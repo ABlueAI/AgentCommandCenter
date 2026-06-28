@@ -37,8 +37,7 @@
 
       <div class="group">
         <div class="group-title">Board</div>
-        <button id="startBoard" class="action accent">🗂️ Start Vibe Kanban</button>
-        <button id="stopBoard" class="action">⏹️ Stop Board</button>
+        <button id="openBoard" class="action accent">🗂️ Open Vibe Kanban</button>
       </div>
 
       <div class="group grow">
@@ -63,15 +62,11 @@
       <section class="tabpane active" data-pane="board">
         <div id="boardEmpty" class="pane-empty">
           <div class="big">🗂️</div>
-          <p>Start the Vibe Kanban board to manage tasks as agents.</p>
-          <p class="hint">It runs locally and embeds right here. First start downloads it (a few seconds).</p>
-          <button id="startBoard2" class="action accent">Start Vibe Kanban</button>
-          <div class="manual">
-            <input id="boardUrl" placeholder="…or paste board URL (http://localhost:PORT)" />
-            <button id="loadBoardUrl" class="ghost">Load</button>
-          </div>
+          <p>Vibe Kanban runs as its own desktop window.</p>
+          <p class="hint">The embedded board needed vibe-kanban's hosted download server, which shut down with Bloop in 2026 — so we launch the installed desktop app instead.</p>
+          <button id="openBoard2" class="action accent">Open Vibe Kanban</button>
+          <button id="locateBoard" class="ghost">Locate app…</button>
         </div>
-        <webview id="boardView" class="hidden" allowpopups></webview>
       </section>
 
       <section class="tabpane" data-pane="agents">
