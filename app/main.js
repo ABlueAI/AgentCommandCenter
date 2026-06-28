@@ -147,25 +147,33 @@ ipcMain.handle('open-external', async (_e, url) => { if (url) shell.openExternal
 // ---- IPC: vibe-kanban board -------------------------------------------------
 // Start the board as a child process and sniff its stdout for the localhost URL,
 // then hand that URL to the renderer to load into the embedded <webview>.
-ipcMain.handle('start-board', async (_e, repo) => {
-  if (boardProc) return { status: 'already-running' };
-  boardProc = spawn('npx', ['-y', 'vibe-kanban'], {
-    cwd: repo || loadSettings().projectsRoot,
-    shell: true,
-    env: { ...process.env, BROWSER: 'none' }, // (?) ask it not to auto-open an external browser
-  });
-  const onData = (d) => {
-    const text = d.toString();
-    if (win) win.webContents.send('board-log', text);
-    const m = text.match(/https?:\/\/(?:localhost|127\.0\.0\.1):\d+\S*/);
-    if (m && win) win.webContents.send('board-url', m[0]);
-  };
-  boardProc.stdout.on('data', onData);
-  boardProc.stderr.on('data', onData);
-  boardProc.on('exit', () => { boardProc = null; if (win) win.webContents.send('board-log', '\n[board process exited]\n'); });
-  return { status: 'starting' };
+// vibe-kanban's hosted CDN died when Bloop shut down (04/2026), so the embedded
+// CLI-server board can't be fetched. Instead we launch the installed standalone
+// Vibe Kanban desktop app (from its GitHub release). Resolution order: saved path
+// -> Start Menu shortcut -> common install dirs.
+function findBoardApp() {
+  const s = loadSettings();
+  if (s.boardAppPath && fs.existsSync(s.boardAppPath)) return s.boardAppPath;
+  const lnk = path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Vibe Kanban.lnk');
+  if (fs.existsSync(lnk)) return lnk; // shell.openPath resolves the .lnk for us
+  const guesses = [
+    path.join(process.env.LOCALAPPDATA || '', 'Vibe Kanban', 'vibe-kanban-tauri.exe'),
+    'C:\\Program Files\\Vibe Kanban\\vibe-kanban-tauri.exe',
+  ];
+  return guesses.find((p) => fs.existsSync(p)) || null;
+}
+ipcMain.handle('open-board', async () => {
+  const target = findBoardApp();
+  if (!target) return { ok: false };
+  const err = await shell.openPath(target); // returns '' on success
+  return { ok: !err, error: err };
 });
-ipcMain.handle('stop-board', async () => {
-  if (boardProc) { try { boardProc.kill(); } catch {} boardProc = null; }
-  return true;
+ipcMain.handle('pick-board-app', async () => {
+  const r = await dialog.showOpenDialog(win, {
+    properties: ['openFile'],
+    filters: [{ name: 'Vibe Kanban', extensions: ['exe', 'lnk'] }],
+  });
+  if (r.canceled) return null;
+  saveSettings({ ...loadSettings(), boardAppPath: r.filePaths[0] });
+  return r.filePaths[0];
 });

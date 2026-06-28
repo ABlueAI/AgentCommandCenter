@@ -8,8 +8,6 @@ const state = { repo: '', githubUrl: '', worktrees: [], chosenAgent: 'claude' };
 async function boot() {
   await refreshRepos();
   wireUi();
-  cc.onBoardUrl((url) => loadBoard(url));
-  cc.onBoardLog((text) => appendLog(text));
 }
 
 async function refreshRepos() {
@@ -119,14 +117,7 @@ async function removeAgent(task) {
   await refreshAgents();
 }
 
-// ---- board ------------------------------------------------------------------
-function loadBoard(url) {
-  const view = $('#boardView');
-  $('#boardEmpty').classList.add('hidden');
-  view.classList.remove('hidden');
-  view.src = url;
-  appendLog(`\n[board] loaded ${url}\n`);
-}
+// ---- logs -------------------------------------------------------------------
 function appendLog(text) {
   const log = $('#logView');
   log.textContent += text;
@@ -146,11 +137,14 @@ function wireUi() {
   $('#openTerminal').onclick = () => state.repo && cc.openTerminal(state.repo);
   $('#openGithub').onclick = () => state.githubUrl && cc.openExternal(state.githubUrl);
 
-  const start = () => cc.startBoard(state.repo);
-  $('#startBoard').onclick = start;
-  $('#startBoard2').onclick = start;
-  $('#stopBoard').onclick = () => cc.stopBoard();
-  $('#loadBoardUrl').onclick = () => { const u = $('#boardUrl').value.trim(); if (u) loadBoard(u); };
+  // Launch the installed Vibe Kanban desktop app; if not found, let the user locate it.
+  const openBoard = async () => {
+    const r = await cc.openBoard();
+    if (!r || !r.ok) { const p = await cc.pickBoardApp(); if (p) await cc.openBoard(); }
+  };
+  $('#openBoard').onclick = openBoard;
+  $('#openBoard2').onclick = openBoard;
+  $('#locateBoard').onclick = async () => { const p = await cc.pickBoardApp(); if (p) await cc.openBoard(); };
 
   // tabs
   document.querySelectorAll('.tab').forEach((t) => {

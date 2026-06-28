@@ -21,9 +21,7 @@ contextBridge.exposeInMainWorld('cc', {
   openTerminal: (p) => ipcRenderer.invoke('open-terminal', p),
   openExternal: (u) => ipcRenderer.invoke('open-external', u),
 
-  // vibe-kanban board
-  startBoard: (repo) => ipcRenderer.invoke('start-board', repo),
-  stopBoard: () => ipcRenderer.invoke('stop-board'),
-  onBoardUrl: (cb) => ipcRenderer.on('board-url', (_e, u) => cb(u)),
-  onBoardLog: (cb) => ipcRenderer.on('board-log', (_e, t) => cb(t)),
+  // vibe-kanban desktop app (launched, not embedded — see main.js)
+  openBoard: () => ipcRenderer.invoke('open-board'),
+  pickBoardApp: () => ipcRenderer.invoke('pick-board-app'),
 });

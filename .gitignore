@@ -20,3 +20,6 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+
+# Installed Vibe Kanban desktop app (landed inside the repo folder; not source)
+Vibe Kanban/
