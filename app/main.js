@@ -23,7 +23,6 @@ function loadSettings() {
 function saveSettings(s) { fs.writeFileSync(settingsPath(), JSON.stringify(s, null, 2)); }
 
 let win = null;
-let boardProc = null; // the running `npx vibe-kanban` child, if any
 const ptys = new Map(); // terminal id -> pty process (in-app terminals)
 
 function createWindow() {
@@ -36,7 +35,6 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,   // renderer is sandboxed; only `window.cc` (preload) is exposed
       nodeIntegration: false,
-      webviewTag: true,         // needed to embed the vibe-kanban board in-app
     },
   });
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
@@ -45,7 +43,6 @@ function createWindow() {
 app.whenReady().then(createWindow);
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 app.on('window-all-closed', () => {
-  if (boardProc) { try { boardProc.kill(); } catch {} }
   for (const p of ptys.values()) { try { p.kill(); } catch {} }
   ptys.clear();
   if (process.platform !== 'darwin') app.quit();
@@ -123,12 +120,6 @@ ipcMain.handle('new-agent', async (_e, { repo, task, agent }) => {
   // The renderer opens an in-app terminal for it (see openInAppTerminal); no external window.
   const wt = path.join(path.dirname(repo), `${path.basename(repo)}-${task}`);
   return { worktree: wt, branch: `agent/${task}` };
-});
-
-// Re-open an agent terminal for an existing worktree.
-ipcMain.handle('open-agent-terminal', async (_e, { worktree, agent }) => {
-  const cmd = AGENT_CMD[agent] || 'powershell';
-  launch('wt', ['-w', '0', 'nt', '-d', `"${worktree}"`, 'powershell', '-NoExit', '-Command', cmd]);
 });
 
 // Tear down an agent's worktree (branch is preserved by the script).

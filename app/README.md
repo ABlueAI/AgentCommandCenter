@@ -1,38 +1,48 @@
 # Command Center (desktop app)
 
 A one-click **dark launcher** that ties your agentic dev tools into a single window:
-the **Vibe Kanban** board (embedded), **VSCode**, **GitHub**, and parallel
-**Claude / Codex / Gemini** agents — each isolated in its own git worktree.
-
-This is the **v1 "layered hub"** (Electron chassis that orchestrates proven tools).
-It's deliberately built to grow into the full BridgeSpace-style ADE (see Roadmap).
+parallel **Claude / Codex / Gemini** agents running in **embedded terminals**, the
+**Vibe Kanban** board, **VSCode**, and **GitHub** — each agent isolated in its own
+git worktree. A BridgeSpace-style ADE built on proven tools.
 
 ## Run it
 ```powershell
 cd D:\Workspace\agent-command-center\app
-npm install      # first time only (pulls Electron)
+npm install      # first time only (pulls Electron + node-pty + xterm)
 npm start
 ```
+(Or double-click the **Command Center** desktop shortcut.)
 
-## What v1 does
+## What it does
 - **Repo picker** — scans your projects root (default `D:\Workspace`, change with 📁) for git repos.
+- **Embedded terminals** — agents run *inside* the app: "+ New" creates an `agent/<task>`
+  worktree (via `../scripts/new-agent.ps1`) and opens a real ConPTY terminal running your
+  chosen CLI. The **Terminals** tab tiles them in a multi-pane grid (`+ Shell` for a plain shell).
+  Agent cards also re-open a terminal, open VSCode, or remove the worktree.
+- **Themes** — 5 dark themes (Obsidian, Void, Dracula, Nord, Synthwave) via the top-bar
+  switcher; persists and re-themes live terminals.
+- **Vibe Kanban** — the board button launches the installed standalone desktop app
+  (resolved via saved path / Start Menu shortcut / common dirs, with a Locate fallback).
+  *Not* embedded: vibe-kanban's hosted download server shut down with Bloop in 2026.
 - **Quick launchers** — open the active repo in VSCode, its GitHub page, or a terminal.
-- **Vibe Kanban, embedded** — "Start Vibe Kanban" runs it locally and loads the board *inside* the app (auto-detects the localhost URL; manual URL box as fallback).
-- **Agents** — "+ New" creates a `agent/<task>` worktree (via `../scripts/new-agent.ps1`) and launches your chosen CLI (Claude/Codex/Gemini) in its own Windows Terminal tab. Each agent card can re-open a terminal, VSCode, or be removed.
 
-## Architecture (so the next session can extend cleanly)
-- `main.js` — Electron main; **all** shelling-out (git, wt, code, npx, browser) lives here behind IPC handlers.
+## Architecture
+- `main.js` — Electron main; **all** shelling-out + the `node-pty` ConPTY sessions live here
+  behind IPC handlers (`pty-start/write/resize/kill`, `pty-data/exit`).
 - `preload.js` — exposes a tidy `window.cc` API; renderer has **no** Node access (contextIsolation on).
-- `renderer/` — `index.html` + `styles.css` (dark theme, tunable `--accent`) + `app.js` (pure UI).
+- `renderer/` — `index.html` + `styles.css` (theme variable sets) + `app.js` (pure UI + xterm)
+  + `vendor/` (vendored xterm.js / addon-fit / xterm.css).
 
-## Roadmap → full-custom (next session)
-The gap to BridgeSpace, in priority order:
-1. **Embedded terminals** — replace the external Windows Terminal launch with in-app
-   panes via `xterm.js` + `node-pty` (needs `electron-rebuild`; the one Windows-native risk).
-2. **Multi-pane grid** — tile N agent terminals in one window (their "up to 16" feel).
-3. **Command-blocks** — Warp-style input/output blocks per agent.
-4. **Agent coordination** — shared "mailbox" + roles (builder/reviewer/scout).
-5. **Theme engine** — multiple dark themes beyond the single Obsidian-teal default.
+## Terminal stack notes
+- Uses **`@lydell/node-pty`** (prebuilt N-API ConPTY) — no native compile, loads in Electron.
+  Stock `node-pty` fails to build on Windows (winpty `GetCommitHash.bat` bug).
+- Agents launch via `powershell -ExecutionPolicy Bypass -Command <agent>` so npm `.ps1`
+  shims always run. Each agent needs a one-time first-run login (`claude`, `codex`, `gemini`).
 
-> Note: git worktrees already give us BridgeSpace's "exclusive file ownership"
+## Roadmap (remaining)
+1. **Agent roles** — builder/reviewer/scout tags that pre-shape each agent's brief.
+2. **Command-blocks** — Warp-style input/output blocks per agent.
+3. **Agent coordination** — shared "mailbox" between agents.
+
+> Git worktrees already give us BridgeSpace's "exclusive file ownership"
 > (no two agents touch the same files) for free.
