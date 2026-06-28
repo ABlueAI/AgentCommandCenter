@@ -1,0 +1,19 @@
+# Normalize line endings so the LF->CRLF warnings stop and scripts stay correct.
+# Default: let git handle text normalization automatically.
+* text=auto
+
+# Shell scripts MUST stay LF or they break on bash/WSL2.
+*.sh text eol=lf
+
+# PowerShell scripts are happiest as CRLF on Windows.
+*.ps1 text eol=crlf
+
+# Docs/config are plain text.
+*.md   text
+*.json text
+*.gitignore text
+
+# Treat archives/images as binary (never normalize).
+*.zip binary
+*.png binary
+*.jpg binary
