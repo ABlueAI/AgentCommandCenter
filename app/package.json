@@ -1,0 +1,15 @@
+{
+  "name": "command-center",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent Command Center — a one-click dark launcher tying together the Vibe Kanban board, VSCode, GitHub, and parallel Claude/Codex/Gemini agents in isolated git worktrees.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "ABlueAI",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^42.5.0"
+  }
+}

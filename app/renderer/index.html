@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src http://localhost:* http://127.0.0.1:*;" />
+  <title>Command Center</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Top bar: brand + active repo selector + global refresh -->
+  <header class="topbar">
+    <div class="brand"><span class="anchor">⚓</span> Command Center</div>
+    <div class="repo-picker">
+      <label>Repo</label>
+      <select id="repoSelect"></select>
+      <button id="changeRoot" class="ghost" title="Change projects root folder">📁</button>
+      <button id="refresh" class="ghost" title="Refresh">⟳</button>
+    </div>
+    <div class="spacer"></div>
+    <div class="agent-legend">
+      <span class="dot claude"></span>Claude
+      <span class="dot codex"></span>Codex
+      <span class="dot gemini"></span>Gemini
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- Sidebar: quick launchers + live agent list -->
+    <aside class="sidebar">
+      <div class="group">
+        <div class="group-title">Workspace</div>
+        <button id="openVscode" class="action">🖥️ Open in VSCode</button>
+        <button id="openGithub" class="action">🐙 Open GitHub</button>
+        <button id="openTerminal" class="action">▶️ Open Terminal</button>
+      </div>
+
+      <div class="group">
+        <div class="group-title">Board</div>
+        <button id="startBoard" class="action accent">🗂️ Start Vibe Kanban</button>
+        <button id="stopBoard" class="action">⏹️ Stop Board</button>
+      </div>
+
+      <div class="group grow">
+        <div class="group-title">
+          Agents
+          <button id="newAgent" class="mini accent" title="New agent">+ New</button>
+        </div>
+        <div id="agentList" class="agent-list">
+          <div class="empty">No agents yet. Click <b>+ New</b>.</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main: tabbed surface (Board / Agents / Logs) -->
+    <main class="main">
+      <nav class="tabs">
+        <button class="tab active" data-tab="board">Board</button>
+        <button class="tab" data-tab="agents">Agents</button>
+        <button class="tab" data-tab="logs">Logs</button>
+      </nav>
+
+      <section class="tabpane active" data-pane="board">
+        <div id="boardEmpty" class="pane-empty">
+          <div class="big">🗂️</div>
+          <p>Start the Vibe Kanban board to manage tasks as agents.</p>
+          <p class="hint">It runs locally and embeds right here. First start downloads it (a few seconds).</p>
+          <button id="startBoard2" class="action accent">Start Vibe Kanban</button>
+          <div class="manual">
+            <input id="boardUrl" placeholder="…or paste board URL (http://localhost:PORT)" />
+            <button id="loadBoardUrl" class="ghost">Load</button>
+          </div>
+        </div>
+        <webview id="boardView" class="hidden" allowpopups></webview>
+      </section>
+
+      <section class="tabpane" data-pane="agents">
+        <div id="agentGrid" class="agent-grid"></div>
+      </section>
+
+      <section class="tabpane" data-pane="logs">
+        <pre id="logView" class="logs"></pre>
+      </section>
+    </main>
+  </div>
+
+  <!-- New Agent modal -->
+  <div id="modal" class="modal-backdrop hidden">
+    <div class="modal">
+      <h3>New Agent</h3>
+      <label>Task name <span class="muted">(kebab-case)</span></label>
+      <input id="taskName" placeholder="e.g. search-bar" />
+      <label>Agent</label>
+      <div class="agent-choices">
+        <button class="choice active" data-agent="claude"><span class="dot claude"></span>Claude</button>
+        <button class="choice" data-agent="codex"><span class="dot codex"></span>Codex</button>
+        <button class="choice" data-agent="gemini"><span class="dot gemini"></span>Gemini</button>
+      </div>
+      <div class="modal-actions">
+        <button id="modalCancel" class="ghost">Cancel</button>
+        <button id="modalCreate" class="action accent">Create &amp; Launch</button>
+      </div>
+      <p class="muted small">Creates a git worktree on <code>agent/&lt;task&gt;</code> and opens the agent in its own terminal.</p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
