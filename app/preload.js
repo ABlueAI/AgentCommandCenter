@@ -13,7 +13,6 @@ contextBridge.exposeInMainWorld('cc', {
 
   // agents
   newAgent: (a) => ipcRenderer.invoke('new-agent', a),
-  openAgentTerminal: (a) => ipcRenderer.invoke('open-agent-terminal', a),
   removeAgent: (a) => ipcRenderer.invoke('remove-agent', a),
 
   // one-click launchers
