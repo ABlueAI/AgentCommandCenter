@@ -1,0 +1,132 @@
+/* Command Center — dark theme (BridgeSpace-inspired "Obsidian/Void" vibe).
+   Near-black surfaces, subtle borders, a marine-teal accent that nods to
+   LighthouseBlue / Starboard. Tunable accent variables up top (?). */
+:root {
+  --bg:        #0b0f14;   /* app background */
+  --panel:     #121821;   /* sidebars / cards */
+  --panel-2:   #0e141c;   /* insets */
+  --border:    #1e2733;
+  --text:      #c8d2dc;
+  --muted:     #6b7785;
+  --accent:    #20c5b7;   /* (?) primary marine teal */
+  --accent-2:  #38bdf8;   /* (?) sky highlight */
+  --claude:    #d9854a;   /* agent identity colors */
+  --codex:     #9aa7b2;
+  --gemini:    #8b7cf6;
+  --danger:    #e0556b;
+  --radius:    9px;
+  --mono: 'Cascadia Code', 'Consolas', ui-monospace, monospace;
+  --sans: 'Segoe UI', system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--text); font-family: var(--sans);
+  font-size: 13.5px; display: flex; flex-direction: column; overflow: hidden;
+}
+.hidden { display: none !important; }
+.muted { color: var(--muted); }
+.small { font-size: 11.5px; }
+code { font-family: var(--mono); color: var(--accent-2); }
+
+/* ---- top bar ---- */
+.topbar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--border);
+}
+.brand { font-weight: 600; letter-spacing: .3px; }
+.brand .anchor { color: var(--accent); }
+.repo-picker { display: flex; align-items: center; gap: 6px; }
+.repo-picker label { color: var(--muted); font-size: 12px; }
+.spacer { flex: 1; }
+.agent-legend { color: var(--muted); font-size: 11.5px; display: flex; align-items: center; gap: 6px; }
+
+/* ---- layout ---- */
+.layout { flex: 1; display: flex; min-height: 0; }
+.sidebar {
+  width: 250px; background: var(--panel); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; padding: 12px; gap: 16px; overflow-y: auto;
+}
+.group { display: flex; flex-direction: column; gap: 6px; }
+.group.grow { flex: 1; min-height: 0; }
+.group-title {
+  display: flex; align-items: center; justify-content: space-between;
+  text-transform: uppercase; font-size: 10.5px; letter-spacing: .8px;
+  color: var(--muted); margin-bottom: 2px;
+}
+
+/* ---- buttons ---- */
+button { font-family: inherit; cursor: pointer; border-radius: var(--radius); transition: .12s; }
+.action {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+  padding: 8px 10px; text-align: left; font-size: 13px;
+}
+.action:hover { border-color: var(--accent); background: #0f1722; }
+.action.accent { border-color: var(--accent); color: #eafffb; }
+.action.accent:hover { background: rgba(32,197,183,.12); }
+.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); padding: 5px 9px; }
+.ghost:hover { color: var(--text); border-color: var(--accent); }
+.mini { background: transparent; color: var(--accent); border: 1px solid var(--border); padding: 2px 8px; font-size: 11px; }
+.mini:hover { background: rgba(32,197,183,.12); }
+select {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+  border-radius: 7px; padding: 5px 8px; font-family: inherit; min-width: 170px;
+}
+
+/* ---- agent identity dots ---- */
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot.claude { background: var(--claude); }
+.dot.codex  { background: var(--codex); }
+.dot.gemini { background: var(--gemini); }
+
+/* ---- sidebar agent list ---- */
+.agent-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+.agent-list .empty { color: var(--muted); font-size: 12px; padding: 8px 4px; }
+.agent-row {
+  display: flex; align-items: center; gap: 8px; padding: 7px 9px;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.agent-row .name { flex: 1; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-row .x { color: var(--muted); border: none; background: none; padding: 2px 4px; }
+.agent-row .x:hover { color: var(--danger); }
+
+/* ---- main / tabs ---- */
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.tabs { display: flex; gap: 4px; padding: 8px 10px 0; background: var(--bg); border-bottom: 1px solid var(--border); }
+.tab { background: transparent; color: var(--muted); border: 1px solid transparent; border-bottom: none; padding: 7px 16px; }
+.tab.active { color: var(--text); background: var(--panel); border-color: var(--border); border-radius: 8px 8px 0 0; }
+.tabpane { flex: 1; min-height: 0; display: none; }
+.tabpane.active { display: flex; flex-direction: column; }
+
+/* board webview fills the pane */
+#boardView { flex: 1; border: none; background: #fff; }
+.pane-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; color: var(--muted); }
+.pane-empty .big { font-size: 46px; }
+.pane-empty .hint { font-size: 12px; }
+.manual { display: flex; gap: 6px; margin-top: 10px; }
+.manual input { width: 320px; }
+input {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+  border-radius: 7px; padding: 8px 10px; font-family: inherit; font-size: 13px;
+}
+input:focus { outline: none; border-color: var(--accent); }
+
+/* ---- agents grid (cards) ---- */
+.agent-grid { padding: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 12px; align-content: start; overflow-y: auto; }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.card .title { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.card .meta { color: var(--muted); font-size: 11.5px; font-family: var(--mono); word-break: break-all; }
+.card .row { display: flex; gap: 6px; }
+
+/* ---- logs ---- */
+.logs { flex: 1; margin: 0; padding: 14px; overflow: auto; font-family: var(--mono); font-size: 12px; color: #9fb0bf; background: var(--panel-2); white-space: pre-wrap; }
+
+/* ---- modal ---- */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; }
+.modal { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 22px; width: 380px; display: flex; flex-direction: column; gap: 8px; }
+.modal h3 { margin: 0 0 6px; }
+.modal label { color: var(--muted); font-size: 12px; margin-top: 6px; }
+.agent-choices { display: flex; gap: 6px; }
+.choice { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 9px; }
+.choice.active { border-color: var(--accent); background: rgba(32,197,183,.1); }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
