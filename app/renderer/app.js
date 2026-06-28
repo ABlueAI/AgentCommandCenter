@@ -2,19 +2,31 @@
 // No Node here by design; this file is pure UI + IPC calls.
 
 const $ = (sel) => document.querySelector(sel);
-const state = { repo: '', githubUrl: '', worktrees: [], chosenAgent: 'claude' };
+const state = { repo: '', githubUrl: '', worktrees: [], chosenAgent: 'claude', theme: 'obsidian' };
 const AGENT_CMD = { claude: 'claude', codex: 'codex', gemini: 'gemini' };
 
 // ---- in-app terminals (xterm.js front-end; real ConPTY lives in main) -------
 const terms = new Map(); // id -> { term, fit, pane }
 let termSeq = 0;
-const XTERM_THEME = {
-  background: '#06090d', foreground: '#c8d2dc', cursor: '#20c5b7',
-  selectionBackground: 'rgba(32,197,183,.35)',
-  black: '#0b0f14', red: '#e0556b', green: '#3ad29f', yellow: '#d9b54a',
-  blue: '#38bdf8', magenta: '#8b7cf6', cyan: '#20c5b7', white: '#c8d2dc',
-  brightBlack: '#6b7785', brightWhite: '#e6edf3',
+const THEMES_XTERM = {
+  obsidian:  { background: '#06090d', foreground: '#c8d2dc', cursor: '#20c5b7', selectionBackground: 'rgba(32,197,183,.35)' },
+  void:      { background: '#070510', foreground: '#d6cdf0', cursor: '#a78bfa', selectionBackground: 'rgba(167,139,250,.35)' },
+  dracula:   { background: '#21222c', foreground: '#f8f8f2', cursor: '#bd93f9', selectionBackground: 'rgba(189,147,249,.35)' },
+  nord:      { background: '#272c36', foreground: '#e5e9f0', cursor: '#88c0d0', selectionBackground: 'rgba(136,192,208,.35)' },
+  synthwave: { background: '#191223', foreground: '#f3e9ff', cursor: '#ff7edb', selectionBackground: 'rgba(255,126,219,.35)' },
 };
+// Shared ANSI palette so agent output stays readable across all themes.
+const ANSI = { black: '#0b0f14', red: '#e0556b', green: '#3ad29f', yellow: '#d9b54a', blue: '#38bdf8', magenta: '#8b7cf6', cyan: '#20c5b7', white: '#c8d2dc', brightBlack: '#6b7785', brightWhite: '#e6edf3' };
+function xtermTheme() { return { ...ANSI, ...(THEMES_XTERM[state.theme] || THEMES_XTERM.obsidian) }; }
+function applyTheme(name) {
+  if (!THEMES_XTERM[name]) name = 'obsidian';
+  state.theme = name;
+  document.documentElement.setAttribute('data-theme', name);
+  const sel = $('#themeSelect'); if (sel) sel.value = name;
+  const t = xtermTheme();
+  for (const x of terms.values()) { x.term.options.theme = t; } // re-theme live terminals
+  cc.saveSettings({ theme: name });
+}
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('active', x.dataset.tab === name));
   document.querySelectorAll('.tabpane').forEach((x) => x.classList.toggle('active', x.dataset.pane === name));
@@ -40,7 +52,7 @@ function openInAppTerminal({ worktree, agent, title }) {
       <button class="x" title="Close">✕</button></div>
     <div class="term-body"></div>`;
   $('#terminalGrid').appendChild(pane);
-  const term = new Terminal({ theme: XTERM_THEME, fontFamily: "'Cascadia Code','Consolas',monospace", fontSize: 13, cursorBlink: true, allowProposedApi: true, scrollback: 5000 });
+  const term = new Terminal({ theme: xtermTheme(), fontFamily: "'Cascadia Code','Consolas',monospace", fontSize: 13, cursorBlink: true, allowProposedApi: true, scrollback: 5000 });
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
   term.open(pane.querySelector('.term-body'));
@@ -58,6 +70,8 @@ function openInAppTerminal({ worktree, agent, title }) {
 
 // ---- boot -------------------------------------------------------------------
 async function boot() {
+  const s = await cc.getSettings();
+  applyTheme((s && s.theme) || 'obsidian');
   await refreshRepos();
   wireUi();
   cc.onPtyData(({ id, data }) => { const t = terms.get(id); if (t) t.term.write(data); });
@@ -182,6 +196,7 @@ function appendLog(text) {
 // ---- wiring -----------------------------------------------------------------
 function wireUi() {
   $('#repoSelect').onchange = (e) => { state.repo = e.target.value; onRepoChange(); };
+  $('#themeSelect').onchange = (e) => applyTheme(e.target.value);
   $('#refresh').onclick = refreshRepos;
   $('#changeRoot').onclick = async () => {
     const dir = await cc.pickFolder();
