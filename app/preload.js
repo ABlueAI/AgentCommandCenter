@@ -24,4 +24,12 @@ contextBridge.exposeInMainWorld('cc', {
   // vibe-kanban desktop app (launched, not embedded — see main.js)
   openBoard: () => ipcRenderer.invoke('open-board'),
   pickBoardApp: () => ipcRenderer.invoke('pick-board-app'),
+
+  // in-app terminals (node-pty)
+  ptyStart: (o) => ipcRenderer.invoke('pty-start', o),
+  ptyWrite: (id, data) => ipcRenderer.send('pty-write', { id, data }),
+  ptyResize: (id, cols, rows) => ipcRenderer.send('pty-resize', { id, cols, rows }),
+  ptyKill: (id) => ipcRenderer.send('pty-kill', id),
+  onPtyData: (cb) => ipcRenderer.on('pty-data', (_e, p) => cb(p)),
+  onPtyExit: (cb) => ipcRenderer.on('pty-exit', (_e, p) => cb(p)),
 });

@@ -7,6 +7,7 @@ const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn, execFile } = require('child_process');
+const pty = require('@lydell/node-pty'); // prebuilt ConPTY — powers in-app terminals
 
 // ---- tunable defaults (marked ? — change to taste) --------------------------
 const DEFAULT_PROJECTS_ROOT = 'D:\\Workspace';            // (?) where your git repos live
@@ -23,6 +24,7 @@ function saveSettings(s) { fs.writeFileSync(settingsPath(), JSON.stringify(s, nu
 
 let win = null;
 let boardProc = null; // the running `npx vibe-kanban` child, if any
+const ptys = new Map(); // terminal id -> pty process (in-app terminals)
 
 function createWindow() {
   win = new BrowserWindow({
@@ -44,6 +46,8 @@ app.whenReady().then(createWindow);
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 app.on('window-all-closed', () => {
   if (boardProc) { try { boardProc.kill(); } catch {} }
+  for (const p of ptys.values()) { try { p.kill(); } catch {} }
+  ptys.clear();
   if (process.platform !== 'darwin') app.quit();
 });
 
@@ -116,9 +120,8 @@ ipcMain.handle('new-agent', async (_e, { repo, task, agent }) => {
       { cwd: repo }, () => resolve());
   });
   // Worktree path follows the <repo>-<task> sibling convention the scripts use.
+  // The renderer opens an in-app terminal for it (see openInAppTerminal); no external window.
   const wt = path.join(path.dirname(repo), `${path.basename(repo)}-${task}`);
-  const cmd = AGENT_CMD[agent] || 'claude';
-  launch('wt', ['-w', '0', 'nt', '--title', `${agent}:${task}`, '-d', `"${wt}"`, 'powershell', '-NoExit', '-Command', cmd]);
   return { worktree: wt, branch: `agent/${task}` };
 });
 
@@ -143,6 +146,29 @@ ipcMain.handle('remove-agent', async (_e, { repo, task }) => {
 ipcMain.handle('open-vscode', async (_e, p) => launch('code', [`"${p}"`]));
 ipcMain.handle('open-terminal', async (_e, p) => launch('wt', ['-w', '0', 'nt', '-d', `"${p}"`]));
 ipcMain.handle('open-external', async (_e, url) => { if (url) shell.openExternal(url); });
+
+// ---- IPC: in-app terminals (node-pty + xterm.js) ---------------------------
+// Each renderer terminal pane gets a real ConPTY here: PowerShell spawned in the
+// worktree, optionally running the chosen agent CLI, with bytes streamed both ways.
+// This is what makes agents run *inside* the Command Center window.
+ipcMain.handle('pty-start', (_e, { id, cwd, agent, cols, rows }) => {
+  const run = AGENT_CMD[agent]; // undefined => plain shell
+  const args = ['-NoLogo', '-NoExit'];
+  if (run) args.push('-Command', run);
+  const p = pty.spawn('powershell.exe', args, {
+    name: 'xterm-256color',
+    cols: cols || 80, rows: rows || 24,
+    cwd: cwd || process.env.USERPROFILE,
+    env: process.env,
+  });
+  ptys.set(id, p);
+  p.onData((data) => { if (win && !win.isDestroyed()) win.webContents.send('pty-data', { id, data }); });
+  p.onExit(() => { ptys.delete(id); if (win && !win.isDestroyed()) win.webContents.send('pty-exit', { id }); });
+  return { ok: true };
+});
+ipcMain.on('pty-write', (_e, { id, data }) => { const p = ptys.get(id); if (p) p.write(data); });
+ipcMain.on('pty-resize', (_e, { id, cols, rows }) => { const p = ptys.get(id); if (p) { try { p.resize(cols, rows); } catch {} } });
+ipcMain.on('pty-kill', (_e, id) => { const p = ptys.get(id); if (p) { try { p.kill(); } catch {} ptys.delete(id); } });
 
 // ---- IPC: vibe-kanban board -------------------------------------------------
 // Start the board as a child process and sniff its stdout for the localhost URL,

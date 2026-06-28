@@ -5,6 +5,7 @@
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src http://localhost:* http://127.0.0.1:*;" />
   <title>Command Center</title>
+  <link rel="stylesheet" href="vendor/xterm.css" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -56,6 +57,7 @@
       <nav class="tabs">
         <button class="tab active" data-tab="board">Board</button>
         <button class="tab" data-tab="agents">Agents</button>
+        <button class="tab" data-tab="terminals">Terminals</button>
         <button class="tab" data-tab="logs">Logs</button>
       </nav>
 
@@ -71,6 +73,16 @@
 
       <section class="tabpane" data-pane="agents">
         <div id="agentGrid" class="agent-grid"></div>
+      </section>
+
+      <section class="tabpane" data-pane="terminals">
+        <div class="term-bar">
+          <span class="muted small">Agents run in-app here — each in its own ConPTY.</span>
+          <button id="newTermShell" class="mini accent">+ Shell</button>
+        </div>
+        <div id="terminalGrid" class="term-grid">
+          <div class="empty muted" id="termEmpty">No terminals open. Open an agent from the <b>Agents</b> tab, or click <b>+ Shell</b>.</div>
+        </div>
       </section>
 
       <section class="tabpane" data-pane="logs">
@@ -99,6 +111,8 @@
     </div>
   </div>
 
+  <script src="vendor/xterm.js"></script>
+  <script src="vendor/addon-fit.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
