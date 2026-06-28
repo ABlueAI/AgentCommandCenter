@@ -153,7 +153,8 @@ ipcMain.handle('open-external', async (_e, url) => { if (url) shell.openExternal
 // This is what makes agents run *inside* the Command Center window.
 ipcMain.handle('pty-start', (_e, { id, cwd, agent, cols, rows }) => {
   const run = AGENT_CMD[agent]; // undefined => plain shell
-  const args = ['-NoLogo', '-NoExit'];
+  // -ExecutionPolicy Bypass so npm .ps1 shims (claude/codex/gemini) always launch.
+  const args = ['-NoLogo', '-ExecutionPolicy', 'Bypass', '-NoExit'];
   if (run) args.push('-Command', run);
   const p = pty.spawn('powershell.exe', args, {
     name: 'xterm-256color',
