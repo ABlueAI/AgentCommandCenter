@@ -77,6 +77,21 @@ function openInAppTerminal(opts = {}) {
   fit.fit();
   term.onData((d) => cc.ptyWrite(id, d));
   term.onResize(({ cols, rows }) => cc.ptyResize(id, cols, rows));
+  // Clipboard: Ctrl+Shift+V paste, Ctrl+Shift+C copy, right-click = copy-selection-else-paste.
+  // Plain Ctrl+C / Ctrl+V are left untouched so Ctrl+C still sends SIGINT to the agent.
+  term.attachCustomKeyEventHandler((e) => {
+    if (e.type !== 'keydown' || !e.ctrlKey || !e.shiftKey) return true;
+    const k = e.key.toLowerCase();
+    if (k === 'v') { const t = cc.clipboardRead(); if (t) term.paste(t); return false; }
+    if (k === 'c') { const s = term.getSelection(); if (s) { cc.clipboardWrite(s); return false; } }
+    return true;
+  });
+  pane.querySelector('.term-body').addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const s = term.getSelection();
+    if (s) { cc.clipboardWrite(s); term.clearSelection(); }
+    else { const t = cc.clipboardRead(); if (t) term.paste(t); }
+  });
   pane.querySelector('.x').onclick = () => {
     cc.ptyKill(id); term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
