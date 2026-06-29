@@ -110,12 +110,18 @@
       <label>Role</label>
       <div class="agent-choices role-choices">
         <button class="choice active" data-role="builder">🔨 Builder</button>
+        <button class="choice" data-role="reviewer">🔎 Reviewer</button>
+        <button class="choice" data-role="codebase-scout">🧭 Codebase</button>
         <button class="choice" data-role="web-scout">🌐 Web Scout</button>
         <button class="choice" data-role="operator">📣 Operator</button>
         <button class="choice" data-role="plain">▶ Plain</button>
       </div>
       <div id="builderOpts" class="modal-opt">
         <label class="check"><input type="checkbox" id="hardTask" /> Hard task — launch on Opus (xhigh effort)</label>
+      </div>
+      <div id="targetRow" class="modal-opt hidden">
+        <label>Target checkout <span class="muted">(read-only role points here)</span></label>
+        <select id="targetSelect"></select>
       </div>
       <div id="cliRow" class="modal-opt hidden">
         <label>CLI</label>

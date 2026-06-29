@@ -260,8 +260,10 @@ function wireUi() {
       document.querySelectorAll('.role-choices .choice').forEach((x) => x.classList.remove('active'));
       c.classList.add('active');
       state.chosenRole = c.dataset.role;
+      const ro = !!(ROLES[state.chosenRole] && ROLES[state.chosenRole].readOnly);
       $('#builderOpts').classList.toggle('hidden', state.chosenRole !== 'builder');
       $('#cliRow').classList.toggle('hidden', state.chosenRole !== 'plain');
+      $('#targetRow').classList.toggle('hidden', !ro);
       updateModalHint();
     };
   });
@@ -284,11 +286,23 @@ function updateModalHint() {
   const role = state.chosenRole;
   if (role === 'plain') {
     hint.innerHTML = `Creates a git worktree on <code>agent/&lt;task&gt;</code> and launches <code>${state.chosenCli}</code>.`;
+  } else if (ROLES[role].readOnly) {
+    hint.innerHTML = `Read-only — launches <code>claude --agent ${role}</code> against the target checkout (no worktree, no edits).`;
   } else if (ROLES[role].needsWorktree) {
     hint.innerHTML = `Creates a git worktree on <code>agent/&lt;task&gt;</code> and launches <code>claude --agent ${role}</code>.`;
   } else {
     hint.innerHTML = `No worktree — launches <code>claude --agent ${role}</code> in the repo root (writes to <code>/outputs</code>).`;
   }
+}
+
+// Fill the read-only-role target dropdown: the main checkout + every live agent worktree.
+function populateTargets() {
+  const sel = $('#targetSelect');
+  if (!sel) return;
+  sel.innerHTML = '';
+  const add = (val, text) => { const o = document.createElement('option'); o.value = val; o.textContent = text; sel.appendChild(o); };
+  if (state.repo) add(state.repo, state.repo.split(/[\\/]/).pop() + ' (main checkout)');
+  for (const wt of state.worktrees) add(wt.path, wt.branch || taskOf(wt));
 }
 
 function openModal() {
@@ -298,8 +312,10 @@ function openModal() {
   state.chosenRole = 'builder'; state.hardTask = false;
   $('#hardTask').checked = false;
   document.querySelectorAll('.role-choices .choice').forEach((x) => x.classList.toggle('active', x.dataset.role === 'builder'));
+  populateTargets();
   $('#builderOpts').classList.remove('hidden');
   $('#cliRow').classList.add('hidden');
+  $('#targetRow').classList.add('hidden');
   updateModalHint();
   $('#modal').classList.remove('hidden');
   $('#taskName').focus();
@@ -307,10 +323,21 @@ function openModal() {
 function closeModal() { $('#modal').classList.add('hidden'); }
 
 async function createAgent() {
+  const role = state.chosenRole;
+  const meta = role !== 'plain' ? ROLES[role] : null;
+
+  // Read-only roles: no worktree, no task needed — point at the chosen target checkout.
+  if (meta && meta.readOnly) {
+    const target = $('#targetSelect').value || state.repo;
+    closeModal();
+    appendLog(`\n[agent] ${role} (read-only) on ${target}…\n`);
+    openInAppTerminal({ worktree: target, role, cli: 'claude', title: `${meta.label} · ${target.split(/[\\/]/).pop()}` });
+    return;
+  }
+
   const task = $('#taskName').value.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '');
   if (!task) { $('#taskName').focus(); return; }
   closeModal();
-  const role = state.chosenRole;
 
   // Plain: today's behavior — fresh worktree + a bare CLI.
   if (role === 'plain') {
@@ -321,7 +348,6 @@ async function createAgent() {
     return;
   }
 
-  const meta = ROLES[role];
   if (meta.needsWorktree) {
     // Builder: fresh worktree, launched with the role (Opus override when Hard is checked).
     appendLog(`\n[agent] worktree agent/${task} (${role}${state.hardTask ? ', opus/xhigh' : ''})…\n`);
