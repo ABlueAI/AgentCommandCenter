@@ -26,3 +26,6 @@ Vibe Kanban/
 
 # Downloaded media (feed-gemini.ps1 output) — context fuel, not source
 media/
+
+# Reviewer diff artifact (written into a worktree for the read-only Reviewer to read)
+.agent-review.diff

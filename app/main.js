@@ -25,13 +25,19 @@ const VALID_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 //   role set    -> `claude --agent <role> [--model x] [--effort y]` (roles are a Claude feature)
 //   cli only    -> bare CLI (claude/codex/gemini)
 //   neither     -> undefined => plain PowerShell shell
-function buildAgentCommand({ cli, agent, role, model, effort }) {
+function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }) {
   if (role && VALID_ROLES.has(role)) {
     // `--agent` is a Claude feature, so roles always launch on the Claude CLI regardless
     // of any cli hint (the Gemini video-scout path injects its brief differently — Phase C).
     let cmd = AGENT_CMD.claude + ' --agent ' + role;
     if (VALID_MODELS.has(model)) cmd += ' --model ' + model;
     if (VALID_EFFORTS.has(effort)) cmd += ' --effort ' + effort;
+    // Optional opening prompt (e.g. the reviewer's "review this diff"). Strip shell-significant
+    // characters so it stays a single safe quoted argument inside the powershell -Command string.
+    if (initialPrompt && typeof initialPrompt === 'string') {
+      const clean = initialPrompt.replace(/["`$\r\n]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (clean) cmd += ' "' + clean + '"';
+    }
     return cmd;
   }
   return AGENT_CMD[cli || agent]; // undefined when unknown/falsy -> plain shell
@@ -167,6 +173,25 @@ ipcMain.handle('remove-agent', async (_e, { repo, task }) => {
       { cwd: repo }, () => resolve());
   });
   return true;
+});
+
+// Build a review diff for a worktree (this branch vs main, including uncommitted work) and
+// write it to .agent-review.diff in that worktree so the read-only Reviewer can Read it —
+// the Reviewer has no shell, so the launcher produces the diff for it (Blue Helm spec §2).
+ipcMain.handle('review-diff', async (_e, { worktree, base }) => {
+  base = base || 'main';
+  if (!worktree || !fs.existsSync(worktree)) return { ok: false, error: 'worktree not found' };
+  const diff = await new Promise((resolve) => {
+    execFile('git', ['-C', worktree, 'diff', base], { maxBuffer: 1024 * 1024 * 32 },
+      (_err, stdout) => resolve(stdout || ''));
+  });
+  const fileName = '.agent-review.diff';
+  const file = path.join(worktree, fileName);
+  if (!diff.trim()) return { ok: true, empty: true, fileName };
+  try { fs.writeFileSync(file, diff, 'utf8'); }
+  catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
+  const files = (diff.match(/^diff --git /gm) || []).length;
+  return { ok: true, fileName, files, bytes: diff.length };
 });
 
 // ---- IPC: one-click launchers ----------------------------------------------

@@ -97,7 +97,7 @@ function openInAppTerminal(opts = {}) {
     if (terms.size === 0) showTermEmpty();
   };
   terms.set(id, { term, fit, pane });
-  cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, cols: term.cols, rows: term.rows });
+  cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, cols: term.cols, rows: term.rows });
   setTimeout(() => { fit.fit(); cc.ptyResize(id, term.cols, term.rows); term.focus(); }, 40);
 }
 
@@ -211,7 +211,7 @@ function renderAgentGrid() {
         const act = b.dataset.act;
         if (['claude', 'codex', 'gemini'].includes(act)) openInAppTerminal({ worktree: wt.path, cli: act });
         // read-only roles operate on the existing checkout — no new worktree
-        else if (act === 'review') openInAppTerminal({ worktree: wt.path, role: 'reviewer', cli: 'claude' });
+        else if (act === 'review') launchReviewer(wt.path);
         else if (act === 'scout') openInAppTerminal({ worktree: wt.path, role: 'codebase-scout', cli: 'claude' });
         else if (act === 'code') cc.openVscode(wt.path);
         else if (act === 'term') cc.openTerminal(wt.path);
@@ -225,6 +225,26 @@ function renderAgentGrid() {
 async function removeAgent(task) {
   await cc.removeAgent({ repo: state.repo, task });
   await refreshAgents();
+}
+
+// Launch the read-only Reviewer against a checkout: build the diff (this branch vs main)
+// first, then open it with an opening prompt pointing at the saved diff so it reviews a
+// concrete change set rather than an empty tree.
+async function launchReviewer(worktree) {
+  const name = worktree.split(/[\\/]/).pop();
+  const r = await cc.reviewDiff({ worktree, base: 'main' });
+  let initialPrompt;
+  if (r && r.empty) {
+    appendLog(`[reviewer] no changes vs main in ${name}.\n`);
+    initialPrompt = 'There are no changes versus main to review in this checkout. Say so, and ask which branch or files to review.';
+  } else if (r && r.ok) {
+    appendLog(`[reviewer] diff ready for ${name}: ${r.files} file(s), ${r.bytes} bytes.\n`);
+    initialPrompt = `Review the change set in ./${r.fileName} (this branch vs main, ${r.files} file(s)). Read that file, then report findings per your role instructions.`;
+  } else {
+    appendLog(`[reviewer] could not build diff for ${name}: ${(r && r.error) || 'unknown error'}\n`);
+    initialPrompt = 'The diff could not be generated automatically. Ask the human to paste the diff you should review.';
+  }
+  openInAppTerminal({ worktree, role: 'reviewer', cli: 'claude', initialPrompt, title: `Reviewer · ${name}` });
 }
 
 // ---- logs -------------------------------------------------------------------
@@ -356,6 +376,7 @@ async function createAgent() {
   if (meta && meta.readOnly) {
     const target = $('#targetSelect').value || state.repo;
     closeModal();
+    if (role === 'reviewer') { await launchReviewer(target); return; }
     appendLog(`\n[agent] ${role} (read-only) on ${target}…\n`);
     openInAppTerminal({ worktree: target, role, cli: 'claude', title: `${meta.label} · ${target.split(/[\\/]/).pop()}` });
     return;
