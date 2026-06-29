@@ -2,8 +2,18 @@
 // No Node here by design; this file is pure UI + IPC calls.
 
 const $ = (sel) => document.querySelector(sel);
-const state = { repo: '', githubUrl: '', worktrees: [], chosenAgent: 'claude', theme: 'obsidian' };
-const AGENT_CMD = { claude: 'claude', codex: 'codex', gemini: 'gemini' };
+const state = { repo: '', githubUrl: '', worktrees: [], chosenRole: 'builder', chosenCli: 'claude', hardTask: false, theme: 'obsidian' };
+
+// Blue Helm role metadata (UI + flow only — the tools allowlist that ENFORCES read-only
+// lives in agent-roles/*.md / ~/.claude/agents). Keep colors in sync with styles.css and
+// the build spec. needsWorktree=false roles run against an existing checkout or repo root.
+const ROLES = {
+  builder:          { label: 'Builder',        glyph: '🔨', cli: 'claude', readOnly: false, needsWorktree: true,  newAgent: true },
+  reviewer:         { label: 'Reviewer',       glyph: '🔎', cli: 'claude', readOnly: true,  needsWorktree: false, newAgent: false },
+  'codebase-scout': { label: 'Codebase Scout', glyph: '🧭', cli: 'claude', readOnly: true,  needsWorktree: false, newAgent: false },
+  'web-scout':      { label: 'Web Scout',       glyph: '🌐', cli: 'claude', readOnly: false, needsWorktree: false, newAgent: true },
+  operator:         { label: 'Operator',        glyph: '📣', cli: 'claude', readOnly: false, needsWorktree: false, newAgent: true },
+};
 
 // ---- in-app terminals (xterm.js front-end; real ConPTY lives in main) -------
 const terms = new Map(); // id -> { term, fit, pane }
@@ -40,14 +50,22 @@ function showTermEmpty() {
     $('#terminalGrid').appendChild(d);
   }
 }
-function openInAppTerminal({ worktree, agent, title }) {
+function openInAppTerminal(opts = {}) {
+  const { worktree, title } = opts;
+  const cli = opts.cli || opts.agent || null;
+  const role = (opts.role && ROLES[opts.role]) ? opts.role : null;
   switchTab('terminals');
   const empty = $('#termEmpty'); if (empty) empty.remove();
   const id = 'pty' + (++termSeq);
-  const label = title || `${agent ? agent + ' · ' : ''}${worktree ? worktree.split(/[\\/]/).pop() : 'shell'}`;
+  const wtName = worktree ? worktree.split(/[\\/]/).pop() : 'shell';
+  const label = title || (role ? `${ROLES[role].label} · ${wtName}` : `${cli ? cli + ' · ' : ''}${wtName}`);
+  // Role badge (tinted + lock for read-only) replaces the plain CLI dot when a role is set.
+  const badge = role
+    ? `<span class="role-badge" data-role="${role}">${ROLES[role].glyph}${ROLES[role].readOnly ? ' 🔒' : ''} ${ROLES[role].label}</span>`
+    : `<span class="dot ${cli || 'codex'}"></span>`;
   const pane = document.createElement('div');
   pane.className = 'term-pane';
-  pane.innerHTML = `<div class="term-head"><span class="dot ${agent || 'codex'}"></span>
+  pane.innerHTML = `<div class="term-head">${badge}
       <span class="name" title="${worktree || ''}">${label}</span>
       <button class="x" title="Close">✕</button></div>
     <div class="term-body"></div>`;
@@ -64,7 +82,7 @@ function openInAppTerminal({ worktree, agent, title }) {
     if (terms.size === 0) showTermEmpty();
   };
   terms.set(id, { term, fit, pane });
-  cc.ptyStart({ id, cwd: worktree, agent, cols: term.cols, rows: term.rows });
+  cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, cols: term.cols, rows: term.rows });
   setTimeout(() => { fit.fit(); cc.ptyResize(id, term.cols, term.rows); term.focus(); }, 40);
 }
 
@@ -164,6 +182,10 @@ function renderAgentGrid() {
         <button class="ghost" data-act="gemini">Gemini</button>
       </div>
       <div class="row">
+        <button class="ghost" data-act="review" title="Read-only Opus review of this branch">🔎 Review</button>
+        <button class="ghost" data-act="scout" title="Read-only codebase exploration">🧭 Scout</button>
+      </div>
+      <div class="row">
         <button class="action" data-act="code">VSCode</button>
         <button class="action" data-act="term">Terminal</button>
         <button class="ghost" data-act="rm">Remove</button>
@@ -171,7 +193,10 @@ function renderAgentGrid() {
     card.querySelectorAll('[data-act]').forEach((b) => {
       b.onclick = () => {
         const act = b.dataset.act;
-        if (['claude', 'codex', 'gemini'].includes(act)) openInAppTerminal({ worktree: wt.path, agent: act });
+        if (['claude', 'codex', 'gemini'].includes(act)) openInAppTerminal({ worktree: wt.path, cli: act });
+        // read-only roles operate on the existing checkout — no new worktree
+        else if (act === 'review') openInAppTerminal({ worktree: wt.path, role: 'reviewer', cli: 'claude' });
+        else if (act === 'scout') openInAppTerminal({ worktree: wt.path, role: 'codebase-scout', cli: 'claude' });
         else if (act === 'code') cc.openVscode(wt.path);
         else if (act === 'term') cc.openTerminal(wt.path);
         else if (act === 'rm') removeAgent(task);
@@ -229,31 +254,113 @@ function wireUi() {
   $('#newAgent').onclick = openModal;
   $('#modalCancel').onclick = closeModal;
   $('#modalCreate').onclick = createAgent;
-  document.querySelectorAll('.choice').forEach((c) => {
+  // Role picker: switches behavior + reveals builder/plain sub-options.
+  document.querySelectorAll('.role-choices .choice').forEach((c) => {
     c.onclick = () => {
-      document.querySelectorAll('.choice').forEach((x) => x.classList.remove('active'));
+      document.querySelectorAll('.role-choices .choice').forEach((x) => x.classList.remove('active'));
       c.classList.add('active');
-      state.chosenAgent = c.dataset.agent;
+      state.chosenRole = c.dataset.role;
+      const ro = !!(ROLES[state.chosenRole] && ROLES[state.chosenRole].readOnly);
+      $('#builderOpts').classList.toggle('hidden', state.chosenRole !== 'builder');
+      $('#cliRow').classList.toggle('hidden', state.chosenRole !== 'plain');
+      $('#targetRow').classList.toggle('hidden', !ro);
+      updateModalHint();
     };
   });
+  // CLI sub-picker (only relevant for the Plain role).
+  document.querySelectorAll('.cli-choice').forEach((c) => {
+    c.onclick = () => {
+      document.querySelectorAll('.cli-choice').forEach((x) => x.classList.remove('active'));
+      c.classList.add('active');
+      state.chosenCli = c.dataset.cli;
+      updateModalHint();
+    };
+  });
+  $('#hardTask').onchange = (e) => { state.hardTask = e.target.checked; };
+}
+
+// Reflect what the modal will actually launch.
+function updateModalHint() {
+  const hint = $('#modalHint');
+  if (!hint) return;
+  const role = state.chosenRole;
+  if (role === 'plain') {
+    hint.innerHTML = `Creates a git worktree on <code>agent/&lt;task&gt;</code> and launches <code>${state.chosenCli}</code>.`;
+  } else if (ROLES[role].readOnly) {
+    hint.innerHTML = `Read-only — launches <code>claude --agent ${role}</code> against the target checkout (no worktree, no edits).`;
+  } else if (ROLES[role].needsWorktree) {
+    hint.innerHTML = `Creates a git worktree on <code>agent/&lt;task&gt;</code> and launches <code>claude --agent ${role}</code>.`;
+  } else {
+    hint.innerHTML = `No worktree — launches <code>claude --agent ${role}</code> in the repo root (writes to <code>/outputs</code>).`;
+  }
+}
+
+// Fill the read-only-role target dropdown: the main checkout + every live agent worktree.
+function populateTargets() {
+  const sel = $('#targetSelect');
+  if (!sel) return;
+  sel.innerHTML = '';
+  const add = (val, text) => { const o = document.createElement('option'); o.value = val; o.textContent = text; sel.appendChild(o); };
+  if (state.repo) add(state.repo, state.repo.split(/[\\/]/).pop() + ' (main checkout)');
+  for (const wt of state.worktrees) add(wt.path, wt.branch || taskOf(wt));
 }
 
 function openModal() {
   if (!state.repo) { alert('Pick a repo first (set your projects root with 📁).'); return; }
   $('#taskName').value = '';
+  // reset to Builder default
+  state.chosenRole = 'builder'; state.hardTask = false;
+  $('#hardTask').checked = false;
+  document.querySelectorAll('.role-choices .choice').forEach((x) => x.classList.toggle('active', x.dataset.role === 'builder'));
+  populateTargets();
+  $('#builderOpts').classList.remove('hidden');
+  $('#cliRow').classList.add('hidden');
+  $('#targetRow').classList.add('hidden');
+  updateModalHint();
   $('#modal').classList.remove('hidden');
   $('#taskName').focus();
 }
 function closeModal() { $('#modal').classList.add('hidden'); }
 
 async function createAgent() {
+  const role = state.chosenRole;
+  const meta = role !== 'plain' ? ROLES[role] : null;
+
+  // Read-only roles: no worktree, no task needed — point at the chosen target checkout.
+  if (meta && meta.readOnly) {
+    const target = $('#targetSelect').value || state.repo;
+    closeModal();
+    appendLog(`\n[agent] ${role} (read-only) on ${target}…\n`);
+    openInAppTerminal({ worktree: target, role, cli: 'claude', title: `${meta.label} · ${target.split(/[\\/]/).pop()}` });
+    return;
+  }
+
   const task = $('#taskName').value.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '');
   if (!task) { $('#taskName').focus(); return; }
   closeModal();
-  appendLog(`\n[agent] creating worktree agent/${task} (${state.chosenAgent})…\n`);
-  const res = await cc.newAgent({ repo: state.repo, task, agent: state.chosenAgent });
-  await refreshAgents();
-  if (res && res.worktree) openInAppTerminal({ worktree: res.worktree, agent: state.chosenAgent });
+
+  // Plain: today's behavior — fresh worktree + a bare CLI.
+  if (role === 'plain') {
+    appendLog(`\n[agent] worktree agent/${task} (plain ${state.chosenCli})…\n`);
+    const res = await cc.newAgent({ repo: state.repo, task });
+    await refreshAgents();
+    if (res && res.worktree) openInAppTerminal({ worktree: res.worktree, cli: state.chosenCli });
+    return;
+  }
+
+  if (meta.needsWorktree) {
+    // Builder: fresh worktree, launched with the role (Opus override when Hard is checked).
+    appendLog(`\n[agent] worktree agent/${task} (${role}${state.hardTask ? ', opus/xhigh' : ''})…\n`);
+    const res = await cc.newAgent({ repo: state.repo, task });
+    await refreshAgents();
+    const model = state.hardTask ? 'opus' : undefined;
+    const effort = state.hardTask ? 'xhigh' : undefined;
+    if (res && res.worktree) openInAppTerminal({ worktree: res.worktree, role, cli: 'claude', model, effort, title: `${meta.label} · ${task}` });
+  } else {
+    // Web-Scout / Operator: no worktree — they write to /outputs, run in the repo root.
+    appendLog(`\n[agent] ${role} in repo root (${task})…\n`);
+    openInAppTerminal({ worktree: state.repo, role, cli: 'claude', title: `${meta.label} · ${task}` });
+  }
 }
 
 boot();

@@ -107,17 +107,35 @@
       <h3>New Agent</h3>
       <label>Task name <span class="muted">(kebab-case)</span></label>
       <input id="taskName" placeholder="e.g. search-bar" />
-      <label>Agent</label>
-      <div class="agent-choices">
-        <button class="choice active" data-agent="claude"><span class="dot claude"></span>Claude</button>
-        <button class="choice" data-agent="codex"><span class="dot codex"></span>Codex</button>
-        <button class="choice" data-agent="gemini"><span class="dot gemini"></span>Gemini</button>
+      <label>Role</label>
+      <div class="agent-choices role-choices">
+        <button class="choice active" data-role="builder">🔨 Builder</button>
+        <button class="choice" data-role="reviewer">🔎 Reviewer</button>
+        <button class="choice" data-role="codebase-scout">🧭 Codebase</button>
+        <button class="choice" data-role="web-scout">🌐 Web Scout</button>
+        <button class="choice" data-role="operator">📣 Operator</button>
+        <button class="choice" data-role="plain">▶ Plain</button>
+      </div>
+      <div id="builderOpts" class="modal-opt">
+        <label class="check"><input type="checkbox" id="hardTask" /> Hard task — launch on Opus (xhigh effort)</label>
+      </div>
+      <div id="targetRow" class="modal-opt hidden">
+        <label>Target checkout <span class="muted">(read-only role points here)</span></label>
+        <select id="targetSelect"></select>
+      </div>
+      <div id="cliRow" class="modal-opt hidden">
+        <label>CLI</label>
+        <div class="agent-choices">
+          <button class="choice cli-choice active" data-cli="claude"><span class="dot claude"></span>Claude</button>
+          <button class="choice cli-choice" data-cli="codex"><span class="dot codex"></span>Codex</button>
+          <button class="choice cli-choice" data-cli="gemini"><span class="dot gemini"></span>Gemini</button>
+        </div>
       </div>
       <div class="modal-actions">
         <button id="modalCancel" class="ghost">Cancel</button>
         <button id="modalCreate" class="action accent">Create &amp; Launch</button>
       </div>
-      <p class="muted small">Creates a git worktree on <code>agent/&lt;task&gt;</code> and opens the agent in its own terminal.</p>
+      <p class="muted small" id="modalHint">Creates a git worktree on <code>agent/&lt;task&gt;</code> and launches <code>claude --agent builder</code> in its own terminal.</p>
     </div>
   </div>
 

@@ -14,6 +14,29 @@ const DEFAULT_PROJECTS_ROOT = 'D:\\Workspace';            // (?) where your git 
 const SCRIPTS_DIR = path.join(__dirname, '..', 'scripts'); // new-agent.ps1 etc. live one level up in this repo
 const AGENT_CMD = { claude: 'claude', codex: 'codex', gemini: 'gemini' }; // CLI launched per agent
 
+// Blue Helm roles: launch `claude --agent <role>` with optional per-task overrides.
+// Everything is validated against allowlists before it is spliced into a shell command,
+// so the renderer can never inject arbitrary text through the IPC channel.
+const VALID_ROLES = new Set(['builder', 'reviewer', 'codebase-scout', 'web-scout', 'operator']);
+const VALID_MODELS = new Set(['sonnet', 'opus', 'haiku', 'fable']);
+const VALID_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
+
+// Resolve a launch spec to the command run inside the PTY. Three cases:
+//   role set    -> `claude --agent <role> [--model x] [--effort y]` (roles are a Claude feature)
+//   cli only    -> bare CLI (claude/codex/gemini)
+//   neither     -> undefined => plain PowerShell shell
+function buildAgentCommand({ cli, agent, role, model, effort }) {
+  if (role && VALID_ROLES.has(role)) {
+    // `--agent` is a Claude feature, so roles always launch on the Claude CLI regardless
+    // of any cli hint (the Gemini video-scout path injects its brief differently — Phase C).
+    let cmd = AGENT_CMD.claude + ' --agent ' + role;
+    if (VALID_MODELS.has(model)) cmd += ' --model ' + model;
+    if (VALID_EFFORTS.has(effort)) cmd += ' --effort ' + effort;
+    return cmd;
+  }
+  return AGENT_CMD[cli || agent]; // undefined when unknown/falsy -> plain shell
+}
+
 // ---- tiny settings store (userData/settings.json) ---------------------------
 const settingsPath = () => path.join(app.getPath('userData'), 'settings.json');
 function loadSettings() {
@@ -142,8 +165,9 @@ ipcMain.handle('open-external', async (_e, url) => { if (url) shell.openExternal
 // Each renderer terminal pane gets a real ConPTY here: PowerShell spawned in the
 // worktree, optionally running the chosen agent CLI, with bytes streamed both ways.
 // This is what makes agents run *inside* the Command Center window.
-ipcMain.handle('pty-start', (_e, { id, cwd, agent, cols, rows }) => {
-  const run = AGENT_CMD[agent]; // undefined => plain shell
+ipcMain.handle('pty-start', (_e, opts) => {
+  const { id, cwd, cols, rows } = opts;
+  const run = buildAgentCommand(opts); // role / bare CLI / undefined => plain shell
   // -ExecutionPolicy Bypass so npm .ps1 shims (claude/codex/gemini) always launch.
   const args = ['-NoLogo', '-ExecutionPolicy', 'Bypass', '-NoExit'];
   if (run) args.push('-Command', run);
