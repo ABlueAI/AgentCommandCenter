@@ -77,21 +77,32 @@ function openInAppTerminal(opts = {}) {
   fit.fit();
   term.onData((d) => cc.ptyWrite(id, d));
   term.onResize(({ cols, rows }) => cc.ptyResize(id, cols, rows));
-  // Clipboard: Ctrl+Shift+V paste, Ctrl+Shift+C copy, right-click = copy-selection-else-paste.
-  // Plain Ctrl+C / Ctrl+V are left untouched so Ctrl+C still sends SIGINT to the agent.
-  // Paste writes raw bytes straight to the PTY (like typing) rather than term.paste(), which
-  // wraps in bracketed-paste escapes that some TUIs (e.g. the Gemini prompt) silently drop.
+  // Clipboard, mirroring Windows Terminal / VS Code (not the purist xterm convention):
+  //   Ctrl+V (or Ctrl+Shift+V)  -> paste
+  //   Ctrl+C                    -> copy when text is selected, otherwise send SIGINT (^C)
+  //   Ctrl+Shift+C              -> always copy the selection
+  //   right-click               -> copy selection, else paste
+  //   OSC 52                    -> programs (e.g. Claude Code's "Copied!") set the OS clipboard
+  // Paste writes raw bytes to the PTY (like typing) rather than term.paste(), whose bracketed-
+  // paste escapes some TUIs (e.g. the Gemini prompt) silently drop.
   const readClip = () => { try { return (cc.clipboardRead && cc.clipboardRead()) || ''; } catch { return ''; } };
-  const writeClip = (s) => { try { if (cc.clipboardWrite) cc.clipboardWrite(s); } catch {} };
+  const writeClip = (s) => { try { if (s && cc.clipboardWrite) cc.clipboardWrite(s); } catch {} };
   const pasteIntoPty = () => {
     const t = readClip();
     if (t) cc.ptyWrite(id, t);
-    else appendLog('[clipboard] nothing pasted (clipboard empty, or restart the app to load clipboard support).\n');
+    else appendLog('[clipboard] nothing to paste (clipboard empty, or restart the app to load clipboard support).\n');
   };
   term.attachCustomKeyEventHandler((e) => {
-    if (e.type !== 'keydown' || !e.ctrlKey || !e.shiftKey) return true;
-    if (e.code === 'KeyV' || (e.key && e.key.toLowerCase() === 'v')) { pasteIntoPty(); return false; }
-    if (e.code === 'KeyC' || (e.key && e.key.toLowerCase() === 'c')) { const s = term.getSelection(); if (s) { writeClip(s); return false; } }
+    if (e.type !== 'keydown' || !e.ctrlKey) return true;
+    const isV = e.code === 'KeyV' || (e.key && e.key.toLowerCase() === 'v');
+    const isC = e.code === 'KeyC' || (e.key && e.key.toLowerCase() === 'c');
+    if (isV) { pasteIntoPty(); return false; }              // Ctrl+V / Ctrl+Shift+V
+    if (isC) {
+      const sel = term.getSelection();
+      if (sel) { writeClip(sel); term.clearSelection(); return false; } // copy
+      if (e.shiftKey) return false;                          // Ctrl+Shift+C, nothing selected: swallow
+      return true;                                           // plain Ctrl+C, nothing selected: SIGINT
+    }
     return true;
   });
   pane.querySelector('.term-body').addEventListener('contextmenu', (e) => {
@@ -100,6 +111,21 @@ function openInAppTerminal(opts = {}) {
     if (s) { writeClip(s); term.clearSelection(); }
     else pasteIntoPty();
   });
+  // OSC 52: when a program in the PTY asks the terminal to set the clipboard (Claude Code's
+  // "(Copied!)", etc.), actually write it to the Windows clipboard. Payload is "<sel>;<base64>".
+  if (term.parser && term.parser.registerOscHandler) {
+    term.parser.registerOscHandler(52, (data) => {
+      const i = (data || '').indexOf(';');
+      if (i >= 0) {
+        const b64 = data.slice(i + 1);
+        if (b64 && b64 !== '?') {
+          try { writeClip(decodeURIComponent(escape(atob(b64)))); }
+          catch { try { writeClip(atob(b64)); } catch {} }
+        }
+      }
+      return true; // handled
+    });
+  }
   pane.querySelector('.x').onclick = () => {
     cc.ptyKill(id); term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
