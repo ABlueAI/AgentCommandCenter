@@ -109,6 +109,7 @@ async function boot() {
   wireUi();
   cc.onPtyData(({ id, data }) => { const t = terms.get(id); if (t) t.term.write(data); });
   cc.onPtyExit(({ id }) => { const t = terms.get(id); if (t) t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n'); });
+  cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));
   window.addEventListener('resize', fitAllTerms);
 }
 
@@ -337,6 +338,16 @@ function openModal() {
 }
 function closeModal() { $('#modal').classList.add('hidden'); }
 
+// Guard: did new-agent actually create the worktree? If not, surface the real reason
+// instead of launching a terminal into a directory that doesn't exist.
+function worktreeOk(res, task) {
+  if (res && res.ok) return true;
+  const why = (res && res.error) || 'unknown error';
+  appendLog(`[agent] could not create worktree for "${task}": ${why}\n`);
+  alert(`Could not create the worktree for "${task}":\n\n${why}\n\nThat branch or folder may already exist — try a different task name, or Remove the old agent first.`);
+  return false;
+}
+
 async function createAgent() {
   const role = state.chosenRole;
   const meta = role !== 'plain' ? ROLES[role] : null;
@@ -359,7 +370,8 @@ async function createAgent() {
     appendLog(`\n[agent] worktree agent/${task} (plain ${state.chosenCli})…\n`);
     const res = await cc.newAgent({ repo: state.repo, task });
     await refreshAgents();
-    if (res && res.worktree) openInAppTerminal({ worktree: res.worktree, cli: state.chosenCli });
+    if (!worktreeOk(res, task)) return;
+    openInAppTerminal({ worktree: res.worktree, cli: state.chosenCli });
     return;
   }
 
@@ -368,9 +380,10 @@ async function createAgent() {
     appendLog(`\n[agent] worktree agent/${task} (${role}${state.hardTask ? ', opus/xhigh' : ''})…\n`);
     const res = await cc.newAgent({ repo: state.repo, task });
     await refreshAgents();
+    if (!worktreeOk(res, task)) return;
     const model = state.hardTask ? 'opus' : undefined;
     const effort = state.hardTask ? 'xhigh' : undefined;
-    if (res && res.worktree) openInAppTerminal({ worktree: res.worktree, role, cli: 'claude', model, effort, title: `${meta.label} · ${task}` });
+    openInAppTerminal({ worktree: res.worktree, role, cli: 'claude', model, effort, title: `${meta.label} · ${task}` });
   } else {
     // Web-Scout / Operator: no worktree — they write to /outputs, run in the repo root.
     appendLog(`\n[agent] ${role} in repo root (${task})…\n`);

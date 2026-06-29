@@ -35,4 +35,7 @@ contextBridge.exposeInMainWorld('cc', {
   // clipboard (terminal copy/paste — via Electron's clipboard, no navigator permission prompts)
   clipboardRead: () => clipboard.readText(),
   clipboardWrite: (t) => clipboard.writeText(t),
+
+  // surfaced main-process errors (shown in the Logs tab instead of a fatal dialog)
+  onMainError: (cb) => ipcRenderer.on('main-error', (_e, m) => cb(m)),
 });
