@@ -48,6 +48,13 @@ function saveSettings(s) { fs.writeFileSync(settingsPath(), JSON.stringify(s, nu
 let win = null;
 const ptys = new Map(); // terminal id -> pty process (in-app terminals)
 
+// Keep a single recoverable error (e.g. a ConPTY hiccup in a worker thread) from killing the
+// whole app with a fatal dialog. Log it, and surface it in the renderer's Logs tab if we can.
+process.on('uncaughtException', (err) => {
+  console.error('[main] uncaught exception:', err);
+  if (win && !win.isDestroyed()) win.webContents.send('main-error', String((err && err.message) || err));
+});
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1320, height: 860, minWidth: 980, minHeight: 640,
@@ -132,17 +139,23 @@ ipcMain.handle('repo-github-url', async (_e, repo) => remoteToHttps(await git(['
 
 // ---- IPC: agents ------------------------------------------------------------
 // Create a worktree (via the repo's own new-agent.ps1) and launch the chosen agent in a WT tab.
-ipcMain.handle('new-agent', async (_e, { repo, task, agent }) => {
+ipcMain.handle('new-agent', async (_e, { repo, task }) => {
   const script = path.join(SCRIPTS_DIR, 'new-agent.ps1');
-  await new Promise((resolve) => {
+  // Worktree path follows the <repo>-<task> sibling convention the scripts use.
+  const wt = path.join(path.dirname(repo), `${path.basename(repo)}-${task}`);
+  const branch = `agent/${task}`;
+  const out = await new Promise((resolve) => {
     execFile('powershell',
       ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-Task', task],
-      { cwd: repo }, () => resolve());
+      { cwd: repo }, (err, stdout, stderr) => resolve({ err, stdout, stderr }));
   });
-  // Worktree path follows the <repo>-<task> sibling convention the scripts use.
-  // The renderer opens an in-app terminal for it (see openInAppTerminal); no external window.
-  const wt = path.join(path.dirname(repo), `${path.basename(repo)}-${task}`);
-  return { worktree: wt, branch: `agent/${task}` };
+  // Don't claim success unless the folder really exists — otherwise the renderer would try
+  // to launch a PTY into a missing dir (Windows error 267) and crash the app.
+  if (!fs.existsSync(wt)) {
+    const error = ((out.stderr || (out.err && out.err.message) || 'worktree was not created') + '').trim();
+    return { ok: false, error, worktree: wt, branch };
+  }
+  return { ok: true, worktree: wt, branch };
 });
 
 // Tear down an agent's worktree (branch is preserved by the script).
@@ -166,17 +179,26 @@ ipcMain.handle('open-external', async (_e, url) => { if (url) shell.openExternal
 // worktree, optionally running the chosen agent CLI, with bytes streamed both ways.
 // This is what makes agents run *inside* the Command Center window.
 ipcMain.handle('pty-start', (_e, opts) => {
-  const { id, cwd, cols, rows } = opts;
+  const { id, cols, rows } = opts;
+  // Never spawn into a missing directory: ConPTY throws Windows error 267 (ERROR_DIRECTORY)
+  // from a worker thread, which would surface as a fatal uncaught exception.
+  const cwd = (opts.cwd && fs.existsSync(opts.cwd)) ? opts.cwd : process.env.USERPROFILE;
   const run = buildAgentCommand(opts); // role / bare CLI / undefined => plain shell
   // -ExecutionPolicy Bypass so npm .ps1 shims (claude/codex/gemini) always launch.
   const args = ['-NoLogo', '-ExecutionPolicy', 'Bypass', '-NoExit'];
   if (run) args.push('-Command', run);
-  const p = pty.spawn('powershell.exe', args, {
-    name: 'xterm-256color',
-    cols: cols || 80, rows: rows || 24,
-    cwd: cwd || process.env.USERPROFILE,
-    env: process.env,
-  });
+  let p;
+  try {
+    p = pty.spawn('powershell.exe', args, {
+      name: 'xterm-256color',
+      cols: cols || 80, rows: rows || 24,
+      cwd,
+      env: process.env,
+    });
+  } catch (e) {
+    if (win && !win.isDestroyed()) win.webContents.send('pty-exit', { id });
+    return { ok: false, error: String((e && e.message) || e) };
+  }
   ptys.set(id, p);
   p.onData((data) => { if (win && !win.isDestroyed()) win.webContents.send('pty-data', { id, data }); });
   p.onExit(() => { ptys.delete(id); if (win && !win.isDestroyed()) win.webContents.send('pty-exit', { id }); });

@@ -77,6 +77,21 @@ function openInAppTerminal(opts = {}) {
   fit.fit();
   term.onData((d) => cc.ptyWrite(id, d));
   term.onResize(({ cols, rows }) => cc.ptyResize(id, cols, rows));
+  // Clipboard: Ctrl+Shift+V paste, Ctrl+Shift+C copy, right-click = copy-selection-else-paste.
+  // Plain Ctrl+C / Ctrl+V are left untouched so Ctrl+C still sends SIGINT to the agent.
+  term.attachCustomKeyEventHandler((e) => {
+    if (e.type !== 'keydown' || !e.ctrlKey || !e.shiftKey) return true;
+    const k = e.key.toLowerCase();
+    if (k === 'v') { const t = cc.clipboardRead(); if (t) term.paste(t); return false; }
+    if (k === 'c') { const s = term.getSelection(); if (s) { cc.clipboardWrite(s); return false; } }
+    return true;
+  });
+  pane.querySelector('.term-body').addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const s = term.getSelection();
+    if (s) { cc.clipboardWrite(s); term.clearSelection(); }
+    else { const t = cc.clipboardRead(); if (t) term.paste(t); }
+  });
   pane.querySelector('.x').onclick = () => {
     cc.ptyKill(id); term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
@@ -94,6 +109,7 @@ async function boot() {
   wireUi();
   cc.onPtyData(({ id, data }) => { const t = terms.get(id); if (t) t.term.write(data); });
   cc.onPtyExit(({ id }) => { const t = terms.get(id); if (t) t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n'); });
+  cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));
   window.addEventListener('resize', fitAllTerms);
 }
 
@@ -322,6 +338,16 @@ function openModal() {
 }
 function closeModal() { $('#modal').classList.add('hidden'); }
 
+// Guard: did new-agent actually create the worktree? If not, surface the real reason
+// instead of launching a terminal into a directory that doesn't exist.
+function worktreeOk(res, task) {
+  if (res && res.ok) return true;
+  const why = (res && res.error) || 'unknown error';
+  appendLog(`[agent] could not create worktree for "${task}": ${why}\n`);
+  alert(`Could not create the worktree for "${task}":\n\n${why}\n\nThat branch or folder may already exist — try a different task name, or Remove the old agent first.`);
+  return false;
+}
+
 async function createAgent() {
   const role = state.chosenRole;
   const meta = role !== 'plain' ? ROLES[role] : null;
@@ -344,7 +370,8 @@ async function createAgent() {
     appendLog(`\n[agent] worktree agent/${task} (plain ${state.chosenCli})…\n`);
     const res = await cc.newAgent({ repo: state.repo, task });
     await refreshAgents();
-    if (res && res.worktree) openInAppTerminal({ worktree: res.worktree, cli: state.chosenCli });
+    if (!worktreeOk(res, task)) return;
+    openInAppTerminal({ worktree: res.worktree, cli: state.chosenCli });
     return;
   }
 
@@ -353,9 +380,10 @@ async function createAgent() {
     appendLog(`\n[agent] worktree agent/${task} (${role}${state.hardTask ? ', opus/xhigh' : ''})…\n`);
     const res = await cc.newAgent({ repo: state.repo, task });
     await refreshAgents();
+    if (!worktreeOk(res, task)) return;
     const model = state.hardTask ? 'opus' : undefined;
     const effort = state.hardTask ? 'xhigh' : undefined;
-    if (res && res.worktree) openInAppTerminal({ worktree: res.worktree, role, cli: 'claude', model, effort, title: `${meta.label} · ${task}` });
+    openInAppTerminal({ worktree: res.worktree, role, cli: 'claude', model, effort, title: `${meta.label} · ${task}` });
   } else {
     // Web-Scout / Operator: no worktree — they write to /outputs, run in the repo root.
     appendLog(`\n[agent] ${role} in repo root (${task})…\n`);

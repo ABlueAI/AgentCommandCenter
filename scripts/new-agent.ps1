@@ -23,9 +23,20 @@ $repoName     = Split-Path $repoRoot -Leaf
 $branch       = "agent/$Task"
 $worktreePath = Join-Path (Split-Path $repoRoot -Parent) "$repoName-$Task"
 
-if (Test-Path $worktreePath) { throw "Worktree path already exists: $worktreePath" }
+# Idempotent: if the worktree folder is already there, reuse it (the app just reopens a terminal).
+if (Test-Path $worktreePath) {
+    Write-Host "Worktree already exists, reusing: $worktreePath"
+    exit 0
+}
 
-git worktree add -b $branch $worktreePath $Base
+# If the branch already exists (e.g. a prior agent was removed but its branch was preserved),
+# attach that branch to the new worktree instead of trying to re-create it.
+$branchExists = git branch --list $branch
+if ($branchExists) {
+    git worktree add $worktreePath $branch
+} else {
+    git worktree add -b $branch $worktreePath $Base
+}
 
 Write-Host ""
 Write-Host "Agent worktree ready:" -ForegroundColor Green

@@ -1,6 +1,6 @@
 // Preload bridge: the ONLY surface the renderer can see. Keeps Node out of the UI
 // while exposing a tidy `window.cc` API that maps 1:1 to the main-process handlers.
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, clipboard } = require('electron');
 
 contextBridge.exposeInMainWorld('cc', {
   // settings & repos
@@ -31,4 +31,11 @@ contextBridge.exposeInMainWorld('cc', {
   ptyKill: (id) => ipcRenderer.send('pty-kill', id),
   onPtyData: (cb) => ipcRenderer.on('pty-data', (_e, p) => cb(p)),
   onPtyExit: (cb) => ipcRenderer.on('pty-exit', (_e, p) => cb(p)),
+
+  // clipboard (terminal copy/paste — via Electron's clipboard, no navigator permission prompts)
+  clipboardRead: () => clipboard.readText(),
+  clipboardWrite: (t) => clipboard.writeText(t),
+
+  // surfaced main-process errors (shown in the Logs tab instead of a fatal dialog)
+  onMainError: (cb) => ipcRenderer.on('main-error', (_e, m) => cb(m)),
 });
