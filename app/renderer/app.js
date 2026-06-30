@@ -76,7 +76,19 @@ function openInAppTerminal(opts = {}) {
   const term = new Terminal({ theme: xtermTheme(), fontFamily: "'Cascadia Code','Consolas',monospace", fontSize: 13, cursorBlink: true, allowProposedApi: true, scrollback: 5000 });
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
+  // Clickable URLs — opened only via the vetted shell.openExternal path, http(s) only.
+  term.loadAddon(new WebLinksAddon.WebLinksAddon((e, uri) => {
+    if (/^https?:\/\//i.test(uri)) cc.openExternal(uri);
+  }));
+  // Correct width for wide/emoji glyphs so the agents' box-drawing TUIs render cleanly.
+  try { term.loadAddon(new Unicode11Addon.Unicode11Addon()); term.unicode.activeVersion = '11'; } catch {}
   term.open(pane.querySelector('.term-body'));
+  // GPU renderer for smooth large output; fall back to DOM if the WebGL context is lost.
+  try {
+    const webgl = new WebglAddon.WebglAddon();
+    webgl.onContextLoss(() => { try { webgl.dispose(); } catch {} });
+    term.loadAddon(webgl);
+  } catch { /* no WebGL here — xterm keeps its DOM renderer */ }
   fit.fit();
   term.onData((d) => cc.ptyWrite(id, d));
   term.onResize(({ cols, rows }) => cc.ptyResize(id, cols, rows));
