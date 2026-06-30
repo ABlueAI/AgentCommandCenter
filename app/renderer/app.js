@@ -402,7 +402,7 @@ function updateModalHint() {
   } else if (ROLES[role].needsWorktree) {
     hint.innerHTML = `Creates a git worktree on <code>agent/&lt;task&gt;</code> and launches <code>claude --agent ${role}</code>.`;
   } else {
-    hint.innerHTML = `No worktree — launches <code>claude --agent ${role}</code> in the repo root (writes to <code>/outputs</code>).`;
+    hint.innerHTML = `Runs in a fenced output sandbox (can't write to any repo) — launches <code>claude --agent ${role}</code>.`;
   }
 }
 
@@ -492,9 +492,12 @@ async function createAgent() {
     const effort = state.hardTask ? 'xhigh' : undefined;
     openInAppTerminal({ worktree: res.worktree, role, cli: 'claude', model, effort, title: `${meta.label} · ${task}` });
   } else {
-    // Web-Scout / Operator: no worktree — they write to /outputs, run in the repo root.
-    appendLog(`\n[agent] ${role} in repo root (${task})…\n`);
-    openInAppTerminal({ worktree: state.repo, role, cli: 'claude', title: `${meta.label} · ${task}` });
+    // Web-Scout / Operator: run in a dedicated fenced sandbox outside any repo. Its
+    // PreToolUse write-fence confines writes to this dir — it can't touch a repo.
+    const r = await cc.ensureOutputDir(role);
+    if (!r || !r.ok) { appendLog(`[agent] could not create sandbox: ${r && r.error}\n`); alert('Could not create the output sandbox:\n' + ((r && r.error) || 'unknown error')); return; }
+    appendLog(`\n[agent] ${role} in fenced sandbox ${r.dir}…\n`);
+    openInAppTerminal({ worktree: r.dir, role, cli: 'claude', title: `${meta.label} · ${task}` });
   }
 }
 
