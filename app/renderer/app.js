@@ -13,6 +13,9 @@ const ROLES = {
   'codebase-scout': { label: 'Codebase Scout', glyph: '🧭', cli: 'claude', readOnly: true,  needsWorktree: false, newAgent: false },
   'web-scout':      { label: 'Web Scout',       glyph: '🌐', cli: 'claude', readOnly: false, needsWorktree: false, newAgent: true },
   operator:         { label: 'Operator',        glyph: '📣', cli: 'claude', readOnly: false, needsWorktree: false, newAgent: true },
+  // Video-scout runs on Gemini (the only model that watches video), launched via the videoScout
+  // path, not claude --agent. Input is a URL, not a task name.
+  'video-scout':    { label: 'Video Scout',     glyph: '🎥', cli: 'gemini', readOnly: false, needsWorktree: false, newAgent: true, video: true },
 };
 
 // ---- in-app terminals (xterm.js front-end; real ConPTY lives in main) -------
@@ -131,7 +134,7 @@ function openInAppTerminal(opts = {}) {
     if (terms.size === 0) showTermEmpty();
   };
   terms.set(id, { term, fit, pane });
-  cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, cols: term.cols, rows: term.rows });
+  cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, cols: term.cols, rows: term.rows });
   setTimeout(() => { fit.fit(); cc.ptyResize(id, term.cols, term.rows); term.focus(); }, 40);
 }
 
@@ -330,10 +333,11 @@ function wireUi() {
       document.querySelectorAll('.role-choices .choice').forEach((x) => x.classList.remove('active'));
       c.classList.add('active');
       state.chosenRole = c.dataset.role;
-      const ro = !!(ROLES[state.chosenRole] && ROLES[state.chosenRole].readOnly);
+      const r = ROLES[state.chosenRole] || {};
       $('#builderOpts').classList.toggle('hidden', state.chosenRole !== 'builder');
       $('#cliRow').classList.toggle('hidden', state.chosenRole !== 'plain');
-      $('#targetRow').classList.toggle('hidden', !ro);
+      $('#targetRow').classList.toggle('hidden', !r.readOnly);
+      setTaskInputMode(!!r.video); // video-scout uses the same field for a URL
       updateModalHint();
     };
   });
@@ -349,6 +353,18 @@ function wireUi() {
   $('#hardTask').onchange = (e) => { state.hardTask = e.target.checked; };
 }
 
+// The task field doubles as the URL field for video-scout — relabel it accordingly.
+function setTaskInputMode(isVideo) {
+  const lbl = $('#taskNameLabel'); const inp = $('#taskName');
+  if (isVideo) {
+    if (lbl) lbl.innerHTML = 'Video URL';
+    if (inp) inp.placeholder = 'https://youtu.be/…';
+  } else {
+    if (lbl) lbl.innerHTML = 'Task name <span class="muted">(kebab-case)</span>';
+    if (inp) inp.placeholder = 'e.g. search-bar';
+  }
+}
+
 // Reflect what the modal will actually launch.
 function updateModalHint() {
   const hint = $('#modalHint');
@@ -356,6 +372,8 @@ function updateModalHint() {
   const role = state.chosenRole;
   if (role === 'plain') {
     hint.innerHTML = `Creates a git worktree on <code>agent/&lt;task&gt;</code> and launches <code>${state.chosenCli}</code>.`;
+  } else if (ROLES[role].video) {
+    hint.innerHTML = `Downloads the video (yt-dlp) and analyzes it with <code>Gemini</code> — visual + spoken. Needs <code>GEMINI_API_KEY</code>.`;
   } else if (ROLES[role].readOnly) {
     hint.innerHTML = `Read-only — launches <code>claude --agent ${role}</code> against the target checkout (no worktree, no edits).`;
   } else if (ROLES[role].needsWorktree) {
@@ -383,6 +401,7 @@ function openModal() {
   $('#hardTask').checked = false;
   document.querySelectorAll('.role-choices .choice').forEach((x) => x.classList.toggle('active', x.dataset.role === 'builder'));
   populateTargets();
+  setTaskInputMode(false);
   $('#builderOpts').classList.remove('hidden');
   $('#cliRow').classList.add('hidden');
   $('#targetRow').classList.add('hidden');
@@ -405,6 +424,16 @@ function worktreeOk(res, task) {
 async function createAgent() {
   const role = state.chosenRole;
   const meta = role !== 'plain' ? ROLES[role] : null;
+
+  // Video-scout: the input is a video URL, not a task. Download + analyze with Gemini.
+  if (meta && meta.video) {
+    const url = $('#taskName').value.trim();
+    if (!/^https?:\/\/\S+$/.test(url)) { alert('Enter a video URL (starting with http:// or https://).'); $('#taskName').focus(); return; }
+    closeModal();
+    appendLog(`\n[video-scout] downloading + analyzing ${url}…\n`);
+    openInAppTerminal({ worktree: state.repo || undefined, role, videoScout: true, videoUrl: url, title: `Video Scout · ${new URL(url).hostname}` });
+    return;
+  }
 
   // Read-only roles: no worktree, no task needed — point at the chosen target checkout.
   if (meta && meta.readOnly) {

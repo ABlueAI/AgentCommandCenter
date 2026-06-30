@@ -163,6 +163,7 @@ input:focus { outline: none; border-color: var(--accent); }
 .role-badge[data-role="codebase-scout"] { color: #22B8CF; border-color: #22B8CF66; background: #22B8CF1a; }
 .role-badge[data-role="web-scout"]      { color: #22B8CF; border-color: #22B8CF66; background: #22B8CF1a; }
 .role-badge[data-role="operator"]       { color: #9775FA; border-color: #9775FA66; background: #9775FA1a; }
+.role-badge[data-role="video-scout"]    { color: #E64980; border-color: #E6498066; background: #E649801a; }
 .role-choices { flex-wrap: wrap; }
 .role-choices .choice { font-size: 12px; padding: 8px 6px; flex: 1 1 30%; }
 .modal-opt { margin-top: 4px; }
