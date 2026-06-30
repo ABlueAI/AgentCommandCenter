@@ -185,6 +185,18 @@ ipcMain.handle('remove-agent', async (_e, { repo, task }) => {
   return true;
 });
 
+// Create a dedicated, fenced outputs sandbox for a research role (web-scout/operator) so it
+// runs OUTSIDE any repo. The role launches with cwd = this dir, and its PreToolUse write-fence
+// confines writes to here — it cannot touch a repo even though it has the Write tool.
+ipcMain.handle('ensure-output-dir', async (_e, { role }) => {
+  const safeRole = String(role || 'output').replace(/[^a-z0-9-]/gi, '') || 'output';
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const dir = path.join(loadSettings().projectsRoot, '.command-center', 'outputs', `${safeRole}-${stamp}`);
+  try { fs.mkdirSync(dir, { recursive: true }); }
+  catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
+  return { ok: true, dir };
+});
+
 // Build a review diff for a worktree (this branch vs main, including uncommitted work) and
 // write it to .agent-review.diff in that worktree so the read-only Reviewer can Read it —
 // the Reviewer has no shell, so the launcher produces the diff for it (Blue Helm spec §2).

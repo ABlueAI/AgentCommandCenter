@@ -56,13 +56,23 @@ claude --agent reviewer        # read-only roles skip worktree creation; point a
   and `mcpServers` frontmatter are ignored. As project/user-scope files (the path here),
   they work normally.
 
+## Write-fencing (web-scout / operator)
+
+These two roles have the `Write` tool, which the allowlist can't scope to a directory. So
+they carry a **PreToolUse hook** (`scripts/hooks/fence-write.js`) that **hard-denies any
+Write/Edit outside the session cwd**. The launcher runs them in a dedicated sandbox
+(`<projectsRoot>/.command-center/outputs/<role>-<timestamp>`), so they cannot touch any
+repo no matter what their prompt says. The hook deploys to `~/.claude/hooks/` and its
+absolute path is injected in place of the `__CC_HOOK__` placeholder by `sync-roles.ps1` —
+so **these roles only enforce after a `sync-roles.ps1` run** (don't hand-copy the .md).
+
 ## Open items (still to verify when building)
 
 - Precedence when both frontmatter `effort` and a launch-time `--effort` flag are set
   (test before relying on launch-time override for the builder's hard-task dial-up).
-- Directory-scoped Write for `web-scout` / `operator`: the `tools` allowlist can't fence
-  Write to `/outputs`; that needs a `permissions.deny` rule or a PreToolUse hook (v2
-  hardening — v1 relies on every output being human-reviewed).
+- Live-confirm the fence fires when launched via `claude --agent web-scout` (frontmatter
+  hooks are documented to apply; verify once by asking it to write outside the sandbox).
+- Optional: extend the same fence to keep the **builder** inside its worktree.
 
 > The human merge gate is sacred: no role auto-merges to `main`, ever. Never run a role in
 > bypass-permissions mode against anything that can reach production.

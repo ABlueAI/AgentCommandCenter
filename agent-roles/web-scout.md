@@ -6,6 +6,12 @@ model: sonnet
 effort: medium
 permissionMode: default
 color: cyan
+hooks:
+  PreToolUse:
+    - matcher: "Write|Edit|MultiEdit"
+      hooks:
+        - type: command
+          command: "node \"__CC_HOOK__\""
 ---
 
 You are the Web Scout. You research what real people in a target market are talking about, searching for, and struggling with - independent of any code being built in parallel.

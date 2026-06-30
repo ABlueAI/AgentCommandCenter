@@ -6,6 +6,12 @@ model: sonnet
 effort: medium
 permissionMode: default
 color: purple
+hooks:
+  PreToolUse:
+    - matcher: "Write|Edit|MultiEdit"
+      hooks:
+        - type: command
+          command: "node \"__CC_HOOK__\""
 ---
 
 You are the Operator. You do what a sharp marketing hire would do in the first 48 hours after a launch - for the current cycle only.
