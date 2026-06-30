@@ -129,11 +129,22 @@ function openInAppTerminal(opts = {}) {
       return true; // handled
     });
   }
+  // Keep this terminal fit to its grid cell whenever the layout changes — a pane added/removed,
+  // the window resized, the tab shown. This is the canonical xterm.js pattern (observe the
+  // container + debounce + fit); without it a reflowed pane keeps its old size and overflows.
+  let rafPending = false;
+  const ro = new ResizeObserver(() => {
+    if (rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(() => { rafPending = false; try { fit.fit(); } catch {} });
+  });
+  ro.observe(pane.querySelector('.term-body'));
   pane.querySelector('.x').onclick = () => {
+    ro.disconnect();
     cc.ptyKill(id); term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
   };
-  terms.set(id, { term, fit, pane });
+  terms.set(id, { term, fit, pane, ro });
   cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, cols: term.cols, rows: term.rows });
   setTimeout(() => { fit.fit(); cc.ptyResize(id, term.cols, term.rows); term.focus(); }, 40);
 }
