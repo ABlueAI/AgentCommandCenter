@@ -52,22 +52,47 @@ Feature-complete through the planned roadmap. Everything testable headlessly is 
 builders, fence logic, `cleanText`, all syntax). The audio (WebGPU/mic/playback) and the live
 agent flows need a human test pass — see `SMOKE-TEST.md`.
 
-## Security posture (audited 2026-06-30)
+## Security posture (audited 2026-06-30; re-ranked after external review)
 Good: no secrets in repo (scanned); sandboxed renderer; validated command builders; scoped
-mic-only permission; local audio processing. **Hardening backlog** (low-risk, not active exposures):
-1. `launch()` uses `spawn` `shell:true` with quoted paths (open-vscode/open-terminal) — drop `shell:true`.
-2. `open-external` should scheme-validate (http/https) in main (the web-links caller already does).
-3. CSP trusts jsdelivr (script) + `connect-src https:` for the audio runtime/model — future: serve
-   vendored ORT WASM via a custom protocol for full offline + tighter CSP.
-4. Write-fence fails **open** if `sync-roles.ps1` wasn't run — make it verify / fail-closed.
-5. Re-validate `new-agent` `task` in main (defense-in-depth; renderer already slugifies).
-6. Dedup the two in-page transformers.js copies (kokoro bundles its own).
+mic-only permission; local audio processing.
+
+**Done in the pre-test hardening pass (2026-06-30):**
+- **Fence now fails CLOSED.** Launching web-scout/operator first calls `verify-fence` (main),
+  which confirms the deployed `~/.claude/agents/<role>.md` has a real PreToolUse hook pointing at
+  an existing `fence-write.js` (no `__CC_HOOK__` left). If not, the launch is **refused** — no more
+  false sense of containment. (Was backlog #4; promoted to #1 — a fence you *think* is on is worse
+  than none.)
+- **Video path is shell-free + scoped.** The pasted URL is validated (`validateVideoUrl`: http(s)
+  only, host allowlist `VIDEO_HOSTS`, rejects localhost / private + 169.254 metadata IPs) and passed
+  to PowerShell as a discrete `-File` arg — never spliced into a `-Command` string, so no shell
+  parses user input. yt-dlp itself is capped in `feed-gemini.ps1` (`--no-playlist`, `--max-filesize`,
+  duration `--match-filter`). (Old backlog #1 shell:true concern, on the path that actually meets
+  untrusted input.)
+- **`open-external` scheme-validated** (http/https only) in main. (Was backlog #2.)
+
+**Remaining backlog** (low-risk, not active exposures):
+1. `launch()` still uses `spawn` `shell:true` for the fixed `code`/`wt` launchers with quoted
+   *repo paths* (not free text). Lower risk than the video path was; revisit (the `.cmd` shims are
+   why it's `shell:true`).
+2. CSP trusts jsdelivr (script) + broad `connect-src https:` for the audio runtime/model — tighten
+   by **vendoring ORT WASM + model weights locally** (custom protocol) for true offline + a scoped
+   CSP. (Test: kill the network after first run; if audio still reaches jsdelivr, that's the gap.)
+3. **Cross-CLI fence gap:** the PreToolUse fence is Claude-Code-only. The Gemini video-scout isn't
+   covered by it — it's contained instead by running in `media/` under cwd with capped, allowlisted
+   downloads; if Gemini ever gets a broad write/file role, it needs OS-level sandboxing, not the hook.
+4. Re-validate `new-agent` `task` in main (defense-in-depth; renderer already slugifies).
+5. Dedup the two in-page transformers.js copies (kokoro bundles its own).
 
 ## Roadmap to "iron clad"
 - Run the hard-test pass (`SMOKE-TEST.md`); fix what it surfaces.
 - Work the security hardening backlog above.
-- Auto-speak (read new scrollback lines through `cleanText`) once speak-selection is tuned.
-- STT accuracy: `whisper-small` for code identifiers; maybe a custom-vocab/correction pass.
+- Auto-speak — **needs an arbitration policy, not just `cleanText`** (audio is one channel, N agents):
+  single global speech queue, **only the focused pane auto-speaks**; background panes that finish get a
+  short chime or a queued one-liner ("Builder finished"), never read full scrollback over live speech.
+- **Voice-per-role** (Builder=`am_michael`, Reviewer=another deep male, …) so you hear *who* is speaking;
+  low effort, pairs with the focus policy above.
+- STT: `whisper-small` helps, but set expectations — STT is for **dictating intent** to an agent, not
+  exact identifiers/flags/paths (type those). Only add a correction pass if prose-level errors annoy.
 - Coordinator role + Agent Teams (deferred until multi-agent dispatch is a real chore).
 - Optional: package with electron-builder (real installer), app icon, observability.
 - Future separate project: a local CUDA inference server (Kokoro-FastAPI + faster-whisper) as a
