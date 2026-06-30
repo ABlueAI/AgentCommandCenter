@@ -156,8 +156,9 @@ input:focus { outline: none; border-color: var(--accent); }
 .tts-controls { display: flex; align-items: center; gap: 6px; }
 .tts-controls select { min-width: auto; padding: 3px 6px; font-size: 11.5px; }
 .tts-controls #ttsVoice { max-width: 160px; }
-.tts-controls #ttsStatus { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tts-controls #ttsStop { padding: 3px 8px; font-size: 11px; }
+.tts-controls #ttsStatus, .tts-controls #sttStatus { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tts-controls #ttsStop, .tts-controls #sttMic { padding: 3px 8px; font-size: 11px; }
+.tts-controls #sttMic.rec { color: var(--danger); border-color: var(--danger); }
 .term-pane .term-body { flex: 1; min-height: 0; padding: 4px 2px 4px 8px; }
 .term-pane .term-body .xterm { height: 100%; }
 

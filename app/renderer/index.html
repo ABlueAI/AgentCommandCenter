@@ -90,6 +90,8 @@
           <span class="muted small">Agents run in-app here — each in its own ConPTY.</span>
           <span class="spacer"></span>
           <div class="tts-controls">
+            <span id="sttStatus" class="muted small"></span>
+            <button id="sttMic" class="ghost" title="Dictate into the focused pane (Whisper)">🎤 Dictate</button>
             <span id="ttsStatus" class="muted small"></span>
             <button id="ttsStop" class="ghost hidden" title="Stop speaking">⏹ Stop</button>
             <label class="muted small">🔊</label>
@@ -161,5 +163,6 @@
   <script src="vendor/addon-webgl.js"></script>
   <script src="app.js"></script>
   <script type="module" src="tts.js"></script>
+  <script type="module" src="stt.js"></script>
 </body>
 </html>

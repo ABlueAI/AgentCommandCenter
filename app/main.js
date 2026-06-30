@@ -3,7 +3,7 @@
 // (git worktrees, VSCode, Windows Terminal, vibe-kanban, the browser). The renderer
 // never touches Node directly — everything goes through the IPC handlers below.
 
-const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn, execFile } = require('child_process');
@@ -86,7 +86,14 @@ function createWindow() {
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  // Allow the microphone (for in-app Whisper dictation) and deny every other
+  // permission class — the renderer never needs camera, geolocation, etc.
+  const allowMedia = (perm) => perm === 'media' || perm === 'audioCapture';
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(allowMedia(permission)));
+  session.defaultSession.setPermissionCheckHandler((_wc, permission) => allowMedia(permission));
+  createWindow();
+});
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 app.on('window-all-closed', () => {
   for (const p of ptys.values()) { try { p.kill(); } catch {} }
