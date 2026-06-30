@@ -561,6 +561,15 @@ async function createAgent() {
   } else {
     // Web-Scout / Operator: run in a dedicated fenced sandbox outside any repo. Its
     // PreToolUse write-fence confines writes to this dir — it can't touch a repo.
+    // FAIL CLOSED: confirm the fence is actually deployed before launching a write-capable
+    // role. If sync-roles.ps1 wasn't run, the fence wouldn't apply and the role would be
+    // unconfined — refuse rather than give a false sense of containment.
+    const fence = await cc.verifyFence(role);
+    if (!fence || !fence.ok) {
+      appendLog(`[agent] BLOCKED ${role}: write-fence not active — ${fence && fence.error}\n`);
+      alert(`Refusing to launch "${ROLES[role].label}" — its write-fence isn't active:\n\n${(fence && fence.error) || 'unknown error'}`);
+      return;
+    }
     const r = await cc.ensureOutputDir(role);
     if (!r || !r.ok) { appendLog(`[agent] could not create sandbox: ${r && r.error}\n`); alert('Could not create the output sandbox:\n' + ((r && r.error) || 'unknown error')); return; }
     appendLog(`\n[agent] ${role} in fenced sandbox ${r.dir}…\n`);

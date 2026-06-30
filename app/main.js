@@ -44,13 +44,31 @@ function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }) {
 }
 
 // Video-scout: download a video and analyze it with Gemini (visual + spoken) via feed-gemini.ps1.
-// Only the URL is interpolated, and it is strictly validated first (http(s), and none of the
-// PowerShell double-quote-breaking characters) so nothing unsafe reaches the shell.
-function buildVideoScoutCommand(url) {
+// The URL is user-pasted and untrusted. Two defenses: (1) validate hard here, and (2) the caller
+// passes it to PowerShell as a discrete `-File` argument (never spliced into a `-Command` string),
+// so no shell ever parses it — a crafted URL cannot break out of quoting regardless of this regex.
+//
+// Beyond "is it a URL", yt-dlp can be steered at internal targets (SSRF-shaped: file://, localhost,
+// link-local 169.254 cloud-metadata) or at huge playlists. So we allow only known video hosts and
+// reject anything private/local. Extend VIDEO_HOSTS (?) to taste; the download size/playlist caps
+// live in feed-gemini.ps1 (--no-playlist / --max-filesize / duration match-filter).
+const VIDEO_HOSTS = new Set([                 // (?) hosts the video-scout is allowed to fetch
+  'youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be',
+  'vimeo.com', 'www.vimeo.com', 'player.vimeo.com',
+]);
+function validateVideoUrl(url) {
   if (typeof url !== 'string' || url.length > 2048) return null;
+  // Cheap belt-and-suspenders: no quotes/$/backtick even though we no longer shell-splice it.
   if (!/^https?:\/\/[^\s"$\x60]+$/.test(url)) return null;
-  const script = path.join(SCRIPTS_DIR, 'feed-gemini.ps1');
-  return `& "${script}" -Url "${url}" -VideoScout`;
+  let u;
+  try { u = new URL(url); } catch { return null; }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;  // reject file:, etc.
+  const host = u.hostname.toLowerCase();
+  // Reject obvious internal targets (localhost / private + link-local IPs / GCP metadata).
+  if (/^(localhost|127\.|0\.|10\.|192\.168\.|169\.254\.|::1|metadata\.google\.internal)/.test(host)) return null;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return null;
+  if (!VIDEO_HOSTS.has(host)) return null;     // allowlist: only known video platforms
+  return url;
 }
 
 // ---- tiny settings store (userData/settings.json) ---------------------------
@@ -204,6 +222,28 @@ ipcMain.handle('ensure-output-dir', async (_e, { role }) => {
   return { ok: true, dir };
 });
 
+// FAIL-CLOSED fence check. The write-fence that confines web-scout/operator lives in the
+// *deployed* role file (~/.claude/agents/<role>.md) and points at a hook script that must
+// exist. If sync-roles.ps1 was never run, the fence silently doesn't apply — and a false
+// sense of containment is worse than none. So before launching a fenced role we verify the
+// fence is really installed, and refuse to launch if it isn't (renderer shows the reason).
+ipcMain.handle('verify-fence', async (_e, { role }) => {
+  if (!VALID_ROLES.has(role)) return { ok: false, error: 'unknown role' };
+  const home = process.env.USERPROFILE || app.getPath('home');
+  const agentFile = path.join(home, '.claude', 'agents', `${role}.md`);
+  const fix = 'Run scripts\\sync-roles.ps1, then relaunch.';
+  if (!fs.existsSync(agentFile)) return { ok: false, error: `Role "${role}" is not deployed (${agentFile} missing). ${fix}` };
+  let text = '';
+  try { text = fs.readFileSync(agentFile, 'utf8'); }
+  catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
+  if (/__CC_HOOK__/.test(text)) return { ok: false, error: `Role "${role}" still has the unsubstituted __CC_HOOK__ placeholder. ${fix}` };
+  // Pull the hook path out of:  command: "node \"<abs path>/fence-write.js\""
+  const m = text.match(/command:\s*"node\s+\\"(.+?fence-write\.js)\\"/i);
+  if (!/PreToolUse/.test(text) || !m) return { ok: false, error: `Role "${role}" has no PreToolUse write-fence wired in. ${fix}` };
+  if (!fs.existsSync(m[1])) return { ok: false, error: `Write-fence hook missing at ${m[1]}. ${fix}` };
+  return { ok: true, hookPath: m[1] };
+});
+
 // Build a review diff for a worktree (this branch vs main, including uncommitted work) and
 // write it to .agent-review.diff in that worktree so the read-only Reviewer can Read it —
 // the Reviewer has no shell, so the launcher produces the diff for it (Blue Helm spec §2).
@@ -226,7 +266,10 @@ ipcMain.handle('review-diff', async (_e, { worktree, base }) => {
 // ---- IPC: one-click launchers ----------------------------------------------
 ipcMain.handle('open-vscode', async (_e, p) => launch('code', [`"${p}"`]));
 ipcMain.handle('open-terminal', async (_e, p) => launch('wt', ['-w', '0', 'nt', '-d', `"${p}"`]));
-ipcMain.handle('open-external', async (_e, url) => { if (url) shell.openExternal(url); });
+// Only ever hand http(s) URLs to the OS — never file:, vbscript:, etc. from terminal output.
+ipcMain.handle('open-external', async (_e, url) => {
+  if (typeof url === 'string' && /^https?:\/\//i.test(url)) shell.openExternal(url);
+});
 
 // ---- IPC: in-app terminals (node-pty + xterm.js) ---------------------------
 // Each renderer terminal pane gets a real ConPTY here: PowerShell spawned in the
@@ -237,19 +280,23 @@ ipcMain.handle('pty-start', (_e, opts) => {
   // Never spawn into a missing directory: ConPTY throws Windows error 267 (ERROR_DIRECTORY)
   // from a worker thread, which would surface as a fatal uncaught exception.
   const cwd = (opts.cwd && fs.existsSync(opts.cwd)) ? opts.cwd : process.env.USERPROFILE;
-  let run;
-  if (opts.videoScout) {
-    run = buildVideoScoutCommand(opts.videoUrl);
-    if (!run) {
-      if (win && !win.isDestroyed()) win.webContents.send('main-error', 'Invalid video URL — must start with http(s) and contain no quotes.');
-      return { ok: false, error: 'invalid video URL' };
-    }
-  } else {
-    run = buildAgentCommand(opts); // role / bare CLI / undefined => plain shell
-  }
   // -ExecutionPolicy Bypass so npm .ps1 shims (claude/codex/gemini) always launch.
   const args = ['-NoLogo', '-ExecutionPolicy', 'Bypass', '-NoExit'];
-  if (run) args.push('-Command', run);
+  if (opts.videoScout) {
+    const url = validateVideoUrl(opts.videoUrl);
+    if (!url) {
+      if (win && !win.isDestroyed()) win.webContents.send('main-error',
+        'Invalid or disallowed video URL — must be an http(s) link on an allowed video host (YouTube/Vimeo).');
+      return { ok: false, error: 'invalid video URL' };
+    }
+    // Pass the URL via `-File` as a discrete argv element: PowerShell binds it to the script's
+    // [string]$Url parameter literally. Nothing user-controlled is ever parsed by a shell.
+    const script = path.join(SCRIPTS_DIR, 'feed-gemini.ps1');
+    args.push('-File', script, '-Url', url, '-VideoScout');
+  } else {
+    const run = buildAgentCommand(opts); // role / bare CLI / undefined => plain shell
+    if (run) args.push('-Command', run);
+  }
   let p;
   try {
     p = pty.spawn('powershell.exe', args, {

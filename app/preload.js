@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('cc', {
   removeAgent: (a) => ipcRenderer.invoke('remove-agent', a),
   reviewDiff: (a) => ipcRenderer.invoke('review-diff', a),
   ensureOutputDir: (a) => ipcRenderer.invoke('ensure-output-dir', a),
+  verifyFence: (a) => ipcRenderer.invoke('verify-fence', a),
 
   // one-click launchers
   openVscode: (p) => ipcRenderer.invoke('open-vscode', p),

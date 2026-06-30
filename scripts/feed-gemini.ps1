@@ -50,20 +50,31 @@ if (-not $gemini) {
 if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir | Out-Null }
 $outTemplate = Join-Path $OutDir "%(title)s.%(ext)s"
 
+# --- safety caps (shared across modes) -----------------------------------------
+# A single URL should never pull a whole playlist, an oversized file, or a multi-hour VOD.
+# These bound disk + cost and shrink the attack surface of a pasted link. Tune (?) as needed.
+$MaxFileSize = '600M'                       # (?) hard cap per download
+$MaxDuration = 5400                         # (?) seconds (90 min); longer videos are skipped
+$ytCommon = @(
+    '--no-playlist',                        # one item only, even if the URL is a playlist
+    '--max-filesize', $MaxFileSize,
+    '--match-filter', "duration < $MaxDuration"
+)
+
 # --- per-mode yt-dlp invocation ------------------------------------------------
 Write-Host "Downloading ($Mode): $Url" -ForegroundColor Cyan
 switch ($Mode) {
     'transcript' {
-        & $ytdlp --restrict-filenames --skip-download --write-auto-subs --write-subs `
+        & $ytdlp @ytCommon --restrict-filenames --skip-download --write-auto-subs --write-subs `
             --sub-lang $Lang --convert-subs srt -o $outTemplate $Url
         $pattern = "*.srt"
     }
     'audio' {
-        & $ytdlp --restrict-filenames -x --audio-format mp3 -o $outTemplate $Url
+        & $ytdlp @ytCommon --restrict-filenames -x --audio-format mp3 -o $outTemplate $Url
         $pattern = "*.mp3"
     }
     'video' {
-        & $ytdlp --restrict-filenames -f "bv*+ba/b" -S "res:720" `
+        & $ytdlp @ytCommon --restrict-filenames -f "bv*+ba/b" -S "res:720" `
             --merge-output-format mp4 -o $outTemplate $Url
         $pattern = "*.mp4"
     }
