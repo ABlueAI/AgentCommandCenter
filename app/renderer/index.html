@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src http://localhost:* http://127.0.0.1:*;" />
+        content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self' https:; worker-src 'self' blob:; frame-src http://localhost:* http://127.0.0.1:*;" />
   <title>Command Center</title>
   <link rel="stylesheet" href="vendor/xterm.css" />
   <link rel="stylesheet" href="styles.css" />
@@ -88,6 +88,20 @@
       <section class="tabpane" data-pane="terminals">
         <div class="term-bar">
           <span class="muted small">Agents run in-app here — each in its own ConPTY.</span>
+          <span class="spacer"></span>
+          <div class="tts-controls">
+            <span id="ttsStatus" class="muted small"></span>
+            <button id="ttsStop" class="ghost hidden" title="Stop speaking">⏹ Stop</button>
+            <label class="muted small">🔊</label>
+            <select id="ttsVoice" title="Voice"></select>
+            <select id="ttsSpeed" title="Speed">
+              <option value="1">1.0×</option>
+              <option value="1.25">1.25×</option>
+              <option value="1.5">1.5×</option>
+              <option value="1.75">1.75×</option>
+              <option value="2">2.0×</option>
+            </select>
+          </div>
           <button id="newTermShell" class="mini accent">+ Shell</button>
         </div>
         <div id="terminalGrid" class="term-grid">
@@ -146,5 +160,6 @@
   <script src="vendor/addon-unicode11.js"></script>
   <script src="vendor/addon-webgl.js"></script>
   <script src="app.js"></script>
+  <script type="module" src="tts.js"></script>
 </body>
 </html>

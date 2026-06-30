@@ -2,7 +2,7 @@
 // No Node here by design; this file is pure UI + IPC calls.
 
 const $ = (sel) => document.querySelector(sel);
-const state = { repo: '', githubUrl: '', worktrees: [], chosenRole: 'builder', chosenCli: 'claude', hardTask: false, theme: 'obsidian' };
+const state = { repo: '', githubUrl: '', worktrees: [], chosenRole: 'builder', chosenCli: 'claude', hardTask: false, theme: 'obsidian', ttsVoice: '', ttsSpeed: 1 };
 
 // Blue Helm role metadata (UI + flow only — the tools allowlist that ENFORCES read-only
 // lives in agent-roles/*.md / ~/.claude/agents). Keep colors in sync with styles.css and
@@ -70,6 +70,7 @@ function openInAppTerminal(opts = {}) {
   pane.className = 'term-pane';
   pane.innerHTML = `<div class="term-head">${badge}
       <span class="name" title="${worktree || ''}">${label}</span>
+      <button class="spk" title="Speak selection (Kokoro TTS)">🔊</button>
       <button class="x" title="Close">✕</button></div>
     <div class="term-body"></div>`;
   $('#terminalGrid').appendChild(pane);
@@ -151,6 +152,12 @@ function openInAppTerminal(opts = {}) {
     requestAnimationFrame(() => { rafPending = false; try { fit.fit(); } catch {} });
   });
   ro.observe(pane.querySelector('.term-body'));
+  pane.querySelector('.spk').onclick = () => {
+    const sel = term.getSelection();
+    if (!window.ccTTS) { appendLog('[tts] voice engine not ready yet.\n'); return; }
+    if (!sel || !sel.trim()) { appendLog('[tts] select some text in the pane first, then click 🔊.\n'); return; }
+    window.ccTTS.speak(sel);
+  };
   pane.querySelector('.x').onclick = () => {
     ro.disconnect();
     cc.ptyKill(id); term.dispose(); pane.remove(); terms.delete(id);
@@ -165,12 +172,45 @@ function openInAppTerminal(opts = {}) {
 async function boot() {
   const s = await cc.getSettings();
   applyTheme((s && s.theme) || 'obsidian');
+  if (s && s.ttsVoice) state.ttsVoice = s.ttsVoice;
+  if (s && s.ttsSpeed) state.ttsSpeed = s.ttsSpeed;
   await refreshRepos();
   wireUi();
   cc.onPtyData(({ id, data }) => { const t = terms.get(id); if (t) t.term.write(data); });
   cc.onPtyExit(({ id }) => { const t = terms.get(id); if (t) t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n'); });
   cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));
   window.addEventListener('resize', fitAllTerms);
+  // TTS module loads after this script; wire its controls when it announces ready.
+  if (window.ccTTS) setupTTSControls();
+  else window.addEventListener('cc-tts-ready', setupTTSControls, { once: true });
+}
+
+// Populate + wire the Kokoro TTS controls (voice, speed, stop, status) once the module is up.
+function setupTTSControls() {
+  const tts = window.ccTTS; if (!tts) return;
+  const voiceSel = $('#ttsVoice');
+  if (voiceSel && !voiceSel.dataset.filled) {
+    for (const v of tts.voices) {
+      const o = document.createElement('option'); o.value = v.id; o.textContent = v.label; voiceSel.appendChild(o);
+    }
+    voiceSel.dataset.filled = '1';
+    voiceSel.value = state.ttsVoice || tts.getVoice();
+    tts.setVoice(voiceSel.value);
+    voiceSel.onchange = () => { tts.setVoice(voiceSel.value); state.ttsVoice = voiceSel.value; cc.saveSettings({ ttsVoice: voiceSel.value }); };
+  }
+  const speedSel = $('#ttsSpeed');
+  if (speedSel) {
+    speedSel.value = String(state.ttsSpeed || 1);
+    tts.setSpeed(speedSel.value);
+    speedSel.onchange = () => { tts.setSpeed(speedSel.value); state.ttsSpeed = Number(speedSel.value); cc.saveSettings({ ttsSpeed: state.ttsSpeed }); };
+  }
+  const stopBtn = $('#ttsStop');
+  if (stopBtn) stopBtn.onclick = () => tts.stop();
+  tts.onStatus(({ state: st, detail }) => {
+    const el = $('#ttsStatus'); if (el) el.textContent = (st && st !== 'idle') ? (st + (detail ? ' — ' + detail : '')) : '';
+    if (stopBtn) stopBtn.classList.toggle('hidden', st !== 'speaking' && st !== 'loading');
+    if (st === 'error' && detail) appendLog('[tts] ' + detail + '\n');
+  });
 }
 
 async function refreshRepos() {
