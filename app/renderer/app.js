@@ -2,7 +2,7 @@
 // No Node here by design; this file is pure UI + IPC calls.
 
 const $ = (sel) => document.querySelector(sel);
-const state = { repo: '', githubUrl: '', worktrees: [], chosenRole: 'builder', chosenCli: 'claude', hardTask: false, theme: 'obsidian' };
+const state = { repo: '', githubUrl: '', worktrees: [], chosenRole: 'builder', chosenCli: 'claude', hardTask: false, theme: 'obsidian', ttsVoice: '', ttsSpeed: 1 };
 
 // Blue Helm role metadata (UI + flow only — the tools allowlist that ENFORCES read-only
 // lives in agent-roles/*.md / ~/.claude/agents). Keep colors in sync with styles.css and
@@ -21,6 +21,7 @@ const ROLES = {
 // ---- in-app terminals (xterm.js front-end; real ConPTY lives in main) -------
 const terms = new Map(); // id -> { term, fit, pane }
 let termSeq = 0;
+let activeTermId = null;  // pane that dictation types into (last focused)
 const THEMES_XTERM = {
   obsidian:  { background: '#06090d', foreground: '#c8d2dc', cursor: '#20c5b7', selectionBackground: 'rgba(32,197,183,.35)' },
   void:      { background: '#070510', foreground: '#d6cdf0', cursor: '#a78bfa', selectionBackground: 'rgba(167,139,250,.35)' },
@@ -70,6 +71,7 @@ function openInAppTerminal(opts = {}) {
   pane.className = 'term-pane';
   pane.innerHTML = `<div class="term-head">${badge}
       <span class="name" title="${worktree || ''}">${label}</span>
+      <button class="spk" title="Speak selection (Kokoro TTS)">🔊</button>
       <button class="x" title="Close">✕</button></div>
     <div class="term-body"></div>`;
   $('#terminalGrid').appendChild(pane);
@@ -151,26 +153,91 @@ function openInAppTerminal(opts = {}) {
     requestAnimationFrame(() => { rafPending = false; try { fit.fit(); } catch {} });
   });
   ro.observe(pane.querySelector('.term-body'));
+  pane.querySelector('.spk').onclick = () => {
+    const sel = term.getSelection();
+    if (!window.ccTTS) { appendLog('[tts] voice engine not ready yet.\n'); return; }
+    if (!sel || !sel.trim()) { appendLog('[tts] select some text in the pane first, then click 🔊.\n'); return; }
+    window.ccTTS.speak(sel);
+  };
   pane.querySelector('.x').onclick = () => {
     ro.disconnect();
     cc.ptyKill(id); term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
   };
+  pane.addEventListener('mousedown', () => { activeTermId = id; });
+  term.textarea && term.textarea.addEventListener('focus', () => { activeTermId = id; });
   terms.set(id, { term, fit, pane, ro });
   cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, cols: term.cols, rows: term.rows });
-  setTimeout(() => { fit.fit(); cc.ptyResize(id, term.cols, term.rows); term.focus(); }, 40);
+  setTimeout(() => { fit.fit(); cc.ptyResize(id, term.cols, term.rows); activeTermId = id; term.focus(); }, 40);
 }
 
 // ---- boot -------------------------------------------------------------------
 async function boot() {
   const s = await cc.getSettings();
   applyTheme((s && s.theme) || 'obsidian');
+  if (s && s.ttsVoice) state.ttsVoice = s.ttsVoice;
+  if (s && s.ttsSpeed) state.ttsSpeed = s.ttsSpeed;
   await refreshRepos();
   wireUi();
   cc.onPtyData(({ id, data }) => { const t = terms.get(id); if (t) t.term.write(data); });
   cc.onPtyExit(({ id }) => { const t = terms.get(id); if (t) t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n'); });
   cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));
   window.addEventListener('resize', fitAllTerms);
+  // TTS/STT modules load after this script; wire their controls when they announce ready.
+  if (window.ccTTS) setupTTSControls();
+  else window.addEventListener('cc-tts-ready', setupTTSControls, { once: true });
+  if (window.ccSTT) setupSTTControls();
+  else window.addEventListener('cc-stt-ready', setupSTTControls, { once: true });
+}
+
+// Wire the Whisper dictation control: push-to-talk that types the transcript into
+// the focused agent pane (we own the PTY write channel, so no OS dictation needed).
+function setupSTTControls() {
+  const stt = window.ccSTT; if (!stt) return;
+  const micBtn = $('#sttMic');
+  if (micBtn && !micBtn.dataset.wired) {
+    micBtn.dataset.wired = '1';
+    micBtn.onclick = () => {
+      if (!activeTermId || !terms.has(activeTermId)) { appendLog('[stt] click into an agent pane first, then 🎤.\n'); return; }
+      stt.toggle();
+    };
+  }
+  stt.onStatus(({ state: st, detail }) => {
+    const el = $('#sttStatus'); if (el) el.textContent = (st && st !== 'idle') ? (st + (detail ? ' — ' + detail : '')) : '';
+    if (micBtn) { micBtn.textContent = st === 'recording' ? '⏺ Stop' : '🎤 Dictate'; micBtn.classList.toggle('rec', st === 'recording'); }
+    if (st === 'error' && detail) appendLog('[stt] ' + detail + '\n');
+  });
+  stt.onResult((text) => {
+    if (activeTermId && terms.has(activeTermId)) { cc.ptyWrite(activeTermId, text + ' '); appendLog('[stt] » ' + text + '\n'); }
+  });
+}
+
+// Populate + wire the Kokoro TTS controls (voice, speed, stop, status) once the module is up.
+function setupTTSControls() {
+  const tts = window.ccTTS; if (!tts) return;
+  const voiceSel = $('#ttsVoice');
+  if (voiceSel && !voiceSel.dataset.filled) {
+    for (const v of tts.voices) {
+      const o = document.createElement('option'); o.value = v.id; o.textContent = v.label; voiceSel.appendChild(o);
+    }
+    voiceSel.dataset.filled = '1';
+    voiceSel.value = state.ttsVoice || tts.getVoice();
+    tts.setVoice(voiceSel.value);
+    voiceSel.onchange = () => { tts.setVoice(voiceSel.value); state.ttsVoice = voiceSel.value; cc.saveSettings({ ttsVoice: voiceSel.value }); };
+  }
+  const speedSel = $('#ttsSpeed');
+  if (speedSel) {
+    speedSel.value = String(state.ttsSpeed || 1);
+    tts.setSpeed(speedSel.value);
+    speedSel.onchange = () => { tts.setSpeed(speedSel.value); state.ttsSpeed = Number(speedSel.value); cc.saveSettings({ ttsSpeed: state.ttsSpeed }); };
+  }
+  const stopBtn = $('#ttsStop');
+  if (stopBtn) stopBtn.onclick = () => tts.stop();
+  tts.onStatus(({ state: st, detail }) => {
+    const el = $('#ttsStatus'); if (el) el.textContent = (st && st !== 'idle') ? (st + (detail ? ' — ' + detail : '')) : '';
+    if (stopBtn) stopBtn.classList.toggle('hidden', st !== 'speaking' && st !== 'loading');
+    if (st === 'error' && detail) appendLog('[tts] ' + detail + '\n');
+  });
 }
 
 async function refreshRepos() {
