@@ -22,9 +22,19 @@ param(
     [string]$Prompt,
     [string]$OutDir = (Join-Path (Get-Location) 'media'),
     [string]$Lang = 'en',
-    [switch]$NoFeed
+    [switch]$NoFeed,
+    [switch]$VideoScout
 )
 $ErrorActionPreference = "Stop"
+
+# Video-scout: force video mode and use the richer visual+spoken analysis brief. Keeping the
+# brief here means the app's launcher only has to pass -VideoScout (no long quoted prompt).
+if ($VideoScout) {
+    $Mode = 'video'
+    if (-not $Prompt) {
+        $Prompt = "You are reviewing a downloaded video for a build/research purpose. Report (a) what is shown on screen - UI, tools, code, diagrams, demonstrated actions, scene/segment changes with rough timestamps - and (b) what is said. Separate visual findings from spoken findings. Flag anything where the on-screen action differs from or adds to the narration."
+    }
+}
 
 # --- locate tools (PATH may be stale right after install / inside the app) -----
 $ytdlp = (Get-Command yt-dlp -ErrorAction SilentlyContinue).Source

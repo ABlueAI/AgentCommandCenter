@@ -105,7 +105,7 @@
   <div id="modal" class="modal-backdrop hidden">
     <div class="modal">
       <h3>New Agent</h3>
-      <label>Task name <span class="muted">(kebab-case)</span></label>
+      <label id="taskNameLabel">Task name <span class="muted">(kebab-case)</span></label>
       <input id="taskName" placeholder="e.g. search-bar" />
       <label>Role</label>
       <div class="agent-choices role-choices">
@@ -114,6 +114,7 @@
         <button class="choice" data-role="codebase-scout">🧭 Codebase</button>
         <button class="choice" data-role="web-scout">🌐 Web Scout</button>
         <button class="choice" data-role="operator">📣 Operator</button>
+        <button class="choice" data-role="video-scout">🎥 Video</button>
         <button class="choice" data-role="plain">▶ Plain</button>
       </div>
       <div id="builderOpts" class="modal-opt">

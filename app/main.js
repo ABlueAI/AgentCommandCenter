@@ -43,6 +43,16 @@ function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }) {
   return AGENT_CMD[cli || agent]; // undefined when unknown/falsy -> plain shell
 }
 
+// Video-scout: download a video and analyze it with Gemini (visual + spoken) via feed-gemini.ps1.
+// Only the URL is interpolated, and it is strictly validated first (http(s), and none of the
+// PowerShell double-quote-breaking characters) so nothing unsafe reaches the shell.
+function buildVideoScoutCommand(url) {
+  if (typeof url !== 'string' || url.length > 2048) return null;
+  if (!/^https?:\/\/[^\s"$\x60]+$/.test(url)) return null;
+  const script = path.join(SCRIPTS_DIR, 'feed-gemini.ps1');
+  return `& "${script}" -Url "${url}" -VideoScout`;
+}
+
 // ---- tiny settings store (userData/settings.json) ---------------------------
 const settingsPath = () => path.join(app.getPath('userData'), 'settings.json');
 function loadSettings() {
@@ -208,7 +218,16 @@ ipcMain.handle('pty-start', (_e, opts) => {
   // Never spawn into a missing directory: ConPTY throws Windows error 267 (ERROR_DIRECTORY)
   // from a worker thread, which would surface as a fatal uncaught exception.
   const cwd = (opts.cwd && fs.existsSync(opts.cwd)) ? opts.cwd : process.env.USERPROFILE;
-  const run = buildAgentCommand(opts); // role / bare CLI / undefined => plain shell
+  let run;
+  if (opts.videoScout) {
+    run = buildVideoScoutCommand(opts.videoUrl);
+    if (!run) {
+      if (win && !win.isDestroyed()) win.webContents.send('main-error', 'Invalid video URL — must start with http(s) and contain no quotes.');
+      return { ok: false, error: 'invalid video URL' };
+    }
+  } else {
+    run = buildAgentCommand(opts); // role / bare CLI / undefined => plain shell
+  }
   // -ExecutionPolicy Bypass so npm .ps1 shims (claude/codex/gemini) always launch.
   const args = ['-NoLogo', '-ExecutionPolicy', 'Bypass', '-NoExit'];
   if (run) args.push('-Command', run);
