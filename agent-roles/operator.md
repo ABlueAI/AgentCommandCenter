@@ -8,7 +8,7 @@ permissionMode: default
 color: purple
 hooks:
   PreToolUse:
-    - matcher: "Write|Edit|MultiEdit"
+    - matcher: "Read|Write|Edit|MultiEdit"
       hooks:
         - type: command
           command: "node \"__CC_HOOK__\""

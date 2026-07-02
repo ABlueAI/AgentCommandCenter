@@ -17,6 +17,9 @@ contextBridge.exposeInMainWorld('cc', {
   reviewDiff: (a) => ipcRenderer.invoke('review-diff', a),
   ensureOutputDir: (a) => ipcRenderer.invoke('ensure-output-dir', a),
   verifyFence: (a) => ipcRenderer.invoke('verify-fence', a),
+  getGeminiKeyStatus: () => ipcRenderer.invoke('get-gemini-key-status'),
+  setGeminiKey: (key) => ipcRenderer.invoke('set-gemini-key', key),
+  clearGeminiKey: () => ipcRenderer.invoke('clear-gemini-key'),
 
   // one-click launchers
   openVscode: (p) => ipcRenderer.invoke('open-vscode', p),

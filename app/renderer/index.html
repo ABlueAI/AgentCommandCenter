@@ -34,7 +34,19 @@
       <span class="dot codex"></span>Codex
       <span class="dot gemini"></span>Gemini
     </div>
+    <div id="keyStored" class="key-stored hidden" title="GEMINI_API_KEY stored &amp; encrypted via OS credential store">
+      🔑 <span class="muted small">Key ✓</span>
+      <button id="geminiKeyChange" class="ghost tiny">Change</button>
+      <button id="geminiKeyClear" class="ghost tiny">Clear</button>
+    </div>
   </header>
+
+  <!-- Shown only when GEMINI_API_KEY is not yet stored -->
+  <div id="keyBanner" class="key-banner hidden">
+    <span>🔑 <b>GEMINI_API_KEY</b> not stored — Video Scout needs it.</span>
+    <input id="geminiKeyInput" type="password" placeholder="Paste your AI Studio key (AIza…)" autocomplete="off" spellcheck="false" />
+    <button id="geminiKeySave" class="action accent">Save encrypted</button>
+  </div>
 
   <div class="layout">
     <!-- Sidebar: quick launchers + live agent list -->
@@ -161,6 +173,7 @@
   <script src="vendor/addon-web-links.js"></script>
   <script src="vendor/addon-unicode11.js"></script>
   <script src="vendor/addon-webgl.js"></script>
+  <script src="pty-parser.js"></script>
   <script src="app.js"></script>
   <script type="module" src="tts.js"></script>
   <script type="module" src="stt.js"></script>
