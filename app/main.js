@@ -17,7 +17,10 @@ const AGENT_CMD = { claude: 'claude', codex: 'codex', gemini: 'gemini' }; // CLI
 // Blue Helm roles: launch `claude --agent <role>` with optional per-task overrides.
 // Everything is validated against allowlists before it is spliced into a shell command,
 // so the renderer can never inject arbitrary text through the IPC channel.
-const VALID_ROLES = new Set(['builder', 'reviewer', 'codebase-scout', 'web-scout', 'operator']);
+const VALID_ROLES = new Set(['builder', 'reviewer', 'codebase-scout', 'web-scout', 'operator', 'source-scout']);
+// Roles whose PTY cwd must resolve inside the ensure-output-dir sandbox before spawning.
+// Matches the roles that carry a PreToolUse path-fence hook.
+const FENCED_ROLES = new Set(['web-scout', 'operator', 'source-scout']);
 const VALID_MODELS = new Set(['sonnet', 'opus', 'haiku', 'fable']);
 const VALID_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 
@@ -103,6 +106,11 @@ function loadGeminiKey() {
 
 let win = null;
 const ptys = new Map(); // terminal id -> pty process (in-app terminals)
+// Mutex for ~/.claude.json read-modify-write. Concurrent sandbox launches are Blue Helm's
+// normal mode; without serialization each call reads a stale snapshot and the last writer
+// wins, silently dropping earlier trust entries. A Promise chain is the idiomatic Node.js
+// mutex: each holder resolves the chain on exit (even on error), so it never deadlocks.
+let claudeJsonLock = Promise.resolve();
 
 // Keep a single recoverable error (e.g. a ConPTY hiccup in a worker thread) from killing the
 // whole app with a fatal dialog. Log it, and surface it in the renderer's Logs tab if we can.
@@ -151,6 +159,30 @@ function git(args, cwd) {
 // Launch a detached external process (Windows Terminal, VSCode, etc.) and don't block.
 function launch(cmd, args) { spawn(cmd, args, { detached: true, shell: true }).unref(); }
 
+// ---- launch-pipeline timing diagnostics (remove once root cause confirmed) --
+let _t0 = null;
+function tlog(msg) {
+  if (_t0 === null) _t0 = Date.now();
+  const elapsed = Date.now() - _t0;
+  const line = `[TIMING +${elapsed}ms] ${msg}`;
+  console.log(line);
+  if (win && !win.isDestroyed()) win.webContents.send('main-error', line);
+}
+// Call at the start of each createAgent attempt to reset the clock.
+function tlogReset() { _t0 = Date.now(); tlog('--- new createAgent sequence ---'); }
+
+// Resolve the real (symlink-free) path. Walks up to the nearest existing ancestor when the
+// target doesn't exist yet — mirrors scripts/hooks/fence-write.js so the main-process cwd
+// guard and the hook use identical resolution logic and cannot be diverged by path tricks.
+function realOrNearest(p) {
+  try { return fs.realpathSync.native(p); }
+  catch {
+    const parent = path.dirname(p);
+    if (parent === p) return p; // filesystem root — nothing left to resolve
+    return path.join(realOrNearest(parent), path.basename(p));
+  }
+}
+
 // Turn a git remote into a browsable https URL.
 function remoteToHttps(remote) {
   if (!remote) return '';
@@ -171,6 +203,8 @@ ipcMain.handle('save-settings', async (_e, partial) => {
 // ---- IPC: Gemini key management (safeStorage) --------------------------------
 // The renderer can check whether a key is stored and save a new value, but the
 // plaintext never travels back across the IPC boundary — it stays in main memory.
+ipcMain.handle('tlog-reset', () => { tlogReset(); });
+
 ipcMain.handle('get-gemini-key-status', () => ({
   hasKey: geminiKey !== null,
   available: safeStorage.isEncryptionAvailable(),
@@ -211,7 +245,9 @@ ipcMain.handle('list-repos', async () => {
 // Parse `git worktree list --porcelain` into [{path, branch}] — these are your live agents.
 ipcMain.handle('list-worktrees', async (_e, repo) => {
   if (!repo) return [];
+  tlog('list-worktrees: git worktree list START');
   const out = await git(['worktree', 'list', '--porcelain'], repo);
+  tlog('list-worktrees: git worktree list END');
   const items = [];
   let cur = {};
   for (const line of out.split('\n')) {
@@ -220,6 +256,7 @@ ipcMain.handle('list-worktrees', async (_e, repo) => {
     else if (line === 'detached') cur.branch = '(detached)';
   }
   if (cur.path) items.push(cur);
+  tlog(`list-worktrees: returning ${items.length} items`);
   return items;
 });
 
@@ -228,21 +265,26 @@ ipcMain.handle('repo-github-url', async (_e, repo) => remoteToHttps(await git(['
 // ---- IPC: agents ------------------------------------------------------------
 // Create a worktree (via the repo's own new-agent.ps1) and launch the chosen agent in a WT tab.
 ipcMain.handle('new-agent', async (_e, { repo, task }) => {
+  tlog(`new-agent: START task="${task}"`);
   const script = path.join(SCRIPTS_DIR, 'new-agent.ps1');
   // Worktree path follows the <repo>-<task> sibling convention the scripts use.
   const wt = path.join(path.dirname(repo), `${path.basename(repo)}-${task}`);
   const branch = `agent/${task}`;
+  tlog('new-agent: execFile powershell new-agent.ps1 START');
   const out = await new Promise((resolve) => {
     execFile('powershell',
       ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-Task', task],
       { cwd: repo }, (err, stdout, stderr) => resolve({ err, stdout, stderr }));
   });
+  tlog('new-agent: execFile powershell new-agent.ps1 END');
   // Don't claim success unless the folder really exists — otherwise the renderer would try
   // to launch a PTY into a missing dir (Windows error 267) and crash the app.
   if (!fs.existsSync(wt)) {
     const error = ((out.stderr || (out.err && out.err.message) || 'worktree was not created') + '').trim();
+    tlog(`new-agent: FAIL worktree missing: ${error}`);
     return { ok: false, error, worktree: wt, branch };
   }
+  tlog('new-agent: END ok');
   return { ok: true, worktree: wt, branch };
 });
 
@@ -261,11 +303,69 @@ ipcMain.handle('remove-agent', async (_e, { repo, task }) => {
 // runs OUTSIDE any repo. The role launches with cwd = this dir, and its PreToolUse write-fence
 // confines writes to here — it cannot touch a repo even though it has the Write tool.
 ipcMain.handle('ensure-output-dir', async (_e, { role }) => {
+  tlog(`ensure-output-dir: START role="${role}"`);
   const safeRole = String(role || 'output').replace(/[^a-z0-9-]/gi, '') || 'output';
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const dir = path.join(loadSettings().projectsRoot, '.command-center', 'outputs', `${safeRole}-${stamp}`);
   try { fs.mkdirSync(dir, { recursive: true }); }
   catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
+  tlog('ensure-output-dir: mkdirSync done');
+
+  // Pre-trust this sandbox in ~/.claude.json so Claude Code's workspace-trust prompt never
+  // fires. Trust state is keyed by exact path — there is no wildcard config — so we must
+  // write the entry before the PTY spawns (Claude Code reads it at session start).
+  //
+  // BEST-EFFORT: a failure here (permissions, disk full, corrupt JSON) must NOT block the
+  // sandbox launch. The worst outcome is a one-time trust dialog in the agent pane — the
+  // outer catch swallows and continues; the return { ok: true, dir } below is unconditional.
+  //
+  // CONCURRENCY: Blue Helm's normal mode is parallel sandbox launches. Without serialization,
+  // concurrent calls each read a stale snapshot and the last writer silently wins, dropping
+  // earlier trust entries. The claudeJsonLock Promise chain serializes all read-modify-write
+  // cycles. Acquiring the lock is synchronous (no await before the assignment), so two calls
+  // that arrive in the same event-loop turn correctly queue rather than race.
+  //
+  // ATOMICITY on disk: each cycle writes to a unique temp file (pid + random), then renames.
+  // On Windows, rename onto an existing file fails instead of replacing; unique names prevent
+  // two concurrent renames from colliding even if the lock is somehow bypassed.
+  const claudeJsonPath = path.join(process.env.USERPROFILE || app.getPath('home'), '.claude.json');
+  let release;
+  const prev = claudeJsonLock;
+  claudeJsonLock = new Promise(res => { release = res; }); // synchronous — no interleaving
+  try {
+    await prev; // wait for any concurrent cycle to finish
+    tlog(`ensure-output-dir: acquired .claude.json lock, reading (${fs.existsSync(claudeJsonPath) ? fs.statSync(claudeJsonPath).size + 'B' : 'missing'})`);
+    // Re-read inside the lock so we always start from the freshest content,
+    // not a snapshot taken before a sibling call's write landed.
+    let claudeData = {};
+    if (fs.existsSync(claudeJsonPath)) {
+      claudeData = JSON.parse(fs.readFileSync(claudeJsonPath, 'utf8'));
+    }
+    if (!claudeData.projects) claudeData.projects = {};
+    const projectKey = dir.replace(/\\/g, '/'); // Claude Code stores paths with forward slashes
+    claudeData.projects[projectKey] = {
+      allowedTools: [],
+      mcpContextUris: [],
+      mcpServers: {},
+      enabledMcpjsonServers: [],
+      disabledMcpjsonServers: [],
+      hasTrustDialogAccepted: true,
+      projectOnboardingSeenCount: 0,
+      hasClaudeMdExternalIncludesApproved: false,
+      hasClaudeMdExternalIncludesWarningShown: false,
+      hasUnseenTeamArtifacts: false,
+    };
+    const tmp = `${claudeJsonPath}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(claudeData, null, 2), 'utf8');
+    fs.renameSync(tmp, claudeJsonPath);
+    tlog('ensure-output-dir: .claude.json write+rename done');
+  } catch (e) {
+    tlog(`ensure-output-dir: .claude.json write FAILED (best-effort, launch continues): ${(e && e.message) || e}`);
+    console.warn('[ensure-output-dir] could not pre-trust sandbox in .claude.json:', (e && e.message) || e);
+  } finally {
+    release(); // always release — a throw must never deadlock the chain
+  }
+  tlog('ensure-output-dir: END ok');
   return { ok: true, dir };
 });
 
@@ -276,6 +376,7 @@ ipcMain.handle('ensure-output-dir', async (_e, { role }) => {
 // fence is really installed AND actually gates Read (not just Write/Edit — Blue Helm
 // checklist P1), and refuse to launch if either is missing (renderer shows the reason).
 ipcMain.handle('verify-fence', async (_e, { role }) => {
+  tlog(`verify-fence: START role="${role}"`);
   if (!VALID_ROLES.has(role)) return { ok: false, error: 'unknown role' };
   const home = process.env.USERPROFILE || app.getPath('home');
   const agentFile = path.join(home, '.claude', 'agents', `${role}.md`);
@@ -295,6 +396,7 @@ ipcMain.handle('verify-fence', async (_e, { role }) => {
   if (!matcherLine || !/\bRead\b/.test(matcherLine[1])) {
     return { ok: false, error: `Role "${role}" has a path-fence but its matcher doesn't include Read — reads are unguarded. ${fix}` };
   }
+  tlog('verify-fence: END ok');
   return { ok: true, hookPath: m[1] };
 });
 
@@ -330,7 +432,42 @@ ipcMain.handle('open-external', async (_e, url) => {
 // worktree, optionally running the chosen agent CLI, with bytes streamed both ways.
 // This is what makes agents run *inside* the Command Center window.
 ipcMain.handle('pty-start', (_e, opts) => {
+  tlog(`pty-start: START id=${opts.id} role=${opts.role || 'none'} cwd=${opts.cwd || '(unset)'}`);
   const { id, cols, rows } = opts;
+
+  // Hard gate: fenced roles (web-scout, operator, source-scout) must run inside the
+  // ensure-output-dir sandbox. Enforce here rather than relying on renderer discipline —
+  // same "tool-enforced-not-convention" principle the hook itself is built on. Uses the
+  // same realpath + case-fold logic as fence-write.js so both layers agree on what "inside"
+  // means and can't be split by a symlink or a Unicode/case path trick.
+  if (!opts.videoScout && opts.role && FENCED_ROLES.has(opts.role)) {
+    const fenceRefuse = (msg) => {
+      tlog(msg);
+      if (win && !win.isDestroyed()) win.webContents.send('main-error', msg);
+      return { ok: false, error: msg };
+    };
+    const declaredCwd = opts.cwd;
+    if (!declaredCwd || !fs.existsSync(declaredCwd)) {
+      return fenceRefuse(
+        `Fenced role "${opts.role}" refused: cwd "${declaredCwd || '(unset)'}" does not exist. ` +
+        `Call ensure-output-dir and pass its result as cwd before spawning.`
+      );
+    }
+    const outputsRoot = path.join(loadSettings().projectsRoot, '.command-center', 'outputs');
+    const fold = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
+    const resolvedRoot = realOrNearest(outputsRoot);
+    const resolvedCwd  = realOrNearest(declaredCwd);
+    const within = fold(resolvedCwd) === fold(resolvedRoot) ||
+                   fold(resolvedCwd).startsWith(fold(resolvedRoot) + path.sep);
+    if (!within) {
+      return fenceRefuse(
+        `Fenced role "${opts.role}" refused: cwd "${resolvedCwd}" is outside the outputs sandbox ` +
+        `("${resolvedRoot}"). Call ensure-output-dir and pass its result as cwd before spawning.`
+      );
+    }
+    tlog(`pty-start: fenced-role cwd check PASSED (${resolvedCwd} ⊆ ${resolvedRoot})`);
+  }
+
   // Never spawn into a missing directory: ConPTY throws Windows error 267 (ERROR_DIRECTORY)
   // from a worker thread, which would surface as a fatal uncaught exception.
   const cwd = (opts.cwd && fs.existsSync(opts.cwd)) ? opts.cwd : process.env.USERPROFILE;
@@ -356,11 +493,27 @@ ipcMain.handle('pty-start', (_e, opts) => {
     const run = buildAgentCommand(opts); // role / bare CLI / undefined => plain shell
     if (run) args.push('-Command', run);
   }
-  // Video-scout gets GEMINI_API_KEY injected from safeStorage; all other PTYs inherit
-  // process.env as-is. The key is never set as an OS env var — safeStorage is the sole
-  // source of truth for it after this migration.
-  const ptyEnv = opts.videoScout ? { ...process.env, GEMINI_API_KEY: geminiKey } : process.env;
+  // CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1 tells Claude Code not to forward the parent
+  // environment into subprocesses it spawns itself: Bash tool calls, PreToolUse/PostToolUse
+  // hook commands, and MCP servers all inherit the PTY env by default. Without this flag, a
+  // Bash step inside any agent can read every secret in process.env (e.g. a GEMINI_API_KEY
+  // left in HKCU:\Environment via setx). Set on every PTY — harmless for non-Claude panes,
+  // essential for agent panes. Defined here, in pty-start; also documented in CLAUDE.md.
+  //
+  // Video-scout PTYs additionally receive GEMINI_API_KEY from safeStorage (decrypted in
+  // main memory, never written to disk) so feed-gemini.ps1 can reach the Gemini API.
+  // IMPORTANT: if GEMINI_API_KEY was previously persisted via `setx`, it is still present
+  // in process.env and leaks into every PTY via the spread below. Remove it from the Windows
+  // user environment manually (see CLAUDE.md). That removal is a pre-req for full per-role
+  // env filtering (Blue Helm checklist item 2).
+  const ptyEnv = {
+    ...process.env,
+    CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1',  // scrub credentials from Claude Code's own subprocesses
+    ...(opts.videoScout ? { GEMINI_API_KEY: geminiKey } : {}),
+  };
   let p;
+  tlog(`pty-start: env built — CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, GEMINI_API_KEY ${opts.videoScout ? 'injected (video-scout)' : 'not added by app (check for setx residue)'}`);
+  tlog(`pty-start: pty.spawn START cwd=${cwd}`);
   try {
     p = pty.spawn('powershell.exe', args, {
       name: 'xterm-256color',
@@ -369,16 +522,18 @@ ipcMain.handle('pty-start', (_e, opts) => {
       env: ptyEnv,
     });
   } catch (e) {
+    tlog(`pty-start: pty.spawn FAILED: ${e.message}`);
     if (win && !win.isDestroyed()) win.webContents.send('pty-exit', { id });
     return { ok: false, error: String((e && e.message) || e) };
   }
+  tlog('pty-start: pty.spawn END ok');
   ptys.set(id, p);
   p.onData((data) => { if (win && !win.isDestroyed()) win.webContents.send('pty-data', { id, data }); });
   p.onExit(() => { ptys.delete(id); if (win && !win.isDestroyed()) win.webContents.send('pty-exit', { id }); });
   return { ok: true };
 });
 ipcMain.on('pty-write', (_e, { id, data }) => { const p = ptys.get(id); if (p) p.write(data); });
-ipcMain.on('pty-resize', (_e, { id, cols, rows }) => { const p = ptys.get(id); if (p) { try { p.resize(cols, rows); } catch {} } });
+ipcMain.on('pty-resize', (_e, { id, cols, rows }) => { const p = ptys.get(id); if (p) { try { p.resize(cols, rows); } catch (err) { tlog(`pty-resize ${id} failed (process likely exiting): ${(err && err.message) || err}`); } } });
 ipcMain.on('pty-kill', (_e, id) => { const p = ptys.get(id); if (p) { try { p.kill(); } catch {} ptys.delete(id); } });
 
 // ---- IPC: vibe-kanban board -------------------------------------------------

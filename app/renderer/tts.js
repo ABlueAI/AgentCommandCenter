@@ -122,7 +122,10 @@ async function speak(rawText) {
   speaking = true; genStop = false;
   setStatus('speaking');
   const ac = ctx();
-  if (ac.state === 'suspended') { try { await ac.resume(); } catch {} }
+  if (ac.state === 'suspended') {
+    try { await ac.resume(); }
+    catch (err) { speaking = false; setStatus('error', 'AudioContext resume failed: ' + (err && err.message)); return; }
+  }
   nextStart = ac.currentTime + 0.05;
 
   // Synthesize sentence-by-sentence so audio starts quickly and stays ahead of playback.

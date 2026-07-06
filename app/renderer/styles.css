@@ -172,6 +172,7 @@ input:focus { outline: none; border-color: var(--accent); }
 .role-badge[data-role="reviewer"]       { color: #37B24D; border-color: #37B24D66; background: #37B24D1a; }
 .role-badge[data-role="codebase-scout"] { color: #22B8CF; border-color: #22B8CF66; background: #22B8CF1a; }
 .role-badge[data-role="web-scout"]      { color: #22B8CF; border-color: #22B8CF66; background: #22B8CF1a; }
+.role-badge[data-role="source-scout"]   { color: #22B8CF; border-color: #22B8CF66; background: #22B8CF1a; }
 .role-badge[data-role="operator"]       { color: #9775FA; border-color: #9775FA66; background: #9775FA1a; }
 .role-badge[data-role="video-scout"]    { color: #E64980; border-color: #E6498066; background: #E649801a; }
 .role-choices { flex-wrap: wrap; }
@@ -223,7 +224,7 @@ input:focus { outline: none; border-color: var(--accent); }
 .logs { flex: 1; margin: 0; padding: 14px; overflow: auto; font-family: var(--mono); font-size: 12px; color: #9fb0bf; background: var(--panel-2); white-space: pre-wrap; }
 
 /* ---- modal ---- */
-.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; }
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 22px; width: 380px; display: flex; flex-direction: column; gap: 8px; }
 .modal h3 { margin: 0 0 6px; }
 .modal label { color: var(--muted); font-size: 12px; margin-top: 6px; }
