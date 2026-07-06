@@ -12,6 +12,7 @@ const ROLES = {
   reviewer:         { label: 'Reviewer',       glyph: '🔎', cli: 'claude', readOnly: true,  needsWorktree: false, newAgent: false },
   'codebase-scout': { label: 'Codebase Scout', glyph: '🧭', cli: 'claude', readOnly: true,  needsWorktree: false, newAgent: false },
   'web-scout':      { label: 'Web Scout',       glyph: '🌐', cli: 'claude', readOnly: false, needsWorktree: false, newAgent: true },
+  'source-scout':   { label: 'Source Scout',    glyph: '🔍', cli: 'claude', readOnly: false, needsWorktree: false, newAgent: true },
   operator:         { label: 'Operator',        glyph: '📣', cli: 'claude', readOnly: false, needsWorktree: false, newAgent: true },
   // Video-scout runs on Gemini (the only model that watches video), launched via the videoScout
   // path, not claude --agent. Input is a URL, not a task name.
@@ -140,7 +141,16 @@ function openInAppTerminal(opts = {}) {
   // Paste writes raw bytes to the PTY (like typing) rather than term.paste(), whose bracketed-
   // paste escapes some TUIs (e.g. the Gemini prompt) silently drop.
   const readClip = () => { try { return (cc.clipboardRead && cc.clipboardRead()) || ''; } catch { return ''; } };
-  const writeClip = (s) => { try { if (s && cc.clipboardWrite) cc.clipboardWrite(s); } catch {} };
+  const writeClip = (s) => {
+    try {
+      if (s && cc.clipboardWrite) {
+        cc.clipboardWrite(s);
+        appendLog(`[copy ${id}] ${s.length} chars written to clipboard\n`);
+      }
+    } catch (err) {
+      appendLog(`[copy ${id}] clipboardWrite FAILED: ${(err && err.message) || err}\n`);
+    }
+  };
   const pasteIntoPty = () => {
     const t = readClip();
     if (t) cc.ptyWrite(id, t);
@@ -153,12 +163,14 @@ function openInAppTerminal(opts = {}) {
     if (isV) { pasteIntoPty(); return false; }              // Ctrl+V / Ctrl+Shift+V
     if (isC) {
       const sel = term.getSelection();
+      appendLog(`[copy ${id}] Ctrl+${e.shiftKey ? 'Shift+' : ''}C: ${sel ? sel.length + ' chars selected' : 'no selection → SIGINT'}\n`);
       if (sel) { writeClip(sel); term.clearSelection(); return false; } // copy
       if (e.shiftKey) return false;                          // Ctrl+Shift+C, nothing selected: swallow
       return true;                                           // plain Ctrl+C, nothing selected: SIGINT
     }
     return true;
   });
+  appendLog(`[copy ${id}] key handler registered\n`);
   pane.querySelector('.term-body').addEventListener('contextmenu', (e) => {
     e.preventDefault();
     const s = term.getSelection();
@@ -174,7 +186,7 @@ function openInAppTerminal(opts = {}) {
         const b64 = data.slice(i + 1);
         if (b64 && b64 !== '?') {
           try { writeClip(decodeURIComponent(escape(atob(b64)))); }
-          catch { try { writeClip(atob(b64)); } catch {} }
+          catch { try { writeClip(atob(b64)); } catch (err) { appendLog(`[osc52 ${id}] base64 decode failed: ${(err && err.message) || err}\n`); } }
         }
       }
       return true; // handled
@@ -208,7 +220,7 @@ function openInAppTerminal(opts = {}) {
     cc.ptyKill(id); term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
   };
-  pane.addEventListener('mousedown', () => { activeTermId = id; });
+  pane.addEventListener('mousedown', () => { activeTermId = id; term.focus(); });
   term.textarea && term.textarea.addEventListener('focus', () => { activeTermId = id; });
   terms.set(id, paneData);
   cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, cols: term.cols, rows: term.rows });
@@ -320,7 +332,9 @@ async function onRepoChange() {
 
 // ---- agents -----------------------------------------------------------------
 async function refreshAgents() {
+  appendLog('[TIMING] refreshAgents: listWorktrees START\n');
   const all = state.repo ? await cc.listWorktrees(state.repo) : [];
+  appendLog(`[TIMING] refreshAgents: listWorktrees END (${all.length} items)\n`);
   // The first worktree is the main checkout; the rest are agents.
   state.worktrees = all.filter((w) => !w.branch || w.branch !== 'main');
   renderAgentList();
@@ -573,10 +587,18 @@ function openModal() {
   $('#cliRow').classList.add('hidden');
   $('#targetRow').classList.add('hidden');
   updateModalHint();
+  // Belt-and-suspenders: disable pointer events on the terminal grid so
+  // xterm's WebGL compositing layer can't intercept modal clicks, and
+  // blur any active terminal so keystrokes reach the name input.
+  $('#terminalGrid').style.pointerEvents = 'none';
+  for (const t of terms.values()) { try { t.term.blur(); } catch {} }
   $('#modal').classList.remove('hidden');
   $('#taskName').focus();
 }
-function closeModal() { $('#modal').classList.add('hidden'); }
+function closeModal() {
+  $('#modal').classList.add('hidden');
+  $('#terminalGrid').style.pointerEvents = '';
+}
 
 // Guard: did new-agent actually create the worktree? If not, surface the real reason
 // instead of launching a terminal into a directory that doesn't exist.
@@ -589,6 +611,8 @@ function worktreeOk(res, task) {
 }
 
 async function createAgent() {
+  await cc.tlogReset();
+  appendLog('[TIMING] createAgent: START\n');
   const role = state.chosenRole;
   const meta = role !== 'plain' ? ROLES[role] : null;
 
@@ -627,9 +651,14 @@ async function createAgent() {
   // Plain: today's behavior — fresh worktree + a bare CLI.
   if (role === 'plain') {
     appendLog(`\n[agent] worktree agent/${task} (plain ${state.chosenCli})…\n`);
+    appendLog('[TIMING] createAgent: newAgent START\n');
     const res = await cc.newAgent({ repo: state.repo, task });
+    appendLog('[TIMING] createAgent: newAgent END\n');
+    appendLog('[TIMING] createAgent: refreshAgents START\n');
     await refreshAgents();
+    appendLog('[TIMING] createAgent: refreshAgents END\n');
     if (!worktreeOk(res, task)) return;
+    appendLog('[TIMING] createAgent: openInAppTerminal (plain)\n');
     openInAppTerminal({ worktree: res.worktree, cli: state.chosenCli });
     return;
   }
@@ -637,11 +666,16 @@ async function createAgent() {
   if (meta.needsWorktree) {
     // Builder: fresh worktree, launched with the role (Opus override when Hard is checked).
     appendLog(`\n[agent] worktree agent/${task} (${role}${state.hardTask ? ', opus/xhigh' : ''})…\n`);
+    appendLog('[TIMING] createAgent: newAgent START\n');
     const res = await cc.newAgent({ repo: state.repo, task });
+    appendLog('[TIMING] createAgent: newAgent END\n');
+    appendLog('[TIMING] createAgent: refreshAgents START\n');
     await refreshAgents();
+    appendLog('[TIMING] createAgent: refreshAgents END\n');
     if (!worktreeOk(res, task)) return;
     const model = state.hardTask ? 'opus' : undefined;
     const effort = state.hardTask ? 'xhigh' : undefined;
+    appendLog('[TIMING] createAgent: openInAppTerminal (builder)\n');
     openInAppTerminal({ worktree: res.worktree, role, cli: 'claude', model, effort, title: `${meta.label} · ${task}` });
   } else {
     // Web-Scout / Operator: run in a dedicated fenced sandbox outside any repo. Its
@@ -649,15 +683,20 @@ async function createAgent() {
     // FAIL CLOSED: confirm the fence is actually deployed before launching a write-capable
     // role. If sync-roles.ps1 wasn't run, the fence wouldn't apply and the role would be
     // unconfined — refuse rather than give a false sense of containment.
+    appendLog('[TIMING] createAgent: verifyFence START\n');
     const fence = await cc.verifyFence({ role });
+    appendLog(`[TIMING] createAgent: verifyFence END ok=${fence && fence.ok}\n`);
     if (!fence || !fence.ok) {
       appendLog(`[agent] BLOCKED ${role}: write-fence not active — ${fence && fence.error}\n`);
       alert(`Refusing to launch "${ROLES[role].label}" — its write-fence isn't active:\n\n${(fence && fence.error) || 'unknown error'}`);
       return;
     }
+    appendLog('[TIMING] createAgent: ensureOutputDir START\n');
     const r = await cc.ensureOutputDir({ role });
+    appendLog(`[TIMING] createAgent: ensureOutputDir END ok=${r && r.ok}\n`);
     if (!r || !r.ok) { appendLog(`[agent] could not create sandbox: ${r && r.error}\n`); alert('Could not create the output sandbox:\n' + ((r && r.error) || 'unknown error')); return; }
     appendLog(`\n[agent] ${role} in fenced sandbox ${r.dir}…\n`);
+    appendLog('[TIMING] createAgent: openInAppTerminal (sandbox)\n');
     openInAppTerminal({ worktree: r.dir, role, cli: 'claude', title: `${meta.label} · ${task}` });
   }
 }

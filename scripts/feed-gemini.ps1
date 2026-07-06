@@ -6,8 +6,9 @@
     transcript  (default) - grabs auto-subtitles as .srt  (cheapest; text only)
     audio                  - extracts .mp3                  (tone/speech matters)
     video                  - downloads the .mp4 <=720p      (visuals matter)
-  Files land in .\media (or -OutDir) with --restrict-filenames so the names are
-  space-free and safe to pass to Gemini's @file references. Unless -NoFeed is set,
+  Files land in D:\Gemini_Video_Review\downloads (or override with -OutDir) with
+  --restrict-filenames so the names are space-free and safe to pass to Gemini's
+  @file references. Unless -NoFeed is set,
   the downloaded file is then handed to `gemini -p` with a default (or -Prompt) brief.
 .EXAMPLE
   .\feed-gemini.ps1 "https://youtu.be/XYZ"
@@ -20,7 +21,7 @@ param(
     [Parameter(Mandatory = $true, Position = 0)][string]$Url,
     [ValidateSet('transcript', 'audio', 'video')][string]$Mode = 'transcript',
     [string]$Prompt,
-    [string]$OutDir = (Join-Path (Get-Location) 'media'),
+    [string]$OutDir = 'D:\Gemini_Video_Review\downloads',
     [string]$Lang = 'en',
     [switch]$NoFeed,
     [switch]$VideoScout
@@ -100,23 +101,24 @@ if (-not $Prompt) {
 if ($NoFeed) {
     Write-Host ""
     Write-Host "Skipped feeding (-NoFeed). To send it to Gemini later, run from ${OutDir}:" -ForegroundColor Cyan
-    Write-Host "  gemini -p `"$Prompt @$($file.Name)`""
+    Write-Host "  gemini -m gemini-2.5-flash-lite -p `"$Prompt @$($file.Name)`""
     return
 }
 
 if (-not $gemini) {
     Write-Host ""
     Write-Host "Gemini CLI not found. File is saved above. Install/login, then run from ${OutDir}:" -ForegroundColor Yellow
-    Write-Host "  gemini -p `"$Prompt @$($file.Name)`""
+    Write-Host "  gemini -m gemini-2.5-flash-lite -p `"$Prompt @$($file.Name)`""
     return
 }
 
-# --- feed Gemini (run from OutDir so the @ reference is a clean relative name) --
+# --- feed Gemini (run from trusted root so Gemini's folder-trust check passes) --
 Write-Host ""
 Write-Host "Feeding to Gemini..." -ForegroundColor Cyan
-Push-Location $OutDir
+$geminiCwd = Split-Path $OutDir -Parent
+Push-Location $geminiCwd
 try {
-    & $gemini -p "$Prompt @$($file.Name)"
+    & $gemini -m gemini-2.5-flash-lite -p "$Prompt @$($file.FullName)"
 }
 finally {
     Pop-Location

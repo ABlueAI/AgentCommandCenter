@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('cc', {
   pickBoardApp: () => ipcRenderer.invoke('pick-board-app'),
 
   // in-app terminals (node-pty)
+  tlogReset: () => ipcRenderer.invoke('tlog-reset'),
   ptyStart: (o) => ipcRenderer.invoke('pty-start', o),
   ptyWrite: (id, data) => ipcRenderer.send('pty-write', { id, data }),
   ptyResize: (id, cols, rows) => ipcRenderer.send('pty-resize', { id, cols, rows }),

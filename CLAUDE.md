@@ -51,6 +51,15 @@ payment setup. Owning the stack is cheaper, fully portable, and safer.
    load-bearing one if a decision depends on it.
 7. Flag security risks proactively — flawed logic, injection surfaces, secrets in code,
    risky permissions — with the reason and a concrete mitigation.
+8. Provider credentials must NOT be persisted as Windows user env vars (`setx`). Every
+   Claude Code agent PTY is launched with `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` (set in
+   `app/main.js` → `pty-start`). Without it, Bash tool calls, PreToolUse/PostToolUse hook
+   scripts, and MCP servers inherit the full PTY env by default, making any credential in
+   `process.env` readable inside a Bash step. Use the in-app key setup UI instead —
+   credentials are encrypted via Electron safeStorage and injected only into the PTYs that
+   need them. If a key was previously set via `setx`, remove it from the Windows user
+   environment: System Properties → Environment Variables → User variables → delete the
+   entry (or: `[Environment]::SetEnvironmentVariable('KEY_NAME', $null, 'User')`).
 
 ## Model routing (which agent does what)
 - Deep multi-file review, architecture, tricky bugs -> Claude Opus (strongest reasoning).
