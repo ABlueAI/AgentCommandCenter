@@ -8,6 +8,11 @@ const path = require('path');
 const fs = require('fs');
 const { spawn, execFile } = require('child_process');
 const pty = require('@lydell/node-pty'); // prebuilt ConPTY — powers in-app terminals
+// Video-scout's Gemini model/media-resolution options are untrusted IPC input, same posture as
+// every other renderer-supplied field. The allowlists + arg-building logic live in this small,
+// dependency-free, unit-tested module (see app/video-scout-args.test.js) so they don't have to be
+// re-verified by hand every time this file changes.
+const { buildVideoScoutArgs } = require('./video-scout-args');
 
 // ---- tunable defaults (marked ? — change to taste) --------------------------
 const DEFAULT_PROJECTS_ROOT = 'D:\\Workspace';            // (?) where your git repos live
@@ -489,6 +494,13 @@ ipcMain.handle('pty-start', (_e, opts) => {
     // [string]$Url parameter literally. Nothing user-controlled is ever parsed by a shell.
     const script = path.join(SCRIPTS_DIR, 'feed-gemini.ps1');
     args.push('-File', script, '-Url', url, '-VideoScout');
+    // Gemini model / media-resolution: validate against the allowlists in video-scout-args.js
+    // and push only what passes — an invalid or missing value is omitted so feed-gemini.ps1's
+    // own default applies. Log the POST-VALIDATION outcome for every field (sent / omitted /
+    // rejected) so the Logs tab never implies a choice was honored when it was silently dropped.
+    const { args: geminiArgs, notes: geminiNotes } = buildVideoScoutArgs(opts);
+    args.push(...geminiArgs);
+    for (const note of geminiNotes) tlog(`pty-start: video-scout ${note}`);
   } else {
     const run = buildAgentCommand(opts); // role / bare CLI / undefined => plain shell
     if (run) args.push('-Command', run);

@@ -180,6 +180,8 @@ input:focus { outline: none; border-color: var(--accent); }
 .modal-opt { margin-top: 4px; }
 .modal-opt .check { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 12.5px; cursor: pointer; }
 .modal-opt .check input { accent-color: var(--accent); }
+.modal-opt select { margin-bottom: 6px; }
+.modal-opt .caveat { color: #d9b54a; margin-top: 2px; } /* visible (non-hover) truthful caveat — not just a tooltip */
 
 /* ---- Gemini key banner & topbar indicator ---- */
 .key-banner {
