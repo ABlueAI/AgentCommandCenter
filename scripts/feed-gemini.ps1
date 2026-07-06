@@ -27,12 +27,15 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
-# Video-scout: force video mode and use the richer visual+spoken analysis brief. Keeping the
-# brief here means the app's launcher only has to pass -VideoScout (no long quoted prompt).
+# Video-scout: force video mode and use the richer forensic-analyst brief from
+# prompts/video-scout-analysis.md. Keeping the brief in its own file (loaded into $Prompt)
+# means the app's launcher only has to pass -VideoScout (no long quoted prompt), and the
+# brief is applied on every video-scout run without needing to paste it each time.
 if ($VideoScout) {
     $Mode = 'video'
     if (-not $Prompt) {
-        $Prompt = "You are reviewing a downloaded video for a build/research purpose. Report (a) what is shown on screen - UI, tools, code, diagrams, demonstrated actions, scene/segment changes with rough timestamps - and (b) what is said. Separate visual findings from spoken findings. Flag anything where the on-screen action differs from or adds to the narration."
+        . (Join-Path $PSScriptRoot 'lib\get-video-scout-prompt.ps1')
+        $Prompt = Get-VideoScoutPrompt
     }
 }
 
