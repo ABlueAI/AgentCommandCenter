@@ -16,6 +16,8 @@
   .\feed-gemini.ps1 "https://youtu.be/XYZ" -Mode video -Prompt "What UI patterns appear?"
 .EXAMPLE
   .\feed-gemini.ps1 "https://youtu.be/XYZ" -Mode audio -NoFeed   # just download
+.EXAMPLE
+  .\feed-gemini.ps1 "https://youtu.be/XYZ" -VideoScout -Model gemini-2.5-pro -MediaResolution HIGH
 #>
 param(
     [Parameter(Mandatory = $true, Position = 0)][string]$Url,
@@ -23,10 +25,25 @@ param(
     [string]$Prompt,
     [string]$OutDir = 'D:\Gemini_Video_Review\downloads',
     [string]$Lang = 'en',
+    # Gemini CLI model (`-m`). Default is the cheapest vision-capable tier. See
+    # lib/get-gemini-launch-config.ps1 for the full model/resolution-vs-download-resolution note.
+    [string]$Model = 'gemini-2.5-flash-lite',
+    # Intended per-request token-cost tier for image/video frames (LOW/MEDIUM/HIGH). NOTE: the
+    # installed Gemini CLI has no flag or settings.json key for this on the -p path yet, so this
+    # is currently logged (and validated) but not sent to the CLI -- see the warning printed at
+    # launch and lib/get-gemini-launch-config.ps1 for why, and the closest available alternatives.
+    [ValidateSet('LOW', 'MEDIUM', 'HIGH')][string]$MediaResolution = 'MEDIUM',
     [switch]$NoFeed,
     [switch]$VideoScout
 )
 $ErrorActionPreference = "Stop"
+
+# Resolve + log the model/media-resolution launch config first, before any download happens, so
+# every run records what tier it used at the top of the Logs tab output.
+. (Join-Path $PSScriptRoot 'lib\get-gemini-launch-config.ps1')
+$launchConfig = Resolve-GeminiLaunchConfig -Model $Model -MediaResolution $MediaResolution
+Write-Host $launchConfig.LogLine -ForegroundColor DarkCyan
+Write-Warning $launchConfig.Warning
 
 # Video-scout: force video mode and use the richer forensic-analyst brief from
 # prompts/video-scout-analysis.md. Keeping the brief in its own file (loaded into $Prompt)
@@ -104,14 +121,14 @@ if (-not $Prompt) {
 if ($NoFeed) {
     Write-Host ""
     Write-Host "Skipped feeding (-NoFeed). To send it to Gemini later, run from ${OutDir}:" -ForegroundColor Cyan
-    Write-Host "  gemini -m gemini-2.5-flash-lite -p `"$Prompt @$($file.Name)`""
+    Write-Host "  gemini -m $Model -p `"$Prompt @$($file.Name)`""
     return
 }
 
 if (-not $gemini) {
     Write-Host ""
     Write-Host "Gemini CLI not found. File is saved above. Install/login, then run from ${OutDir}:" -ForegroundColor Yellow
-    Write-Host "  gemini -m gemini-2.5-flash-lite -p `"$Prompt @$($file.Name)`""
+    Write-Host "  gemini -m $Model -p `"$Prompt @$($file.Name)`""
     return
 }
 
@@ -121,7 +138,9 @@ Write-Host "Feeding to Gemini..." -ForegroundColor Cyan
 $geminiCwd = Split-Path $OutDir -Parent
 Push-Location $geminiCwd
 try {
-    & $gemini -m gemini-2.5-flash-lite -p "$Prompt @$($file.FullName)"
+    # -MediaResolution is intentionally NOT passed here: the gemini CLI has no flag for it on the
+    # -p path (see lib/get-gemini-launch-config.ps1). Only -m/$Model is a real CLI knob today.
+    & $gemini -m $Model -p "$Prompt @$($file.FullName)"
 }
 finally {
     Pop-Location
