@@ -18,8 +18,44 @@ const ROLES = {
   'video-scout':    { label: 'Video Scout',     glyph: '🎥', cli: 'gemini', readOnly: false, needsWorktree: false, newAgent: true, video: true },
 };
 
+// ---- chat bubble renderer -----------------------------------------------
+function makeBubble(type, text, partial) {
+  const div = document.createElement('div');
+  div.className = `chat-bubble ${type}${partial ? ' partial' : ''}`;
+  const inner = document.createElement('span');
+  inner.className = 'bubble-text';
+  inner.textContent = text;
+  div.appendChild(inner);
+  return div;
+}
+
+function drainChatEvents(t) {
+  t.rafId = null;
+  const events = t.pendingEvents.splice(0);
+  for (const ev of events) {
+    if (ev.partial) {
+      if (!t.tailBubble) {
+        t.tailBubble = makeBubble(ev.type, ev.text, true);
+        t.chatBody.appendChild(t.tailBubble);
+      } else {
+        t.tailBubble.querySelector('.bubble-text').textContent = ev.text;
+      }
+    } else {
+      if (t.tailBubble) {
+        // Finalize the in-progress bubble with the confirmed final text.
+        t.tailBubble.querySelector('.bubble-text').textContent = ev.text;
+        t.tailBubble.classList.remove('partial');
+        t.tailBubble = null;
+      } else {
+        t.chatBody.appendChild(makeBubble(ev.type, ev.text, false));
+      }
+    }
+  }
+  t.chatBody.scrollTop = t.chatBody.scrollHeight;
+}
+
 // ---- in-app terminals (xterm.js front-end; real ConPTY lives in main) -------
-const terms = new Map(); // id -> { term, fit, pane }
+const terms = new Map(); // id -> { term, fit, pane, ro, parser, chatBody, pendingEvents, rafId, tailBubble }
 let termSeq = 0;
 let activeTermId = null;  // pane that dictation types into (last focused)
 const THEMES_XTERM = {
@@ -73,7 +109,8 @@ function openInAppTerminal(opts = {}) {
       <span class="name" title="${worktree || ''}">${label}</span>
       <button class="spk" title="Speak selection (Kokoro TTS)">🔊</button>
       <button class="x" title="Close">✕</button></div>
-    <div class="term-body"></div>`;
+    <div class="term-body"></div>
+    <div class="chat-body"></div>`;
   $('#terminalGrid').appendChild(pane);
   const term = new Terminal({ theme: xtermTheme(), fontFamily: "'Cascadia Code','Consolas',monospace", fontSize: 13, cursorBlink: true, allowProposedApi: true, scrollback: 5000 });
   const fit = new FitAddon.FitAddon();
@@ -159,14 +196,21 @@ function openInAppTerminal(opts = {}) {
     if (!sel || !sel.trim()) { appendLog('[tts] select some text in the pane first, then click 🔊.\n'); return; }
     window.ccTTS.speak(sel);
   };
+  const chatBody = pane.querySelector('.chat-body');
+  const paneData = { term, fit, pane, ro, chatBody, pendingEvents: [], rafId: null, tailBubble: null, parser: null };
+  paneData.parser = new PtyParser((ev) => {
+    paneData.pendingEvents.push(ev);
+    if (paneData.rafId === null) paneData.rafId = requestAnimationFrame(() => drainChatEvents(paneData));
+  });
   pane.querySelector('.x').onclick = () => {
     ro.disconnect();
+    if (paneData.rafId !== null) { cancelAnimationFrame(paneData.rafId); paneData.rafId = null; }
     cc.ptyKill(id); term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
   };
   pane.addEventListener('mousedown', () => { activeTermId = id; });
   term.textarea && term.textarea.addEventListener('focus', () => { activeTermId = id; });
-  terms.set(id, { term, fit, pane, ro });
+  terms.set(id, paneData);
   cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, cols: term.cols, rows: term.rows });
   setTimeout(() => { fit.fit(); cc.ptyResize(id, term.cols, term.rows); activeTermId = id; term.focus(); }, 40);
 }
@@ -177,10 +221,17 @@ async function boot() {
   applyTheme((s && s.theme) || 'obsidian');
   if (s && s.ttsVoice) state.ttsVoice = s.ttsVoice;
   if (s && s.ttsSpeed) state.ttsSpeed = s.ttsSpeed;
+  updateKeyBanner(await cc.getGeminiKeyStatus());
   await refreshRepos();
   wireUi();
-  cc.onPtyData(({ id, data }) => { const t = terms.get(id); if (t) t.term.write(data); });
-  cc.onPtyExit(({ id }) => { const t = terms.get(id); if (t) t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n'); });
+  cc.onPtyData(({ id, data }) => {
+    const t = terms.get(id);
+    if (t) { t.term.write(data); t.parser.feed(data); }
+  });
+  cc.onPtyExit(({ id }) => {
+    const t = terms.get(id);
+    if (t) { t.parser.flush(); t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n'); }
+  });
   cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));
   window.addEventListener('resize', fitAllTerms);
   // TTS/STT modules load after this script; wire their controls when they announce ready.
@@ -374,6 +425,13 @@ async function launchReviewer(worktree) {
   openInAppTerminal({ worktree, role: 'reviewer', cli: 'claude', initialPrompt, title: `Reviewer · ${name}` });
 }
 
+// ---- Gemini key banner ------------------------------------------------------
+function updateKeyBanner(status) {
+  const hasKey = status && status.hasKey;
+  $('#keyBanner').classList.toggle('hidden', !!hasKey);
+  $('#keyStored').classList.toggle('hidden', !hasKey);
+}
+
 // ---- logs -------------------------------------------------------------------
 function appendLog(text) {
   const log = $('#logView');
@@ -412,6 +470,25 @@ function wireUi() {
     };
   });
   $('#newTermShell').onclick = () => openInAppTerminal({ worktree: state.repo || undefined });
+
+  // Gemini key banner
+  $('#geminiKeySave').onclick = async () => {
+    const key = $('#geminiKeyInput').value.trim();
+    if (!key) { $('#geminiKeyInput').focus(); return; }
+    const r = await cc.setGeminiKey(key);
+    if (r && r.ok) {
+      $('#geminiKeyInput').value = '';
+      updateKeyBanner({ hasKey: true });
+    } else {
+      appendLog(`[key] save failed: ${(r && r.error) || 'unknown error'}\n`);
+    }
+  };
+  $('#geminiKeyInput').onkeydown = (e) => { if (e.key === 'Enter') $('#geminiKeySave').click(); };
+  $('#geminiKeyChange').onclick = () => updateKeyBanner({ hasKey: false });
+  $('#geminiKeyClear').onclick = async () => {
+    await cc.clearGeminiKey();
+    updateKeyBanner({ hasKey: false });
+  };
 
   // new-agent modal
   $('#newAgent').onclick = openModal;
@@ -519,6 +596,14 @@ async function createAgent() {
   if (meta && meta.video) {
     const url = $('#taskName').value.trim();
     if (!/^https?:\/\/\S+$/.test(url)) { alert('Enter a video URL (starting with http:// or https://).'); $('#taskName').focus(); return; }
+    const ks = await cc.getGeminiKeyStatus();
+    if (!ks || !ks.hasKey) {
+      closeModal();
+      appendLog('[video-scout] GEMINI_API_KEY not stored — enter it in the key setup banner.\n');
+      updateKeyBanner({ hasKey: false });
+      $('#geminiKeyInput').focus();
+      return;
+    }
     closeModal();
     appendLog(`\n[video-scout] downloading + analyzing ${url}…\n`);
     openInAppTerminal({ worktree: state.repo || undefined, role, videoScout: true, videoUrl: url, title: `Video Scout · ${new URL(url).hostname}` });
@@ -564,13 +649,13 @@ async function createAgent() {
     // FAIL CLOSED: confirm the fence is actually deployed before launching a write-capable
     // role. If sync-roles.ps1 wasn't run, the fence wouldn't apply and the role would be
     // unconfined — refuse rather than give a false sense of containment.
-    const fence = await cc.verifyFence(role);
+    const fence = await cc.verifyFence({ role });
     if (!fence || !fence.ok) {
       appendLog(`[agent] BLOCKED ${role}: write-fence not active — ${fence && fence.error}\n`);
       alert(`Refusing to launch "${ROLES[role].label}" — its write-fence isn't active:\n\n${(fence && fence.error) || 'unknown error'}`);
       return;
     }
-    const r = await cc.ensureOutputDir(role);
+    const r = await cc.ensureOutputDir({ role });
     if (!r || !r.ok) { appendLog(`[agent] could not create sandbox: ${r && r.error}\n`); alert('Could not create the output sandbox:\n' + ((r && r.error) || 'unknown error')); return; }
     appendLog(`\n[agent] ${role} in fenced sandbox ${r.dir}…\n`);
     openInAppTerminal({ worktree: r.dir, role, cli: 'claude', title: `${meta.label} · ${task}` });

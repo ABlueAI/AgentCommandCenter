@@ -180,6 +180,45 @@ input:focus { outline: none; border-color: var(--accent); }
 .modal-opt .check { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 12.5px; cursor: pointer; }
 .modal-opt .check input { accent-color: var(--accent); }
 
+/* ---- Gemini key banner & topbar indicator ---- */
+.key-banner {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+  padding: 6px 14px; font-size: 12.5px;
+  background: rgba(224,85,107,.08); border-bottom: 1px solid rgba(224,85,107,.25);
+}
+.key-banner input { flex: 1; max-width: 340px; }
+.key-stored { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+.tiny { font-size: 11px; padding: 2px 7px; line-height: 1.4; }
+
+/* ---- chat bubble view ---- */
+.chat-body {
+  flex: 1; min-height: 0; overflow-y: auto; background: #06090d;
+  padding: 10px 12px; flex-direction: column; gap: 5px;
+  display: none; /* Step 3 toggles to flex */
+}
+.chat-bubble {
+  padding: 6px 10px; border-radius: 8px; line-height: 1.55;
+  font-size: 13px; word-break: break-word; max-width: 100%;
+  white-space: pre-wrap;
+}
+.chat-bubble.assistant  { background: var(--panel); color: var(--text); }
+.chat-bubble.tool_call  {
+  font-family: var(--mono); font-size: 12px;
+  color: var(--accent-2); background: rgba(56,189,248,.07);
+  border-left: 2px solid var(--accent-2); padding-left: 8px;
+}
+.chat-bubble.tool_result {
+  font-family: var(--mono); font-size: 11.5px;
+  color: var(--muted); background: var(--panel-2);
+  border-left: 2px solid var(--border); padding-left: 8px;
+}
+.chat-bubble.unclassified { color: var(--muted); font-style: italic; font-size: 12.5px; }
+.chat-bubble.partial .bubble-text::after {
+  content: '▋'; color: var(--accent); margin-left: 1px;
+  animation: cb-blink .8s step-end infinite;
+}
+@keyframes cb-blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
 /* ---- logs ---- */
 .logs { flex: 1; margin: 0; padding: 14px; overflow: auto; font-family: var(--mono); font-size: 12px; color: #9fb0bf; background: var(--panel-2); white-space: pre-wrap; }
 

@@ -29,3 +29,6 @@ media/
 
 # Reviewer diff artifact (written into a worktree for the read-only Reviewer to read)
 .agent-review.diff
+
+# Vendored minified ML bundles — too large for git and trigger false-positive secret scans
+app/renderer/vendor/transformers.web.min.js

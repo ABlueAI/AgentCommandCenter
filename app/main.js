@@ -3,7 +3,7 @@
 // (git worktrees, VSCode, Windows Terminal, vibe-kanban, the browser). The renderer
 // never touches Node directly — everything goes through the IPC handlers below.
 
-const { app, BrowserWindow, ipcMain, shell, dialog, session } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, session, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn, execFile } = require('child_process');
@@ -79,6 +79,28 @@ function loadSettings() {
 }
 function saveSettings(s) { fs.writeFileSync(settingsPath(), JSON.stringify(s, null, 2)); }
 
+// ---- encrypted secrets store (userData/secure.json) -------------------------
+// Values are encrypted with the OS credential store (DPAPI on Windows) via Electron's
+// safeStorage API — the file contains ciphertext only, never plaintext. The decrypted
+// key lives in main-process memory and is injected only into the specific PTY that needs
+// it; it never crosses the IPC boundary back to the renderer.
+const securePath = () => path.join(app.getPath('userData'), 'secure.json');
+function loadSecure() {
+  try { return JSON.parse(fs.readFileSync(securePath(), 'utf8')); }
+  catch { return {}; }
+}
+function saveSecure(s) { fs.writeFileSync(securePath(), JSON.stringify(s)); }
+
+let geminiKey = null; // decrypted GEMINI_API_KEY; null = not configured
+
+function loadGeminiKey() {
+  if (!safeStorage.isEncryptionAvailable()) return;
+  const s = loadSecure();
+  if (!s.geminiKeyEnc) return;
+  try { geminiKey = safeStorage.decryptString(Buffer.from(s.geminiKeyEnc, 'base64')); }
+  catch { /* ciphertext unreadable (different OS user / key rotation) — leave null */ }
+}
+
 let win = null;
 const ptys = new Map(); // terminal id -> pty process (in-app terminals)
 
@@ -105,6 +127,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  loadGeminiKey(); // decrypt stored GEMINI_API_KEY into memory before any PTY can launch
   // Allow the microphone (for in-app Whisper dictation) and deny every other
   // permission class — the renderer never needs camera, geolocation, etc.
   const allowMedia = (perm) => perm === 'media' || perm === 'audioCapture';
@@ -144,6 +167,30 @@ ipcMain.handle('save-settings', async (_e, partial) => {
   saveSettings(s);
   return s;
 });
+
+// ---- IPC: Gemini key management (safeStorage) --------------------------------
+// The renderer can check whether a key is stored and save a new value, but the
+// plaintext never travels back across the IPC boundary — it stays in main memory.
+ipcMain.handle('get-gemini-key-status', () => ({
+  hasKey: geminiKey !== null,
+  available: safeStorage.isEncryptionAvailable(),
+}));
+ipcMain.handle('set-gemini-key', (_e, key) => {
+  if (typeof key !== 'string' || !key.trim()) return { ok: false, error: 'key is empty' };
+  if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'safeStorage encryption not available on this system' };
+  try {
+    const enc = safeStorage.encryptString(key.trim());
+    const s = loadSecure(); s.geminiKeyEnc = enc.toString('base64'); saveSecure(s);
+    geminiKey = key.trim();
+    return { ok: true };
+  } catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
+});
+ipcMain.handle('clear-gemini-key', () => {
+  const s = loadSecure(); delete s.geminiKeyEnc; saveSecure(s);
+  geminiKey = null;
+  return { ok: true };
+});
+
 ipcMain.handle('pick-folder', async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
   return r.canceled ? null : r.filePaths[0];
@@ -222,11 +269,12 @@ ipcMain.handle('ensure-output-dir', async (_e, { role }) => {
   return { ok: true, dir };
 });
 
-// FAIL-CLOSED fence check. The write-fence that confines web-scout/operator lives in the
+// FAIL-CLOSED fence check. The path-fence that confines web-scout/operator lives in the
 // *deployed* role file (~/.claude/agents/<role>.md) and points at a hook script that must
 // exist. If sync-roles.ps1 was never run, the fence silently doesn't apply — and a false
 // sense of containment is worse than none. So before launching a fenced role we verify the
-// fence is really installed, and refuse to launch if it isn't (renderer shows the reason).
+// fence is really installed AND actually gates Read (not just Write/Edit — Blue Helm
+// checklist P1), and refuse to launch if either is missing (renderer shows the reason).
 ipcMain.handle('verify-fence', async (_e, { role }) => {
   if (!VALID_ROLES.has(role)) return { ok: false, error: 'unknown role' };
   const home = process.env.USERPROFILE || app.getPath('home');
@@ -239,8 +287,14 @@ ipcMain.handle('verify-fence', async (_e, { role }) => {
   if (/__CC_HOOK__/.test(text)) return { ok: false, error: `Role "${role}" still has the unsubstituted __CC_HOOK__ placeholder. ${fix}` };
   // Pull the hook path out of:  command: "node \"<abs path>/fence-write.js\""
   const m = text.match(/command:\s*"node\s+\\"(.+?fence-write\.js)\\"/i);
-  if (!/PreToolUse/.test(text) || !m) return { ok: false, error: `Role "${role}" has no PreToolUse write-fence wired in. ${fix}` };
-  if (!fs.existsSync(m[1])) return { ok: false, error: `Write-fence hook missing at ${m[1]}. ${fix}` };
+  if (!/PreToolUse/.test(text) || !m) return { ok: false, error: `Role "${role}" has no PreToolUse path-fence wired in. ${fix}` };
+  if (!fs.existsSync(m[1])) return { ok: false, error: `Path-fence hook missing at ${m[1]}. ${fix}` };
+  // Confirm the matcher actually includes Read — a write-only matcher (the pre-P1 state)
+  // would pass every check above while leaving reads completely unguarded.
+  const matcherLine = text.match(/matcher:\s*"([^"]*)"/i);
+  if (!matcherLine || !/\bRead\b/.test(matcherLine[1])) {
+    return { ok: false, error: `Role "${role}" has a path-fence but its matcher doesn't include Read — reads are unguarded. ${fix}` };
+  }
   return { ok: true, hookPath: m[1] };
 });
 
@@ -283,6 +337,11 @@ ipcMain.handle('pty-start', (_e, opts) => {
   // -ExecutionPolicy Bypass so npm .ps1 shims (claude/codex/gemini) always launch.
   const args = ['-NoLogo', '-ExecutionPolicy', 'Bypass', '-NoExit'];
   if (opts.videoScout) {
+    if (!geminiKey) {
+      if (win && !win.isDestroyed()) win.webContents.send('main-error',
+        'GEMINI_API_KEY not configured — enter it in the key setup banner and save before launching Video Scout.');
+      return { ok: false, error: 'GEMINI_API_KEY not configured' };
+    }
     const url = validateVideoUrl(opts.videoUrl);
     if (!url) {
       if (win && !win.isDestroyed()) win.webContents.send('main-error',
@@ -297,13 +356,17 @@ ipcMain.handle('pty-start', (_e, opts) => {
     const run = buildAgentCommand(opts); // role / bare CLI / undefined => plain shell
     if (run) args.push('-Command', run);
   }
+  // Video-scout gets GEMINI_API_KEY injected from safeStorage; all other PTYs inherit
+  // process.env as-is. The key is never set as an OS env var — safeStorage is the sole
+  // source of truth for it after this migration.
+  const ptyEnv = opts.videoScout ? { ...process.env, GEMINI_API_KEY: geminiKey } : process.env;
   let p;
   try {
     p = pty.spawn('powershell.exe', args, {
       name: 'xterm-256color',
       cols: cols || 80, rows: rows || 24,
       cwd,
-      env: process.env,
+      env: ptyEnv,
     });
   } catch (e) {
     if (win && !win.isDestroyed()) win.webContents.send('pty-exit', { id });
