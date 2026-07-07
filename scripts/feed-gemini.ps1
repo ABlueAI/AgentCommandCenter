@@ -118,6 +118,16 @@ if (-not $Prompt) {
     }
 }
 
+# --- flatten the prompt to a single line before it becomes a CLI argument ------
+# See lib/get-cli-safe-prompt.ps1 for why: gemini's Windows install is a .cmd shim whose
+# cmd.exe-based argument expansion silently fragments an argument at any embedded
+# newline, which otherwise makes -VideoScout's multi-line default brief (loaded from
+# prompts/video-scout-analysis.md) reach gemini as a truncated -p value PLUS a stray
+# positional token -- exactly what trips gemini's "Cannot use both a positional prompt
+# and the --prompt (-p) flag together" guard.
+. (Join-Path $PSScriptRoot 'lib\get-cli-safe-prompt.ps1')
+$Prompt = Get-CliSafePrompt -Prompt $Prompt
+
 if ($NoFeed) {
     Write-Host ""
     Write-Host "Skipped feeding (-NoFeed). To send it to Gemini later, run from ${OutDir}:" -ForegroundColor Cyan
