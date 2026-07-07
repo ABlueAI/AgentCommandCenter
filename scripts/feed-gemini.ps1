@@ -41,6 +41,7 @@ $ErrorActionPreference = "Stop"
 # Resolve + log the model/media-resolution launch config first, before any download happens, so
 # every run records what tier it used at the top of the Logs tab output.
 . (Join-Path $PSScriptRoot 'lib\get-gemini-launch-config.ps1')
+. (Join-Path $PSScriptRoot 'lib\get-node-cli-arg.ps1')
 $launchConfig = Resolve-GeminiLaunchConfig -Model $Model -MediaResolution $MediaResolution
 Write-Host $launchConfig.LogLine -ForegroundColor DarkCyan
 Write-Warning $launchConfig.Warning
@@ -119,12 +120,12 @@ if (-not $Prompt) {
 }
 
 # --- flatten the prompt to a single line before it becomes a CLI argument ------
-# See lib/get-cli-safe-prompt.ps1 for why: gemini's Windows install is a .cmd shim whose
-# cmd.exe-based argument expansion silently fragments an argument at any embedded
-# newline, which otherwise makes -VideoScout's multi-line default brief (loaded from
-# prompts/video-scout-analysis.md) reach gemini as a truncated -p value PLUS a stray
-# positional token -- exactly what trips gemini's "Cannot use both a positional prompt
-# and the --prompt (-p) flag together" guard.
+# Newline flattening keeps the multi-line -VideoScout brief (loaded from
+# prompts/video-scout-analysis.md) on one physical line. This is one of two delivery concerns on
+# the Windows PowerShell 5.1 -> node.exe argument boundary; the other -- embedded double quotes --
+# is handled separately by ConvertTo-NodeCliArg at the actual `& node` invocation below (quotes
+# can't be flattened away because they're semantically meaningful in the brief). See
+# lib/get-cli-safe-prompt.ps1 and lib/get-node-cli-arg.ps1 for the full mechanism.
 . (Join-Path $PSScriptRoot 'lib\get-cli-safe-prompt.ps1')
 $Prompt = Get-CliSafePrompt -Prompt $Prompt
 
@@ -143,6 +144,24 @@ if (-not $gemini) {
 }
 
 # --- feed Gemini (run from trusted root so Gemini's folder-trust check passes) --
+# We do NOT call the `gemini` shim (.ps1/.cmd) here, and the reason is subtle. Both shims end in
+# `node <bundle>\gemini.js <args>`, so the runtime is a direct node call either way -- but the
+# PowerShell 5.1 -> node.exe argument boundary does not escape a value's embedded double quotes
+# (no PSNativeCommandArgumentPassing before PS 7.3). The -VideoScout brief contains literal "
+# characters, so node's C runtime splits the single -p value into multiple bare tokens, and gemini
+# aborts: "Cannot use both a positional prompt and the --prompt (-p) flag together". Routing
+# through the shim can't be fixed from here because the shim does its OWN uncontrolled
+# `& node ... $args` re-serialization across that same boundary. So we resolve the shim's node
+# entry point ourselves and invoke node directly, applying CommandLineToArgvW-correct escaping
+# (ConvertTo-NodeCliArg) to the one -p value -- see lib/get-node-cli-arg.ps1.
+#
+# gemini.js sits beside the shim at <shim dir>\node_modules\@google\gemini-cli\bundle\gemini.js
+# (this is exactly the path the shim itself runs). node is located the same way the shim locates
+# it: prefer a node.exe next to the shim, else the `node` on PATH.
+$geminiDir = Split-Path $gemini -Parent
+$geminiJs  = Join-Path $geminiDir 'node_modules\@google\gemini-cli\bundle\gemini.js'
+$nodeExe   = if (Test-Path -LiteralPath (Join-Path $geminiDir 'node.exe')) { Join-Path $geminiDir 'node.exe' } else { 'node' }
+
 Write-Host ""
 Write-Host "Feeding to Gemini..." -ForegroundColor Cyan
 $geminiCwd = Split-Path $OutDir -Parent
@@ -150,7 +169,17 @@ Push-Location $geminiCwd
 try {
     # -MediaResolution is intentionally NOT passed here: the gemini CLI has no flag for it on the
     # -p path (see lib/get-gemini-launch-config.ps1). Only -m/$Model is a real CLI knob today.
-    & $gemini -m $Model -p "$Prompt @$($file.FullName)"
+    if (Test-Path -LiteralPath $geminiJs) {
+        $pArg = ConvertTo-NodeCliArg -Arg "$Prompt @$($file.FullName)"
+        & $nodeExe $geminiJs -m $Model -p $pArg
+    }
+    else {
+        # Unknown gemini layout (no npm bundle beside the shim, e.g. a standalone .exe install).
+        # Fall back to the shim so this keeps working, but warn: a prompt with embedded quotes may
+        # be misparsed on this path, since we no longer control the final argument serialization.
+        Write-Warning "Could not locate gemini.js beside '$gemini'; falling back to the gemini shim. A prompt containing embedded double quotes may be misparsed on this fallback path."
+        & $gemini -m $Model -p "$Prompt @$($file.FullName)"
+    }
 }
 finally {
     Pop-Location
