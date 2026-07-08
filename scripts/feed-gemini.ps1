@@ -120,8 +120,13 @@ if (-not $gemini) {
 }
 
 # --- prepare output folder -----------------------------------------------------
-if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir | Out-Null }
-$outTemplate = Join-Path $OutDir "%(title)s.%(ext)s"
+# Download into a fresh per-run subdirectory, not $OutDir directly: this is what makes the file
+# selection below immune to picking up a leftover file from a prior, unrelated run (see
+# lib/get-video-scout-run-dir.ps1 for the bug this fixes).
+. (Join-Path $PSScriptRoot 'lib\get-video-scout-run-dir.ps1')
+. (Join-Path $PSScriptRoot 'lib\get-run-output-file.ps1')
+$runDir = New-VideoScoutRunDir -BaseDir $OutDir
+$outTemplate = Join-Path $runDir "%(title)s.%(ext)s"
 
 # --- safety caps (shared across modes) -----------------------------------------
 # A single URL should never pull a whole playlist, an oversized file, or a multi-hour VOD.
@@ -153,10 +158,15 @@ switch ($Mode) {
     }
 }
 
-# --- find what we just produced (newest matching file) -------------------------
-$file = Get-ChildItem $OutDir -Filter $pattern -File |
-    Sort-Object LastWriteTime -Descending | Select-Object -First 1
-if (-not $file) { throw "Download finished but no $pattern file appeared in $OutDir." }
+# --- find what THIS run produced (scoped to $runDir -- never a prior run's leftover) -----------
+$file = Get-RunOutputFile -RunDir $runDir -Pattern $pattern
+if (-not $file) {
+    throw "Download produced no $pattern file in this run's directory ($runDir). This run's " +
+          "directory is isolated (never shared with a prior run), so this is a genuine failure, " +
+          "not a stale-file mixup. For -Mode transcript this usually means the video has no " +
+          "captions/auto-subs available (try -Mode audio or -Mode video instead); for audio/video " +
+          "it means yt-dlp's download failed upstream -- check the yt-dlp output above."
+}
 
 Write-Host ""
 Write-Host "Saved: $($file.FullName)" -ForegroundColor Green
@@ -182,14 +192,16 @@ $Prompt = Get-CliSafePrompt -Prompt $Prompt
 
 if ($NoFeed) {
     Write-Host ""
-    Write-Host "Skipped feeding (-NoFeed). To send it to Gemini later, run from ${OutDir}:" -ForegroundColor Cyan
+    # $file.DirectoryName, not $OutDir: the file now lives in a per-run subdirectory, not
+    # directly in $OutDir -- see the run-dir isolation note above.
+    Write-Host "Skipped feeding (-NoFeed). To send it to Gemini later, run from $($file.DirectoryName):" -ForegroundColor Cyan
     Write-Host "  gemini -m $Model -p `"$Prompt @$($file.Name)`""
     return
 }
 
 if (-not $gemini) {
     Write-Host ""
-    Write-Host "Gemini CLI not found. File is saved above. Install/login, then run from ${OutDir}:" -ForegroundColor Yellow
+    Write-Host "Gemini CLI not found. File is saved above. Install/login, then run from $($file.DirectoryName):" -ForegroundColor Yellow
     Write-Host "  gemini -m $Model -p `"$Prompt @$($file.Name)`""
     return
 }
