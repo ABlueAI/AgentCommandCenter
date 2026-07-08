@@ -181,7 +181,7 @@
           <option value="MEDIUM" selected>MEDIUM (default)</option>
           <option value="HIGH">HIGH</option>
         </select>
-        <p class="muted small caveat">⚠ Not enforced: the installed Gemini CLI has no flag for media resolution on this path — feed-gemini.ps1 records your choice in the run log only. It is not sent to Gemini and does not change token cost or analysis quality.</p>
+        <p class="muted small caveat">Media resolution is enforced for YouTube URLs in video mode (sent to the API directly — LOW cuts video tokens ~65%). For non-YouTube/local files the CLI fallback applies and the choice is recorded in the run log only (the installed Gemini CLI has no flag for it).</p>
       </div>
       <div class="modal-actions">
         <button id="modalCancel" class="ghost">Cancel</button>

@@ -31,6 +31,30 @@ const DEFAULT_MEDIA_RESOLUTION = 'MEDIUM';
 // explicitly, so the expensive full-video pass is an opt-in choice, never an accident.
 const DEFAULT_ANALYSIS_MODE = 'video';
 
+// Must mirror the YouTube subset of VIDEO_HOSTS in main.js and the host list in
+// scripts/lib/get-video-source-route.ps1. The PS function is the routing authority at run time;
+// this set only powers the launch-time Logs-tab note so the user sees which path a run will take.
+const YOUTUBE_HOSTS = new Set(['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be']);
+
+// Predict which invocation path feed-gemini.ps1 will choose, for Logs-tab visibility. Mirrors
+// Resolve-VideoSourceRoute (scripts/lib/get-video-source-route.ps1): YouTube URL + video mode →
+// SDK (URL straight into generateContent, no download, no 20MB cap, mediaResolution enforced);
+// anything else → CLI (yt-dlp download + gemini @file attach). The app never passes -NoFeed, so
+// that branch isn't modeled here.
+function predictVideoRoute(videoUrl, analysisMode) {
+  const effectiveMode = typeof analysisMode === 'string' && VALID_ANALYSIS_MODES.has(analysisMode)
+    ? analysisMode : DEFAULT_ANALYSIS_MODE;
+  if (effectiveMode !== 'video') {
+    return { route: 'cli', reason: `mode '${effectiveMode}' needs yt-dlp's local output (.srt/.mp3)` };
+  }
+  let host = null;
+  try { host = new URL(videoUrl).hostname.toLowerCase(); } catch { /* malformed → cli */ }
+  if (host && YOUTUBE_HOSTS.has(host)) {
+    return { route: 'sdk', reason: 'YouTube URL + video mode: Gemini API ingests the URL directly (no download, no 20MB cap, mediaResolution enforced)' };
+  }
+  return { route: 'cli', reason: `host '${host || 'unparseable'}' is not YouTube; download + CLI attach applies` };
+}
+
 // Build the extra argv elements for feed-gemini.ps1 from { videoModel, mediaResolution }.
 // Returns { args, notes }:
 //   args  - argv elements to splice into the PowerShell -File invocation (never a shell string)
@@ -38,9 +62,15 @@ const DEFAULT_ANALYSIS_MODE = 'video';
 //           omitted-as-default / rejected), safe to hand straight to main.js's tlog() so the
 //           Logs tab always shows the POST-VALIDATION truth — never implying a choice was
 //           honored when it was actually silently dropped.
-function buildVideoScoutArgs({ videoModel, mediaResolution, analysisMode } = {}) {
+function buildVideoScoutArgs({ videoModel, mediaResolution, analysisMode, videoUrl } = {}) {
   const args = [];
   const notes = [];
+
+  // Route prediction first so it's the first thing the Logs tab shows for the run.
+  if (videoUrl) {
+    const { route, reason } = predictVideoRoute(videoUrl, analysisMode);
+    notes.push(`route=${route.toUpperCase()} (${reason})`);
+  }
 
   if (analysisMode !== undefined && analysisMode !== null && analysisMode !== '') {
     if (typeof analysisMode === 'string' && VALID_ANALYSIS_MODES.has(analysisMode)) {
@@ -74,7 +104,7 @@ function buildVideoScoutArgs({ videoModel, mediaResolution, analysisMode } = {})
         notes.push(`mediaResolution="${mediaResolution}" omitted (matches feed-gemini.ps1's own default)`);
       } else {
         args.push('-MediaResolution', mediaResolution);
-        notes.push(`mediaResolution="${mediaResolution}" sent as -MediaResolution (recorded in the script's run log only — NOT enforced by the Gemini CLI, see scripts/feed-gemini.ps1)`);
+        notes.push(`mediaResolution="${mediaResolution}" sent as -MediaResolution (ENFORCED on the SDK/YouTube route via generationConfig; on the CLI fallback it is recorded in the run log only — the CLI has no flag for it)`);
       }
     } else {
       notes.push(`mediaResolution=${JSON.stringify(mediaResolution)} REJECTED (not in VALID_MEDIA_RESOLUTIONS allowlist) — dropped, script default applies`);
@@ -91,5 +121,7 @@ module.exports = {
   DEFAULT_VIDEO_MODEL,
   DEFAULT_MEDIA_RESOLUTION,
   DEFAULT_ANALYSIS_MODE,
+  YOUTUBE_HOSTS,
+  predictVideoRoute,
   buildVideoScoutArgs,
 };

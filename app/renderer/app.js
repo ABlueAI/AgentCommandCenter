@@ -211,6 +211,12 @@ function openInAppTerminal(opts = {}) {
   const chatBody = pane.querySelector('.chat-body');
   const paneData = { term, fit, pane, ro, chatBody, pendingEvents: [], rafId: null, tailBubble: null, parser: null };
   paneData.parser = new PtyParser((ev) => {
+    // Video-scout SDK runs print one machine-readable token-usage line; surface it in the Logs
+    // tab so every run's real cost is recorded outside the (closable) pane. The parser is already
+    // line-buffered and ANSI-stripped, so chunk boundaries can't split the marker.
+    if (role === 'video-scout' && !ev.partial && ev.text && ev.text.includes('[video-scout usage]')) {
+      appendLog(ev.text.trim() + '\n');
+    }
     paneData.pendingEvents.push(ev);
     if (paneData.rafId === null) paneData.rafId = requestAnimationFrame(() => drainChatEvents(paneData));
   });

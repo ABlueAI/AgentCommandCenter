@@ -35,6 +35,12 @@ param(
     # is currently logged (and validated) but not sent to the CLI -- see the warning printed at
     # launch and lib/get-gemini-launch-config.ps1 for why, and the closest available alternatives.
     [ValidateSet('LOW', 'MEDIUM', 'HIGH')][string]$MediaResolution = 'MEDIUM',
+    # Optional slice bounds in whole seconds, SDK (YouTube) route only: analyze just
+    # [StartOffset, EndOffset] of the video. Billing scales to the slice (proven ~81% cheaper for
+    # 2min of a 10min video). Both must be given; a lone one is warned about and ignored. The
+    # modal has no range picker yet -- these exist so the plumbing is already in place.
+    [ValidateRange(0, 86400)][int]$StartOffset = -1,
+    [ValidateRange(0, 86400)][int]$EndOffset = -1,
     [switch]$NoFeed,
     [switch]$VideoScout
 )
@@ -57,6 +63,46 @@ Write-Warning $launchConfig.Warning
 if ($VideoScout) {
     if (-not $PSBoundParameters.ContainsKey('Mode')) { $Mode = 'video' }
     Write-Host "Video-scout analysis mode: $Mode $(if ($Mode -eq 'video') { '(full visual analysis -- highest token cost)' } else { '(no visual tokens -- cheaper pass)' })" -ForegroundColor DarkCyan
+
+    # --- route: SDK (YouTube direct) vs CLI (yt-dlp download + attach) ----------------------
+    # YouTube URLs in video mode skip the download entirely: the Gemini API ingests the URL as a
+    # fileData.fileUri part. This dodges the CLI's 20MB inline-attach cap (which every real 720p
+    # video exceeds -- the CLI then silently sends the prompt WITHOUT the video) and makes
+    # -MediaResolution actually take effect. Everything else falls through to the CLI path below,
+    # which is unchanged. See lib/get-video-source-route.ps1 for the exact rules.
+    . (Join-Path $PSScriptRoot 'lib\get-video-source-route.ps1')
+    $sourceRoute = Resolve-VideoSourceRoute -Url $Url -Mode $Mode -NoFeed:$NoFeed
+    Write-Host "Video-scout route: $($sourceRoute.Route.ToUpper()) -- $($sourceRoute.Reason)" -ForegroundColor DarkCyan
+    if ($sourceRoute.Route -eq 'sdk') {
+        # Correct the CLI-oriented warning Resolve-GeminiLaunchConfig printed above (line ~54):
+        # on THIS route -MediaResolution is a real generationConfig field, sent and enforced by
+        # the API -- the opposite of what that warning says. Rather than special-case the shared
+        # launch-config helper for a route it doesn't know about, print the correction here.
+        Write-Host "NOTE: on the SDK route (this run), -MediaResolution IS sent to the Gemini API and IS enforced -- the CLI warning above does not apply here." -ForegroundColor DarkCyan
+        $sdkScript = Join-Path $PSScriptRoot 'gemini-video-sdk.js'
+        $sdkArgs = @('--url', $Url, '--model', $Model, '--media-resolution', $MediaResolution)
+        if ($Prompt) {
+            # Explicit -Prompt override: cross the PS 5.1 -> node boundary with the same
+            # CommandLineToArgvW-correct escaping the CLI path uses (see lib/get-node-cli-arg.ps1).
+            $sdkArgs += @('--prompt-text', (ConvertTo-NodeCliArg -Arg $Prompt))
+        }
+        else {
+            # Default forensic brief: hand node the FILE, not the text -- no argument-boundary
+            # escaping and no newline flattening needed; the brief arrives with full fidelity.
+            $sdkArgs += @('--prompt-file', (Join-Path (Split-Path $PSScriptRoot -Parent) 'prompts\video-scout-analysis.md'))
+        }
+        $haveStart = $PSBoundParameters.ContainsKey('StartOffset')
+        $haveEnd = $PSBoundParameters.ContainsKey('EndOffset')
+        if ($haveStart -and $haveEnd) {
+            $sdkArgs += @('--start-offset', $StartOffset, '--end-offset', $EndOffset)
+        }
+        elseif ($haveStart -or $haveEnd) {
+            Write-Warning "Both -StartOffset and -EndOffset are required to analyze a slice; the lone one was ignored and the whole video will be analyzed."
+        }
+        & node $sdkScript @sdkArgs
+        return
+    }
+
     if (-not $Prompt -and $Mode -eq 'video') {
         . (Join-Path $PSScriptRoot 'lib\get-video-scout-prompt.ps1')
         $Prompt = Get-VideoScoutPrompt

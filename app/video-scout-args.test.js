@@ -11,6 +11,8 @@ const {
   DEFAULT_VIDEO_MODEL,
   DEFAULT_MEDIA_RESOLUTION,
   DEFAULT_ANALYSIS_MODE,
+  YOUTUBE_HOSTS,
+  predictVideoRoute,
   buildVideoScoutArgs,
 } = require('./video-scout-args');
 
@@ -35,8 +37,8 @@ function assert(condition, label) {
   assert(args.includes('-MediaResolution') && args[args.indexOf('-MediaResolution') + 1] === 'HIGH',
     'accepts an allowlisted non-default mediaResolution and pushes -MediaResolution');
   assert(notes.some(n => /sent as -Model/.test(n)), 'notes describe videoModel as sent');
-  assert(notes.some(n => /sent as -MediaResolution/.test(n) && /NOT enforced/.test(n)),
-    'notes describe mediaResolution as sent, with the not-enforced caveat');
+  assert(notes.some(n => /sent as -MediaResolution/.test(n) && /ENFORCED on the SDK\/YouTube route/.test(n)),
+    'notes describe mediaResolution as sent, with the route-dependent enforcement caveat');
 }
 
 // --- default-omission: values matching the script's own default are NOT pushed -----
@@ -91,6 +93,36 @@ function assert(condition, label) {
   assert(!args.includes('-Mode'), 'rejects an analysisMode outside VALID_ANALYSIS_MODES');
   assert(notes.some(n => /analysisMode=.*REJECTED/.test(n)), 'notes flag the rejected analysisMode explicitly');
   assert(notes.every(n => !/sent as -Mode/.test(n)), 'no note claims the malicious analysisMode was sent');
+}
+
+// --- route prediction: YouTube + video → SDK, everything else → CLI -----------------
+{
+  assert(predictVideoRoute('https://www.youtube.com/watch?v=abc', 'video').route === 'sdk',
+    'youtube.com + video mode predicts SDK');
+  assert(predictVideoRoute('https://youtu.be/abc', 'video').route === 'sdk',
+    'youtu.be + video mode predicts SDK');
+  assert(predictVideoRoute('https://youtu.be/abc', undefined).route === 'sdk',
+    'absent analysisMode falls back to video (script -VideoScout fallback) → SDK');
+  assert(predictVideoRoute('https://vimeo.com/123', 'video').route === 'cli',
+    'Vimeo predicts CLI (fileUri only ingests YouTube)');
+  assert(predictVideoRoute('https://www.youtube.com/watch?v=abc', 'transcript').route === 'cli',
+    'transcript mode predicts CLI even for YouTube');
+  assert(predictVideoRoute('https://www.youtube.com/watch?v=abc', 'audio').route === 'cli',
+    'audio mode predicts CLI even for YouTube');
+  assert(predictVideoRoute('not a url', 'video').route === 'cli',
+    'malformed URL predicts CLI');
+  assert(predictVideoRoute('https://notyoutube.com/watch?v=abc', 'video').route === 'cli',
+    'lookalike host predicts CLI');
+  assert(YOUTUBE_HOSTS.has('youtube.com') && YOUTUBE_HOSTS.has('youtu.be') && YOUTUBE_HOSTS.has('m.youtube.com') && YOUTUBE_HOSTS.has('www.youtube.com'),
+    'YOUTUBE_HOSTS matches the YouTube subset of main.js VIDEO_HOSTS');
+}
+
+// --- route note flows through buildVideoScoutArgs when videoUrl is present ----------
+{
+  const { notes } = buildVideoScoutArgs({ videoUrl: 'https://youtu.be/abc', analysisMode: 'video' });
+  assert(notes.some(n => /^route=SDK/.test(n)), 'buildVideoScoutArgs emits a route=SDK note for a YouTube video run');
+  const { notes: n2 } = buildVideoScoutArgs({ videoUrl: 'https://youtu.be/abc', analysisMode: 'transcript' });
+  assert(n2.some(n => /^route=CLI/.test(n)), 'buildVideoScoutArgs emits a route=CLI note for a transcript run');
 }
 
 // --- omission: absent fields produce no args and no notes ---------------------------
