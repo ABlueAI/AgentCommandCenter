@@ -162,6 +162,13 @@
         </div>
       </div>
       <div id="videoScoutOpts" class="modal-opt hidden">
+        <label>Analysis mode</label>
+        <select id="analysisModeSelect">
+          <option value="transcript" selected>transcript (default — cheapest, text only)</option>
+          <option value="audio">audio (speech + tone, mp3)</option>
+          <option value="video">video (full visual analysis — highest cost)</option>
+        </select>
+        <p class="muted small">Transcript is the cheapest pass — no visual tokens, text analysis only. Video runs the full forensic visual analysis at the highest token cost, so it's a deliberate opt-in, not the default.</p>
         <label>Gemini model</label>
         <select id="videoModelSelect">
           <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite (default, cheapest)</option>

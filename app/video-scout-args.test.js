@@ -7,8 +7,10 @@
 const {
   VALID_VIDEO_MODELS,
   VALID_MEDIA_RESOLUTIONS,
+  VALID_ANALYSIS_MODES,
   DEFAULT_VIDEO_MODEL,
   DEFAULT_MEDIA_RESOLUTION,
+  DEFAULT_ANALYSIS_MODE,
   buildVideoScoutArgs,
 } = require('./video-scout-args');
 
@@ -62,11 +64,40 @@ function assert(condition, label) {
   assert(notes.every(n => !/sent as/.test(n)), 'no note claims either malicious value was sent');
 }
 
+// --- analysisMode: cheaper modes are sent explicitly as -Mode -----------------------
+{
+  const { args, notes } = buildVideoScoutArgs({ analysisMode: 'transcript' });
+  assert(args.includes('-Mode') && args[args.indexOf('-Mode') + 1] === 'transcript',
+    'accepts analysisMode=transcript and pushes -Mode transcript');
+  assert(notes.some(n => /analysisMode="transcript" sent as -Mode/.test(n)),
+    'notes describe transcript mode as sent');
+}
+{
+  const { args } = buildVideoScoutArgs({ analysisMode: 'audio' });
+  assert(args.includes('-Mode') && args[args.indexOf('-Mode') + 1] === 'audio',
+    'accepts analysisMode=audio and pushes -Mode audio');
+}
+
+// --- analysisMode: 'video' matches the script's -VideoScout fallback, so it is omitted
+{
+  const { args, notes } = buildVideoScoutArgs({ analysisMode: DEFAULT_ANALYSIS_MODE });
+  assert(!args.includes('-Mode'), 'omits -Mode when analysisMode matches the -VideoScout fallback (video)');
+  assert(notes.some(n => /analysisMode="video" omitted/.test(n)), 'notes explain the video-mode omission');
+}
+
+// --- analysisMode: values outside the allowlist are dropped, never spliced ----------
+{
+  const { args, notes } = buildVideoScoutArgs({ analysisMode: 'video"; Remove-Item -Recurse /' });
+  assert(!args.includes('-Mode'), 'rejects an analysisMode outside VALID_ANALYSIS_MODES');
+  assert(notes.some(n => /analysisMode=.*REJECTED/.test(n)), 'notes flag the rejected analysisMode explicitly');
+  assert(notes.every(n => !/sent as -Mode/.test(n)), 'no note claims the malicious analysisMode was sent');
+}
+
 // --- omission: absent fields produce no args and no notes ---------------------------
 {
   const { args, notes } = buildVideoScoutArgs({});
-  assert(args.length === 0, 'no args when both fields are absent');
-  assert(notes.length === 0, 'no notes when both fields are absent');
+  assert(args.length === 0, 'no args when all fields are absent');
+  assert(notes.length === 0, 'no notes when all fields are absent');
 }
 
 // --- sanity: allowlists contain the expected known-good members --------------------
@@ -74,6 +105,8 @@ assert(VALID_VIDEO_MODELS.has('gemini-2.5-flash-lite') && VALID_VIDEO_MODELS.has
   'VALID_VIDEO_MODELS contains the documented Gemini models');
 assert(VALID_MEDIA_RESOLUTIONS.has('LOW') && VALID_MEDIA_RESOLUTIONS.has('MEDIUM') && VALID_MEDIA_RESOLUTIONS.has('HIGH'),
   'VALID_MEDIA_RESOLUTIONS matches feed-gemini.ps1\'s ValidateSet(LOW, MEDIUM, HIGH)');
+assert(VALID_ANALYSIS_MODES.has('transcript') && VALID_ANALYSIS_MODES.has('audio') && VALID_ANALYSIS_MODES.has('video'),
+  'VALID_ANALYSIS_MODES matches feed-gemini.ps1\'s ValidateSet(transcript, audio, video)');
 
 process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

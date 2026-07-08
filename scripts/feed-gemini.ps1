@@ -18,6 +18,8 @@
   .\feed-gemini.ps1 "https://youtu.be/XYZ" -Mode audio -NoFeed   # just download
 .EXAMPLE
   .\feed-gemini.ps1 "https://youtu.be/XYZ" -VideoScout -Model gemini-2.5-pro -MediaResolution HIGH
+.EXAMPLE
+  .\feed-gemini.ps1 "https://youtu.be/XYZ" -VideoScout -Mode transcript   # cheap text-only pass
 #>
 param(
     [Parameter(Mandatory = $true, Position = 0)][string]$Url,
@@ -46,13 +48,16 @@ $launchConfig = Resolve-GeminiLaunchConfig -Model $Model -MediaResolution $Media
 Write-Host $launchConfig.LogLine -ForegroundColor DarkCyan
 Write-Warning $launchConfig.Warning
 
-# Video-scout: force video mode and use the richer forensic-analyst brief from
-# prompts/video-scout-analysis.md. Keeping the brief in its own file (loaded into $Prompt)
-# means the app's launcher only has to pass -VideoScout (no long quoted prompt), and the
-# brief is applied on every video-scout run without needing to paste it each time.
+# Video-scout: default to full video mode, but respect an explicitly passed -Mode so the app's
+# launcher (or a CLI caller) can choose a cheaper transcript/audio-only pass. Bare `-VideoScout`
+# with no -Mode keeps the historical behavior (full visual analysis) so existing invocations are
+# unchanged. The forensic-analyst brief from prompts/video-scout-analysis.md only applies in video
+# mode -- it instructs analyzing the visual stream and on-screen text, which don't exist in an
+# .srt/.mp3, so transcript/audio runs fall through to the per-mode default briefs below instead.
 if ($VideoScout) {
-    $Mode = 'video'
-    if (-not $Prompt) {
+    if (-not $PSBoundParameters.ContainsKey('Mode')) { $Mode = 'video' }
+    Write-Host "Video-scout analysis mode: $Mode $(if ($Mode -eq 'video') { '(full visual analysis -- highest token cost)' } else { '(no visual tokens -- cheaper pass)' })" -ForegroundColor DarkCyan
+    if (-not $Prompt -and $Mode -eq 'video') {
         . (Join-Path $PSScriptRoot 'lib\get-video-scout-prompt.ps1')
         $Prompt = Get-VideoScoutPrompt
     }

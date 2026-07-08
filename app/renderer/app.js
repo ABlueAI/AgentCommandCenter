@@ -2,7 +2,7 @@
 // No Node here by design; this file is pure UI + IPC calls.
 
 const $ = (sel) => document.querySelector(sel);
-const state = { repo: '', githubUrl: '', worktrees: [], chosenRole: 'builder', chosenCli: 'claude', hardTask: false, theme: 'obsidian', ttsVoice: '', ttsSpeed: 1, videoModel: 'gemini-2.5-flash-lite', mediaResolution: 'MEDIUM' };
+const state = { repo: '', githubUrl: '', worktrees: [], chosenRole: 'builder', chosenCli: 'claude', hardTask: false, theme: 'obsidian', ttsVoice: '', ttsSpeed: 1, videoModel: 'gemini-2.5-flash-lite', mediaResolution: 'MEDIUM', analysisMode: 'transcript' };
 
 // Blue Helm role metadata (UI + flow only — the tools allowlist that ENFORCES read-only
 // lives in agent-roles/*.md / ~/.claude/agents). Keep colors in sync with styles.css and
@@ -223,7 +223,7 @@ function openInAppTerminal(opts = {}) {
   pane.addEventListener('mousedown', () => { activeTermId = id; term.focus(); });
   term.textarea && term.textarea.addEventListener('focus', () => { activeTermId = id; });
   terms.set(id, paneData);
-  cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, videoModel: opts.videoModel, mediaResolution: opts.mediaResolution, cols: term.cols, rows: term.rows });
+  cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, videoModel: opts.videoModel, mediaResolution: opts.mediaResolution, analysisMode: opts.analysisMode, cols: term.cols, rows: term.rows });
   setTimeout(() => { fit.fit(); cc.ptyResize(id, term.cols, term.rows); activeTermId = id; term.focus(); }, 40);
 }
 
@@ -538,6 +538,7 @@ function wireUi() {
   // only offer known-good values, they are not the security boundary.
   $('#videoModelSelect').onchange = (e) => { state.videoModel = e.target.value; };
   $('#mediaResolutionSelect').onchange = (e) => { state.mediaResolution = e.target.value; };
+  $('#analysisModeSelect').onchange = (e) => { state.analysisMode = e.target.value; };
 }
 
 // The task field doubles as the URL field for video-scout — relabel it accordingly.
@@ -594,10 +595,12 @@ function openModal() {
   $('#targetRow').classList.add('hidden');
   $('#videoScoutOpts').classList.add('hidden');
   // Reset the Gemini options to their defaults every time the modal opens (mirrors hardTask reset
-  // above) so a previous run's choice never silently carries over into the next one.
-  state.videoModel = 'gemini-2.5-flash-lite'; state.mediaResolution = 'MEDIUM';
+  // above) so a previous run's choice never silently carries over into the next one. analysisMode
+  // resets to transcript (cheapest) so the expensive full-video pass is always a fresh opt-in.
+  state.videoModel = 'gemini-2.5-flash-lite'; state.mediaResolution = 'MEDIUM'; state.analysisMode = 'transcript';
   $('#videoModelSelect').value = state.videoModel;
   $('#mediaResolutionSelect').value = state.mediaResolution;
+  $('#analysisModeSelect').value = state.analysisMode;
   updateModalHint();
   // Belt-and-suspenders: disable pointer events on the terminal grid so
   // xterm's WebGL compositing layer can't intercept modal clicks, and
@@ -641,10 +644,10 @@ async function createAgent() {
       return;
     }
     closeModal();
-    appendLog(`\n[video-scout] downloading + analyzing ${url}… (model: ${state.videoModel}, media resolution: ${state.mediaResolution})\n`);
+    appendLog(`\n[video-scout] downloading + analyzing ${url}… (mode: ${state.analysisMode}, model: ${state.videoModel}, media resolution: ${state.mediaResolution})\n`);
     openInAppTerminal({
       worktree: state.repo || undefined, role, videoScout: true, videoUrl: url,
-      videoModel: state.videoModel, mediaResolution: state.mediaResolution,
+      videoModel: state.videoModel, mediaResolution: state.mediaResolution, analysisMode: state.analysisMode,
       title: `Video Scout · ${new URL(url).hostname}`,
     });
     return;

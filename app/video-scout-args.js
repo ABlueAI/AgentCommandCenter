@@ -15,6 +15,9 @@
 // model spaces (Claude models vs Gemini models) never overlap and must not be conflated.
 const VALID_VIDEO_MODELS = new Set(['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro']);
 const VALID_MEDIA_RESOLUTIONS = new Set(['LOW', 'MEDIUM', 'HIGH']);
+// Must mirror feed-gemini.ps1's [ValidateSet('transcript', 'audio', 'video')]$Mode. All three are
+// fully wired in the script (distinct yt-dlp invocations, file patterns, and default briefs).
+const VALID_ANALYSIS_MODES = new Set(['transcript', 'audio', 'video']);
 
 // Must mirror feed-gemini.ps1's own parameter defaults (see scripts/feed-gemini.ps1 -Model /
 // -MediaResolution). When the caller's choice matches the script's default we omit the flag
@@ -22,6 +25,11 @@ const VALID_MEDIA_RESOLUTIONS = new Set(['LOW', 'MEDIUM', 'HIGH']);
 // (the script), not duplicated here.
 const DEFAULT_VIDEO_MODEL = 'gemini-2.5-flash-lite';
 const DEFAULT_MEDIA_RESOLUTION = 'MEDIUM';
+// The script's own fallback when -Mode is omitted on the -VideoScout path is 'video' (bare
+// -VideoScout keeps its historical full-visual-analysis behavior). NOTE this is deliberately NOT
+// the modal's default — the modal defaults to 'transcript' (cheapest useful pass) and sends it
+// explicitly, so the expensive full-video pass is an opt-in choice, never an accident.
+const DEFAULT_ANALYSIS_MODE = 'video';
 
 // Build the extra argv elements for feed-gemini.ps1 from { videoModel, mediaResolution }.
 // Returns { args, notes }:
@@ -30,9 +38,22 @@ const DEFAULT_MEDIA_RESOLUTION = 'MEDIUM';
 //           omitted-as-default / rejected), safe to hand straight to main.js's tlog() so the
 //           Logs tab always shows the POST-VALIDATION truth — never implying a choice was
 //           honored when it was actually silently dropped.
-function buildVideoScoutArgs({ videoModel, mediaResolution } = {}) {
+function buildVideoScoutArgs({ videoModel, mediaResolution, analysisMode } = {}) {
   const args = [];
   const notes = [];
+
+  if (analysisMode !== undefined && analysisMode !== null && analysisMode !== '') {
+    if (typeof analysisMode === 'string' && VALID_ANALYSIS_MODES.has(analysisMode)) {
+      if (analysisMode === DEFAULT_ANALYSIS_MODE) {
+        notes.push(`analysisMode="${analysisMode}" omitted (matches the script's -VideoScout fallback: full visual analysis)`);
+      } else {
+        args.push('-Mode', analysisMode);
+        notes.push(`analysisMode="${analysisMode}" sent as -Mode (cheaper pass: no visual tokens)`);
+      }
+    } else {
+      notes.push(`analysisMode=${JSON.stringify(analysisMode)} REJECTED (not in VALID_ANALYSIS_MODES allowlist) — dropped, script default (video) applies`);
+    }
+  }
 
   if (videoModel !== undefined && videoModel !== null && videoModel !== '') {
     if (typeof videoModel === 'string' && VALID_VIDEO_MODELS.has(videoModel)) {
@@ -66,7 +87,9 @@ function buildVideoScoutArgs({ videoModel, mediaResolution } = {}) {
 module.exports = {
   VALID_VIDEO_MODELS,
   VALID_MEDIA_RESOLUTIONS,
+  VALID_ANALYSIS_MODES,
   DEFAULT_VIDEO_MODEL,
   DEFAULT_MEDIA_RESOLUTION,
+  DEFAULT_ANALYSIS_MODE,
   buildVideoScoutArgs,
 };
