@@ -560,11 +560,16 @@ function setTaskInputMode(isVideo) {
   }
 }
 
-// Show the time-range inputs only in video mode (offsets are meaningless for transcript/audio,
-// which have no video stream to slice — see feed-gemini.ps1's -StartOffset/-EndOffset).
+// Show the time-range inputs only in video mode, and CLEAR them when leaving video mode so a value
+// the user can no longer see is never silently dropped into (or applied over) a launch. Logic +
+// tests live in video-range-ui.js (clear-on-hide invariant).
 function updateVideoRangeVisibility() {
-  const el = $('#videoRangeOpts');
-  if (el) el.classList.toggle('hidden', state.analysisMode !== 'video');
+  videoRangeUi.syncVideoRangeVisibility({
+    analysisMode: state.analysisMode,
+    rangeOpts: $('#videoRangeOpts'),
+    startInput: $('#videoStartInput'),
+    endInput: $('#videoEndInput'),
+  });
 }
 
 // Accepts MM:SS, H:MM:SS, or bare whole seconds. Returns:
@@ -668,7 +673,12 @@ function openModal() {
   $('#mediaResolutionSelect').value = state.mediaResolution;
   $('#analysisModeSelect').value = state.analysisMode;
   // Time-range fields are read fresh from the DOM at launch (not mirrored into `state`), so
-  // clearing them here is what makes a previous run's range never carry over.
+  // clearing them here is what makes a previous run's range never carry over. Also reset the inline
+  // range-error UI (text + red borders) so a prior session's error never lingers over the cleared
+  // fields. updateVideoRangeVisibility (clear-on-hide, mode is 'transcript' here) empties the values.
+  videoRangeUi.resetVideoRangeError({
+    errorEl: $('#videoRangeError'), startInput: $('#videoStartInput'), endInput: $('#videoEndInput'),
+  });
   $('#videoStartInput').value = '';
   $('#videoEndInput').value = '';
   updateVideoRangeVisibility();
@@ -731,6 +741,12 @@ async function createAgent() {
     };
     if (rangeErrEl) { rangeErrEl.classList.add('hidden'); rangeErrEl.textContent = ''; }
     startEl.classList.remove('invalid'); endEl.classList.remove('invalid');
+
+    // Belt check: clear-on-hide (updateVideoRangeVisibility) guarantees a non-video mode has empty
+    // range inputs, so this is unreachable in normal operation. If it ever fires, some path bypassed
+    // clear-on-hide — log it loudly rather than let a stale range slip by unnoticed.
+    const stale = videoRangeUi.detectStaleRange({ analysisMode: state.analysisMode, startValue: startEl.value, endValue: endEl.value });
+    if (stale) appendLog(`[video-scout] ${stale}\n`);
 
     let rangeOpts = {};
     let rangeLogSuffix = '';

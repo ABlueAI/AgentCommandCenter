@@ -37,14 +37,37 @@ param(
     [ValidateSet('LOW', 'MEDIUM', 'HIGH')][string]$MediaResolution = 'MEDIUM',
     # Optional slice bounds in whole seconds, SDK (YouTube) route only: analyze just
     # [StartOffset, EndOffset] of the video. Billing scales to the slice (proven ~81% cheaper for
-    # 2min of a 10min video). Both must be given; a lone one is warned about and ignored. The
-    # modal has no range picker yet -- these exist so the plumbing is already in place.
+    # 2min of a 10min video). Both must be given together, EndOffset strictly after StartOffset, and
+    # the run must resolve to the SDK route; ANY violation REFUSES the run (throws) rather than
+    # silently analyzing (and billing for) the whole video. The New-Agent modal exposes these via a
+    # range picker (app/renderer) that validates first; this script re-enforces independently since
+    # it is a documented standalone entry point.
     [ValidateRange(0, 86400)][int]$StartOffset = -1,
     [ValidateRange(0, 86400)][int]$EndOffset = -1,
     [switch]$NoFeed,
     [switch]$VideoScout
 )
 $ErrorActionPreference = "Stop"
+
+# --- section-scoping offset validation: REFUSE, never silently downgrade ------------------------
+# Invariant (mirrors app/video-scout-args.js and the main-process refusal in app/main.js): a caller
+# who asked for a [StartOffset, EndOffset] slice must NEVER be silently downgraded to -- and billed
+# for -- a whole-video analysis. Offsets ride videoMetadata into generateContent, which exists only
+# on the SDK/YouTube route, so they require -VideoScout and are re-checked against the resolved
+# route below (the route backstop). These pairing/order/entry-point checks are route-independent,
+# so they run first and fail fast. feed-gemini.ps1 is a documented standalone entry point, so this
+# must hold on its own -- not only when the app validated first.
+$haveStart = $PSBoundParameters.ContainsKey('StartOffset')
+$haveEnd   = $PSBoundParameters.ContainsKey('EndOffset')
+if ($haveStart -xor $haveEnd) {
+    throw "Both -StartOffset and -EndOffset are required to analyze a slice; a lone offset is refused (the whole video is NOT analyzed as a fallback). Pass both, or neither."
+}
+if ($haveStart -and ($EndOffset -le $StartOffset)) {
+    throw "-EndOffset ($EndOffset s) must be strictly greater than -StartOffset ($StartOffset s)."
+}
+if ($haveStart -and -not $VideoScout) {
+    throw "A time range (-StartOffset/-EndOffset) is only valid with -VideoScout on the SDK/YouTube route. Remove the offsets, or add -VideoScout with a YouTube URL in video mode."
+}
 
 # Resolve + log the model/media-resolution launch config first, before any download happens, so
 # every run records what tier it used at the top of the Logs tab output.
@@ -73,6 +96,16 @@ if ($VideoScout) {
     . (Join-Path $PSScriptRoot 'lib\get-video-source-route.ps1')
     $sourceRoute = Resolve-VideoSourceRoute -Url $Url -Mode $Mode -NoFeed:$NoFeed
     Write-Host "Video-scout route: $($sourceRoute.Route.ToUpper()) -- $($sourceRoute.Reason)" -ForegroundColor DarkCyan
+
+    # Route backstop: offsets are only honorable on the SDK route (they ride videoMetadata into
+    # generateContent). On any other resolved route they cannot be applied, so REFUSE rather than
+    # download + analyze the whole file and bill for a slice the caller won't get. This closes the
+    # drift hole where the renderer's predictVideoRoute and the script's Resolve-VideoSourceRoute
+    # could disagree -- enforced here, at the layer that actually spends tokens.
+    if ($haveStart -and $sourceRoute.Route -ne 'sdk') {
+        throw "A time range only works on the SDK/YouTube route (it is sent to the Gemini API as videoMetadata). This run resolved to the '$($sourceRoute.Route)' route ($($sourceRoute.Reason)), which downloads and analyzes the whole file and cannot apply a range. Remove the offsets, or use a YouTube URL in video mode."
+    }
+
     if ($sourceRoute.Route -eq 'sdk') {
         # Correct the CLI-oriented warning Resolve-GeminiLaunchConfig printed above (line ~54):
         # on THIS route -MediaResolution is a real generationConfig field, sent and enforced by
@@ -91,13 +124,10 @@ if ($VideoScout) {
             # escaping and no newline flattening needed; the brief arrives with full fidelity.
             $sdkArgs += @('--prompt-file', (Join-Path (Split-Path $PSScriptRoot -Parent) 'prompts\video-scout-analysis.md'))
         }
-        $haveStart = $PSBoundParameters.ContainsKey('StartOffset')
-        $haveEnd = $PSBoundParameters.ContainsKey('EndOffset')
-        if ($haveStart -and $haveEnd) {
+        # Pairing, strict order, and route were all validated above (refuse-not-downgrade), so by
+        # here $haveStart implies a valid $haveEnd pair on the SDK route -- just pass them through.
+        if ($haveStart) {
             $sdkArgs += @('--start-offset', $StartOffset, '--end-offset', $EndOffset)
-        }
-        elseif ($haveStart -or $haveEnd) {
-            Write-Warning "Both -StartOffset and -EndOffset are required to analyze a slice; the lone one was ignored and the whole video will be analyzed."
         }
         & node $sdkScript @sdkArgs
         return

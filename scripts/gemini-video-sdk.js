@@ -45,16 +45,46 @@ function parseArgs(argv) {
     else if (a === '--media-resolution') out.mediaResolution = argv[++i];
     else if (a === '--prompt-file') out.promptFile = argv[++i];
     else if (a === '--prompt-text') out.promptText = argv[++i];
-    else if (a === '--start-offset') out.startOffset = argv[++i];
-    else if (a === '--end-offset') out.endOffset = argv[++i];
+    // Record that the flag was SEEN separately from its value: a flag given as the final argv
+    // element has an undefined value, which must be distinguishable from "flag not passed" so it
+    // can be refused (resolveSliceOffsets) instead of silently falling through to a whole-video run.
+    else if (a === '--start-offset') { out.startOffsetSeen = true; out.startOffset = argv[++i]; }
+    else if (a === '--end-offset') { out.endOffsetSeen = true; out.endOffset = argv[++i]; }
   }
   return out;
 }
 
-// Pure request-body builder, exported for tests. Offsets are plumbed through NOW (per the
-// migration spec) even though the modal doesn't offer a range picker yet — when both are given
-// they become videoMetadata on the same part as fileData, which is what makes the API bill only
-// the slice instead of the whole video.
+// Validate the section-scoping offsets, exported for tests. Returns { sliced:false } (whole video),
+// { sliced:true, startOffset, endOffset } (both valid non-negative integers, end strictly after
+// start), or { error } — never a coerced/pass-through string and never a silent whole-video
+// downgrade when a slice was requested. main() exits non-zero on { error }. Mirrors the
+// refuse-don't-downgrade invariant enforced in feed-gemini.ps1 and app/video-scout-args.js.
+function resolveSliceOffsets(args) {
+  const startSeen = !!args.startOffsetSeen;
+  const endSeen = !!args.endOffsetSeen;
+  if (!startSeen && !endSeen) return { sliced: false };
+  if (startSeen !== endSeen) {
+    return { error: 'Both --start-offset and --end-offset are required to analyze a slice (only one was given); refusing rather than analyzing the whole video.' };
+  }
+  const parse = (name, raw) => {
+    if (raw === undefined) return { error: `${name} was given with no value.` };
+    if (!/^\d+$/.test(String(raw))) return { error: `${name} must be a non-negative whole number of seconds (got ${JSON.stringify(raw)}).` };
+    return { value: parseInt(raw, 10) };
+  };
+  const s = parse('--start-offset', args.startOffset);
+  if (s.error) return { error: s.error };
+  const e = parse('--end-offset', args.endOffset);
+  if (e.error) return { error: e.error };
+  if (e.value <= s.value) {
+    return { error: `--end-offset (${e.value}s) must be strictly greater than --start-offset (${s.value}s).` };
+  }
+  return { sliced: true, startOffset: s.value, endOffset: e.value };
+}
+
+// Pure request-body builder, exported for tests. When both offsets are given (validated upstream
+// by resolveSliceOffsets) they become videoMetadata on the same part as fileData, which is what
+// makes the API bill only the slice instead of the whole video. The New-Agent modal exposes the
+// range picker that feeds these through feed-gemini.ps1's -StartOffset/-EndOffset.
 function buildRequestBody({ url, prompt, mediaResolution, startOffset, endOffset }) {
   const videoPart = { fileData: { fileUri: url } };
   if (startOffset !== undefined && endOffset !== undefined) {
@@ -90,16 +120,21 @@ async function main() {
 
   const model = args.model || DEFAULT_MODEL;
   const mediaResolution = MEDIA_RESOLUTION_MAP[args.mediaResolution] ? args.mediaResolution : 'MEDIUM';
-  const sliced = args.startOffset !== undefined && args.endOffset !== undefined;
+
+  // Refuse (exit non-zero) on any offset problem — a lone flag, a flag with no value, a non-integer,
+  // or end<=start — rather than silently analyzing (and billing for) the whole video.
+  const slice = resolveSliceOffsets(args);
+  if (slice.error) { console.error(`[video-scout sdk] ${slice.error}`); process.exit(1); }
+  const sliced = slice.sliced;
 
   const body = buildRequestBody({
     url: args.url, prompt, mediaResolution,
-    startOffset: sliced ? args.startOffset : undefined,
-    endOffset: sliced ? args.endOffset : undefined,
+    startOffset: sliced ? slice.startOffset : undefined,
+    endOffset: sliced ? slice.endOffset : undefined,
   });
 
   console.log(`[video-scout sdk] analyzing ${args.url}`);
-  console.log(`[video-scout sdk] model=${model} mediaResolution=${mediaResolution} (ENFORCED on this path)${sliced ? ` slice=${args.startOffset}s-${args.endOffset}s` : ' (whole video)'}`);
+  console.log(`[video-scout sdk] model=${model} mediaResolution=${mediaResolution} (ENFORCED on this path)${sliced ? ` slice=${slice.startOffset}s-${slice.endOffset}s` : ' (whole video)'}`);
 
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
   const t0 = Date.now();
@@ -138,5 +173,5 @@ async function main() {
   console.log(formatUsageLine(json.usageMetadata || {}, model, mediaResolution, sliced));
 }
 
-module.exports = { buildRequestBody, formatUsageLine, parseArgs, MEDIA_RESOLUTION_MAP, DEFAULT_MODEL };
+module.exports = { buildRequestBody, formatUsageLine, parseArgs, resolveSliceOffsets, MEDIA_RESOLUTION_MAP, DEFAULT_MODEL };
 if (require.main === module) main();
