@@ -169,6 +169,15 @@
           <option value="video">video (full visual analysis — highest cost)</option>
         </select>
         <p class="muted small">Transcript is the cheapest pass — no visual tokens, text analysis only. Video runs the full forensic visual analysis at the highest token cost, so it's a deliberate opt-in, not the default.</p>
+        <div id="videoRangeOpts" class="hidden">
+          <label>Analyze only a time range <span class="muted">(optional — leave both blank for the whole video)</span></label>
+          <div class="range-inputs">
+            <input type="text" id="videoStartInput" placeholder="Start (MM:SS or seconds)" />
+            <input type="text" id="videoEndInput" placeholder="End (MM:SS or seconds)" />
+          </div>
+          <p id="videoRangeError" class="range-error hidden"></p>
+          <p class="muted small">A range bills ONLY that slice — proportional to its length, not the whole video (a 2-minute slice of a 10-minute video costs roughly 80% less). Both fields are required together; leave both blank to analyze the whole video. Range analysis applies on the SDK/YouTube route only.</p>
+        </div>
         <label>Gemini model</label>
         <select id="videoModelSelect">
           <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite (default, cheapest)</option>

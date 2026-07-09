@@ -12,6 +12,8 @@ const {
   DEFAULT_MEDIA_RESOLUTION,
   DEFAULT_ANALYSIS_MODE,
   YOUTUBE_HOSTS,
+  MAX_OFFSET_SECONDS,
+  isValidOffset,
   predictVideoRoute,
   buildVideoScoutArgs,
 } = require('./video-scout-args');
@@ -125,11 +127,131 @@ function assert(condition, label) {
   assert(n2.some(n => /^route=CLI/.test(n)), 'buildVideoScoutArgs emits a route=CLI note for a transcript run');
 }
 
-// --- omission: absent fields produce no args and no notes ---------------------------
+// A valid range now REQUIRES a YouTube videoUrl (offsets ride on the SDK/generateContent path,
+// which only exists for YouTube) — a non-YouTube source refuses (see the CLI-route case below).
+const YT = 'https://youtu.be/aqz-KE-bpKQ';
+
+// --- offsets: valid range (YouTube, video mode) is sent as -StartOffset/-EndOffset --
 {
-  const { args, notes } = buildVideoScoutArgs({});
+  const { args, notes, error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', startOffset: 120, endOffset: 240 });
+  assert(error === null, 'a valid YouTube range produces no error (launch proceeds)');
+  assert(args.includes('-StartOffset') && args[args.indexOf('-StartOffset') + 1] === '120',
+    'accepts a valid range and pushes -StartOffset as a STRING (node-pty spawn expects string[] argv)');
+  assert(args.includes('-EndOffset') && args[args.indexOf('-EndOffset') + 1] === '240',
+    'pushes -EndOffset as a string too');
+  assert(args.indexOf('-StartOffset') < args.indexOf('-EndOffset'), '-StartOffset precedes -EndOffset in argv order');
+  assert(notes.some(n => /range sent: -StartOffset 120 -EndOffset 240/.test(n)), 'notes confirm the range was sent');
+}
+
+// --- offsets: absent analysisMode falls back to 'video' (script's own -VideoScout fallback), so a
+// valid YouTube range is still accepted -- proves the mode-gate isn't bypassable by omitting mode.
+{
+  const { args, error } = buildVideoScoutArgs({ videoUrl: YT, startOffset: 10, endOffset: 20 });
+  assert(error === null && args.includes('-StartOffset'), 'omitted analysisMode still resolves to video mode, so a valid range is accepted');
+}
+{
+  // Invalid analysisMode also resolves to the video default, so a valid range is still accepted.
+  const { args, error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'not-a-real-mode', startOffset: 10, endOffset: 20 });
+  assert(error === null && args.includes('-StartOffset'), 'invalid analysisMode falls back to the video default, so a valid range is still accepted');
+}
+
+// --- offsets: REFUSED outside video mode (error set, no args) ------------------------
+{
+  const { args, notes, error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'transcript', startOffset: 10, endOffset: 20 });
+  assert(typeof error === 'string' && /only valid in video mode/.test(error), 'REFUSES a range in transcript mode (error set, user-facing)');
+  assert(!args.includes('-StartOffset') && !args.includes('-EndOffset'), 'no offset args pushed on the transcript-mode refusal');
+  assert(notes.some(n => /REJECTED.*only applies in video mode/.test(n)), 'notes explain the mode-gate refusal');
+}
+{
+  const { error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'audio', startOffset: 10, endOffset: 20 });
+  assert(typeof error === 'string' && /only valid in video mode/.test(error), 'REFUSES a range in audio mode too');
+}
+
+// --- offsets: NEW — a range on a non-YouTube (CLI-route) source is REFUSED -----------
+{
+  const { args, notes, error } = buildVideoScoutArgs({ videoUrl: 'https://vimeo.com/12345', analysisMode: 'video', startOffset: 30, endOffset: 90 });
+  assert(typeof error === 'string' && /only works for YouTube URLs/.test(error), 'REFUSES a range when the source routes to the CLI/download path (non-YouTube)');
+  assert(!args.includes('-StartOffset'), 'no offset args pushed on the CLI-route refusal');
+  assert(notes.some(n => /routes to the CLI\/download path/.test(n)), 'notes explain the CLI-route refusal');
+}
+{
+  // Missing/unparseable URL also predicts CLI -> a range can't be honored -> refuse.
+  const { error } = buildVideoScoutArgs({ analysisMode: 'video', startOffset: 30, endOffset: 90 });
+  assert(typeof error === 'string' && /only works for YouTube URLs/.test(error), 'REFUSES a range when no usable (YouTube) URL is present');
+}
+
+// --- offsets: both-or-neither REFUSAL -------------------------------------------------
+{
+  const { args, notes, error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', startOffset: 10 });
+  assert(typeof error === 'string' && /both a start and an end/.test(error), 'REFUSES a lone startOffset (error set)');
+  assert(!args.includes('-StartOffset'), 'no offset args on the lone-start refusal');
+  assert(notes.some(n => /both are required/.test(n)), 'notes explain the both-or-neither refusal');
+}
+{
+  const { error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', endOffset: 20 });
+  assert(typeof error === 'string' && /both a start and an end/.test(error), 'REFUSES a lone endOffset (error set)');
+}
+
+// --- offsets: end must be strictly after start (REFUSAL) ------------------------------
+{
+  const { args, error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', startOffset: 100, endOffset: 50 });
+  assert(typeof error === 'string' && /must be after start/.test(error), 'REFUSES end < start (error set)');
+  assert(!args.includes('-StartOffset'), 'no offset args on the end<start refusal');
+}
+{
+  const { error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', startOffset: 100, endOffset: 100 });
+  assert(typeof error === 'string' && /must be after start/.test(error), 'REFUSES end === start (strictly-after: a zero-length slice is invalid)');
+}
+
+// --- offsets: non-negative integers only, 0-86400 (REFUSAL; mirrors ValidateRange) ---
+{
+  const { error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', startOffset: -5, endOffset: 20 });
+  assert(typeof error === 'string' && /whole seconds/.test(error), 'REFUSES a negative startOffset (error set)');
+}
+{
+  const { error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', startOffset: 10.5, endOffset: 20 });
+  assert(typeof error === 'string', 'REFUSES a non-integer (fractional) startOffset');
+}
+{
+  const { error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', startOffset: '10', endOffset: 20 });
+  assert(typeof error === 'string', 'REFUSES a startOffset sent as a string instead of a number (strict type check)');
+}
+{
+  const { error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', startOffset: 0, endOffset: MAX_OFFSET_SECONDS + 1 });
+  assert(typeof error === 'string', 'REFUSES an endOffset beyond MAX_OFFSET_SECONDS (86400s / 24h)');
+}
+{
+  const { args, error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', startOffset: 0, endOffset: MAX_OFFSET_SECONDS });
+  assert(error === null && args.includes('-StartOffset'), 'accepts endOffset exactly at MAX_OFFSET_SECONDS (boundary is inclusive)');
+}
+{
+  assert(isValidOffset(0) === true, 'isValidOffset(0) is valid (non-negative boundary)');
+  assert(isValidOffset(-1) === false, 'isValidOffset(-1) is invalid');
+  assert(isValidOffset(1.5) === false, 'isValidOffset(1.5) is invalid (not an integer)');
+  assert(isValidOffset(MAX_OFFSET_SECONDS + 1) === false, 'isValidOffset beyond the 24h cap is invalid');
+}
+
+// --- offsets: injection-shaped values are REFUSED, never spliced into args ----------
+{
+  const { args, notes, error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', startOffset: '0"; rm -rf /', endOffset: 20 });
+  assert(typeof error === 'string', 'REFUSES a startOffset carrying shell-metacharacter-shaped content (fails the strict number check)');
+  assert(!args.includes('-StartOffset'), 'no offset args pushed on the injection-shaped refusal');
+  assert(notes.every(n => !/range sent/.test(n)), 'no note claims the malicious value was sent');
+}
+
+// --- no offsets at all: no error, whole-video proceeds normally ---------------------
+{
+  const { args, error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video' });
+  assert(error === null, 'no range given -> no error (whole-video is the explicit both-blank path)');
+  assert(!args.includes('-StartOffset'), 'no offset args when no range is given');
+}
+
+// --- omission: absent fields produce no args, no notes, no error --------------------
+{
+  const { args, notes, error } = buildVideoScoutArgs({});
   assert(args.length === 0, 'no args when all fields are absent');
   assert(notes.length === 0, 'no notes when all fields are absent');
+  assert(error === null, 'no error when all fields are absent');
 }
 
 // --- sanity: allowlists contain the expected known-good members --------------------

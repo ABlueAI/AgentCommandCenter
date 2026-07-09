@@ -229,7 +229,7 @@ function openInAppTerminal(opts = {}) {
   pane.addEventListener('mousedown', () => { activeTermId = id; term.focus(); });
   term.textarea && term.textarea.addEventListener('focus', () => { activeTermId = id; });
   terms.set(id, paneData);
-  cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, videoModel: opts.videoModel, mediaResolution: opts.mediaResolution, analysisMode: opts.analysisMode, cols: term.cols, rows: term.rows });
+  cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, videoModel: opts.videoModel, mediaResolution: opts.mediaResolution, analysisMode: opts.analysisMode, startOffset: opts.startOffset, endOffset: opts.endOffset, cols: term.cols, rows: term.rows });
   setTimeout(() => { fit.fit(); cc.ptyResize(id, term.cols, term.rows); activeTermId = id; term.focus(); }, 40);
 }
 
@@ -526,6 +526,7 @@ function wireUi() {
       $('#targetRow').classList.toggle('hidden', !r.readOnly);
       $('#videoScoutOpts').classList.toggle('hidden', !r.video);
       setTaskInputMode(!!r.video); // video-scout uses the same field for a URL
+      updateVideoRangeVisibility();
       updateModalHint();
     };
   });
@@ -544,7 +545,7 @@ function wireUi() {
   // only offer known-good values, they are not the security boundary.
   $('#videoModelSelect').onchange = (e) => { state.videoModel = e.target.value; };
   $('#mediaResolutionSelect').onchange = (e) => { state.mediaResolution = e.target.value; };
-  $('#analysisModeSelect').onchange = (e) => { state.analysisMode = e.target.value; };
+  $('#analysisModeSelect').onchange = (e) => { state.analysisMode = e.target.value; updateVideoRangeVisibility(); };
 }
 
 // The task field doubles as the URL field for video-scout — relabel it accordingly.
@@ -557,6 +558,65 @@ function setTaskInputMode(isVideo) {
     if (lbl) lbl.innerHTML = 'Task name <span class="muted">(kebab-case)</span>';
     if (inp) inp.placeholder = 'e.g. search-bar';
   }
+}
+
+// Show the time-range inputs only in video mode (offsets are meaningless for transcript/audio,
+// which have no video stream to slice — see feed-gemini.ps1's -StartOffset/-EndOffset).
+function updateVideoRangeVisibility() {
+  const el = $('#videoRangeOpts');
+  if (el) el.classList.toggle('hidden', state.analysisMode !== 'video');
+}
+
+// Accepts MM:SS, H:MM:SS, or bare whole seconds. Returns:
+//   null  — input was empty (field simply not provided)
+//   NaN   — input had content but didn't match any accepted format
+//   number — parsed whole seconds
+function parseTimeToSeconds(raw) {
+  const s = (raw || '').trim();
+  if (!s) return null;
+  if (/^\d+$/.test(s)) return parseInt(s, 10);
+  let m = /^(\d+):([0-5]?\d)$/.exec(s);
+  if (m) return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  m = /^(\d+):([0-5]\d):([0-5]\d)$/.exec(s);
+  if (m) return parseInt(m[1], 10) * 3600 + parseInt(m[2], 10) * 60 + parseInt(m[3], 10);
+  return NaN;
+}
+
+// Lightweight YouTube-host check for the same immediate-feedback purpose as resolveVideoRange —
+// mirrors YOUTUBE_HOSTS in video-scout-args.js and the YouTube subset of VIDEO_HOSTS in main.js
+// (which remain the authority; a bypassed renderer is still refused there). Used only to block a
+// range + non-YouTube launch in the UI before a dead pane is ever created.
+function isYouTubeUrl(url) {
+  try {
+    const h = new URL(url).hostname.toLowerCase();
+    return h === 'youtube.com' || h === 'www.youtube.com' || h === 'm.youtube.com' || h === 'youtu.be';
+  } catch { return false; }
+}
+
+// Client-side mirror of the validation video-scout-args.js re-does server-side (untrusted-input
+// posture: this check is for immediate user feedback, not the security boundary). Returns:
+//   {}                              — both fields blank: whole video, nothing to report
+//   { error: string }               — invalid: caller should BLOCK submission and show the reason
+//   { startOffset, endOffset }      — both valid, ready to send
+function resolveVideoRange(startRaw, endRaw) {
+  const start = parseTimeToSeconds(startRaw);
+  const end = parseTimeToSeconds(endRaw);
+  const startGiven = start !== null;
+  const endGiven = end !== null;
+  if (!startGiven && !endGiven) return {};
+  if (startGiven !== endGiven) {
+    return { error: 'both start and end are required to analyze a range (only one was given)' };
+  }
+  if (Number.isNaN(start) || Number.isNaN(end)) {
+    return { error: 'could not parse the time range (use MM:SS, H:MM:SS, or whole seconds)' };
+  }
+  if (start < 0 || end < 0 || start > 86400 || end > 86400) {
+    return { error: 'time range must be between 0 and 86400 seconds (24h)' };
+  }
+  if (end <= start) {
+    return { error: `end (${end}s) must be after start (${start}s)` };
+  }
+  return { startOffset: start, endOffset: end };
 }
 
 // Reflect what the modal will actually launch.
@@ -607,6 +667,11 @@ function openModal() {
   $('#videoModelSelect').value = state.videoModel;
   $('#mediaResolutionSelect').value = state.mediaResolution;
   $('#analysisModeSelect').value = state.analysisMode;
+  // Time-range fields are read fresh from the DOM at launch (not mirrored into `state`), so
+  // clearing them here is what makes a previous run's range never carry over.
+  $('#videoStartInput').value = '';
+  $('#videoEndInput').value = '';
+  updateVideoRangeVisibility();
   updateModalHint();
   // Belt-and-suspenders: disable pointer events on the terminal grid so
   // xterm's WebGL compositing layer can't intercept modal clicks, and
@@ -649,11 +714,47 @@ async function createAgent() {
       $('#geminiKeyInput').focus();
       return;
     }
+    // Time range: only meaningful in video mode (transcript/audio have no video stream to slice —
+    // the inputs are hidden then too, see updateVideoRangeVisibility). On ANY failure we BLOCK
+    // submission with visible inline feedback and do NOT fall back to whole-video — a user who
+    // asked for a slice must never be silently downgraded to (and billed for) the whole video.
+    // Whole-video is only the explicit both-blank path. This is immediate-feedback UX; main.js
+    // (video-scout-args.js) independently refuses on the pty-start IPC handler as the bypass-proof
+    // enforcement boundary.
+    const rangeErrEl = $('#videoRangeError');
+    const startEl = $('#videoStartInput');
+    const endEl = $('#videoEndInput');
+    const showRangeError = (msg) => {
+      if (rangeErrEl) { rangeErrEl.textContent = msg; rangeErrEl.classList.remove('hidden'); }
+      startEl.classList.add('invalid'); endEl.classList.add('invalid');
+      appendLog(`[video-scout] launch blocked: ${msg}\n`);
+    };
+    if (rangeErrEl) { rangeErrEl.classList.add('hidden'); rangeErrEl.textContent = ''; }
+    startEl.classList.remove('invalid'); endEl.classList.remove('invalid');
+
+    let rangeOpts = {};
+    let rangeLogSuffix = '';
+    if (state.analysisMode === 'video') {
+      const range = resolveVideoRange(startEl.value, endEl.value);
+      if (range.error) {
+        showRangeError(range.error);
+        return; // modal stays open, fields + error visible — do not launch
+      }
+      if (range.startOffset !== undefined) {
+        if (!isYouTubeUrl(url)) {
+          showRangeError('A time range only works for YouTube URLs. Clear the range, or use a YouTube URL.');
+          return; // modal stays open — do not create a pane that main would refuse anyway
+        }
+        rangeOpts = { startOffset: range.startOffset, endOffset: range.endOffset };
+        rangeLogSuffix = `, range: ${range.startOffset}s-${range.endOffset}s`;
+      }
+    }
     closeModal();
-    appendLog(`\n[video-scout] downloading + analyzing ${url}… (mode: ${state.analysisMode}, model: ${state.videoModel}, media resolution: ${state.mediaResolution})\n`);
+    appendLog(`\n[video-scout] downloading + analyzing ${url}… (mode: ${state.analysisMode}, model: ${state.videoModel}, media resolution: ${state.mediaResolution}${rangeLogSuffix})\n`);
     openInAppTerminal({
       worktree: state.repo || undefined, role, videoScout: true, videoUrl: url,
       videoModel: state.videoModel, mediaResolution: state.mediaResolution, analysisMode: state.analysisMode,
+      ...rangeOpts,
       title: `Video Scout · ${new URL(url).hostname}`,
     });
     return;

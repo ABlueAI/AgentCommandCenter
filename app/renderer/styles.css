@@ -182,6 +182,10 @@ input:focus { outline: none; border-color: var(--accent); }
 .modal-opt .check input { accent-color: var(--accent); }
 .modal-opt select { margin-bottom: 6px; }
 .modal-opt .caveat { color: #d9b54a; margin-top: 2px; } /* visible (non-hover) truthful caveat — not just a tooltip */
+.range-inputs { display: flex; gap: 8px; margin-bottom: 6px; }
+.range-inputs input { flex: 1; min-width: 0; }
+.range-error { color: var(--danger); font-size: 12px; margin: 0 0 6px; } /* visible inline block on invalid range — submission is refused, not silently downgraded */
+.range-inputs input.invalid { border-color: var(--danger); }
 
 /* ---- Gemini key banner & topbar indicator ---- */
 .key-banner {

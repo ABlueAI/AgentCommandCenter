@@ -36,6 +36,15 @@ const DEFAULT_ANALYSIS_MODE = 'video';
 // this set only powers the launch-time Logs-tab note so the user sees which path a run will take.
 const YOUTUBE_HOSTS = new Set(['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be']);
 
+// Must mirror feed-gemini.ps1's [ValidateRange(0, 86400)] on -StartOffset/-EndOffset (86400s = 24h).
+// Re-enforced here so an out-of-range value is a clean, logged REJECTED note in the Logs tab
+// rather than an uncaught PowerShell ValidateRange exception surfacing through the PTY.
+const MAX_OFFSET_SECONDS = 86400;
+
+function isValidOffset(n) {
+  return typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= MAX_OFFSET_SECONDS;
+}
+
 // Predict which invocation path feed-gemini.ps1 will choose, for Logs-tab visibility. Mirrors
 // Resolve-VideoSourceRoute (scripts/lib/get-video-source-route.ps1): YouTube URL + video mode →
 // SDK (URL straight into generateContent, no download, no 20MB cap, mediaResolution enforced);
@@ -56,15 +65,23 @@ function predictVideoRoute(videoUrl, analysisMode) {
 }
 
 // Build the extra argv elements for feed-gemini.ps1 from { videoModel, mediaResolution }.
-// Returns { args, notes }:
+// Returns { args, notes, error }:
 //   args  - argv elements to splice into the PowerShell -File invocation (never a shell string)
 //   notes - human-readable strings describing exactly what happened to each field (sent /
 //           omitted-as-default / rejected), safe to hand straight to main.js's tlog() so the
 //           Logs tab always shows the POST-VALIDATION truth — never implying a choice was
 //           honored when it was actually silently dropped.
-function buildVideoScoutArgs({ videoModel, mediaResolution, analysisMode, videoUrl } = {}) {
+//   error - null on success; a user-facing string when the launch must be REFUSED. Only OFFSET
+//           failures set this (mode-gate, both-or-neither, type/range, end<=start, or offsets on a
+//           source that would route to the CLI/download path). An offset the user explicitly asked
+//           for must never be silently dropped or silently downgraded to whole-video — main.js
+//           surfaces this error and returns { ok:false } instead of spawning. (Allowlist misses on
+//           videoModel/mediaResolution/analysisMode are NOT errors: those legitimately fall back to
+//           the script's own default, which is a safe no-surprise outcome, unlike a dropped range.)
+function buildVideoScoutArgs({ videoModel, mediaResolution, analysisMode, videoUrl, startOffset, endOffset } = {}) {
   const args = [];
   const notes = [];
+  let error = null;
 
   // Route prediction first so it's the first thing the Logs tab shows for the run.
   if (videoUrl) {
@@ -111,7 +128,54 @@ function buildVideoScoutArgs({ videoModel, mediaResolution, analysisMode, videoU
     }
   }
 
-  return { args, notes };
+  // Section-scoping (videoMetadata start/end offset, SDK/YouTube route only): renderer already
+  // validated this (parseTimeToSeconds/resolveVideoRange in app.js), but startOffset/endOffset
+  // cross the same untrusted renderer -> main IPC boundary as every other field here, so they get
+  // the same independent re-validation posture as videoModel/mediaResolution/analysisMode above —
+  // never trust the renderer's check as the actual security/correctness boundary. This runs in the
+  // Electron MAIN process (video-scout-args.js is required only from main.js's pty-start handler;
+  // the renderer has no require() access under contextIsolation), so a modified or bypassed
+  // renderer calling ipcRenderer.invoke('pty-start', {...}) directly still hits this exact check.
+  const startGiven = startOffset !== undefined && startOffset !== null && startOffset !== '';
+  const endGiven = endOffset !== undefined && endOffset !== null && endOffset !== '';
+  if (startGiven || endGiven) {
+    // Any failure below sets `error` (launch REFUSED) rather than dropping the range and
+    // proceeding whole-video: a user who explicitly asked for a slice must never silently get a
+    // whole-video run (and be billed for it). Whole-video is only ever the explicit both-blank path.
+    //
+    // Mode gate FIRST: offsets are meaningless outside video mode (transcript/audio have no video
+    // stream to slice). Compute the EFFECTIVE mode the same way the script itself resolves it — an
+    // absent/invalid analysisMode falls back to 'video' (DEFAULT_ANALYSIS_MODE), matching
+    // feed-gemini.ps1's own `if (-not $PSBoundParameters.ContainsKey('Mode')) { $Mode = 'video' }`
+    // fallback under -VideoScout — so this check can't be bypassed by sending a garbage analysisMode.
+    const effectiveAnalysisMode = (typeof analysisMode === 'string' && VALID_ANALYSIS_MODES.has(analysisMode))
+      ? analysisMode : DEFAULT_ANALYSIS_MODE;
+    if (effectiveAnalysisMode !== 'video') {
+      error = `Time range is only valid in video mode (the current mode is "${effectiveAnalysisMode}"). Clear the range, or switch analysis mode to video.`;
+      notes.push(`startOffset/endOffset REJECTED: a time range only applies in video mode (effective mode is "${effectiveAnalysisMode}") — launch refused`);
+    } else if (startGiven !== endGiven) {
+      error = 'Time range needs both a start and an end. Fill in both, or clear both to analyze the whole video.';
+      notes.push(`startOffset/endOffset REJECTED: both are required to analyze a range (only one was given) — launch refused`);
+    } else if (!isValidOffset(startOffset) || !isValidOffset(endOffset)) {
+      error = `Time range must be whole seconds between 0 and ${MAX_OFFSET_SECONDS} (24h). Got start=${JSON.stringify(startOffset)}, end=${JSON.stringify(endOffset)}.`;
+      notes.push(`startOffset=${JSON.stringify(startOffset)} endOffset=${JSON.stringify(endOffset)} REJECTED (must be non-negative integers, 0-${MAX_OFFSET_SECONDS}) — launch refused`);
+    } else if (endOffset <= startOffset) {
+      error = `Time range end (${endOffset}s) must be after start (${startOffset}s).`;
+      notes.push(`startOffset=${startOffset} endOffset=${endOffset} REJECTED (end must be strictly after start) — launch refused`);
+    } else if (predictVideoRoute(videoUrl, effectiveAnalysisMode).route === 'cli') {
+      // Offsets ride on videoMetadata in the SDK/generateContent path, which only exists for
+      // YouTube URLs. A non-YouTube source routes to the yt-dlp download + CLI-attach path, which
+      // has no way to apply a range — so a range here can't be honored. Refuse (don't silently
+      // download and analyze the WHOLE thing, billing the user for a range they didn't get).
+      error = 'A time range only works for YouTube URLs (analyzed directly via the Gemini API). This source would be downloaded and analyzed locally, which cannot apply a range. Clear the range, or use a YouTube URL.';
+      notes.push(`startOffset=${startOffset} endOffset=${endOffset} REJECTED: source routes to the CLI/download path (non-YouTube), which cannot apply a range — launch refused`);
+    } else {
+      args.push('-StartOffset', String(startOffset), '-EndOffset', String(endOffset));
+      notes.push(`range sent: -StartOffset ${startOffset} -EndOffset ${endOffset} (analyzes only that slice; billing scales to slice length, not whole-video length — SDK/YouTube route only)`);
+    }
+  }
+
+  return { args, notes, error };
 }
 
 module.exports = {
@@ -122,6 +186,8 @@ module.exports = {
   DEFAULT_MEDIA_RESOLUTION,
   DEFAULT_ANALYSIS_MODE,
   YOUTUBE_HOSTS,
+  MAX_OFFSET_SECONDS,
+  isValidOffset,
   predictVideoRoute,
   buildVideoScoutArgs,
 };
