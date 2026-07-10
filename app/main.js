@@ -5,6 +5,7 @@
 
 const { app, BrowserWindow, ipcMain, shell, dialog, session, safeStorage } = require('electron');
 const path = require('path');
+const { pathToFileURL } = require('url');
 const fs = require('fs');
 const { spawn, execFile } = require('child_process');
 const pty = require('@lydell/node-pty'); // prebuilt ConPTY — powers in-app terminals
@@ -16,6 +17,10 @@ const { buildVideoScoutArgs } = require('./video-scout-args');
 // Untrusted IPC `task` names flow into a filesystem path and a git branch name; validate them here
 // (the enforcement boundary) before any fs/git/spawn call. See app/task-name.js / finding #4.
 const { validateTask } = require('./task-name');
+// Navigation-lockdown decisions (deny window.open / off-app navigation) and the shell-free launcher
+// arg builders. Both dependency-free + unit-tested (nav-guard.test.js / launchers.test.js).
+const { decideWindowOpen, decideNavigation } = require('./nav-guard');
+const { openVscodeSpec, openTerminalSpec } = require('./launchers');
 
 // ---- tunable defaults (marked ? — change to taste) --------------------------
 const DEFAULT_PROJECTS_ROOT = 'D:\\Workspace';            // (?) where your git repos live
@@ -139,7 +144,27 @@ function createWindow() {
       nodeIntegration: false,
     },
   });
-  win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  const entryPath = path.join(__dirname, 'renderer', 'index.html');
+  win.loadFile(entryPath);
+
+  // --- Navigation lockdown (AUDIT #3 / electronegativity LIMIT_NAVIGATION HIGH) -----------------
+  // The renderer holds the preload bridge (window.cc), so a stray anchor, an injected navigation, a
+  // middle-click, or a window.open must never repoint this window or spawn an uncontrolled child
+  // window. Deny new windows (forwarding http(s) to the OS browser), and allow navigation ONLY back
+  // to our own entry document. Pure decisions live in nav-guard.js. This is the app's only
+  // BrowserWindow (the board is a separately-launched desktop app, not a webview here).
+  const ENTRY_URL = pathToFileURL(entryPath).toString();
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    const d = decideWindowOpen(url);
+    if (d.externalUrl) shell.openExternal(d.externalUrl);
+    return { action: d.action };
+  });
+  const guardNav = (e, url) => {
+    const d = decideNavigation(url, ENTRY_URL);
+    if (!d.allow) { e.preventDefault(); if (d.externalUrl) shell.openExternal(d.externalUrl); }
+  };
+  win.webContents.on('will-navigate', guardNav);
+  win.webContents.on('will-redirect', guardNav);
 }
 
 app.whenReady().then(() => {
@@ -164,8 +189,10 @@ function git(args, cwd) {
     execFile('git', args, { cwd }, (_err, stdout) => resolve((stdout || '').trim()));
   });
 }
-// Launch a detached external process (Windows Terminal, VSCode, etc.) and don't block.
-function launch(cmd, args) { spawn(cmd, args, { detached: true, shell: true }).unref(); }
+// Launch a detached external process (Windows Terminal, VSCode, etc.) and don't block. shell:false
+// (AUDIT #7): callers build argv via launchers.js so the git-derived directory path is a discrete
+// argument no shell ever parses. See launchers.js for the code.cmd-via-cmd.exe detail on Windows.
+function launch(cmd, args) { spawn(cmd, args, { detached: true }).unref(); }
 
 // ---- launch-pipeline timing diagnostics (remove once root cause confirmed) --
 let _t0 = null;
@@ -460,8 +487,12 @@ ipcMain.handle('review-diff', async (_e, { worktree, base }) => {
 });
 
 // ---- IPC: one-click launchers ----------------------------------------------
-ipcMain.handle('open-vscode', async (_e, p) => launch('code', [`"${p}"`]));
-ipcMain.handle('open-terminal', async (_e, p) => launch('wt', ['-w', '0', 'nt', '-d', `"${p}"`]));
+ipcMain.handle('open-vscode', async (_e, p) => {
+  const s = openVscodeSpec(p);
+  if (s.error) { if (win && !win.isDestroyed()) win.webContents.send('main-error', s.error); return; }
+  launch(s.cmd, s.args);
+});
+ipcMain.handle('open-terminal', async (_e, p) => { const s = openTerminalSpec(p); launch(s.cmd, s.args); });
 // Only ever hand http(s) URLs to the OS — never file:, vbscript:, etc. from terminal output.
 ipcMain.handle('open-external', async (_e, url) => {
   if (typeof url === 'string' && /^https?:\/\//i.test(url)) shell.openExternal(url);
