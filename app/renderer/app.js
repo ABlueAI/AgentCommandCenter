@@ -102,16 +102,11 @@ function openInAppTerminal(opts = {}) {
   const label = title || (role ? `${ROLES[role].label} · ${wtName}` : `${cli ? cli + ' · ' : ''}${wtName}`);
   // Role badge (tinted + lock for read-only) replaces the plain CLI dot when a role is set.
   const badge = role
-    ? `<span class="role-badge" data-role="${role}">${ROLES[role].glyph}${ROLES[role].readOnly ? ' 🔒' : ''} ${ROLES[role].label}</span>`
-    : `<span class="dot ${cli || 'codex'}"></span>`;
-  const pane = document.createElement('div');
-  pane.className = 'term-pane';
-  pane.innerHTML = `<div class="term-head">${badge}
-      <span class="name" title="${worktree || ''}">${label}</span>
-      <button class="spk" title="Speak selection (Kokoro TTS)">🔊</button>
-      <button class="x" title="Close">✕</button></div>
-    <div class="term-body"></div>
-    <div class="chat-body"></div>`;
+    ? { kind: 'role', role, glyph: ROLES[role].glyph, readOnly: ROLES[role].readOnly, label: ROLES[role].label }
+    : { kind: 'cli', cli: cli || 'codex' };
+  // Build the pane with safe DOM APIs (agent-dom.js): `label` and `worktree` derive from git
+  // worktree metadata and must never be interpolated into innerHTML (AUDIT-REPORT.md finding #1).
+  const pane = agentDom.buildTermPane(document, { badge, label, worktreeTitle: worktree || '' });
   $('#terminalGrid').appendChild(pane);
   const term = new Terminal({ theme: xtermTheme(), fontFamily: "'Cascadia Code','Consolas',monospace", fontSize: 13, cursorBlink: true, allowProposedApi: true, scrollback: 5000 });
   const fit = new FitAddon.FitAddon();
@@ -366,11 +361,8 @@ function renderAgentList() {
   }
   list.innerHTML = '';
   for (const wt of state.worktrees) {
-    const row = document.createElement('div');
-    row.className = 'agent-row';
-    row.innerHTML = `<span class="dot ${agentColorOf(wt)}"></span>
-      <span class="name" title="${wt.path}">${wt.branch || taskOf(wt)}</span>
-      <button class="x" title="Remove worktree">✕</button>`;
+    // wt.branch / wt.path are git-derived — build with safe DOM APIs, never innerHTML (finding #1).
+    const row = agentDom.buildAgentRow(document, { colorClass: agentColorOf(wt), name: wt.branch || taskOf(wt), path: wt.path });
     row.querySelector('.x').onclick = () => removeAgent(taskOf(wt));
     list.appendChild(row);
   }
@@ -385,25 +377,8 @@ function renderAgentGrid() {
   }
   for (const wt of state.worktrees) {
     const task = taskOf(wt);
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.innerHTML = `
-      <div class="title"><span class="dot ${agentColorOf(wt)}"></span>${wt.branch || task}</div>
-      <div class="meta">${wt.path}</div>
-      <div class="row">
-        <button class="ghost" data-act="claude">Claude</button>
-        <button class="ghost" data-act="codex">Codex</button>
-        <button class="ghost" data-act="gemini">Gemini</button>
-      </div>
-      <div class="row">
-        <button class="ghost" data-act="review" title="Read-only Opus review of this branch">🔎 Review</button>
-        <button class="ghost" data-act="scout" title="Read-only codebase exploration">🧭 Scout</button>
-      </div>
-      <div class="row">
-        <button class="action" data-act="code">VSCode</button>
-        <button class="action" data-act="term">Terminal</button>
-        <button class="ghost" data-act="rm">Remove</button>
-      </div>`;
+    // wt.branch / wt.path are git-derived — build with safe DOM APIs, never innerHTML (finding #1).
+    const card = agentDom.buildAgentCard(document, { colorClass: agentColorOf(wt), branchText: wt.branch || task, path: wt.path });
     card.querySelectorAll('[data-act]').forEach((b) => {
       b.onclick = () => {
         const act = b.dataset.act;
