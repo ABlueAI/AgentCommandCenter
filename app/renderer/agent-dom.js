@@ -7,21 +7,42 @@
 // renderer XSS escalates to local command execution — this is not merely a display bug.
 //
 // Every value here is placed with textContent / setAttribute / createTextNode and NEVER concatenated
-// into innerHTML, so an untrusted value can only ever become inert text. Dual browser-<script> /
-// CommonJS module (matches pty-parser.js and video-range-ui.js) so the escaping is unit-tested in
-// plain node against a small DOM stub (agent-dom.test.js) — no jsdom dependency is added.
+// into innerHTML, so an untrusted value can only ever become inert text. el() additionally REFUSES
+// (throws) event-handler / URL / style / xlink attribute NAMES, so even a future caller cannot
+// smuggle an active attribute (onclick=…, href="javascript:…") past that textContent-only contract.
+// Dual browser-<script> / CommonJS module (matches pty-parser.js and video-range-ui.js) so the
+// escaping is unit-tested in plain node against a small DOM stub (agent-dom.test.js) — no jsdom dep.
+
+// Attribute names that can execute script or load/booby-trap a resource — an event handler (on*),
+// a URL-bearing attribute, an inline style, or an SVG xlink. el() throws rather than set any of
+// these: the builders here only ever need class / title / data-* / disabled, and permitting a URL
+// or handler attribute would let a future edit smuggle an active value past the textContent-only
+// safety contract this module advertises. Defense in depth for AUDIT-REPORT.md finding #1 (L1).
+const UNSAFE_ATTRS = new Set(['href', 'src', 'srcdoc', 'style', 'formaction', 'xlink:href']);
+function assertSafeAttr(name) {
+  const n = String(name).toLowerCase();
+  if (/^on/i.test(n) || UNSAFE_ATTRS.has(n)) {
+    throw new Error(`agent-dom: refusing to set unsafe attribute "${name}" (event-handler, URL, style, and xlink attributes are not allowed here).`);
+  }
+}
+
+// Recovery hint shown on a Remove control that had to be disabled because the worktree folder isn't
+// named "<repo>-<task>", so no safe task name can be derived for it (finding M1). Constant text.
+const DISABLED_REMOVE_TIP =
+  "This worktree's folder isn't named <repo>-<task>, so the app can't derive a safe name to remove it. " +
+  'Remove it from a terminal in the repo: git worktree remove <path>.';
 
 // Create an element and set only known-safe primitives on it. `text` goes through textContent (never
-// parsed as HTML); `title` and `attrs` go through setAttribute. `className` is a fixed string built
-// from internal constants at the call sites (never from git/user data).
+// parsed as HTML); `title` and every `attrs` name are checked by assertSafeAttr before setAttribute.
+// `className` is a fixed string built from internal constants at the call sites (never git/user data).
 function el(doc, tag, opts) {
   opts = opts || {};
   const node = doc.createElement(tag);
   if (opts.className) node.className = opts.className;
   if (opts.text != null) node.textContent = String(opts.text);
-  if (opts.title != null) node.setAttribute('title', String(opts.title));
+  if (opts.title != null) { assertSafeAttr('title'); node.setAttribute('title', String(opts.title)); }
   if (opts.attrs) {
-    for (const k of Object.keys(opts.attrs)) node.setAttribute(k, String(opts.attrs[k]));
+    for (const k of Object.keys(opts.attrs)) { assertSafeAttr(k); node.setAttribute(k, String(opts.attrs[k])); }
   }
   return node;
 }
@@ -69,7 +90,15 @@ function buildAgentRow(doc, opts) {
   const row = el(doc, 'div', { className: 'agent-row' });
   row.appendChild(el(doc, 'span', { className: `dot ${opts.colorClass}` }));
   row.appendChild(el(doc, 'span', { className: 'name', text: opts.name, title: opts.path }));
-  row.appendChild(el(doc, 'button', { className: 'x', text: '✕', title: 'Remove worktree' }));
+  // removable === false => folder isn't <repo>-<task>, so there is no app-derivable task name to send
+  // to remove-agent (finding M1). Disable the control with a CLI-recovery tooltip instead of wiring a
+  // name the main process would (correctly) refuse anyway.
+  const removable = opts.removable !== false;
+  row.appendChild(el(doc, 'button', {
+    className: 'x', text: '✕',
+    title: removable ? 'Remove worktree' : DISABLED_REMOVE_TIP,
+    attrs: removable ? undefined : { disabled: '' },
+  }));
   return row;
 }
 
@@ -87,8 +116,8 @@ function buildAgentCard(doc, opts) {
 
   card.appendChild(el(doc, 'div', { className: 'meta', text: opts.path }));
 
-  const mkBtn = (cls, act, text, tip) =>
-    el(doc, 'button', { className: cls, text, title: tip, attrs: { 'data-act': act } });
+  const mkBtn = (cls, act, text, tip, attrs) =>
+    el(doc, 'button', { className: cls, text, title: tip, attrs: Object.assign({ 'data-act': act }, attrs || {}) });
 
   const row1 = el(doc, 'div', { className: 'row' });
   row1.appendChild(mkBtn('ghost', 'claude', 'Claude'));
@@ -99,10 +128,15 @@ function buildAgentCard(doc, opts) {
   row2.appendChild(mkBtn('ghost', 'review', '🔎 Review', 'Read-only Opus review of this branch'));
   row2.appendChild(mkBtn('ghost', 'scout', '🧭 Scout', 'Read-only codebase exploration'));
 
+  // rm is disabled (with recovery tooltip) when the worktree name isn't app-derivable (finding M1),
+  // but keeps data-act="rm" so the caller's [data-act] enumeration still sees all 8 buttons.
+  const removable = opts.removable !== false;
   const row3 = el(doc, 'div', { className: 'row' });
   row3.appendChild(mkBtn('action', 'code', 'VSCode'));
   row3.appendChild(mkBtn('action', 'term', 'Terminal'));
-  row3.appendChild(mkBtn('ghost', 'rm', 'Remove'));
+  row3.appendChild(removable
+    ? mkBtn('ghost', 'rm', 'Remove')
+    : mkBtn('ghost', 'rm', 'Remove', DISABLED_REMOVE_TIP, { disabled: '' }));
 
   card.appendChild(row1);
   card.appendChild(row2);

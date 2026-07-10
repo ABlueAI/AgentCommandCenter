@@ -56,13 +56,23 @@ refused('_'.repeat(0) || '', 'empty (guard)');
 accepted('x'.repeat(MAX_TASK_LEN), `exactly MAX_TASK_LEN (${MAX_TASK_LEN}) chars`);
 refused('x'.repeat(MAX_TASK_LEN + 1), 'one over MAX_TASK_LEN');
 
+// --- case rule (M2): lowercase-only, mirroring what the renderer canonicalizes to. REFUSE mixed
+//     case, never silently lowercase. -------------------------------------------------------------
+refused('Task-1', 'mixed case (uppercase T) — renderer canonicalizes to lowercase, so this is refused not folded');
+refused('MixedCase', 'interior uppercase');
+refused('ALLCAPS', 'all uppercase');
+refused('CON', 'uppercase reserved-device name — refused by the lowercase rule (not by any device-name special-case)');
+// "con" (lowercase) is ACCEPTED: this app never special-cases Windows reserved device names because
+// the "<repo>-<task>" prefix defeats the hazard — the worktree folder is "<repo>-con", never a bare
+// "con", so the reserved name is never the actual path. It is lowercase, so it passes the case rule.
+accepted('con', 'lowercase reserved-device name — safe because the <repo>- prefix means the folder is <repo>-con, never bare CON');
+
 // --- legitimate names pass unchanged (regression proof: identical path/branch as today) -----------
 accepted('search-bar', 'renderer-produced kebab slug');
 accepted('hotfix-login', 'kebab slug with two dashes');
 accepted('fix123', 'letters + digits');
 accepted('a', 'single char');
 accepted('feature_x', 'underscore allowed');
-accepted('Task-1', 'mixed case allowed');
 accepted('9lives', 'leading digit allowed');
 accepted('_scratch', 'leading underscore allowed');
 

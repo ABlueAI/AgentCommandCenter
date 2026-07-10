@@ -15,16 +15,24 @@
 // resulting path well clear of Windows MAX_PATH pressure.
 const MAX_TASK_LEN = 64;
 
-// Charset: ASCII letters, digits, dash, underscore only, and the FIRST character must be a letter,
-// digit, or underscore (never '-', which git/CLIs can read as a flag). Deliberately NARROWER than
-// the "letters/digits/dash/underscore/space" example: the task is spliced into a git ref
-// (agent/<task>), and git ref names forbid spaces (and ~ ^ : ? * [ \ .. etc.), so allowing spaces
-// would only guarantee a downstream `git worktree add` failure. This class is a strict SUBSET of
-// what `git check-ref-format refs/heads/agent/<task>` accepts, so a separate git spawn to re-check
-// the ref is unnecessary — anything this regex admits is a valid ref component. It also rejects, by
-// construction: path separators (/ \), '.' (so '..' can't traverse), leading '-', whitespace
-// (incl. leading/trailing), NUL, and any control character.
-const TASK_RE = /^[A-Za-z0-9_][A-Za-z0-9_-]*$/;
+// Charset: LOWERCASE ASCII letters, digits, dash, underscore only, and the FIRST character must be a
+// lowercase letter, digit, or underscore (never '-', which git/CLIs can read as a flag).
+//
+// Case (M2): the charset is lowercase-only rather than adding a separate `task !== task.toLowerCase()`
+// branch — one canonical allowlist regex is the single source of truth for "what is a valid task,"
+// mirrors exactly what the renderer already canonicalizes to (toLowerCase().replace(/[^a-z0-9-]+/g)),
+// and leaves no second predicate to drift out of sync. Refusal is inherent, not silent lowercasing:
+// an uppercase character simply fails the match, so a mixed-case name (e.g. "Task-1") is REFUSED with
+// a visible error — we never quietly fold it to lowercase and proceed.
+//
+// Deliberately NARROWER than the "letters/digits/dash/underscore/space" example: the task is spliced
+// into a git ref (agent/<task>), and git ref names forbid spaces (and ~ ^ : ? * [ \ .. etc.), so
+// allowing spaces would only guarantee a downstream `git worktree add` failure. This class is a
+// strict SUBSET of what `git check-ref-format refs/heads/agent/<task>` accepts, so a separate git
+// spawn to re-check the ref is unnecessary — anything this regex admits is a valid ref component. It
+// also rejects, by construction: uppercase, path separators (/ \), '.' (so '..' can't traverse),
+// leading '-', whitespace (incl. leading/trailing), NUL, and any control character.
+const TASK_RE = /^[a-z0-9_][a-z0-9_-]*$/;
 
 // Returns { ok: true, task } for a valid name, or { ok: false, error } with a user-facing reason.
 function validateTask(task) {
@@ -40,9 +48,9 @@ function validateTask(task) {
   if (!TASK_RE.test(task)) {
     return {
       ok: false,
-      error: 'Task name may contain only letters, digits, dash and underscore, and must start with ' +
-        'a letter, digit, or underscore. Rejected: spaces, path separators (/ \\), "..", a leading ' +
-        'dash, and control characters.',
+      error: 'Task name may contain only lowercase letters, digits, dash and underscore, and must ' +
+        'start with a lowercase letter, digit, or underscore. Rejected: uppercase, spaces, path ' +
+        'separators (/ \\), "..", a leading dash, and control characters.',
     };
   }
   return { ok: true, task };

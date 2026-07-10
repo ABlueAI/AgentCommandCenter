@@ -342,11 +342,21 @@ async function refreshAgents() {
   renderAgentGrid();
 }
 
-// task slug derived from "<repo>-<task>" worktree folder name
+// The task slug for an app-created worktree, whose folder is named "<repo>-<task>". Returns null
+// when the folder does NOT match that convention (a manually-created or foreign worktree): there is
+// then no app-derivable task name, and the remove path must never be handed an unvalidatable name
+// (finding M1). Callers use null to DISABLE the Remove control; displayNameOf() decides the label.
 function taskOf(wt) {
   const base = wt.path.split(/[\\/]/).pop();
   const repoName = state.repo.split(/[\\/]/).pop();
-  return base.startsWith(repoName + '-') ? base.slice(repoName.length + 1) : (wt.branch || base);
+  return base.startsWith(repoName + '-') ? base.slice(repoName.length + 1) : null;
+}
+
+// What to LABEL a worktree in the UI — independent of whether it's app-removable. Prefer the branch,
+// then the derived task, then the raw folder name, so a row always shows something meaningful even
+// when taskOf() is null.
+function displayNameOf(wt) {
+  return wt.branch || taskOf(wt) || wt.path.split(/[\\/]/).pop();
 }
 function agentColorOf(wt) {
   // best-effort: we can't know which CLI is running, so tag by branch convention
@@ -361,9 +371,14 @@ function renderAgentList() {
   }
   list.innerHTML = '';
   for (const wt of state.worktrees) {
+    const task = taskOf(wt);
     // wt.branch / wt.path are git-derived — build with safe DOM APIs, never innerHTML (finding #1).
-    const row = agentDom.buildAgentRow(document, { colorClass: agentColorOf(wt), name: wt.branch || taskOf(wt), path: wt.path });
-    row.querySelector('.x').onclick = () => removeAgent(taskOf(wt));
+    // removable=false (non-<repo>-<task> folder) disables Remove rather than sending an
+    // unvalidatable name to the main process (finding M1).
+    const row = agentDom.buildAgentRow(document, {
+      colorClass: agentColorOf(wt), name: displayNameOf(wt), path: wt.path, removable: task !== null,
+    });
+    if (task !== null) row.querySelector('.x').onclick = () => removeAgent(task);
     list.appendChild(row);
   }
 }
@@ -378,7 +393,10 @@ function renderAgentGrid() {
   for (const wt of state.worktrees) {
     const task = taskOf(wt);
     // wt.branch / wt.path are git-derived — build with safe DOM APIs, never innerHTML (finding #1).
-    const card = agentDom.buildAgentCard(document, { colorClass: agentColorOf(wt), branchText: wt.branch || task, path: wt.path });
+    // removable=false disables the card's Remove button for non-<repo>-<task> folders (finding M1).
+    const card = agentDom.buildAgentCard(document, {
+      colorClass: agentColorOf(wt), branchText: displayNameOf(wt), path: wt.path, removable: task !== null,
+    });
     card.querySelectorAll('[data-act]').forEach((b) => {
       b.onclick = () => {
         const act = b.dataset.act;
@@ -388,7 +406,7 @@ function renderAgentGrid() {
         else if (act === 'scout') openInAppTerminal({ worktree: wt.path, role: 'codebase-scout', cli: 'claude' });
         else if (act === 'code') cc.openVscode(wt.path);
         else if (act === 'term') cc.openTerminal(wt.path);
-        else if (act === 'rm') removeAgent(task);
+        else if (act === 'rm') { if (task !== null) removeAgent(task); } // disabled button won't fire; guard anyway
       };
     });
     grid.appendChild(card);
@@ -396,7 +414,14 @@ function renderAgentGrid() {
 }
 
 async function removeAgent(task) {
-  await cc.removeAgent({ repo: state.repo, task });
+  // Normalized contract: remove-agent returns { ok, error? }. On refusal (e.g. a bypassed renderer
+  // sent an invalid name), surface it the same way worktreeOk() does on the create side — log +
+  // alert — instead of silently swallowing it (finding L3).
+  const res = await cc.removeAgent({ repo: state.repo, task });
+  if (res && res.ok === false) {
+    appendLog(`[agent] remove refused: ${res.error || 'unknown error'}\n`);
+    alert(`Could not remove the worktree:\n\n${res.error || 'unknown error'}`);
+  }
   await refreshAgents();
 }
 
@@ -624,7 +649,7 @@ function populateTargets() {
   sel.innerHTML = '';
   const add = (val, text) => { const o = document.createElement('option'); o.value = val; o.textContent = text; sel.appendChild(o); };
   if (state.repo) add(state.repo, state.repo.split(/[\\/]/).pop() + ' (main checkout)');
-  for (const wt of state.worktrees) add(wt.path, wt.branch || taskOf(wt));
+  for (const wt of state.worktrees) add(wt.path, displayNameOf(wt));
 }
 
 function openModal() {

@@ -5,7 +5,7 @@
 // labels) as INERT TEXT — an <img onerror>/<script>/quote/& payload can never become a live DOM
 // element (AUDIT-REPORT.md finding #1).
 
-const { buildTermPane, buildAgentRow, buildAgentCard } = require('./agent-dom');
+const { el, buildTermPane, buildAgentRow, buildAgentCard } = require('./agent-dom');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -143,6 +143,49 @@ function noLiveInjection(root, label) {
   const cli = buildTermPane(doc, { badge: { kind: 'cli', cli: 'gemini' }, label: 'x', worktreeTitle: '' });
   assert(!cli.querySelector('.role-badge') && cli.querySelector('.dot').getAttribute('class') === 'dot gemini',
     'cli badge renders a plain colored dot, no role badge');
+}
+
+// --- L1: el() refuses script/URL/style attribute names (defense in depth) -------------------------
+function throws(fn, label) {
+  let threw = false;
+  try { fn(); } catch { threw = true; }
+  assert(threw, label);
+}
+throws(() => el(doc, 'a', { attrs: { onclick: 'steal()' } }), 'el() throws on onclick');
+throws(() => el(doc, 'img', { attrs: { onerror: 'x' } }), 'el() throws on onerror');
+throws(() => el(doc, 'a', { attrs: { href: 'javascript:alert(1)' } }), 'el() throws on href');
+throws(() => el(doc, 'img', { attrs: { src: 'x' } }), 'el() throws on src');
+throws(() => el(doc, 'iframe', { attrs: { srcdoc: '<x>' } }), 'el() throws on srcdoc');
+throws(() => el(doc, 'div', { attrs: { style: 'x' } }), 'el() throws on style');
+throws(() => el(doc, 'button', { attrs: { formaction: 'x' } }), 'el() throws on formaction');
+throws(() => el(doc, 'div', { attrs: { 'xlink:href': 'x' } }), 'el() throws on xlink:href');
+throws(() => el(doc, 'div', { attrs: { ONMOUSEOVER: 'x' } }), 'el() throws on ON* case-insensitively');
+{
+  // and does NOT throw on the safe attribute names the builders actually use
+  let ok = true;
+  try { el(doc, 'span', { title: 't', attrs: { 'data-role': 'builder', 'data-act': 'rm', disabled: '' } }); }
+  catch { ok = false; }
+  assert(ok, 'el() allows title / data-* / disabled');
+}
+
+// --- M1: non-removable rows/cards disable Remove with a CLI-recovery tooltip -----------------------
+{
+  const row = buildAgentRow(doc, { colorClass: 'claude', name: 'x', path: 'p', removable: false });
+  assert(row.querySelector('.x').getAttribute('disabled') === '', 'non-removable row: Remove button is disabled');
+  assert(/git worktree remove/.test(row.querySelector('.x').getAttribute('title') || ''), 'disabled Remove tooltip points at the CLI recovery');
+  const rowOk = buildAgentRow(doc, { colorClass: 'claude', name: 'x', path: 'p', removable: true });
+  assert(rowOk.querySelector('.x').getAttribute('disabled') === null, 'removable row: Remove button is enabled');
+  assert(rowOk.querySelector('.x').getAttribute('title') === 'Remove worktree', 'removable row keeps the normal tooltip');
+}
+{
+  const card = buildAgentCard(doc, { colorClass: 'claude', branchText: 'b', path: 'p', removable: false });
+  const rm = card.querySelectorAll('[data-act]').filter((b) => b.getAttribute('data-act') === 'rm')[0];
+  assert(!!rm && rm.getAttribute('disabled') === '', 'non-removable card: rm button is disabled');
+  assert(/git worktree remove/.test(rm.getAttribute('title') || ''), 'disabled card rm has the CLI-recovery tooltip');
+  assert(card.querySelectorAll('[data-act]').length === 8, 'non-removable card still enumerates 8 data-act buttons');
+  const cardOk = buildAgentCard(doc, { colorClass: 'claude', branchText: 'b', path: 'p', removable: true });
+  const rmOk = cardOk.querySelectorAll('[data-act]').filter((b) => b.getAttribute('data-act') === 'rm')[0];
+  assert(rmOk.getAttribute('disabled') === null, 'removable card: rm button is enabled');
 }
 
 process.stdout.write(`\n${passed} passed, ${failed} failed\n`);

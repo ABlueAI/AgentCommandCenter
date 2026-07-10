@@ -336,7 +336,7 @@ ipcMain.handle('remove-agent', async (_e, { repo, task }) => {
       ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-Task', task, '-Force'],
       { cwd: repo }, () => resolve());
   });
-  return true;
+  return { ok: true };  // normalized contract: { ok, error? } — matches new-agent / the refusal above (L3)
 });
 
 // Create a dedicated, fenced outputs sandbox for a research role (web-scout/operator) so it
