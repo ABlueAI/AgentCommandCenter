@@ -13,6 +13,9 @@ const pty = require('@lydell/node-pty'); // prebuilt ConPTY — powers in-app te
 // dependency-free, unit-tested module (see app/video-scout-args.test.js) so they don't have to be
 // re-verified by hand every time this file changes.
 const { buildVideoScoutArgs } = require('./video-scout-args');
+// Untrusted IPC `task` names flow into a filesystem path and a git branch name; validate them here
+// (the enforcement boundary) before any fs/git/spawn call. See app/task-name.js / finding #4.
+const { validateTask } = require('./task-name');
 
 // ---- tunable defaults (marked ? — change to taste) --------------------------
 const DEFAULT_PROJECTS_ROOT = 'D:\\Workspace';            // (?) where your git repos live
@@ -270,6 +273,14 @@ ipcMain.handle('repo-github-url', async (_e, repo) => remoteToHttps(await git(['
 // ---- IPC: agents ------------------------------------------------------------
 // Create a worktree (via the repo's own new-agent.ps1) and launch the chosen agent in a WT tab.
 ipcMain.handle('new-agent', async (_e, { repo, task }) => {
+  // Refuse a malformed task BEFORE building any path or spawning powershell (finding #4). A
+  // bypassed renderer can send anything; never silently sanitize — surface the reason and stop.
+  const taskCheck = validateTask(task);
+  if (!taskCheck.ok) {
+    tlog(`new-agent: REFUSED invalid task: ${taskCheck.error}`);
+    if (win && !win.isDestroyed()) win.webContents.send('main-error', `New agent refused: ${taskCheck.error}`);
+    return { ok: false, error: taskCheck.error };
+  }
   tlog(`new-agent: START task="${task}"`);
   const script = path.join(SCRIPTS_DIR, 'new-agent.ps1');
   // Worktree path follows the <repo>-<task> sibling convention the scripts use.
@@ -295,13 +306,37 @@ ipcMain.handle('new-agent', async (_e, { repo, task }) => {
 
 // Tear down an agent's worktree (branch is preserved by the script).
 ipcMain.handle('remove-agent', async (_e, { repo, task }) => {
+  // Re-validate here INDEPENDENTLY of new-agent — not redundant paranoia. new-agent validates a
+  // name the user is typing right now; this path validates a name read back out of PERSISTENT,
+  // possibly-hostile state: `task` is taskOf(wt), derived from a worktree folder/branch that may
+  // have been planted BEFORE this validation existed (an older build, manual git, or a pre-fix
+  // bypassed renderer). A create-time gate cannot retroactively sanitize what is already on disk,
+  // and the name then flows into a filesystem path + `git worktree remove --force`
+  // (remove-agent.ps1), so it must be re-checked here, at the layer that actually runs git.
+  // (finding #4). Do NOT "simplify" this by trusting the create gate — they guard different inputs.
+  const taskCheck = validateTask(task);
+  if (!taskCheck.ok) {
+    // Actionable refusal: a refusal that only says "failed" strands the user with a worktree the
+    // app now won't remove. Name the offending worktree via JSON.stringify so control chars /
+    // newlines in an attacker-influenced name are escaped to a single inert line (no spoofing of
+    // the Logs tab). Deliberately do NOT echo a reconstructed `<repo>-<task>` path: it is built
+    // from the bad name, so it would be both misleading (likely not the real path) and itself
+    // attacker-influenced — point at the trusted manual recovery instead.
+    const safeName = JSON.stringify(String(task));
+    const msg = `Cannot remove worktree ${safeName}: its name has characters this app won't run git on. ` +
+      `Remove it manually from a terminal in the repo — "git worktree list" to find its path, then ` +
+      `"git worktree remove <path>".`;
+    tlog(`remove-agent: REFUSED invalid task: ${taskCheck.error}`);
+    if (win && !win.isDestroyed()) win.webContents.send('main-error', msg);
+    return { ok: false, error: msg };
+  }
   const script = path.join(SCRIPTS_DIR, 'remove-agent.ps1');
   await new Promise((resolve) => {
     execFile('powershell',
       ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-Task', task, '-Force'],
       { cwd: repo }, () => resolve());
   });
-  return true;
+  return { ok: true };  // normalized contract: { ok, error? } — matches new-agent / the refusal above (L3)
 });
 
 // Create a dedicated, fenced outputs sandbox for a research role (web-scout/operator) so it

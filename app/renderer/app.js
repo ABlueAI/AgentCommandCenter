@@ -102,16 +102,11 @@ function openInAppTerminal(opts = {}) {
   const label = title || (role ? `${ROLES[role].label} · ${wtName}` : `${cli ? cli + ' · ' : ''}${wtName}`);
   // Role badge (tinted + lock for read-only) replaces the plain CLI dot when a role is set.
   const badge = role
-    ? `<span class="role-badge" data-role="${role}">${ROLES[role].glyph}${ROLES[role].readOnly ? ' 🔒' : ''} ${ROLES[role].label}</span>`
-    : `<span class="dot ${cli || 'codex'}"></span>`;
-  const pane = document.createElement('div');
-  pane.className = 'term-pane';
-  pane.innerHTML = `<div class="term-head">${badge}
-      <span class="name" title="${worktree || ''}">${label}</span>
-      <button class="spk" title="Speak selection (Kokoro TTS)">🔊</button>
-      <button class="x" title="Close">✕</button></div>
-    <div class="term-body"></div>
-    <div class="chat-body"></div>`;
+    ? { kind: 'role', role, glyph: ROLES[role].glyph, readOnly: ROLES[role].readOnly, label: ROLES[role].label }
+    : { kind: 'cli', cli: cli || 'codex' };
+  // Build the pane with safe DOM APIs (agent-dom.js): `label` and `worktree` derive from git
+  // worktree metadata and must never be interpolated into innerHTML (AUDIT-REPORT.md finding #1).
+  const pane = agentDom.buildTermPane(document, { badge, label, worktreeTitle: worktree || '' });
   $('#terminalGrid').appendChild(pane);
   const term = new Terminal({ theme: xtermTheme(), fontFamily: "'Cascadia Code','Consolas',monospace", fontSize: 13, cursorBlink: true, allowProposedApi: true, scrollback: 5000 });
   const fit = new FitAddon.FitAddon();
@@ -347,11 +342,22 @@ async function refreshAgents() {
   renderAgentGrid();
 }
 
-// task slug derived from "<repo>-<task>" worktree folder name
+// The task slug for an app-created worktree, whose folder is named "<repo>-<task>". Returns null
+// when the folder does NOT match that convention (a manually-created or foreign worktree): there is
+// then no app-derivable task name, and the remove path must never be handed an unvalidatable name
+// (finding M1). Callers treat a falsy result (null, or the '' from a degenerate "<repo>-" folder)
+// as non-removable and DISABLE the Remove control; displayNameOf() decides the label.
 function taskOf(wt) {
   const base = wt.path.split(/[\\/]/).pop();
   const repoName = state.repo.split(/[\\/]/).pop();
-  return base.startsWith(repoName + '-') ? base.slice(repoName.length + 1) : (wt.branch || base);
+  return base.startsWith(repoName + '-') ? base.slice(repoName.length + 1) : null;
+}
+
+// What to LABEL a worktree in the UI — independent of whether it's app-removable. Prefer the branch,
+// then the derived task, then the raw folder name, so a row always shows something meaningful even
+// when taskOf() is null.
+function displayNameOf(wt) {
+  return wt.branch || taskOf(wt) || wt.path.split(/[\\/]/).pop();
 }
 function agentColorOf(wt) {
   // best-effort: we can't know which CLI is running, so tag by branch convention
@@ -366,12 +372,14 @@ function renderAgentList() {
   }
   list.innerHTML = '';
   for (const wt of state.worktrees) {
-    const row = document.createElement('div');
-    row.className = 'agent-row';
-    row.innerHTML = `<span class="dot ${agentColorOf(wt)}"></span>
-      <span class="name" title="${wt.path}">${wt.branch || taskOf(wt)}</span>
-      <button class="x" title="Remove worktree">✕</button>`;
-    row.querySelector('.x').onclick = () => removeAgent(taskOf(wt));
+    const task = taskOf(wt);
+    // wt.branch / wt.path are git-derived — build with safe DOM APIs, never innerHTML (finding #1).
+    // removable=false (non-<repo>-<task> folder) disables Remove rather than sending an
+    // unvalidatable name to the main process (finding M1).
+    const row = agentDom.buildAgentRow(document, {
+      colorClass: agentColorOf(wt), name: displayNameOf(wt), path: wt.path, removable: !!task,
+    });
+    if (task) row.querySelector('.x').onclick = () => removeAgent(task);
     list.appendChild(row);
   }
 }
@@ -385,25 +393,11 @@ function renderAgentGrid() {
   }
   for (const wt of state.worktrees) {
     const task = taskOf(wt);
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.innerHTML = `
-      <div class="title"><span class="dot ${agentColorOf(wt)}"></span>${wt.branch || task}</div>
-      <div class="meta">${wt.path}</div>
-      <div class="row">
-        <button class="ghost" data-act="claude">Claude</button>
-        <button class="ghost" data-act="codex">Codex</button>
-        <button class="ghost" data-act="gemini">Gemini</button>
-      </div>
-      <div class="row">
-        <button class="ghost" data-act="review" title="Read-only Opus review of this branch">🔎 Review</button>
-        <button class="ghost" data-act="scout" title="Read-only codebase exploration">🧭 Scout</button>
-      </div>
-      <div class="row">
-        <button class="action" data-act="code">VSCode</button>
-        <button class="action" data-act="term">Terminal</button>
-        <button class="ghost" data-act="rm">Remove</button>
-      </div>`;
+    // wt.branch / wt.path are git-derived — build with safe DOM APIs, never innerHTML (finding #1).
+    // removable=false disables the card's Remove button for non-<repo>-<task> folders (finding M1).
+    const card = agentDom.buildAgentCard(document, {
+      colorClass: agentColorOf(wt), branchText: displayNameOf(wt), path: wt.path, removable: !!task,
+    });
     card.querySelectorAll('[data-act]').forEach((b) => {
       b.onclick = () => {
         const act = b.dataset.act;
@@ -413,7 +407,7 @@ function renderAgentGrid() {
         else if (act === 'scout') openInAppTerminal({ worktree: wt.path, role: 'codebase-scout', cli: 'claude' });
         else if (act === 'code') cc.openVscode(wt.path);
         else if (act === 'term') cc.openTerminal(wt.path);
-        else if (act === 'rm') removeAgent(task);
+        else if (act === 'rm') { if (task) removeAgent(task); } // disabled button won't fire; guard anyway
       };
     });
     grid.appendChild(card);
@@ -421,7 +415,14 @@ function renderAgentGrid() {
 }
 
 async function removeAgent(task) {
-  await cc.removeAgent({ repo: state.repo, task });
+  // Normalized contract: remove-agent returns { ok, error? }. On refusal (e.g. a bypassed renderer
+  // sent an invalid name), surface it the same way worktreeOk() does on the create side — log +
+  // alert — instead of silently swallowing it (finding L3).
+  const res = await cc.removeAgent({ repo: state.repo, task });
+  if (res && res.ok === false) {
+    appendLog(`[agent] remove refused: ${res.error || 'unknown error'}\n`);
+    alert(`Could not remove the worktree:\n\n${res.error || 'unknown error'}`);
+  }
   await refreshAgents();
 }
 
@@ -649,7 +650,7 @@ function populateTargets() {
   sel.innerHTML = '';
   const add = (val, text) => { const o = document.createElement('option'); o.value = val; o.textContent = text; sel.appendChild(o); };
   if (state.repo) add(state.repo, state.repo.split(/[\\/]/).pop() + ' (main checkout)');
-  for (const wt of state.worktrees) add(wt.path, wt.branch || taskOf(wt));
+  for (const wt of state.worktrees) add(wt.path, displayNameOf(wt));
 }
 
 function openModal() {
