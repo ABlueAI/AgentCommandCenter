@@ -44,6 +44,10 @@ param(
     # it is a documented standalone entry point.
     [ValidateRange(0, 86400)][int]$StartOffset = -1,
     [ValidateRange(0, 86400)][int]$EndOffset = -1,
+    # (?) Explicit override of the mode-aware duration limit, in whole seconds. No silent bypass: when
+    # provided (> 0) it REPLACES the applicable limit (the source cap, or the range-slice cap) and is
+    # logged at run time. 0 = not set -> use the per-mode defaults in lib/get-duration-guard.ps1.
+    [ValidateRange(0, 86400)][int]$MaxDurationSeconds = 0,
     [switch]$NoFeed,
     [switch]$VideoScout
 )
@@ -67,6 +71,68 @@ if ($haveStart -and ($EndOffset -le $StartOffset)) {
 }
 if ($haveStart -and -not $VideoScout) {
     throw "A time range (-StartOffset/-EndOffset) is only valid with -VideoScout on the SDK/YouTube route. Remove the offsets, or add -VideoScout with a YouTube URL in video mode."
+}
+
+# --- pre-flight duration guard machinery ---------------------------------------------------------
+# ORDERING (load-bearing): these functions are DEFINED here but INVOKED only later, at the call sites
+# tagged "Duration guard" -- and every one of those sites runs AFTER the offset validation just above
+# (and, on the SDK route, after the route backstop). The probe must never be the first thing to touch
+# unvalidated offsets, or it would become the code path that first trusts raw input. See
+# lib/get-duration-guard.ps1 for the (pure) decision logic and get-duration-guard.Tests.ps1.
+. (Join-Path $PSScriptRoot 'lib\get-duration-guard.ps1')
+$ProbeTimeoutSec = 60   # (?) hard cap on the metadata probe; a hung/slow probe REFUSES, never proceeds.
+
+function Get-YtDlpPath {
+    $p = (Get-Command yt-dlp -ErrorAction SilentlyContinue).Source
+    if (-not $p) { throw "yt-dlp not found on PATH. Restart your terminal after install, or run: winget install yt-dlp.yt-dlp" }
+    return $p
+}
+
+# Metadata-only probe (NO download): returns duration (int or $null) + is_live, bounded by a hard
+# timeout. Runs yt-dlp in a background job so the timeout is enforceable; a timeout, error, or empty
+# result yields Duration=$null / TimedOut=$true so the guard fails CLOSED.
+function Invoke-DurationProbe {
+    param([string]$YtDlp, [string]$Url, [int]$TimeoutSec)
+    $job = Start-Job -ScriptBlock {
+        param($exe, $u)
+        & $exe --no-playlist --simulate --no-warnings --print '%(duration)s|%(is_live)s' $u 2>$null
+    } -ArgumentList $YtDlp, $Url
+    $finished = Wait-Job $job -Timeout $TimeoutSec
+    if (-not $finished) {
+        Stop-Job $job -ErrorAction SilentlyContinue
+        Remove-Job $job -Force -ErrorAction SilentlyContinue
+        return [PSCustomObject]@{ TimedOut = $true; Duration = $null; IsLive = $false }
+    }
+    $out = Receive-Job $job 2>$null
+    Remove-Job $job -Force -ErrorAction SilentlyContinue
+    $line = ($out | Where-Object { $_ -match '\|' } | Select-Object -First 1)
+    $dur = $null; $isLive = $false
+    if ($line) {
+        $parts = ([string]$line) -split '\|'
+        if ($parts[0] -match '^\d+$') { $dur = [int]$parts[0] }
+        $isLive = ($parts.Count -gt 1 -and $parts[1].Trim() -eq 'True')
+    }
+    return [PSCustomObject]@{ TimedOut = $false; Duration = $dur; IsLive = $isLive }
+}
+
+# Probe + decide + (on refusal) throw. Returns the guard result so the caller can hand the resolved
+# limit to the SUBORDINATE --match-filter backstop on the download path. Reads the script-scope
+# -MaxDurationSeconds override (0 = unset). Fails closed on any probe problem.
+function Assert-DurationGuard {
+    param([Parameter(Mandatory)][string]$Url, [Parameter(Mandatory)][string]$GuardMode,
+        [switch]$HasRange, [int]$RangeStart = 0, [int]$RangeEnd = 0)
+    $ytdlpProbe = Get-YtDlpPath
+    Write-Host "Duration guard: probing metadata (timeout ${ProbeTimeoutSec}s)..." -ForegroundColor DarkCyan
+    $probe = Invoke-DurationProbe -YtDlp $ytdlpProbe -Url $Url -TimeoutSec $ProbeTimeoutSec
+    $override = if ($MaxDurationSeconds -gt 0) { [Nullable[int]]$MaxDurationSeconds } else { $null }
+    $guard = Resolve-DurationGuard -Mode $GuardMode -HasRange:$HasRange -StartOffset $RangeStart -EndOffset $RangeEnd `
+        -DurationSeconds $probe.Duration -IsLive:$probe.IsLive -ProbeTimedOut:$probe.TimedOut -MaxDurationOverride $override
+    if ($guard.OverrideUsed) {
+        Write-Host "Duration guard: -MaxDurationSeconds=$MaxDurationSeconds override applied (mode=$GuardMode, gate=$($guard.MeasuredKind), limit=$($guard.Limit)s)." -ForegroundColor Yellow
+    }
+    Write-Host ("Duration guard: mode={0} gate={1} measured={2} limit={3}s -> {4}" -f $GuardMode, $guard.MeasuredKind, $guard.Measured, $guard.Limit, $(if ($guard.Allowed) { 'OK' } else { 'REFUSED' })) -ForegroundColor DarkCyan
+    if (-not $guard.Allowed) { throw $guard.Message }
+    return $guard
 }
 
 # Resolve + log the model/media-resolution launch config first, before any download happens, so
@@ -112,6 +178,13 @@ if ($VideoScout) {
         # the API -- the opposite of what that warning says. Rather than special-case the shared
         # launch-config helper for a route it doesn't know about, print the correction here.
         Write-Host "NOTE: on the SDK route (this run), -MediaResolution IS sent to the Gemini API and IS enforced -- the CLI warning above does not apply here." -ForegroundColor DarkCyan
+
+        # Duration guard (SDK route): the URL goes STRAIGHT to the paid API with no yt-dlp download, so
+        # this pre-flight probe is the ONLY guard on this path (there is no download-time backstop --
+        # nothing downloads). Runs after the offset validation and the route backstop above. This route
+        # is video mode by definition; $haveStart marks a range run (gated on slice length).
+        [void](Assert-DurationGuard -Url $Url -GuardMode 'video' -HasRange:$haveStart -RangeStart $StartOffset -RangeEnd $EndOffset)
+
         $sdkScript = Join-Path $PSScriptRoot 'gemini-video-sdk.js'
         $sdkArgs = @('--url', $Url, '--model', $Model, '--media-resolution', $MediaResolution)
         if ($Prompt) {
@@ -140,8 +213,7 @@ if ($VideoScout) {
 }
 
 # --- locate tools (PATH may be stale right after install / inside the app) -----
-$ytdlp = (Get-Command yt-dlp -ErrorAction SilentlyContinue).Source
-if (-not $ytdlp) { throw "yt-dlp not found on PATH. Restart your terminal after install, or run: winget install yt-dlp.yt-dlp" }
+$ytdlp = Get-YtDlpPath
 
 $gemini = (Get-Command gemini -ErrorAction SilentlyContinue).Source
 if (-not $gemini) {
@@ -158,44 +230,60 @@ if (-not $gemini) {
 $runDir = New-VideoScoutRunDir -BaseDir $OutDir
 $outTemplate = Join-Path $runDir "%(title)s.%(ext)s"
 
+# --- Duration guard (download/CLI path) ----------------------------------------
+# Reached only for transcript / audio / non-YouTube video / -NoFeed (the SDK route returned above).
+# A range NEVER reaches here (it always routes to SDK), so HasRange:$false. This runs BEFORE the
+# download and yields the resolved per-mode limit that the subordinate --match-filter uses below.
+$guardResult = Assert-DurationGuard -Url $Url -GuardMode $Mode -HasRange:$false
+
 # --- safety caps (shared across modes) -----------------------------------------
 # A single URL should never pull a whole playlist, an oversized file, or a multi-hour VOD.
 # These bound disk + cost and shrink the attack surface of a pasted link. Tune (?) as needed.
 $MaxFileSize = '600M'                       # (?) hard cap per download
-$MaxDuration = 5400                         # (?) seconds (90 min); longer videos are skipped
 $ytCommon = @(
     '--no-playlist',                        # one item only, even if the URL is a playlist
     '--max-filesize', $MaxFileSize,
-    '--match-filter', "duration < $MaxDuration"
+    # SUBORDINATE backstop to the pre-flight probe above (Assert-DurationGuard). It reuses the SAME
+    # resolved limit the probe just enforced ($guardResult.Limit) plus !is_live, and -- crucially --
+    # without a trailing '?' the comparison also rejects a MISSING/unknown duration (fail-closed;
+    # verified against yt-dlp's --help: the '?' suffix is the fail-OPEN one). This backstop may only
+    # ever REJECT what the probe already allowed (a source that changed between probe and download --
+    # TOCTOU, which is expected and fine), NEVER permit what the probe would refuse. If the two ever
+    # diverge, tighten HERE -- never loosen the probe to match (that is the predictVideoRoute drift trap).
+    '--match-filter', "duration < $($guardResult.Limit) & !is_live"
 )
 
 # --- per-mode yt-dlp invocation ------------------------------------------------
 Write-Host "Downloading ($Mode): $Url" -ForegroundColor Cyan
+# Capture yt-dlp's STDOUT (where the "does not pass filter" backstop line lands -- verified) via
+# Tee-Object so it still streams live while we retain it to build an accurate no-file message below.
+# stderr (progress) is left unpiped so it renders normally, not as red error records.
+$ytStdout = @()
 switch ($Mode) {
     'transcript' {
         & $ytdlp @ytCommon --restrict-filenames --skip-download --write-auto-subs --write-subs `
-            --sub-lang $Lang --convert-subs srt -o $outTemplate $Url
+            --sub-lang $Lang --convert-subs srt -o $outTemplate $Url | Tee-Object -Variable ytStdout
         $pattern = "*.srt"
     }
     'audio' {
-        & $ytdlp @ytCommon --restrict-filenames -x --audio-format mp3 -o $outTemplate $Url
+        & $ytdlp @ytCommon --restrict-filenames -x --audio-format mp3 -o $outTemplate $Url | Tee-Object -Variable ytStdout
         $pattern = "*.mp3"
     }
     'video' {
         & $ytdlp @ytCommon --restrict-filenames -f "bv*+ba/b" -S "res:720" `
-            --merge-output-format mp4 -o $outTemplate $Url
+            --merge-output-format mp4 -o $outTemplate $Url | Tee-Object -Variable ytStdout
         $pattern = "*.mp4"
     }
 }
+$ytStdoutText = ($ytStdout | Out-String)
 
 # --- find what THIS run produced (scoped to $runDir -- never a prior run's leftover) -----------
 $file = Get-RunOutputFile -RunDir $runDir -Pattern $pattern
 if (-not $file) {
-    throw "Download produced no $pattern file in this run's directory ($runDir). This run's " +
-          "directory is isolated (never shared with a prior run), so this is a genuine failure, " +
-          "not a stale-file mixup. For -Mode transcript this usually means the video has no " +
-          "captions/auto-subs available (try -Mode audio or -Mode video instead); for audio/video " +
-          "it means yt-dlp's download failed upstream -- check the yt-dlp output above."
+    # Accurate message: our own duration/live backstop declining the download ("does not pass filter")
+    # is NOT an upstream failure. Distinguish that from a transcript-with-no-captions result and from a
+    # genuine upstream download failure. See lib/get-duration-guard.ps1 (Resolve-NoFileMessage).
+    throw (Resolve-NoFileMessage -Mode $Mode -Pattern $pattern -RunDir $runDir -YtDlpStdout $ytStdoutText -Limit $guardResult.Limit)
 }
 
 Write-Host ""

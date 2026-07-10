@@ -51,3 +51,20 @@ Describe 'feed-gemini.ps1 offset refusal invariant' {
         $LASTEXITCODE | Should Not Be 0
     }
 }
+
+Describe 'feed-gemini.ps1 ordering: offsets validated BEFORE the duration probe' {
+    # The pre-flight probe reads $StartOffset/$EndOffset; it must never be the FIRST thing to touch
+    # them. Proof: an invalid offset pairing (or an offsets-on-non-SDK-route combo) throws the
+    # OFFSET / route-backstop error from the top-of-script validation -- never a probe/duration error.
+    # If the probe had run first it would surface a "Duration guard" / "could not determine" / "exceeds"
+    # message (and a network call) instead. All of these throw before any yt-dlp/probe invocation.
+    It 'a lone -StartOffset throws the offset error, not a duration/probe error' {
+        { & $feedGemini -Url $YT -VideoScout -StartOffset 10 } | Should Throw 'Both -StartOffset and -EndOffset are required'
+    }
+    It 'offsets on a non-SDK route throw the route-backstop error before any probe' {
+        { & $feedGemini -Url $YT -VideoScout -Mode transcript -StartOffset 10 -EndOffset 20 } | Should Throw 'only works on the SDK/YouTube route'
+    }
+    It 'the new -MaxDurationSeconds parameter does not reorder validation (offset error still first)' {
+        { & $feedGemini -Url $YT -VideoScout -StartOffset 10 -MaxDurationSeconds 600 } | Should Throw 'Both -StartOffset and -EndOffset are required'
+    }
+}
