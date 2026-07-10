@@ -61,11 +61,24 @@ refused('x'.repeat(MAX_TASK_LEN + 1), 'one over MAX_TASK_LEN');
 refused('Task-1', 'mixed case (uppercase T) — renderer canonicalizes to lowercase, so this is refused not folded');
 refused('MixedCase', 'interior uppercase');
 refused('ALLCAPS', 'all uppercase');
-refused('CON', 'uppercase reserved-device name — refused by the lowercase rule (not by any device-name special-case)');
-// "con" (lowercase) is ACCEPTED: this app never special-cases Windows reserved device names because
-// the "<repo>-<task>" prefix defeats the hazard — the worktree folder is "<repo>-con", never a bare
-// "con", so the reserved name is never the actual path. It is lowercase, so it passes the case rule.
-accepted('con', 'lowercase reserved-device name — safe because the <repo>- prefix means the folder is <repo>-con, never bare CON');
+refused('CON', 'uppercase reserved name — refused by the lowercase rule (before the device-name check even runs)');
+
+// --- Windows reserved DEVICE NAMES: the "<repo>-" prefix protects the worktree FOLDER, but NOT the
+//     branch ref agent/<task> — git can't create .git/refs/heads/agent/con on Windows (verified:
+//     `git branch agent/con` -> "cannot lock ref ... Invalid argument"). Reject the exact-match class.
+refused('con', 'reserved device name CON — would break the branch ref agent/con on Windows');
+refused('nul', 'reserved device name NUL');
+refused('aux', 'reserved device name AUX');
+refused('prn', 'reserved device name PRN');
+refused('com1', 'reserved device name COM1');
+refused('com9', 'reserved device name COM9');
+refused('lpt1', 'reserved device name LPT1');
+refused('lpt9', 'reserved device name LPT9');
+// Only an EXACT device name is rejected — longer names that merely CONTAIN one are fine.
+accepted('com', 'bare "com" is not a device name (a device name is com/lpt + one digit)');
+accepted('console', '"console" contains "con" but is not the reserved name');
+accepted('con-fig', '"con-fig" is not the bare reserved name');
+accepted('com10', '"com10" is not a device name (only com0-9 are)');
 
 // --- legitimate names pass unchanged (regression proof: identical path/branch as today) -----------
 accepted('search-bar', 'renderer-produced kebab slug');

@@ -345,7 +345,8 @@ async function refreshAgents() {
 // The task slug for an app-created worktree, whose folder is named "<repo>-<task>". Returns null
 // when the folder does NOT match that convention (a manually-created or foreign worktree): there is
 // then no app-derivable task name, and the remove path must never be handed an unvalidatable name
-// (finding M1). Callers use null to DISABLE the Remove control; displayNameOf() decides the label.
+// (finding M1). Callers treat a falsy result (null, or the '' from a degenerate "<repo>-" folder)
+// as non-removable and DISABLE the Remove control; displayNameOf() decides the label.
 function taskOf(wt) {
   const base = wt.path.split(/[\\/]/).pop();
   const repoName = state.repo.split(/[\\/]/).pop();
@@ -376,9 +377,9 @@ function renderAgentList() {
     // removable=false (non-<repo>-<task> folder) disables Remove rather than sending an
     // unvalidatable name to the main process (finding M1).
     const row = agentDom.buildAgentRow(document, {
-      colorClass: agentColorOf(wt), name: displayNameOf(wt), path: wt.path, removable: task !== null,
+      colorClass: agentColorOf(wt), name: displayNameOf(wt), path: wt.path, removable: !!task,
     });
-    if (task !== null) row.querySelector('.x').onclick = () => removeAgent(task);
+    if (task) row.querySelector('.x').onclick = () => removeAgent(task);
     list.appendChild(row);
   }
 }
@@ -395,7 +396,7 @@ function renderAgentGrid() {
     // wt.branch / wt.path are git-derived — build with safe DOM APIs, never innerHTML (finding #1).
     // removable=false disables the card's Remove button for non-<repo>-<task> folders (finding M1).
     const card = agentDom.buildAgentCard(document, {
-      colorClass: agentColorOf(wt), branchText: displayNameOf(wt), path: wt.path, removable: task !== null,
+      colorClass: agentColorOf(wt), branchText: displayNameOf(wt), path: wt.path, removable: !!task,
     });
     card.querySelectorAll('[data-act]').forEach((b) => {
       b.onclick = () => {
@@ -406,7 +407,7 @@ function renderAgentGrid() {
         else if (act === 'scout') openInAppTerminal({ worktree: wt.path, role: 'codebase-scout', cli: 'claude' });
         else if (act === 'code') cc.openVscode(wt.path);
         else if (act === 'term') cc.openTerminal(wt.path);
-        else if (act === 'rm') { if (task !== null) removeAgent(task); } // disabled button won't fire; guard anyway
+        else if (act === 'rm') { if (task) removeAgent(task); } // disabled button won't fire; guard anyway
       };
     });
     grid.appendChild(card);

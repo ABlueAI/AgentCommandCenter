@@ -53,6 +53,22 @@ function validateTask(task) {
         'separators (/ \\), "..", a leading dash, and control characters.',
     };
   }
+  // Windows reserved DEVICE NAMES (con, prn, aux, nul, com0-9, lpt0-9). The "<repo>-" prefix keeps
+  // the worktree FOLDER (<repo>-con) safe — but the branch ref agent/<task> has NO such prefix, and
+  // git writes a loose ref lock file .git/refs/heads/agent/<task>.lock. On Windows a reserved base
+  // name is reserved regardless of extension, so `git worktree add -b agent/con` fails hard with
+  // "cannot lock ref 'refs/heads/agent/con': ... Invalid argument" (verified empirically; note
+  // `git check-ref-format` itself calls agent/con VALID — ref syntax legality is not the same as
+  // Windows createability). Reject the whole class up front with a clear message rather than let it
+  // surface as a cryptic git error. Only an EXACT match is a device name: "com"/"console"/"con-fig"
+  // are fine (a device name is the bare word, optionally com/lpt + a single digit).
+  if (/^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/.test(task)) {
+    return {
+      ok: false,
+      error: `Task name "${task}" is a Windows reserved device name, so git cannot create the ` +
+        `branch ref agent/${task}. Choose another name.`,
+    };
+  }
   return { ok: true, task };
 }
 
