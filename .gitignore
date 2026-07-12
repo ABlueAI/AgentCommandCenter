@@ -27,9 +27,10 @@ Vibe Kanban/
 # Downloaded media (feed-gemini.ps1 output) — context fuel, not source
 media/
 
-# Reviewer diff artifact (written into a worktree for the read-only Reviewer to read)
+# Reviewer diff artifacts (written into a worktree for the read-only Reviewer to read). The wildcard
+# also covers the delta diffs (.agent-review-delta.diff etc.) -- all are local, never committable.
 .agent-review.diff
+.agent-review*.diff
 
 # Vendored minified ML bundles — too large for git and trigger false-positive secret scans
 app/renderer/vendor/transformers.web.min.js
-.agent-review*.diff
