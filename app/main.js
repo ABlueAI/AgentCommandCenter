@@ -19,7 +19,7 @@ const { buildVideoScoutArgs } = require('./video-scout-args');
 const { validateTask } = require('./task-name');
 // Navigation-lockdown decisions (deny window.open / off-app navigation) and the shell-free launcher
 // arg builders. Both dependency-free + unit-tested (nav-guard.test.js / launchers.test.js).
-const { decideWindowOpen, decideNavigation } = require('./nav-guard');
+const { decideWindowOpen, decideNavigation, refusalLine } = require('./nav-guard');
 const { openVscodeSpec, openTerminalSpec } = require('./launchers');
 
 // ---- tunable defaults (marked ? — change to taste) --------------------------
@@ -154,17 +154,26 @@ function createWindow() {
   // to our own entry document. Pure decisions live in nav-guard.js. This is the app's only
   // BrowserWindow (the board is a separately-launched desktop app, not a webview here).
   const ENTRY_URL = pathToFileURL(entryPath).toString();
+  // Surface every denial through the same main-error -> renderer channel the launcher %-path refusal
+  // uses (refuse-visibly rule): a blocked navigation/popup must never be a silent no-op. refusalLine
+  // strips control chars + truncates the (attacker-influenced) URL so this can't become a log sink.
+  const sendRefusal = (line) => { if (win && !win.isDestroyed()) win.webContents.send('main-error', line); };
   win.webContents.setWindowOpenHandler(({ url }) => {
     const d = decideWindowOpen(url);
     if (d.externalUrl) shell.openExternal(d.externalUrl);
+    sendRefusal(refusalLine('window.open', url, !!d.externalUrl));
     return { action: d.action };
   });
-  const guardNav = (e, url) => {
+  const guardNav = (label) => (e, url) => {
     const d = decideNavigation(url, ENTRY_URL);
-    if (!d.allow) { e.preventDefault(); if (d.externalUrl) shell.openExternal(d.externalUrl); }
+    if (!d.allow) {
+      e.preventDefault();
+      if (d.externalUrl) shell.openExternal(d.externalUrl);
+      sendRefusal(refusalLine(label, url, !!d.externalUrl));
+    }
   };
-  win.webContents.on('will-navigate', guardNav);
-  win.webContents.on('will-redirect', guardNav);
+  win.webContents.on('will-navigate', guardNav('will-navigate'));
+  win.webContents.on('will-redirect', guardNav('will-redirect'));
 }
 
 app.whenReady().then(() => {
