@@ -21,10 +21,13 @@ function New-VideoScoutRunDir {
         [Parameter(Mandatory = $true)][string]$BaseDir
     )
     if (-not (Test-Path -LiteralPath $BaseDir)) { New-Item -ItemType Directory -Path $BaseDir | Out-Null }
-    # Timestamp keeps run dirs human-sortable for manual inspection; the process ID guarantees
-    # uniqueness even if two runs somehow start in the same millisecond on the same machine.
+    # Timestamp keeps run dirs human-sortable for manual inspection; the PID + a short random suffix
+    # guarantee uniqueness even when two runs start in the same millisecond IN THE SAME PROCESS (the
+    # PID alone does not -- e.g. two calls back-to-back from one script or test run). This delivers the
+    # "guaranteed-unique" promise in this file's synopsis.
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
-    $runDir = Join-Path $BaseDir "run-$stamp-$PID"
+    $suffix = [Guid]::NewGuid().ToString('N').Substring(0, 8)
+    $runDir = Join-Path $BaseDir "run-$stamp-$PID-$suffix"
     New-Item -ItemType Directory -Path $runDir | Out-Null
     return $runDir
 }

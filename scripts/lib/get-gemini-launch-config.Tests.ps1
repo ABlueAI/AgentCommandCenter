@@ -48,3 +48,25 @@ Describe 'Resolve-GeminiLaunchConfig' {
         $result.Warning | Should Match '-Mode transcript/audio'
     }
 }
+
+Describe 'Resolve-MediaResolutionLog: log what ACTUALLY happened per route (finding 6)' {
+    It 'SDK route: reports the tier as APPLIED (sent + enforced), not merely requested' {
+        $line = Resolve-MediaResolutionLog -MediaResolution 'HIGH' -Route 'sdk'
+        $line | Should Match 'HIGH'
+        $line | Should Match 'APPLIED'
+        $line | Should Not Match 'NOT APPLIED'
+    }
+    It 'CLI route: reports the tier as NOT APPLIED (requested but dropped), naming the reason' {
+        $line = Resolve-MediaResolutionLog -MediaResolution 'MEDIUM' -Route 'cli'
+        $line | Should Match 'MEDIUM'
+        $line | Should Match 'NOT APPLIED'
+        $line | Should Match 'no media-resolution flag'
+    }
+    It 'the CLI line is not mistakable for the applied line (it never claims the tier is in force)' {
+        $cli = Resolve-MediaResolutionLog -MediaResolution 'LOW' -Route 'cli'
+        $cli | Should Not Match 'enforced'
+    }
+    It 'rejects an unknown route (only sdk/cli are valid)' {
+        { Resolve-MediaResolutionLog -MediaResolution 'LOW' -Route 'rest' } | Should Throw
+    }
+}

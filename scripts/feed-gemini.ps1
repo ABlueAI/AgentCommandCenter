@@ -44,6 +44,13 @@ param(
     # it is a documented standalone entry point.
     [ValidateRange(0, 86400)][int]$StartOffset = -1,
     [ValidateRange(0, 86400)][int]$EndOffset = -1,
+    # (?) Explicit override of the mode-aware duration limit, in whole seconds. No silent bypass: when
+    # provided it REPLACES the applicable limit (the source cap, or the range-slice cap) and is logged
+    # at run time. ValidateRange starts at 1 so an EXPLICIT `-MaxDurationSeconds 0` is rejected at bind
+    # time (0 is not a meaningful cap -- it would refuse everything); the unbound DEFAULT stays 0,
+    # which validation does not touch, and means "unset -> use the per-mode defaults in
+    # lib/get-duration-guard.ps1". (Reviewer finding 5: kill the ambiguous explicit-0 sentinel.)
+    [ValidateRange(1, 86400)][int]$MaxDurationSeconds = 0,
     [switch]$NoFeed,
     [switch]$VideoScout
 )
@@ -68,6 +75,19 @@ if ($haveStart -and ($EndOffset -le $StartOffset)) {
 if ($haveStart -and -not $VideoScout) {
     throw "A time range (-StartOffset/-EndOffset) is only valid with -VideoScout on the SDK/YouTube route. Remove the offsets, or add -VideoScout with a YouTube URL in video mode."
 }
+
+# --- pre-flight duration guard machinery ---------------------------------------------------------
+# ORDERING (load-bearing): the probe/guard functions are dot-sourced here but INVOKED only later, at
+# the call sites tagged "Duration guard" -- and every one of those sites runs AFTER the offset
+# validation just above (and, on the SDK route, after the route backstop). The probe must never be
+# the first thing to touch unvalidated offsets, or it would become the code path that first trusts
+# raw input. The IO (Get-YtDlpPath / Invoke-DurationProbe / Assert-DurationGuard) lives in
+# lib/invoke-duration-probe.ps1 -- extracted so it is loadable + unit-testable without running this
+# script (see invoke-duration-probe.Tests.ps1); it dot-sources the pure decision logic in
+# lib/get-duration-guard.ps1, so Resolve-DurationGuard / Resolve-NoFileMessage are available here too.
+# Assert-DurationGuard reads $ProbeTimeoutSec and $MaxDurationSeconds from THIS (caller) scope.
+. (Join-Path $PSScriptRoot 'lib\invoke-duration-probe.ps1')
+$ProbeTimeoutSec = 60   # (?) hard cap on the metadata probe; a hung/slow probe REFUSES, never proceeds.
 
 # Resolve + log the model/media-resolution launch config first, before any download happens, so
 # every run records what tier it used at the top of the Logs tab output.
@@ -107,11 +127,17 @@ if ($VideoScout) {
     }
 
     if ($sourceRoute.Route -eq 'sdk') {
-        # Correct the CLI-oriented warning Resolve-GeminiLaunchConfig printed above (line ~54):
-        # on THIS route -MediaResolution is a real generationConfig field, sent and enforced by
-        # the API -- the opposite of what that warning says. Rather than special-case the shared
-        # launch-config helper for a route it doesn't know about, print the correction here.
-        Write-Host "NOTE: on the SDK route (this run), -MediaResolution IS sent to the Gemini API and IS enforced -- the CLI warning above does not apply here." -ForegroundColor DarkCyan
+        # Route-definitive media-resolution log: on THIS route -MediaResolution is a real
+        # generationConfig field, sent and enforced by the API -- the opposite of the CLI-oriented
+        # warning Resolve-GeminiLaunchConfig printed up top. Log what ACTUALLY happens (finding 6).
+        Write-Host (Resolve-MediaResolutionLog -MediaResolution $MediaResolution -Route 'sdk') -ForegroundColor DarkCyan
+
+        # Duration guard (SDK route): the URL goes STRAIGHT to the paid API with no yt-dlp download, so
+        # this pre-flight probe is the ONLY guard on this path (there is no download-time backstop --
+        # nothing downloads). Runs after the offset validation and the route backstop above. This route
+        # is video mode by definition; $haveStart marks a range run (gated on slice length).
+        [void](Assert-DurationGuard -Url $Url -GuardMode 'video' -HasRange:$haveStart -RangeStart $StartOffset -RangeEnd $EndOffset)
+
         $sdkScript = Join-Path $PSScriptRoot 'gemini-video-sdk.js'
         $sdkArgs = @('--url', $Url, '--model', $Model, '--media-resolution', $MediaResolution)
         if ($Prompt) {
@@ -140,8 +166,7 @@ if ($VideoScout) {
 }
 
 # --- locate tools (PATH may be stale right after install / inside the app) -----
-$ytdlp = (Get-Command yt-dlp -ErrorAction SilentlyContinue).Source
-if (-not $ytdlp) { throw "yt-dlp not found on PATH. Restart your terminal after install, or run: winget install yt-dlp.yt-dlp" }
+$ytdlp = Get-YtDlpPath
 
 $gemini = (Get-Command gemini -ErrorAction SilentlyContinue).Source
 if (-not $gemini) {
@@ -158,44 +183,63 @@ if (-not $gemini) {
 $runDir = New-VideoScoutRunDir -BaseDir $OutDir
 $outTemplate = Join-Path $runDir "%(title)s.%(ext)s"
 
+# --- Duration guard (download/CLI path) ----------------------------------------
+# Reached only for transcript / audio / non-YouTube video / -NoFeed (the SDK route returned above).
+# A range NEVER reaches here (it always routes to SDK), so HasRange:$false. This runs BEFORE the
+# download and yields the resolved per-mode limit that the subordinate --match-filter uses below.
+$guardResult = Assert-DurationGuard -Url $Url -GuardMode $Mode -HasRange:$false
+
 # --- safety caps (shared across modes) -----------------------------------------
 # A single URL should never pull a whole playlist, an oversized file, or a multi-hour VOD.
 # These bound disk + cost and shrink the attack surface of a pasted link. Tune (?) as needed.
 $MaxFileSize = '600M'                       # (?) hard cap per download
-$MaxDuration = 5400                         # (?) seconds (90 min); longer videos are skipped
 $ytCommon = @(
     '--no-playlist',                        # one item only, even if the URL is a playlist
     '--max-filesize', $MaxFileSize,
-    '--match-filter', "duration < $MaxDuration"
+    # SUBORDINATE backstop to the pre-flight probe above (Assert-DurationGuard). It reuses the SAME
+    # resolved limit the probe just enforced ($guardResult.Limit) plus !is_live. A trailing '?' is
+    # deliberately omitted because that suffix is BELIEVED to be the fail-OPEN one -- i.e. its
+    # absence is believed to also reject a MISSING/unknown duration (fail-closed). That belief is
+    # UNVERIFIED against a live yt-dlp and is NOT load-bearing: the pre-flight probe already REFUSES a
+    # null/unknown duration before anything downloads (Resolve-DurationGuard step 3), so by the time
+    # this filter runs the duration is known and this clause can only ever RE-REJECT -- a source that
+    # changed between probe and download (TOCTOU, expected and fine). It must NEVER permit what the
+    # probe would refuse; if the two ever diverge, tighten HERE, never loosen the probe to match.
+    '--match-filter', "duration < $($guardResult.Limit) & !is_live"
 )
 
 # --- per-mode yt-dlp invocation ------------------------------------------------
 Write-Host "Downloading ($Mode): $Url" -ForegroundColor Cyan
+# Capture yt-dlp's STDOUT (where the "does not pass filter" backstop line lands -- verified) via
+# Tee-Object so it still streams live while we retain it to build an accurate no-file message below.
+# stderr (progress) is left unpiped so it renders normally, not as red error records.
+$ytStdout = @()
 switch ($Mode) {
+    # `--` terminates option parsing so a URL beginning with '-' can't be read as a flag (finding 7).
     'transcript' {
         & $ytdlp @ytCommon --restrict-filenames --skip-download --write-auto-subs --write-subs `
-            --sub-lang $Lang --convert-subs srt -o $outTemplate $Url
+            --sub-lang $Lang --convert-subs srt -o $outTemplate -- $Url | Tee-Object -Variable ytStdout
         $pattern = "*.srt"
     }
     'audio' {
-        & $ytdlp @ytCommon --restrict-filenames -x --audio-format mp3 -o $outTemplate $Url
+        & $ytdlp @ytCommon --restrict-filenames -x --audio-format mp3 -o $outTemplate -- $Url | Tee-Object -Variable ytStdout
         $pattern = "*.mp3"
     }
     'video' {
         & $ytdlp @ytCommon --restrict-filenames -f "bv*+ba/b" -S "res:720" `
-            --merge-output-format mp4 -o $outTemplate $Url
+            --merge-output-format mp4 -o $outTemplate -- $Url | Tee-Object -Variable ytStdout
         $pattern = "*.mp4"
     }
 }
+$ytStdoutText = ($ytStdout | Out-String)
 
 # --- find what THIS run produced (scoped to $runDir -- never a prior run's leftover) -----------
 $file = Get-RunOutputFile -RunDir $runDir -Pattern $pattern
 if (-not $file) {
-    throw "Download produced no $pattern file in this run's directory ($runDir). This run's " +
-          "directory is isolated (never shared with a prior run), so this is a genuine failure, " +
-          "not a stale-file mixup. For -Mode transcript this usually means the video has no " +
-          "captions/auto-subs available (try -Mode audio or -Mode video instead); for audio/video " +
-          "it means yt-dlp's download failed upstream -- check the yt-dlp output above."
+    # Accurate message: our own duration/live backstop declining the download ("does not pass filter")
+    # is NOT an upstream failure. Distinguish that from a transcript-with-no-captions result and from a
+    # genuine upstream download failure. See lib/get-duration-guard.ps1 (Resolve-NoFileMessage).
+    throw (Resolve-NoFileMessage -Mode $Mode -Pattern $pattern -RunDir $runDir -YtDlpStdout $ytStdoutText -Limit $guardResult.Limit)
 }
 
 Write-Host ""
@@ -261,7 +305,9 @@ $geminiCwd = Split-Path $OutDir -Parent
 Push-Location $geminiCwd
 try {
     # -MediaResolution is intentionally NOT passed here: the gemini CLI has no flag for it on the
-    # -p path (see lib/get-gemini-launch-config.ps1). Only -m/$Model is a real CLI knob today.
+    # -p path (see lib/get-gemini-launch-config.ps1). Only -m/$Model is a real CLI knob today. Record
+    # what ACTUALLY happened -- requested-but-dropped, not silently logged as in force (finding 6).
+    Write-Host (Resolve-MediaResolutionLog -MediaResolution $MediaResolution -Route 'cli') -ForegroundColor Yellow
     if (Test-Path -LiteralPath $geminiJs) {
         $pArg = ConvertTo-NodeCliArg -Arg "$Prompt @$($file.FullName)"
         & $nodeExe $geminiJs -m $Model -p $pArg
