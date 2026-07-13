@@ -103,3 +103,11 @@ mic-only permission; local audio processing.
 - Native modules in Electron are painful (use prebuilt `@lydell/node-pty`). Audio avoids natives
   entirely (WASM/WebGPU).
 - `GEMINI_API_KEY` set via `setx`. Node TLS fixed (`NODE_EXTRA_CA_CERTS` for the 2026 LE root).
+- **`yt-dlp` on PATH is a HARD dependency of the video-scout, including the SDK/YouTube route.** That
+  route sends the URL straight to the Gemini API and downloads nothing, but it still runs a metadata-
+  only `yt-dlp` probe (duration + is_live) as its ONLY pre-flight duration guard. Missing yt-dlp =
+  the run is REFUSED by design (fail-closed), not silently skipped. Install: `winget install
+  yt-dlp.yt-dlp`, then restart the terminal so PATH refreshes.
+- **Tests.** Node side: `npm test` in `app/`. PowerShell side: `powershell -NoProfile -ExecutionPolicy
+  Bypass -File scripts\run-pester.ps1` runs every `*.Tests.ps1` under `scripts/` and exits non-zero on
+  any failure (requires the Pester module).

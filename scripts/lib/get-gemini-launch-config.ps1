@@ -46,7 +46,29 @@ function Resolve-GeminiLaunchConfig {
     [PSCustomObject]@{
         Model           = $Model
         MediaResolution = $MediaResolution
-        LogLine         = "Gemini launch config -> model: $Model | media resolution: $MediaResolution (requested; see warning)"
+        LogLine         = "Gemini launch config -> model: $Model | media resolution: $MediaResolution (requested; applied only on the SDK route -- see the per-route line below)"
         Warning         = $warning
     }
+}
+
+<#
+.SYNOPSIS
+  The route-definitive media-resolution log line: what ACTUALLY happened, not what was requested.
+.DESCRIPTION
+  The up-front launch-config log is printed before the route is known, so it can only say "requested".
+  Once feed-gemini.ps1 resolves the route it must record the truth (Reviewer finding 6):
+    - sdk: -MediaResolution IS sent to the Gemini API (generationConfig.mediaResolution) and enforced.
+    - cli: the `gemini -p` CLI has no media-resolution flag, so the value is NOT applied -- the run
+      log must SAY it was dropped rather than leave the "requested" line looking like it took effect.
+  Pure string builder; feed-gemini.ps1 does the Write-Host.
+#>
+function Resolve-MediaResolutionLog {
+    param(
+        [Parameter(Mandatory)][string]$MediaResolution,
+        [Parameter(Mandatory)][ValidateSet('sdk', 'cli')][string]$Route
+    )
+    if ($Route -eq 'sdk') {
+        return "Media resolution: $MediaResolution -- APPLIED (SDK route: sent to the Gemini API as generationConfig.mediaResolution and enforced)."
+    }
+    return "Media resolution: requested $MediaResolution -- NOT APPLIED (CLI route: the 'gemini -p' CLI has no media-resolution flag; see lib/get-gemini-launch-config.ps1)."
 }

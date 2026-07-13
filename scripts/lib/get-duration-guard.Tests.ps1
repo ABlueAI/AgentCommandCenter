@@ -2,8 +2,11 @@
 .SYNOPSIS
   Pester tests for the mode-aware duration guard (lib/get-duration-guard.ps1).
 .DESCRIPTION
-  Pure decision logic only -- no network, no yt-dlp, no API key. The actual probe (Invoke-DurationProbe
-  in feed-gemini.ps1) is thin IO over these functions; the policy that matters is all here.
+  Pure decision logic only -- no network, no yt-dlp, no API key. The probe IO that feeds these
+  functions (Get-YtDlpPath / Invoke-DurationProbe / Assert-DurationGuard) now lives in
+  lib/invoke-duration-probe.ps1 and is tested directly in invoke-duration-probe.Tests.ps1 (probe
+  parsing, timeout, fault, override logging) plus feed-gemini.Tests.ps1 (end-to-end SDK-route
+  refusal). This file covers only the pure allow/deny policy.
   Run: Invoke-Pester -Path scripts\lib\get-duration-guard.Tests.ps1
 #>
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -79,6 +82,26 @@ Describe 'Resolve-DurationGuard: -MaxDurationSeconds override (accepted + flagge
     }
     It 'reports OverrideUsed = false when no override is given' {
         (Resolve-DurationGuard -Mode video -DurationSeconds 100).OverrideUsed | Should Be $false
+    }
+}
+
+Describe 'Resolve-DurationGuard: non-positive + boundary durations (finding 4 -- kill the 0 fail-open)' {
+    It 'REFUSES a reported 0-second duration as unknown (0 must NOT pass the size gate)' {
+        $r = Resolve-DurationGuard -Mode video -DurationSeconds 0
+        $r.Allowed | Should Be $false
+        $r.Refusal | Should Be 'unknown-duration'
+    }
+    It 'REFUSES a negative duration as unknown' {
+        (Resolve-DurationGuard -Mode video -DurationSeconds -5).Refusal | Should Be 'unknown-duration'
+    }
+    It 'ALLOWS a duration exactly at the limit (boundary is inclusive: 5400 is not > 5400)' {
+        (Resolve-DurationGuard -Mode video -DurationSeconds 5400).Allowed | Should Be $true
+    }
+    It 'REFUSES one second over the limit' {
+        (Resolve-DurationGuard -Mode video -DurationSeconds 5401).Refusal | Should Be 'exceeds-limit'
+    }
+    It 'ALLOWS the smallest positive (1s) -- the ceil of a sub-second source' {
+        (Resolve-DurationGuard -Mode video -DurationSeconds 1).Allowed | Should Be $true
     }
 }
 

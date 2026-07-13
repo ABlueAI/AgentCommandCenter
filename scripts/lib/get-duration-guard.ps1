@@ -93,13 +93,17 @@ function Resolve-DurationGuard {
             "Refusing: this is a LIVE stream (is_live) with no bounded duration, which cannot be safely " +
             "capped. Live inputs are not analyzed. (mode=$Mode)")
     }
-    # 3. No duration reported (private / age-gated / geo-blocked / unavailable). Fail closed -- this is
-    #    the "never proceed on an unprobed input" rule, and it applies to range runs too.
-    if ($null -eq $DurationSeconds) {
+    # 3. No usable duration: null (private / age-gated / geo-blocked / unavailable) OR a non-positive
+    #    value. A reported 0 or negative is NOT a real length and must NEVER slip through the size gate
+    #    below (0 -gt limit is false, which would fail OPEN) -- treat it as unknown and refuse. Fail
+    #    closed -- the "never proceed on an unprobed input" rule, which applies to range runs too.
+    #    (Reviewer finding 4: this is the one real fail-open seam; the probe parser also maps <=0 to
+    #    $null, so this is defense-in-depth at the decision layer.)
+    if ($null -eq $DurationSeconds -or $DurationSeconds -le 0) {
         return & $refuse 'unknown-duration' (
             "Refusing: could not determine the video's duration (private, age-gated, geo-blocked, or " +
-            "otherwise unavailable). The guard fails closed and will not analyze an input whose length is " +
-            "unknown. (mode=$Mode, limit=${limit}s$ov)")
+            "otherwise unavailable, or reported as non-positive). The guard fails closed and will not " +
+            "analyze an input whose length is unknown. (mode=$Mode, limit=${limit}s$ov)")
     }
     # 4. Known, non-live source: apply the size gate for this kind.
     if ($measured -gt $limit) {

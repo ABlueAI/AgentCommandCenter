@@ -14,6 +14,79 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $feedGemini = Join-Path $here 'feed-gemini.ps1'
 $YT = 'https://youtu.be/aqz-KE-bpKQ'
 
+# End-to-end harness for the SDK route (Reviewer finding 1): run the REAL script and prove that when
+# the probe reports an over-limit / live / undeterminable source, the SDK route THROWS the guard's
+# refusal and NEVER reaches `& node` (the paid call). No network, no API key.
+#
+# What is real vs. stubbed: route resolution, Assert-DurationGuard, Resolve-DurationGuard, the throw,
+# and the `& node` gate all run for real inside feed-gemini.ps1. Only two things are shadowed:
+#   - the probe SUBPROCESS -- injected at the Start-Job/Receive-Job layer (a compiled .exe stub is
+#     blocked by this machine's Application Control policy, and a .cmd routed through cmd.exe mis-
+#     parses the probe's '%(duration)s|%(is_live)s' arg, so stubbing the subprocess is the reliable
+#     way to feed a deterministic probe line);
+#   - `node` -- a tripwire that drops a marker file iff it is ever invoked.
+# A dummy yt-dlp.cmd is placed on PATH only so the script's Get-YtDlpPath resolves; it is never run
+# (Start-Job is shadowed). Global overrides are set up and torn down per call so they never leak into
+# the offset/ordering tests below (which throw before the probe anyway).
+$e2eDir = Join-Path ([System.IO.Path]::GetTempPath()) ("feed-e2e-" + [Guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $e2eDir -Force | Out-Null
+$e2eMarker = Join-Path $e2eDir 'node-was-reached.txt'
+Set-Content -LiteralPath (Join-Path $e2eDir 'yt-dlp.cmd') -Value "@echo off`r`n" -Encoding ASCII  # dummy; never executed
+
+function Invoke-SdkRouteWithStub {
+    param([string]$ProbeLine, [switch]$EmptyProbe)
+    Remove-Item -LiteralPath $e2eMarker -Force -ErrorAction SilentlyContinue
+    $global:E2EReceive = if ($EmptyProbe) { $null } else { $ProbeLine }
+    $global:E2EMarker = $e2eMarker
+    function global:Start-Job   { [PSCustomObject]@{ Id = 1 } }
+    function global:Wait-Job    { $true }
+    function global:Receive-Job { if ($null -ne $global:E2EReceive) { $global:E2EReceive } }
+    function global:Stop-Job    { }
+    function global:Remove-Job  { }
+    function global:node        { Set-Content -LiteralPath $global:E2EMarker -Value 'reached' }  # tripwire
+    $saved = $env:PATH
+    $env:PATH = "$e2eDir;$saved"
+    $threw = $false; $msg = ''
+    try {
+        try { & $feedGemini -Url $script:YT -VideoScout -Mode video 2>$null | Out-Null }
+        catch { $threw = $true; $msg = [string]$_.Exception.Message }
+    }
+    finally {
+        $env:PATH = $saved
+        Remove-Item Function:\Start-Job, Function:\Wait-Job, Function:\Receive-Job, Function:\Stop-Job, Function:\Remove-Job, Function:\node -ErrorAction SilentlyContinue
+        Remove-Item Variable:\E2EReceive, Variable:\E2EMarker -ErrorAction SilentlyContinue
+    }
+    $reached = Test-Path -LiteralPath $e2eMarker
+    return [PSCustomObject]@{ Threw = $threw; Message = $msg; NodeReached = $reached }
+}
+
+Describe 'feed-gemini.ps1 SDK-route duration enforcement (end-to-end, stub yt-dlp -- finding 1)' {
+    It 'REFUSES an over-limit source and NEVER reaches node (the paid call)' {
+        $r = Invoke-SdkRouteWithStub -ProbeLine '99999|False'
+        $r.Threw | Should Be $true
+        $r.Message | Should Match 'exceeds'
+        $r.NodeReached | Should Be $false
+    }
+    It 'REFUSES a live source (is_live) and never reaches node' {
+        $r = Invoke-SdkRouteWithStub -ProbeLine '100|True'
+        $r.Threw | Should Be $true
+        $r.Message | Should Match 'LIVE'
+        $r.NodeReached | Should Be $false
+    }
+    It 'REFUSES an empty/unknown probe result and never reaches node (fail-closed)' {
+        $r = Invoke-SdkRouteWithStub -EmptyProbe
+        $r.Threw | Should Be $true
+        $r.Message | Should Match 'could not determine'
+        $r.NodeReached | Should Be $false
+    }
+}
+
+Describe 'feed-gemini.ps1 -MaxDurationSeconds explicit-0 is rejected at bind time (finding 5)' {
+    It 'throws a parameter-binding error on an explicit -MaxDurationSeconds 0' {
+        { & $feedGemini -Url $YT -MaxDurationSeconds 0 } | Should Throw 'MaxDurationSeconds'
+    }
+}
+
 Describe 'feed-gemini.ps1 offset refusal invariant' {
 
     # 1a — a lone offset is refused (never "ignored, whole video analyzed").
@@ -46,9 +119,20 @@ Describe 'feed-gemini.ps1 offset refusal invariant' {
     }
 
     # Non-zero exit code: the throw must surface as a real refusal when run as a script file.
+    # Start-Process -Wait -PassThru gives a deterministic .ExitCode; capturing $LASTEXITCODE from a
+    # nested `powershell ... 2>$null` is racy in PS 5.1 (the child's stderr can surface in the parent
+    # as a NativeCommandError before the exit code is read).
     It 'exits non-zero (not 0) when a lone offset is passed' {
-        & powershell -NoProfile -NoLogo -ExecutionPolicy Bypass -File $feedGemini -Url $YT -VideoScout -StartOffset 10 2>$null
-        $LASTEXITCODE | Should Not Be 0
+        $errFile = [System.IO.Path]::GetTempFileName()
+        $outFile = [System.IO.Path]::GetTempFileName()
+        try {
+            $p = Start-Process -FilePath 'powershell' -PassThru -Wait -WindowStyle Hidden `
+                -RedirectStandardError $errFile -RedirectStandardOutput $outFile `
+                -ArgumentList @('-NoProfile', '-NoLogo', '-ExecutionPolicy', 'Bypass', '-File', $feedGemini,
+                    '-Url', $YT, '-VideoScout', '-StartOffset', '10')
+            $p.ExitCode | Should Not Be 0
+        }
+        finally { Remove-Item $errFile, $outFile -Force -ErrorAction SilentlyContinue }
     }
 }
 
@@ -68,3 +152,6 @@ Describe 'feed-gemini.ps1 ordering: offsets validated BEFORE the duration probe'
         { & $feedGemini -Url $YT -VideoScout -StartOffset 10 -MaxDurationSeconds 600 } | Should Throw 'Both -StartOffset and -EndOffset are required'
     }
 }
+
+# best-effort cleanup of the compiled stub yt-dlp.exe + node tripwire (Pester 3.4 has no AfterAll)
+Remove-Item -LiteralPath $e2eDir -Recurse -Force -ErrorAction SilentlyContinue
