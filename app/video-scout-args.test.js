@@ -126,6 +126,62 @@ function assert(condition, label) {
   assert(typeof error === 'string', 'REFUSES a boolean analysisMode');
 }
 
+// --- analysisMode compatibility: null and '' are LEGACY, not invalid — same omitted/video
+// fallback as omitting the field entirely, no error, no -Mode arg. (Omitted-field coverage
+// already exists via `buildVideoScoutArgs({})`; these two prove null and '' specifically, since
+// the fail-closed gate above must treat them as "not given," not as an invalid explicit value.)
+{
+  const { args, notes, error } = buildVideoScoutArgs({ analysisMode: null });
+  assert(error === null, 'analysisMode=null produces no error (legacy fallback, not a refusal)');
+  assert(!args.includes('-Mode'), 'analysisMode=null pushes no -Mode arg');
+  assert(notes.every(n => !/REJECTED/.test(n)), 'analysisMode=null is never logged as rejected');
+}
+{
+  const { args, notes, error } = buildVideoScoutArgs({ analysisMode: '' });
+  assert(error === null, "analysisMode='' produces no error (legacy fallback, not a refusal)");
+  assert(!args.includes('-Mode'), "analysisMode='' pushes no -Mode arg");
+  assert(notes.every(n => !/REJECTED/.test(n)), "analysisMode='' is never logged as rejected");
+}
+{
+  // Same compatibility guarantee holds when a range rides along: null/'' still resolve to the
+  // video default, so a valid YouTube range is still accepted (mirrors the omitted-mode case).
+  const YT_COMPAT = 'https://youtu.be/aqz-KE-bpKQ';
+  const { error: errNull } = buildVideoScoutArgs({ videoUrl: YT_COMPAT, analysisMode: null, startOffset: 10, endOffset: 20 });
+  assert(errNull === null, 'analysisMode=null + a valid YouTube range is accepted (video fallback)');
+  const { error: errEmpty } = buildVideoScoutArgs({ videoUrl: YT_COMPAT, analysisMode: '', startOffset: 10, endOffset: 20 });
+  assert(errEmpty === null, "analysisMode='' + a valid YouTube range is accepted (video fallback)");
+}
+
+// --- analysisMode crash-safety: the refusal path must never THROW, even for values on which
+// JSON.stringify itself throws (BigInt, cyclic objects) — the fail-closed gate must not itself
+// become an unhandled exception surfacing through the PTY. -------------------------------------
+{
+  let result;
+  let threw = false;
+  try {
+    result = buildVideoScoutArgs({ analysisMode: 10n });
+  } catch {
+    threw = true;
+  }
+  assert(!threw, 'REFUSES a BigInt analysisMode without throwing (JSON.stringify(10n) itself throws)');
+  assert(result && typeof result.error === 'string', 'a BigInt analysisMode still produces a visible error string');
+  assert(result && !result.args.includes('-Mode'), 'no -Mode arg pushed for a BigInt analysisMode');
+}
+{
+  const cyclic = { mode: 'video' };
+  cyclic.self = cyclic; // JSON.stringify(cyclic) throws "Converting circular structure to JSON"
+  let result;
+  let threw = false;
+  try {
+    result = buildVideoScoutArgs({ analysisMode: cyclic });
+  } catch {
+    threw = true;
+  }
+  assert(!threw, 'REFUSES a cyclic-object analysisMode without throwing');
+  assert(result && typeof result.error === 'string', 'a cyclic-object analysisMode still produces a visible error string');
+  assert(result && !result.args.includes('-Mode'), 'no -Mode arg pushed for a cyclic-object analysisMode');
+}
+
 // --- analysisMode: an invalid mode plus an otherwise-valid range REFUSES, and emits no
 // route note implying a route will run, and no offset args ---------------------------
 {

@@ -45,6 +45,19 @@ function isValidOffset(n) {
   return typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= MAX_OFFSET_SECONDS;
 }
 
+// Describe an arbitrary, untrusted value for an error/log message WITHOUT risking a throw.
+// JSON.stringify throws on a BigInt (TypeError: Do not know how to serialize a BigInt) and on a
+// cyclic object (TypeError: Converting circular structure to JSON) — either could arrive here as
+// an explicit-invalid analysisMode over IPC, and a refusal path must never itself crash. Falls
+// back to a short, safe `<typeof: Tag>` description when stringification isn't possible.
+function describeInvalidValue(value) {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return `<${typeof value}: ${Object.prototype.toString.call(value)}>`;
+  }
+}
+
 // Predict which invocation path feed-gemini.ps1 will choose, for Logs-tab visibility. Mirrors
 // Resolve-VideoSourceRoute (scripts/lib/get-video-source-route.ps1): YouTube URL + video mode →
 // SDK (URL straight into generateContent, no download, no 20MB cap, mediaResolution enforced);
@@ -93,8 +106,9 @@ function buildVideoScoutArgs({ videoModel, mediaResolution, analysisMode, videoU
   const modeGiven = analysisMode !== undefined && analysisMode !== null && analysisMode !== '';
   const modeValid = typeof analysisMode === 'string' && VALID_ANALYSIS_MODES.has(analysisMode);
   if (modeGiven && !modeValid) {
-    error = `Invalid analysis mode ${JSON.stringify(analysisMode)}. Allowed modes: transcript, audio, video. Launch refused.`;
-    notes.push(`analysisMode=${JSON.stringify(analysisMode)} REJECTED (not in VALID_ANALYSIS_MODES allowlist) — launch refused, no route will run`);
+    const described = describeInvalidValue(analysisMode);
+    error = `Invalid analysis mode ${described}. Allowed modes: transcript, audio, video. Launch refused.`;
+    notes.push(`analysisMode=${described} REJECTED (not in VALID_ANALYSIS_MODES allowlist) — launch refused, no route will run`);
     return { args, notes, error };
   }
 
