@@ -36,6 +36,15 @@ layer: whiteboard, quick widgets, and CRM data.
 - Feature branches always; `main` is merge-only. One invariant per branch.
 - Reviewer verdicts are read **verbatim** at the merge gate — never summarized.
 - Failure paths must **refuse visibly** — never silently downgrade/drop.
+- Error/exception paths must exit cleanly with a visible message — never crash,
+  segfault, or emit a native assertion (see K5: libuv `UV_HANDLE_CLOSING` on
+  the 503 path). This is the refuse-visibly rule applied to failure paths, not
+  just guard paths.
+- Diff transport for gates: always pin the diff to a gitignored
+  `.agent-review*.diff` via `git diff main...<sha> --output=` — inline paste has
+  failed on every gate attempted (3×+). Until R1 (in-app diff+merge-gate UI)
+  exists, treat R1 not as post-ship polish but as the standing fix for the
+  project's most reliable recurring failure mode.
 - The fence gate is sacred: business-widget credentials live main-process-side
   via `safeStorage`, never enter any PTY env, never reach the renderer beyond
   display data. No agent role gets email/CRM access by default.
@@ -87,9 +96,10 @@ layer: whiteboard, quick widgets, and CRM data.
 ### Current execution order
 
 The July 14 Handoff #4 queue is the live order: documentation sync and human
-merge gate → `analysisMode` fail-closed → TTS bootstrap → STT bootstrap → audio
-permission/error hardening → V2 TLDR → timestamped transcripts → P13/K5 → V1 →
-V5 → V3 → V4 → remaining Day 2/3 work → full functional ship-check → R15
+merge gate → `analysisMode` fail-closed → V5a per-run manifest → V2 TLDR →
+TTS bootstrap → STT bootstrap → audio permission/error hardening → timestamped
+transcripts → P13/K5 → V1 → V5(b–d; V5a already landed) → V3 → V4 →
+remaining Day 2/3 work → full functional ship-check → R15
 fork/replacement evaluation. Each arrow is a clean checkpoint; runtime items
 remain separate one-invariant branches and receive their own Reviewer gate.
 
@@ -532,8 +542,8 @@ remain separate one-invariant branches and receive their own Reviewer gate.
 > Pester 5 and break the entire gate; pin `-MaximumVersion 4.99.99` and fix
 > the hint. The gate must not carry its own self-destruct instruction.
 > (b) **`docs/PROJECT-STATE.md` still documents `GEMINI_API_KEY` via `setx`**
-> — the exact PTY-env key-exposure pattern CLAUDE.md §8 forbids; point at the
-> in-app secure entry + add the `setx` removal command.
+> — the exact PTY-env key-exposure pattern `AGENTS.md` and `CLAUDE.md` §8
+> forbid; point at the in-app secure entry + add the `setx` removal command.
 > **Batch (one branch, one gate):** positive-control test for the E2E node
 > tripwire (one allow-case asserting `NodeReached = $true` — turns the proof
 > from reasoned-correct to observed-correct) · step-0 slice refusal in
@@ -606,6 +616,7 @@ remain separate one-invariant branches and receive their own Reviewer gate.
 > retention sweep. Not urgent (files are small), but do it before the tool runs
 > unattended for long stretches. **Durable resolution is V5(c); K1 remains open
 > until manifest-scoped retention and media cleanup are implemented and gated.**
+> The manifest itself lands earlier at V5a.
 
 > **K2. Clipboard copy-paste** — flaky in panes generally, and likely **never
 > covered for the video-scout pane at all** (the original fix targeted the
@@ -698,6 +709,9 @@ live testing — these are NEEDS, not wants; V1 blocks the tool's whole point):*
 > live as `run-<timestamp>-<PID>-<guid>` directories, are identifiable only by
 > folder name, and are viewable only through Explorer.
 >
+> **Sequenced ahead of the rest of V5 — see queue. Rationale: the manifest is
+> the K1 fix and the backfill target shrinks the sooner this lands.**
+>
 > **(a) Per-run manifest.** Write a versioned JSON manifest inside each new run
 > directory containing: run ID, source URL, video title, mode, route, model,
 > media resolution as actually APPLIED, slice offsets when present, start/end
@@ -755,6 +769,12 @@ live testing — these are NEEDS, not wants; V1 blocks the tool's whole point):*
 > awaiting-input / done from PTY output; Windows toast + tray badge + optional
 > sound. The app should interrupt Blue, not require polling it. Pattern-mine:
 > `parallel-code` status heuristics + CI-settle notifications.
+>
+> **DEPRIORITIZED vs the July-10 Tier-1 ranking** — the functional-acceptance
+> push (make visible controls work) takes precedence through the current queue.
+> **REVISIT TRIGGER:** if pane-babysitting during the audio (K7/K8) or V3/V4
+> branches becomes a friction point, R4 is cheap relative to its rank and should
+> jump the queue. This is a conscious deferral, not an oversight.
 
 **TIER 2 — daily-driver comfort:**
 

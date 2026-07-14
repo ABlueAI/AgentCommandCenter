@@ -47,33 +47,37 @@ productivity OUT of scope.
    `analysisMode` silently defaults to the costliest `video` pass. Branch
    `feature/analysismode-failclosed`, small, fail-closed + visible refusal +
    tests. Last silent-overspend path.
-2. **TTS bootstrap repair** on `feature/tts-bootstrap-fix`: fix the Kokoro
+2. **V5a — per-run manifest writer (K1 durable fix, backfill-shrinking).**
+   Scripts-side, one-invariant branch. Write the versioned manifest for every
+   accepted run and provide the best-effort backfill target before more
+   index-less run directories accumulate.
+3. **V2 — TLDR in analysis output** (scripts-only prompt-template change;
+   cheap, Blue wants it now). Keep it on its own one-invariant branch at this
+   queue position.
+4. **TTS bootstrap repair** on `feature/tts-bootstrap-fix`: fix the Kokoro
    environment contract, make initialization failures visible, add bootstrap
    tests, and live-test voice/speed/stop on WebGPU and WASM.
-3. **STT bootstrap repair** on `feature/stt-bootstrap-fix`: make the
+5. **STT bootstrap repair** on `feature/stt-bootstrap-fix`: make the
    Transformers/ONNX browser dependency graph reproducible, restore a tracked
    runtime path, pin dictation to the pane where recording started, add tests,
    and prove visible recording/transcribing states plus focused-pane insertion.
-4. **Audio permission hardening** after both engines work: enforce trusted
+6. **Audio permission hardening** after both engines work: enforce trusted
    origin + audio-only media permission and surface module-level errors in Logs.
-5. **V2 — TLDR in analysis output** (scripts-only prompt-template change;
-   cheap, Blue wants it now). Keep it on its own one-invariant branch at this
-   queue position.
-6. **9c — timestamps in transcript output** (enables cheap-pass → pick range
+7. **9c — timestamps in transcript output** (enables cheap-pass → pick range
    → expensive-slice).
-7. **P13 chores**: Pester version pin in `run-pester.ps1` + `PROJECT-STATE.md`
+8. **P13 chores**: Pester version pin in `run-pester.ps1` + `PROJECT-STATE.md`
    `setx` doc fix. **K5**: fix the libuv crash on the SDK 503 path + add
    503 retry/backoff (new bug from live testing — daily annoyance).
-8. **V1 — pane output readable/copyable** (maximize, scroll/wrap, reliable
+9. **V1 — pane output readable/copyable** (maximize, scroll/wrap, reliable
    copy, open-report button). Blue rates this REQUIRED for functionality —
    the analysis is currently trapped in the viewport. Interim: run-dir report
    files on disk have the full text.
-9. **V5 — Analysis Library.** Add per-run manifests, an in-app run list,
-   report retention, manifest-scoped media cleanup, and the V3 follow-up hook.
-   **V1 is a prerequisite for V5's in-app report reader.**
-10. **V3 — pre-analysis direction + follow-up Q&A.**
-11. **V4 — multi-slice in one run** (spec first; touches the guard).
-12. **Day 2/3 work** per `BLUE-HELM-MASTER-STATUS.md`, then ship-check and R15's
+10. **V5(b–d) — Analysis Library (V5a already landed).** Add the in-app run
+    list, report retention, manifest-scoped media cleanup, and the V3 follow-up
+    hook. **V1 is a prerequisite for V5's in-app report reader.**
+11. **V3 — pre-analysis direction + follow-up Q&A.**
+12. **V4 — multi-slice in one run** (spec first; touches the guard).
+13. **Day 2/3 work** per `BLUE-HELM-MASTER-STATUS.md`, then ship-check and R15's
     time-boxed orchestrator fork/replacement evaluation.
 
 ## The process rules (non-negotiable — each one exists because it failed once)
@@ -100,8 +104,18 @@ productivity OUT of scope.
 - **Full Electron process restart** to load renderer/main changes.
 - **Refuse visibly, never silently.** No warn-and-continue, no silent
   downgrade, no guard that permits what it cannot evaluate.
+- **Error/exception paths must exit cleanly with a visible message** — never
+  crash, segfault, or emit a native assertion (see K5: libuv
+  `UV_HANDLE_CLOSING` on the 503 path). This is the refuse-visibly rule applied
+  to failure paths, not just guard paths.
+- **Diff transport for gates:** always pin the diff to a gitignored
+  `.agent-review*.diff` via `git diff main...<sha> --output=` — inline paste has
+  failed on every gate attempted (3×+). Until R1 (in-app diff+merge-gate UI)
+  exists, treat R1 not as post-ship polish but as the standing fix for the
+  project's most reliable recurring failure mode.
 - **Log what happened, not what was requested.**
-- **Never `setx` API keys** (PTY env inheritance); CLAUDE.md §8.
+- **Never `setx` API keys** (PTY env inheritance); `AGENTS.md` and
+  `CLAUDE.md` §8.
 - **Recurring lesson (7 instances):** a finding's severity is a function of
   the threat model in force when written; the guard tends to live one layer
   away from the consequence. Re-check LOWs after any threat-model change.
