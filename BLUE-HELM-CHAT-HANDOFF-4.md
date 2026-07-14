@@ -38,9 +38,9 @@ productivity OUT of scope.
 - **Platform routing:** ChatGPT desktop with GPT-5.6 is the primary planning,
   research, review, and project-state layer. Claude Code remains the primary
   coding layer. Codex CLI/IDE is deferred and separate.
-- ⚠ **The Electron app process may still be running PRE-merge code.** A full
-  restart (quit incl. tray, verify no lingering process, relaunch) is
-  REQUIRED before the live tests below.
+- **Restart rule retained:** fully restart Electron after any future renderer or
+  main-process change before live validation. Tests A–E are already complete;
+  this handoff contains no remaining live-test procedure.
 
 ## Immediate work queue (in order)
 1. **#9 — analysisMode fail-closed** (`feed-gemini.ps1:87`): invalid
@@ -48,7 +48,7 @@ productivity OUT of scope.
    `feature/analysismode-failclosed`, small, fail-closed + visible refusal +
    tests. Last silent-overspend path.
 2. **V2 — TLDR in analysis output** (scripts-only prompt-template change;
-   cheap, Blue wants it now) — can pair with #9's branch window.
+   cheap, Blue wants it now). Keep it on its own one-invariant branch after #9.
 3. **9c — timestamps in transcript output** (enables cheap-pass → pick range
    → expensive-slice).
 4. **P13 chores**: Pester version pin in `run-pester.ps1` + `PROJECT-STATE.md`

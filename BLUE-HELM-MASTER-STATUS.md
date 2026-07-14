@@ -1,17 +1,20 @@
 # Blue Helm — Master Status & Runbook
 ### ⭐ Open THIS file first. The other briefs are deep reference only.
 
-**What this is:** the single ordered to-do list across the whole project,
-organized into a **Fri→Sun ship plan** (target: shippable by Monday). Inside
-each day, do items top-to-bottom. Done work is listed at the bottom with no
-numbers.
+**What this is:** the current project-state source of truth plus the historical
+Fri→Sun execution plan that produced the present baseline. Use the July 14
+checkpoint and the latest handoff for current ordering. The dated Day 0–3
+sections remain as provenance and are not an active calendar promise.
 
-**⏱ SHIP GOAL:** everything green by end of Sunday → ship Monday. Heavy
-build Fri–Sat; Sunday is cleanup, merges, and final verification only.
+**⏱ CURRENT SHIP GOAL:** rebaseline the minimum daily-driver scope with Blue,
+then finish that scope over the next few days. Do not treat the expired Monday
+target in the historical plan as a current commitment.
 
 **The reference docs (open only when you need deep detail on a step):**
-- Video-scout / Gemini SDK detail → `BLUE-HELM-VIDEO-SCOUT.md`
-- Fence-security detail (WO-1…WO-7) → `BLUE-HELM-READ-FENCE-TEST-BRIEF.md`
+- Historical Video-scout / Gemini SDK detail →
+  `docs/source-material/2026-07-14-browser-transfer/expanded/files-1/BLUE-HELM-VIDEO-SCOUT.md`
+- Historical fence-security detail (WO-1…WO-7) →
+  `docs/source-material/2026-07-14-browser-transfer/expanded/files-1/BLUE-HELM-READ-FENCE-TEST-BRIEF.md`
 - Full audit findings → `AUDIT-REPORT.md` (in-repo, @ `fad5ebc`)
 
 **What we're building (one line):** a self-hosted "mission control" desktop app
@@ -162,21 +165,21 @@ layer: whiteboard, quick widgets, and CRM data.
 - Diagnosed the CLI's hard 20MB video wall → **SDK spike proved the fix and
   answered both cost questions** (LOW res cuts ~65%; section-scoping cuts ~81% of
   billing — both confirmed real)
-- **SDK migration built AND live-verified (merge-eligible):** 9-section brief
+- **SDK migration merged AND live-verified:** 9-section brief
   verified over SDK; YouTube→SDK routing with CLI fallback byte-for-byte
   unchanged; API key confirmed env-only (no key-file in merged code); per-run
   `usageMetadata` cost logging; `mediaResolution` enforced; section-offset params
   plumbed. **Live tests passed:** whole-video + a 2-min slice that billed exactly
   18.9% of tokens (proportional to duration) with content matching the slice;
   determinism confirmed (numbers reproduced exactly across two runs). 155 tests.
-- **Stale-transcript bug fixed (built, merge-eligible):** the CLI transcript/
+- **Stale-transcript bug fixed, merged, and live-verified:** the CLI transcript/
   audio path used to silently feed Gemini a leftover file from an unrelated prior
   run when a download produced nothing. Fixed by per-run subdirectory isolation
   (stale files structurally unreachable, not just timestamp-skipped); fix sits at
   the single point all three modes converge, so audio is covered too. Live-fired
   against the exact original trigger — now exits cleanly instead of substituting
   stale data. 202 assertions incl. a repro test.
-- **Section-select UI built (merge-eligible, July 8):** Start/End range inputs in
+- **Section-select UI built and merged (July 9):** Start/End range inputs in
   the video-scout modal (video mode only, hidden otherwise, cleared on modal
   open), accepting MM:SS / H:MM:SS / bare seconds → integer-seconds
   `-StartOffset`/`-EndOffset`. **Refusal-based validation, two independent
@@ -190,13 +193,13 @@ layer: whiteboard, quick widgets, and CRM data.
   green; dry-run proved all five failure classes refuse and valid paths spawn.
   **MERGED July 9** as `bf93993`. A post-merge Reviewer verdict (read verbatim)
   found the refuse-don't-downgrade invariant held only in the JS layer.
-- **Range-invariant hotfix built + committed `fad5ebc`:** `feed-gemini.ps1` now
+- **Range-invariant hotfix built, committed `fad5ebc`, and live-verified:** `feed-gemini.ps1` now
   throws on lone/mis-ordered offsets and wrong-route/non-VideoScout ranges (was
   warn-and-continue); `gemini-video-sdk.js` exits non-zero on lone flag / missing
   value / non-integer / bad order; renderer clears range inputs on leaving video
   mode + resets stale error state + logs any stale-range that slips through. The
   invariant now holds at EVERY spending layer. Tests green across 6 suites
-  (276/276). **Live verification (tests A–D) = Friday, items 5–8.** Two process
+  (276/276). **Live verification A–E is complete.** Two process
   lessons captured as standing rules: verbatim Reviewer reads at the gate;
   feature-branches-always.
 - **Deep read-only audit complete (`AUDIT-REPORT.md` @ `fad5ebc`):** 276/276
@@ -787,7 +790,10 @@ the Sunday ship-check (#16) are non-negotiable for a Monday ship.*
 
 ---
 
-## 🗺 SHIP PLAN AT A GLANCE
+## 🗺 HISTORICAL SHIP PLAN AT A GLANCE — NOT THE CURRENT QUEUE
+
+This block preserves the July 10 plan. Use the July 14 checkpoint and
+`BLUE-HELM-CHAT-HANDOFF-4.md` for current execution order.
 - **Day 0:** ✅ **COMPLETE** — `main` @ `91ca3b7`; both HIGHs merged; 205 tests wired + green.
 - **Day 1 (Fri):** live tests A–E ✅ → next: #9 analysisMode fail-closed → V2 TLDR → 9c timestamps. (9b ✅ merged @ `4da1572`.)
 - **Day 2 (Sat):** heavy build — 3 parallel panes: links, calculator, whiteboard.

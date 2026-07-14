@@ -2,8 +2,8 @@
 
 ## What this project is
 A self-hosted, multi-agent coding command center built on tools I already own —
-Codex + git worktrees, with an optional visual board layer (Vibe Kanban) and
-an optional second model agent (Codex CLI). The goal is to mirror the *workflow* of a
+Claude Code + git worktrees, with an optional visual board layer (Vibe Kanban)
+and a deferred second-opinion agent (Codex CLI/IDE). The goal is to mirror the *workflow* of a
 parallel-agent "vibe coding" setup — multiple agents working in parallel, planned and
 reviewed by me — WITHOUT paying for or routing through any third-party agent platform.
 
