@@ -15,5 +15,10 @@
 
 # Treat archives/images as binary (never normalize).
 *.zip binary
+*.docx binary
 *.png binary
 *.jpg binary
+
+# Preserve transferred source evidence byte-for-byte. Searchable archive
+# expansions remain normal text outside the originals/ directory.
+docs/source-material/**/originals/* binary
