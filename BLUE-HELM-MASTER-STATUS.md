@@ -636,18 +636,18 @@ orchestrator space matured fast — a dozen-plus open tools now do worktree-base
 parallel agents, and their common feature set is effectively the daily-driver
 spec. Roadmap below maps each goal to the OSS that provides it or proves it.
 
-**⚖️ STRATEGY — DECIDED by Blue, July 10: MINE, DON'T ADOPT.** Blue Helm's core
-stays Blue Helm's. The OSS orchestrators (`parallel-code`, `crystal`, Emdash,
-Claudette, Composio AO…) are treated as a **pattern mine**: study their session
-lifecycles, diff-review UX, kanban states, status-detection heuristics — then
-re-implement the good ones behind our own fence. **Never import their code,
-never adopt one, never switch.** The agent layer converges toward the field by
-learning; the security model and the Starboard business integration stay
-proprietary. (Scope note — Claude's interpretation, flagged as such: "never
-import" applies to the orchestrator layer. Neutral utility libraries —
-Excalidraw, dockview-core, DOMPurify, ripgrep — remain adoptable as whole,
-vetted deps per the standing rule; that's what "don't reinvent the wheel"
-buys us without ever pulling peer-orchestrator code into a key-holding app.)
+**⚖️ STRATEGY — updated by Blue, July 14: OWN THROUGH THE CORE BUILD, THEN
+EVALUATE.** Blue Helm's core remains ours while Handoff #4 and Day 1–3 are
+completed. During that work, OSS orchestrators (`parallel-code`, `crystal`,
+Emdash, Claudette, Composio AO…) are a pattern mine for session lifecycle,
+diff-review UX, kanban states, and status detection. R15 then time-boxes a real
+fork/replacement evaluation and may recommend keeping the core, replacing one
+bounded subsystem, or migrating/forking. No peer code enters the production
+branch and no migration begins without Blue's explicit post-evaluation
+approval. Credential boundaries and Starboard business-data controls remain
+ours under every option. Neutral utility libraries — Excalidraw,
+dockview-core, DOMPurify, ripgrep — remain adoptable as whole, vetted
+dependencies throughout.
 
 **SCOPE — DECIDED: daily driver = coding/agent orchestration + business ops
 (CRM, email, cost).** Personal productivity (notes, personal tasks, life

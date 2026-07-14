@@ -106,12 +106,12 @@ productivity OUT of scope.
   the threat model in force when written; the guard tends to live one layer
   away from the consequence. Re-check LOWs after any threat-model change.
 
-## OSS policy (Blue's decision, July 10)
-- **Orchestrator/agent layer: MINE, DON'T ADOPT.** Peer orchestrators
-  (`parallel-code`, `crystal`, Emdash, Claudette, Composio AO) are a pattern
-  mine — study session lifecycle / diff-review UX / kanban states / status
-  detection, re-implement behind our fence. Never import their code, never
-  adopt, never switch.
+## OSS policy (updated by Blue, July 14)
+- **Orchestrator/agent layer: own through the core build.** Peer orchestrators
+  (`parallel-code`, `crystal`, Emdash, Claudette, Composio AO) remain a pattern
+  mine while the Handoff #4 and Day 1–3 queues are completed. R15 then performs
+  a one-working-day fork/replacement evaluation. No peer code enters the
+  production branch and no migration starts without Blue's separate approval.
 - **Utility libraries: adopt as whole, vetted deps** (Excalidraw/esbuild is
   the model; dockview-core, DOMPurify, ripgrep class qualify). Vet: license ·
   `npm audit` · maintenance · pinned · telemetry checked/disabled.
