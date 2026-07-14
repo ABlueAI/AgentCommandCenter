@@ -47,23 +47,34 @@ productivity OUT of scope.
    `analysisMode` silently defaults to the costliest `video` pass. Branch
    `feature/analysismode-failclosed`, small, fail-closed + visible refusal +
    tests. Last silent-overspend path.
-2. **V2 — TLDR in analysis output** (scripts-only prompt-template change;
-   cheap, Blue wants it now). Keep it on its own one-invariant branch after #9.
-3. **9c — timestamps in transcript output** (enables cheap-pass → pick range
+2. **TTS bootstrap repair** on `feature/tts-bootstrap-fix`: fix the Kokoro
+   environment contract, make initialization failures visible, add bootstrap
+   tests, and live-test voice/speed/stop on WebGPU and WASM.
+3. **STT bootstrap repair** on `feature/stt-bootstrap-fix`: make the
+   Transformers/ONNX browser dependency graph reproducible, restore a tracked
+   runtime path, pin dictation to the pane where recording started, add tests,
+   and prove visible recording/transcribing states plus focused-pane insertion.
+4. **Audio permission hardening** after both engines work: enforce trusted
+   origin + audio-only media permission and surface module-level errors in Logs.
+5. **V2 — TLDR in analysis output** (scripts-only prompt-template change;
+   cheap, Blue wants it now). Keep it on its own one-invariant branch at this
+   queue position.
+6. **9c — timestamps in transcript output** (enables cheap-pass → pick range
    → expensive-slice).
-4. **P13 chores**: Pester version pin in `run-pester.ps1` + `PROJECT-STATE.md`
+7. **P13 chores**: Pester version pin in `run-pester.ps1` + `PROJECT-STATE.md`
    `setx` doc fix. **K5**: fix the libuv crash on the SDK 503 path + add
    503 retry/backoff (new bug from live testing — daily annoyance).
-5. **V1 — pane output readable/copyable** (maximize, scroll/wrap, reliable
+8. **V1 — pane output readable/copyable** (maximize, scroll/wrap, reliable
    copy, open-report button). Blue rates this REQUIRED for functionality —
    the analysis is currently trapped in the viewport. Interim: run-dir report
    files on disk have the full text.
-6. **V5 — Analysis Library.** Add per-run manifests, an in-app run list,
+9. **V5 — Analysis Library.** Add per-run manifests, an in-app run list,
    report retention, manifest-scoped media cleanup, and the V3 follow-up hook.
    **V1 is a prerequisite for V5's in-app report reader.**
-7. **V3 — pre-analysis direction + follow-up Q&A.**
-8. **V4 — multi-slice in one run** (spec first; touches the guard).
-9. **Day 2/3 work** per `BLUE-HELM-MASTER-STATUS.md`, then ship-check.
+10. **V3 — pre-analysis direction + follow-up Q&A.**
+11. **V4 — multi-slice in one run** (spec first; touches the guard).
+12. **Day 2/3 work** per `BLUE-HELM-MASTER-STATUS.md`, then ship-check and R15's
+    time-boxed orchestrator fork/replacement evaluation.
 
 ## The process rules (non-negotiable — each one exists because it failed once)
 - **Feature branches always; merge only to `main`; every branch gets its own

@@ -6,9 +6,18 @@ Fri→Sun execution plan that produced the present baseline. Use the July 14
 checkpoint and the latest handoff for current ordering. The dated Day 0–3
 sections remain as provenance and are not an active calendar promise.
 
-**⏱ CURRENT SHIP GOAL:** rebaseline the minimum daily-driver scope with Blue,
-then finish that scope over the next few days. Do not treat the expired Monday
-target in the historical plan as a current commitment.
+**⏱ CURRENT SHIP GOAL:** complete the entire current Handoff #4 queue, then all
+remaining Day 1–3 items, with every exposed platform control useful and
+functional. “Finished” means that complete, tested daily-driver checkpoint —
+not a permanent feature freeze. New improvements can still be added later as
+real use surfaces them. Do not treat the expired Monday target in the
+historical plan as a current commitment.
+
+**Functional acceptance rule:** a visible control must work end-to-end, show an
+honest in-progress state, and surface failure visibly. A dead button, silent
+module-load failure, unreachable output, or feature that exists only in code is
+not complete. Every included surface receives a human smoke test in addition to
+its automated gate before the current ship goal is called complete.
 
 **The reference docs (open only when you need deep detail on a step):**
 - Historical Video-scout / Gemini SDK detail →
@@ -32,11 +41,14 @@ layer: whiteboard, quick widgets, and CRM data.
   display data. No agent role gets email/CRM access by default.
 - Full Electron **process restart** to load renderer/main changes (not reload).
 - **OSS POLICY (Blue, July 10 — two layers):**
-  **(1) Orchestrator/agent layer — MINE, DON'T ADOPT.** Peer orchestrators are
-  a pattern mine (session lifecycle, diff-review UX, kanban states, status
-  detection): study, then re-implement behind our fence. Never import their
-  code, never adopt one, never switch. Security model + business integration
-  stay proprietary.
+  **(1) Orchestrator/agent layer — OWN THROUGH THE CORE BUILD.** Peer
+  orchestrators are a pattern mine during Handoff #4 and Day 1–3 execution:
+  study session lifecycle, diff-review UX, kanban states, and status detection,
+  then implement only what is needed behind our fence. Near the end of the
+  current completion plan, run R15's time-boxed fork/replacement evaluation.
+  No peer code enters the production branch and no migration begins without a
+  separate explicit human decision after that evaluation. Credential and
+  business-data boundaries remain ours regardless of the result.
   **(2) Utility libraries — adopt as whole, vetted deps** instead of building
   from scratch (Excalidraw/esbuild is the model; dockview-core, DOMPurify,
   ripgrep qualify). Vetting gate per dep: permissive license (MIT/Apache/BSD;
@@ -71,6 +83,15 @@ layer: whiteboard, quick widgets, and CRM data.
 - **Source recovery:** browser-era project files are retained under
   `docs/source-material/2026-07-14-browser-transfer/`, with untouched originals,
   expanded archive contents, hashes, and provenance.
+
+### Current execution order
+
+The July 14 Handoff #4 queue is the live order: documentation sync and human
+merge gate → `analysisMode` fail-closed → TTS bootstrap → STT bootstrap → audio
+permission/error hardening → V2 TLDR → timestamped transcripts → P13/K5 → V1 →
+V5 → V3 → V4 → remaining Day 2/3 work → full functional ship-check → R15
+fork/replacement evaluation. Each arrow is a clean checkpoint; runtime items
+remain separate one-invariant branches and receive their own Reviewer gate.
 
 ---
 
@@ -566,7 +587,10 @@ layer: whiteboard, quick widgets, and CRM data.
 > absent from `HEAD`, so fresh clones cannot load it at all. Fix on separate
 > `feature/tts-bootstrap-fix` and `feature/stt-bootstrap-fix` branches with
 > fail-visible initialization and bootstrap contract tests. Do not vendor or
-> rewrite model internals as part of these repairs.
+> rewrite model internals as part of these repairs. **Observed user behavior:**
+> clicking Dictate produces no visible recording or queued/transcribing state.
+> This is explained by STT failing before it publishes `window.ccSTT` and its
+> ready event; it is a bootstrap defect, not an after-stop transcription UX.
 
 > **K8 (VERIFIED, July 14). Audio integration hardening follows bootstrap.**
 > Dictation currently targets whichever pane is active when transcription
@@ -772,7 +796,22 @@ live testing — these are NEEDS, not wants; V1 blocks the tool's whole point):*
 > **R14. PR/CI status watcher.** Poll GitHub checks for pushed branches →
 > R2 notification when they settle.
 
-**THE PATTERN MINE (study only — their code never enters this repo):**
+> **R15. Time-boxed orchestrator fork/replacement evaluation — after Handoff #4
+> and Day 1–3 are functionally complete.** Recommendation: cap this at one
+> working day and make no production-code adoption during the evaluation.
+> Source-Scout shortlists the strongest maintained candidates; compare Windows
+> support, Claude Code and multi-CLI routing, worktree isolation, PTY/terminal
+> quality, session restore, diff/review gates, extensibility, license,
+> maintenance, telemetry, credential boundaries, dependency weight, and
+> migration cost. Run the leading candidate only in a disposable sandbox with
+> no provider credentials or business data. Deliver three explicit options:
+> keep Blue Helm and mine selected patterns; replace one bounded subsystem; or
+> fork/migrate the orchestrator. Each option must include estimated effort,
+> security regressions, data/config migration, features gained/lost, and a
+> rollback path. Blue makes a separate go/no-go decision before any adoption.
+
+**THE PATTERN MINE (study-only through the core build; R15 may recommend a
+later, explicitly approved change):**
 `johannesjo/parallel-code` (MIT; Electron; the closest feature-set match),
 `stravu/crystal`, Emdash (YC W26, open source; strongest worktree
 setup/teardown story), Claudette (MIT, Tauri/Rust — architecture + UX ideas,
