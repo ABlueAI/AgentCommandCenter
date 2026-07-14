@@ -237,11 +237,11 @@ layer: whiteboard, quick widgets, and CRM data.
 > `main` (parts 1–3 landed: `feed-gemini.ps1` throws on lone/mis-ordered/
 > wrong-route offsets; `gemini-video-sdk.js` exits non-zero on bad argv;
 > renderer clears range on leaving video mode + resets stale error state).
-> The invariant now holds at every spending layer. What's LEFT is live
-> verification — tests A–D below — which needs real (small) spend and a full
-> restart, so it was deferred to here.
+> The invariant now holds at every spending layer. Live verification A–E was
+> subsequently completed; the procedures below are retained as the historical
+> test record, not pending work.
 
-> **4. FULL Electron restart — REQUIRED IF NOT ALREADY DONE post-merge.**
+> **4. HISTORICAL PREREQUISITE — full Electron restart (completed).**
 > `main` moved to `91ca3b7` + the test-runner chore; nothing below is valid
 > against a stale process. Quit fully incl. tray; confirm no lingering Electron
 > process (`Get-Process electron`); relaunch. Quick live checks if not yet run:
@@ -782,11 +782,11 @@ gate checks telemetry), `andyrewlee/awesome-agent-orchestrators` (the index).
 
 ---
 
-*Update rule: when an item is finished, move it to the DONE section (drop its
-number). Work the days in order; within a day, top-to-bottom. If a day runs
-long, push the lightest remaining item forward rather than skipping the security
-or verification gates — those are the ship-blockers. The Day-0 security gate and
-the Sunday ship-check (#16) are non-negotiable for a Monday ship.*
+*Historical July 10 update rule: completed items moved to DONE and the Day 0–3
+plan ran top-to-bottom without skipping security or verification gates. The old
+Sunday/Monday deadline is no longer active. Current work follows the July 14
+checkpoint and latest handoff; security, testing, and human merge gates remain
+non-negotiable regardless of the rebaselined ship date.*
 
 ---
 
