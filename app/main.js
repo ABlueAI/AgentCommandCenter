@@ -569,15 +569,19 @@ ipcMain.handle('pty-start', (_e, opts) => {
     // [string]$Url parameter literally. Nothing user-controlled is ever parsed by a shell.
     const script = path.join(SCRIPTS_DIR, 'feed-gemini.ps1');
     args.push('-File', script, '-Url', url, '-VideoScout');
-    // Gemini model / media-resolution: validate against the allowlists in video-scout-args.js
-    // and push only what passes — an invalid or missing value is omitted so feed-gemini.ps1's
-    // own default applies. Log the POST-VALIDATION outcome for every field (sent / omitted /
-    // rejected) so the Logs tab never implies a choice was honored when it was silently dropped.
+    // Gemini model / media-resolution / analysis mode / time range: validate against the
+    // allowlists in video-scout-args.js. videoModel and mediaResolution push only what passes —
+    // an invalid or missing value there is omitted so feed-gemini.ps1's own default applies. An
+    // EXPLICIT invalid analysisMode is NOT omitted-to-default: it REFUSES the launch (see
+    // video-scout-args.js) rather than silently falling through to the costliest full-video pass.
+    // Log the POST-VALIDATION outcome for every field (sent / omitted / rejected) so the Logs tab
+    // never implies a choice was honored when it was silently dropped.
     const { args: geminiArgs, notes: geminiNotes, error: geminiError } = buildVideoScoutArgs(opts);
     for (const note of geminiNotes) tlog(`pty-start: video-scout ${note}`);
-    // A user-requested time range that fails validation REFUSES the launch (visible error) rather
-    // than silently downgrading to a whole-video run. Same refusal pattern as the two checks above;
-    // enforced here in main so a bypassed/modified renderer can't skip it. See video-scout-args.js.
+    // A user-requested time range, or an explicit invalid analysisMode, that fails validation
+    // REFUSES the launch (visible error) rather than silently downgrading to a whole-video run.
+    // Same refusal pattern as the two checks above; enforced here in main so a bypassed/modified
+    // renderer can't skip it. See video-scout-args.js.
     if (geminiError) {
       if (win && !win.isDestroyed()) win.webContents.send('main-error', `Video Scout launch refused: ${geminiError}`);
       return { ok: false, error: geminiError };
