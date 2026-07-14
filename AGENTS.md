@@ -2,8 +2,8 @@
 
 ## What this project is
 A self-hosted, multi-agent coding command center built on tools I already own —
-Claude Code + git worktrees, with an optional visual board layer (Vibe Kanban) and
-an optional second model agent (Codex CLI). The goal is to mirror the *workflow* of a
+Claude Code + git worktrees, with an optional visual board layer (Vibe Kanban)
+and a deferred second-opinion agent (Codex CLI/IDE). The goal is to mirror the *workflow* of a
 parallel-agent "vibe coding" setup — multiple agents working in parallel, planned and
 reviewed by me — WITHOUT paying for or routing through any third-party agent platform.
 
@@ -12,7 +12,7 @@ helper scripts, the task-brief template, and the setup docs. It is the home base
 which I spin up parallel agents against *other* project repos on my machine.
 
 I am deliberately NOT using a paid agent platform (e.g., BridgeMind). Reasons: it would
-be a separate recurring bill on top of my existing Claude/OpenAI costs; the model calls
+be a separate recurring bill on top of my existing Codex/OpenAI costs; the model calls
 would run on their resold credit pool rather than my own plan; it's beta software built
 entirely by autonomous agents; and it would need broad access to my repos, API keys, and
 payment setup. Owning the stack is cheaper, fully portable, and safer.
@@ -22,12 +22,13 @@ payment setup. Owning the stack is cheaper, fully portable, and safer.
   appears, fall back to WSL2. Flag clearly when a step is failing specifically because of
   a Windows-vs-Unix path or shell difference — that's a known failure mode for agent
   tooling and worth naming explicitly rather than guessing around.
-- Claude Code is installed and already connected to GitHub.
-- Codex CLI is optional and may be added later as a second-opinion agent.
+- ChatGPT desktop is installed and connected to this local repository.
+- Claude Code is the primary coding tool and is connected to GitHub.
+- Codex CLI/IDE is optional and deferred as a second-opinion agent.
 - Helper scripts live in `scripts/` (PowerShell `.ps1` + bash `.sh` equivalents).
 
 ## Repository layout
-- `CLAUDE.md` — this brief; Claude Code reads it at the start of every session.
+- `AGENTS.md` — this brief; Codex reads it at the start of every session.
 - `README.md` — quick start.
 - `docs/SETUP-WINDOWS.md` — the full 6-phase setup, step by step.
 - `docs/WORKTREE-CHEATSHEET.md` — worktree mental model + the commands I actually use.
@@ -79,12 +80,12 @@ provider credentials in Windows user environment variables with `setx`.
    entry (or: `[Environment]::SetEnvironmentVariable('KEY_NAME', $null, 'User')`).
 
 ## Model routing (which agent does what)
-- ChatGPT desktop with GPT-5.6 is the primary planning, architecture, research,
-  review, and project-state layer.
-- Deep multi-file review, architecture, tricky bugs -> Claude Opus (strongest reasoning).
-- Fast iteration / implementation -> Claude Sonnet.
-- Claude Code remains the primary coding surface. Codex CLI/IDE is a deferred,
-  independent second-opinion option and never shares Claude's worktree.
+- ChatGPT desktop with GPT-5.6 handles most planning, architecture, research,
+  review, and project-state maintenance.
+- Claude Code is the primary builder: Sonnet for fast implementation and Opus
+  for deep review, architecture, and tricky bugs.
+- Codex CLI/IDE is deferred. If enabled later, it is an independent verifier or
+  fallback and never shares Claude Code's worktree.
 - I (human) stay the router and the final reviewer.
 
 ## Explicitly OUT OF SCOPE for now (deferred, with guardrails)
