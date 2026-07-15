@@ -34,30 +34,57 @@ $e2eMarker = Join-Path $e2eDir 'node-was-reached.txt'
 Set-Content -LiteralPath (Join-Path $e2eDir 'yt-dlp.cmd') -Value "@echo off`r`n" -Encoding ASCII  # dummy; never executed
 
 function Invoke-SdkRouteWithStub {
-    param([string]$ProbeLine, [switch]$EmptyProbe)
+    # -Mode / -OmitMode: pass a mode through to feed-gemini (or omit -Mode entirely, exercising the
+    #   bare -VideoScout video default -- the manifest must then record requestedMode=null).
+    # -NodeSucceeds: the node tripwire ALSO emits a realistic "[video-scout usage]" line and exit
+    #   code 0, so the V5a completed-outcome path can be proven end-to-end with zero network.
+    # Every call gets its own -OutDir under $e2eDir: the V5a manifest work means an ACCEPTED SDK
+    #   launch now creates a run directory, and tests must never write into the real downloads dir.
+    param([string]$ProbeLine, [switch]$EmptyProbe, [string]$Mode = 'video', [switch]$OmitMode, [switch]$NodeSucceeds)
     Remove-Item -LiteralPath $e2eMarker -Force -ErrorAction SilentlyContinue
+    $outDir = Join-Path $e2eDir ('out-' + [Guid]::NewGuid().ToString('N'))
     $global:E2EReceive = if ($EmptyProbe) { $null } else { $ProbeLine }
     $global:E2EMarker = $e2eMarker
+    $global:E2ENodeSucceeds = [bool]$NodeSucceeds
     function global:Start-Job   { [PSCustomObject]@{ Id = 1 } }
     function global:Wait-Job    { $true }
     function global:Receive-Job { if ($null -ne $global:E2EReceive) { $global:E2EReceive } }
     function global:Stop-Job    { }
     function global:Remove-Job  { }
-    function global:node        { Set-Content -LiteralPath $global:E2EMarker -Value 'reached' }  # tripwire
+    function global:node        {
+        Set-Content -LiteralPath $global:E2EMarker -Value 'reached'   # tripwire
+        if ($global:E2ENodeSucceeds) {
+            '[video-scout usage] prompt=100 (video=80 audio=10 text=10) output=50 total=150 model=stub mediaRes=MEDIUM'
+            $global:LASTEXITCODE = 0
+        }
+    }
     $saved = $env:PATH
     $env:PATH = "$e2eDir;$saved"
     $threw = $false; $msg = ''
     try {
-        try { & $feedGemini -Url $script:YT -VideoScout -Mode video 2>$null | Out-Null }
+        try {
+            if ($OmitMode) { & $feedGemini -Url $script:YT -VideoScout -OutDir $outDir 2>$null | Out-Null }
+            else { & $feedGemini -Url $script:YT -VideoScout -Mode $Mode -OutDir $outDir 2>$null | Out-Null }
+        }
         catch { $threw = $true; $msg = [string]$_.Exception.Message }
     }
     finally {
         $env:PATH = $saved
         Remove-Item Function:\Start-Job, Function:\Wait-Job, Function:\Receive-Job, Function:\Stop-Job, Function:\Remove-Job, Function:\node -ErrorAction SilentlyContinue
-        Remove-Item Variable:\E2EReceive, Variable:\E2EMarker -ErrorAction SilentlyContinue
+        Remove-Item Variable:\E2EReceive, Variable:\E2EMarker, Variable:\E2ENodeSucceeds -ErrorAction SilentlyContinue
     }
     $reached = Test-Path -LiteralPath $e2eMarker
-    return [PSCustomObject]@{ Threw = $threw; Message = $msg; NodeReached = $reached }
+    return [PSCustomObject]@{ Threw = $threw; Message = $msg; NodeReached = $reached; OutDir = $outDir }
+}
+
+# Read the single run manifest an e2e call produced (V5a): expects exactly one run dir in OutDir.
+function Get-E2ERunManifest {
+    param([string]$OutDir)
+    $runDirs = @(Get-ChildItem -LiteralPath $OutDir -Directory -ErrorAction SilentlyContinue)
+    if ($runDirs.Count -ne 1) { throw "expected exactly 1 run dir in $OutDir, found $($runDirs.Count)" }
+    $path = Join-Path $runDirs[0].FullName 'manifest.json'
+    if (-not (Test-Path -LiteralPath $path)) { throw "run dir $($runDirs[0].Name) has no manifest.json" }
+    Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
 }
 
 Describe 'feed-gemini.ps1 SDK-route duration enforcement (end-to-end, stub yt-dlp -- finding 1)' {
@@ -150,6 +177,79 @@ Describe 'feed-gemini.ps1 ordering: offsets validated BEFORE the duration probe'
     }
     It 'the new -MaxDurationSeconds parameter does not reorder validation (offset error still first)' {
         { & $feedGemini -Url $YT -VideoScout -StartOffset 10 -MaxDurationSeconds 600 } | Should Throw 'Both -StartOffset and -EndOffset are required'
+    }
+}
+
+Describe 'feed-gemini.ps1 V5a per-run manifest (end-to-end, stubbed probe/node -- zero network)' {
+
+    It 'an ACCEPTED SDK launch that the duration guard refuses leaves a manifest with outcome=refused' {
+        $r = Invoke-SdkRouteWithStub -ProbeLine '99999|False'
+        $r.Threw | Should Be $true
+        $r.NodeReached | Should Be $false
+        $m = Get-E2ERunManifest -OutDir $r.OutDir
+        $m.schemaVersion | Should Be 1
+        $m.route | Should Be 'sdk'
+        $m.videoScout | Should Be $true
+        $m.outcome | Should Be 'refused'
+        $m.reason | Should Match 'exceeds'
+        $m.finishedAt | Should Not Be $null
+        $m.usage | Should Be $null
+    }
+
+    It 'a successful SDK run finalizes completed, with the usage line parsed into the manifest' {
+        $r = Invoke-SdkRouteWithStub -ProbeLine '100|False' -NodeSucceeds
+        $r.Threw | Should Be $false
+        $r.NodeReached | Should Be $true
+        $m = Get-E2ERunManifest -OutDir $r.OutDir
+        $m.outcome | Should Be 'completed'
+        $m.reason | Should Be $null
+        $m.finishedAt | Should Not Be $null
+        $m.usage.promptTokens | Should Be 100
+        $m.usage.totalTokens | Should Be 150
+        # SDK route: media resolution is truly APPLIED, and the manifest says so.
+        $m.mediaResolutionRequested | Should Be 'MEDIUM'
+        $m.mediaResolutionApplied | Should Be 'MEDIUM'
+    }
+
+    It 'records requested-vs-applied mode truthfully (bare -VideoScout: requestedMode=null, appliedMode=video)' {
+        $r = Invoke-SdkRouteWithStub -ProbeLine '100|False' -NodeSucceeds -OmitMode
+        $m = Get-E2ERunManifest -OutDir $r.OutDir
+        $m.requestedMode | Should Be $null
+        $m.appliedMode | Should Be 'video'
+    }
+
+    It 'records an explicitly requested mode as both requested and applied' {
+        $r = Invoke-SdkRouteWithStub -ProbeLine '99999|False'   # refusal is fine; creation happens first
+        $m = Get-E2ERunManifest -OutDir $r.OutDir
+        $m.requestedMode | Should Be 'video'
+        $m.appliedMode | Should Be 'video'
+    }
+
+    It 'a CLI-route (transcript) guard refusal also leaves a refused manifest, with mediaResolutionApplied=null' {
+        $r = Invoke-SdkRouteWithStub -ProbeLine '99999|False' -Mode transcript
+        $r.Threw | Should Be $true
+        $r.NodeReached | Should Be $false
+        $m = Get-E2ERunManifest -OutDir $r.OutDir
+        $m.route | Should Be 'cli'
+        $m.appliedMode | Should Be 'transcript'
+        $m.outcome | Should Be 'refused'
+        $m.mediaResolutionApplied | Should Be $null   # CLI route: requested-but-NOT-applied
+        $m.mediaResolutionRequested | Should Be 'MEDIUM'
+    }
+
+    It 'a launch refused BEFORE acceptance (lone offset) creates NO run directory and NO manifest' {
+        $outDir = Join-Path $e2eDir ('out-' + [Guid]::NewGuid().ToString('N'))
+        { & $feedGemini -Url $YT -VideoScout -StartOffset 10 -OutDir $outDir } | Should Throw 'Both -StartOffset and -EndOffset are required'
+        # Not a library run: nothing may have been created for it.
+        @(Get-ChildItem -LiteralPath $outDir -Directory -ErrorAction SilentlyContinue).Count | Should Be 0
+    }
+
+    It 'the manifest file is UTF-8 without BOM and leaves no temp file in the run dir' {
+        $r = Invoke-SdkRouteWithStub -ProbeLine '100|False' -NodeSucceeds
+        $runDir = @(Get-ChildItem -LiteralPath $r.OutDir -Directory)[0].FullName
+        $bytes = [System.IO.File]::ReadAllBytes((Join-Path $runDir 'manifest.json'))
+        $bytes[0] | Should Be 0x7B
+        @(Get-ChildItem -LiteralPath $runDir -Filter 'manifest.json.tmp-*').Count | Should Be 0
     }
 }
 
