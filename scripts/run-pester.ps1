@@ -16,11 +16,11 @@
 param()
 $ErrorActionPreference = 'Stop'
 
-if (-not (Get-Module -ListAvailable -Name Pester)) {
-    Write-Error "Pester is not installed. Install with: Install-Module Pester -Scope CurrentUser"
+if (-not (Get-Module -ListAvailable -Name Pester | Where-Object { $_.Version -lt [version]'5.0.0' })) {
+    Write-Error "Pester 3.x or 4.x is required. Install the compatible version with: Install-Module Pester -RequiredVersion 3.4.0 -Scope CurrentUser"
     exit 2
 }
-Import-Module Pester -ErrorAction Stop
+Import-Module Pester -MaximumVersion 4.99.99 -ErrorAction Stop
 
 $root = $PSScriptRoot
 $suites = @(Get-ChildItem -Path $root -Recurse -Filter '*.Tests.ps1' | Sort-Object FullName)
