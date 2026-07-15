@@ -624,7 +624,10 @@ remain separate one-invariant branches and receive their own Reviewer gate.
 > absent from `HEAD`, so fresh clones cannot load it at all. Fix on separate
 > `feature/tts-bootstrap-fix` and `feature/stt-bootstrap-fix` branches with
 > fail-visible initialization and bootstrap contract tests. Do not vendor or
-> rewrite model internals as part of these repairs. **Observed user behavior:**
+> rewrite model internals as part of these repairs. **Tier: Standard-class** —
+> initialization and visible failure state; recoverable and non-destructive,
+> with no security, credential, cost-direction, or destructive surface.
+> **Observed user behavior:**
 > clicking Dictate produces no visible recording or queued/transcribing state.
 > This is explained by STT failing before it publishes `window.ccSTT` and its
 > ready event; it is a bootstrap defect, not an after-stop transcription UX.
@@ -635,6 +638,9 @@ remain separate one-invariant branches and receive their own Reviewer gate.
 > handler allows the broad `media` permission class without proving audio-only
 > scope or checking the requesting origin. Repair separately after K7 so
 > functionality and permission changes receive distinct Reviewer gates.
+> **Tier: Full-class.** K8 changes an Electron security boundary: trusted
+> origin and audio-only scope must be proved before granting media. It receives
+> whole-diff review and a delta pass after any FAIL; never fold it into K7.
 
 > **K1. Video download cleanup / auto-delete** — every run now creates a
 > `run-<timestamp>-<PID>` subdir under `downloads\` that is never cleaned up (a
