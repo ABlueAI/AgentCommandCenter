@@ -8,15 +8,22 @@
 // This is an ES module; it exposes a small API on window.ccTTS for the classic
 // app.js to call. Nothing here speaks automatically — the UI drives it.
 
-import { KokoroTTS, env } from './vendor/kokoro.web.js';
+import { KokoroTTS } from './vendor/kokoro.web.js';
+import { bootstrapModel } from './tts-bootstrap.js';
 
 // --- runtime config -----------------------------------------------------------
 // The model is fetched from Hugging Face on first run and cached by the browser
 // thereafter. The ONNX-runtime WASM is fetched from jsdelivr (transformers.js's
 // default) rather than vendored, because Chromium blocks fetch() of file:// URLs
 // from a file:// page — the CDN path is the reliable one and is also cached.
-env.allowLocalModels = false;
-env.backends.onnx.wasm.numThreads = 1;                // avoid SharedArrayBuffer / COOP needs
+//
+// No env.* knobs are set here: the tracked vendor/kokoro.web.js bundle exports a
+// minimal `env` shim (only a `wasmPaths` getter/setter) rather than the full
+// transformers.js Env class. Earlier code assumed `env.backends.onnx.wasm.numThreads`
+// existed on that shim; it doesn't, so the assignment threw at module top-level and
+// took window.ccTTS down with it before it was ever assigned. Not setting numThreads
+// is also not a functional loss — the bundle already defaults it to 1 outside
+// crossOriginIsolated contexts, which this app's file:// origin always is.
 
 const MODEL_ID = 'onnx-community/Kokoro-82M-v1.0-ONNX';
 
@@ -76,12 +83,10 @@ async function ensureModel() {
   if (loading) return loading;
   loading = (async () => {
     setStatus('loading', 'first run downloads the voice model (~80MB)…');
-    try {
-      tts = await KokoroTTS.from_pretrained(MODEL_ID, { dtype: 'q8', device: 'webgpu' });
-    } catch (e) {
-      setStatus('loading', 'WebGPU unavailable — using CPU/WASM…');
-      tts = await KokoroTTS.from_pretrained(MODEL_ID, { dtype: 'q8', device: 'wasm' });
-    }
+    tts = await bootstrapModel(
+      (device) => KokoroTTS.from_pretrained(MODEL_ID, { dtype: 'q8', device }),
+      { onStatus: setStatus },
+    );
     setStatus('idle');
     return tts;
   })();
