@@ -89,12 +89,113 @@ function assert(condition, label) {
   assert(notes.some(n => /analysisMode="video" omitted/.test(n)), 'notes explain the video-mode omission');
 }
 
-// --- analysisMode: values outside the allowlist are dropped, never spliced ----------
+// --- analysisMode: an EXPLICIT invalid value REFUSES the launch (fail-closed) -------
+// This used to be a silent drop-to-default (the costliest 'video' fallback) — now it's a visible
+// refusal: an explicitly supplied, nonempty analysisMode that isn't transcript/audio/video must
+// never launch Video Scout.
 {
-  const { args, notes } = buildVideoScoutArgs({ analysisMode: 'video"; Remove-Item -Recurse /' });
-  assert(!args.includes('-Mode'), 'rejects an analysisMode outside VALID_ANALYSIS_MODES');
+  const { args, notes, error } = buildVideoScoutArgs({ analysisMode: 'video"; Remove-Item -Recurse /' });
+  assert(typeof error === 'string' && /Allowed modes: transcript, audio, video/.test(error) && /refused/i.test(error),
+    'REFUSES an injection-shaped analysisMode with a user-facing error naming the allowed modes');
+  assert(!args.includes('-Mode'), 'rejects an analysisMode outside VALID_ANALYSIS_MODES — no -Mode arg pushed');
+  assert(args.length === 0, 'no args at all are emitted on an invalid-mode refusal');
   assert(notes.some(n => /analysisMode=.*REJECTED/.test(n)), 'notes flag the rejected analysisMode explicitly');
   assert(notes.every(n => !/sent as -Mode/.test(n)), 'no note claims the malicious analysisMode was sent');
+  assert(notes.every(n => !/^route=/.test(n)), 'no route note is emitted — refusal happens before route prediction');
+}
+{
+  const { error } = buildVideoScoutArgs({ analysisMode: 'not-a-real-mode' });
+  assert(typeof error === 'string', 'REFUSES a plain unrecognized string analysisMode');
+}
+// --- analysisMode: wrong TYPES (number/object) also REFUSE, not just bad strings ----
+{
+  const { args, error } = buildVideoScoutArgs({ analysisMode: 42 });
+  assert(typeof error === 'string', 'REFUSES a numeric analysisMode');
+  assert(!args.includes('-Mode'), 'no -Mode arg pushed for a numeric analysisMode');
+}
+{
+  const { error } = buildVideoScoutArgs({ analysisMode: { mode: 'video' } });
+  assert(typeof error === 'string', 'REFUSES an object analysisMode');
+}
+{
+  const { error } = buildVideoScoutArgs({ analysisMode: ['video'] });
+  assert(typeof error === 'string', 'REFUSES an array analysisMode');
+}
+{
+  const { error } = buildVideoScoutArgs({ analysisMode: true });
+  assert(typeof error === 'string', 'REFUSES a boolean analysisMode');
+}
+
+// --- analysisMode compatibility: null and '' are LEGACY, not invalid — same omitted/video
+// fallback as omitting the field entirely, no error, no -Mode arg. (Omitted-field coverage
+// already exists via `buildVideoScoutArgs({})`; these two prove null and '' specifically, since
+// the fail-closed gate above must treat them as "not given," not as an invalid explicit value.)
+{
+  const { args, notes, error } = buildVideoScoutArgs({ analysisMode: null });
+  assert(error === null, 'analysisMode=null produces no error (legacy fallback, not a refusal)');
+  assert(!args.includes('-Mode'), 'analysisMode=null pushes no -Mode arg');
+  assert(notes.every(n => !/REJECTED/.test(n)), 'analysisMode=null is never logged as rejected');
+}
+{
+  const { args, notes, error } = buildVideoScoutArgs({ analysisMode: '' });
+  assert(error === null, "analysisMode='' produces no error (legacy fallback, not a refusal)");
+  assert(!args.includes('-Mode'), "analysisMode='' pushes no -Mode arg");
+  assert(notes.every(n => !/REJECTED/.test(n)), "analysisMode='' is never logged as rejected");
+}
+{
+  // Same compatibility guarantee holds when a range rides along: null/'' still resolve to the
+  // video default, so a valid YouTube range is still accepted (mirrors the omitted-mode case).
+  const YT_COMPAT = 'https://youtu.be/aqz-KE-bpKQ';
+  const { error: errNull } = buildVideoScoutArgs({ videoUrl: YT_COMPAT, analysisMode: null, startOffset: 10, endOffset: 20 });
+  assert(errNull === null, 'analysisMode=null + a valid YouTube range is accepted (video fallback)');
+  const { error: errEmpty } = buildVideoScoutArgs({ videoUrl: YT_COMPAT, analysisMode: '', startOffset: 10, endOffset: 20 });
+  assert(errEmpty === null, "analysisMode='' + a valid YouTube range is accepted (video fallback)");
+}
+
+// --- analysisMode crash-safety: the refusal path must never THROW, even for values on which
+// JSON.stringify itself throws (BigInt, cyclic objects) — the fail-closed gate must not itself
+// become an unhandled exception surfacing through the PTY. -------------------------------------
+{
+  let result;
+  let threw = false;
+  try {
+    result = buildVideoScoutArgs({ analysisMode: 10n });
+  } catch {
+    threw = true;
+  }
+  assert(!threw, 'REFUSES a BigInt analysisMode without throwing (JSON.stringify(10n) itself throws)');
+  assert(result && typeof result.error === 'string', 'a BigInt analysisMode still produces a visible error string');
+  assert(result && !result.args.includes('-Mode'), 'no -Mode arg pushed for a BigInt analysisMode');
+}
+{
+  const cyclic = { mode: 'video' };
+  cyclic.self = cyclic; // JSON.stringify(cyclic) throws "Converting circular structure to JSON"
+  let result;
+  let threw = false;
+  try {
+    result = buildVideoScoutArgs({ analysisMode: cyclic });
+  } catch {
+    threw = true;
+  }
+  assert(!threw, 'REFUSES a cyclic-object analysisMode without throwing');
+  assert(result && typeof result.error === 'string', 'a cyclic-object analysisMode still produces a visible error string');
+  assert(result && !result.args.includes('-Mode'), 'no -Mode arg pushed for a cyclic-object analysisMode');
+}
+
+// --- analysisMode: an invalid mode plus an otherwise-valid range REFUSES, and emits no
+// route note implying a route will run, and no offset args ---------------------------
+{
+  const { args, notes, error } = buildVideoScoutArgs({
+    videoUrl: 'https://youtu.be/aqz-KE-bpKQ', analysisMode: 'not-a-real-mode', startOffset: 10, endOffset: 20,
+  });
+  assert(typeof error === 'string' && /Allowed modes/.test(error),
+    'REFUSES an invalid mode even with an otherwise-valid YouTube range — the range is never reached');
+  assert(!args.includes('-StartOffset') && !args.includes('-EndOffset'),
+    'no offset args are pushed when the mode itself is invalid');
+  assert(!args.includes('-Mode'), 'no -Mode arg pushed on the invalid-mode-plus-range refusal');
+  assert(notes.every(n => !/^route=/.test(n)),
+    'no route note (which would otherwise imply a Video/SDK or CLI route will run) is emitted');
+  assert(notes.every(n => !/range sent/.test(n)), 'no note claims the range was sent');
 }
 
 // --- route prediction: YouTube + video → SDK, everything else → CLI -----------------
@@ -150,9 +251,11 @@ const YT = 'https://youtu.be/aqz-KE-bpKQ';
   assert(error === null && args.includes('-StartOffset'), 'omitted analysisMode still resolves to video mode, so a valid range is accepted');
 }
 {
-  // Invalid analysisMode also resolves to the video default, so a valid range is still accepted.
+  // An EXPLICIT invalid analysisMode REFUSES outright (fail-closed) — it must NOT fall back to
+  // the video default and accept the range. See the dedicated invalid-mode-plus-range block above.
   const { args, error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'not-a-real-mode', startOffset: 10, endOffset: 20 });
-  assert(error === null && args.includes('-StartOffset'), 'invalid analysisMode falls back to the video default, so a valid range is still accepted');
+  assert(typeof error === 'string' && !args.includes('-StartOffset'),
+    'invalid analysisMode refuses rather than falling back to video and accepting the range');
 }
 
 // --- offsets: REFUSED outside video mode (error set, no args) ------------------------

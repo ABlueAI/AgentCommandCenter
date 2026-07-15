@@ -45,6 +45,19 @@ function isValidOffset(n) {
   return typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= MAX_OFFSET_SECONDS;
 }
 
+// Describe an arbitrary, untrusted value for an error/log message WITHOUT risking a throw.
+// JSON.stringify throws on a BigInt (TypeError: Do not know how to serialize a BigInt) and on a
+// cyclic object (TypeError: Converting circular structure to JSON) — either could arrive here as
+// an explicit-invalid analysisMode over IPC, and a refusal path must never itself crash. Falls
+// back to a short, safe `<typeof: Tag>` description when stringification isn't possible.
+function describeInvalidValue(value) {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return `<${typeof value}: ${Object.prototype.toString.call(value)}>`;
+  }
+}
+
 // Predict which invocation path feed-gemini.ps1 will choose, for Logs-tab visibility. Mirrors
 // Resolve-VideoSourceRoute (scripts/lib/get-video-source-route.ps1): YouTube URL + video mode →
 // SDK (URL straight into generateContent, no download, no 20MB cap, mediaResolution enforced);
@@ -71,17 +84,33 @@ function predictVideoRoute(videoUrl, analysisMode) {
 //           omitted-as-default / rejected), safe to hand straight to main.js's tlog() so the
 //           Logs tab always shows the POST-VALIDATION truth — never implying a choice was
 //           honored when it was actually silently dropped.
-//   error - null on success; a user-facing string when the launch must be REFUSED. Only OFFSET
-//           failures set this (mode-gate, both-or-neither, type/range, end<=start, or offsets on a
-//           source that would route to the CLI/download path). An offset the user explicitly asked
-//           for must never be silently dropped or silently downgraded to whole-video — main.js
-//           surfaces this error and returns { ok:false } instead of spawning. (Allowlist misses on
-//           videoModel/mediaResolution/analysisMode are NOT errors: those legitimately fall back to
-//           the script's own default, which is a safe no-surprise outcome, unlike a dropped range.)
+//   error - null on success; a user-facing string when the launch must be REFUSED. Set by an
+//           EXPLICIT invalid analysisMode (a nonempty value that isn't transcript/audio/video —
+//           the costliest fallback, so this is fail-closed, not fail-open), or by an OFFSET
+//           failure (mode-gate, both-or-neither, type/range, end<=start, or offsets on a source
+//           that would route to the CLI/download path). Neither an invalid mode nor a range the
+//           user explicitly asked for may be silently dropped or downgraded — main.js surfaces
+//           this error and returns { ok:false } instead of spawning. (Allowlist misses on
+//           videoModel/mediaResolution are NOT errors: those legitimately fall back to the
+//           script's own default, which is a safe no-surprise outcome, unlike a dropped mode or
+//           a dropped range.)
 function buildVideoScoutArgs({ videoModel, mediaResolution, analysisMode, videoUrl, startOffset, endOffset } = {}) {
   const args = [];
   const notes = [];
   let error = null;
+
+  // Mode validation FIRST, before route prediction or offset evaluation: an explicit invalid
+  // mode must never reach the route-note (which would otherwise describe a route that isn't
+  // actually going to run) or the offset gate (which resolves an absent/invalid mode to 'video'
+  // and would otherwise let an invalid mode ride a range through as if it were video mode).
+  const modeGiven = analysisMode !== undefined && analysisMode !== null && analysisMode !== '';
+  const modeValid = typeof analysisMode === 'string' && VALID_ANALYSIS_MODES.has(analysisMode);
+  if (modeGiven && !modeValid) {
+    const described = describeInvalidValue(analysisMode);
+    error = `Invalid analysis mode ${described}. Allowed modes: transcript, audio, video. Launch refused.`;
+    notes.push(`analysisMode=${described} REJECTED (not in VALID_ANALYSIS_MODES allowlist) — launch refused, no route will run`);
+    return { args, notes, error };
+  }
 
   // Route prediction first so it's the first thing the Logs tab shows for the run.
   if (videoUrl) {
@@ -89,16 +118,13 @@ function buildVideoScoutArgs({ videoModel, mediaResolution, analysisMode, videoU
     notes.push(`route=${route.toUpperCase()} (${reason})`);
   }
 
-  if (analysisMode !== undefined && analysisMode !== null && analysisMode !== '') {
-    if (typeof analysisMode === 'string' && VALID_ANALYSIS_MODES.has(analysisMode)) {
-      if (analysisMode === DEFAULT_ANALYSIS_MODE) {
-        notes.push(`analysisMode="${analysisMode}" omitted (matches the script's -VideoScout fallback: full visual analysis)`);
-      } else {
-        args.push('-Mode', analysisMode);
-        notes.push(`analysisMode="${analysisMode}" sent as -Mode (cheaper pass: no visual tokens)`);
-      }
+  if (modeGiven) {
+    // modeValid is guaranteed true here (the invalid case returned above).
+    if (analysisMode === DEFAULT_ANALYSIS_MODE) {
+      notes.push(`analysisMode="${analysisMode}" omitted (matches the script's -VideoScout fallback: full visual analysis)`);
     } else {
-      notes.push(`analysisMode=${JSON.stringify(analysisMode)} REJECTED (not in VALID_ANALYSIS_MODES allowlist) — dropped, script default (video) applies`);
+      args.push('-Mode', analysisMode);
+      notes.push(`analysisMode="${analysisMode}" sent as -Mode (cheaper pass: no visual tokens)`);
     }
   }
 
