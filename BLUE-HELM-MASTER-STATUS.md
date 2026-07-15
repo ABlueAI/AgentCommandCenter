@@ -35,6 +35,19 @@ layer: whiteboard, quick widgets, and CRM data.
 **Standing rules (do not violate even under time pressure):**
 - Feature branches always; `main` is merge-only. One invariant per branch.
 - Reviewer verdicts are read **verbatim** at the merge gate — never summarized.
+- **Gate tier is declared in every work order, with a one-line blast-radius
+  rationale.** Chore-class is direct-to-`main` only when the existing three
+  chore conditions hold. **Standard-class** is one-invariant branch → ONE
+  scoped Reviewer pass over the named load-bearing hunks → merge; use it when
+  worst-case failure is recoverable and non-destructive. **Full-class** is the
+  multi-round whole-diff/delta-review path, reserved for security boundaries,
+  credentials, destructive operations, or cost-direction guards. Applying
+  Full-class to Standard-class work is cost without risk reduction. Mixed work
+  names its Full-class hunks explicitly; the remaining hunks are Standard.
+- **Diff size is a scoping signal.** If a one-shot or small-surface work order
+  produces a large diff, the work order was wrong before review started. Cap
+  the brief to the safety contract that matters; do not test or review the
+  entire adjacent surface by reflex.
 - Failure paths must **refuse visibly** — never silently downgrade/drop.
 - Error/exception paths must exit cleanly with a visible message — never crash,
   segfault, or emit a native assertion (see K5: libuv `UV_HANDLE_CLOSING` on
@@ -45,6 +58,10 @@ layer: whiteboard, quick widgets, and CRM data.
   failed on every gate attempted (3×+). Until R1 (in-app diff+merge-gate UI)
   exists, treat R1 not as post-ship polish but as the standing fix for the
   project's most reliable recurring failure mode.
+- Reviewer subprocesses use the workspace's approved network-enabled launch
+  path from the first attempt. A sandboxed `ConnectionRefused` is runner
+  configuration failure, not a review attempt; correct it before counting a
+  Reviewer pass.
 - The fence gate is sacred: business-widget credentials live main-process-side
   via `safeStorage`, never enter any PTY env, never reach the renderer beyond
   display data. No agent role gets email/CRM access by default.
@@ -69,11 +86,20 @@ layer: whiteboard, quick widgets, and CRM data.
   are always read-and-re-implemented. Whole audited libraries in, loose
   snippets out, peer-orchestrator code never.
 
-## Current checkpoint — July 14 platform transfer
+## Current checkpoint — July 15 platform transfer
 
-- **Repository baseline:** `main` @ `5e0b923`. The only active work is the
-  documentation-only `docs/project-control-plane-sync` branch; no runtime code
-  is being changed in this synchronization pass.
+- **Repository baseline:** `main` @ `58b7792`, pushed to `origin/main` after
+  the V5a/backfill merge and the test-harness portability repair. Both merged
+  gates are green: 214 Pester assertions and 233 app assertions.
+- **`analysisMode` fail-closed: COMPLETE.** The last invalid-mode silent
+  cost-direction path is merged.
+- **V5a manifest + legacy backfill: COMPLETE.** New accepted runs write the
+  shared-schema manifest. The authorized one-shot `-Apply` sweep created and
+  schema-validated 12 legacy manifests: every one records `route:"cli"` as a
+  code-control-flow inference pinned to `efd76f8bf8c86548c1479cd3e2852d49cce36317`,
+  keeps canonical `startedAt=null`, and retains its folder stamp only in
+  explicit approximate provenance. The sweep reported 0 skipped, unsafe, or
+  failed directories.
 - **Live Test D: COMPLETE.** Transcript launch contained no
   `--start-offset` or `--end-offset`, no stale-range `BUG:` line, and reopened
   video fields were empty. The later Gemini 503 is tracked separately under K5
@@ -95,11 +121,9 @@ layer: whiteboard, quick widgets, and CRM data.
 
 ### Current execution order
 
-The July 14 Handoff #4 queue is the live order: documentation sync and human
-merge gate → `analysisMode` fail-closed → V5a per-run manifest → V2 TLDR →
-TTS bootstrap → STT bootstrap → audio permission/error hardening → timestamped
-transcripts → P13/K5 → V1 → V5(b–d; V5a already landed) → V3 → V4 →
-remaining Day 2/3 work → full functional ship-check → R15
+The live order is: V2 TLDR (Standard-class) → TTS bootstrap → STT bootstrap →
+audio permission/error hardening → timestamped transcripts → P13/K5 → V1 →
+V5(b–d) → V3 → V4 → remaining Day 2/3 work → full functional ship-check → R15
 fork/replacement evaluation. Each arrow is a clean checkpoint; runtime items
 remain separate one-invariant branches and receive their own Reviewer gate.
 
@@ -722,6 +746,11 @@ live testing — these are NEEDS, not wants; V1 blocks the tool's whole point):*
 > library runs. Provide a one-shot best-effort backfill script for existing run
 > directories.
 >
+> **COMPLETE (July 15).** V5a is merged and the authorized one-shot backfill
+> created 12 schema-valid legacy manifests. Backfills record only structural
+> facts: `route:"cli"` with code-control-flow provenance, `startedAt=null`, and
+> the local run-folder timestamp as explicitly approximate provenance.
+>
 > **(b) Library pane.** Add a sortable/filterable in-app list by date, title,
 > mode, route, outcome, and tokens. Selecting an entry opens its report in-app
 > using V1's readable, copyable, maximizable report reader. Cross-report
@@ -759,6 +788,10 @@ live testing — these are NEEDS, not wants; V1 blocks the tool's whole point):*
 > verdict is attached. Turns three standing rules (three-dot diffs, verbatim
 > verdicts, merge-only `main`) from discipline into mechanism. Pattern-mine:
 > Orca / `parallel-code` diff-and-merge UX — studied, then built our way.
+> **Scheduling note (July 15):** diff transport again consumed gate time during
+> the backfill. R1 is the standing fix for this repeated failure mode, not
+> post-ship polish; prioritize it accordingly when the current functional queue
+> is re-ranked.
 
 > **R2. Session persistence / restore. ← RANKED #2.** Relaunch reopens the pane
 > grid, worktrees, roles, and (where the CLI supports it) resumes sessions

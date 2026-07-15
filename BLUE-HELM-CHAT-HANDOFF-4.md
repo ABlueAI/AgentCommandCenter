@@ -15,17 +15,23 @@ parallel PTYs across git worktrees, plus Starboard Automation business ops
 Scope decided: coding/agent orchestration + business ops. Personal
 productivity OUT of scope.
 
-## Current state (verified through July 14)
-- **`main` @ `5e0b923`.** Runtime baseline remains `4da1572`; the later commit
-  adds collaboration documentation only. Active branch:
-  `docs/project-control-plane-sync` (documentation only; not merged).
+## Current state (verified through July 15)
+- **`main` @ `58b7792`, pushed to `origin/main`.** `analysisMode` fail-closed,
+  V5a live manifests, the legacy backfill utility, and a test-harness
+  portability repair are merged.
 - **Day 0 security gate: COMPLETE.** The audit's live XSS→RCE chain
   (`25e72ad`), navigation lockdown + `shell:false` launchers (`91ca3b7`),
   and the mode-aware duration guard (`4da1572`) are all on `main`.
-- **Test gates, both green on the merged tree:** `npm test` in `app/` =
-  205 assertions across 5 node suites; `scripts/run-pester.ps1` = 105
-  Pester assertions across all PowerShell suites. Run BOTH before any push
-  that touches their respective sides.
+- **Test gates, both green on the merged tree:** `npm.cmd test` in `app/` =
+  233 assertions across 5 node suites; `scripts/run-pester.ps1` = 214 Pester
+  assertions across all PowerShell suites. Run BOTH before any push that
+  touches their respective sides.
+- **V5a + one-shot legacy backfill: COMPLETE.** The authorized `-Apply` sweep
+  created 12 manifests under `D:\Gemini_Video_Review\downloads`, with 0
+  skipped, unsafe, or failed directories. All 12 were schema-validated:
+  `route:"cli"` carries code-control-flow provenance pinned to
+  `efd76f8bf8c86548c1479cd3e2852d49cce36317`; canonical `startedAt` is null;
+  the directory-name stamp is retained only as explicit approximate provenance.
 - **Local branches:** all merged feature branches deleted.
 - **Live Test D: ✅ COMPLETE.** Transcript launch contained no
   `--start-offset` or `--end-offset`, no stale-range `BUG:` line, and reopened
@@ -43,46 +49,51 @@ productivity OUT of scope.
   this handoff contains no remaining live-test procedure.
 
 ## Immediate work queue (in order)
-1. **#9 — analysisMode fail-closed** (`feed-gemini.ps1:87`): invalid
-   `analysisMode` silently defaults to the costliest `video` pass. Branch
-   `feature/analysismode-failclosed`, small, fail-closed + visible refusal +
-   tests. Last silent-overspend path.
-2. **V5a — per-run manifest writer (K1 durable fix, backfill-shrinking).**
-   Scripts-side, one-invariant branch. Write the versioned manifest for every
-   accepted run and provide the best-effort backfill target before more
-   index-less run directories accumulate.
-3. **V2 — TLDR in analysis output** (scripts-only prompt-template change;
-   cheap, Blue wants it now). Keep it on its own one-invariant branch at this
-   queue position.
-4. **TTS bootstrap repair** on `feature/tts-bootstrap-fix`: fix the Kokoro
+1. **V2 — TLDR in analysis output (Standard-class).** Scripts-only
+   prompt-template change: a TLDR block leading the report and one concise TLDR
+   per major section. Blast radius: report formatting only — no security,
+   credential, cost, or destructive surface. One branch; one scoped Reviewer
+   pass over the template hunks; merge.
+2. **TTS bootstrap repair** on `feature/tts-bootstrap-fix`: fix the Kokoro
    environment contract, make initialization failures visible, add bootstrap
    tests, and live-test voice/speed/stop on WebGPU and WASM.
-5. **STT bootstrap repair** on `feature/stt-bootstrap-fix`: make the
+3. **STT bootstrap repair** on `feature/stt-bootstrap-fix`: make the
    Transformers/ONNX browser dependency graph reproducible, restore a tracked
    runtime path, pin dictation to the pane where recording started, add tests,
    and prove visible recording/transcribing states plus focused-pane insertion.
-6. **Audio permission hardening** after both engines work: enforce trusted
+4. **Audio permission hardening** after both engines work: enforce trusted
    origin + audio-only media permission and surface module-level errors in Logs.
-7. **9c — timestamps in transcript output** (enables cheap-pass → pick range
+5. **9c — timestamps in transcript output** (enables cheap-pass → pick range
    → expensive-slice).
-8. **P13 chores**: Pester version pin in `run-pester.ps1` + `PROJECT-STATE.md`
+6. **P13 chores**: Pester version pin in `run-pester.ps1` + `PROJECT-STATE.md`
    `setx` doc fix. **K5**: fix the libuv crash on the SDK 503 path + add
    503 retry/backoff (new bug from live testing — daily annoyance).
-9. **V1 — pane output readable/copyable** (maximize, scroll/wrap, reliable
+7. **V1 — pane output readable/copyable** (maximize, scroll/wrap, reliable
    copy, open-report button). Blue rates this REQUIRED for functionality —
    the analysis is currently trapped in the viewport. Interim: run-dir report
    files on disk have the full text.
-10. **V5(b–d) — Analysis Library (V5a already landed).** Add the in-app run
+8. **V5(b–d) — Analysis Library (V5a complete).** Add the in-app run
     list, report retention, manifest-scoped media cleanup, and the V3 follow-up
     hook. **V1 is a prerequisite for V5's in-app report reader.**
-11. **V3 — pre-analysis direction + follow-up Q&A.**
-12. **V4 — multi-slice in one run** (spec first; touches the guard).
-13. **Day 2/3 work** per `BLUE-HELM-MASTER-STATUS.md`, then ship-check and R15's
+9. **V3 — pre-analysis direction + follow-up Q&A.**
+10. **V4 — multi-slice in one run** (spec first; touches the guard).
+11. **Day 2/3 work** per `BLUE-HELM-MASTER-STATUS.md`, then ship-check and R15's
     time-boxed orchestrator fork/replacement evaluation.
 
 ## The process rules (non-negotiable — each one exists because it failed once)
 - **Feature branches always; merge only to `main`; every branch gets its own
   Reviewer gate.** Builder sessions offering courtesy merges: always decline.
+- **Declare the gate tier in the work order, with a one-line blast-radius
+  rationale.** **Standard-class:** one-invariant branch → ONE Reviewer pass
+  scoped to the named load-bearing hunks → merge; use it when worst-case failure
+  is recoverable and non-destructive. **Full-class:** multi-round review,
+  whole-diff read, and delta pass; reserve it for security boundaries,
+  credentials, destructive operations, or cost-direction guards. Full ceremony
+  on Standard-class work is cost without risk reduction. Mixed work names the
+  Full-class hunks explicitly; the rest is reviewed at Standard scope.
+- **Diff size is a scoping signal.** A one-shot or small-surface work order
+  that generates a large diff was incorrectly scoped before review began. Cap
+  the brief: tests prove the safety contract, not the entire adjacent surface.
 - **Reviewer gate:** read-only Reviewer role (no shell by design). Human runs
   pre-flight, pins the diff to a file (`git diff main...<sha>
   --output=.agent-review-*.diff` — gitignored; use `--output`, NOT
@@ -113,6 +124,10 @@ productivity OUT of scope.
   failed on every gate attempted (3×+). Until R1 (in-app diff+merge-gate UI)
   exists, treat R1 not as post-ship polish but as the standing fix for the
   project's most reliable recurring failure mode.
+- **Reviewer network preflight:** launch the read-only Reviewer through the
+  workspace's approved network-enabled route on the first attempt. A sandboxed
+  `ConnectionRefused` produces no review and is runner configuration failure,
+  not a counted gate.
 - **Log what happened, not what was requested.**
 - **Never `setx` API keys** (PTY env inheritance); `AGENTS.md` and
   `CLAUDE.md` §8.
@@ -135,7 +150,9 @@ productivity OUT of scope.
 ## Daily-driver roadmap (post-ship; Blue's Tier-1 ranking)
 **V-series (updated July 14, REQUIRED):** V1 pane output readable/copyable/maximize · V2 TLDR in analysis · V3 pre-analysis direction + follow-up Q&A · V4 multi-slice single run · V5 Analysis Library (V1 reader prerequisite). Then Tier 1:
 1. In-app diff viewer + merge-gate UI (mechanizes the gate; merge button
-   disabled until a verdict is attached) · 2. Session restore on relaunch ·
+   disabled until a verdict is attached; the backfill again showed that this is
+   the standing fix for recurring diff-transport cost, not post-ship polish) ·
+   2. Session restore on relaunch ·
 3. Dockable pane layout (dockview-core) · 4. Status detection +
    notifications. Full R1–R14 in MASTER-STATUS.
 
