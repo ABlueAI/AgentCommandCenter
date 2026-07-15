@@ -36,6 +36,11 @@
 #>
 
 . (Join-Path $PSScriptRoot 'get-video-scout-run-dir.ps1')
+# Single canonical schema/validator + the shared sanitizer (Get-SanitizedManifestText),
+# New-VideoScoutLiveManifest constructor, and Assert-VideoScoutManifestValid. This live writer and
+# the backfill utility MUST build/validate through this one module -- two schema copies would drift
+# (the P6 drift class). See lib/video-scout-manifest-schema.ps1.
+. (Join-Path $PSScriptRoot 'video-scout-manifest-schema.ps1')
 
 function Get-VideoScoutManifestPath {
     param([Parameter(Mandatory)][string]$RunDir)
@@ -44,40 +49,22 @@ function Get-VideoScoutManifestPath {
 
 <#
 .SYNOPSIS
-  One-line, length-capped, credential-redacted form of an untrusted string. Pure. $null when
-  nothing representable remains.
-#>
-function Get-SanitizedManifestText {
-    param([string]$Text, [int]$MaxLength = 500)
-    if ([string]::IsNullOrWhiteSpace($Text)) { return $null }
-    $s = [string]$Text
-    # C0 controls + DEL -> space: the manifest stores single-line text only (a multi-line reason
-    # would let untrusted input fake additional JSON-viewer/log lines).
-    $s = $s -replace '[\x00-\x1F\x7F]', ' '
-    # Bidi/direction-override characters render text backwards in viewers -- the P11 log-spoof
-    # class. They carry no information a reason/title needs; strip rather than escape. (\uXXXX
-    # escapes, not literal characters: the bidi marks are invisible and would boobytrap this file.)
-    $s = $s -replace '[\u200E\u200F\u202A-\u202E\u2066-\u2069]', ''
-    $s = ($s -replace '\s{2,}', ' ').Trim()
-    # A provider error must never carry the live credential into a durable, indexable file. The
-    # length floor avoids redacting short common substrings if the env var holds junk.
-    $key = $env:GEMINI_API_KEY
-    if ($key -and $key.Length -ge 8) { $s = $s.Replace($key, '[redacted]') }
-    if ($s.Length -gt $MaxLength) { $s = $s.Substring(0, $MaxLength) + ' [truncated]' }
-    if ($s.Length -eq 0) { return $null }
-    return $s
-}
-
-<#
-.SYNOPSIS
   Atomically write the manifest object as UTF-8 JSON into $RunDir. Throws visibly on ANY failure;
   never leaves a temp file behind as the manifest and never falls back to a non-atomic write.
+.DESCRIPTION
+  Validates the manifest against the shared canonical schema BEFORE persisting -- a malformed or
+  drifted manifest refuses visibly here rather than reaching disk (the validator is the single gate
+  both writers share). This is a create-or-replace writer (live runs update their manifest across a
+  run's lifecycle); the backfill utility uses its own create-only writer instead.
 #>
 function Write-VideoScoutManifestFile {
     param(
         [Parameter(Mandatory)][string]$RunDir,
         [Parameter(Mandatory)]$Manifest
     )
+    # Refuse to persist anything that is not a valid canonical manifest (runs before the temp file
+    # exists, so an invalid manifest surfaces its own clear validation error and writes nothing).
+    Assert-VideoScoutManifestValid -Manifest $Manifest
     $target = Get-VideoScoutManifestPath -RunDir $RunDir
     $tmp = Join-Path $RunDir ('manifest.json.tmp-' + [Guid]::NewGuid().ToString('N'))
     try {
@@ -131,27 +118,13 @@ function Initialize-VideoScoutRun {
         [Nullable[int]]$EndOffset = $null
     )
     $runDir = New-VideoScoutRunDir -BaseDir $BaseDir
-    $manifest = [ordered]@{
-        schemaVersion            = 1
-        runId                    = (Split-Path $runDir -Leaf)   # the run-dir name: already stamped, PID'd, GUID'd unique
-        videoScout               = $VideoScout
-        url                      = (Get-SanitizedManifestText -Text $Url -MaxLength 2000)
-        videoTitle               = $null
-        requestedMode            = $RequestedMode
-        appliedMode              = $AppliedMode
-        route                    = $Route
-        model                    = (Get-SanitizedManifestText -Text $Model -MaxLength 200)
-        mediaResolutionRequested = $MediaResolutionRequested
-        mediaResolutionApplied   = $MediaResolutionApplied
-        startOffsetSeconds       = $StartOffset
-        endOffsetSeconds         = $EndOffset
-        startedAt                = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
-        finishedAt               = $null
-        usage                    = $null
-        reportFile               = $null   # reserved: nothing writes report files yet (V1/V5b)
-        outcome                  = $null   # null = still running / never finalized; terminal values: completed|refused|error
-        reason                   = $null
-    }
+    # Build the initial live manifest through the SHARED canonical constructor (same module the
+    # backfill utility uses), so the two paths cannot drift on keys, order, or sanitization. runId is
+    # the run-dir name (already stamped, PID'd, GUID'd unique); unknown-at-creation fields stay null.
+    $manifest = New-VideoScoutLiveManifest -RunId (Split-Path $runDir -Leaf) -Url $Url `
+        -RequestedMode $RequestedMode -AppliedMode $AppliedMode -Route $Route -Model $Model `
+        -MediaResolutionRequested $MediaResolutionRequested -MediaResolutionApplied $MediaResolutionApplied `
+        -VideoScout $VideoScout -StartOffset $StartOffset -EndOffset $EndOffset
     try {
         [void](Write-VideoScoutManifestFile -RunDir $runDir -Manifest $manifest)
     }

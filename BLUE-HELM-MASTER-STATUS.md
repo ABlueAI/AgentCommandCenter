@@ -726,6 +726,12 @@ live testing — these are NEEDS, not wants; V1 blocks the tool's whole point):*
 > mode, route, outcome, and tokens. Selecting an entry opens its report in-app
 > using V1's readable, copyable, maximizable report reader. Cross-report
 > full-text search can ride R8 later. **V1 is a prerequisite for this reader.**
+> **Backfilled-date requirement:** legacy backfilled manifests intentionally
+> keep canonical `startedAt=null`. V5b must sort/display them using the local
+> run-stamp retained as `backfill.startedAtFromDirNameLocal`, visibly marked
+> **approximate**. If that provenance timestamp is missing or invalid, place the
+> run in an explicit **Unknown date** bucket. Never let null-date ordering make
+> a backfilled run silently disappear from the library.
 >
 > **(c) Retention.** Keep manifests and reports indefinitely because they are
 > the durable asset. Automatically delete downloaded media after successful
