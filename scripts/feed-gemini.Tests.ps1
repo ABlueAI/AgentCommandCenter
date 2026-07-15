@@ -150,16 +150,27 @@ Describe 'feed-gemini.ps1 offset refusal invariant' {
     # nested `powershell ... 2>$null` is racy in PS 5.1 (the child's stderr can surface in the parent
     # as a NativeCommandError before the exit code is read).
     It 'exits non-zero (not 0) when a lone offset is passed' {
-        $errFile = [System.IO.Path]::GetTempFileName()
-        $outFile = [System.IO.Path]::GetTempFileName()
+        $p = $null
         try {
-            $p = Start-Process -FilePath 'powershell' -PassThru -Wait -WindowStyle Hidden `
-                -RedirectStandardError $errFile -RedirectStandardOutput $outFile `
-                -ArgumentList @('-NoProfile', '-NoLogo', '-ExecutionPolicy', 'Bypass', '-File', $feedGemini,
-                    '-Url', $YT, '-VideoScout', '-StartOffset', '10')
+            # Start-Process copies the inherited environment through a case-insensitive
+            # dictionary in Windows PowerShell 5.1. A host with both Path and PATH then
+            # fails before it launches the child. ProcessStartInfo inherits the real
+            # environment block directly, so this remains a genuine process-boundary test.
+            $psi = New-Object System.Diagnostics.ProcessStartInfo
+            $psi.FileName = 'powershell.exe'
+            $psi.Arguments = "-NoProfile -NoLogo -ExecutionPolicy Bypass -File `"$feedGemini`" -Url `"$YT`" -VideoScout -StartOffset 10"
+            $psi.UseShellExecute = $false
+            $psi.RedirectStandardError = $true
+            $psi.RedirectStandardOutput = $true
+            $p = New-Object System.Diagnostics.Process
+            $p.StartInfo = $psi
+            [void]$p.Start()
+            $p.WaitForExit()
+            [void]$p.StandardOutput.ReadToEnd()
+            [void]$p.StandardError.ReadToEnd()
             $p.ExitCode | Should Not Be 0
         }
-        finally { Remove-Item $errFile, $outFile -Force -ErrorAction SilentlyContinue }
+        finally { if ($null -ne $p) { $p.Dispose() } }
     }
 }
 
