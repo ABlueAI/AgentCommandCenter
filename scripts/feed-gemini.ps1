@@ -93,6 +93,13 @@ $ProbeTimeoutSec = 60   # (?) hard cap on the metadata probe; a hung/slow probe 
 # every run records what tier it used at the top of the Logs tab output.
 . (Join-Path $PSScriptRoot 'lib\get-gemini-launch-config.ps1')
 . (Join-Path $PSScriptRoot 'lib\get-node-cli-arg.ps1')
+# V5a per-run manifest: every ACCEPTED launch (past the free validations above) creates its run
+# directory with a versioned manifest.json inside, updated atomically at every terminal path.
+. (Join-Path $PSScriptRoot 'lib\write-video-scout-manifest.ps1')
+# Manifest truth: record the mode the caller EXPLICITLY requested separately from the mode actually
+# applied -- bare -VideoScout defaults $Mode to 'video' below, and the manifest must not claim the
+# caller asked for what a default chose. $null = -Mode was not passed.
+$RequestedModeForManifest = if ($PSBoundParameters.ContainsKey('Mode')) { $Mode } else { $null }
 $launchConfig = Resolve-GeminiLaunchConfig -Model $Model -MediaResolution $MediaResolution
 Write-Host $launchConfig.LogLine -ForegroundColor DarkCyan
 Write-Warning $launchConfig.Warning
@@ -132,31 +139,68 @@ if ($VideoScout) {
         # warning Resolve-GeminiLaunchConfig printed up top. Log what ACTUALLY happens (finding 6).
         Write-Host (Resolve-MediaResolutionLog -MediaResolution $MediaResolution -Route 'sdk') -ForegroundColor DarkCyan
 
-        # Duration guard (SDK route): the URL goes STRAIGHT to the paid API with no yt-dlp download, so
-        # this pre-flight probe is the ONLY guard on this path (there is no download-time backstop --
-        # nothing downloads). Runs after the offset validation and the route backstop above. This route
-        # is video mode by definition; $haveStart marks a range run (gated on slice length).
-        [void](Assert-DurationGuard -Url $Url -GuardMode 'video' -HasRange:$haveStart -RangeStart $StartOffset -RangeEnd $EndOffset)
+        # V5a manifest: the launch is ACCEPTED (offsets + route validated above; nothing spent yet),
+        # so create the run directory + initial manifest BEFORE the duration guard -- a guard
+        # refusal is then durably recorded as outcome='refused'. This mirrors the CLI path below,
+        # which has always created its run dir before its guard call. MediaResolutionApplied equals
+        # the requested value here because the SDK route sends and enforces it (see the log above).
+        $sdkRun = Initialize-VideoScoutRun -BaseDir $OutDir -Url $Url `
+            -RequestedMode $RequestedModeForManifest -AppliedMode $Mode -Route 'sdk' -Model $Model `
+            -MediaResolutionRequested $MediaResolution -MediaResolutionApplied $MediaResolution `
+            -VideoScout $true `
+            -StartOffset $(if ($haveStart) { $StartOffset } else { $null }) `
+            -EndOffset $(if ($haveStart) { $EndOffset } else { $null })
+        $sdkManifest = $sdkRun.Manifest
+        try {
+            # Duration guard (SDK route): the URL goes STRAIGHT to the paid API with no yt-dlp download, so
+            # this pre-flight probe is the ONLY guard on this path (there is no download-time backstop --
+            # nothing downloads). Runs after the offset validation and the route backstop above. This route
+            # is video mode by definition; $haveStart marks a range run (gated on slice length).
+            [void](Assert-DurationGuard -Url $Url -GuardMode 'video' -HasRange:$haveStart -RangeStart $StartOffset -RangeEnd $EndOffset)
 
-        $sdkScript = Join-Path $PSScriptRoot 'gemini-video-sdk.js'
-        $sdkArgs = @('--url', $Url, '--model', $Model, '--media-resolution', $MediaResolution)
-        if ($Prompt) {
-            # Explicit -Prompt override: cross the PS 5.1 -> node boundary with the same
-            # CommandLineToArgvW-correct escaping the CLI path uses (see lib/get-node-cli-arg.ps1).
-            $sdkArgs += @('--prompt-text', (ConvertTo-NodeCliArg -Arg $Prompt))
+            $sdkScript = Join-Path $PSScriptRoot 'gemini-video-sdk.js'
+            $sdkArgs = @('--url', $Url, '--model', $Model, '--media-resolution', $MediaResolution)
+            if ($Prompt) {
+                # Explicit -Prompt override: cross the PS 5.1 -> node boundary with the same
+                # CommandLineToArgvW-correct escaping the CLI path uses (see lib/get-node-cli-arg.ps1).
+                $sdkArgs += @('--prompt-text', (ConvertTo-NodeCliArg -Arg $Prompt))
+            }
+            else {
+                # Default forensic brief: hand node the FILE, not the text -- no argument-boundary
+                # escaping and no newline flattening needed; the brief arrives with full fidelity.
+                $sdkArgs += @('--prompt-file', (Join-Path (Split-Path $PSScriptRoot -Parent) 'prompts\video-scout-analysis.md'))
+            }
+            # Pairing, strict order, and route were all validated above (refuse-not-downgrade), so by
+            # here $haveStart implies a valid $haveEnd pair on the SDK route -- just pass them through.
+            if ($haveStart) {
+                $sdkArgs += @('--start-offset', $StartOffset, '--end-offset', $EndOffset)
+            }
+            # Tee the SDK's stdout so the machine-readable "[video-scout usage]" line can land in the
+            # manifest; Tee-Object still streams every line to the console/pane live. stderr is left
+            # alone (PS 5.1 would wrap it in error records).
+            & node $sdkScript @sdkArgs | Tee-Object -Variable sdkStdout
+            $sdkExit = $LASTEXITCODE
+            if ($sdkExit -ne 0) {
+                Complete-VideoScoutRunManifest -RunDir $sdkRun.RunDir -Manifest $sdkManifest -Outcome 'error' `
+                    -Reason "gemini-video-sdk.js exited with code $sdkExit (upstream API/network error; see the run output above)."
+            }
+            else {
+                Complete-VideoScoutRunManifest -RunDir $sdkRun.RunDir -Manifest $sdkManifest -Outcome 'completed' `
+                    -Usage (ConvertFrom-VideoScoutUsageLine -Lines $sdkStdout)
+            }
+            return
         }
-        else {
-            # Default forensic brief: hand node the FILE, not the text -- no argument-boundary
-            # escaping and no newline flattening needed; the brief arrives with full fidelity.
-            $sdkArgs += @('--prompt-file', (Join-Path (Split-Path $PSScriptRoot -Parent) 'prompts\video-scout-analysis.md'))
+        catch {
+            # Terminal-truth backstop: classify our own guard refusals as 'refused', anything else
+            # as 'error', then rethrow the ORIGINAL failure. If the outcome is already terminal the
+            # in-flight exception IS a manifest-write failure -- let it propagate untouched.
+            if ($null -eq $sdkManifest.outcome) {
+                Complete-VideoScoutRunManifest -RunDir $sdkRun.RunDir -Manifest $sdkManifest `
+                    -Outcome (Resolve-ManifestFailureClass -Message $_.Exception.Message) `
+                    -Reason $_.Exception.Message
+            }
+            throw
         }
-        # Pairing, strict order, and route were all validated above (refuse-not-downgrade), so by
-        # here $haveStart implies a valid $haveEnd pair on the SDK route -- just pass them through.
-        if ($haveStart) {
-            $sdkArgs += @('--start-offset', $StartOffset, '--end-offset', $EndOffset)
-        }
-        & node $sdkScript @sdkArgs
-        return
     }
 
     if (-not $Prompt -and $Mode -eq 'video') {
@@ -177,149 +221,201 @@ if (-not $gemini) {
 # --- prepare output folder -----------------------------------------------------
 # Download into a fresh per-run subdirectory, not $OutDir directly: this is what makes the file
 # selection below immune to picking up a leftover file from a prior, unrelated run (see
-# lib/get-video-scout-run-dir.ps1 for the bug this fixes).
-. (Join-Path $PSScriptRoot 'lib\get-video-scout-run-dir.ps1')
+# lib/get-video-scout-run-dir.ps1 for the bug this fixes). Initialize-VideoScoutRun wraps that
+# same New-VideoScoutRunDir call (reused, not rebuilt) and adds the V5a manifest: the launch is
+# accepted at this point, so the dir is born WITH its manifest.json. MediaResolutionApplied is
+# $null here because on the CLI route the value is requested-but-NOT-applied (see the honest log
+# at the feed step below) -- the manifest records what actually happens, not what was asked for.
 . (Join-Path $PSScriptRoot 'lib\get-run-output-file.ps1')
-$runDir = New-VideoScoutRunDir -BaseDir $OutDir
+$cliRun = Initialize-VideoScoutRun -BaseDir $OutDir -Url $Url `
+    -RequestedMode $RequestedModeForManifest -AppliedMode $Mode -Route 'cli' -Model $Model `
+    -MediaResolutionRequested $MediaResolution -MediaResolutionApplied $null `
+    -VideoScout ([bool]$VideoScout)
+$runDir = $cliRun.RunDir
+$cliManifest = $cliRun.Manifest
 $outTemplate = Join-Path $runDir "%(title)s.%(ext)s"
 
-# --- Duration guard (download/CLI path) ----------------------------------------
-# Reached only for transcript / audio / non-YouTube video / -NoFeed (the SDK route returned above).
-# A range NEVER reaches here (it always routes to SDK), so HasRange:$false. This runs BEFORE the
-# download and yields the resolved per-mode limit that the subordinate --match-filter uses below.
-$guardResult = Assert-DurationGuard -Url $Url -GuardMode $Mode -HasRange:$false
-
-# --- safety caps (shared across modes) -----------------------------------------
-# A single URL should never pull a whole playlist, an oversized file, or a multi-hour VOD.
-# These bound disk + cost and shrink the attack surface of a pasted link. Tune (?) as needed.
-$MaxFileSize = '600M'                       # (?) hard cap per download
-$ytCommon = @(
-    '--no-playlist',                        # one item only, even if the URL is a playlist
-    '--max-filesize', $MaxFileSize,
-    # SUBORDINATE backstop to the pre-flight probe above (Assert-DurationGuard). It reuses the SAME
-    # resolved limit the probe just enforced ($guardResult.Limit) plus !is_live. A trailing '?' is
-    # deliberately omitted because that suffix is BELIEVED to be the fail-OPEN one -- i.e. its
-    # absence is believed to also reject a MISSING/unknown duration (fail-closed). That belief is
-    # UNVERIFIED against a live yt-dlp and is NOT load-bearing: the pre-flight probe already REFUSES a
-    # null/unknown duration before anything downloads (Resolve-DurationGuard step 3), so by the time
-    # this filter runs the duration is known and this clause can only ever RE-REJECT -- a source that
-    # changed between probe and download (TOCTOU, expected and fine). It must NEVER permit what the
-    # probe would refuse; if the two ever diverge, tighten HERE, never loosen the probe to match.
-    '--match-filter', "duration < $($guardResult.Limit) & !is_live"
-)
-
-# --- per-mode yt-dlp invocation ------------------------------------------------
-Write-Host "Downloading ($Mode): $Url" -ForegroundColor Cyan
-# Capture yt-dlp's STDOUT (where the "does not pass filter" backstop line lands -- verified) via
-# Tee-Object so it still streams live while we retain it to build an accurate no-file message below.
-# stderr (progress) is left unpiped so it renders normally, not as red error records.
-$ytStdout = @()
-switch ($Mode) {
-    # `--` terminates option parsing so a URL beginning with '-' can't be read as a flag (finding 7).
-    'transcript' {
-        & $ytdlp @ytCommon --restrict-filenames --skip-download --write-auto-subs --write-subs `
-            --sub-lang $Lang --convert-subs srt -o $outTemplate -- $Url | Tee-Object -Variable ytStdout
-        $pattern = "*.srt"
-    }
-    'audio' {
-        & $ytdlp @ytCommon --restrict-filenames -x --audio-format mp3 -o $outTemplate -- $Url | Tee-Object -Variable ytStdout
-        $pattern = "*.mp3"
-    }
-    'video' {
-        & $ytdlp @ytCommon --restrict-filenames -f "bv*+ba/b" -S "res:720" `
-            --merge-output-format mp4 -o $outTemplate -- $Url | Tee-Object -Variable ytStdout
-        $pattern = "*.mp4"
-    }
-}
-$ytStdoutText = ($ytStdout | Out-String)
-
-# --- find what THIS run produced (scoped to $runDir -- never a prior run's leftover) -----------
-$file = Get-RunOutputFile -RunDir $runDir -Pattern $pattern
-if (-not $file) {
-    # Accurate message: our own duration/live backstop declining the download ("does not pass filter")
-    # is NOT an upstream failure. Distinguish that from a transcript-with-no-captions result and from a
-    # genuine upstream download failure. See lib/get-duration-guard.ps1 (Resolve-NoFileMessage).
-    throw (Resolve-NoFileMessage -Mode $Mode -Pattern $pattern -RunDir $runDir -YtDlpStdout $ytStdoutText -Limit $guardResult.Limit)
-}
-
-Write-Host ""
-Write-Host "Saved: $($file.FullName)" -ForegroundColor Green
-
-# --- default briefs per mode ---------------------------------------------------
-if (-not $Prompt) {
-    $Prompt = switch ($Mode) {
-        'transcript' { "Summarize this transcript: the key points first, then notable details." }
-        'audio'      { "Summarize what is said in this audio, and note the tone." }
-        'video'      { "Describe what happens in this video and summarize the key points." }
-    }
-}
-
-# --- flatten the prompt to a single line before it becomes a CLI argument ------
-# Newline flattening keeps the multi-line -VideoScout brief (loaded from
-# prompts/video-scout-analysis.md) on one physical line. This is one of two delivery concerns on
-# the Windows PowerShell 5.1 -> node.exe argument boundary; the other -- embedded double quotes --
-# is handled separately by ConvertTo-NodeCliArg at the actual `& node` invocation below (quotes
-# can't be flattened away because they're semantically meaningful in the brief). See
-# lib/get-cli-safe-prompt.ps1 and lib/get-node-cli-arg.ps1 for the full mechanism.
-. (Join-Path $PSScriptRoot 'lib\get-cli-safe-prompt.ps1')
-$Prompt = Get-CliSafePrompt -Prompt $Prompt
-
-if ($NoFeed) {
-    Write-Host ""
-    # $file.DirectoryName, not $OutDir: the file now lives in a per-run subdirectory, not
-    # directly in $OutDir -- see the run-dir isolation note above.
-    Write-Host "Skipped feeding (-NoFeed). To send it to Gemini later, run from $($file.DirectoryName):" -ForegroundColor Cyan
-    Write-Host "  gemini -m $Model -p `"$Prompt @$($file.Name)`""
-    return
-}
-
-if (-not $gemini) {
-    Write-Host ""
-    Write-Host "Gemini CLI not found. File is saved above. Install/login, then run from $($file.DirectoryName):" -ForegroundColor Yellow
-    Write-Host "  gemini -m $Model -p `"$Prompt @$($file.Name)`""
-    return
-}
-
-# --- feed Gemini (run from trusted root so Gemini's folder-trust check passes) --
-# We do NOT call the `gemini` shim (.ps1/.cmd) here, and the reason is subtle. Both shims end in
-# `node <bundle>\gemini.js <args>`, so the runtime is a direct node call either way -- but the
-# PowerShell 5.1 -> node.exe argument boundary does not escape a value's embedded double quotes
-# (no PSNativeCommandArgumentPassing before PS 7.3). The -VideoScout brief contains literal "
-# characters, so node's C runtime splits the single -p value into multiple bare tokens, and gemini
-# aborts: "Cannot use both a positional prompt and the --prompt (-p) flag together". Routing
-# through the shim can't be fixed from here because the shim does its OWN uncontrolled
-# `& node ... $args` re-serialization across that same boundary. So we resolve the shim's node
-# entry point ourselves and invoke node directly, applying CommandLineToArgvW-correct escaping
-# (ConvertTo-NodeCliArg) to the one -p value -- see lib/get-node-cli-arg.ps1.
-#
-# gemini.js sits beside the shim at <shim dir>\node_modules\@google\gemini-cli\bundle\gemini.js
-# (this is exactly the path the shim itself runs). node is located the same way the shim locates
-# it: prefer a node.exe next to the shim, else the `node` on PATH.
-$geminiDir = Split-Path $gemini -Parent
-$geminiJs  = Join-Path $geminiDir 'node_modules\@google\gemini-cli\bundle\gemini.js'
-$nodeExe   = if (Test-Path -LiteralPath (Join-Path $geminiDir 'node.exe')) { Join-Path $geminiDir 'node.exe' } else { 'node' }
-
-Write-Host ""
-Write-Host "Feeding to Gemini..." -ForegroundColor Cyan
-$geminiCwd = Split-Path $OutDir -Parent
-Push-Location $geminiCwd
+# Everything below is a terminal path of an accepted run, so it runs inside one try/catch whose
+# only job is manifest truth: our own guard refusals finalize as 'refused', everything else as
+# 'error', and the original exception is ALWAYS rethrown unchanged (the manifest never softens a
+# failure into a silent continue).
 try {
-    # -MediaResolution is intentionally NOT passed here: the gemini CLI has no flag for it on the
-    # -p path (see lib/get-gemini-launch-config.ps1). Only -m/$Model is a real CLI knob today. Record
-    # what ACTUALLY happened -- requested-but-dropped, not silently logged as in force (finding 6).
-    Write-Host (Resolve-MediaResolutionLog -MediaResolution $MediaResolution -Route 'cli') -ForegroundColor Yellow
-    if (Test-Path -LiteralPath $geminiJs) {
-        $pArg = ConvertTo-NodeCliArg -Arg "$Prompt @$($file.FullName)"
-        & $nodeExe $geminiJs -m $Model -p $pArg
+    # --- Duration guard (download/CLI path) ----------------------------------------
+    # Reached only for transcript / audio / non-YouTube video / -NoFeed (the SDK route returned above).
+    # A range NEVER reaches here (it always routes to SDK), so HasRange:$false. This runs BEFORE the
+    # download and yields the resolved per-mode limit that the subordinate --match-filter uses below.
+    $guardResult = Assert-DurationGuard -Url $Url -GuardMode $Mode -HasRange:$false
+
+    # --- safety caps (shared across modes) -----------------------------------------
+    # A single URL should never pull a whole playlist, an oversized file, or a multi-hour VOD.
+    # These bound disk + cost and shrink the attack surface of a pasted link. Tune (?) as needed.
+    $MaxFileSize = '600M'                       # (?) hard cap per download
+    $ytCommon = @(
+        '--no-playlist',                        # one item only, even if the URL is a playlist
+        '--max-filesize', $MaxFileSize,
+        # SUBORDINATE backstop to the pre-flight probe above (Assert-DurationGuard). It reuses the SAME
+        # resolved limit the probe just enforced ($guardResult.Limit) plus !is_live. A trailing '?' is
+        # deliberately omitted because that suffix is BELIEVED to be the fail-OPEN one -- i.e. its
+        # absence is believed to also reject a MISSING/unknown duration (fail-closed). That belief is
+        # UNVERIFIED against a live yt-dlp and is NOT load-bearing: the pre-flight probe already REFUSES a
+        # null/unknown duration before anything downloads (Resolve-DurationGuard step 3), so by the time
+        # this filter runs the duration is known and this clause can only ever RE-REJECT -- a source that
+        # changed between probe and download (TOCTOU, expected and fine). It must NEVER permit what the
+        # probe would refuse; if the two ever diverge, tighten HERE, never loosen the probe to match.
+        '--match-filter', "duration < $($guardResult.Limit) & !is_live"
+    )
+
+    # --- per-mode yt-dlp invocation ------------------------------------------------
+    Write-Host "Downloading ($Mode): $Url" -ForegroundColor Cyan
+    # Capture yt-dlp's STDOUT (where the "does not pass filter" backstop line lands -- verified) via
+    # Tee-Object so it still streams live while we retain it to build an accurate no-file message below.
+    # stderr (progress) is left unpiped so it renders normally, not as red error records.
+    $ytStdout = @()
+    switch ($Mode) {
+        # `--` terminates option parsing so a URL beginning with '-' can't be read as a flag (finding 7).
+        'transcript' {
+            & $ytdlp @ytCommon --restrict-filenames --skip-download --write-auto-subs --write-subs `
+                --sub-lang $Lang --convert-subs srt -o $outTemplate -- $Url | Tee-Object -Variable ytStdout
+            $pattern = "*.srt"
+        }
+        'audio' {
+            & $ytdlp @ytCommon --restrict-filenames -x --audio-format mp3 -o $outTemplate -- $Url | Tee-Object -Variable ytStdout
+            $pattern = "*.mp3"
+        }
+        'video' {
+            & $ytdlp @ytCommon --restrict-filenames -f "bv*+ba/b" -S "res:720" `
+                --merge-output-format mp4 -o $outTemplate -- $Url | Tee-Object -Variable ytStdout
+            $pattern = "*.mp4"
+        }
+    }
+    $ytStdoutText = ($ytStdout | Out-String)
+
+    # --- find what THIS run produced (scoped to $runDir -- never a prior run's leftover) -----------
+    $file = Get-RunOutputFile -RunDir $runDir -Pattern $pattern
+    if (-not $file) {
+        # Accurate message: our own duration/live backstop declining the download ("does not pass filter")
+        # is NOT an upstream failure. Distinguish that from a transcript-with-no-captions result and from a
+        # genuine upstream download failure. See lib/get-duration-guard.ps1 (Resolve-NoFileMessage).
+        # The catch below classifies the backstop case as 'refused' (message starts 'Refused by') and
+        # the other two as 'error' before rethrowing.
+        throw (Resolve-NoFileMessage -Mode $Mode -Pattern $pattern -RunDir $runDir -YtDlpStdout $ytStdoutText -Limit $guardResult.Limit)
+    }
+
+    Write-Host ""
+    Write-Host "Saved: $($file.FullName)" -ForegroundColor Green
+
+    # Best-effort title for the manifest: yt-dlp named this file from the video title under
+    # --restrict-filenames, so the base name is the closest sanitized title the CLI route has.
+    # (The SDK route has no downloaded file and records videoTitle=null today.) Untrusted either
+    # way -- Complete-VideoScoutRunManifest sanitizes it again before it enters the manifest.
+    $videoTitle = $file.BaseName
+
+    # --- default briefs per mode ---------------------------------------------------
+    if (-not $Prompt) {
+        $Prompt = switch ($Mode) {
+            'transcript' { "Summarize this transcript: the key points first, then notable details." }
+            'audio'      { "Summarize what is said in this audio, and note the tone." }
+            'video'      { "Describe what happens in this video and summarize the key points." }
+        }
+    }
+
+    # --- flatten the prompt to a single line before it becomes a CLI argument ------
+    # Newline flattening keeps the multi-line -VideoScout brief (loaded from
+    # prompts/video-scout-analysis.md) on one physical line. This is one of two delivery concerns on
+    # the Windows PowerShell 5.1 -> node.exe argument boundary; the other -- embedded double quotes --
+    # is handled separately by ConvertTo-NodeCliArg at the actual `& node` invocation below (quotes
+    # can't be flattened away because they're semantically meaningful in the brief). See
+    # lib/get-cli-safe-prompt.ps1 and lib/get-node-cli-arg.ps1 for the full mechanism.
+    . (Join-Path $PSScriptRoot 'lib\get-cli-safe-prompt.ps1')
+    $Prompt = Get-CliSafePrompt -Prompt $Prompt
+
+    if ($NoFeed) {
+        Write-Host ""
+        # $file.DirectoryName, not $OutDir: the file now lives in a per-run subdirectory, not
+        # directly in $OutDir -- see the run-dir isolation note above.
+        Write-Host "Skipped feeding (-NoFeed). To send it to Gemini later, run from $($file.DirectoryName):" -ForegroundColor Cyan
+        Write-Host "  gemini -m $Model -p `"$Prompt @$($file.Name)`""
+        # -NoFeed asked only for the download, and the download succeeded: that IS this run's
+        # completed terminal state (no analysis was requested, so none is missing).
+        Complete-VideoScoutRunManifest -RunDir $runDir -Manifest $cliManifest -Outcome 'completed' -VideoTitle $videoTitle
+        return
+    }
+
+    if (-not $gemini) {
+        Write-Host ""
+        Write-Host "Gemini CLI not found. File is saved above. Install/login, then run from $($file.DirectoryName):" -ForegroundColor Yellow
+        Write-Host "  gemini -m $Model -p `"$Prompt @$($file.Name)`""
+        # The requested analysis did NOT happen. The console message is friendly, but the manifest
+        # must record the truth: this run terminated without its analysis -- an error, not success.
+        Complete-VideoScoutRunManifest -RunDir $runDir -Manifest $cliManifest -Outcome 'error' `
+            -Reason 'Gemini CLI not found: the downloaded file was saved but never analyzed.' -VideoTitle $videoTitle
+        return
+    }
+
+    # --- feed Gemini (run from trusted root so Gemini's folder-trust check passes) --
+    # We do NOT call the `gemini` shim (.ps1/.cmd) here, and the reason is subtle. Both shims end in
+    # `node <bundle>\gemini.js <args>`, so the runtime is a direct node call either way -- but the
+    # PowerShell 5.1 -> node.exe argument boundary does not escape a value's embedded double quotes
+    # (no PSNativeCommandArgumentPassing before PS 7.3). The -VideoScout brief contains literal "
+    # characters, so node's C runtime splits the single -p value into multiple bare tokens, and gemini
+    # aborts: "Cannot use both a positional prompt and the --prompt (-p) flag together". Routing
+    # through the shim can't be fixed from here because the shim does its OWN uncontrolled
+    # `& node ... $args` re-serialization across that same boundary. So we resolve the shim's node
+    # entry point ourselves and invoke node directly, applying CommandLineToArgvW-correct escaping
+    # (ConvertTo-NodeCliArg) to the one -p value -- see lib/get-node-cli-arg.ps1.
+    #
+    # gemini.js sits beside the shim at <shim dir>\node_modules\@google\gemini-cli\bundle\gemini.js
+    # (this is exactly the path the shim itself runs). node is located the same way the shim locates
+    # it: prefer a node.exe next to the shim, else the `node` on PATH.
+    $geminiDir = Split-Path $gemini -Parent
+    $geminiJs  = Join-Path $geminiDir 'node_modules\@google\gemini-cli\bundle\gemini.js'
+    $nodeExe   = if (Test-Path -LiteralPath (Join-Path $geminiDir 'node.exe')) { Join-Path $geminiDir 'node.exe' } else { 'node' }
+
+    Write-Host ""
+    Write-Host "Feeding to Gemini..." -ForegroundColor Cyan
+    $geminiCwd = Split-Path $OutDir -Parent
+    Push-Location $geminiCwd
+    try {
+        # -MediaResolution is intentionally NOT passed here: the gemini CLI has no flag for it on the
+        # -p path (see lib/get-gemini-launch-config.ps1). Only -m/$Model is a real CLI knob today. Record
+        # what ACTUALLY happened -- requested-but-dropped, not silently logged as in force (finding 6).
+        Write-Host (Resolve-MediaResolutionLog -MediaResolution $MediaResolution -Route 'cli') -ForegroundColor Yellow
+        if (Test-Path -LiteralPath $geminiJs) {
+            $pArg = ConvertTo-NodeCliArg -Arg "$Prompt @$($file.FullName)"
+            & $nodeExe $geminiJs -m $Model -p $pArg
+        }
+        else {
+            # Unknown gemini layout (no npm bundle beside the shim, e.g. a standalone .exe install).
+            # Fall back to the shim so this keeps working, but warn: a prompt with embedded quotes may
+            # be misparsed on this path, since we no longer control the final argument serialization.
+            Write-Warning "Could not locate gemini.js beside '$gemini'; falling back to the gemini shim. A prompt containing embedded double quotes may be misparsed on this fallback path."
+            & $gemini -m $Model -p "$Prompt @$($file.FullName)"
+        }
+    }
+    finally {
+        Pop-Location
+    }
+
+    # Terminal truth for the feed: the gemini CLI's own stderr already told the user WHAT failed;
+    # the manifest records THAT it failed. No usage metadata exists on this route (the CLI prints
+    # no machine-readable usage line), so usage stays null -- optional metadata, not a fabrication.
+    $feedExit = $LASTEXITCODE
+    if ($feedExit -ne 0) {
+        Complete-VideoScoutRunManifest -RunDir $runDir -Manifest $cliManifest -Outcome 'error' `
+            -Reason "gemini CLI exited with code $feedExit (see the run output above)." -VideoTitle $videoTitle
     }
     else {
-        # Unknown gemini layout (no npm bundle beside the shim, e.g. a standalone .exe install).
-        # Fall back to the shim so this keeps working, but warn: a prompt with embedded quotes may
-        # be misparsed on this path, since we no longer control the final argument serialization.
-        Write-Warning "Could not locate gemini.js beside '$gemini'; falling back to the gemini shim. A prompt containing embedded double quotes may be misparsed on this fallback path."
-        & $gemini -m $Model -p "$Prompt @$($file.FullName)"
+        Complete-VideoScoutRunManifest -RunDir $runDir -Manifest $cliManifest -Outcome 'completed' -VideoTitle $videoTitle
     }
 }
-finally {
-    Pop-Location
+catch {
+    # Same terminal-truth backstop as the SDK route: record refused/error, then rethrow the
+    # ORIGINAL failure unchanged. If the outcome is already terminal, the in-flight exception is a
+    # manifest-write failure from Complete-VideoScoutRunManifest itself -- propagate it untouched.
+    if ($null -eq $cliManifest.outcome) {
+        Complete-VideoScoutRunManifest -RunDir $runDir -Manifest $cliManifest `
+            -Outcome (Resolve-ManifestFailureClass -Message $_.Exception.Message) `
+            -Reason $_.Exception.Message
+    }
+    throw
 }
