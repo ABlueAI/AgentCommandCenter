@@ -100,6 +100,9 @@ layer: whiteboard, quick widgets, and CRM data.
   keeps canonical `startedAt=null`, and retains its folder stamp only in
   explicit approximate provenance. The sweep reported 0 skipped, unsafe, or
   failed directories.
+- **V2 report TL;DRs: COMPLETE.** The prompt preserves its report-leading
+  Section 1 TL;DR and now requires an evidence-grounded one-line Section TL;DR
+  for Sections 2–9. Standard-class review passed; Pester is 216/216.
 - **Live Test D: COMPLETE.** Transcript launch contained no
   `--start-offset` or `--end-offset`, no stale-range `BUG:` line, and reopened
   video fields were empty. The later Gemini 503 is tracked separately under K5
@@ -121,9 +124,9 @@ layer: whiteboard, quick widgets, and CRM data.
 
 ### Current execution order
 
-The live order is: V2 TLDR (Standard-class) → TTS bootstrap → STT bootstrap →
-audio permission/error hardening → timestamped transcripts → P13/K5 → V1 →
-V5(b–d) → V3 → V4 → remaining Day 2/3 work → full functional ship-check → R15
+The live order is: TTS bootstrap → STT bootstrap → audio permission/error
+hardening → timestamped transcripts → P13/K5 → V1 → V5(b–d) → V3 → V4 →
+remaining Day 2/3 work → full functional ship-check → R15
 fork/replacement evaluation. Each arrow is a clean checkpoint; runtime items
 remain separate one-invariant branches and receive their own Reviewer gate.
 
@@ -704,11 +707,10 @@ live testing — these are NEEDS, not wants; V1 blocks the tool's whole point):*
 > disk in its `run-<timestamp>-<PID>` dir — open the report file; the pane is
 > only a viewport.
 
-> **V2. TLDR in the analysis output.** Prompt-template change: lead the
-> report with a TLDR block, and give each major section its own one-line
-> TLDR. (The nine-section Gem prompt had this shape; the video-scout template
-> apparently doesn't — port it.) Cheap, high value, can land as a
-> scripts-only branch anytime.
+> **V2. TLDR in the analysis output — COMPLETE (July 15).** Section 1 remains
+> report-leading and Sections 2–9 now require their own evidence-grounded
+> one-line Section TL;DR. Pester 216/216; Standard-class scoped Reviewer
+> verdict PASS.
 
 > **V3. Pre-analysis direction + post-analysis follow-up Q&A.** Two halves:
 > (a) BEFORE: an optional "focus/instructions" free-text field in the New
