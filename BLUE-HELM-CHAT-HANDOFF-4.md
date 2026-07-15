@@ -52,15 +52,20 @@ productivity OUT of scope.
   this handoff contains no remaining live-test procedure.
 
 ## Immediate work queue (in order)
-1. **TTS bootstrap repair** on `feature/tts-bootstrap-fix`: fix the Kokoro
+1. **TTS bootstrap repair (Standard-class)** on `feature/tts-bootstrap-fix`:
+   recoverable initialization/failure-visibility work only; one scoped review.
+   Fix the Kokoro
    environment contract, make initialization failures visible, add bootstrap
    tests, and live-test voice/speed/stop on WebGPU and WASM.
 2. **STT bootstrap repair** on `feature/stt-bootstrap-fix`: make the
    Transformers/ONNX browser dependency graph reproducible, restore a tracked
    runtime path, pin dictation to the pane where recording started, add tests,
    and prove visible recording/transcribing states plus focused-pane insertion.
-3. **Audio permission hardening** after both engines work: enforce trusted
-   origin + audio-only media permission and surface module-level errors in Logs.
+3. **K8 audio permission hardening (Full-class)** after both engines work:
+   enforce trusted origin + audio-only media permission and surface module-level
+   errors in Logs. This touches Electron's broad `media` permission boundary,
+   so it requires whole-diff review and a delta pass after any FAIL; never fold
+   it into K7 bootstrap work.
 4. **9c — timestamps in transcript output** (enables cheap-pass → pick range
    → expensive-slice).
 5. **P13 chores**: Pester version pin in `run-pester.ps1` + `PROJECT-STATE.md`
