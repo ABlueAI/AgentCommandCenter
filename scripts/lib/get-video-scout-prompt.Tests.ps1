@@ -33,6 +33,18 @@ Describe 'Get-VideoScoutPrompt' {
         }
     }
 
+    It 'preserves the report-leading Section 1 TL;DR block' {
+        $prompt = Get-VideoScoutPrompt
+        $prompt | Should Match '## 1\. TL;DR'
+    }
+
+    It 'requires a Section TL;DR first line for every section from 2 through 9' {
+        $prompt = Get-VideoScoutPrompt
+        2..9 | ForEach-Object {
+            $prompt | Should Match ("## {0}\. .+\r?\nFirst line must be ``\*\*Section TL;DR:\*\*" -f $_)
+        }
+    }
+
     It 'reads non-ASCII punctuation (em dash) correctly from a BOM-less UTF-8 file' {
         # Regression guard: Windows PowerShell 5.1's Get-Content assumes the system ANSI code
         # page for BOM-less files unless -Encoding UTF8 is passed, which mangles characters
