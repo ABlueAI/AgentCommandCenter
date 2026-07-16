@@ -3,6 +3,43 @@
 
 const $ = (sel) => document.querySelector(sel);
 const state = { repo: '', githubUrl: '', worktrees: [], chosenRole: 'builder', chosenCli: 'claude', hardTask: false, theme: 'obsidian', ttsVoice: '', ttsSpeed: 1, videoModel: 'gemini-2.5-flash-lite', mediaResolution: 'MEDIUM', analysisMode: 'transcript' };
+const audioModules = window.ccAudioModuleHealth.createAudioModuleHealth();
+
+function audioModuleFromFailure(source, detail) {
+  const text = `${source || ''} ${detail || ''}`.toLowerCase();
+  if (text.includes('tts.js') || text.includes('kokoro')) return 'tts';
+  if (text.includes('stt.js') || text.includes('transformers.web')) return 'stt';
+  return '';
+}
+
+function renderAudioModuleState(kind) {
+  const moduleState = audioModules.get(kind);
+  const el = $(kind === 'tts' ? '#ttsStatus' : '#sttStatus');
+  if (!el || moduleState.phase !== 'failed') return;
+  el.textContent = `engine unavailable — ${moduleState.detail}`;
+}
+
+function reportAudioModuleFailure(kind, detail) {
+  const before = audioModules.get(kind);
+  const after = audioModules.markFailed(kind, detail);
+  renderAudioModuleState(kind);
+  if (before.phase !== 'failed' || before.detail !== after.detail) appendLog(`[${kind}] engine unavailable: ${after.detail}\n`);
+}
+
+// app.js is deliberately loaded before the deferred audio modules. Catch an
+// import-time failure here, because a module that dies before its ready event
+// cannot report its own failure.
+window.addEventListener('error', (event) => {
+  const source = (event && event.filename) || (event && event.target && event.target.src);
+  const kind = audioModuleFromFailure(source, event && event.message);
+  if (kind) reportAudioModuleFailure(kind, (event && event.message) || 'browser module failed to load');
+}, true);
+window.addEventListener('unhandledrejection', (event) => {
+  const reason = event && event.reason;
+  const detail = (reason && (reason.message || String(reason))) || 'browser module failed to load';
+  const kind = audioModuleFromFailure('', detail);
+  if (kind) reportAudioModuleFailure(kind, detail);
+});
 
 // Blue Helm role metadata (UI + flow only — the tools allowlist that ENFORCES read-only
 // lives in agent-roles/*.md / ~/.claude/agents). Keep colors in sync with styles.css and
@@ -199,20 +236,33 @@ function openInAppTerminal(opts = {}) {
   ro.observe(pane.querySelector('.term-body'));
   const speakBtn = pane.querySelector('.spk');
   let selectionAtSpeakPointerDown = '';
+  const selectedTextInPane = () => {
+    const terminalText = term.getSelection();
+    if (terminalText) return terminalText;
+    const selection = window.getSelection && window.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) return '';
+    const range = selection.getRangeAt(0);
+    return pane.contains(range.commonAncestorContainer) ? selection.toString() : '';
+  };
   speakBtn.addEventListener('pointerdown', (event) => {
     // Snapshot first: the generic pane focus handler below can otherwise clear
     // xterm's visible selection before the click handler reads it.
-    selectionAtSpeakPointerDown = term.getSelection();
+    selectionAtSpeakPointerDown = selectedTextInPane();
     event.preventDefault();
     event.stopPropagation();
   });
   speakBtn.onclick = (event) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!window.ccTTS) { appendLog('[tts] voice engine not ready yet.\n'); return; }
+    if (!window.ccTTS) {
+      const moduleState = audioModules.get('tts');
+      const detail = moduleState.phase === 'failed' ? moduleState.detail : 'module is still starting';
+      appendLog(`[tts] voice engine unavailable: ${detail}\n`);
+      return;
+    }
     const action = window.ccTTSSelection.resolveSpeakAction({
       selectionAtPointerDown: selectionAtSpeakPointerDown,
-      selectionAtClick: term.getSelection(),
+      selectionAtClick: selectedTextInPane(),
       paneId: id,
       role,
     });
@@ -268,11 +318,33 @@ async function boot() {
   });
   cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));
   window.addEventListener('resize', fitAllTerms);
-  // TTS/STT modules load after this script; wire their controls when they announce ready.
-  if (window.ccTTS) setupTTSControls();
-  else window.addEventListener('cc-tts-ready', setupTTSControls, { once: true });
-  if (window.ccSTT) setupSTTControls();
-  else window.addEventListener('cc-stt-ready', setupSTTControls, { once: true });
+  // TTS/STT modules load after this script. Every state has an explicit UI:
+  // ready wires the control; a missed ready event becomes a visible refusal.
+  const ttsReady = () => { audioModules.markReady('tts'); setupTTSControls(); appendLog('[tts] module ready\n'); };
+  const sttReady = () => { audioModules.markReady('stt'); setupSTTControls(); appendLog('[stt] module ready\n'); };
+  if (window.ccTTS) ttsReady();
+  else window.addEventListener('cc-tts-ready', ttsReady, { once: true });
+  if (window.ccSTT) sttReady();
+  else {
+    installSTTUnavailableControl();
+    window.addEventListener('cc-stt-ready', sttReady, { once: true });
+  }
+  setTimeout(() => {
+    for (const kind of ['tts', 'stt']) {
+      if (audioModules.get(kind).phase !== 'pending') continue;
+      reportAudioModuleFailure(kind, 'module did not initialize; required browser bundle may be missing');
+    }
+  }, 2500);
+}
+
+function installSTTUnavailableControl() {
+  const micBtn = $('#sttMic');
+  if (!micBtn) return;
+  micBtn.onclick = () => {
+    const moduleState = audioModules.get('stt');
+    const detail = moduleState.phase === 'failed' ? moduleState.detail : 'module is still starting';
+    appendLog(`[stt] dictation engine unavailable: ${detail}\n`);
+  };
 }
 
 // Wire the Whisper dictation control: push-to-talk that types the transcript into
@@ -280,8 +352,8 @@ async function boot() {
 function setupSTTControls() {
   const stt = window.ccSTT; if (!stt) return;
   const micBtn = $('#sttMic');
-  if (micBtn && !micBtn.dataset.wired) {
-    micBtn.dataset.wired = '1';
+  if (micBtn && !micBtn.dataset.sttWired) {
+    micBtn.dataset.sttWired = '1';
     micBtn.onclick = () => {
       if (!activeTermId || !terms.has(activeTermId)) { appendLog('[stt] click into an agent pane first, then 🎤.\n'); return; }
       stt.toggle();

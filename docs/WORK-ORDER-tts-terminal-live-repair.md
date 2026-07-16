@@ -9,8 +9,9 @@ control speaks only text the user selected; it never auto-speaks a pane.
 ## Tier and blast radius
 
 **Standard-class.** One invariant on `feature/tts-terminal-live-repair`:
-terminal selection reaches the existing TTS action reliably and the selected
-Kokoro backend receives its supported dtype.
+selection reaches the existing TTS action reliably, an audio module startup
+failure refuses visibly, and the selected Kokoro backend receives its
+supported dtype.
 
 **Blast radius:** renderer-side event handling, local model configuration, and
 diagnostic Logs. A failure remains a recoverable nonfunctional TTS control. No
@@ -28,10 +29,16 @@ touched.
 
 ## Required scope
 
-- Capture terminal selection before the speaker-button interaction can trigger
-  the pane focus handler; use that capture for the existing Speak action.
+- Capture any visible selection within the initiating pane before the
+  speaker-button interaction can trigger the pane focus handler; use that
+  capture for the existing Speak action. Xterm selection remains preferred,
+  with a same-pane DOM selection fallback for rendered content.
 - Log only pane identity, role, and selected-character count. Never log selected
   text. Preserve a visible no-selection refusal.
+- If either deferred browser audio module never announces readiness, surface an
+  honest unavailable status and an explanatory Logs entry. Dictate must never
+  be a silent button, even though the missing Whisper package is repaired on
+  its own STT branch.
 - Load Kokoro with `fp32` on WebGPU and `q8` on WASM.
 - Add focused tests for selection handoff/refusal and per-device model settings.
 

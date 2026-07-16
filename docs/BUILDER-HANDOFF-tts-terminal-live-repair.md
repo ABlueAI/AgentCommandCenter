@@ -3,12 +3,12 @@
 Branch: `feature/tts-terminal-live-repair`
 Fork-point SHA: `ef3e26a`
 Pre-merge main SHA: `ef3e26a`
-Reviewed implementation tip: `368fdfa3291ab61a5576a4eac8a6031b014795bd`
+Reviewed implementation tip: Pending corrective-delta review
 Merge commit SHA: Pending human live proof and merge
 
 Intended invariant: an explicit terminal selection reaches the existing Speak
-action in every pane without exposing selected text in Logs; Kokoro uses fp32
-on WebGPU and q8 on WASM.
+action in every pane without exposing selected text in Logs; an unavailable
+audio module refuses visibly; Kokoro uses fp32 on WebGPU and q8 on WASM.
 
 Files changed:
 
@@ -18,6 +18,10 @@ Files changed:
 - `app/renderer/tts.js` and `tts-device-config.js` use device-specific Kokoro
   options.
 - Focused selection/config tests are wired into `npm.cmd test`.
+- `audio-module-health.js` catches an audio ES-module failure or a missing
+  ready event and makes the unavailable engine explicit in both the control
+  strip and Logs. Dictate receives a refusal handler rather than remaining a
+  hollow button. This does not package or repair Whisper itself.
 - The master status and work order truthfully retain audio as incomplete.
 
 Security-sensitive surfaces touched: none. No main-process, IPC, permission,
@@ -30,7 +34,7 @@ Commands run:
 
 Exact test results:
 
-- App: 272 passed, 0 failed.
+- App: 281 passed, 0 failed.
 - Pester: 216 passed, 0 failed.
 
 Manual verification still required:
@@ -50,13 +54,16 @@ Known limitations:
 - A cancelled pointer press can leave a transient selection snapshot until the
   next pointer press; Reviewer classified this as non-material.
 
-Recommended review focus: pointer/mouse event order and the real Kokoro loader
-options; human proof remains the merge gate.
+Recommended review focus: same-pane selection capture and the audio-module
+failure path (including the Dictate fallback); human proof remains the merge
+gate.
 
 Review diff:
-`git diff main...368fdfa3291ab61a5576a4eac8a6031b014795bd --output=.agent-review-tts-terminal-live-repair.diff`
+Recreate after the corrective-delta commit with:
+`git diff main...HEAD --output=.agent-review-tts-terminal-live-repair.diff`
 
-Reviewer verdict: `VERDICT: PASS`
+Prior reviewer verdict: `VERDICT: PASS` for `368fdfa`; corrective delta needs
+one new scoped Standard-class review before merge.
 
 Reviewer verdict source: scoped read-only review of the pinned diff, July 16,
 2026. The Reviewer could not execute tests; the Builder/Codex app and Pester
