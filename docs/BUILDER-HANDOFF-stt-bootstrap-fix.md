@@ -110,9 +110,16 @@ destination-pane lock · module-failure visibility.
 Review diff (STT-only, excludes the TTS base):
 `git diff ae66043...HEAD --output=.agent-review-stt-bootstrap-fix.diff` (pinned, gitignored)
 
-Reviewer verdict:
+Reviewer verdict: `VERDICT: PASS`
 
-Reviewer verdict source:
+Reviewer verdict source: scoped read-only Standard-class Reviewer pass (fresh subagent),
+July 16, 2026, over the pinned `.agent-review-stt-bootstrap-fix.diff` (`ae66043...82d9bf1`)
+plus worktree context. All five load-bearing areas verified sound; two LOW non-blocking
+observations recorded verbatim: (1) `sttDictationTargetId` is cleared only in `onResult`
+(safe — every record-start overwrites it and `onResult` is the only reader; consider
+clearing on error/idle too); (2) the post-load `('loading', 'model ready — …')` status
+wording is slightly odd but harmless and transient. The Reviewer could not execute
+tests; the Builder's app 383/0 and Pester 216/0 runs above are the execution record.
 
 ## Review-diff rule
 
