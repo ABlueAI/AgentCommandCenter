@@ -88,9 +88,10 @@ layer: whiteboard, quick widgets, and CRM data.
 
 ## Current checkpoint — July 15 platform transfer
 
-- **Repository baseline:** `main` @ `ef3e26a`, pushed to `origin/main` after
-  the Pester compatibility pin and first TTS bootstrap repair. Both merged
-  gates are green: 216 Pester assertions and 262 app assertions.
+- **Repository baseline:** `main` @ `5ee435b`, pushed to `origin/main` after
+  merging `feature/tts-agent-mouse-selection` (the full stacked audio chain).
+  Both gates re-run green on the merged tree: 216 Pester assertions and 423 app
+  assertions.
 - **`analysisMode` fail-closed: COMPLETE.** The last invalid-mode silent
   cost-direction path is merged.
 - **V5a manifest + legacy backfill: COMPLETE.** New accepted runs write the
@@ -114,13 +115,18 @@ layer: whiteboard, quick widgets, and CRM data.
   imports; that STT runtime file is also gitignored and absent from `HEAD`.
   Kokoro, Whisper, Transformers.js, and ONNX Runtime remain the intended OSS
   engines. Repair the integration and packaging; do not rebuild the engines.
-- **Audio live-test correction:** TTS bootstrap is merged, but human testing
-  found terminal selection lost in agent panes and garbled WebGPU speech; TTS
-  remains incomplete on `feature/tts-terminal-live-repair`. STT remains
-  nonfunctional until its browser dependency graph is tracked and reproducible.
-  After core TTS/STT proof, add a Voice Console with target-pane lock and final
-  transcript review. Advanced sequential TTS queueing stays deferred; every
-  future item must retain and announce its source agent name and role.
+- **Audio stack MERGED (July 16, `5ee435b`, marker `AUDIO ACCEPTANCE
+  2026-07-16.4`):** TTS terminal live repair (selection capture, fp32/q8 device
+  config, latest-request-wins playback), STT/Whisper bootstrap (official
+  @huggingface/transformers 3.8.1 bundle, tested env contract, webgpu→wasm
+  fallback with throttled visible progress, destination-pane lock, no
+  transcript text in Logs), dictation accuracy upgrade, and agent-pane
+  mouse-mode selection via xterm's public `select()`. Human acceptance passed
+  Dictate + PowerShell TTS on `.3` and drove the `.4` mouse-selection repair;
+  Blue authorized the merge. Each branch carried its own Reviewer PASS. This
+  closes K7. Voice Console with final transcript review remains roadmap work;
+  advanced sequential TTS queueing stays deferred; every future item must
+  retain and announce its source agent name and role.
 - **Routing decision:** ChatGPT desktop with GPT-5.6 is the primary planning,
   architecture, research, review, and project-state layer. Claude Code remains
   the primary coding surface. Codex CLI/IDE remains an optional, separate
@@ -135,11 +141,12 @@ layer: whiteboard, quick widgets, and CRM data.
 The Voice Console foundation follows successful core-audio proof and precedes
 K8 permission hardening; it does not authorize that security-boundary work.
 
-The live order is: TTS bootstrap → STT bootstrap → audio permission/error
-hardening → timestamped transcripts → P13/K5 → V1 → V5(b–d) → V3 → V4 →
-remaining Day 2/3 work → full functional ship-check → R15
-fork/replacement evaluation. Each arrow is a clean checkpoint; runtime items
-remain separate one-invariant branches and receive their own Reviewer gate.
+The live order is: ~~TTS bootstrap → STT bootstrap~~ (✅ merged @ `5ee435b`) →
+audio permission/error hardening (K8, Full-class — NEXT) → timestamped
+transcripts → P13/K5 → V1 → V5(b–d) → V3 → V4 → remaining Day 2/3 work → full
+functional ship-check → R15 fork/replacement evaluation. Each arrow is a clean
+checkpoint; runtime items remain separate one-invariant branches and receive
+their own Reviewer gate.
 
 ---
 
@@ -627,6 +634,14 @@ remain separate one-invariant branches and receive their own Reviewer gate.
 > the `throw` at `invoke-duration-probe.ps1:86`). Message-first is correct;
 > suppress or soften the stack dump on the standalone path (cosmetic).
 
+> **K7 ✅ RESOLVED (July 16, merged @ `5ee435b`, marker 2026-07-16.4).** Both
+> engines now bootstrap: TTS via the tracked Kokoro bundle with device-correct
+> fp32/q8 config; STT via the official @huggingface/transformers 3.8.1 browser
+> bundle as a declared dependency, with a tested env contract, visible
+> webgpu→wasm fallback + throttled progress, destination-pane lock, and honest
+> module-failure states. Human acceptance passed; each stacked branch had its
+> own Reviewer PASS. Original finding retained below for provenance.
+>
 > **K7 (VERIFIED, July 14). TTS and STT controls are visible but both engines
 > fail during module startup.** TTS assumes `env.backends.onnx` exists on the
 > Kokoro browser bundle even though that bundle exports only `env.wasmPaths`.
@@ -643,12 +658,13 @@ remain separate one-invariant branches and receive their own Reviewer gate.
 > This is explained by STT failing before it publishes `window.ccSTT` and its
 > ready event; it is a bootstrap defect, not an after-stop transcription UX.
 
-> **K8 (VERIFIED, July 14). Audio integration hardening follows bootstrap.**
-> Dictation currently targets whichever pane is active when transcription
-> finishes rather than the pane where recording began. The Electron permission
-> handler allows the broad `media` permission class without proving audio-only
-> scope or checking the requesting origin. Repair separately after K7 so
-> functionality and permission changes receive distinct Reviewer gates.
+> **K8 (VERIFIED, July 14; NEXT in queue now that K7 is merged). Audio
+> integration hardening follows bootstrap.** The pane-targeting half is DONE
+> (the merged destination-pane lock delivers to the pane where recording
+> began, or refuses visibly). REMAINING: the Electron permission handler still
+> allows the broad `media` permission class without proving audio-only scope
+> or checking the requesting origin. Repair separately so functionality and
+> permission changes receive distinct Reviewer gates.
 > **Tier: Full-class.** K8 changes an Electron security boundary: trusted
 > origin and audio-only scope must be proved before granting media. It receives
 > whole-diff review and a delta pass after any FAIL; never fold it into K7.
