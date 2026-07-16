@@ -395,7 +395,7 @@ function setupTTSControls() {
   if (stopBtn) stopBtn.onclick = () => tts.stop();
   tts.onStatus(({ state: st, detail }) => {
     const el = $('#ttsStatus'); if (el) el.textContent = (st && st !== 'idle') ? (st + (detail ? ' — ' + detail : '')) : '';
-    if (stopBtn) stopBtn.classList.toggle('hidden', st !== 'speaking' && st !== 'loading');
+    if (stopBtn) stopBtn.classList.toggle('hidden', st !== 'speaking' && st !== 'synthesizing' && st !== 'loading');
     if (st === 'error' && detail) appendLog('[tts] ' + detail + '\n');
     if (st === 'ready' && detail) appendLog('[tts] engine ready: ' + detail + '\n');
   });

@@ -30,11 +30,22 @@ function section(name) { process.stdout.write(`\n${name}\n`); }
 // tts.js only needs EventTarget (addEventListener/dispatchEvent) and AudioContext at
 // import/speak time; it never touches `document`.
 const win = new EventTarget();
+let scheduledSources = 0;
+const copiedBuffers = [];
 win.AudioContext = function AudioContext() {
   this.state = 'running';
   this.currentTime = 0;
   this.resume = async () => {};
-  this.createBuffer = () => ({ copyToChannel() {} });
+  this.createBuffer = (channels, length, sampleRate) => ({
+    copyToChannel(samples) {
+      copiedBuffers.push({ channels, sampleRate, samples: Array.from(samples) });
+    },
+    duration: length / sampleRate,
+  });
+  this.createBufferSource = () => {
+    scheduledSources++;
+    return { connect() {}, start() {}, stop() {}, set onended(_cb) {} };
+  };
   this.destination = {};
 };
 global.window = win;
@@ -112,6 +123,51 @@ section('Failure path is visible, not silent (both devices fail)');
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+section('Latest request wins: stale or stopped generation cannot enqueue audio');
+
+{
+  const kokoro = await import('./vendor/kokoro.web.js');
+  const original = kokoro.KokoroTTS.from_pretrained;
+  const pending = [];
+  const waitForPending = async (count) => {
+    while (pending.length < count) await new Promise((resolve) => setImmediate(resolve));
+  };
+  kokoro.KokoroTTS.from_pretrained = async () => ({
+    generate: (text) => new Promise((resolve) => pending.push({ text, resolve })),
+  });
+  try {
+    const before = scheduledSources;
+    const first = window.ccTTS.speak('first request.');
+    await waitForPending(1);
+    const second = window.ccTTS.speak('second request.');
+    await waitForPending(2);
+
+    pending[0].resolve({ audio: new Float32Array([0.9, -0.9]), sampling_rate: 24000 });
+    await first;
+    assert(scheduledSources === before,
+      'an older generation result is discarded after a newer click');
+
+    pending[1].resolve({ audio: new Float32Array([0.25, -0.5]), sampling_rate: 24000 });
+    await second;
+    assert(scheduledSources === before + 1,
+      'only the newest request reaches the Web Audio queue');
+    const copied = copiedBuffers.at(-1);
+    assert(!!copied && copied.channels === 1 && copied.sampleRate === 24000
+      && copied.samples[0] === 0.25 && copied.samples[1] === -0.5,
+    'the generated mono waveform and 24 kHz sample rate reach playback unchanged');
+
+    const third = window.ccTTS.speak('stopped request.');
+    await waitForPending(3);
+    window.ccTTS.stop();
+    pending[2].resolve({ audio: new Float32Array([0.6, -0.6]), sampling_rate: 24000 });
+    await third;
+    assert(scheduledSources === before + 1,
+      'Stop invalidates generation still in flight before it can enqueue audio');
+  } finally {
+    kokoro.KokoroTTS.from_pretrained = original;
+  }
+}
+
 // Results
 // ══════════════════════════════════════════════════════════════════════════════
 

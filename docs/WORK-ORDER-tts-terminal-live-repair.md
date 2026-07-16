@@ -47,6 +47,9 @@ touched.
 - Distinguish model synthesis from actual playback, report the selected English
   voice/backend/dtype, and validate the generated Float32 waveform before
   Web Audio receives it.
+- Make speech generation latest-request-wins. A second click or Stop must
+  invalidate an older generation still awaiting the model so stale waveforms
+  can never overlap or corrupt the current playback queue.
 - Display an unmistakable acceptance-build marker in both the window title and
   control strip so an old main build cannot be mistaken for this branch again.
 - Add focused tests for selection handoff/refusal and per-device model settings.
@@ -62,6 +65,8 @@ touched.
 - [ ] Selecting text in PowerShell and at least two agent panes reaches Speak.
 - [ ] Logs identify the initiating pane/role and character count without text.
 - [ ] WebGPU and WASM use the correct model dtype.
+- [x] Automated proof rejects stale and stopped generation before playback and
+      preserves the model's mono Float32 samples at its declared sample rate.
 - [ ] App and Pester gates pass.
 - [ ] A full Electron restart precedes human proof of intelligible English,
       voice selection, speed, Stop, and WebGPU/WASM behavior.

@@ -17,7 +17,9 @@ Files changed:
   interaction and log only pane metadata plus character count.
 - `app/renderer/tts.js` and `tts-device-config.js` use device-specific Kokoro
   options. The TTS status now identifies English/voice/backend/dtype and says
-  `synthesizing` until audio is actually scheduled for playback.
+  `synthesizing` until audio is actually scheduled for playback. A monotonic
+  request token makes repeated clicks and Stop latest-request-wins, so an older
+  asynchronous generation cannot re-enter or overlap the current audio queue.
 - `tts-audio-contract.js` refuses missing, empty, silent, non-finite, or
   implausibly sampled model output before it can be presented as speech.
 - The window title and terminal control strip show `AUDIO ACCEPTANCE
@@ -39,7 +41,7 @@ Commands run:
 
 Exact test results:
 
-- App: 292 passed, 0 failed.
+- App: 296 passed, 0 failed.
 - Pester: 216 passed, 0 failed.
 
 Manual verification still required:
@@ -56,6 +58,9 @@ Known limitations:
 
 - No STT/Whisper repair, Voice Console, target lock, queue, or permission
   hardening is included.
+- First-use download is explicit in the status: approximately 326 MB for the
+  WebGPU fp32 path or 92 MB for the WASM q8 fallback; no manual install is
+  required.
 - A cancelled pointer press can leave a transient selection snapshot until the
   next pointer press; Reviewer classified this as non-material.
 

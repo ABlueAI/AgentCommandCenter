@@ -1,8 +1,8 @@
 // Command Center — in-app Text-to-Speech (Kokoro, WebGPU).
 //
 // Runs the 82M Kokoro TTS model entirely in the renderer on the GPU via WebGPU
-// (falls back to WASM/CPU). The model (~80MB, q8) downloads once from Hugging Face
-// and is cached by the browser thereafter. The ONNX runtime itself is vendored
+// (fp32, with a q8 WASM/CPU fallback). The selected model files download once from
+// Hugging Face and are cached by Chromium. The ONNX runtime itself is vendored
 // locally (vendor/ort/), so only the model is fetched over the network.
 //
 // This is an ES module; it exposes a small API on window.ccTTS for the classic
@@ -48,7 +48,7 @@ let loading = null;    // in-flight load promise
 let voice = 'am_michael';
 let speed = 1.0;
 let speaking = false;
-let genStop = false;   // request to abort the current generation loop
+let requestId = 0;     // monotonic cancellation token; only latest may enqueue
 let statusCb = null;
 let activeDevice = '';
 
@@ -85,7 +85,7 @@ async function ensureModel() {
   if (tts) return tts;
   if (loading) return loading;
   loading = (async () => {
-    setStatus('loading', 'first run downloads the voice model (~80MB)…');
+    setStatus('loading', 'first run downloads the voice model (WebGPU ~326MB; WASM ~92MB)…');
     tts = await bootstrapModel(
       (device) => KokoroTTS.from_pretrained(MODEL_ID, getKokoroLoadOptions(device)),
       { onStatus: setStatus, onSelected: (device) => { activeDevice = device; } },
@@ -123,12 +123,17 @@ function enqueue(float32, sampleRate) {
 async function speak(rawText) {
   const text = cleanText(rawText);
   if (!text) { setStatus('idle', 'nothing to speak'); return; }
-  stop();
+  const mine = ++requestId;
+  cancelScheduledAudio();
+  speaking = false;
   try {
     await ensureModel();
-  } catch (e) { setStatus('error', 'could not load the voice model: ' + (e && e.message)); return; }
+  } catch (e) {
+    if (mine === requestId) setStatus('error', 'could not load the voice model: ' + (e && e.message));
+    return;
+  }
 
-  speaking = true; genStop = false;
+  if (mine !== requestId) return;
   const options = getKokoroLoadOptions(activeDevice);
   setStatus('synthesizing', `English · ${voice} · ${activeDevice}/${options.dtype}`);
   const ac = ctx();
@@ -142,32 +147,37 @@ async function speak(rawText) {
   try {
     let firstAudio = true;
     for (const chunk of chunksOf(text)) {
-      if (genStop) break;
+      if (mine !== requestId) return;
       const a = await tts.generate(chunk, { voice, speed });
-      if (genStop) break;
+      if (mine !== requestId) return;
       const audio = validateKokoroAudio(a);
       enqueue(audio.samples, audio.sampleRate);
       if (firstAudio) {
         firstAudio = false;
+        speaking = true;
         setStatus('speaking', `English · ${voice} · ${activeDevice}/${options.dtype}`);
       }
     }
   } catch (e) {
     speaking = false;
-    if (!genStop) setStatus('error', 'speech failed: ' + (e && e.message));
+    if (mine === requestId) setStatus('error', 'speech failed: ' + (e && e.message));
     return;
   }
   // let the scheduled audio finish before going idle
   const remainMs = Math.max(0, (nextStart - ctx().currentTime) * 1000);
   await new Promise((r) => setTimeout(r, remainMs + 60));
-  if (!genStop) { speaking = false; setStatus('idle'); }
+  if (mine === requestId) { speaking = false; setStatus('idle'); }
+}
+
+function cancelScheduledAudio() {
+  for (const s of scheduled) { try { s.stop(); } catch {} }
+  scheduled = [];
 }
 
 function stop() {
-  genStop = true;
+  requestId++;
   speaking = false;
-  for (const s of scheduled) { try { s.stop(); } catch {} }
-  scheduled = [];
+  cancelScheduledAudio();
   setStatus('idle');
 }
 
