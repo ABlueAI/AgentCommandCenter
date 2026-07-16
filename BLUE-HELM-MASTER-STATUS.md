@@ -88,10 +88,10 @@ layer: whiteboard, quick widgets, and CRM data.
 
 ## Current checkpoint — July 15 platform transfer
 
-- **Repository baseline:** `main` @ `5ee435b`, pushed to `origin/main` after
-  merging `feature/tts-agent-mouse-selection` (the full stacked audio chain).
-  Both gates re-run green on the merged tree: 216 Pester assertions and 423 app
-  assertions.
+- **Repository baseline:** `main` @ `acf1aee`, pushed to `origin/main` after
+  merging `feature/k8-audio-permission-hardening` (K8, Full-class). Both gates
+  re-run green on the merged tree: 216 Pester assertions and 529 app assertions
+  (423 baseline + 106 media-permission-policy).
 - **`analysisMode` fail-closed: COMPLETE.** The last invalid-mode silent
   cost-direction path is merged.
 - **V5a manifest + legacy backfill: COMPLETE.** New accepted runs write the
@@ -127,6 +127,20 @@ layer: whiteboard, quick widgets, and CRM data.
   closes K7. Voice Console with final transcript review remains roadmap work;
   advanced sequential TTS queueing stays deferred; every future item must
   retain and announce its source agent name and role.
+- **K8 media-permission hardening MERGED (July 16, `acf1aee`, marker
+  `K8 ACCEPTANCE 2026-07-16.5`):** media permission is granted only when the
+  current trusted window's main frame requests microphone-only access from the
+  exact entry document (one pure policy module feeds both Electron session
+  handlers; legacy `audioCapture` allowance removed; every other permission,
+  requester, or media shape denied fail-closed with a bounded visible refusal).
+  Trust facts pinned by a bounded Electron 42.5.0 runtime probe; live proof:
+  camera-only and mixed getUserMedia denied before access with Logs refusals,
+  Dictate's audio-only path granted. Full-class whole-diff Reviewer
+  `VERDICT: PASS` (2 LOW non-blocking); Blue live-accepted and authorized the
+  merge. Branch record: fork/pre-merge main `a02c17b`, tip `e1fdd1f`, merge
+  `acf1aee`. This closes K8. **TTS Fast Clear / high-speed enunciation** is
+  recorded as a separate, non-blocking Standard-class backlog improvement — it
+  does not gate 9c or any queue item.
 - **Routing decision:** ChatGPT desktop with GPT-5.6 is the primary planning,
   architecture, research, review, and project-state layer. Claude Code remains
   the primary coding surface. Codex CLI/IDE remains an optional, separate
@@ -142,9 +156,10 @@ The Voice Console foundation follows successful core-audio proof and precedes
 K8 permission hardening; it does not authorize that security-boundary work.
 
 The live order is: ~~TTS bootstrap → STT bootstrap~~ (✅ merged @ `5ee435b`) →
-audio permission/error hardening (K8, Full-class — NEXT) → timestamped
-transcripts → P13/K5 → V1 → V5(b–d) → V3 → V4 → remaining Day 2/3 work → full
-functional ship-check → R15 fork/replacement evaluation. Each arrow is a clean
+~~audio permission/error hardening (K8, Full-class)~~ (✅ merged @ `acf1aee`) →
+**timestamped transcripts (9c — NEXT)** → P13/K5 → V1 → V5(b–d) → V3 → V4 →
+remaining Day 2/3 work → full functional ship-check → R15 fork/replacement
+evaluation. Each arrow is a clean
 checkpoint; runtime items remain separate one-invariant branches and receive
 their own Reviewer gate.
 
@@ -658,6 +673,18 @@ their own Reviewer gate.
 > This is explained by STT failing before it publishes `window.ccSTT` and its
 > ready event; it is a bootstrap defect, not an after-stop transcription UX.
 
+> **K8 ✅ RESOLVED (July 16, merged @ `acf1aee`, marker 2026-07-16.5).** One
+> pure policy module (`app/media-permission-policy.js`, 106-assertion suite in
+> the app gate) now feeds both `setPermissionRequestHandler` and
+> `setPermissionCheckHandler`: a grant requires the trusted window's own
+> WebContents + main frame + exact canonical ENTRY_URL + the probed `file:///`
+> origin + mediaTypes exactly `['audio']`; `audioCapture` and every non-media
+> permission are denied fail-closed with bounded visible refusals (check-side
+> first-occurrence latch prevents the probed page-load automatic-check flood).
+> Merged-main gates 529/0 app, 216/0/0 Pester; live camera/mixed denial +
+> audio-only grant proven; Full-class Reviewer `VERDICT: PASS`. Original
+> finding retained below for provenance.
+>
 > **K8 (VERIFIED, July 14; NEXT in queue now that K7 is merged). Audio
 > integration hardening follows bootstrap.** The pane-targeting half is DONE
 > (the merged destination-pane lock delivers to the pane where recording
