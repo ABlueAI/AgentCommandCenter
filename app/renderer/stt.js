@@ -1,49 +1,75 @@
-// Command Center — in-app Speech-to-Text (Whisper, WebGPU).
+// Command Center — in-app Speech-to-Text (Whisper; WebGPU first, WASM fallback).
 //
-// Push-to-talk dictation that runs Whisper entirely in the renderer on the GPU via
-// WebGPU (WASM/CPU fallback). Because the app owns the PTY write channel, the
-// transcript is typed straight into the focused agent pane (app.js wires onResult
-// -> ptyWrite) — no OS-level dictation tool needed.
+// Push-to-talk dictation that runs Whisper entirely in the renderer. First click starts
+// recording immediately; second click stops, produces ONE finalized transcript (no
+// changing partials), and app.js delivers it to the pane that was LOCKED when recording
+// started (see stt-target-lock.js — never "whichever pane is focused now").
 //
-// The model (~150MB) downloads once from Hugging Face and is cached thereafter.
+// Packaging (the bug this file repairs): the previous import pointed at
+// ./vendor/transformers.web.min.js, which does not exist in the repo — the module died at
+// import time, window.ccSTT was never assigned, and Dictate was a hollow control. That
+// distribution is also the WRONG one for a raw <script type="module"> renderer (it
+// contains bare imports). The official standalone browser ESM bundle below is the
+// correct raw-file entry point, and @huggingface/transformers is a real, declared
+// dependency (app/package.json) — nothing vendored, nothing rewritten.
+//
+// First use downloads the large-v3-turbo model from Hugging Face (WebGPU fp16 ~1.6 GB;
+// WASM q8 ~1.1 GB) with
+// visible, throttled progress in the Dictate status; Chromium caches it thereafter.
 // ES module; exposes a small API on window.ccSTT for the classic app.js.
 
-import { pipeline, env } from './vendor/transformers.web.min.js';
+import { pipeline, env } from '../node_modules/@huggingface/transformers/dist/transformers.min.js';
+import { configureSttEnv } from './stt-env-config.js';
+import {
+  createWhisperLoader,
+  describeWhisperDtype,
+  getWhisperTranscriptionOptions,
+  WHISPER_DOWNLOADS,
+  WHISPER_MODEL_ID,
+} from './stt-bootstrap.js';
+import {
+  MIC_CONSTRAINTS,
+  analyzePcm,
+  assertUsableCapture,
+  getRecorderOptions,
+} from './stt-audio-quality.js';
 
-env.allowLocalModels = false;
-env.backends.onnx.wasm.numThreads = 1;
+// Throws on a wrong/incomplete distribution. An import-time throw here is CAUGHT by
+// app.js's module-failure handler (audioModuleFromFailure recognizes this file's name),
+// so the refusal is visible in the control strip and Logs, never a silent dead button.
+configureSttEnv(env);
 
-const MODEL_ID = 'onnx-community/whisper-base.en';
+const loadWhisper = createWhisperLoader(pipeline);
 
-let asr = null;        // loaded pipeline
-let loading = null;
+let asr = null;         // resolved pipeline (only ever set from a RESOLVED bootstrap)
+let loading = null;     // in-flight load promise
+let activeDevice = '';  // backend that actually initialized ('' until proven)
 let recording = false;
-let busy = false;      // transcribing
+let busy = false;       // transcribing
 let statusCb = null;
 let resultCb = null;
 
-let stream = null;     // MediaStream
-let recorder = null;   // MediaRecorder
+let stream = null;      // MediaStream
+let recorder = null;    // MediaRecorder
 let chunks = [];
 
 function setStatus(state, detail) { if (statusCb) try { statusCb({ state, detail }); } catch {} }
 
-// --- model load (lazy; webgpu, wasm fallback) ---------------------------------
+// --- model load (lazy; webgpu -> wasm via the tested bootstrap contract) --------
 async function ensureModel() {
   if (asr) return asr;
   if (loading) return loading;
   loading = (async () => {
-    setStatus('loading', 'first run downloads the speech model (~150MB)…');
-    try {
-      asr = await pipeline('automatic-speech-recognition', MODEL_ID, {
-        device: 'webgpu',
-        dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' },
-      });
-    } catch (e) {
-      setStatus('loading', 'WebGPU unavailable — using CPU/WASM…');
-      asr = await pipeline('automatic-speech-recognition', MODEL_ID, { device: 'wasm', dtype: 'q8' });
-    }
-    setStatus('idle');
+    setStatus('loading', `first use downloads the speech model (WebGPU ${WHISPER_DOWNLOADS.webgpu}; WASM ${WHISPER_DOWNLOADS.wasm})…`);
+    // createWhisperLoader: webgpu-then-wasm with a VISIBLE fallback status, throttled
+    // download progress on both attempts, falsy-result-is-failure, and a combined
+    // both-backends error. activeDevice is set only after a pipeline actually resolves.
+    const model = await loadWhisper({
+      onStatus: setStatus,
+      onSelected: (device) => { activeDevice = device; },
+    });
+    asr = model;
+    setStatus('loading', `model ready — Whisper large-v3-turbo · ${activeDevice}/${describeWhisperDtype(activeDevice)}`);
     return asr;
   })();
   try { return await loading; } finally { loading = null; }
@@ -70,13 +96,13 @@ async function toPcm16k(blob) {
 async function start() {
   if (recording || busy) return;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream = await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
   } catch (e) {
     setStatus('error', 'microphone unavailable: ' + (e && e.message));
     return;
   }
   chunks = [];
-  recorder = new MediaRecorder(stream);
+  recorder = new MediaRecorder(stream, getRecorderOptions(MediaRecorder));
   recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
   recorder.start();
   recording = true;
@@ -87,7 +113,7 @@ async function stopAndTranscribe() {
   if (!recording) return '';
   recording = false;
   busy = true;
-  setStatus('transcribing', 'thinking…');
+  setStatus('transcribing', 'finalizing recording…');
   await new Promise((res) => { recorder.onstop = res; try { recorder.stop(); } catch { res(); } });
   try { stream.getTracks().forEach((t) => t.stop()); } catch {}
 
@@ -96,22 +122,32 @@ async function stopAndTranscribe() {
     const blob = new Blob(chunks, { type: (recorder && recorder.mimeType) || 'audio/webm' });
     if (blob.size > 0) {
       const pcm = await toPcm16k(blob);
+      const capture = assertUsableCapture(analyzePcm(pcm, 16000));
       const model = await ensureModel();
-      const out = await model(pcm);
+      const captureNote = capture.quality === 'clipping'
+        ? 'capture clipping detected'
+        : `capture ${capture.durationSeconds.toFixed(1)}s`;
+      setStatus('transcribing', `Whisper large-v3-turbo · ${activeDevice}/${describeWhisperDtype(activeDevice)} · ${captureNote}…`);
+      const out = await model(pcm, getWhisperTranscriptionOptions());
       text = ((out && out.text) || '').trim();
     }
   } catch (e) {
-    setStatus('error', 'transcription failed: ' + (e && e.message));
+    // Bounded, honest failure. The bootstrap's combined error already names BOTH
+    // attempted backends with their reasons; anything else is a transcription failure.
+    const msg = String((e && e.message) || e).slice(0, 300);
+    setStatus('error', msg.startsWith('speech model failed') ? msg : 'transcription failed: ' + msg);
     busy = false;
     return '';
   }
   busy = false;
   setStatus('idle');
+  // The transcript text goes ONLY to the onResult consumer (app.js delivers it to the
+  // locked pane). It is never logged or included in any status detail from here.
   if (text && resultCb) { try { resultCb(text); } catch {} }
   return text;
 }
 
-// Toggle: first press records, second press stops + transcribes + emits the text.
+// Toggle: first press records immediately, second press stops + transcribes + emits the text.
 async function toggle() {
   if (recording) return stopAndTranscribe();
   return start();
@@ -121,6 +157,8 @@ window.ccSTT = {
   toggle,
   isRecording: () => recording,
   isBusy: () => busy,
+  getModel: () => WHISPER_MODEL_ID,
+  getBackend: () => activeDevice,
   onStatus: (cb) => { statusCb = cb; },
   onResult: (cb) => { resultCb = cb; },
 };

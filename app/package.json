@@ -6,7 +6,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node nav-guard.test.js && node launchers.test.js && node video-scout-args.test.js && node task-name.test.js && node renderer/agent-dom.test.js && node renderer/tts-bootstrap.test.js && node renderer/tts.test.js"
+    "test": "node nav-guard.test.js && node launchers.test.js && node video-scout-args.test.js && node task-name.test.js && node renderer/agent-dom.test.js && node renderer/tts-selection.test.js && node renderer/audio-module-health.test.js && node renderer/tts-device-config.test.js && node renderer/tts-audio-contract.test.js && node renderer/tts-bootstrap.test.js && node renderer/tts.test.js && node renderer/stt-env-config.test.js && node renderer/stt-bootstrap.test.js && node renderer/stt-audio-quality.test.js && node renderer/stt-target-lock.test.js && node renderer/stt.test.js"
   },
   "author": "ABlueAI",
   "license": "MIT",
@@ -14,6 +14,7 @@
     "electron": "^42.5.0"
   },
   "dependencies": {
+    "@huggingface/transformers": "3.8.1",
     "@lydell/node-pty": "^1.2.0-beta.12",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-unicode11": "^0.9.0",

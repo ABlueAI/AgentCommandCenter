@@ -2,7 +2,48 @@
 // No Node here by design; this file is pure UI + IPC calls.
 
 const $ = (sel) => document.querySelector(sel);
+const AUDIO_ACCEPTANCE_BUILD = 'AUDIO ACCEPTANCE 2026-07-16.4';
 const state = { repo: '', githubUrl: '', worktrees: [], chosenRole: 'builder', chosenCli: 'claude', hardTask: false, theme: 'obsidian', ttsVoice: '', ttsSpeed: 1, videoModel: 'gemini-2.5-flash-lite', mediaResolution: 'MEDIUM', analysisMode: 'transcript' };
+const audioModules = window.ccAudioModuleHealth.createAudioModuleHealth();
+
+function audioModuleFromFailure(source, detail) {
+  const text = `${source || ''} ${detail || ''}`.toLowerCase();
+  if (text.includes('tts.js') || text.includes('kokoro')) return 'tts';
+  // Recognize the OFFICIAL bundle's identifiers (transformers.min / @huggingface/transformers)
+  // as well as this module's own filename; transformers.web stays for the legacy vendor path.
+  if (text.includes('stt.js') || text.includes('transformers.web')
+    || text.includes('transformers.min') || text.includes('@huggingface/transformers')) return 'stt';
+  return '';
+}
+
+function renderAudioModuleState(kind) {
+  const moduleState = audioModules.get(kind);
+  const el = $(kind === 'tts' ? '#ttsStatus' : '#sttStatus');
+  if (!el || moduleState.phase !== 'failed') return;
+  el.textContent = `engine unavailable — ${moduleState.detail}`;
+}
+
+function reportAudioModuleFailure(kind, detail) {
+  const before = audioModules.get(kind);
+  const after = audioModules.markFailed(kind, detail);
+  renderAudioModuleState(kind);
+  if (before.phase !== 'failed' || before.detail !== after.detail) appendLog(`[${kind}] engine unavailable: ${after.detail}\n`);
+}
+
+// app.js is deliberately loaded before the deferred audio modules. Catch an
+// import-time failure here, because a module that dies before its ready event
+// cannot report its own failure.
+window.addEventListener('error', (event) => {
+  const source = (event && event.filename) || (event && event.target && event.target.src);
+  const kind = audioModuleFromFailure(source, event && event.message);
+  if (kind) reportAudioModuleFailure(kind, (event && event.message) || 'browser module failed to load');
+}, true);
+window.addEventListener('unhandledrejection', (event) => {
+  const reason = event && event.reason;
+  const detail = (reason && (reason.message || String(reason))) || 'browser module failed to load';
+  const kind = audioModuleFromFailure('', detail);
+  if (kind) reportAudioModuleFailure(kind, detail);
+});
 
 // Blue Helm role metadata (UI + flow only — the tools allowlist that ENFORCES read-only
 // lives in agent-roles/*.md / ~/.claude/agents). Keep colors in sync with styles.css and
@@ -58,7 +99,8 @@ function drainChatEvents(t) {
 // ---- in-app terminals (xterm.js front-end; real ConPTY lives in main) -------
 const terms = new Map(); // id -> { term, fit, pane, ro, parser, chatBody, pendingEvents, rafId, tailBubble }
 let termSeq = 0;
-let activeTermId = null;  // pane that dictation types into (last focused)
+let activeTermId = null;  // last-focused pane (dictation LOCKS its target from this at record start)
+let sttDictationTargetId = null; // pane locked when recording started; transcript goes ONLY here
 const THEMES_XTERM = {
   obsidian:  { background: '#06090d', foreground: '#c8d2dc', cursor: '#20c5b7', selectionBackground: 'rgba(32,197,183,.35)' },
   void:      { background: '#070510', foreground: '#d6cdf0', cursor: '#a78bfa', selectionBackground: 'rgba(167,139,250,.35)' },
@@ -197,14 +239,62 @@ function openInAppTerminal(opts = {}) {
     requestAnimationFrame(() => { rafPending = false; try { fit.fit(); } catch {} });
   });
   ro.observe(pane.querySelector('.term-body'));
-  pane.querySelector('.spk').onclick = () => {
-    const sel = term.getSelection();
-    if (!window.ccTTS) { appendLog('[tts] voice engine not ready yet.\n'); return; }
-    if (!sel || !sel.trim()) { appendLog('[tts] select some text in the pane first, then click 🔊.\n'); return; }
-    window.ccTTS.speak(sel);
+  const speakBtn = pane.querySelector('.spk');
+  const speakSelectionMemory = window.ccTTSSelection.createSelectionMemory();
+  let selectionAtSpeakPointerDown = '';
+  const selectedTextInPane = () => {
+    const terminalText = term.getSelection();
+    if (terminalText) return terminalText;
+    const selection = window.getSelection && window.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) return '';
+    const range = selection.getRangeAt(0);
+    return pane.contains(range.commonAncestorContainer) ? selection.toString() : '';
+  };
+  const rememberSpeakSelection = () => speakSelectionMemory.remember(selectedTextInPane());
+  // Interactive agent TUIs can clear xterm's live selection while focus moves to
+  // the header. Remember the last non-empty value when xterm first observes it;
+  // PowerShell and agent panes now use the same pane-local handoff.
+  const selectionDisposable = term.onSelectionChange(rememberSpeakSelection);
+  const termBody = pane.querySelector('.term-body');
+  termBody.addEventListener('pointerdown', () => speakSelectionMemory.clear(), true);
+  const mouseSelectionFallback = window.ccTTSSelection.installMouseTrackingSelectionFallback({
+    term,
+    element: termBody,
+    remember: (text) => speakSelectionMemory.remember(text),
+    onCapture: (charCount) => appendLog(`[tts] mouse-mode selection captured: pane=${id} role=${role || 'shell'} chars=${charCount}\n`),
+  });
+  pane.addEventListener('mouseup', rememberSpeakSelection);
+  speakBtn.addEventListener('pointerdown', (event) => {
+    // Snapshot first: the generic pane focus handler below can otherwise clear
+    // xterm's visible selection before the click handler reads it.
+    selectionAtSpeakPointerDown = selectedTextInPane() || speakSelectionMemory.peek();
+    event.preventDefault();
+    event.stopPropagation();
+  });
+  speakBtn.onclick = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!window.ccTTS) {
+      const moduleState = audioModules.get('tts');
+      const detail = moduleState.phase === 'failed' ? moduleState.detail : 'module is still starting';
+      appendLog(`[tts] voice engine unavailable: ${detail}\n`);
+      return;
+    }
+    const action = window.ccTTSSelection.resolveSpeakAction({
+      selectionAtPointerDown: selectionAtSpeakPointerDown,
+      selectionAtClick: selectedTextInPane(),
+      selectionRemembered: speakSelectionMemory.peek(),
+      paneId: id,
+      role,
+    });
+    selectionAtSpeakPointerDown = '';
+    speakSelectionMemory.clear();
+    appendLog(action.log);
+    if (!action.ok) return;
+    window.ccTTS.speak(action.text);
   };
   const chatBody = pane.querySelector('.chat-body');
-  const paneData = { term, fit, pane, ro, chatBody, pendingEvents: [], rafId: null, tailBubble: null, parser: null };
+  const paneData = { term, fit, pane, ro, chatBody, role, pendingEvents: [], rafId: null, tailBubble: null, parser: null };
   paneData.parser = new PtyParser((ev) => {
     // Video-scout SDK runs print one machine-readable token-usage line; surface it in the Logs
     // tab so every run's real cost is recorded outside the (closable) pane. The parser is already
@@ -217,11 +307,16 @@ function openInAppTerminal(opts = {}) {
   });
   pane.querySelector('.x').onclick = () => {
     ro.disconnect();
+    try { selectionDisposable.dispose(); } catch {}
+    try { mouseSelectionFallback.dispose(); } catch {}
     if (paneData.rafId !== null) { cancelAnimationFrame(paneData.rafId); paneData.rafId = null; }
     cc.ptyKill(id); term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
   };
-  pane.addEventListener('mousedown', () => { activeTermId = id; term.focus(); });
+  pane.addEventListener('mousedown', (event) => {
+    if (event.target.closest('.spk')) return;
+    activeTermId = id; term.focus();
+  });
   term.textarea && term.textarea.addEventListener('focus', () => { activeTermId = id; });
   terms.set(id, paneData);
   cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, videoModel: opts.videoModel, mediaResolution: opts.mediaResolution, analysisMode: opts.analysisMode, startOffset: opts.startOffset, endOffset: opts.endOffset, cols: term.cols, rows: term.rows });
@@ -237,6 +332,8 @@ async function boot() {
   updateKeyBanner(await cc.getGeminiKeyStatus());
   await refreshRepos();
   wireUi();
+  document.title = `Blue Helm — ${AUDIO_ACCEPTANCE_BUILD}`;
+  appendLog(`[build] ${AUDIO_ACCEPTANCE_BUILD}\n`);
   cc.onPtyData(({ id, data }) => {
     const t = terms.get(id);
     if (t) { t.term.write(data); t.parser.feed(data); }
@@ -247,23 +344,54 @@ async function boot() {
   });
   cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));
   window.addEventListener('resize', fitAllTerms);
-  // TTS/STT modules load after this script; wire their controls when they announce ready.
-  if (window.ccTTS) setupTTSControls();
-  else window.addEventListener('cc-tts-ready', setupTTSControls, { once: true });
-  if (window.ccSTT) setupSTTControls();
-  else window.addEventListener('cc-stt-ready', setupSTTControls, { once: true });
+  // TTS/STT modules load after this script. Every state has an explicit UI:
+  // ready wires the control; a missed ready event becomes a visible refusal.
+  const ttsReady = () => { audioModules.markReady('tts'); setupTTSControls(); appendLog('[tts] module ready\n'); };
+  const sttReady = () => { audioModules.markReady('stt'); setupSTTControls(); appendLog('[stt] module ready\n'); };
+  if (window.ccTTS) ttsReady();
+  else window.addEventListener('cc-tts-ready', ttsReady, { once: true });
+  if (window.ccSTT) sttReady();
+  else {
+    installSTTUnavailableControl();
+    window.addEventListener('cc-stt-ready', sttReady, { once: true });
+  }
+  setTimeout(() => {
+    for (const kind of ['tts', 'stt']) {
+      if (audioModules.get(kind).phase !== 'pending') continue;
+      reportAudioModuleFailure(kind, 'module did not initialize; required browser bundle may be missing');
+    }
+  }, 2500);
 }
 
-// Wire the Whisper dictation control: push-to-talk that types the transcript into
-// the focused agent pane (we own the PTY write channel, so no OS dictation needed).
+function installSTTUnavailableControl() {
+  const micBtn = $('#sttMic');
+  if (!micBtn) return;
+  micBtn.onclick = () => {
+    const moduleState = audioModules.get('stt');
+    const detail = moduleState.phase === 'failed' ? moduleState.detail : 'module is still starting';
+    appendLog(`[stt] dictation engine unavailable: ${detail}\n`);
+  };
+}
+
+// Wire the Whisper dictation control: push-to-talk that types the FINALIZED transcript
+// into the pane LOCKED at recording start (we own the PTY write channel, so no OS
+// dictation needed). Logs carry pane ID/role, character count, lifecycle, and errors
+// only — never the dictated text itself.
 function setupSTTControls() {
   const stt = window.ccSTT; if (!stt) return;
   const micBtn = $('#sttMic');
-  if (micBtn && !micBtn.dataset.wired) {
-    micBtn.dataset.wired = '1';
+  if (micBtn && !micBtn.dataset.sttWired) {
+    micBtn.dataset.sttWired = '1';
     micBtn.onclick = () => {
+      if (stt.isRecording()) { stt.toggle(); return; } // second click: stop + one finalized transcript
+      if (stt.isBusy()) { appendLog('[stt] still transcribing the previous dictation…\n'); return; }
       if (!activeTermId || !terms.has(activeTermId)) { appendLog('[stt] click into an agent pane first, then 🎤.\n'); return; }
-      stt.toggle();
+      // Lock the destination NOW: however long the model load takes, and whatever pane
+      // is clicked meanwhile, the finished transcript goes here or is refused visibly.
+      sttDictationTargetId = activeTermId;
+      const paneRole = (terms.get(sttDictationTargetId) || {}).role || 'shell';
+      appendLog(`[stt] dictation started — locked to pane ${sttDictationTargetId} (${paneRole})\n`);
+      stt.toggle(); // first click: recording starts immediately (model loads at stop time)
     };
   }
   stt.onStatus(({ state: st, detail }) => {
@@ -272,7 +400,15 @@ function setupSTTControls() {
     if (st === 'error' && detail) appendLog('[stt] ' + detail + '\n');
   });
   stt.onResult((text) => {
-    if (activeTermId && terms.has(activeTermId)) { cc.ptyWrite(activeTermId, text + ' '); appendLog('[stt] » ' + text + '\n'); }
+    const targetId = sttDictationTargetId;
+    sttDictationTargetId = null;
+    const action = window.ccSttTargetLock.resolveTranscriptDelivery({
+      targetId,
+      paneExists: !!(targetId && terms.has(targetId)),
+      charCount: (text || '').length,
+    });
+    appendLog(action.log); // pane id + char count only, by construction — never the text
+    if (action.deliver) cc.ptyWrite(targetId, text + ' ');
   });
 }
 
@@ -299,8 +435,9 @@ function setupTTSControls() {
   if (stopBtn) stopBtn.onclick = () => tts.stop();
   tts.onStatus(({ state: st, detail }) => {
     const el = $('#ttsStatus'); if (el) el.textContent = (st && st !== 'idle') ? (st + (detail ? ' — ' + detail : '')) : '';
-    if (stopBtn) stopBtn.classList.toggle('hidden', st !== 'speaking' && st !== 'loading');
+    if (stopBtn) stopBtn.classList.toggle('hidden', st !== 'speaking' && st !== 'synthesizing' && st !== 'loading');
     if (st === 'error' && detail) appendLog('[tts] ' + detail + '\n');
+    if (st === 'ready' && detail) appendLog('[tts] engine ready: ' + detail + '\n');
   });
 }
 

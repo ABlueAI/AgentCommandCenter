@@ -88,9 +88,9 @@ layer: whiteboard, quick widgets, and CRM data.
 
 ## Current checkpoint — July 15 platform transfer
 
-- **Repository baseline:** `main` @ `58b7792`, pushed to `origin/main` after
-  the V5a/backfill merge and the test-harness portability repair. Both merged
-  gates are green: 214 Pester assertions and 233 app assertions.
+- **Repository baseline:** `main` @ `ef3e26a`, pushed to `origin/main` after
+  the Pester compatibility pin and first TTS bootstrap repair. Both merged
+  gates are green: 216 Pester assertions and 262 app assertions.
 - **`analysisMode` fail-closed: COMPLETE.** The last invalid-mode silent
   cost-direction path is merged.
 - **V5a manifest + legacy backfill: COMPLETE.** New accepted runs write the
@@ -114,6 +114,13 @@ layer: whiteboard, quick widgets, and CRM data.
   imports; that STT runtime file is also gitignored and absent from `HEAD`.
   Kokoro, Whisper, Transformers.js, and ONNX Runtime remain the intended OSS
   engines. Repair the integration and packaging; do not rebuild the engines.
+- **Audio live-test correction:** TTS bootstrap is merged, but human testing
+  found terminal selection lost in agent panes and garbled WebGPU speech; TTS
+  remains incomplete on `feature/tts-terminal-live-repair`. STT remains
+  nonfunctional until its browser dependency graph is tracked and reproducible.
+  After core TTS/STT proof, add a Voice Console with target-pane lock and final
+  transcript review. Advanced sequential TTS queueing stays deferred; every
+  future item must retain and announce its source agent name and role.
 - **Routing decision:** ChatGPT desktop with GPT-5.6 is the primary planning,
   architecture, research, review, and project-state layer. Claude Code remains
   the primary coding surface. Codex CLI/IDE remains an optional, separate
@@ -123,6 +130,10 @@ layer: whiteboard, quick widgets, and CRM data.
   expanded archive contents, hashes, and provenance.
 
 ### Current execution order
+
+**Current supersession:** TTS terminal live repair comes before STT bootstrap.
+The Voice Console foundation follows successful core-audio proof and precedes
+K8 permission hardening; it does not authorize that security-boundary work.
 
 The live order is: TTS bootstrap → STT bootstrap → audio permission/error
 hardening → timestamped transcripts → P13/K5 → V1 → V5(b–d) → V3 → V4 →
