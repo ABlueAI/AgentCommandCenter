@@ -12,6 +12,8 @@ import { KokoroTTS } from './vendor/kokoro.web.js';
 import { bootstrapModel } from './tts-bootstrap.js';
 import { getKokoroLoadOptions } from './tts-device-config.js';
 import { validateKokoroAudio } from './tts-audio-contract.js';
+import { encodeWavBytes } from './wav-encode.js';
+import { createPlaybackQueue } from './tts-playback-queue.js';
 
 // --- runtime config -----------------------------------------------------------
 // The model is fetched from Hugging Face on first run and cached by the browser
@@ -97,26 +99,37 @@ async function ensureModel() {
   try { return await loading; } finally { loading = null; }
 }
 
-// --- Web Audio playback queue (gap-less, natural pitch) -----------------------
-let audioCtx = null;
-let scheduled = [];
-let nextStart = 0;
-function ctx() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  return audioCtx;
+// --- Fast Clear playback (pitch-preserving media elements) ---------------------
+// Kokoro ALWAYS synthesizes at natural speed 1.0 for full articulation; the selected
+// speed is applied as HTMLAudioElement.playbackRate with preservesPitch, so 2x is
+// Chromium's native pitch-preserving time compression instead of the model tripping
+// over compressed phoneme timing (the Fast Clear defect). Each speak() request owns
+// one sequential queue (tts-playback-queue.js); PCM is wrapped as an in-memory WAV
+// blob (wav-encode.js). Probed on Electron 42.5.0: unprefixed preservesPitch is
+// supported and a click-then-synthesis-delayed play() resolves.
+let activeQueue = null;
+
+function disposeActiveQueue() {
+  if (activeQueue) {
+    activeQueue.stop(); // pauses the live element, revokes every outstanding blob URL
+    activeQueue = null;
+  }
 }
-function enqueue(float32, sampleRate) {
-  const ac = ctx();
-  const buf = ac.createBuffer(1, float32.length, sampleRate || 24000);
-  buf.copyToChannel(float32, 0);
-  const src = ac.createBufferSource();
-  src.buffer = buf;
-  src.connect(ac.destination);
-  const startAt = Math.max(ac.currentTime + 0.02, nextStart);
-  src.start(startAt);
-  nextStart = startAt + buf.duration;
-  scheduled.push(src);
-  src.onended = () => { scheduled = scheduled.filter((s) => s !== src); };
+
+function makeQueue(mine) {
+  return createPlaybackQueue({
+    createAudio: (url) => new Audio(url),
+    createObjectUrl: (bytes) => URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' })),
+    revokeObjectUrl: (url) => URL.revokeObjectURL(url),
+    // Listening speed, read when each chunk STARTS (a mid-speech change applies from
+    // the next chunk) — never a synthesis input.
+    getPlaybackRate: () => speed,
+    onError: (reason) => {
+      // The queue's single failure path; only the owning (latest) request may show it,
+      // and nothing later overwrites it with idle (see the outcome check in speak()).
+      if (mine === requestId) { speaking = false; setStatus('error', 'speech playback failed: ' + reason); }
+    },
+  });
 }
 
 // --- speak / stop -------------------------------------------------------------
@@ -124,7 +137,7 @@ async function speak(rawText) {
   const text = cleanText(rawText);
   if (!text) { setStatus('idle', 'nothing to speak'); return; }
   const mine = ++requestId;
-  cancelScheduledAudio();
+  disposeActiveQueue(); // latest request wins: silence and settle the old queue now
   speaking = false;
   try {
     await ensureModel();
@@ -136,22 +149,20 @@ async function speak(rawText) {
   if (mine !== requestId) return;
   const options = getKokoroLoadOptions(activeDevice);
   setStatus('synthesizing', `English · ${voice} · ${activeDevice}/${options.dtype}`);
-  const ac = ctx();
-  if (ac.state === 'suspended') {
-    try { await ac.resume(); }
-    catch (err) { speaking = false; setStatus('error', 'AudioContext resume failed: ' + (err && err.message)); return; }
-  }
-  nextStart = ac.currentTime + 0.05;
+  const queue = makeQueue(mine);
+  activeQueue = queue;
 
   // Synthesize sentence-by-sentence so audio starts quickly and stays ahead of playback.
   try {
     let firstAudio = true;
     for (const chunk of chunksOf(text)) {
       if (mine !== requestId) return;
-      const a = await tts.generate(chunk, { voice, speed });
-      if (mine !== requestId) return;
+      // ALWAYS natural synthesis speed: fully articulated speech; the user's speed is
+      // playback-rate only (the Fast Clear invariant).
+      const a = await tts.generate(chunk, { voice, speed: 1.0 });
+      if (mine !== requestId) return; // stale generation can never enqueue
       const audio = validateKokoroAudio(a);
-      enqueue(audio.samples, audio.sampleRate);
+      queue.enqueue(encodeWavBytes(audio.samples, audio.sampleRate));
       if (firstAudio) {
         firstAudio = false;
         speaking = true;
@@ -160,24 +171,23 @@ async function speak(rawText) {
     }
   } catch (e) {
     speaking = false;
+    queue.end(); // let already-queued audio drain; URLs are revoked either way
     if (mine === requestId) setStatus('error', 'speech failed: ' + (e && e.message));
     return;
   }
-  // let the scheduled audio finish before going idle
-  const remainMs = Math.max(0, (nextStart - ctx().currentTime) * 1000);
-  await new Promise((r) => setTimeout(r, remainMs + 60));
-  if (mine === requestId) { speaking = false; setStatus('idle'); }
-}
-
-function cancelScheduledAudio() {
-  for (const s of scheduled) { try { s.stop(); } catch {} }
-  scheduled = [];
+  queue.end();
+  const outcome = await queue.done; // resolves once: completed | stopped | failed
+  if (mine !== requestId) return;   // a newer request owns the status line now
+  speaking = false;
+  // idle ONLY after a successful drain — a failure stays visible (onError set it),
+  // and stop() already reported idle itself.
+  if (outcome === 'completed') setStatus('idle');
 }
 
 function stop() {
   requestId++;
   speaking = false;
-  cancelScheduledAudio();
+  disposeActiveQueue(); // immediately pauses the active element and clears the queue
   setStatus('idle');
 }
 
