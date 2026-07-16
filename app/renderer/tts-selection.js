@@ -9,19 +9,36 @@
     return typeof value === 'string' && value.trim().length > 0;
   }
 
-  function resolveSpeakAction({ selectionAtPointerDown, selectionAtClick, paneId, role }) {
+  function createSelectionMemory() {
+    let remembered = '';
+    return {
+      remember(value) {
+        if (usable(value)) remembered = value;
+        return remembered.length;
+      },
+      peek() { return remembered; },
+      clear() { remembered = ''; },
+    };
+  }
+
+  function resolveSpeakAction({ selectionAtPointerDown, selectionAtClick, selectionRemembered, paneId, role }) {
     const text = usable(selectionAtPointerDown)
       ? selectionAtPointerDown
-      : (usable(selectionAtClick) ? selectionAtClick : '');
+      : (usable(selectionAtClick)
+        ? selectionAtClick
+        : (usable(selectionRemembered) ? selectionRemembered : ''));
+    const selectionSource = usable(selectionAtPointerDown) || usable(selectionAtClick)
+      ? 'current'
+      : (usable(selectionRemembered) ? 'remembered' : 'none');
     const source = `pane=${String(paneId)} role=${String(role)}`;
 
     if (!text) {
       return { ok: false, text: '', log: `[tts] selection missing: ${source}; select terminal text, then click speaker.\n` };
     }
-    return { ok: true, text, log: `[tts] speak requested: ${source} chars=${text.length}\n` };
+    return { ok: true, text, log: `[tts] speak requested: ${source} chars=${text.length} selection=${selectionSource}\n` };
   }
 
-  const api = { resolveSpeakAction };
+  const api = { createSelectionMemory, resolveSpeakAction };
   global.ccTTSSelection = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window === 'undefined' ? globalThis : window);

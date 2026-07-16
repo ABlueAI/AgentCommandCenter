@@ -240,6 +240,7 @@ function openInAppTerminal(opts = {}) {
   });
   ro.observe(pane.querySelector('.term-body'));
   const speakBtn = pane.querySelector('.spk');
+  const speakSelectionMemory = window.ccTTSSelection.createSelectionMemory();
   let selectionAtSpeakPointerDown = '';
   const selectedTextInPane = () => {
     const terminalText = term.getSelection();
@@ -249,10 +250,18 @@ function openInAppTerminal(opts = {}) {
     const range = selection.getRangeAt(0);
     return pane.contains(range.commonAncestorContainer) ? selection.toString() : '';
   };
+  const rememberSpeakSelection = () => speakSelectionMemory.remember(selectedTextInPane());
+  // Interactive agent TUIs can clear xterm's live selection while focus moves to
+  // the header. Remember the last non-empty value when xterm first observes it;
+  // PowerShell and agent panes now use the same pane-local handoff.
+  const selectionDisposable = term.onSelectionChange(rememberSpeakSelection);
+  const termBody = pane.querySelector('.term-body');
+  termBody.addEventListener('pointerdown', () => speakSelectionMemory.clear(), true);
+  pane.addEventListener('mouseup', rememberSpeakSelection);
   speakBtn.addEventListener('pointerdown', (event) => {
     // Snapshot first: the generic pane focus handler below can otherwise clear
     // xterm's visible selection before the click handler reads it.
-    selectionAtSpeakPointerDown = selectedTextInPane();
+    selectionAtSpeakPointerDown = selectedTextInPane() || speakSelectionMemory.peek();
     event.preventDefault();
     event.stopPropagation();
   });
@@ -268,10 +277,12 @@ function openInAppTerminal(opts = {}) {
     const action = window.ccTTSSelection.resolveSpeakAction({
       selectionAtPointerDown: selectionAtSpeakPointerDown,
       selectionAtClick: selectedTextInPane(),
+      selectionRemembered: speakSelectionMemory.peek(),
       paneId: id,
       role,
     });
     selectionAtSpeakPointerDown = '';
+    speakSelectionMemory.clear();
     appendLog(action.log);
     if (!action.ok) return;
     window.ccTTS.speak(action.text);
@@ -290,6 +301,7 @@ function openInAppTerminal(opts = {}) {
   });
   pane.querySelector('.x').onclick = () => {
     ro.disconnect();
+    try { selectionDisposable.dispose(); } catch {}
     if (paneData.rafId !== null) { cancelAnimationFrame(paneData.rafId); paneData.rafId = null; }
     cc.ptyKill(id); term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
