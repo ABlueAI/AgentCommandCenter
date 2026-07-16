@@ -313,7 +313,16 @@ try {
     # --- default briefs per mode ---------------------------------------------------
     if (-not $Prompt) {
         $Prompt = switch ($Mode) {
-            'transcript' { "Summarize this transcript: the key points first, then notable details." }
+            'transcript' {
+                # 9c: the default transcript brief demands caption-derived timestamps (key points
+                # with citations, a chronological map, whole-second range suggestions) and forbids
+                # invented ones. Loaded from prompts/transcript-analysis.md via its own tested
+                # helper, same pattern as the -VideoScout brief. An explicit -Prompt never reaches
+                # this branch -- it remains a complete caller override.
+                . (Join-Path $PSScriptRoot 'lib\get-transcript-prompt.ps1')
+                Write-Host "Timestamped transcript brief requested (default prompt)" -ForegroundColor Cyan
+                Get-TranscriptPrompt
+            }
             'audio'      { "Summarize what is said in this audio, and note the tone." }
             'video'      { "Describe what happens in this video and summarize the key points." }
         }
