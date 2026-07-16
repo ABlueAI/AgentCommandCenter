@@ -128,9 +128,30 @@ Review diff:
 `git diff d8d0931...HEAD --output=.agent-review-tts-fast-clear.diff` (pinned,
 gitignored)
 
-Reviewer verdict: Pending
+Reviewer verdict: `VERDICT: PASS`
 
-Reviewer verdict source: Pending
+Reviewer verdict source: scoped read-only Standard-class Reviewer pass (fresh subagent),
+July 16, 2026, over the pinned `.agent-review-tts-fast-clear.diff` (`d8d0931...1a86801`)
+plus worktree source. All six scoped areas verified by reading (natural-speed
+generation · rate-at-chunk-start + preservesPitch wiring · queue/cancellation incl.
+latest-request-wins and settle-exactly-once · revoke-exactly-once URL lifecycle under
+racing terminal events · single visible bounded failure path · no unrelated surface).
+Test integrity confirmed: the queue suite imports the ACTUAL exported module, and all
+19 pre-existing tts.test.js assertions are a preserved subset of the new 36. Two LOW
+non-blocking observations recorded verbatim:
+(1) tts.js:165-170 — if enqueue() ever hit the queue's SYNCHRONOUS
+'element-setup-failed' branch, the firstAudio block would immediately overwrite the
+error status with 'speaking' and nothing corrects it; the realistic failures (async
+play() rejection, media error event) fire later and survive, and in production
+createAudio is `new Audio(url)` + two property sets which do not throw in Electron, so
+the branch is effectively unreachable. Suggested minimal fix if ever touched: gate the
+firstAudio status on `!queue.isFinished()`.
+(2) tts.js:158-171 — after a mid-stream playback failure the synthesis loop keeps
+generating remaining chunks that the finished queue discards (wasted inference, no
+correctness impact). Suggested minimal fix: also break the loop on
+`queue.isFinished()`.
+Gate execution (app 609/0, Pester 216/0/0, Electron feasibility probe) accepted from
+the Builder's record; the Reviewer has no shell.
 
 ## Review-diff rule
 
