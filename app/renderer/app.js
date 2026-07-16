@@ -2,7 +2,7 @@
 // No Node here by design; this file is pure UI + IPC calls.
 
 const $ = (sel) => document.querySelector(sel);
-const AUDIO_ACCEPTANCE_BUILD = 'AUDIO ACCEPTANCE 2026-07-16.3';
+const AUDIO_ACCEPTANCE_BUILD = 'AUDIO ACCEPTANCE 2026-07-16.4';
 const state = { repo: '', githubUrl: '', worktrees: [], chosenRole: 'builder', chosenCli: 'claude', hardTask: false, theme: 'obsidian', ttsVoice: '', ttsSpeed: 1, videoModel: 'gemini-2.5-flash-lite', mediaResolution: 'MEDIUM', analysisMode: 'transcript' };
 const audioModules = window.ccAudioModuleHealth.createAudioModuleHealth();
 
@@ -257,6 +257,12 @@ function openInAppTerminal(opts = {}) {
   const selectionDisposable = term.onSelectionChange(rememberSpeakSelection);
   const termBody = pane.querySelector('.term-body');
   termBody.addEventListener('pointerdown', () => speakSelectionMemory.clear(), true);
+  const mouseSelectionFallback = window.ccTTSSelection.installMouseTrackingSelectionFallback({
+    term,
+    element: termBody,
+    remember: (text) => speakSelectionMemory.remember(text),
+    onCapture: (charCount) => appendLog(`[tts] mouse-mode selection captured: pane=${id} role=${role || 'shell'} chars=${charCount}\n`),
+  });
   pane.addEventListener('mouseup', rememberSpeakSelection);
   speakBtn.addEventListener('pointerdown', (event) => {
     // Snapshot first: the generic pane focus handler below can otherwise clear
@@ -302,6 +308,7 @@ function openInAppTerminal(opts = {}) {
   pane.querySelector('.x').onclick = () => {
     ro.disconnect();
     try { selectionDisposable.dispose(); } catch {}
+    try { mouseSelectionFallback.dispose(); } catch {}
     if (paneData.rafId !== null) { cancelAnimationFrame(paneData.rafId); paneData.rafId = null; }
     cc.ptyKill(id); term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();

@@ -1,5 +1,11 @@
 // Run: node app/renderer/tts-selection.test.js
-const { createSelectionMemory, resolveSpeakAction } = require('./tts-selection.js');
+const {
+  createSelectionMemory,
+  installMouseTrackingSelectionFallback,
+  pointerToBufferCell,
+  resolveDragSelection,
+  resolveSpeakAction,
+} = require('./tts-selection.js');
 
 let passed = 0;
 let failed = 0;
@@ -65,6 +71,81 @@ function assert(condition, label) {
   const action = resolveSpeakAction({ selectionAtPointerDown: '   ', selectionAtClick: '', paneId: 'term-4', role: 'web-scout' });
   assert(!action.ok, 'refuses honestly when neither capture contains text');
   assert(/selection missing/.test(action.log), 'missing-selection refusal is visible in Logs');
+}
+
+{
+  const rect = { left: 10, top: 20, width: 800, height: 400 };
+  assert(JSON.stringify(pointerToBufferCell({ clientX: 410, clientY: 220 }, rect, 80, 20, 100))
+    === JSON.stringify({ column: 40, row: 110 }),
+  'maps a pointer into the visible xterm grid plus its scrollback offset');
+  assert(JSON.stringify(pointerToBufferCell({ clientX: -100, clientY: 9999 }, rect, 80, 20, 5))
+    === JSON.stringify({ column: 0, row: 24 }),
+  'clamps a drag released outside the terminal to the nearest visible cell');
+}
+
+{
+  const forward = resolveDragSelection({ column: 5, row: 2 }, { column: 12, row: 3 }, 80);
+  assert(forward.column === 5 && forward.row === 2 && forward.length === 88,
+    'turns a forward multi-row drag into xterm select() coordinates');
+  const reverse = resolveDragSelection({ column: 12, row: 3 }, { column: 5, row: 2 }, 80);
+  assert(JSON.stringify(reverse) === JSON.stringify(forward), 'reverse drags select the same range');
+  assert(resolveDragSelection({ column: 5, row: 2 }, { column: 5, row: 2 }, 80) === null,
+    'a same-cell click is not converted into a selection');
+}
+
+{
+  const elementHandlers = {};
+  const documentHandlers = {};
+  const doc = {
+    addEventListener: (type, fn) => { documentHandlers[type] = fn; },
+    removeEventListener: (type, fn) => { if (documentHandlers[type] === fn) delete documentHandlers[type]; },
+  };
+  const element = {
+    ownerDocument: doc,
+    addEventListener: (type, fn) => { elementHandlers[type] = fn; },
+    removeEventListener: (type, fn) => { if (elementHandlers[type] === fn) delete elementHandlers[type]; },
+  };
+  const selections = [];
+  let selection = '';
+  let cleared = 0;
+  let remembered = '';
+  let capturedChars = -1;
+  const term = {
+    cols: 80,
+    rows: 20,
+    modes: { mouseTrackingMode: 'any' },
+    buffer: { active: { viewportY: 30 } },
+    element: { querySelector: () => ({ getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 400 }) }) },
+    clearSelection: () => { cleared++; selection = ''; },
+    getSelection: () => selection,
+    select: (column, row, length) => { selections.push({ column, row, length }); selection = 'Agent text selected by fallback.'; },
+  };
+  const bridge = installMouseTrackingSelectionFallback({
+    term,
+    element,
+    remember: (text) => { remembered = text; },
+    onCapture: (charCount) => { capturedChars = charCount; },
+  });
+  elementHandlers.mousedown({ button: 0, shiftKey: false, clientX: 100, clientY: 100 });
+  documentHandlers.mouseup({ clientX: 300, clientY: 140 });
+  assert(cleared === 1 && selections.length === 1, 'mouse-mode drag uses xterm select() after the TUI consumed the gesture');
+  assert(selections[0].row === 35 && selections[0].column === 10 && selections[0].length === 181,
+    'the fallback selects the intended absolute buffer range');
+  assert(remembered === selection, 'fallback selection is handed directly to pane-local TTS memory');
+  assert(capturedChars === selection.length, 'capture diagnostics receive only a character count');
+
+  const before = selections.length;
+  elementHandlers.mousedown({ button: 0, shiftKey: false, clientX: 100, clientY: 100 });
+  documentHandlers.mouseup({ clientX: 101, clientY: 101 });
+  assert(selections.length === before, 'normal same-cell clicks remain available to the agent TUI');
+
+  term.modes.mouseTrackingMode = 'none';
+  elementHandlers.mousedown({ button: 0, shiftKey: false, clientX: 100, clientY: 100 });
+  documentHandlers.mouseup({ clientX: 300, clientY: 140 });
+  assert(selections.length === before, 'PowerShell/non-mouse terminals keep xterm native selection behavior');
+
+  bridge.dispose();
+  assert(!elementHandlers.mousedown && !documentHandlers.mouseup, 'the per-pane mouse bridge disposes both listeners');
 }
 
 process.stdout.write(`\n${passed + failed} tests: ${passed} passed, ${failed} failed\n`);
