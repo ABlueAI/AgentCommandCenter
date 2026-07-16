@@ -21,6 +21,12 @@ const { validateTask } = require('./task-name');
 // arg builders. Both dependency-free + unit-tested (nav-guard.test.js / launchers.test.js).
 const { decideWindowOpen, decideNavigation, refusalLine } = require('./nav-guard');
 const { openVscodeSpec, openTerminalSpec } = require('./launchers');
+// K8 media-permission boundary: both session permission handlers come from this pure,
+// dependency-free, unit-tested module (media-permission-policy.test.js). A grant requires
+// the trusted window's main frame + the exact entry document + audio-only proof; every
+// other permission, requester, or media shape is denied fail-closed with a visible,
+// bounded refusal (reason constant only — never a URL, transcript, or device label).
+const { createMediaPermissionHandlers } = require('./media-permission-policy');
 
 // ---- tunable defaults (marked ? — change to taste) --------------------------
 const DEFAULT_PROJECTS_ROOT = 'D:\\Workspace';            // (?) where your git repos live
@@ -118,6 +124,11 @@ function loadGeminiKey() {
 }
 
 let win = null;
+// Canonical trusted entry document — the ONE definition shared by win.loadFile(), the
+// navigation lockdown, and the media-permission policy, so the three trust anchors can
+// never drift apart (independently reconstructed path/origin strings are how they would).
+const ENTRY_PATH = path.join(__dirname, 'renderer', 'index.html');
+const ENTRY_URL = pathToFileURL(ENTRY_PATH).toString();
 const ptys = new Map(); // terminal id -> pty process (in-app terminals)
 // Mutex for ~/.claude.json read-modify-write. Concurrent sandbox launches are Blue Helm's
 // normal mode; without serialization each call reads a stale snapshot and the last writer
@@ -144,16 +155,15 @@ function createWindow() {
       nodeIntegration: false,
     },
   });
-  const entryPath = path.join(__dirname, 'renderer', 'index.html');
-  win.loadFile(entryPath);
+  win.loadFile(ENTRY_PATH);
 
   // --- Navigation lockdown (AUDIT #3 / electronegativity LIMIT_NAVIGATION HIGH) -----------------
   // The renderer holds the preload bridge (window.cc), so a stray anchor, an injected navigation, a
   // middle-click, or a window.open must never repoint this window or spawn an uncontrolled child
   // window. Deny new windows (forwarding http(s) to the OS browser), and allow navigation ONLY back
-  // to our own entry document. Pure decisions live in nav-guard.js. This is the app's only
-  // BrowserWindow (the board is a separately-launched desktop app, not a webview here).
-  const ENTRY_URL = pathToFileURL(entryPath).toString();
+  // to our own entry document (the module-level ENTRY_URL). Pure decisions live in nav-guard.js.
+  // This is the app's only BrowserWindow (the board is a separately-launched desktop app, not a
+  // webview here).
   // Surface every denial through the same main-error -> renderer channel the launcher %-path refusal
   // uses (refuse-visibly rule): a blocked navigation/popup must never be a silent no-op. refusalLine
   // strips control chars + truncates the (attacker-influenced) URL so this can't become a log sink.
@@ -178,11 +188,24 @@ function createWindow() {
 
 app.whenReady().then(() => {
   loadGeminiKey(); // decrypt stored GEMINI_API_KEY into memory before any PTY can launch
-  // Allow the microphone (for in-app Whisper dictation) and deny every other
-  // permission class — the renderer never needs camera, geolocation, etc.
-  const allowMedia = (perm) => perm === 'media' || perm === 'audioCapture';
-  session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(allowMedia(permission)));
-  session.defaultSession.setPermissionCheckHandler((_wc, permission) => allowMedia(permission));
+  // K8 media-permission hardening: grant ONLY a microphone-only request ('media' with
+  // mediaTypes exactly ['audio']) coming from this window's main frame at the exact
+  // entry document with the trusted file: origin — the in-app Whisper dictation path.
+  // Camera, mixed audio/video, foreign documents, subframes, and every other permission
+  // class are denied fail-closed with a bounded visible refusal. Handlers are installed
+  // before the window exists, so the policy late-binds it via getTrustedWindow.
+  // (console.error keeps refusals visible even before the renderer's Logs listener is
+  // attached — the earliest automatic Chromium media checks fire during page load.)
+  const mediaPermission = createMediaPermissionHandlers({
+    entryUrl: ENTRY_URL,
+    getTrustedWindow: () => win,
+    logRefusal: (line) => {
+      console.error(line);
+      if (win && !win.isDestroyed()) win.webContents.send('main-error', line);
+    },
+  });
+  session.defaultSession.setPermissionRequestHandler(mediaPermission.handlePermissionRequest);
+  session.defaultSession.setPermissionCheckHandler(mediaPermission.handlePermissionCheck);
   createWindow();
 });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
