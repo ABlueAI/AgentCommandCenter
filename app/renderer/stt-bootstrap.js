@@ -7,17 +7,17 @@
 
 import { bootstrapModel } from './tts-bootstrap.js';
 
-export const WHISPER_MODEL_ID = 'onnx-community/whisper-base.en';
+export const WHISPER_MODEL_ID = 'onnx-community/whisper-large-v3-turbo';
 
-// Truthful approximate FIRST-USE download sizes for whisper-base.en at these dtypes.
+// Truthful approximate FIRST-USE download sizes for whisper-large-v3-turbo at these dtypes.
 // Shown in the UI before/while downloading; Chromium caches afterwards.
-export const WHISPER_DOWNLOADS = { webgpu: '~207 MB', wasm: '~77 MB' };
+export const WHISPER_DOWNLOADS = { webgpu: '~1.6 GB', wasm: '~1.1 GB' };
 
-// Whisper model settings per browser backend. WebGPU runs the encoder in fp32 with the
-// merged decoder in q4; the WASM/CPU fallback uses q8 end-to-end for a smaller download
+// Whisper model settings per browser backend. WebGPU runs the encoder and merged decoder
+// in fp16; the WASM/CPU fallback uses q8 end-to-end for a smaller download
 // and workable CPU speed. Pure, so the contract is directly assertable.
 export function getWhisperLoadOptions(device) {
-  if (device === 'webgpu') return { device: 'webgpu', dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' } };
+  if (device === 'webgpu') return { device: 'webgpu', dtype: { encoder_model: 'fp16', decoder_model_merged: 'fp16' } };
   if (device === 'wasm') return { device: 'wasm', dtype: 'q8' };
   throw new Error(`Unsupported Whisper device: ${device}`);
 }
@@ -25,6 +25,18 @@ export function getWhisperLoadOptions(device) {
 export function describeWhisperDtype(device) {
   const { dtype } = getWhisperLoadOptions(device);
   return typeof dtype === 'string' ? dtype : `${dtype.encoder_model}+${dtype.decoder_model_merged}`;
+}
+
+export function getWhisperTranscriptionOptions() {
+  return {
+    language: 'english',
+    task: 'transcribe',
+    chunk_length_s: 30,
+    stride_length_s: 5,
+    return_timestamps: false,
+    do_sample: false,
+    num_beams: 3,
+  };
 }
 
 // Status lines may name WHICH file is downloading, but bounded: base name only (no

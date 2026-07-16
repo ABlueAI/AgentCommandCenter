@@ -13,13 +13,26 @@
 // correct raw-file entry point, and @huggingface/transformers is a real, declared
 // dependency (app/package.json) — nothing vendored, nothing rewritten.
 //
-// First use downloads the model from Hugging Face (WebGPU ~207 MB; WASM q8 ~77 MB) with
+// First use downloads the large-v3-turbo model from Hugging Face (WebGPU fp16 ~1.6 GB;
+// WASM q8 ~1.1 GB) with
 // visible, throttled progress in the Dictate status; Chromium caches it thereafter.
 // ES module; exposes a small API on window.ccSTT for the classic app.js.
 
 import { pipeline, env } from '../node_modules/@huggingface/transformers/dist/transformers.min.js';
 import { configureSttEnv } from './stt-env-config.js';
-import { createWhisperLoader, describeWhisperDtype, WHISPER_DOWNLOADS } from './stt-bootstrap.js';
+import {
+  createWhisperLoader,
+  describeWhisperDtype,
+  getWhisperTranscriptionOptions,
+  WHISPER_DOWNLOADS,
+  WHISPER_MODEL_ID,
+} from './stt-bootstrap.js';
+import {
+  MIC_CONSTRAINTS,
+  analyzePcm,
+  assertUsableCapture,
+  getRecorderOptions,
+} from './stt-audio-quality.js';
 
 // Throws on a wrong/incomplete distribution. An import-time throw here is CAUGHT by
 // app.js's module-failure handler (audioModuleFromFailure recognizes this file's name),
@@ -56,7 +69,7 @@ async function ensureModel() {
       onSelected: (device) => { activeDevice = device; },
     });
     asr = model;
-    setStatus('loading', `model ready — Whisper base.en · ${activeDevice}/${describeWhisperDtype(activeDevice)}`);
+    setStatus('loading', `model ready — Whisper large-v3-turbo · ${activeDevice}/${describeWhisperDtype(activeDevice)}`);
     return asr;
   })();
   try { return await loading; } finally { loading = null; }
@@ -83,13 +96,13 @@ async function toPcm16k(blob) {
 async function start() {
   if (recording || busy) return;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream = await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
   } catch (e) {
     setStatus('error', 'microphone unavailable: ' + (e && e.message));
     return;
   }
   chunks = [];
-  recorder = new MediaRecorder(stream);
+  recorder = new MediaRecorder(stream, getRecorderOptions(MediaRecorder));
   recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
   recorder.start();
   recording = true;
@@ -109,9 +122,13 @@ async function stopAndTranscribe() {
     const blob = new Blob(chunks, { type: (recorder && recorder.mimeType) || 'audio/webm' });
     if (blob.size > 0) {
       const pcm = await toPcm16k(blob);
+      const capture = assertUsableCapture(analyzePcm(pcm, 16000));
       const model = await ensureModel();
-      setStatus('transcribing', `Whisper base.en · ${activeDevice}/${describeWhisperDtype(activeDevice)}…`);
-      const out = await model(pcm);
+      const captureNote = capture.quality === 'clipping'
+        ? 'capture clipping detected'
+        : `capture ${capture.durationSeconds.toFixed(1)}s`;
+      setStatus('transcribing', `Whisper large-v3-turbo · ${activeDevice}/${describeWhisperDtype(activeDevice)} · ${captureNote}…`);
+      const out = await model(pcm, getWhisperTranscriptionOptions());
       text = ((out && out.text) || '').trim();
     }
   } catch (e) {
@@ -140,6 +157,7 @@ window.ccSTT = {
   toggle,
   isRecording: () => recording,
   isBusy: () => busy,
+  getModel: () => WHISPER_MODEL_ID,
   getBackend: () => activeDevice,
   onStatus: (cb) => { statusCb = cb; },
   onResult: (cb) => { resultCb = cb; },

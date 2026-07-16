@@ -8,7 +8,7 @@
 
 import {
   WHISPER_MODEL_ID, WHISPER_DOWNLOADS, getWhisperLoadOptions, describeWhisperDtype,
-  boundedFileName, createProgressReporter, createWhisperLoader,
+  getWhisperTranscriptionOptions, boundedFileName, createProgressReporter, createWhisperLoader,
 } from './stt-bootstrap.js';
 
 let passed = 0;
@@ -30,20 +30,29 @@ function section(name) { process.stdout.write(`\n${name}\n`); }
 section('Device options: the approved Whisper model/backend strategy');
 // ══════════════════════════════════════════════════════════════════════════════
 
-assert(WHISPER_MODEL_ID === 'onnx-community/whisper-base.en', 'model stays onnx-community/whisper-base.en');
+assert(WHISPER_MODEL_ID === 'onnx-community/whisper-large-v3-turbo', 'model is the Transformers.js-compatible large-v3-turbo build');
 {
   const gpu = getWhisperLoadOptions('webgpu');
   assert(gpu.device === 'webgpu', 'webgpu options request device webgpu');
-  assert(gpu.dtype && gpu.dtype.encoder_model === 'fp32' && gpu.dtype.decoder_model_merged === 'q4',
-    'webgpu dtype is { encoder_model: fp32, decoder_model_merged: q4 }');
+  assert(gpu.dtype && gpu.dtype.encoder_model === 'fp16' && gpu.dtype.decoder_model_merged === 'fp16',
+    'webgpu dtype is { encoder_model: fp16, decoder_model_merged: fp16 }');
   const wasm = getWhisperLoadOptions('wasm');
   assert(wasm.device === 'wasm' && wasm.dtype === 'q8', 'wasm options are device wasm, dtype q8');
-  assert(describeWhisperDtype('webgpu') === 'fp32+q4' && describeWhisperDtype('wasm') === 'q8',
+  assert(describeWhisperDtype('webgpu') === 'fp16+fp16' && describeWhisperDtype('wasm') === 'q8',
     'dtype descriptions are human-readable per backend');
   await assertThrows(async () => getWhisperLoadOptions('cpu'), 'an unsupported device is refused, not guessed');
 }
-assert(/207/.test(WHISPER_DOWNLOADS.webgpu) && /77/.test(WHISPER_DOWNLOADS.wasm),
-  'truthful approximate first-use sizes: ~207 MB (webgpu), ~77 MB (wasm)');
+assert(/1\.6/.test(WHISPER_DOWNLOADS.webgpu) && /1\.1/.test(WHISPER_DOWNLOADS.wasm),
+  'truthful approximate first-use sizes: ~1.6 GB (webgpu), ~1.1 GB (wasm)');
+{
+  const opts = getWhisperTranscriptionOptions();
+  assert(opts.language === 'english' && opts.task === 'transcribe',
+    'decoding is pinned to English transcription instead of auto-detect/translation');
+  assert(opts.chunk_length_s === 30 && opts.stride_length_s === 5,
+    'long recordings use 30-second chunks with five-second overlap');
+  assert(opts.return_timestamps === false && opts.do_sample === false && opts.num_beams === 3,
+    'decoding is deterministic beam search without timestamp output');
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 section('boundedFileName: bounded, path-free, control-char-free');
@@ -146,11 +155,11 @@ section('createWhisperLoader: honest selection, visible fallback, both-fail refu
   assert(selected === 'webgpu', 'webgpu success is selected honestly');
   assert(calls.length === 1 && calls[0].task === 'automatic-speech-recognition' && calls[0].modelId === WHISPER_MODEL_ID,
     'pipeline is asked for ASR on the approved model');
-  assert(calls[0].opts.device === 'webgpu' && calls[0].opts.dtype.encoder_model === 'fp32',
+  assert(calls[0].opts.device === 'webgpu' && calls[0].opts.dtype.encoder_model === 'fp16',
     'webgpu attempt carries the approved device/dtype options');
   assert(typeof calls[0].opts.progress_callback === 'function', 'a progress_callback is passed into the attempt');
-  assert(statuses.some((s) => s.state === 'loading' && /initializing webgpu/.test(s.detail) && /207/.test(s.detail)),
-    'the webgpu attempt announces itself with the truthful ~207 MB first-use size');
+  assert(statuses.some((s) => s.state === 'loading' && /initializing webgpu/.test(s.detail) && /1\.6/.test(s.detail)),
+    'the webgpu attempt announces itself with the truthful ~1.6 GB first-use size');
 }
 
 {
@@ -173,8 +182,8 @@ section('createWhisperLoader: honest selection, visible fallback, both-fail refu
   assert(selected === 'wasm', 'reports WASM as the backend that actually initialized');
   assert(statuses.some((s) => s.state === 'loading' && /webgpu unavailable/.test(s.detail) && /wasm/.test(s.detail)),
     'the WebGPU→WASM fallback is visible, not silent');
-  assert(statuses.some((s) => /initializing wasm/.test(s.detail) && /77/.test(s.detail)),
-    'the wasm attempt announces the truthful ~77 MB first-use size');
+  assert(statuses.some((s) => /initializing wasm/.test(s.detail) && /1\.1/.test(s.detail)),
+    'the wasm attempt announces the truthful ~1.1 GB first-use size');
 }
 
 {

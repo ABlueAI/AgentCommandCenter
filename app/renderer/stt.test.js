@@ -76,6 +76,8 @@ assert(typeof window.ccSTT.isRecording === 'function' && window.ccSTT.isRecordin
   'ccSTT.isRecording is exposed and starts false');
 assert(typeof window.ccSTT.isBusy === 'function' && window.ccSTT.isBusy() === false,
   'ccSTT.isBusy is exposed and starts false');
+assert(window.ccSTT.getModel() === 'onnx-community/whisper-large-v3-turbo',
+  'ccSTT reports the exact approved model rather than the old base.en model');
 assert(typeof window.ccSTT.onStatus === 'function', 'ccSTT.onStatus is exposed');
 assert(typeof window.ccSTT.onResult === 'function', 'ccSTT.onResult is exposed');
 assert(window.ccSTT.getBackend() === '', 'no backend is claimed before any pipeline has resolved');
