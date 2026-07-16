@@ -197,11 +197,29 @@ function openInAppTerminal(opts = {}) {
     requestAnimationFrame(() => { rafPending = false; try { fit.fit(); } catch {} });
   });
   ro.observe(pane.querySelector('.term-body'));
-  pane.querySelector('.spk').onclick = () => {
-    const sel = term.getSelection();
+  const speakBtn = pane.querySelector('.spk');
+  let selectionAtSpeakPointerDown = '';
+  speakBtn.addEventListener('pointerdown', (event) => {
+    // Snapshot first: the generic pane focus handler below can otherwise clear
+    // xterm's visible selection before the click handler reads it.
+    selectionAtSpeakPointerDown = term.getSelection();
+    event.preventDefault();
+    event.stopPropagation();
+  });
+  speakBtn.onclick = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
     if (!window.ccTTS) { appendLog('[tts] voice engine not ready yet.\n'); return; }
-    if (!sel || !sel.trim()) { appendLog('[tts] select some text in the pane first, then click 🔊.\n'); return; }
-    window.ccTTS.speak(sel);
+    const action = window.ccTTSSelection.resolveSpeakAction({
+      selectionAtPointerDown: selectionAtSpeakPointerDown,
+      selectionAtClick: term.getSelection(),
+      paneId: id,
+      role,
+    });
+    selectionAtSpeakPointerDown = '';
+    appendLog(action.log);
+    if (!action.ok) return;
+    window.ccTTS.speak(action.text);
   };
   const chatBody = pane.querySelector('.chat-body');
   const paneData = { term, fit, pane, ro, chatBody, pendingEvents: [], rafId: null, tailBubble: null, parser: null };
@@ -221,7 +239,10 @@ function openInAppTerminal(opts = {}) {
     cc.ptyKill(id); term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
   };
-  pane.addEventListener('mousedown', () => { activeTermId = id; term.focus(); });
+  pane.addEventListener('mousedown', (event) => {
+    if (event.target.closest('.spk')) return;
+    activeTermId = id; term.focus();
+  });
   term.textarea && term.textarea.addEventListener('focus', () => { activeTermId = id; });
   terms.set(id, paneData);
   cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, videoModel: opts.videoModel, mediaResolution: opts.mediaResolution, analysisMode: opts.analysisMode, startOffset: opts.startOffset, endOffset: opts.endOffset, cols: term.cols, rows: term.rows });

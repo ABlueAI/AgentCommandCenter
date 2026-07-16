@@ -6,7 +6,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node nav-guard.test.js && node launchers.test.js && node video-scout-args.test.js && node task-name.test.js && node renderer/agent-dom.test.js && node renderer/tts-bootstrap.test.js && node renderer/tts.test.js"
+    "test": "node nav-guard.test.js && node launchers.test.js && node video-scout-args.test.js && node task-name.test.js && node renderer/agent-dom.test.js && node renderer/tts-selection.test.js && node renderer/tts-device-config.test.js && node renderer/tts-bootstrap.test.js && node renderer/tts.test.js"
   },
   "author": "ABlueAI",
   "license": "MIT",

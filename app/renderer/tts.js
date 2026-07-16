@@ -10,6 +10,7 @@
 
 import { KokoroTTS } from './vendor/kokoro.web.js';
 import { bootstrapModel } from './tts-bootstrap.js';
+import { getKokoroLoadOptions } from './tts-device-config.js';
 
 // --- runtime config -----------------------------------------------------------
 // The model is fetched from Hugging Face on first run and cached by the browser
@@ -84,7 +85,7 @@ async function ensureModel() {
   loading = (async () => {
     setStatus('loading', 'first run downloads the voice model (~80MB)…');
     tts = await bootstrapModel(
-      (device) => KokoroTTS.from_pretrained(MODEL_ID, { dtype: 'q8', device }),
+      (device) => KokoroTTS.from_pretrained(MODEL_ID, getKokoroLoadOptions(device)),
       { onStatus: setStatus },
     );
     setStatus('idle');
