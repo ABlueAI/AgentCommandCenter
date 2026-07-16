@@ -8,7 +8,10 @@
 // stays honest while a fallback is in flight, then either resolves with the model or
 // throws a descriptive error listing every device that failed — it never resolves to a
 // falsy/partial model, so callers can't mistake a failed bootstrap for a usable one.
-export async function bootstrapModel(loadFn, { onStatus, onSelected, devices = ['webgpu', 'wasm'] } = {}) {
+// `label` names the model family in that combined error (STT reuses this same loop via
+// stt-bootstrap.js, and its refusal must not claim the VOICE model failed). Per-device
+// reasons are length-bounded so a pathological upstream message cannot flood the status.
+export async function bootstrapModel(loadFn, { onStatus, onSelected, devices = ['webgpu', 'wasm'], label = 'voice model' } = {}) {
   const errors = [];
   for (let i = 0; i < devices.length; i++) {
     const device = devices[i];
@@ -21,8 +24,8 @@ export async function bootstrapModel(loadFn, { onStatus, onSelected, devices = [
       if (onSelected) onSelected(device);
       return model;
     } catch (e) {
-      errors.push(`${device}: ${(e && e.message) || e}`);
+      errors.push(`${device}: ${String((e && e.message) || e).slice(0, 160)}`);
     }
   }
-  throw new Error(`voice model failed to initialize (${errors.join('; ')})`);
+  throw new Error(`${label} failed to initialize (${errors.join('; ')})`);
 }

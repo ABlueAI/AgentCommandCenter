@@ -2,14 +2,17 @@
 // No Node here by design; this file is pure UI + IPC calls.
 
 const $ = (sel) => document.querySelector(sel);
-const AUDIO_ACCEPTANCE_BUILD = 'AUDIO ACCEPTANCE 2026-07-16.1';
+const AUDIO_ACCEPTANCE_BUILD = 'AUDIO ACCEPTANCE 2026-07-16.2';
 const state = { repo: '', githubUrl: '', worktrees: [], chosenRole: 'builder', chosenCli: 'claude', hardTask: false, theme: 'obsidian', ttsVoice: '', ttsSpeed: 1, videoModel: 'gemini-2.5-flash-lite', mediaResolution: 'MEDIUM', analysisMode: 'transcript' };
 const audioModules = window.ccAudioModuleHealth.createAudioModuleHealth();
 
 function audioModuleFromFailure(source, detail) {
   const text = `${source || ''} ${detail || ''}`.toLowerCase();
   if (text.includes('tts.js') || text.includes('kokoro')) return 'tts';
-  if (text.includes('stt.js') || text.includes('transformers.web')) return 'stt';
+  // Recognize the OFFICIAL bundle's identifiers (transformers.min / @huggingface/transformers)
+  // as well as this module's own filename; transformers.web stays for the legacy vendor path.
+  if (text.includes('stt.js') || text.includes('transformers.web')
+    || text.includes('transformers.min') || text.includes('@huggingface/transformers')) return 'stt';
   return '';
 }
 
@@ -96,7 +99,8 @@ function drainChatEvents(t) {
 // ---- in-app terminals (xterm.js front-end; real ConPTY lives in main) -------
 const terms = new Map(); // id -> { term, fit, pane, ro, parser, chatBody, pendingEvents, rafId, tailBubble }
 let termSeq = 0;
-let activeTermId = null;  // pane that dictation types into (last focused)
+let activeTermId = null;  // last-focused pane (dictation LOCKS its target from this at record start)
+let sttDictationTargetId = null; // pane locked when recording started; transcript goes ONLY here
 const THEMES_XTERM = {
   obsidian:  { background: '#06090d', foreground: '#c8d2dc', cursor: '#20c5b7', selectionBackground: 'rgba(32,197,183,.35)' },
   void:      { background: '#070510', foreground: '#d6cdf0', cursor: '#a78bfa', selectionBackground: 'rgba(167,139,250,.35)' },
@@ -273,7 +277,7 @@ function openInAppTerminal(opts = {}) {
     window.ccTTS.speak(action.text);
   };
   const chatBody = pane.querySelector('.chat-body');
-  const paneData = { term, fit, pane, ro, chatBody, pendingEvents: [], rafId: null, tailBubble: null, parser: null };
+  const paneData = { term, fit, pane, ro, chatBody, role, pendingEvents: [], rafId: null, tailBubble: null, parser: null };
   paneData.parser = new PtyParser((ev) => {
     // Video-scout SDK runs print one machine-readable token-usage line; surface it in the Logs
     // tab so every run's real cost is recorded outside the (closable) pane. The parser is already
@@ -350,16 +354,25 @@ function installSTTUnavailableControl() {
   };
 }
 
-// Wire the Whisper dictation control: push-to-talk that types the transcript into
-// the focused agent pane (we own the PTY write channel, so no OS dictation needed).
+// Wire the Whisper dictation control: push-to-talk that types the FINALIZED transcript
+// into the pane LOCKED at recording start (we own the PTY write channel, so no OS
+// dictation needed). Logs carry pane ID/role, character count, lifecycle, and errors
+// only — never the dictated text itself.
 function setupSTTControls() {
   const stt = window.ccSTT; if (!stt) return;
   const micBtn = $('#sttMic');
   if (micBtn && !micBtn.dataset.sttWired) {
     micBtn.dataset.sttWired = '1';
     micBtn.onclick = () => {
+      if (stt.isRecording()) { stt.toggle(); return; } // second click: stop + one finalized transcript
+      if (stt.isBusy()) { appendLog('[stt] still transcribing the previous dictation…\n'); return; }
       if (!activeTermId || !terms.has(activeTermId)) { appendLog('[stt] click into an agent pane first, then 🎤.\n'); return; }
-      stt.toggle();
+      // Lock the destination NOW: however long the model load takes, and whatever pane
+      // is clicked meanwhile, the finished transcript goes here or is refused visibly.
+      sttDictationTargetId = activeTermId;
+      const paneRole = (terms.get(sttDictationTargetId) || {}).role || 'shell';
+      appendLog(`[stt] dictation started — locked to pane ${sttDictationTargetId} (${paneRole})\n`);
+      stt.toggle(); // first click: recording starts immediately (model loads at stop time)
     };
   }
   stt.onStatus(({ state: st, detail }) => {
@@ -368,7 +381,15 @@ function setupSTTControls() {
     if (st === 'error' && detail) appendLog('[stt] ' + detail + '\n');
   });
   stt.onResult((text) => {
-    if (activeTermId && terms.has(activeTermId)) { cc.ptyWrite(activeTermId, text + ' '); appendLog('[stt] » ' + text + '\n'); }
+    const targetId = sttDictationTargetId;
+    sttDictationTargetId = null;
+    const action = window.ccSttTargetLock.resolveTranscriptDelivery({
+      targetId,
+      paneExists: !!(targetId && terms.has(targetId)),
+      charCount: (text || '').length,
+    });
+    appendLog(action.log); // pane id + char count only, by construction — never the text
+    if (action.deliver) cc.ptyWrite(targetId, text + ' ');
   });
 }
 
