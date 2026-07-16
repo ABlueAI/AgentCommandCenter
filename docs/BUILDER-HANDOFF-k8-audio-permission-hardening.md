@@ -139,9 +139,22 @@ Review diff (whole branch vs fork point):
 `git diff a02c17b...HEAD --output=.agent-review-k8-audio-permission-hardening.diff`
 (pinned, gitignored)
 
-Reviewer verdict: Pending
+Reviewer verdict: `VERDICT: PASS`
 
-Reviewer verdict source: Pending
+Reviewer verdict source: Full-class read-only Reviewer pass (fresh subagent), July 16,
+2026, over the pinned whole-branch diff `.agent-review-k8-audio-permission-hardening.diff`
+(`a02c17b...953dd67`) plus worktree source. All eight mandated checklist items verified
+by reading (no grant by name alone; audio-only proof in both handlers; exact
+window/document/frame/origin; malformed metadata fails closed; camera and mixed denied;
+bounded no-leak refusals; Dictate path preserved; no unrelated surface changed and
+audioCapture gone). Two LOW non-blocking observations recorded verbatim: (1) the file:
+origin gate is coarse ('file:///' covers all local files) and is intentionally secondary
+to the exact requestingUrl + WebContents-identity binding — not a weakness; (2) the
+check-refusal latch closure outlives a window recreated via app 'activate', so a
+previously-seen (reason,kind) check refusal will not re-log after recreation — bounded
+signature space, denials unaffected, accepted as the documented flood-control trade-off.
+Gate execution (app 529/0, Pester 216/0/0, live probes) accepted from the Builder's
+record above; the Reviewer has no shell by design.
 
 ## Review-diff rule
 
