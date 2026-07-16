@@ -26,6 +26,10 @@ touched.
   text was lost before Speak read it and Logs reported no selection.
 - The user is using the control correctly. Do not substitute a different
   selection workflow or blame the operator.
+- The July 16 screenshot contains main's old `[tts] select some text...` log
+  rather than this branch's pane/role diagnostic, proving the failed test was
+  still running `main`. Main also still requests `q8` on WebGPU; this branch
+  uses Kokoro's documented `fp32` WebGPU configuration.
 
 ## Required scope
 
@@ -40,6 +44,11 @@ touched.
   be a silent button, even though the missing Whisper package is repaired on
   its own STT branch.
 - Load Kokoro with `fp32` on WebGPU and `q8` on WASM.
+- Distinguish model synthesis from actual playback, report the selected English
+  voice/backend/dtype, and validate the generated Float32 waveform before
+  Web Audio receives it.
+- Display an unmistakable acceptance-build marker in both the window title and
+  control strip so an old main build cannot be mistaken for this branch again.
 - Add focused tests for selection handoff/refusal and per-device model settings.
 
 ## Explicitly out of scope

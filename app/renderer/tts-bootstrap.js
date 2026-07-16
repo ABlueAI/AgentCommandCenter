@@ -8,7 +8,7 @@
 // stays honest while a fallback is in flight, then either resolves with the model or
 // throws a descriptive error listing every device that failed — it never resolves to a
 // falsy/partial model, so callers can't mistake a failed bootstrap for a usable one.
-export async function bootstrapModel(loadFn, { onStatus, devices = ['webgpu', 'wasm'] } = {}) {
+export async function bootstrapModel(loadFn, { onStatus, onSelected, devices = ['webgpu', 'wasm'] } = {}) {
   const errors = [];
   for (let i = 0; i < devices.length; i++) {
     const device = devices[i];
@@ -18,6 +18,7 @@ export async function bootstrapModel(loadFn, { onStatus, devices = ['webgpu', 'w
     try {
       const model = await loadFn(device);
       if (!model) throw new Error('loader resolved with no model');
+      if (onSelected) onSelected(device);
       return model;
     } catch (e) {
       errors.push(`${device}: ${(e && e.message) || e}`);

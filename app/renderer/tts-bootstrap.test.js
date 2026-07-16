@@ -40,13 +40,15 @@ section('Success on first device (webgpu) — no fallback noise');
 
 {
   const statuses = [];
+  let selected = '';
   const model = { id: 'fake-model' };
   const result = await bootstrapModel(
     async (device) => { assert(device === 'webgpu', 'first attempt requests webgpu'); return model; },
-    { onStatus: (state, detail) => statuses.push({ state, detail }) },
+    { onStatus: (state, detail) => statuses.push({ state, detail }), onSelected: (device) => { selected = device; } },
   );
   assert(result === model, 'resolves with the loaded model');
   assert(statuses.length === 0, 'no status events fired when webgpu succeeds immediately');
+  assert(selected === 'webgpu', 'reports the backend that actually initialized');
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -55,6 +57,7 @@ section('Success via fallback (webgpu fails, wasm succeeds) — fallback is visi
 
 {
   const statuses = [];
+  let selected = '';
   const model = { id: 'fake-model-wasm' };
   const attempted = [];
   const result = await bootstrapModel(
@@ -63,7 +66,7 @@ section('Success via fallback (webgpu fails, wasm succeeds) — fallback is visi
       if (device === 'webgpu') throw new Error('WebGPU not supported');
       return model;
     },
-    { onStatus: (state, detail) => statuses.push({ state, detail }) },
+    { onStatus: (state, detail) => statuses.push({ state, detail }), onSelected: (device) => { selected = device; } },
   );
   assert(result === model, 'resolves with the wasm model after webgpu fails');
   assert(attempted.join(',') === 'webgpu,wasm', 'tries webgpu then wasm, in order');
@@ -71,6 +74,7 @@ section('Success via fallback (webgpu fails, wasm succeeds) — fallback is visi
   assert(statuses[0].state === 'loading', 'fallback status is a loading state, not silent');
   assert(/webgpu/.test(statuses[0].detail) && /wasm/.test(statuses[0].detail),
     'fallback detail names both the failed and the attempted device');
+  assert(selected === 'wasm', 'reports WASM when the fallback initializes');
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -16,7 +16,12 @@ Files changed:
   `app/renderer/tts-selection.js` preserve the selection through the speaker
   interaction and log only pane metadata plus character count.
 - `app/renderer/tts.js` and `tts-device-config.js` use device-specific Kokoro
-  options.
+  options. The TTS status now identifies English/voice/backend/dtype and says
+  `synthesizing` until audio is actually scheduled for playback.
+- `tts-audio-contract.js` refuses missing, empty, silent, non-finite, or
+  implausibly sampled model output before it can be presented as speech.
+- The window title and terminal control strip show `AUDIO ACCEPTANCE
+  2026-07-16.1`; its absence proves the operator is not in this branch build.
 - Focused selection/config tests are wired into `npm.cmd test`.
 - `audio-module-health.js` catches an audio ES-module failure or a missing
   ready event and makes the unavailable engine explicit in both the control
@@ -34,7 +39,7 @@ Commands run:
 
 Exact test results:
 
-- App: 281 passed, 0 failed.
+- App: 292 passed, 0 failed.
 - Pester: 216 passed, 0 failed.
 
 Manual verification still required:

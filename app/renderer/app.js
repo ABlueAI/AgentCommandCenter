@@ -2,6 +2,7 @@
 // No Node here by design; this file is pure UI + IPC calls.
 
 const $ = (sel) => document.querySelector(sel);
+const AUDIO_ACCEPTANCE_BUILD = 'AUDIO ACCEPTANCE 2026-07-16.1';
 const state = { repo: '', githubUrl: '', worktrees: [], chosenRole: 'builder', chosenCli: 'claude', hardTask: false, theme: 'obsidian', ttsVoice: '', ttsSpeed: 1, videoModel: 'gemini-2.5-flash-lite', mediaResolution: 'MEDIUM', analysisMode: 'transcript' };
 const audioModules = window.ccAudioModuleHealth.createAudioModuleHealth();
 
@@ -308,6 +309,8 @@ async function boot() {
   updateKeyBanner(await cc.getGeminiKeyStatus());
   await refreshRepos();
   wireUi();
+  document.title = `Blue Helm — ${AUDIO_ACCEPTANCE_BUILD}`;
+  appendLog(`[build] ${AUDIO_ACCEPTANCE_BUILD}\n`);
   cc.onPtyData(({ id, data }) => {
     const t = terms.get(id);
     if (t) { t.term.write(data); t.parser.feed(data); }
@@ -394,6 +397,7 @@ function setupTTSControls() {
     const el = $('#ttsStatus'); if (el) el.textContent = (st && st !== 'idle') ? (st + (detail ? ' — ' + detail : '')) : '';
     if (stopBtn) stopBtn.classList.toggle('hidden', st !== 'speaking' && st !== 'loading');
     if (st === 'error' && detail) appendLog('[tts] ' + detail + '\n');
+    if (st === 'ready' && detail) appendLog('[tts] engine ready: ' + detail + '\n');
   });
 }
 

@@ -11,6 +11,7 @@
 import { KokoroTTS } from './vendor/kokoro.web.js';
 import { bootstrapModel } from './tts-bootstrap.js';
 import { getKokoroLoadOptions } from './tts-device-config.js';
+import { validateKokoroAudio } from './tts-audio-contract.js';
 
 // --- runtime config -----------------------------------------------------------
 // The model is fetched from Hugging Face on first run and cached by the browser
@@ -49,6 +50,7 @@ let speed = 1.0;
 let speaking = false;
 let genStop = false;   // request to abort the current generation loop
 let statusCb = null;
+let activeDevice = '';
 
 // --- status -------------------------------------------------------------------
 function setStatus(state, detail) { if (statusCb) try { statusCb({ state, detail }); } catch {} }
@@ -86,9 +88,10 @@ async function ensureModel() {
     setStatus('loading', 'first run downloads the voice model (~80MB)…');
     tts = await bootstrapModel(
       (device) => KokoroTTS.from_pretrained(MODEL_ID, getKokoroLoadOptions(device)),
-      { onStatus: setStatus },
+      { onStatus: setStatus, onSelected: (device) => { activeDevice = device; } },
     );
-    setStatus('idle');
+    const options = getKokoroLoadOptions(activeDevice);
+    setStatus('ready', `English · ${activeDevice}/${options.dtype}`);
     return tts;
   })();
   try { return await loading; } finally { loading = null; }
@@ -126,7 +129,8 @@ async function speak(rawText) {
   } catch (e) { setStatus('error', 'could not load the voice model: ' + (e && e.message)); return; }
 
   speaking = true; genStop = false;
-  setStatus('speaking');
+  const options = getKokoroLoadOptions(activeDevice);
+  setStatus('synthesizing', `English · ${voice} · ${activeDevice}/${options.dtype}`);
   const ac = ctx();
   if (ac.state === 'suspended') {
     try { await ac.resume(); }
@@ -136,14 +140,22 @@ async function speak(rawText) {
 
   // Synthesize sentence-by-sentence so audio starts quickly and stays ahead of playback.
   try {
+    let firstAudio = true;
     for (const chunk of chunksOf(text)) {
       if (genStop) break;
       const a = await tts.generate(chunk, { voice, speed });
       if (genStop) break;
-      if (a && a.audio) enqueue(a.audio, a.sampling_rate);
+      const audio = validateKokoroAudio(a);
+      enqueue(audio.samples, audio.sampleRate);
+      if (firstAudio) {
+        firstAudio = false;
+        setStatus('speaking', `English · ${voice} · ${activeDevice}/${options.dtype}`);
+      }
     }
   } catch (e) {
+    speaking = false;
     if (!genStop) setStatus('error', 'speech failed: ' + (e && e.message));
+    return;
   }
   // let the scheduled audio finish before going idle
   const remainMs = Math.max(0, (nextStart - ctx().currentTime) * 1000);
@@ -169,6 +181,7 @@ window.ccTTS = {
   getVoice: () => voice,
   setSpeed: (s) => { speed = Math.min(2, Math.max(0.5, Number(s) || 1)); },
   getSpeed: () => speed,
+  getBackend: () => activeDevice,
   isSpeaking: () => speaking,
   onStatus: (cb) => { statusCb = cb; },
 };
