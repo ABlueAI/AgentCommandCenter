@@ -88,8 +88,8 @@ layer: whiteboard, quick widgets, and CRM data.
 
 ## Current checkpoint — July 17
 
-- **Repository baseline:** `main` @ `b4519ec`, ready to push after the ordered
-  9c → P13 merges. Both gates were re-run green on the merged tree: 267 Pester
+- **Repository baseline:** `main` @ `db8b61e`, ready to push after the K5 merge.
+  Both gates were re-run green on the merged tree: 271 Pester
   assertions and 529 app assertions. All Day-0 security modules and the full
   `npm test` runner remain present.
 - **`analysisMode` fail-closed: COMPLETE.** The last invalid-mode silent
@@ -152,6 +152,16 @@ layer: whiteboard, quick widgets, and CRM data.
   9c fork/pre-merge main `d8d0931`, tip `0dd0c40`, merge `51a21b8`; P13 fork
   `0dd0c40`, tip `e9275c8`, merge `b4519ec`. Post-merge gates: app 529/0,
   Pester 267/0/0.
+- **K5 Gemini SDK 503 recovery MERGED (July 17, `db8b61e`):** explicit
+  503/`UNAVAILABLE` responses receive at most three byte-identical attempts with
+  bounded visible backoff; terminal and ambiguous failures do not retry; the
+  CLI now drains naturally instead of racing libuv through `process.exit()`;
+  output and usage remain once-only. Full-class whole-diff and CRLF delta
+  reviews both returned `VERDICT: PASS`. Blue first live-proved bounded 503
+  containment during provider saturation, then completed a successful SDK-route
+  run and authorized merge. Branch record: fork/review base `d8d0931`, actual
+  pre-merge main `7c94680`, tip `b60bb1b`, merge `db8b61e`. Post-merge gates:
+  app 529/0, Pester 271/0/0 (including the real 105-assertion Node SDK suite).
 - **Routing decision:** ChatGPT desktop with GPT-5.6 is the primary planning,
   architecture, research, review, and project-state layer. Claude Code remains
   the primary coding surface. Codex CLI/IDE remains an optional, separate
@@ -168,7 +178,8 @@ K8 permission hardening; it does not authorize that security-boundary work.
 
 The live order is: ~~TTS bootstrap → STT bootstrap~~ (✅ merged @ `5ee435b`) →
 ~~audio permission/error hardening (K8, Full-class)~~ (✅ merged @ `acf1aee`) →
-~~timestamped transcripts (9c) → P13~~ (✅ merged @ `b4519ec`) → **K5 — NEXT** →
+~~timestamped transcripts (9c) → P13~~ (✅ merged @ `b4519ec`) →
+~~K5~~ (✅ merged @ `db8b61e`) → **pending reviewed-branch cleanup/merges** →
 V1 → V5(b–d) → V3 → V4 →
 remaining Day 2/3 work → full functional ship-check → R15 fork/replacement
 evaluation. Each arrow is a clean
@@ -652,7 +663,11 @@ their own Reviewer gate.
 
 ## 🐛 KNOWN ISSUES — backlog, not blocking
 
-> **K5 (NEW, July 12 live testing). SDK-route 503 path crashes node** —
+> **K5. ✅ RESOLVED (July 17, merged @ `db8b61e`).** Full-class review and
+> corrective delta both passed; Blue live-accepted the successful SDK path after
+> separately observing bounded 503 containment. Post-merge gates: app 529/0 and
+> Pester 271/0/0. Original finding retained below for provenance.
+> **K5 (July 12 live testing). SDK-route 503 path crashes node** —
 > flash-lite 503 (high demand) was followed by
 > `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), src\win\async.c:94`
 > — a native libuv crash instead of a clean non-zero exit. Refuse visibly,

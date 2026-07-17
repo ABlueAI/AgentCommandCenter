@@ -3,9 +3,10 @@
 Branch: `feature/k5-sdk-503-recovery` (independent of Tracks A and B; all three fork
 from the same main — none is stacked on another)
 Fork-point SHA: `d8d0931`
-Pre-merge main SHA: `d8d0931` (local == origin/main, re-verified at branch time)
+Pre-merge main SHA: `d8d0931` at branch/review time; actual merge-time main was
+`7c94680` after the separately reviewed 9c/P13 pair landed.
 Tip SHA: implementation `74f42ad`; this docs-only handoff commit sits on top
-Merge commit SHA: Pending human live acceptance and merge
+Merge commit SHA: `db8b61ed1fdb59753aeb4b7a7ae0854037aa1fb5`
 
 Tier: FULL-CLASS — this changes the paid Gemini SDK request path and the number of
 attempts Blue Helm may submit (cost direction), even though 503 responses ordinarily
@@ -106,6 +107,10 @@ Live paths actually tested versus mocked:
 Manual verification: K5 worktree app launched directly (see live-acceptance section
 below at gate time); renderer markers deliberately unchanged — the build is
 identified by process command line + PID, not a marker.
+
+Human acceptance: PASS on July 17, 2026. After the provider's Flash-Lite 503
+capacity pressure cleared, Blue completed the live K5 SDK-route test successfully
+and explicitly authorized the merge.
 
 Known limitations:
 
