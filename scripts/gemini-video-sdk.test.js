@@ -320,8 +320,11 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
   {
     const src = fs.readFileSync(path.join(__dirname, 'gemini-video-sdk.js'), 'utf8');
     // Strip //-comment tails first: the shutdown-contract COMMENTS mention process.exit() by
-    // name; the check is that no executable code calls it.
-    const codeOnly = src.split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n');
+    // name; the check is that no executable code calls it. Split on \r?\n — on a CRLF
+    // checkout (git autocrlf materializes CRLF on fresh worktrees) a plain '\n' split leaves
+    // a trailing \r on every line, and JS '$' will not match before '\r', so the comment
+    // strip silently no-ops and the comments themselves trip the regex.
+    const codeOnly = src.split(/\r?\n/).map((l) => l.replace(/\/\/.*$/, '')).join('\n');
     assert(!/process\.exit\s*\(/.test(codeOnly), 'gemini-video-sdk.js contains no process.exit( in executable code');
     assert(/if \(require\.main === module\) runCliEntry\(\);/.test(src), 'require.main invokes the exported runCliEntry adapter (same one the child fixture calls)');
   }
