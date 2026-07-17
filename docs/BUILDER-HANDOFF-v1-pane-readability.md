@@ -3,8 +3,8 @@
 Branch: `feature/v1-pane-readability`
 Fork-point / pre-merge main SHA: `f97b4e70e888a1e32689f0a0d9fe517d30401438` (verified equal on
 `main` and `origin/main` before branching)
-Tip SHA: implementation `51c0054`; Reviewer LOW-1 fix `546abd0`; this docs-only verdict
-commit sits on top
+Tip SHA: implementation `51c0054`; Reviewer LOW-1 fix `546abd0`; verdict docs `2c0f0aa`;
+launch-blocker IIFE fix `c5dda88`; this final docs commit sits on top
 Merge commit SHA: Pending human approval
 
 Tier: STANDARD-CLASS — renderer-only pane layout, terminal-buffer reading, and clipboard
@@ -84,10 +84,13 @@ restore the previous grid."
   failed** (summed across the 22-suite chain; two suites report "N assertions
   passed"), Pester **275 passed / 0 failed / 0 skipped** — both exactly as the work
   order expected.
-- After implementation: app **814 passed / 0 failed** (729 baseline + 44 term-copy +
-  36 pane-maximize + 5 new agent-dom assertions), Pester **275/0/0 byte-identical**.
-  The reachability meta-test verifies both new suites are wired into
-  `app/package.json` (they run 2nd and 3rd in the chain).
+- Final (after the LOW-1 fix and the IIFE launch-blocker fix): app **818 passed /
+  0 failed** (729 baseline + 47 term-copy + 37 pane-maximize + 5 new agent-dom
+  assertions), Pester **275/0/0 byte-identical**. The reachability meta-test verifies
+  both new suites are wired into `app/package.json`.
+- Real-renderer boot proof: the acceptance build launches to the
+  `Blue Helm — V1A ACCEPTANCE 2026-07-17.7` window title with zero Uncaught errors in
+  the Electron console log.
 
 ## Test coverage map (work-order gate → assertion)
 
@@ -117,6 +120,20 @@ meta-test gates both new files by name.
   (that row is trimmed) — standard xterm serialization behavior.
 
 Unexpected pre-existing findings: none.
+
+## In-flight defect found by launching (worth remembering)
+
+The first acceptance-build launch died at load: classic renderer `<script>` files
+share ONE global scope, and both new modules declared a top-level `const api` that
+collided with agent-dom.js's (`Uncaught SyntaxError: Identifier 'api' has already
+been declared`), leaving `window.ccPaneMaximize` undefined and app.js dead — while
+all 818 node assertions were green, because CommonJS gives each test file its own
+module scope. Fixed in `c5dda88` by wrapping both modules in the
+`((global) => { ... })` IIFE pattern the three newest renderer modules already use
+(logic byte-identical, confirmed by delta review), and a static tripwire in BOTH
+suites now fails the gate if the wrapper is ever removed or a top-level `const api`
+reappears. Lesson recorded: a new classic renderer module is not "loaded" until the
+real renderer has booted it — node suites cannot prove shared-scope safety.
 
 ## Morning/human acceptance procedure (marker `V1A ACCEPTANCE 2026-07-17.7`)
 
@@ -158,3 +175,9 @@ bypass the 1,000,000 bound by documented design — xterm has already materializ
 string, so the anti-materialization rationale does not apply. INFO-1: the bound counts
 UTF-16 code units (matches every `s.length` log in the app; pairs never split).
 INFO-2: the Escape two-press contract, documented above.
+
+Second delta review (same Reviewer), July 17, 2026, over the launch-blocker fix
+`c5dda88`: wrapped bodies confirmed logic-identical line-for-line (bound enforcement,
+surrogate safety, privacy-by-construction, maximize state machine all unchanged),
+browser/CJS dual export correct under context isolation, tripwires judged to
+genuinely close the collision class. `VERDICT: PASS`.
