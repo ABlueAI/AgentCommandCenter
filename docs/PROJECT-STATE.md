@@ -33,7 +33,10 @@ window. Built from owned tools — no paid agent platform. The agent role system
   the read-only reviewer at it.
 - **Video-scout (🎥):** yt-dlp downloads a video → Gemini analyzes (visual+spoken). Gemini is the
   only model with native video. Uses `GEMINI_API_KEY` (Google killed the free CLI sign-in; use an
-  AI Studio key via `setx`).
+  AI Studio key). Set the key through the Command Center's in-app secure key setup — it persists
+  via Electron `safeStorage` (DPAPI ciphertext on disk, decrypted only in main-process memory,
+  injected only into the PTYs that need it). NEVER persist it with `setx`: a user-scoped env var
+  is inherited by every process and readable from any Bash step/hook (see AGENTS.md §8).
 - **Write-fencing:** web-scout/operator run in a dedicated sandbox dir and a PreToolUse hook
   (`fence-write.js`) HARD-DENIES any write outside it. Enforced only after `sync-roles.ps1` runs.
 - **Terminal hardening:** real clipboard (Ctrl+C smart copy / Ctrl+V paste / right-click / OSC 52),
@@ -102,7 +105,13 @@ mic-only permission; local audio processing.
 - Windows 11, RTX 5080 (+ 3060 Ti). **Changes load on FULL APP RESTART** (preload/main/modules).
 - Native modules in Electron are painful (use prebuilt `@lydell/node-pty`). Audio avoids natives
   entirely (WASM/WebGPU).
-- `GEMINI_API_KEY` set via `setx`. Node TLS fixed (`NODE_EXTRA_CA_CERTS` for the 2026 LE root).
+- `GEMINI_API_KEY` lives in the Command Center's in-app secure key store (Electron `safeStorage`;
+  ciphertext-only on disk, injected per-PTY). Do NOT persist it via `setx` — if an old user-scoped
+  key exists from earlier setups, remove it with
+  `[Environment]::SetEnvironmentVariable('GEMINI_API_KEY', $null, 'User')`
+  and then FULLY restart the app and any terminals (an inherited environment variable survives in
+  every already-running process until restart). Node TLS fixed (`NODE_EXTRA_CA_CERTS` for the 2026
+  LE root).
 - **`yt-dlp` on PATH is a HARD dependency of the video-scout, including the SDK/YouTube route.** That
   route sends the URL straight to the Gemini API and downloads nothing, but it still runs a metadata-
   only `yt-dlp` probe (duration + is_live) as its ONLY pre-flight duration guard. Missing yt-dlp =

@@ -50,7 +50,10 @@ param(
     # time (0 is not a meaningful cap -- it would refuse everything); the unbound DEFAULT stays 0,
     # which validation does not touch, and means "unset -> use the per-mode defaults in
     # lib/get-duration-guard.ps1". (Reviewer finding 5: kill the ambiguous explicit-0 sentinel.)
-    [ValidateRange(1, 86400)][int]$MaxDurationSeconds = 0,
+    # P13: ceiling lowered 86400 -> 14400 (four hours, matching the largest per-mode default). An
+    # override is a per-run bump, not a way to point the paid pipeline at a day-long source;
+    # anything above 4h is rejected at bind time, before any probe or provider operation.
+    [ValidateRange(1, 14400)][int]$MaxDurationSeconds = 0,
     [switch]$NoFeed,
     [switch]$VideoScout
 )
@@ -85,7 +88,8 @@ if ($haveStart -and -not $VideoScout) {
 # lib/invoke-duration-probe.ps1 -- extracted so it is loadable + unit-testable without running this
 # script (see invoke-duration-probe.Tests.ps1); it dot-sources the pure decision logic in
 # lib/get-duration-guard.ps1, so Resolve-DurationGuard / Resolve-NoFileMessage are available here too.
-# Assert-DurationGuard reads $ProbeTimeoutSec and $MaxDurationSeconds from THIS (caller) scope.
+# P13: Assert-DurationGuard takes -ProbeTimeoutSec and -MaxDurationSeconds as EXPLICIT parameters;
+# both call sites below pass them (no ambient caller-scope reads remain).
 . (Join-Path $PSScriptRoot 'lib\invoke-duration-probe.ps1')
 $ProbeTimeoutSec = 60   # (?) hard cap on the metadata probe; a hung/slow probe REFUSES, never proceeds.
 
@@ -156,7 +160,8 @@ if ($VideoScout) {
             # this pre-flight probe is the ONLY guard on this path (there is no download-time backstop --
             # nothing downloads). Runs after the offset validation and the route backstop above. This route
             # is video mode by definition; $haveStart marks a range run (gated on slice length).
-            [void](Assert-DurationGuard -Url $Url -GuardMode 'video' -HasRange:$haveStart -RangeStart $StartOffset -RangeEnd $EndOffset)
+            [void](Assert-DurationGuard -Url $Url -GuardMode 'video' -HasRange:$haveStart -RangeStart $StartOffset -RangeEnd $EndOffset `
+                -ProbeTimeoutSec $ProbeTimeoutSec -MaxDurationSeconds $MaxDurationSeconds)
 
             $sdkScript = Join-Path $PSScriptRoot 'gemini-video-sdk.js'
             $sdkArgs = @('--url', $Url, '--model', $Model, '--media-resolution', $MediaResolution)
@@ -244,7 +249,8 @@ try {
     # Reached only for transcript / audio / non-YouTube video / -NoFeed (the SDK route returned above).
     # A range NEVER reaches here (it always routes to SDK), so HasRange:$false. This runs BEFORE the
     # download and yields the resolved per-mode limit that the subordinate --match-filter uses below.
-    $guardResult = Assert-DurationGuard -Url $Url -GuardMode $Mode -HasRange:$false
+    $guardResult = Assert-DurationGuard -Url $Url -GuardMode $Mode -HasRange:$false `
+        -ProbeTimeoutSec $ProbeTimeoutSec -MaxDurationSeconds $MaxDurationSeconds
 
     # --- safety caps (shared across modes) -----------------------------------------
     # A single URL should never pull a whole playlist, an oversized file, or a multi-hour VOD.
