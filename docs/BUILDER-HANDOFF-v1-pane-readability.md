@@ -3,7 +3,8 @@
 Branch: `feature/v1-pane-readability`
 Fork-point / pre-merge main SHA: `f97b4e70e888a1e32689f0a0d9fe517d30401438` (verified equal on
 `main` and `origin/main` before branching)
-Tip SHA: recorded below after the review commit
+Tip SHA: implementation `51c0054`; Reviewer LOW-1 fix `546abd0`; this docs-only verdict
+commit sits on top
 Merge commit SHA: Pending human approval
 
 Tier: STANDARD-CLASS — renderer-only pane layout, terminal-buffer reading, and clipboard
@@ -139,4 +140,21 @@ no selection: expect the visible truncated notice with copied/available counts a
   (three-dot from the recorded baseline; `--output`, never PowerShell `>`).
 - Retain the literal `VERDICT: PASS|FAIL` line and identify the review that produced it.
 
-Reviewer verdict: recorded below after the Standard-class pass.
+Reviewer verdict: `VERDICT: PASS`
+
+Reviewer verdict source: Standard-class read-only Reviewer pass (fresh subagent), July 17,
+2026, over the pinned whole diff `.agent-review-v1-pane-readability.diff`
+(`f97b4e7...51c0054`) plus worktree source. All five mandated focus areas verified by
+reading (buffer reconstruction + bound enforcement hand-traced against every test
+vector · selection preservation + one-shared-path Video Scout routing · clipboard
+privacy metadata-only-by-construction + visible failures · maximize/restore/resize
+lifecycle across all exit paths · K2 documentation closure), plus the Escape contract
+(two-press for maximized TUIs judged honest and acceptable), CRLF-safe static checks,
+reachability wiring, and diff proportionality. Findings: LOW-1 (truncation notice
+hardcoded Video-Scout wording for every pane type) — FIXED as prescribed in `546abd0`
+and confirmed by a scoped delta review from the same Reviewer, `VERDICT: PASS`, no new
+findings, no regressions. LOW-2 (recorded, accepted as-is): selection/snapshot copies
+bypass the 1,000,000 bound by documented design — xterm has already materialized the
+string, so the anti-materialization rationale does not apply. INFO-1: the bound counts
+UTF-16 code units (matches every `s.length` log in the app; pairs never split).
+INFO-2: the Escape two-press contract, documented above.
