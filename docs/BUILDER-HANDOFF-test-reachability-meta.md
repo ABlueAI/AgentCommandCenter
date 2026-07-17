@@ -105,9 +105,26 @@ Review diff (stacked delta vs the K5 base):
 gitignored). The full-vs-main delta is `d8d0931...HEAD` and includes the K5 branch;
 review K5 through its own handoff/diff, not this one.
 
-Reviewer verdict: Pending
+Reviewer verdict: `VERDICT: PASS` (initial scoped pass) and `VERDICT: PASS` (delta pass)
 
-Reviewer verdict source: Pending
+Reviewer verdict source: two read-only Reviewer passes (fresh subagents), July 17, 2026.
+(1) Initial scoped Standard-class pass over `.agent-review-test-reachability-meta.diff`
+(`3c5c949...3686963`): PASS with one MEDIUM — substring matching could mask a future
+root-level orphan by name-collision (e.g. wired `renderer/tts.test.js` shadowing a new
+`app/tts.test.js`) — plus two LOWs (watchdog suite's own filename mentions counted as
+wrapper reachability; handoff omission). All three corrected in `587442b`: exact-token
+package.json matching, boundary-guarded wrapper basenames, watchdog excluded from the
+wrapper corpus, limitation documented; the fix was proven against the exact collision
+scenario (scratch `app/tts.test.js` FAILED by name, deleted after).
+(2) Delta pass over `.agent-review-meta-token-delta.diff` (`992744f..587442b`): PASS
+with one LOW — the trailing regex guard omitted `.` (asymmetric with the leading
+guard), so a `tts.test.js.bak` decoy could still match; the Reviewer prescribed the
+functional fix in words. Applied as the follow-up commit under the chore-class
+criteria (zero runtime code · content prescribed verbatim by a Reviewer verdict ·
+verified by execution: clean 6/0 plus a five-case regex proof — .bak decoy,
+path-prefix, dash-prefix all false; quoted and space-bounded legit references true).
+Gate execution (app 649/0, Pester 224/0/0, re-run after each fix) is the Builder's
+record; Reviewers have no shell.
 
 ## Review-diff rule
 

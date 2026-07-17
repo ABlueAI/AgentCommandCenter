@@ -92,8 +92,9 @@ const unreachable = testJs.filter((f) => {
   const relApp = path.relative(APP_DIR, f).split(path.sep).join('/');
   const inPackageJson = !relApp.startsWith('..') && wiredPkgPaths.has(relApp);
   // Basename bounded by non-filename characters on both sides: 'x-tts.test.js' or
-  // 'tts.test.js.bak' inside a wrapper cannot satisfy 'tts.test.js'.
-  const inWrapper = new RegExp(`(?<![\\w.\\-/\\\\])${escapeRe(path.basename(f))}(?![\\w-])`).test(wrapperText);
+  // 'tts.test.js.bak' inside a wrapper cannot satisfy 'tts.test.js'. (The trailing
+  // guard includes '.' symmetrically with the leading one — delta-Reviewer LOW.)
+  const inWrapper = new RegExp(`(?<![\\w.\\-/\\\\])${escapeRe(path.basename(f))}(?![\\w.\\-])`).test(wrapperText);
   return !inPackageJson && !inWrapper;
 });
 
