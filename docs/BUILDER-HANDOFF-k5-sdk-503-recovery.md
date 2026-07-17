@@ -150,6 +150,18 @@ elapsed seconds span all attempts including backoff sleeps (matches pre-K5 seman
 cosmetic). Gate execution (node 105/0, Pester 220/0/0, app 529/0) accepted from the
 Builder's record; the Reviewer has no shell.
 
+Post-PASS corrective delta: `3c5c949` — the no-process.exit source check was
+line-ending dependent (a fresh CRLF checkout left `\r` on split lines, the
+//-comment strip no-oped, and the shutdown-contract COMMENTS tripped the regex; the
+suite would have failed on any fresh checkout, including post-merge main). Found by
+the reachability-meta branch's fresh worktree; fixed by splitting on `/\r?\n/`;
+verified 105/0 on both an LF working copy and a CRLF checkout. Delta reviewed
+separately over the pinned `.agent-review-k5-crlf-delta.diff` (`2bd3598..3c5c949`):
+`VERDICT: PASS`, zero findings (fresh delta-Reviewer subagent, July 17, 2026 —
+confirmed test-code-only, correct on both line endings, and unable to mask a real
+`process.exit(` call). Tip is now `3c5c949` + this docs commit; the full-branch
+review diff was re-pinned to the current tip.
+
 ## Review-diff rule
 
 - Before merge, the reviewed delta is `git diff d8d0931...<tip>`.
