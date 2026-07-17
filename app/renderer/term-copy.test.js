@@ -202,6 +202,16 @@ const html = read('index.html');
 }
 assert(/scrollback:\s*5000/.test(appSrc), 'xterm scrollback stays 5000 (no unjustified increase — V1a constraint)');
 {
+  // Tripwire for the launch-blocking class of bug node tests cannot see: classic renderer
+  // <script> files share ONE global scope, and agent-dom.js owns a top-level `const api`.
+  // This module must keep its whole body inside the shared-scope-safe IIFE wrapper.
+  const modSrc = read('term-copy.js');
+  assert(modSrc.includes('((global) => {')
+    && modSrc.includes("})(typeof window === 'undefined' ? globalThis : window);")
+    && !/^const api\b/m.test(modSrc),
+    'term-copy.js is IIFE-wrapped — no top-level const collides in the shared <script> scope');
+}
+{
   const tcTag = html.indexOf('<script src="term-copy.js">');
   const appTag = html.indexOf('<script src="app.js">');
   assert(tcTag > 0 && appTag > tcTag, 'term-copy.js loads before app.js');

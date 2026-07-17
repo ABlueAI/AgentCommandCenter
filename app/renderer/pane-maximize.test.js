@@ -155,6 +155,15 @@ const css = read('styles.css');
     'CSS gives the maximized pane the whole grid content area (header stays visible)');
 }
 {
+  // Tripwire (see term-copy.test.js): the shared <script> global scope means a top-level
+  // `const api` here would collide with agent-dom.js and kill the renderer at load.
+  const modSrc = read('pane-maximize.js');
+  assert(modSrc.includes('((global) => {')
+    && modSrc.includes("})(typeof window === 'undefined' ? globalThis : window);")
+    && !/^const api\b/m.test(modSrc),
+    'pane-maximize.js is IIFE-wrapped — no top-level const collides in the shared <script> scope');
+}
+{
   const MARKER = 'V1A ACCEPTANCE 2026-07-17.7';
   assert(appSrc.includes(`const ACCEPTANCE_BUILD = '${MARKER}';`), 'app.js pins the V1a acceptance marker');
   assert(appSrc.includes('document.title = `Blue Helm — ${ACCEPTANCE_BUILD}`')
