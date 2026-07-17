@@ -88,9 +88,9 @@ layer: whiteboard, quick widgets, and CRM data.
 
 ## Current checkpoint — July 17
 
-- **Repository baseline:** `main` @ `db8b61e`, ready to push after the K5 merge.
-  Both gates were re-run green on the merged tree: 271 Pester
-  assertions and 529 app assertions. All Day-0 security modules and the full
+- **Repository baseline:** `main` @ `b9063e6`, ready to push after Fast Clear and
+  reachability-meta merged. Both gates were re-run green on the merged tree: 275 Pester
+  assertions and 729 app assertions. All Day-0 security modules and the full
   `npm test` runner remain present.
 - **`analysisMode` fail-closed: COMPLETE.** The last invalid-mode silent
   cost-direction path is merged.
@@ -138,9 +138,8 @@ layer: whiteboard, quick widgets, and CRM data.
   Dictate's audio-only path granted. Full-class whole-diff Reviewer
   `VERDICT: PASS` (2 LOW non-blocking); Blue live-accepted and authorized the
   merge. Branch record: fork/pre-merge main `a02c17b`, tip `e1fdd1f`, merge
-  `acf1aee`. This closes K8. **TTS Fast Clear / high-speed enunciation** is
-  recorded as a separate, non-blocking Standard-class backlog improvement — it
-  does not gate 9c or any queue item.
+  `acf1aee`. This closes K8. The later TTS Fast Clear / high-speed enunciation
+  improvement is now merged; see the July 17 checkpoint below.
 - **9c timestamped transcript output + P13 duration-guard hardening MERGED
   (July 17):** 9c now gives default transcript analyses caption-derived
   timestamp citations, a chronological timestamp map, and whole-second suggested
@@ -162,6 +161,17 @@ layer: whiteboard, quick widgets, and CRM data.
   run and authorized merge. Branch record: fork/review base `d8d0931`, actual
   pre-merge main `7c94680`, tip `b60bb1b`, merge `db8b61e`. Post-merge gates:
   app 529/0, Pester 271/0/0 (including the real 105-assertion Node SDK suite).
+- **TTS Fast Clear + test-runner reachability MERGED (July 17):** Fast Clear
+  synthesizes natural-speed Kokoro audio and applies pitch-preserving playback
+  acceleration; Blue live-accepted the 2x clarity as remarkable/perfect.
+  Reachability-meta now fails the gate by name when any JS or Pester test becomes
+  orphaned and wired the two pre-existing orphan suites it discovered. Reviewer
+  verdicts were `VERDICT: PASS`; the expected `app/package.json` conflict received
+  a focused post-resolution `VERDICT: PASS` after proving the exact 22-token union
+  with no missing, extra, or duplicate suites. Branch records: Fast Clear fork
+  `d8d0931`, actual pre-merge main `9ea95c0`, tip `03461d3`, merge `370387e`;
+  reachability-meta base `3c5c949`, actual pre-merge main `370387e`, tip `c5e4610`,
+  merge `b9063e6`. Combined gates: app 729/0 and Pester 275/0/0.
 - **Routing decision:** ChatGPT desktop with GPT-5.6 is the primary planning,
   architecture, research, review, and project-state layer. Claude Code remains
   the primary coding surface. Codex CLI/IDE remains an optional, separate
@@ -179,8 +189,8 @@ K8 permission hardening; it does not authorize that security-boundary work.
 The live order is: ~~TTS bootstrap → STT bootstrap~~ (✅ merged @ `5ee435b`) →
 ~~audio permission/error hardening (K8, Full-class)~~ (✅ merged @ `acf1aee`) →
 ~~timestamped transcripts (9c) → P13~~ (✅ merged @ `b4519ec`) →
-~~K5~~ (✅ merged @ `db8b61e`) → **pending reviewed-branch cleanup/merges** →
-V1 → V5(b–d) → V3 → V4 →
+~~K5~~ (✅ merged @ `db8b61e`) → ~~Fast Clear + reachability-meta~~
+(✅ merged @ `b9063e6`) → **V1 — NEXT** → V5(b–d) → V3 → V4 →
 remaining Day 2/3 work → full functional ship-check → R15 fork/replacement
 evaluation. Each arrow is a clean
 checkpoint; runtime items remain separate one-invariant branches and receive

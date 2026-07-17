@@ -7,9 +7,10 @@ Pester wrapper merges — that is the test working, not a bug. Merge K5 first; t
 branch then merges clean.
 Fork-point vs main: `d8d0931` (via the K5 chain)
 Base (K5 tip): `3c5c949`
-Pre-merge main SHA: `d8d0931`
+Pre-merge main SHA: `d8d0931` at branch/review time; actual merge-time main was
+`370387e` after K5 and Fast Clear had landed.
 Tip SHA: implementation `992744f`; this docs-only handoff commit sits on top
-Merge commit SHA: Pending human approval (after K5)
+Merge commit SHA: `b9063e632024adf85360d657e90b95dd534c3890`
 
 Tier: Standard-class, chore-adjacent — test tooling only; worst case is a false gate
 failure. No runtime code.
@@ -125,6 +126,13 @@ verified by execution: clean 6/0 plus a five-case regex proof — .bak decoy,
 path-prefix, dash-prefix all false; quoted and space-bounded legit references true).
 Gate execution (app 649/0, Pester 224/0/0, re-run after each fix) is the Builder's
 record; Reviewers have no shell.
+
+Post-conflict focused review: `VERDICT: PASS` (ChatGPT desktop, July 17, 2026).
+The expected `app/package.json` conflict with Fast Clear was resolved as the exact
+22-token union of both reviewed test lists: no missing, extra, or duplicate suites;
+`test-reachability.test.js` remains first. Focused proof passed meta 6/0, WAV 26/0,
+and playback queue 37/0 before the merge commit. Combined merged-main gates then
+passed app 729/0 and Pester 275/0/0.
 
 ## Review-diff rule
 

@@ -3,9 +3,10 @@
 Branch: `feature/tts-fast-clear` (independent of `feature/transcript-timestamps`; both
 fork from the same main — neither is stacked on the other)
 Fork-point SHA: `d8d0931`
-Pre-merge main SHA: `d8d0931` (local == origin/main, verified before branching)
+Pre-merge main SHA: `d8d0931` at branch/review time; actual merge-time main was
+`9ea95c0` after 9c, P13, and K5 landed through their separate gates.
 Tip SHA: implementation `286a21e`; this docs-only handoff commit sits on top
-Merge commit SHA: Pending human live acceptance and merge
+Merge commit SHA: `370387ede264badb9cfba21a59c1e52cd05345d9`
 
 Intended invariant: the selected speed represents LISTENING speed, not Kokoro synthesis
 speed. Kokoro always generates fully articulated speech at natural speed 1.0; the
@@ -104,6 +105,10 @@ Live paths actually tested versus mocked:
   fake), WebGPU adapters.
 - NOT yet proven: real Kokoro audio through the new path at 2x on this machine's
   speakers — exactly the human acceptance this build is launched for.
+
+Human acceptance: PASS on July 17, 2026. Blue reported the 2x TTS difference as
+remarkable: words remained clear, none were missed, and the result was accepted as
+perfect. Blue later explicitly authorized this merge.
 
 Known limitations:
 
