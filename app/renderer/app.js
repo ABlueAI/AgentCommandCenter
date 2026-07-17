@@ -2,7 +2,7 @@
 // No Node here by design; this file is pure UI + IPC calls.
 
 const $ = (sel) => document.querySelector(sel);
-const AUDIO_ACCEPTANCE_BUILD = 'TTS FAST CLEAR ACCEPTANCE 2026-07-16.6';
+const ACCEPTANCE_BUILD = 'V1A ACCEPTANCE 2026-07-17.7';
 const state = { repo: '', githubUrl: '', worktrees: [], chosenRole: 'builder', chosenCli: 'claude', hardTask: false, theme: 'obsidian', ttsVoice: '', ttsSpeed: 1, videoModel: 'gemini-2.5-flash-lite', mediaResolution: 'MEDIUM', analysisMode: 'transcript' };
 const audioModules = window.ccAudioModuleHealth.createAudioModuleHealth();
 
@@ -121,10 +121,46 @@ function applyTheme(name) {
   cc.saveSettings({ theme: name });
 }
 function switchTab(name) {
+  // Leaving the Terminals view must not strand maximize state (V1a): coming back
+  // always lands on the normal grid, never on a half-forgotten maximized layout.
+  if (name !== 'terminals') paneMaximizer.handleViewSwitch();
   document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('active', x.dataset.tab === name));
   document.querySelectorAll('.tabpane').forEach((x) => x.classList.toggle('active', x.dataset.pane === name));
 }
 function fitAllTerms() { for (const t of terms.values()) { try { t.fit.fit(); } catch {} } }
+
+// V1a maximize: the state machine lives in pane-maximize.js; every side effect
+// (refit + PTY resize + focus + button glyphs) lives HERE in onLayout, so all exit
+// paths — toggle, Escape, close-while-maximized, view switch — behave identically.
+const paneMaximizer = window.ccPaneMaximize.createPaneMaximizer({
+  grid: $('#terminalGrid'),
+  log: (line) => appendLog(line),
+  onLayout: (maximizedId, previousId) => {
+    for (const [tid, t] of terms) {
+      const btn = t.pane.querySelector('.max');
+      if (btn) {
+        btn.textContent = maximizedId === tid ? '🗗' : '⛶';
+        btn.title = maximizedId === tid ? 'Restore the grid (Esc)' : 'Maximize pane (Esc restores the grid)';
+      }
+      // Refit and tell ConPTY the new geometry so long lines REFLOW to the new width
+      // instead of becoming unreachable. Hidden panes no-op (FitAddon proposes nothing
+      // for a zero-size container) and refit again when the grid returns.
+      try { t.fit.fit(); cc.ptyResize(tid, t.term.cols, t.term.rows); } catch {}
+    }
+    // Predictable focus: the maximized pane on maximize; the same pane back in the
+    // grid on restore (previousId). Close-while-maximized passes neither — the pane
+    // is gone and focus stays wherever the user puts it next.
+    const focusId = (maximizedId && terms.has(maximizedId)) ? maximizedId
+      : (previousId && terms.has(previousId)) ? previousId : null;
+    if (focusId) { activeTermId = focusId; try { terms.get(focusId).term.focus(); } catch {} }
+  },
+});
+// Escape restores the grid while a pane is maximized, and is CONSUMED (capture phase,
+// before xterm sees it) so the same press doesn't also reach the PTY; press again for
+// a normal terminal ESC. With nothing maximized the key flows to the terminal untouched.
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && paneMaximizer.handleEscape()) { e.preventDefault(); e.stopPropagation(); }
+}, true);
 function showTermEmpty() {
   if (!$('#termEmpty')) {
     const d = document.createElement('div');
@@ -293,6 +329,63 @@ function openInAppTerminal(opts = {}) {
     if (!action.ok) return;
     window.ccTTS.speak(action.text);
   };
+  // V1a Copy Output — ONE shared path for every pane type, including Video Scout.
+  // Priority: a live pane-local selection wins; the pointer-down snapshot rescues a
+  // selection the header click (or a mouse-mode TUI) cleared between pointer-down and
+  // click — the same mechanism the 🔊 button uses; with no selection at all, the whole
+  // buffer + scrollback is reconstructed under the copy bound (term-copy.js).
+  const copyBtn = pane.querySelector('.copy-out');
+  let selectionAtCopyPointerDown = '';
+  let copyFlashTimer = null;
+  const flashCopyBtn = (ok) => {
+    copyBtn.textContent = ok ? '✓' : '⚠';
+    copyBtn.classList.toggle('flash-ok', ok);
+    copyBtn.classList.toggle('flash-err', !ok);
+    if (copyFlashTimer) clearTimeout(copyFlashTimer);
+    copyFlashTimer = setTimeout(() => { copyBtn.textContent = '⧉'; copyBtn.classList.remove('flash-ok', 'flash-err'); }, 1400);
+  };
+  copyBtn.addEventListener('pointerdown', (event) => {
+    // Snapshot BEFORE the click can clear the selection (same rescue as the 🔊 button).
+    selectionAtCopyPointerDown = selectedTextInPane() || speakSelectionMemory.peek();
+    event.preventDefault();
+    event.stopPropagation();
+  });
+  copyBtn.onclick = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const result = window.ccTermCopy.resolveCopyRequest({
+      selection: selectedTextInPane(),
+      snapshot: selectionAtCopyPointerDown,
+      reconstruct: () => window.ccTermCopy.reconstructBufferText(term.buffer.active, window.ccTermCopy.COPY_OUTPUT_BOUND),
+    });
+    selectionAtCopyPointerDown = '';
+    if (!result.ok) {
+      // e.g. an empty pane — refuse visibly (⚠ flash + Logs), never a silent no-op.
+      appendLog(window.ccTermCopy.buildCopyLogLine({ paneId: id, role, source: result.source, failed: true, reason: result.reason }));
+      flashCopyBtn(false);
+      return;
+    }
+    let wrote = false;
+    let failReason = 'clipboard bridge unavailable (restart the app to load clipboard support)';
+    try {
+      if (cc.clipboardWrite) { cc.clipboardWrite(result.text); wrote = true; }
+    } catch (err) { failReason = (err && err.message) || String(err); }
+    if (!wrote) {
+      appendLog(window.ccTermCopy.buildCopyLogLine({ paneId: id, role, source: result.source, failed: true, reason: `clipboardWrite: ${failReason}` }));
+      flashCopyBtn(false);
+      alert(`Copy Output failed — nothing was copied.\n\n${failReason}`);
+      return;
+    }
+    // Logs carry metadata only, by construction: buildCopyLogLine never receives the text.
+    appendLog(window.ccTermCopy.buildCopyLogLine({ paneId: id, role, source: result.source, copiedChars: result.copiedChars, totalChars: result.totalChars, truncated: result.truncated }));
+    flashCopyBtn(true);
+    if (result.truncated) alert(window.ccTermCopy.buildTruncationNotice(result));
+  };
+  pane.querySelector('.max').onclick = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    paneMaximizer.toggle(id, pane);
+  };
   const chatBody = pane.querySelector('.chat-body');
   const paneData = { term, fit, pane, ro, chatBody, role, pendingEvents: [], rafId: null, tailBubble: null, parser: null };
   paneData.parser = new PtyParser((ev) => {
@@ -306,15 +399,19 @@ function openInAppTerminal(opts = {}) {
     if (paneData.rafId === null) paneData.rafId = requestAnimationFrame(() => drainChatEvents(paneData));
   });
   pane.querySelector('.x').onclick = () => {
+    // Closing the maximized pane restores the grid cleanly (V1a) — clear the maximize
+    // state FIRST so the surviving panes un-hide and refit.
+    paneMaximizer.handlePaneClosed(id);
     ro.disconnect();
     try { selectionDisposable.dispose(); } catch {}
     try { mouseSelectionFallback.dispose(); } catch {}
+    if (copyFlashTimer) { clearTimeout(copyFlashTimer); copyFlashTimer = null; }
     if (paneData.rafId !== null) { cancelAnimationFrame(paneData.rafId); paneData.rafId = null; }
     cc.ptyKill(id); term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
   };
   pane.addEventListener('mousedown', (event) => {
-    if (event.target.closest('.spk')) return;
+    if (event.target.closest('.spk, .copy-out, .max')) return;
     activeTermId = id; term.focus();
   });
   term.textarea && term.textarea.addEventListener('focus', () => { activeTermId = id; });
@@ -332,8 +429,10 @@ async function boot() {
   updateKeyBanner(await cc.getGeminiKeyStatus());
   await refreshRepos();
   wireUi();
-  document.title = `Blue Helm — ${AUDIO_ACCEPTANCE_BUILD}`;
-  appendLog(`[build] ${AUDIO_ACCEPTANCE_BUILD}\n`);
+  document.title = `Blue Helm — ${ACCEPTANCE_BUILD}`;
+  const buildBadge = $('#audioBuild');
+  if (buildBadge) buildBadge.textContent = ACCEPTANCE_BUILD; // single source: the const above
+  appendLog(`[build] ${ACCEPTANCE_BUILD}\n`);
   cc.onPtyData(({ id, data }) => {
     const t = terms.get(id);
     if (t) { t.term.write(data); t.parser.feed(data); }
