@@ -66,17 +66,34 @@ const pkg = JSON.parse(fs.readFileSync(path.join(APP_DIR, 'package.json'), 'utf8
 const testScript = (pkg.scripts && pkg.scripts.test) || '';
 assert(testScript.length > 0, 'app/package.json has a "test" script to check against');
 
-// Wrapper text: every Pester suite under scripts/ (a Node suite referenced by one of
-// these is executed by the run-pester gate — the K5 wrapper pattern).
+// EXACT-TOKEN matching, not substring: `renderer/tts.test.js` being wired must never
+// mask a future root-level orphan `tts.test.js` (a masked orphan is the precise
+// failure this tool exists to catch, so a substring false-negative here would be
+// self-defeating). The "test" script is tokenized into its `node <path>` invocations
+// and compared for equality.
+const wiredPkgPaths = new Set(
+  testScript.split('&&')
+    .map((s) => s.trim())
+    .filter((s) => s.startsWith('node '))
+    .map((s) => s.slice(5).trim())
+);
+
+// Wrapper corpus: every Pester suite under scripts/ (a Node suite referenced by one of
+// these is executed by the run-pester gate — the K5 wrapper pattern). This meta-test's
+// own Pester sibling is EXCLUDED: it is a watchdog that mentions test filenames, not a
+// wrapper that executes them, and must not count as reachability for anything.
 const wrapperText = testPs
-  .filter((f) => f.startsWith(SCRIPTS_DIR + path.sep))
+  .filter((f) => f.startsWith(SCRIPTS_DIR + path.sep) && path.basename(f) !== 'test-reachability.Tests.ps1')
   .map((f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } })
   .join('\n');
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const unreachable = testJs.filter((f) => {
   const relApp = path.relative(APP_DIR, f).split(path.sep).join('/');
-  const inPackageJson = !relApp.startsWith('..') && testScript.includes(relApp);
-  const inWrapper = wrapperText.includes(path.basename(f));
+  const inPackageJson = !relApp.startsWith('..') && wiredPkgPaths.has(relApp);
+  // Basename bounded by non-filename characters on both sides: 'x-tts.test.js' or
+  // 'tts.test.js.bak' inside a wrapper cannot satisfy 'tts.test.js'.
+  const inWrapper = new RegExp(`(?<![\\w.\\-/\\\\])${escapeRe(path.basename(f))}(?![\\w-])`).test(wrapperText);
   return !inPackageJson && !inWrapper;
 });
 
@@ -93,8 +110,8 @@ assert(fs.existsSync(path.join(SCRIPTS_DIR, 'test-reachability.Tests.ps1')),
 
 // Explicit self-check (also implied by the invariant above): this meta-test is itself
 // wired into the node gate. Yes, this is the joke; it is also the requirement.
-assert(testScript.includes('test-reachability.test.js'),
-  'this meta-test is itself listed in app/package.json "test" (not the next orphan)');
+assert(wiredPkgPaths.has('test-reachability.test.js'),
+  'this meta-test is itself an exact node invocation in app/package.json "test" (not the next orphan)');
 
 process.stdout.write(`\ntest-reachability: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

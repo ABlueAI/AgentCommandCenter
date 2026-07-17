@@ -84,10 +84,15 @@ Security-sensitive surfaces touched: none. No runtime code, no deps.
 
 Known limitations:
 
-- Wrapper detection is basename-substring inside `scripts/*.Tests.ps1` — a wrapper
-  that mentions a suite's filename without executing it would satisfy the check.
-  Accepted: the realistic failure mode is forgetting wiring entirely, not writing a
-  decoy wrapper.
+- package.json matching is EXACT-TOKEN (the "test" script is tokenized into its
+  `node <path>` invocations) and wrapper matching is a boundary-guarded basename
+  match with the watchdog Pester meta-suite excluded from the wrapper corpus — both
+  hardened from substring matching after the Reviewer's MEDIUM (a wired
+  `renderer/tts.test.js` could previously mask a future root-level `tts.test.js`
+  orphan; the fix was proven against exactly that scratch scenario). Remaining
+  accepted gap: a wrapper that names a suite in a boundary-clean position without
+  executing it would still satisfy the check — the realistic failure mode is
+  forgetting wiring entirely, not writing a decoy wrapper.
 - The exclusion list is name-based at any depth; a future legitimate test living in
   a directory named e.g. `vendor` would be skipped (and should not live there).
 
