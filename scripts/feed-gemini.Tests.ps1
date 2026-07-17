@@ -114,6 +114,28 @@ Describe 'feed-gemini.ps1 -MaxDurationSeconds explicit-0 is rejected at bind tim
     }
 }
 
+Describe 'feed-gemini.ps1 -MaxDurationSeconds ceiling is 14400s / four hours (P13)' {
+    # Technique: pair the override with a lone -StartOffset. Offset validation throws AFTER
+    # parameter binding and BEFORE any probe/network, so the error message tells us exactly which
+    # stage rejected the call: a binding failure names MaxDurationSeconds; a successful bind
+    # reaches the offset refusal instead. No yt-dlp, no network, no paid call.
+    It 'accepts exactly 14400 at bind time (the call proceeds to the later offset refusal)' {
+        { & $feedGemini -Url $YT -VideoScout -StartOffset 10 -MaxDurationSeconds 14400 } |
+            Should Throw 'Both -StartOffset and -EndOffset are required'
+    }
+    It 'rejects 14401 at bind time, before any probe or provider operation' {
+        { & $feedGemini -Url $YT -VideoScout -StartOffset 10 -MaxDurationSeconds 14401 } | Should Throw 'MaxDurationSeconds'
+    }
+    It 'rejects the old 86400 ceiling value at bind time (the day-long override is gone)' {
+        { & $feedGemini -Url $YT -VideoScout -StartOffset 10 -MaxDurationSeconds 86400 } | Should Throw 'MaxDurationSeconds'
+    }
+    It 'the unset DEFAULT still binds fine (per-mode defaults stay in effect)' {
+        # Reaches the offset refusal with NO override argument at all -> the default (0/unset)
+        # passed binding untouched; the per-mode default limits are proven in the guard suites.
+        { & $feedGemini -Url $YT -VideoScout -StartOffset 10 } | Should Throw 'Both -StartOffset and -EndOffset are required'
+    }
+}
+
 Describe 'feed-gemini.ps1 offset refusal invariant' {
 
     # 1a — a lone offset is refused (never "ignored, whole video analyzed").

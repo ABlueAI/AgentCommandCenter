@@ -9,9 +9,11 @@
   dot-sources; see invoke-duration-probe.Tests.ps1 for the probe-parsing / timeout / fault / override
   tests and feed-gemini.Tests.ps1 for the end-to-end SDK-route refusal proof.
 
-  Ambient-scope note (by design, unchanged in the move): Assert-DurationGuard reads $ProbeTimeoutSec
-  and $MaxDurationSeconds from its CALLER's scope. feed-gemini.ps1 supplies both (a script param and
-  a local); the unit tests set them in scope before calling. Nothing else here touches caller scope.
+  P13: Assert-DurationGuard no longer reads ANYTHING from its caller's scope. -ProbeTimeoutSec and
+  -MaxDurationSeconds are explicit parameters (with fail-safe defaults: 60s probe timeout, 0 = no
+  override); because they are declared parameters, PowerShell's dynamic scoping can never fall
+  through to a similarly named caller variable -- the local always exists. Every caller passes both
+  explicitly; invoke-duration-probe.Tests.ps1 proves ambient variables are ignored.
 #>
 
 . (Join-Path $PSScriptRoot 'get-duration-guard.ps1')
@@ -63,15 +65,24 @@ function Invoke-DurationProbe {
         # ANY probe fault (job spawn failure, Receive-Job error, an unexpected parse throw) surfaces
         # as the guard's own "could not determine the duration" refusal downstream -- never a raw PS
         # error and never a silent pass. Fail closed: Duration=$null => Resolve => unknown-duration.
+        # P13: no longer SILENT -- one bounded diagnostic line first, so "the probe itself broke" is
+        # distinguishable from "the source is private/unavailable". Sanitized (control chars
+        # collapsed so a crafted message cannot forge extra lines) and length-capped; only the
+        # exception MESSAGE -- never a stack trace, command line, environment, or response body.
+        $reason = ('' + $_.Exception.Message) -replace '[\x00-\x1f\x7f]+', ' '
+        if ($reason.Length -gt 200) { $reason = $reason.Substring(0, 200) + '...(truncated)' }
+        Write-Host "Duration guard: the duration probe itself failed (refusing fail-closed): $reason" -ForegroundColor Yellow
         return [PSCustomObject]@{ TimedOut = $false; Duration = $null; IsLive = $false }
     }
 }
 
 # Probe + decide + (on refusal) throw. Returns the guard result so the caller can hand the resolved
-# limit to the SUBORDINATE --match-filter backstop on the download path. Reads the caller-scope
-# -MaxDurationSeconds override (0 = unset) and $ProbeTimeoutSec. Fails closed on any probe problem.
+# limit to the SUBORDINATE --match-filter backstop on the download path. Fails closed on any probe
+# problem. P13: -ProbeTimeoutSec and -MaxDurationSeconds (0 = unset) are EXPLICIT parameters --
+# declared locals mean dynamic scoping can never silently pick up caller variables of the same name.
 function Assert-DurationGuard {
     param([Parameter(Mandatory)][string]$Url, [Parameter(Mandatory)][string]$GuardMode,
+        [int]$ProbeTimeoutSec = 60, [int]$MaxDurationSeconds = 0,
         [switch]$HasRange, [int]$RangeStart = 0, [int]$RangeEnd = 0)
     $ytdlpProbe = Get-YtDlpPath
     Write-Host "Duration guard: probing metadata (timeout ${ProbeTimeoutSec}s)..." -ForegroundColor DarkCyan

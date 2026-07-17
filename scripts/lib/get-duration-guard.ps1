@@ -31,9 +31,13 @@ function Get-DurationLimits {
   Decide if a run is allowed. Pure: same inputs -> same result, no IO.
 .OUTPUTS
   PSCustomObject { Allowed; Refusal; Message; Limit; Measured; MeasuredKind; Mode; OverrideUsed }
-  Refusal is one of '', 'live', 'unknown-duration', 'exceeds-limit'.
+  Refusal is one of '', 'range-not-supported-for-mode', 'invalid-range', 'live',
+  'unknown-duration', 'exceeds-limit'.
 .NOTES
   Refusal order is deliberate and fail-closed:
+    0. malformed REQUEST         -> range-not-supported-for-mode / invalid-range (P13: the
+                                    decision layer defends its own invariant; it does not rely
+                                    on callers having validated the range shape)
     1. probe timed out           -> unknown-duration (could not determine length)
     2. is_live                   -> live (no bounded duration)
     3. duration not reported     -> unknown-duration (even for a RANGE run: never proceed unprobed)
@@ -79,6 +83,24 @@ function Resolve-DurationGuard {
         param($reason, $msg)
         $out.Refusal = $reason; $out.Message = $msg
         return [PSCustomObject]$out
+    }
+
+    # 0. Request-shape validation (P13). A range that is not a valid video-mode slice must never
+    #    reach the "allowed" result, no matter what upstream validation did or did not run -- the
+    #    cost-direction decision defends its own invariant. Bounded deterministic reasons only.
+    if ($HasRange) {
+        if ($Mode -ne 'video') {
+            return & $refuse 'range-not-supported-for-mode' (
+                "Refusing: a time range is only supported in video mode (a slice scopes the EXPENSIVE " +
+                "visual pass; transcript/audio always process the whole source). Drop the range or use " +
+                "-Mode video. (mode=$Mode)")
+        }
+        if ($StartOffset -lt 0 -or $EndOffset -le $StartOffset) {
+            return & $refuse 'invalid-range' (
+                "Refusing: the requested range ${StartOffset}s-${EndOffset}s is not a valid slice " +
+                "(start must be >= 0 and end must be strictly greater than start). Refusing rather " +
+                "than guessing what was meant. (mode=$Mode)")
+        }
     }
 
     # 1. Probe timeout -- could not determine the length at all. Fail closed.
@@ -141,7 +163,18 @@ function Resolve-NoFileMessage {
         [string]$YtDlpStdout = '',
         [int]$Limit = 0
     )
-    if ($YtDlpStdout -match 'does not pass filter') {
+    # P13: anchored to the SHAPE of yt-dlp's own diagnostic line, not the bare phrase. The stdout
+    # this scans also carries yt-dlp's echo of the (attacker-chosen) video title, so a title that
+    # merely CONTAINS "does not pass filter" must not be read as proof our backstop fired. The real
+    # rejection line is a bracket-tagged line whose phrase is followed by the parenthesized filter
+    # expression (ours always contains 'duration') and 'skipping':
+    #   [download] <title> does not pass filter (duration < 5400 & !is_live), skipping ..
+    # ((?m)^ anchors to the start of a LINE; a title embedded mid-line, or the phrase without the
+    # structured suffix, does not match.)
+    # Residual (accepted, message-only blast radius): a title crafted to byte-replicate the ENTIRE
+    # structured diagnostic could still spoof this classification -- the consequence is a wrong
+    # explanation string, never a wrong allow/deny (the guard decisions above run independently).
+    if ($YtDlpStdout -match '(?m)^\[[a-z]+\][^\r\n]*\bdoes not pass filter\s*\([^)\r\n]*duration[^)\r\n]*\),?\s*skipping') {
         return "Refused by the yt-dlp duration/live backstop: this download did not pass our own " +
                "match-filter (limit ${Limit}s, mode '$Mode'). Nothing broke on yt-dlp's end -- our own " +
                "guard declined it, most likely because the source changed between the pre-flight probe and " +

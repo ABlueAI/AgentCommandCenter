@@ -155,3 +155,61 @@ Describe 'Resolve-NoFileMessage: accurate no-file reason (Problem C)' {
         $m | Should Not Match 'failed upstream'
     }
 }
+
+Describe 'Resolve-DurationGuard: request-shape validation (P13 -- the decision layer defends itself)' {
+    It 'refuses a range in transcript mode with range-not-supported-for-mode' {
+        $r = Resolve-DurationGuard -Mode transcript -HasRange -StartOffset 0 -EndOffset 60 -DurationSeconds 100
+        $r.Allowed | Should Be $false
+        $r.Refusal | Should Be 'range-not-supported-for-mode'
+    }
+    It 'refuses a range in audio mode with range-not-supported-for-mode' {
+        $r = Resolve-DurationGuard -Mode audio -HasRange -StartOffset 0 -EndOffset 60 -DurationSeconds 100
+        $r.Refusal | Should Be 'range-not-supported-for-mode'
+    }
+    It 'refuses EQUAL boundaries (end == start) with invalid-range' {
+        $r = Resolve-DurationGuard -Mode video -HasRange -StartOffset 120 -EndOffset 120 -DurationSeconds 1000
+        $r.Allowed | Should Be $false
+        $r.Refusal | Should Be 'invalid-range'
+    }
+    It 'refuses REVERSED boundaries (end < start) with invalid-range' {
+        (Resolve-DurationGuard -Mode video -HasRange -StartOffset 300 -EndOffset 100 -DurationSeconds 1000).Refusal | Should Be 'invalid-range'
+    }
+    It 'refuses a NEGATIVE start with invalid-range' {
+        (Resolve-DurationGuard -Mode video -HasRange -StartOffset -5 -EndOffset 100 -DurationSeconds 1000).Refusal | Should Be 'invalid-range'
+    }
+    It 'the malformed-range refusal wins even over a probe timeout (request shape first, fail closed)' {
+        $r = Resolve-DurationGuard -Mode video -HasRange -StartOffset 100 -EndOffset 100 -DurationSeconds $null -ProbeTimedOut
+        $r.Refusal | Should Be 'invalid-range'
+    }
+    It 'a VALID video range retains current behavior (allowed, gated on slice length)' {
+        $r = Resolve-DurationGuard -Mode video -HasRange -StartOffset 60 -EndOffset 660 -DurationSeconds 18000
+        $r.Allowed | Should Be $true
+        $r.MeasuredKind | Should Be 'slice'
+        $r.Measured | Should Be 600
+    }
+    It 'refusal reasons are the bounded deterministic constants (no free text in Refusal)' {
+        (Resolve-DurationGuard -Mode audio -HasRange -StartOffset 0 -EndOffset 1 -DurationSeconds 5).Refusal | Should Be 'range-not-supported-for-mode'
+        (Resolve-DurationGuard -Mode video -HasRange -StartOffset 1 -EndOffset 0 -DurationSeconds 5).Refusal | Should Be 'invalid-range'
+    }
+}
+
+Describe 'Resolve-NoFileMessage: anchored filter-line match (P13 -- titles cannot spoof the phrase)' {
+    It 'recognizes the representative yt-dlp rejection line (bracket tag + parenthesized duration filter + skipping)' {
+        $real = "[download] My Video does not pass filter (duration < 5400 & !is_live), skipping .."
+        (Resolve-NoFileMessage -Mode video -Pattern '*.mp4' -RunDir 'C:\run' -YtDlpStdout $real -Limit 5400) | Should Match 'backstop'
+    }
+    It 'IGNORES an ordinary title containing the bare phrase (no structured suffix)' {
+        $hostile = "[download] Destination: Why this video does not pass filter explained.mp4`nSaved: C:\x\Why_this_video_does_not_pass_filter_explained.mp4"
+        $m = Resolve-NoFileMessage -Mode video -Pattern '*.mp4' -RunDir 'C:\run' -YtDlpStdout $hostile -Limit 5400
+        $m | Should Not Match 'backstop'
+        $m | Should Match 'failed upstream'
+    }
+    It 'IGNORES the phrase when it appears mid-line without the bracket-tag line anchor' {
+        $hostile = "Saved: my clip does not pass filter (duration humor), skipping nothing"
+        (Resolve-NoFileMessage -Mode video -Pattern '*.mp4' -RunDir 'C:\run' -YtDlpStdout $hostile -Limit 5400) | Should Not Match 'backstop'
+    }
+    It 'IGNORES a phrase whose parenthesized part lacks a duration filter (not our backstop shape)' {
+        $hostile = "[download] clip does not pass filter (mood check), skipping .."
+        (Resolve-NoFileMessage -Mode video -Pattern '*.mp4' -RunDir 'C:\run' -YtDlpStdout $hostile -Limit 5400) | Should Not Match 'backstop'
+    }
+}
