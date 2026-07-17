@@ -171,6 +171,9 @@ assert(COPY_OUTPUT_BOUND === 1000000, 'copy bound is exactly 1,000,000 character
   const n = buildTruncationNotice({ copiedChars: 1000000, totalChars: 2345678 });
   assert(n.includes('1,000,000') && n.includes('2,345,678') && /truncated/i.test(n),
     'truncation notice states truncated + copied count + available count');
+  assert(!/Video Scout/.test(n), 'non-scout panes get no Video-Scout run-directory hint (LOW-1: a shell has no run dir)');
+  const vs = buildTruncationNotice({ copiedChars: 1000000, totalChars: 2345678, role: 'video-scout' });
+  assert(/Video Scout/.test(vs) && /run directory/.test(vs), 'Video Scout panes keep the run-directory hint');
 }
 
 // --- static wiring checks (app.js / index.html) ---------------------------------------------------

@@ -379,7 +379,7 @@ function openInAppTerminal(opts = {}) {
     // Logs carry metadata only, by construction: buildCopyLogLine never receives the text.
     appendLog(window.ccTermCopy.buildCopyLogLine({ paneId: id, role, source: result.source, copiedChars: result.copiedChars, totalChars: result.totalChars, truncated: result.truncated }));
     flashCopyBtn(true);
-    if (result.truncated) alert(window.ccTermCopy.buildTruncationNotice(result));
+    if (result.truncated) alert(window.ccTermCopy.buildTruncationNotice({ copiedChars: result.copiedChars, totalChars: result.totalChars, role }));
   };
   pane.querySelector('.max').onclick = (event) => {
     event.preventDefault();

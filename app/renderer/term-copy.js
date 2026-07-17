@@ -131,11 +131,16 @@ function buildCopyLogLine(meta) {
 }
 
 // User-visible truncation notice (shown in the UI, not just Logs): says that output
-// was truncated, how many characters were copied, and how many were available.
+// was truncated, how many characters were copied, and how many were available. The
+// run-directory hint is true only for Video Scout panes, so it is appended only there
+// (Reviewer LOW-1: a PowerShell pane has no run directory to point at).
 function buildTruncationNotice(meta) {
-  return `Copy Output: the pane held more than the ${COPY_OUTPUT_BOUND.toLocaleString('en-US')}-character copy limit.\n\n`
-    + `Copied the newest ${meta.copiedChars.toLocaleString('en-US')} of ${meta.totalChars.toLocaleString('en-US')} available characters (older output was truncated).\n\n`
-    + `The full run output of a Video Scout run is always on disk in its run directory.`;
+  const base = `Copy Output: the pane held more than the ${COPY_OUTPUT_BOUND.toLocaleString('en-US')}-character copy limit.\n\n`
+    + `Copied the newest ${meta.copiedChars.toLocaleString('en-US')} of ${meta.totalChars.toLocaleString('en-US')} available characters (older output was truncated).`;
+  if (meta.role === 'video-scout') {
+    return `${base}\n\nThe full run output of a Video Scout run is always on disk in its run directory.`;
+  }
+  return base;
 }
 
 const api = { COPY_OUTPUT_BOUND, reconstructBufferText, resolveCopyRequest, buildCopyLogLine, buildTruncationNotice };
