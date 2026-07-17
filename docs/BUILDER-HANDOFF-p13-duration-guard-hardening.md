@@ -7,7 +7,7 @@ Fork-point SHA (recorded before implementation): `0dd0c40` (== the 9c tip)
 Pre-merge main SHA: `d8d0931` (main is behind this stack by 9c; the P13-only reviewed
 delta is `0dd0c40...<tip>`)
 Tip SHA: implementation `5f300ac`; this docs-only handoff commit sits on top
-Merge commit SHA: Pending human approval (after 9c)
+Merge commit SHA: `b4519ec02c7cb6193a0ca2b7282f62740edf906f`
 
 Tier: FULL-CLASS — changes a cost-direction guard and its maximum user override.
 
@@ -137,6 +137,10 @@ the P13 worktree in a terminal. Then:
    acceptance since P13 stacks on it). Expect: guard `-> OK`, the timestamped
    transcript brief announcement, a normal analysis, manifest `completed`, and no
    guard noise beyond the two normal probe lines.
+
+Human acceptance: PASS on July 17, 2026. The live duration refusal was observed
+and the stacked 9c timestamp output was accepted as good. Blue explicitly
+authorized the ordered 9c → P13 merge.
 
 ## Review-diff rule
 

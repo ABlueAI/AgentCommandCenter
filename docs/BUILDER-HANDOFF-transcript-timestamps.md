@@ -4,7 +4,7 @@ Branch: `feature/transcript-timestamps`
 Fork-point SHA: `d8d0931`
 Pre-merge main SHA: `d8d0931` (local == origin/main, verified before branching)
 Tip SHA: implementation `4afaa92`; this docs-only handoff commit sits on top
-Merge commit SHA: Pending human live acceptance and merge
+Merge commit SHA: `51a21b80a82fe8b241a56cab248be3c4d00f3e4c`
 
 Intended invariant: a default transcript-mode analysis turns the timestamped SRT source
 into an actionable summary whose substantive claims and recommended video ranges are tied
@@ -69,6 +69,10 @@ Manual verification: the behavioral suite output was inspected once by eye — t
 flattened brief is visible in the deferred `gemini -m gemini-2.5-flash-lite -p "…"` line
 followed by the srt attachment. No real Gemini request was made by the Builder anywhere
 on this branch (paid use stays human-initiated).
+
+Human acceptance: PASS on July 17, 2026. Blue ran the stacked P13/9c acceptance
+build against a captioned short video, confirmed that the generated timestamps
+looked good, and explicitly authorized the merge.
 
 Known limitations:
 

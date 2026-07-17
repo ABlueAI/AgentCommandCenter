@@ -86,12 +86,12 @@ layer: whiteboard, quick widgets, and CRM data.
   are always read-and-re-implemented. Whole audited libraries in, loose
   snippets out, peer-orchestrator code never.
 
-## Current checkpoint — July 15 platform transfer
+## Current checkpoint — July 17
 
-- **Repository baseline:** `main` @ `acf1aee`, pushed to `origin/main` after
-  merging `feature/k8-audio-permission-hardening` (K8, Full-class). Both gates
-  re-run green on the merged tree: 216 Pester assertions and 529 app assertions
-  (423 baseline + 106 media-permission-policy).
+- **Repository baseline:** `main` @ `b4519ec`, ready to push after the ordered
+  9c → P13 merges. Both gates were re-run green on the merged tree: 267 Pester
+  assertions and 529 app assertions. All Day-0 security modules and the full
+  `npm test` runner remain present.
 - **`analysisMode` fail-closed: COMPLETE.** The last invalid-mode silent
   cost-direction path is merged.
 - **V5a manifest + legacy backfill: COMPLETE.** New accepted runs write the
@@ -141,6 +141,17 @@ layer: whiteboard, quick widgets, and CRM data.
   `acf1aee`. This closes K8. **TTS Fast Clear / high-speed enunciation** is
   recorded as a separate, non-blocking Standard-class backlog improvement — it
   does not gate 9c or any queue item.
+- **9c timestamped transcript output + P13 duration-guard hardening MERGED
+  (July 17):** 9c now gives default transcript analyses caption-derived
+  timestamp citations, a chronological timestamp map, and whole-second suggested
+  ranges; Blue live-accepted the timestamp output. P13 makes range shape/mode
+  refusals self-defending, removes ambient guard inputs, caps overrides at
+  14,400 seconds, surfaces bounded probe failures, anchors the yt-dlp backstop,
+  and corrects the obsolete `setx` documentation. Reviewer verdicts were
+  `VERDICT: PASS` (9c Standard-class; P13 Full-class). Ordered branch record:
+  9c fork/pre-merge main `d8d0931`, tip `0dd0c40`, merge `51a21b8`; P13 fork
+  `0dd0c40`, tip `e9275c8`, merge `b4519ec`. Post-merge gates: app 529/0,
+  Pester 267/0/0.
 - **Routing decision:** ChatGPT desktop with GPT-5.6 is the primary planning,
   architecture, research, review, and project-state layer. Claude Code remains
   the primary coding surface. Codex CLI/IDE remains an optional, separate
@@ -157,7 +168,8 @@ K8 permission hardening; it does not authorize that security-boundary work.
 
 The live order is: ~~TTS bootstrap → STT bootstrap~~ (✅ merged @ `5ee435b`) →
 ~~audio permission/error hardening (K8, Full-class)~~ (✅ merged @ `acf1aee`) →
-**timestamped transcripts (9c — NEXT)** → P13/K5 → V1 → V5(b–d) → V3 → V4 →
+~~timestamped transcripts (9c) → P13~~ (✅ merged @ `b4519ec`) → **K5 — NEXT** →
+V1 → V5(b–d) → V3 → V4 →
 remaining Day 2/3 work → full functional ship-check → R15 fork/replacement
 evaluation. Each arrow is a clean
 checkpoint; runtime items remain separate one-invariant branches and receive
@@ -593,7 +605,11 @@ their own Reviewer gate.
 > with an 8-char GUID suffix; uniqueness is now structural; no consumer parses
 > the run-dir name (verified by the Reviewer).
 
-> **P13. Duration-guard follow-up batch (from the PASS verdict's findings +
+> **P13. ✅ RESOLVED (July 17, merged @ `b4519ec`).** The duration-guard
+> follow-up batch landed after 9c with Full-class `VERDICT: PASS`; post-merge
+> gates are Pester 267/0/0 and app 529/0. Original scope retained below for
+> provenance.
+> **Duration-guard follow-up batch (from the PASS verdict's findings +
 > residuals — none blocking, none load-bearing today).**
 > **Chore-class, do FIRST (both qualify under the chore rule once verified by
 > execution):** (a) **Pester version pin in `run-pester.ps1`** — currently
@@ -629,7 +645,8 @@ their own Reviewer gate.
 > **P7. Budget guardrail** — using real `usageMetadata` token numbers (not
 > estimates). Better built next week with a week of real data accumulated.
 
-> **P8. (PULLED UP → Day 1 item 9c)** Timestamps in transcript-mode output.
+> **P8. ✅ COMPLETE (July 17, 9c merge `51a21b8`).** Timestamps in
+> transcript-mode output.
 
 ---
 
