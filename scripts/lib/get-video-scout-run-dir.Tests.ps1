@@ -84,6 +84,13 @@ Describe 'Test-VideoScoutRunId (V5b1)' {
         Test-VideoScoutRunId -RunId 42 | Should Be $false
         Test-VideoScoutRunId -RunId '' | Should Be $false
     }
+    It 'rejects a non-ASCII (Unicode) digit in the stamp — true parity with the JS generator (Reviewer LOW-1)' {
+        # Arabic-Indic digit U+0669 is a Unicode decimal digit that .NET \d would accept but ASCII
+        # [0-9] (and the JS generator) rejects. Build a stamp with it and confirm refusal.
+        $arabicNine = [char]0x0669
+        $rid = 'run-2026071' + $arabicNine + '-090503-007-4242-deadbeef'   # 8-char date, one non-ASCII digit
+        Test-VideoScoutRunId -RunId $rid | Should Be $false
+    }
 }
 
 Describe 'New-VideoScoutRunDirFromId (V5b1)' {

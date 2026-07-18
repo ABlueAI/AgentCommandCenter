@@ -36,7 +36,10 @@ function New-VideoScoutRunDir {
 # (app/video-scout-run-id.js). Anchored: only the listed digit/hex runs, start to end -- so it
 # rejects separators (/ \ :), traversal (..), rooted/UNC paths, and malformed stamps/PIDs/suffixes
 # by construction. A separate length cap bounds the otherwise-open PID digit run.
-$script:VideoScoutRunIdRe = '^run-\d{8}-\d{6}-\d{3}-\d+-[0-9a-f]{8}$'
+# [0-9] (not \d): .NET \d matches the whole Unicode decimal-digit category, but the JS generator's
+# regex (app/video-scout-run-id.js) is ASCII 0-9 only. Use [0-9] here so the PowerShell validator is
+# byte-for-byte the same shape the generator emits (Reviewer LOW-1: true JS/PS parity).
+$script:VideoScoutRunIdRe = '^run-[0-9]{8}-[0-9]{6}-[0-9]{3}-[0-9]+-[0-9a-f]{8}$'
 $script:VideoScoutRunIdMaxLength = 80
 
 <#
