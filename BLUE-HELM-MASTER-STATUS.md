@@ -86,11 +86,12 @@ layer: whiteboard, quick widgets, and CRM data.
   are always read-and-re-implemented. Whole audited libraries in, loose
   snippets out, peer-orchestrator code never.
 
-## Current checkpoint — July 17
+## Current checkpoint — July 18
 
-- **Repository baseline:** `main` @ `b9063e6`, ready to push after Fast Clear and
-  reachability-meta merged. Both gates were re-run green on the merged tree: 275 Pester
-  assertions and 729 app assertions. All Day-0 security modules and the full
+- **Repository baseline:** `main` @ `60d5230` after the human-approved V1a
+  no-fast-forward merge. Both gates were re-run green on the merged tree: 275
+  Pester assertions and 875 app assertions. All Day-0 security modules, K8's
+  media-permission boundary, V1a's bounded clipboard IPC boundary, and the full
   `npm test` runner remain present.
 - **`analysisMode` fail-closed: COMPLETE.** The last invalid-mode silent
   cost-direction path is merged.
@@ -190,9 +191,9 @@ The live order is: ~~TTS bootstrap → STT bootstrap~~ (✅ merged @ `5ee435b`) 
 ~~audio permission/error hardening (K8, Full-class)~~ (✅ merged @ `acf1aee`) →
 ~~timestamped transcripts (9c) → P13~~ (✅ merged @ `b4519ec`) →
 ~~K5~~ (✅ merged @ `db8b61e`) → ~~Fast Clear + reachability-meta~~
-(✅ merged @ `b9063e6`) → **V1a — BUILT, in acceptance** (`feature/v1-pane-readability`;
-closes K2; Open Report/OS dispatch deferred — the in-app reader lands at V5b) →
-V5(b–d) → V3 → V4 →
+(✅ merged @ `b9063e6`) → ~~V1a~~ (✅ human acceptance passed and merged @
+`60d5230`; closes K2; Open Report/OS dispatch deferred — the in-app reader
+lands at V5b) → **V5(b–d) — NEXT** → V3 → V4 →
 remaining Day 2/3 work → full functional ship-check → R15 fork/replacement
 evaluation. Each arrow is a clean
 checkpoint; runtime items remain separate one-invariant branches and receive
@@ -749,8 +750,8 @@ their own Reviewer gate.
 > until manifest-scoped retention and media cleanup are implemented and gated.**
 > The manifest itself lands earlier at V5a.
 
-> **K2. Clipboard copy-paste — ✅ RESOLVED by V1a (July 17,
-> `feature/v1-pane-readability`).** Original finding, retained for provenance:
+> **K2. Clipboard copy-paste — ✅ RESOLVED by V1a (July 18, merged @
+> `60d5230`).** Original finding, retained for provenance:
 > flaky in panes generally, and likely **never covered for the video-scout pane
 > at all** (the original fix targeted the standard Claude pane path). Treat as
 > "add coverage for the Gemini pane." Resolution: every pane — Video Scout
@@ -815,8 +816,8 @@ live testing — these are NEEDS, not wants; V1 blocks the tool's whole point):*
 > viewport. **SPLIT (July 17): V1a delivers readability + copy; the report
 > reader is deferred and recorded separately below.**
 >
-> **V1a — Pane Readability and Copy Repair: BUILT on
-> `feature/v1-pane-readability` (pending human acceptance + merge).**
+> **V1a — Pane Readability and Copy Repair: ✅ COMPLETE (July 18, human
+> acceptance passed, merged @ `60d5230`).**
 > Delivered: maximize/restore one pane inside the Command Center content area
 > (same control and Esc restore; siblings hidden, never closed — PTYs keep
 > running; FitAddon + the PTY resize path rerun on every layout change so long
@@ -829,6 +830,13 @@ live testing — these are NEEDS, not wants; V1 blocks the tool's whole point):*
 > surrogate-safe, visible truncation notice, metadata-only Logs). **Video
 > Scout goes through the same tested Copy Output
 > path as every other pane — this closes K2.**
+> The live-found Electron 42 defect was also closed before merge: sandboxed
+> preload code no longer accesses the OS clipboard directly. Clipboard reads
+> and writes cross a main-process IPC boundary that validates the exact trusted
+> window, webContents, main frame, and canonical entry URL; accepts strings
+> only; applies the same 1,000,000-character hard limit in both directions; and
+> never logs content. Full-class Reviewer verdict: PASS. Final merged-main
+> gates: app 875/0; Pester 275/0/0.
 >
 > **Deferred out of V1a (explicit): Open Report / any OS dispatch.** No
 > `shell.openPath`, no run-directory or report-path resolution, no
