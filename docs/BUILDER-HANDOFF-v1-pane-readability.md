@@ -4,7 +4,8 @@ Branch: `feature/v1-pane-readability`
 Fork-point / pre-merge main SHA: `f97b4e70e888a1e32689f0a0d9fe517d30401438` (verified equal on
 `main` and `origin/main` before branching)
 Tip SHA: implementation `51c0054`; Reviewer LOW-1 fix `546abd0`; verdict docs `2c0f0aa`;
-launch-blocker IIFE fix `c5dda88`; this final docs commit sits on top
+launch-blocker IIFE fix `c5dda88`; verdict docs `e46a783`; universal-bound correction
+`3f09d90` (Blue's directive); this final docs commit sits on top
 Merge commit SHA: Pending human approval
 
 Tier: STANDARD-CLASS — renderer-only pane layout, terminal-buffer reading, and clipboard
@@ -30,7 +31,10 @@ maximizable, scrollable, selectable, and safely copyable.
    - Bound: newest 1,000,000 UTF-16 code units win; a cut inside a surrogate pair drops
      the orphan half (999,999 copied, never a broken character).
    - `resolveCopyRequest`: live pane-local selection → pointer-down snapshot →
-     reconstruction. Selections are never truncated.
+     reconstruction. EVERY source is subject to the bound — selections included
+     (Blue's correction: no clipboard path may be unbounded). `applyCopyBound`
+     applies the identical newest-wins, surrogate-safe cut to selection/snapshot
+     strings; at or below the limit a selection is copied byte-identically.
    - Privacy by construction: `buildCopyLogLine` is the only Logs producer and never
      receives the copied text — only pane ID, role, source, copied/available counts,
      truncated flag, or the failure reason.
@@ -84,10 +88,10 @@ restore the previous grid."
   failed** (summed across the 22-suite chain; two suites report "N assertions
   passed"), Pester **275 passed / 0 failed / 0 skipped** — both exactly as the work
   order expected.
-- Final (after the LOW-1 fix and the IIFE launch-blocker fix): app **818 passed /
-  0 failed** (729 baseline + 47 term-copy + 37 pane-maximize + 5 new agent-dom
-  assertions), Pester **275/0/0 byte-identical**. The reachability meta-test verifies
-  both new suites are wired into `app/package.json`.
+- Final (after the LOW-1 fix, the IIFE launch-blocker fix, and Blue's universal-bound
+  correction): app **824 passed / 0 failed** (729 baseline + 53 term-copy + 37
+  pane-maximize + 5 new agent-dom assertions), Pester **275/0/0 byte-identical**. The
+  reachability meta-test verifies both new suites are wired into `app/package.json`.
 - Real-renderer boot proof: the acceptance build launches to the
   `Blue Helm — V1A ACCEPTANCE 2026-07-17.7` window title with zero Uncaught errors in
   the Electron console log.
@@ -170,14 +174,24 @@ lifecycle across all exit paths · K2 documentation closure), plus the Escape co
 reachability wiring, and diff proportionality. Findings: LOW-1 (truncation notice
 hardcoded Video-Scout wording for every pane type) — FIXED as prescribed in `546abd0`
 and confirmed by a scoped delta review from the same Reviewer, `VERDICT: PASS`, no new
-findings, no regressions. LOW-2 (recorded, accepted as-is): selection/snapshot copies
-bypass the 1,000,000 bound by documented design — xterm has already materialized the
-string, so the anti-materialization rationale does not apply. INFO-1: the bound counts
-UTF-16 code units (matches every `s.length` log in the app; pairs never split).
-INFO-2: the Escape two-press contract, documented above.
+findings, no regressions. LOW-2 — SUPERSEDED BY BLUE'S CORRECTION (July 17): the
+selection exemption from the bound was rejected as an unbounded clipboard operation
+regardless of the LOW rating; the bound is now universal (commit `3f09d90`), closing
+LOW-2 with the stronger invariant. INFO-1: the bound counts UTF-16 code units (matches
+every `s.length` log in the app; pairs never split). INFO-2: the Escape two-press
+contract, documented above.
 
 Second delta review (same Reviewer), July 17, 2026, over the launch-blocker fix
 `c5dda88`: wrapped bodies confirmed logic-identical line-for-line (bound enforcement,
 surrogate safety, privacy-by-construction, maximize state machine all unchanged),
 browser/CJS dual export correct under context isolation, tripwires judged to
 genuinely close the collision class. `VERDICT: PASS`.
+
+Third delta review (same Reviewer), July 17, 2026, over the universal-bound correction
+`3f09d90`: applyCopyBound's cut rule confirmed identical to the buffer path's
+(newest-wins slice, surrogate-orphan drop, count semantics); at-or-below-limit
+selections byte-identical to pre-fix; `reconstructBufferText` and the buffer branch
+byte-for-byte unchanged per the directive; privacy holds on the new truncation path
+(metadata-only Logs, counts-only notice); tests exercise the exported functions at the
+real 1,000,000 constant with a throwing reconstruct stub proving the buffer is never
+touched. `VERDICT: PASS`.
