@@ -78,6 +78,12 @@ function buildTermPane(doc, opts) {
   const head = el(doc, 'div', { className: 'term-head' });
   head.appendChild(buildBadge(doc, opts.badge));
   head.appendChild(el(doc, 'span', { className: 'name', text: opts.label, title: opts.worktreeTitle || '' }));
+  // V5b2: Open Report is added ONLY to Video Scout panes (opts.openReport). It resolves this pane's
+  // report through main's V5b1 pane->runId registry (renderer sends only the pane ID) and shows it in
+  // the in-app Library reader — never an OS file open.
+  if (opts.openReport) {
+    head.appendChild(el(doc, 'button', { className: 'open-report', text: '📄', title: 'Open this run’s report in the Library reader' }));
+  }
   head.appendChild(el(doc, 'button', { className: 'copy-out', text: '⧉', title: 'Copy Output (your selection, otherwise the whole scrollback)' }));
   head.appendChild(el(doc, 'button', { className: 'max', text: '⛶', title: 'Maximize pane (Esc restores the grid)' }));
   head.appendChild(el(doc, 'button', { className: 'spk', text: '🔊', title: 'Speak selection (Kokoro TTS)' }));

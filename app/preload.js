@@ -46,6 +46,14 @@ contextBridge.exposeInMainWorld('cc', {
   clipboardRead: () => ipcRenderer.invoke('clipboard-read'),
   clipboardWrite: (t) => ipcRenderer.invoke('clipboard-write', t),
 
+  // V5b2 Library / in-app report reader (invoke-only). List returns bounded metadata + OPAQUE
+  // main-issued handles; a report is requested only by handle (library) or by pane ID (Open Report on
+  // a live Video Scout pane). The renderer never sends or receives a filesystem path. Main validates
+  // the sender/frame/URL, runs the PowerShell library boundary, and enforces every bound.
+  libraryList: () => ipcRenderer.invoke('library-list'),
+  libraryRead: (handle) => ipcRenderer.invoke('library-read', handle),
+  libraryOpenReport: (paneId) => ipcRenderer.invoke('library-open-report', paneId),
+
   // surfaced main-process errors (shown in the Logs tab instead of a fatal dialog)
   onMainError: (cb) => ipcRenderer.on('main-error', (_e, m) => cb(m)),
 });
