@@ -5,12 +5,14 @@ Fork-point / pre-merge main SHA: `f97b4e70e888a1e32689f0a0d9fe517d30401438` (ver
 `main` and `origin/main` before branching)
 Tip SHA: implementation `51c0054`; Reviewer LOW-1 fix `546abd0`; verdict docs `2c0f0aa`;
 launch-blocker IIFE fix `c5dda88`; verdict docs `e46a783`; universal-bound correction
-`3f09d90` (Blue's directive); this final docs commit sits on top
+`3f09d90`; verdict docs `51dc6a4`; clipboard IPC-boundary repair `386b0c2` (Full-class);
+this final docs commit sits on top
 Merge commit SHA: Pending human approval
 
-Tier: STANDARD-CLASS — renderer-only pane layout, terminal-buffer reading, and clipboard
-output through the existing bridge. No new IPC surface, no filesystem opening, no
-credentials, permissions, cost controls, or security boundaries.
+Tier: STANDARD-CLASS for the pane readability/copy/maximize work — BUT the clipboard
+bridge hunks (`386b0c2`) are a FULL-CLASS security-boundary delta: they move an OS
+capability (the system clipboard) from the sandboxed preload into main behind bounded,
+sender-validated IPC. See the dedicated section below.
 
 Intended invariant: every terminal pane — including Video Scout — is fully readable,
 maximizable, scrollable, selectable, and safely copyable.
@@ -88,13 +90,13 @@ restore the previous grid."
   failed** (summed across the 22-suite chain; two suites report "N assertions
   passed"), Pester **275 passed / 0 failed / 0 skipped** — both exactly as the work
   order expected.
-- Final (after the LOW-1 fix, the IIFE launch-blocker fix, and Blue's universal-bound
-  correction): app **824 passed / 0 failed** (729 baseline + 53 term-copy + 37
-  pane-maximize + 5 new agent-dom assertions), Pester **275/0/0 byte-identical**. The
-  reachability meta-test verifies both new suites are wired into `app/package.json`.
+- Final (after the LOW-1 fix, the IIFE launch-blocker fix, Blue's universal-bound
+  correction, and the Full-class clipboard IPC boundary): app **875 passed / 0 failed**
+  (824 + 21 clipboard-ipc + 30 clipboard-consumer), Pester **275/0/0 byte-identical**.
+  The reachability meta-test verifies every new suite is wired into `app/package.json`.
 - Real-renderer boot proof: the acceptance build launches to the
-  `Blue Helm — V1A ACCEPTANCE 2026-07-17.7` window title with zero Uncaught errors in
-  the Electron console log.
+  `Blue Helm — V1A CLIPBOARD ACCEPTANCE 2026-07-18.8` window title with zero Uncaught
+  errors, and the CDP clipboard round-trip (above) passes against the running build.
 
 ## Test coverage map (work-order gate → assertion)
 
@@ -125,6 +127,49 @@ meta-test gates both new files by name.
 
 Unexpected pre-existing findings: none.
 
+## Clipboard IPC security boundary (Full-class delta, `386b0c2`)
+
+Live acceptance surfaced `Cannot read properties of undefined (reading 'writeText')`:
+under the sandboxed Electron 42 preload the `clipboard` module is undefined, so
+preload's direct `clipboard.readText/writeText` crashed on EVERY copy/paste — global,
+not Video Scout-specific. The clipboard is an OS capability reachable from a renderer
+that also hosts hostile terminal bytes, so the repair is a bounded IPC boundary, not a
+wider preload surface, and is reviewed Full-class.
+
+- **`app/clipboard-ipc.js` (new, pure — no Electron import).** main injects the real
+  `clipboard`, the canonical `ENTRY_URL`, and the trusted-window getter (the same
+  late-binding K8's media-permission-policy uses). Every request is served ONLY when,
+  fail-closed in order: (1) the trusted window exists and is not destroyed; (2)
+  `event.sender` IS that window's `webContents`; (3) `event.senderFrame` IS that
+  webContents' MAIN frame (never a subframe); (4) `senderFrame.url` IS the exact
+  `ENTRY_URL`. Accepts only strings; enforces the **1,000,000-char hard limit on both
+  reads and writes** at the boundary; returns structured `{ ok, text?, error? }`;
+  refusals carry a bounded reason constant only and NEVER clipboard content. A
+  torn-down frame (throwing `.url` getter) degrades to a refusal, never a main throw.
+- **`app/main.js`** imports Electron `clipboard` (main only), builds the handlers with
+  the K8 anchors, and registers `clipboard-read` / `clipboard-write`. Refusals go to
+  console + the Logs channel.
+- **`app/preload.js`** no longer destructures `clipboard`; `clipboardRead` /
+  `clipboardWrite` are `ipcRenderer.invoke` wrappers only. No `navigator.clipboard`, no
+  direct OS access. `contextIsolation`/`nodeIntegration` unchanged; K8 untouched.
+- **`app/renderer/clipboard-consumer.js` (new, pure, IIFE-wrapped)** holds the async
+  consumer logic: success reported ONLY after the IPC resolves `{ ok:true }`; a
+  rejection or `{ ok:false }` refuses visibly (metadata-only Logs) and never throws; a
+  FAILED read returns `null` so it can never be pasted; char counts logged, never
+  content. **`app/renderer/app.js`** routes ALL five consumers through it — Copy Output
+  awaits `clip.writeText` and flashes success only inside the resolved `.then`;
+  Ctrl+C / Ctrl+Shift+C, right-click copy/paste, Ctrl+V, and OSC 52 are fire-and-forget
+  with trailing `.catch` (no unhandled rejection). Copy Output keeps the universal
+  1,000,000-char bound + metadata-only Logs.
+- **Tests:** `app/clipboard-ipc.test.js` (21) and `app/renderer/clipboard-consumer.test.js`
+  (30) — the actual exported handlers/consumer, plus static wiring checks. Both wired
+  into `app/package.json`.
+- **Runtime proof (CDP probe against the real Electron 42 build, no source changes):**
+  trusted main-frame write → `{ok:true}`, read → `{ok:true,text:<marker>}` with
+  ROUNDTRIP MATCH true (the `senderFrame === mainFrame` identity that unit tests can't
+  prove holds at runtime), over-limit → `payload-exceeds-limit`, non-string →
+  `non-string-payload`. App boots clean, zero uncaught console errors.
+
 ## In-flight defect found by launching (worth remembering)
 
 The first acceptance-build launch died at load: classic renderer `<script>` files
@@ -139,21 +184,35 @@ suites now fails the gate if the wrapper is ever removed or a top-level `const a
 reappears. Lesson recorded: a new classic renderer module is not "loaded" until the
 real renderer has booted it — node suites cannot prove shared-scope safety.
 
-## Morning/human acceptance procedure (marker `V1A ACCEPTANCE 2026-07-17.7`)
+## Human retest — CLIPBOARD ONLY (marker `V1A CLIPBOARD ACCEPTANCE 2026-07-18.8`)
 
-The worktree build is left running (window title carries the marker; normal Desktop
-shortcut untouched). Panes to cover: 1. PowerShell (+ Shell) · 2. normal Claude agent
-· 3. a second interactive agent in mouse mode · 4. a real Video Scout pane with long
-wrapped analysis output. For each: maximize + restore (button and Esc) · scroll
-newest→oldest · select and copy a passage (Ctrl+C and header ⧉) · Copy Output with
-no selection · paste elsewhere and verify order/wrapping/blank lines/Unicode · Logs
-show only metadata · TTS + Dictate still work. Truncation: the buffer's character
-capacity is ≈ 5,000 scrollback rows × columns, so the bound is only reachable when
-the pane is WIDE — **maximize the PowerShell pane first** (>200 columns on any of
-your monitors), then run `1..3000 | % { 'X' * 500 }` (fills the scrollback with full
-rows; at ≥240 columns the buffer then holds ≥1.2M characters), then Copy Output with
-no selection: expect the visible truncated notice with copied/available counts and a
-`truncated=true` Logs line. No paid Video Scout run is needed to reach the bound.
+The clipboard repair is the only thing that needs a human retest — the previously
+passed maximize/readability tests do NOT need repeating. The worktree build is left
+running (window title carries the marker; normal Desktop shortcut untouched). Steps:
+1. **Copy Output from PowerShell** — click ⧉ with no selection; expect the ✓ flash and
+   a metadata-only `[copy-output …]` Logs line.
+2. **Copy Output from a real Video Scout pane** — same, on a pane with long analysis
+   output (proves the same path serves the Gemini pane).
+3. **Selected-text Ctrl+C** — select a passage, Ctrl+C, paste elsewhere; verify the
+   text arrives.
+4. **Ctrl+V paste** — copy a known string in another app, click into a harmless
+   PowerShell prompt in a pane, Ctrl+V; verify it types in.
+5. **Logs privacy** — confirm no copied/selected text appears anywhere in the Logs tab
+   (only counts, pane id, role, source, truncated flag).
+
+Already machine-verified so you don't have to chase it: the CDP round-trip proved the
+trusted main-frame read/write path works in the real Electron 42 build, and the
+over-limit/non-string refusals fire at the main boundary.
+
+### Prior (readability/maximize) acceptance procedure — for reference, NOT required again
+
+Panes: PowerShell · normal Claude agent · a second agent in mouse mode · a real Video
+Scout pane. For each: maximize + restore (button and Esc) · scroll newest→oldest ·
+select/copy a passage · Copy Output with no selection · paste and verify
+order/wrapping/blank lines/Unicode · Logs metadata only · TTS + Dictate still work.
+Truncation drill: **maximize the PowerShell pane first** (>200 columns), run
+`1..3000 | % { 'X' * 500 }`, then Copy Output with no selection → expect the truncated
+notice with copied/available counts and a `truncated=true` Logs line.
 
 ## Review-diff rule
 
