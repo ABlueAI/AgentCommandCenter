@@ -3,7 +3,8 @@
 Branch: `feature/v5b1-report-artifacts`
 Fork-point / pre-merge main SHA: `23dc9d513c3a53a9c94d552a2b8e415ba9b89ba2` (verified equal on
 `main` and `origin/main` before branching; baseline gates app 875/0, Pester 275/0/0)
-Tip SHA: recorded below after the review commit
+Tip SHA: implementation `eaaae5f`; Reviewer LOW-1 parity fix `3be32f2`; this docs-only verdict
+commit sits on top
 Merge commit SHA: Pending human approval
 
 Tier: STANDARD-CLASS — create-only report persistence inside a newly created, fixed-root run
@@ -142,4 +143,21 @@ verify the process command line points at `.worktrees\v5b1-report-artifacts\app`
   (three-dot from the recorded baseline; `--output`, never PowerShell `>`).
 - Retain the literal `VERDICT: PASS|FAIL` line and identify the review that produced it.
 
-Reviewer verdict: recorded below after the Standard-class pass.
+Reviewer verdict: `VERDICT: PASS`
+
+Reviewer verdict source: Standard-class read-only Reviewer pass (fresh subagent), July 18,
+2026, over the pinned whole diff `.agent-review-v5b1-report-artifacts.diff` (`23dc5...eaaae5f`)
+plus worktree source. All eight mandated focus areas confirmed by reading: main-issued identity +
+renderer exclusion (generated in main, discrete `-RunId`, never from opts/path/terminal output,
+not returned to renderer; registry survives PTY exit, removed on close/shutdown); fixed-root
+direct-child creation with collision refusal + preserved fallback; the bounded surrogate-safe
+streaming collector (never accumulates the stream, counts-only diagnostics); clean-exit-only
+persistence; create-only atomic report-before-manifest ordering (UTF-8 no BOM, no copy fallback);
+partial-success + crash truth (never a manifest pointing at a temp/partial/missing/failed report);
+single shared validator with the completed-only non-null `reportFile` rule (null valid for the 23
+historical manifests); and `gemini-video-sdk.js` untouched (no K5/request/cost-guard change — only
+the capture mechanism). One LOW and one INFO, both non-blocking. LOW-1 (the PS validator used `\d`
+= Unicode digit category vs the JS generator's ASCII `0-9`) — FIXED in `3be32f2` (anchored to
+`[0-9]`, +1 proof test rejecting a Unicode digit) and confirmed by a scoped delta review,
+`VERDICT: PASS`, no regression. INFO (the truncation-marker fits only when the limit exceeds the
+marker reserve) — a theoretical sub-~124-char-limit edge; the production limit is 1,000,000.
