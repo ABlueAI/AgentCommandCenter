@@ -3,8 +3,8 @@
 Branch: `feature/v5b1-report-artifacts`
 Fork-point / pre-merge main SHA: `23dc9d513c3a53a9c94d552a2b8e415ba9b89ba2` (verified equal on
 `main` and `origin/main` before branching; baseline gates app 875/0, Pester 275/0/0)
-Tip SHA: implementation `eaaae5f`; Reviewer LOW-1 parity fix `3be32f2`; this docs-only verdict
-commit sits on top
+Tip SHA: implementation `eaaae5f`; Reviewer LOW-1 parity fix `3be32f2`; docs verdict `8cc21c1`;
+content-acceptance delta (FAIL 1 + FAIL 2) `a7d524f`; this docs commit sits on top
 Merge commit SHA: Pending human approval
 
 Tier: STANDARD-CLASS — create-only report persistence inside a newly created, fixed-root run
@@ -137,6 +137,67 @@ verify the process command line points at `.worktrees\v5b1-report-artifacts\app`
    `refused`, `reportFile` is null, and no `analysis-output.txt` exists.
 9. Confirm report text never appears in the Logs tab (only run ID / counts / `truncated=true`).
 
+## Content-acceptance delta (FAIL 1 + FAIL 2, commit `a7d524f`)
+
+Live acceptance of the report lifecycle PASSED (run dir == manifest.runId, outcome completed,
+reportFile `analysis-output.txt`, UTF-8 without BOM). Two CONTENT defects blocked merge; the
+lifecycle itself was not touched (report cap/collector, atomic report-before-manifest ordering,
+main-issued run IDs, manifest lifecycle, Gemini parameters, K5 retries/cost guards, and refusal
+behavior are all unchanged).
+
+**FAIL 1 - no TL;DR.** The saved report led with `1. KEY POINTS` because `prompts/transcript-analysis.md`
+defined only KEY POINTS / TIMESTAMP MAP / RECOMMENDED RANGES (the TL;DR contract had lived only in
+the full-video prompt). Fix: added an exact report-leading `## 1. TL;DR` section requiring a concise,
+evidence-grounded summary with at least one caption-derived timestamp when reliable timestamps exist,
+and renumbered the rest to `## 2. KEY POINTS`, `## 3. TIMESTAMP MAP`, `## 4. RECOMMENDED RANGES`.
+Every 9c timestamp-honesty and range requirement is preserved verbatim; an explicit `-Prompt` remains
+a complete override (it never reaches the default-brief branch). `get-transcript-prompt.Tests.ps1`
+now asserts the four exact numbered headers, the TL;DR contract phrases, and that TL;DR precedes every
+other section BOTH in the file and AFTER `Get-CliSafePrompt` flattening (the wiring proof).
+
+**FAIL 2 - native-output encoding corruption.** The persisted timestamp separators showed
+`U+0393 U+00C7 U+00F4` instead of `U+2013`. Root cause: Windows PowerShell 5.1 decodes a native
+process's stdout bytes using `[Console]::OutputEncoding`, which in the app PTY is the legacy OEM
+console code page (CP437 on a US install); UTF-8 en-dash bytes `E2 80 93` decoded as CP437 are exactly
+`U+0393 U+00C7 U+00F4`. **Proven, not guessed:** a disposable probe over the real PS 5.1 -> node
+stdout -> production bounded-collector path showed (a) forcing CP437 reproduces the exact live
+mojibake and (b) scoping `[Console]::OutputEncoding` to UTF-8 (no BOM) around the capture yields the
+exact `U+2013`/`U+2014` code points in both the persisted report and the live pane stream. Fix:
+`scripts/lib/get-native-output-encoding.ps1` (`New-NativeOutputEncoding`, single source of truth for
+the UTF-8-no-BOM encoding), applied in `feed-gemini.ps1` around BOTH native captures - the SDK route
+(`& node gemini-video-sdk.js`) and the CLI route (both the direct `node gemini.js` sub-path and the
+shim fallback) - as a scoped set with the previous value restored in a `finally` (covers throws AND
+nonzero exits; never a process-wide change). This is a correct decode at the boundary, NOT a
+mojibake-replacement parser.
+
+Execution test `scripts/lib/native-output-encoding.Tests.ps1` runs REAL node under a forced CP437
+console through the production collector + create-only writer, reads the persisted file back, and
+asserts: the exact `U+2013`/`U+2014` code points and their raw UTF-8 bytes (`E2 80 93` / `E2 80 94`),
+UTF-8 without BOM, the streamed lines carry the correct code points, and the previous (OEM) encoding
+is restored after the scoped block. A control case (no fix, CP437) reproduces the mojibake so a
+dropped fix fails the suite, plus source-scope guards over `feed-gemini.ps1` (helper dot-sourced;
+UTF-8 scoping present around both captures; restore in finally on both routes; encoding set before the
+SDK `node` invocation). Both new PS suites are auto-discovered by `run-pester.ps1` and covered by the
+reachability meta-test.
+
+Delta gates (this tree): app **899 passed / 0 failed** (unchanged - no JS test added/removed); Pester
+**347 passed / 0 failed / 0 skipped** (baseline 334 + 13 new: 4 transcript-prompt, 9 native-output).
+No real Gemini request and no real video download during implementation/testing.
+
+Marker bumped to `V5B1 CONTENT ACCEPTANCE 2026-07-18.10` (app.js `ACCEPTANCE_BUILD`, the Terminals
+bar span in index.html, and the `pane-maximize.test.js` pin).
+
+### Content-acceptance retest (human-initiated; marker `V5B1 CONTENT ACCEPTANCE 2026-07-18.10`)
+
+Only ONE short transcript run is needed (the duration-refusal test already passed under the .9 marker
+and does not need repeating). Verify the process command line points at
+`.worktrees\v5b1-report-artifacts\app`, then run one short captioned video in transcript mode. PASS
+requires:
+1. The saved `analysis-output.txt` starts with `## 1. TL;DR`.
+2. The TL;DR contains an honest caption-derived timestamp.
+3. Timestamp separators display correctly as en/em dashes, with no `Γ`-style mojibake anywhere.
+4. Manifest/report linkage is unchanged: `outcome: completed`, `reportFile: analysis-output.txt`.
+
 ## Review-diff rule
 
 - Pinned diff: `git diff --output=.agent-review-v5b1-report-artifacts.diff 23dc9d5...<tip>`
@@ -161,3 +222,22 @@ the capture mechanism). One LOW and one INFO, both non-blocking. LOW-1 (the PS v
 `[0-9]`, +1 proof test rejecting a Unicode digit) and confirmed by a scoped delta review,
 `VERDICT: PASS`, no regression. INFO (the truncation-marker fits only when the limit exceeds the
 marker reserve) — a theoretical sub-~124-char-limit edge; the production limit is 1,000,000.
+
+Content-acceptance delta verdict: `VERDICT: PASS`
+
+Content-acceptance delta verdict source: Standard-class read-only scoped delta Reviewer pass (fresh
+subagent), July 18, 2026, over the pinned scoped diff `8cc21c1...a7d524f` (the content-acceptance
+delta only) plus worktree source. All twelve mandated focus points confirmed by reading — FAIL 1:
+exact four numbered headers `## 1. TL;DR`/`## 2. KEY POINTS`/`## 3. TIMESTAMP MAP`/
+`## 4. RECOMMENDED RANGES` in order; evidence-grounded TL;DR requiring a caption-derived timestamp
+when reliable and an honest fallback when not; all 9c honesty/range rules preserved; no double quotes;
+explicit `-Prompt` still a full override; TL;DR precedes every section AFTER `Get-CliSafePrompt`
+flattening. FAIL 2: correct decode at the native boundary (UTF-8 no-BOM scoped `[Console]::OutputEncoding`,
+not a mojibake parser) applied around BOTH native captures (SDK + CLI direct and shim), always restored
+in `finally` (throws + nonzero exits, never process-wide); UTF-8 no BOM preserved; the execution test
+runs real node under a forced CP437 console through the production collector + writer and asserts the
+exact `U+2013`/`U+2014` code points and raw bytes, with a control case that reproduces the mojibake;
+`$usageLine`/`$sdkExit`/`$feedExit` scope-safe (the `ForEach-Object` stays in the caller scope).
+Scope preservation confirmed unchanged (cap/collector, atomic ordering, run IDs, manifest lifecycle,
+Gemini params, K5/cost guards, refusal). Delta touches only the 8 pinned files. No CRITICAL/HIGH/
+MEDIUM/LOW findings.
