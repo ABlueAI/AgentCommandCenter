@@ -128,6 +128,15 @@ function noLiveInjection(root, label) {
   assert(pane.querySelector('.name').getAttribute('title') === QUOTES, 'pane title attr is the literal payload');
   assert(!!pane.querySelector('.term-body') && !!pane.querySelector('.chat-body'), 'pane keeps term-body + chat-body');
   assert(!!pane.querySelector('.spk') && !!pane.querySelector('.x'), 'pane keeps spk + x buttons');
+  // V1a: Copy Output + Maximize are built by the SAME safe builder for every pane type.
+  assert(!!pane.querySelector('.copy-out') && pane.querySelector('.copy-out').tagName === 'BUTTON',
+    'pane has the Copy Output control (safe builder)');
+  assert(/Copy Output/.test(pane.querySelector('.copy-out').getAttribute('title') || ''),
+    'Copy Output control explains itself in its tooltip');
+  assert(!!pane.querySelector('.max') && pane.querySelector('.max').tagName === 'BUTTON',
+    'pane has the Maximize control (safe builder)');
+  assert(/Esc restores/.test(pane.querySelector('.max').getAttribute('title') || ''),
+    'Maximize tooltip documents the Esc restore');
   const rb = pane.querySelector('.role-badge');
   assert(!!rb && rb.getAttribute('data-role') === 'builder', 'role badge has data-role for CSS tint');
   assert(rb.textContent === '🔨 Builder', 'role badge text = glyph + label (no lock when not read-only)');
@@ -143,6 +152,8 @@ function noLiveInjection(root, label) {
   const cli = buildTermPane(doc, { badge: { kind: 'cli', cli: 'gemini' }, label: 'x', worktreeTitle: '' });
   assert(!cli.querySelector('.role-badge') && cli.querySelector('.dot').getAttribute('class') === 'dot gemini',
     'cli badge renders a plain colored dot, no role badge');
+  assert(!!cli.querySelector('.copy-out') && !!cli.querySelector('.max'),
+    'cli-badged panes get the same Copy Output + Maximize controls (no pane type is special-cased)');
 }
 
 // --- L1: el() refuses script/URL/style attribute names (defense in depth) -------------------------

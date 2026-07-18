@@ -190,7 +190,9 @@ The live order is: ~~TTS bootstrap → STT bootstrap~~ (✅ merged @ `5ee435b`) 
 ~~audio permission/error hardening (K8, Full-class)~~ (✅ merged @ `acf1aee`) →
 ~~timestamped transcripts (9c) → P13~~ (✅ merged @ `b4519ec`) →
 ~~K5~~ (✅ merged @ `db8b61e`) → ~~Fast Clear + reachability-meta~~
-(✅ merged @ `b9063e6`) → **V1 — NEXT** → V5(b–d) → V3 → V4 →
+(✅ merged @ `b9063e6`) → **V1a — BUILT, in acceptance** (`feature/v1-pane-readability`;
+closes K2; Open Report/OS dispatch deferred — the in-app reader lands at V5b) →
+V5(b–d) → V3 → V4 →
 remaining Day 2/3 work → full functional ship-check → R15 fork/replacement
 evaluation. Each arrow is a clean
 checkpoint; runtime items remain separate one-invariant branches and receive
@@ -747,9 +749,18 @@ their own Reviewer gate.
 > until manifest-scoped retention and media cleanup are implemented and gated.**
 > The manifest itself lands earlier at V5a.
 
-> **K2. Clipboard copy-paste** — flaky in panes generally, and likely **never
-> covered for the video-scout pane at all** (the original fix targeted the
-> standard Claude pane path). Treat as "add coverage for the Gemini pane."
+> **K2. Clipboard copy-paste — ✅ RESOLVED by V1a (July 17,
+> `feature/v1-pane-readability`).** Original finding, retained for provenance:
+> flaky in panes generally, and likely **never covered for the video-scout pane
+> at all** (the original fix targeted the standard Claude pane path). Treat as
+> "add coverage for the Gemini pane." Resolution: every pane — Video Scout
+> included — now shares ONE tested Copy Output path (live selection first, then
+> the pointer-down snapshot, then full-buffer reconstruction — EVERY source
+> capped at the newest 1,000,000 characters, selections included, per Blue's
+> correction; metadata-only Logs; visible failures), built by the
+> same safe pane builder and proven by term-copy.test.js (44 assertions,
+> including a static check that the copy path contains no role-conditional
+> branch).
 
 ---
 
@@ -798,16 +809,36 @@ citizens, and frames R5's kanban as work management, not a life organizer.
 **🎯 V-SERIES — REQUIRED FOR DAILY-DRIVER FUNCTIONALITY (Blue, July 12, from
 live testing — these are NEEDS, not wants; V1 blocks the tool's whole point):**
 
-> **V1. Pane output must be fully readable and copyable.** Today: no
-> horizontal scroll, no pane maximize/fullscreen, text runs off-screen,
+> **V1. Pane output must be fully readable and copyable.** Original finding:
+> no horizontal scroll, no pane maximize/fullscreen, text runs off-screen,
 > selection/copy unreliable (K2) — the analysis is effectively trapped in the
-> viewport. Fix as a bundle: pane maximize (fullscreen a single pane and
-> back) · proper wrap/scrollback so nothing is unreachable · reliable
-> select/copy in ALL panes incl. video-scout (closes K2) · a "Copy output" /
-> "Open report" button on video-scout panes that opens the run-dir report
-> file directly. INTERIM (works today): every run's full output is already on
-> disk in its `run-<timestamp>-<PID>` dir — open the report file; the pane is
-> only a viewport.
+> viewport. **SPLIT (July 17): V1a delivers readability + copy; the report
+> reader is deferred and recorded separately below.**
+>
+> **V1a — Pane Readability and Copy Repair: BUILT on
+> `feature/v1-pane-readability` (pending human acceptance + merge).**
+> Delivered: maximize/restore one pane inside the Command Center content area
+> (same control and Esc restore; siblings hidden, never closed — PTYs keep
+> running; FitAddon + the PTY resize path rerun on every layout change so long
+> lines REFLOW instead of becoming unreachable; view switches and
+> close-while-maximized can never strand the state) · vertical scrollback
+> reachable · reliable selection and copying in every pane type · a Copy
+> Output control on every terminal pane (selection wins; pointer-down snapshot
+> survives the header click; otherwise full-buffer reconstruction — EVERY
+> source capped at the newest 1,000,000 characters, selections included,
+> surrogate-safe, visible truncation notice, metadata-only Logs). **Video
+> Scout goes through the same tested Copy Output
+> path as every other pane — this closes K2.**
+>
+> **Deferred out of V1a (explicit): Open Report / any OS dispatch.** No
+> `shell.openPath`, no run-directory or report-path resolution, no
+> terminal-output parsing for run IDs. The report reader arrives IN-APP at
+> V5b: main owns pane→run identity from launch; the renderer asks for the
+> report belonging to a pane and never supplies paths or derives identity from
+> terminal text; V5b reuses `scripts/lib/video-scout-manifest-schema.ps1` and
+> its existing validator — no second schema or validator in JavaScript.
+> INTERIM (works today): every run's full output is already on disk in its
+> `run-<timestamp>-<PID>` dir.
 
 > **V2. TLDR in the analysis output — COMPLETE (July 15).** Section 1 remains
 > report-leading and Sections 2–9 now require their own evidence-grounded

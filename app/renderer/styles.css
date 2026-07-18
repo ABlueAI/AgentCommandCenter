@@ -144,6 +144,11 @@ input:focus { outline: none; border-color: var(--accent); }
 .term-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border); }
 .term-grid { flex: 1; min-height: 0; padding: 10px; display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); grid-auto-rows: minmax(260px, 1fr); overflow: auto; }
 .term-grid .empty { grid-column: 1 / -1; align-self: start; padding: 20px; color: var(--muted); }
+/* V1a maximize: one pane fills the grid content area (header + controls stay visible);
+   sibling panes are HIDDEN, not closed — their PTYs keep running underneath. */
+.term-grid.has-maximized { display: block; }
+.term-grid.has-maximized > .term-pane:not(.maximized) { display: none; }
+.term-grid.has-maximized > .term-pane.maximized { height: 100%; }
 .term-pane { display: flex; flex-direction: column; background: #06090d; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; min-height: 0; }
 .term-pane .term-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--border); font-size: 12px; }
 .term-pane .term-head .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -151,6 +156,11 @@ input:focus { outline: none; border-color: var(--accent); }
 .term-pane .term-head .x:hover { color: var(--danger); }
 .term-pane .term-head .spk { color: var(--muted); border: none; background: none; padding: 2px 6px; font-size: 12px; }
 .term-pane .term-head .spk:hover { color: var(--accent); }
+.term-pane .term-head .copy-out, .term-pane .term-head .max { color: var(--muted); border: none; background: none; padding: 2px 6px; font-size: 12px; }
+.term-pane .term-head .copy-out:hover, .term-pane .term-head .max:hover { color: var(--accent); }
+/* transient Copy Output feedback — a failed clipboard write must never look successful */
+.term-pane .term-head .copy-out.flash-ok { color: var(--accent); }
+.term-pane .term-head .copy-out.flash-err { color: var(--danger); }
 
 /* ---- TTS controls (Terminals tab bar) ---- */
 .tts-controls { display: flex; align-items: center; gap: 6px; }

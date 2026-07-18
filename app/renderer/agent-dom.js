@@ -66,15 +66,20 @@ function buildBadge(doc, badge) {
 
 // <div class="term-pane">
 //   <div class="term-head">BADGE<span class="name" title=WORKTREE>LABEL</span>
+//     <button class="copy-out">⧉</button><button class="max">⛶</button>
 //     <button class="spk">🔊</button><button class="x">✕</button></div>
 //   <div class="term-body"></div><div class="chat-body"></div></div>
-// Structure/classes match the previous innerHTML exactly so downstream pane.querySelector('.term-body'
-// | '.spk' | '.x' | '.chat-body') keep working and the flex layout is unchanged.
+// Structure/classes are a strict superset of the previous markup so downstream
+// pane.querySelector('.term-body' | '.spk' | '.x' | '.chat-body') keep working and the
+// flex layout is unchanged. copy-out / max (V1a) are built HERE, on the one safe
+// construction path every pane type shares — including Video Scout.
 function buildTermPane(doc, opts) {
   const pane = el(doc, 'div', { className: 'term-pane' });
   const head = el(doc, 'div', { className: 'term-head' });
   head.appendChild(buildBadge(doc, opts.badge));
   head.appendChild(el(doc, 'span', { className: 'name', text: opts.label, title: opts.worktreeTitle || '' }));
+  head.appendChild(el(doc, 'button', { className: 'copy-out', text: '⧉', title: 'Copy Output (your selection, otherwise the whole scrollback)' }));
+  head.appendChild(el(doc, 'button', { className: 'max', text: '⛶', title: 'Maximize pane (Esc restores the grid)' }));
   head.appendChild(el(doc, 'button', { className: 'spk', text: '🔊', title: 'Speak selection (Kokoro TTS)' }));
   head.appendChild(el(doc, 'button', { className: 'x', text: '✕', title: 'Close' }));
   pane.appendChild(head);

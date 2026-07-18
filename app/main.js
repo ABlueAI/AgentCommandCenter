@@ -3,7 +3,7 @@
 // (git worktrees, VSCode, Windows Terminal, vibe-kanban, the browser). The renderer
 // never touches Node directly — everything goes through the IPC handlers below.
 
-const { app, BrowserWindow, ipcMain, shell, dialog, session, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, session, safeStorage, clipboard } = require('electron');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const fs = require('fs');
@@ -27,6 +27,12 @@ const { openVscodeSpec, openTerminalSpec } = require('./launchers');
 // other permission, requester, or media shape is denied fail-closed with a visible,
 // bounded refusal (reason constant only — never a URL, transcript, or device label).
 const { createMediaPermissionHandlers } = require('./media-permission-policy');
+// V1a clipboard security boundary: the OS clipboard is reachable only through main
+// (the sandboxed preload's `clipboard` is undefined). This pure, unit-tested module
+// (clipboard-ipc.test.js) validates every request comes from the trusted window's main
+// frame at the exact entry document, enforces a 1,000,000-char hard limit both ways,
+// accepts only strings, and never logs clipboard content — same posture as K8.
+const { createClipboardIpcHandlers } = require('./clipboard-ipc');
 
 // ---- tunable defaults (marked ? — change to taste) --------------------------
 const DEFAULT_PROJECTS_ROOT = 'D:\\Workspace';            // (?) where your git repos live
@@ -206,6 +212,23 @@ app.whenReady().then(() => {
   });
   session.defaultSession.setPermissionRequestHandler(mediaPermission.handlePermissionRequest);
   session.defaultSession.setPermissionCheckHandler(mediaPermission.handlePermissionCheck);
+
+  // V1a clipboard boundary: bind the same trust anchors K8 uses (canonical ENTRY_URL +
+  // the late-bound trusted window) and register the two bounded IPC handlers. Refusals
+  // are visible (console + Logs channel) and carry a reason constant only — never
+  // clipboard content.
+  const clipboardIpc = createClipboardIpcHandlers({
+    entryUrl: ENTRY_URL,
+    clipboard,
+    getTrustedWindow: () => win,
+    logRefusal: (line) => {
+      console.error(line);
+      if (win && !win.isDestroyed()) win.webContents.send('main-error', line);
+    },
+  });
+  ipcMain.handle('clipboard-read', (e) => clipboardIpc.handleClipboardRead(e));
+  ipcMain.handle('clipboard-write', (e, payload) => clipboardIpc.handleClipboardWrite(e, payload));
+
   createWindow();
 });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
