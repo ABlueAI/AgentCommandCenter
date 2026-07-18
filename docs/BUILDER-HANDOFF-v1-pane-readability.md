@@ -169,6 +169,18 @@ wider preload surface, and is reviewed Full-class.
   ROUNDTRIP MATCH true (the `senderFrame === mainFrame` identity that unit tests can't
   prove holds at runtime), over-limit → `payload-exceeds-limit`, non-string →
   `non-string-payload`. App boots clean, zero uncaught console errors.
+- **Full-class Reviewer verdict: `VERDICT: PASS`** (fresh reviewer, July 18, 2026, over
+  the pinned diff + worktree source). Confirmed by reading: the ordered fail-closed
+  sender/frame/origin chain lets no untrusted sender/subframe/wrong-URL/destroyed-window
+  request through and degrades a torn-down frame to a refusal (never a main throw); the
+  1,000,000-char limit is enforced at the boundary in BOTH directions; non-strings
+  rejected; no clipboard content in any log or error; all five consumers await/handle
+  the structured result with success reported only on resolved `{ok:true}`, no
+  unhandled-rejection path, and a failed read never reaching `ptyWrite`; Copy Output
+  keeps its universal bound + metadata-only Logs; K8 and the sandbox flags
+  (`contextIsolation:true`/`nodeIntegration:false`) untouched; both suites exercise the
+  real exported code. Two INFO notes (OSC-52 decoder-error string is not content; the
+  thin main forwarders pass the invoke event correctly) — non-blocking.
 
 ## In-flight defect found by launching (worth remembering)
 
