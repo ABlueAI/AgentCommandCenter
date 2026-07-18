@@ -102,21 +102,39 @@
     };
   }
 
+  // Enforce the copy bound on an already-materialized string (the selection and
+  // snapshot sources). Same rule as the buffer path: the NEWEST bound-many characters
+  // win, and a cut that strands the low half of a surrogate pair drops the orphan
+  // (one fewer character copied, never a broken one).
+  function applyCopyBound(text, bound) {
+    if (text.length <= bound) {
+      return { text, copiedChars: text.length, totalChars: text.length, truncated: false };
+    }
+    let out = text.slice(text.length - bound);
+    const first = out.charCodeAt(0);
+    if (first >= 0xdc00 && first <= 0xdfff) out = out.slice(1);
+    return { text: out, copiedChars: out.length, totalChars: text.length, truncated: true };
+  }
+
   // Decide what a Copy Output click copies. Priority (per the V1a contract):
   //   1. a live pane-local selection at click time;
   //   2. the pointer-down snapshot (covers selections that header focus/mouse-mode
   //      TUIs cleared between pointer-down and click — same rescue the 🔊 button uses);
-  //   3. the reconstructed buffer, under the bound.
-  // Selections are never truncated: they already exist as in-memory strings the user
-  // deliberately made. `reconstruct` is only invoked when there is no selection.
+  //   3. the reconstructed buffer.
+  // EVERY source is subject to the copy bound — selections included (Blue's
+  // correction: "Maximum copied output" means no clipboard path is unbounded).
+  // `reconstruct` is only invoked when there is no selection.
   function resolveCopyRequest(opts) {
+    const bound = (opts && Number.isInteger(opts.bound) && opts.bound > 0) ? opts.bound : COPY_OUTPUT_BOUND;
     const selection = (opts && opts.selection) || '';
     const snapshot = (opts && opts.snapshot) || '';
     if (selection) {
-      return { ok: true, source: 'selection', text: selection, copiedChars: selection.length, totalChars: selection.length, truncated: false };
+      const bounded = applyCopyBound(selection, bound);
+      return { ok: true, source: 'selection', text: bounded.text, copiedChars: bounded.copiedChars, totalChars: bounded.totalChars, truncated: bounded.truncated };
     }
     if (snapshot) {
-      return { ok: true, source: 'snapshot', text: snapshot, copiedChars: snapshot.length, totalChars: snapshot.length, truncated: false };
+      const bounded = applyCopyBound(snapshot, bound);
+      return { ok: true, source: 'snapshot', text: bounded.text, copiedChars: bounded.copiedChars, totalChars: bounded.totalChars, truncated: bounded.truncated };
     }
     const rebuilt = opts.reconstruct();
     if (!rebuilt || !rebuilt.ok) {
@@ -147,7 +165,7 @@
     return base;
   }
 
-  const api = { COPY_OUTPUT_BOUND, reconstructBufferText, resolveCopyRequest, buildCopyLogLine, buildTruncationNotice };
+  const api = { COPY_OUTPUT_BOUND, reconstructBufferText, applyCopyBound, resolveCopyRequest, buildCopyLogLine, buildTruncationNotice };
   global.ccTermCopy = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window === 'undefined' ? globalThis : window);

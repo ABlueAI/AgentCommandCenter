@@ -755,8 +755,9 @@ their own Reviewer gate.
 > at all** (the original fix targeted the standard Claude pane path). Treat as
 > "add coverage for the Gemini pane." Resolution: every pane — Video Scout
 > included — now shares ONE tested Copy Output path (live selection first, then
-> the pointer-down snapshot, then bounded full-buffer reconstruction under the
-> 1,000,000-character cap; metadata-only Logs; visible failures), built by the
+> the pointer-down snapshot, then full-buffer reconstruction — EVERY source
+> capped at the newest 1,000,000 characters, selections included, per Blue's
+> correction; metadata-only Logs; visible failures), built by the
 > same safe pane builder and proven by term-copy.test.js (44 assertions,
 > including a static check that the copy path contains no role-conditional
 > branch).
@@ -823,9 +824,10 @@ live testing — these are NEEDS, not wants; V1 blocks the tool's whole point):*
 > close-while-maximized can never strand the state) · vertical scrollback
 > reachable · reliable selection and copying in every pane type · a Copy
 > Output control on every terminal pane (selection wins; pointer-down snapshot
-> survives the header click; otherwise bounded full-buffer reconstruction,
-> newest 1,000,000 characters, surrogate-safe, visible truncation notice,
-> metadata-only Logs). **Video Scout goes through the same tested Copy Output
+> survives the header click; otherwise full-buffer reconstruction — EVERY
+> source capped at the newest 1,000,000 characters, selections included,
+> surrogate-safe, visible truncation notice, metadata-only Logs). **Video
+> Scout goes through the same tested Copy Output
 > path as every other pane — this closes K2.**
 >
 > **Deferred out of V1a (explicit): Open Report / any OS dispatch.** No

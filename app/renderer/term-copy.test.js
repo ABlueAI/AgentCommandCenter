@@ -151,7 +151,34 @@ assert(COPY_OUTPUT_BOUND === 1000000, 'copy bound is exactly 1,000,000 character
     'no selection anywhere: the full buffer reconstruction is used');
   const empty = resolveCopyRequest({ selection: '', snapshot: '', reconstruct: () => ({ ok: false, reason: 'empty-buffer', totalChars: 0 }) });
   assert(empty.ok === false && empty.reason === 'empty-buffer', 'an unavailable/empty buffer surfaces as a refusal, not a fake success');
-  assert(sel.truncated === false && snap.truncated === false, 'selections are never truncated (they are already deliberate in-memory strings)');
+  assert(sel.truncated === false && snap.truncated === false, 'selections at or below the limit are copied unchanged');
+}
+
+// --- the bound applies to SELECTIONS too (Blue correction: no unbounded clipboard path) -----------
+{
+  const boom = () => { throw new Error('reconstruct must not run when a selection exists'); };
+  const under = resolveCopyRequest({ selection: 'x'.repeat(COPY_OUTPUT_BOUND - 1), snapshot: '', reconstruct: boom });
+  assert(under.ok && under.copiedChars === COPY_OUTPUT_BOUND - 1 && under.truncated === false,
+    'selection at limit minus one: copied unchanged, not truncated');
+  const at = resolveCopyRequest({ selection: 'x'.repeat(COPY_OUTPUT_BOUND), snapshot: '', reconstruct: boom });
+  assert(at.ok && at.copiedChars === COPY_OUTPUT_BOUND && at.truncated === false,
+    'selection at exactly the limit: copied unchanged, not truncated');
+  const over = resolveCopyRequest({ selection: 'a' + 'x'.repeat(COPY_OUTPUT_BOUND), snapshot: '', reconstruct: boom });
+  assert(over.ok && over.truncated === true && over.copiedChars === COPY_OUTPUT_BOUND
+    && over.totalChars === COPY_OUTPUT_BOUND + 1 && over.text.length === COPY_OUTPUT_BOUND,
+    'selection at limit plus one: newest limit-many characters copied, truncated=true, availability counted');
+  // '😀' + (bound−1) x's is bound+1 units; the cut lands between the surrogate halves.
+  const emoji = resolveCopyRequest({ selection: '\u{1F600}' + 'x'.repeat(COPY_OUTPUT_BOUND - 1), snapshot: '', reconstruct: boom });
+  const emojiFirst = emoji.text.charCodeAt(0);
+  assert(emoji.ok && emoji.truncated === true && emoji.copiedChars === COPY_OUTPUT_BOUND - 1
+    && !(emojiFirst >= 0xdc00 && emojiFirst <= 0xdfff),
+    'selection with a surrogate pair crossing the truncation boundary drops the orphan half, never splits it');
+  const snapOver = resolveCopyRequest({ selection: '', snapshot: 'y'.repeat(COPY_OUTPUT_BOUND + 5), reconstruct: boom });
+  assert(snapOver.ok && snapOver.source === 'snapshot' && snapOver.copiedChars === COPY_OUTPUT_BOUND && snapOver.truncated === true,
+    'the pointer-down snapshot source is bounded identically');
+  const newest = resolveCopyRequest({ selection: 'abcdef', snapshot: '', reconstruct: boom, bound: 4 });
+  assert(newest.text === 'cdef' && newest.truncated === true && newest.totalChars === 6,
+    'a truncated selection keeps the NEWEST characters (end of the selection)');
 }
 
 // --- privacy: the Logs line is metadata by construction -------------------------------------------

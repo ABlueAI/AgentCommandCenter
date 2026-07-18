@@ -356,6 +356,7 @@ function openInAppTerminal(opts = {}) {
     const result = window.ccTermCopy.resolveCopyRequest({
       selection: selectedTextInPane(),
       snapshot: selectionAtCopyPointerDown,
+      bound: window.ccTermCopy.COPY_OUTPUT_BOUND, // EVERY source is bounded — selections included
       reconstruct: () => window.ccTermCopy.reconstructBufferText(term.buffer.active, window.ccTermCopy.COPY_OUTPUT_BOUND),
     });
     selectionAtCopyPointerDown = '';
