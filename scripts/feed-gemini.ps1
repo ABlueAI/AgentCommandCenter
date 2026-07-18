@@ -111,6 +111,11 @@ $ProbeTimeoutSec = 60   # (?) hard cap on the metadata probe; a hung/slow probe 
 # (write-video-scout-report.ps1) persists analysis-output.txt BEFORE the manifest is completed.
 . (Join-Path $PSScriptRoot 'lib\get-bounded-report.ps1')
 . (Join-Path $PSScriptRoot 'lib\write-video-scout-report.ps1')
+# V5b1 content acceptance (FAIL 2): PS 5.1 decodes a native process's stdout bytes using
+# [Console]::OutputEncoding, which in the app PTY is the legacy OEM code page -- so UTF-8 provider
+# output (en/em dashes, etc.) arrived mojibaked. This helper is the single source of truth for the
+# UTF-8 (no BOM) encoding scoped around each native capture below (see get-native-output-encoding.ps1).
+. (Join-Path $PSScriptRoot 'lib\get-native-output-encoding.ps1')
 # Manifest truth: record the mode the caller EXPLICITLY requested separately from the mode actually
 # applied -- bare -VideoScout defaults $Mode to 'video' below, and the manifest must not claim the
 # caller asked for what a default chose. $null = -Mode was not passed.
@@ -199,13 +204,24 @@ if ($VideoScout) {
             # so usage parsing no longer needs the complete provider stream.
             $reportCollector = New-BoundedReportCollector
             $usageLine = $null
-            & node $sdkScript @sdkArgs | ForEach-Object {
-                $line = [string]$_
-                Add-BoundedReportLine -Collector $reportCollector -Line $line
-                if ($line -match '\[video-scout usage\]') { $usageLine = $line }
-                $line
+            # V5b1 content acceptance (FAIL 2): scope the native-stdout DECODE to UTF-8 (no BOM) ONLY
+            # around this capture so UTF-8 provider output is not mangled through the PTY's legacy OEM
+            # code page, then restore the previous value in finally (covers throws AND nonzero exits;
+            # never a process-wide change). The same corrected decode is what streams live to the pane.
+            $prevOutputEncoding = [Console]::OutputEncoding
+            try {
+                [Console]::OutputEncoding = New-NativeOutputEncoding
+                & node $sdkScript @sdkArgs | ForEach-Object {
+                    $line = [string]$_
+                    Add-BoundedReportLine -Collector $reportCollector -Line $line
+                    if ($line -match '\[video-scout usage\]') { $usageLine = $line }
+                    $line
+                }
+                $sdkExit = $LASTEXITCODE
             }
-            $sdkExit = $LASTEXITCODE
+            finally {
+                [Console]::OutputEncoding = $prevOutputEncoding
+            }
             if ($sdkExit -ne 0) {
                 # Nonzero exit (incl. exhausted K5 retry, empty-response, network): NO report file,
                 # reportFile stays null -- partial streamed output is never a saved report.
@@ -428,12 +444,21 @@ try {
     Write-Host ""
     Write-Host "Feeding to Gemini..." -ForegroundColor Cyan
     $geminiCwd = Split-Path $OutDir -Parent
+    # V5b1 content acceptance (FAIL 2): capture the previous console output encoding BEFORE the scoped
+    # region so the finally can always restore it (covers throws AND nonzero exits). Set/restore is
+    # never a process-wide change -- see get-native-output-encoding.ps1.
+    $prevOutputEncoding = [Console]::OutputEncoding
     Push-Location $geminiCwd
     try {
         # -MediaResolution is intentionally NOT passed here: the gemini CLI has no flag for it on the
         # -p path (see lib/get-gemini-launch-config.ps1). Only -m/$Model is a real CLI knob today. Record
         # what ACTUALLY happened -- requested-but-dropped, not silently logged as in force (finding 6).
         Write-Host (Resolve-MediaResolutionLog -MediaResolution $MediaResolution -Route 'cli') -ForegroundColor Yellow
+        # V5b1 content acceptance (FAIL 2): scope the native-stdout DECODE to UTF-8 (no BOM) around the
+        # capture so UTF-8 provider output is not mangled through the PTY's legacy OEM code page. This
+        # covers BOTH CLI sub-paths (direct node gemini.js and the shim fallback) and the same corrected
+        # decode is what streams live to the pane. Restored in the finally below.
+        [Console]::OutputEncoding = New-NativeOutputEncoding
         # V5b1 bounded streaming capture (both CLI sub-paths: direct node gemini.js and the shim
         # fallback). The trailing `$line` re-emits every line so it still streams live to the pane;
         # the collector retains at most the report limit. `$LASTEXITCODE` is set by the native exe and
@@ -454,6 +479,7 @@ try {
     }
     finally {
         Pop-Location
+        [Console]::OutputEncoding = $prevOutputEncoding
     }
 
     # Terminal truth for the feed: the gemini CLI's own stderr already told the user WHAT failed;
