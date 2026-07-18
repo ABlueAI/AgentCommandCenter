@@ -54,6 +54,12 @@ param(
     # override is a per-run bump, not a way to point the paid pipeline at a day-long source;
     # anything above 4h is rejected at bind time, before any probe or provider operation.
     [ValidateRange(1, 14400)][int]$MaxDurationSeconds = 0,
+    # V5b1: MAIN-issued run ID for an app launch. When passed, the run directory is created from this
+    # exact validated ID as a direct child of the fixed downloads root (never generated here, never
+    # derived from terminal output). When omitted (direct standalone script use outside the app), the
+    # existing PowerShell-generated fallback applies -- byte-compatible shape, unchanged behavior. The
+    # renderer never supplies this: main.js generates it and passes it as this discrete argument.
+    [string]$RunId,
     [switch]$NoFeed,
     [switch]$VideoScout
 )
@@ -100,6 +106,11 @@ $ProbeTimeoutSec = 60   # (?) hard cap on the metadata probe; a hung/slow probe 
 # V5a per-run manifest: every ACCEPTED launch (past the free validations above) creates its run
 # directory with a versioned manifest.json inside, updated atomically at every terminal path.
 . (Join-Path $PSScriptRoot 'lib\write-video-scout-manifest.ps1')
+# V5b1 report artifacts: the bounded streaming collector (get-bounded-report.ps1) captures provider
+# stdout without ever accumulating the whole stream, and the create-only atomic writer
+# (write-video-scout-report.ps1) persists analysis-output.txt BEFORE the manifest is completed.
+. (Join-Path $PSScriptRoot 'lib\get-bounded-report.ps1')
+. (Join-Path $PSScriptRoot 'lib\write-video-scout-report.ps1')
 # Manifest truth: record the mode the caller EXPLICITLY requested separately from the mode actually
 # applied -- bare -VideoScout defaults $Mode to 'video' below, and the manifest must not claim the
 # caller asked for what a default chose. $null = -Mode was not passed.
@@ -153,7 +164,8 @@ if ($VideoScout) {
             -MediaResolutionRequested $MediaResolution -MediaResolutionApplied $MediaResolution `
             -VideoScout $true `
             -StartOffset $(if ($haveStart) { $StartOffset } else { $null }) `
-            -EndOffset $(if ($haveStart) { $EndOffset } else { $null })
+            -EndOffset $(if ($haveStart) { $EndOffset } else { $null }) `
+            -RunId $RunId
         $sdkManifest = $sdkRun.Manifest
         try {
             # Duration guard (SDK route): the URL goes STRAIGHT to the paid API with no yt-dlp download, so
@@ -180,18 +192,44 @@ if ($VideoScout) {
             if ($haveStart) {
                 $sdkArgs += @('--start-offset', $StartOffset, '--end-offset', $EndOffset)
             }
-            # Tee the SDK's stdout so the machine-readable "[video-scout usage]" line can land in the
-            # manifest; Tee-Object still streams every line to the console/pane live. stderr is left
-            # alone (PS 5.1 would wrap it in error records).
-            & node $sdkScript @sdkArgs | Tee-Object -Variable sdkStdout
+            # V5b1 bounded streaming capture: every stdout line still streams live to the pane (the
+            # trailing `$line` re-emits it), while the bounded collector retains at most the report
+            # limit -- NOT the whole stream (the old Tee-Object -Variable accumulated it all). The one
+            # machine-readable "[video-scout usage]" line is captured separately (bounded: one line),
+            # so usage parsing no longer needs the complete provider stream.
+            $reportCollector = New-BoundedReportCollector
+            $usageLine = $null
+            & node $sdkScript @sdkArgs | ForEach-Object {
+                $line = [string]$_
+                Add-BoundedReportLine -Collector $reportCollector -Line $line
+                if ($line -match '\[video-scout usage\]') { $usageLine = $line }
+                $line
+            }
             $sdkExit = $LASTEXITCODE
             if ($sdkExit -ne 0) {
+                # Nonzero exit (incl. exhausted K5 retry, empty-response, network): NO report file,
+                # reportFile stays null -- partial streamed output is never a saved report.
                 Complete-VideoScoutRunManifest -RunDir $sdkRun.RunDir -Manifest $sdkManifest -Outcome 'error' `
                     -Reason "gemini-video-sdk.js exited with code $sdkExit (upstream API/network error; see the run output above)."
             }
             else {
-                Complete-VideoScoutRunManifest -RunDir $sdkRun.RunDir -Manifest $sdkManifest -Outcome 'completed' `
-                    -Usage (ConvertFrom-VideoScoutUsageLine -Lines $sdkStdout)
+                # Clean exit only past here -- the sole signal that permits outcome='completed' + a
+                # persisted report. Atomic ordering: finalize the bounded text, write + rename the
+                # report file, and ONLY THEN complete the manifest pointing at it.
+                $report = Complete-BoundedReport -Collector $reportCollector
+                if ([string]::IsNullOrWhiteSpace($report.Text)) {
+                    # Clean exit but no meaningful output is NOT a successful analysis artifact.
+                    Complete-VideoScoutRunManifest -RunDir $sdkRun.RunDir -Manifest $sdkManifest -Outcome 'error' `
+                        -Reason 'The provider exited cleanly but produced no analysis output; no report was persisted.'
+                }
+                else {
+                    if ($report.Truncated) {
+                        Write-Warning "Report truncated: persisted $($report.PersistedChars) of $($report.TotalChars) characters (kept the beginning; the full analysis streamed above)."
+                    }
+                    $reportName = Write-VideoScoutReportFile -RunDir $sdkRun.RunDir -Text $report.Text
+                    Complete-VideoScoutRunManifest -RunDir $sdkRun.RunDir -Manifest $sdkManifest -Outcome 'completed' `
+                        -Usage (ConvertFrom-VideoScoutUsageLine -Lines $usageLine) -ReportFile $reportName
+                }
             }
             return
         }
@@ -235,7 +273,8 @@ if (-not $gemini) {
 $cliRun = Initialize-VideoScoutRun -BaseDir $OutDir -Url $Url `
     -RequestedMode $RequestedModeForManifest -AppliedMode $Mode -Route 'cli' -Model $Model `
     -MediaResolutionRequested $MediaResolution -MediaResolutionApplied $null `
-    -VideoScout ([bool]$VideoScout)
+    -VideoScout ([bool]$VideoScout) `
+    -RunId $RunId
 $runDir = $cliRun.RunDir
 $cliManifest = $cliRun.Manifest
 $outTemplate = Join-Path $runDir "%(title)s.%(ext)s"
@@ -395,17 +434,23 @@ try {
         # -p path (see lib/get-gemini-launch-config.ps1). Only -m/$Model is a real CLI knob today. Record
         # what ACTUALLY happened -- requested-but-dropped, not silently logged as in force (finding 6).
         Write-Host (Resolve-MediaResolutionLog -MediaResolution $MediaResolution -Route 'cli') -ForegroundColor Yellow
+        # V5b1 bounded streaming capture (both CLI sub-paths: direct node gemini.js and the shim
+        # fallback). The trailing `$line` re-emits every line so it still streams live to the pane;
+        # the collector retains at most the report limit. `$LASTEXITCODE` is set by the native exe and
+        # is NOT changed by piping through ForEach-Object, so the exit code is preserved intact.
+        $reportCollector = New-BoundedReportCollector
         if (Test-Path -LiteralPath $geminiJs) {
             $pArg = ConvertTo-NodeCliArg -Arg "$Prompt @$($file.FullName)"
-            & $nodeExe $geminiJs -m $Model -p $pArg
+            & $nodeExe $geminiJs -m $Model -p $pArg | ForEach-Object { $line = [string]$_; Add-BoundedReportLine -Collector $reportCollector -Line $line; $line }
         }
         else {
             # Unknown gemini layout (no npm bundle beside the shim, e.g. a standalone .exe install).
             # Fall back to the shim so this keeps working, but warn: a prompt with embedded quotes may
             # be misparsed on this path, since we no longer control the final argument serialization.
             Write-Warning "Could not locate gemini.js beside '$gemini'; falling back to the gemini shim. A prompt containing embedded double quotes may be misparsed on this fallback path."
-            & $gemini -m $Model -p "$Prompt @$($file.FullName)"
+            & $gemini -m $Model -p "$Prompt @$($file.FullName)" | ForEach-Object { $line = [string]$_; Add-BoundedReportLine -Collector $reportCollector -Line $line; $line }
         }
+        $feedExit = $LASTEXITCODE
     }
     finally {
         Pop-Location
@@ -414,13 +459,27 @@ try {
     # Terminal truth for the feed: the gemini CLI's own stderr already told the user WHAT failed;
     # the manifest records THAT it failed. No usage metadata exists on this route (the CLI prints
     # no machine-readable usage line), so usage stays null -- optional metadata, not a fabrication.
-    $feedExit = $LASTEXITCODE
     if ($feedExit -ne 0) {
+        # Nonzero exit: NO report file, reportFile stays null (partial streamed output is not saved).
         Complete-VideoScoutRunManifest -RunDir $runDir -Manifest $cliManifest -Outcome 'error' `
             -Reason "gemini CLI exited with code $feedExit (see the run output above)." -VideoTitle $videoTitle
     }
     else {
-        Complete-VideoScoutRunManifest -RunDir $runDir -Manifest $cliManifest -Outcome 'completed' -VideoTitle $videoTitle
+        # Clean exit only past here: finalize the bounded text, write + rename the report, and ONLY
+        # THEN complete the manifest pointing at it (atomic report-before-manifest ordering).
+        $report = Complete-BoundedReport -Collector $reportCollector
+        if ([string]::IsNullOrWhiteSpace($report.Text)) {
+            Complete-VideoScoutRunManifest -RunDir $runDir -Manifest $cliManifest -Outcome 'error' `
+                -Reason 'The Gemini CLI exited cleanly but produced no analysis output; no report was persisted.' -VideoTitle $videoTitle
+        }
+        else {
+            if ($report.Truncated) {
+                Write-Warning "Report truncated: persisted $($report.PersistedChars) of $($report.TotalChars) characters (kept the beginning; the full analysis streamed above)."
+            }
+            $reportName = Write-VideoScoutReportFile -RunDir $runDir -Text $report.Text
+            Complete-VideoScoutRunManifest -RunDir $runDir -Manifest $cliManifest -Outcome 'completed' `
+                -VideoTitle $videoTitle -ReportFile $reportName
+        }
     }
 }
 catch {

@@ -229,3 +229,91 @@ Describe 'Assert-VideoScoutManifestValid rejects drift and malformed shapes' {
         { Assert-VideoScoutManifestValid -Manifest $roundTrip } | Should Not Throw
     }
 }
+
+Describe 'reportFile validation (V5b1)' {
+
+    function New-CompletedLive {
+        # A minimal valid completed live manifest to attach a reportFile to.
+        $m = New-VideoScoutLiveManifest -RunId 'r' -Url 'u' -AppliedMode 'transcript' -Route 'cli' `
+            -Model 'm' -MediaResolutionRequested 'MEDIUM'
+        $m.outcome = 'completed'
+        $m.finishedAt = '2026-07-18T09:05:03.007Z'
+        return $m
+    }
+
+    It 'accepts a null reportFile on any outcome (historical/backfill/failure/refusal/incomplete)' {
+        $m = New-CompletedLive; $m.reportFile = $null
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
+        $r = New-VideoScoutLiveManifest -RunId 'r' -Url 'u' -AppliedMode 'video' -Route 'sdk' -Model 'm' -MediaResolutionRequested 'LOW'
+        $r.outcome = 'refused'; $r.reason = 'Refusing: over limit'; $r.finishedAt = '2026-07-18T09:05:03.007Z'; $r.reportFile = $null
+        { Assert-VideoScoutManifestValid -Manifest $r } | Should Not Throw
+    }
+
+    It 'accepts the canonical analysis-output.txt on a completed run' {
+        $m = New-CompletedLive; $m.reportFile = 'analysis-output.txt'
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
+    }
+
+    It 'rejects a non-null reportFile on a refused outcome' {
+        $m = New-VideoScoutLiveManifest -RunId 'r' -Url 'u' -AppliedMode 'video' -Route 'sdk' -Model 'm' -MediaResolutionRequested 'LOW'
+        $m.outcome = 'refused'; $m.reason = 'Refusing: over limit'; $m.finishedAt = '2026-07-18T09:05:03.007Z'
+        $m.reportFile = 'analysis-output.txt'
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw "permitted only with outcome='completed'"
+    }
+
+    It 'rejects a non-null reportFile on an error outcome' {
+        $m = New-VideoScoutLiveManifest -RunId 'r' -Url 'u' -AppliedMode 'video' -Route 'sdk' -Model 'm' -MediaResolutionRequested 'LOW'
+        $m.outcome = 'error'; $m.reason = 'boom'; $m.finishedAt = '2026-07-18T09:05:03.007Z'
+        $m.reportFile = 'analysis-output.txt'
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw "permitted only with outcome='completed'"
+    }
+
+    It 'rejects a non-null reportFile on a null (never-finalized) outcome' {
+        $m = New-VideoScoutLiveManifest -RunId 'r' -Url 'u' -AppliedMode 'video' -Route 'sdk' -Model 'm' -MediaResolutionRequested 'LOW'
+        $m.reportFile = 'analysis-output.txt'   # outcome stays null
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw "permitted only with outcome='completed'"
+    }
+
+    It 'rejects a reportFile that is a path, not a leaf filename' {
+        $m = New-CompletedLive; $m.reportFile = 'sub/analysis-output.txt'
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'leaf filename'
+        $m2 = New-CompletedLive; $m2.reportFile = 'sub\analysis-output.txt'
+        { Assert-VideoScoutManifestValid -Manifest $m2 } | Should Throw 'leaf filename'
+    }
+
+    It 'rejects a reportFile with a traversal sequence' {
+        $m = New-CompletedLive; $m.reportFile = '..\analysis-output.txt'
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw
+    }
+
+    It 'rejects a reportFile with a drive or rooted prefix' {
+        $m = New-CompletedLive; $m.reportFile = 'C:analysis-output.txt'
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw
+    }
+
+    It 'rejects a reportFile with a disallowed extension' {
+        $m = New-CompletedLive; $m.reportFile = 'analysis-output.exe'
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'approved plain-text extension'
+        $m2 = New-CompletedLive; $m2.reportFile = 'analysis-output'
+        { Assert-VideoScoutManifestValid -Manifest $m2 } | Should Throw 'approved plain-text extension'
+    }
+
+    It 'rejects a reportFile with control characters' {
+        $m = New-CompletedLive; $m.reportFile = "analysis`toutput.txt"
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'control characters'
+    }
+
+    It 'rejects an over-length reportFile' {
+        $m = New-CompletedLive; $m.reportFile = ('a' * 250) + '.txt'
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'maximum length'
+    }
+
+    It 'still rejects a non-null reportFile on a backfill manifest (never completed => never a report)' {
+        # A backfill has outcome=null, so the shared reportFile rule (permitted only with
+        # outcome='completed') rejects it; the backfill must-be-null rule would also reject it. Either
+        # refusal is correct -- assert that it is rejected.
+        $b = New-VideoScoutBackfillManifest -RunId 'r' -AppliedMode 'video'
+        $b.reportFile = 'analysis-output.txt'
+        { Assert-VideoScoutManifestValid -Manifest $b } | Should Throw
+    }
+}

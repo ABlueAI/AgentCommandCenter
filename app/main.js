@@ -14,6 +14,10 @@ const pty = require('@lydell/node-pty'); // prebuilt ConPTY — powers in-app te
 // dependency-free, unit-tested module (see app/video-scout-args.test.js) so they don't have to be
 // re-verified by hand every time this file changes.
 const { buildVideoScoutArgs } = require('./video-scout-args');
+// V5b1: MAIN-issued video-scout run identity. main generates the run ID (never the renderer, never
+// from a path, never parsed from terminal output), passes it to feed-gemini.ps1 as -RunId, and keeps
+// a pane->runId registry so a finished pane can open its report in V5b2. See app/video-scout-run-id.js.
+const { generateRunId, createRunIdRegistry } = require('./video-scout-run-id');
 // Untrusted IPC `task` names flow into a filesystem path and a git branch name; validate them here
 // (the enforcement boundary) before any fs/git/spawn call. See app/task-name.js / finding #4.
 const { validateTask } = require('./task-name');
@@ -136,6 +140,10 @@ let win = null;
 const ENTRY_PATH = path.join(__dirname, 'renderer', 'index.html');
 const ENTRY_URL = pathToFileURL(ENTRY_PATH).toString();
 const ptys = new Map(); // terminal id -> pty process (in-app terminals)
+// V5b1: pane id -> main-issued video-scout run ID. Deliberately SEPARATE from `ptys`: it must
+// SURVIVE the PTY's exit (so the finished pane can still open its report in V5b2) and is removed only
+// when the pane is explicitly closed (pty-kill) or the window shuts down (window-all-closed).
+const videoScoutRunIds = createRunIdRegistry();
 // Mutex for ~/.claude.json read-modify-write. Concurrent sandbox launches are Blue Helm's
 // normal mode; without serialization each call reads a stale snapshot and the last writer
 // wins, silently dropping earlier trust entries. A Promise chain is the idiomatic Node.js
@@ -235,6 +243,7 @@ app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) creat
 app.on('window-all-closed', () => {
   for (const p of ptys.values()) { try { p.kill(); } catch {} }
   ptys.clear();
+  videoScoutRunIds.clear(); // window shutdown: the run-ID mapping is process-lifetime only
   if (process.platform !== 'darwin') app.quit();
 });
 
@@ -560,6 +569,9 @@ ipcMain.handle('open-external', async (_e, url) => {
 ipcMain.handle('pty-start', (_e, opts) => {
   tlog(`pty-start: START id=${opts.id} role=${opts.role || 'none'} cwd=${opts.cwd || '(unset)'}`);
   const { id, cols, rows } = opts;
+  // V5b1: the main-issued run ID for this pane, if it is a video-scout launch. Registered only after
+  // a successful spawn (below), so a refused/failed launch leaves no mapping.
+  let acceptedRunId = null;
 
   // Hard gate: fenced roles (web-scout, operator, source-scout) must run inside the
   // ensure-output-dir sandbox. Enforce here rather than relying on renderer discipline —
@@ -614,7 +626,14 @@ ipcMain.handle('pty-start', (_e, opts) => {
     // Pass the URL via `-File` as a discrete argv element: PowerShell binds it to the script's
     // [string]$Url parameter literally. Nothing user-controlled is ever parsed by a shell.
     const script = path.join(SCRIPTS_DIR, 'feed-gemini.ps1');
-    args.push('-File', script, '-Url', url, '-VideoScout');
+    // V5b1: MAIN issues the run ID here (from the clock, this process's PID, and crypto randomness)
+    // and passes it as a discrete -RunId argument. The renderer never generates, supplies, or
+    // derives it, and it is never parsed from terminal output. PowerShell re-validates it before any
+    // filesystem use. It is stored in the pane->runId registry below but is NOT returned to the
+    // renderer (pty-start still returns only { ok }).
+    const runId = generateRunId();
+    acceptedRunId = runId;
+    args.push('-File', script, '-Url', url, '-VideoScout', '-RunId', runId);
     // Gemini model / media-resolution / analysis mode / time range: validate against the
     // allowlists in video-scout-args.js. videoModel and mediaResolution push only what passes —
     // an invalid or missing value there is omitted so feed-gemini.ps1's own default applies. An
@@ -672,13 +691,22 @@ ipcMain.handle('pty-start', (_e, opts) => {
   }
   tlog('pty-start: pty.spawn END ok');
   ptys.set(id, p);
+  // V5b1: record pane->runId for a video-scout launch. This is stored internally ONLY (never
+  // returned to the renderer). It intentionally OUTLIVES p.onExit below -- a finished run's report
+  // stays openable until the pane is explicitly closed (pty-kill) or the window shuts down.
+  if (acceptedRunId) { videoScoutRunIds.set(id, acceptedRunId); tlog(`pty-start: registered video-scout runId for pane ${id}`); }
   p.onData((data) => { if (win && !win.isDestroyed()) win.webContents.send('pty-data', { id, data }); });
+  // NOTE: onExit removes the PTY handle but deliberately does NOT remove the run-ID mapping (V5b1).
   p.onExit(() => { ptys.delete(id); if (win && !win.isDestroyed()) win.webContents.send('pty-exit', { id }); });
   return { ok: true };
 });
 ipcMain.on('pty-write', (_e, { id, data }) => { const p = ptys.get(id); if (p) p.write(data); });
 ipcMain.on('pty-resize', (_e, { id, cols, rows }) => { const p = ptys.get(id); if (p) { try { p.resize(cols, rows); } catch (err) { tlog(`pty-resize ${id} failed (process likely exiting): ${(err && err.message) || err}`); } } });
-ipcMain.on('pty-kill', (_e, id) => { const p = ptys.get(id); if (p) { try { p.kill(); } catch {} ptys.delete(id); } });
+ipcMain.on('pty-kill', (_e, id) => {
+  const p = ptys.get(id); if (p) { try { p.kill(); } catch {} ptys.delete(id); }
+  // Explicit pane close: the run's report is no longer reachable from the UI, so drop the mapping.
+  videoScoutRunIds.remove(id);
+});
 
 // ---- IPC: vibe-kanban board -------------------------------------------------
 // Start the board as a child process and sniff its stdout for the localhost URL,
