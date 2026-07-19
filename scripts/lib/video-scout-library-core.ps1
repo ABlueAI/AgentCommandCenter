@@ -324,6 +324,11 @@ function Invoke-VideoScoutLibraryRead {
 
     $bytes = $null
     try { $bytes = [System.IO.File]::ReadAllBytes($fullReport) } catch { return @{ ok = $false; status = 'unsafe'; reason = 'report-unreadable' } }
+    # Re-bound against the ACTUAL bytes read (Reviewer LOW-1): the FileInfo.Length check above and this
+    # read are two separate filesystem ops, so a file swapped to a larger one in between could slip a
+    # bigger payload past the size gate. Re-check the real length before decoding so the 4 MiB bound
+    # holds against what was read, not just what was stat'd.
+    if ($bytes.Length -gt $script:VSLibMaxReportBytes) { return @{ ok = $false; status = 'unsafe'; reason = 'report-too-large' } }
     # STRICT UTF-8 decode: throwOnInvalidBytes so a non-UTF-8 report is refused, not mojibaked.
     $text = $null
     try {
