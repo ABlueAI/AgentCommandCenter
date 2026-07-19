@@ -151,6 +151,48 @@ layer: whiteboard, quick widgets, and CRM data.
       main-owned pane→run identity and this same shared validator — no second JS schema/
       validator). **V5c (retention) and V5d remain untouched.**
   Gates on the branch: app **899/0**, Pester **333/0/0**. Standard-class Reviewer PASS.
+  V5b1 later took a Full-class clipboard IPC delta and a Standard content-acceptance delta
+  (leading `## 1. TL;DR` + native-output UTF-8 decoding); reviewed tip is `92cacb3`.
+- **V5b2 Analysis Library + in-app report reader: BUILT (`feature/v5b2-library-reader`, STACKED
+  on the reviewed V5b1 tip `92cacb3`, pending Full-class review + human acceptance + merge; merge
+  order V5b1 then V5b2).** Full-class renderer→filesystem READ boundary. One invariant: the renderer
+  lists/reads only bounded, schema-valid Video Scout records/reports selected through MAIN-OWNED
+  identities; it never supplies or receives filesystem paths, and untrusted manifest/report content
+  renders only as inert plain text. What V5b2 delivers:
+    - **One shared trusted-IPC sender gate** (`app/trusted-ipc-sender.js`), extracted from the V1a
+      clipboard boundary and reused by BOTH clipboard and V5b2 — no duplicate gate. Same four
+      fail-closed checks (trusted window / own webContents / main frame / exact ENTRY_URL); torn-down
+      frames refuse instead of throwing; clipboard behavior + reason constants byte-for-byte
+      preserved (all clipboard tests green).
+    - **One PowerShell library boundary** (`scripts/video-scout-library.ps1` + `-core.ps1`), two
+      actions (List/Read), shell-free `execFile`, JSON-only stdout, fixed timeout + bounded buffers.
+      `video-scout-manifest-schema.ps1` stays the SOLE validator — **no manifest validation in JS.**
+      Bounds: 5,000 run dirs (visible `capExceeded`), 256 KiB manifest, 4 MiB report, 1,000,000
+      decoded UTF-16 units; strict UTF-8; reparse refusal; fixed-root direct-child containment; **Read
+      re-validates everything independently of List (TOCTOU).** Invalid records are excluded but
+      COUNTED with bounded reason constants (never silently omitted, never echoing hostile content).
+    - **Main-owned identities.** One run root `D:\Gemini_Video_Review\downloads` (reused for the
+      video-scout `-OutDir`, the listing, and report resolution). The PS index returns run IDs to
+      main; the renderer requests reports only through OPAQUE main-issued handles (replaced wholesale
+      per List refresh — stale/unknown handles refuse) or by pane ID. **Open Report** on a Video Scout
+      pane resolves through V5b1's internal pane→runId registry (renderer sends only the pane ID; no
+      run ID/path from the pane; no terminal parsing). No path is ever returned to the renderer.
+    - **Honest history + dates.** A completed run with a null `reportFile` is `not-persisted` with the
+      exact message `No report was persisted for this run.` — no failure implied, no reconstruction
+      (no P9 parser). Live = exact UTC date; backfills = explicitly `Approximate` local stamp (never a
+      fabricated UTC); missing/invalid provenance = a visible `Unknown date` bucket (never null-sorted
+      away). Default sort: exact + approximate newest first, unknown last.
+    - **Reader** is plain-text only (`<pre>.textContent`; no HTML/Markdown/URL attributes) with Copy
+      Report (reusing V1a's clipboard consumer + 1,000,000-unit copy bound; success only after the
+      clipboard IPC resolves; metadata-only Logs) and Maximize (reusing the V1a pane-maximize
+      controller; Escape restores; leaving the Library tab cannot strand maximize state).
+    - **No OS dispatch** (no `shell.openPath`), **no report reconstruction**, no HTML/Markdown, no
+      cross-report search, no retention/deletion, no follow-up/paid requests. **V5c (retention) and
+      V5d remain separate and untouched.**
+  Gates on the branch: app **0 failed** (new suites trusted-ipc-sender 10, library-ipc 23,
+  library-view 25; indexer Pester +28), Pester **375/0/0**. Read-only List dry-run vs the real root:
+  25 runs (1 available, 3 not-persisted, 21 incomplete; 13 exact, 12 approximate), 0 invalid.
+  Full-class whole-diff review + delta pass: pending.
 - **V2 report TL;DRs: COMPLETE.** The prompt preserves its report-leading
   Section 1 TL;DR and now requires an evidence-grounded one-line Section TL;DR
   for Sections 2–9. Standard-class review passed; Pester is 216/216.
