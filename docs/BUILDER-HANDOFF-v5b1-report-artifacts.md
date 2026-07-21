@@ -4,8 +4,14 @@ Branch: `feature/v5b1-report-artifacts`
 Fork-point / pre-merge main SHA: `23dc9d513c3a53a9c94d552a2b8e415ba9b89ba2` (verified equal on
 `main` and `origin/main` before branching; baseline gates app 875/0, Pester 275/0/0)
 Tip SHA: implementation `eaaae5f`; Reviewer LOW-1 parity fix `3be32f2`; docs verdict `8cc21c1`;
-content-acceptance delta (FAIL 1 + FAIL 2) `a7d524f`; this docs commit sits on top
+content-acceptance delta (FAIL 1 + FAIL 2) `a7d524f`; content-acceptance delta (FAIL 3 —
+`update_topic` preamble) `c28123f` (current tip); this docs commit sits on top
 Merge commit SHA: Pending human approval
+
+Prior reviewed tip (before the FAIL-3 correction): `92cacb3`. New reviewed tip after this correction:
+`c28123f`. This is the ROOT of the V5 stack content-acceptance correction; V5b2/V5c1/V5c2a inherit it
+by restack (rebase --onto), not by independent duplication — see each descendant handoff's updated tip
+chain.
 
 Tier: STANDARD-CLASS — create-only report persistence inside a newly created, fixed-root run
 directory, plus main-owned run identity. Recoverable and non-destructive. No renderer→filesystem
@@ -241,3 +247,52 @@ exact `U+2013`/`U+2014` code points and raw bytes, with a control case that repr
 Scope preservation confirmed unchanged (cap/collector, atomic ordering, run IDs, manifest lifecycle,
 Gemini params, K5/cost guards, refusal). Delta touches only the 8 pinned files. No CRITICAL/HIGH/
 MEDIUM/LOW findings.
+
+## Content-acceptance delta — FAIL 3 (`update_topic` report preamble) — commit `c28123f`
+
+Root cause: the installed Gemini CLI (0.49.0) ships a built-in `update_topic` tool + system
+instructions that encourage agentic-orchestration chatter during complex tasks. On the `.12` headless
+transcript run the model emitted an `update_topic(...)` block as genuine provider stdout AHEAD of
+`## 1. TL;DR`. The V5b1 collector correctly persisted stdout verbatim, so the fix is at the SOURCE (a
+Gemini CLI tool-deny), never a collector-side parser/filter.
+
+Fix: (1) new tracked policy `scripts/config/video-scout-gemini-policy.toml` — exactly one GLOBAL
+headless deny for `update_topic` (`[[rule]]` toolName/decision=deny/priority=999/interactive=false, no
+per-argument matcher), excluding the tool from the model's headless tool memory; it does not touch
+`~/.gemini` or interactive use. (2) new resolver `scripts/lib/get-video-scout-gemini-policy.ps1`
+(`Get-VideoScoutGeminiPolicyPath`) — param-less, derives an ABSOLUTE repository-owned path from its own
+`$PSScriptRoot`, fail-closed if missing; never renderer/manifest/terminal/user supplied. (3)
+`feed-gemini.ps1` passes `--policy <path>` on BOTH CLI sub-paths (direct node `gemini.js` + fallback
+shim), all CLI modes, default/custom prompts; SDK route untouched (the API route has no such built-in).
+(4) `prompts/transcript-analysis.md` gains an output contract (defense in depth) requiring the model's
+EMITTED output to begin with the literal `## 1. TL;DR` and forbidding planning/commentary/topic
+updates/tool-call syntax/preambles. No change to model/request-count/retries/usage/cost/encoding/atomic
+ordering/manifests; the collector stays verbatim.
+
+Proven (no paid request): the installed Gemini CLI 0.49.0's `--policy` flag loads + parses the tracked
+TOML at startup (valid → exits clean; a deliberately malformed policy → `Policy file error … TOML
+parsing failed`) — verified via `--list-extensions`, no model request. Tests (+22): policy content
+(one headless `update_topic` deny, no argsPattern), resolver path-ownership (param-less/absolute/
+repo-owned/fail-closed), a skipped-if-absent CLI-accept proof, `--policy` passed on direct+fallback ×
+transcript/audio/video × custom prompt and NOT on the SDK route, the emitted-report `## 1. TL;DR`
+contract + preamble forbiddance, and the bounded collector retaining an `update_topic(...)` fixture
+byte-for-byte.
+
+Gates: prior reviewed tip `92cacb3` app 899/0 Pester 347/0/0 → after `c28123f` app 899/0 (JS
+untouched) Pester 369/0/0 (+22). Pinned FAIL-3 scoped diff `92cacb3...c28123f`
+(`.agent-review-v5b1-fail3-update-topic.diff`).
+
+FAIL-3 scoped Reviewer verdict: `VERDICT: PASS`
+
+Source: Standard-class read-only scoped Reviewer pass (fresh subagent), July 21, 2026, over the pinned
+`92cacb3...c28123f` diff plus worktree source. All seven mandated focus areas confirmed: policy
+correctness (one global headless `update_topic` deny, no argsPattern, priority 999); invocation wiring
+(`--policy $policyPath` on BOTH the direct-node and fallback-shim sub-paths, mode/prompt-independent,
+absolute + CWD-independent under Push-Location); fixed policy-path ownership (param-less resolver from
+`$PSScriptRoot`, absolute, fail-closed, never caller/renderer/manifest/terminal supplied); NO output
+parser/filter (collector verbatim; `update_topic(...)` fixture retained byte-for-byte); no request/
+retry/cost/encoding/ordering/manifest change; SDK route unaffected (no `--policy` on `@sdkArgs`); and
+self-contained for clean restack. Two LOW/informational, non-blocking, no change requested: (a) the
+schema's runtime effectiveness depends on the installed CLI — guarded by the conditional CLI-accept
+smoke test (which runs where gemini is installed, as here); (b) the fail-closed resolver test asserts
+via source-grep rather than a functional missing-file path (test-only). Left as-is per precedent.
