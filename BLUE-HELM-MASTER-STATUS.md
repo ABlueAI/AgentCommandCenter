@@ -193,6 +193,47 @@ layer: whiteboard, quick widgets, and CRM data.
   library-view 25; indexer Pester +28), Pester **375/0/0**. Read-only List dry-run vs the real root:
   25 runs (1 available, 3 not-persisted, 21 incomplete; 13 exact, 12 approximate), 0 invalid.
   Full-class whole-diff review + delta pass: pending.
+- **V5c SPLIT into V5c1 (media inventory, non-destructive) and V5c2 (deletion, later).** The original
+  V5c "retention" is deliberately split so ownership recording lands and is proven BEFORE any deletion
+  code exists. **V5c1 is non-destructive: it deletes/moves/quarantines/sweeps NOTHING and never infers
+  ownership for existing history.** V5c2 (the only phase that may delete) is **Full-class** and
+  **blocked until V5c1 is accepted and merged**; it may delete only files a manifest owns, and must
+  ignore any file that exists on disk without a recorded ownership entry.
+- **V5c1 Manifest-owned media inventory: BUILT (`feature/v5c1-media-inventory`, STACKED on the reviewed
+  V5b2 tip `f2cbb1c`, pending Standard-class scoped review + human acceptance + merge; merge order V5b1
+  → V5b2 → V5c1).** Standard-class (reuses the V5b2 read boundary; no new renderer→FS boundary). One
+  invariant: every downloadable media artifact a future run produces is recorded in that run's manifest
+  BEFORE analysis can complete; no file outside the run, no stale file, and no merely discovered file
+  can become manifest-owned. What V5c1 delivers:
+    - **Schema version 2** on the SINGLE shared validator (`video-scout-manifest-schema.ps1`) — one new
+      top-level field `mediaArtifacts` (array, default `[]`, max 16) whose entries have the exact shape
+      `{ fileName (safe leaf), kind (transcript|audio|video), sizeBytes (>=0), recordedAt (UTC), state
+      ('present'), deletedAt: null, deletionReason: null }`; extension MUST match kind
+      (.srt/.mp3/.mp4); array-not-object, exact-keys, case-insensitive-dup, traversal/rooted/control/
+      bidi/size/timestamp/state all enforced. **Version 1 (ALL history + backfills) stays valid
+      UNCHANGED and REJECTS the field; v2 REQUIRES it and is never a backfill.** Ownership is never
+      fabricated for history. `reportFile` still governs `analysis-output.txt` exclusively — reports/
+      manifests/temp/diagnostics are never media.
+    - **Ownership recorder** (`record-video-scout-media.ps1` → `Add-VideoScoutMediaArtifact`) takes only
+      the run dir, the run's own resolver `FileInfo`, the kind, and the manifest. It validates
+      provenance (direct child / ordinary file / no reparse / ext==kind / exists), uses the ACTUAL leaf
+      name + real on-disk size (no caller filename, no directory scan), refuses duplicates, then updates
+      the manifest ATOMICALLY via the shared writer. On any failure it throws, reverts the in-memory
+      claim, and leaves the file untouched. **Deletes/moves/repairs nothing.**
+    - **Lifecycle** (`feed-gemini.ps1`): CLI route = v2 init → guarded download → resolver → RECORD →
+      ONLY THEN the paid Gemini request → existing V5b1 report/outcome lifecycle. A recording failure
+      BLOCKS the paid call, leaves the file, and claims no ownership (outcome error, or null if the
+      manifest is unwritable). SDK route records nothing (remote URL, no local file). NoFeed records the
+      download and may complete without a report. The yt-dlp `.vtt` temp removal is unchanged, not
+      broadened.
+    - **V5b2 compat**: the Library lists v1 history, v1 backfills, v2 empty inventories, and v2 recorded
+      runs through the same shared validator; a bounded `mediaCount` (count only — never filenames or
+      paths) is optionally displayed. No Library delete button (none authorized until V5c2).
+  Gates on the branch: app **939/0** (zero new JS test files), Pester **416/0/0** (375 + 41 new: schema
+  +16, recorder 12, lifecycle 11, library-core +3). Read-only List dry-run vs the real root: 25 runs,
+  25 valid, 0 invalid, every entry `mediaCount = 0` (all history is v1 — ownership never inferred), no
+  path/filename leak. No real Gemini request or download during implementation. Standard-class scoped
+  review + delta pass: pending.
 - **V2 report TL;DRs: COMPLETE.** The prompt preserves its report-leading
   Section 1 TL;DR and now requires an evidence-grounded one-line Section TL;DR
   for Sections 2–9. Standard-class review passed; Pester is 216/216.
