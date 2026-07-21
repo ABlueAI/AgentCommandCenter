@@ -310,3 +310,41 @@ Describe 'Invoke-VideoScoutLibraryList — V5c1 schema v2 media inventory' {
 
     if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
 }
+
+Describe 'Invoke-VideoScoutLibraryList — V5c2a lists new artifact states safely' {
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+    $root = Join-Path $env:TEMP ('v5c2a-lib-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $root -Force | Out-Null
+
+    # A v2 completed run whose inventory spans the FULL deletion lifecycle (a deleted audit entry stays
+    # in the array). The Library must validate + list it and project a bounded count without ever
+    # exposing a filename, path, or the artifact state.
+    $rid = 'run-20260721-120000-000-1234-cccccccc'
+    $d = Join-Path $root $rid; New-Item -ItemType Directory -Path $d -Force | Out-Null
+    $m = New-LiveManifestObj -RunId $rid -Outcome 'completed' -ReportFile 'analysis-output.txt'
+    $m.mediaArtifacts = @(
+        ([ordered]@{ fileName = 'kept.en.srt';    kind = 'transcript'; sizeBytes = 10; recordedAt = '2026-07-21T12:00:00.000Z'; state = 'present';       deletedAt = $null;                        deletionReason = $null }),
+        ([ordered]@{ fileName = 'removed.en.srt';  kind = 'transcript'; sizeBytes = 11; recordedAt = '2026-07-21T12:00:00.000Z'; state = 'deleted';       deletedAt = '2026-07-21T12:00:02.000Z';    deletionReason = 'completed-analysis' }),
+        ([ordered]@{ fileName = 'stuck.en.srt';    kind = 'transcript'; sizeBytes = 12; recordedAt = '2026-07-21T12:00:00.000Z'; state = 'deleting';      deletedAt = $null;                        deletionReason = 'completed-analysis' }),
+        ([ordered]@{ fileName = 'failed.en.srt';   kind = 'transcript'; sizeBytes = 13; recordedAt = '2026-07-21T12:00:00.000Z'; state = 'delete-failed'; deletedAt = $null;                        deletionReason = 'filesystem-delete-failed' }),
+        ([ordered]@{ fileName = 'gone.en.srt';     kind = 'transcript'; sizeBytes = 14; recordedAt = '2026-07-21T12:00:00.000Z'; state = 'missing';       deletedAt = $null;                        deletionReason = 'owned-file-missing' })
+    )
+    [System.IO.File]::WriteAllText((Join-Path $d 'manifest.json'), ($m | ConvertTo-Json -Depth 8), $utf8)
+
+    $res = Invoke-VideoScoutLibraryList -RunRoot $root
+
+    It 'validates and lists the run (none invalid) with a bounded total mediaCount' {
+        $res.ok | Should Be $true
+        @($res.entries).Count | Should Be 1
+        @($res.invalid).Count | Should Be 0
+        $res.entries[0].mediaCount | Should Be 5   # total recorded audit entries, incl. the deleted one
+    }
+    It 'never exposes a media filename, path, artifact state, or deletion reason in the projection' {
+        $blob = $res.entries | ConvertTo-Json -Depth 8 -Compress
+        ($blob -match 'kept\.en\.srt|removed\.en\.srt|stuck\.en\.srt|failed\.en\.srt|gone\.en\.srt') | Should Be $false
+        ($blob -match '\\') | Should Be $false
+        ($blob -match 'deleting|delete-failed|owned-file-missing|completed-analysis') | Should Be $false
+    }
+
+    if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+}

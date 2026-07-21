@@ -50,6 +50,8 @@ $name = if ($argline -match 'audio-format mp3') { 'Fake_Audio.mp3' }
         elseif ($argline -match 'merge-output-format mp4') { 'Fake_Video.mp4' }
         else { 'Fake_Video.en.srt' }
 Set-Content -LiteralPath (Join-Path $runDir $name) -Value ("fake media bytes for " + $name) -Encoding ASCII
+# Optional UNOWNED sibling (never recorded in the manifest) to prove cleanup never scans/globs.
+if ($env:VS_STUB_EXTRA -eq '1') { Set-Content -LiteralPath (Join-Path $runDir 'Unowned_Sibling.mp4') -Value 'unowned' -Encoding ASCII }
 if ($env:VS_STUB_READONLY_MANIFEST -eq '1') { Set-ItemProperty -LiteralPath (Join-Path $runDir 'manifest.json') -Name IsReadOnly -Value $true }
 "[yt-dlp-stub] wrote $name"
 '@ | Set-Content -LiteralPath (Join-Path $commonBin 'yt-dlp.ps1') -Encoding ASCII
@@ -76,7 +78,8 @@ function Invoke-Feed {
         [int]$StubExit = 0,
         [string]$ProbeLine = '100|NA',
         [switch]$NoOutput,
-        [switch]$ReadonlyManifest
+        [switch]$ReadonlyManifest,
+        [switch]$ExtraSibling
     )
     $outDir = Join-Path $stubRoot ('out-' + [Guid]::NewGuid().ToString('N'))
     function global:Start-Job   { [PSCustomObject]@{ Id = 1 } }
@@ -90,6 +93,7 @@ function Invoke-Feed {
     $env:VS_STUB_EXIT = "$StubExit"
     if ($NoOutput) { $env:VS_STUB_NO_OUTPUT = '1' } else { Remove-Item Env:\VS_STUB_NO_OUTPUT -ErrorAction SilentlyContinue }
     if ($ReadonlyManifest) { $env:VS_STUB_READONLY_MANIFEST = '1' } else { Remove-Item Env:\VS_STUB_READONLY_MANIFEST -ErrorAction SilentlyContinue }
+    if ($ExtraSibling) { $env:VS_STUB_EXTRA = '1' } else { Remove-Item Env:\VS_STUB_EXTRA -ErrorAction SilentlyContinue }
     $env:PATH = (($ExtraPathBins + $commonBin) -join ';') + ';' + $savedPath
     try {
         $p = @{ OutDir = $outDir } + $Params
@@ -115,7 +119,7 @@ function Invoke-Feed {
     }
     finally {
         $env:PATH = $savedPath
-        Remove-Item Env:\VS_STUB_MODE, Env:\VS_STUB_EXIT, Env:\VS_STUB_NO_OUTPUT, Env:\VS_STUB_READONLY_MANIFEST, Env:\VS_PROBE_LINE -ErrorAction SilentlyContinue
+        Remove-Item Env:\VS_STUB_MODE, Env:\VS_STUB_EXIT, Env:\VS_STUB_NO_OUTPUT, Env:\VS_STUB_READONLY_MANIFEST, Env:\VS_STUB_EXTRA, Env:\VS_PROBE_LINE -ErrorAction SilentlyContinue
         'Start-Job', 'Wait-Job', 'Receive-Job', 'Stop-Job', 'Remove-Job' |
             ForEach-Object { Remove-Item "function:global:$_" -ErrorAction SilentlyContinue }
     }
@@ -129,7 +133,11 @@ Describe 'V5c1 CLI route records the correct kind' {
         $m.Count | Should Be 1
         $m[0].kind | Should Be 'transcript'
         $m[0].fileName | Should Be 'Fake_Video.en.srt'
-        $m[0].state | Should Be 'present'
+        # V5c2a: the artifact is recorded 'present' before analysis, then automatically cleaned up
+        # AFTER the run completes with a report, so the durable end state here is 'deleted' (its audit
+        # entry -- fileName/kind/size -- is retained). The full deletion contract is proven in
+        # cleanup-video-scout-media.Tests.ps1 and the V5c2a lifecycle Describe below.
+        $m[0].state | Should Be 'deleted'
         $m[0].sizeBytes | Should BeGreaterThan 0
         $r.Manifest.outcome | Should Be 'completed'
         $r.Manifest.reportFile | Should Be 'analysis-output.txt'
@@ -229,6 +237,51 @@ Describe 'V5c1 ordering source guard' {
         $sdkNode = $src.IndexOf('& node $sdkScript @sdkArgs')
         $recordIdx = $src.IndexOf('Add-VideoScoutMediaArtifact')
         ($sdkNode -gt 0 -and $recordIdx -gt $sdkNode) | Should Be $true   # recorder appears AFTER the SDK invocation, i.e. only on the CLI path
+    }
+}
+
+Describe 'V5c2a CLI success cleanup — deletes the owned media, keeps the report + manifest' {
+    It 'transcript success deletes the downloaded .srt but keeps the report + completed manifest, artifact -> deleted' {
+        $r = Invoke-Feed -ExtraPathBins @($fallbackBin) -Params @{ Url = $YT; VideoScout = $true; Mode = 'transcript'; RunId = (New-RunId) }
+        # The analysis still succeeded: report on disk, manifest completed + reportFile.
+        $r.Manifest.outcome | Should Be 'completed'
+        $r.Manifest.reportFile | Should Be 'analysis-output.txt'
+        Test-Path -LiteralPath $r.ReportPath | Should Be $true
+        # The owned media file is gone; its audit entry remains as state=deleted with deletedAt + reason.
+        Test-Path -LiteralPath (Join-Path $r.RunDir 'Fake_Video.en.srt') | Should Be $false
+        $m = @($r.Manifest.mediaArtifacts)
+        $m.Count | Should Be 1
+        $m[0].state | Should Be 'deleted'
+        $m[0].deletedAt | Should Match '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$'
+        $m[0].deletionReason | Should Be 'completed-analysis'
+    }
+    It 'audio success deletes the .mp3 too (cleanup covers every CLI mode that produced a report)' {
+        $r = Invoke-Feed -ExtraPathBins @($fallbackBin) -Params @{ Url = $YT; VideoScout = $true; Mode = 'audio'; RunId = (New-RunId) }
+        $r.Manifest.outcome | Should Be 'completed'
+        Test-Path -LiteralPath (Join-Path $r.RunDir 'Fake_Audio.mp3') | Should Be $false
+        (@($r.Manifest.mediaArtifacts))[0].state | Should Be 'deleted'
+    }
+    It 'an UNOWNED sibling in the run directory is never deleted (cleanup does not scan/glob)' {
+        $r = Invoke-Feed -ExtraPathBins @($fallbackBin) -Params @{ Url = $YT; VideoScout = $true; Mode = 'transcript'; RunId = (New-RunId) } -ExtraSibling
+        Test-Path -LiteralPath (Join-Path $r.RunDir 'Fake_Video.en.srt') | Should Be $false   # owned -> deleted
+        Test-Path -LiteralPath (Join-Path $r.RunDir 'Unowned_Sibling.mp4') | Should Be $true   # unowned -> survives
+    }
+    It 'NoFeed retains the downloaded media (never eligible for success cleanup)' {
+        $r = Invoke-Feed -ExtraPathBins @($fallbackBin) -Params @{ Url = $YT; VideoScout = $true; Mode = 'transcript'; NoFeed = $true; RunId = (New-RunId) }
+        $r.Manifest.outcome | Should Be 'completed'
+        $r.Manifest.reportFile | Should Be $null
+        Test-Path -LiteralPath (Join-Path $r.RunDir 'Fake_Video.en.srt') | Should Be $true
+        (@($r.Manifest.mediaArtifacts))[0].state | Should Be 'present'
+    }
+}
+
+Describe 'V5c2a cleanup wiring — runs only after the report+manifest are finalized' {
+    $src = Get-Content -LiteralPath $feedGemini -Raw -Encoding UTF8
+    It 'invokes cleanup AFTER writing the report and completing the manifest (CLI success branch)' {
+        $reportIdx  = $src.IndexOf('Write-VideoScoutReportFile -RunDir $runDir')
+        $cleanupIdx = $src.IndexOf('Invoke-VideoScoutSuccessMediaCleanup -RunDir $runDir')
+        ($reportIdx -gt 0) | Should Be $true
+        ($cleanupIdx -gt $reportIdx) | Should Be $true   # cleanup runs after the report is durably written + manifest completed
     }
 }
 

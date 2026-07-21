@@ -119,6 +119,10 @@ $ProbeTimeoutSec = 60   # (?) hard cap on the metadata probe; a hung/slow probe 
 # built-in `update_topic` tool so it can't emit agentic-orchestration chatter ahead of the requested
 # report on a headless CLI run. Passed with `--policy` on every Gemini CLI invocation below.
 . (Join-Path $PSScriptRoot 'lib\get-video-scout-gemini-policy.ps1')
+# V5c2a: automatic successful-run media cleanup. ONLY after a run is durably completed with a persisted
+# report does this delete that run's OWN manifest-owned media (from the validated manifest, never a
+# scan). It is TOTAL (never throws) and non-destructive to reports/manifests/directories/history.
+. (Join-Path $PSScriptRoot 'lib\cleanup-video-scout-media.ps1')
 # V5b1 content acceptance (FAIL 2): PS 5.1 decodes a native process's stdout bytes using
 # [Console]::OutputEncoding, which in the app PTY is the legacy OEM code page -- so UTF-8 provider
 # output (en/em dashes, etc.) arrived mojibaked. This helper is the single source of truth for the
@@ -529,6 +533,20 @@ try {
             $reportName = Write-VideoScoutReportFile -RunDir $runDir -Text $report.Text
             Complete-VideoScoutRunManifest -RunDir $runDir -Manifest $cliManifest -Outcome 'completed' `
                 -VideoTitle $videoTitle -ReportFile $reportName
+            # V5c2a: the analysis is now durably completed with a persisted report -- the ONE point in
+            # the lifecycle where automatic media cleanup is eligible. It reloads + re-validates the
+            # manifest from disk and deletes only THIS run's own, manifest-owned media (any CLI mode
+            # that reached this branch: transcript/audio/video). It is TOTAL (never throws); a cleanup
+            # failure surfaces a bounded warning but must NEVER rewrite this successful analysis into a
+            # failure, so the call is additionally guarded here. $OutDir is the fixed, main-owned
+            # downloads root; $runDir is its direct child. (NoFeed / error / refused / SDK routes never
+            # reach here and retain their media; SDK owns no local media anyway.)
+            try {
+                [void](Invoke-VideoScoutSuccessMediaCleanup -RunDir $runDir -DownloadsRoot $OutDir)
+            }
+            catch {
+                Write-Warning "Video-scout media cleanup could not run; the analysis completed successfully and its report is saved."
+            }
         }
     }
 }

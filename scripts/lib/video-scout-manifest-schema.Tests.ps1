@@ -421,3 +421,65 @@ Describe 'V5c1 schema version 2 media inventory' {
         { Assert-VideoScoutManifestValid -Manifest $back } | Should Not Throw
     }
 }
+
+Describe 'V5c2a schema — media artifact deletion states and per-state nullability' {
+    function New-V2 { New-VideoScoutLiveManifest -RunId 'r' -Url 'u' -AppliedMode 'transcript' -Route 'cli' -Model 'm' -MediaResolutionRequested 'MEDIUM' }
+    function New-Art { param($state, $deletedAt = $null, $deletionReason = $null)
+        [ordered]@{ fileName = 'a.srt'; kind = 'transcript'; sizeBytes = 10; recordedAt = '2026-07-21T00:00:00.000Z'; state = $state; deletedAt = $deletedAt; deletionReason = $deletionReason } }
+    $ts = '2026-07-21T00:00:02.000Z'
+
+    It 'accepts every valid per-state shape (present/deleting/deleted/delete-failed/missing)' {
+        $valid = @(
+            (New-Art 'present'),
+            (New-Art 'deleting'      $null 'completed-analysis'),
+            (New-Art 'deleted'       $ts   'completed-analysis'),
+            (New-Art 'delete-failed' $null 'identity-mismatch'),
+            (New-Art 'delete-failed' $null 'reparse-point-refused'),
+            (New-Art 'delete-failed' $null 'unsafe-file-type'),
+            (New-Art 'delete-failed' $null 'filesystem-delete-failed'),
+            (New-Art 'missing'       $null 'owned-file-missing')
+        )
+        foreach ($a in $valid) {
+            $m = New-V2; $m.mediaArtifacts = @($a)
+            { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
+        }
+    }
+    It "rejects a 'deleted' artifact without a UTC deletedAt" {
+        $m = New-V2; $m.mediaArtifacts = @((New-Art 'deleted' $null 'completed-analysis'))
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'deletedAt'
+    }
+    It "rejects a 'deleting'/'delete-failed'/'missing' artifact that carries a deletedAt" {
+        foreach ($st in @('deleting', 'delete-failed', 'missing')) {
+            $m = New-V2; $m.mediaArtifacts = @((New-Art $st $ts 'completed-analysis'))
+            { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'deletedAt null'
+        }
+    }
+    It "rejects a non-present state with a null deletionReason" {
+        foreach ($st in @('deleting', 'deleted', 'delete-failed', 'missing')) {
+            $da = if ($st -eq 'deleted') { $ts } else { $null }
+            $m = New-V2; $m.mediaArtifacts = @((New-Art $st $da $null))
+            { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw
+        }
+    }
+    It 'rejects a deletionReason outside the bounded allowlist (no raw text persisted)' {
+        $m = New-V2; $m.mediaArtifacts = @((New-Art 'delete-failed' $null 'Access is denied: C:\secret\path'))
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'deletionReason must be one of'
+    }
+    It "still rejects a 'present' artifact that carries a deletedAt or deletionReason" {
+        $m1 = New-V2; $m1.mediaArtifacts = @((New-Art 'present' $ts $null))
+        { Assert-VideoScoutManifestValid -Manifest $m1 } | Should Throw
+        $m2 = New-V2; $m2.mediaArtifacts = @((New-Art 'present' $null 'completed-analysis'))
+        { Assert-VideoScoutManifestValid -Manifest $m2 } | Should Throw
+    }
+    It 'rejects an unknown state value' {
+        $m = New-V2; $m.mediaArtifacts = @((New-Art 'quarantined' $null 'completed-analysis'))
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'state must be one of'
+    }
+    It 'round-trips a deleted artifact through JSON and stays valid' {
+        $m = New-V2; $m.mediaArtifacts = @((New-Art 'deleted' $ts 'completed-analysis'))
+        $back = (ConvertTo-Json -InputObject $m -Depth 6) | ConvertFrom-Json
+        $back.mediaArtifacts[0].state | Should Be 'deleted'
+        $back.mediaArtifacts[0].deletedAt | Should Be $ts
+        { Assert-VideoScoutManifestValid -Manifest $back } | Should Not Throw
+    }
+}
