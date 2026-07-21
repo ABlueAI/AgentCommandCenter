@@ -174,4 +174,27 @@ file was deleted** (the downloaded media and every historical file remain on dis
   absolute absence of deletion/move/quarantine/cleanup, and V5b1/V5b2 preserved.
 - Retain the literal `VERDICT: PASS|FAIL` line and identify the review that produced it.
 
-Reviewer verdict: _pending scoped Standard-class review._
+Reviewer verdict: `VERDICT: PASS`
+
+Reviewer verdict source: Standard-class scoped review (fresh reviewer subagent), July 21, 2026, over
+the pinned diff `.agent-review-v5c1-media-inventory.diff` (`f2cbb1c...359a912`) plus worktree source.
+All eight mandated focus areas confirmed by reading: v1 back-compat (v1 stays valid + rejects a
+`mediaArtifacts` key; backfills stay v1; single shared validator; no JS validator); the exact v2
+schema (array-not-object, max 16, exact keys, kind/ext pairing, safe-leaf with `\uXXXX` bidi escapes,
+case-insensitive dup, v2-never-a-backfill); ownership provenance (direct child, ordinary file, reparse
+refusal, actual leaf + real size, no caller substitution, no directory scan); atomic ordering + revert
+on failure; the CLI record-before-Gemini gating with a recording failure blocking the paid call (SDK
+records nothing; NoFeed records); failure truth; the absolute absence of deletion/move/quarantine/
+cleanup (reports never added to `mediaArtifacts`); and V5b1/V5b2 preserved (bounded `mediaCount` only,
+no delete button). PS 5.1 array-unwrap, `List` `@()`, JSON round-trip, and bidi-escape hazards all
+checked clean.
+
+One LOW (non-blocking) finding — the direct-child parent-equality check at
+`record-video-scout-media.ps1:49` was flagged as a case-sensitive ordinal comparison that could
+over-reject on Windows. **Verified SPURIOUS and left unchanged:** the check uses PowerShell `-ne`,
+which is **case-insensitive by default** (`-cne` is the case-sensitive operator, used elsewhere at
+`video-scout-library-core.ps1:211`), so a casing mismatch already compares EQUAL and the file is
+accepted (proven empirically: `"D:\...\run-x" -ne "d:\...\RUN-X"` is `False`). No code change was
+made; making the finding a no-op would only add redundant/inconsistent explicitness. No CRITICAL/HIGH/
+MEDIUM findings; no blocking issues. Final reviewed tip: `359a912` (this verdict-recording docs commit
+sits on top; no reviewed code changed).
