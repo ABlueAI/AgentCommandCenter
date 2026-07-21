@@ -6,6 +6,20 @@ STACKS on V5b1, it does NOT branch from main). Baseline gates on that tip: app 8
 Tip SHA: implementation checkpoint `2fb9518`; marker/docs commit sits on top.
 Merge commit SHA: Pending human approval. Merge order: V5b1 first, then V5b2.
 
+### V5 stack content-acceptance correction — restacked onto corrected V5b1 (2026-07-21)
+
+To inherit the V5b1 `update_topic` policy correction (Gemini CLI tool-deny), this branch was RESTACKED
+(`git rebase --onto`) onto the corrected V5b1, not re-implemented.
+- Base moved: old V5b1 tip `92cacb3` → corrected V5b1 tip `2e8ec32` (fix `c28123f` + V5b1 docs).
+- This branch's tip moved: pre-correction reviewed tip `f2cbb1c` → new restacked tip `731b7d3`.
+- Scoped delta confirmation: the inherited change (`git diff f2cbb1c 731b7d3`) is EXACTLY the V5b1
+  correction; and this branch's OWN reviewed three-dot delta is byte-for-byte IDENTICAL before and
+  after the restack (`git diff 92cacb3...f2cbb1c` == `git diff 2e8ec32...731b7d3`), so the V5b2
+  invariant is untouched.
+- Refreshed pinned diff: `.agent-review-v5b2-library-reader.diff` now `2e8ec32...731b7d3`.
+- Gates after restack: app **PASS (0 failed)**, Pester **397/0/0** (375 + 22 inherited from the V5b1
+  correction). No V5b2 code changed; the delta is inherited only.
+
 Tier: **FULL-CLASS** — this creates a renderer→filesystem READ boundary. It receives a whole-diff
 security review and a delta pass after any failed verdict.
 
