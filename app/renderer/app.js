@@ -2,7 +2,7 @@
 // No Node here by design; this file is pure UI + IPC calls.
 
 const $ = (sel) => document.querySelector(sel);
-const ACCEPTANCE_BUILD = 'V5C1 MEDIA INVENTORY ACCEPTANCE 2026-07-20.12';
+const ACCEPTANCE_BUILD = 'V5C2A SUCCESS CLEANUP ACCEPTANCE 2026-07-21.13';
 const state = { repo: '', githubUrl: '', worktrees: [], chosenRole: 'builder', chosenCli: 'claude', hardTask: false, theme: 'obsidian', ttsVoice: '', ttsSpeed: 1, videoModel: 'gemini-2.5-flash-lite', mediaResolution: 'MEDIUM', analysisMode: 'transcript' };
 const audioModules = window.ccAudioModuleHealth.createAudioModuleHealth();
 
