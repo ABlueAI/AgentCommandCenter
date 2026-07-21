@@ -8,6 +8,27 @@ Merge commit SHA: Pending human approval. Merge order: V5b1 → V5b2 → V5c1 �
 Recorded SHAs at fork time: V5c1 base `c26ba1f`; new-branch fork `c26ba1f`; current main `23dc9d5`;
 origin/main `23dc9d5`.
 
+### V5 stack content-acceptance correction — restacked onto corrected V5c1 (2026-07-21)
+
+RESTACKED (`git rebase --onto`) to inherit the V5b1 `update_topic` Gemini-CLI policy correction, not
+re-implemented.
+- Base moved: old V5c1 tip `c26ba1f` → corrected V5c1 tip `5f8415a` (which chains back through
+  corrected V5b2 `2abd716` and V5b1 `2e8ec32`).
+- This branch's tip moved: pre-correction reviewed tip `6c88597` → new restacked tip `5d84637` (before
+  the `.14` marker bump + this docs commit, which sit on top).
+- feed-gemini.ps1 CONFLICT resolved manually, keeping ALL sides: the inherited policy dot-source +
+  `--policy $policyPath` on both CLI invocations, V5c1's recorder dot-source + `Add-VideoScoutMediaArtifact`
+  call, AND V5c2a's cleanup dot-source + `Invoke-VideoScoutSuccessMediaCleanup` call (all verified
+  present; the file tokenizes). No side was dropped.
+- Scoped delta confirmation: `git diff 6c88597 5d84637` touches ONLY the correction's files (policy
+  toml + resolver + feed-gemini `--policy`/dot-source + prompt contract + tests) and the inherited
+  V5b1/V5b2/V5c1 handoff docs — NO V5c2a-owned file (cleanup helper/tests, schema, lifecycle test,
+  markers) appears, so the V5c2a deletion invariant is byte-for-byte intact.
+- Refreshed pinned diff: `.agent-review-v5c2a-success-media-cleanup.diff` now
+  `5f8415a...<final tip>`.
+- Gates after restack: app **939/0**, Pester **478/0/0** (456 + 22 inherited). No V5c2a code changed.
+- Acceptance marker bumped to `V5 STACK CONTENT ACCEPTANCE 2026-07-21.14` for the final live run.
+
 Tier: **FULL-CLASS** — this performs irreversible filesystem deletion. It receives a whole-diff
 security review, a pinned three-dot diff, a delta review after any FAIL, explicit human live
 acceptance, and a human merge decision.
