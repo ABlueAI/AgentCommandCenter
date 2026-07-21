@@ -1,0 +1,25 @@
+# Video Scout Gemini CLI policy (V5 stack content-acceptance correction).
+#
+# WHY THIS EXISTS: the installed Gemini CLI (0.49.0) ships a built-in `update_topic` tool and
+# system instructions that encourage the model to emit `update_topic(...)` agentic-orchestration
+# chatter during complex tasks. On a headless Video Scout CLI run that chatter was emitted as
+# genuine provider stdout AHEAD of the requested report (the `.12` acceptance failure began with an
+# `update_topic(...)` block before `## 1. TL;DR`). The V5b1 report collector correctly persisted
+# provider stdout verbatim, so the fix belongs at the SOURCE: deny the tool through the Gemini CLI's
+# own supported Policy Engine so it is excluded from the model's available-tool memory in headless
+# mode. This is the enforcement mechanism; the transcript brief's output contract is defense in depth.
+#
+# SCOPE: this file is passed explicitly with `--policy` on every Video Scout Gemini CLI invocation
+# (direct-node and fallback-shim paths, all CLI modes, default and custom prompts). It is repository-
+# owned and resolved from a fixed tracked location (scripts/lib/get-video-scout-gemini-policy.ps1) --
+# never from renderer input, terminal output, a manifest, or a user-supplied path. It does NOT touch
+# the global ~/.gemini configuration and does NOT affect normal interactive Gemini use.
+#
+# The deny is GLOBAL for the tool (no per-argument matcher on the rule), so the CLI removes
+# update_topic entirely rather than allowing specific argument shapes. priority 999 wins over
+# lower-priority allow rules; interactive = false makes it a headless (non-prompting) deny.
+[[rule]]
+toolName = "update_topic"
+decision = "deny"
+priority = 999
+interactive = false

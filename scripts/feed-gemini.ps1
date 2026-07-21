@@ -111,6 +111,10 @@ $ProbeTimeoutSec = 60   # (?) hard cap on the metadata probe; a hung/slow probe 
 # (write-video-scout-report.ps1) persists analysis-output.txt BEFORE the manifest is completed.
 . (Join-Path $PSScriptRoot 'lib\get-bounded-report.ps1')
 . (Join-Path $PSScriptRoot 'lib\write-video-scout-report.ps1')
+# V5 stack content-acceptance correction: the FIXED, repo-owned Gemini CLI policy that denies the
+# built-in `update_topic` tool so it can't emit agentic-orchestration chatter ahead of the requested
+# report on a headless CLI run. Passed with `--policy` on every Gemini CLI invocation below.
+. (Join-Path $PSScriptRoot 'lib\get-video-scout-gemini-policy.ps1')
 # V5b1 content acceptance (FAIL 2): PS 5.1 decodes a native process's stdout bytes using
 # [Console]::OutputEncoding, which in the app PTY is the legacy OEM code page -- so UTF-8 provider
 # output (en/em dashes, etc.) arrived mojibaked. This helper is the single source of truth for the
@@ -464,16 +468,23 @@ try {
         # the collector retains at most the report limit. `$LASTEXITCODE` is set by the native exe and
         # is NOT changed by piping through ForEach-Object, so the exit code is preserved intact.
         $reportCollector = New-BoundedReportCollector
+        # V5 stack content-acceptance correction: deny the Gemini CLI's built-in `update_topic` tool
+        # via its supported Policy Engine on BOTH CLI sub-paths (direct-node and fallback shim), for
+        # every mode and prompt. The path is fixed + repository-owned (Get-VideoScoutGeminiPolicyPath),
+        # absolute (so it resolves under the Push-Location'd trusted CWD), and never caller-supplied.
+        # This is the enforcement; the transcript brief's output contract is defense in depth. The SDK
+        # route is unaffected (update_topic is a CLI tool; the API route has no such built-in).
+        $policyPath = Get-VideoScoutGeminiPolicyPath
         if (Test-Path -LiteralPath $geminiJs) {
             $pArg = ConvertTo-NodeCliArg -Arg "$Prompt @$($file.FullName)"
-            & $nodeExe $geminiJs -m $Model -p $pArg | ForEach-Object { $line = [string]$_; Add-BoundedReportLine -Collector $reportCollector -Line $line; $line }
+            & $nodeExe $geminiJs -m $Model --policy $policyPath -p $pArg | ForEach-Object { $line = [string]$_; Add-BoundedReportLine -Collector $reportCollector -Line $line; $line }
         }
         else {
             # Unknown gemini layout (no npm bundle beside the shim, e.g. a standalone .exe install).
             # Fall back to the shim so this keeps working, but warn: a prompt with embedded quotes may
             # be misparsed on this path, since we no longer control the final argument serialization.
             Write-Warning "Could not locate gemini.js beside '$gemini'; falling back to the gemini shim. A prompt containing embedded double quotes may be misparsed on this fallback path."
-            & $gemini -m $Model -p "$Prompt @$($file.FullName)" | ForEach-Object { $line = [string]$_; Add-BoundedReportLine -Collector $reportCollector -Line $line; $line }
+            & $gemini -m $Model --policy $policyPath -p "$Prompt @$($file.FullName)" | ForEach-Object { $line = [string]$_; Add-BoundedReportLine -Collector $reportCollector -Line $line; $line }
         }
         $feedExit = $LASTEXITCODE
     }

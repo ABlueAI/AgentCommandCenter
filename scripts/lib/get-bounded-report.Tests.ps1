@@ -58,6 +58,15 @@ Describe 'Bounded report collector (ordinary content)' {
         $r = Invoke-Collect -Lines @($hostile)
         $r.Text | Should Be ($hostile + "`n")   # stored verbatim; not sanitized/rendered/executed
     }
+    It 'retains a Gemini update_topic(...) preamble VERBATIM (the collector never filters model chatter)' {
+        # V5 stack content-acceptance correction: the fix is a Gemini CLI --policy tool-deny, NOT a
+        # collector-side parser. Prove the collector still stores an update_topic(...) block byte-for-
+        # byte if the model ever emits one -- it must not strip, reorder, or scan for the first header.
+        $lines = @('update_topic(', '    title="Analyzing SRT for CapCut Caption Tutorial",', ')', '## 1. TL;DR', 'Body.')
+        $r = Invoke-Collect -Lines $lines
+        $r.Text | Should Be (($lines -join "`n") + "`n")   # verbatim, preamble included, nothing discarded
+        $r.Text.StartsWith('update_topic(') | Should Be $true
+    }
 }
 
 Describe 'Bounded report collector (limit boundary)' {

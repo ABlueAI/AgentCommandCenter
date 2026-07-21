@@ -151,5 +151,31 @@ Describe 'adjacent defaults untouched (source-scope guards)' {
     }
 }
 
+Describe 'transcript brief output contract (V5 stack content-acceptance correction)' {
+    # Load the ACTUAL default brief the same way feed-gemini does (Get-TranscriptPrompt reads
+    # prompts/transcript-analysis.md). These assertions are about what the brief INSTRUCTS the model to
+    # EMIT — not about the prompt file's own first bytes (the file legitimately opens with framing text
+    # before the section template).
+    . (Join-Path $here 'lib\get-transcript-prompt.ps1')
+    $brief = Get-TranscriptPrompt
+
+    It 'requires the model''s emitted output to BEGIN with the literal ## 1. TL;DR header' {
+        $brief | Should Match 'first characters of your output must be the literal report header `## 1\. TL;DR`'
+    }
+    It 'explicitly forbids planning, commentary, topic updates, tool-call syntax, and preambles' {
+        $brief | Should Match 'do NOT print any planning'
+        $brief | Should Match 'topic updates'
+        $brief | Should Match 'tool-call syntax'
+        $brief | Should Match 'update_topic'
+        $brief | Should Match 'preamble'
+    }
+    It 'governs emitted output, not the prompt file''s own first bytes (defense-in-depth)' {
+        # The file opens with analysis framing, NOT the bare header — proving the contract is about the
+        # model's OUTPUT, not the prompt file's first bytes.
+        $brief.StartsWith('## 1. TL;DR') | Should Be $false
+        $brief | Should Match '^You are analyzing the attached SRT'
+    }
+}
+
 # --- trailing cleanup (Pester 3.4 pattern: no AfterAll) -------------------------------------------
 Remove-Item -LiteralPath $stubRoot -Recurse -Force -ErrorAction SilentlyContinue

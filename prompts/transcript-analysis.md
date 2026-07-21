@@ -1,5 +1,7 @@
 You are analyzing the attached SRT subtitle file, which was auto-downloaded for a video. Each caption cue carries its own start and end timestamp; those cue timestamps are your ONLY source of time information. Produce an actionable, timestamped analysis using these four sections, with these EXACT section headers, in this order.
 
+Output contract, which overrides any tool-use or planning instinct: emit the report and nothing else. The first characters of your output must be the literal report header `## 1. TL;DR`. Before it, do NOT print any planning, commentary, reasoning, topic updates, tool-call syntax (for example `update_topic(...)`), status lines, or any other preamble; after the final section, print nothing further. Produce only the four report sections described below.
+
 ## 1. TL;DR
 A concise, evidence-grounded summary of the whole video in a few sentences: what it is, what it covers, and the single most important takeaway. When reliable caption timestamps exist, cite at least one caption-derived timestamp here, in [HH:MM:SS] form, anchoring the moment your summary is drawn from. If reliable timestamps cannot be extracted (see the timestamp honesty rules below), summarize without them and say so plainly. This TL;DR section must come first, before every other section.
 
