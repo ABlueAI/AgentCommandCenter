@@ -6,6 +6,23 @@ does NOT branch from main). Baseline gates on that tip: app 939/0, Pester 375/0/
 Tip SHA: implementation checkpoint `5a6f122`; marker/docs commit sits on top.
 Merge commit SHA: Pending human approval. Merge order: V5b1 first, then V5b2, then V5c1 (V5c2 later).
 
+### V5 stack content-acceptance correction — restacked onto corrected V5b2 (2026-07-21)
+
+RESTACKED (`git rebase --onto`) to inherit the V5b1 `update_topic` Gemini-CLI policy correction, not
+re-implemented.
+- Base moved: old V5b2 tip `f2cbb1c` → corrected V5b2 tip `2abd716` (which itself inherits corrected
+  V5b1 `2e8ec32`).
+- This branch's tip moved: pre-correction reviewed tip `c26ba1f` → new restacked tip `8d87bbd`.
+- feed-gemini.ps1 conflict auto-resolved keeping BOTH sides: V5c1's recorder dot-source +
+  `Add-VideoScoutMediaArtifact` call AND the inherited policy dot-source + `--policy $policyPath` on
+  both CLI invocations (verified present + tokenizes).
+- Scoped delta confirmation: `git diff c26ba1f 8d87bbd` touches ONLY the correction's files (policy
+  toml + resolver + feed-gemini `--policy`/dot-source + prompt contract + tests) and the inherited
+  V5b1/V5b2 handoff docs — NO V5c1-owned file (recorder, schema, library-core) appears, so the V5c1
+  media-ownership invariant is byte-for-byte intact.
+- Refreshed pinned diff: `.agent-review-v5c1-media-inventory.diff` now `2abd716...8d87bbd`.
+- Gates after restack: app **939/0**, Pester **438/0/0** (416 + 22 inherited). No V5c1 code changed.
+
 Tier: **STANDARD-CLASS** — this adds a manifest-recording invariant on the write side; no new
 renderer→filesystem boundary is created (the V5b2 read boundary is reused unchanged). It receives ONE
 scoped Standard-class Reviewer pass and a delta pass after any failed verdict.
