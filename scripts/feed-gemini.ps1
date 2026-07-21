@@ -106,6 +106,10 @@ $ProbeTimeoutSec = 60   # (?) hard cap on the metadata probe; a hung/slow probe 
 # V5a per-run manifest: every ACCEPTED launch (past the free validations above) creates its run
 # directory with a versioned manifest.json inside, updated atomically at every terminal path.
 . (Join-Path $PSScriptRoot 'lib\write-video-scout-manifest.ps1')
+# V5c1: the shared media-ownership recorder. A downloaded artifact is recorded (state='present') into
+# the run's schema-v2 manifest BEFORE analysis, from the run's OWN resolved output file only. This
+# module deletes/moves/repairs nothing (V5c1 is non-destructive; deletion is the separate V5c2).
+. (Join-Path $PSScriptRoot 'lib\record-video-scout-media.ps1')
 # V5b1 report artifacts: the bounded streaming collector (get-bounded-report.ps1) captures provider
 # stdout without ever accumulating the whole stream, and the create-only atomic writer
 # (write-video-scout-report.ps1) persists analysis-output.txt BEFORE the manifest is completed.
@@ -368,6 +372,15 @@ try {
 
     Write-Host ""
     Write-Host "Saved: $($file.FullName)" -ForegroundColor Green
+
+    # V5c1: record this run's downloaded artifact in the manifest BEFORE the paid Gemini call (and
+    # before the NoFeed completion). Ownership comes ONLY from $file -- the run's own run-scoped output
+    # (Get-RunOutputFile above), never a scan of the directory and never a caller-provided name. The
+    # recorder validates provenance (direct child, ordinary file, no reparse, extension==mode/kind,
+    # exists, real on-disk size, no duplicate) and updates the manifest ATOMICALLY. If it fails, the
+    # manifest claims NO ownership, the paid request is NOT made, the downloaded file is left untouched
+    # (never deleted/moved/repaired), and the terminal-truth catch below finalizes outcome=error.
+    [void](Add-VideoScoutMediaArtifact -RunDir $runDir -File $file -Kind $Mode -Manifest $cliManifest)
 
     # Best-effort title for the manifest: yt-dlp named this file from the video title under
     # --restrict-filenames, so the base name is the closest sanitized title the CLI route has.

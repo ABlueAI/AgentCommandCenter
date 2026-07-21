@@ -154,6 +154,10 @@
     addField('Outcome', outcomeOf(entry));
     addField('Tokens', tokensLabel(entry));
     addField('Segment', offsetsLabel(entry));
+    // V5c1: a bounded media-artifact count (no filenames/paths). Only shown when the run records any.
+    if (typeof entry.mediaCount === 'number' && entry.mediaCount > 0) {
+      addField('Media', `${entry.mediaCount} file${entry.mediaCount === 1 ? '' : 's'}`);
+    }
     addField('Report', reportStatusShort(entry.reportStatus));
     wrap.appendChild(grid);
     return wrap;

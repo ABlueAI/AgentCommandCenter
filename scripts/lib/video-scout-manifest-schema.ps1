@@ -59,6 +59,124 @@ $script:VideoScoutTimestampRe = '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$'
 $script:VideoScoutReportExtensions = @('.txt')
 $script:VideoScoutReportFileMaxLength = 200
 
+# V5c1: schema version 2 adds ONE canonical top-level field, `mediaArtifacts` — a bounded, exact-shape
+# inventory of the downloadable media files a live run OWNS (recorded from the file object the run's
+# own download/output-resolution path produced, never inferred from directory contents). Version 1
+# manifests (all existing history: backfills, metadata-only, completed pre-V5c runs, V5b1 reports)
+# stay valid UNCHANGED and must REJECT a mediaArtifacts key; version 2 REQUIRES it. Backfills remain
+# version 1 (ownership is never fabricated for history). V5c1 records only `state:"present"`; the
+# deletion-state transition is defined and reviewed separately in V5c2 (this branch has no deletion).
+$script:VideoScoutSchemaVersions = @(1, 2)
+$script:VideoScoutMediaKinds = @('transcript', 'audio', 'video')
+# Extension MUST match kind — the download/output resolver pairs each mode with exactly one pattern.
+$script:VideoScoutMediaKindExtension = @{ transcript = '.srt'; audio = '.mp3'; video = '.mp4' }
+$script:VideoScoutMediaMaxEntries = 16
+$script:VideoScoutMediaFileNameMaxLength = 260
+# V5c1 permits only 'present'. V5c2 will add deletion states through its own reviewed transition.
+$script:VideoScoutMediaStates = @('present')
+$script:VideoScoutMediaArtifactKeys = @('fileName', 'kind', 'sizeBytes', 'recordedAt', 'state', 'deletedAt', 'deletionReason')
+
+<#
+.SYNOPSIS
+  Pure. Throw unless $Name is a SAFE LEAF filename (no path, no traversal, no rooted/UNC/drive prefix,
+  no control/bidi characters, bounded length). Reused for media-artifact filenames; $Label names the
+  field in the error. Same leaf-safety posture the reportFile rule enforces inline. The bidi class is
+  written as \uXXXX regex escapes (not literal marks) so the invisible characters can't boobytrap this
+  file, exactly like the reportFile check below.
+#>
+function Assert-VideoScoutSafeLeafName {
+    param($Name, [string]$Label = 'filename', [int]$MaxLength = 260)
+    if ($Name -isnot [string]) { throw "Manifest validation failed: $Label must be a string." }
+    if ([string]::IsNullOrWhiteSpace($Name)) { throw "Manifest validation failed: $Label must be a non-empty leaf filename." }
+    if ($Name.Length -gt $MaxLength) { throw "Manifest validation failed: $Label exceeds the maximum length of $MaxLength characters." }
+    if ($Name -eq '.' -or $Name -eq '..') { throw "Manifest validation failed: $Label must not be '.' or '..'." }
+    if ($Name -match '[\\/]') { throw "Manifest validation failed: $Label must be a leaf filename, not a path (no separators)." }
+    if ($Name -match '\.\.') { throw "Manifest validation failed: $Label must not contain a traversal sequence (..)." }
+    if ($Name -match '^[A-Za-z]:' -or $Name -match '^[\\/]') { throw "Manifest validation failed: $Label must not contain a drive or rooted/UNC prefix." }
+    if ($Name -match '[\x00-\x1F\x7F]') { throw "Manifest validation failed: $Label must not contain control characters." }
+    if ($Name -match '[\u200E\u200F\u202A-\u202E\u2066-\u2069]') { throw "Manifest validation failed: $Label must not contain bidi-override characters." }
+}
+
+<#
+.SYNOPSIS
+  Throw unless $MediaArtifacts is a valid version-2 inventory: an ARRAY (never an arbitrary object) of
+  at most 16 entries, each with the EXACT artifact key set and value rules, extension matching kind,
+  and case-insensitively unique filenames. V5c1 permits only state='present' with null deletedAt/
+  deletionReason.
+#>
+function Assert-VideoScoutMediaArtifactsValid {
+    # Takes the whole manifest and fetches mediaArtifacts by a PLAIN in-scope assignment. This is
+    # deliberate: PowerShell unwraps arrays that cross a function-return/argument boundary (empty ->
+    # $null, one element -> the bare element), which would make a valid empty/one-item inventory look
+    # like null / an object. A direct dictionary/property assignment inside this scope preserves the
+    # array intact, so the "must be an array" and count checks below are sound.
+    param([Parameter(Mandatory)]$Manifest)
+    $MediaArtifacts = $null
+    if ($Manifest -is [System.Collections.IDictionary]) {
+        if ($Manifest.Contains('mediaArtifacts')) { $MediaArtifacts = $Manifest['mediaArtifacts'] }
+    }
+    else {
+        $prop = $Manifest.PSObject.Properties['mediaArtifacts']
+        if ($prop) { $MediaArtifacts = $prop.Value }
+    }
+    # Must be an ARRAY, never null and never an arbitrary object (a JSON object reads back as a
+    # PSCustomObject, which is neither System.Array nor IList — so this rejects `mediaArtifacts:{}`).
+    if ($null -eq $MediaArtifacts) { throw 'Manifest validation failed (v2): mediaArtifacts must be an array (got null).' }
+    if (($MediaArtifacts -is [string]) -or -not (($MediaArtifacts -is [System.Array]) -or ($MediaArtifacts -is [System.Collections.IList]))) {
+        throw 'Manifest validation failed (v2): mediaArtifacts must be an array, never an arbitrary object.'
+    }
+    $items = @($MediaArtifacts)
+    if ($items.Count -gt $script:VideoScoutMediaMaxEntries) {
+        throw "Manifest validation failed (v2): mediaArtifacts has $($items.Count) entries; the maximum is $($script:VideoScoutMediaMaxEntries)."
+    }
+    $seenNames = @{}
+    foreach ($a in $items) {
+        if ($null -eq $a) { throw 'Manifest validation failed (v2): a mediaArtifacts entry is null.' }
+        # Exact key set — no missing, no extra (a silently added key is refused).
+        $keys = Get-ManifestKeyList -M $a
+        $missing = @($script:VideoScoutMediaArtifactKeys | Where-Object { $keys -notcontains $_ })
+        $extra   = @($keys | Where-Object { $script:VideoScoutMediaArtifactKeys -notcontains $_ })
+        if ($missing.Count) { throw "Manifest validation failed (v2): media artifact missing key(s): $($missing -join ', ')." }
+        if ($extra.Count)   { throw "Manifest validation failed (v2): media artifact has unknown key(s): $($extra -join ', ')." }
+
+        $fileName       = Get-ManifestValue -M $a -Key 'fileName'
+        $kind           = Get-ManifestValue -M $a -Key 'kind'
+        $sizeBytes      = Get-ManifestValue -M $a -Key 'sizeBytes'
+        $recordedAt     = Get-ManifestValue -M $a -Key 'recordedAt'
+        $state          = Get-ManifestValue -M $a -Key 'state'
+        $deletedAt      = Get-ManifestValue -M $a -Key 'deletedAt'
+        $deletionReason = Get-ManifestValue -M $a -Key 'deletionReason'
+
+        Assert-VideoScoutSafeLeafName -Name $fileName -Label 'media artifact fileName' -MaxLength $script:VideoScoutMediaFileNameMaxLength
+        if ($script:VideoScoutMediaKinds -notcontains $kind) {
+            throw "Manifest validation failed (v2): media artifact kind must be one of $($script:VideoScoutMediaKinds -join '/')."
+        }
+        # Extension MUST match kind.
+        $ext = ([System.IO.Path]::GetExtension([string]$fileName)).ToLowerInvariant()
+        $expectedExt = $script:VideoScoutMediaKindExtension[$kind]
+        if ($ext -ne $expectedExt) {
+            throw "Manifest validation failed (v2): media artifact kind '$kind' requires extension '$expectedExt' (got '$ext')."
+        }
+        if (-not (($sizeBytes -is [int] -or $sizeBytes -is [long]) -and ([long]$sizeBytes -ge 0))) {
+            throw 'Manifest validation failed (v2): media artifact sizeBytes must be a non-negative integer.'
+        }
+        if ([string]::IsNullOrWhiteSpace([string]$recordedAt) -or ([string]$recordedAt -notmatch $script:VideoScoutTimestampRe)) {
+            throw 'Manifest validation failed (v2): media artifact recordedAt must be a UTC yyyy-MM-ddTHH:mm:ss.fffZ timestamp.'
+        }
+        if ($script:VideoScoutMediaStates -notcontains $state) {
+            throw "Manifest validation failed (v2): media artifact state must be one of $($script:VideoScoutMediaStates -join '/') (V5c1 records only 'present')."
+        }
+        if ($null -ne $deletedAt) { throw 'Manifest validation failed (v2): media artifact deletedAt must be null (V5c1 has no deletion).' }
+        if ($null -ne $deletionReason) { throw 'Manifest validation failed (v2): media artifact deletionReason must be null (V5c1 has no deletion).' }
+
+        $lower = ([string]$fileName).ToLowerInvariant()
+        if ($seenNames.ContainsKey($lower)) {
+            throw "Manifest validation failed (v2): duplicate media artifact fileName '$fileName' (case-insensitive)."
+        }
+        $seenNames[$lower] = $true
+    }
+}
+
 <#
 .SYNOPSIS
   One-line, length-capped, credential-redacted form of an untrusted string. Pure. $null when nothing
@@ -160,6 +278,12 @@ function New-VideoScoutLiveManifest {
     $m.startOffsetSeconds       = $StartOffset
     $m.endOffsetSeconds         = $EndOffset
     $m.startedAt                = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+    # V5c1: newly initialized LIVE runs are schema version 2 with an empty media inventory. The
+    # inventory is populated (only by the shared recorder, only for a run's own downloaded file) before
+    # analysis; the SDK route keeps it empty (no local file). Backfills stay version 1 (see below) —
+    # ownership is never fabricated for history.
+    $m.schemaVersion            = 2
+    $m.mediaArtifacts           = @()
     return $m
 }
 
@@ -260,7 +384,22 @@ function Assert-VideoScoutManifestValid {
     $keys       = Get-ManifestKeyList -M $Manifest
     $baseKeys   = Get-VideoScoutManifestCanonicalKeys
     $isBackfill = $keys -contains 'backfill'
-    $expected   = if ($isBackfill) { @($baseKeys + 'backfill') } else { @($baseKeys) }
+    # V5c1: the schema version decides the canonical key set. Version 2 (newly initialized live runs)
+    # REQUIRES the mediaArtifacts field and is never a backfill; version 1 (ALL existing history —
+    # backfills, metadata-only, completed pre-V5c runs, V5b1 reports) must REJECT a mediaArtifacts key
+    # (it is an unknown key there). This is what keeps every existing v1 manifest valid unchanged while
+    # rejecting a silently added v2 key on a v1 manifest.
+    $schemaVersion = Get-ManifestValue -M $Manifest -Key 'schemaVersion'
+    if ($script:VideoScoutSchemaVersions -notcontains $schemaVersion) {
+        throw "Manifest validation failed: schemaVersion must be one of $($script:VideoScoutSchemaVersions -join '/')."
+    }
+    if ($schemaVersion -eq 2) {
+        if ($isBackfill) { throw 'Manifest validation failed: a schemaVersion 2 manifest must not be a backfill (backfills remain version 1 — ownership is never fabricated for history).' }
+        $expected = @($baseKeys + 'mediaArtifacts')
+    }
+    else {
+        $expected = if ($isBackfill) { @($baseKeys + 'backfill') } else { @($baseKeys) }
+    }
 
     $missing = @($expected | Where-Object { $keys -notcontains $_ })
     $extra   = @($keys     | Where-Object { $expected -notcontains $_ })
@@ -278,8 +417,11 @@ function Assert-VideoScoutManifestValid {
         param($val) ($null -eq $val) -or (($val -is [int] -or $val -is [long]) -and ([long]$val -ge 0))
     }
 
-    if ((Get-ManifestValue -M $Manifest -Key 'schemaVersion') -ne 1) {
-        throw 'Manifest validation failed: schemaVersion must be 1.'
+    # schemaVersion was validated (1 or 2) and drove the canonical key set above. Version 2 carries the
+    # media inventory — validate its exact shape here (array, <=16, per-artifact rules, ext==kind,
+    # unique names, present-only). Version 1 has no such field.
+    if ($schemaVersion -eq 2) {
+        Assert-VideoScoutMediaArtifactsValid -Manifest $Manifest
     }
     $runId = Get-ManifestValue -M $Manifest -Key 'runId'
     if ([string]::IsNullOrWhiteSpace([string]$runId)) {

@@ -159,6 +159,12 @@ function ConvertTo-VideoScoutLibraryEntry {
     if ($Manifest.startOffsetSeconds -is [int] -or $Manifest.startOffsetSeconds -is [long]) { $startOff = [long]$Manifest.startOffsetSeconds }
     $endOff = $null
     if ($Manifest.endOffsetSeconds -is [int] -or $Manifest.endOffsetSeconds -is [long]) { $endOff = [long]$Manifest.endOffsetSeconds }
+    # V5c1: a BOUNDED count of recorded media artifacts (v2 runs). No filenames/paths are exposed —
+    # just the count, for optional display. v1 history / backfills have no inventory -> 0. Direct
+    # property access + @() (no function-boundary unwrap) keeps an empty inventory as a 0 count.
+    $mediaCount = 0
+    $maProp = $Manifest.PSObject.Properties['mediaArtifacts']
+    if ($maProp -and $null -ne $maProp.Value) { $mediaCount = @($maProp.Value).Count }
     [ordered]@{
         runId        = $RunId                       # bounded, path-free label; main maps it to an opaque handle
         title        = Get-VideoScoutDisplayTitle -Manifest $Manifest
@@ -172,6 +178,7 @@ function ConvertTo-VideoScoutLibraryEntry {
         startOffsetSeconds = $startOff
         endOffsetSeconds   = $endOff
         reportStatus = Get-VideoScoutReportStatusFromManifest -Manifest $Manifest
+        mediaCount   = [long]$mediaCount            # bounded count only — NEVER filenames or paths
     }
 }
 
