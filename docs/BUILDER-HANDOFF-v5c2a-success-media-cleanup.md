@@ -158,4 +158,38 @@ no transcript/report content appears in Logs.
   development.
 - Retain the literal `VERDICT: PASS|FAIL` line and identify the review that produced it.
 
-Reviewer verdict: _pending Full-class whole-diff review._
+Reviewer verdict: `VERDICT: PASS`
+
+Reviewer verdict source: Full-class whole-diff read-only review (fresh reviewer subagent), July 21,
+2026, over the pinned diff `.agent-review-v5c2a-success-media-cleanup.diff` (`c26ba1f...cd1e95c`) plus
+the full worktree source of every touched production file. All sixteen mandated focus areas confirmed
+by reading: deletion authority is manifest-only (no scan/glob/terminal-parse/renderer path; source
+tripwire enforced); the schemaVersion-2 + completed + non-null-reportFile + report-exists eligibility
+gate; NoFeed preservation (null reportFile → no-op); fixed-root containment + run-dir/target direct-
+child identity + reparse refusal that fails CLOSED on unreadable attributes; leaf/extension/size
+identity with visible refusal + file preservation on mismatch; the single literal
+`[System.IO.File]::Delete` (no wildcard/recursion/directory-delete/move/shell); the crash-honest
+present→deleting→deleted lifecycle with the missing / delete-failed branches and NO false `deleted`
+claim (intent committed before the FS delete; `deleted` only after it succeeds; a post-delete manifest-
+write failure leaves durable `deleting`); report/manifest/temp/directory can never be a target; unowned
+siblings untouched; metadata-only bounded diagnostics with `manifest-update-failed` never persisted;
+schema-v1 + v2-present-only compatibility on the ONE validator; no change to K5 requests/retries/usage/
+cost, the duration guard, or the V5c1 recorder; no renderer-supplied path (DownloadsRoot is the fixed
+main-owned `$OutDir`); and no real-root deletion in tests (temp fixtures only). PS 5.1 array-unwrap /
+single-element round-trip / `[NullString]::Value` / reparse-via-GetAttributes / case-insensitive `-ne`
+all checked clean.
+
+Two LOW findings — informational only, NO action required, left unchanged (matching Blue Helm
+precedent for pre-existing/inherent informational LOWs; keeps the reviewed diff stable):
+- LOW-1: `Assert-VideoScoutSafeLeafName` does not explicitly reject a mid-name NTFS-ADS `:`. This is
+  PRE-EXISTING shared V5b1/V5c1 code, unchanged by this diff, and non-exploitable here — the schema's
+  `extension==kind` rule rejects any ADS-bearing leaf at manifest-write time, and cleanup's parent-
+  identity + `GetFileName==leaf` + `File.Exists` + size checks keep any residual case fully CONTAINED
+  within the run directory and fail-closed to `absent`/`missing`. No deletion of an unowned file, a
+  report, a manifest, or anything outside the run dir is possible.
+- LOW-2: the inherent, by-design TOCTOU window between the immediate pre-delete re-validation and
+  `File.Delete`, mitigated by that re-validation and Windows `File.Delete` reparse semantics
+  (it removes a reparse point itself rather than traversing it). Acceptable.
+
+No CRITICAL/HIGH/MEDIUM findings; no blocking issues; no delta review required. Final reviewed tip:
+`cd1e95c` (this verdict-recording docs commit sits on top; no reviewed code changed).
