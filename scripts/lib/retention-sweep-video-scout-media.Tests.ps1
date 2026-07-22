@@ -499,9 +499,25 @@ Describe 'V5c2b production defaults are pinned (read from the loaded function, n
     It 'MaxMutatedRuns default is 100' { (Get-SweepParamDefault 'MaxMutatedRuns') | Should Be '100' }
     It 'MinimumAgeDays default is 7' { (Get-SweepParamDefault 'MinimumAgeDays') | Should Be '7' }
     It 'MinimumAgeDays floor (ValidateRange minimum) is 1' { (Get-SweepParamRangeMin 'MinimumAgeDays') | Should Be '1' }
-    It 'the 1-day (24h) floor stays ABOVE the enforced ~4-hour max analysis duration (ruling G)' {
-        # 24h floor vs the duration guard's ~4h ceiling; literal 4 mirrors the documented external fact.
-        (1 * 24) | Should BeGreaterThan 4
+    It 'the enforced retention floor keeps a stale null-outcome run non-concurrent with the REAL duration ceiling (ruling G)' {
+        # Derive BOTH values from actual enforced parameter metadata (no mirror constant):
+        #  - the retention floor (days) = MinimumAgeDays ValidateRange minimum on the sweep;
+        #  - the real duration-override ceiling (seconds) = MaxDurationSeconds ValidateRange maximum on
+        #    the actual scripts/feed-gemini.ps1 command (the duration guard is NOT refactored/duplicated).
+        # This test FAILS if the floor decreases or the duration ceiling rises enough to erase the margin.
+        $floorVR = (Get-Command Invoke-VideoScoutRetentionSweep).Parameters['MinimumAgeDays'].Attributes |
+            Where-Object { $_ -is [System.Management.Automation.ValidateRangeAttribute] }
+        $feedGemini = Get-Command (Join-Path (Split-Path $here -Parent) 'feed-gemini.ps1')
+        $ceilVR = $feedGemini.Parameters['MaxDurationSeconds'].Attributes |
+            Where-Object { $_ -is [System.Management.Automation.ValidateRangeAttribute] }
+
+        # Both must be successfully discovered (a rename/refactor that voided this safety test would fail here).
+        $floorVR | Should Not BeNullOrEmpty
+        $ceilVR  | Should Not BeNullOrEmpty
+        $floorDays   = [long]$floorVR.MinRange
+        $ceilSeconds = [long]$ceilVR.MaxRange
+
+        ($floorDays * 86400) | Should BeGreaterThan $ceilSeconds
     }
     It 'there is no misleading $VSRetention* mirror constant in the module source' {
         $src = Get-Content -LiteralPath (Join-Path $here 'retention-sweep-video-scout-media.ps1') -Raw
