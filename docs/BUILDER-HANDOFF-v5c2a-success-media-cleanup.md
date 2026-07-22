@@ -4,7 +4,10 @@ Branch: `feature/v5c2a-success-media-cleanup`
 Fork-point / pre-merge base SHA: `c26ba1f` (the reviewed V5c1 tip — this branch STACKS on V5c1, it
 does NOT branch from main). Baseline gates on that tip: app 939/0, Pester 416/0/0.
 Tip SHA: implementation checkpoint `e9f35f9`; marker/docs commits sit on top.
-Merge commit SHA: Pending human approval. Merge order: V5b1 → V5b2 → V5c1 → V5c2a (V5c2b later).
+Merge commit SHA: `fd7317273532de0be91c5d9d72ed4c7f475d6b20` (MERGED 2026-07-22, `--no-ff`; recorded
+pre-merge `main` `429c474d25df28fcecd1b6415f6bff5a81ec9615` = the V5c1 merge commit; reviewed tip
+`ffa27b0`; human live-accepted 2026-07-22 under marker `V5 STACK CONTENT ACCEPTANCE 2026-07-21.14`).
+Merge order: V5b1 → V5b2 → V5c1 → V5c2a → V5c2b.
 Recorded SHAs at fork time: V5c1 base `c26ba1f`; new-branch fork `c26ba1f`; current main `23dc9d5`;
 origin/main `23dc9d5`.
 

@@ -6,7 +6,10 @@ does NOT branch from main). Baseline gates on that tip: app 939/0, Pester 478/0/
 Tip SHA: reviewed code tip **`6541f2e`** (base implementation `95cab6d` + the LOW-1/LOW-2 delta
 `aba6a1c` + the metadata safety-test delta `6541f2e`; this handoff docs commit sits on top — no
 reviewed code changed by it).
-Merge commit SHA: Pending human approval. Merge order: V5b1 → V5b2 → V5c1 → V5c2a → **V5c2b**.
+Merge commit SHA: `0c633adf50764d8783a546beafb7308285410199` (MERGED 2026-07-22, `--no-ff`; recorded
+pre-merge `main` `fd7317273532de0be91c5d9d72ed4c7f475d6b20` = the V5c2a merge commit; reviewed code
+tip `6541f2e`, branch tip `7f0a1f0`; human live-accepted 2026-07-22 against a disposable `%TEMP%`
+fixture). This merge CLOSES K1. Merge order: V5b1 → V5b2 → V5c1 → V5c2a → **V5c2b**.
 Recorded SHAs at fork time: V5c2a base `ffa27b0`; new-branch fork `ffa27b0`; current main `23dc9d5`;
 origin/main `23dc9d5`.
 
@@ -302,8 +305,10 @@ A **real-root dry-run remains optional and read-only**:
 
 - **Final reviewed code tip: `6541f2e`.** The complete reviewed delta is `git diff ffa27b0...6541f2e`
   (7 files, +1575/−19; pinned to `.agent-review-v5c2b-retention-reconciliation.diff`).
-- Before merge, the three-dot review delta is `git diff main...6541f2e`. After merge, reproduce the
-  identical reviewed delta with `git diff <recorded-pre-merge-main>...6541f2e` (`git diff main...6541f2e`
-  goes empty once the tip is an ancestor of `main`). `--output`, never PowerShell `>`.
+- Before merge, the three-dot review delta was `git diff main...6541f2e`. After merge (2026-07-22),
+  the identical reviewed delta reproduces as `git diff ffa27b0...6541f2e` — the immutable stacked base,
+  which equals `git diff <recorded-pre-merge-main fd73172>...6541f2e` for this linear stack; the plain
+  `git diff main...6541f2e` now goes empty since `6541f2e` is an ancestor of `main`. Confirmed MATCH
+  byte-for-byte against the pinned diff on 2026-07-22. `--output`, never PowerShell `>`.
 - Retain the literal base `VERDICT: PASS`, delta `VERDICT: PASS` (LOW-1/LOW-2), and delta `VERDICT: PASS`
   (safety test) lines verbatim.

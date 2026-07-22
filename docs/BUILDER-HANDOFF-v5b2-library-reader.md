@@ -4,7 +4,9 @@ Branch: `feature/v5b2-library-reader`
 Fork-point / pre-merge base SHA: `92cacb3` (the reviewed V5b1 content-corrected tip — this branch
 STACKS on V5b1, it does NOT branch from main). Baseline gates on that tip: app 899/0, Pester 347/0/0.
 Tip SHA: implementation checkpoint `2fb9518`; marker/docs commit sits on top.
-Merge commit SHA: Pending human approval. Merge order: V5b1 first, then V5b2.
+Merge commit SHA: `20f200074a8a0e5b3ea3a18496f2a8c458c3eb06` (MERGED 2026-07-22, `--no-ff`; recorded
+pre-merge `main` `0d708c1258c69438b214bb677710915e634c0956` = the V5b1 merge commit; reviewed tip
+`2abd716`; human live-accepted 2026-07-22). Merge order: V5b1 first, then V5b2.
 
 ### V5 stack content-acceptance correction — restacked onto corrected V5b1 (2026-07-21)
 

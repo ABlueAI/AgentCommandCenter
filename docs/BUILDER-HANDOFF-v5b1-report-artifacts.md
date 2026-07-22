@@ -6,7 +6,9 @@ Fork-point / pre-merge main SHA: `23dc9d513c3a53a9c94d552a2b8e415ba9b89ba2` (ver
 Tip SHA: implementation `eaaae5f`; Reviewer LOW-1 parity fix `3be32f2`; docs verdict `8cc21c1`;
 content-acceptance delta (FAIL 1 + FAIL 2) `a7d524f`; content-acceptance delta (FAIL 3 —
 `update_topic` preamble) `c28123f` (current tip); this docs commit sits on top
-Merge commit SHA: Pending human approval
+Merge commit SHA: `0d708c1258c69438b214bb677710915e634c0956` (MERGED 2026-07-22, `--no-ff`; recorded
+pre-merge `main` `23dc9d513c3a53a9c94d552a2b8e415ba9b89ba2`; branch tip `2e8ec32`, reviewed code
+`c28123f`; human live-accepted 2026-07-22 under marker `V5 STACK CONTENT ACCEPTANCE 2026-07-21.14`)
 
 Prior reviewed tip (before the FAIL-3 correction): `92cacb3`. New reviewed tip after this correction:
 `c28123f`. This is the ROOT of the V5 stack content-acceptance correction; V5b2/V5c1/V5c2a inherit it

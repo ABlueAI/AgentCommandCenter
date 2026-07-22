@@ -86,6 +86,90 @@ layer: whiteboard, quick widgets, and CRM data.
   are always read-and-re-implemented. Whole audited libraries in, loose
   snippets out, peer-orchestrator code never.
 
+## Current checkpoint — July 22 — V5 VIDEO SCOUT STACK MERGED & ACCEPTED
+
+**The full V5 stack is human-merged to `main` and accepted.** The five reviewed
+branches (V5b1 → V5b2 → V5c1 → V5c2a → V5c2b) were merged in order with
+`--no-ff`, each pinned reviewed delta reproduced byte-for-byte, and both full
+gates re-run green on the merged tree. This is the durable record; the older
+July 18 "BUILT, pending" bullets below are provenance (their status lines are
+updated to MERGED).
+
+- **Merged `main` tip:** `0c633adf50764d8783a546beafb7308285410199` (the V5c2b
+  merge commit). `origin/main` was `23dc9d5` at merge time; this record is on the
+  docs-only branch `docs/record-v5-stack-acceptance` and the human pushes `main`
+  after this branch merges.
+- **Linear ancestry (all `--is-ancestor` verified 2026-07-22):**
+  `23dc9d5 → 2e8ec32 → 2abd716 → 5f8415a → ffa27b0 → 6541f2e`, with the branch/merge
+  commits `0d708c1 → 20f2000 → 429c474 → fd73172 → 0c633ad` on `main`.
+
+**Per-branch record (fork / pre-merge-main / reviewed code tip / branch tip / merge):**
+
+| Branch | fork/stacked base | pre-merge `main` | reviewed code tip | branch tip | merge commit |
+|--------|-------------------|------------------|-------------------|-----------|--------------|
+| V5b1 `feature/v5b1-report-artifacts` | `23dc9d5` | `23dc9d5` | `c28123f` (layered) | `2e8ec32` | `0d708c1258c69438b214bb677710915e634c0956` |
+| V5b2 `feature/v5b2-library-reader` | `2e8ec32` | `0d708c1` | `2abd716` | `2abd716` | `20f200074a8a0e5b3ea3a18496f2a8c458c3eb06` |
+| V5c1 `feature/v5c1-media-inventory` | `2abd716` | `20f2000` | `5f8415a` | `5f8415a` | `429c474d25df28fcecd1b6415f6bff5a81ec9615` |
+| V5c2a `feature/v5c2a-success-media-cleanup` | `5f8415a` | `429c474` | `ffa27b0` | `ffa27b0` | `fd7317273532de0be91c5d9d72ed4c7f475d6b20` |
+| V5c2b `feature/v5c2b-retention-reconciliation` | `ffa27b0` | `fd73172` | `6541f2e` | `7f0a1f0` | `0c633adf50764d8783a546beafb7308285410199` |
+
+> **Recorded reviewed tips (per the merge packet §4):** V5b1 `2e8ec32` (branch
+> tip; reviewed code `c28123f` + 1 docs-only commit) · V5b2 `2abd716` · V5c1
+> `5f8415a` · V5c2a `ffa27b0` · V5c2b `6541f2e` (branch tip `7f0a1f0` carries
+> docs-only commits above the reviewed code). The earlier July 18 bullets cite
+> the *build-time* stacked bases (`92cacb3`/`f2cbb1c`/`c26ba1f`); those are the
+> pre-FAIL-3 / pre-restack tips and are superseded by this table.
+
+**Verbatim Reviewer verdicts (read at the gate; recorded in each branch's handoff):**
+
+- **V5b1** — `VERDICT: PASS` (report artifacts, whole-diff) · `VERDICT: PASS`
+  (content-acceptance delta, FAIL 1+2) · `VERDICT: PASS` (FAIL-3 `update_topic`
+  policy, scoped). Source: `docs/BUILDER-HANDOFF-v5b1-report-artifacts.md`.
+- **V5b2** — `VERDICT: PASS` (whole-diff) · `VERDICT: PASS` (LOW-1 scoped delta).
+  Source: `docs/BUILDER-HANDOFF-v5b2-library-reader.md`.
+- **V5c1** — `VERDICT: PASS` (Standard-class scoped). Source:
+  `docs/BUILDER-HANDOFF-v5c1-media-inventory.md`.
+- **V5c2a** — `VERDICT: PASS` (Full-class whole-diff + delta). Source:
+  `docs/BUILDER-HANDOFF-v5c2a-success-media-cleanup.md`.
+- **V5c2b** — `VERDICT: PASS` (Full-class whole-diff base) · `VERDICT: PASS`
+  (LOW-1/LOW-2 delta) · `VERDICT: PASS` (safety-test delta). Source:
+  `docs/BUILDER-HANDOFF-v5c2b-retention-reconciliation.md`.
+
+**Human live acceptance:**
+
+- **V5b1–V5c2a stack — PASS**, marker `V5 STACK CONTENT ACCEPTANCE 2026-07-21.14`,
+  accepted by Blue **2026-07-22** against the live Electron app (main + GPU +
+  renderer + utility) and the CLI Video Scout route on the v5c2a tip `ffa27b0`
+  (the tip that stacks v5b1+v5b2+v5c1): report leads with `## 1. TL;DR`, Library
+  Open Report resolves correctly, manifest stays `outcome: completed`, and only
+  the newly downloaded manifest-owned `.srt` was deleted (`state: deleted`,
+  populated `deletedAt`, `deletionReason: completed-analysis`).
+- **V5c2b — PASS**, accepted by Blue **2026-07-22** against a disposable `%TEMP%`
+  fixture (**no `-Apply` against the real downloads root**): dry-run made zero
+  changes (`manifest.json` SHA-256 unchanged, artifact `state: present`,
+  `owned.srt` present, `runsMutated = 0`); `-Apply` removed **only** the
+  manifest-owned media; the unowned sibling, report, manifest, and run directory
+  survived; the manifest records `state: deleted` + `deletionReason: retention-error`
+  + populated `deletedAt`; fixture cleanup ran through the guarded path (direct
+  parent == `%TEMP%`, leaf begins `vsret-accept-`).
+
+**Pinned-diff reproduction — six of six MATCH (byte-for-byte, 2026-07-22):**
+`23dc9d5...92cacb3` (v5b1 report) · `92cacb3...c28123f` (v5b1 FAIL-3) ·
+`2e8ec32...2abd716` (v5b2) · `2abd716...5f8415a` (v5c1) · `5f8415a...ffa27b0`
+(v5c2a) · `ffa27b0...6541f2e` (v5c2b code tip). Verify v5c2b at the **code** tip
+`6541f2e`, never the branch tip `7f0a1f0`.
+
+**Final merged-`main` gates:** app **939 passed / 0 failed**; Pester **521 passed
+/ 0 failed / 0 skipped**.
+
+- **K1 (video download cleanup / auto-delete) is CLOSED** by the merged and gated
+  V5c2b implementation (bounded cross-run retention/reconciliation sweep for
+  error/refused/abandoned runs + crash-interrupted deletion reconciliation), on
+  top of V5c2a's successful-current-run cleanup. See the K1 entry below.
+- **Next queue position:** the V5 Video Scout stack is complete and K1 is closed.
+  The next feature (V5c2b's successors in the V-series / V5d, or any other item)
+  does **not** begin without a new work order.
+
 ## Current checkpoint — July 18
 
 - **Repository baseline:** `main` @ `60d5230` after the human-approved V1a
@@ -102,8 +186,10 @@ layer: whiteboard, quick widgets, and CRM data.
   keeps canonical `startedAt=null`, and retains its folder stamp only in
   explicit approximate provenance. The sweep reported 0 skipped, unsafe, or
   failed directories.
-- **V5b1 report artifacts + main-owned run identity: BUILT (`feature/v5b1-report-artifacts`,
-  pending human acceptance + merge).** Prerequisite fact recorded before implementation:
+- **V5b1 report artifacts + main-owned run identity: MERGED (`feature/v5b1-report-artifacts`,
+  reviewed tip `2e8ec32` / reviewed code `c28123f`; Reviewer `VERDICT: PASS` ×3 verbatim in the
+  handoff; human live-accepted 2026-07-22; MERGED @ `0d708c1`; see the July 22 checkpoint above).**
+  Prerequisite fact recorded before implementation:
   the real downloads directory holds **23 schema-valid manifests with 0 non-null
   `reportFile` values** — those runs stay metadata-only forever ("No report was
   persisted for this run"); V5b1 does NOT parse terminal output/logs/paths/PTY history
@@ -153,9 +239,10 @@ layer: whiteboard, quick widgets, and CRM data.
   Gates on the branch: app **899/0**, Pester **333/0/0**. Standard-class Reviewer PASS.
   V5b1 later took a Full-class clipboard IPC delta and a Standard content-acceptance delta
   (leading `## 1. TL;DR` + native-output UTF-8 decoding); reviewed tip is `92cacb3`.
-- **V5b2 Analysis Library + in-app report reader: BUILT (`feature/v5b2-library-reader`, STACKED
-  on the reviewed V5b1 tip `92cacb3`, pending Full-class review + human acceptance + merge; merge
-  order V5b1 then V5b2).** Full-class renderer→filesystem READ boundary. One invariant: the renderer
+- **V5b2 Analysis Library + in-app report reader: MERGED (`feature/v5b2-library-reader`, reviewed
+  tip `2abd716`, stacked on the merged V5b1 tip `2e8ec32`; Reviewer `VERDICT: PASS` ×2 verbatim in
+  the handoff; human live-accepted 2026-07-22; MERGED @ `20f2000`; see the July 22 checkpoint
+  above).** Full-class renderer→filesystem READ boundary. One invariant: the renderer
   lists/reads only bounded, schema-valid Video Scout records/reports selected through MAIN-OWNED
   identities; it never supplies or receives filesystem paths, and untrusted manifest/report content
   renders only as inert plain text. What V5b2 delivers:
@@ -192,7 +279,7 @@ layer: whiteboard, quick widgets, and CRM data.
   Gates on the branch: app **0 failed** (new suites trusted-ipc-sender 10, library-ipc 23,
   library-view 25; indexer Pester +28), Pester **375/0/0**. Read-only List dry-run vs the real root:
   25 runs (1 available, 3 not-persisted, 21 incomplete; 13 exact, 12 approximate), 0 invalid.
-  Full-class whole-diff review + delta pass: pending.
+  Full-class whole-diff review + delta pass: **PASS (both verbatim in the handoff); MERGED @ `20f2000`.**
 - **V5c SPLIT into V5c1 (media inventory, non-destructive) and V5c2 (deletion), and V5c2 is itself now
   SPLIT into V5c2a (current successful-run cleanup) and V5c2b (cross-run retention/reconciliation
   sweep).** The original V5c "retention" is deliberately staged so ownership recording lands and is
@@ -200,13 +287,14 @@ layer: whiteboard, quick widgets, and CRM data.
   NOTHING and never infers ownership for existing history.** V5c2a (BUILT below) deletes only a
   successful run's OWN manifest-owned media, right after its report+manifest are durable, and only files
   a validated manifest owns — it ignores any file on disk without a recorded ownership entry.
-  **V5c2a does NOT close K1**: K1 stays open until **V5c2b** implements bounded retention for
-  abandoned/error/interrupted runs. **V5c2b is separate Full-class work, still pending, and does not
-  exist yet.** Historical schema-v1 runs remain metadata-only and receive no inferred ownership or
-  deletion; NoFeed downloads are intentionally retained.
-- **V5c1 Manifest-owned media inventory: BUILT (`feature/v5c1-media-inventory`, STACKED on the reviewed
-  V5b2 tip `f2cbb1c`, pending Standard-class scoped review + human acceptance + merge; merge order V5b1
-  → V5b2 → V5c1).** Standard-class (reuses the V5b2 read boundary; no new renderer→FS boundary). One
+  **V5c2a does NOT close K1**: K1 stayed open until **V5c2b** implemented bounded retention for
+  abandoned/error/interrupted runs. **V5c2b is now built, reviewed (Full-class `VERDICT: PASS` ×3),
+  human-accepted, and MERGED @ `0c633ad` — K1 is CLOSED (July 22).** Historical schema-v1 runs remain
+  metadata-only and receive no inferred ownership or deletion; NoFeed downloads are intentionally retained.
+- **V5c1 Manifest-owned media inventory: MERGED (`feature/v5c1-media-inventory`, reviewed tip
+  `5f8415a`, stacked on the merged V5b2 tip `2abd716`; Reviewer `VERDICT: PASS` (Standard-class
+  scoped) verbatim in the handoff; human live-accepted 2026-07-22; MERGED @ `429c474`; see the
+  July 22 checkpoint above).** Standard-class (reuses the V5b2 read boundary; no new renderer→FS boundary). One
   invariant: every downloadable media artifact a future run produces is recorded in that run's manifest
   BEFORE analysis can complete; no file outside the run, no stale file, and no merely discovered file
   can become manifest-owned. What V5c1 delivers:
@@ -238,11 +326,12 @@ layer: whiteboard, quick widgets, and CRM data.
   +16, recorder 12, lifecycle 11, library-core +3). Read-only List dry-run vs the real root: 25 runs,
   25 valid, 0 invalid, every entry `mediaCount = 0` (all history is v1 — ownership never inferred), no
   path/filename leak. No real Gemini request or download during implementation. Standard-class scoped
-  review + delta pass: pending.
-- **V5c2a Manifest-owned successful-run media cleanup: BUILT (`feature/v5c2a-success-media-cleanup`,
-  STACKED on the reviewed V5c1 tip `c26ba1f`, pending Full-class review + human acceptance + merge;
-  merge order V5b1 → V5b2 → V5c1 → V5c2a).** **Full-class** — the first and only code that deletes a
-  media file (irreversible). One invariant: after a run completes successfully and its report+completed
+  review + delta pass: **PASS (verbatim in the handoff); MERGED @ `429c474`.**
+- **V5c2a Manifest-owned successful-run media cleanup: MERGED (`feature/v5c2a-success-media-cleanup`,
+  reviewed tip `ffa27b0`, stacked on the merged V5c1 tip `5f8415a`; Reviewer `VERDICT: PASS`
+  (Full-class whole-diff + delta) verbatim in the handoff; human live-accepted 2026-07-22 under marker
+  `V5 STACK CONTENT ACCEPTANCE 2026-07-21.14`; MERGED @ `fd73172`; see the July 22 checkpoint above).**
+  **Full-class** — the first and only code that deletes a media file (irreversible). One invariant: after a run completes successfully and its report+completed
   manifest are durable, the app may delete ONLY media files explicitly owned by that same validated
   manifest; no scan, filename guess, extension glob, terminal parse, renderer path, or inferred
   ownership authorizes deletion. What V5c2a delivers:
@@ -278,8 +367,40 @@ layer: whiteboard, quick widgets, and CRM data.
   Gates on the branch: app **939/0** (zero new JS test files), Pester **456/0/0** (416 + 40 new: cleanup
   25, schema +8, library-core +2, lifecycle +5). ALL destructive tests use temp fixture roots only — no
   real Gemini request, download, or real-root deletion during implementation. Full-class whole-diff
-  review + delta pass: pending. **K1 remains OPEN** (closed only by V5c2b). **V5c2b (cross-run
-  retention/reconciliation sweep) remains separate Full-class work and does not exist yet.**
+  review + delta pass: **PASS (verbatim in the handoff); MERGED @ `fd73172`.** **K1 was closed by
+  V5c2b (below), now merged.**
+- **V5c2b Cross-run retention/reconciliation sweep: MERGED (`feature/v5c2b-retention-reconciliation`,
+  reviewed code tip `6541f2e` / branch tip `7f0a1f0`, stacked on the merged V5c2a tip `ffa27b0`;
+  Reviewer `VERDICT: PASS` ×3 (whole-diff base · LOW-1/LOW-2 delta · safety-test delta) verbatim in
+  `docs/BUILDER-HANDOFF-v5c2b-retention-reconciliation.md`; human live-accepted 2026-07-22 against a
+  disposable `%TEMP%` fixture; MERGED @ `0c633ad`; see the July 22 checkpoint above).** **Full-class** —
+  cross-run destructive work that edits 2 V5c2a-reviewed shared files. One invariant: only media a
+  validated manifest still owns may be deleted, on runs whose retention lane (completed reconciliation
+  OR error/refused/abandoned retention) and dual age gate both authorize it; no scan, filename guess,
+  inferred ownership, terminal parse, or renderer path authorizes deletion, and a crash never records a
+  false `deleted`. What V5c2b delivers:
+    - **Two-lane eligibility.** (1) *Completed-run reconciliation* finalizes/reverts crash-interrupted
+      `deleting`/`delete-failed` artifacts left by V5c2a on `outcome: completed` runs, preserving the
+      pre-existing durable `deletionReason`. (2) *Retention cleanup* deletes the owned media of aged-out
+      `error`/`refused`/`abandoned` runs under new authorization reasons `retention-error` /
+      `retention-refused` / `retention-abandoned`. Both lanes reuse the SINGLE shared validator and the
+      V5c2a `Remove-OneVideoScoutMediaArtifact` authority (now parameterized with a `-DeletionReason`
+      defaulting to `completed-analysis`, so V5c2a's behavior is byte-for-byte unchanged).
+    - **Bounded, fail-closed sweep** (`scripts/lib/retention-sweep-video-scout-media.ps1` + thin CLI
+      `scripts/video-scout-retention-sweep.ps1`): dry-run by default; refuses the whole invocation if
+      candidates exceed `MaxRunCandidates` (5000, inspects ≤5001); caps mutations at `MaxMutatedRuns`
+      (100); dual age gate (validated `finishedAt ?? startedAt` and `manifest.json` LastWriteTimeUtc,
+      fail-closed on missing/invalid/future) with a 1-day `ValidateRange` floor that exceeds the
+      4-hour duration ceiling; ordinal-sorted enumeration; non-blocking `Local\` named mutex
+      (`WaitOne(0)`, `AbandonedMutexException` treated as acquired); `-RetryDeleteFailed` re-attempts
+      only `filesystem-delete-failed`. Preserves manifests/reports/NoFeed/schema-v1/sibling files.
+    - **Schema/validator transition:** retention reasons added to the deletion allowlist and a new
+      authorization subset; the validator now requires `deleting`/`deleted` to carry an authorization
+      reason while failure states keep the broader allowlist. Schema-v1 history and V5c2a
+      present/completed-analysis behavior stay valid unchanged.
+  Gates on the branch: app **939/0** (zero JS changed), Pester **521/0/0** (478 + 43 new). ALL
+  destructive tests use temp `%TEMP%` fixtures only — no real-root `-Apply` during implementation.
+  **This closes K1.**
 - **V2 report TL;DRs: COMPLETE.** The prompt preserves its report-leading
   Section 1 TL;DR and now requires an evidence-grounded one-line Section TL;DR
   for Sections 2–9. Standard-class review passed; Pester is 216/216.
@@ -371,11 +492,12 @@ The live order is: ~~TTS bootstrap → STT bootstrap~~ (✅ merged @ `5ee435b`) 
 ~~K5~~ (✅ merged @ `db8b61e`) → ~~Fast Clear + reachability-meta~~
 (✅ merged @ `b9063e6`) → ~~V1a~~ (✅ human acceptance passed and merged @
 `60d5230`; closes K2; Open Report/OS dispatch deferred — the in-app reader
-lands at V5b) → **V5b1 report artifacts + main-owned run identity — BUILT, in
-acceptance** (`feature/v5b1-report-artifacts`; the write-side + run identity; V5b2 is
-the separate Full-class in-app read boundary; V5c/V5d untouched) → V5(b2–d) → V3 → V4 →
-remaining Day 2/3 work → full functional ship-check → R15 fork/replacement
-evaluation. Each arrow is a clean
+lands at V5b) → ~~V5b1 → V5b2 → V5c1 → V5c2a → V5c2b (the full V5 Video Scout
+stack)~~ (✅ all five reviewed, human-accepted 2026-07-22, and MERGED in order @
+`0d708c1 → 20f2000 → 429c474 → fd73172 → 0c633ad`; closes K1; see the July 22
+checkpoint) → **next: V3 → V4 → remaining Day 2/3 work → full functional
+ship-check → R15 fork/replacement evaluation — none begins without a new work
+order.** Each arrow is a clean
 checkpoint; runtime items remain separate one-invariant branches and receive
 their own Reviewer gate.
 
@@ -921,14 +1043,18 @@ their own Reviewer gate.
 > origin and audio-only scope must be proved before granting media. It receives
 > whole-diff review and a delta pass after any FAIL; never fold it into K7.
 
-> **K1. Video download cleanup / auto-delete** — every run now creates a
-> `run-<timestamp>-<PID>` subdir under `downloads\` that is never cleaned up (a
-> side effect of the stale-file fix — correct tradeoff, but it raised the
-> disk-growth rate). Add auto-delete after a successful Gemini analysis, and/or a
-> retention sweep. Not urgent (files are small), but do it before the tool runs
-> unattended for long stretches. **Durable resolution is V5(c); K1 remains open
-> until manifest-scoped retention and media cleanup are implemented and gated.**
-> The manifest itself lands earlier at V5a.
+> **K1. Video download cleanup / auto-delete — ✅ CLOSED (July 22, merged @
+> `0c633ad`).** Every run creates a `run-<timestamp>-<PID>` subdir under
+> `downloads\`; unmanaged growth is now resolved through the manifest-scoped V5c
+> chain. **V5c2a** (merged @ `fd73172`) deletes a successful current run's OWN
+> manifest-owned media right after its report+manifest are durable; **V5c2b**
+> (merged @ `0c633ad`) adds the bounded cross-run retention/reconciliation sweep
+> for error/refused/abandoned runs and reconciles crash-interrupted deletions.
+> Both operate only on media a validated manifest still owns, gated by a dual age
+> gate, and use temp-fixture-only tests. Full record in the July 22 checkpoint
+> above. Original ask (retained for provenance): add auto-delete after a
+> successful Gemini analysis and/or a retention sweep, before the tool runs
+> unattended for long stretches — done and gated.
 
 > **K2. Clipboard copy-paste — ✅ RESOLVED by V1a (July 18, merged @
 > `60d5230`).** Original finding, retained for provenance:

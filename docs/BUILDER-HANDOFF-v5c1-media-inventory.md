@@ -4,7 +4,9 @@ Branch: `feature/v5c1-media-inventory`
 Fork-point / pre-merge base SHA: `f2cbb1c` (the reviewed V5b2 tip — this branch STACKS on V5b2, it
 does NOT branch from main). Baseline gates on that tip: app 939/0, Pester 375/0/0.
 Tip SHA: implementation checkpoint `5a6f122`; marker/docs commit sits on top.
-Merge commit SHA: Pending human approval. Merge order: V5b1 first, then V5b2, then V5c1 (V5c2 later).
+Merge commit SHA: `429c474d25df28fcecd1b6415f6bff5a81ec9615` (MERGED 2026-07-22, `--no-ff`; recorded
+pre-merge `main` `20f200074a8a0e5b3ea3a18496f2a8c458c3eb06` = the V5b2 merge commit; reviewed tip
+`5f8415a`; human live-accepted 2026-07-22). Merge order: V5b1 → V5b2 → V5c1 (V5c2 later).
 
 ### V5 stack content-acceptance correction — restacked onto corrected V5b2 (2026-07-21)
 
