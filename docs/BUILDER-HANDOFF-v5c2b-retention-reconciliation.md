@@ -3,7 +3,8 @@
 Branch: `feature/v5c2b-retention-reconciliation`
 Fork-point / pre-merge base SHA: `ffa27b0` (the reviewed V5c2a tip — this branch STACKS on V5c2a; it
 does NOT branch from main). Baseline gates on that tip: app 939/0, Pester 478/0/0.
-Tip SHA: implementation `95cab6d` (this docs commit sits on top; no reviewed code changed by it).
+Tip SHA: reviewed code tip **`aba6a1c`** (base implementation `95cab6d` + the LOW-1/LOW-2 delta;
+this handoff docs commit sits on top — no reviewed code changed by it).
 Merge commit SHA: Pending human approval. Merge order: V5b1 → V5b2 → V5c1 → V5c2a → **V5c2b**.
 Recorded SHAs at fork time: V5c2a base `ffa27b0`; new-branch fork `ffa27b0`; current main `23dc9d5`;
 origin/main `23dc9d5`.
@@ -79,9 +80,10 @@ the ONE shared schema/validator.
 ## Commands run and exact results (this tree)
 
 - Baseline (V5c2a tip `ffa27b0`): app **939/0**, Pester **478/0/0**.
-- After implementation (`95cab6d`): **app 939/0** (zero JS/`package.json` changed), **Pester 510/0/0**
-  (478 + 32 new). Full suites: `powershell -NoProfile -File scripts\run-pester.ps1` → 510 passed / 0
-  failed; `cd app && npm test` → 939 passed / 0 failed.
+- Base implementation (`95cab6d`): app 939/0, Pester 510/0/0 (478 + 32 new).
+- **After the LOW-1/LOW-2 delta (reviewed code tip `aba6a1c`): app 939/0** (zero JS/`package.json`
+  changed), **Pester 521/0/0** (510 + 11 new). Full suites: `powershell -NoProfile -File
+  scripts\run-pester.ps1` → **521 passed / 0 failed**; `cd app && npm test` → **939 passed / 0 failed**.
 - **No real Gemini request, no real download, and no deletion against the real downloads root** were
   performed. Every destructive test uses a disposable `$env:TEMP` fixture root and cleans it up.
 
@@ -114,8 +116,10 @@ manifest deletion, no renderer/main.js/OS-dispatch; temp-fixture-only destructiv
 
 ## Review diff
 
-- Pinned diff: `git diff --output=.agent-review-v5c2b-retention-reconciliation.diff ffa27b0...95cab6d`
-  (three-dot from the V5c2a base; `--output`, never PowerShell `>`; gitignored). 6 files, +1241/−15.
+- Pinned diff (refreshed to the new code tip): `git diff --output=.agent-review-v5c2b-retention-reconciliation.diff ffa27b0...aba6a1c`
+  (three-dot from the V5c2a base; `--output`, never PowerShell `>`; gitignored). 7 files, +1513/−19.
+- Scoped LOW-1/LOW-2 delta: `.agent-review-v5c2b-low-delta.diff` = `git diff 95cab6d...aba6a1c`
+  (4 files, +281/−13).
 
 ## Reviewer verdict
 
@@ -138,8 +142,9 @@ silently fail-closed — checked specifically); retry / caps / mutex / TOTAL / d
 5.1 handling. The reviewer found **no** way to delete an unowned file, a report/manifest/directory, or
 media of an in-flight run, and **no** change to V5c2a's existing behavior.
 
-Three LOW findings — informational, non-blocking; left unchanged to keep the reviewed diff stable
-(matching Blue Helm precedent for informational LOWs). Recorded verbatim for the human's decision:
+Three LOW findings from the base review (recorded verbatim below). **Human ruling (2026-07-22): fix
+LOW-1 and LOW-2, leave LOW-3 — see the "LOW-1 / LOW-2 delta" section above for the applied fixes and the
+delta `VERDICT: PASS`.**
 
 - **LOW-1** (`retention-sweep-video-scout-media.ps1:37-39`): `$VSRetentionMaxRunCandidates` (5000) and
   `$VSRetentionMaxMutatedPerRun` (100) are defined but unreferenced — the param defaults are hardcoded
@@ -155,7 +160,48 @@ Three LOW findings — informational, non-blocking; left unchanged to keep the r
 - **LOW-3** (`retention-sweep-video-scout-media.ps1:343-346`): `capExhausted` stays `$false` if the run
   that reaches `MaxMutatedRuns` is the last candidate. Cosmetic — nothing is silently skipped.
 
-No CRITICAL/HIGH/MEDIUM findings; no blocking issues; no delta review required.
+No CRITICAL/HIGH/MEDIUM findings; no blocking issues.
+
+## LOW-1 / LOW-2 delta — applied per human ruling (2026-07-22)
+
+Per the human ruling, **LOW-1 and LOW-2 were fixed; LOW-3 was left unchanged** (`capExhausted:false`
+is truthful when the mutation cap is reached on the final candidate — no candidate is skipped).
+
+- **LOW-1** (`retention-sweep-video-scout-media.ps1`): removed the four unreferenced `$VSRetention*`
+  mirror constants; the enforced bounds now live ONLY as explicit parameter defaults / `ValidateRange`
+  (candidates 5000, mutated-runs 100, min-age default 7, floor 1). New tests read these enforced
+  literals back from the module source (a change is caught, not mirrored) and behaviorally pin the
+  7-day default (6-day retained, 8-day swept). No behavior changed — the sweep already used the param
+  literals.
+- **LOW-2** (`video-scout-manifest-schema.ps1`, the ONE validator): a `deleting`/`deleted` artifact's
+  `deletionReason` must now be an AUTHORIZATION reason (`completed-analysis`/`retention-error`/
+  `retention-refused`/`retention-abandoned`); failure reasons no longer validate as a durable deletion
+  intent but remain valid on `delete-failed`/`missing`. Backward-compatible: V5c2a only ever writes
+  `deleting`/`deleted` with `completed-analysis`, so no existing valid manifest is rejected. Focused
+  schema tests prove every authorization reason is accepted and every failure reason rejected there.
+
+**Delta gates:** Pester **521/0/0** (510 + 11 new), app **939/0**. New reviewed code tip **`aba6a1c`**.
+
+### Delta Reviewer verdict
+
+`VERDICT: PASS`
+
+Source: scoped Full-class read-only delta review (fresh Reviewer subagent, Opus), 2026-07-22, over the
+scoped delta `95cab6d...aba6a1c` (`.agent-review-v5c2b-low-delta.diff`) plus the full source of both
+touched files, the cleanup module, and both schema/cleanup test suites. Confirmed: no removed constant
+is still referenced (no NullReference/silent-zero); the enforced defaults are pinned from source +
+behaviorally; the LOW-2 tightening rejects NO pre-existing valid manifest (V5c2a pairs deleting/deleted
+only with `completed-analysis`; failure reasons only on delete-failed/missing); the pre-existing
+`deletedAt`-null / null-reason / full-allowlist checks still fire first so no V5c2a schema-test message
+is broken; the single-validator invariant holds; and V5c2a behavior is byte-for-byte (cleanup module
+unchanged in the delta). No CRITICAL/HIGH/MEDIUM.
+
+One informational note (non-blocking, reviewer-cleared as "no weaker than the pre-delta state"): the
+floor-vs-ceiling test now reads `(1 * 24) | Should BeGreaterThan 4` — a tautology that no longer reads
+the enforced floor or the real duration ceiling (the ruling-G relationship now lives in the module
+comment; the floor itself is still independently pinned via the ValidateRange minimum == 1). Left as-is
+to keep the reviewed tip stable; can be strengthened to derive the floor from the enforced range-min in
+a future touch if desired.
 
 ## Review-diff rule
 
