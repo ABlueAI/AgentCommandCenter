@@ -115,9 +115,19 @@ function Initialize-VideoScoutRun {
         $MediaResolutionApplied = $null,  # untyped for the same reason; null on the CLI route: requested-but-NOT-applied is the truth there
         [bool]$VideoScout = $false,
         [Nullable[int]]$StartOffset = $null,
-        [Nullable[int]]$EndOffset = $null
+        [Nullable[int]]$EndOffset = $null,
+        # V5b1: the MAIN-issued run ID for an app launch. When provided, the run directory is created
+        # from this exact validated ID as a direct child of $BaseDir (New-VideoScoutRunDirFromId).
+        # When $null (direct standalone script use outside the app), the existing PowerShell-generated
+        # fallback (New-VideoScoutRunDir) applies -- byte-compatible shape, unchanged behavior.
+        [string]$RunId = $null
     )
-    $runDir = New-VideoScoutRunDir -BaseDir $BaseDir
+    $runDir = if ([string]::IsNullOrEmpty($RunId)) {
+        New-VideoScoutRunDir -BaseDir $BaseDir
+    }
+    else {
+        New-VideoScoutRunDirFromId -BaseDir $BaseDir -RunId $RunId
+    }
     # Build the initial live manifest through the SHARED canonical constructor (same module the
     # backfill utility uses), so the two paths cannot drift on keys, order, or sanitization. runId is
     # the run-dir name (already stamped, PID'd, GUID'd unique); unknown-at-creation fields stay null.

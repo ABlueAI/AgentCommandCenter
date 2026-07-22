@@ -102,6 +102,55 @@ layer: whiteboard, quick widgets, and CRM data.
   keeps canonical `startedAt=null`, and retains its folder stamp only in
   explicit approximate provenance. The sweep reported 0 skipped, unsafe, or
   failed directories.
+- **V5b1 report artifacts + main-owned run identity: BUILT (`feature/v5b1-report-artifacts`,
+  pending human acceptance + merge).** Prerequisite fact recorded before implementation:
+  the real downloads directory holds **23 schema-valid manifests with 0 non-null
+  `reportFile` values** — those runs stay metadata-only forever ("No report was
+  persisted for this run"); V5b1 does NOT parse terminal output/logs/paths/PTY history
+  to reconstruct them (that would recreate the P9 untrusted-output parser and fabricate
+  history). What V5b1 delivers:
+    - **Main-issued run identity.** Main generates the run ID (clock + PID + crypto
+      randomness, `app/video-scout-run-id.js`) when an app launch is accepted and passes
+      it as a discrete `-RunId` to feed-gemini.ps1. Four explicit negative rules, tested:
+      the renderer never generates it, never supplies it, never derives it from a path,
+      and it is never parsed from terminal output (no terminal-output parser introduced).
+      PowerShell re-validates the complete value before any filesystem use and creates the
+      run dir as a direct child of the fixed downloads root, refusing separators,
+      traversal, rooted paths, malformed stamps/PIDs/suffixes, over-length, and
+      collisions. Main keeps a pane→runId map that SURVIVES PTY exit (so V5b2 can open the
+      finished pane's report) and is removed on explicit pane close / window shutdown; it
+      is never returned to the renderer.
+    - **Bounded untrusted-report write contract.** A streaming collector caps the persisted
+      report at 1,000,000 UTF-16 units, keeps the BEGINNING (TLDR-first), reserves room for
+      and appends a truncation marker inside the cap, never splits a surrogate pair, counts
+      total size numerically, and never accumulates the whole stream (every provider stdout
+      line still streams live to the pane). Report text is never sanitized/interpreted/
+      rendered/executed and never appears in Logs (only run ID, counts, `truncated=true`).
+    - **Atomic report-before-manifest ordering.** On a clean provider exit only: finalize
+      the bounded text → write a unique temp inside the run dir → flush/close → atomic
+      rename to the constant `analysis-output.txt` (create-only, UTF-8 no BOM, no copy
+      fallback) → and only THEN complete the manifest to `outcome:"completed"` +
+      `reportFile:"analysis-output.txt"`. A nonzero exit, thrown exception, refusal,
+      interrupted run, exhausted K5 retry, or empty clean output persists NO report and
+      leaves `reportFile` null (existing refused/error behavior stays authoritative; K5
+      retry behavior is unchanged). Crash truth is honored, not "repaired": a pre-rename
+      crash leaves no report and no pointer; a post-rename/pre-manifest crash leaves an
+      orphan report that V5b2 ignores because the manifest does not point at it.
+    - **Shared validator reuse.** `reportFile` remains defined/validated only in
+      `scripts/lib/video-scout-manifest-schema.ps1`; the single validator now also enforces
+      that a non-null `reportFile` is a bounded leaf filename (no separators/traversal/drive
+      /control/bidi), uses an approved plain-text extension, and is permitted only with
+      `outcome:"completed"`. A null `reportFile` stays valid for all historical/backfill/
+      failed/refused/incomplete/non-analysis manifests — that backward compatibility is
+      what keeps the 23 existing report-less manifests valid metadata-only history. The new
+      app-launch orchestration (not fabricated historical validation) is what guarantees
+      future successful app runs have reports. Applied to BOTH production routes (SDK and
+      CLI: direct `node gemini.js` + the fallback shim); `-NoFeed` remains non-analysis and
+      metadata-only, and the app never launches with `-NoFeed`.
+    - **V5b2 remains the separate Full-class read boundary** (in-app report reader using the
+      main-owned pane→run identity and this same shared validator — no second JS schema/
+      validator). **V5c (retention) and V5d remain untouched.**
+  Gates on the branch: app **899/0**, Pester **333/0/0**. Standard-class Reviewer PASS.
 - **V2 report TL;DRs: COMPLETE.** The prompt preserves its report-leading
   Section 1 TL;DR and now requires an evidence-grounded one-line Section TL;DR
   for Sections 2–9. Standard-class review passed; Pester is 216/216.
@@ -193,7 +242,9 @@ The live order is: ~~TTS bootstrap → STT bootstrap~~ (✅ merged @ `5ee435b`) 
 ~~K5~~ (✅ merged @ `db8b61e`) → ~~Fast Clear + reachability-meta~~
 (✅ merged @ `b9063e6`) → ~~V1a~~ (✅ human acceptance passed and merged @
 `60d5230`; closes K2; Open Report/OS dispatch deferred — the in-app reader
-lands at V5b) → **V5(b–d) — NEXT** → V3 → V4 →
+lands at V5b) → **V5b1 report artifacts + main-owned run identity — BUILT, in
+acceptance** (`feature/v5b1-report-artifacts`; the write-side + run identity; V5b2 is
+the separate Full-class in-app read boundary; V5c/V5d untouched) → V5(b2–d) → V3 → V4 →
 remaining Day 2/3 work → full functional ship-check → R15 fork/replacement
 evaluation. Each arrow is a clean
 checkpoint; runtime items remain separate one-invariant branches and receive

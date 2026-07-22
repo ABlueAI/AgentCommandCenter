@@ -21,9 +21,34 @@ Describe 'Get-TranscriptPrompt contract' {
 
     It 'loads the real default prompt file from prompts/transcript-analysis.md' {
         $prompt | Should Not BeNullOrEmpty
+        $prompt | Should Match 'TL;DR'
         $prompt | Should Match 'KEY POINTS'
         $prompt | Should Match 'TIMESTAMP MAP'
         $prompt | Should Match 'RECOMMENDED RANGES'
+    }
+
+    It 'declares the four sections with the exact numbered markdown headers' {
+        # The saved report must start with `## 1. TL;DR` (V5b1 content acceptance FAIL 1), so the
+        # brief instructs those exact headers. Numbering: 1 TL;DR, 2 KEY POINTS, 3 TIMESTAMP MAP,
+        # 4 RECOMMENDED RANGES.
+        $prompt.Contains('## 1. TL;DR')            | Should Be $true
+        $prompt.Contains('## 2. KEY POINTS')       | Should Be $true
+        $prompt.Contains('## 3. TIMESTAMP MAP')    | Should Be $true
+        $prompt.Contains('## 4. RECOMMENDED RANGES') | Should Be $true
+    }
+
+    It 'orders TL;DR before every other section in the brief itself' {
+        $iTldr   = $prompt.IndexOf('## 1. TL;DR')
+        $iKey    = $prompt.IndexOf('## 2. KEY POINTS')
+        $iMap    = $prompt.IndexOf('## 3. TIMESTAMP MAP')
+        $iRanges = $prompt.IndexOf('## 4. RECOMMENDED RANGES')
+        ($iTldr -ge 0 -and $iTldr -lt $iKey -and $iKey -lt $iMap -and $iMap -lt $iRanges) | Should Be $true
+    }
+
+    It 'requires an evidence-grounded TL;DR with a caption-derived timestamp when reliable' {
+        $prompt | Should Match 'concise, evidence-grounded summary'
+        $prompt | Should Match 'cite at least one caption-derived timestamp'
+        $prompt | Should Match 'This TL;DR section must come first'
     }
 
     It 'requires a timestamp citation on every substantive key point' {
@@ -77,6 +102,20 @@ Describe 'Get-TranscriptPrompt contract' {
         $flat | Should Not Match "`n"
         $flat | Should Match 'Never invent, estimate, or extrapolate a timestamp'
         $flat.Contains("[HH:MM:SS${en}HH:MM:SS] $em topic/event") | Should Be $true
+    }
+
+    It 'keeps TL;DR ahead of every other section AFTER CLI flattening (wiring)' {
+        # feed-gemini flattens the multi-line brief to one physical line before it becomes a -p
+        # argument (Get-CliSafePrompt collapses newlines to single spaces). The header ordering that
+        # makes the model emit `## 1. TL;DR` first must survive that flattening, not just the raw file.
+        . (Join-Path $here 'get-cli-safe-prompt.ps1')
+        $flat = Get-CliSafePrompt -Prompt $prompt
+        $iTldr   = $flat.IndexOf('## 1. TL;DR')
+        $iKey    = $flat.IndexOf('## 2. KEY POINTS')
+        $iMap    = $flat.IndexOf('## 3. TIMESTAMP MAP')
+        $iRanges = $flat.IndexOf('## 4. RECOMMENDED RANGES')
+        $iTldr | Should Not Be -1
+        ($iTldr -lt $iKey -and $iKey -lt $iMap -and $iMap -lt $iRanges) | Should Be $true
     }
 }
 

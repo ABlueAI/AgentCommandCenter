@@ -52,6 +52,12 @@ $script:VideoScoutRoutes      = @('sdk', 'cli')
 $script:VideoScoutResolutions = @('LOW', 'MEDIUM', 'HIGH')
 $script:VideoScoutOutcomes    = @('completed', 'refused', 'error')
 $script:VideoScoutTimestampRe = '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$'
+# V5b1: a non-null reportFile must be a bounded LEAF filename (never a path) with an approved
+# plain-text extension. Null stays valid for all historical/backfill/failed/refused/incomplete/
+# non-analysis manifests -- that is the backward-compatibility that keeps the 23 existing
+# report-less manifests valid.
+$script:VideoScoutReportExtensions = @('.txt')
+$script:VideoScoutReportFileMaxLength = 200
 
 <#
 .SYNOPSIS
@@ -301,7 +307,26 @@ function Assert-VideoScoutManifestValid {
     # Fields common to both variants (shape-checked identically).
     if (-not (& $isNullOrStr $videoTitle)) { throw 'Manifest validation failed: videoTitle must be null or a string.' }
     if (-not (& $inSet $appliedM $script:VideoScoutModes)) { throw "Manifest validation failed: appliedMode must be null or one of $($script:VideoScoutModes -join '/')." }
-    if (-not (& $isNullOrStr $reportFile)) { throw 'Manifest validation failed: reportFile must be null or a string.' }
+
+    # ---- reportFile (V5b1) ----
+    # Null is always valid (historical/backfill/failure/refusal/incomplete/non-analysis). A NON-null
+    # reportFile must be a bounded leaf filename -- no separators, traversal, drive/UNC prefix,
+    # control chars, or bidi controls -- with an approved plain-text extension, and is permitted ONLY
+    # on a completed run. This is the single canonical report-field validation (no second validator).
+    if ($null -ne $reportFile) {
+        if ($reportFile -isnot [string]) { throw 'Manifest validation failed: reportFile must be null or a string.' }
+        if ([string]::IsNullOrWhiteSpace($reportFile)) { throw 'Manifest validation failed: reportFile must be null or a non-empty leaf filename.' }
+        if ($reportFile.Length -gt $script:VideoScoutReportFileMaxLength) { throw "Manifest validation failed: reportFile exceeds the maximum length of $($script:VideoScoutReportFileMaxLength) characters." }
+        if ($reportFile -match '[\\/]') { throw 'Manifest validation failed: reportFile must be a leaf filename, not a path (no separators).' }
+        if ($reportFile -match '\.\.') { throw 'Manifest validation failed: reportFile must not contain a traversal sequence (..).' }
+        if ($reportFile -match '^[A-Za-z]:' -or $reportFile -match '^[\\/]') { throw 'Manifest validation failed: reportFile must not contain a drive or rooted/UNC prefix.' }
+        if ($reportFile -match '[\x00-\x1F\x7F]') { throw 'Manifest validation failed: reportFile must not contain control characters.' }
+        # \uXXXX escapes (not literal marks) so the invisible bidi characters don't boobytrap this file.
+        if ($reportFile -match '[\u200E\u200F\u202A-\u202E\u2066-\u2069]') { throw 'Manifest validation failed: reportFile must not contain bidi-override characters.' }
+        $ext = [System.IO.Path]::GetExtension($reportFile).ToLowerInvariant()
+        if ($script:VideoScoutReportExtensions -notcontains $ext) { throw "Manifest validation failed: reportFile must use an approved plain-text extension ($($script:VideoScoutReportExtensions -join ', '))." }
+        if ($outcome -ne 'completed') { throw "Manifest validation failed: a non-null reportFile is permitted only with outcome='completed' (got outcome=$(if ($null -eq $outcome) { 'null' } else { "'$outcome'" }))." }
+    }
 
     if (-not $isBackfill) {
         # ---- LIVE contract: ground truth ----
