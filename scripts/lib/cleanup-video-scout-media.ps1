@@ -180,8 +180,20 @@ function Remove-OneVideoScoutMediaArtifact {
         [Parameter(Mandatory)][string]$FullRunDir,
         [Parameter(Mandatory)][string]$FullDownloadsRoot,
         [Parameter(Mandatory)]$Manifest,
-        [Parameter(Mandatory)][int]$Index
+        [Parameter(Mandatory)][int]$Index,
+        # V5c2b: the deletion INTENT reason committed at present->deleting. Defaults to 'completed-analysis'
+        # so V5c2a's existing caller is byte-for-byte unchanged. Must be an AUTHORIZATION reason (never a
+        # failure reason). Always code-supplied from a fixed lane mapping, never from file content, so the
+        # guard below cannot be triggered by untrusted data and the TOTAL (never-throws) guarantee holds.
+        [string]$DeletionReason = 'completed-analysis'
     )
+    # Reject a non-authorization intent reason without mutating anything (a failure reason like
+    # 'filesystem-delete-failed' or 'identity-mismatch' must never be recorded as a deletion INTENT).
+    # 'invalid-authorization-reason' is a RUNTIME warning-only constant (like 'manifest-update-failed'):
+    # never persisted to disk.
+    if ($script:VideoScoutMediaAuthorizationReasons -notcontains $DeletionReason) {
+        return @{ outcome = 'failed'; reason = $null; warning = 'invalid-authorization-reason' }
+    }
     $a = $Manifest.mediaArtifacts[$Index]   # live reference: mutations persist into the manifest
     $state = [string]$a.state
 
@@ -201,8 +213,9 @@ function Remove-OneVideoScoutMediaArtifact {
             $a.state = 'present'; $a.deletedAt = $null; $a.deletionReason = $null
             return @{ outcome = 'failed'; reason = $safety.reason; warning = 'manifest-update-failed' }
         }
-        # safe -> commit deletion INTENT (present -> deleting) BEFORE touching the filesystem.
-        $a.state = 'deleting'; $a.deletedAt = $null; $a.deletionReason = 'completed-analysis'
+        # safe -> commit deletion INTENT (present -> deleting) BEFORE touching the filesystem, using the
+        # caller's authorization reason (V5c2a: 'completed-analysis'; V5c2b retention: 'retention-*').
+        $a.state = 'deleting'; $a.deletedAt = $null; $a.deletionReason = $DeletionReason
         if (-not (Save-VideoScoutCleanupManifest -RunDir $FullRunDir -Manifest $Manifest)) {
             # Manifest write failed BEFORE deletion -> the file was never touched; durable stays 'present'.
             $a.state = 'present'; $a.deletedAt = $null; $a.deletionReason = $null
@@ -214,20 +227,27 @@ function Remove-OneVideoScoutMediaArtifact {
     # --- state is 'deleting' here: intent is durable (just committed, or a prior crash left it). ---
     if ($state -ne 'deleting') { return @{ outcome = 'failed'; reason = $null; warning = $null } }  # defensive; unreachable
 
+    # Preserve the artifact's EXISTING durable deletion reason through the finalize/revert transitions.
+    # For a fresh present->deleting we just committed $DeletionReason; for a pre-existing (crash-left)
+    # 'deleting' this is whatever authorization reason originally committed the intent -- reconciliation
+    # must NOT rewrite it. The schema guarantees a 'deleting' artifact carries a non-null allowlisted
+    # (authorization) reason, so this is always a valid bounded constant.
+    $durableReason = [string]$a.deletionReason
+
     # Immediate pre-delete re-validation (TOCTOU) on the exact target.
     $safety2 = Get-VideoScoutMediaDeletionSafety -FullRunDir $FullRunDir -FullDownloadsRoot $FullDownloadsRoot -Artifact $a
     if ($safety2.decision -eq 'absent') {
         # Durable deletion intent exists and the file is gone -> finalize deleting -> deleted.
-        $a.state = 'deleted'; $a.deletedAt = (Get-VideoScoutCleanupUtcNow); $a.deletionReason = 'completed-analysis'
-        if (Save-VideoScoutCleanupManifest -RunDir $FullRunDir -Manifest $Manifest) { return @{ outcome = 'deleted'; reason = 'completed-analysis'; warning = $null } }
-        $a.state = 'deleting'; $a.deletedAt = $null; $a.deletionReason = 'completed-analysis'   # durable stays 'deleting'
-        return @{ outcome = 'failed'; reason = 'completed-analysis'; warning = 'manifest-update-failed' }
+        $a.state = 'deleted'; $a.deletedAt = (Get-VideoScoutCleanupUtcNow); $a.deletionReason = $durableReason
+        if (Save-VideoScoutCleanupManifest -RunDir $FullRunDir -Manifest $Manifest) { return @{ outcome = 'deleted'; reason = $durableReason; warning = $null } }
+        $a.state = 'deleting'; $a.deletedAt = $null; $a.deletionReason = $durableReason   # durable stays 'deleting'
+        return @{ outcome = 'failed'; reason = $durableReason; warning = 'manifest-update-failed' }
     }
     if ($safety2.decision -eq 'refuse') {
         # Something changed under us between intent-commit and delete -> refuse; record delete-failed.
         $a.state = 'delete-failed'; $a.deletedAt = $null; $a.deletionReason = $safety2.reason
         if (Save-VideoScoutCleanupManifest -RunDir $FullRunDir -Manifest $Manifest) { return @{ outcome = 'failed'; reason = $safety2.reason; warning = $null } }
-        $a.state = 'deleting'; $a.deletedAt = $null; $a.deletionReason = 'completed-analysis'
+        $a.state = 'deleting'; $a.deletedAt = $null; $a.deletionReason = $durableReason
         return @{ outcome = 'failed'; reason = $safety2.reason; warning = 'manifest-update-failed' }
     }
 
@@ -239,17 +259,17 @@ function Remove-OneVideoScoutMediaArtifact {
         # The OS delete threw -> delete-failed with a BOUNDED constant (never the raw exception text).
         $a.state = 'delete-failed'; $a.deletedAt = $null; $a.deletionReason = 'filesystem-delete-failed'
         if (Save-VideoScoutCleanupManifest -RunDir $FullRunDir -Manifest $Manifest) { return @{ outcome = 'failed'; reason = 'filesystem-delete-failed'; warning = $null } }
-        $a.state = 'deleting'; $a.deletedAt = $null; $a.deletionReason = 'completed-analysis'
+        $a.state = 'deleting'; $a.deletedAt = $null; $a.deletionReason = $durableReason
         return @{ outcome = 'failed'; reason = 'filesystem-delete-failed'; warning = 'manifest-update-failed' }
     }
 
-    # Deletion succeeded -> deleting -> deleted with a UTC deletedAt.
-    $a.state = 'deleted'; $a.deletedAt = (Get-VideoScoutCleanupUtcNow); $a.deletionReason = 'completed-analysis'
-    if (Save-VideoScoutCleanupManifest -RunDir $FullRunDir -Manifest $Manifest) { return @{ outcome = 'deleted'; reason = 'completed-analysis'; warning = $null } }
+    # Deletion succeeded -> deleting -> deleted with a UTC deletedAt, preserving the durable reason.
+    $a.state = 'deleted'; $a.deletedAt = (Get-VideoScoutCleanupUtcNow); $a.deletionReason = $durableReason
+    if (Save-VideoScoutCleanupManifest -RunDir $FullRunDir -Manifest $Manifest) { return @{ outcome = 'deleted'; reason = $durableReason; warning = $null } }
     # CRITICAL crash-truth: the file is ALREADY gone but the 'deleted' write failed -> the durable
     # state MUST remain 'deleting' (never a false 'deleted'). Revert in-memory to match disk; do not retry.
-    $a.state = 'deleting'; $a.deletedAt = $null; $a.deletionReason = 'completed-analysis'
-    return @{ outcome = 'failed'; reason = 'completed-analysis'; warning = 'manifest-update-failed' }
+    $a.state = 'deleting'; $a.deletedAt = $null; $a.deletionReason = $durableReason
+    return @{ outcome = 'failed'; reason = $durableReason; warning = 'manifest-update-failed' }
 }
 
 <#
