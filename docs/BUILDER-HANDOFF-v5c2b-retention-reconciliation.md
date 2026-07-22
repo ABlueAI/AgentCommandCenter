@@ -3,8 +3,9 @@
 Branch: `feature/v5c2b-retention-reconciliation`
 Fork-point / pre-merge base SHA: `ffa27b0` (the reviewed V5c2a tip — this branch STACKS on V5c2a; it
 does NOT branch from main). Baseline gates on that tip: app 939/0, Pester 478/0/0.
-Tip SHA: reviewed code tip **`aba6a1c`** (base implementation `95cab6d` + the LOW-1/LOW-2 delta;
-this handoff docs commit sits on top — no reviewed code changed by it).
+Tip SHA: reviewed code tip **`6541f2e`** (base implementation `95cab6d` + the LOW-1/LOW-2 delta
+`aba6a1c` + the metadata safety-test delta `6541f2e`; this handoff docs commit sits on top — no
+reviewed code changed by it).
 Merge commit SHA: Pending human approval. Merge order: V5b1 → V5b2 → V5c1 → V5c2a → **V5c2b**.
 Recorded SHAs at fork time: V5c2a base `ffa27b0`; new-branch fork `ffa27b0`; current main `23dc9d5`;
 origin/main `23dc9d5`.
@@ -116,10 +117,10 @@ manifest deletion, no renderer/main.js/OS-dispatch; temp-fixture-only destructiv
 
 ## Review diff
 
-- Pinned diff (refreshed to the new code tip): `git diff --output=.agent-review-v5c2b-retention-reconciliation.diff ffa27b0...aba6a1c`
-  (three-dot from the V5c2a base; `--output`, never PowerShell `>`; gitignored). 7 files, +1513/−19.
-- Scoped LOW-1/LOW-2 delta: `.agent-review-v5c2b-low-delta.diff` = `git diff 95cab6d...aba6a1c`
-  (4 files, +281/−13).
+- Pinned diff (refreshed to the final code tip): `git diff --output=.agent-review-v5c2b-retention-reconciliation.diff ffa27b0...6541f2e`
+  (three-dot from the V5c2a base; `--output`, never PowerShell `>`; gitignored). 7 files, +1575/−19.
+- Scoped LOW-1/LOW-2 delta: `.agent-review-v5c2b-low-delta.diff` = `git diff 95cab6d...aba6a1c` (4 files, +281/−13).
+- Scoped safety-test delta: `.agent-review-v5c2b-safetytest-delta.diff` = `git diff aba6a1c...6541f2e` (2 files, +74/−12).
 
 ## Reviewer verdict
 
@@ -196,14 +197,96 @@ only with `completed-analysis`; failure reasons only on delete-failed/missing); 
 is broken; the single-validator invariant holds; and V5c2a behavior is byte-for-byte (cleanup module
 unchanged in the delta). No CRITICAL/HIGH/MEDIUM.
 
-One informational note (non-blocking, reviewer-cleared as "no weaker than the pre-delta state"): the
-floor-vs-ceiling test now reads `(1 * 24) | Should BeGreaterThan 4` — a tautology that no longer reads
-the enforced floor or the real duration ceiling (the ruling-G relationship now lives in the module
-comment; the floor itself is still independently pinned via the ValidateRange minimum == 1). Left as-is
-to keep the reviewed tip stable; can be strengthened to derive the floor from the enforced range-min in
-a future touch if desired.
+The base-review informational note (the tautological `(1 * 24) > 4` floor test) was subsequently
+addressed by the safety-test delta below.
+
+## Safety-test correction delta (`6541f2e`) — applied per human ruling (2026-07-22)
+
+Test/bookkeeping only; **production behavior frozen at `aba6a1c`.** The tautological floor test was
+replaced by one derived from real enforced parameter metadata:
+- retention floor (days) = the `MinimumAgeDays` `ValidateRange` **minimum** read from
+  `(Get-Command Invoke-VideoScoutRetentionSweep).Parameters['MinimumAgeDays']` → **1**;
+- duration ceiling (seconds) = the `MaxDurationSeconds` `ValidateRange` **maximum** read from
+  `(Get-Command scripts/feed-gemini.ps1).Parameters['MaxDurationSeconds']` → **14400** (the real 4-hour
+  guard, `feed-gemini.ps1:56` `[ValidateRange(1, 14400)]`; the duration guard is neither refactored nor
+  mirrored);
+- asserts BOTH attributes were discovered (`Should Not BeNullOrEmpty`) and
+  `floor_days × 86400 > ceiling_seconds` (**86400 > 14400**, ~6× margin).
+The test now **fails** if the retention floor decreases, the duration ceiling rises past 86400, or
+either attribute becomes undiscoverable. LOW-3 remains intentionally unchanged.
+
+**Delta gates:** Pester **521/0/0** (unchanged — one `It` replaced by one `It`), app **939/0**.
+
+### Safety-test delta Reviewer verdict
+
+`VERDICT: PASS`
+
+Source: final scoped Full-class read-only delta review (fresh Reviewer subagent, Opus), 2026-07-22,
+over `aba6a1c...6541f2e` (`.agent-review-v5c2b-safetytest-delta.diff`) plus the test file, the sweep
+module, and `feed-gemini.ps1`. Confirmed: the only non-doc file changed is the test; the sweep/schema/
+cleanup/wrapper are byte-identical to `aba6a1c` (no production change); the test is a genuine
+metadata-derived assertion (no literal/mirror on either side); it fails closed on floor-decrease,
+ceiling-increase (strict `BeGreaterThan`), and attribute-undiscoverable; it reads the floor from the
+public `Invoke-VideoScoutRetentionSweep` `ValidateRange` (not the private helper's bare `[int]`); and
+`Get-Command` reads `feed-gemini.ps1` metadata without executing it. No findings.
+
+## Human live-acceptance procedure — disposable fixture ONLY (do NOT `-Apply` against the real root)
+
+Build a throwaway fixture root under `%TEMP%`, then prove dry-run mutates nothing and `-Apply` removes
+only the manifest-owned media. Paste into PowerShell from the worktree root
+(`D:\Workspace\agent-command-center\.worktrees\v5c2b-retention-reconciliation`):
+
+```powershell
+# 0) Build a disposable fixture: one ERROR run, >7 days old, owning exactly one .srt, plus an unowned
+#    sibling, an unrelated report, and (implicitly) the manifest + directory.
+. .\scripts\lib\retention-sweep-video-scout-media.ps1
+$root = Join-Path $env:TEMP ('vsret-accept-' + [guid]::NewGuid().ToString('N'))
+$runDir = Join-Path $root 'run-20260101-101010-101-2222-abcdef01'
+New-Item -ItemType Directory -Path $runDir -Force | Out-Null
+$old = (Get-Date).ToUniversalTime().AddDays(-30).ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+$m = New-VideoScoutLiveManifest -RunId 'run-20260101-101010-101-2222-abcdef01' -AppliedMode transcript -Route cli -MediaResolutionRequested MEDIUM
+$m.startedAt = $old; $m.finishedAt = $old; $m.outcome = 'error'; $m.reason = 'fixture'
+$m.mediaArtifacts = @([ordered]@{ fileName='owned.srt'; kind='transcript'; sizeBytes=3; recordedAt=$old; state='present'; deletedAt=$null; deletionReason=$null })
+[void](Write-VideoScoutManifestFile -RunDir $runDir -Manifest $m)
+(Get-Item (Join-Path $runDir 'manifest.json')).LastWriteTimeUtc = (Get-Date).ToUniversalTime().AddDays(-30)
+Set-Content -LiteralPath (Join-Path $runDir 'owned.srt')     -Value 'abc' -Encoding ASCII -NoNewline   # owned (size 3)
+Set-Content -LiteralPath (Join-Path $runDir 'unowned.srt')   -Value 'zzzz' -Encoding ASCII -NoNewline  # unowned sibling
+Set-Content -LiteralPath (Join-Path $runDir 'analysis.txt')  -Value 'a report' -Encoding ASCII         # unrelated report file
+
+# 1) DRY-RUN — expect eligibleRetention=1, deleted=1 (WOULD), runsMutated=0; nothing changes on disk.
+$dry = .\scripts\video-scout-retention-sweep.ps1 -DownloadsRoot $root
+Test-Path (Join-Path $runDir 'owned.srt')   # True  (dry-run mutated nothing)
+
+# 2) APPLY — against the disposable fixture only.
+$apply = .\scripts\video-scout-retention-sweep.ps1 -DownloadsRoot $root -Apply
+
+# 3) VERIFY: only the owned media was removed; sibling/report/manifest/directory survived.
+Test-Path (Join-Path $runDir 'owned.srt')     # False -> owned media deleted
+Test-Path (Join-Path $runDir 'unowned.srt')   # True  -> unowned sibling survived
+Test-Path (Join-Path $runDir 'analysis.txt')  # True  -> report file survived
+Test-Path (Join-Path $runDir 'manifest.json') # True  -> manifest survived
+Test-Path $runDir                             # True  -> directory survived (never pruned)
+
+# 4) VERIFY the manifest records the correct retention reason for the deleted artifact.
+$disk = Get-Content (Join-Path $runDir 'manifest.json') -Raw | ConvertFrom-Json
+$disk.mediaArtifacts[0].state           # deleted
+$disk.mediaArtifacts[0].deletionReason  # retention-error   (error run -> retention-error)
+$disk.mediaArtifacts[0].deletedAt       # a UTC timestamp
+
+# 5) Clean up the disposable fixture.
+Remove-Item -LiteralPath $root -Recurse -Force
+```
+
+A **real-root dry-run remains optional and read-only**:
+`.\scripts\video-scout-retention-sweep.ps1 -DownloadsRoot 'D:\Gemini_Video_Review\downloads'` (no
+`-Apply`). **Do NOT run `-Apply` against the real downloads root before merge authorization.**
 
 ## Review-diff rule
 
-- Before merge: `git diff main...95cab6d` (three-dot). After merge: reproduce with
-  `git diff <recorded-pre-merge-main>...95cab6d`. Retain the literal `VERDICT: PASS` line above.
+- **Final reviewed code tip: `6541f2e`.** The complete reviewed delta is `git diff ffa27b0...6541f2e`
+  (7 files, +1575/−19; pinned to `.agent-review-v5c2b-retention-reconciliation.diff`).
+- Before merge, the three-dot review delta is `git diff main...6541f2e`. After merge, reproduce the
+  identical reviewed delta with `git diff <recorded-pre-merge-main>...6541f2e` (`git diff main...6541f2e`
+  goes empty once the tip is an ancestor of `main`). `--output`, never PowerShell `>`.
+- Retain the literal base `VERDICT: PASS`, delta `VERDICT: PASS` (LOW-1/LOW-2), and delta `VERDICT: PASS`
+  (safety test) lines verbatim.
