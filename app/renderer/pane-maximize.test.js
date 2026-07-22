@@ -167,7 +167,7 @@ const css = read('styles.css');
     'pane-maximize.js is IIFE-wrapped — no top-level const collides in the shared <script> scope');
 }
 {
-  const MARKER = 'V5C1 MEDIA INVENTORY ACCEPTANCE 2026-07-20.12';
+  const MARKER = 'V5 STACK CONTENT ACCEPTANCE 2026-07-21.14';
   assert(appSrc.includes(`const ACCEPTANCE_BUILD = '${MARKER}';`), 'app.js pins the V1a acceptance marker');
   assert(appSrc.includes('document.title = `Blue Helm — ${ACCEPTANCE_BUILD}`')
     && appSrc.includes('appendLog(`[build] ${ACCEPTANCE_BUILD}\\n`)'),

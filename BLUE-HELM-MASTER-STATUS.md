@@ -193,12 +193,17 @@ layer: whiteboard, quick widgets, and CRM data.
   library-view 25; indexer Pester +28), Pester **375/0/0**. Read-only List dry-run vs the real root:
   25 runs (1 available, 3 not-persisted, 21 incomplete; 13 exact, 12 approximate), 0 invalid.
   Full-class whole-diff review + delta pass: pending.
-- **V5c SPLIT into V5c1 (media inventory, non-destructive) and V5c2 (deletion, later).** The original
-  V5c "retention" is deliberately split so ownership recording lands and is proven BEFORE any deletion
-  code exists. **V5c1 is non-destructive: it deletes/moves/quarantines/sweeps NOTHING and never infers
-  ownership for existing history.** V5c2 (the only phase that may delete) is **Full-class** and
-  **blocked until V5c1 is accepted and merged**; it may delete only files a manifest owns, and must
-  ignore any file that exists on disk without a recorded ownership entry.
+- **V5c SPLIT into V5c1 (media inventory, non-destructive) and V5c2 (deletion), and V5c2 is itself now
+  SPLIT into V5c2a (current successful-run cleanup) and V5c2b (cross-run retention/reconciliation
+  sweep).** The original V5c "retention" is deliberately staged so ownership recording lands and is
+  proven BEFORE any deletion code exists. **V5c1 is non-destructive: it deletes/moves/quarantines/sweeps
+  NOTHING and never infers ownership for existing history.** V5c2a (BUILT below) deletes only a
+  successful run's OWN manifest-owned media, right after its report+manifest are durable, and only files
+  a validated manifest owns — it ignores any file on disk without a recorded ownership entry.
+  **V5c2a does NOT close K1**: K1 stays open until **V5c2b** implements bounded retention for
+  abandoned/error/interrupted runs. **V5c2b is separate Full-class work, still pending, and does not
+  exist yet.** Historical schema-v1 runs remain metadata-only and receive no inferred ownership or
+  deletion; NoFeed downloads are intentionally retained.
 - **V5c1 Manifest-owned media inventory: BUILT (`feature/v5c1-media-inventory`, STACKED on the reviewed
   V5b2 tip `f2cbb1c`, pending Standard-class scoped review + human acceptance + merge; merge order V5b1
   → V5b2 → V5c1).** Standard-class (reuses the V5b2 read boundary; no new renderer→FS boundary). One
@@ -234,6 +239,47 @@ layer: whiteboard, quick widgets, and CRM data.
   25 valid, 0 invalid, every entry `mediaCount = 0` (all history is v1 — ownership never inferred), no
   path/filename leak. No real Gemini request or download during implementation. Standard-class scoped
   review + delta pass: pending.
+- **V5c2a Manifest-owned successful-run media cleanup: BUILT (`feature/v5c2a-success-media-cleanup`,
+  STACKED on the reviewed V5c1 tip `c26ba1f`, pending Full-class review + human acceptance + merge;
+  merge order V5b1 → V5b2 → V5c1 → V5c2a).** **Full-class** — the first and only code that deletes a
+  media file (irreversible). One invariant: after a run completes successfully and its report+completed
+  manifest are durable, the app may delete ONLY media files explicitly owned by that same validated
+  manifest; no scan, filename guess, extension glob, terminal parse, renderer path, or inferred
+  ownership authorizes deletion. What V5c2a delivers:
+    - **Schema-v2 artifact-state lifecycle** extended IN PLACE on the SINGLE shared validator (no new
+      schema version, no second validator): `present → deleting → deleted`, plus `delete-failed` /
+      `missing` — modelling that a filesystem delete and a manifest write are not one atomic
+      transaction. A small persisted deletion-reason **allowlist** (`completed-analysis`,
+      `owned-file-missing`, `identity-mismatch`, `unsafe-file-type`, `reparse-point-refused`,
+      `filesystem-delete-failed`); no raw exception text is ever a persisted reason
+      (`manifest-update-failed` is a runtime warning only). Per-state nullability: only `deleted` has a
+      UTC `deletedAt`; only `present` has a null reason. **Schema-v1 history and V5c1 present-only
+      manifests stay valid unchanged.**
+    - **Cleanup helper** (`cleanup-video-scout-media.ps1` → `Invoke-VideoScoutSuccessMediaCleanup`)
+      reloads + re-validates the durable manifest (the SOLE deletion authority), eligible only when
+      `schemaVersion=2` + `outcome=completed` + non-null `reportFile` + the report exists. Per artifact,
+      one at a time, from the validated `mediaArtifacts` only (never a scan): pre-authorize (fixed-root
+      containment, run-dir direct-child identity, exact leaf, ext==kind, not manifest/report/temp,
+      ordinary file, no reparse, size==sizeBytes) → commit intent `present→deleting` BEFORE the FS
+      delete → TOCTOU re-validate → `[IO.File]::Delete` the exact literal path (no wildcard/recursion/
+      shell) → `deleting→deleted` with UTC `deletedAt`. Crash truth: absent-while-present → `missing`
+      (never a false deleted); absent-while-`deleting` → finalize deleted; safety refusal / OS-delete
+      failure → `delete-failed`; manifest-write failure before delete leaves the file intact, after
+      delete leaves durable `deleting` (never a false deleted). **TOTAL (never throws)**; a cleanup
+      failure surfaces a bounded warning (run ID, counts, allowlisted reasons — no paths/content) and
+      never rewrites a successful analysis into a failure. Deletes only media leaves — never a report/
+      manifest/temp/directory; never moves/quarantines.
+    - **Lifecycle** (`feed-gemini.ps1`): exactly ONE call, after the CLI success branch writes the
+      report + completes the manifest (any CLI mode). SDK/NoFeed/error routes never reach it and retain
+      media. No change to K5 requests/retries/usage/cost, the duration guard, or the V5c1 recorder.
+    - **V5b2 compat**: the Library lists the new states through the same validator; the path-free
+      `mediaCount` (total recorded audit entries, incl. deleted) is unchanged; no state/filename/path
+      exposed; no Library delete button (V5c2a is automatic-only).
+  Gates on the branch: app **939/0** (zero new JS test files), Pester **456/0/0** (416 + 40 new: cleanup
+  25, schema +8, library-core +2, lifecycle +5). ALL destructive tests use temp fixture roots only — no
+  real Gemini request, download, or real-root deletion during implementation. Full-class whole-diff
+  review + delta pass: pending. **K1 remains OPEN** (closed only by V5c2b). **V5c2b (cross-run
+  retention/reconciliation sweep) remains separate Full-class work and does not exist yet.**
 - **V2 report TL;DRs: COMPLETE.** The prompt preserves its report-leading
   Section 1 TL;DR and now requires an evidence-grounded one-line Section TL;DR
   for Sections 2–9. Standard-class review passed; Pester is 216/216.

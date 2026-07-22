@@ -64,16 +64,34 @@ $script:VideoScoutReportFileMaxLength = 200
 # own download/output-resolution path produced, never inferred from directory contents). Version 1
 # manifests (all existing history: backfills, metadata-only, completed pre-V5c runs, V5b1 reports)
 # stay valid UNCHANGED and must REJECT a mediaArtifacts key; version 2 REQUIRES it. Backfills remain
-# version 1 (ownership is never fabricated for history). V5c1 records only `state:"present"`; the
-# deletion-state transition is defined and reviewed separately in V5c2 (this branch has no deletion).
+# version 1 (ownership is never fabricated for history).
 $script:VideoScoutSchemaVersions = @(1, 2)
 $script:VideoScoutMediaKinds = @('transcript', 'audio', 'video')
 # Extension MUST match kind — the download/output resolver pairs each mode with exactly one pattern.
 $script:VideoScoutMediaKindExtension = @{ transcript = '.srt'; audio = '.mp3'; video = '.mp4' }
 $script:VideoScoutMediaMaxEntries = 16
 $script:VideoScoutMediaFileNameMaxLength = 260
-# V5c1 permits only 'present'. V5c2 will add deletion states through its own reviewed transition.
-$script:VideoScoutMediaStates = @('present')
+# V5c2a: the artifact-state lifecycle. V5c1 recorded only 'present'; V5c2a adds the crash-honest
+# deletion states, because a filesystem delete and a manifest write are NOT one atomic transaction:
+#   present        -- owned, on disk; deletedAt=null, deletionReason=null.
+#   deleting       -- deletion intent committed to the manifest BEFORE the filesystem delete; the file
+#                     may still exist, or be gone if a crash happened between steps. deletedAt=null,
+#                     deletionReason=<allowlisted>.
+#   deleted        -- the exact owned file was deleted. deletedAt=<UTC>, deletionReason=<allowlisted>.
+#   delete-failed  -- a safety check refused, or the OS delete threw. deletedAt=null,
+#                     deletionReason=<allowlisted bounded constant> (never raw exception text).
+#   missing        -- an artifact recorded 'present' was already absent before cleanup began; the app
+#                     does NOT claim it deleted it. deletedAt=null, deletionReason=owned-file-missing.
+$script:VideoScoutMediaStates = @('present', 'deleting', 'deleted', 'delete-failed', 'missing')
+# The SMALL explicit deletion-reason allowlist. A persisted deletionReason is a bounded CONSTANT only,
+# never an arbitrary exception message, path, or provider/report/media content. `manifest-update-failed`
+# is a RUNTIME warning/summary reason only and is intentionally NOT in this allowlist: when a manifest
+# write fails, the durable manifest keeps its last successfully written state (it cannot truthfully
+# persist a reason describing its own failed write), so that reason never reaches disk.
+$script:VideoScoutMediaDeletionReasons = @(
+    'completed-analysis', 'owned-file-missing', 'identity-mismatch',
+    'unsafe-file-type', 'reparse-point-refused', 'filesystem-delete-failed'
+)
 $script:VideoScoutMediaArtifactKeys = @('fileName', 'kind', 'sizeBytes', 'recordedAt', 'state', 'deletedAt', 'deletionReason')
 
 <#
@@ -101,8 +119,10 @@ function Assert-VideoScoutSafeLeafName {
 .SYNOPSIS
   Throw unless $MediaArtifacts is a valid version-2 inventory: an ARRAY (never an arbitrary object) of
   at most 16 entries, each with the EXACT artifact key set and value rules, extension matching kind,
-  and case-insensitively unique filenames. V5c1 permits only state='present' with null deletedAt/
-  deletionReason.
+  and case-insensitively unique filenames. V5c2a permits the full state lifecycle (present, deleting,
+  deleted, delete-failed, missing) with per-state nullability: only 'deleted' carries a non-null UTC
+  deletedAt; only 'present' has a null deletionReason; every other state carries a bounded allowlisted
+  deletionReason and null deletedAt.
 #>
 function Assert-VideoScoutMediaArtifactsValid {
     # Takes the whole manifest and fetches mediaArtifacts by a PLAIN in-scope assignment. This is
@@ -164,10 +184,38 @@ function Assert-VideoScoutMediaArtifactsValid {
             throw 'Manifest validation failed (v2): media artifact recordedAt must be a UTC yyyy-MM-ddTHH:mm:ss.fffZ timestamp.'
         }
         if ($script:VideoScoutMediaStates -notcontains $state) {
-            throw "Manifest validation failed (v2): media artifact state must be one of $($script:VideoScoutMediaStates -join '/') (V5c1 records only 'present')."
+            throw "Manifest validation failed (v2): media artifact state must be one of $($script:VideoScoutMediaStates -join '/')."
         }
-        if ($null -ne $deletedAt) { throw 'Manifest validation failed (v2): media artifact deletedAt must be null (V5c1 has no deletion).' }
-        if ($null -ne $deletionReason) { throw 'Manifest validation failed (v2): media artifact deletionReason must be null (V5c1 has no deletion).' }
+        # Per-state nullability (V5c2a). A non-null deletionReason must always be a bounded allowlist
+        # constant (never raw text). deletedAt is non-null ONLY for 'deleted' and must be a UTC stamp.
+        if ($null -ne $deletionReason) {
+            if ($deletionReason -isnot [string]) { throw 'Manifest validation failed (v2): media artifact deletionReason must be null or a string.' }
+            if ($script:VideoScoutMediaDeletionReasons -notcontains $deletionReason) {
+                throw "Manifest validation failed (v2): media artifact deletionReason must be one of $($script:VideoScoutMediaDeletionReasons -join '/')."
+            }
+        }
+        if ($null -ne $deletedAt) {
+            if ([string]$deletedAt -notmatch $script:VideoScoutTimestampRe) {
+                throw 'Manifest validation failed (v2): media artifact deletedAt must be null or a UTC yyyy-MM-ddTHH:mm:ss.fffZ timestamp.'
+            }
+        }
+        switch ($state) {
+            'present' {
+                if ($null -ne $deletedAt)      { throw "Manifest validation failed (v2): a 'present' media artifact must have deletedAt null." }
+                if ($null -ne $deletionReason) { throw "Manifest validation failed (v2): a 'present' media artifact must have deletionReason null." }
+            }
+            'deleted' {
+                if ($null -eq $deletedAt)      { throw "Manifest validation failed (v2): a 'deleted' media artifact must have a UTC deletedAt timestamp." }
+                if ($null -eq $deletionReason) { throw "Manifest validation failed (v2): a 'deleted' media artifact must have an allowlisted deletionReason." }
+            }
+            default {
+                # deleting / delete-failed / missing: deletion intent or a refusal is recorded but the
+                # exact owned file was not (yet) confirmed deleted -> deletedAt stays null, a bounded
+                # deletionReason explains the state.
+                if ($null -ne $deletedAt)      { throw "Manifest validation failed (v2): a '$state' media artifact must have deletedAt null (only 'deleted' carries a deletion timestamp)." }
+                if ($null -eq $deletionReason) { throw "Manifest validation failed (v2): a '$state' media artifact must have an allowlisted deletionReason." }
+            }
+        }
 
         $lower = ([string]$fileName).ToLowerInvariant()
         if ($seenNames.ContainsKey($lower)) {
