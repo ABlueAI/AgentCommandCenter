@@ -134,7 +134,10 @@ function Assert-VideoScoutSafeLeafName {
   and case-insensitively unique filenames. V5c2a permits the full state lifecycle (present, deleting,
   deleted, delete-failed, missing) with per-state nullability: only 'deleted' carries a non-null UTC
   deletedAt; only 'present' has a null deletionReason; every other state carries a bounded allowlisted
-  deletionReason and null deletedAt.
+  deletionReason and null deletedAt. V5c2b tightens the durable-intent states: a 'deleting' or 'deleted'
+  artifact's deletionReason must be an AUTHORIZATION reason (completed-analysis / retention-*), never a
+  failure reason (identity-mismatch / unsafe-file-type / reparse-point-refused / filesystem-delete-failed
+  / owned-file-missing) -- those belong only to delete-failed / missing.
 #>
 function Assert-VideoScoutMediaArtifactsValid {
     # Takes the whole manifest and fetches mediaArtifacts by a PLAIN in-scope assignment. This is
@@ -219,11 +222,25 @@ function Assert-VideoScoutMediaArtifactsValid {
             'deleted' {
                 if ($null -eq $deletedAt)      { throw "Manifest validation failed (v2): a 'deleted' media artifact must have a UTC deletedAt timestamp." }
                 if ($null -eq $deletionReason) { throw "Manifest validation failed (v2): a 'deleted' media artifact must have an allowlisted deletionReason." }
+                # V5c2b: a durable deletion record's reason must be an AUTHORIZATION reason (the intent that
+                # authorized the delete) -- never a failure reason (those belong to delete-failed/missing).
+                if ($script:VideoScoutMediaAuthorizationReasons -notcontains $deletionReason) {
+                    throw "Manifest validation failed (v2): a 'deleted' media artifact's deletionReason must be an authorization reason ($($script:VideoScoutMediaAuthorizationReasons -join '/')); a failure reason is never a durable deletion intent."
+                }
+            }
+            'deleting' {
+                # Deletion INTENT is durable but the exact owned file was not (yet) confirmed deleted ->
+                # deletedAt stays null, and the reason must be an AUTHORIZATION reason (the intent), never a
+                # failure reason.
+                if ($null -ne $deletedAt)      { throw "Manifest validation failed (v2): a 'deleting' media artifact must have deletedAt null (only 'deleted' carries a deletion timestamp)." }
+                if ($null -eq $deletionReason) { throw "Manifest validation failed (v2): a 'deleting' media artifact must have an allowlisted deletionReason." }
+                if ($script:VideoScoutMediaAuthorizationReasons -notcontains $deletionReason) {
+                    throw "Manifest validation failed (v2): a 'deleting' media artifact's deletionReason must be an authorization reason ($($script:VideoScoutMediaAuthorizationReasons -join '/')); a failure reason is never a durable deletion intent."
+                }
             }
             default {
-                # deleting / delete-failed / missing: deletion intent or a refusal is recorded but the
-                # exact owned file was not (yet) confirmed deleted -> deletedAt stays null, a bounded
-                # deletionReason explains the state.
+                # delete-failed / missing: a refusal or an absence is recorded (a bounded FAILURE reason);
+                # the exact owned file was not deleted -> deletedAt stays null.
                 if ($null -ne $deletedAt)      { throw "Manifest validation failed (v2): a '$state' media artifact must have deletedAt null (only 'deleted' carries a deletion timestamp)." }
                 if ($null -eq $deletionReason) { throw "Manifest validation failed (v2): a '$state' media artifact must have an allowlisted deletionReason." }
             }

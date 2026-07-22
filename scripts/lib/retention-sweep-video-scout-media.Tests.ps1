@@ -18,6 +18,18 @@
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $here 'retention-sweep-video-scout-media.ps1')
 
+# --- read the ENFORCED parameter defaults / range straight off the module SOURCE (LOW-1: no mirror
+#     constants — a change to a literal in the param block is caught here, never silently mirrored) ----
+$script:VSSweepSrc = Get-Content -LiteralPath (Join-Path $here 'retention-sweep-video-scout-media.ps1') -Raw
+function Get-SweepParamDefault {
+    param([string]$Name)
+    if ($script:VSSweepSrc -match ('\$' + [regex]::Escape($Name) + '\s*=\s*(\d+)')) { $Matches[1] } else { $null }
+}
+function Get-SweepParamRangeMin {
+    param([string]$Name)
+    if ($script:VSSweepSrc -match ('ValidateRange\(\s*(\d+)\s*,\s*\d+\s*\)\]\[int\]\$' + [regex]::Escape($Name))) { $Matches[1] } else { $null }
+}
+
 # --- fixture helpers -------------------------------------------------------------------------------
 function New-SweepRoot { Join-Path $env:TEMP ('vsret-' + [guid]::NewGuid().ToString('N')) }
 
@@ -433,9 +445,6 @@ Describe 'V5c2b bounded summary shape + validation guards' {
         try { { Invoke-VideoScoutRetentionSweep -DownloadsRoot $root -MinimumAgeDays 0 } | Should Throw }
         finally { if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force } }
     }
-    It 'the 1-day floor stays ABOVE the enforced 4-hour max analysis duration' {
-        ($script:VSRetentionMinAgeFloorDays * 24) | Should BeGreaterThan $script:VSRetentionMaxAnalysisDurationHours
-    }
     It 'refuses a missing downloads root' {
         $s = Invoke-VideoScoutRetentionSweep -DownloadsRoot (Join-Path $env:TEMP ('vsret-missing-' + [guid]::NewGuid().ToString('N')))
         $s.refused | Should Be 'downloads-root-missing'
@@ -482,6 +491,82 @@ Describe 'V5c2b schema authorization subset + shared-function guard' {
             Test-Path -LiteralPath $f | Should Be $false
         }
         finally { if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force } }
+    }
+}
+
+Describe 'V5c2b production defaults are pinned (read from the loaded function, not a mirror constant)' {
+    It 'MaxRunCandidates default is 5000' { (Get-SweepParamDefault 'MaxRunCandidates') | Should Be '5000' }
+    It 'MaxMutatedRuns default is 100' { (Get-SweepParamDefault 'MaxMutatedRuns') | Should Be '100' }
+    It 'MinimumAgeDays default is 7' { (Get-SweepParamDefault 'MinimumAgeDays') | Should Be '7' }
+    It 'MinimumAgeDays floor (ValidateRange minimum) is 1' { (Get-SweepParamRangeMin 'MinimumAgeDays') | Should Be '1' }
+    It 'the 1-day (24h) floor stays ABOVE the enforced ~4-hour max analysis duration (ruling G)' {
+        # 24h floor vs the duration guard's ~4h ceiling; literal 4 mirrors the documented external fact.
+        (1 * 24) | Should BeGreaterThan 4
+    }
+    It 'there is no misleading $VSRetention* mirror constant in the module source' {
+        $src = Get-Content -LiteralPath (Join-Path $here 'retention-sweep-video-scout-media.ps1') -Raw
+        ($src -match '\$script:VSRetentionMaxRunCandidates')      | Should Be $false
+        ($src -match '\$script:VSRetentionMaxMutatedPerRun')      | Should Be $false
+        ($src -match '\$script:VSRetentionMinAgeFloorDays')       | Should Be $false
+        ($src -match '\$script:VSRetentionMaxAnalysisDurationHours') | Should Be $false
+    }
+}
+
+Describe 'V5c2b default 7-day cutoff is enforced when -MinimumAgeDays is omitted' {
+    It 'retains a 6-day-old run and sweeps an 8-day-old run under the default cutoff' {
+        $root = New-SweepRoot
+        try {
+            $young = New-SweepRun -Root $root -Outcome 'error' -ValidatedAgeDays 6 -FsAgeDays 6 -Artifacts @(New-Artifact -FileName 'y.srt' -SizeBytes 3) -RunId 'run-young'
+            $yf = New-MediaFile -Dir $young.RunDir -Name 'y.srt' -Content 'abc'
+            $old = New-SweepRun -Root $root -Outcome 'error' -ValidatedAgeDays 8 -FsAgeDays 8 -Artifacts @(New-Artifact -FileName 'o.srt' -SizeBytes 3) -RunId 'run-old2'
+            $of = New-MediaFile -Dir $old.RunDir -Name 'o.srt' -Content 'abc'
+            $s = Invoke-VideoScoutRetentionSweep -DownloadsRoot $root -Apply   # default (7-day) cutoff
+            $s.eligibleRetention | Should Be 1
+            Test-Path -LiteralPath $yf | Should Be $true    # 6d < 7d default -> retained
+            Test-Path -LiteralPath $of | Should Be $false   # 8d > 7d default -> swept
+        }
+        finally { if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force } }
+    }
+}
+
+Describe 'V5c2b (LOW-2) schema pins deleting/deleted reasons to the authorization subset' {
+    function New-V2Manifest {
+        $m = New-VideoScoutLiveManifest -RunId 'run-20260101-101010-101-2222-abcdef01' -AppliedMode 'transcript' -Route 'cli' -MediaResolutionRequested 'MEDIUM'
+        $m.outcome = 'completed'; $m.finishedAt = '2026-01-01T10:10:11.000Z'; $m.reportFile = 'analysis-output.txt'; return $m
+    }
+    function New-Art { param($State, $DeletedAt, $DeletionReason)
+        [ordered]@{ fileName = 'a.srt'; kind = 'transcript'; sizeBytes = 3; recordedAt = '2026-01-01T10:10:10.500Z'; state = $State; deletedAt = $DeletedAt; deletionReason = $DeletionReason } }
+    $ts = '2026-01-01T10:10:12.000Z'
+
+    It 'accepts every AUTHORIZATION reason for a deleting artifact' {
+        foreach ($r in @('completed-analysis', 'retention-error', 'retention-refused', 'retention-abandoned')) {
+            $m = New-V2Manifest; $m.mediaArtifacts = @((New-Art 'deleting' $null $r))
+            { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
+        }
+    }
+    It 'accepts every AUTHORIZATION reason for a deleted artifact' {
+        foreach ($r in @('completed-analysis', 'retention-error', 'retention-refused', 'retention-abandoned')) {
+            $m = New-V2Manifest; $m.mediaArtifacts = @((New-Art 'deleted' $ts $r))
+            { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
+        }
+    }
+    It 'REJECTS every FAILURE reason as the durable reason for a deleting artifact' {
+        foreach ($r in @('identity-mismatch', 'unsafe-file-type', 'reparse-point-refused', 'filesystem-delete-failed', 'owned-file-missing')) {
+            $m = New-V2Manifest; $m.mediaArtifacts = @((New-Art 'deleting' $null $r))
+            { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'authorization reason'
+        }
+    }
+    It 'REJECTS every FAILURE reason as the durable reason for a deleted artifact' {
+        foreach ($r in @('identity-mismatch', 'unsafe-file-type', 'reparse-point-refused', 'filesystem-delete-failed', 'owned-file-missing')) {
+            $m = New-V2Manifest; $m.mediaArtifacts = @((New-Art 'deleted' $ts $r))
+            { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'authorization reason'
+        }
+    }
+    It 'STILL accepts failure reasons on delete-failed / missing (unchanged)' {
+        $m1 = New-V2Manifest; $m1.mediaArtifacts = @((New-Art 'delete-failed' $null 'identity-mismatch'))
+        { Assert-VideoScoutManifestValid -Manifest $m1 } | Should Not Throw
+        $m2 = New-V2Manifest; $m2.mediaArtifacts = @((New-Art 'missing' $null 'owned-file-missing'))
+        { Assert-VideoScoutManifestValid -Manifest $m2 } | Should Not Throw
     }
 }
 

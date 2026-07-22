@@ -34,12 +34,15 @@
 # The ONE shared deletion authority (which itself dot-sources the single schema/validator + writers).
 . (Join-Path $PSScriptRoot 'cleanup-video-scout-media.ps1')
 
-$script:VSRetentionMaxRunCandidates      = 5000   # bounded preflight cap (ruling C) — default for -MaxRunCandidates
-$script:VSRetentionMaxMutatedPerRun      = 100    # per-invocation mutation cap under -Apply (ruling B) — default for -MaxMutatedRuns
-$script:VSRetentionMinAgeFloorDays       = 1      # -MinimumAgeDays floor (ruling G)
-# The 1-day floor MUST stay ABOVE the enforced maximum analysis duration so a stale null-outcome run
-# past the cutoff cannot be an in-flight analysis. If the duration guard's ceiling changes, re-review.
-$script:VSRetentionMaxAnalysisDurationHours = 4
+# Enforced bounds live ONLY as explicit parameter defaults / ValidateRange on
+# Invoke-VideoScoutRetentionSweep below (candidates 5000, mutated-runs 100, min-age default 7, floor 1).
+# There is deliberately NO mirror "$script:" constant whose modification would silently NOT change the
+# enforced value -- the parameter block is the single source of truth (LOW-1). Tests read these defaults
+# back from the loaded function so a change to a literal is caught, not mirrored.
+#
+# SAFETY RELATIONSHIP (ruling G): the 1-day (24h) MinimumAgeDays floor MUST stay ABOVE the enforced
+# ~4-hour maximum analysis duration (the duration guard) so a stale null-outcome run past the cutoff
+# cannot be an in-flight analysis. If that duration ceiling ever changes, re-review this floor.
 
 <#
 .SYNOPSIS
