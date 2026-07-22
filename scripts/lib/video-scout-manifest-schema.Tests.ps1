@@ -39,9 +39,12 @@ Describe 'New-VideoScoutLiveManifest (ground-truth variant)' {
         -MediaResolutionRequested 'LOW' -MediaResolutionApplied 'LOW' -VideoScout $true `
         -StartOffset 120 -EndOffset 240
 
-    It 'produces EXACTLY the canonical keys and NO backfill key' {
-        ((@($m.Keys)) -join ',') | Should Be ($expectedCanonicalKeys -join ',')
+    It 'produces EXACTLY the version-2 keys (v1 canonical + mediaArtifacts) and NO backfill key' {
+        # V5c1: newly initialized live runs are schema version 2 with an empty media inventory.
+        ((@($m.Keys)) -join ',') | Should Be (($expectedCanonicalKeys + 'mediaArtifacts') -join ',')
         ($m.Keys -contains 'backfill') | Should Be $false
+        $m.schemaVersion | Should Be 2
+        @($m.mediaArtifacts).Count | Should Be 0
     }
 
     It 'records a real startedAt (UTC ms) and leaves terminal state null' {
@@ -145,12 +148,11 @@ Describe 'Assert-VideoScoutManifestValid rejects drift and malformed shapes' {
         { Assert-VideoScoutManifestValid -Manifest $null } | Should Throw
     }
 
-    It 'rejects a live manifest that grows a backfill key (drift into approximate)' {
-        # The backfill key IS the variant discriminator, so a live manifest that grows one is judged
-        # under the backfill contract -- and its real (live) facts immediately violate the must-be-null
-        # rule. Rejected either way; assert the actual refusal message, not a hypothetical one.
+    It 'rejects a live (v2) manifest that grows a backfill key (drift into approximate)' {
+        # V5c1: a schema-v2 manifest must NEVER be a backfill (backfills remain version 1 — ownership is
+        # never fabricated for history). A v2 that grows a backfill key is rejected at the version gate.
         $m = New-GoodLive; $m.backfill = @{ x = 1 }
-        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'must be null on a backfilled manifest'
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'must not be a backfill'
     }
 
     It 'rejects an unknown extra key' {
@@ -163,9 +165,12 @@ Describe 'Assert-VideoScoutManifestValid rejects drift and malformed shapes' {
         { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'missing key'
     }
 
-    It 'rejects schemaVersion != 1' {
-        $m = New-GoodLive; $m.schemaVersion = 2
-        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'schemaVersion'
+    It 'accepts the supported schemaVersions (1 and 2) and rejects any other' {
+        # V5c1 introduced version 2; version 1 stays valid, an unsupported version is rejected.
+        $m2 = New-GoodLive; $m2.schemaVersion | Should Be 2
+        { Assert-VideoScoutManifestValid -Manifest $m2 } | Should Not Throw
+        $m3 = New-GoodLive; $m3.schemaVersion = 3
+        { Assert-VideoScoutManifestValid -Manifest $m3 } | Should Throw 'schemaVersion'
     }
 
     It 'rejects an empty runId' {
@@ -315,5 +320,104 @@ Describe 'reportFile validation (V5b1)' {
         $b = New-VideoScoutBackfillManifest -RunId 'r' -AppliedMode 'video'
         $b.reportFile = 'analysis-output.txt'
         { Assert-VideoScoutManifestValid -Manifest $b } | Should Throw
+    }
+}
+
+Describe 'V5c1 schema version 2 media inventory' {
+    # A helper that builds a good v2 live manifest and lets a test set its mediaArtifacts.
+    function New-V2 { New-VideoScoutLiveManifest -RunId 'r' -Url 'u' -AppliedMode 'transcript' -Route 'cli' -Model 'm' -MediaResolutionRequested 'MEDIUM' }
+    function New-Artifact { param($n, $k = 'transcript', $size = 10, $state = 'present', $recordedAt = '2026-07-20T00:00:00.000Z', $deletedAt = $null, $deletionReason = $null)
+        [ordered]@{ fileName = $n; kind = $k; sizeBytes = $size; recordedAt = $recordedAt; state = $state; deletedAt = $deletedAt; deletionReason = $deletionReason } }
+
+    It 'version 1 (base skeleton) remains valid unchanged and has no mediaArtifacts' {
+        $b = New-VideoScoutManifestBase
+        $b.schemaVersion | Should Be 1
+        ($b.Keys -contains 'mediaArtifacts') | Should Be $false
+        { Assert-VideoScoutManifestValid -Manifest ([ordered]@{ schemaVersion=1; runId='r'; videoScout=$true; url='u'; videoTitle=$null; requestedMode=$null; appliedMode='transcript'; route='cli'; model='m'; mediaResolutionRequested='MEDIUM'; mediaResolutionApplied=$null; startOffsetSeconds=$null; endOffsetSeconds=$null; startedAt='2026-07-20T00:00:00.000Z'; finishedAt=$null; usage=$null; reportFile=$null; outcome=$null; reason=$null }) } | Should Not Throw
+    }
+    It 'version 1 REJECTS a silently added mediaArtifacts key' {
+        $v1 = [ordered]@{ schemaVersion=1; runId='r'; videoScout=$true; url='u'; videoTitle=$null; requestedMode=$null; appliedMode='transcript'; route='cli'; model='m'; mediaResolutionRequested='MEDIUM'; mediaResolutionApplied=$null; startOffsetSeconds=$null; endOffsetSeconds=$null; startedAt='2026-07-20T00:00:00.000Z'; finishedAt=$null; usage=$null; reportFile=$null; outcome=$null; reason=$null; mediaArtifacts=@() }
+        { Assert-VideoScoutManifestValid -Manifest $v1 } | Should Throw 'unknown key'
+    }
+    It 'version 2 REQUIRES the mediaArtifacts field' {
+        $m = New-V2; $m.Remove('mediaArtifacts')
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'missing key'
+    }
+    It 'an empty inventory is valid' {
+        $m = New-V2; @($m.mediaArtifacts).Count | Should Be 0
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
+    }
+    It 'each kind/extension pair is valid' {
+        foreach ($pair in @(@('transcript','.srt'), @('audio','.mp3'), @('video','.mp4'))) {
+            $m = New-V2; $m.mediaArtifacts = @((New-Artifact "file$($pair[1])" $pair[0]))
+            { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
+        }
+    }
+    It 'a mismatched extension is rejected' {
+        $m = New-V2; $m.mediaArtifacts = @((New-Artifact 'a.mp3' 'transcript'))
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'requires extension'
+    }
+    It 'an extra artifact key is rejected' {
+        $a = New-Artifact 'a.srt'; $a['bogus'] = 1
+        $m = New-V2; $m.mediaArtifacts = @($a)
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'unknown key'
+    }
+    It 'a missing artifact key is rejected' {
+        $a = New-Artifact 'a.srt'; $a.Remove('state')
+        $m = New-V2; $m.mediaArtifacts = @($a)
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'missing key'
+    }
+    It 'duplicate filenames are rejected case-insensitively' {
+        $m = New-V2; $m.mediaArtifacts = @((New-Artifact 'A.srt'), (New-Artifact 'a.srt'))
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'duplicate'
+    }
+    It 'separators / rooted / traversal / control / bidi filenames are rejected' {
+        $bad = @('sub/of.srt', 'a\b.srt', 'C:\x.srt', '\rooted.srt', '..\up.srt', '..', '.')
+        foreach ($n in $bad) {
+            $m = New-V2; $m.mediaArtifacts = @((New-Artifact $n))
+            { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw
+        }
+        # control + bidi built from code points so this test file stays plain ASCII
+        foreach ($cp in @(0x07, 0x202E)) {
+            $m = New-V2; $m.mediaArtifacts = @((New-Artifact ('a' + [char]$cp + '.srt')))
+            { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw
+        }
+    }
+    It 'invalid sizes / timestamps / states / non-null deletion fields are rejected' {
+        $cases = @(
+            (New-Artifact 'a.srt' 'transcript' -1),
+            (New-Artifact 'a.srt' 'transcript' 'x'),
+            (New-Artifact 'a.srt' 'transcript' 10 'present' 'not-a-timestamp'),
+            (New-Artifact 'a.srt' 'transcript' 10 'deleted'),
+            (New-Artifact 'a.srt' 'transcript' 10 'present' '2026-07-20T00:00:00.000Z' '2026-07-20T00:00:00.000Z'),
+            (New-Artifact 'a.srt' 'transcript' 10 'present' '2026-07-20T00:00:00.000Z' $null 'gone')
+        )
+        foreach ($a in $cases) {
+            $m = New-V2; $m.mediaArtifacts = @($a)
+            { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw
+        }
+    }
+    It 'more than 16 entries is rejected' {
+        $m = New-V2; $m.mediaArtifacts = @(1..17 | ForEach-Object { New-Artifact "f$_.srt" })
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'maximum is 16'
+    }
+    It 'mediaArtifacts as an arbitrary object (not an array) is rejected' {
+        $m = New-V2; $m.mediaArtifacts = [pscustomobject]@{ x = 1 }
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'must be an array'
+    }
+    It 'a backfill manifest remains version 1 (never grows a media inventory)' {
+        $bf = New-VideoScoutBackfillManifest -RunId 'r' -AppliedMode 'video'
+        $bf.schemaVersion | Should Be 1
+        ($bf.Keys -contains 'mediaArtifacts') | Should Be $false
+        { Assert-VideoScoutManifestValid -Manifest $bf } | Should Not Throw
+    }
+    It 'round-trips a v2 manifest with a recorded artifact through JSON unchanged' {
+        $m = New-V2; $m.mediaArtifacts = @((New-Artifact 'video.en.srt'))
+        $json = ConvertTo-Json -InputObject $m -Depth 6
+        $back = $json | ConvertFrom-Json
+        $back.schemaVersion | Should Be 2
+        @($back.mediaArtifacts).Count | Should Be 1
+        $back.mediaArtifacts[0].fileName | Should Be 'video.en.srt'
+        { Assert-VideoScoutManifestValid -Manifest $back } | Should Not Throw
     }
 }

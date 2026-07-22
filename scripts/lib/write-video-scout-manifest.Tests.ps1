@@ -34,9 +34,10 @@ Describe 'Initialize-VideoScoutRun (new-run manifest creation)' {
         Test-Path -LiteralPath (Get-VideoScoutManifestPath -RunDir $run.RunDir) | Should Be $true
     }
 
-    It 'writes valid JSON with schemaVersion 1' {
+    It 'writes valid JSON with schemaVersion 2 and an empty media inventory (V5c1)' {
         $m = Read-ManifestJson -RunDir $run.RunDir
-        $m.schemaVersion | Should Be 1
+        $m.schemaVersion | Should Be 2
+        @($m.mediaArtifacts).Count | Should Be 0
     }
 
     It 'records runId equal to the run directory name (stable, unique)' {

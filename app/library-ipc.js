@@ -70,6 +70,7 @@ function createLibraryIpc(deps) {
       startOffsetSeconds: num(e.startOffsetSeconds),
       endOffsetSeconds: num(e.endOffsetSeconds),
       reportStatus: str(e.reportStatus) || 'incomplete',
+      mediaCount: num(e.mediaCount),   // V5c1: bounded count of recorded media artifacts (never paths)
     };
   }
 

@@ -220,7 +220,8 @@ Describe 'feed-gemini.ps1 V5a per-run manifest (end-to-end, stubbed probe/node -
         $r.Threw | Should Be $true
         $r.NodeReached | Should Be $false
         $m = Get-E2ERunManifest -OutDir $r.OutDir
-        $m.schemaVersion | Should Be 1
+        $m.schemaVersion | Should Be 2                       # V5c1: live runs are schema v2
+        @($m.mediaArtifacts).Count | Should Be 0             # SDK route records no local media
         $m.route | Should Be 'sdk'
         $m.videoScout | Should Be $true
         $m.outcome | Should Be 'refused'

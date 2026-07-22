@@ -264,3 +264,49 @@ Describe 'Invoke-VideoScoutLibraryRead (re-validating read)' {
         Remove-Item -LiteralPath $root -Recurse -Force
     }
 }
+
+Describe 'Invoke-VideoScoutLibraryList — V5c1 schema v2 media inventory' {
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+    $root = Join-Path $env:TEMP ('v5c1-lib-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $root -Force | Out-Null
+
+    # A v2 run with one recorded artifact.
+    $rid1 = 'run-20260720-120000-000-1234-aaaaaaaa'
+    $d1 = Join-Path $root $rid1; New-Item -ItemType Directory -Path $d1 -Force | Out-Null
+    $m1 = New-LiveManifestObj -RunId $rid1 -Outcome 'completed' -ReportFile 'analysis-output.txt'
+    $m1.mediaArtifacts = @(([ordered]@{ fileName = 'v.en.srt'; kind = 'transcript'; sizeBytes = 42; recordedAt = '2026-07-20T12:00:00.000Z'; state = 'present'; deletedAt = $null; deletionReason = $null }))
+    [System.IO.File]::WriteAllText((Join-Path $d1 'manifest.json'), ($m1 | ConvertTo-Json -Depth 8), $utf8)
+
+    # A v2 run with an EMPTY inventory.
+    $rid2 = 'run-20260720-130000-000-1234-bbbbbbbb'
+    $d2 = Join-Path $root $rid2; New-Item -ItemType Directory -Path $d2 -Force | Out-Null
+    $m2 = New-LiveManifestObj -RunId $rid2 -Outcome 'completed' -ReportFile 'analysis-output.txt'
+    [System.IO.File]::WriteAllText((Join-Path $d2 'manifest.json'), ($m2 | ConvertTo-Json -Depth 8), $utf8)
+
+    # A v1 BACKFILL run (no inventory field).
+    $rid3 = 'run-20260708-150835-583-4172'
+    $d3 = Join-Path $root $rid3; New-Item -ItemType Directory -Path $d3 -Force | Out-Null
+    $m3 = New-VideoScoutBackfillManifest -RunId $rid3 -AppliedMode 'transcript' -VideoTitle 'Legacy' -StartedAtFromDirNameLocal '2026-07-08T15:08:35.583'
+    [System.IO.File]::WriteAllText((Join-Path $d3 'manifest.json'), ($m3 | ConvertTo-Json -Depth 8), $utf8)
+
+    $res = Invoke-VideoScoutLibraryList -RunRoot $root
+
+    It 'lists v2 (with + without inventory) AND v1 backfills together, none invalid' {
+        $res.ok | Should Be $true
+        @($res.entries).Count | Should Be 3
+        @($res.invalid).Count | Should Be 0
+    }
+    It 'projects a bounded mediaCount (v2 with artifact = 1, v2 empty = 0, v1 backfill = 0)' {
+        $byId = @{}; foreach ($e in $res.entries) { $byId[$e.runId] = $e }
+        $byId[$rid1].mediaCount | Should Be 1
+        $byId[$rid2].mediaCount | Should Be 0
+        $byId[$rid3].mediaCount | Should Be 0
+    }
+    It 'never exposes a filename or path in the projected entry' {
+        $blob = $res.entries | ConvertTo-Json -Depth 8 -Compress
+        ($blob -match 'v\.en\.srt') | Should Be $false
+        ($blob -match '\\') | Should Be $false
+    }
+
+    if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+}
