@@ -233,10 +233,11 @@ correspondence. The docs-only branch is then merged by the human on the same ter
 
 ## 5. Guardrails / scope
 
-- **K1 is CLOSED by V5c2b (once merged).** V5c2a deletes only a *successful current run's* own
-  manifest-owned media; **V5c2b** (built + human-accepted 2026-07-22, reviewed code tip `6541f2e`) adds
-  the bounded cross-run retention/reconciliation sweep for error/refused/abandoned runs and reconciles
-  crash-interrupted deletions. K1 remains open only until V5c2b's merge lands.
+- **K1 is CLOSED by V5c2b, merged into `main` on 2026-07-22 at `0c633adf50764d8783a546beafb7308285410199`.**
+  V5c2a deletes only a *successful current run's* own manifest-owned media; **V5c2b** (reviewed code tip
+  `6541f2e`, human-accepted 2026-07-22) adds the bounded cross-run retention/reconciliation sweep for
+  error/refused/abandoned runs and reconciles crash-interrupted deletions. This closure is durable and
+  present-tense — K1 is no longer open.
 - Do **not**: push (all branches are local-only), remove worktrees, retarget the Desktop shortcut, run
   `-Apply` against the real downloads root, begin the next feature without a new work order, or add
   commits onto the reviewed tips.
