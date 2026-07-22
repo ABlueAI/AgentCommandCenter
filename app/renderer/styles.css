@@ -249,3 +249,42 @@ input:focus { outline: none; border-color: var(--accent); }
 .choice { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 9px; }
 .choice.active { border-color: var(--accent); background: var(--accent-soft); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+/* ---- V5b2 Library / in-app report reader ---- */
+.lib-bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--bg); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.lib-search { flex: 1 1 180px; min-width: 140px; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); padding: 5px 8px; }
+.lib-filter { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 6px; font-size: 12px; }
+.lib-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(260px, 360px) 1fr; gap: 10px; padding: 10px; overflow: hidden; }
+.lib-grid.has-maximized { display: block; }
+.lib-grid.has-maximized > .lib-list { display: none; }
+.lib-grid.has-maximized > .lib-reader.maximized { height: 100%; }
+.lib-list { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 2px; }
+.lib-list .empty { padding: 16px; color: var(--muted); }
+.lib-row { background: #06090d; border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; cursor: pointer; }
+.lib-row:hover { border-color: var(--accent); }
+.lib-row.selected { border-color: var(--accent); background: var(--accent-soft); }
+.lib-row-title { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-row-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; font-size: 11px; color: var(--muted); }
+.lib-date { color: var(--muted); }
+.lib-badge { border-radius: 999px; padding: 1px 7px; font-size: 10px; border: 1px solid var(--border); }
+.lib-badge-approx { color: #e0b25a; border-color: #6b5326; }
+.lib-chip { border-radius: 4px; padding: 1px 6px; background: var(--panel-2); border: 1px solid var(--border); }
+.lib-outcome-completed { color: var(--accent); }
+.lib-outcome-refused { color: #d89b3a; }
+.lib-outcome-error { color: var(--danger); }
+.lib-outcome-incomplete { color: var(--muted); }
+.lib-report-flag { margin-left: auto; font-size: 10px; color: var(--muted); }
+.lib-reader { display: flex; flex-direction: column; min-height: 0; background: #06090d; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.lib-reader-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--border); font-size: 12px; }
+.lib-reader-head .name { font-weight: 600; }
+.lib-btn { color: var(--muted); border: none; background: none; padding: 2px 6px; font-size: 13px; cursor: pointer; }
+.lib-btn:hover { color: var(--accent); }
+.lib-meta-host { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.lib-meta-panel .lib-meta-title { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-meta-grid { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin-top: 6px; font-size: 12px; }
+.lib-meta-k { color: var(--muted); }
+.lib-meta-v { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-status-msg { padding: 16px; color: var(--muted); font-style: italic; }
+.lib-report-text { flex: 1; min-height: 0; overflow: auto; margin: 0; padding: 10px 12px; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font-family: 'Cascadia Code','Consolas',monospace; font-size: 12.5px; line-height: 1.5; color: var(--text); }
+.term-pane .term-head .open-report { color: var(--muted); border: none; background: none; padding: 2px 6px; font-size: 12px; }
+.term-pane .term-head .open-report:hover { color: var(--accent); }

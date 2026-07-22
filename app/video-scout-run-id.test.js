@@ -104,8 +104,9 @@ const mainSrc = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8').replace
 {
   // MAIN generates the run ID (rule: renderer never generates it).
   assert(/const runId = generateRunId\(\);/.test(mainSrc), 'main.js generates the run ID itself (generateRunId())');
-  // It is passed as a discrete -RunId argument.
-  assert(/args\.push\('-File', script, '-Url', url, '-VideoScout', '-RunId', runId\)/.test(mainSrc),
+  // It is passed as a discrete -RunId argument. (V5b2 appends '-OutDir', VIDEO_SCOUT_RUN_ROOT to the
+  // same push so main owns the run root too — the discrete -RunId argument is unchanged.)
+  assert(/args\.push\('-File', script, '-Url', url, '-VideoScout', '-RunId', runId[,)]/.test(mainSrc),
     'main.js passes the run ID as a discrete -RunId argument to feed-gemini.ps1');
   // Renderer never supplies/overrides it: main must not read a run ID from opts.
   assert(!/opts\.runId/i.test(mainSrc), 'main.js never reads a run ID from the renderer-supplied opts');

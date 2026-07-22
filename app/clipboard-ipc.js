@@ -19,6 +19,8 @@
 // refusal { ok:false, error:<reason constant> }. Reasons are bounded constants;
 // clipboard CONTENT never appears in any log line or error, in either direction.
 
+const { createTrustedSenderGate } = require('./trusted-ipc-sender');
+
 // Hard limit for one clipboard read or write, in UTF-16 code units — the same
 // 1,000,000-character bound the renderer's Copy Output enforces (term-copy.js).
 // Enforced HERE too because main is the security boundary: a bypassed or buggy
@@ -30,35 +32,15 @@ function createClipboardIpcHandlers(deps) {
   const clipboard = deps && deps.clipboard;
   const getTrustedWindow = deps && deps.getTrustedWindow;
   const logRefusal = (deps && deps.logRefusal) || (() => {});
-  if (typeof entryUrl !== 'string' || entryUrl.length === 0) {
-    throw new Error('clipboard-ipc: entryUrl must be the canonical entry document URL string.');
-  }
   if (!clipboard || typeof clipboard.readText !== 'function' || typeof clipboard.writeText !== 'function') {
     throw new Error('clipboard-ipc: a clipboard implementation with readText/writeText is required.');
   }
-  if (typeof getTrustedWindow !== 'function') {
-    throw new Error('clipboard-ipc: getTrustedWindow must be a function.');
-  }
-
-  // Shared sender gate. `event` is the ipcMain.handle invoke event ({ sender, senderFrame }).
-  // Every property access on the (possibly disposed) frame is guarded — a torn-down frame
-  // must degrade to a refusal, never a main-process throw.
-  function assessSender(event) {
-    const win = getTrustedWindow();
-    if (!win || (typeof win.isDestroyed === 'function' && win.isDestroyed())) {
-      return { ok: false, reason: 'no-trusted-window' };
-    }
-    const wc = win.webContents;
-    if (!wc || !event || event.sender !== wc) return { ok: false, reason: 'untrusted-sender' };
-    const frame = event.senderFrame;
-    let mainFrame = null;
-    try { mainFrame = wc.mainFrame; } catch {}
-    if (!frame || !mainFrame || frame !== mainFrame) return { ok: false, reason: 'not-main-frame' };
-    let frameUrl = null;
-    try { frameUrl = frame.url; } catch {}
-    if (frameUrl !== entryUrl) return { ok: false, reason: 'untrusted-document' };
-    return { ok: true };
-  }
+  // The sender/frame/URL trust check is the shared gate (V5b2) — no second copy lives here. The
+  // constructor's entryUrl/getTrustedWindow validation happens inside createTrustedSenderGate, so a
+  // missing entryUrl or getTrustedWindow still throws exactly as before (clipboard-ipc.test.js).
+  const gate = createTrustedSenderGate({ entryUrl, getTrustedWindow });
+  // Preserved name + return shape ({ ok, reason }) so the historical behavior/tests are unchanged.
+  const assessSender = (event) => gate.assess(event);
 
   // Bounded refusal: reason constant only — never content, never a URL.
   function refuse(op, reason) {

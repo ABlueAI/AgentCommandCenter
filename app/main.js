@@ -37,10 +37,44 @@ const { createMediaPermissionHandlers } = require('./media-permission-policy');
 // frame at the exact entry document, enforces a 1,000,000-char hard limit both ways,
 // accepts only strings, and never logs clipboard content — same posture as K8.
 const { createClipboardIpcHandlers } = require('./clipboard-ipc');
+// V5b2 Library/report read boundary: the renderer lists/reads only bounded, schema-valid Video Scout
+// records/reports selected through MAIN-OWNED identities (opaque handles / pane IDs) — never a path or
+// actionable run ID. PowerShell (video-scout-library.ps1) is the sole manifest validator and the only
+// code that touches the filesystem; this pure, unit-tested module (library-ipc.test.js) owns the trust
+// gate, the opaque-handle table, and the path-free projection. Same posture as K8 / the clipboard.
+const { createLibraryIpc } = require('./library-ipc');
 
 // ---- tunable defaults (marked ? — change to taste) --------------------------
 const DEFAULT_PROJECTS_ROOT = 'D:\\Workspace';            // (?) where your git repos live
 const SCRIPTS_DIR = path.join(__dirname, '..', 'scripts'); // new-agent.ps1 etc. live one level up in this repo
+// V5b2: the ONE main-owned Video Scout run root. The renderer never supplies or modifies it. Reused
+// as feed-gemini.ps1's -OutDir (below), the Library listing root, and the report-resolution root, so
+// the launch path and the read path can never point at different directories. This is exactly
+// feed-gemini.ps1's own default OutDir — now passed explicitly so main is the single owner.
+const VIDEO_SCOUT_RUN_ROOT = 'D:\\Gemini_Video_Review\\downloads';
+const LIBRARY_SCRIPT = path.join(SCRIPTS_DIR, 'video-scout-library.ps1');
+const LIBRARY_TIMEOUT_MS = 30000;              // fixed timeout: a hung enumeration/read is killed
+const LIBRARY_MAX_BUFFER = 32 * 1024 * 1024;   // bounded stdout/stderr (a 4 MiB report + JSON overhead fits)
+
+// Run the V5b2 library PowerShell boundary shell-free (execFile) and parse its JSON-only stdout.
+// -RunRoot is the fixed main-owned root; -RunId (Read only) is a main-issued identity. The script
+// always prints one JSON document even on internal error, so a parse failure is the only "reject".
+function runLibraryAction({ action, runId }) {
+  return new Promise((resolve, reject) => {
+    const args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', LIBRARY_SCRIPT,
+      '-Action', action, '-RunRoot', VIDEO_SCOUT_RUN_ROOT];
+    if (action === 'Read') args.push('-RunId', String(runId == null ? '' : runId));
+    execFile('powershell', args,
+      { timeout: LIBRARY_TIMEOUT_MS, maxBuffer: LIBRARY_MAX_BUFFER, windowsHide: true, encoding: 'buffer' },
+      (_err, stdout) => {
+        const text = Buffer.isBuffer(stdout) ? stdout.toString('utf8') : String(stdout || '');
+        let parsed = null;
+        try { parsed = JSON.parse(text); } catch { parsed = null; }
+        if (parsed && typeof parsed === 'object') return resolve(parsed);
+        return reject(new Error('library: no JSON on stdout'));
+      });
+  });
+}
 const AGENT_CMD = { claude: 'claude', codex: 'codex', gemini: 'gemini' }; // CLI launched per agent
 
 // Blue Helm roles: launch `claude --agent <role>` with optional per-task overrides.
@@ -236,6 +270,25 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('clipboard-read', (e) => clipboardIpc.handleClipboardRead(e));
   ipcMain.handle('clipboard-write', (e, payload) => clipboardIpc.handleClipboardWrite(e, payload));
+
+  // V5b2 Library/report read boundary — same trust anchors (canonical ENTRY_URL + the late-bound
+  // trusted window). List/Read run the PowerShell library boundary shell-free; Open Report resolves a
+  // Video Scout pane through V5b1's internal pane->runId registry (the renderer sends only the pane
+  // ID). Refusals are visible (console + Logs) and carry a reason constant only — never a path or
+  // manifest/report content.
+  const libraryIpc = createLibraryIpc({
+    entryUrl: ENTRY_URL,
+    getTrustedWindow: () => win,
+    runLibraryAction,
+    getRunIdForPane: (paneId) => videoScoutRunIds.get(paneId),
+    logRefusal: (line) => {
+      console.error(line);
+      if (win && !win.isDestroyed()) win.webContents.send('main-error', line);
+    },
+  });
+  ipcMain.handle('library-list', (e) => libraryIpc.handleList(e));
+  ipcMain.handle('library-read', (e, handle) => libraryIpc.handleRead(e, handle));
+  ipcMain.handle('library-open-report', (e, paneId) => libraryIpc.handleOpenReport(e, paneId));
 
   createWindow();
 });
@@ -633,7 +686,10 @@ ipcMain.handle('pty-start', (_e, opts) => {
     // renderer (pty-start still returns only { ok }).
     const runId = generateRunId();
     acceptedRunId = runId;
-    args.push('-File', script, '-Url', url, '-VideoScout', '-RunId', runId);
+    // -OutDir is the fixed main-owned run root (V5b2). It equals feed-gemini.ps1's own default, so the
+    // launch behavior is unchanged — but passing it explicitly makes main the single owner of the
+    // directory the Library later lists and reads from, so launch and read can never diverge.
+    args.push('-File', script, '-Url', url, '-VideoScout', '-RunId', runId, '-OutDir', VIDEO_SCOUT_RUN_ROOT);
     // Gemini model / media-resolution / analysis mode / time range: validate against the
     // allowlists in video-scout-args.js. videoModel and mediaResolution push only what passes —
     // an invalid or missing value there is omitted so feed-gemini.ps1's own default applies. An

@@ -2,7 +2,7 @@
 // No Node here by design; this file is pure UI + IPC calls.
 
 const $ = (sel) => document.querySelector(sel);
-const ACCEPTANCE_BUILD = 'V5B1 CONTENT ACCEPTANCE 2026-07-18.10';
+const ACCEPTANCE_BUILD = 'V5B2 LIBRARY ACCEPTANCE 2026-07-18.11';
 const state = { repo: '', githubUrl: '', worktrees: [], chosenRole: 'builder', chosenCli: 'claude', hardTask: false, theme: 'obsidian', ttsVoice: '', ttsSpeed: 1, videoModel: 'gemini-2.5-flash-lite', mediaResolution: 'MEDIUM', analysisMode: 'transcript' };
 const audioModules = window.ccAudioModuleHealth.createAudioModuleHealth();
 
@@ -124,6 +124,8 @@ function switchTab(name) {
   // Leaving the Terminals view must not strand maximize state (V1a): coming back
   // always lands on the normal grid, never on a half-forgotten maximized layout.
   if (name !== 'terminals') paneMaximizer.handleViewSwitch();
+  // V5b2: same rule for the Library reader — leaving the Library tab restores its layout.
+  if (name !== 'library') libMaximizer.handleViewSwitch();
   document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('active', x.dataset.tab === name));
   document.querySelectorAll('.tabpane').forEach((x) => x.classList.toggle('active', x.dataset.pane === name));
 }
@@ -155,12 +157,199 @@ const paneMaximizer = window.ccPaneMaximize.createPaneMaximizer({
     if (focusId) { activeTermId = focusId; try { terms.get(focusId).term.focus(); } catch {} }
   },
 });
+// V5b2: the Library report reader reuses the SAME maximize state machine (pane-maximize.js) — one
+// controller for the reader panel inside the library split. onLayout only flips the button glyph;
+// the CSS (.lib-grid.has-maximized) hides the run list and lets the reader fill the tab.
+const libMaximizer = window.ccPaneMaximize.createPaneMaximizer({
+  grid: $('#libGrid'),
+  log: (line) => appendLog(line),
+  onLayout: (maximizedId) => {
+    const btn = $('#libMax');
+    if (btn) {
+      btn.textContent = maximizedId ? '🗗' : '⛶';
+      btn.title = maximizedId ? 'Restore (Esc)' : 'Maximize (Esc restores)';
+    }
+  },
+});
 // Escape restores the grid while a pane is maximized, and is CONSUMED (capture phase,
 // before xterm sees it) so the same press doesn't also reach the PTY; press again for
 // a normal terminal ESC. With nothing maximized the key flows to the terminal untouched.
+// V5b2: the Library reader's maximizer is offered the same key when nothing terminal consumed it.
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && paneMaximizer.handleEscape()) { e.preventDefault(); e.stopPropagation(); }
+  if (e.key === 'Escape' && (paneMaximizer.handleEscape() || libMaximizer.handleEscape())) { e.preventDefault(); e.stopPropagation(); }
 }, true);
+// ---- V5b2 Library / in-app report reader -------------------------------------
+// The Library lists bounded, schema-valid Video Scout records and reads their reports through
+// main-owned identities (opaque handles / pane IDs). Every manifest-derived value is inserted with
+// textContent via the shared safe builder (agent-dom.js `el`) or into a <pre>.textContent — never
+// innerHTML/Markdown/URL attributes. Copy Report and Maximize REUSE the V1a clipboard consumer and
+// the pane-maximize controller (no duplicate implementations).
+const LV = window.ccLibraryView;
+const libState = { entries: [], selectedHandle: null, currentReportText: '', loaded: false };
+const libClip = window.ccClipboardConsumer.createClipboardConsumer({
+  invokeRead: () => cc.clipboardRead(),
+  invokeWrite: (s) => cc.clipboardWrite(s),
+  ptyWrite: () => {},          // the reader never pastes into a PTY
+  log: appendLog,
+  paneId: 'library',
+});
+
+function libFilters() {
+  return {
+    title: $('#libSearch').value,
+    mode: $('#libMode').value,
+    route: $('#libRoute').value,
+    outcome: $('#libOutcome').value,
+    dateKind: $('#libDateKind').value,
+  };
+}
+
+function renderLibraryList() {
+  const listEl = $('#libList');
+  const filtered = LV.sortEntries(LV.filterEntries(libState.entries, libFilters()), $('#libSort').value);
+  listEl.textContent = '';   // clear via textContent, never innerHTML
+  if (filtered.length === 0) {
+    listEl.appendChild(agentDom.el(document, 'div', {
+      className: 'empty muted',
+      text: libState.entries.length ? 'No runs match the current filters.' : 'No Video Scout runs found yet.',
+    }));
+  } else {
+    for (const entry of filtered) {
+      const row = LV.buildRunRow({ el: agentDom.el, doc: document }, entry);
+      if (entry.handle === libState.selectedHandle) row.classList.add('selected');
+      row.onclick = () => selectLibraryEntry(entry);
+      listEl.appendChild(row);
+    }
+  }
+  const c = LV.computeCounts(libState.entries);
+  $('#libStatus').textContent =
+    `${c.total} run(s) · ${c.available} with report · ${c.notPersisted} metadata-only · ${c.incomplete} incomplete · ${c.approximate} approx · ${c.unknown} unknown`;
+}
+
+async function refreshLibrary() {
+  libState.loaded = true;
+  $('#libStatus').textContent = 'Scanning…';
+  let res;
+  try { res = await cc.libraryList(); }
+  catch (e) { appendLog(`[library] list failed: ${(e && e.message) || e}\n`); $('#libStatus').textContent = 'Scan failed.'; return; }
+  if (!res || !res.ok) {
+    appendLog(`[library] list refused: ${(res && res.error) || 'unknown error'}\n`);
+    $('#libStatus').textContent = 'Scan refused.';
+    return;
+  }
+  libState.entries = Array.isArray(res.entries) ? res.entries : [];
+  libState.selectedHandle = null;
+  clearReader();
+  renderLibraryList();
+  // Honest, metadata-only reporting of what the scan found (no report/manifest content).
+  appendLog(`[library] scanned root: total=${res.total} valid=${libState.entries.length} invalid=${res.invalidCount} capExceeded=${res.capExceeded === true}\n`);
+  if (res.capExceeded) appendLog('[library] NOTE: run-directory cap reached; some runs are not listed.\n');
+  if (res.invalidCount > 0) {
+    const byReason = {};
+    for (const iv of (res.invalid || [])) byReason[iv.reason] = (byReason[iv.reason] || 0) + 1;
+    appendLog(`[library] ${res.invalidCount} invalid record(s) excluded: ${Object.entries(byReason).map(([k, v]) => `${k}x${v}`).join(', ')}\n`);
+  }
+}
+
+function clearReader() {
+  $('#libMetaHost').textContent = '';
+  $('#libReportText').textContent = '';
+  const st = $('#libReportStatus'); st.textContent = ''; st.classList.add('hidden');
+  libState.currentReportText = '';
+}
+function showReportStatus(msg) {
+  const st = $('#libReportStatus');
+  st.textContent = msg;                       // textContent — inert
+  st.classList.remove('hidden');
+  $('#libReportText').textContent = '';
+  libState.currentReportText = '';
+}
+function showReportText(text) {
+  const st = $('#libReportStatus'); st.textContent = ''; st.classList.add('hidden');
+  $('#libReportText').textContent = text;     // textContent — inert plain text (no HTML/Markdown)
+  libState.currentReportText = text;
+}
+function renderMeta(entryLike) {
+  const host = $('#libMetaHost');
+  host.textContent = '';
+  host.appendChild(LV.buildMetaPanel({ el: agentDom.el, doc: document }, entryLike));
+}
+
+async function selectLibraryEntry(entry) {
+  libState.selectedHandle = entry.handle;
+  renderLibraryList();          // re-mark selection
+  renderMeta(entry);
+  showReportStatus('Loading…');
+  let res;
+  try { res = await cc.libraryRead(entry.handle); }
+  catch (e) { showReportStatus('The report could not be read.'); appendLog(`[library] read failed: ${(e && e.message) || e}\n`); return; }
+  applyReadResult(res, entry);
+}
+
+function applyReadResult(res, entryLike) {
+  if (res && res.ok && res.status === 'available' && typeof res.text === 'string') {
+    showReportText(res.text);
+    appendLog(`[library] report opened: chars=${res.chars} status=available\n`);  // metadata only
+    return;
+  }
+  const status = (res && res.status) || 'unsafe';
+  const outcome = (res && res.outcome) || (entryLike && entryLike.outcome) || null;
+  showReportStatus(LV.reportStatusMessage(status, outcome));
+  appendLog(`[library] report unavailable: status=${status}\n`);                  // metadata only
+}
+
+async function openReportForPane(paneId) {
+  switchTab('library');
+  document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('active', x.dataset.tab === 'library'));
+  if (!libState.loaded) refreshLibrary();
+  libState.selectedHandle = null;
+  renderLibraryList();
+  showReportStatus('Loading…');
+  let res;
+  try { res = await cc.libraryOpenReport(paneId); }
+  catch (e) { showReportStatus('The report could not be read.'); appendLog(`[library] open-report failed: ${(e && e.message) || e}\n`); return; }
+  // The renderer never learns the run ID/path — build a minimal meta from the read result only.
+  const entryLike = {
+    title: (res && res.title) || 'Video Scout run',
+    displayRunLabel: '(from Video Scout pane)',
+    mode: res && res.mode, route: res && res.route, outcome: res && res.outcome,
+    totalTokens: null, dateKind: 'unknown', date: null, sortMs: null,
+    reportStatus: (res && res.reportStatus) || (res && res.status) || 'incomplete',
+    startOffsetSeconds: null, endOffsetSeconds: null,
+  };
+  renderMeta(entryLike);
+  applyReadResult(res, entryLike);
+}
+
+function copyReport() {
+  let sel = '';
+  const g = window.getSelection && window.getSelection();
+  const readerEl = $('#libReportText');
+  if (g && g.rangeCount > 0 && !g.isCollapsed && readerEl.contains(g.getRangeAt(0).commonAncestorContainer)) sel = g.toString();
+  const src = sel || libState.currentReportText || '';
+  if (!src) { appendLog('[library-copy] nothing to copy (no report shown).\n'); return; }
+  const bounded = window.ccTermCopy.applyCopyBound(src, window.ccTermCopy.COPY_OUTPUT_BOUND);
+  libClip.writeText(bounded.text).then((r) => {
+    if (r.ok) {
+      appendLog(`[library-copy] copied=${bounded.copiedChars} available=${bounded.totalChars} truncated=${bounded.truncated}\n`); // metadata only
+      if (bounded.truncated) alert(`Copy Report: copied the newest ${bounded.copiedChars.toLocaleString('en-US')} of ${bounded.totalChars.toLocaleString('en-US')} characters (the ${window.ccTermCopy.COPY_OUTPUT_BOUND.toLocaleString('en-US')}-character limit).`);
+    } else {
+      appendLog(`[library-copy] clipboardWrite FAILED: ${r.error}\n`);
+      alert(`Copy Report failed — nothing was copied.\n\n${r.error}`);
+    }
+  }).catch(() => {});
+}
+
+function setupLibrary() {
+  $('#libRefresh').onclick = () => refreshLibrary();
+  for (const idSel of ['#libSearch', '#libMode', '#libRoute', '#libOutcome', '#libDateKind', '#libSort']) {
+    const elx = $(idSel);
+    elx.addEventListener(idSel === '#libSearch' ? 'input' : 'change', () => renderLibraryList());
+  }
+  $('#libCopy').onclick = (e) => { e.preventDefault(); copyReport(); };
+  $('#libMax').onclick = (e) => { e.preventDefault(); libMaximizer.toggle('lib-reader', $('#libReader')); };
+}
+
 function showTermEmpty() {
   if (!$('#termEmpty')) {
     const d = document.createElement('div');
@@ -184,7 +373,7 @@ function openInAppTerminal(opts = {}) {
     : { kind: 'cli', cli: cli || 'codex' };
   // Build the pane with safe DOM APIs (agent-dom.js): `label` and `worktree` derive from git
   // worktree metadata and must never be interpolated into innerHTML (AUDIT-REPORT.md finding #1).
-  const pane = agentDom.buildTermPane(document, { badge, label, worktreeTitle: worktree || '' });
+  const pane = agentDom.buildTermPane(document, { badge, label, worktreeTitle: worktree || '', openReport: role === 'video-scout' });
   $('#terminalGrid').appendChild(pane);
   const term = new Terminal({ theme: xtermTheme(), fontFamily: "'Cascadia Code','Consolas',monospace", fontSize: 13, cursorBlink: true, allowProposedApi: true, scrollback: 5000 });
   const fit = new FitAddon.FitAddon();
@@ -387,6 +576,17 @@ function openInAppTerminal(opts = {}) {
     event.stopPropagation();
     paneMaximizer.toggle(id, pane);
   };
+  // V5b2: Open Report (Video Scout panes only). The renderer sends ONLY this pane's id; main resolves
+  // it to the run through V5b1's internal pane->runId registry (never terminal parsing / a path) and
+  // returns the re-validated report, which we show in the in-app Library reader — no OS file open.
+  const openReportBtn = pane.querySelector('.open-report');
+  if (openReportBtn) {
+    openReportBtn.onclick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openReportForPane(id);
+    };
+  }
   const chatBody = pane.querySelector('.chat-body');
   const paneData = { term, fit, pane, ro, chatBody, role, pendingEvents: [], rafId: null, tailBubble: null, parser: null };
   paneData.parser = new PtyParser((ev) => {
@@ -725,8 +925,11 @@ function wireUi() {
     t.onclick = () => {
       switchTab(t.dataset.tab);
       if (t.dataset.tab === 'terminals') setTimeout(fitAllTerms, 0);
+      // V5b2: scan the run library the first time the Library tab is opened (Refresh re-scans).
+      if (t.dataset.tab === 'library' && !libState.loaded) refreshLibrary();
     };
   });
+  setupLibrary();   // V5b2: wire the Library controls (refresh / filters / sort / copy / maximize)
   $('#newTermShell').onclick = () => openInAppTerminal({ worktree: state.repo || undefined });
 
   // Gemini key banner

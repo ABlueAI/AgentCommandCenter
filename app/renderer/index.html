@@ -80,6 +80,7 @@
         <button class="tab active" data-tab="board">Board</button>
         <button class="tab" data-tab="agents">Agents</button>
         <button class="tab" data-tab="terminals">Terminals</button>
+        <button class="tab" data-tab="library">Library</button>
         <button class="tab" data-tab="logs">Logs</button>
       </nav>
 
@@ -102,7 +103,7 @@
           <span class="muted small">Agents run in-app here — each in its own ConPTY.</span>
           <span class="spacer"></span>
           <div class="tts-controls">
-            <span id="audioBuild" class="audio-build">V5B1 CONTENT ACCEPTANCE 2026-07-18.10</span>
+            <span id="audioBuild" class="audio-build">V5B2 LIBRARY ACCEPTANCE 2026-07-18.11</span>
             <span id="sttStatus" class="muted small"></span>
             <button id="sttMic" class="ghost" title="Dictate into the focused pane (Whisper)">🎤 Dictate</button>
             <span id="ttsStatus" class="muted small"></span>
@@ -121,6 +122,62 @@
         </div>
         <div id="terminalGrid" class="term-grid">
           <div class="empty muted" id="termEmpty">No terminals open. Open an agent from the <b>Agents</b> tab, or click <b>+ Shell</b>.</div>
+        </div>
+      </section>
+
+      <section class="tabpane" data-pane="library">
+        <div class="lib-bar">
+          <button id="libRefresh" class="mini accent" title="Rescan the Video Scout run library">⟳ Refresh</button>
+          <input id="libSearch" class="lib-search" type="text" placeholder="Search title…" autocomplete="off" spellcheck="false" />
+          <select id="libMode" class="lib-filter" title="Filter by analysis mode">
+            <option value="all">All modes</option>
+            <option value="transcript">transcript</option>
+            <option value="audio">audio</option>
+            <option value="video">video</option>
+          </select>
+          <select id="libRoute" class="lib-filter" title="Filter by route">
+            <option value="all">All routes</option>
+            <option value="sdk">sdk</option>
+            <option value="cli">cli</option>
+          </select>
+          <select id="libOutcome" class="lib-filter" title="Filter by outcome">
+            <option value="all">All outcomes</option>
+            <option value="completed">completed</option>
+            <option value="refused">refused</option>
+            <option value="error">error</option>
+            <option value="incomplete">incomplete</option>
+          </select>
+          <select id="libDateKind" class="lib-filter" title="Filter by date kind">
+            <option value="all">All dates</option>
+            <option value="exact">Exact</option>
+            <option value="approximate">Approximate</option>
+            <option value="unknown">Unknown</option>
+          </select>
+          <select id="libSort" class="lib-filter" title="Sort">
+            <option value="date-newest">Date ↓ newest</option>
+            <option value="date-oldest">Date ↑ oldest</option>
+            <option value="tokens-highest">Tokens ↓</option>
+            <option value="tokens-lowest">Tokens ↑</option>
+            <option value="title">Title A–Z</option>
+          </select>
+          <span class="spacer"></span>
+          <span id="libStatus" class="muted small"></span>
+        </div>
+        <div id="libGrid" class="lib-grid">
+          <div id="libList" class="lib-list">
+            <div class="empty muted" id="libEmpty">Click <b>⟳ Refresh</b> to scan the Video Scout run library.</div>
+          </div>
+          <div id="libReader" class="lib-reader">
+            <div class="lib-reader-head">
+              <span class="name">Report reader</span>
+              <span class="spacer"></span>
+              <button id="libCopy" class="lib-btn" title="Copy Report (your selection, otherwise the whole report)">⧉</button>
+              <button id="libMax" class="lib-btn" title="Maximize (Esc restores)">⛶</button>
+            </div>
+            <div id="libMetaHost" class="lib-meta-host"></div>
+            <div id="libReportStatus" class="lib-status-msg hidden"></div>
+            <pre id="libReportText" class="lib-report-text"></pre>
+          </div>
         </div>
       </section>
 
@@ -212,6 +269,7 @@
   <script src="term-copy.js"></script>
   <script src="pane-maximize.js"></script>
   <script src="clipboard-consumer.js"></script>
+  <script src="library-view.js"></script>
   <script src="tts-selection.js"></script>
   <script src="audio-module-health.js"></script>
   <script src="stt-target-lock.js"></script>

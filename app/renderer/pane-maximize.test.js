@@ -130,8 +130,11 @@ const appSrc = read('app.js');
 const html = read('index.html');
 const css = read('styles.css');
 {
-  assert(/document\.addEventListener\('keydown',[\s\S]{0,200}handleEscape\(\)\)\s*\{\s*e\.preventDefault\(\);\s*e\.stopPropagation\(\);\s*\}\s*\}, true\);/.test(appSrc),
-    'Escape listener: capture phase, consumes the key ONLY when a restore happened');
+  // V5b2: the Escape handler now offers the key to the terminal maximizer AND the Library reader
+  // maximizer, still consuming it ONLY when one of them actually restored (preventDefault +
+  // stopPropagation guarded by the combined condition), still in the capture phase (, true).
+  assert(/document\.addEventListener\('keydown',[\s\S]*?Escape[\s\S]*?paneMaximizer\.handleEscape\(\)[\s\S]*?libMaximizer\.handleEscape\(\)[\s\S]*?e\.preventDefault\(\);\s*e\.stopPropagation\(\);[\s\S]*?\}, true\);/.test(appSrc),
+    'Escape listener: capture phase, consumes the key ONLY when a restore happened (terminal or library reader)');
   assert(/function switchTab\(name\) \{[\s\S]{0,300}if \(name !== 'terminals'\) paneMaximizer\.handleViewSwitch\(\);/.test(appSrc),
     'switchTab restores maximize state when leaving the Terminals view');
   const closeStart = appSrc.indexOf("pane.querySelector('.x').onclick");
@@ -164,7 +167,7 @@ const css = read('styles.css');
     'pane-maximize.js is IIFE-wrapped — no top-level const collides in the shared <script> scope');
 }
 {
-  const MARKER = 'V5B1 CONTENT ACCEPTANCE 2026-07-18.10';
+  const MARKER = 'V5B2 LIBRARY ACCEPTANCE 2026-07-18.11';
   assert(appSrc.includes(`const ACCEPTANCE_BUILD = '${MARKER}';`), 'app.js pins the V1a acceptance marker');
   assert(appSrc.includes('document.title = `Blue Helm — ${ACCEPTANCE_BUILD}`')
     && appSrc.includes('appendLog(`[build] ${ACCEPTANCE_BUILD}\\n`)'),
