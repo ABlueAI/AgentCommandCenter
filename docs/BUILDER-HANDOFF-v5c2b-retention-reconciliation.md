@@ -14,6 +14,23 @@ Tier: **FULL-CLASS** — irreversible filesystem deletion across MANY runs per i
 two V5c2a-reviewed shared files. It receives a whole-diff read-only review, a pinned three-dot diff, a
 delta pass after any FAIL, explicit human live acceptance, and a human merge decision.
 
+## Human live acceptance — PASS (2026-07-22)
+
+Blue (ABlueAI) live-accepted reviewed code tip **`6541f2e`** on **2026-07-22**, against a disposable
+`%TEMP%` fixture (the procedure at the end of this handoff; **no `-Apply` against the real downloads
+root**). Observed:
+- **PASS** — dry-run made zero changes (`manifest.json` SHA-256 unchanged, artifact `state: present`,
+  `owned.srt` present, `runsMutated` = 0).
+- **PASS** — `-Apply` removed only the manifest-owned media (`owned.srt`).
+- **PASS** — the unowned sibling, the report file, the manifest, and the run directory all survived.
+- **PASS** — the manifest records `state: deleted`, `deletionReason: retention-error`, and a populated
+  `deletedAt`.
+- **PASS** — disposable-fixture cleanup completed through the guarded path (direct parent == `%TEMP%`,
+  leaf begins `vsret-accept-`).
+
+Recorded here without changing reviewed code or the pinned `ffa27b0...6541f2e` diff. Merges after V5c2a
+on its own human `--no-ff` merge; K1 closes when V5c2b is merged.
+
 ## One invariant
 
 A retention sweep may delete **only** media explicitly owned by a bounded, schema-valid **V2** manifest.
