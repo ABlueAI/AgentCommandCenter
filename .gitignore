@@ -32,5 +32,8 @@ media/
 .agent-review.diff
 .agent-review*.diff
 
+# Merge Gate plans (scripts/merge-gate.ps1) -- human-authored local merge authorizations, never committable
+.merge-gate/
+
 # Vendored minified ML bundles — too large for git and trigger false-positive secret scans
 app/renderer/vendor/transformers.web.min.js
