@@ -3,7 +3,8 @@
 Branch: `feature/v3a-pre-analysis-focus`
 Fork-point SHA: `0b867649dfb5ab8b166c7212a288cd26f5fd00ae`
 Pre-merge main SHA: `0b867649dfb5ab8b166c7212a288cd26f5fd00ae` (verified `main` == `origin/main` == this SHA before branching)
-Tip SHA: reviewed **code** tip `bd6b92c` (this handoff docs commit sits on top — no reviewed code changed by it)
+Tip SHA: reviewed **code** tip `3fefd09` (base implementation `bd6b92c` + the privacy delta `3fefd09`;
+handoff/verdict docs commits interleave but change no reviewed code)
 Merge commit SHA: Pending until merge
 
 Intended invariant:
@@ -35,7 +36,10 @@ Files changed (11; no `app/main.js`, no `app/preload.js`):
 - `scripts/lib/get-analysis-focus.Tests.ps1` (NEW) — helper unit tests.
 - `scripts/feed-gemini.ps1` — `-AnalysisFocus` param; independent validation before any spend; compose
   on the CLI path (before flatten/escape) and the SDK path (base = default brief or explicit `-Prompt`
-  → existing `--prompt-text`; no focus ⇒ `--prompt-file` unchanged).
+  → existing `--prompt-text`; no focus ⇒ `--prompt-file` unchanged). **Privacy delta (`3fefd09`):** the
+  `-NoFeed` and "Gemini CLI not found" fallback branches OMIT the deferred `gemini -p "<prompt> …"`
+  command when a focus is present (it would embed the focus) and print a metadata-safe notice instead;
+  with no focus both branches are byte-for-byte unchanged.
 - `scripts/feed-gemini-analysis-focus.Tests.ps1` (NEW) — behavioral `-NoFeed` wiring + source invariants.
 - `app/package.json` — wired `node renderer/analysis-focus.test.js` into `npm test`.
 
@@ -55,15 +59,15 @@ Security-sensitive surfaces touched:
 Commands run:
 - `cd app && npm test` → all node suites pass, **0 failed (exit 0)**. Reachability meta green
   (32 `*.test.js` discovered; the new `renderer/analysis-focus.test.js` is wired).
-- `powershell.exe -NoProfile -File scripts\run-pester.ps1` → **562 passed / 0 failed / 0 skipped**
-  (521 baseline + 41 new: `get-analysis-focus.Tests.ps1` + `feed-gemini-analysis-focus.Tests.ps1`).
+- `powershell.exe -NoProfile -File scripts\run-pester.ps1` → **571 passed / 0 failed / 0 skipped**
+  (`get-analysis-focus.Tests.ps1` + the privacy-aware `feed-gemini-analysis-focus.Tests.ps1`).
   (`pwsh` unavailable; used the Windows PowerShell 5.1 absolute executable per the work order.)
 
 Exact test results:
 - App node gate: 0 failed, exit 0 (new `analysis-focus` suite 37; `video-scout-args` extended: focus
   rides as one literal argv value; blank omitted; 2001 refused without truncation; non-string/control
   refused; unicode/metacharacters preserved; absent focus adds nothing).
-- Pester gate: 562/0/0. New suites cover: null/blank ⇒ not-set; CRLF/CR/LF/tab → space; trim; exactly
+- Pester gate: 571/0/0. New suites cover: null/blank ⇒ not-set; CRLF/CR/LF/tab → space; trim; exactly
   2000 accepted; 2001 throws (never truncated); C0/DEL throw; unicode + metacharacters preserved;
   composition keeps the base intact with the preservation instruction BEFORE the focus; `-NoFeed`
   transcript path composes on focus and leaves the base brief unchanged without it; the focus text is
@@ -102,25 +106,29 @@ Recommended review focus:
 - No out-of-scope changes (no Q&A, multi-slice, budget, schema, retention, or credential work).
 
 Review diff:
-`git diff 0b867649...bd6b92c --output=.agent-review-v3a-pre-analysis-focus.diff`
-(11 files, +685/−9; pinned diff SHA-256/hash `661db8d5…`, 54104 bytes.)
+`git diff 0b867649...3fefd09 --output=.agent-review-v3a-pre-analysis-focus.diff`
+(full pinned diff hash `e69ff0fb…`, 71247 bytes; delta range for the privacy fix is `bd6b92c...3fefd09`.)
 
-Reviewer verdict: `VERDICT: PASS`
+Reviewer verdict: `VERDICT: PASS` (base) · `VERDICT: PASS` (privacy delta)
 
-Reviewer verdict source: scoped Standard-class read-only review over `0b867649...bd6b92c` (2026-07-22).
-All ten checklist invariants verified at the main boundary; no CRITICAL/HIGH/MEDIUM findings. One LOW
-(informational, accepted, no code change): the standalone `-NoFeed` and "Gemini CLI not found" console
-branches in `feed-gemini.ps1` echo the deferred `gemini -p "<prompt> …"` command, which now includes
-the composed focus. This is pre-existing by-design behavior of those developer/standalone paths (they
-always printed the full prompt) and is NOT renderer-reachable: the app never launches with `-NoFeed`,
-the V3a compose sites log only `chars=N`, and the manifest excludes the focus text. Invariant 5 (no
-focus content in the Logs tab) holds for every app-reachable path.
+Reviewer verdict source:
+- **Base** — scoped Standard-class read-only review over `0b867649...bd6b92c` (2026-07-22). All ten
+  checklist invariants verified at the main boundary; no CRITICAL/HIGH/MEDIUM findings. It raised one
+  LOW: the `-NoFeed` and "Gemini CLI not found" fallback branches echoed the deferred
+  `gemini -p "<prompt> …"` command, which with a focus present contains the composed focus.
+- **Privacy delta** — scoped Standard-class read-only review over `bd6b92c...3fefd09` (2026-07-23),
+  `VERDICT: PASS`, **no findings at any severity**. The LOW is now FIXED: both fallback branches OMIT
+  the deferred command when `$normalizedFocus` is set and print a metadata-safe notice; the no-focus
+  path is byte-for-byte unchanged; a distinctive sentinel focus is proven absent from BOTH the `-NoFeed`
+  and CLI-missing outputs (the CLI-missing branch is reachable from an app-launched run when the Gemini
+  CLI is unavailable); the CLI-missing test harness uses a LOCAL `Get-Command` shadow that cannot leak.
 
 ## Review-diff rule
 
-- Before merge, use `git diff main...bd6b92c` (equivalently the immutable `0b867649...bd6b92c`).
-- After merge, reproduce the reviewed delta with `git diff <recorded-pre-merge-main>...bd6b92c`
-  (`git diff main...bd6b92c` may be empty once the tip is an ancestor of `main`).
+- Before merge, use `git diff main...3fefd09` (equivalently the immutable `0b867649...3fefd09`); the
+  privacy delta alone is `bd6b92c...3fefd09`.
+- After merge, reproduce the reviewed delta with `git diff <recorded-pre-merge-main>...3fefd09`
+  (`git diff main...3fefd09` may be empty once the tip is an ancestor of `main`).
 - Always use `--output`; do not use PowerShell `>` for pinned review diffs.
 - Retain the literal `VERDICT: PASS|FAIL` line and identify the review that produced it.
 
