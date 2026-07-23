@@ -156,6 +156,11 @@ function createLibraryIpc(deps) {
     handleList,
     handleRead,
     handleOpenReport,
+    // V3b, MAIN-INTERNAL ONLY (never exposed over IPC): resolve a CURRENT opaque handle to its
+    // run ID for the follow-up boundary. Reads the same wholesale-replaced table as handleRead,
+    // so a handle from a superseded List resolves to undefined here exactly as it refuses there —
+    // the handle-lifetime rule is unchanged.
+    resolveHandle: (handle) => (typeof handle === 'string' ? handleMap.get(handle) : undefined),
     // test/inspection only — never sent to the renderer.
     _handleCount: () => handleMap.size,
   };

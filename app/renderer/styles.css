@@ -288,3 +288,14 @@ input:focus { outline: none; border-color: var(--accent); }
 .lib-report-text { flex: 1; min-height: 0; overflow: auto; margin: 0; padding: 10px 12px; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font-family: 'Cascadia Code','Consolas',monospace; font-size: 12.5px; line-height: 1.5; color: var(--text); }
 .term-pane .term-head .open-report { color: var(--muted); border: none; background: none; padding: 2px 6px; font-size: 12px; }
 .term-pane .term-head .open-report:hover { color: var(--accent); }
+/* V3b follow-up Q&A (compact section under the report text; hidden unless a report is shown) */
+.lib-followup { border-top: 1px solid var(--border); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; background: var(--panel); }
+.lib-followup-label { font-size: 12px; font-weight: 600; color: var(--text); }
+.lib-followup-q { resize: vertical; min-height: 44px; max-height: 140px; background: #06090d; color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; font-size: 12.5px; font-family: inherit; }
+.lib-followup-q:disabled { opacity: 0.6; }
+.lib-followup-bar { display: flex; align-items: center; gap: 8px; }
+.lib-followup-submit { border: 1px solid var(--border); border-radius: 4px; padding: 3px 12px; font-size: 12px; }
+.lib-followup-submit:disabled { opacity: 0.45; cursor: default; }
+.lib-followup-error { padding: 8px 10px; }
+.lib-followup-answer { margin: 0; max-height: 40%; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font-family: 'Cascadia Code','Consolas',monospace; font-size: 12.5px; line-height: 1.5; color: var(--text); }
+.lib-followup-answer:empty { display: none; }
