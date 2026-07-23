@@ -617,7 +617,7 @@ function openInAppTerminal(opts = {}) {
   });
   term.textarea && term.textarea.addEventListener('focus', () => { activeTermId = id; });
   terms.set(id, paneData);
-  cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, videoModel: opts.videoModel, mediaResolution: opts.mediaResolution, analysisMode: opts.analysisMode, startOffset: opts.startOffset, endOffset: opts.endOffset, cols: term.cols, rows: term.rows });
+  cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, videoModel: opts.videoModel, mediaResolution: opts.mediaResolution, analysisMode: opts.analysisMode, startOffset: opts.startOffset, endOffset: opts.endOffset, analysisFocus: opts.analysisFocus, cols: term.cols, rows: term.rows });
   setTimeout(() => { fit.fit(); cc.ptyResize(id, term.cols, term.rows); activeTermId = id; term.focus(); }, 40);
 }
 
@@ -987,6 +987,24 @@ function wireUi() {
   $('#videoModelSelect').onchange = (e) => { state.videoModel = e.target.value; };
   $('#mediaResolutionSelect').onchange = (e) => { state.mediaResolution = e.target.value; };
   $('#analysisModeSelect').onchange = (e) => { state.analysisMode = e.target.value; updateVideoRangeVisibility(); };
+  // V3a: live character counter for the optional analysis-focus field. Counts the NORMALIZED length
+  // (so trailing whitespace / newlines don't misreport it), and marks the counter when over the bound.
+  // This is UX only — main.js (video-scout-args.js) and feed-gemini.ps1 are the real enforcement.
+  const focusInput = $('#analysisFocusInput');
+  if (focusInput) focusInput.oninput = updateAnalysisFocusCounter;
+}
+
+// Update the "N / 2000" analysis-focus counter from the current textarea value. Uses the shared
+// normalizer so the count matches exactly what will be validated (trim + CRLF/CR/LF/tab -> space).
+function updateAnalysisFocusCounter() {
+  const el = $('#analysisFocusInput'); const counter = $('#analysisFocusCounter');
+  if (!el || !counter) return;
+  const res = analysisFocus.normalizeAnalysisFocus(el.value);
+  // chars is populated for a valid value (provided) and for the too-long case; blank -> 0. For the
+  // (textarea-unreachable) non-string / control-char cases, fall back to the raw length.
+  const len = (typeof res.chars === 'number') ? res.chars : el.value.length;
+  counter.textContent = `${len} / ${analysisFocus.MAX_ANALYSIS_FOCUS_CHARS}`;
+  counter.classList.toggle('over', len > analysisFocus.MAX_ANALYSIS_FOCUS_CHARS);
 }
 
 // The task field doubles as the URL field for video-scout — relabel it accordingly.
@@ -1123,6 +1141,13 @@ function openModal() {
   $('#videoStartInput').value = '';
   $('#videoEndInput').value = '';
   updateVideoRangeVisibility();
+  // V3a: clear the optional analysis-focus field, its inline error, and reset its counter every time
+  // the modal opens, so a previous run's focus (or a prior error) never silently carries over.
+  const focusInput = $('#analysisFocusInput');
+  if (focusInput) { focusInput.value = ''; focusInput.classList.remove('invalid'); }
+  const focusErr = $('#analysisFocusError');
+  if (focusErr) { focusErr.textContent = ''; focusErr.classList.add('hidden'); }
+  updateAnalysisFocusCounter();
   updateModalHint();
   // Belt-and-suspenders: disable pointer events on the terminal grid so
   // xterm's WebGL compositing layer can't intercept modal clicks, and
@@ -1206,12 +1231,32 @@ async function createAgent() {
         rangeLogSuffix = `, range: ${range.startOffset}s-${range.endOffset}s`;
       }
     }
+    // V3a pre-analysis focus: immediate-feedback validation (main.js + feed-gemini.ps1 re-validate
+    // independently — this block is UX only, never the security boundary). On any failure BLOCK the
+    // submission with a visible inline error and keep the modal open. A valid nonblank focus is passed
+    // as opts.analysisFocus; a blank one is omitted so the default brief is unchanged. We never log the
+    // focus text — only the bounded reason on failure, and a char count in the launch note below.
+    const focusEl = $('#analysisFocusInput');
+    const focusErrEl = $('#analysisFocusError');
+    if (focusErrEl) { focusErrEl.classList.add('hidden'); focusErrEl.textContent = ''; }
+    if (focusEl) focusEl.classList.remove('invalid');
+    const focusRes = analysisFocus.normalizeAnalysisFocus(focusEl ? focusEl.value : undefined);
+    if (!focusRes.ok) {
+      const fmsg = analysisFocus.analysisFocusRejectionMessage(focusRes.reason);
+      if (focusErrEl) { focusErrEl.textContent = fmsg; focusErrEl.classList.remove('hidden'); }
+      if (focusEl) focusEl.classList.add('invalid');
+      appendLog(`[video-scout] launch blocked: analysis focus ${focusRes.reason}\n`);
+      return; // modal stays open, error visible — do not launch, no pane, no provider request
+    }
+    const focusOpt = focusRes.provided ? { analysisFocus: focusRes.value } : {};
+    const focusLogSuffix = focusRes.provided ? `, focus: ${focusRes.chars} chars` : '';
     closeModal();
-    appendLog(`\n[video-scout] downloading + analyzing ${url}… (mode: ${state.analysisMode}, model: ${state.videoModel}, media resolution: ${state.mediaResolution}${rangeLogSuffix})\n`);
+    appendLog(`\n[video-scout] downloading + analyzing ${url}… (mode: ${state.analysisMode}, model: ${state.videoModel}, media resolution: ${state.mediaResolution}${rangeLogSuffix}${focusLogSuffix})\n`);
     openInAppTerminal({
       worktree: state.repo || undefined, role, videoScout: true, videoUrl: url,
       videoModel: state.videoModel, mediaResolution: state.mediaResolution, analysisMode: state.analysisMode,
       ...rangeOpts,
+      ...focusOpt,
       title: `Video Scout · ${new URL(url).hostname}`,
     });
     return;

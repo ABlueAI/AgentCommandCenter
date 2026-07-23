@@ -249,6 +249,11 @@
           <option value="HIGH">HIGH</option>
         </select>
         <p class="muted small caveat">Media resolution is enforced for YouTube URLs in video mode (sent to the API directly — LOW cuts video tokens ~65%). For non-YouTube/local files the CLI fallback applies and the choice is recorded in the run log only (the installed Gemini CLI has no flag for it).</p>
+        <label for="analysisFocusInput">Analysis focus / instructions <span class="muted">(optional)</span></label>
+        <textarea id="analysisFocusInput" rows="3" maxlength="4000" placeholder="e.g. Prioritize pricing objections, onboarding friction, and concrete UI patterns."></textarea>
+        <p id="analysisFocusError" class="range-error hidden"></p>
+        <p class="muted small">Steers the analysis toward what you care about while preserving the required report format and every section. Leave blank for the standard analysis.</p>
+        <p class="muted small" id="analysisFocusCounter">0 / 2000</p>
       </div>
       <div class="modal-actions">
         <button id="modalCancel" class="ghost">Cancel</button>
@@ -265,6 +270,7 @@
   <script src="vendor/addon-webgl.js"></script>
   <script src="pty-parser.js"></script>
   <script src="video-range-ui.js"></script>
+  <script src="analysis-focus.js"></script>
   <script src="agent-dom.js"></script>
   <script src="term-copy.js"></script>
   <script src="pane-maximize.js"></script>

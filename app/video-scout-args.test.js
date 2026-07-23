@@ -365,5 +365,76 @@ assert(VALID_MEDIA_RESOLUTIONS.has('LOW') && VALID_MEDIA_RESOLUTIONS.has('MEDIUM
 assert(VALID_ANALYSIS_MODES.has('transcript') && VALID_ANALYSIS_MODES.has('audio') && VALID_ANALYSIS_MODES.has('video'),
   'VALID_ANALYSIS_MODES matches feed-gemini.ps1\'s ValidateSet(transcript, audio, video)');
 
+// --- V3a analysisFocus: valid focus rides as ONE discrete argv element -------------------------
+{
+  const focus = 'Prioritize pricing objections and onboarding friction.';
+  const { args, notes, error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', analysisFocus: focus });
+  assert(error === null, 'valid focus -> no error');
+  const i = args.indexOf('-AnalysisFocus');
+  assert(i !== -1, 'valid focus -> -AnalysisFocus flag present');
+  assert(args[i + 1] === focus, 'focus value is exactly one argv element, unmodified');
+  assert(notes.some((n) => /analysisFocus sent chars=\d+/.test(n)), 'a metadata note reports the char count');
+  assert(!notes.some((n) => n.includes('Prioritize pricing')), 'no note contains the focus TEXT (metadata only)');
+}
+
+// --- V3a analysisFocus: shell-metacharacter-shaped content stays ONE literal argv value --------
+{
+  const focus = '$(rm -rf /) ; cat x | tee `whoami` && echo "hi" > out';
+  const { args, error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', analysisFocus: focus });
+  assert(error === null, 'metacharacter focus -> no error (it is data, not syntax)');
+  const i = args.indexOf('-AnalysisFocus');
+  assert(args[i + 1] === focus, 'quotes/semicolons/$()/pipes/&&/backticks remain one literal argv value');
+}
+
+// --- V3a analysisFocus: normalization (CRLF/CR/LF/tab -> space) + trim before it becomes an arg -
+{
+  const CR = String.fromCharCode(0x0d), LF = String.fromCharCode(0x0a), TAB = String.fromCharCode(0x09);
+  const { args } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', analysisFocus: '  a' + CR + LF + 'b' + TAB + 'c  ' });
+  const i = args.indexOf('-AnalysisFocus');
+  assert(args[i + 1] === 'a b c', 'newlines/tabs normalized to spaces and trimmed in the argv value');
+}
+
+// --- V3a analysisFocus: blank / whitespace-only is OMITTED, not refused ------------------------
+{
+  const CR = String.fromCharCode(0x0d), LF = String.fromCharCode(0x0a), TAB = String.fromCharCode(0x09);
+  for (const blank of ['', '     ', TAB + CR + LF + ' ']) {
+    const { args, error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', analysisFocus: blank });
+    assert(error === null, 'blank focus -> no error');
+    assert(!args.includes('-AnalysisFocus'), 'blank focus -> no -AnalysisFocus arg (default brief unchanged)');
+  }
+}
+
+// --- V3a analysisFocus: 2001 units REFUSES the launch, no arg, no truncation -------------------
+{
+  const over = 'x'.repeat(2001);
+  const { args, error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', analysisFocus: over });
+  assert(typeof error === 'string' && error.length > 0, '2001-char focus -> launch refused (visible error)');
+  assert(!args.includes('-AnalysisFocus'), 'refused focus -> never spliced into args (not truncated)');
+}
+
+// --- V3a analysisFocus: non-string and control chars REFUSE ------------------------------------
+{
+  const NUL = String.fromCharCode(0x00);
+  const bad1 = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', analysisFocus: 123 });
+  assert(typeof bad1.error === 'string' && !bad1.args.includes('-AnalysisFocus'), 'non-string focus -> refused, no arg');
+  const bad2 = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', analysisFocus: 'has' + NUL + 'control' });
+  assert(typeof bad2.error === 'string' && !bad2.args.includes('-AnalysisFocus'), 'control-char focus -> refused, no arg');
+}
+
+// --- V3a analysisFocus: Unicode punctuation survives into the argv value -----------------------
+{
+  const focus = 'Pricing — “friction”, café UX → ✅';
+  const { args } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', analysisFocus: focus });
+  const i = args.indexOf('-AnalysisFocus');
+  assert(args[i + 1] === focus, 'em dash / curly quotes / accents / arrow / emoji survive into the argv value');
+}
+
+// --- V3a analysisFocus: absent focus adds nothing (existing fields untouched) ------------------
+{
+  const { args, notes } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video' });
+  assert(!args.includes('-AnalysisFocus'), 'absent focus -> no -AnalysisFocus arg');
+  assert(!notes.some((n) => n.includes('analysisFocus')), 'absent focus -> no analysisFocus note');
+}
+
 process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);
