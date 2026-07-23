@@ -1,6 +1,7 @@
 'use strict';
 // Pure helper for building the video-scout (feed-gemini.ps1) launch args from renderer-supplied
-// Gemini options (videoModel / mediaResolution). Kept dependency-free (no electron, no fs) so it
+// Gemini options (videoModel / mediaResolution / analysisMode / range / analysisFocus). Kept free of
+// electron/fs (it requires only the equally-pure ./renderer/analysis-focus shared validator) so it
 // can be unit tested with plain node, matching the pty-parser.js / pty-parser.test.js convention.
 // This module changes no runtime behavior on its own — main.js decides when/whether to call it,
 // strictly inside the existing `if (opts.videoScout)` branch of the pty-start handler.
@@ -13,6 +14,11 @@
 // Server-side allowlist for the Gemini model dropdown. Deliberately a SEPARATE set from
 // VALID_MODELS in main.js (the Claude --model allowlist for the --agent <role> path) — the two
 // model spaces (Claude models vs Gemini models) never overlap and must not be conflated.
+// V3a: the ONE shared analysis-focus normalizer/validator, reused verbatim by the renderer (immediate
+// feedback) and here (the real main-process boundary). Dependency-free itself, so this module stays
+// unit-testable in plain node.
+const { normalizeAnalysisFocus, analysisFocusRejectionMessage } = require('./renderer/analysis-focus');
+
 const VALID_VIDEO_MODELS = new Set(['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro']);
 const VALID_MEDIA_RESOLUTIONS = new Set(['LOW', 'MEDIUM', 'HIGH']);
 // Must mirror feed-gemini.ps1's [ValidateSet('transcript', 'audio', 'video')]$Mode. All three are
@@ -94,7 +100,7 @@ function predictVideoRoute(videoUrl, analysisMode) {
 //           videoModel/mediaResolution are NOT errors: those legitimately fall back to the
 //           script's own default, which is a safe no-surprise outcome, unlike a dropped mode or
 //           a dropped range.)
-function buildVideoScoutArgs({ videoModel, mediaResolution, analysisMode, videoUrl, startOffset, endOffset } = {}) {
+function buildVideoScoutArgs({ videoModel, mediaResolution, analysisMode, videoUrl, startOffset, endOffset, analysisFocus } = {}) {
   const args = [];
   const notes = [];
   let error = null;
@@ -199,6 +205,28 @@ function buildVideoScoutArgs({ videoModel, mediaResolution, analysisMode, videoU
       args.push('-StartOffset', String(startOffset), '-EndOffset', String(endOffset));
       notes.push(`range sent: -StartOffset ${startOffset} -EndOffset ${endOffset} (analyzes only that slice; billing scales to slice length, not whole-video length — SDK/YouTube route only)`);
     }
+  }
+
+  // V3a pre-analysis focus (optional). Untrusted IPC value, same posture as every field above: the
+  // renderer validated it for immediate feedback, but THIS is the real boundary (a bypassed/modified
+  // renderer calling pty-start directly still hits it), and feed-gemini.ps1 re-validates independently.
+  // The shared normalizer (./renderer/analysis-focus) trims + normalizes CRLF/CR/LF/tab -> space, caps
+  // at 2000 UTF-16 units (never truncates), and rejects non-strings and C0/DEL controls. A valid,
+  // nonblank focus rides as ONE discrete argv element — -AnalysisFocus <value> — so shell-
+  // metacharacter-shaped content ($(), ;, |, &, backtick, quotes) stays LITERAL prompt data (nothing
+  // here ever builds a shell command string). Blank/omitted adds nothing (the script's default brief is
+  // unchanged). An EXPLICIT invalid focus REFUSES the launch (never silently dropped). Only a character
+  // COUNT is ever logged — the focus text is never put in a note, a log line, or the Logs tab.
+  const focusResult = normalizeAnalysisFocus(analysisFocus);
+  if (!focusResult.ok) {
+    notes.push(`analysisFocus REJECTED (${focusResult.reason}) — launch refused`);
+    // Don't clobber an earlier refusal (e.g. an invalid range): the first refusal reason wins.
+    if (!error) error = analysisFocusRejectionMessage(focusResult.reason);
+  } else if (focusResult.provided) {
+    args.push('-AnalysisFocus', focusResult.value);
+    notes.push(`analysisFocus sent chars=${focusResult.chars}`);
+  } else if (analysisFocus !== undefined && analysisFocus !== null) {
+    notes.push('analysisFocus omitted (blank after normalization) — default brief unchanged');
   }
 
   return { args, notes, error };

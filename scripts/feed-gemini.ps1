@@ -60,6 +60,13 @@ param(
     # existing PowerShell-generated fallback applies -- byte-compatible shape, unchanged behavior. The
     # renderer never supplies this: main.js generates it and passes it as this discrete argument.
     [string]$RunId,
+    # V3a: optional pre-analysis focus/instructions. AUGMENTS (never replaces) the mode's default brief
+    # and never creates a second provider request or bypasses a cost/duration guard. Re-validated here
+    # INDEPENDENTLY (this is a documented standalone entry point) via lib/get-analysis-focus.ps1:
+    # normalized (CRLF/CR/LF/tab -> space, trimmed), max 2000 chars (never truncated), C0/DEL rejected;
+    # blank/absent leaves the default brief unchanged. The app passes it as ONE discrete argument, so
+    # shell-metacharacter-shaped content stays literal prompt DATA (nothing builds a shell string).
+    [string]$AnalysisFocus,
     [switch]$NoFeed,
     [switch]$VideoScout
 )
@@ -84,6 +91,14 @@ if ($haveStart -and ($EndOffset -le $StartOffset)) {
 if ($haveStart -and -not $VideoScout) {
     throw "A time range (-StartOffset/-EndOffset) is only valid with -VideoScout on the SDK/YouTube route. Remove the offsets, or add -VideoScout with a YouTube URL in video mode."
 }
+
+# --- V3a pre-analysis focus: normalize + validate INDEPENDENTLY, before any spend ----------------
+# Route-independent, so it runs here with the other free validations (throws on an explicit invalid
+# value: too long, or a forbidden control character). $normalizedFocus is $null when the focus is
+# absent/blank, which leaves every default brief below unchanged. Only a character COUNT is ever
+# logged at the compose sites; the focus text is never written to the run log.
+. (Join-Path $PSScriptRoot 'lib\get-analysis-focus.ps1')
+$normalizedFocus = Get-NormalizedAnalysisFocus -Focus $AnalysisFocus
 
 # --- pre-flight duration guard machinery ---------------------------------------------------------
 # ORDERING (load-bearing): the probe/guard functions are dot-sourced here but INVOKED only later, at
@@ -194,14 +209,32 @@ if ($VideoScout) {
 
             $sdkScript = Join-Path $PSScriptRoot 'gemini-video-sdk.js'
             $sdkArgs = @('--url', $Url, '--model', $Model, '--media-resolution', $MediaResolution)
-            if ($Prompt) {
-                # Explicit -Prompt override: cross the PS 5.1 -> node boundary with the same
+            if ($normalizedFocus) {
+                # V3a focus present: compose it onto the base brief (an explicit -Prompt if the caller
+                # supplied one, else the DEFAULT forensic video brief loaded from disk) and send the
+                # composed text through the SAME correctly-escaped --prompt-text path the explicit
+                # -Prompt case already uses. This changes only the prompt TEXT: same URL, model, media
+                # resolution, offsets, retry behavior, duration guard, and single call count.
+                if ($Prompt) {
+                    $sdkBasePrompt = $Prompt
+                }
+                else {
+                    . (Join-Path $PSScriptRoot 'lib\get-video-scout-prompt.ps1')
+                    $sdkBasePrompt = Get-VideoScoutPrompt
+                }
+                $sdkComposedPrompt = Add-AnalysisFocusToPrompt -BasePrompt $sdkBasePrompt -Focus $normalizedFocus
+                Write-Host "Analysis focus applied (chars=$($normalizedFocus.Length))" -ForegroundColor DarkCyan
+                $sdkArgs += @('--prompt-text', (ConvertTo-NodeCliArg -Arg $sdkComposedPrompt))
+            }
+            elseif ($Prompt) {
+                # Explicit -Prompt override (no focus): cross the PS 5.1 -> node boundary with the same
                 # CommandLineToArgvW-correct escaping the CLI path uses (see lib/get-node-cli-arg.ps1).
                 $sdkArgs += @('--prompt-text', (ConvertTo-NodeCliArg -Arg $Prompt))
             }
             else {
-                # Default forensic brief: hand node the FILE, not the text -- no argument-boundary
-                # escaping and no newline flattening needed; the brief arrives with full fidelity.
+                # Default forensic brief, no focus: hand node the FILE, not the text -- no argument-
+                # boundary escaping and no newline flattening needed; the brief arrives with full
+                # fidelity. This path is byte-for-byte the pre-V3a behavior.
                 $sdkArgs += @('--prompt-file', (Join-Path (Split-Path $PSScriptRoot -Parent) 'prompts\video-scout-analysis.md'))
             }
             # Pairing, strict order, and route were all validated above (refuse-not-downgrade), so by
@@ -417,6 +450,15 @@ try {
     # is handled separately by ConvertTo-NodeCliArg at the actual `& node` invocation below (quotes
     # can't be flattened away because they're semantically meaningful in the brief). See
     # lib/get-cli-safe-prompt.ps1 and lib/get-node-cli-arg.ps1 for the full mechanism.
+    # V3a: compose the optional focus onto the resolved base prompt (the per-mode default brief, the
+    # -VideoScout video brief, or an explicit -Prompt) BEFORE flattening/escaping. This grows only the
+    # prompt TEXT — it adds no second analysis request and changes no download/guard/model/mode/range
+    # behavior. The subsequent Get-CliSafePrompt + ConvertTo-NodeCliArg handle the composed value the
+    # same way they handle any brief, so metacharacter-shaped focus content stays literal.
+    if ($normalizedFocus) {
+        $Prompt = Add-AnalysisFocusToPrompt -BasePrompt $Prompt -Focus $normalizedFocus
+        Write-Host "Analysis focus applied (chars=$($normalizedFocus.Length))" -ForegroundColor DarkCyan
+    }
     . (Join-Path $PSScriptRoot 'lib\get-cli-safe-prompt.ps1')
     $Prompt = Get-CliSafePrompt -Prompt $Prompt
 
@@ -425,7 +467,16 @@ try {
         # $file.DirectoryName, not $OutDir: the file now lives in a per-run subdirectory, not
         # directly in $OutDir -- see the run-dir isolation note above.
         Write-Host "Skipped feeding (-NoFeed). To send it to Gemini later, run from $($file.DirectoryName):" -ForegroundColor Cyan
-        Write-Host "  gemini -m $Model -p `"$Prompt @$($file.Name)`""
+        # V3a privacy: the deferred `gemini -p` command embeds the composed prompt, which with a focus
+        # present contains the user's -AnalysisFocus text. Terminal output must NEVER echo that focus, so
+        # OMIT the command in that case and print a metadata-safe instruction instead. With no focus the
+        # prior deferred-command output is preserved byte-for-byte.
+        if ($normalizedFocus) {
+            Write-Host "  [deferred 'gemini' command omitted: it embeds your -AnalysisFocus text, which is never printed. Re-run this feed-gemini command with the SAME -AnalysisFocus (and without -NoFeed) to analyze the saved file.]" -ForegroundColor DarkYellow
+        }
+        else {
+            Write-Host "  gemini -m $Model -p `"$Prompt @$($file.Name)`""
+        }
         # -NoFeed asked only for the download, and the download succeeded: that IS this run's
         # completed terminal state (no analysis was requested, so none is missing).
         Complete-VideoScoutRunManifest -RunDir $runDir -Manifest $cliManifest -Outcome 'completed' -VideoTitle $videoTitle
@@ -435,7 +486,16 @@ try {
     if (-not $gemini) {
         Write-Host ""
         Write-Host "Gemini CLI not found. File is saved above. Install/login, then run from $($file.DirectoryName):" -ForegroundColor Yellow
-        Write-Host "  gemini -m $Model -p `"$Prompt @$($file.Name)`""
+        # V3a privacy: same rule as the -NoFeed branch — with a focus present the deferred `gemini -p`
+        # command contains the user's -AnalysisFocus text, so OMIT it and print a metadata-safe
+        # instruction. This branch is reachable from an app-launched run when the Gemini CLI is missing.
+        # With no focus the prior deferred-command output is preserved byte-for-byte.
+        if ($normalizedFocus) {
+            Write-Host "  [deferred 'gemini' command omitted: it embeds your -AnalysisFocus text, which is never printed. Install/login to the Gemini CLI, then re-run this feed-gemini command with the SAME -AnalysisFocus.]" -ForegroundColor DarkYellow
+        }
+        else {
+            Write-Host "  gemini -m $Model -p `"$Prompt @$($file.Name)`""
+        }
         # The requested analysis did NOT happen. The console message is friendly, but the manifest
         # must record the truth: this run terminated without its analysis -- an error, not success.
         Complete-VideoScoutRunManifest -RunDir $runDir -Manifest $cliManifest -Outcome 'error' `
