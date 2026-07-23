@@ -5,7 +5,7 @@ Fork-point SHA: `0b867649dfb5ab8b166c7212a288cd26f5fd00ae`
 Pre-merge main SHA: `0b867649dfb5ab8b166c7212a288cd26f5fd00ae` (verified `main` == `origin/main` == this SHA before branching)
 Tip SHA: reviewed **code** tip `3fefd09` (base implementation `bd6b92c` + the privacy delta `3fefd09`;
 handoff/verdict docs commits interleave but change no reviewed code)
-Merge commit SHA: Pending until merge
+Merge commit SHA: `9641de3066d471452dad40042a32968652e82f68`
 
 Intended invariant:
 An optional user-supplied "Analysis focus / instructions" value AUGMENTS the mode's existing default
@@ -75,12 +75,13 @@ Exact test results:
   one `-AnalysisFocus` param, one SDK `& node $sdkScript` site, two `Assert-DurationGuard -Url` sites
   (unchanged), and no raw-focus `Write-Host`.
 
-Manual verification: NOT run by the builder — reserved for the human acceptance build (fully restart
-Electron; confirm the focus field appears only for Video Scout and clears on reopen; run one short
-captioned transcript analysis with a distinctive harmless focus; confirm the report still begins
-exactly with `## 1. TL;DR` and meaningfully follows the focus; confirm the Logs tab shows only focus
-metadata/count, never the text; confirm Library Open Report still works and the manifest completes;
-confirm no extra provider invocation).
+Human live acceptance: **PASS (July 23, 2026).** Blue fully restarted Electron and confirmed the
+focus field appears only for Video Scout and clears on reopen; one short captioned transcript analysis
+with a distinctive harmless focus still began exactly with `## 1. TL;DR` and meaningfully followed the
+focus; the Logs tab showed only focus metadata/count and never the text; Library Open Report worked;
+the manifest completed normally; and exactly one provider analysis occurred. Blue then performed the
+human `--no-ff` merge, re-ran the merged-main gates (app **997/0**, Pester **571/0/0**), and pushed
+`main` at `9641de3066d471452dad40042a32968652e82f68`.
 
 Known limitations:
 - The live `N / 2000` counter counts the NORMALIZED length; the textarea has a generous `maxlength=4000`
