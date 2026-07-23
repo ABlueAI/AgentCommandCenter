@@ -467,7 +467,16 @@ try {
         # $file.DirectoryName, not $OutDir: the file now lives in a per-run subdirectory, not
         # directly in $OutDir -- see the run-dir isolation note above.
         Write-Host "Skipped feeding (-NoFeed). To send it to Gemini later, run from $($file.DirectoryName):" -ForegroundColor Cyan
-        Write-Host "  gemini -m $Model -p `"$Prompt @$($file.Name)`""
+        # V3a privacy: the deferred `gemini -p` command embeds the composed prompt, which with a focus
+        # present contains the user's -AnalysisFocus text. Terminal output must NEVER echo that focus, so
+        # OMIT the command in that case and print a metadata-safe instruction instead. With no focus the
+        # prior deferred-command output is preserved byte-for-byte.
+        if ($normalizedFocus) {
+            Write-Host "  [deferred 'gemini' command omitted: it embeds your -AnalysisFocus text, which is never printed. Re-run this feed-gemini command with the SAME -AnalysisFocus (and without -NoFeed) to analyze the saved file.]" -ForegroundColor DarkYellow
+        }
+        else {
+            Write-Host "  gemini -m $Model -p `"$Prompt @$($file.Name)`""
+        }
         # -NoFeed asked only for the download, and the download succeeded: that IS this run's
         # completed terminal state (no analysis was requested, so none is missing).
         Complete-VideoScoutRunManifest -RunDir $runDir -Manifest $cliManifest -Outcome 'completed' -VideoTitle $videoTitle
@@ -477,7 +486,16 @@ try {
     if (-not $gemini) {
         Write-Host ""
         Write-Host "Gemini CLI not found. File is saved above. Install/login, then run from $($file.DirectoryName):" -ForegroundColor Yellow
-        Write-Host "  gemini -m $Model -p `"$Prompt @$($file.Name)`""
+        # V3a privacy: same rule as the -NoFeed branch — with a focus present the deferred `gemini -p`
+        # command contains the user's -AnalysisFocus text, so OMIT it and print a metadata-safe
+        # instruction. This branch is reachable from an app-launched run when the Gemini CLI is missing.
+        # With no focus the prior deferred-command output is preserved byte-for-byte.
+        if ($normalizedFocus) {
+            Write-Host "  [deferred 'gemini' command omitted: it embeds your -AnalysisFocus text, which is never printed. Install/login to the Gemini CLI, then re-run this feed-gemini command with the SAME -AnalysisFocus.]" -ForegroundColor DarkYellow
+        }
+        else {
+            Write-Host "  gemini -m $Model -p `"$Prompt @$($file.Name)`""
+        }
         # The requested analysis did NOT happen. The console message is friendly, but the manifest
         # must record the truth: this run terminated without its analysis -- an error, not success.
         Complete-VideoScoutRunManifest -RunDir $runDir -Manifest $cliManifest -Outcome 'error' `
