@@ -2,16 +2,16 @@
 ### ⭐ Open THIS file first. The other briefs are deep reference only.
 
 **What this is:** the current project-state source of truth plus the historical
-Fri→Sun execution plan that produced the present baseline. Use the July 14
-checkpoint and the latest handoff for current ordering. The dated Day 0–3
-sections remain as provenance and are not an active calendar promise.
+Fri→Sun execution plan that produced the present baseline. Use the **July 23
+checkpoint below** for current scope and ordering. The dated Day 0–3 sections
+and older checkpoints remain as provenance and are not active calendar promises.
 
-**⏱ CURRENT SHIP GOAL:** complete the entire current Handoff #4 queue, then all
-remaining Day 1–3 items, with every exposed platform control useful and
-functional. “Finished” means that complete, tested daily-driver checkpoint —
-not a permanent feature freeze. New improvements can still be added later as
-real use surfaces them. Do not treat the expired Monday target in the
-historical plan as a current commitment.
+**⏱ CURRENT SHIP GOAL:** Blue Helm 1.0 is a local Windows daily driver for
+coding orchestration, Video Scout research, and one-place access to Blue's
+business tools. Finish the explicitly labelled **remaining-work sequence** in
+the July 23 checkpoint, pass the full release gate, then use the app for one
+complete workday before acceptance. This is not a public-installer commitment
+or a permanent feature freeze; the resulting field report seeds Blue Helm 2.0.
 
 **Functional acceptance rule:** a visible control must work end-to-end, show an
 honest in-progress state, and surface failure visibly. A dead button, silent
@@ -28,13 +28,16 @@ its automated gate before the current ship goal is called complete.
 
 **What we're building (one line):** a self-hosted "mission control" desktop app
 that runs several AI coding agents in parallel — each sandboxed and supervised —
-to build and operate the Starboard business. "Video-scout" is one of those
-agents; it analyzes videos via Gemini. Weekend adds the business-command-center
-layer: whiteboard, quick widgets, and CRM data.
+and makes Video Scout research plus daily business destinations reachable from
+one place. Native CRM/mail data panels are not required for 1.0.
 
 **Standing rules (do not violate even under time pressure):**
 - Feature branches always; `main` is merge-only. One invariant per branch.
 - Reviewer verdicts are read **verbatim** at the merge gate — never summarized.
+- **Queue-label convention:** every forward sequence must say **remaining
+  work**. A sequence without an explicit already-complete inventory has caused
+  fresh reviewers to report shipped features as missing. The current checkpoint
+  must name both what is already complete and what remains.
 - **Gate tier is declared in every work order, with a one-line blast-radius
   rationale.** Chore-class is direct-to-`main` only when the existing three
   chore conditions hold. **Standard-class** is one-invariant branch → ONE
@@ -85,6 +88,156 @@ layer: whiteboard, quick widgets, and CRM data.
   paths (IPC handlers, PTY plumbing, credential handling, validators) — those
   are always read-and-re-implemented. Whole audited libraries in, loose
   snippets out, peer-orchestrator code never.
+
+**Model-routing reminder (Blue, July 23):** every work order starts with a
+model recommendation. Preference order is **Fable → Opus → Sonnet**, while
+still matching model cost to task risk:
+
+- **Fable** first while Blue's usage credits remain — architecture, substantial
+  implementation, OSS integration, and difficult multi-file work.
+- **Opus** for deep architecture/security assessment and as Reviewer for
+  credentials, IPC, cost guards, destructive operations, and other Full-class
+  boundaries.
+- **Sonnet** for bounded implementation, mechanical deltas, tests,
+  documentation, and small Standard-class work.
+
+Builder and Reviewer remain separate roles. Fable may route guarded subjects to
+Opus; the model indicator is authoritative, while prose style is not evidence
+of a routing failure.
+
+**OSS procurement protocol (Blue, July 23):** before building commodity
+infrastructure, ask whether a maintained OSS library or official SDK already
+solves it. Good candidates include layout engines, terminal addons,
+authentication libraries, vendor API clients, sanitizers, and search tools.
+Blue Helm continues to own PTY/process authority, IPC trust, credentials,
+filesystem/path validation, cost guards, manifest ownership/deletion, and role
+fencing.
+
+Run a read-only Source Scout against primary sources before adoption. Its
+candidate card must cover: capability match/limits · license/commercial use ·
+maintenance/releases/adoption/issues · Windows/Electron fit · framework needs ·
+runtime/transitive weight · telemetry/network behavior · security advisories ·
+persistence/migration implications · Blue Helm integration seams · adopt-whole
+versus owned boundary · effort · and one verdict: **ADOPT, PROTOTYPE,
+PATTERN-MINE, or REJECT**. A PROTOTYPE verdict authorizes only the named
+experiment, never production adoption. Never copy loose snippets into IPC, PTY,
+credential, validator, cost-guard, or deletion paths.
+
+## Current checkpoint — July 23 — V3A MERGED; BLUE HELM 1.0 SCOPE FROZEN
+
+**Baseline:** V3a Video Scout pre-analysis focus is human-accepted, merged with
+`--no-ff`, gated, and pushed. Local and remote `main` are both
+`9641de3066d471452dad40042a32968652e82f68`.
+
+- Reviewed code tip: `3fefd0998eb27ebff348fca29680f6361449e397`;
+  feature branch tip: `f5b93e6`; merge commit: `9641de3`.
+- Reviewer verdicts: `VERDICT: PASS` (base) and `VERDICT: PASS` (privacy
+  delta), both recorded verbatim in
+  `docs/BUILDER-HANDOFF-v3a-pre-analysis-focus.md`.
+- Human smoke acceptance: PASS — the Video-Scout-only field resets cleanly,
+  the report remains `## 1. TL;DR` first and follows the focus, Logs contain
+  focus metadata only, Library/report/manifest behavior remains intact, and
+  exactly one provider analysis occurred.
+- Merged-main gates: app **997 passed / 0 failed**; Pester **571 passed /
+  0 failed / 0 skipped**.
+
+### Already complete — included in Blue Helm 1.0
+
+This is load-bearing context, not historical decoration:
+
+- Core Electron/worktree/PTY orchestration and fenced roles.
+- Navigation/process hardening, secure Gemini-key storage, credential scrub,
+  trusted clipboard IPC, and audio-only permission boundary.
+- TTS, STT/dictation, Fast Clear, and test-reachability mutual watchdogs.
+- **V1a** readable/maximizable/reflowing panes and bounded Copy Output, merged
+  at `60d5230`.
+- **V2** TL;DR-first and per-section TL;DR output.
+- **V5a** manifests/backfill; **V5b1** durable reports/main-owned run identity;
+  **V5b2** Analysis Library + in-app report reader, merged at `20f2000`.
+- **V5c1/V5c2a/V5c2b** manifest-owned media inventory, successful-run cleanup,
+  retention, and crash reconciliation. K1 is CLOSED at `0c633ad`.
+- **V3a** optional bounded pre-analysis focus, merged at `9641de3`.
+- Aggregate test reachability and the Pester `<5` pin are already complete;
+  they are not remaining work.
+
+### Remaining work — Blue Helm 1.0, in order
+
+1. **`merge-gate.ps1` process enabler (time-boxed).** Human supplies accepted
+   tips and launches it; the script verifies clean state, exact SHAs, ancestry,
+   pinned diffs, and order; performs only the approved local `--no-ff` merges;
+   runs declared gates; prints merge SHAs; stops on first discrepancy; and
+   never pushes. Stop/rescope if it exceeds a small Standard-class branch.
+2. **V3b stored-report follow-up.** One bounded request per explicit submission,
+   using the persisted report without re-ingesting video; no background spend
+   or automatic continuation.
+3. **V4 bounded multi-slice.** Full-class cost-direction work. The design must
+   state whether N slices become one provider request with N parts or N
+   sequential requests, and enforce the aggregate duration cap before spend.
+4. **P12 launcher hardening BEFORE Quick Links.** Close the existing HIGH
+   `cmd.exe` metacharacter path and validate launcher directories before adding
+   another external-launch surface.
+5. **Quick Links.** Configurable, main-validated HTTP/HTTPS links. `CRM` /
+   `Starboard CRM` opens Blue's Hexona Systems login and `Outlook` opens Outlook
+   Web in the Windows default browser. No embedded webviews, native CRM/mail
+   panel, Electron-held business credentials, or agent access in 1.0.
+6. **Dockview prototype → human adoption decision.** Prototype
+   `dockview-core` with real terminal and Library panes; verify resize/refit,
+   drag, safe versioned persistence, corrupt-state reset, offline/no-telemetry
+   behavior, clipboard/audio/pane-target compatibility, exact lockfile pin, and
+   `npm audit`. Electron/browser popout windows are excluded from 1.0.
+7. **Dockable/resizable layout integration** only after prototype approval.
+   Dockview hosts DOM containers that may contain terminal or report views, but
+   Blue Helm does not pass Dockview serialized terminal/report content, paths,
+   credentials, or IPC/filesystem authority.
+8. **Session persistence and explicit Claude resume controls.** Restore pane
+   type, role, worktree, safe presentation state, and Dockview placement.
+   `Continue Latest` uses supported `claude --continue`; `Choose Session…` uses
+   the native `claude --resume` selector. Never reconstruct conversations,
+   parse terminal output for session identity, claim arbitrary PTYs resumed, or
+   auto-restart Video Scout/paid work. Missing state refuses visibly; offer
+   Restore Workspace and Start Fresh.
+9. **P1 fenced-role environment containment.** Full-class credential boundary:
+   explicit minimal environments; no provider/business/secret-shaped ambient
+   values in fenced PTYs.
+10. **Fence completion.** Finish WO-6/WO-7 live tests and implement P4 unless
+    preflight proves an equivalent enforcement mechanism. Session continuation
+    must reuse or deliberately extend the existing `.claude.json` coordination
+    surface, cover multiple app processes (not only panes), and prevent/warn on
+    duplicate continuation rather than building a second competing lock.
+11. **Release gate.** Full app/Pester/reachability gates, `npm audit`,
+    Electronegativity, full Electron restart, every included control smoked,
+    visible progress/refusal, metadata-only Logs, credential-boundary checks,
+    no automatic paid restart, clean synchronized `main`, and accepted
+    residuals recorded.
+12. **One complete daily-driver day.** Blue records friction, failures,
+    repeated manual steps, missing capabilities, and desired improvements in a
+    DOCX. Repair blockers, record/tag Blue Helm 1.0, and use non-blocking
+    findings to plan 2.0.
+
+### V4 × K5 retry-attribution release trigger
+
+K5 permits up to three attempts for one retryable provider request, while the
+manifest does not yet persist `attemptCount`. Keep that metadata change out of
+V4's one-invariant branch, but decide its 1.0 status against V4's **actual**
+request architecture:
+
+- If V4 sends N slices as parts of **one** provider request, the cap remains
+  three submitted attempts per run; durable attempt attribution is useful but
+  presumptively non-blocking.
+- If V4 sends N **sequential provider requests**, exposure can become N × three
+  attempts; durable `requestCount`/`attemptCount` becomes a presumptive 1.0
+  blocker before release.
+
+Record the decision after V4, never against today's smaller cost surface.
+
+### Deferred to Blue Helm 2.0 consideration
+
+Calculator · whiteboard · native CRM/Outlook panels · CRM/mail writes · Outlook
+calendar · cost dashboard · cross-report search · remote/mobile access ·
+auto-update/crash reporting · broader visual polish · R15 orchestrator
+replacement evaluation · and additions identified by the daily-driver report.
+Run R15 after real use so alternatives are compared against observed friction,
+not hypothetical feature lists.
 
 ## Current checkpoint — July 22 — V5 VIDEO SCOUT STACK MERGED & ACCEPTED
 
@@ -456,9 +609,11 @@ updated to MERGED).
   bounded visible backoff; terminal and ambiguous failures do not retry; the
   CLI now drains naturally instead of racing libuv through `process.exit()`;
   output and usage remain once-only. Full-class whole-diff and CRLF delta
-  reviews both returned `VERDICT: PASS`. Blue first live-proved bounded 503
-  containment during provider saturation, then completed a successful SDK-route
-  run and authorized merge. Branch record: fork/review base `d8d0931`, actual
+  reviews both returned `VERDICT: PASS`. A real local HTTP fixture proves the
+  bounded retry and natural-shutdown paths; the provider-side race was not
+  reproduced in 120 bounded fixture runs, and Blue later completed a successful
+  SDK-route run after provider capacity pressure cleared. The root cause remains
+  plausible, not proven. Branch record: fork/review base `d8d0931`, actual
   pre-merge main `7c94680`, tip `b60bb1b`, merge `db8b61e`. Post-merge gates:
   app 529/0, Pester 271/0/0 (including the real 105-assertion Node SDK suite).
 - **TTS Fast Clear + test-runner reachability MERGED (July 17):** Fast Clear
@@ -480,13 +635,16 @@ updated to MERGED).
   `docs/source-material/2026-07-14-browser-transfer/`, with untouched originals,
   expanded archive contents, hashes, and provenance.
 
-### Current execution order
+### Historical execution order — superseded by July 23
 
-**Current supersession:** TTS terminal live repair comes before STT bootstrap.
+The sequence below is preserved as provenance. It is not the active queue.
+Follow **Remaining work — Blue Helm 1.0, in order** in the July 23 checkpoint.
+
+**Historical supersession note:** TTS terminal live repair came before STT bootstrap.
 The Voice Console foundation follows successful core-audio proof and precedes
 K8 permission hardening; it does not authorize that security-boundary work.
 
-The live order is: ~~TTS bootstrap → STT bootstrap~~ (✅ merged @ `5ee435b`) →
+The historical order was: ~~TTS bootstrap → STT bootstrap~~ (✅ merged @ `5ee435b`) →
 ~~audio permission/error hardening (K8, Full-class)~~ (✅ merged @ `acf1aee`) →
 ~~timestamped transcripts (9c) → P13~~ (✅ merged @ `b4519ec`) →
 ~~K5~~ (✅ merged @ `db8b61e`) → ~~Fast Clear + reachability-meta~~
@@ -495,9 +653,10 @@ The live order is: ~~TTS bootstrap → STT bootstrap~~ (✅ merged @ `5ee435b`) 
 lands at V5b) → ~~V5b1 → V5b2 → V5c1 → V5c2a → V5c2b (the full V5 Video Scout
 stack)~~ (✅ all five reviewed, human-accepted 2026-07-22, and MERGED in order @
 `0d708c1 → 20f2000 → 429c474 → fd73172 → 0c633ad`; closes K1; see the July 22
-checkpoint) → **next: V3 → V4 → remaining Day 2/3 work → full functional
-ship-check → R15 fork/replacement evaluation — none begins without a new work
-order.** Each arrow is a clean
+checkpoint) → ~~V3a~~ (✅ merged @ `9641de3`) → **historical forecast only:
+V3b → V4 → remaining Day 2/3 work → full functional ship-check → R15
+fork/replacement evaluation. The July 23 queue supersedes this forecast.**
+Each arrow is a clean
 checkpoint; runtime items remain separate one-invariant branches and receive
 their own Reviewer gate.
 
@@ -978,10 +1137,14 @@ their own Reviewer gate.
 
 ## 🐛 KNOWN ISSUES — backlog, not blocking
 
-> **K5. ✅ RESOLVED (July 17, merged @ `db8b61e`).** Full-class review and
-> corrective delta both passed; Blue live-accepted the successful SDK path after
-> separately observing bounded 503 containment. Post-merge gates: app 529/0 and
-> Pester 271/0/0. Original finding retained below for provenance.
+> **K5. ✅ MITIGATION MERGED / FIXTURE-PROVEN (July 17, `db8b61e`);
+> provider recurrence unconfirmed.** Full-class review and corrective delta
+> both passed. A real local HTTP fixture proves bounded retry and clean natural
+> shutdown, but the provider-side race was not reproduced in 120 bounded fixture
+> runs. Blue later accepted a successful SDK path after provider capacity
+> pressure cleared. Root-cause attribution remains plausible, not proven.
+> Post-merge gates: app 529/0 and Pester 271/0/0. Original finding retained
+> below for provenance.
 > **K5 (July 12 live testing). SDK-route 503 path crashes node** —
 > flash-lite 503 (high demand) was followed by
 > `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), src\win\async.c:94`
