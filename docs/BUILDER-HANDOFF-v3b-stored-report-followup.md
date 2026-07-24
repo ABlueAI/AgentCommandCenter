@@ -195,8 +195,8 @@ preservation. The verdict will be read and reported verbatim.
 Review diff (pinned with `git diff --output`, never PowerShell redirection):
 `git diff 147fb74bb8431a0881bce22101252ab5b470bee8...<tip> --output=.agent-review-v3b-stored-report-followup.diff`
 
-Reviewer verdict: PENDING
-Reviewer verdict source: PENDING
+Reviewer verdict: `VERDICT: PASS`
+Reviewer verdict source: Opus Full-class, whole-diff, read-only review (2026-07-24).
 
 ## Review-diff rule
 
@@ -204,3 +204,49 @@ Reviewer verdict source: PENDING
 - After merge: `git diff 147fb74bb8431a0881bce22101252ab5b470bee8...<tip>` (three-dot from the
   recorded pre-merge main; plain `main...<tip>` goes empty once the tip is an ancestor).
 - Pinned `.agent-review-*.diff` files are local review artifacts and remain gitignored.
+
+## Opus review record (2026-07-24)
+
+- **Review class:** Full-class, whole-diff, read-only.
+- **Reviewed range:** `147fb74bb8431a0881bce22101252ab5b470bee8...90fc3387a4e1bb8acbdfc3de1d44538f782b46c9`.
+- **Pinned diff** `.agent-review-v3b-stored-report-followup.diff` was independently reproduced
+  byte-for-byte (SHA-256 `8e2730c59a6bdddd6d6cf381630c30e7722a5f3340c34aa4255cf955f791f95b`,
+  154,203 bytes, 19 files).
+- **Non-paid gates independently rerun by the Reviewer:** app suite exit 0 (incl. followup-ipc
+  63/0, followup-child 32/0, report-followup 40/0); legacy K5/Video Scout suite 105/0 against the
+  refactored shared transport; new follow-up suite 96/0; loopback-only fixtures.
+- **Verbatim verdict:**
+
+`VERDICT: PASS`
+
+- No CRITICAL, HIGH, or MEDIUM findings. Three non-blocking informational observations, none a
+  code defect requiring a delta:
+  1. The minimal Windows child environment supports the current fetch path — empirically confirmed
+     by the successful real acceptance request below.
+  2. No per-fetch timeout exists inside the shared transport; the child-level 180-second wall clock
+     remains the fail-closed bound and matches the existing Video Scout posture.
+  3. Successful metadata currently surfaces through the `main-error` channel, producing two safe
+     metadata lines — a cosmetic semantic mismatch only.
+
+## Human acceptance (Blue, 2026-07-24) — PASS
+
+Observed run: `run-20260721-155847-246-51452-31da8fe7`.
+
+- Opening/selecting the completed report caused **no** provider request.
+- One explicit follow-up submitted: `In one sentence, what is Section 1's TL;DR?`
+- A relevant, inert plain-text answer was returned.
+- Provider metadata: model `gemini-2.5-flash-lite`; questionChars 43; reportChars 2769;
+  attempts 1; prompt 1098; output 52; total 1150.
+- Logs contained only safe metadata (no question/report/answer/key/path/transcript/media):
+  - `[main error] [followup] completed model=gemini-2.5-flash-lite questionChars=43 reportChars=2769 attempts=1 prompt=1098 output=52 total=1150`
+  - `[followup] answered: questionChars=43 attempts=1 prompt=1098 output=52 total=1150`
+- Stored-run immutability verified (before == after):
+  - Manifest SHA-256 `252CCB5F7797A4275B8F423E0F92F41E988037EED78DB6801AB8129802599C86` — unchanged, timestamp unchanged.
+  - Report SHA-256 `65AF8F6E9843B638434C52F0ECF14ED6F3ED321F4E0B0F71D9FA0028DA0DC486` — unchanged, timestamp unchanged.
+  - Run-directory count remained 27; new files 0; no video download/yt-dlp/media/new run.
+- Rapid duplicate submission was locally blocked; Refresh cleared the prior selection/follow-up state.
+
+Honest omission: the optional live-pane **Open Report** follow-up was **not** manually exercised
+(it would require a second paid request). That route remains covered by the automated identity,
+ordering, and renderer tests, and the omission does not weaken acceptance of the primary V3b
+invariant.
