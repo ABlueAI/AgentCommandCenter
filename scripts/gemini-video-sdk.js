@@ -157,6 +157,69 @@ function retryDelayMs(attempt, random) {
   return RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1) + random() * RETRY_JITTER_MS;
 }
 
+// V3b: THE one shared submitted-attempt transport. This is K5's bounded retry loop, extracted
+// verbatim-in-behavior from runVideoScout so the text-follow-up child (scripts/gemini-followup.js)
+// and the video path submit through the SAME loop — there must never be a second implementation of
+// the attempt cap, classification, backoff, ambiguous-network refusal, or terminal handling.
+// Policy is unchanged: at most RETRY_MAX_ATTEMPTS submitted attempts for retryable 503/UNAVAILABLE,
+// two bounded jittered sleeps, a thrown fetch is ambiguous (the server may have processed and might
+// bill it) and is NEVER retried, terminal statuses stop immediately, and bodyJson is serialized by
+// the CALLER exactly once so every retry submits the byte-identical payload.
+//
+// Returns a discriminated outcome; PRESENTATION (log lines, exit codes, stdout shape) stays with
+// the caller so the video path's observable output is unchanged:
+//   { kind: 'success',       json, attempt, secs }
+//   { kind: 'network-error', message, attempt }                       (ambiguous — never retried)
+//   { kind: 'http-failure',  status, json, attempt, secs, exhaustedRetries }
+// deps.onRetryScheduled({ status, json, attempt, delayMs }) fires before each bounded sleep so a
+// caller can log its own retry line; it must not (and cannot) alter the loop.
+async function submitGeminiRequest({ endpoint, key, bodyJson }, deps = {}) {
+  const {
+    fetchImpl = fetch,
+    sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    random = Math.random,
+    onRetryScheduled = () => {},
+  } = deps;
+  const t0 = Date.now();
+  // Structural attempt cap: a plain counted loop, no recursion, no open-ended timers. Cost
+  // truth: at most three submitted attempts; failed attempts return no usable analysis or
+  // usage metadata, and whether the provider bills them is unknown.
+  for (let attempt = 1; attempt <= RETRY_MAX_ATTEMPTS; attempt++) {
+    let res;
+    try {
+      res = await fetchImpl(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        body: bodyJson,
+      });
+    } catch (err) {
+      // Ambiguous by definition: we cannot know whether the server processed (and might bill)
+      // the request, so it is NEVER retried.
+      return { kind: 'network-error', message: err && err.message ? err.message : String(err), attempt };
+    }
+
+    // A malformed body must not hide the transport status: parse failures leave json null and
+    // classification proceeds on res.status alone (503 stays retryable, 400 stays terminal).
+    let json = null;
+    try { json = await res.json(); } catch { json = null; }
+    const secs = ((Date.now() - t0) / 1000).toFixed(1);
+
+    if (res.ok) return { kind: 'success', json, attempt, secs };
+
+    const { retryable } = classifyHttpFailure(res.status, json);
+    if (retryable && attempt < RETRY_MAX_ATTEMPTS) {
+      const delayMs = retryDelayMs(attempt, random);
+      onRetryScheduled({ status: res.status, json, attempt, delayMs });
+      await sleep(delayMs);
+      continue;
+    }
+    // Terminal: either a non-retryable status/body, or the third 503 in a row.
+    return { kind: 'http-failure', status: res.status, json, attempt, secs, exhaustedRetries: retryable };
+  }
+  // Unreachable (every loop path returns or continues), kept as a fail-closed backstop.
+  return { kind: 'http-failure', status: 0, json: null, attempt: RETRY_MAX_ATTEMPTS, secs: '0.0', exhaustedRetries: true };
+}
+
 // The whole operation, dependency-injected for tests (production defaults are Node's real
 // implementations). Returns the process exit code — it never calls process.exit() and never
 // throws for expected failures. The Gemini endpoint is built internally from the model; there
@@ -210,70 +273,53 @@ async function runVideoScout(rawArgs, deps = {}) {
   log(`[video-scout sdk] bounded 503 retry policy active (max ${RETRY_MAX_ATTEMPTS} attempts)`);
 
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-  const t0 = Date.now();
 
-  // Structural attempt cap: a plain counted loop, no recursion, no open-ended timers. Cost
-  // truth: at most three submitted attempts; failed attempts return no usable analysis or
-  // usage metadata, and whether the provider bills them is unknown.
-  for (let attempt = 1; attempt <= RETRY_MAX_ATTEMPTS; attempt++) {
-    let res;
-    try {
-      res = await fetchImpl(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-        body: bodyJson,
-      });
-    } catch (err) {
-      // Ambiguous by definition: we cannot know whether the server processed (and might bill)
-      // the request, so it is NEVER retried — visible failure, natural shutdown.
-      logError(`[video-scout sdk] network error (ambiguous — not retried): ${sanitizeUpstreamText(err.message)}`);
-      return 1;
-    }
-
-    // A malformed body must not hide the transport status: parse failures leave json null and
-    // classification proceeds on res.status alone (503 stays retryable, 400 stays terminal).
-    let json = null;
-    try { json = await res.json(); } catch { json = null; }
-    const secs = ((Date.now() - t0) / 1000).toFixed(1);
-
-    if (res.ok) {
-      const finish = json && json.candidates && json.candidates[0] && json.candidates[0].finishReason;
-      const text = ((json && json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts) || [])
-        .map((p) => p.text || '').join('');
-      if (!text) {
-        // An empty SUCCESS is terminal (never retried): the server answered; asking again could
-        // only duplicate cost for the same outcome.
-        logError(`[video-scout sdk] empty response (finishReason=${finish}). Full candidate: ${sanitizeUpstreamText(JSON.stringify((json && (json.candidates || json))) )}`);
-        return 1;
-      }
-      if (attempt > 1) log(`[video-scout sdk] recovered on attempt ${attempt}/${RETRY_MAX_ATTEMPTS}`);
-      // The analysis text and the usage line print exactly ONCE, only here, only on the
-      // accepted success response — a failed attempt has no path to either line.
-      log(`\n${text}\n`);
-      if (finish !== 'STOP') logError(`[video-scout sdk] WARNING: finishReason=${finish} — output may be truncated.`);
-      log(formatUsageLine((json && json.usageMetadata) || {}, model, mediaResolution, sliced));
-      return 0;
-    }
-
-    const apiMsg = sanitizeUpstreamText(
-      json && json.error ? `${json.error.status || ''} ${json.error.message || ''}`.trim() : JSON.stringify(json).slice(0, 500)
-    );
-    const { retryable } = classifyHttpFailure(res.status, json);
-    if (retryable && attempt < RETRY_MAX_ATTEMPTS) {
-      const delayMs = retryDelayMs(attempt, random);
+  // V3b: the attempt loop itself now lives in submitGeminiRequest (the ONE shared transport —
+  // see its comment). Policy, attempt cap, backoff, classification, and the ambiguous-network
+  // refusal are unchanged; this caller keeps every log line and exit code exactly as before.
+  const outcome = await submitGeminiRequest({ endpoint, key, bodyJson }, {
+    fetchImpl, sleep, random,
+    onRetryScheduled: ({ status, json, attempt, delayMs }) => {
       // Bounded metadata only: status, parsed status word (a known enum when present), attempt
       // counter, delay. Never the body, prompt, or key.
       const statusWord = json && json.error && json.error.status ? ` ${sanitizeUpstreamText(json.error.status).slice(0, 40)}` : '';
-      logError(`[video-scout sdk] HTTP ${res.status}${statusWord} — attempt ${attempt}/${RETRY_MAX_ATTEMPTS}; retrying in ${(delayMs / 1000).toFixed(1)}s`);
-      await sleep(delayMs);
-      continue;
-    }
-    // Terminal: either a non-retryable status/body, or the third 503 in a row.
-    const giveUp = retryable ? ` — giving up after ${RETRY_MAX_ATTEMPTS} attempts` : '';
-    logError(`[video-scout sdk] HTTP ${res.status} after ${secs}s (attempt ${attempt}/${RETRY_MAX_ATTEMPTS})${giveUp}: ${apiMsg}`);
+      logError(`[video-scout sdk] HTTP ${status}${statusWord} — attempt ${attempt}/${RETRY_MAX_ATTEMPTS}; retrying in ${(delayMs / 1000).toFixed(1)}s`);
+    },
+  });
+
+  if (outcome.kind === 'network-error') {
+    // Ambiguous by definition (see the transport) — visible failure, natural shutdown.
+    logError(`[video-scout sdk] network error (ambiguous — not retried): ${sanitizeUpstreamText(outcome.message)}`);
     return 1;
   }
-  // Unreachable (every loop path returns or continues), kept as a fail-closed backstop.
+
+  if (outcome.kind === 'success') {
+    const json = outcome.json;
+    const finish = json && json.candidates && json.candidates[0] && json.candidates[0].finishReason;
+    const text = ((json && json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts) || [])
+      .map((p) => p.text || '').join('');
+    if (!text) {
+      // An empty SUCCESS is terminal (never retried): the server answered; asking again could
+      // only duplicate cost for the same outcome.
+      logError(`[video-scout sdk] empty response (finishReason=${finish}). Full candidate: ${sanitizeUpstreamText(JSON.stringify((json && (json.candidates || json))) )}`);
+      return 1;
+    }
+    if (outcome.attempt > 1) log(`[video-scout sdk] recovered on attempt ${outcome.attempt}/${RETRY_MAX_ATTEMPTS}`);
+    // The analysis text and the usage line print exactly ONCE, only here, only on the
+    // accepted success response — a failed attempt has no path to either line.
+    log(`\n${text}\n`);
+    if (finish !== 'STOP') logError(`[video-scout sdk] WARNING: finishReason=${finish} — output may be truncated.`);
+    log(formatUsageLine((json && json.usageMetadata) || {}, model, mediaResolution, sliced));
+    return 0;
+  }
+
+  // http-failure: either a non-retryable status/body, or the third 503 in a row.
+  const json = outcome.json;
+  const apiMsg = sanitizeUpstreamText(
+    json && json.error ? `${json.error.status || ''} ${json.error.message || ''}`.trim() : JSON.stringify(json).slice(0, 500)
+  );
+  const giveUp = outcome.exhaustedRetries ? ` — giving up after ${RETRY_MAX_ATTEMPTS} attempts` : '';
+  logError(`[video-scout sdk] HTTP ${outcome.status} after ${outcome.secs}s (attempt ${outcome.attempt}/${RETRY_MAX_ATTEMPTS})${giveUp}: ${apiMsg}`);
   return 1;
 }
 
@@ -297,6 +343,7 @@ module.exports = {
   buildRequestBody, formatUsageLine, parseArgs, resolveSliceOffsets,
   MEDIA_RESOLUTION_MAP, DEFAULT_MODEL,
   classifyHttpFailure, retryDelayMs, sanitizeUpstreamText,
+  submitGeminiRequest,
   runVideoScout, runCliEntry,
   RETRY_MAX_ATTEMPTS, RETRY_BASE_DELAY_MS, RETRY_JITTER_MS, NON_RETRYABLE_STATUSES,
 };

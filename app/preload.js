@@ -53,6 +53,12 @@ contextBridge.exposeInMainWorld('cc', {
   libraryList: () => ipcRenderer.invoke('library-list'),
   libraryRead: (handle) => ipcRenderer.invoke('library-read', handle),
   libraryOpenReport: (paneId) => ipcRenderer.invoke('library-open-report', paneId),
+  // V3b follow-up Q&A (invoke-only). The request is a strict discriminated shape carrying ONLY a
+  // main-owned identity token (the CURRENT opaque library handle, or the pane ID for Open Report)
+  // plus the question text — never a run ID, path, report text, URL, model, or key. Main validates
+  // everything, re-reads the report through PowerShell, enforces the cost bounds and the one-in-
+  // flight rule, and returns only a bounded plain-text answer + safe usage metadata.
+  libraryFollowup: (req) => ipcRenderer.invoke('library-followup', req),
 
   // surfaced main-process errors (shown in the Logs tab instead of a fatal dialog)
   onMainError: (cb) => ipcRenderer.on('main-error', (_e, m) => cb(m)),

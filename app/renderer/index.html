@@ -177,6 +177,9 @@
             <div id="libMetaHost" class="lib-meta-host"></div>
             <div id="libReportStatus" class="lib-status-msg hidden"></div>
             <pre id="libReportText" class="lib-report-text"></pre>
+            <!-- V3b: the follow-up Q&A section is BUILT by report-followup.js (safe builders only)
+                 into this host; it shows only while a completed stored report is displayed. -->
+            <div id="libFollowupHost" class="lib-followup-host"></div>
           </div>
         </div>
       </section>
@@ -276,6 +279,7 @@
   <script src="pane-maximize.js"></script>
   <script src="clipboard-consumer.js"></script>
   <script src="library-view.js"></script>
+  <script src="report-followup.js"></script>
   <script src="tts-selection.js"></script>
   <script src="audio-module-health.js"></script>
   <script src="stt-target-lock.js"></script>

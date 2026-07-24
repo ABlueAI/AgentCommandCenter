@@ -193,6 +193,15 @@ const libClip = window.ccClipboardConsumer.createClipboardConsumer({
   log: appendLog,
   paneId: 'library',
 });
+// V3b follow-up Q&A: one explicit question about the displayed stored report. The controller owns
+// the renderer-local epoch (stale-response suppression) and the follow-up section's DOM; the ONLY
+// submission path is its Ask button. It sends main nothing but {source, handle|paneId, question}.
+const libFollowup = window.ccReportFollowup.createReportFollowup({
+  el: agentDom.el,
+  doc: document,
+  submit: (req) => cc.libraryFollowup(req),
+  log: appendLog,
+});
 
 function libFilters() {
   return {
@@ -227,6 +236,11 @@ function renderLibraryList() {
 }
 
 async function refreshLibrary() {
+  // V3b: a refresh START bumps the reader epoch (and clears the follow-up state). If something
+  // newer (a selection or Open Report) takes the reader over while the scan runs, this refresh has
+  // become LATE: it still applies the fresh list + handles below, but it must NOT clear or replace
+  // what the newer action displayed.
+  const myEpoch = libFollowup.noteRefreshStart();
   libState.loaded = true;
   $('#libStatus').textContent = 'Scanning…';
   let res;
@@ -238,8 +252,10 @@ async function refreshLibrary() {
     return;
   }
   libState.entries = Array.isArray(res.entries) ? res.entries : [];
-  libState.selectedHandle = null;
-  clearReader();
+  if (libFollowup.isCurrent(myEpoch)) {
+    libState.selectedHandle = null;
+    clearReader();
+  }
   renderLibraryList();
   // Honest, metadata-only reporting of what the scan found (no report/manifest content).
   appendLog(`[library] scanned root: total=${res.total} valid=${libState.entries.length} invalid=${res.invalidCount} capExceeded=${res.capExceeded === true}\n`);
@@ -276,14 +292,26 @@ function renderMeta(entryLike) {
 }
 
 async function selectLibraryEntry(entry) {
+  // V3b: selecting bumps the epoch — clears the previous follow-up question/answer/errors and
+  // makes any in-flight read or follow-up response stale. Selection NEVER submits anything.
+  const myEpoch = libFollowup.noteSelection();
   libState.selectedHandle = entry.handle;
   renderLibraryList();          // re-mark selection
   renderMeta(entry);
   showReportStatus('Loading…');
   let res;
   try { res = await cc.libraryRead(entry.handle); }
-  catch (e) { showReportStatus('The report could not be read.'); appendLog(`[library] read failed: ${(e && e.message) || e}\n`); return; }
+  catch (e) {
+    if (libFollowup.isCurrent(myEpoch)) showReportStatus('The report could not be read.');
+    appendLog(`[library] read failed: ${(e && e.message) || e}\n`);
+    return;
+  }
+  if (!libFollowup.isCurrent(myEpoch)) return;   // a newer selection/open/refresh owns the reader
   applyReadResult(res, entry);
+  // Record the follow-up identity ONLY after the read displayed: the CURRENT opaque handle when a
+  // completed report is shown, otherwise no source (controls stay hidden/disabled).
+  const available = !!(res && res.ok && res.status === 'available' && typeof res.text === 'string');
+  libFollowup.setSource(available ? { kind: 'library', handle: entry.handle } : null, available);
 }
 
 function applyReadResult(res, entryLike) {
@@ -301,24 +329,37 @@ function applyReadResult(res, entryLike) {
 async function openReportForPane(paneId) {
   switchTab('library');
   document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('active', x.dataset.tab === 'library'));
-  if (!libState.loaded) refreshLibrary();
-  libState.selectedHandle = null;
-  renderLibraryList();
-  showReportStatus('Loading…');
-  let res;
-  try { res = await cc.libraryOpenReport(paneId); }
-  catch (e) { showReportStatus('The report could not be read.'); appendLog(`[library] open-report failed: ${(e && e.message) || e}\n`); return; }
-  // The renderer never learns the run ID/path — build a minimal meta from the read result only.
-  const entryLike = {
-    title: (res && res.title) || 'Video Scout run',
-    displayRunLabel: '(from Video Scout pane)',
-    mode: res && res.mode, route: res && res.route, outcome: res && res.outcome,
-    totalTokens: null, dateKind: 'unknown', date: null, sortMs: null,
-    reportStatus: (res && res.reportStatus) || (res && res.status) || 'incomplete',
-    startOffsetSeconds: null, endOffsetSeconds: null,
-  };
-  renderMeta(entryLike);
-  applyReadResult(res, entryLike);
+  // V3b ordering fix: the awaited-initial-scan / epoch algorithm is openPaneReportOrdered in
+  // report-followup.js (unit-tested there) — the initial scan completes BEFORE the pane report is
+  // read/displayed, a superseding action wins the reader, and a successful read records the PANE
+  // identity as the follow-up source (no Library handle is minted for Open Report).
+  await window.ccReportFollowup.openPaneReportOrdered(libFollowup, {
+    isLoaded: () => libState.loaded,
+    refresh: () => refreshLibrary(),
+    beforeRead: () => {
+      libState.selectedHandle = null;
+      renderLibraryList();
+      showReportStatus('Loading…');
+    },
+    readPane: (id) => cc.libraryOpenReport(id).catch((e) => {
+      appendLog(`[library] open-report failed: ${(e && e.message) || e}\n`);
+      throw e;
+    }),
+    displayError: () => showReportStatus('The report could not be read.'),
+    display: (res) => {
+      // The renderer never learns the run ID/path — build a minimal meta from the read result only.
+      const entryLike = {
+        title: (res && res.title) || 'Video Scout run',
+        displayRunLabel: '(from Video Scout pane)',
+        mode: res && res.mode, route: res && res.route, outcome: res && res.outcome,
+        totalTokens: null, dateKind: 'unknown', date: null, sortMs: null,
+        reportStatus: (res && res.reportStatus) || (res && res.status) || 'incomplete',
+        startOffsetSeconds: null, endOffsetSeconds: null,
+      };
+      renderMeta(entryLike);
+      applyReadResult(res, entryLike);
+    },
+  }, paneId);
 }
 
 function copyReport() {
@@ -341,6 +382,9 @@ function copyReport() {
 }
 
 function setupLibrary() {
+  // V3b: build the follow-up section (safe builders only) into its reader host. Mounting never
+  // submits anything; the Ask button is the only submission path.
+  libFollowup.mount($('#libFollowupHost'));
   $('#libRefresh').onclick = () => refreshLibrary();
   for (const idSel of ['#libSearch', '#libMode', '#libRoute', '#libOutcome', '#libDateKind', '#libSort']) {
     const elx = $(idSel);

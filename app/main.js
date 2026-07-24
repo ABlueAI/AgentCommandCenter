@@ -43,6 +43,16 @@ const { createClipboardIpcHandlers } = require('./clipboard-ipc');
 // code that touches the filesystem; this pure, unit-tested module (library-ipc.test.js) owns the trust
 // gate, the opaque-handle table, and the path-free projection. Same posture as K8 / the clipboard.
 const { createLibraryIpc } = require('./library-ipc');
+// V3b stored-report follow-up: one explicit user submission asks one bounded question about an
+// already-persisted, main-validated report. followup-ipc.js owns the trust/cost boundary (sender
+// gate, discriminated library-handle/pane-ID identity, PS-backed re-read, 200k context cap, global
+// single-flight); followup-child.js owns the provider child (process.execPath + child-only
+// ELECTRON_RUN_AS_NODE=1, allowlisted env, stdin-only content transport, bounded stdout/stderr,
+// hard timeout). Both are pure, unit-tested modules; the key never leaves main except into the
+// child's own environment. This path is NOT a PTY launch and lives entirely outside the fenced-role
+// cwd gate below (which is byte-for-byte unchanged).
+const { createFollowupIpc } = require('./followup-ipc');
+const { createFollowupChildRunner } = require('./followup-child');
 
 // ---- tunable defaults (marked ? — change to taste) --------------------------
 const DEFAULT_PROJECTS_ROOT = 'D:\\Workspace';            // (?) where your git repos live
@@ -289,6 +299,33 @@ app.whenReady().then(() => {
   ipcMain.handle('library-list', (e) => libraryIpc.handleList(e));
   ipcMain.handle('library-read', (e, handle) => libraryIpc.handleRead(e, handle));
   ipcMain.handle('library-open-report', (e, paneId) => libraryIpc.handleOpenReport(e, paneId));
+
+  // V3b stored-report follow-up boundary — same trust anchors, same identity routes (CURRENT
+  // library handle via libraryIpc.resolveHandle — lifetime unchanged — or pane ID via the V5b1
+  // registry), report re-read through the same PowerShell Read authority, and the bounded
+  // text-only Gemini child. Logs carry bounded metadata/constants only.
+  const followupChild = createFollowupChildRunner({
+    scriptPath: path.join(SCRIPTS_DIR, 'gemini-followup.js'),
+    getKey: () => geminiKey,             // decrypted in main memory (safeStorage); child env only
+  });
+  const followupIpc = createFollowupIpc({
+    entryUrl: ENTRY_URL,
+    getTrustedWindow: () => win,
+    resolveLibraryHandle: (handle) => libraryIpc.resolveHandle(handle),
+    getRunIdForPane: (paneId) => videoScoutRunIds.get(paneId),
+    readReport: (runId) => runLibraryAction({ action: 'Read', runId }),
+    runFollowupChild: (payload) => followupChild.run(payload),
+    hasGeminiKey: () => geminiKey !== null,
+    logUsage: (line) => {
+      console.log(line);
+      if (win && !win.isDestroyed()) win.webContents.send('main-error', line);
+    },
+    logRefusal: (line) => {
+      console.error(line);
+      if (win && !win.isDestroyed()) win.webContents.send('main-error', line);
+    },
+  });
+  ipcMain.handle('library-followup', (e, req) => followupIpc.handleAsk(e, req));
 
   createWindow();
 });
