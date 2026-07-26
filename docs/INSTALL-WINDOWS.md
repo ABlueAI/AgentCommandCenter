@@ -27,7 +27,7 @@ plan. Never transfer Blue's provider credentials to another computer.
 
 Windows 11 may display:
 
-> Smart App Control blocked an app that may be unsafe  
+> Smart App Control blocked an app that may be unsafe
 > Windows can't tell who created this app.
 
 The app does not start. Windows is refusing to load the unsigned Electron
@@ -174,4 +174,3 @@ Official references:
 - [Choose a Windows distribution path](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/choose-distribution-path)
 - [Open a Microsoft Store developer account](https://learn.microsoft.com/en-us/windows/apps/publish/partner-center/open-a-developer-account)
 - [Electron packaging](https://www.electronjs.org/docs/latest/tutorial/tutorial-packaging)
-

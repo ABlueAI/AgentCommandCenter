@@ -146,4 +146,3 @@ explanation is:
 That explanation is stronger and safer than claiming the change is costless,
 that Microsoft intended every developer machine to have SAC Off, or that
 signing would prove the application is secure.
-
