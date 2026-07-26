@@ -3,7 +3,7 @@
 Branch: `codex/docs-v1-portable-distribution`
 Fork-point SHA: `6baa732e35bba46d3ace135d8116d6a7eb2f103a`
 Pre-merge main SHA: `6baa732e35bba46d3ace135d8116d6a7eb2f103a`
-Tip SHA: `5e32f9a3808e240c0259ddd12497ce098d5bb99a`
+Tip SHA: `e3ab0c18f8a6799b3e6c52028b1f0af879c1618b`
 Merge commit SHA: Pending until merge
 
 Intended invariant:
@@ -111,10 +111,10 @@ sequenced after packaging and before the release gate.
 
 Review diff:
 Full reviewed range:
-`git diff 6baa732e35bba46d3ace135d8116d6a7eb2f103a...5e32f9a3808e240c0259ddd12497ce098d5bb99a --output=.agent-review-v1-portable-family-distribution-scope.diff`
+`git diff 6baa732e35bba46d3ace135d8116d6a7eb2f103a...e3ab0c18f8a6799b3e6c52028b1f0af879c1618b --output=.agent-review-v1-portable-family-distribution-scope.diff`
 
 Scoped EDA-1 delta:
-`git diff 1cfd9e4545306fca7bb6ae2690bd71bfca0193d3...5e32f9a3808e240c0259ddd12497ce098d5bb99a --output=.agent-review-v1-portable-family-distribution-eda1-delta.diff`
+`git diff 1cfd9e4545306fca7bb6ae2690bd71bfca0193d3...e3ab0c18f8a6799b3e6c52028b1f0af879c1618b --output=.agent-review-v1-portable-family-distribution-eda1-delta.diff`
 
 Reviewer verdict:
 
