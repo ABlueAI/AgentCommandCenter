@@ -10,8 +10,9 @@ and older checkpoints remain as provenance and are not active calendar promises.
 coding orchestration, Video Scout research, and one-place access to Blue's
 business tools. Finish the explicitly labelled **remaining-work sequence** in
 the July 23 checkpoint, pass the full release gate, then use the app for one
-complete workday before acceptance. This is not a public-installer commitment
-or a permanent feature freeze; the resulting field report seeds Blue Helm 2.0.
+complete workday before acceptance. Blue Helm 1.0 includes a bounded, portable
+family-distribution package and setup guide, but not a public Store launch or a
+permanent feature freeze; the resulting field report seeds Blue Helm 2.0.
 
 **Functional acceptance rule:** a visible control must work end-to-end, show an
 honest in-progress state, and surface failure visibly. A dead button, silent
@@ -204,15 +205,73 @@ This is load-bearing context, not historical decoration:
     must reuse or deliberately extend the existing `.claude.json` coordination
     surface, cover multiple app processes (not only panes), and prevent/warn on
     duplicate continuation rather than building a second competing lock.
-11. **Release gate.** Full app/Pester/reachability gates, `npm audit`,
+11. **Portable family distribution and clean-machine setup.** Before 1.0 is
+    complete, replace the development-only shortcut/runtime handoff with an
+    organized packaged build that Blue can install locally and give to one
+    trusted family member at no recurring signing cost. Remove machine-specific
+    `D:\Workspace\...` / `D:\Gemini_Video_Review\...` assumptions from the
+    distribution path through explicit first-run configuration; provide
+    dependency detection and setup instructions; keep credentials per-machine
+    in `safeStorage` and never copy Blue's keys; audit all bundled code, native
+    modules, models, and media tools for redistribution licenses; and prove
+    install, launch, first-run setup, and one representative agent workflow on
+    a clean Windows account or second computer. Time-box a free distribution
+    route: prefer a Microsoft Store-signed MSIX if Blue Helm's full-trust
+    process/filesystem behavior passes a prototype, otherwise ship a direct
+    family build with exact Smart App Control behavior and recovery documented.
+    Azure Artifact Signing or any recurring paid certificate service is
+    optional and is not a 1.0 requirement. Ship
+    `docs/INSTALL-WINDOWS.md` with every direct transfer and retain the
+    investigation record in
+    `docs/SMART-APP-CONTROL-AND-DISTRIBUTION.md`.
+12. **EDA-1 environment and deployment assumptions audit.** After the
+    portable package exists and before the functional ship-check, run the
+    read-only inventory in `docs/AUDIT-SCOPE-environment-deployment.md`.
+    Record every host-policy, runtime/toolchain, external-service, filesystem,
+    distribution/license, network, locale/time, reboot/update, and recipient
+    assumption as fact, inference, or unverified; assign blast radius,
+    warning time, detection, severity, and 1.0 disposition. The highest-value
+    acceptance is a clean-clone/clean-machine install using only
+    `docs/INSTALL-WINDOWS.md`. The audit makes no fixes; each blocking
+    remediation receives its own normally gated work order.
+13. **Release gate.** Resolve or explicitly accept every EDA-1 1.0 blocker,
+    then run the full app/Pester/reachability gates, `npm audit`,
     Electronegativity, full Electron restart, every included control smoked,
     visible progress/refusal, metadata-only Logs, credential-boundary checks,
     no automatic paid restart, clean synchronized `main`, and accepted
     residuals recorded.
-12. **One complete daily-driver day.** Blue records friction, failures,
+14. **One complete daily-driver day.** Blue records friction, failures,
     repeated manual steps, missing capabilities, and desired improvements in a
     DOCX. Repair blockers, record/tag Blue Helm 1.0, and use non-blocking
     findings to plan 2.0.
+
+### Windows launch/distribution constraint — July 26
+
+**Direct signed-binary swap: CLOSED for Electron 42.5.0.** A bounded
+checksum-verified comparison found both the installed Electron runtime and the
+official Electron 42.5.0 Windows prebuilt Authenticode-unsigned. Do not repeat
+the 148 MB download/investigation unless the pinned Electron version or
+Electron's signing policy changes. This closes only the idea of replacing the
+runtime with an officially signed upstream binary; it does **not** mean every
+zero-dollar distribution route is closed.
+
+Smart App Control can block any unsigned Electron development/family build
+before Blue Helm code starts. It offers no per-app exception. On the current
+development machine Blue chose the supported free resolution—Smart App Control
+Off—while keeping Defender and the other independent Windows protections
+enabled. This is an explicit security tradeoff, not an app defect or a silent
+bypass.
+
+| 1.0 distribution candidate | Recurring signing cost | Decision/status |
+|---|---:|---|
+| Direct packaged family build + `INSTALL-WINDOWS.md` | $0 | Required fallback; a recipient with SAC On must make the documented human security-setting choice. |
+| Microsoft Store MSIX | $0 signing; current new-account onboarding is $0 | Preferred time-boxed prototype. Microsoft re-signs a certified MSIX, but Blue Helm must first prove its full-trust child-process/filesystem model is Store-compatible. |
+| SignPath Foundation OSS signing | $0 if accepted | Eligibility scout only: requires a released, fully OSI-licensed project, verifiable builds, and Foundation approval. Never assume acceptance. |
+| CA certificate / Azure Artifact Signing | Paid | Optional future convenience for direct public distribution; never a Blue Helm 1.0 blocker. Current Microsoft documentation permits US/Canada individual Public Trust identities, so do not retain the stale “three-year organization only” claim. |
+
+Do not rearchitect Blue Helm away from Electron merely to avoid signing. That
+would replace `safeStorage`, IPC, process, and window security boundaries and
+requires an independent architecture decision rather than release cleanup.
 
 ### V4 × K5 retry-attribution release trigger
 
