@@ -10,8 +10,9 @@ and older checkpoints remain as provenance and are not active calendar promises.
 coding orchestration, Video Scout research, and one-place access to Blue's
 business tools. Finish the explicitly labelled **remaining-work sequence** in
 the July 23 checkpoint, pass the full release gate, then use the app for one
-complete workday before acceptance. This is not a public-installer commitment
-or a permanent feature freeze; the resulting field report seeds Blue Helm 2.0.
+complete workday before acceptance. Blue Helm 1.0 includes a bounded, portable
+family-distribution package and setup guide, but not a public Store launch or a
+permanent feature freeze; the resulting field report seeds Blue Helm 2.0.
 
 **Functional acceptance rule:** a visible control must work end-to-end, show an
 honest in-progress state, and surface failure visibly. A dead button, silent
@@ -204,12 +205,28 @@ This is load-bearing context, not historical decoration:
     must reuse or deliberately extend the existing `.claude.json` coordination
     surface, cover multiple app processes (not only panes), and prevent/warn on
     duplicate continuation rather than building a second competing lock.
-11. **Release gate.** Full app/Pester/reachability gates, `npm audit`,
+11. **Portable family distribution and clean-machine setup.** Before 1.0 is
+    complete, replace the development-only shortcut/runtime handoff with an
+    organized packaged build that Blue can install locally and give to one
+    trusted family member at no recurring signing cost. Remove machine-specific
+    `D:\Workspace\...` / `D:\Gemini_Video_Review\...` assumptions from the
+    distribution path through explicit first-run configuration; provide
+    dependency detection and setup instructions; keep credentials per-machine
+    in `safeStorage` and never copy Blue's keys; audit all bundled code, native
+    modules, models, and media tools for redistribution licenses; and prove
+    install, launch, first-run setup, and one representative agent workflow on
+    a clean Windows account or second computer. Time-box a free distribution
+    route: prefer a Microsoft Store-signed MSIX if Blue Helm's full-trust
+    process/filesystem behavior passes a prototype, otherwise ship a direct
+    family build with exact Smart App Control behavior and recovery documented.
+    Azure Artifact Signing or any recurring paid certificate service is
+    optional and is not a 1.0 requirement.
+12. **Release gate.** Full app/Pester/reachability gates, `npm audit`,
     Electronegativity, full Electron restart, every included control smoked,
     visible progress/refusal, metadata-only Logs, credential-boundary checks,
     no automatic paid restart, clean synchronized `main`, and accepted
     residuals recorded.
-12. **One complete daily-driver day.** Blue records friction, failures,
+13. **One complete daily-driver day.** Blue records friction, failures,
     repeated manual steps, missing capabilities, and desired improvements in a
     DOCX. Repair blockers, record/tag Blue Helm 1.0, and use non-blocking
     findings to plan 2.0.
