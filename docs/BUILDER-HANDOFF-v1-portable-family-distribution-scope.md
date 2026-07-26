@@ -3,7 +3,7 @@
 Branch: `codex/docs-v1-portable-distribution`
 Fork-point SHA: `6baa732e35bba46d3ace135d8116d6a7eb2f103a`
 Pre-merge main SHA: `6baa732e35bba46d3ace135d8116d6a7eb2f103a`
-Tip SHA: `9cbfbfdfc61df6ca76d0bdd40bb970394038c7a5`
+Tip SHA: `b2c556a9277f104e6cc98aa9c2efa01ada651aef`
 Merge commit SHA: Pending until merge
 
 Intended invariant:
@@ -11,11 +11,16 @@ Intended invariant:
 Blue Helm 1.0 is not complete until it has a portable, organized family build,
 clean-machine setup instructions, per-machine credentials, redistribution
 license checks, and a proven zero-recurring-signing-cost distribution route.
-A public Microsoft Store launch is not required.
+The Electron 42.5.0 signed-upstream-binary swap is closed without falsely
+closing the free Store MSIX or eligible OSS-signing candidates. A public
+Microsoft Store launch is not required.
 
 Files changed:
 
 - `BLUE-HELM-MASTER-STATUS.md`
+- `docs/INSTALL-WINDOWS.md`
+- `docs/SMART-APP-CONTROL-AND-DISTRIBUTION.md`
+- `docs/BUILDER-HANDOFF-v1-portable-family-distribution-scope.md`
 
 Security-sensitive surfaces touched:
 
@@ -29,11 +34,16 @@ Commands run:
 - `git diff --check`
 - `git diff --stat`
 - `git diff -- BLUE-HELM-MASTER-STATUS.md`
+- Read-only verification against current Microsoft Smart App Control, Windows
+  distribution, Store onboarding, and Artifact Signing documentation.
+- Read-only verification against Electron packaging/signing documentation and
+  SignPath Foundation's current OSS eligibility terms.
 
 Exact test results:
 
 No runtime tests were run because no runtime, package, script, or configuration
-file changed. `git diff --check` exited 0.
+file changed. `git diff --check` exited 0. The generated pinned review diff
+reproduces the reviewed range byte-for-byte.
 
 Manual verification:
 
@@ -43,12 +53,26 @@ Manual verification:
 - The ship-goal wording now distinguishes a required family-distribution
   package from a non-required public Store launch.
 - The scope explicitly makes recurring paid signing optional and non-blocking.
+- The transferred Claude evidence is retained as a bounded closure of the
+  official signed-Electron-42.5.0 swap, not overstated as proof that every
+  zero-dollar distribution route is closed.
+- `docs/INSTALL-WINDOWS.md` gives the current direct-build recipient an honest,
+  human-only Smart App Control procedure and troubleshooting path without
+  disabling Defender or using registry bypasses.
+- The distribution matrix retains direct transfer as the guaranteed fallback,
+  Store-signed MSIX as the preferred time-boxed prototype, SignPath as
+  conditional/approval-based, and paid signing as optional.
+- Current Microsoft documentation permits US/Canada individual Public Trust
+  identities; the transferred “three-year organization only” claim was not
+  retained.
 
 Known limitations:
 
-This branch records the release requirement; it does not implement packaging,
-first-run configuration, signing, Store submission, or clean-machine testing.
-Those require a separate spec-before-code work order near the end of 1.0.
+This branch records the release requirement and current Windows launch
+guidance; it does not implement packaging, first-run configuration, signing,
+Store submission, or clean-machine testing. Those require a separate
+spec-before-code work order near the end of 1.0. Store certification and
+SignPath acceptance remain candidates, not promised outcomes.
 
 Unexpected pre-existing findings:
 
@@ -60,10 +84,13 @@ Recommended review focus:
 
 Confirm that the new scope is achievable without requiring a public Store
 launch or recurring certificate subscription, that credentials remain
-per-machine, and that clean-machine acceptance is concrete.
+per-machine, and that clean-machine acceptance is concrete. Check the
+fact/inference boundary around the upstream Electron comparison, the Smart App
+Control tradeoff, free Store MSIX signing/onboarding, Artifact Signing
+individual eligibility, and conditional SignPath eligibility.
 
 Review diff:
-`git diff 6baa732e35bba46d3ace135d8116d6a7eb2f103a...9cbfbfdfc61df6ca76d0bdd40bb970394038c7a5 --output=.agent-review-v1-portable-family-distribution-scope.diff`
+`git diff 6baa732e35bba46d3ace135d8116d6a7eb2f103a...b2c556a9277f104e6cc98aa9c2efa01ada651aef --output=.agent-review-v1-portable-family-distribution-scope.diff`
 
 Reviewer verdict:
 
