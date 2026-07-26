@@ -220,7 +220,10 @@ This is load-bearing context, not historical decoration:
     process/filesystem behavior passes a prototype, otherwise ship a direct
     family build with exact Smart App Control behavior and recovery documented.
     Azure Artifact Signing or any recurring paid certificate service is
-    optional and is not a 1.0 requirement.
+    optional and is not a 1.0 requirement. Ship
+    `docs/INSTALL-WINDOWS.md` with every direct transfer and retain the
+    investigation record in
+    `docs/SMART-APP-CONTROL-AND-DISTRIBUTION.md`.
 12. **Release gate.** Full app/Pester/reachability gates, `npm audit`,
     Electronegativity, full Electron restart, every included control smoked,
     visible progress/refusal, metadata-only Logs, credential-boundary checks,
@@ -230,6 +233,34 @@ This is load-bearing context, not historical decoration:
     repeated manual steps, missing capabilities, and desired improvements in a
     DOCX. Repair blockers, record/tag Blue Helm 1.0, and use non-blocking
     findings to plan 2.0.
+
+### Windows launch/distribution constraint — July 26
+
+**Direct signed-binary swap: CLOSED for Electron 42.5.0.** A bounded
+checksum-verified comparison found both the installed Electron runtime and the
+official Electron 42.5.0 Windows prebuilt Authenticode-unsigned. Do not repeat
+the 148 MB download/investigation unless the pinned Electron version or
+Electron's signing policy changes. This closes only the idea of replacing the
+runtime with an officially signed upstream binary; it does **not** mean every
+zero-dollar distribution route is closed.
+
+Smart App Control can block any unsigned Electron development/family build
+before Blue Helm code starts. It offers no per-app exception. On the current
+development machine Blue chose the supported free resolution—Smart App Control
+Off—while keeping Defender and the other independent Windows protections
+enabled. This is an explicit security tradeoff, not an app defect or a silent
+bypass.
+
+| 1.0 distribution candidate | Recurring signing cost | Decision/status |
+|---|---:|---|
+| Direct packaged family build + `INSTALL-WINDOWS.md` | $0 | Required fallback; a recipient with SAC On must make the documented human security-setting choice. |
+| Microsoft Store MSIX | $0 signing; current new-account onboarding is $0 | Preferred time-boxed prototype. Microsoft re-signs a certified MSIX, but Blue Helm must first prove its full-trust child-process/filesystem model is Store-compatible. |
+| SignPath Foundation OSS signing | $0 if accepted | Eligibility scout only: requires a released, fully OSI-licensed project, verifiable builds, and Foundation approval. Never assume acceptance. |
+| CA certificate / Azure Artifact Signing | Paid | Optional future convenience for direct public distribution; never a Blue Helm 1.0 blocker. Current Microsoft documentation permits US/Canada individual Public Trust identities, so do not retain the stale “three-year organization only” claim. |
+
+Do not rearchitect Blue Helm away from Electron merely to avoid signing. That
+would replace `safeStorage`, IPC, process, and window security boundaries and
+requires an independent architecture decision rather than release cleanup.
 
 ### V4 × K5 retry-attribution release trigger
 
