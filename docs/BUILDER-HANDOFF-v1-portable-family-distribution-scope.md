@@ -3,7 +3,7 @@
 Branch: `codex/docs-v1-portable-distribution`
 Fork-point SHA: `6baa732e35bba46d3ace135d8116d6a7eb2f103a`
 Pre-merge main SHA: `6baa732e35bba46d3ace135d8116d6a7eb2f103a`
-Tip SHA: `bbedda2e7f894354092740692b4fe34b2ea43bfb`
+Tip SHA: `5e32f9a3808e240c0259ddd12497ce098d5bb99a`
 Merge commit SHA: Pending until merge
 
 Intended invariant:
@@ -20,6 +20,7 @@ Files changed:
 - `BLUE-HELM-MASTER-STATUS.md`
 - `docs/INSTALL-WINDOWS.md`
 - `docs/SMART-APP-CONTROL-AND-DISTRIBUTION.md`
+- `docs/AUDIT-SCOPE-environment-deployment.md`
 - `docs/BUILDER-HANDOFF-v1-portable-family-distribution-scope.md`
 
 Security-sensitive surfaces touched:
@@ -38,6 +39,11 @@ Commands run:
   distribution, Store onboarding, and Artifact Signing documentation.
 - Read-only verification against Electron packaging/signing documentation and
   SignPath Foundation's current OSS eligibility terms.
+- Verified that the transferred EDA-1 audit's carried STT missing-runtime claim
+  was historical and fixed: the current app declares
+  `@huggingface/transformers` 3.8.1 as a production dependency. EDA-1 retains
+  it as a positive-control lesson and requires clean-clone proof instead of
+  reopening it as a current defect.
 
 Exact test results:
 
@@ -65,6 +71,15 @@ Manual verification:
 - Current Microsoft documentation permits US/Canada individual Public Trust
   identities; the transferred “three-year organization only” claim was not
   retained.
+- EDA-1 is now an explicit read-only release step after portable packaging and
+  before the functional release gate. It inventories host policy, toolchain,
+  providers, paths, licensing/assets, network/privacy, locale/time, power
+  state, Windows servicing, and recipient-machine assumptions.
+- EDA-1's highest-value test is a clean-clone/clean-machine install using only
+  `docs/INSTALL-WINDOWS.md`; all undocumented interventions become findings.
+- EDA-1 makes no fixes. Blocking remediations receive separate normally gated
+  work orders, and the release gate cannot begin until each 1.0 blocker is
+  resolved or explicitly accepted.
 
 Known limitations:
 
@@ -72,7 +87,9 @@ This branch records the release requirement and current Windows launch
 guidance; it does not implement packaging, first-run configuration, signing,
 Store submission, or clean-machine testing. Those require a separate
 spec-before-code work order near the end of 1.0. Store certification and
-SignPath acceptance remain candidates, not promised outcomes.
+SignPath acceptance remain candidates, not promised outcomes. EDA-1 is an
+audit scope, not evidence that its assumptions already hold; its findings
+report remains future release work.
 
 Unexpected pre-existing findings:
 
@@ -87,18 +104,32 @@ launch or recurring certificate subscription, that credentials remain
 per-machine, and that clean-machine acceptance is concrete. Check the
 fact/inference boundary around the upstream Electron comparison, the Smart App
 Control tradeoff, free Store MSIX signing/onboarding, Artifact Signing
-individual eligibility, and conditional SignPath eligibility.
+individual eligibility, and conditional SignPath eligibility. For the EDA-1
+delta, confirm that the scope is comprehensive without reintroducing stale
+findings, that it remains read-only, and that its clean-machine acceptance is
+sequenced after packaging and before the release gate.
 
 Review diff:
-`git diff 6baa732e35bba46d3ace135d8116d6a7eb2f103a...bbedda2e7f894354092740692b4fe34b2ea43bfb --output=.agent-review-v1-portable-family-distribution-scope.diff`
+Full reviewed range:
+`git diff 6baa732e35bba46d3ace135d8116d6a7eb2f103a...5e32f9a3808e240c0259ddd12497ce098d5bb99a --output=.agent-review-v1-portable-family-distribution-scope.diff`
+
+Scoped EDA-1 delta:
+`git diff 1cfd9e4545306fca7bb6ae2690bd71bfca0193d3...5e32f9a3808e240c0259ddd12497ce098d5bb99a --output=.agent-review-v1-portable-family-distribution-eda1-delta.diff`
 
 Reviewer verdict:
 
-Pending.
+- Base portable-distribution review over
+  `6baa732e35bba46d3ace135d8116d6a7eb2f103a...bbedda2e7f894354092740692b4fe34b2ea43bfb`:
+  `VERDICT: PASS`
+- Scoped EDA-1 delta review: Pending.
 
 Reviewer verdict source:
 
-Pending.
+Base verdict source: attached `Reviewer Report — V1 Portable Family
+Distribution Scope (docs-only)`, read-only Standard-class review supplied by
+Blue on July 26, 2026. The report also verified the one-commit handoff-only
+tail through `1cfd9e4`, pinned-diff byte equality, current external policy
+claims, and untouched `main`/`origin/main`.
 
 ## Review-diff rule
 
