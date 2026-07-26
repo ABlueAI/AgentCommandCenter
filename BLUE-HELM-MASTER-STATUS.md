@@ -224,12 +224,23 @@ This is load-bearing context, not historical decoration:
     `docs/INSTALL-WINDOWS.md` with every direct transfer and retain the
     investigation record in
     `docs/SMART-APP-CONTROL-AND-DISTRIBUTION.md`.
-12. **Release gate.** Full app/Pester/reachability gates, `npm audit`,
+12. **EDA-1 environment and deployment assumptions audit.** After the
+    portable package exists and before the functional ship-check, run the
+    read-only inventory in `docs/AUDIT-SCOPE-environment-deployment.md`.
+    Record every host-policy, runtime/toolchain, external-service, filesystem,
+    distribution/license, network, locale/time, reboot/update, and recipient
+    assumption as fact, inference, or unverified; assign blast radius,
+    warning time, detection, severity, and 1.0 disposition. The highest-value
+    acceptance is a clean-clone/clean-machine install using only
+    `docs/INSTALL-WINDOWS.md`. The audit makes no fixes; each blocking
+    remediation receives its own normally gated work order.
+13. **Release gate.** Resolve or explicitly accept every EDA-1 1.0 blocker,
+    then run the full app/Pester/reachability gates, `npm audit`,
     Electronegativity, full Electron restart, every included control smoked,
     visible progress/refusal, metadata-only Logs, credential-boundary checks,
     no automatic paid restart, clean synchronized `main`, and accepted
     residuals recorded.
-13. **One complete daily-driver day.** Blue records friction, failures,
+14. **One complete daily-driver day.** Blue records friction, failures,
     repeated manual steps, missing capabilities, and desired improvements in a
     DOCX. Repair blockers, record/tag Blue Helm 1.0, and use non-blocking
     findings to plan 2.0.
