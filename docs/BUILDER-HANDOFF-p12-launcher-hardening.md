@@ -140,6 +140,16 @@ nor modifies the fence gate, `ptyEnv`, `realOrNearest`, or `FENCED_ROLES`.
 - The production launcher modules contain no `cmd.exe` / `ComSpec` / shell in code
   (only in explanatory comments).
 - `git status` clean after commit (no phantom EOL modification).
+- Blue completed the reviewed-build manual acceptance after a full Electron
+  launch:
+  - **PASS:** VS Code opened the main repository correctly.
+  - **PASS:** Terminal opened the main repository at
+    `D:\Workspace\agent-command-center`.
+  - **PASS:** VS Code and Terminal opened a registered worktree correctly.
+  - **PASS:** no launcher authorization/spawn errors appeared in Logs; an
+    ordinary in-app builder PTY launched successfully with
+    `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1`; the Video Scout modal and existing
+    startup modules remained reachable.
 
 ## Known limitations
 
