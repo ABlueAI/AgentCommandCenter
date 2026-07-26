@@ -3,7 +3,7 @@
 Branch: `codex/docs-v1-portable-distribution`
 Fork-point SHA: `6baa732e35bba46d3ace135d8116d6a7eb2f103a`
 Pre-merge main SHA: `6baa732e35bba46d3ace135d8116d6a7eb2f103a`
-Tip SHA: `b2c556a9277f104e6cc98aa9c2efa01ada651aef`
+Tip SHA: `bbedda2e7f894354092740692b4fe34b2ea43bfb`
 Merge commit SHA: Pending until merge
 
 Intended invariant:
@@ -90,7 +90,7 @@ Control tradeoff, free Store MSIX signing/onboarding, Artifact Signing
 individual eligibility, and conditional SignPath eligibility.
 
 Review diff:
-`git diff 6baa732e35bba46d3ace135d8116d6a7eb2f103a...b2c556a9277f104e6cc98aa9c2efa01ada651aef --output=.agent-review-v1-portable-family-distribution-scope.diff`
+`git diff 6baa732e35bba46d3ace135d8116d6a7eb2f103a...bbedda2e7f894354092740692b4fe34b2ea43bfb --output=.agent-review-v1-portable-family-distribution-scope.diff`
 
 Reviewer verdict:
 
