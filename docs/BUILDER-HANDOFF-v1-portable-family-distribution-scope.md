@@ -121,7 +121,9 @@ Reviewer verdict:
 - Base portable-distribution review over
   `6baa732e35bba46d3ace135d8116d6a7eb2f103a...bbedda2e7f894354092740692b4fe34b2ea43bfb`:
   `VERDICT: PASS`
-- Scoped EDA-1 delta review: Pending.
+- Scoped EDA-1 delta review over
+  `1cfd9e4545306fca7bb6ae2690bd71bfca0193d3...e3ab0c18f8a6799b3e6c52028b1f0af879c1618b`:
+  `VERDICT: PASS`
 
 Reviewer verdict source:
 
@@ -130,6 +132,15 @@ Distribution Scope (docs-only)`, read-only Standard-class review supplied by
 Blue on July 26, 2026. The report also verified the one-commit handoff-only
 tail through `1cfd9e4`, pinned-diff byte equality, current external policy
 claims, and untouched `main`/`origin/main`.
+
+Scoped EDA-1 verdict source: attached `Reviewer Report — EDA-1 Scoped Delta
+(docs-only)`, read-only Standard-class review supplied by Blue on July 26,
+2026. The report found no CRITICAL, HIGH, or MEDIUM findings; verified the
+scoped pinned diff byte-for-byte; confirmed the one-commit handoff-only tail
+through `4e6f513`; and confirmed that `main`/`origin/main` remained untouched.
+Its two informational notes documented the expected in-range self-reference
+before the handoff tail corrected it and the accurately pending EDA-1 verdict
+at review time. Neither was a defect.
 
 ## Review-diff rule
 
