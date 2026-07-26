@@ -185,4 +185,3 @@ findings, not blank cells.
 
 The release gate begins only after every 1.0 blocker has a merge record or an
 explicit human acceptance record.
-
