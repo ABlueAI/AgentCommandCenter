@@ -7,7 +7,7 @@ const { app, BrowserWindow, ipcMain, shell, dialog, session, safeStorage, clipbo
 const path = require('path');
 const { pathToFileURL } = require('url');
 const fs = require('fs');
-const { spawn, execFile } = require('child_process');
+const { spawn, execFile, execFileSync } = require('child_process');
 const pty = require('@lydell/node-pty'); // prebuilt ConPTY — powers in-app terminals
 // Video-scout's Gemini model/media-resolution options are untrusted IPC input, same posture as
 // every other renderer-supplied field. The allowlists + arg-building logic live in this small,
@@ -24,7 +24,19 @@ const { validateTask } = require('./task-name');
 // Navigation-lockdown decisions (deny window.open / off-app navigation) and the shell-free launcher
 // arg builders. Both dependency-free + unit-tested (nav-guard.test.js / launchers.test.js).
 const { decideWindowOpen, decideNavigation, refusalLine } = require('./nav-guard');
-const { openVscodeSpec, openTerminalSpec } = require('./launchers');
+// P12 launcher hardening: shell-free launcher arg builders + deterministic Code.exe / wt.exe
+// resolution (no cmd.exe intermediary), and the main-owned directory AUTHORIZER (a launcher may open
+// only the current repo root or one of its live git worktrees). Both dependency-free + unit-tested
+// (launchers.test.js / launcher-authz.test.js); the byte-invariance of the fenced-role gate + the
+// whole pty-start handler is asserted by launcher-fence-invariant.test.js.
+const { resolveVscodeExe, resolveTerminalExe } = require('./launchers');
+const { createLauncherAuthorizer } = require('./launcher-authz');
+// The launcher IPC boundary: gate -> authorize -> resolve exe -> shell-free spawn. Pure + unit-tested
+// (launcher-ipc.test.js); an untrusted sender or unauthorized dir spawns zero children.
+const { createLauncherIpc } = require('./launcher-ipc');
+// The one canonical fail-closed sender/frame/URL trust gate (shared with clipboard/library/followup).
+// P12 adds the two launcher handlers as callers so they, too, refuse any non-trusted-window sender.
+const { createTrustedSenderGate } = require('./trusted-ipc-sender');
 // K8 media-permission boundary: both session permission handlers come from this pure,
 // dependency-free, unit-tested module (media-permission-policy.test.js). A grant requires
 // the trusted window's main frame + the exact entry document + audio-only proof; every
@@ -343,10 +355,22 @@ function git(args, cwd) {
     execFile('git', args, { cwd }, (_err, stdout) => resolve((stdout || '').trim()));
   });
 }
-// Launch a detached external process (Windows Terminal, VSCode, etc.) and don't block. shell:false
-// (AUDIT #7): callers build argv via launchers.js so the git-derived directory path is a discrete
-// argument no shell ever parses. See launchers.js for the code.cmd-via-cmd.exe detail on Windows.
-function launch(cmd, args) { spawn(cmd, args, { detached: true }).unref(); }
+// Launch a detached external process (Windows Terminal, VS Code) and don't block. shell:false is
+// EXPLICIT and load-bearing (P12): callers resolve a real executable (Code.exe / wt.exe) and pass the
+// directory as a discrete argv element, so no shell — cmd.exe or sh — ever parses the path. An `error`
+// event (e.g. the executable could not be spawned / ENOENT) is surfaced to the caller's onError so a
+// missing VS Code or Windows Terminal becomes a visible refusal instead of an unhandled rejection.
+function launch(cmd, args, onError) {
+  let child;
+  try {
+    child = spawn(cmd, args, { detached: true, shell: false, windowsHide: false });
+  } catch (e) {
+    if (typeof onError === 'function') onError(e);
+    return;
+  }
+  child.on('error', (err) => { if (typeof onError === 'function') onError(err); });
+  child.unref();
+}
 
 // ---- launch-pipeline timing diagnostics (remove once root cause confirmed) --
 let _t0 = null;
@@ -641,12 +665,59 @@ ipcMain.handle('review-diff', async (_e, { worktree, base }) => {
 });
 
 // ---- IPC: one-click launchers ----------------------------------------------
-ipcMain.handle('open-vscode', async (_e, p) => {
-  const s = openVscodeSpec(p);
-  if (s.error) { if (win && !win.isDestroyed()) win.webContents.send('main-error', s.error); return; }
-  launch(s.cmd, s.args);
+// P12: the MAIN-owned set of directories the one-click launchers may open — every git repository under
+// the configured projectsRoot (the exact `list-repos` rule) plus each of that repo's live git
+// worktrees (the exact `list-worktrees` source). Re-derived from the filesystem + git on EVERY launch;
+// the renderer's string is only membership-tested against it (launcher-authz.js), never trusted. Any
+// enumeration failure degrades to a smaller/empty set, so the launch refuses rather than opens.
+function listLauncherAuthorizedDirs() {
+  const dirs = [];
+  let root;
+  try { root = loadSettings().projectsRoot; } catch { root = null; }
+  if (!root) return dirs;
+  let repos = [];
+  try {
+    repos = fs.readdirSync(root, { withFileTypes: true })
+      .filter((d) => d.isDirectory() && fs.existsSync(path.join(root, d.name, '.git')))
+      .map((d) => path.join(root, d.name));
+  } catch { return dirs; }
+  for (const repo of repos) {
+    dirs.push(repo); // the repo root itself (also git's first worktree entry — kept if git fails)
+    let out = '';
+    try {
+      out = execFileSync('git', ['-C', repo, 'worktree', 'list', '--porcelain'],
+        { encoding: 'utf8', timeout: 10000, windowsHide: true, maxBuffer: 4 * 1024 * 1024 }) || '';
+    } catch { out = ''; }
+    for (const line of out.split('\n')) {
+      if (line.startsWith('worktree ')) { const wp = line.slice(9).trim(); if (wp) dirs.push(wp); }
+    }
+  }
+  return dirs;
+}
+
+// Both launchers pass the SAME two gates before spawning anything: (1) the shared trusted-sender gate
+// (only the real Blue Helm window's main frame at the exact entry document), and (2) the launcher-authz
+// directory authorizer (the path must canonicalize to a main-owned repo/worktree real directory). A
+// failure of EITHER refuses VISIBLY (Logs tab) and spawns NOTHING. The executable is then resolved
+// deterministically from main-owned env (never a renderer path) and spawned shell:false.
+const launcherGate = createTrustedSenderGate({ entryUrl: ENTRY_URL, getTrustedWindow: () => win });
+const launcherAuthorizer = createLauncherAuthorizer({
+  realpath: (p) => fs.realpathSync.native(p),
+  isDirectory: (p) => fs.statSync(p).isDirectory(),
+  listAuthorizedDirs: listLauncherAuthorizedDirs,
 });
-ipcMain.handle('open-terminal', async (_e, p) => { const s = openTerminalSpec(p); launch(s.cmd, s.args); });
+const launcherIpc = createLauncherIpc({
+  assessSender: (e) => launcherGate.assess(e),
+  authorize: (p) => launcherAuthorizer.authorize(p),
+  resolveVscode: () => resolveVscodeExe({ env: process.env, exists: fs.existsSync }),
+  resolveTerminal: () => resolveTerminalExe({ env: process.env, exists: fs.existsSync }),
+  launch,
+  // Bounded visible refusal on the same main-error channel the nav/%-path refusals use — reason
+  // CONSTANT only, never the offending path.
+  logRefusal: (line) => { tlog(line); if (win && !win.isDestroyed()) win.webContents.send('main-error', line); },
+});
+ipcMain.handle('open-vscode', async (e, p) => launcherIpc.handleOpenVscode(e, p));
+ipcMain.handle('open-terminal', async (e, p) => launcherIpc.handleOpenTerminal(e, p));
 // Only ever hand http(s) URLs to the OS — never file:, vbscript:, etc. from terminal output.
 ipcMain.handle('open-external', async (_e, url) => {
   if (typeof url === 'string' && /^https?:\/\//i.test(url)) shell.openExternal(url);
