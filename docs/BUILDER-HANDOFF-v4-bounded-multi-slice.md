@@ -3,9 +3,17 @@
 Branch: `feature/v4-bounded-multi-slice`
 Fork-point SHA: `4c07db9a387191485b51cb99886d58d94573c1ad`
 Pre-merge main SHA: `4c07db9a387191485b51cb99886d58d94573c1ad` (verified `main` == `origin/main` == this SHA before branching; re-verify at gate time)
-Reviewed code tip: **V4R — recorded in the handoff tail commit** (supersedes `f17b51f`)
+Reviewed code tip: **`5b5e30a102e92a02151ee4b4876a379e6fa7069b`** (V4R — supersedes `f17b51f`)
 Superseded reviewed code tip: `f17b51fdbe2dbd2b6110257f2df459dd7edc04f0` (V4; passed review, then FAILED human acceptance — see V4R below)
 Merge commit SHA: Pending until merge
+
+Pinned diff: `.agent-review-v4-bounded-multi-slice.diff` — **262,691 bytes, 32 files**
+(27 modified, 5 added), SHA-256 `B64D084DD2ECA9F900A67FC4806E1A86E75D145C9C1A070DD84361C221340038`.
+Gitignored, created with `git diff --output`, verified to regenerate byte-for-byte.
+
+`docs/BUILDER-HANDOFF-v4-bounded-multi-slice.md` is present as a regular `100644` blob at the
+reviewed tip, so any commit above it can only ever be a **modification** — which is exactly the
+handoff-tail shape `scripts/merge-gate.ps1` requires.
 
 > **Release status: the original V4 Opus `VERDICT: PASS` is HISTORICAL EVIDENCE ONLY and is no
 > longer sufficient to release this branch.** Human acceptance exposed a production defect the
@@ -195,7 +203,13 @@ repository facts was found before implementation began.
   manifest-truth `Describe`; `yt-dlp` stub portability repair + tripwire; `E2EMarkerPath` rename.
 - `scripts/test-fixtures/node-argv-echo.js` **(new)** — inert argv echo fixture.
 
-Cumulative branch total: **33 files** (29 modified, 4 added).
+Cumulative branch total in the reviewed range `4c07db9...5b5e30a`: **32 files** (27 modified,
+5 added — the 5 added are this handoff doc, the two slice-ranges helper/test files, and the two
+test fixtures).
+
+`scripts/lib/get-node-cli-arg.ps1` — the escaping helper itself — is **byte-identical to the fork
+point**. V4R only *calls* it; the transport logic it implements was already reviewed and in
+production use for `--prompt-text`.
 
 ## Files changed — original V4 (29 total: 26 modified, 3 added)
 
@@ -287,13 +301,24 @@ constants `84E1ABF55AE59453` · `resolveSliceOffsets` `91B4C5D10E1C6B4E` · `san
 
 | Suite | V4 | V4R | Note |
 |---|---|---|---|
-| app aggregate | 1297 / 0 | **1297 / 0** | unchanged: V4R touches PowerShell + a test fixture only |
-| Pester aggregate | 802 / 0 / 0 | **see tail commit** | V4R adds real-`node.exe` and manifest-truth tests |
+| app aggregate | 1297 / 0 | **1297 passed / 0 failed** | unchanged: V4R touches PowerShell + a test fixture only |
+| Pester aggregate | 802 / 0 / 0 | **827 passed / 0 failed / 0 skipped** | +25 V4R tests |
 | `get-node-cli-arg.Tests.ps1` | 9 / 0 | **21 / 0** | +12 real `node.exe` round-trip tests |
 | `feed-gemini.Tests.ps1` | 47 / 0 | **60 / 0** | +13 V4R (escaping, manifest truth, `yt-dlp` tripwire) |
 
-Both gates were re-run on the committed corrected tree. Exact totals are recorded in the handoff
-tail commit alongside the reviewed-tip SHA and the pinned-diff metadata.
+Both gates were run with a clean working tree at `5b5e30a` (`git status --porcelain` empty), so the
+measured tree is the committed tree. Also green: `git diff --check` on `4c07db9...5b5e30a` (exit 0),
+`node --check` on the added JS fixture, and `PSParser::Tokenize` on all three changed `.ps1` files
+(0 parse errors). All V4R-added content is ASCII-only with CRLF endings; the only non-ASCII bytes in
+the changed files are pre-existing em-dashes, unchanged in count from the fork point.
+
+### Zero-provider attestation
+
+No test in this branch performs a provider request. The V4R additions spawn exactly one local
+process (`node.exe`) against an inert repo-owned fixture with no `require`, no network, no
+filesystem access, and no credentials. The `yt-dlp` stub is never executed (the probe subprocess is
+shadowed at the `Start-Job`/`Receive-Job` layer). Existing SDK tests remain loopback-only
+(`127.0.0.1`) or use an injected `fetchImpl`.
 
 ## Exact test results — original V4 (historical)
 
