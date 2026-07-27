@@ -52,6 +52,17 @@ const MEDIA_RESOLUTION_MAP = {
 };
 const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
 
+// --- V4 bounded multi-slice constants (mirrored in app/video-scout-args.js and
+// scripts/lib/get-video-scout-slice-ranges.ps1). This file re-enforces the WHOLE multi-slice
+// contract independently — serialized bound, exact shape, count, integer bounds, order/overlap,
+// aggregate cap, scalar mutual exclusion — because it is a runnable entry point of its own and
+// must never trust that PowerShell or main validated first. -----------------------------------
+const MIN_MULTI_SLICES = 2;
+const MAX_SLICES = 8;                       // deliberately below Gemini's documented 10-video max
+const AGGREGATE_SLICE_CAP_SECONDS = 1800;   // fixed; no flag or env var can raise it
+const MAX_SLICE_RANGES_JSON_UNITS = 2048;   // bounds the serialized control argument ONLY
+const MAX_OFFSET_SECONDS = 86400;
+
 // --- K5 retry policy constants (documented bounds, asserted in tests) ------------------------
 const RETRY_MAX_ATTEMPTS = 3;          // total submitted attempts, structural for-loop cap
 const RETRY_BASE_DELAY_MS = 1000;      // delay n = base * 2^(n-1) + jitter -> 1.0-1.5s, 2.0-2.5s
@@ -74,6 +85,9 @@ function parseArgs(argv) {
     // can be refused (resolveSliceOffsets) instead of silently falling through to a whole-video run.
     else if (a === '--start-offset') { out.startOffsetSeen = true; out.startOffset = argv[++i]; }
     else if (a === '--end-offset') { out.endOffsetSeen = true; out.endOffset = argv[++i]; }
+    // Same seen/value split as the offsets: a trailing valueless flag must be refusable, never
+    // silently treated as "not passed" (which would fall through to a whole-video run).
+    else if (a === '--slice-ranges-json') { out.sliceRangesJsonSeen = true; out.sliceRangesJson = argv[++i]; }
   }
   return out;
 }
@@ -105,28 +119,115 @@ function resolveSliceOffsets(args) {
   return { sliced: true, startOffset: s.value, endOffset: e.value };
 }
 
+// V4: validate the multi-slice control argument, exported for tests. The FULL contract is
+// re-enforced here independently (work-order clarification): mutual exclusion with the scalar
+// offsets, the 2048-unit serialized bound BEFORE parsing, exact array/object shape, 2-8 count,
+// integer offsets within 0-86400, end strictly after start, chronological non-overlap in the
+// given order (never sorted/merged/deduplicated), and the fixed aggregate cap. Returns
+// { multi:false } (flag absent), { multi:true, ranges, aggregateSeconds }, or { error } — never a
+// coerced pass-through and never a silent downgrade to whole-video.
+function resolveSliceRanges(args) {
+  if (!args.sliceRangesJsonSeen) return { multi: false };
+  if (args.startOffsetSeen || args.endOffsetSeen) {
+    return { error: '--slice-ranges-json and --start-offset/--end-offset are mutually exclusive; pass one or the other, never both.' };
+  }
+  const raw = args.sliceRangesJson;
+  if (raw === undefined) return { error: '--slice-ranges-json was given with no value.' };
+  if (typeof raw !== 'string' || raw.length > MAX_SLICE_RANGES_JSON_UNITS) {
+    return { error: `--slice-ranges-json exceeds the ${MAX_SLICE_RANGES_JSON_UNITS}-unit bound (got ${raw && raw.length} units); refusing before parsing.` };
+  }
+  let parsed;
+  try { parsed = JSON.parse(raw); }
+  catch { return { error: '--slice-ranges-json is not valid JSON; refusing rather than guessing what was meant.' }; }
+  if (!Array.isArray(parsed)) return { error: '--slice-ranges-json must be a JSON array of {startOffset, endOffset} objects.' };
+  if (parsed.length < MIN_MULTI_SLICES || parsed.length > MAX_SLICES) {
+    return { error: `--slice-ranges-json needs ${MIN_MULTI_SLICES} to ${MAX_SLICES} slices (got ${parsed.length}). One slice uses --start-offset/--end-offset; zero slices means the whole video.` };
+  }
+  const ranges = [];
+  for (let i = 0; i < parsed.length; i++) {
+    const entry = parsed[i];
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+      return { error: `slice ${i + 1} must be an object with exactly startOffset and endOffset.` };
+    }
+    const keys = Object.keys(entry).sort();
+    if (keys.length !== 2 || keys[0] !== 'endOffset' || keys[1] !== 'startOffset') {
+      return { error: `slice ${i + 1} must contain exactly the keys startOffset and endOffset (got ${JSON.stringify(Object.keys(entry))}).` };
+    }
+    const { startOffset, endOffset } = entry;
+    const validOffset = (n) => typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= MAX_OFFSET_SECONDS;
+    if (!validOffset(startOffset) || !validOffset(endOffset)) {
+      return { error: `slice ${i + 1} offsets must be whole seconds from 0 to ${MAX_OFFSET_SECONDS} (got start=${JSON.stringify(startOffset)}, end=${JSON.stringify(endOffset)}).` };
+    }
+    if (endOffset <= startOffset) {
+      return { error: `slice ${i + 1} end (${endOffset}s) must be strictly after its start (${startOffset}s).` };
+    }
+    if (i > 0 && startOffset < ranges[i - 1].endOffset) {
+      return { error: `slice ${i + 1} (${startOffset}s-${endOffset}s) must start at or after the end of slice ${i} (${ranges[i - 1].startOffset}s-${ranges[i - 1].endOffset}s): slices must be chronological and non-overlapping, and are never reordered or merged.` };
+    }
+    ranges.push({ startOffset, endOffset });
+  }
+  const aggregateSeconds = ranges.reduce((sum, r) => sum + (r.endOffset - r.startOffset), 0);
+  if (aggregateSeconds > AGGREGATE_SLICE_CAP_SECONDS) {
+    return { error: `the slices add up to ${aggregateSeconds}s, which exceeds the fixed ${AGGREGATE_SLICE_CAP_SECONDS}s multi-slice cap (no flag can raise it).` };
+  }
+  return { multi: true, ranges, aggregateSeconds };
+}
+
+// V4: the deterministic, repository-owned multi-slice scope instruction, exported for tests.
+// Appended to the RESOLVED prompt (default brief, explicit prompt, or focus-composed text) at this
+// one site so both production entries (feed-gemini.ps1 and a direct node invocation) compose it
+// identically. Content is numbers + fixed text only — no user text, no transport/tool-call detail.
+// It AUGMENTS the existing brief: the required report structure (## 1. TL;DR first, V2 section
+// TL;DRs, V3a focus) is explicitly preserved, and each slice must stay distinguishable.
+function buildSliceScopeInstruction(ranges) {
+  const lines = ranges.map((r, i) => `- Slice ${i + 1}: ${r.startOffset}s to ${r.endOffset}s (${r.endOffset - r.startOffset}s)`);
+  return [
+    `--- ANALYSIS SCOPE: ${ranges.length} AUTHORIZED VIDEO SLICES ---`,
+    `This request attaches ${ranges.length} time slices of the same video, listed in chronological order. ONLY these explicit slices are authorized for analysis; treat everything outside them as out of scope and do not analyze or speculate about it:`,
+    ...lines,
+    'Attribute findings to their slice ("Slice 1", "Slice 2", ...) so each slice remains clearly distinguishable throughout the report. Keep the required report structure EXACTLY as instructed above — the same sections, the same headers, and the report must still begin with `## 1. TL;DR`.',
+  ].join('\n');
+}
+
 // Pure request-body builder, exported for tests. When both offsets are given (validated upstream
 // by resolveSliceOffsets) they become videoMetadata on the same part as fileData, which is what
 // makes the API bill only the slice instead of the whole video. The New-Agent modal exposes the
 // range picker that feeds these through feed-gemini.ps1's -StartOffset/-EndOffset.
-function buildRequestBody({ url, prompt, mediaResolution, startOffset, endOffset }) {
-  const videoPart = { fileData: { fileUri: url } };
-  if (startOffset !== undefined && endOffset !== undefined) {
-    videoPart.videoMetadata = { startOffset: `${startOffset}s`, endOffset: `${endOffset}s` };
+// V4 multi-slice: sliceRanges (2-8, validated upstream by resolveSliceRanges) become N ORDERED
+// media parts — each repeating the same validated public URL via fileData.fileUri with ONLY its
+// own videoMetadata — followed by ONE text part last. There is no whole-video part, no omitted or
+// merged slice, and no upload; with sliceRanges absent the zero/one-slice body is unchanged.
+function buildRequestBody({ url, prompt, mediaResolution, startOffset, endOffset, sliceRanges }) {
+  let parts;
+  if (Array.isArray(sliceRanges) && sliceRanges.length) {
+    parts = sliceRanges.map((r) => ({
+      fileData: { fileUri: url },
+      videoMetadata: { startOffset: `${r.startOffset}s`, endOffset: `${r.endOffset}s` },
+    }));
+    parts.push({ text: prompt });
+  } else {
+    const videoPart = { fileData: { fileUri: url } };
+    if (startOffset !== undefined && endOffset !== undefined) {
+      videoPart.videoMetadata = { startOffset: `${startOffset}s`, endOffset: `${endOffset}s` };
+    }
+    parts = [videoPart, { text: prompt }];
   }
-  const body = { contents: [{ role: 'user', parts: [videoPart, { text: prompt }] }] };
+  const body = { contents: [{ role: 'user', parts }] };
   const mapped = MEDIA_RESOLUTION_MAP[mediaResolution];
   if (mapped) body.generationConfig = { mediaResolution: mapped };
   return body;
 }
 
-function formatUsageLine(usage, model, mediaResolution, sliced) {
+// V4: the optional sliceCount (>=2) appends ` slices=N` for a multi-slice run; every existing
+// call shape (whole video / single slice) is byte-identical without it.
+function formatUsageLine(usage, model, mediaResolution, sliced, sliceCount) {
   const byModality = {};
   for (const d of usage.promptTokensDetails || []) byModality[d.modality] = d.tokenCount;
+  const sliceTag = sliced ? ' sliced=yes' : (sliceCount >= MIN_MULTI_SLICES ? ` slices=${sliceCount}` : '');
   return `[video-scout usage] prompt=${usage.promptTokenCount ?? '?'} ` +
     `(video=${byModality.VIDEO ?? 0} audio=${byModality.AUDIO ?? 0} text=${byModality.TEXT ?? 0}) ` +
     `output=${usage.candidatesTokenCount ?? '?'} total=${usage.totalTokenCount ?? '?'} ` +
-    `model=${model} mediaRes=${mediaResolution}${sliced ? ' sliced=yes' : ''}`;
+    `model=${model} mediaRes=${mediaResolution}${sliceTag}`;
 }
 
 // Upstream error text is attacker-adjacent (it renders provider/network strings into our logs):
@@ -252,16 +353,30 @@ async function runVideoScout(rawArgs, deps = {}) {
   const model = args.model || DEFAULT_MODEL;
   const mediaResolution = MEDIA_RESOLUTION_MAP[args.mediaResolution] ? args.mediaResolution : 'MEDIUM';
 
+  // V4 multi-slice control argument first (it also owns the mutual-exclusion refusal). Refuse
+  // (return non-zero) on ANY problem rather than silently analyzing (and billing for) anything
+  // other than exactly what was asked.
+  const multiSlice = resolveSliceRanges(args);
+  if (multiSlice.error) { logError(`[video-scout sdk] ${multiSlice.error}`); return 1; }
+
   // Refuse (return non-zero) on any offset problem — a lone flag, a flag with no value, a
   // non-integer, or end<=start — rather than silently analyzing (and billing for) the whole video.
   const slice = resolveSliceOffsets(args);
   if (slice.error) { logError(`[video-scout sdk] ${slice.error}`); return 1; }
   const sliced = slice.sliced;
 
+  // V4: the deterministic slice-scope instruction is appended to the RESOLVED prompt at this one
+  // site (numbers + fixed text only), preserving the required report structure. Whole-video and
+  // single-slice prompts are untouched.
+  if (multiSlice.multi) {
+    prompt = `${prompt}\n\n${buildSliceScopeInstruction(multiSlice.ranges)}`;
+  }
+
   const body = buildRequestBody({
     url: args.url, prompt, mediaResolution,
     startOffset: sliced ? slice.startOffset : undefined,
     endOffset: sliced ? slice.endOffset : undefined,
+    sliceRanges: multiSlice.multi ? multiSlice.ranges : undefined,
   });
   // Serialized ONCE, before the loop: every retry submits this byte-identical payload — the
   // URL, prompt, model, media resolution, and slice offsets structurally cannot drift between
@@ -269,7 +384,7 @@ async function runVideoScout(rawArgs, deps = {}) {
   const bodyJson = JSON.stringify(body);
 
   log(`[video-scout sdk] analyzing ${args.url}`);
-  log(`[video-scout sdk] model=${model} mediaResolution=${mediaResolution} (ENFORCED on this path)${sliced ? ` slice=${slice.startOffset}s-${slice.endOffset}s` : ' (whole video)'}`);
+  log(`[video-scout sdk] model=${model} mediaResolution=${mediaResolution} (ENFORCED on this path)${multiSlice.multi ? ` slices=${multiSlice.ranges.length} aggregate=${multiSlice.aggregateSeconds}s (ONE multipart request)` : sliced ? ` slice=${slice.startOffset}s-${slice.endOffset}s` : ' (whole video)'}`);
   log(`[video-scout sdk] bounded 503 retry policy active (max ${RETRY_MAX_ATTEMPTS} attempts)`);
 
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -309,7 +424,8 @@ async function runVideoScout(rawArgs, deps = {}) {
     // accepted success response — a failed attempt has no path to either line.
     log(`\n${text}\n`);
     if (finish !== 'STOP') logError(`[video-scout sdk] WARNING: finishReason=${finish} — output may be truncated.`);
-    log(formatUsageLine((json && json.usageMetadata) || {}, model, mediaResolution, sliced));
+    log(formatUsageLine((json && json.usageMetadata) || {}, model, mediaResolution, sliced,
+      multiSlice.multi ? multiSlice.ranges.length : undefined));
     return 0;
   }
 
@@ -341,7 +457,9 @@ function runCliEntry(deps = {}) {
 
 module.exports = {
   buildRequestBody, formatUsageLine, parseArgs, resolveSliceOffsets,
+  resolveSliceRanges, buildSliceScopeInstruction,
   MEDIA_RESOLUTION_MAP, DEFAULT_MODEL,
+  MIN_MULTI_SLICES, MAX_SLICES, AGGREGATE_SLICE_CAP_SECONDS, MAX_SLICE_RANGES_JSON_UNITS, MAX_OFFSET_SECONDS,
   classifyHttpFailure, retryDelayMs, sanitizeUpstreamText,
   submitGeminiRequest,
   runVideoScout, runCliEntry,

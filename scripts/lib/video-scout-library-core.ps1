@@ -165,6 +165,26 @@ function ConvertTo-VideoScoutLibraryEntry {
     $mediaCount = 0
     $maProp = $Manifest.PSObject.Properties['mediaArtifacts']
     if ($maProp -and $null -ne $maProp.Value) { $mediaCount = @($maProp.Value).Count }
+    # V4: bounded DERIVED slice facts for a schema-v3 multi-slice run — a count and a total duration,
+    # both plain numbers. The individual offsets, the raw array, and every path/filename stay out of
+    # the projection (same posture as mediaCount). v1/v2 runs have no slice set -> 0, and the renderer
+    # keeps showing their existing scalar range / full-length label. These describe the REQUESTED
+    # scope; only outcome='completed' makes that the analyzed scope, which is why the renderer says
+    # "requested N slices" for any non-completed run.
+    $sliceCount = 0
+    $aggregateSliceSeconds = 0
+    $srProp = $Manifest.PSObject.Properties['requestedSliceRanges']
+    if ($srProp -and $null -ne $srProp.Value) {
+        $slices = @($srProp.Value)
+        $sliceCount = $slices.Count
+        foreach ($s in $slices) {
+            $sStart = $s.startOffsetSeconds
+            $sEnd   = $s.endOffsetSeconds
+            if (($sStart -is [int] -or $sStart -is [long]) -and ($sEnd -is [int] -or $sEnd -is [long])) {
+                $aggregateSliceSeconds += ([long]$sEnd - [long]$sStart)
+            }
+        }
+    }
     [ordered]@{
         runId        = $RunId                       # bounded, path-free label; main maps it to an opaque handle
         title        = Get-VideoScoutDisplayTitle -Manifest $Manifest
@@ -179,6 +199,8 @@ function ConvertTo-VideoScoutLibraryEntry {
         endOffsetSeconds   = $endOff
         reportStatus = Get-VideoScoutReportStatusFromManifest -Manifest $Manifest
         mediaCount   = [long]$mediaCount            # bounded count only — NEVER filenames or paths
+        sliceCount            = [long]$sliceCount            # V4: 0 for v1/v2; 2-8 for a multi-slice run
+        aggregateSliceSeconds = [long]$aggregateSliceSeconds # V4: total REQUESTED slice seconds
     }
 }
 

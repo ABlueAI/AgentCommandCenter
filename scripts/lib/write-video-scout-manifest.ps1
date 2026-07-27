@@ -116,6 +116,11 @@ function Initialize-VideoScoutRun {
         [bool]$VideoScout = $false,
         [Nullable[int]]$StartOffset = $null,
         [Nullable[int]]$EndOffset = $null,
+        # V4: the validated multi-slice set (objects with StartOffset/EndOffset) for a multi-slice
+        # SDK run -- makes the manifest schema v3 with requestedSliceRanges and null scalar offsets.
+        # $null (the default) leaves the existing v2 whole-video / single-slice manifest unchanged.
+        # Untyped so an array survives the parameter boundary without coercion.
+        $SliceRanges = $null,
         # V5b1: the MAIN-issued run ID for an app launch. When provided, the run directory is created
         # from this exact validated ID as a direct child of $BaseDir (New-VideoScoutRunDirFromId).
         # When $null (direct standalone script use outside the app), the existing PowerShell-generated
@@ -134,7 +139,7 @@ function Initialize-VideoScoutRun {
     $manifest = New-VideoScoutLiveManifest -RunId (Split-Path $runDir -Leaf) -Url $Url `
         -RequestedMode $RequestedMode -AppliedMode $AppliedMode -Route $Route -Model $Model `
         -MediaResolutionRequested $MediaResolutionRequested -MediaResolutionApplied $MediaResolutionApplied `
-        -VideoScout $VideoScout -StartOffset $StartOffset -EndOffset $EndOffset
+        -VideoScout $VideoScout -StartOffset $StartOffset -EndOffset $EndOffset -SliceRanges $SliceRanges
     try {
         [void](Write-VideoScoutManifestFile -RunDir $runDir -Manifest $manifest)
     }

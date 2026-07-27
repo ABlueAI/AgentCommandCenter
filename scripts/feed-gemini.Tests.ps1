@@ -289,3 +289,205 @@ Describe 'feed-gemini.ps1 V5a per-run manifest (end-to-end, stubbed probe/node -
 
 # best-effort cleanup of the compiled stub yt-dlp.exe + node tripwire (Pester 3.4 has no AfterAll)
 Remove-Item -LiteralPath $e2eDir -Recurse -Force -ErrorAction SilentlyContinue
+
+# ==================================================================================================
+# V4 bounded multi-slice: end-to-end lifecycle through the REAL feed-gemini.ps1.
+# Every refusal must happen BEFORE `& node` (the paid call) -- the node tripwire proves it -- and the
+# one accepted case must reach node with the canonical slice JSON as ONE discrete argument and write
+# a schema-v3 manifest. No network, no API key, no download: the probe subprocess and node are
+# shadowed exactly as in the harness above.
+$v4Argv = Join-Path $e2eDir 'node-argv.txt'
+
+function Invoke-SdkSliceRun {
+    param(
+        [string]$ProbeLine = '3600|False',
+        [string]$SliceRangesJson,
+        [switch]$OmitSlices,
+        [int]$MaxDurationSeconds = 0,
+        [string]$Url,
+        [switch]$WithScalarRange,
+        [switch]$OmitVideoScout,
+        [switch]$EmptyProbe
+    )
+    Remove-Item -LiteralPath $e2eMarker -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $v4Argv -Force -ErrorAction SilentlyContinue
+    $outDir = Join-Path $e2eDir ('out-' + [Guid]::NewGuid().ToString('N'))
+    $global:E2EReceive = if ($EmptyProbe) { $null } else { $ProbeLine }
+    $global:E2EMarker = $e2eMarker
+    $global:E2EArgv = $v4Argv
+    function global:Start-Job   { [PSCustomObject]@{ Id = 1 } }
+    function global:Wait-Job    { $true }
+    function global:Receive-Job { if ($null -ne $global:E2EReceive) { $global:E2EReceive } }
+    function global:Stop-Job    { }
+    function global:Remove-Job  { }
+    function global:node        {
+        Set-Content -LiteralPath $global:E2EMarker -Value 'reached'
+        # Record argv EXACTLY as PowerShell bound it, one element per line, so a test can prove the
+        # slice JSON arrived as ONE discrete argument (never split, never a shell string).
+        Set-Content -LiteralPath $global:E2EArgv -Value ($args -join "`n") -Encoding UTF8
+        '[video-scout usage] prompt=100 (video=80 audio=10 text=10) output=50 total=150 model=stub mediaRes=MEDIUM'
+        $global:LASTEXITCODE = 0
+    }
+    $saved = $env:PATH
+    $env:PATH = "$e2eDir;$saved"
+    $threw = $false; $msg = ''
+    $useUrl = if ($Url) { $Url } else { $script:YT }
+    try {
+        try {
+            $p = @{ Url = $useUrl; Mode = 'video'; OutDir = $outDir }
+            if (-not $OmitVideoScout) { $p['VideoScout'] = $true }
+            if (-not $OmitSlices) { $p['SliceRangesJson'] = $SliceRangesJson }
+            if ($MaxDurationSeconds -gt 0) { $p['MaxDurationSeconds'] = $MaxDurationSeconds }
+            if ($WithScalarRange) { $p['StartOffset'] = 5; $p['EndOffset'] = 9 }
+            & $feedGemini @p 2>$null | Out-Null
+        }
+        catch { $threw = $true; $msg = [string]$_.Exception.Message }
+    }
+    finally {
+        $env:PATH = $saved
+        Remove-Item Function:\Start-Job, Function:\Wait-Job, Function:\Receive-Job, Function:\Stop-Job, Function:\Remove-Job, Function:\node -ErrorAction SilentlyContinue
+        Remove-Item Variable:\E2EReceive, Variable:\E2EMarker, Variable:\E2EArgv -ErrorAction SilentlyContinue
+    }
+    $argv = if (Test-Path -LiteralPath $v4Argv) { @(Get-Content -LiteralPath $v4Argv -Encoding UTF8) } else { @() }
+    return [PSCustomObject]@{
+        Threw = $threw; Message = $msg
+        NodeReached = (Test-Path -LiteralPath $e2eMarker)
+        OutDir = $outDir; Argv = $argv
+    }
+}
+
+$V4Good = '[{"startOffset":10,"endOffset":30},{"startOffset":60,"endOffset":90}]'
+
+Describe 'V4 feed-gemini: an accepted multi-slice run reaches node with canonical discrete argv' {
+    $r = Invoke-SdkSliceRun -SliceRangesJson $V4Good
+    It 'does not throw and REACHES node (positive control: the tripwire can fire)' {
+        $r.Threw | Should Be $false
+        $r.NodeReached | Should Be $true
+    }
+    It 'passes --slice-ranges-json as ONE discrete argument carrying the canonical JSON' {
+        $i = [array]::IndexOf($r.Argv, '--slice-ranges-json')
+        $i | Should Not Be -1
+        $r.Argv[$i + 1] | Should Be $V4Good
+    }
+    It 'never passes the scalar --start-offset/--end-offset alongside slices' {
+        ($r.Argv -contains '--start-offset') | Should Be $false
+        ($r.Argv -contains '--end-offset') | Should Be $false
+    }
+    It 'writes a schema-v3 manifest recording the REQUESTED slice set with null scalar offsets' {
+        $m = Get-E2ERunManifest -OutDir $r.OutDir
+        $m.schemaVersion | Should Be 3
+        @($m.requestedSliceRanges).Count | Should Be 2
+        @($m.requestedSliceRanges)[0].startOffsetSeconds | Should Be 10
+        @($m.requestedSliceRanges)[1].endOffsetSeconds | Should Be 90
+        $m.startOffsetSeconds | Should BeNullOrEmpty
+        $m.endOffsetSeconds | Should BeNullOrEmpty
+        $m.route | Should Be 'sdk'
+    }
+    It 'records an EMPTY media inventory (the multi-slice SDK route owns no local media)' {
+        @((Get-E2ERunManifest -OutDir $r.OutDir).mediaArtifacts).Count | Should Be 0
+    }
+}
+
+Describe 'V4 feed-gemini: every slice-contract violation refuses BEFORE the paid call' {
+    It 'REFUSES malformed JSON without reaching node' {
+        $r = Invoke-SdkSliceRun -SliceRangesJson '[{"startOffset":10,'
+        $r.Threw | Should Be $true
+        $r.Message | Should Match 'not valid JSON'
+        $r.NodeReached | Should Be $false
+    }
+    It 'REFUSES an over-2048-unit payload without reaching node' {
+        $entries = 0..199 | ForEach-Object { '{"startOffset":1,"endOffset":2}' }
+        $r = Invoke-SdkSliceRun -SliceRangesJson ('[' + ($entries -join ',') + ']')
+        $r.Threw | Should Be $true
+        $r.Message | Should Match '2048-unit bound'
+        $r.NodeReached | Should Be $false
+    }
+    It 'REFUSES a bare JSON object without reaching node' {
+        $r = Invoke-SdkSliceRun -SliceRangesJson '{"startOffset":10,"endOffset":30}'
+        $r.Threw | Should Be $true
+        $r.NodeReached | Should Be $false
+    }
+    It 'REFUSES a single-entry array without reaching node' {
+        $r = Invoke-SdkSliceRun -SliceRangesJson '[{"startOffset":10,"endOffset":30}]'
+        $r.Threw | Should Be $true
+        $r.Message | Should Match '2 to 8 slices'
+        $r.NodeReached | Should Be $false
+    }
+    It 'REFUSES nine slices without reaching node' {
+        $entries = 0..8 | ForEach-Object { '{"startOffset":' + ($_ * 20) + ',"endOffset":' + ($_ * 20 + 10) + '}' }
+        $r = Invoke-SdkSliceRun -SliceRangesJson ('[' + ($entries -join ',') + ']')
+        $r.Threw | Should Be $true
+        $r.NodeReached | Should Be $false
+    }
+    It 'REFUSES overlapping slices without reaching node' {
+        $r = Invoke-SdkSliceRun -SliceRangesJson '[{"startOffset":10,"endOffset":30},{"startOffset":20,"endOffset":40}]'
+        $r.Threw | Should Be $true
+        $r.Message | Should Match 'chronological and non-overlapping'
+        $r.NodeReached | Should Be $false
+    }
+    It 'REFUSES an over-cap aggregate (1801s) without reaching node' {
+        $r = Invoke-SdkSliceRun -SliceRangesJson '[{"startOffset":0,"endOffset":1700},{"startOffset":2000,"endOffset":2101}]'
+        $r.Threw | Should Be $true
+        $r.Message | Should Match 'exceeds the fixed 1800s'
+        $r.NodeReached | Should Be $false
+    }
+    It 'REFUSES slices combined with the scalar range without reaching node' {
+        $r = Invoke-SdkSliceRun -SliceRangesJson $V4Good -WithScalarRange
+        $r.Threw | Should Be $true
+        $r.Message | Should Match 'mutually exclusive'
+        $r.NodeReached | Should Be $false
+    }
+    It 'REFUSES -MaxDurationSeconds alongside slices without reaching node (the cap is fixed)' {
+        $r = Invoke-SdkSliceRun -SliceRangesJson $V4Good -MaxDurationSeconds 3600
+        $r.Threw | Should Be $true
+        $r.Message | Should Match 'cannot be used with a multi-slice request'
+        $r.NodeReached | Should Be $false
+    }
+    It 'REFUSES slices without -VideoScout without reaching node' {
+        $r = Invoke-SdkSliceRun -SliceRangesJson $V4Good -OmitVideoScout
+        $r.Threw | Should Be $true
+        $r.Message | Should Match 'only valid with -VideoScout'
+        $r.NodeReached | Should Be $false
+    }
+    It 'REFUSES slices on a NON-YouTube source (CLI/download route) without reaching node' {
+        $r = Invoke-SdkSliceRun -SliceRangesJson $V4Good -Url 'https://vimeo.com/12345'
+        $r.Threw | Should Be $true
+        $r.Message | Should Match 'only work on the SDK/YouTube route'
+        $r.NodeReached | Should Be $false
+    }
+}
+
+Describe 'V4 feed-gemini: the fail-closed probe rules still apply to a multi-slice run' {
+    It 'REFUSES a LIVE source without reaching node, even with a tiny aggregate' {
+        $r = Invoke-SdkSliceRun -SliceRangesJson $V4Good -ProbeLine '3600|True'
+        $r.Threw | Should Be $true
+        $r.Message | Should Match 'LIVE'
+        $r.NodeReached | Should Be $false
+    }
+    It 'REFUSES an undeterminable duration without reaching node' {
+        $r = Invoke-SdkSliceRun -SliceRangesJson $V4Good -EmptyProbe
+        $r.Threw | Should Be $true
+        $r.Message | Should Match 'could not determine'
+        $r.NodeReached | Should Be $false
+    }
+    It 'ALLOWS a long source when the requested slices are small (gates on aggregate, not duration)' {
+        $r = Invoke-SdkSliceRun -SliceRangesJson $V4Good -ProbeLine '18000|False'
+        $r.Threw | Should Be $false
+        $r.NodeReached | Should Be $true
+    }
+}
+
+Describe 'V4 feed-gemini: existing whole-video / single-slice behavior is unchanged' {
+    It 'a run with NO slice argument still reaches node with no --slice-ranges-json' {
+        $r = Invoke-SdkSliceRun -OmitSlices
+        $r.Threw | Should Be $false
+        $r.NodeReached | Should Be $true
+        ($r.Argv -contains '--slice-ranges-json') | Should Be $false
+    }
+    It 'and still writes a schema-v2 manifest with no requestedSliceRanges key' {
+        $r = Invoke-SdkSliceRun -OmitSlices
+        $m = Get-E2ERunManifest -OutDir $r.OutDir
+        $m.schemaVersion | Should Be 2
+        ($m.PSObject.Properties.Name -contains 'requestedSliceRanges') | Should Be $false
+    }
+}

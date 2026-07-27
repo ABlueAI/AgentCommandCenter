@@ -44,6 +44,15 @@ param(
     # it is a documented standalone entry point.
     [ValidateRange(0, 86400)][int]$StartOffset = -1,
     [ValidateRange(0, 86400)][int]$EndOffset = -1,
+    # V4 bounded multi-slice, SDK (YouTube) route only: a JSON array of 2-8 exact
+    # {startOffset, endOffset} objects analyzed as ONE request carrying N ordered media parts.
+    # Bounded at 2048 UTF-16 units and fully re-validated here (shape, exact keys, count, integer
+    # bounds, chronological non-overlap, FIXED 1800s aggregate cap) via
+    # lib/get-video-scout-slice-ranges.ps1 -- this script is a documented standalone entry point, so
+    # it never assumes the app validated first. MUTUALLY EXCLUSIVE with -StartOffset/-EndOffset, and
+    # -MaxDurationSeconds may not accompany it (the aggregate cap is fixed). ANY violation REFUSES
+    # the run (throws) rather than silently analyzing (and billing for) a different scope.
+    [string]$SliceRangesJson,
     # (?) Explicit override of the mode-aware duration limit, in whole seconds. No silent bypass: when
     # provided it REPLACES the applicable limit (the source cap, or the range-slice cap) and is logged
     # at run time. ValidateRange starts at 1 so an EXPLICIT `-MaxDurationSeconds 0` is rejected at bind
@@ -91,6 +100,28 @@ if ($haveStart -and ($EndOffset -le $StartOffset)) {
 if ($haveStart -and -not $VideoScout) {
     throw "A time range (-StartOffset/-EndOffset) is only valid with -VideoScout on the SDK/YouTube route. Remove the offsets, or add -VideoScout with a YouTube URL in video mode."
 }
+
+# --- V4 bounded multi-slice: validate INDEPENDENTLY, before any spend ----------------------------
+# Route-independent checks run here with the other free validations (nothing has been downloaded,
+# probed, or submitted yet). The full contract -- 2048-unit bound before parsing, JSON array shape,
+# exact per-entry keys, 2-8 count, integer 0..86400 offsets, end > start, chronological
+# non-overlap in the GIVEN order, and the fixed 1800s aggregate -- lives in the pure helper, which
+# THROWS a bounded message on any violation. $sliceSet stays $null when no slices were requested,
+# which leaves every existing whole-video / single-slice path byte-for-byte unchanged.
+. (Join-Path $PSScriptRoot 'lib\get-video-scout-slice-ranges.ps1')
+$haveSlices = $PSBoundParameters.ContainsKey('SliceRangesJson')
+if ($haveSlices -and $haveStart) {
+    throw "-SliceRangesJson and -StartOffset/-EndOffset are mutually exclusive: pass a multi-slice set OR a single range, never both."
+}
+if ($haveSlices -and -not $VideoScout) {
+    throw "Time slices (-SliceRangesJson) are only valid with -VideoScout on the SDK/YouTube route. Remove the slices, or add -VideoScout with a YouTube URL in video mode."
+}
+if ($haveSlices) {
+    # An override may not raise or obscure the fixed multi-slice aggregate cap -- refuse visibly
+    # rather than silently ignoring a value the caller believes is in force.
+    Assert-MultiSliceOverrideAllowed -MaxDurationSeconds $MaxDurationSeconds
+}
+$sliceSet = Get-VideoScoutSliceRangeSet -SliceRangesJson $SliceRangesJson -Provided:$haveSlices
 
 # --- V3a pre-analysis focus: normalize + validate INDEPENDENTLY, before any spend ----------------
 # Route-independent, so it runs here with the other free validations (throws on an explicit invalid
@@ -179,6 +210,12 @@ if ($VideoScout) {
     if ($haveStart -and $sourceRoute.Route -ne 'sdk') {
         throw "A time range only works on the SDK/YouTube route (it is sent to the Gemini API as videoMetadata). This run resolved to the '$($sourceRoute.Route)' route ($($sourceRoute.Reason)), which downloads and analyzes the whole file and cannot apply a range. Remove the offsets, or use a YouTube URL in video mode."
     }
+    # V4: the same route backstop for a multi-slice request. Slices ride per-part videoMetadata into
+    # generateContent, which exists only on the SDK route -- REFUSE rather than download and analyze
+    # the whole file while billing for slices the caller will not get.
+    if ($haveSlices -and $sourceRoute.Route -ne 'sdk') {
+        throw "Time slices only work on the SDK/YouTube route (they are sent to the Gemini API as per-part videoMetadata). This run resolved to the '$($sourceRoute.Route)' route ($($sourceRoute.Reason)), which downloads and analyzes the whole file and cannot apply slices. Remove -SliceRangesJson, or use a YouTube URL in video mode."
+    }
 
     if ($sourceRoute.Route -eq 'sdk') {
         # Route-definitive media-resolution log: on THIS route -MediaResolution is a real
@@ -191,12 +228,16 @@ if ($VideoScout) {
         # refusal is then durably recorded as outcome='refused'. This mirrors the CLI path below,
         # which has always created its run dir before its guard call. MediaResolutionApplied equals
         # the requested value here because the SDK route sends and enforces it (see the log above).
+        # V4: a multi-slice run records its REQUESTED, guard-validated scope as schema-v3
+        # requestedSliceRanges (scalar offsets stay null). Whole-video and single-slice runs remain
+        # schema v2 with the existing scalar fields -- unchanged.
         $sdkRun = Initialize-VideoScoutRun -BaseDir $OutDir -Url $Url `
             -RequestedMode $RequestedModeForManifest -AppliedMode $Mode -Route 'sdk' -Model $Model `
             -MediaResolutionRequested $MediaResolution -MediaResolutionApplied $MediaResolution `
             -VideoScout $true `
             -StartOffset $(if ($haveStart) { $StartOffset } else { $null }) `
             -EndOffset $(if ($haveStart) { $EndOffset } else { $null }) `
+            -SliceRanges $(if ($haveSlices) { $sliceSet.Ranges } else { $null }) `
             -RunId $RunId
         $sdkManifest = $sdkRun.Manifest
         try {
@@ -204,7 +245,13 @@ if ($VideoScout) {
             # this pre-flight probe is the ONLY guard on this path (there is no download-time backstop --
             # nothing downloads). Runs after the offset validation and the route backstop above. This route
             # is video mode by definition; $haveStart marks a range run (gated on slice length).
+            # V4: a multi-slice run gates on the AGGREGATE of its validated slices against the FIXED
+            # 1800s cap (an accompanying -MaxDurationSeconds was already refused above). The probe
+            # still runs and still fails closed on a live/unknown-duration source.
             [void](Assert-DurationGuard -Url $Url -GuardMode 'video' -HasRange:$haveStart -RangeStart $StartOffset -RangeEnd $EndOffset `
+                -HasMultiSlice:$haveSlices `
+                -SliceCount $(if ($haveSlices) { $sliceSet.Count } else { 0 }) `
+                -AggregateSeconds $(if ($haveSlices) { $sliceSet.AggregateSeconds } else { 0 }) `
                 -ProbeTimeoutSec $ProbeTimeoutSec -MaxDurationSeconds $MaxDurationSeconds)
 
             $sdkScript = Join-Path $PSScriptRoot 'gemini-video-sdk.js'
@@ -241,6 +288,14 @@ if ($VideoScout) {
             # here $haveStart implies a valid $haveEnd pair on the SDK route -- just pass them through.
             if ($haveStart) {
                 $sdkArgs += @('--start-offset', $StartOffset, '--end-offset', $EndOffset)
+            }
+            # V4: hand node the CANONICAL re-serialization of the VALIDATED slice set (never the
+            # caller's original string), as ONE discrete argument. The SDK re-validates the entire
+            # contract again on its side and composes the slice-scope prompt instruction there, so
+            # the same wording is produced whether the run starts here or at a direct node call.
+            if ($haveSlices) {
+                $sdkArgs += @('--slice-ranges-json', (ConvertTo-VideoScoutSliceRangesJson -Ranges $sliceSet.Ranges))
+                Write-Host "Multi-slice analysis: $($sliceSet.Count) slices, aggregate $($sliceSet.AggregateSeconds)s (ONE request with $($sliceSet.Count) media parts)" -ForegroundColor DarkCyan
             }
             # V5b1 bounded streaming capture: every stdout line still streams live to the pane (the
             # trailing `$line` re-emits it), while the bounded collector retains at most the report

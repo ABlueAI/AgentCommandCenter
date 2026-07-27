@@ -23,6 +23,10 @@ function Get-DurationLimits {
         TranscriptAudio = 14400   # (?) 4h  -- transcript/audio carry NO visual tokens; cheap, so allow long sources
         VideoNoRange    = 5400    # (?) 90m -- full-visual pass, the expensive path (cap unchanged from before)
         VideoRangeSlice = 1800    # (?) 30m -- video+range gates on SLICE length, NOT source duration
+        # V4: the multi-slice AGGREGATE cap. Deliberately NOT marked (?) and deliberately equal to
+        # the single-slice cap: N slices must never authorize more paid video than one slice could,
+        # and unlike the caps above this one is FIXED (no -MaxDurationSeconds override applies).
+        MultiSliceAggregate = 1800
     }
 }
 
@@ -31,10 +35,15 @@ function Get-DurationLimits {
   Decide if a run is allowed. Pure: same inputs -> same result, no IO.
 .OUTPUTS
   PSCustomObject { Allowed; Refusal; Message; Limit; Measured; MeasuredKind; Mode; OverrideUsed }
-  Refusal is one of '', 'range-not-supported-for-mode', 'invalid-range', 'live',
-  'unknown-duration', 'exceeds-limit'.
+  Refusal is one of '', 'range-not-supported-for-mode', 'invalid-range', 'override-not-allowed',
+  'live', 'unknown-duration', 'exceeds-limit'.
+  MeasuredKind is 'source', 'slice', or (V4) 'slice-aggregate'.
 .NOTES
   Refusal order is deliberate and fail-closed:
+    0a. malformed MULTI-SLICE request -> invalid-range / range-not-supported-for-mode /
+                                    override-not-allowed (V4: video-mode only, mutually exclusive
+                                    with a scalar range, 2-8 slices, positive aggregate, and NO
+                                    -MaxDurationSeconds override -- the 1800s aggregate cap is fixed)
     0. malformed REQUEST         -> range-not-supported-for-mode / invalid-range (P13: the
                                     decision layer defends its own invariant; it does not rely
                                     on callers having validated the range shape)
@@ -57,12 +66,26 @@ function Resolve-DurationGuard {
         [Nullable[int]]$DurationSeconds = $null,   # $null = probe could not report a duration
         [switch]$IsLive,
         [switch]$ProbeTimedOut,
-        [Nullable[int]]$MaxDurationOverride = $null # $null = no -MaxDurationSeconds override
+        [Nullable[int]]$MaxDurationOverride = $null, # $null = no -MaxDurationSeconds override
+        # V4: multi-slice request. $HasMultiSlice marks the run; $SliceCount/$AggregateSeconds are
+        # the already-validated set (shape/order/overlap were enforced in
+        # lib/get-video-scout-slice-ranges.ps1). This layer owns the COST decision only.
+        [switch]$HasMultiSlice,
+        [int]$SliceCount = 0,
+        [int]$AggregateSeconds = 0
     )
     $limits = Get-DurationLimits
     $override = $null -ne $MaxDurationOverride
 
-    if ($HasRange) {
+    if ($HasMultiSlice) {
+        # The multi-slice gate measures the AGGREGATE of the requested slices against a FIXED cap.
+        # An override is refused outright below (step 0) rather than applied, so $limit here is
+        # always the fixed cap -- a multi-slice run can never be talked into a larger spend.
+        $kind = 'slice-aggregate'
+        $measured = $AggregateSeconds
+        $limit = $limits.MultiSliceAggregate
+    }
+    elseif ($HasRange) {
         $kind = 'slice'
         $measured = $EndOffset - $StartOffset
         $limit = if ($override) { [int]$MaxDurationOverride } else { $limits.VideoRangeSlice }
@@ -83,6 +106,41 @@ function Resolve-DurationGuard {
         param($reason, $msg)
         $out.Refusal = $reason; $out.Message = $msg
         return [PSCustomObject]$out
+    }
+
+    # 0a. V4 multi-slice request-shape validation. Same principle as step 0 below: the
+    #     cost-direction decision defends its own invariant regardless of upstream validation.
+    #     A multi-slice run is video-mode-only, is mutually exclusive with a scalar range, must
+    #     carry 2-8 slices and a positive aggregate, and may NOT use -MaxDurationSeconds (an
+    #     override is refused visibly, never silently ignored and never honored).
+    if ($HasMultiSlice) {
+        if ($HasRange) {
+            return & $refuse 'invalid-range' (
+                "Refusing: a multi-slice request and a single -StartOffset/-EndOffset range are " +
+                "mutually exclusive. Send one or the other, never both. (mode=$Mode)")
+        }
+        if ($Mode -ne 'video') {
+            return & $refuse 'range-not-supported-for-mode' (
+                "Refusing: time slices are only supported in video mode (slices scope the EXPENSIVE " +
+                "visual pass; transcript/audio always process the whole source). Drop the slices or use " +
+                "-Mode video. (mode=$Mode)")
+        }
+        if ($SliceCount -lt 2 -or $SliceCount -gt 8) {
+            return & $refuse 'invalid-range' (
+                "Refusing: a multi-slice request must carry 2 to 8 slices (got $SliceCount). " +
+                "(mode=$Mode)")
+        }
+        if ($AggregateSeconds -le 0) {
+            return & $refuse 'invalid-range' (
+                "Refusing: the multi-slice aggregate duration must be positive (got ${AggregateSeconds}s). " +
+                "(mode=$Mode)")
+        }
+        if ($override) {
+            return & $refuse 'override-not-allowed' (
+                "Refusing: -MaxDurationSeconds cannot be applied to a multi-slice request. The " +
+                "$($limits.MultiSliceAggregate)s aggregate cap is FIXED for multi-slice runs -- it is neither " +
+                "raised nor obscured by an override. Remove -MaxDurationSeconds, or narrow the slices. (mode=$Mode)")
+        }
     }
 
     # 0. Request-shape validation (P13). A range that is not a valid video-mode slice must never
@@ -129,6 +187,12 @@ function Resolve-DurationGuard {
     }
     # 4. Known, non-live source: apply the size gate for this kind.
     if ($measured -gt $limit) {
+        if ($kind -eq 'slice-aggregate') {
+            return & $refuse 'exceeds-limit' (
+                "Refusing: the $SliceCount requested slices add up to ${measured}s, which exceeds the " +
+                "${limit}s multi-slice aggregate cap. This cap is FIXED and cannot be raised with " +
+                "-MaxDurationSeconds; narrow or remove slices. (mode=$Mode)")
+        }
         if ($kind -eq 'slice') {
             return & $refuse 'exceeds-limit' (
                 "Refusing: the requested range is ${measured}s long (${StartOffset}s-${EndOffset}s), which " +

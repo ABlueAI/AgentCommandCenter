@@ -65,7 +65,21 @@ $script:VideoScoutReportFileMaxLength = 200
 # manifests (all existing history: backfills, metadata-only, completed pre-V5c runs, V5b1 reports)
 # stay valid UNCHANGED and must REJECT a mediaArtifacts key; version 2 REQUIRES it. Backfills remain
 # version 1 (ownership is never fabricated for history).
-$script:VideoScoutSchemaVersions = @(1, 2)
+# V4: schema version 3 adds ONE further canonical top-level field, `requestedSliceRanges` — the
+# bounded, exact-shape record of the 2-8 time slices a multi-slice SDK run REQUESTED (and which the
+# duration guard validated) before any provider submission. Version 3 is used ONLY for multi-slice
+# SDK runs; whole-video and single-slice runs stay version 2 with the existing scalar
+# startOffsetSeconds/endOffsetSeconds. On a v3 manifest those scalars MUST be null (the slice set is
+# the authoritative scope) and `mediaArtifacts` MUST be an EMPTY array: the SDK route downloads no
+# local media, and requiring emptiness is what structurally prevents schema v3 from ever becoming
+# media-ownership/deletion authority if a future route change made it reachable from the CLI path.
+# Versions 1 and 2 stay valid UNCHANGED and must REJECT a requestedSliceRanges key.
+$script:VideoScoutSchemaVersions = @(1, 2, 3)
+$script:VideoScoutSliceRangeKeys = @('startOffsetSeconds', 'endOffsetSeconds')
+$script:VideoScoutSliceMinCount = 2
+$script:VideoScoutSliceMaxCount = 8
+$script:VideoScoutSliceMaxOffset = 86400
+$script:VideoScoutSliceAggregateCap = 1800
 $script:VideoScoutMediaKinds = @('transcript', 'audio', 'video')
 # Extension MUST match kind — the download/output resolver pairs each mode with exactly one pattern.
 $script:VideoScoutMediaKindExtension = @{ transcript = '.srt'; audio = '.mp3'; video = '.mp4' }
@@ -256,6 +270,80 @@ function Assert-VideoScoutMediaArtifactsValid {
 
 <#
 .SYNOPSIS
+  V4: validate the schema-v3 `requestedSliceRanges` field. Same array-safety posture as the media
+  inventory above (plain in-scope assignment so PowerShell cannot unwrap the array).
+.DESCRIPTION
+  Records the user's REQUESTED, guard-validated slice scope: 2-8 exact-shape entries
+  { startOffsetSeconds, endOffsetSeconds } in user-visible chronological order, each a whole number
+  0..86400 with end > start, non-overlapping in the GIVEN order, aggregating to at most 1800s. The
+  same bounded contract enforced at the main boundary, in feed-gemini.ps1, and in the Node SDK.
+
+  SEMANTIC RULE (deliberate, and why the field is named "requested"): this records what was ASKED
+  FOR and validated before submission. It is NOT evidence that the slices were successfully
+  analyzed. Only outcome='completed' -- which requires one successful provider request AND a
+  durable report -- establishes that the requested set was the analyzed scope. Refused/error runs
+  keep this field with "requested" language everywhere it surfaces.
+#>
+function Assert-VideoScoutSliceRangesValid {
+    param([Parameter(Mandatory)]$Manifest)
+    $SliceRanges = $null
+    if ($Manifest -is [System.Collections.IDictionary]) {
+        if ($Manifest.Contains('requestedSliceRanges')) { $SliceRanges = $Manifest['requestedSliceRanges'] }
+    }
+    else {
+        $prop = $Manifest.PSObject.Properties['requestedSliceRanges']
+        if ($prop) { $SliceRanges = $prop.Value }
+    }
+    if ($null -eq $SliceRanges) { throw 'Manifest validation failed (v3): requestedSliceRanges must be an array (got null).' }
+    if (($SliceRanges -is [string]) -or -not (($SliceRanges -is [System.Array]) -or ($SliceRanges -is [System.Collections.IList]))) {
+        throw 'Manifest validation failed (v3): requestedSliceRanges must be an array, never an arbitrary object.'
+    }
+    $items = @($SliceRanges)
+    if ($items.Count -lt $script:VideoScoutSliceMinCount -or $items.Count -gt $script:VideoScoutSliceMaxCount) {
+        throw "Manifest validation failed (v3): requestedSliceRanges must have $($script:VideoScoutSliceMinCount) to $($script:VideoScoutSliceMaxCount) entries (got $($items.Count)); a single range uses the scalar startOffsetSeconds/endOffsetSeconds on a version 2 manifest."
+    }
+    $aggregate = 0
+    $prevEnd = $null
+    for ($i = 0; $i -lt $items.Count; $i++) {
+        $label = $i + 1
+        $entry = $items[$i]
+        if ($null -eq $entry) { throw "Manifest validation failed (v3): requestedSliceRanges entry $label is null." }
+        if (($entry -is [string]) -or ($entry -is [ValueType]) -or ($entry -is [System.Array]) -or ($entry -is [System.Collections.IList])) {
+            throw "Manifest validation failed (v3): requestedSliceRanges entry $label must be an object."
+        }
+        $keys = Get-ManifestKeyList -M $entry
+        $missing = @($script:VideoScoutSliceRangeKeys | Where-Object { $keys -notcontains $_ })
+        $extra   = @($keys | Where-Object { $script:VideoScoutSliceRangeKeys -notcontains $_ })
+        if ($missing.Count) { throw "Manifest validation failed (v3): requestedSliceRanges entry $label is missing key(s): $($missing -join ', ')." }
+        if ($extra.Count)   { throw "Manifest validation failed (v3): requestedSliceRanges entry $label has unknown key(s): $($extra -join ', ')." }
+
+        $start = Get-ManifestValue -M $entry -Key 'startOffsetSeconds'
+        $end   = Get-ManifestValue -M $entry -Key 'endOffsetSeconds'
+        foreach ($pair in @(@{ N = 'startOffsetSeconds'; V = $start }, @{ N = 'endOffsetSeconds'; V = $end })) {
+            $v = $pair.V
+            if ($null -eq $v -or -not (($v -is [int]) -or ($v -is [long]))) {
+                throw "Manifest validation failed (v3): requestedSliceRanges entry $label $($pair.N) must be a whole number of seconds."
+            }
+            if ([long]$v -lt 0 -or [long]$v -gt $script:VideoScoutSliceMaxOffset) {
+                throw "Manifest validation failed (v3): requestedSliceRanges entry $label $($pair.N) must be from 0 to $($script:VideoScoutSliceMaxOffset) seconds."
+            }
+        }
+        if ([long]$end -le [long]$start) {
+            throw "Manifest validation failed (v3): requestedSliceRanges entry $label endOffsetSeconds must be strictly greater than startOffsetSeconds."
+        }
+        if ($null -ne $prevEnd -and [long]$start -lt [long]$prevEnd) {
+            throw "Manifest validation failed (v3): requestedSliceRanges entry $label overlaps or precedes the previous entry; slices are recorded in chronological, non-overlapping order exactly as requested (never reordered or merged)."
+        }
+        $aggregate += ([long]$end - [long]$start)
+        $prevEnd = $end
+    }
+    if ($aggregate -gt $script:VideoScoutSliceAggregateCap) {
+        throw "Manifest validation failed (v3): requestedSliceRanges aggregate ${aggregate}s exceeds the fixed $($script:VideoScoutSliceAggregateCap)s multi-slice cap."
+    }
+}
+
+<#
+.SYNOPSIS
   One-line, length-capped, credential-redacted form of an untrusted string. Pure. $null when nothing
   representable remains. Shared by the live writer and the backfill utility (the "existing shared
   sanitizer" both must use).
@@ -340,7 +428,11 @@ function New-VideoScoutLiveManifest {
         $MediaResolutionApplied = $null,
         [bool]$VideoScout = $false,
         $StartOffset = $null,
-        $EndOffset = $null
+        $EndOffset = $null,
+        # V4: the validated multi-slice set (objects with StartOffset/EndOffset) for a multi-slice
+        # SDK run. $null (the default) keeps the existing schema-v2 whole-video / single-slice
+        # manifest byte-for-byte unchanged.
+        $SliceRanges = $null
     )
     $m = New-VideoScoutManifestBase
     $m.runId                    = $RunId
@@ -361,6 +453,24 @@ function New-VideoScoutLiveManifest {
     # ownership is never fabricated for history.
     $m.schemaVersion            = 2
     $m.mediaArtifacts           = @()
+    # V4: a multi-slice run is schema version 3. The requested slice set becomes the authoritative
+    # scope, so the scalar offsets stay null; mediaArtifacts stays the REQUIRED EMPTY array (the SDK
+    # route owns no local media, and an empty inventory is what keeps v3 outside every media
+    # ownership/deletion path). Entries are recorded in the exact requested order.
+    $sliceList = @($SliceRanges)
+    if ($null -ne $SliceRanges -and $sliceList.Count -gt 0) {
+        $m.schemaVersion      = 3
+        $m.startOffsetSeconds = $null
+        $m.endOffsetSeconds   = $null
+        $m.requestedSliceRanges = @(
+            foreach ($r in $sliceList) {
+                [ordered]@{
+                    startOffsetSeconds = [int]$r.StartOffset
+                    endOffsetSeconds   = [int]$r.EndOffset
+                }
+            }
+        )
+    }
     return $m
 }
 
@@ -470,7 +580,13 @@ function Assert-VideoScoutManifestValid {
     if ($script:VideoScoutSchemaVersions -notcontains $schemaVersion) {
         throw "Manifest validation failed: schemaVersion must be one of $($script:VideoScoutSchemaVersions -join '/')."
     }
-    if ($schemaVersion -eq 2) {
+    if ($schemaVersion -eq 3) {
+        # V4: version 3 = a multi-slice SDK run. It carries BOTH v2's mediaArtifacts (which must be
+        # empty) and requestedSliceRanges, and is never a backfill.
+        if ($isBackfill) { throw 'Manifest validation failed: a schemaVersion 3 manifest must not be a backfill (backfills remain version 1 — scope is never fabricated for history).' }
+        $expected = @($baseKeys + 'mediaArtifacts' + 'requestedSliceRanges')
+    }
+    elseif ($schemaVersion -eq 2) {
         if ($isBackfill) { throw 'Manifest validation failed: a schemaVersion 2 manifest must not be a backfill (backfills remain version 1 — ownership is never fabricated for history).' }
         $expected = @($baseKeys + 'mediaArtifacts')
     }
@@ -499,6 +615,17 @@ function Assert-VideoScoutManifestValid {
     # unique names, present-only). Version 1 has no such field.
     if ($schemaVersion -eq 2) {
         Assert-VideoScoutMediaArtifactsValid -Manifest $Manifest
+    }
+    # V4 (v3): the same media-inventory rules apply AND the inventory must be EMPTY, plus the slice
+    # set must be valid. A v3 manifest with ANY media artifact is INVALID by design — that is the
+    # structural guarantee that schema v3 can never become media-ownership or deletion authority.
+    if ($schemaVersion -eq 3) {
+        Assert-VideoScoutMediaArtifactsValid -Manifest $Manifest
+        $v3Media = @(Get-ManifestValue -M $Manifest -Key 'mediaArtifacts')
+        if ($v3Media.Count -ne 0) {
+            throw 'Manifest validation failed (v3): mediaArtifacts must be EMPTY on a schemaVersion 3 manifest (the multi-slice SDK route owns no local media; a v3 manifest is never media-ownership or deletion authority).'
+        }
+        Assert-VideoScoutSliceRangesValid -Manifest $Manifest
     }
     $runId = Get-ManifestValue -M $Manifest -Key 'runId'
     if ([string]::IsNullOrWhiteSpace([string]$runId)) {
@@ -559,6 +686,17 @@ function Assert-VideoScoutManifestValid {
         if (-not (& $inSet $resApp $script:VideoScoutResolutions)) { throw 'Manifest validation failed (live): mediaResolutionApplied must be null or LOW/MEDIUM/HIGH.' }
         if (-not (& $isNullOrNonNegInt $startOff)) { throw 'Manifest validation failed (live): startOffsetSeconds must be null or a non-negative integer.' }
         if (-not (& $isNullOrNonNegInt $endOff)) { throw 'Manifest validation failed (live): endOffsetSeconds must be null or a non-negative integer.' }
+        # V4 (v3): the slice SET is the authoritative scope, so the scalar offsets must be null —
+        # two competing scope records could otherwise disagree about what was requested. A v3 run is
+        # also SDK-only (slices ride per-part videoMetadata, which exists only on that route).
+        if ($schemaVersion -eq 3) {
+            if ($null -ne $startOff -or $null -ne $endOff) {
+                throw 'Manifest validation failed (v3): startOffsetSeconds and endOffsetSeconds must both be null on a multi-slice manifest (requestedSliceRanges is the authoritative scope).'
+            }
+            if ($route -ne 'sdk') {
+                throw "Manifest validation failed (v3): a multi-slice manifest must record route='sdk' (slices are sent as per-part videoMetadata, which exists only on the SDK route)."
+            }
+        }
         if ([string]::IsNullOrWhiteSpace([string]$startedAt) -or ([string]$startedAt -notmatch $script:VideoScoutTimestampRe)) {
             throw 'Manifest validation failed (live): startedAt must be a UTC yyyy-MM-ddTHH:mm:ss.fffZ timestamp.'
         }

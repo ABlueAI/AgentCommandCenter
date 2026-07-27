@@ -167,3 +167,39 @@ Describe 'V5c1 non-destructive tripwire (source + behavior)' {
         finally { if (Test-Path -LiteralPath $base) { Remove-Item -LiteralPath $base -Recurse -Force } }
     }
 }
+
+# ==================================================================================================
+# V4: the media-ownership RECORDER refuses a schema-v3 (multi-slice) manifest.
+# V4 deliberately did NOT touch this module. These tests PIN that fact: the recorder requires
+# schemaVersion == 2, so a v3 manifest can never gain a media artifact -- which is what keeps V4's
+# new schema version permanently outside every media ownership and deletion path.
+Describe 'V4: the recorder refuses to record media into a schema-v3 multi-slice manifest' {
+    $base = Join-Path $env:TEMP ('rec-v4-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $base -Force | Out-Null
+    try {
+        $runId = 'run-20260722-090000-000-4444-abcdef03'
+        $runDir = Join-Path $base $runId
+        New-Item -ItemType Directory -Path $runDir -Force | Out-Null
+        $slices = @([PSCustomObject]@{ StartOffset = 10; EndOffset = 30 }, [PSCustomObject]@{ StartOffset = 60; EndOffset = 90 })
+        $v3 = New-VideoScoutLiveManifest -RunId $runId -Url 'https://youtu.be/x' -AppliedMode 'video' -Route 'sdk' `
+            -Model 'gemini-2.5-flash-lite' -MediaResolutionRequested 'MEDIUM' -VideoScout $true -SliceRanges $slices
+        $file = New-Srt -Dir $runDir -Name 'My_Video.en.srt'
+
+        It 'the fixture is a schema-v3 manifest with an empty inventory' {
+            $v3.schemaVersion | Should Be 3
+            @($v3.mediaArtifacts).Count | Should Be 0
+        }
+        It 'REFUSES the recording (v3 is not a media-owning schema version)' {
+            { Add-VideoScoutMediaArtifact -RunDir $runDir -File $file -Kind 'transcript' -Manifest $v3 } |
+                Should Throw 'not schema version 2'
+        }
+        It 'claims no ownership: the in-memory inventory stays empty' {
+            try { [void](Add-VideoScoutMediaArtifact -RunDir $runDir -File $file -Kind 'transcript' -Manifest $v3) } catch { }
+            @($v3.mediaArtifacts).Count | Should Be 0
+        }
+        It 'leaves the file on disk untouched (the recorder never deletes or moves anything)' {
+            (Test-Path -LiteralPath $file.FullName) | Should Be $true
+        }
+    }
+    finally { if (Test-Path -LiteralPath $base) { Remove-Item -LiteralPath $base -Recurse -Force -ErrorAction SilentlyContinue } }
+}

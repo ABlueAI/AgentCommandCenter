@@ -47,6 +47,16 @@ const YOUTUBE_HOSTS = new Set(['youtube.com', 'www.youtube.com', 'm.youtube.com'
 // rather than an uncaught PowerShell ValidateRange exception surfacing through the PTY.
 const MAX_OFFSET_SECONDS = 86400;
 
+// V4 bounded multi-slice: application limits, mirrored independently in feed-gemini.ps1
+// (lib/get-video-scout-slice-ranges.ps1) and gemini-video-sdk.js — each layer re-enforces the
+// whole contract; none trusts the previous one. 8 stays deliberately below Gemini's documented
+// 10-video maximum; 1800s is the FIXED aggregate cap (no override may raise it); 2048 bounds only
+// the serialized slice-control argument, never any other payload.
+const MIN_MULTI_SLICES = 2;
+const MAX_SLICES = 8;
+const AGGREGATE_SLICE_CAP_SECONDS = 1800;
+const MAX_SLICE_RANGES_JSON_UNITS = 2048;
+
 function isValidOffset(n) {
   return typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= MAX_OFFSET_SECONDS;
 }
@@ -100,7 +110,7 @@ function predictVideoRoute(videoUrl, analysisMode) {
 //           videoModel/mediaResolution are NOT errors: those legitimately fall back to the
 //           script's own default, which is a safe no-surprise outcome, unlike a dropped mode or
 //           a dropped range.)
-function buildVideoScoutArgs({ videoModel, mediaResolution, analysisMode, videoUrl, startOffset, endOffset, analysisFocus } = {}) {
+function buildVideoScoutArgs({ videoModel, mediaResolution, analysisMode, videoUrl, startOffset, endOffset, sliceRanges, analysisFocus } = {}) {
   const args = [];
   const notes = [];
   let error = null;
@@ -160,9 +170,103 @@ function buildVideoScoutArgs({ videoModel, mediaResolution, analysisMode, videoU
     }
   }
 
+  // V4 bounded multi-slice (SDK/YouTube route only). sliceRanges crosses the same untrusted
+  // renderer -> main IPC boundary as every field here and gets the full independent re-validation:
+  // a bypassed/modified renderer calling pty-start directly still hits every check below. ANY
+  // problem with an explicitly supplied sliceRanges REFUSES the launch (sets `error`) — a slice
+  // set is a cost-direction request and is never dropped, trimmed, reordered, merged, or silently
+  // downgraded to whole-video. On success the ONE canonical compact JSON serialization rides as
+  // one discrete `-SliceRangesJson <json>` argv pair (never a shell string); feed-gemini.ps1 and
+  // gemini-video-sdk.js re-validate the same contract independently.
+  const slicesGiven = sliceRanges !== undefined && sliceRanges !== null;
+  if (slicesGiven) {
+    const scalarAlsoGiven =
+      (startOffset !== undefined && startOffset !== null && startOffset !== '') ||
+      (endOffset !== undefined && endOffset !== null && endOffset !== '');
+    const effectiveSliceMode = (typeof analysisMode === 'string' && VALID_ANALYSIS_MODES.has(analysisMode))
+      ? analysisMode : DEFAULT_ANALYSIS_MODE;
+    const refuseSlices = (msg, note) => { error = msg; notes.push(note); };
+
+    if (scalarAlsoGiven) {
+      refuseSlices(
+        'Multi-slice ranges and a single start/end range are mutually exclusive. Send one or the other, never both.',
+        'sliceRanges REJECTED: also received scalar startOffset/endOffset (mutually exclusive) — launch refused');
+    } else if (!Array.isArray(sliceRanges)) {
+      refuseSlices(
+        `Slice ranges must be an array of {startOffset, endOffset} objects (got ${describeInvalidValue(sliceRanges)}). Launch refused.`,
+        `sliceRanges=${describeInvalidValue(sliceRanges)} REJECTED (not an array) — launch refused`);
+    } else if (sliceRanges.length < MIN_MULTI_SLICES || sliceRanges.length > MAX_SLICES) {
+      refuseSlices(
+        `Multi-slice needs ${MIN_MULTI_SLICES} to ${MAX_SLICES} slices (got ${sliceRanges.length}). One slice uses the single start/end fields; zero slices means the whole video.`,
+        `sliceRanges REJECTED (count ${sliceRanges.length}; allowed ${MIN_MULTI_SLICES}-${MAX_SLICES}) — launch refused`);
+    } else if (effectiveSliceMode !== 'video') {
+      refuseSlices(
+        `Time slices are only valid in video mode (the current mode is "${effectiveSliceMode}"). Clear the slices, or switch analysis mode to video.`,
+        `sliceRanges REJECTED: slices only apply in video mode (effective mode is "${effectiveSliceMode}") — launch refused`);
+    } else {
+      // Exact entry shape: a plain object with exactly the keys startOffset/endOffset, both
+      // integers 0..MAX_OFFSET_SECONDS, end strictly after start. Checked entry by entry so the
+      // refusal names the first offending slice (1-based, matching the visible labels).
+      let entryError = null;
+      const canonical = [];
+      for (let i = 0; i < sliceRanges.length && !entryError; i++) {
+        const entry = sliceRanges[i];
+        if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+          entryError = `Slice ${i + 1} must be an object with exactly startOffset and endOffset (got ${describeInvalidValue(entry)}).`;
+          break;
+        }
+        const keys = Object.keys(entry).sort();
+        if (keys.length !== 2 || keys[0] !== 'endOffset' || keys[1] !== 'startOffset') {
+          entryError = `Slice ${i + 1} must contain exactly the keys startOffset and endOffset (got ${describeInvalidValue(Object.keys(entry))}).`;
+          break;
+        }
+        if (!isValidOffset(entry.startOffset) || !isValidOffset(entry.endOffset)) {
+          entryError = `Slice ${i + 1} offsets must be whole seconds between 0 and ${MAX_OFFSET_SECONDS} (got start=${describeInvalidValue(entry.startOffset)}, end=${describeInvalidValue(entry.endOffset)}).`;
+          break;
+        }
+        if (entry.endOffset <= entry.startOffset) {
+          entryError = `Slice ${i + 1} end (${entry.endOffset}s) must be strictly after its start (${entry.startOffset}s).`;
+          break;
+        }
+        if (i > 0 && entry.startOffset < canonical[i - 1].endOffset) {
+          entryError = `Slice ${i + 1} (${entry.startOffset}s-${entry.endOffset}s) must start at or after the end of slice ${i} (${canonical[i - 1].startOffset}s-${canonical[i - 1].endOffset}s): slices must be chronological and non-overlapping, and are never reordered or merged.`;
+          break;
+        }
+        canonical.push({ startOffset: entry.startOffset, endOffset: entry.endOffset });
+      }
+      if (entryError) {
+        refuseSlices(`${entryError} Launch refused.`, 'sliceRanges REJECTED (invalid slice entry/order) — launch refused');
+      } else {
+        const aggregate = canonical.reduce((sum, r) => sum + (r.endOffset - r.startOffset), 0);
+        const routePrediction = predictVideoRoute(videoUrl, effectiveSliceMode).route;
+        const serialized = JSON.stringify(canonical); // canonical order fixed by construction above
+        if (aggregate > AGGREGATE_SLICE_CAP_SECONDS) {
+          refuseSlices(
+            `The slices add up to ${aggregate}s, which exceeds the fixed ${AGGREGATE_SLICE_CAP_SECONDS}s multi-slice cap (no override can raise it). Narrow or remove slices.`,
+            `sliceRanges REJECTED (aggregate ${aggregate}s > fixed cap ${AGGREGATE_SLICE_CAP_SECONDS}s) — launch refused`);
+        } else if (routePrediction === 'cli') {
+          refuseSlices(
+            'Time slices only work for YouTube URLs (analyzed directly via the Gemini API). This source would be downloaded and analyzed locally, which cannot apply slices. Clear the slices, or use a YouTube URL.',
+            'sliceRanges REJECTED: source routes to the CLI/download path (non-YouTube), which cannot apply slices — launch refused');
+        } else if (serialized.length > MAX_SLICE_RANGES_JSON_UNITS) {
+          // Structurally unreachable for 8 in-bounds slices (~350 units max), kept as the hard
+          // transport bound the work order names — fail closed, never truncate.
+          refuseSlices(
+            `The serialized slice payload is ${serialized.length} units, which exceeds the ${MAX_SLICE_RANGES_JSON_UNITS}-unit bound. Launch refused.`,
+            `sliceRanges REJECTED (serialized ${serialized.length} > ${MAX_SLICE_RANGES_JSON_UNITS} units) — launch refused`);
+        } else {
+          args.push('-SliceRangesJson', serialized);
+          // Bounded metadata only (count + aggregate) — never the serialized JSON in a note/log.
+          notes.push(`sliceRanges sent count=${canonical.length} aggregate=${aggregate}s as one discrete -SliceRangesJson (ONE analysis of just those slices; SDK/YouTube route only)`);
+        }
+      }
+    }
+    if (error) return { args, notes, error };
+  }
+
   // Section-scoping (videoMetadata start/end offset, SDK/YouTube route only): renderer already
-  // validated this (parseTimeToSeconds/resolveVideoRange in app.js), but startOffset/endOffset
-  // cross the same untrusted renderer -> main IPC boundary as every other field here, so they get
+  // validated this (parseTimeToSeconds/classifySliceRows in video-range-ui.js), but startOffset/
+  // endOffset cross the same untrusted renderer -> main IPC boundary as every other field here, so they get
   // the same independent re-validation posture as videoModel/mediaResolution/analysisMode above —
   // never trust the renderer's check as the actual security/correctness boundary. This runs in the
   // Electron MAIN process (video-scout-args.js is required only from main.js's pty-start handler;
@@ -241,6 +345,10 @@ module.exports = {
   DEFAULT_ANALYSIS_MODE,
   YOUTUBE_HOSTS,
   MAX_OFFSET_SECONDS,
+  MIN_MULTI_SLICES,
+  MAX_SLICES,
+  AGGREGATE_SLICE_CAP_SECONDS,
+  MAX_SLICE_RANGES_JSON_UNITS,
   isValidOffset,
   predictVideoRoute,
   buildVideoScoutArgs,

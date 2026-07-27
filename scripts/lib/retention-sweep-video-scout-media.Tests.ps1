@@ -608,3 +608,58 @@ Describe 'V5c2b non-destructive tripwire (source: no direct delete/move/media-sc
         ($src -match 'AbandonedMutexException') | Should Be $true
     }
 }
+
+# ==================================================================================================
+# V4: the cross-run RETENTION sweep never treats a schema-v3 (multi-slice) run as a candidate.
+# V4 deliberately did NOT touch this module. These tests PIN that fact: the per-run gate requires
+# schemaVersion == 2, so a v3 run is untouchable by retention in BOTH dry-run and -Apply, even when
+# it is old enough and its outcome would otherwise put it in a sweep lane.
+Describe 'V4: schema-v3 multi-slice runs are NEVER retention candidates' {
+    $root = New-SweepRoot
+    New-Item -ItemType Directory -Path $root -Force | Out-Null
+    try {
+        $runId = 'run-20260101-101010-101-2222-abcdef04'
+        $runDir = Join-Path $root $runId
+        New-Item -ItemType Directory -Path $runDir -Force | Out-Null
+        # An OLD, errored multi-slice run -- the exact shape retention would sweep if it were v2.
+        $slices = @([PSCustomObject]@{ StartOffset = 10; EndOffset = 30 }, [PSCustomObject]@{ StartOffset = 60; EndOffset = 90 })
+        $m = New-VideoScoutLiveManifest -RunId $runId -Url 'https://youtu.be/x' -AppliedMode 'video' -Route 'sdk' `
+            -Model 'gemini-2.5-flash-lite' -MediaResolutionRequested 'MEDIUM' -VideoScout $true -SliceRanges $slices
+        $old = VSOldUtc 400
+        $m.startedAt = $old
+        $m.finishedAt = $old
+        $m.outcome = 'error'
+        $m.reason = 'provider rejected the multipart request'
+        [void](Write-VideoScoutManifestFile -RunDir $runDir -Manifest $m)
+        $stray = New-MediaFile -Dir $runDir -Name 'stray.srt' -Content 'abc'
+
+        $dry = Invoke-VideoScoutRetentionSweep -DownloadsRoot $root
+        $applied = Invoke-VideoScoutRetentionSweep -DownloadsRoot $root -Apply
+
+        It 'the fixture is an OLD schema-v3 error run (only the version excludes it)' {
+            $disk = Get-DiskManifest -RunDir $runDir
+            $disk.schemaVersion | Should Be 3
+            $disk.outcome | Should Be 'error'
+            @($disk.requestedSliceRanges).Count | Should Be 2
+        }
+        It 'the DRY RUN mutates no runs' {
+            $dry.runsMutated | Should Be 0
+        }
+        It 'the APPLY run mutates no runs and deletes nothing' {
+            $applied.runsMutated | Should Be 0
+            $applied.deleted | Should Be 0
+        }
+        It 'the unowned media file survives -Apply (retention never scans for unowned files)' {
+            (Test-Path -LiteralPath $stray) | Should Be $true
+        }
+        It 'the manifest is not rewritten (still schema 3, still no media inventory)' {
+            $disk = Get-DiskManifest -RunDir $runDir
+            $disk.schemaVersion | Should Be 3
+            @($disk.mediaArtifacts).Count | Should Be 0
+        }
+        It 'the run directory survives' {
+            (Test-Path -LiteralPath $runDir) | Should Be $true
+        }
+    }
+    finally { if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue } }
+}

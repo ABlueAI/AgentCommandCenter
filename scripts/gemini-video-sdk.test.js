@@ -403,6 +403,158 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     server.close();
   }
 
+  // ============================== V4 bounded multi-slice ======================================
+  const { resolveSliceRanges, buildSliceScopeInstruction, MIN_MULTI_SLICES, MAX_SLICES,
+    AGGREGATE_SLICE_CAP_SECONDS, MAX_SLICE_RANGES_JSON_UNITS } = require('./gemini-video-sdk');
+  const S2 = '[{"startOffset":10,"endOffset":30},{"startOffset":60,"endOffset":90}]';
+  const sliceArgs = (json, extra = []) => ['--url', 'https://youtu.be/test', '--prompt-text', 'BRIEF-TEXT analyze', '--media-resolution', 'LOW', '--slice-ranges-json', json, ...extra];
+
+  section('V4 constants + resolveSliceRanges contract (full independent re-enforcement)');
+  {
+    assert(MIN_MULTI_SLICES === 2 && MAX_SLICES === 8 && AGGREGATE_SLICE_CAP_SECONDS === 1800 && MAX_SLICE_RANGES_JSON_UNITS === 2048,
+      'V4 bounds pinned: 2-8 slices, fixed 1800s aggregate, 2048-unit serialized bound');
+    assert(resolveSliceRanges(parseArgs([])).multi === false, 'flag absent -> multi:false (whole-video/scalar behavior untouched)');
+    assert(resolveSliceRanges(parseArgs(['--slice-ranges-json'])).error, 'valueless trailing flag refuses (never "not passed")');
+    assert(resolveSliceRanges(parseArgs(['--slice-ranges-json', S2, '--start-offset', '5'])).error.includes('mutually exclusive'),
+      'slices + scalar offset flags refuse (mutual exclusion, either order)');
+    const big = '[' + Array(200).fill('{"startOffset":1,"endOffset":2}').join(',') + ']';
+    assert(big.length > 2048 && /2048-unit bound/.test(resolveSliceRanges(parseArgs(['--slice-ranges-json', big])).error),
+      'over-2048-unit payload refuses BEFORE parsing');
+    assert(resolveSliceRanges(parseArgs(['--slice-ranges-json', '{not json'])).error.includes('not valid JSON'), 'malformed JSON refuses');
+    assert(resolveSliceRanges(parseArgs(['--slice-ranges-json', '{"startOffset":1,"endOffset":2}'])).error.includes('array'),
+      'a bare object refuses (array required)');
+    assert(resolveSliceRanges(parseArgs(['--slice-ranges-json', '[{"startOffset":1,"endOffset":2}]'])).error.includes('2 to 8'),
+      'a 1-entry array refuses (scalar path owns single slices)');
+    const nine = JSON.stringify(Array.from({ length: 9 }, (_, i) => ({ startOffset: i * 20, endOffset: i * 20 + 10 })));
+    assert(resolveSliceRanges(parseArgs(['--slice-ranges-json', nine])).error.includes('2 to 8'), 'a 9-entry array refuses');
+    assert(resolveSliceRanges(parseArgs(['--slice-ranges-json', '[{"startOffset":10,"endOffset":30},{"startOffset":60,"endOffset":90,"x":1}]'])).error.includes('exactly the keys'),
+      'an extra key refuses (exact-shape entries)');
+    assert(resolveSliceRanges(parseArgs(['--slice-ranges-json', '[{"startOffset":10,"endOffset":30},{"startOffset":60.5,"endOffset":90}]'])).error.includes('whole seconds'),
+      'a fractional offset refuses');
+    assert(resolveSliceRanges(parseArgs(['--slice-ranges-json', '[{"startOffset":10,"endOffset":30},{"startOffset":"60","endOffset":90}]'])).error.includes('whole seconds'),
+      'a string offset refuses (never coerced)');
+    assert(resolveSliceRanges(parseArgs(['--slice-ranges-json', '[{"startOffset":10,"endOffset":30},{"startOffset":60,"endOffset":86401}]'])).error.includes('86400'),
+      'an offset beyond 86400 refuses');
+    assert(resolveSliceRanges(parseArgs(['--slice-ranges-json', '[{"startOffset":10,"endOffset":30},{"startOffset":90,"endOffset":90}]'])).error.includes('strictly after'),
+      'end == start refuses');
+    assert(resolveSliceRanges(parseArgs(['--slice-ranges-json', '[{"startOffset":10,"endOffset":30},{"startOffset":20,"endOffset":40}]'])).error.includes('chronological and non-overlapping'),
+      'overlap refuses');
+    assert(resolveSliceRanges(parseArgs(['--slice-ranges-json', '[{"startOffset":100,"endOffset":200},{"startOffset":10,"endOffset":50}]'])).error.includes('never reordered'),
+      'out-of-order refuses — never silently reordered');
+    const adj = resolveSliceRanges(parseArgs(['--slice-ranges-json', '[{"startOffset":10,"endOffset":20},{"startOffset":20,"endOffset":30}]']));
+    assert(adj.multi === true, 'adjacent slices are allowed');
+    const eightOk = JSON.stringify(Array.from({ length: 8 }, (_, i) => ({ startOffset: i * 400, endOffset: i * 400 + 225 })));
+    const okAgg = resolveSliceRanges(parseArgs(['--slice-ranges-json', eightOk]));
+    assert(okAgg.multi === true && okAgg.aggregateSeconds === 1800, 'exactly 1800s aggregate is accepted (inclusive cap)');
+    const eightOver = Array.from({ length: 8 }, (_, i) => ({ startOffset: i * 400, endOffset: i * 400 + 225 }));
+    eightOver[7] = { startOffset: 2800, endOffset: 3026 };
+    assert(resolveSliceRanges(parseArgs(['--slice-ranges-json', JSON.stringify(eightOver)])).error.includes('1801s'),
+      '1801s aggregate refuses (fixed cap, no flag can raise it)');
+    const ok2 = resolveSliceRanges(parseArgs(['--slice-ranges-json', S2]));
+    assert(ok2.multi === true && ok2.aggregateSeconds === 50
+      && ok2.ranges.map((r) => `${r.startOffset}-${r.endOffset}`).join(',') === '10-30,60-90',
+      'a valid 2-slice payload resolves with exact ordered ranges + aggregate');
+  }
+
+  section('V4 scope instruction (deterministic, structure-preserving)');
+  {
+    const text = buildSliceScopeInstruction([{ startOffset: 10, endOffset: 30 }, { startOffset: 60, endOffset: 90 }]);
+    assert(text.includes('2 AUTHORIZED VIDEO SLICES'), 'names the slice count');
+    assert(text.includes('- Slice 1: 10s to 30s (20s)') && text.includes('- Slice 2: 60s to 90s (30s)'),
+      'lists chronological labels with exact offsets and lengths');
+    assert(/ONLY these explicit slices are authorized/.test(text), 'states only the explicit slices are authorized');
+    assert(/distinguishable/.test(text), 'asks for per-slice attribution in the report');
+    assert(text.includes('## 1. TL;DR'), 'preserves the report-leading TL;DR requirement');
+    assert(!/update_topic|tool|fetch|argv|JSON payload/i.test(text), 'no transport/tool-call internals leak into the prompt');
+    assert(text === buildSliceScopeInstruction([{ startOffset: 10, endOffset: 30 }, { startOffset: 60, endOffset: 90 }]),
+      'deterministic: identical input -> identical instruction');
+  }
+
+  section('V4 golden request bodies (zero/one-slice unchanged; exact multipart for 2 and 8)');
+  {
+    const whole = buildRequestBody({ url: 'https://youtu.be/x', prompt: 'P', mediaResolution: 'LOW' });
+    assert(JSON.stringify(whole) === '{"contents":[{"role":"user","parts":[{"fileData":{"fileUri":"https://youtu.be/x"}},{"text":"P"}]}],"generationConfig":{"mediaResolution":"MEDIA_RESOLUTION_LOW"}}',
+      'GOLDEN: zero-slice body is byte-identical to the existing shape');
+    const single = buildRequestBody({ url: 'https://youtu.be/x', prompt: 'P', mediaResolution: 'LOW', startOffset: 5, endOffset: 9 });
+    assert(JSON.stringify(single) === '{"contents":[{"role":"user","parts":[{"fileData":{"fileUri":"https://youtu.be/x"},"videoMetadata":{"startOffset":"5s","endOffset":"9s"}},{"text":"P"}]}],"generationConfig":{"mediaResolution":"MEDIA_RESOLUTION_LOW"}}',
+      'GOLDEN: one-slice body is byte-identical to the existing shape');
+    const two = buildRequestBody({ url: 'https://youtu.be/x', prompt: 'P', mediaResolution: 'LOW', sliceRanges: [{ startOffset: 10, endOffset: 30 }, { startOffset: 60, endOffset: 90 }] });
+    assert(JSON.stringify(two) === '{"contents":[{"role":"user","parts":[{"fileData":{"fileUri":"https://youtu.be/x"},"videoMetadata":{"startOffset":"10s","endOffset":"30s"}},{"fileData":{"fileUri":"https://youtu.be/x"},"videoMetadata":{"startOffset":"60s","endOffset":"90s"}},{"text":"P"}]}],"generationConfig":{"mediaResolution":"MEDIA_RESOLUTION_LOW"}}',
+      'GOLDEN: exact 2-slice multipart JSON — N ordered media parts, same URL, own metadata each, ONE text part LAST');
+    const ranges8 = Array.from({ length: 8 }, (_, i) => ({ startOffset: i * 400, endOffset: i * 400 + 225 }));
+    const eight = buildRequestBody({ url: 'https://youtu.be/x', prompt: 'P', mediaResolution: 'LOW', sliceRanges: ranges8 });
+    const parts8 = eight.contents[0].parts;
+    assert(parts8.length === 9, '8-slice body has exactly 9 parts (8 media + 1 text)');
+    assert(parts8.slice(0, 8).every((p, i) => p.fileData.fileUri === 'https://youtu.be/x'
+      && p.videoMetadata.startOffset === `${ranges8[i].startOffset}s` && p.videoMetadata.endOffset === `${ranges8[i].endOffset}s`
+      && Object.keys(p).join(',') === 'fileData,videoMetadata'),
+      'each of the 8 media parts repeats the same URL with ONLY its own validated videoMetadata, in user order');
+    assert(Object.keys(parts8[8]).join(',') === 'text' && parts8[8].text === 'P', 'the single text part appears last');
+    assert(!parts8.some((p) => p.fileData && !p.videoMetadata), 'no whole-video media part is added');
+  }
+
+  section('V4 usage-line tag');
+  {
+    const u = { promptTokenCount: 10, candidatesTokenCount: 5, totalTokenCount: 15, promptTokensDetails: [] };
+    assert(!formatUsageLine(u, 'm', 'LOW', false).includes('slice'), 'existing whole-video line unchanged (no slice tag)');
+    assert(formatUsageLine(u, 'm', 'LOW', true).endsWith(' sliced=yes'), 'existing single-slice line unchanged');
+    assert(formatUsageLine(u, 'm', 'LOW', false, 3).endsWith(' slices=3'), 'multi-slice run appends slices=N');
+  }
+
+  section('V4 one logical request: single fetch, byte-identical K5 retries, refusals fetch nothing');
+  {
+    const h = makeDeps([resp(200, SUCCESS_BODY)]);
+    const code = await runVideoScout(sliceArgs(S2), h.deps);
+    assert(code === 0 && h.calls.length === 1, 'a 2-slice run submits EXACTLY ONE request (no sequential per-slice calls)');
+    const sent = JSON.parse(h.calls[0].body);
+    assert(sent.contents[0].parts.length === 3, 'the one submitted body carries 2 media parts + 1 text part');
+    assert(sent.contents[0].parts[2].text.includes('BRIEF-TEXT analyze') && sent.contents[0].parts[2].text.includes('2 AUTHORIZED VIDEO SLICES'),
+      'the submitted prompt = resolved prompt + appended scope instruction');
+    assert(h.logs.some((l) => /slices=2 aggregate=50s \(ONE multipart request\)/.test(l)), 'launch log carries bounded slice metadata');
+    assert(h.logs.some((l) => /\[video-scout usage\].*slices=2/.test(l)), 'usage line tags slices=2');
+  }
+  {
+    const h = makeDeps([resp(503, U503), resp(503, U503), resp(200, SUCCESS_BODY)]);
+    const code = await runVideoScout(sliceArgs(S2), h.deps);
+    assert(code === 0 && h.calls.length === 3, 'retryable 503s: recovered on attempt 3 with slices');
+    assert(h.calls[0].body === h.calls[1].body && h.calls[1].body === h.calls[2].body,
+      'every K5 retry submits the BYTE-IDENTICAL multipart body (serialized once, before the loop)');
+    assert(h.sleeps.join(',') === '1200,2200', 'the two bounded deterministic delays, unchanged by V4');
+    assert(usageCount(h.logs) === 1, 'usage prints exactly once');
+  }
+  {
+    const h = makeDeps([resp(503, U503), resp(503, U503), resp(503, U503), resp(200, SUCCESS_BODY)]);
+    const code = await runVideoScout(sliceArgs(S2), h.deps);
+    assert(code === 1 && h.calls.length === 3, 'NO fourth attempt exists for a multi-slice run');
+  }
+  {
+    const h = makeDeps([new Error('socket hang up')]);
+    const code = await runVideoScout(sliceArgs(S2), h.deps);
+    assert(code === 1 && h.calls.length === 1, 'ambiguous network failure with slices: one fetch, never retried');
+  }
+  {
+    const h = makeDeps([resp(200, SUCCESS_BODY)]);
+    assert((await runVideoScout(sliceArgs('{bad json'), h.deps)) === 1 && h.calls.length === 0,
+      'invalid slice JSON: nonzero exit with ZERO fetches');
+    assert((await runVideoScout(sliceArgs(S2, ['--start-offset', '5', '--end-offset', '9']), h.deps)) === 1 && h.calls.length === 0,
+      'slices + scalar offsets: refused with ZERO fetches (mutual exclusion)');
+    const over = Array.from({ length: 8 }, (_, i) => ({ startOffset: i * 400, endOffset: i * 400 + 225 }));
+    over[7] = { startOffset: 2800, endOffset: 3026 };
+    assert((await runVideoScout(sliceArgs(JSON.stringify(over)), h.deps)) === 1 && h.calls.length === 0,
+      '1801s aggregate: refused with ZERO fetches (cap enforced before any submission)');
+  }
+
+  section('V4 no second retry loop / no sequential-request machinery in source');
+  {
+    const src = fs.readFileSync(path.join(__dirname, 'gemini-video-sdk.js'), 'utf8');
+    assert((src.match(/attempt <= RETRY_MAX_ATTEMPTS/g) || []).length === 1,
+      'exactly ONE attempt loop exists (the shared submitGeminiRequest transport)');
+    // Count INVOCATIONS only: `submitGeminiRequest({` also matches the function definition, so
+    // anchor on `await` — one call site means no per-slice submission loop was introduced.
+    assert((src.match(/await submitGeminiRequest\(/g) || []).length === 1,
+      'runVideoScout calls the shared transport at exactly one site — no per-slice submission loop');
+  }
+
   process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
   process.exit(failed ? 1 : 0);
 })();

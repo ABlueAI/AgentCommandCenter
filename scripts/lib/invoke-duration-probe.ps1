@@ -83,13 +83,18 @@ function Invoke-DurationProbe {
 function Assert-DurationGuard {
     param([Parameter(Mandatory)][string]$Url, [Parameter(Mandatory)][string]$GuardMode,
         [int]$ProbeTimeoutSec = 60, [int]$MaxDurationSeconds = 0,
-        [switch]$HasRange, [int]$RangeStart = 0, [int]$RangeEnd = 0)
+        [switch]$HasRange, [int]$RangeStart = 0, [int]$RangeEnd = 0,
+        # V4: a multi-slice run gates on the AGGREGATE of its already-validated slice set against a
+        # FIXED cap. Passed through to the pure decision layer, which owns the cost decision (and
+        # refuses an accompanying override outright rather than applying or silently ignoring it).
+        [switch]$HasMultiSlice, [int]$SliceCount = 0, [int]$AggregateSeconds = 0)
     $ytdlpProbe = Get-YtDlpPath
     Write-Host "Duration guard: probing metadata (timeout ${ProbeTimeoutSec}s)..." -ForegroundColor DarkCyan
     $probe = Invoke-DurationProbe -YtDlp $ytdlpProbe -Url $Url -TimeoutSec $ProbeTimeoutSec
     $override = if ($MaxDurationSeconds -gt 0) { [Nullable[int]]$MaxDurationSeconds } else { $null }
     $guard = Resolve-DurationGuard -Mode $GuardMode -HasRange:$HasRange -StartOffset $RangeStart -EndOffset $RangeEnd `
-        -DurationSeconds $probe.Duration -IsLive:$probe.IsLive -ProbeTimedOut:$probe.TimedOut -MaxDurationOverride $override
+        -DurationSeconds $probe.Duration -IsLive:$probe.IsLive -ProbeTimedOut:$probe.TimedOut -MaxDurationOverride $override `
+        -HasMultiSlice:$HasMultiSlice -SliceCount $SliceCount -AggregateSeconds $AggregateSeconds
     if ($guard.OverrideUsed) {
         Write-Host "Duration guard: -MaxDurationSeconds=$MaxDurationSeconds override applied (mode=$GuardMode, gate=$($guard.MeasuredKind), limit=$($guard.Limit)s)." -ForegroundColor Yellow
     }

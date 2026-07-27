@@ -165,12 +165,16 @@ Describe 'Assert-VideoScoutManifestValid rejects drift and malformed shapes' {
         { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'missing key'
     }
 
-    It 'accepts the supported schemaVersions (1 and 2) and rejects any other' {
-        # V5c1 introduced version 2; version 1 stays valid, an unsupported version is rejected.
+    It 'accepts the supported schemaVersions (1, 2 and 3) and rejects any other' {
+        # V5c1 introduced version 2; V4 introduced version 3 (multi-slice). Version 1 stays valid and
+        # an unsupported version is still rejected. NOTE: bumping THIS manifest's version to 3
+        # without adding requestedSliceRanges now fails on the missing v3 key rather than on the
+        # version itself -- which is the correct, stricter behavior -- so the "any other version"
+        # half of this assertion uses a genuinely unsupported version (4).
         $m2 = New-GoodLive; $m2.schemaVersion | Should Be 2
         { Assert-VideoScoutManifestValid -Manifest $m2 } | Should Not Throw
-        $m3 = New-GoodLive; $m3.schemaVersion = 3
-        { Assert-VideoScoutManifestValid -Manifest $m3 } | Should Throw 'schemaVersion'
+        $m4 = New-GoodLive; $m4.schemaVersion = 4
+        { Assert-VideoScoutManifestValid -Manifest $m4 } | Should Throw 'schemaVersion'
     }
 
     It 'rejects an empty runId' {
@@ -481,5 +485,176 @@ Describe 'V5c2a schema — media artifact deletion states and per-state nullabil
         $back.mediaArtifacts[0].state | Should Be 'deleted'
         $back.mediaArtifacts[0].deletedAt | Should Be $ts
         { Assert-VideoScoutManifestValid -Manifest $back } | Should Not Throw
+    }
+}
+
+Describe 'V4 schema version 3 -- multi-slice requested scope' {
+    # A valid multi-slice SDK run: 2 chronological slices, empty media inventory, null scalars.
+    function New-Slices { param($ranges = @(@{S=10;E=30}, @{S=60;E=90}))
+        @(foreach ($r in $ranges) { [PSCustomObject]@{ StartOffset = $r.S; EndOffset = $r.E } }) }
+    function New-V3 { param($ranges = $null)
+        New-VideoScoutLiveManifest -RunId 'r' -Url 'u' -AppliedMode 'video' -Route 'sdk' -Model 'm' `
+            -MediaResolutionRequested 'MEDIUM' -VideoScout $true `
+            -SliceRanges $(if ($null -eq $ranges) { New-Slices } else { $ranges }) }
+
+    It 'a multi-slice run is schema version 3 with requestedSliceRanges in the REQUESTED order' {
+        $m = New-V3
+        $m.schemaVersion | Should Be 3
+        @($m.requestedSliceRanges).Count | Should Be 2
+        @($m.requestedSliceRanges)[0].startOffsetSeconds | Should Be 10
+        @($m.requestedSliceRanges)[1].endOffsetSeconds | Should Be 90
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
+    }
+    It 'a v3 manifest has NULL scalar offsets (the slice set is the authoritative scope)' {
+        $m = New-V3
+        $m.startOffsetSeconds | Should BeNullOrEmpty
+        $m.endOffsetSeconds | Should BeNullOrEmpty
+    }
+    It 'a v3 manifest requires an EMPTY mediaArtifacts array' {
+        $m = New-V3
+        @($m.mediaArtifacts).Count | Should Be 0
+    }
+    It 'survives a JSON round-trip (the shape the Library actually reads back from disk)' {
+        $rt = (New-V3 | ConvertTo-Json -Depth 8) | ConvertFrom-Json
+        { Assert-VideoScoutManifestValid -Manifest $rt } | Should Not Throw
+        @($rt.requestedSliceRanges).Count | Should Be 2
+    }
+    It 'records all 8 slices for a maximum multi-slice run' {
+        $eight = New-Slices -ranges @(0..7 | ForEach-Object { @{ S = $_ * 400; E = $_ * 400 + 225 } })
+        $m = New-V3 -ranges $eight
+        @($m.requestedSliceRanges).Count | Should Be 8
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
+    }
+
+    # --- version isolation: v1 and v2 stay valid unchanged and REJECT the new key ---------------
+    It 'a whole-video / single-slice run stays schema version 2 with no requestedSliceRanges key' {
+        $v2 = New-VideoScoutLiveManifest -RunId 'r' -Url 'u' -AppliedMode 'video' -Route 'sdk' -Model 'm' -MediaResolutionRequested 'MEDIUM' -StartOffset 5 -EndOffset 9
+        $v2.schemaVersion | Should Be 2
+        ($v2.Keys -contains 'requestedSliceRanges') | Should Be $false
+        $v2.startOffsetSeconds | Should Be 5
+        { Assert-VideoScoutManifestValid -Manifest $v2 } | Should Not Throw
+    }
+    It 'an EMPTY slice set leaves the manifest at version 2 (never an empty v3)' {
+        $m = New-VideoScoutLiveManifest -RunId 'r' -Url 'u' -AppliedMode 'video' -Route 'sdk' -Model 'm' -MediaResolutionRequested 'MEDIUM' -SliceRanges @()
+        $m.schemaVersion | Should Be 2
+        ($m.Keys -contains 'requestedSliceRanges') | Should Be $false
+    }
+    It 'version 2 REJECTS a silently added requestedSliceRanges key' {
+        $v2 = New-VideoScoutLiveManifest -RunId 'r' -Url 'u' -AppliedMode 'video' -Route 'sdk' -Model 'm' -MediaResolutionRequested 'MEDIUM'
+        $v2.requestedSliceRanges = @([ordered]@{ startOffsetSeconds = 10; endOffsetSeconds = 30 })
+        { Assert-VideoScoutManifestValid -Manifest $v2 } | Should Throw 'unknown key'
+    }
+    It 'version 1 REJECTS a silently added requestedSliceRanges key' {
+        $v1 = [ordered]@{ schemaVersion=1; runId='r'; videoScout=$true; url='u'; videoTitle=$null; requestedMode=$null; appliedMode='video'; route='sdk'; model='m'; mediaResolutionRequested='MEDIUM'; mediaResolutionApplied=$null; startOffsetSeconds=$null; endOffsetSeconds=$null; startedAt='2026-07-20T00:00:00.000Z'; finishedAt=$null; usage=$null; reportFile=$null; outcome=$null; reason=$null; requestedSliceRanges=@() }
+        { Assert-VideoScoutManifestValid -Manifest $v1 } | Should Throw 'unknown key'
+    }
+    It 'version 3 REQUIRES the requestedSliceRanges field' {
+        $m = New-V3; $m.Remove('requestedSliceRanges')
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'missing key'
+    }
+    It 'version 3 still REQUIRES the mediaArtifacts field' {
+        $m = New-V3; $m.Remove('mediaArtifacts')
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'missing key'
+    }
+    It 'an unknown schemaVersion (4) is refused' {
+        $m = New-V3; $m.schemaVersion = 4
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'schemaVersion must be one of'
+    }
+
+    # --- the structural guarantee: v3 can NEVER become media-deletion authority -----------------
+    It 'a v3 manifest with ANY media artifact is INVALID (v3 is never media-ownership authority)' {
+        $m = New-V3
+        $m.mediaArtifacts = @([ordered]@{ fileName='x.srt'; kind='transcript'; sizeBytes=10; recordedAt='2026-07-20T00:00:00.000Z'; state='present'; deletedAt=$null; deletionReason=$null })
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'mediaArtifacts must be EMPTY'
+    }
+    It 'a v3 manifest with a DELETED artifact is equally invalid' {
+        $m = New-V3
+        $m.mediaArtifacts = @([ordered]@{ fileName='x.srt'; kind='transcript'; sizeBytes=10; recordedAt='2026-07-20T00:00:00.000Z'; state='deleted'; deletedAt='2026-07-20T00:01:00.000Z'; deletionReason='completed-analysis' })
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'mediaArtifacts must be EMPTY'
+    }
+    It 'a v3 manifest must record the SDK route (slices exist only on that route)' {
+        $m = New-V3; $m.route = 'cli'
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'must record route'
+    }
+    It 'a v3 manifest must not also carry scalar offsets (two competing scope records)' {
+        $m = New-V3; $m.startOffsetSeconds = 5; $m.endOffsetSeconds = 9
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'must both be null'
+    }
+    It 'a v3 manifest is never a backfill' {
+        $m = New-V3
+        $m.backfill = [ordered]@{ startedAtApproximate = $true; generatedAt = 'x'; source = 'y'; inferredFields = @('route'); routeInference = @{} }
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw
+    }
+
+    # --- requestedSliceRanges shape enforcement -------------------------------------------------
+    It 'refuses fewer than 2 or more than 8 slice entries' {
+        $m = New-V3; $m.requestedSliceRanges = @([ordered]@{ startOffsetSeconds=10; endOffsetSeconds=30 })
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw '2 to 8 entries'
+        $m2 = New-V3; $m2.requestedSliceRanges = @(0..8 | ForEach-Object { [ordered]@{ startOffsetSeconds = $_ * 20; endOffsetSeconds = $_ * 20 + 10 } })
+        { Assert-VideoScoutManifestValid -Manifest $m2 } | Should Throw '2 to 8 entries'
+    }
+    It 'refuses a non-array requestedSliceRanges' {
+        $m = New-V3; $m.requestedSliceRanges = [ordered]@{ startOffsetSeconds = 10; endOffsetSeconds = 30 }
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'must be an array'
+    }
+    It 'refuses an entry with extra or missing keys' {
+        $m = New-V3
+        $m.requestedSliceRanges = @([ordered]@{ startOffsetSeconds=10; endOffsetSeconds=30 }, [ordered]@{ startOffsetSeconds=60; endOffsetSeconds=90; label='x' })
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'unknown key'
+        $m2 = New-V3
+        $m2.requestedSliceRanges = @([ordered]@{ startOffsetSeconds=10; endOffsetSeconds=30 }, [ordered]@{ startOffsetSeconds=60 })
+        { Assert-VideoScoutManifestValid -Manifest $m2 } | Should Throw 'missing key'
+    }
+    It 'refuses non-integer / out-of-range offsets' {
+        $m = New-V3
+        $m.requestedSliceRanges = @([ordered]@{ startOffsetSeconds=10; endOffsetSeconds=30 }, [ordered]@{ startOffsetSeconds='60'; endOffsetSeconds=90 })
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'whole number'
+        $m2 = New-V3
+        $m2.requestedSliceRanges = @([ordered]@{ startOffsetSeconds=10; endOffsetSeconds=30 }, [ordered]@{ startOffsetSeconds=60; endOffsetSeconds=86401 })
+        { Assert-VideoScoutManifestValid -Manifest $m2 } | Should Throw 'from 0 to 86400'
+    }
+    It 'refuses end less than or equal to start' {
+        $m = New-V3
+        $m.requestedSliceRanges = @([ordered]@{ startOffsetSeconds=10; endOffsetSeconds=30 }, [ordered]@{ startOffsetSeconds=90; endOffsetSeconds=90 })
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'strictly greater'
+    }
+    It 'refuses overlapping / out-of-order entries (order is recorded as requested, never repaired)' {
+        $m = New-V3
+        $m.requestedSliceRanges = @([ordered]@{ startOffsetSeconds=10; endOffsetSeconds=30 }, [ordered]@{ startOffsetSeconds=20; endOffsetSeconds=40 })
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'overlaps or precedes'
+        $m2 = New-V3
+        $m2.requestedSliceRanges = @([ordered]@{ startOffsetSeconds=100; endOffsetSeconds=200 }, [ordered]@{ startOffsetSeconds=10; endOffsetSeconds=50 })
+        { Assert-VideoScoutManifestValid -Manifest $m2 } | Should Throw 'overlaps or precedes'
+    }
+    It 'refuses an aggregate above the fixed 1800s cap' {
+        $m = New-V3
+        $m.requestedSliceRanges = @([ordered]@{ startOffsetSeconds=0; endOffsetSeconds=1700 }, [ordered]@{ startOffsetSeconds=2000; endOffsetSeconds=2200 })
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'exceeds the fixed 1800s'
+    }
+    It 'ACCEPTS an aggregate of exactly 1800s' {
+        $m = New-V3
+        $m.requestedSliceRanges = @([ordered]@{ startOffsetSeconds=0; endOffsetSeconds=900 }, [ordered]@{ startOffsetSeconds=1000; endOffsetSeconds=1900 })
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
+    }
+
+    # --- requested-vs-analyzed truth ------------------------------------------------------------
+    It 'a REFUSED multi-slice run keeps its requested scope and persists no report' {
+        $m = New-V3; $m.outcome = 'refused'; $m.reason = 'Refusing: ...'; $m.finishedAt = '2026-07-20T00:01:00.000Z'
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
+        $m.reportFile | Should BeNullOrEmpty
+        @($m.requestedSliceRanges).Count | Should Be 2
+    }
+    It 'an ERROR multi-slice run is equally valid and equally report-less' {
+        $m = New-V3; $m.outcome = 'error'; $m.reason = 'provider rejected the request'; $m.finishedAt = '2026-07-20T00:01:00.000Z'
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
+        $m.reportFile | Should BeNullOrEmpty
+    }
+    It 'a COMPLETED multi-slice run may carry a report (the analyzed-scope evidence)' {
+        $m = New-V3; $m.outcome = 'completed'; $m.reportFile = 'analysis-output.txt'; $m.finishedAt = '2026-07-20T00:01:00.000Z'
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
+    }
+    It 'a non-completed multi-slice run may NOT carry a report (unchanged V5b1 rule)' {
+        $m = New-V3; $m.outcome = 'error'; $m.reportFile = 'analysis-output.txt'
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'permitted only with'
     }
 }
