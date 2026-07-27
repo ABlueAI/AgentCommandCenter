@@ -17,8 +17,13 @@ handoff-tail shape `scripts/merge-gate.ps1` requires.
 
 > **Release status: the original V4 Opus `VERDICT: PASS` is HISTORICAL EVIDENCE ONLY and is no
 > longer sufficient to release this branch.** Human acceptance exposed a production defect the
-> reviewed test suite could not see. A NEW Full-class whole-diff Opus review of the corrected tree
-> is required before any merge or paid run.
+> reviewed test suite could not see.
+>
+> The required new review is **complete**: an Opus 5 Full-class whole-diff read-only review of
+> `4c07db9...5b5e30a` returned a literal `VERDICT: PASS` with independently measured gates of
+> app **1297 / 0** and Pester **827 / 0 / 0**. That verdict — recorded verbatim under
+> [Reviewer verdicts](#reviewer-verdicts) — is the one that authorizes the merge and the single
+> paid acceptance run.
 
 ---
 
@@ -314,11 +319,12 @@ the changed files are pre-existing em-dashes, unchanged in count from the fork p
 
 ### Zero-provider attestation
 
-No test in this branch performs a provider request. The V4R additions spawn exactly one local
-process (`node.exe`) against an inert repo-owned fixture with no `require`, no network, no
-filesystem access, and no credentials. The `yt-dlp` stub is never executed (the probe subprocess is
-shadowed at the `Start-Job`/`Receive-Job` layer). Existing SDK tests remain loopback-only
-(`127.0.0.1`) or use an injected `fetchImpl`.
+No test in this branch performs a provider request. V4R tests spawn only short-lived local
+`node.exe` processes against inert repository-owned fixtures. They make no network/provider request,
+access no credentials or media, and never execute the `yt-dlp` stub (the probe subprocess is
+shadowed at the `Start-Job`/`Receive-Job` layer, so the stub is only ever *resolved*, never run).
+The fixture itself has no `require`, no network, no filesystem access, and no environment access.
+Existing SDK tests remain loopback-only (`127.0.0.1`) or use an injected `fetchImpl`.
 
 ## Exact test results — original V4 (historical)
 
@@ -457,13 +463,19 @@ provider submissions and consumed zero paid attempts.
 17. If the multipart body is rejected by the provider, record the visible failure as a V4
     compatibility finding. **Do not authorize a sequential fallback in the acceptance session.**
 
-## Review diff
+## Review diff (authoritative — V4R)
 
-`git diff 4c07db9a387191485b51cb99886d58d94573c1ad...f17b51fdbe2dbd2b6110257f2df459dd7edc04f0 --output=.agent-review-v4-bounded-multi-slice.diff`
+Reviewed range: `4c07db9a387191485b51cb99886d58d94573c1ad...5b5e30a102e92a02151ee4b4876a379e6fa7069b`
+
+`git diff 4c07db9a387191485b51cb99886d58d94573c1ad...5b5e30a102e92a02151ee4b4876a379e6fa7069b --output=.agent-review-v4-bounded-multi-slice.diff`
 
 Pinned (gitignored, created with `--output`, never PowerShell redirection):
-`.agent-review-v4-bounded-multi-slice.diff` — **204,586 bytes, 29 files**,
-SHA-256 `A78C2832B3F52B6843284D93DE46E531E386853C740AB12A59DA0723D6D73DAE`.
+`.agent-review-v4-bounded-multi-slice.diff` — **262,691 bytes, 32 files** (27 modified, 5 added),
+SHA-256 `B64D084DD2ECA9F900A67FC4806E1A86E75D145C9C1A070DD84361C221340038`.
+
+> **Superseded (historical only — do NOT regenerate or merge against these):** the original V4
+> artifact was `4c07db9...f17b51f`, 204,586 bytes, 29 files,
+> SHA-256 `A78C2832B3F52B6843284D93DE46E531E386853C740AB12A59DA0723D6D73DAE`.
 
 ## Recommended Opus Full-class review focus — V4R (review these FIRST)
 
@@ -496,16 +508,59 @@ The original V4 review is superseded for release purposes. Start here:
 12. Fence/PTY preservation via the blob-hash evidence (`app/main.js` byte-identical).
 13. Test reachability, and that no implementation test used a paid provider or real media.
 
-Reviewer verdict: _pending — V4R; the earlier V4 `VERDICT: PASS` is historical evidence only_
+## Reviewer verdicts
 
-Reviewer verdict source: _pending — Opus Full-class, whole-diff, read-only review of the CORRECTED tree_
+### Current — V4R (authoritative for release)
+
+Reviewer verdict:
+
+```text
+VERDICT: PASS
+```
+
+Reviewer verdict source: **Opus 5 Full-class, whole-diff, read-only review of
+`4c07db9a387191485b51cb99886d58d94573c1ad...5b5e30a102e92a02151ee4b4876a379e6fa7069b`** (the
+corrected tree).
+
+Gates independently measured by that review: app **1297 / 0**; Pester **827 / 0 / 0**.
+
+**This verdict supersedes the original V4 verdict for release purposes.** It is the only verdict
+that authorizes the merge and the single paid acceptance run.
+
+What that review independently established, beyond the gates: the raw PS 5.1 -> real `node.exe`
+quotation loss was reproduced and then shown fixed end-to-end through the *actual* SDK validator
+(`resolveSliceRanges` refuses the unescaped payload, accepts the escaped one byte-for-byte as a
+single argv element with no retained backslashes); `ConvertTo-NodeCliArg` is applied exactly once,
+strictly after all validation/guarding/manifest creation; double escaping fails closed; the fixed
+1,800 s aggregate cap still refuses 1,801 s *after* transport; the V4 suite passes 60/0 with
+`yt-dlp` removed from PATH entirely while the pre-V4R suite fails 6 tests under the identical
+condition; no global sentinel aliases any script-scope variable; and the 27 files not touched by
+V4R are byte-identical to the previously reviewed V4 tip (zero drift).
+
+### Superseded — original V4 (historical evidence only)
+
+Reviewer verdict:
+
+```text
+VERDICT: PASS
+```
+
+Reviewer verdict source: Opus 5 Full-class, whole-diff, read-only review of
+`4c07db9a387191485b51cb99886d58d94573c1ad...f17b51fdbe2dbd2b6110257f2df459dd7edc04f0`.
+
+Retained as the honest record of what was reviewed and when. **It is NOT sufficient to release this
+branch**: human acceptance afterwards exposed a real production transport defect that the reviewed
+test suite structurally could not detect, because every V4 slice test asserted against a PowerShell
+`node` function shadow, which never crosses `CommandLineToArgvW`.
 
 ## Review-diff rule
 
-- Before merge: `git diff main...f17b51f` (equivalently the immutable `4c07db9...f17b51f`).
-- After merge: reproduce with `git diff 4c07db9a387191485b51cb99886d58d94573c1ad...f17b51f`
+- Before merge: `git diff main...5b5e30a` (equivalently the immutable `4c07db9...5b5e30a`).
+- After merge: reproduce with
+  `git diff 4c07db9a387191485b51cb99886d58d94573c1ad...5b5e30a102e92a02151ee4b4876a379e6fa7069b`
   (`git diff main...<tip>` goes empty once the tip is an ancestor of `main`).
 - Always use `--output`; never PowerShell `>`.
 - Retain the literal `VERDICT: PASS|FAIL` line and identify the review that produced it.
+- The superseded `f17b51f` range is historical only and must never be used for a merge-gate plan.
 
 Pinned `.agent-review-*.diff` files are local review artifacts and remain gitignored.
