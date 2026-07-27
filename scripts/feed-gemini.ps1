@@ -293,8 +293,23 @@ if ($VideoScout) {
             # caller's original string), as ONE discrete argument. The SDK re-validates the entire
             # contract again on its side and composes the slice-scope prompt instruction there, so
             # the same wording is produced whether the run starts here or at a direct node call.
+            #
+            # V4R (transport repair -- this is what the first human acceptance attempt hit): Windows
+            # PowerShell 5.1 has no PSNativeCommandArgumentPassing, so when it serializes a native
+            # argument it does NOT escape the value's own interior double quotes. node's
+            # CommandLineToArgvW parsing then reads every " as a quote toggle and STRIPS it, so the
+            # raw canonical JSON arrived as `[{startOffset:60,endOffset:90},...]` -- not JSON --
+            # and resolveSliceRanges refused (correctly, and before any provider submission).
+            # ConvertTo-NodeCliArg applies the CommandLineToArgvW-correct escaping ONCE, here at the
+            # final `& node` boundary, exactly as the -p/--prompt-text values above already do. The
+            # SDK therefore receives the ORIGINAL canonical JSON, byte for byte. Deliberately
+            # ordered AFTER all validation: everything upstream (this script's own re-validation,
+            # the duration guard, the manifest) works on the canonical value; the escaped form is a
+            # delivery-layer representation only and is never validated, logged, or persisted.
             if ($haveSlices) {
-                $sdkArgs += @('--slice-ranges-json', (ConvertTo-VideoScoutSliceRangesJson -Ranges $sliceSet.Ranges))
+                $sliceRangesCanonicalJson = ConvertTo-VideoScoutSliceRangesJson -Ranges $sliceSet.Ranges
+                $sdkArgs += @('--slice-ranges-json', (ConvertTo-NodeCliArg -Arg $sliceRangesCanonicalJson))
+                # Bounded metadata only -- the serialized payload (canonical OR escaped) is never logged.
                 Write-Host "Multi-slice analysis: $($sliceSet.Count) slices, aggregate $($sliceSet.AggregateSeconds)s (ONE request with $($sliceSet.Count) media parts)" -ForegroundColor DarkCyan
             }
             # V5b1 bounded streaming capture: every stdout line still streams live to the pane (the
@@ -325,8 +340,15 @@ if ($VideoScout) {
             if ($sdkExit -ne 0) {
                 # Nonzero exit (incl. exhausted K5 retry, empty-response, network): NO report file,
                 # reportFile stays null -- partial streamed output is never a saved report.
+                # V4R: attribution-neutral on purpose. A nonzero exit ALSO covers the SDK refusing
+                # LOCALLY before it ever submits anything (a bad --slice-ranges-json, a missing key,
+                # an offset problem). The old text asserted "upstream API/network error", which this
+                # parent process cannot prove and which actively misdirected the diagnosis of the
+                # transport defect above. State the exit code and point at the visible output --
+                # never invent an attribution the caller has no evidence for. Matches the CLI path's
+                # existing wording (see the gemini-CLI branch below).
                 Complete-VideoScoutRunManifest -RunDir $sdkRun.RunDir -Manifest $sdkManifest -Outcome 'error' `
-                    -Reason "gemini-video-sdk.js exited with code $sdkExit (upstream API/network error; see the run output above)."
+                    -Reason "gemini-video-sdk.js exited with code $sdkExit; see the run output above."
             }
             else {
                 # Clean exit only past here -- the sole signal that permits outcome='completed' + a

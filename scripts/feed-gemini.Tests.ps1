@@ -14,6 +14,24 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $feedGemini = Join-Path $here 'feed-gemini.ps1'
 $YT = 'https://youtu.be/aqz-KE-bpKQ'
 
+# V4R: the V4 slice blocks below need ConvertTo-NodeCliArg (the transport escaping) and
+# ConvertTo-VideoScoutSliceRangesJson / Get-VideoScoutSliceRangeSet (the canonical serializer) so
+# EXPECTED values are computed from the real production helpers, never hand-typed literals.
+#
+# LANDMINE (found while adding these; disarmed below -- do not re-arm it): the harness functions
+# publish their stubs' state as GLOBAL sentinel variables and clean them up with
+# `Remove-Item Variable:\<name>`. PowerShell variable names are CASE-INSENSITIVE, so a global named
+# `E2EMarker` and this file's script-scope `$e2eMarker` are THE SAME NAME. As soon as ANY .ps1 is
+# dot-sourced at this file's scope, that cleanup stops resolving to the global and destroys the
+# script-scope `$e2eMarker` instead -- after which every later harness call fails with
+# "Cannot bind argument to parameter 'LiteralPath' because it is null" (27 tests, none of them
+# actually broken). Confirmed with a minimal two-file repro: identical files, one with a dot-source
+# and one without, differing only in whether $e2eMarker survives the second call.
+# The sentinel is therefore named `E2EMarkerPath`, which collides with nothing. Keep every global
+# sentinel name distinct from every script-scope variable name in this file.
+. (Join-Path $here 'lib\get-node-cli-arg.ps1')
+. (Join-Path $here 'lib\get-video-scout-slice-ranges.ps1')
+
 # End-to-end harness for the SDK route (Reviewer finding 1): run the REAL script and prove that when
 # the probe reports an over-limit / live / undeterminable source, the SDK route THROWS the guard's
 # refusal and NEVER reaches `& node` (the paid call). No network, no API key.
@@ -44,7 +62,7 @@ function Invoke-SdkRouteWithStub {
     Remove-Item -LiteralPath $e2eMarker -Force -ErrorAction SilentlyContinue
     $outDir = Join-Path $e2eDir ('out-' + [Guid]::NewGuid().ToString('N'))
     $global:E2EReceive = if ($EmptyProbe) { $null } else { $ProbeLine }
-    $global:E2EMarker = $e2eMarker
+    $global:E2EMarkerPath = $e2eMarker
     $global:E2ENodeSucceeds = [bool]$NodeSucceeds
     function global:Start-Job   { [PSCustomObject]@{ Id = 1 } }
     function global:Wait-Job    { $true }
@@ -52,7 +70,7 @@ function Invoke-SdkRouteWithStub {
     function global:Stop-Job    { }
     function global:Remove-Job  { }
     function global:node        {
-        Set-Content -LiteralPath $global:E2EMarker -Value 'reached'   # tripwire
+        Set-Content -LiteralPath $global:E2EMarkerPath -Value 'reached'   # tripwire
         if ($global:E2ENodeSucceeds) {
             '[video-scout usage] prompt=100 (video=80 audio=10 text=10) output=50 total=150 model=stub mediaRes=MEDIUM'
             $global:LASTEXITCODE = 0
@@ -71,7 +89,7 @@ function Invoke-SdkRouteWithStub {
     finally {
         $env:PATH = $saved
         Remove-Item Function:\Start-Job, Function:\Wait-Job, Function:\Receive-Job, Function:\Stop-Job, Function:\Remove-Job, Function:\node -ErrorAction SilentlyContinue
-        Remove-Item Variable:\E2EReceive, Variable:\E2EMarker, Variable:\E2ENodeSucceeds -ErrorAction SilentlyContinue
+        Remove-Item Variable:\E2EReceive, Variable:\E2EMarkerPath, Variable:\E2ENodeSucceeds -ErrorAction SilentlyContinue
     }
     $reached = Test-Path -LiteralPath $e2eMarker
     return [PSCustomObject]@{ Threw = $threw; Message = $msg; NodeReached = $reached; OutDir = $outDir }
@@ -287,16 +305,45 @@ Describe 'feed-gemini.ps1 V5a per-run manifest (end-to-end, stubbed probe/node -
     }
 }
 
-# best-effort cleanup of the compiled stub yt-dlp.exe + node tripwire (Pester 3.4 has no AfterAll)
-Remove-Item -LiteralPath $e2eDir -Recurse -Force -ErrorAction SilentlyContinue
+# V4R portability repair: $e2eDir is DELIBERATELY NOT removed here any more. It holds the
+# repository-created yt-dlp.cmd stub, and the V4 lifecycle blocks below run the real feed-gemini.ps1,
+# whose Assert-DurationGuard calls Get-YtDlpPath (which THROWS when yt-dlp cannot be resolved).
+# Deleting the stub at this point made every V4 lifecycle test silently depend on a MACHINE-INSTALLED
+# yt-dlp: green here, "yt-dlp not found on PATH" on a clean machine. Cleanup now happens once at the
+# very end of the file, after the last test that uses this directory (Pester 3.4 has no AfterAll).
 
 # ==================================================================================================
 # V4 bounded multi-slice: end-to-end lifecycle through the REAL feed-gemini.ps1.
 # Every refusal must happen BEFORE `& node` (the paid call) -- the node tripwire proves it -- and the
-# one accepted case must reach node with the canonical slice JSON as ONE discrete argument and write
-# a schema-v3 manifest. No network, no API key, no download: the probe subprocess and node are
+# one accepted case must reach node with the slice JSON as ONE discrete argument and write a
+# schema-v3 manifest. No network, no API key, no download: the probe subprocess and node are
 # shadowed exactly as in the harness above.
+#
+# V4R: what the shadow `node` observes is the TRANSPORT-ESCAPED representation, not the canonical
+# JSON. That is correct and load-bearing. A PowerShell `function global:node` receives $sdkArgs
+# verbatim -- it never crosses CommandLineToArgvW -- whereas the real node.exe DOES, and reconstructs
+# the canonical JSON from the escaped form. Proving the reconstruction therefore requires a real
+# native process, which is exactly what scripts/lib/get-node-cli-arg.Tests.ps1 does (with a negative
+# control showing the unescaped value loses its quotes). This file proves the complementary half:
+# the escaping is applied exactly ONCE, at the boundary, as ONE discrete argv pair.
+# (ConvertTo-NodeCliArg / ConvertTo-VideoScoutSliceRangesJson are dot-sourced at the TOP of this
+# file -- see the note there; dot-sourcing mid-file, after Describe blocks have already run, breaks
+# the harness's shared state.)
 $v4Argv = Join-Path $e2eDir 'node-argv.txt'
+
+# V4R portability: return $true when $dir actually contains a yt-dlp launcher. Used to strip any
+# MACHINE-INSTALLED yt-dlp out of PATH for the duration of every V4 run, so these tests can only ever
+# resolve the repository-created stub in $e2eDir -- i.e. they behave identically on a clean machine.
+# Bounded and total: a malformed PATH entry is simply reported as "no yt-dlp here", never a throw.
+function Test-DirHasYtDlp {
+    param([string]$Dir)
+    if ([string]::IsNullOrWhiteSpace($Dir)) { return $false }
+    foreach ($leaf in @('yt-dlp.exe', 'yt-dlp.cmd', 'yt-dlp.bat')) {
+        try { if (Test-Path -LiteralPath (Join-Path $Dir $leaf) -PathType Leaf) { return $true } }
+        catch { return $false }
+    }
+    return $false
+}
 
 function Invoke-SdkSliceRun {
     param(
@@ -307,29 +354,43 @@ function Invoke-SdkSliceRun {
         [string]$Url,
         [switch]$WithScalarRange,
         [switch]$OmitVideoScout,
-        [switch]$EmptyProbe
+        [switch]$EmptyProbe,
+        # V4R: make the shadow node exit NONZERO so the error-outcome manifest path can be proven.
+        # Default 0 keeps every existing accepted-run assertion byte-for-byte unchanged.
+        [int]$NodeExit = 0
     )
     Remove-Item -LiteralPath $e2eMarker -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $v4Argv -Force -ErrorAction SilentlyContinue
     $outDir = Join-Path $e2eDir ('out-' + [Guid]::NewGuid().ToString('N'))
     $global:E2EReceive = if ($EmptyProbe) { $null } else { $ProbeLine }
-    $global:E2EMarker = $e2eMarker
+    $global:E2EMarkerPath = $e2eMarker
     $global:E2EArgv = $v4Argv
+    $global:E2ENodeExit = $NodeExit
     function global:Start-Job   { [PSCustomObject]@{ Id = 1 } }
     function global:Wait-Job    { $true }
     function global:Receive-Job { if ($null -ne $global:E2EReceive) { $global:E2EReceive } }
     function global:Stop-Job    { }
     function global:Remove-Job  { }
     function global:node        {
-        Set-Content -LiteralPath $global:E2EMarker -Value 'reached'
+        Set-Content -LiteralPath $global:E2EMarkerPath -Value 'reached'
         # Record argv EXACTLY as PowerShell bound it, one element per line, so a test can prove the
         # slice JSON arrived as ONE discrete argument (never split, never a shell string).
         Set-Content -LiteralPath $global:E2EArgv -Value ($args -join "`n") -Encoding UTF8
-        '[video-scout usage] prompt=100 (video=80 audio=10 text=10) output=50 total=150 model=stub mediaRes=MEDIUM'
-        $global:LASTEXITCODE = 0
+        # A nonzero run emits NO usage line -- exactly like the real SDK refusing or failing.
+        if ($global:E2ENodeExit -eq 0) {
+            '[video-scout usage] prompt=100 (video=80 audio=10 text=10) output=50 total=150 model=stub mediaRes=MEDIUM'
+        }
+        $global:LASTEXITCODE = $global:E2ENodeExit
     }
     $saved = $env:PATH
-    $env:PATH = "$e2eDir;$saved"
+    # V4R portability: prepend the stub dir AND drop every PATH entry that carries a real yt-dlp, so
+    # Get-YtDlpPath can only resolve the repository-created stub. Without this the suite passed only
+    # on machines that happened to have yt-dlp installed.
+    $cleanPath = @($saved -split ';' | Where-Object { $_ -and -not (Test-DirHasYtDlp -Dir $_) })
+    $env:PATH = (@($e2eDir) + $cleanPath) -join ';'
+    # Record what yt-dlp actually resolves to under that PATH, so a tripwire test can assert the V4
+    # lifecycle never silently used a machine-installed binary.
+    $resolvedYtDlp = (Get-Command yt-dlp -ErrorAction SilentlyContinue).Source
     $threw = $false; $msg = ''
     $useUrl = if ($Url) { $Url } else { $script:YT }
     try {
@@ -346,13 +407,14 @@ function Invoke-SdkSliceRun {
     finally {
         $env:PATH = $saved
         Remove-Item Function:\Start-Job, Function:\Wait-Job, Function:\Receive-Job, Function:\Stop-Job, Function:\Remove-Job, Function:\node -ErrorAction SilentlyContinue
-        Remove-Item Variable:\E2EReceive, Variable:\E2EMarker, Variable:\E2EArgv -ErrorAction SilentlyContinue
+        Remove-Item Variable:\E2EReceive, Variable:\E2EMarkerPath, Variable:\E2EArgv, Variable:\E2ENodeExit -ErrorAction SilentlyContinue
     }
     $argv = if (Test-Path -LiteralPath $v4Argv) { @(Get-Content -LiteralPath $v4Argv -Encoding UTF8) } else { @() }
     return [PSCustomObject]@{
         Threw = $threw; Message = $msg
         NodeReached = (Test-Path -LiteralPath $e2eMarker)
         OutDir = $outDir; Argv = $argv
+        ResolvedYtDlp = $resolvedYtDlp
     }
 }
 
@@ -364,10 +426,28 @@ Describe 'V4 feed-gemini: an accepted multi-slice run reaches node with canonica
         $r.Threw | Should Be $false
         $r.NodeReached | Should Be $true
     }
-    It 'passes --slice-ranges-json as ONE discrete argument carrying the canonical JSON' {
+    It 'passes --slice-ranges-json as ONE discrete argument carrying the TRANSPORT-ESCAPED value' {
+        # V4R: a PowerShell shadow function receives $sdkArgs verbatim, so it sees the escaped form.
+        # Real node.exe reconstructs the canonical JSON from exactly this string -- proven natively in
+        # scripts/lib/get-node-cli-arg.Tests.ps1, which also shows the UNESCAPED value losing its quotes.
         $i = [array]::IndexOf($r.Argv, '--slice-ranges-json')
         $i | Should Not Be -1
-        $r.Argv[$i + 1] | Should Be $V4Good
+        $r.Argv[$i + 1] | Should Be (ConvertTo-NodeCliArg -Arg $V4Good)
+    }
+    It 'escapes the slice payload EXACTLY ONCE (no double escaping, no raw quotes on the wire)' {
+        $i = [array]::IndexOf($r.Argv, '--slice-ranges-json')
+        $sent = [string]$r.Argv[$i + 1]
+        # Once: every quote is \" -- never \\" (a doubly-escaped backslash) and never a bare ".
+        $sent | Should Match '\\"startOffset\\":10'
+        ($sent -match '\\\\"') | Should Be $false
+        ($sent -match '(?<!\\)"')  | Should Be $false
+        $sent | Should Not Be (ConvertTo-NodeCliArg -Arg (ConvertTo-NodeCliArg -Arg $V4Good))
+    }
+    It 'derives the escaped value from the CANONICAL validated JSON, not the callers raw string' {
+        # The canonical form is rebuilt from the validated slice set, so the escaped wire value must
+        # be exactly the escaping of that canonical text -- nothing else can have reached the wire.
+        $i = [array]::IndexOf($r.Argv, '--slice-ranges-json')
+        $r.Argv[$i + 1] | Should Be (ConvertTo-NodeCliArg -Arg (ConvertTo-VideoScoutSliceRangesJson -Ranges (Get-VideoScoutSliceRangeSet -SliceRangesJson $V4Good -Provided).Ranges))
     }
     It 'never passes the scalar --start-offset/--end-offset alongside slices' {
         ($r.Argv -contains '--start-offset') | Should Be $false
@@ -491,3 +571,71 @@ Describe 'V4 feed-gemini: existing whole-video / single-slice behavior is unchan
         ($m.PSObject.Properties.Name -contains 'requestedSliceRanges') | Should Be $false
     }
 }
+
+# --- V4R: a VALID multi-slice run whose SDK exits NONZERO ----------------------------------------
+# This is the exact shape of the failed human acceptance attempt: everything upstream was correct,
+# node was reached, and the SDK refused LOCALLY (before any provider submission). The manifest must
+# record that honestly -- an error outcome with a bounded, attribution-NEUTRAL reason. The old text
+# asserted an "upstream API/network error", which the PowerShell parent cannot prove and which
+# actively misdirected the diagnosis of the transport defect.
+Describe 'V4R feed-gemini: a nonzero SDK exit is recorded truthfully, never blamed on the provider' {
+    $r = Invoke-SdkSliceRun -SliceRangesJson $V4Good -NodeExit 1
+    $m = Get-E2ERunManifest -OutDir $r.OutDir
+
+    It 'reaches node (the run was accepted; the failure is downstream of every guard)' {
+        $r.Threw | Should Be $false
+        $r.NodeReached | Should Be $true
+    }
+    It 'records outcome=error' {
+        $m.outcome | Should Be 'error'
+    }
+    It 'leaves usage and reportFile null (partial streamed output is never a saved report)' {
+        $m.usage | Should BeNullOrEmpty
+        $m.reportFile | Should BeNullOrEmpty
+    }
+    It 'states the exit code and points at the visible output' {
+        $m.reason | Should Match 'gemini-video-sdk\.js exited with code 1'
+        $m.reason | Should Match 'see the run output above'
+    }
+    It 'does NOT claim an upstream API/network error it cannot prove' {
+        ($m.reason -match 'upstream') | Should Be $false
+        ($m.reason -match 'API/network') | Should Be $false
+    }
+    It 'keeps the reason bounded and free of the slice payload' {
+        $m.reason.Length | Should BeLessThan 500
+        ($m.reason -match 'startOffset') | Should Be $false
+    }
+    It 'still records the requested schema-v3 scope and an empty media inventory' {
+        $m.schemaVersion | Should Be 3
+        @($m.requestedSliceRanges).Count | Should Be 2
+        @($m.mediaArtifacts).Count | Should Be 0
+    }
+}
+
+# --- V4R: portability tripwire -------------------------------------------------------------------
+# The V4 lifecycle blocks above previously ran only because the machine happened to have yt-dlp
+# installed (the stub directory was deleted before they started). Prove the stub is what resolves.
+Describe 'V4R feed-gemini: the V4 lifecycle resolves the TEST stub yt-dlp, never a machine install' {
+    $r = Invoke-SdkSliceRun -SliceRangesJson $V4Good
+
+    It 'resolved a yt-dlp at all (Get-YtDlpPath would otherwise throw before any V4 assertion)' {
+        $r.ResolvedYtDlp | Should Not BeNullOrEmpty
+    }
+    It 'resolved the repository-created stub inside the test directory' {
+        (Split-Path -Parent $r.ResolvedYtDlp) | Should Be $e2eDir
+        (Split-Path -Leaf $r.ResolvedYtDlp) | Should Be 'yt-dlp.cmd'
+    }
+    It 'the stub still exists (it is never deleted before the tests that need it)' {
+        (Test-Path -LiteralPath (Join-Path $e2eDir 'yt-dlp.cmd') -PathType Leaf) | Should Be $true
+    }
+    It 'a machine-installed yt-dlp is filtered out of PATH for these runs' {
+        # Test-DirHasYtDlp is what performs the filtering; prove it actually detects a yt-dlp dir.
+        (Test-DirHasYtDlp -Dir $e2eDir) | Should Be $true
+        (Test-DirHasYtDlp -Dir (Join-Path $e2eDir 'no-such-dir')) | Should Be $false
+        (Test-DirHasYtDlp -Dir '') | Should Be $false
+    }
+}
+
+# Cleanup runs ONCE, here, after the last test that uses $e2eDir (Pester 3.4 has no AfterAll).
+# It must stay at the very end of this file: the yt-dlp.cmd stub and the node tripwire live here.
+Remove-Item -LiteralPath $e2eDir -Recurse -Force -ErrorAction SilentlyContinue

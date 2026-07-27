@@ -3,9 +3,125 @@
 Branch: `feature/v4-bounded-multi-slice`
 Fork-point SHA: `4c07db9a387191485b51cb99886d58d94573c1ad`
 Pre-merge main SHA: `4c07db9a387191485b51cb99886d58d94573c1ad` (verified `main` == `origin/main` == this SHA before branching; re-verify at gate time)
-Reviewed code tip: `f17b51fdbe2dbd2b6110257f2df459dd7edc04f0`
-Branch tip: `f17b51fdbe2dbd2b6110257f2df459dd7edc04f0` (single commit; no handoff tail yet — this doc lands as the tail)
+Reviewed code tip: **V4R — recorded in the handoff tail commit** (supersedes `f17b51f`)
+Superseded reviewed code tip: `f17b51fdbe2dbd2b6110257f2df459dd7edc04f0` (V4; passed review, then FAILED human acceptance — see V4R below)
 Merge commit SHA: Pending until merge
+
+> **Release status: the original V4 Opus `VERDICT: PASS` is HISTORICAL EVIDENCE ONLY and is no
+> longer sufficient to release this branch.** Human acceptance exposed a production defect the
+> reviewed test suite could not see. A NEW Full-class whole-diff Opus review of the corrected tree
+> is required before any merge or paid run.
+
+---
+
+# V4R — Repair: Windows multi-slice transport
+
+## The failed human acceptance attempt
+
+| | |
+|---|---|
+| Run ID | `run-20260726-220716-094-6964-162bf359` |
+| Evidence (preserved unchanged) | `D:\Gemini_Video_Review\Downloads\run-20260726-220716-094-6964-162bf359` |
+| Provider submissions | **0** |
+| Paid attempts consumed | **0** |
+| Manifest outcome | `error`, `usage: null`, `reportFile: null` |
+| Requested scope recorded | schema v3, `60-90s` + `240-270s` (60s aggregate) — exactly what was asked |
+
+Everything upstream of the transport worked: the renderer collected two slices, the main boundary
+validated and serialized them, PowerShell re-validated them, the probe ran, and the duration guard
+passed a 60-second aggregate. **No provider request was made, so no spend occurred and the guard
+was never at risk.** The old manifest reason nevertheless read
+`"...exited with code 1 (upstream API/network error; see the run output above)."`, which was false
+and actively misdirected diagnosis.
+
+## Root cause (reproduced locally, no network)
+
+`feed-gemini.ps1` appended the canonical slice JSON to `$sdkArgs` **raw**. Windows PowerShell 5.1
+has no `PSNativeCommandArgumentPassing`, so it does not escape a native argument's own interior
+double quotes; node's `CommandLineToArgvW` parsing then treats each `"` as a quote toggle and strips
+it. Verified directly against real `node.exe` under PS `5.1.26100.8875`:
+
+```text
+sent (raw canonical) : [{"startOffset":60,"endOffset":90},{"startOffset":240,"endOffset":270}]
+node process.argv    : [{startOffset:60,endOffset:90},{startOffset:240,endOffset:270}]   <- not JSON
+```
+
+`resolveSliceRanges` then refused — correctly, and **before** any provider submission. The
+fail-closed design worked exactly as intended; the transport was the defect.
+
+**Why the reviewed suite missed it:** every V4 test asserted against a PowerShell `function
+global:node` shadow. A PowerShell function receives the argument array **verbatim** and never
+crosses `CommandLineToArgvW`, so a mock physically cannot observe quote stripping. Only a real
+native process can. That gap is now closed by a mandatory real-`node.exe` test with a negative
+control.
+
+## The correction
+
+**`scripts/feed-gemini.ps1`**
+
+- The canonical JSON is built **after** all PowerShell validation succeeds, then
+  `ConvertTo-NodeCliArg` (the repository's existing `CommandLineToArgvW`-correct helper, already
+  used for `--prompt-text`) is applied **exactly once**, at the final `& node` boundary.
+- Validation, the duration guard, and the manifest all continue to operate on the **canonical**
+  value. The escaped form is a delivery-layer representation only: never validated, never logged,
+  never persisted. The SDK receives the original canonical JSON byte for byte.
+- The nonzero-exit manifest reason is now attribution-neutral:
+  `"gemini-video-sdk.js exited with code <n>; see the run output above."` A nonzero exit also covers
+  the SDK refusing **locally**, which the PowerShell parent cannot distinguish — so it no longer
+  asserts an upstream failure it cannot prove. This matches the CLI path's existing wording.
+
+**`scripts/lib/get-node-cli-arg.Tests.ps1`** — 12 new tests running the **actual `node.exe`
+application** (asserted to be a real `.exe`, never a function/alias/mock/shim) against a repo-owned
+fixture, comparing `process.argv` to the canonical JSON base64-byte-for-byte: two ordinary slices,
+boundary offsets `0` and `86400`, the maximum eight slices, compact whitespace-free JSON, exactly
+one argv element, no retained backslashes, a **double-escaping** detector, and a **negative control**
+proving the unescaped value loses its quotes. `JSON.parse` acceptance is reported by the node
+process itself — PowerShell 5.1's `ConvertFrom-Json` is lenient about unquoted keys and would have
+called the mangled payload valid, hiding the defect.
+
+**`scripts/test-fixtures/node-argv-echo.js`** (new) — inert echo fixture: no `require`, no network,
+no filesystem, no credentials.
+
+**`scripts/feed-gemini.Tests.ps1`**
+
+- The shadow-node assertion now expects the **transport-escaped** representation, with new tests
+  proving the escaping is applied **exactly once** (no `\\"`, no bare `"`, not double-escaped) and
+  that it is derived from the **canonical validated** JSON, not any caller string. `--slice-ranges-json`
+  and its value remain one discrete pair; scalar offsets remain absent.
+- New `Describe` for a valid multi-slice run whose SDK exits nonzero: node reached, `outcome: error`,
+  `usage`/`reportFile` null, reason bounded and payload-free, and an explicit assertion that the
+  reason does **not** say "upstream" or "API/network".
+- Every zero-node refusal test and its positive control are preserved unchanged.
+
+### Two test defects repaired
+
+1. **Portability (the defect flagged in the prior review).** `$e2eDir` — which holds the
+   repository-created `yt-dlp.cmd` stub — was deleted *before* the V4 lifecycle blocks, so those
+   tests silently depended on a **machine-installed** `yt-dlp` (green here, `yt-dlp not found on
+   PATH` on a clean machine). Cleanup now runs once at the very end of the file. Additionally every
+   V4 run strips any PATH entry that actually contains a `yt-dlp` launcher, so the stub is the only
+   thing resolvable, and a tripwire `Describe` asserts the resolved path is the stub inside
+   `$e2eDir`. The suite now behaves identically with or without a global `yt-dlp`.
+
+2. **A latent harness landmine, found and disarmed.** The harness publishes stub state as global
+   sentinels and cleans them up with `Remove-Item Variable:\<name>`. PowerShell variable names are
+   **case-insensitive**, so the global `E2EMarker` and the file's script-scope `$e2eMarker` are the
+   same name. The moment *any* `.ps1` is dot-sourced at file scope, that cleanup stops resolving to
+   the global and destroys `$e2eMarker` instead — collapsing 27 previously passing tests with
+   `Cannot bind argument to parameter 'LiteralPath' because it is null`. Confirmed with a minimal
+   two-file repro differing only in the presence of a dot-source. The sentinel is renamed
+   `E2EMarkerPath`, which collides with nothing. This was pre-existing and merely triggered by V4R's
+   need to dot-source the production helpers.
+
+## What V4R deliberately did NOT change
+
+`app/main.js`, `app/preload.js`, renderer slice behavior, `buildRequestBody`, K5 retry, the fence/cwd
+gate, PTY environment, credentials, V3a focus, V3b follow-up, report persistence, Library behavior,
+the media ownership/cleanup/retention modules, prompts, existing URL logging, and the stale
+`2026-07-21.14` acceptance badge (which needs its own build-identity work order). No dependency was
+added, no request architecture changed, and no unrelated dead code was touched.
+
+---
 
 ## Baseline correction (approved by Blue before any code)
 
@@ -69,7 +185,19 @@ repository facts was found before implementation began.
 | Maximum serialized slice-control payload | 2,048 UTF-16 units (bounds **only** the slice argument) |
 | Fixed aggregate multi-slice duration cap | 1,800 s (**not** raisable by `-MaxDurationSeconds`) |
 
-## Files changed (29 total: 26 modified, 3 added)
+## Files changed — V4R correction (4: 3 modified, 1 added)
+
+- `scripts/feed-gemini.ps1` — apply `ConvertTo-NodeCliArg` once at the `& node` boundary;
+  attribution-neutral nonzero-exit manifest reason.
+- `scripts/lib/get-node-cli-arg.Tests.ps1` — +12 real `node.exe` argv round-trip tests with a
+  negative control.
+- `scripts/feed-gemini.Tests.ps1` — escaped-value + escaped-exactly-once assertions; nonzero-SDK
+  manifest-truth `Describe`; `yt-dlp` stub portability repair + tripwire; `E2EMarkerPath` rename.
+- `scripts/test-fixtures/node-argv-echo.js` **(new)** — inert argv echo fixture.
+
+Cumulative branch total: **33 files** (29 modified, 4 added).
+
+## Files changed — original V4 (29 total: 26 modified, 3 added)
 
 **Added**
 - `scripts/lib/get-video-scout-slice-ranges.ps1` — the scoped pure helper Blue named. Parses/validates
@@ -155,7 +283,19 @@ constants `84E1ABF55AE59453` · `resolveSliceOffsets` `91B4C5D10E1C6B4E` · `san
    `get-video-scout-slice-ranges.Tests.ps1`. No new JS test file was created, so `app/package.json`
    needed no wiring (and is byte-identical).
 
-## Exact test results
+## Exact test results — V4R (corrected tree, re-measured)
+
+| Suite | V4 | V4R | Note |
+|---|---|---|---|
+| app aggregate | 1297 / 0 | **1297 / 0** | unchanged: V4R touches PowerShell + a test fixture only |
+| Pester aggregate | 802 / 0 / 0 | **see tail commit** | V4R adds real-`node.exe` and manifest-truth tests |
+| `get-node-cli-arg.Tests.ps1` | 9 / 0 | **21 / 0** | +12 real `node.exe` round-trip tests |
+| `feed-gemini.Tests.ps1` | 47 / 0 | **60 / 0** | +13 V4R (escaping, manifest truth, `yt-dlp` tripwire) |
+
+Both gates were re-run on the committed corrected tree. Exact totals are recorded in the handoff
+tail commit alongside the reviewed-tip SHA and the pinned-diff metadata.
+
+## Exact test results — original V4 (historical)
 
 | Suite | Result | Note |
 |---|---|---|
@@ -267,7 +407,9 @@ content is ASCII-only with CRLF endings, matching the existing files.
 
 ## Manual acceptance checklist — reserved for Blue, exactly ONE paid logical request
 
-Only after the Opus Full-class review returns a literal `VERDICT: PASS`.
+Only after the **new (V4R)** Opus Full-class review returns a literal `VERDICT: PASS`. The failed
+`run-20260726-220716-094-6964-162bf359` attempt does **not** count against this budget: it made zero
+provider submissions and consumed zero paid attempts.
 
 1. Fully restart Electron, including the main process.
 2. Choose one public YouTube video with two short, clearly distinct intervals.
@@ -298,7 +440,21 @@ Pinned (gitignored, created with `--output`, never PowerShell redirection):
 `.agent-review-v4-bounded-multi-slice.diff` — **204,586 bytes, 29 files**,
 SHA-256 `A78C2832B3F52B6843284D93DE46E531E386853C740AB12A59DA0723D6D73DAE`.
 
-## Recommended Opus Full-class review focus
+## Recommended Opus Full-class review focus — V4R (review these FIRST)
+
+The original V4 review is superseded for release purposes. Start here:
+
+1. Reproduce the raw PS 5.1 -> `node.exe` quotation loss locally (no network), then confirm the
+   corrected path applies `ConvertTo-NodeCliArg` **exactly once**, at the native boundary only.
+2. Confirm validation, the duration guard, and the manifest all operate on the **canonical** value,
+   and that the escaped form is never validated, logged, or persisted.
+3. Run the real `node.exe` argv round-trip and inspect BOTH its positive and negative controls.
+4. Confirm the manifest reason is attribution-neutral and that a local SDK refusal is never blamed
+   on the provider.
+5. Confirm the V4 Pester tests cannot resolve a machine-installed `yt-dlp`.
+6. Confirm no paid or live-provider traffic exists in any test.
+
+## Recommended Opus Full-class review focus — original V4 surface (re-verify)
 
 1. Baseline SHAs, branch ancestry, this handoff, and byte-for-byte reproduction of the pinned diff.
 2. Renderer row behavior and visible refusal (partial row, blank-among-populated, no pane on failure).
@@ -315,9 +471,9 @@ SHA-256 `A78C2832B3F52B6843284D93DE46E531E386853C740AB12A59DA0723D6D73DAE`.
 12. Fence/PTY preservation via the blob-hash evidence (`app/main.js` byte-identical).
 13. Test reachability, and that no implementation test used a paid provider or real media.
 
-Reviewer verdict: _pending_
+Reviewer verdict: _pending — V4R; the earlier V4 `VERDICT: PASS` is historical evidence only_
 
-Reviewer verdict source: _pending — Opus Full-class, whole-diff, read-only review_
+Reviewer verdict source: _pending — Opus Full-class, whole-diff, read-only review of the CORRECTED tree_
 
 ## Review-diff rule
 
