@@ -144,14 +144,17 @@ function buildVideoScoutArgs({ videoModel, mediaResolution, analysisMode, videoU
     }
   }
 
+  // V4Q BINDING RULING: an app-originated request serializes EVERY validated model selection,
+  // including gemini-2.5-flash-lite. The old "omit it because it matches the script default"
+  // shortcut became unsafe the moment feed-gemini.ps1 gained omitted-model resolution: under that
+  // policy an omitted -Model on a sliced run resolves to gemini-2.5-pro, so silently dropping an
+  // EXPLICIT Lite choice would have run (and billed) Pro against the user's stated intent. The app
+  // therefore never relies on the script's default; omitted-model defaulting is reserved for direct
+  // PowerShell/SDK callers, who have no UI selection to honor.
   if (videoModel !== undefined && videoModel !== null && videoModel !== '') {
     if (typeof videoModel === 'string' && VALID_VIDEO_MODELS.has(videoModel)) {
-      if (videoModel === DEFAULT_VIDEO_MODEL) {
-        notes.push(`videoModel="${videoModel}" omitted (matches feed-gemini.ps1's own default)`);
-      } else {
-        args.push('-Model', videoModel);
-        notes.push(`videoModel="${videoModel}" sent as -Model`);
-      }
+      args.push('-Model', videoModel);
+      notes.push(`videoModel="${videoModel}" sent as -Model (always serialized: the app never lets an explicit choice be re-read as omitted)`);
     } else {
       notes.push(`videoModel=${JSON.stringify(videoModel)} REJECTED (not in VALID_VIDEO_MODELS allowlist) — dropped, script default applies`);
     }

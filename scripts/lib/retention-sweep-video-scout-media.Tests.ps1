@@ -625,6 +625,11 @@ Describe 'V4: schema-v3 multi-slice runs are NEVER retention candidates' {
         $slices = @([PSCustomObject]@{ StartOffset = 10; EndOffset = 30 }, [PSCustomObject]@{ StartOffset = 60; EndOffset = 90 })
         $m = New-VideoScoutLiveManifest -RunId $runId -Url 'https://youtu.be/x' -AppliedMode 'video' -Route 'sdk' `
             -Model 'gemini-2.5-flash-lite' -MediaResolutionRequested 'MEDIUM' -VideoScout $true -SliceRanges $slices
+        # V4Q: new live SDK runs are schema v4, but v3 manifests still EXIST on disk and are never
+        # migrated -- so this block keeps proving the legacy guarantee against a real v3 shape. The
+        # v4 equivalent is proved in the Describe immediately below.
+        $m.schemaVersion = 3
+        $m.Remove('diagnosticArtifacts')
         $old = VSOldUtc 400
         $m.startedAt = $old
         $m.finishedAt = $old

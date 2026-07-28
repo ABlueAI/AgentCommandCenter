@@ -13,8 +13,10 @@ const {
   RETRY_MAX_ATTEMPTS, RETRY_BASE_DELAY_MS, RETRY_JITTER_MS, NON_RETRYABLE_STATUSES,
 } = require('./gemini-video-sdk');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const http = require('http');
+const crypto = require('crypto');
 const { execFile } = require('child_process');
 
 let passed = 0, failed = 0;
@@ -49,7 +51,12 @@ function section(name) { process.stdout.write(`\n${name}\n`); }
 // --- buildRequestBody: media resolution mapping --------------------------------------
 {
   assert(buildRequestBody({ url: 'u', prompt: 'p', mediaResolution: 'HIGH' }).generationConfig.mediaResolution === 'MEDIA_RESOLUTION_HIGH', 'HIGH maps correctly');
-  assert(!('generationConfig' in buildRequestBody({ url: 'u', prompt: 'p', mediaResolution: 'ULTRA' })), 'unknown resolution produces no generationConfig (API default applies)');
+  // V4Q: generationConfig is now ALWAYS present because maxOutputTokens applies to every SDK video
+  // model. An unknown resolution still contributes no mediaResolution key (the API default applies).
+  const unknownRes = buildRequestBody({ url: 'u', prompt: 'p', mediaResolution: 'ULTRA' }).generationConfig;
+  assert(!('mediaResolution' in unknownRes), 'unknown resolution produces no mediaResolution key (API default applies)');
+  assert(unknownRes.maxOutputTokens === 16384 && !('thinkingConfig' in unknownRes),
+    'unknown resolution still gets the V4Q output bound and no thinking budget');
   assert(Object.keys(MEDIA_RESOLUTION_MAP).join(',') === 'LOW,MEDIUM,HIGH', 'map covers exactly LOW/MEDIUM/HIGH');
 }
 
@@ -158,10 +165,50 @@ section('K5 backoff bounds (retryDelayMs)');
 }
 
 // --- harness for runVideoScout with injected deps -------------------------------------
-const SUCCESS_BODY = {
-  candidates: [{ content: { parts: [{ text: 'ANALYSIS RESULT' }] }, finishReason: 'STOP' }],
+// V4Q: every accepted response must now satisfy the deterministic quality gate, so the transport
+// fixtures below carry a COMPLIANT report rather than a bare string. The report is composed from the
+// SDK's own exported marker constants, so the fixture cannot drift from the contract it is proving
+// (a spelling change in production fails these tests loudly instead of silently passing a stale
+// fixture). 'ANALYSIS RESULT' is retained inside it so the existing print-exactly-once assertions
+// keep measuring the same thing.
+const {
+  AUTHORIZED_SCOPE_LINE, SLICE_HEADING, UNDETERMINABLE_DURATION_LINE, NO_SYNTHETIC_EVIDENCE_LINE,
+  EVIDENCE_SECTION_HEADER, EVIDENCE_SECTION_NEXT_HEADER,
+} = require('./gemini-video-sdk');
+
+function compliantReport(ranges = []) {
+  const sliced = ranges.length > 0;
+  const agg = ranges.reduce((s, r) => s + (r.endOffset - r.startOffset), 0);
+  const out = [
+    '## 1. TL;DR', 'ANALYSIS RESULT — a bounded forensic pass.', '',
+    '## 2. VIDEO PROFILE', '**Section TL;DR:** profile.',
+  ];
+  if (sliced) out.push(AUTHORIZED_SCOPE_LINE(ranges.length, agg), UNDETERMINABLE_DURATION_LINE, NO_SYNTHETIC_EVIDENCE_LINE);
+  out.push('', '## 3. PEOPLE, ENTITIES & SETTING', '**Section TL;DR:** people.', '',
+    '## 4. DETAILED SUMMARY', '**Section TL;DR:** summary.', '',
+    EVIDENCE_SECTION_HEADER, '**Section TL;DR:** evidence.');
+  ranges.forEach((r, i) => {
+    const n = i + 1;
+    out.push(SLICE_HEADING(n, r),
+      `**Slice ${n} audio status:** SPEECH`,
+      `**Slice ${n} audio evidence:** 00:0${Math.min(n, 9)} — a spoken phrase`,
+      `**Slice ${n} transcription anchor:** "hold this position"`,
+      `${r.startOffset}s-${r.endOffset}s [VISUAL] steady framing across this slice`);
+  });
+  if (!sliced) out.push('00:01 [VISUAL] opening frame');
+  out.push('', EVIDENCE_SECTION_NEXT_HEADER, '**Section TL;DR:** claims.', '',
+    '## 7. DISCREPANCIES & CROSS-CHECKS', '**Section TL;DR:** cross-checks.', '',
+    '## 8. SOURCE-CREDIBILITY ASSESSMENT', '**Section TL;DR:** credibility.', '',
+    '## 9. LIMITATIONS OF THIS ANALYSIS', '**Section TL;DR:** limits.');
+  return out.join('\n');
+}
+const bodyFor = (ranges = []) => ({
+  candidates: [{ content: { parts: [{ text: compliantReport(ranges) }] }, finishReason: 'STOP' }],
   usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5, totalTokenCount: 15, promptTokensDetails: [] },
-};
+});
+const SUCCESS_BODY = bodyFor();
+const S2_RANGES = [{ startOffset: 10, endOffset: 30 }, { startOffset: 60, endOffset: 90 }];
+const SLICED_BODY = bodyFor(S2_RANGES);
 const U503 = { error: { code: 503, status: 'UNAVAILABLE', message: 'The model is overloaded. Please try again later.' } };
 function resp(status, body, opts = {}) {
   return {
@@ -170,13 +217,21 @@ function resp(status, body, opts = {}) {
     json: async () => { if (opts.malformed) throw new Error('unexpected token'); return body; },
   };
 }
-function makeDeps(responses) {
+// V4Q: the diagnostic directory is MANDATORY before any submission, and the diagnostic writer is
+// fully dependency-injected here so no test ever touches a real filesystem path. `writes` records
+// what WOULD have been persisted, which is how the diagnostic-lifecycle assertions below inspect
+// the preserved bytes without creating files.
+const FAKE_DIAG_DIR = process.platform === 'win32' ? 'C:\\v4q-fake-run' : '/v4q-fake-run';
+function makeDeps(responses, fsOpts = {}) {
   const calls = [];
   const sleeps = [];
   const logs = [];
   const errs = [];
+  const writes = [];
+  const renames = [];
+  const existing = new Set(fsOpts.existing || []);
   return {
-    calls, sleeps, logs, errs,
+    calls, sleeps, logs, errs, writes, renames,
     deps: {
       fetchImpl: async (url, opts) => {
         calls.push({ url, body: opts.body, headers: opts.headers });
@@ -189,10 +244,18 @@ function makeDeps(responses) {
       log: (l) => logs.push(String(l)),
       logError: (l) => errs.push(String(l)),
       env: { GEMINI_API_KEY: 'SECRET-KEY-123' },
+      statSync: fsOpts.statSync || (() => ({ isDirectory: () => true })),
+      existsSync: (p) => existing.has(p),
+      writeFileSync: (p, buf) => {
+        if (fsOpts.writeThrows) throw new Error('EACCES: permission denied');
+        writes.push({ path: p, buf });
+      },
+      renameSync: (from, to) => { renames.push({ from, to }); },
+      unlinkSync: () => {},
     },
   };
 }
-const ARGS = ['--url', 'https://youtu.be/test', '--prompt-text', 'SECRET-PROMPT-XYZ analyze this', '--media-resolution', 'LOW'];
+const ARGS = ['--url', 'https://youtu.be/test', '--prompt-text', 'SECRET-PROMPT-XYZ analyze this', '--media-resolution', 'LOW', '--diagnostic-dir', FAKE_DIAG_DIR];
 const usageCount = (logs) => logs.filter((l) => l.includes('[video-scout usage]')).length;
 const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).length;
 
@@ -374,9 +437,14 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
       }
     });
     const port = await new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server.address().port)));
+    // V4Q: the child runs the REAL adapter, so it enforces the real --diagnostic-dir precondition.
+    // Give it an actual empty temp directory. The fixture responses are quality-COMPLIANT, so no
+    // diagnostic is ever written here — which is itself asserted below.
+    const childDiagDir = fs.mkdtempSync(path.join(os.tmpdir(), 'v4q-child-'));
+    const CHILD_ARGS = ARGS.map((a) => (a === FAKE_DIAG_DIR ? childDiagDir : a));
     const runChild = (fixturePath) => new Promise((resolve) => {
       const t0 = Date.now();
-      execFile(process.execPath, [path.join(__dirname, 'test-fixtures', 'gemini-sdk-child.js'), ...ARGS], {
+      execFile(process.execPath, [path.join(__dirname, 'test-fixtures', 'gemini-sdk-child.js'), ...CHILD_ARGS], {
         env: { ...process.env, GEMINI_API_KEY: 'dummy-child-key', K5_FIXTURE_PORT: String(port), K5_FIXTURE_PATH: fixturePath },
         timeout: 60000,
       }, (err, stdout, stderr) => {
@@ -399,15 +467,20 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     assert((okRun.stdout.match(/\[video-scout usage\]/g) || []).length === 1, 'recovered child prints the usage line exactly once');
     assert(okRun.stdout.includes('recovered on attempt 3/3'), 'recovered child names the winning attempt');
     assert(!/Assertion failed|UV_HANDLE_CLOSING/i.test(okRun.stderr + okRun.stdout), 'recovered child output is assertion-free');
+    // A quality-compliant response leaves NO diagnostic behind: evidence is preserved only on
+    // rejection, never as a side effect of a normal run.
+    assert(fs.readdirSync(childDiagDir).length === 0,
+      'a compliant response creates no diagnostic file in the run directory');
 
     server.close();
+    fs.rmSync(childDiagDir, { recursive: true, force: true });
   }
 
   // ============================== V4 bounded multi-slice ======================================
-  const { resolveSliceRanges, buildSliceScopeInstruction, MIN_MULTI_SLICES, MAX_SLICES,
+  const { resolveSliceRanges, buildAuthorizedScopeInstruction, MIN_MULTI_SLICES, MAX_SLICES,
     AGGREGATE_SLICE_CAP_SECONDS, MAX_SLICE_RANGES_JSON_UNITS } = require('./gemini-video-sdk');
   const S2 = '[{"startOffset":10,"endOffset":30},{"startOffset":60,"endOffset":90}]';
-  const sliceArgs = (json, extra = []) => ['--url', 'https://youtu.be/test', '--prompt-text', 'BRIEF-TEXT analyze', '--media-resolution', 'LOW', '--slice-ranges-json', json, ...extra];
+  const sliceArgs = (json, extra = []) => ['--url', 'https://youtu.be/test', '--prompt-text', 'BRIEF-TEXT analyze', '--media-resolution', 'LOW', '--diagnostic-dir', FAKE_DIAG_DIR, '--slice-ranges-json', json, ...extra];
 
   section('V4 constants + resolveSliceRanges contract (full independent re-enforcement)');
   {
@@ -456,31 +529,56 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
       'a valid 2-slice payload resolves with exact ordered ranges + aggregate');
   }
 
-  section('V4 scope instruction (deterministic, structure-preserving)');
+  section('V4Q authorized-scope instruction (deterministic, structure-preserving, 1-8 ranges)');
   {
-    const text = buildSliceScopeInstruction([{ startOffset: 10, endOffset: 30 }, { startOffset: 60, endOffset: 90 }]);
+    const text = buildAuthorizedScopeInstruction([{ startOffset: 10, endOffset: 30 }, { startOffset: 60, endOffset: 90 }]);
     assert(text.includes('2 AUTHORIZED VIDEO SLICES'), 'names the slice count');
-    assert(text.includes('- Slice 1: 10s to 30s (20s)') && text.includes('- Slice 2: 60s to 90s (30s)'),
-      'lists chronological labels with exact offsets and lengths');
+    assert(text.includes('### Slice 1: [10s,30s) — 20s authorized') && text.includes('### Slice 2: [60s,90s) — 30s authorized'),
+      'lists chronological labels with exact half-open endpoints and lengths');
     assert(/ONLY these explicit slices are authorized/.test(text), 'states only the explicit slices are authorized');
     assert(/distinguishable/.test(text), 'asks for per-slice attribution in the report');
     assert(text.includes('## 1. TL;DR'), 'preserves the report-leading TL;DR requirement');
     assert(!/update_topic|tool|fetch|argv|JSON payload/i.test(text), 'no transport/tool-call internals leak into the prompt');
-    assert(text === buildSliceScopeInstruction([{ startOffset: 10, endOffset: 30 }, { startOffset: 60, endOffset: 90 }]),
+    assert(text === buildAuthorizedScopeInstruction([{ startOffset: 10, endOffset: 30 }, { startOffset: 60, endOffset: 90 }]),
       'deterministic: identical input -> identical instruction');
+    // V4Q: the acceptance ORACLES must never be sent. The gate is about structure; the subject,
+    // the video's age, and the channel's size are how a HUMAN judges the answer afterwards.
+    assert(!/meditation|breathing|mindful|subscriber|channel size|years old/i.test(text),
+      'the known meditation subject, video age, and channel size never enter the provider prompt');
+
+    // The scalar path composes through the SAME helper — this is the V4Q defect being repaired.
+    const one = buildAuthorizedScopeInstruction([{ startOffset: 60, endOffset: 75 }]);
+    assert(one.includes('1 AUTHORIZED VIDEO SLICE ---') && !one.includes('AUTHORIZED VIDEO SLICES'),
+      'a single range produces correct singular wording');
+    assert(one.includes('### Slice 1: [60s,75s) — 15s authorized'), 'the scalar slice gets an exact heading');
+    assert(one.includes('**Slice N audio status:**') && one.includes('**Slice N transcription anchor:**')
+      && one.includes('**Source duration:** UNDETERMINABLE FROM AUTHORIZED SLICES')
+      && one.includes('**Synthetic-media assessment:** NO OBSERVABLE EVIDENCE'),
+      'the scalar slice receives the SAME audio, anti-speculation, and synthetic contract as multipart');
+    for (let n = 1; n <= 8; n++) {
+      const rs = Array.from({ length: n }, (_, i) => ({ startOffset: i * 100, endOffset: i * 100 + 20 }));
+      const t = buildAuthorizedScopeInstruction(rs);
+      assert(rs.every((r, i) => t.includes(`### Slice ${i + 1}: [${r.startOffset}s,${r.endOffset}s) — 20s authorized`)),
+        `${n}-range scope instruction names every authorized slice exactly`);
+    }
   }
 
   section('V4 golden request bodies (zero/one-slice unchanged; exact multipart for 2 and 8)');
   {
+    // V4Q: the media-part structure below is UNCHANGED; generationConfig now additionally carries the
+    // SDK-owned output bound (and, for sliced Pro only, the reviewed thinking budget).
     const whole = buildRequestBody({ url: 'https://youtu.be/x', prompt: 'P', mediaResolution: 'LOW' });
-    assert(JSON.stringify(whole) === '{"contents":[{"role":"user","parts":[{"fileData":{"fileUri":"https://youtu.be/x"}},{"text":"P"}]}],"generationConfig":{"mediaResolution":"MEDIA_RESOLUTION_LOW"}}',
-      'GOLDEN: zero-slice body is byte-identical to the existing shape');
+    assert(JSON.stringify(whole) === '{"contents":[{"role":"user","parts":[{"fileData":{"fileUri":"https://youtu.be/x"}},{"text":"P"}]}],"generationConfig":{"mediaResolution":"MEDIA_RESOLUTION_LOW","maxOutputTokens":16384}}',
+      'GOLDEN: zero-slice body keeps its exact part shape (+ V4Q output bound, no thinkingConfig)');
     const single = buildRequestBody({ url: 'https://youtu.be/x', prompt: 'P', mediaResolution: 'LOW', startOffset: 5, endOffset: 9 });
-    assert(JSON.stringify(single) === '{"contents":[{"role":"user","parts":[{"fileData":{"fileUri":"https://youtu.be/x"},"videoMetadata":{"startOffset":"5s","endOffset":"9s"}},{"text":"P"}]}],"generationConfig":{"mediaResolution":"MEDIA_RESOLUTION_LOW"}}',
-      'GOLDEN: one-slice body is byte-identical to the existing shape');
+    assert(JSON.stringify(single) === '{"contents":[{"role":"user","parts":[{"fileData":{"fileUri":"https://youtu.be/x"},"videoMetadata":{"startOffset":"5s","endOffset":"9s"}},{"text":"P"}]}],"generationConfig":{"mediaResolution":"MEDIA_RESOLUTION_LOW","maxOutputTokens":16384}}',
+      'GOLDEN: one-slice body keeps its exact part shape (+ V4Q output bound, no thinkingConfig without Pro)');
     const two = buildRequestBody({ url: 'https://youtu.be/x', prompt: 'P', mediaResolution: 'LOW', sliceRanges: [{ startOffset: 10, endOffset: 30 }, { startOffset: 60, endOffset: 90 }] });
-    assert(JSON.stringify(two) === '{"contents":[{"role":"user","parts":[{"fileData":{"fileUri":"https://youtu.be/x"},"videoMetadata":{"startOffset":"10s","endOffset":"30s"}},{"fileData":{"fileUri":"https://youtu.be/x"},"videoMetadata":{"startOffset":"60s","endOffset":"90s"}},{"text":"P"}]}],"generationConfig":{"mediaResolution":"MEDIA_RESOLUTION_LOW"}}',
+    assert(JSON.stringify(two) === '{"contents":[{"role":"user","parts":[{"fileData":{"fileUri":"https://youtu.be/x"},"videoMetadata":{"startOffset":"10s","endOffset":"30s"}},{"fileData":{"fileUri":"https://youtu.be/x"},"videoMetadata":{"startOffset":"60s","endOffset":"90s"}},{"text":"P"}]}],"generationConfig":{"mediaResolution":"MEDIA_RESOLUTION_LOW","maxOutputTokens":16384}}',
       'GOLDEN: exact 2-slice multipart JSON — N ordered media parts, same URL, own metadata each, ONE text part LAST');
+    const twoPro = buildRequestBody({ url: 'https://youtu.be/x', prompt: 'P', model: 'gemini-2.5-pro', mediaResolution: 'LOW', sliceRanges: [{ startOffset: 10, endOffset: 30 }, { startOffset: 60, endOffset: 90 }] });
+    assert(JSON.stringify(twoPro.generationConfig) === '{"mediaResolution":"MEDIA_RESOLUTION_LOW","maxOutputTokens":16384,"thinkingConfig":{"thinkingBudget":8192}}',
+      'GOLDEN: sliced Pro adds exactly the reviewed 8192 thinking budget and nothing else');
     const ranges8 = Array.from({ length: 8 }, (_, i) => ({ startOffset: i * 400, endOffset: i * 400 + 225 }));
     const eight = buildRequestBody({ url: 'https://youtu.be/x', prompt: 'P', mediaResolution: 'LOW', sliceRanges: ranges8 });
     const parts8 = eight.contents[0].parts;
@@ -503,7 +601,7 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
 
   section('V4 one logical request: single fetch, byte-identical K5 retries, refusals fetch nothing');
   {
-    const h = makeDeps([resp(200, SUCCESS_BODY)]);
+    const h = makeDeps([resp(200, SLICED_BODY)]);
     const code = await runVideoScout(sliceArgs(S2), h.deps);
     assert(code === 0 && h.calls.length === 1, 'a 2-slice run submits EXACTLY ONE request (no sequential per-slice calls)');
     const sent = JSON.parse(h.calls[0].body);
@@ -514,7 +612,7 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     assert(h.logs.some((l) => /\[video-scout usage\].*slices=2/.test(l)), 'usage line tags slices=2');
   }
   {
-    const h = makeDeps([resp(503, U503), resp(503, U503), resp(200, SUCCESS_BODY)]);
+    const h = makeDeps([resp(503, U503), resp(503, U503), resp(200, SLICED_BODY)]);
     const code = await runVideoScout(sliceArgs(S2), h.deps);
     assert(code === 0 && h.calls.length === 3, 'retryable 503s: recovered on attempt 3 with slices');
     assert(h.calls[0].body === h.calls[1].body && h.calls[1].body === h.calls[2].body,
@@ -553,6 +651,342 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     // anchor on `await` — one call site means no per-slice submission loop was introduced.
     assert((src.match(/await submitGeminiRequest\(/g) || []).length === 1,
       'runVideoScout calls the shared transport at exactly one site — no per-slice submission loop');
+  }
+
+  // ================================ V4Q generation policy =====================================
+  const {
+    buildGenerationConfig, resolveEffectiveModel, validateReportQuality, extractEvidenceSection,
+    resolveDiagnosticDir, writeRejectedResponseDiagnostic, QUALITY_FAILURE_CODES, REQUIRED_SECTIONS,
+    MAX_DIAGNOSTIC_BYTES, MAX_DIAGNOSTIC_CHARS, DIAGNOSTIC_FILENAME, PRO_MODEL,
+  } = require('./gemini-video-sdk');
+  const LITE = 'gemini-2.5-flash-lite';
+  const FLASH = 'gemini-2.5-flash';
+  const gc = (model, n) => buildGenerationConfig({ model, mediaResolution: 'MEDIUM', effectiveSliceCount: n });
+
+  section('V4Q generation config: exact model x slice-count matrix (counts 0-8)');
+  {
+    // The authoritative table. maxOutputTokens applies to EVERY SDK video model; the reviewed
+    // thinking budget applies ONLY to bounded sliced Pro.
+    const EXPECTED_MAX = [16384, 16384, 16384, 18432, 20480, 22528, 24576, 26624, 28672];
+    for (let n = 0; n <= 8; n++) {
+      for (const m of [LITE, FLASH, PRO_MODEL]) {
+        assert(gc(m, n).maxOutputTokens === EXPECTED_MAX[n],
+          `${m} @ ${n} slice(s): maxOutputTokens === ${EXPECTED_MAX[n]}`);
+      }
+    }
+    // Whole video (count 0): NO model gets a thinking budget — provider defaults are preserved.
+    for (const m of [LITE, FLASH, PRO_MODEL]) {
+      assert(!('thinkingConfig' in gc(m, 0)),
+        `whole-video ${m}: thinkingConfig is ABSENT (provider default thinking behavior preserved)`);
+    }
+    // Sliced non-Pro: still no thinking budget — Flash keeps dynamic thinking, Lite keeps none.
+    for (const n of [1, 2, 8]) {
+      for (const m of [LITE, FLASH]) {
+        assert(!('thinkingConfig' in gc(m, n)),
+          `sliced ${m} @ ${n}: thinkingConfig is ABSENT (existing thinking behavior unchanged)`);
+      }
+    }
+    // Sliced Pro: exactly the reviewed budget, at every count.
+    for (const n of [1, 2, 3, 8]) {
+      const c = gc(PRO_MODEL, n);
+      assert(c.thinkingConfig && c.thinkingConfig.thinkingBudget === 8192
+        && Object.keys(c.thinkingConfig).join(',') === 'thinkingBudget',
+        `sliced Pro @ ${n}: thinkingConfig is exactly { thinkingBudget: 8192 }`);
+    }
+    // Never serialized as a falsy/empty placeholder — an absent budget means the KEY is absent.
+    const wholePro = JSON.stringify(gc(PRO_MODEL, 0));
+    assert(!/thinking/i.test(wholePro), 'an absent thinking budget emits NO thinkingConfig key (not null, 0, or {})');
+    // An unknown/direct model string must not inherit a budget reviewed only for 2.5 Pro.
+    assert(!('thinkingConfig' in gc('gemini-experimental-x', 4)), 'an unknown model string gets no thinking budget');
+    assert(!('thinkingConfig' in gc('GEMINI-2.5-PRO', 2)), 'model matching is exact-case (no accidental Pro match)');
+  }
+
+  section('V4Q effective model resolution (explicit always wins; omitted defaults by scope)');
+  {
+    assert(resolveEffectiveModel({ explicitModel: undefined, effectiveSliceCount: 0 }) === LITE,
+      'omitted + whole video -> economy default');
+    assert(resolveEffectiveModel({ explicitModel: undefined, effectiveSliceCount: 1 }) === PRO_MODEL,
+      'omitted + scalar slice -> Pro');
+    assert(resolveEffectiveModel({ explicitModel: undefined, effectiveSliceCount: 8 }) === PRO_MODEL,
+      'omitted + multipart -> Pro');
+    for (const m of [LITE, FLASH, PRO_MODEL, 'gemini-experimental-x']) {
+      for (const n of [0, 1, 8]) {
+        assert(resolveEffectiveModel({ explicitModel: m, effectiveSliceCount: n }) === m,
+          `explicit ${m} @ ${n} slice(s) is honored EXACTLY (never substituted)`);
+      }
+    }
+  }
+
+  section('V4Q scalar and multipart reach the SAME SDK-owned policy through buildRequestBody');
+  {
+    const scalarPro = buildRequestBody({ url: 'u', prompt: 'p', model: PRO_MODEL, mediaResolution: 'MEDIUM', startOffset: 60, endOffset: 75 });
+    const multiPro = buildRequestBody({ url: 'u', prompt: 'p', model: PRO_MODEL, mediaResolution: 'MEDIUM', sliceRanges: [{ startOffset: 10, endOffset: 30 }, { startOffset: 60, endOffset: 90 }] });
+    assert(JSON.stringify(scalarPro.generationConfig) === JSON.stringify(gc(PRO_MODEL, 1)),
+      'the scalar body config is exactly buildGenerationConfig(model, 1) — one shared policy');
+    assert(JSON.stringify(multiPro.generationConfig) === JSON.stringify(gc(PRO_MODEL, 2)),
+      'the multipart body config is exactly buildGenerationConfig(model, 2) — one shared policy');
+    const wholeLite = buildRequestBody({ url: 'u', prompt: 'p', model: LITE, mediaResolution: 'MEDIUM' });
+    assert(JSON.stringify(wholeLite.generationConfig) === JSON.stringify(gc(LITE, 0)),
+      'the whole-video body config is exactly buildGenerationConfig(model, 0)');
+    // Effective model is genuinely threaded: the SAME slice scope produces different configs per model.
+    assert(JSON.stringify(buildRequestBody({ url: 'u', prompt: 'p', model: LITE, mediaResolution: 'MEDIUM', startOffset: 1, endOffset: 2 }).generationConfig)
+      !== JSON.stringify(scalarPro.generationConfig),
+      'the model argument actually reaches generation policy (Lite and Pro differ at identical scope)');
+  }
+
+  section('V4Q scripts/ never imports the renderer policy module');
+  {
+    const src = fs.readFileSync(path.join(__dirname, 'gemini-video-sdk.js'), 'utf8');
+    assert(!/video-model-policy/.test(src),
+      'gemini-video-sdk.js does not reference the renderer policy module (the SDK owns its own policy)');
+    assert(!/require\(['"][^'"]*renderer/.test(src), 'gemini-video-sdk.js imports nothing from app/renderer');
+  }
+
+  section('V4Q K5 preservation: fully configured body serialized once, byte-identical across retries');
+  {
+    const h = makeDeps([resp(503, U503), resp(503, U503), resp(200, SLICED_BODY)]);
+    const code = await runVideoScout(sliceArgs(S2), h.deps);
+    assert(code === 0 && h.calls.length === 3, 'three attempts, recovered on the third');
+    assert(h.calls[0].body === h.calls[1].body && h.calls[1].body === h.calls[2].body,
+      'every retry submits the byte-identical body INCLUDING generationConfig');
+    const cfg = JSON.parse(h.calls[0].body).generationConfig;
+    assert(cfg.maxOutputTokens === 16384 && cfg.thinkingConfig.thinkingBudget === 8192,
+      'the retried body carries the resolved sliced-Pro configuration (omitted model defaulted to Pro)');
+    assert(h.sleeps.join(',') === '1200,2200', 'the K5 delays are unchanged by V4Q');
+  }
+
+  // ================================= V4Q quality gate =========================================
+  const R2 = S2_RANGES;
+  const okReport = () => compliantReport(R2);
+  const vq = (text, opts = {}) => validateReportQuality({
+    text, finishReason: opts.finishReason || 'STOP', ranges: opts.ranges || R2,
+    audioTokens: opts.audioTokens === undefined ? 2240 : opts.audioTokens,
+  });
+
+  section('V4Q validator: compliant fixtures PASS (scalar, multipart, legitimate silence)');
+  {
+    assert(vq(okReport()).ok === true, 'a compliant 2-slice known-speech report passes');
+    const one = [{ startOffset: 60, endOffset: 75 }];
+    assert(vq(compliantReport(one), { ranges: one }).ok === true, 'a compliant scalar known-speech report passes');
+    const eight = Array.from({ length: 8 }, (_, i) => ({ startOffset: i * 100, endOffset: i * 100 + 20 }));
+    assert(vq(compliantReport(eight), { ranges: eight }).ok === true, 'a complete 8-slice report passes');
+    assert(vq(compliantReport(), { ranges: [] }).ok === true, 'a compliant whole-video report passes (structure-only checks)');
+    // Justified silence is legitimate and must NOT be rejected.
+    const justified = okReport()
+      .replace(/\*\*Slice (\d) audio status:\*\* SPEECH/g, '**Slice $1 audio status:** SILENCE')
+      .replace(/\*\*Slice (\d) transcription anchor:\*\*[^\n]*/g, '**Slice $1 audio justification:** 00:0$1 — listened for speech, music, and room tone across the slice; nothing audible');
+    assert(vq(justified).ok === true, 'justified universal silence PASSES (false-positive control)');
+    // A supported, timestamped, confidence-rated synthetic finding is allowed.
+    const supported = okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE,
+      '**Synthetic-media assessment:** likely synthetic voiceover — Evidence: 00:12 uniform spectral envelope with no breath noise — Confidence: LOW');
+    assert(vq(supported).ok === true, 'a standardized evidence-backed synthetic assessment PASSES');
+  }
+
+  section('V4Q validator: every observed V4 failure class is caught with a distinct code');
+  {
+    const cases = [
+      ['finish-max-tokens', okReport(), { finishReason: 'MAX_TOKENS' }],
+      ['finish-not-stop', okReport(), { finishReason: 'SAFETY' }],
+      ['missing-section', okReport().replace('## 7. DISCREPANCIES & CROSS-CHECKS', '## 7a. OTHER'), {}],
+      ['duplicate-section', okReport() + '\n## 3. PEOPLE, ENTITIES & SETTING\n', {}],
+      // The exact V4 defect: slice 2 rendered 04:00-04:30 instead of the authorized [240,280).
+      ['scope-mismatch', okReport().replace(SLICE_HEADING(2, R2[1]), SLICE_HEADING(2, { startOffset: 60, endOffset: 80 })), {}],
+      ['scope-mismatch', okReport().replace(AUTHORIZED_SCOPE_LINE(2, 50), '**Authorized scope:** 2 slice(s), aggregate 999s'), {}],
+      ['missing-slice', okReport().replace(SLICE_HEADING(2, R2[1]), '(slice 2 dropped)'), {}],
+      ['missing-slice-audio', okReport().replace('**Slice 2 audio status:** SPEECH', ''), {}],
+      ['missing-speech-anchor', okReport().replace('**Slice 2 transcription anchor:** "hold this position"', ''), {}],
+      ['unjustified-universal-silence', okReport().replace(/\*\*Slice (\d) audio status:\*\* SPEECH/g, '**Slice $1 audio status:** SILENCE').replace(/\*\*Slice \d transcription anchor:\*\*[^\n]*\n/g, ''), {}],
+      // The exact V4 defect: a false "no audio" finding while audio tokens were billed.
+      ['unjustified-universal-silence', okReport().replace('**Section TL;DR:** profile.', 'No audio or spoken content is present in the provided video slices. The video is silent.'), {}],
+      ['speculative-source-duration', okReport().replace(UNDETERMINABLE_DURATION_LINE, 'Approximate duration: Over 1 hour.'), {}],
+      ['unsupported-synthetic-claim', okReport().replace('**Section TL;DR:** profile.', 'The static nature suggests it is AI-generated stock footage.'), {}],
+      ['repetitive-timestamp-filler', okReport().replace('10s-30s [VISUAL] steady framing across this slice',
+        Array.from({ length: 30 }, (_, i) => `00:${String(i).padStart(2, '0')} [VISUAL] Solid green background.`).join('\n')), {}],
+    ];
+    for (const [expected, text, opts] of cases) {
+      const v = vq(text, opts);
+      assert(v.ok === false && v.code === expected, `rejected with code ${expected}`);
+      assert(QUALITY_FAILURE_CODES.includes(v.code), `${expected} is in the closed allowlist`);
+    }
+  }
+
+  section('V4Q validator: no provider text, prompt, media, URL, or credential enters a reason');
+  {
+    const marked = okReport()
+      .replace('**Section TL;DR:** profile.', 'SECRET-PROVIDER-PHRASE the video is silent and AI-generated')
+      .replace('10s-30s [VISUAL] steady framing across this slice',
+        Array.from({ length: 30 }, () => '00:01 [VISUAL] SECRET-PROVIDER-PHRASE repeated').join('\n'));
+    for (const opts of [{}, { finishReason: 'SAFETY' }, { finishReason: 'MAX_TOKENS' }]) {
+      const v = vq(marked, opts);
+      assert(v.ok === false, 'marked report is rejected');
+      assert(!/SECRET-PROVIDER-PHRASE/.test(v.reason), 'the failure reason carries no provider text');
+      assert(!/youtu\.be|https?:\/\//.test(v.reason), 'the failure reason carries no URL');
+      assert(!/SECRET-KEY|GEMINI_API_KEY/.test(v.reason), 'the failure reason carries no credential');
+    }
+    const nonStop = vq(okReport(), { finishReason: 'SOME_UNDOCUMENTED_REASON' });
+    assert(nonStop.code === 'finish-not-stop' && !/SOME_UNDOCUMENTED_REASON/.test(nonStop.reason),
+      'an unrecognized finishReason is reported as a bounded phrase, never echoed');
+  }
+
+  section('V4Q evidence-section identity cannot silently drift');
+  {
+    const promptText = fs.readFileSync(path.join(__dirname, '..', 'prompts', 'video-scout-analysis.md'), 'utf8');
+    assert(promptText.split(EVIDENCE_SECTION_HEADER).length - 1 === 1,
+      'the canonical evidence header appears EXACTLY once in the prompt');
+    assert(REQUIRED_SECTIONS[4] === EVIDENCE_SECTION_HEADER,
+      'the ordered template defines the canonical evidence header as the FIFTH section');
+    const idx = REQUIRED_SECTIONS.map((h) => promptText.indexOf(h));
+    assert(idx.every((i) => i !== -1), 'every required section header exists in the prompt');
+    assert(idx.every((v, i) => i === 0 || v > idx[i - 1]), 'the prompt declares the sections in the required order');
+    // Located by exact canonical headers, never a numeric substring: a renamed section must fail.
+    const renamed = okReport().replace(EVIDENCE_SECTION_HEADER, '## 5. TIMESTAMPED STUFF');
+    assert(vq(renamed).code === 'missing-section', 'renaming the evidence section fails the contract visibly');
+    assert(extractEvidenceSection(okReport()).includes('**Slice 1 audio status:**'),
+      'the evidence section is extracted between the exact canonical headers');
+    assert(extractEvidenceSection(okReport()).indexOf('**Section TL;DR:** claims.') === -1,
+      'extraction stops at the following canonical header (never bleeds into section 6)');
+  }
+
+  section('V4Q repetition heuristic: structural marker lines are never counted as filler');
+  {
+    // Eight slices legitimately share the same `**Slice N audio status:** SILENCE` shape. If marker
+    // lines were counted, a compliant 8-slice report would self-reject.
+    const eight = Array.from({ length: 8 }, (_, i) => ({ startOffset: i * 100, endOffset: i * 100 + 20 }));
+    const silent8 = compliantReport(eight)
+      .replace(/\*\*Slice (\d) audio status:\*\* SPEECH/g, '**Slice $1 audio status:** SILENCE')
+      .replace(/\*\*Slice (\d) transcription anchor:\*\*[^\n]*/g, '**Slice $1 audio justification:** 00:0$1 — listened across the slice; nothing audible');
+    assert(vq(silent8, { ranges: eight }).ok === true,
+      'eight identical audio-status marker lines do NOT trip the repetition heuristic');
+    // Three repeats are allowed (limited cross-slice confirmation is legitimate); four are not.
+    const mk = (n) => okReport().replace('10s-30s [VISUAL] steady framing across this slice',
+      Array.from({ length: n }, (_, i) => `00:0${i} [VISUAL] identical observation`).join('\n'));
+    assert(vq(mk(3)).ok === true, 'three identical observations are allowed');
+    assert(vq(mk(4)).code === 'repetitive-timestamp-filler', 'a fourth identical observation is rejected');
+  }
+
+  // ============================ V4Q diagnostic lifecycle ======================================
+  section('V4Q --diagnostic-dir is MANDATORY and validated before any submission');
+  {
+    const noDir = ['--url', 'https://youtu.be/test', '--prompt-text', 'p', '--media-resolution', 'LOW'];
+    let h = makeDeps([resp(200, SUCCESS_BODY)]);
+    assert((await runVideoScout(noDir, h.deps)) === 1 && h.calls.length === 0,
+      'a missing --diagnostic-dir refuses with ZERO fetches (never spends to discover it)');
+    h = makeDeps([resp(200, SUCCESS_BODY)]);
+    assert((await runVideoScout([...noDir, '--diagnostic-dir'], h.deps)) === 1 && h.calls.length === 0,
+      'a valueless trailing --diagnostic-dir refuses with ZERO fetches');
+    h = makeDeps([resp(200, SUCCESS_BODY)]);
+    assert((await runVideoScout([...noDir, '--diagnostic-dir', 'relative/path'], h.deps)) === 1 && h.calls.length === 0,
+      'a relative --diagnostic-dir refuses with ZERO fetches');
+    h = makeDeps([resp(200, SUCCESS_BODY)], { statSync: () => { throw new Error('ENOENT'); } });
+    assert((await runVideoScout(ARGS, h.deps)) === 1 && h.calls.length === 0,
+      'a non-existent --diagnostic-dir refuses with ZERO fetches');
+    h = makeDeps([resp(200, SUCCESS_BODY)], { statSync: () => ({ isDirectory: () => false }) });
+    assert((await runVideoScout(ARGS, h.deps)) === 1 && h.calls.length === 0,
+      'a --diagnostic-dir that is not a directory refuses with ZERO fetches');
+    // Pure resolver contract.
+    assert(resolveDiagnosticDir(parseArgs([])).error, 'resolveDiagnosticDir: absent flag is an error');
+    assert(resolveDiagnosticDir(parseArgs(['--diagnostic-dir', FAKE_DIAG_DIR]), { statSync: () => ({ isDirectory: () => true }) }).dir === FAKE_DIAG_DIR,
+      'resolveDiagnosticDir: an existing absolute directory resolves');
+  }
+
+  section('V4Q rejected response: preserved once, usage kept, error, no report, no repair call');
+  {
+    const badBody = {
+      candidates: [{ content: { parts: [{ text: okReport().replace(UNDETERMINABLE_DURATION_LINE, 'Approximate duration: Over 1 hour.') }] }, finishReason: 'STOP' }],
+      usageMetadata: { promptTokenCount: 22406, candidatesTokenCount: 3122, totalTokenCount: 25528, promptTokensDetails: [{ modality: 'VIDEO', tokenCount: 18410 }, { modality: 'AUDIO', tokenCount: 2240 }] },
+    };
+    const h = makeDeps([resp(200, badBody)]);
+    const code = await runVideoScout(sliceArgs(S2), h.deps);
+    assert(code === 1, 'a quality rejection exits non-zero');
+    assert(h.calls.length === 1, 'NO repair, retry, continuation, or fallback request is made after rejection');
+    // The rejected analysis text must never reach the terminal or the Logs pane.
+    assert(!h.logs.some((l) => l.includes('Over 1 hour')) && !h.errs.some((l) => l.includes('Over 1 hour')),
+      'the rejected response body is never emitted to stdout or stderr');
+    assert(!h.logs.some((l) => l.includes('## 1. TL;DR')), 'no part of the rejected report is printed');
+    // Usage IS preserved so the manifest can record what the failed run cost.
+    const usage = h.logs.filter((l) => l.includes('[video-scout usage]'));
+    assert(usage.length === 1 && usage[0].includes('video=18410') && usage[0].includes('audio=2240'),
+      'the usage line is still emitted exactly once (cost truth is preserved)');
+    // Exactly one write + one atomic rename to the fixed leaf, as a direct child of the run dir.
+    assert(h.writes.length === 1 && h.renames.length === 1, 'the diagnostic is written once and renamed once (atomic)');
+    assert(h.renames[0].to === path.join(FAKE_DIAG_DIR, DIAGNOSTIC_FILENAME),
+      `the diagnostic lands on the fixed leaf ${DIAGNOSTIC_FILENAME} as a direct child of the run directory`);
+    assert(path.dirname(h.renames[0].to) === FAKE_DIAG_DIR, 'the diagnostic is a DIRECT child (no nesting, no traversal)');
+    // Exact bytes: UTF-8, no BOM, byte-for-byte the provider response.
+    const buf = h.writes[0].buf;
+    assert(Buffer.isBuffer(buf) && buf.toString('utf8') === badBody.candidates[0].content.parts[0].text,
+      'the preserved bytes are the EXACT provider response text');
+    assert(!(buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF), 'the diagnostic is UTF-8 WITHOUT a BOM');
+    // The machine-readable line carries an allowlisted code and our independently checkable identity.
+    const q = h.logs.filter((l) => l.startsWith('[video-scout quality]'));
+    assert(q.length === 1, 'exactly one machine-readable quality line is emitted');
+    const m = /^\[video-scout quality\] rejected code=(\S+) file=(\S+) bytes=(\d+) sha256=([0-9a-f]{64})$/.exec(q[0]);
+    assert(m && QUALITY_FAILURE_CODES.includes(m[1]), 'the quality line carries an allowlisted failure code');
+    assert(m[2] === DIAGNOSTIC_FILENAME && Number(m[3]) === buf.length, 'the reported leaf and byte count match what was written');
+    assert(m[4] === crypto.createHash('sha256').update(buf).digest('hex'), 'the reported sha256 matches the preserved bytes');
+  }
+
+  section('V4Q diagnostic write failure: never retried, no metadata published');
+  {
+    const badBody = {
+      candidates: [{ content: { parts: [{ text: okReport().replace(UNDETERMINABLE_DURATION_LINE, 'Approximate duration: Over 1 hour.') }] }, finishReason: 'STOP' }],
+      usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5, totalTokenCount: 15, promptTokensDetails: [{ modality: 'AUDIO', tokenCount: 2240 }] },
+    };
+    const h = makeDeps([resp(200, badBody)], { writeThrows: true });
+    const code = await runVideoScout(sliceArgs(S2), h.deps);
+    assert(code === 1 && h.calls.length === 1, 'a diagnostic write failure is terminal and never re-calls the provider');
+    assert(h.logs.some((l) => l === '[video-scout quality] rejected code=diagnostic-write-failed'),
+      'the write failure is reported as the allowlisted diagnostic-write-failed code with NO artifact metadata');
+    assert(h.logs.filter((l) => l.includes('[video-scout usage]')).length === 1, 'usage is still preserved');
+    assert(h.errs.some((l) => /could NOT be preserved/.test(l)), 'the failure is visible, never silent');
+  }
+
+  section('V4Q diagnostic writer: bounds, overwrite refusal, and no diagnostic on success');
+  {
+    const dir = FAKE_DIAG_DIR;
+    const okWrite = writeRejectedResponseDiagnostic({ diagnosticDir: dir, text: 'body' },
+      { writeFileSync: () => {}, renameSync: () => {}, existsSync: () => false, unlinkSync: () => {} });
+    assert(okWrite.ok && okWrite.fileName === DIAGNOSTIC_FILENAME && okWrite.bytes === 4, 'a normal write reports the fixed leaf and byte count');
+    const dup = writeRejectedResponseDiagnostic({ diagnosticDir: dir, text: 'body' },
+      { writeFileSync: () => {}, renameSync: () => {}, existsSync: () => true, unlinkSync: () => {} });
+    assert(!dup.ok && /already exists/.test(dup.error), 'an existing diagnostic is NEVER overwritten (preserved evidence wins)');
+    const overChars = writeRejectedResponseDiagnostic({ diagnosticDir: dir, text: 'x'.repeat(MAX_DIAGNOSTIC_CHARS + 1) },
+      { writeFileSync: () => { throw new Error('must not be called'); }, renameSync: () => {}, existsSync: () => false, unlinkSync: () => {} });
+    assert(!overChars.ok && /character/.test(overChars.error), 'the character bound is enforced BEFORE any bytes are written');
+    // The CHARACTER bound is the binding constraint in practice: a JS string of at most
+    // MAX_DIAGNOSTIC_CHARS units encodes to at most 3 bytes per unit (BMP <= 3 bytes; astral pairs
+    // spend 4 bytes across 2 units), so <= 3,000,000 bytes — always under the 4 MiB byte bound. The
+    // byte check is therefore a deliberate defence-in-depth backstop, not dead weight: it keeps the
+    // guarantee if either constant is ever retuned independently. Prove that relationship holds
+    // rather than asserting an unreachable rejection.
+    assert(MAX_DIAGNOSTIC_CHARS * 3 <= MAX_DIAGNOSTIC_BYTES,
+      'the character bound is the binding constraint: no in-bounds string can exceed the byte bound');
+    const worstCase = Buffer.from('ࠀ'.repeat(MAX_DIAGNOSTIC_CHARS), 'utf8').length;
+    assert(worstCase === MAX_DIAGNOSTIC_CHARS * 3 && worstCase <= MAX_DIAGNOSTIC_BYTES,
+      'a worst-case 3-byte-per-unit payload at the character bound still fits inside the byte bound');
+    const atBound = writeRejectedResponseDiagnostic({ diagnosticDir: dir, text: 'x'.repeat(MAX_DIAGNOSTIC_CHARS) },
+      { writeFileSync: () => {}, renameSync: () => {}, existsSync: () => false, unlinkSync: () => {} });
+    assert(atBound.ok && atBound.bytes === MAX_DIAGNOSTIC_CHARS, 'exactly at the character bound is accepted (inclusive)');
+    assert(MAX_DIAGNOSTIC_BYTES === 4 * 1024 * 1024 && MAX_DIAGNOSTIC_CHARS === 1000000,
+      'the V4Q diagnostic bounds are pinned (4 MiB / 1,000,000 characters)');
+    // A PASSING response creates no diagnostic at all.
+    const h = makeDeps([resp(200, SLICED_BODY)]);
+    assert((await runVideoScout(sliceArgs(S2), h.deps)) === 0, 'a compliant sliced response is accepted');
+    assert(h.writes.length === 0 && h.renames.length === 0, 'a passing response creates NO diagnostic');
+    assert(!h.logs.some((l) => l.startsWith('[video-scout quality]')), 'a passing response emits no quality-rejection line');
+  }
+
+  section('V4Q failure-code allowlist is closed and matches the validator');
+  {
+    assert(QUALITY_FAILURE_CODES.length === 13, 'exactly the 13 approved failure codes exist');
+    const expected = ['finish-max-tokens', 'finish-not-stop', 'missing-section', 'duplicate-section',
+      'scope-mismatch', 'missing-slice', 'missing-slice-audio', 'missing-speech-anchor',
+      'unjustified-universal-silence', 'unsupported-synthetic-claim', 'speculative-source-duration',
+      'repetitive-timestamp-filler', 'diagnostic-write-failed'];
+    assert(expected.every((c) => QUALITY_FAILURE_CODES.includes(c)), 'every approved code is present');
+    const src = fs.readFileSync(path.join(__dirname, 'gemini-video-sdk.js'), 'utf8');
+    const emitted = new Set((src.match(/fail\('([a-z0-9\-]+)'/g) || []).map((s) => s.slice(6, -1)));
+    for (const c of emitted) assert(QUALITY_FAILURE_CODES.includes(c), `emitted code ${c} is inside the closed allowlist`);
   }
 
   process.stdout.write(`\n${passed} passed, ${failed} failed\n`);

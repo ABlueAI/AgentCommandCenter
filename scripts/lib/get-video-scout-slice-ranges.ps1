@@ -186,8 +186,10 @@ function Assert-MultiSliceOverrideAllowed {
   lists the chronological labels and offsets, states that ONLY those slices are authorized, asks
   for per-slice attribution, and explicitly preserves the required report structure (the
   report-leading `## 1. TL;DR`, the V2 per-section TL;DRs, and any V3a focus already composed in).
-  Mirrors buildSliceScopeInstruction in scripts/gemini-video-sdk.js -- the SDK route composes it
-  there; this function serves the CLI-side composition and the tests that pin the wording contract.
+  Mirrors buildAuthorizedScopeInstruction in scripts/gemini-video-sdk.js (renamed in V4Q from
+  buildSliceScopeInstruction when the helper was widened from multi-only to one-through-eight
+  ranges) -- the SDK route composes it there; this function serves the CLI-side composition and the
+  tests that pin the wording contract.
 #>
 function Add-SliceScopeToPrompt {
     [CmdletBinding()]

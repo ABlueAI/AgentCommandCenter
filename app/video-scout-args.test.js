@@ -47,12 +47,36 @@ function assert(condition, label) {
     'notes describe mediaResolution as sent, with the route-dependent enforcement caveat');
 }
 
-// --- default-omission: values matching the script's own default are NOT pushed -----
+// --- V4Q BINDING RULING: every validated model selection is serialized, Lite included -----------
+// mediaResolution keeps its default-omission behavior (the script's default is unambiguous there),
+// but videoModel must NOT be omitted: feed-gemini.ps1 resolves an OMITTED -Model on a sliced run to
+// gemini-2.5-pro, so dropping an explicit Lite choice would run -- and bill -- Pro against the
+// user's stated intent. Omitted-model defaulting is reserved for direct PowerShell/SDK callers.
 {
   const { args, notes } = buildVideoScoutArgs({ videoModel: DEFAULT_VIDEO_MODEL, mediaResolution: DEFAULT_MEDIA_RESOLUTION });
-  assert(args.length === 0, 'omits both flags when values match feed-gemini.ps1 defaults');
-  assert(notes.some(n => /videoModel="gemini-2.5-flash-lite" omitted/.test(n)), 'notes explain videoModel omission');
-  assert(notes.some(n => /mediaResolution="MEDIUM" omitted/.test(n)), 'notes explain mediaResolution omission');
+  assert(args.join(' ') === `-Model ${DEFAULT_VIDEO_MODEL}`,
+    'an explicit Flash-Lite selection is STILL serialized (never re-read downstream as "omitted")');
+  assert(notes.some(n => /videoModel="gemini-2.5-flash-lite" sent as -Model/.test(n)),
+    'notes record that the explicit model was sent');
+  assert(notes.some(n => /always serialized/.test(n)),
+    'notes state why the app never relies on the script default for the model');
+  assert(notes.some(n => /mediaResolution="MEDIUM" omitted/.test(n)), 'notes explain mediaResolution omission (unchanged)');
+}
+
+// Every allowlisted model round-trips explicitly, at every scope. This is the exact defect the
+// ruling closes: an app-originated sliced run must never resolve to a model the user did not pick.
+{
+  for (const m of ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro']) {
+    const { args } = buildVideoScoutArgs({ videoModel: m, mediaResolution: 'MEDIUM' });
+    assert(args[args.indexOf('-Model') + 1] === m, `app-originated videoModel="${m}" is serialized exactly`);
+  }
+  const sliced = buildVideoScoutArgs({
+    videoModel: 'gemini-2.5-flash-lite', mediaResolution: 'MEDIUM', analysisMode: 'video',
+    videoUrl: 'https://www.youtube.com/watch?v=abc12345678',
+    sliceRanges: [{ startOffset: 10, endOffset: 30 }, { startOffset: 60, endOffset: 90 }],
+  });
+  assert(sliced.args[sliced.args.indexOf('-Model') + 1] === 'gemini-2.5-flash-lite',
+    'a SLICED app request still carries the explicit Lite choice (never silently upgraded to Pro)');
 }
 
 // --- reject: values outside the allowlist are dropped, never spliced into args -----

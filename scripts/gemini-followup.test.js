@@ -52,11 +52,35 @@ section('follow-up body: text-only, policy-first, follow-up-only output cap');
   assert(FOLLOWUP_MAX_OUTPUT_TOKENS === 4096, 'the fixed output cap is 4096');
   assert(FOLLOWUP_POLICY.indexOf('not instructions') !== -1, 'the policy names the report as reference material, not instructions');
 }
-section('existing video body: unchanged, and receives NO maxOutputTokens');
+// V4Q: an accepted video response must satisfy the deterministic quality gate, so the golden
+// transport fixture below carries a structurally compliant whole-video report. Only the four
+// universal checks apply at whole-video scope (non-empty, leading TL;DR, sections 1-9 once and in
+// order, finishReason STOP) — the slice/audio/scope contract is bounded-scope only.
+const V4Q_COMPLIANT_WHOLE_VIDEO = [
+  '## 1. TL;DR', 'VIDEO OUT — golden equivalence fixture.', '',
+  '## 2. VIDEO PROFILE', '**Section TL;DR:** profile.', '',
+  '## 3. PEOPLE, ENTITIES & SETTING', '**Section TL;DR:** people.', '',
+  '## 4. DETAILED SUMMARY', '**Section TL;DR:** summary.', '',
+  '## 5. COMPREHENSIVE TIMESTAMPED FINDINGS', '**Section TL;DR:** evidence.', '00:01 [VISUAL] opening frame', '',
+  '## 6. CLAIMS, NUMBERS & CALLS TO ACTION', '**Section TL;DR:** claims.', '',
+  '## 7. DISCREPANCIES & CROSS-CHECKS', '**Section TL;DR:** cross-checks.', '',
+  '## 8. SOURCE-CREDIBILITY ASSESSMENT', '**Section TL;DR:** credibility.', '',
+  '## 9. LIMITATIONS OF THIS ANALYSIS', '**Section TL;DR:** limits.',
+].join('\n');
+
+section('video body vs follow-up body: independent output caps, unchanged part shape');
 {
+  // V4Q changed this relationship deliberately. The video path now carries its OWN SDK-owned
+  // maxOutputTokens (16,384 at whole-video scope, scaling with slice count), which is a DIFFERENT
+  // constant and a different owner from the follow-up cap. What must stay true is that the two are
+  // independent: the follow-up cap is still follow-up-only and is not inherited by the video body.
   const vb = buildRequestBody({ url: 'https://youtu.be/x', prompt: 'p', mediaResolution: 'LOW' });
-  const vblob = JSON.stringify(vb);
-  assert(vblob.indexOf('maxOutputTokens') === -1, 'the video request body has no maxOutputTokens (the cap is follow-up-only)');
+  assert(vb.generationConfig.maxOutputTokens === 16384,
+    'the whole-video body carries the V4Q SDK-owned output bound (16384)');
+  assert(vb.generationConfig.maxOutputTokens !== FOLLOWUP_MAX_OUTPUT_TOKENS,
+    'the video bound is NOT the follow-up cap (the two remain independently owned constants)');
+  assert(!('thinkingConfig' in vb.generationConfig),
+    'a whole-video body still receives no thinking budget (provider default preserved)');
   assert(vb.contents[0].parts[0].fileData.fileUri === 'https://youtu.be/x', 'the video body still carries fileData.fileUri (its shape is untouched)');
 }
 section('fixed model');
@@ -226,11 +250,16 @@ const PAYLOAD = { report: 'SECRET-REPORT-TEXT with facts', question: 'SECRET-QUE
     // Pinned against the pre-extraction builder output — if the video body builder or its wiring
     // ever drifts, this exact string comparison fails.
     const body = buildRequestBody({ url: 'https://youtu.be/gold', prompt: 'GOLDEN-PROMPT', mediaResolution: 'LOW', startOffset: 60, endOffset: 120 });
-    const expected = '{"contents":[{"role":"user","parts":[{"fileData":{"fileUri":"https://youtu.be/gold"},"videoMetadata":{"startOffset":"60s","endOffset":"120s"}},{"text":"GOLDEN-PROMPT"}]}],"generationConfig":{"mediaResolution":"MEDIA_RESOLUTION_LOW"}}';
+    // V4Q: the CONTENTS/parts structure below is byte-identical to the pre-V4Q golden — that is what
+    // this equivalence section exists to protect. generationConfig additionally carries the
+    // SDK-owned output bound, which is the one intended V4Q delta.
+    const expected = '{"contents":[{"role":"user","parts":[{"fileData":{"fileUri":"https://youtu.be/gold"},"videoMetadata":{"startOffset":"60s","endOffset":"120s"}},{"text":"GOLDEN-PROMPT"}]}],"generationConfig":{"mediaResolution":"MEDIA_RESOLUTION_LOW","maxOutputTokens":16384}}';
     assert(JSON.stringify(body) === expected, 'the sliced LOW video request body serializes to the exact pinned golden JSON');
+    assert(JSON.stringify(body.contents) === '[{"role":"user","parts":[{"fileData":{"fileUri":"https://youtu.be/gold"},"videoMetadata":{"startOffset":"60s","endOffset":"120s"}},{"text":"GOLDEN-PROMPT"}]}]',
+      'the media/text part structure is byte-identical to the pre-V4Q golden');
     const whole = buildRequestBody({ url: 'https://youtu.be/gold', prompt: 'GOLDEN-PROMPT', mediaResolution: 'ULTRA' });
-    assert(JSON.stringify(whole) === '{"contents":[{"role":"user","parts":[{"fileData":{"fileUri":"https://youtu.be/gold"}},{"text":"GOLDEN-PROMPT"}]}]}',
-      'the whole-video unknown-resolution body serializes to the exact pinned golden JSON');
+    assert(JSON.stringify(whole) === '{"contents":[{"role":"user","parts":[{"fileData":{"fileUri":"https://youtu.be/gold"}},{"text":"GOLDEN-PROMPT"}]}],"generationConfig":{"maxOutputTokens":16384}}',
+      'the whole-video unknown-resolution body serializes to the exact pinned golden JSON (no mediaResolution key)');
   }
 
   section('GOLDEN video-path equivalence: observable attempt trace through the extracted transport');
@@ -238,14 +267,23 @@ const PAYLOAD = { report: 'SECRET-REPORT-TEXT with facts', question: 'SECRET-QUE
     const calls = []; const sleeps = []; const logs = []; const errs = [];
     const mk = (status, body) => resp(status, body);
     const deps = {
-      fetchImpl: async (url, opts) => { calls.push({ url, body: opts.body }); return [mk(503, U503), mk(503, U503), mk(200, { candidates: [{ content: { parts: [{ text: 'VIDEO OUT' }] }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 1 } })][calls.length - 1]; },
+      fetchImpl: async (url, opts) => { calls.push({ url, body: opts.body }); return [mk(503, U503), mk(503, U503), mk(200, { candidates: [{ content: { parts: [{ text: V4Q_COMPLIANT_WHOLE_VIDEO }] }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 1 } })][calls.length - 1]; },
       sleep: async (ms) => { sleeps.push(ms); },
       random: () => 0.4,
       log: (l) => logs.push(String(l)),
       logError: (l) => errs.push(String(l)),
       env: { GEMINI_API_KEY: 'k' },
+      // V4Q: --diagnostic-dir is mandatory before submission; the deps are injected so this
+      // equivalence test still touches no filesystem. The response is quality-COMPLIANT, so the
+      // observable transport trace below is exactly what it was pre-V4Q.
+      statSync: () => ({ isDirectory: () => true }),
+      existsSync: () => false,
+      writeFileSync: () => { throw new Error('a compliant response must never write a diagnostic'); },
+      renameSync: () => {},
+      unlinkSync: () => {},
     };
-    const code = await runVideoScout(['--url', 'https://youtu.be/gold', '--prompt-text', 'GOLDEN-PROMPT', '--media-resolution', 'LOW'], deps);
+    const diagDir = process.platform === 'win32' ? 'C:\\v4q-golden-run' : '/v4q-golden-run';
+    const code = await runVideoScout(['--url', 'https://youtu.be/gold', '--prompt-text', 'GOLDEN-PROMPT', '--media-resolution', 'LOW', '--diagnostic-dir', diagDir], deps);
     assert(code === 0, 'video 503,503,success run exits 0');
     assert(calls.length === 3 && sleeps.join(',') === '1200,2200', 'attempt trace: exactly [request, sleep 1200, request, sleep 2200, request]');
     assert(calls.every((c) => c.body === calls[0].body), 'every attempt submitted the byte-identical body');

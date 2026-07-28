@@ -183,7 +183,21 @@ Describe 'V4: the recorder refuses to record media into a schema-v3 multi-slice 
         $slices = @([PSCustomObject]@{ StartOffset = 10; EndOffset = 30 }, [PSCustomObject]@{ StartOffset = 60; EndOffset = 90 })
         $v3 = New-VideoScoutLiveManifest -RunId $runId -Url 'https://youtu.be/x' -AppliedMode 'video' -Route 'sdk' `
             -Model 'gemini-2.5-flash-lite' -MediaResolutionRequested 'MEDIUM' -VideoScout $true -SliceRanges $slices
+        # V4Q: new live SDK runs are schema v4; v3 manifests still exist on disk and are never
+        # migrated, so this keeps proving the legacy refusal. The v4 refusal is proved below.
+        $v4 = New-VideoScoutLiveManifest -RunId $runId -Url 'https://youtu.be/x' -AppliedMode 'video' -Route 'sdk' `
+            -Model 'gemini-2.5-flash-lite' -MediaResolutionRequested 'MEDIUM' -VideoScout $true -SliceRanges $slices
+        $v3.schemaVersion = 3
+        $v3.Remove('diagnosticArtifacts')
         $file = New-Srt -Dir $runDir -Name 'My_Video.en.srt'
+
+        It 'a schema-v4 SDK manifest ALSO refuses media recording (v4 owns no media, ever)' {
+            $v4.schemaVersion | Should Be 4
+            @($v4.mediaArtifacts).Count | Should Be 0
+            { Add-VideoScoutMediaArtifact -RunDir $runDir -File $file -Kind 'transcript' -Manifest $v4 } |
+                Should Throw 'not schema version 2'
+            @($v4.mediaArtifacts).Count | Should Be 0
+        }
 
         It 'the fixture is a schema-v3 manifest with an empty inventory' {
             $v3.schemaVersion | Should Be 3

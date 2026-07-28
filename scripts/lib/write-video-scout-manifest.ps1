@@ -173,7 +173,12 @@ function Complete-VideoScoutRunManifest {
         [string]$Reason = $null,
         $Usage = $null,
         [string]$VideoTitle = $null,
-        [string]$ReportFile = $null
+        [string]$ReportFile = $null,
+        # V4Q: the INDEPENDENTLY VERIFIED diagnostic entry (kind/fileName/bytes/sha256) produced by
+        # Get-VideoScoutDiagnosticArtifact. Untyped so the pscustomobject survives the parameter
+        # boundary. $null (the default) leaves diagnosticArtifacts as the empty array every other
+        # terminal path records -- refusals, network failures, and successful runs alike.
+        $DiagnosticArtifact = $null
     )
     if ($null -ne $Manifest.outcome) {
         throw ("Video-scout manifest for '$($Manifest.runId)' already records terminal outcome " +
@@ -197,6 +202,23 @@ function Complete-VideoScoutRunManifest {
     }
     if (-not [string]::IsNullOrWhiteSpace($ReportFile)) {
         $Manifest.reportFile = Get-SanitizedManifestText -Text $ReportFile -MaxLength 300
+    }
+    # V4Q: record the preserved rejected-response evidence. Refused here rather than written into an
+    # unsuitable manifest: a diagnostic only exists on a schema-v4 SDK run that failed, and pairing it
+    # with a report or a completed outcome would be exactly the confusion the invariant forbids. The
+    # shared validator re-checks the same couplings on the way to disk, so this is a fail-fast guard,
+    # not the only enforcement.
+    if ($null -ne $DiagnosticArtifact) {
+        if (-not (Test-ManifestHasKey -M $Manifest -Key 'diagnosticArtifacts')) {
+            throw "Video-scout manifest for '$($Manifest.runId)' has no diagnosticArtifacts field; a diagnostic can only be recorded on a schemaVersion 4 SDK manifest."
+        }
+        if ($Outcome -ne 'error') {
+            throw "Video-scout manifest for '$($Manifest.runId)': a diagnostic artifact may only be recorded with outcome='error' (got '$Outcome')."
+        }
+        if ($null -ne $Manifest.reportFile) {
+            throw "Video-scout manifest for '$($Manifest.runId)': a diagnostic artifact may never accompany a reportFile."
+        }
+        $Manifest.diagnosticArtifacts = @($DiagnosticArtifact)
     }
     # In-memory terminal state is set BEFORE the write: if the write throws, the caller's catch can
     # see the outcome is already decided (no double-finalize) and the write failure propagates

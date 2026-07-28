@@ -156,7 +156,7 @@ Describe 'feed-gemini.ps1 -MaxDurationSeconds ceiling is 14400s / four hours (P1
 
 Describe 'feed-gemini.ps1 offset refusal invariant' {
 
-    # 1a — a lone offset is refused (never "ignored, whole video analyzed").
+    # 1a â€” a lone offset is refused (never "ignored, whole video analyzed").
     It 'throws on a lone -StartOffset (no -EndOffset)' {
         { & $feedGemini -Url $YT -VideoScout -StartOffset 10 } | Should Throw 'Both -StartOffset and -EndOffset are required'
     }
@@ -164,7 +164,7 @@ Describe 'feed-gemini.ps1 offset refusal invariant' {
         { & $feedGemini -Url $YT -VideoScout -EndOffset 20 } | Should Throw 'Both -StartOffset and -EndOffset are required'
     }
 
-    # 1b — end must be strictly after start.
+    # 1b â€” end must be strictly after start.
     It 'throws when -EndOffset < -StartOffset' {
         { & $feedGemini -Url $YT -VideoScout -StartOffset 100 -EndOffset 50 } | Should Throw 'must be strictly greater'
     }
@@ -172,7 +172,7 @@ Describe 'feed-gemini.ps1 offset refusal invariant' {
         { & $feedGemini -Url $YT -VideoScout -StartOffset 100 -EndOffset 100 } | Should Throw 'must be strictly greater'
     }
 
-    # 1c — route backstop: offsets on a non-SDK (download/CLI) route are refused.
+    # 1c â€” route backstop: offsets on a non-SDK (download/CLI) route are refused.
     It 'throws when offsets are given but the run routes to CLI (transcript mode)' {
         { & $feedGemini -Url $YT -VideoScout -Mode transcript -StartOffset 10 -EndOffset 20 } | Should Throw 'only works on the SDK/YouTube route'
     }
@@ -238,8 +238,9 @@ Describe 'feed-gemini.ps1 V5a per-run manifest (end-to-end, stubbed probe/node -
         $r.Threw | Should Be $true
         $r.NodeReached | Should Be $false
         $m = Get-E2ERunManifest -OutDir $r.OutDir
-        $m.schemaVersion | Should Be 2                       # V5c1: live runs are schema v2
+        $m.schemaVersion | Should Be 4                       # V4Q: live SDK runs are schema v4
         @($m.mediaArtifacts).Count | Should Be 0             # SDK route records no local media
+        @($m.diagnosticArtifacts).Count | Should Be 0        # a guard refusal preserves no diagnostic
         $m.route | Should Be 'sdk'
         $m.videoScout | Should Be $true
         $m.outcome | Should Be 'refused'
@@ -357,7 +358,18 @@ function Invoke-SdkSliceRun {
         [switch]$EmptyProbe,
         # V4R: make the shadow node exit NONZERO so the error-outcome manifest path can be proven.
         # Default 0 keeps every existing accepted-run assertion byte-for-byte unchanged.
-        [int]$NodeExit = 0
+        [int]$NodeExit = 0,
+        # V4Q: simulate a LOCAL quality rejection exactly as the real SDK performs it -- preserve the
+        # rejected body as the fixed leaf inside the supplied --diagnostic-dir, emit the usage line
+        # (cost truth survives) plus the ONE machine-readable quality line, and exit non-zero.
+        [switch]$QualityReject,
+        [string]$QualityCode = 'scope-mismatch',
+        [string]$RejectedBody = 'SECRET-REJECTED-PROVIDER-BODY that must never reach a log or a report',
+        # Make the stub report an identity that does NOT match what it wrote, to prove the parent
+        # process independently re-derives the artifact identity instead of trusting the child.
+        [switch]$LieAboutIdentity,
+        # Emit the quality line but write NO diagnostic, to prove the verification-failure path.
+        [switch]$SkipDiagnosticWrite
     )
     Remove-Item -LiteralPath $e2eMarker -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $v4Argv -Force -ErrorAction SilentlyContinue
@@ -366,6 +378,11 @@ function Invoke-SdkSliceRun {
     $global:E2EMarkerPath = $e2eMarker
     $global:E2EArgv = $v4Argv
     $global:E2ENodeExit = $NodeExit
+    $global:E2EQualityReject = [bool]$QualityReject
+    $global:E2EQualityCode = $QualityCode
+    $global:E2ERejectedBody = $RejectedBody
+    $global:E2ELieAboutIdentity = [bool]$LieAboutIdentity
+    $global:E2ESkipDiagnosticWrite = [bool]$SkipDiagnosticWrite
     function global:Start-Job   { [PSCustomObject]@{ Id = 1 } }
     function global:Wait-Job    { $true }
     function global:Receive-Job { if ($null -ne $global:E2EReceive) { $global:E2EReceive } }
@@ -376,6 +393,28 @@ function Invoke-SdkSliceRun {
         # Record argv EXACTLY as PowerShell bound it, one element per line, so a test can prove the
         # slice JSON arrived as ONE discrete argument (never split, never a shell string).
         Set-Content -LiteralPath $global:E2EArgv -Value ($args -join "`n") -Encoding UTF8
+        # V4Q quality rejection: the response ARRIVED and was billed, then failed the local gate.
+        # Usage still prints (cost truth), the body is preserved as the fixed leaf, and the one
+        # machine-readable quality line reports the artifact identity.
+        if ($global:E2EQualityReject) {
+            '[video-scout usage] prompt=22406 (video=18410 audio=2240 text=1756) output=3122 total=25528 model=stub mediaRes=MEDIUM slices=2'
+            $dd = $null
+            for ($i = 0; $i -lt $args.Count; $i++) { if ($args[$i] -eq '--diagnostic-dir') { $dd = [string]$args[$i + 1] } }
+            if ($dd -and -not $global:E2ESkipDiagnosticWrite) {
+                $enc = New-Object System.Text.UTF8Encoding($false)
+                $target = Join-Path $dd 'rejected-response.txt'
+                [System.IO.File]::WriteAllText($target, $global:E2ERejectedBody, $enc)
+                $bytes = ([System.IO.File]::ReadAllBytes($target)).Length
+                $hash = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash.ToLower()
+                if ($global:E2ELieAboutIdentity) { $bytes = 999999; $hash = 'f' * 64 }
+                "[video-scout quality] rejected code=$($global:E2EQualityCode) file=rejected-response.txt bytes=$bytes sha256=$hash"
+            }
+            else {
+                '[video-scout quality] rejected code=diagnostic-write-failed'
+            }
+            $global:LASTEXITCODE = 1
+            return
+        }
         # A nonzero run emits NO usage line -- exactly like the real SDK refusing or failing.
         if ($global:E2ENodeExit -eq 0) {
             '[video-scout usage] prompt=100 (video=80 audio=10 text=10) output=50 total=150 model=stub mediaRes=MEDIUM'
@@ -400,7 +439,9 @@ function Invoke-SdkSliceRun {
             if (-not $OmitSlices) { $p['SliceRangesJson'] = $SliceRangesJson }
             if ($MaxDurationSeconds -gt 0) { $p['MaxDurationSeconds'] = $MaxDurationSeconds }
             if ($WithScalarRange) { $p['StartOffset'] = 5; $p['EndOffset'] = 9 }
-            & $feedGemini @p 2>$null | Out-Null
+            # V4Q: CAPTURE the run's own output (stdout + stderr) instead of discarding it, so a test
+            # can prove a rejected provider body never reaches the pane or the Logs tab.
+            $captured = (& $feedGemini @p 2>&1 | Out-String)
         }
         catch { $threw = $true; $msg = [string]$_.Exception.Message }
     }
@@ -408,6 +449,7 @@ function Invoke-SdkSliceRun {
         $env:PATH = $saved
         Remove-Item Function:\Start-Job, Function:\Wait-Job, Function:\Receive-Job, Function:\Stop-Job, Function:\Remove-Job, Function:\node -ErrorAction SilentlyContinue
         Remove-Item Variable:\E2EReceive, Variable:\E2EMarkerPath, Variable:\E2EArgv, Variable:\E2ENodeExit -ErrorAction SilentlyContinue
+        Remove-Item Variable:\E2EQualityReject, Variable:\E2EQualityCode, Variable:\E2ERejectedBody, Variable:\E2ELieAboutIdentity, Variable:\E2ESkipDiagnosticWrite -ErrorAction SilentlyContinue
     }
     $argv = if (Test-Path -LiteralPath $v4Argv) { @(Get-Content -LiteralPath $v4Argv -Encoding UTF8) } else { @() }
     return [PSCustomObject]@{
@@ -415,6 +457,7 @@ function Invoke-SdkSliceRun {
         NodeReached = (Test-Path -LiteralPath $e2eMarker)
         OutDir = $outDir; Argv = $argv
         ResolvedYtDlp = $resolvedYtDlp
+        Output = [string]$captured
     }
 }
 
@@ -453,9 +496,9 @@ Describe 'V4 feed-gemini: an accepted multi-slice run reaches node with canonica
         ($r.Argv -contains '--start-offset') | Should Be $false
         ($r.Argv -contains '--end-offset') | Should Be $false
     }
-    It 'writes a schema-v3 manifest recording the REQUESTED slice set with null scalar offsets' {
+    It 'writes a schema-v4 manifest recording the REQUESTED slice set with null scalar offsets' {
         $m = Get-E2ERunManifest -OutDir $r.OutDir
-        $m.schemaVersion | Should Be 3
+        $m.schemaVersion | Should Be 4
         @($m.requestedSliceRanges).Count | Should Be 2
         @($m.requestedSliceRanges)[0].startOffsetSeconds | Should Be 10
         @($m.requestedSliceRanges)[1].endOffsetSeconds | Should Be 90
@@ -564,11 +607,11 @@ Describe 'V4 feed-gemini: existing whole-video / single-slice behavior is unchan
         $r.NodeReached | Should Be $true
         ($r.Argv -contains '--slice-ranges-json') | Should Be $false
     }
-    It 'and still writes a schema-v2 manifest with no requestedSliceRanges key' {
+    It 'and still writes a schema-v4 manifest whose slice set is NULL (scalar offsets stay authoritative)' {
         $r = Invoke-SdkSliceRun -OmitSlices
         $m = Get-E2ERunManifest -OutDir $r.OutDir
-        $m.schemaVersion | Should Be 2
-        ($m.PSObject.Properties.Name -contains 'requestedSliceRanges') | Should Be $false
+        $m.schemaVersion | Should Be 4
+        $m.requestedSliceRanges | Should BeNullOrEmpty
     }
 }
 
@@ -605,10 +648,12 @@ Describe 'V4R feed-gemini: a nonzero SDK exit is recorded truthfully, never blam
         $m.reason.Length | Should BeLessThan 500
         ($m.reason -match 'startOffset') | Should Be $false
     }
-    It 'still records the requested schema-v3 scope and an empty media inventory' {
-        $m.schemaVersion | Should Be 3
+    It 'still records the requested schema-v4 scope and an empty media inventory' {
+        $m.schemaVersion | Should Be 4
         @($m.requestedSliceRanges).Count | Should Be 2
         @($m.mediaArtifacts).Count | Should Be 0
+        # A NON-quality nonzero exit preserves no diagnostic: there was no rejected response.
+        @($m.diagnosticArtifacts).Count | Should Be 0
     }
 }
 
@@ -633,6 +678,146 @@ Describe 'V4R feed-gemini: the V4 lifecycle resolves the TEST stub yt-dlp, never
         (Test-DirHasYtDlp -Dir $e2eDir) | Should Be $true
         (Test-DirHasYtDlp -Dir (Join-Path $e2eDir 'no-such-dir')) | Should Be $false
         (Test-DirHasYtDlp -Dir '') | Should Be $false
+    }
+}
+
+. (Join-Path $here 'lib\video-scout-manifest-schema.ps1')
+
+# --- V4Q: the LOCAL quality-rejection lifecycle ---------------------------------------------------
+# The response arrived and was paid for, then failed the deterministic gate. This block proves the
+# PowerShell side of the invariant end to end: the body is preserved as evidence, the run is a
+# terminal error with NO report, usage survives, the diagnostic is recorded ONLY after this process
+# independently re-derives its identity, and the rejected content never reaches a log or a report.
+Describe 'V4Q feed-gemini: a quality-rejected response is preserved as evidence, never as output' {
+    $r = Invoke-SdkSliceRun -SliceRangesJson $V4Good -QualityReject
+    $m = Get-E2ERunManifest -OutDir $r.OutDir
+    $runDir = (Get-ChildItem -LiteralPath $r.OutDir -Directory | Select-Object -First 1).FullName
+
+    It 'the SDK was reached and the run ends as a terminal ERROR' {
+        $r.NodeReached | Should Be $true
+        $m.outcome | Should Be 'error'
+        $m.finishedAt | Should Not BeNullOrEmpty
+    }
+    It 'NO report is persisted (a rejected response is never a report)' {
+        $m.reportFile | Should BeNullOrEmpty
+        (Test-Path -LiteralPath (Join-Path $runDir 'analysis-output.txt')) | Should Be $false
+    }
+    It 'the reason carries the allowlisted [quality:<code>] marker and no provider text' {
+        $m.reason | Should Match '^\[quality:scope-mismatch\]'
+        ($m.reason -match 'SECRET-REJECTED-PROVIDER-BODY') | Should Be $false
+        $m.reason.Length | Should BeLessThan 500
+    }
+    It 'USAGE is preserved (the rejected run still cost money and the manifest says so)' {
+        $m.usage | Should Not BeNullOrEmpty
+        $m.usage.videoTokens | Should Be 18410
+        $m.usage.audioTokens | Should Be 2240
+        $m.usage.totalTokens | Should Be 25528
+    }
+    It 'the diagnostic is preserved on disk as the fixed leaf, a DIRECT child of the run directory' {
+        $diag = Join-Path $runDir 'rejected-response.txt'
+        (Test-Path -LiteralPath $diag -PathType Leaf) | Should Be $true
+        (Get-Content -LiteralPath $diag -Raw) | Should Match 'SECRET-REJECTED-PROVIDER-BODY'
+    }
+    It 'the manifest records EXACTLY one diagnostic entry with an independently verified identity' {
+        @($m.diagnosticArtifacts).Count | Should Be 1
+        $e = @($m.diagnosticArtifacts)[0]
+        $e.kind | Should Be 'quality-rejected-response'
+        $e.fileName | Should Be 'rejected-response.txt'
+        $diag = Join-Path $runDir 'rejected-response.txt'
+        $e.bytes | Should Be ([System.IO.File]::ReadAllBytes($diag)).Length
+        $e.sha256 | Should Be ((Get-FileHash -LiteralPath $diag -Algorithm SHA256).Hash.ToLower())
+    }
+    It 'the manifest is schema v4 with an empty media inventory (a diagnostic is NOT media)' {
+        $m.schemaVersion | Should Be 4
+        @($m.mediaArtifacts).Count | Should Be 0
+    }
+    It 'the whole manifest leaks no rejected provider text' {
+        ((Get-Content -LiteralPath (Join-Path $runDir 'manifest.json') -Raw) -match 'SECRET-REJECTED-PROVIDER-BODY') | Should Be $false
+    }
+    It 'the rejected body never appears in the captured run output (content-free Logs)' {
+        ($r.Output -match 'SECRET-REJECTED-PROVIDER-BODY') | Should Be $false
+    }
+    It 'the manifest still validates against the shared schema gate' {
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
+    }
+}
+
+Describe 'V4Q feed-gemini: the parent NEVER trusts the child-reported artifact identity' {
+    $r = Invoke-SdkSliceRun -SliceRangesJson $V4Good -QualityReject -LieAboutIdentity
+    $m = Get-E2ERunManifest -OutDir $r.OutDir
+
+    It 'a mismatched identity claim degrades to diagnostic-write-failed rather than being recorded' {
+        $m.outcome | Should Be 'error'
+        $m.reason | Should Match '^\[quality:diagnostic-write-failed\]'
+    }
+    It 'NO unverified diagnostic metadata is published' {
+        @($m.diagnosticArtifacts).Count | Should Be 0
+    }
+    It 'usage is still preserved and no report is written' {
+        $m.usage.totalTokens | Should Be 25528
+        $m.reportFile | Should BeNullOrEmpty
+    }
+    It 'the manifest still validates' {
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
+    }
+}
+
+Describe 'V4Q feed-gemini: a diagnostic that was never written is recorded honestly' {
+    $r = Invoke-SdkSliceRun -SliceRangesJson $V4Good -QualityReject -SkipDiagnosticWrite
+    $m = Get-E2ERunManifest -OutDir $r.OutDir
+
+    It 'records the diagnostic-write-failed class with an EMPTY diagnostic array' {
+        $m.outcome | Should Be 'error'
+        $m.reason | Should Match '^\[quality:diagnostic-write-failed\]'
+        @($m.diagnosticArtifacts).Count | Should Be 0
+        $m.reportFile | Should BeNullOrEmpty
+    }
+    It 'the manifest still validates' {
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
+    }
+}
+
+Describe 'V4Q feed-gemini: --diagnostic-dir is always supplied, and is the run directory itself' {
+    $r = Invoke-SdkSliceRun -SliceRangesJson $V4Good
+    $argv = @(Get-Content -LiteralPath $v4Argv -Encoding UTF8)
+    $runDir = (Get-ChildItem -LiteralPath $r.OutDir -Directory | Select-Object -First 1).FullName
+
+    It 'the SDK receives --diagnostic-dir exactly once' {
+        (@($argv | Where-Object { $_ -eq '--diagnostic-dir' })).Count | Should Be 1
+    }
+    It 'its value is the already-created run directory (never a caller-supplied path)' {
+        $i = [array]::IndexOf($argv, '--diagnostic-dir')
+        $argv[$i + 1] | Should Be $runDir
+        (Test-Path -LiteralPath $argv[$i + 1] -PathType Container) | Should Be $true
+    }
+    It 'an ACCEPTED run leaves no diagnostic behind' {
+        (Test-Path -LiteralPath (Join-Path $runDir 'rejected-response.txt')) | Should Be $false
+        $m = Get-E2ERunManifest -OutDir $r.OutDir
+        @($m.diagnosticArtifacts).Count | Should Be 0
+    }
+}
+
+# --- V4Q: omitted-model resolution (direct PowerShell callers only) --------------------------------
+Describe 'V4Q feed-gemini: an omitted -Model resolves by scope; an explicit -Model always wins' {
+    It 'omitted + multipart slices -> gemini-2.5-pro' {
+        $r = Invoke-SdkSliceRun -SliceRangesJson $V4Good
+        (Get-E2ERunManifest -OutDir $r.OutDir).model | Should Be 'gemini-2.5-pro'
+        $argv = @(Get-Content -LiteralPath $v4Argv -Encoding UTF8)
+        $argv[([array]::IndexOf($argv, '--model')) + 1] | Should Be 'gemini-2.5-pro'
+    }
+    It 'omitted + a scalar range -> gemini-2.5-pro' {
+        $r = Invoke-SdkSliceRun -OmitSlices -WithScalarRange
+        (Get-E2ERunManifest -OutDir $r.OutDir).model | Should Be 'gemini-2.5-pro'
+    }
+    It 'omitted + whole video -> the economy default is retained' {
+        $r = Invoke-SdkSliceRun -OmitSlices
+        (Get-E2ERunManifest -OutDir $r.OutDir).model | Should Be 'gemini-2.5-flash-lite'
+    }
+    It 'the manifest, the SDK argv, and the run all agree on ONE resolved model' {
+        $r = Invoke-SdkSliceRun -SliceRangesJson $V4Good
+        $m = Get-E2ERunManifest -OutDir $r.OutDir
+        $argv = @(Get-Content -LiteralPath $v4Argv -Encoding UTF8)
+        $argv[([array]::IndexOf($argv, '--model')) + 1] | Should Be $m.model
     }
 }
 

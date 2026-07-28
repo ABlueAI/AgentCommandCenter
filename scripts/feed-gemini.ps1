@@ -178,6 +178,35 @@ $ProbeTimeoutSec = 60   # (?) hard cap on the metadata probe; a hung/slow probe 
 # applied -- bare -VideoScout defaults $Mode to 'video' below, and the manifest must not claim the
 # caller asked for what a default chose. $null = -Mode was not passed.
 $RequestedModeForManifest = if ($PSBoundParameters.ContainsKey('Mode')) { $Mode } else { $null }
+
+# --- V4Q effective model resolution --------------------------------------------------------------
+# An EXPLICIT -Model always wins exactly as given. With -Model omitted, a BOUNDED SLICE SCOPE
+# (scalar range or multipart set) defaults to Pro; everything else -- whole video, transcript,
+# audio -- keeps the economy default. $haveStart/$haveSlices/$sliceSet were all resolved above in
+# the free-validation block, so this runs BEFORE the launch-config log line, the run directory, the
+# manifest, the endpoint, the request body, and the usage line: all of them read one resolved value
+# and structurally cannot disagree.
+#
+# Route safety: slices/offsets already require -VideoScout (refused above) and are refused again on
+# any non-SDK route at the backstop below, BEFORE anything is downloaded or submitted. So this can
+# never select Pro for a CLI download path.
+#
+# The app never relies on this default: app/video-scout-args.js serializes every validated model
+# selection explicitly, including gemini-2.5-flash-lite, so an explicit Lite choice can never be
+# re-read here as "omitted" and silently upgraded to Pro. Omitted-model resolution exists for direct
+# PowerShell/SDK callers only.
+$ModelWasExplicit = $PSBoundParameters.ContainsKey('Model')
+$V4QEffectiveSliceCount = if ($haveSlices) { $sliceSet.Count } elseif ($haveStart) { 1 } else { 0 }
+if (-not $ModelWasExplicit -and $V4QEffectiveSliceCount -ge 1) {
+    $Model = 'gemini-2.5-pro'
+    Write-Host "Model policy: bounded sliced video defaults to $Model (no -Model was supplied)." -ForegroundColor DarkCyan
+}
+
+# V4Q: the independent PowerShell-side verification of a rejected-response diagnostic, plus the
+# PowerShell copies of the diagnostic bounds and the closed quality-failure-code allowlist. The
+# parent process never trusts node's self-reported artifact metadata.
+. (Join-Path $PSScriptRoot 'lib\get-video-scout-diagnostic-artifact.ps1')
+
 $launchConfig = Resolve-GeminiLaunchConfig -Model $Model -MediaResolution $MediaResolution
 Write-Host $launchConfig.LogLine -ForegroundColor DarkCyan
 Write-Warning $launchConfig.Warning
@@ -312,6 +341,13 @@ if ($VideoScout) {
                 # Bounded metadata only -- the serialized payload (canonical OR escaped) is never logged.
                 Write-Host "Multi-slice analysis: $($sliceSet.Count) slices, aggregate $($sliceSet.AggregateSeconds)s (ONE request with $($sliceSet.Count) media parts)" -ForegroundColor DarkCyan
             }
+            # V4Q: the MANDATORY diagnostic directory, supplied by THIS process as the already-created
+            # run directory. The app user cannot supply or override it -- it is not a passthrough of
+            # any caller value. node refuses BEFORE submitting if it is missing or not an existing
+            # absolute directory, so a run that could not preserve a rejected response never spends
+            # money discovering that. Escaped at the same PS 5.1 -> node boundary as every other
+            # value-bearing argument (a run directory can contain spaces).
+            $sdkArgs += @('--diagnostic-dir', (ConvertTo-NodeCliArg -Arg $sdkRun.RunDir))
             # V5b1 bounded streaming capture: every stdout line still streams live to the pane (the
             # trailing `$line` re-emits it), while the bounded collector retains at most the report
             # limit -- NOT the whole stream (the old Tee-Object -Variable accumulated it all). The one
@@ -319,6 +355,10 @@ if ($VideoScout) {
             # so usage parsing no longer needs the complete provider stream.
             $reportCollector = New-BoundedReportCollector
             $usageLine = $null
+            # V4Q: the ONE machine-readable quality-gate line, captured bounded (one line) exactly
+            # like the usage line. Its presence is what distinguishes a locally REJECTED response
+            # from every other nonzero exit (refusal, network, exhausted retry).
+            $qualityLine = $null
             # V5b1 content acceptance (FAIL 2): scope the native-stdout DECODE to UTF-8 (no BOM) ONLY
             # around this capture so UTF-8 provider output is not mangled through the PTY's legacy OEM
             # code page, then restore the previous value in finally (covers throws AND nonzero exits;
@@ -330,6 +370,7 @@ if ($VideoScout) {
                     $line = [string]$_
                     Add-BoundedReportLine -Collector $reportCollector -Line $line
                     if ($line -match '\[video-scout usage\]') { $usageLine = $line }
+                    if ($line -match '\[video-scout quality\]') { $qualityLine = $line }
                     $line
                 }
                 $sdkExit = $LASTEXITCODE
@@ -337,7 +378,47 @@ if ($VideoScout) {
             finally {
                 [Console]::OutputEncoding = $prevOutputEncoding
             }
-            if ($sdkExit -ne 0) {
+            # V4Q: a LOCAL quality rejection is a distinct terminal class from every other nonzero
+            # exit. The response arrived and was paid for, was found non-compliant by the
+            # deterministic gate, and was preserved as evidence -- it is never a report, never enters
+            # the Library, and never authorizes a retry (no repair, fallback, or continuation exists
+            # anywhere on this path). The parent process re-derives the artifact's identity itself
+            # rather than trusting node's self-reported bytes/hash.
+            $qualityVerdict = ConvertFrom-VideoScoutQualityLine -Line $qualityLine
+            if ($sdkExit -ne 0 -and $null -ne $qualityVerdict) {
+                $qualityUsage = ConvertFrom-VideoScoutUsageLine -Lines $usageLine
+                $qualityCode = $qualityVerdict.Code
+                $diagnosticEntry = $null
+                if ($qualityCode -ne 'diagnostic-write-failed') {
+                    try {
+                        # Independent verification: containment, fixed leaf, ordinary file, no reparse
+                        # point, strict UTF-8, byte count, decoded characters, and our OWN SHA-256.
+                        $verified = Get-VideoScoutDiagnosticArtifact -RunDir $sdkRun.RunDir
+                        if ([int64]$verified.bytes -ne [int64]$qualityVerdict.Bytes -or $verified.sha256 -cne $qualityVerdict.Sha256) {
+                            throw "the preserved artifact does not match the identity the SDK reported (independently measured $($verified.bytes) bytes / $($verified.sha256))."
+                        }
+                        $diagnosticEntry = $verified
+                    }
+                    catch {
+                        # Visible, never silent: we could not stand behind the artifact, so we record
+                        # the write-failure class and leave diagnosticArtifacts EMPTY rather than
+                        # publishing metadata we did not verify. The provider is never re-called.
+                        Write-Warning "Video-scout quality rejection recorded, but the preserved diagnostic could not be verified: $($_.Exception.Message)"
+                        $qualityCode = 'diagnostic-write-failed'
+                        $diagnosticEntry = $null
+                    }
+                }
+                $qualityReason = if ($null -ne $diagnosticEntry) {
+                    "[quality:$qualityCode] The provider response failed the local Video Scout quality gate and was NOT saved as a report. The exact response is preserved for inspection as $($diagnosticEntry.fileName) in this run directory."
+                }
+                else {
+                    "[quality:$qualityCode] The provider response failed the local Video Scout quality gate and was NOT saved as a report; the response could not be preserved as a diagnostic."
+                }
+                # Usage is preserved either way so the manifest records what the rejected run cost.
+                Complete-VideoScoutRunManifest -RunDir $sdkRun.RunDir -Manifest $sdkManifest -Outcome 'error' `
+                    -Reason $qualityReason -Usage $qualityUsage -DiagnosticArtifact $diagnosticEntry
+            }
+            elseif ($sdkExit -ne 0) {
                 # Nonzero exit (incl. exhausted K5 retry, empty-response, network): NO report file,
                 # reportFile stays null -- partial streamed output is never a saved report.
                 # V4R: attribution-neutral on purpose. A nonzero exit ALSO covers the SDK refusing

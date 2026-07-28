@@ -419,3 +419,111 @@ Describe 'V4: Library projection of schema-v3 multi-slice runs' {
         $e1.aggregateSliceSeconds | Should Be 0
     }
 }
+
+Describe 'V4Q: the Library NEVER exposes a rejected-response diagnostic' {
+    # A diagnostic is preserved EVIDENCE, not output. These tests are the structural proof that it
+    # cannot reach a user through the Library: not as a report, not as a projected field, not as
+    # readable text, and not as an "available" run.
+    function New-V4RejectedManifest {
+        param([string]$Code = 'scope-mismatch')
+        $m = New-VideoScoutLiveManifest -RunId 'run-20260728-090000-000-6666-abcdef06' -Url 'https://youtu.be/x' `
+            -AppliedMode 'video' -Route 'sdk' -Model 'gemini-2.5-pro' -MediaResolutionRequested 'MEDIUM' `
+            -VideoScout $true -StartOffset 60 -EndOffset 75
+        $m.outcome = 'error'
+        $m.finishedAt = '2026-07-28T09:00:01.000Z'
+        $m.reason = "[quality:$Code] The provider response failed the local Video Scout quality gate and was NOT saved as a report."
+        $m.diagnosticArtifacts = @([ordered]@{
+                kind     = 'quality-rejected-response'
+                fileName = 'rejected-response.txt'
+                sha256   = 'd1e8a70b5ccab1dc2f56bbf7e99f064a660c08e361a35751b9c483c88943d082'
+                bytes    = 4242
+            })
+        $m
+    }
+    function New-V4Read { ((New-V4RejectedManifest) | ConvertTo-Json -Depth 8) | ConvertFrom-Json }
+
+    It 'the fixture is a valid schema-v4 rejected run (error, no report, one diagnostic)' {
+        $m = New-V4RejectedManifest
+        $m.schemaVersion | Should Be 4
+        $m.outcome | Should Be 'error'
+        $m.reportFile | Should BeNullOrEmpty
+        @($m.diagnosticArtifacts).Count | Should Be 1
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
+    }
+
+    It 'report status stays INCOMPLETE (availability still keys off outcome + reportFile only)' {
+        (Get-VideoScoutReportStatusFromManifest -Manifest (New-V4Read)) | Should Be 'incomplete'
+    }
+
+    It 'the projected entry exposes NO diagnostic field, filename, hash, or byte count' {
+        $e = ConvertTo-VideoScoutLibraryEntry -RunId 'r' -Manifest (New-V4Read)
+        $names = @($e.PSObject.Properties.Name)
+        ($names | Where-Object { $_ -match 'diagnostic' }).Count | Should Be 0
+        $blob = ($e | ConvertTo-Json -Depth 8)
+        ($blob -match 'rejected-response') | Should Be $false
+        ($blob -match 'd1e8a70b5ccab1dc2f56bbf7e99f064a660c08e361a35751b9c483c88943d082') | Should Be $false
+        ($blob -match '4242') | Should Be $false
+        ($blob -match 'quality-rejected-response') | Should Be $false
+    }
+
+    It 'the projected entry claims no media (a diagnostic is not media)' {
+        (ConvertTo-VideoScoutLibraryEntry -RunId 'r' -Manifest (New-V4Read)).mediaCount | Should Be 0
+    }
+
+    It 'LIST projects the run as an error with no report and leaks no diagnostic identity' {
+        $root = New-TempRoot
+        try {
+            $runId = 'run-20260728-090000-000-6666-abcdef06'
+            $runDir = New-RunDir -Root $root -RunId $runId
+            Write-ManifestJson -RunDir $runDir -Obj (New-V4RejectedManifest)
+            # The preserved evidence really is on disk next to the manifest -- and still must not surface.
+            $enc = New-Object System.Text.UTF8Encoding($false)
+            [System.IO.File]::WriteAllText((Join-Path $runDir 'rejected-response.txt'), 'SECRET-REJECTED-BODY', $enc)
+
+            $list = Invoke-VideoScoutLibraryList -RunRoot $root
+            $list.ok | Should Be $true
+            @($list.entries).Count | Should Be 1
+            $entry = @($list.entries)[0]
+            $entry.outcome | Should Be 'error'
+            $entry.reportStatus | Should Be 'incomplete'
+            $blob = ($list | ConvertTo-Json -Depth 10)
+            ($blob -match 'SECRET-REJECTED-BODY') | Should Be $false
+            ($blob -match 'rejected-response') | Should Be $false
+            ($blob -match 'd1e8a70b5ccab1dc2f56bbf7e99f064a660c08e361a35751b9c483c88943d082') | Should Be $false
+        }
+        finally { if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue } }
+    }
+
+    It 'READ returns incomplete and NEVER the diagnostic text, even though it sits in the run dir' {
+        $root = New-TempRoot
+        try {
+            $runId = 'run-20260728-090000-000-6666-abcdef06'
+            $runDir = New-RunDir -Root $root -RunId $runId
+            Write-ManifestJson -RunDir $runDir -Obj (New-V4RejectedManifest)
+            $enc = New-Object System.Text.UTF8Encoding($false)
+            [System.IO.File]::WriteAllText((Join-Path $runDir 'rejected-response.txt'), 'SECRET-REJECTED-BODY', $enc)
+
+            $read = Invoke-VideoScoutLibraryRead -RunRoot $root -RunId $runId
+            $read.ok | Should Be $true
+            $read.status | Should Be 'incomplete'
+            $read.reportStatus | Should Be 'incomplete'
+            $read.outcome | Should Be 'error'
+            $blob = ($read | ConvertTo-Json -Depth 10)
+            ($blob -match 'SECRET-REJECTED-BODY') | Should Be $false
+            ($blob -match 'rejected-response') | Should Be $false
+        }
+        finally { if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue } }
+    }
+
+    It 'a diagnostic can never be promoted into reportFile by the schema (defence in depth)' {
+        $m = New-V4RejectedManifest
+        $m.reportFile = 'rejected-response.txt'
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw
+    }
+
+    It 'the Library core source never reads or projects the diagnostic file' {
+        $src = Get-Content -LiteralPath (Join-Path $here 'video-scout-library-core.ps1') -Raw
+        ($src -match 'rejected-response') | Should Be $false
+        ($src -match 'diagnosticArtifacts') | Should Be $false
+    }
+}

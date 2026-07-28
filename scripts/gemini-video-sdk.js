@@ -44,6 +44,8 @@
 // uncertainty is exactly why this file is a Full-class review surface.
 
 const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 
 const MEDIA_RESOLUTION_MAP = {
   LOW: 'MEDIA_RESOLUTION_LOW',
@@ -62,6 +64,23 @@ const MAX_SLICES = 8;                       // deliberately below Gemini's docum
 const AGGREGATE_SLICE_CAP_SECONDS = 1800;   // fixed; no flag or env var can raise it
 const MAX_SLICE_RANGES_JSON_UNITS = 2048;   // bounds the serialized control argument ONLY
 const MAX_OFFSET_SECONDS = 86400;
+
+// --- V4Q generation-policy constants (SDK-OWNED; see the packet's "SDK-owned generation policy").
+// Nothing under scripts/ may import the renderer policy module: the renderer's copy governs the
+// modal's RECOMMENDATION only, and this file is a runnable entry point that must never trust that
+// PowerShell or main resolved the model first. --------------------------------------------------
+const PRO_MODEL = 'gemini-2.5-pro';
+const BASE_MAX_OUTPUT_TOKENS = 16384;       // slice counts 0/1/2 all land here
+const PER_EXTRA_SLICE_OUTPUT_TOKENS = 2048; // each slice above 2 adds this much visible headroom
+const SLICED_PRO_THINKING_BUDGET = 8192;    // ONLY for gemini-2.5-pro with >=1 slice
+
+// --- V4Q diagnostic bounds. Defined independently here and in PowerShell
+// (scripts/lib/get-video-scout-diagnostic-artifact.ps1); tests assert the two agree. They
+// intentionally match the current Library report bounds but are an independent V4Q contract, so a
+// later Library change cannot silently move the diagnostic ceiling. -----------------------------
+const MAX_DIAGNOSTIC_BYTES = 4 * 1024 * 1024;
+const MAX_DIAGNOSTIC_CHARS = 1000000;
+const DIAGNOSTIC_FILENAME = 'rejected-response.txt';
 
 // --- K5 retry policy constants (documented bounds, asserted in tests) ------------------------
 const RETRY_MAX_ATTEMPTS = 3;          // total submitted attempts, structural for-loop cap
@@ -88,6 +107,10 @@ function parseArgs(argv) {
     // Same seen/value split as the offsets: a trailing valueless flag must be refusable, never
     // silently treated as "not passed" (which would fall through to a whole-video run).
     else if (a === '--slice-ranges-json') { out.sliceRangesJsonSeen = true; out.sliceRangesJson = argv[++i]; }
+    // V4Q: mandatory discrete diagnostic directory. Same seen/value split as the offsets so a
+    // trailing valueless flag is refusable rather than silently absent — this argument gates a PAID
+    // submission, so "not supplied" and "supplied empty" must never collapse into each other.
+    else if (a === '--diagnostic-dir') { out.diagnosticDirSeen = true; out.diagnosticDir = argv[++i]; }
   }
   return out;
 }
@@ -173,20 +196,73 @@ function resolveSliceRanges(args) {
   return { multi: true, ranges, aggregateSeconds };
 }
 
-// V4: the deterministic, repository-owned multi-slice scope instruction, exported for tests.
-// Appended to the RESOLVED prompt (default brief, explicit prompt, or focus-composed text) at this
-// one site so both production entries (feed-gemini.ps1 and a direct node invocation) compose it
-// identically. Content is numbers + fixed text only — no user text, no transport/tool-call detail.
-// It AUGMENTS the existing brief: the required report structure (## 1. TL;DR first, V2 section
-// TL;DRs, V3a focus) is explicitly preserved, and each slice must stay distinguishable.
-function buildSliceScopeInstruction(ranges) {
-  const lines = ranges.map((r, i) => `- Slice ${i + 1}: ${r.startOffset}s to ${r.endOffset}s (${r.endOffset - r.startOffset}s)`);
+// The exact per-slice heading the report must echo, and the machine-checked marker lines. These
+// constants are the SINGLE source of truth shared by the generated scope instruction and the
+// deterministic validator, so the prompt can never ask for one spelling while the gate demands
+// another. Changing a spelling here changes both sides at once (and its contract test fails loudly).
+const AUTHORIZED_SCOPE_LINE = (count, aggregateSeconds) =>
+  `**Authorized scope:** ${count} slice(s), aggregate ${aggregateSeconds}s`;
+const SLICE_HEADING = (n, r) =>
+  `### Slice ${n}: [${r.startOffset}s,${r.endOffset}s) — ${r.endOffset - r.startOffset}s authorized`;
+const UNDETERMINABLE_DURATION_LINE = '**Source duration:** UNDETERMINABLE FROM AUTHORIZED SLICES';
+const NO_SYNTHETIC_EVIDENCE_LINE = '**Synthetic-media assessment:** NO OBSERVABLE EVIDENCE';
+const AUDIO_STATUSES = ['SPEECH', 'MUSIC', 'AMBIENCE', 'SILENCE', 'UNCLEAR'];
+const EVIDENCE_SECTION_HEADER = '## 5. COMPREHENSIVE TIMESTAMPED FINDINGS';
+const EVIDENCE_SECTION_NEXT_HEADER = '## 6. CLAIMS, NUMBERS & CALLS TO ACTION';
+
+// V4Q (was buildSliceScopeInstruction, multi-only): the deterministic, repository-owned authorized
+// scope instruction for ONE THROUGH EIGHT ranges. A scalar slice is converted upstream into a
+// single internal range and composes through this SAME function, so a one-slice run receives the
+// identical boundary, audio, and anti-speculation contract that multipart runs receive — the V4Q
+// failure evidence showed the scalar path silently skipped all of it.
+//
+// Appended to the RESOLVED prompt (default brief, explicit prompt, or focus-composed text) at one
+// site so both production entries (feed-gemini.ps1 and a direct node invocation) compose it
+// identically. Content is numbers + fixed text only — no user text, no transport/tool-call detail,
+// and never the acceptance oracles (subject, video age, channel size).
+function buildAuthorizedScopeInstruction(ranges) {
+  const count = ranges.length;
+  const aggregateSeconds = ranges.reduce((sum, r) => sum + (r.endOffset - r.startOffset), 0);
+  const lines = ranges.map((r, i) => `- ${SLICE_HEADING(i + 1, r)}`);
   return [
-    `--- ANALYSIS SCOPE: ${ranges.length} AUTHORIZED VIDEO SLICES ---`,
-    `This request attaches ${ranges.length} time slices of the same video, listed in chronological order. ONLY these explicit slices are authorized for analysis; treat everything outside them as out of scope and do not analyze or speculate about it:`,
+    `--- ANALYSIS SCOPE: ${count} AUTHORIZED VIDEO SLICE${count === 1 ? '' : 'S'} ---`,
+    `This request attaches ${count} time slice${count === 1 ? '' : 's'} of the same video, listed in chronological order. ONLY these explicit slices are authorized for analysis; treat everything outside them as out of scope and do not analyze or speculate about it. Ranges are half-open [start,end): the end second is the exclusive boundary.`,
     ...lines,
+    '',
+    'MANDATORY OUTPUT CONTRACT — a response missing any of the following is rejected locally and never becomes a report:',
+    `1. Include this exact line once, in Section 2: \`${AUTHORIZED_SCOPE_LINE(count, aggregateSeconds)}\``,
+    `2. Include this exact line once, in Section 2: \`${UNDETERMINABLE_DURATION_LINE}\`. You cannot see the full source, so you must NOT estimate, infer, or state a total video duration. Report only the authorized aggregate above.`,
+    `3. Include a Synthetic-media assessment line once, in Section 2. If you have no timestamped observable evidence of AI generation, synthesis, deepfaking, stock footage, or manipulation, the line must be exactly: \`${NO_SYNTHETIC_EVIDENCE_LINE}\`. Static, simple, low-budget, animated, or amateur-looking content is NOT evidence of AI generation. Only if you have specific timestamped evidence, use: \`**Synthetic-media assessment:** <finding> — Evidence: <MM:SS observation> — Confidence: LOW|MEDIUM|HIGH\``,
+    `4. In Section 5, open each slice with its exact heading, in this order, echoing BOTH endpoints exactly as written above:`,
+    ...lines.map((l) => `   ${l.slice(2)}`),
+    `5. Under each slice heading, include these marker lines (N = that slice's number):`,
+    `   \`**Slice N audio status:** <${AUDIO_STATUSES.join('|')}>\` — assess the audio of THAT slice independently; never carry a judgement across slices.`,
+    '   `**Slice N audio evidence:** MM:SS — <what you actually heard, or what you listened for and did not hear>`',
+    '   `**Slice N transcription anchor:** "<short verbatim quote>"` — REQUIRED whenever that slice\'s status is SPEECH.',
+    `   If EVERY slice is SILENCE or UNCLEAR, each slice additionally requires \`**Slice N audio justification:** MM:SS — <what you listened for and why you concluded there was nothing>\`. An audio stream was supplied; "there is no audio" is not an available answer.`,
+    '6. Consolidate an unchanged condition into ONE ranged entry (e.g. `01:00-01:29 [VISUAL] static green frame, no change`). Do NOT emit one near-identical observation per second; repeated filler is rejected.',
+    '',
     'Attribute findings to their slice ("Slice 1", "Slice 2", ...) so each slice remains clearly distinguishable throughout the report. Keep the required report structure EXACTLY as instructed above — the same sections, the same headers, and the report must still begin with `## 1. TL;DR`.',
   ].join('\n');
+}
+
+// V4Q SDK-owned generation policy, pure and exported. `maxOutputTokens` applies to EVERY SDK video
+// model and never itself enables, disables, or pins thinking. The 8,192 thinking budget is added
+// only for bounded sliced Pro, so Flash keeps its provider-default dynamic thinking, Flash-Lite
+// keeps its no-thinking default, and explicit whole-video Pro keeps provider-default dynamic
+// thinking — no pre-existing non-sliced thinking behavior is silently changed.
+function buildGenerationConfig({ model, mediaResolution, effectiveSliceCount }) {
+  const config = {};
+  const mapped = MEDIA_RESOLUTION_MAP[mediaResolution];
+  if (mapped) config.mediaResolution = mapped;
+  const count = Number.isInteger(effectiveSliceCount) && effectiveSliceCount > 0 ? effectiveSliceCount : 0;
+  config.maxOutputTokens = BASE_MAX_OUTPUT_TOKENS + Math.max(0, count - 2) * PER_EXTRA_SLICE_OUTPUT_TOKENS;
+  // Exact-string match on purpose: an unknown or direct model string must fall through to the
+  // provider default rather than inherit a budget reviewed only for 2.5 Pro.
+  if (model === PRO_MODEL && count >= 1) {
+    config.thinkingConfig = { thinkingBudget: SLICED_PRO_THINKING_BUDGET };
+  }
+  return config;
 }
 
 // Pure request-body builder, exported for tests. When both offsets are given (validated upstream
@@ -197,25 +273,315 @@ function buildSliceScopeInstruction(ranges) {
 // media parts — each repeating the same validated public URL via fileData.fileUri with ONLY its
 // own videoMetadata — followed by ONE text part last. There is no whole-video part, no omitted or
 // merged slice, and no upload; with sliceRanges absent the zero/one-slice body is unchanged.
-function buildRequestBody({ url, prompt, mediaResolution, startOffset, endOffset, sliceRanges }) {
+// V4Q: `model` is now threaded in so the ONE production body builder owns generation policy
+// (scalar and multipart both reach buildGenerationConfig through this single site).
+function buildRequestBody({ url, prompt, model, mediaResolution, startOffset, endOffset, sliceRanges }) {
   let parts;
+  let effectiveSliceCount;
   if (Array.isArray(sliceRanges) && sliceRanges.length) {
     parts = sliceRanges.map((r) => ({
       fileData: { fileUri: url },
       videoMetadata: { startOffset: `${r.startOffset}s`, endOffset: `${r.endOffset}s` },
     }));
     parts.push({ text: prompt });
+    effectiveSliceCount = sliceRanges.length;
   } else {
     const videoPart = { fileData: { fileUri: url } };
     if (startOffset !== undefined && endOffset !== undefined) {
       videoPart.videoMetadata = { startOffset: `${startOffset}s`, endOffset: `${endOffset}s` };
+      effectiveSliceCount = 1;
+    } else {
+      effectiveSliceCount = 0;
     }
     parts = [videoPart, { text: prompt }];
   }
   const body = { contents: [{ role: 'user', parts }] };
-  const mapped = MEDIA_RESOLUTION_MAP[mediaResolution];
-  if (mapped) body.generationConfig = { mediaResolution: mapped };
+  body.generationConfig = buildGenerationConfig({ model, mediaResolution, effectiveSliceCount });
   return body;
+}
+
+// V4Q effective-model resolution, pure and exported. An EXPLICIT model always wins exactly as
+// given (including an unknown/direct string — this file never silently substitutes a model the
+// caller did not ask for). With no explicit model, bounded slice scope defaults to Pro and
+// whole-video stays on the economy default. Resolved BEFORE the endpoint, body, logs, usage line,
+// and manifest are built so all five structurally agree.
+function resolveEffectiveModel({ explicitModel, effectiveSliceCount }) {
+  if (explicitModel) return explicitModel;
+  return effectiveSliceCount >= 1 ? PRO_MODEL : DEFAULT_MODEL;
+}
+
+// --- V4Q deterministic report-quality validator ------------------------------------------------
+// Runs AFTER a successful provider response and BEFORE the analysis may be emitted or become a
+// report. It guarantees STRUCTURAL compliance, never semantic truth: a model can still produce a
+// convincing but false audio justification. See the handoff's honest-limitation section.
+const REQUIRED_SECTIONS = [
+  '## 1. TL;DR',
+  '## 2. VIDEO PROFILE',
+  '## 3. PEOPLE, ENTITIES & SETTING',
+  '## 4. DETAILED SUMMARY',
+  EVIDENCE_SECTION_HEADER,
+  EVIDENCE_SECTION_NEXT_HEADER,
+  '## 7. DISCREPANCIES & CROSS-CHECKS',
+  '## 8. SOURCE-CREDIBILITY ASSESSMENT',
+  '## 9. LIMITATIONS OF THIS ANALYSIS',
+];
+
+// Affirmative synthetic/manipulation vocabulary. Presence alone is not a failure — it is a failure
+// only when the standardized assessment line reports NO OBSERVABLE EVIDENCE, i.e. the report both
+// claims synthesis and disclaims evidence for it.
+const SYNTHETIC_TERMS = /\b(ai[- ]generated|ai generation|synthetic|deepfake|deep fake|stock footage|manipulated imagery|digitally manipulated)\b/i;
+// Claims that no audio STREAM exists. Deliberately distinct from an honest SILENCE finding: the
+// gate rejects "there was nothing to hear", never "I listened and heard silence".
+const NO_AUDIO_STREAM_CLAIMS = [
+  /\bno audio(?:\s+or\s+[a-z ]+?)?\s+(?:is|was)?\s*(?:present|supplied|provided|included|available|attached)\b/i,
+  /\bno audio\s+(?:track|stream|channel)\b/i,
+  /\bthere\s+is\s+no\s+audio\b/i,
+  /\bthe\s+video\s+is\s+silent\b/i,
+  /\baudio\s+(?:is|was)\s+(?:absent|not\s+present|not\s+provided|not\s+supplied)\b/i,
+];
+const TIMESTAMP = String.raw`\d{1,2}:\d{2}(?::\d{2})?`;
+
+// The CLOSED allowlist of quality-gate failure codes. PowerShell refuses any code outside this
+// set, so a future validator branch cannot invent an unreviewed reason that reaches a manifest.
+const QUALITY_FAILURE_CODES = [
+  'finish-max-tokens',
+  'finish-not-stop',
+  'missing-section',
+  'duplicate-section',
+  'scope-mismatch',
+  'missing-slice',
+  'missing-slice-audio',
+  'missing-speech-anchor',
+  'unjustified-universal-silence',
+  'unsupported-synthetic-claim',
+  'speculative-source-duration',
+  'repetitive-timestamp-filler',
+  'diagnostic-write-failed',
+];
+
+function fail(code, reason) { return { ok: false, code, reason }; }
+
+// Locate section 5 by its EXACT canonical header and the EXACT following canonical header — never
+// by a numeric substring, so renaming or reordering a section fails the contract test visibly
+// instead of silently scanning the wrong region (or nothing).
+function extractEvidenceSection(text) {
+  const start = text.indexOf(EVIDENCE_SECTION_HEADER);
+  if (start === -1) return '';
+  const after = start + EVIDENCE_SECTION_HEADER.length;
+  const end = text.indexOf(EVIDENCE_SECTION_NEXT_HEADER, after);
+  return end === -1 ? text.slice(after) : text.slice(after, end);
+}
+
+// Normalize one evidence itemization line down to its observation body so that N near-identical
+// per-second entries collapse to one key. Structural marker lines are excluded by the caller —
+// eight slices legitimately share the same `**Slice N audio status:** SILENCE` shape.
+function normalizeEvidenceLine(line) {
+  return line
+    .replace(/^\s*[-*+]\s*/, '')
+    .replace(new RegExp(`^\\s*${TIMESTAMP}(?:\\s*[-–—]\\s*${TIMESTAMP})?\\s*`), '')
+    .replace(/\[[A-Z/ ]+\]/g, ' ')
+    .replace(/\bslice\s*\d+\b/gi, ' ')
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function validateReportQuality({ text, finishReason, ranges, audioTokens }) {
+  const body = String(text == null ? '' : text);
+  const sliceRanges = Array.isArray(ranges) ? ranges : [];
+  const sliced = sliceRanges.length > 0;
+
+  // Truncation first: it explains every downstream structural absence, so reporting a missing
+  // section for a response the provider cut off would be misleading.
+  if (finishReason === 'MAX_TOKENS') {
+    return fail('finish-max-tokens', 'the provider stopped at the output-token limit, so the analysis is truncated.');
+  }
+  if (finishReason !== 'STOP') {
+    // Bounded enum only — never the raw provider string, which must not reach a failure reason.
+    const known = ['SAFETY', 'RECITATION', 'PROHIBITED_CONTENT', 'SPII', 'MALFORMED_FUNCTION_CALL', 'LANGUAGE', 'BLOCKLIST', 'OTHER'];
+    const word = known.indexOf(String(finishReason)) === -1 ? 'an unrecognized reason' : String(finishReason);
+    return fail('finish-not-stop', `the provider finished with ${word} rather than STOP.`);
+  }
+  if (!body.trim()) {
+    return fail('missing-section', 'the response contained no text.');
+  }
+  if (!body.trimStart().startsWith(REQUIRED_SECTIONS[0])) {
+    return fail('missing-section', `the report must begin with "${REQUIRED_SECTIONS[0]}".`);
+  }
+
+  let cursor = -1;
+  for (const header of REQUIRED_SECTIONS) {
+    const first = body.indexOf(header);
+    if (first === -1) return fail('missing-section', `required section "${header}" is absent.`);
+    if (body.indexOf(header, first + header.length) !== -1) {
+      return fail('duplicate-section', `section "${header}" appears more than once.`);
+    }
+    if (first < cursor) return fail('missing-section', `section "${header}" is out of the required order.`);
+    cursor = first;
+  }
+
+  if (!sliced) return { ok: true };
+
+  const aggregateSeconds = sliceRanges.reduce((sum, r) => sum + (r.endOffset - r.startOffset), 0);
+  const scopeLine = AUTHORIZED_SCOPE_LINE(sliceRanges.length, aggregateSeconds);
+  if (body.indexOf(scopeLine) === -1) {
+    return fail('scope-mismatch', `the report does not echo the authorized scope line "${scopeLine}".`);
+  }
+
+  // Exact ordered slice headings: catches omitted, shortened (wrong endpoint), reordered, merged,
+  // and invented slices in one comparison against the authoritative validated ranges.
+  const expectedHeadings = sliceRanges.map((r, i) => SLICE_HEADING(i + 1, r));
+  const seenHeadings = (body.match(/^###\s+Slice\s+.*$/gm) || []).map((s) => s.trim());
+  if (seenHeadings.length !== expectedHeadings.length) {
+    return fail('missing-slice', `expected ${expectedHeadings.length} slice heading(s), found ${seenHeadings.length}.`);
+  }
+  for (let i = 0; i < expectedHeadings.length; i++) {
+    if (seenHeadings[i] !== expectedHeadings[i]) {
+      return fail('scope-mismatch', `slice heading ${i + 1} must be exactly "${expectedHeadings[i]}".`);
+    }
+  }
+
+  const statuses = [];
+  for (let i = 0; i < sliceRanges.length; i++) {
+    const n = i + 1;
+    const statusRe = new RegExp(String.raw`\*\*Slice ${n} audio status:\*\*\s*(${AUDIO_STATUSES.join('|')})\b`, 'g');
+    const found = body.match(statusRe) || [];
+    if (found.length === 0) {
+      return fail('missing-slice-audio', `slice ${n} has no "**Slice ${n} audio status:**" line with one of ${AUDIO_STATUSES.join('/')}.`);
+    }
+    if (found.length > 1) {
+      return fail('missing-slice-audio', `slice ${n} has ${found.length} conflicting audio-status lines; exactly one is required.`);
+    }
+    const status = new RegExp(String.raw`\*\*Slice ${n} audio status:\*\*\s*(${AUDIO_STATUSES.join('|')})\b`).exec(body)[1];
+    statuses.push(status);
+
+    if (!new RegExp(String.raw`\*\*Slice ${n} audio evidence:\*\*\s*${TIMESTAMP}\s*[-–—:]`).test(body)) {
+      return fail('missing-slice-audio', `slice ${n} has no timestamped "**Slice ${n} audio evidence:**" observation.`);
+    }
+    if (status === 'SPEECH' && !new RegExp(String.raw`\*\*Slice ${n} transcription anchor:\*\*\s*["“][^"”]+["”]`).test(body)) {
+      return fail('missing-speech-anchor', `slice ${n} reports SPEECH but carries no quoted "**Slice ${n} transcription anchor:**".`);
+    }
+  }
+
+  // Heuristic, not semantic proof (see the handoff): if the provider billed audio tokens and every
+  // slice came back SILENCE/UNCLEAR, each slice must say what it listened for. Rewording can evade
+  // this; it exists to stop the specific observed failure of blanket unexamined silence.
+  if (audioTokens > 0 && statuses.every((s) => s === 'SILENCE' || s === 'UNCLEAR')) {
+    for (let i = 0; i < sliceRanges.length; i++) {
+      const n = i + 1;
+      if (!new RegExp(String.raw`\*\*Slice ${n} audio justification:\*\*\s*${TIMESTAMP}\s*[-–—:]`).test(body)) {
+        return fail('unjustified-universal-silence', `every slice reports SILENCE/UNCLEAR while ${audioTokens} audio tokens were billed, but slice ${n} carries no timestamped "**Slice ${n} audio justification:**".`);
+      }
+    }
+  }
+  // The provider processed an audio stream, so denying that one exists is false on its face.
+  if (audioTokens > 0) {
+    // Structural reason only: the matched phrase is provider text and must never be echoed.
+    for (const re of NO_AUDIO_STREAM_CLAIMS) {
+      if (re.test(body)) {
+        return fail('unjustified-universal-silence', `${audioTokens} audio tokens were billed, but the report asserts that no audio stream was present.`);
+      }
+    }
+  }
+
+  if (body.indexOf(UNDETERMINABLE_DURATION_LINE) === -1) {
+    return fail('speculative-source-duration', `the report does not carry the required line "${UNDETERMINABLE_DURATION_LINE}".`);
+  }
+
+  // Scan for AFFIRMATIVE synthetic claims only. Two exclusions keep this honest: the sanctioned
+  // assessment line itself contains the word "Synthetic" (it must not trip its own detector), and a
+  // negated statement ("no observable evidence of AI generation") is the compliant answer, not a
+  // violation. What remains is an unhedged synthetic claim made outside the standardized channel.
+  const scannable = body
+    .replace(/^\*\*Synthetic-media assessment:\*\*[^\n]*$/gm, '')
+    .split('\n')
+    .filter((line) => !/\b(no|not|nor|without|absent|lacks?|lacking|none|cannot|can't|isn't|aren't|wasn't|weren't|don't|doesn't|didn't)\b/i.test(line))
+    .join('\n');
+  const assertsSynthetic = SYNTHETIC_TERMS.test(scannable);
+  const declaresNoEvidence = body.indexOf(NO_SYNTHETIC_EVIDENCE_LINE) !== -1;
+  const standardized = /\*\*Synthetic-media assessment:\*\*\s*(?!NO OBSERVABLE EVIDENCE)\S[^\n]*?—\s*Evidence:\s*[^\n]*?\d{1,2}:\d{2}[^\n]*?—\s*Confidence:\s*(LOW|MEDIUM|HIGH)\b/.test(body);
+  if (!declaresNoEvidence && !standardized) {
+    return fail('unsupported-synthetic-claim', 'the report carries neither the NO OBSERVABLE EVIDENCE line nor a standardized timestamped synthetic-media assessment with a confidence level.');
+  }
+  if (declaresNoEvidence && assertsSynthetic && !standardized) {
+    return fail('unsupported-synthetic-claim', 'the report declares no observable synthetic-media evidence yet asserts synthetic/manipulated origin elsewhere without a timestamped, confidence-rated assessment.');
+  }
+
+  const evidence = extractEvidenceSection(body);
+  const counts = new Map();
+  for (const rawLine of evidence.split('\n')) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#') || line.startsWith('**')) continue;
+    const key = normalizeEvidenceLine(line);
+    if (!key) continue;
+    const next = (counts.get(key) || 0) + 1;
+    if (next > 3) {
+      // Count only — the repeated observation itself is provider text.
+      return fail('repetitive-timestamp-filler', `the evidence section repeats one normalized observation ${next} times (limit 3); consolidate an unchanged condition into a range.`);
+    }
+    counts.set(key, next);
+  }
+
+  return { ok: true };
+}
+
+// --- V4Q durable rejected-response diagnostics --------------------------------------------------
+// A rejected response is preserved as evidence, never as output: it is never printed, never becomes
+// reportFile, never enters the Library, and never authorizes media deletion.
+function resolveDiagnosticDir(args, deps = {}) {
+  const statSync = deps.statSync || fs.statSync;
+  if (!args.diagnosticDirSeen) {
+    return { error: '--diagnostic-dir is required before any submission so a rejected response can be preserved.' };
+  }
+  const dir = args.diagnosticDir;
+  if (typeof dir !== 'string' || dir.trim() === '') {
+    return { error: '--diagnostic-dir was given with no value.' };
+  }
+  if (!path.isAbsolute(dir)) {
+    return { error: '--diagnostic-dir must be an absolute path to an existing run directory.' };
+  }
+  let st;
+  try { st = statSync(dir); }
+  catch { return { error: '--diagnostic-dir does not exist; the run directory must be created before submission.' }; }
+  if (!st.isDirectory()) return { error: '--diagnostic-dir is not a directory.' };
+  return { dir };
+}
+
+// Same-directory temporary file + atomic rename, never overwriting an existing diagnostic. Bounds
+// are enforced BEFORE any bytes are written, so an oversized response cannot half-land.
+function writeRejectedResponseDiagnostic({ diagnosticDir, text }, deps = {}) {
+  const writeFileSync = deps.writeFileSync || fs.writeFileSync;
+  const renameSync = deps.renameSync || fs.renameSync;
+  const existsSync = deps.existsSync || fs.existsSync;
+  const unlinkSync = deps.unlinkSync || fs.unlinkSync;
+
+  const body = String(text == null ? '' : text);
+  if (body.length > MAX_DIAGNOSTIC_CHARS) {
+    return { ok: false, error: `rejected response is ${body.length} characters, over the ${MAX_DIAGNOSTIC_CHARS}-character diagnostic bound.` };
+  }
+  const buf = Buffer.from(body, 'utf8');
+  if (buf.length > MAX_DIAGNOSTIC_BYTES) {
+    return { ok: false, error: `rejected response is ${buf.length} bytes, over the ${MAX_DIAGNOSTIC_BYTES}-byte diagnostic bound.` };
+  }
+  const finalPath = path.join(diagnosticDir, DIAGNOSTIC_FILENAME);
+  if (existsSync(finalPath)) {
+    return { ok: false, error: 'a diagnostic already exists for this run; refusing to overwrite preserved evidence.' };
+  }
+  const tmpPath = path.join(diagnosticDir, `.${DIAGNOSTIC_FILENAME}.${process.pid}.tmp`);
+  try {
+    writeFileSync(tmpPath, buf, { flag: 'wx' });   // UTF-8 bytes, no BOM
+    renameSync(tmpPath, finalPath);
+  } catch (err) {
+    try { if (existsSync(tmpPath)) unlinkSync(tmpPath); } catch { /* best effort; the real failure is reported below */ }
+    return { ok: false, error: sanitizeUpstreamText(err && err.message ? err.message : String(err)) };
+  }
+  return {
+    ok: true,
+    fileName: DIAGNOSTIC_FILENAME,
+    bytes: buf.length,
+    sha256: crypto.createHash('sha256').update(buf).digest('hex'),
+  };
 }
 
 // V4: the optional sliceCount (>=2) appends ` slices=N` for a multi-slice run; every existing
@@ -350,7 +716,6 @@ async function runVideoScout(rawArgs, deps = {}) {
   }
   if (!prompt) { logError('[video-scout sdk] no prompt: pass --prompt-file or --prompt-text.'); return 1; }
 
-  const model = args.model || DEFAULT_MODEL;
   const mediaResolution = MEDIA_RESOLUTION_MAP[args.mediaResolution] ? args.mediaResolution : 'MEDIUM';
 
   // V4 multi-slice control argument first (it also owns the mutual-exclusion refusal). Refuse
@@ -365,15 +730,30 @@ async function runVideoScout(rawArgs, deps = {}) {
   if (slice.error) { logError(`[video-scout sdk] ${slice.error}`); return 1; }
   const sliced = slice.sliced;
 
-  // V4: the deterministic slice-scope instruction is appended to the RESOLVED prompt at this one
-  // site (numbers + fixed text only), preserving the required report structure. Whole-video and
-  // single-slice prompts are untouched.
-  if (multiSlice.multi) {
-    prompt = `${prompt}\n\n${buildSliceScopeInstruction(multiSlice.ranges)}`;
+  // V4Q: ONE authorized-range list drives scope composition, generation policy, model resolution,
+  // and validation. A scalar slice becomes a single internal range here, which is what puts the
+  // one-slice path under the same boundary/audio/anti-speculation contract as multipart.
+  const authorizedRanges = multiSlice.multi
+    ? multiSlice.ranges
+    : (sliced ? [{ startOffset: slice.startOffset, endOffset: slice.endOffset }] : []);
+  const effectiveSliceCount = authorizedRanges.length;
+  const model = resolveEffectiveModel({ explicitModel: args.model, effectiveSliceCount });
+
+  // V4Q: mandatory BEFORE any paid submission — a run that could not preserve a rejected response
+  // must never spend money discovering that. The app cannot supply or override this argument;
+  // feed-gemini.ps1 passes the already-created run directory.
+  const diagnostic = resolveDiagnosticDir(args, { statSync: deps.statSync });
+  if (diagnostic.error) { logError(`[video-scout sdk] ${diagnostic.error}`); return 1; }
+
+  // V4Q: the deterministic authorized-scope instruction is appended to the RESOLVED prompt at this
+  // one site (numbers + fixed text only), preserving the required report structure. Whole-video
+  // prompts are untouched and receive no fabricated bounded-scope instruction.
+  if (effectiveSliceCount >= 1) {
+    prompt = `${prompt}\n\n${buildAuthorizedScopeInstruction(authorizedRanges)}`;
   }
 
   const body = buildRequestBody({
-    url: args.url, prompt, mediaResolution,
+    url: args.url, prompt, model, mediaResolution,
     startOffset: sliced ? slice.startOffset : undefined,
     endOffset: sliced ? slice.endOffset : undefined,
     sliceRanges: multiSlice.multi ? multiSlice.ranges : undefined,
@@ -420,12 +800,39 @@ async function runVideoScout(rawArgs, deps = {}) {
       return 1;
     }
     if (outcome.attempt > 1) log(`[video-scout sdk] recovered on attempt ${outcome.attempt}/${RETRY_MAX_ATTEMPTS}`);
+
+    const usage = (json && json.usageMetadata) || {};
+    const usageLine = formatUsageLine(usage, model, mediaResolution, sliced,
+      multiSlice.multi ? multiSlice.ranges.length : undefined);
+    const audioTokens = ((usage.promptTokensDetails || [])
+      .filter((d) => d && d.modality === 'AUDIO')
+      .reduce((sum, d) => sum + (d.tokenCount || 0), 0));
+
+    // V4Q: the deterministic quality gate runs BEFORE the analysis is emitted. A rejected response
+    // is terminal — it is preserved as evidence and never printed, never becomes a report, and
+    // NEVER causes another provider request (no repair, fallback, or continuation exists).
+    const verdict = validateReportQuality({ text, finishReason: finish, ranges: authorizedRanges, audioTokens });
+    if (!verdict.ok) {
+      logError(`[video-scout sdk] quality gate REJECTED this response (${verdict.code}): ${verdict.reason}`);
+      const written = writeRejectedResponseDiagnostic(
+        { diagnosticDir: diagnostic.dir, text },
+        { writeFileSync: deps.writeFileSync, renameSync: deps.renameSync, existsSync: deps.existsSync, unlinkSync: deps.unlinkSync }
+      );
+      // Usage is preserved either way so the manifest records what the failed run actually cost.
+      log(usageLine);
+      if (!written.ok) {
+        logError(`[video-scout sdk] the rejected response could NOT be preserved: ${written.error}`);
+        log('[video-scout quality] rejected code=diagnostic-write-failed');
+        return 1;
+      }
+      log(`[video-scout quality] rejected code=${verdict.code} file=${written.fileName} bytes=${written.bytes} sha256=${written.sha256}`);
+      return 1;
+    }
+
     // The analysis text and the usage line print exactly ONCE, only here, only on the
     // accepted success response — a failed attempt has no path to either line.
     log(`\n${text}\n`);
-    if (finish !== 'STOP') logError(`[video-scout sdk] WARNING: finishReason=${finish} — output may be truncated.`);
-    log(formatUsageLine((json && json.usageMetadata) || {}, model, mediaResolution, sliced,
-      multiSlice.multi ? multiSlice.ranges.length : undefined));
+    log(usageLine);
     return 0;
   }
 
@@ -457,7 +864,17 @@ function runCliEntry(deps = {}) {
 
 module.exports = {
   buildRequestBody, formatUsageLine, parseArgs, resolveSliceOffsets,
-  resolveSliceRanges, buildSliceScopeInstruction,
+  resolveSliceRanges, buildAuthorizedScopeInstruction,
+  // V4Q generation policy (SDK-owned; scripts/ never imports the renderer copy)
+  buildGenerationConfig, resolveEffectiveModel,
+  PRO_MODEL, BASE_MAX_OUTPUT_TOKENS, PER_EXTRA_SLICE_OUTPUT_TOKENS, SLICED_PRO_THINKING_BUDGET,
+  // V4Q quality gate + durable diagnostics
+  validateReportQuality, extractEvidenceSection, normalizeEvidenceLine,
+  resolveDiagnosticDir, writeRejectedResponseDiagnostic,
+  QUALITY_FAILURE_CODES, REQUIRED_SECTIONS, AUDIO_STATUSES,
+  EVIDENCE_SECTION_HEADER, EVIDENCE_SECTION_NEXT_HEADER,
+  AUTHORIZED_SCOPE_LINE, SLICE_HEADING, UNDETERMINABLE_DURATION_LINE, NO_SYNTHETIC_EVIDENCE_LINE,
+  MAX_DIAGNOSTIC_BYTES, MAX_DIAGNOSTIC_CHARS, DIAGNOSTIC_FILENAME,
   MEDIA_RESOLUTION_MAP, DEFAULT_MODEL,
   MIN_MULTI_SLICES, MAX_SLICES, AGGREGATE_SLICE_CAP_SECONDS, MAX_SLICE_RANGES_JSON_UNITS, MAX_OFFSET_SECONDS,
   classifyHttpFailure, retryDelayMs, sanitizeUpstreamText,
