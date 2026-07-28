@@ -402,10 +402,16 @@ const DUR_LINK = String.raw`(?:is|was|are|were|appears?[ \t]+to[ \t]+be|seems?[ 
 const DUR_RUNNING_VERB = String.raw`(?:runs?[ \t]+for|lasts?|spans?)`;
 const DUR_ARTICLE = String.raw`(?:(?:the|this|that|its|a|an)[ \t]+)?(?:${DUR_MODIFIER}[ \t]+)*`;
 // Hedges split by what they let us conclude against the authorized aggregate (§7.4).
-const DUR_HEDGE_LOWER = String.raw`(?:over|more[ \t]+than|in[ \t]+excess[ \t]+of|at[ \t]+least|upwards[ \t]+of|greater[ \t]+than|longer[ \t]+than)`;
+// V4Q FINAL CORRECTION: STRICT and INCLUSIVE lower bounds are no longer conflated. "over 50s"
+// necessarily exceeds 50s, so it rejects at an aggregate of 50; "at least 50s" is satisfied BY 50s
+// and proves nothing, so it rejects only above 50. Treating them alike rejected a truthful
+// bounded-scope statement. `upwards of` is read INCLUSIVELY -- the conservative reading -- because
+// no reviewed contract establishes a stricter meaning for it.
+const DUR_HEDGE_STRICT_LOWER = String.raw`(?:over|more[ \t]+than|in[ \t]+excess[ \t]+of|greater[ \t]+than|longer[ \t]+than)`;
+const DUR_HEDGE_INCLUSIVE_LOWER = String.raw`(?:at[ \t]+least|upwards[ \t]+of|no[ \t]+less[ \t]+than)`;
 const DUR_HEDGE_UPPER = String.raw`(?:under|less[ \t]+than|at[ \t]+most|up[ \t]+to|no[ \t]+more[ \t]+than|shorter[ \t]+than)`;
 const DUR_HEDGE_APPROX = String.raw`(?:approximately|approx\.?|about|roughly|around|circa|nearly|almost|just|exactly|precisely|only|some)`;
-const DUR_HEDGE = String.raw`(?:(?:${DUR_HEDGE_LOWER}|${DUR_HEDGE_UPPER}|${DUR_HEDGE_APPROX})[ \t]+)*`;
+const DUR_HEDGE = String.raw`(?:(?:${DUR_HEDGE_STRICT_LOWER}|${DUR_HEDGE_INCLUSIVE_LOWER}|${DUR_HEDGE_UPPER}|${DUR_HEDGE_APPROX})[ \t]+)*`;
 const NUMBER_WORDS = {
   a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
   ten: 10, eleven: 11, twelve: 12, fifteen: 15, twenty: 20, thirty: 30, forty: 40, fifty: 50,
@@ -444,12 +450,16 @@ function parseDurationSeconds(raw) {
 // authorized aggregate a length statement is a bounded-scope description and passes; above it, the
 // statement necessarily claims knowledge the request never supplied. When the comparison cannot
 // deterministically establish that the claim EXCEEDS the aggregate, prefer passing.
+// The hedge IMMEDIATELY preceding the value governs it, so each class is matched at the END of the
+// captured hedge run ("just over 50 seconds" is governed by `over`, not by `just`).
 function claimExceedsAggregate(hedge, value, aggregateSeconds) {
   const seconds = parseDurationSeconds(value);
   if (seconds === null || !Number.isFinite(aggregateSeconds)) return false;
   const h = String(hedge || '').trim().toLowerCase();
-  if (new RegExp(String.raw`^${DUR_HEDGE_UPPER}$`, 'i').test(h)) return false; // an upper bound proves nothing
-  if (new RegExp(String.raw`^${DUR_HEDGE_LOWER}$`, 'i').test(h)) return seconds >= aggregateSeconds;
+  const endsWith = (cls) => new RegExp(String.raw`(?:^|[ \t])${cls}$`, 'i').test(h);
+  if (endsWith(DUR_HEDGE_UPPER)) return false;                              // an upper bound proves nothing
+  if (endsWith(DUR_HEDGE_STRICT_LOWER)) return seconds >= aggregateSeconds; // "over N" excludes N itself
+  // Inclusive lower bounds, approximations, and a bare value are all satisfied BY the aggregate.
   return seconds > aggregateSeconds;
 }
 
@@ -586,8 +596,10 @@ const SLICE_HEADING_SHAPE = /^#{1,6}[ \t]*Slice\b/i;
 const SYNTHETIC_ASSESSMENT_SHAPE = /^\*\*Synthetic-media assessment:\*\*/;
 // V4Q FINAL (§4.2): each separator is INDEPENDENTLY a hyphen, en dash, or em dash, and the two need
 // not match -- a model that emits ` - ` before Evidence and ` — ` before Confidence is compliant.
-// Surrounding whitespace is required, so a hyphen used inside a compound word is not a separator.
-const ASSESSMENT_SEPARATOR = String.raw`[ \t](?:-|–|—)[ \t]`;
+// Surrounding whitespace is REQUIRED (so a hyphen inside a compound word is never a separator) but
+// ONE OR MORE spaces or tabs are accepted on each side: aligned or double-spaced output is
+// cosmetic, and rejecting a correct assessment over an extra space would discard a good response.
+const ASSESSMENT_SEPARATOR = String.raw`[ \t]+(?:-|–|—)[ \t]+`;
 const STANDARDIZED_SYNTHETIC_LINE = new RegExp(
   String.raw`^\*\*Synthetic-media assessment:\*\*[ \t]*\S.*?${ASSESSMENT_SEPARATOR}Evidence:[ \t]*\S.*?${TIMESTAMP}.*?${ASSESSMENT_SEPARATOR}Confidence:[ \t]*(?:LOW|MEDIUM|HIGH)[ \t]*\.?[ \t]*$`);
 
@@ -596,38 +608,59 @@ const STANDARDIZED_SYNTHETIC_LINE = new RegExp(
 // accepted complete-line shape? Content is not examined here. The reasons distinguish missing from
 // misplaced from malformed so a rejection tells the operator what to fix, while naming no provider
 // text.
-function validateSourceDurationField(section2, allLines) {
-  const exact = section2.filter((l) => l.trim() === UNDETERMINABLE_DURATION_LINE);
-  if (exact.length === 1) return { ok: true };
-  if (exact.length > 1) {
-    return fail('source-duration-field-format', `the canonical source-duration field appears ${exact.length} times in ${PROFILE_SECTION_HEADER}; exactly one is required.`);
-  }
-  if (allLines.some((l) => l.trim() === UNDETERMINABLE_DURATION_LINE)) {
-    return fail('source-duration-field-format', `the canonical source-duration field is present but outside "${PROFILE_SECTION_HEADER}", where it is required.`);
-  }
-  if (section2.some((l) => l.trim().startsWith('**Source duration:**'))) {
-    return fail('source-duration-field-format', `the source-duration field is malformed; the only accepted line is exactly "${UNDETERMINABLE_DURATION_LINE}".`);
-  }
-  return fail('source-duration-field-format', `"${PROFILE_SECTION_HEADER}" carries no "${UNDETERMINABLE_DURATION_LINE}" line.`);
+// V4Q FINAL CORRECTION -- GLOBAL LABEL UNIQUENESS. Counting only within Section 2 let a SECOND
+// field stand elsewhere in the report: one compliant assessment in the Video Profile and another,
+// contradicting one in the Limitations section both survived, because the section-scoped count saw
+// exactly one. Each canonical LABEL must now occur exactly once across the WHOLE report -- counted
+// by occurrence, not by line, so two labels crammed into one line is still two.
+const SOURCE_DURATION_LABEL = '**Source duration:**';
+const SYNTHETIC_ASSESSMENT_LABEL = '**Synthetic-media assessment:**';
+function countLabel(allLines, label) {
+  return allLines.join('\n').split(label).length - 1;
 }
 
-// Returns the accepted FORM on success, so the caller can report which one was used without
-// re-parsing. Both accepted forms are equally valid; neither exempts the rest of the report from
-// the frozen-vocabulary scan.
-function validateSyntheticAssessmentField(section2, allLines) {
-  const shaped = matchLines(section2, SYNTHETIC_ASSESSMENT_SHAPE);
-  if (shaped.length > 1) {
-    return fail('synthetic-assessment-field-format', `the synthetic-media assessment field appears ${shaped.length} times in ${PROFILE_SECTION_HEADER}; exactly one is required.`);
+function validateSourceDurationField(section2, allLines) {
+  const total = countLabel(allLines, SOURCE_DURATION_LABEL);
+  if (total === 0) {
+    return fail('source-duration-field-format', `the report carries no "${SOURCE_DURATION_LABEL}" field; exactly one is required, in ${PROFILE_SECTION_HEADER}.`);
   }
+  if (total > 1) {
+    return fail('source-duration-field-format', `the "${SOURCE_DURATION_LABEL}" label occurs ${total} times across the report; exactly one occurrence is permitted.`);
+  }
+  // Exactly one occurrence exists. It must BE a complete line, in Section 2, in the accepted form.
+  if (hasExactLine(section2, UNDETERMINABLE_DURATION_LINE)) return { ok: true, line: UNDETERMINABLE_DURATION_LINE };
+  if (hasExactLine(allLines, UNDETERMINABLE_DURATION_LINE)) {
+    return fail('source-duration-field-format', `the canonical source-duration field is present but outside "${PROFILE_SECTION_HEADER}", where it is required.`);
+  }
+  if (section2.some((l) => l.includes(SOURCE_DURATION_LABEL))) {
+    return fail('source-duration-field-format', `the source-duration field is malformed; the only accepted line is exactly "${UNDETERMINABLE_DURATION_LINE}".`);
+  }
+  return fail('source-duration-field-format', `the source-duration field is both malformed and outside "${PROFILE_SECTION_HEADER}"; the only accepted line is exactly "${UNDETERMINABLE_DURATION_LINE}".`);
+}
+
+// Returns the accepted FORM and the accepted LINE on success. The line is returned so the caller can
+// exclude that ONE line -- by identity, not by shape -- before the frozen-vocabulary scan. Excluding
+// every assessment-shaped line would have let a second, forbidden assessment hide behind the shape
+// of the field that licenses it. Global uniqueness above makes a second one impossible anyway; this
+// keeps the two defences independent.
+function validateSyntheticAssessmentField(section2, allLines) {
+  const total = countLabel(allLines, SYNTHETIC_ASSESSMENT_LABEL);
+  if (total === 0) {
+    return fail('synthetic-assessment-field-format', `the report carries no "${SYNTHETIC_ASSESSMENT_LABEL}" field; exactly one is required, in ${PROFILE_SECTION_HEADER}.`);
+  }
+  if (total > 1) {
+    return fail('synthetic-assessment-field-format', `the "${SYNTHETIC_ASSESSMENT_LABEL}" label occurs ${total} times across the report; exactly one occurrence is permitted.`);
+  }
+  const shaped = matchLines(section2, SYNTHETIC_ASSESSMENT_SHAPE);
   if (shaped.length === 0) {
     if (matchLines(allLines, SYNTHETIC_ASSESSMENT_SHAPE).length > 0) {
       return fail('synthetic-assessment-field-format', `the synthetic-media assessment field is present but outside "${PROFILE_SECTION_HEADER}", where it is required.`);
     }
-    return fail('synthetic-assessment-field-format', `"${PROFILE_SECTION_HEADER}" carries no complete "**Synthetic-media assessment:**" line.`);
+    return fail('synthetic-assessment-field-format', `the sole "${SYNTHETIC_ASSESSMENT_LABEL}" occurrence does not occupy a complete line in "${PROFILE_SECTION_HEADER}".`);
   }
   const line = shaped[0].trim();
-  if (line === NO_SYNTHETIC_EVIDENCE_LINE) return { ok: true, form: 'no-evidence' };
-  if (STANDARDIZED_SYNTHETIC_LINE.test(line)) return { ok: true, form: 'evidence-backed' };
+  if (line === NO_SYNTHETIC_EVIDENCE_LINE) return { ok: true, form: 'no-evidence', line };
+  if (STANDARDIZED_SYNTHETIC_LINE.test(line)) return { ok: true, form: 'evidence-backed', line };
   return fail('synthetic-assessment-field-format', 'the synthetic-media assessment is neither the exact NO OBSERVABLE EVIDENCE line nor an evidence-backed finding carrying a timestamped observation and a LOW/MEDIUM/HIGH confidence.');
 }
 
@@ -811,9 +844,11 @@ function validateReportQuality({ text, finishReason, ranges, audioTokens }) {
   // wherever it appears, including inside a denial, because the canonical field is the only place
   // origin may be discussed at all. Both accepted field forms are treated identically here -- an
   // evidence-backed finding licenses the field, never a restatement elsewhere.
-  const outsideAssessment = lines
-    .filter((line) => !SYNTHETIC_ASSESSMENT_SHAPE.test(line.trim()))
-    .join('\n');
+  // Exclude exactly ONE line -- the accepted canonical field -- by identity and position, never by
+  // shape. Removing every assessment-shaped line would let a second, forbidden assessment hide
+  // behind the shape of the field that licenses it.
+  const acceptedAt = lines.findIndex((l) => l.trim() === assessmentField.line);
+  const outsideAssessment = lines.filter((_, i) => i !== acceptedAt).join('\n');
   for (const re of FORBIDDEN_ORIGIN_PATTERNS) {
     if (re.test(outsideAssessment)) {
       // Structural reason only: the matched phrase is provider text and must never be echoed.

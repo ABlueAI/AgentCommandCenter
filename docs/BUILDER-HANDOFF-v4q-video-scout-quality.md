@@ -268,8 +268,46 @@ naming a real cross-channel conflict.
 It must pass `validateReportQuality` with **zero** failure codes.
 
 It exists to answer one question: *is this contract over-strict?* If a genuinely correct report
-cannot pass, that fixture fails first and loudly, and the correct response is to report the contract
-as over-strict — **not** to weaken the fixture.
+cannot pass, that fixture fails first and loudly.
+
+> **If a realistic correct report cannot pass, stop and report the contract as over-strict rather than weakening tests.**
+
+---
+
+## Later prompt-compliance probe — NOT AUTHORIZED BY THIS WORK
+
+> **This probe is not authorized by any V4Q correction, including this one. It must not run automatically, and no agent may start it on its own initiative.**
+
+The gate now rejects origin restatement anywhere outside the canonical field, including *negative*
+restatement. Whether a real model actually obeys that instruction is an open question that only a
+real request can answer — and no real request has been made at any point during V4Q.
+
+**When it may happen.** After the complete V4Q implementation receives the required final Full-class
+whole-diff review `VERDICT: PASS`, and *before* the final paid acceptance run, Blue may **separately
+and explicitly** authorize one probe.
+
+**What it is.** One deliberately cheap request: approximately **15 seconds**, **single slice**, Pro.
+Its sole purpose is to test compliance with the instruction not to restate the synthetic-origin
+conclusion outside the canonical field. Read the response — or the preserved diagnostic — looking
+specifically for that restatement.
+
+**What it is not.** It is **not** analysis-quality acceptance. Passing the probe says the model
+follows one formatting instruction. It says nothing about whether the analysis is correct.
+
+**Rules while it runs.**
+
+- No automatic re-probe, repair, retry, continuation, or fallback is permitted.
+- K5's existing bounded recovery — at most three byte-identical attempts, eligible 503 responses only
+  — is the *only* retry that may occur, and it is unchanged.
+
+**If it fails.** Stop. Preserve the diagnostic and inspect it. Tighten the prompt through a reviewed
+code change, re-run the gates, and obtain review again. **Do not re-probe automatically**; a
+replacement probe requires fresh explicit authorization from Blue.
+
+**If it passes.** Continue only to the separately authorized final acceptance run.
+
+> Passing the deterministic gate does not establish factual truth. Human acceptance remains
+> responsible for euphemism and semantic accuracy, before and after this probe.
 
 ---
 

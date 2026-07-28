@@ -1306,6 +1306,57 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
       'validateSyntheticAssessmentField reports which accepted form was used');
   }
 
+  section('V4Q FINAL CORRECTION: canonical-field uniqueness is GLOBAL, not section-scoped');
+  {
+    // Counting only inside Section 2 let a SECOND field stand elsewhere: one compliant assessment in
+    // the Video Profile and another, contradicting one in the Limitations section both survived,
+    // because the section-scoped count saw exactly one. Each LABEL is now counted across the WHOLE
+    // report, by OCCURRENCE rather than by line.
+    const dupCases = [
+      ['source-duration-field-format', 'a second EXACT field outside Section 2', inLimits(UNDETERMINABLE_DURATION_LINE)],
+      ['source-duration-field-format', 'a second MALFORMED field inside Section 2',
+        okReport().replace(UNDETERMINABLE_DURATION_LINE, UNDETERMINABLE_DURATION_LINE + '\n**Source duration:** about an hour')],
+      ['source-duration-field-format', 'a second PREFIXED field elsewhere', inLimits('Recap: **Source duration:** 1:02:03')],
+      ['source-duration-field-format', 'a second SUFFIXED field elsewhere', inLimits(UNDETERMINABLE_DURATION_LINE + ' (approx)')],
+      ['source-duration-field-format', 'TWO labels embedded in ONE line',
+        okReport().replace(UNDETERMINABLE_DURATION_LINE, UNDETERMINABLE_DURATION_LINE + ' **Source duration:** 1:02:03')],
+      ['synthetic-assessment-field-format', 'a second EXACT field outside Section 2', inLimits(NO_SYNTHETIC_EVIDENCE_LINE)],
+      ['synthetic-assessment-field-format', 'a second MALFORMED field inside Section 2',
+        okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE, NO_SYNTHETIC_EVIDENCE_LINE + '\n**Synthetic-media assessment:** maybe')],
+      ['synthetic-assessment-field-format', 'a second PREFIXED field elsewhere',
+        inLimits('To repeat, ' + NO_SYNTHETIC_EVIDENCE_LINE)],
+      ['synthetic-assessment-field-format', 'a second SUFFIXED field elsewhere',
+        inLimits(NO_SYNTHETIC_EVIDENCE_LINE + ' as noted')],
+      ['synthetic-assessment-field-format', 'TWO labels embedded in ONE line',
+        okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE, NO_SYNTHETIC_EVIDENCE_LINE + ' **Synthetic-media assessment:** x')],
+    ];
+    for (const [code, label, text] of dupCases) {
+      const v = vq(text);
+      assert(v.ok === false && v.code === code, `${label} returns ${code}`);
+    }
+    // FORMAT still wins even when the duplicate carries forbidden content: the response is malformed
+    // first, and saying so is more actionable than reporting the content it also got wrong.
+    assert(vq(inLimits('**Synthetic-media assessment:** clearly AI-generated')).code === 'synthetic-assessment-field-format',
+      'a duplicate assessment carrying frozen vocabulary returns the FORMAT code, not the content code');
+    assert(vq(inLimits('**Source duration:** 1:02:03')).code === 'source-duration-field-format',
+      'a duplicate duration field carrying a length claim returns the FORMAT code, not the content code');
+    // A normal report carrying exactly ONE accepted field of each kind still passes, in both forms.
+    assert(vq(okReport()).ok === true, 'exactly one accepted field of each kind still passes (no-evidence form)');
+    assert(vq(okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE,
+      '**Synthetic-media assessment:** synthetic voiceover — Evidence: 00:12 flat envelope — Confidence: HIGH')).ok === true,
+      'exactly one accepted field of each kind still passes (evidence-backed form)');
+    assert(validateReportQuality({ text: MEDITATION_REPORT, finishReason: 'STOP', ranges: MEDITATION_RANGES, audioTokens: 4480 }).ok === true,
+      'the complete realistic fixture is unaffected by global uniqueness');
+    // The pure validators count globally, and report the accepted line so the caller can exclude
+    // exactly that one line by identity before the frozen-vocabulary scan.
+    assert(validateSourceDurationField([UNDETERMINABLE_DURATION_LINE], [UNDETERMINABLE_DURATION_LINE]).line === UNDETERMINABLE_DURATION_LINE,
+      'validateSourceDurationField returns the accepted line');
+    assert(validateSyntheticAssessmentField([NO_SYNTHETIC_EVIDENCE_LINE], [NO_SYNTHETIC_EVIDENCE_LINE]).line === NO_SYNTHETIC_EVIDENCE_LINE,
+      'validateSyntheticAssessmentField returns the accepted line, not just its form');
+    assert(validateSourceDurationField([UNDETERMINABLE_DURATION_LINE], [UNDETERMINABLE_DURATION_LINE, UNDETERMINABLE_DURATION_LINE]).code === 'source-duration-field-format',
+      'a valid Section 2 field does NOT excuse a second occurrence elsewhere');
+  }
+
   section('V4Q FINAL: each separator is independently hyphen / en dash / em dash');
   {
     // §4.2 — all three variants, and mixed pairs, on each separator independently.
@@ -1314,6 +1365,29 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
       assert(vq(okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE, line)).ok === true,
         `an evidence-backed assessment separated by "${a}" then "${b}" is accepted`);
       assert(STANDARDIZED_SYNTHETIC_LINE.test(line), 'the exported complete-line contract accepts the same pair');
+    }
+    // V4Q FINAL CORRECTION: ONE OR MORE spaces/tabs on each side. Aligned or double-spaced output is
+    // cosmetic; rejecting a correct assessment over an extra space would discard a good response.
+    // Whitespace itself is still REQUIRED on both sides, so a hyphen inside a compound word can
+    // never be read as a separator.
+    const sep = (a, b) => okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE,
+      `**Synthetic-media assessment:** likely synthetic voiceover${a}Evidence: 00:12 flat envelope${b}Confidence: LOW`);
+    for (const [label, a, b] of [
+      ['a single space on each side', ' — ', ' — '],
+      ['multiple spaces on each side', '   —   ', '  -  '],
+      ['tabs on each side', '\t—\t', '\t–\t'],
+      ['mixed separators AND mixed spacing', ' -  ', '  — '],
+      ['a tab on one side and a space on the other', '\t— ', ' –\t'],
+    ]) {
+      assert(vq(sep(a, b)).ok === true, `separator whitespace: ${label} is accepted`);
+    }
+    for (const [label, a, b] of [
+      ['no whitespace at all', '—', '—'],
+      ['whitespace on the leading side only', ' —', '— '],
+      ['whitespace on the trailing side only', '— ', ' —'],
+    ]) {
+      assert(vq(sep(a, b)).code === 'synthetic-assessment-field-format',
+        `separator whitespace: ${label} is REJECTED (whitespace stays mandatory on both sides)`);
     }
     for (const confidence of ['LOW', 'MEDIUM', 'HIGH']) {
       assert(vq(okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE,
@@ -1480,6 +1554,46 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     assert(claimExceedsAggregate('over ', '50 seconds', 50) === true, '"over N" with N >= aggregate exceeds');
     assert(claimExceedsAggregate('under ', '9 hours', 50) === false, 'an upper bound never exceeds');
     assert(claimExceedsAggregate('', 'a while', 50) === false, 'an unparseable value never exceeds');
+  }
+
+  section('V4Q FINAL CORRECTION: STRICT and INCLUSIVE lower bounds are not the same claim');
+  {
+    // "over 50s" EXCLUDES 50s, so at a 50s aggregate it necessarily claims material outside scope.
+    // "at least 50s" is SATISFIED BY 50s, so it claims nothing outside scope and must pass.
+    // Conflating them rejected a truthful bounded-scope statement.
+    assert(vq(inLimits('The video is at least 50 seconds long.')).ok === true,
+      'INCLUSIVE: "at least 50 seconds" at a 50s aggregate PASSES (50s satisfies it)');
+    assert(vq(inLimits('The video is at least 51 seconds long.')).code === 'speculative-source-duration',
+      'INCLUSIVE: "at least 51 seconds" at a 50s aggregate is REJECTED (strictly above)');
+    assert(vq(inLimits('The video is over 50 seconds long.')).code === 'speculative-source-duration',
+      'STRICT: "over 50 seconds" at a 50s aggregate is REJECTED (it excludes 50s)');
+    assert(vq(inLimits('The video is 50 seconds long.')).ok === true,
+      'exact unhedged equality still PASSES');
+    // `upwards of` reads INCLUSIVELY -- the conservative choice, since no reviewed contract gives it
+    // a stricter meaning.
+    assert(vq(inLimits('The video is upwards of 50 seconds long.')).ok === true,
+      '"upwards of 50 seconds" is read inclusively and PASSES at a 50s aggregate');
+    assert(vq(inLimits('The video is upwards of 51 seconds long.')).code === 'speculative-source-duration',
+      '"upwards of 51 seconds" is REJECTED (strictly above the aggregate)');
+    // The hedge IMMEDIATELY preceding the value governs it.
+    assert(vq(inLimits('The video is just over 50 seconds long.')).code === 'speculative-source-duration',
+      '"just over 50 seconds" is governed by `over`, not by `just`, and is REJECTED');
+    // Every pre-existing above/below control is unchanged.
+    assert(vq(inLimits('The video is 15 seconds long.')).ok === true, 'below-aggregate control unchanged');
+    assert(vq(inLimits('The video is 90 seconds long.')).code === 'speculative-source-duration', 'above-aggregate control unchanged');
+    assert(vq(inLimits('The video is over 10 seconds long.')).ok === true, '"over N" below aggregate control unchanged');
+    assert(vq(inLimits('The video is under two hours long.')).ok === true, 'upper-bound control unchanged');
+    assert(vq(inLimits('The video is over one hour long.')).code === 'speculative-source-duration', 'the mandated example is unchanged');
+    assert(vq(inLimits('The recording runs for 62 minutes.')).code === 'speculative-source-duration', 'production 6 control unchanged');
+    // The comparison helper, per hedge class.
+    assert(claimExceedsAggregate('at least ', '50 seconds', 50) === false, 'helper: inclusive at the aggregate does not exceed');
+    assert(claimExceedsAggregate('at least ', '51 seconds', 50) === true, 'helper: inclusive above the aggregate exceeds');
+    assert(claimExceedsAggregate('upwards of ', '50 seconds', 50) === false, 'helper: "upwards of" is inclusive');
+    assert(claimExceedsAggregate('no less than ', '50 seconds', 50) === false, 'helper: "no less than" is inclusive');
+    assert(claimExceedsAggregate('greater than ', '50 seconds', 50) === true, 'helper: "greater than" is strict');
+    assert(claimExceedsAggregate('longer than ', '50 seconds', 50) === true, 'helper: "longer than" is strict');
+    assert(claimExceedsAggregate('in excess of ', '50 seconds', 50) === true, 'helper: "in excess of" is strict');
+    assert(claimExceedsAggregate('just over ', '50 seconds', 50) === true, 'helper: the LAST hedge governs the value');
   }
 
   section('V4Q FINAL: bounded subjects and cross-unit co-occurrence PASS');
