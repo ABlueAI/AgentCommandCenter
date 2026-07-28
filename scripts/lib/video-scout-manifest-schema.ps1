@@ -98,8 +98,12 @@ $script:VideoScoutQualityReasonCodes = @(
     'missing-slice-audio'
     'missing-speech-anchor'
     'unjustified-universal-silence'
-    'unsupported-synthetic-claim'
+    # V4Q FINAL: canonical-field FORMAT codes sit beside their CONTENT counterparts. Format is
+    # decided first, so a malformed field is never reported as a content violation.
+    'source-duration-field-format'
     'speculative-source-duration'
+    'synthetic-assessment-field-format'
+    'unsupported-synthetic-claim'
     'repetitive-timestamp-filler'
     'diagnostic-write-failed'
 )

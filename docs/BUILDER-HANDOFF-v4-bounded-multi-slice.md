@@ -15,15 +15,24 @@ Gitignored, created with `git diff --output`, verified to regenerate byte-for-by
 reviewed tip, so any commit above it can only ever be a **modification** — which is exactly the
 handoff-tail shape `scripts/merge-gate.ps1` requires.
 
-> **Release status: the original V4 Opus `VERDICT: PASS` is HISTORICAL EVIDENCE ONLY and is no
-> longer sufficient to release this branch.** Human acceptance exposed a production defect the
-> reviewed test suite could not see.
+> **Release status: STALE. Neither the original V4 verdict nor the V4R verdict authorizes release
+> any more.** Both are historical evidence only.
 >
-> The required new review is **complete**: an Opus 5 Full-class whole-diff read-only review of
-> `4c07db9...5b5e30a` returned a literal `VERDICT: PASS` with independently measured gates of
-> app **1297 / 0** and Pester **827 / 0 / 0**. That verdict — recorded verbatim under
-> [Reviewer verdicts](#reviewer-verdicts) — is the one that authorizes the merge and the single
-> paid acceptance run.
+> The V4R review below returned a literal `VERDICT: PASS` for `4c07db9...5b5e30a`, and that text is
+> still recorded verbatim under [Reviewer verdicts](#reviewer-verdicts) — but the wording there
+> claiming it "authorizes the merge and the single paid acceptance run" **no longer holds**. A
+> second human acceptance pass failed on *content quality*: the response was transported correctly
+> and cost real money, then proved unusable — it invented a source duration it could not see and
+> asserted synthetic origin it had no evidence for. Correct transport is not a correct report.
+>
+> That failure opened **V4Q**, which adds a deterministic report-quality gate on top of everything
+> V4R proved. V4Q's contract, its deliberate limitations, and what it explicitly does NOT protect
+> are documented in
+> [`BUILDER-HANDOFF-v4q-video-scout-quality.md`](BUILDER-HANDOFF-v4q-video-scout-quality.md).
+>
+> Release now requires a NEW Opus 5 Full-class whole-diff review of the branch including V4Q,
+> ending in a literal `VERDICT: PASS`. Read the V4R material below as an accurate record of the
+> transport repair — not as a live release authorization.
 
 ---
 

@@ -203,6 +203,69 @@ function compliantReport(ranges = []) {
     '## 9. LIMITATIONS OF THIS ANALYSIS', '**Section TL;DR:** limits.');
   return out.join('\n');
 }
+// --- V4Q FINAL (§9): the complete, hand-written, realistic passing fixture --------------------
+// A nine-section, two-slice report for a static-imagery guided-meditation video, written the way a
+// correct response actually reads rather than as a minimal shape that satisfies the gate. It is the
+// standing answer to "is this contract over-strict?": if a genuinely correct report cannot pass,
+// this fixture fails first and loudly.
+const MEDITATION_RANGES = [{ startOffset: 0, endOffset: 90 }, { startOffset: 600, endOffset: 690 }];
+const MEDITATION_REPORT = [
+  '## 1. TL;DR',
+  'A guided-meditation upload built around a single unmoving illustrated landscape, with a calm female narrator leading a breathing exercise over a sustained instrumental bed. Across both authorized windows the frame never cuts, pans, or zooms; all change is in the audio. The narrator gives breath counts and short affirmations, and a lower-third caption offers a companion app at the ten-minute mark. Nothing on screen identifies the creator, and no claim of therapeutic benefit is made in the portions supplied.',
+  '',
+  '## 2. VIDEO PROFILE',
+  '**Section TL;DR:** A static 16:9 illustrated still serving as a bed for narrated breathing guidance, produced to a modest but competent standard.',
+  '**Authorized scope:** 2 slice(s), aggregate 180s',
+  '**Source duration:** UNDETERMINABLE FROM AUTHORIZED SLICES',
+  '**Synthetic-media assessment:** NO OBSERVABLE EVIDENCE',
+  'Aspect ratio is 16:9 with no letterboxing. The presentation is consistent with a long-form YouTube upload rather than a vertical short. Production quality is prosumer: the illustration is cleanly drawn and the audio bed is level, but there is no editing to assess because the image never changes. No watermark, channel bug, or re-upload border appears in either window.',
+  '',
+  '## 3. PEOPLE, ENTITIES & SETTING',
+  '**Section TL;DR:** One unseen female narrator and one on-screen app caption; no person is visible at any point.',
+  'Speaker 1 is an unseen female narrator with a measured, low-volume delivery. She is never shown and is not named on screen in either window. The only identifiable entity is a caption reading "Stillwater — daily sessions" at 10:14. The depicted setting is an illustrated lakeshore at dusk; it is artwork, not a filmed location, and it does not change.',
+  '',
+  '## 4. DETAILED SUMMARY',
+  '**Section TL;DR:** An opening orientation and breath count, then a mid-session body-scan segment, both over one unchanging illustration.',
+  'The opening window establishes the exercise: the narrator asks the listener to settle, then leads a four-count inhale and six-count exhale, repeated twice. The mid-session window is further into a body scan, moving attention from shoulders to jaw. The instrumental bed is continuous across both windows and does not resolve or restart within either. Because the two windows are not adjacent, no claim is made here about what happens between them.',
+  '',
+  '## 5. COMPREHENSIVE TIMESTAMPED FINDINGS',
+  '**Section TL;DR:** Two authorized windows, each visually static and carrying distinct narration over a continuous instrumental bed.',
+  '### Slice 1: [0s,90s) — 90s authorized',
+  '**Slice 1 audio status:** SPEECH',
+  '**Slice 1 audio evidence:** 00:06 — a female voice begins speaking over a sustained pad; breath counts are audible and unhurried',
+  '**Slice 1 transcription anchor:** "let the shoulders drop away from the ears"',
+  '00:00-00:05 [VISUAL] illustrated lakeshore at dusk, no motion, no titles',
+  '00:06-01:30 [VISUAL] identical frame held; no cut, pan, zoom, or overlay for the remainder of the window',
+  '00:06 [AUDIO] narration begins; synthesized ambient pad already established underneath',
+  '00:22 [AUDIO] first four-count inhale instruction, followed by a six-count exhale',
+  '01:04 [AUDIO] the same breath pattern is repeated once, with no change in the instrumental bed',
+  '',
+  '### Slice 2: [600s,690s) — 90s authorized',
+  '**Slice 2 audio status:** SPEECH',
+  '**Slice 2 audio evidence:** 10:02 — the same female voice continues a body-scan instruction; the instrumental bed is unchanged in timbre and level',
+  '**Slice 2 transcription anchor:** "notice the jaw, and let it soften"',
+  '10:00-11:30 [VISUAL] the identical illustrated frame, still with no motion or transition',
+  '10:14 [TEXT] lower-third caption appears: "Stillwater — daily sessions"',
+  '10:02 [AUDIO] body-scan narration in progress, attention moving from shoulders to jaw',
+  '10:41 [AUDIO] synthesized strings enter beneath the pad and sustain to the end of the window',
+  '',
+  '## 6. CLAIMS, NUMBERS & CALLS TO ACTION',
+  '**Section TL;DR:** One on-screen brand caption and one implicit call to action; no health or outcome claims in the authorized windows.',
+  'The only call to action is the caption "Stillwater — daily sessions" at 10:14, which names a product but gives no URL, price, or promo code. The narrator states two numbers, both breath counts: "four" and "six". No therapeutic, medical, or outcome claim is made in either window.',
+  '',
+  '## 7. DISCREPANCIES & CROSS-CHECKS',
+  '**Section TL;DR:** One real channel disagreement: the audio advances continuously while the visual channel supplies no corroborating change.',
+  'The audio channel establishes clear forward progress — an opening orientation in the first window and a mid-session body scan in the second — while the visual channel is identical in both and therefore corroborates neither position. Nothing on screen confirms that the second window is later in the session; that ordering rests entirely on the supplied offsets and the narration content. The caption at 10:14 names "Stillwater", but no channel identity is visible anywhere else in the authorized windows, so the caption cannot be cross-checked against an uploader.',
+  '',
+  '## 8. SOURCE-CREDIBILITY ASSESSMENT',
+  '**Section TL;DR:** Low attributability: competent production, but nothing in the authorized windows identifies who made it.',
+  'The material is internally consistent and free of the artifacts that would suggest a re-upload, but attribution is weak: no channel branding, no spoken attribution, and no on-screen credit appear in either window. The single caption names a product rather than a publisher. Credibility beyond the authorized windows cannot be assessed.',
+  '',
+  '## 9. LIMITATIONS OF THIS ANALYSIS',
+  '**Section TL;DR:** Only two bounded windows were supplied; everything outside them is unexamined and unknowable from this pass.',
+  'Only the two authorized windows were available, and nothing outside them was observed. The source duration cannot be determined from these slices, so no statement is made about how much material sits before, between, or after them. Analysis samples roughly one frame per second, so a brief flash between sampled frames could have been missed — though with a completely static image that risk is low here. Whether the narration is a live human take or an assembled read cannot be determined from what was supplied.',
+].join('\n');
+
 const bodyFor = (ranges = []) => ({
   candidates: [{ content: { parts: [{ text: compliantReport(ranges) }] }, finishReason: 'STOP' }],
   usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5, totalTokenCount: 15, promptTokensDetails: [] },
@@ -700,7 +763,10 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     splitReportLines, sectionLines, findHeaderLine, hasExactLine, matchLines,
     SLICE_AUDIO_STATUS_LINE, SLICE_AUDIO_EVIDENCE_LINE, SLICE_ANCHOR_LINE, SLICE_JUSTIFICATION_LINE,
     SLICE_HEADING_SHAPE, SYNTHETIC_ASSESSMENT_SHAPE, STANDARDIZED_SYNTHETIC_LINE,
-    SOURCE_LENGTH_ASSERTIONS, NEGATED_SYNTHETIC_CLAIMS, SYNTHETIC_TERMS,
+    FORBIDDEN_ORIGIN_PHRASES, FORBIDDEN_ORIGIN_PATTERNS,
+    splitSentenceUnits, parseDurationSeconds, claimExceedsAggregate,
+    validateSourceDurationField, validateSyntheticAssessmentField,
+    PROFILE_SECTION_INDEX, EVIDENCE_SECTION_INDEX,
   } = require('./gemini-video-sdk');
   const LITE = 'gemini-2.5-flash-lite';
   const FLASH = 'gemini-2.5-flash';
@@ -841,7 +907,11 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
       ['unjustified-universal-silence', okReport().replace(/\*\*Slice (\d) audio status:\*\* SPEECH/g, '**Slice $1 audio status:** SILENCE').replace(/\*\*Slice \d transcription anchor:\*\*[^\n]*\n/g, ''), {}],
       // The exact V4 defect: a false "no audio" finding while audio tokens were billed.
       ['unjustified-universal-silence', okReport().replace('**Section TL;DR:** profile.', 'No audio or spoken content is present in the provided video slices. The video is silent.'), {}],
-      ['speculative-source-duration', okReport().replace(UNDETERMINABLE_DURATION_LINE, 'Approximate duration: Over 1 hour.'), {}],
+      // V4Q FINAL: replacing the canonical field is now a FORMAT failure; keeping it and ALSO
+      // asserting a duration is the CONTENT failure. Both classes are proven here.
+      ['source-duration-field-format', okReport().replace(UNDETERMINABLE_DURATION_LINE, 'Approximate duration: Over 1 hour.'), {}],
+      ['speculative-source-duration', okReport().replace(UNDETERMINABLE_DURATION_LINE, UNDETERMINABLE_DURATION_LINE + '\nApproximate duration: Over 1 hour.'), {}],
+      ['synthetic-assessment-field-format', okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE, '**Synthetic-media assessment:** probably fine'), {}],
       ['unsupported-synthetic-claim', okReport().replace('**Section TL;DR:** profile.', 'The static nature suggests it is AI-generated stock footage.'), {}],
       ['repetitive-timestamp-filler', okReport().replace('10s-30s [VISUAL] steady framing across this slice',
         Array.from({ length: 30 }, (_, i) => `00:${String(i).padStart(2, '0')} [VISUAL] Solid green background.`).join('\n')), {}],
@@ -932,9 +1002,9 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     const moveOut = (line) => base.replace(line + '\n', '').replace('**Section TL;DR:** limits.', '**Section TL;DR:** limits.\n' + line);
     assert(vq(moveOut(AUTHORIZED_SCOPE_LINE(2, 50))).code === 'scope-mismatch',
       'the authorized-scope line outside Section 2 does not satisfy the contract');
-    assert(vq(moveOut(UNDETERMINABLE_DURATION_LINE)).code === 'speculative-source-duration',
+    assert(vq(moveOut(UNDETERMINABLE_DURATION_LINE)).code === 'source-duration-field-format',
       'the undeterminable-duration line outside Section 2 does not satisfy the contract');
-    assert(vq(moveOut(NO_SYNTHETIC_EVIDENCE_LINE)).code === 'unsupported-synthetic-claim',
+    assert(vq(moveOut(NO_SYNTHETIC_EVIDENCE_LINE)).code === 'synthetic-assessment-field-format',
       'the synthetic-media assessment outside Section 2 does not satisfy the contract');
 
     // A marker belonging to slice 2 cannot be satisfied by text sitting under slice 1.
@@ -1049,10 +1119,10 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     for (const [code, mutated] of [
       ['scope-mismatch', okReport().replace(scope, 'Note: ' + scope)],
       ['scope-mismatch', okReport().replace(scope, scope + ' (approximately)')],
-      ['speculative-source-duration', okReport().replace(UNDETERMINABLE_DURATION_LINE, 'Note: ' + UNDETERMINABLE_DURATION_LINE)],
-      ['speculative-source-duration', okReport().replace(UNDETERMINABLE_DURATION_LINE, UNDETERMINABLE_DURATION_LINE + ' — but likely long')],
-      ['unsupported-synthetic-claim', okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE, 'We note ' + NO_SYNTHETIC_EVIDENCE_LINE + ' here.')],
-      ['unsupported-synthetic-claim', okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE, NO_SYNTHETIC_EVIDENCE_LINE + ' so far')],
+      ['source-duration-field-format', okReport().replace(UNDETERMINABLE_DURATION_LINE, 'Note: ' + UNDETERMINABLE_DURATION_LINE)],
+      ['source-duration-field-format', okReport().replace(UNDETERMINABLE_DURATION_LINE, UNDETERMINABLE_DURATION_LINE + ' — but likely long')],
+      ['synthetic-assessment-field-format', okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE, 'We note ' + NO_SYNTHETIC_EVIDENCE_LINE + ' here.')],
+      ['synthetic-assessment-field-format', okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE, NO_SYNTHETIC_EVIDENCE_LINE + ' so far')],
     ]) {
       const v = vq(mutated);
       assert(v.ok === false && v.code === code, `ADVERSARIAL: an embedded/extended Section 2 marker is rejected with ${code}`);
@@ -1060,7 +1130,7 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     // Exactly one assessment line: two conflicting ones cannot both stand.
     const twoAssessments = okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE,
       NO_SYNTHETIC_EVIDENCE_LINE + '\n**Synthetic-media assessment:** clearly synthetic — Evidence: 00:04 warping — Confidence: HIGH');
-    assert(vq(twoAssessments).code === 'unsupported-synthetic-claim',
+    assert(vq(twoAssessments).code === 'synthetic-assessment-field-format',
       'two Section 2 synthetic-media assessment lines are rejected; exactly one is required');
     assert(SYNTHETIC_ASSESSMENT_SHAPE.test(NO_SYNTHETIC_EVIDENCE_LINE), 'the no-evidence line IS assessment-shaped');
     assert(STANDARDIZED_SYNTHETIC_LINE.test('**Synthetic-media assessment:** likely synthetic voiceover — Evidence: 00:12 uniform spectral envelope — Confidence: LOW'),
@@ -1125,105 +1195,392 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     assert(vq(compliantReport(eight), { ranges: eight }).ok === true, 'the eight-slice fixture still passes');
   }
 
-  // ================ V4Q CORRECTION 2: NATURAL-LANGUAGE CONTRADICTORY CLAIMS ====================
-  section('V4Q CORRECTION 2: prose source-length assertions contradict the undeterminable line');
+  // ================== V4Q FINAL: PROMPT / GATE AGREEMENT AND SINGLE SOURCE =====================
+  section('V4Q FINAL: the base prompt no longer orders the field the gate rejects');
   {
-    // The work order's named cases, plus the equivalent source/video/runtime forms.
+    const basePrompt = fs.readFileSync(path.join(__dirname, '..', 'prompts', 'video-scout-analysis.md'), 'utf8');
+    const supplement = buildAuthorizedScopeInstruction(R2);
+    const resolved = basePrompt + '\n' + supplement;
+    const evidenceTemplate = '**Synthetic-media assessment:** <finding> — Evidence: <MM:SS observation> — Confidence: LOW|MEDIUM|HIGH';
+
+    // THE ROOT DEFECT: Section 2 used to order "approximate duration", which is precisely the field
+    // the gate rejects. Prompt and gate now agree, so a model obeying the prompt cannot be rejected
+    // for obeying it.
+    assert(!/approximate duration,/i.test(basePrompt),
+      'the base prompt no longer lists "approximate duration" as a Section 2 item');
+    assert(/there is no approximate-duration item in this section/i.test(basePrompt),
+      'the base prompt says so explicitly rather than merely omitting it');
+    assert(DURATION_FIELD_CLAIM.test('Approximate duration: Over 1 hour') === true,
+      '(the removed instruction produced exactly what the field detector rejects, which is why it had to go)');
+
+    // §4.3 SINGLE SOURCE: each exact literal/template exists in exactly ONE place, the supplement.
+    const occurrences = (haystack, needle) => haystack.split(needle).length - 1;
+    for (const [label, literal] of [
+      ['the source-duration line', UNDETERMINABLE_DURATION_LINE],
+      ['the no-evidence line', NO_SYNTHETIC_EVIDENCE_LINE],
+      ['the evidence-backed template', evidenceTemplate],
+    ]) {
+      assert(occurrences(resolved, literal) === 1, `${label} appears EXACTLY once in the resolved sliced prompt`);
+      assert(occurrences(basePrompt, literal) === 0, `${label} does not appear in the base prompt (no second source to drift)`);
+      assert(occurrences(supplement, literal) === 1, `${label} is owned solely by buildAuthorizedScopeInstruction`);
+    }
+
+    // §4.3.3 the non-literal discipline SURVIVES, so whole-video runs keep principle-level guidance.
+    for (const [label, re] of [
+      ['static/low-budget content is not evidence', /is NOT evidence of AI generation/],
+      ['never classify origin by vibe', /Never classify origin by vibe/],
+      ['affirmative findings need evidence and confidence', /requires specific timestamped observable evidence and a stated confidence level/],
+      ['duration only when directly observable', /State a source duration ONLY when the full source duration is directly observable/],
+    ]) {
+      assert(re.test(basePrompt), `the base prompt retains: ${label}`);
+    }
+
+    // §4.3.6 the no-restatement instruction, in both the base prompt and the supplement.
+    assert(/do not restate the conclusion, positive OR negative/i.test(basePrompt),
+      'the base prompt forbids restating origin conclusions');
+    for (const named of ['TL;DR', 'detailed summary', 'discrepancies section', 'credibility assessment', 'limitations section']) {
+      assert(basePrompt.includes(named), `the no-restatement rule names the ${named}`);
+    }
+    assert(/ONLY place origin may be discussed/.test(supplement) && /not positively, and not negatively/.test(supplement),
+      'the sliced supplement repeats the no-restatement rule in the terms the gate enforces');
+    assert(/synthesized or synth-pad music, a manipulated exposure/.test(supplement),
+      'the supplement tells the model which descriptive vocabulary remains SAFE');
+    assert(/the two separators may each be a hyphen, en dash, or em dash/.test(supplement),
+      'the supplement documents the separator tolerance the validator grants');
+
+    // The canonical section template still matches the prompt, in order.
+    const idx = REQUIRED_SECTIONS.map((h) => basePrompt.indexOf(h));
+    assert(idx.every((i) => i !== -1), 'every canonical section header exists in the prompt');
+    assert(idx.every((v, i) => i === 0 || v > idx[i - 1]), 'the prompt declares them in the required order');
+  }
+
+  // ==================== V4Q FINAL: CANONICAL FIELD FORMAT vs CONTENT ==========================
+  // Two minimal canonical fields, deterministic format validation, finite lexical content checks,
+  // and explicit format-before-content precedence. The gate prefers UNDER-matching to discarding a
+  // correct provider response: semantic truth, euphemism, and unlisted paraphrase are human
+  // acceptance's job, and the handoff says so literally.
+  section('V4Q FINAL: source-duration FIELD FORMAT is its own code');
+  {
+    const cases = [
+      ['missing', okReport().replace(UNDETERMINABLE_DURATION_LINE + '\n', '')],
+      ['duplicated', okReport().replace(UNDETERMINABLE_DURATION_LINE, UNDETERMINABLE_DURATION_LINE + '\n' + UNDETERMINABLE_DURATION_LINE)],
+      ['outside Section 2', okReport().replace(UNDETERMINABLE_DURATION_LINE + '\n', '')
+        .replace('**Section TL;DR:** limits.', '**Section TL;DR:** limits.\n' + UNDETERMINABLE_DURATION_LINE)],
+      ['prefixed', okReport().replace(UNDETERMINABLE_DURATION_LINE, 'Note: ' + UNDETERMINABLE_DURATION_LINE)],
+      ['suffixed', okReport().replace(UNDETERMINABLE_DURATION_LINE, UNDETERMINABLE_DURATION_LINE + ' (probably)')],
+      ['alternative wording', okReport().replace(UNDETERMINABLE_DURATION_LINE, '**Source duration:** UNKNOWN')],
+    ];
+    for (const [label, text] of cases) {
+      const v = vq(text);
+      assert(v.ok === false && v.code === 'source-duration-field-format',
+        `a ${label} source-duration field returns source-duration-field-format`);
+      assert(!/UNKNOWN|probably/.test(v.reason) || v.reason.includes(UNDETERMINABLE_DURATION_LINE),
+        'the reason names the required literal, never the provider wording');
+    }
+    // The pure field validator, exercised directly.
+    assert(validateSourceDurationField([UNDETERMINABLE_DURATION_LINE], [UNDETERMINABLE_DURATION_LINE]).ok === true,
+      'validateSourceDurationField accepts exactly one exact line');
+    assert(validateSourceDurationField([], [UNDETERMINABLE_DURATION_LINE]).code === 'source-duration-field-format',
+      'validateSourceDurationField rejects a line that sits outside the profile section');
+  }
+
+  section('V4Q FINAL: synthetic-assessment FIELD FORMAT is its own code');
+  {
+    const cases = [
+      ['missing', okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE + '\n', '')],
+      ['duplicated', okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE, NO_SYNTHETIC_EVIDENCE_LINE + '\n' + NO_SYNTHETIC_EVIDENCE_LINE)],
+      ['outside Section 2', okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE + '\n', '')
+        .replace('**Section TL;DR:** limits.', '**Section TL;DR:** limits.\n' + NO_SYNTHETIC_EVIDENCE_LINE)],
+      ['prefixed', okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE, 'We note ' + NO_SYNTHETIC_EVIDENCE_LINE)],
+      ['neither accepted form', okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE, '**Synthetic-media assessment:** probably fine')],
+      ['timestampless evidence', okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE, '**Synthetic-media assessment:** odd warping — Evidence: uniform envelope — Confidence: LOW')],
+      ['no confidence rating', okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE, '**Synthetic-media assessment:** odd warping — Evidence: 00:12 warping')],
+      ['separator without whitespace', okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE, '**Synthetic-media assessment:** odd warping—Evidence: 00:12 warping—Confidence: LOW')],
+    ];
+    for (const [label, text] of cases) {
+      const v = vq(text);
+      assert(v.ok === false && v.code === 'synthetic-assessment-field-format',
+        `a ${label} synthetic-media assessment returns synthetic-assessment-field-format`);
+    }
+    assert(validateSyntheticAssessmentField([NO_SYNTHETIC_EVIDENCE_LINE], [NO_SYNTHETIC_EVIDENCE_LINE]).form === 'no-evidence',
+      'validateSyntheticAssessmentField reports which accepted form was used');
+  }
+
+  section('V4Q FINAL: each separator is independently hyphen / en dash / em dash');
+  {
+    // §4.2 — all three variants, and mixed pairs, on each separator independently.
+    for (const [a, b] of [['—', '—'], ['-', '-'], ['–', '–'], ['-', '—'], ['—', '-'], ['–', '—'], ['—', '–']]) {
+      const line = `**Synthetic-media assessment:** likely synthetic voiceover ${a} Evidence: 00:12 uniform spectral envelope ${b} Confidence: MEDIUM`;
+      assert(vq(okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE, line)).ok === true,
+        `an evidence-backed assessment separated by "${a}" then "${b}" is accepted`);
+      assert(STANDARDIZED_SYNTHETIC_LINE.test(line), 'the exported complete-line contract accepts the same pair');
+    }
+    for (const confidence of ['LOW', 'MEDIUM', 'HIGH']) {
+      assert(vq(okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE,
+        `**Synthetic-media assessment:** possible reuse — Evidence: 00:03 duplicated frame — Confidence: ${confidence}`)).ok === true,
+        `confidence ${confidence} is accepted`);
+    }
+  }
+
+  section('V4Q FINAL: format is decided BEFORE content');
+  {
+    // Both malformed → the source-duration code, deterministically.
+    const bothBad = okReport()
+      .replace(UNDETERMINABLE_DURATION_LINE, 'x ' + UNDETERMINABLE_DURATION_LINE)
+      .replace(NO_SYNTHETIC_EVIDENCE_LINE, 'y ' + NO_SYNTHETIC_EVIDENCE_LINE);
+    assert(vq(bothBad).code === 'source-duration-field-format',
+      'when BOTH canonical fields are malformed, the source-duration format code is returned');
+    // A malformed synthetic field that ALSO contains forbidden vocabulary is a FORMAT failure.
+    assert(vq(okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE, '**Synthetic-media assessment:** looks AI-generated')).code === 'synthetic-assessment-field-format',
+      'a malformed assessment containing "AI-generated" returns the FORMAT code, not the content code');
+    // A malformed duration field that ALSO contains a forbidden duration claim is a FORMAT failure.
+    assert(vq(okReport().replace(UNDETERMINABLE_DURATION_LINE, 'Approximate duration: Over 1 hour.')).code === 'source-duration-field-format',
+      'a replaced duration field carrying an invented duration returns the FORMAT code');
+    // Well-formed fields hand off to the content contracts.
+    assert(vq(inLimits('The static frame suggests stock footage.')).code === 'unsupported-synthetic-claim',
+      'well-formed fields plus forbidden origin vocabulary returns the CONTENT code');
+    assert(vq(inLimits("The video's duration is 1:02:03.")).code === 'speculative-source-duration',
+      'well-formed fields plus a source-length claim returns the CONTENT code');
+  }
+
+  // ===================== V4Q FINAL: FROZEN SYNTHETIC-ORIGIN VOCABULARY =========================
+  section('V4Q FINAL: every frozen origin phrase rejects OUTSIDE the canonical field');
+  {
+    assert(FORBIDDEN_ORIGIN_PHRASES.length === 17, 'the frozen vocabulary is exactly 17 phrases');
+    for (const phrase of FORBIDDEN_ORIGIN_PHRASES) {
+      const v = vq(inLimits(`Observed: ${phrase} characteristics.`));
+      assert(v.ok === false && v.code === 'unsupported-synthetic-claim',
+        `frozen phrase "${phrase}" rejects outside the canonical field`);
+      assert(!v.reason.includes(phrase), 'the failure reason never echoes the matched phrase');
+    }
+    // Both accepted field forms are treated identically: an evidence-backed finding licenses the
+    // FIELD, never a restatement elsewhere.
+    const backed = (report) => report.replace(NO_SYNTHETIC_EVIDENCE_LINE,
+      '**Synthetic-media assessment:** synthetic voiceover — Evidence: 00:12 flat envelope — Confidence: HIGH');
+    assert(vq(backed(okReport())).ok === true, 'an evidence-backed assessment alone passes');
+    assert(vq(backed(inLimits('This is AI-generated.'))).code === 'unsupported-synthetic-claim',
+      'an evidence-backed assessment does NOT license restatement elsewhere');
+    assert(vq(inLimits('This is AI-generated.')).code === 'unsupported-synthetic-claim',
+      'a no-evidence assessment does NOT license restatement elsewhere');
+  }
+
+  section('V4Q FINAL: negative origin restatement is rejected DELIBERATELY (§8 reversal)');
+  {
+    // AUTHORIZED REVERSAL. These four were passing controls at 4aeb28f. There is no negation
+    // interpretation any more: the canonical field is the ONLY place origin may be discussed, so a
+    // denial in the Limitations section is a restatement. This is the single most likely
+    // false-positive rejection from a well-behaved model, and the handoff says so.
     for (const claim of [
-      'The video is over one hour long.',
-      "The video's duration is 1:02:03.",
-      'The duration of the video is 1:02:03.',
-      'The source runs for 62 minutes.',
-      'The recording lasts about two hours.',
-      'The full runtime is approximately 90 minutes.',
-      'Video length: 62 minutes',
-      'The clip spans 1:05:00.',
-      'The footage totals 45 minutes.',
-      'The entire video was roughly three hours.',
-      'The source video is in excess of 2 hours.',
-      'This video clocks in at 47 minutes.',
+      'No observable evidence of AI generation was found.',
+      'The material does not appear AI-generated.',
+      'Nothing suggests AI generation.',
+      'The footage was not digitally manipulated.',
+      'It is not merely AI-generated.',
+      'The imagery is not just synthetic media.',
+      'No indications of AI generation were observed.',
+    ]) {
+      const v = vq(inLimits(claim));
+      assert(v.ok === false && v.code === 'unsupported-synthetic-claim',
+        `REVERSAL: negative restatement "${claim.slice(0, 40)}" is REJECTED`);
+    }
+    // The one §8 case that REMAINS passing: bare "synthetic" is not frozen vocabulary.
+    assert(vq(inLimits('The imagery is not demonstrably synthetic.')).ok === true,
+      'REVERSAL CONTROL: "not demonstrably synthetic" still PASSES (bare `synthetic` is excluded)');
+  }
+
+  section('V4Q FINAL: bare synth / audio / manipulation vocabulary is NOT an origin claim');
+  {
+    // These carry legitimate audio, editing, and camera meanings. Rejecting them would discard
+    // correct observations, so they are excluded from the frozen list on purpose.
+    for (const observation of [
+      'Synthesized ambient tones continue under the narration.',
+      'A low synth-pad drone is audible.',
+      'Synthetic strings enter near the end.',
+      'The camera manipulates focus during the transition.',
+      'The exposure appears manually manipulated.',
+      'Manipulation of the exposure is visible throughout.',
+      'A synthesizer pad sustains beneath the narration.',
+      'The manipulated focus resolves by the end of the slice.',
+    ]) {
+      assert(vq(inLimits(observation)).ok === true, `a legitimate observation passes: "${observation.slice(0, 40)}"`);
+    }
+    for (const bare of ['synthetic', 'synthesized', 'synth', 'manipulate', 'manipulation', 'manipulated exposure', 'manipulated focus']) {
+      assert(FORBIDDEN_ORIGIN_PATTERNS.every((re) => !re.test(`the ${bare} is present`)),
+        `bare "${bare}" is deliberately absent from the frozen vocabulary`);
+    }
+  }
+
+  // ================== V4Q FINAL: SENTENCE-LOCAL SOURCE-DURATION CONTRACT =======================
+  section('V4Q FINAL: the deterministic sentence-unit splitter');
+  {
+    assert(splitSentenceUnits('One. Two! Three?').join('|') === 'One.|Two!|Three?',
+      'terminators followed by whitespace split');
+    assert(splitSentenceUnits('A line\nB line').join('|') === 'A line|B line', 'line boundaries split');
+    assert(splitSentenceUnits('It ran 1.5 hours today.').length === 1, 'a decimal point does NOT split');
+    assert(splitSentenceUnits('The stamp is 1:02:03 exactly.').length === 1, 'a clock reading does NOT split');
+    assert(splitSentenceUnits('   ').length === 0, 'blank input yields no units');
+    // Value parsing is exact and closed.
+    assert(parseDurationSeconds('1:02:03') === 3723 && parseDurationSeconds('1:05') === 65,
+      'clock forms parse as H:MM:SS and M:SS');
+    assert(parseDurationSeconds('62 minutes') === 3720 && parseDurationSeconds('one hour') === 3600
+      && parseDurationSeconds('30 seconds') === 30, 'number and number-word values parse');
+    assert(parseDurationSeconds('a while') === null && parseDurationSeconds('unknown') === null,
+      'non-values parse to null, which is why honest prose never matches');
+  }
+
+  section('V4Q FINAL: productions 1, 2, 3 and 5 reject on their own');
+  {
+    for (const [id, claim] of [
+      [1, "The video's duration is 1:02:03."],
+      [1, 'The source length is 62 minutes.'],
+      [2, 'The duration of the video is 62 minutes.'],
+      [3, 'The overall runtime is 90 minutes.'],
+      [5, 'Approximate duration: Over 1 hour.'],
+      [5, 'Estimated runtime: 62 minutes'],
+      [5, 'Video runtime: 1:02:03'],
     ]) {
       const v = vq(inLimits(claim));
       assert(v.ok === false && v.code === 'speculative-source-duration',
-        `ADVERSARIAL: the required undeterminable line plus "${claim.slice(0, 34)}" is REJECTED`);
-      assert(!v.reason.includes(claim.slice(4, 20)), 'the failure reason never echoes the asserted length');
+        `production ${id} rejects "${claim.slice(0, 36)}"`);
+      assert(!v.reason.includes('62') || v.reason.includes('50s authorized aggregate'),
+        'the reason states the authorized aggregate, never the claimed length');
     }
-    // FALSE-POSITIVE CONTROLS: honest limitation prose supplies no value and must still pass.
+  }
+
+  section('V4Q FINAL: productions 4 and 6 are gated by the AUTHORIZED AGGREGATE');
+  {
+    // R2 aggregates to 50s. This is the ONE place authorized scope disambiguates identical prose.
+    assert(vq(inLimits('The video is over one hour long.')).code === 'speculative-source-duration',
+      'production 4: "over one hour" exceeds the 50s aggregate and is REJECTED');
+    assert(vq(inLimits('The recording runs for 62 minutes.')).code === 'speculative-source-duration',
+      'production 6: "runs for 62 minutes" exceeds the 50s aggregate and is REJECTED');
+    assert(vq(inLimits('The video is 90 seconds long.')).code === 'speculative-source-duration',
+      'production 4: a value above the aggregate is REJECTED');
+    assert(vq(inLimits('The video is 15 seconds long.')).ok === true,
+      'production 4: BELOW the aggregate is bounded-scope description and PASSES');
+    assert(vq(inLimits('The video is 50 seconds long.')).ok === true,
+      'production 4: EQUAL to the aggregate PASSES');
+    assert(vq(inLimits('The video is under two hours long.')).ok === true,
+      'an upper-bound hedge proves nothing about exceeding the aggregate, so it PASSES');
+    assert(vq(inLimits('The video is over 10 seconds long.')).ok === true,
+      '"over N" with N below the aggregate does not deterministically exceed it, so it PASSES');
+    // The same prose against a different authorized scope.
+    const R30 = [{ startOffset: 0, endOffset: 30 }];
+    const at30 = (extra) => compliantReport(R30).replace('**Section TL;DR:** limits.', '**Section TL;DR:** limits.\n' + extra);
+    assert(vq(at30('The video is 15 seconds long.'), { ranges: R30 }).ok === true,
+      '15s passes against a 30s aggregate');
+    assert(vq(at30('The video is 30 seconds long.'), { ranges: R30 }).ok === true,
+      '30s passes against a 30s aggregate (equal is in scope)');
+    assert(vq(at30('The video is 45 seconds long.'), { ranges: R30 }).code === 'speculative-source-duration',
+      '45s is REJECTED against a 30s aggregate');
+    // The comparison helper, exercised directly.
+    assert(claimExceedsAggregate('', '90 seconds', 50) === true, 'bare value above aggregate exceeds');
+    assert(claimExceedsAggregate('', '50 seconds', 50) === false, 'equal does not exceed');
+    assert(claimExceedsAggregate('over ', '10 seconds', 50) === false, '"over N" with N < aggregate is indeterminate');
+    assert(claimExceedsAggregate('over ', '50 seconds', 50) === true, '"over N" with N >= aggregate exceeds');
+    assert(claimExceedsAggregate('under ', '9 hours', 50) === false, 'an upper bound never exceeds');
+    assert(claimExceedsAggregate('', 'a while', 50) === false, 'an unparseable value never exceeds');
+  }
+
+  section('V4Q FINAL: bounded subjects and cross-unit co-occurrence PASS');
+  {
+    // `slice`, `clip`, `segment`, and `part` are NOT whole-source subjects.
+    for (const control of [
+      'The video shows a static frame for 30 seconds.',
+      'This clip runs for 30 seconds.',
+      'The clip spans 1:05:00.',
+      'Slice 1 covers 30 seconds.',
+      'The segment lasts 40 seconds.',
+      'Part 2 lasts 40 seconds.',
+    ]) {
+      assert(vq(inLimits(control)).ok === true, `bounded-subject control passes: "${control.slice(0, 36)}"`);
+    }
+    // AUTHORIZED REVERSAL (§8): this was a rejecting case at 4aeb28f.
+    assert(vq(inLimits('The clip spans 1:05:00.')).ok === true,
+      'REVERSAL: a `clip` duration statement now PASSES (bounded subject)');
+    // Honest limitation prose supplies no concrete value, so no production can match it.
     for (const honest of [
+      'The source duration cannot be determined from these slices.',
       'The full duration of the video is unknown from the authorized slices alone.',
       'Only the authorized aggregate was analyzed; the source length was never visible.',
       'Duration beyond the authorized slices could not be determined.',
       'The full source length is not determinable from the authorized slices.',
-      'The total runtime of the source could not be established.',
-      'The video may continue past the authorized window; that is unknowable here.',
     ]) {
-      assert(vq(inLimits(honest)).ok === true, `honest limitation prose still passes: "${honest.slice(0, 34)}"`);
+      assert(vq(inLimits(honest)).ok === true, `honest limitation prose passes: "${honest.slice(0, 36)}"`);
     }
-    // The authorized aggregate and per-slice authorized lengths are never read as source claims.
-    assert(vq(inLimits('Slice 1 duration is 20 seconds of authorized footage.')).ok === true,
-      'a PER-SLICE authorized length is not a source-length claim');
-    assert(vq(inLimits('The authorized aggregate is 50s across two slices.')).ok === true,
-      'the authorized aggregate is not a source-length claim');
-    assert(SOURCE_LENGTH_ASSERTIONS.every((re) => !re.test(AUTHORIZED_SCOPE_LINE(2, 50))),
-      'no prose pattern matches the authorized-scope line');
-    assert(SOURCE_LENGTH_ASSERTIONS.every((re) => !re.test(SLICE_HEADING(1, R2[0]))),
-      'no prose pattern matches a per-slice heading');
-    assert(SOURCE_LENGTH_ASSERTIONS.some((re) => re.test('The video is over one hour long.')),
-      'the prose pattern set is what catches the natural-language claim');
+    // Tokens are NEVER combined across units.
+    for (const [label, split] of [
+      ['sentences', 'The video is static throughout. A caption reads 62 minutes.'],
+      ['lines', 'The video is static throughout.\nA caption reads 62 minutes.'],
+      ['paragraphs', 'The video holds one frame.\n\nElsewhere a timer shows 62 minutes.'],
+    ]) {
+      assert(vq(inLimits(split)).ok === true, `cross-${label} co-occurrence does NOT assemble a claim`);
+    }
+    // The sanctioned lines never trigger themselves.
+    assert(DURATION_FIELD_CLAIM.test(AUTHORIZED_SCOPE_LINE(2, 50)) === false, 'the scope line is not a duration field');
+    assert(DURATION_FIELD_CLAIM.test(SLICE_HEADING(1, R2[0])) === false, 'a slice heading is not a duration field');
+    assert(DURATION_FIELD_CLAIM.test(UNDETERMINABLE_DURATION_LINE) === true,
+      '(the sanctioned line IS field-shaped, which is why it is stripped before the scan)');
+    assert(vq(okReport()).ok === true, 'the sanctioned lines together still pass');
   }
 
-  section('V4Q CORRECTION 2: only a negation ATTACHED to the synthetic claim is a denial');
+  // ======================= V4Q FINAL: CANONICAL SECTION IDENTITY (§9) ==========================
+  section('V4Q FINAL: REQUIRED_SECTIONS is the SINGLE ordered template definition');
   {
-    // The work order's named cases: affirmative claims that merely CONTAIN a negation token. The
-    // previous whole-line negation filter let both of these through.
-    for (const claim of [
-      'There is no doubt this is AI-generated.',
-      'Not only is it synthetic, it is obviously manipulated.',
-      'Nothing here is subtle: this is a deepfake.',
-      'It is not unreasonable to call this AI-generated.',
-      'No question about it — the imagery is synthetic.',
-    ]) {
-      const v = vq(inLimits(claim));
-      assert(v.ok === false && v.code === 'unsupported-synthetic-claim',
-        `ADVERSARIAL: NO OBSERVABLE EVIDENCE plus "${claim.slice(0, 34)}" is REJECTED`);
-      assert(!v.reason.includes('AI-generated') && !v.reason.includes('deepfake'),
-        'the failure reason never echoes the provider claim');
+    assert(REQUIRED_SECTIONS.length === 9, 'the template declares exactly nine sections');
+    assert(PROFILE_SECTION_INDEX === 1 && REQUIRED_SECTIONS[PROFILE_SECTION_INDEX] === PROFILE_SECTION_HEADER,
+      'Video Profile is the SECOND canonical section, and its header is derived from the template');
+    assert(REQUIRED_SECTIONS[PROFILE_SECTION_INDEX + 1] === PROFILE_SECTION_NEXT_HEADER,
+      "Video Profile's end boundary is the FOLLOWING canonical section");
+    assert(EVIDENCE_SECTION_INDEX === 4 && REQUIRED_SECTIONS[EVIDENCE_SECTION_INDEX] === EVIDENCE_SECTION_HEADER,
+      'the evidence section is the FIFTH canonical section, derived from the same template');
+    assert(REQUIRED_SECTIONS[EVIDENCE_SECTION_INDEX + 1] === EVIDENCE_SECTION_NEXT_HEADER,
+      "the evidence section's end boundary is the FOLLOWING canonical section");
+    // Template drift fails visibly rather than silently retargeting a different section.
+    assert(vq(okReport().replace(PROFILE_SECTION_HEADER, '## 2. CLIP PROFILE')).code === 'missing-section',
+      'renaming Video Profile fails visibly');
+    assert(vq(okReport().replace(PROFILE_SECTION_NEXT_HEADER, '## 3. CAST')).code === 'missing-section',
+      "renaming Video Profile's boundary section fails visibly");
+    // Field checks cannot begin targeting a different section: the fields are only ever accepted
+    // between the derived boundaries.
+    const s2 = sectionLines(splitReportLines(okReport()), PROFILE_SECTION_HEADER, PROFILE_SECTION_NEXT_HEADER);
+    assert(s2.some((l) => l.trim() === UNDETERMINABLE_DURATION_LINE) && s2.some((l) => l.trim() === NO_SYNTHETIC_EVIDENCE_LINE),
+      'both canonical fields live between the derived Video Profile boundaries');
+  }
+
+  // ================== V4Q FINAL: THE COMPLETE REALISTIC PASSING FIXTURE (§9) ===================
+  section('V4Q FINAL: a complete, realistic nine-section guided-meditation report PASSES');
+  {
+    const v = validateReportQuality({
+      text: MEDITATION_REPORT, finishReason: 'STOP', ranges: MEDITATION_RANGES, audioTokens: 4480,
+    });
+    assert(v.ok === true, `the complete realistic report passes with ZERO failure codes (got ${v.code || 'ok'}: ${v.reason || ''})`);
+    // It is genuinely complete and genuinely realistic — not a fixture shaped to slip past the gate.
+    const lines = MEDITATION_REPORT.split('\n');
+    for (const header of REQUIRED_SECTIONS) {
+      assert(lines.filter((l) => l.trim() === header).length === 1, `it carries "${header}" exactly once`);
     }
-    // FALSE-POSITIVE CONTROLS: properly negated claims are the compliant answer.
-    for (const negated of [
-      'No observable evidence of AI generation was found.',
-      'The material does not appear AI-generated.',
-      'The imagery is not demonstrably synthetic.',
-      'There were no signs of manipulation in either slice.',
-      'Nothing suggests AI generation.',
-      'The footage was not digitally manipulated.',
-      'No indications of deepfaking were observed in either slice.',
-    ]) {
-      assert(vq(inLimits(negated)).ok === true, `a properly negated synthetic claim passes: "${negated.slice(0, 34)}"`);
-    }
-    // Descriptions that make NO origin claim carry no synthetic vocabulary at all.
-    for (const neutral of [
-      'The framing is static and amateur throughout.',
-      'The content is animated, with simple low-budget motion graphics.',
-      'A single unchanging shot; production quality is low.',
-    ]) {
-      assert(vq(inLimits(neutral)).ok === true, `a no-origin-claim description passes: "${neutral.slice(0, 34)}"`);
-      assert(!SYNTHETIC_TERMS.test(neutral), 'a no-origin-claim description carries no synthetic vocabulary');
-    }
-    // A standardized, timestamped, confidence-rated finding is the sanctioned way to claim it.
-    const supported = okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE,
-      '**Synthetic-media assessment:** likely synthetic voiceover — Evidence: 00:12 uniform spectral envelope — Confidence: MEDIUM');
-    assert(vq(supported).ok === true, 'a standardized evidence-backed synthetic assessment still passes');
-    assert(vq(inLimits('There is no doubt this is AI-generated.').replace(NO_SYNTHETIC_EVIDENCE_LINE,
-      '**Synthetic-media assessment:** synthetic voiceover — Evidence: 00:12 uniform envelope — Confidence: HIGH')).ok === true,
-      'the same affirmative prose is allowed once a standardized assessment backs it');
-    // The neutralizers themselves are narrow.
-    assert(NEGATED_SYNTHETIC_CLAIMS.some((re) => { re.lastIndex = 0; return re.test('no observable evidence of AI generation'); }),
-      'the neutralizer set recognizes the compliant denial');
-    assert(NEGATED_SYNTHETIC_CLAIMS.every((re) => { re.lastIndex = 0; return !re.test('there is no doubt this is AI-generated'); }),
-      'NO neutralizer treats "no doubt this is AI-generated" as a denial');
-    assert(NEGATED_SYNTHETIC_CLAIMS.every((re) => { re.lastIndex = 0; return !re.test('not only is it synthetic, it is obviously manipulated'); }),
-      'NO neutralizer treats "not only is it synthetic" as a denial');
+    assert(MEDITATION_RANGES.reduce((s, r) => s + (r.endOffset - r.startOffset), 0) === 180,
+      'its authorized aggregate is 180s across two non-adjacent windows');
+    assert(lines.filter((l) => l.trim() === AUTHORIZED_SCOPE_LINE(2, 180)).length === 1, 'exact authorized scope');
+    assert(lines.filter((l) => l.trim() === UNDETERMINABLE_DURATION_LINE).length === 1, 'the canonical duration field');
+    assert(lines.filter((l) => l.trim() === NO_SYNTHETIC_EVIDENCE_LINE).length === 1, 'the canonical assessment field');
+    MEDITATION_RANGES.forEach((r, i) => {
+      assert(lines.filter((l) => l.trim() === SLICE_HEADING(i + 1, r)).length === 1,
+        `slice ${i + 1} opens with its exact heading and complete endpoints`);
+    });
+    assert(/synthesized ambient pad/.test(MEDITATION_REPORT) && /synthesized strings/.test(MEDITATION_REPORT),
+      'it describes synthesized music honestly — the exact vocabulary the frozen list excludes');
+    assert(/00:06-01:30 \[VISUAL\]/.test(MEDITATION_REPORT) && /10:00-11:30 \[VISUAL\]/.test(MEDITATION_REPORT),
+      'static imagery is consolidated into RANGES rather than per-second filler');
+    assert(/The source duration cannot be determined from these slices/.test(MEDITATION_REPORT),
+      'it carries truthful bounded-duration prose');
+    assert(!/no discrepancies/i.test(MEDITATION_REPORT) && /corroborates neither position/.test(MEDITATION_REPORT),
+      'its discrepancies section states a real cross-channel conflict, not a vacuous denial');
+    assert(FORBIDDEN_ORIGIN_PATTERNS.every((re) => !re.test(MEDITATION_REPORT)),
+      'it never restates synthetic origin outside the canonical field');
+    assert(lines.filter((l) => l.trim().startsWith('**Slice')).length === 6,
+      'it carries per-slice audio status, evidence, and anchors for both slices');
   }
 
   // ============================ V4Q diagnostic lifecycle ======================================
@@ -1288,6 +1645,51 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     assert(m[4] === crypto.createHash('sha256').update(buf).digest('hex'), 'the reported sha256 matches the preserved bytes');
   }
 
+  section('V4Q FINAL: BOTH new format codes drive the full diagnostic lifecycle');
+  {
+    // §12 — the same mandatory preservation applies to the two format codes, proven end to end
+    // through inert local fixtures. No credentials, no media, no network.
+    const cases = [
+      ['source-duration-field-format', okReport().replace(UNDETERMINABLE_DURATION_LINE, 'Approximate duration: SECRET-LEN Over 1 hour.')],
+      ['synthetic-assessment-field-format', okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE, '**Synthetic-media assessment:** SECRET-CLAIM looks AI-generated')],
+    ];
+    for (const [expectedCode, text] of cases) {
+      const body = {
+        candidates: [{ content: { parts: [{ text }] }, finishReason: 'STOP' }],
+        usageMetadata: {
+          promptTokenCount: 18410, candidatesTokenCount: 900, totalTokenCount: 19310,
+          promptTokensDetails: [{ modality: 'AUDIO', tokenCount: 2240 }],
+        },
+      };
+      const h = makeDeps([resp(200, body)]);
+      assert((await runVideoScout(sliceArgs(S2), h.deps)) === 1, `${expectedCode}: the run exits non-zero`);
+      assert(h.calls.length === 1, `${expectedCode}: NO repair, retry, continuation, or fallback request follows`);
+      // Exact bytes preserved once, atomically, on the fixed leaf.
+      assert(h.writes.length === 1 && h.renames.length === 1, `${expectedCode}: written once, renamed once`);
+      assert(h.renames[0].to === path.join(FAKE_DIAG_DIR, DIAGNOSTIC_FILENAME),
+        `${expectedCode}: the diagnostic is a direct child on the fixed leaf`);
+      const buf = h.writes[0].buf;
+      assert(buf.toString('utf8') === text, `${expectedCode}: the preserved bytes are the EXACT provider response`);
+      assert(!(buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF), `${expectedCode}: UTF-8 without a BOM`);
+      // Usage survives the rejection so the manifest can record what the failed run cost.
+      const usage = h.logs.filter((l) => l.includes('[video-scout usage]'));
+      assert(usage.length === 1 && usage[0].includes('audio=2240'), `${expectedCode}: usage is preserved exactly once`);
+      // The code crosses the Node -> PowerShell boundary unchanged, with a verifiable identity.
+      const q = h.logs.filter((l) => l.startsWith('[video-scout quality]'));
+      assert(q.length === 1, `${expectedCode}: exactly one machine-readable quality line`);
+      const m = /^\[video-scout quality\] rejected code=(\S+) file=(\S+) bytes=(\d+) sha256=([0-9a-f]{64})$/.exec(q[0]);
+      assert(m && m[1] === expectedCode, `${expectedCode}: the quality line carries the EXACT new code`);
+      assert(QUALITY_FAILURE_CODES.includes(m[1]), `${expectedCode}: the code is inside the closed allowlist`);
+      assert(m[2] === DIAGNOSTIC_FILENAME && Number(m[3]) === buf.length && m[4] === crypto.createHash('sha256').update(buf).digest('hex'),
+        `${expectedCode}: leaf, byte count, and sha256 all match the preserved bytes`);
+      // No provider content leaks into any operator-visible channel.
+      for (const line of [...h.logs, ...h.errs]) {
+        assert(!line.includes('SECRET-LEN') && !line.includes('SECRET-CLAIM') && !line.includes('## 1. TL;DR'),
+          `${expectedCode}: no provider text reaches stdout, stderr, or the Logs pane`);
+      }
+    }
+  }
+
   section('V4Q diagnostic write failure: never retried, no metadata published');
   {
     const badBody = {
@@ -1340,10 +1742,13 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
 
   section('V4Q failure-code allowlist is closed and matches the validator');
   {
-    assert(QUALITY_FAILURE_CODES.length === 13, 'exactly the 13 approved failure codes exist');
+    assert(QUALITY_FAILURE_CODES.length === 15, 'exactly the 15 approved failure codes exist');
     const expected = ['finish-max-tokens', 'finish-not-stop', 'missing-section', 'duplicate-section',
       'scope-mismatch', 'missing-slice', 'missing-slice-audio', 'missing-speech-anchor',
-      'unjustified-universal-silence', 'unsupported-synthetic-claim', 'speculative-source-duration',
+      'unjustified-universal-silence',
+      // V4Q FINAL: the two canonical-field FORMAT codes, beside their CONTENT counterparts.
+      'source-duration-field-format', 'speculative-source-duration',
+      'synthetic-assessment-field-format', 'unsupported-synthetic-claim',
       'repetitive-timestamp-filler', 'diagnostic-write-failed'];
     assert(expected.every((c) => QUALITY_FAILURE_CODES.includes(c)), 'every approved code is present');
     const src = fs.readFileSync(path.join(__dirname, 'gemini-video-sdk.js'), 'utf8');

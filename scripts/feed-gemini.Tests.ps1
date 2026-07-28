@@ -862,6 +862,82 @@ Describe 'V4Q feed-gemini: an omitted -Model resolves by scope; an explicit -Mod
     }
 }
 
+# --- V4Q FINAL: the two canonical-field FORMAT codes cross the boundary intact ---------------------
+# A format failure is a first-class rejection: it must reach a durable v4 manifest with its EXACT
+# code, its preserved evidence, and its usage, exactly like every content failure. These runs are
+# fully inert -- a stub node, a stub yt-dlp, no credentials, no network, no media.
+Describe 'V4Q FINAL feed-gemini: source-duration-field-format survives Node -> PowerShell -> manifest' {
+    $r = Invoke-SdkSliceRun -SliceRangesJson $V4Good -QualityReject -QualityCode 'source-duration-field-format' `
+        -RejectedBody 'SECRET-FORMAT-BODY Approximate duration: Over 1 hour'
+    $m = Get-E2ERunManifest -OutDir $r.OutDir
+    $runDir = (Get-ChildItem -LiteralPath $r.OutDir -Directory | Select-Object -First 1).FullName
+
+    It 'the run is a terminal error carrying the EXACT format code' {
+        $m.outcome | Should Be 'error'
+        $m.reason | Should Match '^\[quality:source-duration-field-format\]'
+    }
+    It 'the code is the schema-allowlisted one, not a near miss' {
+        ((Get-VideoScoutQualityReasonCodes) -ccontains 'source-duration-field-format') | Should Be $true
+        ($m.reason -match 'speculative-source-duration') | Should Be $false
+    }
+    It 'NO report is produced and the manifest is schema v4' {
+        $m.reportFile | Should BeNullOrEmpty
+        $m.schemaVersion | Should Be 4
+        (Test-Path -LiteralPath (Join-Path $runDir 'analysis-output.txt')) | Should Be $false
+    }
+    It 'USAGE survives the format rejection (the run was still billed)' {
+        $m.usage | Should Not BeNullOrEmpty
+        $m.usage.videoTokens | Should Be 18410
+        $m.usage.audioTokens | Should Be 2240
+    }
+    It 'exactly ONE independently verified diagnostic entry is recorded' {
+        @($m.diagnosticArtifacts).Count | Should Be 1
+        $m.diagnosticArtifacts[0].fileName | Should Be 'rejected-response.txt'
+        $m.diagnosticArtifacts[0].sha256 | Should Be (Get-FileHash -LiteralPath (Join-Path $runDir 'rejected-response.txt') -Algorithm SHA256).Hash.ToLower()
+    }
+    It 'the preserved bytes are exact, and no provider text reaches the reason' {
+        $bytes = [System.IO.File]::ReadAllBytes((Join-Path $runDir 'rejected-response.txt'))
+        [System.Text.Encoding]::UTF8.GetString($bytes) | Should Be 'SECRET-FORMAT-BODY Approximate duration: Over 1 hour'
+        ($bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) | Should Be $false
+        ($m.reason -match 'SECRET-FORMAT-BODY') | Should Be $false
+    }
+    It 'the manifest validates' {
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
+    }
+}
+
+Describe 'V4Q FINAL feed-gemini: synthetic-assessment-field-format survives Node -> PowerShell -> manifest' {
+    $r = Invoke-SdkSliceRun -SliceRangesJson $V4Good -QualityReject -QualityCode 'synthetic-assessment-field-format' `
+        -RejectedBody 'SECRET-ASSESSMENT-BODY looks AI-generated to me'
+    $m = Get-E2ERunManifest -OutDir $r.OutDir
+    $runDir = (Get-ChildItem -LiteralPath $r.OutDir -Directory | Select-Object -First 1).FullName
+
+    It 'the run is a terminal error carrying the EXACT format code' {
+        $m.outcome | Should Be 'error'
+        $m.reason | Should Match '^\[quality:synthetic-assessment-field-format\]'
+    }
+    It 'the code is distinct from its content counterpart' {
+        ((Get-VideoScoutQualityReasonCodes) -ccontains 'synthetic-assessment-field-format') | Should Be $true
+        ($m.reason -match 'unsupported-synthetic-claim') | Should Be $false
+    }
+    It 'NO report is produced and the manifest is schema v4' {
+        $m.reportFile | Should BeNullOrEmpty
+        $m.schemaVersion | Should Be 4
+    }
+    It 'exactly ONE independently verified diagnostic entry is recorded, with usage preserved' {
+        @($m.diagnosticArtifacts).Count | Should Be 1
+        $m.usage.videoTokens | Should Be 18410
+    }
+    It 'the rejected origin claim never reaches the reason or a report' {
+        ($m.reason -match 'SECRET-ASSESSMENT-BODY') | Should Be $false
+        ($m.reason -match 'AI-generated') | Should Be $false
+        (Test-Path -LiteralPath (Join-Path $runDir 'analysis-output.txt')) | Should Be $false
+    }
+    It 'the manifest validates' {
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
+    }
+}
+
 # Cleanup runs ONCE, here, after the last test that uses $e2eDir (Pester 3.4 has no AfterAll).
 # It must stay at the very end of this file: the yt-dlp.cmd stub and the node tripwire live here.
 Remove-Item -LiteralPath $e2eDir -Recurse -Force -ErrorAction SilentlyContinue

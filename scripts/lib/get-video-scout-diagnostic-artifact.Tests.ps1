@@ -34,14 +34,43 @@ Describe 'V4Q diagnostic contract constants' {
         Get-VideoScoutMaxDiagnosticBytes | Should Be (4 * 1024 * 1024)
         Get-VideoScoutMaxDiagnosticChars | Should Be 1000000
     }
-    It 'declares exactly the 13 allowlisted quality-gate failure codes' {
+    It 'declares exactly the 15 allowlisted quality-gate failure codes' {
         $codes = @(Get-VideoScoutQualityFailureCodes)
-        $codes.Count | Should Be 13
+        $codes.Count | Should Be 15
         foreach ($c in @('finish-max-tokens', 'finish-not-stop', 'missing-section', 'duplicate-section',
                 'scope-mismatch', 'missing-slice', 'missing-slice-audio', 'missing-speech-anchor',
-                'unjustified-universal-silence', 'unsupported-synthetic-claim',
-                'speculative-source-duration', 'repetitive-timestamp-filler', 'diagnostic-write-failed')) {
+                'unjustified-universal-silence',
+                'source-duration-field-format', 'speculative-source-duration',
+                'synthetic-assessment-field-format', 'unsupported-synthetic-claim',
+                'repetitive-timestamp-filler', 'diagnostic-write-failed')) {
             ($codes -ccontains $c) | Should Be $true
+        }
+    }
+    It 'V4Q FINAL: the two canonical-field FORMAT codes are allowlisted and distinct from their CONTENT counterparts' {
+        # Format and content are separate verdicts. The verifier must accept all four so a rejection
+        # keeps its precise meaning across the Node -> PowerShell -> manifest boundary.
+        foreach ($c in @('source-duration-field-format', 'synthetic-assessment-field-format',
+                'speculative-source-duration', 'unsupported-synthetic-claim')) {
+            (Test-VideoScoutQualityFailureCode -Code $c) | Should Be $true
+        }
+        (Test-VideoScoutQualityFailureCode -Code 'source-duration-format') | Should Be $false
+        (Test-VideoScoutQualityFailureCode -Code 'Source-Duration-Field-Format') | Should Be $false
+        (Test-VideoScoutQualityFailureCode -Code 'synthetic-field-format') | Should Be $false
+    }
+    It 'V4Q FINAL: a full quality line carrying either new FORMAT code parses with its metadata intact' {
+        foreach ($c in @('source-duration-field-format', 'synthetic-assessment-field-format')) {
+            $line = "[video-scout quality] rejected code=$c file=rejected-response.txt bytes=4096 sha256=$('c' * 64)"
+            $parsed = ConvertFrom-VideoScoutQualityLine -Line $line
+            $parsed | Should Not BeNullOrEmpty
+            $parsed.Code | Should Be $c
+            $parsed.FileName | Should Be 'rejected-response.txt'
+            $parsed.Bytes | Should Be 4096
+            $parsed.Sha256 | Should Be ('c' * 64)
+        }
+    }
+    It 'V4Q FINAL: either new FORMAT code without artifact metadata is REFUSED like every other non-write-failure code' {
+        foreach ($c in @('source-duration-field-format', 'synthetic-assessment-field-format')) {
+            ConvertFrom-VideoScoutQualityLine -Line "[video-scout quality] rejected code=$c" | Should BeNullOrEmpty
         }
     }
     It 'the allowlist is CLOSED and case-sensitive' {

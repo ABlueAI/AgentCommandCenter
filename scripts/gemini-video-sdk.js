@@ -207,12 +207,31 @@ const SLICE_HEADING = (n, r) =>
 const UNDETERMINABLE_DURATION_LINE = '**Source duration:** UNDETERMINABLE FROM AUTHORIZED SLICES';
 const NO_SYNTHETIC_EVIDENCE_LINE = '**Synthetic-media assessment:** NO OBSERVABLE EVIDENCE';
 const AUDIO_STATUSES = ['SPEECH', 'MUSIC', 'AMBIENCE', 'SILENCE', 'UNCLEAR'];
-const EVIDENCE_SECTION_HEADER = '## 5. COMPREHENSIVE TIMESTAMPED FINDINGS';
-const EVIDENCE_SECTION_NEXT_HEADER = '## 6. CLAIMS, NUMBERS & CALLS TO ACTION';
-// V4Q CORRECTION: Section 2's exact bounds, so the scope/duration/synthetic markers are required
-// where they belong rather than anywhere in the report.
-const PROFILE_SECTION_HEADER = '## 2. VIDEO PROFILE';
-const PROFILE_SECTION_NEXT_HEADER = '## 3. PEOPLE, ENTITIES & SETTING';
+
+// V4Q FINAL (§9) -- THE SINGLE ORDERED TEMPLATE DEFINITION. This array is the only place the
+// report's section identity and order are written down. Every section-boundary constant below is
+// DERIVED from it by index, so the profile and evidence boundaries cannot silently begin targeting
+// a different section after a template edit: renaming or reordering a section moves the derived
+// constants with it and fails the contract tests visibly. Previously '## 2. VIDEO PROFILE' was
+// spelled here AND again as a standalone constant -- two sources of truth for one string.
+const REQUIRED_SECTIONS = [
+  '## 1. TL;DR',
+  '## 2. VIDEO PROFILE',
+  '## 3. PEOPLE, ENTITIES & SETTING',
+  '## 4. DETAILED SUMMARY',
+  '## 5. COMPREHENSIVE TIMESTAMPED FINDINGS',
+  '## 6. CLAIMS, NUMBERS & CALLS TO ACTION',
+  '## 7. DISCREPANCIES & CROSS-CHECKS',
+  '## 8. SOURCE-CREDIBILITY ASSESSMENT',
+  '## 9. LIMITATIONS OF THIS ANALYSIS',
+];
+// The two gated regions, named by their ordinal position in the one template above.
+const PROFILE_SECTION_INDEX = 1;   // Video Profile: carries both canonical quality fields.
+const EVIDENCE_SECTION_INDEX = 4;  // Comprehensive timestamped findings: carries slice subsections.
+const PROFILE_SECTION_HEADER = REQUIRED_SECTIONS[PROFILE_SECTION_INDEX];
+const PROFILE_SECTION_NEXT_HEADER = REQUIRED_SECTIONS[PROFILE_SECTION_INDEX + 1];
+const EVIDENCE_SECTION_HEADER = REQUIRED_SECTIONS[EVIDENCE_SECTION_INDEX];
+const EVIDENCE_SECTION_NEXT_HEADER = REQUIRED_SECTIONS[EVIDENCE_SECTION_INDEX + 1];
 
 // V4Q (was buildSliceScopeInstruction, multi-only): the deterministic, repository-owned authorized
 // scope instruction for ONE THROUGH EIGHT ranges. A scalar slice is converted upstream into a
@@ -236,7 +255,8 @@ function buildAuthorizedScopeInstruction(ranges) {
     'MANDATORY OUTPUT CONTRACT — a response missing any of the following is rejected locally and never becomes a report:',
     `1. Include this exact line once, in Section 2: \`${AUTHORIZED_SCOPE_LINE(count, aggregateSeconds)}\``,
     `2. Include this exact line once, in Section 2: \`${UNDETERMINABLE_DURATION_LINE}\`. You cannot see the full source, so you must NOT estimate, infer, or state a total video duration. Report only the authorized aggregate above.`,
-    `3. Include a Synthetic-media assessment line once, in Section 2. If you have no timestamped observable evidence of AI generation, synthesis, deepfaking, stock footage, or manipulation, the line must be exactly: \`${NO_SYNTHETIC_EVIDENCE_LINE}\`. Static, simple, low-budget, animated, or amateur-looking content is NOT evidence of AI generation. Only if you have specific timestamped evidence, use: \`**Synthetic-media assessment:** <finding> — Evidence: <MM:SS observation> — Confidence: LOW|MEDIUM|HIGH\``,
+    `3. Include a Synthetic-media assessment line exactly once, in Section 2. If you have no timestamped observable evidence of AI generation, synthesis, deepfaking, stock footage, or manipulation, the line must be exactly: \`${NO_SYNTHETIC_EVIDENCE_LINE}\`. Static, simple, low-budget, animated, or amateur-looking content is NOT evidence of AI generation. Only if you have specific timestamped evidence, use: \`**Synthetic-media assessment:** <finding> — Evidence: <MM:SS observation> — Confidence: LOW|MEDIUM|HIGH\` (the two separators may each be a hyphen, en dash, or em dash).`,
+    '3a. That one line is the ONLY place origin may be discussed. Do NOT restate the conclusion anywhere else — not positively, and not negatively. Sentences such as "no evidence of AI generation was found", "the footage was not digitally manipulated", or "this is not stock footage" are restatements and are rejected exactly like a positive claim. Write the field, then say nothing further about origin. Describing what you SEE and HEAR is always fine: synthesized or synth-pad music, a manipulated exposure, and a static frame are ordinary observations, not origin claims.',
     `4. In Section 5, open each slice with its exact heading, in this order, echoing BOTH endpoints exactly as written above:`,
     ...lines.map((l) => `   ${l.slice(2)}`),
     `5. Under each slice heading, include these marker lines (N = that slice's number):`,
@@ -318,22 +338,29 @@ function resolveEffectiveModel({ explicitModel, effectiveSliceCount }) {
 // Runs AFTER a successful provider response and BEFORE the analysis may be emitted or become a
 // report. It guarantees STRUCTURAL compliance, never semantic truth: a model can still produce a
 // convincing but false audio justification. See the handoff's honest-limitation section.
-const REQUIRED_SECTIONS = [
-  '## 1. TL;DR',
-  '## 2. VIDEO PROFILE',
-  '## 3. PEOPLE, ENTITIES & SETTING',
-  '## 4. DETAILED SUMMARY',
-  EVIDENCE_SECTION_HEADER,
-  EVIDENCE_SECTION_NEXT_HEADER,
-  '## 7. DISCREPANCIES & CROSS-CHECKS',
-  '## 8. SOURCE-CREDIBILITY ASSESSMENT',
-  '## 9. LIMITATIONS OF THIS ANALYSIS',
-];
+// (REQUIRED_SECTIONS and the derived section boundaries are defined once, further up.)
 
-// Affirmative synthetic/manipulation vocabulary. Presence alone is not a failure — it is a failure
-// only when the standardized assessment line reports NO OBSERVABLE EVIDENCE, i.e. the report both
-// claims synthesis and disclaims evidence for it.
-const SYNTHETIC_TERMS = /\b(ai[- ]generated|ai generation|synthetic|deepfake|deep fake|stock footage|manipulated imagery|digitally manipulated)\b/i;
+// V4Q FINAL (§6) -- THE FROZEN SYNTHETIC-ORIGIN VOCABULARY. A closed, literal list. Matching is
+// case-insensitive with word boundaries and NO negation interpretation whatsoever: a forbidden
+// phrase rejects wherever it appears outside the one accepted canonical assessment field, including
+// inside a denial. That is deliberate. The canonical field is the ONLY place origin may be
+// discussed, so "No observable evidence of AI generation was found." in the Limitations section is
+// a restatement and is rejected -- see the handoff, where this is called out as the most likely
+// false-positive rejection from an otherwise well-behaved model.
+//
+// Bare `synthetic`, `synthesized`, `synth`, `manipulate`, and `manipulation` are ABSENT on purpose:
+// they have ordinary audio, editing, and camera meanings ("synthesized ambient tones", "the camera
+// manipulates focus"), and rejecting them would discard correct observations. The gate prefers
+// under-matching to discarding a correct response.
+const FORBIDDEN_ORIGIN_PHRASES = [
+  'AI-generated', 'AI generated', 'AI generation',
+  'synthetic media', 'synthetically generated',
+  'deepfake', 'deepfakes', 'deepfaked', 'deepfaking',
+  'deep fake', 'deep fakes', 'deep faked', 'deep faking',
+  'stock footage', 'manipulated footage', 'manipulated imagery', 'digitally manipulated',
+];
+const FORBIDDEN_ORIGIN_PATTERNS = FORBIDDEN_ORIGIN_PHRASES.map((phrase) => new RegExp(
+  String.raw`\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '[ \\t]+')}\b`, 'i'));
 // Claims that no audio STREAM exists. Deliberately distinct from an honest SILENCE finding: the
 // gate rejects "there was nothing to hear", never "I listened and heard silence".
 const NO_AUDIO_STREAM_CLAIMS = [
@@ -360,51 +387,116 @@ const DURATION_FIELD_CLAIM = new RegExp(
   String.raw`^[ \t>*_-]*(?:\*\*)?[ \t]*(?:(?:${DURATION_FIELD_QUALIFIER})[ \t]+(?:${DURATION_FIELD_NOUN})|duration|runtime|running[ \t]+time)[ \t]*(?:\*\*)?[ \t]*[:\-–—]`,
   'im');
 
-// V4Q CORRECTION 2 -- NATURAL-LANGUAGE source-length assertions. The field detector above only sees
-// "<qualifier> duration:" labels, so plain prose ("The video is over one hour long.") walked past
-// it. These four bounded patterns close that gap WITHOUT swallowing honest limitation prose: every
-// one of them requires a concrete VALUE (a clock reading, or a number followed by a spelled time
-// unit). "the full duration of the video is unknown", "the source length was never visible", and
-// "duration beyond the authorized slices could not be determined" therefore never match, because
-// none of them supplies a value. The sanctioned scope line, the undeterminable line, and the
-// per-slice headings are stripped before the scan, so authorized lengths are never mistaken for a
-// source-length claim.
-const LEN_SUBJECT = String.raw`(?:\b(?:the|this|its|that)\s+)?(?:(?:entire|full|whole|complete|original|total|overall|actual|source)\s+)*(?:videos?|sources?|footage|recordings?|films?|clips?)`;
-const LEN_NOUN = String.raw`(?:duration|runtime|run\s*time|running\s+time|length)`;
-const LEN_VERB = String.raw`(?:is|was|are|were|appears?\s+to\s+be|seems?\s+to\s+be|comes?\s+(?:in\s+)?(?:to|at)|totals?|equals?|measures?|clocks?\s+in\s+at|runs?(?:\s+for)?|lasts?(?:\s+for)?|spans?|stretches?\s+(?:for|to)|goes?\s+on\s+for|exceeds?)`;
-const LEN_HEDGE = String.raw`(?:(?:approximately|approx\.?|about|roughly|around|circa|over|under|nearly|almost|just|well|only|exactly|precisely|some|at\s+least|at\s+most|more\s+than|less\s+than|upwards\s+of|in\s+excess\s+of)\s+)*`;
-const LEN_NUMBER = String.raw`(?:\d+(?:[.,]\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|sixty|ninety|half|a\s+few|a\s+couple\s+of|several|multiple)`;
-const LEN_UNIT = String.raw`(?:hours?|hrs?|minutes?|mins?|seconds?|secs?)`;
-const LEN_VALUE = String.raw`${LEN_HEDGE}(?:${TIMESTAMP}|${LEN_NUMBER}[ \t]*(?:\+[ \t]*)?${LEN_UNIT})`;
-const SOURCE_LENGTH_ASSERTIONS = [
-  // "The video's duration is 1:02:03", "the source length was 62 minutes"
-  new RegExp(String.raw`\b${LEN_SUBJECT}(?:'s|s'|’s)?\s+${LEN_NOUN}\s+${LEN_VERB}\s+${LEN_VALUE}`, 'i'),
-  // "the duration of the video is 1:02:03"
-  new RegExp(String.raw`\b${LEN_NOUN}\s+of\s+${LEN_SUBJECT}\s+${LEN_VERB}\s+${LEN_VALUE}`, 'i'),
-  // "the full runtime is approximately 90 minutes" -- whole-source qualifier, no subject noun. The
-  // qualifier list deliberately excludes "slice", so a per-slice length statement does not match.
-  new RegExp(String.raw`\b(?:total|full|overall|entire|complete|original|source|video)\s+${LEN_NOUN}\s+${LEN_VERB}\s+${LEN_VALUE}`, 'i'),
-  // "The video is over one hour long", "the source runs for 62 minutes", "the recording lasts about two hours"
-  new RegExp(String.raw`\b${LEN_SUBJECT}\s+${LEN_VERB}\s+${LEN_VALUE}`, 'i'),
-];
+// V4Q FINAL (§7) -- THE SENTENCE-LOCAL SOURCE-DURATION CONTRACT. The previous revision matched
+// natural language across a whole report, which meant an unbounded interpretation problem. This
+// replaces it with six finite productions, five of which must match INSIDE ONE deterministic unit.
+// Tokens are never combined across units, so a paragraph mentioning "video" and a later paragraph
+// mentioning "62 minutes" cannot be assembled into a claim neither sentence made.
 
-// V4Q CORRECTION 2 -- NARROW negation neutralization. The previous implementation dropped any line
-// containing a negation word before scanning for synthetic claims, which handed a free pass to
-// "There is no doubt this is AI-generated." and "Not only is it synthetic, it is obviously
-// manipulated." -- both AFFIRMATIVE claims that merely contain a negation token. These patterns
-// instead remove only a negation DIRECTLY ATTACHED to the synthetic claim, then the affirmative
-// vocabulary scan runs over what is left. A stray "no"/"not" elsewhere in the sentence no longer
-// protects anything.
-const NEGATED_SYNTHETIC_TERM = String.raw`(?:ai[- ]generat\w*|ai generation|synthes\w*|synthetic\w*|deepfak\w*|deep fake|stock footage|manipulat\w*)`;
-const NEGATED_SYNTHETIC_CLAIMS = [
-  // "No observable evidence of AI generation", "no clear indications of manipulation"
-  new RegExp(String.raw`\b(?:no|not\s+any|zero)\s+(?:\w+\s+){0,3}?(?:evidence|indication|indications|indicator|indicators|sign|signs|marker|markers|artifact|artifacts|trace|traces|proof)\s+(?:of|for|that|suggesting|indicating)\s+(?:\w+[- ]){0,2}?${NEGATED_SYNTHETIC_TERM}`, 'gi'),
-  // "The material does not appear AI-generated"
-  new RegExp(String.raw`\b(?:do|does|did)\s+not\s+(?:\w+\s+){0,2}?(?:appear|seem|look)\s+(?:to\s+be\s+)?(?:\w+[- ]){0,2}?${NEGATED_SYNTHETIC_TERM}`, 'gi'),
-  // "The imagery is not demonstrably synthetic"
-  new RegExp(String.raw`\b(?:is|are|was|were|be|been)\s+not\s+(?:\w+\s+){0,2}?${NEGATED_SYNTHETIC_TERM}`, 'gi'),
-  // "nothing suggests AI generation"
-  new RegExp(String.raw`\bnothing\s+(?:\w+\s+){0,2}?(?:suggest\w*|indicat\w*|point\w*)\s+(?:to\s+|toward\s+|towards\s+)?(?:\w+[- ]){0,2}?${NEGATED_SYNTHETIC_TERM}`, 'gi'),
+// §7.2 -- the closed vocabularies. `slice`, `clip`, `segment`, and `part` are deliberately NOT
+// whole-source subjects: a statement about an authorized portion is in scope and must pass.
+const DUR_SUBJECT = String.raw`(?:videos?|sources?|footage|recordings?|films?)`;
+const DUR_NOUN = String.raw`(?:duration|runtime|running[ \t]+time|length)`;
+const DUR_MODIFIER = String.raw`(?:total|full|overall|entire|complete|original|source|video)`;
+const DUR_LINK = String.raw`(?:is|was|are|were|appears?[ \t]+to[ \t]+be|seems?[ \t]+to[ \t]+be|comes?[ \t]+to|totals?|equals?|measures?|clocks?[ \t]+in[ \t]+at)`;
+const DUR_RUNNING_VERB = String.raw`(?:runs?[ \t]+for|lasts?|spans?)`;
+const DUR_ARTICLE = String.raw`(?:(?:the|this|that|its|a|an)[ \t]+)?(?:${DUR_MODIFIER}[ \t]+)*`;
+// Hedges split by what they let us conclude against the authorized aggregate (§7.4).
+const DUR_HEDGE_LOWER = String.raw`(?:over|more[ \t]+than|in[ \t]+excess[ \t]+of|at[ \t]+least|upwards[ \t]+of|greater[ \t]+than|longer[ \t]+than)`;
+const DUR_HEDGE_UPPER = String.raw`(?:under|less[ \t]+than|at[ \t]+most|up[ \t]+to|no[ \t]+more[ \t]+than|shorter[ \t]+than)`;
+const DUR_HEDGE_APPROX = String.raw`(?:approximately|approx\.?|about|roughly|around|circa|nearly|almost|just|exactly|precisely|only|some)`;
+const DUR_HEDGE = String.raw`(?:(?:${DUR_HEDGE_LOWER}|${DUR_HEDGE_UPPER}|${DUR_HEDGE_APPROX})[ \t]+)*`;
+const NUMBER_WORDS = {
+  a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
+  ten: 10, eleven: 11, twelve: 12, fifteen: 15, twenty: 20, thirty: 30, forty: 40, fifty: 50,
+  sixty: 60, ninety: 90, half: 0.5,
+};
+const DUR_NUMBER = String.raw`(?:\d+(?:\.\d+)?|${Object.keys(NUMBER_WORDS).join('|')})`;
+const DUR_UNIT = String.raw`(?:hours?|hrs?|minutes?|mins?|seconds?|secs?)`;
+// A CONCRETE value only: a clock reading, or a number followed by a spelled time unit. This single
+// requirement is why honest limitation prose keeps passing -- "the source duration cannot be
+// determined from these slices" supplies no value, so no production can match it.
+const DUR_VALUE = String.raw`(?:${TIMESTAMP}|${DUR_NUMBER}[ \t]*${DUR_UNIT})`;
+const DUR_CLAIM = String.raw`(${DUR_HEDGE})(${DUR_VALUE})`;
+
+// Pure, exported: parse ONE concrete value to seconds, or null when it is not one of the closed
+// forms. `M:SS` is minutes:seconds; `H:MM:SS` is hours:minutes:seconds.
+function parseDurationSeconds(raw) {
+  const value = String(raw == null ? '' : raw).trim();
+  const clock = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(value);
+  if (clock) {
+    return clock[3] === undefined
+      ? Number(clock[1]) * 60 + Number(clock[2])
+      : Number(clock[1]) * 3600 + Number(clock[2]) * 60 + Number(clock[3]);
+  }
+  const m = new RegExp(String.raw`^(${DUR_NUMBER})[ \t]*(${DUR_UNIT})$`, 'i').exec(value);
+  if (!m) return null;
+  const token = m[1].toLowerCase();
+  const n = /^\d/.test(token) ? Number(token) : NUMBER_WORDS[token];
+  if (n === undefined || !Number.isFinite(n)) return null;
+  const unit = m[2].toLowerCase();
+  if (unit.startsWith('h')) return n * 3600;
+  if (unit.startsWith('m')) return n * 60;
+  return n;
+}
+
+// §7.4 -- the ONLY place authorized scope disambiguates otherwise identical prose. At or below the
+// authorized aggregate a length statement is a bounded-scope description and passes; above it, the
+// statement necessarily claims knowledge the request never supplied. When the comparison cannot
+// deterministically establish that the claim EXCEEDS the aggregate, prefer passing.
+function claimExceedsAggregate(hedge, value, aggregateSeconds) {
+  const seconds = parseDurationSeconds(value);
+  if (seconds === null || !Number.isFinite(aggregateSeconds)) return false;
+  const h = String(hedge || '').trim().toLowerCase();
+  if (new RegExp(String.raw`^${DUR_HEDGE_UPPER}$`, 'i').test(h)) return false; // an upper bound proves nothing
+  if (new RegExp(String.raw`^${DUR_HEDGE_LOWER}$`, 'i').test(h)) return seconds >= aggregateSeconds;
+  return seconds > aggregateSeconds;
+}
+
+// §7.1 -- the deterministic unit splitter, pure and exported. Fixed delimiters only: a line
+// boundary, or `.`/`?`/`!` followed by whitespace or end of input. No NLP, no probabilistic
+// segmentation. "1.5 hours" and "1:02:03" do not split because the character after the `.` is not
+// whitespace.
+function splitSentenceUnits(text) {
+  const units = [];
+  for (const line of splitReportLines(text)) {
+    let buffer = '';
+    for (let i = 0; i < line.length; i++) {
+      buffer += line[i];
+      if ((line[i] === '.' || line[i] === '?' || line[i] === '!')
+        && (i + 1 === line.length || /\s/.test(line[i + 1]))) {
+        if (buffer.trim()) units.push(buffer.trim());
+        buffer = '';
+      }
+    }
+    if (buffer.trim()) units.push(buffer.trim());
+  }
+  return units;
+}
+
+// §7.3 -- the six rejecting productions. 1-3 and 5 reject on their own; 4 and 6 additionally
+// require the claimed value to exceed the authorized aggregate.
+const DURATION_PRODUCTIONS = [
+  { // 1. whole-source subject + duration noun + linking phrase + concrete value
+    id: 1, aggregateGated: false,
+    re: new RegExp(String.raw`\b${DUR_ARTICLE}${DUR_SUBJECT}(?:'s|s'|’s)?[ \t]+${DUR_NOUN}[ \t]+${DUR_LINK}[ \t]+${DUR_CLAIM}`, 'i'),
+  },
+  { // 2. duration noun + "of" + whole-source subject + linking phrase + concrete value
+    id: 2, aggregateGated: false,
+    re: new RegExp(String.raw`\b${DUR_NOUN}[ \t]+of[ \t]+${DUR_ARTICLE}${DUR_SUBJECT}[ \t]+${DUR_LINK}[ \t]+${DUR_CLAIM}`, 'i'),
+  },
+  { // 3. whole-source modifier + duration noun + linking phrase + concrete value
+    id: 3, aggregateGated: false,
+    re: new RegExp(String.raw`\b${DUR_MODIFIER}[ \t]+${DUR_NOUN}[ \t]+${DUR_LINK}[ \t]+${DUR_CLAIM}`, 'i'),
+  },
+  { // 4. the explicit finite `long` construction -- aggregate-gated
+    id: 4, aggregateGated: true,
+    re: new RegExp(String.raw`\b${DUR_ARTICLE}${DUR_SUBJECT}[ \t]+${DUR_LINK}[ \t]+${DUR_CLAIM}[ \t]+long\b`, 'i'),
+  },
+  { // 6. whole-source subject + running verb + concrete value -- aggregate-gated
+    id: 6, aggregateGated: true,
+    re: new RegExp(String.raw`\b${DUR_ARTICLE}${DUR_SUBJECT}[ \t]+${DUR_RUNNING_VERB}[ \t]+${DUR_CLAIM}`, 'i'),
+  },
 ];
 
 // The CLOSED allowlist of quality-gate failure codes. PowerShell refuses any code outside this
@@ -419,8 +511,14 @@ const QUALITY_FAILURE_CODES = [
   'missing-slice-audio',
   'missing-speech-anchor',
   'unjustified-universal-silence',
-  'unsupported-synthetic-claim',
+  // V4Q FINAL (§5): FORMAT codes are separate from CONTENT codes. A response whose canonical field
+  // is missing, duplicated, misplaced, prefixed, suffixed, or otherwise malformed is a formatting
+  // failure and is reported as one -- even when it also contains forbidden content, because format
+  // validation runs first. That distinction is what makes a rejection actionable.
+  'source-duration-field-format',
   'speculative-source-duration',
+  'synthetic-assessment-field-format',
+  'unsupported-synthetic-claim',
   'repetitive-timestamp-filler',
   'diagnostic-write-failed',
 ];
@@ -486,8 +584,52 @@ const SLICE_JUSTIFICATION_LINE = (n) =>
 const SLICE_HEADING_SHAPE = /^#{1,6}[ \t]*Slice\b/i;
 // The two accepted Section 2 synthetic-media assessment forms, as complete lines.
 const SYNTHETIC_ASSESSMENT_SHAPE = /^\*\*Synthetic-media assessment:\*\*/;
+// V4Q FINAL (§4.2): each separator is INDEPENDENTLY a hyphen, en dash, or em dash, and the two need
+// not match -- a model that emits ` - ` before Evidence and ` — ` before Confidence is compliant.
+// Surrounding whitespace is required, so a hyphen used inside a compound word is not a separator.
+const ASSESSMENT_SEPARATOR = String.raw`[ \t](?:-|–|—)[ \t]`;
 const STANDARDIZED_SYNTHETIC_LINE = new RegExp(
-  String.raw`^\*\*Synthetic-media assessment:\*\*[ \t]*\S.*[-–—][ \t]*Evidence:[ \t]*.*${TIMESTAMP}.*[-–—][ \t]*Confidence:[ \t]*(?:LOW|MEDIUM|HIGH)[ \t]*[.]?[ \t]*$`);
+  String.raw`^\*\*Synthetic-media assessment:\*\*[ \t]*\S.*?${ASSESSMENT_SEPARATOR}Evidence:[ \t]*\S.*?${TIMESTAMP}.*?${ASSESSMENT_SEPARATOR}Confidence:[ \t]*(?:LOW|MEDIUM|HIGH)[ \t]*\.?[ \t]*$`);
+
+// --- V4Q FINAL (§4, §5.1): the two canonical field-FORMAT validators -----------------------------
+// Each answers exactly one question: is the field there, once, in the Video Profile section, in an
+// accepted complete-line shape? Content is not examined here. The reasons distinguish missing from
+// misplaced from malformed so a rejection tells the operator what to fix, while naming no provider
+// text.
+function validateSourceDurationField(section2, allLines) {
+  const exact = section2.filter((l) => l.trim() === UNDETERMINABLE_DURATION_LINE);
+  if (exact.length === 1) return { ok: true };
+  if (exact.length > 1) {
+    return fail('source-duration-field-format', `the canonical source-duration field appears ${exact.length} times in ${PROFILE_SECTION_HEADER}; exactly one is required.`);
+  }
+  if (allLines.some((l) => l.trim() === UNDETERMINABLE_DURATION_LINE)) {
+    return fail('source-duration-field-format', `the canonical source-duration field is present but outside "${PROFILE_SECTION_HEADER}", where it is required.`);
+  }
+  if (section2.some((l) => l.trim().startsWith('**Source duration:**'))) {
+    return fail('source-duration-field-format', `the source-duration field is malformed; the only accepted line is exactly "${UNDETERMINABLE_DURATION_LINE}".`);
+  }
+  return fail('source-duration-field-format', `"${PROFILE_SECTION_HEADER}" carries no "${UNDETERMINABLE_DURATION_LINE}" line.`);
+}
+
+// Returns the accepted FORM on success, so the caller can report which one was used without
+// re-parsing. Both accepted forms are equally valid; neither exempts the rest of the report from
+// the frozen-vocabulary scan.
+function validateSyntheticAssessmentField(section2, allLines) {
+  const shaped = matchLines(section2, SYNTHETIC_ASSESSMENT_SHAPE);
+  if (shaped.length > 1) {
+    return fail('synthetic-assessment-field-format', `the synthetic-media assessment field appears ${shaped.length} times in ${PROFILE_SECTION_HEADER}; exactly one is required.`);
+  }
+  if (shaped.length === 0) {
+    if (matchLines(allLines, SYNTHETIC_ASSESSMENT_SHAPE).length > 0) {
+      return fail('synthetic-assessment-field-format', `the synthetic-media assessment field is present but outside "${PROFILE_SECTION_HEADER}", where it is required.`);
+    }
+    return fail('synthetic-assessment-field-format', `"${PROFILE_SECTION_HEADER}" carries no complete "**Synthetic-media assessment:**" line.`);
+  }
+  const line = shaped[0].trim();
+  if (line === NO_SYNTHETIC_EVIDENCE_LINE) return { ok: true, form: 'no-evidence' };
+  if (STANDARDIZED_SYNTHETIC_LINE.test(line)) return { ok: true, form: 'evidence-backed' };
+  return fail('synthetic-assessment-field-format', 'the synthetic-media assessment is neither the exact NO OBSERVABLE EVIDENCE line nor an evidence-backed finding carrying a timestamped observation and a LOW/MEDIUM/HIGH confidence.');
+}
 
 // Normalize one evidence itemization line down to its observation body so that N near-identical
 // per-second entries collapse to one key. Structural marker lines are excluded by the caller —
@@ -634,62 +776,49 @@ function validateReportQuality({ text, finishReason, ranges, audioTokens }) {
     }
   }
 
-  // ---- Section 2: source duration ---------------------------------------------------------------
-  if (!hasExactLine(section2, UNDETERMINABLE_DURATION_LINE)) {
-    return fail('speculative-source-duration', `Section 2 does not carry the required line, exactly and complete, as "${UNDETERMINABLE_DURATION_LINE}".`);
-  }
-  // V4Q CORRECTION -- CONTRADICTION. Carrying the required line no longer buys immunity: the
-  // observed failure stated BOTH "Approximate duration: Over 1 hour" and (under the new prompt)
-  // would still be able to carry the undeterminable line. Strip the ONE sanctioned line, then any
-  // remaining duration FIELD assertion is a contradiction. Deliberately field-shaped ("<x>
-  // duration:") so honest prose -- "the full duration of the video is unknown" -- never trips it,
-  // and so the authorized aggregate and per-slice authorized lengths are untouched.
-  //
-  // V4Q CORRECTION 2: the same stripped text is now ALSO scanned for natural-language length
-  // assertions ("The video is over one hour long.", "The video's duration is 1:02:03."), which the
-  // field-shaped detector alone could not see. Every prose pattern demands a concrete value, so the
-  // honest limitation forms stay passing.
+  // ---- V4Q FINAL (§5.2): FORMAT BEFORE CONTENT, SOURCE BEFORE SYNTHETIC -------------------------
+  // Both canonical fields are format-checked before either content contract runs. A response whose
+  // field is malformed gets the format code even when it also carries forbidden content, and when
+  // BOTH fields are malformed the source-duration code is the one returned.
+  const durationField = validateSourceDurationField(section2, lines);
+  if (!durationField.ok) return durationField;
+  const assessmentField = validateSyntheticAssessmentField(section2, lines);
+  if (!assessmentField.ok) return assessmentField;
+  // ---- CONTENT: source duration (§7) ------------------------------------------------------------
+  // The three sanctioned length-bearing lines are removed first so the contract can never reject
+  // the very text it mandates. What remains is scanned two ways: the line-anchored field assertion
+  // (production 5), then the five sentence-local productions, each inside ONE deterministic unit.
   const sanctionedLengthLines = new Set([UNDETERMINABLE_DURATION_LINE, scopeLine, ...expectedHeadings]);
-  const withoutSanctionedDuration = lines
-    .filter((l) => !sanctionedLengthLines.has(l.trim()))
-    .join('\n');
-  if (DURATION_FIELD_CLAIM.test(withoutSanctionedDuration)) {
-    return fail('speculative-source-duration', 'the report asserts a source/total/video duration field alongside the required undeterminable line; the two contradict each other and only the authorized aggregate is knowable.');
+  const withoutSanctionedDuration = lines.filter((l) => !sanctionedLengthLines.has(l.trim()));
+  if (DURATION_FIELD_CLAIM.test(withoutSanctionedDuration.join('\n'))) {
+    return fail('speculative-source-duration', 'the report carries a source/total/video duration FIELD alongside the required undeterminable line; the two contradict each other and only the authorized aggregate is knowable.');
   }
-  for (const re of SOURCE_LENGTH_ASSERTIONS) {
-    if (re.test(withoutSanctionedDuration)) {
+  for (const unit of splitSentenceUnits(withoutSanctionedDuration.join('\n'))) {
+    for (const production of DURATION_PRODUCTIONS) {
+      const m = production.re.exec(unit);
+      if (!m) continue;
+      // Productions 4 and 6 are the ONLY place authorized scope disambiguates otherwise identical
+      // prose: at or below the aggregate the sentence describes what was actually supplied.
+      if (production.aggregateGated && !claimExceedsAggregate(m[1], m[2], aggregateSeconds)) continue;
       // Structural reason only: the asserted length is provider text and is never echoed.
-      return fail('speculative-source-duration', 'the report states a total source/video length alongside the required undeterminable line; the two contradict each other and only the authorized aggregate is knowable.');
+      return fail('speculative-source-duration', `the report states a whole-source length (form ${production.id}) alongside the required undeterminable line; only the ${aggregateSeconds}s authorized aggregate is knowable.`);
     }
   }
 
-  // ---- Section 2: synthetic-media assessment ----------------------------------------------------
-  // Scan for AFFIRMATIVE synthetic claims only. Two exclusions keep this honest: the sanctioned
-  // assessment line itself contains the word "Synthetic" (it must not trip its own detector), and a
-  // negated statement ("no observable evidence of AI generation") is the compliant answer, not a
-  // violation. What remains is an unhedged synthetic claim made outside the standardized channel.
-  // V4Q CORRECTION 2: the old whole-line negation filter dropped every line containing "no"/"not",
-  // which let "There is no doubt this is AI-generated." and "Not only is it synthetic, ..." through
-  // untouched. Negation is now neutralized only where it is DIRECTLY attached to the synthetic
-  // claim; whatever affirmative vocabulary survives that removal is a real claim.
-  let scannable = lines
+  // ---- CONTENT: synthetic origin (§6) -----------------------------------------------------------
+  // The ONE accepted canonical assessment line is removed, then the frozen vocabulary is matched
+  // over everything that remains. There is no negation interpretation: a forbidden phrase rejects
+  // wherever it appears, including inside a denial, because the canonical field is the only place
+  // origin may be discussed at all. Both accepted field forms are treated identically here -- an
+  // evidence-backed finding licenses the field, never a restatement elsewhere.
+  const outsideAssessment = lines
     .filter((line) => !SYNTHETIC_ASSESSMENT_SHAPE.test(line.trim()))
     .join('\n');
-  for (const re of NEGATED_SYNTHETIC_CLAIMS) scannable = scannable.replace(re, ' ');
-  const assertsSynthetic = SYNTHETIC_TERMS.test(scannable);
-
-  const assessmentLines = matchLines(section2, SYNTHETIC_ASSESSMENT_SHAPE);
-  if (assessmentLines.length !== 1) {
-    return fail('unsupported-synthetic-claim', `Section 2 must carry exactly one complete "**Synthetic-media assessment:**" line; found ${assessmentLines.length}.`);
-  }
-  const assessment = assessmentLines[0].trim();
-  const declaresNoEvidence = assessment === NO_SYNTHETIC_EVIDENCE_LINE;
-  const standardized = !declaresNoEvidence && STANDARDIZED_SYNTHETIC_LINE.test(assessment);
-  if (!declaresNoEvidence && !standardized) {
-    return fail('unsupported-synthetic-claim', 'Section 2 carries neither the exact NO OBSERVABLE EVIDENCE line nor a standardized timestamped synthetic-media assessment with a confidence level.');
-  }
-  if (declaresNoEvidence && assertsSynthetic) {
-    return fail('unsupported-synthetic-claim', 'the report declares no observable synthetic-media evidence yet asserts synthetic/manipulated origin elsewhere without a timestamped, confidence-rated assessment.');
+  for (const re of FORBIDDEN_ORIGIN_PATTERNS) {
+    if (re.test(outsideAssessment)) {
+      // Structural reason only: the matched phrase is provider text and must never be echoed.
+      return fail('unsupported-synthetic-claim', `synthetic-origin terminology appears outside the one canonical "**Synthetic-media assessment:**" field (which reported ${assessmentField.form}); origin may be discussed only in that field.`);
+    }
   }
 
   const counts = new Map();
@@ -1057,7 +1186,11 @@ module.exports = {
   splitReportLines, sectionLines, findHeaderLine, hasExactLine, matchLines,
   SLICE_AUDIO_STATUS_LINE, SLICE_AUDIO_EVIDENCE_LINE, SLICE_ANCHOR_LINE, SLICE_JUSTIFICATION_LINE,
   SLICE_HEADING_SHAPE, SYNTHETIC_ASSESSMENT_SHAPE, STANDARDIZED_SYNTHETIC_LINE,
-  SOURCE_LENGTH_ASSERTIONS, NEGATED_SYNTHETIC_CLAIMS, SYNTHETIC_TERMS,
+  // V4Q FINAL: frozen vocabulary, sentence-local duration productions, aggregate comparison
+  FORBIDDEN_ORIGIN_PHRASES, FORBIDDEN_ORIGIN_PATTERNS,
+  splitSentenceUnits, parseDurationSeconds, claimExceedsAggregate, DURATION_PRODUCTIONS,
+  validateSourceDurationField, validateSyntheticAssessmentField,
+  PROFILE_SECTION_INDEX, EVIDENCE_SECTION_INDEX,
   PROFILE_SECTION_HEADER, PROFILE_SECTION_NEXT_HEADER, DURATION_FIELD_CLAIM,
   resolveDiagnosticDir, writeRejectedResponseDiagnostic,
   QUALITY_FAILURE_CODES, REQUIRED_SECTIONS, AUDIO_STATUSES,

@@ -783,6 +783,31 @@ Describe 'V4Q schema version 4 -- live SDK runs and rejected-response diagnostic
             { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
         }
     }
+    It 'V4Q FINAL: the schema declares exactly 15 codes, including both canonical-field FORMAT codes' {
+        $codes = @(Get-VideoScoutQualityReasonCodes)
+        $codes.Count | Should Be 15
+        ($codes -ccontains 'source-duration-field-format') | Should Be $true
+        ($codes -ccontains 'synthetic-assessment-field-format') | Should Be $true
+        # The FORMAT codes are additions, never replacements: their CONTENT counterparts survive.
+        ($codes -ccontains 'speculative-source-duration') | Should Be $true
+        ($codes -ccontains 'unsupported-synthetic-claim') | Should Be $true
+    }
+    It 'V4Q FINAL: a v4 manifest carrying either new FORMAT code validates end to end' {
+        foreach ($code in @('source-duration-field-format', 'synthetic-assessment-field-format')) {
+            $m = New-Rejected; $m.reason = "[quality:$code] the canonical field is malformed"
+            { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
+            $m.schemaVersion | Should Be 4
+            $m.outcome | Should Be 'error'
+            $m.reportFile | Should BeNullOrEmpty
+            @($m.diagnosticArtifacts).Count | Should Be 1
+        }
+    }
+    It 'V4Q FINAL: a near-miss format code is still refused (the allowlist stays CLOSED)' {
+        foreach ($bogus in @('source-duration-format', 'synthetic-field-format', 'field-format')) {
+            $m = New-Rejected; $m.reason = "[quality:$bogus] x"
+            { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'not an allowlisted'
+        }
+    }
     It 'at most ONE diagnostic entry is permitted' {
         $m = New-Rejected; $m.diagnosticArtifacts = @((New-Entry), (New-Entry))
         { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw 'at most'
