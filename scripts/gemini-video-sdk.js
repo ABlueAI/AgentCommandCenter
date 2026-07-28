@@ -407,11 +407,49 @@ const DUR_ARTICLE = String.raw`(?:(?:the|this|that|its|a|an)[ \t]+)?(?:${DUR_MOD
 // and proves nothing, so it rejects only above 50. Treating them alike rejected a truthful
 // bounded-scope statement. `upwards of` is read INCLUSIVELY -- the conservative reading -- because
 // no reviewed contract establishes a stricter meaning for it.
-const DUR_HEDGE_STRICT_LOWER = String.raw`(?:over|more[ \t]+than|in[ \t]+excess[ \t]+of|greater[ \t]+than|longer[ \t]+than)`;
-const DUR_HEDGE_INCLUSIVE_LOWER = String.raw`(?:at[ \t]+least|upwards[ \t]+of|no[ \t]+less[ \t]+than)`;
-const DUR_HEDGE_UPPER = String.raw`(?:under|less[ \t]+than|at[ \t]+most|up[ \t]+to|no[ \t]+more[ \t]+than|shorter[ \t]+than)`;
-const DUR_HEDGE_APPROX = String.raw`(?:approximately|approx\.?|about|roughly|around|circa|nearly|almost|just|exactly|precisely|only|some)`;
-const DUR_HEDGE = String.raw`(?:(?:${DUR_HEDGE_STRICT_LOWER}|${DUR_HEDGE_INCLUSIVE_LOWER}|${DUR_HEDGE_UPPER}|${DUR_HEDGE_APPROX})[ \t]+)*`;
+// Five closed classes, written ONCE as literal phrase lists. The matching regex and the classifier
+// are both derived from these lists, so a phrase can never be matchable but unclassified.
+const DUR_HEDGE_UPPER_PHRASES = ['no more than', 'less than', 'shorter than', 'at most', 'up to', 'under'];
+const DUR_HEDGE_INCLUSIVE_PHRASES = ['no less than', 'at least', 'upwards of'];
+const DUR_HEDGE_STRICT_PHRASES = ['in excess of', 'more than', 'greater than', 'longer than', 'over'];
+// V4Q FINAL CORRECTION -- NON-BINDING APPROXIMATIONS. "approximately 51 seconds" against a 50s
+// aggregate is NOT proof that the source exceeds the authorized scope: the phrase supplies no
+// deterministic lower bound, and establishing one would mean inventing a tolerance. The durable
+// contract already says that when the comparison cannot deterministically establish an excess, the
+// claim passes -- so these return false. That is an accepted UNDER-match, not a finding that the
+// report is correct; semantic truth stays with human acceptance.
+const DUR_HEDGE_NONBINDING_PHRASES = ['approximately', 'approx.', 'approx', 'about', 'roughly', 'around', 'circa', 'nearly', 'almost', 'some', 'just'];
+// Numerically binding: these assert the value itself, so ordinary comparison applies.
+const DUR_HEDGE_BINDING_PHRASES = ['exactly', 'precisely', 'only'];
+
+const HEDGE_CLASS_BY_PHRASE = new Map();
+for (const [cls, phrases] of [
+  ['upper', DUR_HEDGE_UPPER_PHRASES], ['inclusive', DUR_HEDGE_INCLUSIVE_PHRASES],
+  ['strict', DUR_HEDGE_STRICT_PHRASES], ['nonbinding', DUR_HEDGE_NONBINDING_PHRASES],
+  ['binding', DUR_HEDGE_BINDING_PHRASES],
+]) {
+  for (const phrase of phrases) HEDGE_CLASS_BY_PHRASE.set(phrase, cls);
+}
+// LONGEST FIRST, for both the regex alternation and the terminal-phrase scan. Without this,
+// "no less than" (inclusive) was silently classified by its "less than" tail as an upper bound, and
+// "no more than" by its "more than" tail as a strict lower bound -- each landing in the wrong class.
+const DUR_HEDGE_PHRASES = [...HEDGE_CLASS_BY_PHRASE.keys()].sort((a, b) => b.length - a.length);
+const DUR_HEDGE_ALTERNATION = DUR_HEDGE_PHRASES
+  .map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '[ \\t]+'))
+  .join('|');
+const DUR_HEDGE = String.raw`(?:(?:${DUR_HEDGE_ALTERNATION})[ \t]+)*`;
+
+// Pure and exported. Returns the class of the hedge phrase IMMEDIATELY preceding the value, by
+// longest terminal match over the closed lists above. A finite terminal-token rule only -- no
+// semantic parsing, no tolerance arithmetic, no fuzzy matching.
+function classifyTerminalHedge(hedge) {
+  const h = String(hedge == null ? '' : hedge).toLowerCase().replace(/[ \t]+/g, ' ').trim();
+  if (!h) return 'none';
+  for (const phrase of DUR_HEDGE_PHRASES) {
+    if (h === phrase || h.endsWith(` ${phrase}`)) return HEDGE_CLASS_BY_PHRASE.get(phrase);
+  }
+  return 'none';
+}
 const NUMBER_WORDS = {
   a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
   ten: 10, eleven: 11, twelve: 12, fifteen: 15, twenty: 20, thirty: 30, forty: 40, fifty: 50,
@@ -450,17 +488,21 @@ function parseDurationSeconds(raw) {
 // authorized aggregate a length statement is a bounded-scope description and passes; above it, the
 // statement necessarily claims knowledge the request never supplied. When the comparison cannot
 // deterministically establish that the claim EXCEEDS the aggregate, prefer passing.
-// The hedge IMMEDIATELY preceding the value governs it, so each class is matched at the END of the
-// captured hedge run ("just over 50 seconds" is governed by `over`, not by `just`).
+// The hedge IMMEDIATELY preceding the value governs it: "just over 50 seconds" is governed by
+// `over`, and "over approximately 51 seconds" by `approximately`.
 function claimExceedsAggregate(hedge, value, aggregateSeconds) {
   const seconds = parseDurationSeconds(value);
   if (seconds === null || !Number.isFinite(aggregateSeconds)) return false;
-  const h = String(hedge || '').trim().toLowerCase();
-  const endsWith = (cls) => new RegExp(String.raw`(?:^|[ \t])${cls}$`, 'i').test(h);
-  if (endsWith(DUR_HEDGE_UPPER)) return false;                              // an upper bound proves nothing
-  if (endsWith(DUR_HEDGE_STRICT_LOWER)) return seconds >= aggregateSeconds; // "over N" excludes N itself
-  // Inclusive lower bounds, approximations, and a bare value are all satisfied BY the aggregate.
-  return seconds > aggregateSeconds;
+  switch (classifyTerminalHedge(hedge)) {
+    // Neither an upper bound nor a non-binding approximation can PROVE an excess, so both pass.
+    case 'upper': return false;
+    case 'nonbinding': return false;
+    // "over N" excludes N itself, so a threshold equal to the aggregate already claims more.
+    case 'strict': return seconds >= aggregateSeconds;
+    // Inclusive lower bounds, numerically binding hedges, and a bare value are all SATISFIED BY the
+    // aggregate, so only a strictly greater value claims material outside the authorized scope.
+    default: return seconds > aggregateSeconds;
+  }
 }
 
 // §7.1 -- the deterministic unit splitter, pure and exported. Fixed delimiters only: a line
@@ -1224,6 +1266,7 @@ module.exports = {
   // V4Q FINAL: frozen vocabulary, sentence-local duration productions, aggregate comparison
   FORBIDDEN_ORIGIN_PHRASES, FORBIDDEN_ORIGIN_PATTERNS,
   splitSentenceUnits, parseDurationSeconds, claimExceedsAggregate, DURATION_PRODUCTIONS,
+  classifyTerminalHedge, DUR_HEDGE_PHRASES, HEDGE_CLASS_BY_PHRASE,
   validateSourceDurationField, validateSyntheticAssessmentField,
   PROFILE_SECTION_INDEX, EVIDENCE_SECTION_INDEX,
   PROFILE_SECTION_HEADER, PROFILE_SECTION_NEXT_HEADER, DURATION_FIELD_CLAIM,

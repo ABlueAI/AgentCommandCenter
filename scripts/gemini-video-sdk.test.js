@@ -765,6 +765,7 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     SLICE_HEADING_SHAPE, SYNTHETIC_ASSESSMENT_SHAPE, STANDARDIZED_SYNTHETIC_LINE,
     FORBIDDEN_ORIGIN_PHRASES, FORBIDDEN_ORIGIN_PATTERNS,
     splitSentenceUnits, parseDurationSeconds, claimExceedsAggregate,
+    classifyTerminalHedge, DUR_HEDGE_PHRASES, HEDGE_CLASS_BY_PHRASE,
     validateSourceDurationField, validateSyntheticAssessmentField,
     PROFILE_SECTION_INDEX, EVIDENCE_SECTION_INDEX,
   } = require('./gemini-video-sdk');
@@ -1594,6 +1595,94 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     assert(claimExceedsAggregate('longer than ', '50 seconds', 50) === true, 'helper: "longer than" is strict');
     assert(claimExceedsAggregate('in excess of ', '50 seconds', 50) === true, 'helper: "in excess of" is strict');
     assert(claimExceedsAggregate('just over ', '50 seconds', 50) === true, 'helper: the LAST hedge governs the value');
+  }
+
+  section('V4Q FINAL CORRECTION: a non-binding approximation cannot PROVE an excess');
+  {
+    // "approximately 51 seconds" against a 50s aggregate supplies no deterministic lower bound.
+    // Establishing one would mean inventing a tolerance, so the durable rule applies: when the
+    // comparison cannot deterministically establish an excess, the claim PASSES. These are accepted
+    // UNDER-matches, not findings that the report is correct.
+    for (const claim of [
+      'The video is approximately 51 seconds long.',
+      'The video is about 51 seconds long.',
+      'The video is roughly 90 seconds long.',
+      'The video is around two hours long.',
+      'The video is circa 62 minutes long.',
+      'The video is nearly 51 seconds long.',
+      'The video is almost 90 seconds long.',
+      'The video is some 62 minutes long.',
+      'The video is just 51 seconds long.',
+      'The video is approx. 62 minutes long.',
+    ]) {
+      assert(vq(inLimits(claim)).ok === true,
+        `NON-BINDING: "${claim.slice(13, 44)}" PASSES (no deterministic lower bound)`);
+    }
+    // Exact and numerically binding forms keep ordinary comparison.
+    for (const claim of [
+      'The video is 51 seconds long.',
+      'The video is exactly 51 seconds long.',
+      'The video is precisely 51 seconds long.',
+      'The video is only 51 seconds long.',
+    ]) {
+      assert(vq(inLimits(claim)).code === 'speculative-source-duration',
+        `BINDING: "${claim.slice(13, 44)}" is REJECTED above the aggregate`);
+    }
+    for (const claim of [
+      'The video is 50 seconds long.',
+      'The video is exactly 50 seconds long.',
+      'The video is precisely 50 seconds long.',
+      'The video is only 50 seconds long.',
+    ]) {
+      assert(vq(inLimits(claim)).ok === true, `BINDING: "${claim.slice(13, 44)}" at EQUALITY passes`);
+    }
+    // Terminal-hedge precedence, through the complete validator path.
+    assert(vq(inLimits('The video is just over 50 seconds long.')).code === 'speculative-source-duration',
+      'TERMINAL: "just over 50 seconds" is governed by strict `over` and REJECTS');
+    assert(vq(inLimits('The video is approximately over 50 seconds long.')).code === 'speculative-source-duration',
+      'TERMINAL: "approximately over 50 seconds" is governed by strict `over` and REJECTS');
+    assert(vq(inLimits('The video is over approximately 51 seconds long.')).ok === true,
+      'TERMINAL: "over approximately 51 seconds" is governed by non-binding `approximately` and PASSES');
+    // The classifier itself, over the whole closed vocabulary.
+    for (const [hedge, cls] of [
+      ['approximately', 'nonbinding'], ['approx.', 'nonbinding'], ['approx', 'nonbinding'],
+      ['about', 'nonbinding'], ['roughly', 'nonbinding'], ['around', 'nonbinding'],
+      ['circa', 'nonbinding'], ['nearly', 'nonbinding'], ['almost', 'nonbinding'],
+      ['some', 'nonbinding'], ['just', 'nonbinding'],
+      ['exactly', 'binding'], ['precisely', 'binding'], ['only', 'binding'],
+      ['over', 'strict'], ['more than', 'strict'], ['in excess of', 'strict'],
+      ['greater than', 'strict'], ['longer than', 'strict'],
+      ['at least', 'inclusive'], ['upwards of', 'inclusive'], ['no less than', 'inclusive'],
+      ['under', 'upper'], ['less than', 'upper'], ['at most', 'upper'],
+      ['up to', 'upper'], ['no more than', 'upper'], ['shorter than', 'upper'],
+      ['', 'none'], ['   ', 'none'],
+    ]) {
+      assert(classifyTerminalHedge(hedge) === cls, `classifyTerminalHedge("${hedge}") is ${cls}`);
+    }
+    // LONGEST terminal phrase wins. Without this, "no less than" was classified by its "less than"
+    // tail as an upper bound, and "no more than" by its "more than" tail as a strict lower bound --
+    // each landing in the wrong class and silently misjudging the aggregate comparison.
+    assert(classifyTerminalHedge('no less than') === 'inclusive' && classifyTerminalHedge('less than') === 'upper',
+      'the longer "no less than" is NOT classified by its shorter "less than" tail');
+    assert(classifyTerminalHedge('no more than') === 'upper' && classifyTerminalHedge('more than') === 'strict',
+      'the longer "no more than" is NOT classified by its shorter "more than" tail');
+    assert(claimExceedsAggregate('no less than ', '51 seconds', 50) === true,
+      '"no less than 51 seconds" exceeds a 50s aggregate');
+    assert(claimExceedsAggregate('no less than ', '50 seconds', 50) === false,
+      '"no less than 50 seconds" does NOT exceed a 50s aggregate');
+    assert(claimExceedsAggregate('no more than ', '9 hours', 50) === false,
+      '"no more than" is an upper bound and never exceeds');
+    assert(DUR_HEDGE_PHRASES.every((p, i, a) => i === 0 || a[i - 1].length >= p.length),
+      'the hedge vocabulary is ordered longest-first for both matching and classification');
+    assert(DUR_HEDGE_PHRASES.length === HEDGE_CLASS_BY_PHRASE.size,
+      'every matchable hedge phrase has exactly one class -- none is matchable but unclassified');
+    // Non-binding approximation does NOT weaken the mandated rejections.
+    assert(vq(inLimits('The video is over one hour long.')).code === 'speculative-source-duration',
+      'the mandated "over one hour long" rejection is unchanged');
+    assert(vq(inLimits('Approximate duration: Over 1 hour.')).code === 'speculative-source-duration',
+      'the line-anchored duration FIELD is unaffected by hedge classification');
+    assert(vq(inLimits("The video's duration is 1:02:03.")).code === 'speculative-source-duration',
+      'ungated production 1 is unaffected by hedge classification');
   }
 
   section('V4Q FINAL: bounded subjects and cross-unit co-occurrence PASS');

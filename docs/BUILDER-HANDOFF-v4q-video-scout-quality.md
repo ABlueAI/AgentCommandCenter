@@ -189,13 +189,42 @@ hour long` example. It is deliberately not a general subject-plus-time co-occurr
 ### The authorized-aggregate comparison
 
 Productions 4 and 6 compare the parsed value against the authorized aggregate the validator already
-knows from the validated ranges:
+knows from the validated ranges. **The hedge immediately preceding the value decides how**, resolved
+by longest terminal phrase over five closed classes — a finite terminal-token rule, with no semantic
+parsing, no tolerance arithmetic, and no fuzzy matching.
 
-- below the aggregate → pass
-- equal to the aggregate → pass
-- above the aggregate → reject
-- `over N` / `more than N` / `in excess of N` → exceeds only when `N >= aggregate`
+| Class | Phrases | Rejects when |
+|---|---|---|
+| **Strict lower** | `over`, `more than`, `in excess of`, `greater than`, `longer than` | `N >= aggregate` — the phrase excludes `N` itself, so equality already claims more |
+| **Inclusive lower** | `at least`, `upwards of`, `no less than` | `N > aggregate` — the aggregate itself satisfies the claim |
+| **Upper** | `under`, `less than`, `at most`, `up to`, `no more than`, `shorter than` | never — an upper bound cannot establish an excess |
+| **Non-binding approximation** | `approximately`, `approx.`, `approx`, `about`, `roughly`, `around`, `circa`, `nearly`, `almost`, `some`, standalone `just` | never — see below |
+| **Binding / bare** | `exactly`, `precisely`, `only`, or no hedge | `N > aggregate` — ordinary comparison |
+
+Worked examples against a 50s aggregate: `over 50 seconds` rejects but `over 49 seconds` passes;
+`at least 50 seconds` passes and `at least 51 seconds` rejects; `exactly 51 seconds` rejects and
+`exactly 50 seconds` passes.
+
+**Terminal-hedge precedence.** `just over 50 seconds` is governed by strict `over` and rejects;
+`approximately over 50 seconds` likewise. `over approximately 51 seconds` is governed by non-binding
+`approximately` and passes. Longest terminal phrase wins, which is what keeps `no less than`
+(inclusive) from being read as its `less than` tail (upper), and `no more than` (upper) from being
+read as its `more than` tail (strict).
+
+**Why approximation under-matching is deliberate.** `approximately 51 seconds` against a 50s
+aggregate is *not* proof that the source exceeds the authorized scope. The phrase supplies no
+deterministic lower bound, and the only way to manufacture one would be to invent an approximation
+tolerance — a threshold nobody reviewed, applied to text the gate cannot actually interpret. **The
+validator applies no invented approximation tolerance.** So the durable rule below governs, and the
+claim passes.
+
 - if the comparison cannot deterministically establish that the claim exceeds the aggregate → **pass**
+
+These approximation passes are accepted **under-matches**, not findings that the report is correct.
+A report that says `approximately 51 seconds` about a 50-second authorized scope may well be wrong;
+the gate simply cannot prove it from the text, and discarding a paid response on an unprovable
+reading is the worse error. **Human acceptance remains responsible for semantic truth**, here as
+everywhere else in this gate.
 
 > **This is the ONLY semantic ambiguity in the entire gate that is resolved using known authorized
 > scope.** At or below the aggregate, `The video is 15 seconds long.` describes what was actually
