@@ -390,9 +390,73 @@ Library / cleanup / retention / record / writer non-exposure proofs.
 
 ---
 
+---
+
+## Phase B — the renderer model policy
+
+One invariant: **within each New Agent modal session, Video Scout automatically selects Flash-Lite
+for transcript/audio and Pro for video, until the user manually picks a model. A manual choice then
+wins for the rest of that session, and closing/reopening the modal resets the policy.**
+
+`app/renderer/video-model-policy.js` is a pure dual-environment module (browser `<script>` global +
+CommonJS, following `video-range-ui.js`). No DOM, Electron, filesystem, network, credentials,
+provider calls, or timers; every transition returns a new plain state object.
+
+| Session state | transcript | audio | video |
+|---|---|---|---|
+| unpinned (automatic) | Flash-Lite | Flash-Lite | **Pro** |
+| pinned (manual) | the pinned model | the pinned model | the pinned model |
+
+**Why Pro is the automatic video choice.** The quality gate rejects a response that fails
+deterministic validation, and a rejected response is a paid, terminal failure whose only output is
+evidence. Flash-Lite on a bounded video pass is exactly the configuration that produced the V4Q
+failure evidence. Transcript and audio keep the economy model because they never enter that path.
+
+**Slice count is deliberately not an input.** Analysis mode alone decides, so a whole-video pass and
+an eight-slice pass receive the same automatic model. Backend effective-model resolution is a
+separate mechanism and is unchanged.
+
+**A manual choice is refused, never substituted.** An out-of-allowlist value returns a refusal and
+leaves the previous concrete model on the wire — the same reasoning that made `buildVideoScoutArgs`
+refuse rather than drop `-Model`. Re-selecting the model already displayed still pins the session:
+the user made a choice, and that it matches the automatic one does not make it automatic.
+
+**No sentinel reaches the wire.** `state.videoModel` always holds a concrete allowlisted model —
+never `auto`, never blank. `syncVideoModelControls()` is the single place the policy is pushed into
+both the DOM and `state`, so the dropdown can never display one model while `ptyStart` sends
+another. `openModal()` resets the session wholesale, which is what stops a manual pin from leaking
+into the next one. Nothing is persisted to settings or disk.
+
+**The renderer is a mirror, not authority.** `app/video-scout-args.js` owns the launch allowlist and
+`scripts/gemini-video-sdk.js` independently owns generation policy. Tests pin the renderer allowlist
+equal to `VALID_VIDEO_MODELS`, Flash-Lite equal to `DEFAULT_VIDEO_MODEL`, Pro equal to the SDK's
+`PRO_MODEL`, and assert the SDK contains **no** reference to `video-model-policy`.
+
+**Honest modal copy.** The status line distinguishes an automatic selection from a pinned one and
+carries the Pro cost caveat. It never claims a run is free, paid, or billable: whether a request
+falls inside a free tier depends on the user's own Gemini project and account, which the app cannot
+see.
+
+### Manual acceptance plan — record only, not yet run
+
+Requires a full **Electron process restart**, not a reload. Do **not** click Create & Launch during
+this renderer-only check.
+
+1. Open the modal, choose Video Scout → transcript mode with Flash-Lite selected automatically.
+2. Switch to video → Pro appears automatically.
+3. Switch back to transcript, then audio → Flash-Lite returns each time.
+4. Manually select Flash-Lite, then toggle video/audio/transcript → Flash-Lite remains throughout.
+5. Manually select Flash, toggle every mode → Flash remains.
+6. Close and reopen the modal → transcript with automatic Flash-Lite; no manual state survives.
+7. Read the help text: it describes the automatic/manual state accurately and does not claim a run
+   is necessarily free or billable.
+
+---
+
 ## Status
 
-Backend correction checkpoints only. **Renderer Phase B is blocked** pending a literal
-`CHECKPOINT REVIEW: PASS`. Nothing here is merged or pushed, and no provider request has been made
-at any point during V4Q implementation. Release requires a new Opus 5 Full-class whole-diff review
-ending in a literal `VERDICT: PASS`; a checkpoint PASS unblocks Phase B and nothing else.
+Backend correction checkpoints plus renderer Phase B. Nothing here is merged or pushed, and **no
+provider request has been made at any point during V4Q implementation**. Release requires a new
+Opus 5 Full-class whole-diff review ending in a literal `VERDICT: PASS`; a Phase B checkpoint PASS
+authorizes final handoff/diff preparation only — not a provider probe, acceptance run, merge, or
+push.

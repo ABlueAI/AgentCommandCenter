@@ -1028,9 +1028,24 @@ function wireUi() {
   // Video-scout's Gemini options (model / media-resolution). Server-side allowlists in main.js
   // (VALID_VIDEO_MODELS / VALID_MEDIA_RESOLUTIONS) are the actual enforcement — these dropdowns
   // only offer known-good values, they are not the security boundary.
-  $('#videoModelSelect').onchange = (e) => { state.videoModel = e.target.value; };
+  // V4Q Phase B: the model dropdown PINS a manual choice for the rest of this modal session. An
+  // out-of-allowlist value is refused rather than substituted, and the control is snapped back to
+  // the concrete model still held in state — the dropdown must never display one model while
+  // ptyStart sends another.
+  $('#videoModelSelect').onchange = (e) => {
+    const result = videoModelPolicy.applyManualModel(modelPolicy, e.target.value);
+    if (result.error) { syncVideoModelControls(result.error); return; }
+    modelPolicy = result.state;
+    syncVideoModelControls();
+  };
   $('#mediaResolutionSelect').onchange = (e) => { state.mediaResolution = e.target.value; };
-  $('#analysisModeSelect').onchange = (e) => { state.analysisMode = e.target.value; updateVideoRangeVisibility(); };
+  // V4Q Phase B: a mode change re-applies the AUTOMATIC policy only while the session is unpinned.
+  // After a manual pick the mode still changes (slice rows follow it) but the model does not.
+  $('#analysisModeSelect').onchange = (e) => {
+    modelPolicy = videoModelPolicy.applyAnalysisMode(modelPolicy, e.target.value);
+    syncVideoModelControls();
+    updateVideoRangeVisibility();
+  };
   // V4: add a slice row (capped at MAX_SLICES; the handler disables itself via renumberSliceRows).
   const addSliceBtn = $('#addSliceBtn');
   if (addSliceBtn) addSliceBtn.onclick = () => addSliceRow();
@@ -1132,6 +1147,29 @@ function clearSliceRowErrors() {
   for (const r of sliceRows) { r.startEl.classList.remove('invalid'); r.endEl.classList.remove('invalid'); }
 }
 
+// V4Q Phase B — the per-modal-session model policy. Held OUTSIDE `state` because it is session
+// scoped: openModal() replaces it wholesale, which is what guarantees a manual choice never leaks
+// into the next modal session. `state.videoModel` remains the single value the launch path reads
+// and always holds a CONCRETE allowlisted model — never 'auto', never blank, never a sentinel.
+let modelPolicy = videoModelPolicy.initialPolicyState();
+
+// The ONE place the policy is pushed into the DOM and into `state`, so the dropdown, the status
+// line, and the value ptyStart will send can never disagree. `refusal` shows an invalid-selection
+// message while leaving the previously chosen concrete model intact on the wire.
+function syncVideoModelControls(refusal) {
+  state.videoModel = modelPolicy.model;
+  state.analysisMode = modelPolicy.analysisMode;
+  const select = $('#videoModelSelect');
+  if (select) select.value = modelPolicy.model;
+  const modeSelect = $('#analysisModeSelect');
+  if (modeSelect) modeSelect.value = modelPolicy.analysisMode;
+  const status = $('#videoModelStatus');
+  if (status) {
+    status.textContent = refusal || videoModelPolicy.describeModelSelection(modelPolicy);
+    status.classList.toggle('over', Boolean(refusal));
+  }
+}
+
 // Live "N slices · Xs / 1800s" display, driven by the same math the classifier enforces, so the
 // user sees the aggregate and the cap BEFORE submitting (display-only; never the validation).
 function updateSliceAggregate() {
@@ -1210,10 +1248,13 @@ function openModal() {
   // Reset the Gemini options to their defaults every time the modal opens (mirrors hardTask reset
   // above) so a previous run's choice never silently carries over into the next one. analysisMode
   // resets to transcript (cheapest) so the expensive full-video pass is always a fresh opt-in.
-  state.videoModel = 'gemini-2.5-flash-lite'; state.mediaResolution = 'MEDIUM'; state.analysisMode = 'transcript';
-  $('#videoModelSelect').value = state.videoModel;
+  // V4Q Phase B: reset the POLICY SESSION first, then synchronize every control from it. This is
+  // the only reset path, so a manual model choice can never survive a close/reopen: the new session
+  // starts unpinned, in transcript mode, on the economy model.
+  modelPolicy = videoModelPolicy.resetPolicyState();
+  state.mediaResolution = 'MEDIUM';
   $('#mediaResolutionSelect').value = state.mediaResolution;
-  $('#analysisModeSelect').value = state.analysisMode;
+  syncVideoModelControls();
   // Slice rows are read fresh from the DOM at launch (not mirrored into `state`), so resetting
   // them here is what makes a previous run's slices never carry over. Reopening restores exactly
   // ONE blank row with no stale values or errors; updateVideoRangeVisibility (clear-on-hide, mode
