@@ -697,6 +697,10 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     extractProfileSection, resolveDiagnosticDir, writeRejectedResponseDiagnostic, REQUIRED_SECTIONS,
     MAX_DIAGNOSTIC_BYTES, MAX_DIAGNOSTIC_CHARS, PRO_MODEL,
     PROFILE_SECTION_HEADER, PROFILE_SECTION_NEXT_HEADER, DURATION_FIELD_CLAIM,
+    splitReportLines, sectionLines, findHeaderLine, hasExactLine, matchLines,
+    SLICE_AUDIO_STATUS_LINE, SLICE_AUDIO_EVIDENCE_LINE, SLICE_ANCHOR_LINE, SLICE_JUSTIFICATION_LINE,
+    SLICE_HEADING_SHAPE, SYNTHETIC_ASSESSMENT_SHAPE, STANDARDIZED_SYNTHETIC_LINE,
+    SOURCE_LENGTH_ASSERTIONS, NEGATED_SYNTHETIC_CLAIMS, SYNTHETIC_TERMS,
   } = require('./gemini-video-sdk');
   const LITE = 'gemini-2.5-flash-lite';
   const FLASH = 'gemini-2.5-flash';
@@ -987,6 +991,239 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     const honest = compliantReport(R2).replace('**Section TL;DR:** limits.',
       '**Section TL;DR:** limits.\nThe full source length is not determinable from the authorized slices.');
     assert(vq(honest).ok === true, 'a report combining correct placement with honest duration limitation passes');
+  }
+
+  // ===================== V4Q CORRECTION 2: EXACT STRUCTURAL ELEMENTS ==========================
+  // Everything structural is decided on a WHOLE trimmed line. The prior implementation used
+  // substring/unanchored matching, so a malformed report could inherit a canonical structure it
+  // never emitted: `prefix ## 3. ...` satisfied a section header, an embedded scope line satisfied
+  // the scope contract, and a marker quoted inside prose satisfied a slice marker.
+  const inLimits = (extra) => okReport().replace('**Section TL;DR:** limits.', '**Section TL;DR:** limits.\n' + extra);
+
+  section('V4Q CORRECTION 2: canonical headers must be EXACT COMPLETE LINES, once, in order');
+  {
+    // The work order's named case.
+    const prefixed = okReport().replace('## 3. PEOPLE, ENTITIES & SETTING', 'prefix ## 3. PEOPLE, ENTITIES & SETTING');
+    assert(vq(prefixed).code === 'missing-section',
+      'ADVERSARIAL: "prefix ## 3. PEOPLE, ENTITIES & SETTING" does NOT satisfy the section-3 header');
+    for (const [label, mutated] of [
+      ['leading prose', okReport().replace('## 4. DETAILED SUMMARY', 'see ## 4. DETAILED SUMMARY')],
+      ['trailing text', okReport().replace('## 8. SOURCE-CREDIBILITY ASSESSMENT', '## 8. SOURCE-CREDIBILITY ASSESSMENT (partial)')],
+      ['inline in a sentence', okReport().replace(EVIDENCE_SECTION_NEXT_HEADER, 'refer to ' + EVIDENCE_SECTION_NEXT_HEADER + ' below')],
+    ]) {
+      assert(vq(mutated).code === 'missing-section', `ADVERSARIAL: a header with ${label} is not the header`);
+    }
+    // A header NAME quoted in prose can neither satisfy nor duplicate a section.
+    assert(vq(inLimits('The report follows the ## 2. VIDEO PROFILE template.')).ok === true,
+      'a canonical header name quoted mid-sentence neither satisfies nor duplicates a section');
+    // Exactly once, still enforced on exact lines.
+    assert(vq(okReport() + '\n## 3. PEOPLE, ENTITIES & SETTING\n').code === 'duplicate-section',
+      'a repeated exact header line is still a duplicate');
+    // Order, and the mandatory opening line.
+    assert(vq('preamble\n' + okReport()).code === 'missing-section',
+      'the report must OPEN with the exact "## 1. TL;DR" line');
+    assert(vq(okReport().replace('## 1. TL;DR', '## 1. TL;DR ')).ok === true,
+      'trailing whitespace on a header line is tolerated (trimmed equality, not raw equality)');
+    // The exported line primitives are the ones the validator uses.
+    assert(splitReportLines('a\r\nb\rc\nd').length === 4, 'CRLF, CR, and LF all split into lines');
+    assert(findHeaderLine(['x', '  ## 1. TL;DR  ', 'y'], '## 1. TL;DR') === 1,
+      'findHeaderLine matches a trimmed whole line');
+    assert(findHeaderLine(['prefix ## 1. TL;DR'], '## 1. TL;DR') === -1,
+      'findHeaderLine never matches a substring');
+    assert(hasExactLine(['  exact  '], 'exact') && !hasExactLine(['x exact'], 'exact'),
+      'hasExactLine is trimmed equality, never containment');
+    assert(matchLines(['**a**', 'z **a**'], /^\*\*a\*\*$/).length === 1,
+      'matchLines anchors the pattern to the complete trimmed line');
+    // Section 2 and Section 5 bounds come from the exact header lines.
+    const s2 = sectionLines(splitReportLines(okReport()), PROFILE_SECTION_HEADER, PROFILE_SECTION_NEXT_HEADER);
+    assert(s2.some((l) => l.trim() === AUTHORIZED_SCOPE_LINE(2, 50)) && !s2.some((l) => l.includes('Slice 1 audio status')),
+      'sectionLines returns exactly the lines between the two canonical header lines');
+  }
+
+  section('V4Q CORRECTION 2: Section 2 markers must be EXACT COMPLETE LINES');
+  {
+    const scope = AUTHORIZED_SCOPE_LINE(2, 50);
+    // The work order's named case.
+    assert(vq(okReport().replace(scope, 'NOT-AN-EXACT-LINE ' + scope + ' trailing')).code === 'scope-mismatch',
+      'ADVERSARIAL: "NOT-AN-EXACT-LINE **Authorized scope:** ... trailing" does NOT satisfy the scope contract');
+    for (const [code, mutated] of [
+      ['scope-mismatch', okReport().replace(scope, 'Note: ' + scope)],
+      ['scope-mismatch', okReport().replace(scope, scope + ' (approximately)')],
+      ['speculative-source-duration', okReport().replace(UNDETERMINABLE_DURATION_LINE, 'Note: ' + UNDETERMINABLE_DURATION_LINE)],
+      ['speculative-source-duration', okReport().replace(UNDETERMINABLE_DURATION_LINE, UNDETERMINABLE_DURATION_LINE + ' — but likely long')],
+      ['unsupported-synthetic-claim', okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE, 'We note ' + NO_SYNTHETIC_EVIDENCE_LINE + ' here.')],
+      ['unsupported-synthetic-claim', okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE, NO_SYNTHETIC_EVIDENCE_LINE + ' so far')],
+    ]) {
+      const v = vq(mutated);
+      assert(v.ok === false && v.code === code, `ADVERSARIAL: an embedded/extended Section 2 marker is rejected with ${code}`);
+    }
+    // Exactly one assessment line: two conflicting ones cannot both stand.
+    const twoAssessments = okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE,
+      NO_SYNTHETIC_EVIDENCE_LINE + '\n**Synthetic-media assessment:** clearly synthetic — Evidence: 00:04 warping — Confidence: HIGH');
+    assert(vq(twoAssessments).code === 'unsupported-synthetic-claim',
+      'two Section 2 synthetic-media assessment lines are rejected; exactly one is required');
+    assert(SYNTHETIC_ASSESSMENT_SHAPE.test(NO_SYNTHETIC_EVIDENCE_LINE), 'the no-evidence line IS assessment-shaped');
+    assert(STANDARDIZED_SYNTHETIC_LINE.test('**Synthetic-media assessment:** likely synthetic voiceover — Evidence: 00:12 uniform spectral envelope — Confidence: LOW'),
+      'the standardized alternative is recognized as a complete anchored line');
+    assert(!STANDARDIZED_SYNTHETIC_LINE.test('**Synthetic-media assessment:** likely synthetic voiceover — Evidence: uniform envelope — Confidence: LOW'),
+      'the standardized alternative REQUIRES a timestamp');
+    assert(!STANDARDIZED_SYNTHETIC_LINE.test('**Synthetic-media assessment:** likely synthetic — Evidence: 00:12 warping'),
+      'the standardized alternative REQUIRES a confidence rating');
+  }
+
+  section('V4Q CORRECTION 2: Section 5 slice headings and markers must be EXACT COMPLETE LINES');
+  {
+    // The work order's named case.
+    assert(vq(okReport().replace('**Slice 1 audio status:** SPEECH', 'Prose says **Slice 1 audio status:** SPEECH maybe')).code === 'missing-slice-audio',
+      'ADVERSARIAL: "Prose says **Slice 1 audio status:** SPEECH maybe" is NOT a marker line');
+    for (const [code, label, mutated] of [
+      ['missing-slice', 'a slice heading quoted in prose', okReport().replace(SLICE_HEADING(2, R2[1]), 'see ' + SLICE_HEADING(2, R2[1]))],
+      ['scope-mismatch', 'a slice heading with trailing text', okReport().replace(SLICE_HEADING(2, R2[1]), SLICE_HEADING(2, R2[1]) + ' (partial)')],
+      ['missing-slice-audio', 'an audio status with trailing hedging', okReport().replace('**Slice 2 audio status:** SPEECH', '**Slice 2 audio status:** SPEECH or possibly MUSIC')],
+      ['missing-slice-audio', 'an audio-evidence line embedded in prose', okReport().replace('**Slice 2 audio evidence:** 00:02 — a spoken phrase', 'As noted, **Slice 2 audio evidence:** 00:02 — a spoken phrase')],
+      ['missing-speech-anchor', 'an anchor line with trailing commentary', okReport().replace('**Slice 2 transcription anchor:** "hold this position"', '**Slice 2 transcription anchor:** "hold this position" probably')],
+    ]) {
+      const v = vq(mutated);
+      assert(v.ok === false && v.code === code, `ADVERSARIAL: ${label} is rejected with ${code}`);
+    }
+    // WRONG SLICE SUBSECTION — every marker kind, not just the anchor.
+    const move = (from, to, line) => okReport().replace('\n' + line.replace(/^\*\*Slice \d/, `**Slice ${from}`), '')
+      .replace(`**Slice ${to} audio status:** SPEECH`, `**Slice ${to} audio status:** SPEECH\n` + line.replace(/^\*\*Slice \d/, `**Slice ${from}`));
+    assert(vq(move(2, 1, '**Slice 2 audio evidence:** 00:02 — a spoken phrase')).code === 'missing-slice-audio',
+      "slice 2's audio-evidence line sitting in slice 1's subsection does not satisfy slice 2");
+    assert(vq(move(2, 1, '**Slice 2 transcription anchor:** "hold this position"')).code === 'missing-speech-anchor',
+      "slice 2's anchor sitting in slice 1's subsection does not satisfy slice 2");
+    // WRONG SECTION — a marker above the first slice heading is in no subsection at all.
+    const aboveHeadings = okReport().replace('\n**Slice 1 audio status:** SPEECH', '')
+      .replace('**Section TL;DR:** evidence.', '**Section TL;DR:** evidence.\n**Slice 1 audio status:** SPEECH');
+    assert(vq(aboveHeadings).code === 'missing-slice-audio',
+      "a marker placed in Section 5 but ABOVE slice 1's heading belongs to no subsection");
+    // Universal-silence justification obeys the same anchored, per-subsection contract.
+    const silent = okReport()
+      .replace(/\*\*Slice (\d) audio status:\*\* SPEECH/g, '**Slice $1 audio status:** SILENCE')
+      .replace(/\*\*Slice (\d) transcription anchor:\*\*[^\n]*/g, '**Slice $1 audio justification:** 00:0$1 — listened across the slice; nothing audible');
+    assert(vq(silent).ok === true, 'correctly placed per-slice justifications pass');
+    assert(vq(silent.replace('**Slice 2 audio justification:** 00:02 — listened across the slice; nothing audible',
+      'Commentary: **Slice 2 audio justification:** 00:02 — listened across the slice')).code === 'unjustified-universal-silence',
+      'a justification embedded in prose does not satisfy the silence contract');
+    // The exported marker contracts are the ones the validator applies.
+    assert(SLICE_AUDIO_STATUS_LINE(1).test('**Slice 1 audio status:** SPEECH') && !SLICE_AUDIO_STATUS_LINE(1).test('x **Slice 1 audio status:** SPEECH'),
+      'SLICE_AUDIO_STATUS_LINE is anchored at both ends');
+    assert(SLICE_AUDIO_EVIDENCE_LINE(1).test('**Slice 1 audio evidence:** 00:01 — heard speech'),
+      'SLICE_AUDIO_EVIDENCE_LINE accepts the contract form');
+    assert(SLICE_ANCHOR_LINE(1).test('**Slice 1 transcription anchor:** "hold this"'),
+      'SLICE_ANCHOR_LINE accepts the contract form');
+    assert(SLICE_JUSTIFICATION_LINE(1).test('**Slice 1 audio justification:** 00:01 — listened; nothing'),
+      'SLICE_JUSTIFICATION_LINE accepts the contract form');
+    assert(SLICE_HEADING_SHAPE.test(SLICE_HEADING(1, R2[0])) && !SLICE_HEADING_SHAPE.test('see ### Slice 1: x'),
+      'SLICE_HEADING_SHAPE only sees a heading-led line, so a malformed heading is counted then rejected');
+    // The three passing fixtures are unchanged by all of the above.
+    const one = [{ startOffset: 60, endOffset: 75 }];
+    const eight = Array.from({ length: 8 }, (_, i) => ({ startOffset: i * 100, endOffset: i * 100 + 20 }));
+    assert(vq(compliantReport(one), { ranges: one }).ok === true, 'the scalar fixture still passes');
+    assert(vq(okReport()).ok === true, 'the two-slice fixture still passes');
+    assert(vq(compliantReport(eight), { ranges: eight }).ok === true, 'the eight-slice fixture still passes');
+  }
+
+  // ================ V4Q CORRECTION 2: NATURAL-LANGUAGE CONTRADICTORY CLAIMS ====================
+  section('V4Q CORRECTION 2: prose source-length assertions contradict the undeterminable line');
+  {
+    // The work order's named cases, plus the equivalent source/video/runtime forms.
+    for (const claim of [
+      'The video is over one hour long.',
+      "The video's duration is 1:02:03.",
+      'The duration of the video is 1:02:03.',
+      'The source runs for 62 minutes.',
+      'The recording lasts about two hours.',
+      'The full runtime is approximately 90 minutes.',
+      'Video length: 62 minutes',
+      'The clip spans 1:05:00.',
+      'The footage totals 45 minutes.',
+      'The entire video was roughly three hours.',
+      'The source video is in excess of 2 hours.',
+      'This video clocks in at 47 minutes.',
+    ]) {
+      const v = vq(inLimits(claim));
+      assert(v.ok === false && v.code === 'speculative-source-duration',
+        `ADVERSARIAL: the required undeterminable line plus "${claim.slice(0, 34)}" is REJECTED`);
+      assert(!v.reason.includes(claim.slice(4, 20)), 'the failure reason never echoes the asserted length');
+    }
+    // FALSE-POSITIVE CONTROLS: honest limitation prose supplies no value and must still pass.
+    for (const honest of [
+      'The full duration of the video is unknown from the authorized slices alone.',
+      'Only the authorized aggregate was analyzed; the source length was never visible.',
+      'Duration beyond the authorized slices could not be determined.',
+      'The full source length is not determinable from the authorized slices.',
+      'The total runtime of the source could not be established.',
+      'The video may continue past the authorized window; that is unknowable here.',
+    ]) {
+      assert(vq(inLimits(honest)).ok === true, `honest limitation prose still passes: "${honest.slice(0, 34)}"`);
+    }
+    // The authorized aggregate and per-slice authorized lengths are never read as source claims.
+    assert(vq(inLimits('Slice 1 duration is 20 seconds of authorized footage.')).ok === true,
+      'a PER-SLICE authorized length is not a source-length claim');
+    assert(vq(inLimits('The authorized aggregate is 50s across two slices.')).ok === true,
+      'the authorized aggregate is not a source-length claim');
+    assert(SOURCE_LENGTH_ASSERTIONS.every((re) => !re.test(AUTHORIZED_SCOPE_LINE(2, 50))),
+      'no prose pattern matches the authorized-scope line');
+    assert(SOURCE_LENGTH_ASSERTIONS.every((re) => !re.test(SLICE_HEADING(1, R2[0]))),
+      'no prose pattern matches a per-slice heading');
+    assert(SOURCE_LENGTH_ASSERTIONS.some((re) => re.test('The video is over one hour long.')),
+      'the prose pattern set is what catches the natural-language claim');
+  }
+
+  section('V4Q CORRECTION 2: only a negation ATTACHED to the synthetic claim is a denial');
+  {
+    // The work order's named cases: affirmative claims that merely CONTAIN a negation token. The
+    // previous whole-line negation filter let both of these through.
+    for (const claim of [
+      'There is no doubt this is AI-generated.',
+      'Not only is it synthetic, it is obviously manipulated.',
+      'Nothing here is subtle: this is a deepfake.',
+      'It is not unreasonable to call this AI-generated.',
+      'No question about it — the imagery is synthetic.',
+    ]) {
+      const v = vq(inLimits(claim));
+      assert(v.ok === false && v.code === 'unsupported-synthetic-claim',
+        `ADVERSARIAL: NO OBSERVABLE EVIDENCE plus "${claim.slice(0, 34)}" is REJECTED`);
+      assert(!v.reason.includes('AI-generated') && !v.reason.includes('deepfake'),
+        'the failure reason never echoes the provider claim');
+    }
+    // FALSE-POSITIVE CONTROLS: properly negated claims are the compliant answer.
+    for (const negated of [
+      'No observable evidence of AI generation was found.',
+      'The material does not appear AI-generated.',
+      'The imagery is not demonstrably synthetic.',
+      'There were no signs of manipulation in either slice.',
+      'Nothing suggests AI generation.',
+      'The footage was not digitally manipulated.',
+      'No indications of deepfaking were observed in either slice.',
+    ]) {
+      assert(vq(inLimits(negated)).ok === true, `a properly negated synthetic claim passes: "${negated.slice(0, 34)}"`);
+    }
+    // Descriptions that make NO origin claim carry no synthetic vocabulary at all.
+    for (const neutral of [
+      'The framing is static and amateur throughout.',
+      'The content is animated, with simple low-budget motion graphics.',
+      'A single unchanging shot; production quality is low.',
+    ]) {
+      assert(vq(inLimits(neutral)).ok === true, `a no-origin-claim description passes: "${neutral.slice(0, 34)}"`);
+      assert(!SYNTHETIC_TERMS.test(neutral), 'a no-origin-claim description carries no synthetic vocabulary');
+    }
+    // A standardized, timestamped, confidence-rated finding is the sanctioned way to claim it.
+    const supported = okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE,
+      '**Synthetic-media assessment:** likely synthetic voiceover — Evidence: 00:12 uniform spectral envelope — Confidence: MEDIUM');
+    assert(vq(supported).ok === true, 'a standardized evidence-backed synthetic assessment still passes');
+    assert(vq(inLimits('There is no doubt this is AI-generated.').replace(NO_SYNTHETIC_EVIDENCE_LINE,
+      '**Synthetic-media assessment:** synthetic voiceover — Evidence: 00:12 uniform envelope — Confidence: HIGH')).ok === true,
+      'the same affirmative prose is allowed once a standardized assessment backs it');
+    // The neutralizers themselves are narrow.
+    assert(NEGATED_SYNTHETIC_CLAIMS.some((re) => { re.lastIndex = 0; return re.test('no observable evidence of AI generation'); }),
+      'the neutralizer set recognizes the compliant denial');
+    assert(NEGATED_SYNTHETIC_CLAIMS.every((re) => { re.lastIndex = 0; return !re.test('there is no doubt this is AI-generated'); }),
+      'NO neutralizer treats "no doubt this is AI-generated" as a denial');
+    assert(NEGATED_SYNTHETIC_CLAIMS.every((re) => { re.lastIndex = 0; return !re.test('not only is it synthetic, it is obviously manipulated'); }),
+      'NO neutralizer treats "not only is it synthetic" as a denial');
   }
 
   // ============================ V4Q diagnostic lifecycle ======================================

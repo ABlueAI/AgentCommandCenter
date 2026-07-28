@@ -349,7 +349,63 @@ const TIMESTAMP = String.raw`\d{1,2}:\d{2}(?::\d{2})?`;
 // video is unknown", "only the authorized 70s were analyzed") never matches, while the observed
 // failure ("Approximate duration: Over 1 hour") does. The one sanctioned line is stripped before
 // this runs, and the authorized-scope line and per-slice headings use different wording entirely.
-const DURATION_FIELD_CLAIM = /(?:^|\n)[ \t>*_-]*(?:\*\*)?[ \t]*(?:approximate|source|video|total|full|overall|runtime|running|estimated|actual)[ \t]+duration[ \t]*(?:\*\*)?[ \t]*[:\-–—]/i;
+// V4Q CORRECTION 2: the field noun now also covers runtime / running time / length, and the two
+// inherently whole-source nouns (duration, runtime) additionally match with no qualifier at all.
+// `length` still REQUIRES a whole-source qualifier so a per-slice "Slice 1 length:" field is
+// untouched. Anchored per line (multiline `^`) rather than the old `(?:^|\n)` prefix so the match
+// is a line-leading field label, never a fragment found mid-line.
+const DURATION_FIELD_QUALIFIER = 'approximate|source|video|total|full|overall|runtime|running|estimated|actual|original|complete|entire';
+const DURATION_FIELD_NOUN = String.raw`duration|runtime|running[ \t]+time|run[ \t]*time|length`;
+const DURATION_FIELD_CLAIM = new RegExp(
+  String.raw`^[ \t>*_-]*(?:\*\*)?[ \t]*(?:(?:${DURATION_FIELD_QUALIFIER})[ \t]+(?:${DURATION_FIELD_NOUN})|duration|runtime|running[ \t]+time)[ \t]*(?:\*\*)?[ \t]*[:\-–—]`,
+  'im');
+
+// V4Q CORRECTION 2 -- NATURAL-LANGUAGE source-length assertions. The field detector above only sees
+// "<qualifier> duration:" labels, so plain prose ("The video is over one hour long.") walked past
+// it. These four bounded patterns close that gap WITHOUT swallowing honest limitation prose: every
+// one of them requires a concrete VALUE (a clock reading, or a number followed by a spelled time
+// unit). "the full duration of the video is unknown", "the source length was never visible", and
+// "duration beyond the authorized slices could not be determined" therefore never match, because
+// none of them supplies a value. The sanctioned scope line, the undeterminable line, and the
+// per-slice headings are stripped before the scan, so authorized lengths are never mistaken for a
+// source-length claim.
+const LEN_SUBJECT = String.raw`(?:\b(?:the|this|its|that)\s+)?(?:(?:entire|full|whole|complete|original|total|overall|actual|source)\s+)*(?:videos?|sources?|footage|recordings?|films?|clips?)`;
+const LEN_NOUN = String.raw`(?:duration|runtime|run\s*time|running\s+time|length)`;
+const LEN_VERB = String.raw`(?:is|was|are|were|appears?\s+to\s+be|seems?\s+to\s+be|comes?\s+(?:in\s+)?(?:to|at)|totals?|equals?|measures?|clocks?\s+in\s+at|runs?(?:\s+for)?|lasts?(?:\s+for)?|spans?|stretches?\s+(?:for|to)|goes?\s+on\s+for|exceeds?)`;
+const LEN_HEDGE = String.raw`(?:(?:approximately|approx\.?|about|roughly|around|circa|over|under|nearly|almost|just|well|only|exactly|precisely|some|at\s+least|at\s+most|more\s+than|less\s+than|upwards\s+of|in\s+excess\s+of)\s+)*`;
+const LEN_NUMBER = String.raw`(?:\d+(?:[.,]\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|sixty|ninety|half|a\s+few|a\s+couple\s+of|several|multiple)`;
+const LEN_UNIT = String.raw`(?:hours?|hrs?|minutes?|mins?|seconds?|secs?)`;
+const LEN_VALUE = String.raw`${LEN_HEDGE}(?:${TIMESTAMP}|${LEN_NUMBER}[ \t]*(?:\+[ \t]*)?${LEN_UNIT})`;
+const SOURCE_LENGTH_ASSERTIONS = [
+  // "The video's duration is 1:02:03", "the source length was 62 minutes"
+  new RegExp(String.raw`\b${LEN_SUBJECT}(?:'s|s'|’s)?\s+${LEN_NOUN}\s+${LEN_VERB}\s+${LEN_VALUE}`, 'i'),
+  // "the duration of the video is 1:02:03"
+  new RegExp(String.raw`\b${LEN_NOUN}\s+of\s+${LEN_SUBJECT}\s+${LEN_VERB}\s+${LEN_VALUE}`, 'i'),
+  // "the full runtime is approximately 90 minutes" -- whole-source qualifier, no subject noun. The
+  // qualifier list deliberately excludes "slice", so a per-slice length statement does not match.
+  new RegExp(String.raw`\b(?:total|full|overall|entire|complete|original|source|video)\s+${LEN_NOUN}\s+${LEN_VERB}\s+${LEN_VALUE}`, 'i'),
+  // "The video is over one hour long", "the source runs for 62 minutes", "the recording lasts about two hours"
+  new RegExp(String.raw`\b${LEN_SUBJECT}\s+${LEN_VERB}\s+${LEN_VALUE}`, 'i'),
+];
+
+// V4Q CORRECTION 2 -- NARROW negation neutralization. The previous implementation dropped any line
+// containing a negation word before scanning for synthetic claims, which handed a free pass to
+// "There is no doubt this is AI-generated." and "Not only is it synthetic, it is obviously
+// manipulated." -- both AFFIRMATIVE claims that merely contain a negation token. These patterns
+// instead remove only a negation DIRECTLY ATTACHED to the synthetic claim, then the affirmative
+// vocabulary scan runs over what is left. A stray "no"/"not" elsewhere in the sentence no longer
+// protects anything.
+const NEGATED_SYNTHETIC_TERM = String.raw`(?:ai[- ]generat\w*|ai generation|synthes\w*|synthetic\w*|deepfak\w*|deep fake|stock footage|manipulat\w*)`;
+const NEGATED_SYNTHETIC_CLAIMS = [
+  // "No observable evidence of AI generation", "no clear indications of manipulation"
+  new RegExp(String.raw`\b(?:no|not\s+any|zero)\s+(?:\w+\s+){0,3}?(?:evidence|indication|indications|indicator|indicators|sign|signs|marker|markers|artifact|artifacts|trace|traces|proof)\s+(?:of|for|that|suggesting|indicating)\s+(?:\w+[- ]){0,2}?${NEGATED_SYNTHETIC_TERM}`, 'gi'),
+  // "The material does not appear AI-generated"
+  new RegExp(String.raw`\b(?:do|does|did)\s+not\s+(?:\w+\s+){0,2}?(?:appear|seem|look)\s+(?:to\s+be\s+)?(?:\w+[- ]){0,2}?${NEGATED_SYNTHETIC_TERM}`, 'gi'),
+  // "The imagery is not demonstrably synthetic"
+  new RegExp(String.raw`\b(?:is|are|was|were|be|been)\s+not\s+(?:\w+\s+){0,2}?${NEGATED_SYNTHETIC_TERM}`, 'gi'),
+  // "nothing suggests AI generation"
+  new RegExp(String.raw`\bnothing\s+(?:\w+\s+){0,2}?(?:suggest\w*|indicat\w*|point\w*)\s+(?:to\s+|toward\s+|towards\s+)?(?:\w+[- ]){0,2}?${NEGATED_SYNTHETIC_TERM}`, 'gi'),
+];
 
 // The CLOSED allowlist of quality-gate failure codes. PowerShell refuses any code outside this
 // set, so a future validator branch cannot invent an unreviewed reason that reaches a manifest.
@@ -371,15 +427,33 @@ const QUALITY_FAILURE_CODES = [
 
 function fail(code, reason) { return { ok: false, code, reason }; }
 
-// Locate section 5 by its EXACT canonical header and the EXACT following canonical header — never
-// by a numeric substring, so renaming or reordering a section fails the contract test visibly
-// instead of silently scanning the wrong region (or nothing).
+// V4Q CORRECTION 2 -- EXACT LINES, ONE PARSE. The report is split into lines once and every
+// structural decision below is made on a WHOLE trimmed line. The previous implementation used
+// `indexOf` on the raw text, so `prefix ## 3. PEOPLE, ENTITIES & SETTING` satisfied the section-3
+// header and `NOT-AN-EXACT-LINE **Authorized scope:** ... trailing` satisfied the scope contract --
+// a malformed report could inherit a canonical structure it never actually emitted.
+function splitReportLines(text) {
+  return String(text == null ? '' : text).split(/\r\n|\r|\n/);
+}
+// Index of the ONE line that IS the header (trimmed equality), or -1. Never a substring hit.
+function findHeaderLine(lines, header, from = 0) {
+  for (let i = from; i < lines.length; i++) {
+    if (lines[i].trim() === header) return i;
+  }
+  return -1;
+}
+// The lines strictly BETWEEN two exact canonical header lines. Locating a section by its exact
+// header line and the exact following canonical header line — never by a numeric substring — means
+// renaming or reordering a section fails the contract test visibly instead of silently scanning the
+// wrong region (or nothing).
+function sectionLines(lines, startHeader, endHeader) {
+  const start = findHeaderLine(lines, startHeader);
+  if (start === -1) return [];
+  const end = findHeaderLine(lines, endHeader, start + 1);
+  return lines.slice(start + 1, end === -1 ? lines.length : end);
+}
 function extractSection(text, startHeader, endHeader) {
-  const start = text.indexOf(startHeader);
-  if (start === -1) return '';
-  const after = start + startHeader.length;
-  const end = text.indexOf(endHeader, after);
-  return end === -1 ? text.slice(after) : text.slice(after, end);
+  return sectionLines(splitReportLines(text), startHeader, endHeader).join('\n');
 }
 function extractEvidenceSection(text) {
   return extractSection(text, EVIDENCE_SECTION_HEADER, EVIDENCE_SECTION_NEXT_HEADER);
@@ -387,6 +461,33 @@ function extractEvidenceSection(text) {
 function extractProfileSection(text) {
   return extractSection(text, PROFILE_SECTION_HEADER, PROFILE_SECTION_NEXT_HEADER);
 }
+
+// Whole-line predicates. `hasExactLine` is literal equality after trimming; `matchLines` anchors the
+// supplied pattern to the COMPLETE trimmed line, so a marker embedded in prose ("Prose says **Slice
+// 1 audio status:** SPEECH maybe") is not a marker line and does not satisfy anything.
+function hasExactLine(lines, exact) {
+  return lines.some((l) => l.trim() === exact);
+}
+function matchLines(lines, re) {
+  return lines.filter((l) => re.test(l.trim()));
+}
+// Anchored marker-line contracts. N is the slice number; each returns a COMPLETE-line pattern.
+const SLICE_AUDIO_STATUS_LINE = (n) =>
+  new RegExp(String.raw`^\*\*Slice ${n} audio status:\*\*[ \t]*(${AUDIO_STATUSES.join('|')})[ \t]*$`);
+const SLICE_AUDIO_EVIDENCE_LINE = (n) =>
+  new RegExp(String.raw`^\*\*Slice ${n} audio evidence:\*\*[ \t]*${TIMESTAMP}[ \t]*[-–—:][ \t]*\S.*$`);
+const SLICE_ANCHOR_LINE = (n) =>
+  new RegExp(String.raw`^\*\*Slice ${n} transcription anchor:\*\*[ \t]*["“][^"”]+["”][ \t]*[.,;]?[ \t]*$`);
+const SLICE_JUSTIFICATION_LINE = (n) =>
+  new RegExp(String.raw`^\*\*Slice ${n} audio justification:\*\*[ \t]*${TIMESTAMP}[ \t]*[-–—:][ \t]*\S.*$`);
+// A heading-shaped line that CLAIMS to open a slice subsection. Detected loosely (any `#`-led line
+// naming a slice) so a malformed heading is COUNTED and then rejected for not being exact, rather
+// than silently ignored and reported as a different, less accurate failure.
+const SLICE_HEADING_SHAPE = /^#{1,6}[ \t]*Slice\b/i;
+// The two accepted Section 2 synthetic-media assessment forms, as complete lines.
+const SYNTHETIC_ASSESSMENT_SHAPE = /^\*\*Synthetic-media assessment:\*\*/;
+const STANDARDIZED_SYNTHETIC_LINE = new RegExp(
+  String.raw`^\*\*Synthetic-media assessment:\*\*[ \t]*\S.*[-–—][ \t]*Evidence:[ \t]*.*${TIMESTAMP}.*[-–—][ \t]*Confidence:[ \t]*(?:LOW|MEDIUM|HIGH)[ \t]*[.]?[ \t]*$`);
 
 // Normalize one evidence itemization line down to its observation body so that N near-identical
 // per-second entries collapse to one key. Structural marker lines are excluded by the caller —
@@ -407,6 +508,8 @@ function validateReportQuality({ text, finishReason, ranges, audioTokens }) {
   const body = String(text == null ? '' : text);
   const sliceRanges = Array.isArray(ranges) ? ranges : [];
   const sliced = sliceRanges.length > 0;
+  // ONE parse. Every structural decision below reads this array, never the raw string.
+  const lines = splitReportLines(body);
 
   // Truncation first: it explains every downstream structural absence, so reporting a missing
   // section for a response the provider cut off would be misleading.
@@ -422,19 +525,30 @@ function validateReportQuality({ text, finishReason, ranges, audioTokens }) {
   if (!body.trim()) {
     return fail('missing-section', 'the response contained no text.');
   }
-  if (!body.trimStart().startsWith(REQUIRED_SECTIONS[0])) {
-    return fail('missing-section', `the report must begin with "${REQUIRED_SECTIONS[0]}".`);
+  const firstContentLine = lines.find((l) => l.trim() !== '');
+  if (firstContentLine === undefined || firstContentLine.trim() !== REQUIRED_SECTIONS[0]) {
+    return fail('missing-section', `the report must begin with the exact line "${REQUIRED_SECTIONS[0]}".`);
   }
 
+  // Each canonical header must be a COMPLETE trimmed line, present exactly once, in order. Matching
+  // whole lines is what rejects `prefix ## 3. PEOPLE, ENTITIES & SETTING`: it is not the header, so
+  // the header is absent. Only `#`-led lines are considered, so ordinary prose quoting a header
+  // name in the middle of a sentence can neither satisfy nor duplicate a section.
+  const headerLines = new Map();
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (trimmed.charCodeAt(0) !== 35 /* # */) continue;
+    if (REQUIRED_SECTIONS.indexOf(trimmed) === -1) continue;
+    if (!headerLines.has(trimmed)) headerLines.set(trimmed, []);
+    headerLines.get(trimmed).push(i);
+  }
   let cursor = -1;
   for (const header of REQUIRED_SECTIONS) {
-    const first = body.indexOf(header);
-    if (first === -1) return fail('missing-section', `required section "${header}" is absent.`);
-    if (body.indexOf(header, first + header.length) !== -1) {
-      return fail('duplicate-section', `section "${header}" appears more than once.`);
-    }
-    if (first < cursor) return fail('missing-section', `section "${header}" is out of the required order.`);
-    cursor = first;
+    const at = headerLines.get(header);
+    if (!at) return fail('missing-section', `required section "${header}" is absent as an exact line.`);
+    if (at.length > 1) return fail('duplicate-section', `section "${header}" appears more than once.`);
+    if (at[0] < cursor) return fail('missing-section', `section "${header}" is out of the required order.`);
+    cursor = at[0];
   }
 
   if (!sliced) return { ok: true };
@@ -443,35 +557,36 @@ function validateReportQuality({ text, finishReason, ranges, audioTokens }) {
   // canonical section, located by exact adjacent headers. Searching the whole report (the original
   // implementation) accepted a report that put every slice/audio marker in Section 4 and left
   // Section 5 empty -- structurally the same failure V4Q exists to catch, passing the gate.
-  const section2 = extractSection(body, PROFILE_SECTION_HEADER, PROFILE_SECTION_NEXT_HEADER);
-  const evidence = extractSection(body, EVIDENCE_SECTION_HEADER, EVIDENCE_SECTION_NEXT_HEADER);
+  // Boundaries are derived from the EXACT header-line indexes established above, so the two scanned
+  // regions are the real Section 2 and Section 5, not whatever a substring search happened to find.
+  const section2 = sectionLines(lines, PROFILE_SECTION_HEADER, PROFILE_SECTION_NEXT_HEADER);
+  const evidence = sectionLines(lines, EVIDENCE_SECTION_HEADER, EVIDENCE_SECTION_NEXT_HEADER);
 
   const aggregateSeconds = sliceRanges.reduce((sum, r) => sum + (r.endOffset - r.startOffset), 0);
   const scopeLine = AUTHORIZED_SCOPE_LINE(sliceRanges.length, aggregateSeconds);
-  if (section2.indexOf(scopeLine) === -1) {
-    return fail('scope-mismatch', `Section 2 does not carry the authorized scope line "${scopeLine}".`);
+  if (!hasExactLine(section2, scopeLine)) {
+    return fail('scope-mismatch', `Section 2 does not carry the authorized scope line, exactly and complete, as "${scopeLine}".`);
   }
 
   // ---- Section 5: exact ordered slice SUBSECTIONS -----------------------------------------------
-  // Headings are read from Section 5 ONLY, then each slice's markers are required inside that
-  // slice's own subsection. This is what makes "one distinct subsection per authorized slice" real:
-  // a marker belonging to slice 2 cannot be satisfied by text sitting under slice 1.
+  // Headings are read from Section 5 ONLY, as complete lines, then each slice's markers are required
+  // inside that slice's own subsection. This is what makes "one distinct subsection per authorized
+  // slice" real: a marker belonging to slice 2 cannot be satisfied by text sitting under slice 1.
   const expectedHeadings = sliceRanges.map((r, i) => SLICE_HEADING(i + 1, r));
-  const headingRe = /^###[ \t]+Slice[ \t]+.*$/gm;
   const seen = [];
-  let hm;
-  while ((hm = headingRe.exec(evidence)) !== null) {
-    seen.push({ text: hm[0].trim(), start: hm.index, end: hm.index + hm[0].length });
+  for (let i = 0; i < evidence.length; i++) {
+    if (SLICE_HEADING_SHAPE.test(evidence[i].trim())) seen.push({ text: evidence[i].trim(), at: i });
   }
   if (seen.length !== expectedHeadings.length) {
-    return fail('missing-slice', `Section 5 must contain exactly ${expectedHeadings.length} slice subsection(s); found ${seen.length}.`);
+    return fail('missing-slice', `Section 5 must contain exactly ${expectedHeadings.length} slice subsection heading line(s); found ${seen.length}.`);
   }
   for (let i = 0; i < expectedHeadings.length; i++) {
     if (seen[i].text !== expectedHeadings[i]) {
-      return fail('scope-mismatch', `Section 5 slice subsection ${i + 1} must open with exactly "${expectedHeadings[i]}".`);
+      return fail('scope-mismatch', `Section 5 slice subsection ${i + 1} must open with the exact complete line "${expectedHeadings[i]}".`);
     }
   }
-  const subsectionOf = (i) => evidence.slice(seen[i].end, i + 1 < seen.length ? seen[i + 1].start : evidence.length);
+  // Lines strictly between this heading and the next (or the end of Section 5).
+  const subsectionOf = (i) => evidence.slice(seen[i].at + 1, i + 1 < seen.length ? seen[i + 1].at : evidence.length);
 
   const statuses = [];
   const subsections = [];
@@ -479,22 +594,21 @@ function validateReportQuality({ text, finishReason, ranges, audioTokens }) {
     const n = i + 1;
     const sub = subsectionOf(i);
     subsections.push(sub);
-    const statusRe = new RegExp(String.raw`\*\*Slice ${n} audio status:\*\*\s*(${AUDIO_STATUSES.join('|')})\b`, 'g');
-    const found = sub.match(statusRe) || [];
+    const found = matchLines(sub, SLICE_AUDIO_STATUS_LINE(n));
     if (found.length === 0) {
-      return fail('missing-slice-audio', `slice ${n}'s Section 5 subsection has no "**Slice ${n} audio status:**" line with one of ${AUDIO_STATUSES.join('/')}.`);
+      return fail('missing-slice-audio', `slice ${n}'s Section 5 subsection has no complete "**Slice ${n} audio status:**" line ending in one of ${AUDIO_STATUSES.join('/')}.`);
     }
     if (found.length > 1) {
       return fail('missing-slice-audio', `slice ${n}'s subsection has ${found.length} conflicting audio-status lines; exactly one is required.`);
     }
-    const status = new RegExp(String.raw`\*\*Slice ${n} audio status:\*\*\s*(${AUDIO_STATUSES.join('|')})\b`).exec(sub)[1];
+    const status = SLICE_AUDIO_STATUS_LINE(n).exec(found[0].trim())[1];
     statuses.push(status);
 
-    if (!new RegExp(String.raw`\*\*Slice ${n} audio evidence:\*\*\s*${TIMESTAMP}\s*[-–—:]`).test(sub)) {
-      return fail('missing-slice-audio', `slice ${n}'s subsection has no timestamped "**Slice ${n} audio evidence:**" observation.`);
+    if (matchLines(sub, SLICE_AUDIO_EVIDENCE_LINE(n)).length === 0) {
+      return fail('missing-slice-audio', `slice ${n}'s subsection has no complete timestamped "**Slice ${n} audio evidence:**" line.`);
     }
-    if (status === 'SPEECH' && !new RegExp(String.raw`\*\*Slice ${n} transcription anchor:\*\*\s*["“][^"”]+["”]`).test(sub)) {
-      return fail('missing-speech-anchor', `slice ${n} reports SPEECH but its subsection carries no quoted "**Slice ${n} transcription anchor:**".`);
+    if (status === 'SPEECH' && matchLines(sub, SLICE_ANCHOR_LINE(n)).length === 0) {
+      return fail('missing-speech-anchor', `slice ${n} reports SPEECH but its subsection carries no complete quoted "**Slice ${n} transcription anchor:**" line.`);
     }
   }
 
@@ -504,8 +618,8 @@ function validateReportQuality({ text, finishReason, ranges, audioTokens }) {
   if (audioTokens > 0 && statuses.every((s) => s === 'SILENCE' || s === 'UNCLEAR')) {
     for (let i = 0; i < sliceRanges.length; i++) {
       const n = i + 1;
-      if (!new RegExp(String.raw`\*\*Slice ${n} audio justification:\*\*\s*${TIMESTAMP}\s*[-–—:]`).test(subsections[i])) {
-        return fail('unjustified-universal-silence', `every slice reports SILENCE/UNCLEAR while ${audioTokens} audio tokens were billed, but slice ${n}'s subsection carries no timestamped "**Slice ${n} audio justification:**".`);
+      if (matchLines(subsections[i], SLICE_JUSTIFICATION_LINE(n)).length === 0) {
+        return fail('unjustified-universal-silence', `every slice reports SILENCE/UNCLEAR while ${audioTokens} audio tokens were billed, but slice ${n}'s subsection carries no complete timestamped "**Slice ${n} audio justification:**" line.`);
       }
     }
   }
@@ -521,8 +635,8 @@ function validateReportQuality({ text, finishReason, ranges, audioTokens }) {
   }
 
   // ---- Section 2: source duration ---------------------------------------------------------------
-  if (section2.indexOf(UNDETERMINABLE_DURATION_LINE) === -1) {
-    return fail('speculative-source-duration', `Section 2 does not carry the required line "${UNDETERMINABLE_DURATION_LINE}".`);
+  if (!hasExactLine(section2, UNDETERMINABLE_DURATION_LINE)) {
+    return fail('speculative-source-duration', `Section 2 does not carry the required line, exactly and complete, as "${UNDETERMINABLE_DURATION_LINE}".`);
   }
   // V4Q CORRECTION -- CONTRADICTION. Carrying the required line no longer buys immunity: the
   // observed failure stated BOTH "Approximate duration: Over 1 hour" and (under the new prompt)
@@ -530,12 +644,23 @@ function validateReportQuality({ text, finishReason, ranges, audioTokens }) {
   // remaining duration FIELD assertion is a contradiction. Deliberately field-shaped ("<x>
   // duration:") so honest prose -- "the full duration of the video is unknown" -- never trips it,
   // and so the authorized aggregate and per-slice authorized lengths are untouched.
-  const withoutSanctionedDuration = body
-    .split('\n')
-    .filter((l) => l.trim() !== UNDETERMINABLE_DURATION_LINE)
+  //
+  // V4Q CORRECTION 2: the same stripped text is now ALSO scanned for natural-language length
+  // assertions ("The video is over one hour long.", "The video's duration is 1:02:03."), which the
+  // field-shaped detector alone could not see. Every prose pattern demands a concrete value, so the
+  // honest limitation forms stay passing.
+  const sanctionedLengthLines = new Set([UNDETERMINABLE_DURATION_LINE, scopeLine, ...expectedHeadings]);
+  const withoutSanctionedDuration = lines
+    .filter((l) => !sanctionedLengthLines.has(l.trim()))
     .join('\n');
   if (DURATION_FIELD_CLAIM.test(withoutSanctionedDuration)) {
-    return fail('speculative-source-duration', 'the report asserts a source/total/video duration alongside the required undeterminable line; the two contradict each other and only the authorized aggregate is knowable.');
+    return fail('speculative-source-duration', 'the report asserts a source/total/video duration field alongside the required undeterminable line; the two contradict each other and only the authorized aggregate is knowable.');
+  }
+  for (const re of SOURCE_LENGTH_ASSERTIONS) {
+    if (re.test(withoutSanctionedDuration)) {
+      // Structural reason only: the asserted length is provider text and is never echoed.
+      return fail('speculative-source-duration', 'the report states a total source/video length alongside the required undeterminable line; the two contradict each other and only the authorized aggregate is knowable.');
+    }
   }
 
   // ---- Section 2: synthetic-media assessment ----------------------------------------------------
@@ -543,23 +668,32 @@ function validateReportQuality({ text, finishReason, ranges, audioTokens }) {
   // assessment line itself contains the word "Synthetic" (it must not trip its own detector), and a
   // negated statement ("no observable evidence of AI generation") is the compliant answer, not a
   // violation. What remains is an unhedged synthetic claim made outside the standardized channel.
-  const scannable = body
-    .replace(/^\*\*Synthetic-media assessment:\*\*[^\n]*$/gm, '')
-    .split('\n')
-    .filter((line) => !/\b(no|not|nor|without|absent|lacks?|lacking|none|cannot|can't|isn't|aren't|wasn't|weren't|don't|doesn't|didn't)\b/i.test(line))
+  // V4Q CORRECTION 2: the old whole-line negation filter dropped every line containing "no"/"not",
+  // which let "There is no doubt this is AI-generated." and "Not only is it synthetic, ..." through
+  // untouched. Negation is now neutralized only where it is DIRECTLY attached to the synthetic
+  // claim; whatever affirmative vocabulary survives that removal is a real claim.
+  let scannable = lines
+    .filter((line) => !SYNTHETIC_ASSESSMENT_SHAPE.test(line.trim()))
     .join('\n');
+  for (const re of NEGATED_SYNTHETIC_CLAIMS) scannable = scannable.replace(re, ' ');
   const assertsSynthetic = SYNTHETIC_TERMS.test(scannable);
-  const declaresNoEvidence = section2.indexOf(NO_SYNTHETIC_EVIDENCE_LINE) !== -1;
-  const standardized = /\*\*Synthetic-media assessment:\*\*\s*(?!NO OBSERVABLE EVIDENCE)\S[^\n]*?—\s*Evidence:\s*[^\n]*?\d{1,2}:\d{2}[^\n]*?—\s*Confidence:\s*(LOW|MEDIUM|HIGH)\b/.test(section2);
-  if (!declaresNoEvidence && !standardized) {
-    return fail('unsupported-synthetic-claim', 'Section 2 carries neither the NO OBSERVABLE EVIDENCE line nor a standardized timestamped synthetic-media assessment with a confidence level.');
+
+  const assessmentLines = matchLines(section2, SYNTHETIC_ASSESSMENT_SHAPE);
+  if (assessmentLines.length !== 1) {
+    return fail('unsupported-synthetic-claim', `Section 2 must carry exactly one complete "**Synthetic-media assessment:**" line; found ${assessmentLines.length}.`);
   }
-  if (declaresNoEvidence && assertsSynthetic && !standardized) {
+  const assessment = assessmentLines[0].trim();
+  const declaresNoEvidence = assessment === NO_SYNTHETIC_EVIDENCE_LINE;
+  const standardized = !declaresNoEvidence && STANDARDIZED_SYNTHETIC_LINE.test(assessment);
+  if (!declaresNoEvidence && !standardized) {
+    return fail('unsupported-synthetic-claim', 'Section 2 carries neither the exact NO OBSERVABLE EVIDENCE line nor a standardized timestamped synthetic-media assessment with a confidence level.');
+  }
+  if (declaresNoEvidence && assertsSynthetic) {
     return fail('unsupported-synthetic-claim', 'the report declares no observable synthetic-media evidence yet asserts synthetic/manipulated origin elsewhere without a timestamped, confidence-rated assessment.');
   }
 
   const counts = new Map();
-  for (const rawLine of evidence.split('\n')) {
+  for (const rawLine of evidence) {
     const line = rawLine.trim();
     if (!line || line.startsWith('#') || line.startsWith('**')) continue;
     const key = normalizeEvidenceLine(line);
@@ -920,6 +1054,10 @@ module.exports = {
   PRO_MODEL, BASE_MAX_OUTPUT_TOKENS, PER_EXTRA_SLICE_OUTPUT_TOKENS, SLICED_PRO_THINKING_BUDGET,
   // V4Q quality gate + durable diagnostics
   validateReportQuality, extractSection, extractEvidenceSection, extractProfileSection, normalizeEvidenceLine,
+  splitReportLines, sectionLines, findHeaderLine, hasExactLine, matchLines,
+  SLICE_AUDIO_STATUS_LINE, SLICE_AUDIO_EVIDENCE_LINE, SLICE_ANCHOR_LINE, SLICE_JUSTIFICATION_LINE,
+  SLICE_HEADING_SHAPE, SYNTHETIC_ASSESSMENT_SHAPE, STANDARDIZED_SYNTHETIC_LINE,
+  SOURCE_LENGTH_ASSERTIONS, NEGATED_SYNTHETIC_CLAIMS, SYNTHETIC_TERMS,
   PROFILE_SECTION_HEADER, PROFILE_SECTION_NEXT_HEADER, DURATION_FIELD_CLAIM,
   resolveDiagnosticDir, writeRejectedResponseDiagnostic,
   QUALITY_FAILURE_CODES, REQUIRED_SECTIONS, AUDIO_STATUSES,
