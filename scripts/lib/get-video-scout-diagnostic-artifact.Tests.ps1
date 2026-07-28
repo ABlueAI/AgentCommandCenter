@@ -77,11 +77,60 @@ Describe 'ConvertFrom-VideoScoutQualityLine' {
         $p.Bytes | Should BeNullOrEmpty
         $p.Sha256 | Should BeNullOrEmpty
     }
-    It 'accepts every allowlisted code' {
-        foreach ($c in Get-VideoScoutQualityFailureCodes) {
+    It 'accepts every allowlisted NON-write-failure code with full metadata' {
+        foreach ($c in (Get-VideoScoutQualityFailureCodes | Where-Object { $_ -ne 'diagnostic-write-failed' })) {
             $line = "[video-scout quality] rejected code=$c file=rejected-response.txt bytes=1 sha256=$('b' * 64)"
             (ConvertFrom-VideoScoutQualityLine -Line $line).Code | Should Be $c
         }
+    }
+    It 'accepts a valid ZERO-BYTE artifact (an empty response is still evidence)' {
+        # The real SHA-256 of zero bytes, computed rather than transcribed.
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        try { $emptyHash = (($sha.ComputeHash([byte[]]@()) | ForEach-Object { $_.ToString('x2') }) -join '') }
+        finally { $sha.Dispose() }
+        $emptyHash.Length | Should Be 64
+        $p = ConvertFrom-VideoScoutQualityLine -Line "[video-scout quality] rejected code=missing-section file=rejected-response.txt bytes=0 sha256=$emptyHash"
+        $p | Should Not BeNullOrEmpty
+        $p.Bytes | Should Be 0
+        $p.Code | Should Be 'missing-section'
+        $p.Sha256 | Should Be $emptyHash
+    }
+
+    # --- V4Q CORRECTION: the two shapes are MUTUALLY EXCLUSIVE ----------------------------------
+    # Both forms below were previously ACCEPTED. A non-write-failure code with no metadata let a
+    # real rejection that silently lost its artifact parse as if that were normal; and
+    # diagnostic-write-failed carrying metadata claimed an artifact that by definition was never
+    # written. Each is now refused outright.
+    It 'REFUSES any non-write-failure code that carries NO artifact metadata' {
+        foreach ($c in (Get-VideoScoutQualityFailureCodes | Where-Object { $_ -ne 'diagnostic-write-failed' })) {
+            ConvertFrom-VideoScoutQualityLine -Line "[video-scout quality] rejected code=$c" | Should BeNullOrEmpty
+        }
+    }
+    It 'REFUSES diagnostic-write-failed that carries artifact metadata' {
+        ConvertFrom-VideoScoutQualityLine -Line ("[video-scout quality] rejected code=diagnostic-write-failed file=rejected-response.txt bytes=10 sha256=" + ('a' * 64)) | Should BeNullOrEmpty
+        ConvertFrom-VideoScoutQualityLine -Line '[video-scout quality] rejected code=diagnostic-write-failed bytes=10' | Should BeNullOrEmpty
+        ConvertFrom-VideoScoutQualityLine -Line '[video-scout quality] rejected code=diagnostic-write-failed file=rejected-response.txt' | Should BeNullOrEmpty
+    }
+    It 'REFUSES partial metadata (all three fields or none)' {
+        foreach ($rest in @(
+                'file=rejected-response.txt',
+                'file=rejected-response.txt bytes=10',
+                ('bytes=10 sha256=' + ('a' * 64)),
+                ('sha256=' + ('a' * 64)),
+                'bytes=10')) {
+            ConvertFrom-VideoScoutQualityLine -Line "[video-scout quality] rejected code=scope-mismatch $rest" | Should BeNullOrEmpty
+        }
+    }
+    It 'REFUSES metadata in the wrong ORDER' {
+        ConvertFrom-VideoScoutQualityLine -Line ("[video-scout quality] rejected code=scope-mismatch bytes=10 file=rejected-response.txt sha256=" + ('a' * 64)) | Should BeNullOrEmpty
+        ConvertFrom-VideoScoutQualityLine -Line ("[video-scout quality] rejected code=scope-mismatch sha256=" + ('a' * 64) + ' file=rejected-response.txt bytes=10') | Should BeNullOrEmpty
+    }
+    It 'REFUSES wrong CASE in the field names or the code' {
+        ConvertFrom-VideoScoutQualityLine -Line ("[video-scout quality] rejected code=scope-mismatch File=rejected-response.txt Bytes=10 SHA256=" + ('a' * 64)) | Should BeNullOrEmpty
+        ConvertFrom-VideoScoutQualityLine -Line ("[video-scout quality] rejected code=SCOPE-MISMATCH file=rejected-response.txt bytes=10 sha256=" + ('a' * 64)) | Should BeNullOrEmpty
+    }
+    It 'REFUSES an EXTRA field even when every required field is well formed' {
+        ConvertFrom-VideoScoutQualityLine -Line ("[video-scout quality] rejected code=scope-mismatch file=rejected-response.txt bytes=10 sha256=" + ('a' * 64) + ' kind=quality-rejected-response') | Should BeNullOrEmpty
     }
     It 'returns $null for an ordinary report or log line (never a false positive)' {
         foreach ($l in @('## 1. TL;DR something', '[video-scout usage] prompt=10 output=5',
@@ -136,6 +185,45 @@ Describe 'Get-VideoScoutDiagnosticArtifact -- happy path and identity' {
             $b = Get-VideoScoutDiagnosticArtifact -RunDir $root
             $b.sha256 | Should Be $a.sha256
             $b.bytes | Should Be $a.bytes
+        }
+    }
+    finally { if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue } }
+}
+
+Describe 'V4Q: a ZERO-BYTE diagnostic is valid evidence, verified and hashed like any other' {
+    # An empty provider response is still a billed response. The corrected SDK lifecycle preserves it
+    # as a zero-byte artifact rather than exiting early, so the verifier must accept and hash it.
+    $root = New-DiagRoot
+    try {
+        [System.IO.File]::WriteAllBytes((Join-Path $root $script:DiagLeaf), [byte[]]@())
+        $a = Get-VideoScoutDiagnosticArtifact -RunDir $root
+
+        It 'verifies a zero-byte artifact instead of refusing it' {
+            $a | Should Not BeNullOrEmpty
+            $a.kind | Should Be 'quality-rejected-response'
+            $a.fileName | Should Be 'rejected-response.txt'
+        }
+        It 'reports bytes = 0' {
+            $a.bytes | Should Be 0
+        }
+        It 'hashes it, and the hash matches an INDEPENDENT hasher' {
+            $a.sha256 | Should Match '^[0-9a-f]{64}$'
+            $a.sha256 | Should Be ((Get-FileHash -LiteralPath (Join-Path $root $script:DiagLeaf) -Algorithm SHA256).Hash.ToLower())
+        }
+        It 'a zero-byte artifact is trivially valid UTF-8 and inside both bounds' {
+            $a.bytes -le (Get-VideoScoutMaxDiagnosticBytes) | Should Be $true
+            $a.bytes -le (Get-VideoScoutMaxDiagnosticChars) | Should Be $true
+        }
+        It 'the resulting entry is accepted by the schema-v4 manifest contract' {
+            . (Join-Path $here 'video-scout-manifest-schema.ps1')
+            $m = New-VideoScoutLiveManifest -RunId 'r' -Url 'u' -AppliedMode 'video' -Route 'sdk' `
+                -Model 'gemini-2.5-pro' -MediaResolutionRequested 'MEDIUM' -VideoScout $true -StartOffset 60 -EndOffset 75
+            $m.outcome = 'error'
+            $m.reason = '[quality:missing-section] the provider returned an empty response'
+            $m.finishedAt = '2026-07-28T00:00:00.000Z'
+            $m.diagnosticArtifacts = @([ordered]@{ kind = $a.kind; fileName = $a.fileName; sha256 = $a.sha256; bytes = $a.bytes })
+            { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
+            $m.reportFile | Should BeNullOrEmpty
         }
     }
     finally { if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue } }

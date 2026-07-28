@@ -209,6 +209,10 @@ const NO_SYNTHETIC_EVIDENCE_LINE = '**Synthetic-media assessment:** NO OBSERVABL
 const AUDIO_STATUSES = ['SPEECH', 'MUSIC', 'AMBIENCE', 'SILENCE', 'UNCLEAR'];
 const EVIDENCE_SECTION_HEADER = '## 5. COMPREHENSIVE TIMESTAMPED FINDINGS';
 const EVIDENCE_SECTION_NEXT_HEADER = '## 6. CLAIMS, NUMBERS & CALLS TO ACTION';
+// V4Q CORRECTION: Section 2's exact bounds, so the scope/duration/synthetic markers are required
+// where they belong rather than anywhere in the report.
+const PROFILE_SECTION_HEADER = '## 2. VIDEO PROFILE';
+const PROFILE_SECTION_NEXT_HEADER = '## 3. PEOPLE, ENTITIES & SETTING';
 
 // V4Q (was buildSliceScopeInstruction, multi-only): the deterministic, repository-owned authorized
 // scope instruction for ONE THROUGH EIGHT ranges. A scalar slice is converted upstream into a
@@ -340,6 +344,12 @@ const NO_AUDIO_STREAM_CLAIMS = [
   /\baudio\s+(?:is|was)\s+(?:absent|not\s+present|not\s+provided|not\s+supplied)\b/i,
 ];
 const TIMESTAMP = String.raw`\d{1,2}:\d{2}(?::\d{2})?`;
+// V4Q CORRECTION: a FIELD-shaped duration assertion. Deliberately narrow -- it requires a
+// "<qualifier> duration" label followed by a separator, so honest prose ("the full duration of the
+// video is unknown", "only the authorized 70s were analyzed") never matches, while the observed
+// failure ("Approximate duration: Over 1 hour") does. The one sanctioned line is stripped before
+// this runs, and the authorized-scope line and per-slice headings use different wording entirely.
+const DURATION_FIELD_CLAIM = /(?:^|\n)[ \t>*_-]*(?:\*\*)?[ \t]*(?:approximate|source|video|total|full|overall|runtime|running|estimated|actual)[ \t]+duration[ \t]*(?:\*\*)?[ \t]*[:\-–—]/i;
 
 // The CLOSED allowlist of quality-gate failure codes. PowerShell refuses any code outside this
 // set, so a future validator branch cannot invent an unreviewed reason that reaches a manifest.
@@ -364,12 +374,18 @@ function fail(code, reason) { return { ok: false, code, reason }; }
 // Locate section 5 by its EXACT canonical header and the EXACT following canonical header — never
 // by a numeric substring, so renaming or reordering a section fails the contract test visibly
 // instead of silently scanning the wrong region (or nothing).
-function extractEvidenceSection(text) {
-  const start = text.indexOf(EVIDENCE_SECTION_HEADER);
+function extractSection(text, startHeader, endHeader) {
+  const start = text.indexOf(startHeader);
   if (start === -1) return '';
-  const after = start + EVIDENCE_SECTION_HEADER.length;
-  const end = text.indexOf(EVIDENCE_SECTION_NEXT_HEADER, after);
+  const after = start + startHeader.length;
+  const end = text.indexOf(endHeader, after);
   return end === -1 ? text.slice(after) : text.slice(after, end);
+}
+function extractEvidenceSection(text) {
+  return extractSection(text, EVIDENCE_SECTION_HEADER, EVIDENCE_SECTION_NEXT_HEADER);
+}
+function extractProfileSection(text) {
+  return extractSection(text, PROFILE_SECTION_HEADER, PROFILE_SECTION_NEXT_HEADER);
 }
 
 // Normalize one evidence itemization line down to its observation body so that N near-identical
@@ -423,59 +439,78 @@ function validateReportQuality({ text, finishReason, ranges, audioTokens }) {
 
   if (!sliced) return { ok: true };
 
+  // V4Q CORRECTION -- SECTION SCOPING. Every bounded-scope marker below is required INSIDE its
+  // canonical section, located by exact adjacent headers. Searching the whole report (the original
+  // implementation) accepted a report that put every slice/audio marker in Section 4 and left
+  // Section 5 empty -- structurally the same failure V4Q exists to catch, passing the gate.
+  const section2 = extractSection(body, PROFILE_SECTION_HEADER, PROFILE_SECTION_NEXT_HEADER);
+  const evidence = extractSection(body, EVIDENCE_SECTION_HEADER, EVIDENCE_SECTION_NEXT_HEADER);
+
   const aggregateSeconds = sliceRanges.reduce((sum, r) => sum + (r.endOffset - r.startOffset), 0);
   const scopeLine = AUTHORIZED_SCOPE_LINE(sliceRanges.length, aggregateSeconds);
-  if (body.indexOf(scopeLine) === -1) {
-    return fail('scope-mismatch', `the report does not echo the authorized scope line "${scopeLine}".`);
+  if (section2.indexOf(scopeLine) === -1) {
+    return fail('scope-mismatch', `Section 2 does not carry the authorized scope line "${scopeLine}".`);
   }
 
-  // Exact ordered slice headings: catches omitted, shortened (wrong endpoint), reordered, merged,
-  // and invented slices in one comparison against the authoritative validated ranges.
+  // ---- Section 5: exact ordered slice SUBSECTIONS -----------------------------------------------
+  // Headings are read from Section 5 ONLY, then each slice's markers are required inside that
+  // slice's own subsection. This is what makes "one distinct subsection per authorized slice" real:
+  // a marker belonging to slice 2 cannot be satisfied by text sitting under slice 1.
   const expectedHeadings = sliceRanges.map((r, i) => SLICE_HEADING(i + 1, r));
-  const seenHeadings = (body.match(/^###\s+Slice\s+.*$/gm) || []).map((s) => s.trim());
-  if (seenHeadings.length !== expectedHeadings.length) {
-    return fail('missing-slice', `expected ${expectedHeadings.length} slice heading(s), found ${seenHeadings.length}.`);
+  const headingRe = /^###[ \t]+Slice[ \t]+.*$/gm;
+  const seen = [];
+  let hm;
+  while ((hm = headingRe.exec(evidence)) !== null) {
+    seen.push({ text: hm[0].trim(), start: hm.index, end: hm.index + hm[0].length });
+  }
+  if (seen.length !== expectedHeadings.length) {
+    return fail('missing-slice', `Section 5 must contain exactly ${expectedHeadings.length} slice subsection(s); found ${seen.length}.`);
   }
   for (let i = 0; i < expectedHeadings.length; i++) {
-    if (seenHeadings[i] !== expectedHeadings[i]) {
-      return fail('scope-mismatch', `slice heading ${i + 1} must be exactly "${expectedHeadings[i]}".`);
+    if (seen[i].text !== expectedHeadings[i]) {
+      return fail('scope-mismatch', `Section 5 slice subsection ${i + 1} must open with exactly "${expectedHeadings[i]}".`);
     }
   }
+  const subsectionOf = (i) => evidence.slice(seen[i].end, i + 1 < seen.length ? seen[i + 1].start : evidence.length);
 
   const statuses = [];
+  const subsections = [];
   for (let i = 0; i < sliceRanges.length; i++) {
     const n = i + 1;
+    const sub = subsectionOf(i);
+    subsections.push(sub);
     const statusRe = new RegExp(String.raw`\*\*Slice ${n} audio status:\*\*\s*(${AUDIO_STATUSES.join('|')})\b`, 'g');
-    const found = body.match(statusRe) || [];
+    const found = sub.match(statusRe) || [];
     if (found.length === 0) {
-      return fail('missing-slice-audio', `slice ${n} has no "**Slice ${n} audio status:**" line with one of ${AUDIO_STATUSES.join('/')}.`);
+      return fail('missing-slice-audio', `slice ${n}'s Section 5 subsection has no "**Slice ${n} audio status:**" line with one of ${AUDIO_STATUSES.join('/')}.`);
     }
     if (found.length > 1) {
-      return fail('missing-slice-audio', `slice ${n} has ${found.length} conflicting audio-status lines; exactly one is required.`);
+      return fail('missing-slice-audio', `slice ${n}'s subsection has ${found.length} conflicting audio-status lines; exactly one is required.`);
     }
-    const status = new RegExp(String.raw`\*\*Slice ${n} audio status:\*\*\s*(${AUDIO_STATUSES.join('|')})\b`).exec(body)[1];
+    const status = new RegExp(String.raw`\*\*Slice ${n} audio status:\*\*\s*(${AUDIO_STATUSES.join('|')})\b`).exec(sub)[1];
     statuses.push(status);
 
-    if (!new RegExp(String.raw`\*\*Slice ${n} audio evidence:\*\*\s*${TIMESTAMP}\s*[-–—:]`).test(body)) {
-      return fail('missing-slice-audio', `slice ${n} has no timestamped "**Slice ${n} audio evidence:**" observation.`);
+    if (!new RegExp(String.raw`\*\*Slice ${n} audio evidence:\*\*\s*${TIMESTAMP}\s*[-–—:]`).test(sub)) {
+      return fail('missing-slice-audio', `slice ${n}'s subsection has no timestamped "**Slice ${n} audio evidence:**" observation.`);
     }
-    if (status === 'SPEECH' && !new RegExp(String.raw`\*\*Slice ${n} transcription anchor:\*\*\s*["“][^"”]+["”]`).test(body)) {
-      return fail('missing-speech-anchor', `slice ${n} reports SPEECH but carries no quoted "**Slice ${n} transcription anchor:**".`);
+    if (status === 'SPEECH' && !new RegExp(String.raw`\*\*Slice ${n} transcription anchor:\*\*\s*["“][^"”]+["”]`).test(sub)) {
+      return fail('missing-speech-anchor', `slice ${n} reports SPEECH but its subsection carries no quoted "**Slice ${n} transcription anchor:**".`);
     }
   }
 
   // Heuristic, not semantic proof (see the handoff): if the provider billed audio tokens and every
-  // slice came back SILENCE/UNCLEAR, each slice must say what it listened for. Rewording can evade
-  // this; it exists to stop the specific observed failure of blanket unexamined silence.
+  // slice came back SILENCE/UNCLEAR, each slice must say what it listened for -- in its OWN
+  // subsection. Rewording can evade this; it exists to stop the observed blanket-silence failure.
   if (audioTokens > 0 && statuses.every((s) => s === 'SILENCE' || s === 'UNCLEAR')) {
     for (let i = 0; i < sliceRanges.length; i++) {
       const n = i + 1;
-      if (!new RegExp(String.raw`\*\*Slice ${n} audio justification:\*\*\s*${TIMESTAMP}\s*[-–—:]`).test(body)) {
-        return fail('unjustified-universal-silence', `every slice reports SILENCE/UNCLEAR while ${audioTokens} audio tokens were billed, but slice ${n} carries no timestamped "**Slice ${n} audio justification:**".`);
+      if (!new RegExp(String.raw`\*\*Slice ${n} audio justification:\*\*\s*${TIMESTAMP}\s*[-–—:]`).test(subsections[i])) {
+        return fail('unjustified-universal-silence', `every slice reports SILENCE/UNCLEAR while ${audioTokens} audio tokens were billed, but slice ${n}'s subsection carries no timestamped "**Slice ${n} audio justification:**".`);
       }
     }
   }
-  // The provider processed an audio stream, so denying that one exists is false on its face.
+  // The provider processed an audio stream, so denying that one exists is false on its face. This
+  // one IS whole-report scoped on purpose: a false "there is no audio" is a lie wherever it appears.
   if (audioTokens > 0) {
     // Structural reason only: the matched phrase is provider text and must never be echoed.
     for (const re of NO_AUDIO_STREAM_CLAIMS) {
@@ -485,10 +520,25 @@ function validateReportQuality({ text, finishReason, ranges, audioTokens }) {
     }
   }
 
-  if (body.indexOf(UNDETERMINABLE_DURATION_LINE) === -1) {
-    return fail('speculative-source-duration', `the report does not carry the required line "${UNDETERMINABLE_DURATION_LINE}".`);
+  // ---- Section 2: source duration ---------------------------------------------------------------
+  if (section2.indexOf(UNDETERMINABLE_DURATION_LINE) === -1) {
+    return fail('speculative-source-duration', `Section 2 does not carry the required line "${UNDETERMINABLE_DURATION_LINE}".`);
+  }
+  // V4Q CORRECTION -- CONTRADICTION. Carrying the required line no longer buys immunity: the
+  // observed failure stated BOTH "Approximate duration: Over 1 hour" and (under the new prompt)
+  // would still be able to carry the undeterminable line. Strip the ONE sanctioned line, then any
+  // remaining duration FIELD assertion is a contradiction. Deliberately field-shaped ("<x>
+  // duration:") so honest prose -- "the full duration of the video is unknown" -- never trips it,
+  // and so the authorized aggregate and per-slice authorized lengths are untouched.
+  const withoutSanctionedDuration = body
+    .split('\n')
+    .filter((l) => l.trim() !== UNDETERMINABLE_DURATION_LINE)
+    .join('\n');
+  if (DURATION_FIELD_CLAIM.test(withoutSanctionedDuration)) {
+    return fail('speculative-source-duration', 'the report asserts a source/total/video duration alongside the required undeterminable line; the two contradict each other and only the authorized aggregate is knowable.');
   }
 
+  // ---- Section 2: synthetic-media assessment ----------------------------------------------------
   // Scan for AFFIRMATIVE synthetic claims only. Two exclusions keep this honest: the sanctioned
   // assessment line itself contains the word "Synthetic" (it must not trip its own detector), and a
   // negated statement ("no observable evidence of AI generation") is the compliant answer, not a
@@ -499,16 +549,15 @@ function validateReportQuality({ text, finishReason, ranges, audioTokens }) {
     .filter((line) => !/\b(no|not|nor|without|absent|lacks?|lacking|none|cannot|can't|isn't|aren't|wasn't|weren't|don't|doesn't|didn't)\b/i.test(line))
     .join('\n');
   const assertsSynthetic = SYNTHETIC_TERMS.test(scannable);
-  const declaresNoEvidence = body.indexOf(NO_SYNTHETIC_EVIDENCE_LINE) !== -1;
-  const standardized = /\*\*Synthetic-media assessment:\*\*\s*(?!NO OBSERVABLE EVIDENCE)\S[^\n]*?—\s*Evidence:\s*[^\n]*?\d{1,2}:\d{2}[^\n]*?—\s*Confidence:\s*(LOW|MEDIUM|HIGH)\b/.test(body);
+  const declaresNoEvidence = section2.indexOf(NO_SYNTHETIC_EVIDENCE_LINE) !== -1;
+  const standardized = /\*\*Synthetic-media assessment:\*\*\s*(?!NO OBSERVABLE EVIDENCE)\S[^\n]*?—\s*Evidence:\s*[^\n]*?\d{1,2}:\d{2}[^\n]*?—\s*Confidence:\s*(LOW|MEDIUM|HIGH)\b/.test(section2);
   if (!declaresNoEvidence && !standardized) {
-    return fail('unsupported-synthetic-claim', 'the report carries neither the NO OBSERVABLE EVIDENCE line nor a standardized timestamped synthetic-media assessment with a confidence level.');
+    return fail('unsupported-synthetic-claim', 'Section 2 carries neither the NO OBSERVABLE EVIDENCE line nor a standardized timestamped synthetic-media assessment with a confidence level.');
   }
   if (declaresNoEvidence && assertsSynthetic && !standardized) {
     return fail('unsupported-synthetic-claim', 'the report declares no observable synthetic-media evidence yet asserts synthetic/manipulated origin elsewhere without a timestamped, confidence-rated assessment.');
   }
 
-  const evidence = extractEvidenceSection(body);
   const counts = new Map();
   for (const rawLine of evidence.split('\n')) {
     const line = rawLine.trim();
@@ -793,12 +842,13 @@ async function runVideoScout(rawArgs, deps = {}) {
     const finish = json && json.candidates && json.candidates[0] && json.candidates[0].finishReason;
     const text = ((json && json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts) || [])
       .map((p) => p.text || '').join('');
-    if (!text) {
-      // An empty SUCCESS is terminal (never retried): the server answered; asking again could
-      // only duplicate cost for the same outcome.
-      logError(`[video-scout sdk] empty response (finishReason=${finish}). Full candidate: ${sanitizeUpstreamText(JSON.stringify((json && (json.candidates || json))) )}`);
-      return 1;
-    }
+    // V4Q CORRECTION: there is NO early exit for an empty response. An empty success is still a
+    // billed provider response, so it takes the SAME path as any other: usage is extracted, the
+    // quality gate classifies it, the exact response (including the empty string, which preserves
+    // as a valid zero-byte artifact) is written as evidence, and the canonical quality line is
+    // emitted. The old early return skipped usage extraction entirely -- losing the cost record for
+    // a run that had already been paid for -- and dumped the raw candidate object into the log,
+    // which is provider content. Both are gone.
     if (outcome.attempt > 1) log(`[video-scout sdk] recovered on attempt ${outcome.attempt}/${RETRY_MAX_ATTEMPTS}`);
 
     const usage = (json && json.usageMetadata) || {};
@@ -869,7 +919,8 @@ module.exports = {
   buildGenerationConfig, resolveEffectiveModel,
   PRO_MODEL, BASE_MAX_OUTPUT_TOKENS, PER_EXTRA_SLICE_OUTPUT_TOKENS, SLICED_PRO_THINKING_BUDGET,
   // V4Q quality gate + durable diagnostics
-  validateReportQuality, extractEvidenceSection, normalizeEvidenceLine,
+  validateReportQuality, extractSection, extractEvidenceSection, extractProfileSection, normalizeEvidenceLine,
+  PROFILE_SECTION_HEADER, PROFILE_SECTION_NEXT_HEADER, DURATION_FIELD_CLAIM,
   resolveDiagnosticDir, writeRejectedResponseDiagnostic,
   QUALITY_FAILURE_CODES, REQUIRED_SECTIONS, AUDIO_STATUSES,
   EVIDENCE_SECTION_HEADER, EVIDENCE_SECTION_NEXT_HEADER,

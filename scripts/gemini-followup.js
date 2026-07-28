@@ -21,8 +21,14 @@
 //
 // The request is TEXT-ONLY by construction: buildFollowupRequestBody emits no fileData, fileUri,
 // videoMetadata, mediaResolution, tools, or function declarations — nothing that could re-ingest
-// video or take an external action. maxOutputTokens applies ONLY to this body (the video request
-// body remains untouched and cap-free).
+// video or take an external action.
+//
+// Output caps (corrected in V4Q — the previous wording said the video body was cap-free, which is
+// no longer true): this follow-up body carries its own independently owned FOLLOWUP_MAX_OUTPUT_TOKENS
+// cap, and video requests carry a SEPARATE cap set by the V4Q generation policy in
+// gemini-video-sdk.js (buildGenerationConfig). The two are deliberately distinct constants with
+// distinct owners, and neither policy controls or derives from the other — changing one must never
+// be assumed to change the other.
 
 const { submitGeminiRequest } = require('./gemini-video-sdk');
 

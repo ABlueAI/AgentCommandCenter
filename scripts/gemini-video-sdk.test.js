@@ -11,6 +11,7 @@ const {
   buildRequestBody, formatUsageLine, parseArgs, resolveSliceOffsets, MEDIA_RESOLUTION_MAP, DEFAULT_MODEL,
   classifyHttpFailure, retryDelayMs, runVideoScout, runCliEntry,
   RETRY_MAX_ATTEMPTS, RETRY_BASE_DELAY_MS, RETRY_JITTER_MS, NON_RETRYABLE_STATUSES,
+  QUALITY_FAILURE_CODES, DIAGNOSTIC_FILENAME,
 } = require('./gemini-video-sdk');
 const fs = require('fs');
 const os = require('os');
@@ -350,12 +351,49 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     assert(code === 0 && h.calls.length === 2, 'a 503 whose body fails to parse still retries on the status');
   }
 
-  section('K5 empty SUCCESS response is terminal (asking again could only duplicate cost)');
+  section('V4Q empty SUCCESS response takes the FULL quality-gate lifecycle (no early exit)');
   {
-    const h = makeDeps([resp(200, { candidates: [{ content: { parts: [] }, finishReason: 'SAFETY' }] }), resp(200, SUCCESS_BODY)]);
-    const code = await runVideoScout(ARGS, h.deps);
-    assert(code === 1 && h.calls.length === 1, 'empty success: one request, exit 1, no retry');
-    assert(h.errs.some((l) => l.includes('empty response')), 'and it is visible');
+    // An empty success is still a BILLED provider response. The corrected lifecycle extracts usage
+    // first, classifies the empty text through the gate, preserves it as a valid ZERO-BYTE
+    // diagnostic, emits the canonical quality line, and exits non-zero -- with no retry, repair,
+    // fallback, or continuation. The old early return skipped usage extraction entirely and dumped
+    // the raw candidate object (provider content) into the log.
+    const emptyBody = (finishReason) => ({
+      candidates: [{ content: { parts: [] }, finishReason }],
+      usageMetadata: { promptTokenCount: 1234, candidatesTokenCount: 0, totalTokenCount: 1234, promptTokensDetails: [{ modality: 'VIDEO', tokenCount: 1200 }] },
+    });
+    const cases = [
+      ['STOP', 'missing-section'],
+      ['MAX_TOKENS', 'finish-max-tokens'],
+      ['SAFETY', 'finish-not-stop'],
+      [undefined, 'finish-not-stop'],
+      ['SOME_UNDOCUMENTED_REASON', 'finish-not-stop'],
+    ];
+    for (const [finishReason, expectedCode] of cases) {
+      const label = finishReason === undefined ? 'missing finishReason' : finishReason;
+      // A second response is queued to prove it is NEVER consumed.
+      const h = makeDeps([resp(200, emptyBody(finishReason)), resp(200, SUCCESS_BODY)]);
+      const code = await runVideoScout(ARGS, h.deps);
+      assert(code === 1, `${label} + empty text: exits non-zero`);
+      assert(h.calls.length === 1, `${label}: EXACTLY one provider submission (no retry/repair/continuation)`);
+      const q = h.logs.filter((l) => l.startsWith('[video-scout quality]'));
+      assert(q.length === 1, `${label}: exactly one canonical quality line`);
+      const m = /^\[video-scout quality\] rejected code=(\S+) file=(\S+) bytes=(\d+) sha256=([0-9a-f]{64})$/.exec(q[0]);
+      assert(m && m[1] === expectedCode, `${label} + empty text -> ${expectedCode}`);
+      assert(QUALITY_FAILURE_CODES.includes(m[1]), `${label}: the code is inside the closed allowlist`);
+      // USAGE is preserved -- the run was paid for and the manifest must be able to record it.
+      const usage = h.logs.filter((l) => l.includes('[video-scout usage]'));
+      assert(usage.length === 1 && usage[0].includes('video=1200'), `${label}: usage is preserved exactly once`);
+      // A VALID ZERO-BYTE artifact is written -- "empty" is still evidence of what arrived.
+      assert(h.writes.length === 1 && h.renames.length === 1, `${label}: the diagnostic is written once and renamed once`);
+      assert(h.writes[0].buf.length === 0 && Number(m[3]) === 0, `${label}: the preserved artifact is a valid ZERO-BYTE file`);
+      assert(m[4] === crypto.createHash('sha256').update(Buffer.alloc(0)).digest('hex'),
+        `${label}: the reported hash is the SHA-256 of the empty artifact`);
+      assert(h.renames[0].to === path.join(FAKE_DIAG_DIR, DIAGNOSTIC_FILENAME), `${label}: it lands on the fixed leaf`);
+      // No report, and no provider content in the logs.
+      assert(!h.logs.some((l) => l.includes('candidates') || l.includes('finishReason')),
+        `${label}: the raw candidate object never reaches the log (the old path dumped it)`);
+    }
   }
 
   section('K5 diagnostics hygiene: key and prompt never enter logs');
@@ -656,8 +694,9 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
   // ================================ V4Q generation policy =====================================
   const {
     buildGenerationConfig, resolveEffectiveModel, validateReportQuality, extractEvidenceSection,
-    resolveDiagnosticDir, writeRejectedResponseDiagnostic, QUALITY_FAILURE_CODES, REQUIRED_SECTIONS,
-    MAX_DIAGNOSTIC_BYTES, MAX_DIAGNOSTIC_CHARS, DIAGNOSTIC_FILENAME, PRO_MODEL,
+    extractProfileSection, resolveDiagnosticDir, writeRejectedResponseDiagnostic, REQUIRED_SECTIONS,
+    MAX_DIAGNOSTIC_BYTES, MAX_DIAGNOSTIC_CHARS, PRO_MODEL,
+    PROFILE_SECTION_HEADER, PROFILE_SECTION_NEXT_HEADER, DURATION_FIELD_CLAIM,
   } = require('./gemini-video-sdk');
   const LITE = 'gemini-2.5-flash-lite';
   const FLASH = 'gemini-2.5-flash';
@@ -862,6 +901,92 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
       Array.from({ length: n }, (_, i) => `00:0${i} [VISUAL] identical observation`).join('\n'));
     assert(vq(mk(3)).ok === true, 'three identical observations are allowed');
     assert(vq(mk(4)).code === 'repetitive-timestamp-filler', 'a fourth identical observation is rejected');
+  }
+
+  section('V4Q CORRECTION: bounded-scope markers are required in their CANONICAL SECTION');
+  {
+    // Section extraction is by exact adjacent headers, never a whole-report search.
+    const base = okReport();
+    assert(extractProfileSection(base).includes(AUTHORIZED_SCOPE_LINE(2, 50)),
+      'Section 2 is extracted between its exact adjacent canonical headers');
+    assert(!extractProfileSection(base).includes('**Slice 1 audio status:**'),
+      'Section 2 extraction stops before Section 3 (never bleeds into later sections)');
+    assert(PROFILE_SECTION_HEADER === '## 2. VIDEO PROFILE' && PROFILE_SECTION_NEXT_HEADER === '## 3. PEOPLE, ENTITIES & SETTING',
+      'the Section 2 boundary headers are the canonical ones');
+
+    // THE REVIEWER'S SECOND REPORT: every slice/audio marker moved into Section 4, Section 5 empty.
+    // The pre-correction validator searched the whole report and PASSED this.
+    const s5Body = extractEvidenceSection(base).trim();
+    const markersInS4 = base
+      .replace(s5Body, '')
+      .replace('**Section TL;DR:** summary.', '**Section TL;DR:** summary.\n' + s5Body);
+    const movedVerdict = vq(markersInS4);
+    assert(movedVerdict.ok === false && movedVerdict.code === 'missing-slice',
+      'REGRESSION CONTROL: slice subsections placed in Section 4 with Section 5 empty are REJECTED');
+
+    // Individually relocated Section 2 markers are each rejected on their own.
+    const moveOut = (line) => base.replace(line + '\n', '').replace('**Section TL;DR:** limits.', '**Section TL;DR:** limits.\n' + line);
+    assert(vq(moveOut(AUTHORIZED_SCOPE_LINE(2, 50))).code === 'scope-mismatch',
+      'the authorized-scope line outside Section 2 does not satisfy the contract');
+    assert(vq(moveOut(UNDETERMINABLE_DURATION_LINE)).code === 'speculative-source-duration',
+      'the undeterminable-duration line outside Section 2 does not satisfy the contract');
+    assert(vq(moveOut(NO_SYNTHETIC_EVIDENCE_LINE)).code === 'unsupported-synthetic-claim',
+      'the synthetic-media assessment outside Section 2 does not satisfy the contract');
+
+    // A marker belonging to slice 2 cannot be satisfied by text sitting under slice 1.
+    const misplacedAnchor = base.replace('**Slice 2 transcription anchor:** "hold this position"', '')
+      .replace('**Slice 1 transcription anchor:** "hold this position"',
+        '**Slice 1 transcription anchor:** "hold this position"\n**Slice 2 transcription anchor:** "hold this position"');
+    assert(vq(misplacedAnchor).code === 'missing-speech-anchor',
+      "slice 2's anchor sitting inside slice 1's subsection does not satisfy slice 2");
+  }
+
+  section('V4Q CORRECTION: a contradictory source-duration claim is rejected');
+  {
+    const withDuration = (claim) => okReport().replace(UNDETERMINABLE_DURATION_LINE, UNDETERMINABLE_DURATION_LINE + '\n' + claim);
+    // THE REVIEWER'S FIRST REPORT: the required line AND the invented duration, together.
+    for (const claim of [
+      'Approximate duration: Over 1 hour',
+      '**Approximate duration:** Over 1 hour',
+      'Source duration: 3600s',
+      'Video duration: 1:02:03',
+      'Total duration: 70 minutes',
+      'Full duration — 2 hours',
+      'Estimated duration: unknown but long',
+    ]) {
+      const v = vq(withDuration(claim));
+      assert(v.ok === false && v.code === 'speculative-source-duration',
+        `REGRESSION CONTROL: the required line plus "${claim.slice(0, 28)}..." is REJECTED`);
+    }
+    // And the honest forms are NOT rejected.
+    assert(vq(okReport()).ok === true, 'the exact undeterminable line alone passes');
+    for (const honest of [
+      'The full duration of the video is unknown from the authorized slices alone.',
+      'Only the authorized aggregate was analyzed; the source length was never visible.',
+      'Duration beyond the authorized slices could not be determined.',
+    ]) {
+      assert(vq(okReport().replace('**Section TL;DR:** limits.', '**Section TL;DR:** limits.\n' + honest)).ok === true,
+        `honest limitation prose passes: "${honest.slice(0, 32)}..."`);
+    }
+    // The authorized aggregate and the per-slice authorized lengths are never mistaken for a claim.
+    assert(DURATION_FIELD_CLAIM.test(AUTHORIZED_SCOPE_LINE(2, 50)) === false,
+      'the authorized-scope line is not a duration claim');
+    assert(DURATION_FIELD_CLAIM.test(SLICE_HEADING(1, R2[0])) === false,
+      'a per-slice authorized length is not a duration claim');
+    assert(DURATION_FIELD_CLAIM.test(UNDETERMINABLE_DURATION_LINE) === true,
+      '(the sanctioned line IS field-shaped, which is why it is stripped before the scan)');
+  }
+
+  section('V4Q CORRECTION: correctly placed scalar / 2-slice / 8-slice reports still PASS');
+  {
+    const one = [{ startOffset: 60, endOffset: 75 }];
+    assert(vq(compliantReport(one), { ranges: one }).ok === true, 'scalar report with markers in Section 5 passes');
+    assert(vq(compliantReport(R2)).ok === true, 'two-slice report with markers in Section 5 passes');
+    const eight = Array.from({ length: 8 }, (_, i) => ({ startOffset: i * 100, endOffset: i * 100 + 20 }));
+    assert(vq(compliantReport(eight), { ranges: eight }).ok === true, 'eight-slice report with markers in Section 5 passes');
+    const honest = compliantReport(R2).replace('**Section TL;DR:** limits.',
+      '**Section TL;DR:** limits.\nThe full source length is not determinable from the authorized slices.');
+    assert(vq(honest).ok === true, 'a report combining correct placement with honest duration limitation passes');
   }
 
   // ============================ V4Q diagnostic lifecycle ======================================

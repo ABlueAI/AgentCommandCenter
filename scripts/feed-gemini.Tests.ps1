@@ -742,6 +742,47 @@ Describe 'V4Q feed-gemini: a quality-rejected response is preserved as evidence,
     }
 }
 
+Describe 'V4Q feed-gemini: an EMPTY provider response is preserved as a valid zero-byte diagnostic' {
+    # The corrected SDK lifecycle has no early exit for an empty response: it is still a billed
+    # response, so usage is preserved, the empty body is written as a zero-byte artifact, and the
+    # run is a terminal error with no report. This proves the PowerShell half end to end.
+    $r = Invoke-SdkSliceRun -SliceRangesJson $V4Good -QualityReject -QualityCode 'missing-section' -RejectedBody ''
+    $m = Get-E2ERunManifest -OutDir $r.OutDir
+    $runDir = (Get-ChildItem -LiteralPath $r.OutDir -Directory | Select-Object -First 1).FullName
+    $diag = Join-Path $runDir 'rejected-response.txt'
+
+    It 'the zero-byte artifact exists as the fixed leaf, a direct child of the run directory' {
+        (Test-Path -LiteralPath $diag -PathType Leaf) | Should Be $true
+        ([System.IO.File]::ReadAllBytes($diag)).Length | Should Be 0
+    }
+    It 'the run is a terminal ERROR with the missing-section quality code and NO report' {
+        $m.outcome | Should Be 'error'
+        $m.reason | Should Match '^\[quality:missing-section\]'
+        $m.reportFile | Should BeNullOrEmpty
+        (Test-Path -LiteralPath (Join-Path $runDir 'analysis-output.txt')) | Should Be $false
+    }
+    It 'USAGE is still preserved for the empty response (it was billed)' {
+        $m.usage.totalTokens | Should Be 25528
+    }
+    It 'the schema-v4 manifest records the INDEPENDENTLY verified zero-byte entry' {
+        $m.schemaVersion | Should Be 4
+        @($m.diagnosticArtifacts).Count | Should Be 1
+        $e = @($m.diagnosticArtifacts)[0]
+        $e.kind | Should Be 'quality-rejected-response'
+        $e.fileName | Should Be 'rejected-response.txt'
+        $e.bytes | Should Be 0
+        $e.sha256 | Should Be ((Get-FileHash -LiteralPath $diag -Algorithm SHA256).Hash.ToLower())
+    }
+    It 'the manifest validates and the zero-byte artifact is never exposed as a report' {
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
+        # Report availability keys off outcome + reportFile, which is what keeps this run
+        # permanently unavailable in the Library (proved directly in video-scout-library-core.Tests.ps1).
+        $m.outcome | Should Be 'error'
+        $m.reportFile | Should BeNullOrEmpty
+        ((Get-Content -LiteralPath (Join-Path $runDir 'manifest.json') -Raw) -match '"reportFile"\s*:\s*null') | Should Be $true
+    }
+}
+
 Describe 'V4Q feed-gemini: the parent NEVER trusts the child-reported artifact identity' {
     $r = Invoke-SdkSliceRun -SliceRangesJson $V4Good -QualityReject -LieAboutIdentity
     $m = Get-E2ERunManifest -OutDir $r.OutDir

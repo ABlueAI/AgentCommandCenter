@@ -106,10 +106,15 @@ function predictVideoRoute(videoUrl, analysisMode) {
 //           failure (mode-gate, both-or-neither, type/range, end<=start, or offsets on a source
 //           that would route to the CLI/download path). Neither an invalid mode nor a range the
 //           user explicitly asked for may be silently dropped or downgraded — main.js surfaces
-//           this error and returns { ok:false } instead of spawning. (Allowlist misses on
-//           videoModel/mediaResolution are NOT errors: those legitimately fall back to the
-//           script's own default, which is a safe no-surprise outcome, unlike a dropped mode or
-//           a dropped range.)
+//           this error and returns { ok:false } instead of spawning.
+//
+//           V4Q CORRECTION: an EXPLICIT invalid videoModel is now an error too. It used to be
+//           dropped on the assumption that falling back to "the script's own default" was a safe
+//           no-surprise outcome. That assumption died with V4Q's omitted-model resolution: an
+//           omitted -Model on a SLICED run now resolves to gemini-2.5-pro, so a dropped invalid
+//           model would silently launch the most expensive model the user never chose. Same
+//           fail-closed reasoning as an invalid analysisMode. An allowlist miss on
+//           mediaResolution remains a non-error: its fallback is genuinely inert.
 function buildVideoScoutArgs({ videoModel, mediaResolution, analysisMode, videoUrl, startOffset, endOffset, sliceRanges, analysisFocus } = {}) {
   const args = [];
   const notes = [];
@@ -156,7 +161,13 @@ function buildVideoScoutArgs({ videoModel, mediaResolution, analysisMode, videoU
       args.push('-Model', videoModel);
       notes.push(`videoModel="${videoModel}" sent as -Model (always serialized: the app never lets an explicit choice be re-read as omitted)`);
     } else {
-      notes.push(`videoModel=${JSON.stringify(videoModel)} REJECTED (not in VALID_VIDEO_MODELS allowlist) — dropped, script default applies`);
+      // Fail CLOSED: refuse the launch instead of dropping the flag. Under V4Q's omitted-model
+      // resolution a dropped -Model on a sliced run becomes gemini-2.5-pro, so "drop and continue"
+      // would spend the user's money on a model they never selected.
+      const describedModel = describeInvalidValue(videoModel);
+      error = `Invalid video model ${describedModel}. Allowed models: ${[...VALID_VIDEO_MODELS].join(', ')}. Launch refused.`;
+      notes.push(`videoModel=${describedModel} REJECTED (not in VALID_VIDEO_MODELS allowlist) — launch REFUSED (never silently downgraded to the omitted-model default)`);
+      return { args: [], notes, error };
     }
   }
 

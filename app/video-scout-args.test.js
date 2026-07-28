@@ -79,13 +79,63 @@ function assert(condition, label) {
     'a SLICED app request still carries the explicit Lite choice (never silently upgraded to Pro)');
 }
 
-// --- reject: values outside the allowlist are dropped, never spliced into args -----
+// --- V4Q CORRECTION: an invalid videoModel REFUSES the launch; an invalid mediaResolution does not
+// An out-of-allowlist model used to be dropped so the script default would apply. That stopped
+// being safe when feed-gemini.ps1 gained omitted-model resolution: a dropped -Model on a sliced run
+// now resolves to gemini-2.5-pro, so "drop and continue" would spend real money on a model the user
+// never selected. mediaResolution keeps the drop behavior -- its fallback is genuinely inert.
 {
-  const { args, notes } = buildVideoScoutArgs({ videoModel: 'gemini-3-ultra-secret', mediaResolution: 'ULTRA' });
-  assert(!args.includes('-Model'), 'rejects a videoModel outside VALID_VIDEO_MODELS');
-  assert(!args.includes('-MediaResolution'), 'rejects a mediaResolution outside VALID_MEDIA_RESOLUTIONS');
+  const { args, notes, error } = buildVideoScoutArgs({ videoModel: 'gemini-3-ultra-secret', mediaResolution: 'ULTRA' });
+  assert(typeof error === 'string' && error.length > 0, 'an invalid videoModel sets a launch-refusing error');
+  assert(/Invalid video model/.test(error) && /Launch refused/.test(error), 'the error names the problem and says the launch is refused');
+  assert(args.length === 0, 'a refused launch emits NO launchable argument set at all');
+  assert(!args.includes('-Model'), 'the invalid model is never spliced into args');
   assert(notes.some(n => /videoModel=.*REJECTED/.test(n)), 'notes flag the rejected videoModel explicitly');
+  assert(notes.some(n => /never silently downgraded/.test(n)), 'notes state that no silent downgrade happened');
+}
+{
+  // mediaResolution is unchanged: dropped with a note, launch still proceeds.
+  const { args, notes, error } = buildVideoScoutArgs({ videoModel: 'gemini-2.5-pro', mediaResolution: 'ULTRA' });
+  assert(error === null || error === undefined, 'an invalid mediaResolution alone does NOT refuse the launch');
+  assert(!args.includes('-MediaResolution'), 'rejects a mediaResolution outside VALID_MEDIA_RESOLUTIONS');
+  assert(args[args.indexOf('-Model') + 1] === 'gemini-2.5-pro', 'the valid model still serializes');
   assert(notes.some(n => /mediaResolution=.*REJECTED/.test(n)), 'notes flag the rejected mediaResolution explicitly');
+}
+{
+  // The exact escalation the correction closes: an invalid model on a SLICED request must never be
+  // able to reach PowerShell's omitted-model sliced-Pro default.
+  const r = buildVideoScoutArgs({
+    videoModel: 'gemini-3-ultra-secret', mediaResolution: 'MEDIUM', analysisMode: 'video',
+    videoUrl: 'https://www.youtube.com/watch?v=abc12345678',
+    sliceRanges: [{ startOffset: 10, endOffset: 30 }, { startOffset: 60, endOffset: 90 }],
+  });
+  assert(typeof r.error === 'string' && r.error.length > 0, 'invalid model + valid slices returns a visible error');
+  assert(r.args.length === 0, 'invalid model + valid slices emits no launchable argument set');
+  assert(!r.args.includes('-SliceRangesJson'), 'the slice payload is not emitted either — nothing launches');
+  assert(!r.args.includes('-Model'), 'no -Model reaches PowerShell, so its omitted-model default is unreachable by this path');
+}
+{
+  // Malformed / injection-shaped payloads refuse without interpolating anything unsafe.
+  for (const bad of ['gemini-2.5-pro"; rm -rf /', 'gemini-2.5-pro `whoami`', '$(id)', 12345, {}, [], true]) {
+    const r = buildVideoScoutArgs({ videoModel: bad, mediaResolution: 'MEDIUM' });
+    assert(typeof r.error === 'string' && r.error.length > 0, `invalid videoModel ${JSON.stringify(String(bad))} refuses`);
+    assert(r.args.length === 0, 'a refused launch emits no arguments');
+    assert(!r.args.some(a => String(a).includes('rm -rf') || String(a).includes('whoami') || String(a).includes('$(')),
+      'no model value is interpolated into an argument');
+  }
+  // A BigInt/cyclic value must not crash the refusal path itself.
+  const cyclic = {}; cyclic.self = cyclic;
+  const rc = buildVideoScoutArgs({ videoModel: cyclic, mediaResolution: 'MEDIUM' });
+  assert(typeof rc.error === 'string' && rc.args.length === 0, 'a cyclic videoModel refuses without throwing');
+}
+{
+  // A genuinely ABSENT model keeps the separately specified omitted-model behavior: no -Model, no
+  // error, and PowerShell's own scope-based resolution applies.
+  for (const absent of [undefined, null, '']) {
+    const r = buildVideoScoutArgs({ videoModel: absent, mediaResolution: 'MEDIUM' });
+    assert(!r.error, `an absent videoModel (${JSON.stringify(absent)}) is not an error`);
+    assert(!r.args.includes('-Model'), 'an absent videoModel emits no -Model (omitted-model resolution applies downstream)');
+  }
 }
 
 // --- reject: shell-metacharacter / injection-shaped values are dropped too ----------

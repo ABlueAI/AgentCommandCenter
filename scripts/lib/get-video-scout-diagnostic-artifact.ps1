@@ -92,10 +92,19 @@ function ConvertFrom-VideoScoutQualityLine {
     $rest = $Matches[2]
     if (-not (Test-VideoScoutQualityFailureCode -Code $code)) { return $null }
 
+    # V4Q CORRECTION: the two shapes are MUTUALLY EXCLUSIVE and each is bound to its code. The
+    # original implementation accepted any allowlisted code with no metadata (so a real rejection
+    # that silently lost its artifact still parsed as if that were normal) and accepted
+    # diagnostic-write-failed WITH metadata (claiming an artifact that by definition was never
+    # written). Both are now refused.
+    $isWriteFailure = ($code -ceq 'diagnostic-write-failed')
     if ([string]::IsNullOrWhiteSpace($rest)) {
-        # Write-failure shape: a code with no artifact metadata (nothing was preserved).
+        # No metadata: legal ONLY for the write-failure code, which means nothing was preserved.
+        if (-not $isWriteFailure) { return $null }
         return [pscustomobject]@{ Code = $code; FileName = $null; Bytes = $null; Sha256 = $null }
     }
+    # Metadata present: illegal for the write-failure code (nothing exists to describe).
+    if ($isWriteFailure) { return $null }
     if ($rest -cnotmatch '^\s+file=(\S+)\s+bytes=(\d+)\s+sha256=([0-9a-f]{64})\s*$') { return $null }
     $fileName = $Matches[1]
     if ($fileName -cne $script:VideoScoutDiagnosticFileName) { return $null }
