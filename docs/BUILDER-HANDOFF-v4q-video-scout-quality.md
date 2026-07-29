@@ -496,10 +496,94 @@ this renderer-only check.
 
 ---
 
+---
+
+## Final implementation inventory
+
+**Backend (7 production files).** `scripts/gemini-video-sdk.js` (generation policy, authorized-scope
+instruction, the deterministic quality validator, durable diagnostics), `prompts/video-scout-analysis.md`,
+`scripts/lib/video-scout-manifest-schema.ps1` (schema v4), `scripts/lib/get-video-scout-diagnostic-artifact.ps1`
+(new — independent PowerShell verification), `scripts/lib/write-video-scout-manifest.ps1`,
+`scripts/feed-gemini.ps1`, `app/video-scout-args.js`. Two further files carry **authorized
+comment-only** corrections: `scripts/lib/get-video-scout-slice-ranges.ps1` and `scripts/gemini-followup.js`.
+
+**Renderer (3 production files).** `app/renderer/video-model-policy.js` (new — the pure policy and
+interaction adapter), `app/renderer/app.js`, `app/renderer/index.html`.
+
+**Tests (14).** The SDK suite, `app/renderer/video-model-policy.test.js` (new),
+`scripts/lib/get-video-scout-diagnostic-artifact.Tests.ps1` (new),
+`scripts/video-model-policy-node.Tests.ps1` (new wrapper), plus the manifest schema, writer,
+feed-gemini, Library core, follow-up, video-scout-args, record, cleanup, retention, and
+media-inventory suites.
+
+## Accepted checkpoint verdicts
+
+| Range | Verdict |
+|---|---|
+| `ad14423e...4e77046` (cumulative backend) | `CHECKPOINT REVIEW: PASS` |
+| `72c632e...810f257` (Phase B selector correction) | `CHECKPOINT REVIEW: PASS` |
+| `ad14423e...810f257` (cumulative V4Q) | `CHECKPOINT REVIEW: PASS` |
+
+A checkpoint PASS unblocked the next phase and, finally, this handoff and pinned-diff preparation.
+**None of them authorizes a provider probe, an acceptance run, a merge, or a push.**
+
+## Gate totals at the reviewed tip
+
+| Gate | Result |
+|---|---|
+| app | 1340 passed / 0 failed |
+| Pester | 955 passed / 0 failed / 0 skipped |
+| `video-model-policy.test.js` | 398 / 0 |
+| `gemini-video-sdk.test.js` | 839 / 0 |
+| `video-scout-args.test.js` | 205 / 0 |
+| `video-range-ui.test.js` | 52 / 0 |
+| reachability | Node 6 / 0, PowerShell green |
+
+> **No V4Q implementation step and no V4Q checkpoint test used a provider request.** Every suite
+> runs on injected fakes and a 127.0.0.1 fixture. Throughout V4Q the preserved run directory count
+> stayed at 31, with `run-20260727-001226-817-10472-c46bea78` — the failed-acceptance evidence —
+> remaining the newest and untouched.
+
+## Current limitations and human-acceptance responsibilities
+
+1. The gate is structural and lexical, **not a truth oracle**. Euphemism, unlisted paraphrase, and
+   convincing false claims can pass. A human must read the report.
+2. **Negative origin restatement is the most likely false-positive rejection** from an otherwise
+   well-behaved model. This is deliberate and is why the probe exists.
+3. **Whole-video analysis is not gated** — prompt-level discipline only.
+4. Approximation hedges deliberately **under-match**; no invented tolerance is applied.
+5. The audio-justification heuristic can be evaded by rewording; it stops the observed failure, not
+   every possible one.
+6. `UNDETERMINABLE FROM AUTHORIZED SLICES` is valid **only** while sliced requests receive no
+   authoritative full-source duration metadata. If that ever changes, the field and validator must
+   be revisited rather than enforcing a known falsehood.
+7. **Dismiss-to-pin** in the model selector is an accepted, visible tradeoff (see above).
+8. Whether any request is free-tier or billable depends on the user's Gemini project and account;
+   the app cannot determine it.
+
+## Full-class review focus list
+
+1. Canonical-field **format-before-content** precedence, and source-before-synthetic ordering.
+2. **Global** (not section-scoped) label uniqueness for both canonical fields.
+3. The frozen synthetic-origin vocabulary, its deliberate exclusions (bare `synthetic`, `synthesized`,
+   `synth`, `manipulate`, `manipulation`), and the deliberate negative-restatement rejection.
+4. Sentence-local duration productions 1–6, the terminal-hedge classes, and the authorized-aggregate
+   comparison — the only place known scope disambiguates prose.
+5. The complete realistic guided-meditation fixture passing with zero failure codes.
+6. All three failure-code allowlists agreeing exactly (SDK, diagnostic verifier, manifest schema).
+7. Rejected-response preservation: exact bytes once, usage retained, `outcome: error`,
+   `reportFile: null`, one independently verified diagnostic, no content in reasons/Logs/Library.
+8. **No quality rejection triggers another provider request** — no repair, continuation, or fallback.
+9. Renderer selector wiring: `pointerdown`, `keydown`, `change`; same-value activation;
+   tab-without-activation; invalid refusal; modal reset.
+10. Cross-layer model agreement and the SDK's freedom from any renderer-policy reference.
+11. Prompt single-source ownership and the removal of the `approximate duration` instruction.
+
 ## Status
 
-Backend correction checkpoints plus renderer Phase B. Nothing here is merged or pushed, and **no
-provider request has been made at any point during V4Q implementation**. Release requires a new
-Opus 5 Full-class whole-diff review ending in a literal `VERDICT: PASS`; a Phase B checkpoint PASS
-authorizes final handoff/diff preparation only — not a provider probe, acceptance run, merge, or
-push.
+Backend correction checkpoints plus renderer Phase B, now finalized for whole-diff review. Nothing
+here is merged or pushed, and **no provider request has been made at any point during V4Q
+implementation**. Release requires a new Opus 5 Full-class whole-diff review of
+`4c07db9...<FINAL_REVIEWED_TIP>` ending in a literal `VERDICT: PASS`.
+
+**The final Full-class review has not yet occurred.** No verdict on the complete branch exists.

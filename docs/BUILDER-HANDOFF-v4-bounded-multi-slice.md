@@ -3,13 +3,13 @@
 Branch: `feature/v4-bounded-multi-slice`
 Fork-point SHA: `4c07db9a387191485b51cb99886d58d94573c1ad`
 Pre-merge main SHA: `4c07db9a387191485b51cb99886d58d94573c1ad` (verified `main` == `origin/main` == this SHA before branching; re-verify at gate time)
-Reviewed code tip: **`5b5e30a102e92a02151ee4b4876a379e6fa7069b`** (V4R — supersedes `f17b51f`)
-Superseded reviewed code tip: `f17b51fdbe2dbd2b6110257f2df459dd7edc04f0` (V4; passed review, then FAILED human acceptance — see V4R below)
+Reviewed code tip: **recorded in the handoff tail commit** (V4Q final — supersedes `5b5e30a` and `f17b51f`)
+Superseded reviewed code tips: `5b5e30a102e92a02151ee4b4876a379e6fa7069b` (V4R) and `f17b51fdbe2dbd2b6110257f2df459dd7edc04f0` (original V4) — both passed review, then FAILED human acceptance
 Merge commit SHA: Pending until merge
 
-Pinned diff: `.agent-review-v4-bounded-multi-slice.diff` — **262,691 bytes, 32 files**
-(27 modified, 5 added), SHA-256 `B64D084DD2ECA9F900A67FC4806E1A86E75D145C9C1A070DD84361C221340038`.
-Gitignored, created with `git diff --output`, verified to regenerate byte-for-byte.
+Pinned diff: `.agent-review-v4-bounded-multi-slice.diff` — regenerated for the **complete** branch;
+exact bytes, SHA-256, and file counts are recorded in the handoff tail commit below. Gitignored,
+created with `git diff --output`, verified to regenerate byte-for-byte.
 
 `docs/BUILDER-HANDOFF-v4-bounded-multi-slice.md` is present as a regular `100644` blob at the
 reviewed tip, so any commit above it can only ever be a **modification** — which is exactly the
@@ -33,6 +33,78 @@ handoff-tail shape `scripts/merge-gate.ps1` requires.
 > Release now requires a NEW Opus 5 Full-class whole-diff review of the branch including V4Q,
 > ending in a literal `VERDICT: PASS`. Read the V4R material below as an accurate record of the
 > transport repair — not as a live release authorization.
+
+---
+
+# Release-candidate summary — what this branch actually ships
+
+This section is the current, release-facing truth for the whole branch. Where it disagrees with the
+V4 or V4R material further down, **this section wins**; the older sections are preserved unchanged
+as historical evidence of what was reviewed and what was learned.
+
+**The final review base is still `4c07db9a387191485b51cb99886d58d94573c1ad`.** The reviewed range is
+`4c07db9...<FINAL_REVIEWED_TIP>`, covering V4 + V4R + V4Q in one whole-diff pass.
+
+### What changed since the V4R verdict
+
+| Area | V4R state | Release-candidate state |
+|---|---|---|
+| Manifest schema | v3 for live sliced runs | **v4** for every new live SDK run (v1/v2/v3 remain readable) |
+| Sliced model selection | Flash-Lite everywhere | **Pro automatically** for video mode, unless the user pins another allowlisted model |
+| Report acceptance | any transported response became a report | a response must pass a **deterministic quality gate** first |
+| Rejected responses | not preserved | preserved as `rejected-response.txt`, `outcome: error`, `reportFile: null` |
+| Whole-video analysis | same path as sliced | **not covered** by the sliced-response quality gate |
+
+### The model policy, stated plainly
+
+Within one New Agent modal session, Video Scout automatically selects Flash-Lite for transcript and
+audio and **Pro for video**. A manual selection wins for the rest of that session and survives every
+analysis-mode change — including **deliberate same-value selector activation**, because a `<select>`
+emits no `change` event when the user picks the option already shown. Closing and reopening the
+modal resets to transcript + automatic Flash-Lite. Nothing is persisted to disk.
+
+### The quality gate is part of the release candidate
+
+The deterministic gate, its two canonical Video Profile fields, durable rejected-response
+diagnostics, and Library/media-inventory non-exposure of rejected content are all in scope for the
+final review. See
+[`BUILDER-HANDOFF-v4q-video-scout-quality.md`](BUILDER-HANDOFF-v4q-video-scout-quality.md) for the
+complete contract.
+
+> **"Quality gate passed" does not mean the analysis is factually true.** The gate is a structural
+> and lexical filter. It does not interpret arbitrary semantics, euphemism, or unlisted paraphrase,
+> and a convincing false claim can pass it. Human acceptance must read the report and judge factual
+> accuracy. Never represent a gate pass as a truth claim.
+
+> **Whole-video analysis does not receive the complete sliced-response quality gate.** The canonical
+> duration and synthetic-origin fields and their lexical enforcement apply only to bounded sliced
+> SDK analysis. Whole-video responses keep prompt-level discipline but no equivalent deterministic
+> gate. Extending it requires a separate reviewed scope decision.
+
+> **Cost language.** A provider request may fall inside a free tier or be billable depending on the
+> user's own Gemini project and account. This repository cannot determine which, and must not
+> describe a request as necessarily "paid" or promise that one is free.
+
+**Final acceptance still requires human factual review.** No automated gate in this branch replaces
+a person reading the report.
+
+## Release sequence (supersedes the V4R acceptance checklist)
+
+Strictly ordered. Each step requires its own explicit authorization from Blue; none of them is
+authorized by this handoff.
+
+1. **Full-class whole-diff review** of `4c07db9...<FINAL_REVIEWED_TIP>`, ending in a literal
+   `VERDICT: PASS`.
+2. **Separate Blue authorization** for one approximately 15-second, single-slice Pro
+   **prompt-compliance probe** — testing only whether the model obeys the instruction not to restate
+   the synthetic-origin conclusion outside its canonical field.
+3. **If the probe is rejected or restates the forbidden conclusion: stop for Blue's ruling.** Preserve
+   the diagnostic, inspect it, and fix the prompt through a reviewed code change.
+4. **Only after a successful probe**, separate authorization for exactly **one** deliberately short
+   final provider acceptance run.
+5. **No automatic re-probe, repair, continuation, fallback, or additional run** at any point. K5's
+   bounded 503 recovery — at most three byte-identical attempts on eligible transport failures — is
+   the only retry that may occur, and it is unchanged.
 
 ---
 
@@ -445,7 +517,17 @@ Process note (no code impact): PowerShell 5.1 reads BOM-less `.ps1` files as ANS
 appended into a test file was misread as a curly quote and broke parsing. All V4-added PowerShell
 content is ASCII-only with CRLF endings, matching the existing files.
 
-## Manual acceptance checklist — reserved for Blue, exactly ONE paid logical request
+## Manual acceptance checklist — SUPERSEDED (historical evidence only)
+
+> **STALE. Do not follow this checklist.** It was written for the V4R verdict and predates V4Q. It
+> is preserved verbatim because it records what was checked at that time, and because step 10 is the
+> reason the schema-version drift is worth calling out. Two things in it are now factually wrong:
+> the manifest is **schema v4**, not v3, for every new live SDK run; and a transported response is
+> no longer automatically a report — it must pass the deterministic quality gate first.
+>
+> It also predates the V4Q ordering: a probe now precedes any acceptance run. **Use the
+> [Release sequence](#release-sequence-supersedes-the-v4r-acceptance-checklist) near the top of this
+> document instead.**
 
 Only after the **new (V4R)** Opus Full-class review returns a literal `VERDICT: PASS`. The failed
 `run-20260726-220716-094-6964-162bf359` attempt does **not** count against this budget: it made zero
@@ -472,19 +554,21 @@ provider submissions and consumed zero paid attempts.
 17. If the multipart body is rejected by the provider, record the visible failure as a V4
     compatibility finding. **Do not authorize a sequential fallback in the acceptance session.**
 
-## Review diff (authoritative — V4R)
+## Review diff — SUPERSEDED identities (historical evidence only)
 
-Reviewed range: `4c07db9a387191485b51cb99886d58d94573c1ad...5b5e30a102e92a02151ee4b4876a379e6fa7069b`
+> **Neither artifact below is the authoritative one any more.** The current pinned artifact covers
+> `4c07db9...<FINAL_REVIEWED_TIP>` and its exact identity is recorded in the handoff tail commit.
+> Do **not** regenerate or merge against the ranges or hashes in this section.
 
-`git diff 4c07db9a387191485b51cb99886d58d94573c1ad...5b5e30a102e92a02151ee4b4876a379e6fa7069b --output=.agent-review-v4-bounded-multi-slice.diff`
-
-Pinned (gitignored, created with `--output`, never PowerShell redirection):
-`.agent-review-v4-bounded-multi-slice.diff` — **262,691 bytes, 32 files** (27 modified, 5 added),
+**V4R (superseded).** Range `4c07db9a387191485b51cb99886d58d94573c1ad...5b5e30a102e92a02151ee4b4876a379e6fa7069b`
+— 262,691 bytes, 32 files (27 modified, 5 added),
 SHA-256 `B64D084DD2ECA9F900A67FC4806E1A86E75D145C9C1A070DD84361C221340038`.
 
-> **Superseded (historical only — do NOT regenerate or merge against these):** the original V4
-> artifact was `4c07db9...f17b51f`, 204,586 bytes, 29 files,
-> SHA-256 `A78C2832B3F52B6843284D93DE46E531E386853C740AB12A59DA0723D6D73DAE`.
+**Original V4 (superseded).** Range `4c07db9...f17b51f` — 204,586 bytes, 29 files,
+SHA-256 `A78C2832B3F52B6843284D93DE46E531E386853C740AB12A59DA0723D6D73DAE`.
+
+Both were created with `git diff --output` (never PowerShell redirection) and verified to regenerate
+byte-for-byte at the time. They remain accurate records of what each review actually read.
 
 ## Recommended Opus Full-class review focus — V4R (review these FIRST)
 
