@@ -12,6 +12,7 @@ const {
   classifyHttpFailure, retryDelayMs, runVideoScout, runCliEntry,
   RETRY_MAX_ATTEMPTS, RETRY_BASE_DELAY_MS, RETRY_JITTER_MS, NON_RETRYABLE_STATUSES,
   QUALITY_FAILURE_CODES, DIAGNOSTIC_FILENAME,
+  findRepeatedObservation, EVIDENCE_REPEAT_LIMIT, normalizeEvidenceLine,
 } = require('./gemini-video-sdk');
 const fs = require('fs');
 const os = require('os');
@@ -971,11 +972,159 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
       .replace(/\*\*Slice (\d) transcription anchor:\*\*[^\n]*/g, '**Slice $1 audio justification:** 00:0$1 — listened across the slice; nothing audible');
     assert(vq(silent8, { ranges: eight }).ok === true,
       'eight identical audio-status marker lines do NOT trip the repetition heuristic');
-    // Three repeats are allowed (limited cross-slice confirmation is legitimate); four are not.
+    // Three repeats are allowed WITHIN ONE SLICE; four are not.
     const mk = (n) => okReport().replace('10s-30s [VISUAL] steady framing across this slice',
       Array.from({ length: n }, (_, i) => `00:0${i} [VISUAL] identical observation`).join('\n'));
     assert(vq(mk(3)).ok === true, 'three identical observations are allowed');
     assert(vq(mk(4)).code === 'repetitive-timestamp-filler', 'a fourth identical observation is rejected');
+  }
+
+  // ============ V4Q FINAL CORRECTION: filler is counted PER SUBSECTION (VERDICT: FAIL) ==========
+  // The Full-class review returned VERDICT: FAIL. One Map counted normalized observations across ALL
+  // of Section 5 while normalizeEvidenceLine strips `Slice N`, so the gate could not tell filler
+  // INSIDE one slice from the ONE consolidated entry per slice the repository's own scope
+  // instruction demands. On uniform footage a maximally compliant report was rejected at >= 4
+  // slices, discarding a correct response after usage had already occurred.
+  section('V4Q FINAL CORRECTION: one consolidated observation per slice passes at EVERY slice count');
+  {
+    // Build the exact shape the scope instruction asks for: one ranged entry per slice, uniform
+    // footage, every slice SILENCE with a justification (so the audio contract is satisfied too).
+    const uniform = (count) => {
+      const ranges = Array.from({ length: count }, (_, i) => ({ startOffset: i * 100, endOffset: i * 100 + 30 }));
+      const agg = ranges.reduce((s, r) => s + (r.endOffset - r.startOffset), 0);
+      const out = ['## 1. TL;DR', 'A static title card throughout.', '', PROFILE_SECTION_HEADER,
+        '**Section TL;DR:** profile.', AUTHORIZED_SCOPE_LINE(count, agg), UNDETERMINABLE_DURATION_LINE,
+        NO_SYNTHETIC_EVIDENCE_LINE, '', PROFILE_SECTION_NEXT_HEADER, '**Section TL;DR:** none visible.', '',
+        '## 4. DETAILED SUMMARY', '**Section TL;DR:** unchanging card.', '',
+        EVIDENCE_SECTION_HEADER, '**Section TL;DR:** evidence.'];
+      ranges.forEach((r, i) => {
+        const n = i + 1;
+        out.push(SLICE_HEADING(n, r),
+          `**Slice ${n} audio status:** SILENCE`,
+          `**Slice ${n} audio evidence:** 0${n}:00 — listened across the window, heard nothing`,
+          `**Slice ${n} audio justification:** 0${n}:00 — no speech, music, or ambience at any point`,
+          `- 0${n}:00-0${n}:29 [VISUAL] static title card, no change`);
+      });
+      out.push('', EVIDENCE_SECTION_NEXT_HEADER, '**Section TL;DR:** no claims.', '',
+        '## 7. DISCREPANCIES & CROSS-CHECKS', '**Section TL;DR:** audio and visual agree on stasis.', '',
+        '## 8. SOURCE-CREDIBILITY ASSESSMENT', '**Section TL;DR:** unattributable.', '',
+        '## 9. LIMITATIONS OF THIS ANALYSIS', '**Section TL;DR:** bounded windows only.');
+      return { text: out.join('\n'), ranges };
+    };
+    // GUARD: the entries must genuinely collide after normalization. Without this the matrix below
+    // could pass for the wrong reason — a surviving timestamp or offset would make each key unique
+    // and the cross-slice case would never actually be exercised.
+    const k1 = normalizeEvidenceLine('- 01:00-01:29 [VISUAL] static title card, no change');
+    const k8 = normalizeEvidenceLine('- 08:00-08:29 [VISUAL] static title card, no change');
+    assert(k1 === k8 && k1 === 'static title card no change',
+      'the per-slice entries genuinely normalize to ONE identical key (the matrix is not passing by accident)');
+    // THE REGRESSION MATRIX. Every count 1..8 must pass; 4+ used to reject.
+    for (let count = 1; count <= 8; count++) {
+      const { text, ranges } = uniform(count);
+      const v = vq(text, { ranges });
+      assert(v.ok === true,
+        `REGRESSION: ${count} slice(s) with ONE mandated consolidated entry each PASSES (was ${count >= 4 ? 'REJECTED' : 'passing'})`);
+    }
+  }
+
+  section('V4Q FINAL CORRECTION: the threshold of three still applies WITHIN each subsection');
+  {
+    const R8 = Array.from({ length: 8 }, (_, i) => ({ startOffset: i * 100, endOffset: i * 100 + 30 }));
+    // `perSlice(n)` decides what goes under slice n; `pre` goes in the Section 5 preamble.
+    const build = (ranges, perSlice, pre = []) => {
+      const agg = ranges.reduce((s, r) => s + (r.endOffset - r.startOffset), 0);
+      const out = ['## 1. TL;DR', 'Static footage.', '', PROFILE_SECTION_HEADER, '**Section TL;DR:** profile.',
+        AUTHORIZED_SCOPE_LINE(ranges.length, agg), UNDETERMINABLE_DURATION_LINE, NO_SYNTHETIC_EVIDENCE_LINE, '',
+        PROFILE_SECTION_NEXT_HEADER, '**Section TL;DR:** none.', '', '## 4. DETAILED SUMMARY',
+        '**Section TL;DR:** summary.', '', EVIDENCE_SECTION_HEADER, '**Section TL;DR:** evidence.', ...pre];
+      ranges.forEach((r, i) => {
+        const n = i + 1;
+        out.push(SLICE_HEADING(n, r), `**Slice ${n} audio status:** SILENCE`,
+          `**Slice ${n} audio evidence:** 0${n}:00 — listened, heard nothing`,
+          `**Slice ${n} audio justification:** 0${n}:00 — nothing audible at any point`,
+          ...perSlice(n));
+      });
+      out.push('', EVIDENCE_SECTION_NEXT_HEADER, '**Section TL;DR:** claims.', '',
+        '## 7. DISCREPANCIES & CROSS-CHECKS', '**Section TL;DR:** consistent.', '',
+        '## 8. SOURCE-CREDIBILITY ASSESSMENT', '**Section TL;DR:** unattributable.', '',
+        '## 9. LIMITATIONS OF THIS ANALYSIS', '**Section TL;DR:** bounded.');
+      return out.join('\n');
+    };
+    const one = (n) => [`- 0${n}:00-0${n}:29 [VISUAL] static title card, no change`];
+    const many = (n, k) => Array.from({ length: k }, (_, j) => `- 0${n}:0${j} [VISUAL] static title card, no change`);
+
+    assert(vq(build(R8, (n) => (n === 1 ? many(1, 3) : one(n))), { ranges: R8 }).ok === true,
+      'THREE identical observations inside ONE subsection are allowed');
+    const four = vq(build(R8, (n) => (n === 1 ? many(1, 4) : one(n))), { ranges: R8 });
+    assert(four.code === 'repetitive-timestamp-filler', 'FOUR identical observations inside ONE subsection are REJECTED');
+    assert(/slice 1/.test(four.reason), 'the reason identifies WHICH subsection repeated');
+    // Slice 8 specifically — the far end of the range, and the count that used to be unreachable.
+    const eighth = vq(build(R8, (n) => (n === 8 ? many(8, 4) : one(n))), { ranges: R8 });
+    assert(eighth.code === 'repetitive-timestamp-filler', 'four repetitions in SLICE 8 are rejected');
+    assert(/slice 8/.test(eighth.reason), 'the reason structurally identifies slice 8');
+    // The allowance is per bucket, so 3 in EVERY slice — 24 identical lines overall — still passes.
+    assert(vq(build(R8, (n) => many(n, 3)), { ranges: R8 }).ok === true,
+      'three allowed repetitions in EACH of eight slices still passes (24 identical lines overall)');
+    // The Section 5 preamble is its own bucket.
+    const pre = vq(build(R8, one, Array.from({ length: 4 }, (_, j) => `- 00:0${j} [VISUAL] identical preamble observation`)), { ranges: R8 });
+    assert(pre.code === 'repetitive-timestamp-filler', 'four identical observations in the Section 5 PREAMBLE are rejected');
+    assert(/preamble/i.test(pre.reason), 'the reason identifies the preamble bucket');
+    // Classic per-second filler inside one slice still fails, which is the whole point of the check.
+    assert(vq(build(R8, (n) => (n === 1 ? many(1, 12) : one(n))), { ranges: R8 }).code === 'repetitive-timestamp-filler',
+      'twelve per-second near-identical lines inside one slice are still REJECTED');
+    // Content-free reason.
+    const leak = vq(build(R8, (n) => (n === 1
+      ? Array.from({ length: 4 }, (_, j) => `- 00:0${j} [VISUAL] SECRET-PROVIDER-PHRASE static card`)
+      : one(n))), { ranges: R8 });
+    assert(!/SECRET-PROVIDER-PHRASE/.test(leak.reason) && !/static card/.test(leak.reason),
+      'the filler reason never echoes the repeated observation text');
+    // The pure bucket helper, exercised directly.
+    assert(findRepeatedObservation(['- a b c', '- a b c', '- a b c']) === null, 'helper: three identical lines are allowed');
+    assert(findRepeatedObservation(['- a b c', '- a b c', '- a b c', '- a b c']).count === 4, 'helper: the fourth is reported');
+    assert(findRepeatedObservation(['**Slice 1 audio status:** SILENCE', '**Slice 2 audio status:** SILENCE',
+      '**Slice 3 audio status:** SILENCE', '**Slice 4 audio status:** SILENCE']) === null,
+      'helper: structural marker lines are excluded from counting');
+    assert(findRepeatedObservation(['### Slice 1: x', '### Slice 2: x', '### Slice 3: x', '### Slice 4: x']) === null,
+      'helper: heading lines are excluded');
+    assert(findRepeatedObservation(['', '  ', '', '   ']) === null, 'helper: blank lines are excluded');
+    assert(findRepeatedObservation([]) === null && findRepeatedObservation(null) === null,
+      'helper: an empty or absent bucket is inert');
+    assert(EVIDENCE_REPEAT_LIMIT === 3, 'the limit is a CONSTANT and is never scaled by slice count');
+    // Normalization is unchanged: `Slice N` is still stripped, so relabelled per-second filler
+    // cannot evade the check by carrying different slice numbers.
+    assert(normalizeEvidenceLine('- 00:01 [VISUAL] Slice 1 static frame') === normalizeEvidenceLine('- 00:02 [VISUAL] Slice 2 static frame'),
+      'normalization still strips `Slice N`, so relabelled filler inside one bucket cannot evade the count');
+  }
+
+  section('V4Q FINAL CORRECTION: quality reasons make no unsupported billing-status claim');
+  {
+    // Token usage proves that provider usage occurred. It does NOT prove that money changed hands:
+    // free-tier versus billable depends on the user's own Gemini project and account.
+    const reasons = [];
+    const collect = (v) => { if (v && v.ok === false && v.reason) reasons.push(v.reason); };
+    // Local, so this section does not depend on a helper declared further down the file.
+    const withLimit = (extra) => okReport().replace('**Section TL;DR:** limits.', '**Section TL;DR:** limits.\n' + extra);
+    collect(vq(okReport().replace(UNDETERMINABLE_DURATION_LINE + '\n', '')));
+    collect(vq(okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE + '\n', '')));
+    collect(vq(withLimit('The static frame suggests stock footage.')));
+    collect(vq(withLimit("The video's duration is 1:02:03.")));
+    collect(vq(okReport().replace('## 9. LIMITATIONS OF THIS ANALYSIS', '')));
+    collect(vq(okReport(), { finishReason: 'MAX_TOKENS' }));
+    collect(vq(okReport().replace(/\*\*Slice 1 audio status:\*\* SPEECH/, '**Slice 1 audio status:** SILENCE')
+      .replace(/\*\*Slice 2 audio status:\*\* SPEECH/, '**Slice 2 audio status:** SILENCE')));
+    collect(vq(okReport().replace('10s-30s [VISUAL] steady framing across this slice',
+      Array.from({ length: 4 }, (_, i) => `00:0${i} [VISUAL] identical observation`).join('\n'))));
+    assert(reasons.length >= 7, 'a representative spread of rejection reasons was collected');
+    for (const reason of reasons) {
+      assert(!/\bpaid\b|\bbilled\b|\bbillable\b|free[- ]tier/i.test(reason),
+        `a quality reason claims no billing status: "${reason.slice(0, 56)}…"`);
+    }
+    // The producing source carries no generic "usage proves billing" claim either.
+    const src = fs.readFileSync(path.join(__dirname, 'gemini-video-sdk.js'), 'utf8');
+    assert(!/tokens were billed|billed audio tokens|had already been paid for|any paid submission/.test(src),
+      'gemini-video-sdk.js no longer claims that token usage proves billing');
+    assert(/provider usage metadata records|provider usage metadata reports/.test(src),
+      'it states what is actually true: provider usage metadata records the tokens');
   }
 
   section('V4Q CORRECTION: bounded-scope markers are required in their CANONICAL SECTION');

@@ -548,6 +548,84 @@ A checkpoint PASS unblocked the next phase and, finally, this handoff and pinned
 > stayed at 31, with `run-20260727-001226-817-10472-c46bea78` — the failed-acceptance evidence —
 > remaining the newest and untouched.
 
+---
+
+## The Full-class review FAILED — and what was corrected
+
+The first Full-class whole-diff review of `4c07db9...20bf2ec` returned the literal verdict:
+
+```text
+VERDICT: FAIL
+```
+
+**The defect.** `normalizeEvidenceLine` strips `Slice N` (deliberately — so relabelled per-second
+filler cannot evade the count), and the repetition counter ran **one Map across the whole of
+Section 5** with a fixed allowance of 3. It therefore could not distinguish repetition *inside* one
+slice — genuine filler — from the one consolidated entry *per slice* that this repository's own
+scope instruction demands: *"Consolidate an unchanged condition into ONE ranged entry."*
+
+On uniform footage a maximally compliant report was rejected once it carried four or more slices:
+
+| Slices | Before | After |
+|---|---|---|
+| 1, 2, 3 | pass | pass |
+| **4, 5, 6, 7, 8** | **`repetitive-timestamp-filler`** | **pass** |
+
+The allowance of 3 was also smaller than `MAX_SLICES = 8`, so the most-authorized configurations
+were the most likely to be rejected. This discarded a structurally correct response *after* provider
+usage had already occurred, in the most expensive configuration the branch produces (Pro, an 8,192
+thinking budget, up to 28,672 output tokens) — and it directly contradicted the calibration
+principle stated elsewhere in the same file: *the gate prefers under-matching to discarding a
+correct response.*
+
+**The correction.** Repetition is now counted **per bucket**, with a fresh counter for each:
+
+- the Section 5 preamble (lines before the first exact slice heading), and
+- each exact slice subsection.
+
+`findRepeatedObservation` is a small pure helper so bucket behaviour is directly testable. The
+global whole-evidence Map is **deleted** — there is no second or fallback counter that could
+reintroduce cross-slice conflation.
+
+**Two alternatives were rejected.**
+
+1. *Scaling the threshold with slice count* — backwards. It would weaken real within-slice filler
+   detection in exact proportion to how many slices were requested, so the runs with the most
+   authorized content would get the loosest filler check.
+2. *Keeping `Slice N` in the normalized key* — it would let eight literally identical per-second
+   lines evade the check simply by carrying different slice labels, defeating the whole purpose.
+
+The threshold stays a constant **3**, the failure code stays `repetitive-timestamp-filler`, and the
+reason now names *which* bucket repeated (`slice N` or `the Section 5 preamble`) while still never
+echoing the repeated provider text.
+
+**The new regression matrix**, all pinned in `scripts/gemini-video-sdk.test.js`: one consolidated
+observation per slice passes at every count 1–8 (with a guard asserting the entries genuinely
+collide after normalization, so the matrix cannot pass for the wrong reason); three identical
+observations inside one subsection pass and a fourth rejects; four repetitions in slice 8 reject and
+name slice 8; three repetitions in *each* of eight slices — 24 identical lines overall — still pass;
+four identical lines in the preamble reject and name the preamble; twelve per-second lines inside one
+slice still reject; structural markers, headings, and blanks stay excluded.
+
+> The quality gate remains a **deterministic structural and lexical filter, not a truth oracle.**
+> This correction removes a false rejection; it does not make the gate any better at judging whether
+> a report is true. Human acceptance remains responsible for factual accuracy.
+
+**Release remains blocked** pending a new Full-class whole-diff review. The pinned artifact for
+`4c07db9...20bf2ec` belongs to the FAILED review and is historical evidence only.
+
+### Deferred, non-blocking finding
+
+The reviewer also noted that `Add-SliceScopeToPrompt`
+(`scripts/lib/get-video-scout-slice-ranges.ps1`) is referenced only by its own test file. Its
+docstring claims it mirrors `buildAuthorizedScopeInstruction` and serves CLI-side composition;
+neither is true — slices are refused on every non-SDK route, and its wording lacks the entire V4Q
+mandatory output contract, so a prompt built from it would be rejected by the quality gate every
+time. **It was deliberately not modified or wired here.** Wiring it requires a separate reviewed
+decision.
+
+---
+
 ## Current limitations and human-acceptance responsibilities
 
 1. The gate is structural and lexical, **not a truth oracle**. Euphemism, unlisted paraphrase, and

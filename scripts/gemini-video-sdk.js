@@ -709,6 +709,30 @@ function validateSyntheticAssessmentField(section2, allLines) {
 // Normalize one evidence itemization line down to its observation body so that N near-identical
 // per-second entries collapse to one key. Structural marker lines are excluded by the caller —
 // eight slices legitimately share the same `**Slice N audio status:** SILENCE` shape.
+// The most identical normalized observations one bucket may carry. Deliberately a CONSTANT: see the
+// call site for why scaling it with slice count would be exactly backwards.
+const EVIDENCE_REPEAT_LIMIT = 3;
+
+// Pure and exported: scan ONE bucket of Section 5 lines and return the first normalized observation
+// that exceeds the limit, or null. A fresh Map per call is what makes the buckets independent —
+// there is deliberately no shared or fallback counter anywhere, because a second counter is exactly
+// how cross-slice conflation would creep back in.
+function findRepeatedObservation(lines) {
+  const counts = new Map();
+  for (const rawLine of Array.isArray(lines) ? lines : []) {
+    const line = String(rawLine == null ? '' : rawLine).trim();
+    // Blank lines, headings, and structural `**Slice N ...**` markers are not observations. Eight
+    // slices legitimately share the same marker shapes.
+    if (!line || line.startsWith('#') || line.startsWith('**')) continue;
+    const key = normalizeEvidenceLine(line);
+    if (!key) continue;
+    const count = (counts.get(key) || 0) + 1;
+    if (count > EVIDENCE_REPEAT_LIMIT) return { count };
+    counts.set(key, count);
+  }
+  return null;
+}
+
 function normalizeEvidenceLine(line) {
   return line
     .replace(/^\s*[-*+]\s*/, '')
@@ -829,14 +853,15 @@ function validateReportQuality({ text, finishReason, ranges, audioTokens }) {
     }
   }
 
-  // Heuristic, not semantic proof (see the handoff): if the provider billed audio tokens and every
+  // Heuristic, not semantic proof (see the handoff): if provider usage metadata reports audio tokens
+  // and every
   // slice came back SILENCE/UNCLEAR, each slice must say what it listened for -- in its OWN
   // subsection. Rewording can evade this; it exists to stop the observed blanket-silence failure.
   if (audioTokens > 0 && statuses.every((s) => s === 'SILENCE' || s === 'UNCLEAR')) {
     for (let i = 0; i < sliceRanges.length; i++) {
       const n = i + 1;
       if (matchLines(subsections[i], SLICE_JUSTIFICATION_LINE(n)).length === 0) {
-        return fail('unjustified-universal-silence', `every slice reports SILENCE/UNCLEAR while ${audioTokens} audio tokens were billed, but slice ${n}'s subsection carries no complete timestamped "**Slice ${n} audio justification:**" line.`);
+        return fail('unjustified-universal-silence', `every slice reports SILENCE/UNCLEAR while provider usage metadata records ${audioTokens} audio tokens, but slice ${n}'s subsection carries no complete timestamped "**Slice ${n} audio justification:**" line.`);
       }
     }
   }
@@ -846,7 +871,7 @@ function validateReportQuality({ text, finishReason, ranges, audioTokens }) {
     // Structural reason only: the matched phrase is provider text and must never be echoed.
     for (const re of NO_AUDIO_STREAM_CLAIMS) {
       if (re.test(body)) {
-        return fail('unjustified-universal-silence', `${audioTokens} audio tokens were billed, but the report asserts that no audio stream was present.`);
+        return fail('unjustified-universal-silence', `provider usage metadata records ${audioTokens} audio tokens, but the report asserts that no audio stream was present.`);
       }
     }
   }
@@ -898,18 +923,28 @@ function validateReportQuality({ text, finishReason, ranges, audioTokens }) {
     }
   }
 
-  const counts = new Map();
-  for (const rawLine of evidence) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith('#') || line.startsWith('**')) continue;
-    const key = normalizeEvidenceLine(line);
-    if (!key) continue;
-    const next = (counts.get(key) || 0) + 1;
-    if (next > 3) {
-      // Count only — the repeated observation itself is provider text.
-      return fail('repetitive-timestamp-filler', `the evidence section repeats one normalized observation ${next} times (limit 3); consolidate an unchanged condition into a range.`);
+  // ---- FILLER: counted PER SUBSECTION, never across the whole of Section 5 ----------------------
+  // V4Q FINAL CORRECTION (Full-class VERDICT: FAIL). The counter used to run one Map over all of
+  // Section 5 while normalizeEvidenceLine strips `Slice N` — so it could not tell filler INSIDE one
+  // slice from the one consolidated entry per slice that this repository's OWN scope instruction
+  // demands ("Consolidate an unchanged condition into ONE ranged entry"). On uniform footage a
+  // maximally compliant report was rejected at four or more slices, discarding a correct response
+  // after usage had already occurred. Each authorized slice now gets its own fresh counter, and the
+  // Section 5 preamble gets one too, so filler is still caught exactly where filler happens.
+  //
+  // The threshold stays at three and is NEVER scaled by slice count: scaling would weaken real
+  // within-slice filler detection in proportion to how many slices were requested, which is
+  // backwards. Normalization is unchanged and still strips `Slice N`: keeping the number would let
+  // eight literally identical per-second lines evade the check by carrying different labels.
+  const preamble = seen.length ? evidence.slice(0, seen[0].at) : evidence;
+  const buckets = [{ label: 'the Section 5 preamble', lines: preamble }];
+  subsections.forEach((lines, i) => buckets.push({ label: `slice ${i + 1}'s Section 5 subsection`, lines }));
+  for (const bucket of buckets) {
+    const repeated = findRepeatedObservation(bucket.lines);
+    if (repeated) {
+      // Count and location only — the repeated observation itself is provider text.
+      return fail('repetitive-timestamp-filler', `${bucket.label} repeats one normalized observation ${repeated.count} times (limit ${EVIDENCE_REPEAT_LIMIT}); consolidate an unchanged condition into a range.`);
     }
-    counts.set(key, next);
   }
 
   return { ok: true };
@@ -1108,13 +1143,13 @@ async function runVideoScout(rawArgs, deps = {}) {
   const mediaResolution = MEDIA_RESOLUTION_MAP[args.mediaResolution] ? args.mediaResolution : 'MEDIUM';
 
   // V4 multi-slice control argument first (it also owns the mutual-exclusion refusal). Refuse
-  // (return non-zero) on ANY problem rather than silently analyzing (and billing for) anything
+  // (return non-zero) on ANY problem rather than silently analyzing (and consuming quota for) anything
   // other than exactly what was asked.
   const multiSlice = resolveSliceRanges(args);
   if (multiSlice.error) { logError(`[video-scout sdk] ${multiSlice.error}`); return 1; }
 
   // Refuse (return non-zero) on any offset problem — a lone flag, a flag with no value, a
-  // non-integer, or end<=start — rather than silently analyzing (and billing for) the whole video.
+  // non-integer, or end<=start — rather than silently analyzing (and consuming quota for) the whole video.
   const slice = resolveSliceOffsets(args);
   if (slice.error) { logError(`[video-scout sdk] ${slice.error}`); return 1; }
   const sliced = slice.sliced;
@@ -1128,7 +1163,8 @@ async function runVideoScout(rawArgs, deps = {}) {
   const effectiveSliceCount = authorizedRanges.length;
   const model = resolveEffectiveModel({ explicitModel: args.model, effectiveSliceCount });
 
-  // V4Q: mandatory BEFORE any paid submission — a run that could not preserve a rejected response
+  // V4Q: mandatory BEFORE any provider submission that consumes quota and may incur cost — a run
+  // that could not preserve a rejected response
   // must never spend money discovering that. The app cannot supply or override this argument;
   // feed-gemini.ps1 passes the already-created run directory.
   const diagnostic = resolveDiagnosticDir(args, { statSync: deps.statSync });
@@ -1183,11 +1219,11 @@ async function runVideoScout(rawArgs, deps = {}) {
     const text = ((json && json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts) || [])
       .map((p) => p.text || '').join('');
     // V4Q CORRECTION: there is NO early exit for an empty response. An empty success is still a
-    // billed provider response, so it takes the SAME path as any other: usage is extracted, the
+    // provider response for which usage has already occurred, so it takes the SAME path as any other: usage is extracted, the
     // quality gate classifies it, the exact response (including the empty string, which preserves
     // as a valid zero-byte artifact) is written as evidence, and the canonical quality line is
     // emitted. The old early return skipped usage extraction entirely -- losing the cost record for
-    // a run that had already been paid for -- and dumped the raw candidate object into the log,
+    // a run for which provider usage had already occurred -- and dumped the raw candidate object into the log,
     // which is provider content. Both are gone.
     if (outcome.attempt > 1) log(`[video-scout sdk] recovered on attempt ${outcome.attempt}/${RETRY_MAX_ATTEMPTS}`);
 
@@ -1260,6 +1296,7 @@ module.exports = {
   PRO_MODEL, BASE_MAX_OUTPUT_TOKENS, PER_EXTRA_SLICE_OUTPUT_TOKENS, SLICED_PRO_THINKING_BUDGET,
   // V4Q quality gate + durable diagnostics
   validateReportQuality, extractSection, extractEvidenceSection, extractProfileSection, normalizeEvidenceLine,
+  findRepeatedObservation, EVIDENCE_REPEAT_LIMIT,
   splitReportLines, sectionLines, findHeaderLine, hasExactLine, matchLines,
   SLICE_AUDIO_STATUS_LINE, SLICE_AUDIO_EVIDENCE_LINE, SLICE_ANCHOR_LINE, SLICE_JUSTIFICATION_LINE,
   SLICE_HEADING_SHAPE, SYNTHETIC_ASSESSMENT_SHAPE, STANDARDIZED_SYNTHETIC_LINE,

@@ -78,9 +78,24 @@ are also byte-identical to the base — the whole branch never touched the IPC b
 `ad14423e...4e77046`, on the Phase B correction `72c632e...810f257`, and on the cumulative V4Q range
 `ad14423e...810f257`.
 
-> **The final Full-class whole-diff verdict is still PENDING.** No verdict exists for
-> `4c07db9...20bf2ec`. A checkpoint PASS never authorized merge, push, a provider probe, or an
-> acceptance run, and neither does this tail.
+> **THE FULL-CLASS REVIEW OF `4c07db9...20bf2ec` RETURNED `VERDICT: FAIL`.** Release is blocked.
+>
+> The reviewer found that the `repetitive-timestamp-filler` check counted normalized observations
+> across the whole of Section 5 while `normalizeEvidenceLine` strips `Slice N`, so it conflated the
+> ONE consolidated observation per slice that this branch's own scope instruction demands with
+> repeated filler inside a single slice. On uniform footage a fully compliant report was rejected at
+> four or more slices — discarding a correct response after provider usage had already occurred, in
+> the branch's most expensive configuration. Everything else in the 13-step review order verified
+> clean, both gates were green at the expected numbers, and the pinned diff reproduced
+> byte-identically.
+>
+> The correction — repetition counted per slice subsection and per Section 5 preamble, with the
+> global counter deleted — is recorded in
+> [`BUILDER-HANDOFF-v4q-video-scout-quality.md`](BUILDER-HANDOFF-v4q-video-scout-quality.md). It is
+> awaiting its own focused checkpoint review, and **the pinned artifact above belongs to the FAILED
+> review and has deliberately NOT been regenerated.** A new Full-class whole-diff review is required
+> before release; no checkpoint PASS ever authorized merge, push, a provider probe, or an acceptance
+> run, and neither does this tail.
 
 **Zero provider activity.** No provider request, prompt-compliance probe, credential use, network
 media, acceptance run, merge, or push occurred at any point during V4Q or Phase B. The preserved
