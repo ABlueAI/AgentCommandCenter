@@ -3,13 +3,102 @@
 Branch: `feature/v4-bounded-multi-slice`
 Fork-point SHA: `4c07db9a387191485b51cb99886d58d94573c1ad`
 Pre-merge main SHA: `4c07db9a387191485b51cb99886d58d94573c1ad` (verified `main` == `origin/main` == this SHA before branching; re-verify at gate time)
-Reviewed code tip: **recorded in the handoff tail commit** (V4Q final — supersedes `5b5e30a` and `f17b51f`)
+Reviewed code tip: **`32393f5f023d84dd7aff9b2f197408b969591dc4`** (V4Q final — supersedes `5b5e30a` and `f17b51f`)
 Superseded reviewed code tips: `5b5e30a102e92a02151ee4b4876a379e6fa7069b` (V4R) and `f17b51fdbe2dbd2b6110257f2df459dd7edc04f0` (original V4) — both passed review, then FAILED human acceptance
 Merge commit SHA: Pending until merge
 
-Pinned diff: `.agent-review-v4-bounded-multi-slice.diff` — regenerated for the **complete** branch;
-exact bytes, SHA-256, and file counts are recorded in the handoff tail commit below. Gitignored,
-created with `git diff --output`, verified to regenerate byte-for-byte.
+Pinned diff: `.agent-review-v4-bounded-multi-slice.diff` — **656,095 bytes, 43 files**
+(32 modified, 11 added, 0 deleted), SHA-256
+`1D5A4BCE6972A9878B244A05CE216A581400DAFE8B3D9548EAB255695085ED50`.
+Gitignored, created with `git diff --output`, verified to regenerate byte-for-byte.
+
+---
+
+## MERGE-GATE HANDOFF TAIL — final reviewed tip and pinned diff
+
+**Authoritative review range:**
+`4c07db9a387191485b51cb99886d58d94573c1ad...32393f5f023d84dd7aff9b2f197408b969591dc4`
+
+| Item | Value |
+|---|---|
+| Final reviewed tip | `32393f5f023d84dd7aff9b2f197408b969591dc4` |
+| Review base (pre-merge `main`) | `4c07db9a387191485b51cb99886d58d94573c1ad` |
+| Branch | `feature/v4-bounded-multi-slice` |
+| Merge commit | Pending until merge |
+
+**Pinned diff.** `.agent-review-v4-bounded-multi-slice.diff` — **656,095 bytes**, SHA-256
+`1D5A4BCE6972A9878B244A05CE216A581400DAFE8B3D9548EAB255695085ED50`, **43 files**
+(32 modified, 11 added, 0 deleted), **+8,878 / −204**. Created with `git diff --output` (never
+PowerShell redirection), regenerated to a separate temporary file and compared **byte-for-byte
+identical**; the temporary file was removed. Gitignored via `.gitignore:33` (`.agent-review*.diff`),
+a regular file inside the registered worktree, with no reparse point on any path component. Never
+staged, never committed.
+
+Reproduce with:
+
+```
+git diff 4c07db9a387191485b51cb99886d58d94573c1ad...32393f5f023d84dd7aff9b2f197408b969591dc4 --output=.agent-review-v4-bounded-multi-slice.diff
+```
+
+**Final gate totals at `32393f5`.**
+
+| Gate | Result |
+|---|---|
+| app | **1340 passed / 0 failed** |
+| Pester | **955 passed / 0 failed / 0 skipped** |
+| `video-model-policy.test.js` | 398 / 0 |
+| `gemini-video-sdk.test.js` | 839 / 0 |
+| `video-scout-args.test.js` | 205 / 0 |
+| `video-range-ui.test.js` | 52 / 0 |
+| `launcher-fence-invariant` / `launcher-authz` | 6 / 0 · 18 / 0 |
+| reachability | Node 6 / 0 · PowerShell 4 / 0 |
+
+16 JavaScript files syntax-checked, 22 PowerShell files parsed, zero failures. `git diff --check`
+clean. `app/package.json` **byte-identical to the review base**. `app/main.js` and `app/preload.js`
+are also byte-identical to the base — the whole branch never touched the IPC boundary.
+
+**Accepted checkpoint verdicts.** `CHECKPOINT REVIEW: PASS` on the cumulative backend range
+`ad14423e...4e77046`, on the Phase B correction `72c632e...810f257`, and on the cumulative V4Q range
+`ad14423e...810f257`.
+
+> **The final Full-class whole-diff verdict is still PENDING.** No verdict exists for
+> `4c07db9...32393f5`. A checkpoint PASS never authorized merge, push, a provider probe, or an
+> acceptance run, and neither does this tail.
+
+**Zero provider activity.** No provider request, prompt-compliance probe, credential use, network
+media, acceptance run, merge, or push occurred at any point during V4Q or Phase B. The preserved
+run-directory count remained **31** throughout, with `run-20260727-001226-817-10472-c46bea78` — the
+failed-acceptance evidence — still the newest and untouched.
+
+### Reviewer instructions
+
+Read-only. Do not edit files, run a provider probe, perform manual acceptance, merge, or push.
+
+1. Verify base, reviewed tip, branch tip, ancestry, clean state, and the one-commit handoff tail.
+2. Reproduce and byte-compare the pinned three-dot diff.
+3. Review the renderer's repeatable 1–8 slice UX, validation, ordering, overlap policy, and visible
+   refusal paths.
+4. Confirm aggregate duration and request-size guards execute **before** download or provider
+   reachability.
+5. Confirm one request body contains N ordered media parts plus one final text part — never N
+   sequential provider requests.
+6. Confirm K5 remains one logical request with at most three byte-identical eligible attempts.
+7. Recheck the Windows PowerShell 5.1 native-argument transport repair using the real `node.exe`
+   negative and positive controls.
+8. Review effective-model resolution, Pro-only thinking configuration, output-token ceilings,
+   explicit-model precedence, and renderer/backend agreement.
+9. Review the real selector event wiring — same-value activation, keyboard operation,
+   tab-without-activation, invalid values, and modal reset.
+10. Review the quality gate's structural checks, canonical-field format/content precedence, bounded
+    lexical productions, false-positive controls, and documented limitations.
+11. Review rejected-response preservation, schema-v4 truth, usage retention, content-free
+    reasons/Logs, and Library/retention non-exposure.
+12. Verify preservation of the fenced-role cwd gate, unrelated PTY behavior, credential isolation,
+    V3a focus, V3b follow-up, manifest truth, reports, Library, retention ownership, and media
+    deletion boundaries.
+13. Independently run the app and Pester gates, confirm test reachability and zero provider activity.
+
+End with exactly `VERDICT: PASS` or `VERDICT: FAIL — <bounded reasons>`.
 
 `docs/BUILDER-HANDOFF-v4-bounded-multi-slice.md` is present as a regular `100644` blob at the
 reviewed tip, so any commit above it can only ever be a **modification** — which is exactly the
