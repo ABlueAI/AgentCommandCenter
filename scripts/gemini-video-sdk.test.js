@@ -987,10 +987,22 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
   // slices, discarding a correct response after usage had already occurred.
   section('V4Q FINAL CORRECTION: one consolidated observation per slice passes at EVERY slice count');
   {
+    // SCOPE-HONEST RANGES. Slice n is [n*60, n*60+30) and every displayed timestamp is DERIVED from
+    // those offsets, so each observation genuinely falls inside the slice it is filed under. The
+    // earlier version declared [0,30), [100,130), … while displaying 01:00-01:29, 02:00-02:29, … —
+    // slice 1's interval sat entirely outside its own authorized range. The production normalizer
+    // strips timestamps, so the matrix still passed; it just was not the "fully compliant report"
+    // this regression is supposed to represent. A fixture that misrepresents its own premise cannot
+    // prove the thing it claims to prove.
+    const sliceRange = (i) => ({ startOffset: (i + 1) * 60, endOffset: (i + 1) * 60 + 30 });
+    const mmss = (seconds) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+    // Inclusive display interval for a half-open [start,end) range: the last observed second.
+    const interval = (r) => `${mmss(r.startOffset)}-${mmss(r.endOffset - 1)}`;
+
     // Build the exact shape the scope instruction asks for: one ranged entry per slice, uniform
     // footage, every slice SILENCE with a justification (so the audio contract is satisfied too).
     const uniform = (count) => {
-      const ranges = Array.from({ length: count }, (_, i) => ({ startOffset: i * 100, endOffset: i * 100 + 30 }));
+      const ranges = Array.from({ length: count }, (_, i) => sliceRange(i));
       const agg = ranges.reduce((s, r) => s + (r.endOffset - r.startOffset), 0);
       const out = ['## 1. TL;DR', 'A static title card throughout.', '', PROFILE_SECTION_HEADER,
         '**Section TL;DR:** profile.', AUTHORIZED_SCOPE_LINE(count, agg), UNDETERMINABLE_DURATION_LINE,
@@ -1001,9 +1013,9 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
         const n = i + 1;
         out.push(SLICE_HEADING(n, r),
           `**Slice ${n} audio status:** SILENCE`,
-          `**Slice ${n} audio evidence:** 0${n}:00 — listened across the window, heard nothing`,
-          `**Slice ${n} audio justification:** 0${n}:00 — no speech, music, or ambience at any point`,
-          `- 0${n}:00-0${n}:29 [VISUAL] static title card, no change`);
+          `**Slice ${n} audio evidence:** ${mmss(r.startOffset)} — listened across the window, heard nothing`,
+          `**Slice ${n} audio justification:** ${mmss(r.startOffset)} — no speech, music, or ambience at any point`,
+          `- ${interval(r)} [VISUAL] static title card, no change`);
       });
       out.push('', EVIDENCE_SECTION_NEXT_HEADER, '**Section TL;DR:** no claims.', '',
         '## 7. DISCREPANCIES & CROSS-CHECKS', '**Section TL;DR:** audio and visual agree on stasis.', '',
@@ -1011,13 +1023,39 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
         '## 9. LIMITATIONS OF THIS ANALYSIS', '**Section TL;DR:** bounded windows only.');
       return { text: out.join('\n'), ranges };
     };
-    // GUARD: the entries must genuinely collide after normalization. Without this the matrix below
-    // could pass for the wrong reason — a surviving timestamp or offset would make each key unique
-    // and the cross-slice case would never actually be exercised.
-    const k1 = normalizeEvidenceLine('- 01:00-01:29 [VISUAL] static title card, no change');
-    const k8 = normalizeEvidenceLine('- 08:00-08:29 [VISUAL] static title card, no change');
+    // GUARD 1 — SCOPE HONESTY. Every displayed evidence interval must lie inside the authorized
+    // range it is filed under, at every slice count. Parsed back out of the rendered text, so it
+    // checks what the fixture actually EMITS rather than what it intended to emit.
+    const toSeconds = (stamp) => { const [m, s] = stamp.split(':').map(Number); return m * 60 + s; };
+    for (let count = 1; count <= 8; count++) {
+      const { text, ranges } = uniform(count);
+      const shown = text.split('\n')
+        .map((l) => /^- (\d{2}:\d{2})-(\d{2}:\d{2}) \[VISUAL\]/.exec(l.trim()))
+        .filter(Boolean);
+      assert(shown.length === count, `${count}-slice fixture emits exactly ${count} ranged visual entries`);
+      shown.forEach((m, i) => {
+        const r = ranges[i];
+        const from = toSeconds(m[1]); const to = toSeconds(m[2]);
+        assert(from >= r.startOffset && to < r.endOffset && from <= to,
+          `${count}-slice fixture: slice ${i + 1}'s interval ${m[1]}-${m[2]} lies INSIDE its authorized [${r.startOffset}s,${r.endOffset}s)`);
+      });
+      // The per-slice audio markers are timestamped inside their own slice too.
+      for (let i = 0; i < count; i++) {
+        const stamp = new RegExp(String.raw`\*\*Slice ${i + 1} audio evidence:\*\* (\d{2}:\d{2})`).exec(text);
+        assert(stamp && toSeconds(stamp[1]) >= ranges[i].startOffset && toSeconds(stamp[1]) < ranges[i].endOffset,
+          `${count}-slice fixture: slice ${i + 1}'s audio evidence timestamp is inside its authorized range`);
+      }
+    }
+    // GUARD 2 — NORMALIZATION COLLISION. The entries must genuinely collide after normalization.
+    // Without this the matrix could pass for the wrong reason — a surviving timestamp or offset would
+    // make each key unique and the cross-slice case would never actually be exercised. Keys are read
+    // from the REAL rendered slice 1 and slice 8 lines, not from hand-typed literals.
+    const k1 = normalizeEvidenceLine(`- ${interval(sliceRange(0))} [VISUAL] static title card, no change`);
+    const k8 = normalizeEvidenceLine(`- ${interval(sliceRange(7))} [VISUAL] static title card, no change`);
     assert(k1 === k8 && k1 === 'static title card no change',
       'the per-slice entries genuinely normalize to ONE identical key (the matrix is not passing by accident)');
+    assert(interval(sliceRange(0)) === '01:00-01:29' && interval(sliceRange(7)) === '08:00-08:29',
+      'the derived intervals are the intended 01:00-01:29 … 08:00-08:29, now matching their ranges');
     // THE REGRESSION MATRIX. Every count 1..8 must pass; 4+ used to reject.
     for (let count = 1; count <= 8; count++) {
       const { text, ranges } = uniform(count);
@@ -1029,7 +1067,13 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
 
   section('V4Q FINAL CORRECTION: the threshold of three still applies WITHIN each subsection');
   {
-    const R8 = Array.from({ length: 8 }, (_, i) => ({ startOffset: i * 100, endOffset: i * 100 + 30 }));
+    // SCOPE-HONEST RANGES, same rule as the matrix above: slice n is [n*60, n*60+30) and every
+    // displayed timestamp is derived from the offsets, so nothing is filed under a slice it does not
+    // fall inside.
+    const mmss = (seconds) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+    const R8 = Array.from({ length: 8 }, (_, i) => ({ startOffset: (i + 1) * 60, endOffset: (i + 1) * 60 + 30 }));
+    const at = (n, offset = 0) => mmss(R8[n - 1].startOffset + offset);
+    const spanOf = (n) => `${mmss(R8[n - 1].startOffset)}-${mmss(R8[n - 1].endOffset - 1)}`;
     // `perSlice(n)` decides what goes under slice n; `pre` goes in the Section 5 preamble.
     const build = (ranges, perSlice, pre = []) => {
       const agg = ranges.reduce((s, r) => s + (r.endOffset - r.startOffset), 0);
@@ -1040,8 +1084,8 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
       ranges.forEach((r, i) => {
         const n = i + 1;
         out.push(SLICE_HEADING(n, r), `**Slice ${n} audio status:** SILENCE`,
-          `**Slice ${n} audio evidence:** 0${n}:00 — listened, heard nothing`,
-          `**Slice ${n} audio justification:** 0${n}:00 — nothing audible at any point`,
+          `**Slice ${n} audio evidence:** ${mmss(r.startOffset)} — listened, heard nothing`,
+          `**Slice ${n} audio justification:** ${mmss(r.startOffset)} — nothing audible at any point`,
           ...perSlice(n));
       });
       out.push('', EVIDENCE_SECTION_NEXT_HEADER, '**Section TL;DR:** claims.', '',
@@ -1050,8 +1094,25 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
         '## 9. LIMITATIONS OF THIS ANALYSIS', '**Section TL;DR:** bounded.');
       return out.join('\n');
     };
-    const one = (n) => [`- 0${n}:00-0${n}:29 [VISUAL] static title card, no change`];
-    const many = (n, k) => Array.from({ length: k }, (_, j) => `- 0${n}:0${j} [VISUAL] static title card, no change`);
+    // One consolidated entry spanning the whole slice; `many` puts k distinct in-range seconds under
+    // one slice. Both derive every timestamp from that slice's own authorized offsets.
+    const one = (n) => [`- ${spanOf(n)} [VISUAL] static title card, no change`];
+    const many = (n, k) => Array.from({ length: k }, (_, j) => `- ${at(n, j)} [VISUAL] static title card, no change`);
+    // SCOPE-HONESTY GUARD for this fixture family, including the k=12 filler case.
+    {
+      const toSeconds = (s) => { const [m, sec] = s.split(':').map(Number); return m * 60 + sec; };
+      for (let n = 1; n <= 8; n++) {
+        const r = R8[n - 1];
+        const span = /^- (\d{2}:\d{2})-(\d{2}:\d{2}) /.exec(one(n)[0]);
+        assert(toSeconds(span[1]) === r.startOffset && toSeconds(span[2]) === r.endOffset - 1,
+          `threshold fixture: slice ${n}'s consolidated span matches its authorized [${r.startOffset}s,${r.endOffset}s)`);
+        for (const line of many(n, 12)) {
+          const t = toSeconds(/^- (\d{2}:\d{2}) /.exec(line)[1]);
+          assert(t >= r.startOffset && t < r.endOffset,
+            `threshold fixture: every repeated observation under slice ${n} is inside its authorized range`);
+        }
+      }
+    }
 
     assert(vq(build(R8, (n) => (n === 1 ? many(1, 3) : one(n))), { ranges: R8 }).ok === true,
       'THREE identical observations inside ONE subsection are allowed');
@@ -1066,7 +1127,9 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     assert(vq(build(R8, (n) => many(n, 3)), { ranges: R8 }).ok === true,
       'three allowed repetitions in EACH of eight slices still passes (24 identical lines overall)');
     // The Section 5 preamble is its own bucket.
-    const pre = vq(build(R8, one, Array.from({ length: 4 }, (_, j) => `- 00:0${j} [VISUAL] identical preamble observation`)), { ranges: R8 });
+    // Preamble lines are timestamped inside slice 1's authorized range — the preamble is not itself
+    // a slice, so its observations must still point at authorized footage.
+    const pre = vq(build(R8, one, Array.from({ length: 4 }, (_, j) => `- ${at(1, j)} [VISUAL] identical preamble observation`)), { ranges: R8 });
     assert(pre.code === 'repetitive-timestamp-filler', 'four identical observations in the Section 5 PREAMBLE are rejected');
     assert(/preamble/i.test(pre.reason), 'the reason identifies the preamble bucket');
     // Classic per-second filler inside one slice still fails, which is the whole point of the check.
@@ -1074,7 +1137,7 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
       'twelve per-second near-identical lines inside one slice are still REJECTED');
     // Content-free reason.
     const leak = vq(build(R8, (n) => (n === 1
-      ? Array.from({ length: 4 }, (_, j) => `- 00:0${j} [VISUAL] SECRET-PROVIDER-PHRASE static card`)
+      ? Array.from({ length: 4 }, (_, j) => `- ${at(1, j)} [VISUAL] SECRET-PROVIDER-PHRASE static card`)
       : one(n))), { ranges: R8 });
     assert(!/SECRET-PROVIDER-PHRASE/.test(leak.reason) && !/static card/.test(leak.reason),
       'the filler reason never echoes the repeated observation text');
