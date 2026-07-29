@@ -3,13 +3,13 @@
 Branch: `feature/v4-bounded-multi-slice`
 Fork-point SHA: `4c07db9a387191485b51cb99886d58d94573c1ad`
 Pre-merge main SHA: `4c07db9a387191485b51cb99886d58d94573c1ad` (verified `main` == `origin/main` == this SHA before branching; re-verify at gate time)
-Reviewed code tip: **`32393f5f023d84dd7aff9b2f197408b969591dc4`** (V4Q final — supersedes `5b5e30a` and `f17b51f`)
+Reviewed code tip: **`83b50e776e4c24f7a685424bc2c99f526b22afdf`** (V4Q final — supersedes `32393f5`, `5b5e30a`, and `f17b51f`)
 Superseded reviewed code tips: `5b5e30a102e92a02151ee4b4876a379e6fa7069b` (V4R) and `f17b51fdbe2dbd2b6110257f2df459dd7edc04f0` (original V4) — both passed review, then FAILED human acceptance
 Merge commit SHA: Pending until merge
 
-Pinned diff: `.agent-review-v4-bounded-multi-slice.diff` — **656,095 bytes, 43 files**
+Pinned diff: `.agent-review-v4-bounded-multi-slice.diff` — **662,462 bytes, 43 files**
 (32 modified, 11 added, 0 deleted), SHA-256
-`1D5A4BCE6972A9878B244A05CE216A581400DAFE8B3D9548EAB255695085ED50`.
+`26F37F0A73611B3AFFC82F9B0627261B89A2A3FB5E8822D5868582F5B506A92D`.
 Gitignored, created with `git diff --output`, verified to regenerate byte-for-byte.
 
 ---
@@ -17,18 +17,24 @@ Gitignored, created with `git diff --output`, verified to regenerate byte-for-by
 ## MERGE-GATE HANDOFF TAIL — final reviewed tip and pinned diff
 
 **Authoritative review range:**
-`4c07db9a387191485b51cb99886d58d94573c1ad...32393f5f023d84dd7aff9b2f197408b969591dc4`
+`4c07db9a387191485b51cb99886d58d94573c1ad...83b50e776e4c24f7a685424bc2c99f526b22afdf`
 
 | Item | Value |
 |---|---|
-| Final reviewed tip | `32393f5f023d84dd7aff9b2f197408b969591dc4` |
+| Final reviewed tip | `83b50e776e4c24f7a685424bc2c99f526b22afdf` |
 | Review base (pre-merge `main`) | `4c07db9a387191485b51cb99886d58d94573c1ad` |
 | Branch | `feature/v4-bounded-multi-slice` |
 | Merge commit | Pending until merge |
 
-**Pinned diff.** `.agent-review-v4-bounded-multi-slice.diff` — **656,095 bytes**, SHA-256
-`1D5A4BCE6972A9878B244A05CE216A581400DAFE8B3D9548EAB255695085ED50`, **43 files**
-(32 modified, 11 added, 0 deleted), **+8,878 / −204**. Created with `git diff --output` (never
+> **Superseded reviewed tip:** `32393f5f023d84dd7aff9b2f197408b969591dc4`, whose pinned artifact was
+> 656,095 bytes / SHA-256 `1D5A4BCE6972A9878B244A05CE216A581400DAFE8B3D9548EAB255695085ED50`. It was
+> replaced by a two-document truth correction (superseded-review labelling and billing language).
+> `32393f5` and the former tail commit `f339564` are now **inside** the reviewed range, not the
+> handoff tail. That artifact identity is historical and must not be used for the merge gate.
+
+**Pinned diff.** `.agent-review-v4-bounded-multi-slice.diff` — **662,462 bytes**, SHA-256
+`26F37F0A73611B3AFFC82F9B0627261B89A2A3FB5E8822D5868582F5B506A92D`, **43 files**
+(32 modified, 11 added, 0 deleted), **+8,985 / −204**. Created with `git diff --output` (never
 PowerShell redirection), regenerated to a separate temporary file and compared **byte-for-byte
 identical**; the temporary file was removed. Gitignored via `.gitignore:33` (`.agent-review*.diff`),
 a regular file inside the registered worktree, with no reparse point on any path component. Never
@@ -37,10 +43,12 @@ staged, never committed.
 Reproduce with:
 
 ```
-git diff 4c07db9a387191485b51cb99886d58d94573c1ad...32393f5f023d84dd7aff9b2f197408b969591dc4 --output=.agent-review-v4-bounded-multi-slice.diff
+git diff 4c07db9a387191485b51cb99886d58d94573c1ad...83b50e776e4c24f7a685424bc2c99f526b22afdf --output=.agent-review-v4-bounded-multi-slice.diff
 ```
 
-**Final gate totals at `32393f5`.**
+**Final gate totals** (measured at `32393f5`; the only commits since are documentation-only, and
+every production and test blob is byte-identical to that tree, so these totals still hold — the
+Full-class reviewer will independently re-run both gates).
 
 | Gate | Result |
 |---|---|
@@ -62,7 +70,7 @@ are also byte-identical to the base — the whole branch never touched the IPC b
 `ad14423e...810f257`.
 
 > **The final Full-class whole-diff verdict is still PENDING.** No verdict exists for
-> `4c07db9...32393f5`. A checkpoint PASS never authorized merge, push, a provider probe, or an
+> `4c07db9...83b50e7`. A checkpoint PASS never authorized merge, push, a provider probe, or an
 > acceptance run, and neither does this tail.
 
 **Zero provider activity.** No provider request, prompt-compliance probe, credential use, network
