@@ -5,8 +5,10 @@
 // then wins for the rest of that modal session, and closing/reopening the modal resets the policy.
 //
 // WHY Pro is the automatic VIDEO choice: V4Q's quality gate rejects a response that fails
-// deterministic structural validation, and a rejected response is a paid, terminal failure whose
-// only output is evidence. Flash-Lite on a bounded video pass is exactly the configuration that
+// deterministic structural validation, and a rejected response is a terminal provider-response
+// failure after usage that consumes quota and may incur cost; its only output is evidence. (Whether
+// a request is free-tier or billable depends on the user's own Gemini project and account, which
+// this repository cannot see.) Flash-Lite on a bounded video pass is exactly the configuration that
 // produced the V4Q failure evidence. Defaulting video to Pro buys the analysis quality the gate
 // demands; transcript/audio keep the economy model because they never enter that path.
 //
