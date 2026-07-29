@@ -1032,12 +1032,29 @@ function wireUi() {
   // out-of-allowlist value is refused rather than substituted, and the control is snapped back to
   // the concrete model still held in state — the dropdown must never display one model while
   // ptyStart sends another.
-  $('#videoModelSelect').onchange = (e) => {
-    const result = videoModelPolicy.applyManualModel(modelPolicy, e.target.value);
-    if (result.error) { syncVideoModelControls(result.error); return; }
-    modelPolicy = result.state;
+  //
+  // CORRECTION: `change` alone was insufficient. A <select> emits NO change event when the user
+  // picks the option ALREADY DISPLAYED, so deliberately keeping the automatic Flash-Lite left the
+  // session unpinned and switching to video then silently escalated it to Pro (and symmetrically,
+  // a deliberately kept Pro was silently downgraded). Deliberate ACTIVATION now pins the displayed
+  // model; a subsequent `change` replaces that pin with the newly selected model.
+  const modelSelect = $('#videoModelSelect');
+  const pinFromInteraction = (interaction) => {
+    const outcome = videoModelPolicy.applyModelInteraction(modelPolicy, interaction);
+    if (outcome.error) { syncVideoModelControls(outcome.error); return; }
+    if (!outcome.handled) return; // focus/tab/modifier-only: no choice was expressed
+    modelPolicy = outcome.state;
     syncVideoModelControls();
   };
+  // Primary pointer only — right/middle activation is not a choice. Fires BEFORE the native
+  // selector changes the value, so the displayed model is pinned even if the user dismisses.
+  modelSelect.onpointerdown = (e) => pinFromInteraction({
+    type: 'pointerdown', button: e.button, isPrimary: e.isPrimary, displayedModel: modelSelect.value,
+  });
+  modelSelect.onkeydown = (e) => pinFromInteraction({
+    type: 'keydown', key: e.key, ctrlKey: e.ctrlKey, metaKey: e.metaKey, displayedModel: modelSelect.value,
+  });
+  modelSelect.onchange = (e) => pinFromInteraction({ type: 'change', displayedModel: e.target.value });
   $('#mediaResolutionSelect').onchange = (e) => { state.mediaResolution = e.target.value; };
   // V4Q Phase B: a mode change re-applies the AUTOMATIC policy only while the session is unpinned.
   // After a manual pick the mode still changes (slice rows follow it) but the model does not.

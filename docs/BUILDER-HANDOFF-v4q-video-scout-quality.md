@@ -421,6 +421,42 @@ leaves the previous concrete model on the wire — the same reasoning that made 
 refuse rather than drop `-Model`. Re-selecting the model already displayed still pins the session:
 the user made a choice, and that it matches the automatic one does not make it automatic.
 
+### Why `change` alone was not enough
+
+A `<select>` emits **no** `change` event when the user picks the option already displayed. Wiring the
+policy to `change` only therefore left this path open:
+
+1. Transcript mode displays Flash-Lite automatically.
+2. The user opens the selector and deliberately chooses that same Flash-Lite.
+3. No event fires; the session stays **unpinned**.
+4. The user switches to video — and the renderer silently escalates to Pro.
+
+The symmetric case downgraded a deliberately kept Pro when leaving video mode. Both are exactly the
+silent model substitution this policy exists to prevent, and the pure unit tests could not catch it
+because they called `applyManualModel()` directly rather than going through the UI.
+
+**Deliberate activation now pins the displayed model**, via a pure interaction adapter
+(`applyModelInteraction`) that takes plain data rather than a DOM event:
+
+- **Pointer** — primary mouse, touch, or pen activation pins the currently displayed model. It fires
+  on `pointerdown`, *before* the native selector changes anything, so dismissing still pins.
+  Right-click and middle-click are ignored; a context menu is not a choice.
+- **Keyboard** — ArrowUp/ArrowDown/Home/End/PageUp/PageDown/Enter/Space, Alt+ArrowDown, and any
+  single printable type-ahead character pin the displayed model.
+- **Change** — still pins, and replaces a temporary same-value pin with the newly selected model.
+
+**Not pinning:** Tab, focus alone, Escape alone, modifier-only presses (Shift/Control/Alt/Meta), and
+Ctrl/Meta shortcuts. Tabbing across the selector leaves the automatic policy fully live.
+
+> **Disclosed tradeoff.** Opening the selector and dismissing it without changing the value *does*
+> count as a manual pin. That is deliberate: the user reached for the cost/quality control, and
+> preserving what they were looking at is safer than silently escalating or downgrading it a moment
+> later. Nothing is hidden — the status line flips from automatic wording to "your choice"
+> immediately, so the pinned state is visible the instant it happens.
+
+This correction is renderer-only. It does not alter automatic recommendations, the model allowlist,
+generation policy, concrete model serialization, backend enforcement, or provider behavior.
+
 **No sentinel reaches the wire.** `state.videoModel` always holds a concrete allowlisted model —
 never `auto`, never blank. `syncVideoModelControls()` is the single place the policy is pushed into
 both the DOM and `state`, so the dropdown can never display one model while `ptyStart` sends
@@ -443,13 +479,20 @@ Requires a full **Electron process restart**, not a reload. Do **not** click Cre
 this renderer-only check.
 
 1. Open the modal, choose Video Scout → transcript mode with Flash-Lite selected automatically.
-2. Switch to video → Pro appears automatically.
-3. Switch back to transcript, then audio → Flash-Lite returns each time.
-4. Manually select Flash-Lite, then toggle video/audio/transcript → Flash-Lite remains throughout.
-5. Manually select Flash, toggle every mode → Flash remains.
-6. Close and reopen the modal → transcript with automatic Flash-Lite; no manual state survives.
-7. Read the help text: it describes the automatic/manual state accurately and does not claim a run
-   is necessarily free or billable.
+2. Open the model selector and choose *or dismiss* the displayed Flash-Lite.
+3. The status line changes immediately to the manual "your choice" wording.
+4. Switch to video → **Flash-Lite remains** (no silent escalation).
+5. Reopen a fresh modal and enter video → automatic Pro.
+6. Open the selector and choose *or dismiss* the displayed Pro.
+7. Switch to transcript → **Pro remains** (no silent downgrade).
+8. Reopen again → transcript with automatic Flash-Lite; no manual state survives.
+9. Tab through the selector without activating it, then switch to video → Pro appears automatically.
+10. Keyboard-operate the selector (arrows/Enter/type-ahead) → the displayed model pins.
+11. Switch back to transcript, then audio → Flash-Lite returns each time (unpinned session).
+12. Manually select Flash, toggle every mode → Flash remains.
+13. Read the help text: it describes the automatic/manual state accurately and does not claim a run
+    is necessarily free or billable.
+14. Do not start a run.
 
 ---
 

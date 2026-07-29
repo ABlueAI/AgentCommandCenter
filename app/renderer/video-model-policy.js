@@ -116,6 +116,58 @@ function describeModelSelection(state) {
   return `Using ${s.model} — ${reason}. Pick a model yourself to keep it for this window.${costNote}`;
 }
 
+// --- V4Q Phase B CORRECTION: the interaction adapter ---------------------------------------------
+// `change` alone was not enough. A <select> emits NO change event when the user picks the option
+// ALREADY DISPLAYED, so this sequence silently escalated: transcript shows Flash-Lite automatically
+// → the user deliberately chooses that same Flash-Lite → no event → the session stays UNPINNED →
+// switching to video replaces it with Pro. The symmetric downgrade existed for a deliberately kept
+// Pro. Deliberate ACTIVATION of the control, not just a value change, is what expresses intent.
+//
+// CONSERVATIVE DISCLOSURE: opening the selector and dismissing it without changing the value counts
+// as a pin. That is deliberate. The user reached for the cost/quality control, and preserving what
+// they were looking at is safer than silently escalating or downgrading it a moment later. Nothing
+// is hidden — the status line flips from automatic wording to "your choice" immediately.
+//
+// Pure and event-LIKE: it takes plain data, never a DOM event, so every case is directly testable.
+const SELECTOR_OPERATION_KEYS = ['ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown', 'Enter'];
+// Pressing a modifier by itself is not operating anything, and Tab/Escape alone are navigation and
+// cancellation. None of them expresses a choice.
+const NON_PINNING_KEYS = ['Tab', 'Escape', 'Shift', 'Control', 'Alt', 'Meta', 'AltGraph', 'CapsLock',
+  'NumLock', 'ScrollLock', 'ContextMenu', 'Dead'];
+
+function isDeliberateModelInteraction(interaction) {
+  const e = interaction && typeof interaction === 'object' ? interaction : {};
+  if (e.type === 'change') return true; // the value already moved; intent is not in question
+  if (e.type === 'pointerdown' || e.type === 'mousedown') {
+    // PRIMARY activation only. Right-click (2) opens a context menu and middle-click (1) does not
+    // operate the control, so neither is a choice. Touch and pen primary contact report button 0.
+    return e.button === 0 && e.isPrimary !== false;
+  }
+  if (e.type !== 'keydown') return false;
+  const key = e.key;
+  if (typeof key !== 'string' || key === '') return false;
+  // A Ctrl/Meta chord is an application shortcut, not selector operation.
+  if (e.ctrlKey === true || e.metaKey === true) return false;
+  if (NON_PINNING_KEYS.indexOf(key) !== -1) return false;
+  if (SELECTOR_OPERATION_KEYS.indexOf(key) !== -1) return true;
+  // Any single printable character — including Space — is type-ahead option selection on a <select>.
+  return key.length === 1;
+}
+
+// Applies the interaction to the CURRENTLY DISPLAYED concrete model. Returns the resulting state,
+// any refusal, and whether the interaction was handled as a pin, so the caller never has to guess.
+function applyModelInteraction(state, interaction) {
+  const current = normalizePolicyState(state);
+  if (!isDeliberateModelInteraction(interaction)) {
+    return { state: current, error: null, pinned: false, handled: false };
+  }
+  const e = interaction && typeof interaction === 'object' ? interaction : {};
+  const displayed = e.displayedModel === undefined ? current.model : e.displayedModel;
+  const result = applyManualModel(current, displayed);
+  if (result.error) return { state: result.state, error: result.error, pinned: false, handled: true };
+  return { state: result.state, error: null, pinned: true, handled: true };
+}
+
 // Uniquely named: renderer <script> files share ONE global scope, so a generic top-level name here
 // could collide with another renderer file and break the whole renderer at load time.
 const videoModelPolicyExports = {
@@ -124,6 +176,8 @@ const videoModelPolicyExports = {
   isAllowedModel, isAnalysisMode, recommendedModelForMode,
   initialPolicyState, resetPolicyState, normalizePolicyState,
   applyAnalysisMode, applyManualModel, describeModelSelection,
+  isDeliberateModelInteraction, applyModelInteraction,
+  SELECTOR_OPERATION_KEYS, NON_PINNING_KEYS,
 };
 if (typeof module !== 'undefined') module.exports = videoModelPolicyExports;
 else window.videoModelPolicy = videoModelPolicyExports;

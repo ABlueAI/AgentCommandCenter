@@ -182,6 +182,128 @@ section('bounded status copy distinguishes automatic from pinned');
   }
 }
 
+section('CORRECTION: deliberate POINTER activation pins the displayed model');
+{
+  const autoLite = P.initialPolicyState();
+  const autoPro = P.applyAnalysisMode(P.initialPolicyState(), VIDEO_MODE);
+  const down = (extra) => Object.assign({ type: 'pointerdown', button: 0, isPrimary: true }, extra);
+  for (const [label, base, expected] of [
+    ['displayed Flash-Lite', autoLite, FLASH_LITE_MODEL],
+    ['displayed Pro', autoPro, PRO_MODEL],
+  ]) {
+    const r = P.applyModelInteraction(base, down({ displayedModel: expected }));
+    ok(r.pinned === true && r.handled === true, `primary mouse activation pins ${label}`);
+    ok(r.state.model === expected && r.state.manuallyChosen === true, `${label} is the pinned concrete model`);
+    ok(r.error === null, `${label}: no refusal`);
+  }
+  // Touch and pen primary contact report button 0 as well.
+  for (const pointerType of ['touch', 'pen', 'mouse']) {
+    const r = P.applyModelInteraction(autoPro, down({ pointerType, displayedModel: PRO_MODEL }));
+    ok(r.pinned === true && r.state.model === PRO_MODEL, `${pointerType} primary activation pins the displayed model`);
+  }
+  // Non-primary activation is not a choice.
+  for (const [label, ev] of [
+    ['right-click', down({ button: 2, displayedModel: FLASH_LITE_MODEL })],
+    ['middle-click', down({ button: 1, displayedModel: FLASH_LITE_MODEL })],
+    ['non-primary pointer', down({ isPrimary: false, displayedModel: FLASH_LITE_MODEL })],
+  ]) {
+    const r = P.applyModelInteraction(autoLite, ev);
+    ok(r.pinned === false && r.handled === false, `${label} does NOT pin`);
+    ok(r.state.manuallyChosen === false, `${label} leaves the session unpinned`);
+    ok(P.applyAnalysisMode(r.state, VIDEO_MODE).model === PRO_MODEL, `${label} leaves the automatic policy live`);
+  }
+  // An invalid displayed value is refused, never substituted.
+  const bad = P.applyModelInteraction(autoPro, down({ displayedModel: 'gemini-9-turbo' }));
+  ok(typeof bad.error === 'string' && bad.pinned === false, 'an invalid displayed value is refused');
+  ok(bad.state.model === PRO_MODEL && bad.state.manuallyChosen === false,
+    'the refusal leaves the prior valid concrete model in state and does not pin');
+  // Activation then a DIFFERENT selection: the temporary pin is replaced by the new model.
+  let s = P.applyModelInteraction(autoLite, down({ displayedModel: FLASH_LITE_MODEL })).state;
+  ok(s.model === FLASH_LITE_MODEL, 'pointer activation pins the displayed Flash-Lite first');
+  s = P.applyModelInteraction(s, { type: 'change', displayedModel: FLASH_MODEL }).state;
+  ok(s.model === FLASH_MODEL && s.manuallyChosen === true, 'a following change replaces the pin with the newly selected model');
+  ok(P.applyAnalysisMode(s, VIDEO_MODE).model === FLASH_MODEL, 'and that new pin survives a mode change');
+}
+
+section('CORRECTION: deliberate KEYBOARD operation pins the displayed model');
+{
+  const auto = P.initialPolicyState();
+  const key = (k, extra) => Object.assign({ type: 'keydown', key: k, displayedModel: FLASH_LITE_MODEL }, extra);
+  for (const k of ['ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown', 'Enter', ' ']) {
+    const r = P.applyModelInteraction(auto, key(k));
+    ok(r.pinned === true, `selector-operation key ${JSON.stringify(k)} pins the displayed model`);
+    ok(r.state.model === FLASH_LITE_MODEL && r.state.manuallyChosen === true, `${JSON.stringify(k)} pins the concrete displayed model`);
+  }
+  // Printable type-ahead option selection.
+  for (const k of ['g', 'G', 'p', '2', '-', '.']) {
+    ok(P.applyModelInteraction(auto, key(k)).pinned === true, `printable option-selection key "${k}" pins`);
+  }
+  // Alt+ArrowDown (and platform equivalents) open the selector.
+  ok(P.applyModelInteraction(auto, key('ArrowDown', { altKey: true })).pinned === true, 'Alt+ArrowDown pins');
+  // Navigation, cancellation, modifiers alone, and Ctrl/Meta chords are not choices.
+  for (const k of ['Tab', 'Escape', 'Shift', 'Control', 'Alt', 'Meta', 'AltGraph', 'CapsLock', 'ContextMenu', 'F5', 'Backspace']) {
+    const r = P.applyModelInteraction(auto, key(k));
+    ok(r.pinned === false && r.handled === false, `${k} does NOT pin`);
+    ok(r.state.manuallyChosen === false, `${k} leaves the session unpinned`);
+  }
+  for (const [label, ev] of [
+    ['Ctrl+A', key('a', { ctrlKey: true })], ['Meta+C', key('c', { metaKey: true })],
+    ['Ctrl+ArrowDown', key('ArrowDown', { ctrlKey: true })], ['Meta+Enter', key('Enter', { metaKey: true })],
+  ]) ok(P.applyModelInteraction(auto, ev).pinned === false, `${label} is an application shortcut and does NOT pin`);
+  // Keyboard operation followed by a different change.
+  let s = P.applyModelInteraction(auto, key('ArrowDown')).state;
+  s = P.applyModelInteraction(s, { type: 'change', displayedModel: PRO_MODEL }).state;
+  ok(s.model === PRO_MODEL && s.manuallyChosen === true, 'a change after keyboard operation pins the NEW model');
+  // Unknown/garbage interactions are inert.
+  for (const ev of [null, undefined, {}, { type: 'focus' }, { type: 'blur' }, { type: 'keyup', key: 'Enter' }, { type: 'click' }]) {
+    const r = P.applyModelInteraction(auto, ev);
+    ok(r.pinned === false && r.handled === false, `${JSON.stringify(ev)} is not a deliberate interaction`);
+  }
+  // The classifier is directly exercised too.
+  ok(P.isDeliberateModelInteraction({ type: 'change' }) === true, 'a change event is always deliberate');
+  ok(P.isDeliberateModelInteraction({ type: 'pointerdown', button: 0 }) === true, 'primary pointerdown is deliberate');
+  ok(P.isDeliberateModelInteraction({ type: 'pointerdown', button: 2 }) === false, 'secondary pointerdown is not');
+}
+
+section('CORRECTION: the named regression sequences');
+{
+  const primary = (m) => ({ type: 'pointerdown', button: 0, isPrimary: true, displayedModel: m });
+  // 1. automatic transcript Flash-Lite → same-value interaction → video
+  let s = P.initialPolicyState();
+  s = P.applyModelInteraction(s, primary(FLASH_LITE_MODEL)).state;
+  s = P.applyAnalysisMode(s, VIDEO_MODE);
+  ok(s.model === FLASH_LITE_MODEL, 'REGRESSION 1: deliberately kept Flash-Lite survives switching to video (no silent escalation)');
+  // 2. automatic video Pro → same-value interaction → transcript
+  s = P.applyAnalysisMode(P.initialPolicyState(), VIDEO_MODE);
+  ok(s.model === PRO_MODEL && s.manuallyChosen === false, 'video starts on automatic Pro');
+  s = P.applyModelInteraction(s, primary(PRO_MODEL)).state;
+  s = P.applyAnalysisMode(s, TRANSCRIPT_MODE);
+  ok(s.model === PRO_MODEL, 'REGRESSION 2: deliberately kept Pro survives switching to transcript (no silent downgrade)');
+  // 3. automatic transcript Flash-Lite → interaction → choose Flash → video
+  s = P.initialPolicyState();
+  s = P.applyModelInteraction(s, primary(FLASH_LITE_MODEL)).state;
+  s = P.applyModelInteraction(s, { type: 'change', displayedModel: FLASH_MODEL }).state;
+  s = P.applyAnalysisMode(s, VIDEO_MODE);
+  ok(s.model === FLASH_MODEL, 'REGRESSION 3: choosing Flash after activation pins Flash through video');
+  // 4. tab across the selector WITHOUT activating it → video
+  s = P.initialPolicyState();
+  s = P.applyModelInteraction(s, { type: 'keydown', key: 'Tab', displayedModel: FLASH_LITE_MODEL }).state;
+  ok(s.manuallyChosen === false, 'REGRESSION 4: tabbing across the selector does not pin');
+  s = P.applyAnalysisMode(s, VIDEO_MODE);
+  ok(s.model === PRO_MODEL, 'REGRESSION 4: the automatic policy is still live and video gives Pro');
+  // 5. close/reopen after any pin
+  for (const pinned of [
+    P.applyModelInteraction(P.initialPolicyState(), primary(FLASH_LITE_MODEL)).state,
+    P.applyModelInteraction(P.applyAnalysisMode(P.initialPolicyState(), VIDEO_MODE), primary(PRO_MODEL)).state,
+    P.applyModelInteraction(P.initialPolicyState(), { type: 'keydown', key: 'ArrowDown', displayedModel: FLASH_LITE_MODEL }).state,
+  ]) {
+    ok(pinned.manuallyChosen === true, 'a pin was established');
+    const fresh = P.resetPolicyState();
+    ok(fresh.manuallyChosen === false && fresh.analysisMode === TRANSCRIPT_MODE && fresh.model === FLASH_LITE_MODEL,
+      'REGRESSION 5: close/reopen returns to transcript + automatic Flash-Lite');
+  }
+}
+
 section('CROSS-LAYER: the renderer mirror agrees with the launch path and the SDK');
 {
   const launchAllowlist = [...args.VALID_VIDEO_MODELS].sort();
@@ -239,7 +361,23 @@ section('renderer wiring: script order, honest copy, and the concrete launch val
   ok(appSrc.indexOf("videoModel: 'auto'") === -1 && !/videoModel:\s*['"]\s*['"]/.test(appSrc),
     "the renderer→main payload carries no 'auto' or blank model");
   ok(/modelPolicy = videoModelPolicy\.resetPolicyState\(\)/.test(appSrc), 'openModal resets the policy session');
-  ok(/videoModelPolicy\.applyManualModel/.test(appSrc), 'the model dropdown routes through applyManualModel');
+  // The UI must actually INVOKE the policy — a direct applyManualModel() call in a test proves
+  // nothing about the renderer. All three real event paths are pinned here.
+  ok(/videoModelPolicy\.applyModelInteraction/.test(appSrc), 'the model selector routes through applyModelInteraction');
+  ok(/modelSelect\.onpointerdown\s*=/.test(appSrc), 'app.js wires a pointerdown handler to the model selector');
+  ok(/modelSelect\.onkeydown\s*=/.test(appSrc), 'app.js wires a keydown handler to the model selector');
+  ok(/modelSelect\.onchange\s*=/.test(appSrc), 'app.js keeps the change handler on the model selector');
+  ok(/type:\s*'pointerdown'[\s\S]{0,160}displayedModel:\s*modelSelect\.value/.test(appSrc),
+    'pointerdown passes the CURRENTLY DISPLAYED value, so a same-value activation pins it');
+  ok(/type:\s*'keydown'[\s\S]{0,160}displayedModel:\s*modelSelect\.value/.test(appSrc),
+    'keydown passes the CURRENTLY DISPLAYED value');
+  ok(/type:\s*'change',\s*displayedModel:\s*e\.target\.value/.test(appSrc),
+    'change passes the NEWLY SELECTED value, replacing any temporary pin');
+  ok(/button:\s*e\.button/.test(appSrc) && /isPrimary:\s*e\.isPrimary/.test(appSrc),
+    'the pointer handler forwards button/isPrimary so non-primary activation is ignored');
+  ok(/ctrlKey:\s*e\.ctrlKey/.test(appSrc) && /metaKey:\s*e\.metaKey/.test(appSrc),
+    'the keyboard handler forwards Ctrl/Meta so shortcuts do not pin');
+  ok(/if \(!outcome\.handled\) return/.test(appSrc), 'a non-deliberate interaction changes nothing');
   ok(/videoModelPolicy\.applyAnalysisMode/.test(appSrc), 'the analysis-mode dropdown routes through applyAnalysisMode');
   ok(/function syncVideoModelControls/.test(appSrc), 'one sync function owns DOM+state agreement');
   ok(appSrc.indexOf("state.videoModel = 'gemini-2.5-flash-lite'") === -1,
