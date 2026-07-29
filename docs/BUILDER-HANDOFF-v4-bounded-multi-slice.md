@@ -692,7 +692,7 @@ The original V4 review is superseded for release purposes. Start here:
 
 ## Reviewer verdicts
 
-### Current — V4R (authoritative for release)
+### Superseded — V4R (historical evidence only)
 
 Reviewer verdict:
 
@@ -700,14 +700,18 @@ Reviewer verdict:
 VERDICT: PASS
 ```
 
-Reviewer verdict source: **Opus 5 Full-class, whole-diff, read-only review of
-`4c07db9a387191485b51cb99886d58d94573c1ad...5b5e30a102e92a02151ee4b4876a379e6fa7069b`** (the
-corrected tree).
+Reviewer verdict source: Opus 5 Full-class, whole-diff, read-only review of
+`4c07db9a387191485b51cb99886d58d94573c1ad...5b5e30a102e92a02151ee4b4876a379e6fa7069b` (the corrected
+tree).
 
 Gates independently measured by that review: app **1297 / 0**; Pester **827 / 0 / 0**.
 
-**This verdict supersedes the original V4 verdict for release purposes.** It is the only verdict
-that authorizes the merge and the single paid acceptance run.
+> **This verdict authorizes no present action.** It superseded the original V4 verdict *at the
+> time*, and it remains an accurate record of what that review read and established. It has since
+> been superseded twice over: by the failed human acceptance that followed it, and by V4Q. It does
+> **not** authorize a merge, a push, a provider probe, or an acceptance run, and it is **invalid for
+> the merge-gate plan**. The gate totals above are historical measurements of the `5b5e30a` tree,
+> not of the current branch.
 
 What that review independently established, beyond the gates: the raw PS 5.1 -> real `node.exe`
 quotation loss was reproduced and then shown fixed end-to-end through the *actual* SDK validator
@@ -731,18 +735,28 @@ Reviewer verdict source: Opus 5 Full-class, whole-diff, read-only review of
 `4c07db9a387191485b51cb99886d58d94573c1ad...f17b51fdbe2dbd2b6110257f2df459dd7edc04f0`.
 
 Retained as the honest record of what was reviewed and when. **It is NOT sufficient to release this
-branch**: human acceptance afterwards exposed a real production transport defect that the reviewed
-test suite structurally could not detect, because every V4 slice test asserted against a PowerShell
-`node` function shadow, which never crosses `CommandLineToArgvW`.
+branch** and authorizes no present action: human acceptance afterwards exposed a real production
+transport defect that the reviewed test suite structurally could not detect, because every V4 slice
+test asserted against a PowerShell `node` function shadow, which never crosses `CommandLineToArgvW`.
+
+> **Both verdicts above are historical and invalid for the merge-gate plan.** Their literal
+> `VERDICT: PASS` lines, ranges, gate numbers, and pinned-diff hashes are preserved verbatim as
+> evidence of what each review actually read. Neither may be cited as authorization for the current
+> branch. **No verdict exists for the current review range.**
 
 ## Review-diff rule
 
-- Before merge: `git diff main...5b5e30a` (equivalently the immutable `4c07db9...5b5e30a`).
-- After merge: reproduce with
-  `git diff 4c07db9a387191485b51cb99886d58d94573c1ad...5b5e30a102e92a02151ee4b4876a379e6fa7069b`
-  (`git diff main...<tip>` goes empty once the tip is an ancestor of `main`).
+**The only current review range is `4c07db9a387191485b51cb99886d58d94573c1ad...<FINAL_REVIEWED_TIP>`,
+where `<FINAL_REVIEWED_TIP>` is the SHA recorded in the merge-gate handoff tail near the top of this
+document.** That tail also records the authoritative pinned-diff bytes, SHA-256, and file counts.
+
+- Before merge: `git diff 4c07db9a387191485b51cb99886d58d94573c1ad...<FINAL_REVIEWED_TIP>`
+  (equivalently `git diff main...<FINAL_REVIEWED_TIP>` while the tip is not yet an ancestor of `main`).
+- After merge: reproduce with the same immutable three-dot range — `git diff main...<tip>` goes empty
+  once the tip is an ancestor of `main`.
 - Always use `--output`; never PowerShell `>`.
 - Retain the literal `VERDICT: PASS|FAIL` line and identify the review that produced it.
-- The superseded `f17b51f` range is historical only and must never be used for a merge-gate plan.
+- **The `5b5e30a` and `f17b51f` ranges are historical only and must never be used for a merge-gate
+  plan.** Do not regenerate against them and do not cite their hashes as current.
 
 Pinned `.agent-review-*.diff` files are local review artifacts and remain gitignored.

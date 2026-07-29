@@ -222,8 +222,8 @@ claim passes.
 
 These approximation passes are accepted **under-matches**, not findings that the report is correct.
 A report that says `approximately 51 seconds` about a 50-second authorized scope may well be wrong;
-the gate simply cannot prove it from the text, and discarding a paid response on an unprovable
-reading is the worse error. **Human acceptance remains responsible for semantic truth**, here as
+the gate simply cannot prove it from the text, and discarding a provider response after usage and
+quota were already consumed, on an unprovable reading, is the worse error. **Human acceptance remains responsible for semantic truth**, here as
 everywhere else in this gate.
 
 > **This is the ONLY semantic ambiguity in the entire gate that is resolved using known authorized
@@ -265,7 +265,8 @@ Every quality rejection, including both new format codes:
 
 - preserves the exact response text as UTF-8 **without BOM**, in `rejected-response.txt` only,
   as a direct child of the existing run directory;
-- preserves usage (the run was billed; the manifest says so);
+- preserves usage (provider usage occurred and is recorded in the manifest; whether it was free-tier
+  or billable is unknown to this repository);
 - records `outcome: error` and `reportFile: null`;
 - publishes exactly one diagnostic entry, and only after the PowerShell side **independently
   re-derives** the artifact's byte count and SHA-256 rather than trusting what the child reported;
@@ -277,8 +278,9 @@ empty, preserve usage where available, and never repeat the provider request.
 
 > **No quality rejection ever triggers another provider request.** There is no repair, no
 > continuation, no fallback, and no quality-driven retry. K5's bounded 503 recovery is untouched and
-> applies only to eligible transport failures. A rejected response is a terminal, paid failure whose
-> only output is evidence.
+> applies only to eligible transport failures. A rejected response is a terminal provider-response
+> failure that occurred after usage was consumed — potentially billable, depending on the user's own
+> Gemini project and account — whose only output is evidence.
 
 The mandatory pre-submission `--diagnostic-dir` gate is unchanged: the SDK refuses to submit at all
 if it has nowhere to preserve a rejection, with zero fetches.
@@ -312,8 +314,8 @@ restatement. Whether a real model actually obeys that instruction is an open que
 real request can answer — and no real request has been made at any point during V4Q.
 
 **When it may happen.** After the complete V4Q implementation receives the required final Full-class
-whole-diff review `VERDICT: PASS`, and *before* the final paid acceptance run, Blue may **separately
-and explicitly** authorize one probe.
+whole-diff review `VERDICT: PASS`, and *before* the final provider acceptance run, Blue may
+**separately and explicitly** authorize one probe.
 
 **What it is.** One deliberately cheap request: approximately **15 seconds**, **single slice**, Pro.
 Its sole purpose is to test compliance with the instruction not to restate the synthetic-origin
@@ -408,9 +410,11 @@ provider calls, or timers; every transition returns a new plain state object.
 | pinned (manual) | the pinned model | the pinned model | the pinned model |
 
 **Why Pro is the automatic video choice.** The quality gate rejects a response that fails
-deterministic validation, and a rejected response is a paid, terminal failure whose only output is
-evidence. Flash-Lite on a bounded video pass is exactly the configuration that produced the V4Q
-failure evidence. Transcript and audio keep the economy model because they never enter that path.
+deterministic validation, and a rejected response is a terminal failure whose only output is
+evidence — it **consumes quota and may incur cost**, since free-tier versus billable status depends
+on the user's own Gemini project and account and cannot be determined here. Flash-Lite on a bounded
+video pass is exactly the configuration that produced the V4Q failure evidence. Transcript and audio
+keep the economy model because they never enter that path.
 
 **Slice count is deliberately not an input.** Analysis mode alone decides, so a whole-video pass and
 an eight-slice pass receive the same automatic model. Backend effective-model resolution is a
