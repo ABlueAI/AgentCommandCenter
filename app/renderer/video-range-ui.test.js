@@ -4,6 +4,8 @@
 // Verifies the clear-on-hide, error-reset, and stale-range belt-check invariants for the
 // video-scout time-range UI, using a tiny fake DOM element (classList + value).
 
+const fs = require('fs');
+const path = require('path');
 const {
   syncVideoRangeVisibility, resetVideoRangeError, detectStaleRange,
   MAX_SLICES, MIN_MULTI_SLICES, AGGREGATE_SLICE_CAP_SECONDS, MAX_OFFSET_SECONDS,
@@ -14,6 +16,23 @@ let passed = 0, failed = 0;
 function assert(cond, label) {
   if (cond) { process.stdout.write(`  ✓ ${label}\n`); passed++; }
   else { process.stderr.write(`  ✗ FAIL: ${label}\n`); failed++; }
+}
+
+// The V4 controls make the Video Scout form substantially taller than the original New Agent
+// modal. Pin the actual CSS contract so the URL field and launch controls cannot disappear beyond
+// a short or narrow viewport: wider screens reduce wrapping, while every viewport retains a
+// bounded, internally scrollable dialog.
+{
+  const css = fs.readFileSync(path.join(__dirname, 'styles.css'), 'utf8').replace(/\r\n/g, '\n');
+  const modalRule = (css.match(/\.modal\s*\{([^}]*)\}/) || [null, ''])[1];
+  assert(/width:\s*min\(680px,\s*calc\(100vw\s*-\s*32px\)\)/.test(modalRule),
+    'New Agent modal widens to 680px but remains inside narrow viewports');
+  assert(/max-height:\s*calc\(100vh\s*-\s*32px\)/.test(modalRule),
+    'New Agent modal height is capped inside the visible viewport');
+  assert(/overflow-y:\s*auto/.test(modalRule),
+    'an over-height Video Scout form scrolls inside the modal instead of clipping its fields');
+  assert(/box-sizing:\s*border-box/.test(modalRule),
+    'modal padding and border are included in the viewport-bounded dimensions');
 }
 
 // Minimal fake element: a value plus a classList backed by a Set.

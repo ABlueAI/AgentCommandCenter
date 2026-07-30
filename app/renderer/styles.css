@@ -252,7 +252,12 @@ input:focus { outline: none; border-color: var(--accent); }
 
 /* ---- modal ---- */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.modal { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 22px; width: 380px; display: flex; flex-direction: column; gap: 8px; }
+.modal {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 22px;
+  width: min(680px, calc(100vw - 32px)); max-height: calc(100vh - 32px);
+  box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 8px;
+}
 .modal h3 { margin: 0 0 6px; }
 .modal label { color: var(--muted); font-size: 12px; margin-top: 6px; }
 .agent-choices { display: flex; gap: 6px; }
