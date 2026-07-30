@@ -223,15 +223,55 @@ const RAW_SECONDS_STAMP = String.raw`\d{1,6}s`;
 const CLOCK_STAMP = String.raw`\d{1,2}:\d{2}(?::\d{2})?`;
 const ANY_STAMP = `(?:${RAW_SECONDS_STAMP}|${CLOCK_STAMP})`;
 const EVIDENCE_TAG = /\[(?:VISUAL|AUDIO|TEXT)\]/;
-const EVIDENCE_LINE = new RegExp(
-  String.raw`^(?:[-*+][ \t]+)?(${ANY_STAMP})(?:[ \t]*[-–—][ \t]*(${ANY_STAMP}))?[ \t]+\[(VISUAL|AUDIO|TEXT)\]`);
-const LABELED_MARKER = /^\*\*Slice[ \t]+(\d+)[ \t]+audio[ \t]+(evidence|justification):\*\*[ \t]*(.*)$/;
-const LEADING_STAMP = new RegExp(String.raw`^(${ANY_STAMP})`);
+const LIST_PREFIX = /^[-*+][ \t]+/;
+// A labeled Slice audio marker, carrying the SAME optional Markdown list prefix ordinary evidence
+// may carry. Still anchored, so marker-like text quoted inside prose is not a marker.
+const LABELED_MARKER = /^(?:[-*+][ \t]+)?\*\*Slice[ \t]+(\d+)[ \t]+audio[ \t]+(evidence|justification):\*\*[ \t]*(.*)$/;
 
 function stampSeconds(stamp) {
   if (/^\d+s$/.test(stamp)) return Number(stamp.slice(0, -1));
   const parts = stamp.split(':').map(Number);
   return parts.length === 3 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : parts[0] * 60 + parts[1];
+}
+
+// THE ONE canonical timestamp-span parser. Ordinary Section 5 evidence and labeled Slice audio
+// markers both go through this; there is deliberately no second, weaker marker grammar. Revision 8
+// gave markers a bare leading-stamp match, so a ranged marker's ENDING timestamp was never read:
+// `10s-999s` authorized as the point `10s`, and `29s-30s` passed against [10,30).
+const RANGE_FORM = new RegExp(String.raw`^(${ANY_STAMP})[ \t]*[-–—][ \t]*(${ANY_STAMP})(?![\w:])`);
+const POINT_FORM = new RegExp(String.raw`^(${ANY_STAMP})(?![\w:])`);
+// An UNSPACED dash immediately followed by non-whitespace opens a range, so what follows it must be
+// a complete stamp: `10s-oops` is malformed, never the valid point `10s`. A SPACED dash is the
+// marker's own description separator (`00:06 — a female voice`), which leaves a point span intact.
+const DANGLING_RANGE = /^[-–—][^\s]/;
+
+function parseStampSpan(text) {
+  const s = String(text);
+  const ranged = RANGE_FORM.exec(s);
+  if (ranged) {
+    return { from: stampSeconds(ranged[1]), to: stampSeconds(ranged[2]), ranged: true, length: ranged[0].length };
+  }
+  const point = POINT_FORM.exec(s);
+  if (!point) return null;
+  if (DANGLING_RANGE.test(s.slice(point[0].length))) return null;
+  const t = stampSeconds(point[1]);
+  return { from: t, to: t, ranged: false, length: point[0].length };
+}
+
+// The one range predicate every caller shares: half-open at the end, ordered within an interval.
+// BOTH endpoints are checked, which is what makes a ranged marker's tail load-bearing.
+function withinRange(span, r) {
+  return Boolean(span) && span.from >= r.startOffset && span.from <= span.to && span.to < r.endOffset;
+}
+
+// A timestamp-led Section 5 evidence line: optional list prefix, one canonical span, then the tag.
+function parseEvidenceLine(line) {
+  const rest = line.replace(LIST_PREFIX, '');
+  const span = parseStampSpan(rest);
+  if (!span) return null;
+  const tag = /^[ \t]+\[(VISUAL|AUDIO|TEXT)\]/.exec(rest.slice(span.length));
+  if (!tag) return null;
+  return { from: span.from, to: span.to, ranged: span.ranged, kind: tag[1] };
 }
 
 // --- Independent rendered-declaration map (§16) ------------------------------------------------
@@ -265,9 +305,9 @@ function extractEvidence(lines, label, where) {
     const line = raw.trim();
     if (!line || line.startsWith('#')) continue;
     if (LABELED_MARKER.test(line)) continue;
-    const m = EVIDENCE_LINE.exec(line);
-    if (m) {
-      found.push({ line, from: stampSeconds(m[1]), to: stampSeconds(m[2] || m[1]), ranged: Boolean(m[2]), kind: m[3] });
+    const parsed = parseEvidenceLine(line);
+    if (parsed) {
+      found.push({ line, ...parsed });
     } else if (EVIDENCE_TAG.test(line)) {
       // Recognized as evidence, not parseable under the declared grammar: never skipped.
       assert(false, `[${label}] ${where}: recognized evidence line is parseable — "${line.slice(0, 70)}"`);
@@ -277,7 +317,7 @@ function extractEvidence(lines, label, where) {
 }
 
 function assertInsideRange(ev, r, label, where) {
-  assert(ev.from >= r.startOffset && ev.from <= ev.to && ev.to < r.endOffset,
+  assert(withinRange(ev, r),
     `[${label}] ${where}: "${ev.line.slice(0, 58)}" lies inside authorized [${r.startOffset}s,${r.endOffset}s)`);
 }
 
@@ -323,13 +363,14 @@ function guardScopeHonesty(text, ranges, label, opts = {}) {
       if (!m) continue;
       assert(Number(m[1]) === n, `[${label}] ${where}: every labeled marker under this heading names slice ${n}`);
       if (Number(m[1]) !== n) continue;
-      const stamp = LEADING_STAMP.exec(m[3]);
-      assert(Boolean(stamp), `[${label}] ${where}: the ${m[2]} marker is timestamp-led`);
-      if (stamp) {
-        const t = stampSeconds(stamp[1]);
-        assert(t >= r.startOffset && t < r.endOffset,
-          `[${label}] ${where}: the ${m[2]} marker at ${stamp[1]} is inside [${r.startOffset}s,${r.endOffset}s)`);
-      }
+      // Same canonical span parser and same range predicate as ordinary evidence, so BOTH
+      // endpoints of a ranged marker are authorized. A malformed span fails visibly here and is
+      // not counted, so it can never satisfy the marker tally through a partial match either.
+      const span = parseStampSpan(m[3]);
+      assert(Boolean(span), `[${label}] ${where}: the ${m[2]} marker carries a complete parseable timestamp span`);
+      if (!span) continue;
+      assert(withinRange(span, r),
+        `[${label}] ${where}: the ${m[2]} marker span ${span.from}s-${span.to}s is inside [${r.startOffset}s,${r.endOffset}s)`);
       if (m[2] === 'evidence') evidenceMarkers++; else justificationMarkers++;
     }
     if (opts.requireEvidenceMarker !== false) {
@@ -1418,6 +1459,134 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     // cannot evade the check by carrying different slice numbers.
     assert(normalizeEvidenceLine('- 00:01 [VISUAL] Slice 1 static frame') === normalizeEvidenceLine('- 00:02 [VISUAL] Slice 2 static frame'),
       'normalization still strips `Slice N`, so relabelled filler inside one bucket cannot evade the count');
+  }
+
+  section('V4 REVISION 9: Slice audio markers use the COMPLETE timestamp-span grammar');
+  {
+    // Revision 8 gave labeled markers their own weaker grammar: a bare leading-stamp match with no
+    // list-prefix support. A ranged marker's ENDING timestamp was therefore never read, so
+    // `10s-999s` authorized as the point `10s` and `29s-30s` passed against [10,30). Markers and
+    // ordinary evidence now share ONE canonical span parser and ONE range predicate.
+    const RANGE = { startOffset: 10, endOffset: 30 };
+    const RANGES = [RANGE];
+    // Markers are supplied verbatim, so every form below is exercised as RENDERED TEXT inside a
+    // complete assembled report rather than as a string handed straight to the parser.
+    const withMarkers = (evidence, justification) => [
+      '## 1. TL;DR', 'Static.', '', PROFILE_SECTION_HEADER, '**Section TL;DR:** profile.',
+      AUTHORIZED_SCOPE_LINE(1, 20), UNDETERMINABLE_DURATION_LINE, NO_SYNTHETIC_EVIDENCE_LINE, '',
+      PROFILE_SECTION_NEXT_HEADER, '**Section TL;DR:** none.', '', '## 4. DETAILED SUMMARY',
+      '**Section TL;DR:** summary.', '', EVIDENCE_SECTION_HEADER, '**Section TL;DR:** evidence.',
+      SLICE_HEADING(1, RANGE), '**Slice 1 audio status:** SILENCE', evidence, justification,
+      '10s-29s [VISUAL] one consolidated observation', '',
+      EVIDENCE_SECTION_NEXT_HEADER, '**Section TL;DR:** claims.', '',
+      '## 7. DISCREPANCIES & CROSS-CHECKS', '**Section TL;DR:** consistent.', '',
+      '## 8. SOURCE-CREDIBILITY ASSESSMENT', '**Section TL;DR:** unattributable.', '',
+      '## 9. LIMITATIONS OF THIS ANALYSIS', '**Section TL;DR:** bounded.',
+    ].join('\n');
+    const guardMarkers = (evidence, justification, label) =>
+      guardScopeHonesty(withMarkers(evidence, justification), RANGES, label, { requireJustification: true });
+
+    // POSITIVE 1 — unprefixed point marker, in the clock form production itself requires.
+    const plain = withMarkers('**Slice 1 audio evidence:** 00:10 — a spoken phrase',
+      '**Slice 1 audio justification:** 00:10 — nothing audible');
+    guardScopeHonesty(plain, RANGES, 'marker-point-unprefixed', { requireJustification: true });
+    assert(vq(plain, { ranges: RANGES }).ok === true,
+      'an unprefixed point audio-evidence marker is authorized by the guard AND passes production');
+    // POSITIVE 2 — the optional Markdown list prefix, for all three bullet characters. The guard
+    // must RECOGNIZE these so they cannot slip out of marker scope. Production's own marker
+    // contract is anchored with no prefix, so it rejects them; both facts are recorded.
+    for (const bullet of ['-', '*', '+']) {
+      const prefixed = withMarkers(`${bullet} **Slice 1 audio evidence:** 00:10 — a spoken phrase`,
+        `${bullet} **Slice 1 audio justification:** 00:10 — nothing audible`);
+      guardScopeHonesty(prefixed, RANGES, `marker-point-prefixed-${bullet}`, { requireJustification: true });
+      assert(vq(prefixed, { ranges: RANGES }).code === 'missing-slice-audio',
+        `a "${bullet} " prefixed marker is recognized and authorized by the guard, and production still requires the unprefixed form`);
+    }
+    // POSITIVE 3 — a ranged audio-evidence marker wholly inside [10,30), raw-second form.
+    guardMarkers('**Slice 1 audio evidence:** 10s-29s — a spoken phrase',
+      '**Slice 1 audio justification:** 00:10 — nothing audible', 'marker-ranged-raw-seconds');
+    // POSITIVE 4 — a ranged audio-JUSTIFICATION marker wholly inside [10,30), clock form.
+    const rangedJust = withMarkers('**Slice 1 audio evidence:** 00:10 — a spoken phrase',
+      '**Slice 1 audio justification:** 00:10-00:29 — nothing audible');
+    guardScopeHonesty(rangedJust, RANGES, 'marker-ranged-justification', { requireJustification: true });
+    assert(vq(rangedJust, { ranges: RANGES }).ok === true,
+      'a ranged clock-form audio-justification marker is authorized by the guard AND passes production');
+    // POSITIVE 5 — the HH:MM:SS branch. No production fixture renders it, so this is a parser-level
+    // control, and that gap is recorded rather than papered over.
+    const hms = parseStampSpan('01:00:05-01:00:09 — text');
+    assert(hms && hms.ranged && hms.from === 3605 && hms.to === 3609,
+      'an HH:MM:SS-HH:MM:SS span parses both endpoints (parser-level: no rendered fixture uses this form)');
+
+    // ---- NEGATIVE CONTROLS, through the SAME parser and range predicate the guard consumes -----
+    const span = (s) => parseStampSpan(s);
+    assert(!withinRange(span('10s-30s'), RANGE),
+      'NEGATIVE: `10s-30s` fails authorization for [10,30) — the end is the exclusive endpoint');
+    const wide = span('10s-999s — a spoken phrase');
+    assert(wide.ranged && wide.from === 10 && wide.to === 999,
+      'NEGATIVE: `10s-999s` parses as a RANGE ending at 999, never as the valid point 10');
+    assert(!withinRange(wide, RANGE), 'NEGATIVE: and it therefore fails authorization for [10,30)');
+    assert(!withinRange(span('29s-30s'), RANGE),
+      'NEGATIVE: `29s-30s` fails because its ENDING timestamp is the exclusive endpoint');
+    assert(!withinRange(span('30s'), RANGE), 'NEGATIVE: `30s` fails as a point for [10,30)');
+    const reversed = span('29s-10s');
+    assert(reversed.from === 29 && reversed.to === 10 && !withinRange(reversed, RANGE),
+      'NEGATIVE: `29s-10s` fails because a <= b is false');
+    assert(span('10s-oops') === null,
+      'NEGATIVE: `10s-oops` is malformed and is NEVER accepted as the valid point `10s`');
+    assert(withinRange(span('00:10 — a spoken phrase'), RANGE),
+      'a SPACED dash is the marker description separator, so a point span survives it intact');
+    // The evidence path and the marker path really are the same implementation.
+    for (const form of ['10s', '10s-29s', '00:10', '00:10-00:29', '01:00:05', '01:00:05-01:00:09']) {
+      const viaEvidence = parseEvidenceLine(`- ${form} [VISUAL] x`);
+      const viaMarker = parseStampSpan(`${form} — x`);
+      assert(viaEvidence && viaMarker && viaEvidence.from === viaMarker.from && viaEvidence.to === viaMarker.to,
+        `evidence and marker paths agree on "${form}" (one canonical span implementation)`);
+    }
+    // NEGATIVE 6 — a ranged marker whose END leaves the window is refused, for BOTH marker kinds,
+    // read out of an ASSEMBLED REPORT rather than from a literal. This is exactly what Revision 8
+    // got wrong: it authorized these on their leading timestamp alone and never read the tail.
+    const markersOf = (text, label) => parseAssembledReport(text, label).declarations[0].lines
+      .map((l) => LABELED_MARKER.exec(l.trim())).filter(Boolean);
+    for (const [kind, evidence, justification] of [
+      ['evidence', '**Slice 1 audio evidence:** 00:10-00:59 — a spoken phrase',
+        '**Slice 1 audio justification:** 00:10 — nothing audible'],
+      ['justification', '**Slice 1 audio evidence:** 00:10 — a spoken phrase',
+        '**Slice 1 audio justification:** 00:10-00:59 — nothing audible'],
+    ]) {
+      const rendered = markersOf(withMarkers(evidence, justification), `marker-overrun-${kind}`);
+      const target = rendered.find((m) => m[2] === kind);
+      assert(Boolean(target), `the ranged ${kind} marker is recognized in the assembled report`);
+      const overrun = parseStampSpan(target[3]);
+      assert(overrun.ranged && overrun.from === 10 && overrun.to === 59,
+        `NEGATIVE: the rendered ${kind} marker parses as the RANGE 10s-59s, not the point 10s`);
+      assert(!withinRange(overrun, RANGE),
+        `NEGATIVE: a ranged ${kind} marker ending outside [10,30) is refused — Revision 8 authorized it`);
+    }
+    // NEGATIVE 7 — a prefixed marker is recognized AND assigned to its enclosing subsection.
+    const prefixedParsed = parseAssembledReport(
+      withMarkers('- **Slice 1 audio evidence:** 00:10 — a spoken phrase',
+        '- **Slice 1 audio justification:** 00:10 — nothing audible'), 'marker-prefixed-ownership');
+    const owned = prefixedParsed.declarations[0].lines
+      .map((l) => LABELED_MARKER.exec(l.trim())).filter(Boolean);
+    assert(owned.length === 2 && owned.every((m) => Number(m[1]) === 1),
+      'NEGATIVE: both Markdown-prefixed markers are recognized inside slice 1\'s parsed subsection');
+    // NEGATIVE 8 — a marker naming the wrong slice still fails ownership.
+    const wrongSlice = parseAssembledReport(
+      withMarkers('**Slice 2 audio evidence:** 00:10 — a spoken phrase',
+        '**Slice 1 audio justification:** 00:10 — nothing audible'), 'marker-wrong-slice');
+    const enclosing = wrongSlice.declarations[0];
+    const mismatched = enclosing.lines.map((l) => LABELED_MARKER.exec(l.trim())).filter(Boolean)
+      .filter((m) => Number(m[1]) !== enclosing.n);
+    assert(mismatched.length === 1 && mismatched[0][1] === '2',
+      'NEGATIVE: a Slice 2 marker inside slice 1\'s subsection is detected as an ownership mismatch');
+    // NEGATIVE 9 — a malformed marker stays IN scope and cannot satisfy the count by partial match.
+    const malformed = LABELED_MARKER.exec('**Slice 1 audio evidence:** 10s-oops — a spoken phrase');
+    assert(Boolean(malformed), 'NEGATIVE: a malformed marker is still RECOGNIZED (it does not vanish from scope)');
+    assert(parseStampSpan(malformed[3]) === null,
+      'NEGATIVE: and its span fails to parse, so it fails visibly instead of counting toward the marker tally');
+    // Prose is still not a marker, so the §14 carve-outs keep reaching production untouched.
+    assert(LABELED_MARKER.exec('As noted, **Slice 1 audio evidence:** 00:10 — a spoken phrase') === null,
+      'marker-like text quoted inside prose is still not a labeled marker');
   }
 
   section('V4 REVISION 8: rendered ownership is by slice IDENTITY, never by position');
