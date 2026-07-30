@@ -4,7 +4,7 @@ Branch: `feature/v4-bounded-multi-slice`
 Fork-point SHA: `4c07db9a387191485b51cb99886d58d94573c1ad`
 Pre-merge main SHA: `4c07db9a387191485b51cb99886d58d94573c1ad` (verified `main` == `origin/main` == this SHA before branching; re-verify at gate time)
 Accepted corrective-checkpoint tip: **`0d00853296e1ac602dbe7f4e99c03f192a747970`** (Revision 9 `CHECKPOINT REVIEW: PASS`; no Revision 8 or Revision 9 production change)
-Final reviewed tip: Pending the documentation commit authorized by the post–Revision 9 finalization work order; its immutable SHA is recorded in the merge-gate handoff tail after the new whole-diff artifact is created.
+Final reviewed tip: **`b02af5a28d30479b158485749397b123ee562405`**
 Superseded reviewed code tips: `5b5e30a102e92a02151ee4b4876a379e6fa7069b` (V4R) and `f17b51fdbe2dbd2b6110257f2df459dd7edc04f0` (original V4) — both passed review, then FAILED human acceptance
 Merge commit SHA: Pending until merge
 
@@ -14,6 +14,51 @@ Historical failed-review diff: `.agent-review-v4-bounded-multi-slice.diff` — *
 Gitignored, created with `git diff --output`, verified to regenerate byte-for-byte, and preserved
 unchanged as evidence for the failed `4c07db9...20bf2ec` whole-diff review. It is not the current
 review artifact and must not be regenerated or substituted.
+
+---
+
+## MERGE-GATE HANDOFF TAIL — Revision 9 final review identity
+
+| Item | Value |
+|---|---|
+| Review base | `4c07db9a387191485b51cb99886d58d94573c1ad` |
+| Final reviewed tip | `b02af5a28d30479b158485749397b123ee562405` |
+| Review range | `4c07db9a387191485b51cb99886d58d94573c1ad...b02af5a28d30479b158485749397b123ee562405` |
+| Branch | `feature/v4-bounded-multi-slice` |
+| Authoritative artifact | `.agent-review-v4-bounded-multi-slice-revision-9-final.diff` |
+| Artifact identity | `729,376` bytes · SHA-256 `174F8C626413660E74476AAB28DF5909906F463155ADE6A64A93F07A9635E3D1` |
+| Artifact inventory | `43` files: `32` modified, `11` added, `0` deleted · `+9,976 / −205` |
+| Corrective checkpoint | Revision 9 `CHECKPOINT REVIEW: PASS` at `0d00853296e1ac602dbe7f4e99c03f192a747970` |
+| Merge commit | Pending until separately authorized merge |
+
+The authoritative artifact is an ordinary, non-reparse file, gitignored by `.gitignore:33`,
+unstaged, generated with Git's native `--output`, independently regenerated to a distinct temporary
+file, and proven byte-for-byte identical. The temporary file was removed. All seven earlier pinned
+artifacts remain historical evidence and were reverified unchanged.
+
+The final gates are carried forward from the accepted independent Revision 9 checkpoint review; they
+were not rerun during documentation-only finalization:
+
+| Gate | Accepted result |
+|---|---|
+| Focused SDK | `3491 passed / 0 failed` |
+| App | exit `0`, no failures |
+| Pester | `955 passed / 0 failed / 0 skipped`, twice |
+| Reachability | `6 passed / 0 failed` |
+| Syntax and diff hygiene | clean |
+
+The next review must be a fresh Claude Opus 5 Very High Full-class, whole-diff, read-only review of
+`4c07db9a387191485b51cb99886d58d94573c1ad...b02af5a28d30479b158485749397b123ee562405`,
+ending exactly in `VERDICT: PASS` or `VERDICT: FAIL — <bounded reasons>`.
+
+**Handoff-tail shape.** The resulting branch tip is the documentation-only commit containing this
+section. Its immutable SHA must be recorded in the external uncommitted handoff after commit
+creation; a commit cannot truthfully contain its own SHA without rewriting itself. Structurally, the
+branch tip must be exactly one commit above `b02af5a28d30479b158485749397b123ee562405`,
+and that commit must modify only this handoff file.
+
+The final whole-diff review has not yet passed. This tail and the Revision 9 checkpoint PASS
+authorize no provider probe, acceptance run, merge, or push.
 
 ---
 
