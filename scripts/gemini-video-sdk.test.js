@@ -178,6 +178,198 @@ const {
   EVIDENCE_SECTION_HEADER, EVIDENCE_SECTION_NEXT_HEADER,
 } = require('./gemini-video-sdk');
 
+// ================== V4 REVISION 8: rendered-fixture integrity infrastructure ==================
+// A guard that reconstructs its input from the helper that built the fixture cannot detect the
+// drift it exists to prevent — that is exactly how GUARD 2 came to carry a false claim. So every
+// helper below takes the COMPLETE assembled report string that is handed to production
+// validation, and derives scope, ownership and counts from that text alone.
+
+const mmss = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+// §21: an injected observation is stamped inside the range it is filed under. When a fixture needs
+// more observations than the window has whole seconds, cycle deterministically rather than walking
+// out of scope — a repeated stamp is honest, a stamp outside the authorized window is not.
+const cycledStamp = (i, r) => mmss(r.startOffset + (i % (r.endOffset - r.startOffset)));
+
+// --- Fail-loud mutation helpers ---------------------------------------------------------------
+// `String.replace()` whose target has stopped matching returns the source untouched. An
+// adversarial fixture built that way silently becomes its own compliant control and the assertion
+// passes for the wrong reason. These refuse a missing target, a wrong occurrence count, an
+// identical replacement, and an output that did not change.
+function mutateLiteral(source, target, replacement, label, expectedCount = 1) {
+  const ok = typeof target === 'string' && target.length > 0;
+  assert(ok, `[${label}] the literal mutation target is non-empty`);
+  const found = ok ? source.split(target).length - 1 : 0;
+  assert(found === expectedCount, `[${label}] the target occurs exactly ${expectedCount}x in the source (found ${found})`);
+  assert(target !== replacement, `[${label}] the replacement differs from the target`);
+  const out = ok && found === expectedCount ? source.split(target).join(replacement) : source;
+  assert(out !== source, `[${label}] the mutation actually changed the assembled report`);
+  return out;
+}
+
+function mutateRegex(source, pattern, replacement, expectedCount, label) {
+  const flags = pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`;
+  const found = (source.match(new RegExp(pattern.source, flags)) || []).length;
+  assert(found > 0, `[${label}] the mutation pattern matches at least once`);
+  assert(found === expectedCount, `[${label}] the pattern matches exactly ${expectedCount}x (found ${found})`);
+  const out = source.replace(new RegExp(pattern.source, flags), replacement);
+  assert(out !== source, `[${label}] the mutation actually changed the assembled report`);
+  return out;
+}
+
+// --- Complete evidence grammar (all rendered fixture forms) -----------------------------------
+// Raw seconds (`10s`, `10s-29s`) and clock forms (`MM:SS`, `HH:MM:SS`, and their intervals), with
+// or without a leading Markdown dash. A displayed interval `a-b` is INCLUSIVE of `b`.
+const RAW_SECONDS_STAMP = String.raw`\d{1,6}s`;
+const CLOCK_STAMP = String.raw`\d{1,2}:\d{2}(?::\d{2})?`;
+const ANY_STAMP = `(?:${RAW_SECONDS_STAMP}|${CLOCK_STAMP})`;
+const EVIDENCE_TAG = /\[(?:VISUAL|AUDIO|TEXT)\]/;
+const EVIDENCE_LINE = new RegExp(
+  String.raw`^(?:[-*+][ \t]+)?(${ANY_STAMP})(?:[ \t]*[-–—][ \t]*(${ANY_STAMP}))?[ \t]+\[(VISUAL|AUDIO|TEXT)\]`);
+const LABELED_MARKER = /^\*\*Slice[ \t]+(\d+)[ \t]+audio[ \t]+(evidence|justification):\*\*[ \t]*(.*)$/;
+const LEADING_STAMP = new RegExp(String.raw`^(${ANY_STAMP})`);
+
+function stampSeconds(stamp) {
+  if (/^\d+s$/.test(stamp)) return Number(stamp.slice(0, -1));
+  const parts = stamp.split(':').map(Number);
+  return parts.length === 3 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : parts[0] * 60 + parts[1];
+}
+
+// --- Independent rendered-declaration map (§16) ------------------------------------------------
+// Parsed out of the assembled text, never out of the range array that produced it, so the two can
+// be compared as genuinely independent statements about the same report.
+const RENDERED_HEADING = /^#{1,6}[ \t]*Slice[ \t]+(\d+):[ \t]*\[(\d+)s,(\d+)s\)[ \t]*—[ \t]*(\d+)s authorized[ \t]*$/;
+
+function parseAssembledReport(text, label) {
+  const all = String(text).split('\n');
+  const start = all.findIndex((l) => l.trim() === EVIDENCE_SECTION_HEADER);
+  assert(start !== -1, `[${label}] the assembled report carries the canonical Section 5 header`);
+  const after = all.findIndex((l, i) => i > start && l.trim() === EVIDENCE_SECTION_NEXT_HEADER);
+  const body = all.slice(start + 1, after === -1 ? all.length : after);
+  const declarations = [];
+  body.forEach((line, i) => {
+    const m = RENDERED_HEADING.exec(line.trim());
+    if (m) declarations.push({ n: Number(m[1]), start: Number(m[2]), end: Number(m[3]), authorized: Number(m[4]), at: i });
+  });
+  declarations.forEach((d, k) => {
+    d.lines = body.slice(d.at + 1, k + 1 < declarations.length ? declarations[k + 1].at : body.length);
+  });
+  const preamble = body.slice(0, declarations.length ? declarations[0].at : body.length);
+  return { body, declarations, preamble };
+}
+
+// Timestamp-bearing evidence inside one bounded block, as an ORDERED LIST: §21's deterministic
+// cycling deliberately repeats stamps, so observations must never be keyed by timestamp.
+function extractEvidence(lines, label, where) {
+  const found = [];
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    if (LABELED_MARKER.test(line)) continue;
+    const m = EVIDENCE_LINE.exec(line);
+    if (m) {
+      found.push({ line, from: stampSeconds(m[1]), to: stampSeconds(m[2] || m[1]), ranged: Boolean(m[2]), kind: m[3] });
+    } else if (EVIDENCE_TAG.test(line)) {
+      // Recognized as evidence, not parseable under the declared grammar: never skipped.
+      assert(false, `[${label}] ${where}: recognized evidence line is parseable — "${line.slice(0, 70)}"`);
+    }
+  }
+  return found;
+}
+
+function assertInsideRange(ev, r, label, where) {
+  assert(ev.from >= r.startOffset && ev.from <= ev.to && ev.to < r.endOffset,
+    `[${label}] ${where}: "${ev.line.slice(0, 58)}" lies inside authorized [${r.startOffset}s,${r.endOffset}s)`);
+}
+
+// --- The test-side scope-honesty guard (§15 §16 §17 §18 §19) ----------------------------------
+// `ranges` is the EFFECTIVE array handed to validateReportQuality (§9), never a rendered heading.
+function guardScopeHonesty(text, ranges, label, opts = {}) {
+  const observations = opts.observations || (() => 1);
+  const parsed = parseAssembledReport(text, label);
+
+  const expected = new Map();
+  ranges.forEach((r, i) => expected.set(i + 1, r));
+  assert(expected.size === ranges.length, `[${label}] the expected-range map has no duplicate slice identity`);
+
+  const rendered = new Map();
+  for (const d of parsed.declarations) {
+    assert(!rendered.has(d.n), `[${label}] slice ${d.n} is declared exactly once in the assembled report`);
+    rendered.set(d.n, d);
+  }
+  assert(rendered.size === expected.size,
+    `[${label}] the assembled report declares ${expected.size} slice(s) (found ${rendered.size})`);
+  for (const n of rendered.keys()) assert(expected.has(n), `[${label}] no extra rendered slice ${n}`);
+  for (const [n, r] of expected) {
+    const d = rendered.get(n);
+    assert(Boolean(d), `[${label}] slice ${n} is declared in the assembled report`);
+    if (!d) continue;
+    assert(d.start === r.startOffset && d.end === r.endOffset && d.authorized === r.endOffset - r.startOffset,
+      `[${label}] slice ${n} renders [${d.start}s,${d.end}s) exactly matching its effective [${r.startOffset}s,${r.endOffset}s)`);
+  }
+
+  // A labeled marker in the preamble is owned by no subsection at all.
+  for (const raw of parsed.preamble) {
+    assert(!LABELED_MARKER.test(raw.trim()), `[${label}] no slice-labeled marker sits in the Section 5 preamble`);
+  }
+
+  let total = 0;
+  for (const [n, r] of expected) {
+    const d = rendered.get(n);
+    if (!d) continue;
+    const where = `slice ${n}`;
+    let evidenceMarkers = 0, justificationMarkers = 0;
+    for (const raw of d.lines) {
+      const m = LABELED_MARKER.exec(raw.trim());
+      if (!m) continue;
+      assert(Number(m[1]) === n, `[${label}] ${where}: every labeled marker under this heading names slice ${n}`);
+      if (Number(m[1]) !== n) continue;
+      const stamp = LEADING_STAMP.exec(m[3]);
+      assert(Boolean(stamp), `[${label}] ${where}: the ${m[2]} marker is timestamp-led`);
+      if (stamp) {
+        const t = stampSeconds(stamp[1]);
+        assert(t >= r.startOffset && t < r.endOffset,
+          `[${label}] ${where}: the ${m[2]} marker at ${stamp[1]} is inside [${r.startOffset}s,${r.endOffset}s)`);
+      }
+      if (m[2] === 'evidence') evidenceMarkers++; else justificationMarkers++;
+    }
+    if (opts.requireEvidenceMarker !== false) {
+      assert(evidenceMarkers === 1, `[${label}] ${where}: exactly one audio-evidence marker (found ${evidenceMarkers})`);
+    }
+    if (opts.requireJustification) {
+      assert(justificationMarkers === 1, `[${label}] ${where}: exactly one audio-justification marker (found ${justificationMarkers})`);
+    }
+    const evidence = extractEvidence(d.lines, label, where);
+    const want = observations(n);
+    assert(evidence.length === want, `[${label}] ${where}: ${want} timestamp-led observation(s) extracted (found ${evidence.length})`);
+    for (const ev of evidence) assertInsideRange(ev, r, label, where);
+    total += evidence.length;
+  }
+  assert(total > 0, `[${label}] the assembled report yields a NON-ZERO extracted observation count`);
+
+  // §17 preamble: its own bucket, authorized against the expected map, never folded into a slice.
+  const preamble = extractEvidence(parsed.preamble, label, 'preamble');
+  assert(preamble.length === (opts.preambleObservations || 0),
+    `[${label}] preamble carries ${opts.preambleObservations || 0} timestamp-led observation(s) (found ${preamble.length})`);
+  for (const ev of preamble) {
+    const matches = [...expected.values()].filter((r) => ev.from >= r.startOffset && ev.from <= ev.to && ev.to < r.endOffset);
+    assert(matches.length === 1,
+      `[${label}] preamble: "${ev.line.slice(0, 52)}" falls within EXACTLY ONE expected range (matched ${matches.length})`);
+  }
+  return { parsed, total, preamble: preamble.length };
+}
+
+// §15 whole-video no-op: an explicitly empty effective range array with no rendered slice
+// structure has no ownership to check, so the sliced guard must not run at all.
+function guardWholeVideo(text, ranges, label) {
+  assert(Array.isArray(ranges) && ranges.length === 0, `[${label}] the effective range array is explicitly empty`);
+  const parsed = parseAssembledReport(text, label);
+  assert(parsed.declarations.length === 0, `[${label}] the whole-video report renders no slice heading`);
+  for (const raw of parsed.body) {
+    assert(!LABELED_MARKER.test(raw.trim()), `[${label}] the whole-video report renders no slice-labeled audio marker`);
+  }
+  return parsed;
+}
+
 function compliantReport(ranges = []) {
   const sliced = ranges.length > 0;
   const agg = ranges.reduce((s, r) => s + (r.endOffset - r.startOffset), 0);
@@ -193,9 +385,12 @@ function compliantReport(ranges = []) {
     const n = i + 1;
     out.push(SLICE_HEADING(n, r),
       `**Slice ${n} audio status:** SPEECH`,
-      `**Slice ${n} audio evidence:** 00:0${Math.min(n, 9)} — a spoken phrase`,
+      // V4 REVISION 8: both timestamps are DERIVED from the range this line is filed under. The
+      // displayed interval ends on the last observable second, because the authorized range is
+      // half-open: `[10,30)` is observed as `10s-29s`, never `10s-30s`.
+      `**Slice ${n} audio evidence:** ${mmss(r.startOffset)} — a spoken phrase`,
       `**Slice ${n} transcription anchor:** "hold this position"`,
-      `${r.startOffset}s-${r.endOffset}s [VISUAL] steady framing across this slice`);
+      `${r.startOffset}s-${r.endOffset - 1}s [VISUAL] steady framing across this slice`);
   });
   if (!sliced) out.push('00:01 [VISUAL] opening frame');
   out.push('', EVIDENCE_SECTION_NEXT_HEADER, '**Section TL;DR:** claims.', '',
@@ -236,7 +431,7 @@ const MEDITATION_REPORT = [
   '**Slice 1 audio evidence:** 00:06 — a female voice begins speaking over a sustained pad; breath counts are audible and unhurried',
   '**Slice 1 transcription anchor:** "let the shoulders drop away from the ears"',
   '00:00-00:05 [VISUAL] illustrated lakeshore at dusk, no motion, no titles',
-  '00:06-01:30 [VISUAL] identical frame held; no cut, pan, zoom, or overlay for the remainder of the window',
+  '00:06-01:29 [VISUAL] identical frame held; no cut, pan, zoom, or overlay for the remainder of the window',
   '00:06 [AUDIO] narration begins; synthesized ambient pad already established underneath',
   '00:22 [AUDIO] first four-count inhale instruction, followed by a six-count exhale',
   '01:04 [AUDIO] the same breath pattern is repeated once, with no change in the instrumental bed',
@@ -245,7 +440,7 @@ const MEDITATION_REPORT = [
   '**Slice 2 audio status:** SPEECH',
   '**Slice 2 audio evidence:** 10:02 — the same female voice continues a body-scan instruction; the instrumental bed is unchanged in timbre and level',
   '**Slice 2 transcription anchor:** "notice the jaw, and let it soften"',
-  '10:00-11:30 [VISUAL] the identical illustrated frame, still with no motion or transition',
+  '10:00-11:29 [VISUAL] the identical illustrated frame, still with no motion or transition',
   '10:14 [TEXT] lower-third caption appears: "Stillwater — daily sessions"',
   '10:02 [AUDIO] body-scan narration in progress, attention moving from shoulders to jaw',
   '10:41 [AUDIO] synthesized strings enter beneath the pad and sustain to the end of the window',
@@ -876,16 +1071,35 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
 
   section('V4Q validator: compliant fixtures PASS (scalar, multipart, legitimate silence)');
   {
-    assert(vq(okReport()).ok === true, 'a compliant 2-slice known-speech report passes');
+    // Each positive fixture is parsed out of the SAME assembled string it hands to `vq`, so a
+    // fixture that renders evidence outside the window it declares fails here first.
+    const okText = okReport();
+    guardScopeHonesty(okText, R2, 'compliant-2slice');
+    assert(vq(okText).ok === true, 'a compliant 2-slice known-speech report passes');
     const one = [{ startOffset: 60, endOffset: 75 }];
-    assert(vq(compliantReport(one), { ranges: one }).ok === true, 'a compliant scalar known-speech report passes');
+    const oneText = compliantReport(one);
+    guardScopeHonesty(oneText, one, 'compliant-scalar');
+    assert(vq(oneText, { ranges: one }).ok === true, 'a compliant scalar known-speech report passes');
     const eight = Array.from({ length: 8 }, (_, i) => ({ startOffset: i * 100, endOffset: i * 100 + 20 }));
-    assert(vq(compliantReport(eight), { ranges: eight }).ok === true, 'a complete 8-slice report passes');
-    assert(vq(compliantReport(), { ranges: [] }).ok === true, 'a compliant whole-video report passes (structure-only checks)');
-    // Justified silence is legitimate and must NOT be rejected.
-    const justified = okReport()
-      .replace(/\*\*Slice (\d) audio status:\*\* SPEECH/g, '**Slice $1 audio status:** SILENCE')
-      .replace(/\*\*Slice (\d) transcription anchor:\*\*[^\n]*/g, '**Slice $1 audio justification:** 00:0$1 — listened for speech, music, and room tone across the slice; nothing audible');
+    const eightText = compliantReport(eight);
+    guardScopeHonesty(eightText, eight, 'compliant-8slice');
+    assert(vq(eightText, { ranges: eight }).ok === true, 'a complete 8-slice report passes');
+    // §15 whole-video no-op: an explicitly empty effective range array owns no slice structure, so
+    // the sliced ownership checks must not run. `00:01 [VISUAL] opening frame` stays unscoped.
+    const wholeText = compliantReport();
+    const wholeParsed = guardWholeVideo(wholeText, [], 'compliant-whole-video');
+    assert(wholeParsed.body.some((l) => l.trim() === '00:01 [VISUAL] opening frame'),
+      'the whole-video fixture keeps its unscoped opening-frame observation');
+    assert(vq(wholeText, { ranges: [] }).ok === true, 'a compliant whole-video report passes (structure-only checks)');
+    // Justified silence is legitimate and must NOT be rejected. Each injected justification is
+    // stamped inside the slice it names, derived from that slice's own authorized range.
+    const justified = mutateRegex(
+      mutateRegex(okReport(), /\*\*Slice (\d) audio status:\*\* SPEECH/, '**Slice $1 audio status:** SILENCE',
+        2, 'justified-silence-status'),
+      /\*\*Slice (\d) transcription anchor:\*\*[^\n]*/,
+      (_m, n) => `**Slice ${n} audio justification:** ${mmss(R2[Number(n) - 1].startOffset)} — listened for speech, music, and room tone across the slice; nothing audible`,
+      2, 'justified-silence-anchor');
+    guardScopeHonesty(justified, R2, 'justified-silence', { requireJustification: true });
     assert(vq(justified).ok === true, 'justified universal silence PASSES (false-positive control)');
     // A supported, timestamped, confidence-rated synthetic finding is allowed.
     const supported = okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE,
@@ -893,8 +1107,17 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     assert(vq(supported).ok === true, 'a standardized evidence-backed synthetic assessment PASSES');
   }
 
+  // §21: the unmutated slice-1 visual line every filler fixture below replaces. Changing
+  // `compliantReport` to render the last observable second silently broke this literal, so it is
+  // written once, consumed through the fail-loud helper, and can never no-op unnoticed again.
+  const SLICE1_VISUAL = '10s-29s [VISUAL] steady framing across this slice';
+  const fillSlice1 = (count, body, label) => mutateLiteral(okReport(), SLICE1_VISUAL,
+    Array.from({ length: count }, (_, i) => `${cycledStamp(i, R2[0])} [VISUAL] ${body}`).join('\n'), label);
+
   section('V4Q validator: every observed V4 failure class is caught with a distinct code');
   {
+    const FILLER_30 = fillSlice1(30, 'Solid green background.', 'failure-class-filler');
+    guardScopeHonesty(FILLER_30, R2, 'failure-class-filler', { observations: (n) => (n === 1 ? 30 : 1) });
     const cases = [
       ['finish-max-tokens', okReport(), { finishReason: 'MAX_TOKENS' }],
       ['finish-not-stop', okReport(), { finishReason: 'SAFETY' }],
@@ -915,8 +1138,7 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
       ['speculative-source-duration', okReport().replace(UNDETERMINABLE_DURATION_LINE, UNDETERMINABLE_DURATION_LINE + '\nApproximate duration: Over 1 hour.'), {}],
       ['synthetic-assessment-field-format', okReport().replace(NO_SYNTHETIC_EVIDENCE_LINE, '**Synthetic-media assessment:** probably fine'), {}],
       ['unsupported-synthetic-claim', okReport().replace('**Section TL;DR:** profile.', 'The static nature suggests it is AI-generated stock footage.'), {}],
-      ['repetitive-timestamp-filler', okReport().replace('10s-30s [VISUAL] steady framing across this slice',
-        Array.from({ length: 30 }, (_, i) => `00:${String(i).padStart(2, '0')} [VISUAL] Solid green background.`).join('\n')), {}],
+      ['repetitive-timestamp-filler', FILLER_30, {}],
     ];
     for (const [expected, text, opts] of cases) {
       const v = vq(text, opts);
@@ -927,10 +1149,14 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
 
   section('V4Q validator: no provider text, prompt, media, URL, or credential enters a reason');
   {
-    const marked = okReport()
-      .replace('**Section TL;DR:** profile.', 'SECRET-PROVIDER-PHRASE the video is silent and AI-generated')
-      .replace('10s-30s [VISUAL] steady framing across this slice',
-        Array.from({ length: 30 }, () => '00:01 [VISUAL] SECRET-PROVIDER-PHRASE repeated').join('\n'));
+    // §24 FIXTURE ONE of two: the okReport-derived marked report, exercised under three finish
+    // reasons. Scope-honest — its provider-marked filler is stamped inside slice 1's own window —
+    // so the leak assertions cannot be satisfied by a report that was rejected for being malformed.
+    const marked = mutateLiteral(
+      fillSlice1(30, 'SECRET-PROVIDER-PHRASE repeated', 'marked-report-filler'),
+      '**Section TL;DR:** profile.', 'SECRET-PROVIDER-PHRASE the video is silent and AI-generated',
+      'marked-report-profile');
+    guardScopeHonesty(marked, R2, 'marked-report', { observations: (n) => (n === 1 ? 30 : 1) });
     for (const opts of [{}, { finishReason: 'SAFETY' }, { finishReason: 'MAX_TOKENS' }]) {
       const v = vq(marked, opts);
       assert(v.ok === false, 'marked report is rejected');
@@ -967,16 +1193,22 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     // Eight slices legitimately share the same `**Slice N audio status:** SILENCE` shape. If marker
     // lines were counted, a compliant 8-slice report would self-reject.
     const eight = Array.from({ length: 8 }, (_, i) => ({ startOffset: i * 100, endOffset: i * 100 + 20 }));
-    const silent8 = compliantReport(eight)
-      .replace(/\*\*Slice (\d) audio status:\*\* SPEECH/g, '**Slice $1 audio status:** SILENCE')
-      .replace(/\*\*Slice (\d) transcription anchor:\*\*[^\n]*/g, '**Slice $1 audio justification:** 00:0$1 — listened across the slice; nothing audible');
+    const silent8 = mutateRegex(
+      mutateRegex(compliantReport(eight), /\*\*Slice (\d) audio status:\*\* SPEECH/, '**Slice $1 audio status:** SILENCE',
+        8, 'silent8-status'),
+      /\*\*Slice (\d) transcription anchor:\*\*[^\n]*/,
+      (_m, n) => `**Slice ${n} audio justification:** ${mmss(eight[Number(n) - 1].startOffset)} — listened across the slice; nothing audible`,
+      8, 'silent8-anchor');
+    guardScopeHonesty(silent8, eight, 'silent8', { requireJustification: true });
     assert(vq(silent8, { ranges: eight }).ok === true,
       'eight identical audio-status marker lines do NOT trip the repetition heuristic');
     // Three repeats are allowed WITHIN ONE SLICE; four are not.
-    const mk = (n) => okReport().replace('10s-30s [VISUAL] steady framing across this slice',
-      Array.from({ length: n }, (_, i) => `00:0${i} [VISUAL] identical observation`).join('\n'));
-    assert(vq(mk(3)).ok === true, 'three identical observations are allowed');
-    assert(vq(mk(4)).code === 'repetitive-timestamp-filler', 'a fourth identical observation is rejected');
+    const mk = (n) => fillSlice1(n, 'identical observation', `mk-${n}`);
+    const mk3 = mk(3); const mk4 = mk(4);
+    guardScopeHonesty(mk3, R2, 'mk-3', { observations: (n) => (n === 1 ? 3 : 1) });
+    guardScopeHonesty(mk4, R2, 'mk-4', { observations: (n) => (n === 1 ? 4 : 1) });
+    assert(vq(mk3).ok === true, 'three identical observations are allowed');
+    assert(vq(mk4).code === 'repetitive-timestamp-filler', 'a fourth identical observation is rejected');
   }
 
   // ============ V4Q FINAL CORRECTION: filler is counted PER SUBSECTION (VERDICT: FAIL) ==========
@@ -1023,46 +1255,61 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
         '## 9. LIMITATIONS OF THIS ANALYSIS', '**Section TL;DR:** bounded windows only.');
       return { text: out.join('\n'), ranges };
     };
+    // Each count is assembled ONCE. That one string is what the guard parses and what `vq`
+    // validates, so there is no second rendering for the two to disagree about.
+    const built = Array.from({ length: 8 }, (_, i) => uniform(i + 1));
+
     // GUARD 1 — SCOPE HONESTY. Every displayed evidence interval must lie inside the authorized
-    // range it is filed under, at every slice count. Parsed back out of the rendered text, so it
-    // checks what the fixture actually EMITS rather than what it intended to emit.
-    const toSeconds = (stamp) => { const [m, s] = stamp.split(':').map(Number); return m * 60 + s; };
-    for (let count = 1; count <= 8; count++) {
-      const { text, ranges } = uniform(count);
-      const shown = text.split('\n')
-        .map((l) => /^- (\d{2}:\d{2})-(\d{2}:\d{2}) \[VISUAL\]/.exec(l.trim()))
-        .filter(Boolean);
-      assert(shown.length === count, `${count}-slice fixture emits exactly ${count} ranged visual entries`);
-      shown.forEach((m, i) => {
-        const r = ranges[i];
-        const from = toSeconds(m[1]); const to = toSeconds(m[2]);
-        assert(from >= r.startOffset && to < r.endOffset && from <= to,
-          `${count}-slice fixture: slice ${i + 1}'s interval ${m[1]}-${m[2]} lies INSIDE its authorized [${r.startOffset}s,${r.endOffset}s)`);
-      });
-      // The per-slice audio markers are timestamped inside their own slice too.
-      for (let i = 0; i < count; i++) {
-        const stamp = new RegExp(String.raw`\*\*Slice ${i + 1} audio evidence:\*\* (\d{2}:\d{2})`).exec(text);
-        assert(stamp && toSeconds(stamp[1]) >= ranges[i].startOffset && toSeconds(stamp[1]) < ranges[i].endOffset,
-          `${count}-slice fixture: slice ${i + 1}'s audio evidence timestamp is inside its authorized range`);
-      }
+    // range it is filed under, at every slice count, read out of the assembled report.
+    for (const { text, ranges } of built) {
+      const g = guardScopeHonesty(text, ranges, `uniform-${ranges.length}`, { requireJustification: true });
+      assert(g.total === ranges.length,
+        `${ranges.length}-slice fixture emits exactly ${ranges.length} ranged visual entries`);
     }
-    // GUARD 2 — NORMALIZATION COLLISION. The entries must genuinely collide after normalization.
-    // Without this the matrix could pass for the wrong reason — a surviving timestamp or offset would
-    // make each key unique and the cross-slice case would never actually be exercised. Keys are read
-    // from the REAL rendered slice 1 and slice 8 lines, not from hand-typed literals.
-    const k1 = normalizeEvidenceLine(`- ${interval(sliceRange(0))} [VISUAL] static title card, no change`);
-    const k8 = normalizeEvidenceLine(`- ${interval(sliceRange(7))} [VISUAL] static title card, no change`);
-    assert(k1 === k8 && k1 === 'static title card no change',
-      'the per-slice entries genuinely normalize to ONE identical key (the matrix is not passing by accident)');
-    assert(interval(sliceRange(0)) === '01:00-01:29' && interval(sliceRange(7)) === '08:00-08:29',
-      'the derived intervals are the intended 01:00-01:29 … 08:00-08:29, now matching their ranges');
-    // THE REGRESSION MATRIX. Every count 1..8 must pass; 4+ used to reject.
-    for (let count = 1; count <= 8; count++) {
-      const { text, ranges } = uniform(count);
+
+    // GUARD 2 — NORMALIZATION COLLISION, on the ONE CACHED uniform(8) report.
+    // The previous version of this guard hand-rebuilt both lines from the same helpers that
+    // produced the fixture and retyped the observation body as a literal. It therefore compared a
+    // reconstruction against a reconstruction and could not have detected the drift it existed to
+    // prevent — the reviewer's CHECKPOINT REVIEW: FAIL. Every value below is now extracted from
+    // `EIGHT.text`, the exact string handed to `vq` two assertions further down.
+    const EIGHT = built[7];
+    const parsed8 = parseAssembledReport(EIGHT.text, 'uniform-8');
+    const subsection = (n) => {
+      const d = parsed8.declarations.find((x) => x.n === n);
+      assert(Boolean(d), `uniform(8): slice ${n} opens its own parsed subsection`);
+      return d;
+    };
+    const soleObservation = (n) => {
+      const found = extractEvidence(subsection(n).lines, 'uniform-8', `slice ${n}`);
+      assert(found.length === 1, `uniform(8): slice ${n} carries exactly ONE consolidated visual observation`);
+      return found[0];
+    };
+    const obs1 = soleObservation(1);
+    const obs8 = soleObservation(8);
+    // Endpoints pinned from the PARSED numbers, not from the interval helper that rendered them.
+    assert(obs1.from === 60 && obs1.to === 89 && obs8.from === 480 && obs8.to === 509,
+      'the rendered slice 1 and slice 8 intervals are 01:00-01:29 and 08:00-08:29, matching their ranges');
+    const k1 = normalizeEvidenceLine(obs1.line);
+    const k8 = normalizeEvidenceLine(obs8.line);
+    assert(k1 === k8,
+      'the ACTUAL rendered slice 1 and slice 8 entries normalize to one identical key (the matrix is not passing by accident)');
+    assert(k1 === 'static title card no change', 'the normalized key is pinned independently of both lines');
+    // NEGATIVE CONTROL. Begin from the real extracted slice 8 line and add slice-dependent body
+    // text: if normalization ever stopped collapsing these entries, the collision above would be
+    // meaningless, so prove that a genuine difference in the body does survive.
+    assert(normalizeEvidenceLine(`${obs8.line}, frame 8`) !== k1,
+      'slice-dependent body text on the real slice 8 line destroys the collision with the real slice 1 line');
+    assert(normalizeEvidenceLine(`${obs8.line}, frame 8`) === 'static title card no change frame 8',
+      'the control differs by exactly the slice-dependent text it added');
+    // THE REGRESSION MATRIX. Every count 1..8 must pass; 4+ used to reject. Same strings as above.
+    for (const { text, ranges } of built) {
       const v = vq(text, { ranges });
       assert(v.ok === true,
-        `REGRESSION: ${count} slice(s) with ONE mandated consolidated entry each PASSES (was ${count >= 4 ? 'REJECTED' : 'passing'})`);
+        `REGRESSION: ${ranges.length} slice(s) with ONE mandated consolidated entry each PASSES (was ${ranges.length >= 4 ? 'REJECTED' : 'passing'})`);
     }
+    assert(vq(EIGHT.text, { ranges: EIGHT.ranges }).ok === true,
+      'the cached uniform(8) report — the exact text Guard 2 parsed — is the one production validates');
   }
 
   section('V4Q FINAL CORRECTION: the threshold of three still applies WITHIN each subsection');
@@ -1098,47 +1345,61 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     // one slice. Both derive every timestamp from that slice's own authorized offsets.
     const one = (n) => [`- ${spanOf(n)} [VISUAL] static title card, no change`];
     const many = (n, k) => Array.from({ length: k }, (_, j) => `- ${at(n, j)} [VISUAL] static title card, no change`);
-    // SCOPE-HONESTY GUARD for this fixture family, including the k=12 filler case.
-    {
-      const toSeconds = (s) => { const [m, sec] = s.split(':').map(Number); return m * 60 + sec; };
-      for (let n = 1; n <= 8; n++) {
-        const r = R8[n - 1];
-        const span = /^- (\d{2}:\d{2})-(\d{2}:\d{2}) /.exec(one(n)[0]);
-        assert(toSeconds(span[1]) === r.startOffset && toSeconds(span[2]) === r.endOffset - 1,
-          `threshold fixture: slice ${n}'s consolidated span matches its authorized [${r.startOffset}s,${r.endOffset}s)`);
-        for (const line of many(n, 12)) {
-          const t = toSeconds(/^- (\d{2}:\d{2}) /.exec(line)[1]);
-          assert(t >= r.startOffset && t < r.endOffset,
-            `threshold fixture: every repeated observation under slice ${n} is inside its authorized range`);
-        }
-      }
+    // §25: SEVEN DISTINCT ASSEMBLED REPORTS. Each is built once; the scope-honesty parser reads
+    // that exact string, and `vq` is then handed the same string. The previous guard here inspected
+    // `one(n)[0]` and `many(n, 12)` — generator return values that no report necessarily contained —
+    // so it could not prove anything about the text production actually validated.
+    const secret = (n, k) => Array.from({ length: k }, (_, j) => `- ${at(n, j)} [VISUAL] SECRET-PROVIDER-PHRASE static card`);
+    const REPORTS = {
+      threeInSlice1: { text: build(R8, (n) => (n === 1 ? many(1, 3) : one(n))), observations: (n) => (n === 1 ? 3 : 1) },
+      fourInSlice1: { text: build(R8, (n) => (n === 1 ? many(1, 4) : one(n))), observations: (n) => (n === 1 ? 4 : 1) },
+      fourInSlice8: { text: build(R8, (n) => (n === 8 ? many(8, 4) : one(n))), observations: (n) => (n === 8 ? 4 : 1) },
+      threeInEvery: { text: build(R8, (n) => many(n, 3)), observations: () => 3 },
+      fourInPreamble: {
+        text: build(R8, one, Array.from({ length: 4 }, (_, j) => `- ${at(1, j)} [VISUAL] identical preamble observation`)),
+        observations: () => 1, preambleObservations: 4,
+      },
+      twelveInSlice1: { text: build(R8, (n) => (n === 1 ? many(1, 12) : one(n))), observations: (n) => (n === 1 ? 12 : 1) },
+      providerTextInSlice1: { text: build(R8, (n) => (n === 1 ? secret(1, 4) : one(n))), observations: (n) => (n === 1 ? 4 : 1) },
+    };
+    for (const [key, spec] of Object.entries(REPORTS)) {
+      spec.verdict = null;
+      guardScopeHonesty(spec.text, R8, `r8-${key}`, {
+        requireJustification: true,
+        observations: spec.observations,
+        preambleObservations: spec.preambleObservations || 0,
+      });
     }
+    const validate = (key) => { REPORTS[key].verdict = vq(REPORTS[key].text, { ranges: R8 }); return REPORTS[key].verdict; };
 
-    assert(vq(build(R8, (n) => (n === 1 ? many(1, 3) : one(n))), { ranges: R8 }).ok === true,
+    assert(validate('threeInSlice1').ok === true,
       'THREE identical observations inside ONE subsection are allowed');
-    const four = vq(build(R8, (n) => (n === 1 ? many(1, 4) : one(n))), { ranges: R8 });
+    const four = validate('fourInSlice1');
     assert(four.code === 'repetitive-timestamp-filler', 'FOUR identical observations inside ONE subsection are REJECTED');
     assert(/slice 1/.test(four.reason), 'the reason identifies WHICH subsection repeated');
     // Slice 8 specifically — the far end of the range, and the count that used to be unreachable.
-    const eighth = vq(build(R8, (n) => (n === 8 ? many(8, 4) : one(n))), { ranges: R8 });
+    const eighth = validate('fourInSlice8');
     assert(eighth.code === 'repetitive-timestamp-filler', 'four repetitions in SLICE 8 are rejected');
     assert(/slice 8/.test(eighth.reason), 'the reason structurally identifies slice 8');
     // The allowance is per bucket, so 3 in EVERY slice — 24 identical lines overall — still passes.
-    assert(vq(build(R8, (n) => many(n, 3)), { ranges: R8 }).ok === true,
+    assert(validate('threeInEvery').ok === true,
       'three allowed repetitions in EACH of eight slices still passes (24 identical lines overall)');
-    // The Section 5 preamble is its own bucket.
-    // Preamble lines are timestamped inside slice 1's authorized range — the preamble is not itself
-    // a slice, so its observations must still point at authorized footage.
-    const pre = vq(build(R8, one, Array.from({ length: 4 }, (_, j) => `- ${at(1, j)} [VISUAL] identical preamble observation`)), { ranges: R8 });
+    // The Section 5 preamble is its own bucket. Its observations are timestamped inside slice 1's
+    // authorized window — the preamble is not itself a slice, so the guard authorizes each stamp
+    // against exactly one expected range without ever folding it into that slice's count.
+    const pre = validate('fourInPreamble');
     assert(pre.code === 'repetitive-timestamp-filler', 'four identical observations in the Section 5 PREAMBLE are rejected');
     assert(/preamble/i.test(pre.reason), 'the reason identifies the preamble bucket');
     // Classic per-second filler inside one slice still fails, which is the whole point of the check.
-    assert(vq(build(R8, (n) => (n === 1 ? many(1, 12) : one(n))), { ranges: R8 }).code === 'repetitive-timestamp-filler',
+    assert(validate('twelveInSlice1').code === 'repetitive-timestamp-filler',
       'twelve per-second near-identical lines inside one slice are still REJECTED');
-    // Content-free reason.
-    const leak = vq(build(R8, (n) => (n === 1
-      ? Array.from({ length: 4 }, (_, j) => `- ${at(1, j)} [VISUAL] SECRET-PROVIDER-PHRASE static card`)
-      : one(n))), { ranges: R8 });
+    // §24 FIXTURE TWO of two: the filler-leak report. The code is pinned FIRST — `reason` is
+    // undefined on a pass and unrelated under any other rejection, so both negated checks below
+    // would otherwise be satisfied by a report that never reached the filler path at all.
+    const leak = validate('providerTextInSlice1');
+    assert(leak.code === 'repetitive-timestamp-filler',
+      'the leak fixture reaches the FILLER path, so the reason checks below are not vacuous');
+    assert(typeof leak.reason === 'string' && leak.reason.length > 0, 'it carries a bounded reason');
     assert(!/SECRET-PROVIDER-PHRASE/.test(leak.reason) && !/static card/.test(leak.reason),
       'the filler reason never echoes the repeated observation text');
     // The pure bucket helper, exercised directly.
@@ -1159,6 +1420,37 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
       'normalization still strips `Slice N`, so relabelled filler inside one bucket cannot evade the count');
   }
 
+  section('V4 REVISION 8: rendered ownership is by slice IDENTITY, never by position');
+  {
+    // A guard that walked declarations positionally would agree with an identity-based one on every
+    // fixture in this file, because every fixture renders its slices in order. This counterfactual
+    // is the only place the two readings can disagree, so it is where a positional fallback would
+    // be caught. Production ordering is untouched: nothing here is submitted to `vq`.
+    const ranges = Array.from({ length: 4 }, (_, i) => ({ startOffset: (i + 1) * 100, endOffset: (i + 1) * 100 + 40 }));
+    const original = compliantReport(ranges);
+    guardScopeHonesty(original, ranges, 'reorder-source');
+    const before = parseAssembledReport(original, 'reorder-source');
+    // Lift each COMPLETE subsection out of the assembled text and re-emit them back-to-front. The
+    // headings are carried along untouched, so every subsection keeps the identity it declared.
+    const blocks = before.declarations.map((d) => [before.body[d.at], ...d.lines].join('\n'));
+    const reordered = mutateLiteral(original, blocks.join('\n'), [...blocks].reverse().join('\n'), 'reorder-subsections');
+    const after = parseAssembledReport(reordered, 'reorder-result');
+    assert(after.declarations.map((d) => d.n).join(',') === '4,3,2,1',
+      'the reordered report really does render its subsections back-to-front');
+    // Identity-based ownership survives the reordering unchanged...
+    guardScopeHonesty(reordered, ranges, 'reorder-result');
+    // ...and a positional reading would genuinely have been wrong at every position, so the guard
+    // above is load-bearing rather than trivially satisfied.
+    after.declarations.forEach((d, k) => {
+      assert(d.n !== k + 1, `position ${k + 1} no longer holds slice ${k + 1}`);
+      assert(d.start === ranges[d.n - 1].startOffset && d.end === ranges[d.n - 1].endOffset,
+        `the subsection at position ${k + 1} is authorized by slice ${d.n}'s range, not by position ${k + 1}`);
+      const evidence = extractEvidence(d.lines, 'reorder-result', `position ${k + 1}`);
+      assert(evidence.length === 1 && evidence[0].from === ranges[d.n - 1].startOffset,
+        `the evidence at position ${k + 1} still belongs to slice ${d.n}`);
+    });
+  }
+
   section('V4Q FINAL CORRECTION: quality reasons make no unsupported billing-status claim');
   {
     // Token usage proves that provider usage occurred. It does NOT prove that money changed hands:
@@ -1175,8 +1467,14 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     collect(vq(okReport(), { finishReason: 'MAX_TOKENS' }));
     collect(vq(okReport().replace(/\*\*Slice 1 audio status:\*\* SPEECH/, '**Slice 1 audio status:** SILENCE')
       .replace(/\*\*Slice 2 audio status:\*\* SPEECH/, '**Slice 2 audio status:** SILENCE')));
-    collect(vq(okReport().replace('10s-30s [VISUAL] steady framing across this slice',
-      Array.from({ length: 4 }, (_, i) => `00:0${i} [VISUAL] identical observation`).join('\n'))));
+    // §21: this sweep contributes a CONFIRMED filler rejection, not merely "some rejection". The
+    // stale literal here used to no-op silently, which quietly shrank the reason spread by one.
+    const sweepFiller = fillSlice1(4, 'identical observation', 'billing-sweep-filler');
+    guardScopeHonesty(sweepFiller, R2, 'billing-sweep-filler', { observations: (n) => (n === 1 ? 4 : 1) });
+    const sweepVerdict = vq(sweepFiller);
+    assert(sweepVerdict.code === 'repetitive-timestamp-filler',
+      'the reason sweep includes a confirmed repetitive-timestamp-filler rejection');
+    collect(sweepVerdict);
     assert(reasons.length >= 7, 'a representative spread of rejection reasons was collected');
     for (const reason of reasons) {
       assert(!/\bpaid\b|\bbilled\b|\bbillable\b|free[- ]tier/i.test(reason),
@@ -1267,10 +1565,17 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
   section('V4Q CORRECTION: correctly placed scalar / 2-slice / 8-slice reports still PASS');
   {
     const one = [{ startOffset: 60, endOffset: 75 }];
-    assert(vq(compliantReport(one), { ranges: one }).ok === true, 'scalar report with markers in Section 5 passes');
-    assert(vq(compliantReport(R2)).ok === true, 'two-slice report with markers in Section 5 passes');
+    const oneText = compliantReport(one);
+    guardScopeHonesty(oneText, one, 'placed-scalar');
+    assert(vq(oneText, { ranges: one }).ok === true, 'scalar report with markers in Section 5 passes');
+    // §9: no `ranges` option, so the EFFECTIVE expected map is the `vq` wrapper's R2 fallback.
+    const twoText = compliantReport(R2);
+    guardScopeHonesty(twoText, R2, 'placed-2slice-effective-fallback');
+    assert(vq(twoText).ok === true, 'two-slice report with markers in Section 5 passes');
     const eight = Array.from({ length: 8 }, (_, i) => ({ startOffset: i * 100, endOffset: i * 100 + 20 }));
-    assert(vq(compliantReport(eight), { ranges: eight }).ok === true, 'eight-slice report with markers in Section 5 passes');
+    const eightText = compliantReport(eight);
+    guardScopeHonesty(eightText, eight, 'placed-8slice');
+    assert(vq(eightText, { ranges: eight }).ok === true, 'eight-slice report with markers in Section 5 passes');
     const honest = compliantReport(R2).replace('**Section TL;DR:** limits.',
       '**Section TL;DR:** limits.\nThe full source length is not determinable from the authorized slices.');
     assert(vq(honest).ok === true, 'a report combining correct placement with honest duration limitation passes');
@@ -1356,38 +1661,61 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
 
   section('V4Q CORRECTION 2: Section 5 slice headings and markers must be EXACT COMPLETE LINES');
   {
+    // §14: every fixture in this block is DELIBERATELY malformed — that is the point of it. The
+    // test-side scope parser is not run here; it would refuse the very structure these cases exist
+    // to hand to production. What replaces it is proof that the intended mutation actually
+    // happened, so a stale literal can never turn an adversarial case into its compliant control.
+    // Both marker literals are derived from R2, so they follow `compliantReport` automatically.
+    const evidenceMarker = (n) => `**Slice ${n} audio evidence:** ${mmss(R2[n - 1].startOffset)} — a spoken phrase`;
+    const anchorMarker = (n) => `**Slice ${n} transcription anchor:** "hold this position"`;
+    const justificationMarker = (n) => `**Slice ${n} audio justification:** ${mmss(R2[n - 1].startOffset)} — listened across the slice; nothing audible`;
+
     // The work order's named case.
-    assert(vq(okReport().replace('**Slice 1 audio status:** SPEECH', 'Prose says **Slice 1 audio status:** SPEECH maybe')).code === 'missing-slice-audio',
+    assert(vq(mutateLiteral(okReport(), '**Slice 1 audio status:** SPEECH',
+      'Prose says **Slice 1 audio status:** SPEECH maybe', 'prose-status')).code === 'missing-slice-audio',
       'ADVERSARIAL: "Prose says **Slice 1 audio status:** SPEECH maybe" is NOT a marker line');
     for (const [code, label, mutated] of [
-      ['missing-slice', 'a slice heading quoted in prose', okReport().replace(SLICE_HEADING(2, R2[1]), 'see ' + SLICE_HEADING(2, R2[1]))],
-      ['scope-mismatch', 'a slice heading with trailing text', okReport().replace(SLICE_HEADING(2, R2[1]), SLICE_HEADING(2, R2[1]) + ' (partial)')],
-      ['missing-slice-audio', 'an audio status with trailing hedging', okReport().replace('**Slice 2 audio status:** SPEECH', '**Slice 2 audio status:** SPEECH or possibly MUSIC')],
-      ['missing-slice-audio', 'an audio-evidence line embedded in prose', okReport().replace('**Slice 2 audio evidence:** 00:02 — a spoken phrase', 'As noted, **Slice 2 audio evidence:** 00:02 — a spoken phrase')],
-      ['missing-speech-anchor', 'an anchor line with trailing commentary', okReport().replace('**Slice 2 transcription anchor:** "hold this position"', '**Slice 2 transcription anchor:** "hold this position" probably')],
+      ['missing-slice', 'a slice heading quoted in prose',
+        mutateLiteral(okReport(), SLICE_HEADING(2, R2[1]), 'see ' + SLICE_HEADING(2, R2[1]), 'heading-in-prose')],
+      ['scope-mismatch', 'a slice heading with trailing text',
+        mutateLiteral(okReport(), SLICE_HEADING(2, R2[1]), SLICE_HEADING(2, R2[1]) + ' (partial)', 'heading-trailing')],
+      ['missing-slice-audio', 'an audio status with trailing hedging',
+        mutateLiteral(okReport(), '**Slice 2 audio status:** SPEECH', '**Slice 2 audio status:** SPEECH or possibly MUSIC', 'status-hedged')],
+      ['missing-slice-audio', 'an audio-evidence line embedded in prose',
+        mutateLiteral(okReport(), evidenceMarker(2), 'As noted, ' + evidenceMarker(2), 'evidence-in-prose')],
+      ['missing-speech-anchor', 'an anchor line with trailing commentary',
+        mutateLiteral(okReport(), anchorMarker(2), anchorMarker(2) + ' probably', 'anchor-trailing')],
     ]) {
       const v = vq(mutated);
       assert(v.ok === false && v.code === code, `ADVERSARIAL: ${label} is rejected with ${code}`);
     }
     // WRONG SLICE SUBSECTION — every marker kind, not just the anchor.
-    const move = (from, to, line) => okReport().replace('\n' + line.replace(/^\*\*Slice \d/, `**Slice ${from}`), '')
-      .replace(`**Slice ${to} audio status:** SPEECH`, `**Slice ${to} audio status:** SPEECH\n` + line.replace(/^\*\*Slice \d/, `**Slice ${from}`));
-    assert(vq(move(2, 1, '**Slice 2 audio evidence:** 00:02 — a spoken phrase')).code === 'missing-slice-audio',
+    const move = (from, to, line) => mutateLiteral(
+      mutateLiteral(okReport(), '\n' + line, '', `move-${from}-into-${to}-lift`),
+      `**Slice ${to} audio status:** SPEECH`, `**Slice ${to} audio status:** SPEECH\n` + line,
+      `move-${from}-into-${to}-drop`);
+    assert(vq(move(2, 1, evidenceMarker(2))).code === 'missing-slice-audio',
       "slice 2's audio-evidence line sitting in slice 1's subsection does not satisfy slice 2");
-    assert(vq(move(2, 1, '**Slice 2 transcription anchor:** "hold this position"')).code === 'missing-speech-anchor',
+    assert(vq(move(2, 1, anchorMarker(2))).code === 'missing-speech-anchor',
       "slice 2's anchor sitting in slice 1's subsection does not satisfy slice 2");
     // WRONG SECTION — a marker above the first slice heading is in no subsection at all.
-    const aboveHeadings = okReport().replace('\n**Slice 1 audio status:** SPEECH', '')
-      .replace('**Section TL;DR:** evidence.', '**Section TL;DR:** evidence.\n**Slice 1 audio status:** SPEECH');
+    const aboveHeadings = mutateLiteral(
+      mutateLiteral(okReport(), '\n**Slice 1 audio status:** SPEECH', '', 'above-headings-lift'),
+      '**Section TL;DR:** evidence.', '**Section TL;DR:** evidence.\n**Slice 1 audio status:** SPEECH',
+      'above-headings-drop');
     assert(vq(aboveHeadings).code === 'missing-slice-audio',
       "a marker placed in Section 5 but ABOVE slice 1's heading belongs to no subsection");
-    // Universal-silence justification obeys the same anchored, per-subsection contract.
-    const silent = okReport()
-      .replace(/\*\*Slice (\d) audio status:\*\* SPEECH/g, '**Slice $1 audio status:** SILENCE')
-      .replace(/\*\*Slice (\d) transcription anchor:\*\*[^\n]*/g, '**Slice $1 audio justification:** 00:0$1 — listened across the slice; nothing audible');
+    // Universal-silence justification obeys the same anchored, per-subsection contract. This
+    // correctly placed variant IS scope-honest, so it is guarded before it is asserted to pass.
+    const silent = mutateRegex(
+      mutateRegex(okReport(), /\*\*Slice (\d) audio status:\*\* SPEECH/, '**Slice $1 audio status:** SILENCE',
+        2, 'silent-status'),
+      /\*\*Slice (\d) transcription anchor:\*\*[^\n]*/, (_m, n) => justificationMarker(Number(n)),
+      2, 'silent-anchor');
+    guardScopeHonesty(silent, R2, 'silent-justified', { requireJustification: true });
     assert(vq(silent).ok === true, 'correctly placed per-slice justifications pass');
-    assert(vq(silent.replace('**Slice 2 audio justification:** 00:02 — listened across the slice; nothing audible',
-      'Commentary: **Slice 2 audio justification:** 00:02 — listened across the slice')).code === 'unjustified-universal-silence',
+    assert(vq(mutateLiteral(silent, justificationMarker(2),
+      'Commentary: ' + justificationMarker(2), 'justification-in-prose')).code === 'unjustified-universal-silence',
       'a justification embedded in prose does not satisfy the silence contract');
     // The exported marker contracts are the ones the validator applies.
     assert(SLICE_AUDIO_STATUS_LINE(1).test('**Slice 1 audio status:** SPEECH') && !SLICE_AUDIO_STATUS_LINE(1).test('x **Slice 1 audio status:** SPEECH'),
@@ -1403,9 +1731,13 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     // The three passing fixtures are unchanged by all of the above.
     const one = [{ startOffset: 60, endOffset: 75 }];
     const eight = Array.from({ length: 8 }, (_, i) => ({ startOffset: i * 100, endOffset: i * 100 + 20 }));
-    assert(vq(compliantReport(one), { ranges: one }).ok === true, 'the scalar fixture still passes');
-    assert(vq(okReport()).ok === true, 'the two-slice fixture still passes');
-    assert(vq(compliantReport(eight), { ranges: eight }).ok === true, 'the eight-slice fixture still passes');
+    const scalarText = compliantReport(one); const eightText = compliantReport(eight); const twoText = okReport();
+    guardScopeHonesty(scalarText, one, 'unchanged-scalar');
+    guardScopeHonesty(twoText, R2, 'unchanged-2slice');
+    guardScopeHonesty(eightText, eight, 'unchanged-8slice');
+    assert(vq(scalarText, { ranges: one }).ok === true, 'the scalar fixture still passes');
+    assert(vq(twoText).ok === true, 'the two-slice fixture still passes');
+    assert(vq(eightText, { ranges: eight }).ok === true, 'the eight-slice fixture still passes');
   }
 
   // ================== V4Q FINAL: PROMPT / GATE AGREEMENT AND SINGLE SOURCE =====================
@@ -1986,8 +2318,19 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     });
     assert(/synthesized ambient pad/.test(MEDITATION_REPORT) && /synthesized strings/.test(MEDITATION_REPORT),
       'it describes synthesized music honestly — the exact vocabulary the frozen list excludes');
-    assert(/00:06-01:30 \[VISUAL\]/.test(MEDITATION_REPORT) && /10:00-11:30 \[VISUAL\]/.test(MEDITATION_REPORT),
+    // V4 REVISION 8: the consolidated ranges end on the LAST OBSERVABLE SECOND of their half-open
+    // windows — `[0,90)` is observed as 00:00-01:29, not 00:00-01:30. The realistic fixture is held
+    // to the same scope honesty as every synthetic one; it gets no exemption for being readable.
+    assert(/00:06-01:29 \[VISUAL\]/.test(MEDITATION_REPORT) && /10:00-11:29 \[VISUAL\]/.test(MEDITATION_REPORT),
       'static imagery is consolidated into RANGES rather than per-second filler');
+    // Every timestamp-bearing Section 5 line — [VISUAL], [AUDIO], [TEXT] and both audio-evidence
+    // markers — is parsed out of the assembled report and authorized against MEDITATION_RANGES.
+    const med = guardScopeHonesty(MEDITATION_REPORT, MEDITATION_RANGES, 'meditation',
+      { observations: (n) => (n === 1 ? 5 : 4) });
+    assert(med.total === 9, `it carries nine timestamp-led Section 5 evidence lines (found ${med.total})`);
+    assert(med.parsed.declarations.length === 2, 'it declares exactly two slices');
+    assert(MEDITATION_REPORT.split('\n').filter((l) => /^\*\*Slice \d audio justification:\*\*/.test(l.trim())).length === 0,
+      'it needs no audio-justification marker because both slices are speech-bearing');
     assert(/The source duration cannot be determined from these slices/.test(MEDITATION_REPORT),
       'it carries truthful bounded-duration prose');
     assert(!/no discrepancies/i.test(MEDITATION_REPORT) && /corroborates neither position/.test(MEDITATION_REPORT),
