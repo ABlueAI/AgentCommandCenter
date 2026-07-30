@@ -8,6 +8,59 @@ whose V4R release authorization is now **stale** — see the banner at the top o
 
 ---
 
+## Post–Revision 9 checkpoint status — authoritative
+
+The current accepted corrective-checkpoint tip is
+`0d00853296e1ac602dbe7f4e99c03f192a747970`. A fresh, independent Full-class
+review ended exactly:
+
+```text
+CHECKPOINT REVIEW: PASS
+```
+
+It independently verified exact branch, ancestry, clean state, and the one-commit/one-file Revision 9
+shape; byte-identical regeneration of both Revision 9 artifacts; preservation of all five
+pre–Revision 9 artifacts; complete range-end validation and Markdown-prefixed marker ownership;
+rendered reports as the integration input; and independently supplied effective ranges. Its measured
+gates were focused SDK **3491/0**, app exit **0** with no failures, Pester **955/0/0** twice, and
+reachability **6/0**.
+
+The corrective chain after the failed `4c07db9...20bf2ec` whole-diff review is:
+
+| Commit | Correction | Production changed? |
+|---|---|---|
+| `3585204fee9c8cd087bef0174febc7abbf7c5c85` | Per-subsection and preamble repetition counting. | Yes — the production repetition-validator correction. |
+| `e21ca5ef64c8538e3a345db32e46fc2533a47ce6` | Initial scope-honesty fixture correction. | No — test integrity only. |
+| `a09b35b41b789bb9f32f0b9c555bca2ec7d3851c` | Revision 8 rendered-fixture fail-loud integrity correction. | No — test integrity only. |
+| `0d00853296e1ac602dbe7f4e99c03f192a747970` | Revision 9 complete marker-span and Markdown-prefix integrity correction. | No — test integrity only. |
+
+Revision 8 and Revision 9 changed the test proof, not production behavior. The original
+`4c07db9...20bf2ec` whole-diff `VERDICT: FAIL` and its pinned artifact remain historical evidence.
+**The final Full-class whole-diff review has not yet passed, so release remains blocked.**
+
+The release sequence remains: fresh whole-diff `VERDICT: PASS`; separate explicit Blue authorization
+for one cheap, deliberately short prompt-compliance probe; stop for Blue's ruling if it is rejected
+or violates the no-restatement instruction; only after success, separate explicit authorization for
+exactly one deliberately short final provider acceptance run. There is no automatic re-probe,
+repair, retry, continuation, fallback, or additional run. Human acceptance remains responsible for
+factual truth.
+
+Provider history must be stated precisely:
+
+> No provider activity occurred during the Revision 8 or Revision 9 corrective checkpoints. The
+> preserved earlier provider run remained untouched. This is not a claim that no provider activity
+> has ever occurred.
+
+Known limitations remain open: the historical `954/1` Pester result is unexplained;
+`HH:MM:SS` coverage is parser-level only; and production's audio-marker format is narrower than the
+integrity guard's accepted parser forms.
+
+OSS disposition, verbatim:
+
+`Not applicable — bounded test correction within the existing V4 subsystem; no new subsystem or dependency`
+
+---
+
 ## Read this first
 
 > The quality gate is a deterministic structural and lexical filter, not a truth oracle. It does not
@@ -527,6 +580,9 @@ media-inventory suites.
 | `ad14423e...4e77046` (cumulative backend) | `CHECKPOINT REVIEW: PASS` |
 | `72c632e...810f257` (Phase B selector correction) | `CHECKPOINT REVIEW: PASS` |
 | `ad14423e...810f257` (cumulative V4Q) | `CHECKPOINT REVIEW: PASS` |
+| `3585204...e21ca5e` (scope-honesty correction) | `CHECKPOINT REVIEW: FAIL` — superseded by Revision 8 |
+| `e21ca5e...a09b35b` (Revision 8 integrity correction) | `CHECKPOINT REVIEW: FAIL` — superseded by Revision 9 |
+| `a09b35b...0d008532` (Revision 9 marker-span correction) | `CHECKPOINT REVIEW: PASS` |
 
 A checkpoint PASS unblocked the next phase and, finally, this handoff and pinned-diff preparation.
 **None of them authorizes a provider probe, an acceptance run, a merge, or a push.**
@@ -535,18 +591,18 @@ A checkpoint PASS unblocked the next phase and, finally, this handoff and pinned
 
 | Gate | Result |
 |---|---|
-| app | 1340 passed / 0 failed |
-| Pester | 955 passed / 0 failed / 0 skipped |
+| app | exit 0, no failures |
+| Pester | 955 passed / 0 failed / 0 skipped, twice |
 | `video-model-policy.test.js` | 398 / 0 |
-| `gemini-video-sdk.test.js` | 839 / 0 |
+| `gemini-video-sdk.test.js` | 3491 / 0 |
 | `video-scout-args.test.js` | 205 / 0 |
 | `video-range-ui.test.js` | 52 / 0 |
-| reachability | Node 6 / 0, PowerShell green |
+| reachability | Node 6 / 0, PowerShell green within the full gate |
 
-> **No V4Q implementation step and no V4Q checkpoint test used a provider request.** Every suite
-> runs on injected fakes and a 127.0.0.1 fixture. Throughout V4Q the preserved run directory count
-> stayed at 31, with `run-20260727-001226-817-10472-c46bea78` — the failed-acceptance evidence —
-> remaining the newest and untouched.
+> No provider activity occurred during the Revision 8 or Revision 9 corrective checkpoints. The
+> preserved earlier provider run remained untouched. This is not a claim that no provider activity
+> has ever occurred. Every corrective suite used injected fakes and local fixtures; the preserved run
+> directory count stayed at 31, with `run-20260727-001226-817-10472-c46bea78` remaining newest.
 
 ---
 
@@ -663,9 +719,11 @@ decision.
 
 ## Status
 
-Backend correction checkpoints plus renderer Phase B, now finalized for whole-diff review. Nothing
-here is merged or pushed, and **no provider request has been made at any point during V4Q
-implementation**. Release requires a new Opus 5 Full-class whole-diff review of
-`4c07db9...<FINAL_REVIEWED_TIP>` ending in a literal `VERDICT: PASS`.
+Backend correction checkpoints plus renderer Phase B are now finalized through the Revision 9
+`CHECKPOINT REVIEW: PASS`. Nothing here is merged or pushed. No provider activity occurred during
+the Revision 8 or Revision 9 corrective checkpoints; the preserved earlier provider run remained
+untouched, which is not a claim that no provider activity has ever occurred. Release requires a new
+Opus 5 Full-class whole-diff review of `4c07db9...<FINAL_REVIEWED_TIP>` ending in a literal
+`VERDICT: PASS`.
 
 **The final Full-class review has not yet occurred.** No verdict on the complete branch exists.

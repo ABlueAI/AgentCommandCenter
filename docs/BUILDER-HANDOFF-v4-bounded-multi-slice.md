@@ -3,20 +3,82 @@
 Branch: `feature/v4-bounded-multi-slice`
 Fork-point SHA: `4c07db9a387191485b51cb99886d58d94573c1ad`
 Pre-merge main SHA: `4c07db9a387191485b51cb99886d58d94573c1ad` (verified `main` == `origin/main` == this SHA before branching; re-verify at gate time)
-Reviewed code tip: **`20bf2ecbaacad331576be030d4fdc2af2a178e10`** (V4Q final — supersedes `83b50e7`, `32393f5`, `5b5e30a`, and `f17b51f`)
+Accepted corrective-checkpoint tip: **`0d00853296e1ac602dbe7f4e99c03f192a747970`** (Revision 9 `CHECKPOINT REVIEW: PASS`; no Revision 8 or Revision 9 production change)
+Final reviewed tip: Pending the documentation commit authorized by the post–Revision 9 finalization work order; its immutable SHA is recorded in the merge-gate handoff tail after the new whole-diff artifact is created.
 Superseded reviewed code tips: `5b5e30a102e92a02151ee4b4876a379e6fa7069b` (V4R) and `f17b51fdbe2dbd2b6110257f2df459dd7edc04f0` (original V4) — both passed review, then FAILED human acceptance
 Merge commit SHA: Pending until merge
 
-Pinned diff: `.agent-review-v4-bounded-multi-slice.diff` — **663,394 bytes, 43 files**
+Historical failed-review diff: `.agent-review-v4-bounded-multi-slice.diff` — **663,394 bytes, 43 files**
 (32 modified, 11 added, 0 deleted), SHA-256
 `9CBB62A2CBA05E168B64D6F323FD621EA98CC446D1AAF97D13E73E8C84753275`.
-Gitignored, created with `git diff --output`, verified to regenerate byte-for-byte.
+Gitignored, created with `git diff --output`, verified to regenerate byte-for-byte, and preserved
+unchanged as evidence for the failed `4c07db9...20bf2ec` whole-diff review. It is not the current
+review artifact and must not be regenerated or substituted.
 
 ---
 
-## MERGE-GATE HANDOFF TAIL — final reviewed tip and pinned diff
+## Post–Revision 9 finalization status — authoritative
 
-**Authoritative review range:**
+The current accepted corrective checkpoint is
+`0d00853296e1ac602dbe7f4e99c03f192a747970`. A fresh, independent Full-class
+checkpoint review ended exactly:
+
+```text
+CHECKPOINT REVIEW: PASS
+```
+
+That review independently verified exact branch, ancestry, clean state, and one-commit/one-file
+correction shape; byte-identical regeneration of both Revision 9 artifacts; preservation of all five
+pre–Revision 9 historical artifacts; complete range-end validation and Markdown-prefixed marker
+ownership; rendered reports as the integration input; independently supplied effective ranges;
+focused SDK **3491/0**; app exit **0** with no failures; Pester **955/0/0** twice; and reachability
+**6/0**. No provider activity, acceptance, merge, push, or file modification occurred during that
+review.
+
+The corrective chain after the failed whole-diff review is:
+
+| Commit | Correction | Production changed? |
+|---|---|---|
+| `3585204fee9c8cd087bef0174febc7abbf7c5c85` | Count repeated observations per slice subsection and per Section 5 preamble. | Yes — the originally reviewed repetition-validator correction. |
+| `e21ca5ef64c8538e3a345db32e46fc2533a47ce6` | Initial scope-honesty fixture correction. | No — test integrity only. |
+| `a09b35b41b789bb9f32f0b9c555bca2ec7d3851c` | Revision 8 rendered-fixture, fail-loud, ownership, range, and counterfactual integrity correction. | No — test integrity only. |
+| `0d00853296e1ac602dbe7f4e99c03f192a747970` | Revision 9 complete marker-span parsing, range-end validation, and Markdown-prefix ownership correction. | No — test integrity only. |
+
+Revision 8 and Revision 9 strengthened the proof around the existing V4/V4Q production behavior;
+they did not alter `scripts/gemini-video-sdk.js` or any other production file. The accepted checkpoint
+authorizes only this final handoff and whole-diff preparation. **The final Full-class whole-diff
+review has not yet passed, so release remains blocked.**
+
+The remaining release sequence is strictly ordered:
+
+1. Fresh Full-class review of `4c07db9...<FINAL_REVIEWED_TIP>`, ending in literal `VERDICT: PASS`.
+2. Separate explicit Blue authorization for one cheap, deliberately short prompt-compliance probe.
+3. If the probe is rejected or violates the no-restatement instruction, stop for Blue's ruling.
+4. Only after a successful probe, separate explicit authorization for exactly one deliberately short
+   final provider acceptance run.
+5. No automatic re-probe, repair, retry, continuation, fallback, or additional run. Human acceptance
+   remains responsible for factual truth.
+
+Provider history must be stated precisely:
+
+> No provider activity occurred during the Revision 8 or Revision 9 corrective checkpoints. The
+> preserved earlier provider run remained untouched. This is not a claim that no provider activity
+> has ever occurred.
+
+Known limitations remain open: the historical `954/1` Pester result is unexplained;
+`HH:MM:SS` coverage is parser-level only; and production's audio-marker format is narrower than the
+integrity guard's accepted parser forms. The deferred `Add-SliceScopeToPrompt` finding remains
+non-blocking and unmodified in the companion V4Q handoff.
+
+OSS disposition, verbatim:
+
+`Not applicable — bounded test correction within the existing V4 subsystem; no new subsystem or dependency`
+
+---
+
+## HISTORICAL MERGE-GATE HANDOFF TAIL — failed `20bf2ec` whole-diff
+
+**Historical failed review range:**
 `4c07db9a387191485b51cb99886d58d94573c1ad...20bf2ecbaacad331576be030d4fdc2af2a178e10`
 
 | Item | Value |
@@ -89,18 +151,15 @@ are also byte-identical to the base — the whole branch never touched the IPC b
 > clean, both gates were green at the expected numbers, and the pinned diff reproduced
 > byte-identically.
 >
-> The correction — repetition counted per slice subsection and per Section 5 preamble, with the
-> global counter deleted — is recorded in
-> [`BUILDER-HANDOFF-v4q-video-scout-quality.md`](BUILDER-HANDOFF-v4q-video-scout-quality.md). It is
-> awaiting its own focused checkpoint review, and **the pinned artifact above belongs to the FAILED
-> review and has deliberately NOT been regenerated.** A new Full-class whole-diff review is required
-> before release; no checkpoint PASS ever authorized merge, push, a provider probe, or an acceptance
-> run, and neither does this tail.
+> The correction chain is now complete through `0d008532`, and Revision 9 received
+> `CHECKPOINT REVIEW: PASS`. **The pinned artifact above still belongs to the FAILED review and has
+> deliberately NOT been regenerated.** A new Full-class whole-diff review is required before
+> release; no checkpoint PASS authorized merge, push, a provider probe, or an acceptance run.
 
-**Zero provider activity.** No provider request, prompt-compliance probe, credential use, network
-media, acceptance run, merge, or push occurred at any point during V4Q or Phase B. The preserved
-run-directory count remained **31** throughout, with `run-20260727-001226-817-10472-c46bea78` — the
-failed-acceptance evidence — still the newest and untouched.
+**Precise provider history.** No provider activity occurred during the Revision 8 or Revision 9
+corrective checkpoints. The preserved earlier provider run remained untouched. This is not a claim
+that no provider activity has ever occurred. The run-directory count remained **31**, with
+`run-20260727-001226-817-10472-c46bea78` still newest and untouched.
 
 ### Reviewer instructions
 
