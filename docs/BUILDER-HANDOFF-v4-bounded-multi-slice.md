@@ -4,7 +4,8 @@ Branch: `feature/v4-bounded-multi-slice`
 Fork-point SHA: `4c07db9a387191485b51cb99886d58d94573c1ad`
 Pre-merge main SHA: `4c07db9a387191485b51cb99886d58d94573c1ad` (verified `main` == `origin/main` == this SHA before branching; re-verify at gate time)
 Accepted corrective-checkpoint tip: **`0d00853296e1ac602dbe7f4e99c03f192a747970`** (Revision 9 `CHECKPOINT REVIEW: PASS`; no Revision 8 or Revision 9 production change)
-Final reviewed tip: **`b02af5a28d30479b158485749397b123ee562405`**
+Current final reviewed-tip candidate: **`0e412e0bc908f344809b06a8f9439b2f75e90af3`** (viewport-corrected; see the authoritative VIEWPORT-CORRECTED FINAL section immediately below)
+Previously reviewed tip, independent `VERDICT: PASS` over the smaller range ending there: `b02af5a28d30479b158485749397b123ee562405`
 Superseded reviewed code tips: `5b5e30a102e92a02151ee4b4876a379e6fa7069b` (V4R) and `f17b51fdbe2dbd2b6110257f2df459dd7edc04f0` (original V4) — both passed review, then FAILED human acceptance
 Merge commit SHA: Pending until merge
 
@@ -17,7 +18,130 @@ review artifact and must not be regenerated or substituted.
 
 ---
 
-## MERGE-GATE HANDOFF TAIL — Revision 9 final review identity
+## VIEWPORT-CORRECTED FINAL — AUTHORITATIVE RELEASE IDENTITY
+
+**This section supersedes every earlier merge-gate tail in this document for current release
+purposes.** Earlier sections are retained as honest historical evidence of what was true at their
+own checkpoint. Where they state a reviewed tip, an artifact identity, a gate total, a release
+sequence, or an external run count, **those values are historical and must not be read as current
+state.** In particular, the former **31-directory** run-root count and the prompt-compliance-probe
+release sequence appear in earlier sections and are both superseded below.
+
+| Item | Value |
+|---|---|
+| Review base | `4c07db9a387191485b51cb99886d58d94573c1ad` |
+| Final reviewed tip | `0e412e0bc908f344809b06a8f9439b2f75e90af3` |
+| Review range | `4c07db9a387191485b51cb99886d58d94573c1ad...0e412e0bc908f344809b06a8f9439b2f75e90af3` |
+| Branch | `feature/v4-bounded-multi-slice` |
+| Authoritative artifact | `.agent-review-v4-bounded-multi-slice-viewport-final.diff` |
+| Artifact identity | `734,027` bytes · SHA-256 `28066C5A613A2C3ED1D5DAD862EC49C47692EAA2F5E153E3B270C6BC862C5436` |
+| Artifact inventory | `43` files: `32` modified, `11` added, `0` deleted · `+10,046 / −206` |
+| Merge commit | Pending until separately authorized merge |
+
+The artifact is an ordinary, non-reparse file with no reparse point anywhere in its path,
+gitignored by `.gitignore:33`, unstaged and untracked, generated with Git's native `--output`
+(never PowerShell redirection), independently regenerated into a distinct temporary file and proven
+byte-for-byte identical; that temporary file was then deleted. All eight earlier pinned
+`.agent-review-*.diff` artifacts were reverified byte-for-byte unchanged and remain historical
+evidence. The Revision 9 final artifact remains authoritative **only** for its own smaller range
+ending at `b02af5a2…` and must not be overwritten or relabelled.
+
+### Accepted reviews (distinct ranges — do not conflate)
+
+**Independent Full-class whole-diff review** of
+`4c07db9a387191485b51cb99886d58d94573c1ad...b02af5a28d30479b158485749397b123ee562405` recorded
+`INDEPENDENCE CHECK: PASS` and ended `VERDICT: PASS`. An earlier builder-side review of that same
+range ended FAIL **solely** because that reviewer had authored commits within it; it is retained as
+historical self-review evidence and does not supersede the independent PASS.
+
+**Viewport checkpoint review** of
+`b0b42c0e61cd3271cf2b0c6fadcd005371d4c417...0e412e0bc908f344809b06a8f9439b2f75e90af3` ended:
+
+`CHECKPOINT REVIEW: PASS`
+
+Measured there: focused `video-range-ui.test.js` **56 passed / 0 failed**; full app gate exit `0`
+with zero failures; Pester **955 passed / 0 failed / 0 skipped**; reachability **6 passed / 0
+failed**; syntax and `git diff --check` clean; run root unchanged at 37 directories with the same
+newest run; no provider activity. It established that the New Agent modal is viewport-bounded and
+internally scrollable, with no horizontal-clipping tradeoff, four load-bearing CSS assertions, and
+exactly one production `.modal` consumer.
+
+**No whole-diff verdict exists for the new range ending at `0e412e0…`.** One is required before any
+merge decision, and none is pre-recorded here.
+
+### Corrected provider history
+
+Provider activity **did occur**. The former 31-directory checkpoint is historical only; the current
+external run root `D:\Gemini_Video_Review\Downloads` holds **37** immediate `run-*` directories,
+newest `run-20260730-163649-567-50088-facc7834`. The six runs beyond the former checkpoint:
+
+| Run | Outcome |
+|---|---|
+| `run-20260730-161750-111-44836-c48b78a5` | Pro attempt; did not complete — quota unavailable |
+| `run-20260730-161850-447-44836-22a6a591` | Flash-Lite; quality-rejected |
+| `run-20260730-162846-473-44836-b8d9d77e` | Flash attempt; errored without a completed response |
+| `run-20260730-163324-698-50088-b1e32ed3` | Flash-Lite; quality-rejected |
+| `run-20260730-163456-824-50088-9253ad66` | Flash-Lite; quality-rejected |
+| `run-20260730-163649-567-50088-facc7834` | Flash-Lite; quality-rejected |
+
+The four completed Flash-Lite responses received audio tokens but characterized speech-heavy slices
+as silent and were rejected as `unjustified-universal-silence`. That is **negative Flash-Lite
+audiovisual qualification evidence** — it is **not** a slicer or transport failure. The quality gate
+refused the unreliable reports and preserved each response diagnostically. The prescribed Pro
+prompt-compliance acceptance **did not complete** and must never be described as performed. No
+additional provider activity is authorized.
+
+### Blue ruling — model qualification (binding)
+
+> BLUE RULING: Accept the V4/V4Q implementation with Flash-Lite audiovisual qualification explicitly
+> deferred. The preserved Flash-Lite runs demonstrate correct slicing, provider transport, usage
+> recording, and fail-closed quality rejection, but do not establish reliable speech analysis. No
+> additional provider test is authorized. Full audiovisual acceptance remains open until Blue
+> intentionally enables and approves testing with a stronger model.
+
+Consequently the earlier prompt-compliance-probe and provider-acceptance sequence is **superseded as
+a merge prerequisite**; no further provider run is required or authorized before the merge decision.
+Audio remains Blue's expected primary workflow. Video qualification may be revisited if a stronger
+free model appears, or if Blue develops sufficient regular need to authorize a stronger model.
+
+### Carried-forward unresolved findings (non-blocking)
+
+1. Historical Pester `954/1` remains unexplained; it has never been reproduced and later green runs
+   do not retire it.
+2. `HH:MM:SS` timestamp coverage remains parser-level only — no rendered fixture exercises it.
+3. Production audio-marker syntax remains narrower than the test-side integrity guard (production
+   requires clock form and no list prefix; the guard also recognizes raw seconds and prefixes).
+4. `Add-SliceScopeToPrompt` remains deferred and unmodified.
+5. Flash-Lite audiovisual qualification is deferred per the ruling above.
+
+### Status
+
+Merge and push remain **unauthorized**. The final Full-class whole-diff read-only review of
+`4c07db9a387191485b51cb99886d58d94573c1ad...0e412e0bc908f344809b06a8f9439b2f75e90af3` is **still
+pending**. The next reviewer must independently verify the whole range and the new artifact rather
+than relying on any identity recorded here.
+
+### Full-class reviewer order — additions for the viewport correction
+
+Beyond the existing V4/V4Q review areas, the reviewer must also confirm:
+
+- Responsive modal width and height against the viewport.
+- Internal vertical scrolling when the form exceeds the available height.
+- The URL field, slice controls, error line, model controls and Create/Cancel remain reachable.
+- Narrow-viewport and short-viewport behavior, with no horizontal-clipping tradeoff.
+- Exactly one production `.modal` consumer.
+- Four load-bearing CSS assertions that read the production stylesheet and fail if width,
+  max-height, overflow or border-box containment is removed, and that do not claim to be
+  rendered-browser geometry tests.
+- No renderer behavior, provider, model-policy, guard or IPC expansion.
+
+---
+
+## MERGE-GATE HANDOFF TAIL — Revision 9 final review identity (HISTORICAL — SUPERSEDED)
+
+> **Superseded** by the VIEWPORT-CORRECTED FINAL section above. Retained verbatim as evidence of
+> what was reviewed at the `b02af5a2…` checkpoint. Its reviewed tip, artifact identity, gate totals
+> and release sequence are historical and are not current state.
 
 | Item | Value |
 |---|---|
@@ -62,7 +186,14 @@ authorize no provider probe, acceptance run, merge, or push.
 
 ---
 
-## Post–Revision 9 finalization status — authoritative
+## Post–Revision 9 finalization status (HISTORICAL — SUPERSEDED)
+
+> **Superseded** by the VIEWPORT-CORRECTED FINAL section at the top of this document. It was
+> authoritative at the `b02af5a2…` checkpoint and is retained verbatim as evidence. Its reviewed
+> tip, its 31-directory run-root count, and its release sequence — which required a Pro
+> prompt-compliance probe and a subsequent provider acceptance run — are **no longer current**.
+> Blue's model-qualification ruling removed both as merge prerequisites, and no further provider
+> run is required or authorized. The probe did not complete and must not be described as performed.
 
 The current accepted corrective checkpoint is
 `0d00853296e1ac602dbe7f4e99c03f192a747970`. A fresh, independent Full-class
@@ -313,7 +444,14 @@ complete contract.
 **Final acceptance still requires human factual review.** No automated gate in this branch replaces
 a person reading the report.
 
-## Release sequence (supersedes the V4R acceptance checklist)
+## Release sequence (HISTORICAL — SUPERSEDED)
+
+> **Superseded** by Blue's model-qualification ruling, recorded in the VIEWPORT-CORRECTED FINAL
+> section at the top of this document. Steps 2–5 below — the Pro prompt-compliance probe and the
+> subsequent single provider acceptance run — are **no longer merge prerequisites**, and no further
+> provider run is required or authorized. Step 1, a Full-class whole-diff review ending in a literal
+> `VERDICT: PASS`, does still stand, now over the range ending at `0e412e0…`. Retained verbatim
+> rather than rewritten, so the original ordering remains legible as evidence.
 
 Strictly ordered. Each step requires its own explicit authorization from Blue; none of them is
 authorized by this handoff.
