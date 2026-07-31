@@ -4,10 +4,11 @@ Branch: `feature/v4-bounded-multi-slice`
 Fork-point SHA: `4c07db9a387191485b51cb99886d58d94573c1ad`
 Pre-merge main SHA: `4c07db9a387191485b51cb99886d58d94573c1ad` (verified `main` == `origin/main` == this SHA before branching; re-verify at gate time)
 Accepted corrective-checkpoint tip: **`0d00853296e1ac602dbe7f4e99c03f192a747970`** (Revision 9 `CHECKPOINT REVIEW: PASS`; no Revision 8 or Revision 9 production change)
-Current final reviewed-tip candidate: **`0e412e0bc908f344809b06a8f9439b2f75e90af3`** (viewport-corrected; see the authoritative VIEWPORT-CORRECTED FINAL section immediately below)
+Final reviewed tip: **`0e412e0bc908f344809b06a8f9439b2f75e90af3`** (viewport-corrected; see the authoritative POST-MERGE CLOSEOUT section immediately below)
+Final handoff tail / branch tip: **`7eecb1c78e30c792e2f0b3660c766a325f0692e8`**
 Previously reviewed tip, independent `VERDICT: PASS` over the smaller range ending there: `b02af5a28d30479b158485749397b123ee562405`
 Superseded reviewed code tips: `5b5e30a102e92a02151ee4b4876a379e6fa7069b` (V4R) and `f17b51fdbe2dbd2b6110257f2df459dd7edc04f0` (original V4) — both passed review, then FAILED human acceptance
-Merge commit SHA: Pending until merge
+Merge commit SHA: **`22592b7879860ad59cc422c7cf49bb93108a3c5d`**
 
 Historical failed-review diff: `.agent-review-v4-bounded-multi-slice.diff` — **663,394 bytes, 43 files**
 (32 modified, 11 added, 0 deleted), SHA-256
@@ -18,7 +19,114 @@ review artifact and must not be regenerated or substituted.
 
 ---
 
-## VIEWPORT-CORRECTED FINAL — AUTHORITATIVE RELEASE IDENTITY
+## POST-MERGE CLOSEOUT — AUTHORITATIVE RELEASE RECORD
+
+**V4/V4Q is reviewed, gated, merged, and pushed. It is included in Blue Helm 1.0.** This section is
+the current authoritative state of this branch. Every section below it — including the
+VIEWPORT-CORRECTED FINAL section — was accurate at its own checkpoint and is retained verbatim as
+historical evidence. Where an earlier section says a review is pending, a verdict does not yet
+exist, a merge SHA is pending, or merge/push is unauthorized, **those statements were true when
+written and are superseded here**; they must not be read as current state.
+
+| Item | Value |
+|---|---|
+| Review base (pre-merge `main`) | `4c07db9a387191485b51cb99886d58d94573c1ad` |
+| Final reviewed tip | `0e412e0bc908f344809b06a8f9439b2f75e90af3` |
+| Final handoff tail / branch tip | `7eecb1c78e30c792e2f0b3660c766a325f0692e8` |
+| Reviewed range | `4c07db9a387191485b51cb99886d58d94573c1ad...0e412e0bc908f344809b06a8f9439b2f75e90af3` |
+| **Merge commit** | **`22592b7879860ad59cc422c7cf49bb93108a3c5d`** |
+| Merge parent 1 (pre-merge `main`) | `4c07db9a387191485b51cb99886d58d94573c1ad` |
+| Merge parent 2 (branch tip) | `7eecb1c78e30c792e2f0b3660c766a325f0692e8` |
+| Merge tree | `66f92a46c46062abac77c3b830db6e17af66ecd1` |
+| Remote state | `main == origin/main == 22592b7879860ad59cc422c7cf49bb93108a3c5d` (pushed `4c07db9..22592b7`) |
+
+`22592b7…` is the **merge commit**, never the reviewed tip. The reviewed-tip endpoint remains
+`0e412e0…`, one commit below the branch tip.
+
+**Review-diff rule after merge.** `git diff main...<tip>` now goes empty, because the tip is an
+ancestor of `main`. Reproduce the reviewed delta with the immutable three-dot range against the
+recorded pre-merge `main`:
+
+```
+git diff 4c07db9a387191485b51cb99886d58d94573c1ad...0e412e0bc908f344809b06a8f9439b2f75e90af3
+```
+
+### Independent final verdict
+
+A fresh Claude Opus 5, Very High effort, Full-class, whole-diff, **read-only** review of
+`4c07db9a387191485b51cb99886d58d94573c1ad...0e412e0bc908f344809b06a8f9439b2f75e90af3` recorded
+`INDEPENDENCE CHECK: PASS — this session authored no commit in the reviewed range.` and ended
+literally:
+
+```text
+VERDICT: PASS
+```
+
+That review independently reproduced the authoritative artifact
+`.agent-review-v4-bounded-multi-slice-viewport-final.diff` — **734,027 bytes**, SHA-256
+`28066C5A613A2C3ED1D5DAD862EC49C47692EAA2F5E153E3B270C6BC862C5436`, **43 files** (32 modified,
+11 added, 0 deleted), **+10,046 / −206** — regenerated with Git's native `--output` into a separate
+temporary file and compared byte-for-byte across all 734,027 bytes, then deleted only that temporary
+file. All eight earlier pinned `.agent-review-*.diff` artifacts were reverified and each regenerates
+byte-identically from its own range; they remain historical evidence and must not be regenerated,
+relabelled, or overwritten.
+
+### Merged-main gates
+
+Measured on merged `main` (`22592b7…`), not on the branch:
+
+| Gate | Result |
+|---|---|
+| app | exit `0`, zero failures |
+| Pester | **955 passed / 0 failed / 0 skipped** |
+
+The app suite reports in mixed formats, so exit `0` with zero failures is the authoritative reading;
+no single aggregate assertion total is claimed for it. Also measured during the final review:
+focused SDK `3491 / 0`, reachability `6 / 0`, `node --check` clean on all 16 changed JavaScript
+files, `PSParser::Tokenize` clean on all 22 changed PowerShell files, and `git diff --check` clean.
+
+### Provider history at closeout
+
+**No provider activity occurred during the final review, the merge, the push, or this closeout.**
+That is not a claim that provider activity never occurred — it did, and it remains disclosed in the
+Corrected provider history section below. The external run root `D:\Gemini_Video_Review\Downloads`
+held **37** immediate `run-*` directories with newest `run-20260730-163649-567-50088-facc7834`
+before and after the final review, and no probe or acceptance run was performed.
+
+### Blue's model-qualification ruling — still binding
+
+Accepted by this closeout, unchanged:
+
+- bounded slicing, provider transport, usage recording, and fail-closed quality rejection are
+  **accepted**;
+- reliable Flash-Lite **speech analysis is not established**;
+- stronger-model audiovisual qualification remains **deferred**;
+- **no additional provider test is authorized** by this closeout.
+
+Full audiovisual acceptance stays open until Blue intentionally enables and approves testing with a
+stronger model.
+
+### Five non-blocking limitations carried forward — not downgraded
+
+1. Historical Pester `954/1` remains **unexplained**; it has never been reproduced and later green
+   runs, including the merged-main `955/0/0`, do not retire it.
+2. Rendered-fixture `HH:MM:SS` timestamp coverage remains **parser-level only** — no rendered
+   fixture exercises that form.
+3. Production audio-marker grammar remains **narrower** than the test-side integrity guard
+   (production requires clock form and no list prefix; the guard also accepts raw seconds and
+   Markdown list prefixes).
+4. `Add-SliceScopeToPrompt` remains **deferred and unwired** — referenced only by its own test file.
+   Wiring it requires a separate reviewed decision.
+5. Flash-Lite audiovisual qualification remains **deferred** per the ruling above.
+
+---
+
+## VIEWPORT-CORRECTED FINAL — RELEASE IDENTITY AT THE PRE-MERGE CHECKPOINT (HISTORICAL — SUPERSEDED)
+
+> **Superseded** by the POST-MERGE CLOSEOUT section above. Accurate at the pre-merge checkpoint and
+> retained verbatim as evidence. Its "no verdict exists", "merge commit pending", and
+> "merge and push remain unauthorized" statements were true when written and are **not** current
+> state — the final verdict is recorded above and the merge is `22592b7…`.
 
 **This section supersedes every earlier merge-gate tail in this document for current release
 purposes.** Earlier sections are retained as honest historical evidence of what was true at their
@@ -392,14 +500,22 @@ handoff-tail shape `scripts/merge-gate.ps1` requires.
 
 ---
 
-# Release-candidate summary — what this branch actually ships
+# Release-candidate summary — what this branch shipped (HISTORICAL — SUPERSEDED)
 
-This section is the current, release-facing truth for the whole branch. Where it disagrees with the
-V4 or V4R material further down, **this section wins**; the older sections are preserved unchanged
-as historical evidence of what was reviewed and what was learned.
+> **Superseded** by the POST-MERGE CLOSEOUT section at the top of this document, which is the
+> current release-facing truth now that V4/V4Q is merged at `22592b7…`. This section was the
+> release-facing truth while the branch was still a candidate, and is retained verbatim: its
+> description of what the branch ships remains an accurate account of the delivered behavior, but
+> its `<FINAL_REVIEWED_TIP>` placeholder and its precedence claim over "the V4 or V4R material
+> further down" are historical.
+
+This section was the release-facing truth for the whole branch at the candidate stage. Where it
+disagrees with the V4 or V4R material further down, **this section wins**; the older sections are
+preserved unchanged as historical evidence of what was reviewed and what was learned.
 
 **The final review base is still `4c07db9a387191485b51cb99886d58d94573c1ad`.** The reviewed range is
-`4c07db9...<FINAL_REVIEWED_TIP>`, covering V4 + V4R + V4Q in one whole-diff pass.
+`4c07db9...<FINAL_REVIEWED_TIP>`, covering V4 + V4R + V4Q in one whole-diff pass. The final reviewed
+tip is `0e412e0…`; see the POST-MERGE CLOSEOUT section for the resolved identities.
 
 ### What changed since the V4R verdict
 
@@ -1016,18 +1132,21 @@ test asserted against a PowerShell `node` function shadow, which never crosses `
 > **Both verdicts above are historical and invalid for the merge-gate plan.** Their literal
 > `VERDICT: PASS` lines, ranges, gate numbers, and pinned-diff hashes are preserved verbatim as
 > evidence of what each review actually read. Neither may be cited as authorization for the current
-> branch. **No verdict exists for the current review range.**
+> branch. **They were written while no verdict existed for the final review range; the final
+> independent `VERDICT: PASS` for `4c07db9a...0e412e0` is now recorded in the POST-MERGE CLOSEOUT
+> section at the top of this document.**
 
 ## Review-diff rule
 
-**The only current review range is `4c07db9a387191485b51cb99886d58d94573c1ad...<FINAL_REVIEWED_TIP>`,
-where `<FINAL_REVIEWED_TIP>` is the SHA recorded in the merge-gate handoff tail near the top of this
-document.** That tail also records the authoritative pinned-diff bytes, SHA-256, and file counts.
+**The reviewed range is
+`4c07db9a387191485b51cb99886d58d94573c1ad...0e412e0bc908f344809b06a8f9439b2f75e90af3`.** The
+POST-MERGE CLOSEOUT section at the top of this document records that range, the merge commit
+`22592b7…`, and the authoritative pinned-diff bytes, SHA-256, and file counts.
 
-- Before merge: `git diff 4c07db9a387191485b51cb99886d58d94573c1ad...<FINAL_REVIEWED_TIP>`
-  (equivalently `git diff main...<FINAL_REVIEWED_TIP>` while the tip is not yet an ancestor of `main`).
-- After merge: reproduce with the same immutable three-dot range — `git diff main...<tip>` goes empty
-  once the tip is an ancestor of `main`.
+- The immutable reproduction, before or after merge:
+  `git diff 4c07db9a387191485b51cb99886d58d94573c1ad...0e412e0bc908f344809b06a8f9439b2f75e90af3`.
+- `git diff main...0e412e0` now goes empty — the tip is an ancestor of `main` since the merge, which
+  is exactly why the recorded pre-merge `main` SHA is the one to diff against.
 - Always use `--output`; never PowerShell `>`.
 - Retain the literal `VERDICT: PASS|FAIL` line and identify the review that produced it.
 - **The `5b5e30a` and `f17b51f` ranges are historical only and must never be used for a merge-gate
