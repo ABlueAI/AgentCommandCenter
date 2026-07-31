@@ -87,11 +87,44 @@ files, `PSParser::Tokenize` clean on all 22 changed PowerShell files, and `git d
 
 ### Provider history at closeout
 
-**No provider activity occurred during the final review, the merge, the push, or this closeout.**
-That is not a claim that provider activity never occurred — it did, and it remains disclosed in the
-Corrected provider history section below. The external run root `D:\Gemini_Video_Review\Downloads`
-held **37** immediate `run-*` directories with newest `run-20260730-163649-567-50088-facc7834`
-before and after the final review, and no probe or acceptance run was performed.
+Three distinct checkpoints, deliberately not collapsed into one number.
+
+**A. Final-review checkpoint — 37 runs.** The independent Full-class whole-diff review measured the
+external run root `D:\Gemini_Video_Review\Downloads` at **37** immediate `run-*` directories, newest
+`run-20260730-163649-567-50088-facc7834`, unchanged before and after that review. No provider
+request, probe, or acceptance run occurred during it. **37 was the final-review checkpoint, not the
+permanent closeout count.**
+
+**B. Later user-initiated activity, before the merge — root rose to 39.** Two further runs were
+started by the user after the final review and completed **before** the V4 merge at `22592b7…`:
+
+| Run | Schema | Route | Mode | Model | Outcome | Report |
+|---|---|---|---|---|---|---|
+| `run-20260730-201601-874-50088-a1a58bcf` | 2 | `cli` | `transcript` | `gemini-2.5-flash-lite` | `completed` | `analysis-output.txt` |
+| `run-20260730-201721-000-50088-4e089c89` | 2 | `cli` | `transcript` | `gemini-2.5-flash-lite` | `completed` | `analysis-output.txt` |
+
+These two raised the run root from **37 to 39**. They were **ordinary CLI transcript runs** on the
+yt-dlp download-and-attach route — schema v2, with null `requestedSliceRanges` and null scalar
+offsets. They were **not sliced Video Scout runs**, they did not exercise the V4 multipart request
+path or the V4Q sliced-response quality gate, and they are **not V4 audiovisual qualification
+evidence**. Their report bodies were **not inspected** for this correction; only manifest metadata
+was read. Their existence does **not** change the V4 reviewed range, merge commit, merge tree,
+merged-main gates, Blue's model-qualification ruling, or any accepted limitation.
+
+**C. Merge, push, and documentation closeout — no provider activity.** **No provider activity
+occurred during the actual V4 merge, push, or documentation-closeout operations.** That is a claim
+about those operations only. It is *not* a claim that no provider activity occurred between the
+final review and the merge — the two transcript runs above prove otherwise — and it is *not* a claim
+that provider activity never occurred at all. The earlier six-run history, including the four
+quality-rejected Flash-Lite responses, remains disclosed in the Corrected provider history section
+below.
+
+**Checkpoint durability.** The run count is a **timestamped release-evidence checkpoint, not a
+permanent repository invariant.** Later user-initiated runs may increase the external run-root count
+without changing the V4 merge identity or making this historical checkpoint false. The 39-run
+measurement was verified at **`2026-07-31T03:43:00Z`**, newest directory
+`run-20260730-201721-000-50088-4e089c89`. A future count above 39 is expected normal use and does
+**not** require editing this V4 release record.
 
 ### Blue's model-qualification ruling — still binding
 
