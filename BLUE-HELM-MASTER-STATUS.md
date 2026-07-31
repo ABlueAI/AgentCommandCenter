@@ -126,6 +126,14 @@ credential, validator, cost-guard, or deletion paths.
 
 ## Current checkpoint — July 23 — V3A MERGED; BLUE HELM 1.0 SCOPE FROZEN
 
+> **BASELINE ADVANCED — July 30.** The `main` SHA in the baseline paragraph below
+> was accurate on July 23 and is now historical. Local and remote `main` are both
+> **`22592b7879860ad59cc422c7cf49bb93108a3c5d`** — the V4/V4Q merge — after P12
+> (`4c07db9`), Merge Gate v1 (`147fb74`), V3b (`6baa732`), a documentation merge
+> (`a6bba64`), and V4 (`22592b7`) landed. The scope-frozen Blue Helm 1.0
+> definition in this section still stands; only the baseline SHA moved. The
+> *Already complete* and *Remaining work* lists below are current as of July 30.
+
 **Baseline:** V3a Video Scout pre-analysis focus is human-accepted, merged with
 `--no-ff`, gated, and pushed. Local and remote `main` are both
 `9641de3066d471452dad40042a32968652e82f68`.
@@ -158,54 +166,72 @@ This is load-bearing context, not historical decoration:
 - **V5c1/V5c2a/V5c2b** manifest-owned media inventory, successful-run cleanup,
   retention, and crash reconciliation. K1 is CLOSED at `0c633ad`.
 - **V3a** optional bounded pre-analysis focus, merged at `9641de3`.
+- **P12** external-launcher hardening, merged at `4c07db9`.
+- **Merge Gate v1** (`scripts/merge-gate.ps1`) evidence-checked local `--no-ff`
+  merge helper, merged at `147fb74`.
+- **V3b** stored-report follow-up Q&A, merged at `6baa732`.
+- **V4 bounded multi-slice + V4Q report-quality gate**, merged at `22592b7`
+  (reviewed range `4c07db9...0e412e0`, branch tip `7eecb1c`; independent
+  Opus 5 Full-class whole-diff `VERDICT: PASS`; merged-main gates app exit `0`
+  with zero failures and Pester **955 passed / 0 failed / 0 skipped**). Full
+  release record in `docs/BUILDER-HANDOFF-v4-bounded-multi-slice.md`.
 - Aggregate test reachability and the Pester `<5` pin are already complete;
   they are not remaining work.
 
 ### Remaining work — Blue Helm 1.0, in order
 
-1. **`merge-gate.ps1` process enabler (time-boxed).** Human supplies accepted
-   tips and launches it; the script verifies clean state, exact SHAs, ancestry,
-   pinned diffs, and order; performs only the approved local `--no-ff` merges;
-   runs declared gates; prints merge SHAs; stops on first discrepancy; and
-   never pushes. Stop/rescope if it exceeds a small Standard-class branch.
-2. **V3b stored-report follow-up.** One bounded request per explicit submission,
-   using the persisted report without re-ingesting video; no background spend
-   or automatic continuation.
-3. **V4 bounded multi-slice.** Full-class cost-direction work. The design must
-   state whether N slices become one provider request with N parts or N
-   sequential requests, and enforce the aggregate duration cap before spend.
-4. **P12 launcher hardening BEFORE Quick Links.** Close the existing HIGH
-   `cmd.exe` metacharacter path and validate launcher directories before adding
-   another external-launch surface.
-5. **Quick Links.** Configurable, main-validated HTTP/HTTPS links. `CRM` /
-   `Starboard CRM` opens Blue's Hexona Systems login and `Outlook` opens Outlook
-   Web in the Windows default browser. No embedded webviews, native CRM/mail
-   panel, Electron-held business credentials, or agent access in 1.0.
-6. **Dockview prototype → human adoption decision.** Prototype
+> **STALE WORDING CORRECTED — July 30.** The previous version of this list opened
+> with four items that have since been reviewed, gated, merged, and pushed:
+> `merge-gate.ps1` (merged `147fb74`), V3b stored-report follow-up (merged
+> `6baa732`), V4 bounded multi-slice (merged `22592b7`), and P12 launcher
+> hardening (merged `4c07db9`). That wording is **stale, not reinterpreted** —
+> those four are now recorded in *Already complete* above, and their design
+> history is retained in the completed entries and their handoff documents. The
+> list below is renumbered accordingly and reordered to match Blue's
+> next-feature direction recorded beneath it.
+>
+> **P12 is retained explicitly, not closed silently.** Its standing requirement
+> — launcher hardening precedes Quick Links — is **satisfied**, because P12
+> merged at `4c07db9`, before the Quick Links entry below was reached. Quick
+> Links is unblocked on that axis. Do not delete this constraint; it is the
+> reason Quick Links may proceed at all.
+
+1. **Dockview prototype → human adoption decision.** Prototype
    `dockview-core` with real terminal and Library panes; verify resize/refit,
    drag, safe versioned persistence, corrupt-state reset, offline/no-telemetry
    behavior, clipboard/audio/pane-target compatibility, exact lockfile pin, and
    `npm audit`. Electron/browser popout windows are excluded from 1.0.
-7. **Dockable/resizable layout integration** only after prototype approval.
+2. **Dockable/resizable layout integration** only after prototype approval.
    Dockview hosts DOM containers that may contain terminal or report views, but
    Blue Helm does not pass Dockview serialized terminal/report content, paths,
    credentials, or IPC/filesystem authority.
-8. **Session persistence and explicit Claude resume controls.** Restore pane
+3. **Cross-provider pane-status indicators (R4, promoted).** Detect
+   idle / awaiting-input / done and surface it per pane across providers, so the
+   app interrupts Blue rather than requiring him to poll it. Sequenced after
+   Dockview so the indicators target stable pane and tab headers rather than the
+   hand-rolled grid they would otherwise have to be rebuilt against. Design
+   history and the original ranking remain in the R4 roadmap entry.
+4. **Quick Links.** Configurable, main-validated HTTP/HTTPS links. `CRM` /
+   `Starboard CRM` opens Blue's Hexona Systems login and `Outlook` opens Outlook
+   Web in the Windows default browser. No embedded webviews, native CRM/mail
+   panel, Electron-held business credentials, or agent access in 1.0. Its P12
+   prerequisite is satisfied (see the note above).
+5. **Session persistence and explicit Claude resume controls.** Restore pane
    type, role, worktree, safe presentation state, and Dockview placement.
    `Continue Latest` uses supported `claude --continue`; `Choose Session…` uses
    the native `claude --resume` selector. Never reconstruct conversations,
    parse terminal output for session identity, claim arbitrary PTYs resumed, or
    auto-restart Video Scout/paid work. Missing state refuses visibly; offer
    Restore Workspace and Start Fresh.
-9. **P1 fenced-role environment containment.** Full-class credential boundary:
+6. **P1 fenced-role environment containment.** Full-class credential boundary:
    explicit minimal environments; no provider/business/secret-shaped ambient
    values in fenced PTYs.
-10. **Fence completion.** Finish WO-6/WO-7 live tests and implement P4 unless
+7. **Fence completion.** Finish WO-6/WO-7 live tests and implement P4 unless
     preflight proves an equivalent enforcement mechanism. Session continuation
     must reuse or deliberately extend the existing `.claude.json` coordination
     surface, cover multiple app processes (not only panes), and prevent/warn on
     duplicate continuation rather than building a second competing lock.
-11. **Portable family distribution and clean-machine setup.** Before 1.0 is
+8. **Portable family distribution and clean-machine setup.** Before 1.0 is
     complete, replace the development-only shortcut/runtime handoff with an
     organized packaged build that Blue can install locally and give to one
     trusted family member at no recurring signing cost. Remove machine-specific
@@ -224,7 +250,7 @@ This is load-bearing context, not historical decoration:
     `docs/INSTALL-WINDOWS.md` with every direct transfer and retain the
     investigation record in
     `docs/SMART-APP-CONTROL-AND-DISTRIBUTION.md`.
-12. **EDA-1 environment and deployment assumptions audit.** After the
+9. **EDA-1 environment and deployment assumptions audit.** After the
     portable package exists and before the functional ship-check, run the
     read-only inventory in `docs/AUDIT-SCOPE-environment-deployment.md`.
     Record every host-policy, runtime/toolchain, external-service, filesystem,
@@ -234,16 +260,46 @@ This is load-bearing context, not historical decoration:
     acceptance is a clean-clone/clean-machine install using only
     `docs/INSTALL-WINDOWS.md`. The audit makes no fixes; each blocking
     remediation receives its own normally gated work order.
-13. **Release gate.** Resolve or explicitly accept every EDA-1 1.0 blocker,
+10. **Release gate.** Resolve or explicitly accept every EDA-1 1.0 blocker,
     then run the full app/Pester/reachability gates, `npm audit`,
     Electronegativity, full Electron restart, every included control smoked,
     visible progress/refusal, metadata-only Logs, credential-boundary checks,
     no automatic paid restart, clean synchronized `main`, and accepted
     residuals recorded.
-14. **One complete daily-driver day.** Blue records friction, failures,
+11. **One complete daily-driver day.** Blue records friction, failures,
     repeated manual steps, missing capabilities, and desired improvements in a
     DOCX. Repair blockers, record/tag Blue Helm 1.0, and use non-blocking
     findings to plan 2.0.
+
+### Next-feature direction — Blue, July 30
+
+**Dockview and cross-provider pane-status indicators are the next two feature
+areas, in that order.** Dockview comes first so the status UI targets stable
+pane and tab headers instead of the hand-rolled grid it would otherwise have to
+be rebuilt against.
+
+**Pane-status R4's revisit trigger has FIRED.** R4 was consciously deprioritized
+with an explicit condition: if pane-babysitting during the audio or V3/V4
+branches became a friction point, R4 jumps the queue. It did — babysitting panes
+became demonstrated friction across those branches, not a hypothetical. R4 is
+therefore promoted into the 1.0 remaining-work list above rather than left in
+the Tier-1 roadmap backlog. The original entry and ranking are retained as design
+history.
+
+**Both subsystems require their own OSS procurement record before
+implementation.** Per the OSS procurement protocol, each needs a read-only
+Source Scout run against primary sources and a candidate card covering
+capability match/limits, license, maintenance, Windows/Electron fit, framework
+needs, runtime/transitive weight, telemetry/network behavior, security
+advisories, persistence/migration implications, integration seams, adopt-whole
+versus owned boundary, and effort — ending in exactly one verdict term: **ADOPT,
+PROTOTYPE, PATTERN-MINE, or REJECT**.
+
+**No OSS verdict has been supplied by Blue for either subsystem, and none is
+recorded here.** The `dockview-core` entry in the R3 roadmap describes it as a
+utility-dependency adoption; that is a *roadmap expectation*, not a procurement
+verdict, and it does not substitute for the required record. Neither subsystem
+is authorized to begin implementation on the strength of this closeout.
 
 ### Windows launch/distribution constraint — July 26
 
@@ -273,21 +329,29 @@ Do not rearchitect Blue Helm away from Electron merely to avoid signing. That
 would replace `safeStorage`, IPC, process, and window security boundaries and
 requires an independent architecture decision rather than release cleanup.
 
-### V4 × K5 retry-attribution release trigger
+### V4 × K5 retry-attribution release trigger — DECIDED July 30
 
-K5 permits up to three attempts for one retryable provider request, while the
-manifest does not yet persist `attemptCount`. Keep that metadata change out of
-V4's one-invariant branch, but decide its 1.0 status against V4's **actual**
-request architecture:
+**Decided against V4's actual, merged request architecture, not a projection.**
+The trigger asked which of two shapes V4 would take. It took the first, and this
+was verified in the independent Full-class whole-diff review of the merged code:
 
-- If V4 sends N slices as parts of **one** provider request, the cap remains
-  three submitted attempts per run; durable attempt attribution is useful but
-  presumptively non-blocking.
-- If V4 sends N **sequential provider requests**, exposure can become N × three
-  attempts; durable `requestCount`/`attemptCount` becomes a presumptive 1.0
-  blocker before release.
+- **One logical provider request per run.** `buildRequestBody` emits **N ordered
+  media parts** — each repeating the same validated URL via `fileData.fileUri`
+  with only its own `videoMetadata` — followed by **one final text part**.
+- **Zero sequential per-slice requests.** The SDK holds exactly one attempt
+  loop, one `submitGeminiRequest` call site on the video path, and one
+  `fetchImpl` call site; the request body is serialized **once before the loop**.
+- **At most three byte-identical eligible attempts**, unchanged from K5.
+  Retries are eligible 503/UNAVAILABLE only; a thrown fetch is ambiguous and is
+  never retried; no quality rejection, repair, continuation, or fallback ever
+  triggers another request.
 
-Record the decision after V4, never against today's smaller cost surface.
+**Decision: durable `requestCount` / `attemptCount` is NOT a Blue Helm 1.0
+blocker under this architecture.** The exposure ceiling is three submitted
+attempts per run — the pre-V4 cost surface — because N slices ride inside one
+request rather than multiplying it. The metadata remains useful and stays
+available as a 2.0 candidate; it was deliberately kept out of V4's
+one-invariant branch and no longer gates release.
 
 ### Deferred to Blue Helm 2.0 consideration
 
@@ -1485,6 +1549,14 @@ live testing — these are NEEDS, not wants; V1 blocks the tool's whole point):*
 > **REVISIT TRIGGER:** if pane-babysitting during the audio (K7/K8) or V3/V4
 > branches becomes a friction point, R4 is cheap relative to its rank and should
 > jump the queue. This is a conscious deferral, not an oversight.
+>
+> **TRIGGER FIRED — July 30. R4 IS PROMOTED.** Pane babysitting across the audio
+> and V3/V4 branches became demonstrated friction, which is exactly the stated
+> condition. R4 now sits in the Blue Helm 1.0 remaining-work list as
+> *cross-provider pane-status indicators*, sequenced immediately after Dockview
+> so the indicators target stable pane/tab headers. The deferral text above is
+> retained as design history, not as current queue position. Implementation still
+> requires its own OSS procurement record first.
 
 **TIER 2 — daily-driver comfort:**
 
