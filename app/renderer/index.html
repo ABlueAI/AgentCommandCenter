@@ -231,20 +231,23 @@
         </select>
         <p class="muted small">Transcript is the cheapest pass — no visual tokens, text analysis only. Video runs the full forensic visual analysis at the highest token cost, so it's a deliberate opt-in, not the default.</p>
         <div id="videoRangeOpts" class="hidden">
-          <label>Analyze only a time range <span class="muted">(optional — leave both blank for the whole video)</span></label>
-          <div class="range-inputs">
-            <input type="text" id="videoStartInput" placeholder="Start (MM:SS or seconds)" />
-            <input type="text" id="videoEndInput" placeholder="End (MM:SS or seconds)" />
+          <label>Analyze only time slices <span class="muted">(optional — leave blank for the whole video)</span></label>
+          <div id="sliceRowsHost"></div>
+          <div class="slice-controls">
+            <button type="button" id="addSliceBtn" class="ghost small-btn">+ Add slice</button>
+            <span id="sliceAggregate" class="muted small"></span>
           </div>
           <p id="videoRangeError" class="range-error hidden"></p>
-          <p class="muted small">A range bills ONLY that slice — proportional to its length, not the whole video (a 2-minute slice of a 10-minute video costs roughly 80% less). Both fields are required together; leave both blank to analyze the whole video. Range analysis applies on the SDK/YouTube route only.</p>
+          <p class="muted small">Each slice bills ONLY its own length. One slice = the existing single-range analysis. 2–8 slices run as ONE analysis of just those slices; they must be chronological and non-overlapping, and together may total at most 1800s (30 min) — that cap is fixed. Slices apply on the SDK/YouTube route only.</p>
         </div>
         <label>Gemini model</label>
         <select id="videoModelSelect">
-          <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite (default, cheapest)</option>
-          <option value="gemini-2.5-flash">gemini-2.5-flash</option>
-          <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+          <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite (automatic for transcript/audio, cheapest)</option>
+          <option value="gemini-2.5-flash">gemini-2.5-flash (manual middle option)</option>
+          <option value="gemini-2.5-pro">gemini-2.5-pro (automatic for video, highest quality and cost)</option>
         </select>
+        <p id="videoModelStatus" class="muted small"></p>
+        <p class="muted small">Transcript and audio automatically use Flash-Lite. Video automatically uses Pro, because bounded video analysis is where report quality matters most. Pick a model yourself and it stays selected until you close this window. Pro can use significantly more quota and cost more than the other options. Whether any run falls inside a free tier depends on your own Gemini project and account — this app cannot tell you that.</p>
         <label>Media resolution</label>
         <select id="mediaResolutionSelect">
           <option value="LOW">LOW</option>
@@ -273,6 +276,9 @@
   <script src="vendor/addon-webgl.js"></script>
   <script src="pty-parser.js"></script>
   <script src="video-range-ui.js"></script>
+  <!-- V4Q Phase B: must load BEFORE app.js — app.js reads window.videoModelPolicy at module scope
+       to seed the per-modal-session policy, so a later <script> would leave it undefined. -->
+  <script src="video-model-policy.js"></script>
   <script src="analysis-focus.js"></script>
   <script src="agent-dom.js"></script>
   <script src="term-copy.js"></script>

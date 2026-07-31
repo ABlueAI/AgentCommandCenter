@@ -348,3 +348,182 @@ Describe 'Invoke-VideoScoutLibraryList — V5c2a lists new artifact states safel
 
     if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
 }
+
+# ==================================================================================================
+# V4: the Library projection exposes BOUNDED DERIVED slice facts for a schema-v3 multi-slice run --
+# a count and a total duration, both plain numbers. The individual offsets, the raw slice array, and
+# every filename/path stay out of the projection (same posture as mediaCount).
+Describe 'V4: Library projection of schema-v3 multi-slice runs' {
+    function New-V3Manifest {
+        param([object[]]$Slices = @(@{S=10;E=30}, @{S=60;E=90}), [string]$Outcome = 'completed')
+        $ranges = @(foreach ($r in $Slices) { [PSCustomObject]@{ StartOffset = $r.S; EndOffset = $r.E } })
+        $m = New-VideoScoutLiveManifest -RunId 'run-20260722-090000-000-5555-abcdef05' -Url 'https://youtu.be/x' `
+            -AppliedMode 'video' -Route 'sdk' -Model 'gemini-2.5-flash-lite' -MediaResolutionRequested 'MEDIUM' `
+            -VideoScout $true -SliceRanges $ranges
+        if ($Outcome -ne 'null') {
+            $m.outcome = $Outcome
+            $m.finishedAt = '2026-07-22T09:00:01.000Z'
+            if ($Outcome -eq 'completed') { $m.reportFile = 'analysis-output.txt' } else { $m.reason = 'test reason' }
+        }
+        # Project the READ-BACK (PSCustomObject) shape, which is what the Library actually sees.
+        ($m | ConvertTo-Json -Depth 8) | ConvertFrom-Json
+    }
+
+    It 'derives sliceCount and aggregateSliceSeconds for a completed multi-slice run' {
+        $e = ConvertTo-VideoScoutLibraryEntry -RunId 'r' -Manifest (New-V3Manifest)
+        $e.sliceCount | Should Be 2
+        $e.aggregateSliceSeconds | Should Be 50
+    }
+    It 'sums all 8 slices of a maximum multi-slice run' {
+        $eight = @(0..7 | ForEach-Object { @{ S = $_ * 400; E = $_ * 400 + 225 } })
+        $e = ConvertTo-VideoScoutLibraryEntry -RunId 'r' -Manifest (New-V3Manifest -Slices $eight)
+        $e.sliceCount | Should Be 8
+        $e.aggregateSliceSeconds | Should Be 1800
+    }
+    It 'keeps the scalar offsets null for a v3 run (the slice set is the scope)' {
+        $e = ConvertTo-VideoScoutLibraryEntry -RunId 'r' -Manifest (New-V3Manifest)
+        $e.startOffsetSeconds | Should BeNullOrEmpty
+        $e.endOffsetSeconds | Should BeNullOrEmpty
+    }
+    It 'reports mediaCount 0 for a v3 run (it can never own media)' {
+        (ConvertTo-VideoScoutLibraryEntry -RunId 'r' -Manifest (New-V3Manifest)).mediaCount | Should Be 0
+    }
+    It 'projects a REFUSED and an ERROR multi-slice run with the same bounded facts' {
+        foreach ($o in @('refused', 'error')) {
+            $e = ConvertTo-VideoScoutLibraryEntry -RunId 'r' -Manifest (New-V3Manifest -Outcome $o)
+            $e.sliceCount | Should Be 2
+            $e.aggregateSliceSeconds | Should Be 50
+            $e.outcome | Should Be $o
+        }
+    }
+    It 'exposes NO raw slice array, offsets, filenames, or paths in the projection' {
+        $e = ConvertTo-VideoScoutLibraryEntry -RunId 'r' -Manifest (New-V3Manifest)
+        ($e.Keys -contains 'requestedSliceRanges') | Should Be $false
+        ($e.Keys -contains 'mediaArtifacts') | Should Be $false
+        $json = $e | ConvertTo-Json -Depth 6
+        ($json -match 'startOffset"') | Should Be $false
+        ($json -match 'C:\\|D:\\|\.srt|\.mp4|manifest\.json') | Should Be $false
+    }
+    It 'existing v1/v2 runs project sliceCount 0 (no behavior change for history)' {
+        $v2 = New-VideoScoutLiveManifest -RunId 'r' -Url 'u' -AppliedMode 'video' -Route 'sdk' -Model 'm' -MediaResolutionRequested 'MEDIUM' -StartOffset 5 -EndOffset 9
+        $e2 = ConvertTo-VideoScoutLibraryEntry -RunId 'r' -Manifest (($v2 | ConvertTo-Json -Depth 8) | ConvertFrom-Json)
+        $e2.sliceCount | Should Be 0
+        $e2.aggregateSliceSeconds | Should Be 0
+        $e2.startOffsetSeconds | Should Be 5
+        $e2.endOffsetSeconds | Should Be 9
+        $v1 = New-VideoScoutManifestBase
+        $v1.runId = 'r'; $v1.videoScout = $false; $v1.appliedMode = 'transcript'; $v1.route = 'cli'
+        $v1.mediaResolutionRequested = 'MEDIUM'; $v1.startedAt = '2026-07-20T00:00:00.000Z'
+        $e1 = ConvertTo-VideoScoutLibraryEntry -RunId 'r' -Manifest (($v1 | ConvertTo-Json -Depth 8) | ConvertFrom-Json)
+        $e1.sliceCount | Should Be 0
+        $e1.aggregateSliceSeconds | Should Be 0
+    }
+}
+
+Describe 'V4Q: the Library NEVER exposes a rejected-response diagnostic' {
+    # A diagnostic is preserved EVIDENCE, not output. These tests are the structural proof that it
+    # cannot reach a user through the Library: not as a report, not as a projected field, not as
+    # readable text, and not as an "available" run.
+    function New-V4RejectedManifest {
+        param([string]$Code = 'scope-mismatch')
+        $m = New-VideoScoutLiveManifest -RunId 'run-20260728-090000-000-6666-abcdef06' -Url 'https://youtu.be/x' `
+            -AppliedMode 'video' -Route 'sdk' -Model 'gemini-2.5-pro' -MediaResolutionRequested 'MEDIUM' `
+            -VideoScout $true -StartOffset 60 -EndOffset 75
+        $m.outcome = 'error'
+        $m.finishedAt = '2026-07-28T09:00:01.000Z'
+        $m.reason = "[quality:$Code] The provider response failed the local Video Scout quality gate and was NOT saved as a report."
+        $m.diagnosticArtifacts = @([ordered]@{
+                kind     = 'quality-rejected-response'
+                fileName = 'rejected-response.txt'
+                sha256   = 'd1e8a70b5ccab1dc2f56bbf7e99f064a660c08e361a35751b9c483c88943d082'
+                bytes    = 4242
+            })
+        $m
+    }
+    function New-V4Read { ((New-V4RejectedManifest) | ConvertTo-Json -Depth 8) | ConvertFrom-Json }
+
+    It 'the fixture is a valid schema-v4 rejected run (error, no report, one diagnostic)' {
+        $m = New-V4RejectedManifest
+        $m.schemaVersion | Should Be 4
+        $m.outcome | Should Be 'error'
+        $m.reportFile | Should BeNullOrEmpty
+        @($m.diagnosticArtifacts).Count | Should Be 1
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Not Throw
+    }
+
+    It 'report status stays INCOMPLETE (availability still keys off outcome + reportFile only)' {
+        (Get-VideoScoutReportStatusFromManifest -Manifest (New-V4Read)) | Should Be 'incomplete'
+    }
+
+    It 'the projected entry exposes NO diagnostic field, filename, hash, or byte count' {
+        $e = ConvertTo-VideoScoutLibraryEntry -RunId 'r' -Manifest (New-V4Read)
+        $names = @($e.PSObject.Properties.Name)
+        ($names | Where-Object { $_ -match 'diagnostic' }).Count | Should Be 0
+        $blob = ($e | ConvertTo-Json -Depth 8)
+        ($blob -match 'rejected-response') | Should Be $false
+        ($blob -match 'd1e8a70b5ccab1dc2f56bbf7e99f064a660c08e361a35751b9c483c88943d082') | Should Be $false
+        ($blob -match '4242') | Should Be $false
+        ($blob -match 'quality-rejected-response') | Should Be $false
+    }
+
+    It 'the projected entry claims no media (a diagnostic is not media)' {
+        (ConvertTo-VideoScoutLibraryEntry -RunId 'r' -Manifest (New-V4Read)).mediaCount | Should Be 0
+    }
+
+    It 'LIST projects the run as an error with no report and leaks no diagnostic identity' {
+        $root = New-TempRoot
+        try {
+            $runId = 'run-20260728-090000-000-6666-abcdef06'
+            $runDir = New-RunDir -Root $root -RunId $runId
+            Write-ManifestJson -RunDir $runDir -Obj (New-V4RejectedManifest)
+            # The preserved evidence really is on disk next to the manifest -- and still must not surface.
+            $enc = New-Object System.Text.UTF8Encoding($false)
+            [System.IO.File]::WriteAllText((Join-Path $runDir 'rejected-response.txt'), 'SECRET-REJECTED-BODY', $enc)
+
+            $list = Invoke-VideoScoutLibraryList -RunRoot $root
+            $list.ok | Should Be $true
+            @($list.entries).Count | Should Be 1
+            $entry = @($list.entries)[0]
+            $entry.outcome | Should Be 'error'
+            $entry.reportStatus | Should Be 'incomplete'
+            $blob = ($list | ConvertTo-Json -Depth 10)
+            ($blob -match 'SECRET-REJECTED-BODY') | Should Be $false
+            ($blob -match 'rejected-response') | Should Be $false
+            ($blob -match 'd1e8a70b5ccab1dc2f56bbf7e99f064a660c08e361a35751b9c483c88943d082') | Should Be $false
+        }
+        finally { if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue } }
+    }
+
+    It 'READ returns incomplete and NEVER the diagnostic text, even though it sits in the run dir' {
+        $root = New-TempRoot
+        try {
+            $runId = 'run-20260728-090000-000-6666-abcdef06'
+            $runDir = New-RunDir -Root $root -RunId $runId
+            Write-ManifestJson -RunDir $runDir -Obj (New-V4RejectedManifest)
+            $enc = New-Object System.Text.UTF8Encoding($false)
+            [System.IO.File]::WriteAllText((Join-Path $runDir 'rejected-response.txt'), 'SECRET-REJECTED-BODY', $enc)
+
+            $read = Invoke-VideoScoutLibraryRead -RunRoot $root -RunId $runId
+            $read.ok | Should Be $true
+            $read.status | Should Be 'incomplete'
+            $read.reportStatus | Should Be 'incomplete'
+            $read.outcome | Should Be 'error'
+            $blob = ($read | ConvertTo-Json -Depth 10)
+            ($blob -match 'SECRET-REJECTED-BODY') | Should Be $false
+            ($blob -match 'rejected-response') | Should Be $false
+        }
+        finally { if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue } }
+    }
+
+    It 'a diagnostic can never be promoted into reportFile by the schema (defence in depth)' {
+        $m = New-V4RejectedManifest
+        $m.reportFile = 'rejected-response.txt'
+        { Assert-VideoScoutManifestValid -Manifest $m } | Should Throw
+    }
+
+    It 'the Library core source never reads or projects the diagnostic file' {
+        $src = Get-Content -LiteralPath (Join-Path $here 'video-scout-library-core.ps1') -Raw
+        ($src -match 'rejected-response') | Should Be $false
+        ($src -match 'diagnosticArtifacts') | Should Be $false
+    }
+}

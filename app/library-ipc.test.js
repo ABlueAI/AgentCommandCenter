@@ -170,6 +170,44 @@ function trustedIpc(overrides) {
     assert(l.ok === false && l.error === 'library-subprocess-failed', 'a thrown subprocess fails closed on List');
   }
 
+  // ============================ V4 bounded multi-slice ==========================================
+  // The IPC projection forwards only the two BOUNDED DERIVED numbers. The raw slice array and the
+  // individual offsets must never cross the boundary, exactly like mediaCount/paths.
+  {
+    const v3Payload = () => ({
+      ok: true, rootExists: true, total: 1, capExceeded: false,
+      entries: [{
+        runId: 'run-20260722-090000-000-5555-abcdef05', title: 'Sliced', date: '2026-07-22T09:00:00.000Z',
+        dateKind: 'exact', sortMs: 1785790800000, mode: 'video', route: 'sdk', outcome: 'completed',
+        totalTokens: 42, startOffsetSeconds: null, endOffsetSeconds: null, reportStatus: 'available',
+        mediaCount: 0, sliceCount: 2, aggregateSliceSeconds: 50,
+        // Hostile extras the PS layer would never send: they must be DROPPED by the projection.
+        requestedSliceRanges: [{ startOffsetSeconds: 10, endOffsetSeconds: 30 }],
+        runDir: 'D:\\Gemini_Video_Review\\downloads\\run-x',
+      }],
+      invalid: [],
+    });
+    const { ipc, ev } = trustedIpc({ runLibraryAction: async () => v3Payload() });
+    const l = await ipc.handleList(ev);
+    assert(l.ok === true && l.entries.length === 1, 'a schema-v3 multi-slice run lists successfully');
+    const e = l.entries[0];
+    assert(e.sliceCount === 2 && e.aggregateSliceSeconds === 50,
+      'the bounded derived slice count + aggregate are forwarded to the renderer');
+    assert(e.requestedSliceRanges === undefined,
+      'the RAW slice array never crosses the IPC boundary');
+    assert(e.runDir === undefined, 'no filesystem path crosses the IPC boundary');
+    assert(e.startOffsetSeconds === null && e.endOffsetSeconds === null,
+      'a v3 run forwards null scalar offsets (the slice set is the scope)');
+    assert(!JSON.stringify(e).includes('Gemini_Video_Review'), 'no path substring survives anywhere in the entry');
+  }
+  {
+    // A legacy List payload with no slice fields must project them as null, never undefined-crash.
+    const { ipc, ev } = trustedIpc();
+    const l = await ipc.handleList(ev);
+    assert(l.entries.every((e) => e.sliceCount === null && e.aggregateSliceSeconds === null),
+      'historical entries with no slice fields project null (num()) without error');
+  }
+
   process.stdout.write(`\nlibrary-ipc: ${passed} passed, ${failed} failed\n`);
   process.exit(failed ? 1 : 0);
 })();

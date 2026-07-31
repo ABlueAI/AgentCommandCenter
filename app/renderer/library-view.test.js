@@ -118,5 +118,37 @@ function entry(o) {
   assert(threw, 'the DOM stub throws if innerHTML is ever used (so the inertness tests are meaningful)');
 }
 
+// ============================== V4 bounded multi-slice ==========================================
+// The Segment label distinguishes REQUESTED from analyzed scope: only a completed run (one
+// successful provider request AND a durable report) proves the requested slices were the analyzed
+// scope, so every non-completed outcome reads "requested N slices". v1/v2 labels are unchanged.
+{
+  assert(LV.offsetsLabel(entry({ sliceCount: 2, aggregateSliceSeconds: 50, outcome: 'completed' })) === '2 slices · 50s',
+    'a COMPLETED multi-slice run reads "N slices · Xs" (the analyzed scope)');
+  assert(LV.offsetsLabel(entry({ sliceCount: 8, aggregateSliceSeconds: 1800, outcome: 'completed' })) === '8 slices · 1800s',
+    'the maximum 8-slice completed run reads its full aggregate');
+  for (const oc of ['refused', 'error', null]) {
+    assert(LV.offsetsLabel(entry({ sliceCount: 3, aggregateSliceSeconds: 120, outcome: oc })) === 'requested 3 slices · 120s',
+      `a ${oc === null ? 'null (incomplete)' : oc} multi-slice run reads "requested N slices" (never claims analysis happened)`);
+  }
+  // existing v1/v2 labels are byte-identical to before
+  assert(LV.offsetsLabel(entry({ startOffsetSeconds: 5, endOffsetSeconds: 9 })) === 'range 5s–9s',
+    'an existing single-range run keeps its exact "range Ss–Es" label');
+  assert(LV.offsetsLabel(entry({})) === 'full length',
+    'an existing unsliced run keeps its exact "full length" label');
+  assert(LV.offsetsLabel(entry({ sliceCount: 0, aggregateSliceSeconds: 0 })) === 'full length',
+    'sliceCount 0 (every historical run) falls through to the unchanged labels');
+  assert(LV.offsetsLabel(entry({ sliceCount: 1, aggregateSliceSeconds: 20, startOffsetSeconds: 5, endOffsetSeconds: 25 })) === 'range 5s–25s',
+    'a sliceCount of 1 is never a multi-slice label (single slices ride the scalar fields)');
+}
+{
+  // The metadata panel renders the multi-slice Segment value as inert text, with no offsets exposed.
+  const meta = LV.buildMetaPanel(deps, entry({ sliceCount: 2, aggregateSliceSeconds: 50, outcome: 'error' }));
+  const texts = meta.walk([]).map((n) => n.textContent).join('|');
+  assert(texts.includes('requested 2 slices · 50s'), 'the meta panel shows the requested-slice Segment value');
+  assert(!/startOffset|endOffset|\.srt|\.mp4|[A-Za-z]:\\/.test(texts),
+    'the meta panel never exposes raw offsets, filenames, or paths for a multi-slice run');
+}
+
 process.stdout.write(`\nlibrary-view: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

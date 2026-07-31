@@ -71,6 +71,10 @@ function createLibraryIpc(deps) {
       endOffsetSeconds: num(e.endOffsetSeconds),
       reportStatus: str(e.reportStatus) || 'incomplete',
       mediaCount: num(e.mediaCount),   // V5c1: bounded count of recorded media artifacts (never paths)
+      // V4: bounded DERIVED multi-slice facts (numbers only; the individual offsets and the raw
+      // array never cross this boundary). 0 for every whole-video / single-slice / historical run.
+      sliceCount: num(e.sliceCount),
+      aggregateSliceSeconds: num(e.aggregateSliceSeconds),
     };
   }
 

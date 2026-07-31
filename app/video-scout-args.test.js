@@ -13,6 +13,10 @@ const {
   DEFAULT_ANALYSIS_MODE,
   YOUTUBE_HOSTS,
   MAX_OFFSET_SECONDS,
+  MIN_MULTI_SLICES,
+  MAX_SLICES,
+  AGGREGATE_SLICE_CAP_SECONDS,
+  MAX_SLICE_RANGES_JSON_UNITS,
   isValidOffset,
   predictVideoRoute,
   buildVideoScoutArgs,
@@ -43,21 +47,95 @@ function assert(condition, label) {
     'notes describe mediaResolution as sent, with the route-dependent enforcement caveat');
 }
 
-// --- default-omission: values matching the script's own default are NOT pushed -----
+// --- V4Q BINDING RULING: every validated model selection is serialized, Lite included -----------
+// mediaResolution keeps its default-omission behavior (the script's default is unambiguous there),
+// but videoModel must NOT be omitted: feed-gemini.ps1 resolves an OMITTED -Model on a sliced run to
+// gemini-2.5-pro, so dropping an explicit Lite choice would run -- and bill -- Pro against the
+// user's stated intent. Omitted-model defaulting is reserved for direct PowerShell/SDK callers.
 {
   const { args, notes } = buildVideoScoutArgs({ videoModel: DEFAULT_VIDEO_MODEL, mediaResolution: DEFAULT_MEDIA_RESOLUTION });
-  assert(args.length === 0, 'omits both flags when values match feed-gemini.ps1 defaults');
-  assert(notes.some(n => /videoModel="gemini-2.5-flash-lite" omitted/.test(n)), 'notes explain videoModel omission');
-  assert(notes.some(n => /mediaResolution="MEDIUM" omitted/.test(n)), 'notes explain mediaResolution omission');
+  assert(args.join(' ') === `-Model ${DEFAULT_VIDEO_MODEL}`,
+    'an explicit Flash-Lite selection is STILL serialized (never re-read downstream as "omitted")');
+  assert(notes.some(n => /videoModel="gemini-2.5-flash-lite" sent as -Model/.test(n)),
+    'notes record that the explicit model was sent');
+  assert(notes.some(n => /always serialized/.test(n)),
+    'notes state why the app never relies on the script default for the model');
+  assert(notes.some(n => /mediaResolution="MEDIUM" omitted/.test(n)), 'notes explain mediaResolution omission (unchanged)');
 }
 
-// --- reject: values outside the allowlist are dropped, never spliced into args -----
+// Every allowlisted model round-trips explicitly, at every scope. This is the exact defect the
+// ruling closes: an app-originated sliced run must never resolve to a model the user did not pick.
 {
-  const { args, notes } = buildVideoScoutArgs({ videoModel: 'gemini-3-ultra-secret', mediaResolution: 'ULTRA' });
-  assert(!args.includes('-Model'), 'rejects a videoModel outside VALID_VIDEO_MODELS');
-  assert(!args.includes('-MediaResolution'), 'rejects a mediaResolution outside VALID_MEDIA_RESOLUTIONS');
+  for (const m of ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro']) {
+    const { args } = buildVideoScoutArgs({ videoModel: m, mediaResolution: 'MEDIUM' });
+    assert(args[args.indexOf('-Model') + 1] === m, `app-originated videoModel="${m}" is serialized exactly`);
+  }
+  const sliced = buildVideoScoutArgs({
+    videoModel: 'gemini-2.5-flash-lite', mediaResolution: 'MEDIUM', analysisMode: 'video',
+    videoUrl: 'https://www.youtube.com/watch?v=abc12345678',
+    sliceRanges: [{ startOffset: 10, endOffset: 30 }, { startOffset: 60, endOffset: 90 }],
+  });
+  assert(sliced.args[sliced.args.indexOf('-Model') + 1] === 'gemini-2.5-flash-lite',
+    'a SLICED app request still carries the explicit Lite choice (never silently upgraded to Pro)');
+}
+
+// --- V4Q CORRECTION: an invalid videoModel REFUSES the launch; an invalid mediaResolution does not
+// An out-of-allowlist model used to be dropped so the script default would apply. That stopped
+// being safe when feed-gemini.ps1 gained omitted-model resolution: a dropped -Model on a sliced run
+// now resolves to gemini-2.5-pro, so "drop and continue" would spend real money on a model the user
+// never selected. mediaResolution keeps the drop behavior -- its fallback is genuinely inert.
+{
+  const { args, notes, error } = buildVideoScoutArgs({ videoModel: 'gemini-3-ultra-secret', mediaResolution: 'ULTRA' });
+  assert(typeof error === 'string' && error.length > 0, 'an invalid videoModel sets a launch-refusing error');
+  assert(/Invalid video model/.test(error) && /Launch refused/.test(error), 'the error names the problem and says the launch is refused');
+  assert(args.length === 0, 'a refused launch emits NO launchable argument set at all');
+  assert(!args.includes('-Model'), 'the invalid model is never spliced into args');
   assert(notes.some(n => /videoModel=.*REJECTED/.test(n)), 'notes flag the rejected videoModel explicitly');
+  assert(notes.some(n => /never silently downgraded/.test(n)), 'notes state that no silent downgrade happened');
+}
+{
+  // mediaResolution is unchanged: dropped with a note, launch still proceeds.
+  const { args, notes, error } = buildVideoScoutArgs({ videoModel: 'gemini-2.5-pro', mediaResolution: 'ULTRA' });
+  assert(error === null || error === undefined, 'an invalid mediaResolution alone does NOT refuse the launch');
+  assert(!args.includes('-MediaResolution'), 'rejects a mediaResolution outside VALID_MEDIA_RESOLUTIONS');
+  assert(args[args.indexOf('-Model') + 1] === 'gemini-2.5-pro', 'the valid model still serializes');
   assert(notes.some(n => /mediaResolution=.*REJECTED/.test(n)), 'notes flag the rejected mediaResolution explicitly');
+}
+{
+  // The exact escalation the correction closes: an invalid model on a SLICED request must never be
+  // able to reach PowerShell's omitted-model sliced-Pro default.
+  const r = buildVideoScoutArgs({
+    videoModel: 'gemini-3-ultra-secret', mediaResolution: 'MEDIUM', analysisMode: 'video',
+    videoUrl: 'https://www.youtube.com/watch?v=abc12345678',
+    sliceRanges: [{ startOffset: 10, endOffset: 30 }, { startOffset: 60, endOffset: 90 }],
+  });
+  assert(typeof r.error === 'string' && r.error.length > 0, 'invalid model + valid slices returns a visible error');
+  assert(r.args.length === 0, 'invalid model + valid slices emits no launchable argument set');
+  assert(!r.args.includes('-SliceRangesJson'), 'the slice payload is not emitted either — nothing launches');
+  assert(!r.args.includes('-Model'), 'no -Model reaches PowerShell, so its omitted-model default is unreachable by this path');
+}
+{
+  // Malformed / injection-shaped payloads refuse without interpolating anything unsafe.
+  for (const bad of ['gemini-2.5-pro"; rm -rf /', 'gemini-2.5-pro `whoami`', '$(id)', 12345, {}, [], true]) {
+    const r = buildVideoScoutArgs({ videoModel: bad, mediaResolution: 'MEDIUM' });
+    assert(typeof r.error === 'string' && r.error.length > 0, `invalid videoModel ${JSON.stringify(String(bad))} refuses`);
+    assert(r.args.length === 0, 'a refused launch emits no arguments');
+    assert(!r.args.some(a => String(a).includes('rm -rf') || String(a).includes('whoami') || String(a).includes('$(')),
+      'no model value is interpolated into an argument');
+  }
+  // A BigInt/cyclic value must not crash the refusal path itself.
+  const cyclic = {}; cyclic.self = cyclic;
+  const rc = buildVideoScoutArgs({ videoModel: cyclic, mediaResolution: 'MEDIUM' });
+  assert(typeof rc.error === 'string' && rc.args.length === 0, 'a cyclic videoModel refuses without throwing');
+}
+{
+  // A genuinely ABSENT model keeps the separately specified omitted-model behavior: no -Model, no
+  // error, and PowerShell's own scope-based resolution applies.
+  for (const absent of [undefined, null, '']) {
+    const r = buildVideoScoutArgs({ videoModel: absent, mediaResolution: 'MEDIUM' });
+    assert(!r.error, `an absent videoModel (${JSON.stringify(absent)}) is not an error`);
+    assert(!r.args.includes('-Model'), 'an absent videoModel emits no -Model (omitted-model resolution applies downstream)');
+  }
 }
 
 // --- reject: shell-metacharacter / injection-shaped values are dropped too ----------
@@ -436,5 +514,156 @@ assert(VALID_ANALYSIS_MODES.has('transcript') && VALID_ANALYSIS_MODES.has('audio
   assert(!notes.some((n) => n.includes('analysisFocus')), 'absent focus -> no analysisFocus note');
 }
 
-process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
-process.exit(failed ? 1 : 0);
+// ================================ V4 bounded multi-slice =======================================
+const slices2 = [{ startOffset: 10, endOffset: 30 }, { startOffset: 60, endOffset: 90 }];
+const SLICES2_JSON = '[{"startOffset":10,"endOffset":30},{"startOffset":60,"endOffset":90}]';
+
+// --- constants pinned --------------------------------------------------------------------------
+{
+  assert(MIN_MULTI_SLICES === 2 && MAX_SLICES === 8, 'multi-slice count bounds are 2-8');
+  assert(AGGREGATE_SLICE_CAP_SECONDS === 1800, 'aggregate cap is the fixed 1800s');
+  assert(MAX_SLICE_RANGES_JSON_UNITS === 2048, 'serialized slice-control bound is 2048 UTF-16 units');
+}
+
+// --- accept: 2 valid slices -> exactly one discrete -SliceRangesJson pair ----------------------
+{
+  const { args, notes, error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', sliceRanges: slices2 });
+  assert(error === null, '2 valid chronological slices are accepted');
+  const i = args.indexOf('-SliceRangesJson');
+  assert(i !== -1 && args[i + 1] === SLICES2_JSON,
+    'the canonical compact JSON rides as ONE discrete -SliceRangesJson argv value (exact bytes)');
+  assert(args.length === 2, 'exactly the flag + value are added — nothing else, never a shell string');
+  assert(!args.includes('-StartOffset') && !args.includes('-EndOffset'),
+    'multi-slice never also emits the scalar -StartOffset/-EndOffset');
+  assert(notes.some((n) => /sliceRanges sent count=2 aggregate=50s/.test(n)), 'note carries count + aggregate');
+  assert(!notes.some((n) => n.includes(SLICES2_JSON)), 'the serialized JSON never appears in a note (Logs privacy)');
+}
+
+// --- accept: 8 slices summing to exactly 1800s (cap inclusive) ---------------------------------
+{
+  const eight = Array.from({ length: 8 }, (_, i) => ({ startOffset: i * 400, endOffset: i * 400 + 225 }));
+  const { args, error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', sliceRanges: eight });
+  assert(error === null && args.includes('-SliceRangesJson'), '8 slices at exactly the 1800s aggregate are accepted');
+}
+
+// --- adjacent allowed --------------------------------------------------------------------------
+{
+  const { error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', sliceRanges: [{ startOffset: 10, endOffset: 20 }, { startOffset: 20, endOffset: 30 }] });
+  assert(error === null, 'adjacent slices (start == previous end) are allowed');
+}
+
+// --- refuse: aggregate 1801 --------------------------------------------------------------------
+{
+  const eight = Array.from({ length: 8 }, (_, i) => ({ startOffset: i * 400, endOffset: i * 400 + 225 }));
+  eight[7] = { startOffset: 2800, endOffset: 3026 }; // 226s -> aggregate 1801
+  const { args, error, notes } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', sliceRanges: eight });
+  assert(error !== null && /1801s/.test(error) && /no override can raise it/.test(error),
+    '1801s aggregate refuses and states the cap cannot be overridden');
+  assert(!args.includes('-SliceRangesJson'), 'no slice arg is emitted on refusal');
+  assert(notes.some((n) => /aggregate 1801s > fixed cap 1800s/.test(n)), 'note records the aggregate refusal');
+}
+
+// --- refuse: mutual exclusion with scalar offsets ----------------------------------------------
+{
+  const { args, error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', sliceRanges: slices2, startOffset: 5, endOffset: 9 });
+  assert(error !== null && /mutually exclusive/.test(error), 'sliceRanges + scalar offsets refuses (mutually exclusive)');
+  assert(args.length === 0, 'nothing is emitted when the mutual-exclusion refusal fires');
+}
+
+// --- refuse: shape (array-vs-object/string/null-entry), exact keys, types ----------------------
+{
+  assert(buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', sliceRanges: { startOffset: 1, endOffset: 2 } }).error !== null,
+    'a bare object (not an array) refuses');
+  assert(buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', sliceRanges: SLICES2_JSON }).error !== null,
+    'a pre-serialized string refuses (main serializes; it never trusts a renderer string)');
+  assert(buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', sliceRanges: [slices2[0], null] }).error !== null,
+    'a null entry refuses');
+  assert(buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', sliceRanges: [slices2[0], [60, 90]] }).error !== null,
+    'an array entry refuses (exact-object shape required)');
+  const extra = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', sliceRanges: [slices2[0], { startOffset: 60, endOffset: 90, note: 'x' }] });
+  assert(extra.error !== null && /exactly the keys/.test(extra.error), 'an extra key refuses (exact key set)');
+  assert(buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', sliceRanges: [slices2[0], { startOffset: 60 }] }).error !== null,
+    'a missing key refuses');
+  assert(buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', sliceRanges: [slices2[0], { startOffset: 60.5, endOffset: 90 }] }).error !== null,
+    'a fractional offset refuses (integers only)');
+  assert(buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', sliceRanges: [slices2[0], { startOffset: '60', endOffset: 90 }] }).error !== null,
+    'a string-typed offset refuses (never coerced)');
+  assert(buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', sliceRanges: [slices2[0], { startOffset: 60, endOffset: 86401 }] }).error !== null,
+    'an offset beyond 86400 refuses');
+  assert(buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', sliceRanges: [slices2[0], { startOffset: 90, endOffset: 90 }] }).error !== null,
+    'end == start refuses (zero-length slice)');
+}
+
+// --- refuse: count bounds ----------------------------------------------------------------------
+{
+  assert(buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', sliceRanges: [] }).error !== null,
+    'an explicit empty array refuses (fail-closed: 2-8 required)');
+  const one = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', sliceRanges: [slices2[0]] });
+  assert(one.error !== null && /One slice uses the single start\/end fields/.test(one.error),
+    'a 1-entry array refuses and points at the scalar path');
+  const nine = Array.from({ length: 9 }, (_, i) => ({ startOffset: i * 20, endOffset: i * 20 + 10 }));
+  assert(buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', sliceRanges: nine }).error !== null,
+    'a 9-entry array refuses (max 8)');
+}
+
+// --- refuse: chronological order / overlap / duplicate -----------------------------------------
+{
+  const overlap = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', sliceRanges: [{ startOffset: 10, endOffset: 30 }, { startOffset: 20, endOffset: 40 }] });
+  assert(overlap.error !== null && /chronological and non-overlapping/.test(overlap.error), 'overlap refuses');
+  const dup = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', sliceRanges: [{ startOffset: 10, endOffset: 30 }, { startOffset: 10, endOffset: 30 }] });
+  assert(dup.error !== null, 'duplicate refuses');
+  const ooo = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', sliceRanges: [{ startOffset: 100, endOffset: 200 }, { startOffset: 10, endOffset: 50 }] });
+  assert(ooo.error !== null && /never reordered or merged/.test(ooo.error), 'out-of-order refuses, never silently reordered');
+}
+
+// --- refuse: mode / route gates -----------------------------------------------------------------
+{
+  const transcript = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'transcript', sliceRanges: slices2 });
+  assert(transcript.error !== null && /only valid in video mode/.test(transcript.error), 'slices outside video mode refuse');
+  const badMode = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'garbage', sliceRanges: slices2 });
+  assert(badMode.error !== null && /Invalid analysis mode/.test(badMode.error),
+    'an explicit invalid analysisMode still refuses FIRST (slices cannot ride a garbage mode through)');
+  const nonYt = buildVideoScoutArgs({ videoUrl: 'https://vimeo.com/12345', analysisMode: 'video', sliceRanges: slices2 });
+  assert(nonYt.error !== null && /YouTube/.test(nonYt.error), 'a non-YouTube source (CLI/download route) refuses slices');
+}
+
+// --- absent sliceRanges adds nothing -------------------------------------------------------------
+{
+  const { args, notes, error } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video' });
+  assert(error === null && !args.includes('-SliceRangesJson') && !notes.some((n) => n.includes('sliceRanges')),
+    'absent sliceRanges -> no slice arg, no slice note (whole-video/scalar behavior untouched)');
+}
+
+// --- REAL Windows argv roundtrip (load-bearing boundary; required by the work-order clarification)
+// Prove the compact slice JSON survives a main/node-pty-style ARGUMENT ARRAY -> CreateProcess ->
+// CommandLineToArgvW -> `powershell.exe -File` -> [string]$SliceRangesJson parameter binding
+// BYTE-IDENTICALLY. Non-network: spawns only local powershell.exe with a repo-owned fixture that
+// echoes the received value base64-encoded. Parser-only tests cannot prove this boundary — JSON is
+// exactly the kind of quote-dense value the PS 5.1 argument boundary has mangled before.
+async function argvRoundtrip() {
+  const { spawn } = require('child_process');
+  const path = require('path');
+  const fixture = path.join(__dirname, '..', 'scripts', 'test-fixtures', 'slice-json-echo.ps1');
+  const { args } = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', sliceRanges: slices2 });
+  const json = args[args.indexOf('-SliceRangesJson') + 1];
+  const psArgs = ['-NoProfile', '-NoLogo', '-ExecutionPolicy', 'Bypass', '-File', fixture, '-SliceRangesJson', json];
+  const out = await new Promise((resolve, reject) => {
+    const p = spawn('powershell.exe', psArgs, { windowsHide: true });
+    let stdout = '';
+    p.stdout.on('data', (d) => { stdout += d.toString('utf8'); });
+    p.on('error', reject);
+    p.on('close', (code) => resolve({ code, stdout }));
+  });
+  assert(out.code === 0, 'argv roundtrip: the fixture PowerShell process exited 0');
+  const m = /SLICEJSON:([A-Za-z0-9+/=]+)/.exec(out.stdout);
+  const received = m ? Buffer.from(m[1], 'base64').toString('utf8') : '(no marker)';
+  assert(received === json,
+    `argv roundtrip: -SliceRangesJson arrived byte-identical through the real argument-array -> powershell.exe -File boundary (sent ${json.length} units, got ${received.length})`);
+}
+
+argvRoundtrip().catch((err) => {
+  assert(false, `argv roundtrip threw: ${err && err.message ? err.message : err}`);
+}).finally(() => {
+  process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
+  process.exit(failed ? 1 : 0);
+});

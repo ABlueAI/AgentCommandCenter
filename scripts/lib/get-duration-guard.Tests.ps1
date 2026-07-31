@@ -213,3 +213,120 @@ Describe 'Resolve-NoFileMessage: anchored filter-line match (P13 -- titles canno
         (Resolve-NoFileMessage -Mode video -Pattern '*.mp4' -RunDir 'C:\run' -YtDlpStdout $hostile -Limit 5400) | Should Not Match 'backstop'
     }
 }
+
+# ================================== V4 bounded multi-slice ======================================
+# The multi-slice AGGREGATE gate: N slices must never authorize more paid video than one slice
+# could, the cap is FIXED (no -MaxDurationSeconds), and the fail-closed probe rules (live /
+# unknown / timed-out) still apply to a multi-slice run exactly as they do to every other run.
+
+Describe 'V4: Get-DurationLimits exposes the fixed multi-slice aggregate cap' {
+    It 'defines MultiSliceAggregate = 1800, equal to the single-slice cap' {
+        $l = Get-DurationLimits
+        $l.MultiSliceAggregate | Should Be 1800
+        $l.MultiSliceAggregate | Should Be $l.VideoRangeSlice
+    }
+}
+
+Describe 'V4: Resolve-DurationGuard multi-slice aggregate gate' {
+    It 'ALLOWS an aggregate below the cap and reports the slice-aggregate gate' {
+        $g = Resolve-DurationGuard -Mode video -HasMultiSlice -SliceCount 2 -AggregateSeconds 50 -DurationSeconds 600
+        $g.Allowed | Should Be $true
+        $g.MeasuredKind | Should Be 'slice-aggregate'
+        $g.Measured | Should Be 50
+        $g.Limit | Should Be 1800
+    }
+    It 'ALLOWS an aggregate of exactly 1800s (the cap is inclusive)' {
+        (Resolve-DurationGuard -Mode video -HasMultiSlice -SliceCount 8 -AggregateSeconds 1800 -DurationSeconds 7200).Allowed | Should Be $true
+    }
+    It 'REFUSES an aggregate of 1801s' {
+        $g = Resolve-DurationGuard -Mode video -HasMultiSlice -SliceCount 8 -AggregateSeconds 1801 -DurationSeconds 7200
+        $g.Allowed | Should Be $false
+        $g.Refusal | Should Be 'exceeds-limit'
+        $g.Message | Should Match 'multi-slice aggregate cap'
+    }
+    It 'gates on the AGGREGATE, not the source duration: a 5h source with small slices passes' {
+        (Resolve-DurationGuard -Mode video -HasMultiSlice -SliceCount 3 -AggregateSeconds 120 -DurationSeconds 18000).Allowed | Should Be $true
+    }
+}
+
+Describe 'V4: multi-slice request-shape defence (the decision layer defends its own invariant)' {
+    It 'REFUSES multi-slice outside video mode' {
+        foreach ($m in @('transcript', 'audio')) {
+            $g = Resolve-DurationGuard -Mode $m -HasMultiSlice -SliceCount 2 -AggregateSeconds 50 -DurationSeconds 600
+            $g.Allowed | Should Be $false
+            $g.Refusal | Should Be 'range-not-supported-for-mode'
+        }
+    }
+    It 'REFUSES multi-slice combined with a scalar range (mutually exclusive)' {
+        $g = Resolve-DurationGuard -Mode video -HasMultiSlice -SliceCount 2 -AggregateSeconds 50 -HasRange -StartOffset 0 -EndOffset 10 -DurationSeconds 600
+        $g.Allowed | Should Be $false
+        $g.Refusal | Should Be 'invalid-range'
+        $g.Message | Should Match 'mutually exclusive'
+    }
+    It 'REFUSES a slice count outside 2-8 even if the aggregate would fit' {
+        foreach ($c in @(0, 1, 9, 100)) {
+            (Resolve-DurationGuard -Mode video -HasMultiSlice -SliceCount $c -AggregateSeconds 50 -DurationSeconds 600).Allowed | Should Be $false
+        }
+    }
+    It 'REFUSES a non-positive aggregate (never a free pass through the size gate)' {
+        foreach ($a in @(0, -5)) {
+            $g = Resolve-DurationGuard -Mode video -HasMultiSlice -SliceCount 2 -AggregateSeconds $a -DurationSeconds 600
+            $g.Allowed | Should Be $false
+            $g.Refusal | Should Be 'invalid-range'
+        }
+    }
+}
+
+Describe 'V4: -MaxDurationSeconds can neither raise nor obscure the fixed multi-slice cap' {
+    It 'REFUSES visibly when an override accompanies a multi-slice request' {
+        $g = Resolve-DurationGuard -Mode video -HasMultiSlice -SliceCount 2 -AggregateSeconds 50 -DurationSeconds 600 -MaxDurationOverride 3600
+        $g.Allowed | Should Be $false
+        $g.Refusal | Should Be 'override-not-allowed'
+        $g.Message | Should Match 'FIXED for multi-slice'
+    }
+    It 'refuses the override even when it is LOWER than the cap (the cap is not negotiable)' {
+        (Resolve-DurationGuard -Mode video -HasMultiSlice -SliceCount 2 -AggregateSeconds 50 -DurationSeconds 600 -MaxDurationOverride 60).Refusal |
+            Should Be 'override-not-allowed'
+    }
+    It 'an over-cap multi-slice aggregate cannot be rescued by an override' {
+        (Resolve-DurationGuard -Mode video -HasMultiSlice -SliceCount 2 -AggregateSeconds 5000 -DurationSeconds 600 -MaxDurationOverride 9000).Allowed |
+            Should Be $false
+    }
+    It 'legacy single-slice override behavior is UNCHANGED (still raises the slice limit)' {
+        $g = Resolve-DurationGuard -Mode video -HasRange -StartOffset 0 -EndOffset 2400 -DurationSeconds 3000 -MaxDurationOverride 3000
+        $g.Allowed | Should Be $true
+        $g.OverrideUsed | Should Be $true
+        $g.Limit | Should Be 3000
+    }
+}
+
+Describe 'V4: multi-slice inherits every fail-closed probe rule (never proceeds unprobed)' {
+    It 'REFUSES a live source' {
+        (Resolve-DurationGuard -Mode video -HasMultiSlice -SliceCount 2 -AggregateSeconds 50 -DurationSeconds 600 -IsLive).Refusal | Should Be 'live'
+    }
+    It 'REFUSES an unknown (null) duration' {
+        (Resolve-DurationGuard -Mode video -HasMultiSlice -SliceCount 2 -AggregateSeconds 50 -DurationSeconds $null).Refusal | Should Be 'unknown-duration'
+    }
+    It 'REFUSES a non-positive reported duration' {
+        (Resolve-DurationGuard -Mode video -HasMultiSlice -SliceCount 2 -AggregateSeconds 50 -DurationSeconds 0).Refusal | Should Be 'unknown-duration'
+    }
+    It 'REFUSES a probe timeout' {
+        (Resolve-DurationGuard -Mode video -HasMultiSlice -SliceCount 2 -AggregateSeconds 50 -DurationSeconds 600 -ProbeTimedOut).Refusal | Should Be 'unknown-duration'
+    }
+}
+
+Describe 'V4: existing non-multi-slice behavior is untouched' {
+    It 'whole-video video mode still gates on source duration against 5400s' {
+        (Resolve-DurationGuard -Mode video -DurationSeconds 5400).Allowed | Should Be $true
+        (Resolve-DurationGuard -Mode video -DurationSeconds 5401).Allowed | Should Be $false
+    }
+    It 'single-slice still gates on slice length against 1800s' {
+        (Resolve-DurationGuard -Mode video -HasRange -StartOffset 0 -EndOffset 1800 -DurationSeconds 9000).Allowed | Should Be $true
+        (Resolve-DurationGuard -Mode video -HasRange -StartOffset 0 -EndOffset 1801 -DurationSeconds 9000).Allowed | Should Be $false
+    }
+    It 'transcript/audio remain source-gated at 4h with MeasuredKind=source' {
+        $g = Resolve-DurationGuard -Mode transcript -DurationSeconds 14400
+        $g.Allowed | Should Be $true
+        $g.MeasuredKind | Should Be 'source'
+    }
+}

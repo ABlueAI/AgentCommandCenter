@@ -85,7 +85,17 @@
     const t = entry && entry.totalTokens;
     return (typeof t === 'number' && Number.isFinite(t)) ? `${t.toLocaleString('en-US')} tokens` : '— tokens';
   }
+  // V4: a multi-slice run reports its slice count + aggregate seconds. The wording distinguishes
+  // REQUESTED from analyzed scope: only a completed run (one successful provider request AND a
+  // durable report) proves the requested slices were the analyzed scope, so every non-completed
+  // outcome is labelled "requested N slices". Existing v1/v2 runs keep their exact prior labels.
   function offsetsLabel(entry) {
+    const n = entry && entry.sliceCount;
+    if (typeof n === 'number' && n >= 2) {
+      const secs = (entry && typeof entry.aggregateSliceSeconds === 'number') ? entry.aggregateSliceSeconds : 0;
+      const core = `${n} slices · ${secs}s`;
+      return (entry && entry.outcome === 'completed') ? core : `requested ${core}`;
+    }
     const s = entry && entry.startOffsetSeconds; const e = entry && entry.endOffsetSeconds;
     if (typeof s === 'number' && typeof e === 'number') return `range ${s}s–${e}s`;
     return 'full length';

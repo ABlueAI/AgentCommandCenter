@@ -661,7 +661,7 @@ function openInAppTerminal(opts = {}) {
   });
   term.textarea && term.textarea.addEventListener('focus', () => { activeTermId = id; });
   terms.set(id, paneData);
-  cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, videoModel: opts.videoModel, mediaResolution: opts.mediaResolution, analysisMode: opts.analysisMode, startOffset: opts.startOffset, endOffset: opts.endOffset, analysisFocus: opts.analysisFocus, cols: term.cols, rows: term.rows });
+  cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, videoModel: opts.videoModel, mediaResolution: opts.mediaResolution, analysisMode: opts.analysisMode, startOffset: opts.startOffset, endOffset: opts.endOffset, sliceRanges: opts.sliceRanges, analysisFocus: opts.analysisFocus, cols: term.cols, rows: term.rows });
   setTimeout(() => { fit.fit(); cc.ptyResize(id, term.cols, term.rows); activeTermId = id; term.focus(); }, 40);
 }
 
@@ -1028,9 +1028,44 @@ function wireUi() {
   // Video-scout's Gemini options (model / media-resolution). Server-side allowlists in main.js
   // (VALID_VIDEO_MODELS / VALID_MEDIA_RESOLUTIONS) are the actual enforcement — these dropdowns
   // only offer known-good values, they are not the security boundary.
-  $('#videoModelSelect').onchange = (e) => { state.videoModel = e.target.value; };
+  // V4Q Phase B: the model dropdown PINS a manual choice for the rest of this modal session. An
+  // out-of-allowlist value is refused rather than substituted, and the control is snapped back to
+  // the concrete model still held in state — the dropdown must never display one model while
+  // ptyStart sends another.
+  //
+  // CORRECTION: `change` alone was insufficient. A <select> emits NO change event when the user
+  // picks the option ALREADY DISPLAYED, so deliberately keeping the automatic Flash-Lite left the
+  // session unpinned and switching to video then silently escalated it to Pro (and symmetrically,
+  // a deliberately kept Pro was silently downgraded). Deliberate ACTIVATION now pins the displayed
+  // model; a subsequent `change` replaces that pin with the newly selected model.
+  const modelSelect = $('#videoModelSelect');
+  const pinFromInteraction = (interaction) => {
+    const outcome = videoModelPolicy.applyModelInteraction(modelPolicy, interaction);
+    if (outcome.error) { syncVideoModelControls(outcome.error); return; }
+    if (!outcome.handled) return; // focus/tab/modifier-only: no choice was expressed
+    modelPolicy = outcome.state;
+    syncVideoModelControls();
+  };
+  // Primary pointer only — right/middle activation is not a choice. Fires BEFORE the native
+  // selector changes the value, so the displayed model is pinned even if the user dismisses.
+  modelSelect.onpointerdown = (e) => pinFromInteraction({
+    type: 'pointerdown', button: e.button, isPrimary: e.isPrimary, displayedModel: modelSelect.value,
+  });
+  modelSelect.onkeydown = (e) => pinFromInteraction({
+    type: 'keydown', key: e.key, ctrlKey: e.ctrlKey, metaKey: e.metaKey, displayedModel: modelSelect.value,
+  });
+  modelSelect.onchange = (e) => pinFromInteraction({ type: 'change', displayedModel: e.target.value });
   $('#mediaResolutionSelect').onchange = (e) => { state.mediaResolution = e.target.value; };
-  $('#analysisModeSelect').onchange = (e) => { state.analysisMode = e.target.value; updateVideoRangeVisibility(); };
+  // V4Q Phase B: a mode change re-applies the AUTOMATIC policy only while the session is unpinned.
+  // After a manual pick the mode still changes (slice rows follow it) but the model does not.
+  $('#analysisModeSelect').onchange = (e) => {
+    modelPolicy = videoModelPolicy.applyAnalysisMode(modelPolicy, e.target.value);
+    syncVideoModelControls();
+    updateVideoRangeVisibility();
+  };
+  // V4: add a slice row (capped at MAX_SLICES; the handler disables itself via renumberSliceRows).
+  const addSliceBtn = $('#addSliceBtn');
+  if (addSliceBtn) addSliceBtn.onclick = () => addSliceRow();
   // V3a: live character counter for the optional analysis-focus field. Counts the NORMALIZED length
   // (so trailing whitespace / newlines don't misreport it), and marks the counter when over the bound.
   // This is UX only — main.js (video-scout-args.js) and feed-gemini.ps1 are the real enforcement.
@@ -1063,34 +1098,119 @@ function setTaskInputMode(isVideo) {
   }
 }
 
-// Show the time-range inputs only in video mode, and CLEAR them when leaving video mode so a value
-// the user can no longer see is never silently dropped into (or applied over) a launch. Logic +
-// tests live in video-range-ui.js (clear-on-hide invariant).
+// V4 slice rows: the DOM row list lives here; ALL decision logic lives in video-range-ui.js
+// (classifySliceRows / computeSliceAggregate / detectStaleSliceRows). Each entry is one visible
+// "Slice N" row. Rows are read fresh from the DOM at launch — never mirrored into `state`.
+const sliceRows = [];
+
+function collectSliceRowValues() {
+  return sliceRows.map((r) => ({ startValue: r.startEl.value, endValue: r.endEl.value }));
+}
+
+// Build one slice row (label + start/end inputs + a per-row Remove button). Row numbering is
+// recomputed on every add/remove so the visible "Slice N" labels always match positional order —
+// the same order every downstream layer (args JSON, provider parts, prompt, manifest) preserves.
+function createSliceRow() {
+  const rowEl = document.createElement('div');
+  rowEl.className = 'slice-row';
+  const label = document.createElement('span');
+  label.className = 'slice-label muted small';
+  const startEl = document.createElement('input');
+  startEl.type = 'text'; startEl.placeholder = 'Start (MM:SS or seconds)'; startEl.className = 'slice-start';
+  const endEl = document.createElement('input');
+  endEl.type = 'text'; endEl.placeholder = 'End (MM:SS or seconds)'; endEl.className = 'slice-end';
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button'; removeBtn.className = 'ghost small-btn slice-remove'; removeBtn.textContent = '✕';
+  removeBtn.title = 'Remove this slice';
+  const row = { rowEl, label, startEl, endEl, removeBtn };
+  removeBtn.onclick = () => {
+    const idx = sliceRows.indexOf(row);
+    if (idx !== -1) { sliceRows.splice(idx, 1); rowEl.remove(); }
+    if (sliceRows.length === 0) addSliceRow(); // never zero rows: one blank row = whole video
+    renumberSliceRows(); updateSliceAggregate();
+  };
+  startEl.oninput = updateSliceAggregate;
+  endEl.oninput = updateSliceAggregate;
+  rowEl.append(label, startEl, endEl, removeBtn);
+  return row;
+}
+
+function addSliceRow() {
+  if (sliceRows.length >= videoRangeUi.MAX_SLICES) return; // the button is disabled too; belt check
+  const row = createSliceRow();
+  sliceRows.push(row);
+  const host = $('#sliceRowsHost');
+  if (host) host.appendChild(row.rowEl);
+  renumberSliceRows(); updateSliceAggregate();
+}
+
+function renumberSliceRows() {
+  sliceRows.forEach((r, i) => { r.label.textContent = `Slice ${i + 1}`; });
+  const addBtn = $('#addSliceBtn');
+  if (addBtn) addBtn.disabled = sliceRows.length >= videoRangeUi.MAX_SLICES;
+}
+
+// Reset to exactly ONE blank row with no lingering errors — the modal-open / clear-on-hide state.
+function resetSliceRows() {
+  const host = $('#sliceRowsHost');
+  sliceRows.splice(0).forEach((r) => r.rowEl.remove());
+  if (host) addSliceRow();
+  clearSliceRowErrors();
+}
+
+function clearSliceRowErrors() {
+  const errEl = $('#videoRangeError');
+  if (errEl) { errEl.textContent = ''; errEl.classList.add('hidden'); }
+  for (const r of sliceRows) { r.startEl.classList.remove('invalid'); r.endEl.classList.remove('invalid'); }
+}
+
+// V4Q Phase B — the per-modal-session model policy. Held OUTSIDE `state` because it is session
+// scoped: openModal() replaces it wholesale, which is what guarantees a manual choice never leaks
+// into the next modal session. `state.videoModel` remains the single value the launch path reads
+// and always holds a CONCRETE allowlisted model — never 'auto', never blank, never a sentinel.
+let modelPolicy = videoModelPolicy.initialPolicyState();
+
+// The ONE place the policy is pushed into the DOM and into `state`, so the dropdown, the status
+// line, and the value ptyStart will send can never disagree. `refusal` shows an invalid-selection
+// message while leaving the previously chosen concrete model intact on the wire.
+function syncVideoModelControls(refusal) {
+  state.videoModel = modelPolicy.model;
+  state.analysisMode = modelPolicy.analysisMode;
+  const select = $('#videoModelSelect');
+  if (select) select.value = modelPolicy.model;
+  const modeSelect = $('#analysisModeSelect');
+  if (modeSelect) modeSelect.value = modelPolicy.analysisMode;
+  const status = $('#videoModelStatus');
+  if (status) {
+    status.textContent = refusal || videoModelPolicy.describeModelSelection(modelPolicy);
+    status.classList.toggle('over', Boolean(refusal));
+  }
+}
+
+// Live "N slices · Xs / 1800s" display, driven by the same math the classifier enforces, so the
+// user sees the aggregate and the cap BEFORE submitting (display-only; never the validation).
+function updateSliceAggregate() {
+  const el = $('#sliceAggregate');
+  if (!el) return;
+  const agg = videoRangeUi.computeSliceAggregate({ rows: collectSliceRowValues() });
+  if (agg.populatedCount === 0) { el.textContent = 'whole video (no slices)'; el.classList.remove('over'); return; }
+  const label = agg.populatedCount === 1 ? '1 slice' : `${agg.populatedCount} slices`;
+  const capNote = agg.populatedCount >= 2 ? ` / ${videoRangeUi.AGGREGATE_SLICE_CAP_SECONDS}s cap` : '';
+  el.textContent = `${label} · ${agg.aggregateSeconds}s${capNote}`;
+  el.classList.toggle('over', agg.populatedCount >= 2 && agg.overCap);
+}
+
+// Show the slice rows only in video mode, and CLEAR them (reset to one blank row) when leaving
+// video mode so a value the user can no longer see is never silently dropped into (or applied
+// over) a launch — the same clear-on-hide invariant as before, extended to the whole row set.
 function updateVideoRangeVisibility() {
-  videoRangeUi.syncVideoRangeVisibility({
-    analysisMode: state.analysisMode,
-    rangeOpts: $('#videoRangeOpts'),
-    startInput: $('#videoStartInput'),
-    endInput: $('#videoEndInput'),
-  });
+  const rangeOpts = $('#videoRangeOpts');
+  const isVideo = state.analysisMode === 'video';
+  if (rangeOpts) rangeOpts.classList.toggle('hidden', !isVideo);
+  if (!isVideo) resetSliceRows();
 }
 
-// Accepts MM:SS, H:MM:SS, or bare whole seconds. Returns:
-//   null  — input was empty (field simply not provided)
-//   NaN   — input had content but didn't match any accepted format
-//   number — parsed whole seconds
-function parseTimeToSeconds(raw) {
-  const s = (raw || '').trim();
-  if (!s) return null;
-  if (/^\d+$/.test(s)) return parseInt(s, 10);
-  let m = /^(\d+):([0-5]?\d)$/.exec(s);
-  if (m) return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
-  m = /^(\d+):([0-5]\d):([0-5]\d)$/.exec(s);
-  if (m) return parseInt(m[1], 10) * 3600 + parseInt(m[2], 10) * 60 + parseInt(m[3], 10);
-  return NaN;
-}
-
-// Lightweight YouTube-host check for the same immediate-feedback purpose as resolveVideoRange —
+// Lightweight YouTube-host check for the same immediate-feedback purpose as classifySliceRows —
 // mirrors YOUTUBE_HOSTS in video-scout-args.js and the YouTube subset of VIDEO_HOSTS in main.js
 // (which remain the authority; a bypassed renderer is still refused there). Used only to block a
 // range + non-YouTube launch in the UI before a dead pane is ever created.
@@ -1099,32 +1219,6 @@ function isYouTubeUrl(url) {
     const h = new URL(url).hostname.toLowerCase();
     return h === 'youtube.com' || h === 'www.youtube.com' || h === 'm.youtube.com' || h === 'youtu.be';
   } catch { return false; }
-}
-
-// Client-side mirror of the validation video-scout-args.js re-does server-side (untrusted-input
-// posture: this check is for immediate user feedback, not the security boundary). Returns:
-//   {}                              — both fields blank: whole video, nothing to report
-//   { error: string }               — invalid: caller should BLOCK submission and show the reason
-//   { startOffset, endOffset }      — both valid, ready to send
-function resolveVideoRange(startRaw, endRaw) {
-  const start = parseTimeToSeconds(startRaw);
-  const end = parseTimeToSeconds(endRaw);
-  const startGiven = start !== null;
-  const endGiven = end !== null;
-  if (!startGiven && !endGiven) return {};
-  if (startGiven !== endGiven) {
-    return { error: 'both start and end are required to analyze a range (only one was given)' };
-  }
-  if (Number.isNaN(start) || Number.isNaN(end)) {
-    return { error: 'could not parse the time range (use MM:SS, H:MM:SS, or whole seconds)' };
-  }
-  if (start < 0 || end < 0 || start > 86400 || end > 86400) {
-    return { error: 'time range must be between 0 and 86400 seconds (24h)' };
-  }
-  if (end <= start) {
-    return { error: `end (${end}s) must be after start (${start}s)` };
-  }
-  return { startOffset: start, endOffset: end };
 }
 
 // Reflect what the modal will actually launch.
@@ -1171,19 +1265,18 @@ function openModal() {
   // Reset the Gemini options to their defaults every time the modal opens (mirrors hardTask reset
   // above) so a previous run's choice never silently carries over into the next one. analysisMode
   // resets to transcript (cheapest) so the expensive full-video pass is always a fresh opt-in.
-  state.videoModel = 'gemini-2.5-flash-lite'; state.mediaResolution = 'MEDIUM'; state.analysisMode = 'transcript';
-  $('#videoModelSelect').value = state.videoModel;
+  // V4Q Phase B: reset the POLICY SESSION first, then synchronize every control from it. This is
+  // the only reset path, so a manual model choice can never survive a close/reopen: the new session
+  // starts unpinned, in transcript mode, on the economy model.
+  modelPolicy = videoModelPolicy.resetPolicyState();
+  state.mediaResolution = 'MEDIUM';
   $('#mediaResolutionSelect').value = state.mediaResolution;
-  $('#analysisModeSelect').value = state.analysisMode;
-  // Time-range fields are read fresh from the DOM at launch (not mirrored into `state`), so
-  // clearing them here is what makes a previous run's range never carry over. Also reset the inline
-  // range-error UI (text + red borders) so a prior session's error never lingers over the cleared
-  // fields. updateVideoRangeVisibility (clear-on-hide, mode is 'transcript' here) empties the values.
-  videoRangeUi.resetVideoRangeError({
-    errorEl: $('#videoRangeError'), startInput: $('#videoStartInput'), endInput: $('#videoEndInput'),
-  });
-  $('#videoStartInput').value = '';
-  $('#videoEndInput').value = '';
+  syncVideoModelControls();
+  // Slice rows are read fresh from the DOM at launch (not mirrored into `state`), so resetting
+  // them here is what makes a previous run's slices never carry over. Reopening restores exactly
+  // ONE blank row with no stale values or errors; updateVideoRangeVisibility (clear-on-hide, mode
+  // is 'transcript' here) hides the block and re-resets defensively.
+  resetSliceRows();
   updateVideoRangeVisibility();
   // V3a: clear the optional analysis-focus field, its inline error, and reset its counter every time
   // the modal opens, so a previous run's focus (or a prior error) never silently carries over.
@@ -1234,45 +1327,53 @@ async function createAgent() {
       $('#geminiKeyInput').focus();
       return;
     }
-    // Time range: only meaningful in video mode (transcript/audio have no video stream to slice —
-    // the inputs are hidden then too, see updateVideoRangeVisibility). On ANY failure we BLOCK
-    // submission with visible inline feedback and do NOT fall back to whole-video — a user who
-    // asked for a slice must never be silently downgraded to (and billed for) the whole video.
-    // Whole-video is only the explicit both-blank path. This is immediate-feedback UX; main.js
-    // (video-scout-args.js) independently refuses on the pty-start IPC handler as the bypass-proof
-    // enforcement boundary.
+    // Time slices: only meaningful in video mode (transcript/audio have no video stream to slice —
+    // the rows are hidden then too, see updateVideoRangeVisibility). On ANY failure we BLOCK
+    // submission with visible inline feedback, mark the offending row(s), and do NOT fall back to
+    // whole-video — a user who asked for slices must never be silently downgraded to (and billed
+    // for) the whole video. Whole-video is only the explicit all-blank path. This is immediate-
+    // feedback UX; main.js (video-scout-args.js) independently refuses on the pty-start IPC handler
+    // as the bypass-proof enforcement boundary.
     const rangeErrEl = $('#videoRangeError');
-    const startEl = $('#videoStartInput');
-    const endEl = $('#videoEndInput');
-    const showRangeError = (msg) => {
+    const showRangeError = (msg, badRows) => {
       if (rangeErrEl) { rangeErrEl.textContent = msg; rangeErrEl.classList.remove('hidden'); }
-      startEl.classList.add('invalid'); endEl.classList.add('invalid');
+      const bad = Array.isArray(badRows) && badRows.length ? badRows : sliceRows.map((_, i) => i);
+      for (const i of bad) {
+        const r = sliceRows[i];
+        if (r) { r.startEl.classList.add('invalid'); r.endEl.classList.add('invalid'); }
+      }
       appendLog(`[video-scout] launch blocked: ${msg}\n`);
     };
-    if (rangeErrEl) { rangeErrEl.classList.add('hidden'); rangeErrEl.textContent = ''; }
-    startEl.classList.remove('invalid'); endEl.classList.remove('invalid');
+    clearSliceRowErrors();
 
-    // Belt check: clear-on-hide (updateVideoRangeVisibility) guarantees a non-video mode has empty
-    // range inputs, so this is unreachable in normal operation. If it ever fires, some path bypassed
-    // clear-on-hide — log it loudly rather than let a stale range slip by unnoticed.
-    const stale = videoRangeUi.detectStaleRange({ analysisMode: state.analysisMode, startValue: startEl.value, endValue: endEl.value });
+    // Belt check: clear-on-hide (updateVideoRangeVisibility) guarantees a non-video mode has blank
+    // rows, so this is unreachable in normal operation. If it ever fires, some path bypassed
+    // clear-on-hide — log it loudly rather than let stale slices slip by unnoticed.
+    const stale = videoRangeUi.detectStaleSliceRows({ analysisMode: state.analysisMode, rows: collectSliceRowValues() });
     if (stale) appendLog(`[video-scout] ${stale}\n`);
 
     let rangeOpts = {};
     let rangeLogSuffix = '';
     if (state.analysisMode === 'video') {
-      const range = resolveVideoRange(startEl.value, endEl.value);
-      if (range.error) {
-        showRangeError(range.error);
-        return; // modal stays open, fields + error visible — do not launch
+      const cls = videoRangeUi.classifySliceRows({ rows: collectSliceRowValues() });
+      if (cls.kind === 'error') {
+        showRangeError(cls.message, cls.badRows);
+        return; // modal stays open, rows + error visible — do not launch, no pane
       }
-      if (range.startOffset !== undefined) {
+      if (cls.kind === 'single' || cls.kind === 'multi') {
         if (!isYouTubeUrl(url)) {
-          showRangeError('A time range only works for YouTube URLs. Clear the range, or use a YouTube URL.');
+          showRangeError('Time slices only work for YouTube URLs (analyzed directly via the Gemini API). Clear the slices, or use a YouTube URL.');
           return; // modal stays open — do not create a pane that main would refuse anyway
         }
-        rangeOpts = { startOffset: range.startOffset, endOffset: range.endOffset };
-        rangeLogSuffix = `, range: ${range.startOffset}s-${range.endOffset}s`;
+      }
+      if (cls.kind === 'single') {
+        // One populated row = the existing single-slice scalar path, unchanged end to end.
+        rangeOpts = { startOffset: cls.startOffset, endOffset: cls.endOffset };
+        rangeLogSuffix = `, range: ${cls.startOffset}s-${cls.endOffset}s`;
+      } else if (cls.kind === 'multi') {
+        // 2-8 rows = the V4 path: ONE submission, ONE provider request with N ordered parts.
+        rangeOpts = { sliceRanges: cls.ranges };
+        rangeLogSuffix = `, slices: ${cls.ranges.length} (aggregate ${cls.aggregateSeconds}s)`;
       }
     }
     // V3a pre-analysis focus: immediate-feedback validation (main.js + feed-gemini.ps1 re-validate

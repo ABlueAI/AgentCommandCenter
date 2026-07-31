@@ -164,8 +164,11 @@ Describe 'V5c1 CLI route records the correct kind' {
 Describe 'V5c1 SDK route records no local media' {
     It 'YouTube video -> SDK route: empty inventory, completed, no download' {
         $r = Invoke-Feed -Params @{ Url = $YT; VideoScout = $true; RunId = (New-RunId) }   # bare -VideoScout -> video -> SDK
-        $r.Manifest.schemaVersion | Should Be 2
+        # V4Q: live SDK runs are schema version 4. The media inventory stays REQUIRED-EMPTY, which is
+        # what keeps this route permanently outside every media ownership/deletion path.
+        $r.Manifest.schemaVersion | Should Be 4
         (@($r.Manifest.mediaArtifacts)).Count | Should Be 0
+        (@($r.Manifest.diagnosticArtifacts)).Count | Should Be 0
         $r.Manifest.route | Should Be 'sdk'
         $r.Manifest.outcome | Should Be 'completed'
     }

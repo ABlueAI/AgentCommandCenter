@@ -116,6 +116,11 @@ function Initialize-VideoScoutRun {
         [bool]$VideoScout = $false,
         [Nullable[int]]$StartOffset = $null,
         [Nullable[int]]$EndOffset = $null,
+        # V4: the validated multi-slice set (objects with StartOffset/EndOffset) for a multi-slice
+        # SDK run -- makes the manifest schema v3 with requestedSliceRanges and null scalar offsets.
+        # $null (the default) leaves the existing v2 whole-video / single-slice manifest unchanged.
+        # Untyped so an array survives the parameter boundary without coercion.
+        $SliceRanges = $null,
         # V5b1: the MAIN-issued run ID for an app launch. When provided, the run directory is created
         # from this exact validated ID as a direct child of $BaseDir (New-VideoScoutRunDirFromId).
         # When $null (direct standalone script use outside the app), the existing PowerShell-generated
@@ -134,7 +139,7 @@ function Initialize-VideoScoutRun {
     $manifest = New-VideoScoutLiveManifest -RunId (Split-Path $runDir -Leaf) -Url $Url `
         -RequestedMode $RequestedMode -AppliedMode $AppliedMode -Route $Route -Model $Model `
         -MediaResolutionRequested $MediaResolutionRequested -MediaResolutionApplied $MediaResolutionApplied `
-        -VideoScout $VideoScout -StartOffset $StartOffset -EndOffset $EndOffset
+        -VideoScout $VideoScout -StartOffset $StartOffset -EndOffset $EndOffset -SliceRanges $SliceRanges
     try {
         [void](Write-VideoScoutManifestFile -RunDir $runDir -Manifest $manifest)
     }
@@ -168,7 +173,12 @@ function Complete-VideoScoutRunManifest {
         [string]$Reason = $null,
         $Usage = $null,
         [string]$VideoTitle = $null,
-        [string]$ReportFile = $null
+        [string]$ReportFile = $null,
+        # V4Q: the INDEPENDENTLY VERIFIED diagnostic entry (kind/fileName/bytes/sha256) produced by
+        # Get-VideoScoutDiagnosticArtifact. Untyped so the pscustomobject survives the parameter
+        # boundary. $null (the default) leaves diagnosticArtifacts as the empty array every other
+        # terminal path records -- refusals, network failures, and successful runs alike.
+        $DiagnosticArtifact = $null
     )
     if ($null -ne $Manifest.outcome) {
         throw ("Video-scout manifest for '$($Manifest.runId)' already records terminal outcome " +
@@ -192,6 +202,23 @@ function Complete-VideoScoutRunManifest {
     }
     if (-not [string]::IsNullOrWhiteSpace($ReportFile)) {
         $Manifest.reportFile = Get-SanitizedManifestText -Text $ReportFile -MaxLength 300
+    }
+    # V4Q: record the preserved rejected-response evidence. Refused here rather than written into an
+    # unsuitable manifest: a diagnostic only exists on a schema-v4 SDK run that failed, and pairing it
+    # with a report or a completed outcome would be exactly the confusion the invariant forbids. The
+    # shared validator re-checks the same couplings on the way to disk, so this is a fail-fast guard,
+    # not the only enforcement.
+    if ($null -ne $DiagnosticArtifact) {
+        if (-not (Test-ManifestHasKey -M $Manifest -Key 'diagnosticArtifacts')) {
+            throw "Video-scout manifest for '$($Manifest.runId)' has no diagnosticArtifacts field; a diagnostic can only be recorded on a schemaVersion 4 SDK manifest."
+        }
+        if ($Outcome -ne 'error') {
+            throw "Video-scout manifest for '$($Manifest.runId)': a diagnostic artifact may only be recorded with outcome='error' (got '$Outcome')."
+        }
+        if ($null -ne $Manifest.reportFile) {
+            throw "Video-scout manifest for '$($Manifest.runId)': a diagnostic artifact may never accompany a reportFile."
+        }
+        $Manifest.diagnosticArtifacts = @($DiagnosticArtifact)
     }
     # In-memory terminal state is set BEFORE the write: if the write throws, the caller's catch can
     # see the outcome is already decided (no double-finalize) and the write failure propagates

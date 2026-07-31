@@ -44,6 +44,15 @@ param(
     # it is a documented standalone entry point.
     [ValidateRange(0, 86400)][int]$StartOffset = -1,
     [ValidateRange(0, 86400)][int]$EndOffset = -1,
+    # V4 bounded multi-slice, SDK (YouTube) route only: a JSON array of 2-8 exact
+    # {startOffset, endOffset} objects analyzed as ONE request carrying N ordered media parts.
+    # Bounded at 2048 UTF-16 units and fully re-validated here (shape, exact keys, count, integer
+    # bounds, chronological non-overlap, FIXED 1800s aggregate cap) via
+    # lib/get-video-scout-slice-ranges.ps1 -- this script is a documented standalone entry point, so
+    # it never assumes the app validated first. MUTUALLY EXCLUSIVE with -StartOffset/-EndOffset, and
+    # -MaxDurationSeconds may not accompany it (the aggregate cap is fixed). ANY violation REFUSES
+    # the run (throws) rather than silently analyzing (and billing for) a different scope.
+    [string]$SliceRangesJson,
     # (?) Explicit override of the mode-aware duration limit, in whole seconds. No silent bypass: when
     # provided it REPLACES the applicable limit (the source cap, or the range-slice cap) and is logged
     # at run time. ValidateRange starts at 1 so an EXPLICIT `-MaxDurationSeconds 0` is rejected at bind
@@ -91,6 +100,28 @@ if ($haveStart -and ($EndOffset -le $StartOffset)) {
 if ($haveStart -and -not $VideoScout) {
     throw "A time range (-StartOffset/-EndOffset) is only valid with -VideoScout on the SDK/YouTube route. Remove the offsets, or add -VideoScout with a YouTube URL in video mode."
 }
+
+# --- V4 bounded multi-slice: validate INDEPENDENTLY, before any spend ----------------------------
+# Route-independent checks run here with the other free validations (nothing has been downloaded,
+# probed, or submitted yet). The full contract -- 2048-unit bound before parsing, JSON array shape,
+# exact per-entry keys, 2-8 count, integer 0..86400 offsets, end > start, chronological
+# non-overlap in the GIVEN order, and the fixed 1800s aggregate -- lives in the pure helper, which
+# THROWS a bounded message on any violation. $sliceSet stays $null when no slices were requested,
+# which leaves every existing whole-video / single-slice path byte-for-byte unchanged.
+. (Join-Path $PSScriptRoot 'lib\get-video-scout-slice-ranges.ps1')
+$haveSlices = $PSBoundParameters.ContainsKey('SliceRangesJson')
+if ($haveSlices -and $haveStart) {
+    throw "-SliceRangesJson and -StartOffset/-EndOffset are mutually exclusive: pass a multi-slice set OR a single range, never both."
+}
+if ($haveSlices -and -not $VideoScout) {
+    throw "Time slices (-SliceRangesJson) are only valid with -VideoScout on the SDK/YouTube route. Remove the slices, or add -VideoScout with a YouTube URL in video mode."
+}
+if ($haveSlices) {
+    # An override may not raise or obscure the fixed multi-slice aggregate cap -- refuse visibly
+    # rather than silently ignoring a value the caller believes is in force.
+    Assert-MultiSliceOverrideAllowed -MaxDurationSeconds $MaxDurationSeconds
+}
+$sliceSet = Get-VideoScoutSliceRangeSet -SliceRangesJson $SliceRangesJson -Provided:$haveSlices
 
 # --- V3a pre-analysis focus: normalize + validate INDEPENDENTLY, before any spend ----------------
 # Route-independent, so it runs here with the other free validations (throws on an explicit invalid
@@ -147,6 +178,35 @@ $ProbeTimeoutSec = 60   # (?) hard cap on the metadata probe; a hung/slow probe 
 # applied -- bare -VideoScout defaults $Mode to 'video' below, and the manifest must not claim the
 # caller asked for what a default chose. $null = -Mode was not passed.
 $RequestedModeForManifest = if ($PSBoundParameters.ContainsKey('Mode')) { $Mode } else { $null }
+
+# --- V4Q effective model resolution --------------------------------------------------------------
+# An EXPLICIT -Model always wins exactly as given. With -Model omitted, a BOUNDED SLICE SCOPE
+# (scalar range or multipart set) defaults to Pro; everything else -- whole video, transcript,
+# audio -- keeps the economy default. $haveStart/$haveSlices/$sliceSet were all resolved above in
+# the free-validation block, so this runs BEFORE the launch-config log line, the run directory, the
+# manifest, the endpoint, the request body, and the usage line: all of them read one resolved value
+# and structurally cannot disagree.
+#
+# Route safety: slices/offsets already require -VideoScout (refused above) and are refused again on
+# any non-SDK route at the backstop below, BEFORE anything is downloaded or submitted. So this can
+# never select Pro for a CLI download path.
+#
+# The app never relies on this default: app/video-scout-args.js serializes every validated model
+# selection explicitly, including gemini-2.5-flash-lite, so an explicit Lite choice can never be
+# re-read here as "omitted" and silently upgraded to Pro. Omitted-model resolution exists for direct
+# PowerShell/SDK callers only.
+$ModelWasExplicit = $PSBoundParameters.ContainsKey('Model')
+$V4QEffectiveSliceCount = if ($haveSlices) { $sliceSet.Count } elseif ($haveStart) { 1 } else { 0 }
+if (-not $ModelWasExplicit -and $V4QEffectiveSliceCount -ge 1) {
+    $Model = 'gemini-2.5-pro'
+    Write-Host "Model policy: bounded sliced video defaults to $Model (no -Model was supplied)." -ForegroundColor DarkCyan
+}
+
+# V4Q: the independent PowerShell-side verification of a rejected-response diagnostic, plus the
+# PowerShell copies of the diagnostic bounds and the closed quality-failure-code allowlist. The
+# parent process never trusts node's self-reported artifact metadata.
+. (Join-Path $PSScriptRoot 'lib\get-video-scout-diagnostic-artifact.ps1')
+
 $launchConfig = Resolve-GeminiLaunchConfig -Model $Model -MediaResolution $MediaResolution
 Write-Host $launchConfig.LogLine -ForegroundColor DarkCyan
 Write-Warning $launchConfig.Warning
@@ -179,6 +239,12 @@ if ($VideoScout) {
     if ($haveStart -and $sourceRoute.Route -ne 'sdk') {
         throw "A time range only works on the SDK/YouTube route (it is sent to the Gemini API as videoMetadata). This run resolved to the '$($sourceRoute.Route)' route ($($sourceRoute.Reason)), which downloads and analyzes the whole file and cannot apply a range. Remove the offsets, or use a YouTube URL in video mode."
     }
+    # V4: the same route backstop for a multi-slice request. Slices ride per-part videoMetadata into
+    # generateContent, which exists only on the SDK route -- REFUSE rather than download and analyze
+    # the whole file while billing for slices the caller will not get.
+    if ($haveSlices -and $sourceRoute.Route -ne 'sdk') {
+        throw "Time slices only work on the SDK/YouTube route (they are sent to the Gemini API as per-part videoMetadata). This run resolved to the '$($sourceRoute.Route)' route ($($sourceRoute.Reason)), which downloads and analyzes the whole file and cannot apply slices. Remove -SliceRangesJson, or use a YouTube URL in video mode."
+    }
 
     if ($sourceRoute.Route -eq 'sdk') {
         # Route-definitive media-resolution log: on THIS route -MediaResolution is a real
@@ -191,12 +257,16 @@ if ($VideoScout) {
         # refusal is then durably recorded as outcome='refused'. This mirrors the CLI path below,
         # which has always created its run dir before its guard call. MediaResolutionApplied equals
         # the requested value here because the SDK route sends and enforces it (see the log above).
+        # V4: a multi-slice run records its REQUESTED, guard-validated scope as schema-v3
+        # requestedSliceRanges (scalar offsets stay null). Whole-video and single-slice runs remain
+        # schema v2 with the existing scalar fields -- unchanged.
         $sdkRun = Initialize-VideoScoutRun -BaseDir $OutDir -Url $Url `
             -RequestedMode $RequestedModeForManifest -AppliedMode $Mode -Route 'sdk' -Model $Model `
             -MediaResolutionRequested $MediaResolution -MediaResolutionApplied $MediaResolution `
             -VideoScout $true `
             -StartOffset $(if ($haveStart) { $StartOffset } else { $null }) `
             -EndOffset $(if ($haveStart) { $EndOffset } else { $null }) `
+            -SliceRanges $(if ($haveSlices) { $sliceSet.Ranges } else { $null }) `
             -RunId $RunId
         $sdkManifest = $sdkRun.Manifest
         try {
@@ -204,7 +274,13 @@ if ($VideoScout) {
             # this pre-flight probe is the ONLY guard on this path (there is no download-time backstop --
             # nothing downloads). Runs after the offset validation and the route backstop above. This route
             # is video mode by definition; $haveStart marks a range run (gated on slice length).
+            # V4: a multi-slice run gates on the AGGREGATE of its validated slices against the FIXED
+            # 1800s cap (an accompanying -MaxDurationSeconds was already refused above). The probe
+            # still runs and still fails closed on a live/unknown-duration source.
             [void](Assert-DurationGuard -Url $Url -GuardMode 'video' -HasRange:$haveStart -RangeStart $StartOffset -RangeEnd $EndOffset `
+                -HasMultiSlice:$haveSlices `
+                -SliceCount $(if ($haveSlices) { $sliceSet.Count } else { 0 }) `
+                -AggregateSeconds $(if ($haveSlices) { $sliceSet.AggregateSeconds } else { 0 }) `
                 -ProbeTimeoutSec $ProbeTimeoutSec -MaxDurationSeconds $MaxDurationSeconds)
 
             $sdkScript = Join-Path $PSScriptRoot 'gemini-video-sdk.js'
@@ -242,6 +318,36 @@ if ($VideoScout) {
             if ($haveStart) {
                 $sdkArgs += @('--start-offset', $StartOffset, '--end-offset', $EndOffset)
             }
+            # V4: hand node the CANONICAL re-serialization of the VALIDATED slice set (never the
+            # caller's original string), as ONE discrete argument. The SDK re-validates the entire
+            # contract again on its side and composes the slice-scope prompt instruction there, so
+            # the same wording is produced whether the run starts here or at a direct node call.
+            #
+            # V4R (transport repair -- this is what the first human acceptance attempt hit): Windows
+            # PowerShell 5.1 has no PSNativeCommandArgumentPassing, so when it serializes a native
+            # argument it does NOT escape the value's own interior double quotes. node's
+            # CommandLineToArgvW parsing then reads every " as a quote toggle and STRIPS it, so the
+            # raw canonical JSON arrived as `[{startOffset:60,endOffset:90},...]` -- not JSON --
+            # and resolveSliceRanges refused (correctly, and before any provider submission).
+            # ConvertTo-NodeCliArg applies the CommandLineToArgvW-correct escaping ONCE, here at the
+            # final `& node` boundary, exactly as the -p/--prompt-text values above already do. The
+            # SDK therefore receives the ORIGINAL canonical JSON, byte for byte. Deliberately
+            # ordered AFTER all validation: everything upstream (this script's own re-validation,
+            # the duration guard, the manifest) works on the canonical value; the escaped form is a
+            # delivery-layer representation only and is never validated, logged, or persisted.
+            if ($haveSlices) {
+                $sliceRangesCanonicalJson = ConvertTo-VideoScoutSliceRangesJson -Ranges $sliceSet.Ranges
+                $sdkArgs += @('--slice-ranges-json', (ConvertTo-NodeCliArg -Arg $sliceRangesCanonicalJson))
+                # Bounded metadata only -- the serialized payload (canonical OR escaped) is never logged.
+                Write-Host "Multi-slice analysis: $($sliceSet.Count) slices, aggregate $($sliceSet.AggregateSeconds)s (ONE request with $($sliceSet.Count) media parts)" -ForegroundColor DarkCyan
+            }
+            # V4Q: the MANDATORY diagnostic directory, supplied by THIS process as the already-created
+            # run directory. The app user cannot supply or override it -- it is not a passthrough of
+            # any caller value. node refuses BEFORE submitting if it is missing or not an existing
+            # absolute directory, so a run that could not preserve a rejected response never spends
+            # money discovering that. Escaped at the same PS 5.1 -> node boundary as every other
+            # value-bearing argument (a run directory can contain spaces).
+            $sdkArgs += @('--diagnostic-dir', (ConvertTo-NodeCliArg -Arg $sdkRun.RunDir))
             # V5b1 bounded streaming capture: every stdout line still streams live to the pane (the
             # trailing `$line` re-emits it), while the bounded collector retains at most the report
             # limit -- NOT the whole stream (the old Tee-Object -Variable accumulated it all). The one
@@ -249,6 +355,10 @@ if ($VideoScout) {
             # so usage parsing no longer needs the complete provider stream.
             $reportCollector = New-BoundedReportCollector
             $usageLine = $null
+            # V4Q: the ONE machine-readable quality-gate line, captured bounded (one line) exactly
+            # like the usage line. Its presence is what distinguishes a locally REJECTED response
+            # from every other nonzero exit (refusal, network, exhausted retry).
+            $qualityLine = $null
             # V5b1 content acceptance (FAIL 2): scope the native-stdout DECODE to UTF-8 (no BOM) ONLY
             # around this capture so UTF-8 provider output is not mangled through the PTY's legacy OEM
             # code page, then restore the previous value in finally (covers throws AND nonzero exits;
@@ -260,6 +370,7 @@ if ($VideoScout) {
                     $line = [string]$_
                     Add-BoundedReportLine -Collector $reportCollector -Line $line
                     if ($line -match '\[video-scout usage\]') { $usageLine = $line }
+                    if ($line -match '\[video-scout quality\]') { $qualityLine = $line }
                     $line
                 }
                 $sdkExit = $LASTEXITCODE
@@ -267,11 +378,58 @@ if ($VideoScout) {
             finally {
                 [Console]::OutputEncoding = $prevOutputEncoding
             }
-            if ($sdkExit -ne 0) {
+            # V4Q: a LOCAL quality rejection is a distinct terminal class from every other nonzero
+            # exit. The response arrived and was paid for, was found non-compliant by the
+            # deterministic gate, and was preserved as evidence -- it is never a report, never enters
+            # the Library, and never authorizes a retry (no repair, fallback, or continuation exists
+            # anywhere on this path). The parent process re-derives the artifact's identity itself
+            # rather than trusting node's self-reported bytes/hash.
+            $qualityVerdict = ConvertFrom-VideoScoutQualityLine -Line $qualityLine
+            if ($sdkExit -ne 0 -and $null -ne $qualityVerdict) {
+                $qualityUsage = ConvertFrom-VideoScoutUsageLine -Lines $usageLine
+                $qualityCode = $qualityVerdict.Code
+                $diagnosticEntry = $null
+                if ($qualityCode -ne 'diagnostic-write-failed') {
+                    try {
+                        # Independent verification: containment, fixed leaf, ordinary file, no reparse
+                        # point, strict UTF-8, byte count, decoded characters, and our OWN SHA-256.
+                        $verified = Get-VideoScoutDiagnosticArtifact -RunDir $sdkRun.RunDir
+                        if ([int64]$verified.bytes -ne [int64]$qualityVerdict.Bytes -or $verified.sha256 -cne $qualityVerdict.Sha256) {
+                            throw "the preserved artifact does not match the identity the SDK reported (independently measured $($verified.bytes) bytes / $($verified.sha256))."
+                        }
+                        $diagnosticEntry = $verified
+                    }
+                    catch {
+                        # Visible, never silent: we could not stand behind the artifact, so we record
+                        # the write-failure class and leave diagnosticArtifacts EMPTY rather than
+                        # publishing metadata we did not verify. The provider is never re-called.
+                        Write-Warning "Video-scout quality rejection recorded, but the preserved diagnostic could not be verified: $($_.Exception.Message)"
+                        $qualityCode = 'diagnostic-write-failed'
+                        $diagnosticEntry = $null
+                    }
+                }
+                $qualityReason = if ($null -ne $diagnosticEntry) {
+                    "[quality:$qualityCode] The provider response failed the local Video Scout quality gate and was NOT saved as a report. The exact response is preserved for inspection as $($diagnosticEntry.fileName) in this run directory."
+                }
+                else {
+                    "[quality:$qualityCode] The provider response failed the local Video Scout quality gate and was NOT saved as a report; the response could not be preserved as a diagnostic."
+                }
+                # Usage is preserved either way so the manifest records what the rejected run cost.
+                Complete-VideoScoutRunManifest -RunDir $sdkRun.RunDir -Manifest $sdkManifest -Outcome 'error' `
+                    -Reason $qualityReason -Usage $qualityUsage -DiagnosticArtifact $diagnosticEntry
+            }
+            elseif ($sdkExit -ne 0) {
                 # Nonzero exit (incl. exhausted K5 retry, empty-response, network): NO report file,
                 # reportFile stays null -- partial streamed output is never a saved report.
+                # V4R: attribution-neutral on purpose. A nonzero exit ALSO covers the SDK refusing
+                # LOCALLY before it ever submits anything (a bad --slice-ranges-json, a missing key,
+                # an offset problem). The old text asserted "upstream API/network error", which this
+                # parent process cannot prove and which actively misdirected the diagnosis of the
+                # transport defect above. State the exit code and point at the visible output --
+                # never invent an attribution the caller has no evidence for. Matches the CLI path's
+                # existing wording (see the gemini-CLI branch below).
                 Complete-VideoScoutRunManifest -RunDir $sdkRun.RunDir -Manifest $sdkManifest -Outcome 'error' `
-                    -Reason "gemini-video-sdk.js exited with code $sdkExit (upstream API/network error; see the run output above)."
+                    -Reason "gemini-video-sdk.js exited with code $sdkExit; see the run output above."
             }
             else {
                 # Clean exit only past here -- the sole signal that permits outcome='completed' + a

@@ -198,6 +198,16 @@ input:focus { outline: none; border-color: var(--accent); }
 .range-error { color: var(--danger); font-size: 12px; margin: 0 0 6px; } /* visible inline block on invalid range — submission is refused, not silently downgraded */
 .range-inputs input.invalid { border-color: var(--danger); }
 
+/* ---- V4 slice rows (repeatable start/end rows, video mode only) ---- */
+.slice-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+.slice-row .slice-label { flex: 0 0 52px; }
+.slice-row input { flex: 1; min-width: 0; }
+.slice-row input.invalid { border-color: var(--danger); }
+.slice-row .slice-remove { flex: 0 0 auto; padding: 2px 8px; }
+.slice-controls { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; }
+.small-btn { font-size: 12px; padding: 3px 10px; }
+#sliceAggregate.over { color: var(--danger); } /* over-cap shown live, BEFORE submission */
+
 /* ---- Gemini key banner & topbar indicator ---- */
 .key-banner {
   display: flex; align-items: center; gap: 10px; flex-shrink: 0;
@@ -242,7 +252,12 @@ input:focus { outline: none; border-color: var(--accent); }
 
 /* ---- modal ---- */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.modal { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 22px; width: 380px; display: flex; flex-direction: column; gap: 8px; }
+.modal {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 22px;
+  width: min(680px, calc(100vw - 32px)); max-height: calc(100vh - 32px);
+  box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 8px;
+}
 .modal h3 { margin: 0 0 6px; }
 .modal label { color: var(--muted); font-size: 12px; margin-top: 6px; }
 .agent-choices { display: flex; gap: 6px; }

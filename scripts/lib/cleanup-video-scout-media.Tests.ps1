@@ -405,3 +405,65 @@ Describe 'V5c2a non-destructive tripwire (source: literal delete only, no scan/w
         ($src -match '\*\.srt|\*\.mp3|\*\.mp4') | Should Be $false   # no extension glob
     }
 }
+
+# ==================================================================================================
+# V4: a schema-v3 (multi-slice) manifest is NOT cleanup-eligible.
+# V4 deliberately did NOT touch this module. These tests PIN that fact: the existing eligibility gate
+# requires schemaVersion == 2, so a v3 run is a safe no-op, and a v3 manifest cannot even carry a
+# media artifact (the schema forbids it). If a future change ever authorized v3 here, that would be a
+# destructive-boundary expansion and these tests must fail loudly.
+Describe 'V4: schema-v3 multi-slice manifests are NEVER cleanup-eligible' {
+    $root = New-CleanupFixtureRoot
+    try {
+        $runId = 'run-20260722-090000-000-3333-abcdef02'
+        $runDir = Join-Path $root $runId
+        New-Item -ItemType Directory -Path $runDir -Force | Out-Null
+        # A COMPLETED multi-slice SDK run with a durable report -- i.e. it satisfies every eligibility
+        # condition EXCEPT the schema version. Only the version keeps it out of the deletion path.
+        $slices = @([PSCustomObject]@{ StartOffset = 10; EndOffset = 30 }, [PSCustomObject]@{ StartOffset = 60; EndOffset = 90 })
+        $m = New-VideoScoutLiveManifest -RunId $runId -Url 'https://youtu.be/x' -AppliedMode 'video' -Route 'sdk' `
+            -Model 'gemini-2.5-flash-lite' -MediaResolutionRequested 'MEDIUM' -VideoScout $true -SliceRanges $slices
+        # V4Q: new live SDK runs are schema v4, but v3 manifests still EXIST on disk and are never
+        # migrated -- so this block keeps proving the legacy guarantee against a real v3 shape. The
+        # v4 equivalent is proved in the Describe immediately below.
+        $m.schemaVersion = 3
+        $m.Remove('diagnosticArtifacts')
+        $m.outcome = 'completed'
+        $m.finishedAt = '2026-07-22T09:00:01.000Z'
+        $m.reportFile = 'analysis-output.txt'
+        New-MediaFile -Dir $runDir -Name 'analysis-output.txt' -Content '## 1. TL;DR' | Out-Null
+        [void](Write-VideoScoutManifestFile -RunDir $runDir -Manifest $m)
+        # A media file that merely EXISTS in the run dir but is owned by nothing.
+        $stray = New-MediaFile -Dir $runDir -Name 'stray.srt' -Content 'abc'
+
+        $summary = Invoke-VideoScoutSuccessMediaCleanup -RunDir $runDir -DownloadsRoot $root
+
+        It 'the fixture really is a completed schema-v3 run with a report (only the version excludes it)' {
+            $disk = Get-DiskManifest -RunDir $runDir
+            $disk.schemaVersion | Should Be 3
+            $disk.outcome | Should Be 'completed'
+            $disk.reportFile | Should Be 'analysis-output.txt'
+            @($disk.requestedSliceRanges).Count | Should Be 2
+        }
+        It 'cleanup is a safe NO-OP: nothing deleted, nothing failed' {
+            $summary.deleted | Should Be 0
+            $summary.failed | Should Be 0
+        }
+        It 'the unowned media file survives (no scan-based deletion ever happens)' {
+            (Test-Path -LiteralPath $stray) | Should Be $true
+        }
+        It 'the report and manifest survive untouched' {
+            (Test-Path -LiteralPath (Join-Path $runDir 'analysis-output.txt')) | Should Be $true
+            (Test-Path -LiteralPath (Join-Path $runDir 'manifest.json')) | Should Be $true
+        }
+        It 'the manifest is not rewritten (still schema 3, still no media inventory)' {
+            $disk = Get-DiskManifest -RunDir $runDir
+            $disk.schemaVersion | Should Be 3
+            @($disk.mediaArtifacts).Count | Should Be 0
+        }
+        It 'the run directory survives' {
+            (Test-Path -LiteralPath $runDir) | Should Be $true
+        }
+    }
+    finally { if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue } }
+}

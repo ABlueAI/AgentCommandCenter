@@ -34,10 +34,14 @@ Describe 'Initialize-VideoScoutRun (new-run manifest creation)' {
         Test-Path -LiteralPath (Get-VideoScoutManifestPath -RunDir $run.RunDir) | Should Be $true
     }
 
-    It 'writes valid JSON with schemaVersion 2 and an empty media inventory (V5c1)' {
+    It 'writes valid JSON with schemaVersion 4, an empty media inventory, and empty diagnostics' {
+        # V4Q: an accepted live SDK launch is schema version 4. mediaArtifacts stays REQUIRED-EMPTY
+        # (the SDK route owns no local media) and diagnosticArtifacts begins empty.
         $m = Read-ManifestJson -RunDir $run.RunDir
-        $m.schemaVersion | Should Be 2
+        $m.schemaVersion | Should Be 4
         @($m.mediaArtifacts).Count | Should Be 0
+        @($m.diagnosticArtifacts).Count | Should Be 0
+        $m.startOffsetSeconds | Should Be 120
     }
 
     It 'records runId equal to the run directory name (stable, unique)' {
