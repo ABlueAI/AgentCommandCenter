@@ -55,6 +55,55 @@ process.stdout.write('\nthe controlled dockview@7.0.4 fixture is accepted\n');
 }
 
 // ---------------------------------------------------------------------------
+process.stdout.write('\nthe REAL in-memory toJSON() shape validates (not just the JSON file form)\n');
+// ---------------------------------------------------------------------------
+{
+  // REGRESSION PIN. dockview@7.0.4's DockviewPanel.toJSON() always emits TEN own keys per panel,
+  // seven of them `undefined`. Verified against a live api.toJSON() read with
+  // Object.getOwnPropertyNames — NOT through a JSON round-trip, which silently drops
+  // undefined-valued keys. The committed fixture was originally captured through such a round-trip,
+  // which made the validator look tighter than reality and would have refused EVERY real save.
+  //
+  // Validation runs on both sides of the file, so both shapes must pass:
+  //   before writing -> the in-memory object (ten keys)
+  //   after reading  -> JSON.parse output   (three keys)
+  const REAL_OPTIONAL = ['tabComponent', 'params', 'renderer',
+    'minimumHeight', 'maximumHeight', 'minimumWidth', 'maximumWidth'];
+
+  const inMemory = clone(FIXTURE);
+  for (const id of Object.keys(inMemory.panels)) {
+    for (const k of REAL_OPTIONAL) inMemory.panels[id][k] = undefined;
+  }
+  const keyCount = Object.getOwnPropertyNames(inMemory.panels.pty1).length;
+  assert(keyCount === 10, `the simulated in-memory panel carries all ten own keys (got ${keyCount})`);
+  assert(verdict(inMemory).ok === true,
+    'the REAL in-memory shape validates — a save is not refused by its own serializer artifacts');
+
+  // JSON.stringify drops them, which is why the on-disk form has three keys.
+  const fileForm = JSON.parse(JSON.stringify(inMemory));
+  assert(Object.getOwnPropertyNames(fileForm.panels.pty1).length === 3,
+    'JSON serialization drops the undefined-valued keys (this is why the file form has three)');
+  assert(verdict(fileForm).ok === true, 'the on-disk form validates too');
+
+  // The security property must survive the relaxation: a POPULATED optional key is still refused.
+  for (const k of REAL_OPTIONAL) {
+    const populated = clone(FIXTURE);
+    populated.panels.pty1[k] = (k === 'params') ? { cwd: 'D:\\Workspace\\secret' } : 'something';
+    assert(verdict(populated).reason === REASON.LAYOUT_SHAPE,
+      `a POPULATED ${k} is still refused (only undefined is tolerated)`);
+  }
+  const populatedNumeric = clone(FIXTURE);
+  populatedNumeric.panels.pty1.minimumWidth = 120;
+  assert(verdict(populatedNumeric).reason === REASON.LAYOUT_SHAPE,
+    'a populated numeric size hint is refused too — the allowlist did not become a blocklist');
+
+  // A required key present but undefined must NOT satisfy the requirement.
+  const undefTitle = clone(FIXTURE);
+  undefTitle.panels.pty1.title = undefined;
+  assert(verdict(undefTitle).reason === REASON.LAYOUT_SHAPE, 'an undefined REQUIRED key is refused');
+}
+
+// ---------------------------------------------------------------------------
 process.stdout.write('\nenvelope contract\n');
 // ---------------------------------------------------------------------------
 {

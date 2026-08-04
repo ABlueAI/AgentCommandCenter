@@ -77,12 +77,18 @@ contextBridge.exposeInMainWorld('cc', {
 // registered at all in default `npm start`.
 const dockviewPrototypeEnabled = process.argv.includes('--cc-dockview-prototype');
 
-contextBridge.exposeInMainWorld('ccDockview', Object.freeze({
-  // Frozen boolean — the ONLY authority the renderer has for "am I in prototype mode?".
-  enabled: dockviewPrototypeEnabled,
-  // Bounded layout operations. The renderer passes ONLY a layout object; it never supplies a path,
-  // a filename, or any part of one. Main owns the file location, the validation, and the refusal.
-  saveLayout: (layout) => ipcRenderer.invoke('dockview-layout-save', layout),
-  loadLayout: () => ipcRenderer.invoke('dockview-layout-load'),
-  resetLayout: () => ipcRenderer.invoke('dockview-layout-reset'),
-}));
+// The bridge is exposed ONLY in prototype mode. On the default path `window.ccDockview` is
+// undefined, so the renderer's global surface is genuinely unchanged — not merely inert. app.js
+// already handles absence (`!window.ccDockview` returns early), so this is the stronger form of the
+// same guarantee: default `npm start` gains no new global and no new IPC wrapper at all.
+if (dockviewPrototypeEnabled) {
+  contextBridge.exposeInMainWorld('ccDockview', Object.freeze({
+    // Frozen boolean — the ONLY authority the renderer has for "am I in prototype mode?".
+    enabled: dockviewPrototypeEnabled,
+    // Bounded layout operations. The renderer passes ONLY a layout object; it never supplies a
+    // path, a filename, or any part of one. Main owns the location, the validation, and the refusal.
+    saveLayout: (layout) => ipcRenderer.invoke('dockview-layout-save', layout),
+    loadLayout: () => ipcRenderer.invoke('dockview-layout-load'),
+    resetLayout: () => ipcRenderer.invoke('dockview-layout-reset'),
+  }));
+}

@@ -257,14 +257,35 @@ function validateLayout(layout) {
     if (!isPlainObject(p)) return REASON.LAYOUT_SHAPE;
     const pk = safeKeys(p);
     if (pk === null) return REASON.FORBIDDEN_KEY;
-    // STRICT: exactly these three keys. `params` is the field that could carry paths, prompts,
-    // report text, or credentials, so its mere PRESENCE is a refusal — dockview@7.0.4 omits it
-    // entirely for our usage, which is what makes this bound honest rather than aspirational.
+
+    // dockview@7.0.4's DockviewPanel.toJSON() ALWAYS emits ten own keys, seven of which are
+    // `undefined` for our usage. Verified against a live `api.toJSON()` read with
+    // Object.getOwnPropertyNames — NOT through a JSON round-trip, which silently drops
+    // undefined-valued keys and would make this validator look tighter than it can be.
+    //
+    // That matters because validation runs on BOTH sides of the file:
+    //   * before writing, against the in-memory object  -> ten own keys present
+    //   * after reading, against JSON.parse output      -> only the three populated keys
+    // So both shapes must validate, and refusing key PRESENCE outright would refuse every save.
+    //
+    // The security property is preserved exactly where it counts: an optional key is tolerated
+    // ONLY when its value is `undefined`. A `params` (or renderer, or size hint) carrying an actual
+    // value is still refused — which is the case that could smuggle a path, prompt, or credential.
+    const REQUIRED_PANEL_KEYS = ['id', 'contentComponent', 'title'];
+    const OPTIONAL_UNDEFINED_ONLY = [
+      'tabComponent', 'params', 'renderer',
+      'minimumHeight', 'maximumHeight', 'minimumWidth', 'maximumWidth',
+    ];
     for (const k of pk) {
-      if (!['id', 'contentComponent', 'title'].includes(k)) return REASON.LAYOUT_SHAPE;
+      if (REQUIRED_PANEL_KEYS.includes(k)) continue;
+      if (OPTIONAL_UNDEFINED_ONLY.includes(k)) {
+        if (p[k] !== undefined) return REASON.LAYOUT_SHAPE; // a populated optional field is refused
+        continue;
+      }
+      return REASON.LAYOUT_SHAPE;                            // any other key at all is refused
     }
-    for (const k of ['id', 'contentComponent', 'title']) {
-      if (!hasOwn(p, k)) return REASON.LAYOUT_SHAPE;
+    for (const k of REQUIRED_PANEL_KEYS) {
+      if (!hasOwn(p, k) || p[k] === undefined) return REASON.LAYOUT_SHAPE;
     }
     if (p.id !== id) return REASON.LAYOUT_SHAPE; // map key and panel identity must agree
     e = checkString(p.id, MAX_ID_LENGTH); if (e) return e;

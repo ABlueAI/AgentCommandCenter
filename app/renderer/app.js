@@ -650,6 +650,15 @@ function openInAppTerminal(opts = {}) {
   // makes any repeat call a no-op.
   const closeThisPane = () => {
     if (!terms.has(id)) return;   // already closed — exactly-once guarantee
+    // PROTOTYPE ONLY: if this pane is hosted in a Dockview panel, remove the panel too, so closing
+    // from the pane's own ✕ does not leave a ghost panel behind. The adapter suppresses its own
+    // close-convergence while doing so, and this whole call is inside the terms.has(id) guard, so
+    // the two directions cannot recurse. On the default path the instance is undefined and this
+    // is a single falsy check.
+    const dvPrototype = window.ccDockviewPrototypeInstance;
+    if (dvPrototype && typeof dvPrototype.onAppPaneClosed === 'function') {
+      try { dvPrototype.onAppPaneClosed(id); } catch { /* prototype teardown must not block a close */ }
+    }
     // Closing the maximized pane restores the grid cleanly (V1a) — clear the maximize
     // state FIRST so the surviving panes un-hide and refit.
     paneMaximizer.handlePaneClosed(id);
@@ -737,6 +746,13 @@ async function maybeStartDockviewPrototype() {
       return t ? t.pane.querySelector('.term-body') : null;
     },
     fitTerminal: (paneId) => { const t = terms.get(paneId); if (t) t.fit.fit(); },
+    // Hand the gated fit controller sole ownership of this pane's resizing: the app's own
+    // per-pane ResizeObserver has no visibility or geometry gate, and leaving it attached would
+    // give a Dockview-hosted terminal two observers and two PTY-resize senders.
+    suspendAppResizeObserver: (paneId) => {
+      const t = terms.get(paneId);
+      if (t && t.ro) { try { t.ro.disconnect(); } catch { /* already disconnected */ } }
+    },
     measureTerminal: (paneId) => {
       const t = terms.get(paneId);
       return t ? { cols: t.term.cols, rows: t.term.rows } : null;

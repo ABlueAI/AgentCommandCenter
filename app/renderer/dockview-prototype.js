@@ -41,6 +41,9 @@
     const hostedPanes = new Map();
     let api = null;
     let disposed = false;
+    // Set while Dockview is tearing the workspace down on our behalf (fromJSON's implicit clear,
+    // or adapter dispose). Removals fired during that window must NOT kill PTYs.
+    let suppressCloseConvergence = false;
 
     // ---- persistent, unmistakable prototype banner (§ 6) -------------------------------------
     const banner = document.createElement('div');
@@ -125,6 +128,15 @@
       // One ResizeObserver per pane, attached exactly once, alongside the controller. Re-entry
       // through a move returns the SAME controller, so no second observer is created.
       if (!controller._observerAttached) {
+        // The app's OWN per-pane ResizeObserver (app.js) calls fit() with no visibility and no
+        // geometry gate. Left running, a Dockview-hosted terminal would carry TWO observers and two
+        // resize senders, and the ungated one could push a collapsed 2x1 geometry to the PTY
+        // mid-drag — defeating the whole § 8 contract. Suspend it so the gated controller is the
+        // single live resize path for panes this adapter hosts. The app restores nothing here; its
+        // observer is reconnected only if the pane leaves the prototype (it does not, on this
+        // branch) and is disconnected by the app's own close path either way.
+        host.suspendAppResizeObserver(paneId);
+
         const body = host.getTerminalBody(paneId);
         if (body && typeof ResizeObserver === 'function') {
           const ro = new ResizeObserver(() => controller.schedule());
@@ -154,10 +166,24 @@
     // disposal, observer disconnect, map deletion, and DOM cleanup each happen EXACTLY once.
     // Dockview's removal event releases the adapter's own state and then delegates to the app's
     // single close path; that path is itself guarded, so the second caller is a no-op.
-    api.onDidRemovePanel((event) => {
-      const paneId = event && event.panel && event.panel.id;
-      if (!paneId) return;
+    // PAYLOAD SHAPE: dockview@7.0.4's DockviewComponent unwraps the group model's `{ panel }` event
+    // and fires the PANEL ITSELF on the public `onDidRemovePanel`
+    // (dockview.js: `this._onDidRemovePanel.fire(event.panel)`). Reading `event.panel.id` here
+    // yields undefined and silently disables this entire convergence path, so the ID is read
+    // directly off the payload — and an unresolvable ID is a VISIBLE refusal, never a silent
+    // return, because a silent return is exactly what would hide this class of bug again.
+    api.onDidRemovePanel((panel) => {
+      const paneId = panel && panel.id;
+      if (!paneId) {
+        host.log('[dockview-prototype] REFUSED: panel removal with no resolvable pane ID\n');
+        return;
+      }
+      // RE-ENTRANCY: fromJSON() clears the whole workspace first, and those removals surface here
+      // as ordinary panel removals. Converging them on the app's close path would ptyKill every
+      // live terminal on Restore. The guard makes teardown-driven removals release only the
+      // adapter's own state, leaving PTYs alone.
       releasePane(paneId);
+      if (suppressCloseConvergence) return;
       host.closePane(paneId);
     });
 
@@ -221,10 +247,26 @@
         await useDefaultLayout();
         return result;
       }
+      // Restoring geometry cannot resurrect a PTY: after a restart there are no live panes to host,
+      // and § 9 forbids auto-launching PTYs. Rather than mount empty panel shells — the "silently
+      // missing pane" shape § 5.7 forbids — refuse visibly when a restored pane ID has no live pane
+      // and say exactly which panes would need to be recreated first.
+      const restoredIds = Object.keys((result.layout && result.layout.panels) || {});
+      const missing = restoredIds.filter((paneId) => !host.getPaneElement(paneId));
+      if (missing.length > 0) {
+        host.log(`[dockview-prototype] restore REFUSED: ${missing.length} restored pane(s) have no live pane\n`);
+        controls.setStatus(
+          `Restore refused: ${missing.length} saved pane(s) are not open (${missing.join(', ')}). ` +
+          'Create them first, or use Use Default. Nothing was changed and the saved layout is intact.');
+        return { ok: false, reason: 'panes-not-live' };
+      }
+
       try {
         // main validated this immediately before returning it; the shape reaching fromJSON is the
-        // shape the validator accepted.
-        api.fromJSON(result.layout);
+        // shape the validator accepted. fromJSON clears the workspace first, so its removals are
+        // suppressed from the close-convergence path (they are not user closes).
+        suppressCloseConvergence = true;
+        try { api.fromJSON(result.layout); } finally { suppressCloseConvergence = false; }
         controls.setStatus(`Layout restored (saved ${result.savedAt}).`);
         host.log('[dockview-prototype] layout restored\n');
       } catch (e) {
@@ -292,6 +334,23 @@
       ok: true,
       api: () => api,
       addPane,
+      /**
+       * The INVERSE convergence: called by the app's own close path (the ✕ button) so a pane closed
+       * from its own header also disappears from Dockview. Without it the panel survives as a ghost
+       * empty host, its controller and observer leak, and a later Save would persist a panel for a
+       * pane that no longer exists — which would restore as a missing pane (§ 5.7).
+       * Removal here is suppressed from the close-convergence path, because the app is already
+       * mid-close; otherwise the two paths would call each other.
+       */
+      onAppPaneClosed(paneId) {
+        if (!paneId || !api) return;
+        releasePane(paneId);
+        const panel = typeof api.getPanel === 'function' ? api.getPanel(paneId) : null;
+        if (!panel) return;
+        suppressCloseConvergence = true;
+        try { api.removePanel(panel); } catch (e) { host.log(`[dockview-prototype] removePanel failed: ${(e && e.message) || e}\n`); }
+        finally { suppressCloseConvergence = false; }
+      },
       saveLayout,
       restoreLayout,
       resetLayout,

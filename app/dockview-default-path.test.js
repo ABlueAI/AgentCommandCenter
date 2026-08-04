@@ -24,9 +24,14 @@ const read = (...p) => fs.readFileSync(path.join(APP_DIR, ...p), 'utf8');
 
 /**
  * Strip comments so "does the CODE do X" assertions cannot be satisfied — or falsified — by prose.
- * Walks the source tracking string and template literals so a `//` inside '../node_modules/...' or
- * 'https://...' is not mistaken for a comment. Regex literals are not tracked; none of the sources
- * checked here contains a regex holding an unbalanced quote or a comment marker.
+ *
+ * Tracks string and template literals so a `//` inside '../node_modules/...' or 'https://...' is
+ * not mistaken for a comment, AND consumes backslash escapes everywhere — not only inside strings.
+ * That second rule is what makes a regex literal safe: in `/^https?:\/\//i` the escaped `\/` pairs
+ * are consumed, so the regex-closing `/` is never seen as the first half of a `//` comment. Without
+ * it this function silently deleted the rest of that line, and any assertion scanning that region
+ * ran against truncated source. A lone backslash outside a string is a syntax error in JavaScript,
+ * so consuming `\X` pairs unconditionally cannot damage valid code.
  */
 function stripComments(src) {
   let out = '';
@@ -35,8 +40,8 @@ function stripComments(src) {
   while (i < src.length) {
     const c = src[i];
     const next = src[i + 1];
+    if (c === '\\') { out += c + (next || ''); i += 2; continue; }   // escape pair, in or out of a string
     if (quote) {
-      if (c === '\\') { out += c + (next || ''); i += 2; continue; }
       if (c === quote) quote = null;
       out += c; i++; continue;
     }
@@ -52,6 +57,27 @@ const preloadSrc = read('preload.js');
 const appSrc = read('renderer', 'app.js');
 const indexSrc = read('renderer', 'index.html');
 const pkg = JSON.parse(read('package.json'));
+
+// ---------------------------------------------------------------------------
+process.stdout.write('\nthe comment stripper this file relies on is itself sound\n');
+// ---------------------------------------------------------------------------
+{
+  // The exact shape that previously broke it: a regex literal containing escaped slashes.
+  const sample = "if (/^https?:\\/\\//i.test(uri)) cc.openExternal(uri);   // trailing comment\nKEEP_ME";
+  const out = stripComments(sample);
+  assert(out.includes('cc.openExternal(uri)'), 'code after a regex literal with escaped slashes survives');
+  assert(out.includes('KEEP_ME'), 'the following line survives (no runaway comment deletion)');
+  assert(!out.includes('trailing comment'), 'a genuine trailing comment is still removed');
+
+  assert(stripComments("const a = 'http://x';  // c").includes("'http://x'"), 'a // inside a string survives');
+  assert(stripComments('/* block */ CODE').trim() === 'CODE', 'block comments are removed');
+  assert(!stripComments('// whole line\nCODE').includes('whole line'), 'whole-line comments are removed');
+
+  // Load-bearing: the real app.js must not shrink by more than its comment volume, and the specific
+  // line the old stripper destroyed must still be present after stripping.
+  assert(stripComments(appSrc).includes('cc.openExternal(uri)'),
+    'app.js:427 (the WebLinks regex line) survives stripping of the real source');
+}
 
 // ---------------------------------------------------------------------------
 process.stdout.write('\nindex.html is untouched by the prototype\n');
@@ -117,6 +143,14 @@ process.stdout.write('\nthe preload exposes a frozen boolean and bounded operati
 {
   assert(/contextBridge\.exposeInMainWorld\('ccDockview', Object\.freeze\(\{/.test(preloadSrc),
     'the ccDockview bridge is frozen at creation');
+  // Stronger than "inert on the default path": the global does not EXIST there.
+  const preloadCode = stripComments(preloadSrc);
+  const exposeIdx = preloadCode.indexOf("exposeInMainWorld('ccDockview'");
+  const gateIdx = preloadCode.indexOf('if (dockviewPrototypeEnabled) {');
+  assert(gateIdx > -1 && exposeIdx > gateIdx,
+    'the ccDockview bridge is exposed ONLY inside the prototype-mode guard');
+  assert((preloadCode.match(/exposeInMainWorld\('ccDockview'/g) || []).length === 1,
+    'there is exactly one ccDockview exposure');
   assert(/const dockviewPrototypeEnabled = process\.argv\.includes\('--cc-dockview-prototype'\);/.test(preloadSrc),
     'the preload reads the forwarded token from its own process argv');
   assert(/enabled: dockviewPrototypeEnabled,/.test(preloadSrc), 'the bridge exposes the boolean');
@@ -206,8 +240,29 @@ process.stdout.write('\nthe pane close path is single and idempotent\n');
     'ptyKill appears exactly once in app.js — there is no second kill path');
 
   const adapterSrc = read('renderer', 'dockview-prototype.js');
-  assert(/api\.onDidRemovePanel\(\(event\) => \{[\s\S]*?host\.closePane\(paneId\);/.test(adapterSrc),
-    'a Dockview panel removal delegates to that same app-owned close path');
+  // NOTE: the convergence itself is proven BEHAVIOURALLY in dockview-adapter-lifecycle.test.js,
+  // against the vendor's real event payload shape. A source-regex previously "proved" this while
+  // the delegation was dead code (the handler read `event.panel.id`, but dockview fires the panel
+  // itself), so the load-bearing assertion deliberately lives in the behavioural suite. What is
+  // pinned here is only the negative space: the adapter holds no privileged authority.
+  assert(/onDidRemovePanel/.test(adapterSrc), 'the adapter subscribes to panel removal');
+
+  // dockview@7.0.4 fires these two events with DIFFERENT payload shapes, which is an easy trap:
+  //   onDidRemovePanel        -> the panel ITSELF        (`_onDidRemovePanel.fire(event.panel)`)
+  //   onDidActivePanelChange  -> a wrapper { panel, origin } (`.fire({ panel, origin })`)
+  // So `event.panel.id` is WRONG in the first and RIGHT in the second. Assert per-handler rather
+  // than over the whole file, or a correct usage gets flagged and an incorrect one gets missed.
+  const adapterCodeOnly = stripComments(adapterSrc);
+  const removeStart = adapterCodeOnly.indexOf('api.onDidRemovePanel(');
+  const removeBlock = adapterCodeOnly.slice(removeStart, adapterCodeOnly.indexOf('});', removeStart));
+  assert(removeStart > -1 && !/\.panel\.id/.test(removeBlock),
+    'the removal handler does NOT read a wrapper — dockview fires the panel itself there');
+  assert(/panel && panel\.id/.test(removeBlock), 'the removal handler reads the ID off the payload directly');
+
+  const activeStart = adapterCodeOnly.indexOf('api.onDidActivePanelChange(');
+  const activeBlock = adapterCodeOnly.slice(activeStart, adapterCodeOnly.indexOf('});', activeStart));
+  assert(activeStart > -1 && /event && event\.panel && event\.panel\.id/.test(activeBlock),
+    'the active-panel handler DOES read the wrapper — that event really is { panel, origin }');
   // Checked against CODE with comments stripped: the adapter's prose legitimately discusses ptyKill.
   const adapterCode = stripComments(adapterSrc);
   assert(!/ptyKill|ptyStart|ptyWrite|ptyResize/.test(adapterCode),
