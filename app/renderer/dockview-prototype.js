@@ -37,13 +37,28 @@
     }
 
     const registry = fitPolicy.createFitRegistry();
-    // paneId -> the pane element the existing app built, parked here while not mounted in a panel.
+    // paneId -> { element, kind } for every pane this adapter OWNS. Ownership is deliberately
+    // INDEPENDENT of whether the pane is currently mounted in a Dockview panel, because fromJSON
+    // destroys every panel and builds new ones: the pane must survive that gap intact.
     const hostedPanes = new Map();
+    // paneId -> the panel content host the pane is CURRENTLY mounted into. Transient by definition:
+    // dropped on unmount, rewritten by the rebuilt component's init(). This is what lets a restore
+    // PROVE it actually reparented rather than assuming it did.
+    const mountedHosts = new Map();
     let api = null;
     let disposed = false;
-    // Set while Dockview is tearing the workspace down on our behalf (fromJSON's implicit clear,
-    // or adapter dispose). Removals fired during that window must NOT kill PTYs.
-    let suppressCloseConvergence = false;
+    // True only for the synchronous duration of a call in which DOCKVIEW is restructuring the
+    // workspace on our behalf: fromJSON's implicit clear and rebuild, our own removePanel during an
+    // app-side close, and final teardown. Removals fired inside that window are MOUNT TRANSITIONS,
+    // not user closes — they release the transient mount and nothing else.
+    let mountTransition = false;
+
+    /** Run `fn` with removals classified as mount transitions. Restores the previous mode always. */
+    function inMountTransition(fn) {
+      const previous = mountTransition;
+      mountTransition = true;
+      try { return fn(); } finally { mountTransition = previous; }
+    }
 
     // ---- persistent, unmistakable prototype banner (§ 6) -------------------------------------
     const banner = document.createElement('div');
@@ -82,11 +97,14 @@
       return {
         element,
         init() {
-          const hosted = hostedPanes.get(paneId);
-          if (hosted && hosted.parentNode !== element) {
-            // REPARENT, never rebuild. appendChild moves the existing node, preserving the live
-            // xterm, its PTY, and every handler already bound to it.
-            element.appendChild(hosted);
+          const owned = hostedPanes.get(paneId);
+          if (owned && owned.element) {
+            // REPARENT, never rebuild. appendChild MOVES the existing node, preserving the live
+            // xterm, its PTY, and every handler already bound to it. fromJSON's rebuild lands here
+            // too, which is precisely why an unmount must never drop pane ownership: if the entry
+            // were gone, this would mount an empty shell and strand the live pane on a dead host.
+            if (owned.element.parentNode !== element) element.appendChild(owned.element);
+            mountedHosts.set(paneId, element);
           }
           ensureController(paneId, element);
         },
@@ -149,8 +167,18 @@
       return controller;
     }
 
-    /** Tear down everything this adapter owns for a pane. Idempotent. */
-    function releasePane(paneId) {
+    /**
+     * TEMPORARY DOCKVIEW UNMOUNT — releases only what belonged to the PANEL the pane was mounted in:
+     * the fit controller, its ResizeObserver, and any pending animation frame.
+     *
+     * Pane OWNERSHIP is deliberately preserved. This runs during fromJSON's clear, and the very next
+     * thing Dockview does is rebuild the panels and call each component's init(), which must still
+     * find the live element to reparent. Deleting ownership here was the round-2 defect: the rebuild
+     * mounted empty shells while the live xterm and its PTY stayed attached to a discarded host.
+     *
+     * Idempotent: unmounting an already-unmounted pane is a no-op, never a throw.
+     */
+    function unmountPane(paneId) {
       const controller = registry.get(paneId);
       if (controller && controller._observer) {
         try { controller._observer.disconnect(); } catch { /* best effort */ }
@@ -158,7 +186,28 @@
         controller._observerAttached = false;
       }
       registry.remove(paneId);       // disposes the controller (cancels any pending frame)
+      mountedHosts.delete(paneId);
+    }
+
+    /**
+     * PERMANENT PANE RELEASE — everything the unmount does, PLUS dropping this adapter's ownership.
+     * Used for a genuine user close, the app-owned ✕ path, and final teardown. Never for a
+     * Dockview-driven rebuild. Idempotent.
+     */
+    function releasePane(paneId) {
+      unmountPane(paneId);
       hostedPanes.delete(paneId);
+    }
+
+    /**
+     * Is this pane actually mounted in the panel host Dockview most recently built for it? Compares
+     * live DOM parentage by object identity, so a restore cannot report success while the rebuilt
+     * panel is an empty shell.
+     */
+    function paneIsMounted(paneId) {
+      const owned = hostedPanes.get(paneId);
+      const hostElement = mountedHosts.get(paneId);
+      return !!(owned && owned.element && hostElement && owned.element.parentNode === hostElement);
     }
 
     // ---- ONE idempotent close path (§ 7) ------------------------------------------------------
@@ -178,12 +227,17 @@
         host.log('[dockview-prototype] REFUSED: panel removal with no resolvable pane ID\n');
         return;
       }
-      // RE-ENTRANCY: fromJSON() clears the whole workspace first, and those removals surface here
-      // as ordinary panel removals. Converging them on the app's close path would ptyKill every
-      // live terminal on Restore. The guard makes teardown-driven removals release only the
-      // adapter's own state, leaving PTYs alone.
+      // CLASSIFY BEFORE RELEASING. fromJSON() clears the whole workspace first, and those removals
+      // surface here as ordinary panel removals. They are mount transitions, not user closes, so
+      // they must release ONLY the transient mount — the pane stays owned and is reparented into
+      // the panel Dockview is about to rebuild. Deciding this after a permanent release (the
+      // round-2 shape) both stranded the live pane and left the rebuild nothing to mount.
+      if (mountTransition) {
+        unmountPane(paneId);
+        return;
+      }
+      // A genuine user close: drop ownership, then converge on the app's single guarded close path.
       releasePane(paneId);
-      if (suppressCloseConvergence) return;
       host.closePane(paneId);
     });
 
@@ -215,7 +269,9 @@
         host.log(`[dockview-prototype] REFUSED addPane: no pane element for ${paneId}\n`);
         return false;
       }
-      hostedPanes.set(paneId, element);
+      // Ownership is recorded WITH the pane's kind, so a failed restore can rebuild exactly these
+      // panes from exactly these live elements without asking the app to create anything.
+      hostedPanes.set(paneId, { element, kind: descriptor.panel.component });
       // Only the three allowlisted fields cross into Dockview. `params` is never supplied, which is
       // why dockview@7.0.4 omits it from toJSON and the layout validator can refuse it outright.
       const options = { id: descriptor.panel.id, component: descriptor.panel.component, title: descriptor.panel.title };
@@ -261,21 +317,80 @@
         return { ok: false, reason: 'panes-not-live' };
       }
 
+      // ---- TRANSACTION: capture enough to put the live topology back if applying the saved layout
+      // fails. Both captures are in-memory only; nothing is written and the saved file is untouched.
+      const preRestorePanes = new Map(hostedPanes);
+      let preRestoreLayout = null;
+      try { preRestoreLayout = api.toJSON(); } catch { preRestoreLayout = null; }
+
       try {
         // main validated this immediately before returning it; the shape reaching fromJSON is the
-        // shape the validator accepted. fromJSON clears the workspace first, so its removals are
-        // suppressed from the close-convergence path (they are not user closes).
-        suppressCloseConvergence = true;
-        try { api.fromJSON(result.layout); } finally { suppressCloseConvergence = false; }
-        controls.setStatus(`Layout restored (saved ${result.savedAt}).`);
-        host.log('[dockview-prototype] layout restored\n');
-      } catch (e) {
-        host.log(`[dockview-prototype] fromJSON FAILED: ${(e && e.message) || e}\n`);
-        controls.setStatus('Restore failed. Loading default layout.');
-        await useDefaultLayout();
+        // shape the validator accepted. fromJSON clears the workspace first and then rebuilds it,
+        // so every removal it fires is a mount transition rather than a user close.
+        inMountTransition(() => api.fromJSON(result.layout));
+      } catch {
+        // The exception is deliberately NOT echoed: Dockview's messages interpolate panel IDs and
+        // layout fragments, and § 9 forbids putting state contents in the Logs tab.
+        return failRestore('restore-apply-failed', preRestoreLayout, preRestorePanes);
       }
+
+      // Applying did not throw — but "did not throw" is not "mounted". Verify by object identity
+      // that every restored pane really is parented to the panel host Dockview just built for it.
+      // This is the assertion whose absence let a restore report success over empty shells.
+      const unmounted = restoredIds.filter((paneId) => !paneIsMounted(paneId));
+      if (unmounted.length > 0) {
+        return failRestore('restore-apply-incomplete', preRestoreLayout, preRestorePanes);
+      }
+
+      controls.setStatus(`Layout restored (saved ${result.savedAt}).`);
+      host.log('[dockview-prototype] layout restored\n');
       registry.scheduleAll();
       return result;
+    }
+
+    /**
+     * Put the pre-restore workspace back after a failed apply, using the ORIGINAL live pane elements.
+     * No PTY is created or killed and `useDefaultLayout()` is never used here, because it would spawn
+     * replacement terminals alongside the ones still running.
+     *
+     * Two ordered strategies, not a retry of one:
+     *   1. Re-apply the layout Dockview itself serialized moments earlier — restores exact topology.
+     *   2. Last resort: clear, then rebuild the captured panes through the same `addPanel` primitive
+     *      that created them. Loses the split arrangement, but no live pane is left unmounted.
+     * Returns a bounded outcome code for the log — never layout contents.
+     */
+    function rollbackRestore(snapshot, panes) {
+      if (snapshot) {
+        try {
+          inMountTransition(() => api.fromJSON(snapshot));
+          if ([...panes.keys()].every((paneId) => paneIsMounted(paneId))) return 'topology-restored';
+        } catch { /* fall through to the flat rebuild */ }
+      }
+      try { inMountTransition(() => { if (typeof api.clear === 'function') api.clear(); }); }
+      catch { /* best effort — the rebuild below re-adds regardless */ }
+      let rebuilt = 0;
+      for (const [paneId, record] of panes) {
+        hostedPanes.set(paneId, record);          // ownership was never dropped; make it explicit
+        if (addPane(paneId, record.kind)) rebuilt++;
+      }
+      if (rebuilt === panes.size && [...panes.keys()].every((paneId) => paneIsMounted(paneId))) {
+        return 'panes-rebuilt-flat';
+      }
+      return 'incomplete';
+    }
+
+    /** Bounded, content-free restore failure: roll back, say so in both surfaces, refuse. */
+    function failRestore(reason, snapshot, panes) {
+      host.log(`[dockview-prototype] restore REFUSED: ${reason}\n`);
+      const outcome = rollbackRestore(snapshot, panes);
+      host.log(`[dockview-prototype] restore rollback: ${outcome}\n`);
+      controls.setStatus(outcome === 'incomplete'
+        ? `Restore failed (${reason}) and the previous arrangement could not be fully rebuilt. ` +
+          'No terminal was closed and the saved layout on disk is unchanged.'
+        : `Restore failed (${reason}). The saved layout was NOT applied and is unchanged on disk; ` +
+          'your previous panes were put back and no terminal was closed.');
+      registry.scheduleAll();
+      return { ok: false, reason };
     }
 
     async function resetLayout() {
@@ -344,26 +459,36 @@
        */
       onAppPaneClosed(paneId) {
         if (!paneId || !api) return;
+        // Ownership is dropped FIRST, so the removal this triggers finds nothing left to release
+        // and the two directions cannot call each other.
         releasePane(paneId);
         const panel = typeof api.getPanel === 'function' ? api.getPanel(paneId) : null;
         if (!panel) return;
-        suppressCloseConvergence = true;
-        try { api.removePanel(panel); } catch (e) { host.log(`[dockview-prototype] removePanel failed: ${(e && e.message) || e}\n`); }
-        finally { suppressCloseConvergence = false; }
+        try { inMountTransition(() => api.removePanel(panel)); }
+        catch { host.log('[dockview-prototype] removePanel REFUSED: panel could not be removed\n'); }
       },
       saveLayout,
       restoreLayout,
       resetLayout,
       useDefaultLayout,
       releasePane,
+      unmountPane,
+      paneIsMounted,
+      /** Read-only view of which panes this adapter currently owns. Diagnostics/tests only. */
+      ownedPaneIds: () => [...hostedPanes.keys()],
       registry,
       dispose() {
         if (disposed) return;
         disposed = true;
         window.removeEventListener('resize', onWindowResize);
+        // Every OWNED pane, not only those carrying a fit controller — the Library pane has no
+        // xterm and therefore no controller, but the adapter still owns its mount.
+        for (const id of [...hostedPanes.keys()]) releasePane(id);
         for (const id of registry.ids()) releasePane(id);
         registry.disposeAll();
-        try { api.dispose(); } catch { /* best effort */ }
+        // Ownership is already gone, so any removal Dockview fires while disposing is a teardown
+        // transition: it must not reach the app's close path and kill a PTY on the way out.
+        try { inMountTransition(() => api.dispose()); } catch { /* best effort */ }
       },
     };
   }
