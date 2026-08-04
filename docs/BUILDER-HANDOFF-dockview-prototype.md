@@ -5,15 +5,23 @@ Worktree: `D:\Workspace\agent-command-center\.worktrees\dockview-prototype`
 Fork-point / pre-merge `main` SHA: `1dce24c141e929c04122e8b2998277d4c2d0c728` (`main == origin/main` at branch creation)
 Procurement-record commit: `a0c8551` — `docs/OSS-PROCUREMENT-dockview.md` only
 Round-1 reviewed tip: `6315354` — **review returned `VERDICT: FAIL`**
-Round-2 tip (fixes): `588ed85` — **awaiting a second review; no PASS exists yet**
-Branch tip: this documentation-only handoff-tail commit above `588ed85`
+Round-2 reviewed tip: `588ed85` — **review returned `VERDICT: FAIL`**
+Round-3 tip (fixes): `8663467d19678e321fd3c136e6cf8bdbd32ab5b5` — **awaiting a third review**
+Branch tip: this documentation-only handoff-tail commit above `8663467`
 Merge commit SHA: **not applicable — merge and push are NOT authorized**
 
-Branch shape: `1dce24c1 → a0c8551 → 6315354 → e04fa4d → 588ed85 → (this handoff tail)`
+Branch shape:
+`1dce24c1 → a0c8551 → 6315354 → e04fa4d → 588ed85 → 26ed85e → 8663467 → (this handoff tail)`
 
-> **STATUS: NOT REVIEW-CLEAN.** The independent Full-class review of `6315354` returned
-> `VERDICT: FAIL`. Its blocking findings were verified and fixed in `588ed85`, but that fix commit
-> **has not itself been reviewed**. This branch must not be treated as carrying a passing review.
+> # STATUS: NOT REVIEW-CLEAN — TWO INDEPENDENT REVIEWS HAVE FAILED THIS BRANCH
+>
+> Round 1 (`6315354`) returned `VERDICT: FAIL`.
+> Round 2 (`588ed85`) **also** returned `VERDICT: FAIL`.
+>
+> The round-2 blocking finding was reproduced and fixed in `8663467`, but **that fix commit has not
+> itself been reviewed**. **No round of this branch has ever returned PASS.** Nothing here may be
+> read as a passing review, as human acceptance, or as an adoption verdict, and the branch remains
+> unauthorized for merge or push.
 
 Procurement record: **`docs/OSS-PROCUREMENT-dockview.md`** (required by `AGENTS.md` § OSS-FIRST
 PROCUREMENT GATE item 6; its path and Blue's verbatim verdict are restated below per item 7).
@@ -39,11 +47,15 @@ FORK · PROTOTYPE · PATTERN-MINE · BUILD FRESH after § 14 human acceptance.
 
 | Gate | Baseline at `1dce24c1` | After implementation | Delta |
 | --- | --- | --- | --- |
-| App (`npm test`) | **1362 passed / 0 failed**, 37 suites, exit 0 | **1759 passed / 0 failed**, 43 suites, exit 0 | +397 / +6 suites |
+| App (`npm test`) | **1362 passed / 0 failed**, 37 suites, exit 0 | **1850 passed / 0 failed**, 43 suites, exit 0 | +488 / +6 suites |
 | Pester (`scripts\run-pester.ps1`) | **955 passed / 0 failed / 0 skipped** | **955 passed / 0 failed / 0 skipped** | unchanged |
 
-(At the round-1 tip `6315354` the app gate was 1706/0 across 42 suites; the round-2 fixes added the
-behavioural adapter suite and further assertions.)
+Per-round app gate: `6315354` = 1706/0 across 42 suites · `588ed85` = 1759/0 across 43 suites ·
+`8663467` = **1850/0 across 43 suites**.
+
+The round-3 delta reconciles exactly: **+91**, which is precisely
+`app/renderer/dockview-adapter-lifecycle.test.js` going from **28 to 119** assertions. No other
+suite's count changed, and no suite was added or removed.
 
 The app delta reconciles exactly: 47 (package-identity) + 111 (layout-store) + 54 (default-path) +
 59 (fit-policy) + 71 (panel-policy) = 342 new, plus 2 added to `pane-maximize.test.js` = **344**.
@@ -249,13 +261,101 @@ assert per-handler rather than over the whole file, which is stricter than eithe
 **What this failure says about the kill-criteria table in § 4.** The round-1 table was too generous.
 B1 and B4 mean the close path and the save path were **not** exercised end-to-end before that table
 was written. The table above still marks criteria 1, 2, and 8 as *not yet observable*, and that is
-now the honest reading of the persistence and close criteria too until § 14 is performed against
-`588ed85`.
+now the honest reading of the persistence and close criteria too until § 14 is performed against the
+current tip. Round 2 then proved the same point a second time — see § 9 — so the § 4 table should be
+read as **not yet established** for criteria 1, 2, 5, 6, 7 and 8 until a review returns PASS and the
+§ 6 human acceptance is actually performed.
 
-## 9. Pinned review artifact
+## 9. Independent review — round 2 ALSO returned FAIL, and what changed in `8663467`
 
-Both artifacts are gitignored and local. Both were generated with `git diff --output=` (never
-PowerShell redirection) and regenerated into a separate file and **byte-compared identical**.
+The round-2 Full-class review of `588ed85` confirmed every round-1 correction (B1, B3, B4, B5, H1,
+H2, M1, M2 each independently re-derived and verified), reproduced the pinned artifact byte-for-byte,
+and ran every gate green — and still failed the branch on one blocking defect. **Its literal verdict
+line, verbatim:**
+
+> VERDICT: FAIL — Restore silently orphans live terminals: releasePane runs before the re-entrancy
+> guard, so fromJSON's clear empties hostedPanes and the rebuild half cannot reparent, leaving empty
+> panel shells and detached xterms with live PTYs (criterion 6, § 5.7); and the round-2 lifecycle
+> fake omits fromJSON's createComponent/init() rebuild, so its post-restore assertion passes on that
+> empty shell and conceals the defect.
+
+### The cause, verified against the vendor bundle
+
+The removal handler performed a **permanent** release before deciding what kind of removal it was:
+
+```js
+releasePane(paneId);              // deletes the hostedPanes entry
+if (suppressCloseConvergence) return;
+```
+
+`dockview@7.0.4`'s `_doFromJSON` calls `this.clear()` first (`dockview.js:17080` → `_doClear` →
+`doRemoveGroup:17721` → `removePanel` per panel), and each of those surfaces on the public removal
+event. The rebuild that follows (`dockview.js:17120` → `DockviewPanelModel` constructor →
+`createComponent:12519` → `panel.init` → `content.init`) then found **no ownership entry**, so it
+mounted an empty shell while the live xterm and its PTY stayed attached to a discarded host.
+
+Fixing B1 in round 2 is what made this path live at all; the B3 guard sat exactly one line too late
+to cover it. **The round-1 table in § 4 was too generous a second time**: the persistence and close
+criteria were still not exercised end-to-end when it was written.
+
+### The correction
+
+| Concern | Round-2 shape | `8663467` |
+| --- | --- | --- |
+| Removal classification | released permanently, then checked the guard | **classifies first**: a mount transition unmounts and returns; anything else releases and converges once |
+| Ownership vs. mount | one operation conflated both | two operations: `unmountPane` (transient — controller, observer, pending frame) and `releasePane` (adds ownership) |
+| Guard scope | a bare boolean, reset in one `finally` | `inMountTransition(fn)` restores the **previous** mode, so nesting and a genuine later user close both behave |
+| Restore success | assumed once `fromJSON` returned | `paneIsMounted()` verifies **by object identity** that every restored pane is parented to the host just built for it |
+| Apply failure | `useDefaultLayout()` — which spawns replacement terminals | deterministic rollback to the captured topology using the **original** live elements; no PTY created or killed |
+| Failure reporting | echoed `e.message` | bounded `restore-apply-failed` / `restore-apply-incomplete`; the exception is never echoed (its messages interpolate panel IDs and layout fragments) |
+| Teardown | released only panes carrying a fit controller | releases every **owned** pane, so the Library pane no longer survives `dispose()`; `api.dispose()` runs inside a mount transition |
+
+Rollback is two ordered strategies, not a retry: re-apply the layout Dockview itself serialized
+moments earlier, and failing that, clear and rebuild the captured panes through the same `addPanel`
+primitive that created them. The saved file is never written, deleted, or overwritten on any path.
+
+### Test fidelity — the second half of the finding
+
+The round-2 fake performed `fromJSON`'s clear but rebuilt with a bare `panels.set(id, {id})`, never
+invoking the component factory or the renderer's `init()`. Its post-restore assertion was
+`getPanel('pty1') !== null`, which passes over an empty shell. That is why the defect survived a
+review that was otherwise thorough.
+
+The fake now performs **both halves**, and the stub `appendChild` **moves** nodes as the real DOM
+does. Assertions inspect DOM ownership by object identity and panel-host child counts;
+`getPanel(id) !== null` is no longer treated as proof of anything.
+
+**Regression proof.** The round-3 restore assertions were run against both tips using an identical
+harness: **9 of 11 fail against `588ed85`** (every "original pane element is a child of the rebuilt
+host", "not an empty shell", and "no longer on the discarded host" assertion) and **11 of 11 pass
+against `8663467`** — with no PTY killed or created in either case. The committed suite itself also
+fails against `588ed85`.
+
+New behavioural coverage: successful restore of two terminals plus a Library pane · controller and
+observer disposal during the clear · exactly one new controller and observer per restored terminal ·
+three leak-free restore cycles (controllers, observers, frames, pane entries) · close convergence in
+both directions **after** a restore · the missing-live-pane refusal leaving the current topology
+untouched · apply failure after the clear · apply failure mid-rebuild · teardown release.
+
+### Round-3 disclosures
+
+1. **`useDefaultLayout()` on the LOAD-failure branch is unchanged.** When `loadLayout` itself refuses
+   (no saved layout, corrupt file), the adapter still calls `useDefaultLayout()`, which creates two
+   terminals and a Library pane. If panes are already open, that **adds** to them rather than
+   replacing them. The work order scopes round 3 to the *apply* path, so this was deliberately not
+   touched. Disclosed rather than silently fixed or silently ignored — it needs its own authorization.
+2. **Two ungated resize senders remain**, as the round-2 review noted: xterm's own `term.onResize`
+   (`app.js:440`) and the maximize path (`app.js:150`). Both carry the same post-fit geometry as the
+   gated controller, so they are duplicative rather than divergent, and both are pre-existing
+   production wiring. `app.js` is outside this work order's file scope.
+3. **`ownedPaneIds()` was added to the adapter's returned surface** — a read-only list of pane IDs
+   the adapter owns, used by the leak assertions. It exposes no element, no handle, and no authority.
+
+## 10. Pinned review artifacts
+
+All three artifacts are gitignored and local. Each was generated with `git diff --output=` (never
+PowerShell redirection), regenerated into a separate file, and **byte-compared identical**. The
+round-1 and round-2 artifacts are **preserved unchanged as historical failed-review evidence**.
 
 **Round 1 — reviewed, `VERDICT: FAIL`**
 `.agent-review-dockview-prototype.diff`
@@ -264,11 +364,51 @@ PowerShell redirection) and regenerated into a separate file and **byte-compared
 - Size: **172,014 bytes** · SHA-256 **`138F7BE022F660BFA634A40CD8E439E853ACE458E24FCF3BCBD19A3B03E79F21`**
 - 20 files · 3,139 insertions · 3 deletions
 
-**Round 2 — awaiting review**
+**Round 2 — reviewed, `VERDICT: FAIL`**
 `.agent-review-dockview-prototype-r2.diff`
 
 - Range: `1dce24c141e929c04122e8b2998277d4c2d0c728...588ed85`
 - Size: **216,125 bytes** · SHA-256 **`45F238F765308662AC00A3558D89186C60990B9243267F315A506D59E1932778`**
 - 22 files · 3,843 insertions · 3 deletions
-- Fix-only delta for a focused re-review: `git diff 6315354 588ed85` — 9 files, 731 insertions,
-  27 deletions.
+
+**Round 3 — awaiting review**
+`.agent-review-dockview-prototype-r3.diff`
+
+- Range: `1dce24c141e929c04122e8b2998277d4c2d0c728...8663467d19678e321fd3c136e6cf8bdbd32ab5b5`
+- Size: **241,892 bytes** · SHA-256 **`D3043843A532BF17A1BCC6F51212B10CD3A9595977DACF3C325A510FE22ACB91`**
+- 22 files · 4,257 insertions · 3 deletions
+- Reviewed code tip: `8663467d19678e321fd3c136e6cf8bdbd32ab5b5`
+- Fix-only delta for a focused re-review: `git diff 588ed85 8663467` — **2 files**,
+  457 insertions, 90 deletions (`app/renderer/dockview-prototype.js` and
+  `app/renderer/dockview-adapter-lifecycle.test.js` only).
+
+### Round-3 file scope — proven, not asserted
+
+Every other file in the branch is **byte-identical to `588ed85`**, verified by blob hash:
+`app/main.js` · `app/preload.js` · `app/package.json` · `app/package-lock.json` ·
+`app/dockview-layout-store.js` · `app/renderer/app.js` · `app/renderer/index.html` ·
+`app/renderer/styles.css` · `app/renderer/dockview-fit-policy.js` ·
+`app/renderer/dockview-panel-policy.js` · `app/renderer/pane-maximize.test.js` ·
+`app/dockview-default-path.test.js` · `app/dockview-layout-store.test.js` ·
+`app/dockview-package-identity.test.js` · `app/dockview-tripwire.js` · `app/dockview-tripwire.html` ·
+`app/test-fixtures/dockview-7.0.4-layout.json` · `docs/OSS-PROCUREMENT-dockview.md` ·
+`BLUE-HELM-MASTER-STATUS.md` · `scripts/merge-gate.ps1`.
+
+No dependency changed; `package.json` and `package-lock.json` are untouched, so `dockview@7.0.4`
+remains the exact pinned version and no `npm audit fix` was run.
+
+### Round-3 gates, as run
+
+| Gate | Result |
+| --- | --- |
+| Focused lifecycle suite | **119 passed / 0 failed** (was 28) |
+| App (`npm test`) | **1850 passed / 0 failed**, 43 suites, **exit 0** |
+| Pester | **955 passed / 0 failed / 0 skipped**, exit 0 |
+| Reachability | 6/6 Node · Pester family green |
+| Node `--check` on both changed files | clean |
+| `git diff --check` | clean |
+| Dockview network tripwire | `ok: true` · `dockviewVersion: 7.0.4` · `loadedUnderStrictCsp: true` · **`remoteRequestCount: 0`** |
+
+**No human acceptance was performed. No provider request was made. Not merged. Not pushed.**
+§ 6 of this document still lists the outstanding human acceptance procedure in full, and it must now
+be performed against `8663467` rather than `588ed85` — after a review returns PASS, not before.
