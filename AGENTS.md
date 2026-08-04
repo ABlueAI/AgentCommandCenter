@@ -52,6 +52,21 @@ reproduced after merge; create pinned `.agent-review-*.diff` files with
 renderer or main-process changes; make failures refuse visibly; and never put
 provider credentials in Windows user environment variables with `setx`.
 
+## OSS-FIRST PROCUREMENT GATE — HARD INVARIANT
+
+Before specifying, prototyping, or implementing any new subsystem:
+
+1. Run a Source-Scout evaluation of maintained OSS projects, official SDKs, and reusable libraries.
+2. Record the candidates evaluated with, for each: license, maintenance, telemetry/network behavior, security surface, Windows support, and estimated adoption-versus-build effort.
+3. Obtain one explicit Blue verdict: **ADOPT, FORK, PROTOTYPE, PATTERN-MINE, or BUILD FRESH**. These five are the only final subsystem verdicts. Candidate disposition is a separate, lower level: an individual candidate may be accepted or **rejected** while the evaluation is being built, and `REJECT` is never a final subsystem verdict. Rejecting every candidate yields the documented search evidence that may support **BUILD FRESH**; it does not by itself produce a verdict.
+4. If Blue named an OSS base or structure, treat ADOPT/FORK as the default interpretation. Never silently narrow it to PATTERN-MINE.
+5. PATTERN-MINE does not authorize rebuilding the subsystem. A separate Blue decision must authorize build-fresh work.
+6. Record the verdict verbatim in a **tracked OSS procurement decision record**: a committed Markdown file under `docs/`, named for the subsystem, holding the candidates evaluated, the item-2 evidence, and Blue's verdict line quoted verbatim. It must be a tracked repository file — not a chat message, a memory entry, or an untracked local note.
+7. Restate that verbatim verdict, and identify the record by path, in every work order and handoff concerning the subsystem.
+8. Any later deviation must stop visibly and request approval before code is written.
+9. “No suitable OSS exists” requires documented search evidence; it cannot be inferred from model memory.
+10. **Blue must refuse merge authorization for a new subsystem branch whose work order and handoff do not identify the tracked OSS procurement record and quote the verdict verbatim.** `scripts/merge-gate.ps1` does **not** parse procurement-record prose and does **not** mechanically enforce this policy. It accepts a plan-declared `handoffDoc` path and validates that document's handoff-tail commit shape and regular-blob identity, alongside plan-declared SHAs, ancestry, clean state, the pinned diff, the predicted merge tree, and the declared gates — but it never inspects work-order text, handoff prose, procurement-record contents, or verdicts. Automated enforcement would require its own separately reviewed implementation branch. **Until that exists, this gate is enforced by human review and authorization; describing it as automatic would be false.**
+
 ## How I work (conventions — follow these)
 1. Spec before code. When I describe a feature, first restate the intent and produce a
    short structured PLAN. Do not start editing files until the plan is agreed.
