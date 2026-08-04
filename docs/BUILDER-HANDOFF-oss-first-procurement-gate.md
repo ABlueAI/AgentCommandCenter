@@ -4,10 +4,10 @@ Branch: `codex/oss-first-procurement-gate-v2`
 Fork-point SHA: `c58ddfa9a3a3b0558e9fd4dc61474255a8b90aae` — current `main`, which is also the pre-merge `main` SHA (re-verify at gate time)
 Pre-merge `main` SHA: `c58ddfa9a3a3b0558e9fd4dc61474255a8b90aae` (`main == origin/main` at branch creation)
 Reviewed tip: **`9db3fdf5600cda03738a7e8f9dda96d416537869`** — the single implementation commit on this branch (`docs(governance): reconcile OSS verdict contract on current main`), and the endpoint of both the reviewed range and the pinned artifact.
-Branch tip: one documentation-only **handoff-tail** commit above the reviewed tip, modifying only this file. Its exact SHA is recorded externally and pinned in the merge plan; it is deliberately not written here, because a commit cannot contain its own SHA and a placeholder would re-create the defect the previous revision had to correct.
+Branch tip: the second of two documentation-only **handoff-tail** commits above the reviewed tip, each modifying only this file. Its exact SHA is recorded externally and pinned in the merge plan; it is deliberately not written here, because a commit cannot contain its own SHA and a placeholder would re-create the defect the previous revision had to correct.
 Merge commit SHA: Pending until merge
 
-Branch shape: `c58ddfa9 → 9db3fdf → one documentation-only handoff-tail commit`
+Branch shape: `c58ddfa9 → 9db3fdf → two documentation-only handoff-tail commits`
 
 ## Intended invariant
 
@@ -223,8 +223,8 @@ byte-for-byte into a separate temporary file.
 | Lines | `+318 / −8` |
 | Per file | `AGENTS.md` +15/−0 · `BLUE-HELM-MASTER-STATUS.md` +59/−8 · `docs/BUILDER-HANDOFF-oss-first-procurement-gate.md` +244/−0 |
 
-The artifact endpoint stays at `9db3fdf`. The handoff-tail commit above it
-deliberately does **not** move the reviewed range, so the artifact is not
+The artifact endpoint stays at `9db3fdf`. The handoff-tail commits above it
+deliberately do **not** move the reviewed range, so the artifact is not
 regenerated when the tail lands.
 
 The superseded artifact `.agent-review-oss-first-procurement-gate.diff` is a
@@ -251,8 +251,16 @@ gitignored.
 
 ## Reviewer verdict
 
-Pending.
+`VERDICT: PASS`
 
 ## Reviewer verdict source
 
-Pending — fresh Claude Opus 5, Very High effort, read-only Standard-class review.
+Fresh independent Claude Opus 5, Very High effort, read-only Standard-class
+review on 2026-08-04 of reviewed range
+`c58ddfa9a3a3b0558e9fd4dc61474255a8b90aae...9db3fdf5600cda03738a7e8f9dda96d416537869`,
+handoff tail
+`9db3fdf5600cda03738a7e8f9dda96d416537869..a78467631c838fd478edd1a1678e2c1efb6bd606`,
+the pinned artifact, and composition with synchronized `main`. The review
+opened with a literal independence PASS, regenerated the artifact
+byte-for-byte, verified all 17 review requirements, made no file changes, and
+ended with the literal verdict above. The full report is retained externally.
