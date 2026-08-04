@@ -3,11 +3,11 @@
 Branch: `codex/oss-first-procurement-gate-v2`
 Fork-point SHA: `c58ddfa9a3a3b0558e9fd4dc61474255a8b90aae` — current `main`, which is also the pre-merge `main` SHA (re-verify at gate time)
 Pre-merge `main` SHA: `c58ddfa9a3a3b0558e9fd4dc61474255a8b90aae` (`main == origin/main` at branch creation)
-Reviewed tip: the single implementation commit on this branch, `docs(governance): reconcile OSS verdict contract on current main`. Its exact SHA is recorded externally and pinned in the review request and merge plan; it is deliberately not written here, because a commit cannot contain its own SHA and a placeholder would re-create the defect the previous revision had to correct.
-Branch tip: the reviewed tip, or one documentation-only handoff-tail commit above it modifying only this file.
+Reviewed tip: **`9db3fdf5600cda03738a7e8f9dda96d416537869`** — the single implementation commit on this branch (`docs(governance): reconcile OSS verdict contract on current main`), and the endpoint of both the reviewed range and the pinned artifact.
+Branch tip: one documentation-only **handoff-tail** commit above the reviewed tip, modifying only this file. Its exact SHA is recorded externally and pinned in the merge plan; it is deliberately not written here, because a commit cannot contain its own SHA and a placeholder would re-create the defect the previous revision had to correct.
 Merge commit SHA: Pending until merge
 
-Branch shape: `c58ddfa9 → reviewed implementation commit → (at most one documentation-only handoff-tail commit)`
+Branch shape: `c58ddfa9 → 9db3fdf → one documentation-only handoff-tail commit`
 
 ## Intended invariant
 
@@ -207,14 +207,25 @@ record before any work order for that subsystem is written.
 ## Review diff
 
 Pinned artifact `.agent-review-oss-first-procurement-gate-v2.diff`, range
-`c58ddfa9a3a3b0558e9fd4dc61474255a8b90aae...<reviewed tip>`, created with
-`git diff --output` (never PowerShell `>`), gitignored, untracked, unstaged, an
-ordinary file with no reparse point, and verified to regenerate byte-for-byte
-into a separate temporary file.
+`c58ddfa9a3a3b0558e9fd4dc61474255a8b90aae...9db3fdf5600cda03738a7e8f9dda96d416537869`,
+created with `git diff --output` (never PowerShell `>`), gitignored, untracked,
+unstaged, an ordinary file with no reparse point, and verified to regenerate
+byte-for-byte into a separate temporary file.
 
-**Fixed identity — do not regenerate or replace:** recorded in the handoff-tail
-commit and in the external review request (exact range, byte length, SHA-256,
-file inventory, and line counts).
+**Fixed identity — do not regenerate or replace:**
+
+| Item | Value |
+|---|---|
+| Range | `c58ddfa9a3a3b0558e9fd4dc61474255a8b90aae...9db3fdf5600cda03738a7e8f9dda96d416537869` |
+| Bytes | `22,558` |
+| SHA-256 | `A90856CB30540AB00A02B21EB63DF655A682E0E9A1B95467E5A2E1D2CDD6F41F` |
+| Inventory | 3 files — 2 modified, 1 added, 0 deleted |
+| Lines | `+318 / −8` |
+| Per file | `AGENTS.md` +15/−0 · `BLUE-HELM-MASTER-STATUS.md` +59/−8 · `docs/BUILDER-HANDOFF-oss-first-procurement-gate.md` +244/−0 |
+
+The artifact endpoint stays at `9db3fdf`. The handoff-tail commit above it
+deliberately does **not** move the reviewed range, so the artifact is not
+regenerated when the tail lands.
 
 The superseded artifact `.agent-review-oss-first-procurement-gate.diff` is a
 different file at a different path and is **not** deleted, overwritten, or
@@ -222,10 +233,13 @@ regenerated.
 
 ## Review-diff rule
 
-- Before merge: `git diff c58ddfa9a3a3b0558e9fd4dc61474255a8b90aae...<reviewed tip>`.
-  `main` is the fork point for this branch, so `git diff main...<tip>` is
-  equivalent **only while `main` remains `c58ddfa9`**; if `main` advances, use the
-  recorded fork-point SHA explicitly.
+- Before merge:
+  `git diff c58ddfa9a3a3b0558e9fd4dc61474255a8b90aae...9db3fdf5600cda03738a7e8f9dda96d416537869`.
+  Note the endpoint is the reviewed tip `9db3fdf`, not the branch tip — the
+  handoff tail above it is outside the reviewed range. `main` is the fork point
+  for this branch, so `git diff main...<tip>` is equivalent **only while `main`
+  remains `c58ddfa9`**; if `main` advances, use the recorded fork-point SHA
+  explicitly.
 - After merge: reproduce with the same immutable three-dot range against the
   recorded fork point.
 - Always use `--output`; never PowerShell `>`.
