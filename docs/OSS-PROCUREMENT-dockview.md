@@ -320,7 +320,71 @@ build fresh (rejected at this step only; a prototype must answer the integration
 `PROTOTYPE`, and the prototype's outcome is evidence for a later human adoption decision — ADOPT ·
 FORK · PROTOTYPE · PATTERN-MINE · BUILD FRESH — not a decision this record makes.
 
-## 15. Predeclared NO-GO criteria
+## 15. Audit gate — Blue's amended § 4 clause, and the reachability determination
+
+The work order's § 4 stop condition ("a HIGH/CRITICAL advisory exists") was ambiguous against this
+tree, which already carries pre-existing advisories. Blue ruled on 2026-08-04. The clause now reads:
+
+> no NEW high/critical advisory **attributable to the candidate**, including **newly reachable
+> existing advisories**
+
+Blue's reasoning, recorded because it is the reusable part: an unchanged advisory *count* can hide a
+**new path** to an already-listed vulnerable package, which is exactly the failure mode totals miss.
+A pure identity comparison of `npm audit` output is therefore not sufficient evidence on its own.
+Future OSS procurement orders should state the clause in the amended form so the next candidate does
+not need a human tiebreak on the same ambiguity.
+
+### Determination for `dockview@7.0.4`: PASS — delta is zero and unambiguous
+
+Two independent checks, both required by the amended clause:
+
+1. **Count comparison.** `npm audit` is identical before and after the install:
+   `{info 0, low 0, moderate 2, high 4, critical 0, total 6}` in both cases, over the identical
+   package set `@huggingface/transformers, kokoro-js, protobufjs, sharp, tar, undici`. No advisory
+   names `dockview` or `dockview-core`.
+2. **Reachability.** Computed from the lockfile, the set of packages reachable from `dockview` is
+   exactly `{dockview-core}` — and `dockview-core` has zero dependencies. **No vulnerable package is
+   reachable from Dockview by any path**, so no existing advisory became newly reachable. The
+   lockfile diff is `+17 / -0` lines touching only the two `node_modules/dockview*` entries, so no
+   pre-existing package gained an edge either.
+
+`npm audit fix` was **not** run, and must not be. Blue's stated reason: it would silently upgrade the
+audio/ML chain inside a layout prototype, breaking the one-invariant rule and contaminating the diff
+the reviewer has to read.
+
+### The six advisories are pre-existing UNRESOLVED RELEASE RISKS
+
+They are **not** accepted, **not** fixed, and **not** harmless. They are out of scope for this work
+order and unchanged by it. Per Blue's required follow-through they are triaged **individually** —
+lumping them as "the audio stack" would hide that three of them are not ML-specific at all:
+
+| Advisory | Sev | Shortest path from the app | Shipped at runtime? | Class |
+| --- | --- | --- | --- | --- |
+| `sharp` (libvips CVE-2026-33327/33328/35590/35591) | high | `@huggingface/transformers → sharp` | **Yes** (prod dep) | ML-specific |
+| `@huggingface/transformers` (inherited via sharp) | high | direct prod dependency | **Yes** | ML-specific |
+| `kokoro-js` (inherited via transformers) | high | direct prod dependency | **Yes** | ML-specific (TTS) |
+| `protobufjs` (DoS via `.proto` option parsing) | moderate | `@huggingface/transformers → onnxruntime-web → protobufjs` | **Yes** | **not** ML-specific |
+| `tar` (uncontrolled recursion DoS) | moderate | `@huggingface/transformers → onnxruntime-node → tar` | **Yes** | **not** ML-specific |
+| `undici` (5 advisories: response desync, cache disclosure, CRLF injection, cookie injection) | high | `electron → @electron/get → undici` — **not reachable via prod deps at all** | **No** — lockfile marks it `dev: true, optional: true`; it is Electron's build/install-time downloader | **not** ML-specific |
+
+The `undici` row is the clearest illustration of why individual triage was required: it is a *high*
+advisory that is **not present in the shipped application** at all, which is a materially different
+risk posture from the three ML runtime dependencies.
+
+**Destination and ownership — one item this branch CANNOT durably deliver.** Blue directed that these
+six be added as a named item on the Blue Helm 1.0 release-gate list, owned by **EDA-1**
+(`docs/AUDIT-SCOPE-environment-deployment.md`), each with its own reachability determination and its
+own blocks-1.0 / defer decision. That registration belongs in `BLUE-HELM-MASTER-STATUS.md`, which
+this work order's § 12 lists as **Expected unchanged** — and, more decisively, this branch is
+explicitly **not authorized to merge or push** and is required to be removable by deleting it. Any
+release-gate entry written here would vanish with the branch, recreating exactly the "a phrase that
+exists in one handoff and nowhere else" failure Blue called out.
+
+The triage evidence above is therefore recorded here, in a tracked file, and the **registration is
+raised as a separate, small, independently-authorized change against `main`**. It is not silently
+performed on this branch, and it is not silently skipped.
+
+## 16. Predeclared NO-GO criteria
 
 The work order § 5 predeclares eleven NO-GO criteria (terminal refit failure; stale/zero/oscillating
 PTY geometry; any telemetry or network request; a requirement for React, remote assets,

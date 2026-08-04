@@ -314,3 +314,21 @@ input:focus { outline: none; border-color: var(--accent); }
 .lib-followup-error { padding: 8px 10px; }
 .lib-followup-answer { margin: 0; max-height: 40%; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font-family: 'Cascadia Code','Consolas',monospace; font-size: 12.5px; line-height: 1.5; color: var(--text); }
 .lib-followup-answer:empty { display: none; }
+
+/* ---- Dockview prototype (PROTOTYPE ONLY — branch feature/dockview-prototype) -------------------
+   Everything below is reachable only when main passed --dockview-prototype. The default grid never
+   creates #dockviewPrototypeRoot, so none of these rules match on the default path. They are kept
+   in one clearly-fenced block at the end of the file so deleting the branch removes them cleanly. */
+.dockview-prototype-root { position: fixed; inset: 0; z-index: 9000; display: flex; flex-direction: column; background: var(--bg, #0b0f14); }
+.dockview-prototype-banner {
+  flex: 0 0 auto; padding: 8px 14px; text-align: center;
+  font-family: 'Cascadia Code','Consolas',monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.14em;
+  color: #1b1200; background: repeating-linear-gradient(45deg, #ffb300, #ffb300 12px, #d68f00 12px, #d68f00 24px);
+  border-bottom: 2px solid #ff6d00; text-transform: uppercase;
+}
+.dockview-prototype-controls { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line, #1e2733); background: var(--panel, #0f1620); }
+.dockview-prototype-status { margin-left: auto; font-size: 12px; color: var(--muted, #7d8b9c); }
+.dockview-prototype-surface { flex: 1 1 auto; min-height: 0; position: relative; }
+.dockview-prototype-pane-host { width: 100%; height: 100%; overflow: hidden; }
+.dockview-prototype-pane-host > .term-pane,
+.dockview-prototype-pane-host > .library-panel { width: 100%; height: 100%; margin: 0; border-radius: 0; }

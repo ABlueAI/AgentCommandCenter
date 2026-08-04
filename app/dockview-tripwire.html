@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!-- Deliberately STRICTER than the app's own CSP. `connect-src 'none'` means any fetch/XHR/
+       WebSocket/EventSource/beacon Dockview might attempt is refused by the page itself, in
+       addition to being cancelled by the main-process request monitor. `default-src 'none'`
+       means nothing loads that is not explicitly allowed below.
+
+       style-src allows 'unsafe-inline' because the published UMD bundle injects its stylesheet
+       into document.head at load time (`styleInject`, "sideEffects": true). That is a documented
+       load-time side effect of the vendor bundle, not something this harness does. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; font-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none';" />
+  <title>Dockview tripwire</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #0b0f14; }
+    #host { position: absolute; inset: 0; }
+  </style>
+</head>
+<body>
+  <div id="host"></div>
+  <!-- The ONLY script this page loads is the vendor bundle, via <script src> under the CSP above.
+       If Dockview could not load in a context-isolated renderer under a strict CSP, this is where
+       it would fail. The harness itself contributes no script: main drives it with
+       executeJavaScript so the page has no inline script and no preload bridge at all. -->
+  <script src="node_modules/dockview/dist/dockview.js"></script>
+</body>
+</html>

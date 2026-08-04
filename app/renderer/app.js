@@ -643,7 +643,13 @@ function openInAppTerminal(opts = {}) {
     paneData.pendingEvents.push(ev);
     if (paneData.rafId === null) paneData.rafId = requestAnimationFrame(() => drainChatEvents(paneData));
   });
-  pane.querySelector('.x').onclick = () => {
+  // The ONE close path for this pane. Extracted from the close button's handler (behaviour and
+  // ordering are unchanged) and made IDEMPOTENT so that a second caller cannot double-kill a PTY or
+  // double-dispose an xterm. On the Dockview prototype branch a panel-removal event is that second
+  // caller; on the default path the close button is still the only one, and `terms.delete(id)` below
+  // makes any repeat call a no-op.
+  const closeThisPane = () => {
+    if (!terms.has(id)) return;   // already closed — exactly-once guarantee
     // Closing the maximized pane restores the grid cleanly (V1a) — clear the maximize
     // state FIRST so the surviving panes un-hide and refit.
     paneMaximizer.handlePaneClosed(id);
@@ -655,6 +661,8 @@ function openInAppTerminal(opts = {}) {
     cc.ptyKill(id); term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
   };
+  paneData.closePane = closeThisPane;
+  pane.querySelector('.x').onclick = closeThisPane;
   pane.addEventListener('mousedown', (event) => {
     if (event.target.closest('.spk, .copy-out, .max')) return;
     activeTermId = id; term.focus();
@@ -663,6 +671,95 @@ function openInAppTerminal(opts = {}) {
   terms.set(id, paneData);
   cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, videoModel: opts.videoModel, mediaResolution: opts.mediaResolution, analysisMode: opts.analysisMode, startOffset: opts.startOffset, endOffset: opts.endOffset, sliceRanges: opts.sliceRanges, analysisFocus: opts.analysisFocus, cols: term.cols, rows: term.rows });
   setTimeout(() => { fit.fit(); cc.ptyResize(id, term.cols, term.rows); activeTermId = id; term.focus(); }, 40);
+}
+
+// ---- Dockview prototype bootstrap (PROTOTYPE ONLY — branch feature/dockview-prototype) --------
+// The ENTIRE prototype hangs off the strict check on the first line of maybeStartDockviewPrototype.
+// When main did not pass the flag, `window.ccDockview` reports enabled === false, that function
+// returns immediately, and no Dockview script tag is ever created — index.html is untouched and the
+// default grid behaves exactly as before (§ 5.10 / § 6).
+//
+// Scripts are injected dynamically rather than listed in index.html precisely so the default path
+// cannot load them. They load in dependency order, from local files only.
+const DOCKVIEW_PROTOTYPE_SCRIPTS = [
+  '../node_modules/dockview/dist/dockview.js',   // vendor UMD bundle -> window.dockview
+  'dockview-fit-policy.js',
+  'dockview-panel-policy.js',
+  'dockview-prototype.js',
+];
+
+function loadScriptOnce(src) {
+  return new Promise((resolve, reject) => {
+    const el = document.createElement('script');
+    el.src = src;
+    el.onload = () => resolve();
+    el.onerror = () => reject(new Error(`failed to load ${src}`));
+    document.head.appendChild(el);
+  });
+}
+
+async function maybeStartDockviewPrototype() {
+  // STRICT and fail-closed: only main's frozen boolean `true` proceeds. A renderer query string,
+  // hash, saved setting, or injected truthy object cannot satisfy this.
+  if (!window.ccDockview || window.ccDockview.enabled !== true) return;
+
+  appendLog('[dockview-prototype] flag present — loading prototype (NOT PRODUCTION)\n');
+  try {
+    for (const src of DOCKVIEW_PROTOTYPE_SCRIPTS) await loadScriptOnce(src);
+  } catch (e) {
+    appendLog(`[dockview-prototype] FAILED to load: ${(e && e.message) || e}\n`);
+    return;
+  }
+
+  let container = document.getElementById('dockviewPrototypeRoot');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'dockviewPrototypeRoot';
+    container.className = 'dockview-prototype-root';
+    document.body.appendChild(container);
+  }
+
+  // The controlled surface the adapter is allowed to use. Everything privileged stays on this side:
+  // the adapter never sees cc.*, a path, a role, a prompt, or report content.
+  window.ccDockviewPrototypeInstance = window.ccDockviewPrototype.activate({
+    bridge: window.ccDockview,
+    getDockviewGlobal: () => window.dockview,
+    getContainer: () => container,
+    log: appendLog,
+    isTerminalPane: (paneId) => terms.has(paneId),
+    getPaneElement: (paneId) => {
+      const t = terms.get(paneId);
+      if (t) return t.pane;
+      return paneId === 'library' ? document.getElementById('libraryPanel') : null;
+    },
+    getTerminalBody: (paneId) => {
+      const t = terms.get(paneId);
+      return t ? t.pane.querySelector('.term-body') : null;
+    },
+    fitTerminal: (paneId) => { const t = terms.get(paneId); if (t) t.fit.fit(); },
+    measureTerminal: (paneId) => {
+      const t = terms.get(paneId);
+      return t ? { cols: t.term.cols, rows: t.term.rows } : null;
+    },
+    sendResize: (paneId, cols, rows) => cc.ptyResize(paneId, cols, rows),
+    focusPane: (paneId) => {
+      const t = terms.get(paneId);
+      if (t) { activeTermId = paneId; try { t.term.focus(); } catch {} }
+    },
+    // Pane creation goes through the EXISTING code path, so the prototype's terminals are real
+    // PTYs carrying the app's own clipboard, OSC 52, TTS, Dictate, and close wiring — not stand-ins.
+    createTerminalPane: async () => {
+      const before = new Set(terms.keys());
+      openInAppTerminal({});
+      return [...terms.keys()].find((id) => !before.has(id)) || null;
+    },
+    createLibraryPane: () => (document.getElementById('libraryPanel') ? 'library' : null),
+    // The app's single idempotent close path. Calling it twice kills one PTY once.
+    closePane: (paneId) => {
+      const t = terms.get(paneId);
+      if (t && typeof t.closePane === 'function') t.closePane();
+    },
+  });
 }
 
 // ---- boot -------------------------------------------------------------------
@@ -688,6 +785,10 @@ async function boot() {
   });
   cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));
   window.addEventListener('resize', fitAllTerms);
+  // DORMANT prototype seam (branch feature/dockview-prototype). On the default path
+  // `window.ccDockview.enabled` is false, this call returns immediately, and NOTHING about Dockview
+  // is fetched, parsed, styled, persisted, or initialized. See maybeStartDockviewPrototype below.
+  maybeStartDockviewPrototype();
   // TTS/STT modules load after this script. Every state has an explicit UI:
   // ready wires the control; a missed ready event becomes a visible refusal.
   const ttsReady = () => { audioModules.markReady('tts'); setupTTSControls(); appendLog('[tts] module ready\n'); };

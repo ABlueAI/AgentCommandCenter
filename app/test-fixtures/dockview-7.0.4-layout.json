@@ -1,0 +1,54 @@
+{
+  "grid": {
+    "root": {
+      "type": "branch",
+      "data": [
+        {
+          "type": "leaf",
+          "data": {
+            "views": [
+              "pty1"
+            ],
+            "activeView": "pty1",
+            "id": "1"
+          },
+          "size": 100
+        },
+        {
+          "type": "leaf",
+          "data": {
+            "views": [
+              "pty2",
+              "library"
+            ],
+            "activeView": "library",
+            "id": "2"
+          },
+          "size": 100
+        }
+      ],
+      "size": 100
+    },
+    "width": 100,
+    "height": 100,
+    "orientation": "HORIZONTAL"
+  },
+  "panels": {
+    "pty1": {
+      "id": "pty1",
+      "contentComponent": "terminal",
+      "title": "Terminal 1"
+    },
+    "pty2": {
+      "id": "pty2",
+      "contentComponent": "terminal",
+      "title": "Terminal 2"
+    },
+    "library": {
+      "id": "library",
+      "contentComponent": "library",
+      "title": "Library"
+    }
+  },
+  "activeGroup": "2"
+}

@@ -63,3 +63,26 @@ contextBridge.exposeInMainWorld('cc', {
   // surfaced main-process errors (shown in the Logs tab instead of a fatal dialog)
   onMainError: (cb) => ipcRenderer.on('main-error', (_e, m) => cb(m)),
 });
+
+// ---- Dockview prototype bridge (PROTOTYPE ONLY — branch feature/dockview-prototype) -------------
+// Exposes exactly two things, per the work order § 6: a FROZEN BOOLEAN and bounded layout
+// operations. Nothing here can enable the prototype — it only reports the decision MAIN already
+// made and forwarded through `additionalArguments` at window construction. Renderer script cannot
+// change this process's argv, so a query string, hash, saved setting, or injected script cannot
+// flip it on.
+//
+// The boolean is computed ONCE at preload time and deep-frozen, so renderer code cannot mutate
+// `window.ccDockview.enabled` to unlock the layout operations either. When the prototype is off the
+// operations are still exposed but every call rejects in main, because the handlers are not
+// registered at all in default `npm start`.
+const dockviewPrototypeEnabled = process.argv.includes('--cc-dockview-prototype');
+
+contextBridge.exposeInMainWorld('ccDockview', Object.freeze({
+  // Frozen boolean — the ONLY authority the renderer has for "am I in prototype mode?".
+  enabled: dockviewPrototypeEnabled,
+  // Bounded layout operations. The renderer passes ONLY a layout object; it never supplies a path,
+  // a filename, or any part of one. Main owns the file location, the validation, and the refusal.
+  saveLayout: (layout) => ipcRenderer.invoke('dockview-layout-save', layout),
+  loadLayout: () => ipcRenderer.invoke('dockview-layout-load'),
+  resetLayout: () => ipcRenderer.invoke('dockview-layout-reset'),
+}));
