@@ -119,10 +119,46 @@ candidate card must cover: capability match/limits · license/commercial use ·
 maintenance/releases/adoption/issues · Windows/Electron fit · framework needs ·
 runtime/transitive weight · telemetry/network behavior · security advisories ·
 persistence/migration implications · Blue Helm integration seams · adopt-whole
-versus owned boundary · effort · and one verdict: **ADOPT, PROTOTYPE,
-PATTERN-MINE, or REJECT**. A PROTOTYPE verdict authorizes only the named
+versus owned boundary · and effort. A PROTOTYPE verdict authorizes only the named
 experiment, never production adoption. Never copy loose snippets into IPC, PTY,
 credential, validator, cost-guard, or deletion paths.
+
+**Two verdict levels, deliberately not the same thing.** An individual
+*candidate* may be **rejected** during evaluation — an ordinary outcome of
+comparing options, needing no ceremony. Blue's final *subsystem* verdict is a
+separate decision and must be exactly one of:
+
+> **ADOPT · FORK · PROTOTYPE · PATTERN-MINE · BUILD FRESH**
+
+Two passages in this file previously ended in a single four-term set
+`ADOPT, PROTOTYPE, PATTERN-MINE, or REJECT` — this protocol section and the
+July 30 *Next-feature direction* section below. Both conflated the two levels,
+omitted `FORK` and `BUILD FRESH`, and presented candidate rejection as a final
+subsystem verdict. **Both were stale, and both are corrected here — not
+reinterpreted.** `AGENTS.md` § *OSS-FIRST PROCUREMENT GATE — HARD INVARIANT* is
+the authority and the five terms above match it exactly. Rejecting every
+candidate does not by itself produce a subsystem verdict — it produces the
+documented search evidence a **BUILD FRESH** decision requires.
+
+**The verdict must live in a tracked OSS procurement decision record** — a
+committed Markdown file under `docs/`, named for the subsystem — and be quoted
+verbatim in every work order and handoff for that subsystem, which must also
+identify the record by path.
+
+**Enforcement is procedural, not automated.** `scripts/merge-gate.ps1` does not
+read work-order text, handoff prose, or procurement-record contents, and it
+enforces no OSS verdict; it verifies plan-declared SHAs, ancestry, clean state,
+the declared handoff document's tail shape and blob identity, the pinned diff,
+the predicted merge tree, and the declared gates. Blue refusing merge
+authorization is the control. Automating it would require its own separately
+reviewed branch.
+
+**Dockview and cross-provider pane-status indicators are separate subsystems,
+each requiring its own tracked procurement record and its own Blue verdict.**
+One record cannot cover both. **Neither currently has a Blue verdict**, so
+neither is authorized for specification, prototyping, or implementation. The
+`dockview-core` expectation in the R3 roadmap entry is a roadmap note, not a
+procurement verdict, and does not satisfy this gate.
 
 ## Current checkpoint — July 23 — V3A MERGED; BLUE HELM 1.0 SCOPE FROZEN
 
@@ -292,14 +328,29 @@ Source Scout run against primary sources and a candidate card covering
 capability match/limits, license, maintenance, Windows/Electron fit, framework
 needs, runtime/transitive weight, telemetry/network behavior, security
 advisories, persistence/migration implications, integration seams, adopt-whole
-versus owned boundary, and effort — ending in exactly one verdict term: **ADOPT,
-PROTOTYPE, PATTERN-MINE, or REJECT**.
+versus owned boundary, and effort. **Candidate disposition and the subsystem
+verdict are two different decisions.** Individual candidates may be accepted or
+rejected while the card is built; that comparison outcome is not a subsystem
+verdict. Each record then ends in exactly one final subsystem verdict term:
+**ADOPT, FORK, PROTOTYPE, PATTERN-MINE, or BUILD FRESH**. Rejecting every
+candidate produces the documented search evidence that may support **BUILD
+FRESH**; `REJECT` is not itself the final subsystem verdict.
+
+> **CORRECTED — this paragraph previously ended "exactly one verdict term:
+> ADOPT, PROTOTYPE, PATTERN-MINE, or REJECT."** That four-term wording omitted
+> `FORK` and `BUILD FRESH` and presented candidate rejection as Blue's final
+> subsystem verdict. It is **stale, not reinterpreted**. `AGENTS.md` §
+> *OSS-FIRST PROCUREMENT GATE — HARD INVARIANT* is the authority; the five terms
+> above match it exactly and match the OSS procurement protocol section at the
+> top of this file.
 
 **No OSS verdict has been supplied by Blue for either subsystem, and none is
-recorded here.** The `dockview-core` entry in the R3 roadmap describes it as a
-utility-dependency adoption; that is a *roadmap expectation*, not a procurement
-verdict, and it does not substitute for the required record. Neither subsystem
-is authorized to begin implementation on the strength of this closeout.
+recorded here.** Each subsystem needs its own tracked record and its own
+verdict; one record cannot cover both. The `dockview-core` entry in the R3
+roadmap describes it as a utility-dependency adoption; that is a *roadmap
+expectation*, not a procurement verdict, and it does not substitute for the
+required record. Neither subsystem is authorized to begin specification,
+prototyping, or implementation on the strength of this closeout.
 
 ### Windows launch/distribution constraint — July 26
 
