@@ -4,11 +4,16 @@ Branch: `feature/dockview-prototype`
 Worktree: `D:\Workspace\agent-command-center\.worktrees\dockview-prototype`
 Fork-point / pre-merge `main` SHA: `1dce24c141e929c04122e8b2998277d4c2d0c728` (`main == origin/main` at branch creation)
 Procurement-record commit: `a0c8551` — `docs/OSS-PROCUREMENT-dockview.md` only
-Reviewed tip: `6315354` — the single implementation commit
-Branch tip: this documentation-only handoff-tail commit above the reviewed tip
+Round-1 reviewed tip: `6315354` — **review returned `VERDICT: FAIL`**
+Round-2 tip (fixes): `588ed85` — **awaiting a second review; no PASS exists yet**
+Branch tip: this documentation-only handoff-tail commit above `588ed85`
 Merge commit SHA: **not applicable — merge and push are NOT authorized**
 
-Branch shape: `1dce24c1 → a0c8551 → 6315354 → (this handoff tail)`
+Branch shape: `1dce24c1 → a0c8551 → 6315354 → e04fa4d → 588ed85 → (this handoff tail)`
+
+> **STATUS: NOT REVIEW-CLEAN.** The independent Full-class review of `6315354` returned
+> `VERDICT: FAIL`. Its blocking findings were verified and fixed in `588ed85`, but that fix commit
+> **has not itself been reviewed**. This branch must not be treated as carrying a passing review.
 
 Procurement record: **`docs/OSS-PROCUREMENT-dockview.md`** (required by `AGENTS.md` § OSS-FIRST
 PROCUREMENT GATE item 6; its path and Blue's verbatim verdict are restated below per item 7).
@@ -34,8 +39,11 @@ FORK · PROTOTYPE · PATTERN-MINE · BUILD FRESH after § 14 human acceptance.
 
 | Gate | Baseline at `1dce24c1` | After implementation | Delta |
 | --- | --- | --- | --- |
-| App (`npm test`) | **1362 passed / 0 failed**, 37 suites, exit 0 | **1706 passed / 0 failed**, 42 suites, exit 0 | +344 / +5 suites |
+| App (`npm test`) | **1362 passed / 0 failed**, 37 suites, exit 0 | **1759 passed / 0 failed**, 43 suites, exit 0 | +397 / +6 suites |
 | Pester (`scripts\run-pester.ps1`) | **955 passed / 0 failed / 0 skipped** | **955 passed / 0 failed / 0 skipped** | unchanged |
+
+(At the round-1 tip `6315354` the app gate was 1706/0 across 42 suites; the round-2 fixes added the
+behavioural adapter suite and further assertions.)
 
 The app delta reconciles exactly: 47 (package-identity) + 111 (layout-store) + 54 (default-path) +
 59 (fit-policy) + 71 (panel-policy) = 342 new, plus 2 added to `pane-maximize.test.js` = **344**.
@@ -215,13 +223,52 @@ here would vanish with the branch, recreating the exact "exists in one handoff a
 failure Blue warned against. It needs a separate, small, independently-authorized change against
 `main`. **Recommended next work order.**
 
-## 8. Pinned review artifact
+## 8. Independent review — round 1 returned FAIL; what it found and what changed
 
-`.agent-review-dockview-prototype.diff` (gitignored, local)
+The Full-class review of `6315354` returned `VERDICT: FAIL`. Every blocking finding was
+independently verified against the vendor bundle and a live Electron probe **before** being
+accepted. All were real. This section exists so the failure is part of the record, not a footnote.
+
+| # | Finding | Verified how | Fixed in `588ed85` |
+| --- | --- | --- | --- |
+| B1 | Panel-removal convergence was **dead code**: dockview fires the panel itself, not `{panel}`, so `event.panel.id` was always undefined and closing a tab would orphan the PTY | `dockview.js:18526` — `_onDidRemovePanel.fire(event.panel)` | Reads the ID off the payload; an unresolvable ID is now a **visible refusal**, not a silent return |
+| B2 | The test guarding B1 asserted on **source text** and passed anyway | Read the assertion | Replaced by a behavioural suite using the vendor's real payload shapes |
+| B3 | With B1 fixed, Restore would `ptyKill` **every live terminal**, because `fromJSON` clears first | `dockview.js:17049` `reuseExistingPanels`, `_doFromJSON` | Re-entrancy guard around `fromJSON` and dispose |
+| B4 | **Save was refused by its own validator.** `toJSON()` emits 10 own keys/panel, 7 undefined; the fixture showed 3 because `executeJavaScript` drops undefined-valued keys | Live Electron probe reading `Object.getOwnPropertyNames` | Optional keys tolerated **only when `undefined`**; a populated `params`/`renderer`/size hint is still refused |
+| B5 | The fit policy was **additive**: the app's own ungated `ResizeObserver` stayed attached, so hosted terminals had two observers and two resize senders | Read `app.js:504-509` | Adapter suspends the app's observer for panes it hosts |
+| H1 | The ✕ button left a **ghost panel** and leaked the controller/observer | Read the close path | Inverse convergence hook `onAppPaneClosed` |
+| H2 | Restore mounted **empty panel shells** when no live pane matched a saved ID | Read `restoreLayout` | Refuses visibly, names the missing panes, changes nothing |
+| M1 | `window.ccDockview` was exposed **unconditionally**, so the default renderer's global surface was not unchanged | Read `preload.js` | Exposed only inside the prototype-mode guard |
+| M2 | The test comment stripper **deleted code**: in `/^https?:\/\//i` it read the regex-closing slash as a comment | Traced by hand, then pinned | Consumes backslash escapes globally, plus self-tests |
+
+**One reviewer claim was not accepted as written.** It implied `event.panel.id` was wrong throughout.
+It is wrong for `onDidRemovePanel` but **correct** for `onDidActivePanelChange`, which genuinely
+fires `{ panel, origin }` (`dockview.js:17916`). The two events have different shapes; the tests now
+assert per-handler rather than over the whole file, which is stricter than either reading.
+
+**What this failure says about the kill-criteria table in § 4.** The round-1 table was too generous.
+B1 and B4 mean the close path and the save path were **not** exercised end-to-end before that table
+was written. The table above still marks criteria 1, 2, and 8 as *not yet observable*, and that is
+now the honest reading of the persistence and close criteria too until § 14 is performed against
+`588ed85`.
+
+## 9. Pinned review artifact
+
+Both artifacts are gitignored and local. Both were generated with `git diff --output=` (never
+PowerShell redirection) and regenerated into a separate file and **byte-compared identical**.
+
+**Round 1 — reviewed, `VERDICT: FAIL`**
+`.agent-review-dockview-prototype.diff`
 
 - Range: `1dce24c141e929c04122e8b2998277d4c2d0c728...6315354`
-- Size: **172,014 bytes**
-- SHA-256: **`138F7BE022F660BFA634A40CD8E439E853ACE458E24FCF3BCBD19A3B03E79F21`**
-- 20 files · 3,139 insertions · 3 deletions · 3,344 diff lines
-- Generated with `git diff --output=` (never PowerShell redirection), regenerated into a separate
-  file and **byte-compared identical**.
+- Size: **172,014 bytes** · SHA-256 **`138F7BE022F660BFA634A40CD8E439E853ACE458E24FCF3BCBD19A3B03E79F21`**
+- 20 files · 3,139 insertions · 3 deletions
+
+**Round 2 — awaiting review**
+`.agent-review-dockview-prototype-r2.diff`
+
+- Range: `1dce24c141e929c04122e8b2998277d4c2d0c728...588ed85`
+- Size: **216,125 bytes** · SHA-256 **`45F238F765308662AC00A3558D89186C60990B9243267F315A506D59E1932778`**
+- 22 files · 3,843 insertions · 3 deletions
+- Fix-only delta for a focused re-review: `git diff 6315354 588ed85` — 9 files, 731 insertions,
+  27 deletions.
