@@ -6,22 +6,31 @@ Fork-point / pre-merge `main` SHA: `1dce24c141e929c04122e8b2998277d4c2d0c728` (`
 Procurement-record commit: `a0c8551` — `docs/OSS-PROCUREMENT-dockview.md` only
 Round-1 reviewed tip: `6315354` — **review returned `VERDICT: FAIL`**
 Round-2 reviewed tip: `588ed85` — **review returned `VERDICT: FAIL`**
-Round-3 tip (fixes): `8663467d19678e321fd3c136e6cf8bdbd32ab5b5` — **awaiting a third review**
-Branch tip: this documentation-only handoff-tail commit above `8663467`
+Round-3 tip (fixes): `8663467d19678e321fd3c136e6cf8bdbd32ab5b5` — **review returned `VERDICT: PASS`**
+Round-4 reviewed code tip: `35da2e3f2a4551cee26fc48585fa4274c1f6af36` — **awaiting review**
+Branch tip: this documentation-only handoff-tail commit above `35da2e3`
 Merge commit SHA: **not applicable — merge and push are NOT authorized**
 
 Branch shape:
-`1dce24c1 → a0c8551 → 6315354 → e04fa4d → 588ed85 → 26ed85e → 8663467 → (this handoff tail)`
+`1dce24c1 → a0c8551 → 6315354 → e04fa4d → 588ed85 → 26ed85e → 8663467 → 1b23799 → 35da2e3 → (this handoff tail)`
 
-> # STATUS: NOT REVIEW-CLEAN — TWO INDEPENDENT REVIEWS HAVE FAILED THIS BRANCH
+> # STATUS: ROUND 3 PASSED CODE REVIEW, THEN FAILED HUMAN ACCEPTANCE AT STARTUP
 >
 > Round 1 (`6315354`) returned `VERDICT: FAIL`.
-> Round 2 (`588ed85`) **also** returned `VERDICT: FAIL`.
+> Round 2 (`588ed85`) returned `VERDICT: FAIL`.
+> Round 3 (`8663467`) returned **`VERDICT: PASS`** — and that verdict **remains truthful** for the
+> restore-ownership correction it reviewed. It is **not** human acceptance, and it did not prove
+> that the browser script chain could initialize, because nothing in the automated suite executed
+> that chain in a browser.
 >
-> The round-2 blocking finding was reproduced and fixed in `8663467`, but **that fix commit has not
-> itself been reviewed**. **No round of this branch has ever returned PASS.** Nothing here may be
-> read as a passing review, as human acceptance, or as an adoption verdict, and the branch remains
-> unauthorized for merge or push.
+> **Stage A human acceptance was then performed and FAILED immediately at prototype startup.**
+> Normal `npm start` passed; `npm run prototype:dockview` produced a **full-screen blank overlay**
+> with no banner and no controls. Evidence and root cause are in § 11.
+>
+> **Round 4 (`35da2e3`) corrects that separately observed runtime defect.**
+> **Round 4 has NOT passed review and has NOT passed human acceptance.** Nothing here may be read
+> as a passing review of round 4, as human acceptance, or as an adoption verdict, and the branch
+> remains unauthorized for merge or push.
 
 Procurement record: **`docs/OSS-PROCUREMENT-dockview.md`** (required by `AGENTS.md` § OSS-FIRST
 PROCUREMENT GATE item 6; its path and Blue's verbatim verdict are restated below per item 7).
@@ -371,7 +380,7 @@ round-1 and round-2 artifacts are **preserved unchanged as historical failed-rev
 - Size: **216,125 bytes** · SHA-256 **`45F238F765308662AC00A3558D89186C60990B9243267F315A506D59E1932778`**
 - 22 files · 3,843 insertions · 3 deletions
 
-**Round 3 — awaiting review**
+**Round 3 — reviewed, `VERDICT: PASS`** (then failed human acceptance — see § 11)
 `.agent-review-dockview-prototype-r3.diff`
 
 - Range: `1dce24c141e929c04122e8b2998277d4c2d0c728...8663467d19678e321fd3c136e6cf8bdbd32ab5b5`
@@ -381,6 +390,18 @@ round-1 and round-2 artifacts are **preserved unchanged as historical failed-rev
 - Fix-only delta for a focused re-review: `git diff 588ed85 8663467` — **2 files**,
   457 insertions, 90 deletions (`app/renderer/dockview-prototype.js` and
   `app/renderer/dockview-adapter-lifecycle.test.js` only).
+
+**Round 4 — awaiting review**
+`.agent-review-dockview-prototype-r4.diff`
+
+- Range: `1dce24c141e929c04122e8b2998277d4c2d0c728...35da2e3f2a4551cee26fc48585fa4274c1f6af36`
+- Size: **298,409 bytes** · SHA-256 **`E87DCF94ABB0D76783D36CEDD48660A089B21B2AF052C55998968481284E0AC8`**
+- 25 files · 5,264 insertions · 3 deletions
+- Reviewed code tip: `35da2e3f2a4551cee26fc48585fa4274c1f6af36`
+- Fix-only delta for a focused re-review: `git diff 1b23799 35da2e3` — **9 files**.
+  Read it with **`git diff -w 1b23799 35da2e3`** first: whitespace-insensitive it is
+  **884 insertions / 17 deletions**, because the two policy modules are dominated by mechanical
+  re-indentation from being wrapped in an IIFE (semantically **+9 lines each**).
 
 ### Round-3 file scope — proven, not asserted
 
@@ -412,3 +433,167 @@ remains the exact pinned version and no `npm audit fix` was run.
 **No human acceptance was performed. No provider request was made. Not merged. Not pushed.**
 § 6 of this document still lists the outstanding human acceptance procedure in full, and it must now
 be performed against `8663467` rather than `588ed85` — after a review returns PASS, not before.
+
+## 11. Round 3 PASSED review — then human acceptance FAILED at startup, and what round 4 changed
+
+### The review verdict stands; it was never the missing evidence
+
+The independent Full-class review of `8663467` returned, literally:
+
+> VERDICT: PASS
+
+That verdict **remains truthful for what it reviewed**: the restore-ownership correction. It is
+**not** human acceptance, and it did not establish that the browser script chain could initialize —
+because no test on this branch executed that chain in a browser. Round 3 is not being rewritten as a
+FAIL. It answered its question correctly; the runtime question was simply never asked.
+
+### Stage A human acceptance — observed result
+
+| Step | Result |
+| --- | --- |
+| Normal `npm start` | **PASS** — existing grid unchanged, no banner, no controls, no layout file |
+| `npm run prototype:dockview` | **FAIL** — full-screen blank overlay |
+| Expected banner and six controls | **Absent** |
+| Layout file | Absent (nothing was created) |
+| Provider activity | None |
+| Failed Electron instance | Closed |
+
+Evidence retained:
+
+- Screenshot: `C:\Users\levij\AppData\Local\Temp\codex-clipboard-ec243511-a1b4-4bc0-a17e-2eba6ae87e61.png`
+- Renderer log: `C:\Users\levij\AppData\Local\Temp\dockview-prototype-renderer.log`
+  — **11,967 bytes**, SHA-256 `84947AF434E783073A08C6743F3AFB00E8E30414B1BF7AB9048842DCC32DCAC4`
+  (both re-verified at the start of round 4; the log identity matched exactly)
+
+The four reproduced errors, verbatim from that log:
+
+```text
+dockview-fit-policy.js:    Uncaught SyntaxError: Identifier 'api' has already been declared
+dockview-panel-policy.js:  Uncaught SyntaxError: Identifier 'api' has already been declared
+dockview-prototype.js:     Uncaught ReferenceError: require is not defined
+app.js:733                 TypeError: Cannot read properties of undefined (reading 'activate')
+```
+
+### Root cause — Blue Helm's browser integration, not the vendor bundle
+
+`dockview@7.0.4` loaded successfully (the log shows its bundle fetched immediately before the first
+error). The defect is entirely ours, and it is a Node-versus-browser scoping difference:
+
+1. `app/renderer/agent-dom.js:158` already declares a top-level `const api`, and the renderer log
+   confirms it loads at line 26 — **before** the Dockview scripts at lines 51-55.
+2. Both policy modules also declared a top-level `const api`.
+3. Classic browser scripts share **one** global lexical environment, so the second and third
+   `const api` are redeclarations that fail at **parse** time. Neither policy module ran a single
+   statement, and neither published its global.
+4. Node/CommonJS never saw this: `require` gives every file its own module scope. That is why
+   1,850 assertions passed over code that could not start.
+5. `dockview-prototype.js` used the short-circuit fallback to `require`. With the globals missing,
+   it **evaluated `require`**, which is intentionally absent under `nodeIntegration: false`.
+6. Script-element `onload` fires on **fetch**, not on successful parse and publication — so
+   `app.js` believed the chain had loaded.
+7. `app.js` created `.dockview-prototype-root` (`position: fixed; inset: 0; z-index: 9000;` opaque
+   background) **before** confirming activation, so a dead prototype covered a working application.
+
+### The correction
+
+| Concern | Round-3 shape | `35da2e3` |
+| --- | --- | --- |
+| Policy-module scope | top-level `const api` in the shared global environment | **whole module enclosed in an IIFE** — nothing reaches global scope, so a future top-level name cannot collide either |
+| Environment selection | short-circuit fallback that reached `require` | `module` is tested **first** and short-circuits; the browser path never names or evaluates `require` |
+| Dependency timing | resolved at module load; a miss killed the script | resolved inside `activate()`; a miss is a bounded `policy-modules-missing` refusal |
+| Load proof | script `onload` treated as success | every required export **verified by member**, in both `app.js` and `bootstrap()` |
+| Overlay lifecycle | root created, then activation attempted | verify, then create root, then activate in an error boundary, then publish only on `ok === true`; any failure removes the root it created |
+| Failure reporting | echoed the exception message | one bounded, content-free reason; no exception text, path, source, or state |
+| Floating promise | bare call | `.catch(...)` — no unhandled rejection can survive |
+
+### The gate that would have caught it — and demonstrably does
+
+`app/dockview-bootstrap.test.js` drives `app/dockview-bootstrap-harness.js` + `.html`: a real
+Electron renderer with `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`, its own
+session partition, every non-`file://` request cancelled, and a CSP stricter than the app's
+(`default-src 'none'; connect-src 'none'`). It loads the **real** files as **real classic scripts**
+in the **real order**, with `renderer/agent-dom.js` **first** — without that pre-existing
+`const api` the collision does not occur and the gate would prove nothing. It installs
+`window.onerror` / `unhandledrejection` capture and a **`require` tripwire** before any chain script,
+then drives the **real** `bootstrap()` through six failure paths and the success path.
+
+**Negative control, run both ways with an identical harness:**
+
+| Tree | Result |
+| --- | --- |
+| `8663467` (round-3 code) | **57 passed / 30 failed, exit 1** — reproduces `Identifier 'api' has already been declared` (x2), `require is not defined`, all four missing exports, no banner, **0 of 6** controls |
+| `35da2e3` (round 4) | **87 passed / 0 failed, exit 0** |
+
+The three reverted files were restored from the commit and re-verified by SHA-256 afterwards; the
+worktree is clean.
+
+### The vendor-only tripwire is untouched
+
+`app/dockview-tripwire.js` and `.html` are **byte-identical** to `1b23799`. They still load only the
+vendor bundle, so network behaviour remains attributable to Dockview rather than to our integration
+code. The new bootstrap harness is deliberately a **separate** entry point, page, and session
+partition, and is reachable from neither `main.js` nor `index.html`.
+
+### Round-4 file scope
+
+Production (4): `app/renderer/dockview-fit-policy.js` · `app/renderer/dockview-panel-policy.js` ·
+`app/renderer/dockview-prototype.js` · `app/renderer/app.js`.
+Tests/harness (4): `app/dockview-bootstrap-harness.js` · `app/dockview-bootstrap-harness.html` ·
+`app/dockview-bootstrap.test.js` · `app/dockview-default-path.test.js`.
+Build (1): `app/package.json` — the `test` script only, so the new gate is reached by `npm test`.
+
+`app/dockview-default-path.test.js` was modified on a **concrete failing test**, as § 12 requires:
+its assertion `boot() calls the dormant seam exactly once` matched a literal bare call, which the
+mandatory `.catch` changes. The assertion was **tightened**, not relaxed — it now requires the
+`.catch` — and 37 assertions were added.
+
+Verified **byte-identical to `1b23799`** by blob hash: `app/main.js` · `app/preload.js` ·
+`app/package-lock.json` · `app/dockview-layout-store.js` · `app/dockview-tripwire.js` ·
+`app/dockview-tripwire.html` · `app/renderer/index.html` · `app/renderer/styles.css` ·
+`docs/OSS-PROCUREMENT-dockview.md` · `BLUE-HELM-MASTER-STATUS.md` · `scripts/merge-gate.ps1`.
+No dependency changed, no `npm audit fix` was run, and no vendor file was touched.
+
+### Round-4 gates, as run
+
+| Gate | Result |
+| --- | --- |
+| **New real-browser bootstrap gate** | **87 passed / 0 failed** (fails 30 against `8663467`) |
+| Focused policy tests | fit-policy **59/0** · panel-policy **71/0** |
+| Focused lifecycle suite | **119 passed / 0 failed** |
+| Default-path suite | **103 passed / 0 failed** (was 66) |
+| App (`npm test`) | **1974 passed / 0 failed**, **44 suites**, **exit 0** |
+| Pester | **955 passed / 0 failed / 0 skipped**, exit 0 |
+| Vendor-only tripwire | `ok: true` · `dockviewVersion: 7.0.4` · `loadedUnderStrictCsp: true` · **`remoteRequestCount: 0`** |
+| Test reachability | 6/6 Node · Pester family green · the new gate is an exact wired token, not an orphan |
+| Node `--check` | clean on all 7 touched/added JS files |
+| PowerShell parse | 71 files, 0 errors |
+| `git diff --check` | clean |
+| Package-lock | byte-identical |
+| Prototype layout file | **absent before and after** every automated gate |
+| Provider activity | none |
+
+**App-gate reconciliation, exactly:** 1850 to 1974 = **+124**, being **+87** for the new
+`dockview-bootstrap` suite and **+37** for `dockview-default-path` (66 to 103). Suites 43 to 44 = the
+one new suite. No other suite's count changed.
+
+### Round-4 disclosures
+
+1. **The two policy-module diffs are dominated by re-indentation.** Wrapping each module in an IIFE
+   indents its whole body, so the raw diff looks like a rewrite. It is not: `git diff -w` shows
+   **+9 lines each** (the explanatory comment plus the wrapper), and the Node suites for both
+   modules pass unchanged at 59/0 and 71/0. Review these two files with `-w`.
+2. **`app.js` verifies the exports and `bootstrap()` verifies them again.** This is deliberate
+   defence in depth, not an oversight: the `app.js` check catches a chain that published no adapter
+   at all, and the `bootstrap()` check catches a partially-published one and is what the browser
+   gate can drive directly. Both are tested.
+3. **The three residuals disclosed in § 9 are unchanged and still open** — the `useDefaultLayout()`
+   load-failure branch, the two pre-existing ungated resize senders in `app.js`, and
+   `ownedPaneIds()` as a read-only diagnostic. Round 4 was scoped to the browser bootstrap and did
+   not touch them.
+4. **`window.ccDockviewPrototypeInstance` remains a renderer global** (`app.js`), unchanged from
+   round 3. Round 4 additionally guarantees it is **never** published on a failed bootstrap.
+
+**§ 6 human acceptance must now be re-run from the beginning, against `35da2e3`, starting from the
+normal `npm start` control — and only after a review of round 4 returns PASS.**
+
+**No human acceptance. No adoption verdict. No provider request. Not merged. Not pushed.**
