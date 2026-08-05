@@ -707,6 +707,11 @@ function loadScriptOnce(src) {
   });
 }
 
+/** One bounded, content-free prototype refusal. Never echoes an exception, path, or state. */
+function refuseDockviewPrototype(reason) {
+  appendLog(`[dockview-prototype] REFUSED: ${reason} — prototype not started, existing layout left usable\n`);
+}
+
 async function maybeStartDockviewPrototype() {
   // STRICT and fail-closed: only main's frozen boolean `true` proceeds. A renderer query string,
   // hash, saved setting, or injected truthy object cannot satisfy this.
@@ -715,22 +720,38 @@ async function maybeStartDockviewPrototype() {
   appendLog('[dockview-prototype] flag present — loading prototype (NOT PRODUCTION)\n');
   try {
     for (const src of DOCKVIEW_PROTOTYPE_SCRIPTS) await loadScriptOnce(src);
-  } catch (e) {
-    appendLog(`[dockview-prototype] FAILED to load: ${(e && e.message) || e}\n`);
+  } catch {
+    // The rejection carries only a src we already control; one bounded reason is the contract.
+    refuseDockviewPrototype('script-load-failed');
     return;
   }
 
-  let container = document.getElementById('dockviewPrototypeRoot');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'dockviewPrototypeRoot';
-    container.className = 'dockview-prototype-root';
-    document.body.appendChild(container);
+  // A script element's `onload` fires when the file was FETCHED — NOT when it parsed and published
+  // its API. Round 3 treated onload as proof: both policy scripts fetched fine, then failed to
+  // parse on a global `const api` collision, and the adapter was never defined. Verify the actual
+  // exports here, BEFORE anything full-screen is committed to the visible UI.
+  const proto = window.ccDockviewPrototype;
+  if (!proto || typeof proto.bootstrap !== 'function' || typeof proto.activate !== 'function') {
+    refuseDockviewPrototype('adapter-export-missing');
+    return;
+  }
+  // Names come from the adapter's own closed literal list, so this reason cannot carry state.
+  const missing = typeof proto.missingBrowserExports === 'function' ? proto.missingBrowserExports(window) : [];
+  if (missing.length > 0) {
+    refuseDockviewPrototype(`missing-exports:${missing.join('+')}`);
+    return;
   }
 
-  // The controlled surface the adapter is allowed to use. Everything privileged stays on this side:
-  // the adapter never sees cc.*, a path, a role, a prompt, or report content.
-  window.ccDockviewPrototypeInstance = window.ccDockviewPrototype.activate({
+  // bootstrap() creates the full-screen root only after its own re-verification passes, wraps
+  // activation in an error boundary, and removes the root again on any failure — so a broken
+  // prototype can never leave an opaque overlay on top of a working app.
+  proto.bootstrap({ win: window, doc: document, log: appendLog, buildHost: buildDockviewHost });
+}
+
+// The controlled surface the adapter is allowed to use. Everything privileged stays on this side:
+// the adapter never sees cc.*, a path, a role, a prompt, or report content.
+function buildDockviewHost(container) {
+  return {
     bridge: window.ccDockview,
     getDockviewGlobal: () => window.dockview,
     getContainer: () => container,
@@ -775,7 +796,7 @@ async function maybeStartDockviewPrototype() {
       const t = terms.get(paneId);
       if (t && typeof t.closePane === 'function') t.closePane();
     },
-  });
+  };
 }
 
 // ---- boot -------------------------------------------------------------------
@@ -804,7 +825,10 @@ async function boot() {
   // DORMANT prototype seam (branch feature/dockview-prototype). On the default path
   // `window.ccDockview.enabled` is false, this call returns immediately, and NOTHING about Dockview
   // is fetched, parsed, styled, persisted, or initialized. See maybeStartDockviewPrototype below.
-  maybeStartDockviewPrototype();
+  // The .catch is required, not decorative: this is a floating promise, and an unhandled rejection
+  // here would be an invisible failure. Every internal path already refuses in a bounded way, so
+  // this only fires if the bootstrap itself broke — and it still refuses visibly.
+  maybeStartDockviewPrototype().catch(() => refuseDockviewPrototype('bootstrap-failed'));
   // TTS/STT modules load after this script. Every state has an explicit UI:
   // ready wires the control; a missed ready event becomes a visible refusal.
   const ttsReady = () => { audioModules.markReady('tts'); setupTTSControls(); appendLog('[tts] module ready\n'); };

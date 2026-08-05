@@ -184,7 +184,10 @@ process.stdout.write('\nthe renderer seam is dormant and strictly gated\n');
     'the prototype scripts are a dynamic list, not <script> tags in index.html');
   assert(/'\.\.\/node_modules\/dockview\/dist\/dockview\.js'/.test(appSrc),
     'the vendor bundle is loaded from node_modules (nothing new is committed to the repo)');
-  assert(/maybeStartDockviewPrototype\(\);/.test(appSrc), 'boot() calls the dormant seam exactly once');
+  // The call site is a FLOATING promise, so it must carry a .catch — an unhandled rejection here
+  // would be exactly the invisible failure this branch is not allowed to ship (round 4).
+  assert(/maybeStartDockviewPrototype\(\)\.catch\(/.test(appSrc),
+    'boot() calls the dormant seam once and attaches a .catch so no unhandled rejection survives');
   assert((appSrc.match(/maybeStartDockviewPrototype\(\)/g) || []).length === 2,
     'the seam is declared once and called once');
 
@@ -271,6 +274,99 @@ process.stdout.write('\nthe pane close path is single and idempotent\n');
     'the adapter never touches clipboard, Library, follow-up, or credential IPC');
   assert(!/\bcc\./.test(adapterCode),
     'the adapter never reaches the privileged cc.* preload bridge at all');
+}
+
+// ---------------------------------------------------------------------------
+process.stdout.write('\nthe browser bootstrap is fail-safe by CONSTRUCTION (round 4)\n');
+// ---------------------------------------------------------------------------
+// These are structural supplements. The BEHAVIOUR they describe is proven in a real Electron
+// renderer by dockview-bootstrap.test.js; these pin the shape so a future edit that reintroduces
+// the defect fails here too, cheaply, without waiting for the browser gate.
+{
+  const adapterSrc = read('renderer', 'dockview-prototype.js');
+  const adapterCode = stripComments(adapterSrc);
+  const fitSrc = read('renderer', 'dockview-fit-policy.js');
+  const panelSrc = read('renderer', 'dockview-panel-policy.js');
+  const appCode = stripComments(appSrc);
+
+  // (a) No renderer module may put a lexical binding in the shared global scope. agent-dom.js
+  // already owns a top-level `const api`; a second one anywhere is a parse-time collision that
+  // takes BOTH scripts down. Checked on raw source: a top-level declaration is column-zero.
+  for (const [name, src] of [['dockview-fit-policy.js', fitSrc], ['dockview-panel-policy.js', panelSrc], ['dockview-prototype.js', adapterSrc]]) {
+    assert(!/^(const|let|var|class|function)\s/m.test(stripComments(src).replace(/^'use strict';\r?\n/, '')),
+      `${name} declares NOTHING at top level — it is fully enclosed, so no future name can collide`);
+    assert(/^\(function \(\) \{/m.test(src), `${name} is wrapped in an IIFE`);
+  }
+
+  // (b) The browser path must never reach `require`. `module` is tested first and short-circuits,
+  // so the identifier is never evaluated under nodeIntegration:false.
+  assert(!/\|\|\s*require\(/.test(adapterCode),
+    'the adapter has no `window.X || require(...)` fallback — that shape is what evaluated require in the browser');
+  assert(/typeof module === 'object'/.test(adapterCode),
+    'the adapter selects its environment by testing `module`, not by falling through to require');
+  const requireUses = adapterCode.match(/[^.\w]require\(/g) || [];
+  assert(requireUses.length === 1, 'the adapter names `require` exactly once, inside the CommonJS branch');
+
+  // (c) Export verification must PRECEDE root creation. Creating the full-screen overlay first is
+  // what turned a script failure into an opaque blank screen over a working app.
+  const bootstrapStart = adapterCode.indexOf('function bootstrap(');
+  assert(bootstrapStart > -1, 'the adapter exposes bootstrap()');
+  const bootstrapBody = adapterCode.slice(bootstrapStart);
+  const verifyAt = bootstrapBody.indexOf('missingBrowserExports(win)');
+  const createAt = bootstrapBody.indexOf('doc.createElement(');
+  assert(verifyAt > -1 && createAt > -1 && verifyAt < createAt,
+    'bootstrap() verifies the required exports BEFORE it creates the prototype root');
+  assert(/catch \{[\s\S]{0,120}?refuse\('activation-threw'\)/.test(bootstrapBody),
+    'activation is wrapped in an error boundary that refuses with a bounded code');
+  assert(/instance\.ok !== true/.test(bootstrapBody),
+    'an activation that returns a falsy/ok:false result is treated as a failure');
+  assert(/removeChild\(createdRoot\)/.test(bootstrapBody.replace(/\s+/g, ' ')) || /createdRoot\.parentNode\.removeChild\(createdRoot\)/.test(bootstrapBody),
+    'a refusal removes the root this bootstrap created');
+
+  // (d) No refusal may echo an exception, path, or state.
+  assert(!/e\.message|err\.message|String\(e\)/.test(bootstrapBody),
+    'bootstrap() never echoes an exception message');
+  assert(!/e\.message|err\.message/.test(appCode.slice(appCode.indexOf('async function maybeStartDockviewPrototype'))),
+    'the app.js bootstrap never echoes an exception message either');
+
+  // (e) app.js must verify the exports itself rather than trusting script onload.
+  assert(/typeof proto\.bootstrap !== 'function'/.test(appCode),
+    'app.js verifies the adapter actually published bootstrap()');
+  assert(/missingBrowserExports\(window\)/.test(appCode),
+    'app.js verifies every required browser export before starting');
+  const appBootStart = appCode.indexOf('async function maybeStartDockviewPrototype');
+  const appBootBody = appCode.slice(appBootStart, appCode.indexOf('function buildDockviewHost'));
+  assert(!/createElement\('div'\)|dockviewPrototypeRoot/.test(appBootBody),
+    'app.js no longer creates the full-screen root itself — bootstrap() owns that lifecycle');
+}
+
+// ---------------------------------------------------------------------------
+process.stdout.write('\nDEFAULT mode loads none of the four Dockview scripts (§ 11.12)\n');
+// ---------------------------------------------------------------------------
+{
+  // Every one of the four scripts is reachable ONLY through the gated list, and index.html — the
+  // default document — references none of them and no prototype global.
+  const FOUR = ['dockview/dist/dockview.js', 'dockview-fit-policy.js', 'dockview-panel-policy.js', 'dockview-prototype.js'];
+  for (const script of FOUR) {
+    assert(!indexSrc.includes(script), `index.html never references ${script}`);
+    assert(appSrc.includes(script), `${script} is reachable only via the gated DOCKVIEW_PROTOTYPE_SCRIPTS list`);
+  }
+  for (const global of ['ccDockviewPrototype', 'ccDockviewFitPolicy', 'ccDockviewPanelPolicy', 'ccDockviewPrototypeInstance']) {
+    assert(!indexSrc.includes(global), `index.html exposes no ${global}`);
+  }
+  // The list itself is exactly those four, in dependency order, vendor bundle first.
+  const listMatch = /const DOCKVIEW_PROTOTYPE_SCRIPTS = \[([\s\S]*?)\];/.exec(appSrc);
+  assert(!!listMatch, 'the gated script list is present');
+  const listed = (listMatch ? listMatch[1] : '').match(/'([^']+)'/g) || [];
+  assert(listed.length === 4, 'exactly four scripts are gated behind the flag');
+  assert(/dockview\/dist\/dockview\.js/.test(listed[0]), 'the vendor bundle loads first');
+  assert(/dockview-prototype\.js/.test(listed[3]), 'the adapter loads last, after both policy modules');
+
+  // The new harness must not become a way to load Dockview on the default path.
+  assert(!indexSrc.includes('dockview-bootstrap-harness'),
+    'the bootstrap harness is not referenced by the default document');
+  assert(!mainSrc.includes('dockview-bootstrap-harness'),
+    'the bootstrap harness is not reachable from main.js — it is a standalone test entry point');
 }
 
 // ---------------------------------------------------------------------------

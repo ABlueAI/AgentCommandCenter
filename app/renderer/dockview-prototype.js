@@ -16,15 +16,64 @@
 // pane would kill its PTY, which is a predeclared kill criterion (§ 5.8).
 
 (function () {
-  const fitPolicy = (typeof window !== 'undefined' && window.ccDockviewFitPolicy) || require('./dockview-fit-policy');
-  const panelPolicy = (typeof window !== 'undefined' && window.ccDockviewPanelPolicy) || require('./dockview-panel-policy');
-
   const BANNER_TEXT = 'DOCKVIEW PROTOTYPE — NOT PRODUCTION';
+
+  // ENVIRONMENT SELECTION IS EXPLICIT (round 4). The previous shape was
+  //     window.ccDockviewFitPolicy || require('./dockview-fit-policy')
+  // which reads fine under Node and is a live grenade in the renderer: when the browser global was
+  // missing — because the policy script had failed to PARSE — the `||` fell through and evaluated
+  // `require`, which does not exist under `nodeIntegration: false`. That threw
+  // "ReferenceError: require is not defined" and took this script down with it.
+  //
+  // `module` is tested FIRST and `require` is never reached on the browser path, so a renderer can
+  // neither name nor evaluate it. Resolution is also DEFERRED into activate(): a missing dependency
+  // must still leave this file parsed and `window.ccDockviewPrototype` published, so the bootstrap
+  // can verify the export and refuse in a bounded way rather than dying at load time.
+  const isCommonJS = typeof module === 'object' && module !== null && !!module.exports;
+
+  function resolveDependency(globalName, cjsPath) {
+    if (typeof window !== 'undefined' && window[globalName]) return window[globalName];
+    if (isCommonJS) {
+      try { return require(cjsPath); } catch { return null; }
+    }
+    return null;
+  }
+
+  // The exact browser globals the prototype cannot start without, each with the member the
+  // bootstrap actually calls. A fetched-but-unparsed script publishes NOTHING, so checking the
+  // member — not merely the namespace — is what makes script-element `onload` non-load-bearing.
+  const REQUIRED_BROWSER_EXPORTS = [
+    ['dockview', (v) => !!v && typeof v.createDockview === 'function'],
+    ['ccDockviewFitPolicy', (v) => !!v && typeof v.createFitController === 'function' && typeof v.createFitRegistry === 'function'],
+    ['ccDockviewPanelPolicy', (v) => !!v && typeof v.shouldLoadDockview === 'function' && typeof v.buildPanelDescriptor === 'function'],
+    ['ccDockviewPrototype', (v) => !!v && typeof v.activate === 'function'],
+  ];
+
+  /**
+   * Which required browser globals are absent or incomplete? Returns names drawn ONLY from the
+   * closed literal list above, so a refusal built from it can never carry state, paths, or content.
+   */
+  function missingBrowserExports(win) {
+    if (!win) return REQUIRED_BROWSER_EXPORTS.map(([name]) => name);
+    return REQUIRED_BROWSER_EXPORTS
+      .filter(([name, isValid]) => { try { return !isValid(win[name]); } catch { return true; } })
+      .map(([name]) => name);
+  }
 
   /**
    * @param {object} host  The controlled surface app.js exposes. The adapter may use ONLY these.
    */
   function activate(host) {
+    // Dependencies are resolved HERE, not at module load, so a missing one is a bounded refusal
+    // instead of a script-killing throw. See resolveDependency above.
+    const fitPolicy = resolveDependency('ccDockviewFitPolicy', './dockview-fit-policy');
+    const panelPolicy = resolveDependency('ccDockviewPanelPolicy', './dockview-panel-policy');
+    if (!fitPolicy || !panelPolicy) {
+      if (host && typeof host.log === 'function') {
+        host.log('[dockview-prototype] REFUSED: policy modules unavailable\n');
+      }
+      return { ok: false, reason: 'policy-modules-missing' };
+    }
     // Defense in depth: app.js already gated the dynamic load behind the same predicate. Asserting
     // it again here means this module cannot be activated by being loaded some other way.
     if (!panelPolicy.shouldLoadDockview(host && host.bridge)) {
@@ -493,7 +542,86 @@
     };
   }
 
-  const api = { activate, BANNER_TEXT };
+  /**
+   * FAIL-SAFE BROWSER BOOTSTRAP (round 4).
+   *
+   * The round-3 sequence created the full-screen prototype root and THEN called activate(). When the
+   * script chain had not actually initialized, activation threw, the root survived, and
+   * `.dockview-prototype-root` (position:fixed; inset:0; opaque background; z-index:9000) covered a
+   * perfectly working application with an opaque rectangle — the observed blank screen.
+   *
+   * The order is now: verify exports -> build the root -> activate inside an error boundary ->
+   * publish the instance only on `ok === true`. Every failure removes any root this call created,
+   * clears any partial instance, emits ONE bounded reason, and leaves the existing UI usable. No
+   * exception text, path, layout fragment, or source text is ever echoed.
+   *
+   * `win`/`doc` are injected so the same function is exercised by Node tests and by the real
+   * Electron harness — the bootstrap is never proven by reading its source.
+   */
+  function bootstrap(options) {
+    const opts = options || {};
+    const win = opts.win;
+    const doc = opts.doc;
+    const log = typeof opts.log === 'function' ? opts.log : () => {};
+    const buildHost = opts.buildHost;
+    const rootId = opts.rootId || 'dockviewPrototypeRoot';
+    const rootClassName = opts.rootClassName || 'dockview-prototype-root';
+
+    if (!win || !doc || typeof buildHost !== 'function') {
+      log('[dockview-prototype] REFUSED: bootstrap-misconfigured\n');
+      return { ok: false, reason: 'bootstrap-misconfigured' };
+    }
+
+    let createdRoot = null;
+    const refuse = (reason) => {
+      // Remove only a root THIS call created, then clear any partial instance. Both are wrapped:
+      // a refusal that throws would be worse than the failure it is reporting.
+      try {
+        if (createdRoot && createdRoot.parentNode) createdRoot.parentNode.removeChild(createdRoot);
+      } catch { /* best effort */ }
+      createdRoot = null;
+      try { win.ccDockviewPrototypeInstance = undefined; } catch { /* best effort */ }
+      log(`[dockview-prototype] REFUSED: ${reason} — prototype not started, existing layout left usable\n`);
+      return { ok: false, reason };
+    };
+
+    // A script element's onload fires when the file was FETCHED, not when it parsed and published
+    // an API. Both policy scripts fetched fine and then failed to parse, which is precisely why
+    // onload is not treated as proof of anything here.
+    const missing = missingBrowserExports(win);
+    if (missing.length > 0) return refuse(`missing-exports:${missing.join('+')}`);
+
+    // Only NOW may a full-screen root exist.
+    let root;
+    try {
+      root = doc.getElementById(rootId);
+      if (!root) {
+        root = doc.createElement('div');
+        root.id = rootId;
+        root.className = rootClassName;
+        doc.body.appendChild(root);
+        createdRoot = root;
+      }
+    } catch {
+      return refuse('root-create-failed');
+    }
+
+    let instance = null;
+    try {
+      instance = win.ccDockviewPrototype.activate(buildHost(root));
+    } catch {
+      return refuse('activation-threw');
+    }
+    if (!instance || instance.ok !== true) {
+      return refuse(instance && instance.reason ? `activation-refused:${instance.reason}` : 'activation-refused');
+    }
+
+    win.ccDockviewPrototypeInstance = instance;
+    log('[dockview-prototype] bootstrap complete — prototype active\n');
+    return { ok: true, instance };
+  }
+
+  const api = { activate, bootstrap, missingBrowserExports, BANNER_TEXT };
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.ccDockviewPrototype = api;
 })();
