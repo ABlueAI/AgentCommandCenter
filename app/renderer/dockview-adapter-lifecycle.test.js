@@ -84,12 +84,17 @@ function makeFakeDockview() {
   const panels = new Map();
   let componentFactory = null;
   const addPanelCalls = [];
-  let failMode = null;          // null | 'after-clear' | 'mid-rebuild'
+  const activatedIds = [];      // every panel.api.setActive() call, in order
+  let failMode = null;          // null | 'after-clear' | 'mid-rebuild' | 'add-panel'
 
   // The real lifecycle: DockviewPanelModel's constructor calls createComponent({id,name}), then
   // panel.init(...) calls the returned renderer's init(). Both halves matter to the adapter.
   function buildPanel(id, component, title) {
-    const panel = { id, component, title };
+    // dockview@7.0.4 exposes `readonly api: DockviewPanelApi` on every panel, and that API carries
+    // `setActive(): void` (dockviewPanelApi.d.ts:75) — the bundle's own tab handlers call
+    // `panel.api.setActive()`. Modelling it here is what lets the duplicate-Add test prove the
+    // adapter focuses the existing panel rather than adding a second one.
+    const panel = { id, component, title, api: { setActive() { activatedIds.push(id); } } };
     panels.set(id, panel);
     if (componentFactory) {
       const renderer = componentFactory({ id, name: component });
@@ -102,6 +107,9 @@ function makeFakeDockview() {
   const api = {
     addPanel(opts) {
       addPanelCalls.push(opts);   // the exact object the adapter handed to Dockview
+      // Lets a test drive the § "transactional docking" rollback: addPanel throwing must leave the
+      // ownership map and the Library DOM exactly as they were.
+      if (failMode === 'add-panel' ) throw new Error('dockview: synthetic addPanel failure');
       return buildPanel(opts.id, opts.component, opts.title);
     },
     getPanel: (id) => panels.get(id) || null,
@@ -145,16 +153,39 @@ function makeFakeDockview() {
     _api: api,
     _listeners: listeners,
     _addPanelCalls: addPanelCalls,
+    _activatedIds: activatedIds,
     _failFromJSON: (mode) => { failMode = mode; },
   };
 }
 
+/**
+ * Read the adapter's REAL status surface rather than a channel invented for the tests: walk the
+ * container the adapter built and return the text of its `.dockview-prototype-status` element.
+ * If the adapter ever stops writing there, these assertions fail — which is the point.
+ */
+function statusText(host) {
+  const found = [];
+  (function walk(el) {
+    if (!el) return;
+    if (el.className === 'dockview-prototype-status') found.push(el.textContent);
+    for (const child of el.children || []) walk(child);
+  })(host.getContainer());
+  return found.length ? found[found.length - 1] : '';
+}
+
 function makeHost(overrides = {}) {
-  const calls = { closePane: [], suspended: [], logs: [], statuses: [], created: [] };
+  const calls = { closePane: [], suspended: [], logs: [], statuses: [], created: [], docked: 0, undocked: 0 };
   const container = makeElement('div');
   const paneElements = new Map([
     ['pty1', makeElement('div')], ['pty2', makeElement('div')], ['library', makeElement('div')],
   ]);
+  // The Library is a singleton that lives in the tab strip. `libraryHome` stands in for that
+  // original parent so a test can assert the SAME element object goes back to it. The real
+  // placeholder-based implementation lives in app.js and is proven against the genuine index.html
+  // Library section by the Electron bootstrap harness — this stub only proves the ADAPTER drives
+  // the dock/undock contract correctly and rolls it back on failure.
+  const libraryHome = makeElement('main');
+  let libraryPlaceholder = null;
   let nextTerminal = 0;
   const host = {
     bridge: { enabled: true, saveLayout: async () => ({ ok: true, savedAt: 'x' }), loadLayout: async () => ({ ok: false, reason: 'no-saved-layout' }), resetLayout: async () => ({ ok: true }) },
@@ -172,8 +203,30 @@ function makeHost(overrides = {}) {
     createTerminalPane: async () => { const id = ['pty1', 'pty2'][nextTerminal++] || null; calls.created.push(id); return id; },
     createLibraryPane: () => { calls.created.push('library'); return 'library'; },
     closePane: (id) => calls.closePane.push(id),
+    // --- Library singleton docking (mirrors app.js's placeholder contract) ---
+    libraryAvailable: () => paneElements.has('library'),
+    dockLibrary: () => {
+      const el = paneElements.get('library');
+      if (!el) return null;                       // missing Library DOM -> caller must refuse visibly
+      if (libraryPlaceholder) return el;          // idempotent: no second placeholder
+      libraryPlaceholder = { marker: true };
+      calls.docked++;
+      return el;
+    },
+    undockLibrary: () => {
+      if (!libraryPlaceholder) return false;      // idempotent: undocking an undocked Library is a no-op
+      libraryPlaceholder = null;
+      calls.undocked++;
+      const el = paneElements.get('library');
+      if (el) libraryHome.appendChild(el);        // back to its original parent, same object
+      return true;
+    },
+    isLibraryDocked: () => libraryPlaceholder !== null,
+    liveTerminalCount: () => [...paneElements.keys()].filter((k) => k !== 'library').length,
+    liveTerminalIds: () => [...paneElements.keys()].filter((k) => k !== 'library'),
     _calls: calls,
     _paneElements: paneElements,
+    _libraryHome: libraryHome,
   };
   return Object.assign(host, overrides);
 }
@@ -290,8 +343,116 @@ process.stdout.write('\nonly the three allowlisted fields ever reach Dockview\n'
     'a positioned panel adds only `position` — still no params');
   assert(!('params' in libOpts), 'no params key is ever supplied to Dockview');
 
-  assert(instance.addPane('shell9', 'terminal') === false, 'an unknown pane ID is refused');
-  assert(instance.addPane('pty1', 'iframe') === false, 'an unknown component kind is refused');
+  // addPane now returns a BOUNDED RESULT rather than a bare boolean, because round 5 requires every
+  // control to report success or a named refusal — a silently discarded click is what made Add
+  // Library look like it did nothing at all.
+  const badId = instance.addPane('shell9', 'terminal');
+  assert(badId.ok === false && badId.reason === 'bad-pane-id', 'an unknown pane ID is refused by name');
+  const badKind = instance.addPane('pty2', 'iframe');
+  assert(badKind.ok === false && badKind.reason === 'unknown-component-kind', 'an unknown kind is refused by name');
+  assert(instance.ownedPaneIds().includes('shell9') === false, 'a refused add records no ownership');
+}
+
+// ---------------------------------------------------------------------------
+process.stdout.write('\nR5: Add Library docks the singleton and refuses duplicates visibly\n');
+// ---------------------------------------------------------------------------
+{
+  const fake = makeFakeDockview();
+  const host = makeHost(); host._dockview = fake;
+  const instance = adapter.activate(host);
+
+  const first = instance.addPane('library', 'library');
+  assert(first.ok === true, 'Add Library succeeds');
+  assert(host._calls.docked === 1, 'the singleton was docked exactly once');
+  assert(instance.ownedPaneIds().includes('library'), 'the Library is owned');
+  assert(fake._addPanelCalls.length === 1, 'exactly one panel was added');
+
+  // Duplicate: must focus, must NOT add a second panel or a second ownership entry.
+  const second = instance.addPane('library', 'library');
+  assert(second.ok === false && second.reason === 'library-already-open', 'a duplicate Add reports library-already-open');
+  assert(second.focused === true, 'the existing panel was focused via panel.api.setActive()');
+  assert(fake._activatedIds.join(',') === 'library', 'setActive was called on the Library panel exactly once');
+  assert(fake._addPanelCalls.length === 1, 'NO second panel was created');
+  assert(instance.ownedPaneIds().filter((id) => id === 'library').length === 1, 'ownership is not duplicated');
+  assert(host._calls.docked === 1, 'the Library DOM was not touched again');
+}
+
+// ---------------------------------------------------------------------------
+process.stdout.write('\nR5: missing Library DOM refuses visibly — no silent null path\n');
+// ---------------------------------------------------------------------------
+{
+  const fake = makeFakeDockview();
+  const host = makeHost(); host._dockview = fake;
+  host._paneElements.delete('library');          // the pre-R5 production state: no Library element
+  const instance = adapter.activate(host);
+
+  const r = instance.addPane('library', 'library');
+  assert(r.ok === false && r.reason === 'library-dom-missing', 'a missing Library surface refuses by name');
+  assert(host._calls.logs.some((l) => /library-dom-missing/.test(l)), 'the refusal reaches the log with a content-free reason');
+  assert(fake._addPanelCalls.length === 0, 'no panel was created');
+  assert(instance.ownedPaneIds().length === 0, 'no ownership was recorded');
+}
+
+// ---------------------------------------------------------------------------
+process.stdout.write('\nR5: docking is TRANSACTIONAL — a failed addPanel rolls everything back\n');
+// ---------------------------------------------------------------------------
+{
+  const fake = makeFakeDockview();
+  const host = makeHost(); host._dockview = fake;
+  const instance = adapter.activate(host);
+  fake._failFromJSON('add-panel');               // make api.addPanel throw
+
+  const r = instance.addPane('library', 'library');
+  assert(r.ok === false && r.reason === 'add-panel-failed', 'the failed add refuses by name');
+  assert(instance.ownedPaneIds().includes('library') === false, 'provisional ownership was rolled back');
+  assert(host._calls.undocked === 1, 'the Library was returned to its original position');
+  assert(host.isLibraryDocked() === false, 'the Library is not left docked');
+  assert(host._paneElements.get('library') && host._paneElements.get('library').parentNode === host._libraryHome,
+    'the SAME Library element is back under its original parent');
+}
+
+// ---------------------------------------------------------------------------
+process.stdout.write('\nR5: closing Library returns the identical element; re-adding works\n');
+// ---------------------------------------------------------------------------
+{
+  const fake = makeFakeDockview();
+  const host = makeHost(); host._dockview = fake;
+  const instance = adapter.activate(host);
+  const libraryElement = host._paneElements.get('library');
+
+  instance.addPane('library', 'library');
+  const panel = fake._api.getPanel('library');
+  fake._api.removePanel(panel);                  // a genuine user close of the Library tab
+
+  assert(host._calls.undocked === 1, 'closing the Library undocked it');
+  assert(host._paneElements.get('library') === libraryElement, 'it is the IDENTICAL element object, not a clone');
+  assert(libraryElement.parentNode === host._libraryHome, 'it went back to its original parent');
+  assert(instance.ownedPaneIds().includes('library') === false, 'ownership was released');
+
+  const readd = instance.addPane('library', 'library');
+  assert(readd.ok === true, 'the Library can be re-added after closing');
+  assert(host._calls.docked === 2, 'it docked a second time');
+  assert(fake._api.getPanel('library') !== null, 'the panel exists again');
+}
+
+// Awaited from the async section at the end of this file (a top-level `return` is not valid here).
+async function r5RestoreKeepsLibraryDocked() {
+  process.stdout.write('\nR5: a restore-driven rebuild is a MOUNT transition — it must not undock\n');
+  const fake = makeFakeDockview();
+  const host = makeHost(); host._dockview = fake;
+  host.bridge.loadLayout = async () => ({
+    ok: true, savedAt: '2026-08-04T12:00:00Z',
+    layout: { panels: { library: { id: 'library', contentComponent: 'library', title: 'Library' } } },
+  });
+  const instance = adapter.activate(host);
+  instance.addPane('library', 'library');
+  const undockedAfterAdd = host._calls.undocked;
+
+  await instance.restoreLayout();
+  assert(host._calls.undocked === undockedAfterAdd,
+    'fromJSON clearing and rebuilding did NOT send the Library home mid-restore');
+  assert(host.isLibraryDocked() === true, 'the Library is still docked after the rebuild');
+  assert(instance.ownedPaneIds().includes('library'), 'ownership survived the rebuild');
 }
 
 // ---------------------------------------------------------------------------
@@ -497,7 +658,7 @@ process.stdout.write('\nevent shapes stay distinct per handler (they genuinely d
     assert(true, 'a second dispose is a no-op, not a throw');
   }
 
-  process.stdout.write('\nRestore with no saved layout offers the default instead of failing\n');
+  process.stdout.write('\nRestore with no saved layout refuses and creates NOTHING\n');
   // -------------------------------------------------------------------------
   {
     const fake = makeFakeDockview();
@@ -506,7 +667,77 @@ process.stdout.write('\nevent shapes stay distinct per handler (they genuinely d
     const result = await instance.restoreLayout();
     assert(result && result.ok === false && result.reason === 'no-saved-layout', 'the missing-state reason is surfaced');
     assert(host._calls.logs.some((l) => /no-saved-layout/.test(l)), 'the reason is logged');
+    // R5: the old build fell through to the default-workspace creator here, which silently spawned
+    // two PTYs on every failed restore. A refusal must be a full stop.
+    assert(host._calls.created.length === 0, 'restore failure created NO terminal');
+    assert(fake._addPanelCalls.length === 0, 'restore failure created NO pane');
+    assert(instance.ownedPaneIds().length === 0, 'the workspace is untouched');
   }
+
+  process.stdout.write('\nR5: Create Default Workspace is idempotent and preflights emptiness\n');
+  // -------------------------------------------------------------------------
+  {
+    const fake = makeFakeDockview();
+    const host = makeHost(); host._dockview = fake;
+    const instance = adapter.activate(host);
+
+    const first = await instance.useDefaultLayout();
+    assert(first.ok === true, 'the first invocation succeeds from an empty workspace');
+    assert(host._calls.created.filter((id) => id !== 'library').length === 2, 'exactly two terminals were created');
+    assert(instance.ownedPaneIds().sort().join(',') === 'library,pty1,pty2', 'two terminals plus the singleton Library');
+    const panesAfterFirst = fake._addPanelCalls.length;
+    const createdAfterFirst = host._calls.created.length;
+
+    const second = await instance.useDefaultLayout();
+    assert(second.ok === false && second.reason === 'workspace-not-empty', 'a second invocation refuses by name');
+    assert(host._calls.created.length === createdAfterFirst, 'the refusal created ZERO new terminals (no PTY spawned)');
+    assert(fake._addPanelCalls.length === panesAfterFirst, 'the refusal created ZERO new panes');
+    assert(/already has/.test(statusText(host)), 'the refusal is visible in the status surface');
+  }
+
+  process.stdout.write('\nR5: Clear Saved Layout touches metadata only, and says so\n');
+  // -------------------------------------------------------------------------
+  {
+    const fake = makeFakeDockview();
+    const host = makeHost(); host._dockview = fake;
+    const instance = adapter.activate(host);
+    await instance.useDefaultLayout();
+    const ownedBefore = instance.ownedPaneIds().sort().join(',');
+    const panesBefore = fake._addPanelCalls.length;
+
+    const r = await instance.resetLayout();
+    assert(r && r.ok === true, 'the saved metadata was cleared');
+    assert(instance.ownedPaneIds().sort().join(',') === ownedBefore, 'no pane was closed');
+    assert(fake._addPanelCalls.length === panesBefore, 'no pane was created');
+    assert(host._calls.closePane.length === 0, 'no PTY was killed');
+    assert(/Live panes were NOT changed/.test(statusText(host)),
+      'the status states explicitly that live panes were unchanged');
+  }
+
+  process.stdout.write('\nR5: closing every terminal returns live and owned counts to zero\n');
+  // -------------------------------------------------------------------------
+  {
+    const fake = makeFakeDockview();
+    const host = makeHost(); host._dockview = fake;
+    const instance = adapter.activate(host);
+    instance.addPane('pty1', 'terminal');
+    instance.addPane('pty2', 'terminal');
+    assert(instance.diagnostics().ownedPanes === 2, 'two terminal panes are owned');
+    assert(instance.diagnostics().fitControllers === 2, 'each has exactly one fit controller');
+
+    for (const id of ['pty1', 'pty2']) fake._api.removePanel(fake._api.getPanel(id));
+
+    const d = instance.diagnostics();
+    assert(d.ownedPanes === 0, 'Dockview ownership returns to zero');
+    assert(d.ownedPaneIds.length === 0, 'no owned pane IDs remain');
+    assert(d.fitControllers === 0, 'no fit controller remains');
+    assert(host._calls.closePane.sort().join(',') === 'pty1,pty2', 'each PTY close path ran exactly once');
+    // Monotonic IDs are preserved by the app, not reset here — a later "Terminal 17" label does not
+    // imply 17 live terminals, which is exactly what these counters disambiguate.
+    assert(instance.ownedPaneIds().length === 0, 'the adapter owns nothing after closing everything');
+  }
+
+  await r5RestoreKeepsLibraryDocked();
 
   process.stdout.write(`\ndockview-adapter-lifecycle: ${passed} passed, ${failed} failed\n`);
   if (failed > 0) process.exit(1);

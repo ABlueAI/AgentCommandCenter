@@ -125,7 +125,12 @@
         </div>
       </section>
 
-      <section class="tabpane" data-pane="library">
+      <!-- `id` is an inert stable identity for the Dockview prototype seam (branch
+           feature/dockview-prototype). Nothing in the default path reads it: no CSS rule and no
+           production script selects `#libraryPane`, so default appearance and behaviour are
+           unchanged. It exists so the prototype can dock THIS singleton element rather than a copy,
+           and so a missing Library surface fails loudly instead of resolving to null. -->
+      <section id="libraryPane" class="tabpane" data-pane="library">
         <div class="lib-bar">
           <button id="libRefresh" class="mini accent" title="Rescan the Video Scout run library">⟳ Refresh</button>
           <input id="libSearch" class="lib-search" type="text" placeholder="Search title…" autocomplete="off" spellcheck="false" />

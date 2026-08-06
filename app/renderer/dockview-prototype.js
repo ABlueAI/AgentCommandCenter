@@ -246,6 +246,15 @@
     function releasePane(paneId) {
       unmountPane(paneId);
       hostedPanes.delete(paneId);
+      // The Library is a SINGLETON that was borrowed from the tab strip, so a permanent release has
+      // to give it back — to the exact position it came from. This lives in releasePane and NOT in
+      // unmountPane on purpose: a restore-driven rebuild is a mount transition, which calls only
+      // unmountPane, so a rebuild reparents the Library between panel hosts without ever sending it
+      // home and back (which would flicker it through the tab strip mid-restore).
+      if (paneId === 'library' && typeof host.undockLibrary === 'function') {
+        try { host.undockLibrary(); }
+        catch { host.log('[dockview-prototype] Library undock REFUSED: element could not be returned\n'); }
+      }
     }
 
     /**
@@ -306,27 +315,80 @@
     window.addEventListener('resize', onWindowResize);
 
     // ---- panel creation -----------------------------------------------------------------------
+    /**
+     * Add one pane to the Dockview workspace. TRANSACTIONAL: it either produces a panel, or it
+     * leaves the workspace, the ownership map, and the Library DOM exactly as it found them and
+     * returns a bounded refusal. There is no partially-applied outcome and no silent no-op — a
+     * silently discarded click is what made Add Library appear to do nothing at all.
+     *
+     * @returns {{ok: true} | {ok: false, reason: string}}
+     */
     function addPane(paneId, kind, positionOptions) {
+      // STEP 1 — duplicate detection, BEFORE touching hostedPanes or the Library DOM. Doing this
+      // first is what guarantees a duplicate Add cannot leave a stray ownership entry or a homeless
+      // singleton behind.
+      const existing = typeof api.getPanel === 'function' ? api.getPanel(paneId) : null;
+      if (existing) {
+        // Focus the panel the user already has. `panel.api.setActive()` is dockview@7.0.4's public
+        // panel API (dockviewPanelApi.d.ts: `setActive(): void`), and is what the bundle's own tab
+        // handlers call.
+        let focused = false;
+        try {
+          if (existing.api && typeof existing.api.setActive === 'function') { existing.api.setActive(); focused = true; }
+        } catch { focused = false; }
+        const reason = paneId === 'library' ? 'library-already-open' : 'pane-already-open';
+        host.log(`[dockview-prototype] ${reason}: focused the existing panel instead of adding a second\n`);
+        return { ok: false, reason, focused };
+      }
+
+      // STEP 2 — validate the descriptor before any DOM move, so an invalid request never dislodges
+      // the Library from the tab strip.
       const title = panelPolicy.defaultTitleFor(paneId);
       const descriptor = panelPolicy.buildPanelDescriptor({ paneId, kind, title });
       if (!descriptor.ok) {
         host.log(`[dockview-prototype] REFUSED addPane: ${descriptor.reason}\n`);
-        return false;
+        return { ok: false, reason: descriptor.reason };
       }
-      const element = host.getPaneElement(paneId);
-      if (!element) {
-        host.log(`[dockview-prototype] REFUSED addPane: no pane element for ${paneId}\n`);
-        return false;
+
+      // STEP 3 — resolve the element. The Library is borrowed out of the tab strip here, which is
+      // the only mutation performed before addPanel, and the only one step 4 has to undo.
+      let element = null;
+      let didDock = false;
+      if (descriptor.panel.component === 'library') {
+        element = typeof host.dockLibrary === 'function' ? host.dockLibrary() : null;
+        if (!element) {
+          host.log('[dockview-prototype] REFUSED addPane: library-dom-missing\n');
+          return { ok: false, reason: 'library-dom-missing' };
+        }
+        didDock = true;
+      } else {
+        element = host.getPaneElement(paneId);
+        if (!element) {
+          host.log(`[dockview-prototype] REFUSED addPane: pane-element-missing (${paneId})\n`);
+          return { ok: false, reason: 'pane-element-missing' };
+        }
       }
-      // Ownership is recorded WITH the pane's kind, so a failed restore can rebuild exactly these
-      // panes from exactly these live elements without asking the app to create anything.
+
+      // STEP 4 — provisional ownership, then the commit. Ownership is recorded WITH the pane's kind
+      // so a failed restore can rebuild exactly these panes from exactly these live elements.
       hostedPanes.set(paneId, { element, kind: descriptor.panel.component });
       // Only the three allowlisted fields cross into Dockview. `params` is never supplied, which is
       // why dockview@7.0.4 omits it from toJSON and the layout validator can refuse it outright.
       const options = { id: descriptor.panel.id, component: descriptor.panel.component, title: descriptor.panel.title };
       if (positionOptions) options.position = positionOptions;
-      api.addPanel(options);
-      return true;
+      try {
+        api.addPanel(options);
+      } catch (e) {
+        // ROLLBACK: drop the provisional ownership and put the Library back where it was, so a
+        // failed add is indistinguishable from never having been attempted.
+        hostedPanes.delete(paneId);
+        if (didDock && typeof host.undockLibrary === 'function') {
+          try { host.undockLibrary(); } catch { /* the refusal below still reports the failure */ }
+        }
+        host.log(`[dockview-prototype] REFUSED addPane: add-panel-failed (${paneId})\n`);
+        return { ok: false, reason: 'add-panel-failed' };
+      }
+      return { ok: true };
     }
 
     // ---- layout persistence (all validation is main's; this side only transports) --------------
@@ -346,10 +408,13 @@
         // Refuse VISIBLY with a bounded reason code, do NOT call fromJSON, and load the default
         // layout instead. The invalid file is left on disk untouched by main for diagnosis (§ 9).
         host.log(`[dockview-prototype] restore REFUSED: ${reason}\n`);
+        // A refusal is a FULL STOP. It must not create a terminal, must not spawn a PTY, and must
+        // not fall through to the default-workspace creator: an automatic fallback is how a failed
+        // restore silently multiplied terminals during human acceptance. The current workspace is
+        // left exactly as it was, and the user decides what to do next.
         controls.setStatus(reason === 'no-saved-layout'
-          ? 'No saved prototype layout.'
-          : `Restore refused (${reason}). Loading default layout.`);
-        await useDefaultLayout();
+          ? 'No saved prototype layout. Nothing was changed — use Create Default Workspace if you want one.'
+          : `Restore refused (${reason}). Nothing was changed.`);
         return result;
       }
       // Restoring geometry cannot resurrect a PTY: after a restart there are no live panes to host,
@@ -362,7 +427,7 @@
         host.log(`[dockview-prototype] restore REFUSED: ${missing.length} restored pane(s) have no live pane\n`);
         controls.setStatus(
           `Restore refused: ${missing.length} saved pane(s) are not open (${missing.join(', ')}). ` +
-          'Create them first, or use Use Default. Nothing was changed and the saved layout is intact.');
+          'Create them first, or use Create Default Workspace. Nothing was changed and the saved layout is intact.');
         return { ok: false, reason: 'panes-not-live' };
       }
 
@@ -420,7 +485,9 @@
       let rebuilt = 0;
       for (const [paneId, record] of panes) {
         hostedPanes.set(paneId, record);          // ownership was never dropped; make it explicit
-        if (addPane(paneId, record.kind)) rebuilt++;
+        // addPane returns a bounded { ok, reason } result, NOT a boolean: `if (addPane(...))` would
+        // be true even for a refusal and would over-count the rebuild.
+        if (addPane(paneId, record.kind).ok) rebuilt++;
       }
       if (rebuilt === panes.size && [...panes.keys()].every((paneId) => paneIsMounted(paneId))) {
         return 'panes-rebuilt-flat';
@@ -442,26 +509,57 @@
       return { ok: false, reason };
     }
 
+    /**
+     * Clear Saved Layout — deletes ONLY the persisted layout metadata under userData. It closes no
+     * pane, kills no PTY, and moves nothing. The status says so explicitly, because the old "Reset"
+     * label and its bare "Saved layout cleared." message read like the live workspace had been
+     * reset, which it never was.
+     */
     async function resetLayout() {
       const result = await host.bridge.resetLayout();
-      controls.setStatus(result && result.ok ? 'Saved layout cleared.' : 'Reset refused.');
+      controls.setStatus(result && result.ok
+        ? `Saved layout metadata deleted. Live panes were NOT changed — ${hostedPanes.size} pane(s) still open.`
+        : `Clear Saved Layout refused: ${(result && result.reason) || 'unknown'}. Live panes were NOT changed.`);
       host.log(`[dockview-prototype] layout reset: ${result && result.ok ? 'ok' : 'refused'}\n`);
       return result;
     }
 
     /**
-     * The default prototype workspace. Explicitly user-triggered — never created on app startup,
-     * so a normal launch never spawns a PTY or restores a workspace (§ 9).
+     * Create Default Workspace — exactly two terminals plus the singleton Library, and ONLY from an
+     * empty workspace. Explicitly user-triggered; never runs on app startup, so a normal launch
+     * still spawns no PTY and restores no workspace (§ 9).
+     *
+     * PREFLIGHT BEFORE CREATION. The emptiness check happens before the FIRST terminal is created,
+     * not between creations. Repeating the old unguarded version is what produced the confusing,
+     * terminal-multiplying behaviour in human acceptance: every click added two more live PTYs.
+     * A refusal here creates zero panes and zero PTYs.
      */
     async function useDefaultLayout() {
+      if (hostedPanes.size > 0) {
+        const owned = [...hostedPanes.keys()].join(', ');
+        host.log(`[dockview-prototype] REFUSED create-default-workspace: workspace-not-empty (${hostedPanes.size} pane(s))\n`);
+        controls.setStatus(
+          `Create Default Workspace refused: the workspace already has ${hostedPanes.size} pane(s) (${owned}). ` +
+          'Close them first. Nothing was created and no terminal was started.');
+        return { ok: false, reason: 'workspace-not-empty' };
+      }
+
       const first = await host.createTerminalPane();
       if (first) addPane(first, 'terminal');
       const second = await host.createTerminalPane();
       if (second) addPane(second, 'terminal', { direction: 'right' });
-      const library = host.createLibraryPane();
-      if (library) addPane(library, 'library', { direction: 'below' });
-      controls.setStatus('Default prototype layout loaded.');
+
+      // The Library is optional in the sense that a missing surface must refuse visibly rather than
+      // abort the whole workspace — but it must never fail silently.
+      const libraryResult = addPane('library', 'library', { direction: 'below' });
       registry.scheduleAll();
+
+      if (!libraryResult.ok) {
+        controls.setStatus(`Default workspace created with two terminals. Library refused: ${libraryResult.reason}.`);
+        return { ok: true, library: libraryResult };
+      }
+      controls.setStatus('Default workspace created: two terminals and the Library.');
+      return { ok: true };
     }
 
     // ---- controls -----------------------------------------------------------------------------
@@ -472,13 +570,33 @@
       status.className = 'dockview-prototype-status';
       status.textContent = 'Prototype idle. Nothing is created until you ask.';
 
+      // EVERY control reports success or a bounded refusal into the status surface. None may end in
+      // a silent no-op: Add Library previously resolved a nonexistent `#libraryPanel` to null and
+      // discarded the click with no status, no log line, and no visible effect at all.
       const buttons = [
-        ['Add Terminal', async () => { const id = await host.createTerminalPane(); if (id) addPane(id, 'terminal'); }],
-        ['Add Library', () => { const id = host.createLibraryPane(); if (id) addPane(id, 'library'); }],
+        ['Add Terminal', async () => {
+          const id = await host.createTerminalPane();
+          if (!id) { controls.setStatus('Add Terminal refused: the app did not create a terminal pane.'); return; }
+          const r = addPane(id, 'terminal');
+          controls.setStatus(r.ok ? `Added ${panelPolicy.defaultTitleFor(id)}.` : `Add Terminal refused: ${r.reason}.`);
+        }],
+        ['Add Library', () => {
+          const r = addPane('library', 'library');
+          if (r.ok) { controls.setStatus('Library docked.'); return; }
+          controls.setStatus(r.reason === 'library-already-open'
+            ? (r.focused
+              ? 'Library is already open — focused the existing panel. No duplicate was created.'
+              : 'Library is already open. No duplicate was created.')
+            : `Add Library refused: ${r.reason}.`);
+        }],
         ['Save Layout', () => saveLayout()],
         ['Restore Layout', () => restoreLayout()],
-        ['Use Default', () => useDefaultLayout()],
-        ['Reset', () => resetLayout()],
+        // Renamed from "Use Default": it CREATES a workspace (two real PTYs and the Library), and
+        // the old label read like a harmless view toggle.
+        ['Create Default Workspace', () => useDefaultLayout()],
+        // Renamed from "Reset": it clears only persisted metadata on disk. The old label strongly
+        // implied it would reset the live panes, which it never did.
+        ['Clear Saved Layout', () => resetLayout()],
       ].map(([label, onClick]) => {
         const b = document.createElement('button');
         b.className = 'ghost';
@@ -525,6 +643,20 @@
       paneIsMounted,
       /** Read-only view of which panes this adapter currently owns. Diagnostics/tests only. */
       ownedPaneIds: () => [...hostedPanes.keys()],
+      /**
+       * Diagnostics for human acceptance. Terminal IDs are MONOTONIC and never reused, so a pane
+       * labelled "Terminal 17" does not mean seventeen terminals are live — it means seventeen have
+       * been created since launch. These counters report what is actually live and actually owned,
+       * so the two can never be confused while reading the screen.
+       */
+      diagnostics: () => ({
+        liveTerminals: typeof host.liveTerminalCount === 'function' ? host.liveTerminalCount() : null,
+        liveTerminalIds: typeof host.liveTerminalIds === 'function' ? host.liveTerminalIds() : null,
+        ownedPanes: hostedPanes.size,
+        ownedPaneIds: [...hostedPanes.keys()],
+        fitControllers: registry.size(),
+        libraryDocked: typeof host.isLibraryDocked === 'function' ? host.isLibraryDocked() : null,
+      }),
       registry,
       dispose() {
         if (disposed) return;

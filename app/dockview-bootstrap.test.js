@@ -190,11 +190,73 @@ assert(success.bannerText === 'DOCKVIEW PROTOTYPE — NOT PRODUCTION',
   `the persistent banner renders its exact text (saw: ${JSON.stringify(success.bannerText)})`);
 assert(success.rootOnTop === true, 'a SUCCESSFUL prototype is the topmost surface, as intended');
 
-const EXPECTED_CONTROLS = ['Add Terminal', 'Add Library', 'Save Layout', 'Restore Layout', 'Use Default', 'Reset'];
+// R5: the two ambiguous labels were renamed. "Use Default" read like a harmless view toggle
+// while it actually created two live PTYs, and "Reset" read like it would reset the live
+// workspace while it only ever deleted persisted metadata.
+const EXPECTED_CONTROLS = ['Add Terminal', 'Add Library', 'Save Layout', 'Restore Layout', 'Create Default Workspace', 'Clear Saved Layout'];
 const buttons = success.buttons || [];
 assert(buttons.length === 6, `exactly six controls render (saw ${buttons.length})`);
 for (const label of EXPECTED_CONTROLS) {
   assert(buttons.includes(label), `the "${label}" control is present in the rendered DOM`);
+}
+
+// ---------------------------------------------------------------------------
+process.stdout.write('\nR5: the REAL Library surface, driven in a real renderer\n');
+// ---------------------------------------------------------------------------
+// Every assertion below runs against markup EXTRACTED FROM app/renderer/index.html at run time, not
+// against a fixture maintained here. The harness throws if the section is missing, duplicated,
+// nested, or short a canonical control, so this block cannot pass against a stand-in.
+{
+  const lib = (report && report.library) || {};
+  assert(!lib.error, `the Library flow completed without error (saw: ${lib.error || 'none'})`);
+  assert(lib.activated === true, 'the adapter activated against the real Library DOM');
+
+  // PROOF 1 + 2 — the production selector resolves; the pre-R5 selector is the negative control.
+  assert(lib.selectorResolves === true, 'the production selector #libraryPane resolves in a real renderer');
+  assert(lib.legacySelectorResolves === false,
+    'NEGATIVE CONTROL: the pre-R5 #libraryPanel resolves to nothing — the exact silent-null defect');
+
+  const expectedControls = (report && report.libraryControlIds) || [];
+  assert(expectedControls.length === 15, 'fifteen canonical Library controls are enumerated');
+  assert((lib.controlsPresent || []).length === expectedControls.length,
+    `every canonical control is present in the extracted section (saw ${(lib.controlsPresent || []).length}/${expectedControls.length})`);
+
+  const step = (name) => ((lib.steps || []).find((x) => x.name === name) || {});
+
+  // PROOF 3 — Add Library produces ONE visible panel holding the REAL controls.
+  const add = step('add');
+  assert(add.ok === true, 'Add Library succeeds against the real surface');
+  assert(add.hostedInPanel === true, 'the Library is parented to a Dockview panel host');
+  assert(add.controlsStillPresent === expectedControls.length,
+    'all fifteen real controls survive the reparent (Refresh, filters, list, reader, Copy, Maximize, follow-up)');
+  assert(add.sameElement === true, 'the docked node is the SAME singleton, not a clone');
+  // Visible even though NO tab is active. The harness page carries the real `.tabpane{display:none}`
+  // rule, so a non-zero box here means the docked-Library rule genuinely wins.
+  assert(add.tabActiveClass === false, 'the Library tab is NOT active during this check');
+  assert(add.height > 0 && add.width > 0,
+    `the docked Library is visible anyway (${add.width}x${add.height}) — display:none was overridden`);
+
+  // PROOF 5 — a duplicate Add focuses instead of duplicating.
+  const dup = step('duplicate');
+  assert(dup.ok === false && dup.reason === 'library-already-open', 'a duplicate Add reports library-already-open');
+  assert(dup.focused === true, 'it focused the existing panel via panel.api.setActive()');
+  assert(dup.panelCount === 1, 'there is still exactly ONE Library element in the document');
+  assert(dup.ownedLibraryCount === 1, 'ownership was not duplicated');
+
+  // PROOF 4 — close returns the IDENTICAL element to its EXACT original position.
+  const close = step('close');
+  assert(close.sameElement === true, 'closing returns the identical element object (not a clone)');
+  assert(close.backInStrip === true, 'it is back inside the original tab strip');
+  assert(close.homeIndexAfter === lib.homeIndexBefore,
+    `it is at its EXACT original index (${lib.homeIndexBefore} -> ${close.homeIndexAfter})`);
+  assert(close.controlsIntact === expectedControls.length, 'all fifteen controls survive the round trip');
+  assert(close.owned === false, 'adapter ownership was released');
+
+  // Re-adding after a close must work.
+  const readd = step('readd');
+  assert(readd.ok === true, 're-adding the Library after closing it succeeds');
+  assert(readd.sameElement === true, 'the re-added Library is still the same singleton');
+  assert(readd.owned === true, 'it is owned again');
 }
 
 process.stdout.write(`\ndockview-bootstrap: ${passed} passed, ${failed} failed\n`);

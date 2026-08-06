@@ -697,6 +697,58 @@ const DOCKVIEW_PROTOTYPE_SCRIPTS = [
   'dockview-prototype.js',
 ];
 
+// ---- Library singleton docking (PROTOTYPE ONLY) ------------------------------------------------
+// The Library is ONE element that lives in the tab strip and carries every listener library-view.js
+// and report-followup.js bound to it. The prototype moves that exact node into a Dockview panel and
+// must be able to return it to the precise position it came from.
+//
+// `#libraryPane` is an inert id added to the existing production section purely as this seam's
+// anchor; nothing on the default path reads it. If it is ever missing, every caller here reports a
+// bounded refusal — there is deliberately no fallback markup and no silent null path, because a
+// silent null is exactly what made Add Library discard clicks without a trace.
+const LIBRARY_SELECTOR = '#libraryPane';
+// A zero-size marker parked at the Library's original position. Storing the parent alone is not
+// enough: siblings can change while the Library is docked, and only a placeholder survives that.
+let libraryHomePlaceholder = null;
+// A HELD REFERENCE to the docked element. This is load-bearing, not defensive: the adapter unmounts
+// a pane (detaching it from the document) BEFORE releasing it, so by the time undock runs a
+// `document.querySelector` lookup returns null and the singleton would be stranded outside the DOM
+// with no way back. The real-Electron bootstrap harness caught exactly that.
+let libraryDockedElement = null;
+
+function libraryElement() { return document.querySelector(LIBRARY_SELECTOR) || libraryDockedElement; }
+
+/**
+ * Move the Library out of the tab strip, leaving a placeholder at its exact position.
+ * Returns the element on success, or null if the Library DOM is missing.
+ * Idempotent: docking an already-docked Library returns the same element and moves nothing.
+ */
+function dockLibraryElement() {
+  const el = libraryElement();
+  if (!el) return null;
+  if (libraryHomePlaceholder) return el;      // already docked — do not create a second placeholder
+  const placeholder = document.createComment('dockview-prototype: Library home');
+  el.parentNode.insertBefore(placeholder, el);
+  libraryHomePlaceholder = placeholder;
+  libraryDockedElement = el;
+  return el;
+}
+
+/**
+ * Return the Library to the exact position it was taken from and drop the placeholder.
+ * Idempotent: undocking a Library that is not docked is a no-op, never a throw.
+ */
+function undockLibraryElement() {
+  const el = libraryDockedElement || document.querySelector(LIBRARY_SELECTOR);
+  const placeholder = libraryHomePlaceholder;
+  libraryHomePlaceholder = null;
+  libraryDockedElement = null;
+  if (!el || !placeholder || !placeholder.parentNode) return false;
+  placeholder.parentNode.insertBefore(el, placeholder);
+  placeholder.parentNode.removeChild(placeholder);
+  return true;
+}
+
 function loadScriptOnce(src) {
   return new Promise((resolve, reject) => {
     const el = document.createElement('script');
@@ -760,7 +812,7 @@ function buildDockviewHost(container) {
     getPaneElement: (paneId) => {
       const t = terms.get(paneId);
       if (t) return t.pane;
-      return paneId === 'library' ? document.getElementById('libraryPanel') : null;
+      return paneId === 'library' ? libraryElement() : null;
     },
     getTerminalBody: (paneId) => {
       const t = terms.get(paneId);
@@ -790,7 +842,17 @@ function buildDockviewHost(container) {
       openInAppTerminal({});
       return [...terms.keys()].find((id) => !before.has(id)) || null;
     },
-    createLibraryPane: () => (document.getElementById('libraryPanel') ? 'library' : null),
+    // The Library is a SINGLETON element that already lives in the tab strip. The prototype docks
+    // that exact element and must be able to put it back; it never clones or rebuilds it, because a
+    // clone would lose every listener library-view.js and report-followup.js bound to it.
+    libraryAvailable: () => libraryElement() !== null,
+    dockLibrary: () => dockLibraryElement(),
+    undockLibrary: () => undockLibraryElement(),
+    isLibraryDocked: () => libraryHomePlaceholder !== null,
+    // Diagnostics for acceptance: a monotonic ID like "Terminal 17" does NOT mean 17 live
+    // terminals. This reports what is actually live so the two can never be confused.
+    liveTerminalCount: () => terms.size,
+    liveTerminalIds: () => [...terms.keys()],
     // The app's single idempotent close path. Calling it twice kills one PTY once.
     closePane: (paneId) => {
       const t = terms.get(paneId);
