@@ -7,12 +7,13 @@ Procurement-record commit: `a0c8551` — `docs/OSS-PROCUREMENT-dockview.md` only
 Round-1 reviewed tip: `6315354` — **review returned `VERDICT: FAIL`**
 Round-2 reviewed tip: `588ed85` — **review returned `VERDICT: FAIL`**
 Round-3 tip (fixes): `8663467d19678e321fd3c136e6cf8bdbd32ab5b5` — **review returned `VERDICT: PASS`**
-Round-4 reviewed code tip: `35da2e3f2a4551cee26fc48585fa4274c1f6af36` — **awaiting review**
-Branch tip: this documentation-only handoff-tail commit above `35da2e3`
+Round-4 reviewed code tip: `35da2e3f2a4551cee26fc48585fa4274c1f6af36` — **review returned `VERDICT: PASS`**
+Round-5 reviewed code tip: `bebe1bf` — **awaiting review**
+Branch tip: this documentation-only handoff-tail commit above `bebe1bf`
 Merge commit SHA: **not applicable — merge and push are NOT authorized**
 
 Branch shape:
-`1dce24c1 → a0c8551 → 6315354 → e04fa4d → 588ed85 → 26ed85e → 8663467 → 1b23799 → 35da2e3 → (this handoff tail)`
+`1dce24c1 → a0c8551 → 6315354 → e04fa4d → 588ed85 → 26ed85e → 8663467 → 1b23799 → 35da2e3 → 23b8361 → bebe1bf → (this handoff tail)`
 
 > # STATUS: ROUND 3 PASSED CODE REVIEW, THEN FAILED HUMAN ACCEPTANCE AT STARTUP
 >
@@ -28,9 +29,41 @@ Branch shape:
 > with no banner and no controls. Evidence and root cause are in § 11.
 >
 > **Round 4 (`35da2e3`) corrects that separately observed runtime defect.**
-> **Round 4 has NOT passed review and has NOT passed human acceptance.** Nothing here may be read
-> as a passing review of round 4, as human acceptance, or as an adoption verdict, and the branch
-> remains unauthorized for merge or push.
+>
+> ---
+>
+> # ROUND 5 — SECOND HUMAN-ACCEPTANCE FAILURE, NOW CORRECTED
+>
+> **Round 4 (`35da2e3`) received an independent `VERDICT: PASS`.** That verdict stands and is not
+> retracted here: review and human acceptance are separate evidence, and Round 4's correction (the
+> browser bootstrap) genuinely worked.
+>
+> **Human acceptance was resumed and FAILED again, for unrelated reasons:**
+>
+> 1. **Add Library silently did nothing.** No panel, no status, no log line, no visible effect.
+> 2. **The layout controls were confusing and multiplied terminals.**
+>
+> Both are corrected in Round 5 (`bebe1bf`). Root causes, in the code:
+>
+> * `#libraryPanel` **exists nowhere in the DOM.** It appeared only in two `app/renderer/app.js`
+>   call sites, both of which resolved to `null`, so `addPane` was never reached and the click was
+>   discarded. The real surface is the `section.tabpane[data-pane="library"]` in `index.html`,
+>   which had no id.
+> * `useDefaultLayout` had **no emptiness guard**, so every press of the old "Use Default" created
+>   two more live PTYs.
+> * The restore-failure branch **called that same creator**, so a refused restore spawned terminals
+>   as a side effect.
+>
+> A third defect was found *during* Round 5 by the real-Electron harness and never reached
+> acceptance: the first cut of `undockLibraryElement` re-queried the document, but the adapter
+> detaches a pane **before** releasing it, so the lookup returned `null` and the Library singleton
+> would have been stranded outside the DOM permanently. Undock now prefers a held reference. This is
+> recorded because it is the clearest evidence that the Node suites alone could not have caught it.
+
+> **Round 5 (`bebe1bf`) has NOT been reviewed and has NOT passed human acceptance.** Round 4's
+> `VERDICT: PASS` belongs to `35da2e3` and says nothing about the Round 5 correction above. Nothing
+> here may be read as a passing review of Round 5, as human acceptance, or as an adoption verdict,
+> and the branch remains unauthorized for merge or push.
 
 Procurement record: **`docs/OSS-PROCUREMENT-dockview.md`** (required by `AGENTS.md` § OSS-FIRST
 PROCUREMENT GATE item 6; its path and Blue's verbatim verdict are restated below per item 7).
@@ -56,11 +89,17 @@ FORK · PROTOTYPE · PATTERN-MINE · BUILD FRESH after § 14 human acceptance.
 
 | Gate | Baseline at `1dce24c1` | After implementation | Delta |
 | --- | --- | --- | --- |
-| App (`npm test`) | **1362 passed / 0 failed**, 37 suites, exit 0 | **1850 passed / 0 failed**, 43 suites, exit 0 | +488 / +6 suites |
+| App (`npm test`) | **1362 passed / 0 failed**, 37 suites, exit 0 | **2099 passed / 0 failed**, 44 suites, exit 0 | +737 / +7 suites |
 | Pester (`scripts\run-pester.ps1`) | **955 passed / 0 failed / 0 skipped** | **955 passed / 0 failed / 0 skipped** | unchanged |
 
-Per-round app gate: `6315354` = 1706/0 across 42 suites · `588ed85` = 1759/0 across 43 suites ·
-`8663467` = **1850/0 across 43 suites**.
+Per-round app gate: `6315354` = 1706/0 (42 suites) · `588ed85` = 1759/0 (43) · `8663467` = 1850/0
+(43) · `35da2e3`/`23b8361` = **1974/0 (44)** · `bebe1bf` = **2099/0 (44)**.
+
+The round-5 delta reconciles exactly: **+125**, and only three suites moved —
+`dockview-default-path` 103 → 152 (**+49**), `dockview-bootstrap` 87 → 111 (**+24**), and
+`dockview-adapter-lifecycle` 119 → 171 (**+52**). No other suite's count changed, and **no suite was
+added**: every Round-5 proof landed in an existing suite, so no `app/package.json` reachability entry
+was required.
 
 The round-3 delta reconciles exactly: **+91**, which is precisely
 `app/renderer/dockview-adapter-lifecycle.test.js` going from **28 to 119** assertions. No other
@@ -92,8 +131,13 @@ this base are documentation-only, so no test-count change exists in the tree, an
   accepts a path.
 - The three layout IPC channels are registered **inside** `if (dockviewPrototypeEnabled)`. In default
   `npm start` they do not exist at all, so an invoke rejects with "no handler registered".
-- `app/renderer/index.html` is **unmodified**. Prototype scripts and the vendor bundle are injected
-  dynamically, only after `window.ccDockview.enabled !== true` fails to return early.
+- `app/renderer/index.html` carries exactly **one** Round-5 change: an inert `id="libraryPane"` on
+  the pre-existing Library `<section>`, plus a comment explaining it. No CSS rule and no production
+  script reads that id, so default appearance and behaviour are unchanged — and
+  `dockview-default-path.test.js` asserts index.html still loads no Dockview script, no Dockview
+  stylesheet, and carries no Dockview markup or class. Prototype scripts and the vendor bundle are
+  still injected dynamically, only after `window.ccDockview.enabled !== true` fails to return
+  early.
 
 ### Layout trust boundary — `app/dockview-layout-store.js`
 
@@ -243,6 +287,67 @@ branch is not authorized to merge or push and must remain removable by deletion 
 here would vanish with the branch, recreating the exact "exists in one handoff and nowhere else"
 failure Blue warned against. It needs a separate, small, independently-authorized change against
 `main`. **Recommended next work order.**
+
+## 7b. Round 5 — Library integration and layout-control semantics
+
+### What was corrected
+
+| Symptom (human acceptance) | Root cause, in code | Correction |
+| --- | --- | --- |
+| Add Library silently did nothing | `#libraryPanel` exists **nowhere** in the DOM; the two `app.js` call sites resolved to `null`, so `addPane` was never reached | Bound to the real `section.tabpane[data-pane="library"]`, now carrying an inert `id="libraryPane"` |
+| Controls multiplied terminals | `useDefaultLayout` had **no emptiness guard** — each press created two more live PTYs | Preflights an empty workspace **before** the first terminal; refuses `workspace-not-empty` creating zero panes and zero PTYs |
+| A refused restore spawned terminals | the restore-failure branch **called** the default-workspace creator | Restore failure is a full stop; it never calls that creator |
+| "Use Default" / "Reset" were misleading | labels implied a view toggle and a live reset | Renamed **Create Default Workspace** / **Clear Saved Layout**; the latter states that live panes were unchanged |
+
+### Library docking contract
+
+The Library is a **singleton** carrying every listener `library-view.js` and `report-followup.js`
+bound to it, so it is **moved, never cloned**. A placeholder comment records its exact original
+position, so closing returns it to the same **index**, not merely the same parent.
+
+Docking is **transactional**: an existing panel is detected **before** `hostedPanes` or the DOM is
+touched; descriptor validation precedes any DOM move; and a throwing `addPanel` rolls back **both**
+the provisional ownership and the DOM. A duplicate Add focuses the existing panel through
+dockview 7.0.4's verified public `panel.api.setActive()` (`dockviewPanelApi.d.ts:75`) and reports
+`library-already-open`. A missing surface refuses `library-dom-missing` with a content-free log
+reason. The undock lives in **permanent release only**, so a restore-driven rebuild remains a mount
+transition and does not send the Library home mid-restore.
+
+### A defect the Node suites could not have caught
+
+The first cut of `undockLibraryElement` re-queried `document.querySelector('#libraryPane')`. The
+adapter **detaches** a pane before releasing it, so that lookup returned `null`, the placeholder
+branch bailed out, and the Library singleton would have been stranded outside the DOM permanently —
+unrecoverable without a restart. The real-Electron bootstrap harness caught it on its first run.
+Undock now prefers a **held reference**. This is recorded because it is the clearest evidence on this
+branch that a real-renderer harness earns its keep.
+
+### Proof strategy, and the one honest gap
+
+The bootstrap harness **extracts the Library section from `app/renderer/index.html` at run time** and
+hard-fails if it is missing, duplicated, nested, or short any of the fifteen canonical controls
+(`libRefresh`, `libSearch`, `libMode`, `libRoute`, `libOutcome`, `libDateKind`, `libSort`,
+`libStatus`, `libList`, `libReader`, `libCopy`, `libMax`, `libMetaHost`, `libReportText`,
+`libFollowupHost`). There is **no copied fixture** to drift out of sync. It then drives add →
+duplicate → close → re-add against that genuine markup in a real sandboxed renderer, checking element
+identity, original index, control survival, and visibility while **no tab is active**.
+
+**The gap, stated plainly:** the harness page cannot load `styles.css` (it is a separate page with a
+stricter CSP), so it carries a copy of the two real `.tabpane` rules plus the docked rule. That copy
+is what makes the visibility assertion meaningful rather than vacuous — without
+`.tabpane{display:none}` present, a visible Library would prove nothing. To stop the copy drifting,
+`dockview-default-path.test.js` separately asserts that `styles.css` still contains a docked-Library
+rule at `(0,3,0)` specificity and still contains the `.tabpane{display:none}` default it must beat.
+Production CSS and the harness copy are therefore pinned to each other by test, not by discipline.
+
+### Terminal identity
+
+`termSeq` remains monotonic and is **never reset** (asserted: it is initialised exactly once). A
+label like **Terminal 17 does not mean seventeen live terminals** — it means seventeen have been
+created since launch. `instance.diagnostics()` reports `liveTerminals`, `ownedPanes`,
+`fitControllers`, and `libraryDocked` so the two can never be confused while reading the screen, and
+a test proves all three counts return to zero after every terminal is closed.
+
 
 ## 8. Independent review — round 1 returned FAIL; what it found and what changed
 
@@ -402,6 +507,17 @@ round-1 and round-2 artifacts are **preserved unchanged as historical failed-rev
   Read it with **`git diff -w 1b23799 35da2e3`** first: whitespace-insensitive it is
   **884 insertions / 17 deletions**, because the two policy modules are dominated by mechanical
   re-indentation from being wrapped in an IIFE (semantically **+9 lines each**).
+
+**Round 5 — awaiting review**
+`.agent-review-dockview-prototype-r5.diff`
+
+- Range: `1dce24c141e929c04122e8b2998277d4c2d0c728...bebe1bf`
+- Size: **328,171 bytes** · SHA-256 **`F5691350719FB5603283BA36234CF474BE38A8CDDB28E854872A18C0D8882A7B`**
+- 26 files · 5,791 insertions · 4 deletions
+- Isolated Round-5 correction for a focused re-review: `git diff 23b8361 bebe1bf` — 9 files,
+  749 insertions, 34 deletions.
+- R1–R4 artifacts are preserved unchanged (172,014 / 216,125 / 241,892 / 298,409 bytes).
+
 
 ### Round-3 file scope — proven, not asserted
 
