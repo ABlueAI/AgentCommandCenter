@@ -8,12 +8,14 @@ Round-1 reviewed tip: `6315354` — **review returned `VERDICT: FAIL`**
 Round-2 reviewed tip: `588ed85` — **review returned `VERDICT: FAIL`**
 Round-3 tip (fixes): `8663467d19678e321fd3c136e6cf8bdbd32ab5b5` — **review returned `VERDICT: PASS`**
 Round-4 reviewed code tip: `35da2e3f2a4551cee26fc48585fa4274c1f6af36` — **review returned `VERDICT: PASS`**
-Round-5 reviewed code tip: `bebe1bf` — **awaiting review**
-Branch tip: this documentation-only handoff-tail commit above `bebe1bf`
+Round-5 implementation: `bebe1bf` — its pinned artifact was **superseded**, see § 12
+Round-5 reviewed code tip: `3e338d9686114604036b0572a14f3f3866bc9617` — **awaiting review**
+Artifact to review: `.agent-review-dockview-prototype-r5-final.diff` (**not** the r5 artifact)
+Branch tip: this documentation-only handoff-tail commit above `3e338d9`
 Merge commit SHA: **not applicable — merge and push are NOT authorized**
 
 Branch shape:
-`1dce24c1 → a0c8551 → 6315354 → e04fa4d → 588ed85 → 26ed85e → 8663467 → 1b23799 → 35da2e3 → 23b8361 → bebe1bf → (this handoff tail)`
+`1dce24c1 → a0c8551 → 6315354 → e04fa4d → 588ed85 → 26ed85e → 8663467 → 1b23799 → 35da2e3 → 23b8361 → bebe1bf → 1dd2bf5 → 3e338d9 → (this handoff tail)`
 
 > # STATUS: ROUND 3 PASSED CODE REVIEW, THEN FAILED HUMAN ACCEPTANCE AT STARTUP
 >
@@ -508,15 +510,39 @@ round-1 and round-2 artifacts are **preserved unchanged as historical failed-rev
   **884 insertions / 17 deletions**, because the two policy modules are dominated by mechanical
   re-indentation from being wrapped in an IIFE (semantically **+9 lines each**).
 
-**Round 5 — awaiting review**
+**Round 5 — SUPERSEDED, never reviewed. Do not review from this artifact.**
 `.agent-review-dockview-prototype-r5.diff`
 
 - Range: `1dce24c141e929c04122e8b2998277d4c2d0c728...bebe1bf`
 - Size: **328,171 bytes** · SHA-256 **`F5691350719FB5603283BA36234CF474BE38A8CDDB28E854872A18C0D8882A7B`**
 - 26 files · 5,791 insertions · 4 deletions
-- Isolated Round-5 correction for a focused re-review: `git diff 23b8361 bebe1bf` — 9 files,
-  749 insertions, 34 deletions.
-- R1–R4 artifacts are preserved unchanged (172,014 / 216,125 / 241,892 / 298,409 bytes).
+- Isolated Round-5 correction: `git diff 23b8361 bebe1bf` — 9 files, 749 insertions, 34 deletions.
+- **Why superseded:** this artifact is materially incomplete. It records
+  `app/dockview-default-path.test.js` as a single line —
+  `Binary files /dev/null and b/app/dockview-default-path.test.js differ` — because that file then
+  contained one literal NUL byte. The hidden file is the proof of predeclared kill criterion § 5.10
+  (default `npm start` never touches Dockview), so the artifact concealed exactly the evidence a
+  reviewer most needs. See § 12.
+- **Preserved unchanged** as superseded reviewability evidence; its SHA-256 above was re-verified
+  after the correction and is byte-identical.
+
+**Round 5 FINAL — awaiting review. This is the artifact to review.**
+`.agent-review-dockview-prototype-r5-final.diff`
+
+- Range: `1dce24c141e929c04122e8b2998277d4c2d0c728...3e338d9686114604036b0572a14f3f3866bc9617`
+- Size: **372,008 bytes** · SHA-256 **`1289587909EC104ACAA4B3E52B5C7794991F11C205A5F5A12ACD7B284716A4B1`**
+- 26 files · 6,446 insertions · 4 deletions
+- Reviewed code tip: `3e338d9686114604036b0572a14f3f3866bc9617`
+- Generated with `git diff --output=` only, regenerated into a separate file, and **byte-compared
+  identical**.
+- **Zero `Binary files … differ` markers.** All 26 files carry textual hunks; all **8** JavaScript
+  test suites are fully readable. `app/dockview-default-path.test.js` now appears as **539
+  insertions** where the superseded artifact showed one marker line.
+- Verification note for whoever re-checks this: the file now legitimately contains the *phrase*
+  "Binary files … differ" twice, in explanatory comments. Those appear as `+`-prefixed added lines.
+  A real Git marker is unprefixed at column 0, so anchor the check on **`^Binary files`** — a bare
+  substring grep returns 2 false positives.
+- R1–R4 artifacts preserved unchanged (172,014 / 216,125 / 241,892 / 298,409 bytes).
 
 
 ### Round-3 file scope — proven, not asserted
@@ -711,5 +737,120 @@ one new suite. No other suite's count changed.
 
 **§ 6 human acceptance must now be re-run from the beginning, against `35da2e3`, starting from the
 normal `npm start` control — and only after a review of round 4 returns PASS.**
+
+**No human acceptance. No adoption verdict. No provider request. Not merged. Not pushed.**
+
+---
+
+## 12. Round-5 reviewability correction — `3e338d9`
+
+Round 5's implementation (`bebe1bf`) was complete and its gates were green, but the artifact pinned
+for review was **not a faithful record of it**. This section exists so that fact is not lost.
+
+### The defect
+
+`app/dockview-default-path.test.js` contained **exactly one literal NUL byte**, at byte offset
+6,231, in the fallback of the Library-section lookup:
+
+```js
+const libStart = indexSrc.indexOf(libraryOpenTags[0] || '<NUL>');
+```
+
+The *intent* was sound. If the `#libraryPane` open tag were ever missing, the fallback had to be a
+string that can never occur in HTML, so `libStart` would be `-1`, `librarySection` would be empty,
+and all 15 canonical-control assertions would **fail** rather than silently pass. NUL has that
+property structurally.
+
+The *encoding* was not sound. A single NUL byte makes Git classify the entire file as binary, so
+`git diff` refuses to show content and emits one line instead:
+
+```
+Binary files /dev/null and b/app/dockview-default-path.test.js differ
+```
+
+The file Git was hiding is the one that pins **predeclared kill criterion § 5.10** — that a default
+`npm start` never imports, initializes, or is affected by Dockview. The artifact therefore concealed
+precisely the evidence a reviewer most needs, while looking complete: 25 of 26 files rendered
+normally and the single marker was easy to scroll past.
+
+**This was invisible to every gate on the branch.** The suite passed 152/0 the whole time, because
+`readFileSync(path, 'utf8')` decodes the NUL into an ordinary-looking string. Nothing in the test
+run inspects the bytes Git actually sees. The defect was only ever observable in the artifact.
+
+### The correction
+
+Test-only, one file.
+
+1. **Printable sentinel.** The NUL is replaced by `'__missing_library_open_tag__'`. A printable
+   sentinel is not *structurally* impossible in HTML the way NUL is, so the never-matches property
+   is now **proven rather than assumed**: a guard aborts if that string ever appears in
+   `index.html`. The guarantee is preserved at equal strength, not weakened.
+
+2. **A byte-level self-check.** The suite reads its **own file as raw bytes** via `__filename` and
+   aborts, naming the offset, if any NUL is present. Reading bytes is the entire point — decoding is
+   what masked the defect. A companion check proves the detection is not vacuous by running the
+   identical test against a buffer built from **numeric byte values** (`[0x61, 0x00, 0x62]`), so the
+   file needs no escape sequence and cannot reintroduce the byte it is checking for.
+
+**Both new checks are fail-fast guards, not counted assertions.** Two reasons. A reviewability
+violation should abort before printing results the artifact cannot display anyway. And it keeps the
+suite total pinned, so the count remains usable as a regression control — which is what let the
+`2099/0` reconciliation below be exact rather than approximate.
+
+No behavioural assertion was weakened, deleted, or reworded. No production code, dependency,
+package, IPC, PTY, layout-store, provider, or runtime behaviour changed.
+
+### Proof
+
+| Check | Result |
+|---|---|
+| NUL bytes in the file | **0** (was 1, at offset 6,231) |
+| Git classification | **textual** — `git diff --numstat` reports `539  0`, not `-  -` |
+| Hunks in the artifact | complete; **539 insertions** shown |
+| `node --check` | passes |
+| Guard negative control | a NUL-injected copy aborts **exit 1**, reporting offset 60 |
+| `dockview-default-path` | **152 passed, 0 failed** — unchanged |
+| App gate | **2099 passed, 0 failed, 44 suites** — unchanged |
+| Pester | **955 passed, 0 failed, 0 skipped** — unchanged |
+| Reachability | `test-reachability` 6/0, clean |
+| `git diff --check` | clean |
+| Artifact regeneration | byte-identical |
+
+**App-gate reconciliation.** Summing the 44 suites gives 2081, not 2099, because **two suites report
+in a different format** — `renderer/audio-module-health.test.js` and
+`renderer/tts-audio-contract.test.js` each print `9 assertions passed` rather than
+`N passed, M failed`. 2081 + 9 + 9 = **2099**. Anyone re-running this gate with a naïve
+`N passed, M failed` parser will get 2081/42 and should not read that as a regression.
+
+### One thing this correction cannot fix
+
+`git diff 1dd2bf5 3e338d9` — the **isolated** fix commit — still renders as
+`Bin 32307 -> 35438 bytes`. That is unavoidable and correct: Git falls back to binary output when
+*either* side is binary, and the pre-fix blob is the binary one. That blob is the defect.
+
+The consequence is that **the isolated correction commit cannot be reviewed from its own diff.**
+Review it from `.agent-review-dockview-prototype-r5-final.diff`, where the file appears in full
+because it does not exist at the `1dce24c1` base. To see the change alone, compare the blobs
+directly:
+
+```
+git show 1dd2bf5:app/dockview-default-path.test.js > old.js
+git show 3e338d9:app/dockview-default-path.test.js > new.js
+diff -u old.js new.js
+```
+
+That yields 494 lines to 540 lines — **39 lines added, 1 removed** (the sentinel line).
+
+### Status
+
+- Reviewed code tip: **`3e338d9686114604036b0572a14f3f3866bc9617`**
+- Artifact to review: **`.agent-review-dockview-prototype-r5-final.diff`**
+- All 11 prior commits (`a0c8551` … `1dd2bf5`) verified still ancestors — no amend, reset, rebase,
+  squash, or history rewrite.
+- `main == origin/main == 1dce24c141e929c04122e8b2998277d4c2d0c728`, untouched. Branch has **no
+  upstream ref — never pushed.**
+
+**Round 5 remains UNREVIEWED.** The round-3 PASS belongs to `8663467` and says nothing about
+rounds 4 or 5.
 
 **No human acceptance. No adoption verdict. No provider request. Not merged. Not pushed.**
