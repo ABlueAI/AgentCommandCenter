@@ -9,13 +9,14 @@ Round-2 reviewed tip: `588ed85` — **review returned `VERDICT: FAIL`**
 Round-3 tip (fixes): `8663467d19678e321fd3c136e6cf8bdbd32ab5b5` — **review returned `VERDICT: PASS`**
 Round-4 reviewed code tip: `35da2e3f2a4551cee26fc48585fa4274c1f6af36` — **review returned `VERDICT: PASS`**
 Round-5 implementation: `bebe1bf` — its pinned artifact was **superseded**, see § 12
-Round-5 reviewed code tip: `3e338d9686114604036b0572a14f3f3866bc9617` — **awaiting review**
-Artifact to review: `.agent-review-dockview-prototype-r5-final.diff` (**not** the r5 artifact)
-Branch tip: this documentation-only handoff-tail commit above `3e338d9`
+Round-5 reviewed code tip: `3e338d9686114604036b0572a14f3f3866bc9617` — **review returned `VERDICT: PASS`**
+Round-6 reviewed code tip: `be4422d84bab4727d3bd11772f30d9a010069ed5` — **awaiting review**
+Artifact to review: `.agent-review-dockview-prototype-r6.diff` (**not** any earlier artifact)
+Branch tip: this documentation-only handoff-tail commit above `be4422d`
 Merge commit SHA: **not applicable — merge and push are NOT authorized**
 
 Branch shape:
-`1dce24c1 → a0c8551 → 6315354 → e04fa4d → 588ed85 → 26ed85e → 8663467 → 1b23799 → 35da2e3 → 23b8361 → bebe1bf → 1dd2bf5 → 3e338d9 → (this handoff tail)`
+`1dce24c1 → a0c8551 → 6315354 → e04fa4d → 588ed85 → 26ed85e → 8663467 → 1b23799 → 35da2e3 → 23b8361 → bebe1bf → 1dd2bf5 → 3e338d9 → e23499a → be4422d → (this handoff tail)`
 
 > # STATUS: ROUND 3 PASSED CODE REVIEW, THEN FAILED HUMAN ACCEPTANCE AT STARTUP
 >
@@ -62,10 +63,33 @@ Branch shape:
 > would have been stranded outside the DOM permanently. Undock now prefers a held reference. This is
 > recorded because it is the clearest evidence that the Node suites alone could not have caught it.
 
-> **Round 5 (`bebe1bf`) has NOT been reviewed and has NOT passed human acceptance.** Round 4's
-> `VERDICT: PASS` belongs to `35da2e3` and says nothing about the Round 5 correction above. Nothing
-> here may be read as a passing review of Round 5, as human acceptance, or as an adoption verdict,
-> and the branch remains unauthorized for merge or push.
+> ---
+>
+> # ROUND 6 — ROUND 5 PASSED REVIEW, THEN HUMAN ACCEPTANCE FOUND DICTATE UNREACHABLE
+>
+> **Round 5 (`3e338d9`) received an independent Full-class `VERDICT: PASS`.** That verdict stands.
+>
+> **Human acceptance was then performed against it and passed nearly everything** — the normal
+> renderer path; Add Library, duplicate focus/refusal, and close/re-add; restore with no saved
+> layout creating nothing; Create Default Workspace idempotency; save/rearrange/restore;
+> split and window resize with terminal interactivity; terminal close convergence; Clear Saved
+> Layout semantics; and Copy Output in both moved and unmoved panes, including controlled-selection
+> and whole-buffer tests. **Copy Output is not a defect and is unchanged by Round 6.**
+>
+> **It failed on one thing: Dictate was unreachable in prototype mode.** The app-owned
+> `.tts-controls` surface — `#audioBuild`, `#sttStatus`, `#sttMic`, `#ttsStatus`, `#ttsStop`,
+> `#ttsVoice`, `#ttsSpeed` — stayed in the Terminals toolbar while `.dockview-prototype-root`
+> (`position: fixed; inset: 0; z-index: 9000`, opaque) covered it. The controls were present in the
+> DOM and impossible to click. That is the predeclared kill criterion covering TTS and Dictate after
+> docking (§ 5.8).
+>
+> **Round 6 (`be4422d`) corrects it** by reparenting that exact element into a dedicated, visible
+> prototype audio slot. See § 13.
+
+> **Round 6 (`be4422d`) has NOT been reviewed and has NOT passed human acceptance.** Round 5's
+> `VERDICT: PASS` belongs to `3e338d9` and says nothing about the Round 6 correction. Nothing here
+> may be read as a passing review of Round 6, as human acceptance, or as an adoption verdict, and
+> the branch remains unauthorized for merge or push.
 
 Procurement record: **`docs/OSS-PROCUREMENT-dockview.md`** (required by `AGENTS.md` § OSS-FIRST
 PROCUREMENT GATE item 6; its path and Blue's verbatim verdict are restated below per item 7).
@@ -91,11 +115,17 @@ FORK · PROTOTYPE · PATTERN-MINE · BUILD FRESH after § 14 human acceptance.
 
 | Gate | Baseline at `1dce24c1` | After implementation | Delta |
 | --- | --- | --- | --- |
-| App (`npm test`) | **1362 passed / 0 failed**, 37 suites, exit 0 | **2099 passed / 0 failed**, 44 suites, exit 0 | +737 / +7 suites |
+| App (`npm test`) | **1362 passed / 0 failed**, 37 suites, exit 0 | **2287 passed / 0 failed**, 44 suites, exit 0 | +925 / +7 suites |
 | Pester (`scripts\run-pester.ps1`) | **955 passed / 0 failed / 0 skipped** | **955 passed / 0 failed / 0 skipped** | unchanged |
 
 Per-round app gate: `6315354` = 1706/0 (42 suites) · `588ed85` = 1759/0 (43) · `8663467` = 1850/0
-(43) · `35da2e3`/`23b8361` = **1974/0 (44)** · `bebe1bf` = **2099/0 (44)**.
+(43) · `35da2e3`/`23b8361` = **1974/0 (44)** · `bebe1bf`/`3e338d9` = **2099/0 (44)** ·
+`be4422d` = **2287/0 (44)**.
+
+The round-6 delta reconciles exactly: **+188**, and only three suites moved —
+`dockview-default-path` 152 → 209 (**+57**), `dockview-bootstrap` 111 → 205 (**+94**), and
+`dockview-adapter-lifecycle` 171 → 208 (**+37**). No other suite's count changed and **no suite was
+added**, so `app/package.json` needed no reachability entry and is byte-identical to `e23499a`.
 
 The round-5 delta reconciles exactly: **+125**, and only three suites moved —
 `dockview-default-path` 103 → 152 (**+49**), `dockview-bootstrap` 87 → 111 (**+24**), and
@@ -227,7 +257,7 @@ they are **not** claimed as passed.
 | 5 | Saved state cannot be strictly schema-validated and bounded | **Did not fire** — the real fixture is small and closed; the strict allowlist is honest, not over-fit |
 | 6 | Corrupt/oversized/unsupported/hand-edited state reaches `fromJSON` | **Did not fire** — validated three times; `fromJSON` is unreachable for invalid state |
 | 7 | Invalid state crashes the renderer, drops panes silently, or overwrites the file | **Did not fire** — bounded visible refusal; orphan/dangling panes refused rather than dropped; invalid file preserved |
-| 8 | Move/tab breaks clipboard, Copy Output, TTS, Dictate, focus, PTY output, close, or Open Report | **Not yet observable** live; panes are reparented not recreated, and the adapter cannot reach `cc.*` at all |
+| 8 | Move/tab breaks clipboard, Copy Output, TTS, Dictate, focus, PTY output, close, or Open Report | **DID FIRE at `3e338d9`, corrected in `be4422d`** — Copy Output, clipboard, focus, PTY output and close all passed human acceptance, but **Dictate was unreachable**: the app-owned `.tts-controls` surface stayed behind the full-screen prototype overlay. See § 13. Re-verification requires § 14 human acceptance against `be4422d` |
 | 9 | Dockview receives contents, paths, prompts, credentials, keys, or authority | **Did not fire** — three allowlisted fields only; asserted in tests |
 | 10 | Default `npm start` imports/initializes Dockview, creates a layout file, or changes the grid | **Did not fire** — 54 assertions in `dockview-default-path.test.js` |
 | 11 | Requires an architectural refactor not removable by deleting the branch | **Did not fire** — every change is additive or fenced; deleting the branch removes all of it |
@@ -526,7 +556,8 @@ round-1 and round-2 artifacts are **preserved unchanged as historical failed-rev
 - **Preserved unchanged** as superseded reviewability evidence; its SHA-256 above was re-verified
   after the correction and is byte-identical.
 
-**Round 5 FINAL — awaiting review. This is the artifact to review.**
+**Round 5 FINAL — reviewed, `VERDICT: PASS`** (then human acceptance found Dictate unreachable —
+see § 13)
 `.agent-review-dockview-prototype-r5-final.diff`
 
 - Range: `1dce24c141e929c04122e8b2998277d4c2d0c728...3e338d9686114604036b0572a14f3f3866bc9617`
@@ -543,6 +574,20 @@ round-1 and round-2 artifacts are **preserved unchanged as historical failed-rev
   A real Git marker is unprefixed at column 0, so anchor the check on **`^Binary files`** — a bare
   substring grep returns 2 false positives.
 - R1–R4 artifacts preserved unchanged (172,014 / 216,125 / 241,892 / 298,409 bytes).
+
+**Round 6 — awaiting review. THIS IS THE ARTIFACT TO REVIEW.**
+`.agent-review-dockview-prototype-r6.diff`
+
+- Range: `1dce24c141e929c04122e8b2998277d4c2d0c728...be4422d84bab4727d3bd11772f30d9a010069ed5`
+- Size: **437,855 bytes** · SHA-256 **`577F33DA510A7B176DD79F1D225734243A1AF3E7382BA5FCDEB7F6A5D7603C0D`**
+- 26 files · 7,565 insertions · 4 deletions
+- Reviewed code tip: `be4422d84bab4727d3bd11772f30d9a010069ed5`
+- Generated with `git diff --output=` only, regenerated into a separate file, and **byte-compared
+  identical**. Zero `^Binary files` markers and **zero NUL bytes**; all 26 files carry textual hunks.
+- Isolated Round-6 correction: `git diff e23499a be4422d` — **8 files**, 983 insertions,
+  5 deletions.
+- All six earlier artifacts preserved unchanged and re-verified by SHA-256 after this round
+  (172,014 / 216,125 / 241,892 / 298,409 / 328,171 / 372,008 bytes).
 
 
 ### Round-3 file scope — proven, not asserted
@@ -841,16 +886,182 @@ diff -u old.js new.js
 
 That yields 494 lines to 540 lines — **39 lines added, 1 removed** (the sentinel line).
 
-### Status
+### Status of round 5
 
 - Reviewed code tip: **`3e338d9686114604036b0572a14f3f3866bc9617`**
-- Artifact to review: **`.agent-review-dockview-prototype-r5-final.diff`**
-- All 11 prior commits (`a0c8551` … `1dd2bf5`) verified still ancestors — no amend, reset, rebase,
-  squash, or history rewrite.
+- Artifact reviewed: **`.agent-review-dockview-prototype-r5-final.diff`**
+- **Round 5 returned `VERDICT: PASS`** from an independent Full-class review. Human acceptance was
+  then performed against it and found one defect — see § 13.
+
+---
+
+## 13. Round 6 — the audio-toolbar reachability correction, `be4422d`
+
+### The human-acceptance result, in full
+
+Round 5's independent Full-class review returned, literally:
+
+> VERDICT: PASS
+
+Human acceptance was then performed against `3e338d9`. **Everything below passed:** the normal
+renderer path · Add Library, duplicate focus/refusal, close/re-add · restore with no saved layout
+creating nothing · Create Default Workspace idempotency · save, rearrange, restore · split and
+window resize with terminal interactivity · terminal close convergence · Clear Saved Layout
+semantics · and **Copy Output in both moved and unmoved panes**, including controlled-selection and
+whole-buffer tests. **Copy Output is not a defect and Round 6 does not touch it** — its source and
+its test suite are byte-identical to `e23499a`.
+
+**One thing failed: Dictate was unreachable in prototype mode.**
+
+The app-owned `.tts-controls` surface — carrying `#audioBuild`, `#sttStatus`, `#sttMic`,
+`#ttsStatus`, `#ttsStop`, `#ttsVoice`, and `#ttsSpeed` — stayed in the Terminals `.term-bar`, while
+`.dockview-prototype-root` (`position: fixed; inset: 0; z-index: 9000`, opaque background) covered
+the whole viewport. The controls were present in the DOM and impossible to click. That is the
+predeclared kill criterion covering TTS and Dictate after docking (§ 5.8), and § 4's row 8 is
+updated accordingly: it **did fire**, and is now corrected rather than still unobserved.
+
+### The correction
+
+The prototype **reparents that exact element** into a dedicated audio slot inside its own root.
+
+**Moved by object identity — never cloned, proxied, or reimplemented.** A clone would carry none of
+the handlers `setupSTTControls`/`setupTTSControls` and the `ccSTT`/`ccTTS` modules bind, and a proxy
+button would be a *second* Dictate implementation whose destination locking could diverge from the
+real one. `dockview-default-path.test.js` asserts the seam contains no `cloneNode`, no
+`dispatchEvent`, no synthesized `.click()`, and no reference to `ccSTT`/`ccTTS` at all — the adapter
+never learns what the element is, only that it is one opaque node to borrow and give back.
+
+| Concern | Shape |
+| --- | --- |
+| Slot placement | a **sibling** of the Dockview surface, never a panel and never inside one — so splitting, grouping, tabbing, hiding, moving, and restoring panes cannot affect reachability |
+| Original position | a placeholder comment records the exact **index** among `.term-bar`'s children (`#newTermShell` follows the controls, so the parent alone is not enough) |
+| Restoration handle | a **held element reference**, not a document query — the element is detached from its query-able position while docked |
+| Preflight | the surface is counted **before any DOM mutation**; `audio-controls-missing` / `audio-controls-duplicated` refuse having built nothing and moved nothing |
+| Attach ordering | the **final** activation step, after `createDockview` and all four event subscriptions, so no remaining initialization can throw while the controls sit inside a root the bootstrap is about to delete |
+| Failed attach | rolls back, disposes the Dockview instance this activation created, refuses `audio-controls-dock-failed` |
+| Disposal | undocks **first**, before anything else |
+| Bootstrap refusal | `refuse()` returns the controls **before** removing the root — the ordering is the whole point |
+
+Duplication is refused rather than tolerated because a second `.tts-controls` means duplicate
+element IDs, and `$('#sttMic')` would then wire whichever copy came first.
+
+**Dictation destination locking is untouched.** The lock keys off `activeTermId`, which is renderer
+state, not DOM position, so moving the controls cannot redirect a transcript. The finalized
+transcript still resolves against the pane locked at recording **start** through the existing
+`window.ccSttTargetLock.resolveTranscriptDelivery` policy. `renderer/stt-target-lock.test.js` passes
+**11/11 unchanged**, alongside `stt-bootstrap` 47/47, `tts-selection` 27/27, `audio-module-health`
+9/9, `tts` 36/36, and `stt` 19/19 — all unmodified.
+
+### `index.html` required no production change
+
+The work order expected this and it held: `.tts-controls` and its seven IDs were already a unique,
+stable anchor, so unlike the Library seam this one needed no added id. `app/renderer/index.html` is
+**byte-identical to `e23499a`**, and the default-path suite asserts the surface still carries no
+prototype-only id and no Dockview attribute.
+
+### The live negative control
+
+The real-Electron harness **reproduces the observed failure before proving the fix**. With a
+full-screen `.dockview-prototype-root` present and the controls left in the toolbar — the exact
+pre-correction geometry — `#sttMic` is measurably unreachable: `elementFromPoint` at the button's
+own centre returns the overlay, not the button. Only then does the corrected path run, and the
+genuine button becomes the topmost element at its own centre.
+
+Without that step, "the button is reachable after the fix" would prove nothing about the bug. The
+harness drives `.tts-controls` **extracted from `app/renderer/index.html` at run time** and
+hard-fails if it is missing, duplicated, or short any of the seven controls — there is no copied
+fixture. The same disclosure as the Library applies: the harness page carries a copy of the real
+`.tts-controls`, `.term-bar`, `.dockview-prototype-root`, and `.dockview-prototype-audio` CSS
+(a separate page cannot load `styles.css` under its stricter CSP), and
+`dockview-default-path.test.js` pins production and harness to each other so they cannot drift.
+
+Also proven in a real renderer: a listener bound **before** the move fires exactly once after it;
+every control stays findable by `getElementById` so late `ccSTT`/`ccTTS` initialization still wires
+it; status text, the recording class, Stop visibility, voice, and speed all survive; disposal
+returns the identical object to its exact original index; and every failure path leaves exactly one
+connected surface in the toolbar with no orphan placeholder.
+
+### Round-6 file scope
+
+Production (3): `app/renderer/app.js` · `app/renderer/dockview-prototype.js` ·
+`app/renderer/styles.css`.
+Tests/harness (5): `app/dockview-bootstrap-harness.js` · `app/dockview-bootstrap-harness.html` ·
+`app/dockview-bootstrap.test.js` · `app/dockview-default-path.test.js` ·
+`app/renderer/dockview-adapter-lifecycle.test.js`.
+
+Verified **byte-identical to `e23499a`** by blob hash: `app/main.js` · `app/preload.js` ·
+`app/package.json` · `app/package-lock.json` · `app/dockview-layout-store.js` ·
+`app/renderer/index.html` · `app/renderer/term-copy.js` · `app/renderer/term-copy.test.js` ·
+`app/renderer/stt-target-lock.js` · `app/renderer/stt-target-lock.test.js` ·
+`app/dockview-tripwire.js` · `app/dockview-tripwire.html` · `docs/OSS-PROCUREMENT-dockview.md` ·
+`BLUE-HELM-MASTER-STATUS.md` · `scripts/merge-gate.ps1`.
+
+No dependency changed, no `npm audit fix` was run, no vendor file was touched, and no IPC, PTY,
+clipboard, Library, credential, provider, microphone-permission, STT/TTS engine, model, or
+worker/bootstrap code changed.
+
+### Round-6 gates, as run against the committed tree `be4422d`
+
+| Gate | Result |
+| --- | --- |
+| Focused bootstrap suite | **205 passed / 0 failed** (was 111) |
+| Focused lifecycle suite | **208 passed / 0 failed** (was 171) |
+| Default-path suite | **209 passed / 0 failed** (was 152) |
+| Existing audio suites | stt-target-lock **11/11** · stt-bootstrap **47/47** · tts-selection **27/27** · audio-module-health **9/9** · tts **36/36** · stt **19/19** — all unmodified |
+| Copy Output / maximize | term-copy **53/53** · pane-maximize **39/39** — both unmodified |
+| App (`npm test`) | **2287 passed / 0 failed**, **44 suites**, **exit 0** |
+| Pester | **955 passed / 0 failed / 0 skipped**, exit 0 |
+| Reachability | `test-reachability` **6/0** |
+| Node `--check` | clean on all 6 touched JS files |
+| PowerShell parse | 71 files, 0 errors |
+| `git diff --check` | clean |
+| Dockview vendor tripwire | `ok: true` · `dockviewVersion: 7.0.4` · `loadedUnderStrictCsp: true` · **`remoteRequestCount: 0`** |
+| Saved-layout acceptance evidence | **byte-identical** — 1,653 bytes, SHA-256 `D49D616FEE7F1569611C7F0C9631EEEE50AE70AF3E0AC85DF6B43D640DDBD477`, schema 1, `dockview` 7.0.4 |
+| Provider activity | none |
+
+**App-gate reconciliation, exactly:** 2099 to 2287 = **+188**, being **+94** for
+`dockview-bootstrap`, **+57** for `dockview-default-path`, and **+37** for
+`dockview-adapter-lifecycle`. Suites remain **44** — no suite was added, so no `app/package.json`
+reachability entry was needed. As recorded in § 12, a naïve `N passed, M failed` parser will read
+2269/42 because `renderer/audio-module-health.test.js` and `renderer/tts-audio-contract.test.js`
+each print `9 assertions passed` instead; 2269 + 9 + 9 = **2287**.
+
+### Round-6 disclosures
+
+1. **The lifecycle and bootstrap fake hosts gained the audio contract**, because activation now
+   preflights it and would otherwise refuse in every existing scenario. This is a fail-closed
+   preflight by design: a host that does not implement `audioControlsCount` counts as zero and
+   refuses. The pre-existing lifecycle assertions were re-run unchanged at **171/0** before the new
+   Round-6 blocks were added, so the correction demonstrably did not alter existing behaviour.
+2. **`undockAudioControlsElement` has a last-resort branch.** If the placeholder is ever detached,
+   the exact index is unrecoverable, and it re-attaches to the remembered parent instead and says so
+   in the Logs tab. Losing the exact position is strictly better than losing Dictate, TTS status,
+   Stop, voice, and speed entirely. It is not reachable on any path in this branch; it exists so
+   that no failure mode ends with the controls detached.
+3. **The audio slot carries a static label** (`App audio (live controls)`). It is inert text in the
+   prototype's own chrome and reads nothing from the app.
+4. **The three residuals disclosed in § 9 are unchanged and still open** — the `useDefaultLayout()`
+   load-failure branch, the two pre-existing ungated resize senders in `app.js`, and
+   `ownedPaneIds()` as a read-only diagnostic. Round 6 was scoped to audio reachability.
+5. **The § 7 registration item is still outstanding** — the six pre-existing advisories still need
+   their own independently-authorized change against `main`. Unchanged by Round 6.
+
+### Status of round 6
+
+- Reviewed code tip: **`be4422d84bab4727d3bd11772f30d9a010069ed5`**
+- Artifact to review: **`.agent-review-dockview-prototype-r6.diff`**
+- All 14 prior commits (`a0c8551` … `e23499a`) verified still ancestors — no amend, reset, rebase,
+  squash, or history rewrite. All six earlier artifacts preserved unchanged.
 - `main == origin/main == 1dce24c141e929c04122e8b2998277d4c2d0c728`, untouched. Branch has **no
   upstream ref — never pushed.**
 
-**Round 5 remains UNREVIEWED.** The round-3 PASS belongs to `8663467` and says nothing about
-rounds 4 or 5.
+**Round 6 is UNREVIEWED.** The Round 5 PASS belongs to `3e338d9` and says nothing about Round 6.
+
+### § 14 human acceptance must be re-run after a review returns PASS
+
+Fully restart Electron, then: the normal-path control · prototype audio-control visibility ·
+Dictate destination locking **before and after** pane movement and tab activation · TTS
+selection/Stop/voice/speed · the Copy Output control · saved-layout restart and restore · and a
+final normal-path control.
 
 **No human acceptance. No adoption verdict. No provider request. Not merged. Not pushed.**
