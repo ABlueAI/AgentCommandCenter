@@ -91,6 +91,33 @@ Branch shape:
 > may be read as a passing review of Round 6, as human acceptance, or as an adoption verdict, and
 > the branch remains unauthorized for merge or push.
 
+> ---
+>
+> # CLOSED OUT 2026-08-07 — ROUND 6 PASSED REVIEW AND HUMAN ACCEPTANCE; BLUE ISSUED **ADOPT**
+>
+> The block immediately above was true when written. It is superseded, and kept so the sequence
+> stays legible rather than rewritten.
+>
+> 1. **Independent review: `VERDICT: PASS`.** A fresh Claude Opus 5 Very-High-effort, read-only
+>    Full-class review of `be4422d`, plus a supplement closing items 7–15 of the review order,
+>    returned that literal line. It reproduced `.agent-review-dockview-prototype-r6.diff`
+>    byte-for-byte and independently re-ran the app gate (2287/0, 44 suites, exit 0), Pester
+>    (955/0/0), the vendor tripwire (`remoteRequestCount: 0`) and the PowerShell parse (71 files,
+>    0 errors). It recorded **three non-blocking observations** — see § 15.
+> 2. **Human acceptance: PASS — attested by Blue** in the *Work Order — Dockview Production
+>    Integration* (2026-08-07). Recorded as attestation, not repository-proven evidence: no
+>    acceptance transcript is committed, and § 6 / § 14 below were written before it was performed.
+> 3. **Blue's subsystem verdict is now `ADOPT`**, superseding `PROTOTYPE` for future Dockview work.
+>    Both verdicts verbatim, and the adoption carry-forward constraints, are in
+>    **`docs/OSS-PROCUREMENT-dockview.md` §§ 1 and 17**.
+>
+> Production adoption is implemented on a **separate** branch,
+> `feature/dockview-production-integration`, based on this branch's tip `a78a3e4`, and is
+> **separately reviewed**. Nothing in this document vouches for that work.
+>
+> **This prototype branch remains unmerged and unpushed**, its history unrewritten, and its seven
+> pinned artifacts unchanged. It is retained as the evidence trail behind the ADOPT verdict.
+
 Procurement record: **`docs/OSS-PROCUREMENT-dockview.md`** (required by `AGENTS.md` § OSS-FIRST
 PROCUREMENT GATE item 6; its path and Blue's verbatim verdict are restated below per item 7).
 
@@ -1055,13 +1082,85 @@ each print `9 assertions passed` instead; 2269 + 9 + 9 = **2287**.
 - `main == origin/main == 1dce24c141e929c04122e8b2998277d4c2d0c728`, untouched. Branch has **no
   upstream ref — never pushed.**
 
-**Round 6 is UNREVIEWED.** The Round 5 PASS belongs to `3e338d9` and says nothing about Round 6.
+**Round 6 was reviewed on 2026-08-07 and returned `VERDICT: PASS`** — see § 15. The sentence this
+replaced ("Round 6 is UNREVIEWED") was true until that review ran.
 
-### § 14 human acceptance must be re-run after a review returns PASS
+### § 14 human acceptance — performed, PASS (Blue-attested)
 
-Fully restart Electron, then: the normal-path control · prototype audio-control visibility ·
-Dictate destination locking **before and after** pane movement and tab activation · TTS
-selection/Stop/voice/speed · the Copy Output control · saved-layout restart and restore · and a
-final normal-path control.
+The procedure below was carried out after the Round-6 review returned PASS: fully restart Electron,
+then the normal-path control · prototype audio-control visibility · Dictate destination locking
+**before and after** pane movement and tab activation · TTS selection/Stop/voice/speed · the Copy
+Output control · saved-layout restart and restore · and a final normal-path control.
 
-**No human acceptance. No adoption verdict. No provider request. Not merged. Not pushed.**
+Blue attests all of it passed. No acceptance transcript is committed, so this is an attestation
+rather than repository-proven evidence.
+
+**No provider request. Not merged. Not pushed.**
+
+---
+
+## 15. Closeout — review result, human acceptance, and the ADOPT verdict
+
+### The literal verdict line
+
+> VERDICT: PASS
+
+Source: an independent Claude Opus 5 Very-High-effort, read-only Full-class review of reviewed code
+tip `be4422d84bab4727d3bd11772f30d9a010069ed5`, artifact `.agent-review-dockview-prototype-r6.diff`,
+followed by a supplement closing items 7–15 of the review order. The reviewer opened by declaring no
+authorship of, edit to, or prior review of any commit in the reviewed range.
+
+### What it independently reproduced
+
+| Check | Result |
+| --- | --- |
+| Pinned artifact | 437,855 bytes · SHA-256 `577F33DA…603C0D` · regenerated to a separate file and **byte-identical** · 26 files (18 added / 8 modified) · +7,565/−4 · zero `^Binary files` markers · zero NUL bytes |
+| Six earlier artifacts | all byte-identical to their recorded SHA-256s |
+| App gate | **2287 passed / 0 failed**, 44 suites, exit 0 (2269 + 2×9 assertion-style) |
+| Pester | **955 / 0 / 0**, exit 0 |
+| Vendor tripwire | `ok: true` · `dockviewVersion: 7.0.4` · `loadedUnderStrictCsp: true` · **`remoteRequestCount: 0`** |
+| PowerShell parse | 71 files, 0 errors |
+| Byte-identical file claims | all 19 confirmed by blob hash |
+| Saved-layout evidence | 1,653 bytes · SHA-256 `D49D616F…DDBD477` · `schemaVersion 1` · `dockview` 7.0.4 |
+
+The live negative control was singled out as the load-bearing proof: with the pre-correction
+geometry reproduced in a real Electron renderer, `elementFromPoint` at `#sttMic`'s own centre
+returned the overlay, establishing that Dictate was genuinely unreachable rather than merely
+described as such.
+
+### Three non-blocking observations — carried forward, not lost
+
+The reviewer judged none of these blocking under the complete order. They are recorded because two
+are worth acting on in production and one is a disclosure debt this document owed.
+
+1. **Inert resize-listener leak on the `audio-controls-dock-failed` rollback.** That catch disposes
+   the Dockview instance but does not remove `onWindowResize` or dispose the fit registry. The
+   registry is empty at that point and the adapter is never published, so the listener is a no-op
+   closure; and the path is near-unreachable, because the preflight has just proven exactly one
+   `.tts-controls` with a parent exists. **Moot in production** — the production work order § 6
+   removes the full-screen overlay, so the entire audio dock/undock seam and this rollback disappear.
+2. **Incomplete harness-CSS drift pin.** `dockview-default-path.test.js` pins `.tts-controls`,
+   `.dockview-prototype-audio` and `.dockview-prototype-root` between production and the harness
+   page, but not the copied `.hidden` and `.term-bar` rules. Both copies were verified to match
+   production at review time, and the negative control measures `#sttMic`, which neither rule
+   affects.
+3. **One undisclosed unreachable branch.** `undockAudioControlsElement`'s final bare `return false`
+   — placeholder detached **and** home parent disconnected — deliberately does **not** clear the
+   dock bookkeeping, preserving the only handle so a later call can retry, and the failure surfaces
+   twice (its own `appendLog` plus the adapter's dispose log). It cannot duplicate, permanently
+   detach, or silently lose the controls. Reaching it requires `.term-bar` itself to leave the
+   document, which nothing on this branch does. Disclosed here to close the gap.
+
+### Status of round 6
+
+- Reviewed code tip: **`be4422d84bab4727d3bd11772f30d9a010069ed5`** — **`VERDICT: PASS`**
+- Artifact reviewed: **`.agent-review-dockview-prototype-r6.diff`**
+- Human acceptance: **PASS**, attested by Blue 2026-08-07
+- Subsystem verdict: **`ADOPT`**, verbatim in `docs/OSS-PROCUREMENT-dockview.md` § 1.1, superseding
+  `PROTOTYPE` for future Dockview work
+- Production integration: separate branch `feature/dockview-production-integration` based on
+  `a78a3e4`, **separately reviewed** — nothing here vouches for it
+- All 14 prior commits (`a0c8551` … `e23499a`) verified still ancestors — no amend, reset, rebase,
+  squash, or history rewrite. All seven pinned artifacts preserved unchanged.
+- `main == origin/main == 1dce24c141e929c04122e8b2998277d4c2d0c728`, untouched. Branch has **no
+  upstream ref — never pushed.**

@@ -3,32 +3,87 @@
 Subsystem: **Dockview — pane layout / docking manager for the Blue Helm renderer**
 Record path: `docs/OSS-PROCUREMENT-dockview.md` (this file — the tracked record required by
 `AGENTS.md` § *OSS-FIRST PROCUREMENT GATE — HARD INVARIANT*, item 6)
-Work order: *Work Order — Dockview Bounded Prototype*
-Branch: `feature/dockview-prototype` · Base `main` SHA `1dce24c141e929c04122e8b2998277d4c2d0c728`
-Evidence retrieval date: **2026-08-04** (all registry/GitHub values below were read on this date)
+Work orders, in order: *Work Order — Dockview Bounded Prototype* (superseded for future work) ·
+*Work Order — Dockview Production Integration* (**current**)
+Branches: `feature/dockview-prototype` (prototype, accepted) ·
+`feature/dockview-production-integration` (production adoption, **under review**)
+Base `main` SHA for both: `1dce24c141e929c04122e8b2998277d4c2d0c728`
+Evidence retrieval date: **2026-08-04** (all registry/GitHub values in §§ 2–14 were read on this
+date and are unchanged). Adoption recorded: **2026-08-07**.
 
-This record is the **first** commit on the branch and precedes any dependency install, per the work
-order § 4. Nothing in this file authorizes production adoption.
+This record was the **first** commit on the prototype branch and preceded any dependency install,
+per that work order § 4. It is now also the tracked adoption record required by `AGENTS.md` § OSS-FIRST
+PROCUREMENT GATE item 6.
 
 ---
 
-## 1. Blue's binding verdict — verbatim
+## 1. Blue's binding verdicts — verbatim
+
+Two verdicts exist for this subsystem. The current one governs; the earlier one is retained as
+historical evidence, not deleted, because it is what authorized the prototype whose results the
+current verdict rests on.
+
+### 1.1 CURRENT — ADOPT (2026-08-07), verbatim
+
+> ADOPT — Dockview: adopt dockview@7.0.4 as Blue Helm 1.0's production pane-layout engine using the
+> reviewed prototype architecture. Preserve main-owned IPC, PTY, filesystem, credential, clipboard,
+> Library, audio, and persistence authority; exclude popouts; persist only strictly validated
+> versioned layout metadata; and keep pane-status indicators separate.
+
+This **supersedes the earlier PROTOTYPE verdict for future Dockview work**. It authorizes
+implementation only. It does not authorize merge or push, and it does not assert that the production
+integration has passed anything — see § 1.3.
+
+### 1.2 HISTORICAL — PROTOTYPE (2026-08-04), verbatim
+
+Retained as evidence. It governed `feature/dockview-prototype` and nothing else.
 
 > PROTOTYPE — Dockview: evaluate the MIT dockview package at an exact verified version using real
 > terminal and Library panes. Exclude popouts. Preserve main-owned IPC, PTY, filesystem, and
 > credential authority. Persist only versioned layout metadata. Production integration requires
 > separate human acceptance.
 
-Binding scope clarification, verbatim:
+Its binding scope clarification, verbatim:
 
 > That authorizes a bounded prototype only, not production adoption, and does not authorize merge,
 > push, or any change to the production renderer path.
 
-**PROTOTYPE** is one of the five allowed final subsystem verdicts (ADOPT · FORK · PROTOTYPE ·
-PATTERN-MINE · BUILD FRESH). Candidate disposition below is the separate, lower level: an individual
-candidate may be *accepted* or *rejected* without that being a subsystem verdict. Pane-status
-indicators are a **separate subsystem** with their own record and verdict; they are out of scope here
-and are forbidden on this branch.
+That clarification remains true **of the prototype branch**. It is not a constraint on the
+production-integration branch, which the ADOPT verdict authorizes.
+
+**ADOPT** and **PROTOTYPE** are both among the five allowed final subsystem verdicts (ADOPT · FORK ·
+PROTOTYPE · PATTERN-MINE · BUILD FRESH). Candidate disposition (§ 14) is the separate, lower level.
+Pane-status indicators remain a **separate subsystem** with their own record and verdict; the ADOPT
+verdict restates that they stay separate, and they are out of scope here.
+
+### 1.3 What the adoption rests on — and what it does not claim
+
+**Independent review of the prototype: PASS.** A fresh Claude Opus 5 Very-High-effort, read-only
+Full-class review of Round-6 code tip `be4422d84bab4727d3bd11772f30d9a010069ed5`, plus a supplement
+covering its items 7–15, ended in the literal line `VERDICT: PASS`. That review reproduced the pinned
+artifact byte-for-byte, re-ran the app gate (2287/0, 44 suites, exit 0), Pester (955/0/0), the vendor
+tripwire (`remoteRequestCount: 0`), and the PowerShell parse (71 files, 0 errors), and recorded three
+non-blocking observations (an inert resize-listener leak on an unreachable rollback branch, an
+incomplete harness-CSS drift pin, and one undisclosed unreachable branch).
+
+**Human acceptance of the prototype: PASS — attested by Blue**, in the *Work Order — Dockview
+Production Integration* dated 2026-08-07, covering: the ordinary app path; Dockview pane creation,
+movement, splitting, resizing and closure; Library singleton docking, closing and reopening; layout
+save and restore; a Copy Output controlled test; Dictate destination locking; TTS selection, voice,
+speed and Stop; and a final ordinary-app fallback control. **This is recorded as Blue's attestation,
+not as repository-proven evidence** — the prototype branch's own handoff still reads "No human
+acceptance" because it was written before acceptance was performed, and no acceptance transcript is
+committed. The saved prototype layout produced during that work remained a schema-versioned envelope
+for `dockview@7.0.4` (1,653 bytes, SHA-256
+`D49D616FEE7F1569611C7F0C9631EEEE50AE70AF3E0AC85DF6B43D640DDBD477`, `schemaVersion 1`), verified
+unmodified.
+
+**No production adoption, merge, or push occurred before this record.**
+
+**The production integration itself has passed nothing yet.** It is implemented on
+`feature/dockview-production-integration` and is **separately reviewed under the production-integration
+work order § 14**. Nothing in this file may be read as a passing review, human acceptance, or merge
+authorization for that branch.
 
 ---
 
@@ -401,3 +456,26 @@ removed by deleting the branch).
 Any one of them makes this candidate a prototype **NO-GO** regardless of appearance. A NO-GO is
 evidence about the Dockview candidate — it is **not** a final subsystem verdict, and `REJECT` is never
 one. Blue selects the final verdict from the five allowed terms.
+
+Outcome: **none of the eleven fired as a permanent NO-GO.** Criterion 8 (broken TTS/Dictate after
+docking) *did* fire at `3e338d9` — Dictate was unreachable behind the prototype's full-screen overlay
+— and was corrected in `be4422d`, which the Round-6 review then passed. That criterion is moot for
+production by construction: § 6 of the production work order forbids the full-screen overlay, so
+`.tts-controls` never leaves its normal toolbar position and is never covered.
+
+## 17. Adoption carry-forward — the constraints that survive the verdict change
+
+The ADOPT verdict changes the *authorization*, not the *facts*. Every finding in §§ 2–16 was
+re-verified on 2026-08-07 and carries into production unchanged:
+
+| Constraint | Status under ADOPT |
+| --- | --- |
+| **Exact version** | `dockview@7.0.4` only, pinned with `--save-exact`; `dockview-core@7.0.4` is the entire transitive closure (2 packages, depth 1). Any version bump needs its own decision. |
+| **Licence** | MIT, unmodified grant, both packages (§ 6). The `dockview-enterprise` proprietary sibling stays **out of bounds** — reaching for it crosses into a paid commercial licence and requires separate legal review. The § 6(c) attribution gap still applies: if Blue Helm is ever redistributed, the MIT notice must be reproduced in our own attribution file. |
+| **No React** | `react`/`react-dom` appear nowhere in the closure. `dockview-react` is not installed and must not be. Re-gated by `dockview-package-identity.test.js`. |
+| **No telemetry / network** | Zero network, storage, or code-evaluation primitives in either package (§ 9). Re-proven at runtime by the vendor tripwire (`remoteRequestCount: 0`). |
+| **No popouts / floating groups** | `disableFloatingGroups: true`; no popout API is called. Excluded by both verdicts. |
+| **UMD, not ESM** | The published ESM entry imports the bare specifier `dockview-core` and needs an import map the app CSP blocks (§ 12). The self-contained UMD bundle in the same package at the same version is used instead, loaded from a local path — no bundler, no import map, no Node integration, no CSP change, no remote asset. |
+| **Layout persistence** | Strictly validated versioned metadata only, main-owned, renderer supplies no path. Production uses `dockview-layout.json`; the prototype's `dockview-prototype-layout.json` is preserved untouched as acceptance evidence and is never imported or overwritten. |
+| **Advisory disposition** | Unchanged. The six pre-existing advisories (`sharp`, `@huggingface/transformers`, `kokoro-js`, `protobufjs`, `tar`, `undici`) remain **unresolved release risks**, individually triaged in § 15, still owned by **EDA-1**, and still awaiting their own independently-authorized registration against `main` (§ 15, and the prototype handoff § 7). `npm audit fix` was not run and must not be. No advisory is attributable to Dockview: the set reachable from `dockview` is exactly `{dockview-core}`, which has zero dependencies. |
+| **Pane-status indicators** | Still a separate subsystem with its own record and verdict. Explicitly restated in the ADOPT verdict. Out of scope. |
