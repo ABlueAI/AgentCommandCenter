@@ -65,25 +65,34 @@ const { createLibraryIpc } = require('./library-ipc');
 // cwd gate below (which is byte-for-byte unchanged).
 const { createFollowupIpc } = require('./followup-ipc');
 const { createFollowupChildRunner } = require('./followup-child');
-// PROTOTYPE ONLY (branch feature/dockview-prototype). The main-owned Dockview layout trust boundary.
-// Saved layout state is a file on disk and therefore untrusted input, and dockview's own fromJSON
-// does no validation, so this module owns the fixed userData path, the reparse/size/UTF-8 guards,
-// and the strict allowlist validator. Requiring it has NO effect on the default path: the IPC
-// handlers below are registered only when the main-owned prototype flag is set, and the renderer
-// cannot import Dockview unless that same flag reaches it through the preload.
+// The main-owned Dockview layout trust boundary. Saved layout state is a file on disk and therefore
+// untrusted input, and dockview's own fromJSON does no validation, so this module owns the fixed
+// userData path, the reparse/size/UTF-8 guards, and the strict allowlist validator. Requiring it has
+// no effect in classic recovery mode: the IPC handlers below are not registered there, and the
+// renderer cannot reach a layout operation the preload never exposed.
 const { createLayoutStore } = require('./dockview-layout-store');
 
-// ---- Dockview prototype flag (MAIN decides; the renderer can never enable it) ------------------
-// Blue's verdict authorizes a bounded PROTOTYPE only. Enabling it is a main-process decision read
-// once, at startup, from this process's own argv. It is deliberately NOT a setting, not an env var,
-// and not anything the renderer can influence: a renderer query string, a hash, a saved setting, or
-// an injected script cannot turn it on, because none of them can change main's argv.
-const DOCKVIEW_PROTOTYPE_FLAG = '--dockview-prototype';
+// ---- Layout engine selection (MAIN decides; the renderer can never change it) -------------------
+// Blue's ADOPT verdict makes Dockview the PRODUCTION pane-layout engine, so `npm start` — no flag —
+// gets Dockview. The former hand-built grid survives as a bounded EMERGENCY RECOVERY surface behind
+// an explicit opt-out flag, not as a second production layout.
+//
+// The polarity is deliberately inverted from the prototype branch. There the flag turned Dockview
+// ON and its absence was the safe default; here the flag turns Dockview OFF. That means the DEFAULT
+// path is now the one that must be proven, which is what `dockview-production-path.test.js` does.
+//
+// This is a main-process decision read once, at startup, from this process's own argv. It is not a
+// setting, not an env var, and not anything the renderer can influence: a renderer query string, a
+// hash, a saved setting, or an injected script cannot change main's argv.
+const CLASSIC_LAYOUT_FLAG = '--classic-layout';
 // The token forwarded into the renderer/preload process argv. It is a DIFFERENT string from the
 // launch flag so that the renderer's copy can never be confused with (or used to re-derive) the
 // main-process launch decision — the preload only ever reports what main already decided.
-const DOCKVIEW_PROTOTYPE_RENDERER_ARG = '--cc-dockview-prototype';
-const dockviewPrototypeEnabled = process.argv.includes(DOCKVIEW_PROTOTYPE_FLAG);
+const CLASSIC_LAYOUT_RENDERER_ARG = '--cc-classic-layout';
+const classicLayoutEnabled = process.argv.includes(CLASSIC_LAYOUT_FLAG);
+// Dockview is the production engine: everything Dockview-related is gated on this, and it is true
+// unless the operator explicitly asked for recovery mode.
+const dockviewLayoutEnabled = !classicLayoutEnabled;
 
 // ---- tunable defaults (marked ? — change to taste) --------------------------
 const DEFAULT_PROJECTS_ROOT = 'D:\\Workspace';            // (?) where your git repos live
@@ -242,11 +251,11 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,   // renderer is sandboxed; only `window.cc` (preload) is exposed
       nodeIntegration: false,
-      // PROTOTYPE ONLY. Forwards MAIN's already-made decision into the preload's process.argv.
+      // Forwards MAIN's already-made layout decision into the preload's process.argv.
       // additionalArguments is set at window construction by the main process, so renderer script
-      // cannot add, remove, or forge it. When the prototype is off this is an empty array and the
-      // preload reports false — the default path is bit-identical to before.
-      additionalArguments: dockviewPrototypeEnabled ? [DOCKVIEW_PROTOTYPE_RENDERER_ARG] : [],
+      // cannot add, remove, or forge it. Empty array = production Dockview; the token is present
+      // ONLY when the operator launched recovery mode.
+      additionalArguments: classicLayoutEnabled ? [CLASSIC_LAYOUT_RENDERER_ARG] : [],
     },
   });
   win.loadFile(ENTRY_PATH);
@@ -363,20 +372,22 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('library-followup', (e, req) => followupIpc.handleAsk(e, req));
 
-  // ---- Dockview prototype layout boundary (PROTOTYPE ONLY) -------------------------------------
-  // Registered ONLY when main decided the prototype is on. In default `npm start` these three
-  // channels do not exist at all, so an invoke from anywhere rejects with "no handler registered" —
-  // the strongest possible form of "the default path cannot touch this".
+  // ---- Dockview layout boundary --------------------------------------------------------------
+  // Registered ONLY when Dockview is the active layout engine — i.e. always, EXCEPT in classic
+  // recovery mode. Under `--classic-layout` these three channels do not exist at all, so an invoke
+  // from anywhere rejects with "no handler registered": recovery mode cannot read, write, or delete
+  // layout state even if renderer code tried, which is the strongest available form of the work
+  // order's "classic must not register layout IPC".
   //
   // Trust anchors are the same ones the clipboard / library / follow-up boundaries use (canonical
   // ENTRY_URL + the late-bound trusted window), so this surface is no weaker than the existing ones.
   // The renderer supplies NO path, ever: the store derives one fixed file from Electron userData.
-  // Refusals carry a bounded reason constant only — never layout contents (§ 9).
-  if (dockviewPrototypeEnabled) {
+  // Refusals carry a bounded reason constant only — never layout contents.
+  if (dockviewLayoutEnabled) {
     const dockviewGate = createTrustedSenderGate({ entryUrl: ENTRY_URL, getTrustedWindow: () => win });
     const dockviewStore = createLayoutStore({ userDataDir: app.getPath('userData') });
     const refuseDockview = (channel, reason) => {
-      const line = `[dockview-prototype] ${channel} REFUSED: ${reason}`;
+      const line = `[dockview-layout] ${channel} REFUSED: ${reason}`;
       console.error(line);
       if (win && !win.isDestroyed()) win.webContents.send('main-error', line);
       return { ok: false, reason };
@@ -409,7 +420,11 @@ app.whenReady().then(() => {
       return { ok: true };
     });
 
-    console.log('[dockview-prototype] ENABLED — prototype layout IPC registered. NOT PRODUCTION.');
+    console.log('[dockview-layout] layout IPC registered (production layout engine: dockview 7.0.4).');
+  } else {
+    // Recovery mode is a deliberate, visible operator choice, never a silent fallback. Saying so in
+    // main's log means a support transcript shows which layout engine actually ran.
+    console.log('[classic-layout] CLASSIC RECOVERY MODE — Dockview disabled, layout IPC NOT registered.');
   }
 
   createWindow();

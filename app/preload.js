@@ -64,31 +64,36 @@ contextBridge.exposeInMainWorld('cc', {
   onMainError: (cb) => ipcRenderer.on('main-error', (_e, m) => cb(m)),
 });
 
-// ---- Dockview prototype bridge (PROTOTYPE ONLY — branch feature/dockview-prototype) -------------
-// Exposes exactly two things, per the work order § 6: a FROZEN BOOLEAN and bounded layout
-// operations. Nothing here can enable the prototype — it only reports the decision MAIN already
-// made and forwarded through `additionalArguments` at window construction. Renderer script cannot
-// change this process's argv, so a query string, hash, saved setting, or injected script cannot
-// flip it on.
+// ---- Dockview layout bridge --------------------------------------------------------------------
+// Reports MAIN's already-made layout decision and, in production, carries bounded layout operations.
+// Nothing here can CHANGE the decision: it only reflects what main forwarded through
+// `additionalArguments` at window construction. Renderer script cannot change this process's argv,
+// so a query string, hash, saved setting, or injected script cannot flip the engine either way.
 //
-// The boolean is computed ONCE at preload time and deep-frozen, so renderer code cannot mutate
-// `window.ccDockview.enabled` to unlock the layout operations either. When the prototype is off the
-// operations are still exposed but every call rejects in main, because the handlers are not
-// registered at all in default `npm start`.
-const dockviewPrototypeEnabled = process.argv.includes('--cc-dockview-prototype');
+// The value is computed ONCE at preload time and the exposed object is frozen, so renderer code
+// cannot mutate `window.ccDockview.enabled` to conjure layout operations that were not exposed.
+const classicLayoutEnabled = process.argv.includes('--cc-classic-layout');
 
-// The bridge is exposed ONLY in prototype mode. On the default path `window.ccDockview` is
-// undefined, so the renderer's global surface is genuinely unchanged — not merely inert. app.js
-// already handles absence (`!window.ccDockview` returns early), so this is the stronger form of the
-// same guarantee: default `npm start` gains no new global and no new IPC wrapper at all.
-if (dockviewPrototypeEnabled) {
-  contextBridge.exposeInMainWorld('ccDockview', Object.freeze({
-    // Frozen boolean — the ONLY authority the renderer has for "am I in prototype mode?".
-    enabled: dockviewPrototypeEnabled,
-    // Bounded layout operations. The renderer passes ONLY a layout object; it never supplies a
-    // path, a filename, or any part of one. Main owns the location, the validation, and the refusal.
-    saveLayout: (layout) => ipcRenderer.invoke('dockview-layout-save', layout),
-    loadLayout: () => ipcRenderer.invoke('dockview-layout-load'),
-    resetLayout: () => ipcRenderer.invoke('dockview-layout-reset'),
-  }));
-}
+// Two genuinely different shapes, not one shape with an inert flag.
+//
+// PRODUCTION (default `npm start`): `enabled: true` plus the three bounded operations.
+// CLASSIC RECOVERY (`--classic-layout`): `enabled: false` and NO operations at all — `saveLayout`,
+// `loadLayout` and `resetLayout` are not merely inert, they are absent. Main has also not registered
+// the handlers in that mode, so even a forged call has nothing to reach. That is the work order's
+// "classic must not register layout IPC" and "must not read, write, or delete Dockview layout
+// state" enforced at both ends rather than by renderer discipline.
+contextBridge.exposeInMainWorld('ccDockview', Object.freeze(
+  classicLayoutEnabled
+    ? {
+        // Frozen boolean — the ONLY authority the renderer has for "is Dockview the layout engine?".
+        enabled: false,
+      }
+    : {
+        enabled: true,
+        // Bounded layout operations. The renderer passes ONLY a layout object; it never supplies a
+        // path, a filename, or any part of one. Main owns the location, validation, and refusal.
+        saveLayout: (layout) => ipcRenderer.invoke('dockview-layout-save', layout),
+        loadLayout: () => ipcRenderer.invoke('dockview-layout-load'),
+        resetLayout: () => ipcRenderer.invoke('dockview-layout-reset'),
+      }
+));

@@ -41,7 +41,11 @@ const MAX_TITLE_LENGTH = 200;
 const SCHEMA_VERSION = 1;
 const PACKAGE_NAME = 'dockview';
 const PACKAGE_VERSION = '7.0.4';
-const LAYOUT_FILENAME = 'dockview-prototype-layout.json';
+// PRODUCTION filename. Deliberately NOT the prototype's `dockview-prototype-layout.json`: that file
+// is retained untouched as the human-acceptance evidence behind Blue's ADOPT verdict, and this store
+// must never read, import, migrate, or overwrite it. A production install therefore starts with no
+// saved arrangement rather than silently inheriting a prototype one.
+const LAYOUT_FILENAME = 'dockview-layout.json';
 
 // The ONLY component kinds the prototype hosts. An unknown kind is a refusal, not a skipped panel —
 // silently dropping a panel is itself a predeclared kill criterion (§ 5.7).
