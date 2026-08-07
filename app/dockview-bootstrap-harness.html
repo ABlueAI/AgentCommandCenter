@@ -38,6 +38,21 @@
     .dockview-prototype-pane-host > .tabpane[data-pane="library"] {
       display: flex; flex-direction: column; height: 100%; min-height: 0;
     }
+    /* The REAL audio rules from app/renderer/styles.css. They are load-bearing for the negative
+       control: `#sttMic` needs a genuine layout box before "is it the topmost element at its own
+       centre?" means anything, and `.dockview-prototype-audio` must lay out as a visible row inside
+       the overlay for the corrected assertion to be a real measurement rather than a DOM check.
+       `dockview-default-path.test.js` pins that styles.css still carries matching rules, so this
+       copy and production cannot drift apart silently. */
+    .hidden { display: none !important; }
+    .term-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; }
+    .tts-controls { display: flex; align-items: center; gap: 6px; }
+    .dockview-prototype-audio {
+      flex: 0 0 auto; display: flex; align-items: center; gap: 10px;
+      padding: 6px 12px; border-bottom: 1px solid #1e2733; background: #0f1620;
+    }
+    .dockview-prototype-audio-label { flex: 0 0 auto; font-size: 10px; font-weight: 700; }
+    .dockview-prototype-audio > .tts-controls { flex: 1 1 auto; }
   </style>
 </head>
 <body>

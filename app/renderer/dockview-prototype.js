@@ -79,6 +79,23 @@
     if (!panelPolicy.shouldLoadDockview(host && host.bridge)) {
       return { ok: false, reason: 'prototype-not-enabled' };
     }
+
+    // ---- audio-control preflight, BEFORE any DOM mutation -------------------------------------
+    // The prototype root is a full-screen opaque overlay, so starting without the app-owned
+    // `.tts-controls` surface hosted inside it is exactly the failure this correction exists to
+    // fix: Dictate, Stop, voice, speed, and both status readouts become unreachable. Requiring the
+    // surface up front means a missing or duplicated one refuses BEFORE anything is built and
+    // BEFORE anything is moved — there is nothing to roll back at this point by construction.
+    //
+    // Duplication is refused rather than tolerated because a second `.tts-controls` means duplicate
+    // element IDs, and `$('#sttMic')` would then wire whichever copy happened to come first.
+    const audioCount = typeof host.audioControlsCount === 'function' ? host.audioControlsCount() : 0;
+    if (audioCount !== 1) {
+      const reason = audioCount === 0 ? 'audio-controls-missing' : 'audio-controls-duplicated';
+      host.log(`[dockview-prototype] REFUSED: ${reason} (found ${audioCount})\n`);
+      return { ok: false, reason };
+    }
+
     const dockview = host.getDockviewGlobal();
     if (!dockview || typeof dockview.createDockview !== 'function') {
       host.log('[dockview-prototype] REFUSED: dockview bundle did not expose createDockview\n');
@@ -120,9 +137,21 @@
     const surface = document.createElement('div');
     surface.className = 'dockview-prototype-surface dockview-theme-abyss';
 
+    // The slot that will host the app's OWN audio controls. It is a sibling of the Dockview
+    // surface, never a panel and never inside one, so splitting, grouping, tabbing, hiding, moving,
+    // and restoring panes cannot affect whether Dictate is reachable (§ 10). It is created empty
+    // here and filled only after the risky initialization below has succeeded.
+    const audioSlot = document.createElement('div');
+    audioSlot.className = 'dockview-prototype-audio';
+    const audioLabel = document.createElement('span');
+    audioLabel.className = 'dockview-prototype-audio-label';
+    audioLabel.textContent = 'App audio (live controls)';
+    audioSlot.appendChild(audioLabel);
+
     const controls = buildControls();
     container.appendChild(banner);
     container.appendChild(controls.element);
+    container.appendChild(audioSlot);
     container.appendChild(surface);
 
     // ---- Dockview instance --------------------------------------------------------------------
@@ -610,6 +639,31 @@
       return { element, setStatus: (t) => { status.textContent = t; } };
     }
 
+    // ---- ATTACH THE APP-OWNED AUDIO CONTROLS — LAST, after every risky step has succeeded -------
+    // Deliberately the final activation step. `createDockview`, the component factory, and all four
+    // event subscriptions are already done, so there is no remaining initialization that can throw
+    // while the app's audio surface sits inside a root the bootstrap is about to delete. That
+    // ordering is the guarantee; the try/catch below is the belt to its braces.
+    //
+    // The element is MOVED, by object identity. appendChild relocates the existing node, so every
+    // handler app.js and the ccSTT/ccTTS modules bound to `#sttMic`, `#ttsStop`, `#ttsVoice`, and
+    // `#ttsSpeed` survives, the status readouts keep updating, and dictation destination locking is
+    // untouched because it keys off `activeTermId`, not DOM position.
+    try {
+      const audioElement = host.dockAudioControls();
+      if (!audioElement) throw new Error('audio controls could not be borrowed');
+      audioSlot.appendChild(audioElement);
+    } catch {
+      // ROLLBACK: put the controls back, tear down the Dockview instance this activation created,
+      // and refuse in a bounded way. The bootstrap removes the root, and because the controls are
+      // home again the normal renderer is left intact — no placeholder, no duplicate, no detached
+      // controls, and nothing for the user to recover manually.
+      try { host.undockAudioControls(); } catch { /* best effort — the refusal still reports */ }
+      try { inMountTransition(() => api.dispose()); } catch { /* best effort */ }
+      host.log('[dockview-prototype] REFUSED: audio-controls-dock-failed\n');
+      return { ok: false, reason: 'audio-controls-dock-failed' };
+    }
+
     host.log('[dockview-prototype] ACTIVE — layout only. PTY, clipboard, TTS, Dictate, Library remain app-owned.\n');
 
     return {
@@ -656,11 +710,25 @@
         ownedPaneIds: [...hostedPanes.keys()],
         fitControllers: registry.size(),
         libraryDocked: typeof host.isLibraryDocked === 'function' ? host.isLibraryDocked() : null,
+        audioControlsDocked: typeof host.isAudioControlsDocked === 'function' ? host.isAudioControlsDocked() : null,
       }),
       registry,
       dispose() {
         if (disposed) return;
         disposed = true;
+        // FIRST, before anything else and before the caller removes the prototype root: give the
+        // app its audio controls back. They are app-owned and merely borrowed; tearing down while
+        // they are still inside the root would delete the application's only Dictate, TTS status,
+        // Stop, voice, and speed surface along with it.
+        if (typeof host.undockAudioControls === 'function') {
+          try {
+            if (!host.undockAudioControls()) {
+              host.log('[dockview-prototype] audio controls were NOT returned to their original position\n');
+            }
+          } catch {
+            host.log('[dockview-prototype] audio-controls undock REFUSED: element could not be returned\n');
+          }
+        }
         window.removeEventListener('resize', onWindowResize);
         // Every OWNED pane, not only those carrying a fit controller — the Library pane has no
         // xterm and therefore no controller, but the adapter still owns its mount.
@@ -705,7 +773,18 @@
     }
 
     let createdRoot = null;
+    // Held so a refusal can reach the host surface. activate() may already have moved the app-owned
+    // audio controls INTO the root, and removing the root without giving them back would delete the
+    // application's only Dictate/TTS surface. Undock is idempotent, so calling it when nothing was
+    // moved is a no-op.
+    let hostSurface = null;
     const refuse = (reason) => {
+      // Return borrowed app-owned DOM BEFORE the root is removed. Ordering is the whole point here.
+      try {
+        if (hostSurface && typeof hostSurface.undockAudioControls === 'function') {
+          hostSurface.undockAudioControls();
+        }
+      } catch { /* best effort */ }
       // Remove only a root THIS call created, then clear any partial instance. Both are wrapped:
       // a refusal that throws would be worse than the failure it is reporting.
       try {
@@ -740,7 +819,10 @@
 
     let instance = null;
     try {
-      instance = win.ccDockviewPrototype.activate(buildHost(root));
+      // Built into a held variable, not inline, so `refuse` above can reach the host to return any
+      // app-owned DOM that activation had already borrowed.
+      hostSurface = buildHost(root);
+      instance = win.ccDockviewPrototype.activate(hostSurface);
     } catch {
       return refuse('activation-threw');
     }

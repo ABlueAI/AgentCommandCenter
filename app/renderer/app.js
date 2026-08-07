@@ -749,6 +749,97 @@ function undockLibraryElement() {
   return true;
 }
 
+// ---- Audio-control surface docking (PROTOTYPE ONLY) --------------------------------------------
+// `.tts-controls` is ONE app-owned element carrying the build badge, both status readouts, Dictate
+// (`#sttMic`), Stop, voice, and speed. Every handler on it is bound by this file's own
+// setupSTTControls()/setupTTSControls() and by the ccSTT/ccTTS modules, and dictation destination
+// locking reads `activeTermId` — none of which is DOM-position dependent.
+//
+// The prototype MOVES that exact node into its own visible slot. It never clones the markup, never
+// creates proxy buttons, never synthesizes clicks, and never installs a second TTS/STT
+// implementation: a clone would carry no handlers at all, and a proxy would be a second Dictate
+// implementation whose destination locking could diverge from the real one.
+//
+// WHY THIS EXISTS: `.dockview-prototype-root` is `position: fixed; inset: 0; z-index: 9000` with an
+// opaque background. The controls live in the Terminals `.term-bar`, which the overlay covers
+// completely, so in prototype mode Dictate was rendered unreachable — the predeclared kill
+// criterion covering TTS and Dictate after docking.
+const AUDIO_CONTROLS_SELECTOR = '.tts-controls';
+// A marker parked at the controls' original position among `.term-bar`'s children. The parent alone
+// is not enough: `#newTermShell` follows the controls, so only a placeholder restores the index.
+let audioHomePlaceholder = null;
+// A HELD REFERENCE, for the same load-bearing reason as the Library's: once the element has been
+// moved into the prototype root and the root is being torn down, a document lookup can no longer be
+// relied on to find it. Restoration must never depend on a query.
+let audioDockedElement = null;
+// The original parent, held separately as a LAST-RESORT net. The placeholder is the contract and
+// restores the exact index; this exists only so that a placeholder somehow detached from the
+// document can never cost the app its only Dictate/TTS surface.
+let audioHomeParent = null;
+
+function audioControlsElement() {
+  return document.querySelector(AUDIO_CONTROLS_SELECTOR) || audioDockedElement;
+}
+
+// Counted from the live document so "exactly one genuine surface" is a fact, not an assumption.
+// A second `.tts-controls` would mean duplicated IDs, and `$('#sttMic')` would then wire whichever
+// one happened to come first — so duplication is refused rather than guessed at.
+function audioControlsCount() {
+  return document.querySelectorAll(AUDIO_CONTROLS_SELECTOR).length;
+}
+
+/**
+ * Take the audio controls out of the Terminals toolbar, leaving a placeholder at their exact index.
+ * Returns the element on success, or null if the surface is missing.
+ * Idempotent: docking already-docked controls returns the same element and moves nothing.
+ */
+function dockAudioControlsElement() {
+  const el = audioControlsElement();
+  if (!el || !el.parentNode) return null;
+  if (audioHomePlaceholder) return el;   // already docked — do not create a second placeholder
+  const placeholder = document.createComment('dockview-prototype: audio controls home');
+  el.parentNode.insertBefore(placeholder, el);
+  audioHomePlaceholder = placeholder;
+  audioDockedElement = el;
+  audioHomeParent = el.parentNode;
+  return el;
+}
+
+/**
+ * Return the audio controls to the exact position they were taken from and drop the placeholder.
+ * Idempotent: undocking controls that are not docked is a no-op, never a throw.
+ * Returns true only when the element was restored to its exact original index.
+ */
+function undockAudioControlsElement() {
+  const el = audioDockedElement || document.querySelector(AUDIO_CONTROLS_SELECTOR);
+  const placeholder = audioHomePlaceholder;
+  const parent = audioHomeParent;
+  if (!el) { audioHomePlaceholder = null; audioDockedElement = null; audioHomeParent = null; return false; }
+
+  if (placeholder && placeholder.parentNode) {
+    placeholder.parentNode.insertBefore(el, placeholder);
+    placeholder.parentNode.removeChild(placeholder);
+    audioHomePlaceholder = null; audioDockedElement = null; audioHomeParent = null;
+    return true;
+  }
+
+  // LAST RESORT. The placeholder is gone, so the exact index is unrecoverable — but leaving the
+  // element detached would cost the app Dictate, TTS status, Stop, voice, and speed entirely, which
+  // is strictly worse than restoring it to the right toolbar in the wrong position. The bookkeeping
+  // is cleared only once the element is genuinely re-attached.
+  if (parent && parent.isConnected) {
+    parent.appendChild(el);
+    appendLog('[dockview-prototype] audio controls restored to their toolbar, but NOT to their original position\n');
+    audioHomePlaceholder = null; audioDockedElement = null; audioHomeParent = null;
+    return false;
+  }
+
+  // Nothing was moved (never docked), or there is genuinely nowhere to put it back. Keep the held
+  // reference so a later attempt can still find the element rather than discarding its only handle.
+  if (!placeholder && !parent) { audioDockedElement = null; return false; }
+  return false;
+}
+
 function loadScriptOnce(src) {
   return new Promise((resolve, reject) => {
     const el = document.createElement('script');
@@ -849,6 +940,14 @@ function buildDockviewHost(container) {
     dockLibrary: () => dockLibraryElement(),
     undockLibrary: () => undockLibraryElement(),
     isLibraryDocked: () => libraryHomePlaceholder !== null,
+    // The app-owned audio surface, moved by object identity — never cloned or proxied. The adapter
+    // may only count it, borrow it, and give it back; every TTS/STT handler, all engine state,
+    // destination locking, and module-failure behaviour stay owned by this file and the ccSTT/ccTTS
+    // modules exactly as on the default path.
+    audioControlsCount: () => audioControlsCount(),
+    dockAudioControls: () => dockAudioControlsElement(),
+    undockAudioControls: () => undockAudioControlsElement(),
+    isAudioControlsDocked: () => audioHomePlaceholder !== null,
     // Diagnostics for acceptance: a monotonic ID like "Terminal 17" does NOT mean 17 live
     // terminals. This reports what is actually live so the two can never be confused.
     liveTerminalCount: () => terms.size,

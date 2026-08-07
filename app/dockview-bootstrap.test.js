@@ -259,5 +259,136 @@ process.stdout.write('\nR5: the REAL Library surface, driven in a real renderer\
   assert(readd.owned === true, 'it is owned again');
 }
 
+// ---------------------------------------------------------------------------
+process.stdout.write('\nR6: the app-owned audio controls are reachable in prototype mode\n');
+// ---------------------------------------------------------------------------
+// Every assertion below runs against `.tts-controls` EXTRACTED FROM app/renderer/index.html at run
+// time — the same element production ships, with the same seven IDs — not a fixture maintained
+// here. The harness throws if that surface is missing, duplicated, or short a control.
+{
+  const aud = (report && report.audio) || {};
+  const install = (report && report.audioInstall) || {};
+  const expected = (report && report.audioControlIds) || [];
+  const step = (name) => ((aud.steps || []).find((x) => x.name === name) || {});
+
+  assert(!aud.error, `the audio flow completed without error (saw: ${aud.error || 'none'})`);
+  assert(expected.length === 7, 'seven canonical audio controls are enumerated');
+
+  // PROOF 1 — exactly one genuine surface, carrying all seven canonical IDs.
+  assert(install.installed === true, 'the genuine .tts-controls surface was installed from index.html');
+  assert(install.count === 1, `exactly ONE .tts-controls surface exists (saw ${install.count})`);
+  assert((install.controlsPresent || []).length === 7,
+    `all seven canonical controls are present (saw ${(install.controlsPresent || []).length}/7)`);
+  assert(aud.surfaceCount === 1, 'still exactly one surface when the flow begins');
+
+  // NEGATIVE CONTROL — reproduce the human-acceptance failure LIVE before proving the fix.
+  const neg = step('negative-control');
+  assert(neg.micPresent === true, 'NEGATIVE CONTROL: #sttMic is present in the DOM the whole time');
+  assert(neg.micInsideRoot === false,
+    'NEGATIVE CONTROL: pre-correction, #sttMic is OUTSIDE the prototype root');
+  assert(neg.micReachable === false,
+    'NEGATIVE CONTROL: pre-correction, #sttMic is covered by the full-screen overlay and unreachable');
+  assert(neg.audioReachable === false,
+    'NEGATIVE CONTROL: the whole .tts-controls surface is unreachable behind the overlay');
+
+  // PROOF 2 — activation reparents that exact object into the visible prototype slot.
+  const act = step('activated');
+  assert(act.slotPresent === true, 'the prototype builds a dedicated audio slot');
+  assert(act.inSlot === true, 'the genuine .tts-controls is parented to that slot');
+  assert(act.insideRoot === true, 'it is inside the prototype root — no longer behind it');
+  assert(act.sameElement === true, 'it is the SAME element object, not a clone');
+  assert(act.sameMic === true, 'the #sttMic node is the identical object it was before the move');
+  assert(act.surfaceCount === 1, 'still exactly ONE .tts-controls in the document — nothing was duplicated');
+  assert(act.controlsPresent === 7, 'all seven controls survive the reparent');
+  assert(act.micReachable === true,
+    'THE CORRECTION: the genuine #sttMic is now the topmost element at its own centre — clickable');
+  assert(act.audioReachable === true, 'the whole audio surface is reachable inside the prototype');
+
+  // PROOF 3 — handlers bound BEFORE the move still fire, exactly once.
+  assert(act.micClicks === 1,
+    `a listener bound before the move fires exactly once after it (saw ${act.micClicks})`);
+
+  // PROOF 4 — discoverable by ID, so late ccSTT/ccTTS initialization can still wire it.
+  assert(act.discoverableById === true,
+    'every control is still findable by getElementById after the move (late STT/TTS wiring works)');
+
+  // PROOF 5 — status text, recording class, Stop visibility, voice and speed all survive.
+  assert(act.sttStatusText === 'recording', 'STT status text survives the move');
+  assert(act.ttsStatusText === 'speaking', 'TTS status text survives the move');
+  assert(act.micHasRecClass === true, 'the recording class survives the move');
+  assert(act.stopVisible === true, 'Stop visibility state survives the move');
+  assert(act.voiceValue === 'af_heart', 'the selected voice survives the move');
+  assert(act.speedValue === '1.5', 'the selected speed survives the move');
+  assert(act.diagnosticsDocked === true, 'diagnostics report the controls as docked');
+
+  // PROOF 6 — splitting panes cannot hide the controls: the slot is outside the Dockview surface.
+  const split = step('after-split');
+  assert(split.micReachable === true, 'after splitting into two panes, #sttMic is still reachable');
+  assert(split.sameMic === true, 'and it is still the identical node');
+  assert(split.stillInSlot === true, 'the controls never entered a Dockview panel');
+
+  // PROOF 7 — disposal returns the same object to its exact original index.
+  const dis = step('disposed');
+  assert(dis.sameElement === true, 'disposal returns the identical element object');
+  assert(dis.sameMic === true, 'and the identical #sttMic node');
+  assert(dis.backInBar === true, 'it is back inside the original toolbar');
+  assert(dis.homeIndexAfter === aud.homeIndexBefore,
+    `at its EXACT original index (${aud.homeIndexBefore} -> ${dis.homeIndexAfter})`);
+  assert(dis.surfaceCount === 1, 'still exactly one surface after the round trip');
+  assert(dis.controlsPresent === 7, 'all seven controls survive the round trip');
+  assert(dis.micClicks === 1, 'the pre-move listener still fires exactly once after restoration');
+  assert(dis.voiceValue === 'af_heart' && dis.speedValue === '1.5', 'voice and speed survive the round trip');
+  assert(dis.placeholderGone === true, 'the placeholder was consumed — no marker left behind');
+
+  // PROOF 8 — an activation failure leaves the normal renderer intact.
+  const fail = step('activation-failure');
+  assert(fail.audioInBar === true, 'after a failed activation the controls are still in the toolbar');
+  assert(fail.audioIndex === aud.homeIndexBefore, 'at their original index');
+  assert(fail.audioConnected === true, 'and still connected to the document');
+  assert(fail.surfaceCount === 1, 'no duplicate surface was created by the failure');
+  assert(fail.stillDocked === false, 'no dangling docked state');
+  assert(fail.placeholderLeft === false, 'no orphan placeholder comment was left in the toolbar');
+
+  // PROOF 9 — the bootstrap-level net: a refusal AFTER movement restores before removing the root.
+  const boot = step('bootstrap-refusal-after-move');
+  assert(boot.wasStranded === true, 'the controls really were inside a prototype root before this refusal');
+  assert(boot.refused === true, `the bootstrap refused (${boot.reason})`);
+  assert(boot.sameElement === true, 'the identical element was rescued');
+  assert(boot.audioInBar === true, 'a refusal after movement returns the controls to the toolbar');
+  assert(boot.audioIndex === aud.homeIndexBefore, 'at their exact original index');
+  assert(boot.audioConnected === true, 'they are connected, not detached and lost');
+  assert(boot.surfaceCount === 1, 'exactly one surface remains');
+  assert(boot.stillDocked === false, 'the dock bookkeeping was cleared');
+}
+
+// ---------------------------------------------------------------------------
+process.stdout.write('\nR6: missing or duplicated audio controls refuse visibly\n');
+// ---------------------------------------------------------------------------
+{
+  const byName = (n) => ((report.drive && report.drive.scenarios) || []).find((s) => s.name === n) || {};
+  for (const [name, reason] of [
+    ['missing-audio-controls', 'audio-controls-missing'],
+    ['duplicated-audio-controls', 'audio-controls-duplicated'],
+  ]) {
+    const s = byName(name);
+    assert(s.ok === false, `${name}: activation refuses`);
+    assert(s.reason === `activation-refused:${reason}`, `${name}: the bounded reason is ${reason} (saw ${s.reason})`);
+    assert(s.rootPresent === false, `${name}: no opaque overlay is left behind`);
+    assert(s.instancePublished === false, `${name}: no instance is published`);
+    assert(s.appSurfaceOnTop === true, `${name}: the normal app surface is usable and unobscured`);
+    assert(s.audioConnected === true, `${name}: the audio controls remain connected`);
+    assert(s.audioInTermBar === true, `${name}: and remain in the normal toolbar`);
+    assert(s.audioCount === 1, `${name}: exactly one surface remains`);
+  }
+
+  // Every OTHER failure scenario must also leave the audio surface untouched and at home.
+  for (const s of (report.drive && report.drive.scenarios) || []) {
+    if (s.name === 'success') continue;
+    assert(s.audioCount === 1, `${s.name}: exactly one audio surface remains`);
+    assert(s.audioConnected === true, `${s.name}: the audio surface is never left detached`);
+    assert(s.audioStillDocked === false, `${s.name}: no dangling docked state after the scenario`);
+  }
+}
+
 process.stdout.write(`\ndockview-bootstrap: ${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exit(1);

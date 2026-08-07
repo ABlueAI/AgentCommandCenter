@@ -145,11 +145,14 @@ function makeFakeDockview() {
         buildPanel(id, saved.contentComponent || 'terminal', saved.title || id);
       });
     },
-    dispose() {},
+    dispose() { api._disposed = true; },
+    _disposed: false,
     _panels: panels,
   };
+  let created = false;
   return {
-    createDockview: (_el, options) => { componentFactory = options && options.createComponent; return api; },
+    createDockview: (_el, options) => { created = true; componentFactory = options && options.createComponent; return api; },
+    get _created() { return created; },
     _api: api,
     _listeners: listeners,
     _addPanelCalls: addPanelCalls,
@@ -174,7 +177,10 @@ function statusText(host) {
 }
 
 function makeHost(overrides = {}) {
-  const calls = { closePane: [], suspended: [], logs: [], statuses: [], created: [], docked: 0, undocked: 0 };
+  const calls = {
+    closePane: [], suspended: [], logs: [], statuses: [], created: [], docked: 0, undocked: 0,
+    audioDocked: 0, audioUndocked: 0,
+  };
   const container = makeElement('div');
   const paneElements = new Map([
     ['pty1', makeElement('div')], ['pty2', makeElement('div')], ['library', makeElement('div')],
@@ -186,6 +192,10 @@ function makeHost(overrides = {}) {
   // the dock/undock contract correctly and rolls it back on failure.
   const libraryHome = makeElement('main');
   let libraryPlaceholder = null;
+  // Stand-in for the Terminals `.term-bar` and the app-owned `.tts-controls` element it holds.
+  const audioHome = makeElement('div');
+  const audioElement = makeElement('div');
+  let audioPlaceholder = null;
   let nextTerminal = 0;
   const host = {
     bridge: { enabled: true, saveLayout: async () => ({ ok: true, savedAt: 'x' }), loadLayout: async () => ({ ok: false, reason: 'no-saved-layout' }), resetLayout: async () => ({ ok: true }) },
@@ -224,9 +234,36 @@ function makeHost(overrides = {}) {
     isLibraryDocked: () => libraryPlaceholder !== null,
     liveTerminalCount: () => [...paneElements.keys()].filter((k) => k !== 'library').length,
     liveTerminalIds: () => [...paneElements.keys()].filter((k) => k !== 'library'),
+    // --- app-owned audio controls (mirrors app.js's placeholder + held-reference contract) ---
+    // `audioHome` stands in for the Terminals `.term-bar`, so a test can assert the SAME element
+    // object goes back to it. The real implementation lives in app.js and is proven against the
+    // genuine `.tts-controls` from index.html by the Electron bootstrap harness; this stub only
+    // proves the ADAPTER borrows and returns it correctly on every path.
+    audioControlsCount: () => host._audioCount,
+    dockAudioControls: () => {
+      if (host._audioDockThrows) throw new Error('synthetic dock failure');
+      if (host._audioDockReturnsNull) return null;
+      if (audioPlaceholder) return audioElement;   // idempotent: no second placeholder
+      audioPlaceholder = { marker: true };
+      calls.audioDocked++;
+      return audioElement;
+    },
+    undockAudioControls: () => {
+      if (!audioPlaceholder) return false;         // idempotent: undocking an undocked surface is a no-op
+      audioPlaceholder = null;
+      calls.audioUndocked++;
+      audioHome.appendChild(audioElement);         // back to its original parent, same object
+      return true;
+    },
+    isAudioControlsDocked: () => audioPlaceholder !== null,
+    _audioCount: 1,
+    _audioDockThrows: false,
+    _audioDockReturnsNull: false,
     _calls: calls,
     _paneElements: paneElements,
     _libraryHome: libraryHome,
+    _audioHome: audioHome,
+    _audioElement: audioElement,
   };
   return Object.assign(host, overrides);
 }
@@ -738,6 +775,71 @@ process.stdout.write('\nevent shapes stay distinct per handler (they genuinely d
   }
 
   await r5RestoreKeepsLibraryDocked();
+
+  process.stdout.write('\nR6: the app-owned audio controls are borrowed and always given back\n');
+  // -------------------------------------------------------------------------
+  {
+    const fake = makeFakeDockview();
+    const host = makeHost(); host._dockview = fake;
+    const instance = adapter.activate(host);
+    assert(instance.ok === true, 'activation succeeds when exactly one audio surface exists');
+    assert(host._calls.audioDocked === 1, 'the controls were borrowed exactly once');
+    assert(host._calls.audioUndocked === 0, 'and not yet returned');
+    assert(instance.diagnostics().audioControlsDocked === true, 'diagnostics report them docked');
+    // Borrowed by object identity into the adapter's own slot — never cloned.
+    const slot = host.getContainer().children.find((c) => c.className === 'dockview-prototype-audio');
+    assert(!!slot, 'the adapter created a dedicated audio slot');
+    assert(slot.children.includes(host._audioElement),
+      'the SAME element object was moved into the slot — no clone, no proxy control');
+    // The slot is a sibling of the Dockview surface, never a panel, so panes cannot hide it.
+    assert(!host.getContainer().children.some((c) => c.className === 'dockview-prototype-surface' && c.children.includes(host._audioElement)),
+      'the controls are NOT inside the Dockview surface, so splitting/tabbing cannot hide them');
+
+    instance.dispose();
+    assert(host._calls.audioUndocked === 1, 'disposal returns them exactly once');
+    assert(host._audioHome.children.includes(host._audioElement),
+      'the identical element object is back in its original parent');
+    assert(instance.diagnostics().audioControlsDocked === false, 'and diagnostics agree');
+
+    instance.dispose();
+    assert(host._calls.audioUndocked === 1, 'a second dispose does not undock twice');
+  }
+
+  process.stdout.write('\nR6: a missing or duplicated audio surface refuses BEFORE anything moves\n');
+  // -------------------------------------------------------------------------
+  {
+    for (const [count, reason] of [[0, 'audio-controls-missing'], [2, 'audio-controls-duplicated'], [3, 'audio-controls-duplicated']]) {
+      const fake = makeFakeDockview();
+      const host = makeHost(); host._dockview = fake; host._audioCount = count;
+      const result = adapter.activate(host);
+      assert(result.ok === false && result.reason === reason,
+        `${count} audio surface(s) refuses with ${reason} (saw ${result.reason})`);
+      assert(host._calls.audioDocked === 0, `${count}: nothing was borrowed`);
+      assert(host._calls.audioUndocked === 0, `${count}: and nothing needed returning`);
+      // The preflight runs before ANY DOM mutation, so no banner/controls/slot were built either.
+      assert(host.getContainer().children.length === 0,
+        `${count}: the refusal happened before a single element was appended`);
+      assert(fake._created === false, `${count}: Dockview was never even instantiated`);
+      assert(host._calls.logs.some((l) => l.includes(reason)), `${count}: the refusal is visible in the log`);
+    }
+  }
+
+  process.stdout.write('\nR6: a failed borrow rolls back and leaves the renderer intact\n');
+  // -------------------------------------------------------------------------
+  {
+    for (const [flag, label] of [['_audioDockThrows', 'a throwing dock'], ['_audioDockReturnsNull', 'a dock that returns null']]) {
+      const fake = makeFakeDockview();
+      const host = makeHost(); host._dockview = fake; host[flag] = true;
+      const result = adapter.activate(host);
+      assert(result.ok === false && result.reason === 'audio-controls-dock-failed',
+        `${label} refuses with a bounded reason (saw ${result.reason})`);
+      assert(host._calls.logs.some((l) => l.includes('audio-controls-dock-failed')),
+        `${label}: the refusal is visible in the log`);
+      // The Dockview instance this activation created must not be left running.
+      assert(fake._api._disposed === true, `${label}: the Dockview instance was disposed on rollback`);
+      assert(host._calls.closePane.length === 0, `${label}: no PTY was closed by the rollback`);
+    }
+  }
 
   process.stdout.write(`\ndockview-adapter-lifecycle: ${passed} passed, ${failed} failed\n`);
   if (failed > 0) process.exit(1);

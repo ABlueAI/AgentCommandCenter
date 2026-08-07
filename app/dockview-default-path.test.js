@@ -196,6 +196,141 @@ process.stdout.write('\nR5: the docked-Library seam is correct by construction\n
 }
 
 // ---------------------------------------------------------------------------
+process.stdout.write('\nR6: the audio-control seam is correct by construction\n');
+// ---------------------------------------------------------------------------
+{
+  const CANONICAL_AUDIO_CONTROLS = [
+    'audioBuild', 'sttStatus', 'sttMic', 'ttsStatus', 'ttsStop', 'ttsVoice', 'ttsSpeed',
+  ];
+
+  // --- index.html required NO production markup change: the existing element and IDs are the
+  // authority, and the seam binds to the class that was already there.
+  const audioOpenTags = indexSrc.match(/<div\s+class="tts-controls"[^>]*>/g) || [];
+  assert(audioOpenTags.length === 1,
+    `index.html has EXACTLY ONE .tts-controls surface (found ${audioOpenTags.length})`);
+  for (const id of CANONICAL_AUDIO_CONTROLS) {
+    assert(new RegExp(`id="${id}"`).test(indexSrc), `index.html still owns #${id}`);
+  }
+  // No prototype-only id, hook, or attribute was added to the audio surface — unlike the Library
+  // seam, this one needed nothing, because `.tts-controls` was already a unique stable anchor.
+  assert(!/tts-controls[^>]*id=/.test(indexSrc), 'the audio surface needed no prototype-only id');
+  assert(!/dockview/i.test(audioOpenTags[0]), 'the audio surface carries no Dockview attribute');
+
+  const css = read('renderer', 'styles.css');
+  assert(/\.dockview-prototype-audio\s*\{[^}]*display:\s*flex/.test(css),
+    'styles.css defines the prototype audio slot as a visible flex row');
+  // The slot is a direct child of the root, a SIBLING of the surface — never inside a pane host, so
+  // no pane arrangement can hide it.
+  assert(!/\.dockview-prototype-pane-host[^{]*\.dockview-prototype-audio/.test(css),
+    'the audio slot is never scoped inside a Dockview pane host');
+  // It cannot match on the default path: the class exists only in the prototype root.
+  assert(css.indexOf('.dockview-prototype-audio') > css.indexOf('/* ---- Dockview prototype'),
+    'the audio rules live inside the fenced prototype block, so deleting the branch removes them');
+
+  // --- the harness page copies these rules; pin the two together so they cannot drift ---------
+  const harnessHtml = fs.readFileSync(path.join(__dirname, 'dockview-bootstrap-harness.html'), 'utf8');
+  assert(/\.tts-controls\s*\{[^}]*display:\s*flex/.test(harnessHtml),
+    'the harness page carries the real .tts-controls rule, so its reachability measurement is real');
+  assert(/\.dockview-prototype-audio\s*\{[^}]*display:\s*flex/.test(harnessHtml),
+    'and the real audio-slot rule');
+  assert(/\.dockview-prototype-root\s*\{[^}]*position:\s*fixed/.test(harnessHtml)
+    && /\.dockview-prototype-root\s*\{[^}]*z-index:\s*9000/.test(harnessHtml),
+    'the harness reproduces the full-screen overlay — without it the negative control proves nothing');
+  assert(/\.tts-controls\s*\{[^}]*display:\s*flex/.test(css),
+    'production styles.css still carries the .tts-controls rule the harness copies');
+
+  // --- app.js: placeholder + held reference, exactly as the Library seam does ------------------
+  const appCode = stripComments(appSrc);
+  assert(/const AUDIO_CONTROLS_SELECTOR = '\.tts-controls';/.test(appCode),
+    'app.js resolves the audio surface by its existing production class');
+  assert(/document\.createComment\('dockview-prototype: audio controls home'\)/.test(appCode),
+    'docking records the exact original position with a placeholder, not just a parent');
+  assert(/let audioDockedElement = null;/.test(appCode), 'app.js holds a reference to the docked element');
+  assert(/const el = audioDockedElement \|\| document\.querySelector\(AUDIO_CONTROLS_SELECTOR\);/.test(appCode),
+    'undock prefers the HELD reference over a document lookup');
+  assert(/placeholder\.parentNode\.insertBefore\(el, placeholder\)/.test(appCode),
+    'undock returns the element to the placeholder position, not merely to the parent');
+  // The element is MOVED, never cloned: a clone would carry no STT/TTS handler at all.
+  assert(!/cloneNode/.test(appCode), 'app.js never clones DOM for the prototype');
+  assert(!/tts-controls[^\n]*innerHTML/.test(appCode), 'app.js never rebuilds the audio markup');
+
+  // --- the whole seam is unreachable on the default path --------------------------------------
+  // `buildDockviewHost` is only ever called from the prototype bootstrap, so if every call site of
+  // the dock/undock helpers lives inside it, nothing on the default path can move the controls.
+  // The anchor must survive comment stripping, so it is a real statement rather than a comment.
+  const hostStart = appCode.indexOf('function buildDockviewHost(');
+  const hostEnd = appCode.indexOf('async function boot()', hostStart);
+  assert(hostStart > -1 && hostEnd > hostStart, 'buildDockviewHost is bounded by the boot function');
+  const hostBody = appCode.slice(hostStart, hostEnd);
+  // `\b` before `dock` is load-bearing: without it, `undockAudioControlsElement` also matches,
+  // because `dockAudioControlsElement` is a literal substring of it.
+  for (const fn of ['dockAudioControlsElement', 'undockAudioControlsElement', 'audioControlsCount']) {
+    const rx = () => new RegExp(`\\b${fn}\\(\\)`, 'g');
+    const total = (appCode.match(rx()) || []).length;
+    const inHost = (hostBody.match(rx()) || []).length;
+    // One declaration (outside the host) plus exactly one call site (inside it).
+    assert(total === 2 && inHost === 1,
+      `${fn} has exactly one call site, and it is inside the prototype host surface (${inHost} in host / ${total} total)`);
+  }
+  assert(!/\bdockAudioControlsElement\(\)/.test(appCode.slice(0, hostStart).replace(/function dockAudioControlsElement\(\)/, '')),
+    'nothing before the prototype host surface docks the audio controls');
+
+  // --- dictation destination locking is untouched by any of this ------------------------------
+  // The lock keys off `activeTermId`, which is renderer state, not DOM position — so moving the
+  // controls cannot redirect a transcript. Dockview focus keeps that state current, and the
+  // finalized transcript still goes to the pane locked at recording START.
+  assert(/focusPane: \(paneId\) => \{[\s\S]{0,160}activeTermId = paneId;/.test(hostBody),
+    'Dockview focus changes continue to update activeTermId');
+  assert(/sttDictationTargetId = activeTermId;/.test(appCode),
+    'the dictation destination is still locked to the pane focused at recording start');
+  assert(/const targetId = sttDictationTargetId;[\s\S]{0,120}sttDictationTargetId = null;/.test(appCode),
+    'the finalized transcript still resolves against the LOCKED target, not the current pane');
+  assert(/window\.ccSttTargetLock\.resolveTranscriptDelivery/.test(appCode),
+    'delivery still goes through the existing target-lock policy module');
+  // No second Dictate/TTS implementation, no proxy, no synthesized click anywhere in the seam.
+  // Bounded to the seam itself — from its first declaration to the next unrelated section — so the
+  // app's OWN setupSTTControls/setupTTSControls (which legitimately use ccSTT/ccTTS) are excluded.
+  const seamStart = appCode.indexOf('const AUDIO_CONTROLS_SELECTOR');
+  const seamEnd = appCode.indexOf('function loadScriptOnce(', seamStart);
+  assert(seamStart > -1 && seamEnd > seamStart, 'the audio seam is a bounded, self-contained block');
+  const protoSeam = appCode.slice(seamStart, seamEnd);
+  for (const forbidden of ['ccSTT', 'ccTTS', 'getUserMedia', 'MediaRecorder', '.click()', 'dispatchEvent']) {
+    assert(!protoSeam.includes(forbidden),
+      `the audio seam never touches ${forbidden} — it moves the element and nothing else`);
+  }
+  const adapterAll = stripComments(read('renderer', 'dockview-prototype.js'));
+  for (const forbidden of ['ccSTT', 'ccTTS', 'sttMic', 'ttsStop', 'ttsVoice', 'ttsSpeed', 'getUserMedia', 'dispatchEvent']) {
+    assert(!adapterAll.includes(forbidden),
+      `the adapter never references ${forbidden} — it only borrows an opaque element`);
+  }
+
+  // --- the adapter attaches the controls LAST, after every risky step has succeeded ------------
+  const adapterCode = stripComments(read('renderer', 'dockview-prototype.js'));
+  const preflightAt = adapterCode.indexOf('audioControlsCount');
+  const createAt = adapterCode.indexOf('dockview.createDockview(');
+  const dockAt = adapterCode.indexOf('host.dockAudioControls()');
+  const activeLogAt = adapterCode.indexOf('ACTIVE — layout only');
+  assert(preflightAt > -1 && createAt > -1 && dockAt > -1 && activeLogAt > -1, 'all four anchors exist');
+  assert(preflightAt < createAt,
+    'the audio preflight runs BEFORE Dockview is created — a refusal builds and moves nothing');
+  assert(adapterCode.indexOf('container.appendChild(banner)') > preflightAt,
+    'the preflight runs before ANY DOM mutation');
+  assert(dockAt > createAt,
+    'the controls are attached only AFTER createDockview succeeded');
+  assert(dockAt < activeLogAt, 'and the attach is the final activation step');
+  assert(/audio-controls-dock-failed/.test(adapterCode), 'a failed attach has a bounded reason');
+  assert(/audio-controls-missing/.test(adapterCode) && /audio-controls-duplicated/.test(adapterCode),
+    'missing and duplicated surfaces have distinct bounded reasons');
+  // The refusal path must give the controls back before the bootstrap deletes the root.
+  const refuseStart = adapterCode.indexOf('const refuse = (reason) =>');
+  const refuseBody = adapterCode.slice(refuseStart, adapterCode.indexOf('return { ok: false, reason };', refuseStart));
+  assert(/undockAudioControls\(\)/.test(refuseBody),
+    'bootstrap refusal returns the app-owned controls BEFORE removing the root');
+  assert(refuseBody.indexOf('undockAudioControls') < refuseBody.indexOf('removeChild'),
+    'and does so in that order — restore first, then remove the root');
+}
+
+// ---------------------------------------------------------------------------
 process.stdout.write('\nR5: layout-control semantics cannot silently create or destroy\n');
 // ---------------------------------------------------------------------------
 {
