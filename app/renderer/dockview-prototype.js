@@ -16,7 +16,8 @@
 // pane would kill its PTY, which is a predeclared kill criterion (§ 5.8).
 
 (function () {
-  const BANNER_TEXT = 'DOCKVIEW PROTOTYPE — NOT PRODUCTION';
+  // No banner. Dockview is the production layout engine under Blue's ADOPT verdict, so there is
+  // nothing to warn about — a "NOT PRODUCTION" strip on the production surface would be false.
 
   // ENVIRONMENT SELECTION IS EXPLICIT (round 4). The previous shape was
   //     window.ccDockviewFitPolicy || require('./dockview-fit-policy')
@@ -70,35 +71,25 @@
     const panelPolicy = resolveDependency('ccDockviewPanelPolicy', './dockview-panel-policy');
     if (!fitPolicy || !panelPolicy) {
       if (host && typeof host.log === 'function') {
-        host.log('[dockview-prototype] REFUSED: policy modules unavailable\n');
+        host.log('[dockview] REFUSED: policy modules unavailable\n');
       }
       return { ok: false, reason: 'policy-modules-missing' };
     }
     // Defense in depth: app.js already gated the dynamic load behind the same predicate. Asserting
     // it again here means this module cannot be activated by being loaded some other way.
     if (!panelPolicy.shouldLoadDockview(host && host.bridge)) {
-      return { ok: false, reason: 'prototype-not-enabled' };
+      return { ok: false, reason: 'dockview-not-enabled' };
     }
 
-    // ---- audio-control preflight, BEFORE any DOM mutation -------------------------------------
-    // The prototype root is a full-screen opaque overlay, so starting without the app-owned
-    // `.tts-controls` surface hosted inside it is exactly the failure this correction exists to
-    // fix: Dictate, Stop, voice, speed, and both status readouts become unreachable. Requiring the
-    // surface up front means a missing or duplicated one refuses BEFORE anything is built and
-    // BEFORE anything is moved — there is nothing to roll back at this point by construction.
-    //
-    // Duplication is refused rather than tolerated because a second `.tts-controls` means duplicate
-    // element IDs, and `$('#sttMic')` would then wire whichever copy happened to come first.
-    const audioCount = typeof host.audioControlsCount === 'function' ? host.audioControlsCount() : 0;
-    if (audioCount !== 1) {
-      const reason = audioCount === 0 ? 'audio-controls-missing' : 'audio-controls-duplicated';
-      host.log(`[dockview-prototype] REFUSED: ${reason} (found ${audioCount})\n`);
-      return { ok: false, reason };
-    }
+    // The prototype's audio-control preflight is GONE, along with the borrow/restore seam it
+    // guarded. It existed only because the prototype covered the whole viewport with an opaque
+    // full-screen root, which put `.tts-controls` — and therefore Dictate — behind it. The
+    // production surface is embedded below the toolbar, so the controls are never covered, never
+    // move, and are never this module's business. The adapter now has no knowledge of them at all.
 
     const dockview = host.getDockviewGlobal();
     if (!dockview || typeof dockview.createDockview !== 'function') {
-      host.log('[dockview-prototype] REFUSED: dockview bundle did not expose createDockview\n');
+      host.log('[dockview] REFUSED: dockview bundle did not expose createDockview\n');
       return { ok: false, reason: 'bundle-missing' };
     }
 
@@ -126,32 +117,16 @@
       try { return fn(); } finally { mountTransition = previous; }
     }
 
-    // ---- persistent, unmistakable prototype banner (§ 6) -------------------------------------
-    const banner = document.createElement('div');
-    banner.id = 'dockviewPrototypeBanner';
-    banner.className = 'dockview-prototype-banner';
-    banner.textContent = BANNER_TEXT;
-    banner.setAttribute('role', 'status');
-
+    // The container is supplied by the host — in production it is the embedded `#terminalDock`
+    // inside the Terminals tab. The adapter neither creates nor positions it, and specifically does
+    // NOT create a full-screen root: nothing here can cover the toolbar, the navigation, or the
+    // `.tts-controls` element.
     const container = host.getContainer();
     const surface = document.createElement('div');
     surface.className = 'dockview-prototype-surface dockview-theme-abyss';
 
-    // The slot that will host the app's OWN audio controls. It is a sibling of the Dockview
-    // surface, never a panel and never inside one, so splitting, grouping, tabbing, hiding, moving,
-    // and restoring panes cannot affect whether Dictate is reachable (§ 10). It is created empty
-    // here and filled only after the risky initialization below has succeeded.
-    const audioSlot = document.createElement('div');
-    audioSlot.className = 'dockview-prototype-audio';
-    const audioLabel = document.createElement('span');
-    audioLabel.className = 'dockview-prototype-audio-label';
-    audioLabel.textContent = 'App audio (live controls)';
-    audioSlot.appendChild(audioLabel);
-
     const controls = buildControls();
-    container.appendChild(banner);
     container.appendChild(controls.element);
-    container.appendChild(audioSlot);
     container.appendChild(surface);
 
     // ---- Dockview instance --------------------------------------------------------------------
@@ -282,7 +257,7 @@
       // home and back (which would flicker it through the tab strip mid-restore).
       if (paneId === 'library' && typeof host.undockLibrary === 'function') {
         try { host.undockLibrary(); }
-        catch { host.log('[dockview-prototype] Library undock REFUSED: element could not be returned\n'); }
+        catch { host.log('[dockview] Library undock REFUSED: element could not be returned\n'); }
       }
     }
 
@@ -311,7 +286,7 @@
     api.onDidRemovePanel((panel) => {
       const paneId = panel && panel.id;
       if (!paneId) {
-        host.log('[dockview-prototype] REFUSED: panel removal with no resolvable pane ID\n');
+        host.log('[dockview] REFUSED: panel removal with no resolvable pane ID\n');
         return;
       }
       // CLASSIFY BEFORE RELEASING. fromJSON() clears the whole workspace first, and those removals
@@ -366,7 +341,7 @@
           if (existing.api && typeof existing.api.setActive === 'function') { existing.api.setActive(); focused = true; }
         } catch { focused = false; }
         const reason = paneId === 'library' ? 'library-already-open' : 'pane-already-open';
-        host.log(`[dockview-prototype] ${reason}: focused the existing panel instead of adding a second\n`);
+        host.log(`[dockview] ${reason}: focused the existing panel instead of adding a second\n`);
         return { ok: false, reason, focused };
       }
 
@@ -375,7 +350,7 @@
       const title = panelPolicy.defaultTitleFor(paneId);
       const descriptor = panelPolicy.buildPanelDescriptor({ paneId, kind, title });
       if (!descriptor.ok) {
-        host.log(`[dockview-prototype] REFUSED addPane: ${descriptor.reason}\n`);
+        host.log(`[dockview] REFUSED addPane: ${descriptor.reason}\n`);
         return { ok: false, reason: descriptor.reason };
       }
 
@@ -386,14 +361,14 @@
       if (descriptor.panel.component === 'library') {
         element = typeof host.dockLibrary === 'function' ? host.dockLibrary() : null;
         if (!element) {
-          host.log('[dockview-prototype] REFUSED addPane: library-dom-missing\n');
+          host.log('[dockview] REFUSED addPane: library-dom-missing\n');
           return { ok: false, reason: 'library-dom-missing' };
         }
         didDock = true;
       } else {
         element = host.getPaneElement(paneId);
         if (!element) {
-          host.log(`[dockview-prototype] REFUSED addPane: pane-element-missing (${paneId})\n`);
+          host.log(`[dockview] REFUSED addPane: pane-element-missing (${paneId})\n`);
           return { ok: false, reason: 'pane-element-missing' };
         }
       }
@@ -414,7 +389,7 @@
         if (didDock && typeof host.undockLibrary === 'function') {
           try { host.undockLibrary(); } catch { /* the refusal below still reports the failure */ }
         }
-        host.log(`[dockview-prototype] REFUSED addPane: add-panel-failed (${paneId})\n`);
+        host.log(`[dockview] REFUSED addPane: add-panel-failed (${paneId})\n`);
         return { ok: false, reason: 'add-panel-failed' };
       }
       return { ok: true };
@@ -424,8 +399,8 @@
     async function saveLayout() {
       const result = await host.bridge.saveLayout(api.toJSON());
       host.log(result && result.ok
-        ? `[dockview-prototype] layout saved (${result.savedAt})\n`
-        : `[dockview-prototype] layout save REFUSED: ${(result && result.reason) || 'unknown'}\n`);
+        ? `[dockview] layout saved (${result.savedAt})\n`
+        : `[dockview] layout save REFUSED: ${(result && result.reason) || 'unknown'}\n`);
       controls.setStatus(result && result.ok ? 'Layout saved.' : `Save refused: ${(result && result.reason) || 'unknown'}`);
       return result;
     }
@@ -436,13 +411,13 @@
         const reason = (result && result.reason) || 'unknown';
         // Refuse VISIBLY with a bounded reason code, do NOT call fromJSON, and load the default
         // layout instead. The invalid file is left on disk untouched by main for diagnosis (§ 9).
-        host.log(`[dockview-prototype] restore REFUSED: ${reason}\n`);
+        host.log(`[dockview] restore REFUSED: ${reason}\n`);
         // A refusal is a FULL STOP. It must not create a terminal, must not spawn a PTY, and must
         // not fall through to the default-workspace creator: an automatic fallback is how a failed
         // restore silently multiplied terminals during human acceptance. The current workspace is
         // left exactly as it was, and the user decides what to do next.
         controls.setStatus(reason === 'no-saved-layout'
-          ? 'No saved prototype layout. Nothing was changed — use Create Default Workspace if you want one.'
+          ? 'No saved arrangement. Nothing was changed.'
           : `Restore refused (${reason}). Nothing was changed.`);
         return result;
       }
@@ -453,10 +428,10 @@
       const restoredIds = Object.keys((result.layout && result.layout.panels) || {});
       const missing = restoredIds.filter((paneId) => !host.getPaneElement(paneId));
       if (missing.length > 0) {
-        host.log(`[dockview-prototype] restore REFUSED: ${missing.length} restored pane(s) have no live pane\n`);
+        host.log(`[dockview] restore REFUSED: ${missing.length} restored pane(s) have no live pane\n`);
         controls.setStatus(
           `Restore refused: ${missing.length} saved pane(s) are not open (${missing.join(', ')}). ` +
-          'Create them first, or use Create Default Workspace. Nothing was changed and the saved layout is intact.');
+          'Open them first. Nothing was changed and the saved arrangement is intact.');
         return { ok: false, reason: 'panes-not-live' };
       }
 
@@ -486,7 +461,7 @@
       }
 
       controls.setStatus(`Layout restored (saved ${result.savedAt}).`);
-      host.log('[dockview-prototype] layout restored\n');
+      host.log('[dockview] layout restored\n');
       registry.scheduleAll();
       return result;
     }
@@ -526,9 +501,9 @@
 
     /** Bounded, content-free restore failure: roll back, say so in both surfaces, refuse. */
     function failRestore(reason, snapshot, panes) {
-      host.log(`[dockview-prototype] restore REFUSED: ${reason}\n`);
+      host.log(`[dockview] restore REFUSED: ${reason}\n`);
       const outcome = rollbackRestore(snapshot, panes);
-      host.log(`[dockview-prototype] restore rollback: ${outcome}\n`);
+      host.log(`[dockview] restore rollback: ${outcome}\n`);
       controls.setStatus(outcome === 'incomplete'
         ? `Restore failed (${reason}) and the previous arrangement could not be fully rebuilt. ` +
           'No terminal was closed and the saved layout on disk is unchanged.'
@@ -549,7 +524,7 @@
       controls.setStatus(result && result.ok
         ? `Saved layout metadata deleted. Live panes were NOT changed — ${hostedPanes.size} pane(s) still open.`
         : `Clear Saved Layout refused: ${(result && result.reason) || 'unknown'}. Live panes were NOT changed.`);
-      host.log(`[dockview-prototype] layout reset: ${result && result.ok ? 'ok' : 'refused'}\n`);
+      host.log(`[dockview] layout reset: ${result && result.ok ? 'ok' : 'refused'}\n`);
       return result;
     }
 
@@ -566,7 +541,7 @@
     async function useDefaultLayout() {
       if (hostedPanes.size > 0) {
         const owned = [...hostedPanes.keys()].join(', ');
-        host.log(`[dockview-prototype] REFUSED create-default-workspace: workspace-not-empty (${hostedPanes.size} pane(s))\n`);
+        host.log(`[dockview] REFUSED create-default-workspace: workspace-not-empty (${hostedPanes.size} pane(s))\n`);
         controls.setStatus(
           `Create Default Workspace refused: the workspace already has ${hostedPanes.size} pane(s) (${owned}). ` +
           'Close them first. Nothing was created and no terminal was started.');
@@ -597,40 +572,35 @@
       element.className = 'dockview-prototype-controls';
       const status = document.createElement('span');
       status.className = 'dockview-prototype-status';
-      status.textContent = 'Prototype idle. Nothing is created until you ask.';
+      status.textContent = 'Layout ready. Panes are created by + Shell, the Agents tab, and Library.';
 
       // EVERY control reports success or a bounded refusal into the status surface. None may end in
       // a silent no-op: Add Library previously resolved a nonexistent `#libraryPanel` to null and
       // discarded the click with no status, no log line, and no visible effect at all.
+      // PHASE B CONTROL BAR — deliberately minimal.
+      //
+      // Terminal creation is NOT duplicated here: `+ Shell` and the Agents tab already own it, and a
+      // second creation affordance is how the prototype's "Use Default" quietly multiplied PTYs.
+      // Library docking is NOT duplicated here either: the existing Library navigation owns it.
+      //
+      // The three persistence controls are rendered but DISABLED, because Phase B does not implement
+      // Save/Restore/Reset/Clear semantics. Showing them disabled with a reason is the honest shape:
+      // it neither hides that persistence is coming nor lets anyone invoke half-finished behaviour.
+      // The underlying functions still exist and are exercised by tests; nothing in the production UI
+      // can reach them until Phase C wires these up.
+      const PHASE_C_TITLE = 'Layout persistence arrives in Phase C — not enabled yet.';
       const buttons = [
-        ['Add Terminal', async () => {
-          const id = await host.createTerminalPane();
-          if (!id) { controls.setStatus('Add Terminal refused: the app did not create a terminal pane.'); return; }
-          const r = addPane(id, 'terminal');
-          controls.setStatus(r.ok ? `Added ${panelPolicy.defaultTitleFor(id)}.` : `Add Terminal refused: ${r.reason}.`);
-        }],
-        ['Add Library', () => {
-          const r = addPane('library', 'library');
-          if (r.ok) { controls.setStatus('Library docked.'); return; }
-          controls.setStatus(r.reason === 'library-already-open'
-            ? (r.focused
-              ? 'Library is already open — focused the existing panel. No duplicate was created.'
-              : 'Library is already open. No duplicate was created.')
-            : `Add Library refused: ${r.reason}.`);
-        }],
-        ['Save Layout', () => saveLayout()],
-        ['Restore Layout', () => restoreLayout()],
-        // Renamed from "Use Default": it CREATES a workspace (two real PTYs and the Library), and
-        // the old label read like a harmless view toggle.
-        ['Create Default Workspace', () => useDefaultLayout()],
-        // Renamed from "Reset": it clears only persisted metadata on disk. The old label strongly
-        // implied it would reset the live panes, which it never did.
-        ['Clear Saved Layout', () => resetLayout()],
-      ].map(([label, onClick]) => {
+        'Save Arrangement',
+        'Restore Saved Arrangement',
+        'Clear Saved Arrangement',
+      ].map((label) => {
         const b = document.createElement('button');
         b.className = 'ghost';
         b.textContent = label;
-        b.onclick = () => { Promise.resolve(onClick()).catch((e) => host.log(`[dockview-prototype] ${label} failed: ${(e && e.message) || e}\n`)); };
+        b.disabled = true;
+        b.title = PHASE_C_TITLE;
+        b.setAttribute('aria-disabled', 'true');
+        b.dataset.phase = 'c';
         return b;
       });
 
@@ -639,32 +609,7 @@
       return { element, setStatus: (t) => { status.textContent = t; } };
     }
 
-    // ---- ATTACH THE APP-OWNED AUDIO CONTROLS — LAST, after every risky step has succeeded -------
-    // Deliberately the final activation step. `createDockview`, the component factory, and all four
-    // event subscriptions are already done, so there is no remaining initialization that can throw
-    // while the app's audio surface sits inside a root the bootstrap is about to delete. That
-    // ordering is the guarantee; the try/catch below is the belt to its braces.
-    //
-    // The element is MOVED, by object identity. appendChild relocates the existing node, so every
-    // handler app.js and the ccSTT/ccTTS modules bound to `#sttMic`, `#ttsStop`, `#ttsVoice`, and
-    // `#ttsSpeed` survives, the status readouts keep updating, and dictation destination locking is
-    // untouched because it keys off `activeTermId`, not DOM position.
-    try {
-      const audioElement = host.dockAudioControls();
-      if (!audioElement) throw new Error('audio controls could not be borrowed');
-      audioSlot.appendChild(audioElement);
-    } catch {
-      // ROLLBACK: put the controls back, tear down the Dockview instance this activation created,
-      // and refuse in a bounded way. The bootstrap removes the root, and because the controls are
-      // home again the normal renderer is left intact — no placeholder, no duplicate, no detached
-      // controls, and nothing for the user to recover manually.
-      try { host.undockAudioControls(); } catch { /* best effort — the refusal still reports */ }
-      try { inMountTransition(() => api.dispose()); } catch { /* best effort */ }
-      host.log('[dockview-prototype] REFUSED: audio-controls-dock-failed\n');
-      return { ok: false, reason: 'audio-controls-dock-failed' };
-    }
-
-    host.log('[dockview-prototype] ACTIVE — layout only. PTY, clipboard, TTS, Dictate, Library remain app-owned.\n');
+    host.log('[dockview] layout engine active — layout only. PTY, clipboard, TTS, Dictate and Library remain app-owned.\n');
 
     return {
       ok: true,
@@ -686,7 +631,35 @@
         const panel = typeof api.getPanel === 'function' ? api.getPanel(paneId) : null;
         if (!panel) return;
         try { inMountTransition(() => api.removePanel(panel)); }
-        catch { host.log('[dockview-prototype] removePanel REFUSED: panel could not be removed\n'); }
+        catch { host.log('[dockview] removePanel REFUSED: panel could not be removed\n'); }
+      },
+      /**
+       * Maximize / restore the panel hosting `paneId`.
+       *
+       * Uses dockview@7.0.4's public panel API, VERIFIED against the installed type definitions
+       * (`dockview-core/dist/cjs/api/dockviewPanelApi.d.ts` declares `maximize(): void`,
+       * `isMaximized(): boolean`, `exitMaximized(): void`) and confirmed present in the shipped UMD
+       * bundle. The method names are read from the installed package, never inferred.
+       *
+       * Returns null when this adapter does not host the pane, so the caller falls through to the
+       * classic grid maximizer instead of silently doing nothing.
+       */
+      maximizePane(paneId) {
+        if (!paneId || !api || !hostedPanes.has(paneId)) return null;
+        const panel = typeof api.getPanel === 'function' ? api.getPanel(paneId) : null;
+        if (!panel || !panel.api || typeof panel.api.maximize !== 'function') return null;
+        try {
+          const already = typeof panel.api.isMaximized === 'function' && panel.api.isMaximized();
+          if (already) {
+            if (typeof panel.api.exitMaximized === 'function') panel.api.exitMaximized();
+            return { maximized: false };
+          }
+          panel.api.maximize();
+          return { maximized: true };
+        } catch {
+          host.log('[dockview] maximize REFUSED: the panel API rejected the request\n');
+          return null;
+        }
       },
       saveLayout,
       restoreLayout,
@@ -710,25 +683,13 @@
         ownedPaneIds: [...hostedPanes.keys()],
         fitControllers: registry.size(),
         libraryDocked: typeof host.isLibraryDocked === 'function' ? host.isLibraryDocked() : null,
-        audioControlsDocked: typeof host.isAudioControlsDocked === 'function' ? host.isAudioControlsDocked() : null,
       }),
       registry,
       dispose() {
         if (disposed) return;
         disposed = true;
-        // FIRST, before anything else and before the caller removes the prototype root: give the
-        // app its audio controls back. They are app-owned and merely borrowed; tearing down while
-        // they are still inside the root would delete the application's only Dictate, TTS status,
-        // Stop, voice, and speed surface along with it.
-        if (typeof host.undockAudioControls === 'function') {
-          try {
-            if (!host.undockAudioControls()) {
-              host.log('[dockview-prototype] audio controls were NOT returned to their original position\n');
-            }
-          } catch {
-            host.log('[dockview-prototype] audio-controls undock REFUSED: element could not be returned\n');
-          }
-        }
+        // No audio undock here any more. The production surface never borrows `.tts-controls`, so
+        // there is nothing to give back and no ordering constraint to honour.
         window.removeEventListener('resize', onWindowResize);
         // Every OWNED pane, not only those carrying a fit controller — the Library pane has no
         // xterm and therefore no controller, but the adapter still owns its mount.
@@ -764,65 +725,48 @@
     const doc = opts.doc;
     const log = typeof opts.log === 'function' ? opts.log : () => {};
     const buildHost = opts.buildHost;
-    const rootId = opts.rootId || 'dockviewPrototypeRoot';
-    const rootClassName = opts.rootClassName || 'dockview-prototype-root';
+    // The EMBEDDED production container. The bootstrap looks it up; it never creates it, and it
+    // never creates a full-screen root. If the markup does not provide it, that is a refusal — a
+    // silently-invented container is how a dead layout ends up covering a working application.
+    const containerId = opts.containerId || 'terminalDock';
 
     if (!win || !doc || typeof buildHost !== 'function') {
-      log('[dockview-prototype] REFUSED: bootstrap-misconfigured\n');
+      log('[dockview] REFUSED: bootstrap-misconfigured\n');
       return { ok: false, reason: 'bootstrap-misconfigured' };
     }
 
-    let createdRoot = null;
-    // Held so a refusal can reach the host surface. activate() may already have moved the app-owned
-    // audio controls INTO the root, and removing the root without giving them back would delete the
-    // application's only Dictate/TTS surface. Undock is idempotent, so calling it when nothing was
-    // moved is a no-op.
-    let hostSurface = null;
+    let container = null;
     const refuse = (reason) => {
-      // Return borrowed app-owned DOM BEFORE the root is removed. Ordering is the whole point here.
+      // Strip anything a partial activation appended, so no half-built surface survives. The
+      // container is empty in markup and only this adapter ever writes into it, so clearing it is
+      // exact rather than approximate. Wrapped: a refusal that throws would be worse than the
+      // failure it reports.
       try {
-        if (hostSurface && typeof hostSurface.undockAudioControls === 'function') {
-          hostSurface.undockAudioControls();
-        }
+        if (container) { while (container.firstChild) container.removeChild(container.firstChild); }
       } catch { /* best effort */ }
-      // Remove only a root THIS call created, then clear any partial instance. Both are wrapped:
-      // a refusal that throws would be worse than the failure it is reporting.
-      try {
-        if (createdRoot && createdRoot.parentNode) createdRoot.parentNode.removeChild(createdRoot);
-      } catch { /* best effort */ }
-      createdRoot = null;
-      try { win.ccDockviewPrototypeInstance = undefined; } catch { /* best effort */ }
-      log(`[dockview-prototype] REFUSED: ${reason} — prototype not started, existing layout left usable\n`);
+      // The container stays hidden. The caller never switched the visible surface, because that
+      // switch happens only after a successful activation — so the classic grid is still the live,
+      // usable terminal workspace in this same process.
+      log(`[dockview] REFUSED: ${reason} — layout engine not started, classic grid left usable\n`);
       return { ok: false, reason };
     };
 
     // A script element's onload fires when the file was FETCHED, not when it parsed and published
-    // an API. Both policy scripts fetched fine and then failed to parse, which is precisely why
+    // an API. Both policy scripts once fetched fine and then failed to parse, which is precisely why
     // onload is not treated as proof of anything here.
     const missing = missingBrowserExports(win);
     if (missing.length > 0) return refuse(`missing-exports:${missing.join('+')}`);
 
-    // Only NOW may a full-screen root exist.
-    let root;
     try {
-      root = doc.getElementById(rootId);
-      if (!root) {
-        root = doc.createElement('div');
-        root.id = rootId;
-        root.className = rootClassName;
-        doc.body.appendChild(root);
-        createdRoot = root;
-      }
+      container = doc.getElementById(containerId);
     } catch {
-      return refuse('root-create-failed');
+      container = null;
     }
+    if (!container) return refuse('dock-container-missing');
 
     let instance = null;
     try {
-      // Built into a held variable, not inline, so `refuse` above can reach the host to return any
-      // app-owned DOM that activation had already borrowed.
-      hostSurface = buildHost(root);
-      instance = win.ccDockviewPrototype.activate(hostSurface);
+      instance = win.ccDockviewPrototype.activate(buildHost(container));
     } catch {
       return refuse('activation-threw');
     }
@@ -830,12 +774,14 @@
       return refuse(instance && instance.reason ? `activation-refused:${instance.reason}` : 'activation-refused');
     }
 
-    win.ccDockviewPrototypeInstance = instance;
-    log('[dockview-prototype] bootstrap complete — prototype active\n');
+    // The instance is RETURNED, not published on `window`. The prototype's
+    // `window.ccDockviewPrototypeInstance` was a mutable global that the app's close path read as an
+    // authority; any script could have replaced it. The caller now holds it in module scope.
+    log('[dockview] layout engine started\n');
     return { ok: true, instance };
   }
 
-  const api = { activate, bootstrap, missingBrowserExports, BANNER_TEXT };
+  const api = { activate, bootstrap, missingBrowserExports };
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.ccDockviewPrototype = api;
 })();

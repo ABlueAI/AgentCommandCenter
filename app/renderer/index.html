@@ -123,6 +123,18 @@
         <div id="terminalGrid" class="term-grid">
           <div class="empty muted" id="termEmpty">No terminals open. Open an agent from the <b>Agents</b> tab, or click <b>+ Shell</b>.</div>
         </div>
+        <!-- Production Dockview surface. EMBEDDED here as a sibling of the grid, inside the same
+             Terminals tab and BELOW the toolbar above — never fixed-position and never full-screen,
+             so Board / Agents / Logs, the navigation, the terminal toolbar and the `.tts-controls`
+             element in it all stay exactly where they are.
+
+             Both containers exist at all times and exactly one is visible. That is what lets a
+             failed Dockview bootstrap fall back to a usable classic grid IN THE SAME PROCESS: the
+             grid was never removed, only hidden, and only after Dockview had already activated.
+
+             Empty and hidden in markup. Classic recovery mode (`npm run start:classic`) never
+             unhides it, never loads a Dockview script, and leaves the grid as the live surface. -->
+        <div id="terminalDock" class="term-dock" hidden></div>
       </section>
 
       <!-- `id` is an inert stable identity for the Dockview prototype seam (branch

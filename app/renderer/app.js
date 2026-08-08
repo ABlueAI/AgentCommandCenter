@@ -129,7 +129,16 @@ function switchTab(name) {
   document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('active', x.dataset.tab === name));
   document.querySelectorAll('.tabpane').forEach((x) => x.classList.toggle('active', x.dataset.pane === name));
 }
-function fitAllTerms() { for (const t of terms.values()) { try { t.fit.fit(); } catch {} } }
+// RESIZE OWNERSHIP. A Dockview-hosted terminal is fitted ONLY by its guarded fit controller, which
+// checks visibility and geometry inside an animation frame and refuses zero/hidden/non-finite sizes.
+// This global path is the CLASSIC-grid fitter, so it must skip docked panes: running both would give
+// a hosted terminal two effective resize senders and let ungated geometry reach `pty-resize`.
+function fitAllTerms() {
+  for (const [id, t] of terms) {
+    if (paneIsDocked(id)) continue;   // the fit controller owns this pane
+    try { t.fit.fit(); } catch {}
+  }
+}
 
 // V1a maximize: the state machine lives in pane-maximize.js; every side effect
 // (refit + PTY resize + focus + button glyphs) lives HERE in onLayout, so all exit
@@ -650,14 +659,17 @@ function openInAppTerminal(opts = {}) {
   // makes any repeat call a no-op.
   const closeThisPane = () => {
     if (!terms.has(id)) return;   // already closed — exactly-once guarantee
-    // PROTOTYPE ONLY: if this pane is hosted in a Dockview panel, remove the panel too, so closing
-    // from the pane's own ✕ does not leave a ghost panel behind. The adapter suppresses its own
-    // close-convergence while doing so, and this whole call is inside the terms.has(id) guard, so
-    // the two directions cannot recurse. On the default path the instance is undefined and this
-    // is a single falsy check.
-    const dvPrototype = window.ccDockviewPrototypeInstance;
-    if (dvPrototype && typeof dvPrototype.onAppPaneClosed === 'function') {
-      try { dvPrototype.onAppPaneClosed(id); } catch { /* prototype teardown must not block a close */ }
+    // CLOSE CONVERGENCE, direction 2 of 2. If this pane is hosted in a Dockview panel, remove the
+    // panel too, so closing from the pane's own ✕ does not leave a ghost panel behind. The adapter
+    // suppresses its own close-convergence while doing so, and this whole call is inside the
+    // `terms.has(id)` guard, so the two directions cannot recurse: whichever fires first deletes the
+    // map entry, and the other returns immediately. Exactly one ptyKill, one xterm disposal, one
+    // observer disconnect, one map deletion.
+    //
+    // `layoutInstance` is a module-local, not a window global, so nothing outside this file can
+    // substitute a fake and redirect closure. In classic mode it is null and this is one falsy check.
+    if (layoutInstance && typeof layoutInstance.onAppPaneClosed === 'function') {
+      try { layoutInstance.onAppPaneClosed(id); } catch { /* layout teardown must not block a close */ }
     }
     // Closing the maximized pane restores the grid cleanly (V1a) — clear the maximize
     // state FIRST so the surviving panes un-hide and refit.
@@ -679,18 +691,38 @@ function openInAppTerminal(opts = {}) {
   term.textarea && term.textarea.addEventListener('focus', () => { activeTermId = id; });
   terms.set(id, paneData);
   cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, videoModel: opts.videoModel, mediaResolution: opts.mediaResolution, analysisMode: opts.analysisMode, startOffset: opts.startOffset, endOffset: opts.endOffset, sliceRanges: opts.sliceRanges, analysisFocus: opts.analysisFocus, cols: term.cols, rows: term.rows });
+  // ---- TERMINAL ADOPTION TRANSACTION ----------------------------------------------------------
+  // The pane above was created by the existing app-owned path and is already a fully live terminal:
+  // real PTY, real xterm, real clipboard / OSC 52 / TTS / Dictate / Open Report wiring. If Dockview
+  // is the active workspace, it must now host that exact element — never a copy.
+  //
+  // A failed dock is NOT survivable by leaving the pane in the classic grid, because the grid is
+  // hidden while Dockview is active: the result would be a live PTY the user can neither see nor
+  // close. So the failure path closes THIS pane through the same idempotent close path the ✕ button
+  // uses — exactly one ptyKill, one xterm disposal, one observer disconnect, one map deletion — and
+  // reports a bounded reason. Either the terminal is visible and owned, or it does not exist.
+  if (layoutInstance) {
+    let docked = null;
+    try { docked = layoutInstance.addPane(id, 'terminal'); }
+    catch { docked = { ok: false, reason: 'add-pane-threw' }; }
+    if (!docked || docked.ok !== true) {
+      appendLog(`[dockview] REFUSED to dock ${id}: ${(docked && docked.reason) || 'unknown'} — closing `
+        + 'the terminal that was just created, so no orphan PTY or hidden pane survives\n');
+      closeThisPane();
+      return;
+    }
+  }
   setTimeout(() => { fit.fit(); cc.ptyResize(id, term.cols, term.rows); activeTermId = id; term.focus(); }, 40);
 }
 
-// ---- Dockview prototype bootstrap (PROTOTYPE ONLY — branch feature/dockview-prototype) --------
-// The ENTIRE prototype hangs off the strict check on the first line of maybeStartDockviewPrototype.
-// When main did not pass the flag, `window.ccDockview` reports enabled === false, that function
-// returns immediately, and no Dockview script tag is ever created — index.html is untouched and the
-// default grid behaves exactly as before (§ 5.10 / § 6).
+// ---- Dockview layout engine scripts ------------------------------------------------------------
+// Loaded on every normal launch. Classic recovery mode returns from startLayoutEngine() before this
+// list is touched, so `--classic-layout` creates no Dockview script tag at all — index.html itself
+// references none of them, which is what makes that guarantee checkable rather than asserted.
 //
-// Scripts are injected dynamically rather than listed in index.html precisely so the default path
-// cannot load them. They load in dependency order, from local files only.
-const DOCKVIEW_PROTOTYPE_SCRIPTS = [
+// Injected dynamically rather than listed in index.html precisely so recovery mode can decline
+// them. They load in dependency order, from LOCAL FILES ONLY — no CDN, no remote asset.
+const DOCKVIEW_SCRIPTS = [
   '../node_modules/dockview/dist/dockview.js',   // vendor UMD bundle -> window.dockview
   'dockview-fit-policy.js',
   'dockview-panel-policy.js',
@@ -749,96 +781,18 @@ function undockLibraryElement() {
   return true;
 }
 
-// ---- Audio-control surface docking (PROTOTYPE ONLY) --------------------------------------------
-// `.tts-controls` is ONE app-owned element carrying the build badge, both status readouts, Dictate
-// (`#sttMic`), Stop, voice, and speed. Every handler on it is bound by this file's own
-// setupSTTControls()/setupTTSControls() and by the ccSTT/ccTTS modules, and dictation destination
-// locking reads `activeTermId` — none of which is DOM-position dependent.
+// ---- The audio-control seam is GONE -----------------------------------------------------------
+// The prototype borrowed the app-owned `.tts-controls` element into its own slot, because its
+// full-screen opaque overlay covered the Terminals toolbar and made Dictate unreachable. The
+// production surface is embedded BELOW that toolbar, so the controls are never covered and never
+// need to move. The whole borrow/restore mechanism — selector, placeholder, held reference,
+// last-resort parent, dock/undock helpers, count preflight and the adapter's rollback — is deleted
+// rather than left dormant: dead machinery around a live audio surface is a liability, and the
+// safest reparenting code is the code that does not exist.
 //
-// The prototype MOVES that exact node into its own visible slot. It never clones the markup, never
-// creates proxy buttons, never synthesizes clicks, and never installs a second TTS/STT
-// implementation: a clone would carry no handlers at all, and a proxy would be a second Dictate
-// implementation whose destination locking could diverge from the real one.
-//
-// WHY THIS EXISTS: `.dockview-prototype-root` is `position: fixed; inset: 0; z-index: 9000` with an
-// opaque background. The controls live in the Terminals `.term-bar`, which the overlay covers
-// completely, so in prototype mode Dictate was rendered unreachable — the predeclared kill
-// criterion covering TTS and Dictate after docking.
-const AUDIO_CONTROLS_SELECTOR = '.tts-controls';
-// A marker parked at the controls' original position among `.term-bar`'s children. The parent alone
-// is not enough: `#newTermShell` follows the controls, so only a placeholder restores the index.
-let audioHomePlaceholder = null;
-// A HELD REFERENCE, for the same load-bearing reason as the Library's: once the element has been
-// moved into the prototype root and the root is being torn down, a document lookup can no longer be
-// relied on to find it. Restoration must never depend on a query.
-let audioDockedElement = null;
-// The original parent, held separately as a LAST-RESORT net. The placeholder is the contract and
-// restores the exact index; this exists only so that a placeholder somehow detached from the
-// document can never cost the app its only Dictate/TTS surface.
-let audioHomeParent = null;
-
-function audioControlsElement() {
-  return document.querySelector(AUDIO_CONTROLS_SELECTOR) || audioDockedElement;
-}
-
-// Counted from the live document so "exactly one genuine surface" is a fact, not an assumption.
-// A second `.tts-controls` would mean duplicated IDs, and `$('#sttMic')` would then wire whichever
-// one happened to come first — so duplication is refused rather than guessed at.
-function audioControlsCount() {
-  return document.querySelectorAll(AUDIO_CONTROLS_SELECTOR).length;
-}
-
-/**
- * Take the audio controls out of the Terminals toolbar, leaving a placeholder at their exact index.
- * Returns the element on success, or null if the surface is missing.
- * Idempotent: docking already-docked controls returns the same element and moves nothing.
- */
-function dockAudioControlsElement() {
-  const el = audioControlsElement();
-  if (!el || !el.parentNode) return null;
-  if (audioHomePlaceholder) return el;   // already docked — do not create a second placeholder
-  const placeholder = document.createComment('dockview-prototype: audio controls home');
-  el.parentNode.insertBefore(placeholder, el);
-  audioHomePlaceholder = placeholder;
-  audioDockedElement = el;
-  audioHomeParent = el.parentNode;
-  return el;
-}
-
-/**
- * Return the audio controls to the exact position they were taken from and drop the placeholder.
- * Idempotent: undocking controls that are not docked is a no-op, never a throw.
- * Returns true only when the element was restored to its exact original index.
- */
-function undockAudioControlsElement() {
-  const el = audioDockedElement || document.querySelector(AUDIO_CONTROLS_SELECTOR);
-  const placeholder = audioHomePlaceholder;
-  const parent = audioHomeParent;
-  if (!el) { audioHomePlaceholder = null; audioDockedElement = null; audioHomeParent = null; return false; }
-
-  if (placeholder && placeholder.parentNode) {
-    placeholder.parentNode.insertBefore(el, placeholder);
-    placeholder.parentNode.removeChild(placeholder);
-    audioHomePlaceholder = null; audioDockedElement = null; audioHomeParent = null;
-    return true;
-  }
-
-  // LAST RESORT. The placeholder is gone, so the exact index is unrecoverable — but leaving the
-  // element detached would cost the app Dictate, TTS status, Stop, voice, and speed entirely, which
-  // is strictly worse than restoring it to the right toolbar in the wrong position. The bookkeeping
-  // is cleared only once the element is genuinely re-attached.
-  if (parent && parent.isConnected) {
-    parent.appendChild(el);
-    appendLog('[dockview-prototype] audio controls restored to their toolbar, but NOT to their original position\n');
-    audioHomePlaceholder = null; audioDockedElement = null; audioHomeParent = null;
-    return false;
-  }
-
-  // Nothing was moved (never docked), or there is genuinely nowhere to put it back. Keep the held
-  // reference so a later attempt can still find the element rather than discarding its only handle.
-  if (!placeholder && !parent) { audioDockedElement = null; return false; }
-  return false;
-}
+// `.tts-controls` therefore stays exactly where index.html puts it, keeping every handler
+// setupSTTControls()/setupTTSControls() and the ccSTT/ccTTS modules bind to it, and dictation
+// destination locking continues to key off `activeTermId` rather than DOM position.
 
 function loadScriptOnce(src) {
   return new Promise((resolve, reject) => {
@@ -850,45 +804,169 @@ function loadScriptOnce(src) {
   });
 }
 
-/** One bounded, content-free prototype refusal. Never echoes an exception, path, or state. */
-function refuseDockviewPrototype(reason) {
-  appendLog(`[dockview-prototype] REFUSED: ${reason} — prototype not started, existing layout left usable\n`);
+// ---- Production layout engine ------------------------------------------------------------------
+// THE LIVE ADAPTER INSTANCE, held in module scope. The prototype published this on
+// `window.ccDockviewPrototypeInstance` and then read it back as an authority in the close path,
+// which meant any script in the renderer could substitute a fake and redirect pane closure. It is
+// now a module-local that nothing outside this file can reach or replace.
+let layoutInstance = null;
+
+/** True when Dockview is the live terminal workspace. */
+function dockviewIsActive() { return layoutInstance !== null; }
+
+/** True when THIS adapter owns `paneId`. The single source of truth for resize/maximize routing. */
+function paneIsDocked(paneId) {
+  if (!layoutInstance) return false;
+  try { return layoutInstance.ownedPaneIds().indexOf(paneId) !== -1; }
+  catch { return false; }
 }
 
-async function maybeStartDockviewPrototype() {
-  // STRICT and fail-closed: only main's frozen boolean `true` proceeds. A renderer query string,
-  // hash, saved setting, or injected truthy object cannot satisfy this.
-  if (!window.ccDockview || window.ccDockview.enabled !== true) return;
+/**
+ * Show exactly one terminal surface. Both containers exist at all times; this only toggles which is
+ * visible, so the classic grid is never destroyed and is always one attribute away from usable.
+ */
+function showTerminalSurface(which) {
+  const grid = $('#terminalGrid');
+  const dock = $('#terminalDock');
+  if (!grid || !dock) return false;
+  const useDock = which === 'dock';
+  dock.hidden = !useDock;
+  grid.hidden = useDock;
+  return true;
+}
 
-  appendLog('[dockview-prototype] flag present — loading prototype (NOT PRODUCTION)\n');
+/** One bounded, content-free refusal, and a guaranteed landing on the working grid. */
+function refuseLayoutEngine(reason) {
+  appendLog(`[dockview] REFUSED: ${reason} — layout engine not started, classic grid left usable\n`);
+  showTerminalSurface('grid');
+}
+
+/**
+ * Adopt terminal panes that already exist — panes created while the Dockview scripts were still
+ * loading, which is a real race because startup is async and `+ Shell` is clickable immediately.
+ *
+ * ALL-OR-NOTHING. A partially adopted workspace would leave the unadopted panes parented to the
+ * hidden classic grid: alive, holding a PTY, and invisible. That is precisely the "hidden pane"
+ * the work order forbids, so a single failure rolls every adoption back and the caller falls back
+ * to the grid. No PTY is created or killed on any path here.
+ *
+ * @returns {boolean} true when every existing pane was adopted.
+ */
+function adoptExistingPanes() {
+  if (!layoutInstance) return false;
+  const adopted = [];
+  for (const id of [...terms.keys()]) {
+    let result = null;
+    try { result = layoutInstance.addPane(id, 'terminal'); }
+    catch { result = { ok: false, reason: 'adopt-threw' }; }
+    if (result && result.ok) { adopted.push(id); continue; }
+
+    appendLog(`[dockview] adopt REFUSED for ${id}: ${(result && result.reason) || 'unknown'} — `
+      + `rolling back ${adopted.length} adopted pane(s); no PTY was created or killed\n`);
+    for (const doneId of adopted) {
+      try { layoutInstance.onAppPaneClosed(doneId); } catch { /* rollback is best effort */ }
+    }
+    returnAllPanesToGrid();
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Reparent every live terminal pane back into the classic grid, by object identity. Used by
+ * adoption rollback and by any post-activation failure, so a pane can never end up detached: the
+ * xterm, its PTY and every handler ride along with the element.
+ */
+function returnAllPanesToGrid() {
+  const grid = $('#terminalGrid');
+  if (!grid) return;
+  for (const t of terms.values()) {
+    if (t && t.pane && t.pane.parentNode !== grid) {
+      try { grid.appendChild(t.pane); } catch { /* best effort — the refusal already reported */ }
+    }
+  }
+}
+
+async function startLayoutEngine() {
+  // STRICT in the direction that matters. `enabled` is main's frozen boolean: true on a normal
+  // launch, false under --classic-layout. The renderer cannot flip it either way, because it is
+  // computed in the preload from an argv token no renderer script can write.
+  if (!window.ccDockview || window.ccDockview.enabled !== true) {
+    appendLog('[classic-layout] CLASSIC RECOVERY MODE ACTIVE — Dockview is not loaded and layout '
+      + 'operations are unavailable. The classic grid is the terminal workspace.\n');
+    showTerminalSurface('grid');
+    return;
+  }
+
   try {
-    for (const src of DOCKVIEW_PROTOTYPE_SCRIPTS) await loadScriptOnce(src);
+    for (const src of DOCKVIEW_SCRIPTS) await loadScriptOnce(src);
   } catch {
     // The rejection carries only a src we already control; one bounded reason is the contract.
-    refuseDockviewPrototype('script-load-failed');
+    refuseLayoutEngine('script-load-failed');
     return;
   }
 
   // A script element's `onload` fires when the file was FETCHED — NOT when it parsed and published
-  // its API. Round 3 treated onload as proof: both policy scripts fetched fine, then failed to
-  // parse on a global `const api` collision, and the adapter was never defined. Verify the actual
-  // exports here, BEFORE anything full-screen is committed to the visible UI.
-  const proto = window.ccDockviewPrototype;
-  if (!proto || typeof proto.bootstrap !== 'function' || typeof proto.activate !== 'function') {
-    refuseDockviewPrototype('adapter-export-missing');
+  // its API. That distinction is not theoretical: two policy scripts once fetched fine, failed to
+  // parse on a global `const api` collision, and left the adapter undefined while onload reported
+  // success. Verify the actual exports before anything is committed to the visible UI.
+  const engine = window.ccDockviewPrototype;
+  if (!engine || typeof engine.bootstrap !== 'function' || typeof engine.activate !== 'function') {
+    refuseLayoutEngine('adapter-export-missing');
     return;
   }
   // Names come from the adapter's own closed literal list, so this reason cannot carry state.
-  const missing = typeof proto.missingBrowserExports === 'function' ? proto.missingBrowserExports(window) : [];
+  const missing = typeof engine.missingBrowserExports === 'function' ? engine.missingBrowserExports(window) : [];
   if (missing.length > 0) {
-    refuseDockviewPrototype(`missing-exports:${missing.join('+')}`);
+    refuseLayoutEngine(`missing-exports:${missing.join('+')}`);
     return;
   }
 
-  // bootstrap() creates the full-screen root only after its own re-verification passes, wraps
-  // activation in an error boundary, and removes the root again on any failure — so a broken
-  // prototype can never leave an opaque overlay on top of a working app.
-  proto.bootstrap({ win: window, doc: document, log: appendLog, buildHost: buildDockviewHost });
+  // bootstrap() binds to the EMBEDDED #terminalDock, re-verifies the exports itself, wraps
+  // activation in an error boundary, and strips any partial surface on failure. The grid is still
+  // the visible workspace at this point and stays that way unless everything below succeeds.
+  let result = null;
+  try {
+    result = engine.bootstrap({ win: window, doc: document, log: appendLog, buildHost: buildDockviewHost });
+  } catch {
+    refuseLayoutEngine('bootstrap-threw');
+    return;
+  }
+  if (!result || result.ok !== true || !result.instance) {
+    refuseLayoutEngine((result && result.reason) || 'activation-refused');
+    return;
+  }
+  layoutInstance = result.instance;
+
+  // Adopt first, still hidden, so a failed adoption never flashes a broken workspace.
+  if (!adoptExistingPanes()) {
+    try { layoutInstance.dispose(); } catch { /* teardown must not mask the refusal */ }
+    layoutInstance = null;
+    const dock = $('#terminalDock');
+    while (dock && dock.firstChild) dock.removeChild(dock.firstChild);
+    refuseLayoutEngine('pane-adoption-failed');
+    return;
+  }
+
+  // ONLY NOW is the visible workspace switched. Everything above can fail with the classic grid
+  // still on screen and still usable, which is the whole point of the ordering.
+  showTerminalSurface('dock');
+  appendLog('[dockview] production layout engine active (dockview 7.0.4).\n');
+
+  // A READ-ONLY, bounded diagnostic surface for tests and support transcripts. It is deliberately
+  // not an authority: nothing in this file reads it, it exposes no element, handle, or mutator, and
+  // it is non-writable and non-configurable so it cannot be swapped for a fake.
+  try {
+    Object.defineProperty(window, 'ccDockviewDiagnostics', {
+      value: Object.freeze({
+        snapshot: () => (layoutInstance ? layoutInstance.diagnostics() : null),
+        active: () => layoutInstance !== null,
+      }),
+      writable: false,
+      configurable: false,
+      enumerable: false,
+    });
+  } catch { /* a diagnostic surface must never be able to break startup */ }
 }
 
 // The controlled surface the adapter is allowed to use. Everything privileged stays on this side:
@@ -940,14 +1018,8 @@ function buildDockviewHost(container) {
     dockLibrary: () => dockLibraryElement(),
     undockLibrary: () => undockLibraryElement(),
     isLibraryDocked: () => libraryHomePlaceholder !== null,
-    // The app-owned audio surface, moved by object identity — never cloned or proxied. The adapter
-    // may only count it, borrow it, and give it back; every TTS/STT handler, all engine state,
-    // destination locking, and module-failure behaviour stay owned by this file and the ccSTT/ccTTS
-    // modules exactly as on the default path.
-    audioControlsCount: () => audioControlsCount(),
-    dockAudioControls: () => dockAudioControlsElement(),
-    undockAudioControls: () => undockAudioControlsElement(),
-    isAudioControlsDocked: () => audioHomePlaceholder !== null,
+    // No audio members. The adapter has no knowledge of `.tts-controls` and no way to reach it:
+    // the production surface never covers the toolbar, so the element never moves.
     // Diagnostics for acceptance: a monotonic ID like "Terminal 17" does NOT mean 17 live
     // terminals. This reports what is actually live so the two can never be confused.
     liveTerminalCount: () => terms.size,
@@ -983,13 +1055,14 @@ async function boot() {
   });
   cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));
   window.addEventListener('resize', fitAllTerms);
-  // DORMANT prototype seam (branch feature/dockview-prototype). On the default path
-  // `window.ccDockview.enabled` is false, this call returns immediately, and NOTHING about Dockview
-  // is fetched, parsed, styled, persisted, or initialized. See maybeStartDockviewPrototype below.
+  // PRODUCTION layout engine. On a normal launch this loads Dockview and, only after activation and
+  // pane adoption both succeed, switches the visible terminal workspace from the grid to the dock.
+  // Under `--classic-layout` it returns immediately and NOTHING about Dockview is fetched, parsed,
+  // styled, persisted, or initialized. See startLayoutEngine above.
   // The .catch is required, not decorative: this is a floating promise, and an unhandled rejection
   // here would be an invisible failure. Every internal path already refuses in a bounded way, so
   // this only fires if the bootstrap itself broke — and it still refuses visibly.
-  maybeStartDockviewPrototype().catch(() => refuseDockviewPrototype('bootstrap-failed'));
+  startLayoutEngine().catch(() => refuseLayoutEngine('startup-failed'));
   // TTS/STT modules load after this script. Every state has an explicit UI:
   // ready wires the control; a missed ready event becomes a visible refusal.
   const ttsReady = () => { audioModules.markReady('tts'); setupTTSControls(); appendLog('[tts] module ready\n'); };
