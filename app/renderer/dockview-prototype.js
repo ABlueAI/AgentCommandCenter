@@ -527,13 +527,17 @@
         if (!paneIsMounted(id)) return { ok: false, reason: REASON.APPLY_INCOMPLETE };
       }
       // No unexpected panel: the workspace must hold exactly the expected set, no more.
-      let livePanels = null;
-      try { livePanels = api.panels.map((p) => p && p.id); } catch { livePanels = null; }
-      if (livePanels) {
-        const expected = new Set(expectedIds);
-        if (livePanels.length !== expected.size) return { ok: false, reason: REASON.UNEXPECTED_PANEL };
-        for (const id of livePanels) if (!expected.has(id)) return { ok: false, reason: REASON.UNEXPECTED_PANEL };
-      }
+      let panelRecords = null;
+      try { panelRecords = api.panels; } catch { return { ok: false, reason: REASON.APPLY_INCOMPLETE }; }
+      // Enumeration is itself part of the post-apply proof. If the API is unavailable or no longer
+      // returns an array, the operation cannot honestly claim that every panel was checked. Refuse
+      // as an incomplete apply and roll back; reserve UNEXPECTED_PANEL for a successful enumeration
+      // whose contents actually disagree with the expected set.
+      if (!Array.isArray(panelRecords)) return { ok: false, reason: REASON.APPLY_INCOMPLETE };
+      const livePanels = panelRecords.map((p) => p && p.id);
+      const expected = new Set(expectedIds);
+      if (livePanels.length !== expected.size) return { ok: false, reason: REASON.UNEXPECTED_PANEL };
+      for (const id of livePanels) if (!expected.has(id)) return { ok: false, reason: REASON.UNEXPECTED_PANEL };
       // Object identity: the live xterm, its PTY and every handler ride on the ORIGINAL element.
       // A rebuilt panel holding anything else means the pane was recreated, which would have killed
       // a terminal — the one thing a layout operation may never do.

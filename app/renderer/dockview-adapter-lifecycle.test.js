@@ -119,6 +119,8 @@ function makeFakeDockview() {
   let failOnce = false;         // true => the fault fires once, so a rollback can still succeed
   // null | 'after-clear' | 'mid-rebuild' | 'add-panel' | 'drop-last' | 'extra-panel'
   let failMode = null;
+  let panelEnumerationMode = null;
+  let panelEnumerationOnce = false;
 
   // The real lifecycle: DockviewPanelModel's constructor calls createComponent({id,name}), then
   // panel.init(...) calls the returned renderer's init(). Both halves matter to the adapter.
@@ -185,7 +187,17 @@ function makeFakeDockview() {
     // dockview@7.0.4's DockviewApi exposes `panels` (all panels) and `activePanel`. The adapter
     // reads both — `panels` to prove no UNEXPECTED panel survived an apply, `activePanel` to put
     // focus back after a rollback — so the fake must carry them.
-    get panels() { return [...panels.values()]; },
+    get panels() {
+      const mode = panelEnumerationMode;
+      if (mode && panelEnumerationOnce) {
+        panelEnumerationMode = null;
+        panelEnumerationOnce = false;
+      }
+      if (mode === 'throw') throw new Error('dockview: synthetic panel enumeration failure');
+      if (mode === 'unavailable') return undefined;
+      if (mode === 'non-array') return { invalid: true };
+      return [...panels.values()];
+    },
     get activePanel() { return activePanelId ? panels.get(activePanelId) || null : null; },
     // A REAL serialization: one leaf group per panel under a horizontal branch, exactly the shape
     // the committed dockview@7.0.4 fixture has. This matters because the adapter now VALIDATES the
@@ -258,6 +270,11 @@ function makeFakeDockview() {
     _exitCalls: exitCalls,
     /** Passing { once: true } models a TRANSIENT vendor fault: the apply fails, the rollback works. */
     _failFromJSON: (mode, opts) => { failMode = mode; failOnce = !!(opts && opts.once); },
+    /** Fault-inject the public `api.panels` enumeration used by post-apply verification. */
+    _failPanelEnumeration: (mode, opts) => {
+      panelEnumerationMode = mode;
+      panelEnumerationOnce = !!(opts && opts.once);
+    },
   };
 }
 
@@ -852,6 +869,50 @@ process.stdout.write('\nevent shapes stay distinct per handler (they genuinely d
     assert(result.ok === false && result.reason === R.UNEXPECTED_PANEL,
       `a panel nobody expected is caught as ${R.UNEXPECTED_PANEL} (saw ${result.reason})`);
     assert(host._calls.closePane.length === 0, 'without killing a PTY');
+  }
+
+  process.stdout.write('\npanel enumeration failure is fail-closed, and a transient fault rolls back\n');
+  // -------------------------------------------------------------------------
+  // Reading `api.panels` is part of the proof that no unexpected panel survived. A throwing getter
+  // must therefore refuse rather than skip that check. This fault is transient: the target apply
+  // cannot be verified, but the rollback can enumerate normally and must restore the exact objects.
+  {
+    const { fake, host, instance, paneEl } = makeRestoreScenario(THREE);
+    const originals = new Map(THREE.map((id) => [id, paneEl(id)]));
+    const createdBefore = host._calls.created.length;
+    fake._failPanelEnumeration('throw', { once: true });
+
+    const result = await instance.restoreArrangement();
+    assert(result.ok === false && result.reason === R.APPLY_INCOMPLETE,
+      `a throwing panel getter refuses as ${R.APPLY_INCOMPLETE} (saw ${result.reason})`);
+    assert(result.rollback === 'restored', 'the transient enumeration fault rolls back successfully');
+    assert(host._calls.closePane.length === 0, 'the refusal closes zero PTYs');
+    assert(host._calls.created.length === createdBefore, 'the refusal creates zero PTYs');
+    for (const id of THREE) {
+      assert(paneEl(id) === originals.get(id), `${id}: rollback retains the ORIGINAL element object`);
+      assert(instance.paneIsMounted(id) === true, `${id}: rollback leaves the original object mounted`);
+    }
+    assert(/previous arrangement was put back/i.test(statusText(host)),
+      'the visible status reports the successful rollback');
+  }
+
+  process.stdout.write('\npersistently unavailable or non-array panel enumeration reports incomplete rollback\n');
+  // -------------------------------------------------------------------------
+  // Both non-throwing invalid shapes are persistent here. Verification must refuse the target apply,
+  // then refuse the rollback verification too — never convert an unverified rollback into success.
+  for (const mode of ['unavailable', 'non-array']) {
+    const { fake, host, instance } = makeRestoreScenario(THREE);
+    const createdBefore = host._calls.created.length;
+    fake._failPanelEnumeration(mode);
+
+    const result = await instance.restoreArrangement();
+    assert(result.ok === false && result.reason === R.APPLY_INCOMPLETE,
+      `${mode}: invalid panel enumeration refuses as ${R.APPLY_INCOMPLETE}`);
+    assert(result.rollback === 'incomplete', `${mode}: rollback is reported incomplete, never restored`);
+    assert(host._calls.closePane.length === 0, `${mode}: zero PTYs were closed`);
+    assert(host._calls.created.length === createdBefore, `${mode}: zero PTYs were created`);
+    assert(/could NOT be fully put back/i.test(statusText(host)),
+      `${mode}: the visible status admits the rollback could not be verified`);
   }
 
   process.stdout.write('\nan INCOMPLETE rollback is reported as incomplete, never as success\n');
