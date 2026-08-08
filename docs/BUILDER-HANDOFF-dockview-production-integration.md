@@ -8,15 +8,15 @@ Phase-C implementation: `3ffb28e857aab5ae614cd05e418aa331a10f4b08`
 Phase-C fail-closed correction: `d203b631b566c1cdb6ba2d645b4494f793aa9fab`
 First Full-class reviewed-code tip: `fba57dc44b746b403ce870bd5496a30392b3a7df` — `VERDICT: FAIL`
 Full-class corrective implementation: `9d1efb839a1f5312626c9445d35f3fa3b88d8d41`
-Corrective reviewed-code tip SHA: pending the corrective finalization commit described in § C14
-Branch tip: pending the immediately following handoff-only artifact tail
+Corrective reviewed-code tip SHA: `6be07912ed0ad29aa99a35994fd284aac247d036`
+Branch tip: the immediately following handoff-only artifact tail containing § C15
 Merge commit SHA: Pending until merge
 
 **Status: FULL-CLASS FAIL CORRECTED — FOCUSED FULL-CLASS DELTA REVIEW NOT YET REQUESTED**
 
 This document has two parts. **PART ONE** (§§ 1–12) is the Phase-B record, preserved as written;
 where Phase C superseded a Phase-B fact it is marked there and corrected in PART TWO.
-**PART TWO** (§§ C1–C14) is Phase C, both corrective rounds, and finalization.
+**PART TWO** (§§ C1–C15) is Phase C, both corrective rounds, and finalization.
 
 ---
 
@@ -376,8 +376,8 @@ Finalization then found one real fail-open verification gap. The corrective sequ
    `VERDICT: FAIL`; two MEDIUM findings and one LOW, recorded verbatim in § C14.
 8. `9d1efb839a1f5312626c9445d35f3fa3b88d8d41` — the approved bounded correction for all three
    findings, with no unrelated production change.
-9. the corrective reviewed-code finalization commit — this handoff plus
-   `BLUE-HELM-MASTER-STATUS.md` after the final gates.
+9. `6be07912ed0ad29aa99a35994fd284aac247d036` — the corrective reviewed-code finalization
+   commit: this handoff plus `BLUE-HELM-MASTER-STATUS.md` after the final gates.
 10. exactly one following handoff-only tail — refreshed artifact ranges, sizes, and SHA-256
     identities. The focused delta review must review item 8 through item 9, not either handoff tail.
 
@@ -763,9 +763,26 @@ was explicitly not a basis for its code verdict.
   requirement remains unwaived.
 
 The correction is built and gated, not reviewed or accepted. The next review scope is the exact
-corrective delta from prior handoff-only tip `83b8cfa1206ab21d07befcf0664c584eea64a379` to the new
-corrective reviewed-code tip. A fresh focused Full-class delta review must return its own literal
-verdict. No prior PASS exists to inherit, and the original cumulative verdict remains FAIL.
+corrective delta `83b8cfa1206ab21d07befcf0664c584eea64a379...6be07912ed0ad29aa99a35994fd284aac247d036`.
+A fresh focused Full-class delta review must return its own literal verdict. No prior PASS exists to
+inherit, and the original cumulative verdict remains FAIL.
+
+## C15. Corrective review artifacts
+
+The corrective reviewed-code tip is **`6be07912ed0ad29aa99a35994fd284aac247d036`**. The two
+whole-branch artifacts were refreshed, and a narrowly scoped corrective-delta artifact was added so
+the next Reviewer can assess the FAIL dispositions without re-reviewing 755 KB. All three were
+created with `git diff --output`, remain gitignored, and matched an independent regeneration in
+both exact byte count and SHA-256 identity.
+
+| Purpose | Exact three-dot range | Pinned file | Exact size | SHA-256 | Diff shortstat |
+| --- | --- | --- | ---: | --- | --- |
+| Isolated production adoption after the accepted prototype | `a78a3e424f8fa763ca6d98525fdf3aae85e12fda...6be07912ed0ad29aa99a35994fd284aac247d036` | `.agent-review-dockview-production-adoption.diff` | **645,512 bytes** | `11d97315872761f19bdbd149cfdb878a02ee113fb8d566839d2ef0b36402a5d8` | 23 files; 7,054 insertions; 2,181 deletions |
+| Refreshed cumulative merge delta and merge-gate artifact | `1dce24c141e929c04122e8b2998277d4c2d0c728...6be07912ed0ad29aa99a35994fd284aac247d036` | `.agent-review-dockview-production-integration.diff` | **755,704 bytes** | `b04fac307ec7852b2802ac08025495a76844025fbf31f78c5d152321939fb6ff` | 32 files; 12,684 insertions; 39 deletions |
+| Focused Full-class FAIL corrective delta | `83b8cfa1206ab21d07befcf0664c584eea64a379...6be07912ed0ad29aa99a35994fd284aac247d036` | `.agent-review-dockview-production-full-review-corrections.diff` | **46,024 bytes** | `79fddc5cc6f41b39f48e455260e007eadcb15e5c0d50cdf5e86f4f83f003e1a7` | 10 files; 285 insertions; 56 deletions |
+
+This handoff-only tail is excluded from all three ranges. The cumulative artifact remains the one a
+later merge-gate plan must name; the 46,024-byte delta is the next Reviewer's focused scope.
 
 ## Review-diff rule
 
