@@ -6,14 +6,15 @@ Pre-merge main SHA: `1dce24c141e929c04122e8b2998277d4c2d0c728`
 Phase-B implementation: `97394588c2017ea57b5f394b17edb773dc618106`
 Phase-C implementation: `3ffb28e857aab5ae614cd05e418aa331a10f4b08`
 Phase-C fail-closed correction: `d203b631b566c1cdb6ba2d645b4494f793aa9fab`
-Reviewed-code tip SHA: pending the finalization commit described in PART TWO § C1
+Reviewed-code tip SHA: `fba57dc44b746b403ce870bd5496a30392b3a7df`
+Branch tip: the immediately following handoff-only tail commit containing this exact artifact record
 Merge commit SHA: Pending until merge
 
 **Status: PHASE C CORRECTED — FINALIZATION COMPLETE; FULL-CLASS REVIEW NOT YET REQUESTED**
 
 This document has two parts. **PART ONE** (§§ 1–12) is the Phase-B record, preserved as written;
 where Phase C superseded a Phase-B fact it is marked there and corrected in PART TWO.
-**PART TWO** (§§ C1–C12) is Phase C and its fail-closed correction.
+**PART TWO** (§§ C1–C13) is Phase C, its fail-closed correction, and finalization.
 
 ---
 
@@ -362,8 +363,9 @@ Finalization then found one real fail-open verification gap. The corrective sequ
 
 3. `d203b631b566c1cdb6ba2d645b4494f793aa9fab` — fail closed when the live Dockview panel list
    cannot be enumerated, with lifecycle tests for transient and persistent faults.
-4. the reviewed-code finalization commit — this handoff plus `BLUE-HELM-MASTER-STATUS.md`, after
-   all final gates pass.
+4. `fba57dc44b746b403ce870bd5496a30392b3a7df` — the reviewed-code finalization commit: this
+   handoff plus `BLUE-HELM-MASTER-STATUS.md`, after all final Dockview/app gates pass and with the
+   Pester environment limitation recorded exactly.
 5. exactly one immediately following handoff-only tail commit — exact reviewed-tip SHA and the two
    pinned review-artifact ranges, sizes, and SHA-256 identities. This final commit is not part of
    either reviewed diff.
@@ -696,6 +698,23 @@ falsely `restored`; PTY creation and closure remain zero. The focused lifecycle 
 This correction authorizes only the finalization route. It does not constitute a review of the
 cumulative production diff. That remains the purpose of the fresh Full-class review after the two
 pinned artifacts are recorded.
+
+## C13. Final pinned review artifacts
+
+The reviewed-code tip is **`fba57dc44b746b403ce870bd5496a30392b3a7df`**. Both artifacts were
+created with `git diff --output`, remain gitignored local review evidence, and were independently
+regenerated from the stated range. Each regeneration matched the pinned file in both byte count and
+SHA-256 identity.
+
+| Purpose | Exact three-dot range | Pinned file | Exact size | SHA-256 | Diff shortstat |
+| --- | --- | --- | ---: | --- | --- |
+| Isolated production adoption after the accepted prototype | `a78a3e424f8fa763ca6d98525fdf3aae85e12fda...fba57dc44b746b403ce870bd5496a30392b3a7df` | `.agent-review-dockview-production-adoption.diff` | **622,269 bytes** | `426f645e94bdef9cfc249116e9bae3fc866371feba48ccdfc49f80c1d6a3661d` | 22 files; 6,794 insertions; 2,169 deletions |
+| Cumulative merge delta and merge-gate artifact | `1dce24c141e929c04122e8b2998277d4c2d0c728...fba57dc44b746b403ce870bd5496a30392b3a7df` | `.agent-review-dockview-production-integration.diff` | **737,780 bytes** | `6670c2c044f48ee0e5e01b500a0fe7c8b341950f869af3d637f8615b49e77a24` | 32 files; 12,436 insertions; 39 deletions |
+
+The isolated artifact is the production-adoption review surface. The cumulative artifact is the
+reproducible delta from recorded pre-merge `main` and is the artifact a later merge-gate plan must
+name. This handoff-only tail is intentionally excluded from both artifacts. No Full-class verdict,
+human acceptance, merge, or push exists yet.
 
 ## Review-diff rule
 
