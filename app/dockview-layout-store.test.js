@@ -25,6 +25,7 @@ function assert(cond, label) {
 }
 
 const FIXTURE = JSON.parse(fs.readFileSync(path.join(__dirname, 'test-fixtures', 'dockview-7.0.4-layout.json'), 'utf8'));
+const STORE_SOURCE = fs.readFileSync(path.join(__dirname, 'dockview-layout-store.js'), 'utf8');
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const envelopeOf = (layout) => ({
   schemaVersion: 1, package: 'dockview', packageVersion: '7.0.4',
@@ -345,6 +346,19 @@ process.stdout.write('\nfile-backed store: read guards\n');
   assert(store.layoutPath() === file, 'the layout path is main-owned: userData + a fixed filename');
   assert(store.load().reason === REASON.NOT_FOUND, 'a missing file refuses with no-saved-layout');
 
+  const loadWithLstatError = (code) => createLayoutStore({
+    userDataDir: dir,
+    fsImpl: {
+      lstatSync: () => { const err = new Error('synthetic lstat failure'); err.code = code; throw err; },
+    },
+  }).load();
+  assert(loadWithLstatError('ENOENT').reason === REASON.NOT_FOUND,
+    'ONLY ENOENT means no-saved-layout');
+  assert(loadWithLstatError('EACCES').reason === REASON.READ_FAILED,
+    'access denial while inspecting the canonical path refuses as read-failed');
+  assert(loadWithLstatError('EIO').reason === REASON.READ_FAILED,
+    'an I/O failure while inspecting the canonical path refuses as read-failed');
+
   fs.writeFileSync(file, 'not json at all');
   assert(store.load().reason === REASON.INVALID_JSON, 'non-JSON refuses with invalid-json');
 
@@ -443,6 +457,36 @@ process.stdout.write('\nfile-backed store: writes are validated and atomic\n');
   const leftovers = fs.readdirSync(dir).filter(f => f.endsWith('.tmp'));
   assert(leftovers.length === 0, 'no temp file survives a successful save');
   assert(fs.readdirSync(dir).length === 1, 'exactly one file exists after saving');
+
+  // Node's rename contract replaces an existing FILE at the destination on Windows. Exercise the
+  // real platform path: a second valid save must atomically replace the first without a delete gap.
+  const replacement = clone(FIXTURE);
+  replacement.panels.pty1.title = 'Terminal One';
+  assert(store.save(replacement).ok === true, 'an existing arrangement is replaced successfully');
+  assert(store.load().envelope.layout.panels.pty1.title === 'Terminal One',
+    'the replacement, not the prior arrangement, is now canonical');
+
+  // A failed replacement must leave the old canonical bytes intact. The injected rename throws
+  // before touching the target; production then cleans only its unique temp file.
+  const beforeFailedReplace = fs.readFileSync(file);
+  let renameCalls = 0;
+  const faultFs = Object.create(fs);
+  faultFs.renameSync = () => { renameCalls++; const err = new Error('synthetic rename failure'); err.code = 'EACCES'; throw err; };
+  const faultStore = createLayoutStore({ userDataDir: dir, fsImpl: faultFs });
+  const refusedReplacement = clone(FIXTURE);
+  refusedReplacement.panels.pty1.title = 'Terminal Two';
+  const refused = faultStore.save(refusedReplacement);
+  assert(refused.ok === false && refused.reason === REASON.WRITE_FAILED,
+    'a failed atomic replacement refuses as write-failed');
+  assert(renameCalls === 1, 'replacement is attempted exactly once — there is no delete-and-retry path');
+  assert(fs.readFileSync(file).equals(beforeFailedReplace),
+    'the previous valid arrangement remains byte-for-byte intact after replacement failure');
+  assert(fs.readdirSync(dir).filter(f => f.endsWith('.tmp')).length === 0,
+    'the refused replacement cleans only its own temp file');
+
+  const saveSource = STORE_SOURCE.slice(STORE_SOURCE.indexOf('  function save('), STORE_SOURCE.indexOf('  function reset('));
+  assert(!/rmSync\(layoutPath/.test(saveSource),
+    'INTERRUPTION TRIPWIRE: Save never removes the canonical file before committing its replacement');
 
   assert(store.reset().ok === true, 'reset removes the layout file');
   assert(!fs.existsSync(file), 'the layout file is gone after reset');

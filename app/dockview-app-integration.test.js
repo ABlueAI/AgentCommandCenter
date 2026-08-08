@@ -625,9 +625,10 @@ process.stdout.write('\nMALFORMED saved state never reaches fromJSON in the real
     'path-in-title': 'unsafe-content-in-state',
     'unknown-component': 'unknown-component-kind',
     'floating-groups': 'invalid-layout-shape',
+    'hidden-pane-group': 'invalid-layout-shape',
     'wrong-schema-version': 'unsupported-schema-version',
   };
-  assert(M.malformed.length === 5, 'five corruptions were driven through the real Restore control');
+  assert(M.malformed.length === 6, 'six corruptions were driven through the real Restore control');
   for (const entry of M.malformed) {
     const reason = EXPECTED[entry.label];
     assert(entry.status.includes(`Restore refused (${reason})`),
@@ -643,7 +644,7 @@ process.stdout.write('\nMALFORMED saved state never reaches fromJSON in the real
     'and neither does the Logs tab');
   assert(M.ptyKill.length === 0, 'no PTY was killed across every corruption');
   assert(JSON.stringify(M.owned.sort()) === JSON.stringify(['pty1', 'pty2']),
-    'and the workspace survived all five intact');
+    'and the workspace survived all six intact');
 }
 
 // ---------------------------------------------------------------------------
@@ -676,8 +677,8 @@ process.stdout.write('\nEXACTLY ONE layout operation at a time, both lines of de
   assert(C.allEnabledAfter === true, 'and every control is enabled again — the busy state is not sticky');
 
   // NO OVERLAP REACHED MAIN: five malformed restores plus this one is six loads, and not one more.
-  assert(S.malformedAndConcurrency.layoutIpc.load === 6,
-    `exactly six loads reached main — the burst added none (saw ${S.malformedAndConcurrency.layoutIpc.load})`);
+  assert(S.malformedAndConcurrency.layoutIpc.load === 7,
+    `exactly seven loads reached main — the burst added none (saw ${S.malformedAndConcurrency.layoutIpc.load})`);
   assert(S.malformedAndConcurrency.layoutIpc.reset === 0,
     'and the forced Clear clicks reached main zero times');
 }

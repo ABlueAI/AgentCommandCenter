@@ -1144,6 +1144,7 @@ async function scenarioMalformedAndConcurrency() {
     ['path-in-title', (e) => { e.layout.panels.pty1.title = 'C:\\Users\\levij\\key'; }],
     ['unknown-component', (e) => { e.layout.panels.pty1.contentComponent = 'iframe'; }],
     ['floating-groups', (e) => { e.layout.floatingGroups = [{}]; }],
+    ['hidden-pane-group', (e) => { e.layout.grid.root.data[0].visible = false; }],
     ['wrong-schema-version', (e) => { e.schemaVersion = 99; }],
   ];
   const pristine = JSON.parse(JSON.stringify(savedLayout.envelope));
@@ -1205,7 +1206,7 @@ async function scenarioMalformedAndConcurrency() {
 
   const result = {
     settled, baseline, malformed, concurrency,
-    // Exactly ONE load reached main across the whole concurrency burst that follows the five
+    // Exactly ONE load reached main across the whole concurrency burst that follows the six
     // malformed restores; anything more would mean overlapping operations.
     layoutIpc: { save: ipc.layoutSave, load: ipc.layoutLoad, reset: ipc.layoutReset },
     ptyStart: ipc.ptyStart.slice(),

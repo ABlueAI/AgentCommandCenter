@@ -65,8 +65,11 @@ function createLayoutStore({ userDataDir, fsImpl = fs } = {}) {
     let st;
     try {
       st = fsImpl.lstatSync(layoutPath); // lstat, NOT stat — must not follow a link
-    } catch {
-      return refuse(REASON.NOT_FOUND);
+    } catch (err) {
+      // Absence is the only condition that means "no saved arrangement". Access denial, device
+      // failure, and every other inspection error mean the boundary could not establish what is at
+      // the canonical path, so claiming the file is absent would be false.
+      return refuse(err && err.code === 'ENOENT' ? REASON.NOT_FOUND : REASON.READ_FAILED);
     }
 
     // Reparse points (symlinks and Windows junctions both report as symbolic links here) are
@@ -118,15 +121,11 @@ function createLayoutStore({ userDataDir, fsImpl = fs } = {}) {
     const tmp = layoutPath + '.' + process.pid + '.' + Math.random().toString(36).slice(2) + '.tmp';
     try {
       fsImpl.writeFileSync(tmp, JSON.stringify(envelope, null, 2), { encoding: 'utf8' });
-      // Atomic replacement. On Windows rename-onto-existing fails, so renameSync is attempted and
-      // falls back to an explicit replace; the unique temp name keeps concurrent writers from
-      // colliding either way.
-      try {
-        fsImpl.renameSync(tmp, layoutPath);
-      } catch {
-        fsImpl.rmSync(layoutPath, { force: true });
-        fsImpl.renameSync(tmp, layoutPath);
-      }
+      // ONE atomic replacement. Node's rename contract replaces an existing FILE at the target;
+      // critically, a failed rename leaves that target untouched. Never delete the canonical file
+      // first: doing so creates an interruption window in which the previous valid arrangement is
+      // gone while the replacement exists only under its temp name.
+      fsImpl.renameSync(tmp, layoutPath);
     } catch {
       try { fsImpl.rmSync(tmp, { force: true }); } catch { /* temp cleanup is best-effort */ }
       return refuse(REASON.WRITE_FAILED);

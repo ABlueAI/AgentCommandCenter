@@ -290,6 +290,29 @@
       return !!(owned && owned.element && hostElement && owned.element.parentNode === hostElement);
     }
 
+    /**
+     * Is the pane's GROUP reachable by the user?
+     *
+     * The pane element itself may be hidden legitimately when it is an inactive TAB, so testing
+     * that element would reject valid tab groups. The owning group must nevertheless remain in the
+     * document with non-zero geometry: its tab strip is the recovery affordance for every panel in
+     * it. A `visible:false` split deserializes as a mounted panel inside a hidden group, which is the
+     * stranded-live-PTY state this check closes.
+     */
+    function paneIsReachable(paneId) {
+      if (!paneIsMounted(paneId)) return false;
+      let groupElement = null;
+      try {
+        const panel = typeof api.getPanel === 'function' ? api.getPanel(paneId) : null;
+        groupElement = panel && panel.api && panel.api.group && panel.api.group.element;
+      } catch { return false; }
+      if (!groupElement || !groupElement.isConnected || groupElement.offsetParent === null) return false;
+      let rect;
+      try { rect = groupElement.getBoundingClientRect(); } catch { return false; }
+      return !!(rect && Number.isFinite(rect.width) && Number.isFinite(rect.height)
+        && rect.width > 0 && rect.height > 0);
+    }
+
     // ---- ONE idempotent close path (§ 7) ------------------------------------------------------
     // A Dockview panel removal and the pane's own close button must converge, so ptyKill, xterm
     // disposal, observer disconnect, map deletion, and DOM cleanup each happen EXACTLY once.
@@ -525,6 +548,7 @@
     function verifyApplied(expectedIds, elements, counts) {
       for (const id of expectedIds) {
         if (!paneIsMounted(id)) return { ok: false, reason: REASON.APPLY_INCOMPLETE };
+        if (!paneIsReachable(id)) return { ok: false, reason: REASON.APPLY_INCOMPLETE };
       }
       // No unexpected panel: the workspace must hold exactly the expected set, no more.
       let panelRecords = null;

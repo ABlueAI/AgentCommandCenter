@@ -189,7 +189,14 @@
     }
 
     if (hasOwn(node, 'size')) { const e = checkFiniteNumber(node.size); if (e) return e; }
-    if (hasOwn(node, 'visible') && typeof node.visible !== 'boolean') return REASON.LAYOUT_SHAPE;
+    if (hasOwn(node, 'visible')) {
+      if (typeof node.visible !== 'boolean') return REASON.LAYOUT_SHAPE;
+      // Dockview uses `visible:false` to deserialize a hidden split/group. Every serialized leaf in
+      // this product contains a live terminal or the Library, so accepting it would let untrusted
+      // state make an owned pane unreachable while still satisfying the pane-ID set check. A
+      // visible node may carry `true` (although the vendor normally omits it); hidden state refuses.
+      if (node.visible === false) return REASON.LAYOUT_SHAPE;
+    }
 
     if (node.type === 'branch') {
       if (!Array.isArray(node.data)) return REASON.LAYOUT_SHAPE;

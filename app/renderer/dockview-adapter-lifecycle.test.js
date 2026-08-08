@@ -36,7 +36,7 @@ function makeElement(tag) {
   return {
     tagName: tag, className: '', id: '', textContent: '', onclick: null,
     children: [], parentNode: null, isConnected: true,
-    style: {}, dataset: {},
+    style: {}, dataset: {}, _hidden: false,
     setAttribute() {}, removeAttribute() {},
     appendChild(child) {
       const previous = child.parentNode;
@@ -49,8 +49,8 @@ function makeElement(tag) {
     },
     removeChild(child) { this.children = this.children.filter(c => c !== child); child.parentNode = null; },
     querySelector() { return null; },
-    getBoundingClientRect() { return { width: 800, height: 600 }; },
-    get offsetParent() { return this.parentNode || { }; },
+    getBoundingClientRect() { return this._hidden ? { width: 0, height: 0 } : { width: 800, height: 600 }; },
+    get offsetParent() { return this._hidden ? null : (this.parentNode || { }); },
   };
 }
 global.document = { createElement: (t) => makeElement(t), getElementById: () => null, head: makeElement('head'), body: makeElement('body') };
@@ -116,8 +116,10 @@ function makeFakeDockview() {
   const maximizeCalls = [];     // every panel.api.maximize() call, in order
   const exitCalls = [];         // every panel.api.exitMaximized() call, in order
   let activePanelId = null;     // whichever panel was last activated
+  let dockSurface = null;
   let failOnce = false;         // true => the fault fires once, so a rollback can still succeed
   // null | 'after-clear' | 'mid-rebuild' | 'add-panel' | 'drop-last' | 'extra-panel'
+  //      | 'hide-last' | 'hide-pane-last'
   let failMode = null;
   let panelEnumerationMode = null;
   let panelEnumerationOnce = false;
@@ -125,6 +127,7 @@ function makeFakeDockview() {
   // The real lifecycle: DockviewPanelModel's constructor calls createComponent({id,name}), then
   // panel.init(...) calls the returned renderer's init(). Both halves matter to the adapter.
   function buildPanel(id, component, title) {
+    const groupElement = makeElement('section');
     // dockview@7.0.4 exposes `readonly api: DockviewPanelApi` on every panel, and that API carries
     // `setActive(): void` (dockviewPanelApi.d.ts:75) — the bundle's own tab handlers call
     // `panel.api.setActive()`. Modelling it here is what lets the duplicate-Add test prove the
@@ -138,6 +141,7 @@ function makeFakeDockview() {
     const panel = {
       id, component, title,
       api: {
+        group: { element: groupElement },
         setActive() { activatedIds.push(id); activePanelId = id; },
         maximize() {
           if (api._maximizeThrows) throw new Error('dockview: synthetic maximize failure');
@@ -152,9 +156,11 @@ function makeFakeDockview() {
       },
     };
     panels.set(id, panel);
+    if (dockSurface) dockSurface.appendChild(groupElement);
     if (componentFactory) {
       const renderer = componentFactory({ id, name: component });
       panel._renderer = renderer;
+      if (renderer && renderer.element) groupElement.appendChild(renderer.element);
       if (renderer && typeof renderer.init === 'function') renderer.init({});
     }
     return panel;
@@ -172,6 +178,7 @@ function makeFakeDockview() {
     removePanel(panel) {
       panels.delete(panel.id);
       listeners.remove.forEach((fn) => fn(panel));   // REAL SHAPE: the panel itself, not { panel }
+      if (panel.api.group.element.parentNode) panel.api.group.element.parentNode.removeChild(panel.api.group.element);
     },
     // DockviewApi.clear() -> component.clear() -> _doClear -> removeGroup -> removePanel per panel,
     // each of which surfaces on the public removal event.
@@ -179,6 +186,7 @@ function makeFakeDockview() {
       for (const panel of [...panels.values()]) {
         panels.delete(panel.id);
         listeners.remove.forEach((fn) => fn(panel));
+        if (panel.api.group.element.parentNode) panel.api.group.element.parentNode.removeChild(panel.api.group.element);
       }
     },
     onDidRemovePanel: (fn) => listeners.remove.push(fn),
@@ -248,7 +256,9 @@ function makeFakeDockview() {
         }
         if (mode === 'drop-last' && index === ids.length - 1) return;  // silently missing pane
         const saved = (layout.panels && layout.panels[id]) || {};
-        buildPanel(id, saved.contentComponent || 'terminal', saved.title || id);
+        const panel = buildPanel(id, saved.contentComponent || 'terminal', saved.title || id);
+        if (mode === 'hide-last' && index === ids.length - 1) panel.api.group.element._hidden = true;
+        if (mode === 'hide-pane-last' && index === ids.length - 1) panel._renderer.element._hidden = true;
       });
       if (mode === 'extra-panel') buildPanel('pty9', 'terminal', 'Terminal 9');
     },
@@ -260,7 +270,12 @@ function makeFakeDockview() {
   };
   let created = false;
   return {
-    createDockview: (_el, options) => { created = true; componentFactory = options && options.createComponent; return api; },
+    createDockview: (_el, options) => {
+      created = true;
+      dockSurface = _el;
+      componentFactory = options && options.createComponent;
+      return api;
+    },
     get _created() { return created; },
     _api: api,
     _listeners: listeners,
@@ -871,6 +886,47 @@ process.stdout.write('\nevent shapes stay distinct per handler (they genuinely d
     assert(host._calls.closePane.length === 0, 'without killing a PTY');
   }
 
+  process.stdout.write('\na mounted pane inside a hidden group is caught and rolled back\n');
+  // -------------------------------------------------------------------------
+  // This differs from `visible:false` in the serialized target, which the shared policy refuses
+  // before fromJSON. It models the vendor silently collapsing a group from otherwise valid state:
+  // IDs, object identity, DOM parentage, and ownership still match, so only the explicit group-
+  // reachability proof can catch it.
+  {
+    const { fake, host, instance, paneEl } = makeRestoreScenario(THREE);
+    const originals = new Map(THREE.map((id) => [id, paneEl(id)]));
+    const createdBefore = host._calls.created.length;
+    fake._failFromJSON('hide-last', { once: true });
+
+    const result = await instance.restoreArrangement();
+    assert(result && result.ok === false && result.reason === R.APPLY_INCOMPLETE,
+      `a hidden pane group refuses as ${R.APPLY_INCOMPLETE} (saw ${result && result.reason})`);
+    assert(result.rollback === 'restored', 'the prior reachable arrangement is restored');
+    assert(host._calls.closePane.length === 0, 'the hidden-group refusal closes zero PTYs');
+    assert(host._calls.created.length === createdBefore, 'the hidden-group refusal creates zero PTYs');
+    for (const id of THREE) {
+      assert(paneEl(id) === originals.get(id), `${id}: rollback retains the ORIGINAL element object`);
+      assert(instance.paneIsMounted(id) === true, `${id}: rollback leaves the original object mounted`);
+    }
+    assert(/previous arrangement was put back/i.test(statusText(host)),
+      'the visible status reports the successful rollback');
+  }
+
+  process.stdout.write('\nan inactive tab remains valid when its owning group is reachable\n');
+  // -------------------------------------------------------------------------
+  {
+    const { fake, host, instance } = makeRestoreScenario(THREE);
+    // Dockview hides an inactive tab's renderer but leaves the group and its tab strip visible.
+    // Reachability is therefore proved at the GROUP, not by demanding that every pane body have an
+    // offsetParent simultaneously.
+    fake._failFromJSON('hide-pane-last', { once: true });
+    const result = await instance.restoreArrangement();
+    assert(result && result.ok === true,
+      'a hidden inactive pane body is accepted while its group remains reachable');
+    assert(host._calls.closePane.length === 0 && host._calls.created.length === 0,
+      'the valid tabbed-state apply creates and closes nothing');
+  }
+
   process.stdout.write('\npanel enumeration failure is fail-closed, and a transient fault rolls back\n');
   // -------------------------------------------------------------------------
   // Reading `api.panels` is part of the proof that no unexpected panel survived. A throwing getter
@@ -946,6 +1002,24 @@ process.stdout.write('\nevent shapes stay distinct per handler (they genuinely d
     assert(host._calls.created.length === 0, 'restore failure created NO terminal');
     assert(fake._addPanelCalls.length === 0, 'restore failure created NO pane');
     assert(instance.ownedPaneIds().length === 0, 'the workspace is untouched');
+  }
+
+  process.stdout.write('\na saved-file inspection failure is not reported as absence\n');
+  // -------------------------------------------------------------------------
+  {
+    const fake = makeFakeDockview();
+    const host = makeHost(); host._dockview = fake;
+    host._loadResult = { ok: false, reason: R.READ_FAILED };
+    const instance = adapter.activate(host);
+    const result = await instance.restoreArrangement();
+    assert(result && result.ok === false && result.reason === R.READ_FAILED,
+      'the main-side inspection failure is surfaced as read-failed');
+    assert(/Restore refused \(read-failed\)/.test(statusText(host)),
+      'the UI reports an inspection refusal rather than claiming no arrangement exists');
+    assert(!/no saved arrangement/i.test(statusText(host)),
+      'the absence message is reserved for a genuine ENOENT result');
+    assert(host._calls.created.length === 0 && host._calls.closePane.length === 0,
+      'the inspection refusal creates and closes nothing');
   }
 
   // ---------------------------------------------------------------------------

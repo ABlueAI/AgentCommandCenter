@@ -74,6 +74,28 @@ process.stdout.write('\nONE validator: main and the renderer share the same func
 }
 
 // ---------------------------------------------------------------------------
+process.stdout.write('\nhidden pane-bearing layout nodes are refused\n');
+// ---------------------------------------------------------------------------
+{
+  const hiddenLeaf = clone(FIXTURE);
+  hiddenLeaf.grid.root.data[0].visible = false;
+  assert(policy.validateLayout(hiddenLeaf) === R.LAYOUT_SHAPE,
+    'a pane-bearing leaf with visible:false is refused before it can reach fromJSON');
+  assert(policy.paneIdsFromLayout(hiddenLeaf).reason === R.LAYOUT_SHAPE,
+    'pane extraction cannot turn hidden state into an apparently coherent pane set');
+
+  const hiddenBranch = clone(FIXTURE);
+  hiddenBranch.grid.root.visible = false;
+  assert(policy.validateLayout(hiddenBranch) === R.LAYOUT_SHAPE,
+    'a hidden branch is refused too — no hidden pane-bearing subtree is accepted');
+
+  const explicitlyVisible = clone(FIXTURE);
+  explicitlyVisible.grid.root.data[0].visible = true;
+  assert(policy.validateLayout(explicitlyVisible) === null,
+    'visible:true remains accepted; only state that hides a pane-bearing node is forbidden');
+}
+
+// ---------------------------------------------------------------------------
 process.stdout.write('\nthe policy is PURE and safe to load as a classic renderer script\n');
 // ---------------------------------------------------------------------------
 {
