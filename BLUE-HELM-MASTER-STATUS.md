@@ -157,13 +157,15 @@ reviewed branch.
 each requiring its own tracked procurement record and its own Blue verdict.**
 One record cannot cover both. **Dockview now has a tracked record and an ADOPT
 verdict** in `docs/OSS-PROCUREMENT-dockview.md`; its production integration is
-built on `feature/dockview-production-integration` but remains unreviewed,
-unaccepted, unmerged, and unpushed. **Cross-provider pane-status indicators
+the subject of an active corrective review cycle on `feature/dockview-production-integration`:
+the first cumulative Full-class review returned literal `VERDICT: FAIL`, and its bounded corrective
+delta is built but not yet delta-reviewed. It remains unaccepted, unmerged, and unpushed.
+**Cross-provider pane-status indicators
 still have no Blue verdict**, so that separate subsystem remains unauthorized
 for specification or implementation. The `dockview-core` expectation in the
 R3 roadmap entry remains a roadmap note, not a pane-status procurement verdict.
 
-## Current checkpoint — August 8 — DOCKVIEW PHASE C GREEN; FINAL REVIEW NOT YET REQUESTED
+## Current checkpoint — August 8 — DOCKVIEW FULL REVIEW FAILED; CORRECTIVE DELTA GREEN
 
 `feature/dockview-production-integration` now carries the accepted prototype history plus the
 production Phase-B and Phase-C implementations. Phase C enables four explicit operations — Save
@@ -182,9 +184,13 @@ Blue's binding verdict, verbatim:
 > versioned layout metadata; and keep pane-status indicators separate.
 
 Status at this checkpoint: Phase-C implementation `3ffb28e857aab5ae614cd05e418aa331a10f4b08`;
-fail-closed panel-enumeration correction `d203b63`; no Full-class cumulative review yet; no human
-production acceptance; no merge or push. Dockview is therefore still **remaining work**, and
-pane-status procurement must not begin until Dockview reaches its clean stopping point.
+fail-closed panel-enumeration correction `d203b63`; cumulative reviewed-code tip `fba57dc4` returned
+literal `VERDICT: FAIL` with two MEDIUM findings (non-atomic Windows replacement fallback and hidden
+pane groups passing post-apply verification) plus one LOW (`lstat` errors reported as absence).
+Blue approved the bounded correction, implemented at `9d1efb839a1f5312626c9445d35f3fa3b88d8d41`.
+The corrective delta is green in the app gate and awaits its focused Full-class delta review. There
+is no human production acceptance, merge, or push. Dockview is therefore still **remaining work**,
+and pane-status procurement must not begin until Dockview reaches its clean stopping point.
 
 ## Current checkpoint — July 23 — V3A MERGED; BLUE HELM 1.0 SCOPE FROZEN
 

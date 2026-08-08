@@ -6,15 +6,17 @@ Pre-merge main SHA: `1dce24c141e929c04122e8b2998277d4c2d0c728`
 Phase-B implementation: `97394588c2017ea57b5f394b17edb773dc618106`
 Phase-C implementation: `3ffb28e857aab5ae614cd05e418aa331a10f4b08`
 Phase-C fail-closed correction: `d203b631b566c1cdb6ba2d645b4494f793aa9fab`
-Reviewed-code tip SHA: `fba57dc44b746b403ce870bd5496a30392b3a7df`
-Branch tip: the immediately following handoff-only tail commit containing this exact artifact record
+First Full-class reviewed-code tip: `fba57dc44b746b403ce870bd5496a30392b3a7df` — `VERDICT: FAIL`
+Full-class corrective implementation: `9d1efb839a1f5312626c9445d35f3fa3b88d8d41`
+Corrective reviewed-code tip SHA: pending the corrective finalization commit described in § C14
+Branch tip: pending the immediately following handoff-only artifact tail
 Merge commit SHA: Pending until merge
 
-**Status: PHASE C CORRECTED — FINALIZATION COMPLETE; FULL-CLASS REVIEW NOT YET REQUESTED**
+**Status: FULL-CLASS FAIL CORRECTED — FOCUSED FULL-CLASS DELTA REVIEW NOT YET REQUESTED**
 
 This document has two parts. **PART ONE** (§§ 1–12) is the Phase-B record, preserved as written;
 where Phase C superseded a Phase-B fact it is marked there and corrected in PART TWO.
-**PART TWO** (§§ C1–C13) is Phase C, its fail-closed correction, and finalization.
+**PART TWO** (§§ C1–C14) is Phase C, both corrective rounds, and finalization.
 
 ---
 
@@ -369,6 +371,15 @@ Finalization then found one real fail-open verification gap. The corrective sequ
 5. exactly one immediately following handoff-only tail commit — exact reviewed-tip SHA and the two
    pinned review-artifact ranges, sizes, and SHA-256 identities. This final commit is not part of
    either reviewed diff.
+6. `83b8cfa1206ab21d07befcf0664c584eea64a379` — that handoff-only artifact tail.
+7. Fresh independent read-only Full-class review of the cumulative artifact — literal
+   `VERDICT: FAIL`; two MEDIUM findings and one LOW, recorded verbatim in § C14.
+8. `9d1efb839a1f5312626c9445d35f3fa3b88d8d41` — the approved bounded correction for all three
+   findings, with no unrelated production change.
+9. the corrective reviewed-code finalization commit — this handoff plus
+   `BLUE-HELM-MASTER-STATUS.md` after the final gates.
+10. exactly one following handoff-only tail — refreshed artifact ranges, sizes, and SHA-256
+    identities. The focused delta review must review item 8 through item 9, not either handoff tail.
 
 Starting checkpoint, verified before any edit: branch tip `79829f3982232f052e564ee1db023246aa3080de`,
 Phase-B implementation `9739458` present, `f5a0e54` / `3a61e56` / `3ab0a23` unchanged ancestors,
@@ -496,6 +507,7 @@ rollback's own `fromJSON` too.
 | a pane SILENTLY dropped (no throw) | `layout-apply-incomplete` | `restored` | 0 / 0 |
 | an UNEXPECTED extra panel | `unexpected-panel-after-apply` | `restored` | 0 / 0 |
 | panel enumeration throws once | `layout-apply-incomplete` | `restored`, original identities intact | 0 / 0 |
+| otherwise-valid apply leaves one owning group hidden | `layout-apply-incomplete` | `restored`, original identities intact | 0 / 0 |
 | persistent fault — rollback fails too | `layout-apply-incomplete` | **`incomplete`, and said so** | 0 / 0 |
 | panel enumeration stays unavailable or non-array | `layout-apply-incomplete` | **`incomplete`, never falsely restored** | 0 / 0 |
 | unusable rollback snapshot | `rollback-snapshot-invalid` | never applied at all | 0 / 0 |
@@ -537,21 +549,21 @@ New:
 | Path | What it is |
 | --- | --- |
 | `app/dockview-layout-policy.js` | THE shared schema authority. Pure, dependency-free, IIFE-enclosed, dual-exported (CommonJS + `window.ccDockviewLayoutPolicy`). |
-| `app/dockview-layout-policy.test.js` | Its pure suite. **178 assertions.** |
+| `app/dockview-layout-policy.test.js` | Its pure suite. **182 assertions.** The corrective delta rejects hidden pane-bearing nodes while retaining explicit `visible:true`. |
 
 Modified:
 
 | Path | Change |
 | --- | --- |
-| `app/dockview-layout-store.js` | Reduced to the FILE boundary; every schema decision delegated to the policy and re-exported. All guards preserved verbatim. `reset()` now reports `existed`. |
-| `app/renderer/dockview-prototype.js` | The four operations, `runExclusive`, the single `applyValidatedLayout` call site, `captureWorkspace` / `verifyApplied` / `rollbackWorkspace` / `applyAsTransaction`, the four enabled controls; `useDefaultLayout` deleted; `ccDockviewLayoutPolicy` added to the required exports. The correction makes throwing, unavailable, and non-array `api.panels` enumeration fail closed as `layout-apply-incomplete`; `unexpected-panel-after-apply` is reserved for a successfully enumerated but mismatching set. |
+| `app/dockview-layout-store.js` | Reduced to the FILE boundary; every schema decision delegated to the policy and re-exported. `reset()` reports `existed`. The corrective delta uses one atomic rename without deleting the canonical file first, and maps only `ENOENT` to absence. |
+| `app/renderer/dockview-prototype.js` | The four operations, `runExclusive`, the single `applyValidatedLayout` call site, `captureWorkspace` / `verifyApplied` / `rollbackWorkspace` / `applyAsTransaction`, the four enabled controls; `useDefaultLayout` deleted; `ccDockviewLayoutPolicy` added to the required exports. Enumeration failures fail closed; post-apply verification now also requires each panel's owning group to be connected and non-zero while permitting an inactive tab body to be hidden. |
 | `app/renderer/app.js` | `../dockview-layout-policy.js` added to `DOCKVIEW_SCRIPTS`, before the adapter. |
 | `app/main.js` | `dockview-layout-load` returns the WHOLE envelope so the renderer can validate schema version, package identity and timestamp too; `dockview-layout-reset` returns `existed`. |
 | `app/package.json` | Wired `dockview-layout-policy.test.js` into the `test` script. |
 | `app/dockview-default-path.test.js` | Phase-C structure: one-validator, prototype-file ban, the four contracts, single `fromJSON` site, exclusivity, controls. 295 → **371**. |
 | `app/dockview-bootstrap-harness.js` / `.test.js` | Six-script chain, `missing-layout-policy` scenario, four-enabled-control expectations. 182 → **203**. |
-| `app/dockview-app-harness.js` / `dockview-app-integration.test.js` | Four Phase-C scenarios driving the real controls against an in-memory store running the real validators. 180 → **287**. |
-| `app/renderer/dockview-adapter-lifecycle.test.js` | Real layout shapes throughout, the set matrix, malformed state, the transaction/rollback table, the four operations, exclusivity, and fail-closed panel enumeration. 203 → **359**. |
+| `app/dockview-app-harness.js` / `dockview-app-integration.test.js` | Four Phase-C scenarios driving the real controls against an in-memory store running the real validators, including a real-control hidden-group corruption. 180 → **291**. |
+| `app/renderer/dockview-adapter-lifecycle.test.js` | Real layout shapes throughout, the set matrix, malformed state, the transaction/rollback table, the four operations, exclusivity, fail-closed panel enumeration, group reachability, and honest file-inspection refusal. 203 → **376**. |
 
 No PowerShell changed, so the Pester total is unchanged.
 
@@ -559,12 +571,12 @@ No PowerShell changed, so the Pester total is unchanged.
 
 | Suite | Result |
 | --- | --- |
-| `dockview-layout-policy` (shared policy) | **178 passed, 0 failed** |
-| `dockview-layout-store` | 124 passed, 0 failed |
+| `dockview-layout-policy` (shared policy) | **182 passed, 0 failed** |
+| `dockview-layout-store` | **134 passed, 0 failed** |
 | `dockview-default-path` | **371 passed, 0 failed** |
-| `dockview-app-integration` (application harness) | **287 passed, 0 failed** |
+| `dockview-app-integration` (application harness) | **291 passed, 0 failed** |
 | `dockview-bootstrap` | **203 passed, 0 failed** |
-| `dockview-adapter-lifecycle` | **359 passed, 0 failed** |
+| `dockview-adapter-lifecycle` | **376 passed, 0 failed** |
 | `dockview-package-identity` | 47 passed, 0 failed |
 | `dockview-fit-policy` / `dockview-panel-policy` | 59 / 71 passed, 0 failed |
 | `test-reachability` | 6 passed, 0 failed |
@@ -572,8 +584,8 @@ No PowerShell changed, so the Pester total is unchanged.
 
 | Gate | Result |
 | --- | --- |
-| **Full app gate** (`npm test`, 44 suites) | **GREEN — 3,046 assertions, 0 failed** after `d203b63` |
-| **Full Pester gate** (`scripts/run-pester.ps1`, 35 suites) | Phase-C delivery evidence: **GREEN — 955 passed, 0 failed, 0 skipped**. Corrected-tip Codex reruns: 954 assertions passed and the one installed-Gemini-CLI policy-load check failed before its assertion because Codex's credential-scrubbed process has no `GEMINI_API_KEY`; a non-secret placeholder was tried once and discarded when the CLI hung. See the reproducibility note below. |
+| **Full app gate** (`npm test`, 44 suites) | **GREEN — 3,081 assertions, 0 failed** after `9d1efb8` |
+| **Full Pester gate** (`scripts/run-pester.ps1`, 35 suites) | Phase-C delivery evidence: **GREEN — 955 passed, 0 failed, 0 skipped**. Corrective-tip Codex rerun: 954 assertions passed and the one installed-Gemini-CLI policy-load check failed before its assertion because Codex's credential-scrubbed process has no `GEMINI_API_KEY`. See the reproducibility note below. |
 | Reachability | GREEN — the new suite is wired into `app/package.json` |
 | Node syntax | `node --check` on all 21 changed/new `.js` files in the cumulative range — GREEN |
 | PowerShell parsing | `[Parser]::ParseFile` over all 71 tracked `.ps1`/`.psm1` files — **0 parse errors** |
@@ -586,19 +598,20 @@ No PowerShell changed, so the Pester total is unchanged.
 
 | Suite | Phase B | Phase C | Δ | Why |
 | --- | --- | --- | --- | --- |
-| `dockview-layout-policy` | — | 178 | **+178** | New suite: identity of the shared functions, purity/enclosure, the closed reason set, ID extraction, the set matrix, canonical order, the default arrangement. |
+| `dockview-layout-policy` | — | 182 | **+182** | Shared identity, purity/enclosure, closed reasons, ID extraction, set matrix, canonical order, default arrangement, and hidden-node refusal. |
+| `dockview-layout-store` | 124 | 134 | **+10** | ENOENT discrimination, real Windows overwrite, failed-replacement byte preservation, temp cleanup, and the no-canonical-delete interruption tripwire. |
 | `dockview-default-path` | 295 | 371 | **+76** | One-validator scan, prototype-file ban, store-boundary guards, the four contracts, single `fromJSON` site, exclusivity, control ids; the `useDefaultLayout` / placeholder assertions became negative controls. |
 | `dockview-bootstrap` | 182 | 203 | **+21** | Six-script chain, the `missing-layout-policy` scenario, four-enabled-control expectations. |
-| `dockview-app-integration` | 180 | 287 | **+107** | Four new scenarios: the four operations end to end, the exact-set matrix in the real app, malformed state, and both concurrency defence lines. |
-| `dockview-adapter-lifecycle` | 203 | 359 | **+156** | Real layout shapes, the set matrix, nine malformed-state cases, the transaction table, save/reset/clear contracts, exclusivity, and transient/persistent panel-enumeration failures. |
-| all other suites | 1,648 | 1,648 | 0 | Untouched. |
-| **Total** | **2,508** | **3,046** | **+538** | 178 + 76 + 21 + 107 + 156 = **+538**. ✔ |
+| `dockview-app-integration` | 180 | 291 | **+111** | Four Phase-C scenarios plus the real-control hidden-group corruption; exact-set, malformed-state, and concurrency coverage. |
+| `dockview-adapter-lifecycle` | 203 | 376 | **+173** | Transactions, exact sets, operations, enumeration faults, hidden-group rollback, inactive-tab allowance, and read-failure UI honesty. |
+| all other suites | 1,524 | 1,524 | 0 | Untouched. |
+| **Total** | **2,508** | **3,081** | **+573** | 182 + 10 + 76 + 21 + 111 + 173 = **+573**. ✔ |
 
 ### Corrected-tip Pester reproducibility note
 
-The correction changes only renderer JavaScript and its Node lifecycle suite; no PowerShell source,
+Both corrective rounds change only app JavaScript and Node/Electron tests; no PowerShell source,
 Pester suite, Gemini policy, or CLI configuration changed. The Phase-C delivery's full Pester gate
-was 955/0/0. On this finalization run, all 954 repository assertions completed green, but the one
+was 955/0/0. On the corrective-tip finalization run, all 954 repository assertions completed green, but the one
 machine-installed CLI check invoked `gemini --policy <tracked-file> --list-extensions` and the
 currently installed CLI refused before the assertion because Codex correctly has no provider key
 in its process environment. A process-local non-secret placeholder was attempted once; the CLI
@@ -697,7 +710,8 @@ falsely `restored`; PTY creation and closure remain zero. The focused lifecycle 
 
 This correction authorizes only the finalization route. It does not constitute a review of the
 cumulative production diff. That remains the purpose of the fresh Full-class review after the two
-pinned artifacts are recorded.
+pinned artifacts are recorded. That review subsequently returned FAIL; § C14 supersedes this
+pre-review status while preserving it as the exact chronology.
 
 ## C13. Final pinned review artifacts
 
@@ -713,8 +727,45 @@ SHA-256 identity.
 
 The isolated artifact is the production-adoption review surface. The cumulative artifact is the
 reproducible delta from recorded pre-merge `main` and is the artifact a later merge-gate plan must
-name. This handoff-only tail is intentionally excluded from both artifacts. No Full-class verdict,
-human acceptance, merge, or push exists yet.
+name. This handoff-only tail is intentionally excluded from both artifacts. At the time they were
+pinned, no Full-class verdict, human acceptance, merge, or push existed; § C14 records the later
+FAIL verdict. Acceptance, merge, and push still do not exist.
+
+## C14. First cumulative Full-class review — FAIL, then bounded correction
+
+### Reviewer verdict and source
+
+Source: fresh independent read-only Full-class Reviewer subprocess, August 8, 2026, over cumulative
+reviewed-code tip `fba57dc44b746b403ce870bd5496a30392b3a7df`. The Reviewer independently
+verified both § C13 artifact byte counts and SHA-256 identities, reviewed the cumulative production
+boundary, and returned two MEDIUM findings plus one LOW. The Pester credential-environment caveat
+was explicitly not a basis for its code verdict.
+
+> VERDICT: FAIL
+
+| Severity | Finding | Corrective disposition in `9d1efb839a1f5312626c9445d35f3fa3b88d8d41` |
+| --- | --- | --- |
+| MEDIUM | `dockview-layout-store.js` removed the canonical file before retrying a Windows replacement, so a second failure or interruption could erase the previous valid arrangement while the UI promised it was unchanged. | Save now performs exactly one atomic temp-to-canonical rename. A failed rename cleans only its unique temp file. Real Windows overwrite, injected replacement failure, byte preservation, and a source tripwire proving Save never removes `layoutPath` are green. |
+| MEDIUM | The policy accepted `visible:false`, and post-apply verification proved mounting/IDs/identity/counts but not whether the owning group remained reachable. Restore could therefore report success with a live PTY in a hidden group. | The shared validator refuses `visible:false` before `fromJSON`. Post-apply verification independently requires every panel's owning group to be connected and non-zero. The check is group-based so an inactive tab body remains valid and recoverable through its visible tab strip. A transient hidden-group fault proves bounded refusal, rollback, original identities, and zero PTY creation/closure. |
+| LOW | Every `lstatSync` error was reported as `no-saved-layout`, including access denial and I/O failure. | Only `ENOENT` maps to `no-saved-layout`; all other inspection errors map to bounded `read-failed`. Store tests cover `ENOENT`, `EACCES`, and `EIO`, and lifecycle coverage proves the UI no longer claims absence. |
+
+### Corrective gates
+
+* Focused non-Electron set: **1,069 passed, 0 failed** — reachability 6, policy 182, store 134,
+  default path 371, lifecycle 376.
+* Real application harness: **291 passed, 0 failed**, including six malformed saved-state controls
+  and `remoteRequestCount: 0` across all fourteen scenarios.
+* Full app gate: **3,081 assertions, 0 failed**, 44 suites.
+* Dockview tripwire: `remoteRequestCount: 0` under strict CSP.
+* Full Pester attempt at the corrective commit: **954 passed, 1 environment-dependent failure, 0
+  skipped** — solely the installed Gemini CLI requiring `GEMINI_API_KEY` before its no-request
+  `--list-extensions` assertion. No PowerShell or Gemini surface changed; § C8's merge-time 955/0/0
+  requirement remains unwaived.
+
+The correction is built and gated, not reviewed or accepted. The next review scope is the exact
+corrective delta from prior handoff-only tip `83b8cfa1206ab21d07befcf0664c584eea64a379` to the new
+corrective reviewed-code tip. A fresh focused Full-class delta review must return its own literal
+verdict. No prior PASS exists to inherit, and the original cumulative verdict remains FAIL.
 
 ## Review-diff rule
 
@@ -731,7 +782,7 @@ Pinned `.agent-review-*.diff` files are local review artifacts and must remain g
 
 ---
 
-Not started, and not authorised by this handoff: Full-class review, human acceptance, merge, push,
-pane-status (R4) work, unrelated cleanup.
+Not started, and not authorised by this handoff: focused Full-class delta review, human acceptance,
+merge, push, pane-status (R4) work, unrelated cleanup.
 
-**PHASE C CORRECTED — FINALIZATION COMPLETE; FULL-CLASS REVIEW NOT YET REQUESTED**
+**FULL-CLASS FAIL CORRECTED — FOCUSED FULL-CLASS DELTA REVIEW NOT YET REQUESTED**
