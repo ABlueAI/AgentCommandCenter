@@ -95,8 +95,8 @@ const chain = report.chain || {};
 const exps = chain.exports || {};
 const fetched = (chain.results || []).filter((r) => r.fetched).map((r) => r.src);
 
-assert((chain.results || []).length === 5, 'all five chain scripts were injected');
-assert(fetched.length === 5, 'all five chain scripts were fetched');
+assert((chain.results || []).length === 6, 'all six chain scripts were injected');
+assert(fetched.length === 6, 'all six chain scripts were fetched');
 assert(fetched.some((s) => s.includes('agent-dom')),
   'the PRE-EXISTING renderer script with a top-level `const api` is loaded FIRST (without it this gate proves nothing)');
 
@@ -104,6 +104,8 @@ assert(exps.agentDom === true, 'agent-dom.js published window.agentDom (its own 
 assert(exps.dockview === true, 'the vendor UMD bundle published window.dockview.createDockview');
 assert(exps.ccDockviewFitPolicy === true, 'dockview-fit-policy.js published window.ccDockviewFitPolicy');
 assert(exps.ccDockviewPanelPolicy === true, 'dockview-panel-policy.js published window.ccDockviewPanelPolicy');
+assert(exps.ccDockviewLayoutPolicy === true,
+  'dockview-layout-policy.js — the SAME module main validates with — published window.ccDockviewLayoutPolicy');
 assert(exps.ccDockviewPrototype === true, 'dockview-prototype.js published window.ccDockviewPrototype.activate');
 assert(exps.ccDockviewPrototypeBootstrap === true, 'the adapter also published bootstrap()');
 
@@ -137,6 +139,7 @@ const byName = (n) => scenarios.find((s) => s.name === n);
 const FAILURE_CASES = [
   ['missing-fit-policy', /^missing-exports:/, 'a missing fit-policy export'],
   ['missing-panel-policy', /^missing-exports:/, 'a missing panel-policy export'],
+  ['missing-layout-policy', /^missing-exports:/, 'a missing SHARED layout-policy export'],
   ['missing-adapter', /^missing-exports:/, 'a missing adapter export'],
   ['missing-dockview-bundle', /^missing-exports:/, 'a missing vendor bundle'],
   ['activation-throws', /^activation-threw$/, 'activation throwing'],
@@ -229,20 +232,32 @@ assert(success.bannerCount === 0, 'no prototype banner is rendered');
 assert(success.audioSlotCount === 0, 'no audio slot is created — the borrow seam does not exist');
 assert(success.surfaceCount === 1, 'exactly one Dockview surface is created');
 
-// Phase B renders the three persistence controls DISABLED with a reason. That is the honest shape:
-// it neither hides that persistence is coming nor lets anyone invoke half-finished behaviour. Pane
-// creation and Library docking are NOT duplicated here — `+ Shell`, the Agents tab and the Library
-// tab already own them, and a second creation affordance is how the prototype multiplied PTYs.
-const EXPECTED_CONTROLS = ['Save Arrangement', 'Restore Saved Arrangement', 'Clear Saved Arrangement'];
+// Phase C renders FOUR ENABLED controls, each with a stable id. Phase B's disabled placeholders are
+// gone: an operation is either implemented and clickable, or it is not on the bar.
+//
+// Pane creation and Library docking are still NOT duplicated here — `+ Shell`, the Agents tab and
+// the Library tab own them, and a second creation affordance is how the prototype's "Use Default"
+// multiplied PTYs. Every control on this bar changes ARRANGEMENT or SAVED METADATA, nothing else.
+const EXPECTED_CONTROLS = [
+  ['dvSaveArrangement', 'Save Arrangement'],
+  ['dvRestoreArrangement', 'Restore Saved Arrangement'],
+  ['dvResetArrangement', 'Reset Current Arrangement'],
+  ['dvClearSaved', 'Clear Saved Arrangement'],
+];
 const buttons = success.buttons || [];
-assert(buttons.length === 3, `exactly three controls render (saw ${buttons.length}: ${JSON.stringify(buttons.map((b) => b.label))})`);
-for (const label of EXPECTED_CONTROLS) {
+assert(buttons.length === 4, `exactly four controls render (saw ${buttons.length}: ${JSON.stringify(buttons.map((b) => b.label))})`);
+for (const [id, label] of EXPECTED_CONTROLS) {
   const b = buttons.find((x) => x.label === label);
   assert(!!b, `the "${label}" control is present in the rendered DOM`);
   if (!b) continue;
-  assert(b.disabled === true, `"${label}" is DISABLED — Phase B does not implement persistence`);
-  assert(b.phase === 'c', `"${label}" is marked as Phase C work`);
+  assert(b.disabled === false, `"${label}" is ENABLED — Phase C implements it`);
+  assert(b.id === id, `"${label}" carries the stable id ${id} (saw ${b.id})`);
 }
+assert(JSON.stringify(success.buttonIds) === JSON.stringify(EXPECTED_CONTROLS.map(([id]) => id)),
+  `the four stable ids render in the documented order (saw ${JSON.stringify(success.buttonIds)})`);
+assert(success.disabledCount === 0, 'no control is left disabled at rest');
+assert(success.phaseCPlaceholders === 0,
+  'NEGATIVE CONTROL: no `data-phase="c"` placeholder survives — the disabled stubs are gone');
 assert(!buttons.some((b) => /Add Terminal|Add Library|Create Default Workspace/.test(b.label)),
   'no duplicate terminal-creation or Library control exists on the layout bar');
 assert(typeof success.statusText === 'string' && success.statusText.length > 0,

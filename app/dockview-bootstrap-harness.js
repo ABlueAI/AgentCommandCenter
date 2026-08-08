@@ -178,6 +178,7 @@ const LOAD_CHAIN = `(async () => {
     'node_modules/dockview/dist/dockview.js',
     'renderer/dockview-fit-policy.js',
     'renderer/dockview-panel-policy.js',
+    'dockview-layout-policy.js',
     'renderer/dockview-prototype.js',
   ];
   const results = [];
@@ -188,6 +189,7 @@ const LOAD_CHAIN = `(async () => {
       dockview: !!(window.dockview && typeof window.dockview.createDockview === 'function'),
       ccDockviewFitPolicy: !!(window.ccDockviewFitPolicy && typeof window.ccDockviewFitPolicy.createFitController === 'function'),
       ccDockviewPanelPolicy: !!(window.ccDockviewPanelPolicy && typeof window.ccDockviewPanelPolicy.shouldLoadDockview === 'function'),
+      ccDockviewLayoutPolicy: !!(window.ccDockviewLayoutPolicy && typeof window.ccDockviewLayoutPolicy.validateLayout === 'function'),
       ccDockviewPrototype: !!(window.ccDockviewPrototype && typeof window.ccDockviewPrototype.activate === 'function'),
       ccDockviewPrototypeBootstrap: !!(window.ccDockviewPrototype && typeof window.ccDockviewPrototype.bootstrap === 'function'),
       agentDom: !!(window.agentDom && typeof window.agentDom.el === 'function'),
@@ -246,7 +248,15 @@ function buildLibraryFlow(sectionHtml) {
     while (container.firstChild) container.removeChild(container.firstChild);
 
     const host = {
-      bridge: { enabled: true, saveLayout: async () => ({ ok: true, savedAt: 'x' }), loadLayout: async () => ({ ok: false, reason: 'no-saved-layout' }), resetLayout: async () => ({ ok: true }) },
+      // Main's real shapes: loadLayout returns the WHOLE envelope so the renderer can validate it.
+      // This flow never runs a layout operation — it drives the Library seam — so the load simply
+      // reports that nothing is saved.
+      bridge: {
+        enabled: true,
+        saveLayout: async () => ({ ok: true, savedAt: '2026-08-08T12:00:00Z' }),
+        loadLayout: async () => ({ ok: false, reason: 'no-saved-layout' }),
+        resetLayout: async () => ({ ok: true, existed: false }),
+      },
       getDockviewGlobal: () => window.dockview,
       getContainer: () => container,
       log: (l) => logs.push(String(l)),
@@ -464,6 +474,14 @@ const DRIVE_BOOTSTRAP = `(() => {
     () => { const s = win.ccDockviewPanelPolicy; delete win.ccDockviewPanelPolicy; return s; },
     (s) => { win.ccDockviewPanelPolicy = s; });
 
+  // 2b — the SHARED layout policy. Without it the renderer could not validate immediately before
+  // fromJSON, and the only alternatives would be an unvalidated apply or a second, drift-prone
+  // validator — both worse than not starting the layout engine at all. So it is a hard requirement,
+  // and its absence lands on the classic grid like any other missing export.
+  run('missing-layout-policy',
+    () => { const s = win.ccDockviewLayoutPolicy; delete win.ccDockviewLayoutPolicy; return s; },
+    (s) => { win.ccDockviewLayoutPolicy = s; });
+
   // 3 — the adapter global itself absent (bootstrap is held locally, so it can still be called)
   run('missing-adapter',
     () => { const s = win.ccDockviewPrototype; delete win.ccDockviewPrototype; return s; },
@@ -506,13 +524,17 @@ const DRIVE_BOOTSTRAP = `(() => {
   const buttons = d ? [...d.querySelectorAll('.dockview-prototype-controls button')] : [];
   out.success = {
     dockChildCount: d ? d.children.length : -1,
+    // Phase C: four ENABLED controls with stable ids, and nothing that can create a pane.
+    buttonIds: buttons.map((b) => b.id),
+    disabledCount: buttons.filter((b) => b.disabled).length,
+    phaseCPlaceholders: buttons.filter((b) => b.dataset && b.dataset.phase === 'c').length,
     // The prototype's persistent "NOT PRODUCTION" strip is gone: Dockview IS production now, so a
     // warning strip on the production surface would be a false statement.
     bannerCount: d ? d.querySelectorAll('.dockview-prototype-banner').length : -1,
     surfaceCount: d ? d.querySelectorAll('.dockview-prototype-surface').length : -1,
     // No audio slot exists at all; the whole borrow/restore seam was deleted, not disabled.
     audioSlotCount: doc.querySelectorAll('.dockview-prototype-audio').length,
-    buttons: buttons.map((b) => ({ label: b.textContent, disabled: b.disabled === true, phase: b.dataset.phase || null })),
+    buttons: buttons.map((b) => ({ id: b.id, label: b.textContent, disabled: b.disabled === true, phase: b.dataset.phase || null })),
     statusText: d && d.querySelector('.dockview-prototype-status') ? d.querySelector('.dockview-prototype-status').textContent : null,
     instanceReturned: !!(successResult && successResult.instance && successResult.instance.ok === true),
     instancePublished: win.ccDockviewPrototypeInstance !== undefined && win.ccDockviewPrototypeInstance !== null,

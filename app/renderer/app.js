@@ -790,7 +790,11 @@ const DOCKVIEW_SCRIPTS = [
   '../node_modules/dockview/dist/dockview.js',   // vendor UMD bundle -> window.dockview
   'dockview-fit-policy.js',
   'dockview-panel-policy.js',
-  'dockview-prototype.js',
+  // The SAME schema module main validates with, loaded here as a classic script so the renderer can
+  // validate immediately before every fromJSON. It lives beside main.js rather than in renderer/
+  // precisely because both processes load it — one file, one set of rules, no drift.
+  '../dockview-layout-policy.js',
+  'dockview-prototype.js',                       // last: it depends on all three policies
 ];
 
 // ---- Library singleton docking (PROTOTYPE ONLY) ------------------------------------------------

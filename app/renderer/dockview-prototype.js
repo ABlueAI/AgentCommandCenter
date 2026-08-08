@@ -47,6 +47,16 @@
     ['dockview', (v) => !!v && typeof v.createDockview === 'function'],
     ['ccDockviewFitPolicy', (v) => !!v && typeof v.createFitController === 'function' && typeof v.createFitRegistry === 'function'],
     ['ccDockviewPanelPolicy', (v) => !!v && typeof v.shouldLoadDockview === 'function' && typeof v.buildPanelDescriptor === 'function'],
+    // Phase C. The renderer validates state immediately before EVERY fromJSON, so a missing or
+    // unparsed layout policy is not a degraded mode — it is a refusal that lands on the classic
+    // grid. Without it the only alternatives would be an unvalidated fromJSON or a second,
+    // drift-prone validator, and both are worse than not starting the layout engine at all.
+    ['ccDockviewLayoutPolicy', (v) => !!v
+      && typeof v.validateLayout === 'function'
+      && typeof v.validateEnvelope === 'function'
+      && typeof v.paneIdsFromLayout === 'function'
+      && typeof v.comparePaneSets === 'function'
+      && typeof v.buildDefaultArrangement === 'function'],
     ['ccDockviewPrototype', (v) => !!v && typeof v.activate === 'function'],
   ];
 
@@ -69,12 +79,16 @@
     // instead of a script-killing throw. See resolveDependency above.
     const fitPolicy = resolveDependency('ccDockviewFitPolicy', './dockview-fit-policy');
     const panelPolicy = resolveDependency('ccDockviewPanelPolicy', './dockview-panel-policy');
-    if (!fitPolicy || !panelPolicy) {
+    // The SAME module main validates with, loaded here as a browser global. Not a renderer copy of
+    // the rules — the identical file, so the two sides cannot disagree about what is valid.
+    const layoutPolicy = resolveDependency('ccDockviewLayoutPolicy', '../dockview-layout-policy');
+    if (!fitPolicy || !panelPolicy || !layoutPolicy) {
       if (host && typeof host.log === 'function') {
         host.log('[dockview] REFUSED: policy modules unavailable\n');
       }
       return { ok: false, reason: 'policy-modules-missing' };
     }
+    const REASON = layoutPolicy.REASON;
     // Defense in depth: app.js already gated the dynamic load behind the same predicate. Asserting
     // it again here means this module cannot be activated by being loaded some other way.
     if (!panelPolicy.shouldLoadDockview(host && host.bridge)) {
@@ -399,175 +413,413 @@
       return { ok: true };
     }
 
-    // ---- layout persistence (all validation is main's; this side only transports) --------------
-    async function saveLayout() {
-      const result = await host.bridge.saveLayout(api.toJSON());
-      host.log(result && result.ok
-        ? `[dockview] layout saved (${result.savedAt})\n`
-        : `[dockview] layout save REFUSED: ${(result && result.reason) || 'unknown'}\n`);
-      controls.setStatus(result && result.ok ? 'Layout saved.' : `Save refused: ${(result && result.reason) || 'unknown'}`);
-      return result;
-    }
 
-    async function restoreLayout() {
-      const result = await host.bridge.loadLayout();
-      if (!result || !result.ok) {
-        const reason = (result && result.reason) || 'unknown';
-        // Refuse VISIBLY with a bounded reason code, do NOT call fromJSON, and load the default
-        // layout instead. The invalid file is left on disk untouched by main for diagnosis (§ 9).
-        host.log(`[dockview] restore REFUSED: ${reason}\n`);
-        // A refusal is a FULL STOP. It must not create a terminal, must not spawn a PTY, and must
-        // not fall through to the default-workspace creator: an automatic fallback is how a failed
-        // restore silently multiplied terminals during human acceptance. The current workspace is
-        // left exactly as it was, and the user decides what to do next.
-        controls.setStatus(reason === 'no-saved-layout'
-          ? 'No saved arrangement. Nothing was changed.'
-          : `Restore refused (${reason}). Nothing was changed.`);
-        return result;
-      }
-      // Restoring geometry cannot resurrect a PTY: after a restart there are no live panes to host,
-      // and § 9 forbids auto-launching PTYs. Rather than mount empty panel shells — the "silently
-      // missing pane" shape § 5.7 forbids — refuse visibly when a restored pane ID has no live pane
-      // and say exactly which panes would need to be recreated first.
-      const restoredIds = Object.keys((result.layout && result.layout.panels) || {});
-      const missing = restoredIds.filter((paneId) => !host.getPaneElement(paneId));
-      if (missing.length > 0) {
-        host.log(`[dockview] restore REFUSED: ${missing.length} restored pane(s) have no live pane\n`);
-        controls.setStatus(
-          `Restore refused: ${missing.length} saved pane(s) are not open (${missing.join(', ')}). ` +
-          'Open them first. Nothing was changed and the saved arrangement is intact.');
-        return { ok: false, reason: 'panes-not-live' };
-      }
+    // ---- Phase C: layout persistence ------------------------------------------------------------
+    //
+    // FOUR honest operations, and one rule they all obey: NO LAYOUT OPERATION MAY CREATE, CLOSE,
+    // RESTART, RESUME, OR SILENTLY STRAND A PTY. Layout is arrangement metadata; terminal lifecycle
+    // belongs to the app, and nothing below touches it.
+    //
+    //   Save Arrangement           metadata out, nothing else changes
+    //   Restore Saved Arrangement  one validated fromJSON, or a validated rollback
+    //   Reset Current Arrangement  the same transaction, applied to a computed default; no file I/O
+    //   Clear Saved Arrangement    deletes only the saved file; the workspace is untouched
+    //
+    // VALIDATION HAPPENS HERE TOO, not only in main. Main validates what it writes and what it
+    // reads, but between main's check and `fromJSON` the state crosses IPC and passes through this
+    // module — and a rollback snapshot never goes near main at all. So every single `fromJSON` in
+    // this file goes through `applyValidatedLayout`, and there is no other call site.
 
-      // ---- TRANSACTION: capture enough to put the live topology back if applying the saved layout
-      // fails. Both captures are in-memory only; nothing is written and the saved file is untouched.
-      const preRestorePanes = new Map(hostedPanes);
-      let preRestoreLayout = null;
-      try { preRestoreLayout = api.toJSON(); } catch { preRestoreLayout = null; }
+    /** The operation currently running, or null. Exactly one layout operation may run at a time. */
+    let busyOperation = null;
 
-      try {
-        // main validated this immediately before returning it; the shape reaching fromJSON is the
-        // shape the validator accepted. fromJSON clears the workspace first and then rebuilds it,
-        // so every removal it fires is a mount transition rather than a user close.
-        inMountTransition(() => api.fromJSON(result.layout));
-      } catch {
-        // The exception is deliberately NOT echoed: Dockview's messages interpolate panel IDs and
-        // layout fragments, and § 9 forbids putting state contents in the Logs tab.
-        return failRestore('restore-apply-failed', preRestoreLayout, preRestorePanes);
-      }
-
-      // Applying did not throw — but "did not throw" is not "mounted". Verify by object identity
-      // that every restored pane really is parented to the panel host Dockview just built for it.
-      // This is the assertion whose absence let a restore report success over empty shells.
-      const unmounted = restoredIds.filter((paneId) => !paneIsMounted(paneId));
-      if (unmounted.length > 0) {
-        return failRestore('restore-apply-incomplete', preRestoreLayout, preRestorePanes);
-      }
-
-      controls.setStatus(`Layout restored (saved ${result.savedAt}).`);
-      host.log('[dockview] layout restored\n');
-      registry.scheduleAll();
-      return result;
-    }
+    const OPERATION_LABEL = {
+      save: 'Saving the current arrangement',
+      restore: 'Restoring the saved arrangement',
+      reset: 'Resetting the current arrangement',
+      clear: 'Clearing the saved arrangement',
+    };
 
     /**
-     * Put the pre-restore workspace back after a failed apply, using the ORIGINAL live pane elements.
-     * No PTY is created or killed and `useDefaultLayout()` is never used here, because it would spawn
-     * replacement terminals alongside the ones still running.
+     * Run one layout operation with EXCLUSIVE ownership of the layout.
      *
-     * Two ordered strategies, not a retry of one:
-     *   1. Re-apply the layout Dockview itself serialized moments earlier — restores exact topology.
-     *   2. Last resort: clear, then rebuild the captured panes through the same `addPanel` primitive
-     *      that created them. Loses the split arrangement, but no live pane is left unmounted.
-     * Returns a bounded outcome code for the log — never layout contents.
+     * Overlapping operations are the failure mode this prevents: a restore's `fromJSON` interleaved
+     * with a save's `toJSON`, or two restores racing to roll back to each other's snapshot, would
+     * corrupt the workspace in ways no individual operation could detect. The controls are disabled
+     * for the duration AND a programmatic second call is refused, so neither a fast double-click nor
+     * a future caller can open the window.
+     *
+     * The release is in `finally`: an operation that throws must not leave the UI permanently dead.
+     * Nothing is ever retried automatically.
      */
-    function rollbackRestore(snapshot, panes) {
-      if (snapshot) {
-        try {
-          inMountTransition(() => api.fromJSON(snapshot));
-          if ([...panes.keys()].every((paneId) => paneIsMounted(paneId))) return 'topology-restored';
-        } catch { /* fall through to the flat rebuild */ }
+    async function runExclusive(name, fn) {
+      if (busyOperation !== null) {
+        host.log(`[dockview] ${name} REFUSED: ${REASON.BUSY}\n`);
+        controls.setStatus(`${OPERATION_LABEL[busyOperation]} is still running. Nothing was changed.`);
+        return { ok: false, reason: REASON.BUSY };
       }
-      try { inMountTransition(() => { if (typeof api.clear === 'function') api.clear(); }); }
-      catch { /* best effort — the rebuild below re-adds regardless */ }
-      let rebuilt = 0;
-      for (const [paneId, record] of panes) {
-        hostedPanes.set(paneId, record);          // ownership was never dropped; make it explicit
-        // addPane returns a bounded { ok, reason } result, NOT a boolean: `if (addPane(...))` would
-        // be true even for a refusal and would over-count the rebuild.
-        if (addPane(paneId, record.kind).ok) rebuilt++;
+      busyOperation = name;
+      controls.setBusy(name);
+      try {
+        return await fn();
+      } finally {
+        busyOperation = null;
+        controls.setIdle();
       }
-      if (rebuilt === panes.size && [...panes.keys()].every((paneId) => paneIsMounted(paneId))) {
-        return 'panes-rebuilt-flat';
-      }
-      return 'incomplete';
     }
 
-    /** Bounded, content-free restore failure: roll back, say so in both surfaces, refuse. */
-    function failRestore(reason, snapshot, panes) {
-      host.log(`[dockview] restore REFUSED: ${reason}\n`);
-      const outcome = rollbackRestore(snapshot, panes);
-      host.log(`[dockview] restore rollback: ${outcome}\n`);
-      controls.setStatus(outcome === 'incomplete'
-        ? `Restore failed (${reason}) and the previous arrangement could not be fully rebuilt. ` +
-          'No terminal was closed and the saved layout on disk is unchanged.'
-        : `Restore failed (${reason}). The saved layout was NOT applied and is unchanged on disk; ` +
-          'your previous panes were put back and no terminal was closed.');
-      registry.scheduleAll();
+    /** A bounded refusal: one reason code to the log, one sentence to the status surface. */
+    function refuseOperation(name, reason, sentence) {
+      host.log(`[dockview] ${name} REFUSED: ${reason}\n`);
+      controls.setStatus(sentence);
       return { ok: false, reason };
     }
 
-    /**
-     * Clear Saved Layout — deletes ONLY the persisted layout metadata under userData. It closes no
-     * pane, kills no PTY, and moves nothing. The status says so explicitly, because the old "Reset"
-     * label and its bare "Saved layout cleared." message read like the live workspace had been
-     * reset, which it never was.
-     */
-    async function resetLayout() {
-      const result = await host.bridge.resetLayout();
-      controls.setStatus(result && result.ok
-        ? `Saved layout metadata deleted. Live panes were NOT changed — ${hostedPanes.size} pane(s) still open.`
-        : `Clear Saved Layout refused: ${(result && result.reason) || 'unknown'}. Live panes were NOT changed.`);
-      host.log(`[dockview] layout reset: ${result && result.ok ? 'ok' : 'refused'}\n`);
-      return result;
+    /** The pane IDs this adapter OWNS right now, read from its own map — never from saved state. */
+    function ownedIds() { return [...hostedPanes.keys()]; }
+
+    /** How many owned panes are terminals, and how many are the Library. Counts only, never IDs. */
+    function ownershipCounts() {
+      let terminals = 0;
+      let library = 0;
+      for (const [, record] of hostedPanes) {
+        if (record.kind === 'library') library += 1; else terminals += 1;
+      }
+      return { terminals, library };
     }
 
     /**
-     * Create Default Workspace — exactly two terminals plus the singleton Library, and ONLY from an
-     * empty workspace. Explicitly user-triggered; never runs on app startup, so a normal launch
-     * still spawns no PTY and restores no workspace (§ 9).
+     * THE ONLY `fromJSON` CALL SITE IN THIS FILE.
      *
-     * PREFLIGHT BEFORE CREATION. The emptiness check happens before the FIRST terminal is created,
-     * not between creations. Repeating the old unguarded version is what produced the confusing,
-     * terminal-multiplying behaviour in human acceptance: every click added two more live PTYs.
-     * A refusal here creates zero panes and zero PTYs.
+     * Validates through the shared policy IMMEDIATELY BEFORE applying — not earlier, because the
+     * gap between an earlier check and the call is exactly where an unvalidated object could be
+     * substituted. A validation failure returns the bounded reason and `fromJSON` is never reached.
+     *
+     * The apply itself runs inside a mount transition, because `fromJSON` clears the workspace
+     * before rebuilding it and every removal it fires is a MOUNT transition, not a user close.
      */
-    async function useDefaultLayout() {
-      if (hostedPanes.size > 0) {
-        const owned = [...hostedPanes.keys()].join(', ');
-        host.log(`[dockview] REFUSED create-default-workspace: workspace-not-empty (${hostedPanes.size} pane(s))\n`);
-        controls.setStatus(
-          `Create Default Workspace refused: the workspace already has ${hostedPanes.size} pane(s) (${owned}). ` +
-          'Close them first. Nothing was created and no terminal was started.');
-        return { ok: false, reason: 'workspace-not-empty' };
+    function applyValidatedLayout(layout) {
+      const error = layoutPolicy.validateLayout(layout);
+      if (error) return { ok: false, reason: error, applied: false };
+      try {
+        inMountTransition(() => api.fromJSON(layout));
+      } catch {
+        // The exception is deliberately NOT echoed: Dockview's messages interpolate panel IDs and
+        // layout fragments, and no state content may reach the Logs tab.
+        return { ok: false, reason: REASON.APPLY_THREW, applied: true };
       }
+      return { ok: true, applied: true };
+    }
 
-      const first = await host.createTerminalPane();
-      if (first) addPane(first, 'terminal');
-      const second = await host.createTerminalPane();
-      if (second) addPane(second, 'terminal', { direction: 'right' });
-
-      // The Library is optional in the sense that a missing surface must refuse visibly rather than
-      // abort the whole workspace — but it must never fail silently.
-      const libraryResult = addPane('library', 'library', { direction: 'below' });
-      registry.scheduleAll();
-
-      if (!libraryResult.ok) {
-        controls.setStatus(`Default workspace created with two terminals. Library refused: ${libraryResult.reason}.`);
-        return { ok: true, library: libraryResult };
+    /**
+     * Did the apply actually produce the workspace it promised?
+     *
+     * "Did not throw" is not "mounted". This checks four independent things, because each has been
+     * a real defect class: a pane silently missing, a panel nobody owns, a rebuilt shell holding a
+     * COPY of the element instead of the live one, and ownership drifting between kinds.
+     *
+     * @param {string[]} expectedIds        the panes that must be present, and no others
+     * @param {Map<string,object>} elements paneId -> the element object that must still be there
+     * @param {{terminals:number, library:number}} counts  ownership counts that must be unchanged
+     */
+    function verifyApplied(expectedIds, elements, counts) {
+      for (const id of expectedIds) {
+        if (!paneIsMounted(id)) return { ok: false, reason: REASON.APPLY_INCOMPLETE };
       }
-      controls.setStatus('Default workspace created: two terminals and the Library.');
+      // No unexpected panel: the workspace must hold exactly the expected set, no more.
+      let livePanels = null;
+      try { livePanels = api.panels.map((p) => p && p.id); } catch { livePanels = null; }
+      if (livePanels) {
+        const expected = new Set(expectedIds);
+        if (livePanels.length !== expected.size) return { ok: false, reason: REASON.UNEXPECTED_PANEL };
+        for (const id of livePanels) if (!expected.has(id)) return { ok: false, reason: REASON.UNEXPECTED_PANEL };
+      }
+      // Object identity: the live xterm, its PTY and every handler ride on the ORIGINAL element.
+      // A rebuilt panel holding anything else means the pane was recreated, which would have killed
+      // a terminal — the one thing a layout operation may never do.
+      for (const [id, element] of elements) {
+        const owned = hostedPanes.get(id);
+        if (!owned || owned.element !== element) return { ok: false, reason: REASON.IDENTITY_CHANGED };
+      }
+      const after = ownershipCounts();
+      if (after.terminals !== counts.terminals || after.library !== counts.library) {
+        return { ok: false, reason: REASON.OWNERSHIP_MISMATCH };
+      }
       return { ok: true };
+    }
+
+    /**
+     * Capture everything needed to put the workspace back exactly as it is right now.
+     *
+     * Elements are captured BY OBJECT IDENTITY, so the verification after a rollback compares the
+     * same objects rather than trusting IDs. The snapshot layout is Dockview's own serialization of
+     * the live topology, so a rollback re-applies a shape Dockview itself produced.
+     */
+    function captureWorkspace() {
+      const elements = new Map();
+      for (const [id, record] of hostedPanes) elements.set(id, record.element);
+      let layout = null;
+      try { layout = api.toJSON(); } catch { layout = null; }
+      let activePaneId = null;
+      try { activePaneId = (api.activePanel && api.activePanel.id) || null; } catch { activePaneId = null; }
+      return { ids: [...hostedPanes.keys()], elements, layout, activePaneId, counts: ownershipCounts() };
+    }
+
+    /**
+     * Put the captured workspace back after a failed apply.
+     *
+     * ONE attempt, through the same validated call site, and validated AGAIN immediately before it
+     * — the snapshot was checked when it was captured, but that was before a failed `fromJSON` ran,
+     * and re-checking costs nothing next to restoring the wrong thing.
+     *
+     * There is deliberately no second strategy. The prototype fell back to clearing and re-adding
+     * every pane through `addPane`, which changes the topology, re-docks the Library, and is a
+     * REPAIR rather than a rollback. An honest "the previous arrangement could not be fully put
+     * back" is better than a quiet substitution, so an incomplete rollback is REPORTED, not patched.
+     *
+     * @returns {'restored'|'incomplete'}
+     */
+    function rollbackWorkspace(snapshot) {
+      if (!snapshot || !snapshot.layout) return 'incomplete';
+      const applied = applyValidatedLayout(snapshot.layout);
+      if (!applied.ok) return 'incomplete';
+      const verdict = verifyApplied(snapshot.ids, snapshot.elements, snapshot.counts);
+      if (!verdict.ok) return 'incomplete';
+      // Best-effort: put focus back where the user had it. Never load-bearing for the outcome.
+      if (snapshot.activePaneId) {
+        try {
+          const panel = typeof api.getPanel === 'function' ? api.getPanel(snapshot.activePaneId) : null;
+          if (panel && panel.api && typeof panel.api.setActive === 'function') panel.api.setActive();
+        } catch { /* focus is cosmetic; a failure here does not make the rollback incomplete */ }
+      }
+      registry.scheduleAll();
+      return 'restored';
+    }
+
+    /**
+     * The shared tail of Restore and Reset: apply a validated target layout as ONE transaction, and
+     * roll back to the captured workspace if anything about the result is wrong.
+     *
+     * No retry, no repair, no fallback layout, no terminal creation, no continuation.
+     */
+    function applyAsTransaction(name, targetLayout, snapshot) {
+      const applied = applyValidatedLayout(targetLayout);
+      if (!applied.ok && !applied.applied) {
+        // Validation refused: `fromJSON` was never called, so the workspace is untouched and there
+        // is nothing to roll back.
+        return refuseOperation(name, applied.reason,
+          `${OPERATION_LABEL[name]} refused (${applied.reason}). Nothing was changed.`);
+      }
+
+      let verdict = applied.ok ? verifyApplied(snapshot.ids, snapshot.elements, snapshot.counts)
+        : { ok: false, reason: applied.reason };
+
+      if (verdict.ok) {
+        registry.scheduleAll();
+        return { ok: true };
+      }
+
+      const outcome = rollbackWorkspace(snapshot);
+      host.log(`[dockview] ${name} REFUSED: ${verdict.reason} — rollback ${outcome}\n`);
+      controls.setStatus(outcome === 'restored'
+        ? `${OPERATION_LABEL[name]} failed (${verdict.reason}). Your previous arrangement was put back; `
+          + 'no terminal was closed and the saved arrangement on disk is unchanged.'
+        : `${OPERATION_LABEL[name]} failed (${verdict.reason}) and the previous arrangement could NOT be `
+          + 'fully put back. No terminal was closed and the saved arrangement on disk is unchanged.');
+      return { ok: false, reason: verdict.reason, rollback: outcome };
+    }
+
+    // ---- 1. Save Arrangement ----------------------------------------------------------------------
+    /**
+     * Write the CURRENT arrangement as metadata. Creates and kills nothing, and moves nothing.
+     *
+     * Four preconditions are checked BEFORE main is called, so a workspace that could not be
+     * restored is never written in the first place — and a refusal leaves any previously saved
+     * valid arrangement exactly as it was, because nothing reaches the file at all.
+     */
+    async function saveArrangement() {
+      return runExclusive('save', async () => {
+        let current = null;
+        try { current = api.toJSON(); } catch { current = null; }
+        if (!current) {
+          return refuseOperation('save', REASON.LAYOUT_SHAPE,
+            'Save refused: the layout engine could not describe the current arrangement. Nothing was saved.');
+        }
+
+        // (1) + (2) validate, and take the pane IDs from the SAME validated traversal.
+        const ids = layoutPolicy.paneIdsFromLayout(current);
+        if (!ids.ok) {
+          return refuseOperation('save', ids.reason,
+            `Save refused (${ids.reason}). Nothing was saved and any previously saved arrangement is unchanged.`);
+        }
+
+        // (3) exact set equality against the panes this adapter actually OWNS. Derived
+        // independently — one list from the serialized layout, one from the ownership map.
+        const match = layoutPolicy.comparePaneSets(ids.sorted, ownedIds());
+        if (!match.ok) {
+          return refuseOperation('save', match.reason,
+            `Save refused (${match.reason}): the arrangement describes ${match.savedCount} pane(s) but `
+            + `${match.liveCount} are open. Nothing was saved.`);
+        }
+
+        // (4) every owned pane is really mounted. Saving a workspace with an unmounted pane would
+        // persist a panel that restores as an empty shell.
+        for (const id of hostedPanes.keys()) {
+          if (!paneIsMounted(id)) {
+            return refuseOperation('save', REASON.PANE_NOT_MOUNTED,
+              'Save refused: a pane is not mounted in the layout yet. Nothing was saved.');
+          }
+        }
+
+        // (5) main validates AGAIN before writing, and owns the path.
+        const result = await host.bridge.saveLayout(current);
+        if (!result || !result.ok) {
+          const reason = (result && result.reason) || 'unknown';
+          return refuseOperation('save', reason,
+            `Save refused (${reason}). Nothing was written and any previously saved arrangement is unchanged.`);
+        }
+        host.log('[dockview] arrangement saved\n');
+        controls.setStatus(`Arrangement saved (${match.count} pane(s)). No terminal was created, closed or moved.`);
+        return { ok: true, savedAt: result.savedAt };
+      });
+    }
+
+    // ---- 2. Restore Saved Arrangement -------------------------------------------------------------
+    /**
+     * Apply the saved arrangement to the CURRENTLY LIVE panes, as one transaction.
+     *
+     * Restoring geometry cannot resurrect a PTY, and this operation never tries: it requires the
+     * live pane set to already equal the saved one, EXACTLY. Anything else is refused before
+     * `fromJSON`, because the alternatives are both kill criteria — mounting empty shells for saved
+     * panes that are not open, or stranding open panes the saved state does not mention.
+     */
+    async function restoreArrangement() {
+      return runExclusive('restore', async () => {
+        const loaded = await host.bridge.loadLayout();
+        if (!loaded || !loaded.ok) {
+          const reason = (loaded && loaded.reason) || 'unknown';
+          // A refusal is a FULL STOP: no terminal is created, no default layout is substituted, and
+          // the current workspace is left exactly as it was. The invalid file stays on disk for
+          // diagnosis, untouched by main.
+          return refuseOperation('restore', reason, reason === REASON.NOT_FOUND
+            ? 'There is no saved arrangement yet. Nothing was changed.'
+            : `Restore refused (${reason}). Nothing was changed and the saved file is unchanged on disk.`);
+        }
+
+        // Validate AGAIN, here, against the whole envelope — not just the layout. Main already
+        // validated what it read, but this side is the one about to call `fromJSON`.
+        const verdict = layoutPolicy.validateEnvelope(loaded.envelope);
+        if (!verdict.ok) {
+          return refuseOperation('restore', verdict.reason,
+            `Restore refused (${verdict.reason}). Nothing was changed and the saved file is unchanged on disk.`);
+        }
+        const savedLayout = verdict.envelope.layout;
+
+        // EXACT set equality. The two lists are derived independently: the saved one from the
+        // validated saved layout, the live one from this adapter's ownership map.
+        const ids = layoutPolicy.paneIdsFromLayout(savedLayout);
+        if (!ids.ok) {
+          return refuseOperation('restore', ids.reason,
+            `Restore refused (${ids.reason}). Nothing was changed.`);
+        }
+        const match = layoutPolicy.comparePaneSets(ids.sorted, ownedIds());
+        if (!match.ok) {
+          const detail = match.reason === REASON.SAVED_NOT_LIVE
+            ? `${match.savedNotLive} saved pane(s) are not open. Open them first.`
+            : match.reason === REASON.LIVE_NOT_SAVED
+              ? `${match.liveNotSaved} open pane(s) are not in the saved arrangement. Close them first.`
+              : `the saved arrangement describes ${match.savedCount} pane(s) and ${match.liveCount} are open.`;
+          return refuseOperation('restore', match.reason,
+            `Restore refused (${match.reason}): ${detail} Nothing was changed and the saved file is intact.`);
+        }
+
+        // Capture the rollback target, and refuse BEFORE touching the workspace if it could not be
+        // put back. Applying a change we cannot undo is worse than not applying it.
+        const snapshot = captureWorkspace();
+        if (!snapshot.layout || layoutPolicy.validateLayout(snapshot.layout)) {
+          return refuseOperation('restore', REASON.SNAPSHOT_INVALID,
+            'Restore refused: the current arrangement could not be captured for rollback, so nothing was changed.');
+        }
+
+        const outcome = applyAsTransaction('restore', savedLayout, snapshot);
+        if (!outcome.ok) return outcome;
+        host.log('[dockview] arrangement restored\n');
+        controls.setStatus(`Saved arrangement restored (${match.count} pane(s)). No terminal was created or closed.`);
+        return { ok: true, savedAt: loaded.envelope.savedAt };
+      });
+    }
+
+    // ---- 3. Reset Current Arrangement -------------------------------------------------------------
+    /**
+     * Re-arrange the panes that are ALREADY open into the deterministic default, and do nothing
+     * else. It reads no file, writes no file, and — critically — creates no terminal.
+     *
+     * The prototype's `useDefaultLayout()` is GONE, not disabled. That control created two
+     * terminals and the Library every time it ran, which multiplied live PTYs during human
+     * acceptance; there is now no UI control and no automatic route in production that can create a
+     * pane as a side effect of a layout operation. The default arrangement is computed from the
+     * panes that exist (`buildDefaultArrangement`), so it cannot conjure one.
+     */
+    async function resetArrangement() {
+      return runExclusive('reset', async () => {
+        if (hostedPanes.size === 0) {
+          return refuseOperation('reset', REASON.NO_LIVE_PANES,
+            'There are no open panes to re-arrange. Nothing was changed and no terminal was created.');
+        }
+
+        const snapshot = captureWorkspace();
+        if (!snapshot.layout || layoutPolicy.validateLayout(snapshot.layout)) {
+          return refuseOperation('reset', REASON.SNAPSHOT_INVALID,
+            'Reset refused: the current arrangement could not be captured for rollback, so nothing was changed.');
+        }
+
+        // Built from the LIVE ownership map, so the pane set is preserved by construction.
+        const panes = [];
+        for (const [id, record] of hostedPanes) {
+          panes.push({ id, component: record.kind, title: panelPolicy.defaultTitleFor(id) });
+        }
+        const built = layoutPolicy.buildDefaultArrangement({
+          panes,
+          width: snapshot.layout.grid.width,
+          height: snapshot.layout.grid.height,
+        });
+        if (!built.ok) {
+          return refuseOperation('reset', built.reason,
+            `Reset refused (${built.reason}). Nothing was changed and no terminal was created.`);
+        }
+
+        const outcome = applyAsTransaction('reset', built.layout, snapshot);
+        if (!outcome.ok) return outcome;
+        host.log('[dockview] current arrangement reset\n');
+        controls.setStatus(`Current arrangement reset to the default row (${snapshot.ids.length} pane(s)). `
+          + 'No terminal was created or closed, and the saved arrangement was not read or written.');
+        return { ok: true };
+      });
+    }
+
+    // ---- 4. Clear Saved Arrangement ---------------------------------------------------------------
+    /**
+     * Delete ONLY the saved metadata file. It closes no pane, kills no PTY, moves nothing, and never
+     * calls `fromJSON` — the status says so explicitly, because the prototype's bare "Saved layout
+     * cleared." read like the live workspace had been reset, which it never was.
+     */
+    async function clearSavedArrangement() {
+      return runExclusive('clear', async () => {
+        const result = await host.bridge.resetLayout();
+        if (!result || !result.ok) {
+          const reason = (result && result.reason) || 'unknown';
+          return refuseOperation('clear', reason,
+            `Clear Saved Arrangement refused (${reason}). Your live panes were NOT changed.`);
+        }
+        host.log('[dockview] saved arrangement cleared\n');
+        // An already-absent file is a SUCCESSFUL no-op — the caller asked for "no saved arrangement"
+        // and that is the state. Saying so is more honest than reporting a deletion that did not
+        // happen, and more honest than reporting a failure.
+        controls.setStatus(result.existed === false
+          ? `There was no saved arrangement to clear. Your live panes were NOT changed — ${hostedPanes.size} pane(s) still open.`
+          : `Saved arrangement deleted. Your live panes were NOT changed — ${hostedPanes.size} pane(s) still open.`);
+        return { ok: true, existed: result.existed !== false };
+      });
     }
 
     // ---- controls -----------------------------------------------------------------------------
@@ -578,39 +830,55 @@
       status.className = 'dockview-prototype-status';
       status.textContent = 'Layout ready. Panes are created by + Shell, the Agents tab, and Library.';
 
-      // EVERY control reports success or a bounded refusal into the status surface. None may end in
-      // a silent no-op: Add Library previously resolved a nonexistent `#libraryPanel` to null and
-      // discarded the click with no status, no log line, and no visible effect at all.
-      // PHASE B CONTROL BAR — deliberately minimal.
+      // THE FOUR PHASE-C CONTROLS, enabled and honest.
       //
-      // Terminal creation is NOT duplicated here: `+ Shell` and the Agents tab already own it, and a
-      // second creation affordance is how the prototype's "Use Default" quietly multiplied PTYs.
-      // Library docking is NOT duplicated here either: the existing Library navigation owns it.
+      // Terminal creation is deliberately NOT here: `+ Shell` and the Agents tab own it, and a
+      // second creation affordance is exactly how the prototype's "Use Default" quietly multiplied
+      // PTYs. Library docking is not here either — the Library tab owns it. Every control on this
+      // bar changes ARRANGEMENT or SAVED METADATA, and nothing else.
       //
-      // The three persistence controls are rendered but DISABLED, because Phase B does not implement
-      // Save/Restore/Reset/Clear semantics. Showing them disabled with a reason is the honest shape:
-      // it neither hides that persistence is coming nor lets anyone invoke half-finished behaviour.
-      // The underlying functions still exist and are exercised by tests; nothing in the production UI
-      // can reach them until Phase C wires these up.
-      const PHASE_C_TITLE = 'Layout persistence arrives in Phase C — not enabled yet.';
-      const buttons = [
-        'Save Arrangement',
-        'Restore Saved Arrangement',
-        'Clear Saved Arrangement',
-      ].map((label) => {
+      // Each carries a stable id so tests and support transcripts can address it by name rather
+      // than by label text or DOM position.
+      const BUTTONS = [
+        ['dvSaveArrangement', 'Save Arrangement', 'Write the current arrangement to disk. No terminal is created, closed or moved.', () => saveArrangement()],
+        ['dvRestoreArrangement', 'Restore Saved Arrangement', 'Re-apply the saved arrangement to the panes that are open now.', () => restoreArrangement()],
+        ['dvResetArrangement', 'Reset Current Arrangement', 'Re-arrange the panes that are open now into the default row. Nothing is created, closed or saved.', () => resetArrangement()],
+        ['dvClearSaved', 'Clear Saved Arrangement', 'Delete the saved arrangement file. Your open panes are not changed.', () => clearSavedArrangement()],
+      ];
+      const buttons = BUTTONS.map(([id, label, title, run]) => {
         const b = document.createElement('button');
         b.className = 'ghost';
+        b.id = id;
         b.textContent = label;
-        b.disabled = true;
-        b.title = PHASE_C_TITLE;
-        b.setAttribute('aria-disabled', 'true');
-        b.dataset.phase = 'c';
+        b.title = title;
+        // The floating promise is deliberate — the handler must return immediately — but it can
+        // never go unhandled: every operation resolves to a bounded result, and the .catch is the
+        // belt-and-braces net for a defect inside the operation itself.
+        b.onclick = () => {
+          run().catch(() => {
+            host.log('[dockview] layout operation FAILED unexpectedly\n');
+            status.textContent = 'That layout operation failed unexpectedly. Nothing was changed.';
+          });
+        };
         return b;
       });
 
       for (const b of buttons) element.appendChild(b);
       element.appendChild(status);
-      return { element, setStatus: (t) => { status.textContent = t; } };
+      return {
+        element,
+        setStatus: (t) => { status.textContent = t; },
+        /** Disable every control for the duration of one operation, and say which one is running. */
+        setBusy: (name) => {
+          for (const b of buttons) { b.disabled = true; b.setAttribute('aria-disabled', 'true'); }
+          status.textContent = `${OPERATION_LABEL[name]}…`;
+        },
+        /** Always reached through `finally`, so a thrown operation cannot leave the UI dead. */
+        setIdle: () => {
+          for (const b of buttons) { b.disabled = false; b.removeAttribute('aria-disabled'); }
+        },
+        buttonIds: () => buttons.map((b) => b.id),
+      };
     }
 
     host.log('[dockview] layout engine active — layout only. PTY, clipboard, TTS, Dictate and Library remain app-owned.\n');
@@ -686,15 +954,22 @@
         if (!panel || !panel.api || typeof panel.api.isMaximized !== 'function') return null;
         try { return panel.api.isMaximized() === true; } catch { return null; }
       },
-      saveLayout,
-      restoreLayout,
-      resetLayout,
-      useDefaultLayout,
+      // THE FOUR PHASE-C OPERATIONS. `useDefaultLayout` is deliberately absent from this surface,
+      // not merely unbound from a button: nothing outside this module can reach a routine that
+      // creates panes as a side effect of a layout operation, because no such routine exists.
+      saveArrangement,
+      restoreArrangement,
+      resetArrangement,
+      clearSavedArrangement,
+      /** Which operation is running, or null. Read-only; the exclusivity itself is enforced inside. */
+      busyOperation: () => busyOperation,
       releasePane,
       unmountPane,
       paneIsMounted,
       /** Read-only view of which panes this adapter currently owns. Diagnostics/tests only. */
       ownedPaneIds: () => [...hostedPanes.keys()],
+      /** The stable ids of the four layout controls, for tests and support transcripts. */
+      controlIds: () => controls.buttonIds(),
       /**
        * Diagnostics for human acceptance. Terminal IDs are MONOTONIC and never reused, so a pane
        * labelled "Terminal 17" does not mean seventeen terminals are live — it means seventeen have

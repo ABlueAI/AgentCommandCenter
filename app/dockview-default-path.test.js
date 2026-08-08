@@ -629,26 +629,193 @@ process.stdout.write('\nthe pane close path is single and idempotent\n');
 }
 
 // ---------------------------------------------------------------------------
+process.stdout.write('\nPHASE C: ONE validator, and the prototype evidence file is untouchable\n');
+// ---------------------------------------------------------------------------
+{
+  const policySrc = read('dockview-layout-policy.js');
+  const storeSrc = read('dockview-layout-store.js');
+  const storeCode = stripComments(storeSrc);
+
+  // Exactly ONE file in the app defines the schema. A second `function validateLayout(` anywhere
+  // would be the drift this architecture exists to prevent.
+  const definers = [];
+  for (const f of ['dockview-layout-policy.js', 'dockview-layout-store.js', 'main.js', 'preload.js',
+    'renderer/app.js', 'renderer/dockview-prototype.js', 'renderer/dockview-fit-policy.js',
+    'renderer/dockview-panel-policy.js']) {
+    const parts = f.split('/');
+    if (/function validateLayout\s*\(/.test(stripComments(read(...parts)))) definers.push(f);
+  }
+  assert(JSON.stringify(definers) === JSON.stringify(['dockview-layout-policy.js']),
+    `exactly ONE module defines validateLayout (saw ${JSON.stringify(definers)})`);
+
+  assert(/const policy = require\('\.\/dockview-layout-policy'\);/.test(storeCode),
+    'the main-side store REQUIRES the shared policy rather than carrying its own copy');
+  assert(!/function validateEnvelope\s*\(|function buildEnvelope\s*\(/.test(storeCode),
+    'and defines no envelope logic of its own');
+  assert(/^  validateEnvelope,$/m.test(storeCode) && /^  validateLayout,$/m.test(storeCode),
+    'it re-exports the shared functions so existing callers keep one import site');
+  assert(!/require\s*\(/.test(stripComments(policySrc)),
+    'the policy itself requires nothing — that is what makes it loadable in the renderer');
+  assert(/'\.\.\/dockview-layout-policy\.js'/.test(appCode),
+    'and the renderer loads THAT FILE as a classic script');
+  assert(/resolveDependency\('ccDockviewLayoutPolicy', '\.\.\/dockview-layout-policy'\)/.test(adapterCode),
+    'the adapter resolves it by the same path under CommonJS');
+  assert(/\['ccDockviewLayoutPolicy', \(v\) => !!v/.test(adapterCode),
+    'and it is a REQUIRED browser export, so a missing or unparsed copy refuses into the classic grid');
+
+  // THE PROTOTYPE EVIDENCE FILE. It is the human-acceptance record behind Blue's ADOPT verdict and
+  // must never be read, migrated, renamed, deleted, or overwritten by production code.
+  const PROTOTYPE_FILE = 'dockview-prototype-layout.json';
+  for (const f of ['dockview-layout-store.js', 'dockview-layout-policy.js', 'main.js', 'preload.js',
+    'renderer/app.js', 'renderer/dockview-prototype.js']) {
+    const parts = f.split('/');
+    assert(!stripComments(read(...parts)).includes(PROTOTYPE_FILE),
+      `NEGATIVE CONTROL: ${f} contains no production read/write/delete path for ${PROTOTYPE_FILE}`);
+  }
+  assert(storeSrc.includes(PROTOTYPE_FILE),
+    'the store\'s PROSE explains why that file is off limits — the ban is documented, not accidental');
+  assert(/const LAYOUT_FILENAME = 'dockview-layout\.json';/.test(storeCode),
+    'the production filename is the distinct dockview-layout.json');
+
+  // The main-owned boundary is intact: every guard still lives in the store.
+  for (const [pattern, label] of [
+    [/lstatSync\(layoutPath\)/, 'it lstats rather than stats, so a link is never followed'],
+    [/st\.isSymbolicLink\(\)/, 'reparse points are refused'],
+    [/!st\.isFile\(\)/, 'non-regular files are refused'],
+    [/st\.size > MAX_RAW_BYTES/, 'the byte bound is checked BEFORE any parsing'],
+    [/buf\.length > MAX_RAW_BYTES/, 'and re-checked after the read'],
+    [/new TextDecoder\('utf-8', \{ fatal: true, ignoreBOM: false \}\)/, 'decoding is strict UTF-8'],
+    [/path\.join\(userDataDir, LAYOUT_FILENAME\)/, 'the path is main-owned and fixed'],
+    [/renameSync\(tmp, layoutPath\)/, 'the write is atomic through a temp file'],
+  ]) {
+    assert(pattern.test(storeCode), label);
+  }
+  assert(/const verdict = validateEnvelope\(envelope\);\s*\n\s*if \(!verdict\.ok\) return verdict;/.test(storeCode),
+    'main validates BEFORE writing, so an invalid layout is never persisted');
+  assert(storeCode.indexOf('validateEnvelope(envelope)') < storeCode.indexOf('writeFileSync'),
+    'and it does so before the file is touched at all');
+}
+
+// ---------------------------------------------------------------------------
+process.stdout.write('\nPHASE C: no layout operation can create, close or strand a PTY\n');
+// ---------------------------------------------------------------------------
+{
+  // THE PROTOTYPE'S PANE-CREATING LAYOUT CONTROL IS GONE, NOT DISABLED. `useDefaultLayout()` created
+  // two terminals and the Library every time it ran, which multiplied live PTYs during human
+  // acceptance. There is no such routine, no export for one, and no control that could reach one.
+  assert(!/useDefaultLayout/.test(adapterCode),
+    'NEGATIVE CONTROL: `useDefaultLayout` appears nowhere in the adapter code');
+  assert(!/workspace-not-empty/.test(adapterCode),
+    'NEGATIVE CONTROL: nor does its refusal reason — the whole routine is deleted');
+  assert(!/'Add Terminal'|'Add Library'|'Create Default Workspace'/.test(adapterCode),
+    'and no control label can create a pane');
+  assert(!/createTerminalPane\(\)/.test(adapterCode),
+    'NEGATIVE CONTROL: the adapter never calls the host\'s terminal creator at all');
+
+  // The four operations exist, each as its own bounded async function.
+  for (const fn of ['saveArrangement', 'restoreArrangement', 'resetArrangement', 'clearSavedArrangement']) {
+    assert(new RegExp(`async function ${fn}\\(\\)`).test(adapterCode), `${fn} exists`);
+    assert(new RegExp(`^      ${fn},$`, 'm').test(adapterCode), `${fn} is on the instance surface`);
+  }
+
+  // EXACTLY ONE fromJSON CALL SITE, and it validates first. This is the Phase-C invariant: there is
+  // no route by which unvalidated state can be applied, because there is only one route at all.
+  const applySites = (adapterCode.match(/api\.fromJSON\(/g) || []).length;
+  assert(applySites === 1, `api.fromJSON appears exactly ONCE in the adapter (saw ${applySites})`);
+  const applyStart = adapterCode.indexOf('function applyValidatedLayout(layout)');
+  const applyBody = adapterCode.slice(applyStart, adapterCode.indexOf('\n    }', applyStart));
+  assert(applyStart > -1, 'and it lives inside applyValidatedLayout');
+  assert(applyBody.indexOf('layoutPolicy.validateLayout(layout)') < applyBody.indexOf('api.fromJSON('),
+    'which validates through the SHARED policy IMMEDIATELY BEFORE applying');
+  assert(/if \(error\) return \{ ok: false, reason: error, applied: false \};/.test(applyBody),
+    'a validation failure returns the bounded reason and never reaches fromJSON');
+  assert(/inMountTransition\(\(\) => api\.fromJSON\(layout\)\)/.test(applyBody),
+    'and the apply runs inside a mount transition, so its removals never kill a PTY');
+
+  // Every operation goes through the exclusivity wrapper.
+  for (const fn of ['saveArrangement', 'restoreArrangement', 'resetArrangement', 'clearSavedArrangement']) {
+    const start = adapterCode.indexOf(`async function ${fn}()`);
+    const head = adapterCode.slice(start, start + 200);
+    assert(/return runExclusive\('/.test(head), `${fn} runs under runExclusive — one operation at a time`);
+  }
+  assert(/} finally \{\s*\n\s*busyOperation = null;\s*\n\s*controls\.setIdle\(\);/.test(adapterCode),
+    'and the busy state is released in `finally`, so a throwing operation cannot deadlock the UI');
+  assert(!/setTimeout|retry/i.test(adapterCode.slice(adapterCode.indexOf('async function runExclusive'),
+    adapterCode.indexOf('async function saveArrangement'))),
+    'nothing is ever retried automatically');
+
+  // SAVE validates and compares BEFORE it calls main.
+  const saveStart = adapterCode.indexOf('async function saveArrangement()');
+  const saveBody = adapterCode.slice(saveStart, adapterCode.indexOf('async function restoreArrangement', saveStart));
+  assert(saveBody.indexOf('layoutPolicy.paneIdsFromLayout(current)') < saveBody.indexOf('host.bridge.saveLayout'),
+    'Save validates the layout BEFORE the IPC');
+  assert(saveBody.indexOf('layoutPolicy.comparePaneSets') < saveBody.indexOf('host.bridge.saveLayout'),
+    'and compares the pane sets BEFORE the IPC');
+  assert(saveBody.indexOf('paneIsMounted(id)') < saveBody.indexOf('host.bridge.saveLayout'),
+    'and confirms every owned pane is mounted BEFORE the IPC');
+  assert(!/fromJSON/.test(saveBody), 'Save never applies a layout');
+
+  // RESTORE: validate the envelope, compare the sets, capture and validate the rollback, then apply.
+  const restoreStart = adapterCode.indexOf('async function restoreArrangement()');
+  const restoreBody = adapterCode.slice(restoreStart, adapterCode.indexOf('async function resetArrangement', restoreStart));
+  assert(/layoutPolicy\.validateEnvelope\(loaded\.envelope\)/.test(restoreBody),
+    'Restore validates the WHOLE envelope again in the renderer');
+  assert(restoreBody.indexOf('validateEnvelope') < restoreBody.indexOf('comparePaneSets'),
+    'before comparing the pane sets');
+  assert(restoreBody.indexOf('comparePaneSets') < restoreBody.indexOf('captureWorkspace()'),
+    'and before capturing the rollback target');
+  assert(restoreBody.indexOf('captureWorkspace()') < restoreBody.indexOf('applyAsTransaction'),
+    'which is captured before anything is applied');
+  assert(/layoutPolicy\.validateLayout\(snapshot\.layout\)/.test(restoreBody),
+    'the rollback snapshot is validated too — applying a change we could not undo is refused');
+  assert(/ownedIds\(\)/.test(restoreBody),
+    'the LIVE set comes from the adapter\'s own ownership map, not from the saved layout');
+  assert(!/useDefaultLayout|createTerminalPane/.test(restoreBody),
+    'a failed restore has no fallback layout and creates no terminal');
+
+  // RESET: no file I/O at all, and the arrangement is computed from the LIVE panes.
+  const resetStart = adapterCode.indexOf('async function resetArrangement()');
+  const resetBody = adapterCode.slice(resetStart, adapterCode.indexOf('async function clearSavedArrangement', resetStart));
+  assert(!/bridge\.(save|load|reset)Layout/.test(resetBody),
+    'Reset reads no file, writes no file and deletes no file');
+  assert(/layoutPolicy\.buildDefaultArrangement\(\{/.test(resetBody),
+    'it computes the default arrangement through the shared policy');
+  assert(/for \(const \[id, record\] of hostedPanes\)/.test(resetBody),
+    'from the LIVE ownership map, so the pane set is preserved by construction');
+  assert(/applyAsTransaction\('reset'/.test(resetBody),
+    'and applies it through the SAME validated transactional machinery as Restore');
+  assert(!/createTerminalPane|dockLibrary/.test(resetBody),
+    'creating a terminal or docking the Library is not something Reset can do');
+
+  // CLEAR: only main's reset, and never fromJSON.
+  const clearStart = adapterCode.indexOf('async function clearSavedArrangement()');
+  // Anchored on CODE, not on the section comment: `adapterCode` has had its comments stripped, so a
+  // comment anchor would miss and silently widen the slice to the whole rest of the file.
+  const clearBody = adapterCode.slice(clearStart, adapterCode.indexOf('function buildControls()', clearStart));
+  assert(/host\.bridge\.resetLayout\(\)/.test(clearBody), 'Clear invokes only main\'s reset operation');
+  assert(!/fromJSON|applyAsTransaction|addPane/.test(clearBody),
+    'and applies nothing, adds nothing, and closes nothing');
+  assert(/result\.existed === false/.test(clearBody),
+    'an already-absent file is distinguished as a successful no-op');
+  assert(/live panes were NOT changed/i.test(clearBody),
+    'and the status states explicitly that live panes were unchanged');
+
+  // The single rollback strategy — no repair, no rebuild-through-addPane.
+  const rollbackStart = adapterCode.indexOf('function rollbackWorkspace(snapshot)');
+  const rollbackBody = adapterCode.slice(rollbackStart, adapterCode.indexOf('\n    }', rollbackStart));
+  assert(/applyValidatedLayout\(snapshot\.layout\)/.test(rollbackBody),
+    'the rollback re-applies the captured topology through the one validated call site');
+  assert(!/addPane\(|api\.clear\(\)/.test(rollbackBody),
+    'NEGATIVE CONTROL: it never falls back to clearing and re-adding — that is a repair, not a rollback');
+  assert(/return 'incomplete'/.test(rollbackBody) && /return 'restored'/.test(rollbackBody),
+    'and it reports honestly which of the two happened');
+  assert(/could NOT be/.test(adapterCode), 'an incomplete rollback says so in the status');
+}
+
+// ---------------------------------------------------------------------------
 process.stdout.write('\nlayout controls cannot silently create or destroy\n');
 // ---------------------------------------------------------------------------
 {
-  // Create Default Workspace preflights emptiness BEFORE creating the first terminal.
-  const defaultStart = adapterCode.indexOf('async function useDefaultLayout()');
-  const defaultBody = adapterCode.slice(defaultStart, adapterCode.indexOf('\n    }', defaultStart));
-  assert(defaultStart > -1, 'the default-workspace creator exists');
-  assert(defaultBody.indexOf('hostedPanes.size > 0') < defaultBody.indexOf('createTerminalPane'),
-    'the emptiness preflight runs BEFORE any terminal is created — a refusal spawns zero PTYs');
-  assert(/workspace-not-empty/.test(defaultBody), 'the refusal is a bounded, named reason');
-
-  // Restore failure must never reach the default-workspace creator.
-  const restoreStart = adapterCode.indexOf('async function restoreLayout()');
-  const restoreBody = adapterCode.slice(restoreStart, adapterCode.indexOf('\n    async function', restoreStart + 10));
-  assert(restoreStart > -1, 'the restore path exists');
-  assert(!/useDefaultLayout\(\)/.test(restoreBody),
-    'restore NEVER calls the default-workspace creator — a failed restore creates no terminal');
-  assert(/Live panes were NOT changed/.test(adapterCode),
-    'Clear Saved Layout states explicitly that live panes were unchanged');
-
   // Transactional docking: duplicate detection precedes every mutation.
   const addStart = adapterCode.indexOf('function addPane(');
   const addBody = adapterCode.slice(addStart, adapterCode.indexOf('\n    }', addStart));
@@ -671,12 +838,18 @@ process.stdout.write('\nlayout controls cannot silently create or destroy\n');
   assert(!/undockLibrary/.test(unmountBody),
     'an unmount (a restore-driven rebuild) does NOT undock the Library');
 
-  // Phase B renders persistence DISABLED rather than half-working or hidden.
-  assert(/const PHASE_C_TITLE = 'Layout persistence arrives in Phase C/.test(adapterCode),
-    'the Phase-C controls carry an explicit reason');
-  assert(/b\.disabled = true;/.test(adapterCode), 'and are rendered disabled');
-  assert(!/'Add Terminal'|'Add Library'|'Create Default Workspace'/.test(adapterCode),
-    'the layout bar duplicates neither terminal creation nor Library docking');
+  // Phase C renders four ENABLED controls with stable ids. The disabled placeholders are gone: an
+  // operation is either implemented and clickable, or it is not on the bar.
+  assert(!/PHASE_C_TITLE|Layout persistence arrives in Phase C/.test(adapterCode),
+    'NEGATIVE CONTROL: the Phase-B disabled-placeholder machinery is gone');
+  assert(!/dataset\.phase = 'c'/.test(adapterCode), 'and so is its data-phase marker');
+  const CONTROL_IDS = ['dvSaveArrangement', 'dvRestoreArrangement', 'dvResetArrangement', 'dvClearSaved'];
+  for (const id of CONTROL_IDS) {
+    assert(adapterCode.includes(`'${id}'`), `the stable control id ${id} is declared`);
+  }
+  assert(/b\.disabled = true;[\s\S]{0,200}status\.textContent = `\$\{OPERATION_LABEL\[name\]\}…`/.test(adapterCode),
+    'controls are disabled only for the duration of an operation, alongside an in-progress status');
+  assert(/b\.disabled = false;/.test(adapterCode), 'and re-enabled afterwards');
 
   assert(/disableFloatingGroups: true/.test(adapterCode),
     'floating groups are disabled (popouts excluded by the verdict, floating out of scope)');
@@ -779,20 +952,23 @@ process.stdout.write('\nthe launch scripts are exact\n');
 process.stdout.write('\nthe four Dockview scripts are reachable ONLY through the gated list\n');
 // ---------------------------------------------------------------------------
 {
-  const FOUR = ['dockview/dist/dockview.js', 'dockview-fit-policy.js', 'dockview-panel-policy.js', 'dockview-prototype.js'];
-  for (const script of FOUR) {
+  const FIVE = ['dockview/dist/dockview.js', 'dockview-fit-policy.js', 'dockview-panel-policy.js', 'dockview-layout-policy.js', 'dockview-prototype.js'];
+  for (const script of FIVE) {
     assert(!indexSrc.includes(script), `index.html never references ${script}`);
     assert(appSrc.includes(script), `${script} is reachable only via the gated DOCKVIEW_SCRIPTS list`);
   }
-  for (const global of ['ccDockviewPrototype', 'ccDockviewFitPolicy', 'ccDockviewPanelPolicy']) {
+  for (const global of ['ccDockviewPrototype', 'ccDockviewFitPolicy', 'ccDockviewPanelPolicy', 'ccDockviewLayoutPolicy']) {
     assert(!indexSrc.includes(global), `index.html exposes no ${global}`);
   }
   const listMatch = /const DOCKVIEW_SCRIPTS = \[([\s\S]*?)\];/.exec(appSrc);
   assert(!!listMatch, 'the gated script list is present');
   const listed = (listMatch ? listMatch[1] : '').match(/'([^']+)'/g) || [];
-  assert(listed.length === 4, `exactly four scripts are gated behind the layout decision (saw ${listed.length})`);
+  assert(listed.length === 5, `exactly five scripts are gated behind the layout decision (saw ${listed.length})`);
   assert(/dockview\/dist\/dockview\.js/.test(listed[0]), 'the vendor bundle loads first');
-  assert(/dockview-prototype\.js/.test(listed[3]), 'the adapter loads last, after both policy modules');
+  assert(/dockview-layout-policy\.js/.test(listed[3]),
+    'the SHARED layout policy loads before the adapter, which depends on it');
+  assert(/dockview-prototype\.js/.test(listed[4]),
+    'and the adapter loads last, after all three policy modules');
 
   // Neither harness may become a way to load Dockview on the production path.
   for (const harness of ['dockview-bootstrap-harness', 'dockview-app-harness']) {

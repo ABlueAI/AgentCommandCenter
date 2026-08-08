@@ -84,6 +84,7 @@ const S = report.scenarios || {};
 const EXPECTED_SCENARIOS = [
   'production', 'classic', 'scriptRefusal', 'adoptionRollback', 'newPaneTransaction',
   'startFailure', 'library', 'maximize', 'closeConvergence', 'diagnostic',
+  'layoutOperations', 'exactSet', 'malformedAndConcurrency', 'saveRefused',
 ];
 for (const name of EXPECTED_SCENARIOS) {
   assert(!!S[name], `the ${name} scenario is present in the report`);
@@ -110,8 +111,12 @@ process.stdout.write('\nA NORMAL LAUNCH selects Dockview — no flag, no opt-in\
   assert(st.dockviewGlobalLoaded === true, 'the vendor bundle was loaded');
   assert(st.adapterLoaded && st.fitPolicyLoaded && st.panelPolicyLoaded,
     'the adapter and both policy modules published their exports');
-  assert(st.dockviewScriptTags.length === 4,
-    `exactly four Dockview scripts were injected (saw ${st.dockviewScriptTags.length})`);
+  // Five since Phase C: the vendor bundle, the fit and panel policies, the SHARED layout policy,
+  // and the adapter last.
+  assert(st.dockviewScriptTags.length === 5,
+    `exactly five Dockview scripts were injected (saw ${st.dockviewScriptTags.length})`);
+  assert(st.dockviewScriptTags.some((s) => /dockview-layout-policy\.js$/.test(s)),
+    `including the shared layout policy (saw ${JSON.stringify(st.dockviewScriptTags)})`);
   assert(st.diagnosticsActive === true, 'the engine reports itself active');
   assert(st.errors.length === 0, `no window error reached the renderer (saw ${JSON.stringify(st.errors)})`);
   assert(st.rejections.length === 0, `no unhandled rejection (saw ${JSON.stringify(st.rejections)})`);
@@ -441,6 +446,256 @@ process.stdout.write('\nthe acceptance diagnostic is read-only and is never an a
     assert(!fs.readFileSync(path.join(APP_DIR, file), 'utf8').includes('ccDockviewDiagnostics'),
       `${file} never reads the diagnostic surface`);
   }
+}
+
+// ---------------------------------------------------------------------------
+process.stdout.write('\nPHASE C: four enabled controls, and nothing runs automatically at startup\n');
+// ---------------------------------------------------------------------------
+{
+  const c = S.layoutOperations.controls;
+  const EXPECTED_IDS = ['dvSaveArrangement', 'dvRestoreArrangement', 'dvResetArrangement', 'dvClearSaved'];
+  assert(JSON.stringify(c.ids) === JSON.stringify(EXPECTED_IDS),
+    `the four stable control ids render in the documented order (saw ${JSON.stringify(c.ids)})`);
+  assert(JSON.stringify(c.labels) === JSON.stringify([
+    'Save Arrangement', 'Restore Saved Arrangement', 'Reset Current Arrangement', 'Clear Saved Arrangement',
+  ]), `with the four documented labels (saw ${JSON.stringify(c.labels)})`);
+  assert(c.disabled === 0, 'all four are ENABLED at rest — the Phase-B placeholders are gone');
+  assert(c.reachable === true, 'and every one of them is actually clickable in the real renderer');
+
+  // NO LAYOUT OPERATION RUNS AUTOMATICALLY. `production` is a plain launch that never touches a
+  // control, and its layout IPC counters are all zero.
+  const p = S.production;
+  assert(p.layoutIpc.save === 0 && p.layoutIpc.load === 0 && p.layoutIpc.reset === 0,
+    `a normal launch performs NO save, load or reset (saw ${JSON.stringify(p.layoutIpc)})`);
+  assert(!/arrangement saved|arrangement restored|arrangement cleared/i.test(p.state.logs),
+    'and the Logs tab shows no layout operation at startup');
+}
+
+// ---------------------------------------------------------------------------
+process.stdout.write('\nSAVE writes metadata only, and only after it validates\n');
+// ---------------------------------------------------------------------------
+{
+  const L = S.layoutOperations;
+  assert(/^Arrangement saved \(2 pane\(s\)\)/.test(L.saved.status),
+    `Save reports success with a count (saw ${JSON.stringify(L.saved.status)})`);
+  assert(/No terminal was created, closed or moved/.test(L.saved.status),
+    'and states that no terminal was touched');
+  assert(L.savedState.layoutSave === 1, 'main was called exactly once');
+  assert(JSON.stringify(L.savedState.ptyStart) === JSON.stringify(['pty1', 'pty2']),
+    'no PTY was started by the save');
+  assert(L.savedState.ptyKill.length === 0, 'and none was killed');
+  assert(L.savedState.groups === 2, 'the live arrangement is unchanged by saving');
+
+  // What crossed to main must satisfy the SAME validator main writes with.
+  const payload = L.savedState.payload;
+  assert(!!payload, 'a layout really crossed to main');
+  const { validateLayout, paneIdsFromLayout, comparePaneSets } = require('./dockview-layout-policy');
+  assert(validateLayout(payload) === null,
+    'and it is a layout the shared validator accepts — the renderer validated BEFORE the IPC');
+  const ids = paneIdsFromLayout(payload);
+  assert(comparePaneSets(ids.sorted, ['pty1', 'pty2']).ok === true,
+    'describing exactly the panes that were open');
+}
+
+// ---------------------------------------------------------------------------
+process.stdout.write('\nRESTORE brings the topology back and preserves pane object identity\n');
+// ---------------------------------------------------------------------------
+{
+  const L = S.layoutOperations;
+  assert(L.split.groups === 2, 'the saved arrangement really was two separate groups');
+  assert(L.disturbed.groups === 1, 'and the arrangement was then changed to one group');
+  assert(L.elementIdsBefore.length === 2, 'both live pane elements were tagged before the change');
+
+  assert(/^Saved arrangement restored \(2 pane\(s\)\)/.test(L.restored.status),
+    `Restore reports success with a count (saw ${JSON.stringify(L.restored.status)})`);
+  assert(L.restoredState.groups === 2,
+    `the two-group topology came BACK (saw ${L.restoredState.groups} group(s)) — a no-op could not do this`);
+  // THE IDENTITY CLAIM. The tags were stamped on the element objects before the restore; the same
+  // tags after it mean the ORIGINAL nodes survived `fromJSON`, carrying their xterm and PTY.
+  assert(JSON.stringify(L.restoredState.identities) === JSON.stringify(L.elementIdsBefore),
+    `every pane element is the SAME object after the restore (saw ${JSON.stringify(L.restoredState.identities)})`);
+  assert(L.restoredState.layoutLoad === 1, 'main was asked for the saved state exactly once');
+  assert(JSON.stringify(L.restoredState.ptyStart) === JSON.stringify(['pty1', 'pty2']),
+    'the restore started ZERO PTYs');
+  assert(L.restoredState.ptyKill.length === 0, 'and killed ZERO');
+  assert(L.restoredState.live === 2, 'both terminals are still live');
+  assert(JSON.stringify(L.restoredState.owned.sort()) === JSON.stringify(['pty1', 'pty2']),
+    'and both are still owned');
+}
+
+// ---------------------------------------------------------------------------
+process.stdout.write('\nRESET re-arranges the live panes, touching no file and no terminal\n');
+// ---------------------------------------------------------------------------
+{
+  const L = S.layoutOperations;
+  assert(/^Current arrangement reset to the default row \(2 pane\(s\)\)/.test(L.reset.status),
+    `Reset reports what it did (saw ${JSON.stringify(L.reset.status)})`);
+  assert(/No terminal was created or closed/.test(L.reset.status), 'and that no terminal was touched');
+  assert(/the saved arrangement was not read or written/.test(L.reset.status),
+    'and that no file was involved');
+
+  // NO FILE I/O AT ALL: the counters are exactly where the save and restore left them.
+  assert(L.resetState.layoutSave === L.savedState.layoutSave,
+    `Reset wrote nothing (save count stayed at ${L.savedState.layoutSave})`);
+  assert(L.resetState.layoutLoad === L.restoredState.layoutLoad,
+    `Reset read nothing (load count stayed at ${L.restoredState.layoutLoad})`);
+  assert(L.resetState.layoutReset === 0, 'and deleted nothing');
+
+  // NO TERMINAL CREATED. This is the prototype defect the operation replaces: `useDefaultLayout`
+  // created two terminals and the Library every time it ran.
+  assert(JSON.stringify(L.resetState.ptyStart) === JSON.stringify(['pty1', 'pty2']),
+    `Reset created ZERO terminals (saw ${JSON.stringify(L.resetState.ptyStart)})`);
+  assert(L.resetState.ptyKill.length === 0, 'and closed ZERO');
+  assert(JSON.stringify(L.resetState.owned.sort()) === JSON.stringify(['pty1', 'pty2']),
+    'the EXACT live pane set is preserved');
+  assert(JSON.stringify(L.resetState.identities) === JSON.stringify(L.elementIdsBefore),
+    'and every pane element is still the same object');
+  // The documented arrangement: one group per pane, canonical order, every pane visible.
+  assert(L.resetState.groups === 2,
+    `every pane gets its own group — nothing is hidden behind a tab (saw ${L.resetState.groups})`);
+  assert(JSON.stringify(L.resetState.order) === JSON.stringify(['pty1', 'pty2']),
+    `in canonical ascending order (saw ${JSON.stringify(L.resetState.order)})`);
+}
+
+// ---------------------------------------------------------------------------
+process.stdout.write('\nCLEAR deletes only the saved file, and an absent file is still success\n');
+// ---------------------------------------------------------------------------
+{
+  const L = S.layoutOperations;
+  assert(/^Saved arrangement deleted/.test(L.cleared.status),
+    `Clear reports the deletion (saw ${JSON.stringify(L.cleared.status)})`);
+  assert(/live panes were NOT changed/i.test(L.cleared.status),
+    'and states explicitly that live panes were not changed');
+  assert(L.clearedState.fileGone === true, 'the saved state really is gone');
+  assert(L.clearedState.layoutReset === 1, 'main\'s reset was called exactly once');
+  assert(L.clearedState.ptyKill.length === 0, 'no PTY was killed');
+  assert(JSON.stringify(L.clearedState.owned.sort()) === JSON.stringify(['pty1', 'pty2']),
+    'the workspace is untouched');
+  assert(JSON.stringify(L.clearedState.identities) === JSON.stringify(L.elementIdsBefore),
+    'down to the same element objects — Clear never calls fromJSON');
+
+  assert(/^There was no saved arrangement to clear/.test(L.clearedAgain.status),
+    `clearing twice is a visible SUCCESSFUL no-op, distinguished from a deletion (saw ${JSON.stringify(L.clearedAgain.status)})`);
+  assert(/live panes were NOT changed/i.test(L.clearedAgain.status), 'and still says the panes are untouched');
+
+  assert(/^There is no saved arrangement yet/.test(L.restoreAfterClear.status),
+    `Restore after a clear refuses plainly (saw ${JSON.stringify(L.restoreAfterClear.status)})`);
+  assert(JSON.stringify(L.afterClearState.owned.sort()) === JSON.stringify(['pty1', 'pty2']),
+    'and changes nothing');
+  assert(L.afterClearState.ptyKill.length === 0, 'and kills nothing');
+}
+
+// ---------------------------------------------------------------------------
+process.stdout.write('\nEXACT saved/live set equality gates restore in the real app\n');
+// ---------------------------------------------------------------------------
+{
+  const E = S.exactSet;
+  assert(/^Arrangement saved \(3 pane\(s\)\)/.test(E.savedThree.status),
+    'three panes — two terminals and the Library — were saved');
+  assert(E.closed.owned.length === 2, 'then one was closed');
+
+  assert(/^Restore refused \(saved-panes-not-live\)/.test(E.savedNotLive.status),
+    `a saved pane that is no longer open refuses BY NAME (saw ${JSON.stringify(E.savedNotLive.status)})`);
+  assert(/1 saved pane\(s\) are not open/.test(E.savedNotLive.status),
+    'reporting a COUNT so the user knows what to do');
+  assert(JSON.stringify(E.savedNotLiveState.panels) === JSON.stringify(E.closed.panels),
+    'fromJSON was never called — the workspace is byte-identical');
+  assert(E.savedNotLiveState.killsDuring === 0, 'and no PTY was killed to make the restore fit');
+
+  assert(/^Restore refused \(live-panes-not-saved\)/.test(E.liveNotSaved.status),
+    `an extra live pane refuses BY NAME (saw ${JSON.stringify(E.liveNotSaved.status)})`);
+  assert(/1 open pane\(s\) are not in the saved arrangement/.test(E.liveNotSaved.status),
+    'again with a count');
+  assert(E.liveNotSavedState.panels.length === 3, 'the extra pane is still open');
+  assert(E.liveNotSavedState.killsDuring === 0, 'and was NOT closed to make the saved state fit');
+
+  // CONTENT-FREE: counts and reason codes only, never a pane ID.
+  for (const status of [E.savedNotLive.status, E.liveNotSaved.status]) {
+    assert(!/pty\d/.test(status), `no pane ID appears in the refusal (saw ${JSON.stringify(status)})`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+process.stdout.write('\nMALFORMED saved state never reaches fromJSON in the real app\n');
+// ---------------------------------------------------------------------------
+{
+  const M = S.malformedAndConcurrency;
+  const EXPECTED = {
+    'populated-params': 'invalid-layout-shape',
+    'path-in-title': 'unsafe-content-in-state',
+    'unknown-component': 'unknown-component-kind',
+    'floating-groups': 'invalid-layout-shape',
+    'wrong-schema-version': 'unsupported-schema-version',
+  };
+  assert(M.malformed.length === 5, 'five corruptions were driven through the real Restore control');
+  for (const entry of M.malformed) {
+    const reason = EXPECTED[entry.label];
+    assert(entry.status.includes(`Restore refused (${reason})`),
+      `${entry.label}: refused as ${reason} (saw ${JSON.stringify(entry.status)})`);
+    assert(JSON.stringify(entry.panelsAfter) === JSON.stringify(entry.panelsBefore),
+      `${entry.label}: fromJSON was NEVER called — the live workspace is unchanged`);
+    assert(entry.killsDuring === 0, `${entry.label}: no PTY was killed`);
+    // The status carries a bounded code, never a fragment of the refused state.
+    assert(!/D:\\|C:\\|levij|secret|iframe|floatingGroups|params/.test(entry.status),
+      `${entry.label}: the refusal echoes no fragment of the corrupted state`);
+  }
+  assert(!/D:\\Workspace\\secret|C:\\Users\\levij|iframe/.test(M.logs),
+    'and neither does the Logs tab');
+  assert(M.ptyKill.length === 0, 'no PTY was killed across every corruption');
+  assert(JSON.stringify(M.owned.sort()) === JSON.stringify(['pty1', 'pty2']),
+    'and the workspace survived all five intact');
+}
+
+// ---------------------------------------------------------------------------
+process.stdout.write('\nEXACTLY ONE layout operation at a time, both lines of defence\n');
+// ---------------------------------------------------------------------------
+{
+  const C = S.malformedAndConcurrency.concurrency;
+  // FIRST LINE: the DOM. Every control is disabled for the duration, so a double-click fires no
+  // handler at all, and the status names the operation that is running.
+  assert(C.midFlight.status === 'Restoring the saved arrangement…',
+    `an operation-specific in-progress status is shown (saw ${JSON.stringify(C.midFlight.status)})`);
+  assert(C.midFlight.allDisabled === true && C.midFlight.disabledCount === 4,
+    'all FOUR controls are disabled while it runs');
+  assert(C.stillMidFlight.allDisabled === true,
+    'twelve further clicks on disabled controls change nothing');
+
+  // SECOND LINE: the adapter. The harness forces the buttons enabled and clicks again, so the
+  // handlers really do run mid-flight — and are refused, visibly.
+  assert(/is still running\. Nothing was changed\./.test(C.forced.status),
+    `a handler that runs mid-flight is REFUSED visibly (saw ${JSON.stringify(C.forced.status)})`);
+  assert(/Restoring the saved arrangement is still running/.test(C.forced.status),
+    'naming the operation that holds the layout');
+  const busyRefusals = (S.malformedAndConcurrency.logs.match(/layout-operation-in-progress/g) || []).length;
+  assert(busyRefusals === 4,
+    `each forced click logged one bounded busy refusal (saw ${busyRefusals})`);
+
+  // The in-flight operation still completed normally, and the controls came back.
+  assert(/^Saved arrangement restored/.test(C.afterStatus),
+    `the original operation finished normally (saw ${JSON.stringify(C.afterStatus)})`);
+  assert(C.allEnabledAfter === true, 'and every control is enabled again — the busy state is not sticky');
+
+  // NO OVERLAP REACHED MAIN: five malformed restores plus this one is six loads, and not one more.
+  assert(S.malformedAndConcurrency.layoutIpc.load === 6,
+    `exactly six loads reached main — the burst added none (saw ${S.malformedAndConcurrency.layoutIpc.load})`);
+  assert(S.malformedAndConcurrency.layoutIpc.reset === 0,
+    'and the forced Clear clicks reached main zero times');
+}
+
+// ---------------------------------------------------------------------------
+process.stdout.write('\na save main refuses overwrites nothing, and says so\n');
+// ---------------------------------------------------------------------------
+{
+  const F = S.saveRefused;
+  assert(/^Save refused \(write-failed\)/.test(F.refused.status),
+    `the refusal names the bounded reason (saw ${JSON.stringify(F.refused.status)})`);
+  assert(/any previously saved arrangement is unchanged/.test(F.refused.status),
+    'and states that nothing previously saved was replaced');
+  assert(F.fileStillAbsent === true, 'nothing was written');
+  assert(F.layoutSave === 1, 'main was called exactly once and refused');
+  assert(F.ptyKill.length === 0 && JSON.stringify(F.ptyStart) === JSON.stringify(['pty1']),
+    'and no PTY was created or killed by the failed save');
+  assert(JSON.stringify(F.owned) === JSON.stringify(['pty1']), 'the workspace is untouched');
 }
 
 // ---------------------------------------------------------------------------

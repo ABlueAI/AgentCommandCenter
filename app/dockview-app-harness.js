@@ -50,13 +50,20 @@ const STEP_TIMEOUT_MS = 30000;
 const ipc = {
   ptyStart: [], ptyKill: [], ptyResize: 0, ptyWrite: 0,
   libraryList: 0, libraryRead: 0, libraryOpenReport: 0,
-  layoutSave: 0, layoutLoad: 0, layoutReset: 0,
+  layoutSave: 0, layoutLoad: 0, layoutReset: 0, savedLayouts: [],
 };
 function resetIpc() {
   ipc.ptyStart = []; ipc.ptyKill = []; ipc.ptyResize = 0; ipc.ptyWrite = 0;
   ipc.libraryList = 0; ipc.libraryRead = 0; ipc.libraryOpenReport = 0;
-  ipc.layoutSave = 0; ipc.layoutLoad = 0; ipc.layoutReset = 0;
+  ipc.layoutSave = 0; ipc.layoutLoad = 0; ipc.layoutReset = 0; ipc.savedLayouts = [];
 }
+
+/**
+ * The saved layout file, IN MEMORY. Phase C's four operations are driven through main's real IPC
+ * handlers' contract, but the harness owns the "disk" so a gate run can never touch the real
+ * userData file — and never, ever the prototype evidence file.
+ */
+const savedLayout = { envelope: null };
 
 /** Controls for the current scenario, reset before each window. */
 const control = {
@@ -67,6 +74,8 @@ const control = {
   held: [],                // parked { url, callback }
   ptyStartResult: { ok: true },
   ptyStartDelayMs: 0,
+  layoutIpcDelayMs: 0,     // slows save/load/reset so a concurrent click lands mid-operation
+  saveResult: null,        // when set, main's save refuses with this instead of writing
 };
 
 /** Requests observed across the whole run. Metadata only — never a full URL, query, or path. */
@@ -86,6 +95,9 @@ function resetControl(options) {
   control.cancelPatterns = o.cancel || [];
   control.ptyStartResult = o.ptyStartResult || { ok: true };
   control.ptyStartDelayMs = o.ptyStartDelayMs || 0;
+  control.layoutIpcDelayMs = o.layoutIpcDelayMs || 0;
+  control.saveResult = o.saveResult || null;
+  savedLayout.envelope = null;
   armSettingsGate();
   resetIpc();
 }
@@ -212,6 +224,24 @@ const PRELUDE = `(() => {
   win.__cc.owners = () => {
     const d = win.ccDockviewDiagnostics;
     return (d && typeof d.resizeOwners === 'function') ? d.resizeOwners() : null;
+  };
+  // ---- Phase C probes: the layout control bar and pane identity across a fromJSON --------------
+  win.__cc.status = () => {
+    const el = doc.querySelector('.dockview-prototype-status');
+    return el ? el.textContent : '';
+  };
+  win.__cc.layoutButtons = () => [...doc.querySelectorAll('.dockview-prototype-controls button')];
+  win.__cc.anyDisabled = () => win.__cc.layoutButtons().some((b) => b.disabled === true);
+  win.__cc.panelIds = () => (win.__cc.api ? win.__cc.api.panels.map((p) => p.id).sort() : null);
+  // Element identity across a rebuild, read from a tag stamped on the element itself. An id-keyed
+  // map would prove nothing: the question is whether the SAME node survived, not whether a node
+  // with that pane's id exists.
+  win.__cc.identities = () => {
+    const out = {};
+    for (const el of doc.querySelectorAll('.term-pane')) {
+      if (el.dataset.ccIdentity) out[el.dataset.ccIdentity] = true;
+    }
+    return Object.keys(out).sort();
   };
   win.__cc.logs = () => (doc.getElementById('logView') || {}).textContent || '';
   win.__cc.settled = () => /production layout engine active|\\[dockview\\] REFUSED|CLASSIC RECOVERY MODE ACTIVE/
@@ -902,6 +932,313 @@ async function scenarioCloseConvergence() {
   return result;
 }
 
+// ---------------------------------------------------------------------------
+// PHASE C — the four layout operations, driven through the REAL controls in the REAL renderer.
+// ---------------------------------------------------------------------------
+
+/** Click one of the four layout controls by its stable id and wait for the operation to settle. */
+const clickLayout = (id) => `(async () => {
+  const before = window.__cc.status();
+  const btn = document.getElementById(${JSON.stringify(id)});
+  if (!btn) return { clicked: false, reason: 'control-missing' };
+  const wasDisabled = btn.disabled === true;
+  btn.click();
+  // Settled = the status changed AND every control is enabled again (the busy state released).
+  await window.__cc.waitFor(() => window.__cc.status() !== before && !window.__cc.anyDisabled(), 10000);
+  await window.__cc.sleep(120);
+  return { clicked: true, wasDisabled, status: window.__cc.status(), panels: window.__cc.panelIds() };
+})()`;
+
+/**
+ * 11 — Save, Restore, Reset and Clear, end to end, against real panes and a real fromJSON.
+ *
+ * The arrangement is deliberately CHANGED between save and restore (two panes split into separate
+ * groups, then collapsed back into one), so "restored" means the topology actually came back rather
+ * than never having moved.
+ */
+async function scenarioLayoutOperations() {
+  const win = await openWindow({ name: 'layout-operations' });
+  const settled = await run(win, AWAIT_SETTLED);
+  await run(win, CLICK_NEW_SHELL);
+  await run(win, CLICK_NEW_SHELL);
+  await run(win, `window.__cc.sleep(200)`);
+
+  // Split, so the saved arrangement is distinguishable from the default one.
+  const split = await run(win, `(async () => {
+    const api = window.__cc.api;
+    api.getPanel('pty2').api.moveTo({ group: api.getPanel('pty1').api.group, position: 'right' });
+    await window.__cc.sleep(250);
+    return { groups: api.groups.length };
+  })()`);
+
+  // Tag each live pane element WHILE the panes are in separate groups, so both are attached to the
+  // document. Once they share a group only the active tab's content is attached — dockview detaches
+  // the rest — and a tag applied then would land on the same node twice.
+  const elementIdsBefore = await run(win, `(() => {
+    const api = window.__cc.api;
+    for (const id of ['pty1', 'pty2']) {
+      const el = api.getPanel(id).api.group.element.querySelector('.term-pane');
+      if (el && !el.dataset.ccIdentity) el.dataset.ccIdentity = id + '-' + Math.random().toString(36).slice(2);
+    }
+    return window.__cc.identities();
+  })()`);
+
+  const controls = await run(win, `(() => {
+    const bar = document.querySelector('.dockview-prototype-controls');
+    const buttons = bar ? [...bar.querySelectorAll('button')] : [];
+    return {
+      ids: buttons.map((b) => b.id),
+      labels: buttons.map((b) => b.textContent),
+      disabled: buttons.filter((b) => b.disabled).length,
+      reachable: buttons.every((b) => window.__cc.reachable(b)),
+    };
+  })()`);
+
+  const saved = await run(win, clickLayout('dvSaveArrangement'));
+  const savedState = {
+    layoutSave: ipc.layoutSave,
+    ptyStart: ipc.ptyStart.slice(),
+    ptyKill: ipc.ptyKill.slice(),
+    // What actually crossed to main — asserted against the shared validator by the test.
+    payload: ipc.savedLayouts[0] || null,
+    groups: await run(win, `window.__cc.api.groups.length`),
+  };
+
+  // Move the arrangement AWAY from what was saved, so a restore has real work to do.
+  const disturbed = await run(win, `(async () => {
+    const api = window.__cc.api;
+    api.getPanel('pty2').api.moveTo({ group: api.getPanel('pty1').api.group, position: 'center' });
+    await window.__cc.sleep(250);
+    return { groups: api.groups.length, panels: window.__cc.panelIds() };
+  })()`);
+
+  const restored = await run(win, clickLayout('dvRestoreArrangement'));
+  const restoredState = {
+    layoutLoad: ipc.layoutLoad,
+    ptyStart: ipc.ptyStart.slice(),
+    ptyKill: ipc.ptyKill.slice(),
+    groups: await run(win, `window.__cc.api.groups.length`),
+    identities: await run(win, `window.__cc.identities()`),
+    live: await run(win, `window.ccDockviewDiagnostics.snapshot().liveTerminals`),
+    owned: await run(win, `window.ccDockviewDiagnostics.snapshot().ownedPaneIds`),
+  };
+
+  const reset = await run(win, clickLayout('dvResetArrangement'));
+  const resetState = {
+    layoutSave: ipc.layoutSave, layoutLoad: ipc.layoutLoad, layoutReset: ipc.layoutReset,
+    ptyStart: ipc.ptyStart.slice(),
+    ptyKill: ipc.ptyKill.slice(),
+    groups: await run(win, `window.__cc.api.groups.length`),
+    identities: await run(win, `window.__cc.identities()`),
+    owned: await run(win, `window.ccDockviewDiagnostics.snapshot().ownedPaneIds`),
+    order: await run(win, `window.__cc.api.groups.map((g) => g.panels.map((p) => p.id)).flat()`),
+  };
+
+  const cleared = await run(win, clickLayout('dvClearSaved'));
+  const clearedState = {
+    layoutReset: ipc.layoutReset,
+    fileGone: savedLayout.envelope === null,
+    ptyStart: ipc.ptyStart.slice(),
+    ptyKill: ipc.ptyKill.slice(),
+    owned: await run(win, `window.ccDockviewDiagnostics.snapshot().ownedPaneIds`),
+    identities: await run(win, `window.__cc.identities()`),
+  };
+  // Clearing twice: the second time there is nothing to delete, and that is still a success.
+  const clearedAgain = await run(win, clickLayout('dvClearSaved'));
+
+  // With the file gone, Restore must refuse and change nothing.
+  const restoreAfterClear = await run(win, clickLayout('dvRestoreArrangement'));
+  const afterClearState = {
+    owned: await run(win, `window.ccDockviewDiagnostics.snapshot().ownedPaneIds`),
+    identities: await run(win, `window.__cc.identities()`),
+    ptyKill: ipc.ptyKill.slice(),
+  };
+
+  const result = {
+    settled, split, controls,
+    saved, savedState, disturbed, elementIdsBefore,
+    restored, restoredState,
+    reset, resetState,
+    cleared, clearedState, clearedAgain,
+    restoreAfterClear, afterClearState,
+    logs: await run(win, `window.__cc.logs().slice(-6000)`),
+  };
+  await closeWindow(win);
+  return result;
+}
+
+/**
+ * 12 — the pane sets must match EXACTLY, proven in the real app.
+ *
+ * Save with three panes, close one, then restore: the saved state names a pane that is no longer
+ * open, so the restore must refuse before `fromJSON` rather than mounting an empty shell.
+ */
+async function scenarioExactSet() {
+  const win = await openWindow({ name: 'exact-set' });
+  const settled = await run(win, AWAIT_SETTLED);
+  await run(win, CLICK_NEW_SHELL);
+  await run(win, CLICK_NEW_SHELL);
+  await run(win, `(async () => {
+    [...document.querySelectorAll('.tab')].find((t) => t.dataset.tab === 'library').click();
+    await window.__cc.sleep(250);
+    return true;
+  })()`);
+  const savedThree = await run(win, clickLayout('dvSaveArrangement'));
+
+  // (a) SAVED NAMES A PANE THAT IS NOT OPEN — close one and try to restore.
+  const closed = await run(win, `(async () => {
+    const api = window.__cc.api;
+    api.removePanel(api.getPanel('pty2'));
+    await window.__cc.sleep(300);
+    return { owned: window.ccDockviewDiagnostics.snapshot().ownedPaneIds, panels: window.__cc.panelIds() };
+  })()`);
+  const killsBefore = ipc.ptyKill.length;
+  const savedNotLive = await run(win, clickLayout('dvRestoreArrangement'));
+  const savedNotLiveState = {
+    panels: await run(win, `window.__cc.panelIds()`),
+    owned: await run(win, `window.ccDockviewDiagnostics.snapshot().ownedPaneIds`),
+    killsDuring: ipc.ptyKill.length - killsBefore,
+    starts: ipc.ptyStart.slice(),
+  };
+
+  // (b) A PANE IS OPEN THAT THE SAVED STATE DOES NOT MENTION — save, then add one, then restore.
+  await run(win, clickLayout('dvSaveArrangement'));
+  await run(win, CLICK_NEW_SHELL);
+  const killsBefore2 = ipc.ptyKill.length;
+  const liveNotSaved = await run(win, clickLayout('dvRestoreArrangement'));
+  const liveNotSavedState = {
+    panels: await run(win, `window.__cc.panelIds()`),
+    owned: await run(win, `window.ccDockviewDiagnostics.snapshot().ownedPaneIds`),
+    killsDuring: ipc.ptyKill.length - killsBefore2,
+  };
+
+  const result = {
+    settled, savedThree, closed, savedNotLive, savedNotLiveState, liveNotSaved, liveNotSavedState,
+    logs: await run(win, `window.__cc.logs().slice(-4000)`),
+  };
+  await closeWindow(win);
+  return result;
+}
+
+/**
+ * 13 — malformed saved state can never reach `fromJSON`, and a double click cannot overlap.
+ *
+ * The saved "file" is corrupted directly in the harness's in-memory store, which is exactly what a
+ * hand-edited file on disk would look like from the renderer's side.
+ */
+async function scenarioMalformedAndConcurrency() {
+  const win = await openWindow({ name: 'malformed-and-concurrency', layoutIpcDelayMs: 600 });
+  const settled = await run(win, AWAIT_SETTLED);
+  await run(win, CLICK_NEW_SHELL);
+  await run(win, CLICK_NEW_SHELL);
+  await run(win, `window.__cc.sleep(200)`);
+
+  // A real save first, so there IS a saved arrangement to corrupt.
+  await run(win, clickLayout('dvSaveArrangement'));
+  const baseline = { panels: await run(win, `window.__cc.panelIds()`) };
+
+  // --- corrupt the saved state in ways a hand-edited file could ---------------------------------
+  const malformed = [];
+  const CORRUPTIONS = [
+    ['populated-params', (e) => { e.layout.panels.pty1.params = { cwd: 'D:\\Workspace\\secret' }; }],
+    ['path-in-title', (e) => { e.layout.panels.pty1.title = 'C:\\Users\\levij\\key'; }],
+    ['unknown-component', (e) => { e.layout.panels.pty1.contentComponent = 'iframe'; }],
+    ['floating-groups', (e) => { e.layout.floatingGroups = [{}]; }],
+    ['wrong-schema-version', (e) => { e.schemaVersion = 99; }],
+  ];
+  const pristine = JSON.parse(JSON.stringify(savedLayout.envelope));
+  for (const [label, corrupt] of CORRUPTIONS) {
+    savedLayout.envelope = JSON.parse(JSON.stringify(pristine));
+    corrupt(savedLayout.envelope);
+    const before = await run(win, `window.__cc.panelIds()`);
+    const killsBefore = ipc.ptyKill.length;
+    const outcome = await run(win, clickLayout('dvRestoreArrangement'));
+    malformed.push({
+      label,
+      status: outcome.status,
+      panelsBefore: before,
+      panelsAfter: await run(win, `window.__cc.panelIds()`),
+      killsDuring: ipc.ptyKill.length - killsBefore,
+    });
+  }
+  savedLayout.envelope = pristine;
+
+  // --- CONCURRENCY: hammer every control while one operation is still in flight -----------------
+  // `layoutIpcDelayMs` holds main's handler open, so the second click genuinely lands mid-operation
+  // rather than after it. Both halves are measured: the DOM disables the controls, and the
+  // operations themselves refuse.
+  const concurrency = await run(win, `(async () => {
+    const ids = ['dvSaveArrangement', 'dvRestoreArrangement', 'dvResetArrangement', 'dvClearSaved'];
+    const btn = (id) => document.getElementById(id);
+    const before = window.__cc.status();
+    btn('dvRestoreArrangement').click();
+    await window.__cc.sleep(80);                       // inside the 600ms IPC hold
+    const midFlight = {
+      status: window.__cc.status(),
+      allDisabled: ids.every((id) => btn(id).disabled === true),
+      disabledCount: ids.filter((id) => btn(id).disabled === true).length,
+    };
+    // Click EVERY control, repeatedly, while the first one is still running. A disabled button
+    // fires no handler, which is the FIRST line of defence.
+    for (let i = 0; i < 3; i++) for (const id of ids) btn(id).click();
+    await window.__cc.sleep(80);
+    const stillMidFlight = { status: window.__cc.status(), allDisabled: ids.every((id) => btn(id).disabled === true) };
+
+    // Now defeat that first line deliberately: force the buttons enabled and click again, so the
+    // handlers really do run while an operation is in flight. The SECOND line of defence — the
+    // adapter's own exclusivity — must refuse them, visibly.
+    for (const id of ids) btn(id).disabled = false;
+    for (const id of ids) btn(id).click();
+    await window.__cc.sleep(120);
+    const forced = { status: window.__cc.status() };
+    // The buttons were forced enabled above, so "no control is disabled" is no longer a signal that
+    // the operation finished. Wait for the in-flight operation to actually report its own outcome.
+    await window.__cc.waitFor(() => !/is still running|Restoring the saved arrangement…/.test(window.__cc.status()), 10000);
+    await window.__cc.sleep(200);
+    return {
+      before, midFlight, stillMidFlight, forced,
+      afterStatus: window.__cc.status(),
+      allEnabledAfter: ids.every((id) => btn(id).disabled === false),
+      panels: window.__cc.panelIds(),
+    };
+  })()`);
+
+  const result = {
+    settled, baseline, malformed, concurrency,
+    // Exactly ONE load reached main across the whole concurrency burst that follows the five
+    // malformed restores; anything more would mean overlapping operations.
+    layoutIpc: { save: ipc.layoutSave, load: ipc.layoutLoad, reset: ipc.layoutReset },
+    ptyStart: ipc.ptyStart.slice(),
+    ptyKill: ipc.ptyKill.slice(),
+    owned: await run(win, `window.ccDockviewDiagnostics.snapshot().ownedPaneIds`),
+    logs: await run(win, `window.__cc.logs().slice(-6000)`),
+  };
+  await closeWindow(win);
+  return result;
+}
+
+/** 14 — a save that main refuses must not overwrite, and must say so. */
+async function scenarioSaveRefused() {
+  const win = await openWindow({
+    name: 'save-refused',
+    saveResult: { ok: false, reason: 'write-failed' },
+  });
+  const settled = await run(win, AWAIT_SETTLED);
+  await run(win, CLICK_NEW_SHELL);
+  await run(win, `window.__cc.sleep(200)`);
+  const refused = await run(win, clickLayout('dvSaveArrangement'));
+  const result = {
+    settled, refused,
+    fileStillAbsent: savedLayout.envelope === null,
+    layoutSave: ipc.layoutSave,
+    ptyStart: ipc.ptyStart.slice(),
+    ptyKill: ipc.ptyKill.slice(),
+    owned: await run(win, `window.ccDockviewDiagnostics.snapshot().ownedPaneIds`),
+  };
+  await closeWindow(win);
+  return result;
+}
+
 /** 10 — the acceptance diagnostic is read-only and cannot be substituted. */
 async function scenarioDiagnostic() {
   const win = await openWindow({ name: 'diagnostic' });
@@ -967,9 +1304,41 @@ app.whenReady().then(async () => {
   ipcMain.handle('clipboard-read', () => ({ ok: true, text: '' }));
   ipcMain.handle('clipboard-write', () => ({ ok: true }));
   ipcMain.handle('open-external', () => ({ ok: true }));
-  ipcMain.handle('dockview-layout-save', () => { ipc.layoutSave++; return { ok: true, savedAt: 'harness' }; });
-  ipcMain.handle('dockview-layout-load', () => { ipc.layoutLoad++; return { ok: false, reason: 'no-saved-layout' }; });
-  ipcMain.handle('dockview-layout-reset', () => { ipc.layoutReset++; return { ok: true }; });
+  // ---- the layout boundary, exercised through the REAL shared policy ---------------------------
+  // These stubs stand in for main's handlers, and they run the SAME `dockview-layout-store` code
+  // main runs — validate on write, validate on read — against an in-memory file. That keeps a gate
+  // run away from the real userData path while still proving the renderer talks to a validating
+  // boundary rather than a permissive one.
+  const layoutStore = require('./dockview-layout-store');
+  const delayLayoutIpc = () => (control.layoutIpcDelayMs
+    ? new Promise((r) => setTimeout(r, control.layoutIpcDelayMs)) : Promise.resolve());
+
+  ipcMain.handle('dockview-layout-save', async (_e, layout) => {
+    ipc.layoutSave++;
+    ipc.savedLayouts.push(layout);
+    await delayLayoutIpc();
+    if (control.saveResult) return control.saveResult;
+    const envelope = layoutStore.buildEnvelope(layout);
+    const verdict = layoutStore.validateEnvelope(envelope);
+    if (!verdict.ok) return { ok: false, reason: verdict.reason };
+    savedLayout.envelope = JSON.parse(JSON.stringify(envelope));   // through JSON, exactly as a file is
+    return { ok: true, savedAt: envelope.savedAt };
+  });
+  ipcMain.handle('dockview-layout-load', async () => {
+    ipc.layoutLoad++;
+    await delayLayoutIpc();
+    if (!savedLayout.envelope) return { ok: false, reason: layoutStore.REASON.NOT_FOUND };
+    const verdict = layoutStore.validateEnvelope(savedLayout.envelope);
+    if (!verdict.ok) return { ok: false, reason: verdict.reason };
+    return { ok: true, envelope: verdict.envelope };
+  });
+  ipcMain.handle('dockview-layout-reset', async () => {
+    ipc.layoutReset++;
+    await delayLayoutIpc();
+    const existed = savedLayout.envelope !== null;
+    savedLayout.envelope = null;
+    return { ok: true, existed };
+  });
 
   const ORDER = [
     ['production', scenarioProduction],
@@ -982,6 +1351,10 @@ app.whenReady().then(async () => {
     ['maximize', scenarioMaximize],
     ['closeConvergence', scenarioCloseConvergence],
     ['diagnostic', scenarioDiagnostic],
+    ['layoutOperations', scenarioLayoutOperations],
+    ['exactSet', scenarioExactSet],
+    ['malformedAndConcurrency', scenarioMalformedAndConcurrency],
+    ['saveRefused', scenarioSaveRefused],
   ];
 
   // A global watchdog: a harness that hangs must still produce a report naming the step it hung on,

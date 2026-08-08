@@ -75,8 +75,36 @@ global.ResizeObserver = function (cb) {
 
 require('./dockview-fit-policy');
 require('./dockview-panel-policy');
+// The SHARED layout policy — the same module main validates with. Requiring it here is not a test
+// convenience: the adapter now refuses to activate without it, and it is what makes every
+// `fromJSON` below run through the real validator rather than a stand-in.
+const layoutPolicy = require('../dockview-layout-policy');
 const adapterModule = require('./dockview-prototype');
 const adapter = adapterModule.activate ? adapterModule : global.window.ccDockviewPrototype;
+const R = layoutPolicy.REASON;
+
+/**
+ * Build a REAL, valid dockview@7.0.4 layout for a set of panes — through the shared policy itself,
+ * so a test can never accidentally assert against a shape the production validator would refuse.
+ */
+function layoutFor(ids, width = 100, height = 100) {
+  const built = layoutPolicy.buildDefaultArrangement({
+    panes: ids.map((id) => ({
+      id,
+      component: id === 'library' ? 'library' : 'terminal',
+      title: id === 'library' ? 'Library' : `Terminal ${id.slice(3)}`,
+    })),
+    width,
+    height,
+  });
+  if (!built.ok) throw new Error(`layoutFor could not build a valid layout: ${built.reason}`);
+  return built.layout;
+}
+
+/** The on-disk envelope main returns for a set of panes. */
+function envelopeFor(ids) {
+  return layoutPolicy.buildEnvelope(layoutFor(ids), Date.UTC(2026, 7, 8, 12, 0, 0));
+}
 
 // ---- fake Dockview api: real payload shapes AND the real fromJSON lifecycle --------------------
 function makeFakeDockview() {
@@ -87,7 +115,10 @@ function makeFakeDockview() {
   const activatedIds = [];      // every panel.api.setActive() call, in order
   const maximizeCalls = [];     // every panel.api.maximize() call, in order
   const exitCalls = [];         // every panel.api.exitMaximized() call, in order
-  let failMode = null;          // null | 'after-clear' | 'mid-rebuild' | 'add-panel'
+  let activePanelId = null;     // whichever panel was last activated
+  let failOnce = false;         // true => the fault fires once, so a rollback can still succeed
+  // null | 'after-clear' | 'mid-rebuild' | 'add-panel' | 'drop-last' | 'extra-panel'
+  let failMode = null;
 
   // The real lifecycle: DockviewPanelModel's constructor calls createComponent({id,name}), then
   // panel.init(...) calls the returned renderer's init(). Both halves matter to the adapter.
@@ -105,7 +136,7 @@ function makeFakeDockview() {
     const panel = {
       id, component, title,
       api: {
-        setActive() { activatedIds.push(id); },
+        setActive() { activatedIds.push(id); activePanelId = id; },
         maximize() {
           if (api._maximizeThrows) throw new Error('dockview: synthetic maximize failure');
           api._maximizedId = id;
@@ -151,22 +182,63 @@ function makeFakeDockview() {
     onDidRemovePanel: (fn) => listeners.remove.push(fn),
     onDidActivePanelChange: (fn) => listeners.active.push(fn),
     onDidLayoutChange: (fn) => listeners.layout.push(fn),
-    toJSON: () => ({
-      panels: Object.fromEntries([...panels].map(([id, p]) => [id, { id, contentComponent: p.component, title: p.title }])),
-    }),
+    // dockview@7.0.4's DockviewApi exposes `panels` (all panels) and `activePanel`. The adapter
+    // reads both — `panels` to prove no UNEXPECTED panel survived an apply, `activePanel` to put
+    // focus back after a rollback — so the fake must carry them.
+    get panels() { return [...panels.values()]; },
+    get activePanel() { return activePanelId ? panels.get(activePanelId) || null : null; },
+    // A REAL serialization: one leaf group per panel under a horizontal branch, exactly the shape
+    // the committed dockview@7.0.4 fixture has. This matters because the adapter now VALIDATES the
+    // rollback snapshot it captures from here — a toJSON that emitted `{panels}` alone would be
+    // refused by the production validator, and every transaction test would pass for the wrong
+    // reason (refused before applying) or fail spuriously.
+    toJSON: () => {
+      const ids = [...panels.keys()];
+      return {
+        grid: {
+          root: {
+            type: 'branch',
+            size: 100,
+            data: ids.map((id, i) => ({
+              type: 'leaf',
+              size: 100,
+              data: { views: [id], activeView: id, id: String(i + 1) },
+            })),
+          },
+          width: 100,
+          height: 100,
+          orientation: 'HORIZONTAL',
+        },
+        panels: Object.fromEntries(ids.map((id) => {
+          const p = panels.get(id);
+          return [id, { id, contentComponent: p.component, title: p.title }];
+        })),
+        activeGroup: '1',
+      };
+    },
     fromJSON(layout) {
+      // TRANSIENT vs PERSISTENT is the distinction that decides what a rollback can achieve. A
+      // saved layout the vendor chokes on is transient: the snapshot Dockview itself serialized
+      // moments earlier still applies, so the rollback SUCCEEDS. A persistent fault breaks the
+      // rollback's own fromJSON too, and the adapter must then report the rollback INCOMPLETE
+      // rather than claim the previous arrangement is back.
+      const mode = failMode;
+      if (mode && failOnce) { failMode = null; failOnce = false; }
+
       // HALF 1 — _doFromJSON calls this.clear() BEFORE deserializing anything.
       api.clear();
-      if (failMode === 'after-clear') throw new Error('dockview: synthetic apply failure after clear');
+      if (mode === 'after-clear') throw new Error('dockview: synthetic apply failure after clear');
       // HALF 2 — the deserializer builds every saved panel through createComponent + init().
       const ids = Object.keys((layout && layout.panels) || {});
       ids.forEach((id, index) => {
-        if (failMode === 'mid-rebuild' && index === 1) {
+        if (mode === 'mid-rebuild' && index === 1) {
           throw new Error('dockview: synthetic apply failure mid-rebuild');
         }
+        if (mode === 'drop-last' && index === ids.length - 1) return;  // silently missing pane
         const saved = (layout.panels && layout.panels[id]) || {};
         buildPanel(id, saved.contentComponent || 'terminal', saved.title || id);
       });
+      if (mode === 'extra-panel') buildPanel('pty9', 'terminal', 'Terminal 9');
     },
     dispose() { api._disposed = true; },
     _disposed: false,
@@ -184,7 +256,8 @@ function makeFakeDockview() {
     _activatedIds: activatedIds,
     _maximizeCalls: maximizeCalls,
     _exitCalls: exitCalls,
-    _failFromJSON: (mode) => { failMode = mode; },
+    /** Passing { once: true } models a TRANSIENT vendor fault: the apply fails, the rollback works. */
+    _failFromJSON: (mode, opts) => { failMode = mode; failOnce = !!(opts && opts.once); },
   };
 }
 
@@ -206,7 +279,7 @@ function statusText(host) {
 function makeHost(overrides = {}) {
   const calls = {
     closePane: [], suspended: [], resumed: [], logs: [], statuses: [], created: [],
-    docked: 0, undocked: 0,
+    docked: 0, undocked: 0, saved: [], cleared: 0,
   };
   const container = makeElement('div');
   const paneElements = new Map([
@@ -228,7 +301,18 @@ function makeHost(overrides = {}) {
   // fail rather than quietly skipping.
   let nextTerminal = 0;
   const host = {
-    bridge: { enabled: true, saveLayout: async () => ({ ok: true, savedAt: 'x' }), loadLayout: async () => ({ ok: false, reason: 'no-saved-layout' }), resetLayout: async () => ({ ok: true }) },
+    // The MAIN-owned bridge, in the shapes main actually returns. `loadLayout` hands back the WHOLE
+    // envelope (Phase C) so the renderer can validate schema version, package identity and
+    // timestamp — not just the layout — immediately before fromJSON.
+    bridge: {
+      enabled: true,
+      saveLayout: async (layout) => { calls.saved.push(layout); return host._saveResult; },
+      loadLayout: async () => host._loadResult,
+      resetLayout: async () => { calls.cleared += 1; return host._resetResult; },
+    },
+    _saveResult: { ok: true, savedAt: '2026-08-08T12:00:00Z' },
+    _loadResult: { ok: false, reason: 'no-saved-layout' },
+    _resetResult: { ok: true, existed: true },
     getDockviewGlobal: () => host._dockview,
     getContainer: () => container,
     log: (l) => calls.logs.push(l),
@@ -275,25 +359,22 @@ function makeHost(overrides = {}) {
   return Object.assign(host, overrides);
 }
 
-/** Stand up an adapter hosting pty1 + pty2 + library, and hand back everything the assertions need. */
-function makeRestoreScenario(savedPanels) {
+/**
+ * Stand up an adapter hosting a set of panes, with a saved envelope main would return.
+ * `savedIds` defaults to exactly the live set, which is the only case a restore may proceed on.
+ */
+function makeRestoreScenario(savedIds, liveIds = ['pty1', 'pty2', 'library']) {
   const fake = makeFakeDockview();
   const host = makeHost(); host._dockview = fake;
-  host.bridge.loadLayout = async () => ({ ok: true, savedAt: '2026-08-04T12:00:00Z', layout: { panels: savedPanels } });
+  host._loadResult = { ok: true, envelope: envelopeFor(savedIds || liveIds) };
   const instance = adapter.activate(host);
-  instance.addPane('pty1', 'terminal');
-  instance.addPane('pty2', 'terminal');
-  instance.addPane('library', 'library');
+  for (const id of liveIds) instance.addPane(id, id === 'library' ? 'library' : 'terminal');
   const paneEl = (id) => host._paneElements.get(id);
   const hostOf = (id) => { const p = fake._api.getPanel(id); return p && p._renderer && p._renderer.element; };
   return { fake, host, instance, paneEl, hostOf };
 }
 
-const SAVED_THREE = {
-  pty1: { id: 'pty1', contentComponent: 'terminal', title: 'Terminal 1' },
-  pty2: { id: 'pty2', contentComponent: 'terminal', title: 'Terminal 2' },
-  library: { id: 'library', contentComponent: 'library', title: 'Library' },
-};
+const THREE = ['pty1', 'pty2', 'library'];
 
 // ---------------------------------------------------------------------------
 process.stdout.write('\nDockview panel removal converges on the app close path (REAL payload shape)\n');
@@ -480,19 +561,17 @@ process.stdout.write('\nR5: closing Library returns the identical element; re-ad
 }
 
 // Awaited from the async section at the end of this file (a top-level `return` is not valid here).
-async function r5RestoreKeepsLibraryDocked() {
-  process.stdout.write('\nR5: a restore-driven rebuild is a MOUNT transition — it must not undock\n');
+async function restoreKeepsLibraryDocked() {
+  process.stdout.write('\na restore-driven rebuild is a MOUNT transition — it must not undock\n');
   const fake = makeFakeDockview();
   const host = makeHost(); host._dockview = fake;
-  host.bridge.loadLayout = async () => ({
-    ok: true, savedAt: '2026-08-04T12:00:00Z',
-    layout: { panels: { library: { id: 'library', contentComponent: 'library', title: 'Library' } } },
-  });
+  host._loadResult = { ok: true, envelope: envelopeFor(['library']) };
   const instance = adapter.activate(host);
   instance.addPane('library', 'library');
   const undockedAfterAdd = host._calls.undocked;
 
-  await instance.restoreLayout();
+  const result = await instance.restoreArrangement();
+  assert(result.ok === true, 'the restore succeeds');
   assert(host._calls.undocked === undockedAfterAdd,
     'fromJSON clearing and rebuilding did NOT send the Library home mid-restore');
   assert(host.isLibraryDocked() === true, 'the Library is still docked after the rebuild');
@@ -527,7 +606,7 @@ process.stdout.write('\nevent shapes stay distinct per handler (they genuinely d
   process.stdout.write('\nRESTORE moves the live panes into the rebuilt panels (both halves of fromJSON)\n');
   // -------------------------------------------------------------------------
   {
-    const { fake, host, instance, paneEl, hostOf } = makeRestoreScenario(SAVED_THREE);
+    const { fake, host, instance, paneEl, hostOf } = makeRestoreScenario(THREE);
 
     const oldHosts = { pty1: hostOf('pty1'), pty2: hostOf('pty2'), library: hostOf('library') };
     const oldControllers = { pty1: instance.registry.get('pty1'), pty2: instance.registry.get('pty2') };
@@ -535,7 +614,7 @@ process.stdout.write('\nevent shapes stay distinct per handler (they genuinely d
     const createdBefore = host._calls.created.length;
     const observersBefore = observers.live;
 
-    const result = await instance.restoreLayout();
+    const result = await instance.restoreArrangement();
 
     assert(result && result.ok === true, 'the restore reports success');
     assert(host._calls.closePane.length === 0,
@@ -544,7 +623,7 @@ process.stdout.write('\nevent shapes stay distinct per handler (they genuinely d
       'no PTY and no pane is newly created during restore');
 
     // The load-bearing assertions: DOM ownership by OBJECT IDENTITY, not `getPanel(id) !== null`.
-    for (const id of ['pty1', 'pty2', 'library']) {
+    for (const id of THREE) {
       const rebuiltHost = hostOf(id);
       assert(!!rebuiltHost && rebuiltHost !== oldHosts[id],
         `${id}: Dockview built a NEW panel host during the rebuild`);
@@ -571,22 +650,24 @@ process.stdout.write('\nevent shapes stay distinct per handler (they genuinely d
       'exactly one live adapter ResizeObserver per restored terminal — none accumulated, none lost');
     assert(instance.ownedPaneIds().sort().join(',') === 'library,pty1,pty2',
       'pane ownership survived the rebuild intact');
+    assert(/restored/i.test(statusText(host)), 'the status says the arrangement was restored');
+    assert(!/pty\d/.test(statusText(host)), 'and names no pane');
   }
 
   process.stdout.write('\nRESTORE is repeatable: three cycles leak nothing\n');
   // -------------------------------------------------------------------------
   {
-    const { host, instance, paneEl, hostOf } = makeRestoreScenario(SAVED_THREE);
+    const { host, instance, paneEl, hostOf } = makeRestoreScenario(THREE);
     const framesBefore = frames.pending;
     const observersBefore = observers.live;
 
     for (let cycle = 1; cycle <= 3; cycle++) {
-      const r = await instance.restoreLayout();
+      const r = await instance.restoreArrangement();
       assert(r && r.ok === true, `cycle ${cycle}: restore succeeds`);
       assert(instance.registry.size() === 2, `cycle ${cycle}: still exactly 2 controllers`);
       assert(observers.live === observersBefore, `cycle ${cycle}: still exactly 2 live observers`);
       assert(instance.ownedPaneIds().length === 3, `cycle ${cycle}: still exactly 3 owned panes`);
-      assert(['pty1', 'pty2', 'library'].every((id) => paneEl(id).parentNode === hostOf(id)),
+      assert(THREE.every((id) => paneEl(id).parentNode === hostOf(id)),
         `cycle ${cycle}: every live pane is parented to its current panel host`);
     }
     assert(frames.pending <= framesBefore + 2,
@@ -597,8 +678,8 @@ process.stdout.write('\nevent shapes stay distinct per handler (they genuinely d
   process.stdout.write('\nafter a restore, closing still works in BOTH directions, exactly once\n');
   // -------------------------------------------------------------------------
   {
-    const { fake, host, instance } = makeRestoreScenario(SAVED_THREE);
-    await instance.restoreLayout();
+    const { fake, host, instance } = makeRestoreScenario(THREE);
+    await instance.restoreArrangement();
 
     // The re-entrancy guard is scoped to the synchronous fromJSON call, so a genuine user close
     // afterwards is NOT suppressed.
@@ -617,64 +698,126 @@ process.stdout.write('\nevent shapes stay distinct per handler (they genuinely d
     assert(instance.ownedPaneIds().sort().join(',') === 'library', 'only the Library pane remains owned');
   }
 
-  process.stdout.write('\nRestore refuses visibly when a saved pane is not live\n');
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  process.stdout.write('\nEXACT saved/live set equality gates every restore\n');
+  // ---------------------------------------------------------------------------
+  // The two sets are derived INDEPENDENTLY — saved from the validated saved layout, live from the
+  // adapter's own ownership map — so this can never be a tautology.
   {
-    const { fake, host, instance, paneEl, hostOf } = makeRestoreScenario({ pty1: SAVED_THREE.pty1, pty2: SAVED_THREE.pty2 });
-    host._paneElements.delete('pty2');            // pty2 was saved but is not open after a restart
-    const hostsBefore = { pty1: hostOf('pty1'), pty2: hostOf('pty2'), library: hostOf('library') };
-
-    const result = await instance.restoreLayout();
-    assert(result && result.ok === false && result.reason === 'panes-not-live',
-      'restore refuses rather than mounting an empty panel shell for a missing pane');
-    assert(host._calls.logs.some((l) => /restore REFUSED/.test(l)), 'the refusal is visible in the log');
-    assert(hostOf('pty1') === hostsBefore.pty1 && hostOf('library') === hostsBefore.library,
-      'the refusal happens BEFORE fromJSON — the current panels were never rebuilt');
-    assert(paneEl('pty1').parentNode === hostsBefore.pty1,
-      'the existing topology is untouched: the live pane keeps its current host');
-    assert(host._calls.closePane.length === 0, 'and nothing was closed');
+    // (a) equal sets, different ORDER: allowed. Order alone is not a mismatch.
+    const s = makeRestoreScenario(['library', 'pty2', 'pty1'], ['pty1', 'pty2', 'library']);
+    const r = await s.instance.restoreArrangement();
+    assert(r.ok === true, 'the same three panes in a different saved order restore normally');
+  }
+  {
+    // (b) saved names a pane that is NOT open -> mounting an empty shell is refused.
+    const s = makeRestoreScenario(['pty1', 'pty2', 'library'], ['pty1', 'pty2']);
+    const before = s.instance.ownedPaneIds().sort().join(',');
+    const r = await s.instance.restoreArrangement();
+    assert(r.ok === false && r.reason === R.SAVED_NOT_LIVE,
+      `a saved pane that is not live refuses as ${R.SAVED_NOT_LIVE} (saw ${r.reason})`);
+    assert(s.fake._api._panels.size === 2, 'fromJSON was never called — the workspace is untouched');
+    assert(s.instance.ownedPaneIds().sort().join(',') === before, 'ownership is unchanged');
+    assert(s.host._calls.closePane.length === 0, 'and nothing was closed');
+    assert(!/pty\d|library/.test(statusText(s.host)), 'the status names no pane');
+  }
+  {
+    // (c) a pane is OPEN that the saved state does not mention -> stranding it is refused.
+    const s = makeRestoreScenario(['pty1'], ['pty1', 'pty2']);
+    const r = await s.instance.restoreArrangement();
+    assert(r.ok === false && r.reason === R.LIVE_NOT_SAVED,
+      `an extra live pane refuses as ${R.LIVE_NOT_SAVED} (saw ${r.reason})`);
+    assert(s.fake._api._panels.size === 2, 'fromJSON was never called');
+    assert(s.host._calls.closePane.length === 0, 'and the extra pane was NOT closed to make it fit');
+  }
+  {
+    // (d) EQUAL COUNTS, different IDs — the case a length check would wave through.
+    const s = makeRestoreScenario(['pty1', 'pty3'], ['pty1', 'pty2']);
+    const r = await s.instance.restoreArrangement();
+    assert(r.ok === false && r.reason === R.PANE_SET_MISMATCH,
+      `equal counts with different IDs refuse as ${R.PANE_SET_MISMATCH} (saw ${r.reason})`);
+    assert(s.fake._api._panels.size === 2, 'fromJSON was never called');
   }
 
-  process.stdout.write('\nan apply failure AFTER the clear rolls back instead of stranding panes\n');
+  // ---------------------------------------------------------------------------
+  process.stdout.write('\nMALFORMED saved state can never reach fromJSON\n');
+  // ---------------------------------------------------------------------------
+  {
+    const MALFORMED = [
+      ['a layout with no grid', (e) => { delete e.layout.grid; }, R.LAYOUT_SHAPE],
+      ['a populated `params`', (e) => { e.layout.panels.pty1.params = { cwd: 'D:\\Workspace' }; }, R.LAYOUT_SHAPE],
+      ['a title carrying a path', (e) => { e.layout.panels.pty1.title = 'C:\\secrets\\key'; }, R.UNSAFE_CONTENT],
+      ['an unknown component kind', (e) => { e.layout.panels.pty1.contentComponent = 'iframe'; }, R.UNKNOWN_COMPONENT],
+      ['an unknown top-level layout key', (e) => { e.layout.floatingGroups = []; }, R.LAYOUT_SHAPE],
+      ['a wrong schema version', (e) => { e.schemaVersion = 2; }, R.SCHEMA_VERSION],
+      ['a wrong package version', (e) => { e.packageVersion = '8.0.0'; }, R.PACKAGE_VERSION],
+      ['a malformed timestamp', (e) => { e.savedAt = 'yesterday'; }, R.TIMESTAMP],
+      ['an envelope that is not an object', null, R.ENVELOPE_SHAPE],
+    ];
+    for (const [label, mutate, reason] of MALFORMED) {
+      const s = makeRestoreScenario(THREE);
+      const envelope = mutate ? envelopeFor(THREE) : 'not-an-envelope';
+      if (mutate) mutate(envelope);
+      s.host._loadResult = { ok: true, envelope };
+      const panelsBefore = s.fake._api._panels.size;
+
+      const r = await s.instance.restoreArrangement();
+      assert(r.ok === false && r.reason === reason,
+        `${label} refuses as ${reason} (saw ${r.reason})`);
+      assert(s.fake._api._panels.size === panelsBefore,
+        `${label}: fromJSON was NEVER called — the live workspace is untouched`);
+      assert(s.host._calls.closePane.length === 0, `${label}: no PTY was killed`);
+      assert(s.host._calls.created.length === 0, `${label}: no pane was created`);
+      // Bounded and content-free: the reason is a code from the closed set, and the status carries
+      // no fragment of the offending state.
+      assert(layoutPolicy.REASON_CODES.has(r.reason), `${label}: the reason is inside the closed set`);
+      assert(!/D:\\|C:\\|secrets|iframe|floatingGroups/.test(statusText(s.host)),
+        `${label}: the status echoes no fragment of the refused state`);
+      assert(!s.host._calls.logs.some((l) => /D:\\|C:\\|secrets/.test(l)),
+        `${label}: neither does the log`);
+    }
+  }
+
+  process.stdout.write('\nan apply failure AFTER the clear rolls back transactionally\n');
   // -------------------------------------------------------------------------
   {
-    const { fake, host, instance, paneEl, hostOf } = makeRestoreScenario(SAVED_THREE);
+    const { fake, host, instance, paneEl, hostOf } = makeRestoreScenario(THREE);
     const createdBefore = host._calls.created.length;
-    fake._failFromJSON('after-clear');
+    fake._failFromJSON('after-clear', { once: true });
 
-    const result = await instance.restoreLayout();
+    const result = await instance.restoreArrangement();
 
-    assert(result && result.ok === false && result.reason === 'restore-apply-failed',
-      'a bounded failure reason is returned');
-    assert(result.ok !== true, 'the earlier successful load result is NOT returned as if it applied');
+    assert(result && result.ok === false && result.reason === R.APPLY_THREW,
+      `a bounded failure reason is returned (saw ${result.reason})`);
+    assert(result.rollback === 'restored', 'and the rollback is reported as successful');
     assert(host._calls.closePane.length === 0, 'no PTY was killed by the failed apply');
     assert(host._calls.created.length === createdBefore,
-      'no replacement terminal was created — useDefaultLayout is not the failure path');
-    for (const id of ['pty1', 'pty2', 'library']) {
+      'no replacement terminal was created — there is no fallback layout');
+    for (const id of THREE) {
       assert(instance.paneIsMounted(id) === true, `${id}: is mounted again after rollback`);
       assert(paneEl(id).parentNode === hostOf(id), `${id}: parented to its rebuilt host, not stranded`);
       assert(hostOf(id).children.length === 1, `${id}: the rolled-back panel is not an empty shell`);
     }
     assert(instance.ownedPaneIds().sort().join(',') === 'library,pty1,pty2', 'all panes remain owned');
-    assert(host._calls.logs.some((l) => /restore rollback/.test(l)), 'the rollback is visible in the log');
+    assert(/put back/i.test(statusText(host)), 'the status says the previous arrangement was put back');
     assert(!host._calls.logs.some((l) => /synthetic apply failure/.test(l)),
-      'the exception text is NEVER echoed into the log (no state contents, no exception content)');
+      'the exception text is NEVER echoed into the log');
   }
 
   process.stdout.write('\nan apply failure DURING the rebuild also rolls back, with no empty shells\n');
   // -------------------------------------------------------------------------
   {
-    const { fake, host, instance, paneEl, hostOf } = makeRestoreScenario(SAVED_THREE);
+    const { fake, host, instance, paneEl, hostOf } = makeRestoreScenario(THREE);
     const createdBefore = host._calls.created.length;
-    fake._failFromJSON('mid-rebuild');
+    fake._failFromJSON('mid-rebuild', { once: true });
 
-    const result = await instance.restoreLayout();
+    const result = await instance.restoreArrangement();
 
-    assert(result && result.ok === false && result.reason === 'restore-apply-failed',
+    assert(result && result.ok === false && result.reason === R.APPLY_THREW,
       'a partial rebuild also returns the bounded failure reason');
     assert(host._calls.closePane.length === 0, 'no PTY was killed');
     assert(host._calls.created.length === createdBefore, 'no PTY was created');
-    for (const id of ['pty1', 'pty2', 'library']) {
+    for (const id of THREE) {
       assert(instance.paneIsMounted(id) === true, `${id}: recovered by the rollback`);
       assert(paneEl(id).parentNode === hostOf(id), `${id}: owns its element again`);
       assert(hostOf(id).children.length === 1, `${id}: no empty shell survived the partial rebuild`);
@@ -683,79 +826,285 @@ process.stdout.write('\nevent shapes stay distinct per handler (they genuinely d
     assert(instance.ownedPaneIds().length === 3, 'no pane entry was lost by the partial rebuild');
   }
 
-  process.stdout.write('\nprototype teardown releases everything it owns\n');
+  process.stdout.write('\nan apply that SILENTLY drops a pane is caught, not reported as success\n');
   // -------------------------------------------------------------------------
+  // "Did not throw" is not "mounted". This is the shape that once let a restore report success over
+  // empty shells, so it is caught by verification rather than by an exception.
   {
-    const { host, instance } = makeRestoreScenario(SAVED_THREE);
-    await instance.restoreLayout();
-    const observersBefore = observers.live;
-    assert(observersBefore >= 2, 'the restored terminals hold live observers before teardown');
+    const { fake, host, instance } = makeRestoreScenario(THREE);
+    fake._failFromJSON('drop-last', { once: true });
 
-    instance.dispose();
-    assert(instance.registry.size() === 0, 'every fit controller is disposed on teardown');
-    assert(instance.ownedPaneIds().length === 0,
-      'every owned pane is released on teardown, including the Library pane that has no controller');
-    assert(observers.live === observersBefore - 2, 'both adapter ResizeObservers were disconnected');
-    assert(host._calls.closePane.length === 0,
-      'teardown does NOT kill PTYs — the app owns their lifecycle, not the adapter');
-    instance.dispose();
-    assert(true, 'a second dispose is a no-op, not a throw');
+    const result = await instance.restoreArrangement();
+    assert(result.ok === false && result.reason === R.APPLY_INCOMPLETE,
+      `a silently missing pane is caught as ${R.APPLY_INCOMPLETE} (saw ${result.reason})`);
+    assert(result.rollback === 'restored', 'and rolled back');
+    assert(host._calls.closePane.length === 0, 'without killing a PTY');
+    assert(instance.ownedPaneIds().length === 3, 'every pane is still owned');
   }
 
-  process.stdout.write('\nRestore with no saved layout refuses and creates NOTHING\n');
+  process.stdout.write('\nan apply that produces an UNEXPECTED panel is caught too\n');
+  // -------------------------------------------------------------------------
+  {
+    const { fake, host, instance } = makeRestoreScenario(THREE);
+    fake._failFromJSON('extra-panel', { once: true });
+
+    const result = await instance.restoreArrangement();
+    assert(result.ok === false && result.reason === R.UNEXPECTED_PANEL,
+      `a panel nobody expected is caught as ${R.UNEXPECTED_PANEL} (saw ${result.reason})`);
+    assert(host._calls.closePane.length === 0, 'without killing a PTY');
+  }
+
+  process.stdout.write('\nan INCOMPLETE rollback is reported as incomplete, never as success\n');
+  // -------------------------------------------------------------------------
+  // The honest failure mode: the apply failed AND the rollback could not put everything back. There
+  // is deliberately no second repair strategy, so this must be visible rather than patched over.
+  {
+    const { fake, host, instance } = makeRestoreScenario(THREE);
+    fake._failFromJSON('drop-last');   // stays on, so the rollback's own fromJSON also drops a pane
+
+    const result = await instance.restoreArrangement();
+    assert(result.ok === false, 'the operation fails');
+    assert(result.rollback === 'incomplete',
+      `the rollback is reported INCOMPLETE (saw ${result.rollback})`);
+    assert(/could NOT be\s+fully put back|could NOT be fully put back/i.test(statusText(host)),
+      'and the status says so explicitly rather than claiming the previous arrangement is back');
+    assert(host._calls.closePane.length === 0, 'still without killing a PTY');
+    assert(host._calls.created.length === 0, 'and without creating one');
+  }
+
+  process.stdout.write('\nRestore with no saved arrangement refuses and creates NOTHING\n');
   // -------------------------------------------------------------------------
   {
     const fake = makeFakeDockview();
     const host = makeHost(); host._dockview = fake;
     const instance = adapter.activate(host);
-    const result = await instance.restoreLayout();
-    assert(result && result.ok === false && result.reason === 'no-saved-layout', 'the missing-state reason is surfaced');
+    const result = await instance.restoreArrangement();
+    assert(result && result.ok === false && result.reason === R.NOT_FOUND, 'the missing-state reason is surfaced');
     assert(host._calls.logs.some((l) => /no-saved-layout/.test(l)), 'the reason is logged');
-    // R5: the old build fell through to the default-workspace creator here, which silently spawned
-    // two PTYs on every failed restore. A refusal must be a full stop.
+    assert(/no saved arrangement/i.test(statusText(host)), 'and stated plainly in the status');
     assert(host._calls.created.length === 0, 'restore failure created NO terminal');
     assert(fake._addPanelCalls.length === 0, 'restore failure created NO pane');
     assert(instance.ownedPaneIds().length === 0, 'the workspace is untouched');
   }
 
-  process.stdout.write('\nR5: Create Default Workspace is idempotent and preflights emptiness\n');
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  process.stdout.write('\nSAVE validates BEFORE it calls main, and writes metadata only\n');
+  // ---------------------------------------------------------------------------
   {
-    const fake = makeFakeDockview();
-    const host = makeHost(); host._dockview = fake;
-    const instance = adapter.activate(host);
-
-    const first = await instance.useDefaultLayout();
-    assert(first.ok === true, 'the first invocation succeeds from an empty workspace');
-    assert(host._calls.created.filter((id) => id !== 'library').length === 2, 'exactly two terminals were created');
-    assert(instance.ownedPaneIds().sort().join(',') === 'library,pty1,pty2', 'two terminals plus the singleton Library');
-    const panesAfterFirst = fake._addPanelCalls.length;
-    const createdAfterFirst = host._calls.created.length;
-
-    const second = await instance.useDefaultLayout();
-    assert(second.ok === false && second.reason === 'workspace-not-empty', 'a second invocation refuses by name');
-    assert(host._calls.created.length === createdAfterFirst, 'the refusal created ZERO new terminals (no PTY spawned)');
-    assert(fake._addPanelCalls.length === panesAfterFirst, 'the refusal created ZERO new panes');
-    assert(/already has/.test(statusText(host)), 'the refusal is visible in the status surface');
+    const { fake, host, instance } = makeRestoreScenario(THREE);
+    const result = await instance.saveArrangement();
+    assert(result.ok === true, 'a coherent workspace saves');
+    assert(host._calls.saved.length === 1, 'main was called exactly once');
+    assert(layoutPolicy.validateLayout(host._calls.saved[0]) === null,
+      'and what crossed to main is a layout the SHARED validator accepts');
+    const ids = layoutPolicy.paneIdsFromLayout(host._calls.saved[0]);
+    assert(layoutPolicy.comparePaneSets(ids.sorted, instance.ownedPaneIds()).ok === true,
+      'describing exactly the panes the adapter owns');
+    assert(host._calls.closePane.length === 0 && host._calls.created.length === 0,
+      'saving creates and kills nothing');
+    assert(fake._api._panels.size === 3, 'and changes no live arrangement');
+    assert(/saved/i.test(statusText(host)) && !/pty\d/.test(statusText(host)),
+      'the status reports success without naming a pane');
+  }
+  {
+    // A save whose pane sets disagree must never reach main — so a previously saved VALID
+    // arrangement cannot be replaced by an incoherent one.
+    const { host, instance } = makeRestoreScenario(THREE);
+    // Own a pane Dockview does not have a panel for: toJSON and ownership now disagree.
+    instance.addPane('pty2', 'terminal');           // duplicate add is refused, ownership unchanged
+    host._paneElements.set('pty3', { tagName: 'div', children: [], parentNode: null, isConnected: true,
+      appendChild(c) { this.children.push(c); c.parentNode = this; return c; },
+      removeChild(c) { this.children = this.children.filter((x) => x !== c); },
+      querySelector() { return null; }, getBoundingClientRect() { return { width: 1, height: 1 }; },
+      style: {}, dataset: {}, setAttribute() {}, removeAttribute() {}, className: '', id: '', textContent: '',
+      get offsetParent() { return this.parentNode || {}; } });
+    const savedBefore = host._calls.saved.length;
+    // Force the disagreement: the adapter owns pty3 but Dockview never got a panel for it.
+    instance.addPane('pty3', 'terminal');
+    host._dockview._api._panels.delete('pty3');
+    const result = await instance.saveArrangement();
+    assert(result.ok === false, 'a workspace whose pane sets disagree refuses to save');
+    assert(result.reason === R.LIVE_NOT_SAVED || result.reason === R.PANE_NOT_MOUNTED,
+      `by name (saw ${result.reason})`);
+    assert(host._calls.saved.length === savedBefore,
+      'main was NEVER called, so no previously saved arrangement could be overwritten');
+  }
+  {
+    // Main refusing is surfaced, not swallowed.
+    const { host, instance } = makeRestoreScenario(THREE);
+    host._saveResult = { ok: false, reason: R.WRITE_FAILED };
+    const result = await instance.saveArrangement();
+    assert(result.ok === false && result.reason === R.WRITE_FAILED, 'main\'s refusal is returned by name');
+    assert(/unchanged/i.test(statusText(host)),
+      'and the status says any previously saved arrangement is unchanged');
   }
 
-  process.stdout.write('\nR5: Clear Saved Layout touches metadata only, and says so\n');
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  process.stdout.write('\nRESET CURRENT ARRANGEMENT re-arranges, and creates nothing\n');
+  // ---------------------------------------------------------------------------
   {
+    const { fake, host, instance, paneEl } = makeRestoreScenario(THREE);
+    const elementsBefore = new Map(THREE.map((id) => [id, paneEl(id)]));
+    const createdBefore = host._calls.created.length;
+    const loadsBefore = host._calls.saved.length;
+
+    const result = await instance.resetArrangement();
+
+    assert(result.ok === true, 'the reset succeeds');
+    assert(host._calls.created.length === createdBefore,
+      'ZERO terminals were created — the prototype default-workspace behaviour is gone');
+    assert(host._calls.closePane.length === 0, 'ZERO terminals were closed');
+    assert(host._calls.saved.length === loadsBefore, 'no file was written');
+    assert(host._calls.cleared === 0, 'and none was deleted');
+    assert(instance.ownedPaneIds().sort().join(',') === 'library,pty1,pty2',
+      'the EXACT live pane set is preserved');
+    for (const id of THREE) {
+      assert(paneEl(id) === elementsBefore.get(id), `${id}: the element object is identical`);
+      assert(instance.paneIsMounted(id) === true, `${id}: and it is mounted`);
+    }
+    assert(host._calls.docked === 1 && host._calls.undocked === 0,
+      'the Library was neither re-docked nor sent home — it was already open and stays open');
+    // The documented default: one horizontal row, canonical order, every pane visible.
+    const applied = fake._api.toJSON();
+    const ids = layoutPolicy.paneIdsFromLayout(applied);
+    assert(JSON.stringify(ids.ordered) === JSON.stringify(['pty1', 'pty2', 'library']),
+      `panes are arranged in canonical order (saw ${JSON.stringify(ids.ordered)})`);
+    assert(/reset/i.test(statusText(host)) && !/pty\d/.test(statusText(host)),
+      'the status reports the reset without naming a pane');
+  }
+  {
+    // An empty workspace has nothing to re-arrange, and must NOT be an excuse to create panes.
     const fake = makeFakeDockview();
     const host = makeHost(); host._dockview = fake;
     const instance = adapter.activate(host);
-    await instance.useDefaultLayout();
+    const result = await instance.resetArrangement();
+    assert(result.ok === false && result.reason === R.NO_LIVE_PANES,
+      `an empty workspace refuses as ${R.NO_LIVE_PANES} (saw ${result.reason})`);
+    assert(host._calls.created.length === 0, 'and creates NOTHING');
+    assert(fake._addPanelCalls.length === 0, 'not even a pane');
+  }
+  {
+    // A failed reset rolls back to the prior topology, exactly like a failed restore.
+    const { fake, host, instance, paneEl } = makeRestoreScenario(THREE);
+    const elementsBefore = new Map(THREE.map((id) => [id, paneEl(id)]));
+    fake._failFromJSON('after-clear', { once: true });
+
+    const result = await instance.resetArrangement();
+    assert(result.ok === false && result.reason === R.APPLY_THREW, 'the failure is bounded');
+    assert(result.rollback === 'restored', 'and the prior topology was put back');
+    assert(instance.ownedPaneIds().length === 3, 'every pane is still owned');
+    for (const id of THREE) {
+      assert(paneEl(id) === elementsBefore.get(id), `${id}: still the identical element object`);
+      assert(instance.paneIsMounted(id) === true, `${id}: and mounted again`);
+    }
+    assert(host._calls.closePane.length === 0 && host._calls.created.length === 0,
+      'a failed reset creates and kills nothing');
+  }
+
+  // ---------------------------------------------------------------------------
+  process.stdout.write('\nCLEAR SAVED ARRANGEMENT touches metadata only, and says so\n');
+  // ---------------------------------------------------------------------------
+  {
+    const { fake, host, instance } = makeRestoreScenario(THREE);
     const ownedBefore = instance.ownedPaneIds().sort().join(',');
     const panesBefore = fake._addPanelCalls.length;
 
-    const r = await instance.resetLayout();
+    const r = await instance.clearSavedArrangement();
     assert(r && r.ok === true, 'the saved metadata was cleared');
+    assert(host._calls.cleared === 1, 'main\'s reset was called exactly once');
     assert(instance.ownedPaneIds().sort().join(',') === ownedBefore, 'no pane was closed');
     assert(fake._addPanelCalls.length === panesBefore, 'no pane was created');
     assert(host._calls.closePane.length === 0, 'no PTY was killed');
-    assert(/Live panes were NOT changed/.test(statusText(host)),
+    assert(fake._api._panels.size === 3, 'and fromJSON was never called — the arrangement is untouched');
+    assert(/live panes were NOT changed/i.test(statusText(host)),
       'the status states explicitly that live panes were unchanged');
+  }
+  {
+    // An already-absent file is a SUCCESSFUL no-op, distinguished in the status.
+    const { host, instance } = makeRestoreScenario(THREE);
+    host._resetResult = { ok: true, existed: false };
+    const r = await instance.clearSavedArrangement();
+    assert(r.ok === true && r.existed === false, 'an already-absent file still succeeds');
+    assert(/no saved arrangement to clear/i.test(statusText(host)),
+      'and the status distinguishes it from an actual deletion');
+  }
+  {
+    const { host, instance } = makeRestoreScenario(THREE);
+    host._resetResult = { ok: false, reason: R.WRITE_FAILED };
+    const r = await instance.clearSavedArrangement();
+    assert(r.ok === false && r.reason === R.WRITE_FAILED, 'a refusal from main is surfaced by name');
+    assert(/live panes were NOT changed/i.test(statusText(host)),
+      'and still states that live panes were unchanged');
+  }
+
+  // ---------------------------------------------------------------------------
+  process.stdout.write('\nEXACTLY ONE layout operation may run at a time\n');
+  // ---------------------------------------------------------------------------
+  {
+    const { host, instance } = makeRestoreScenario(THREE);
+    // Hold main's load open so the restore is genuinely mid-flight when the second call arrives.
+    let release = null;
+    const gate = new Promise((resolve) => { release = resolve; });
+    host._loadResult = null;
+    host.bridge.loadLayout = async () => { await gate; return { ok: true, envelope: envelopeFor(THREE) }; };
+
+    const first = instance.restoreArrangement();
+    assert(instance.busyOperation() === 'restore', 'the first operation claims the layout');
+
+    // Every other operation, including a second restore, is refused while it is held.
+    const overlapping = await Promise.all([
+      instance.restoreArrangement(),
+      instance.saveArrangement(),
+      instance.resetArrangement(),
+      instance.clearSavedArrangement(),
+    ]);
+    for (const r of overlapping) {
+      assert(r.ok === false && r.reason === R.BUSY,
+        `an overlapping operation is refused as ${R.BUSY} (saw ${r.reason})`);
+    }
+    assert(host._calls.saved.length === 0, 'the overlapping save never reached main');
+    assert(host._calls.cleared === 0, 'nor did the overlapping clear');
+    assert(/still running/i.test(statusText(host)), 'and the refusal is visible in the status');
+
+    release();
+    const result = await first;
+    assert(result.ok === true, 'the first operation completes normally');
+    assert(instance.busyOperation() === null, 'and releases the layout when it finishes');
+
+    // After it releases, a normal operation works again — the busy state is not sticky.
+    const after = await instance.clearSavedArrangement();
+    assert(after.ok === true, 'a later operation is accepted once the layout is free');
+  }
+  {
+    // The release is in `finally`: an operation that throws internally must not deadlock the UI.
+    const { host, instance } = makeRestoreScenario(THREE);
+    host.bridge.loadLayout = async () => { throw new Error('synthetic bridge explosion'); };
+    let threw = false;
+    try { await instance.restoreArrangement(); } catch { threw = true; }
+    assert(threw === true, 'a throwing bridge propagates rather than being silently swallowed');
+    assert(instance.busyOperation() === null,
+      'and the busy state is released anyway — the four controls are never left permanently dead');
+    const after = await instance.clearSavedArrangement();
+    assert(after.ok === true, 'the next operation is accepted');
+  }
+
+  // ---------------------------------------------------------------------------
+  process.stdout.write('\nthe four controls are enabled, stable, and create nothing\n');
+  // ---------------------------------------------------------------------------
+  {
+    const { host, instance } = makeRestoreScenario(THREE);
+    assert(JSON.stringify(instance.controlIds())
+      === JSON.stringify(['dvSaveArrangement', 'dvRestoreArrangement', 'dvResetArrangement', 'dvClearSaved']),
+      `the four stable control ids are exactly as documented (saw ${JSON.stringify(instance.controlIds())})`);
+    assert(typeof instance.saveArrangement === 'function'
+      && typeof instance.restoreArrangement === 'function'
+      && typeof instance.resetArrangement === 'function'
+      && typeof instance.clearSavedArrangement === 'function',
+      'all four operations are on the instance surface');
+    // The prototype's terminal-multiplying routine is GONE from the surface, not merely unbound.
+    assert(instance.useDefaultLayout === undefined,
+      'NEGATIVE CONTROL: useDefaultLayout does not exist — nothing can reach a pane-creating layout op');
+    assert(host._calls.created.length === 0, 'and standing the controls up created nothing');
   }
 
   process.stdout.write('\nR5: closing every terminal returns live and owned counts to zero\n');
@@ -781,7 +1130,7 @@ process.stdout.write('\nevent shapes stay distinct per handler (they genuinely d
     assert(instance.ownedPaneIds().length === 0, 'the adapter owns nothing after closing everything');
   }
 
-  await r5RestoreKeepsLibraryDocked();
+  await restoreKeepsLibraryDocked();
 
   process.stdout.write('\nthe adapter has NO audio contract at all — it cannot move the controls\n');
   // -------------------------------------------------------------------------

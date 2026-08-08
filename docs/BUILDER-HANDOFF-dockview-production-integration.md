@@ -1,14 +1,22 @@
-# Builder Handoff — Dockview Production Integration (Phase B)
+# Builder Handoff — Dockview Production Integration (Phases B and C)
 
 Branch: `feature/dockview-production-integration`
 Fork-point SHA: `1dce24c141e929c04122e8b2998277d4c2d0c728`
 Pre-merge main SHA: `1dce24c141e929c04122e8b2998277d4c2d0c728`
-Tip SHA: the docs commit that immediately follows `97394588c2017ea57b5f394b17edb773dc618106` (see § 3)
+Phase-B implementation: `97394588c2017ea57b5f394b17edb773dc618106`
+Phase-C implementation: `__PHASE_C_SHA__`
+Tip SHA: the docs commit that immediately follows the Phase-C implementation (see PART TWO § C1)
 Merge commit SHA: Pending until merge
 
-**Status: PHASE B GREEN — FINAL FULL-CLASS REVIEW NOT YET REQUESTED**
+**Status: PHASE C GREEN — FINALIZATION AND FULL-CLASS REVIEW NOT YET REQUESTED**
+
+This document has two parts. **PART ONE** (§§ 1–12) is the Phase-B record, preserved as written;
+where Phase C superseded a Phase-B fact it is marked there and corrected in PART TWO.
+**PART TWO** (§§ C1–C11) is Phase C.
 
 ---
+
+# PART ONE — PHASE B
 
 ## 1. OSS procurement record and verdict
 
@@ -331,6 +339,312 @@ Reviewer verdict: Not yet requested.
 
 Reviewer verdict source: n/a
 
+---
+
+# PART TWO — PHASE C: TRUSTED LAYOUT PERSISTENCE
+
+## C1. What this phase is, and its commits
+
+**Phase-C invariant: four honest production layout operations, and no layout operation can create,
+close, restart, resume, or silently strand a PTY.** All state stays main-owned, bounded, versioned,
+schema-validated, and content-free in logs. Nothing runs automatically at startup.
+
+Same binding verdict as PART ONE § 1 — `docs/OSS-PROCUREMENT-dockview.md`, ADOPT dockview@7.0.4.
+
+Phase C is TWO commits, because a commit cannot contain its own SHA:
+
+1. `__PHASE_C_SHA__` — all of the Phase-C code and tests below.
+2. the immediately following `docs(dockview-production)` commit — this handoff, carrying that SHA.
+   It is the branch tip and touches nothing but this file.
+
+Starting checkpoint, verified before any edit: branch tip `79829f3982232f052e564ee1db023246aa3080de`,
+Phase-B implementation `9739458` present, `f5a0e54` / `3a61e56` / `3ab0a23` unchanged ancestors,
+worktree clean, `main == origin/main == 1dce24c1`, no Electron process running, app baseline
+**2,508/0** re-measured, Pester baseline **955/0/0**.
+
+## C2. Shared-policy architecture
+
+Phase B validated saved layout state in MAIN only. The renderer then handed main's output straight
+to `fromJSON`. That is the gap Phase C closes — and the only honest way to close it is with the
+SAME code on both sides, not a second implementation that can drift.
+
+```
+             app/dockview-layout-policy.js          <- THE one schema authority
+             pure · no fs · no path · no Electron · no DOM · nothing at top level
+                    |                                        |
+        require()   |                                        |  <script src>
+                    v                                        v
+   app/dockview-layout-store.js                  window.ccDockviewLayoutPolicy
+   (FILE boundary only: fixed path, byte                     |
+    bound, lstat, reparse refusal, strict                    v
+    UTF-8, atomic write) ------ main IPC ----->  app/renderer/dockview-prototype.js
+                                                 validates immediately before EVERY fromJSON
+```
+
+* **One validator, proven by object identity.** `dockview-layout-store.js` re-exports the policy's
+  actual function objects, and `dockview-layout-policy.test.js` asserts
+  `store.validateLayout === policy.validateLayout` for all seven shared functions plus the reason
+  set. It also evaluates the same source file in a bare VM with a `window` and no `module` — the
+  renderer's exact environment — and checks that instance agrees with the CommonJS one on the real
+  fixture and on a deliberately broken one.
+* **Exactly one module defines the schema.** `dockview-default-path.test.js` scans all eight
+  candidate files for `function validateLayout(` and asserts the list is exactly
+  `["dockview-layout-policy.js"]`.
+* **Bounded pure operations provided:** `validateLayout`, `validateEnvelope`, `buildEnvelope`,
+  `paneIdsFromLayout` (validates first, then returns grid-ordered + sorted IDs from the SAME
+  traversal), `comparePaneSets`, `canonicalPaneOrder`, `buildDefaultArrangement`, plus the closed
+  `REASON` set, `REASON_CODES`, and every bound.
+* **The renderer validates immediately before EVERY `fromJSON`.** `api.fromJSON(` appears exactly
+  ONCE in the adapter, inside `applyValidatedLayout`, which validates first and returns a bounded
+  reason instead of applying. That single call site serves all four apply paths: saved-layout
+  restore, rollback to the pre-operation snapshot, Reset, and rollback after a failed reset.
+* **A missing or unparsed policy is a refusal, not a degraded mode.** `ccDockviewLayoutPolicy` is a
+  REQUIRED browser export, the script list loads it before the adapter, and the bootstrap harness
+  drives a `missing-layout-policy` scenario that lands on the usable classic grid.
+
+## C3. The four operation contracts
+
+| Operation | Control id | Reads file | Writes file | Calls `fromJSON` | Can create/kill a PTY |
+| --- | --- | --- | --- | --- | --- |
+| Save Arrangement | `dvSaveArrangement` | no | yes | no | **no** |
+| Restore Saved Arrangement | `dvRestoreArrangement` | yes | no | once (+ once on rollback) | **no** |
+| Reset Current Arrangement | `dvResetArrangement` | **no** | **no** | once (+ once on rollback) | **no** |
+| Clear Saved Arrangement | `dvClearSaved` | no | deletes only | **no** | **no** |
+
+**Save** — `api.toJSON()` → validate through the shared policy → pane-ID set must exactly equal the
+adapter's owned set → every owned pane must be mounted → only then main, which validates again
+before writing. A refusal at any step never reaches the IPC, so a previously saved VALID arrangement
+cannot be replaced by an incoherent one.
+
+**Restore** — busy state → load → validate the WHOLE envelope again in the renderer → exact set
+comparison → capture live pane records by object identity, the current layout, and the active pane →
+validate the captured rollback layout (and refuse if it is unusable, because applying a change we
+cannot undo is worse than not applying it) → ONE `fromJSON` → verify four things (every expected
+pane mounted, no unexpected panel, every element the ORIGINAL object, terminal/Library ownership
+counts unchanged) → refit through the Dockview owner → report. No retry, repair, fallback layout,
+terminal creation, or continuation.
+
+**Reset Current Arrangement** — the same transactional machinery applied to a layout computed from
+the LIVE ownership map. No file is read, written, or deleted.
+
+**Clear Saved Arrangement** — main's reset only. An already-absent file is a visible SUCCESSFUL
+no-op, distinguished in the status by main's `existed` flag.
+
+### The deterministic default arrangement (documented, and pinned in tests)
+
+**A single horizontal row of groups, one pane per group, in canonical order, first pane active,
+every node `size: 100`.**
+
+* Canonical order: terminals by ASCENDING NUMERIC pane ID (so `pty2` precedes `pty10`, which a plain
+  string sort gets wrong — pinned as its own negative control), then the Library singleton last.
+* One pane per group, not one tabbed group: every live pane stays VISIBLE. A single tab group would
+  be equally deterministic and would hide every pane but one, which reads as "the panes vanished".
+* `size: 100` everywhere because dockview@7.0.4 lays out proportionally and re-normalises through
+  `gridview.layout(width, height)` immediately after deserializing. The committed fixture confirms
+  sizes need not sum to `width`: it carries two leaves of `size: 100` under a `width: 100` grid.
+* `buildDefaultArrangement` is a pure function of the panes it is handed and self-checks its own
+  output against the shared validator, so it cannot produce state the policy would then refuse.
+
+**`useDefaultLayout()` is GONE, not disabled.** The prototype's control created two terminals and
+the Library every time it ran. The identifier appears nowhere in the adapter, it is absent from the
+instance surface, and the adapter never calls the host's terminal creator at all.
+
+## C4. Exact live-pane equality (the § 3 matrix)
+
+The two lists are derived INDEPENDENTLY — saved from the validated saved layout via
+`paneIdsFromLayout`, live from the adapter's own `hostedPanes` ownership map via `ownedIds()`.
+Deriving both from the saved layout would make the comparison a tautology.
+
+| Saved | Live | Result | Reason code |
+| --- | --- | --- | --- |
+| `pty1,pty2,library` | `library,pty2,pty1` | **allowed** | — order alone is never a mismatch |
+| `[]` | `[]` | **allowed** | — |
+| `pty1,pty2` | `pty1` | refused | `saved-panes-not-live` |
+| `pty1` | `pty1,pty2` | refused | `live-panes-not-saved` |
+| `pty1,pty3` | `pty1,pty2` | refused | `pane-set-mismatch` (equal counts, different IDs) |
+| `pty1,pty1` | `pty1` | refused | `duplicate-pane-id` |
+| non-array / bad ID / oversize | any | refused | `pane-set-invalid` |
+
+The UI reports COUNTS and a bounded code. It never echoes a pane ID — asserted by regex on every
+refusal result and on every status string, in both the pure suite and the real-app harness.
+
+## C5. Transactional failure and rollback evidence
+
+Proven in `dockview-adapter-lifecycle.test.js` against a fake that reproduces the vendor's real
+`fromJSON` lifecycle (clear, then rebuild through `createComponent` + `init()`), with a
+TRANSIENT-vs-PERSISTENT fault distinction — a transient fault is a saved layout the vendor chokes on
+while the snapshot Dockview itself serialized still applies; a persistent fault breaks the
+rollback's own `fromJSON` too.
+
+| Fault | Detected as | Rollback | PTYs created / killed |
+| --- | --- | --- | --- |
+| throw after `clear()` | `layout-apply-threw` | `restored` | 0 / 0 |
+| throw mid-rebuild | `layout-apply-threw` | `restored` | 0 / 0 |
+| a pane SILENTLY dropped (no throw) | `layout-apply-incomplete` | `restored` | 0 / 0 |
+| an UNEXPECTED extra panel | `unexpected-panel-after-apply` | `restored` | 0 / 0 |
+| persistent fault — rollback fails too | `layout-apply-incomplete` | **`incomplete`, and said so** | 0 / 0 |
+| unusable rollback snapshot | `rollback-snapshot-invalid` | never applied at all | 0 / 0 |
+| Reset: throw after `clear()` | `layout-apply-threw` | `restored`, identities intact | 0 / 0 |
+
+There is deliberately **no second rollback strategy**. The prototype fell back to clearing and
+re-adding every pane through `addPane`, which changes the topology and re-docks the Library — a
+REPAIR, not a rollback. An honest "the previous arrangement could not be fully put back" beats a
+quiet substitution, so an incomplete rollback is reported and pinned.
+
+**Element identity across a real `fromJSON`** is proven in the application harness, not just the
+fake: each live `.term-pane` is stamped with a random tag while the panes are in separate groups,
+and the same tags are present after Restore and after Reset.
+
+## C6. Honest UI and concurrency
+
+Four ENABLED controls with stable ids replace Phase B's three disabled placeholders; the
+`data-phase="c"` marker is gone and its absence is a negative control. Status text distinguishes:
+saved · restored · current arrangement reset · saved arrangement cleared · refused with a bounded
+reason · rollback succeeded · rollback incomplete · an operation already running.
+
+Exclusivity has **two independent lines of defence**, and both are measured in the real app:
+
+1. **The DOM.** All four controls are disabled for the duration and the status names the running
+   operation. Twelve further clicks during a 600 ms held IPC fire no handler at all.
+2. **The adapter.** The harness then forces the buttons enabled and clicks again, so the handlers
+   really do run mid-flight — `runExclusive` refuses each with `layout-operation-in-progress`
+   (4 bounded refusals logged) and the status says which operation holds the layout.
+
+Across that burst, main saw exactly **six** loads — the five malformed restores plus the one real
+one — and **zero** extra resets. The busy flag is released in `finally`, proven by a bridge that
+throws: the operation propagates, `busyOperation()` returns to null, and the next operation is
+accepted.
+
+## C7. Exact files
+
+New:
+
+| Path | What it is |
+| --- | --- |
+| `app/dockview-layout-policy.js` | THE shared schema authority. Pure, dependency-free, IIFE-enclosed, dual-exported (CommonJS + `window.ccDockviewLayoutPolicy`). |
+| `app/dockview-layout-policy.test.js` | Its pure suite. **178 assertions.** |
+
+Modified:
+
+| Path | Change |
+| --- | --- |
+| `app/dockview-layout-store.js` | Reduced to the FILE boundary; every schema decision delegated to the policy and re-exported. All guards preserved verbatim. `reset()` now reports `existed`. |
+| `app/renderer/dockview-prototype.js` | The four operations, `runExclusive`, the single `applyValidatedLayout` call site, `captureWorkspace` / `verifyApplied` / `rollbackWorkspace` / `applyAsTransaction`, the four enabled controls; `useDefaultLayout` deleted; `ccDockviewLayoutPolicy` added to the required exports. |
+| `app/renderer/app.js` | `../dockview-layout-policy.js` added to `DOCKVIEW_SCRIPTS`, before the adapter. |
+| `app/main.js` | `dockview-layout-load` returns the WHOLE envelope so the renderer can validate schema version, package identity and timestamp too; `dockview-layout-reset` returns `existed`. |
+| `app/package.json` | Wired `dockview-layout-policy.test.js` into the `test` script. |
+| `app/dockview-default-path.test.js` | Phase-C structure: one-validator, prototype-file ban, the four contracts, single `fromJSON` site, exclusivity, controls. 295 → **371**. |
+| `app/dockview-bootstrap-harness.js` / `.test.js` | Six-script chain, `missing-layout-policy` scenario, four-enabled-control expectations. 182 → **203**. |
+| `app/dockview-app-harness.js` / `dockview-app-integration.test.js` | Four Phase-C scenarios driving the real controls against an in-memory store running the real validators. 180 → **287**. |
+| `app/renderer/dockview-adapter-lifecycle.test.js` | Real layout shapes throughout, the set matrix, malformed state, the transaction/rollback table, the four operations, exclusivity. 203 → **338**. |
+
+No PowerShell changed, so the Pester total is unchanged.
+
+## C8. Exact gate results
+
+| Suite | Result |
+| --- | --- |
+| `dockview-layout-policy` (shared policy) | **178 passed, 0 failed** |
+| `dockview-layout-store` | 124 passed, 0 failed |
+| `dockview-default-path` | **371 passed, 0 failed** |
+| `dockview-app-integration` (application harness) | **287 passed, 0 failed** |
+| `dockview-bootstrap` | **203 passed, 0 failed** |
+| `dockview-adapter-lifecycle` | **338 passed, 0 failed** |
+| `dockview-package-identity` | 47 passed, 0 failed |
+| `dockview-fit-policy` / `dockview-panel-policy` | 59 / 71 passed, 0 failed |
+| `test-reachability` | 6 passed, 0 failed |
+| terminal / Library / Copy Output / audio focused suites | `pane-maximize` 40, `library-view` 36, `library-ipc` 30, `report-followup` 40, `term-copy` 53, `clipboard-consumer` 30, `stt-target-lock` 16, `stt` 19, `tts` 47 — all 0 failed |
+
+| Gate | Result |
+| --- | --- |
+| **Full app gate** (`npm test`, 44 suites) | **GREEN — 3,025 assertions, 0 failed** |
+| **Full Pester gate** (`scripts/run-pester.ps1`, 35 suites) | **GREEN — 955 passed, 0 failed, 0 skipped**, 138.27s |
+| Reachability | GREEN — the new suite is wired into `app/package.json` |
+| Node syntax | `node --check` on all 12 changed/new `.js` files — GREEN |
+| PowerShell parsing | `[Parser]::ParseFile` over every tracked `.ps1`/`.psm1` — **0 parse errors** |
+| Whitespace | `git diff --check` — clean |
+| Package identity / no-React | 47 passed, 0 failed; `dockview` pinned to exactly `7.0.4` |
+| Dockview tripwire | `remoteRequestCount: 0` (file mainFrame ×1, script ×1) |
+| Application-harness network census | `remoteRequestCount: 0` across all fourteen scenarios |
+
+### Assertion-count reconciliation from 2,508/0
+
+| Suite | Phase B | Phase C | Δ | Why |
+| --- | --- | --- | --- | --- |
+| `dockview-layout-policy` | — | 178 | **+178** | New suite: identity of the shared functions, purity/enclosure, the closed reason set, ID extraction, the set matrix, canonical order, the default arrangement. |
+| `dockview-default-path` | 295 | 371 | **+76** | One-validator scan, prototype-file ban, store-boundary guards, the four contracts, single `fromJSON` site, exclusivity, control ids; the `useDefaultLayout` / placeholder assertions became negative controls. |
+| `dockview-bootstrap` | 182 | 203 | **+21** | Six-script chain, the `missing-layout-policy` scenario, four-enabled-control expectations. |
+| `dockview-app-integration` | 180 | 287 | **+107** | Four new scenarios: the four operations end to end, the exact-set matrix in the real app, malformed state, and both concurrency defence lines. |
+| `dockview-adapter-lifecycle` | 203 | 338 | **+135** | Real layout shapes, the set matrix, nine malformed-state cases, the seven-row transaction table, save/reset/clear contracts, exclusivity. |
+| all other suites | 1,648 | 1,648 | 0 | Untouched. |
+| **Total** | **2,508** | **3,025** | **+517** | 178 + 76 + 21 + 107 + 135 = **+517**. ✔ |
+
+### The prototype evidence file
+
+`%APPDATA%\command-center\dockview-prototype-layout.json` — size 1,653 bytes, mtime **2026-08-07
+12:32**, MD5 `12b7911f2cf1fe9cb548dfe5fc1416f2`, unchanged by every gate in this phase. The
+production file `dockview-layout.json` **was never created** in userData: the application harness
+owns an in-memory store, so a gate run cannot touch the real path.
+
+## C9. Negative controls (against the pre-Phase-C tip `79829f3`)
+
+Run by checking `79829f3` into a throwaway detached worktree, copying the new suites in, and running
+them. The worktree was removed afterwards and `git worktree list` is back to its prior contents.
+
+| # | Control | Result — it DOES fail against `79829f3` |
+| --- | --- | --- |
+| 1 | **Missing exact-set comparison** | `dockview-default-path` **314✓/57✗**: "Restore validates the WHOLE envelope again in the renderer", "and before capturing the rollback target", "the LIVE set comes from the adapter's own ownership map" all fail. `dockview-layout-policy` **169✓/9✗**: the store re-exports none of the shared functions, including `comparePaneSets`. |
+| 2 | **Renderer calling `fromJSON` without immediate validation** | `api.fromJSON appears exactly ONCE in the adapter (saw 2)` fails, as do "it lives inside applyValidatedLayout", "which validates through the SHARED policy IMMEDIATELY BEFORE applying", and "a validation failure returns the bounded reason and never reaches fromJSON". |
+| 3 | **Reset creating terminals** | "NEGATIVE CONTROL: `useDefaultLayout` appears nowhere in the adapter code" fails, as do its refusal-reason and `createTerminalPane()` counterparts; `dockview-adapter-lifecycle` asserts `instance.useDefaultLayout === undefined`. |
+| 4 | **Enabled overlapping operations** | All four "runs under runExclusive" assertions fail. In the real app the harness reads three controls with **no ids, all three disabled**, and no Reset control at all — every Phase-C click returns `control-missing`. |
+| 5 | **Restore with extra live panes** | **Behavioural probe** against the `79829f3` adapter: two live panes, a saved layout naming one. Result `{"ok":true}` — the restore reported SUCCESS while leaving `pty2` owned with **no panel** (`panels after: ["pty1"]`, `mounted: ["pty1"]`): a live terminal stranded and invisible. Phase C refuses this as `live-panes-not-saved` before `fromJSON`. |
+| 6 | **Content-bearing refusal text** | **Behavioural probe**: the `79829f3` refusal reads `"Restore refused: 1 saved pane(s) are not open (pty2). Open them first…"` — a pane ID in the UI. Phase C's equivalent reads `"Restore refused (saved-panes-not-live): 1 saved pane(s) are not open. Open them first…"`, and every refusal string is regex-checked for `pty\d`. |
+
+Aggregate against `79829f3`: `dockview-bootstrap` **187✓/14✗**; `dockview-adapter-lifecycle` aborts
+with `TypeError: instance.restoreArrangement is not a function`; `dockview-app-integration` aborts
+because the pre-Phase-C controls cannot save anything for the malformed scenario to corrupt.
+
+## C10. Deviations and limitations
+
+* **One deliberate contract change beyond the letter of the work order:** `dockview-layout-load` now
+  returns the WHOLE envelope instead of `{ layout, savedAt }`. The order requires the renderer to
+  validate before `fromJSON`, and validating the ENVELOPE (not just the layout) also checks the
+  schema version, package identity and timestamp — which unwrapping in main would silently discard.
+  `dockview-layout-reset` likewise now returns `existed`, which is what lets Clear distinguish a
+  deletion from an equally successful no-op.
+* **`Reset Current Arrangement` collapses splits into an even row.** That is what "reset" means here,
+  and it is stated in the button's own tooltip and in the status text. It is not a no-op for a user
+  who liked their arrangement — but it is deterministic, reversible by Restore if they saved one,
+  and it never closes anything.
+* **Escape still does not exit a Dockview maximize**, and **`switchTab` still does not clear one**
+  (both carried over from Phase B, § 9).
+* **The application harness owns an in-memory saved-layout store.** It runs the real
+  `dockview-layout-store` validators on both sides of that store, so the renderer is proven to be
+  talking to a validating boundary — but the real `userData` file path itself is exercised only by
+  `dockview-layout-store.test.js` (which uses temp directories), never by a gate run.
+* **Phase-C additions to the closed reason set** (`pane-set-invalid`, `saved-panes-not-live`,
+  `live-panes-not-saved`, `pane-set-mismatch`, `no-live-panes`, `pane-not-mounted`,
+  `layout-apply-threw`, `layout-apply-incomplete`, `unexpected-panel-after-apply`,
+  `pane-element-identity-changed`, `ownership-count-mismatch`, `rollback-snapshot-invalid`,
+  `layout-operation-in-progress`) are new codes, not new content: each is asserted to be a short
+  kebab-case string inside `REASON_CODES`.
+* **Retained prototype-era internal names** are unchanged from PART ONE § 7 —
+  `renderer/dockview-prototype.js`, `window.ccDockviewPrototype`, the
+  `.dockview-prototype-*` CSS class family, and the `dockview-prototype: Library home` placeholder
+  comment. The new module deliberately does NOT inherit that prefix: it is
+  `dockview-layout-policy.js` / `ccDockviewLayoutPolicy`.
+* **No human acceptance was performed**, and none is requested by this handoff.
+
+## C11. Recommended review focus for Phase C
+
+1. `applyValidatedLayout` being the only `fromJSON` call site, and whether any future path could
+   bypass it.
+2. `comparePaneSets` and its two independent input sources — the tautology this exists to prevent.
+3. `rollbackWorkspace`: one attempt, no repair, and the honesty of `restored` vs `incomplete`.
+4. `buildDefaultArrangement`: that it can only ever describe panes it was handed.
+5. `runExclusive`'s `finally` release, and the two defence lines against overlapping operations.
+6. The `dockview-layout-load` envelope contract change in `main.js`.
+
 ## Review-diff rule
 
 - Before merge, use `git diff main...<tip>`.
@@ -346,7 +660,7 @@ Pinned `.agent-review-*.diff` files are local review artifacts and must remain g
 
 ---
 
-**STATUS: PHASE B GREEN — FINAL FULL-CLASS REVIEW NOT YET REQUESTED**
+Not started, and not authorised by this handoff: finalization, final review artifacts, review
+request, human acceptance, merge, push, pane-status (R4) work, unrelated cleanup.
 
-Not started, and not authorised by this handoff: persistence Phase C, final review artifacts,
-review request, human acceptance, merge, push.
+**PHASE C GREEN — FINALIZATION AND FULL-CLASS REVIEW NOT YET REQUESTED**

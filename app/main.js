@@ -407,19 +407,26 @@ app.whenReady().then(() => {
     ipcMain.handle('dockview-layout-load', (e) => {
       const gate = dockviewGate.assess(e);
       if (!gate.ok) return refuseDockview('dockview-layout-load', gate.reason);
-      // Validated after reading and before returning over IPC (§ 9). An invalid file is left on
-      // disk untouched for diagnosis; the renderer gets a reason code and loads the default layout.
+      // Validated after reading and before returning over IPC. An invalid file is left on disk
+      // untouched for diagnosis; the renderer gets a bounded reason code and changes nothing.
       const result = dockviewStore.load();
       if (!result.ok) return refuseDockview('dockview-layout-load', result.reason);
-      return { ok: true, layout: result.envelope.layout, savedAt: result.envelope.savedAt };
+      // The WHOLE envelope crosses, not just its layout. Phase C validates again in the renderer
+      // immediately before `fromJSON`, using the same shared policy, and validating the envelope
+      // there checks the schema version, package identity and timestamp too — which unwrapping here
+      // would silently discard.
+      return { ok: true, envelope: result.envelope };
     });
 
     ipcMain.handle('dockview-layout-reset', (e) => {
       const gate = dockviewGate.assess(e);
       if (!gate.ok) return refuseDockview('dockview-layout-reset', gate.reason);
+      // Clear Saved Arrangement. Deletes ONLY this store's own file; touches no live pane and no
+      // other file. `existed` lets the renderer distinguish "deleted it" from the equally
+      // successful "there was nothing to delete".
       const result = dockviewStore.reset();
       if (!result.ok) return refuseDockview('dockview-layout-reset', result.reason);
-      return { ok: true };
+      return { ok: true, existed: result.existed === true };
     });
 
     console.log('[dockview-layout] layout IPC registered (production layout engine: dockview 7.0.4).');
