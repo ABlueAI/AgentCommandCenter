@@ -79,7 +79,9 @@ const { createLayoutStore } = require('./dockview-layout-store');
 //
 // The polarity is deliberately inverted from the prototype branch. There the flag turned Dockview
 // ON and its absence was the safe default; here the flag turns Dockview OFF. That means the DEFAULT
-// path is now the one that must be proven, which is what `dockview-production-path.test.js` does.
+// path is now the one that must be proven: `dockview-app-integration.test.js` proves it in a real
+// Electron renderer running the real app, and `dockview-default-path.test.js` pins the code shape
+// (including this polarity) that keeps it true.
 //
 // This is a main-process decision read once, at startup, from this process's own argv. It is not a
 // setting, not an env var, and not anything the renderer can influence: a renderer query string, a

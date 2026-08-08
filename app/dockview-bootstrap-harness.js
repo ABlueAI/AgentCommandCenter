@@ -1,15 +1,21 @@
-// Dockview BOOTSTRAP harness — real-browser regression gate (prototype branch only).
+// Dockview BOOTSTRAP harness — real-browser regression gate for the adapter's own bootstrap.
 //
-// WHY THIS EXISTS, AND WHY IT IS NOT THE TRIPWIRE.
+// WHY THIS EXISTS, AND WHY IT IS NEITHER OF THE OTHER TWO HARNESSES.
 //
-// `dockview-tripwire.js` loads the VENDOR BUNDLE AND NOTHING ELSE, on purpose: it is the evidence
-// that network behaviour is attributable to Dockview rather than to our integration code. It must
-// stay that way, so this is a separate harness with a separate page, partition, and purpose.
+//   * `dockview-tripwire.js` loads the VENDOR BUNDLE AND NOTHING ELSE, on purpose: it is the
+//     evidence that network behaviour is attributable to Dockview rather than to our integration
+//     code. It must stay uncontaminated.
+//   * `dockview-app-harness.js` loads the WHOLE APPLICATION — real index.html, real preload, real
+//     app.js — and proves production behaviour end to end.
+//   * THIS harness sits between them. It drives the ADAPTER'S bootstrap directly, against a
+//     synthetic host, through every FAILURE path — including several that cannot be produced from
+//     the application (a policy module that published nothing, an activation that throws, a missing
+//     dock container). It is the only place those refusals can be exercised at all.
 //
-// This harness exists because round 3 shipped a prototype that passed 1,850 Node assertions and
-// then could not start in a real renderer at all. Every helper was proven under `require`, where
-// each file gets its OWN module scope. Classic browser scripts share ONE global lexical
-// environment, and in that environment:
+// It exists because round 3 of the prototype shipped code that passed 1,850 Node assertions and
+// then could not start in a real renderer. Every helper was proven under `require`, where each file
+// gets its OWN module scope. Classic browser scripts share ONE global lexical environment, and
+// there:
 //
 //   * renderer/agent-dom.js already declares a top-level `const api`;
 //   * both Dockview policy modules also declared a top-level `const api`;
@@ -17,9 +23,7 @@
 //     "Uncaught SyntaxError: Identifier 'api' has already been declared";
 //   * dockview-prototype.js then evaluated `window.X || require('...')`, and with the globals
 //     missing it reached `require`, which does not exist under `nodeIntegration: false`, giving
-//     "Uncaught ReferenceError: require is not defined";
-//   * app.js had already created the full-screen `.dockview-prototype-root` overlay, so the user
-//     saw an opaque rectangle over a working application.
+//     "Uncaught ReferenceError: require is not defined".
 //
 // A Node test cannot see any of that. This harness therefore runs the REAL files, as REAL classic
 // scripts, in the REAL order, in a context-isolated, sandboxed, node-integration-free renderer
@@ -27,6 +31,11 @@
 //
 // It loads agent-dom.js FIRST, deliberately: without that pre-existing top-level `const api` the
 // collision does not occur and the gate would prove nothing.
+//
+// PRODUCTION SURFACE. The bootstrap binds to the EMBEDDED `#terminalDock` that index.html ships.
+// It never creates a container and never creates a full-screen root, so every scenario below
+// measures whether the app surface stayed usable — including the SUCCESS path, where a started
+// engine must still not cover the toolbar.
 //
 // Output is a single JSON document on stdout so a test can consume it without scraping logs.
 
@@ -51,7 +60,7 @@ const LIBRARY_CONTROL_IDS = [
  * Extract the REAL Library section from app/renderer/index.html.
  *
  * Deliberately NOT a copied fixture: a copy drifts from production silently, and the defect this
- * round corrects was the prototype pointing at markup that did not exist. This THROWS rather than
+ * seam corrects was the prototype pointing at markup that did not exist. This THROWS rather than
  * degrading — no fallback markup, no silent substitution — so a renamed id or a removed control
  * fails the gate loudly instead of being papered over.
  */
@@ -76,50 +85,6 @@ function extractLibrarySection() {
   if (!/data-pane="library"/.test(section) || !/class="tabpane"/.test(section)) {
     throw new Error('#libraryPane is no longer the tabpane Library surface');
   }
-  return section;
-}
-
-// The canonical audio controls. Human acceptance failed a second time because `.tts-controls` —
-// which owns Dictate — stayed in the Terminals toolbar while the prototype root covered it, so this
-// harness must prove the GENUINE surface ends up inside the visible prototype overlay.
-const AUDIO_CONTROL_IDS = [
-  'audioBuild', 'sttStatus', 'sttMic', 'ttsStatus', 'ttsStop', 'ttsVoice', 'ttsSpeed',
-];
-
-/**
- * Extract the REAL `.tts-controls` surface from app/renderer/index.html.
- *
- * Same contract as the Library extraction: no copied fixture, and a THROW rather than a degraded
- * fallback, so a renamed id or a removed control fails the gate loudly. A second `.tts-controls`
- * would mean duplicate element IDs, which is itself the condition the adapter refuses on.
- */
-function extractAudioControlsSection() {
-  const html = fs.readFileSync(INDEX_FILE, 'utf8');
-  const matches = html.match(/<div\s+class="tts-controls"[^>]*>/g) || [];
-  if (matches.length !== 1) {
-    throw new Error(`expected exactly one .tts-controls surface in index.html, found ${matches.length}`);
-  }
-  const start = html.indexOf(matches[0]);
-  // The surface nests <select><option> children, so the close tag must be matched by depth rather
-  // than by the first </div> — guessing would silently truncate the voice and speed controls.
-  let depth = 0;
-  let i = start;
-  let end = -1;
-  const tag = /<\/?div\b/g;
-  tag.lastIndex = start;
-  let m;
-  while ((m = tag.exec(html)) !== null) {
-    depth += m[0] === '</div' ? -1 : 1;
-    if (depth === 0) { end = html.indexOf('>', m.index) + 1; break; }
-    i = m.index;
-  }
-  if (end === -1) throw new Error('.tts-controls surface is not closed');
-  const section = html.slice(start, end);
-  const missing = AUDIO_CONTROL_IDS.filter((id) => !new RegExp(`id="${id}"`).test(section));
-  if (missing.length > 0) {
-    throw new Error(`.tts-controls is missing canonical control(s): ${missing.join(', ')}`);
-  }
-  if (i < start) throw new Error('.tts-controls extraction produced an inconsistent range');
   return section;
 }
 
@@ -232,103 +197,13 @@ const LOAD_CHAIN = `(async () => {
 })()`;
 
 /**
- * Install the GENUINE `.tts-controls` surface, extracted verbatim from index.html, into a stand-in
- * `.term-bar` inside the harness's app surface — with a sibling on each side, exactly as production
- * has (a lead caption before it and `#newTermShell` after it), so "restored to its exact original
- * index" is checkable by index rather than merely by parent.
- *
- * It also publishes `window.__ccAudioHome`, the page-side mirror of app.js's placeholder/held-
- * reference dock contract. Every host built below uses it, so the adapter's audio preflight sees a
- * real surface in every scenario, exactly as it will in the real renderer.
- */
-function buildAudioSurfaceInstaller(sectionHtml) {
-  return `(() => {
-  const doc = document;
-  const bar = doc.createElement('div');
-  bar.className = 'term-bar';
-  bar.id = 'harnessTermBar';
-  const lead = doc.createElement('span');
-  lead.className = 'muted small';
-  lead.textContent = 'Agents run in-app here';
-  bar.appendChild(lead);
-  bar.insertAdjacentHTML('beforeend', ${JSON.stringify(sectionHtml)});
-  const shell = doc.createElement('button');
-  shell.id = 'newTermShell';
-  shell.textContent = '+ Shell';
-  bar.appendChild(shell);
-  doc.getElementById('appSurface').appendChild(bar);
-
-  // Mirrors app/renderer/app.js: a placeholder records the exact index, and a HELD REFERENCE is
-  // what restoration uses, because the element is detached from its query-able position while
-  // docked. dockview-default-path.test.js pins that the two implementations agree.
-  let placeholder = null;
-  let docked = null;
-  let homeParent = null;
-  window.__ccAudioHome = {
-    element: () => doc.querySelector('.tts-controls') || docked,
-    count: () => doc.querySelectorAll('.tts-controls').length,
-    isDocked: () => placeholder !== null,
-    homeIndex: () => {
-      const el = doc.querySelector('.tts-controls') || docked;
-      return Array.prototype.indexOf.call(bar.children, el);
-    },
-    bar: () => bar,
-    dock: () => {
-      const el = doc.querySelector('.tts-controls') || docked;
-      if (!el || !el.parentNode) return null;
-      if (placeholder) return el;
-      placeholder = doc.createComment('dockview-prototype: audio controls home');
-      el.parentNode.insertBefore(placeholder, el);
-      docked = el;
-      homeParent = el.parentNode;
-      return el;
-    },
-    undock: () => {
-      const el = docked || doc.querySelector('.tts-controls');
-      const p = placeholder;
-      const parent = homeParent;
-      if (!el) { placeholder = null; docked = null; homeParent = null; return false; }
-      if (p && p.parentNode) {
-        p.parentNode.insertBefore(el, p);
-        p.parentNode.removeChild(p);
-        placeholder = null; docked = null; homeParent = null;
-        return true;
-      }
-      if (parent && parent.isConnected) {
-        parent.appendChild(el);
-        placeholder = null; docked = null; homeParent = null;
-        return false;
-      }
-      if (!p && !parent) { docked = null; return false; }
-      return false;
-    },
-  };
-  return {
-    installed: true,
-    count: window.__ccAudioHome.count(),
-    homeIndex: window.__ccAudioHome.homeIndex(),
-    controlsPresent: ${JSON.stringify(AUDIO_CONTROL_IDS)}.filter((id) => !!doc.getElementById(id)),
-  };
-})()`;
-}
-
-// The audio half of every harness host. Kept in ONE place so the bootstrap scenarios, the Library
-// flow, and the audio flow cannot drift apart on the contract the adapter actually calls.
-const AUDIO_HOST_MEMBERS = `
-      audioControlsCount: () => window.__ccAudioHome.count(),
-      dockAudioControls: () => window.__ccAudioHome.dock(),
-      undockAudioControls: () => window.__ccAudioHome.undock(),
-      isAudioControlsDocked: () => window.__ccAudioHome.isDocked(),`;
-
-// Drives the REAL bootstrap through every failure path and then the success path. Failure paths run
-// FIRST, from a clean DOM, so "no overlay was left behind" is measured before anything succeeds.
-/**
- * Round 5 — drive the adapter against the GENUINE Library section in a real renderer.
+ * Drive the adapter against the GENUINE Library section in a real renderer.
  *
  * The section is injected verbatim from index.html (never a copy maintained here), into a stand-in
  * tab strip alongside a sibling, so "returned to its exact original position" is checkable by index
  * and not merely by parent. The host's dock/undock mirror app.js's placeholder contract; app.js
- * owns the production implementation and `dockview-default-path.test.js` pins that the two agree.
+ * owns the production implementation, `dockview-default-path.test.js` pins that the two agree, and
+ * `dockview-app-integration.test.js` proves the production one end to end.
  */
 function buildLibraryFlow(sectionHtml) {
   return `(() => {
@@ -366,9 +241,9 @@ function buildLibraryFlow(sectionHtml) {
       paneEls.set(id, d);
     }
     const logs = [];
-    const container = doc.createElement('div');
-    container.className = 'dockview-prototype-root';
-    doc.body.appendChild(container);
+    // The EMBEDDED production container, emptied first so the flow starts from a clean surface.
+    const container = doc.getElementById('terminalDock');
+    while (container.firstChild) container.removeChild(container.firstChild);
 
     const host = {
       bridge: { enabled: true, saveLayout: async () => ({ ok: true, savedAt: 'x' }), loadLayout: async () => ({ ok: false, reason: 'no-saved-layout' }), resetLayout: async () => ({ ok: true }) },
@@ -379,8 +254,8 @@ function buildLibraryFlow(sectionHtml) {
       getPaneElement: (id) => (id === 'library' ? doc.querySelector('#libraryPane') : (paneEls.get(id) || null)),
       getTerminalBody: (id) => paneEls.get(id) || null,
       fitTerminal: () => {}, measureTerminal: () => ({ cols: 80, rows: 24 }), sendResize: () => {},
-      suspendAppResizeObserver: () => {}, focusPane: () => {},
-      createTerminalPane: async () => null, createLibraryPane: () => 'library',
+      suspendAppResizeObserver: () => {}, resumeAppResizeObserver: () => {}, focusPane: () => {},
+      createTerminalPane: async () => null,
       closePane: () => {},
       // Mirrors app.js's contract, INCLUDING the held reference: the adapter detaches the pane from
       // the document before releasing it, so a querySelector lookup at undock time returns null.
@@ -403,7 +278,7 @@ function buildLibraryFlow(sectionHtml) {
       },
       isLibraryDocked: () => placeholder !== null,
       liveTerminalCount: () => paneEls.size,
-      liveTerminalIds: () => [...paneEls.keys()],${AUDIO_HOST_MEMBERS}
+      liveTerminalIds: () => [...paneEls.keys()],
     };
 
     const instance = window.ccDockviewPrototype.activate(host);
@@ -454,6 +329,7 @@ function buildLibraryFlow(sectionHtml) {
     });
 
     instance.dispose();
+    if (strip.parentNode) strip.parentNode.removeChild(strip);
     out.logs = logs;
     return out;
   } catch (e) {
@@ -463,14 +339,16 @@ function buildLibraryFlow(sectionHtml) {
 })()`;
 }
 
+// Drives the REAL bootstrap through every failure path and then the success path. Failure paths run
+// FIRST, from a clean dock, so "nothing was left behind" is measured before anything succeeds.
 const DRIVE_BOOTSTRAP = `(() => {
   const doc = document;
   const win = window;
-  const ROOT_ID = 'dockviewPrototypeRoot';
+  const DOCK_ID = 'terminalDock';
   const proto = win.ccDockviewPrototype;   // held locally so the global can be removed in a scenario
   const out = { scenarios: [], logs: [], hostCalls: null, success: null };
 
-  const hostCalls = { createTerminalPane: 0, createLibraryPane: 0, closePane: 0 };
+  const hostCalls = { createTerminalPane: 0, closePane: 0, suspendResize: 0, resumeResize: 0 };
   const log = (l) => out.logs.push(String(l));
 
   function makeInertHost(container, opts) {
@@ -497,58 +375,72 @@ const DRIVE_BOOTSTRAP = `(() => {
       fitTerminal: () => {},
       measureTerminal: () => ({ cols: 80, rows: 24 }),
       sendResize: () => {},
-      suspendAppResizeObserver: () => {},
+      suspendAppResizeObserver: () => { hostCalls.suspendResize++; },
+      resumeAppResizeObserver: () => { hostCalls.resumeResize++; },
       focusPane: () => {},
       createTerminalPane: async () => { hostCalls.createTerminalPane++; return null; },
-      createLibraryPane: () => { hostCalls.createLibraryPane++; return null; },
       closePane: () => { hostCalls.closePane++; },
-      // Present unless a scenario deliberately suppresses it, so the audio preflight is exercised
-      // on the real path rather than skipped by a host that does not implement the contract.
-      audioControlsCount: () => (o.audioCount === undefined ? window.__ccAudioHome.count() : o.audioCount),
-      dockAudioControls: () => window.__ccAudioHome.dock(),
-      undockAudioControls: () => window.__ccAudioHome.undock(),
-      isAudioControlsDocked: () => window.__ccAudioHome.isDocked(),
+      dockLibrary: () => paneEls.get('library') || null,
+      undockLibrary: () => true,
+      isLibraryDocked: () => false,
+      liveTerminalCount: () => 2,
+      liveTerminalIds: () => ['pty1', 'pty2'],
     };
   }
 
-  function cleanRoot() {
-    const r = doc.getElementById(ROOT_ID);
-    if (r && r.parentNode) r.parentNode.removeChild(r);
-    win.ccDockviewPrototypeInstance = undefined;
+  function dock() { return doc.getElementById(DOCK_ID); }
+  function cleanDock() {
+    const d = dock();
+    if (d) { while (d.firstChild) d.removeChild(d.firstChild); }
   }
 
   // "Unobscured" is measured, not assumed: what is actually the topmost element at the centre of
-  // the viewport? A surviving .dockview-prototype-root would be, because it is fixed/inset-0/z-9000.
-  function appSurfaceOnTop() {
+  // the viewport, and at the Dictate button's own centre? A position:fixed inset:0 z-index:9000
+  // overlay would be both, which is exactly the prototype defect that is gone.
+  function topmostIsInsideAppSurface() {
     const surface = doc.getElementById('appSurface');
     if (!surface) return false;
     const top = doc.elementFromPoint(Math.floor(win.innerWidth / 2), Math.floor(win.innerHeight / 2));
     return !!top && (top === surface || surface.contains(top));
   }
+  function reachable(el) {
+    if (!el || !el.isConnected) return false;
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return false;
+    const top = doc.elementFromPoint(Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2));
+    return !!top && (top === el || el.contains(top));
+  }
 
   function record(name, result) {
-    const root = doc.getElementById(ROOT_ID);
+    const d = dock();
+    const bar = doc.getElementById('harnessTermBar');
     const audio = doc.querySelector('.tts-controls');
     out.scenarios.push({
       name,
       ok: !!(result && result.ok),
       reason: (result && result.reason) || null,
-      rootPresent: !!root,
-      rootChildCount: root ? root.children.length : 0,
+      // The container is never removed — it is markup. What matters is whether anything was left
+      // INSIDE it, and whether any overlay was created anywhere in the document.
+      dockPresent: !!d,
+      dockChildCount: d ? d.children.length : -1,
+      overlayCount: doc.querySelectorAll('.dockview-prototype-root').length,
+      fixedPositionCount: [...doc.body.querySelectorAll('*')]
+        .filter((el) => getComputedStyle(el).position === 'fixed').length,
+      // The prototype published its instance on the window, where the app's close path read it as
+      // an authority. Production returns it instead, so this must be undefined on EVERY path.
       instancePublished: win.ccDockviewPrototypeInstance !== undefined && win.ccDockviewPrototypeInstance !== null,
       appSurfacePresent: !!doc.getElementById('appSurface'),
-      appSurfaceOnTop: appSurfaceOnTop(),
-      // Every failure must leave the app's audio surface present, connected, and back in the
-      // stand-in toolbar — never detached, never inside a removed root, never duplicated.
+      appSurfaceOnTop: topmostIsInsideAppSurface(),
+      // The audio controls are the app's, always, on every path — the adapter has no knowledge of
+      // them at all now, so they must never move, never duplicate, and never become unreachable.
       audioCount: doc.querySelectorAll('.tts-controls').length,
-      audioConnected: !!(audio && audio.isConnected),
-      audioInTermBar: !!(audio && audio.parentNode === doc.getElementById('harnessTermBar')),
-      audioStillDocked: win.__ccAudioHome ? win.__ccAudioHome.isDocked() : null,
+      audioInTermBar: !!(audio && bar && audio.parentNode === bar),
+      micReachable: reachable(doc.getElementById('sttMic')),
     });
   }
 
   function run(name, mutate, restore, hostOpts) {
-    cleanRoot();
+    cleanDock();
     let saved;
     try { saved = mutate(); } catch (e) { /* recorded via the scenario result */ }
     let result;
@@ -559,7 +451,7 @@ const DRIVE_BOOTSTRAP = `(() => {
     }
     record(name, result);
     try { restore(saved); } catch (e) { /* nothing to do */ }
-    cleanRoot();
+    cleanDock();
   }
 
   // 1 — a policy module that never published its export
@@ -588,16 +480,20 @@ const DRIVE_BOOTSTRAP = `(() => {
   // 5 — activation returns { ok: false }
   run('activation-refused', () => null, () => {}, { enabled: false });
 
-  // 6 — the app-owned audio surface is absent. Refusing is correct: the root is a full-screen
-  // opaque overlay, so starting without Dictate inside it is the kill-criterion failure itself.
-  run('missing-audio-controls', () => null, () => {}, { audioCount: 0 });
+  // 6 — the EMBEDDED container is missing from the markup. The bootstrap must refuse rather than
+  // invent one: a silently-created container is how a dead layout ends up covering a working app.
+  run('dock-container-missing',
+    () => {
+      const d = dock();
+      const parent = d.parentNode;
+      const next = d.nextSibling;
+      parent.removeChild(d);
+      return { d, parent, next };
+    },
+    (s) => { if (s && s.parent) s.parent.insertBefore(s.d, s.next); });
 
-  // 7 — a duplicated audio surface means duplicate element IDs, so \`#sttMic\` would wire whichever
-  // copy came first. Refused rather than guessed at.
-  run('duplicated-audio-controls', () => null, () => {}, { audioCount: 2 });
-
-  // 11 — the success path, last, from a clean DOM
-  cleanRoot();
+  // 7 — the success path, last, from a clean dock
+  cleanDock();
   let successResult;
   try {
     successResult = proto.bootstrap({ win, doc, log, buildHost: (c) => makeInertHost(c) });
@@ -606,253 +502,33 @@ const DRIVE_BOOTSTRAP = `(() => {
   }
   record('success', successResult);
 
-  const root = doc.getElementById(ROOT_ID);
-  const banner = root ? root.querySelector('.dockview-prototype-banner') : null;
-  const buttons = root ? [...root.querySelectorAll('.dockview-prototype-controls button')].map((b) => b.textContent) : [];
+  const d = dock();
+  const buttons = d ? [...d.querySelectorAll('.dockview-prototype-controls button')] : [];
   out.success = {
-    rootPresent: !!root,
-    rootChildCount: root ? root.children.length : 0,
-    bannerText: banner ? banner.textContent : null,
-    buttons,
-    instancePublished: !!win.ccDockviewPrototypeInstance,
-    instanceOk: !!(win.ccDockviewPrototypeInstance && win.ccDockviewPrototypeInstance.ok === true),
-    // The prototype root is SUPPOSED to be on top once it started successfully.
-    rootOnTop: (() => {
-      const top = doc.elementFromPoint(Math.floor(win.innerWidth / 2), Math.floor(win.innerHeight / 2));
-      return !!(root && top && (top === root || root.contains(top)));
-    })(),
+    dockChildCount: d ? d.children.length : -1,
+    // The prototype's persistent "NOT PRODUCTION" strip is gone: Dockview IS production now, so a
+    // warning strip on the production surface would be a false statement.
+    bannerCount: d ? d.querySelectorAll('.dockview-prototype-banner').length : -1,
+    surfaceCount: d ? d.querySelectorAll('.dockview-prototype-surface').length : -1,
+    // No audio slot exists at all; the whole borrow/restore seam was deleted, not disabled.
+    audioSlotCount: doc.querySelectorAll('.dockview-prototype-audio').length,
+    buttons: buttons.map((b) => ({ label: b.textContent, disabled: b.disabled === true, phase: b.dataset.phase || null })),
+    statusText: d && d.querySelector('.dockview-prototype-status') ? d.querySelector('.dockview-prototype-status').textContent : null,
+    instanceReturned: !!(successResult && successResult.instance && successResult.instance.ok === true),
+    instancePublished: win.ccDockviewPrototypeInstance !== undefined && win.ccDockviewPrototypeInstance !== null,
+    // Even a SUCCESSFUL start is embedded: the toolbar above it is still reachable.
+    micReachable: reachable(doc.getElementById('sttMic')),
+    appSurfaceOnTop: topmostIsInsideAppSurface(),
+    surfaceInsideDock: !!(d && d.querySelector('.dockview-prototype-surface')),
   };
 
   // Tear the successful instance down so the harness leaves nothing running.
-  try { if (win.ccDockviewPrototypeInstance && win.ccDockviewPrototypeInstance.dispose) win.ccDockviewPrototypeInstance.dispose(); } catch (e) {}
+  try { if (successResult && successResult.instance && successResult.instance.dispose) successResult.instance.dispose(); } catch (e) {}
+  cleanDock();
 
   out.hostCalls = hostCalls;
   out.probe = win.__ccHarness;
   return out;
-})()`;
-
-/**
- * Round 6 — prove the GENUINE audio controls end up inside the visible prototype overlay.
- *
- * The centrepiece is a LIVE NEGATIVE CONTROL that reproduces the observed human-acceptance failure
- * before proving the correction: with a full-screen `.dockview-prototype-root` present and the
- * controls left in the toolbar (the pre-correction geometry), `#sttMic` must be measurably
- * unreachable — `elementFromPoint` at its own centre returns the overlay, not the button. Without
- * that step, "the button is reachable after the fix" would prove nothing about the bug.
- */
-const AUDIO_FLOW = `(() => {
-  const doc = document;
-  const win = window;
-  const out = { steps: [] };
-  const record = (name, data) => { out.steps.push(Object.assign({ name }, data)); };
-  const ROOT_ID = 'dockviewPrototypeRoot';
-
-  // Is the element the topmost thing at its own centre? That is what "reachable" means to a user:
-  // not merely present in the DOM, but actually the thing a click would land on.
-  const reachable = (el) => {
-    if (!el || !el.isConnected) return false;
-    const r = el.getBoundingClientRect();
-    if (r.width <= 0 || r.height <= 0) return false;
-    const top = doc.elementFromPoint(Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2));
-    return !!top && (top === el || el.contains(top));
-  };
-
-  try {
-    const audioEl = doc.querySelector('.tts-controls');
-    const mic = doc.getElementById('sttMic');
-    const bar = doc.getElementById('harnessTermBar');
-    if (!audioEl || !mic || !bar) { out.error = 'audio surface was not installed'; return out; }
-
-    out.surfaceCount = doc.querySelectorAll('.tts-controls').length;
-    out.controlsPresent = ${JSON.stringify(AUDIO_CONTROL_IDS)}.filter((id) => !!doc.getElementById(id));
-    out.homeIndexBefore = Array.prototype.indexOf.call(bar.children, audioEl);
-
-    // --- 0. LIVE NEGATIVE CONTROL: the pre-correction geometry ---------------------------------
-    // A full-screen prototype root, with the controls left where production puts them. This is
-    // exactly the state human acceptance hit, reproduced rather than described.
-    const preRoot = doc.createElement('div');
-    preRoot.id = ROOT_ID;
-    preRoot.className = 'dockview-prototype-root';
-    doc.body.appendChild(preRoot);
-    record('negative-control', {
-      micPresent: !!mic.isConnected,
-      micInsideRoot: preRoot.contains(mic),
-      micReachable: reachable(mic),
-      audioReachable: reachable(audioEl),
-    });
-    preRoot.parentNode.removeChild(preRoot);
-
-    // --- state and handler fixtures, bound BEFORE the move --------------------------------------
-    // A listener added here must survive the reparent and fire exactly once afterwards. This is the
-    // property a cloned or proxied control could not possibly have.
-    let micClicks = 0;
-    mic.addEventListener('click', () => { micClicks++; });
-    const voice = doc.getElementById('ttsVoice');
-    const speed = doc.getElementById('ttsSpeed');
-    const opt = doc.createElement('option'); opt.value = 'af_heart'; opt.textContent = 'Heart';
-    voice.appendChild(opt);
-    voice.value = 'af_heart';
-    speed.value = '1.5';
-    doc.getElementById('sttStatus').textContent = 'recording';
-    doc.getElementById('ttsStatus').textContent = 'speaking';
-    mic.classList.add('rec');
-    doc.getElementById('ttsStop').classList.remove('hidden');
-    const micIdentity = mic;
-
-    // --- 1. activate: the controls must move INTO the visible prototype root ---------------------
-    const container = doc.createElement('div');
-    container.id = ROOT_ID;
-    container.className = 'dockview-prototype-root';
-    doc.body.appendChild(container);
-
-    const paneEls = new Map();
-    for (const id of ['pty1', 'pty2']) {
-      const d = doc.createElement('div');
-      d.style.width = '300px'; d.style.height = '200px';
-      doc.body.appendChild(d);
-      paneEls.set(id, d);
-    }
-    const logs = [];
-    const host = {
-      bridge: { enabled: true, saveLayout: async () => ({ ok: true, savedAt: 'x' }), loadLayout: async () => ({ ok: false, reason: 'no-saved-layout' }), resetLayout: async () => ({ ok: true }) },
-      getDockviewGlobal: () => win.dockview,
-      getContainer: () => container,
-      log: (l) => logs.push(String(l)),
-      isTerminalPane: (id) => paneEls.has(id),
-      getPaneElement: (id) => (id === 'library' ? doc.querySelector('#libraryPane') : (paneEls.get(id) || null)),
-      getTerminalBody: (id) => paneEls.get(id) || null,
-      fitTerminal: () => {}, measureTerminal: () => ({ cols: 80, rows: 24 }), sendResize: () => {},
-      suspendAppResizeObserver: () => {}, focusPane: () => {},
-      createTerminalPane: async () => null, closePane: () => {},
-      dockLibrary: () => null, undockLibrary: () => false, isLibraryDocked: () => false,
-      liveTerminalCount: () => paneEls.size,
-      liveTerminalIds: () => [...paneEls.keys()],${AUDIO_HOST_MEMBERS}
-    };
-
-    const instance = win.ccDockviewPrototype.activate(host);
-    out.activated = !!(instance && instance.ok);
-    if (!out.activated) { out.logs = logs; out.activationReason = instance && instance.reason; return out; }
-
-    const slot = container.querySelector('.dockview-prototype-audio');
-    const movedAudio = doc.querySelector('.tts-controls');
-    const movedMic = doc.getElementById('sttMic');
-    micClicks = 0;
-    movedMic.click();
-    record('activated', {
-      slotPresent: !!slot,
-      inSlot: !!(slot && movedAudio && movedAudio.parentNode === slot),
-      insideRoot: !!(movedAudio && container.contains(movedAudio)),
-      sameElement: movedAudio === audioEl,
-      sameMic: movedMic === micIdentity,
-      surfaceCount: doc.querySelectorAll('.tts-controls').length,
-      controlsPresent: ${JSON.stringify(AUDIO_CONTROL_IDS)}.filter((id) => !!doc.getElementById(id)).length,
-      // Discoverable by ID after the move, so late ccSTT/ccTTS initialization still wires it.
-      discoverableById: ${JSON.stringify(AUDIO_CONTROL_IDS)}.every((id) => !!doc.getElementById(id)),
-      micReachable: reachable(movedMic),
-      audioReachable: reachable(movedAudio),
-      micClicks,
-      sttStatusText: doc.getElementById('sttStatus').textContent,
-      ttsStatusText: doc.getElementById('ttsStatus').textContent,
-      micHasRecClass: movedMic.classList.contains('rec'),
-      stopVisible: !doc.getElementById('ttsStop').classList.contains('hidden'),
-      voiceValue: doc.getElementById('ttsVoice').value,
-      speedValue: doc.getElementById('ttsSpeed').value,
-      diagnosticsDocked: instance.diagnostics().audioControlsDocked,
-    });
-
-    // --- 2. panes split/grouped/tabbed: the slot is outside the surface, so nothing can hide it ---
-    instance.addPane('pty1', 'terminal');
-    instance.addPane('pty2', 'terminal', { direction: 'right' });
-    const afterSplitMic = doc.getElementById('sttMic');
-    record('after-split', {
-      micReachable: reachable(afterSplitMic),
-      sameMic: afterSplitMic === micIdentity,
-      stillInSlot: !!(slot && afterSplitMic.closest('.dockview-prototype-audio') === slot),
-    });
-
-    // --- 3. dispose: the identical element returns to its exact original index ------------------
-    instance.dispose();
-    const backAudio = doc.querySelector('.tts-controls');
-    const backMic = doc.getElementById('sttMic');
-    micClicks = 0;
-    backMic.click();
-    record('disposed', {
-      sameElement: backAudio === audioEl,
-      sameMic: backMic === micIdentity,
-      backInBar: !!(backAudio && backAudio.parentNode === bar),
-      homeIndexAfter: Array.prototype.indexOf.call(bar.children, backAudio),
-      surfaceCount: doc.querySelectorAll('.tts-controls').length,
-      controlsPresent: ${JSON.stringify(AUDIO_CONTROL_IDS)}.filter((id) => !!doc.getElementById(id)).length,
-      micClicks,
-      voiceValue: doc.getElementById('ttsVoice').value,
-      speedValue: doc.getElementById('ttsSpeed').value,
-      placeholderGone: !win.__ccAudioHome.isDocked(),
-    });
-    if (container.parentNode) container.parentNode.removeChild(container);
-
-    // --- 4. activation refusal AFTER the surface exists: nothing is left moved ------------------
-    const refuseContainer = doc.createElement('div');
-    refuseContainer.className = 'dockview-prototype-root';
-    doc.body.appendChild(refuseContainer);
-    const throwingHost = Object.assign({}, host, {
-      getContainer: () => refuseContainer,
-      getDockviewGlobal: () => { throw new Error('synthetic failure'); },
-    });
-    let refusal = null;
-    try { refusal = win.ccDockviewPrototype.activate(throwingHost); }
-    catch (e) { refusal = { threw: true }; }
-    const afterRefusalAudio = doc.querySelector('.tts-controls');
-    record('activation-failure', {
-      audioInBar: !!(afterRefusalAudio && afterRefusalAudio.parentNode === bar),
-      audioIndex: Array.prototype.indexOf.call(bar.children, afterRefusalAudio),
-      audioConnected: !!(afterRefusalAudio && afterRefusalAudio.isConnected),
-      surfaceCount: doc.querySelectorAll('.tts-controls').length,
-      stillDocked: win.__ccAudioHome.isDocked(),
-      placeholderLeft: bar.innerHTML.indexOf('audio controls home') !== -1,
-    });
-    if (refuseContainer.parentNode) refuseContainer.parentNode.removeChild(refuseContainer);
-
-    // --- 5. bootstrap refusal AFTER the controls were already moved -----------------------------
-    // This proves the BOOTSTRAP-level net, not merely activate's own rollback. The controls are
-    // moved into a prototype root by hand — the "already stranded" state — and a bootstrap that
-    // then refuses must return them to the toolbar rather than leaving them inside a root it is
-    // about to discard. Without this, a refusal after movement would silently cost the app Dictate.
-    const strandRoot = doc.createElement('div');
-    strandRoot.id = ROOT_ID;
-    strandRoot.className = 'dockview-prototype-root';
-    doc.body.appendChild(strandRoot);
-    const stranded = win.__ccAudioHome.dock();
-    strandRoot.appendChild(stranded);
-    const wasStranded = strandRoot.contains(doc.getElementById('sttMic'));
-    let bootResult;
-    try {
-      bootResult = win.ccDockviewPrototype.bootstrap({
-        win, doc, log: (l) => logs.push(String(l)),
-        buildHost: (c) => Object.assign({}, host, { getContainer: () => c, bridge: { enabled: false } }),
-      });
-    } catch (e) {
-      bootResult = { ok: false, reason: 'THREW:' + String((e && e.message) || e) };
-    }
-    const rescued = doc.querySelector('.tts-controls');
-    record('bootstrap-refusal-after-move', {
-      wasStranded,
-      refused: bootResult.ok === false,
-      reason: bootResult.reason || null,
-      sameElement: rescued === audioEl,
-      audioInBar: !!(rescued && rescued.parentNode === bar),
-      audioIndex: Array.prototype.indexOf.call(bar.children, rescued),
-      audioConnected: !!(rescued && rescued.isConnected),
-      surfaceCount: doc.querySelectorAll('.tts-controls').length,
-      stillDocked: win.__ccAudioHome.isDocked(),
-    });
-    if (strandRoot.parentNode) strandRoot.parentNode.removeChild(strandRoot);
-
-    out.logs = logs;
-    return out;
-  } catch (e) {
-    out.error = String((e && e.message) || e);
-    return out;
-  }
 })()`;
 
 // ---------------------------------------------------------------------------
@@ -907,22 +583,9 @@ app.whenReady().then(async () => {
   if (!probe || probe.installed !== true) return fail('install-probe', 'probe did not install');
 
   const chain = await step('load-chain', LOAD_CHAIN);
-
-  // The GENUINE audio surface must exist before anything drives the adapter: activation now
-  // preflights it, so installing it first is what makes every scenario below run the real path.
-  // Extraction throws on any drift; that must surface as a harness failure, not a skipped step.
-  let audioSection;
-  try {
-    audioSection = extractAudioControlsSection();
-  } catch (e) {
-    return fail('extract-audio-controls', (e && e.message) || e);
-  }
-  const audioInstall = await step('install-audio-surface', buildAudioSurfaceInstaller(audioSection));
-
   const drive = await step('drive-bootstrap', DRIVE_BOOTSTRAP);
-  const audio = await step('audio-flow', AUDIO_FLOW);
 
-  // ---- Round 5: drive the REAL Library surface ------------------------------------------------
+  // ---- drive the REAL Library surface ---------------------------------------------------------
   // Extraction throws on any mismatch; that must surface as a harness failure, not a skipped step.
   let librarySection;
   try {
@@ -938,10 +601,7 @@ app.whenReady().then(async () => {
     chain,
     drive,
     library,
-    audio,
-    audioInstall,
     libraryControlIds: LIBRARY_CONTROL_IDS,
-    audioControlIds: AUDIO_CONTROL_IDS,
     consoleMessages,
     requests: summarize(),
     remoteRequestCount,

@@ -150,8 +150,15 @@ const css = read('styles.css');
     'the ✕ control still routes through that one close path');
   assert(/const closeThisPane = \(\) => \{\s*\n\s*if \(!terms\.has\(id\)\) return;/.test(appSrc),
     'the close path is idempotent — a second call is a no-op, so a PTY cannot be killed twice');
-  assert(/pane\.querySelector\('\.max'\)\.onclick[\s\S]{0,200}paneMaximizer\.toggle\(id, pane\)/.test(appSrc),
-    'the header ⛶ control toggles through the exported controller');
+  // MAXIMIZE NOW ROUTES BY OWNERSHIP. There are two maximizers — this controller for the classic
+  // grid, and Dockview's own group maximizer for a hosted pane — and exactly one may run per click.
+  // This controller's contract is unchanged; what changed is that it is reached only when the pane
+  // is NOT owned by the layout engine. Both halves are pinned so neither can quietly swallow the
+  // other; the routing itself is proven behaviourally in dockview-app-integration.test.js.
+  assert(/pane\.querySelector\('\.max'\)\.onclick[\s\S]{0,400}paneMaximizer\.toggle\(id, pane\)/.test(appSrc),
+    'the header ⛶ control still toggles through the exported controller');
+  assert(/if \(paneIsDocked\(id\)\) \{ maximizeDockedPane\(id\); return; \}\s*\n\s*paneMaximizer\.toggle\(id, pane\);/.test(appSrc),
+    'and it does so ONLY for a pane the layout engine does not own — the docked branch returns first');
   const onLayoutStart = appSrc.indexOf('onLayout: (maximizedId, previousId)');
   const onLayoutBlock = appSrc.slice(onLayoutStart, appSrc.indexOf('},', appSrc.indexOf('if (focusId)', onLayoutStart)));
   assert(onLayoutStart > 0 && onLayoutBlock.includes('t.fit.fit()') && onLayoutBlock.includes('cc.ptyResize('),

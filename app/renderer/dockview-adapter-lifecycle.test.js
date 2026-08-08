@@ -85,6 +85,8 @@ function makeFakeDockview() {
   let componentFactory = null;
   const addPanelCalls = [];
   const activatedIds = [];      // every panel.api.setActive() call, in order
+  const maximizeCalls = [];     // every panel.api.maximize() call, in order
+  const exitCalls = [];         // every panel.api.exitMaximized() call, in order
   let failMode = null;          // null | 'after-clear' | 'mid-rebuild' | 'add-panel'
 
   // The real lifecycle: DockviewPanelModel's constructor calls createComponent({id,name}), then
@@ -94,7 +96,28 @@ function makeFakeDockview() {
     // `setActive(): void` (dockviewPanelApi.d.ts:75) — the bundle's own tab handlers call
     // `panel.api.setActive()`. Modelling it here is what lets the duplicate-Add test prove the
     // adapter focuses the existing panel rather than adding a second one.
-    const panel = { id, component, title, api: { setActive() { activatedIds.push(id); } } };
+    //
+    // The same file declares `maximize(): void`, `isMaximized(): boolean` and
+    // `exitMaximized(): void` (lines 42-44), verified against the installed package and present in
+    // the shipped UMD bundle. Only ONE group may be maximized at a time in the real component
+    // (`maximizeView` exits any existing maximized view first), which is modelled here because the
+    // app's ⛶/🗗 glyph bookkeeping depends on exactly that behaviour.
+    const panel = {
+      id, component, title,
+      api: {
+        setActive() { activatedIds.push(id); },
+        maximize() {
+          if (api._maximizeThrows) throw new Error('dockview: synthetic maximize failure');
+          api._maximizedId = id;
+          maximizeCalls.push(id);
+        },
+        isMaximized() { return api._maximizedId === id; },
+        exitMaximized() {
+          if (api._maximizedId === id) api._maximizedId = null;
+          exitCalls.push(id);
+        },
+      },
+    };
     panels.set(id, panel);
     if (componentFactory) {
       const renderer = componentFactory({ id, name: component });
@@ -148,6 +171,8 @@ function makeFakeDockview() {
     dispose() { api._disposed = true; },
     _disposed: false,
     _panels: panels,
+    _maximizedId: null,
+    _maximizeThrows: false,
   };
   let created = false;
   return {
@@ -157,6 +182,8 @@ function makeFakeDockview() {
     _listeners: listeners,
     _addPanelCalls: addPanelCalls,
     _activatedIds: activatedIds,
+    _maximizeCalls: maximizeCalls,
+    _exitCalls: exitCalls,
     _failFromJSON: (mode) => { failMode = mode; },
   };
 }
@@ -178,8 +205,8 @@ function statusText(host) {
 
 function makeHost(overrides = {}) {
   const calls = {
-    closePane: [], suspended: [], logs: [], statuses: [], created: [], docked: 0, undocked: 0,
-    audioDocked: 0, audioUndocked: 0,
+    closePane: [], suspended: [], resumed: [], logs: [], statuses: [], created: [],
+    docked: 0, undocked: 0,
   };
   const container = makeElement('div');
   const paneElements = new Map([
@@ -192,10 +219,13 @@ function makeHost(overrides = {}) {
   // the dock/undock contract correctly and rolls it back on failure.
   const libraryHome = makeElement('main');
   let libraryPlaceholder = null;
-  // Stand-in for the Terminals `.term-bar` and the app-owned `.tts-controls` element it holds.
-  const audioHome = makeElement('div');
-  const audioElement = makeElement('div');
-  let audioPlaceholder = null;
+  // NO AUDIO CONTRACT. The prototype's host exposed audioControlsCount / dockAudioControls /
+  // undockAudioControls / isAudioControlsDocked, and the adapter preflighted and borrowed the
+  // app-owned `.tts-controls` element because its full-screen overlay covered the toolbar. The
+  // production surface is embedded below that toolbar, so the controls never move — and the whole
+  // seam is deleted, not disabled. Its absence from this stub is load-bearing: an adapter that
+  // still preflighted audio would refuse to activate against this host, and every test below would
+  // fail rather than quietly skipping.
   let nextTerminal = 0;
   const host = {
     bridge: { enabled: true, saveLayout: async () => ({ ok: true, savedAt: 'x' }), loadLayout: async () => ({ ok: false, reason: 'no-saved-layout' }), resetLayout: async () => ({ ok: true }) },
@@ -208,7 +238,11 @@ function makeHost(overrides = {}) {
     fitTerminal: () => {},
     measureTerminal: () => ({ cols: 80, rows: 24 }),
     sendResize: () => {},
-    suspendAppResizeObserver: (id) => calls.suspended.push(id),
+    suspendAppResizeObserver: (id) => { calls.suspended.push(id); return true; },
+    // The inverse handover. The ADAPTER never calls it — a pane leaving Dockview alive is the app's
+    // decision (adoption rollback), and this stub records that so the test can prove the adapter
+    // does not take resize ownership back on its own.
+    resumeAppResizeObserver: (id) => { calls.resumed.push(id); return true; },
     focusPane: () => {},
     createTerminalPane: async () => { const id = ['pty1', 'pty2'][nextTerminal++] || null; calls.created.push(id); return id; },
     createLibraryPane: () => { calls.created.push('library'); return 'library'; },
@@ -234,36 +268,9 @@ function makeHost(overrides = {}) {
     isLibraryDocked: () => libraryPlaceholder !== null,
     liveTerminalCount: () => [...paneElements.keys()].filter((k) => k !== 'library').length,
     liveTerminalIds: () => [...paneElements.keys()].filter((k) => k !== 'library'),
-    // --- app-owned audio controls (mirrors app.js's placeholder + held-reference contract) ---
-    // `audioHome` stands in for the Terminals `.term-bar`, so a test can assert the SAME element
-    // object goes back to it. The real implementation lives in app.js and is proven against the
-    // genuine `.tts-controls` from index.html by the Electron bootstrap harness; this stub only
-    // proves the ADAPTER borrows and returns it correctly on every path.
-    audioControlsCount: () => host._audioCount,
-    dockAudioControls: () => {
-      if (host._audioDockThrows) throw new Error('synthetic dock failure');
-      if (host._audioDockReturnsNull) return null;
-      if (audioPlaceholder) return audioElement;   // idempotent: no second placeholder
-      audioPlaceholder = { marker: true };
-      calls.audioDocked++;
-      return audioElement;
-    },
-    undockAudioControls: () => {
-      if (!audioPlaceholder) return false;         // idempotent: undocking an undocked surface is a no-op
-      audioPlaceholder = null;
-      calls.audioUndocked++;
-      audioHome.appendChild(audioElement);         // back to its original parent, same object
-      return true;
-    },
-    isAudioControlsDocked: () => audioPlaceholder !== null,
-    _audioCount: 1,
-    _audioDockThrows: false,
-    _audioDockReturnsNull: false,
     _calls: calls,
     _paneElements: paneElements,
     _libraryHome: libraryHome,
-    _audioHome: audioHome,
-    _audioElement: audioElement,
   };
   return Object.assign(host, overrides);
 }
@@ -776,69 +783,122 @@ process.stdout.write('\nevent shapes stay distinct per handler (they genuinely d
 
   await r5RestoreKeepsLibraryDocked();
 
-  process.stdout.write('\nR6: the app-owned audio controls are borrowed and always given back\n');
+  process.stdout.write('\nthe adapter has NO audio contract at all — it cannot move the controls\n');
+  // -------------------------------------------------------------------------
+  // NEGATIVE CONTROL against the prototype adapter. That build preflighted `audioControlsCount()`
+  // before doing anything and refused with `audio-controls-missing` when the host did not implement
+  // it, then borrowed `.tts-controls` into a slot of its own. `makeHost` implements NONE of that
+  // contract, so a prototype-era adapter cannot activate against it and every assertion in this
+  // file would fail — which is exactly what makes the absence provable rather than asserted.
+  {
+    const fake = makeFakeDockview();
+    const host = makeHost(); host._dockview = fake;
+    const AUDIO_MEMBERS = ['audioControlsCount', 'dockAudioControls', 'undockAudioControls', 'isAudioControlsDocked'];
+    for (const member of AUDIO_MEMBERS) {
+      assert(!(member in host), `the host surface does not implement ${member}`);
+    }
+
+    const instance = adapter.activate(host);
+    assert(instance.ok === true, 'the adapter activates against a host with no audio contract at all');
+    assert(fake._created === true, 'and really did instantiate Dockview');
+    instance.addPane('pty1', 'terminal');
+    instance.addPane('library', 'library');
+
+    // Nothing the adapter builds is an audio slot, and nothing it logs mentions one.
+    const slotNames = host.getContainer().children.map((c) => c.className);
+    assert(!slotNames.some((n) => /audio/i.test(n)),
+      `the adapter builds no audio slot (built: ${JSON.stringify(slotNames)})`);
+    assert(!host._calls.logs.some((l) => /audio/i.test(l)), 'and never logs about audio');
+    const diag = instance.diagnostics();
+    assert(!('audioControlsDocked' in diag), 'diagnostics carry no audio field');
+
+    instance.dispose();
+    assert(!host._calls.logs.some((l) => /audio/i.test(l)), 'teardown does not mention audio either');
+  }
+
+  process.stdout.write('\nmaximize goes through the verified panel API and refits through the owner\n');
   // -------------------------------------------------------------------------
   {
     const fake = makeFakeDockview();
     const host = makeHost(); host._dockview = fake;
     const instance = adapter.activate(host);
-    assert(instance.ok === true, 'activation succeeds when exactly one audio surface exists');
-    assert(host._calls.audioDocked === 1, 'the controls were borrowed exactly once');
-    assert(host._calls.audioUndocked === 0, 'and not yet returned');
-    assert(instance.diagnostics().audioControlsDocked === true, 'diagnostics report them docked');
-    // Borrowed by object identity into the adapter's own slot — never cloned.
-    const slot = host.getContainer().children.find((c) => c.className === 'dockview-prototype-audio');
-    assert(!!slot, 'the adapter created a dedicated audio slot');
-    assert(slot.children.includes(host._audioElement),
-      'the SAME element object was moved into the slot — no clone, no proxy control');
-    // The slot is a sibling of the Dockview surface, never a panel, so panes cannot hide it.
-    assert(!host.getContainer().children.some((c) => c.className === 'dockview-prototype-surface' && c.children.includes(host._audioElement)),
-      'the controls are NOT inside the Dockview surface, so splitting/tabbing cannot hide them');
+    instance.addPane('pty1', 'terminal');
+    instance.addPane('pty2', 'terminal');
 
-    instance.dispose();
-    assert(host._calls.audioUndocked === 1, 'disposal returns them exactly once');
-    assert(host._audioHome.children.includes(host._audioElement),
-      'the identical element object is back in its original parent');
-    assert(instance.diagnostics().audioControlsDocked === false, 'and diagnostics agree');
+    assert(instance.isPaneMaximized('pty1') === false, 'nothing is maximized to begin with');
 
-    instance.dispose();
-    assert(host._calls.audioUndocked === 1, 'a second dispose does not undock twice');
+    const first = instance.maximizePane('pty1');
+    assert(!!first && first.maximized === true, 'maximizing a hosted pane reports maximized:true');
+    assert(fake._maximizeCalls.join(',') === 'pty1', 'it called panel.api.maximize() exactly once, on that panel');
+    assert(instance.isPaneMaximized('pty1') === true, 'and the adapter agrees the pane is maximized');
+    assert(instance.isPaneMaximized('pty2') === false, 'while its sibling is not');
+
+    // The SAME control restores. The adapter reads isMaximized() rather than tracking its own copy,
+    // so a maximize performed by any other route (a dockview control, a later panel API call)
+    // cannot desynchronise it.
+    const second = instance.maximizePane('pty1');
+    assert(!!second && second.maximized === false, 'clicking again reports maximized:false');
+    assert(fake._exitCalls.join(',') === 'pty1', 'it called panel.api.exitMaximized() exactly once');
+    assert(fake._maximizeCalls.length === 1, 'and did NOT call maximize() a second time');
+    assert(instance.isPaneMaximized('pty1') === false, 'nothing is maximized again');
+
+    // Dockview permits ONE maximized group, so maximizing the sibling silently un-maximizes the
+    // first. The app repaints both glyphs from isPaneMaximized for exactly this reason.
+    instance.maximizePane('pty1');
+    instance.maximizePane('pty2');
+    assert(instance.isPaneMaximized('pty2') === true, 'maximizing the sibling maximizes it');
+    assert(instance.isPaneMaximized('pty1') === false,
+      'and the previously maximized pane reports itself restored — the glyph source of truth is honest');
   }
 
-  process.stdout.write('\nR6: a missing or duplicated audio surface refuses BEFORE anything moves\n');
+  process.stdout.write('\nmaximize REFUSES rather than falling through to the grid maximizer\n');
   // -------------------------------------------------------------------------
   {
-    for (const [count, reason] of [[0, 'audio-controls-missing'], [2, 'audio-controls-duplicated'], [3, 'audio-controls-duplicated']]) {
-      const fake = makeFakeDockview();
-      const host = makeHost(); host._dockview = fake; host._audioCount = count;
-      const result = adapter.activate(host);
-      assert(result.ok === false && result.reason === reason,
-        `${count} audio surface(s) refuses with ${reason} (saw ${result.reason})`);
-      assert(host._calls.audioDocked === 0, `${count}: nothing was borrowed`);
-      assert(host._calls.audioUndocked === 0, `${count}: and nothing needed returning`);
-      // The preflight runs before ANY DOM mutation, so no banner/controls/slot were built either.
-      assert(host.getContainer().children.length === 0,
-        `${count}: the refusal happened before a single element was appended`);
-      assert(fake._created === false, `${count}: Dockview was never even instantiated`);
-      assert(host._calls.logs.some((l) => l.includes(reason)), `${count}: the refusal is visible in the log`);
-    }
+    const fake = makeFakeDockview();
+    const host = makeHost(); host._dockview = fake;
+    const instance = adapter.activate(host);
+    instance.addPane('pty1', 'terminal');
+
+    // (a) not ours -> null, so the CALLER may use the classic grid maximizer for that pane.
+    assert(instance.maximizePane('pty2') === null, 'a pane this adapter does not host returns null');
+    assert(instance.isPaneMaximized('pty2') === null, 'and its maximized state is unknowable, not false');
+    assert(instance.maximizePane(null) === null, 'a missing pane ID returns null');
+
+    // (b) ours, but the panel API rejects -> null AND a visible refusal. The caller must treat this
+    // as a full stop; silently running the grid maximizer would hide the siblings of a grid that is
+    // not even on screen.
+    fake._api._maximizeThrows = true;
+    const logsBefore = host._calls.logs.length;
+    assert(instance.maximizePane('pty1') === null, 'a rejecting panel API returns null');
+    const newLogs = host._calls.logs.slice(logsBefore);
+    assert(newLogs.some((l) => /maximize REFUSED/.test(l)), 'and the refusal is VISIBLE in the log');
+    assert(newLogs.every((l) => !/synthetic/.test(l)), 'without echoing the exception text');
+    assert(host._calls.closePane.length === 0, 'and nothing was closed by the refusal');
   }
 
-  process.stdout.write('\nR6: a failed borrow rolls back and leaves the renderer intact\n');
+  process.stdout.write('\nresize ownership transfers one way only — the adapter never takes it back\n');
   // -------------------------------------------------------------------------
   {
-    for (const [flag, label] of [['_audioDockThrows', 'a throwing dock'], ['_audioDockReturnsNull', 'a dock that returns null']]) {
-      const fake = makeFakeDockview();
-      const host = makeHost(); host._dockview = fake; host[flag] = true;
-      const result = adapter.activate(host);
-      assert(result.ok === false && result.reason === 'audio-controls-dock-failed',
-        `${label} refuses with a bounded reason (saw ${result.reason})`);
-      assert(host._calls.logs.some((l) => l.includes('audio-controls-dock-failed')),
-        `${label}: the refusal is visible in the log`);
-      // The Dockview instance this activation created must not be left running.
-      assert(fake._api._disposed === true, `${label}: the Dockview instance was disposed on rollback`);
-      assert(host._calls.closePane.length === 0, `${label}: no PTY was closed by the rollback`);
-    }
+    const fake = makeFakeDockview();
+    const host = makeHost(); host._dockview = fake;
+    const instance = adapter.activate(host);
+    instance.addPane('pty1', 'terminal');
+    instance.addPane('pty2', 'terminal');
+    instance.addPane('library', 'library');
+
+    assert(host._calls.suspended.sort().join(',') === 'pty1,pty2',
+      'each hosted TERMINAL hands its grid observer over exactly once');
+    assert(!host._calls.suspended.includes('library'),
+      'the Library pane has no xterm and no observer to suspend');
+    assert(host._calls.suspended.length === 2, 'and no pane is suspended twice');
+
+    // Handing ownership BACK is the app's decision, taken only on adoption rollback. A closed pane
+    // needs nothing: the app's own close path disconnects its observer for good.
+    fake._api.removePanel(fake._api.getPanel('pty1'));
+    instance.onAppPaneClosed('pty2');
+    instance.dispose();
+    assert(host._calls.resumed.length === 0,
+      `the adapter NEVER calls resumeAppResizeObserver itself (saw ${JSON.stringify(host._calls.resumed)})`);
   }
 
   process.stdout.write(`\ndockview-adapter-lifecycle: ${passed} passed, ${failed} failed\n`);

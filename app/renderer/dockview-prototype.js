@@ -203,9 +203,13 @@
         // geometry gate. Left running, a Dockview-hosted terminal would carry TWO observers and two
         // resize senders, and the ungated one could push a collapsed 2x1 geometry to the PTY
         // mid-drag — defeating the whole § 8 contract. Suspend it so the gated controller is the
-        // single live resize path for panes this adapter hosts. The app restores nothing here; its
-        // observer is reconnected only if the pane leaves the prototype (it does not, on this
-        // branch) and is disconnected by the app's own close path either way.
+        // single live resize path for panes this adapter hosts.
+        //
+        // OWNERSHIP TRANSFERS BOTH WAYS. This hands grid resizing TO the fit controller; the app
+        // takes it back with `resumeAppResizeObserver(paneId)` when a pane leaves this adapter
+        // without being closed — the adoption-rollback path, where the pane goes home to the
+        // classic grid and must resize normally again. A pane that is genuinely closed needs
+        // neither: the app's own close path disconnects the observer for good.
         host.suspendAppResizeObserver(paneId);
 
         const body = host.getTerminalBody(paneId);
@@ -641,8 +645,15 @@
        * `isMaximized(): boolean`, `exitMaximized(): void`) and confirmed present in the shipped UMD
        * bundle. The method names are read from the installed package, never inferred.
        *
-       * Returns null when this adapter does not host the pane, so the caller falls through to the
-       * classic grid maximizer instead of silently doing nothing.
+       * REFIT IS PART OF THE OPERATION, and it happens through the OWNING path. Maximizing hides
+       * every sibling leaf view and gives the maximized one the whole surface, so both the grown
+       * pane and the shrunk ones need a fit; the gated controllers are the only thing allowed to do
+       * that for a hosted pane, so they are scheduled here. The caller must NOT also run the
+       * classic grid fitter — that would be a second resize owner for the same panes.
+       *
+       * Returns null when this adapter does not host the pane, or when the panel API refuses. The
+       * caller treats null as a REFUSAL and must not silently fall through to the grid maximizer:
+       * that would hide the siblings of a grid that is not even on screen.
        */
       maximizePane(paneId) {
         if (!paneId || !api || !hostedPanes.has(paneId)) return null;
@@ -652,14 +663,28 @@
           const already = typeof panel.api.isMaximized === 'function' && panel.api.isMaximized();
           if (already) {
             if (typeof panel.api.exitMaximized === 'function') panel.api.exitMaximized();
+            registry.scheduleAll();
             return { maximized: false };
           }
           panel.api.maximize();
+          registry.scheduleAll();
           return { maximized: true };
         } catch {
           host.log('[dockview] maximize REFUSED: the panel API rejected the request\n');
           return null;
         }
+      },
+      /**
+       * Is the panel hosting `paneId` currently maximized? Returns null when this adapter does not
+       * host the pane or the panel API cannot answer, so the caller can distinguish "not mine" from
+       * a definite false. Read-only: it exists so the app can keep its own ⛶/🗗 glyphs truthful
+       * after a maximize that changed which panel is maximized.
+       */
+      isPaneMaximized(paneId) {
+        if (!paneId || !api || !hostedPanes.has(paneId)) return null;
+        const panel = typeof api.getPanel === 'function' ? api.getPanel(paneId) : null;
+        if (!panel || !panel.api || typeof panel.api.isMaximized !== 'function') return null;
+        try { return panel.api.isMaximized() === true; } catch { return null; }
       },
       saveLayout,
       restoreLayout,
