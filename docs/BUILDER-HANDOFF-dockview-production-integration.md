@@ -3,7 +3,7 @@
 Branch: `feature/dockview-production-integration`
 Fork-point SHA: `1dce24c141e929c04122e8b2998277d4c2d0c728`
 Pre-merge main SHA: `1dce24c141e929c04122e8b2998277d4c2d0c728`
-Tip SHA: (this continuation's commit — recorded in § 3 below)
+Tip SHA: the docs commit that immediately follows `97394588c2017ea57b5f394b17edb773dc618106` (see § 3)
 Merge commit SHA: Pending until merge
 
 **Status: PHASE B GREEN — FINAL FULL-CLASS REVIEW NOT YET REQUESTED**
@@ -68,7 +68,13 @@ with their measurements, in § 6.
 
 ## 3. This continuation
 
-Commit SHA: `__CONTINUATION_SHA__`
+Implementation commit: `97394588c2017ea57b5f394b17edb773dc618106`
+
+This continuation is TWO commits, because a commit cannot contain its own SHA:
+
+1. `97394588c2017ea57b5f394b17edb773dc618106` — all of the Phase-B code and tests below.
+2. the immediately following `docs(dockview-production)` commit — this handoff, carrying that SHA.
+   It is the branch tip and touches nothing but this file.
 
 Intended invariant: **Dockview is the production pane-layout engine on the default launch, and
 every ownership boundary it creates — resize, maximize, Library, PTY lifecycle — has exactly one
