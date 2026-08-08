@@ -4,7 +4,7 @@ Branch: `feature/dockview-production-integration`
 Fork-point SHA: `1dce24c141e929c04122e8b2998277d4c2d0c728`
 Pre-merge main SHA: `1dce24c141e929c04122e8b2998277d4c2d0c728`
 Phase-B implementation: `97394588c2017ea57b5f394b17edb773dc618106`
-Phase-C implementation: `__PHASE_C_SHA__`
+Phase-C implementation: `3ffb28e857aab5ae614cd05e418aa331a10f4b08`
 Tip SHA: the docs commit that immediately follows the Phase-C implementation (see PART TWO § C1)
 Merge commit SHA: Pending until merge
 
@@ -353,7 +353,7 @@ Same binding verdict as PART ONE § 1 — `docs/OSS-PROCUREMENT-dockview.md`, AD
 
 Phase C is TWO commits, because a commit cannot contain its own SHA:
 
-1. `__PHASE_C_SHA__` — all of the Phase-C code and tests below.
+1. `3ffb28e857aab5ae614cd05e418aa331a10f4b08` — all of the Phase-C code and tests below.
 2. the immediately following `docs(dockview-production)` commit — this handoff, carrying that SHA.
    It is the branch tip and touches nothing but this file.
 
