@@ -9,14 +9,15 @@ Phase-C fail-closed correction: `d203b631b566c1cdb6ba2d645b4494f793aa9fab`
 First Full-class reviewed-code tip: `fba57dc44b746b403ce870bd5496a30392b3a7df` — `VERDICT: FAIL`
 Full-class corrective implementation: `9d1efb839a1f5312626c9445d35f3fa3b88d8d41`
 Corrective reviewed-code tip SHA: `6be07912ed0ad29aa99a35994fd284aac247d036`
-Branch tip: the immediately following handoff-only artifact tail containing § C15
+Focused Full-class corrective-delta verdict: `VERDICT: PASS`
+Branch tip: the second handoff-only tail commit after the corrective reviewed-code tip (see § C16)
 Merge commit SHA: Pending until merge
 
-**Status: FULL-CLASS FAIL CORRECTED — FOCUSED FULL-CLASS DELTA REVIEW NOT YET REQUESTED**
+**Status: FULL-CLASS CORRECTIVE DELTA `VERDICT: PASS` — HUMAN ACCEPTANCE NOT YET REQUESTED**
 
 This document has two parts. **PART ONE** (§§ 1–12) is the Phase-B record, preserved as written;
 where Phase C superseded a Phase-B fact it is marked there and corrected in PART TWO.
-**PART TWO** (§§ C1–C15) is Phase C, both corrective rounds, and finalization.
+**PART TWO** (§§ C1–C16) is Phase C, both corrective rounds, finalization, and review verdicts.
 
 ---
 
@@ -380,6 +381,11 @@ Finalization then found one real fail-open verification gap. The corrective sequ
    commit: this handoff plus `BLUE-HELM-MASTER-STATUS.md` after the final gates.
 10. exactly one following handoff-only tail — refreshed artifact ranges, sizes, and SHA-256
     identities. The focused delta review must review item 8 through item 9, not either handoff tail.
+11. `cd84cc6ab6a420fd66a7bb8ded9040aeb15426e8` — that handoff-only artifact tail.
+12. Fresh independent read-only focused Full-class review of the pinned corrective delta — no
+    findings and literal `VERDICT: PASS`; recorded in § C16.
+13. the immediately following handoff-only verdict record — this file only, still within the
+    merge-gate's accepted handoff-tail shape.
 
 Starting checkpoint, verified before any edit: branch tip `79829f3982232f052e564ee1db023246aa3080de`,
 Phase-B implementation `9739458` present, `f5a0e54` / `3a61e56` / `3ab0a23` unchanged ancestors,
@@ -762,16 +768,17 @@ was explicitly not a basis for its code verdict.
   `--list-extensions` assertion. No PowerShell or Gemini surface changed; § C8's merge-time 955/0/0
   requirement remains unwaived.
 
-The correction is built and gated, not reviewed or accepted. The next review scope is the exact
-corrective delta `83b8cfa1206ab21d07befcf0664c584eea64a379...6be07912ed0ad29aa99a35994fd284aac247d036`.
-A fresh focused Full-class delta review must return its own literal verdict. No prior PASS exists to
-inherit, and the original cumulative verdict remains FAIL.
+At this historical checkpoint the correction was built and gated, but not yet reviewed or accepted.
+The exact corrective delta
+`83b8cfa1206ab21d07befcf0664c584eea64a379...6be07912ed0ad29aa99a35994fd284aac247d036`
+subsequently received the independent literal PASS recorded in § C16. The original cumulative
+verdict remains FAIL; § C16 is the new verdict for the bounded corrective delta.
 
 ## C15. Corrective review artifacts
 
 The corrective reviewed-code tip is **`6be07912ed0ad29aa99a35994fd284aac247d036`**. The two
 whole-branch artifacts were refreshed, and a narrowly scoped corrective-delta artifact was added so
-the next Reviewer can assess the FAIL dispositions without re-reviewing 755 KB. All three were
+the focused Reviewer could assess the FAIL dispositions without re-reviewing 755 KB. All three were
 created with `git diff --output`, remain gitignored, and matched an independent regeneration in
 both exact byte count and SHA-256 identity.
 
@@ -782,7 +789,36 @@ both exact byte count and SHA-256 identity.
 | Focused Full-class FAIL corrective delta | `83b8cfa1206ab21d07befcf0664c584eea64a379...6be07912ed0ad29aa99a35994fd284aac247d036` | `.agent-review-dockview-production-full-review-corrections.diff` | **46,024 bytes** | `79fddc5cc6f41b39f48e455260e007eadcb15e5c0d50cdf5e86f4f83f003e1a7` | 10 files; 285 insertions; 56 deletions |
 
 This handoff-only tail is excluded from all three ranges. The cumulative artifact remains the one a
-later merge-gate plan must name; the 46,024-byte delta is the next Reviewer's focused scope.
+later merge-gate plan must name; the 46,024-byte delta was the focused review scope recorded below.
+
+## C16. Focused Full-class corrective-delta review — PASS
+
+Source: fresh independent read-only Full-class Reviewer subprocess, August 8, 2026. The exact
+reviewed range was
+`83b8cfa1206ab21d07befcf0664c584eea64a379...6be07912ed0ad29aa99a35994fd284aac247d036`,
+pinned as `.agent-review-dockview-production-full-review-corrections.diff`. The Reviewer verified
+the artifact identity at **46,024 bytes** and SHA-256
+`79fddc5cc6f41b39f48e455260e007eadcb15e5c0d50cdf5e86f4f83f003e1a7`.
+
+The review returned no CRITICAL, HIGH, MEDIUM, or LOW findings and independently confirmed:
+
+* Windows layout replacement uses one temp-to-canonical rename without deleting the prior file;
+  the tests cover real overwrite, failed-rename byte preservation, temp cleanup, and the no-delete
+  invariant.
+* `visible:false` is refused, while post-apply verification requires each owning group to remain
+  connected and non-zero; the tests cover hidden-group rollback, original object identities, zero
+  PTY creation or closure, and a valid inactive tab.
+* Only `ENOENT` maps to saved-layout absence; other inspection failures are reported as
+  `read-failed`, with store and lifecycle coverage.
+
+The corrective-tip Pester attempt remains honestly recorded as 954 passed, one environment-only
+Gemini CLI credential failure, and zero skipped. The Reviewer explicitly did not treat that as a
+JavaScript defect, and the merge-time 955/0/0 requirement remains unwaived.
+
+> VERDICT: PASS
+
+This is a review verdict, not human acceptance or merge authorization. No merge or push has been
+performed. The next checkpoint is a separate human acceptance decision.
 
 ## Review-diff rule
 
@@ -799,7 +835,7 @@ Pinned `.agent-review-*.diff` files are local review artifacts and must remain g
 
 ---
 
-Not started, and not authorised by this handoff: focused Full-class delta review, human acceptance,
-merge, push, pane-status (R4) work, unrelated cleanup.
+Not started, and not authorised by this handoff: human acceptance, merge, push, pane-status (R4)
+work, unrelated cleanup.
 
-**FULL-CLASS FAIL CORRECTED — FOCUSED FULL-CLASS DELTA REVIEW NOT YET REQUESTED**
+**FULL-CLASS CORRECTIVE DELTA `VERDICT: PASS` — HUMAN ACCEPTANCE NOT YET REQUESTED**
