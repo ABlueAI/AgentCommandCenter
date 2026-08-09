@@ -11,15 +11,16 @@ Full-class corrective implementation: `9d1efb839a1f5312626c9445d35f3fa3b88d8d41`
 Corrective reviewed-code tip SHA: `6be07912ed0ad29aa99a35994fd284aac247d036`
 Focused Full-class corrective-delta verdict: `VERDICT: PASS`
 Human production acceptance: `HUMAN ACCEPTANCE: PASS`
-Branch tip: the third handoff-only tail commit after the corrective reviewed-code tip (see § C17)
-Merge commit SHA: Pending until merge
+Branch tip: `cddd63314709c32aac93cb4816a96502e6d528ff` — the third handoff-only tail commit after
+the corrective reviewed-code tip (see § C17)
+Merge commit SHA: `d23e2c28c53fa5fd23ed73dbd48a4f43c369ebc2`
 
-**Status: HUMAN ACCEPTANCE PASS — MERGE AND PUSH AUTHORIZED; FIXED GATES STILL BINDING**
+**Status: COMPLETE — REVIEWED, HUMAN-ACCEPTED, MERGED, GATED ON MERGED `main`, AND PUSHED**
 
 This document has two parts. **PART ONE** (§§ 1–12) is the Phase-B record, preserved as written;
 where Phase C superseded a Phase-B fact it is marked there and corrected in PART TWO.
-**PART TWO** (§§ C1–C17) is Phase C, both corrective rounds, finalization, review verdicts, and
-human acceptance.
+**PART TWO** (§§ C1–C18) is Phase C, both corrective rounds, finalization, review verdicts,
+human acceptance, and the post-merge closeout.
 
 ---
 
@@ -861,6 +862,106 @@ merge-time Pester result must still be literal **955 passed / 0 failed / 0 skipp
 preflight and Apply must pass, the local merge result must be proven before push, and any failure
 stops the sequence visibly.
 
+## C18. Post-merge closeout — merged, gated on merged `main`, and pushed
+
+**Dockview production integration is complete.** It is independently reviewed, human-accepted,
+merged with `--no-ff`, gated on merged `main`, and pushed. Nothing in this section reinterprets
+§§ C14–C17: the first cumulative `VERDICT: FAIL`, its bounded corrective delta, the focused
+corrective `VERDICT: PASS`, and `HUMAN ACCEPTANCE: PASS` all stand exactly as recorded.
+
+### Merge identity
+
+| Field | Value |
+| --- | --- |
+| Merge commit | `d23e2c28c53fa5fd23ed73dbd48a4f43c369ebc2` |
+| Merge subject | `Merge Dockview: production pane layout integration` |
+| Merge parent 1 — recorded pre-merge `main` | `1dce24c141e929c04122e8b2998277d4c2d0c728` |
+| Merge parent 2 — branch tip | `cddd63314709c32aac93cb4816a96502e6d528ff` |
+| Merge tree | `bc1a0fb660999c27be537431f995828dad237e6a` |
+| Corrective reviewed-code tip | `6be07912ed0ad29aa99a35994fd284aac247d036` |
+
+The merge tree is **byte-identical to the branch-tip tree** (`cddd633^{tree}` is also
+`bc1a0fb660999c27be537431f995828dad237e6a`), so the `--no-ff` merge introduced no merge-time edit:
+what was reviewed is exactly what landed. Parent 1's tree was
+`6bf1ffc5745ca3569d74b76c054e3e03176d8120`.
+
+### The dependency-hydration stop, recorded honestly
+
+The **first post-merge app-gate attempt stopped before completing**. `main`'s working copy carried
+an `app/node_modules` tree that predated the merge, so it did not contain the `dockview` and
+`dockview-core` packages the merge had just introduced. `app/node_modules` is gitignored and is not
+part of any commit, tree, or reviewed diff.
+
+**The merge was retained** — not reverted, re-done, or amended. Blue approved a bounded recovery:
+
+```
+npm install --ignore-scripts --no-audit --no-fund
+```
+
+It installed only `dockview@7.0.4` and `dockview-core@7.0.4`, resolved from the **already-tracked**
+`app/package-lock.json` that the merge itself had brought in, and **changed no tracked file** —
+which is precisely why no lockfile update was needed or produced. Both full gates then passed and
+push proceeded.
+
+**This is an environment-hydration stop, not a code defect.** No source, test, dependency
+declaration, or lockfile change was required, and nothing in the reviewed delta was implicated. The
+honest lesson is procedural: a merge that adds a runtime dependency leaves the merging checkout's
+ignored `node_modules` stale, and the gate correctly refused to run against it rather than
+producing a misleading pass.
+
+### Merged-main gate results
+
+Both gates were run on merged `main` at `d23e2c28c53fa5fd23ed73dbd48a4f43c369ebc2` with a clean
+tracked tree, and both were **independently re-run and re-tallied during this closeout** rather
+than transcribed:
+
+| Gate | Result |
+| --- | --- |
+| App gate (`npm test`, `app/`) | exit `0` — **46 suites, 3,099 assertions passed, 0 failed** |
+| Pester (`scripts/run-pester.ps1`) | exit `0` — **955 passed / 0 failed / 0 skipped** |
+
+The Pester result is the literal `955 / 0 / 0` the merge gate requires; the environment-dependent
+Gemini-CLI credential failure recorded at the corrective commit in §§ C14 and C16 did not recur.
+Running the full app gate left the tracked tree clean, which is itself evidence the gate mutates
+nothing tracked.
+
+> **COUNTING CORRECTION — the chain is 46 suites, not 44, and every earlier tally in this document
+> undercounts by exactly two suites and 18 assertions.** § 4 records "43 suites / 2,508
+> assertions"; §§ C8 and C14 record "44 suites / 3,081 assertions". These are a **tally error, not
+> a change in the gate**. The earlier tally omitted the only two suites that print
+> `N assertions passed` instead of `N passed, 0 failed` — `renderer/audio-module-health.test.js`
+> and `renderer/tts-audio-contract.test.js`, 9 assertions each — so every figure is short by two
+> suites and 18 assertions. Counting the `&&`-chained entries in `app/package.json` confirms it
+> independently, without running anything: **45 suites at `79829f3`** (recorded as 43) and
+> **46 at `3ffb28e`, `9d1efb8`, `6be0791`, `cddd633`, and `d23e2c2` alike** (recorded as 44). No
+> suite was added, removed, or skipped between the corrective tip and the merge.
+>
+> **The § C8 reconciliation is unaffected.** Both of its endpoints are undercounted by the same
+> constant 18, so the delta is exact: `2,508 → 3,081` is `+573`, and the true `2,526 → 3,099` is
+> also `+573`. The per-suite attributions in that table are likewise untouched, because neither
+> omitted suite changed in either phase. The historical sections are left as written rather than
+> silently renumbered; this note is the correction.
+
+### Post-merge state
+
+* Local `main` and `origin/main` are both `d23e2c28c53fa5fd23ed73dbd48a4f43c369ebc2`; the push
+  completed successfully.
+* No Electron processes remain.
+* The production saved-layout file `dockview-layout.json` is **absent** from `userData` — nothing
+  in the gates or the merge created one, consistent with § C2's rule that nothing runs
+  automatically at startup.
+* The prototype evidence file `dockview-prototype-layout.json` remains untouched, as § C2 requires.
+* The prototype branch stays unmerged and unpushed as the retained evidence trail behind the ADOPT
+  decision.
+
+### Still not authorized
+
+Cross-provider pane-status indicators (R4) are the next queue position and remain **unauthorized
+for specification or implementation** until that separate subsystem has its own Source-Scout
+evaluation, its own tracked OSS procurement record, and its own explicit Blue verdict of ADOPT,
+FORK, PROTOTYPE, PATTERN-MINE, or BUILD FRESH. **The Dockview record and ADOPT verdict do not
+transfer to pane-status.**
+
 ## Review-diff rule
 
 - Before merge, use `git diff main...<tip>`.
@@ -876,7 +977,8 @@ Pinned `.agent-review-*.diff` files are local review artifacts and must remain g
 
 ---
 
-Authorized but not yet started at this commit: the fixed merge gates, local no-FF merge, and push.
-Not authorized: pane-status (R4) work and unrelated cleanup.
+Complete at this commit: the fixed merge gates, the local no-FF merge, the merged-`main` gates, and
+the push — all recorded in § C18. Not authorized: pane-status (R4) work and unrelated cleanup.
 
-**HUMAN ACCEPTANCE: PASS — MERGE AND PUSH AUTHORIZED; FIXED GATES STILL BINDING**
+**DOCKVIEW PRODUCTION INTEGRATION: COMPLETE — REVIEWED, HUMAN-ACCEPTED, MERGED AT `d23e2c2`, GATED
+ON MERGED `main`, AND PUSHED**

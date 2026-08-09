@@ -155,17 +155,63 @@ reviewed branch.
 
 **Dockview and cross-provider pane-status indicators are separate subsystems,
 each requiring its own tracked procurement record and its own Blue verdict.**
-One record cannot cover both. **Dockview now has a tracked record and an ADOPT
-verdict** in `docs/OSS-PROCUREMENT-dockview.md`; its production integration is
-the subject of an active corrective review cycle on `feature/dockview-production-integration`:
-the first cumulative Full-class review returned literal `VERDICT: FAIL`, and its bounded corrective
-delta is built but not yet delta-reviewed. It remains unaccepted, unmerged, and unpushed.
+One record cannot cover both. **Dockview has a tracked record and an ADOPT
+verdict** in `docs/OSS-PROCUREMENT-dockview.md`, and its production integration
+is now reviewed, human-accepted, merged at
+`d23e2c28c53fa5fd23ed73dbd48a4f43c369ebc2`, gated on merged `main`, and pushed.
 **Cross-provider pane-status indicators
 still have no Blue verdict**, so that separate subsystem remains unauthorized
 for specification or implementation. The `dockview-core` expectation in the
 R3 roadmap entry remains a roadmap note, not a pane-status procurement verdict.
+**Dockview's completed procurement decision does not transfer to pane-status**;
+finishing Dockview satisfied Dockview's gate only.
+
+## Current checkpoint — August 8 — DOCKVIEW MERGED, GATED, AND PUSHED
+
+**Baseline:** Dockview production pane-layout integration is independently
+reviewed, human-accepted, merged with `--no-ff`, gated on merged `main`, and
+pushed. Local and remote `main` are both
+**`d23e2c28c53fa5fd23ed73dbd48a4f43c369ebc2`**.
+
+- Merge subject: `Merge Dockview: production pane layout integration`.
+- Merge parent 1 (recorded pre-merge `main`):
+  `1dce24c141e929c04122e8b2998277d4c2d0c728`; merge parent 2 (branch tip):
+  `cddd63314709c32aac93cb4816a96502e6d528ff`; merge tree
+  `bc1a0fb660999c27be537431f995828dad237e6a`, which is byte-identical to the
+  branch-tip tree — the `--no-ff` merge introduced no merge-time edit.
+- Corrective reviewed-code tip: `6be07912ed0ad29aa99a35994fd284aac247d036`.
+- Reviewer verdicts, both retained verbatim in
+  `docs/BUILDER-HANDOFF-dockview-production-integration.md`: the first
+  cumulative Full-class review returned literal `VERDICT: FAIL` over
+  `fba57dc4` (two MEDIUM, one LOW), and the focused Full-class review of the
+  bounded corrective delta returned literal `VERDICT: PASS`. The FAIL is
+  historical fact, not superseded wording.
+- Human production acceptance: `HUMAN ACCEPTANCE: PASS` — a full-restart
+  walkthrough of all four layout operations in which both original terminal
+  PIDs survived every operation.
+- Merged-main gates: app gate exit `0`, **46 suites, 3,099 assertions passed /
+  0 failed**; Pester **955 passed / 0 failed / 0 skipped**.
+- The first post-merge app-gate attempt stopped because `main`'s gitignored
+  `app/node_modules` predated the merge and so lacked the newly merged
+  packages. The merge was retained; Blue approved a bounded
+  `npm install --ignore-scripts --no-audit --no-fund`, which installed only
+  `dockview@7.0.4` and `dockview-core@7.0.4` from the already-tracked
+  `app/package-lock.json` and changed no tracked file. Both full gates then
+  passed and push proceeded. This was an environment-hydration stop, not a
+  code defect.
+
+**Dockable/resizable layout integration is complete.** Cross-provider
+pane-status indicators (R4) move to the next queue position and remain
+unauthorized until they have their own Source-Scout evaluation, their own
+tracked OSS procurement record, and an explicit Blue verdict.
 
 ## Current checkpoint — August 8 — DOCKVIEW FULL REVIEW FAILED; CORRECTIVE DELTA GREEN
+
+> **SUPERSEDED — retained as historical provenance.** This checkpoint was
+> accurate at the corrective-delta stage, before the focused delta review, human
+> acceptance, merge, merged-main gates, and push. It is preserved rather than
+> rewritten so the FAIL verdict and the bounded correction that answered it
+> remain visible. The current state is the August 8 merged checkpoint above.
 
 `feature/dockview-production-integration` now carries the accepted prototype history plus the
 production Phase-B and Phase-C implementations. Phase C enables four explicit operations — Save
@@ -196,12 +242,19 @@ and pane-status procurement must not begin until Dockview reaches its clean stop
 
 > **BASELINE ADVANCED — August 8.** The `main` SHA in the baseline paragraph below
 > was accurate on July 23 and is now historical. Local and remote `main` are both
-> **`1dce24c141e929c04122e8b2998277d4c2d0c728`** — the OSS-first procurement
-> governance merge — after P12 (`4c07db9`), Merge Gate v1 (`147fb74`), V3b
-> (`6baa732`), V4 (`22592b7`), the V4 closeout (`c58ddfa`), and procurement
-> governance (`1dce24c`) landed. Dockview has not reached `main`. The scope-frozen Blue Helm 1.0
+> **`d23e2c28c53fa5fd23ed73dbd48a4f43c369ebc2`** — the Dockview production
+> pane-layout integration merge — after P12 (`4c07db9`), Merge Gate v1
+> (`147fb74`), V3b (`6baa732`), V4 (`22592b7`), the V4 closeout (`c58ddfa`),
+> procurement governance (`1dce24c`), and Dockview (`d23e2c2`) landed. The
+> scope-frozen Blue Helm 1.0
 > definition in this section still stands; only the baseline SHA moved. The
 > *Already complete* and *Remaining work* lists below are current as of August 8.
+>
+> The intermediate `1dce24c141e929c04122e8b2998277d4c2d0c728` baseline recorded
+> here earlier — and the "Dockview has not reached `main`" wording that
+> accompanied it — are **stale, not reinterpreted**: both were accurate until
+> the Dockview merge, and `1dce24c` is retained above as Dockview's recorded
+> pre-merge `main` and merge parent 1.
 
 **Baseline:** V3a Video Scout pre-analysis focus is human-accepted, merged with
 `--no-ff`, gated, and pushed. Local and remote `main` are both
@@ -239,6 +292,20 @@ This is load-bearing context, not historical decoration:
 - **Merge Gate v1** (`scripts/merge-gate.ps1`) evidence-checked local `--no-ff`
   merge helper, merged at `147fb74`.
 - **V3b** stored-report follow-up Q&A, merged at `6baa732`.
+- **Dockview dockable/resizable pane-layout integration**, merged at `d23e2c2`
+  (recorded pre-merge `main` `1dce24c`, branch tip `cddd633`, corrective
+  reviewed-code tip `6be0791`; first cumulative Full-class review
+  `VERDICT: FAIL`, focused corrective-delta Full-class review `VERDICT: PASS`,
+  `HUMAN ACCEPTANCE: PASS`; merged-main gates app exit `0` with **3,099
+  assertions / 0 failed** across 46 suites and Pester **955 passed / 0 failed /
+  0 skipped**). Adopts `dockview@7.0.4` per `docs/OSS-PROCUREMENT-dockview.md`
+  with app-owned PTY/IPC/filesystem authority, classic-grid recovery, and four
+  explicit layout operations that cannot create, close, restart, resume, or
+  strand a PTY. Full release record in
+  `docs/BUILDER-HANDOFF-dockview-production-integration.md`. The bounded
+  `dockview@7.0.4` prototype that produced the ADOPT decision passed its own
+  Full-class review and human acceptance; its branch stays unmerged and
+  unpushed as the retained evidence trail behind that decision.
 - **V4 bounded multi-slice + V4Q report-quality gate**, merged at `22592b7`
   (reviewed range `4c07db9...0e412e0`, branch tip `7eecb1c`; independent
   Opus 5 Full-class whole-diff `VERDICT: PASS`; merged-main gates app exit `0`
@@ -264,43 +331,53 @@ This is load-bearing context, not historical decoration:
 > merged at `4c07db9`, before the Quick Links entry below was reached. Quick
 > Links is unblocked on that axis. Do not delete this constraint; it is the
 > reason Quick Links may proceed at all.
+>
+> **RENUMBERED — August 8, after the Dockview merge.** The two leading Dockview
+> entries — the prototype adoption decision and *Dockable/resizable layout
+> integration* — are complete and now recorded in *Already complete* above with
+> their SHAs, both verdicts, human acceptance, and merged-main gates. That
+> wording is **stale, not reinterpreted**; the design history stays in the
+> completed entry and in
+> `docs/BUILDER-HANDOFF-dockview-production-integration.md`. Cross-provider
+> pane-status indicators therefore move up into the next queue position, which
+> is what the Dockview-first sequencing was always waiting on. Moving up the
+> queue is not authorization — see the gate note attached to the entry.
 
-1. **Dockview prototype → human adoption decision: COMPLETE as evidence, not merged.** The bounded
-   `dockview@7.0.4` prototype passed independent Full-class review and Blue-attested human
-   acceptance; Blue then issued the tracked ADOPT verdict above. The prototype branch remains
-   unmerged and unpushed as the evidence trail behind that decision.
-2. **Dockable/resizable layout integration: PHASE C GREEN, pending final review and acceptance.**
-   The production branch implements the default Dockview path, classic recovery, transactional
-   persistence, exact live/saved pane equality, and app-owned PTY/IPC/filesystem authority. It is
-   not complete until the cumulative Full-class review returns literal `VERDICT: PASS`, Blue runs
-   the full-restart production acceptance, and Blue alone authorizes merge and push.
-3. **Cross-provider pane-status indicators (R4, promoted).** Detect
+1. **Cross-provider pane-status indicators (R4, promoted). NEXT IN QUEUE —
+   NOT YET AUTHORIZED.** Detect
    idle / awaiting-input / done and surface it per pane across providers, so the
    app interrupts Blue rather than requiring him to poll it. Sequenced after
    Dockview so the indicators target stable pane and tab headers rather than the
-   hand-rolled grid they would otherwise have to be rebuilt against. Design
+   hand-rolled grid they would otherwise have to be rebuilt against; that
+   prerequisite is now satisfied, because Dockview merged at `d23e2c2`.
+   **Specification and implementation remain unauthorized until this subsystem
+   has all three of: its own read-only Source-Scout evaluation against primary
+   sources; its own tracked OSS procurement decision record under `docs/`; and
+   an explicit Blue verdict of ADOPT, FORK, PROTOTYPE, PATTERN-MINE, or BUILD
+   FRESH.** The Dockview record and its ADOPT verdict do not cover pane-status
+   and must not be reused for it. Design
    history and the original ranking remain in the R4 roadmap entry.
-4. **Quick Links.** Configurable, main-validated HTTP/HTTPS links. `CRM` /
+2. **Quick Links.** Configurable, main-validated HTTP/HTTPS links. `CRM` /
    `Starboard CRM` opens Blue's Hexona Systems login and `Outlook` opens Outlook
    Web in the Windows default browser. No embedded webviews, native CRM/mail
    panel, Electron-held business credentials, or agent access in 1.0. Its P12
    prerequisite is satisfied (see the note above).
-5. **Session persistence and explicit Claude resume controls.** Restore pane
+3. **Session persistence and explicit Claude resume controls.** Restore pane
    type, role, worktree, safe presentation state, and Dockview placement.
    `Continue Latest` uses supported `claude --continue`; `Choose Session…` uses
    the native `claude --resume` selector. Never reconstruct conversations,
    parse terminal output for session identity, claim arbitrary PTYs resumed, or
    auto-restart Video Scout/paid work. Missing state refuses visibly; offer
    Restore Workspace and Start Fresh.
-6. **P1 fenced-role environment containment.** Full-class credential boundary:
+4. **P1 fenced-role environment containment.** Full-class credential boundary:
    explicit minimal environments; no provider/business/secret-shaped ambient
    values in fenced PTYs.
-7. **Fence completion.** Finish WO-6/WO-7 live tests and implement P4 unless
+5. **Fence completion.** Finish WO-6/WO-7 live tests and implement P4 unless
     preflight proves an equivalent enforcement mechanism. Session continuation
     must reuse or deliberately extend the existing `.claude.json` coordination
     surface, cover multiple app processes (not only panes), and prevent/warn on
     duplicate continuation rather than building a second competing lock.
-8. **Portable family distribution and clean-machine setup.** Before 1.0 is
+6. **Portable family distribution and clean-machine setup.** Before 1.0 is
     complete, replace the development-only shortcut/runtime handoff with an
     organized packaged build that Blue can install locally and give to one
     trusted family member at no recurring signing cost. Remove machine-specific
@@ -319,7 +396,7 @@ This is load-bearing context, not historical decoration:
     `docs/INSTALL-WINDOWS.md` with every direct transfer and retain the
     investigation record in
     `docs/SMART-APP-CONTROL-AND-DISTRIBUTION.md`.
-9. **EDA-1 environment and deployment assumptions audit.** After the
+7. **EDA-1 environment and deployment assumptions audit.** After the
     portable package exists and before the functional ship-check, run the
     read-only inventory in `docs/AUDIT-SCOPE-environment-deployment.md`.
     Record every host-policy, runtime/toolchain, external-service, filesystem,
@@ -329,13 +406,13 @@ This is load-bearing context, not historical decoration:
     acceptance is a clean-clone/clean-machine install using only
     `docs/INSTALL-WINDOWS.md`. The audit makes no fixes; each blocking
     remediation receives its own normally gated work order.
-10. **Release gate.** Resolve or explicitly accept every EDA-1 1.0 blocker,
+8. **Release gate.** Resolve or explicitly accept every EDA-1 1.0 blocker,
     then run the full app/Pester/reachability gates, `npm audit`,
     Electronegativity, full Electron restart, every included control smoked,
     visible progress/refusal, metadata-only Logs, credential-boundary checks,
     no automatic paid restart, clean synchronized `main`, and accepted
     residuals recorded.
-11. **One complete daily-driver day.** Blue records friction, failures,
+9. **One complete daily-driver day.** Blue records friction, failures,
     repeated manual steps, missing capabilities, and desired improvements in a
     DOCX. Repair blockers, record/tag Blue Helm 1.0, and use non-blocking
     findings to plan 2.0.
@@ -346,6 +423,11 @@ This is load-bearing context, not historical decoration:
 areas, in that order.** Dockview comes first so the status UI targets stable
 pane and tab headers instead of the hand-rolled grid it would otherwise have to
 be rebuilt against.
+
+> **FIRST HALF DISCHARGED — August 8.** Dockview merged at `d23e2c2`, so the
+> stable pane and tab headers this ordering was protecting now exist on `main`.
+> The direction is retained as the reason pane-status is sequenced where it is,
+> not as outstanding work. Pane-status is now the next feature area on its own.
 
 **Pane-status R4's revisit trigger has FIRED.** R4 was consciously deprioritized
 with an explicit condition: if pane-babysitting during the audio or V3/V4
@@ -377,13 +459,16 @@ FRESH**; `REJECT` is not itself the final subsystem verdict.
 > above match it exactly and match the OSS procurement protocol section at the
 > top of this file.
 
-**Dockview has satisfied this gate.** Its tracked record is
-`docs/OSS-PROCUREMENT-dockview.md`, and Blue's current verdict is the verbatim
-ADOPT line recorded in the August 8 checkpoint above. The production branch is
-built but still awaits final Full-class review, human acceptance, merge, and
-push. **Pane-status has not satisfied this gate:** it still needs its own
+**Dockview has satisfied this gate, and its production integration is now
+finished.** Its tracked record is
+`docs/OSS-PROCUREMENT-dockview.md`, and Blue's verdict is the verbatim
+ADOPT line recorded in the August 8 checkpoints above. The production branch
+was reviewed, human-accepted, merged at `d23e2c2`, gated on merged `main`, and
+pushed. **Pane-status has not satisfied this gate:** it still needs its own
 Source-Scout evaluation, tracked record, and Blue verdict. The Dockview record
-and verdict do not authorize pane-status work.
+and verdict do not authorize pane-status work, and Dockview reaching `main`
+does not discharge pane-status's separate procurement gate — a completed
+subsystem verdict covers only the subsystem it names.
 
 ### Windows launch/distribution constraint — July 26
 
@@ -1622,6 +1707,14 @@ live testing — these are NEEDS, not wants; V1 blocks the tool's whole point):*
 > tab, persist layouts. Replaces hand-rolled grid CSS as panes multiply
 > (links, calc, whiteboard, CRM, video-scout…). This one IS a utility-dep
 > adoption, not a pattern-mine.
+>
+> **DELIVERED — August 8, merged at `d23e2c2`.** Shipped as `dockview@7.0.4`
+> (which bundles `dockview-core`) under the tracked ADOPT verdict in
+> `docs/OSS-PROCUREMENT-dockview.md`. This roadmap entry is retained as the
+> origin of the requirement, not as open work. Note the scope difference the
+> entry anticipated loosely and the delivered subsystem defines exactly:
+> persistence is four explicit, validated, transactional operations over the
+> live pane set — not implicit layout saving.
 
 > **R4. Agent status detection + notifications. ← RANKED #4.** Detect idle /
 > awaiting-input / done from PTY output; Windows toast + tray badge + optional
