@@ -962,6 +962,31 @@ evaluation, its own tracked OSS procurement record, and its own explicit Blue ve
 FORK, PROTOTYPE, PATTERN-MINE, or BUILD FRESH. **The Dockview record and ADOPT verdict do not
 transfer to pane-status.**
 
+### Closeout branch and pinned review artifact
+
+The closeout itself is a **documentation-only** change on
+`feature/dockview-post-merge-closeout`, built in an isolated worktree from `main` at
+`d23e2c28c53fa5fd23ed73dbd48a4f43c369ebc2`. It modifies exactly two tracked files —
+`docs/BUILDER-HANDOFF-dockview-production-integration.md` and `BLUE-HELM-MASTER-STATUS.md` — and no
+application code, test, dependency, merge-gate script, `AGENTS.md`, or GitHub configuration.
+
+| Field | Value |
+| --- | --- |
+| Documentation reviewed tip | `b6aa8941494c3967aeeb57592ae43a518104594c` |
+| Exact three-dot review range | `d23e2c28c53fa5fd23ed73dbd48a4f43c369ebc2...b6aa8941494c3967aeeb57592ae43a518104594c` |
+| Pinned artifact | `.agent-review-dockview-post-merge-closeout.diff` |
+| Exact size | **26,067 bytes** |
+| SHA-256 | `93f65aa8d54a64daf138d06557f8746c334f643d6f0bac418c086c6f67226891` |
+| Diff shortstat | 2 files; 238 insertions; 43 deletions |
+
+The artifact was created with `git diff --output` (never PowerShell redirection), remains gitignored
+local review evidence, and was independently regenerated from the stated range — the regeneration
+matched the pinned file in both exact byte count and SHA-256 identity. This handoff-only tail commit
+is intentionally excluded from the range, as with every earlier artifact in §§ C13 and C15.
+
+**This closeout has not been reviewed, merged, or pushed.** It stops here for a fresh independent
+Standard-class review.
+
 ## Review-diff rule
 
 - Before merge, use `git diff main...<tip>`.
