@@ -10,14 +10,16 @@ First Full-class reviewed-code tip: `fba57dc44b746b403ce870bd5496a30392b3a7df` �
 Full-class corrective implementation: `9d1efb839a1f5312626c9445d35f3fa3b88d8d41`
 Corrective reviewed-code tip SHA: `6be07912ed0ad29aa99a35994fd284aac247d036`
 Focused Full-class corrective-delta verdict: `VERDICT: PASS`
-Branch tip: the second handoff-only tail commit after the corrective reviewed-code tip (see § C16)
+Human production acceptance: `HUMAN ACCEPTANCE: PASS`
+Branch tip: the third handoff-only tail commit after the corrective reviewed-code tip (see § C17)
 Merge commit SHA: Pending until merge
 
-**Status: FULL-CLASS CORRECTIVE DELTA `VERDICT: PASS` — HUMAN ACCEPTANCE NOT YET REQUESTED**
+**Status: HUMAN ACCEPTANCE PASS — MERGE AND PUSH AUTHORIZED; FIXED GATES STILL BINDING**
 
 This document has two parts. **PART ONE** (§§ 1–12) is the Phase-B record, preserved as written;
 where Phase C superseded a Phase-B fact it is marked there and corrected in PART TWO.
-**PART TWO** (§§ C1–C16) is Phase C, both corrective rounds, finalization, and review verdicts.
+**PART TWO** (§§ C1–C17) is Phase C, both corrective rounds, finalization, review verdicts, and
+human acceptance.
 
 ---
 
@@ -386,6 +388,10 @@ Finalization then found one real fail-open verification gap. The corrective sequ
     findings and literal `VERDICT: PASS`; recorded in § C16.
 13. the immediately following handoff-only verdict record — this file only, still within the
     merge-gate's accepted handoff-tail shape.
+14. Blue's visible full-restart human verification — all seven work-order sections passed, original
+    terminal PIDs stayed stable, and the pane-set mismatch refusal remained counts-only.
+15. the immediately following third and final handoff-only tail — this acceptance record only,
+    reaching but not exceeding the merge-gate's three-tail cap above the reviewed-code tip.
 
 Starting checkpoint, verified before any edit: branch tip `79829f3982232f052e564ee1db023246aa3080de`,
 Phase-B implementation `9739458` present, `f5a0e54` / `3a61e56` / `3ab0a23` unchanged ancestors,
@@ -818,7 +824,42 @@ JavaScript defect, and the merge-time 955/0/0 requirement remains unwaived.
 > VERDICT: PASS
 
 This is a review verdict, not human acceptance or merge authorization. No merge or push has been
-performed. The next checkpoint is a separate human acceptance decision.
+performed at this historical checkpoint. The subsequent human decision is recorded below.
+
+## C17. Human production acceptance — PASS; merge and push authorized
+
+Source: Blue's visible production walkthrough on August 8, 2026, after a full restart of the feature
+build at branch tip `8ff1f751a537f5ebdc1eaac84c2786d80f953e13`. The production saved-layout
+file was absent before launch, the renderer ran from this worktree, and the accepted app instance
+was then fully closed with zero Electron processes remaining.
+
+All seven work-order sections passed:
+
+1. restore with no saved arrangement refused visibly and created no pane;
+2. two disposable terminal panes plus the Library opened successfully;
+3. the distinctive three-pane arrangement saved successfully;
+4. a third live terminal produced this bounded counts-only refusal, verbatim:
+   `Restore refused (live-panes-not-saved): 1 open pane(s) are not in the saved arrangement. Close
+   them first. Nothing was changed and the saved file is intact.` After Blue manually closed only
+   that third terminal, Restore returned to the saved arrangement;
+5. successful Restore preserved both original terminal processes;
+6. Reset produced the default arrangement without overwriting the save, and Restore returned the
+   distinctive saved arrangement again; and
+7. Clear changed only saved metadata, after which Restore honestly reported absence.
+
+The original terminal process identities remained stable throughout every layout operation:
+
+* terminal 1: PID **54705**;
+* terminal 2: PID **26968**.
+
+Blue's literal decision:
+
+> HUMAN ACCEPTANCE: PASS
+
+Blue explicitly authorized merge and push. That authorization does not waive any fixed gate: the
+merge-time Pester result must still be literal **955 passed / 0 failed / 0 skipped**, merge-gate
+preflight and Apply must pass, the local merge result must be proven before push, and any failure
+stops the sequence visibly.
 
 ## Review-diff rule
 
@@ -835,7 +876,7 @@ Pinned `.agent-review-*.diff` files are local review artifacts and must remain g
 
 ---
 
-Not started, and not authorised by this handoff: human acceptance, merge, push, pane-status (R4)
-work, unrelated cleanup.
+Authorized but not yet started at this commit: the fixed merge gates, local no-FF merge, and push.
+Not authorized: pane-status (R4) work and unrelated cleanup.
 
-**FULL-CLASS CORRECTIVE DELTA `VERDICT: PASS` — HUMAN ACCEPTANCE NOT YET REQUESTED**
+**HUMAN ACCEPTANCE: PASS — MERGE AND PUSH AUTHORIZED; FIXED GATES STILL BINDING**
