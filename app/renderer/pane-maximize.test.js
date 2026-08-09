@@ -137,13 +137,28 @@ const css = read('styles.css');
     'Escape listener: capture phase, consumes the key ONLY when a restore happened (terminal or library reader)');
   assert(/function switchTab\(name\) \{[\s\S]{0,300}if \(name !== 'terminals'\) paneMaximizer\.handleViewSwitch\(\);/.test(appSrc),
     'switchTab restores maximize state when leaving the Terminals view');
-  const closeStart = appSrc.indexOf("pane.querySelector('.x').onclick");
+  // The close handler's BODY was extracted into the named, idempotent `closeThisPane` so a Dockview
+  // panel-removal event and the close button can converge on exactly one path (Dockview prototype
+  // work order § 7). The ordering invariant this asserts is unchanged; only the anchor moved, so the
+  // anchor follows it. The button is still verified to route to that same single path below.
+  const closeStart = appSrc.indexOf('const closeThisPane = () =>');
   const closeBlock = appSrc.slice(closeStart, appSrc.indexOf('showTermEmpty()', closeStart));
   assert(closeStart > 0 && closeBlock.indexOf('paneMaximizer.handlePaneClosed(id)') !== -1
     && closeBlock.indexOf('paneMaximizer.handlePaneClosed(id)') < closeBlock.indexOf('pane.remove()'),
     'close handler restores the grid BEFORE removing the pane');
-  assert(/pane\.querySelector\('\.max'\)\.onclick[\s\S]{0,200}paneMaximizer\.toggle\(id, pane\)/.test(appSrc),
-    'the header ⛶ control toggles through the exported controller');
+  assert(/pane\.querySelector\('\.x'\)\.onclick = closeThisPane;/.test(appSrc),
+    'the ✕ control still routes through that one close path');
+  assert(/const closeThisPane = \(\) => \{\s*\n\s*if \(!terms\.has\(id\)\) return;/.test(appSrc),
+    'the close path is idempotent — a second call is a no-op, so a PTY cannot be killed twice');
+  // MAXIMIZE NOW ROUTES BY OWNERSHIP. There are two maximizers — this controller for the classic
+  // grid, and Dockview's own group maximizer for a hosted pane — and exactly one may run per click.
+  // This controller's contract is unchanged; what changed is that it is reached only when the pane
+  // is NOT owned by the layout engine. Both halves are pinned so neither can quietly swallow the
+  // other; the routing itself is proven behaviourally in dockview-app-integration.test.js.
+  assert(/pane\.querySelector\('\.max'\)\.onclick[\s\S]{0,400}paneMaximizer\.toggle\(id, pane\)/.test(appSrc),
+    'the header ⛶ control still toggles through the exported controller');
+  assert(/if \(paneIsDocked\(id\)\) \{ maximizeDockedPane\(id\); return; \}\s*\n\s*paneMaximizer\.toggle\(id, pane\);/.test(appSrc),
+    'and it does so ONLY for a pane the layout engine does not own — the docked branch returns first');
   const onLayoutStart = appSrc.indexOf('onLayout: (maximizedId, previousId)');
   const onLayoutBlock = appSrc.slice(onLayoutStart, appSrc.indexOf('},', appSrc.indexOf('if (focusId)', onLayoutStart)));
   assert(onLayoutStart > 0 && onLayoutBlock.includes('t.fit.fit()') && onLayoutBlock.includes('cc.ptyResize('),

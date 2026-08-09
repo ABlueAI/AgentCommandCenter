@@ -63,3 +63,37 @@ contextBridge.exposeInMainWorld('cc', {
   // surfaced main-process errors (shown in the Logs tab instead of a fatal dialog)
   onMainError: (cb) => ipcRenderer.on('main-error', (_e, m) => cb(m)),
 });
+
+// ---- Dockview layout bridge --------------------------------------------------------------------
+// Reports MAIN's already-made layout decision and, in production, carries bounded layout operations.
+// Nothing here can CHANGE the decision: it only reflects what main forwarded through
+// `additionalArguments` at window construction. Renderer script cannot change this process's argv,
+// so a query string, hash, saved setting, or injected script cannot flip the engine either way.
+//
+// The value is computed ONCE at preload time and the exposed object is frozen, so renderer code
+// cannot mutate `window.ccDockview.enabled` to conjure layout operations that were not exposed.
+const classicLayoutEnabled = process.argv.includes('--cc-classic-layout');
+
+// Two genuinely different shapes, not one shape with an inert flag.
+//
+// PRODUCTION (default `npm start`): `enabled: true` plus the three bounded operations.
+// CLASSIC RECOVERY (`--classic-layout`): `enabled: false` and NO operations at all — `saveLayout`,
+// `loadLayout` and `resetLayout` are not merely inert, they are absent. Main has also not registered
+// the handlers in that mode, so even a forged call has nothing to reach. That is the work order's
+// "classic must not register layout IPC" and "must not read, write, or delete Dockview layout
+// state" enforced at both ends rather than by renderer discipline.
+contextBridge.exposeInMainWorld('ccDockview', Object.freeze(
+  classicLayoutEnabled
+    ? {
+        // Frozen boolean — the ONLY authority the renderer has for "is Dockview the layout engine?".
+        enabled: false,
+      }
+    : {
+        enabled: true,
+        // Bounded layout operations. The renderer passes ONLY a layout object; it never supplies a
+        // path, a filename, or any part of one. Main owns the location, validation, and refusal.
+        saveLayout: (layout) => ipcRenderer.invoke('dockview-layout-save', layout),
+        loadLayout: () => ipcRenderer.invoke('dockview-layout-load'),
+        resetLayout: () => ipcRenderer.invoke('dockview-layout-reset'),
+      }
+));

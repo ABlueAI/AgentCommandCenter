@@ -155,20 +155,53 @@ reviewed branch.
 
 **Dockview and cross-provider pane-status indicators are separate subsystems,
 each requiring its own tracked procurement record and its own Blue verdict.**
-One record cannot cover both. **Neither currently has a Blue verdict**, so
-neither is authorized for specification, prototyping, or implementation. The
-`dockview-core` expectation in the R3 roadmap entry is a roadmap note, not a
-procurement verdict, and does not satisfy this gate.
+One record cannot cover both. **Dockview now has a tracked record and an ADOPT
+verdict** in `docs/OSS-PROCUREMENT-dockview.md`; its production integration is
+the subject of an active corrective review cycle on `feature/dockview-production-integration`:
+the first cumulative Full-class review returned literal `VERDICT: FAIL`, and its bounded corrective
+delta is built but not yet delta-reviewed. It remains unaccepted, unmerged, and unpushed.
+**Cross-provider pane-status indicators
+still have no Blue verdict**, so that separate subsystem remains unauthorized
+for specification or implementation. The `dockview-core` expectation in the
+R3 roadmap entry remains a roadmap note, not a pane-status procurement verdict.
+
+## Current checkpoint — August 8 — DOCKVIEW FULL REVIEW FAILED; CORRECTIVE DELTA GREEN
+
+`feature/dockview-production-integration` now carries the accepted prototype history plus the
+production Phase-B and Phase-C implementations. Phase C enables four explicit operations — Save
+Arrangement, Restore Saved Arrangement, Reset Current Arrangement, and Clear Saved Arrangement —
+through one dependency-free layout policy shared by main and renderer. Saved/live pane sets must
+match exactly; every `fromJSON` is validated immediately before use; restore/reset are transactional;
+and no layout operation may create, close, restart, resume, or silently strand a PTY.
+
+Tracked procurement record: `docs/OSS-PROCUREMENT-dockview.md`.
+
+Blue's binding verdict, verbatim:
+
+> ADOPT — Dockview: adopt dockview@7.0.4 as Blue Helm 1.0's production pane-layout engine using the
+> reviewed prototype architecture. Preserve main-owned IPC, PTY, filesystem, credential, clipboard,
+> Library, audio, and persistence authority; exclude popouts; persist only strictly validated
+> versioned layout metadata; and keep pane-status indicators separate.
+
+Status at this checkpoint: Phase-C implementation `3ffb28e857aab5ae614cd05e418aa331a10f4b08`;
+fail-closed panel-enumeration correction `d203b63`; cumulative reviewed-code tip `fba57dc4` returned
+literal `VERDICT: FAIL` with two MEDIUM findings (non-atomic Windows replacement fallback and hidden
+pane groups passing post-apply verification) plus one LOW (`lstat` errors reported as absence).
+Blue approved the bounded correction, implemented at `9d1efb839a1f5312626c9445d35f3fa3b88d8d41`.
+The corrective delta is green in the app gate and awaits its focused Full-class delta review. There
+is no human production acceptance, merge, or push. Dockview is therefore still **remaining work**,
+and pane-status procurement must not begin until Dockview reaches its clean stopping point.
 
 ## Current checkpoint — July 23 — V3A MERGED; BLUE HELM 1.0 SCOPE FROZEN
 
-> **BASELINE ADVANCED — July 30.** The `main` SHA in the baseline paragraph below
+> **BASELINE ADVANCED — August 8.** The `main` SHA in the baseline paragraph below
 > was accurate on July 23 and is now historical. Local and remote `main` are both
-> **`22592b7879860ad59cc422c7cf49bb93108a3c5d`** — the V4/V4Q merge — after P12
-> (`4c07db9`), Merge Gate v1 (`147fb74`), V3b (`6baa732`), a documentation merge
-> (`a6bba64`), and V4 (`22592b7`) landed. The scope-frozen Blue Helm 1.0
+> **`1dce24c141e929c04122e8b2998277d4c2d0c728`** — the OSS-first procurement
+> governance merge — after P12 (`4c07db9`), Merge Gate v1 (`147fb74`), V3b
+> (`6baa732`), V4 (`22592b7`), the V4 closeout (`c58ddfa`), and procurement
+> governance (`1dce24c`) landed. Dockview has not reached `main`. The scope-frozen Blue Helm 1.0
 > definition in this section still stands; only the baseline SHA moved. The
-> *Already complete* and *Remaining work* lists below are current as of July 30.
+> *Already complete* and *Remaining work* lists below are current as of August 8.
 
 **Baseline:** V3a Video Scout pre-analysis focus is human-accepted, merged with
 `--no-ff`, gated, and pushed. Local and remote `main` are both
@@ -232,15 +265,15 @@ This is load-bearing context, not historical decoration:
 > Links is unblocked on that axis. Do not delete this constraint; it is the
 > reason Quick Links may proceed at all.
 
-1. **Dockview prototype → human adoption decision.** Prototype
-   `dockview-core` with real terminal and Library panes; verify resize/refit,
-   drag, safe versioned persistence, corrupt-state reset, offline/no-telemetry
-   behavior, clipboard/audio/pane-target compatibility, exact lockfile pin, and
-   `npm audit`. Electron/browser popout windows are excluded from 1.0.
-2. **Dockable/resizable layout integration** only after prototype approval.
-   Dockview hosts DOM containers that may contain terminal or report views, but
-   Blue Helm does not pass Dockview serialized terminal/report content, paths,
-   credentials, or IPC/filesystem authority.
+1. **Dockview prototype → human adoption decision: COMPLETE as evidence, not merged.** The bounded
+   `dockview@7.0.4` prototype passed independent Full-class review and Blue-attested human
+   acceptance; Blue then issued the tracked ADOPT verdict above. The prototype branch remains
+   unmerged and unpushed as the evidence trail behind that decision.
+2. **Dockable/resizable layout integration: PHASE C GREEN, pending final review and acceptance.**
+   The production branch implements the default Dockview path, classic recovery, transactional
+   persistence, exact live/saved pane equality, and app-owned PTY/IPC/filesystem authority. It is
+   not complete until the cumulative Full-class review returns literal `VERDICT: PASS`, Blue runs
+   the full-restart production acceptance, and Blue alone authorizes merge and push.
 3. **Cross-provider pane-status indicators (R4, promoted).** Detect
    idle / awaiting-input / done and surface it per pane across providers, so the
    app interrupts Blue rather than requiring him to poll it. Sequenced after
@@ -322,7 +355,7 @@ therefore promoted into the 1.0 remaining-work list above rather than left in
 the Tier-1 roadmap backlog. The original entry and ranking are retained as design
 history.
 
-**Both subsystems require their own OSS procurement record before
+**Each subsystem requires its own OSS procurement record before
 implementation.** Per the OSS procurement protocol, each needs a read-only
 Source Scout run against primary sources and a candidate card covering
 capability match/limits, license, maintenance, Windows/Electron fit, framework
@@ -344,13 +377,13 @@ FRESH**; `REJECT` is not itself the final subsystem verdict.
 > above match it exactly and match the OSS procurement protocol section at the
 > top of this file.
 
-**No OSS verdict has been supplied by Blue for either subsystem, and none is
-recorded here.** Each subsystem needs its own tracked record and its own
-verdict; one record cannot cover both. The `dockview-core` entry in the R3
-roadmap describes it as a utility-dependency adoption; that is a *roadmap
-expectation*, not a procurement verdict, and it does not substitute for the
-required record. Neither subsystem is authorized to begin specification,
-prototyping, or implementation on the strength of this closeout.
+**Dockview has satisfied this gate.** Its tracked record is
+`docs/OSS-PROCUREMENT-dockview.md`, and Blue's current verdict is the verbatim
+ADOPT line recorded in the August 8 checkpoint above. The production branch is
+built but still awaits final Full-class review, human acceptance, merge, and
+push. **Pane-status has not satisfied this gate:** it still needs its own
+Source-Scout evaluation, tracked record, and Blue verdict. The Dockview record
+and verdict do not authorize pane-status work.
 
 ### Windows launch/distribution constraint — July 26
 

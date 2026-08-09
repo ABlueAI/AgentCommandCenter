@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!-- Strict CSP, and deliberately STRICTER than the app's own: `default-src 'none'` plus
+       `connect-src 'none'` means this page cannot reach the network at all, so any request the
+       integration chain attempts is refused here as well as cancelled by the main-process monitor.
+
+       `script-src 'self'` allows the classic <script src> elements the chain is injected as. It
+       does NOT allow inline script, which is why this page carries none: the probe, the script
+       chain, and the assertions are all driven from main via executeJavaScript, exactly as the
+       vendor-only tripwire does.
+
+       style-src allows 'unsafe-inline' for one reason only: the published dockview UMD bundle
+       injects its stylesheet into document.head at load ("sideEffects": true). That is the
+       vendor's load-time behaviour, not this harness's. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; font-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none';" />
+  <title>Dockview bootstrap harness</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #0b0f14; color: #cfd8e3; }
+    /* The app surface this harness stands in for. Its continued presence and visibility after a
+       refusal is the "existing Blue Helm UI remains usable and unobscured" assertion — and, on the
+       SUCCESS path, the assertion that a started layout engine still does not cover it. */
+    #appSurface { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 12px; }
+
+    /* THE REAL PRODUCTION RULES, copied from app/renderer/styles.css. The embedded dock is an
+       ordinary in-flow block, NOT the prototype's `position: fixed; inset: 0; z-index: 9000`
+       overlay. `dockview-default-path.test.js` pins that styles.css still carries exactly these
+       rules and no overlay rule, so this copy and production cannot drift apart silently. */
+    .term-dock { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .term-dock[hidden] { display: none; }
+    .dockview-prototype-controls { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #1e2733; background: #0f1620; }
+    .dockview-prototype-status { margin-left: auto; font-size: 12px; color: #7d8b9c; }
+    .dockview-prototype-surface { flex: 1 1 auto; min-height: 0; position: relative; }
+    .dockview-prototype-pane-host { width: 100%; height: 100%; overflow: hidden; }
+
+    /* The REAL tabpane rules from app/renderer/styles.css. Without them the docked Library would
+       appear visible here for the wrong reason (nothing hiding it), and the assertion would prove
+       nothing. With them, `.tabpane{display:none}` actively fights the docked rule below, which is
+       the interaction that matters. */
+    .tabpane { flex: 1; min-height: 0; display: none; }
+    .tabpane.active { display: flex; flex-direction: column; }
+    .dockview-prototype-pane-host > .tabpane[data-pane="library"] {
+      display: flex; flex-direction: column; height: 100%; min-height: 0;
+    }
+
+    /* The REAL toolbar and audio rules. They are load-bearing: `#sttMic` needs a genuine layout box
+       before "is it the topmost element at its own centre?" means anything. The prototype covered
+       this toolbar with its overlay and made Dictate unreachable; the production surface sits BELOW
+       it, and that is what these rules let the harness measure rather than assume. */
+    .hidden { display: none !important; }
+    .term-bar { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
+    .tts-controls { display: flex; align-items: center; gap: 6px; }
+  </style>
+</head>
+<body>
+  <!-- Stands in for the real Terminals tab: a toolbar that must never be covered or emptied, and
+       the EMBEDDED dock container below it. `#terminalDock` is empty and hidden in markup, exactly
+       as index.html ships it — the bootstrap looks it up and never creates it, so a harness that
+       omitted it would exercise the `dock-container-missing` refusal instead of the real path. -->
+  <div id="appSurface">
+    <div class="term-bar" id="harnessTermBar">
+      <span class="muted small">Agents run in-app here</span>
+      <div class="tts-controls">
+        <span id="sttStatus"></span>
+        <button id="sttMic">🎤 Dictate</button>
+        <button id="ttsStop" class="hidden">⏹ Stop</button>
+      </div>
+      <button id="newTermShell">+ Shell</button>
+    </div>
+    <div id="terminalDock" class="term-dock"></div>
+  </div>
+  <!-- No inline script and no preload bridge. Main installs the error/require probe, injects the
+       classic-script chain in the real order, and then drives the real bootstrap. -->
+</body>
+</html>

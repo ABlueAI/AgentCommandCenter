@@ -129,7 +129,16 @@ function switchTab(name) {
   document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('active', x.dataset.tab === name));
   document.querySelectorAll('.tabpane').forEach((x) => x.classList.toggle('active', x.dataset.pane === name));
 }
-function fitAllTerms() { for (const t of terms.values()) { try { t.fit.fit(); } catch {} } }
+// RESIZE OWNERSHIP. A Dockview-hosted terminal is fitted ONLY by its guarded fit controller, which
+// checks visibility and geometry inside an animation frame and refuses zero/hidden/non-finite sizes.
+// This global path is the CLASSIC-grid fitter, so it must skip docked panes: running both would give
+// a hosted terminal two effective resize senders and let ungated geometry reach `pty-resize`.
+function fitAllTerms() {
+  for (const [id, t] of terms) {
+    if (paneIsDocked(id)) continue;   // the fit controller owns this pane
+    try { t.fit.fit(); } catch {}
+  }
+}
 
 // V1a maximize: the state machine lives in pane-maximize.js; every side effect
 // (refit + PTY resize + focus + button glyphs) lives HERE in onLayout, so all exit
@@ -327,8 +336,11 @@ function applyReadResult(res, entryLike) {
 }
 
 async function openReportForPane(paneId) {
-  switchTab('library');
-  document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('active', x.dataset.tab === 'library'));
+  // Bring the Library surface forward through the ONE navigation path, so Open Report lands on the
+  // docked panel when Dockview is live and on the Library tab in classic mode. `firstLoadRefresh`
+  // is off because the ordered algorithm below owns the initial scan — flipping `libState.loaded`
+  // here would make it skip the await and reintroduce the V3b ordering defect.
+  focusLibrarySurface({ firstLoadRefresh: false });
   // V3b ordering fix: the awaited-initial-scan / epoch algorithm is openPaneReportOrdered in
   // report-followup.js (unit-tested there) — the initial scan completes BEFORE the pane report is
   // read/displayed, a superseding action wins the reader, and a successful read records the PANE
@@ -507,6 +519,12 @@ function openInAppTerminal(opts = {}) {
     requestAnimationFrame(() => { rafPending = false; try { fit.fit(); } catch {} });
   });
   ro.observe(pane.querySelector('.term-body'));
+  // RESIZE OWNERSHIP. `ro` above is the APP-OWNED (classic grid) resize owner and it is live from
+  // here. A Dockview-hosted pane must have exactly ONE owner, so the adapter suspends this one and
+  // its gated fit controller takes over; an adoption rollback hands it straight back. A
+  // ResizeObserver exposes no "am I observing?" state, so `paneData.roConnected` below is the
+  // record — `ro.disconnect()` and `ro.observe()` are called from exactly three places (the
+  // suspend host op, resumeAppResizeObserver, and this pane's close path) and each updates it.
   const speakBtn = pane.querySelector('.spk');
   const speakSelectionMemory = window.ccTTSSelection.createSelectionMemory();
   let selectionAtSpeakPointerDown = '';
@@ -615,9 +633,17 @@ function openInAppTerminal(opts = {}) {
       if (result.truncated) alert(window.ccTermCopy.buildTruncationNotice({ copiedChars: result.copiedChars, totalChars: result.totalChars, role }));
     }).catch(() => {});
   };
+  // MAXIMIZE ROUTES BY OWNERSHIP. Two maximizers exist and exactly one may run for a given pane:
+  //   * the classic grid maximizer (pane-maximize.js), which hides the siblings inside
+  //     `#terminalGrid` and refits them through `t.fit.fit()` + cc.ptyResize in its onLayout;
+  //   * Dockview's own group maximizer, which hides the sibling leaf views inside the dock and
+  //     whose panes are refit by their gated fit controllers.
+  // `paneIsDocked` — adapter ownership, not a DOM guess — is the single source of truth, so the
+  // choice is made once and the two mechanisms can never both fire for one click.
   pane.querySelector('.max').onclick = (event) => {
     event.preventDefault();
     event.stopPropagation();
+    if (paneIsDocked(id)) { maximizeDockedPane(id); return; }
     paneMaximizer.toggle(id, pane);
   };
   // V5b2: Open Report (Video Scout panes only). The renderer sends ONLY this pane's id; main resolves
@@ -632,7 +658,7 @@ function openInAppTerminal(opts = {}) {
     };
   }
   const chatBody = pane.querySelector('.chat-body');
-  const paneData = { term, fit, pane, ro, chatBody, role, pendingEvents: [], rafId: null, tailBubble: null, parser: null };
+  const paneData = { term, fit, pane, ro, roConnected: true, chatBody, role, pendingEvents: [], rafId: null, tailBubble: null, parser: null };
   paneData.parser = new PtyParser((ev) => {
     // Video-scout SDK runs print one machine-readable token-usage line; surface it in the Logs
     // tab so every run's real cost is recorded outside the (closable) pane. The parser is already
@@ -643,11 +669,29 @@ function openInAppTerminal(opts = {}) {
     paneData.pendingEvents.push(ev);
     if (paneData.rafId === null) paneData.rafId = requestAnimationFrame(() => drainChatEvents(paneData));
   });
-  pane.querySelector('.x').onclick = () => {
+  // The ONE close path for this pane. Extracted from the close button's handler (behaviour and
+  // ordering are unchanged) and made IDEMPOTENT so that a second caller cannot double-kill a PTY or
+  // double-dispose an xterm. On the Dockview prototype branch a panel-removal event is that second
+  // caller; on the default path the close button is still the only one, and `terms.delete(id)` below
+  // makes any repeat call a no-op.
+  const closeThisPane = () => {
+    if (!terms.has(id)) return;   // already closed — exactly-once guarantee
+    // CLOSE CONVERGENCE, direction 2 of 2. If this pane is hosted in a Dockview panel, remove the
+    // panel too, so closing from the pane's own ✕ does not leave a ghost panel behind. The adapter
+    // suppresses its own close-convergence while doing so, and this whole call is inside the
+    // `terms.has(id)` guard, so the two directions cannot recurse: whichever fires first deletes the
+    // map entry, and the other returns immediately. Exactly one ptyKill, one xterm disposal, one
+    // observer disconnect, one map deletion.
+    //
+    // `layoutInstance` is a module-local, not a window global, so nothing outside this file can
+    // substitute a fake and redirect closure. In classic mode it is null and this is one falsy check.
+    if (layoutInstance && typeof layoutInstance.onAppPaneClosed === 'function') {
+      try { layoutInstance.onAppPaneClosed(id); } catch { /* layout teardown must not block a close */ }
+    }
     // Closing the maximized pane restores the grid cleanly (V1a) — clear the maximize
     // state FIRST so the surviving panes un-hide and refit.
     paneMaximizer.handlePaneClosed(id);
-    ro.disconnect();
+    ro.disconnect(); paneData.roConnected = false;
     try { selectionDisposable.dispose(); } catch {}
     try { mouseSelectionFallback.dispose(); } catch {}
     if (copyFlashTimer) { clearTimeout(copyFlashTimer); copyFlashTimer = null; }
@@ -655,14 +699,553 @@ function openInAppTerminal(opts = {}) {
     cc.ptyKill(id); term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
   };
+  // ---- LOCAL ROLLBACK (pre-PTY only) ----------------------------------------------------------
+  // Undo everything this function built in the RENDERER, for the window in which no PTY exists yet.
+  // It is deliberately NOT `closeThisPane`: this path must invoke neither `ptyStart` nor `ptyKill`.
+  // Killing an ID main has never seen would be a false entry in the process trace and would make
+  // "zero PTY was started" unprovable; the whole point of docking before starting is that there is
+  // nothing to kill here. Bounded: it touches only what the lines above created.
+  const rollbackLocalPane = () => {
+    if (!terms.has(id)) return;
+    paneMaximizer.handlePaneClosed(id);
+    ro.disconnect(); paneData.roConnected = false;
+    try { selectionDisposable.dispose(); } catch {}
+    try { mouseSelectionFallback.dispose(); } catch {}
+    if (copyFlashTimer) { clearTimeout(copyFlashTimer); copyFlashTimer = null; }
+    if (paneData.rafId !== null) { cancelAnimationFrame(paneData.rafId); paneData.rafId = null; }
+    term.dispose(); pane.remove(); terms.delete(id);
+    if (terms.size === 0) showTermEmpty();
+  };
+  paneData.closePane = closeThisPane;
+  pane.querySelector('.x').onclick = closeThisPane;
   pane.addEventListener('mousedown', (event) => {
     if (event.target.closest('.spk, .copy-out, .max')) return;
     activeTermId = id; term.focus();
   });
   term.textarea && term.textarea.addEventListener('focus', () => { activeTermId = id; });
   terms.set(id, paneData);
-  cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, videoModel: opts.videoModel, mediaResolution: opts.mediaResolution, analysisMode: opts.analysisMode, startOffset: opts.startOffset, endOffset: opts.endOffset, sliceRanges: opts.sliceRanges, analysisFocus: opts.analysisFocus, cols: term.cols, rows: term.rows });
-  setTimeout(() => { fit.fit(); cc.ptyResize(id, term.cols, term.rows); activeTermId = id; term.focus(); }, 40);
+
+  // ---- TERMINAL LAUNCH TRANSACTION -------------------------------------------------------------
+  // ORDER IS LOAD-BEARING: dock FIRST, start the PTY only once the dock has succeeded.
+  //
+  // The earlier shape started the PTY and then, if docking failed, immediately killed it. That is a
+  // race, not a transaction: `ptyStart` is asynchronous IPC, so the kill can be sent while main is
+  // still inside `pty.spawn`. Main resolves `pty-kill` against its `ptys` map, and a handle that is
+  // not in that map yet cannot be killed — leaving an orphan ConPTY that nothing in the app owns or
+  // can reach. Docking first removes the window entirely: on the failure path there is no PTY,
+  // because none was ever requested.
+  //
+  // The pane itself is real and complete before this point — real xterm, real clipboard / OSC 52 /
+  // TTS / Dictate / Open Report wiring — because Dockview must host THAT element, never a copy.
+  if (layoutInstance) {
+    let docked = null;
+    try { docked = layoutInstance.addPane(id, 'terminal'); }
+    catch { docked = { ok: false, reason: 'add-pane-threw' }; }
+    if (!docked || docked.ok !== true) {
+      appendLog(`[dockview] REFUSED to dock ${id}: ${(docked && docked.reason) || 'unknown'} — the `
+        + 'pane was removed and NO terminal process was started, so there is no orphan PTY, no '
+        + 'hidden pane, and nothing to kill\n');
+      rollbackLocalPane();
+      return;
+    }
+  }
+
+  // EXACTLY ONE ptyStart, on every path, and only after the pane is visible and owned.
+  const startResult = cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, videoModel: opts.videoModel, mediaResolution: opts.mediaResolution, analysisMode: opts.analysisMode, startOffset: opts.startOffset, endOffset: opts.endOffset, sliceRanges: opts.sliceRanges, analysisFocus: opts.analysisFocus, cols: term.cols, rows: term.rows });
+  // A refused or rejected start must not leave a Dockview panel behind: the panel would be a ghost
+  // host for a terminal that never ran, and a later Save would persist it. Convergence goes through
+  // the SAME idempotent close path the ✕ uses, so the panel, the observer, the xterm and the map
+  // entry each go exactly once — and its `cc.ptyKill` is the belt-and-braces guarantee that no
+  // process survives a start that reported failure after spawning (main ignores a kill for an ID it
+  // does not hold).
+  //
+  // In CLASSIC mode this only logs: the pane stays exactly as it always has, because there is no
+  // panel to strand and main already surfaces its own refusal through `main-error`.
+  const onStartFailed = (reason) => {
+    if (!terms.has(id)) return;             // the user closed it first — nothing to undo
+    appendLog(`[pty] start FAILED for ${id}: ${reason}`
+      + (layoutInstance ? ' — removing the pane and its layout panel\n' : '\n'));
+    if (layoutInstance) closeThisPane();
+  };
+  Promise.resolve(startResult).then(
+    (res) => { if (!res || res.ok !== true) onStartFailed((res && res.error) || 'refused'); },
+    () => onStartFailed('ipc-rejected'),
+  );
+  // The settle-in refit. Guarded on the pane still being live, because a start failure can close it
+  // inside this window and fitting a disposed xterm would throw out of a timer callback.
+  setTimeout(() => {
+    if (!terms.has(id)) return;
+    fit.fit(); cc.ptyResize(id, term.cols, term.rows); activeTermId = id; term.focus();
+  }, 40);
+}
+
+// ---- Dockview layout engine scripts ------------------------------------------------------------
+// Loaded on every normal launch. Classic recovery mode returns from startLayoutEngine() before this
+// list is touched, so `--classic-layout` creates no Dockview script tag at all — index.html itself
+// references none of them, which is what makes that guarantee checkable rather than asserted.
+//
+// Injected dynamically rather than listed in index.html precisely so recovery mode can decline
+// them. They load in dependency order, from LOCAL FILES ONLY — no CDN, no remote asset.
+const DOCKVIEW_SCRIPTS = [
+  '../node_modules/dockview/dist/dockview.js',   // vendor UMD bundle -> window.dockview
+  'dockview-fit-policy.js',
+  'dockview-panel-policy.js',
+  // The SAME schema module main validates with, loaded here as a classic script so the renderer can
+  // validate immediately before every fromJSON. It lives beside main.js rather than in renderer/
+  // precisely because both processes load it — one file, one set of rules, no drift.
+  '../dockview-layout-policy.js',
+  'dockview-prototype.js',                       // last: it depends on all three policies
+];
+
+// ---- Library singleton docking (PROTOTYPE ONLY) ------------------------------------------------
+// The Library is ONE element that lives in the tab strip and carries every listener library-view.js
+// and report-followup.js bound to it. The prototype moves that exact node into a Dockview panel and
+// must be able to return it to the precise position it came from.
+//
+// `#libraryPane` is an inert id added to the existing production section purely as this seam's
+// anchor; nothing on the default path reads it. If it is ever missing, every caller here reports a
+// bounded refusal — there is deliberately no fallback markup and no silent null path, because a
+// silent null is exactly what made Add Library discard clicks without a trace.
+const LIBRARY_SELECTOR = '#libraryPane';
+// A zero-size marker parked at the Library's original position. Storing the parent alone is not
+// enough: siblings can change while the Library is docked, and only a placeholder survives that.
+let libraryHomePlaceholder = null;
+// A HELD REFERENCE to the docked element. This is load-bearing, not defensive: the adapter unmounts
+// a pane (detaching it from the document) BEFORE releasing it, so by the time undock runs a
+// `document.querySelector` lookup returns null and the singleton would be stranded outside the DOM
+// with no way back. The real-Electron bootstrap harness caught exactly that.
+let libraryDockedElement = null;
+
+function libraryElement() { return document.querySelector(LIBRARY_SELECTOR) || libraryDockedElement; }
+
+/**
+ * Move the Library out of the tab strip, leaving a placeholder at its exact position.
+ * Returns the element on success, or null if the Library DOM is missing.
+ * Idempotent: docking an already-docked Library returns the same element and moves nothing.
+ */
+function dockLibraryElement() {
+  const el = libraryElement();
+  if (!el) return null;
+  if (libraryHomePlaceholder) return el;      // already docked — do not create a second placeholder
+  const placeholder = document.createComment('dockview-prototype: Library home');
+  el.parentNode.insertBefore(placeholder, el);
+  libraryHomePlaceholder = placeholder;
+  libraryDockedElement = el;
+  return el;
+}
+
+/**
+ * Return the Library to the exact position it was taken from and drop the placeholder.
+ * Idempotent: undocking a Library that is not docked is a no-op, never a throw.
+ */
+function undockLibraryElement() {
+  const el = libraryDockedElement || document.querySelector(LIBRARY_SELECTOR);
+  const placeholder = libraryHomePlaceholder;
+  libraryHomePlaceholder = null;
+  libraryDockedElement = null;
+  if (!el || !placeholder || !placeholder.parentNode) return false;
+  placeholder.parentNode.insertBefore(el, placeholder);
+  placeholder.parentNode.removeChild(placeholder);
+  return true;
+}
+
+// ---- The audio-control seam is GONE -----------------------------------------------------------
+// The prototype borrowed the app-owned `.tts-controls` element into its own slot, because its
+// full-screen opaque overlay covered the Terminals toolbar and made Dictate unreachable. The
+// production surface is embedded BELOW that toolbar, so the controls are never covered and never
+// need to move. The whole borrow/restore mechanism — selector, placeholder, held reference,
+// last-resort parent, dock/undock helpers, count preflight and the adapter's rollback — is deleted
+// rather than left dormant: dead machinery around a live audio surface is a liability, and the
+// safest reparenting code is the code that does not exist.
+//
+// `.tts-controls` therefore stays exactly where index.html puts it, keeping every handler
+// setupSTTControls()/setupTTSControls() and the ccSTT/ccTTS modules bind to it, and dictation
+// destination locking continues to key off `activeTermId` rather than DOM position.
+
+function loadScriptOnce(src) {
+  return new Promise((resolve, reject) => {
+    const el = document.createElement('script');
+    el.src = src;
+    el.onload = () => resolve();
+    el.onerror = () => reject(new Error(`failed to load ${src}`));
+    document.head.appendChild(el);
+  });
+}
+
+// ---- Production layout engine ------------------------------------------------------------------
+// THE LIVE ADAPTER INSTANCE, held in module scope. The prototype published this on
+// `window.ccDockviewPrototypeInstance` and then read it back as an authority in the close path,
+// which meant any script in the renderer could substitute a fake and redirect pane closure. It is
+// now a module-local that nothing outside this file can reach or replace.
+let layoutInstance = null;
+
+/** True when Dockview is the live terminal workspace. */
+function dockviewIsActive() { return layoutInstance !== null; }
+
+/** True when THIS adapter owns `paneId`. The single source of truth for resize/maximize routing. */
+function paneIsDocked(paneId) {
+  if (!layoutInstance) return false;
+  try { return layoutInstance.ownedPaneIds().indexOf(paneId) !== -1; }
+  catch { return false; }
+}
+
+/**
+ * Give a pane's resizing back to the app's OWN grid ResizeObserver.
+ *
+ * The exact inverse of the adapter's `suspendAppResizeObserver`, and the reason a rolled-back
+ * adoption leaves a pane that still resizes. It reconnects the EXISTING observer object —
+ * `observe()` on an already-constructed ResizeObserver re-establishes the subscription — because a
+ * freshly constructed one would be a SECOND owner alongside the original, which is the exact
+ * double-resize failure the suspend exists to prevent.
+ *
+ * Idempotent by the `roConnected` record, so calling it on a pane that already owns its resizing
+ * cannot subscribe twice. A missing terminal body is a visible refusal, never a silent no-op:
+ * a pane that resizes with nobody listening looks identical to one that works until the window moves.
+ *
+ * @returns {boolean} true when the pane's own observer is (or already was) live.
+ */
+function resumeAppResizeObserver(paneId) {
+  const t = terms.get(paneId);
+  if (!t || !t.ro) return false;
+  if (t.roConnected === true) return true;
+  const body = t.pane.querySelector('.term-body');
+  if (!body) {
+    appendLog(`[dockview] REFUSED to resume grid resizing for ${paneId}: the terminal body is missing\n`);
+    return false;
+  }
+  t.ro.observe(body);
+  t.roConnected = true;
+  return true;
+}
+
+/**
+ * Maximize / restore a DOCKVIEW-OWNED pane. Only ever reached for a pane `paneIsDocked` reports as
+ * owned, so the classic grid maximizer is not an alternative here and is deliberately never called:
+ * it would hide the siblings of a grid that is not even on screen.
+ *
+ * A refusal from the layout engine is a FULL STOP with a visible reason. Refits are the adapter's,
+ * through its gated fit controllers — running `fitAllTerms` here would be a second resize owner.
+ */
+function maximizeDockedPane(paneId) {
+  let result = null;
+  try { result = layoutInstance.maximizePane(paneId); }
+  catch { result = null; }
+  if (!result) {
+    appendLog(`[dockview] maximize REFUSED for ${paneId} — the layout engine owns this pane and `
+      + 'declined the request; the classic grid maximizer was NOT used and nothing changed\n');
+    return false;
+  }
+  refreshDockedMaximizeGlyphs();
+  return true;
+}
+
+/**
+ * Keep the ⛶/🗗 glyph on every DOCKED pane truthful. Dockview permits one maximized group at a
+ * time, so maximizing pane B while A is maximized silently restores A — and A's button would
+ * otherwise still claim to be maximized. Docked panes only: a classic pane's glyph belongs to
+ * pane-maximize.js's own onLayout and must not be written from here.
+ */
+function refreshDockedMaximizeGlyphs() {
+  for (const [tid, t] of terms) {
+    if (!paneIsDocked(tid)) continue;
+    const btn = t.pane.querySelector('.max');
+    if (!btn) continue;
+    let maximized = null;
+    try { maximized = layoutInstance.isPaneMaximized(tid); } catch { maximized = null; }
+    if (maximized === null) continue;   // the engine cannot answer — leave the glyph alone
+    btn.textContent = maximized ? '🗗' : '⛶';
+    btn.title = maximized ? 'Restore the layout' : 'Maximize pane';
+  }
+}
+
+/**
+ * Library navigation while Dockview is the live workspace.
+ *
+ * The Library is ONE element. When it is docked it physically lives inside `#terminalDock`, so
+ * "go to the Library" means activating the Terminals workspace and adding — or focusing — that
+ * singleton panel. Activating the (now empty) Library tabpane instead would hide the workspace the
+ * Library is actually in, which is the same class of bug as showing an empty shell.
+ *
+ * @param {{firstLoadRefresh?: boolean}} options  `firstLoadRefresh:false` for Open Report, whose own
+ *   ordered algorithm (report-followup.js `openPaneReportOrdered`) owns the initial scan and must
+ *   not have `libState.loaded` flipped underneath it.
+ * @returns {boolean} true when the Library is open and focused.
+ */
+function openLibraryInDock(options = {}) {
+  switchTab('terminals');
+  let result = null;
+  try { result = layoutInstance.addPane('library', 'library'); }
+  catch { result = { ok: false, reason: 'add-pane-threw' }; }
+  // `library-already-open` is the SUCCESS shape for NAVIGATION: the adapter focused the panel the
+  // user already has rather than creating a second one. Every other non-ok reason is a refusal.
+  const opened = !!result && (result.ok === true || result.reason === 'library-already-open');
+  if (!opened) {
+    appendLog(`[dockview] Library REFUSED: ${(result && result.reason) || 'unknown'} — the Library `
+      + 'was not opened, no element was moved, and no copy was made\n');
+    return false;
+  }
+  // The existing V5b2 first-load behaviour, unchanged: the run library is scanned the first time the
+  // Library is opened, and ⟳ Refresh re-scans thereafter.
+  if (options.firstLoadRefresh !== false && !libState.loaded) refreshLibrary();
+  return true;
+}
+
+/**
+ * Bring the Library surface to the front, whichever engine is live. Classic mode and every
+ * bootstrap refusal take the original tab path, byte-for-byte.
+ */
+function focusLibrarySurface(options = {}) {
+  if (dockviewIsActive()) return openLibraryInDock(options);
+  switchTab('library');
+  document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('active', x.dataset.tab === 'library'));
+  return true;
+}
+
+/**
+ * Show exactly one terminal surface. Both containers exist at all times; this only toggles which is
+ * visible, so the classic grid is never destroyed and is always one attribute away from usable.
+ */
+function showTerminalSurface(which) {
+  const grid = $('#terminalGrid');
+  const dock = $('#terminalDock');
+  if (!grid || !dock) return false;
+  const useDock = which === 'dock';
+  dock.hidden = !useDock;
+  grid.hidden = useDock;
+  return true;
+}
+
+/** One bounded, content-free refusal, and a guaranteed landing on the working grid. */
+function refuseLayoutEngine(reason) {
+  appendLog(`[dockview] REFUSED: ${reason} — layout engine not started, classic grid left usable\n`);
+  showTerminalSurface('grid');
+}
+
+/**
+ * Adopt terminal panes that already exist — panes created while the Dockview scripts were still
+ * loading, which is a real race because startup is async and `+ Shell` is clickable immediately.
+ *
+ * ALL-OR-NOTHING. A partially adopted workspace would leave the unadopted panes parented to the
+ * hidden classic grid: alive, holding a PTY, and invisible. That is precisely the "hidden pane"
+ * the work order forbids, so a single failure rolls every adoption back and the caller falls back
+ * to the grid. No PTY is created or killed on any path here.
+ *
+ * @returns {boolean} true when every existing pane was adopted.
+ */
+function adoptExistingPanes() {
+  if (!layoutInstance) return false;
+  const adopted = [];
+  for (const id of [...terms.keys()]) {
+    let result = null;
+    try { result = layoutInstance.addPane(id, 'terminal'); }
+    catch { result = { ok: false, reason: 'adopt-threw' }; }
+    if (result && result.ok) { adopted.push(id); continue; }
+
+    appendLog(`[dockview] adopt REFUSED for ${id}: ${(result && result.reason) || 'unknown'} — `
+      + `rolling back ${adopted.length} adopted pane(s); no PTY was created or killed\n`);
+    // Release each adopted pane from the adapter FIRST. That disposes its fit controller and
+    // disconnects the adapter's own ResizeObserver, so the pane arrives back at the grid with NO
+    // resize owner at all — which `returnAllPanesToGrid` then fixes by reconnecting the app's.
+    for (const doneId of adopted) {
+      try { layoutInstance.onAppPaneClosed(doneId); } catch { /* rollback is best effort */ }
+    }
+    returnAllPanesToGrid();
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Put every live terminal pane back under classic-grid ownership: the DOM position AND the resize
+ * owner, which are two halves of the same handover and are useless apart.
+ *
+ * Adoption disconnects each adopted pane's app-owned ResizeObserver, because the adapter's gated
+ * fit controller took over. When adoption then rolls back, the controller is disposed with it — so
+ * a pane returned to the grid without this reconnect has ZERO resize owners: it looks correct until
+ * the first window resize, then keeps a stale geometry forever. Reparenting by object identity
+ * means the xterm, its PTY and every handler ride along with the element.
+ *
+ * Ends with ONE bounded refit for the whole transition (not one per pane): `fitAllTerms` skips
+ * docked panes, and by this point nothing is docked, so it is exactly the classic-grid fitter doing
+ * exactly one pass. A fit that changes the geometry sends its own `pty-resize` through xterm's
+ * `onResize`, so no separate resize message is issued here.
+ */
+function returnAllPanesToGrid() {
+  const grid = $('#terminalGrid');
+  if (!grid) return;
+  for (const [id, t] of terms) {
+    if (t && t.pane && t.pane.parentNode !== grid) {
+      try { grid.appendChild(t.pane); } catch { /* best effort — the refusal already reported */ }
+    }
+    resumeAppResizeObserver(id);
+  }
+  fitAllTerms();
+}
+
+async function startLayoutEngine() {
+  // STRICT in the direction that matters. `enabled` is main's frozen boolean: true on a normal
+  // launch, false under --classic-layout. The renderer cannot flip it either way, because it is
+  // computed in the preload from an argv token no renderer script can write.
+  if (!window.ccDockview || window.ccDockview.enabled !== true) {
+    appendLog('[classic-layout] CLASSIC RECOVERY MODE ACTIVE — Dockview is not loaded and layout '
+      + 'operations are unavailable. The classic grid is the terminal workspace.\n');
+    showTerminalSurface('grid');
+    return;
+  }
+
+  try {
+    for (const src of DOCKVIEW_SCRIPTS) await loadScriptOnce(src);
+  } catch {
+    // The rejection carries only a src we already control; one bounded reason is the contract.
+    refuseLayoutEngine('script-load-failed');
+    return;
+  }
+
+  // A script element's `onload` fires when the file was FETCHED — NOT when it parsed and published
+  // its API. That distinction is not theoretical: two policy scripts once fetched fine, failed to
+  // parse on a global `const api` collision, and left the adapter undefined while onload reported
+  // success. Verify the actual exports before anything is committed to the visible UI.
+  const engine = window.ccDockviewPrototype;
+  if (!engine || typeof engine.bootstrap !== 'function' || typeof engine.activate !== 'function') {
+    refuseLayoutEngine('adapter-export-missing');
+    return;
+  }
+  // Names come from the adapter's own closed literal list, so this reason cannot carry state.
+  const missing = typeof engine.missingBrowserExports === 'function' ? engine.missingBrowserExports(window) : [];
+  if (missing.length > 0) {
+    refuseLayoutEngine(`missing-exports:${missing.join('+')}`);
+    return;
+  }
+
+  // bootstrap() binds to the EMBEDDED #terminalDock, re-verifies the exports itself, wraps
+  // activation in an error boundary, and strips any partial surface on failure. The grid is still
+  // the visible workspace at this point and stays that way unless everything below succeeds.
+  let result = null;
+  try {
+    result = engine.bootstrap({ win: window, doc: document, log: appendLog, buildHost: buildDockviewHost });
+  } catch {
+    refuseLayoutEngine('bootstrap-threw');
+    return;
+  }
+  if (!result || result.ok !== true || !result.instance) {
+    refuseLayoutEngine((result && result.reason) || 'activation-refused');
+    return;
+  }
+  layoutInstance = result.instance;
+
+  // Adopt first, still hidden, so a failed adoption never flashes a broken workspace.
+  if (!adoptExistingPanes()) {
+    try { layoutInstance.dispose(); } catch { /* teardown must not mask the refusal */ }
+    layoutInstance = null;
+    const dock = $('#terminalDock');
+    while (dock && dock.firstChild) dock.removeChild(dock.firstChild);
+    refuseLayoutEngine('pane-adoption-failed');
+    return;
+  }
+
+  // ONLY NOW is the visible workspace switched. Everything above can fail with the classic grid
+  // still on screen and still usable, which is the whole point of the ordering.
+  showTerminalSurface('dock');
+  appendLog('[dockview] production layout engine active (dockview 7.0.4).\n');
+
+  // A READ-ONLY, bounded diagnostic surface for tests, human acceptance and support transcripts.
+  // It is deliberately NOT an authority: nothing in this file (or any other) reads it, it exposes
+  // no element, handle, or mutator, every accessor returns a fresh plain value, and the property is
+  // non-writable and non-configurable so it cannot be swapped for a fake that lies about the state.
+  // Removing it would change no application behaviour whatsoever — that is the test of whether a
+  // diagnostic has quietly become load-bearing.
+  try {
+    Object.defineProperty(window, 'ccDockviewDiagnostics', {
+      value: Object.freeze({
+        snapshot: () => (layoutInstance ? layoutInstance.diagnostics() : null),
+        active: () => layoutInstance !== null,
+        /**
+         * Who owns each live pane's resizing right now. Exactly one of the two must be true per
+         * pane at every stable point: the app's grid ResizeObserver, or the adapter's gated fit
+         * controller. Both true is the double-resize defect; both false is the silently-dead-resize
+         * defect that a rolled-back adoption used to produce.
+         */
+        resizeOwners: () => [...terms.entries()].map(([paneId, t]) => ({
+          paneId,
+          appObserver: t.roConnected === true,
+          fitController: !!(layoutInstance && layoutInstance.registry.has(paneId)),
+        })),
+      }),
+      writable: false,
+      configurable: false,
+      enumerable: false,
+    });
+  } catch { /* a diagnostic surface must never be able to break startup */ }
+}
+
+// The controlled surface the adapter is allowed to use. Everything privileged stays on this side:
+// the adapter never sees cc.*, a path, a role, a prompt, or report content.
+function buildDockviewHost(container) {
+  return {
+    bridge: window.ccDockview,
+    getDockviewGlobal: () => window.dockview,
+    getContainer: () => container,
+    log: appendLog,
+    isTerminalPane: (paneId) => terms.has(paneId),
+    getPaneElement: (paneId) => {
+      const t = terms.get(paneId);
+      if (t) return t.pane;
+      return paneId === 'library' ? libraryElement() : null;
+    },
+    getTerminalBody: (paneId) => {
+      const t = terms.get(paneId);
+      return t ? t.pane.querySelector('.term-body') : null;
+    },
+    fitTerminal: (paneId) => { const t = terms.get(paneId); if (t) t.fit.fit(); },
+    // Hand the gated fit controller sole ownership of this pane's resizing: the app's own
+    // per-pane ResizeObserver has no visibility or geometry gate, and leaving it attached would
+    // give a Dockview-hosted terminal two observers and two PTY-resize senders.
+    suspendAppResizeObserver: (paneId) => {
+      const t = terms.get(paneId);
+      if (!t || !t.ro || t.roConnected !== true) return false;
+      try { t.ro.disconnect(); } catch { /* already disconnected */ }
+      t.roConnected = false;
+      return true;
+    },
+    // The inverse. Narrowly scoped to ONE pane and reconnects the EXISTING observer rather than
+    // constructing a second one — see resumeAppResizeObserver. The adapter calls nothing here on a
+    // normal close; this exists for the transitions where a pane leaves Dockview alive.
+    resumeAppResizeObserver: (paneId) => resumeAppResizeObserver(paneId),
+    measureTerminal: (paneId) => {
+      const t = terms.get(paneId);
+      return t ? { cols: t.term.cols, rows: t.term.rows } : null;
+    },
+    sendResize: (paneId, cols, rows) => cc.ptyResize(paneId, cols, rows),
+    focusPane: (paneId) => {
+      const t = terms.get(paneId);
+      if (t) { activeTermId = paneId; try { t.term.focus(); } catch {} }
+    },
+    // Pane creation goes through the EXISTING code path, so the prototype's terminals are real
+    // PTYs carrying the app's own clipboard, OSC 52, TTS, Dictate, and close wiring — not stand-ins.
+    createTerminalPane: async () => {
+      const before = new Set(terms.keys());
+      openInAppTerminal({});
+      return [...terms.keys()].find((id) => !before.has(id)) || null;
+    },
+    // The Library is a SINGLETON element that already lives in the tab strip. The prototype docks
+    // that exact element and must be able to put it back; it never clones or rebuilds it, because a
+    // clone would lose every listener library-view.js and report-followup.js bound to it.
+    libraryAvailable: () => libraryElement() !== null,
+    dockLibrary: () => dockLibraryElement(),
+    undockLibrary: () => undockLibraryElement(),
+    isLibraryDocked: () => libraryHomePlaceholder !== null,
+    // No audio members. The adapter has no knowledge of `.tts-controls` and no way to reach it:
+    // the production surface never covers the toolbar, so the element never moves.
+    // Diagnostics for acceptance: a monotonic ID like "Terminal 17" does NOT mean 17 live
+    // terminals. This reports what is actually live so the two can never be confused.
+    liveTerminalCount: () => terms.size,
+    liveTerminalIds: () => [...terms.keys()],
+    // The app's single idempotent close path. Calling it twice kills one PTY once.
+    closePane: (paneId) => {
+      const t = terms.get(paneId);
+      if (t && typeof t.closePane === 'function') t.closePane();
+    },
+  };
 }
 
 // ---- boot -------------------------------------------------------------------
@@ -688,6 +1271,14 @@ async function boot() {
   });
   cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));
   window.addEventListener('resize', fitAllTerms);
+  // PRODUCTION layout engine. On a normal launch this loads Dockview and, only after activation and
+  // pane adoption both succeed, switches the visible terminal workspace from the grid to the dock.
+  // Under `--classic-layout` it returns immediately and NOTHING about Dockview is fetched, parsed,
+  // styled, persisted, or initialized. See startLayoutEngine above.
+  // The .catch is required, not decorative: this is a floating promise, and an unhandled rejection
+  // here would be an invisible failure. Every internal path already refuses in a bounded way, so
+  // this only fires if the bootstrap itself broke — and it still refuses visibly.
+  startLayoutEngine().catch(() => refuseLayoutEngine('startup-failed'));
   // TTS/STT modules load after this script. Every state has an explicit UI:
   // ready wires the control; a missed ready event becomes a visible refusal.
   const ttsReady = () => { audioModules.markReady('tts'); setupTTSControls(); appendLog('[tts] module ready\n'); };
@@ -967,6 +1558,11 @@ function wireUi() {
   // tabs
   document.querySelectorAll('.tab').forEach((t) => {
     t.onclick = () => {
+      // PRODUCTION Dockview: the Library is a docked panel inside the Terminals workspace, so its
+      // tab navigates there and adds or focuses the singleton — never a clone, never a duplicate.
+      // Classic mode and every bootstrap refusal leave `layoutInstance` null and fall through to
+      // the original tab behaviour below, unchanged.
+      if (t.dataset.tab === 'library' && dockviewIsActive()) { openLibraryInDock(); return; }
       switchTab(t.dataset.tab);
       if (t.dataset.tab === 'terminals') setTimeout(fitAllTerms, 0);
       // V5b2: scan the run library the first time the Library tab is opened (Refresh re-scans).
