@@ -147,19 +147,18 @@ would prove nothing about it. The tracked-file change set is two new Markdown do
 | Field | Value |
 | --- | --- |
 | Reviewed base | `7a102a2498cb48fdc168e20503741509c5daefd3` |
-| Documentation reviewed tip | recorded in the handoff-only tail commit below |
-| Branch tip | the handoff-only tail commit below |
-| Exact review range | `7a102a2498cb48fdc168e20503741509c5daefd3...<documentation reviewed tip>` |
+| Documentation reviewed tip | `10d80b2c36e956ba7548ca49f6a3652ebef31006` |
+| Branch tip | this handoff-only tail commit |
+| Exact review range | `7a102a2498cb48fdc168e20503741509c5daefd3...10d80b2c36e956ba7548ca49f6a3652ebef31006` |
 | Pinned artifact | `.agent-review-pane-status-source-scout.diff` |
 | Changed paths | `docs/OSS-PROCUREMENT-pane-status.md` (added), `docs/BUILDER-HANDOFF-pane-status-source-scout.md` (added) |
-| Insertions / deletions | recorded in the tail commit |
-| Artifact size | recorded in the tail commit |
-| Artifact SHA-256 | recorded in the tail commit |
+| Insertions / deletions | **968 insertions, 0 deletions**, 2 files |
+| Artifact size | **72,232 bytes** |
+| Artifact SHA-256 | `e5a6ae48dc2e1e0640be1aded2028784bb0abd1ebf396040a9411b69ae7f48c7` |
 | `git diff --check` | clean |
 
-These values are deliberately left unfilled in the reviewed commit, because the artifact is generated
-*from* that commit and cannot be known before it exists. The tail commit below fills them in and
-modifies only this document.
+Both changed paths are Markdown. No dependency, lockfile, script, test, or runtime file changed, so the
+app and Pester gates are untouched by this branch.
 
 The artifact was created with `git diff --output` (never PowerShell redirection), remains gitignored
 local review evidence, and was independently regenerated from the stated range — matching the pinned
