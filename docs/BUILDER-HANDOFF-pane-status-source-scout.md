@@ -8,15 +8,22 @@ Documentation reviewed tip: see § 8
 Branch tip: see § 8
 Merge commit SHA: Pending until merge
 
-**Status: VERDICT FINALIZED — REVISION 4 REVIEWED `VERDICT: PASS`; BLUE ISSUED
-`BLUE SUBSYSTEM VERDICT: PROTOTYPE`; BOUNDED PROTOTYPING AUTHORIZED; PRODUCTION IMPLEMENTATION REMAINS
-UNAUTHORIZED**
+**Status: VERDICT FINALIZED, ONE LOW CORRECTION APPLIED — REVISION 4 REVIEWED `VERDICT: PASS`; BLUE
+ISSUED `BLUE SUBSYSTEM VERDICT: PROTOTYPE`; BOUNDED PROTOTYPING AUTHORIZED; PRODUCTION IMPLEMENTATION
+REMAINS UNAUTHORIZED**
 
 ## 0.0.0 Verdict finalization — the current state of this branch
 
 **Revision-4 review result:** `VERDICT: PASS`, independent Standard-class, at reviewed tip
 `555aee5db928a8be73b0e3cdb528019677f9ad4e`. Three prior revisions returned `VERDICT: FAIL` and are
 preserved below as review history.
+
+**Verdict-finalization review result:** `VERDICT: FAIL`, independent Standard-class, at reviewed tip
+`ca884297c7b34d0d4b29ac24bf9792e654f5b344` — **one finding, severity Low**: a stale current-state
+verification row in § 9.1 contradicted the canonical PROTOTYPE verdict. **Disposition: removed.** No
+procurement analysis, authorization boundary, Master Status text, or recommendation changed. Full detail
+in § 9. The verdict below and everything in this section are **unaffected by that correction** — the
+FAIL was about one duplicated table row, not about the verdict or its boundary.
 
 **Blue's human authorization, verbatim:**
 
@@ -694,8 +701,27 @@ superseded review history.
 `555aee5db928a8be73b0e3cdb528019677f9ad4e`. This is the first PASS on this branch and the review that
 made the verdict possible. Retained verbatim as the literal verdict line, not a paraphrase.
 
-**Verdict finalization:** **none yet** — stopped for a fresh independent Standard-class
-verdict-finalization review.
+**Verdict finalization:** `VERDICT: FAIL` — independent Standard-class review of reviewed tip
+`ca884297c7b34d0d4b29ac24bf9792e654f5b344`. **One finding, severity Low.**
+
+| Field | Value |
+| --- | --- |
+| Severity | **Low** |
+| Finding | One **stale current-state verification row** contradicted the canonical PROTOTYPE verdict. The § 9.1 table ended with a leftover row from revision 4 — `\| Blue verdict \| none invented; placeholder retained verbatim \|` — sitting directly beneath the corrected detailed row that records `BLUE SUBSYSTEM VERDICT: PROTOTYPE`. Two rows in one table asserted opposite current states |
+| Disposition | **Removed.** The stale row is deleted and **not replaced** — the detailed row immediately above it already records the verdict, its verbatim human authorization, and the fact that no verdict term was invented |
+| Scope of the correction | **No procurement analysis, no authorization boundary, no Master Status text, and no recommendation changed.** Exactly one table row was deleted from one file |
+
+**Why it was missed at verdict finalization.** The row was appended to the bottom of the § 9.1 table in
+an earlier revision, below the block of rows the verdict-finalization edit rewrote. That edit replaced
+the rows it matched and never saw the trailing duplicate, and the follow-up sweep searched for the
+placeholder string `NOT YET ISSUED` — which this row does not contain. **The lesson, consistent with
+this branch's standing rule: a sweep keyed to one phrasing does not establish that a claim is absent.
+Checking the table for duplicate row *keys* would have caught it; searching for one spelling of the
+claim did not.**
+
+**Corrected reviewed tip:** recorded in the tail commit below.
+
+**Focused corrective review:** **none yet** — stopped for a focused independent Standard-class review.
 
 **Blue's subsystem verdict** is a separate thing from a Reviewer verdict, and both are recorded:
 Reviewer verdicts are `VERDICT: PASS|FAIL` on a diff; Blue's is
@@ -727,7 +753,6 @@ Reviewer verdicts are `VERDICT: PASS|FAIL` on a diff; Blue's is
 | **Blue verdict** | **not invented — quoted.** `BLUE SUBSYSTEM VERDICT: PROTOTYPE` is Blue's own decision, issued from the verbatim human statement *"lets continue with prototype"* recorded in § 12.1 of the record. No verdict term was chosen, inferred, or implied on Blue's behalf, and the record now **ends** with that canonical line |
 | **Hook installation** | **none.** No hook was written to `~/.claude/settings.json`, `~/.codex/`, `~/.gemini/settings.json`, or any other provider configuration. Experiment A is authorized but has not begun |
 | Prototype or implementation | **none exists.** Verdict finalization is a documentation act; the prototype belongs to a later branch under its own work order |
-| Blue verdict | none invented; placeholder retained verbatim |
 
 ## Review-diff rule
 
