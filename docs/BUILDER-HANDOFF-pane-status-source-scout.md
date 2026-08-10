@@ -508,25 +508,29 @@ evidence was overwritten:
 | --- | --- |
 | Reviewed base (cumulative) | `7a102a2498cb48fdc168e20503741509c5daefd3` |
 | Revision-3 tail (focused base) | `3058621e7057f5258f8176258ec092bc556a2532` |
-| **Revision-4 reviewed tip** | recorded in the tail commit below |
+| **Revision-4 reviewed tip** | `555aee5db928a8be73b0e3cdb528019677f9ad4e` |
 | Branch tip | this handoff-only tail commit |
 | Changed paths | `docs/OSS-PROCUREMENT-pane-status.md`, `docs/BUILDER-HANDOFF-pane-status-source-scout.md` |
 
-**Focused revision-4 artifact**
+**Focused revision-4 artifact** — the delta a corrective reviewer should read
 
 | Field | Value |
 | --- | --- |
-| Range | `3058621e7057f5258f8176258ec092bc556a2532...<revision-4 reviewed tip>` |
+| Range | `3058621e7057f5258f8176258ec092bc556a2532...555aee5db928a8be73b0e3cdb528019677f9ad4e` |
 | File | `.agent-review-pane-status-source-scout-r4-corrections.diff` |
-| Shortstat / size / SHA-256 | recorded in the tail commit |
+| Shortstat | 2 files, **502 insertions, 219 deletions** |
+| Size | **87,816 bytes** |
+| SHA-256 | `78aae4bd1e438c9af26623b442e1795b1c8336733cc74003b444f2db08b5310f` |
 
-**Cumulative revision-4 artifact**
+**Cumulative revision-4 artifact** — the whole branch from `main`
 
 | Field | Value |
 | --- | --- |
-| Range | `7a102a2498cb48fdc168e20503741509c5daefd3...<revision-4 reviewed tip>` |
+| Range | `7a102a2498cb48fdc168e20503741509c5daefd3...555aee5db928a8be73b0e3cdb528019677f9ad4e` |
 | File | `.agent-review-pane-status-source-scout-r4-cumulative.diff` |
-| Shortstat / size / SHA-256 | recorded in the tail commit |
+| Shortstat | 2 files, **2,159 insertions, 0 deletions** (both files are additions relative to `main`) |
+| Size | **170,070 bytes** |
+| SHA-256 | `fb106664cebafceae894ed84ce7477909139bc83fa8357a5e25c6f000b1284aa` |
 
 Both created with `git diff --output` (never PowerShell redirection), both gitignored, both independently
 regenerated from their stated ranges and matched in exact byte count and SHA-256. `git diff --check` is
@@ -535,8 +539,15 @@ regenerated or overwritten**. Per the revision-4 work order, the revision-1, -2 
 **not** re-hashed this round; their recorded identities above stand from revision 3's verification.
 
 > The exact SHAs, byte counts and hashes cannot appear in the content commit that they describe — the
-> commit does not yet exist when its own diff is generated. They are recorded in the handoff-only tail
-> commit that follows, which is excluded from both ranges and modifies only this document.
+> commit does not yet exist when its own diff is generated. They are recorded in **this handoff-only
+> tail commit**, which is excluded from both ranges and modifies only this document.
+
+**Regeneration note.** Both artifacts were regenerated from their stated ranges into a distinct
+`.agent-review-r4-regen-*.diff` pair **inside the worktree**, compared, and found identical in byte count
+and SHA-256; the two regeneration files were then removed behind an explicit filename-pattern guard. The
+first regeneration attempt wrote to a scratch directory on another drive, which `git diff --output`
+rejected — it produced empty files rather than a valid comparison. That attempt was discarded and redone,
+rather than reported as a mismatch.
 
 ### A deliberate non-change, flagged for the reviewer
 
