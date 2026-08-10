@@ -7,7 +7,17 @@ Record path: `docs/OSS-PROCUREMENT-pane-status.md` (this file — the tracked re
 Work order: *Claude Code Work Order — Pane-Status OSS Procurement Evaluation*
 Branch: `feature/pane-status-source-scout`
 Base `main` SHA: `7a102a2498cb48fdc168e20503741509c5daefd3`
-Evidence retrieval dates: **2026-08-08 – 2026-08-09**
+Evidence retrieval dates: **2026-08-08 – 2026-08-10**
+Revision: **2** — corrective, after an independent Standard-class review of revision 1 returned
+`VERDICT: FAIL`
+
+**Revision history.** Revision 1 (reviewed tip `10d80b2c`) was reviewed independently and **FAILED** on
+four findings: (1) the candidate set omitted the Codex app-server protocol; (2) zero-token binary scans
+were promoted into behavioural claims; (3) Claude's `terminalSequence` was described as permitting
+arbitrary escape sequences; (4) the cross-provider asymmetry claim was too strong. All four are
+corrected here, each at the point of the original error and marked as a correction rather than silently
+rewritten, so the failed reasoning stays visible. The FAIL is preserved as superseded review history in
+the branch handoff; it is not erased or reinterpreted.
 
 This record is evidence-gathering only. It exists so Blue can later issue exactly one subsystem
 verdict. It is written **before** any specification, dependency install, prototype, or implementation,
@@ -27,6 +37,31 @@ Every substantive claim is tagged:
 
 Where a documented claim could not be confirmed against the *installed* software, that gap is stated
 rather than smoothed over. Several such gaps exist and they matter (§ 7.5).
+
+### 0.1 Evidence tiers — added in revision 2 after the FAIL
+
+Revision 1 collapsed four very different kinds of evidence into the single word "verified". The
+independent Standard-class review returned `VERDICT: FAIL`, and its second finding was that zero
+plaintext token matches in a compiled binary had been promoted into behavioural claims. That was a real
+defect in the reasoning, not a wording problem. This record now separates:
+
+| Tier | Meaning | Strength |
+| --- | --- | --- |
+| **T1 — Documented** | Stated in the provider's own documentation. | Establishes intent and contract; may describe a newer version than the one installed. |
+| **T2 — Installed schema / capability surface** | Read out of the installed software's own generated schema, feature list, or `--help` output. | **Strongest tier available without running a session.** Authoritative for the installed version. |
+| **T3 — Token presence** | A literal string was found in an installed binary or bundle. | Supporting only. Presence is suggestive; **absence proves nothing** (see below). |
+| **T4 — Runtime observed** | Behaviour actually seen from a running session. | **Not available in this evaluation** — no model turn was launched. |
+| **T5 — Inference** | A conclusion drawn from the above. | Only as strong as what it rests on; load-bearing ones are flagged. |
+
+**Why T3 absence proves nothing.** A compiled Rust binary such as `codex.exe` may hold a string
+fragmented across a jump table, constructed at runtime by concatenation or formatting, produced by a
+`serde` derive from an enum variant with a different literal casing, stored compressed, or emitted via a
+numeric constant rather than the literal text being searched for. A plaintext search that returns zero
+hits therefore establishes only that *that exact byte sequence* was not found by *that search*. It does
+not establish that the software cannot produce the corresponding behaviour.
+
+Revision 2 re-labels every affected claim accordingly and, where a T2 surface exists, replaces the T3
+evidence with it.
 
 ---
 
@@ -97,10 +132,22 @@ Method, in the order applied:
    description.
 6. **Repository inspection** of Blue Helm itself to establish the real integration seams and to avoid
    proposing anything the app already owns.
+7. **(Revision 2) Generated capability surfaces**, which are stronger than both documentation and token
+   scanning: `codex features list` for staged feature state, and
+   `codex app-server generate-json-schema --out <unique temp dir> --experimental` for the full installed
+   protocol (335 schema files). The temp directory was created with a GUID-suffixed unique name,
+   inspected, then removed after verifying the path matched that unique pattern. Schema generation is
+   local codegen — **no model turn, no network request, no credential use**.
 
-**Constraints honoured.** No package was installed. No provider login or credential entry occurred. No
-paid model run occurred. No source code was copied. No prototype was built. The only commands run
-against provider software were `--version` and offline string inspection of already-installed files.
+**Constraints honoured.** No package was installed. No provider login or credential entry occurred.
+**No live or paid model turn was launched, in either revision.** No source code was copied. No prototype
+was built. No credential, transcript, prompt text, or private provider data was inspected or exposed.
+
+The complete list of commands run against provider software, across both revisions: `--version`;
+`--help` on `codex` and four of its subcommands; `codex features list`;
+`codex app-server generate-json-schema` into a unique temp directory that was then deleted; and offline
+string inspection of already-installed files. Every one of these is local and read-only with respect to
+the provider account — none contacts a model, and none reads credentials or conversation data.
 
 ## 4. Primary sources
 
@@ -121,6 +168,9 @@ against provider software were `--version` and offline string inspection of alre
 | **Installed Claude Code** | `claude --version` → `2.1.220 (Claude Code)`, `C:\Users\levij\.local\bin\claude.exe` | Installed-version capability |
 | **Installed Codex CLI** | `codex --version` → `codex-cli 0.142.3`; string inspection of the shipped `codex.exe` | Installed-version capability |
 | **Installed Gemini CLI** | `gemini --version` → `0.49.0`; token scan of `@google/gemini-cli` `bundle/chunk-*.js` | Installed-version capability |
+| **Installed Codex app-server protocol schema** | `codex app-server generate-json-schema --out <unique temp dir> --experimental` → **335 schema files**, inspected then deleted | **T2** — authoritative event/method/state surface for the installed version (§ 6.A5) |
+| **Installed Codex feature table** | `codex features list` | **T2** — `hooks stable true`, plus the `stable`/`experimental`/`under development`/`removed` staging model (§ 7.5) |
+| **Installed Codex command surface** | `codex --help`, `codex app-server --help`, `codex app-server daemon --help`, `codex remote-control --help`, `codex features --help` | Subcommand availability, transports, analytics default, TUI-vs-daemon coupling |
 | Blue Helm repository | `app/main.js`, `app/renderer/app.js`, `app/renderer/pty-parser.js`, `app/package.json` | Integration seams, existing ownership |
 
 "No suitable OSS exists" is **not** claimed. Candidates were searched, and the strongest candidates are
@@ -136,6 +186,7 @@ implementation would combine A, C, and E, and would use B or D only as stated.
 | **A1** | Claude Code hooks | Official interface | n/a (product feature) | CLI **2.1.220** installed | current | Yes | **None** | Claude only | **Accepted for consideration** |
 | **A2** | Codex CLI hooks | Official interface | n/a | CLI **0.142.3** installed | current | Yes | **None** | Codex only | **Accepted for consideration** |
 | **A3** | Codex `notify` program | Official interface | n/a | CLI **0.142.3** installed | current | Yes | **None** | Codex only | Accepted — narrow (one event) |
+| **A5** | **Codex app-server (JSON-RPC protocol)** | Official protocol | Apache-2.0 (`openai/codex`) | `codex app-server`, schema generated from **installed 0.142.3** | repo pushed **2026-08-10** | Yes | None *as a package* — but a protocol client and a replacement pane UI | Codex only | **Accepted for consideration — richest status semantics found, highest integration cost** (§ 6.A5) |
 | **A4** | Gemini CLI hooks | Official interface | n/a | CLI **0.49.0** installed | current | Yes | **None** | Gemini only | **Accepted for consideration** |
 | **B1** | OSC 133 / OSC 633 shell-integration marks, parsed via existing `xterm.parser.registerOscHandler` | Documented protocol + API the app already uses | n/a | xterm 6.0.0 installed | current | Yes | **None** | Generic PTY (shell), not agents | Accepted — **shell panes only**, see § 8 |
 | **B2** | Terminal bell (BEL) via `preferredNotifChannel: "terminal_bell"` | Official Claude setting | n/a | 2.1.220 | current | Yes | None | Claude only | **Rejected as a state source** — cannot distinguish finished from awaiting-permission (§ 7.1) |
@@ -164,9 +215,15 @@ first-party addon from the same MIT project as the xterm build already vendored.
 excluded by licence (AGPL-3.0 and Commons Clause), the best mechanism match carries no licence at all,
 and the rest render text or read conversation transcripts (§ 6.E).
 
-**[INFERENCE]** The procurement question for this subsystem is therefore **not** "which package do we
-install". It is "which *official signals* do we consume, and how do we refuse honestly when they are
+**[T5 — INFERENCE]** The procurement question for this subsystem is therefore **not** "which package do
+we install". It is "which *official signals* do we consume, and how do we refuse honestly when they are
 absent". That reframing is the main deliverable of this evaluation.
+
+**One accepted candidate is not free, and revision 2 adds it deliberately.** **A5, the Codex
+app-server**, also adds no npm package — but it is the one candidate whose true cost is not measured in
+dependencies at all. It requires a protocol client, a credential posture, and a replacement UI for the
+Codex pane (§ 6.A5, § 10.2). Revision 1's "everything is free" framing was tidy precisely because it had
+omitted the candidate that is not.
 
 ## 6. Detailed candidate cards
 
@@ -212,11 +269,44 @@ since v2.1.218. Hook edits are picked up at runtime by a file watcher rather tha
 startup. `allowManagedHooksOnly` exists for enterprise administrators to block user/project/plugin
 hooks.
 
-**[FACT] Hooks can emit terminal escape sequences by design.** A hook's JSON output may include
-`terminalSequence`, documented for notifications and window titles, with the example value
-`"\033]777;notify;Title;Body\007"`. Separately, as of v2.1.139 on macOS and Linux, command hooks run
-without a controlling terminal so they cannot write escape sequences directly; **no equivalent
-statement is made for Windows**, which is Blue Helm's only platform.
+**[T1] Hooks can emit terminal escape sequences by design — from a bounded allowlist.**
+
+Revision 1 said hooks "can emit **arbitrary** terminal sequences" and stated that the
+no-controlling-terminal mitigation was documented only for macOS/Linux with *"no equivalent statement
+made for Windows"*. **Both claims were wrong and are corrected here.** The documentation specifies an
+allowlist and states Windows support explicitly. Quoted verbatim:
+
+> The field accepts a string of one or more allowlisted escape sequences:
+>
+> * OSC `0`, `1`, `2`: window and icon titles
+> * OSC `9`: iTerm2, ConEmu, Windows Terminal, and WezTerm notifications, including `9;4` taskbar progress
+> * OSC `99`: Kitty notifications
+> * OSC `777`: urxvt, Ghostty, and Warp notifications
+> * Bare BEL
+>
+> Sequences may be terminated with BEL or with ST. **Anything outside the allowlist, including CSI cursor
+> and color sequences, OSC palette sequences, OSC 8 hyperlinks, OSC 52 clipboard writes, and OSC 1337, is
+> rejected and the field is ignored.**
+
+and on platform support:
+
+> This is race-free, works inside tmux and GNU screen, and **works on Windows where there is no `/dev/tty`**.
+
+**[T5] The corrected security concern is narrower but sharper, not weaker.** `terminalSequence` is not
+an arbitrary-escape-sequence primitive — it cannot move the cursor, recolour the screen, write the
+clipboard via OSC 52, or inject OSC 8 hyperlinks. But **OSC `9` is on the allowlist, and the
+documentation names `9;4` taskbar progress explicitly**. So:
+
+* a hook — including one defined in a project's committable `.claude/settings.json`, which executes
+  without per-hook approval — can legitimately emit exactly the OSC 9;4 sequence that § 6.B3 proposes
+  reading as a *working* indicator; and
+* the mechanism is **documented to work on Windows**, so this is live on Blue Helm's only platform
+  rather than being a theoretical gap.
+
+The precise finding is therefore a **forgery / trust-boundary problem for OSC 9;4 specifically**, not
+arbitrary escape-sequence execution: any in-band pane-status marker built on the OSC 9 family can be
+produced by an allowed hook output or by pane content, and cannot authenticate its origin. It does not
+imply that Claude Code hooks can drive the terminal generally.
 
 **Disposition: accepted for consideration.** Richest state model of any candidate, zero dependencies,
 and the only source that natively distinguishes all five states. Carries the record's biggest privacy
@@ -243,19 +333,44 @@ project-local hooks load only when the `.codex/` layer is trusted. Managed hooks
 (`requirements.toml`) are auto-trusted and can be enforced with `allow_managed_hooks_only = true`.
 A `--dangerously-bypass-hook-trust` flag exists.
 
-**[FACT] Confirmed present in the installed binary.** Offline string inspection of the shipped
-`codex.exe` (Codex 0.142.3) found: `hooks.json` (6), `hook_event_name` (25), `PreToolUse` (50),
-`PostToolUse` (37), `UserPromptSubmit` (34), `PermissionRequest` (50), `SubagentStop` (28),
-`PostCompact` (26), `bypass_hook_trust` (14), `SessionStart` (45).
+**[T2] Hooks are a stable, enabled feature on this installation.** `codex features list` on the
+installed 0.142.3 reports the row `hooks   stable   true`. This is a capability statement from the
+software itself and is the authoritative installed-version evidence for this card. Revision 1 did not
+consult this surface and relied on token counting instead.
 
-**[FACT] One documented event is absent from the installed binary.** `SessionEnd` returned **0**
-occurrences while `SessionStart` returned 45. See § 7.5 — this is version drift, not a doc error to
-wave away.
+**[T3 — supporting only] Token presence in the installed binary.** Offline plaintext inspection of the
+shipped `codex.exe` found: `hooks.json` (6), `hook_event_name` (25), `PreToolUse` (50), `PostToolUse`
+(37), `UserPromptSubmit` (34), `PermissionRequest` (50), `SubagentStop` (28), `PostCompact` (26),
+`bypass_hook_trust` (14), `SessionStart` (45). These corroborate the T1/T2 evidence. They are not
+independent proof of runtime behaviour.
 
-**Method caveat, stated plainly:** string presence in a 308 MB binary is strong evidence for
-distinctive tokens (`bypass_hook_trust`, `hooks.json`, `PreToolUse`) and weak evidence for common words.
-Counts for generic tokens such as `Stop` (168) and `Notification` (978) are **not** cited as proof that
-those are hook event names; the event list above comes from the documentation.
+#### Correction — the revision-1 `SessionEnd` claim is withdrawn
+
+Revision 1 stated, in this Codex card, that *"One documented event is absent from the installed
+binary"* and treated it as demonstrated version drift. The review's second finding was that this
+promoted a zero-token result into a behavioural claim. **That criticism is correct and the claim is
+withdrawn.**
+
+* **What was searched:** the literal ASCII string `SessionEnd`, case-sensitive, via `rg -a -o -c -F`
+  against the single file
+  `%APPDATA%\npm\node_modules\@openai\codex\node_modules\@openai\codex-win32-x64\vendor\x86_64-pc-windows-msvc\bin\codex.exe`
+  (Codex 0.142.3).
+* **What was observed:** 0 matches for `SessionEnd`; 45 for `SessionStart`.
+* **What that is:** a **T3 installed-binary token-scan observation**, nothing more.
+* **What it does not establish:** it does **not** prove `SessionEnd` is absent at runtime, and it does
+  not prove version drift. Per § 0.1, a Rust binary can produce an event name without that literal
+  appearing contiguously in the file — for example via a `serde` rename, a fragmented or
+  runtime-assembled string, or an enum discriminant formatted at emit time.
+* **Current status of the question: UNVERIFIED.** No T2 surface consulted here enumerates hook event
+  names (`codex features list` reports the *feature*, not its events; the app-server schema describes
+  the app-server protocol, in which hooks appear only as `HookStartedNotification` /
+  `HookCompletedNotification` / `hooks/list`). Settling it would require either a documented
+  installed-version hook schema or a runtime experiment, and is assigned to § 11.1.
+
+**Method caveat retained and sharpened:** token *presence* for distinctive strings (`bypass_hook_trust`,
+`hooks.json`, `PreToolUse`) is meaningful corroboration; token *absence* is not evidence of absence; and
+counts for generic words such as `Stop` (168) and `Notification` (978) are **not** cited as proof of
+anything. The event list above comes from documentation (T1).
 
 **Disposition: accepted for consideration.** Zero dependencies, best trust model, coarser states.
 
@@ -275,6 +390,134 @@ cloned repository cannot introduce or redirect a `notify` program.
 **Disposition: accepted, but narrow.** One event cannot express four states. Useful as a
 belt-and-braces completion signal, and notable as the only mechanism here that is structurally immune
 to project-level tampering. Redundant if A2 is used.
+
+### A5 — Codex app-server (JSON-RPC protocol) — added in revision 2
+
+Revision 1 omitted this candidate entirely. That omission was the review's first finding and it was
+correct: the record evaluated hooks and terminal signals without carding the official structured
+protocol that Codex actually exposes. This card applies the same criteria used for every other
+candidate.
+
+**[T2] Evidence basis.** All protocol facts below were read from the **installed** Codex 0.142.3's own
+generated JSON Schema bundle, produced with
+`codex app-server generate-json-schema --out <unique temp dir> --experimental` (335 schema files),
+inspected, and then deleted. No model turn was launched; schema generation is a local codegen operation.
+
+**Licence and provenance.** `openai/codex` — **Apache-2.0**, 105,113 stars, pushed **2026-08-10**, not
+archived (GitHub REST API). The protocol ships inside the CLI Blue Helm already launches; adopting it
+adds **no npm package**.
+
+**Maintenance and stability.** `codex app-server` is marked **`[experimental]`** in `--help`, as are its
+`generate-ts` / `generate-json-schema` subcommands. The schema bundle is versioned (`v1/`, `v2/`), and
+`v2` carries essentially all status-relevant methods.
+
+**Installed-version availability.** Confirmed present: `codex app-server` with subcommands `daemon`,
+`proxy`, `generate-ts`, `generate-json-schema`. Separately, `codex features list` reports **`hooks
+stable true`** on this installation — a T2 capability statement that supersedes revision 1's T3 token
+counting for the Codex hooks card.
+
+**Windows support.** Runs natively; the installed binary is `codex.exe`. Transports offered via
+`--listen`: `stdio://` (default), `unix://`, `ws://IP:PORT`, `off`.
+
+**Network and telemetry behaviour.** `--analytics-default-enabled` exists, and the help text states
+verbatim: *"Analytics are disabled by default for app-server. Users have to explicitly opt in via the
+`analytics` section in the config.toml file."* Default-off is the correct posture, but analytics are a
+configurable surface that a Blue Helm integration would need to pin explicitly rather than inherit.
+
+**Authentication and credential implications — a genuine escalation.** The client surface includes
+`account/login/start`, `account/login/cancel`, `account/logout`, `account/read`,
+`account/rateLimits/read`, `account/usage/read`, and `auth/login`, plus a server→client
+`account/chatgptAuthTokens/refresh` request. **An app-server client sits inside Codex's credential
+boundary** — it can drive login/logout and is asked to service token refresh. That is categorically
+more authority than a hook, which only receives an event. Under the owned-boundary rules this is the
+single most significant concern in this card.
+
+**Security and trust surface.** Larger than any other candidate here. The same protocol that reports
+status also exposes filesystem operations (`fs/readFile`, `fs/writeFile`, `fs/remove`, `fs/watch`),
+process control (`process/spawn`, `process/kill`, `process/writeStdin`, `process/resizePty`), thread
+mutation (`thread/delete`, `thread/rollback`, `thread/fork`), and config writes. A status client would
+have to be scoped to a strict read-only subset by discipline, because the transport does not scope
+itself.
+
+**[T2] Status-event semantics — the strongest found in this evaluation.** `thread/status/changed`
+carries a `ThreadStatus` discriminated union, quoted from the installed schema:
+
+| `type` | Additional | Maps to |
+| --- | --- | --- |
+| `notLoaded` | — | not started |
+| `idle` | — | **completed / idle** |
+| `active` | `activeFlags: []` | **actively working** |
+| `active` | `activeFlags: ["waitingOnUserInput"]` | **awaiting human input** |
+| `active` | `activeFlags: ["waitingOnApproval"]` | **awaiting approval** |
+| `systemError` | — | **failed** |
+
+This is a **state model**, not an event stream: the notification reports what the thread *is*, keyed by
+`threadId`. Every other candidate in this record requires the app to *reconstruct* state by remembering
+which event fired last. Note especially `waitingOnUserInput`, which is distinct from
+`waitingOnApproval` — Codex therefore expresses a general awaiting-input state here, which its hook
+surface does not.
+
+**[T2] Turn semantics.** `turn/started` and `turn/completed` are both present as notifications;
+`TurnCompletedNotification` requires `threadId` and `turn`. Also present: `turn/diff/updated`,
+`turn/plan/updated`, `turn/steer`, and `TurnInterrupt`.
+
+**[T2] Approval-request semantics — structurally stronger than a hook.** Approvals are JSON-RPC
+**server→client requests**, not notifications, so the client must reply:
+
+| Method | Purpose |
+| --- | --- |
+| `item/commandExecution/requestApproval` | command-execution approval |
+| `item/fileChange/requestApproval` | file-change approval |
+| `item/permissions/requestApproval` | permission approval |
+| `item/tool/requestUserInput` | a tool asking the user a question |
+| `mcpServer/elicitation/request` | MCP server elicitation |
+
+**[T5 — INFERENCE, load-bearing]** Because an approval is an outstanding *request*, "this pane is
+blocked on a human" is not inferred from a heuristic — it is structurally true while the request is
+unanswered. No hook, escape sequence, or output heuristic in this record can match that.
+
+**Pane/session binding.** Every status and turn notification carries `threadId`. Binding is explicit and
+survives anything the UI does, which directly answers threat 10 (§ 8) far better than any in-band
+scheme.
+
+**Forgeability / spoofing surface.** Out-of-band over stdio/unix/ws, so **pane content cannot forge it**
+— a decisive advantage over OSC-based signalling (§ 6.B3, threat 1). The transport instead becomes the
+thing to protect: `ws://IP:PORT` and `remote-control` would expose it beyond the local process and must
+not be enabled.
+
+**Version-drift behaviour.** Better than every other candidate, and this is its quiet strength: the
+schema is **generated from the installed binary**, so drift is *detectable by regeneration and diff*
+rather than discovered when a pane silently stops updating. Against that, `[experimental]` means the
+protocol may change shape without the stability promise a `stable` feature carries.
+
+**Adoption effort, and the decisive limitation.** **[T5 — INFERENCE, load-bearing]** The app-server is an
+*alternative frontend protocol*: a client drives Codex programmatically and renders the results itself.
+Evidence that it cannot observe an existing PTY session:
+
+* `ThreadLoadedListResponse.data` is documented in the schema as *"Thread ids for sessions currently
+  loaded in memory"* — i.e. in that server process's memory.
+* `codex --help` offers **no flag to attach the interactive TUI to a daemon**; the only mentions of
+  `app-server`/`daemon` in the top-level help are the subcommand list itself.
+
+So a `codex` TUI running in a Blue Helm PTY is a **separate process with its own threads**, and a
+separate app-server client would report on its *own* threads, not the pane's. Adopting app-server for
+status therefore **replaces** the Codex pane's interactive terminal rather than supplementing it: Blue
+Helm would drive Codex over JSON-RPC and render its own UI, giving up the real Codex TUI that the pane
+exists to show.
+
+**Whether it replaces, supplements, or complicates the existing PTY path: it replaces it, for Codex
+panes only.** That is a UX and architecture decision, not a status-plumbing decision.
+
+**Build/ownership burden.** A JSON-RPC client, a transport, a scoped method allowlist, a credential
+posture for a surface that can log in and out, and — if the pane is to stay usable — a replacement UI
+for everything the Codex TUI currently renders. Substantially larger than every other candidate
+combined, and it buys Codex only.
+
+**Disposition: accepted for consideration.** It has the best status semantics, the best binding, and the
+best drift story of anything evaluated, and it is unforgeable by pane content. It also carries the
+largest security surface, sits inside the credential boundary, is marked experimental, and cannot be
+adopted without replacing the Codex pane's terminal UX. Those are not reasons to reject it; they are the
+trade Blue has to weigh, and revision 1 denied Blue that choice by omitting it.
 
 ### A4 — Gemini CLI hooks
 
@@ -362,13 +605,39 @@ Code emits **raw** OSC 9;4 without tmux DCS passthrough wrapping — i.e. the se
 only tmux swallows it. Blue Helm is not tmux; it is the terminal, and would receive the raw sequence
 directly.
 
-**[FACT] Confirmed present in the installed binary.** Offline string inspection of
+**[T3 — supporting] Token presence in the installed Claude binary.** Offline string inspection of
 `C:\Users\levij\.local\bin\claude.exe` (2.1.220): `terminalProgressBarEnabled` (21 occurrences), `9;4`
-(6 occurrences).
+(6 occurrences). Combined with the T1 documentation and issue #57366, the case that installed Claude
+Code emits OSC 9;4 is strong.
 
-**[FACT] Codex and Gemini do not emit it.** Same inspection method: `9;4` returned **0** occurrences in
-the installed Codex 0.142.3 binary and **0** across the installed Gemini 0.49.0 `bundle/chunk-*.js`.
-This is a Claude-only signal, verified rather than assumed.
+#### Correction — the revision-1 "Codex and Gemini do not emit it" claim is withdrawn
+
+Revision 1 stated *"Codex and Gemini do not emit it … This is a Claude-only signal, verified rather than
+assumed."* **That was an overclaim and is withdrawn.** It inverted a null result into a capability
+statement, which is exactly the reasoning error the review flagged.
+
+* **What was searched:** the literal ASCII string `9;4` via `rg -a -o -c -F` against the installed
+  Codex 0.142.3 `codex.exe`, and via a .NET regex count over the installed Gemini 0.49.0
+  `@google\gemini-cli\bundle\chunk-*.js` files.
+* **What was observed:** 0 matches in each.
+* **What that is:** a **T3 token-scan observation**.
+* **What it does not establish:** it does **not** establish that Codex or Gemini *cannot* emit OSC 9;4.
+  A progress sequence is routinely assembled at emit time from parts (`"\x1b]9;"`, a state number, a
+  value), in which case the contiguous literal `9;4` never appears in the file at all. The null result
+  is fully consistent with either emitting or not emitting.
+* **Separating the four questions honestly:**
+
+| Question | Claude Code 2.1.220 | Codex 0.142.3 | Gemini CLI 0.49.0 |
+| --- | --- | --- | --- |
+| **Documented support (T1)** | **Yes** — `terminalProgressBarEnabled`; issue #57366 describes raw OSC 9;4 emission | None found | None found |
+| **Token presence (T3)** | Present (`9;4` ×6, setting ×21) | Not found | Not found |
+| **Runtime behaviour (T4)** | **Unverified** — no session was launched | **Unverified** | **Unverified** |
+| **Inference (T5)** | Very likely emits when the setting is enabled | Unknown — no documented support found *and* no token; absence of documentation is the weightier of the two | Unknown, same basis |
+
+* **Corrected conclusion:** OSC 9;4 is **documented for Claude Code and not documented for Codex or
+  Gemini**. That is a statement about documentation and is the defensible one. Whether the other two
+  emit it is **unverified**, and any design must therefore treat OSC 9;4 as *a Claude-documented signal
+  it may opportunistically receive from others*, never as a provider discriminator.
 
 **[FACT] An official first-party parser exists.** `@xterm/addon-progress` is one of the 13 official
 addons in the `xtermjs/xterm.js` repository (verified against the repository's `addons/` listing). It
@@ -551,17 +820,39 @@ Blue Helm's threat model.
 Legend: **native** = a dedicated documented event/matcher exists; **derived** = obtainable by combining
 events; **none** = no documented signal.
 
-| State | Claude Code 2.1.220 | Codex 0.142.3 | Gemini CLI 0.49.0 | Generic PowerShell pane |
-| --- | --- | --- | --- | --- |
-| actively working | **native ×2** — `UserPromptSubmit`/`PreToolUse` hooks, **and** in-band `OSC 9;4` progress (`terminalProgressBarEnabled`) | **native** — `UserPromptSubmit`, `PreToolUse`. **No `OSC 9;4`** (verified absent from installed binary) | **native** — `BeforeAgent`, `BeforeTool`. **No `OSC 9;4`** (verified absent from installed bundle) | **derived** — between `OSC 133;C` and `;D` |
-| awaiting human input | **native** — `Notification` matcher `permission_prompt` / `idle_prompt` | **partial** — `PermissionRequest` (approval only; no idle signal) | **partial** — `Notification` `notification_type: "ToolPermission"` only | **none** |
-| completed / idle | **native** — `Stop` | **partial** — `Stop` fires on finish **or interrupt** | **native** — `AfterAgent` | **derived** — `OSC 133;D` with exit code 0 |
-| exited / failed | **native** — `StopFailure` (+ matchers `rate_limit`, `overloaded`, `authentication_failed`), `SessionEnd` | **partial** — `Stop` conflates; `SessionEnd` **absent from the installed binary** (§ 7.5) | **native** — `SessionEnd` with `reason` | **native** — `OSC 133;D;<exitcode>`, plus `pty-exit` |
-| distinguishes *awaiting* from *finished* | **Yes** | Only for tool approvals | Only for tool approvals | No |
+Columns are now split by *interface*, because Codex exposes two very different ones and revision 1
+conflated their coverage by carding only the first.
 
-**[FACT] Providers do not expose equivalent signals.** The work order warned against assuming they
-would; the matrix confirms it. Claude Code is materially ahead, Codex and Gemini can express
-"needs approval" but not "idle and waiting", and generic panes can express nothing about intent.
+| State | Claude Code 2.1.220 (hooks) | Codex 0.142.3 (hooks) | **Codex 0.142.3 (app-server)** | Gemini CLI 0.49.0 (hooks) | Generic PowerShell pane |
+| --- | --- | --- | --- | --- | --- |
+| actively working | **native ×2** — `UserPromptSubmit`/`PreToolUse`, **and** documented in-band `OSC 9;4` | **native** — `UserPromptSubmit`, `PreToolUse` | **native** — `ThreadStatus.active`, `turn/started` | **native** — `BeforeAgent`, `BeforeTool` | **derived** — between `OSC 133;C` and `;D` |
+| awaiting human input | **native** — `Notification` matchers `idle_prompt` **and** `permission_prompt` | **partial** — `PermissionRequest` (approval only) | **native** — `activeFlags: waitingOnUserInput` **and** `waitingOnApproval`, plus three outstanding `requestApproval` request types | **partial** — `Notification` `notification_type: "ToolPermission"` | **none** |
+| completed / idle | **native** — `Stop` | **partial** — `Stop` fires on finish **or interrupt** | **native** — `ThreadStatus.idle`, `turn/completed` | **native** — `AfterAgent` | **derived** — `OSC 133;D` exit code 0 |
+| exited / failed | **native** — `StopFailure` (matchers `rate_limit`, `overloaded`, `authentication_failed`), `SessionEnd` | **partial** — `Stop` conflates; `SessionEnd` presence at runtime **UNVERIFIED** (§ A2 correction) | **native** — `ThreadStatus.systemError`, `thread/closed`, `error` notification | **native** — `SessionEnd` with `reason` | **native** — `OSC 133;D;<exitcode>`, plus `pty-exit` |
+| distinguishes *awaiting* from *finished* | **Yes — both idle and permission** | **Yes, for approvals only** | **Yes — both, as explicit state flags** | **Yes, for tool permissions only** | No |
+| available without replacing the pane's terminal | Yes | Yes | **No** (§ 6.A5) | Yes | Yes |
+
+#### Correction — the revision-1 exclusivity claim is withdrawn
+
+Revision 1 asserted *"Only Claude Code distinguishes awaiting input from finished"* and repeated it in
+the recommendation and handoff. The review's fourth finding was that this was too strong, and it was
+right — revision 1's own matrix already scored Codex and Gemini "partial" on that row, so the prose
+contradicted the table beneath it. The corrected position:
+
+* **All four evaluated interfaces can distinguish at least some awaiting-input condition from
+  completion.** Codex hooks do so via `PermissionRequest`; Gemini hooks via `Notification`
+  `notification_type: "ToolPermission"`. Neither is silent on the distinction.
+* **Codex's app-server is at least as expressive as Claude's hooks on this axis, and arguably more**:
+  `waitingOnUserInput` and `waitingOnApproval` are *state flags* rather than transient events, so the
+  app never has to reconstruct "what fired last".
+* **What is genuinely distinctive about Claude Code** is narrower and should be stated that way: among
+  the three **hook** systems, it appears to be the only one documenting *both* an idle-prompt and a
+  permission-prompt distinction — Codex and Gemini hooks document approval-type waits only.
+* **"Richest documented hook coverage" is not "exclusive capability."** Revision 1 conflated the two.
+
+**[FACT] Providers still do not expose equivalent signals** — the work order was right to warn against
+assuming they would. But the asymmetry is *unevenness in shape and cost*, not a single provider holding
+a capability the others lack. Generic PowerShell panes remain the only genuinely silent case.
 
 ### 7.2 Common shape
 
@@ -598,25 +889,42 @@ the parent environment into the subprocesses it spawns — and the in-code comme
 reduced the blast radius of the very hook mechanism this subsystem would use. That is a genuine
 head start, and it should not be undone.
 
-### 7.5 Installed-version drift — the finding that most affects a verdict
+### 7.5 Installed-version drift — restated in revision 2 on sounder evidence
 
-**[FACT]** Documentation describes current `main`; Blue Helm launches specific installed versions. Two
-concrete mismatches were found by checking the installed software:
+Revision 1 built this section on the claim that Codex's `SessionEnd` was "absent from the installed
+binary". That claim is **withdrawn** (§ A2), so the section is rebuilt rather than left resting on it.
 
-1. **Codex `SessionEnd` is documented but absent from the installed 0.142.3 binary** — 0 occurrences,
-   against 45 for `SessionStart`.
-2. Third-party write-ups place `UserPromptSubmit` at Codex v0.116.0 and `PreToolUse`/`PostToolUse` at
-   v0.117.0, i.e. the event set has been growing release by release.
+**What is withdrawn:** the assertion that a documented event was demonstrably missing at runtime. A
+zero-token scan cannot show that (§ 0.1).
 
-**[INFERENCE — load-bearing]** The hook event surface of all three providers is **actively changing**.
-Any design that assumes a fixed event set will drift out of correctness silently, because a hook that
-never fires produces *no error* — it produces a pane that quietly stops updating. This is threat 3, and
-it is not hypothetical: it is already observable between the current documentation and the currently
-installed Codex.
+**What survives, on better evidence:**
 
-**[RECOMMENDATION]** Capability must be **detected and displayed per provider**, and a provider whose
-expected events stop arriving must degrade to *unknown*, visibly. A silent stale status is the specific
-failure this subsystem must not ship.
+1. **[T1] The event surfaces are growing release by release.** Documentation and release notes place
+   `UserPromptSubmit` and `PreToolUse`/`PostToolUse` at specific recent Codex versions, and Claude Code's
+   documented hook list has expanded to 31 events.
+2. **[T2] The installed software itself reports staged, mutable capability.** `codex features list` on
+   0.142.3 classifies features across `stable` / `experimental` / `under development` / `removed`, and
+   **`removed` entries exist** — capabilities are withdrawn, not only added. `hooks` is `stable true`
+   today; `exec_permission_approvals` is `under development false`; `plugin_hooks` is `removed`.
+3. **[T2] The app-server is explicitly `[experimental]`**, so its protocol may change shape.
+
+**[T5 — INFERENCE, load-bearing, and unchanged in substance] Drift is real and silent.** A hook that
+stops firing produces *no error* — it produces a pane that quietly stops updating, which is worse than a
+visible failure. The conclusion revision 1 drew is still correct; only its evidence needed replacing.
+
+**[T5] Revision 2 adds a materially better mitigation than revision 1 had.** Two of the installed
+surfaces used in this evaluation are **machine-readable and diffable**:
+
+* `codex features list` — a stable/experimental/removed capability table; and
+* `codex app-server generate-json-schema` — the full protocol, generated from the installed binary.
+
+Either can be captured at a known-good version and re-generated after an upgrade, turning drift from
+something discovered by a user noticing a stale badge into something detectable by comparison. No
+equivalent generated surface was found for Claude Code or Gemini CLI hooks.
+
+**[RECOMMENDATION]** Capability must be **detected and displayed per provider**; a provider whose
+expected signals stop arriving must degrade to *unknown*, visibly; and where a provider offers a
+generated capability surface, it should be pinned and re-checked on upgrade rather than trusted.
 
 ## 8. Threat-model findings
 
@@ -625,7 +933,7 @@ being **prefer unknown/refused over a confidently false status**.
 
 | # | Threat | Assessment | Evidence-backed mitigation direction |
 | --- | --- | --- | --- |
-| 1 | Agent output prints text resembling a completion marker | **Real and easy.** Any in-band scheme (OSC 133, a custom OSC, a sentinel string) can be forged by the agent simply printing it — and agents routinely print terminal escape sequences while discussing them. Worse, Claude Code hooks may emit arbitrary sequences via `terminalSequence` **by design**, and the no-controlling-terminal mitigation is documented only for macOS/Linux, not Windows. | Treat all in-band terminal data as untrusted. Prefer an **out-of-band** channel (hook → app) that pane content cannot write to. If any in-band marker is ever used, it must carry a per-pane secret the app generated and never echoed into the PTY. |
+| 1 | Agent output prints text resembling a completion marker | **Real and easy.** Any in-band scheme (OSC 133, a custom OSC, a sentinel string) can be forged by the agent simply printing it — and agents routinely print terminal escape sequences while discussing them. **Corrected in revision 2:** Claude Code's `terminalSequence` is *not* an arbitrary-sequence primitive — it is an allowlist (OSC 0/1/2/9/99/777 and BEL; everything else, including OSC 52, is rejected and the field ignored) and it is **documented to work on Windows**. But OSC `9` is on that allowlist and the docs name `9;4` progress explicitly, so a hook — including a project-scoped one that runs without per-hook approval — can legitimately emit the exact sequence § 6.B3 would read as *working*. | Treat all in-band terminal data as untrusted. Prefer an **out-of-band** channel (hook → app, or a structured protocol such as § 6.A5) that pane content cannot write to. If any in-band marker is ever used, it must carry a per-pane secret the app generated and never echoed into the PTY — note that an OSC 9;4 progress value cannot carry such a secret, which is why it can corroborate but never decide. |
 | 2 | Untrusted repository content causes a fake "awaiting input" signal | **Real, and provider-dependent.** Claude Code executes project `.claude/settings.json` hooks with no per-hook approval and picks up edits at runtime via a file watcher. Gemini fingerprints project hooks and warns on change. Codex hashes and requires explicit `/hooks` trust, and additionally **ignores `notify` in project config entirely**. Blue Helm clones and runs untrusted repositories in worktrees as its core function, so this is squarely in scope. | Install status hooks at **user scope only**. Never derive status from project-scoped configuration. Ignore any status report that does not authenticate as the app's own reporter for that specific pane. |
 | 3 | Provider output format changes after an update | **Already happening** — see § 7.5, Codex `SessionEnd`. | Per-provider capability detection with a visible *unknown* state; a heartbeat/liveness expectation so "events stopped arriving" is distinguishable from "nothing is happening"; pin observed behaviour per installed version. |
 | 4 | A hook or plugin receives secrets or full prompt/output content unnecessarily | **Real and confirmed by schema.** All three providers hand hooks `transcript_path`; Claude and Codex hand `Stop` the `last_assistant_message`; all three hand prompt text to the submit/pre-agent event; tool events carry `tool_input`, which the Claude documentation itself notes may contain passwords or API keys. | A status reporter must consume **only** `hook_event_name`, `session_id`, and a pane token — and must never read, forward, or log `prompt`, `last_assistant_message`, `tool_input`, `tool_response`, or open `transcript_path`. This is enforceable by construction, and it should be enforced by test. Keep `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1`. |
@@ -666,6 +974,7 @@ command (§ C2, § C7).
 | Slice | Adopt | Build owned | Assessment |
 | --- | --- | --- | --- |
 | Event transport (hook → app) | Nothing to adopt — no OSS package provides this for a sandboxed Electron app | Small owned local endpoint + tiny reporter executable | **Build is the only option.** No candidate exists. |
+| Structured status for Codex | **Codex app-server** (Apache-2.0, official, richest semantics) | Hook reporter, as for the other providers | **Adopt would win on semantics and lose on scope**: it replaces the Codex pane's terminal, brings the credential boundary and a large method surface, and is `[experimental]`. See § 10.2. |
 | Provider event → state mapping | Nothing to adopt — mappings are product-specific and changing | Small owned table, one per provider, version-pinned | **Build is the only option**, and it must be maintained. |
 | Process-tree corroboration | `pidtree` (MIT, 0 deps) | One `Get-CimInstance` call | Near-equivalent. `pidtree` buys cross-platform correctness the project does not need; direct call avoids a dependency. **Genuinely close; either is defensible.** |
 | OSC 133 parsing for shell panes | No library needed | `registerOscHandler(133, …)` — the app already calls this API for OSC 52 | **Build, trivially.** Adopting anything here would be worse than the one-line owned version. |
@@ -686,11 +995,32 @@ the same either way: capability detection plus a visible *unknown* state, so dri
 
 **[RECOMMENDATION — not a verdict, and not a specification.]**
 
-The evidence supports **treating the three official hook systems as the primary signal source, and
-building the subsystem itself as owned code**, because:
+### 10.0 Outcome of re-deriving after the FAIL
 
-1. All three providers ship a hook system that is present in the versions installed on Blue's machine
-   (verified, § A1/A2/A4), sharing one integration contract (§ 7.2).
+The reasoning was re-run from the candidate set upward with § 6.A5 included, rather than the old
+conclusion being carried forward. Stated explicitly, as the work order requires:
+
+> **The recommendation SURVIVES as the primary path, with two substantive amendments.** The app-server
+> does **not** displace hooks for pane status *as scoped* — but only because of a UX constraint, not
+> because it is the weaker interface. On the merits of status semantics alone, **app-server is the best
+> interface evaluated in this record.** § 10.2 is the comparison that decides it, and § 10.3 states the
+> condition under which the answer flips.
+
+The two amendments:
+
+* **Amendment 1 — the design should be provider-specific, not lowest-common-denominator.** Revision 1
+  implicitly sought one uniform mechanism. That is now recorded as the wrong target (§ 10.4).
+* **Amendment 2 — the asymmetry claim is narrowed** (§ 7.1): every evaluated interface distinguishes
+  *some* awaiting-input condition from completion. Claude Code has the richest documented **hook**
+  coverage; it does not hold an exclusive capability.
+
+### 10.1 The surviving recommendation
+
+Treat the **official provider hook systems as the primary signal source, and build the subsystem itself
+as owned code**, because:
+
+1. All three providers ship a hook system present in the installed versions — and for Codex this is now
+   T2 evidence (`codex features list` → `hooks stable true`), not token counting (§ A2).
 2. Adopting them costs **zero dependencies** — no licence, no transitive closure, no native build, no
    telemetry (§ 9.1).
 3. No third-party candidate can own the subsystem without receiving pane identity, IPC authority, or
@@ -700,20 +1030,70 @@ building the subsystem itself as owned code**, because:
    application rather than a library (§ 6.E).
 4. The one library slice with a real candidate (`pidtree`) is nearly equivalent to a single owned
    PowerShell call on this machine (§ 9.2).
-5. One genuine off-the-shelf component does exist and is worth taking: **`@xterm/addon-progress`**, an
-   official MIT addon from the same project as the vendored xterm, which parses the `OSC 9;4` progress
-   sequence that installed Claude Code already emits (§ 6.B3). It is the cheapest *actively working*
-   signal available — for Claude panes only, and in-band, so it corroborates rather than decides.
+5. `@xterm/addon-progress` (official, MIT, same project as the vendored xterm) remains worth taking for
+   Claude panes — but strictly as **corroboration**, because § 6.B3's correction shows OSC 9;4 is
+   documented for Claude and *unverified* elsewhere, and threat 1's correction shows an allowed
+   `terminalSequence` hook output can forge exactly that sequence.
 
-**Two findings should temper any decision**, and they are the reason this record does not simply read
-as an endorsement:
+### 10.2 Why app-server does not displace it — the comparison
 
-* **Provider capability is unequal and cannot be made equal.** Only Claude Code distinguishes *awaiting
-  input* from *finished*. Codex and Gemini express tool-approval only; generic panes express nothing
-  (§ 7.1). A cross-provider indicator will therefore be **honest but asymmetric**, and Blue should
-  expect that rather than discover it.
-* **The event surface is actively drifting**, already demonstrably so (§ 7.5). This subsystem will need
-  maintenance at every provider upgrade.
+| Axis | Codex app-server | Provider hooks | Winner |
+| --- | --- | --- | --- |
+| Status semantics | Explicit state union incl. `waitingOnUserInput` / `waitingOnApproval` | Events the app must reassemble into state | **app-server** |
+| Approval semantics | Outstanding JSON-RPC **request** — blocked-on-human is structurally true | An event fired at some past moment | **app-server** |
+| Pane/session binding | Explicit `threadId` on every notification | `session_id`, plus whatever the app correlates | **app-server** |
+| Forgeability | Out-of-band; pane content cannot write it | Out-of-band; same property | tie |
+| Version-drift detection | Schema **generated from the installed binary**, so drift is diffable | Undetectable until a hook silently stops firing | **app-server** |
+| Credential exposure | Client sits inside the auth boundary (`account/login`, token refresh) | Hook receives an event; no auth authority | **hooks** |
+| Security surface | Same channel exposes fs, process spawn/kill, thread mutation, config writes | One event payload | **hooks** |
+| Stability promise | `[experimental]` | `hooks` reports `stable` on installed Codex | **hooks** |
+| Provider coverage | Codex only | All three | **hooks** |
+| **Compatibility with the existing PTY pane** | **Cannot observe a PTY session; adopting it replaces the Codex pane's terminal** | Works with the pane exactly as it is | **hooks — decisively** |
+
+**[T5 — the deciding line]** The last row decides it. Blue Helm's panes exist to *be real terminals
+running the real agent CLIs*; that is the product. A status subsystem is not a licence to replace the
+Codex TUI with a bespoke JSON-RPC-driven UI — that is a far larger change than the one being procured,
+and it would be decided on UX grounds, not status grounds. Since an app-server client cannot see the
+thread running in the pane's PTY (§ 6.A5), adopting it *for status* means adopting it *for everything*
+about Codex panes.
+
+### 10.3 The condition under which this flips
+
+If Blue ever decides that a Codex pane should be a **native Blue Helm surface** rather than a hosted
+TUI — or wants a headless/background Codex mode, remote control, or an in-app approval UI — then
+app-server becomes the right foundation and this recommendation should be re-derived. It is the better
+interface; it is simply answering a bigger question than pane status. Recording that explicitly is the
+main thing revision 1 denied Blue by omitting the candidate.
+
+### 10.4 Provider-specific, not lowest-common-denominator
+
+**[RECOMMENDATION]** Do not force one uniform mechanism. The evidence points to per-provider sourcing
+behind one normalised internal state:
+
+| Pane type | Primary | Corroboration | Honest floor |
+| --- | --- | --- | --- |
+| Claude Code | hooks (`Notification` idle/permission, `Stop`, `StopFailure`) | OSC 9;4 progress | *unknown* |
+| Codex | hooks (`PermissionRequest`, `Stop`) | process-tree liveness | *unknown*; app-server only if § 10.3 fires |
+| Gemini | hooks (`Notification` ToolPermission, `AfterAgent`, `SessionEnd`) | process-tree liveness | *unknown* |
+| PowerShell | `OSC 133;D` exit code, `pty-exit` | — | running/exited only; **no intent states** |
+
+The normalisation layer, refusal policy, and display stay owned and identical across providers. Only
+the *sources* differ. This is what "honest but asymmetric" should mean concretely.
+
+### 10.5 Fallback when a provider signal is unavailable
+
+**[RECOMMENDATION]** One rule, applied identically everywhere: **degrade to *unknown*, visibly, and show
+the age of the last known state.** Never infer *completed* from silence (threats 5–7). Output
+classification (§ D1) may only ever produce an explicitly low-confidence label, never a terminal state.
+
+### 10.6 What still tempers any decision
+
+* **Cross-provider capability is uneven** — in shape and integration cost, though not, as revision 1
+  wrongly said, because one provider uniquely distinguishes waiting from finished (§ 7.1).
+* **The surfaces drift**, including by *removal* (§ 7.5) — this subsystem needs maintenance at every
+  provider upgrade.
+* **No runtime behaviour was observed at all** (§ 11.2). Every signal in the recommended path is
+  documented or schema-level; none has been seen to fire on Blue's machine.
 
 **[RECOMMENDATION]** If Blue wants to reduce risk before committing, the highest-value bounded
 experiment is described in § 11.1. It is described only; it is **not** authorized, and nothing in this
@@ -744,7 +1124,15 @@ record authorizes it.
    xterm) versus one owned `registerOscHandler(9, …)` beside the existing OSC 52 handler. The addon
    brings tested clamping and strict parsing; the owned version brings no new package. Both are
    defensible; they are not the same decision as (a).
-7. **Which verdict term applies.** The five allowed terms are ADOPT, FORK, PROTOTYPE, PATTERN-MINE, and
+7. **Codex app-server — the question revision 1 never put to Blue.** It has the best status semantics,
+   the best pane binding, and the only diffable drift surface of anything evaluated (§ 10.2), but it
+   **cannot observe a PTY-hosted session**, so using it for status means replacing the Codex pane's
+   terminal with a Blue-Helm-rendered UI, accepting a client that sits inside Codex's credential
+   boundary, and depending on an `[experimental]` protocol. Does Blue want (a) hooks now and app-server
+   never, (b) hooks now with app-server reconsidered if a native Codex surface is ever wanted (§ 10.3),
+   or (c) app-server explored now as a deliberate UX change? This record recommends (b) but the choice
+   is a product decision, not a procurement one.
+8. **Which verdict term applies.** The five allowed terms are ADOPT, FORK, PROTOTYPE, PATTERN-MINE, and
    BUILD FRESH. Note that the thing being adopted here is a set of **official interfaces**, not an OSS
    package, which does not map cleanly onto ADOPT as used in the Dockview record. Blue may wish to state
    explicitly which term covers "consume official provider interfaces, own the subsystem".
@@ -760,6 +1148,26 @@ pane; verify that no prompt, output, path, or transcript content ever reaches th
 when the provider is upgraded; and measure the added per-event latency, including Gemini's synchronous
 in-loop execution. Kill criteria would include any conversation content reaching the app, any status
 attributable to the wrong pane after a Dockview move, and any measurable agent stall.
+
+### 11.2 Claims that remain UNVERIFIED — consolidated (revision 2)
+
+**No T4 (runtime-observed) evidence exists anywhere in this record.** No model turn was launched, by
+design. Everything below is assigned to a later separately authorized experiment and must not be relied
+on as settled:
+
+| # | Unverified claim | Current best evidence | How it would be settled |
+| --- | --- | --- | --- |
+| U1 | Whether Codex 0.142.3 emits a `SessionEnd` hook event at runtime | T1 docs list it; T3 token scan found 0 — which proves nothing (§ 0.1) | Installed-version hook schema, if one is ever exposed, or a runtime experiment |
+| U2 | Whether Codex or Gemini ever emit `OSC 9;4` | No documented support found; T3 token scan found 0 in each | Runtime observation with a terminal that logs OSC 9 |
+| U3 | Whether Claude Code actually emits `OSC 9;4` on Blue's machine when `terminalProgressBarEnabled` is set | T1 docs + issue #57366 + T3 tokens — strong, but still not observed | Runtime observation |
+| U4 | Whether Claude Code's `Notification` hook fires reliably on this Windows 11 build | T1 docs; issues #56936 and #8320 are **closed** but were real Windows/idle defects (§ 6.E) | Runtime observation |
+| U5 | Whether an app-server client can observe a `codex` session running in a separate PTY | Schema says loaded threads are per-process; TUI help exposes no attach flag — strong inference, not proof | Runtime experiment with a daemon plus a PTY session |
+| U6 | Per-event latency added by any hook, and whether Gemini's synchronous in-loop hook execution stalls the agent | T1 documentation states hooks run synchronously in Gemini's loop | Measurement under a real session |
+| U7 | Whether any provider's hook payload can be reduced, in practice, to metadata only without losing the signal | Schemas show the fields; a reporter's ability to ignore them is a design claim | Bounded experiment (§ 11.1) |
+
+**[T5]** U5 is the one that could change § 10.2's deciding row. If an app-server client *could* observe
+a PTY-hosted session, app-server would supplement rather than replace the terminal, and the comparison
+would likely favour it. The evidence points against that, but the record does not claim it is proven.
 
 ## 12. Authorization state
 
