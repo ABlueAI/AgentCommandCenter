@@ -8,8 +8,54 @@ Documentation reviewed tip: see § 8
 Branch tip: see § 8
 Merge commit SHA: Pending until merge
 
-**Status: REVISION 4 — CORRECTED AFTER THREE `VERDICT: FAIL` REVIEWS; NO BLUE VERDICT EXISTS;
-IMPLEMENTATION REMAINS UNAUTHORIZED**
+**Status: VERDICT FINALIZED — REVISION 4 REVIEWED `VERDICT: PASS`; BLUE ISSUED
+`BLUE SUBSYSTEM VERDICT: PROTOTYPE`; BOUNDED PROTOTYPING AUTHORIZED; PRODUCTION IMPLEMENTATION REMAINS
+UNAUTHORIZED**
+
+## 0.0.0 Verdict finalization — the current state of this branch
+
+**Revision-4 review result:** `VERDICT: PASS`, independent Standard-class, at reviewed tip
+`555aee5db928a8be73b0e3cdb528019677f9ad4e`. Three prior revisions returned `VERDICT: FAIL` and are
+preserved below as review history.
+
+**Blue's human authorization, verbatim:**
+
+> lets continue with prototype
+
+**Canonical subsystem verdict, recorded verbatim in § 12 of
+`docs/OSS-PROCUREMENT-pane-status.md`:**
+
+> BLUE SUBSYSTEM VERDICT: PROTOTYPE
+
+**The exact authorization boundary:**
+
+| | State |
+| --- | --- |
+| Bounded prototype work on pane-status detection | **AUTHORIZED** |
+| **Experiment A** — one-provider hook reporter (§ 11.1 of the record) | **AUTHORIZED** as the intended first prototype, under a **separate** work order that selects the provider and specifies the prototype |
+| Production implementation | **NOT authorized** |
+| Production specification / general architecture adoption | **NOT authorized** |
+| **Experiment B** — app-server runtime testing (listener, `codex --remote`, observer client, settling U5b) | **NOT authorized** unless Blue separately expands the prototype scope |
+| Merge or push of this branch | **NOT authorized** by the verdict — that is Blue's separate act |
+
+**No prototype work occurred on this branch.** No hook was installed in any provider configuration, no
+provider command was run, no schema was generated, no app-server or remote TUI was started, no model
+session was launched, and no application, dependency, script, configuration or test file was touched.
+The verdict-finalization commit is a **documentation act only**; the prototype belongs to a later branch
+under its own work order.
+
+**Changed files in the verdict-finalization commit** — exactly three, all Markdown:
+
+| Path | Change |
+| --- | --- |
+| `docs/OSS-PROCUREMENT-pane-status.md` | Verdict recorded (§ 12), authorization state updated (§ 2), Experiment A/B authorization split (§ 11.1) |
+| `docs/BUILDER-HANDOFF-pane-status-source-scout.md` | This section, § 9 verdicts, § 9.1 verification, artifact records |
+| `BLUE-HELM-MASTER-STATUS.md` | Procurement-gate paragraphs, August 8 checkpoint note, remaining-work entry 1 |
+
+Also updated for internal consistency: § 10.6 and § 11's question preamble in the record, where
+statements that "nothing in this record authorizes" the experiment became stale. **No candidate
+analysis, capability matrix, threat finding, or recommendation was altered**, and no research was
+reopened.
 
 ## 0. Review history — revisions 1, 2 and 3 all FAILED, and all are preserved
 
@@ -112,36 +158,48 @@ Documentation-only, Standard-class. No runtime behaviour changed, because no run
 
 Tracked record created by this branch: **`docs/OSS-PROCUREMENT-pane-status.md`**.
 
-There is **no Blue subsystem verdict to quote**, so none is quoted. The record carries the required
-authorization-state placeholder verbatim:
+Blue's verdict, quoted verbatim from § 12 of that record:
 
-> BLUE SUBSYSTEM VERDICT: NOT YET ISSUED — IMPLEMENTATION REMAINS UNAUTHORIZED
+> BLUE SUBSYSTEM VERDICT: PROTOTYPE
 
-That is an authorization-state statement, not a sixth verdict term. The five allowed final subsystem
-verdicts remain **ADOPT · FORK · PROTOTYPE · PATTERN-MINE · BUILD FRESH**. `REJECT` appears nowhere as a
-final verdict; it is used only at the candidate-disposition level, which `AGENTS.md` defines as a
-separate, lower level.
+`PROTOTYPE` is one of the five allowed final subsystem verdicts — **ADOPT · FORK · PROTOTYPE ·
+PATTERN-MINE · BUILD FRESH**. `REJECT` appears nowhere as a final verdict; it is used only at the
+candidate-disposition level, which `AGENTS.md` defines as a separate, lower level. The verdict
+authorizes **bounded prototype work only**; the full boundary is in § 0.0.0 above and § 12 of the record.
 
-The binding state quoted from `BLUE-HELM-MASTER-STATUS.md`, verbatim:
-
-> Cross-provider pane-status indicators still have no Blue verdict, so that separate subsystem remains
-> unauthorized for specification or implementation.
+> **SUPERSEDED — retained as historical provenance.** Through revision 4 this section read *"There is
+> **no Blue subsystem verdict to quote**, so none is quoted"*, and carried the placeholder
+> `BLUE SUBSYSTEM VERDICT: NOT YET ISSUED — IMPLEMENTATION REMAINS UNAUTHORIZED` together with the
+> then-binding Master Status line *"Cross-provider pane-status indicators still have no Blue verdict, so
+> that separate subsystem remains unauthorized for specification or implementation."* Both were accurate
+> until Blue issued the verdict and are **stale, not reinterpreted**. `BLUE-HELM-MASTER-STATUS.md` was
+> updated in the same commit, so the quotation and its source no longer diverge.
 
 **The Dockview ADOPT verdict was not reused.** `docs/OSS-PROCUREMENT-dockview.md` states the boundary
 itself — "keep pane-status indicators separate" — and one record cannot cover two subsystems.
+Pane-status's PROTOTYPE verdict is its own and covers only pane-status.
 
 ## 3. Files changed
 
-Exactly two, both new, both Markdown:
+Exactly three across the whole branch, all Markdown:
 
 | Path | Change |
 | --- | --- |
 | `docs/OSS-PROCUREMENT-pane-status.md` | **Added** — the tracked procurement record (12 required sections) |
 | `docs/BUILDER-HANDOFF-pane-status-source-scout.md` | **Added** — this handoff |
+| `BLUE-HELM-MASTER-STATUS.md` | **Modified** at verdict finalization only — procurement-gate paragraphs, the August 8 checkpoint note, and remaining-work entry 1 |
 
-`BLUE-HELM-MASTER-STATUS.md` was **deliberately not edited**, per the work order: the roadmap already
-records the pending gate, and no verdict exists to record. No application code, test, dependency,
-lockfile, script, GitHub configuration, `AGENTS.md`, or unrelated document was touched.
+> **UPDATED at verdict finalization.** Through revision 4 this section read *"Exactly two, both new, both
+> Markdown"*, and the paragraph below stated that `BLUE-HELM-MASTER-STATUS.md` was **deliberately not
+> edited** because the roadmap already recorded the pending gate and no verdict existed to record. That
+> was correct for revisions 1–4 and is **stale, not reinterpreted**: the verdict-finalization work order
+> authorizes and requires the Master Status synchronization, because a verdict now exists.
+
+Superseded text, retained: *"`BLUE-HELM-MASTER-STATUS.md` was **deliberately not edited**, per the work
+order: the roadmap already records the pending gate, and no verdict exists to record."*
+
+No application code, test, dependency, lockfile, script, GitHub configuration, `AGENTS.md`, or unrelated
+document was touched — in any revision, including verdict finalization.
 
 `codex/release-1.0-auth-backup-blockers` was not read, referenced, or incorporated.
 
@@ -549,14 +607,57 @@ first regeneration attempt wrote to a scratch directory on another drive, which 
 rejected — it produced empty files rather than a valid comparison. That attempt was discarded and redone,
 rather than reported as a mismatch.
 
+### Verdict-finalization artifacts
+
+| Field | Value |
+| --- | --- |
+| Reviewed base (cumulative) | `7a102a2498cb48fdc168e20503741509c5daefd3` |
+| Revision-4 tail (focused base) | `6d40c31f1d357af7ab1ce49b551cd9136899bb1d` |
+| **Verdict-finalization reviewed tip** | recorded in the tail commit below |
+| Branch tip | this handoff-only tail commit |
+| Changed paths | `docs/OSS-PROCUREMENT-pane-status.md`, `docs/BUILDER-HANDOFF-pane-status-source-scout.md`, `BLUE-HELM-MASTER-STATUS.md` |
+
+**Focused verdict-finalization artifact**
+
+| Field | Value |
+| --- | --- |
+| Range | `6d40c31f1d357af7ab1ce49b551cd9136899bb1d...<verdict-reviewed tip>` |
+| File | `.agent-review-pane-status-source-scout-verdict-corrections.diff` |
+| Shortstat / size / SHA-256 | recorded in the tail commit |
+
+**Cumulative verdict-finalization artifact**
+
+| Field | Value |
+| --- | --- |
+| Range | `7a102a2498cb48fdc168e20503741509c5daefd3...<verdict-reviewed tip>` |
+| File | `.agent-review-pane-status-source-scout-verdict-cumulative.diff` |
+| Shortstat / size / SHA-256 | recorded in the tail commit |
+
+Both created with `git diff --output` (never PowerShell redirection), both gitignored, both independently
+regenerated from their stated ranges and matched in exact byte count and SHA-256. `git diff --check` is
+clean on both ranges. The names are new, so **no earlier review's evidence file is regenerated or
+overwritten**; per the work order the revision-1 through revision-4 artifacts were **not** re-hashed or
+regenerated this round, and their recorded identities above stand from their own verification rounds.
+
+> The exact SHAs, byte counts and hashes cannot appear in the content commit that they describe — the
+> commit does not yet exist when its own diff is generated. They are recorded in **this handoff-only
+> tail commit**, which is excluded from both ranges and modifies only this document.
+
+**Note on the cumulative range.** It now spans **three** files rather than two, because
+`BLUE-HELM-MASTER-STATUS.md` is modified by the verdict-finalization commit. That file is a
+**modification** to an existing tracked document, not an addition, so the cumulative shortstat carries
+deletions for the first time on this branch.
+
 ### A deliberate non-change, flagged for the reviewer
 
-The corrective work order renders the closing placeholder with a trailing period. The record keeps the
-**existing** literal line without one —
-`BLUE SUBSYSTEM VERDICT: NOT YET ISSUED — IMPLEMENTATION REMAINS UNAUTHORIZED` — because the work order
-asks for "the existing literal state", and that exact string is what the original work order specified
-and what revision 1 committed. Altering it could break any later check pinned to it. This is a
-deliberate choice, not an oversight.
+**RESOLVED at verdict finalization.** Through revisions 1–4 this entry recorded that the closing
+placeholder was kept without a trailing period —
+`BLUE SUBSYSTEM VERDICT: NOT YET ISSUED — IMPLEMENTATION REMAINS UNAUTHORIZED` — because the corrective
+work orders rendered it with one, and altering the pinned string could have broken a later check. That
+placeholder no longer exists: the verdict-finalization work order directed its replacement, and the
+record now ends with the canonical line `BLUE SUBSYSTEM VERDICT: PROTOTYPE`, rendered exactly as the
+work order specifies and with no trailing period. The old concern is closed, and the reasoning is
+retained so a reviewer can see why the string was previously frozen.
 
 **A second deliberate non-change, new in revision 4.** § 6.3 of this handoff contains **two
 near-duplicate "Temporary-directory handling" paragraphs**, left over from revision 3. That is a cosmetic
@@ -578,30 +679,43 @@ superseded review history.
 `63b7d71f205c60e5a8102e35ade320f2adca5995`. Two findings, dispositioned in § 0.3. Preserved as
 superseded review history.
 
-**Revision 4:** **none yet** — stopped for a fresh independent Standard-class revision-four review.
+**Revision 4:** `VERDICT: PASS` — independent Standard-class review of reviewed tip
+`555aee5db928a8be73b0e3cdb528019677f9ad4e`. This is the first PASS on this branch and the review that
+made the verdict possible. Retained verbatim as the literal verdict line, not a paraphrase.
+
+**Verdict finalization:** **none yet** — stopped for a fresh independent Standard-class
+verdict-finalization review.
+
+**Blue's subsystem verdict** is a separate thing from a Reviewer verdict, and both are recorded:
+Reviewer verdicts are `VERDICT: PASS|FAIL` on a diff; Blue's is
+`BLUE SUBSYSTEM VERDICT: PROTOTYPE` on the subsystem, recorded in § 12 of
+`docs/OSS-PROCUREMENT-pane-status.md` per `AGENTS.md` item 6.
 
 ## 9.1 Verification performed before stopping
 
 | Check | Result |
 | --- | --- |
 | Worktree and branch | `.worktrees/pane-status-source-scout` on `feature/pane-status-source-scout` |
-| Expected ancestry | `7a102a24`, `10d80b2c`, `849cf7c4`, `0532772d`, `9f6490be`, `63b7d71f`, `3058621e` all confirmed ancestors of the branch tip |
-| Starting tip matched the work order | `3058621e7057f5258f8176258ec092bc556a2532`, verified before any edit |
+| Expected ancestry | `7a102a24`, `10d80b2c`, `849cf7c4`, `0532772d`, `9f6490be`, `63b7d71f`, `3058621e`, `555aee5d`, `6d40c31f` all confirmed ancestors of the branch tip |
+| Starting tip matched the work order | `6d40c31f1d357af7ab1ce49b551cd9136899bb1d`, verified before any edit |
+| Revision-4 review result recorded | `VERDICT: PASS` at reviewed tip `555aee5db928a8be73b0e3cdb528019677f9ad4e` |
 | Tracked state | clean |
-| Tracked files changed across the cumulative range | exactly two, both Markdown |
+| Tracked files changed in the verdict-finalization content commit | **exactly three, all Markdown** — the two branch documents plus `BLUE-HELM-MASTER-STATUS.md` |
+| Handoff-only tail | touches **only** `docs/BUILDER-HANDOFF-pane-status-source-scout.md` |
 | Application / config changes | none |
-| `git diff --check` | clean on the revision-4 focused and cumulative ranges |
-| Artifact reproduction | both revision-4 artifacts regenerated byte-identically |
+| `git diff --check` | clean on the verdict-finalization focused and cumulative ranges |
+| Artifact reproduction | both new verdict-finalization artifacts regenerated byte-identically |
 | `main` / `origin/main` | unchanged at `7a102a2498cb48fdc168e20503741509c5daefd3` |
 | Merge or push | none |
 | Electron / provider processes left running **by this work** | **none.** No Electron instance and no provider session was started. Stated precisely rather than as a bare "zero processes": a process check found running `claude.exe` instances belonging to the VS Code extension hosting this session, and one `codex.exe` from the pre-existing Codex **desktop app** under `WindowsApps` — a different install from the npm CLI inspected here. Neither originates from this work order. Every Codex command run (`--version`, `--help` ×5, `features list`, `generate-json-schema`) exits immediately and left nothing resident |
 | **App-server, daemon, remote TUI, or remote session launched** | **none.** Revision 3 established the `--remote` topology entirely from `--help` output and official documentation, and **revision 4 ran no provider command at all.** No listener was started, no `--remote` connection was made, and no thread was created. Settling U5b would require exactly that, which is why it is assigned to the unauthorized § 11.1 Experiment B |
-| **New research, capability rediscovery, or schema generation in revision 4** | **none.** Revision 4 is a documentation correction. No provider binary was invoked, no schema was regenerated, and no source was re-fetched; every fact it states was already in the record or comes from the accepted revision-3 review findings, and where the latter is the case the record says so explicitly (§ 6.A5 provenance note) |
-| Temporary artifacts | both generated schema directories were deleted behind a unique-pattern guard during revision 3; revision 4 created none |
-| Prior review artifacts | re-hashed after revision 3 and unchanged. **Not re-hashed in revision 4** — the work order directs that revisions 1–3 artifacts are neither re-verified nor regenerated, and the new artifacts use distinct revision-4 names so none could be overwritten |
+| **New research, capability rediscovery, or schema generation** | **none in revision 4 or at verdict finalization.** Both are documentation-only. No provider binary was invoked, no schema was regenerated, no source was re-fetched, and the procurement research was not reopened |
+| Temporary artifacts | both generated schema directories were deleted behind a unique-pattern guard during revision 3; revision 4 and verdict finalization created none |
+| Prior review artifacts | **Not re-hashed or regenerated at verdict finalization** — the work order directs it, and the new artifacts use distinct verdict-finalization names so none could be overwritten |
 | Live model turn | none launched |
-| Blue verdict | **none invented.** The record still ends with the exact placeholder, and no ADOPT/FORK/PROTOTYPE/PATTERN-MINE/BUILD FRESH term is issued or implied |
-| Prototype or implementation | none exists |
+| **Blue verdict** | **not invented — quoted.** `BLUE SUBSYSTEM VERDICT: PROTOTYPE` is Blue's own decision, issued from the verbatim human statement *"lets continue with prototype"* recorded in § 12.1 of the record. No verdict term was chosen, inferred, or implied on Blue's behalf, and the record now **ends** with that canonical line |
+| **Hook installation** | **none.** No hook was written to `~/.claude/settings.json`, `~/.codex/`, `~/.gemini/settings.json`, or any other provider configuration. Experiment A is authorized but has not begun |
+| Prototype or implementation | **none exists.** Verdict finalization is a documentation act; the prototype belongs to a later branch under its own work order |
 | Blue verdict | none invented; placeholder retained verbatim |
 
 ## Review-diff rule

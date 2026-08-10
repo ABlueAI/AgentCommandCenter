@@ -9,7 +9,9 @@ Branch: `feature/pane-status-source-scout`
 Base `main` SHA: `7a102a2498cb48fdc168e20503741509c5daefd3`
 Evidence retrieval dates: **2026-08-08 – 2026-08-10**
 Revision: **4** — corrective, after independent Standard-class reviews of revisions 1, 2 **and** 3 each
-returned `VERDICT: FAIL`
+returned `VERDICT: FAIL`. Revision 4 returned **`VERDICT: PASS`** at reviewed tip
+`555aee5db928a8be73b0e3cdb528019677f9ad4e`.
+Subsystem verdict: **PROTOTYPE** — issued by Blue and recorded in § 12. This record is complete.
 
 **Revision history.**
 
@@ -27,13 +29,19 @@ returned `VERDICT: FAIL`
   **internally impossible hybrid**, in which Blue Helm drove the app-server thread *and* the real remote
   TUI remained the driving UI; **(2)** it described the documented remote-TUI/WebSocket topology in
   current voice as *officially supported*, which the source does not say.
-* **Revision 4** (this one) — **documentation correction only; no new research, no capability
+* **Revision 4** — **documentation correction only; no new research, no capability
   rediscovery, no schema regeneration.** § 10.2 is rebuilt around exactly three coherent topologies
   (**A** existing PTY + hooks, **B** Blue Helm drives and renders, **C** remote TUI drives and Blue Helm
   observes), with B and C declared mutually exclusive. The single open question **U5 is split into U5a**
   — documented `thread/loaded/list` + `thread/read` polling, unmeasured at runtime — **and U5b** —
   undocumented push subscription and approval routing. Support-language is corrected to
-  *documented* throughout.
+  *documented* throughout. Independent Standard-class review of reviewed tip
+  `555aee5db928a8be73b0e3cdb528019677f9ad4e` returned **`VERDICT: PASS`**.
+* **Verdict finalization** (this commit) — Blue issued the subsystem verdict after the revision-4
+  PASS. § 12 now carries **`BLUE SUBSYSTEM VERDICT: PROTOTYPE`** together with Blue's verbatim
+  authorization and the exact prototype boundary. **No research was reopened and no candidate analysis,
+  capability matrix, threat finding, or recommendation was altered** — the evidence and all four review
+  outcomes stand exactly as reviewed.
 
 **Three failures, and the third is a different mistake from the first two.** Revision 1's defect was
 promoting a zero-hit *token scan* into a negative fact. Revision 2's defect was promoting a zero-hit
@@ -131,24 +139,47 @@ installation, prototyping, and implementation.
 
 ## 2. Current authorization state
 
-Quoted verbatim from `BLUE-HELM-MASTER-STATUS.md`:
+**All three preconditions in `AGENTS.md` § *OSS-FIRST PROCUREMENT GATE — HARD INVARIANT* are now
+satisfied**, and the verdict is recorded in full at § 12:
+
+| Precondition | State |
+| --- | --- |
+| A read-only Source-Scout evaluation against primary sources | **Satisfied** — §§ 3–9 of this record |
+| A tracked OSS procurement decision record under `docs/` | **Satisfied** — this file, `docs/OSS-PROCUREMENT-pane-status.md` |
+| An explicit Blue verdict of ADOPT / FORK / PROTOTYPE / PATTERN-MINE / BUILD FRESH | **Satisfied** — `BLUE SUBSYSTEM VERDICT: PROTOTYPE` (§ 12) |
+
+**What that authorizes is bounded prototype work only.** Production specification, architecture
+commitment, and production implementation remain unauthorized. The full boundary — including which
+experiment is authorized and which is not — is stated in § 12 and must be read there rather than
+inferred from this summary.
+
+### 2.1 The pre-verdict state, retained as historical provenance
+
+The following was the binding authorization state while §§ 3–11 were researched and while all four
+reviews were run. It is **superseded, not reinterpreted**, and is retained because the evidence in this
+record was gathered under it.
+
+Quoted verbatim from `BLUE-HELM-MASTER-STATUS.md` as it read at base `main`
+`7a102a2498cb48fdc168e20503741509c5daefd3`:
 
 > Cross-provider pane-status indicators still have no Blue verdict, so that separate subsystem remains
 > unauthorized for specification or implementation.
 
-Corroborating verbatim text from the same file's remaining-work entry, which this record does not
-change:
+Corroborating verbatim text from the same file's remaining-work entry as it then read:
 
 > **Specification and implementation remain unauthorized until this subsystem has all three of: its own
 > read-only Source-Scout evaluation against primary sources; its own tracked OSS procurement decision
 > record under `docs/`; and an explicit Blue verdict of ADOPT, FORK, PROTOTYPE, PATTERN-MINE, or BUILD
 > FRESH.**
 
-This file is the second of those three preconditions. The third does not exist.
+At the time those lines were written into this record, this file was the second of those three
+preconditions and the third did not exist. Both statements have since been superseded in
+`BLUE-HELM-MASTER-STATUS.md` by the same commit that records the verdict here.
 
-**The Dockview ADOPT verdict does not apply here.** Dockview's own record states the boundary
-verbatim — "keep pane-status indicators separate" — and `AGENTS.md` requires one record and one
-verdict per subsystem. Nothing in `docs/OSS-PROCUREMENT-dockview.md` authorizes any pane-status work.
+**The Dockview ADOPT verdict does not apply here, and was not used.** Dockview's own record states the
+boundary verbatim — "keep pane-status indicators separate" — and `AGENTS.md` requires one record and one
+verdict per subsystem. Nothing in `docs/OSS-PROCUREMENT-dockview.md` authorized any pane-status work;
+the PROTOTYPE verdict in § 12 is this subsystem's own and covers only this subsystem.
 
 ## 3. Search method and date
 
@@ -1419,10 +1450,27 @@ classification (§ D1) may only ever produce an explicitly low-confidence label,
   documented or schema-level; none has been seen to fire on Blue's machine.
 
 **[RECOMMENDATION]** If Blue wants to reduce risk before committing, the highest-value bounded
-experiment is described in § 11.1. It is described only; it is **not** authorized, and nothing in this
-record authorizes it.
+experiment is described in § 11.1.
+
+> **UPDATED at verdict finalization.** This paragraph previously ended *"It is described only; it is
+> **not** authorized, and nothing in this record authorizes it."* That was accurate through revision 4
+> and is now superseded for **Experiment A only**: Blue's `PROTOTYPE` verdict (§ 12) authorizes bounded
+> Experiment A work under a separate work order. **Experiment B remains unauthorized.** The
+> recommendation itself is unchanged.
 
 ## 11. Questions Blue must decide
+
+> **STATUS AT VERDICT FINALIZATION.** The questions below are retained **exactly as reviewed**. Two of
+> them now have partial answers from Blue's verdict (§ 12), recorded here rather than by editing the
+> questions:
+>
+> * **Q8 — which verdict term applies:** answered. **`PROTOTYPE`.**
+> * **Q7 — hooks now / experiment / app-server now:** answered as **(b)**, and the § 11.1 experiment
+>   this record declined to authorize is now authorized **for Experiment A only**. Q7's closing clause
+>   *"which **this record does not do**"* described the record's state before the verdict and is
+>   superseded by § 12.
+>
+> Q1–Q6 remain open and are inputs to the separate prototype work order, not to this record.
 
 1. **Scope of honesty.** Is an asymmetric indicator acceptable — full states for Claude Code, approval
    only for Codex/Gemini, running/exited only for shell panes — or must all providers reach parity
@@ -1467,10 +1515,21 @@ record authorizes it.
    package, which does not map cleanly onto ADOPT as used in the Dockview record. Blue may wish to state
    explicitly which term covers "consume official provider interfaces, own the subsystem".
 
-### 11.1 Proposed bounded experiment — described only, NOT authorized
+### 11.1 Proposed bounded experiments — A now authorized, B still NOT authorized
 
 Recorded because the work order requires that a suggested prototype be documented and then stopped.
-**This requires an explicit later `PROTOTYPE` verdict from Blue before any of it may be built.**
+When written, this section required *"an explicit later `PROTOTYPE` verdict from Blue before any of it
+may be built."*
+
+> **UPDATED at verdict finalization.** That verdict now exists (§ 12), and it is **split, not blanket**:
+>
+> * **Experiment A — AUTHORIZED** as bounded prototype work, under a separate work order that selects
+>   the provider and specifies the prototype. The boundary and kill criteria below are **not** relaxed.
+> * **Experiment B — STILL NOT AUTHORIZED.** App-server runtime testing remains out of scope: no
+>   listener, no `codex --remote` connection, no observer client. It becomes authorized only if Blue
+>   separately expands the prototype scope.
+>
+> The experiment descriptions below are unchanged from revision 4.
 
 **Experiment A — hook reporter (unchanged).** Install a user-scope hook for **one** provider that reports
 only `hook_event_name` plus an app-generated pane token to a local endpoint; display the result on
@@ -1501,9 +1560,11 @@ loopback only, never a non-loopback listener; no token in a persistent Windows u
 and **no `setx`**; server started and stopped within the experiment; a disposable throwaway working
 directory.
 
-**Neither experiment is authorized.** Both are described so that a later `PROTOTYPE` verdict has
-something concrete to authorize. Experiment B in particular requires launching an app-server and a real
-Codex session — explicitly outside the scope of this and every previous revision of this branch.
+**Authorization, as it now stands (§ 12).** Both experiments were described so that a later `PROTOTYPE`
+verdict would have something concrete to authorize. That verdict authorized **Experiment A only**.
+**Experiment B is not authorized**: it requires launching an app-server and a real Codex session, which
+stays outside the scope of this branch and of the PROTOTYPE verdict until Blue expands it. Nothing on
+this branch has begun either experiment.
 
 ### 11.2 Claims that remain UNVERIFIED — consolidated (revision 2, U5 split in revision 4)
 
@@ -1533,12 +1594,49 @@ for its unmeasured runtime characteristics** — the polling interface itself is
 
 ## 12. Authorization state
 
-**BLUE SUBSYSTEM VERDICT: NOT YET ISSUED — IMPLEMENTATION REMAINS UNAUTHORIZED**
+### 12.1 Blue's authorization, verbatim
 
-That line is an authorization-state statement, not a sixth verdict term. The five allowed final
-subsystem verdicts remain **ADOPT · FORK · PROTOTYPE · PATTERN-MINE · BUILD FRESH**, and only Blue
-issues one. The candidate dispositions in §§ 5–6 are the separate, lower level and are not a verdict.
-`REJECT` appears nowhere in this record as a final verdict.
+Blue stated, verbatim:
+
+> lets continue with prototype
+
+### 12.2 What the verdict authorizes
+
+**Bounded prototype work only.** Specifically:
+
+* **Authorized:** bounded prototype work on cross-provider pane-status detection, beginning with
+  **Experiment A** (§ 11.1) — the one-provider hook reporter.
+* **Not authorized:** production implementation. This verdict does not authorize a production
+  specification, general architecture adoption, dependency installation as production dependencies,
+  merge, or push.
+* **Not authorized:** **Experiment B** (§ 11.1) and any app-server runtime testing — no listener, no
+  `codex --remote` connection, no observer client, and nothing that would settle **U5b** (§ 11.2).
+  Experiment B stays unauthorized unless **Blue separately expands the prototype scope**.
+* **Provider selection and the complete prototype specification are handled by a separate work order**,
+  after this procurement branch is reviewed and merged. Nothing in this record chooses the provider.
+
+The Experiment A boundary recorded in § 11.1 governs the prototype and is not relaxed by this verdict:
+one provider, one pane, `hook_event_name` plus an app-generated pane token only, no prompt/output/path/
+transcript content reaching the app, and the stated kill criteria.
+
+### 12.3 Verdict term and scope
+
+`PROTOTYPE` is one of the five allowed final subsystem verdicts — **ADOPT · FORK · PROTOTYPE ·
+PATTERN-MINE · BUILD FRESH** — and only Blue issues one. The candidate dispositions in §§ 5–6 are the
+separate, lower level and are not a verdict. `REJECT` appears nowhere in this record as a final verdict.
+
+This verdict covers **cross-provider pane-status indicators only**. It does not transfer to any other
+subsystem, just as Dockview's ADOPT verdict never transferred to this one.
+
+### 12.4 State of this branch at the moment the verdict was recorded
 
 No specification, architecture commitment, dependency installation, prototype, implementation, merge,
-or push has occurred on this branch.
+or push has occurred on this branch. **The prototype has not begun**; recording the verdict is a
+documentation act, and the prototype work itself belongs to a later branch under its own work order.
+
+The evidence in §§ 3–11, the four review outcomes (three `VERDICT: FAIL`, then revision 4's
+`VERDICT: PASS`), and the § 10 recommendation are unchanged by this section.
+
+---
+
+**BLUE SUBSYSTEM VERDICT: PROTOTYPE**

@@ -159,12 +159,31 @@ One record cannot cover both. **Dockview has a tracked record and an ADOPT
 verdict** in `docs/OSS-PROCUREMENT-dockview.md`, and its production integration
 is now reviewed, human-accepted, merged at
 `d23e2c28c53fa5fd23ed73dbd48a4f43c369ebc2`, gated on merged `main`, and pushed.
-**Cross-provider pane-status indicators
-still have no Blue verdict**, so that separate subsystem remains unauthorized
-for specification or implementation. The `dockview-core` expectation in the
+
+**Cross-provider pane-status indicators now have their own tracked record and
+their own Blue verdict.** Tracked procurement record:
+`docs/OSS-PROCUREMENT-pane-status.md`. Blue's verdict, verbatim:
+
+> BLUE SUBSYSTEM VERDICT: PROTOTYPE
+
+**That authorizes bounded prototype work only.** Production specification and
+production implementation remain unauthorized. The next pane-status action is
+**Experiment A**, the one-provider hook reporter described in § 11.1 of the
+record, under its own separate work order that selects the provider and
+specifies the prototype. **Experiment B — app-server runtime testing — remains
+unauthorized** pending a separate Blue scope decision.
+
+> **SUPERSEDED — retained as historical provenance.** This paragraph previously
+> read *"Cross-provider pane-status indicators still have no Blue verdict, so
+> that separate subsystem remains unauthorized for specification or
+> implementation."* That was accurate until Blue issued the PROTOTYPE verdict
+> and is **stale, not reinterpreted**.
+
+The `dockview-core` expectation in the
 R3 roadmap entry remains a roadmap note, not a pane-status procurement verdict.
-**Dockview's completed procurement decision does not transfer to pane-status**;
-finishing Dockview satisfied Dockview's gate only.
+**Dockview's completed procurement decision did not transfer to pane-status**;
+finishing Dockview satisfied Dockview's gate only, and pane-status's verdict is
+its own.
 
 ## Current checkpoint — August 8 — DOCKVIEW MERGED, GATED, AND PUSHED
 
@@ -201,9 +220,14 @@ pushed. Local and remote `main` are both
   code defect.
 
 **Dockable/resizable layout integration is complete.** Cross-provider
-pane-status indicators (R4) move to the next queue position and remain
-unauthorized until they have their own Source-Scout evaluation, their own
-tracked OSS procurement record, and an explicit Blue verdict.
+pane-status indicators (R4) move to the next queue position.
+
+> **UPDATED — August 10.** All three preconditions named in the original wording
+> — a Source-Scout evaluation, a tracked OSS procurement record, and an explicit
+> Blue verdict — are now satisfied. The record is
+> `docs/OSS-PROCUREMENT-pane-status.md` and the verdict is
+> `BLUE SUBSYSTEM VERDICT: PROTOTYPE`, authorizing **bounded prototyping only**.
+> Production specification and implementation remain unauthorized.
 
 ## Current checkpoint — August 8 — DOCKVIEW FULL REVIEW FAILED; CORRECTIVE DELTA GREEN
 
@@ -344,19 +368,30 @@ This is load-bearing context, not historical decoration:
 > queue is not authorization — see the gate note attached to the entry.
 
 1. **Cross-provider pane-status indicators (R4, promoted). NEXT IN QUEUE —
-   NOT YET AUTHORIZED.** Detect
+   BOUNDED PROTOTYPING AUTHORIZED.** Detect
    idle / awaiting-input / done and surface it per pane across providers, so the
    app interrupts Blue rather than requiring him to poll it. Sequenced after
    Dockview so the indicators target stable pane and tab headers rather than the
    hand-rolled grid they would otherwise have to be rebuilt against; that
    prerequisite is now satisfied, because Dockview merged at `d23e2c2`.
-   **Specification and implementation remain unauthorized until this subsystem
-   has all three of: its own read-only Source-Scout evaluation against primary
-   sources; its own tracked OSS procurement decision record under `docs/`; and
-   an explicit Blue verdict of ADOPT, FORK, PROTOTYPE, PATTERN-MINE, or BUILD
-   FRESH.** The Dockview record and its ADOPT verdict do not cover pane-status
-   and must not be reused for it. Design
+   **The subsystem has passed its Source-Scout review and carries its own Blue
+   verdict.** Tracked procurement record:
+   `docs/OSS-PROCUREMENT-pane-status.md`. Verdict, verbatim:
+   `BLUE SUBSYSTEM VERDICT: PROTOTYPE`.
+   **Only bounded prototyping is authorized. Production specification and
+   production implementation remain unauthorized.** The next action is
+   **Experiment A** — the one-provider hook reporter (§ 11.1 of the record) —
+   under a separate work order that selects the provider and specifies the
+   prototype. **Experiment B, and app-server runtime testing generally, remain
+   unauthorized** pending a separate Blue scope decision.
+   The Dockview record and its ADOPT verdict never covered pane-status and were
+   not reused for it. Design
    history and the original ranking remain in the R4 roadmap entry.
+
+   > **SUPERSEDED — retained as historical provenance.** This entry previously
+   > read *"NEXT IN QUEUE — NOT YET AUTHORIZED"* and required all three
+   > procurement preconditions before any work. All three are now satisfied;
+   > that wording is **stale, not reinterpreted**.
 2. **Quick Links.** Configurable, main-validated HTTP/HTTPS links. `CRM` /
    `Starboard CRM` opens Blue's Hexona Systems login and `Outlook` opens Outlook
    Web in the Windows default browser. No embedded webviews, native CRM/mail
@@ -464,11 +499,21 @@ finished.** Its tracked record is
 `docs/OSS-PROCUREMENT-dockview.md`, and Blue's verdict is the verbatim
 ADOPT line recorded in the August 8 checkpoints above. The production branch
 was reviewed, human-accepted, merged at `d23e2c2`, gated on merged `main`, and
-pushed. **Pane-status has not satisfied this gate:** it still needs its own
-Source-Scout evaluation, tracked record, and Blue verdict. The Dockview record
-and verdict do not authorize pane-status work, and Dockview reaching `main`
-does not discharge pane-status's separate procurement gate — a completed
-subsystem verdict covers only the subsystem it names.
+pushed.
+
+**Pane-status has now satisfied this gate too.** Its tracked record is
+`docs/OSS-PROCUREMENT-pane-status.md`, and Blue's verdict is verbatim
+`BLUE SUBSYSTEM VERDICT: PROTOTYPE` — **bounded prototyping only; production
+specification and implementation remain unauthorized.** It satisfied the gate
+through its own Source-Scout evaluation, its own record, and its own verdict:
+the Dockview record and verdict never authorized pane-status work, and Dockview
+reaching `main` did not discharge pane-status's separate procurement gate — a
+completed subsystem verdict covers only the subsystem it names.
+
+> **SUPERSEDED — retained as historical provenance.** This paragraph previously
+> read *"Pane-status has not satisfied this gate: it still needs its own
+> Source-Scout evaluation, tracked record, and Blue verdict."* It is **stale,
+> not reinterpreted**.
 
 ### Windows launch/distribution constraint — July 26
 
