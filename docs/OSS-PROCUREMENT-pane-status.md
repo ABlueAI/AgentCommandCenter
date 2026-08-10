@@ -8,16 +8,32 @@ Work order: *Claude Code Work Order — Pane-Status OSS Procurement Evaluation*
 Branch: `feature/pane-status-source-scout`
 Base `main` SHA: `7a102a2498cb48fdc168e20503741509c5daefd3`
 Evidence retrieval dates: **2026-08-08 – 2026-08-10**
-Revision: **2** — corrective, after an independent Standard-class review of revision 1 returned
-`VERDICT: FAIL`
+Revision: **3** — corrective, after independent Standard-class reviews of revisions 1 **and** 2 both
+returned `VERDICT: FAIL`
 
-**Revision history.** Revision 1 (reviewed tip `10d80b2c`) was reviewed independently and **FAILED** on
-four findings: (1) the candidate set omitted the Codex app-server protocol; (2) zero-token binary scans
-were promoted into behavioural claims; (3) Claude's `terminalSequence` was described as permitting
-arbitrary escape sequences; (4) the cross-provider asymmetry claim was too strong. All four are
-corrected here, each at the point of the original error and marked as a correction rather than silently
-rewritten, so the failed reasoning stays visible. The FAIL is preserved as superseded review history in
-the branch handoff; it is not erased or reinterpreted.
+**Revision history.**
+
+* **Revision 1** (reviewed tip `10d80b2c`) — **`VERDICT: FAIL`** on four findings: the candidate set
+  omitted the Codex app-server protocol; zero-token binary scans were promoted into behavioural claims;
+  Claude's `terminalSequence` was described as permitting arbitrary escape sequences; and the
+  cross-provider asymmetry claim was too strong.
+* **Revision 2** (reviewed tip `0532772d`) — **`VERDICT: FAIL`** on two further findings: **(1)** the
+  decisive app-server premise was false — installed Codex 0.142.3 *does* expose `codex --remote`, so
+  app-server does **not** require replacing the terminal; **(2)** claims revision 2 had itself withdrawn
+  were still present as current facts elsewhere in both documents.
+* **Revision 3** (this one) — corrects both. The app-server card is rebuilt on the real topology, the
+  recommendation is re-derived without the false premise, and a full stale-claim sweep was run across
+  both documents.
+
+**Two failures, one root cause.** Revision 1's defect was promoting a zero-hit *token scan* into a
+negative fact. Revision 2's defect was promoting a zero-hit *help-text grep* into a negative fact — the
+same error in a different medium, committed while correcting the first. The standing rule now recorded
+in § 0.1: **a negative claim may never rest on a search that could miss it. It must rest on a closed
+enumeration or on an explicit statement in a source.**
+
+Corrections are made at the point of the original error and marked as corrections rather than silently
+rewritten, so the failed reasoning stays visible. Both FAILs are preserved as superseded review history
+in the branch handoff; neither is erased or reinterpreted.
 
 This record is evidence-gathering only. It exists so Blue can later issue exactly one subsystem
 verdict. It is written **before** any specification, dependency install, prototype, or implementation,
@@ -44,6 +60,12 @@ Revision 1 collapsed four very different kinds of evidence into the single word 
 independent Standard-class review returned `VERDICT: FAIL`, and its second finding was that zero
 plaintext token matches in a compiled binary had been promoted into behavioural claims. That was a real
 defect in the reasoning, not a wording problem. This record now separates:
+
+**Revision 3 adds the rule that both failures violated.** A **negative** claim — "X is absent", "there is
+no flag", "it cannot do Y" — may never rest on a search that could miss its target. It must rest on
+either a **closed enumeration** (a discriminated union in a schema, an exhaustive `--help` OPTIONS block
+read in full, a complete file listing) or an **explicit statement in a source**. A grep, a token scan, or
+a filtered view of a longer output can only ever support a *positive* finding.
 
 | Tier | Meaning | Strength |
 | --- | --- | --- |
@@ -170,7 +192,9 @@ the provider account — none contacts a model, and none reads credentials or co
 | **Installed Gemini CLI** | `gemini --version` → `0.49.0`; token scan of `@google/gemini-cli` `bundle/chunk-*.js` | Installed-version capability |
 | **Installed Codex app-server protocol schema** | `codex app-server generate-json-schema --out <unique temp dir> --experimental` → **335 schema files**, inspected then deleted | **T2** — authoritative event/method/state surface for the installed version (§ 6.A5) |
 | **Installed Codex feature table** | `codex features list` | **T2** — `hooks stable true`, plus the `stable`/`experimental`/`under development`/`removed` staging model (§ 7.5) |
-| **Installed Codex command surface** | `codex --help`, `codex app-server --help`, `codex app-server daemon --help`, `codex remote-control --help`, `codex features --help` | Subcommand availability, transports, analytics default, TUI-vs-daemon coupling |
+| **Installed Codex command surface** | `codex --help`, `codex app-server --help`, `codex app-server daemon --help`, `codex remote-control --help`, `codex features --help` | Subcommand availability, transports, analytics default |
+| **(Revision 3) Installed Codex surface, re-read in full** | `C:\Users\levij\AppData\Roaming\npm\codex.cmd` → `--version`, full 134-line `--help`, `app-server --help`, `remote-control --help`, `remote-control start --help` | **`--remote`, `--remote-auth-token-env`, `--ws-auth` and the loopback/non-loopback distinction** — the surface revision 2 missed by grepping instead of reading |
+| **(Revision 3) Official app-server documentation** | https://learn.chatgpt.com/docs/app-server#connect-the-cli-terminal-ui | The *"Connect the CLI terminal UI"* topology; WebSocket experimental/unsupported status; loopback guidance; the unauthenticated-by-default-during-rollout warning |
 | Blue Helm repository | `app/main.js`, `app/renderer/app.js`, `app/renderer/pty-parser.js`, `app/package.json` | Integration seams, existing ownership |
 
 "No suitable OSS exists" is **not** claimed. Candidates were searched, and the strongest candidates are
@@ -186,11 +210,11 @@ implementation would combine A, C, and E, and would use B or D only as stated.
 | **A1** | Claude Code hooks | Official interface | n/a (product feature) | CLI **2.1.220** installed | current | Yes | **None** | Claude only | **Accepted for consideration** |
 | **A2** | Codex CLI hooks | Official interface | n/a | CLI **0.142.3** installed | current | Yes | **None** | Codex only | **Accepted for consideration** |
 | **A3** | Codex `notify` program | Official interface | n/a | CLI **0.142.3** installed | current | Yes | **None** | Codex only | Accepted — narrow (one event) |
-| **A5** | **Codex app-server (JSON-RPC protocol)** | Official protocol | Apache-2.0 (`openai/codex`) | `codex app-server`, schema generated from **installed 0.142.3** | repo pushed **2026-08-10** | Yes | None *as a package* — but a protocol client and a replacement pane UI | Codex only | **Accepted for consideration — richest status semantics found, highest integration cost** (§ 6.A5) |
+| **A5** | **Codex app-server (JSON-RPC protocol)**, with the real TUI attached via `codex --remote` | Official protocol | Apache-2.0 (`openai/codex`) | `codex app-server` + `codex --remote`, schema generated from **installed 0.142.3** | repo pushed **2026-08-10** | Yes | None *as a package* — but a protocol client, a server process to own, and a transport | Codex only | **Accepted for consideration — richest status semantics found; keeps the real TUI; passive second-client observation unverified** (§ 6.A5) |
 | **A4** | Gemini CLI hooks | Official interface | n/a | CLI **0.49.0** installed | current | Yes | **None** | Gemini only | **Accepted for consideration** |
 | **B1** | OSC 133 / OSC 633 shell-integration marks, parsed via existing `xterm.parser.registerOscHandler` | Documented protocol + API the app already uses | n/a | xterm 6.0.0 installed | current | Yes | **None** | Generic PTY (shell), not agents | Accepted — **shell panes only**, see § 8 |
 | **B2** | Terminal bell (BEL) via `preferredNotifChannel: "terminal_bell"` | Official Claude setting | n/a | 2.1.220 | current | Yes | None | Claude only | **Rejected as a state source** — cannot distinguish finished from awaiting-permission (§ 7.1) |
-| **B3** | **OSC 9;4 progress**, emitted by Claude Code (`terminalProgressBarEnabled`) and parsed by the official `@xterm/addon-progress` | Official sequence + official first-party addon | MIT (addon) | addon from the xterm project already vendored | current | Yes | +1 optional addon, same project as installed xterm | **Claude only** — verified absent from installed Codex and Gemini | **Accepted for consideration** — cheapest *actively working* signal that exists (§ 6.B3) |
+| **B3** | **OSC 9;4 progress**, emitted by Claude Code (`terminalProgressBarEnabled`) and parsed by the official `@xterm/addon-progress` | Official sequence + official first-party addon | MIT (addon) | addon from the xterm project already vendored | current | Yes | +1 optional addon, same project as installed xterm | **Documented for Claude Code only**; whether Codex or Gemini emit it is **unverified**, not disproven (§ 6.B3) | **Accepted for consideration** — cheapest *actively working* signal that exists (§ 6.B3) |
 | **C1** | Existing `node-pty` `onExit` → `pty-exit` IPC | Already owned by the app | MIT (`@lydell/node-pty`) | in tree | current | Yes | **None** | All panes | **Accepted** — authoritative for *exited*, and only that |
 | **C2** | `pidtree` | npm library | MIT | **1.0.0**, published **2026-06-08** | maintained | Yes (wmic → PowerShell fallback) | +1, zero deps | All panes | Accepted — corroborating signal only |
 | **C3** | `ps-list` | npm library | MIT | **9.0.0**, published **2025-09-26** | ~10.5 months | Yes | +1, zero deps | All panes | Rejected — ESM-only (`"type": "module"`, `engines.node >=20`) against a CommonJS main process; no advantage over C2 |
@@ -490,34 +514,147 @@ schema is **generated from the installed binary**, so drift is *detectable by re
 rather than discovered when a pane silently stops updating. Against that, `[experimental]` means the
 protocol may change shape without the stability promise a `stable` feature carries.
 
-**Adoption effort, and the decisive limitation.** **[T5 — INFERENCE, load-bearing]** The app-server is an
-*alternative frontend protocol*: a client drives Codex programmatically and renders the results itself.
-Evidence that it cannot observe an existing PTY session:
+#### Correction — the revision-2 "must replace the terminal" premise is WITHDRAWN
 
-* `ThreadLoadedListResponse.data` is documented in the schema as *"Thread ids for sessions currently
-  loaded in memory"* — i.e. in that server process's memory.
-* `codex --help` offers **no flag to attach the interactive TUI to a daemon**; the only mentions of
-  `app-server`/`daemon` in the top-level help are the subcommand list itself.
+Revision 2 asserted that `codex --help` offered *"no flag to attach the interactive TUI to a daemon"*
+and concluded that adopting app-server **replaces** the Codex pane's terminal. **Both are false.** The
+independent revision-2 review reproduced the contrary evidence, and this evaluation has re-reproduced it
+against the explicit npm wrapper `C:\Users\levij\AppData\Roaming\npm\codex.cmd`.
 
-So a `codex` TUI running in a Blue Helm PTY is a **separate process with its own threads**, and a
-separate app-server client would report on its *own* threads, not the pane's. Adopting app-server for
-status therefore **replaces** the Codex pane's interactive terminal rather than supplementing it: Blue
-Helm would drive Codex over JSON-RPC and render its own UI, giving up the real Codex TUI that the pane
-exists to show.
+**How the error happened, because the pattern matters more than the fact.** Revision 2 did not read
+`codex --help` (134 lines); it grepped that output for lines matching `app-server|daemon`. The flag's
+description reads *"Connect the TUI to a remote **app server** endpoint"* — two words, unhyphenated — so
+the regex never matched, and a failed *search* was again written down as a confident negative *fact*.
+That is the identical error class as the revision-1 token-scan defect corrected in § 0.1, committed a
+second time in a different medium. **The rule that follows: a negative claim may never rest on a search
+that could miss; it must rest on a closed enumeration or an explicit statement in a source.**
 
-**Whether it replaces, supplements, or complicates the existing PTY path: it replaces it, for Codex
-panes only.** That is a UX and architecture decision, not a status-plumbing decision.
+**[T2 — ESTABLISHED] The installed command surface.** Reproduced from
+`C:\Users\levij\AppData\Roaming\npm\codex.cmd` (`--version` → `codex-cli 0.142.3`):
 
-**Build/ownership burden.** A JSON-RPC client, a transport, a scoped method allowlist, a credential
-posture for a surface that can log in and out, and — if the pane is to stay usable — a replacement UI
-for everything the Codex TUI currently renders. Substantially larger than every other candidate
-combined, and it buys Codex only.
+```
+      --remote <ADDR>
+          Connect the TUI to a remote app server endpoint.
 
-**Disposition: accepted for consideration.** It has the best status semantics, the best binding, and the
-best drift story of anything evaluated, and it is unforgeable by pane content. It also carries the
-largest security surface, sits inside the credential boundary, is marked experimental, and cannot be
-adopted without replacing the Codex pane's terminal UX. Those are not reasons to reject it; they are the
-trade Blue has to weigh, and revision 1 denied Blue that choice by omitting it.
+          Accepted forms: `ws://host:port`, `wss://host:port`, `unix://`, or `unix://PATH`.
+
+      --remote-auth-token-env <ENV_VAR>
+          Name of the environment variable containing the bearer token to send to a remote app
+          server websocket
+```
+
+**[T2] `--remote` is not marked experimental.** It appears in the top-level `OPTIONS` block with no
+qualifier, in contrast to the `app-server` and `remote-control` **subcommands**, which are both labelled
+`[experimental]` in the command list. The transport is separately qualified — see below.
+
+**[T2] The surface distinguishes four transports and two exposure classes.** `app-server --listen` takes
+`stdio://` (default), `unix://`, `unix://PATH`, `ws://IP:PORT`, or `off`. WebSocket authentication is
+explicitly scoped: `--ws-auth <MODE>` is documented as *"Websocket auth mode for **non-loopback**
+listeners"*, with `[possible values: capability-token, signed-bearer-token]`, supported by
+`--ws-token-file <PATH>`, `--ws-token-sha256 <HEX>`, `--ws-shared-secret-file <PATH>`, `--ws-issuer`,
+`--ws-audience`, and `--ws-max-clock-skew-seconds`. **Loopback and non-loopback are materially different
+deployments in the tool's own design**, not merely in ours.
+
+**[T1 — ESTABLISHED] The official topology.** `learn.chatgpt.com/docs/app-server`, *"Connect the CLI
+terminal UI"*, verbatim:
+
+> Start a WebSocket listener:
+>
+>     codex app-server --listen ws://127.0.0.1:4500
+>
+> Then connect the terminal UI:
+>
+>     codex --remote ws://127.0.0.1:4500
+>
+> For a non-local connection, configure WebSocket authentication and put the connection behind TLS.
+
+**So the corrected position is: a real Codex TUI and an app-server are an officially supported
+combination in one launch topology.** A Blue Helm pane could still run the genuine Codex TUI, with that
+TUI connected to an app-server the app also controls. Terminal replacement is **not** required.
+
+**[T1] Qualifications that survive and must not be dropped.** The documentation marks **WebSocket
+transport as experimental and unsupported for production workloads**; states *"Use `wss://` for a remote
+host. Use `ws://` only for a localhost or SSH-forwarded connection"*; and warns that **non-loopback
+WebSocket listeners currently allow unauthenticated connections by default during rollout**, so auth
+must be configured before any remote exposure. For Blue Helm the only defensible deployment is
+**loopback `ws://127.0.0.1` or `unix://`, never a non-loopback listener** — and that is a deployment
+choice available to us, not a prohibition on the transport as such.
+
+**Token handling — and a boundary this project already has a rule about.** The server side takes
+secrets by **file path** (`--ws-token-file`, `--ws-shared-secret-file`); only the TUI client side names
+an environment variable (`--remote-auth-token-env`). Note carefully that the flag takes the *name* of a
+variable, not the secret. Blue Helm already injects per-PTY environment from `safeStorage` at spawn
+time (the Video Scout `GEMINI_API_KEY` path in `app/main.js`), so a token could be supplied to exactly
+one PTY without ever becoming a persistent Windows user variable. **`setx` must not be used**, per
+`AGENTS.md`; nothing here requires it.
+
+#### The genuinely unresolved question — stated precisely
+
+Correcting the topology does **not** establish that Blue Helm can passively watch a pane. The load-bearing
+question is now narrower and sharper:
+
+> **Can a second Blue Helm app-server client subscribe to, or read, the same loaded thread being driven
+> by a remote Codex TUI — without taking over the interaction, duplicating the thread, interfering with
+> approval routing, or requiring a replacement UI?**
+
+**[T2/T1] What the installed schemas and official docs do establish:**
+
+* **Subscription is per-connection.** `ThreadUnsubscribeStatus` is a closed enum of
+  `notLoaded` / `notSubscribed` / `unsubscribed`. A connection can be *not subscribed* to a thread that
+  is loaded, which only makes sense if subscription is tracked per connection.
+* **Subscriber counting exists.** The documentation refers to the case where *"this was the last
+  subscriber"*, after which the server *"unloads the thread after a no-subscriber inactivity grace
+  period"* — a concept that presupposes the possibility of more than one.
+* **A non-resuming read path exists.** `thread/read` is documented to read a thread *without* resuming it
+  or emitting `thread/started`. `ThreadReadParams` takes `threadId` and an optional `includeTurns`.
+* **There is `thread/unsubscribe` but no `thread/subscribe`.** This is a **closed-enumeration**
+  observation, not a text search: `ClientRequest.json` is the discriminated union of every client method
+  the installed server accepts, and its `thread/*` members are exhaustively
+  `approveGuardianDeniedAction, archive, backgroundTerminals/{clean,list,terminate}, compact/start,
+  decrement, delete, fork, goal/{clear,get,set}, increment, inject, list, loaded/list, memoryMode/set,
+  metadata/update, name/set, read, realtime/*, resume, rollback, search, settings/update, shellCommand,
+  start, started, turn, turns/items/list, turns/list, unarchive, unsubscribe`. No subscribe method
+  exists in that set.
+* **Subscription therefore appears to be acquired by `thread/start` or `thread/resume`**, and
+  `ThreadResumeParams` is a *configuring* call — it carries `approvalPolicy`, `approvalsReviewer`,
+  `sandbox`, `permissions`, `model`, `modelProvider`, `config`, `cwd`, and more, and has **no**
+  read-only, observe, or subscribe-only flag.
+
+**[T5 — INFERENCE, load-bearing, and explicitly not a fact]** Putting those together: a passive observer
+would have either to `thread/resume` a thread the TUI is already driving — supplying a competing
+configuration, which is precisely the take-over/interference risk — or to **poll** `thread/loaded/list`
+plus `thread/read`, which yields no `thread/status/changed` push and so forfeits the very property that
+makes app-server attractive. **No documented passive subscribe-only path was found.**
+
+**[UNVERIFIED — U5, restated]** Whether a second client may in fact subscribe to a TUI-driven thread
+without disturbing it, and **whether approval requests are routed to one client or to all subscribed
+clients**, are **not settled** by the installed schemas, the installed help, or the official
+documentation. The documentation is silent on approval routing. This is recorded as unknown. It is
+**not** recorded as impossible — that inversion is the exact error this revision exists to correct.
+
+**Whether it replaces, supplements, or complicates the existing PTY path.** Corrected answer: **it does
+not require replacement.** In the official topology it *supplements* the pane — the real TUI keeps
+running — at the cost of a materially more complex launch: Blue Helm would own an app-server process,
+its transport and lifetime, a token if one is used, and reconnection behaviour. Whether it can also be
+*passively observed* by a second client is the open question above. If that turns out to be
+unsupported, the fallback is not "replace the terminal" but "use hooks for Codex", which costs nothing
+already spent.
+
+**Build/ownership burden.** A JSON-RPC client, transport and lifetime management for a server process,
+a scoped method allowlist, a credential posture for a surface that can log in and out, reconnection and
+failure handling, and — only in the replacement topology, which is now known to be optional — a UI.
+Still the largest of any candidate, and still Codex-only.
+
+**Failure behaviour to weigh.** If the app-server dies, the remote TUI loses its backend and the pane
+becomes unusable, whereas an independently PTY-hosted `codex` process has no such dependency. Adopting
+the remote topology therefore introduces a **new single point of failure into a pane that currently has
+none** — a real cost that has nothing to do with status quality.
+
+**Disposition: accepted for consideration.** Best status semantics, best binding, best drift story,
+unforgeable by pane content, and — corrected — **compatible with keeping the real Codex TUI**. Against
+that: the largest security surface, a client inside the credential boundary, experimental/unsupported
+WebSocket transport, a new failure dependency, higher launch complexity, and an unresolved
+passive-observation question.
 
 ### A4 — Gemini CLI hooks
 
@@ -974,7 +1111,7 @@ command (§ C2, § C7).
 | Slice | Adopt | Build owned | Assessment |
 | --- | --- | --- | --- |
 | Event transport (hook → app) | Nothing to adopt — no OSS package provides this for a sandboxed Electron app | Small owned local endpoint + tiny reporter executable | **Build is the only option.** No candidate exists. |
-| Structured status for Codex | **Codex app-server** (Apache-2.0, official, richest semantics) | Hook reporter, as for the other providers | **Adopt would win on semantics and lose on scope**: it replaces the Codex pane's terminal, brings the credential boundary and a large method surface, and is `[experimental]`. See § 10.2. |
+| Structured status for Codex | **Codex app-server** (Apache-2.0, official, richest semantics), with the real TUI attached via `codex --remote` | Hook reporter, as for the other providers | **Adopt wins on semantics; the cost is launch complexity and an unresolved passive-observation question**, not terminal replacement (corrected in § 6.A5). See § 10.2. |
 | Provider event → state mapping | Nothing to adopt — mappings are product-specific and changing | Small owned table, one per provider, version-pinned | **Build is the only option**, and it must be maintained. |
 | Process-tree corroboration | `pidtree` (MIT, 0 deps) | One `Get-CimInstance` call | Near-equivalent. `pidtree` buys cross-platform correctness the project does not need; direct call avoids a dependency. **Genuinely close; either is defensible.** |
 | OSC 133 parsing for shell panes | No library needed | `registerOscHandler(133, …)` — the app already calls this API for OSC 52 | **Build, trivially.** Adopting anything here would be worse than the one-line owned version. |
@@ -995,21 +1132,31 @@ the same either way: capability detection plus a visible *unknown* state, so dri
 
 **[RECOMMENDATION — not a verdict, and not a specification.]**
 
-### 10.0 Outcome of re-deriving after the FAIL
+### 10.0 Outcome of re-deriving in revision 3
 
-The reasoning was re-run from the candidate set upward with § 6.A5 included, rather than the old
-conclusion being carried forward. Stated explicitly, as the work order requires:
+Revision 2's conclusion rested on a **false premise** — that app-server adoption necessarily replaces
+the Codex terminal (§ 6.A5 correction). That premise is removed and the reasoning re-run from the
+candidate set upward. Stated explicitly:
 
-> **The recommendation SURVIVES as the primary path, with two substantive amendments.** The app-server
-> does **not** displace hooks for pane status *as scoped* — but only because of a UX constraint, not
-> because it is the weaker interface. On the merits of status semantics alone, **app-server is the best
-> interface evaluated in this record.** § 10.2 is the comparison that decides it, and § 10.3 states the
-> condition under which the answer flips.
+> **The headline recommendation SURVIVES — hooks first, subsystem owned — but its basis has changed
+> materially and its confidence is lower.** Revision 2 called the hooks-versus-app-server question
+> *decisive*. It is not. With the real topology established, **app-server is a genuinely open upgrade
+> path for Codex that preserves the real TUI**, and it loses to hooks today on cost, certainty and
+> coverage — not on capability, and no longer on a claimed impossibility.
 
-The two amendments:
+**What changed in the reasoning:**
 
-* **Amendment 1 — the design should be provider-specific, not lowest-common-denominator.** Revision 1
-  implicitly sought one uniform mechanism. That is now recorded as the wrong target (§ 10.4).
+* **Deleted:** "app-server cannot observe a PTY session, therefore it replaces the terminal, therefore
+  hooks win decisively." Both the premise and the word *decisively* are withdrawn.
+* **Added:** app-server + `codex --remote` is an **officially documented topology that keeps the genuine
+  TUI in the pane**. The trade is now launch complexity, a new failure dependency, experimental
+  transport, and credential authority — all real, none disqualifying.
+* **Newly load-bearing:** whether a **second** client can passively observe the TUI's thread (U5). This
+  single unverified question now carries the weight the false premise used to carry.
+
+The two amendments from revision 2 stand:
+
+* **Amendment 1 — provider-specific, not lowest-common-denominator** (§ 10.4).
 * **Amendment 2 — the asymmetry claim is narrowed** (§ 7.1): every evaluated interface distinguishes
   *some* awaiting-input condition from completion. Claude Code has the richest documented **hook**
   coverage; it does not hold an exclusive capability.
@@ -1035,35 +1182,65 @@ as owned code**, because:
    documented for Claude and *unverified* elsewhere, and threat 1's correction shows an allowed
    `terminalSequence` hook output can forge exactly that sequence.
 
-### 10.2 Why app-server does not displace it — the comparison
+### 10.2 The corrected comparison — four topologies, not two
 
-| Axis | Codex app-server | Provider hooks | Winner |
-| --- | --- | --- | --- |
-| Status semantics | Explicit state union incl. `waitingOnUserInput` / `waitingOnApproval` | Events the app must reassemble into state | **app-server** |
-| Approval semantics | Outstanding JSON-RPC **request** — blocked-on-human is structurally true | An event fired at some past moment | **app-server** |
-| Pane/session binding | Explicit `threadId` on every notification | `session_id`, plus whatever the app correlates | **app-server** |
-| Forgeability | Out-of-band; pane content cannot write it | Out-of-band; same property | tie |
-| Version-drift detection | Schema **generated from the installed binary**, so drift is diffable | Undetectable until a hook silently stops firing | **app-server** |
-| Credential exposure | Client sits inside the auth boundary (`account/login`, token refresh) | Hook receives an event; no auth authority | **hooks** |
-| Security surface | Same channel exposes fs, process spawn/kill, thread mutation, config writes | One event payload | **hooks** |
-| Stability promise | `[experimental]` | `hooks` reports `stable` on installed Codex | **hooks** |
-| Provider coverage | Codex only | All three | **hooks** |
-| **Compatibility with the existing PTY pane** | **Cannot observe a PTY session; adopting it replaces the Codex pane's terminal** | Works with the pane exactly as it is | **hooks — decisively** |
+Revision 2 compared "hooks" against a strawman "app-server that replaces the terminal". The real options
+are four, and one of them did not exist in revision 2's analysis at all.
 
-**[T5 — the deciding line]** The last row decides it. Blue Helm's panes exist to *be real terminals
-running the real agent CLIs*; that is the product. A status subsystem is not a licence to replace the
-Codex TUI with a bespoke JSON-RPC-driven UI — that is a far larger change than the one being procured,
-and it would be decided on UX grounds, not status grounds. Since an app-server client cannot see the
-thread running in the pane's PTY (§ 6.A5), adopting it *for status* means adopting it *for everything*
-about Codex panes.
+| Axis | **T1 · PTY-hosted Codex + hooks** (today's pane) | **T2 · app-server + real remote TUI**, Blue Helm drives the thread | **T3 · app-server + remote TUI + second Blue Helm observer** | **T4 · provider hooks only, all providers** |
+| --- | --- | --- | --- | --- |
+| Status semantics | Events reassembled into state | **State union** incl. `waitingOnUserInput` / `waitingOnApproval` | Same as T2 **if** observation works | Events reassembled |
+| Approval semantics | `PermissionRequest` event | **Outstanding JSON-RPC request** — structurally true | **Unknown routing** — one client or all? undocumented | Event only |
+| Pane/thread binding | `session_id` correlated by the app | Explicit `threadId` | Explicit `threadId` | `session_id` |
+| Forgeability | Out-of-band | Out-of-band | Out-of-band | Out-of-band |
+| Version drift | Silent until a hook stops firing | **Diffable** — schema generated from the binary | Diffable | Silent |
+| Security surface | One event payload | Full protocol: fs, process, thread mutation, config | Same, plus a second connection | One event payload |
+| Credential authority | None | **Inside the auth boundary** (`account/login`, token refresh) | Same | None |
+| Stability | `hooks` = `stable` (installed) | `app-server` `[experimental]`; **WebSocket documented experimental and unsupported for production** | Same | `stable` |
+| Provider coverage | Codex | Codex | Codex | **All three** |
+| **Real terminal UI preserved** | **Yes** | **Yes** — `codex --remote`, officially documented | **Yes** | **Yes** |
+| Launch complexity | None — spawn `codex` | Own a server process, transport, lifetime, token, reconnection | Same, plus a second client | None |
+| Passive observation | n/a — hooks push | Not needed; Blue Helm *is* the driver, but then it renders the UI | **UNVERIFIED (U5)** — no `thread/subscribe` exists; `thread/resume` configures; `thread/read` is a poll | n/a |
+| Windows behaviour | Native | Native; loopback `ws://127.0.0.1` or `unix://` | Same | Native |
+| Failure / reconnection | Pane has **no external dependency** | Server death breaks the pane — **a new single point of failure** | Same | No external dependency |
+
+**[T5 — the corrected deciding reasoning]** No single row decides this now.
+
+* **T2 is real and officially supported**, but it only helps status if Blue Helm is the *driver* — and a
+  driver has to render the UI, which is the replacement outcome by another route. If instead the pane's
+  TUI is the driver and Blue Helm merely wants to watch, that is **T3**.
+* **T3 is the only topology that would give Blue Helm app-server-quality status while the pane keeps a
+  real TUI it does not have to reimplement** — and T3 is exactly what is **unverified**.
+* **T1/T4 cost nothing beyond a reporter**, work today, cover all three providers, and rest on a
+  `stable` feature.
+
+So hooks win **on cost, certainty, coverage and blast radius** — not because app-server is incapable,
+and not because it must replace anything.
+
+### 10.2.1 Exactly how U5 affects the recommendation
+
+Stated plainly, because the work order requires that uncertainty not be silently converted into a
+negative:
+
+* **If U5 resolves positive** — a second client can subscribe or cheaply poll a TUI-driven thread
+  without taking over, duplicating it, or capturing approvals — then **T3 likely becomes the recommended
+  Codex source**, because it delivers a true state model with explicit `threadId` binding while the pane
+  keeps the genuine TUI. Hooks would remain the fallback and the other two providers' path.
+* **If U5 resolves negative** — observation requires `thread/resume` (which reconfigures) or steals
+  approval routing — then **hooks remain correct for Codex**, and app-server stays reserved for the
+  § 10.3 scenario.
+* **Until U5 is settled, the recommendation is provisional on this point and is stated as such.** It is
+  *not* recorded that app-server cannot observe; it is recorded that nobody has shown that it can.
 
 ### 10.3 The condition under which this flips
 
-If Blue ever decides that a Codex pane should be a **native Blue Helm surface** rather than a hosted
-TUI — or wants a headless/background Codex mode, remote control, or an in-app approval UI — then
-app-server becomes the right foundation and this recommendation should be re-derived. It is the better
-interface; it is simply answering a bigger question than pane status. Recording that explicitly is the
-main thing revision 1 denied Blue by omitting the candidate.
+Two distinct conditions, where revision 2 recorded only the second:
+
+1. **U5 resolves positive** (§ 10.2.1) — app-server becomes the likely Codex source without any change
+   to the pane's UX. This is now the *near* condition, and it is answerable by a bounded experiment.
+2. **Blue wants a native Codex surface** — a headless/background mode, remote control, or an in-app
+   approval UI. Then app-server is the right foundation regardless of U5, and this recommendation should
+   be re-derived from scratch.
 
 ### 10.4 Provider-specific, not lowest-common-denominator
 
@@ -1073,7 +1250,7 @@ behind one normalised internal state:
 | Pane type | Primary | Corroboration | Honest floor |
 | --- | --- | --- | --- |
 | Claude Code | hooks (`Notification` idle/permission, `Stop`, `StopFailure`) | OSC 9;4 progress | *unknown* |
-| Codex | hooks (`PermissionRequest`, `Stop`) | process-tree liveness | *unknown*; app-server only if § 10.3 fires |
+| Codex | hooks (`PermissionRequest`, `Stop`) **today** | process-tree liveness | *unknown*. Upgrade path: app-server observation (T3) if **U5** resolves positive — the real TUI is preserved either way (§ 10.2.1) |
 | Gemini | hooks (`Notification` ToolPermission, `AfterAgent`, `SessionEnd`) | process-tree liveness | *unknown* |
 | PowerShell | `OSC 133;D` exit code, `pty-exit` | — | running/exited only; **no intent states** |
 
@@ -1124,14 +1301,16 @@ record authorizes it.
    xterm) versus one owned `registerOscHandler(9, …)` beside the existing OSC 52 handler. The addon
    brings tested clamping and strict parsing; the owned version brings no new package. Both are
    defensible; they are not the same decision as (a).
-7. **Codex app-server — the question revision 1 never put to Blue.** It has the best status semantics,
-   the best pane binding, and the only diffable drift surface of anything evaluated (§ 10.2), but it
-   **cannot observe a PTY-hosted session**, so using it for status means replacing the Codex pane's
-   terminal with a Blue-Helm-rendered UI, accepting a client that sits inside Codex's credential
-   boundary, and depending on an `[experimental]` protocol. Does Blue want (a) hooks now and app-server
-   never, (b) hooks now with app-server reconsidered if a native Codex surface is ever wanted (§ 10.3),
-   or (c) app-server explored now as a deliberate UX change? This record recommends (b) but the choice
-   is a product decision, not a procurement one.
+7. **Codex app-server — corrected in revision 3.** It has the best status semantics, the best pane
+   binding, and the only diffable drift surface of anything evaluated — **and, contrary to revision 2,
+   it does not require replacing the Codex terminal**: `codex --remote` attaches the real TUI to an
+   app-server in an officially documented topology (§ 6.A5). What it does cost is a server process to
+   own, an experimental/unsupported WebSocket transport, a client inside Codex's credential boundary, and
+   a new single point of failure for a pane that currently has none. The open question is **U5**: whether
+   a second Blue Helm client can watch that thread passively (§ 10.2.1). Does Blue want (a) hooks now,
+   app-server never; (b) hooks now, with a bounded experiment to settle U5 before deciding; or (c)
+   app-server pursued now? This record leans to (b) — but (b) requires authorizing the § 11.1 experiment,
+   which **this record does not do**.
 8. **Which verdict term applies.** The five allowed terms are ADOPT, FORK, PROTOTYPE, PATTERN-MINE, and
    BUILD FRESH. Note that the thing being adopted here is a set of **official interfaces**, not an OSS
    package, which does not map cleanly onto ADOPT as used in the Dockview record. Blue may wish to state
@@ -1142,12 +1321,29 @@ record authorizes it.
 Recorded because the work order requires that a suggested prototype be documented and then stopped.
 **This requires an explicit later `PROTOTYPE` verdict from Blue before any of it may be built.**
 
-A minimal read-only experiment would: install a user-scope hook for **one** provider that reports only
-`hook_event_name` plus an app-generated pane token to a local endpoint; display the result on **one**
-pane; verify that no prompt, output, path, or transcript content ever reaches the app; verify behaviour
-when the provider is upgraded; and measure the added per-event latency, including Gemini's synchronous
-in-loop execution. Kill criteria would include any conversation content reaching the app, any status
-attributable to the wrong pane after a Dockview move, and any measurable agent stall.
+**Experiment A — hook reporter (unchanged).** Install a user-scope hook for **one** provider that reports
+only `hook_event_name` plus an app-generated pane token to a local endpoint; display the result on
+**one** pane; verify that no prompt, output, path, or transcript content ever reaches the app; verify
+behaviour when the provider is upgraded; and measure the added per-event latency, including Gemini's
+synchronous in-loop execution. Kill criteria: any conversation content reaching the app, any status
+attributable to the wrong pane after a Dockview move, any measurable agent stall.
+
+**Experiment B — settle U5 (added in revision 3).** The narrowest experiment that would answer the one
+question now carrying the most weight (§ 10.2.1): start `codex app-server --listen ws://127.0.0.1:<port>`
+on **loopback only**; attach one real TUI with `codex --remote`; then connect a second, read-only client
+and attempt to observe that same thread. Record: whether `thread/loaded/list` shows it; whether
+`thread/read` returns current state without disturbing the TUI; whether any subscription to
+`thread/status/changed` is obtainable **without** `thread/resume`; whether `thread/resume` from the
+second client takes over, duplicates, or reconfigures the thread; and **which client receives
+`item/*/requestApproval`**. Kill criteria: the TUI's interaction is disturbed in any way, an approval is
+routed away from the TUI, the thread is duplicated, or observation proves to require driving the thread.
+Constraints: loopback only, never a non-loopback listener; no token in a persistent Windows user
+environment variable and **no `setx`**; server started and stopped within the experiment; a disposable
+throwaway working directory.
+
+**Neither experiment is authorized.** Both are described so that a later `PROTOTYPE` verdict has
+something concrete to authorize. Experiment B in particular requires launching an app-server and a real
+Codex session — explicitly outside the scope of this and every previous revision of this branch.
 
 ### 11.2 Claims that remain UNVERIFIED — consolidated (revision 2)
 
@@ -1161,13 +1357,14 @@ on as settled:
 | U2 | Whether Codex or Gemini ever emit `OSC 9;4` | No documented support found; T3 token scan found 0 in each | Runtime observation with a terminal that logs OSC 9 |
 | U3 | Whether Claude Code actually emits `OSC 9;4` on Blue's machine when `terminalProgressBarEnabled` is set | T1 docs + issue #57366 + T3 tokens — strong, but still not observed | Runtime observation |
 | U4 | Whether Claude Code's `Notification` hook fires reliably on this Windows 11 build | T1 docs; issues #56936 and #8320 are **closed** but were real Windows/idle defects (§ 6.E) | Runtime observation |
-| U5 | Whether an app-server client can observe a `codex` session running in a separate PTY | Schema says loaded threads are per-process; TUI help exposes no attach flag — strong inference, not proof | Runtime experiment with a daemon plus a PTY session |
+| U5 **(restated in revision 3)** | Whether a **second** Blue Helm app-server client can subscribe to or read the **same loaded thread** driven by a remote Codex TUI, without taking over the interaction, duplicating the thread, or interfering with approvals — **and whether approval requests are routed to one client or to all subscribed clients** | Subscription is per-connection (`notSubscribed` is a distinct status); the docs reference a "last subscriber" and a no-subscriber unload grace period; `thread/read` reads without resuming; **but `ClientRequest` contains no `thread/subscribe`**, and `thread/resume` is a configuring call with no read-only flag. Approval routing is **undocumented**. | A bounded runtime experiment with a loopback listener, one remote TUI, and one observer client |
 | U6 | Per-event latency added by any hook, and whether Gemini's synchronous in-loop hook execution stalls the agent | T1 documentation states hooks run synchronously in Gemini's loop | Measurement under a real session |
 | U7 | Whether any provider's hook payload can be reduced, in practice, to metadata only without losing the signal | Schemas show the fields; a reporter's ability to ignore them is a design claim | Bounded experiment (§ 11.1) |
 
-**[T5]** U5 is the one that could change § 10.2's deciding row. If an app-server client *could* observe
-a PTY-hosted session, app-server would supplement rather than replace the terminal, and the comparison
-would likely favour it. The evidence points against that, but the record does not claim it is proven.
+**[T5]** U5 now carries the weight revision 2's false premise used to carry. Its resolution is the
+single largest open input to the Codex half of the recommendation — see § 10.2.1 for exactly what each
+outcome would change. The record does **not** claim observation is impossible; it records that no source
+consulted establishes that it works.
 
 ## 12. Authorization state
 

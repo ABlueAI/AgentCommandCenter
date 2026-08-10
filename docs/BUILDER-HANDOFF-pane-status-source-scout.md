@@ -8,22 +8,35 @@ Documentation reviewed tip: see § 8
 Branch tip: see § 8
 Merge commit SHA: Pending until merge
 
-**Status: REVISION 2 — CORRECTED AFTER `VERDICT: FAIL`; NO BLUE VERDICT EXISTS; IMPLEMENTATION REMAINS
-UNAUTHORIZED**
+**Status: REVISION 3 — CORRECTED AFTER TWO `VERDICT: FAIL` REVIEWS; NO BLUE VERDICT EXISTS;
+IMPLEMENTATION REMAINS UNAUTHORIZED**
 
-## 0. Review history — revision 1 FAILED, and that is preserved
+## 0. Review history — revisions 1 and 2 both FAILED, and both are preserved
 
-An independent Standard-class review of revision 1 (reviewed tip
-`10d80b2c36e956ba7548ca49f6a3652ebef31006`) returned the literal line:
+Two independent Standard-class reviews have been run on this branch. **Both returned the literal line:**
 
 > VERDICT: FAIL
 
-That verdict is **superseded review history, not erased or reinterpreted**. It was correct on all four
-findings, and revision 2 exists only because of it. The failed reasoning is retained in place inside the
-procurement record, each error marked as a correction at the point where it was made, so a later reader
-can see what was wrong rather than only what replaced it.
+* **Revision 1** — reviewed tip `10d80b2c36e956ba7548ca49f6a3652ebef31006`. Four findings (§ 0.1).
+* **Revision 2** — reviewed tip `0532772d2a78fa36ee591173bef442731fd8590f`. Two findings (§ 0.2).
 
-### The four findings and their disposition
+Both verdicts are **superseded review history, not erased or reinterpreted**. Both were correct. The
+failed reasoning is retained in place inside the procurement record, each error marked as a correction at
+the point where it was made, so a later reader sees what was wrong and not only what replaced it.
+
+### 0.0 One root cause behind both failures
+
+Revision 1 turned a zero-hit **token scan** of a compiled binary into a negative fact. Revision 2 — while
+correcting exactly that — turned a zero-hit **grep of `--help` output** into a negative fact. Same error,
+different medium, committed twice.
+
+The standing rule now recorded in § 0.1 of the procurement record: **a negative claim may never rest on a
+search that could miss. It must rest on a closed enumeration or an explicit statement in a source.**
+Revision 3 applies it — for example, the "no `thread/subscribe` method exists" finding is drawn from the
+`ClientRequest` discriminated union, which is exhaustive by construction, and the `--remote` finding came
+from reading all 134 lines of `--help` rather than filtering them.
+
+### 0.1 Revision 1 — the four findings and their disposition
 
 | # | Finding | Disposition in revision 2 |
 | --- | --- | --- |
@@ -32,7 +45,7 @@ can see what was wrong rather than only what replaced it.
 | 3 | Claude's `terminalSequence` was described as permitting **arbitrary** escape sequences, and the Windows position was stated wrongly. | **Corrected.** § A1 now quotes the documented allowlist verbatim (OSC 0/1/2/9/99/777 and bare BEL; anything else — including OSC 52 — is rejected and the field ignored) and the documented statement that it **works on Windows**. The narrower, sharper concern is retained: OSC `9` is allowlisted and `9;4` is named explicitly, so an in-band OSC 9;4 marker remains forgeable by an allowed hook output. Threat 1 was updated to match. |
 | 4 | The cross-provider asymmetry claim was too strong. | **Corrected.** "Only Claude Code distinguishes awaiting input from finished" is **withdrawn** — it also contradicted revision 1's own matrix, which already scored Codex and Gemini "partial" on that row. § 7.1 now records that all four evaluated interfaces distinguish some awaiting-input condition from completion, that Codex's app-server expresses **both** `waitingOnUserInput` and `waitingOnApproval` as explicit state flags, and that what is genuinely distinctive about Claude Code is narrower: among the three **hook** systems it appears uniquely documented for both idle-prompt and permission-prompt distinctions. "Richest documented coverage" is now explicitly separated from "exclusive capability." |
 
-### Correction that most changes the picture
+### 0.1.1 Correction that most changed the picture in revision 2
 
 Finding 1 was not a bookkeeping omission. The installed Codex app-server exposes
 `thread/status/changed` carrying a `ThreadStatus` union of `notLoaded` / `idle` / `systemError` /
@@ -40,6 +53,13 @@ Finding 1 was not a bookkeeping omission. The installed Codex app-server exposes
 **state model** rather than an event stream, bound to an explicit `threadId`, with approvals delivered
 as JSON-RPC **requests** the client must answer. On status semantics alone it is the best interface in
 the record, and revision 1 gave Blue no opportunity to weigh it.
+
+### 0.2 Revision 2 — the two findings and their disposition
+
+| # | Finding | Disposition in revision 3 |
+| --- | --- | --- |
+| 1 | **The decisive app-server premise is false.** Revision 2 stated that installed Codex 0.142.3 offered no way to connect its real TUI to app-server, and concluded that adoption must replace the terminal interface. The reviewer reproduced `--remote <ADDR>` — *"Connect the TUI to a remote app server endpoint"* — accepting `ws://`, `wss://`, `unix://`, `unix://PATH`; `app-server --listen`; WebSocket auth flags `--ws-auth`, `--ws-token-file`, `--ws-token-sha256`; and the official *"Connect the CLI terminal UI"* procedure. | **Corrected.** § 6.A5 carries a withdrawal block naming the error and how it happened, the reproduced command surface, the official topology verbatim, and the surviving qualifications (WebSocket experimental/unsupported; loopback vs non-loopback; unauthenticated-by-default during rollout). § 10.2 was rebuilt as a **four-topology** comparison; § 10.2.1 states exactly how the remaining uncertainty affects the recommendation; § 10.3 now carries **two** flip conditions. The handoff's § 6.2 stale row is marked superseded and § 6.3 records the revision-3 evidence. |
+| 2 | **Withdrawn claims remained as current facts** — the B3 comparison row said OSC 9;4 was "verified absent" from Codex and Gemini; the handoff still asserted Codex `SessionEnd` absence, Claude-only OSC 9;4, and that only Claude distinguishes awaiting-input from finished. | **Corrected.** A full sweep was run across both documents for thirteen phrase patterns (`verified absent`, `absent from the installed`, `do/does not emit`, `cannot emit`, `Claude only`, `Claude-only`, `Only Claude`, `no attach flag`, `no flag`, `cannot observe`, `replaces/replacing the Codex`, `replaces the terminal`). Every **current-voice** occurrence was corrected; historical ones survive only inside visibly-labelled withdrawal blocks. Repaired specifically: the B3 comparison row, the A5 comparison row, the handoff installed-evidence table, "Findings a reviewer should check first" (renumbered to eight entries and rewritten), the § 9.2 adopt-vs-build row, § 10.2/§ 10.2.1/§ 10.3, § 10.4's Codex row, and the U5 entry. The duplicate revision-2 artifact table header was also removed. |
 
 ## 1. Intended invariant
 
@@ -112,8 +132,8 @@ branches:
 | `gemini --version` | `0.49.0` |
 | Gemini bundle token scan | Hooks **present** in the installed 0.49.0 (`hook_event_name` ×27, `BeforeTool` ×144, `AfterAgent` ×67) |
 | Codex binary string scan | Hooks and `notify` **present** (`hooks.json` ×6, `hook_event_name` ×25, `bypass_hook_trust` ×14, `agent-turn-complete` ×1) |
-| Codex `SessionEnd` | **0 occurrences** while `SessionStart` = 45 — documented event absent from the installed version |
-| `OSC 9;4` emission | **Claude only**: `claude.exe` `terminalProgressBarEnabled` ×21, `9;4` ×6; Codex **0**; Gemini **0** |
+| Codex `SessionEnd` token scan | **0 occurrences** while `SessionStart` = 45. **T3 observation only — this does NOT establish runtime absence** and the revision-1 claim that it did is withdrawn (§ A2). Runtime status: **unverified (U1)** |
+| `OSC 9;4` token scan | `claude.exe` `terminalProgressBarEnabled` ×21, `9;4` ×6; Codex **0**; Gemini **0**. **T3 only.** OSC 9;4 is **documented for Claude Code**; whether Codex or Gemini emit it is **unverified (U2)**, not disproven |
 | `Get-Command wmic.exe` | **Not present** on this Windows 11 build — decisive for `ps-tree`, and it forces `pidtree` onto its PowerShell path |
 
 Method caveat recorded in the record itself: string presence in a 308 MB binary is strong evidence for
@@ -122,55 +142,85 @@ distinctive tokens and weak evidence for common words. Counts for generic tokens
 
 ## 6. Findings a reviewer should check first
 
-1. **§ 7.5 — installed-version drift.** Codex's documented `SessionEnd` is absent from the installed
-   0.142.3 binary. This is the strongest argument in the record that the subsystem needs per-provider
-   capability detection and a visible *unknown* state, because a hook that never fires produces no
-   error — it produces a pane that silently stops updating.
-2. **§ 7.1 — providers are not equivalent.** Only Claude Code distinguishes *awaiting input* from
-   *finished* (`Notification` matchers `idle_prompt` / `permission_prompt` versus `Stop`, plus a
-   separate `StopFailure`). Codex and Gemini express tool-approval only. Generic PowerShell panes
-   express nothing about intent. Any cross-provider indicator will be honest but **asymmetric**.
-3. **§ 8.1 — the constraint set.** Threats 1+2 rule out in-band signalling as authoritative; 4+9 rule
+1. **§ 6.A5 — the corrected app-server topology (revision 3's main change).** Installed Codex 0.142.3
+   exposes `--remote <ADDR>` — *"Connect the TUI to a remote app server endpoint"* — and the official
+   documentation gives the `codex app-server --listen ws://127.0.0.1:4500` + `codex --remote …`
+   procedure. **App-server does not require replacing the Codex terminal.** Revision 2 claimed the
+   opposite; that claim is withdrawn.
+2. **§ 10.2.1 — the one question now carrying the weight.** Whether a **second** Blue Helm client can
+   observe a TUI-driven thread without taking over, duplicating it, or capturing approval routing is
+   **UNVERIFIED (U5)**. Check specifically that the record does not anywhere convert this into "cannot".
+3. **§ 7.5 — installed-version drift.** The subsystem needs per-provider capability detection and a
+   visible *unknown* state, because a hook that never fires produces no error — it produces a pane that
+   silently stops updating. **Note:** revision 1's supporting claim that Codex's `SessionEnd` was absent
+   from the installed binary is **withdrawn** (§ A2); this section was rebuilt on the installed feature
+   table and the `stable`/`experimental`/`removed` staging model instead.
+4. **§ 7.1 — providers are not equivalent, but none holds an exclusive capability.** All four evaluated
+   interfaces distinguish *some* awaiting-input condition from completion; Codex's app-server expresses
+   both `waitingOnUserInput` and `waitingOnApproval` as explicit state flags. What is distinctive about
+   Claude Code is narrower: among the three **hook** systems it appears uniquely documented for both
+   idle-prompt and permission-prompt distinctions. Any cross-provider indicator will still be honest but
+   **asymmetric** — in shape and cost, not capability.
+5. **§ 8.1 — the constraint set.** Threats 1+2 rule out in-band signalling as authoritative; 4+9 rule
    out handing a reporter conversation content; 5+6 rule out treating one turn-end event as "finished".
    Two unrelated OSS projects (`wmux`, `tmux-agent-status`) independently converged on the same
    decomposition, which is corroboration rather than proof.
-4. **§ 6.B3 — the one genuinely off-the-shelf component.** Installed Claude Code emits `OSC 9;4`; the
-   official MIT `@xterm/addon-progress` parses exactly that, with state 3 = indeterminate. Verified
-   absent from Codex and Gemini, so it is a Claude-only signal.
-5. **§ 6.E — no third-party project is adoptable.** `claude-squad` is AGPL-3.0; `amux` is
+6. **§ 6.B3 — the one genuinely off-the-shelf component.** The official MIT `@xterm/addon-progress`
+   parses `OSC 9;4`, with state 3 = indeterminate. OSC 9;4 is **documented for Claude Code**; whether
+   Codex or Gemini emit it is **unverified, not disproven**. Use it as corroboration only — an allowed
+   `terminalSequence` hook output can forge it (threat 1).
+7. **§ 6.E — no third-party project is adoptable.** `claude-squad` is AGPL-3.0; `amux` is
    NOASSERTION/Commons Clause; `tmux-agent-status` has **no licence file** despite an open-source-looking
    README; `wmux` (MIT, Windows-native, closest architectural match) is a competing application, not a
    library.
-6. **Two corrections made to sweep findings**, recorded in § 6.E so they are not carried forward wrongly:
+8. **Two corrections made to sweep findings**, recorded in § 6.E so they are not carried forward wrongly:
    `anthropics/claude-code` issues **#56936** (Windows 11 Notification hook) and **#8320** (60-second
    idle notification) are **CLOSED**, not open. They are retained as *historical* Windows-specific
    reliability defects in the exact mechanism this subsystem would rely on.
 
-## 6.1 Did the recommendation change? — **It survived, with two substantive amendments**
+## 6.1 Did the recommendation change? — **The headline survived; its basis and confidence did not**
 
-Stated explicitly, as the corrective work order requires. The reasoning was re-run from the candidate
-set upward with app-server included, not carried forward by default (§ 10.0 of the record).
+Re-derived in revision 3 with the false premise removed (§ 10.0 of the record).
 
 **Survived:** consume the **official provider hook systems** as the primary signal source and **build
 the subsystem as owned code**.
 
-**Why app-server does not displace it — one decisive row** (full comparison at § 10.2): an app-server
-client **cannot observe a session running in an existing PTY**. The installed schema documents loaded
-threads as being "currently loaded in memory" per server process, and `codex --help` exposes no flag to
-attach the interactive TUI to a daemon. So using app-server for status means **replacing** the Codex
-pane's real terminal with a Blue-Helm-rendered JSON-RPC UI — a product decision far larger than pane
-status, and one that would also put the client inside Codex's credential boundary
-(`account/login`, token refresh) on an `[experimental]` protocol.
+**Changed — and this matters more than the headline:**
 
-**Amendment 1 — provider-specific, not lowest-common-denominator** (§ 10.4). Revision 1 implicitly
-sought one uniform mechanism; that is now recorded as the wrong target. Sources differ per provider
-behind one owned normalisation, refusal, and display layer.
+* **Withdrawn:** "an app-server client cannot observe a PTY session, therefore it replaces the terminal,
+  therefore hooks win **decisively**." The premise was false and the word *decisively* is gone.
+* **Established instead:** `codex app-server --listen …` + `codex --remote …` is an **officially
+  documented topology in which the pane keeps the real Codex TUI**. App-server is a live upgrade path,
+  not an all-or-nothing UX replacement.
+* **Hooks still win today**, but on **cost, certainty, coverage and blast radius** — zero dependencies,
+  a `stable` feature on the installed Codex, all three providers, and no new failure dependency —
+  against app-server's server process to own, experimental/unsupported WebSocket transport, client
+  inside the credential boundary, and a new single point of failure for a pane that currently has none.
+* **Confidence is lower and explicitly provisional** on one question (§ 10.2.1).
 
-**Amendment 2 — the asymmetry is unevenness, not exclusivity** (§ 7.1), per finding 4.
+**The load-bearing open question, stated precisely:** can a **second** Blue Helm client subscribe to or
+read the **same loaded thread** driven by a remote Codex TUI, without taking over the interaction,
+duplicating the thread, interfering with approval routing, or requiring a replacement UI?
 
-**And the condition under which the answer flips is now on the record** (§ 10.3): if Blue ever wants a
-native Codex surface, a headless/background mode, remote control, or an in-app approval UI, app-server
-becomes the right foundation and this recommendation should be re-derived.
+* Evidence *for* plausibility: subscription is per-connection (`notSubscribed` is a distinct status);
+  the docs reference a "last subscriber" and a no-subscriber unload grace period; `thread/read` reads
+  without resuming.
+* Evidence *for* difficulty: the `ClientRequest` closed enumeration contains **no `thread/subscribe`**;
+  subscription appears to come from `thread/start`/`thread/resume`, and `ThreadResumeParams` is a
+  configuring call with no read-only flag; approval routing is undocumented.
+* **Verdict: UNVERIFIED.** Not "impossible" — that inversion is exactly what failed twice.
+
+**How it affects the recommendation** (§ 10.2.1): if it resolves **positive**, app-server observation
+likely becomes the recommended Codex source with the TUI untouched; if **negative**, hooks stand for
+Codex. Until then the Codex half of the recommendation is provisional.
+
+**Amendment 1 — provider-specific, not lowest-common-denominator** (§ 10.4), unchanged.
+
+**Amendment 2 — the asymmetry is unevenness, not exclusivity** (§ 7.1), unchanged.
+
+**Flip conditions** (§ 10.3), now two rather than one: **(1)** U5 resolves positive — the near condition,
+answerable by a bounded experiment; **(2)** Blue wants a native Codex surface, headless mode, remote
+control, or an in-app approval UI.
 
 ## 6.2 Installed-version evidence added in revision 2
 
@@ -185,8 +235,46 @@ Verified locally, **without launching any model turn**:
 | `thread/status/changed` | `ThreadStatus` = `notLoaded` / `idle` / `systemError` / `active` + `activeFlags: waitingOnApproval \| waitingOnUserInput` |
 | `turn/started`, `turn/completed` | Both present as notifications |
 | Approval requests | `item/commandExecution/requestApproval`, `item/fileChange/requestApproval`, `item/permissions/requestApproval`, plus `item/tool/requestUserInput` and `mcpServer/elicitation/request` |
-| `codex --help` daemon coupling | No flag to attach the interactive TUI to a daemon |
 | `openai/codex` repo | Apache-2.0, 105,113 stars, pushed 2026-08-10, not archived |
+
+> **SUPERSEDED ROW — removed in revision 3.** This table previously ended with *"`codex --help` daemon
+> coupling — No flag to attach the interactive TUI to a daemon."* **That was false** and is withdrawn;
+> see § 6.3. It is noted here rather than deleted silently, because it is the claim the revision-2 review
+> failed the record on.
+
+## 6.3 Installed-version evidence added in revision 3
+
+Reproduced through the explicit npm wrapper `C:\Users\levij\AppData\Roaming\npm\codex.cmd` so executable
+selection is unambiguous. **No model turn, server, daemon, remote session, or TUI was launched.**
+
+| Check | Result |
+| --- | --- |
+| `--version` | `codex-cli 0.142.3` |
+| Top-level `--help` | **134 lines**, read in full — not filtered. Revision 2 grepped it for `app-server\|daemon`; the flag's description says *"remote **app server** endpoint"* (unhyphenated), so the pattern never matched |
+| `--remote <ADDR>` | *"Connect the TUI to a remote app server endpoint."* Accepted forms: `ws://host:port`, `wss://host:port`, `unix://`, `unix://PATH` |
+| `--remote-auth-token-env <ENV_VAR>` | *"Name of the environment variable containing the bearer token to send to a remote app server websocket"* — takes a variable **name**, not a secret |
+| Is `--remote` qualified? | **No `[experimental]` marker** — it sits in the top-level `OPTIONS` block. By contrast the `app-server` and `remote-control` **subcommands** are both labelled `[experimental]` |
+| `app-server --listen <URL>` | `stdio://` (default), `unix://`, `unix://PATH`, `ws://IP:PORT`, `off` |
+| `--ws-auth <MODE>` | *"Websocket auth mode for **non-loopback** listeners"* — `[possible values: capability-token, signed-bearer-token]` |
+| Other WS auth flags | `--ws-token-file <PATH>`, `--ws-token-sha256 <HEX>`, `--ws-shared-secret-file <PATH>`, `--ws-issuer`, `--ws-audience`, `--ws-max-clock-skew-seconds` — server-side secrets are taken **by file path**, never by env var |
+| Loopback vs non-loopback distinguished? | **Yes**, by the tool itself — auth flags are scoped to non-loopback listeners |
+| `remote-control` | `[experimental]`; subcommands `start`, `stop`; options are config/feature/`--json` only |
+| Official topology | `codex app-server --listen ws://127.0.0.1:4500` then `codex --remote ws://127.0.0.1:4500` — *"Connect the CLI terminal UI"*, learn.chatgpt.com/docs/app-server |
+| Documented transport status | WebSocket is **experimental and unsupported for production workloads**; `ws://` only for localhost or SSH-forwarded; **non-loopback listeners currently allow unauthenticated connections by default during rollout** |
+| `thread/*` client methods | Enumerated from the `ClientRequest` discriminated union — a **closed enumeration**, not a grep. Contains `thread/unsubscribe` but **no `thread/subscribe`** |
+| `ThreadUnsubscribeStatus` | `notLoaded` / `notSubscribed` / `unsubscribed` — subscription is tracked **per connection** |
+| `ThreadReadParams` | `threadId`, optional `includeTurns`; documented to read **without resuming** or emitting `thread/started` |
+| `ThreadResumeParams` | Carries `approvalPolicy`, `approvalsReviewer`, `sandbox`, `permissions`, `model`, `modelProvider`, `config`, `cwd` … — a **configuring** call, with no read-only/observe flag |
+| Approval routing to one or many clients | **Not documented** — recorded as unverified |
+
+**Token handling.** Server-side secrets are files; only the client names an environment variable. Blue
+Helm already injects per-PTY environment from `safeStorage` at spawn time, so a token could reach exactly
+one PTY without ever becoming a persistent Windows user variable. **`setx` is not used and must not be**,
+per `AGENTS.md`.
+
+**Temporary-directory handling.** A second schema bundle was generated into a fresh GUID-suffixed
+directory, inspected, and removed only after verifying the path matched that unique pattern; a follow-up
+scan of `%TEMP%` for `codex-appserver-schema-*` returns **0**.
 
 **Temporary-directory handling.** The schema bundle was written to a GUID-suffixed unique directory
 under `%TEMP%`, inspected, and then removed **only after verifying the path matched that unique
@@ -206,8 +294,11 @@ carries a consolidated unverified list at **§ 11.2** with seven numbered items 
   observed.
 * **U4 — whether Claude Code's `Notification` hook fires reliably on this Windows 11 build.** Issues
   #56936 and #8320 are **closed**, but both were real defects in exactly this mechanism.
-* **U5 — whether an app-server client can observe a PTY-hosted session.** Strong inference against;
-  **not proven**. This is the one unverified item that could overturn § 10.2's deciding row.
+* **U5 (restated in revision 3) — whether a second client can observe a TUI-driven thread.** Not whether
+  app-server can attach a TUI at all: it can, and does so officially. The open question is whether a
+  *second* Blue Helm client can subscribe to or read that same loaded thread without taking over,
+  duplicating it, or capturing approval routing — and **who receives approval requests when more than
+  one client is connected**. Undocumented. **Unverified, not impossible.**
 * **U6 — hook latency, and whether Gemini's synchronous in-loop hooks stall the agent.**
 * **U7 — whether a reporter can be reduced to metadata only in practice.**
 
@@ -258,12 +349,10 @@ names.
 
 | Field | Value |
 | --- | --- |
-| Field | Value |
-| --- | --- |
 | Reviewed base (cumulative) | `7a102a2498cb48fdc168e20503741509c5daefd3` |
 | Previous handoff tail (corrective base) | `849cf7c4960f339a0fab1f436eae0cea4d2c8952` |
-| **Corrected reviewed tip** | `0532772d2a78fa36ee591173bef442731fd8590f` |
-| Branch tip | this handoff-only tail commit |
+| **Revision-2 reviewed tip** | `0532772d2a78fa36ee591173bef442731fd8590f` |
+| Revision-2 tail | `9f6490be3f57596293103a940ac25e10039b5822` |
 | Changed paths | `docs/OSS-PROCUREMENT-pane-status.md`, `docs/BUILDER-HANDOFF-pane-status-source-scout.md` |
 
 **Corrective artifact — the focused delta a corrective reviewer should read**
@@ -313,10 +402,14 @@ range, and it modifies only this document.
 ## 9. Reviewer verdicts
 
 **Revision 1:** `VERDICT: FAIL` — independent Standard-class review of reviewed tip
-`10d80b2c36e956ba7548ca49f6a3652ebef31006`. Four findings, all listed and dispositioned in § 0.
-Preserved as superseded review history.
+`10d80b2c36e956ba7548ca49f6a3652ebef31006`. Four findings, dispositioned in § 0.1. Preserved as
+superseded review history.
 
-**Revision 2:** **none yet** — stopped for a fresh independent Standard-class corrective review.
+**Revision 2:** `VERDICT: FAIL` — independent Standard-class review of reviewed tip
+`0532772d2a78fa36ee591173bef442731fd8590f`. Two findings, dispositioned in § 0.2. Preserved as
+superseded review history.
+
+**Revision 3:** **none yet** — stopped for a fresh independent Standard-class revision-three review.
 
 ## 9.1 Verification performed before stopping
 
