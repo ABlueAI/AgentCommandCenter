@@ -666,6 +666,48 @@ count and SHA-256, and then removed behind an explicit filename-pattern guard. R
 directory on another drive does not work — `git diff --output` produces an empty file and errors — so
 the comparison is always done inside the worktree.
 
+### Stale-row correction artifacts
+
+| Field | Value |
+| --- | --- |
+| Reviewed base (cumulative) | `7a102a2498cb48fdc168e20503741509c5daefd3` |
+| Verdict-finalization tail (focused base) | `3f7a3d0cbd4db10df6273a9513f38ff2368b2501` |
+| **Corrected reviewed tip** | `291cf0bc83176e1765efe4aecb52ea31aadafdbc` |
+| Branch tip | this handoff-only tail commit |
+| Changed path | `docs/BUILDER-HANDOFF-pane-status-source-scout.md` — **one file only** |
+
+**Focused stale-row artifact** — the delta a focused reviewer should read
+
+| Field | Value |
+| --- | --- |
+| Range | `3f7a3d0cbd4db10df6273a9513f38ff2368b2501...291cf0bc83176e1765efe4aecb52ea31aadafdbc` |
+| File | `.agent-review-pane-status-source-scout-stale-row-corrections.diff` |
+| Shortstat | 1 file, **31 insertions, 6 deletions** |
+| Size | **5,006 bytes** |
+| SHA-256 | `0817b0e928bd77736cb107a2f9ed495124752882b216d166e08dc8edb9df9870` |
+
+**Cumulative stale-row artifact** — the whole branch from `main`
+
+| Field | Value |
+| --- | --- |
+| Range | `7a102a2498cb48fdc168e20503741509c5daefd3...291cf0bc83176e1765efe4aecb52ea31aadafdbc` |
+| File | `.agent-review-pane-status-source-scout-stale-row-cumulative.diff` |
+| Shortstat | 3 files, **2,497 insertions, 20 deletions** |
+| Size | **196,193 bytes** |
+| SHA-256 | `f1b104ab45fc7e42b02e2739721ec377cd9b90746b5a4e7ad0be031ec1507f36` |
+
+**Reading the focused diff.** It is deliberately small — 5 KB. Of its 31 insertions, **one** line is the
+correction itself (a deleted table row); the remainder is the review-history entry recording this FAIL,
+its severity, its disposition, and why the row survived the verdict-finalization sweep. The six
+deletions are the stale row plus the five lines of the previous "none yet" review-status stub it
+replaced.
+
+Both created with `git diff --output` (never PowerShell redirection), both gitignored, both regenerated
+from their stated ranges **inside the worktree** and matched in exact byte count and SHA-256, with the
+regeneration copies removed behind a filename-pattern guard. `git diff --check` is clean on both ranges.
+The names are new; per the work order the revision-1 through verdict-finalization artifacts were
+**neither re-hashed nor regenerated**, so no earlier review's evidence file could be touched.
+
 ### A deliberate non-change, flagged for the reviewer
 
 **RESOLVED at verdict finalization.** Through revisions 1–4 this entry recorded that the closing
@@ -719,7 +761,7 @@ this branch's standing rule: a sweep keyed to one phrasing does not establish th
 Checking the table for duplicate row *keys* would have caught it; searching for one spelling of the
 claim did not.**
 
-**Corrected reviewed tip:** recorded in the tail commit below.
+**Corrected reviewed tip:** `291cf0bc83176e1765efe4aecb52ea31aadafdbc`. Artifacts in § 8.
 
 **Focused corrective review:** **none yet** — stopped for a focused independent Standard-class review.
 
