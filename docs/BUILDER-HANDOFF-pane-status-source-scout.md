@@ -8,33 +8,50 @@ Documentation reviewed tip: see § 8
 Branch tip: see § 8
 Merge commit SHA: Pending until merge
 
-**Status: REVISION 3 — CORRECTED AFTER TWO `VERDICT: FAIL` REVIEWS; NO BLUE VERDICT EXISTS;
+**Status: REVISION 4 — CORRECTED AFTER THREE `VERDICT: FAIL` REVIEWS; NO BLUE VERDICT EXISTS;
 IMPLEMENTATION REMAINS UNAUTHORIZED**
 
-## 0. Review history — revisions 1 and 2 both FAILED, and both are preserved
+## 0. Review history — revisions 1, 2 and 3 all FAILED, and all are preserved
 
-Two independent Standard-class reviews have been run on this branch. **Both returned the literal line:**
+Three independent Standard-class reviews have been run on this branch. **All three returned the literal
+line:**
 
 > VERDICT: FAIL
 
 * **Revision 1** — reviewed tip `10d80b2c36e956ba7548ca49f6a3652ebef31006`. Four findings (§ 0.1).
 * **Revision 2** — reviewed tip `0532772d2a78fa36ee591173bef442731fd8590f`. Two findings (§ 0.2).
+* **Revision 3** — reviewed tip `63b7d71f205c60e5a8102e35ade320f2adca5995`. Two findings (§ 0.3).
 
-Both verdicts are **superseded review history, not erased or reinterpreted**. Both were correct. The
-failed reasoning is retained in place inside the procurement record, each error marked as a correction at
-the point where it was made, so a later reader sees what was wrong and not only what replaced it.
+All three verdicts are **superseded review history, not erased or reinterpreted**. All three were
+correct. The failed reasoning is retained in place inside the procurement record, each error marked as a
+correction at the point where it was made, so a later reader sees what was wrong and not only what
+replaced it.
 
-### 0.0 One root cause behind both failures
+### 0.0 Root causes — one shared by revisions 1 and 2, a different one in revision 3
 
 Revision 1 turned a zero-hit **token scan** of a compiled binary into a negative fact. Revision 2 — while
 correcting exactly that — turned a zero-hit **grep of `--help` output** into a negative fact. Same error,
 different medium, committed twice.
 
-The standing rule now recorded in § 0.1 of the procurement record: **a negative claim may never rest on a
+The standing rule recorded in § 0.1 of the procurement record: **a negative claim may never rest on a
 search that could miss. It must rest on a closed enumeration or an explicit statement in a source.**
-Revision 3 applies it — for example, the "no `thread/subscribe` method exists" finding is drawn from the
+Revision 3 applied it correctly — the "no `thread/subscribe` method exists" finding is drawn from the
 `ClientRequest` discriminated union, which is exhaustive by construction, and the `--remote` finding came
 from reading all 134 lines of `--help` rather than filtering them.
+
+**Revision 3 failed on something else: precision of description, not evidence handling.** It listed four
+topologies, one of which could not be true at all (Blue Helm driving the thread *and* the real remote TUI
+remaining the driving UI); it stated one open question so broadly that a **documented** read path was
+filed under the same "unverified" label as an **undocumented** push path; and it used *officially
+supported* where the source says only *documented*, while the same source calls the transport
+experimental and unsupported for production. The added rule: **an option must be internally consistent to
+be listed, an uncertainty must be no broader than the evidence makes it, and documented is not
+supported.**
+
+Note the direction of the third failure. Revisions 1 and 2 **overclaimed a negative**; revision 3
+**overclaimed uncertainty** on U5a and **overclaimed support** on the topology. The correction discipline
+has to run both ways: not converting uncertainty into a negative fact, and not converting a documented
+fact into an uncertainty.
 
 ### 0.1 Revision 1 — the four findings and their disposition
 
@@ -58,8 +75,31 @@ the record, and revision 1 gave Blue no opportunity to weigh it.
 
 | # | Finding | Disposition in revision 3 |
 | --- | --- | --- |
-| 1 | **The decisive app-server premise is false.** Revision 2 stated that installed Codex 0.142.3 offered no way to connect its real TUI to app-server, and concluded that adoption must replace the terminal interface. The reviewer reproduced `--remote <ADDR>` — *"Connect the TUI to a remote app server endpoint"* — accepting `ws://`, `wss://`, `unix://`, `unix://PATH`; `app-server --listen`; WebSocket auth flags `--ws-auth`, `--ws-token-file`, `--ws-token-sha256`; and the official *"Connect the CLI terminal UI"* procedure. | **Corrected.** § 6.A5 carries a withdrawal block naming the error and how it happened, the reproduced command surface, the official topology verbatim, and the surviving qualifications (WebSocket experimental/unsupported; loopback vs non-loopback; unauthenticated-by-default during rollout). § 10.2 was rebuilt as a **four-topology** comparison; § 10.2.1 states exactly how the remaining uncertainty affects the recommendation; § 10.3 now carries **two** flip conditions. The handoff's § 6.2 stale row is marked superseded and § 6.3 records the revision-3 evidence. |
+| 1 | **The decisive app-server premise is false.** Revision 2 stated that installed Codex 0.142.3 offered no way to connect its real TUI to app-server, and concluded that adoption must replace the terminal interface. The reviewer reproduced `--remote <ADDR>` — *"Connect the TUI to a remote app server endpoint"* — accepting `ws://`, `wss://`, `unix://`, `unix://PATH`; `app-server --listen`; WebSocket auth flags `--ws-auth`, `--ws-token-file`, `--ws-token-sha256`; and the official *"Connect the CLI terminal UI"* procedure. | **Corrected.** § 6.A5 carries a withdrawal block naming the error and how it happened, the reproduced command surface, the official topology verbatim, and the surviving qualifications (WebSocket experimental/unsupported; loopback vs non-loopback; unauthenticated-by-default during rollout). § 10.2 was rebuilt as a **four-topology** comparison *(**SUPERSEDED in revision 4** — one of those four was internally impossible; § 10.2 is now a **three-topology** comparison, § 0.3 finding 1)*; § 10.2.1 states exactly how the remaining uncertainty affects the recommendation; § 10.3 now carries **two** flip conditions. The handoff's § 6.2 stale row is marked superseded and § 6.3 records the revision-3 evidence. |
 | 2 | **Withdrawn claims remained as current facts** — the B3 comparison row said OSC 9;4 was "verified absent" from Codex and Gemini; the handoff still asserted Codex `SessionEnd` absence, Claude-only OSC 9;4, and that only Claude distinguishes awaiting-input from finished. | **Corrected.** A full sweep was run across both documents for thirteen phrase patterns (`verified absent`, `absent from the installed`, `do/does not emit`, `cannot emit`, `Claude only`, `Claude-only`, `Only Claude`, `no attach flag`, `no flag`, `cannot observe`, `replaces/replacing the Codex`, `replaces the terminal`). Every **current-voice** occurrence was corrected; historical ones survive only inside visibly-labelled withdrawal blocks. Repaired specifically: the B3 comparison row, the A5 comparison row, the handoff installed-evidence table, "Findings a reviewer should check first" (renumbered to eight entries and rewritten), the § 9.2 adopt-vs-build row, § 10.2/§ 10.2.1/§ 10.3, § 10.4's Codex row, and the U5 entry. The duplicate revision-2 artifact table header was also removed. |
+
+### 0.3 Revision 3 — the two findings and their disposition
+
+| # | Finding | Disposition in revision 4 |
+| --- | --- | --- |
+| 1 | **§ 10.2 contained an internally impossible hybrid.** Revision 3's four-topology comparison included one option in which Blue Helm drives the app-server thread *while* the real remote TUI remains the driving UI. A thread has one driver; those cannot both hold. | **Corrected.** § 10.2 is rebuilt around **exactly three** topologies — **A** existing PTY + hooks (no app-server, no new transport, all three providers), **B** Blue Helm drives the thread and renders its own UI (the native/replacement case), **C** the real remote TUI drives and Blue Helm observes as a second client (the only topology combining a genuine TUI with app-server observation). The impossible entry is **deleted, not renamed**, and the record now states verbatim that **B and C are mutually exclusive with respect to who drives the thread and must not be recombined into a hybrid**. Topology labels are letters because `T1`–`T5` are evidence tiers in this record. No fourth topology was added. The comparison table, its explanatory prose, § 10.0, § 10.2.1, § 10.3, § 10.4's Codex row, § 11 Q7, § 5's A5 row and § 9.2's Codex row were all updated to match. |
+| 2 | **Support-language overstated the source.** The remote-TUI/WebSocket topology was described in current voice as *officially supported*, which OpenAI's documentation does not say — the same documentation marks the WebSocket transport experimental and unsupported for production workloads. | **Corrected.** Both documents now say *officially documented*, *documented topology*, or *documented command surface*. § 6.A5 carries an explicit note that **"documented" is not a synonym for "supported"**. The experimental/unsupported-for-production qualification is **preserved** everywhere it appeared, including the § 10.2 stability row and the § 6.A5 qualifications block. Labelled historical quotations and withdrawal passages were not altered. |
+
+**Also corrected in revision 4: the U5 split.** Not a separate numbered finding, but the substantive
+change the reviewer's first finding forced. Revision 3 asked "can a second client observe a TUI-driven
+thread?" as one question and marked all of it unverified. That bundled two mechanisms with different
+evidence:
+
+* **U5a — documented.** `thread/loaded/list` lists loaded threads; `thread/read` reads one **without
+  resuming it**; the returned thread object carries runtime status. This is a documented polling route
+  and revision 4 stops describing it as unverified. What remains open is **measurement** — cadence,
+  per-poll cost, displayed staleness, reconnection, idle-unload behaviour — not existence. Approval
+  routing is **not** a U5a concern: a reader does not need to receive approval requests to see that a
+  thread is `active` + `waitingOnApproval`.
+* **U5b — undocumented.** No `thread/subscribe` exists in the installed closed enumeration; whether push
+  is obtainable without `thread/resume` is undocumented; and approval-request routing between a TUI and
+  an observer is undocumented, as is any `thread/resume` interference or ownership behaviour. U5b keeps
+  the "plausible, not established" framing and is **not** given U5a's official citation.
 
 ## 1. Intended invariant
 
@@ -142,85 +182,107 @@ distinctive tokens and weak evidence for common words. Counts for generic tokens
 
 ## 6. Findings a reviewer should check first
 
-1. **§ 6.A5 — the corrected app-server topology (revision 3's main change).** Installed Codex 0.142.3
-   exposes `--remote <ADDR>` — *"Connect the TUI to a remote app server endpoint"* — and the official
-   documentation gives the `codex app-server --listen ws://127.0.0.1:4500` + `codex --remote …`
+1. **§ 10.2 — the three-topology rebuild (revision 4's main change).** Exactly three options: **A**
+   existing PTY + hooks, **B** Blue Helm drives the thread and renders its own UI, **C** the real remote
+   TUI drives and Blue Helm observes. Revision 3's fourth option was internally impossible and is
+   deleted. Check specifically that **B and C are never recombined** — the record states their mutual
+   exclusivity verbatim — and that no fourth topology crept back in.
+2. **§ 6.A5 — the corrected app-server topology (revision 3's main change, retained).** Installed Codex
+   0.142.3 exposes `--remote <ADDR>` — *"Connect the TUI to a remote app server endpoint"* — and the
+   official documentation gives the `codex app-server --listen ws://127.0.0.1:4500` + `codex --remote …`
    procedure. **App-server does not require replacing the Codex terminal.** Revision 2 claimed the
-   opposite; that claim is withdrawn.
-2. **§ 10.2.1 — the one question now carrying the weight.** Whether a **second** Blue Helm client can
-   observe a TUI-driven thread without taking over, duplicating it, or capturing approval routing is
-   **UNVERIFIED (U5)**. Check specifically that the record does not anywhere convert this into "cannot".
-3. **§ 7.5 — installed-version drift.** The subsystem needs per-provider capability detection and a
+   opposite; that claim is withdrawn. Revision 4 changes only the *word*: this is a **documented**
+   topology, not an *officially supported* one — the transport is documented as experimental and
+   unsupported for production.
+3. **§ 6.A5 / § 10.2.1 — the U5 split, and it cuts both ways.** **U5a** — `thread/loaded/list` +
+   `thread/read` polling with runtime status in the response — is **documented**; check that the record
+   nowhere calls it unverified or undocumented, and that approval-routing uncertainty is not attached to
+   it. **U5b** — passive push subscription and approval-request routing — is **undocumented**; check that
+   the record nowhere converts that into "cannot", and that U5b is not given U5a's official citation.
+4. **§ 7.5 — installed-version drift.** The subsystem needs per-provider capability detection and a
    visible *unknown* state, because a hook that never fires produces no error — it produces a pane that
    silently stops updating. **Note:** revision 1's supporting claim that Codex's `SessionEnd` was absent
    from the installed binary is **withdrawn** (§ A2); this section was rebuilt on the installed feature
    table and the `stable`/`experimental`/`removed` staging model instead.
-4. **§ 7.1 — providers are not equivalent, but none holds an exclusive capability.** All four evaluated
+5. **§ 7.1 — providers are not equivalent, but none holds an exclusive capability.** All four evaluated
    interfaces distinguish *some* awaiting-input condition from completion; Codex's app-server expresses
    both `waitingOnUserInput` and `waitingOnApproval` as explicit state flags. What is distinctive about
    Claude Code is narrower: among the three **hook** systems it appears uniquely documented for both
    idle-prompt and permission-prompt distinctions. Any cross-provider indicator will still be honest but
    **asymmetric** — in shape and cost, not capability.
-5. **§ 8.1 — the constraint set.** Threats 1+2 rule out in-band signalling as authoritative; 4+9 rule
+6. **§ 8.1 — the constraint set.** Threats 1+2 rule out in-band signalling as authoritative; 4+9 rule
    out handing a reporter conversation content; 5+6 rule out treating one turn-end event as "finished".
    Two unrelated OSS projects (`wmux`, `tmux-agent-status`) independently converged on the same
    decomposition, which is corroboration rather than proof.
-6. **§ 6.B3 — the one genuinely off-the-shelf component.** The official MIT `@xterm/addon-progress`
+7. **§ 6.B3 — the one genuinely off-the-shelf component.** The official MIT `@xterm/addon-progress`
    parses `OSC 9;4`, with state 3 = indeterminate. OSC 9;4 is **documented for Claude Code**; whether
    Codex or Gemini emit it is **unverified, not disproven**. Use it as corroboration only — an allowed
    `terminalSequence` hook output can forge it (threat 1).
-7. **§ 6.E — no third-party project is adoptable.** `claude-squad` is AGPL-3.0; `amux` is
+8. **§ 6.E — no third-party project is adoptable.** `claude-squad` is AGPL-3.0; `amux` is
    NOASSERTION/Commons Clause; `tmux-agent-status` has **no licence file** despite an open-source-looking
    README; `wmux` (MIT, Windows-native, closest architectural match) is a competing application, not a
    library.
-8. **Two corrections made to sweep findings**, recorded in § 6.E so they are not carried forward wrongly:
+9. **Two corrections made to sweep findings**, recorded in § 6.E so they are not carried forward wrongly:
    `anthropics/claude-code` issues **#56936** (Windows 11 Notification hook) and **#8320** (60-second
    idle notification) are **CLOSED**, not open. They are retained as *historical* Windows-specific
    reliability defects in the exact mechanism this subsystem would rely on.
 
-## 6.1 Did the recommendation change? — **The headline survived; its basis and confidence did not**
+## 6.1 Did the recommendation change? — **No new evaluation was run; the headline stands and its stated reasons are corrected**
 
-Re-derived in revision 3 with the false premise removed (§ 10.0 of the record).
+Revision 4 conducted **no new candidate evaluation**. The recommendation was updated only as far as the
+corrected topology set and the U5 split require.
 
-**Survived:** consume the **official provider hook systems** as the primary signal source and **build
-the subsystem as owned code**.
+**Unchanged headline:** consume the **official provider hook systems** as the primary signal source and
+**build the subsystem as owned code**.
 
-**Changed — and this matters more than the headline:**
+**Changed in revision 3 and retained:**
 
 * **Withdrawn:** "an app-server client cannot observe a PTY session, therefore it replaces the terminal,
   therefore hooks win **decisively**." The premise was false and the word *decisively* is gone.
 * **Established instead:** `codex app-server --listen …` + `codex --remote …` is an **officially
   documented topology in which the pane keeps the real Codex TUI**. App-server is a live upgrade path,
   not an all-or-nothing UX replacement.
-* **Hooks still win today**, but on **cost, certainty, coverage and blast radius** — zero dependencies,
-  a `stable` feature on the installed Codex, all three providers, and no new failure dependency —
-  against app-server's server process to own, experimental/unsupported WebSocket transport, client
-  inside the credential boundary, and a new single point of failure for a pane that currently has none.
-* **Confidence is lower and explicitly provisional** on one question (§ 10.2.1).
 
-**The load-bearing open question, stated precisely:** can a **second** Blue Helm client subscribe to or
-read the **same loaded thread** driven by a remote Codex TUI, without taking over the interaction,
-duplicating the thread, interfering with approval routing, or requiring a replacement UI?
+**Changed in revision 4 — the reasons, not the conclusion:**
 
-* Evidence *for* plausibility: subscription is per-connection (`notSubscribed` is a distinct status);
-  the docs reference a "last subscriber" and a no-subscriber unload grace period; `thread/read` reads
-  without resuming.
-* Evidence *for* difficulty: the `ClientRequest` closed enumeration contains **no `thread/subscribe`**;
-  subscription appears to come from `thread/start`/`thread/resume`, and `ThreadResumeParams` is a
-  configuring call with no read-only flag; approval routing is undocumented.
-* **Verdict: UNVERIFIED.** Not "impossible" — that inversion is exactly what failed twice.
+* **The hooks-first case no longer leans on the deleted hybrid.** It rests on **cost** (zero
+  dependencies), **provider coverage** (all three, versus Codex-only), **transport stability** (`hooks`
+  reported `stable` on the installed Codex, versus an `[experimental]` app-server on a WebSocket
+  transport documented as unsupported for production), **security surface** (one event payload, versus a
+  protocol that can also write files, spawn processes, mutate threads and drive login, scoped read-only
+  only by discipline), **the freshness tradeoff polling imposes**, and **the absence of U5b evidence**.
+* **Blue's options are three, and two of them are mutually exclusive** (§ 10.2): **A** hooks on today's
+  PTY pane; **B** Blue Helm drives and renders a native Codex surface; **C** the real remote TUI drives
+  and Blue Helm observes. B is a product decision, not a status decision.
+* **"App-server observation is unverified" is now too strong and has been narrowed.** Polling
+  observation is documented; push observation is not.
 
-**How it affects the recommendation** (§ 10.2.1): if it resolves **positive**, app-server observation
-likely becomes the recommended Codex source with the TUI untouched; if **negative**, hooks stand for
-Codex. Until then the Codex half of the recommendation is provisional.
+**The two open questions, separated:**
+
+* **U5a — documented, unmeasured.** `thread/loaded/list` + `thread/read` return a thread's runtime status
+  without resuming or driving it. What is open is cadence, per-poll cost, displayed staleness,
+  reconnection, and idle-unload behaviour. **Not** an existence question, and **not** an approval-routing
+  question — a reader sees `active` + `waitingOnApproval` without receiving approval requests.
+* **U5b — undocumented.** Whether push (`thread/status/changed`) is obtainable for a TUI-driven thread
+  **without** `thread/resume`, and where approval requests route when a TUI and an observer are both
+  connected. Plausible — subscription is per-connection (`notSubscribed` is a distinct status) and the
+  docs reference a "last subscriber" plus a no-subscriber unload grace period — but the `ClientRequest`
+  closed enumeration contains **no `thread/subscribe`**, and `ThreadResumeParams` is a configuring call
+  with no read-only flag. **UNVERIFIED, not "impossible"** — that inversion is exactly what failed twice.
+
+**How they affect the recommendation** (§ 10.2.1): if **U5b** resolves positive, topology C likely
+becomes the recommended Codex source with the TUI untouched; if negative, hooks stand for Codex **with
+C-poll still available as a documented secondary source**. Independently, U5a's production suitability
+stays open until measured. The Codex half of the recommendation is provisional on that basis.
 
 **Amendment 1 — provider-specific, not lowest-common-denominator** (§ 10.4), unchanged.
 
 **Amendment 2 — the asymmetry is unevenness, not exclusivity** (§ 7.1), unchanged.
 
-**Flip conditions** (§ 10.3), now two rather than one: **(1)** U5 resolves positive — the near condition,
-answerable by a bounded experiment; **(2)** Blue wants a native Codex surface, headless mode, remote
-control, or an in-app approval UI.
+**Flip conditions** (§ 10.3), two, with a partial third: **(1)** U5b resolves positive — the near
+condition, answerable by a bounded experiment; **(1a)** a weaker partial flip if C-poll is *measured* and
+proves cheap and fresh enough, which needs no U5b answer at all; **(2)** Blue wants a native Codex
+surface, headless mode, remote control, or an in-app approval UI — that is topology B.
 
 ## 6.2 Installed-version evidence added in revision 2
 
@@ -282,8 +344,9 @@ pattern** — the removal was guarded by an explicit pattern check rather than i
 
 ## 7. Known limitations of this evaluation
 
-**No T4 (runtime-observed) evidence exists anywhere in this record, in either revision.** The record now
-carries a consolidated unverified list at **§ 11.2** with seven numbered items (U1–U7); the summary:
+**No T4 (runtime-observed) evidence exists anywhere in this record, in any revision.** The record carries
+a consolidated unverified list at **§ 11.2**, now with eight numbered items after revision 4 split U5
+into **U5a** and **U5b** (U1, U2, U3, U4, U5a, U5b, U6, U7); the summary:
 
 * **U1 — whether Codex 0.142.3 emits `SessionEnd` at runtime.** Revision 1 claimed it did not; that
   claim is **withdrawn**. Documented (T1), zero token hits (T3), no installed hook-event schema found,
@@ -294,11 +357,18 @@ carries a consolidated unverified list at **§ 11.2** with seven numbered items 
   observed.
 * **U4 — whether Claude Code's `Notification` hook fires reliably on this Windows 11 build.** Issues
   #56936 and #8320 are **closed**, but both were real defects in exactly this mechanism.
-* **U5 (restated in revision 3) — whether a second client can observe a TUI-driven thread.** Not whether
-  app-server can attach a TUI at all: it can, and does so officially. The open question is whether a
-  *second* Blue Helm client can subscribe to or read that same loaded thread without taking over,
-  duplicating it, or capturing approval routing — and **who receives approval requests when more than
-  one client is connected**. Undocumented. **Unverified, not impossible.**
+* **U5a (split out in revision 4) — polling is documented; only its runtime characteristics are open.**
+  `thread/loaded/list` lists loaded threads, `thread/read` reads one **without resuming it**, and the
+  returned thread object carries runtime status. Revision 3 filed this under "unverified" alongside U5b;
+  that was wrong and is corrected. What is genuinely unmeasured: polling cadence, per-poll cost,
+  displayed staleness, reconnection behaviour, and what a poller sees when the server unloads an idle
+  thread. **Documented but unmeasured — not undocumented.**
+* **U5b (split out in revision 4) — passive push and approval routing.** Not whether app-server can
+  attach a TUI at all: it can, and the topology is documented. The open question is whether a *second*
+  Blue Helm client can acquire `thread/status/changed` **push** for a TUI-driven thread **without**
+  `thread/resume`, whether `thread/resume` from that client takes over or duplicates the thread, and
+  **who receives approval requests when more than one client is connected**. Undocumented.
+  **Unverified, not impossible.**
 * **U6 — hook latency, and whether Gemini's synchronous in-loop hooks stall the agent.**
 * **U7 — whether a reporter can be reduced to metadata only in practice.**
 
@@ -326,7 +396,11 @@ Commands: `git worktree add`, `git status`, `git diff --check`, `git add`, `git 
 `codex app-server generate-json-schema --out <unique temp dir> --experimental` followed by a
 pattern-guarded delete of that directory.
 
-**No live or paid model turn was launched in either revision.**
+**Revision 4 added no research commands at all** — only `git` (verification, `diff --check`, `add`,
+`commit`, `diff --output`) and hashing of the two new artifacts. It is a documentation correction: no
+provider binary was run, no schema regenerated, no source re-fetched.
+
+**No live or paid model turn was launched in any revision.**
 
 No test suite was run: this branch changes no code, so the app and Pester gates are unaffected and
 would prove nothing about it. The tracked-file change set is two Markdown documents.
@@ -428,6 +502,42 @@ evidence was overwritten:
 | `.agent-review-pane-status-source-scout-corrections.diff` (r2 focused) | 74,833 | `c5535e67af0a53bf04131a066dfe0b379d44bcc228956e34d8d7118177195b67` |
 | `.agent-review-pane-status-source-scout-r2-cumulative.diff` (r2 cumulative) | 115,175 | `805639df3349df17d2a31b881d4f709f7390093b3b9e2ba481e3628718213f5b` |
 
+### Revision 4 artifacts
+
+| Field | Value |
+| --- | --- |
+| Reviewed base (cumulative) | `7a102a2498cb48fdc168e20503741509c5daefd3` |
+| Revision-3 tail (focused base) | `3058621e7057f5258f8176258ec092bc556a2532` |
+| **Revision-4 reviewed tip** | recorded in the tail commit below |
+| Branch tip | this handoff-only tail commit |
+| Changed paths | `docs/OSS-PROCUREMENT-pane-status.md`, `docs/BUILDER-HANDOFF-pane-status-source-scout.md` |
+
+**Focused revision-4 artifact**
+
+| Field | Value |
+| --- | --- |
+| Range | `3058621e7057f5258f8176258ec092bc556a2532...<revision-4 reviewed tip>` |
+| File | `.agent-review-pane-status-source-scout-r4-corrections.diff` |
+| Shortstat / size / SHA-256 | recorded in the tail commit |
+
+**Cumulative revision-4 artifact**
+
+| Field | Value |
+| --- | --- |
+| Range | `7a102a2498cb48fdc168e20503741509c5daefd3...<revision-4 reviewed tip>` |
+| File | `.agent-review-pane-status-source-scout-r4-cumulative.diff` |
+| Shortstat / size / SHA-256 | recorded in the tail commit |
+
+Both created with `git diff --output` (never PowerShell redirection), both gitignored, both independently
+regenerated from their stated ranges and matched in exact byte count and SHA-256. `git diff --check` is
+clean on both ranges. The revision-4 artifact names are new, so **no earlier review's evidence file is
+regenerated or overwritten**. Per the revision-4 work order, the revision-1, -2 and -3 artifacts were
+**not** re-hashed this round; their recorded identities above stand from revision 3's verification.
+
+> The exact SHAs, byte counts and hashes cannot appear in the content commit that they describe — the
+> commit does not yet exist when its own diff is generated. They are recorded in the handoff-only tail
+> commit that follows, which is excluded from both ranges and modifies only this document.
+
 ### A deliberate non-change, flagged for the reviewer
 
 The corrective work order renders the closing placeholder with a trailing period. The record keeps the
@@ -437,10 +547,11 @@ asks for "the existing literal state", and that exact string is what the origina
 and what revision 1 committed. Altering it could break any later check pinned to it. This is a
 deliberate choice, not an oversight.
 
-The artifact was created with `git diff --output` (never PowerShell redirection), remains gitignored
-local review evidence, and was independently regenerated from the stated range — matching the pinned
-file in both exact byte count and SHA-256 identity. This handoff-only tail commit is excluded from the
-range, and it modifies only this document.
+**A second deliberate non-change, new in revision 4.** § 6.3 of this handoff contains **two
+near-duplicate "Temporary-directory handling" paragraphs**, left over from revision 3. That is a cosmetic
+defect, it is not one of the two accepted revision-3 findings, and the revision-4 work order authorizes
+changes only where they are needed for coherence with those findings. It is therefore left in place and
+flagged here rather than fixed by widening scope on my own authority. A reviewer may direct its removal.
 
 ## 9. Reviewer verdicts
 
@@ -452,26 +563,33 @@ superseded review history.
 `0532772d2a78fa36ee591173bef442731fd8590f`. Two findings, dispositioned in § 0.2. Preserved as
 superseded review history.
 
-**Revision 3:** **none yet** — stopped for a fresh independent Standard-class revision-three review.
+**Revision 3:** `VERDICT: FAIL` — independent Standard-class review of reviewed tip
+`63b7d71f205c60e5a8102e35ade320f2adca5995`. Two findings, dispositioned in § 0.3. Preserved as
+superseded review history.
+
+**Revision 4:** **none yet** — stopped for a fresh independent Standard-class revision-four review.
 
 ## 9.1 Verification performed before stopping
 
 | Check | Result |
 | --- | --- |
 | Worktree and branch | `.worktrees/pane-status-source-scout` on `feature/pane-status-source-scout` |
-| Expected ancestry | `7a102a24`, `10d80b2c`, `849cf7c4` all confirmed ancestors of the branch tip |
+| Expected ancestry | `7a102a24`, `10d80b2c`, `849cf7c4`, `0532772d`, `9f6490be`, `63b7d71f`, `3058621e` all confirmed ancestors of the branch tip |
+| Starting tip matched the work order | `3058621e7057f5258f8176258ec092bc556a2532`, verified before any edit |
 | Tracked state | clean |
 | Tracked files changed across the cumulative range | exactly two, both Markdown |
 | Application / config changes | none |
-| `git diff --check` | clean on corrective and cumulative ranges |
-| Artifact reproduction | both regenerated byte-identically |
+| `git diff --check` | clean on the revision-4 focused and cumulative ranges |
+| Artifact reproduction | both revision-4 artifacts regenerated byte-identically |
 | `main` / `origin/main` | unchanged at `7a102a2498cb48fdc168e20503741509c5daefd3` |
 | Merge or push | none |
 | Electron / provider processes left running **by this work** | **none.** No Electron instance and no provider session was started. Stated precisely rather than as a bare "zero processes": a process check found running `claude.exe` instances belonging to the VS Code extension hosting this session, and one `codex.exe` from the pre-existing Codex **desktop app** under `WindowsApps` — a different install from the npm CLI inspected here. Neither originates from this work order. Every Codex command run (`--version`, `--help` ×5, `features list`, `generate-json-schema`) exits immediately and left nothing resident |
-| **App-server, daemon, remote TUI, or remote session launched** | **none.** Revision 3 established the `--remote` topology entirely from `--help` output and official documentation. **No listener was started, no `--remote` connection was made, and no thread was created.** Settling U5 would require exactly that, which is why it is assigned to the unauthorized § 11.1 Experiment B |
-| Temporary artifacts | both generated schema directories were deleted behind a unique-pattern guard; a re-scan of `%TEMP%` for `codex-appserver-schema-*` returns **0** |
-| Prior review artifacts | all three re-hashed after revision 3 and unchanged |
+| **App-server, daemon, remote TUI, or remote session launched** | **none.** Revision 3 established the `--remote` topology entirely from `--help` output and official documentation, and **revision 4 ran no provider command at all.** No listener was started, no `--remote` connection was made, and no thread was created. Settling U5b would require exactly that, which is why it is assigned to the unauthorized § 11.1 Experiment B |
+| **New research, capability rediscovery, or schema generation in revision 4** | **none.** Revision 4 is a documentation correction. No provider binary was invoked, no schema was regenerated, and no source was re-fetched; every fact it states was already in the record or comes from the accepted revision-3 review findings, and where the latter is the case the record says so explicitly (§ 6.A5 provenance note) |
+| Temporary artifacts | both generated schema directories were deleted behind a unique-pattern guard during revision 3; revision 4 created none |
+| Prior review artifacts | re-hashed after revision 3 and unchanged. **Not re-hashed in revision 4** — the work order directs that revisions 1–3 artifacts are neither re-verified nor regenerated, and the new artifacts use distinct revision-4 names so none could be overwritten |
 | Live model turn | none launched |
+| Blue verdict | **none invented.** The record still ends with the exact placeholder, and no ADOPT/FORK/PROTOTYPE/PATTERN-MINE/BUILD FRESH term is issued or implied |
 | Prototype or implementation | none exists |
 | Blue verdict | none invented; placeholder retained verbatim |
 
