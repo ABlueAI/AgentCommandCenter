@@ -613,25 +613,29 @@ rather than reported as a mismatch.
 | --- | --- |
 | Reviewed base (cumulative) | `7a102a2498cb48fdc168e20503741509c5daefd3` |
 | Revision-4 tail (focused base) | `6d40c31f1d357af7ab1ce49b551cd9136899bb1d` |
-| **Verdict-finalization reviewed tip** | recorded in the tail commit below |
+| **Verdict-finalization reviewed tip** | `ca884297c7b34d0d4b29ac24bf9792e654f5b344` |
 | Branch tip | this handoff-only tail commit |
 | Changed paths | `docs/OSS-PROCUREMENT-pane-status.md`, `docs/BUILDER-HANDOFF-pane-status-source-scout.md`, `BLUE-HELM-MASTER-STATUS.md` |
 
-**Focused verdict-finalization artifact**
+**Focused verdict-finalization artifact** — the delta a reviewer should read
 
 | Field | Value |
 | --- | --- |
-| Range | `6d40c31f1d357af7ab1ce49b551cd9136899bb1d...<verdict-reviewed tip>` |
+| Range | `6d40c31f1d357af7ab1ce49b551cd9136899bb1d...ca884297c7b34d0d4b29ac24bf9792e654f5b344` |
 | File | `.agent-review-pane-status-source-scout-verdict-corrections.diff` |
-| Shortstat / size / SHA-256 | recorded in the tail commit |
+| Shortstat | 3 files, **334 insertions, 77 deletions** |
+| Size | **38,871 bytes** |
+| SHA-256 | `b47b333dbd6539759aef8cc497ebf33c83acd0e8ed9a33291c276db44a329b9f` |
 
-**Cumulative verdict-finalization artifact**
+**Cumulative verdict-finalization artifact** — the whole branch from `main`
 
 | Field | Value |
 | --- | --- |
-| Range | `7a102a2498cb48fdc168e20503741509c5daefd3...<verdict-reviewed tip>` |
+| Range | `7a102a2498cb48fdc168e20503741509c5daefd3...ca884297c7b34d0d4b29ac24bf9792e654f5b344` |
 | File | `.agent-review-pane-status-source-scout-verdict-cumulative.diff` |
-| Shortstat / size / SHA-256 | recorded in the tail commit |
+| Shortstat | 3 files, **2,447 insertions, 20 deletions** |
+| Size | **192,102 bytes** |
+| SHA-256 | `ce273cc520bd8ab77c17c9c046ae5613f0f91077c80080f64b5147fb16e2aec8` |
 
 Both created with `git diff --output` (never PowerShell redirection), both gitignored, both independently
 regenerated from their stated ranges and matched in exact byte count and SHA-256. `git diff --check` is
@@ -646,7 +650,14 @@ regenerated this round, and their recorded identities above stand from their own
 **Note on the cumulative range.** It now spans **three** files rather than two, because
 `BLUE-HELM-MASTER-STATUS.md` is modified by the verdict-finalization commit. That file is a
 **modification** to an existing tracked document, not an addition, so the cumulative shortstat carries
-deletions for the first time on this branch.
+deletions for the first time on this branch — **20**, all of them in `BLUE-HELM-MASTER-STATUS.md`. The
+two branch documents remain pure additions relative to `main`.
+
+**Regeneration note.** Both artifacts were regenerated from their stated ranges into a distinct
+`.agent-review-verdict-regen-*.diff` pair **inside the worktree**, compared, found identical in byte
+count and SHA-256, and then removed behind an explicit filename-pattern guard. Regenerating into a
+directory on another drive does not work — `git diff --output` produces an empty file and errors — so
+the comparison is always done inside the worktree.
 
 ### A deliberate non-change, flagged for the reviewer
 
@@ -732,9 +743,23 @@ Pinned `.agent-review-*.diff` files are local review artifacts and must remain g
 
 ---
 
-Not authorized and not started: pane-status specification, architecture commitment, dependency
-installation, prototyping, implementation, merge, and push. The bounded experiment described in
-§ 11.1 of the procurement record is **described only** and requires an explicit later `PROTOTYPE`
-verdict from Blue before any part of it may be built.
+**Authorized and not yet started:** bounded prototype work, beginning with **Experiment A** (§ 11.1 of
+the procurement record), under a separate work order that selects the provider and specifies the
+prototype.
 
-**BLUE SUBSYSTEM VERDICT: NOT YET ISSUED — IMPLEMENTATION REMAINS UNAUTHORIZED**
+**Not authorized:** production specification, architecture commitment, production implementation,
+merge, and push — and **Experiment B**, together with all app-server runtime testing, unless Blue
+separately expands the prototype scope.
+
+**Not started, on this branch or anywhere:** any prototype, hook installation, provider command, schema
+generation, app-server, remote TUI, or model session.
+
+> **SUPERSEDED — retained as historical provenance.** Through revision 4 this closing block read: *"Not
+> authorized and not started: pane-status specification, architecture commitment, dependency
+> installation, prototyping, implementation, merge, and push. The bounded experiment described in § 11.1
+> of the procurement record is **described only** and requires an explicit later `PROTOTYPE` verdict from
+> Blue before any part of it may be built."* followed by
+> `BLUE SUBSYSTEM VERDICT: NOT YET ISSUED — IMPLEMENTATION REMAINS UNAUTHORIZED`. That verdict now
+> exists, so both statements are **stale, not reinterpreted**.
+
+**BLUE SUBSYSTEM VERDICT: PROTOTYPE**
