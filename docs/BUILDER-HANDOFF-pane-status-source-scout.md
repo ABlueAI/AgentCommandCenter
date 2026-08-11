@@ -866,8 +866,16 @@ Exactly three tracked Markdown files, **+2,539 / −20**:
 `7a102a24...291cf0bc`. The difference is the handoff-only tail `258f44dc` (+43 / −1), which sits above
 the reviewed tip and inside the merge: 2,497 + 43 − 1 = **2,539** insertions, with deletions unchanged
 at 20 because the tail's single deletion replaced a line the reviewed range had already counted as an
-insertion. The reviewed delta and the merged delta therefore agree exactly; no unreviewed content
-entered `main`.
+insertion.
+
+> The reviewed content delta plus the declared handoff-only tail reproduce the merged delta exactly; no
+> unexpected or non-handoff content entered `main`.
+
+**Stated that way deliberately.** The tail was **not** inside the reviewed range — it was expected,
+declared in the merge-gate plan as `branchTip`, and validated by `scripts/merge-gate.ps1` against the
+handoff-tail policy (≤3 commits above the reviewed tip, each touching only the declared `handoffDoc`).
+Expected-and-gate-validated is **not** the same as reviewed, and this section previously blurred the
+two by concluding that "no unreviewed content entered `main`". See § C1.10.
 
 ### C1.3 Merge gate
 
@@ -989,6 +997,31 @@ head.
 
 The original `.worktrees/pane-status-source-scout` worktree was **not reused, edited, or deleted**, and
 was confirmed clean at `258f44dc` before and after this work.
+
+### C1.10 Closeout review history
+
+The closeout branch has its own review history, kept separate from the merged branch's six reviews
+(§ C1.6), which are **unchanged**.
+
+**Closeout review 1:** `VERDICT: FAIL` — reviewed tip
+`d3d0ea2721a85eef5a1cf56f39aab86c05275230`. **One finding, severity Low.**
+
+| Field | Value |
+| --- | --- |
+| Severity | **Low** |
+| Finding | § C1.2 correctly identified `258f44dc` as a handoff-only tail **excluded from the reviewed artifact**, and then incorrectly concluded from that same paragraph that *"no unreviewed content entered `main`"*. The tail was expected and merge-gate-validated, **but it was not part of the reviewed range** — so the conclusion overstated what the reconciliation proves |
+| Disposition | **Corrected.** The claim is replaced with: *"The reviewed content delta plus the declared handoff-only tail reproduce the merged delta exactly; no unexpected or non-handoff content entered `main`."* A short note now states explicitly that expected-and-gate-validated is not the same as reviewed |
+| Scope | **One file, one paragraph.** `BLUE-HELM-MASTER-STATUS.md` untouched; no earlier review history, artifact, verdict, or authorization boundary altered |
+
+**Why the error is worth recording rather than quietly fixing.** The arithmetic in § C1.2 was right and
+still is: 2,497 + 43 − 1 = 2,539 reconciles exactly. What was wrong was the *inference* drawn from it.
+Reconciling the line counts proves the merged delta is fully **accounted for**; it does not prove every
+line was **reviewed**, because 43 of those insertions were never inside `7a102a24...291cf0bc`. The
+handoff-tail policy exists precisely because a tail is trusted on its *shape* — ≤3 commits, handoff
+document only — rather than on review. Conflating "accounted for" with "reviewed" would erode that
+distinction, which is the thing the policy is protecting.
+
+**Closeout review 2:** **none yet** — stopped for a focused independent Standard-class review.
 
 ---
 
