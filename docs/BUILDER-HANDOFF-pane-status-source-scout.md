@@ -949,7 +949,37 @@ architecture adoption, **Experiment B**, and all app-server runtime testing (no 
 evidence and the verdict — a decision record. No detection code, no reporter, no indicator, and no
 provider integration exists.
 
-### C1.8 What did not happen during closeout
+### C1.8 Closeout branch and its own review artifact
+
+The closeout itself is a separate branch awaiting its own review — it is **not** part of what merged.
+
+| Field | Value |
+| --- | --- |
+| Branch | `feature/pane-status-source-scout-closeout` |
+| Worktree | `.worktrees/pane-status-source-scout-closeout` |
+| Base | `045be87973512ac532eee3868a3cc9b916f30ab0` — merged `main`, exactly |
+| Reviewed tip | `d3d0ea2721a85eef5a1cf56f39aab86c05275230` |
+| Branch tip | this handoff-only tail commit |
+| Changed paths | `BLUE-HELM-MASTER-STATUS.md`, `docs/BUILDER-HANDOFF-pane-status-source-scout.md` — **exactly two, both Markdown** |
+
+| Field | Value |
+| --- | --- |
+| Range | `045be87973512ac532eee3868a3cc9b916f30ab0...d3d0ea2721a85eef5a1cf56f39aab86c05275230` |
+| File | `.agent-review-pane-status-source-scout-closeout.diff` |
+| Shortstat | 2 files, **242 insertions, 18 deletions** |
+| Size | **20,213 bytes** |
+| SHA-256 | `79609c8bbaefaaff6cf6fa5d8676bdcce6cbd5712d16ef15e9366d3cef7b588c` |
+
+Created with `git diff --output` (never PowerShell redirection), gitignored via `.gitignore:33`,
+regenerated from its stated range inside this worktree and matched in exact byte count and SHA-256, with
+the regeneration copy removed behind a filename-pattern guard. `git diff --check` is clean. The name is
+new, so **no earlier artifact could be overwritten**; the eleven artifacts in the source-scout worktree
+were neither regenerated nor re-hashed beyond the single in-place confirmation recorded in § C1.5.
+
+**The procurement record `docs/OSS-PROCUREMENT-pane-status.md` was not touched by this closeout.** It is
+merged and final; the verdict in its § 12 stands as written.
+
+### C1.9 What did not happen during closeout
 
 **No prototype work began.** Specifically: no hook was written to `~/.claude/settings.json`, `~/.codex/`,
 `~/.gemini/settings.json`, or any other provider configuration; no provider command was run; no schema
