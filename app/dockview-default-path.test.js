@@ -283,8 +283,18 @@ process.stdout.write('\nindex.html ships the EMBEDDED dock and loads no Dockview
   assert(!/tts-controls[^>]*id=/.test(indexSrc), 'the audio surface needed no layout-only id');
   assert(!/dockview/i.test(audioOpenTags[0]), 'the audio surface carries no Dockview attribute');
 
+  // RE-PINNED for Experiment A (pane-status PROTOTYPE), and not silently: this tripwire exists so an
+  // added renderer script has to be argued for rather than slipped in. 21 -> 22. The one addition is
+  // `pane-status-badge.js`, gated at the source — main never sends on the pane-status-prototype
+  // channel unless BLUE_HELM_PANE_STATUS_PROTOTYPE=1, so with the gate off the module loads, defines
+  // one global, and does nothing else. The assertion below names the expected file, so a FUTURE extra
+  // script still fails here rather than riding in on this bump.
   const scriptTags = (indexSrc.match(/<script[^>]*src=/g) || []).length;
-  assert(scriptTags === 21, `index.html still loads exactly its original 21 <script src> tags (found ${scriptTags})`);
+  assert(scriptTags === 22, `index.html loads exactly 22 <script src> tags — the original 21 plus the gated pane-status prototype badge (found ${scriptTags})`);
+  assert(/<script src="pane-status-badge\.js"><\/script>/.test(indexSrc),
+    'the 22nd script is exactly the pane-status prototype badge');
+  assert(indexSrc.indexOf('BLUE SUBSYSTEM VERDICT: PROTOTYPE') !== -1,
+    'index.html records the procurement verdict that authorizes that prototype script');
 }
 
 // ---------------------------------------------------------------------------

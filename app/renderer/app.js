@@ -1270,6 +1270,36 @@ async function boot() {
     if (t) { t.parser.flush(); t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n'); }
   });
   cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));
+
+// EXPERIMENT A — PROTOTYPE pane status (Claude only, one pane).
+// docs/OSS-PROCUREMENT-pane-status.md — "BLUE SUBSYSTEM VERDICT: PROTOTYPE".
+//
+// Receive-only. Main pushes a token-free { paneId, state, reason, prototype } view; the renderer has
+// no way to request status, enroll a pane, or reach the transport. With the prototype gate off, main
+// never sends on this channel and every line below stays dormant.
+//
+// State is keyed by the app's pane id — the same key `terms`, main's PTY map, and Dockview's registry
+// use — so a badge follows its PROCESS, not its position. That is what makes a Dockview drag unable
+// to hand one pane's status to another.
+const paneStatusBadge = window.ccPaneStatusBadge
+  ? window.ccPaneStatusBadge.createPaneStatusBadge({
+      document,
+      log: appendLog,
+      getPaneElement: (paneId) => { const t = terms.get(paneId); return t ? t.pane : null; },
+    })
+  : null;
+if (paneStatusBadge && cc.onPaneStatusPrototype) {
+  cc.onPaneStatusPrototype((view) => {
+    const shown = paneStatusBadge.update(view);
+    if (shown && view && view.paneId) {
+      appendLog(`[pane-status PROTOTYPE] ${view.paneId} -> ${shown.label}${view.reason ? ` (${view.reason})` : ''}\n`);
+    }
+  });
+  // Dockview reparents a pane's element when Blue drags it between groups, which can drop the badge
+  // node from the DOM. The STATE survives regardless (it lives in the badge module keyed by pane id);
+  // this only re-attaches the visual. It never invents, resets, or reassigns a status.
+  window.ccPaneStatusReattach = (paneId) => paneStatusBadge.reattach(paneId);
+}
   window.addEventListener('resize', fitAllTerms);
   // PRODUCTION layout engine. On a normal launch this loads Dockview and, only after activation and
   // pane adoption both succeed, switches the visible terminal workspace from the grid to the dock.

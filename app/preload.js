@@ -62,6 +62,14 @@ contextBridge.exposeInMainWorld('cc', {
 
   // surfaced main-process errors (shown in the Logs tab instead of a fatal dialog)
   onMainError: (cb) => ipcRenderer.on('main-error', (_e, m) => cb(m)),
+
+  // EXPERIMENT A — PROTOTYPE pane status (Claude only, one pane).
+  // docs/OSS-PROCUREMENT-pane-status.md — "BLUE SUBSYSTEM VERDICT: PROTOTYPE".
+  // RECEIVE-ONLY, deliberately. There is no invoke() counterpart and no way for the renderer to ask
+  // for status, enroll a pane, or reach the transport: main pushes a token-free
+  // { paneId, state, reason, prototype } view and that is the entire surface. When the prototype gate
+  // is off, main never sends on this channel, so the callback simply never fires.
+  onPaneStatusPrototype: (cb) => ipcRenderer.on('pane-status-prototype', (_e, v) => cb(v)),
 });
 
 // ---- Dockview layout bridge --------------------------------------------------------------------

@@ -37,6 +37,11 @@ const { createLauncherIpc } = require('./launcher-ipc');
 // The one canonical fail-closed sender/frame/URL trust gate (shared with clipboard/library/followup).
 // P12 adds the two launcher handlers as callers so they, too, refuse any non-trusted-window sender.
 const { createTrustedSenderGate } = require('./trusted-ipc-sender');
+// EXPERIMENT A (PROTOTYPE, Claude only) — docs/OSS-PROCUREMENT-pane-status.md,
+// "BLUE SUBSYSTEM VERDICT: PROTOTYPE". Requiring this module is inert: with the gate env var unset,
+// createPaneStatusPrototype() returns an object whose every method is a no-op, so no pipe, token, IPC
+// channel, badge, or PTY environment change exists. See prototype-pane-status/pane-status-prototype.js.
+const { createPaneStatusPrototype } = require('./prototype-pane-status/pane-status-prototype');
 // K8 media-permission boundary: both session permission handlers come from this pure,
 // dependency-free, unit-tested module (media-permission-policy.test.js). A grant requires
 // the trusted window's main frame + the exact entry document + audio-only proof; every
@@ -226,6 +231,10 @@ let win = null;
 const ENTRY_PATH = path.join(__dirname, 'renderer', 'index.html');
 const ENTRY_URL = pathToFileURL(ENTRY_PATH).toString();
 const ptys = new Map(); // terminal id -> pty process (in-app terminals)
+// EXPERIMENT A prototype handle. Assigned once the window exists; until then, and whenever the gate
+// env var is unset, it is the inert object (see createInertPrototype) so every call site below is
+// safe without a null check or a flag test.
+let paneStatus = { enabled: false, envForPane: () => ({}), releasePane: () => false, stop: () => false };
 // V5b1: pane id -> main-issued video-scout run ID. Deliberately SEPARATE from `ptys`: it must
 // SURVIVE the PTY's exit (so the finished pane can still open its report in V5b2) and is removed only
 // when the pane is explicitly closed (pty-kill) or the window shuts down (window-all-closed).
@@ -327,6 +336,30 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('clipboard-read', (e) => clipboardIpc.handleClipboardRead(e));
   ipcMain.handle('clipboard-write', (e, payload) => clipboardIpc.handleClipboardWrite(e, payload));
+
+  // EXPERIMENT A — PROTOTYPE, Claude only, one pane. docs/OSS-PROCUREMENT-pane-status.md,
+  // "BLUE SUBSYSTEM VERDICT: PROTOTYPE". Bounded prototype work only; production implementation,
+  // Experiment B, and app-server runtime testing remain unauthorized.
+  //
+  // With BLUE_HELM_PANE_STATUS_PROTOTYPE unset this is the INERT object: nothing is listened on,
+  // nothing is minted, and `envForPane()` returns {} for every pane forever. The send() below is
+  // one-way main -> renderer and carries only { paneId, state, reason, prototype } — there is no
+  // renderer-callable handler here at all, so this adds no new attack surface to the IPC boundary.
+  paneStatus = createPaneStatusPrototype({
+    env: process.env,
+    path,
+    appDir: __dirname,
+    log: (line) => tlog(line),
+    send: (channel, payload) => { if (win && !win.isDestroyed()) win.webContents.send(channel, payload); },
+  });
+  if (paneStatus.enabled) {
+    const started = paneStatus.start();
+    if (!started.ok) {
+      const msg = `[pane-status] PROTOTYPE listener failed to start (${started.error || started.reason}) — panes will show "unknown".`;
+      console.error(msg);
+      if (win && !win.isDestroyed()) win.webContents.send('main-error', msg);
+    }
+  }
 
   // V5b2 Library/report read boundary — same trust anchors (canonical ENTRY_URL + the late-bound
   // trusted window). List/Read run the PowerShell library boundary shell-free; Open Report resolves a
@@ -930,10 +963,17 @@ ipcMain.handle('pty-start', (_e, opts) => {
   // in process.env and leaks into every PTY via the spread below. Remove it from the Windows
   // user environment manually (see CLAUDE.md). That removal is a pre-req for full per-role
   // env filtering (Blue Helm checklist item 2).
+  // EXPERIMENT A (PROTOTYPE): {} for every pane unless the gate env var is set AND this is the single
+  // enrolled Claude pane. The scrub above is NOT weakened — it stays exactly as it was, and if it
+  // prevents the hook reporter from inheriting these two variables the experiment is blocked and
+  // reported as blocked rather than worked around. The token exists only here and in main's memory:
+  // never in argv, a log line, a file, the renderer, or a persistent environment variable.
+  const paneStatusEnv = paneStatus.envForPane(opts);
   const ptyEnv = {
     ...process.env,
     CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1',  // scrub credentials from Claude Code's own subprocesses
     ...(opts.videoScout ? { GEMINI_API_KEY: geminiKey } : {}),
+    ...paneStatusEnv,
   };
   let p;
   tlog(`pty-start: env built — CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, GEMINI_API_KEY ${opts.videoScout ? 'injected (video-scout)' : 'not added by app (check for setx residue)'}`);
@@ -967,6 +1007,9 @@ ipcMain.on('pty-kill', (_e, id) => {
   const p = ptys.get(id); if (p) { try { p.kill(); } catch {} ptys.delete(id); }
   // Explicit pane close: the run's report is no longer reachable from the UI, so drop the mapping.
   videoScoutRunIds.remove(id);
+  // EXPERIMENT A: the pane is gone, so its token must die with it. Releasing here (not on pty-exit)
+  // matches the run-ID registry's rule — a finished agent's pane still exists until Blue closes it.
+  paneStatus.releasePane(id);
 });
 
 // ---- IPC: vibe-kanban board -------------------------------------------------

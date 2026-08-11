@@ -306,6 +306,11 @@
   <script src="tts-selection.js"></script>
   <script src="audio-module-health.js"></script>
   <script src="stt-target-lock.js"></script>
+  <!-- EXPERIMENT A prototype badge (Claude only, one pane). docs/OSS-PROCUREMENT-pane-status.md,
+       "BLUE SUBSYSTEM VERDICT: PROTOTYPE". Loading it is inert: main never sends on the
+       pane-status-prototype channel unless the gate env var is set, so with the gate off no badge
+       is ever created and no listener ever fires. -->
+  <script src="pane-status-badge.js"></script>
   <script src="app.js"></script>
   <script type="module" src="tts.js"></script>
   <script type="module" src="stt.js"></script>
