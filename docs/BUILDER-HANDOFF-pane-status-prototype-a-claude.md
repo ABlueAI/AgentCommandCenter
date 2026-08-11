@@ -273,16 +273,29 @@ process, recovery file, or temp directory remains.
 | --- | --- |
 | Revision 1 reviewed tip | `bf66fb3b9fad080d1ff92ed0815034e525a75740` — `VERDICT: FAIL` |
 | Handoff-only tail (rev 1) | `f8cb64a391a969e51ecc379094ca02cc76c9ae81` |
-| **Revision 2 reviewed tip** | the corrective content commit — pinned in the tail commit below |
+| **Revision 2 reviewed tip** | `c8d9fdaa3ecd8b792850ad525b9b768bdd14bcb5` |
 | Branch tip | the handoff-only tail commit below |
-| Focused correction range | `f8cb64a3...<revision 2 reviewed tip>` |
-| Cumulative prototype range | `3ff96bde...<revision 2 reviewed tip>` |
+| Focused correction range | `f8cb64a391a969e51ecc379094ca02cc76c9ae81...c8d9fdaa3ecd8b792850ad525b9b768bdd14bcb5` |
+| Cumulative prototype range | `3ff96bdea3e68a83cd5774c9b94b68d9cb292add...c8d9fdaa3ecd8b792850ad525b9b768bdd14bcb5` |
 
-Artifact identities are pinned in the **handoff-only tail commit**, because a commit cannot state its
-own SHA. Two new artifacts, with new names:
+The corrective content commit's parent is `f8cb64a391a969e51ecc379094ca02cc76c9ae81`, as required.
 
-* `.agent-review-pane-status-prototype-a-claude-rev2-focused.diff` — `f8cb64a3...<tip>`
-* `.agent-review-pane-status-prototype-a-claude-rev2-cumulative.diff` — `3ff96bde...<tip>`
+| Artifact | Range | Shortstat | Size | SHA-256 |
+| --- | --- | --- | --- | --- |
+| `.agent-review-pane-status-prototype-a-claude-rev2-focused.diff` | `f8cb64a3...c8d9fdaa` | **18 files, 1,923 insertions, 251 deletions** | **165,445 bytes** | `b8b5f644d1fc53f84beb6c7762c7968dbd7328de1374a0a6c622cee9242a64f7` |
+| `.agent-review-pane-status-prototype-a-claude-rev2-cumulative.diff` | `3ff96bde...c8d9fdaa` | **26 files, 4,808 insertions, 10 deletions** | **280,014 bytes** | `3b3cb40fc1d5590479f7009af66f76934c48044f283e598d5b2566fc3e1683f3` |
+
+The revision-1 artifact is unchanged and still verifies at its recorded identity:
+`.agent-review-pane-status-prototype-a-claude.diff`, `3ff96bde...bf66fb3b`, 174,128 bytes,
+`eaad43a22aeacfc7de79f234e3805e7aaf56dd75e2de11854e42d5936aa42f89`.
+
+**On the 251 deletions in the focused range** — worth checking directly, since revision 1 had only 7.
+They are: the two re-pinned tripwire assertions and the lines they replaced (§ 3); the preload's
+`onPaneStatusPrototype` member, moved out of the always-exposed `cc` object and behind the gate; the
+renderer's unconditional badge construction and the unreachable reattach global (finding 7); the
+`listen` token-printing block (finding 10); and the replaced sections of the two documents. **No
+existing application behaviour was removed** — the deletions are relocations, corrections, and the
+removal of the two surfaces the review required to be absent.
 
 Both created with `git diff --output` (never PowerShell redirection), gitignored via `.gitignore:33`,
 regenerated from their stated ranges and proven **byte-identical**. **The original revision-1 artifact
