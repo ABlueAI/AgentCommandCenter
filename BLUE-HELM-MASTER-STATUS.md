@@ -161,7 +161,8 @@ is now reviewed, human-accepted, merged at
 `d23e2c28c53fa5fd23ed73dbd48a4f43c369ebc2`, gated on merged `main`, and pushed.
 
 **Cross-provider pane-status indicators now have their own tracked record and
-their own Blue verdict.** Tracked procurement record:
+their own Blue verdict, and both are merged into `main` and pushed** at
+`045be87973512ac532eee3868a3cc9b916f30ab0`. Tracked procurement record:
 `docs/OSS-PROCUREMENT-pane-status.md`. Blue's verdict, verbatim:
 
 > BLUE SUBSYSTEM VERDICT: PROTOTYPE
@@ -172,6 +173,10 @@ production implementation remain unauthorized. The next pane-status action is
 record, under its own separate work order that selects the provider and
 specifies the prototype. **Experiment B — app-server runtime testing — remains
 unauthorized** pending a separate Blue scope decision.
+
+**The procurement gate is complete; the subsystem is not.** Merging the record
+put evidence and a decision into `main`, not a feature. No detection code,
+reporter, indicator, or provider integration exists.
 
 > **SUPERSEDED — retained as historical provenance.** This paragraph previously
 > read *"Cross-provider pane-status indicators still have no Blue verdict, so
@@ -185,7 +190,56 @@ R3 roadmap entry remains a roadmap note, not a pane-status procurement verdict.
 finishing Dockview satisfied Dockview's gate only, and pane-status's verdict is
 its own.
 
+## Current checkpoint — August 11 — PANE-STATUS PROCUREMENT MERGED AND PUSHED; PROTOTYPE VERDICT IN `main`
+
+**Baseline:** local `main`, `origin/main`, and GitHub `refs/heads/main` are all
+**`045be87973512ac532eee3868a3cc9b916f30ab0`**. Verified three independent ways
+during closeout: `git rev-parse main origin/main`, `git ls-remote origin
+refs/heads/main`, and the GitHub REST API.
+
+- Merge subject: `Merge pane status Source Scout and PROTOTYPE verdict`.
+- Merge parent 1 (recorded pre-merge `main`):
+  `7a102a2498cb48fdc168e20503741509c5daefd3`; merge parent 2 (branch tip):
+  `258f44dc6bf6654631659d6da8ab76023552d2db`; merge tree
+  `18560427f2a56c1e79418974e7f491aaa81c1766`, which is **byte-identical to the
+  branch-tip tree** — the merge introduced no merge-time edit.
+- Reviewed corrective tip: `291cf0bc83176e1765efe4aecb52ea31aadafdbc`.
+- Reviewer verdicts, all retained verbatim in
+  `docs/BUILDER-HANDOFF-pane-status-source-scout.md`: revisions 1, 2 and 3 each
+  returned literal `VERDICT: FAIL`; revision 4 returned literal `VERDICT: PASS`;
+  the verdict-finalization commit returned literal `VERDICT: FAIL` on one Low
+  finding (a stale verification row contradicting the verdict); and the final
+  focused review of `291cf0bc` returned literal **`VERDICT: PASS`** — the review
+  the merge rests on. The four FAILs are historical fact, not superseded wording.
+- Merge gate: `scripts/merge-gate.ps1` with plan
+  `.merge-gate/plan-pane-status-source-scout.psd1`, 815 bytes, SHA-256
+  `e502969aeddd411b2c2d70989844d95d11e9910528e20958f96e24571eded7a1`
+  (recomputed during closeout and matching), `documentationOnly = $true`,
+  **`gates = @()`**.
+- Pinned reviewed artifact, preserved and **not regenerated**:
+  `.agent-review-pane-status-source-scout-stale-row-cumulative.diff`,
+  `7a102a24...291cf0bc`, **196,193 bytes**, SHA-256
+  `f1b104ab45fc7e42b02e2739721ec377cd9b90746b5a4e7ad0be031ec1507f36`.
+- **No application or Pester gate was run, and none was required.** The merge
+  changed exactly three tracked Markdown files (**+2,539 / −20**) and no code,
+  test, dependency, script, or configuration file; the approved plan declared no
+  gates. Recorded plainly rather than omitted.
+
+**The pane-status OSS procurement gate is COMPLETE. The pane-status subsystem is
+NOT complete.** What reached `main` is a decision record — Source-Scout evidence
+plus Blue's verdict. **No detection code, reporter, indicator, or provider
+integration exists.** The verdict authorizes **bounded Experiment A only**;
+production implementation, production specification, Experiment B, and all
+app-server runtime testing remain unauthorized. **Next pane-status action:
+Experiment A**, which remains remaining-work item 1.
+
 ## Current checkpoint — August 8 — DOCKVIEW MERGED, GATED, AND PUSHED
+
+> **SUPERSEDED AS THE CURRENT BASELINE — retained as historical provenance.**
+> Accurate through the Dockview merge. `main` has since advanced to
+> `045be87973512ac532eee3868a3cc9b916f30ab0` (August 11 checkpoint above). The
+> Dockview facts below remain correct; only the "current baseline" claim is
+> **stale, and it is not reinterpreted**.
 
 **Baseline:** Dockview production pane-layout integration is independently
 reviewed, human-accepted, merged with `--no-ff`, gated on merged `main`, and
@@ -375,9 +429,15 @@ This is load-bearing context, not historical decoration:
    hand-rolled grid they would otherwise have to be rebuilt against; that
    prerequisite is now satisfied, because Dockview merged at `d23e2c2`.
    **The subsystem has passed its Source-Scout review and carries its own Blue
-   verdict.** Tracked procurement record:
+   verdict, and both are now merged into `main` and pushed** at
+   `045be87973512ac532eee3868a3cc9b916f30ab0` (August 11 checkpoint). Tracked
+   procurement record:
    `docs/OSS-PROCUREMENT-pane-status.md`. Verdict, verbatim:
    `BLUE SUBSYSTEM VERDICT: PROTOTYPE`.
+   **The procurement gate is complete; this roadmap item is not.** What landed in
+   `main` is a decision record, not a feature — no detection code, reporter,
+   indicator, or provider integration exists, which is why this entry stays at
+   position 1.
    **Only bounded prototyping is authorized. Production specification and
    production implementation remain unauthorized.** The next action is
    **Experiment A** — the one-provider hook reporter (§ 11.1 of the record) —
@@ -501,14 +561,21 @@ ADOPT line recorded in the August 8 checkpoints above. The production branch
 was reviewed, human-accepted, merged at `d23e2c2`, gated on merged `main`, and
 pushed.
 
-**Pane-status has now satisfied this gate too.** Its tracked record is
+**Pane-status has now satisfied this gate too, and its record is merged and
+pushed** at `045be87973512ac532eee3868a3cc9b916f30ab0`. Its tracked record is
 `docs/OSS-PROCUREMENT-pane-status.md`, and Blue's verdict is verbatim
-`BLUE SUBSYSTEM VERDICT: PROTOTYPE` — **bounded prototyping only; production
-specification and implementation remain unauthorized.** It satisfied the gate
+`BLUE SUBSYSTEM VERDICT: PROTOTYPE` — **bounded Experiment A only; production
+specification, production implementation, Experiment B, and app-server runtime
+testing remain unauthorized.** It satisfied the gate
 through its own Source-Scout evaluation, its own record, and its own verdict:
 the Dockview record and verdict never authorized pane-status work, and Dockview
 reaching `main` did not discharge pane-status's separate procurement gate — a
 completed subsystem verdict covers only the subsystem it names.
+
+**Satisfying the gate is not shipping the subsystem.** Both Dockview and
+pane-status have cleared procurement, but Dockview's *integration* is complete
+while pane-status's is not started. The gate governs whether work may begin, not
+whether it is done.
 
 > **SUPERSEDED — retained as historical provenance.** This paragraph previously
 > read *"Pane-status has not satisfied this gate: it still needs its own

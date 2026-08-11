@@ -4,13 +4,15 @@ Branch: `feature/pane-status-source-scout`
 Worktree: `.worktrees/pane-status-source-scout`
 Fork-point SHA: `7a102a2498cb48fdc168e20503741509c5daefd3`
 Pre-merge main SHA: `7a102a2498cb48fdc168e20503741509c5daefd3`
-Documentation reviewed tip: see § 8
-Branch tip: see § 8
-Merge commit SHA: Pending until merge
+Documentation reviewed tip: `291cf0bc83176e1765efe4aecb52ea31aadafdbc` (see § 8)
+Branch tip: `258f44dc6bf6654631659d6da8ab76023552d2db` (see § 8)
+Merge commit SHA: `045be87973512ac532eee3868a3cc9b916f30ab0`
 
-**Status: VERDICT FINALIZED, ONE LOW CORRECTION APPLIED — REVISION 4 REVIEWED `VERDICT: PASS`; BLUE
-ISSUED `BLUE SUBSYSTEM VERDICT: PROTOTYPE`; BOUNDED PROTOTYPING AUTHORIZED; PRODUCTION IMPLEMENTATION
-REMAINS UNAUTHORIZED**
+**Status: COMPLETE — REVIEWED `VERDICT: PASS`, MERGED, AND PUSHED. BLUE ISSUED
+`BLUE SUBSYSTEM VERDICT: PROTOTYPE`; BOUNDED EXPERIMENT A AUTHORIZED; PRODUCTION IMPLEMENTATION,
+EXPERIMENT B, AND APP-SERVER RUNTIME TESTING REMAIN UNAUTHORIZED**
+
+Post-merge closeout: **§ C1** at the end of this document.
 
 ## 0.0.0 Verdict finalization — the current state of this branch
 
@@ -763,14 +765,26 @@ claim did not.**
 
 **Corrected reviewed tip:** `291cf0bc83176e1765efe4aecb52ea31aadafdbc`. Artifacts in § 8.
 
-**Focused corrective review:** **none yet** — stopped for a focused independent Standard-class review.
+**Focused corrective review:** `VERDICT: PASS` — focused independent Standard-class review of reviewed
+tip `291cf0bc83176e1765efe4aecb52ea31aadafdbc`, against the pinned artifact
+`.agent-review-pane-status-source-scout-stale-row-cumulative.diff`. **This is the final review of the
+branch and the one the merge was authorized on.** The literal verdict line is recorded here as a fact;
+the reviewer's own prose is not reproduced, because it was not captured in this worktree and
+reconstructing it would be fabrication.
 
 **Blue's subsystem verdict** is a separate thing from a Reviewer verdict, and both are recorded:
 Reviewer verdicts are `VERDICT: PASS|FAIL` on a diff; Blue's is
 `BLUE SUBSYSTEM VERDICT: PROTOTYPE` on the subsystem, recorded in § 12 of
 `docs/OSS-PROCUREMENT-pane-status.md` per `AGENTS.md` item 6.
 
-## 9.1 Verification performed before stopping
+## 9.1 Verification performed before stopping — **PRE-MERGE, retained as historical**
+
+> **These rows describe the branch as it stood immediately before merge, and they are left exactly as
+> written.** Two of them are true only of that moment and must not be read as current: *"`main` /
+> `origin/main` | unchanged at `7a102a2498cb48fdc168e20503741509c5daefd3`"* and *"Merge or push |
+> none"*. Both were accurate when recorded and are **superseded, not wrong** — the branch has since
+> been merged at `045be87973512ac532eee3868a3cc9b916f30ab0` and pushed. The post-merge state is
+> recorded separately in **§ C1**; this table is not rewritten to match it.
 
 | Check | Result |
 | --- | --- |
@@ -810,16 +824,159 @@ Pinned `.agent-review-*.diff` files are local review artifacts and must remain g
 
 ---
 
+# PART TWO — POST-MERGE CLOSEOUT
+
+## § C1. Post-merge closeout — merged, gated, and pushed
+
+**Added after the merge, on branch `feature/pane-status-source-scout-closeout` in
+`.worktrees/pane-status-source-scout-closeout`, based on merged `main`.** Documentation only. Every fact
+below was independently reproduced from the repository before it was written down; none was copied
+forward on trust.
+
+### C1.1 Merge identity
+
+| Field | Value |
+| --- | --- |
+| Merge commit | `045be87973512ac532eee3868a3cc9b916f30ab0` |
+| Merge subject | `Merge pane status Source Scout and PROTOTYPE verdict` |
+| Merge parent 1 (recorded pre-merge `main`) | `7a102a2498cb48fdc168e20503741509c5daefd3` |
+| Merge parent 2 (merged branch tip) | `258f44dc6bf6654631659d6da8ab76023552d2db` |
+| Merge tree | `18560427f2a56c1e79418974e7f491aaa81c1766` |
+| Reviewed corrective tip | `291cf0bc83176e1765efe4aecb52ea31aadafdbc` |
+| Merged branch | `feature/pane-status-source-scout` |
+
+**The merge tree is byte-identical to the branch-tip tree.** Both `258f44dc^{tree}` and
+`045be879^{tree}` resolve to `18560427f2a56c1e79418974e7f491aaa81c1766`, so the `--no-ff` merge
+introduced **no merge-time edit**. The pre-merge `main` tree was `6e1cb02d28b931568ea276845d595144fc527590`,
+confirming the trees genuinely differed and the comparison is meaningful rather than vacuous.
+
+All three of `7a102a24`, `291cf0bc` and `258f44dc` are confirmed ancestors of the merge commit.
+
+### C1.2 What the merge brought into `main`
+
+Exactly three tracked Markdown files, **+2,539 / −20**:
+
+| Path | Nature |
+| --- | --- |
+| `docs/OSS-PROCUREMENT-pane-status.md` | Added — the tracked procurement record |
+| `docs/BUILDER-HANDOFF-pane-status-source-scout.md` | Added — this handoff |
+| `BLUE-HELM-MASTER-STATUS.md` | Modified — procurement-gate paragraphs, checkpoint note, remaining-work entry 1 |
+
+**Reconciliation with the reviewed artifact,** which recorded **+2,497 / −20** over
+`7a102a24...291cf0bc`. The difference is the handoff-only tail `258f44dc` (+43 / −1), which sits above
+the reviewed tip and inside the merge: 2,497 + 43 − 1 = **2,539** insertions, with deletions unchanged
+at 20 because the tail's single deletion replaced a line the reviewed range had already counted as an
+insertion. The reviewed delta and the merged delta therefore agree exactly; no unreviewed content
+entered `main`.
+
+### C1.3 Merge gate
+
+The merge was executed through `scripts/merge-gate.ps1` with plan
+`.merge-gate/plan-pane-status-source-scout.psd1`.
+
+| Field | Value |
+| --- | --- |
+| Plan file size | 815 bytes |
+| Plan SHA-256 | `e502969aeddd411b2c2d70989844d95d11e9910528e20958f96e24571eded7a1` — **independently recomputed during closeout and matching** |
+| `documentationOnly` | `$true` |
+| `gates` | `@()` — **empty; the plan declared no gates** |
+| `reviewedTip` / `branchTip` | `291cf0bc…` / `258f44dc…` — both match what was reviewed and merged |
+| `pinnedDiff` | `.worktrees/pane-status-source-scout/.agent-review-pane-status-source-scout-stale-row-cumulative.diff` |
+| `mergeMessage` | `Merge pane status Source Scout and PROTOTYPE verdict` — matches the actual merge subject |
+
+**No application or Pester gate was rerun, and none was required.** This was a documentation-only merge:
+no application code, test, dependency, lockfile, script, or configuration file changed anywhere on the
+branch, and the approved merge-gate plan declared `gates = @()`. Running the suites would have proven
+nothing about a change set of three Markdown files. **Stated plainly rather than omitted: the app and
+Pester suites were not run for this merge or for this closeout.**
+
+### C1.4 Push and final remote equality
+
+Local `main`, `origin/main`, and GitHub's `refs/heads/main` are all
+**`045be87973512ac532eee3868a3cc9b916f30ab0`**. Verified during closeout three independent ways:
+`git rev-parse main origin/main`, `git ls-remote origin refs/heads/main`, and the GitHub REST API
+(`repos/ABlueAI/AgentCommandCenter/git/ref/heads/main`). All three agree.
+
+### C1.5 Reviewed artifact — preserved, not regenerated
+
+| Field | Value |
+| --- | --- |
+| File | `.agent-review-pane-status-source-scout-stale-row-cumulative.diff` |
+| Range | `7a102a2498cb48fdc168e20503741509c5daefd3...291cf0bc83176e1765efe4aecb52ea31aadafdbc` |
+| Size | **196,193 bytes** |
+| SHA-256 | `f1b104ab45fc7e42b02e2739721ec377cd9b90746b5a4e7ad0be031ec1507f36` |
+| Review result | `VERDICT: PASS` |
+
+The file was **hashed in place and not regenerated or overwritten**; it still lives in the original
+`.worktrees/pane-status-source-scout` worktree, which this closeout left untouched. Its recorded size
+and SHA-256 were confirmed to match during closeout. The literal `VERDICT: PASS` line is recorded as a
+fact; **no reviewer prose is reproduced, because none was captured in the repository and inventing it
+would be fabrication.**
+
+Every earlier artifact — revisions 1 through 4, verdict finalization, and the stale-row correction —
+is likewise untouched: none was regenerated, re-hashed, renamed, or deleted by this closeout.
+
+### C1.6 Review history, complete and preserved
+
+| Stage | Reviewed tip | Result |
+| --- | --- | --- |
+| Revision 1 | `10d80b2c…` | `VERDICT: FAIL` |
+| Revision 2 | `0532772d…` | `VERDICT: FAIL` |
+| Revision 3 | `63b7d71f…` | `VERDICT: FAIL` |
+| Revision 4 | `555aee5d…` | `VERDICT: PASS` |
+| Verdict finalization | `ca884297…` | `VERDICT: FAIL` (one Low) |
+| Stale-row correction | `291cf0bc…` | **`VERDICT: PASS`** — final, and the review the merge rests on |
+
+**All four FAIL/PASS outcomes above are historical fact and are preserved in place**, each with its
+findings and disposition (§§ 0.1–0.3, § 9). None was erased, softened, or reinterpreted by the merge or
+by this closeout.
+
+### C1.7 Authorization state after the merge — unchanged
+
+Tracked procurement record: **`docs/OSS-PROCUREMENT-pane-status.md`**. Blue's verdict, verbatim:
+
+> BLUE SUBSYSTEM VERDICT: PROTOTYPE
+
+**Merging the procurement record did not widen that verdict by one inch.** It authorizes **bounded
+Experiment A only** — the one-provider hook reporter of § 11.1 of the record — under a separate work
+order that selects the provider and specifies the prototype.
+
+**Still unauthorized:** production pane-status implementation, production specification, general
+architecture adoption, **Experiment B**, and all app-server runtime testing (no listener, no
+`codex --remote` connection, no observer client).
+
+**The procurement gate is complete; the pane-status subsystem is not.** What reached `main` is the
+evidence and the verdict — a decision record. No detection code, no reporter, no indicator, and no
+provider integration exists.
+
+### C1.8 What did not happen during closeout
+
+**No prototype work began.** Specifically: no hook was written to `~/.claude/settings.json`, `~/.codex/`,
+`~/.gemini/settings.json`, or any other provider configuration; no provider command was run; no schema
+was generated; no app-server, listener, or remote TUI was started; and no model session was launched.
+The closeout ran `git` and file-hashing commands, plus one read-only `gh api` call to confirm the remote
+head.
+
+The original `.worktrees/pane-status-source-scout` worktree was **not reused, edited, or deleted**, and
+was confirmed clean at `258f44dc` before and after this work.
+
+---
+
 **Authorized and not yet started:** bounded prototype work, beginning with **Experiment A** (§ 11.1 of
 the procurement record), under a separate work order that selects the provider and specifies the
 prototype.
 
-**Not authorized:** production specification, architecture commitment, production implementation,
-merge, and push — and **Experiment B**, together with all app-server runtime testing, unless Blue
-separately expands the prototype scope.
+**Not authorized:** production specification, architecture commitment, production implementation — and
+**Experiment B**, together with all app-server runtime testing, unless Blue separately expands the
+prototype scope.
 
-**Not started, on this branch or anywhere:** any prototype, hook installation, provider command, schema
-generation, app-server, remote TUI, or model session.
+> **UPDATED at post-merge closeout.** This block previously also listed *"merge, and push"* as not
+> authorized. That was accurate for the source-scout branch before Blue authorized the merge; the branch
+> has since been merged at `045be879…` and pushed, so that clause is **stale, not reinterpreted**. It
+> never applied to the subsystem — merging a procurement record is not implementing a subsystem.
+
+**Not started, on this branch or anywhere:** any pane-status prototype, hook installation, provider
+command, schema generation, app-server, remote TUI, or model session.
 
 > **SUPERSEDED — retained as historical provenance.** Through revision 4 this closing block read: *"Not
 > authorized and not started: pane-status specification, architecture commitment, dependency
