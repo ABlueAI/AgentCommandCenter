@@ -147,6 +147,15 @@
   }
 
   const api = { describeView, createPaneStatusBadge, STATE_LABEL, REASON_TEXT, STATE_CLASS };
-  global.ccPaneStatusBadge = api;
+
+  // REVISION 2 — gate off means ABSENT, not inert. `index.html` loads this file unconditionally (a
+  // classic <script> tag cannot be conditional), so the GLOBAL is what has to disappear. It is
+  // published only when the preload actually exposed the prototype bridge, which happens only when
+  // main forwarded the gate token at window construction. With the gate off this module therefore
+  // defines nothing on `window`: no `ccPaneStatusBadge`, and app.js finds nothing to construct.
+  //
+  // `module.exports` is unconditional so the node test can exercise the pure functions without
+  // pretending to be a gated renderer.
+  if (global.ccPaneStatus && global.ccPaneStatus.enabled === true) global.ccPaneStatusBadge = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

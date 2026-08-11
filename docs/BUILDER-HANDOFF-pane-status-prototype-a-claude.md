@@ -4,12 +4,14 @@ Branch: `feature/pane-status-prototype-a-claude`
 Worktree: `.worktrees/pane-status-prototype-a-claude`
 Fork-point SHA: `3ff96bdea3e68a83cd5774c9b94b68d9cb292add`
 Pre-merge main SHA: `3ff96bdea3e68a83cd5774c9b94b68d9cb292add`
-Reviewed tip: see § 9
-Branch tip: see § 9
+Revision 1 reviewed tip: `bf66fb3b9fad080d1ff92ed0815034e525a75740` — **`VERDICT: FAIL`**
+Revision 2 reviewed tip: see § 12
+Branch tip: see § 12
 Merge commit SHA: Pending until merge
 
-**Status: PROTOTYPE BUILT, GATED, TESTED, AND RUN LIVE — AWAITING INDEPENDENT FULL-CLASS REVIEW.
-NOT MERGED, NOT PUSHED. PRODUCTION IMPLEMENTATION REMAINS UNAUTHORIZED.**
+**Status: REVISION 2 — CORRECTIVE. All ten review findings addressed. Structural gates green.
+The one remaining authorized model turn was deliberately NOT consumed; a human verification step is
+in § 11. AWAITING A FRESH INDEPENDENT FULL-CLASS REVIEW. NOT MERGED, NOT PUSHED.**
 
 ## 0. Procurement authority
 
@@ -22,203 +24,283 @@ reporter, one bounded display. Still unauthorized and untouched here: production
 implementation, permanent hook installation, multiple providers, multiple status-enabled panes,
 **Experiment B**, any app-server listener / `codex --remote` / observer client, merge, and push.
 
-The OSS research was not reopened and the § 10 recommendation was not changed.
+The OSS research was not reopened, the § 10 recommendation was not changed, and the procurement
+record's reviewed historical analysis was **not rewritten**.
 
-Full evidence: **`docs/PROTOTYPE-EVIDENCE-pane-status-claude-hook.md`**.
+Full evidence: **`docs/PROTOTYPE-EVIDENCE-pane-status-claude-hook.md`** (revision 2).
 
-## 1. Intended invariant
+---
 
-> When prototype mode is disabled, application behaviour and provider configuration are unchanged.
-> When enabled, exactly one Claude pane may receive out-of-band status events carrying only
-> `hook_event_name` and an app-generated ephemeral pane token.
+## 1. REVIEW HISTORY — revision 1, `VERDICT: FAIL`
 
-The gate is `BLUE_HELM_PANE_STATUS_PROTOTYPE=1`, compared `=== '1'`.
+An independent Full-class review of `bf66fb3b` returned:
 
-**How "disabled means unchanged" is enforced** — by shape, not by a flag test.
-`createPaneStatusPrototype()` returns a **different object** when the gate is off, whose `envForPane()`
-returns `{}` unconditionally and which has no pipe, token, or listener behind it. A missed flag check
-cannot leak because there is nothing to leak. Same posture as `preload.js`'s `ccDockview`.
+> **VERDICT: FAIL**
 
-## 2. Files changed
+**1 Critical · 3 High · 4 Medium · 3 Low.** Recorded in full below, **not downgraded and not
+reinterpreted**. The disposition column records what revision 2 did.
+
+### Blocking
+
+| # | Sev | Finding | Disposition in revision 2 |
+| --- | --- | --- | --- |
+| 1 | **Critical** | **The application could never display any state but `unknown`.** `app/main.js` constructed the prototype with no `observedVersion`; the store recorded `null`; `resolveDisplayState` checks `versionSupported === false` **first**, before `lastEvent`, so every view returned `unknown/version-mismatch`. The live object exposed no `setObservedVersion`, so no call site could fix it. The working demonstration existed only in `live-probe.js`, which supplied the answer itself. | **FIXED.** New `pane-status-version.js`; `main.js` discovers and feeds the version; `setObservedVersion` exposed and refreshes the enrolled pane. `pane-status-integration.test.js` drives a real event to `working` through main.js's own call shape. |
+| 2 | **High** | **The pinned version was a different installation from the one Blue Helm launches.** `AGENT_CMD.claude` is bare `claude` via PowerShell → `C:\Users\levij\.local\bin\claude.exe` (**2.1.220**). The probe hard-coded `%APPDATA%\npm\claude.cmd` (**2.1.196**). So the pin didn't match the launched binary, **and the entire live run — including the decisive scrub finding — was collected against a build Blue Helm does not run.** | **FIXED + SCOPED.** Discovery now resolves through PowerShell with the PTY's environment and versions **that resolved path**. `2.1.220` was **not** added to the supported list (§ 4). Evidence § 2 scopes every runtime observation to npm 2.1.196. |
+| 3 | **High** | **The token authenticates the pane environment, not the reporter.** Pipe name and token live in the PTY env; every descendant inherits them — proven by the experiment's own § 5 finding that hook children inherit *despite* the scrub. Any Bash tool call, MCP server, or other hook can forge an allowlisted event. Contradicts the handoff's "not terminal output (threat 1)" framing. | **RECORDED AS A NEGATIVE RESULT**, not patched. Evidence § 5.1. Claims corrected; "validates the mechanism convincingly" **withdrawn**. **No new authentication scheme was invented.** |
+| 4 | **High** | **A fresh-process second `install` could destroy the genuine settings backup.** It captured the already-patched file as "the original", copied it over the real backup (integrity check passed, both sides patched), appended hooks twice, and a later `restore` "proved" restoration to the patched file and deleted the recovery copy. Revision 1's fixture reused the same in-memory guard, so it could not catch this. | **FIXED.** `install()` refuses — before any write — on an existing recovery copy or an existing `MARKER`; the runner refuses on an existing sidecar. Six-step fresh-process fixture in `pane-status-boundary.test.js` + `pane-status-runner.test.js`. |
+
+### Non-blocking
+
+| # | Sev | Finding | Disposition in revision 2 |
+| --- | --- | --- | --- |
+| 5 | **Medium** | **A required Experiment A element was never performed and not listed as unknown**: § 11.1 requires "verify behaviour when the provider is upgraded". | **RECORDED AS UNVERIFIED.** Evidence § 11 item 10. Exact-version mismatch is proven structurally (including for 2.1.220); real upgrade behaviour is explicitly untested, and no turn was spent simulating it. |
+| 6 | **Medium** | **Gate-off was inert, not absent**: `cc.onPaneStatusPrototype`, the renderer subscription, and both `window.*` globals existed unconditionally. | **FIXED BY SHAPE.** Gate token forwarded via `additionalArguments`; `window.ccPaneStatus` is **undefined** when off; badge global gated; both shapes tested. Evidence § 9.1. |
+| 7 | **Medium** | **`window.ccPaneStatusReattach` was never called by any application code**, while evidence § 7 marked live re-attachment PROVEN. | **REMOVED.** Narrowest correction taken: the unreachable global is gone and evidence § 7 now claims only self-healing on the next update. |
+| 8 | **Medium** | **PTY spawn failure stranded the single slot.** `envForPane` enrolled before the spawn; the failure path never released. Dockview happened to recover via the renderer; **classic layout did not**. | **FIXED IN MAIN.** `paneStatus.releasePane(id)` in the spawn catch, where enrolment was taken. Covered by test and pinned as a content assertion in the tripwire. |
+| 9 | **Low** | **The suite structurally could not catch finding 1** — every construction site supplied `observedVersion` by hand. | **FIXED.** `pane-status-integration.test.js` builds the subsystem with main.js's exact dependency set and asserts main.js's source wiring. |
+| 10 | **Low** | **`run-experiment-a.js listen` printed the bearer token to stdout** — a structural token-to-scrollback path, never invoked live. | **REMOVED.** No command prints it; `listen` passes it to a child's environment. Every command mode is executed and scanned in `pane-status-runner.test.js`. |
+| 11 | **Low** | **Kill-criterion 2 was answered structurally** without cross-referencing the unperformed live drag. | **CORRECTED.** Evidence § 10 now labels every criterion RUNTIME / STRUCTURAL / NOT PERFORMED and states plainly that criterion 2 is **not satisfied**. |
+
+> Reviewer's numbering ran 1–11 across the two tables (1 Critical, 3 High, 4 Medium, 3 Low).
+
+---
+
+## 2. What revision 2 changed
 
 | Path | Change |
 | --- | --- |
-| `app/prototype-pane-status/pane-status-protocol.js` | **Added** — wire contract, event allowlist, state mapping, staleness, version gate |
-| `app/prototype-pane-status/pane-status-store.js` | **Added** — token minting, single-pane enrolment, constant-time compare |
-| `app/prototype-pane-status/pane-status-server.js` | **Added** — main-owned Windows named pipe, bounded framing |
-| `app/prototype-pane-status/pane-status-reporter.js` | **Added** — the hook child |
-| `app/prototype-pane-status/pane-status-settings.js` | **Added** — settings guard. **Not imported by the app** |
-| `app/prototype-pane-status/pane-status-prototype.js` | **Added** — the single orchestrator `main.js` touches |
-| `app/prototype-pane-status/pane-status-boundary.test.js` | **Added** — 135 assertions |
-| `app/prototype-pane-status/pane-status-reporter.test.js` | **Added** — 106 assertions, real child + real pipe |
-| `app/prototype-pane-status/run-experiment-a.js` | **Added** — builder-operated settings/listen runner |
-| `app/prototype-pane-status/live-probe.js` | **Added** — builder-operated live probe |
-| `app/renderer/pane-status-badge.js` | **Added** — IIFE badge module |
-| `app/renderer/pane-status-badge.test.js` | **Added** — 42 assertions |
-| `app/main.js` | Modified — require, gated construction, `envForPane` spread in `ptyEnv`, release on `pty-kill` |
-| `app/preload.js` | Modified — one **receive-only** channel |
-| `app/renderer/app.js` | Modified — badge construction + subscription |
-| `app/renderer/index.html` | Modified — one script tag |
-| `app/renderer/styles.css` | Modified — badge styles |
-| `app/package.json` | Modified — three suites added to the gate chain |
-| `app/launcher-fence-invariant.test.js` | Modified — **re-pinned, see § 4** |
-| `app/dockview-default-path.test.js` | Modified — **re-pinned, see § 4** |
+| `app/prototype-pane-status/pane-status-version.js` | **Added** — resolves the provider through PowerShell exactly as the pane does; versions that resolved path; fails closed |
+| `app/prototype-pane-status/pane-status-version.test.js` | **Added** — 68 assertions |
+| `app/prototype-pane-status/pane-status-integration.test.js` | **Added** — 74 assertions; main.js's call shape, both gate shapes, spawn-failure release |
+| `app/prototype-pane-status/pane-status-runner.test.js` | **Added** — 72 assertions; executes every runner mode, scans for token leakage |
+| `app/prototype-pane-status/pane-status-prototype.js` | `setObservedVersion`/`observedVersion` exposed; `RENDERER_ARG` added; inert object extended |
+| `app/prototype-pane-status/pane-status-settings.js` | Install refuses on an existing recovery copy or an existing marker |
+| `app/prototype-pane-status/run-experiment-a.js` | Sidecar refusal; **no token printing**; child-env launcher; test-only path overrides |
+| `app/prototype-pane-status/pane-status-boundary.test.js` | +22 — the six-step interrupted-install fixture |
+| `app/main.js` | Version discovery + propagation; gate token forwarded; **release on spawn failure** |
+| `app/preload.js` | Pane-status bridge moved out of `cc` and behind the forwarded gate token |
+| `app/renderer/app.js` | Subscribes through the gated bridge; unreachable reattach global removed |
+| `app/renderer/pane-status-badge.js` | Global published only behind the bridge |
+| `app/renderer/pane-status-badge.test.js` | +3 — gate-off/gate-on global behaviour |
+| `app/launcher-fence-invariant.test.js` | **Re-pinned again, see § 3** |
+| `app/dockview-default-path.test.js` | **Re-pinned, see § 3** |
+| `app/package.json` | Three suites added to the gate chain |
+| `docs/PROTOTYPE-EVIDENCE-pane-status-claude-hook.md` | Corrected throughout |
 
-No dependency, lockfile, script, GitHub configuration, `AGENTS.md`, or PowerShell file changed. The
-procurement record was **not** touched.
+No dependency, lockfile, GitHub configuration, `AGENTS.md`, or PowerShell file changed. **The
+procurement record was not touched.**
 
-## 3. Security-sensitive surfaces
+---
 
-**Transport — a main-owned Windows named pipe.** Not terminal output (§ 8 threat 1: pane content can
-forge anything a pane can print). Not TCP, not even loopback — creating a network listener is an
-explicit kill criterion, and a loopback socket is reachable by every process on the machine. Unique
-pipe name per app run. Bounds: 512 B/message, 4 KiB/connection, 4 messages/connection, 8 concurrent
+## 3. Tripwires re-pinned again — read this first
+
+**`launcher-fence-invariant.test.js`.** Exactly one region moved in revision 2.
+
+| Region | Rev 1 | Rev 2 | Why |
+| --- | --- | --- | --- |
+| fenced-role cwd gate | 1354 B / `ae9dce92…` | **unchanged** | Never touched in either revision |
+| ptyEnv block | 236 B / `cd100743…` | **unchanged** | Revision 2 did not alter the PTY environment |
+| pty-start handler | 8714 → 9289 B | **9913 B / `67cb161c…`** | The `pty.spawn` **failure path** now releases the prototype enrolment (finding 8) |
+
+All prior hashes are retained in-file. New content assertions pin the *behaviour* so a future re-pin
+cannot drop it: the spawn-failure release is asserted inside the catch block, `setObservedVersion` must
+be called, and `createPaneStatusPrototype` must not hard-code `observedVersion`.
+
+**`dockview-default-path.test.js`.** `additionalArguments` was a single ternary and is now a spread
+list, because the prototype forwards its own gate token the same way. The old pin is retained in a
+comment. The replacement is **stronger than a shape match**: it asserts that *every* entry is
+conditional, so "the production path forwards an empty list" survives future additions rather than
+having to be re-argued. Script-tag count is unchanged at 22.
+
+---
+
+## 4. The decision not to add `2.1.220`
+
+Blue Helm resolves `C:\Users\levij\.local\bin\claude.exe`, version **2.1.220**. The work order permits
+adding it to `SUPPORTED_CLAUDE_VERSIONS` **only if** the remaining live run exercises that exact binary
+and confirms the required hook behaviour. That run did not happen (§ 11), so **`2.1.220` was not
+added** and the list remains `['2.1.196']`.
+
+**Consequence, stated plainly: on Blue's machine today the badge will read `unknown
+(version-mismatch)`, and main surfaces a visible `main-error` explaining why.** That is the designed
+fail-closed behaviour for an unexercised provider build. It is not a claim that the feature works, and
+it is not a defect — it is the honest state until someone exercises 2.1.220.
+
+---
+
+## 5. Security-sensitive surfaces (corrected)
+
+**Transport.** A main-owned Windows named pipe. Not terminal output, not TCP, not loopback. Unique
+name per app run. Bounds: 512 B/message, 4 KiB/connection, 4 messages/connection, 8 concurrent
 connections, 5 s idle timeout.
 
-**Token.** 32 CSPRNG bytes as hex, minted in main, held only in main's memory, delivered only into the
-single enrolled pane's process environment. Never in argv, a log line, a file, the renderer, Claude's
-settings, or a persistent user variable. **No `setx`.** Compared with `crypto.timingSafeEqual` on
-length-checked buffers.
+**Token — corrected claim.** 32 CSPRNG bytes as hex, minted in main, held only in main's memory,
+delivered only into the single enrolled pane's process environment. Never in argv, a log line, a file,
+the renderer, Claude's settings, a persistent user variable, **or any console**. No `setx`. Compared
+with `crypto.timingSafeEqual`.
 
-**Credential scrub.** `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` is unchanged and unweakened. The
-fenced-role cwd gate in `pty-start` is **byte-for-byte identical** to the reviewed base.
+**It authenticates possession of the pane environment, NOT reporter identity.** Every descendant of the
+pane's PTY inherits the pipe name and token, so a model-invoked shell command, an MCP server, or
+another hook can forge an allowlisted event. The named pipe removes **accidental** forgery via visible
+terminal output; it does **not** prevent **deliberate** forgery from inside the pane. Recorded as an
+**unresolved production blocker** and a **negative security result** — see evidence § 5.1.
 
-**Renderer boundary.** One receive-only channel. No `invoke()` counterpart exists, so the renderer
-cannot request status, enroll a pane, or reach the transport. The view object has exactly four fields
-and no room for a token.
+**Credential scrub.** `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` unchanged and unweakened. The fenced-role
+cwd gate is byte-for-byte identical to the reviewed base across both revisions.
 
-**Claude configuration.** The application has **no** authority to edit it: `main.js` does not import
-the settings guard, and a test asserts that. The temporary change was made by a builder-operated
-script with a proven byte-identical restore.
+**Renderer boundary.** One receive-only channel, and it exists **only when the gate is on**. No
+`invoke()` counterpart. The view object has exactly four fields and no room for a token.
 
-## 4. Two deliberate tripwires were re-pinned — read this first
+**Claude configuration.** The application still has **no** authority to edit it: `main.js` imports
+neither the settings guard nor the runner, and tests assert both.
 
-Both exist to fail when someone changes a protected region, so a human decides. Both fired. Both are
-re-pinned **with the old values retained in-file** and with new content assertions that survive any
-future re-pin.
+---
 
-**`launcher-fence-invariant.test.js`** — pins `pty-start` regions by SHA-256.
-
-| Region | Before | After | Why |
-| --- | --- | --- | --- |
-| fenced-role cwd gate | 1354 B / `ae9dce92…` | **1354 B / `ae9dce92…` — UNCHANGED** | Not touched at all |
-| ptyEnv block | 213 B / `b83cd467…` | 236 B / `cd100743…` | One added spread: `...paneStatusEnv` |
-| pty-start handler | 8714 B / `21c9ab2f…` | 9289 B / `abe919c4…` | That spread, its comment, and the line computing it |
-
-The env is the **only** channel that can carry the pipe name and token to the hook child; argv, a file,
-a persistent variable and terminal output are all forbidden. So `pty-start` had to change. New
-assertions now check the *content* that matters — the scrub is present, is never set to a disabled
-value, the video-scout key injection is still video-scout-scoped, and `main.js` never writes a literal
-token — so a future re-pin cannot quietly drop the scrub along with the hash.
-
-**`dockview-default-path.test.js`** — pinned `index.html` at exactly 21 `<script src>` tags; now 22.
-The addition is named explicitly (`pane-status-badge.js`) and the file must still carry the procurement
-verdict string, so a *further* extra script fails here rather than riding in on this bump.
-
-## 5. Gates
+## 6. Gates — recounted per suite, not copied
 
 | Gate | Result |
 | --- | --- |
-| App gate (`npm test`) | **exit 0 — 49 chain entries, 3,390 assertions passed, 0 failed** |
-| Pester (`scripts\run-pester.ps1`) | **955 passed / 0 failed / 0 skipped** |
+| App gate (`npm test`) | **exit 0 — 52 chain entries, 3,636 assertions passed, 0 failed** |
+| Pester (`scripts\run-pester.ps1`) | **955 passed / 0 failed / 0 skipped** (35 suites, 107.9 s) |
 | `git diff --check` | clean |
 
-**Assertion reconciliation** — counted per suite, not copied:
+**Assertion reconciliation from revision 1's 3,390:**
 
 | Source | Δ |
 | --- | --- |
-| Baseline (pre-branch) | 3,099 |
-| `pane-status-boundary` (new) | +135 |
-| `pane-status-reporter` (new) | +106 |
-| `pane-status-badge` (new) | +42 |
-| `launcher-fence-invariant` 6 → 12 | +6 |
-| `dockview-default-path` 371 → 373 | +2 |
-| **Total** | **3,390** ✓ |
+| `pane-status-version` (new) | +68 |
+| `pane-status-integration` (new) | +74 |
+| `pane-status-runner` (new) | +72 |
+| `pane-status-boundary` 135 → 157 | +22 |
+| `dockview-default-path` 373 → 377 | +4 |
+| `launcher-fence-invariant` 12 → 15 | +3 |
+| `pane-status-badge` 42 → 45 | +3 |
+| **Total** | **3,390 + 246 = 3,636** ✓ |
 
-Chain entries 46 → 49. Pester is unchanged at 955 because no PowerShell file changed.
+Chain entries 49 → 52. Pester is unchanged at 955 because no PowerShell file changed.
 
-**A note on the worktree.** `git worktree add` does not copy the gitignored `app/node_modules`
-junction, so it had to be recreated before the app gate could run — the same step recorded on the
-V5c2b branch.
+---
 
-## 6. Runtime experiment — what happened
+## 7. Focused suites run
 
-Two model turns were used of the three authorized, in disposable temp directories, with content-free
-prompts ("Reply with exactly the word: ok").
+Main-process integration and version propagation (`pane-status-integration`); command
+resolution/version binding (`pane-status-version`); protocol/store/server and settings
+(`pane-status-boundary`); reporter privacy (`pane-status-reporter`); settings installation,
+interruption, refusal and restoration (`pane-status-boundary` + `pane-status-runner`); gate-on/gate-off
+application shape (`pane-status-integration`); spawn-failure release (`pane-status-integration` +
+`launcher-fence-invariant`); renderer badge lifecycle and Dockview identity (`pane-status-badge`);
+token absence across every output surface (`pane-status-runner`).
 
-* **Turn 1 (prototype pane).** `SessionStart → idle`, `UserPromptSubmit → working`, `Stop → turn
-  ended`, `SessionEnd → exited`. 4 accepted, 0 refused. Delivery 1 ms (min/median/max, n=4).
-* **Turn 2 (control).** A Claude session with **no** prototype variables, while the temporary hooks
-  were installed: **0 connections, 0 events, no reporter output**, exit 0. Blue's own sessions were
-  unaffected for the whole window.
+---
 
-**The decisive finding, and the one I most want a reviewer to look at.**
-`CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` did **not** block the hook child from inheriting the two
-`BLUE_HELM_*` variables. The work order anticipated the opposite and told me to stop and report
-blocked; that condition did not arise. But `main.js`'s own comments describe that flag as preventing
-exactly this for hook commands, the official settings documentation does not list the flag at all, and
-the hooks documentation states hooks inherit the parent environment with only `OTEL_*` excluded.
+## 8. Recommended review focus
 
-I am recording the narrow observation and **not** the broad conclusion: two `BLUE_HELM_*` variables
-reached a hook child. I did not test credential-shaped variables, Bash tool calls, or MCP servers.
-Any security reasoning resting on "hooks don't see the PTY environment" should be re-verified — as its
-own bounded task, which is **not** authorized here. See § 5 of the evidence document.
+1. **Finding 3's disposition.** Is recording provenance as a negative result the right call, or does
+   Blue want a separately specified trust boundary before anything else proceeds?
+2. **The § 4 decision.** Leaving 2.1.220 unsupported means the badge shows `unknown` on Blue's own
+   machine. Correct, or should the remaining turn be spent to change that?
+3. **The two re-pins in § 3**, and whether the new content assertions are strong enough.
+4. **`pane-status-version.js`** — is resolving through PowerShell *with the profile loaded* the right
+   fidelity/complexity trade, and is fail-closed genuinely fail-closed?
+5. **The settings refusals** — is refuse-and-tell-the-operator right, or should `install` offer an
+   automatic recovery path?
+6. **Evidence § 10** — are the RUNTIME / STRUCTURAL / NOT PERFORMED labels honest?
 
-**Settings.** Original 381 B / `b9f576bb…`, no `hooks` key. Patched (only `hooks` added, all five
-existing keys preserved), experiment run, restored to **381 B / `b9f576bb…` exact**, `hooks` absent on
-re-parse, recovery copy deleted only after restoration was proven.
+---
 
-**Not performed / unverified, stated plainly:** `Notification` (would need an interactive prompt I
-cannot drive, and forcing it would mean weakening permissions), `StopFailure` (forbidden to
-manufacture), and a **live Dockview drag** (no GUI automation hook — recorded as not performed, never
-as passed or failed). Dockview identity is proven synthetically against the real module.
-
-**No kill criterion fired** — all ten are enumerated with their outcome in § 10 of the evidence
-document.
-
-## 7. Recommended review focus
-
-1. **§ 4's two re-pins.** Are they justified, and are the new content assertions strong enough?
-2. **The privacy boundary.** `pane-status-reporter.js` builds a fresh object from one validated string
-   plus its own token — verify no path copies, spreads, or stringifies the input.
-3. **`envForPane()` in `pane-status-prototype.js`** — the only place a token leaves main.
-4. **The inert object.** Confirm the gate-off path genuinely has nothing behind it.
-5. **Wording.** `Stop` renders "turn ended". Assert nothing anywhere says finished/safe/exited-process.
-6. **The § 6 environment finding** — is my narrow phrasing narrow enough?
-
-## 8. Known limitations
+## 9. Known limitations
 
 * `Notification` and `StopFailure` unverified live; the live Dockview drag not performed.
+* **Nothing has been observed in the real Electron application.** The fix is proven by test through
+  main.js's own call shape; no Electron instance has rendered a badge.
+* **Every runtime observation is scoped to npm Claude Code 2.1.196**, which is not the executable Blue
+  Helm launches.
+* **Provider-upgrade behaviour is unverified** (a required Experiment A element).
 * n = 4 latency samples, one session, idle machine.
-* Exact-version pin (`2.1.196`); any other version degrades every pane to `unknown`.
 * `STALE_MS = 120000` is an unvalidated experiment value, marked `(?)`.
-* With `-NoExit` the PTY outlives the Claude process, so a pane can survive `SessionEnd`; the
-  prototype shows `exited` and does not age it out. Whether that is right for production is undecided.
-* The probe stands in for the Electron main process. It uses the real store, server and protocol, but
-  no Electron instance was launched, which is why the live drag is unperformed.
+* With `-NoExit` the PTY outlives the Claude process, so a pane can survive `SessionEnd`.
+* Reporter provenance is unresolved (§ 5).
 
-## 9. Commits and review artifact
+---
+
+## 10. Runtime experiment status
+
+**No model turn was consumed in revision 2.** Two of three authorized turns were spent in revision 1;
+**one remains**, held for § 11.
+
+Blue's Claude settings were **not touched** in revision 2. Verified read-only: `~/.claude/settings.json`
+is 382 B / `a67c2e66…` with the five original top-level keys, **no `hooks` key**, no prototype marker;
+`%TEMP%\blue-helm-pane-status-experiment` does not exist. Per the work order, the current file is
+treated as **user-owned state** and no attempt was made to restore it to the historical 381-byte hash.
+
+---
+
+## 11. HUMAN VERIFICATION STEP — for Blue, requiring the one remaining turn
+
+The final run needs a Dockview drag, and there is no GUI automation hook for one. Reporting it without
+Blue's own observation would repeat the error this review just failed the branch for. So it is handed
+over rather than guessed.
+
+**Decide first (§ 4):** the badge will read `unknown (version-mismatch)` until `2.1.220` is exercised.
+Either accept that and verify only the plumbing, or authorize adding `2.1.220` to
+`SUPPORTED_CLAUDE_VERSIONS` **as part of** this run so a real state can appear.
+
+**Before the run:** confirm `%TEMP%\blue-helm-pane-status-experiment` does not exist; confirm
+`~/.claude/settings.json` contains no `blue-helm-pane-status-prototype` marker; record its byte size
+and SHA-256 as the run's baseline; confirm no `*blue-helm-pane-status*` named pipe exists; run
+`node app/prototype-pane-status/run-experiment-a.js identity` (read-only) and
+`Get-Command claude` to confirm the executable — **without launching a model**.
+
+**The run:** `node app/prototype-pane-status/run-experiment-a.js install` (it will refuse if anything
+is left over — that is the fix from finding 4); set `BLUE_HELM_PANE_STATUS_PROTOTYPE=1`; start the app;
+open **one** Claude pane; send one content-free prompt (`Reply with exactly the word: ok`) requesting
+no permissions, secrets, files, tools, or repository content; **observe the badge**; then **drag the
+pane to another Dockview group and observe whether the badge state survives** — that is the
+observation only Blue can make, and it is kill-criterion 2.
+
+**After the run:** exit Claude cleanly; stop Electron;
+`node app/prototype-pane-status/run-experiment-a.js restore`; confirm byte-identical restoration
+against **the new baseline**; confirm `hooks` and the marker are absent; confirm no pipe, stray
+process, recovery file, or temp directory remains.
+
+**Do not consume a fourth turn.** If this cannot be completed in one, stop and request authorization.
+
+---
+
+## 12. Commits and review artifacts
 
 | Field | Value |
 | --- | --- |
-| **Reviewed tip** | `bf66fb3b9fad080d1ff92ed0815034e525a75740` |
+| Revision 1 reviewed tip | `bf66fb3b9fad080d1ff92ed0815034e525a75740` — `VERDICT: FAIL` |
+| Handoff-only tail (rev 1) | `f8cb64a391a969e51ecc379094ca02cc76c9ae81` |
+| **Revision 2 reviewed tip** | the corrective content commit — pinned in the tail commit below |
 | Branch tip | the handoff-only tail commit below |
-| Cumulative range | `3ff96bdea3e68a83cd5774c9b94b68d9cb292add...bf66fb3b9fad080d1ff92ed0815034e525a75740` |
-| Artifact | `.agent-review-pane-status-prototype-a-claude.diff` |
-| Shortstat | **22 files, 3,127 insertions, 7 deletions** |
-| Size | **174,128 bytes** |
-| SHA-256 | `eaad43a22aeacfc7de79f234e3805e7aaf56dd75e2de11854e42d5936aa42f89` |
+| Focused correction range | `f8cb64a3...<revision 2 reviewed tip>` |
+| Cumulative prototype range | `3ff96bde...<revision 2 reviewed tip>` |
 
-Created with `git diff --output` (never PowerShell redirection), gitignored via `.gitignore:33`,
-regenerated from its stated range inside this worktree and proven **byte-identical**, with the
-regeneration copy removed behind a filename-pattern guard. `git diff --check` is clean on the range.
+Artifact identities are pinned in the **handoff-only tail commit**, because a commit cannot state its
+own SHA. Two new artifacts, with new names:
 
-**Only 7 deletions across the whole branch**, and they are worth checking directly: they are the two
-re-pinned tripwire assertions (§ 4) and the lines they replaced. No existing behaviour was removed.
+* `.agent-review-pane-status-prototype-a-claude-rev2-focused.diff` — `f8cb64a3...<tip>`
+* `.agent-review-pane-status-prototype-a-claude-rev2-cumulative.diff` — `3ff96bde...<tip>`
 
-## 10. Reviewer verdict
+Both created with `git diff --output` (never PowerShell redirection), gitignored via `.gitignore:33`,
+regenerated from their stated ranges and proven **byte-identical**. **The original revision-1 artifact
+`.agent-review-pane-status-prototype-a-claude.diff` was neither altered nor regenerated.**
+`git diff --check` is clean on both ranges.
 
-**None yet** — stopped for a fresh independent **Full-class** review.
+---
+
+## 13. Reviewer verdict
+
+**None yet for revision 2** — stopped for a fresh independent **Full-class** review.
+
+Revision 1's verdict, retained verbatim: **`VERDICT: FAIL`** (1 Critical, 3 High, 4 Medium, 3 Low),
+recorded in § 1.
+
+**Note on independence:** the reviewer who produced revision 1's `VERDICT: FAIL` also performed this
+corrective work, at Blue's direction. The next review must therefore be carried out by a **different**
+reviewer for the independence requirement to hold.
 
 ## Review-diff rule
 
@@ -229,11 +311,19 @@ re-pinned tripwire assertions (§ 4) and the lines they replaced. No existing be
 
 ---
 
-**Authorized and performed:** bounded Experiment A — one Claude provider, one pane, a temporary
-reversible hook installation, and a bounded prototype display.
+**Authorized and performed in revision 2:** corrective work within bounded Experiment A — structural
+fixes, focused tests, settings-recovery tests, and evidence correction. No model turn was consumed.
 
 **Not authorized, and not done:** production specification or implementation, permanent hook
 installation, a second provider, a second status-enabled pane, Experiment B, any app-server listener /
 `codex --remote` / observer client, merge, and push.
+
+Explicitly:
+
+* **Experiment A correction only.**
+* **Reporter provenance remains unresolved unless independently proven.**
+* **Production pane-status implementation remains unauthorized.**
+* **Experiment B and app-server runtime testing remain unauthorized.**
+* **Nothing was merged or pushed.**
 
 **BLUE SUBSYSTEM VERDICT: PROTOTYPE**

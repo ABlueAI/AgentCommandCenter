@@ -158,8 +158,28 @@ process.stdout.write('\nthe layout decision is MAIN\'s, and the DEFAULT is Dockv
   // present ONLY in recovery mode.
   assert(/const CLASSIC_LAYOUT_RENDERER_ARG = '--cc-classic-layout';/.test(mainSrc),
     'the renderer-side token is a distinct string from the launch flag');
-  assert(/additionalArguments: classicLayoutEnabled \? \[CLASSIC_LAYOUT_RENDERER_ARG\] : \[\]/.test(mainSrc),
-    'main forwards the decision via additionalArguments, EMPTY on the production path');
+  // RE-PINNED (Experiment A revision 2), and not silently. `additionalArguments` was a single
+  // ternary; it is now a spread list because the pane-status PROTOTYPE forwards its OWN gate token
+  // the same way, so the preload can make its bridge ABSENT rather than inert when the gate is off.
+  //
+  // Old pin, retained so the reviewed base stays reproducible:
+  //   additionalArguments: classicLayoutEnabled ? [CLASSIC_LAYOUT_RENDERER_ARG] : []
+  //
+  // The replacement is stronger than a shape match: it asserts that EVERY entry is conditional, so
+  // "the production path forwards an empty list" survives any future addition instead of having to
+  // be re-argued each time.
+  assert(/additionalArguments:\s*\[/.test(mainSrc),
+    'main still forwards renderer-side decisions via additionalArguments');
+  assert(/\.\.\.\(classicLayoutEnabled \? \[CLASSIC_LAYOUT_RENDERER_ARG\] : \[\]\)/.test(mainSrc),
+    'the classic-layout token is present ONLY in recovery mode');
+  assert(/\.\.\.\(paneStatusPrototypeEnabled \? \[PANE_STATUS_RENDERER_ARG\] : \[\]\)/.test(mainSrc),
+    'the pane-status prototype token is present ONLY when its gate is on');
+  const addArgsBlock = mainSrc.slice(mainSrc.indexOf('additionalArguments: ['));
+  const addArgsEntries = addArgsBlock.slice(0, addArgsBlock.indexOf('],'))
+    .split('\n').map((l) => l.trim()).filter((l) => l.indexOf('...') === 0);
+  assert(addArgsEntries.length >= 2, 'both forwarded tokens are accounted for');
+  assert(addArgsEntries.every((l) => l.indexOf('?') !== -1 && l.indexOf(': [])') !== -1),
+    'EVERY additionalArguments entry is conditional, so the DEFAULT production path forwards an EMPTY list');
 }
 
 // ---------------------------------------------------------------------------

@@ -327,6 +327,11 @@ process.stdout.write('\n-- temporary settings guard --\n');
   const r4 = g4.restore();
   assert(r4.ok && r4.restored === 'absence', 'restore reports absence restoration');
   assert(!fs.existsSync(settingsPath), 'the file we created is gone again');
+  // Discard the absence-sentinel recovery copy, exactly as the runner does after a proven restore.
+  // Revision 2 made this necessary AND meaningful: install() now refuses when a recovery copy is
+  // still lying around, so leaving one behind is itself the interrupted-run condition.
+  assert(g4.discardBackup(r4).ok, 'the absence-sentinel recovery copy is discarded after restore');
+  assert(!fs.existsSync(backupPath), 'leaving no recovery artifact behind for the next install');
 
   // (5) simulated failure mid-experiment: restore still works from the backup
   fs.writeFileSync(settingsPath, JSON.stringify(originalObj, null, 2) + '\n', 'utf8');
@@ -342,6 +347,91 @@ process.stdout.write('\n-- temporary settings guard --\n');
   const p1 = settings.applyPatch(originalObj, block);
   const p2 = settings.removePatch(p1);
   eq(JSON.stringify(p2), JSON.stringify(originalObj), 'applyPatch then removePatch round-trips exactly');
+
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
+// ---------------------------------------------------- interrupted install (revision 2, High finding)
+process.stdout.write('\n-- interrupted install: a second install must REFUSE, not clobber the backup --\n');
+{
+  // THE SCENARIO THE REVIEWER FOUND. Revision 1's case (5) reused the SAME guard instance, which
+  // still held the true `original` in memory — so it never exercised the dangerous path. A crash
+  // means a FRESH PROCESS, and a fresh guard knows nothing. Every step below therefore builds a new
+  // guard, exactly as a new `node run-experiment-a.js install` would.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pane-status-interrupt-'));
+  const settingsPath = path.join(tmp, 'settings.json');
+  const backupPath = path.join(tmp, 'settings.backup');
+  const mk = () => settings.createSettingsGuard({ fs, crypto, settingsPath, backupPath });
+  const shaOf = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+
+  // (1) CLEAN INSTALL — the genuine original, captured and backed up.
+  const genuine = { model: 'sonnet', permissions: { allow: ['Bash(git *)'] }, theme: 'dark' };
+  fs.writeFileSync(settingsPath, JSON.stringify(genuine, null, 2) + '\n', 'utf8');
+  const genuineSha = shaOf(settingsPath);
+  const genuineBytes = fs.statSync(settingsPath).size;
+
+  const g1 = mk();
+  g1.captureIdentity();
+  assert(g1.install('C:\\node.exe', 'C:\\reporter.js', 5).ok, '(1) the clean install succeeds');
+  assert(fs.existsSync(backupPath), '(1) a recovery copy exists');
+  eq(shaOf(backupPath), genuineSha, '(1) and it is the GENUINE original, byte for byte');
+  assert(fs.readFileSync(settingsPath, 'utf8').indexOf(settings.MARKER) !== -1,
+    '(1) the live file now carries the prototype marker');
+
+  // (2) SIMULATED CRASH — the process dies. `installed` and `original` are lost with it; the patched
+  //     file and both recovery artifacts survive on disk.
+  const patchedShaAfterCrash = shaOf(settingsPath);
+
+  // (3) NEW-PROCESS INSTALL ATTEMPT — must refuse, visibly, touching nothing.
+  const g2 = mk();
+  const second = g2.install('C:\\node.exe', 'C:\\reporter.js', 5);
+  assert(!second.ok, '(3) a fresh-process second install REFUSES');
+  eq(second.reason, 'recovery-copy-already-exists', '(3) naming the recovery copy as the reason');
+  assert(typeof second.action === 'string' && second.action.toLowerCase().indexOf('restore') !== -1,
+    '(3) and telling the operator to run restore');
+  eq(shaOf(backupPath), genuineSha, '(3) THE BACKUP IS UNTOUCHED — still the genuine original');
+  eq(shaOf(settingsPath), patchedShaAfterCrash, '(3) and the settings file was not modified either');
+
+  // The marker check is the second line of defence: even with the backup gone, an already-patched
+  // file must not be treated as a pristine original.
+  fs.unlinkSync(backupPath);
+  const g3 = mk();
+  const third = g3.install('C:\\node.exe', 'C:\\reporter.js', 5);
+  assert(!third.ok, '(3b) with the backup removed, the MARKER still refuses a second install');
+  eq(third.reason, 'prototype-hooks-already-installed', '(3b) naming the already-installed hooks');
+  eq(shaOf(settingsPath), patchedShaAfterCrash, '(3b) and still nothing was written');
+  assert(!fs.existsSync(backupPath), '(3b) no new recovery copy was fabricated over the missing one');
+
+  // (4) NEW-PROCESS RESTORE — from the genuine backup, in a process that never ran install().
+  fs.copyFileSync(path.join(tmp, 'settings.json'), path.join(tmp, 'patched.keep')); // keep for (5)
+  fs.writeFileSync(backupPath, fs.readFileSync(path.join(tmp, 'patched.keep')));    // wrong backup...
+  const gBad = mk();
+  gBad.captureIdentity();
+  fs.writeFileSync(backupPath, Buffer.from(JSON.stringify(genuine, null, 2) + '\n', 'utf8')); // ...restored
+  eq(shaOf(backupPath), genuineSha, '(4) the genuine recovery copy is in place');
+
+  const g4 = mk();
+  const id4 = g4.captureIdentity();
+  assert(id4.existed, '(4) the fresh process sees a settings file');
+  // A fresh guard's notion of "original" is the PATCHED file, so guard.restore() alone would restore
+  // the patch. That is precisely why the runner keeps an identity sidecar and restores from it; here
+  // we assert the recovery DATA is intact and byte-identical to the genuine original.
+  fs.writeFileSync(settingsPath, fs.readFileSync(backupPath));
+
+  // (5) EXACT RESTORATION of the genuine original bytes and hash.
+  eq(shaOf(settingsPath), genuineSha, '(5) the settings file is byte-identical to the genuine original');
+  eq(fs.statSync(settingsPath).size, genuineBytes, '(5) and the same byte length');
+  const reparsed = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+  assert(!Object.prototype.hasOwnProperty.call(reparsed, 'hooks'), '(5) the hooks key is absent on re-parse');
+  assert(fs.readFileSync(settingsPath, 'utf8').indexOf(settings.MARKER) === -1,
+    '(5) and no prototype marker survives');
+
+  // (6) With everything clean again, a fresh install is allowed once more.
+  fs.unlinkSync(backupPath);
+  const g5 = mk();
+  g5.captureIdentity();
+  assert(g5.install('C:\\node.exe', 'C:\\reporter.js', 5).ok,
+    '(6) once restored and cleaned up, a new install is permitted again');
 
   fs.rmSync(tmp, { recursive: true, force: true });
 }

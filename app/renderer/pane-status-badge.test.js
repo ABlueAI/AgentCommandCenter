@@ -171,7 +171,26 @@ process.stdout.write('\n-- renderer module discipline --\n');
     'the module is wrapped in the ((global) => {...}) IIFE required for classic renderer scripts');
   assert(src.indexOf('\nconst ') === -1 || src.trim().indexOf('((global)') === 0,
     'no bare top-level const escapes into the shared renderer global scope');
-  assert(typeof globalThis.ccPaneStatusBadge === 'object', 'it publishes exactly one global: ccPaneStatusBadge');
+  // REVISION 2: the global is GATED. Requiring this file in a plain node process — which is exactly
+  // what an ungated renderer looks like — must publish NOTHING, because the work order requires the
+  // prototype surface to be ABSENT when disabled rather than inert. `module.exports` stays
+  // unconditional so this suite can still exercise the pure functions.
+  eq(typeof globalThis.ccPaneStatusBadge, 'undefined',
+    'GATE OFF: requiring the module publishes no ccPaneStatusBadge global');
+  assert(typeof badgeMod.createPaneStatusBadge === 'function',
+    'while module.exports still carries the API for tests');
+  assert(/if \(global\.ccPaneStatus && global\.ccPaneStatus\.enabled === true\) global\.ccPaneStatusBadge/.test(src),
+    'and the global is published only behind the preload-exposed prototype bridge');
+
+  const badgePath = require.resolve('./pane-status-badge.js');
+  delete require.cache[badgePath];
+  globalThis.ccPaneStatus = { enabled: true };
+  require(badgePath);
+  eq(typeof globalThis.ccPaneStatusBadge, 'object',
+    'GATE ON: with the bridge present it publishes exactly one global');
+  delete globalThis.ccPaneStatus;
+  delete globalThis.ccPaneStatusBadge;
+  delete require.cache[badgePath];
 }
 
 process.stdout.write(`\npane-status-badge: ${passed} passed, ${failed} failed\n`);

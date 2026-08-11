@@ -39,22 +39,34 @@ function sha(s) { return crypto.createHash('sha256').update(s, 'utf8').digest('h
 // pipe name and pane token is that pane's process environment — the alternatives (argv, a file, a
 // persistent user variable, terminal output) are all forbidden by the work order, and rightly.
 //
-// What changed, exactly:
+// What changed in REVISION 1, exactly:
 //   * `ptyEnv block`      213 -> 236 bytes. ONE added spread: `...paneStatusEnv`, which is `{}` for
 //                         every pane unless the prototype gate is set AND that pane is the single
 //                         enrolled Claude pane.
 //   * `pty-start handler` 8714 -> 9289 bytes. The same spread, its comment, and the one line that
 //                         computes `paneStatusEnv`.
 //
-// What did NOT change, and is the reason this re-pin is safe to accept:
+// RE-PINNED AGAIN for REVISION 2, after a Full-class VERDICT: FAIL. Exactly one region moved again:
+//   * `pty-start handler` 9289 -> 9913 bytes. The ONLY change is in the `pty.spawn` FAILURE path: it
+//                         now calls `paneStatus.releasePane(id)` (plus its comment). `envForPane`
+//                         enrols the pane and mints its token BEFORE the spawn is attempted, so a
+//                         failed spawn used to strand the single Experiment A slot — under classic
+//                         layout the renderer never cleans it up, and every later Claude pane
+//                         silently got no status until the app restarted. Enrolment is taken in main,
+//                         so it is handed back in main.
+//   * `ptyEnv block`      236 bytes — UNCHANGED from revision 1. The environment handed to a PTY was
+//                         not touched by revision 2 at all.
+//
+// What did NOT change across EITHER revision, and is the reason these re-pins are safe to accept:
 //   * `fenced-role cwd gate` — byte-for-byte IDENTICAL, same length, same hash as the reviewed base.
-//     The credential/fence containment logic was not touched at all.
+//     The credential/fence containment logic has never been touched.
 //   * `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'` is still set on every PTY, unchanged and unweakened.
 //     Asserted separately below so it cannot be lost in a future re-pin.
 //
-// Pre-prototype hashes, retained so the reviewed base stays reproducible:
-//   ptyEnv block      213  b83cd467dc52406d7c402d89864f39f3bc71639516987ff2768902de273c0820
-//   pty-start handler 8714 21c9ab2fc8be096a2be0ec0609070ac74c2d94a5fc6125c2b16e2b3f3e45e421
+// Prior hashes, retained so every reviewed base stays reproducible:
+//   ptyEnv block      213  b83cd467dc52406d7c402d89864f39f3bc71639516987ff2768902de273c0820  (base)
+//   pty-start handler 8714 21c9ab2fc8be096a2be0ec0609070ac74c2d94a5fc6125c2b16e2b3f3e45e421  (base)
+//   pty-start handler 9289 abe919c44da95b76df1cc5b4547aad5ccba83a24c4c3ab1d0f77f2e6454d4d53  (rev 1)
 // ---------------------------------------------------------------------------------------------
 
 // Region definitions: [name, startAnchor, endAnchor, expected byte length, expected sha256].
@@ -77,8 +89,8 @@ const REGIONS = [
     name: 'pty-start handler',
     start: "ipcMain.handle('pty-start', (_e, opts) => {",
     end: "ipcMain.on('pty-write'",
-    len: 9289,
-    sha: 'abe919c44da95b76df1cc5b4547aad5ccba83a24c4c3ab1d0f77f2e6454d4d53',
+    len: 9913,
+    sha: '67cb161c6dea42ca9b8be3bc87f783e264a7cab8d73607cdd0d79747fbba8c73',
   },
 ];
 
@@ -105,6 +117,18 @@ assert(src.indexOf('const paneStatusEnv = paneStatus.envForPane(opts);') !== -1,
   'the pane-status prototype env is computed through the gated envForPane()');
 assert(!/BLUE_HELM_PANE_STATUS_TOKEN\s*:/.test(src),
   'main.js never writes a literal pane-status token into ptyEnv (the store mints it)');
+// Revision 2 content assertions — the reason THIS re-pin happened, pinned as behaviour so the next
+// re-pin cannot quietly drop them along with the hash.
+{
+  const failTail = src.slice(src.indexOf('pty-start: pty.spawn FAILED'));
+  const failBlock = failTail.slice(0, failTail.indexOf('return { ok: false'));
+  assert(failBlock.indexOf('paneStatus.releasePane(id)') !== -1,
+    'a failed pty.spawn releases the pane-status enrolment in main\'s own failure path');
+}
+assert(src.indexOf('paneStatus.setObservedVersion(') !== -1,
+  'main.js feeds a DISCOVERED provider version into the prototype (never a hard-coded one)');
+assert(!/createPaneStatusPrototype\(\{[\s\S]{0,400}?observedVersion/.test(src),
+  'and never hard-codes observedVersion at construction');
 
 process.stdout.write(`\nlauncher-fence-invariant: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

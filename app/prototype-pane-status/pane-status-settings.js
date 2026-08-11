@@ -10,8 +10,11 @@
 // callers are this module's test and the experiment runner script.
 //
 // What it guarantees, in order:
+//   0. An install is REFUSED outright if a recovery copy already exists, or if the settings file
+//      already carries this prototype's marker — the interrupted-run case (revision 2, see install()).
 //   1. Identity of the original file is captured (existence, byte length, sha256) BEFORE any write.
-//   2. A byte-for-byte recovery copy exists before the first mutation.
+//   2. A byte-for-byte recovery copy exists before the first mutation, and an EXISTING recovery copy
+//      is never overwritten.
 //   3. The patch ADDS hook entries and preserves every existing key and every existing hook.
 //   4. A malformed settings file is REFUSED, never overwritten.
 //   5. Restore puts back the exact original bytes — or the original ABSENCE — and proves it by hash.
@@ -155,6 +158,40 @@ function createSettingsGuard(deps) {
    */
   function install(nodeExe, reporterPath, timeoutSeconds) {
     if (installed) return { ok: false, reason: 'already-installed' };
+
+    // ---------------------------------------------------------------------------------------------
+    // REVISION 2 — THE DEFECT THIS BLOCK EXISTS TO PREVENT (Full-class VERDICT: FAIL, High).
+    //
+    // `installed` is in-memory only. If a previous run was interrupted after patching — a crash,
+    // Ctrl-C, a reboot — the settings file is already patched and the recovery artifacts still sit in
+    // %TEMP%. A FRESH process knew none of that: it captured the identity of the ALREADY-PATCHED
+    // file, copied that over the genuine backup, and the `sha256Of(backup) === original.sha256` check
+    // passed because both sides were now the patched hash. A later restore then "proved" restoration
+    // to the patched file and deleted the recovery copy. Blue's real settings would have been left
+    // carrying the experiment's hooks — twice, since applyPatch appends — with the tooling reporting
+    // byte-identical success.
+    //
+    // So: refuse before touching ANYTHING if a recovery artifact or a previous patch is present. A
+    // refusal is recoverable; a clobbered backup is not. The operator is told to run restore.
+    // ---------------------------------------------------------------------------------------------
+    if (fs.existsSync(backupPath)) {
+      return {
+        ok: false,
+        reason: 'recovery-copy-already-exists',
+        action: 'A recovery copy from an earlier run is present. Run `restore` first — installing now would overwrite it.',
+      };
+    }
+    if (fs.existsSync(settingsPath)) {
+      const existingText = fs.readFileSync(settingsPath).toString('utf8');
+      if (existingText.indexOf(MARKER) !== -1) {
+        return {
+          ok: false,
+          reason: 'prototype-hooks-already-installed',
+          action: 'The settings file already carries this prototype marker from an earlier run. Run `restore` first.',
+        };
+      }
+    }
+
     if (!original) captureIdentity();
 
     let originalObj = {};

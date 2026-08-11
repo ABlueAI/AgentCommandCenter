@@ -24,6 +24,12 @@ const reporter = require('./pane-status-reporter');
 
 const GATE_ENV = 'BLUE_HELM_PANE_STATUS_PROTOTYPE';
 const RENDERER_CHANNEL = 'pane-status-prototype';
+// Forwarded into the preload's argv at window construction (the same mechanism `--cc-classic-layout`
+// uses) so the PRELOAD can decide whether the prototype bridge exists at all. Renderer script cannot
+// add, remove, or forge a process argument, so this is a decision main makes and the renderer obeys.
+// Revision 2: without this the preload method, the renderer subscription and the badge global existed
+// unconditionally, which contradicted "gate off means absent".
+const RENDERER_ARG = '--blue-helm-pane-status-prototype';
 
 /** The one gate. Exact string '1' — not truthiness, so a stray empty string cannot enable it. */
 function isPrototypeEnabled(env) {
@@ -53,6 +59,10 @@ function createInertPrototype() {
     metrics() { return null; },
     stats() { return { enabled: false }; },
     pipeName() { return null; },
+    // Present so a caller that discovers a version never has to null-check the gate, and inert so a
+    // discovered version cannot bring anything to life behind a disabled gate.
+    setObservedVersion() { return false; },
+    observedVersion() { return null; },
   };
 }
 
@@ -152,6 +162,26 @@ function createPaneStatusPrototype(deps) {
       if (released) send(RENDERER_CHANNEL, { paneId, state: 'unknown', reason: 'released', prototype: true });
       return released;
     },
+    /**
+     * Record the provider version discovered against the executable the pane actually launches.
+     *
+     * Discovery is asynchronous (it costs a PowerShell profile load), so it can land before OR after
+     * the pane enrolls. Both orders must work, which is why the store reads `observedVersion` at
+     * view time rather than caching a resolved state: setting it here immediately governs every
+     * later delivered event, heartbeat tick and renderer update. A pane that enrolled while the
+     * version was still unknown is refreshed right now, so the badge corrects itself rather than
+     * waiting for the next hook event.
+     *
+     * A null/failed discovery is recorded as null, which keeps the badge at `unknown` — never
+     * "assume compatible".
+     */
+    setObservedVersion(version) {
+      store.setObservedVersion(version);
+      const paneId = store.enrolledPaneId();
+      if (paneId) send(RENDERER_CHANNEL, store.viewFor(paneId));
+      return store.versionSupported();
+    },
+    observedVersion: () => store.stats().observedVersion,
     viewFor: (paneId) => store.viewFor(paneId),
     enrolledPaneId: () => store.enrolledPaneId(),
     metrics: () => server.metrics(),
@@ -164,6 +194,7 @@ function createPaneStatusPrototype(deps) {
 const api = {
   GATE_ENV,
   RENDERER_CHANNEL,
+  RENDERER_ARG,
   isPrototypeEnabled,
   isEligibleClaudePane,
   createInertPrototype,

@@ -41,7 +41,14 @@ const { createTrustedSenderGate } = require('./trusted-ipc-sender');
 // "BLUE SUBSYSTEM VERDICT: PROTOTYPE". Requiring this module is inert: with the gate env var unset,
 // createPaneStatusPrototype() returns an object whose every method is a no-op, so no pipe, token, IPC
 // channel, badge, or PTY environment change exists. See prototype-pane-status/pane-status-prototype.js.
-const { createPaneStatusPrototype } = require('./prototype-pane-status/pane-status-prototype');
+const {
+  createPaneStatusPrototype,
+  isPrototypeEnabled: paneStatusPrototypeGateOn,
+  RENDERER_ARG: PANE_STATUS_RENDERER_ARG,
+} = require('./prototype-pane-status/pane-status-prototype');
+// Revision 2: discovers the Claude version FROM THE EXECUTABLE THIS FILE LAUNCHES. Revision 1 shipped
+// no discovery at all, so every badge resolved to `unknown/version-mismatch` in the real application.
+const { createClaudeVersionResolver } = require('./prototype-pane-status/pane-status-version');
 // K8 media-permission boundary: both session permission handlers come from this pure,
 // dependency-free, unit-tested module (media-permission-policy.test.js). A grant requires
 // the trusted window's main frame + the exact entry document + audio-only proof; every
@@ -100,6 +107,11 @@ const classicLayoutEnabled = process.argv.includes(CLASSIC_LAYOUT_FLAG);
 // Dockview is the production engine: everything Dockview-related is gated on this, and it is true
 // unless the operator explicitly asked for recovery mode.
 const dockviewLayoutEnabled = !classicLayoutEnabled;
+// EXPERIMENT A (PROTOTYPE) gate, read ONCE here because the window is constructed before the
+// prototype object is, and the preload's shape has to be decided at construction time. Same posture
+// as `classicLayoutEnabled`: main decides, the renderer is told, and renderer script cannot forge a
+// process argument to flip it.
+const paneStatusPrototypeEnabled = paneStatusPrototypeGateOn(process.env);
 
 // ---- tunable defaults (marked ? — change to taste) --------------------------
 const DEFAULT_PROJECTS_ROOT = 'D:\\Workspace';            // (?) where your git repos live
@@ -266,7 +278,16 @@ function createWindow() {
       // additionalArguments is set at window construction by the main process, so renderer script
       // cannot add, remove, or forge it. Empty array = production Dockview; the token is present
       // ONLY when the operator launched recovery mode.
-      additionalArguments: classicLayoutEnabled ? [CLASSIC_LAYOUT_RENDERER_ARG] : [],
+      //
+      // EXPERIMENT A (PROTOTYPE) adds a SECOND independent token, present only when the prototype
+      // gate is on. The preload uses it to decide whether the pane-status bridge exists at all —
+      // with the gate off there is no preload method, no renderer subscription and no badge global,
+      // rather than an inert one. The two tokens are separate strings and neither can be derived
+      // from the other.
+      additionalArguments: [
+        ...(classicLayoutEnabled ? [CLASSIC_LAYOUT_RENDERER_ARG] : []),
+        ...(paneStatusPrototypeEnabled ? [PANE_STATUS_RENDERER_ARG] : []),
+      ],
     },
   });
   win.loadFile(ENTRY_PATH);
@@ -359,6 +380,36 @@ app.whenReady().then(() => {
       console.error(msg);
       if (win && !win.isDestroyed()) win.webContents.send('main-error', msg);
     }
+    // REVISION 2 — the defect that made revision 1 unreachable in the real app. Discover the Claude
+    // version FROM THE SAME EXECUTABLE a pane launches: `AGENT_CMD.claude` resolved by PowerShell
+    // with the PTY's own environment, never a guessed path and never another installation's package
+    // metadata. Asynchronous, because it costs a PowerShell profile load and must not delay startup;
+    // the store reads the version at view time, so a later answer governs every subsequent event,
+    // heartbeat tick and renderer update, and any pane that already enrolled is refreshed.
+    //
+    // FAIL-CLOSED: a resolution failure, an erroring version command, an unparsable string or a
+    // timeout all leave the version null, which keeps every badge at `unknown` with a visible
+    // reason. It never assumes compatibility.
+    createClaudeVersionResolver({
+      execFile: require('child_process').execFile,
+      env: process.env,
+      commandName: AGENT_CMD.claude,
+      log: (line) => tlog(line),
+    }).discover().then((found) => {
+      const supported = paneStatus.setObservedVersion(found.ok ? found.version : null);
+      if (!found.ok) {
+        const msg = `[pane-status] PROTOTYPE could not establish the Claude version (${found.reason}) — panes stay "unknown".`;
+        console.error(msg);
+        if (win && !win.isDestroyed()) win.webContents.send('main-error', msg);
+        return;
+      }
+      if (!supported) {
+        // Not an error — the honest, designed outcome. The badge says `unknown` and explains why.
+        const msg = `[pane-status] PROTOTYPE: Claude ${found.version} at ${found.source} is not a version this prototype was exercised against — panes stay "unknown" (version-mismatch).`;
+        console.error(msg);
+        if (win && !win.isDestroyed()) win.webContents.send('main-error', msg);
+      }
+    });
   }
 
   // V5b2 Library/report read boundary — same trust anchors (canonical ENTRY_URL + the late-bound
@@ -987,6 +1038,13 @@ ipcMain.handle('pty-start', (_e, opts) => {
     });
   } catch (e) {
     tlog(`pty-start: pty.spawn FAILED: ${e.message}`);
+    // EXPERIMENT A: `envForPane` above ENROLLED this pane and minted its token before the spawn was
+    // attempted. No process exists to report status, so main must hand the single Experiment A slot
+    // back here — where it was taken — rather than relying on renderer cleanup. Revision 1 leaked the
+    // slot on this path: under Dockview the renderer's close path happened to release it, but in
+    // CLASSIC layout a failed start only logs, so the slot stayed bound to a pane with no process and
+    // every later Claude pane silently got no status until the app restarted.
+    paneStatus.releasePane(id);
     if (win && !win.isDestroyed()) win.webContents.send('pty-exit', { id });
     return { ok: false, error: String((e && e.message) || e) };
   }

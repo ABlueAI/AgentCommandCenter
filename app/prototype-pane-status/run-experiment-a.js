@@ -15,6 +15,18 @@
 //
 // The install path writes an identity sidecar so `restore` works even from a fresh process — a
 // crashed experiment must still be recoverable.
+//
+// REVISION 2, after a Full-class VERDICT: FAIL. That recoverability claim was FALSE for the case it
+// names. A second `install` from a fresh process used to overwrite both the sidecar and the backup
+// with already-patched state, destroying the only record of the genuine original. Install now
+// REFUSES — without touching settings, sidecar or backup — if a sidecar exists, if a recovery copy
+// exists, or if the settings file already carries the prototype marker, and tells the operator to
+// run `restore`. Recovery artifacts are never overwritten, only created once and deleted after a
+// proven byte-identical restoration.
+//
+// Also revision 2: NO command prints the bearer token. `listen` used to print it for a manual
+// copy/paste launch; it now hands the prototype variables to a child process's environment via
+// EXPERIMENT_CHILD_ARGV and prints only the variable names.
 
 const crypto = require('crypto');
 const fs = require('fs');
@@ -26,8 +38,12 @@ const serverMod = require('./pane-status-server');
 const { createPaneStatusStore } = require('./pane-status-store');
 const protocol = require('./pane-status-protocol');
 
-const SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json');
-const WORK_DIR = path.join(os.tmpdir(), 'blue-helm-pane-status-experiment');
+// Paths. The two overrides exist so the test suite can exercise EVERY command mode — including the
+// refusal and restore paths — against a disposable temp tree instead of Blue's real `~/.claude`.
+// They are read only by this builder-operated script; `app/main.js` does not import this file and a
+// test asserts that, so no application code path can be redirected by them.
+const SETTINGS_PATH = process.env.EXPERIMENT_SETTINGS_PATH || path.join(os.homedir(), '.claude', 'settings.json');
+const WORK_DIR = process.env.EXPERIMENT_WORK_DIR || path.join(os.tmpdir(), 'blue-helm-pane-status-experiment');
 const BACKUP_PATH = path.join(WORK_DIR, 'claude-settings.backup');
 const IDENTITY_PATH = path.join(WORK_DIR, 'identity.json');
 const REPORTER_PATH = path.join(__dirname, 'pane-status-reporter.js');
@@ -49,19 +65,58 @@ function cmdIdentity() {
 }
 
 function cmdInstall() {
-  ensureWorkDir();
-  const g = guard();
-  const id = g.captureIdentity();
-  fs.writeFileSync(IDENTITY_PATH, JSON.stringify({ settingsPath: SETTINGS_PATH, ...id }, null, 2), 'utf8');
-  const res = g.install(process.execPath, REPORTER_PATH, 5);
-  if (!res.ok) {
-    process.stderr.write(`INSTALL REFUSED: ${res.reason}\n`);
+  // REVISION 2: refuse BEFORE writing the sidecar. Revision 1 overwrote `identity.json` with the
+  // identity of an already-patched file whenever an interrupted run was followed by a second
+  // `install`, destroying the record of the genuine original before the guard even ran. The sidecar
+  // is a recovery artifact like the backup, so it gets the same rule: never overwrite one, tell the
+  // operator to restore.
+  if (fs.existsSync(IDENTITY_PATH)) {
+    process.stderr.write('INSTALL REFUSED: identity-sidecar-already-exists\n');
+    process.stderr.write('An earlier run did not complete. Run `node run-experiment-a.js restore` first.\n');
+    process.stderr.write('Settings, identity sidecar and recovery copy were NOT modified.\n');
     process.exitCode = 1;
     return;
   }
+  ensureWorkDir();
+  const g = guard();
+  const res = g.install(process.execPath, REPORTER_PATH, 5);
+  if (!res.ok) {
+    process.stderr.write(`INSTALL REFUSED: ${res.reason}\n`);
+    if (res.action) process.stderr.write(`${res.action}\n`);
+    process.stderr.write('Settings, identity sidecar and recovery copy were NOT modified.\n');
+    process.exitCode = 1;
+    return;
+  }
+  // Written only AFTER a successful install, so a refusal can never leave a sidecar describing a
+  // file state that was never reached.
+  const id = res.original;
+  fs.writeFileSync(IDENTITY_PATH, JSON.stringify({ settingsPath: SETTINGS_PATH, ...id }, null, 2), 'utf8');
   process.stdout.write('INSTALLED. Structural change only (no settings contents shown):\n');
   process.stdout.write(JSON.stringify(res.change, null, 2) + '\n');
   process.stdout.write(JSON.stringify({ originalIdentity: id, backupPath: BACKUP_PATH }, null, 2) + '\n');
+}
+
+/**
+ * Emit the prototype environment INTO A CHILD, never onto a console.
+ *
+ * REVISION 2: `listen` used to print the pipe name and the bearer token to stdout for the operator to
+ * paste. That was a structural token-to-scrollback path — the reviewer counted it even though the
+ * live probe never invoked it — and kill-criterion 3 ("the token appears in logs, arguments, renderer
+ * state, or persistent storage") is only honestly answerable if no such path exists at all. The
+ * launcher below hands the values to the child through its environment and prints nothing but the
+ * variable NAMES.
+ */
+function spawnGatedChild(commandArgs, pipeName, token) {
+  const { spawn } = require('child_process');
+  const env = {
+    ...process.env,
+    CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1',
+    BLUE_HELM_PANE_STATUS_PROTOTYPE: '1',
+    BLUE_HELM_PANE_STATUS_PIPE: pipeName,
+    BLUE_HELM_PANE_STATUS_TOKEN: token,
+  };
+  process.stdout.write('Child launched with BLUE_HELM_PANE_STATUS_{PROTOTYPE,PIPE,TOKEN} in its environment (values not printed).\n');
+  return spawn(commandArgs[0], commandArgs.slice(1), { env, stdio: 'inherit', windowsHide: true });
 }
 
 function cmdRestore() {
@@ -123,12 +178,19 @@ function cmdListen() {
   });
   const started = srv.start();
   if (!started.ok) { process.stderr.write(`LISTEN FAILED: ${started.error}\n`); process.exitCode = 1; return; }
-  // These two lines are the ONLY place the token is printed, and only into the builder's own console
-  // for the manual launch step. It is never written to a file, a log, or Claude's settings.
-  process.stdout.write(`\nSet these in the Claude pane's environment, then launch claude there:\n`);
-  process.stdout.write(`  $env:BLUE_HELM_PANE_STATUS_PROTOTYPE='1'\n`);
-  process.stdout.write(`  $env:BLUE_HELM_PANE_STATUS_PIPE='${pipeName}'\n`);
-  process.stdout.write(`  $env:BLUE_HELM_PANE_STATUS_TOKEN='${token}'\n\n`);
+  // REVISION 2: NOTHING about the pipe name or the token is printed. A child that needs them is
+  // launched through spawnGatedChild(), which passes them in the environment. There is no operator
+  // copy/paste step any more, because that step required putting a bearer token on a console.
+  process.stdout.write('\nListener up. Prototype variables are handed to a child process only — never printed.\n');
+  if (process.env.EXPERIMENT_CHILD_ARGV) {
+    let argv = null;
+    try { argv = JSON.parse(process.env.EXPERIMENT_CHILD_ARGV); } catch { argv = null; }
+    if (Array.isArray(argv) && argv.length && argv.every((a) => typeof a === 'string')) {
+      spawnGatedChild(argv, pipeName, token);
+    } else {
+      process.stderr.write('EXPERIMENT_CHILD_ARGV was set but is not a JSON array of strings — no child launched.\n');
+    }
+  }
   const stopAfterMs = Number(process.env.EXPERIMENT_LISTEN_MS || 300000);
   setTimeout(() => {
     srv.stop();
