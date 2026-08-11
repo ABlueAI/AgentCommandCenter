@@ -1021,6 +1021,27 @@ handoff-tail policy exists precisely because a tail is trusted on its *shape* �
 document only — rather than on review. Conflating "accounted for" with "reviewed" would erode that
 distinction, which is the thing the policy is protecting.
 
+**Corrected closeout reviewed tip:** `37fb75b0d496055d3d8401b2f0e6ed1fd69e6a05`.
+
+**Closeout correction artifacts.** New filenames, so the original closeout artifact
+(`.agent-review-pane-status-source-scout-closeout.diff`, 20,213 bytes,
+`79609c8b…`) is **untouched** — confirmed by re-hashing it in place, and it was not regenerated.
+
+| | Range | Shortstat | Bytes | SHA-256 |
+| --- | --- | --- | ---: | --- |
+| Focused | `d414a00d0506b833aa826ce5e47075d45eacd43b...37fb75b0d496055d3d8401b2f0e6ed1fd69e6a05` | 1 file, **35 insertions, 2 deletions** | **3,775** | `25089c73f231f9fd5c803747fcf7df2adb6b14c203ff1890a060bcd957695568` |
+| Cumulative | `045be87973512ac532eee3868a3cc9b916f30ab0...37fb75b0d496055d3d8401b2f0e6ed1fd69e6a05` | 2 files, **305 insertions, 18 deletions** | **24,485** | `c74640f203e4d7d89ee6a66ea7c0838dc5b4879f80405e38413aac53d37c44ef` |
+
+Files: `.agent-review-pane-status-closeout-r2-corrections.diff` and
+`.agent-review-pane-status-closeout-r2-cumulative.diff`. Both created with `git diff --output` (never
+PowerShell redirection), both gitignored via `.gitignore:33`, both regenerated from their stated ranges
+inside this worktree and matched in exact byte count and SHA-256, with the regeneration copies removed
+behind a filename-pattern guard. `git diff --check` is clean on both ranges.
+
+The **focused** range touches exactly one tracked Markdown file — this handoff. The **cumulative** range
+still touches exactly the two intended Markdown files and no others, confirming
+`BLUE-HELM-MASTER-STATUS.md` was not modified by this correction.
+
 **Closeout review 2:** **none yet** — stopped for a focused independent Standard-class review.
 
 ---
