@@ -201,14 +201,20 @@ document.
 
 | Field | Value |
 | --- | --- |
-| Reviewed tip | recorded in the tail commit |
-| Branch tip | the handoff-only tail commit |
-| Cumulative range | `3ff96bdea3e68a83cd5774c9b94b68d9cb292add...<reviewed tip>` |
+| **Reviewed tip** | `bf66fb3b9fad080d1ff92ed0815034e525a75740` |
+| Branch tip | the handoff-only tail commit below |
+| Cumulative range | `3ff96bdea3e68a83cd5774c9b94b68d9cb292add...bf66fb3b9fad080d1ff92ed0815034e525a75740` |
 | Artifact | `.agent-review-pane-status-prototype-a-claude.diff` |
-| Shortstat / size / SHA-256 | recorded in the tail commit |
+| Shortstat | **22 files, 3,127 insertions, 7 deletions** |
+| Size | **174,128 bytes** |
+| SHA-256 | `eaad43a22aeacfc7de79f234e3805e7aaf56dd75e2de11854e42d5936aa42f89` |
 
 Created with `git diff --output` (never PowerShell redirection), gitignored via `.gitignore:33`,
-regenerated from its stated range and proven byte-identical.
+regenerated from its stated range inside this worktree and proven **byte-identical**, with the
+regeneration copy removed behind a filename-pattern guard. `git diff --check` is clean on the range.
+
+**Only 7 deletions across the whole branch**, and they are worth checking directly: they are the two
+re-pinned tripwire assertions (§ 4) and the lines they replaced. No existing behaviour was removed.
 
 ## 10. Reviewer verdict
 
