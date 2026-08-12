@@ -13,8 +13,16 @@ here are experiment choices, not production decisions.
 
 Branch: `feature/pane-status-prototype-a-claude`
 Base `main`: `3ff96bdea3e68a83cd5774c9b94b68d9cb292add`
-Experiment dates: **2026-08-11** (revisions 1–2) · **2026-08-12** (revision 3, the real-application run)
-Document revision: **3** (final), after revision 2 received an independent Full-class `VERDICT: PASS`
+Experiment dates: **2026-08-11** (revisions 1–2) · **2026-08-12** (revision 3, the real-application
+run; revision 4, the documentation-accuracy correction)
+Document revision: **4** — the documentation-accuracy correction made after revision 3 received an
+independent `VERDICT: FAIL`. Revision 2 had received an independent Full-class `VERDICT: PASS`;
+revision 4 then received an independent focused Full-class `VERDICT: PASS` with no blocking defects.
+
+> **CLOSEOUT CORRECTION.** Through revision 4 this line read *"Document revision: **3** (final)"*.
+> That was stale on both counts — the document had advanced to revision 4, and "(final)" had been
+> falsified by revision 3's `VERDICT: FAIL`. It is corrected here rather than reinterpreted, and was
+> finding 2 of the revision-4 review.
 
 ---
 
