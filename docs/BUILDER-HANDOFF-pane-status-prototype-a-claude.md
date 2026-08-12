@@ -736,22 +736,47 @@ recorded here as **deliberate retentions with reasons**, not as oversights.
 | Branch tip | the handoff-only tail commit that pins this table |
 | Delta | **3 files, 421 insertions, 44 deletions** — all tracked Markdown |
 
-| Artifact | Range | Size | SHA-256 |
-| --- | --- | --- | --- |
-| `.agent-review-pane-status-prototype-a-closeout.diff` | `7afd9453...cddbc776` | **35,798 bytes** | `2e40597ee84abe74c8375f39459a87308333fea24b81d2a203c61ffb1ec4f7e4` |
+| Artifact | Range | Shortstat | Size | SHA-256 |
+| --- | --- | --- | --- | --- |
+| `.agent-review-pane-status-prototype-a-closeout.diff` (first pass, **preserved unchanged**) | `7afd9453...cddbc776` | 3 files, 421+ / 44− | **35,798 bytes** | `2e40597ee84abe74c8375f39459a87308333fea24b81d2a203c61ffb1ec4f7e4` |
+| **`.agent-review-pane-status-prototype-a-closeout-gate-provenance-cumulative.diff`** (current reviewed range) | `7afd9453...9b141463` | **3 files, 486 insertions, 44 deletions** | **40,488 bytes** | `95166b417580304646b1828c6a9d062d859deceef00396854ef696a7cf16a734` |
 
-Created with `git diff --output` (never PowerShell `>`), gitignored via `.gitignore:33`, regenerated
-from its stated range to a separate temporary file and proven **byte-identical** by `cmp`; only the
-temporary copy was removed. `git diff --check` is clean (exit 0) on the range.
+Both created with `git diff --output` (never PowerShell `>`) and gitignored via `.gitignore:33`. Each
+was regenerated from its stated range to a separate temporary file and proven **byte-identical** by
+`cmp`; only the temporary copies were removed. `git diff --check` is clean (exit 0) on both ranges.
+**The earlier 35,798-byte artifact was not regenerated, renamed, or overwritten** — the correction
+pass took a new name so both ranges stay independently reproducible.
 
-The three changed files are `BLUE-HELM-MASTER-STATUS.md`,
+The three changed files across the cumulative range are `BLUE-HELM-MASTER-STATUS.md`,
 `docs/BUILDER-HANDOFF-pane-status-prototype-a-claude.md`, and
 `docs/PROTOTYPE-EVIDENCE-pane-status-claude-hook.md`. **No code, test, dependency, configuration,
-procurement analysis, or canonical verdict changed.**
+procurement analysis, or canonical verdict changed.** The gate-provenance correction itself
+(`cddbc776...9b141463`) touched only the first two; the evidence document carries no current-voice
+claim of that kind and was deliberately left alone.
 
-### C1.12 Closeout review status
+### C1.12 Revision history of this closeout branch
 
-**None yet** — this closeout branch stops for its own independent review before any merge. Per
-`AGENTS.md`, Blue remains the only merge authority, and Claude Code never merges its own work.
+| Pass | Content tip | Scope |
+| --- | --- | --- |
+| 1 — closeout record | `cddbc77658f22245ee1729402910c281a543a5da` | Merge facts, merge-gate record, review result, findings 1–3 corrected |
+| 2 — **gate-provenance correction** | `9b1414633afb1c7addda727aedb6939443b72945` | § C1.4 rewritten; § 9 pointer added; checkpoint bullet corrected |
+
+**What pass 2 corrected, stated plainly:** pass 1 wrote that the closeout "did not independently
+re-verify those two gates on merged `main`." That described the closeout's own scope but read as a
+claim about the merge itself, implying merged `main` had never been gated. **It had been** — Codex ran
+both full gates on the merged tree before push (§ C1.4). The false wording is withdrawn and retained
+as labelled history; it also stands in the immutable commit message of `cddbc776`, where § C1.4 is
+marked controlling.
+
+### C1.13 Closeout review status
+
+**None yet** — this closeout branch stops for a fresh independent **Standard-class** review before any
+merge. Per `AGENTS.md`, Blue remains the only merge authority, and Claude Code never merges its own
+work.
+
+**No production verdict is recorded on this branch, and none may be.** The established sequence is
+unchanged: this closeout is reviewed and lands first; a **separate tracked decision amendment** then
+records Blue's production decision; production specification follows only after that amendment passes
+its own review and lands.
 
 **BLUE SUBSYSTEM VERDICT: PROTOTYPE**
