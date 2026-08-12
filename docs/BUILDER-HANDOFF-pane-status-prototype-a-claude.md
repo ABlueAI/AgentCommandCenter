@@ -273,16 +273,35 @@ provenance is unresolved**.
 | Revision 1 reviewed tip | `bf66fb3b9fad080d1ff92ed0815034e525a75740` — `VERDICT: FAIL` |
 | Revision 2 reviewed tip | `c8d9fdaa3ecd8b792850ad525b9b768bdd14bcb5` — `VERDICT: PASS` |
 | Handoff-only tail (rev 2) | `d85002ce82e3fbb5b895197a0d17f3f3a0ed5d9d` |
-| **Revision 3 reviewed tip** | see the table below |
-| Focused correction range | `d85002ce...<revision-3 reviewed tip>` |
-| Cumulative prototype range | `3ff96bde...<revision-3 reviewed tip>` |
+| **Revision 3 reviewed tip** | `3920a3b1a57a349137ac7e5098624ebda06aab5c` |
+| Branch tip | the handoff-only tail commit below |
+| Focused correction range | `d85002ce82e3fbb5b895197a0d17f3f3a0ed5d9d...3920a3b1a57a349137ac7e5098624ebda06aab5c` |
+| Cumulative prototype range | `3ff96bdea3e68a83cd5774c9b94b68d9cb292add...3920a3b1a57a349137ac7e5098624ebda06aab5c` |
 
 The revision-3 content commit's parent is `d85002ce`, as required.
 
-Artifact identities are recorded in the handoff-only tail commit that follows the content commit.
-Both are created with `git diff --output` (never PowerShell redirection), gitignored via
-`.gitignore:33`, regenerated from their stated ranges and proven byte-identical. **Every earlier
-artifact is preserved unchanged.**
+| Artifact | Range | Shortstat | Size | SHA-256 |
+| --- | --- | --- | --- | --- |
+| `.agent-review-pane-status-prototype-a-claude-rev3-focused.diff` | `d85002ce...3920a3b1` | **9 files, 689 insertions, 267 deletions** | **91,004 bytes** | `6fe5745583b7829dd720bdc3ad9f14e7a6b5052a904e9d278690fea0fa4e5e9e` |
+| `.agent-review-pane-status-prototype-a-claude-rev3-cumulative.diff` | `3ff96bde...3920a3b1` | **26 files, 5,243 insertions, 10 deletions** | **309,470 bytes** | `555ee343928b62593b493e0c3d34710db92c2f58add76195f6014d9057cd8de6` |
+
+**Every earlier artifact is preserved unchanged and still verifies at its recorded identity:**
+
+| Artifact | Size | SHA-256 |
+| --- | --- | --- |
+| `.agent-review-pane-status-prototype-a-claude.diff` (rev 1) | 174,128 | `eaad43a22aeacfc7de79f234e3805e7aaf56dd75e2de11854e42d5936aa42f89` |
+| `…-rev2-focused.diff` | 165,445 | `b8b5f644d1fc53f84beb6c7762c7968dbd7328de1374a0a6c622cee9242a64f7` |
+| `…-rev2-cumulative.diff` | 280,014 | `3b3cb40fc1d5590479f7009af66f76934c48044f283e598d5b2566fc3e1683f3` |
+
+**On the 267 deletions in the focused range** — they are: the replaced tripwire assertions and
+comments (Low 1, Low 2), the reordered `interpretProbe` branch (Low 3), the two relabelled test
+comment blocks (Low 5, Low 6), the superseded `2.1.220`-is-unsupported assertions, and the replaced
+sections of the two documents. **No application behaviour was removed**; the only behavioural changes
+are the three fixes in Low 2, Low 3 and Low 4, and the version-list addition.
+
+Both created with `git diff --output` (never PowerShell redirection), gitignored via `.gitignore:33`,
+regenerated from their stated ranges and proven **byte-identical** by `cmp`. `git diff --check` is
+clean (exit 0) on both ranges.
 
 ---
 
