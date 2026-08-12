@@ -168,15 +168,26 @@ their own Blue verdict, and both are merged into `main` and pushed** at
 > BLUE SUBSYSTEM VERDICT: PROTOTYPE
 
 **That authorizes bounded prototype work only.** Production specification and
-production implementation remain unauthorized. The next pane-status action is
-**Experiment A**, the one-provider hook reporter described in § 11.1 of the
-record, under its own separate work order that selects the provider and
-specifies the prototype. **Experiment B — app-server runtime testing — remains
-unauthorized** pending a separate Blue scope decision.
+production implementation remain unauthorized. **Experiment B — app-server
+runtime testing — remains unauthorized** pending a separate Blue scope decision.
 
-**The procurement gate is complete; the subsystem is not.** Merging the record
-put evidence and a decision into `main`, not a feature. No detection code,
-reporter, indicator, or provider integration exists.
+**Experiment A has been carried out, reviewed to `VERDICT: PASS`, merged, and
+pushed** at `7afd945314fc3d4430b9030ef3b2a33b1acd1feb` (August 12 checkpoint):
+a gated Claude-only hook reporter over a main-owned Windows named pipe, one
+pane, with a `PROTOTYPE`-labelled renderer badge. It ended with both positive
+and negative results — see the checkpoint for the full split.
+
+**The procurement gate is complete; the subsystem is not.** What is in `main` is
+now a decision record **plus dormant prototype code**, still not a feature. The
+prototype gates on `BLUE_HELM_PANE_STATUS_PROTOTYPE === '1'` and is inert when
+unset, so no indicator runs for Blue in normal use. **Reporter provenance is
+unresolved**, which is a production blocker: the badge is advisory, not
+authenticated truth.
+
+> **UPDATED — August 12.** This paragraph previously read *"The next pane-status
+> action is **Experiment A** …"* and *"No detection code, reporter, indicator, or
+> provider integration exists."* Experiment A is done and its code is merged, so
+> both are **stale, not reinterpreted**.
 
 > **SUPERSEDED — retained as historical provenance.** This paragraph previously
 > read *"Cross-provider pane-status indicators still have no Blue verdict, so
@@ -190,7 +201,99 @@ R3 roadmap entry remains a roadmap note, not a pane-status procurement verdict.
 finishing Dockview satisfied Dockview's gate only, and pane-status's verdict is
 its own.
 
+## Current checkpoint — August 12 — PANE-STATUS EXPERIMENT A MERGED AND PUSHED; PROTOTYPE CODE IN `main`, DORMANT
+
+**Baseline:** local `main`, `origin/main`, and GitHub `refs/heads/main` are all
+**`7afd945314fc3d4430b9030ef3b2a33b1acd1feb`**. Verified during closeout by
+`git rev-parse main`, `git rev-parse origin/main`, and `git ls-remote origin
+refs/heads/main` — the third read live from GitHub rather than from the local
+remote-tracking ref.
+
+- Merge subject: `Merge pane status Prototype A experiment`.
+- Merge parent 1 (recorded pre-merge `main`):
+  `3ff96bdea3e68a83cd5774c9b94b68d9cb292add`; merge parent 2 (branch tip):
+  `5764ce61c8caa0b5f0de37e9f2e329a7f1a839e0`; merge tree
+  `8c8be52a1440978f3f4f20d2c9ea5ea94666e8e3`, which is **byte-identical to the
+  branch-tip tree** — the merge introduced no merge-time edit. The pre-merge
+  `main` tree was `e9d418fa20323bbd5f346b28a717b59050086ff0`, genuinely
+  different, so that tree-identity match is a meaningful check rather than a
+  comparison against an unchanged base.
+- Reviewed revision-4 content tip: `583688343547d957f30551c5468b418f31136761`.
+  The branch tip is one handoff-only commit above it, which is why the reviewed
+  tree and the merged tree differ; both are recorded rather than conflated.
+- Reviewer verdicts, all retained verbatim in
+  `docs/BUILDER-HANDOFF-pane-status-prototype-a-claude.md`: revision 1
+  `VERDICT: FAIL`, revision 2 `VERDICT: PASS`, revision 3 `VERDICT: FAIL`, and
+  revision 4 **`VERDICT: PASS`** — the review the merge rests on, with **no
+  blocking defects**, four non-blocking Low editorial findings and one further
+  observation. The two FAILs are historical fact, not superseded wording.
+- **Independence, recorded because it was breached mid-branch:** no verdict
+  between revisions 2 and 4 was genuinely independent — the same agent built and
+  reviewed revisions 3 and 4, and revision 3's FAIL was a self-audit. The
+  revision-4 review was performed by a **different** reviewer, which closed that
+  gap before merge.
+- Merge gate: `scripts/merge-gate.ps1` with plan
+  `.merge-gate/plan-pane-status-prototype-a.psd1`, 838 bytes, SHA-256
+  `2206b878249a310f40e9f6839f9d9eaff8f517d5cfa0357dd3696dcad5fd5169`
+  (recomputed in place during closeout and matching), `documentationOnly = $false`,
+  **`gates = @('app', 'pester')`**, preflight PASS, predicted tree matching the
+  realized `8c8be52a…`. `.merge-gate/` is gitignored by design, so the plan is
+  verifiable on this machine but is not tracked history.
+- Pinned reviewed artifacts, preserved and **not regenerated**: seven in total,
+  all verified at closeout. The plan's `pinnedDiff` is
+  `.agent-review-pane-status-prototype-a-claude-rev4-cumulative.diff`,
+  `3ff96bde...58368834`, **324,582 bytes**, SHA-256
+  `db7edce273a2a07a592eb77fd4fa2b0ad718ebbc2ca2b182c52491fc83eec974`.
+- **This merge landed CODE, not only a decision record** — 26 files,
+  **+5,494 / −10**: 24 files under `app/` (+4,034 / −10) and 2 documentation
+  files (+1,460). That is the material difference from the August 11
+  Source-Scout merge, which was documentation-only.
+- **The prototype is DORMANT in `main` and defaults to off.** The gate is
+  `env['BLUE_HELM_PANE_STATUS_PROTOTYPE'] === '1'` — an exact string comparison,
+  not truthiness. Unset, `main.js` receives an inert object whose every method is
+  a no-op, the preload bridge is never constructed, and the badge module
+  publishes no renderer global. **Merging prototype code neither enabled a
+  prototype feature nor authorized one.**
+- **No gate was run during closeout and none was required** — the closeout delta
+  is three tracked Markdown files. The reviewed pre-merge results carried forward
+  are: app gate exit 0, 52 chain entries, **3,678 assertions passed / 0 failed**;
+  Pester **955 passed / 0 failed / 0 skipped**. Stated plainly: **closeout did
+  not independently re-verify those gates on merged `main`.**
+
+**Experiment A is COMPLETE AS A BOUNDED PROTOTYPE — which means it ENDED with
+results recorded, not that every objective passed.** Two objectives did not: the
+live Dockview drag was **NOT PERFORMED** (wrong-pane-after-move remains **NOT
+SATISFIED**), and visible state animation was **NEVER OBSERVED**. One security
+question was answered in the negative: **reporter provenance is UNRESOLVED** — a
+pane descendant can forge an allowlisted event, so the badge is **advisory, not
+authenticated truth**. The run also consumed **four model turns against three
+authorized**, and the origin of the extra prompt cycle is still unresolved.
+
+**Positive results that are equally real:** the transport, the privacy boundary,
+byte-identical settings reversibility, single-pane containment, live
+`Notification` delivery, and **human-verified static badge rendering**
+(`PROTOTYPE ○ unknown` in the visible pane header).
+
+**Production pane-status specification and implementation, Experiment B, and all
+app-server runtime testing remain UNAUTHORIZED.** A merged prototype is not an
+adopted subsystem. The canonical verdict in
+`docs/OSS-PROCUREMENT-pane-status.md` is unchanged and its tracked blob
+`5c0803777c1ea42209aec84568eed906ac9bdad1` is byte-identical across the merge:
+
+> BLUE SUBSYSTEM VERDICT: PROTOTYPE
+
+**Next pane-status action: a Blue decision on what Experiment A's results
+justify** — not further prototype building by default. Any next step needs its
+own work order.
+
 ## Current checkpoint — August 11 — PANE-STATUS PROCUREMENT MERGED AND PUSHED; PROTOTYPE VERDICT IN `main`
+
+> **SUPERSEDED AS THE CURRENT BASELINE — retained as historical provenance.**
+> Accurate through the Source-Scout procurement merge. `main` has since advanced
+> to `7afd945314fc3d4430b9030ef3b2a33b1acd1feb` (August 12 checkpoint above), and
+> the "next action is Experiment A" statement below has been **carried out**.
+> Every other fact here remains correct; only the current-baseline and
+> next-action claims are **stale, and they are not reinterpreted**.
 
 **Baseline:** local `main`, `origin/main`, and GitHub `refs/heads/main` are all
 **`045be87973512ac532eee3868a3cc9b916f30ab0`**. Verified three independent ways
@@ -434,19 +537,32 @@ This is load-bearing context, not historical decoration:
    procurement record:
    `docs/OSS-PROCUREMENT-pane-status.md`. Verdict, verbatim:
    `BLUE SUBSYSTEM VERDICT: PROTOTYPE`.
-   **The procurement gate is complete; this roadmap item is not.** What landed in
-   `main` is a decision record, not a feature — no detection code, reporter,
-   indicator, or provider integration exists, which is why this entry stays at
-   position 1.
+   **Experiment A is DONE and MERGED** at
+   `7afd945314fc3d4430b9030ef3b2a33b1acd1feb` (August 12 checkpoint), after four
+   review revisions ending in `VERDICT: PASS` from an independent reviewer.
+   **The procurement gate is complete and Experiment A is complete; this roadmap
+   item is not.** What is in `main` is a decision record plus **dormant,
+   gate-off prototype code** — not a shipped indicator — which is why this entry
+   stays at position 1.
    **Only bounded prototyping is authorized. Production specification and
-   production implementation remain unauthorized.** The next action is
-   **Experiment A** — the one-provider hook reporter (§ 11.1 of the record) —
-   under a separate work order that selects the provider and specifies the
-   prototype. **Experiment B, and app-server runtime testing generally, remain
-   unauthorized** pending a separate Blue scope decision.
+   production implementation remain unauthorized.** **Experiment B, and
+   app-server runtime testing generally, remain unauthorized** pending a
+   separate Blue scope decision.
+   **What Experiment A left open, and what any production step must answer
+   first:** reporter provenance is unresolved (a pane descendant can forge an
+   allowlisted event, so the badge is advisory); the live Dockview drag was never
+   performed, so wrong-pane-after-move is **NOT SATISFIED**; and visible state
+   animation was never observed. **The next action is a Blue decision on what
+   these results justify** — not more prototype building by default — under its
+   own work order.
    The Dockview record and its ADOPT verdict never covered pane-status and were
    not reused for it. Design
    history and the original ranking remain in the R4 roadmap entry.
+
+   > **UPDATED — August 12.** This entry previously read *"no detection code,
+   > reporter, indicator, or provider integration exists"* and *"The next action
+   > is **Experiment A**."* Experiment A has been performed, reviewed, and
+   > merged; both statements are **stale, not reinterpreted**.
 
    > **SUPERSEDED — retained as historical provenance.** This entry previously
    > read *"NEXT IN QUEUE — NOT YET AUTHORIZED"* and required all three
@@ -574,8 +690,14 @@ completed subsystem verdict covers only the subsystem it names.
 
 **Satisfying the gate is not shipping the subsystem.** Both Dockview and
 pane-status have cleared procurement, but Dockview's *integration* is complete
-while pane-status's is not started. The gate governs whether work may begin, not
-whether it is done.
+while pane-status's has only reached a **bounded prototype**: Experiment A is
+built, reviewed, and merged at `7afd9453`, and it is gate-off dormant code with
+provenance unresolved — not an integration. The gate governs whether work may
+begin, not whether it is done.
+
+> **UPDATED — August 12.** This paragraph previously read *"while pane-status's
+> is not started."* Experiment A has since been performed and merged; that
+> wording is **stale, not reinterpreted**. No production integration exists.
 
 > **SUPERSEDED — retained as historical provenance.** This paragraph previously
 > read *"Pane-status has not satisfied this gate: it still needs its own

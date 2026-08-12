@@ -6,17 +6,27 @@ Fork-point SHA: `3ff96bdea3e68a83cd5774c9b94b68d9cb292add`
 Pre-merge main SHA: `3ff96bdea3e68a83cd5774c9b94b68d9cb292add`
 Revision 1 reviewed tip: `bf66fb3b9fad080d1ff92ed0815034e525a75740` — **`VERDICT: FAIL`**
 Revision 2 reviewed tip: `c8d9fdaa3ecd8b792850ad525b9b768bdd14bcb5` — **`VERDICT: PASS`**
-Revision 3 reviewed tip: see § 12
-Merge commit SHA: Pending until merge
+Revision 3 reviewed tip: `3920a3b1a57a349137ac7e5098624ebda06aab5c` — **`VERDICT: FAIL`**
+Revision 4 reviewed tip: `583688343547d957f30551c5468b418f31136761` — **`VERDICT: PASS`**
+Branch tip (handoff-only tail): `5764ce61c8caa0b5f0de37e9f2e329a7f1a839e0`
+Merge commit SHA: `7afd945314fc3d4430b9030ef3b2a33b1acd1feb`
 
-**Status: REVISION 4 — documentation-accuracy correction, after revision 3 received an independent
-`VERDICT: FAIL`. All six revision-2 Low findings remain corrected; Experiment A was run inside the
-REAL Electron application against the executable a pane actually launches; Claude settings were
-restored byte-identically. REVISION 4 CHANGES DOCUMENTATION ONLY — no code, no test, no hook, no
-model turn, no gate rerun. Badge rendering is now HUMAN-VERIFIED (§ 6); revision 3's `.term-head`
-claim was FALSE and is withdrawn. STILL OPEN: the run went ONE MODEL TURN OVER BUDGET (§ 7), the
-Dockview drag is NOT PERFORMED, and reporter provenance is unresolved. AWAITING A FRESH INDEPENDENT
-FOCUSED FULL-CLASS REVIEW. NOT MERGED, NOT PUSHED.**
+**Status: MERGED. Revision 4 received an independent focused Full-class `VERDICT: PASS` with no
+blocking defects, and the branch was merged into `main` at
+`7afd945314fc3d4430b9030ef3b2a33b1acd1feb`. The four remaining non-blocking editorial findings are
+corrected in this closeout (§ C1.9). Experiment A is COMPLETE AS A BOUNDED PROTOTYPE — which means it
+ENDED with results recorded, not that every objective passed. STILL OPEN AND UNCHANGED BY THE MERGE:
+the run went ONE MODEL TURN OVER BUDGET (§ 7), the Dockview drag is NOT PERFORMED, visible state
+animation is UNOBSERVED, and reporter provenance is UNRESOLVED. Production pane-status specification
+and implementation, Experiment B, and app-server runtime testing all remain UNAUTHORIZED.**
+
+> **SUPERSEDED — retained as historical provenance.** This status block previously read
+> *"REVISION 4 — documentation-accuracy correction … AWAITING A FRESH INDEPENDENT FOCUSED FULL-CLASS
+> REVIEW. NOT MERGED, NOT PUSHED."* Every fact in it was accurate when written; only the
+> awaiting-review and not-merged claims are **stale, and they are not reinterpreted**. The revision-4
+> content — six revision-2 Low findings corrected, the real-application run, byte-identical settings
+> restoration, human-verified badge rendering, and the withdrawn `.term-head` claim — stands
+> unchanged and is recorded in § 1.4, § 6 and § 12.
 
 ## 0. Procurement authority
 
@@ -29,10 +39,11 @@ reporter, one bounded display. Still unauthorized and untouched: production spec
 implementation, permanent hook installation, multiple providers, multiple status-enabled panes,
 **Experiment B**, any app-server listener / `codex --remote` / observer client, merge, and push.
 
-The procurement record was **not modified in revision 3** — no addendum was required, its reviewed
-analysis is untouched, and its canonical verdict is unchanged.
+The procurement record was **not modified in revisions 3–4** — no addendum was required, its reviewed
+analysis is untouched, and its canonical verdict is unchanged. Confirmed again at closeout: the
+tracked blob `5c0803777c1ea42209aec84568eed906ac9bdad1` is byte-identical before and after the merge.
 
-Full evidence: **`docs/PROTOTYPE-EVIDENCE-pane-status-claude-hook.md`** (revision 3).
+Full evidence: **`docs/PROTOTYPE-EVIDENCE-pane-status-claude-hook.md`** (revision 4).
 
 ---
 
@@ -325,8 +336,14 @@ app**; and **§ 5.1 of the evidence — reporter provenance is unresolved**.
 3. Whether evidence § 7.3's durable rule is stated strongly enough, given this is the third time the
    lineage has hit that error shape.
 4. The Low-2 tripwire rewrite and its negative control.
-4. Whether evidence § 7.1 states the badge hypothesis narrowly enough.
 5. Whether § 11 item 19 keeps provider-upgrade behaviour appropriately un-generalised.
+
+> **CLOSEOUT NOTE.** This list guided the revision-4 review, which has since returned
+> `VERDICT: PASS` (§ 14). A sixth item — *"whether evidence § 7.1 states the badge hypothesis
+> narrowly enough"* — was **removed during closeout**: § 7.1 no longer contains a hypothesis. It was
+> replaced in revision 4 by the human-verified rendering result, and the hypothesis framing survives
+> only inside the § 7.2 superseded blockquote. The stale item was carried over from the revision-3
+> list and was itself finding 1 of the revision-4 review.
 
 ---
 
@@ -403,19 +420,28 @@ clean (exit 0) on both ranges.
 
 ## 13. Reviewer verdict
 
-**None yet for revision 4** — stopped for a fresh independent **focused Full-class** review.
+Revision 4 was reviewed by a **fresh reviewer, independent of the revision 2–4 builder/reviewer**, in
+a focused Full-class pass. The literal verdict line returned was:
+
+> VERDICT: PASS
 
 * Revision 1: **`VERDICT: FAIL`** (1 Critical, 3 High, 4 Medium, 3 Low).
 * Revision 2: **`VERDICT: PASS`** (6 non-blocking Low), all six corrected in revision 3.
 * Revision 3: **`VERDICT: FAIL`** (1 High, 1 Medium — both documentation, neither code), both
   corrected in revision 4 (§ 1.4).
+* Revision 4: **`VERDICT: PASS`** — **no blocking defects**, 4 non-blocking Low editorial findings
+  plus 1 additional non-blocking observation. All five are dispositioned in § C1.9.
 
-**Note on independence — read this before recording any verdict.** The same reviewer produced
-revision 2's `VERDICT: PASS`, performed revision 3's corrective and runtime work, produced revision
-3's `VERDICT: FAIL` as a self-audit, and performed revision 4's corrections — all at Blue's
-direction. **No verdict on this branch since revision 2 has been genuinely independent.** Revision 3's
-FAIL should be read as a self-audit that caught a real defect, not as independent verification. The
-next review must be carried out by a **different** reviewer for the independence requirement to hold.
+**The four FAIL-then-correct cycles are historical fact, not superseded wording.** The merge rests on
+the revision-4 `VERDICT: PASS` over content tip `58368834`.
+
+**Note on independence — the requirement is now satisfied, and how it was breached before matters.**
+The same reviewer produced revision 2's `VERDICT: PASS`, performed revision 3's corrective and
+runtime work, produced revision 3's `VERDICT: FAIL` as a self-audit, and performed revision 4's
+corrections — all at Blue's direction. **No verdict between revision 2 and revision 4 was genuinely
+independent**, and revision 3's FAIL should still be read as a self-audit that caught a real defect
+rather than as independent verification. The revision-4 review was carried out by a **different**
+reviewer, which is what closed that gap before merge.
 
 ## Review-diff rule
 
@@ -447,5 +473,226 @@ move, and visible state animation), and one security question was answered in th
 * **Production pane-status implementation remains unauthorized.**
 * **Experiment B and app-server runtime testing remain unauthorized.**
 * **Nothing was merged or pushed.**
+
+> **SUPERSEDED ON THE LAST BULLET ONLY — retained as historical provenance.** *"Nothing was merged or
+> pushed"* was accurate through revision 4. The branch has since been merged into `main` at
+> `7afd945314fc3d4430b9030ef3b2a33b1acd1feb` (§ C1). **Every other bullet above is still current**:
+> the turn overrun, the unperformed Dockview drag, the unobserved state animation, the unresolved
+> provenance, and both unauthorized-work statements are unchanged by the merge.
+
+---
+
+## § C1. Post-merge closeout
+
+Documentation-only closeout, performed on branch `feature/pane-status-prototype-a-closeout` from a
+worktree based at the merge commit. Every fact below was reproduced independently from the repository
+and the local filesystem at closeout time — none is copied forward from the pre-merge record.
+
+### C1.1 Merge identity
+
+| Field | Value | Verified |
+| --- | --- | --- |
+| Merge commit | `7afd945314fc3d4430b9030ef3b2a33b1acd1feb` | `git cat-file -p` |
+| Subject | `Merge pane status Prototype A experiment` | `git log -1 --format=%s` |
+| Parent 1 (pre-merge `main`) | `3ff96bdea3e68a83cd5774c9b94b68d9cb292add` | `git rev-parse 7afd9453^1` |
+| Parent 2 (branch tip) | `5764ce61c8caa0b5f0de37e9f2e329a7f1a839e0` | `git rev-parse 7afd9453^2` |
+| Merge tree | `8c8be52a1440978f3f4f20d2c9ea5ea94666e8e3` | `git rev-parse 7afd9453^{tree}` |
+| Reviewed revision-4 content tip | `583688343547d957f30551c5468b418f31136761` | § 12 |
+
+**The merge tree is byte-identical to the branch-tip tree.** `5764ce61^{tree}` is also
+`8c8be52a1440978f3f4f20d2c9ea5ea94666e8e3`, and `git diff` between the two trees is empty. **The merge
+introduced no merge-time edit.**
+
+**The comparison is meaningful, because the pre-merge `main` tree genuinely differed.**
+`3ff96bde^{tree}` is `e9d418fa20323bbd5f346b28a717b59050086ff0` — a different object — and the diff
+from it to the merge tree is **26 files, 5,494 insertions, 10 deletions**. A tree-identity match
+against an unchanged base would have proven nothing; this one is a real fast-forward-equivalent
+content match against a base that moved.
+
+The reviewed content tip's tree (`58368834^{tree}` = `1e659d204bcdb9fff8ae8a172956739a091bcb95`)
+differs from the merge tree, and **that is expected**: the handoff-only tail `5764ce61` sits one
+commit above the reviewed tip and adds the revision-4 artifact pin (+36 / −4). The reviewed delta is
+the tip; the merged delta is the tail. Both are recorded rather than conflated.
+
+### C1.2 What the merge brought into `main`
+
+| Area | Files | Insertions | Deletions |
+| --- | --- | --- | --- |
+| `app/` — application and test code | 24 | 4,034 | 10 |
+| `docs/` — evidence and handoff | 2 | 1,460 | 0 |
+| **Total** | **26** | **5,494** | **10** |
+
+**This merge landed CODE, not only a decision record** — which is the material difference from the
+Source-Scout procurement merge that preceded it. 14 new modules under `app/prototype-pane-status/`,
+the renderer badge and its suite, and edits to `app/main.js`, `app/preload.js`, `app/renderer/app.js`,
+`index.html`, `styles.css`, `package.json` and two existing test files are now in `main`.
+
+**The prototype is DORMANT in `main` and defaults to off.** `pane-status-prototype.js` gates on
+`env['BLUE_HELM_PANE_STATUS_PROTOTYPE'] === '1'` — an exact string comparison, not truthiness, so a
+stray empty value cannot enable it. With the variable unset, `main.js` receives `createInertPrototype()`,
+whose every method is a no-op; the preload bridge is never constructed, and the badge module publishes
+no renderer global. **Merging prototype code did not enable a prototype feature, and it did not
+authorize one.**
+
+### C1.3 Merge-gate record
+
+Plan: `.merge-gate/plan-pane-status-prototype-a.psd1` — **838 bytes**, SHA-256 recomputed in place at
+closeout as `2206b878249a310f40e9f6839f9d9eaff8f517d5cfa0357dd3696dcad5fd5169`, **matching the
+recorded identity**. The plan was neither regenerated nor modified.
+
+| Plan key | Declared value |
+| --- | --- |
+| `expectedMainSha` / `expectedOriginMainSha` | `3ff96bdea3e68a83cd5774c9b94b68d9cb292add` |
+| `branch` | `feature/pane-status-prototype-a-claude` |
+| `reviewedBase` | `3ff96bdea3e68a83cd5774c9b94b68d9cb292add` |
+| `reviewedTip` | `583688343547d957f30551c5468b418f31136761` |
+| `branchTip` | `5764ce61c8caa0b5f0de37e9f2e329a7f1a839e0` |
+| `handoffDoc` | `docs/BUILDER-HANDOFF-pane-status-prototype-a-claude.md` |
+| `mergeMessage` | `Merge pane status Prototype A experiment` |
+| `documentationOnly` | `$false` |
+| `gates` | `@('app', 'pester')` |
+
+Recorded outcome: **handoff tail one commit; predicted tree `8c8be52a…`; preflight PASS.** The
+realized merge tree is `8c8be52a1440978f3f4f20d2c9ea5ea94666e8e3`, matching the prediction.
+
+**Two precision notes, so this record is not read as more than it is.** First, the plan file itself
+carries no `predictedTree` key — the predicted tree is computed by `scripts/merge-gate.ps1` from the
+declared SHAs and compared to the realized merge; what is verifiable from the plan alone is the SHA
+set above. Second, `.merge-gate/` is **gitignored** (`.gitignore:36`) as human-authored local merge
+authorization and is deliberately never committed, so the plan is verifiable in place on this machine
+but is not part of the tracked history.
+
+### C1.4 Gates
+
+**No gate was run during this closeout, and none was required.** The closeout changes exactly three
+tracked Markdown files and no code, test, dependency, script, or configuration file. The `app` and
+`pester` gates declared in the plan belong to the merge authorization, not to this documentation
+delta.
+
+Historical reviewed results, carried forward and **not re-run here**:
+
+| Gate | Result (revision 3; unchanged through revision 4) |
+| --- | --- |
+| App gate (`npm test`) | exit 0 — 52 chain entries, **3,678 assertions passed / 0 failed** |
+| Pester (`scripts\run-pester.ps1`) | **955 passed / 0 failed / 0 skipped** (35 suites) |
+
+Stated plainly rather than omitted: **this closeout did not independently re-verify those two gates on
+merged `main`.** They are recorded as the reviewed pre-merge results they are.
+
+### C1.5 Reviewed artifacts — preserved, not regenerated
+
+All seven artifacts remain in the prototype worktree at their recorded identities, verified at
+closeout and **not regenerated**:
+
+| Artifact | Size | SHA-256 |
+| --- | --- | --- |
+| rev 1 | 174,128 | `eaad43a22aeacfc7de79f234e3805e7aaf56dd75e2de11854e42d5936aa42f89` |
+| rev 2 focused | 165,445 | `b8b5f644d1fc53f84beb6c7762c7968dbd7328de1374a0a6c622cee9242a64f7` |
+| rev 2 cumulative | 280,014 | `3b3cb40fc1d5590479f7009af66f76934c48044f283e598d5b2566fc3e1683f3` |
+| rev 3 focused | 91,004 | `6fe5745583b7829dd720bdc3ad9f14e7a6b5052a904e9d278690fea0fa4e5e9e` |
+| rev 3 cumulative | 309,470 | `555ee343928b62593b493e0c3d34710db92c2f58add76195f6014d9057cd8de6` |
+| **rev 4 focused** | **35,065** | `e5ae245623ac5cb7d9923b8f438c88743c939656ff6ef90da040cf16b794f94c` |
+| **rev 4 cumulative** | **324,582** | `db7edce273a2a07a592eb77fd4fa2b0ad718ebbc2ca2b182c52491fc83eec974` |
+
+The plan's `pinnedDiff` is the rev-4 cumulative artifact. During the revision-4 review both rev-4
+ranges were regenerated to separate temporary files with `git diff --output` and compared
+byte-for-byte; only the temporary copies were removed.
+
+### C1.6 Review history, complete and preserved
+
+| Revision | Reviewed tip | Literal verdict |
+| --- | --- | --- |
+| 1 | `bf66fb3b9fad080d1ff92ed0815034e525a75740` | `VERDICT: FAIL` |
+| 2 | `c8d9fdaa3ecd8b792850ad525b9b768bdd14bcb5` | `VERDICT: PASS` |
+| 3 | `3920a3b1a57a349137ac7e5098624ebda06aab5c` | `VERDICT: FAIL` |
+| **4** | `583688343547d957f30551c5468b418f31136761` | **`VERDICT: PASS`** |
+
+Verified facts about the revision-4 review, recorded without reproducing reviewer prose that the
+repository does not store:
+
+* **No blocking defects.**
+* **Both revision-3 documentation findings were fully corrected** — the false `.term-head`
+  non-existence claim, and the ambiguous-statement-treated-as-confirmed-observation.
+* **Static badge rendering is human-verified** — `PROTOTYPE ○ unknown`, in the visible pane header,
+  after the pane controls.
+* **Four non-blocking Low editorial findings remained**, plus **one additional observation about
+  artifact-table duplication**.
+* **The review was genuinely independent of the revision 2–4 builder/reviewer.**
+
+### C1.7 Authorization state after the merge — UNCHANGED
+
+Tracked record: `docs/OSS-PROCUREMENT-pane-status.md`. Canonical verdict, verbatim:
+
+> BLUE SUBSYSTEM VERDICT: PROTOTYPE
+
+The record's tracked blob is `5c0803777c1ea42209aec84568eed906ac9bdad1` **both before and after the
+merge** — byte-identical, no addendum, no edit to its analysis, no change to its verdict.
+
+**Still unauthorized, and not advanced by this merge:** production pane-status specification,
+production implementation, Experiment B, all app-server runtime testing, any new authentication
+design for reporter provenance, permanent hook installation, additional providers, and additional
+status-enabled panes. **A merged prototype is not an adopted subsystem.**
+
+**Still open, and not closed by this merge:** four model turns recorded against three authorized with
+the origin of the extra prompt cycle unresolved (§ 7); the Dockview drag **NOT PERFORMED** with
+wrong-pane-after-move **NOT SATISFIED**; visible state animation **UNOBSERVED**; and reporter
+provenance **UNRESOLVED** — a pane descendant can forge an allowlisted event, so the badge is
+**advisory, not authenticated truth**.
+
+### C1.8 Local and remote state at closeout
+
+| Check | Result |
+| --- | --- |
+| Local `main` | `7afd945314fc3d4430b9030ef3b2a33b1acd1feb` |
+| `origin/main` (remote-tracking) | `7afd945314fc3d4430b9030ef3b2a33b1acd1feb` |
+| GitHub `refs/heads/main` (`git ls-remote`) | `7afd945314fc3d4430b9030ef3b2a33b1acd1feb` |
+| Prototype worktree | clean at `5764ce61c8caa0b5f0de37e9f2e329a7f1a839e0` |
+| Closeout branch base | created exactly at `7afd9453…` |
+
+All three `main` references were verified equal, the third read live from GitHub rather than from the
+local remote-tracking ref.
+
+**Experiment residue — none remains:**
+
+| Check | Result |
+| --- | --- |
+| Electron processes | **none** |
+| `*blue-helm-pane-status*` named pipes | **none** |
+| `%USERPROFILE%\.claude\settings.json` | **382 bytes**, SHA-256 `a67c2e66…5dcc5` — exact match to the pre-experiment baseline |
+| `hooks` key / prototype marker in settings | **absent** (re-parsed) |
+| `claude-settings.backup`, `identity.json` | **absent** |
+| `%TEMP%\blue-helm-pane-status-experiment` | **absent** |
+| `%APPDATA%\command-center\dockview-layout.json` | **present, 1,291 B — user-owned, deliberately NOT deleted** |
+
+### C1.9 The five remaining review findings and their dispositions
+
+| # | Sev | Finding | Disposition |
+| --- | --- | --- | --- |
+| 1 | Low | Handoff § 11 carried a duplicate `4.` and a stale item asking whether evidence § 7.1 states the badge **hypothesis** narrowly enough — § 7.1 no longer contains a hypothesis | **CORRECTED.** Stale item removed, numbering fixed, and the removal recorded in place rather than silently applied |
+| 2 | Low | Evidence front matter still read `Document revision: 3 (final)` — stale revision, and `(final)` falsified by revision 3's FAIL | **CORRECTED.** Now revision 4, `(final)` removed, experiment-date metadata extended, prior wording preserved as a labelled closeout correction |
+| 3 | Low | Handoff § 0 still said the procurement record was "not modified in revision 3" and pointed at evidence "(revision 3)" | **CORRECTED** to revisions 3–4 and revision 4, with the procurement blob identity verified byte-identical across the merge |
+| 4 | Low | Evidence § 11 item 11 still reads "no Electron instance has yet rendered a badge" in the present tense | **KNOWINGLY RETAINED.** It sits under the `Added in revision 2:` heading and is explicitly superseded by item 14, which names it. The layered-history convention is used consistently in that section; rewriting a revision-2-era item in place would damage the very provenance the list exists to preserve |
+| 5 | — | Handoff § 12 carries two artifact-preservation tables and two identical `git diff --output` paragraphs (revision 4's, then revision 3's retained block) | **KNOWINGLY RETAINED.** Both blocks are accurate for their own revision, and line 384's "Every earlier artifact" was true as of revision 3. Redundant, not false |
+
+Findings 4 and 5 were both non-blocking and both carried optional dispositions in the review. They are
+recorded here as **deliberate retentions with reasons**, not as oversights.
+
+### C1.10 What did NOT happen during closeout
+
+* **No application or test code changed.** The closeout delta is three tracked Markdown files.
+* **No Claude model turn was consumed.** The count stands at four against three authorized.
+* **No hook was installed**, no Claude settings were touched, and no prototype pipe, reporter, or
+  recovery file was created.
+* **No Electron process was launched**, and none was running at closeout.
+* **No gate was run** (§ C1.4).
+* **No merge-gate plan was regenerated or modified** — its identity was recomputed in place only.
+* **No pinned review artifact was regenerated or overwritten.**
+* **The procurement record was not touched.**
+* **Nothing was merged or pushed by this closeout**, which stops at a reviewable branch.
+
+### C1.11 Closeout review status
+
+**None yet** — this closeout branch stops for its own independent review before any merge. Per
+`AGENTS.md`, Blue remains the only merge authority, and Claude Code never merges its own work.
 
 **BLUE SUBSYSTEM VERDICT: PROTOTYPE**
