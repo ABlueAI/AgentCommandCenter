@@ -690,7 +690,31 @@ recorded here as **deliberate retentions with reasons**, not as oversights.
 * **The procurement record was not touched.**
 * **Nothing was merged or pushed by this closeout**, which stops at a reviewable branch.
 
-### C1.11 Closeout review status
+### C1.11 Closeout branch and its own review artifact
+
+| Field | Value |
+| --- | --- |
+| Branch | `feature/pane-status-prototype-a-closeout` |
+| Worktree | `.worktrees/pane-status-prototype-a-closeout` |
+| Base (merged `main`) | `7afd945314fc3d4430b9030ef3b2a33b1acd1feb` |
+| Content tip | `cddbc77658f22245ee1729402910c281a543a5da` |
+| Branch tip | the handoff-only tail commit that pins this table |
+| Delta | **3 files, 421 insertions, 44 deletions** — all tracked Markdown |
+
+| Artifact | Range | Size | SHA-256 |
+| --- | --- | --- | --- |
+| `.agent-review-pane-status-prototype-a-closeout.diff` | `7afd9453...cddbc776` | **35,798 bytes** | `2e40597ee84abe74c8375f39459a87308333fea24b81d2a203c61ffb1ec4f7e4` |
+
+Created with `git diff --output` (never PowerShell `>`), gitignored via `.gitignore:33`, regenerated
+from its stated range to a separate temporary file and proven **byte-identical** by `cmp`; only the
+temporary copy was removed. `git diff --check` is clean (exit 0) on the range.
+
+The three changed files are `BLUE-HELM-MASTER-STATUS.md`,
+`docs/BUILDER-HANDOFF-pane-status-prototype-a-claude.md`, and
+`docs/PROTOTYPE-EVIDENCE-pane-status-claude-hook.md`. **No code, test, dependency, configuration,
+procurement analysis, or canonical verdict changed.**
+
+### C1.12 Closeout review status
 
 **None yet** — this closeout branch stops for its own independent review before any merge. Per
 `AGENTS.md`, Blue remains the only merge authority, and Claude Code never merges its own work.
