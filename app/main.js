@@ -409,6 +409,15 @@ app.whenReady().then(() => {
         console.error(msg);
         if (win && !win.isDestroyed()) win.webContents.send('main-error', msg);
       }
+    }).catch(() => {
+      // Revision 3, Low finding 4. `discover()` is built never to reject, but the handler ABOVE can
+      // still throw — e.g. `win.webContents.send` racing window teardown between the isDestroyed()
+      // check and the send. Without this, that becomes an unhandled rejection: a silent failure, and
+      // this repo requires the opposite. The message is a fixed constant: no path, no environment
+      // value, no command output, no token, and deliberately not the caught error's own text.
+      const msg = '[pane-status] PROTOTYPE version discovery handler failed — panes stay "unknown".';
+      console.error(msg);
+      if (win && !win.isDestroyed()) win.webContents.send('main-error', msg);
     });
   }
 

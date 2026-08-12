@@ -174,12 +174,29 @@ process.stdout.write('\nthe layout decision is MAIN\'s, and the DEFAULT is Dockv
     'the classic-layout token is present ONLY in recovery mode');
   assert(/\.\.\.\(paneStatusPrototypeEnabled \? \[PANE_STATUS_RENDERER_ARG\] : \[\]\)/.test(mainSrc),
     'the pane-status prototype token is present ONLY when its gate is on');
+  // CORRECTED (revision 3, Low finding 2). The previous version FILTERED to lines beginning with
+  // `...` before checking them, so an unconditional NON-spread entry (`SOME_ARG,`) was discarded
+  // rather than caught, and the tripwire passed while the production path forwarded a non-empty
+  // list. That is the exact failure a tripwire exists to prevent. Now EVERY non-empty, non-comment
+  // entry inside the array is inspected and an unconditional one FAILS, whatever its syntax.
   const addArgsBlock = mainSrc.slice(mainSrc.indexOf('additionalArguments: ['));
   const addArgsEntries = addArgsBlock.slice(0, addArgsBlock.indexOf('],'))
-    .split('\n').map((l) => l.trim()).filter((l) => l.indexOf('...') === 0);
+    .split('\n')
+    .slice(1)                                            // drop the `additionalArguments: [` header
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && l.indexOf('//') !== 0); // keep comments out, keep everything else IN
   assert(addArgsEntries.length >= 2, 'both forwarded tokens are accounted for');
-  assert(addArgsEntries.every((l) => l.indexOf('?') !== -1 && l.indexOf(': [])') !== -1),
-    'EVERY additionalArguments entry is conditional, so the DEFAULT production path forwards an EMPTY list');
+  const unconditionalEntries = addArgsEntries.filter(
+    (l) => !(l.indexOf('?') !== -1 && l.indexOf(': [])') !== -1));
+  assert(unconditionalEntries.length === 0,
+    'EVERY additionalArguments entry is conditional, so the DEFAULT production path forwards an EMPTY list ' +
+    `(unconditional entries found: ${JSON.stringify(unconditionalEntries)})`);
+  // NEGATIVE CONTROL: prove the check above would actually catch an unconditional entry, rather than
+  // passing because the filter emptied the list. Revision 2's version passed for exactly that reason.
+  const probeEntries = ['...(a ? [X] : [])', 'UNCONDITIONAL_ARG,']
+    .filter((l) => !(l.indexOf('?') !== -1 && l.indexOf(': [])') !== -1));
+  assert(probeEntries.length === 1 && probeEntries[0] === 'UNCONDITIONAL_ARG,',
+    'the conditional-entry predicate demonstrably REJECTS an unconditional entry (negative control)');
 }
 
 // ---------------------------------------------------------------------------
@@ -305,10 +322,19 @@ process.stdout.write('\nindex.html ships the EMBEDDED dock and loads no Dockview
 
   // RE-PINNED for Experiment A (pane-status PROTOTYPE), and not silently: this tripwire exists so an
   // added renderer script has to be argued for rather than slipped in. 21 -> 22. The one addition is
-  // `pane-status-badge.js`, gated at the source — main never sends on the pane-status-prototype
-  // channel unless BLUE_HELM_PANE_STATUS_PROTOTYPE=1, so with the gate off the module loads, defines
-  // one global, and does nothing else. The assertion below names the expected file, so a FUTURE extra
-  // script still fails here rather than riding in on this bump.
+  // `pane-status-badge.js`, gated at the source.
+  //
+  // CORRECTED (revision 3, Low finding 1). This comment used to say the module "defines one global"
+  // with the gate off — that was revision 1's behaviour and the very thing the revision-2 review
+  // required to change. GATE OFF MEANS ABSENT, NOT INERT: a classic <script> tag cannot be
+  // conditional, so the file is always LOADED, but it publishes NO prototype global. It defines
+  // `window.ccPaneStatusBadge` only when the preload actually exposed `window.ccPaneStatus`, which
+  // happens only when main forwarded its gate token at window construction. With the gate off there
+  // is no global, no badge instance, no subscription, and no prototype DOM. Asserted in
+  // pane-status-integration.test.js and renderer/pane-status-badge.test.js.
+  //
+  // The assertion below names the expected file, so a FUTURE extra script still fails here rather
+  // than riding in on this bump.
   const scriptTags = (indexSrc.match(/<script[^>]*src=/g) || []).length;
   assert(scriptTags === 22, `index.html loads exactly 22 <script src> tags — the original 21 plus the gated pane-status prototype badge (found ${scriptTags})`);
   assert(/<script src="pane-status-badge\.js"><\/script>/.test(indexSrc),

@@ -189,9 +189,25 @@ function isVersionSupported(observedVersion, supportedVersions) {
   return list.indexOf(observedVersion) !== -1;
 }
 
-// The version this prototype was actually run against. Recorded here rather than in prose so the
+// The versions this prototype was actually run against. Recorded here rather than in prose so the
 // degrade-to-unknown path has a single source of truth the tests can read.
-const SUPPORTED_CLAUDE_VERSIONS = Object.freeze(['2.1.196']);
+//
+// THIS IS A CLOSED LIST OF EXACT STRINGS, NOT A RANGE AND NOT A SUPPORT DECLARATION.
+//
+//   '2.1.196' — npm `@anthropic-ai/claude-code`, exercised in the revision-1 live probe run.
+//   '2.1.220' — `C:\Users\levij\.local\bin\claude.exe`, the executable a Blue Helm pane actually
+//               resolves and launches. Added PROVISIONALLY in revision 3 under an explicit work
+//               order, and only because the final authorized run exercises THAT EXACT resolved
+//               binary through the real Electron path. If that run cannot start, launches a
+//               different binary, or fails before producing a trustworthy observation, this entry
+//               is removed again before finalization. It is an experiment record, not a
+//               compatibility claim about the 2.1.x line.
+//
+// Two entries must not be read as "anything between them works". § 7.5 of the procurement record
+// records that provider surfaces drift by REMOVAL as well as addition, so every version an operator
+// might run has to be exercised on its own or it stays `unknown`. isVersionSupported() is an exact
+// indexOf against this list precisely so no semver reasoning can creep in.
+const SUPPORTED_CLAUDE_VERSIONS = Object.freeze(['2.1.196', '2.1.220']);
 
 const api = {
   PROTOCOL_VERSION,

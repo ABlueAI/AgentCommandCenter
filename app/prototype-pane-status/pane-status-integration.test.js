@@ -61,9 +61,15 @@ function capturingNet() {
 }
 
 /**
- * Construct the prototype with EXACTLY the dependency set app/main.js passes — deliberately WITHOUT
- * `observedVersion`, because main.js does not pass one. If this shape cannot reach a real state, the
- * application cannot either.
+ * Construct the prototype using the APPLICATION'S CALL SHAPE — deliberately WITHOUT `observedVersion`,
+ * because main.js does not pass one. If this shape cannot reach a real state, the application cannot
+ * either. That absence is the load-bearing property, and it is separately asserted against main.js's
+ * own source further down.
+ *
+ * CORRECTED (revision 3, Low finding 5): this used to claim "EXACTLY the dependency set app/main.js
+ * passes". It is not exact — `net` and `crypto` are injected TEST STUBS that main.js does not pass,
+ * so the suite can exercise the real protocol/store/server without binding a pipe. Everything else
+ * (`env`, `path`, `appDir`, `log`, `send`) mirrors main.js. Say what it is rather than overclaiming.
  */
 function buildLikeMain(sends) {
   return prototypeMod.createPaneStatusPrototype({
@@ -133,7 +139,9 @@ process.stdout.write('\n-- main.js\'s own call shape can reach a non-unknown sta
   cap.deliver(protocol.encodeMessage('Stop', token));
   eq(live.viewFor('pty1').state, 'turn ended', 'a second event advances the state');
 
-  // Same path, but with the version the application actually resolves on this machine.
+  // Same path, with the version the application actually resolves and launches on this machine.
+  // REVISION 3: `2.1.220` is now in the pinned list (exercised through the real Electron path under
+  // the final work order), so this case asserts the POSITIVE outcome for it.
   const sendsB = [];
   const capB = capturingNet();
   const liveB = prototypeMod.createPaneStatusPrototype({
@@ -143,11 +151,28 @@ process.stdout.write('\n-- main.js\'s own call shape can reach a non-unknown sta
   });
   liveB.start();
   const envB = liveB.envForPane({ id: 'pty1', cli: 'claude' });
-  liveB.setObservedVersion('2.1.220');
+  eq(liveB.setObservedVersion('2.1.220'), true,
+    'the executable Blue Helm actually resolves (2.1.220) is an exercised version');
   capB.deliver(protocol.encodeMessage('UserPromptSubmit', envB.BLUE_HELM_PANE_STATUS_TOKEN));
-  eq(liveB.viewFor('pty1').state, 'unknown',
+  eq(liveB.viewFor('pty1').state, 'working',
+    'AN ACCEPTED EVENT REACHES "working" UNDER THE APP-RESOLVED 2.1.220 EXECUTABLE');
+  eq(liveB.viewFor('pty1').reason, null, 'with no degrade reason');
+
+  // And the neighbouring version is STILL refused — two entries are a closed set, not a range.
+  const sendsD = [];
+  const capD = capturingNet();
+  const liveD = prototypeMod.createPaneStatusPrototype({
+    env: { BLUE_HELM_PANE_STATUS_PROTOTYPE: '1' },
+    path, appDir: path.join(__dirname, '..'), log: () => {},
+    send: (c, p) => sendsD.push({ c, p }), net: capD.net, crypto,
+  });
+  liveD.start();
+  const envD = liveD.envForPane({ id: 'pty1', cli: 'claude' });
+  eq(liveD.setObservedVersion('2.1.221'), false, 'an ADJACENT unexercised version is not supported');
+  capD.deliver(protocol.encodeMessage('UserPromptSubmit', envD.BLUE_HELM_PANE_STATUS_TOKEN));
+  eq(liveD.viewFor('pty1').state, 'unknown',
     'an accepted event under an UNEXERCISED version still refuses to display a state');
-  eq(liveB.viewFor('pty1').reason, 'version-mismatch', 'and says exactly why');
+  eq(liveD.viewFor('pty1').reason, 'version-mismatch', 'and says exactly why');
 }
 
 // ================================================================ version propagation
@@ -176,7 +201,8 @@ process.stdout.write('\n-- discovered version governs enrolment, events, heartbe
   const sendsC = [];
   const liveC = buildLikeMain(sendsC);
   liveC.envForPane({ id: 'pty1', cli: 'claude' });
-  eq(liveC.setObservedVersion('2.1.220'), false, 'the version Blue Helm actually resolves is NOT supported');
+  eq(liveC.setObservedVersion('2.1.221'), false,
+    'an unexercised version — adjacent to a supported one — is NOT supported');
   eq(liveC.viewFor('pty1').reason, 'version-mismatch', 'an unexercised version stays version-mismatch');
   eq(liveC.setObservedVersion(null), false, 'a FAILED discovery is recorded as null');
   eq(liveC.viewFor('pty1').reason, 'version-mismatch', 'and a failed discovery never assumes compatible');

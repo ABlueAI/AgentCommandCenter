@@ -107,10 +107,23 @@ function interpretProbe(result) {
   if (r.timedOut) return { ok: false, version: null, source: null, reason: 'version-probe-timeout' };
   if (r.error) return { ok: false, version: null, source: null, reason: 'version-probe-failed' };
   const stdout = typeof r.stdout === 'string' ? r.stdout : '';
-  if (readTag(stdout, ERROR_TAG) !== null) {
-    return { ok: false, version: null, source: null, reason: 'provider-not-found' };
-  }
+
+  // CORRECTED (revision 3, Low finding 3). SOURCE IS READ FIRST, BEFORE BRANCHING ON ERROR_TAG.
+  //
+  // The probe writes SOURCE_TAG as soon as `Get-Command` succeeds, and only then runs
+  // `& $s --version`. With `$ErrorActionPreference = "Stop"`, a native command that writes to stderr
+  // raises a terminating NativeCommandError in Windows PowerShell 5.1 — so the catch can fire AFTER
+  // the source line was already printed. Revision 2 tested ERROR_TAG first and therefore reported
+  // `provider-not-found` with a null source for a provider that WAS found and whose version command
+  // merely failed, and `version-command-failed` was unreachable in that case. Both outcomes fail
+  // closed to a null version either way; the defect was that the operator-visible reason named the
+  // wrong cause. Reserve `provider-not-found` for an ACTUAL resolution failure.
   const source = readTag(stdout, SOURCE_TAG);
+  if (readTag(stdout, ERROR_TAG) !== null) {
+    return source
+      ? { ok: false, version: null, source, reason: 'version-command-failed' }
+      : { ok: false, version: null, source: null, reason: 'provider-not-found' };
+  }
   if (!source) return { ok: false, version: null, source: null, reason: 'provider-unresolved' };
   const versionLine = readTag(stdout, VERSION_TAG);
   if (versionLine === null) return { ok: false, version: null, source, reason: 'version-command-failed' };

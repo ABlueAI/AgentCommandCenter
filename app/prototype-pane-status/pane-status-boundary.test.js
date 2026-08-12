@@ -355,9 +355,17 @@ process.stdout.write('\n-- temporary settings guard --\n');
 process.stdout.write('\n-- interrupted install: a second install must REFUSE, not clobber the backup --\n');
 {
   // THE SCENARIO THE REVIEWER FOUND. Revision 1's case (5) reused the SAME guard instance, which
-  // still held the true `original` in memory — so it never exercised the dangerous path. A crash
-  // means a FRESH PROCESS, and a fresh guard knows nothing. Every step below therefore builds a new
-  // guard, exactly as a new `node run-experiment-a.js install` would.
+  // still held the true `original` in memory — so it never exercised the dangerous path. Every step
+  // below therefore builds a NEW GUARD OBJECT, which is what drops the in-memory `installed` and
+  // `original` state that made the bug invisible.
+  //
+  // SCOPE, CORRECTED (revision 3, Low finding 6): these are FRESH GUARD OBJECTS IN ONE PROCESS, not
+  // separate processes. That is enough to prove the guard carries no rescuing in-memory state, which
+  // is the property under test here. The genuinely separate-process proof — a real crashed run, a
+  // real second `node run-experiment-a.js install`, and a real fresh-process `restore` — lives in
+  // `pane-status-runner.test.js`, which spawns the runner with spawnSync. The two suites together
+  // cover the sequence; neither claims the other's ground. Labels below say "new-guard" for that
+  // reason, and "fresh process" is reserved for the runner suite.
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pane-status-interrupt-'));
   const settingsPath = path.join(tmp, 'settings.json');
   const backupPath = path.join(tmp, 'settings.backup');
@@ -382,10 +390,10 @@ process.stdout.write('\n-- interrupted install: a second install must REFUSE, no
   //     file and both recovery artifacts survive on disk.
   const patchedShaAfterCrash = shaOf(settingsPath);
 
-  // (3) NEW-PROCESS INSTALL ATTEMPT — must refuse, visibly, touching nothing.
+  // (3) NEW-GUARD INSTALL ATTEMPT — must refuse, visibly, touching nothing.
   const g2 = mk();
   const second = g2.install('C:\\node.exe', 'C:\\reporter.js', 5);
-  assert(!second.ok, '(3) a fresh-process second install REFUSES');
+  assert(!second.ok, '(3) a new-guard second install REFUSES (see the runner suite for the real fresh process)');
   eq(second.reason, 'recovery-copy-already-exists', '(3) naming the recovery copy as the reason');
   assert(typeof second.action === 'string' && second.action.toLowerCase().indexOf('restore') !== -1,
     '(3) and telling the operator to run restore');
@@ -402,7 +410,7 @@ process.stdout.write('\n-- interrupted install: a second install must REFUSE, no
   eq(shaOf(settingsPath), patchedShaAfterCrash, '(3b) and still nothing was written');
   assert(!fs.existsSync(backupPath), '(3b) no new recovery copy was fabricated over the missing one');
 
-  // (4) NEW-PROCESS RESTORE — from the genuine backup, in a process that never ran install().
+  // (4) NEW-GUARD RESTORE — from the genuine backup, using a guard that never ran install().
   fs.copyFileSync(path.join(tmp, 'settings.json'), path.join(tmp, 'patched.keep')); // keep for (5)
   fs.writeFileSync(backupPath, fs.readFileSync(path.join(tmp, 'patched.keep')));    // wrong backup...
   const gBad = mk();
@@ -412,10 +420,11 @@ process.stdout.write('\n-- interrupted install: a second install must REFUSE, no
 
   const g4 = mk();
   const id4 = g4.captureIdentity();
-  assert(id4.existed, '(4) the fresh process sees a settings file');
-  // A fresh guard's notion of "original" is the PATCHED file, so guard.restore() alone would restore
-  // the patch. That is precisely why the runner keeps an identity sidecar and restores from it; here
-  // we assert the recovery DATA is intact and byte-identical to the genuine original.
+  assert(id4.existed, '(4) the new guard sees a settings file');
+  // A new guard's notion of "original" is the PATCHED file, so guard.restore() alone would restore
+  // the patch. That is precisely why the runner keeps an identity sidecar and restores from it — and
+  // why the end-to-end restore is proven in `pane-status-runner.test.js`, in a real separate process.
+  // Here we assert only that the recovery DATA is intact and byte-identical to the genuine original.
   fs.writeFileSync(settingsPath, fs.readFileSync(backupPath));
 
   // (5) EXACT RESTORATION of the genuine original bytes and hash.

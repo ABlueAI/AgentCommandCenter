@@ -107,13 +107,78 @@ process.stdout.write('\n-- every failure mode yields a NULL version, never an as
     eq(got.reason, reason, `  ${label} carries its bounded reason`);
   }
 
+  // ---- Low finding 3 (revision 3): resolution success vs resolution failure are DIFFERENT reasons.
+  //
+  // The probe prints SOURCE_TAG the moment `Get-Command` succeeds, then runs `& $s --version`. Under
+  // `$ErrorActionPreference = "Stop"`, a native command writing to stderr raises a terminating
+  // NativeCommandError in Windows PowerShell 5.1, so the catch can fire AFTER the source line was
+  // printed. Revision 2 checked ERROR_TAG first and called that `provider-not-found` with a null
+  // source — naming the wrong cause for a provider that was found. Both paths still fail closed.
+  {
+    const resolvedButVersionThrew = version.interpretProbe({
+      stdout: `${version.SOURCE_TAG}C:\\Users\\levij\\.local\\bin\\claude.exe\n${version.ERROR_TAG}NativeCommandError\n`,
+    });
+    eq(resolvedButVersionThrew.ok, false, 'a resolved provider whose --version THREW still refuses');
+    eq(resolvedButVersionThrew.reason, 'version-command-failed',
+      '  and reports version-command-failed, NOT provider-not-found');
+    eq(resolvedButVersionThrew.source, 'C:\\Users\\levij\\.local\\bin\\claude.exe',
+      '  and PRESERVES the resolved source, so the operator is told which executable failed');
+    eq(resolvedButVersionThrew.version, null, '  while still yielding a null version (fail-closed)');
+
+    const neverResolved = version.interpretProbe({
+      stdout: `${version.ERROR_TAG}CommandNotFoundException\n`,
+    });
+    eq(neverResolved.reason, 'provider-not-found',
+      'provider-not-found is RESERVED for an actual resolution failure');
+    eq(neverResolved.source, null, '  which genuinely has no source to report');
+  }
+
   // The null must actually degrade the badge — this is the join between this module and the store.
   assert(!protocol.isVersionSupported(null), 'a null version is NOT supported (badge degrades to unknown)');
   assert(!protocol.isVersionSupported(''), 'an empty version is NOT supported');
-  assert(!protocol.isVersionSupported('2.1.220'),
-    'the executable Blue Helm resolves (2.1.220) is NOT in the supported list — it was never exercised live');
+}
+
+// ---------------------------------------------------------------- the pinned list is EXACT, not a range
+process.stdout.write('\n-- the supported list is a closed set of exact strings, never a semver range --\n');
+{
+  // REVISION 3. `2.1.220` — the executable a Blue Helm pane actually resolves and launches — was
+  // added PROVISIONALLY alongside the already-evidenced npm `2.1.196`, and only because the final
+  // authorized run exercises that exact binary through the real Electron path. Two entries must not
+  // become "the 2.1.x line works": § 7.5 of the procurement record records that provider surfaces
+  // drift by REMOVAL as well as addition, so every version has to be exercised on its own merits.
+  eq(protocol.SUPPORTED_CLAUDE_VERSIONS.length, 2, 'the list holds exactly two exercised versions');
   assert(protocol.isVersionSupported('2.1.196'),
-    'only npm 2.1.196, the version actually exercised, is supported');
+    'npm 2.1.196 (revision-1 live probe run) is accepted');
+  assert(protocol.isVersionSupported('2.1.220'),
+    'the app-resolved .local\\bin\\claude.exe 2.1.220 is accepted');
+
+  // NEIGHBOURS ON BOTH SIDES AND BETWEEN THE TWO ENTRIES ARE ALL REFUSED. This is the assertion that
+  // proves no range behaviour exists: 2.1.200 sits BETWEEN the two supported versions and is still
+  // refused, which a semver range could not do.
+  for (const near of ['2.1.195', '2.1.197', '2.1.200', '2.1.219', '2.1.221', '2.1.2200', '2.2.196', '3.1.220']) {
+    assert(!protocol.isVersionSupported(near),
+      `a NEARBY version (${near}) is refused — the check is exact-match, not a range`);
+  }
+  assert(!protocol.isVersionSupported('2.1.200'),
+    'a version BETWEEN the two supported entries is refused, so the pair is not an interval');
+
+  // Malformed, padded, and shape-confusable inputs are refused rather than coerced.
+  for (const bad of ['', ' 2.1.220', '2.1.220 ', 'v2.1.220', '2.1.220 (Claude Code)', '2.1', '2.1.220.1',
+                     '2.1.220-beta.1', 'latest', '*', '>=2.1.196', '2.1.196,2.1.220']) {
+    assert(!protocol.isVersionSupported(bad),
+      `a malformed or range-shaped version (${JSON.stringify(bad)}) is refused`);
+  }
+  for (const wrongType of [null, undefined, 2.1, {}, [], ['2.1.220'], true]) {
+    assert(!protocol.isVersionSupported(wrongType),
+      `a non-string version (${JSON.stringify(wrongType)}) is refused`);
+  }
+
+  // The list is frozen, so no caller can widen it at runtime.
+  assert(Object.isFrozen(protocol.SUPPORTED_CLAUDE_VERSIONS), 'the pinned list is frozen');
+  let mutated = false;
+  try { protocol.SUPPORTED_CLAUDE_VERSIONS.push('9.9.9'); mutated = true; } catch { mutated = false; }
+  assert(!protocol.isVersionSupported('9.9.9'),
+    'and a push against it cannot introduce a supported version' + (mutated ? '' : ' (throws in strict mode)'));
 }
 
 // ---------------------------------------------------------------- version string parsing

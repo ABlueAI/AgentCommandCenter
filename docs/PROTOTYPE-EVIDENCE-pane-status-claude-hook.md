@@ -13,8 +13,49 @@ here are experiment choices, not production decisions.
 
 Branch: `feature/pane-status-prototype-a-claude`
 Base `main`: `3ff96bdea3e68a83cd5774c9b94b68d9cb292add`
-Experiment date: **2026-08-11**
-Document revision: **2** (corrective), after an independent Full-class review returned `VERDICT: FAIL`
+Experiment dates: **2026-08-11** (revisions 1–2) · **2026-08-12** (revision 3, the real-application run)
+Document revision: **3** (final), after revision 2 received an independent Full-class `VERDICT: PASS`
+
+---
+
+## 0.A REVISION 3 — the real-application run, and exactly what it did and did not establish
+
+Revision 2 was reviewed independently and returned:
+
+> VERDICT: PASS
+
+The reviewer independently confirmed **all 11 revision-1 findings** fixed, scoped, or honestly
+recorded, **with none downgraded**, and raised **six non-blocking Low findings**. All six are
+corrected in revision 3 (§ 0.B). Verified revision-2 artifacts, unchanged:
+
+| Artifact | Range | Size | SHA-256 |
+| --- | --- | --- | --- |
+| rev2 focused | `f8cb64a3...c8d9fdaa` | 165,445 | `b8b5f644d1fc53f84beb6c7762c7968dbd7328de1374a0a6c622cee9242a64f7` |
+| rev2 cumulative | `3ff96bde...c8d9fdaa` | 280,014 | `3b3cb40fc1d5590479f7009af66f76934c48044f283e598d5b2566fc3e1683f3` |
+| rev1 (unchanged) | `3ff96bde...bf66fb3b` | 174,128 | `eaad43a22aeacfc7de79f234e3805e7aaf56dd75e2de11854e42d5936aa42f89` |
+
+**THE HEADLINE: for the first time, the prototype ran inside the REAL Electron application, against
+the executable a Blue Helm pane actually launches, and real hook events drove real states through
+main, the preload boundary and the renderer subscription.** Revision 2 could only prove that by test.
+
+**AND THE HONEST COUNTERWEIGHT, stated here rather than buried: the human observer reported that he
+could not see a badge** ("idk what badges youre talking about … im not seeing what youre
+referencing"). The event path is proven; the **visible control is not**. See § 7.1. The Dockview drag
+was **again NOT PERFORMED**, so kill criterion 2 is **still NOT SATISFIED** (§ 10). And the run
+consumed **more model turns than were authorized** — see § 3.4, which is not rounded down.
+
+### 0.B The six Low findings from the revision-2 review, and their dispositions
+
+| # | Low finding | Disposition in revision 3 |
+| --- | --- | --- |
+| 1 | `dockview-default-path.test.js` carried a stale comment saying the badge module "defines one global" with the gate off — revision 1's behaviour, and the thing finding 6 removed | **CORRECTED.** The comment now states that gate-off means the module is loaded but publishes **no** prototype global |
+| 2 | The `additionalArguments` tripwire FILTERED to `...`-prefixed lines before checking them, so an unconditional non-spread entry would be dropped rather than caught | **FIXED.** Every non-empty, non-comment entry is now inspected and an unconditional one fails; a **negative control** proves the predicate actually rejects one |
+| 3 | `interpretProbe` tested `ERROR_TAG` before `SOURCE_TAG`, so a resolved provider whose `--version` threw was reported `provider-not-found` with a null source, and `version-command-failed` was unreachable | **FIXED.** Source is read first; a resolved provider whose version command failed now reports `version-command-failed` **and preserves the resolved path**. `provider-not-found` is reserved for real resolution failure. Both outcomes covered by new assertions |
+| 4 | `discover().then(...)` had no `.catch()`, so a throw in the handler became an unhandled rejection — a silent failure | **FIXED.** A bounded `.catch()` logs a fixed constant: no path, environment value, command output, token, or the caught error's own text |
+| 5 | The integration suite claimed "EXACTLY the dependency set app/main.js passes" while also injecting `net`/`crypto` stubs | **CORRECTED.** It now says application call shape **plus injected transport/crypto test stubs**, and names the load-bearing property (no `observedVersion`) |
+| 6 | Boundary-test cases were labelled "fresh-process" but built fresh **guard objects** in one process | **RELABELLED** to "new-guard". "Fresh process" is reserved for `pane-status-runner.test.js`, which really spawns the runner |
+
+**No finding was downgraded, and none was closed by argument rather than by change.**
 
 ---
 
@@ -107,12 +148,30 @@ PATH itself, never guesses an install location, and never reads another installa
 metadata. Resolution failure, an erroring version command, an unparsable string, or a timeout all
 yield a **null** version, which keeps the badge at `unknown` — never "assume compatible".
 
-**`SUPPORTED_CLAUDE_VERSIONS` remains `['2.1.196']`.** `2.1.220` was deliberately **not** added: the
-work order permits it only if the final authorized model turn exercises that exact binary and
-confirms the hook behaviour, and that turn was **not consumed** (§ 3.3). The honest consequence is
-that **on Blue's machine today the badge will read `unknown (version-mismatch)`**, and main surfaces
-a visible `main-error` saying so. That is the designed, correct outcome for an unexercised provider
-build — not a defect, and not a claim that the feature works.
+**REVISION 3: `SUPPORTED_CLAUDE_VERSIONS` is now `['2.1.196', '2.1.220']`.**
+
+Revision 2 deliberately left `2.1.220` out, because no authorized run had exercised it, and recorded
+the honest consequence that the badge would read `unknown (version-mismatch)` on Blue's own machine.
+Revision 3's work order authorized adding it **provisionally**, conditional on the final run actually
+launching that exact resolved executable and observing the real application path successfully.
+
+**It did.** In the running Electron application (§ 3.5):
+
+```
+[pane-status] provider resolved: C:\Users\levij\.local\bin\claude.exe (version 2.1.220)
+```
+
+no `version-mismatch` `main-error` was emitted, the enrolled pane's first view was
+`unknown (no-signal)` rather than `unknown (version-mismatch)`, and **six real hook events from that
+build were accepted and drove real states**. So the entry stays.
+
+**What its presence does and does not mean.** It means events from that exact build were accepted and
+displayed by the real application. It does **not** mean the badge was seen (§ 7.1), and it is **not**
+a compatibility statement about the 2.1.x line. `isVersionSupported` remains an exact `indexOf`
+against a frozen, closed list — `pane-status-version.test.js` asserts that `2.1.195`, `2.1.197`,
+`2.1.200` (which sits **between** the two supported entries), `2.1.219`, `2.1.221`, `2.2.196` and
+`3.1.220` are **all still refused**, which no semver range could do. Two entries are two exercised
+data points, not an interval.
 
 The check remains an **exact match against a pinned list**, not a semver range, because § 7.5 of the
 procurement record records that provider surfaces drift by **removal** as well as addition.
@@ -142,7 +201,65 @@ Live run: **4 events accepted, 0 refused, 4 connections, 0 dropped.**
   fixed and proven by test through main.js's own call shape, but **no Electron instance has yet
   displayed any of these states**. See § 3.3.
 
-### 3.3 The one remaining authorized model turn was NOT consumed
+### 3.5 REVISION 3 — events observed in the REAL Electron application
+
+Every line below is from the running application's own main-process log, with the corresponding
+renderer-side line from `app/renderer/app.js`. Nothing here came from `live-probe.js`.
+
+| Event | Real-app result | Renderer received it? |
+| --- | --- | --- |
+| (enrolment) | `pane pty1 enrolled (token minted, retained in main memory only)` | `pty1 -> unknown (no-signal)` |
+| `SessionStart` | **accepted → `idle`** | `pty1 -> idle` |
+| `UserPromptSubmit` | **accepted → `working`** (×2) | `pty1 -> working` |
+| `Stop` | **accepted → `turn ended`** (×2) | `pty1 -> turn ended` |
+| **`Notification`** | **accepted → `attention`** | `pty1 -> attention` |
+| `StopFailure` | **not emitted — UNVERIFIED** | — |
+| `SessionEnd` | **not observed this run** — Electron was force-stopped rather than Claude exited interactively | — |
+
+**6 events accepted · 0 refused · 0 dropped · 0 transport errors.**
+
+Three results here are new and none of them existed before revision 3:
+
+1. **The real preload/renderer path is proven.** The `[pane-status PROTOTYPE] …` lines are emitted by
+   the renderer's own subscription callback, which runs only if `window.ccPaneStatus` existed, the
+   gate token reached the preload, and main pushed on the prototype channel. Revision 2 could only
+   assert that against source.
+2. **`Notification` FIRED NATURALLY and was accepted → `attention`.** Every prior revision recorded
+   it `UNVERIFIED`, and § 11 called it "the one signal that would make the badge genuinely useful …
+   the one not yet observed live". It is now observed. **What produced it was not established** — the
+   timing is consistent with Claude Code's idle notification, but a permission prompt would look the
+   same from here, and the operator did not confirm which. Recorded as **observed, cause unknown**.
+3. **A second pane was refused status by the real application**, not merely by the data structure:
+   `pane pty2 launched WITHOUT status: Experiment A already bound to pty1`. The pane itself launched
+   and worked normally. That upgrades kill criterion 9 from STRUCTURAL to RUNTIME (§ 10).
+
+### 3.4 MODEL TURNS — the count is over budget, and is recorded as such
+
+**Authorized: three turns total. Consumed: four.**
+
+Two were spent in revision 1. Revision 3's work order authorized **one** final content-free turn. The
+application log shows **two** complete prompt cycles in the enrolled pane:
+
+```
+accepted UserPromptSubmit -> working      <- turn A (the authorized "Reply with exactly the word: ok")
+accepted Stop             -> turn ended
+accepted Notification     -> attention
+accepted UserPromptSubmit -> working      <- turn B, UNPLANNED
+accepted Stop             -> turn ended
+```
+
+The operator reported sending **one** prompt ("it did reply with only the word 'ok' after i
+prompted") and did not confirm a second. Only the enrolled pane holds the token, so both cycles came
+from `pty1`; no other session could have produced them.
+
+**The origin of turn B is NOT established, and this document does not invent one.** It is recorded as
+a **one-turn overrun against the authorized budget**, flagged for Blue rather than rounded down to
+"three of three". What turn B contained is unknown, so it cannot be asserted content-free — but see
+§ 6: the transport carried only an event name and a token in every case, and the whole application
+log contains no token, no pipe name, and no 64-hex run of any kind, so kill criterion 1 is unaffected
+by the uncertainty.
+
+### 3.3 Revision 2's decision to hold the turn (superseded by § 3.4)
 
 Two of three authorized turns were spent in revision 1. One remains. The work order permits it only
 for a run that exercises the real Electron main process, the real preload boundary, the real renderer
@@ -342,7 +459,45 @@ very next event. That is **self-healing on the next update**, not live re-attach
 happened. Recorded as **not performed** — never as passed, never as failed. The identity property is
 structural (the badge is keyed by the same `pty<N>` id that main's PTY map and Dockview's panel
 registry use) and the module-level proof exercises the real module, but a human drag in the running
-app is still outstanding. The procedure for Blue is in handoff § 11.
+app is still outstanding.
+
+**REVISION 3: still NOT PERFORMED.** The application was running and the operator was asked directly.
+He declined and asked to revisit it separately — verbatim: *"its good, lets move on, idk what badges
+youre talking about can we circle back to it in another test? im not seeing what youre referencing"*.
+No drag was performed and none is reported. **Kill criterion 2 remains NOT SATISFIED** (§ 10).
+
+### 7.1 NEGATIVE RESULT (revision 3) — the event path works; the VISIBLE BADGE IS UNCONFIRMED
+
+**The operator, looking at the running application, reported that he could not see any badge.** That
+is a first-hand observation and it is recorded as one, not explained away.
+
+**Why the renderer log lines do NOT contradict him.** `app/renderer/app.js` logs
+`[pane-status PROTOTYPE] …` when `paneStatusBadge.update(view)` returns a truthy value. But `update()`
+returns its computed view **whether or not a DOM node was attached**:
+
+```js
+const el = ensureBadge(view.paneId);
+if (!el) return shown; // pane not in the DOM (yet, or any more) — state is still remembered
+```
+
+So those lines prove the event reached the renderer and the badge module processed it. **They do not
+prove anything was drawn.** Revision 2's suite has the same blind spot: it asserts against a stub DOM,
+where the host element always exists.
+
+**A structural cause was identified, and it is a hypothesis, not a diagnosis.** `ensureBadge` prefers
+`pane.querySelector('.term-head')` as its host and falls back to the pane root. The class
+**`.term-head` appears nowhere in `app/renderer/app.js` or `app/renderer/index.html`** — it exists
+only as 12 rules in `styles.css`. So the badge, if attached at all, is appended as the **last child of
+the pane element**, after the xterm container, rather than into a pane header. That is a plausible
+explanation for an invisible control and it is **not confirmed**: no DOM inspection of the running
+renderer was performed, so it is a lead for the next test, not a finding.
+
+**What this costs and what it does not.** It does **not** weaken § 3.5: main, IPC, the preload
+boundary, the renderer subscription and the badge module's state machine all demonstrably worked, and
+the state was correct at every step. It **does** mean the claim "a badge was visibly displayed in the
+real application" **cannot be made**, and this document does not make it. The prototype's *display*
+half is the least-verified part of Experiment A, and after this run that is more clearly true, not
+less.
 
 ---
 
@@ -379,6 +534,25 @@ now **382 bytes**, hash `a67c2e66…`, with exactly the five original top-level 
 restoration held and left nothing behind; the one-byte difference from the 381-byte historical hash is
 a later, unrelated edit to an existing value. **That file is user-owned state and revision 2 does not
 touch it or try to restore it to the historical hash.**
+
+### 8.2 REVISION 3 — the real run's settings identities, start to finish
+
+| Stage | Value |
+| --- | --- |
+| Baseline captured before any write | **382 bytes** · `a67c2e6620f13861c7e548b4d69c259b119bae746cc6f8dfbd307a6b8f55dcc5` |
+| Baseline top-level keys | `effortLevel, model, permissions, theme, tui` · no `hooks` · no marker |
+| Read-only `identity` command agreed | 382 / `a67c2e66…`, and created nothing |
+| Recovery copy after install | 382 / `a67c2e66…` — **byte-identical to the baseline**, verified before the first mutation |
+| Identity sidecar | recorded the same genuine identity, written only after a successful install |
+| Patched live file | 3,188 bytes · `hooks` added · marker present · 6 events, each 0 → 1 group |
+| **Restored** | **382 bytes** · `a67c2e6620f13861c7e548b4d69c259b119bae746cc6f8dfbd307a6b8f55dcc5` — **exact match** |
+| Restored keys, re-parsed | `effortLevel, model, permissions, theme, tui` · `hooks` **absent** · marker **absent** · no `pane-status` reference |
+| Recovery copy + sidecar | **removed only after restoration was proven** |
+| Experiment temp directory | **removed** (verified empty and name-guarded first) |
+| Named pipe · Electron · reporter processes | **none remain** |
+
+The restored file is byte-identical to the pre-run baseline. **This run therefore leaves Blue's Claude
+configuration exactly as it found it.**
 
 ### 8.1 CORRECTION — an interrupted install could have destroyed the genuine backup
 
@@ -433,6 +607,30 @@ window the hooks were installed.
 No Electron instance was launched by this experiment, so no isolated user-data directory was needed:
 the probe stands in for the main process using the **real** store, server and protocol modules. That is
 a deliberate scope reduction and it is why § 7's live drag is unperformed.
+
+**REVISION 3 UPDATE — one production file DID change, and it is reported rather than quietly left out
+of the table above.** Revision 3 launched the real application against the **real** user-data
+directory (no isolated profile), so the row "`dockview-layout.json` — absent / absent" no longer
+holds:
+
+| Check | Before revision 3 | After revision 3 |
+| --- | --- | --- |
+| `%APPDATA%\command-center\dockview-layout.json` | **absent** | **PRESENT** — 1,291 B, written during the run |
+| Leftover `*blue-helm-pane-status*` pipes | — | **0** |
+| Leftover experiment processes | — | **0** |
+| Experiment temp directory | — | **0** (removed after verifying it was empty, behind a name guard) |
+| Claude user settings | 382 / `a67c2e66…` | 382 / `a67c2e66…` |
+
+**Who wrote it, and whether it matters.** It was written by the **production Dockview layout engine**,
+which persists the operator's layout whenever the app runs and panes are opened — normal application
+behaviour, not a prototype side effect. It was **not** deleted: it is legitimate user-owned state
+produced by ordinary use, and removing it would destroy a real setting to make a table look tidy.
+Scanned for contamination: **0** matches for `pane-status`, `blue-helm`, or any 64-hex run. Its keys
+are `schemaVersion, package, packageVersion, savedAt, layout`.
+
+The honest statement is therefore narrower than revision 2's: **the prototype interfered with no
+production user data; running the real application persisted the operator's own layout, as it always
+does.**
 
 ### 9.1 CORRECTION — gate-off was inert, not absent
 
@@ -495,6 +693,31 @@ or source assertion, not observed live. **NOT PERFORMED** = neither.
 * **Criterion 8 held for the run but had a latent failure mode** that the revision-1 fixtures could
   not have caught.
 
+### 10.1 REVISION 3 — restated against the REAL-APPLICATION run
+
+Legend unchanged, with one addition: **NOT SATISFIED** = the criterion's own runtime condition was
+never created, so "did not fire" is not an answer to it.
+
+| # | Kill criterion | Status after revision 3 | Basis |
+| --- | --- | --- | --- |
+| 1 | Conversation/sensitive content reaches the app | **NO** | **RUNTIME (real app) + STRUCTURAL** — 6 accepted events in the real application; the entire Electron log contains no token, no pipe name and **no 64-hex run at all**; plus the existing source proof (§ 6) |
+| 2 | Any event updates the wrong pane **after a Dockview move** | **NOT SATISFIED** | **STRUCTURAL only.** The drag was offered in the running app and declined (§ 7). Never passed, never failed — **not established** |
+| 3 | Token appears in logs, arguments, renderer state, or persistent storage | **NO** | **RUNTIME (real app) + STRUCTURAL** — scanned the real application log: 0 tokens, 0 pipe names. Plus every runner mode executed and source-proved (§ 6) |
+| 4 | Credential scrubbing must be weakened | **NO** | **RUNTIME** — the real PTY logged `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1`; the fenced-role region is byte-identical to the reviewed base across all three revisions |
+| 5 | A non-loopback network listener is created | **NO** | **RUNTIME** — the real app bound `\\.\pipe\blue-helm-pane-status-…` and nothing else; the pipe was gone after shutdown |
+| 6 | Claude experiences a repeatable or visible stall | **NO** | **RUNTIME** — two real turns in the real app, no stall reported and none visible; operator: *"no errors, appears tobeb working as intended"*. Still not a latency study |
+| 7 | Reporter execution becomes unbounded | **NO** | **RUNTIME + STRUCTURAL** — 6 events delivered, 0 dropped, 0 transport errors, no residual reporter process |
+| 8 | User-scope settings cannot be restored byte-identically | **NO** | **RUNTIME** — restored to the exact baseline hash `a67c2e66…` and re-parsed clean (§ 8.2). The revision-2 latent failure remains fixed and fixture-covered |
+| 9 | More than one provider or pane becomes involved | **NO** | **RUNTIME (upgraded from STRUCTURAL)** — a second real pane launched and was refused status by the running application: `pane pty2 launched WITHOUT status: Experiment A already bound to pty1` |
+| 10 | Completing the experiment would require Experiment B | **NO** | **RUNTIME** — no app-server, listener, `codex --remote`, or observer client existed at any point |
+
+**Two things sit outside the ten and must not be lost in a table of NOs:**
+
+* **§ 7.1 — the visible badge was never confirmed.** No kill criterion covers "the display works",
+  which is why it is stated as a negative result rather than a criterion outcome. It is the weakest
+  part of Experiment A.
+* **§ 5.1 — reporter provenance is unresolved.** Unchanged by this run, and still a production blocker.
+
 Separately, and outside the ten: § 5.1 records a **negative security result** — the token
 authenticates the pane environment, not the reporter. No kill criterion covers provenance, which is
 why it is stated as a result rather than as a criterion outcome.
@@ -535,6 +758,34 @@ Added in revision 2:
     that made it impossible and proves the fix by test through main.js's own call shape, but no
     Electron instance has yet rendered a badge (§ 3.3).
 12. **Reporter provenance** — unresolved, and now a recorded negative result (§ 5.1).
+
+Resolved, changed, or added in revision 3:
+
+13. **RESOLVED — item 1, `Notification` at runtime.** It fired naturally in the real application and
+    was accepted → `attention` (§ 3.5). **What triggered it is still unknown** (idle notification vs
+    permission prompt), so the signal is proven to arrive while its *meaning* remains uncharacterised.
+14. **PARTLY RESOLVED — item 11.** The main → IPC → preload → renderer path is now proven in the real
+    Electron application. **The visible badge is not** (§ 7.1) — so "does the whole path work" is now
+    *yes up to the DOM, unconfirmed at the DOM*.
+15. **STILL OPEN — item 3, the live Dockview drag.** Offered in the running app and declined; kill
+    criterion 2 stays NOT SATISFIED.
+16. **STILL OPEN — items 2, 4, 5, 6, 7, 8, 12.** `StopFailure` remains **UNVERIFIED**; `SessionEnd`
+    was **not observed in this run** (Electron was force-stopped rather than Claude exited cleanly),
+    though revision 1 did observe it under 2.1.196.
+17. **NEW — why the badge is invisible.** `.term-head`, the host `ensureBadge` prefers, does not exist
+    in the renderer markup, so the badge falls back to the pane root. **Hypothesis, not diagnosis**
+    (§ 7.1); no DOM inspection was performed.
+18. **NEW — the origin of the second model turn** (§ 3.4). Unexplained, and it put the run one turn
+    over the authorized budget.
+19. **PROVIDER-UPGRADE BEHAVIOUR — narrowed, NOT generalised (supersedes item 10's scope).** The
+    prototype has now been exercised against **two** builds: npm `2.1.196` (revision 1, via the probe)
+    and `.local\bin\claude.exe` `2.1.220` (revision 3, via the real application). Across that one
+    transition the hook mechanism kept working: the same event names fired and the same reporter
+    handled them unchanged. **That is a two-point observation, and it is the entire extent of the
+    claim.** It does not establish that hooks survive upgrades in general, that event names are
+    stable across other versions, or that the next release will behave this way — § 7.5 of the
+    procurement record records drift by removal as well as addition. The exact-match pin exists
+    precisely so an unexercised build degrades visibly to `unknown` instead of being assumed fine.
 
 ---
 
@@ -595,6 +846,35 @@ delivers its stated benefit.
 3. A separately reviewed decision on **provenance** (§ 5.1): solve it, or accept pane status as
    advisory and say so in the UI.
 4. A bounded re-verification of what `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` actually scrubs (§ 5).
+
+### 12.1 REVISION 3 — what the real-application run changed in this answer
+
+**Stronger than revision 2 could claim:**
+
+* **The mechanism now has T4 evidence inside the real product**, not through a probe. Main, the store,
+  the named pipe, the preload boundary and the renderer subscription all carried six real events to
+  correct states, against **the executable a pane actually launches**. Recommendation item 1 is done.
+* **`Notification` — the highest-value signal — was observed live** and mapped to `attention`
+  (§ 3.5). Revision 2's "one honest complication" (the most useful state was the unproven one) is
+  **partly retired**: the signal arrives. What triggers it is still uncharacterised, so item 2 is
+  narrowed, not closed.
+* **Single-pane containment is a runtime fact**, not a data-structure argument (criterion 9).
+* **Reversibility is a runtime fact**: byte-identical restoration of the real user file (§ 8.2).
+
+**Weaker, or newly exposed, and therefore recorded against the approach:**
+
+* **The display half is now the least-verified part of the prototype.** The operator could not see a
+  badge (§ 7.1). Revision 2 assumed the renderer half was fine because its tests passed against a
+  stub DOM; the first human look says otherwise. **A status feature nobody can see delivers none of
+  the stated benefit**, and no production decision should treat § 3.5's six events as evidence that
+  the feature works *for a user*.
+* **Kill criterion 2 is still not satisfied** after two attempts to get it observed.
+* **Trusted event provenance remains unresolved** (§ 5.1) and is untouched by this run.
+
+**The net position is unchanged in kind and sharper in detail: the transport, the privacy boundary and
+the reversibility are demonstrated; the trust model and the user-visible display are not.** A
+hooks-first production design still has to solve provenance, and now also has to prove the badge is
+actually rendered where a Dockview pane can be seen.
 
 ---
 
