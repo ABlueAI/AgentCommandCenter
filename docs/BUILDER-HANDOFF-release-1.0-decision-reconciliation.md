@@ -221,16 +221,36 @@ the state of the gates beyond what `main` already records.
 
 ## 11. Review artifact
 
-Pinned cumulative artifact for the reviewed range, created with `git diff --output` (never PowerShell
-`>`) and gitignored via `.gitignore:33`:
-
-| Artifact | Range |
+| Field | Value |
 | --- | --- |
-| `.agent-review-release-1.0-decision-reconciliation.diff` | `4e6787f6dbafb482138ac4623654aa6bb63e997c...<reviewed content tip>` |
+| Base (pre-merge `main`) | `4e6787f6dbafb482138ac4623654aa6bb63e997c` |
+| **Reviewed content tip** | **`f527e3131ab82c1347dfa469cc852da4961a374c`** |
+| Branch tip | the handoff-only tail commit that pins this table |
+| Reviewed range | `4e6787f6dbafb482138ac4623654aa6bb63e997c...f527e3131ab82c1347dfa469cc852da4961a374c` |
 
-**Its exact identity — reviewed content tip, shortstat, byte size, SHA-256, byte-identical
-regeneration proof, and the exact changed-file list — is pinned by the handoff-only tail commit
-below**, because a commit cannot record the identity of a diff that ends at itself.
+| Artifact | Shortstat | Size | SHA-256 |
+| --- | --- | --- | --- |
+| `.agent-review-release-1.0-decision-reconciliation.diff` | **4 files, 972 insertions, 44 deletions** | **72,704 bytes** | `e688d5e7766ab01cc82805d46b2ea82840e14db2e37646467797bbeb949c27fa` |
+
+Created with `git diff --output` (never PowerShell `>`) and gitignored via `.gitignore:33`.
+**Regenerated from its stated range to a separate temporary file and proven byte-identical by `cmp`;
+only the temporary copy was removed.** `git diff --check` is clean (exit 0) on the range.
+
+**Exact changed-file list for the reviewed range** — four tracked Markdown files, nothing else:
+
+| Status | Path |
+| --- | --- |
+| `M` | `BLUE-HELM-MASTER-STATUS.md` |
+| `A` | `docs/BUILDER-HANDOFF-release-1.0-decision-reconciliation.md` |
+| `A` | `docs/DECISION-RECONCILIATION-release-1.0.md` |
+| `M` | `docs/OSS-PROCUREMENT-pane-status.md` |
+
+**Gate disposition: documentation-only; the app and Pester gates were NOT run** (§ 6). No code, test,
+dependency, configuration, script, merge-gate implementation, provider setting, or GitHub
+configuration is present in this range.
+
+**The tail commit above this content tip touches only this handoff document**, and the pinned artifact
+ends at the content tip and excludes the tail.
 
 ## Review-diff rule
 
