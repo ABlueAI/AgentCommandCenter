@@ -11,7 +11,14 @@ Evidence retrieval dates: **2026-08-08 – 2026-08-10**
 Revision: **4** — corrective, after independent Standard-class reviews of revisions 1, 2 **and** 3 each
 returned `VERDICT: FAIL`. Revision 4 returned **`VERDICT: PASS`** at reviewed tip
 `555aee5db928a8be73b0e3cdb528019677f9ad4e`.
-Subsystem verdict: **PROTOTYPE** — issued by Blue and recorded in § 12. This record is complete.
+Subsystem verdict: **BUILD FRESH** — issued by Blue on **2026-08-12** and recorded in § 13, which is
+this record's canonical ending. The earlier **PROTOTYPE** verdict (§ 12) is retained verbatim as the
+historical authorization under which bounded Experiment A was carried out; it is superseded as the
+canonical ending, **not withdrawn and not reinterpreted**. This record is complete.
+
+> **UPDATED — 2026-08-12.** This line previously read *"Subsystem verdict: **PROTOTYPE** — issued by
+> Blue and recorded in § 12."* That was accurate until the § 13 decision amendment; it is **stale, not
+> reinterpreted**.
 
 **Revision history.**
 
@@ -146,12 +153,20 @@ satisfied**, and the verdict is recorded in full at § 12:
 | --- | --- |
 | A read-only Source-Scout evaluation against primary sources | **Satisfied** — §§ 3–9 of this record |
 | A tracked OSS procurement decision record under `docs/` | **Satisfied** — this file, `docs/OSS-PROCUREMENT-pane-status.md` |
-| An explicit Blue verdict of ADOPT / FORK / PROTOTYPE / PATTERN-MINE / BUILD FRESH | **Satisfied** — `BLUE SUBSYSTEM VERDICT: PROTOTYPE` (§ 12) |
+| An explicit Blue verdict of ADOPT / FORK / PROTOTYPE / PATTERN-MINE / BUILD FRESH | **Satisfied twice** — `BLUE SUBSYSTEM VERDICT: PROTOTYPE` (§ 12, 2026-08-10) and, as the current canonical verdict, `BLUE SUBSYSTEM VERDICT: BUILD FRESH` (§ 13, 2026-08-12) |
 
-**What that authorizes is bounded prototype work only.** Production specification, architecture
-commitment, and production implementation remain unauthorized. The full boundary — including which
-experiment is authorized and which is not — is stated in § 12 and must be read there rather than
-inferred from this summary.
+**What the § 12 `PROTOTYPE` verdict authorized was bounded prototype work only**, and that work —
+Experiment A — is complete. **What the § 13 `BUILD FRESH` verdict authorizes is a production
+direction, not production code on any current branch.** Production specification and production
+implementation each still require their own work order. The full boundary — including the advisory-only
+safety clauses, the preconditions on any further paid live run, and the five production acceptance
+requirements — is stated in § 13 and must be read there rather than inferred from this summary.
+
+> **UPDATED — 2026-08-12.** This paragraph previously read *"What that authorizes is bounded prototype
+> work only. Production specification, architecture commitment, and production implementation remain
+> unauthorized."* That was accurate under the § 12 verdict alone and is **stale, not reinterpreted**,
+> now that § 13 records an approved production direction. Production *implementation* is still not
+> authorized by this record.
 
 ### 2.1 The pre-verdict state, retained as historical provenance
 
@@ -1640,3 +1655,144 @@ The evidence in §§ 3–11, the four review outcomes (three `VERDICT: FAIL`, th
 ---
 
 **BLUE SUBSYSTEM VERDICT: PROTOTYPE**
+
+> **SUPERSEDED AS THIS RECORD'S CANONICAL ENDING — 2026-08-12 — retained verbatim as historical
+> provenance.** The `PROTOTYPE` verdict above is **not withdrawn, not rewritten, and not
+> reinterpreted**. It authorized bounded Experiment A, that experiment was carried out under it, and
+> it remains the authorization the Experiment A record rests on. What changed is the **next**
+> direction: § 13 records a later Blue decision, and this record's canonical ending is now
+> **`BLUE SUBSYSTEM VERDICT: BUILD FRESH`** at the foot of § 13.
+
+---
+
+## 13. Decision amendment — 2026-08-12 — production direction after Experiment A
+
+### 13.1 Why this amendment exists, and what it does not disturb
+
+§ 12's `PROTOTYPE` verdict authorized **bounded Experiment A only**. That experiment has since been
+specified, built, reviewed across four revisions ending in an independent `VERDICT: PASS`, merged into
+`main` at `7afd945314fc3d4430b9030ef3b2a33b1acd1feb`, and closed out at
+`4e6787f6dbafb482138ac4623654aa6bb63e997c`. Its records are
+`docs/PROTOTYPE-EVIDENCE-pane-status-claude-hook.md` (revision 4) and
+`docs/BUILDER-HANDOFF-pane-status-prototype-a-claude.md`.
+
+**The `PROTOTYPE` verdict authorized the completed bounded experiment and nothing more.** It never
+authorized production, and this amendment does **not** rewrite it as though it had always meant
+production authorization. Both verdicts are true statements about different moments: `PROTOTYPE`
+authorized the experiment that has now ended; `BUILD FRESH` authorizes the production direction that
+follows it.
+
+**The candidate evaluation in §§ 3–11 is unchanged.** No new research sweep was run for this
+amendment, no candidate disposition moved, and no evidence row was re-scored. This section records a
+Blue decision made against evidence that was already reviewed and merged.
+
+### 13.2 Blue's authorization, verbatim
+
+Blue stated, verbatim:
+
+> APPROVE BUILD FRESH VERDICT
+>
+> BUILD FRESH — Pane status: build Blue Helm’s production pane-status subsystem as an advisory-only,
+> human-facing indicator using official provider lifecycle interfaces and the reviewed Experiment A
+> architecture. Provider events are unauthenticated hints and must never authorize or automatically
+> trigger merge, push, approval, pane closure, process control, restart, credential access, or another
+> consequential action. Begin with Claude Code only; fail closed to `unknown` for unverified versions;
+> require explicit reversible hook setup and removal; keep logs metadata-only; preserve the
+> Experiment A provenance limitation as an accepted residual.
+
+### 13.3 What this verdict means, stated precisely
+
+* **It supersedes `PROTOTYPE` for the next production direction.** Pane-status work no longer stops at
+  bounded prototyping; the subsystem now has an approved production direction.
+* **It does not erase or reinterpret Experiment A.** Experiment A remains a completed bounded
+  prototype with both positive and negative results, authorized by the `PROTOTYPE` verdict, and its
+  evidence stands exactly as reviewed.
+* **`BUILD FRESH` here means Blue Helm owns its status normalization, lifecycle, UI, and safety
+  boundaries** while **consuming official provider lifecycle interfaces**. The owned surface is the
+  normalization of provider signals into Blue Helm states, the state lifecycle and staleness policy,
+  the renderer indicator, and every safety boundary around them.
+* **It does not authorize reimplementing provider hook systems.** Blue Helm consumes what the provider
+  officially exposes. It does not fork, replace, wrap, patch, or reconstruct a provider's hook
+  mechanism, and it does not treat an undocumented provider internal as an interface.
+* **It does not authorize implementation through this branch.** The branch carrying this amendment is
+  documentation-only. Recording the verdict authorizes no production specification, no production
+  code, no provider command, no hook installation, and no live model session.
+
+### 13.4 The advisory-only boundary is part of the verdict, not commentary
+
+The verdict's safety clauses are binding scope:
+
+* **Provider events are unauthenticated hints.** They must **never** authorize or automatically
+  trigger merge, push, approval, pane closure, process control, restart, credential access, or another
+  consequential action.
+* **Claude Code only to begin.** Any additional provider requires its own decision.
+* **Fail closed to `unknown` for unverified versions** — the behaviour Experiment A already
+  demonstrated in the real application (`PROTOTYPE ○ unknown` against an unrecognised build).
+* **Explicit, reversible hook setup and removal** — never silent, never permanent by default.
+* **Logs stay metadata-only.**
+* **The Experiment A provenance limitation is preserved as an accepted residual** (§ 13.8).
+
+### 13.5 Requirements before another paid live pane-status run
+
+Binding preconditions, carried forward:
+
+* **The unexplained four-turn use against a three-turn authorization must be resolved, or enforceable
+  turn accounting must be implemented first.** Experiment A recorded four model turns against three
+  authorized and never established the origin of the extra prompt cycle
+  (`docs/PROTOTYPE-EVIDENCE-pane-status-claude-hook.md` § 3.4).
+* **No additional live run may occur merely to gather convenient evidence.** A paid run requires a
+  question it is the only way to answer, declared before the run.
+
+### 13.6 Production acceptance — every item required
+
+Production pane status is not complete until all five hold:
+
+1. **A human visibly observes the badge animate through real states.** Experiment A never did this.
+2. **Pane identity and status remain correct through a live Dockview move.** Never performed in
+   Experiment A; kill criterion 2 stands **NOT SATISFIED**.
+3. **A second pane cannot receive or inherit the first pane's status.**
+4. **Advisory status cannot trigger merge, push, approval, pane closure, process control, restart,
+   credential access, or another consequential action.** This is a negative control that must be
+   proven, not asserted.
+5. **If the hook is absent, broken, removed, or stops reporting, the badge becomes `unknown` within a
+   documented bounded interval.** It must **never** remain falsely `working` or `attention`.
+
+### 13.7 Three distinct Experiment A facts that must not be collapsed
+
+| Fact | Status |
+| --- | --- |
+| Static badge rendering | **HUMAN-CONFIRMED** as `PROTOTYPE ○ unknown` in the visible pane header |
+| Visible live state animation | **NOT CONFIRMED** — the verification that saw the badge sent no prompt |
+| Dockview move test | **NOT PERFORMED** — offered in the running application and declined |
+
+**These are three separate results and must be reported separately.** A confirmed static render is not
+a confirmed animation, and neither is a pane-move identity proof. Any future document that merges them
+into a single "the badge works" claim is wrong.
+
+### 13.8 Reporter provenance — accepted residual, with an automatic void condition
+
+Experiment A established as a negative security result that the pane token authenticates **possession
+of the pane environment**, not **reporter identity**: any descendant of the pane's PTY can read the
+token and submit a forged allowlisted event
+(`docs/PROTOTYPE-EVIDENCE-pane-status-claude-hook.md` § 5.1). The badge is therefore **advisory, not
+authenticated truth**.
+
+**That residual is accepted only while pane status is advisory and human-facing.**
+
+> **If pane status ever becomes an input to automation or a consequential action, this acceptance is
+> automatically void.** It then requires a new security decision and its own review before any such
+> use. No work order, specification, or implementation may rely on the current acceptance to justify
+> an automated consumer of pane status.
+
+### 13.9 What remains unauthorized after this amendment
+
+* **Production specification and production implementation are not begun by this record.** Each
+  follows its own work order after this reconciliation is reviewed and lands.
+* **Experiment B and all app-server runtime testing remain unauthorized** — no listener, no
+  `codex --remote`, no observer client.
+* **Providers beyond Claude Code remain unauthorized.**
+* **No new authentication scheme for reporter provenance is authorized or invented here.**
+
+---
+
+**BLUE SUBSYSTEM VERDICT: BUILD FRESH**
