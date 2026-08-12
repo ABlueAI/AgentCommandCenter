@@ -9,11 +9,14 @@ Revision 2 reviewed tip: `c8d9fdaa3ecd8b792850ad525b9b768bdd14bcb5` — **`VERDI
 Revision 3 reviewed tip: see § 12
 Merge commit SHA: Pending until merge
 
-**Status: REVISION 3 — FINAL. All six revision-2 Low findings corrected. Experiment A was run inside
-the REAL Electron application against the executable a pane actually launches. Claude settings were
-restored byte-identically. TWO RESULTS NEED BLUE'S ATTENTION BEFORE ANY NEXT STEP: the visible badge
-was never confirmed (§ 6), and the run went ONE MODEL TURN OVER BUDGET (§ 7). AWAITING A FRESH
-INDEPENDENT FULL-CLASS REVIEW. NOT MERGED, NOT PUSHED.**
+**Status: REVISION 4 — documentation-accuracy correction, after revision 3 received an independent
+`VERDICT: FAIL`. All six revision-2 Low findings remain corrected; Experiment A was run inside the
+REAL Electron application against the executable a pane actually launches; Claude settings were
+restored byte-identically. REVISION 4 CHANGES DOCUMENTATION ONLY — no code, no test, no hook, no
+model turn, no gate rerun. Badge rendering is now HUMAN-VERIFIED (§ 6); revision 3's `.term-head`
+claim was FALSE and is withdrawn. STILL OPEN: the run went ONE MODEL TURN OVER BUDGET (§ 7), the
+Dockview drag is NOT PERFORMED, and reporter provenance is unresolved. AWAITING A FRESH INDEPENDENT
+FOCUSED FULL-CLASS REVIEW. NOT MERGED, NOT PUSHED.**
 
 ## 0. Procurement authority
 
@@ -68,6 +71,27 @@ and nothing was merged or pushed. It raised **six non-blocking Low findings**.
 | 5 | Low | `pane-status-integration.test.js:63-67` — claimed "EXACTLY the dependency set app/main.js passes" while injecting `net`/`crypto` | **CORRECTED** to application call shape **plus injected test stubs**, naming the load-bearing property |
 | 6 | Low | `pane-status-boundary.test.js` — labels said "fresh-process" for fresh **guard objects** in one process | **RELABELLED** "new-guard"; "fresh process" reserved for the runner suite that really spawns processes |
 
+### 1.4 Revision 3 — `VERDICT: FAIL`
+
+An independent review of `3920a3b1` returned:
+
+> VERDICT: FAIL
+
+**Two findings, both against the documentation, neither against the code:**
+
+| # | Sev | Finding | Disposition in revision 4 |
+| --- | --- | --- | --- |
+| 1 | **High** | Evidence and handoff **falsely stated that `.term-head` does not exist**. It is created in `app/renderer/agent-dom.js`, and the badge attaches inside the visible pane header | **CORRECTED.** Claim withdrawn everywhere in current voice; the true code fact recorded (§ 6, evidence § 7.1.1); the zero-hit methodology defect recorded as a durable rule (evidence § 7.3) |
+| 2 | **Medium** | Blue's earlier *"idk what badges youre talking about"* was **ambiguous**, but the documents converted it into a confirmed observation that the badge did not render | **CORRECTED.** Blue's words preserved verbatim and unrewritten; the inference withdrawn; superseded text retained in evidence § 7.2 |
+
+**Everything else in revision 3 passed review** and is unchanged by revision 4: all six revision-2 Low
+corrections; exact `2.1.220` membership; the `Notification` evidence; the second-pane refusal;
+settings restoration; the turn-overrun disclosure; the reporter-provenance disclosure; all five
+artifact identities; and gate reconciliation.
+
+**This FAIL is not a code failure.** No application or test code was implicated, and none was changed
+in revision 4.
+
 Verified revision-2 artifacts, **not regenerated and not altered**:
 
 | Artifact | Range | Size | SHA-256 |
@@ -111,6 +135,16 @@ which no semver range could do — plus malformed, padded, range-shaped and non-
 | `app/dockview-default-path.test.js` | +1 — Low 1 comment; Low 2 stronger check + negative control |
 | `app/main.js` | Low 4 — bounded `.catch()` on the discovery chain |
 | `docs/PROTOTYPE-EVIDENCE-pane-status-claude-hook.md` | Revision 3 throughout |
+
+### 3.1 What revision 4 changed — documentation ONLY
+
+| Path | Change |
+| --- | --- |
+| `docs/PROTOTYPE-EVIDENCE-pane-status-claude-hook.md` | § 0.A corrected; § 7.1 replaced (badge human-verified, `.term-head` code fact, `unknown` interpretation); § 7.2 superseded text retained verbatim; § 7.3 methodology rule added; § 10.1, § 11 items 14/17, § 12.1 corrected |
+| `docs/BUILDER-HANDOFF-pane-status-prototype-a-claude.md` | Status header, § 1.4 (revision-3 FAIL), § 3.1, § 6 replaced, § 9 gate-provenance note, § 10, § 11, § 13, closing |
+
+**Revision 4 changed NO application code, NO test, NO dependency, NO configuration, NO procurement
+analysis, and NOT the canonical verdict.** The supported-version list is untouched. No gate was rerun.
 
 No dependency, lockfile, GitHub configuration, `AGENTS.md`, PowerShell file, or the procurement
 record changed. **No pinned tripwire region moved** — `launcher-fence-invariant.test.js` passes
@@ -162,24 +196,47 @@ running and declined in favour of revisiting it separately.
 
 ---
 
-## 6. NEEDS BLUE — the visible badge was never confirmed
+## 6. RESOLVED IN REVISION 4 — the badge RENDERS, and is human-verified
 
-**The operator, looking at the running application, could not see a badge.** Recorded as a first-hand
-observation, not explained away. Evidence § 7.1.
+**Revision 3 stated here that the badge was never confirmed and offered a structural explanation for
+its absence. An independent review returned `VERDICT: FAIL` on that section. Both claims were wrong.**
 
-The renderer log lines do **not** contradict him: `update()` returns its computed view **whether or
-not a DOM node was attached** (`if (!el) return shown;`). They prove the event arrived and the state
-machine ran — not that anything was drawn. Revision 2's suite shares the blind spot, asserting against
-a stub DOM where the host always exists.
+Blue then looked again and reported, verbatim:
 
-**A lead, explicitly not a diagnosis:** `ensureBadge` prefers `pane.querySelector('.term-head')` and
-falls back to the pane root. **`.term-head` appears nowhere in `app/renderer/app.js` or
-`index.html`** — it exists only as CSS rules. So the badge, if attached at all, lands as the last
-child of the pane element, after the xterm container. No DOM inspection of the running renderer was
-performed, so this is the first thing to check next time, not a finding.
+> i saw this: PROTOTYPE ○ unknown
 
-**Consequence for any production reading: a status feature nobody can see delivers none of the stated
-benefit.** The six events do not evidence that the feature works *for a user*.
+| Property | Verified |
+| --- | --- |
+| Badge rendered | **YES** |
+| Location | **far-right of the visible pane header, AFTER the pane controls** |
+| Exact text | **`PROTOTYPE ○ unknown`** |
+| Header order observed | **role/name → `⧉ ⛶ 🔊 ✕` → badge** |
+| Claude version the pane's banner reported | **v2.1.228** |
+| Prompt / hook / model turn / status event | **none** — a no-prompt visual check only |
+
+**`.term-head` EXISTS.** It is created in `app/renderer/agent-dom.js` and is the visible inner pane
+header; every pane is built through `buildTermPane`, and that element is what the badge's
+`getPaneElement` returns. So `pane.querySelector('.term-head')` matches and the badge attaches **inside
+the header** — the pane-root fallback is never taken. `app/renderer/app.js` and `index.html` are **not**
+the complete DOM-construction surface. The observed right-edge placement is what this layout showed;
+it is not a permanent UI-placement guarantee.
+
+**`unknown` was the CORRECT display.** v2.1.228 is not in the exact supported set
+(`['2.1.196','2.1.220']`), so a visible `unknown` is the designed fail-closed outcome — and it is new
+runtime evidence that an unrecognised version degrades visibly in the real application. **It qualifies
+nothing:** `2.1.228` was not added, is not authorized, and the screenshot proves only the version the
+pane's banner reported, not which executable supplied it. The list is unchanged.
+
+**How the false claim happened, because it matters more than the claim:** the search was restricted to
+`app.js` and `index.html`; pane DOM construction also lives in `agent-dom.js`; a zero hit in selected
+files was promoted into a repository-wide absence. That is the error shape already prohibited by
+procurement record § 0.1 — the third time this lineage has hit it. **Rule: before claiming something
+does not exist, enumerate the complete relevant surface or search the whole tree. A zero-hit search
+over selected files proves only that those files contain no hit.** Evidence § 7.3.
+
+**What is still NOT proven, and is not softened by any of the above:** the chip was never watched
+*changing* as events arrive (this check sent no prompt); the Dockview drag is still **NOT PERFORMED**;
+and a visible badge is not an authenticated one — provenance is unresolved (§ 10).
 
 ---
 
@@ -222,11 +279,15 @@ user-owned state, and removing it to tidy a table would destroy a real setting. 
 
 ## 9. Gates — recounted per suite
 
-| Gate | Result |
+**REVISION 4 DID NOT RERUN THE GATES.** It is a documentation-only correction touching exactly two
+Markdown files, so the figures below are **historical facts carried forward from revision 3**, not
+fresh runs. Only `git diff --check` was run for revision 4 (clean).
+
+| Gate | Result (revision 3 — NOT rerun for revision 4) |
 | --- | --- |
 | App gate (`npm test`) | **exit 0 — 52 chain entries, 3,678 assertions passed, 0 failed** |
 | Pester (`scripts\run-pester.ps1`) | **955 passed / 0 failed / 0 skipped** (35 suites) |
-| `git diff --check` | clean (exit 0) |
+| `git diff --check` | clean (exit 0) — **rerun for revision 4, still clean** |
 
 **Reconciliation from revision 2's 3,636:**
 
@@ -249,18 +310,21 @@ gate reports 50 suites in `N passed, M failed` form plus `audio-module-health` a
 4 **NO** (RUNTIME) · 5 **NO** (RUNTIME) · 6 **NO** (RUNTIME, 2 turns) · 7 **NO**
 (RUNTIME+STRUCTURAL) · 8 **NO** (RUNTIME) · 9 **NO** (**RUNTIME**, upgraded) · 10 **NO** (RUNTIME).
 
-Outside the ten: **§ 6 the visible badge is unconfirmed**, and **§ 5.1 of the evidence — reporter
-provenance is unresolved**.
+Outside the ten: **§ 6 — static badge rendering is HUMAN-VERIFIED (revision 4)**, with visible
+*state change* still unobserved; **an unrecognised version degraded visibly to `unknown` in the real
+app**; and **§ 5.1 of the evidence — reporter provenance is unresolved**.
 
 ---
 
 ## 11. Recommended review focus
 
-1. **§ 6 and § 7** — the two results that need Blue's judgement, not just a reviewer's.
-2. Whether keeping `2.1.220` is right given the badge was never seen. The argument for keeping it is
-   that list membership governs *event acceptance*, which was demonstrated; the argument against is
-   that "observes the real application path successfully" could be read to include the display.
-3. The Low-2 tripwire rewrite and its negative control.
+1. **Whether § 6 and evidence § 7.1-7.3 now state the badge result accurately** — neither
+   overclaiming the sighting (it was static only, no prompt sent) nor leaving any current-voice trace
+   of the withdrawn `.term-head` claim.
+2. **§ 7 — the turn overrun**, still the item needing Blue's judgement rather than a reviewer's.
+3. Whether evidence § 7.3's durable rule is stated strongly enough, given this is the third time the
+   lineage has hit that error shape.
+4. The Low-2 tripwire rewrite and its negative control.
 4. Whether evidence § 7.1 states the badge hypothesis narrowly enough.
 5. Whether § 11 item 19 keeps provider-upgrade behaviour appropriately un-generalised.
 
@@ -307,14 +371,19 @@ clean (exit 0) on both ranges.
 
 ## 13. Reviewer verdict
 
-**None yet for revision 3** — stopped for a fresh independent **Full-class** review.
+**None yet for revision 4** — stopped for a fresh independent **focused Full-class** review.
 
 * Revision 1: **`VERDICT: FAIL`** (1 Critical, 3 High, 4 Medium, 3 Low).
-* Revision 2: **`VERDICT: PASS`** (6 non-blocking Low), all six corrected here.
+* Revision 2: **`VERDICT: PASS`** (6 non-blocking Low), all six corrected in revision 3.
+* Revision 3: **`VERDICT: FAIL`** (1 High, 1 Medium — both documentation, neither code), both
+  corrected in revision 4 (§ 1.4).
 
-**Note on independence:** the reviewer who produced revision 2's `VERDICT: PASS` also performed
-revision 3's corrective and runtime work, at Blue's direction. The next review must therefore be
-carried out by a **different** reviewer for the independence requirement to hold.
+**Note on independence — read this before recording any verdict.** The same reviewer produced
+revision 2's `VERDICT: PASS`, performed revision 3's corrective and runtime work, produced revision
+3's `VERDICT: FAIL` as a self-audit, and performed revision 4's corrections — all at Blue's
+direction. **No verdict on this branch since revision 2 has been genuinely independent.** Revision 3's
+FAIL should be read as a self-audit that caught a real defect, not as independent verification. The
+next review must be carried out by a **different** reviewer for the independence requirement to hold.
 
 ## Review-diff rule
 
@@ -325,13 +394,24 @@ carried out by a **different** reviewer for the independence requirement to hold
 
 ---
 
-**Experiment A is COMPLETE.** It was specified, built, reviewed twice, corrected twice, and finally
-run inside the real application against the executable a pane actually launches.
+**Experiment A is COMPLETE as a bounded prototype** — specified, built, reviewed three times,
+corrected three times, and run inside the real application against the executable a pane actually
+launches. **"Complete" means the authorized experiment has ENDED with both positive and negative
+results recorded. It does NOT mean every Experiment A objective passed** — two did not (the Dockview
+move, and visible state animation), and one security question was answered in the negative.
 
-* **Model turns: four consumed against three authorized** (§ 7). The overrun is unexplained and is
-  recorded rather than smoothed over. No further turn may be spent without a new authorization.
-* **Reporter provenance remains unresolved** — a negative security result and a production blocker.
-* **The visible badge remains unconfirmed** (§ 6) — the weakest part of the prototype.
+* **Static badge rendering is HUMAN-VERIFIED.** The observed badge was **`PROTOTYPE ○ unknown`**,
+  in the pane header, after the pane controls (§ 6).
+* **`unknown` was correct** — the pane reported v2.1.228, which is deliberately not in the supported
+  set. `2.1.228` was **not** added and is **not** authorized; the list stays `['2.1.196','2.1.220']`.
+* **No model turn was consumed during revision 4.** No hook installed, no prompt sent, no Electron or
+  provider launched by revision 4, no gate rerun.
+* **Model turns: four remain recorded against three authorized** (§ 7). The origin of the extra
+  prompt cycle is still unresolved. No further turn may be spent without new authorization.
+* **Visible state animation was NOT observed** — the verification that saw the badge sent no prompt.
+* **The Dockview drag remains NOT PERFORMED**, and wrong-pane-after-move remains **NOT SATISFIED**.
+* **Reporter provenance remains unresolved** — reporter identity is not authenticated, a pane
+  descendant can forge an allowlisted event, and the badge is **advisory**. Production blocker.
 * **Production pane-status implementation remains unauthorized.**
 * **Experiment B and app-server runtime testing remain unauthorized.**
 * **Nothing was merged or pushed.**

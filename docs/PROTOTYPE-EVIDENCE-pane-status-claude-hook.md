@@ -38,11 +38,23 @@ corrected in revision 3 (§ 0.B). Verified revision-2 artifacts, unchanged:
 the executable a Blue Helm pane actually launches, and real hook events drove real states through
 main, the preload boundary and the renderer subscription.** Revision 2 could only prove that by test.
 
-**AND THE HONEST COUNTERWEIGHT, stated here rather than buried: the human observer reported that he
-could not see a badge** ("idk what badges youre talking about … im not seeing what youre
-referencing"). The event path is proven; the **visible control is not**. See § 7.1. The Dockview drag
-was **again NOT PERFORMED**, so kill criterion 2 is **still NOT SATISFIED** (§ 10). And the run
-consumed **more model turns than were authorized** — see § 3.4, which is not rounded down.
+**REVISION 4 CORRECTION TO THIS SUMMARY.** Revision 3 stated here that the human observer "could not
+see a badge" and that the visible control was unproven. **An independent review returned
+`VERDICT: FAIL` on that**, and a later explicit sighting settled it the other way:
+
+> i saw this: PROTOTYPE ○ unknown
+
+**Badge rendering is HUMAN-VERIFIED** — in the pane header, after the pane controls, reading
+`PROTOTYPE ○ unknown`, which is the correct fail-closed display for the unrecognised version the pane
+reported (v2.1.228). See § 7.1. Revision 3's claim that `.term-head` does not exist was **false**; it
+is created in `agent-dom.js` (§ 7.1.1), and the methodology defect that produced that claim is
+recorded in § 7.3.
+
+**What remains genuinely unproven, and is NOT softened by that correction:** event-driven *visible*
+state change was never watched on screen (the verification sent no prompt); the Dockview drag was
+**again NOT PERFORMED**, so kill criterion 2 is **still NOT SATISFIED** (§ 10); reporter provenance
+is still unresolved (§ 5.1); and the run consumed **more model turns than were authorized** — see
+§ 3.4, which is not rounded down.
 
 ### 0.B The six Low findings from the revision-2 review, and their dispositions
 
@@ -466,38 +478,131 @@ He declined and asked to revisit it separately — verbatim: *"its good, lets mo
 youre talking about can we circle back to it in another test? im not seeing what youre referencing"*.
 No drag was performed and none is reported. **Kill criterion 2 remains NOT SATISFIED** (§ 10).
 
-### 7.1 NEGATIVE RESULT (revision 3) — the event path works; the VISIBLE BADGE IS UNCONFIRMED
+### 7.1 REVISION 4 — the event path works AND the badge is HUMAN-VERIFIED RENDERING
 
-**The operator, looking at the running application, reported that he could not see any badge.** That
-is a first-hand observation and it is recorded as one, not explained away.
+> **REVISION 4 — THIS SECTION WAS WRONG AND IS REPLACED.** Its original text is preserved verbatim
+> in § 7.2 as superseded review history. An independent review of revision 3 returned
+> **`VERDICT: FAIL`** on it. **The badge DID render**, and the structural explanation this section
+> gave for its supposed absence was **false**. Read § 7.1 below as the corrected record.
 
-**Why the renderer log lines do NOT contradict him.** `app/renderer/app.js` logs
-`[pane-status PROTOTYPE] …` when `paneStatusBadge.update(view)` returns a truthy value. But `update()`
-returns its computed view **whether or not a DOM node was attached**:
+**BADGE RENDERING IS HUMAN-VERIFIED.** Blue looked at the running application and reported, verbatim:
 
-```js
-const el = ensureBadge(view.paneId);
-if (!el) return shown; // pane not in the DOM (yet, or any more) — state is still remembered
-```
+> i saw this: PROTOTYPE ○ unknown
 
-So those lines prove the event reached the renderer and the badge module processed it. **They do not
-prove anything was drawn.** Revision 2's suite has the same blind spot: it asserts against a stub DOM,
-where the host element always exists.
+| Property | Verified value |
+| --- | --- |
+| Badge rendered | **YES** |
+| Location | **far-right of the visible pane header, AFTER the pane controls** |
+| Exact visible text | **`PROTOTYPE ○ unknown`** |
+| Observed header order | **role/name → `⧉ ⛶ 🔊 ✕` → `PROTOTYPE ○ unknown`** |
+| Claude version the pane's banner reported | **Claude Code v2.1.228** |
+| Prompt sent | **none** |
+| Hook installed | **none** |
+| Model turn consumed | **none** |
+| Status event exercised | **none** |
 
-**A structural cause was identified, and it is a hypothesis, not a diagnosis.** `ensureBadge` prefers
-`pane.querySelector('.term-head')` as its host and falls back to the pane root. The class
-**`.term-head` appears nowhere in `app/renderer/app.js` or `app/renderer/index.html`** — it exists
-only as 12 rules in `styles.css`. So the badge, if attached at all, is appended as the **last child of
-the pane element**, after the xterm container, rather than into a pane header. That is a plausible
-explanation for an invisible control and it is **not confirmed**: no DOM inspection of the running
-renderer was performed, so it is a lead for the next test, not a finding.
+This was a separate, later, **no-prompt visual verification** — not part of the § 3.5 runtime run, and
+it must not be merged with it. Nothing was sent, installed, or exercised; only the static rendered
+control was observed.
 
-**What this costs and what it does not.** It does **not** weaken § 3.5: main, IPC, the preload
-boundary, the renderer subscription and the badge module's state machine all demonstrably worked, and
-the state was correct at every step. It **does** mean the claim "a badge was visibly displayed in the
-real application" **cannot be made**, and this document does not make it. The prototype's *display*
-half is the least-verified part of Experiment A, and after this run that is more clearly true, not
-less.
+### 7.1.1 `.term-head` EXISTS — the corrected code fact
+
+`ensureBadge` uses `pane.querySelector('.term-head') || pane`. The header **is** present, so the
+fallback is never taken:
+
+* `app/renderer/agent-dom.js` creates it — `el(doc, 'div', { className: 'term-head' })` — and appends
+  it as the pane's **first** child, before `.term-body`.
+* `app/renderer/app.js` builds **every** pane through `agentDom.buildTermPane(...)`; that same element
+  is stored in `paneData` and returned by the badge's `getPaneElement`.
+* `app/renderer/styles.css` styles that header `display:flex; align-items:center`, and the badge as a
+  bordered `inline-flex` chip inside it.
+
+So the badge attaches **within the visible inner pane header**. In the observed layout it appears
+**after** the pane controls, at the far-right edge. That placement is what this run showed; it is not
+a permanent UI-placement guarantee beyond the reviewed layout.
+
+**`app/renderer/app.js` and `app/renderer/index.html` are NOT the complete DOM-construction surface** —
+`agent-dom.js` builds the pane markup, and any future claim about renderer structure has to account
+for it.
+
+### 7.1.2 Why `unknown` was the CORRECT thing to see
+
+The pane's banner reported **v2.1.228**, which is not a member of the prototype's exact supported set
+(`['2.1.196','2.1.220']`). An unrecognised version must degrade visibly rather than guess, so
+`unknown` is the **designed fail-closed outcome**, not a badge failure.
+
+This is genuinely new runtime evidence: **an unrecognised provider version produced a visible
+`unknown` badge in the real application.** Revision 3 could only prove that path by test.
+
+**It qualifies nothing.** It does **not** add `2.1.228` to the supported list, does **not** authorize
+adding it, and does **not** generalise provider-upgrade compatibility. The list stays exactly
+`['2.1.196','2.1.220']` as already reviewed. The screenshot also proves only the version **the pane's
+banner reported** — it does **not** establish which executable path supplied `2.1.228`.
+
+### 7.1.3 What is proven, and what is still not
+
+**Proven:** static badge rendering, in the real Electron application, in the pane header, with correct
+`unknown`-for-unrecognised-version behaviour.
+
+**Still NOT proven, and not softened by the above:**
+
+* **Event-driven visible state change was not observed during this verification** — no prompt was
+  sent, so no `idle`/`working`/`turn ended` transition was watched on screen. § 3.5 proves those
+  states reached the renderer callback; it remains unobserved that the *visible chip text* changes as
+  they arrive.
+* **The Dockview drag remains NOT PERFORMED**, and wrong-pane-after-move remains **NOT SATISFIED**.
+* **Reporter provenance remains unresolved** (§ 5.1). A visible badge is not an authenticated one.
+
+### 7.2 SUPERSEDED — revision 3's § 7.1, preserved verbatim, and why it failed
+
+Retained so the failed reasoning stays visible rather than being quietly rewritten. **Everything in
+this blockquote is SUPERSEDED and must not be read as current state.**
+
+> **NEGATIVE RESULT (revision 3) — the event path works; the VISIBLE BADGE IS UNCONFIRMED**
+>
+> **The operator, looking at the running application, reported that he could not see any badge.** That
+> is a first-hand observation and it is recorded as one, not explained away.
+>
+> **A structural cause was identified, and it is a hypothesis, not a diagnosis.** `ensureBadge` prefers
+> `pane.querySelector('.term-head')` as its host and falls back to the pane root. The class
+> **`.term-head` appears nowhere in `app/renderer/app.js` or `app/renderer/index.html`** — it exists
+> only as 12 rules in `styles.css`. So the badge, if attached at all, is appended as the **last child of
+> the pane element**, after the xterm container, rather than into a pane header.
+
+**Finding 1 (High) — the `.term-head` claim was false.** It is created in
+`app/renderer/agent-dom.js` and is the visible inner pane header (§ 7.1.1). The inference built on it —
+badge at the pane root, behind or below the terminal — was therefore also false.
+
+**Finding 2 (Medium) — an ambiguous statement was recorded as a confirmed observation.** Blue's
+earlier words were:
+
+> idk what badges youre talking about can we circle back to it in another test? im not seeing what
+> youre referencing
+
+That is ambiguous between *"the badge is not rendering"* and *"I don't know which UI element you
+mean."* Revision 3 resolved it in one direction, called it a first-hand observation, and built a
+section title and an unknown-item on it. The later explicit sighting (§ 7.1) shows the second reading
+was the correct one. **Blue's original words are not rewritten** — only the inference drawn from them
+is withdrawn.
+
+### 7.3 THE METHODOLOGY DEFECT — a zero-hit search promoted into an absence claim
+
+**How the false claim was produced:** the search was restricted to `app/renderer/app.js` and
+`app/renderer/index.html`. DOM construction for panes also lives in `app/renderer/agent-dom.js`. A
+zero hit across those two selected files was written down as a repository-wide absence.
+
+**This repeated an error shape already prohibited by § 0.1 of the procurement record**, which was
+adopted after revisions 1 and 2 of that branch failed for exactly it — and it was committed here while
+documenting a *different* finding, which is how it evaded the same scrutiny.
+
+**Durable rule, restated so it survives this document:**
+
+> Before claiming that an element, token, API, or behavior does not exist, enumerate the complete
+> relevant source surface or search the whole tree. A zero-hit search over selected files proves only
+> that those selected files contain no hit.
+
+Corollary learned here: **when a UI element is reported missing, check where the DOM is actually
+constructed** — not where you expect it to be constructed.
 
 ---
 
@@ -711,12 +816,17 @@ never created, so "did not fire" is not an answer to it.
 | 9 | More than one provider or pane becomes involved | **NO** | **RUNTIME (upgraded from STRUCTURAL)** — a second real pane launched and was refused status by the running application: `pane pty2 launched WITHOUT status: Experiment A already bound to pty1` |
 | 10 | Completing the experiment would require Experiment B | **NO** | **RUNTIME** — no app-server, listener, `codex --remote`, or observer client existed at any point |
 
-**Two things sit outside the ten and must not be lost in a table of NOs:**
+**Three things sit outside the ten and must not be lost in a table of NOs:**
 
-* **§ 7.1 — the visible badge was never confirmed.** No kill criterion covers "the display works",
-  which is why it is stated as a negative result rather than a criterion outcome. It is the weakest
-  part of Experiment A.
-* **§ 5.1 — reporter provenance is unresolved.** Unchanged by this run, and still a production blocker.
+* **§ 7.1 — badge rendering is HUMAN-VERIFIED (revision 4).** No kill criterion covers "the display
+  works", so it is recorded here rather than as a criterion outcome. Revision 3 recorded this as an
+  unconfirmed negative; that was corrected after an independent `VERDICT: FAIL`. **Narrow scope:**
+  the *static* rendered chip was seen (`PROTOTYPE ○ unknown`); **event-driven visible state change was
+  not** — the verification sent no prompt.
+* **§ 7.1.2 — an unrecognised version degraded visibly to `unknown` in the real application.** New
+  runtime evidence for the fail-closed path. It qualifies no version and adds nothing to the list.
+* **§ 5.1 — reporter provenance is unresolved.** Unchanged by either run, and still a production
+  blocker. A badge being visible does not make it authenticated.
 
 Separately, and outside the ten: § 5.1 records a **negative security result** — the token
 authenticates the pane environment, not the reporter. No kill criterion covers provenance, which is
@@ -764,17 +874,23 @@ Resolved, changed, or added in revision 3:
 13. **RESOLVED — item 1, `Notification` at runtime.** It fired naturally in the real application and
     was accepted → `attention` (§ 3.5). **What triggered it is still unknown** (idle notification vs
     permission prompt), so the signal is proven to arrive while its *meaning* remains uncharacterised.
-14. **PARTLY RESOLVED — item 11.** The main → IPC → preload → renderer path is now proven in the real
-    Electron application. **The visible badge is not** (§ 7.1) — so "does the whole path work" is now
-    *yes up to the DOM, unconfirmed at the DOM*.
+14. **RESOLVED for rendering, PARTLY OPEN for animation — item 11 (revised in revision 4).** The
+    main → IPC → preload → renderer path is proven in the real Electron application, **and the badge
+    is now human-verified as rendering** in the pane header (§ 7.1). What remains open is narrower
+    than revision 3 claimed: **the visible chip was never watched changing as events arrive**, because
+    the verification that saw it sent no prompt, and the run that sent prompts was not watched for
+    visible transitions.
 15. **STILL OPEN — item 3, the live Dockview drag.** Offered in the running app and declined; kill
     criterion 2 stays NOT SATISFIED.
 16. **STILL OPEN — items 2, 4, 5, 6, 7, 8, 12.** `StopFailure` remains **UNVERIFIED**; `SessionEnd`
     was **not observed in this run** (Electron was force-stopped rather than Claude exited cleanly),
     though revision 1 did observe it under 2.1.196.
-17. **NEW — why the badge is invisible.** `.term-head`, the host `ensureBadge` prefers, does not exist
-    in the renderer markup, so the badge falls back to the pane root. **Hypothesis, not diagnosis**
-    (§ 7.1); no DOM inspection was performed.
+17. **WITHDRAWN (revision 4) — "why the badge is invisible".** This item asserted that `.term-head`
+    does not exist in the renderer markup. **That was false** — it is created in
+    `app/renderer/agent-dom.js` and is the visible pane header (§ 7.1.1), the badge was never
+    invisible, and the item's premise was withdrawn after an independent `VERDICT: FAIL`. The
+    methodology defect that produced it is recorded in § 7.3. **Replaced by a real open item:**
+    whether the visible chip *updates on screen* as events arrive (see item 14).
 18. **NEW — the origin of the second model turn** (§ 3.4). Unexplained, and it put the run one turn
     over the authorized budget.
 19. **PROVIDER-UPGRADE BEHAVIOUR — narrowed, NOT generalised (supersedes item 10's scope).** The
@@ -863,18 +979,22 @@ delivers its stated benefit.
 
 **Weaker, or newly exposed, and therefore recorded against the approach:**
 
-* **The display half is now the least-verified part of the prototype.** The operator could not see a
-  badge (§ 7.1). Revision 2 assumed the renderer half was fine because its tests passed against a
-  stub DOM; the first human look says otherwise. **A status feature nobody can see delivers none of
-  the stated benefit**, and no production decision should treat § 3.5's six events as evidence that
-  the feature works *for a user*.
+* **CORRECTED IN REVISION 4 — this bullet previously said the display was the least-verified part
+  and that "the operator could not see a badge". That was withdrawn after an independent
+  `VERDICT: FAIL`.** Blue subsequently saw `PROTOTYPE ○ unknown` rendered in the pane header (§ 7.1),
+  so **static rendering is human-verified** and revision 2's stub-DOM coverage turns out to have
+  modelled production correctly. What is genuinely unproven is narrower: **no one has watched the
+  chip change on screen as events arrive.** § 3.5 proves the states reach the renderer callback;
+  visible transition remains unobserved, so a production decision still should not treat § 3.5's six
+  events as proof the feature works *for a user*.
 * **Kill criterion 2 is still not satisfied** after two attempts to get it observed.
 * **Trusted event provenance remains unresolved** (§ 5.1) and is untouched by this run.
 
-**The net position is unchanged in kind and sharper in detail: the transport, the privacy boundary and
-the reversibility are demonstrated; the trust model and the user-visible display are not.** A
-hooks-first production design still has to solve provenance, and now also has to prove the badge is
-actually rendered where a Dockview pane can be seen.
+**The net position after revision 4: the transport, the privacy boundary, the reversibility, and now
+STATIC BADGE RENDERING are demonstrated; the trust model is not, and neither is visible state
+animation or identity through a Dockview move.** A hooks-first production design still has to solve
+provenance. It no longer has to prove the badge renders at all — that is settled — but it does have to
+show the chip visibly tracks the agent, and that it survives a pane move.
 
 ---
 
