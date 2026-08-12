@@ -294,6 +294,10 @@ user-owned state, and removing it to tidy a table would destroy a real setting. 
 Markdown files, so the figures below are **historical facts carried forward from revision 3**, not
 fresh runs. Only `git diff --check` was run for revision 4 (clean).
 
+> **This section is PRE-MERGE scope only, and is not the last word on gating.** Merged `main` was
+> independently gated by Codex before push — see **§ C1.4**, which records that run and its
+> chronology. Do not read the "not rerun" statement here as meaning the merged tree went unverified.
+
 | Gate | Result (revision 3 — NOT rerun for revision 4) |
 | --- | --- |
 | App gate (`npm test`) | **exit 0 — 52 chain entries, 3,678 assertions passed, 0 failed** |
@@ -562,22 +566,53 @@ set above. Second, `.merge-gate/` is **gitignored** (`.gitignore:36`) as human-a
 authorization and is deliberately never committed, so the plan is verifiable in place on this machine
 but is not part of the tracked history.
 
-### C1.4 Gates
+### C1.4 Gates — MERGED `main` WAS INDEPENDENTLY RE-VERIFIED BEFORE PUSH
 
-**No gate was run during this closeout, and none was required.** The closeout changes exactly three
-tracked Markdown files and no code, test, dependency, script, or configuration file. The `app` and
-`pester` gates declared in the plan belong to the merge authorization, not to this documentation
-delta.
+**Two different statements are involved here, and conflating them is what the previous wording got
+wrong. Both of these are true:**
 
-Historical reviewed results, carried forward and **not re-run here**:
+* **Merged `main` WAS independently gated before push.** Codex ran both full gates against the merged
+  tree — not against the branch, and not as a copy-forward of the pre-merge figures.
+* **This documentation-only closeout branch did NOT rerun them.** It changes three tracked Markdown
+  files, so there is nothing for a gate to exercise.
 
-| Gate | Result (revision 3; unchanged through revision 4) |
+**The chronology, in order:**
+
+| # | Step |
 | --- | --- |
-| App gate (`npm test`) | exit 0 — 52 chain entries, **3,678 assertions passed / 0 failed** |
-| Pester (`scripts\run-pester.ps1`) | **955 passed / 0 failed / 0 skipped** (35 suites) |
+| 1 | Merge commit `7afd945314fc3d4430b9030ef3b2a33b1acd1feb` created |
+| 2 | Parents and predicted tree independently verified |
+| 3 | **Codex ran the full app gate on the merged tree** — exit **0**, **52 chain entries**, **3,678 assertions passed**, **0 failed** |
+| 4 | **Codex ran the full Pester gate** — **955 passed / 0 failed / 0 skipped** |
+| 5 | **Push occurred only after both merged-`main` gates passed** |
+| 6 | This closeout branch did not rerun either gate |
 
-Stated plainly rather than omitted: **this closeout did not independently re-verify those two gates on
-merged `main`.** They are recorded as the reviewed pre-merge results they are.
+| Gate | Merged-`main` result (step 3–4, before push) |
+| --- | --- |
+| App gate (`npm test`) | **exit 0 — 52 chain entries, 3,678 assertions passed / 0 failed** |
+| Pester (`scripts\run-pester.ps1`) | **955 passed / 0 failed / 0 skipped** |
+
+**Why the merged-`main` figures equal the pre-merge reviewed figures, and why that is corroboration
+rather than a copy.** The merge tree `8c8be52a…` is byte-identical to the branch-tip tree (§ C1.1), so
+an independent run against merged `main` *should* reproduce the reviewed numbers exactly. It did. Two
+independently executed runs over identical trees agreeing is evidence the merge introduced nothing;
+identical numbers here are the expected result, not a sign the figures were carried across.
+
+The `app` and `pester` gates declared in the merge plan belong to that merge authorization, and they
+were satisfied at step 3–4.
+
+> **SUPERSEDED — retained as historical provenance.** This section previously read *"No gate was run
+> during this closeout, and none was required … this closeout did not independently re-verify those
+> two gates on merged `main`. They are recorded as the reviewed pre-merge results they are."* The
+> first clause was true and remains true. **The second was FALSE and is withdrawn:** it stated the
+> closeout's own scope as though it were the state of the whole merge, and so implied merged `main`
+> had never been gated. It had been — by Codex, before push. The wording is **corrected, not
+> reinterpreted**.
+>
+> **The same withdrawn claim also appears in the commit message of `cddbc776`** ("closeout did not
+> independently re-verify those gates on merged main") and in the superseded `BLUE-HELM-MASTER-STATUS.md`
+> bullet. Commit messages are immutable, so that one stands in the history and is **corrected here
+> rather than rewritten there**. A reader of the commit log should treat this section as controlling.
 
 ### C1.5 Reviewed artifacts — preserved, not regenerated
 

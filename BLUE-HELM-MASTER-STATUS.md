@@ -254,11 +254,17 @@ remote-tracking ref.
   a no-op, the preload bridge is never constructed, and the badge module
   publishes no renderer global. **Merging prototype code neither enabled a
   prototype feature nor authorized one.**
-- **No gate was run during closeout and none was required** — the closeout delta
-  is three tracked Markdown files. The reviewed pre-merge results carried forward
-  are: app gate exit 0, 52 chain entries, **3,678 assertions passed / 0 failed**;
-  Pester **955 passed / 0 failed / 0 skipped**. Stated plainly: **closeout did
-  not independently re-verify those gates on merged `main`.**
+- **Merged-`main` gates, run by Codex BEFORE push and independent of the branch
+  runs:** app gate exit `0` with **52 chain entries, 3,678 assertions passed / 0
+  failed**, and Pester **955 passed / 0 failed / 0 skipped**. The order was:
+  merge created → parents and predicted tree verified → both merged-`main` gates
+  run → **push only after both passed**. Because the merge tree `8c8be52a…` is
+  byte-identical to the branch-tip tree, an independent run over merged `main`
+  reproducing the reviewed figures exactly is **corroboration that the merge
+  introduced nothing** — not a copy-forward.
+- **The documentation-only closeout branch did not rerun those gates**, and none
+  was required: its delta is three tracked Markdown files. **That is a statement
+  about the closeout's scope, not about merged `main`, which was gated.**
 
 **Experiment A is COMPLETE AS A BOUNDED PROTOTYPE — which means it ENDED with
 results recorded, not that every objective passed.** Two objectives did not: the
