@@ -337,12 +337,44 @@ app**; and **§ 5.1 of the evidence — reporter provenance is unresolved**.
 | Revision 1 reviewed tip | `bf66fb3b9fad080d1ff92ed0815034e525a75740` — `VERDICT: FAIL` |
 | Revision 2 reviewed tip | `c8d9fdaa3ecd8b792850ad525b9b768bdd14bcb5` — `VERDICT: PASS` |
 | Handoff-only tail (rev 2) | `d85002ce82e3fbb5b895197a0d17f3f3a0ed5d9d` |
-| **Revision 3 reviewed tip** | `3920a3b1a57a349137ac7e5098624ebda06aab5c` |
+| Revision 3 reviewed tip | `3920a3b1a57a349137ac7e5098624ebda06aab5c` — **`VERDICT: FAIL`** |
+| Revision 3 handoff-only tail | `efc606b825af200add01606f943a4935e63f8235` |
+| **Revision 4 reviewed tip** | `583688343547d957f30551c5468b418f31136761` |
 | Branch tip | the handoff-only tail commit below |
-| Focused correction range | `d85002ce82e3fbb5b895197a0d17f3f3a0ed5d9d...3920a3b1a57a349137ac7e5098624ebda06aab5c` |
-| Cumulative prototype range | `3ff96bdea3e68a83cd5774c9b94b68d9cb292add...3920a3b1a57a349137ac7e5098624ebda06aab5c` |
+| Revision-4 focused range | `efc606b825af200add01606f943a4935e63f8235...583688343547d957f30551c5468b418f31136761` |
+| Revision-4 cumulative range | `3ff96bdea3e68a83cd5774c9b94b68d9cb292add...583688343547d957f30551c5468b418f31136761` |
+| Revision 3 focused range (historical) | `d85002ce82e3fbb5b895197a0d17f3f3a0ed5d9d...3920a3b1a57a349137ac7e5098624ebda06aab5c` |
 
-The revision-3 content commit's parent is `d85002ce`, as required.
+The revision-4 content commit's parent is `efc606b825af200add01606f943a4935e63f8235`, as required;
+the revision-3 content commit's parent was `d85002ce`.
+
+| Artifact | Range | Shortstat | Size | SHA-256 |
+| --- | --- | --- | --- | --- |
+| `.agent-review-pane-status-prototype-a-claude-rev4-focused.diff` | `efc606b8...58368834` | **2 files, 293 insertions, 93 deletions** | **35,065 bytes** | `e5ae245623ac5cb7d9923b8f438c88743c939656ff6ef90da040cf16b794f94c` |
+| `.agent-review-pane-status-prototype-a-claude-rev4-cumulative.diff` | `3ff96bde...58368834` | **26 files, 5,462 insertions, 10 deletions** | **324,582 bytes** | `db7edce273a2a07a592eb77fd4fa2b0ad718ebbc2ca2b182c52491fc83eec974` |
+
+Both created with `git diff --output` (never PowerShell redirection), gitignored via `.gitignore:33`,
+regenerated from their stated ranges and proven **byte-identical** by `cmp`. `git diff --check` is
+clean (exit 0) on both ranges. **The revision-4 focused range touches exactly the two declared
+Markdown files and nothing else** — no code, test, dependency, configuration, procurement analysis, or
+canonical verdict.
+
+**All five earlier artifacts are preserved unchanged and still verify at their recorded identities:**
+
+| Artifact | Size | SHA-256 |
+| --- | --- | --- |
+| `.agent-review-pane-status-prototype-a-claude.diff` (rev 1) | 174,128 | `eaad43a22aeacfc7de79f234e3805e7aaf56dd75e2de11854e42d5936aa42f89` |
+| `…-rev2-focused.diff` | 165,445 | `b8b5f644d1fc53f84beb6c7762c7968dbd7328de1374a0a6c622cee9242a64f7` |
+| `…-rev2-cumulative.diff` | 280,014 | `3b3cb40fc1d5590479f7009af66f76934c48044f283e598d5b2566fc3e1683f3` |
+| `…-rev3-focused.diff` | 91,004 | `6fe5745583b7829dd720bdc3ad9f14e7a6b5052a904e9d278690fea0fa4e5e9e` |
+| `…-rev3-cumulative.diff` | 309,470 | `555ee343928b62593b493e0c3d34710db92c2f58add76195f6014d9057cd8de6` |
+
+**On the 93 deletions in the revision-4 focused range:** they are the withdrawn `.term-head` claims
+and the inferences built on them, the "badge was never confirmed" section title and body, the stale
+badge bullets in § 10/§ 11/§ 12.1 of the evidence and § 6/§ 10/§ 11 of this handoff, and the replaced
+status header and verdict block. **Nothing was deleted to hide it** — revision 3's § 7.1 is retained
+verbatim as labelled superseded history in evidence § 7.2, and Blue's original ambiguous words are
+preserved unrewritten.
 
 | Artifact | Range | Shortstat | Size | SHA-256 |
 | --- | --- | --- | --- | --- |
