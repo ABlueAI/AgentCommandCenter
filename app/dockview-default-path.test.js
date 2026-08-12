@@ -158,8 +158,45 @@ process.stdout.write('\nthe layout decision is MAIN\'s, and the DEFAULT is Dockv
   // present ONLY in recovery mode.
   assert(/const CLASSIC_LAYOUT_RENDERER_ARG = '--cc-classic-layout';/.test(mainSrc),
     'the renderer-side token is a distinct string from the launch flag');
-  assert(/additionalArguments: classicLayoutEnabled \? \[CLASSIC_LAYOUT_RENDERER_ARG\] : \[\]/.test(mainSrc),
-    'main forwards the decision via additionalArguments, EMPTY on the production path');
+  // RE-PINNED (Experiment A revision 2), and not silently. `additionalArguments` was a single
+  // ternary; it is now a spread list because the pane-status PROTOTYPE forwards its OWN gate token
+  // the same way, so the preload can make its bridge ABSENT rather than inert when the gate is off.
+  //
+  // Old pin, retained so the reviewed base stays reproducible:
+  //   additionalArguments: classicLayoutEnabled ? [CLASSIC_LAYOUT_RENDERER_ARG] : []
+  //
+  // The replacement is stronger than a shape match: it asserts that EVERY entry is conditional, so
+  // "the production path forwards an empty list" survives any future addition instead of having to
+  // be re-argued each time.
+  assert(/additionalArguments:\s*\[/.test(mainSrc),
+    'main still forwards renderer-side decisions via additionalArguments');
+  assert(/\.\.\.\(classicLayoutEnabled \? \[CLASSIC_LAYOUT_RENDERER_ARG\] : \[\]\)/.test(mainSrc),
+    'the classic-layout token is present ONLY in recovery mode');
+  assert(/\.\.\.\(paneStatusPrototypeEnabled \? \[PANE_STATUS_RENDERER_ARG\] : \[\]\)/.test(mainSrc),
+    'the pane-status prototype token is present ONLY when its gate is on');
+  // CORRECTED (revision 3, Low finding 2). The previous version FILTERED to lines beginning with
+  // `...` before checking them, so an unconditional NON-spread entry (`SOME_ARG,`) was discarded
+  // rather than caught, and the tripwire passed while the production path forwarded a non-empty
+  // list. That is the exact failure a tripwire exists to prevent. Now EVERY non-empty, non-comment
+  // entry inside the array is inspected and an unconditional one FAILS, whatever its syntax.
+  const addArgsBlock = mainSrc.slice(mainSrc.indexOf('additionalArguments: ['));
+  const addArgsEntries = addArgsBlock.slice(0, addArgsBlock.indexOf('],'))
+    .split('\n')
+    .slice(1)                                            // drop the `additionalArguments: [` header
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && l.indexOf('//') !== 0); // keep comments out, keep everything else IN
+  assert(addArgsEntries.length >= 2, 'both forwarded tokens are accounted for');
+  const unconditionalEntries = addArgsEntries.filter(
+    (l) => !(l.indexOf('?') !== -1 && l.indexOf(': [])') !== -1));
+  assert(unconditionalEntries.length === 0,
+    'EVERY additionalArguments entry is conditional, so the DEFAULT production path forwards an EMPTY list ' +
+    `(unconditional entries found: ${JSON.stringify(unconditionalEntries)})`);
+  // NEGATIVE CONTROL: prove the check above would actually catch an unconditional entry, rather than
+  // passing because the filter emptied the list. Revision 2's version passed for exactly that reason.
+  const probeEntries = ['...(a ? [X] : [])', 'UNCONDITIONAL_ARG,']
+    .filter((l) => !(l.indexOf('?') !== -1 && l.indexOf(': [])') !== -1));
+  assert(probeEntries.length === 1 && probeEntries[0] === 'UNCONDITIONAL_ARG,',
+    'the conditional-entry predicate demonstrably REJECTS an unconditional entry (negative control)');
 }
 
 // ---------------------------------------------------------------------------
@@ -283,8 +320,27 @@ process.stdout.write('\nindex.html ships the EMBEDDED dock and loads no Dockview
   assert(!/tts-controls[^>]*id=/.test(indexSrc), 'the audio surface needed no layout-only id');
   assert(!/dockview/i.test(audioOpenTags[0]), 'the audio surface carries no Dockview attribute');
 
+  // RE-PINNED for Experiment A (pane-status PROTOTYPE), and not silently: this tripwire exists so an
+  // added renderer script has to be argued for rather than slipped in. 21 -> 22. The one addition is
+  // `pane-status-badge.js`, gated at the source.
+  //
+  // CORRECTED (revision 3, Low finding 1). This comment used to say the module "defines one global"
+  // with the gate off — that was revision 1's behaviour and the very thing the revision-2 review
+  // required to change. GATE OFF MEANS ABSENT, NOT INERT: a classic <script> tag cannot be
+  // conditional, so the file is always LOADED, but it publishes NO prototype global. It defines
+  // `window.ccPaneStatusBadge` only when the preload actually exposed `window.ccPaneStatus`, which
+  // happens only when main forwarded its gate token at window construction. With the gate off there
+  // is no global, no badge instance, no subscription, and no prototype DOM. Asserted in
+  // pane-status-integration.test.js and renderer/pane-status-badge.test.js.
+  //
+  // The assertion below names the expected file, so a FUTURE extra script still fails here rather
+  // than riding in on this bump.
   const scriptTags = (indexSrc.match(/<script[^>]*src=/g) || []).length;
-  assert(scriptTags === 21, `index.html still loads exactly its original 21 <script src> tags (found ${scriptTags})`);
+  assert(scriptTags === 22, `index.html loads exactly 22 <script src> tags — the original 21 plus the gated pane-status prototype badge (found ${scriptTags})`);
+  assert(/<script src="pane-status-badge\.js"><\/script>/.test(indexSrc),
+    'the 22nd script is exactly the pane-status prototype badge');
+  assert(indexSrc.indexOf('BLUE SUBSYSTEM VERDICT: PROTOTYPE') !== -1,
+    'index.html records the procurement verdict that authorizes that prototype script');
 }
 
 // ---------------------------------------------------------------------------

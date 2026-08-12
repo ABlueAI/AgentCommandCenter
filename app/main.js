@@ -37,6 +37,18 @@ const { createLauncherIpc } = require('./launcher-ipc');
 // The one canonical fail-closed sender/frame/URL trust gate (shared with clipboard/library/followup).
 // P12 adds the two launcher handlers as callers so they, too, refuse any non-trusted-window sender.
 const { createTrustedSenderGate } = require('./trusted-ipc-sender');
+// EXPERIMENT A (PROTOTYPE, Claude only) — docs/OSS-PROCUREMENT-pane-status.md,
+// "BLUE SUBSYSTEM VERDICT: PROTOTYPE". Requiring this module is inert: with the gate env var unset,
+// createPaneStatusPrototype() returns an object whose every method is a no-op, so no pipe, token, IPC
+// channel, badge, or PTY environment change exists. See prototype-pane-status/pane-status-prototype.js.
+const {
+  createPaneStatusPrototype,
+  isPrototypeEnabled: paneStatusPrototypeGateOn,
+  RENDERER_ARG: PANE_STATUS_RENDERER_ARG,
+} = require('./prototype-pane-status/pane-status-prototype');
+// Revision 2: discovers the Claude version FROM THE EXECUTABLE THIS FILE LAUNCHES. Revision 1 shipped
+// no discovery at all, so every badge resolved to `unknown/version-mismatch` in the real application.
+const { createClaudeVersionResolver } = require('./prototype-pane-status/pane-status-version');
 // K8 media-permission boundary: both session permission handlers come from this pure,
 // dependency-free, unit-tested module (media-permission-policy.test.js). A grant requires
 // the trusted window's main frame + the exact entry document + audio-only proof; every
@@ -95,6 +107,11 @@ const classicLayoutEnabled = process.argv.includes(CLASSIC_LAYOUT_FLAG);
 // Dockview is the production engine: everything Dockview-related is gated on this, and it is true
 // unless the operator explicitly asked for recovery mode.
 const dockviewLayoutEnabled = !classicLayoutEnabled;
+// EXPERIMENT A (PROTOTYPE) gate, read ONCE here because the window is constructed before the
+// prototype object is, and the preload's shape has to be decided at construction time. Same posture
+// as `classicLayoutEnabled`: main decides, the renderer is told, and renderer script cannot forge a
+// process argument to flip it.
+const paneStatusPrototypeEnabled = paneStatusPrototypeGateOn(process.env);
 
 // ---- tunable defaults (marked ? — change to taste) --------------------------
 const DEFAULT_PROJECTS_ROOT = 'D:\\Workspace';            // (?) where your git repos live
@@ -226,6 +243,10 @@ let win = null;
 const ENTRY_PATH = path.join(__dirname, 'renderer', 'index.html');
 const ENTRY_URL = pathToFileURL(ENTRY_PATH).toString();
 const ptys = new Map(); // terminal id -> pty process (in-app terminals)
+// EXPERIMENT A prototype handle. Assigned once the window exists; until then, and whenever the gate
+// env var is unset, it is the inert object (see createInertPrototype) so every call site below is
+// safe without a null check or a flag test.
+let paneStatus = { enabled: false, envForPane: () => ({}), releasePane: () => false, stop: () => false };
 // V5b1: pane id -> main-issued video-scout run ID. Deliberately SEPARATE from `ptys`: it must
 // SURVIVE the PTY's exit (so the finished pane can still open its report in V5b2) and is removed only
 // when the pane is explicitly closed (pty-kill) or the window shuts down (window-all-closed).
@@ -257,7 +278,16 @@ function createWindow() {
       // additionalArguments is set at window construction by the main process, so renderer script
       // cannot add, remove, or forge it. Empty array = production Dockview; the token is present
       // ONLY when the operator launched recovery mode.
-      additionalArguments: classicLayoutEnabled ? [CLASSIC_LAYOUT_RENDERER_ARG] : [],
+      //
+      // EXPERIMENT A (PROTOTYPE) adds a SECOND independent token, present only when the prototype
+      // gate is on. The preload uses it to decide whether the pane-status bridge exists at all —
+      // with the gate off there is no preload method, no renderer subscription and no badge global,
+      // rather than an inert one. The two tokens are separate strings and neither can be derived
+      // from the other.
+      additionalArguments: [
+        ...(classicLayoutEnabled ? [CLASSIC_LAYOUT_RENDERER_ARG] : []),
+        ...(paneStatusPrototypeEnabled ? [PANE_STATUS_RENDERER_ARG] : []),
+      ],
     },
   });
   win.loadFile(ENTRY_PATH);
@@ -327,6 +357,69 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('clipboard-read', (e) => clipboardIpc.handleClipboardRead(e));
   ipcMain.handle('clipboard-write', (e, payload) => clipboardIpc.handleClipboardWrite(e, payload));
+
+  // EXPERIMENT A — PROTOTYPE, Claude only, one pane. docs/OSS-PROCUREMENT-pane-status.md,
+  // "BLUE SUBSYSTEM VERDICT: PROTOTYPE". Bounded prototype work only; production implementation,
+  // Experiment B, and app-server runtime testing remain unauthorized.
+  //
+  // With BLUE_HELM_PANE_STATUS_PROTOTYPE unset this is the INERT object: nothing is listened on,
+  // nothing is minted, and `envForPane()` returns {} for every pane forever. The send() below is
+  // one-way main -> renderer and carries only { paneId, state, reason, prototype } — there is no
+  // renderer-callable handler here at all, so this adds no new attack surface to the IPC boundary.
+  paneStatus = createPaneStatusPrototype({
+    env: process.env,
+    path,
+    appDir: __dirname,
+    log: (line) => tlog(line),
+    send: (channel, payload) => { if (win && !win.isDestroyed()) win.webContents.send(channel, payload); },
+  });
+  if (paneStatus.enabled) {
+    const started = paneStatus.start();
+    if (!started.ok) {
+      const msg = `[pane-status] PROTOTYPE listener failed to start (${started.error || started.reason}) — panes will show "unknown".`;
+      console.error(msg);
+      if (win && !win.isDestroyed()) win.webContents.send('main-error', msg);
+    }
+    // REVISION 2 — the defect that made revision 1 unreachable in the real app. Discover the Claude
+    // version FROM THE SAME EXECUTABLE a pane launches: `AGENT_CMD.claude` resolved by PowerShell
+    // with the PTY's own environment, never a guessed path and never another installation's package
+    // metadata. Asynchronous, because it costs a PowerShell profile load and must not delay startup;
+    // the store reads the version at view time, so a later answer governs every subsequent event,
+    // heartbeat tick and renderer update, and any pane that already enrolled is refreshed.
+    //
+    // FAIL-CLOSED: a resolution failure, an erroring version command, an unparsable string or a
+    // timeout all leave the version null, which keeps every badge at `unknown` with a visible
+    // reason. It never assumes compatibility.
+    createClaudeVersionResolver({
+      execFile: require('child_process').execFile,
+      env: process.env,
+      commandName: AGENT_CMD.claude,
+      log: (line) => tlog(line),
+    }).discover().then((found) => {
+      const supported = paneStatus.setObservedVersion(found.ok ? found.version : null);
+      if (!found.ok) {
+        const msg = `[pane-status] PROTOTYPE could not establish the Claude version (${found.reason}) — panes stay "unknown".`;
+        console.error(msg);
+        if (win && !win.isDestroyed()) win.webContents.send('main-error', msg);
+        return;
+      }
+      if (!supported) {
+        // Not an error — the honest, designed outcome. The badge says `unknown` and explains why.
+        const msg = `[pane-status] PROTOTYPE: Claude ${found.version} at ${found.source} is not a version this prototype was exercised against — panes stay "unknown" (version-mismatch).`;
+        console.error(msg);
+        if (win && !win.isDestroyed()) win.webContents.send('main-error', msg);
+      }
+    }).catch(() => {
+      // Revision 3, Low finding 4. `discover()` is built never to reject, but the handler ABOVE can
+      // still throw — e.g. `win.webContents.send` racing window teardown between the isDestroyed()
+      // check and the send. Without this, that becomes an unhandled rejection: a silent failure, and
+      // this repo requires the opposite. The message is a fixed constant: no path, no environment
+      // value, no command output, no token, and deliberately not the caught error's own text.
+      const msg = '[pane-status] PROTOTYPE version discovery handler failed — panes stay "unknown".';
+      console.error(msg);
+      if (win && !win.isDestroyed()) win.webContents.send('main-error', msg);
+    });
+  }
 
   // V5b2 Library/report read boundary — same trust anchors (canonical ENTRY_URL + the late-bound
   // trusted window). List/Read run the PowerShell library boundary shell-free; Open Report resolves a
@@ -930,10 +1023,17 @@ ipcMain.handle('pty-start', (_e, opts) => {
   // in process.env and leaks into every PTY via the spread below. Remove it from the Windows
   // user environment manually (see CLAUDE.md). That removal is a pre-req for full per-role
   // env filtering (Blue Helm checklist item 2).
+  // EXPERIMENT A (PROTOTYPE): {} for every pane unless the gate env var is set AND this is the single
+  // enrolled Claude pane. The scrub above is NOT weakened — it stays exactly as it was, and if it
+  // prevents the hook reporter from inheriting these two variables the experiment is blocked and
+  // reported as blocked rather than worked around. The token exists only here and in main's memory:
+  // never in argv, a log line, a file, the renderer, or a persistent environment variable.
+  const paneStatusEnv = paneStatus.envForPane(opts);
   const ptyEnv = {
     ...process.env,
     CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1',  // scrub credentials from Claude Code's own subprocesses
     ...(opts.videoScout ? { GEMINI_API_KEY: geminiKey } : {}),
+    ...paneStatusEnv,
   };
   let p;
   tlog(`pty-start: env built — CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, GEMINI_API_KEY ${opts.videoScout ? 'injected (video-scout)' : 'not added by app (check for setx residue)'}`);
@@ -947,6 +1047,13 @@ ipcMain.handle('pty-start', (_e, opts) => {
     });
   } catch (e) {
     tlog(`pty-start: pty.spawn FAILED: ${e.message}`);
+    // EXPERIMENT A: `envForPane` above ENROLLED this pane and minted its token before the spawn was
+    // attempted. No process exists to report status, so main must hand the single Experiment A slot
+    // back here — where it was taken — rather than relying on renderer cleanup. Revision 1 leaked the
+    // slot on this path: under Dockview the renderer's close path happened to release it, but in
+    // CLASSIC layout a failed start only logs, so the slot stayed bound to a pane with no process and
+    // every later Claude pane silently got no status until the app restarted.
+    paneStatus.releasePane(id);
     if (win && !win.isDestroyed()) win.webContents.send('pty-exit', { id });
     return { ok: false, error: String((e && e.message) || e) };
   }
@@ -967,6 +1074,9 @@ ipcMain.on('pty-kill', (_e, id) => {
   const p = ptys.get(id); if (p) { try { p.kill(); } catch {} ptys.delete(id); }
   // Explicit pane close: the run's report is no longer reachable from the UI, so drop the mapping.
   videoScoutRunIds.remove(id);
+  // EXPERIMENT A: the pane is gone, so its token must die with it. Releasing here (not on pty-exit)
+  // matches the run-ID registry's rule — a finished agent's pane still exists until Blue closes it.
+  paneStatus.releasePane(id);
 });
 
 // ---- IPC: vibe-kanban board -------------------------------------------------

@@ -360,3 +360,20 @@ input:focus { outline: none; border-color: var(--accent); }
   min-height: 0;
 }
 .dockview-prototype-pane-host > .tabpane[data-pane="library"] > .lib-grid { min-height: 0; }
+
+/* EXPERIMENT A - PROTOTYPE pane status badge (Claude only, one pane).
+   docs/OSS-PROCUREMENT-pane-status.md - "BLUE SUBSYSTEM VERDICT: PROTOTYPE".
+   Deliberately loud: the PROTOTYPE tag is part of the control so this can never be mistaken for a
+   shipped feature by a future reader or a screenshot. */
+.pane-status-badge { display:inline-flex; align-items:center; gap:6px; margin-left:8px; padding:1px 6px;
+  border:1px dashed var(--border,#3a3f4b); border-radius:10px; font-size:10px; line-height:16px; opacity:.95; }
+.pane-status-proto { font-size:8px; letter-spacing:.08em; font-weight:700; opacity:.65; }
+.pane-status-dot { width:7px; height:7px; border-radius:50%; background:#6b7280; }
+.pane-status-text { font-size:10px; opacity:.85; }
+.pane-status-badge.ps-idle      .pane-status-dot { background:#6b7280; }
+.pane-status-badge.ps-working   .pane-status-dot { background:#3b82f6; }
+.pane-status-badge.ps-attention .pane-status-dot { background:#f59e0b; }
+.pane-status-badge.ps-turn-ended .pane-status-dot { background:#10b981; }
+.pane-status-badge.ps-failed    .pane-status-dot { background:#ef4444; }
+.pane-status-badge.ps-exited    .pane-status-dot { background:#4b5563; }
+.pane-status-badge.ps-unknown   .pane-status-dot { background:transparent; border:1px solid #6b7280; }

@@ -1270,6 +1270,42 @@ async function boot() {
     if (t) { t.parser.flush(); t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n'); }
   });
   cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));
+
+// EXPERIMENT A — PROTOTYPE pane status (Claude only, one pane).
+// docs/OSS-PROCUREMENT-pane-status.md — "BLUE SUBSYSTEM VERDICT: PROTOTYPE".
+//
+// Receive-only. Main pushes a token-free { paneId, state, reason, prototype } view; the renderer has
+// no way to request status, enroll a pane, or reach the transport.
+//
+// REVISION 2 — gate off means ABSENT. `window.ccPaneStatus` exists only when main forwarded the gate
+// token into the preload's argv, and `window.ccPaneStatusBadge` exists only when that bridge does.
+// With the gate off, both are undefined, no badge instance is constructed, and nothing subscribes —
+// rather than an inert subscription waiting on a channel main never uses.
+//
+// State is keyed by the app's pane id — the same key `terms`, main's PTY map, and Dockview's registry
+// use — so a badge follows its PROCESS, not its position. That is what makes a Dockview drag unable
+// to hand one pane's status to another.
+const paneStatusBadge = (window.ccPaneStatus && window.ccPaneStatus.enabled && window.ccPaneStatusBadge)
+  ? window.ccPaneStatusBadge.createPaneStatusBadge({
+      document,
+      log: appendLog,
+      getPaneElement: (paneId) => { const t = terms.get(paneId); return t ? t.pane : null; },
+    })
+  : null;
+if (paneStatusBadge) {
+  window.ccPaneStatus.onPaneStatusPrototype((view) => {
+    const shown = paneStatusBadge.update(view);
+    if (shown && view && view.paneId) {
+      appendLog(`[pane-status PROTOTYPE] ${view.paneId} -> ${shown.label}${view.reason ? ` (${view.reason})` : ''}\n`);
+    }
+  });
+  // NOTE (revision 2): no `window.ccPaneStatusReattach` global. Revision 1 defined one and NOTHING
+  // in the application ever called it, while the evidence claimed live re-attachment was proven. The
+  // unreachable global is removed rather than left as a false affordance. Dockview reparenting can
+  // still drop the badge NODE; the STATE is unaffected (it lives in the badge module keyed by pane
+  // id) and `update()` re-creates the node via ensureBadge on the very next event. That is
+  // self-healing on the next update — not live re-attachment, and the evidence now says so.
+}
   window.addEventListener('resize', fitAllTerms);
   // PRODUCTION layout engine. On a normal launch this loads Dockview and, only after activation and
   // pane adoption both succeed, switches the visible terminal workspace from the grid to the dock.
