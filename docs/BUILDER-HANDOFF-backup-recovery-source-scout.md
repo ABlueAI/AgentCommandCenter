@@ -1,13 +1,21 @@
-# Builder Handoff — Independent Backup and Recovery Source-Scout, and ADOPT Verdict Finalization
+# Builder Handoff — Independent Backup and Recovery Source-Scout, ADOPT Verdict Finalization, and Handoff Accuracy Correction
 
 Branch: `feature/backup-recovery-verdict-finalization`
 Worktree: `.worktrees\backup-recovery-verdict-finalization`
 Branched from: `3000250bbb127aac8252d427843f60bfdd9553cb` (the Source-Scout handoff-only tail)
 Fork-point SHA: `4d0548e592d34e8407e939981bf4787c054387ad`
 Pre-merge `main` SHA: `4d0548e592d34e8407e939981bf4787c054387ad`
-Reviewed content tip: the verdict-finalization content commit below; the branch tip is the
-handoff-only tail that pins the review artifacts
+Revision 4 reviewed content tip: `a57f8a6fe30ee886fb91f05d2c80d50249571c98` — reviewed,
+`VERDICT: FAIL` on six handoff-accuracy findings
+Revision 4 handoff-only tail: `73f217468b331f2903b2fcc009a94df2d19c9b58`
+Reviewed content tip: the **revision-5** handoff-accuracy correction commit below; the branch tip is
+the handoff-only tail that pins the review artifacts
 Merge commit SHA: **Pending until merge**
+
+**Current revision: 5 — handoff accuracy correction.** Documentation-labelling only. It corrects six
+stale or ambiguous current-voice passages **in this handoff document alone**. The ADOPT verdict, the
+procurement record, and the Master Status roadmap entry are **unchanged and byte-identical** to the
+revision-4 reviewed tip. See § *Revision-5 scope — handoff accuracy correction, stated plainly*.
 
 Preceding branch: `feature/backup-recovery-source-scout` — Source-Scout evidence, reviewed content
 tip `a796952ac691c8b54138a51fff6e106500445353`, handoff-only tail
@@ -135,6 +143,10 @@ dependency, configuration, script, provider setting, hook, GitHub configuration,
 external account is touched. No software is installed. No backup, restore, upload, scan, or
 prototype is run.
 
+**Revision 5 narrows the working scope further without changing that invariant.** The
+handoff-accuracy correction touches **only this handoff document**; it corrects how the branch
+describes itself and alters no decision, no evidence, and no roadmap state.
+
 > **Source-Scout branch invariant, for provenance:** *"produce the required OSS-first procurement
 > evaluation for independent backup and recovery, and change nothing else … and no roadmap state is
 > updated."* That branch honoured it. Roadmap state changes here, on its own branch, which is why
@@ -142,7 +154,9 @@ prototype is run.
 
 ## 2. Files changed
 
-Exactly three tracked files, as the work order allows:
+Exactly three tracked files across the cumulative range `4d0548e5...<rev 5 tip>`, as the work orders
+allow. **Revision 5 changed only the middle row** — the procurement record and the Master Status are
+byte-identical to the revision-4 reviewed tip `a57f8a6f`:
 
 | File | Kind | Change |
 | --- | --- | --- |
@@ -345,7 +359,34 @@ started.** No `npm`, no Pester, no application launch, no backup or restore comm
 was installed, no account created, no data transferred, no secret read, and no cleanup of production
 data performed** — in revision 3 as in revisions 1 and 2.
 
-## 6. Exact test results — gate disposition
+**Added in revision 5 — all read-only except the single edited handoff file:**
+
+* `git rev-parse`, `git log`, `git status --porcelain`, `git worktree list`, `git branch` — starting
+  state verification in both worktrees
+* `git diff --name-status`, `git diff --shortstat`, `git diff --check` on the declared ranges
+* `sha256sum` and `cmp` — re-verification of all seven pre-existing artifacts and byte-identical
+  regeneration of the new ones
+* `git diff --output` — creation of artifacts 8 and 9
+* Edits to `docs/BUILDER-HANDOFF-backup-recovery-source-scout.md` only
+
+**No web fetch, no `gh api` call, no candidate research, and no re-measurement of host state was
+performed in revision 5** — it changes labelling, not evidence.
+
+## 6. Source-Scout gate disposition — pre-verdict historical scope
+
+> **HISTORICAL SCOPE — Source-Scout stage (revisions 1–3), before Blue issued `ADOPT`.** This section
+> records the gate disposition for the **Source-Scout** cumulative range and is retained unchanged as
+> provenance. **It does not describe the current branch.** The file counts differ by stage and are
+> stated here so no reader has to infer them:
+>
+> * **Source-Scout cumulative range** (`4d0548e5...a796952a`) — **two** Markdown files. *This is what
+>   the paragraph below describes, and it was correct for that range.*
+> * **Verdict-finalization cumulative range** (`4d0548e5...a57f8a6f`) — **three** Markdown files. See
+>   § *Gate disposition — revision 4*.
+> * **Revision-5 handoff-accuracy correction, focused range** — **one** Markdown file (this handoff).
+>   See § *Gate disposition — revision 5*.
+>
+> The Source-Scout stage is **not** rewritten to say it changed three files. It changed two.
 
 **Documentation-only branch. App and Pester gates were NOT run, and none was required.** The delta is
 two new tracked Markdown files and no code, test, dependency, script, or configuration file.
@@ -360,6 +401,15 @@ Recorded plainly rather than omitted: this branch performed no gate execution an
 the state of the gates beyond what `main` already records.
 
 ## 7. Manual verification
+
+**Revisions 1–2 verification — performed before the ADOPT verdict was issued.**
+
+> **HISTORICAL.** Every bullet in this block records the Source-Scout branch state at revisions 1–2,
+> when the record deliberately carried no verdict. **None of it is a claim about the current branch
+> state.** In particular, the fourth bullet's "contains **no** ADOPT / FORK / PROTOTYPE /
+> PATTERN-MINE / BUILD FRESH verdict line" was true then and is **false now**: the procurement record
+> records Blue's `ADOPT` verdict verbatim in § 12.1 and ends with the canonical line
+> `BLUE SUBSYSTEM VERDICT: ADOPT`.
 
 * Starting state confirmed before any edit: `main` = `origin/main` =
   `4d0548e592d34e8407e939981bf4787c054387ad`, subject `Merge Release 1.0 decision reconciliation`,
@@ -405,8 +455,13 @@ the state of the gates beyond what `main` already records.
 * **Retention numbers and the quiescing choice are marked `(?)`** as tunable, per project convention.
 * **No architecture was validated end to end.** The load-bearing uncertainty named in § 9 of the
   record is exactly what a bounded prototype would resolve.
-* **The recommendation is a recommendation.** Blue may reasonably choose Architecture B over C, or
-  PROTOTYPE over ADOPT; the record argues both and says which question decides it.
+* **The recommendation was a recommendation** — *pre-verdict history, and no longer the current
+  state.* At Source-Scout stage the decision was still open: Blue could reasonably have chosen
+  Architecture B over C, or PROTOTYPE over ADOPT, and the record argued both and said which question
+  decided it. **Blue subsequently issued `ADOPT`**, selecting **restic** with the
+  Architecture-C-shaped external removable copy plus a separate encrypted **Backblaze B2** off-site
+  repository (record § 12.1), **subject to the bounded prototype and its restic-versus-Kopia return
+  condition** (record § 12.3). The canonical verdict is **not** undecided.
 * **Revision 1 shipped a wrong inference, and that is a process signal.** The faulty claim was
   measured-looking, quantified, and repeated in six places before anything checked whether upstream
   configuration implies commit absence. The corrected § 9 states plainly which conclusions changed
@@ -458,6 +513,24 @@ the state of the gates beyond what `main` already records.
 
 ## 10. Recommended review focus
 
+### Revision-3 pre-verdict review focus — retained historical, superseded for Revision 4 and later
+
+> **These checks applied before Blue issued `ADOPT`.** Items 1–16 below governed the Source-Scout
+> reviews of revisions 1–3, when the record deliberately carried no verdict. **They do not govern
+> verdict-finalization review, this revision-5 correction, or any later review.**
+>
+> **Item 1 is now false as a current-state expectation.** It instructs a reviewer to confirm that the
+> record issues no verdict and contains no `BLUE SUBSYSTEM VERDICT: …` line. The procurement record
+> now records Blue's `ADOPT` verdict verbatim in § 12.1 and **ends with the canonical line**
+> `BLUE SUBSYSTEM VERDICT: ADOPT`. A reviewer applying item 1 today would reach the wrong conclusion.
+>
+> **The current review must instead verify that the ADOPT verdict is recorded verbatim and that the
+> procurement record ends with the canonical ADOPT line** — not that no verdict exists. See
+> § *Current review focus — revision 5* below.
+>
+> Retained in full rather than deleted, per the standing rule that superseded guidance is **scoped,
+> not erased**.
+
 1. **Whether the record issues no verdict** — that § 9 recommends a direction, ends with the exact
    required line, and contains no `BLUE SUBSYSTEM VERDICT: ADOPT|FORK|PROTOTYPE|PATTERN-MINE|BUILD
    FRESH` anywhere.
@@ -507,6 +580,33 @@ the state of the gates beyond what `main` already records.
     conditional survive; Architecture C's margin narrowed materially; the Blue Helm-owned remainder
     grew. All four should be visible, not just the ones that flatter the previous conclusion.
 
+### Current review focus — revision 5
+
+**This is the live guidance. The items above are historical.**
+
+1. **Whether Blue's `ADOPT` verdict is recorded verbatim** in both this handoff (§ 0) and the
+   procurement record (§ 12.1), byte-identical to each other, with no substantive difference,
+   omission, silent narrowing, or expansion.
+2. **Whether the procurement record ends with the canonical line** `BLUE SUBSYSTEM VERDICT: ADOPT`,
+   appearing **once** as the live final verdict, with the former
+   `BLUE SUBSYSTEM VERDICT: NOT YET ISSUED — IMPLEMENTATION REMAINS UNAUTHORIZED` surviving only
+   inside labelled superseded history.
+3. **Whether Blue's issuing statement** — `I ISSUE THE BACKUP AND RECOVERY ADOPT VERDICT EXACTLY AS
+   DRAFTED.` — is recorded verbatim and is not inferred from the recommendation, the reviewer `PASS`,
+   discussion, or a pasted draft.
+4. **Whether every obsolete current-voice statement in this handoff is now either corrected or scoped
+   inside a labelled historical block** — specifically the six findings this revision addresses:
+   the controlling artifact, the pre-verdict review focus, the revisions 1–2 verification block, the
+   two-file gate statement, the open-choice known-limitation, and the artifact count.
+5. **Whether exactly one unqualified current-voice statement names a controlling review artifact**,
+   and whether it names the correct one.
+6. **Whether historical scope is stated explicitly rather than left to be inferred** from a nearby
+   section heading or from chronology.
+7. **Whether the procurement record and Master Status are untouched by this revision** — this is a
+   handoff-accuracy correction only, and both must be byte-identical to the revision-4 reviewed tip.
+8. **Whether all seven pre-existing review artifacts are byte-identical**, and whether the two new
+   revision-5 artifacts match their declared ranges, shortstats, sizes, and SHA-256 identities.
+
 ## 11. Review artifacts
 
 ### Commit shape
@@ -521,12 +621,27 @@ the state of the gates beyond what `main` already records.
 | **Revision 3 reviewed content tip** | **`a796952ac691c8b54138a51fff6e106500445353`** |
 | Revision 3 handoff-only tail (base of this branch) | `3000250bbb127aac8252d427843f60bfdd9553cb` |
 | **Revision 4 reviewed content tip** (verdict finalization) | **`a57f8a6fe30ee886fb91f05d2c80d50249571c98`** |
-| Branch tip | the revision-4 handoff-only tail commit that pins this table |
+| Revision 4 handoff-only tail (base of the revision-5 correction) | `73f217468b331f2903b2fcc009a94df2d19c9b58` |
+| **Revision 5 reviewed content tip** (handoff accuracy correction) | **pinned by the tail commit below** |
+| Branch tip | the revision-5 handoff-only tail commit that pins this table |
 
-**Review the revision-3 cumulative range** — it is the controlling artifact. The revision-3 focused
-range is provided so this correction can be audited in isolation against the reviewed revision-2 tip.
+> **SUPERSEDED REVIEW INSTRUCTION — REVISION 3 ONLY.** This paragraph previously read: *"Review the
+> revision-3 cumulative range — it is the controlling artifact. The revision-3 focused range is
+> provided so this correction can be audited in isolation against the reviewed revision-2 tip."*
+>
+> That instruction **controlled the revision-3 review**, before verdict finalization. **It is
+> historical and must not guide the current review.** The revision-3 cumulative artifact
+> (`4d0548e5...a796952a`) ends at the revision-3 tip and therefore contains neither Blue's `ADOPT`
+> verdict nor this correction.
+>
+> The single current controlling artifact is named below.
 
-### The five pinned artifacts
+### The nine pinned artifacts
+
+**Seven artifacts existed at the start of revision 5** (five from Source-Scout, two from verdict
+finalization). **Revision 5 adds two more** under new filenames, bringing the table to **nine**. The
+header previously read *"The five pinned artifacts"* while the table already held seven; that
+undercount is corrected here.
 
 | # | Artifact | Range | Shortstat | Size | SHA-256 |
 | --- | --- | --- | --- | ---: | --- |
@@ -536,16 +651,25 @@ range is provided so this correction can be audited in isolation against the rev
 | 4 | `.agent-review-backup-recovery-revision-3.diff` **(rev 3 focused)** | `7bda19af...a796952a` | 2 files, 559 insertions, 171 deletions | **93,269 bytes** | `9adf3f3533b9c5e377732a67f7259d3c56f783f5f2b605d19774182023d913e0` |
 | 5 | `.agent-review-backup-recovery-revision-3-cumulative.diff` **(rev 3 cumulative)** | `4d0548e5...a796952a` | 2 files, 1,500 insertions, 0 deletions | **120,725 bytes** | `f2736eead1598abf580e57f0e9807162b99c7ebfdc83c7f0d76b5851df3a5450` |
 | 6 | `.agent-review-backup-recovery-verdict-finalization.diff` **(rev 4 focused)** | `3000250b...a57f8a6f` | 3 files, 500 insertions, 63 deletions | **52,044 bytes** | `6746c868fb689fa5abdc9eae2b23c12a36c72a6f716e1d35f0bc21e13c30a342` |
-| 7 | `.agent-review-backup-recovery-verdict-finalization-cumulative.diff` **(rev 4 cumulative — CONTROLLING)** | `4d0548e5...a57f8a6f` | 3 files, 1,940 insertions, 3 deletions | **154,341 bytes** | `2fee8bebd0b9d27d05bb29d8c4b28c5571738578812304335003e8ea83ef742d` |
+| 7 | `.agent-review-backup-recovery-verdict-finalization-cumulative.diff` **(rev 4 cumulative — superseded as controlling by artifact 9)** | `4d0548e5...a57f8a6f` | 3 files, 1,940 insertions, 3 deletions | **154,341 bytes** | `2fee8bebd0b9d27d05bb29d8c4b28c5571738578812304335003e8ea83ef742d` |
+| 8 | `.agent-review-backup-recovery-handoff-accuracy.diff` **(rev 5 focused)** | `73f21746...<rev 5 tip>` | *pinned by the tail commit* | *pinned by the tail commit* | *pinned by the tail commit* |
+| 9 | `.agent-review-backup-recovery-handoff-accuracy-cumulative.diff` **(rev 5 cumulative — CONTROLLING)** | `4d0548e5...<rev 5 tip>` | *pinned by the tail commit* | *pinned by the tail commit* | *pinned by the tail commit* |
 
-**Artifacts 1–5 are preserved byte-identical** — each re-hashed at the start of revision 4 and
-unchanged. None was regenerated, renamed, or overwritten. **Revision 4 writes new filenames rather
-than touching any existing artifact.** Artifacts 1–3 live in the Source-Scout worktree; artifacts 4–5
-were re-verified there before this branch was created.
+**Artifacts 1–7 are preserved byte-identical** — each re-hashed at the start of revision 5 and
+unchanged. None was regenerated, renamed, or overwritten. **Revision 5 writes new filenames rather
+than touching any existing artifact.** Artifacts 1–5 live in the Source-Scout worktree, which remains
+clean at `3000250b`; artifacts 6–7 live in this worktree and were re-verified before any edit.
 
-**Review the revision-4 cumulative range** `4d0548e5...a57f8a6f` — it is the controlling artifact, and
-it carries the full Source-Scout evidence plus the verdict finalization. The revision-4 focused range
-`3000250b...a57f8a6f` isolates the finalization against the passed revision-3 tail.
+**Review the revision-5 cumulative range** `4d0548e5...<rev 5 tip>` — **it is the controlling
+artifact.** It carries the full Source-Scout evidence, the verdict finalization, and this
+handoff-accuracy correction. The revision-5 focused range `73f21746...<rev 5 tip>` isolates the
+correction against the reviewed revision-4 tail.
+
+> **Why the controlling artifact moved from 7 to 9.** Artifact 7 controlled the review that returned
+> `VERDICT: FAIL` on the six findings corrected here; it ends at `a57f8a6f` and therefore does **not**
+> contain those corrections. Pointing the next reviewer at it would recreate the exact defect Finding
+> 1 exists to fix. Artifact 7's identity is unchanged and it remains pinned above as the reviewed
+> artifact of record for revision 4.
 
 Both were created with `git diff --output` (never PowerShell `>`), are gitignored via
 `.gitignore:33`, and were **each regenerated from their stated range to a separate temporary file and
@@ -588,12 +712,56 @@ No application code, test, dependency, configuration, script, provider setting, 
 configuration, backup target, storage target, or external account is present in either range. `main`
 and `origin/main` remain at `4d0548e592d34e8407e939981bf4787c054387ad`.
 
+### Changed-file lists — revision 5
+
+**Focused range** `73f21746...<rev 5 tip>` — exactly one file, this handoff:
+
+| Status | Path |
+| --- | --- |
+| `M` | `docs/BUILDER-HANDOFF-backup-recovery-source-scout.md` |
+
+**Cumulative range** `4d0548e5...<rev 5 tip>` — still exactly the three intended Markdown files:
+
+| Status | Path |
+| --- | --- |
+| `M` | `BLUE-HELM-MASTER-STATUS.md` |
+| `A` | `docs/BUILDER-HANDOFF-backup-recovery-source-scout.md` |
+| `A` | `docs/OSS-PROCUREMENT-backup-recovery.md` |
+
+**`docs/OSS-PROCUREMENT-backup-recovery.md` and `BLUE-HELM-MASTER-STATUS.md` are untouched by
+revision 5** — both blobs are byte-identical to the revision-4 reviewed tip `a57f8a6f`. The verdict
+text, the canonical `BLUE SUBSYSTEM VERDICT: ADOPT` ending, the procurement evidence, the prototype
+requirements, and the roadmap entry are unchanged by this correction.
+
+**The revision-5 tail commit touches only this handoff document**, and artifacts 8 and 9 both end at
+the revision-5 content tip and exclude the tail.
+
+### Gate disposition — revision 5
+
+**Documentation-only; the app and Pester gates were NOT run and none was required.**
+
+| Gate | Disposition |
+| --- | --- |
+| App gate (`npm test`) | **NOT RUN** — documentation-only |
+| Pester (`scripts\run-pester.ps1`) | **NOT RUN** — documentation-only |
+| `git diff --check` | **RUN — clean (exit 0)** on both revision-5 ranges |
+
+No application code, test, dependency, configuration, script, provider setting, hook, GitHub
+configuration, credential, backup target, storage target, account, or application key is present in
+either range. **No software was installed, no account or application key created, no storage
+configured, no data copied, backed up, restored, scanned, or uploaded, no prototype run, no schedule
+created, and no secret value read or recorded** — in revision 5 as in revisions 1–4. `main` and
+`origin/main` remain at `4d0548e592d34e8407e939981bf4787c054387ad`.
+
+> **Revision-3 artifact note, retained in place.** The paragraph immediately below refers to the
+> **revision-3** ranges and artifacts 4–5. It self-identifies and is left as written.
+
 All were created with `git diff --output` (never PowerShell `>`) and are gitignored via
 `.gitignore:33`. **Artifacts 4 and 5 were each regenerated from their stated range to a separate
 temporary file and proven byte-identical; only the temporary copies were removed.**
 `git diff --check` is clean (exit 0) on **both** new revision-3 ranges.
 
-### Changed-file lists
+### Changed-file lists — revision 3
 
 **Revision-3 focused range** `7bda19af...a796952a` — exactly the two declared Markdown files:
 
@@ -638,15 +806,63 @@ cumulative range `4d0548e5...a796952a`, by a reviewer independent of the Source-
 revision-3 correction author, and the reviewer who issued the revision-2 `FAIL`. All seven findings
 confirmed corrected; six non-blocking observations raised and carried forward (record § 12.8).
 
-**Revision 4 (this verdict-finalization branch) — none yet.** This branch stops for a **fresh
-independent Standard-class review**. The reviewer who passed revision 3 participated in drafting this
-finalization and is **not independent of it**; a different reviewer is required.
+**Revision 4 — `VERDICT: FAIL`.** A fresh independent Standard-class reviewer examined the
+verdict-finalization cumulative range `4d0548e5...a57f8a6f` (artifact 7) and returned, literally:
+
+> `VERDICT: FAIL`
+
+**This was a FAIL, and it is recorded as one — not as a partial pass.** What the reviewer confirmed
+as passing, and what failed, are both stated exactly:
+
+**Passed.** The human authorization was unambiguous and faithfully recorded, and the issuing act
+preceded branch creation. The ADOPT verdict text is verbatim and byte-identical across both copies.
+The canonical ending is `BLUE SUBSYSTEM VERDICT: ADOPT`, appearing once, with the former placeholder
+labelled superseded. The authorization boundaries are correct. The immutability split is correct —
+append-only-key immutability as the primary pass condition, compliance-mode Object Lock separately
+reported, with the stop condition correctly stated. The coverage-staleness control, the metadata-only
+credential-exclusion proof, the DPAPI-bypass-by-exclusion framing, and different-machine recovery are
+all present and correct. The Master Status update is accurate and touches entry 1 only. The review
+history is preserved, including the original `FAIL`. The Git shape and all artifact identities match.
+No implementation or external-state change occurred. Newly added technical claims were re-verified
+against official restic, Backblaze, and Kopia documentation and the live restic issue states.
+
+**Failed.** **Six stale or ambiguous current-voice passages in this handoff**, none of which required
+any substantive change to the verdict, the procurement evidence, a technical requirement, or a
+roadmap decision:
+
+| # | Severity | Blocking | Finding | Corrected in revision 5 |
+| --- | --- | --- | --- | --- |
+| 1 | **Medium** | **Yes** | A stale revision-3 instruction named the revision-3 cumulative artifact as controlling, contradicting the revision-4 statement 20 lines below it. Two unlabelled current-voice statements asserted different controlling artifacts | Preserved inside a labelled `SUPERSEDED REVIEW INSTRUCTION — REVISION 3 ONLY` block; exactly one unqualified current-voice controlling statement remains, naming the revision-5 cumulative artifact |
+| 2 | **Medium** | **Yes** | § 10 review-focus item 1 instructed the reviewer to confirm the record **issues no verdict** and contains no `BLUE SUBSYSTEM VERDICT: …` line — live guidance directly contradicting the ADOPT finalization | Items 1–16 scoped under *Revision-3 pre-verdict review focus — retained historical, superseded for Revision 4 and later*; a new *Current review focus — revision 5* section carries the live guidance |
+| 3 | **Low/Medium** | No | The § 7 verification block asserted in present tense that the record "contains **no** ADOPT / FORK / PROTOTYPE / PATTERN-MINE / BUILD FRESH verdict line", with no revision scope label | Block headed *Revisions 1–2 verification — performed before the ADOPT verdict was issued*, with an explicit note that the bullet is now false |
+| 4 | **Low** | No | § 6 stated the delta was "two new tracked Markdown files", contradicting § 2's "exactly three tracked files" | § 6 relabelled *Source-Scout gate disposition — pre-verdict historical scope*, stating all three per-stage counts (two / three / one) without rewriting the Source-Scout stage |
+| 5 | **Low** | No | A known-limitations bullet said Blue "may reasonably choose Architecture B over C, or PROTOTYPE over ADOPT", presenting the verdict as still open | Converted to past tense as pre-verdict history, recording that Blue subsequently issued `ADOPT` and selected restic with the external-USB plus B2 direction, subject to the bounded prototype |
+| 6 | **Low** | No | The header read "The five pinned artifacts" above a seven-row table | Corrected to "The nine pinned artifacts", matching the table after revision 5 adds two |
+
+**Non-blocking reviewer observations — reviewed and deliberately deferred.** None affects
+authorization, and none is corrected here, because doing so would require editing documents outside
+this correction's allowed scope:
+
+* The procurement record's § 11 gate table omits gate items 8 and 10. **It makes no false claim** —
+  the omitted items are simply not listed.
+* `BLUE-HELM-MASTER-STATUS.md` entry 1 contains cosmetic nested `**` emphasis that renders
+  inconsistently. Cosmetic only.
+* The revision-3 artifact prose in § 11 is oddly ordered relative to the revision-4 and revision-5
+  blocks, but it self-identifies as revision 3 and states no false current claim.
+
+These may be cleaned during a later closeout **only if still useful**. **Procurement evidence and
+Master Status are not touched for cosmetic reasons.**
+
+**Revision 5 (this handoff-accuracy correction) — none yet.** This branch stops for a **fresh
+independent Standard-class review**. The reviewer who returned the revision-4 `FAIL` identified these
+findings and is **not independent of their correction**; a different reviewer is required.
 
 ## Reviewer verdict source
 
 Revision 2: independent Standard-class review recorded above, verdict line `VERDICT: FAIL`.
 Revision 3: fresh independent Standard-class review, verdict line `VERDICT: PASS`.
-Revision 4: **pending.**
+Revision 4: fresh independent Standard-class review, verdict line `VERDICT: FAIL`.
+Revision 5: **pending.**
 
 ## Verdict-finalization scope, stated plainly
 
@@ -656,12 +872,36 @@ This branch **records a decision**. It does not act on one.
 * The procurement record now ends **`BLUE SUBSYSTEM VERDICT: ADOPT`**; the former ending survives
   only inside a labelled superseded block (record § 12.9).
 * The earlier `VERDICT: FAIL` is preserved **as a FAIL**, not rewritten as though it had passed.
-* All five earlier review artifacts are **byte-identical**; none was regenerated or renamed.
+* All **five** artifacts that predated revision 4 are **byte-identical**; none was regenerated or
+  renamed.
 * **No architecture has been exercised.** No software installed, no account or application key
   created, no storage configured, no data copied, backed up, restored, scanned, or uploaded, no
   prototype run, no schedule created, and no secret read — in revision 4 as in revisions 1–3.
 * The next authorized technical stage is a **bounded prototype under its own reviewed work order**,
   which must restate the verbatim verdict and name the record path per `AGENTS.md` gate item 7.
+
+## Revision-5 scope — handoff accuracy correction, stated plainly
+
+This revision **corrects how this handoff describes itself**. It changes no decision.
+
+* **Exactly one tracked file is changed: this handoff.** `docs/OSS-PROCUREMENT-backup-recovery.md`
+  and `BLUE-HELM-MASTER-STATUS.md` are **byte-identical** to the revision-4 reviewed tip `a57f8a6f`.
+* **The ADOPT verdict text is untouched** and remains byte-identical in both recorded copies. The
+  procurement record still ends exactly `BLUE SUBSYSTEM VERDICT: ADOPT`.
+* **No procurement evidence, technical requirement, prototype condition, or roadmap decision was
+  changed** — not the immutability split, not the coverage-staleness control, not the credential
+  exclusion proof, not the DPAPI framing, not the different-machine acceptance.
+* **All six findings were corrected by explicit historical scoping or current-state wording.** No
+  historical text was deleted; superseded guidance is **scoped, not erased**.
+* **The revision-4 `VERDICT: FAIL` is recorded as a FAIL**, alongside the revision-2 `FAIL` and the
+  revision-3 `PASS`. No earlier verdict was rewritten, downgraded, or reinterpreted.
+* **All seven artifacts that predated revision 5 are byte-identical**; revision 5 writes two new
+  filenames rather than touching any of them.
+* **No software installed, no account or application key created, no storage configured, no data
+  copied, backed up, restored, scanned, or uploaded, no prototype run, no schedule created, and no
+  secret value read or recorded.**
+* `main` and `origin/main` remain at `4d0548e592d34e8407e939981bf4787c054387ad`. **Not merged, not
+  pushed.**
 
 ---
 
