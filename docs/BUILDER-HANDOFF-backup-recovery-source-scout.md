@@ -439,7 +439,7 @@ the state of the gates beyond what `main` already records.
 | Revision 1 handoff-only tail | `9e9ad01d8e42574cda7e8ed7911ed998da8290e5` |
 | Revision 2 content tip (reviewed → `VERDICT: FAIL`, retained) | `b079d0f9d092544e9f83e46a84cb212924599f4a` |
 | Revision 2 handoff-only tail | `7bda19afb33f8ce0677996dec2ba922af1b7f732` |
-| **Revision 3 reviewed content tip** | **pinned by the tail commit below** |
+| **Revision 3 reviewed content tip** | **`a796952ac691c8b54138a51fff6e106500445353`** |
 | Branch tip | the revision-3 handoff-only tail commit that pins this table |
 
 **Review the revision-3 cumulative range** — it is the controlling artifact. The revision-3 focused
@@ -452,8 +452,8 @@ range is provided so this correction can be audited in isolation against the rev
 | 1 | `.agent-review-backup-recovery-source-scout.diff` **(rev 1 original, unmodified)** | `4d0548e5...ccb8b524` | 2 files, 917 insertions, 0 deletions | **68,901 bytes** | `c1a36fb402ea4580e5061cbefe89317d3a812af3dc374b5741769af77b788e4c` |
 | 2 | `.agent-review-backup-recovery-correction.diff` **(rev 2 focused, unmodified)** | `9e9ad01d...b079d0f9` | 2 files, 211 insertions, 62 deletions | **38,060 bytes** | `f28056f131908992cabea030eca85c3cfb93e11b0863ab3a06169f2729106ba7` |
 | 3 | `.agent-review-backup-recovery-source-scout-cumulative.diff` **(rev 2 cumulative, unmodified)** | `4d0548e5...b079d0f9` | 2 files, 1,087 insertions, 0 deletions | **82,975 bytes** | `9d915b5098ef274eb8e37710d7c709ecd58e9bf8c54a3d05aec1accedfb5855a` |
-| 4 | `.agent-review-backup-recovery-revision-3.diff` **(rev 3 focused)** | `7bda19af...<rev 3 tip>` | *pinned by the tail commit* | *pinned by the tail commit* | *pinned by the tail commit* |
-| 5 | `.agent-review-backup-recovery-revision-3-cumulative.diff` **(rev 3 cumulative — controlling)** | `4d0548e5...<rev 3 tip>` | *pinned by the tail commit* | *pinned by the tail commit* | *pinned by the tail commit* |
+| 4 | `.agent-review-backup-recovery-revision-3.diff` **(rev 3 focused)** | `7bda19af...a796952a` | 2 files, 559 insertions, 171 deletions | **93,269 bytes** | `9adf3f3533b9c5e377732a67f7259d3c56f783f5f2b605d19774182023d913e0` |
+| 5 | `.agent-review-backup-recovery-revision-3-cumulative.diff` **(rev 3 cumulative — CONTROLLING)** | `4d0548e5...a796952a` | 2 files, 1,500 insertions, 0 deletions | **120,725 bytes** | `f2736eead1598abf580e57f0e9807162b99c7ebfdc83c7f0d76b5851df3a5450` |
 
 **Artifacts 1–3 are preserved byte-identical** — each re-hashed at the start of revision 3 and
 unchanged. None was regenerated, renamed, or overwritten. **Revision 3 writes new filenames rather
@@ -466,14 +466,14 @@ temporary file and proven byte-identical; only the temporary copies were removed
 
 ### Changed-file lists
 
-**Revision-3 focused range** `7bda19af...<revision-3 tip>` — exactly the two declared Markdown files:
+**Revision-3 focused range** `7bda19af...a796952a` — exactly the two declared Markdown files:
 
 | Status | Path |
 | --- | --- |
 | `M` | `docs/BUILDER-HANDOFF-backup-recovery-source-scout.md` |
 | `M` | `docs/OSS-PROCUREMENT-backup-recovery.md` |
 
-**Revision-3 cumulative range** `4d0548e5...<revision-3 tip>` — the same two files, still the only
+**Revision-3 cumulative range** `4d0548e5...a796952a` — the same two files, still the only
 additions:
 
 | Status | Path |
