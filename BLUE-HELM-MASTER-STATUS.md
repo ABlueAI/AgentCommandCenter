@@ -163,13 +163,49 @@ is now reviewed, human-accepted, merged at
 **Cross-provider pane-status indicators now have their own tracked record and
 their own Blue verdict, and both are merged into `main` and pushed** at
 `045be87973512ac532eee3868a3cc9b916f30ab0`. Tracked procurement record:
-`docs/OSS-PROCUREMENT-pane-status.md`. Blue's verdict, verbatim:
+`docs/OSS-PROCUREMENT-pane-status.md`.
+
+**The record's canonical verdict is now, verbatim:**
+
+> BLUE SUBSYSTEM VERDICT: BUILD FRESH
+
+Blue's full authorization, verbatim, recorded in § 13 of the record:
+
+> APPROVE BUILD FRESH VERDICT
+>
+> BUILD FRESH — Pane status: build Blue Helm’s production pane-status subsystem
+> as an advisory-only, human-facing indicator using official provider lifecycle
+> interfaces and the reviewed Experiment A architecture. Provider events are
+> unauthenticated hints and must never authorize or automatically trigger merge,
+> push, approval, pane closure, process control, restart, credential access, or
+> another consequential action. Begin with Claude Code only; fail closed to
+> `unknown` for unverified versions; require explicit reversible hook setup and
+> removal; keep logs metadata-only; preserve the Experiment A provenance
+> limitation as an accepted residual.
+
+**The earlier verdict is preserved, not rewritten.** § 12 of the record still
+carries Blue's first verdict verbatim:
 
 > BLUE SUBSYSTEM VERDICT: PROTOTYPE
 
-**That authorizes bounded prototype work only.** Production specification and
-production implementation remain unauthorized. **Experiment B — app-server
-runtime testing — remains unauthorized** pending a separate Blue scope decision.
+That verdict authorized **bounded Experiment A**, that experiment was carried out
+under it, and it is **superseded as the record's canonical ending, not withdrawn
+and not reinterpreted**. It never meant production authorization and is not read
+that way now.
+
+**What `BUILD FRESH` authorizes is a production direction, not production code.**
+Blue Helm owns its status normalization, lifecycle, UI, and safety boundaries
+while consuming official provider lifecycle interfaces; it does **not** authorize
+reimplementing provider hook systems. **Production specification and production
+implementation each still require their own work order**, and neither is begun.
+**Experiment B — app-server runtime testing — remains unauthorized** pending a
+separate Blue scope decision, as do providers beyond Claude Code.
+
+> **UPDATED — August 12 (decision reconciliation).** This block previously quoted
+> `BLUE SUBSYSTEM VERDICT: PROTOTYPE` as the current canonical verdict and read
+> *"That authorizes bounded prototype work only."* Blue has since issued the
+> `BUILD FRESH` verdict above. The earlier wording is **stale, not
+> reinterpreted**, and the `PROTOTYPE` verdict itself is retained verbatim.
 
 **Experiment A has been carried out, reviewed to `VERDICT: PASS`, merged, and
 pushed** at `7afd945314fc3d4430b9030ef3b2a33b1acd1feb` (August 12 checkpoint):
@@ -201,7 +237,87 @@ R3 roadmap entry remains a roadmap note, not a pane-status procurement verdict.
 finishing Dockview satisfied Dockview's gate only, and pane-status's verdict is
 its own.
 
+## Current checkpoint — August 12 — RELEASE 1.0 DECISION RECONCILIATION; PANE-STATUS VERDICT IS NOW `BUILD FRESH`
+
+**Baseline:** local `main` and `origin/main` are both
+**`4e6787f6dbafb482138ac4623654aa6bb63e997c`**, subject
+`Merge pane status Prototype A closeout`.
+
+**This checkpoint is written on an unmerged documentation-only branch**,
+`feature/release-1.0-decision-reconciliation`, which stops for a fresh
+independent Standard-class review. Nothing in it is merged or pushed, and by its
+own standing control (§ *Standing control — branch reconciliation* in
+`docs/DECISION-RECONCILIATION-release-1.0.md`) **nothing here is a current
+release commitment until this branch lands on `main`.**
+
+### What this reconciliation did
+
+- **Recorded Blue's pane-status `BUILD FRESH` verdict** verbatim in § 13 of
+  `docs/OSS-PROCUREMENT-pane-status.md`, which is now that record's canonical
+  ending. The earlier `PROTOTYPE` verdict is retained verbatim in § 12 as the
+  historical authorization under which Experiment A was carried out —
+  **superseded as the canonical ending, not withdrawn and not reinterpreted.**
+- **Audited every local branch not merged into `main`** — the complete set was
+  exactly four — and classified each. Full record:
+  `docs/DECISION-RECONCILIATION-release-1.0.md`.
+- **Found two genuine Release 1.0 commitments stranded on unmerged branches:**
+  independent backup and recovery, and Quick Check / work-order decision
+  preflight. The Quick Check branch also carries a **verbatim Blue OSS
+  procurement verdict dated July 30, 2026** that never became tracked state on
+  `main`.
+- **Reordered the remaining-work queue** so independent backup and recovery is
+  the blocking prerequisite and the next implementation area, followed by Quick
+  Check / merge-evidence reconciliation, then pane-status production.
+- **Reframed Red-risk merge protection** around evidence binding rather than
+  assuming Windows Hello or a passkey is the solution — see
+  *Red-risk merge protection* below.
+- **Adopted a standing branch-reconciliation control** so a decision can never
+  again be treated as durable before its controlling tracked record lands on
+  `main`.
+
+### The process finding
+
+> Blue Helm had no systematic reconciliation control ensuring that an approved
+> decision became durable tracked state on `main`. A chat decision or
+> feature-branch document was being treated as durable before it landed.
+
+### Honest completion estimate — a planning range, not a release commitment
+
+- **Nine workstreams were tracked on `main` before reconciliation.**
+- **Independent backup and recovery adds one known commitment.**
+- **Quick Check / merge-evidence reconciliation adds one known commitment.**
+- **The working total is therefore approximately eleven known workstreams.**
+- **A separate biometric authorization subsystem would increase that count only
+  if later justified** — it is not currently counted, and it is not
+  automatically a 1.0 implementation requirement.
+- **Approximately 55–65% of known release-risk work remains.**
+- **EDA-1, clean-machine installation, and the daily-driver day are discovery
+  exercises whose findings may create additional work.** They are scheduled to
+  find unknowns, so the count above can grow for legitimate reasons.
+
+**This is a planning range, not a release commitment.** It is stated so the
+remaining distance is visible, not to fix a date or a scope.
+
+### What this reconciliation does NOT authorize
+
+Backup implementation, Quick Check implementation, a pane-status production
+specification, pane-status production code, provider commands, hooks, live model
+sessions, biometric or passkey merge authorization, or any merge of the four
+audited branches. **The next implementation work after this reconciliation
+passes review and lands is independent backup and recovery — not pane status.**
+
 ## Current checkpoint — August 12 — PANE-STATUS EXPERIMENT A MERGED AND PUSHED; PROTOTYPE CODE IN `main`, DORMANT
+
+> **SUPERSEDED AS THE CURRENT BASELINE — retained as historical provenance.**
+> Accurate through the Experiment A merge. `main` has since advanced to
+> `4e6787f6dbafb482138ac4623654aa6bb63e997c` (the Experiment A closeout merge),
+> and the pane-status verdict quoted below as canonical has since been superseded
+> by `BLUE SUBSYSTEM VERDICT: BUILD FRESH` (decision-reconciliation checkpoint
+> above). **Every Experiment A fact recorded here remains correct**, including
+> every open item — the unperformed Dockview drag, the unobserved state
+> animation, the unresolved reporter provenance, and the four-against-three model
+> turns. Only the current-baseline and canonical-verdict claims are **stale, and
+> they are not reinterpreted**.
 
 **Baseline:** local `main`, `origin/main`, and GitHub `refs/heads/main` are all
 **`7afd945314fc3d4430b9030ef3b2a33b1acd1feb`**. Verified during closeout by
@@ -529,9 +645,77 @@ This is load-bearing context, not historical decoration:
 > pane-status indicators therefore move up into the next queue position, which
 > is what the Dockview-first sequencing was always waiting on. Moving up the
 > queue is not authorization — see the gate note attached to the entry.
+>
+> **REORDERED AND RENUMBERED — August 12, by the Release 1.0 decision
+> reconciliation** (`docs/DECISION-RECONCILIATION-release-1.0.md`). Two genuine
+> 1.0 commitments were found stranded on unmerged local branches and are now
+> carried forward here as entries 1 and 2: **independent backup and recovery**
+> (from `codex/release-1.0-auth-backup-blockers`) and **Quick Check /
+> merge-evidence reconciliation** (from `codex/docs-quick-check-roadmap`).
+> Cross-provider pane-status moves from position 1 to position 3 and every
+> following entry shifts by two; **their relative order is unchanged**. Nothing
+> was removed. The previous nine-item numbering is **stale, not reinterpreted**.
+> **Moving up the queue is not authorization** — entries 1 and 2 each still need
+> their own procurement work and work orders, and neither is authorized to begin
+> by this list.
 
-1. **Cross-provider pane-status indicators (R4, promoted). NEXT IN QUEUE —
-   BOUNDED PROTOTYPING AUTHORIZED.** Detect
+1. **Independent backup and recovery. BLOCKING 1.0 PREREQUISITE — and the next
+   implementation area after the decision-reconciliation branch lands.** Blue
+   Helm's release risk is not only "does the feature work" but "can this project
+   survive a lost disk, a bad delete, or a compromised account." Nothing in
+   `main` currently answers that. Requirements:
+   - **Its own Source-Scout evaluation** and **its own tracked Blue verdict** in
+     its own procurement decision record under `docs/`, per `AGENTS.md` §
+     *OSS-FIRST PROCUREMENT GATE — HARD INVARIANT*. Backup tooling is a
+     subsystem like any other; it does not inherit another subsystem's verdict.
+   - **At least three recoverable copies across two storage forms, with one
+     off-site.**
+   - **Coverage of both Git history and declared non-Git application state** —
+     the second is inventoried explicitly rather than assumed, because it is the
+     part GitHub does not hold.
+   - **Provider secrets excluded**, with their independent recovery path
+     documented separately. Backups must not become a new credential store.
+   - **Integrity verification** — recorded, verifiable digests, not "the job
+     reported success."
+   - **A clean isolated restore drill that does not rely on the active workspace
+     or GitHub being available.** A configured-but-undrilled backup is not
+     completion.
+
+   **GitHub is an off-site copy of committed and pushed Git history, and that is
+   all it is.** It is **not** the sole backup, and it is **not** a backup of
+   uncommitted files, gitignored artifacts, application state, configuration, or
+   recovery material. Treating a remote as the backup is the specific
+   assumption this entry exists to retire.
+
+   Carried forward from `codex/release-1.0-auth-backup-blockers`
+   (tip `cc440d44`, dated 2026-08-08), which is **not merged**.
+2. **Quick Check / merge-evidence reconciliation.** Two related problems, kept
+   deliberately distinct:
+   - **A work-order decision preflight** — a canonical validated work-order
+     manifest, deterministic linting, an allowlisted read-only factual
+     preflight, a digest-bound review bundle, and an independent semantic review
+     before high-impact work is sent. This improves **decision quality**.
+   - **A merge-evidence control** — binding a literal reviewer verdict to an
+     exact reviewed artifact. This is a different guarantee; see *Red-risk merge
+     protection* below.
+
+   **Neither one proves that a human review was thoughtful.** They may share a
+   manifest or review bundle, but **must not be conflated without a
+   specification** that says which guarantee each part provides.
+
+   **Status: requires reconciliation under the current OSS procurement gate
+   before implementation.** A verbatim Blue procurement verdict for the Quick
+   Check stack, dated **July 30, 2026**, exists on the unmerged branch
+   `codex/docs-quick-check-roadmap` (tip `5eb697f3`) — recorded in
+   `BLUE-HELM-MASTER-STATUS.md` on that branch rather than in a tracked
+   procurement record under `docs/` on `main`. **It therefore does not satisfy
+   the current gate as it stands, and the stale branch text is not current
+   authorization.** Reconciling it — bringing it onto `main` in the form the
+   gate requires and confirming with Blue that it still stands — is its own work
+   order. **No Quick Check implementation is authorized here.**
+3. **Cross-provider pane-status indicators (R4, promoted) — production
+   specification and `BUILD FRESH` implementation. NOT STARTED; SEQUENCED AFTER
+   ITEMS 1 AND 2.** Detect
    idle / awaiting-input / done and surface it per pane across providers, so the
    app interrupts Blue rather than requiring him to poll it. Sequenced after
    Dockview so the indicators target stable pane and tab headers rather than the
@@ -541,29 +725,65 @@ This is load-bearing context, not historical decoration:
    verdict, and both are now merged into `main` and pushed** at
    `045be87973512ac532eee3868a3cc9b916f30ab0` (August 11 checkpoint). Tracked
    procurement record:
-   `docs/OSS-PROCUREMENT-pane-status.md`. Verdict, verbatim:
-   `BLUE SUBSYSTEM VERDICT: PROTOTYPE`.
+   `docs/OSS-PROCUREMENT-pane-status.md`. **Canonical verdict, verbatim:**
+   `BLUE SUBSYSTEM VERDICT: BUILD FRESH` (§ 13, August 12). The earlier
+   `BLUE SUBSYSTEM VERDICT: PROTOTYPE` (§ 12) is retained verbatim as the
+   historical authorization for Experiment A — **superseded as the canonical
+   ending, not withdrawn and not reinterpreted**.
    **Experiment A is DONE and MERGED** at
    `7afd945314fc3d4430b9030ef3b2a33b1acd1feb` (August 12 checkpoint), after four
-   review revisions ending in `VERDICT: PASS` from an independent reviewer.
+   review revisions ending in `VERDICT: PASS` from an independent reviewer, and
+   closed out at `4e6787f6`.
    **The procurement gate is complete and Experiment A is complete; this roadmap
    item is not.** What is in `main` is a decision record plus **dormant,
-   gate-off prototype code** — not a shipped indicator — which is why this entry
-   stays at position 1.
-   **Only bounded prototyping is authorized. Production specification and
-   production implementation remain unauthorized.** **Experiment B, and
-   app-server runtime testing generally, remain unauthorized** pending a
+   gate-off prototype code** — not a shipped indicator.
+   **What `BUILD FRESH` authorizes is a production direction, not production
+   code.** Blue Helm owns status normalization, lifecycle, UI, and safety
+   boundaries while consuming **official provider lifecycle interfaces**;
+   reimplementing provider hook systems is **not** authorized. **Production
+   specification and production implementation each still require their own work
+   order, and neither is begun.** **Experiment B, app-server runtime testing
+   generally, and providers beyond Claude Code remain unauthorized** pending a
    separate Blue scope decision.
+   **Advisory-only is binding:** provider events are unauthenticated hints and
+   must never authorize or automatically trigger merge, push, approval, pane
+   closure, process control, restart, credential access, or another consequential
+   action.
+   **Before another paid live run:** the unexplained four-turn use against a
+   three-turn authorization must be resolved, or enforceable turn accounting must
+   be implemented first; and no live run may occur merely to gather convenient
+   evidence.
+   **Production acceptance requires all five:** (i) a human visibly observes the
+   badge animate through real states; (ii) pane identity and status stay correct
+   through a live Dockview move; (iii) a second pane cannot receive or inherit
+   the first pane's status; (iv) advisory status cannot trigger any consequential
+   action; (v) an absent, broken, removed, or silent hook drives the badge to
+   `unknown` within a documented bounded interval — never a false `working` or
+   `attention`.
    **What Experiment A left open, and what any production step must answer
-   first:** reporter provenance is unresolved (a pane descendant can forge an
-   allowlisted event, so the badge is advisory); the live Dockview drag was never
-   performed, so wrong-pane-after-move is **NOT SATISFIED**; and visible state
-   animation was never observed. **The next action is a Blue decision on what
-   these results justify** — not more prototype building by default — under its
-   own work order.
+   first — three distinct facts that must not be collapsed:** static badge
+   rendering was **HUMAN-CONFIRMED** as `PROTOTYPE ○ unknown`; visible live state
+   animation was **NOT CONFIRMED**; and the live Dockview move was **NOT
+   PERFORMED**, so wrong-pane-after-move is **NOT SATISFIED**. Separately,
+   **reporter provenance is unresolved** — a pane descendant can forge an
+   allowlisted event, so the badge is **advisory, not authenticated truth**. That
+   residual is accepted **only** while pane status is advisory and human-facing:
+   if it ever becomes an input to automation or a consequential action, the
+   acceptance is **automatically void** and requires a new security decision and
+   review.
    The Dockview record and its ADOPT verdict never covered pane-status and were
    not reused for it. Design
    history and the original ranking remain in the R4 roadmap entry.
+
+   > **UPDATED — August 12 (decision reconciliation).** This entry previously sat
+   > at position 1, read *"NEXT IN QUEUE — BOUNDED PROTOTYPING AUTHORIZED"* and
+   > *"Only bounded prototyping is authorized"*, quoted
+   > `BLUE SUBSYSTEM VERDICT: PROTOTYPE` as canonical, and said *"The next action
+   > is a Blue decision on what these results justify."* Blue has since made that
+   > decision — the `BUILD FRESH` verdict — and independent backup and recovery
+   > now precedes this entry. All of that wording is **stale, not
+   > reinterpreted**; the `PROTOTYPE` verdict itself is retained verbatim in § 12
+   > of the procurement record.
 
    > **UPDATED — August 12.** This entry previously read *"no detection code,
    > reporter, indicator, or provider integration exists"* and *"The next action
@@ -574,27 +794,27 @@ This is load-bearing context, not historical decoration:
    > read *"NEXT IN QUEUE — NOT YET AUTHORIZED"* and required all three
    > procurement preconditions before any work. All three are now satisfied;
    > that wording is **stale, not reinterpreted**.
-2. **Quick Links.** Configurable, main-validated HTTP/HTTPS links. `CRM` /
+4. **Quick Links.** Configurable, main-validated HTTP/HTTPS links. `CRM` /
    `Starboard CRM` opens Blue's Hexona Systems login and `Outlook` opens Outlook
    Web in the Windows default browser. No embedded webviews, native CRM/mail
    panel, Electron-held business credentials, or agent access in 1.0. Its P12
    prerequisite is satisfied (see the note above).
-3. **Session persistence and explicit Claude resume controls.** Restore pane
+5. **Session persistence and explicit Claude resume controls.** Restore pane
    type, role, worktree, safe presentation state, and Dockview placement.
    `Continue Latest` uses supported `claude --continue`; `Choose Session…` uses
    the native `claude --resume` selector. Never reconstruct conversations,
    parse terminal output for session identity, claim arbitrary PTYs resumed, or
    auto-restart Video Scout/paid work. Missing state refuses visibly; offer
    Restore Workspace and Start Fresh.
-4. **P1 fenced-role environment containment.** Full-class credential boundary:
+6. **P1 fenced-role environment containment.** Full-class credential boundary:
    explicit minimal environments; no provider/business/secret-shaped ambient
    values in fenced PTYs.
-5. **Fence completion.** Finish WO-6/WO-7 live tests and implement P4 unless
+7. **Fence completion.** Finish WO-6/WO-7 live tests and implement P4 unless
     preflight proves an equivalent enforcement mechanism. Session continuation
     must reuse or deliberately extend the existing `.claude.json` coordination
     surface, cover multiple app processes (not only panes), and prevent/warn on
     duplicate continuation rather than building a second competing lock.
-6. **Portable family distribution and clean-machine setup.** Before 1.0 is
+8. **Portable family distribution and clean-machine setup.** Before 1.0 is
     complete, replace the development-only shortcut/runtime handoff with an
     organized packaged build that Blue can install locally and give to one
     trusted family member at no recurring signing cost. Remove machine-specific
@@ -613,7 +833,7 @@ This is load-bearing context, not historical decoration:
     `docs/INSTALL-WINDOWS.md` with every direct transfer and retain the
     investigation record in
     `docs/SMART-APP-CONTROL-AND-DISTRIBUTION.md`.
-7. **EDA-1 environment and deployment assumptions audit.** After the
+9. **EDA-1 environment and deployment assumptions audit.** After the
     portable package exists and before the functional ship-check, run the
     read-only inventory in `docs/AUDIT-SCOPE-environment-deployment.md`.
     Record every host-policy, runtime/toolchain, external-service, filesystem,
@@ -623,16 +843,71 @@ This is load-bearing context, not historical decoration:
     acceptance is a clean-clone/clean-machine install using only
     `docs/INSTALL-WINDOWS.md`. The audit makes no fixes; each blocking
     remediation receives its own normally gated work order.
-8. **Release gate.** Resolve or explicitly accept every EDA-1 1.0 blocker,
+10. **Release gate.** **Independent backup and recovery (entry 1) is a blocking
+    prerequisite of this gate**, and a plan, a procurement record, or a
+    configured-but-undrilled backup is not completion — the restore drill is.
+    Then resolve or explicitly accept every EDA-1 1.0 blocker,
     then run the full app/Pester/reachability gates, `npm audit`,
     Electronegativity, full Electron restart, every included control smoked,
     visible progress/refusal, metadata-only Logs, credential-boundary checks,
     no automatic paid restart, clean synchronized `main`, and accepted
-    residuals recorded.
-9. **One complete daily-driver day.** Blue records friction, failures,
+    residuals recorded. Run the **branch-reconciliation enumeration** here as
+    well: every local branch not merged into `main`, classified `LANDED` /
+    `SUPERSEDED` / `DEFERRED` / `ABANDONED`, recorded on `main`.
+11. **One complete daily-driver day.** Blue records friction, failures,
     repeated manual steps, missing capabilities, and desired improvements in a
     DOCX. Repair blockers, record/tag Blue Helm 1.0, and use non-blocking
     findings to plan 2.0.
+
+### Red-risk merge protection — reframed August 12
+
+**Do not restore the earlier Windows Hello / passkey language as the assumed
+solution.** That framing, drafted on `codex/release-1.0-auth-backup-blockers`,
+named a mechanism before it named the failure it was defending against. The
+failure modes actually observed in this project are these:
+
+- **A merge could proceed without the required verdict being bound to the exact
+  reviewed change.** Verdicts are read verbatim by a human today; nothing
+  mechanically ties a `VERDICT: PASS` to the specific artifact it was issued
+  against.
+- **A stale branch could produce a materially dangerous cumulative tree.** A
+  branch that forked long ago can merge cleanly and still deliver a tree nobody
+  reviewed as a whole.
+- **Authenticating the person at the keyboard does not prove that the correct
+  diff was reviewed.** Proving *who* approved is a different guarantee from
+  proving *what* they approved, and only the second addresses the failures above.
+
+**The primary future control is therefore evidence binding.** A Red-risk merge
+path must bind and verify:
+
+- the **literal reviewer verdict**;
+- the **exact repository identity**;
+- the **reviewed base and tip**;
+- the **declared branch tip and handoff-only tail**;
+- the **pinned-diff SHA-256**;
+- the **predicted merge tree**;
+- the **realized merge tree**;
+- and it must **refuse on missing, stale, mismatched, or non-`PASS` evidence.**
+
+**This is not implemented.** `scripts/merge-gate.ps1` verifies plan-declared
+SHAs, ancestry, clean state, the declared handoff document's tail shape and blob
+identity, the pinned diff, the predicted merge tree, and the declared gates — it
+**does not parse verdict prose** and never has. Describing this protection as
+implemented would be false; it is currently enforced by human review and
+authorization.
+
+**Windows Hello or a passkey may remain a defence-in-depth candidate for
+genuinely Red operations, but only after its own Source-Scout work and
+threat-model decision.** It is **not** automatically a separate 1.0
+implementation requirement, and it is not counted as a workstream in the
+completion estimate.
+
+> **REFRAMED — August 12 (decision reconciliation).** The stranded
+> `codex/release-1.0-auth-backup-blockers` entry required "a hardware-backed
+> passkey or Windows Hello gesture" as a blocking 1.0 item. That branch is **not
+> merged**, its wording is not restored here, and the commitment it represents is
+> carried forward as the evidence-binding control above. The branch is retained
+> as provenance; see `docs/DECISION-RECONCILIATION-release-1.0.md` § 3.
 
 ### Next-feature direction — Blue, July 30
 
@@ -643,8 +918,16 @@ be rebuilt against.
 
 > **FIRST HALF DISCHARGED — August 8.** Dockview merged at `d23e2c2`, so the
 > stable pane and tab headers this ordering was protecting now exist on `main`.
-> The direction is retained as the reason pane-status is sequenced where it is,
-> not as outstanding work. Pane-status is now the next feature area on its own.
+> The direction is retained as the reason pane-status is sequenced after Dockview
+> rather than before it, not as outstanding work.
+
+> **UPDATED — August 12 (decision reconciliation).** This note previously ended
+> *"Pane-status is now the next feature area on its own."* It no longer is:
+> **independent backup and recovery is the next implementation area**, followed
+> by Quick Check / merge-evidence reconciliation, with pane-status production at
+> entry 3. The July 30 direction still explains why pane-status follows Dockview;
+> it no longer describes the queue position. That wording is **stale, not
+> reinterpreted**.
 
 **Pane-status R4's revisit trigger has FIRED.** R4 was consciously deprioritized
 with an explicit condition: if pane-babysitting during the audio or V3/V4
@@ -685,21 +968,33 @@ pushed.
 
 **Pane-status has now satisfied this gate too, and its record is merged and
 pushed** at `045be87973512ac532eee3868a3cc9b916f30ab0`. Its tracked record is
-`docs/OSS-PROCUREMENT-pane-status.md`, and Blue's verdict is verbatim
-`BLUE SUBSYSTEM VERDICT: PROTOTYPE` — **bounded Experiment A only; production
-specification, production implementation, Experiment B, and app-server runtime
-testing remain unauthorized.** It satisfied the gate
+`docs/OSS-PROCUREMENT-pane-status.md`, and its **canonical verdict is verbatim
+`BLUE SUBSYSTEM VERDICT: BUILD FRESH`** (§ 13, August 12) — **an approved
+production direction, not production code: production specification and
+production implementation each still require their own work order, and
+Experiment B, app-server runtime testing, and providers beyond Claude Code remain
+unauthorized.** The earlier `BLUE SUBSYSTEM VERDICT: PROTOTYPE` (§ 12) is
+retained verbatim as the authorization under which bounded Experiment A was
+carried out. It satisfied the gate
 through its own Source-Scout evaluation, its own record, and its own verdict:
 the Dockview record and verdict never authorized pane-status work, and Dockview
 reaching `main` did not discharge pane-status's separate procurement gate — a
 completed subsystem verdict covers only the subsystem it names.
 
+> **UPDATED — August 12 (decision reconciliation).** This paragraph previously
+> quoted `BLUE SUBSYSTEM VERDICT: PROTOTYPE` as the current verdict and read
+> *"bounded Experiment A only."* Blue has since issued the `BUILD FRESH` verdict;
+> that wording is **stale, not reinterpreted**, and the `PROTOTYPE` verdict is
+> retained verbatim in the record.
+
 **Satisfying the gate is not shipping the subsystem.** Both Dockview and
 pane-status have cleared procurement, but Dockview's *integration* is complete
 while pane-status's has only reached a **bounded prototype**: Experiment A is
 built, reviewed, and merged at `7afd9453`, and it is gate-off dormant code with
-provenance unresolved — not an integration. The gate governs whether work may
-begin, not whether it is done.
+provenance unresolved — not an integration. **A `BUILD FRESH` verdict does not
+change that**: it approves a direction, and the subsystem still has no production
+specification, no production code, and no shipped indicator. The gate governs
+whether work may begin, not whether it is done.
 
 > **UPDATED — August 12.** This paragraph previously read *"while pane-status's
 > is not started."* Experiment A has since been performed and merged; that
