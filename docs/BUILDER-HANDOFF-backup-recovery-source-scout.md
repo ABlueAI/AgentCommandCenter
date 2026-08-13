@@ -12,6 +12,16 @@ Merge commit SHA: **Pending until merge**
 **Standard-class** review. Per `AGENTS.md`, Blue remains the only merge authority and Claude Code
 never merges its own work.
 
+**Revision 2 — pre-review accuracy correction. This is NOT an independent reviewer verdict.**
+No reviewer has examined this branch; no `VERDICT:` line has been issued against it. Revision 1
+(content tip `ccb8b524`) contained a **blocking analytical defect**: it inferred "commits absent from
+GitHub" from "no configured upstream." A live `git ls-remote --heads origin` enumeration disproved
+that inference. Revision 2 corrects every claim that depended on it, **re-derives the risk ranking and
+the Architecture C recommendation** rather than substituting numbers, and corrects the `.merge-gate`
+file-type description. Candidate versions, licensing, pricing, `safeStorage` findings, architecture
+facts, and source citations are **unchanged and were not re-researched**. The original revision-1
+artifact is preserved unmodified.
+
 ## 0. Procurement authority
 
 Tracked record created by this branch: **`docs/OSS-PROCUREMENT-backup-recovery.md`**.
@@ -52,18 +62,32 @@ changes only after a later verdict-finalization work order.
 
 ## 3. What the evaluation found
 
-### 3.1 The measurement that reframes the problem
+### 3.1 The measurement — corrected in revision 2
 
-`git for-each-ref --format='%(refname:short) %(upstream:short)' refs/heads`, run 2026-08-13:
+**Revision 1 of this branch made an invalid inference and it is corrected here.** It treated "no
+configured upstream" as equivalent to "commits absent from GitHub." Those are different facts.
 
-* **66 local branches total.**
-* **6 have an upstream tracking branch.**
-* **60 have none** — they exist on one disk, in one building.
-* **0 tags.**
+Live enumeration, 2026-08-13, `git ls-remote --heads origin` plus per-tip ancestry testing against
+every live remote head:
 
-GitHub therefore protects roughly one branch in eleven, and nothing outside Git. This is the single
-strongest piece of evidence for why backup is a blocking 1.0 prerequisite, and it was measured rather
-than assumed.
+* **8 live remote heads.**
+* **66 local branch heads.**
+* **61 local branch tips reachable from at least one live remote head.**
+* **5 not reachable** — `codex/chat-handoff-5`, `codex/docs-quick-check-roadmap`,
+  `codex/oss-first-procurement-gate`, `codex/release-1.0-auth-backup-blockers`, and
+  `feature/backup-recovery-source-scout` (this branch, expected — intentionally unpushed).
+* Separately: **60 local branches have no configured upstream**; **0 tags** locally and remotely.
+
+**The pre-existing exposure is four remote-unreachable branch tips, not sixty unique histories.**
+Most branches without an upstream were merged and pushed through `main`, so their objects are
+reachable there.
+
+**What survives the correction, and matters.** The four unreachable tips are exactly the four orphan
+branches classified by `docs/DECISION-RECONCILIATION-release-1.0.md` — including
+`codex/docs-quick-check-roadmap`, which carries the verbatim July 30 Blue procurement verdict. And
+reachability of commit objects is not preservation of the environment: 8 remote refs do not preserve
+the 66-name local ref namespace, branch topology, worktree mapping, reflogs, uncommitted work,
+gitignored evidence, or any non-Git state.
 
 ### 3.2 State inventory
 
@@ -76,8 +100,9 @@ portability, and recovery owner. Canonical locations were read from code, not gu
 * `app/main.js:123` → `VIDEO_SCOUT_RUN_ROOT = 'D:\Gemini_Video_Review\downloads'`
 * `app/main.js:210` / `:222` / `:483` / `:766` → `settings.json`, `secure.json`, Dockview layout store, `.claude.json`
 
-Measured sizes: `.git` 624 files / **6.1 MB**; `.merge-gate\` **12 files**; Video Scout library **61
-files / 84.7 MB** (mostly excludable media); `%APPDATA%\command-center` non-cache state **under 5 KB**.
+Measured sizes: `.git` 624 files / **6.1 MB**; `.merge-gate\` **12 files — 11 `*.psd1` plans and 1
+`*.ps1` run helper**; Video Scout library **61 files / 84.7 MB** (mostly excludable media);
+`%APPDATA%\command-center` non-cache state **under 5 KB**.
 The authoritative set is **tens of megabytes**, so cost is not the binding constraint — discipline is.
 
 ### 3.3 The `safeStorage` finding
@@ -195,14 +220,23 @@ the state of the gates beyond what `main` already records.
   record is exactly what a bounded prototype would resolve.
 * **The recommendation is a recommendation.** Blue may reasonably choose Architecture B over C, or
   PROTOTYPE over ADOPT; the record argues both and says which question decides it.
+* **Revision 1 shipped a wrong inference, and that is a process signal.** The faulty claim was
+  measured-looking, quantified, and repeated in six places before anything checked whether upstream
+  configuration implies commit absence. The corrected § 9 states plainly which conclusions changed
+  (Architecture C's rationale, the risk ranking) and which did not (ADOPT). A reader comparing
+  revisions should not have to guess which parts moved.
 
 ## 9. Unexpected pre-existing findings
 
-* **60 of 66 local branches have no upstream, and there are zero tags.** The exposure is larger than
-  "no backup exists" — most of the project's branch history has never left this machine.
-* **`.merge-gate\` holds 12 human-authored merge authorizations that are gitignored by design.** They
-  are deliberately never committable, which means they are also completely unprotected by GitHub, and
-  they are the evidence trail for every merge the project has gated.
+* **Four pre-existing branch tips are not reachable from any live remote head, and they are exactly
+  the four orphan branches the reconciliation audit classified** — including
+  `codex/docs-quick-check-roadmap`, which carries the verbatim July 30 Blue procurement verdict. The
+  branches already identified as holding stranded decisions are also the branches whose commits exist
+  nowhere but this disk. **Zero tags** exist locally or remotely.
+* **`.merge-gate\` holds 12 gitignored control-plane files — 11 `*.psd1` merge-authorization plans
+  and 1 `*.ps1` run helper.** All twelve are valuable local evidence; only the eleven are
+  authorization plans. Being never-committable by design, they are structurally unprotected by any
+  Git remote, and they are the evidence trail for every merge the project has gated.
 * **Duplicati's licensing changed shape.** The LICENSE is MIT with a `proprietary/` carve-out under
   `Copyright (c) 2026 Duplicati Inc.` This is not what a "MIT-licensed OSS backup tool" reputation
   implies, and it is why GitHub reports NOASSERTION.
@@ -217,7 +251,10 @@ the state of the gates beyond what `main` already records.
 1. **Whether the record issues no verdict** — that § 9 recommends a direction, ends with the exact
    required line, and contains no `BLUE SUBSYSTEM VERDICT: ADOPT|FORK|PROTOTYPE|PATTERN-MINE|BUILD
    FRESH` anywhere.
-2. **Whether the 60-of-66 branch measurement is reproducible** from the command recorded in § 3.1.
+2. **Whether the corrected reachability measurement is reproducible** from the commands recorded in
+   § 3.1 — `git ls-remote --heads origin`, then per-tip ancestry against every live remote head — and
+   whether **every** current-voice claim previously derived from the upstream-count inference has been
+   corrected rather than only the headline ones.
 3. **Whether the `safeStorage`/DPAPI conclusion is properly sourced** to official Electron
    documentation and correctly turned into an exclusion plus a human recovery procedure.
 4. **Whether negative claims are disciplined** — particularly restic's absent object-lock support
@@ -230,6 +267,11 @@ the state of the gates beyond what `main` already records.
    appears in either document.**
 8. **Whether the ADOPT-versus-PATTERN-MINE reasoning holds** under `AGENTS.md` items 4 and 5, and is
    not a silent narrowing in either direction.
+9. **Whether § 9 genuinely re-derives rather than find-replaces.** The corrected risk ranking should
+   stand on its own evidence, Architecture C's advantage should now rest on Backblaze B2 over
+   OneDrive plus a second independent restore mechanism — not on the withdrawn branch-count claim —
+   and the near-zero-cost mitigation (pushing the four stranded branches) should be named without
+   being conflated with the subsystem or treated as authorized.
 
 ## 11. Review artifact
 

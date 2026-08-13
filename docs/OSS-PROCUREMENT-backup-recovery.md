@@ -6,7 +6,20 @@ Date: **2026-08-13**
 Evidence retrieval date: **2026-08-13** (all external sources accessed this date unless stated).
 Branch: `feature/backup-recovery-source-scout`
 Base `main`: `4d0548e592d34e8407e939981bf4787c054387ad` (subject `Merge Release 1.0 decision reconciliation`)
-Revision: **1** — first submission, stops for independent Standard-class review.
+Revision: **2** — **pre-review accuracy correction**, applied before any independent review
+of this record. **No reviewer verdict has been issued on this branch.**
+
+**Revision history.**
+
+| Rev | Date | Change |
+| --- | --- | --- |
+| 1 | 2026-08-13 | First submission at content tip `ccb8b524`. |
+| 2 | 2026-08-13 | **Corrective.** Revision 1 inferred "commits absent from GitHub" from "no configured upstream." That inference is invalid. A live `git ls-remote --heads origin` enumeration showed **8 remote heads covering 61 of 66 local branch tips**, leaving **5 unreachable** — 4 pre-existing plus this intentionally unpushed branch. Every claim derived from the faulty inference is corrected, the risk ranking is re-derived, and the Architecture C rationale is restated on its corrected basis (§ 9). `.merge-gate\` is corrected to **11 plan files plus 1 run helper**. Candidate versions, licensing, pricing, `safeStorage` findings, architecture facts, and source citations are unchanged. |
+
+**What revision 2 does not touch.** No new research sweep was run. No candidate version,
+license, price, security finding, or citation was re-checked or altered. The correction is
+confined to the branch-reachability evidence, the conclusions that depended on it, and the
+`.merge-gate` file-type count.
 
 **Subsystem verdict: NOT YET ISSUED.** This record presents evidence and a recommended
 direction. It does not authorize installation, configuration, a backup, a restore, an
@@ -20,16 +33,37 @@ Blue Helm's release risk has been measured so far as "does the feature work." Th
 subsystem measures something else: **can this project survive a lost disk, a bad delete,
 or a compromised account.** Nothing on `main` currently answers that.
 
-The audit below found the problem is materially worse than "there is no backup job." The
-single most important measured fact in this record:
+The measured exposure, stated as **commit reachability** rather than as upstream
+configuration:
 
-> **60 of 66 local branches in `D:\Workspace\agent-command-center` have no upstream
-> tracking branch.** Six do. There are **zero tags**. Measured 2026-08-13 with
-> `git for-each-ref --format='%(refname:short) %(upstream:short)' refs/heads`.
+> Live enumeration on 2026-08-13 (`git ls-remote --heads origin`) returned **8 live remote
+> heads** against **66 local branch heads**. Testing every local tip for ancestry against
+> those live heads: **61 local branch tips are reachable from at least one live remote
+> head; 5 are not.** Separately, **60 local branches have no configured upstream** and
+> there are **zero tags**, locally and remotely.
 
-GitHub therefore protects roughly one branch in eleven. The remaining sixty exist on
-exactly one disk, in one building. That is not a gap in a backup plan; it is the absence
-of one.
+The five remote-unreachable tips are:
+
+| Branch | Tip | Status |
+| --- | --- | --- |
+| `codex/chat-handoff-5` | `1ef274b8` | Pre-existing. `SUPERSEDED` per `docs/DECISION-RECONCILIATION-release-1.0.md` |
+| `codex/docs-quick-check-roadmap` | `5eb697f3` | Pre-existing. `DEFERRED` — **carries the verbatim July 30 Blue procurement verdict** |
+| `codex/oss-first-procurement-gate` | `7e6045a0` | Pre-existing. `SUPERSEDED` |
+| `codex/release-1.0-auth-backup-blockers` | `cc440d44` | Pre-existing. `DEFERRED` — the stranded backup commitment |
+| `feature/backup-recovery-source-scout` | this branch | **Expected** — intentionally unpushed pending review |
+
+**The pre-existing exposure is therefore four remote-unreachable branch tips, not sixty
+unique histories.** A branch without a configured upstream is not a branch whose commits
+are absent from the remote: the great majority were merged and pushed through `main`, and
+their objects are reachable there.
+
+**What that correction does not soften.** Those four tips are exactly the four orphan
+branches the decision-reconciliation audit classified — including the one holding a
+verbatim Blue procurement verdict that never became tracked state. The branches most
+likely to be lost are the branches already identified as holding stranded decisions. And
+reachability of commit objects is not preservation of the working environment: GitHub
+holds 8 refs, not the 66-name local namespace, and none of the worktree mapping, reflogs,
+uncommitted work, gitignored evidence, or non-Git application state catalogued in § 2.
 
 ## 1. The protection problem — failure classes
 
@@ -40,7 +74,7 @@ evidence proves recovery.
 
 | # | Failure class | What must survive | Copy relied upon | Required independence | How failure becomes visible | Recovery evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| F1 | Internal drive failure (`D:` dies) | All Git history, all local-only branches, non-Git app state, control-plane evidence | Copy 2 (local external) first; Copy 3 (off-site) if the external is also lost | Different physical device from `D:` | Immediate and loud — the machine cannot read the volume | Restore drill § 6 completes from Copy 2 alone |
+| F1 | Internal drive failure (`D:` dies) | All Git history including the 4 remote-unreachable tips, the full local ref namespace and worktree mapping, non-Git app state, control-plane evidence | Copy 2 (local external) first; Copy 3 (off-site) if the external is also lost | Different physical device from `D:` | Immediate and loud — the machine cannot read the volume | Restore drill § 6 completes from Copy 2 alone |
 | F2 | Whole-machine loss, theft, fire, flood | Same as F1 | Copy 3 (off-site) | Different physical building | Immediate; the machine is gone | Drill § 6 completes on a replacement machine from Copy 3 alone |
 | F3 | Accidental deletion / destructive local command (`rm -rf`, bad `git worktree remove --force`) | The deleted state as of before the command | Most recent good **version** in Copy 2 or 3 | Version retention — a mirror that already synced the deletion is useless | **Often silent.** Discovered later, by absence | A restore of a specific dated version, not "latest" |
 | F4 | Bad merge, reset, rebase, force-push | Pre-operation refs and reflog | Versioned repository snapshot; `git reflog` only if the machine survives | Snapshot must predate the operation and be immutable to it | Silent — the repo still works, just wrongly | Restore of a prior snapshot showing the original ref values |
@@ -55,9 +89,11 @@ evidence proves recovery.
 
 **Two statements this record refuses to blur.**
 
-* **A Git remote is not a backup.** It holds pushed history only. Measured today, that is
-  6 of 66 branches, none of the working tree, none of the gitignored control-plane
-  evidence, and none of the non-Git application state.
+* **A Git remote is not a backup.** It holds pushed history only. Measured today that is
+  **8 refs carrying commits that cover 61 of 66 local tips** — but it holds none of the
+  66-name local ref namespace, none of the worktree mapping or reflogs, none of the
+  working tree, none of the gitignored control-plane evidence, and none of the non-Git
+  application state. Commit reachability is not environment preservation.
 * **Synchronization is not versioning.** A folder-sync or mirror tool propagates deletion
   and encryption faithfully. Against F3, F4, and F6 it is an accelerant, not a control,
   unless independent version retention is proven.
@@ -80,11 +116,12 @@ Canonical locations established from code:
 | # | State category | Example path / owner | Classification | Include / protect separately / exclude | Live-copy consistency risk | Portable to a replacement machine? | Recovery prerequisite and owner |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | S1 | Committed Git history and refs | `D:\Workspace\agent-command-center\.git` — 624 files, **6.1 MB** | **Authoritative** | **Include** | Yes — copying during a Git write can tear an object or ref update | Yes | Git installed. Blue |
-| S2 | **Local branches with no upstream** | 60 of 66 refs under `.git/refs/heads` | **Authoritative and irreplaceable** | **Include** | With S1 | Yes | Same as S1. Blue |
+| S2a | **Branch tips not reachable from any live remote head** | 4 pre-existing (`codex/chat-handoff-5`, `codex/docs-quick-check-roadmap`, `codex/oss-first-procurement-gate`, `codex/release-1.0-auth-backup-blockers`) + this unpushed branch | **Authoritative and irreplaceable** — these commits exist only on this disk | **Include** | With S1 | Yes | Same as S1. Blue |
+| S2b | **Local ref namespace and topology** | All 66 names under `.git/refs/heads` vs 8 live remote heads; plus reflogs and stashes | **Valuable, not preserved remotely** — the commits are mostly reachable, the *names and branch structure* are not | **Include** | With S1 | Yes | Same as S1. Blue |
 | S3 | Uncommitted tracked changes | Working trees under `D:\Workspace\agent-command-center` and `.worktrees\*` | Valuable, possibly authoritative | **Include** | Yes — mid-edit capture | Yes | None beyond files. Blue |
 | S4 | Untracked files | Any working tree | Valuable, unknown content | **Include** (with exclusions below) | Yes | Yes | None. Blue |
 | S5 | Gitignored review artifacts | `.agent-review*.diff` (`.gitignore:33`) | **Valuable evidence, never committable** | **Include** | Low — written once via `git diff --output` | Yes | None. Blue |
-| S6 | Merge-gate plans and control-plane evidence | `.merge-gate\` — **12 files**, e.g. `plan-release-1.0-decision-reconciliation.psd1` (827 B, 2026-08-13) | **Valuable, human-authored, irreplaceable** | **Include** | Low | Yes | None. Blue |
+| S6 | Merge-gate plans and control-plane evidence | `.merge-gate\` — **12 files: 11 `*.psd1` merge-authorization plans** (e.g. `plan-release-1.0-decision-reconciliation.psd1`, 827 B, 2026-08-13) **and 1 `*.ps1` run helper** | **Valuable, human-authored, irreplaceable** | **Include** | Low | Yes | None. Blue |
 | S7 | Worktree content with unfinished work | 26 registered worktrees (`git worktree list`), incl. `D:\Workspace\agent-command-center-*` siblings | Valuable | **Include** | Yes | Path-sensitive — see S8 | Blue |
 | S8 | Git worktree administrative metadata | `.git\worktrees\*`, and `.git` **files** inside each worktree pointing at absolute paths | Valuable but **path-bound** | **Include**, and expect repair on restore | Low | **Partially.** Absolute paths break if restored to a different drive letter or root | `git worktree repair`. Blue |
 | S9 | Blue Helm application configuration | `%APPDATA%\command-center\settings.json` — **161 B** | Valuable, small | **Include** | Low, but written on app events | Yes — plain JSON | None. Blue |
@@ -151,7 +188,7 @@ selected before its role is defined.
 | --- | --- | --- |
 | **Versioned encrypted backup engines** (restic, Kopia, Duplicati) | Versioned, deduplicated, client-side-encrypted, integrity-checked copies to local and off-site destinations | Cannot decide *what* to include; cannot repair a torn Git object captured mid-write |
 | **Windows first-party facilities** (File History, Windows Backup / `wbadmin`, VSS, OneDrive) | VSS gives consistent capture of locked files; OneDrive gives an already-paid off-site surface | Scope, retention, and portability limits documented in § 4.4–§ 4.7 make them insufficient as the primary control |
-| **Git-specific snapshots** (`git bundle`, `--mirror` clone) | A self-contained, verifiable, format-stable archive of *all* refs including the 60 local-only branches | Covers only Git; ignores S9–S14 entirely |
+| **Git-specific snapshots** (`git bundle`, `--mirror` clone) | A self-contained, verifiable, format-stable archive preserving the **complete 66-name ref namespace** and the 4 remote-unreachable tips | Covers only Git; ignores S9–S14 entirely. Most commits are already reachable remotely, so the marginal gain is namespace + the 4 tips, not 60 histories |
 | **Transport and replication** (rclone, robocopy, Syncthing) | Moving bytes to a destination; rclone adds encrypted remotes | **None of these is a backup.** No versioning of their own (rclone/robocopy), or deletion-propagating sync (Syncthing) |
 
 Candidates were included on the evidence below and excluded only with a stated reason.
@@ -299,8 +336,8 @@ Behavioural claims are cited to official documentation.
 | Field | Finding |
 | --- | --- |
 | Role | Off-site copy of **pushed Git history only** |
-| Measured coverage today | **6 of 66 local branches; 0 tags.** Nothing else |
-| What it does not hold | 60 local-only branches, working trees, `.merge-gate\` (12 files), `.agent-review*.diff`, `%APPDATA%\command-center` state, the Video Scout library, `.command-center\outputs`, or any recovery material |
+| Measured coverage today | **8 live remote heads**, whose history covers **61 of 66 local branch tips**. **6 local branches have a configured upstream; 0 tags** locally or remotely |
+| What it does not hold | The **4 pre-existing remote-unreachable tips** (§ 0) plus this unpushed branch; the **66-name local ref namespace and branch topology**; reflogs and stashes; worktree mapping; working trees; `.merge-gate\` (12 files); `.agent-review*.diff`; `%APPDATA%\command-center` state; the Video Scout library; `.command-center\outputs`; or any recovery material |
 | Failure exposure | F5 — account compromise, repository deletion, or outage removes it entirely |
 | Accept / reject | **Keep, and count it honestly.** It is a real off-site copy of a real subset. It is **not** the backup, and no architecture below may count it as one of the three copies |
 
@@ -311,10 +348,10 @@ Behavioural claims are cited to official documentation.
 | Canonical source | https://git-scm.com/docs/git-bundle (accessed 2026-08-13) |
 | Role | "Move objects and refs by archive" — offline transfer of Git objects "without an active 'server'" |
 | Key properties | "Bundles are `.pack` files with a header indicating what references are contained within." A self-contained bundle "can be extracted into anywhere, even into an empty repository, or be cloned from" — `git clone backup.bundle <dir>` works |
-| Why it matters here | A single verifiable file capturing **all 66 refs**, restorable with nothing but Git. Immune to the torn-`.git`-directory risk because Git itself produces it |
+| Why it matters here | A single verifiable file capturing **all 66 refs by name**, restorable with nothing but Git. Immune to the torn-`.git`-directory risk because Git itself produces it |
 | Limitation | Git only. Says nothing about S9–S14. Also excludes the reflog and stashes unless captured deliberately |
 | Cost / effort | $0; one command |
-| Accept / reject | **Strong accept as a component.** The single highest value-per-effort item in this record, and the one that most directly answers the 60-local-branch finding |
+| Accept / reject | **Accept as a component, on a corrected and narrower basis.** It preserves the complete ref namespace (which the 8 remote heads do not) and the 4 remote-unreachable tips. It must **not** be justified as protecting 60 unique histories absent from GitHub — 61 of 66 tips are reachable remotely. Much of its Git-only value could also be obtained by simply pushing the 4 stranded branches, which is a one-command mitigation and not a backup subsystem |
 
 ### 4.10 rclone
 
@@ -406,7 +443,7 @@ excluded are S13, S17–S21; S11 and S16 are pending Blue's answers in § 8.
 | **Copy 1** | Working state on `D:` |
 | **Copy 2** | External USB: restic repository **and** dated `*.bundle` files |
 | **Copy 3** | **Backblaze B2** holding the restic repository; bundles included in it |
-| Fourth, deliberately non-counted | GitHub, for the 6 branches that are pushed — recorded honestly as partial |
+| Fourth, deliberately non-counted | GitHub — 8 live heads whose history covers 61 of 66 local tips. Recorded honestly as partial: real commit coverage, no ref namespace, no non-Git state |
 | Storage forms | Internal SSD, external USB, S3-compatible object storage |
 | Off-site | B2 |
 | Independent of GitHub | Yes, and doubly so — a bundle restores with Git alone, no restic needed |
@@ -418,7 +455,7 @@ excluded are S13, S17–S21; S11 and S16 are pending Blue's answers in § 8.
 | Cost | **$0–negligible** (B2 free tier) |
 | Single points of failure | Fewest of the three: two independent restore mechanisms (restic and plain Git) over two independent destinations |
 | GitHub **and** the computer both gone | **Recoverable**, by either mechanism |
-| Weakness | Two mechanisms mean two things to verify and two things that can silently stop. No object-lock immutability unless B2 Object Lock is added, which restic does not natively drive (§ 4.1) |
+| Weakness | Two mechanisms mean two things to verify and two things that can silently stop. No object-lock immutability unless B2 Object Lock is added, which restic does not natively drive (§ 4.1). **After the § 0 correction, the bundle component's marginal value is narrower than first argued** — it preserves the ref namespace and 4 tips, not 60 absent histories |
 
 ### 5.1 Architecture comparison
 
@@ -449,7 +486,8 @@ decrypted provider credentials.
 
 ### 6.1 Frozen manifest
 Before capture, record what recovery is expected to produce: the full output of
-`git for-each-ref` (all 66 refs, so the 60 local-only branches are provable), `git worktree
+`git for-each-ref` (all 66 refs by name, so the full namespace and the 4 remote-unreachable
+tips are provable), `git worktree
 list`, the file list of `%APPDATA%\command-center` non-cache state, the `.merge-gate\`
 file list, the Video Scout run-ID list, and `.command-center\outputs` directory names.
 Store the manifest **with the backup and on `main`**.
@@ -546,7 +584,8 @@ work orders, handoffs, command-line arguments, Windows user environment variable
    documented coordination surface, and whether it carries session material is
    **UNVERIFIED**. Excluding it is the safe default; the cost is losing coordination state.
 3. **Recovery point.** Per commit, hourly, daily, or on-demand before risky operations?
-   The 60-local-branch finding argues for at least daily plus a manual trigger.
+   The corrected exposure — non-Git state and gitignored evidence, which no push protects —
+   argues for at least daily plus a manual trigger.
 4. **Replacement-machine recovery time.** Hours, or same-day acceptable?
 5. **Maximum recurring cost.** Architectures B and C are plausibly $0 under B2's free tier
    at the measured data volume; is a small paid ceiling acceptable if the set grows?
@@ -564,7 +603,34 @@ work orders, handoffs, command-line arguments, Windows user environment variable
 12. **Which architecture advances**, and to what — bounded prototype, or straight to a
     specified implementation?
 
-## 9. Recommendation — re-derived, and not a verdict
+## 9. Recommendation — re-derived after the § 0 correction, and not a verdict
+
+**This section was re-derived, not patched.** Revision 1 rested substantially on the claim
+that sixty branch histories existed nowhere but this disk. That claim was wrong: 61 of 66
+local tips are reachable from live remote heads. The corrected risk ranking is stated
+first, and the recommendation is then tested against it.
+
+**Corrected risk ranking, strongest exposure first:**
+
+1. **No independent restore proof of anything.** Unchanged by the correction, and now the
+   clear top risk. Nothing in `main` demonstrates that any state can be recovered.
+2. **Non-Git application state** — `%APPDATA%\command-center` (S9, S10), the Video Scout
+   library (S12), `.command-center\outputs` (S14). No push protects any of it.
+3. **Gitignored evidence and control-plane material** — `.merge-gate\` (11 plan files plus
+   1 run helper) and `.agent-review*.diff`. Deliberately never committable, therefore
+   structurally invisible to every Git remote.
+4. **Uncommitted and untracked work** across 26 registered worktrees.
+5. **Four pre-existing remote-unreachable branch tips**, plus this intentionally unpushed
+   branch. Small in count, disproportionate in content: they are the same four orphan
+   branches the reconciliation audit classified, one of which holds a verbatim Blue
+   procurement verdict.
+6. **Local ref namespace, branch topology, worktree mapping, reflogs, stashes** — 66 names
+   against 8 remote heads. The commits mostly survive; the structure does not.
+
+**What the correction changed.** Items 2–4 were always in the record but were ranked
+behind a headline number that turned out to be wrong. Removing that number **moves weight
+away from the Git-specific argument and toward general file backup** — which is precisely
+what an adopted engine does and what a `git bundle` does not.
 
 **Adoptable intact.** The capture engine, its encryption, its deduplication, its snapshot
 and retention model, its integrity verification, and its restore machinery. Restic and
@@ -579,8 +645,11 @@ configuration, orchestration, and evidence — not a product.
 
 **Rejected.** Duplicati (mixed vendor-controlled licensing; unnecessary service and web-UI
 surface). File History (scope mismatch with the actual state locations). `robocopy` and
-Syncthing as backups (no versioning / deletion propagation). GitHub as the backup (measured
-6-of-66 coverage). rclone is accepted only as optional transport.
+Syncthing as backups (no versioning / deletion propagation). GitHub as the backup — not
+because its commit coverage is thin (it covers 61 of 66 tips) but because it preserves no
+ref namespace, no worktree mapping, no working tree, no gitignored evidence, and no
+non-Git state, and because F5 can remove it entirely. rclone is accepted only as optional
+transport.
 
 **Unverified, and honestly flagged.** `wbadmin`'s full feature availability on Windows 11
 Home; `secure.json` decryptability after profile migration; whether `.claude.json` carries
@@ -589,14 +658,23 @@ without custom work (current evidence says no for restic and Kopia).
 
 **The load-bearing uncertainty**, and the bounded experiment that would resolve it:
 > Can a scheduled, VSS-consistent capture of this specific machine's state be restored to a
-> clean isolated destination such that **all 66 refs** and the declared non-Git state come
-> back intact, with `secure.json` provably absent — and does the operator find out when the
-> job stops running?
+> clean isolated destination such that **all 66 refs by name** and the declared non-Git
+> state come back intact, with `secure.json` provably absent — and does the operator find
+> out when the job stops running?
 
 That is one bounded prototype: one engine, one external drive, one off-site destination,
 one drill, one deliberately broken job to prove the alert fires.
 
-**Recommended direction, for Blue's decision — `ADOPT`.**
+**Recommended direction, for Blue's decision — `ADOPT`. Re-derived after the correction and
+unchanged, and the corrected evidence supports it more strongly rather than less.**
+
+The original ADOPT argument never rested on the branch-count claim. It rests on the fact
+that the capture, encryption, dedup, snapshot, retention, verification, and restore
+machinery already exist in mature permissively licensed tools, and that what remains is
+configuration and evidence. Correcting the branch measurement **moves exposure toward
+general file state** (ranking items 1–4 above), which is exactly the surface an adopted
+engine covers and exactly the surface no Git-specific trick covers. ADOPT therefore
+survives the correction on strengthened, not weakened, grounds.
 
 The subsystem is an adopted engine plus Blue Helm-owned configuration, verification, and
 restore orchestration. Under `AGENTS.md` item 4, that is **ADOPT**, and item 5 makes the
@@ -606,26 +684,55 @@ narrowing the gate forbids. The owned configuration and orchestration around an 
 tool is normal integration work, not a separate BUILD FRESH subsystem — no new engine, no
 new format, no new crypto is proposed, and none should be.
 
-**On engine choice, if Blue chooses ADOPT**, the evidence favours **restic in Architecture
-C**: built-in VSS is a materially better Windows consistency story than user-maintained
-shadow-copy scripts, and the `git bundle` component directly answers the strongest measured
-risk in this record with one command and no new dependency. **Kopia in Architecture B is
-the correct choice if ransomware immutability outranks Windows capture simplicity** — its
-compliance-mode object lock is the only documented path in this evaluation to a copy a
-compromised host cannot destroy. Both are defensible; they optimise different failure
-classes, and § 8 Q8 is the question that decides between them.
+**On engine and architecture, the correction did change the reasoning, and the change is
+recorded rather than hidden.**
+
+**Architecture C is still recommended, on a corrected basis.** Revision 1 justified it
+chiefly by the `git bundle` component "answering the strongest measured risk." That
+justification is withdrawn — the strongest measured risks are now items 1–4, none of which
+a bundle addresses. C's remaining advantages over A are:
+
+* **Backblaze B2 rather than OneDrive as the off-site copy** — no 30-day version horizon
+  on the container files, and an object-lock-capable destination if Blue later wants it.
+  **This, not the bundle, is now the reason C outranks A.**
+* **A second independent restore mechanism.** Restoring history needs only Git and one
+  `.bundle`, with no dependency on the engine, its repository format, or its password
+  being remembered correctly. That is genuine defence in depth against F10 and against
+  operator error, and it costs one command.
+* **Preservation of the 66-name ref namespace and the 4 unreachable tips**, which the 8
+  remote heads do not provide.
+
+**The gap between C and A has narrowed materially.** If Blue prefers zero new accounts, A
+with OneDrive is now a closer second than revision 1 implied, and the honest difference is
+the off-site destination rather than the Git tooling.
+
+**The gap between C and B is unchanged**, and § 8 Q8 still decides it: built-in VSS
+(restic) against documented compliance-mode object lock (Kopia). If anything the
+correction slightly favours restic's VSS, because ranking items 2–4 are live-written files
+where capture consistency is the binding problem.
+
+**A near-zero-cost mitigation exists and is deliberately not conflated with the
+subsystem.** Pushing the four stranded branches would remove ranking item 5 entirely, in
+one command, today. It is **not authorized by this record** (it is a push), it is **not a
+backup**, and it addresses none of ranking items 1–4. It is named here so that Blue can
+take it as a separate cheap decision without anyone treating it as progress on this
+subsystem.
 
 **PROTOTYPE is the reasonable alternative direction** if Blue wants the load-bearing
 uncertainty resolved before committing — bounded to the single experiment named above.
 
 ## 10. Historical and roadmap accuracy
 
-* **GitHub protects only committed and pushed Git history.** Measured coverage on
-  2026-08-13: **6 of 66 local branches, 0 tags.**
-* **GitHub is not the sole backup.** It does not protect uncommitted work, gitignored
-  artifacts (`.agent-review*.diff`, `.merge-gate\`), the 60 local-only branches,
-  `%APPDATA%\command-center` application state, the Video Scout library,
-  `.command-center\outputs`, or any recovery material.
+* **GitHub protects only committed and pushed Git history.** Measured 2026-08-13 by live
+  enumeration: **8 remote heads**, whose history covers **61 of 66 local branch tips**.
+  **6 local branches have a configured upstream; 0 tags** locally or remotely.
+* **GitHub is not the sole backup.** It does not protect the **4 pre-existing
+  remote-unreachable branch tips**, the **66-name local ref namespace or branch topology**,
+  reflogs, stashes, worktree mapping, uncommitted work, gitignored artifacts
+  (`.agent-review*.diff`, `.merge-gate\`), `%APPDATA%\command-center` application state,
+  the Video Scout library, `.command-center\outputs`, or any recovery material.
+* **A configured upstream is not the measure of remote coverage.** Reachability is.
+  Revision 1 of this record conflated the two; § 0 records the correction.
 * **`codex/release-1.0-auth-backup-blockers` is stale and must not be merged.** Its
   commitment was reconciled into current roadmap language on `main` by
   `docs/DECISION-RECONCILIATION-release-1.0.md` § 3, which classified it **DEFERRED** and
