@@ -236,10 +236,31 @@ the state of the gates beyond what `main` already records.
 | Field | Value |
 | --- | --- |
 | Base (pre-merge `main`) | `4d0548e592d34e8407e939981bf4787c054387ad` |
-| **Reviewed content tip** | **Pinned by the tail commit — see the table below once written** |
+| **Reviewed content tip** | **`ccb8b5246de03cd8974aba68a4aa738798c0ce99`** |
 | Branch tip | the handoff-only tail commit that pins this table |
+| Reviewed range | `4d0548e592d34e8407e939981bf4787c054387ad...ccb8b5246de03cd8974aba68a4aa738798c0ce99` |
 
-*(Artifact identity is recorded by the tail commit, after the content tip exists.)*
+| Artifact | Shortstat | Size | SHA-256 |
+| --- | --- | --- | --- |
+| `.agent-review-backup-recovery-source-scout.diff` | **2 files, 917 insertions, 0 deletions** | **68,901 bytes** | `c1a36fb402ea4580e5061cbefe89317d3a812af3dc374b5741769af77b788e4c` |
+
+Created with `git diff --output` (never PowerShell `>`) and gitignored via `.gitignore:33`.
+**Regenerated from its stated range to a separate temporary file and proven byte-identical by `cmp`;
+only the temporary copy was removed.** `git diff --check` is clean (exit 0) on the range.
+
+**Exact changed-file list for the reviewed range** — two new tracked Markdown files, nothing else:
+
+| Status | Path |
+| --- | --- |
+| `A` | `docs/BUILDER-HANDOFF-backup-recovery-source-scout.md` |
+| `A` | `docs/OSS-PROCUREMENT-backup-recovery.md` |
+
+**Gate disposition: documentation-only; the app and Pester gates were NOT run** (§ 6). No application
+code, test, dependency, configuration, script, provider setting, hook, GitHub configuration, backup
+target, or external account is present in this range, and no production data was copied or uploaded.
+
+**The tail commit above this content tip touches only this handoff document**, and the pinned artifact
+ends at the content tip and excludes the tail.
 
 ## Review-diff rule
 
