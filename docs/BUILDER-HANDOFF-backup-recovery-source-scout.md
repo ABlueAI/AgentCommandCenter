@@ -520,7 +520,7 @@ the state of the gates beyond what `main` already records.
 | Revision 2 handoff-only tail | `7bda19afb33f8ce0677996dec2ba922af1b7f732` |
 | **Revision 3 reviewed content tip** | **`a796952ac691c8b54138a51fff6e106500445353`** |
 | Revision 3 handoff-only tail (base of this branch) | `3000250bbb127aac8252d427843f60bfdd9553cb` |
-| **Revision 4 reviewed content tip** (verdict finalization) | **pinned by the tail commit below** |
+| **Revision 4 reviewed content tip** (verdict finalization) | **`a57f8a6fe30ee886fb91f05d2c80d50249571c98`** |
 | Branch tip | the revision-4 handoff-only tail commit that pins this table |
 
 **Review the revision-3 cumulative range** — it is the controlling artifact. The revision-3 focused
@@ -535,17 +535,58 @@ range is provided so this correction can be audited in isolation against the rev
 | 3 | `.agent-review-backup-recovery-source-scout-cumulative.diff` **(rev 2 cumulative, unmodified)** | `4d0548e5...b079d0f9` | 2 files, 1,087 insertions, 0 deletions | **82,975 bytes** | `9d915b5098ef274eb8e37710d7c709ecd58e9bf8c54a3d05aec1accedfb5855a` |
 | 4 | `.agent-review-backup-recovery-revision-3.diff` **(rev 3 focused)** | `7bda19af...a796952a` | 2 files, 559 insertions, 171 deletions | **93,269 bytes** | `9adf3f3533b9c5e377732a67f7259d3c56f783f5f2b605d19774182023d913e0` |
 | 5 | `.agent-review-backup-recovery-revision-3-cumulative.diff` **(rev 3 cumulative)** | `4d0548e5...a796952a` | 2 files, 1,500 insertions, 0 deletions | **120,725 bytes** | `f2736eead1598abf580e57f0e9807162b99c7ebfdc83c7f0d76b5851df3a5450` |
-| 6 | `.agent-review-backup-recovery-verdict-finalization.diff` **(rev 4 focused)** | `3000250b...<rev 4 tip>` | *pinned by the tail commit* | *pinned by the tail commit* | *pinned by the tail commit* |
-| 7 | `.agent-review-backup-recovery-verdict-finalization-cumulative.diff` **(rev 4 cumulative — CONTROLLING)** | `4d0548e5...<rev 4 tip>` | *pinned by the tail commit* | *pinned by the tail commit* | *pinned by the tail commit* |
+| 6 | `.agent-review-backup-recovery-verdict-finalization.diff` **(rev 4 focused)** | `3000250b...a57f8a6f` | 3 files, 500 insertions, 63 deletions | **52,044 bytes** | `6746c868fb689fa5abdc9eae2b23c12a36c72a6f716e1d35f0bc21e13c30a342` |
+| 7 | `.agent-review-backup-recovery-verdict-finalization-cumulative.diff` **(rev 4 cumulative — CONTROLLING)** | `4d0548e5...a57f8a6f` | 3 files, 1,940 insertions, 3 deletions | **154,341 bytes** | `2fee8bebd0b9d27d05bb29d8c4b28c5571738578812304335003e8ea83ef742d` |
 
 **Artifacts 1–5 are preserved byte-identical** — each re-hashed at the start of revision 4 and
 unchanged. None was regenerated, renamed, or overwritten. **Revision 4 writes new filenames rather
 than touching any existing artifact.** Artifacts 1–3 live in the Source-Scout worktree; artifacts 4–5
 were re-verified there before this branch was created.
 
-**Review the revision-4 cumulative range** `4d0548e5...<rev 4 tip>` — it is the controlling artifact,
-and it carries the full Source-Scout evidence plus the verdict finalization. The revision-4 focused
-range `3000250b...<rev 4 tip>` isolates the finalization against the passed revision-3 tail.
+**Review the revision-4 cumulative range** `4d0548e5...a57f8a6f` — it is the controlling artifact, and
+it carries the full Source-Scout evidence plus the verdict finalization. The revision-4 focused range
+`3000250b...a57f8a6f` isolates the finalization against the passed revision-3 tail.
+
+Both were created with `git diff --output` (never PowerShell `>`), are gitignored via
+`.gitignore:33`, and were **each regenerated from their stated range to a separate temporary file and
+proven byte-identical**; only the temporary copies were removed. `git diff --check` is clean (exit 0)
+on **both** revision-4 ranges.
+
+### Changed-file lists — revision 4
+
+**Focused range** `3000250b...a57f8a6f` — exactly the three declared files:
+
+| Status | Path |
+| --- | --- |
+| `M` | `BLUE-HELM-MASTER-STATUS.md` |
+| `M` | `docs/BUILDER-HANDOFF-backup-recovery-source-scout.md` |
+| `M` | `docs/OSS-PROCUREMENT-backup-recovery.md` |
+
+**Cumulative range** `4d0548e5...a57f8a6f` — the same three files; the two `docs/` files are additions
+relative to base, and the Master Status is a modification:
+
+| Status | Path |
+| --- | --- |
+| `M` | `BLUE-HELM-MASTER-STATUS.md` |
+| `A` | `docs/BUILDER-HANDOFF-backup-recovery-source-scout.md` |
+| `A` | `docs/OSS-PROCUREMENT-backup-recovery.md` |
+
+**The revision-4 tail commit touches only this handoff document**, and artifacts 6 and 7 both end at
+the revision-4 content tip and exclude the tail.
+
+### Gate disposition — revision 4
+
+**Documentation-only; the app and Pester gates were NOT run and none was required.**
+
+| Gate | Disposition |
+| --- | --- |
+| App gate (`npm test`) | **NOT RUN** — documentation-only |
+| Pester (`scripts\run-pester.ps1`) | **NOT RUN** — documentation-only |
+| `git diff --check` | **RUN — clean (exit 0)** on both revision-4 ranges |
+
+No application code, test, dependency, configuration, script, provider setting, hook, GitHub
+configuration, backup target, storage target, or external account is present in either range. `main`
+and `origin/main` remain at `4d0548e592d34e8407e939981bf4787c054387ad`.
 
 All were created with `git diff --output` (never PowerShell `>`) and are gitignored via
 `.gitignore:33`. **Artifacts 4 and 5 were each regenerated from their stated range to a separate
