@@ -1,14 +1,17 @@
 # OSS Procurement — Independent Backup and Recovery
 
 Subsystem: **Independent backup and recovery** (Blue Helm 1.0 remaining-work entry 1).
-Record type: **Source-Scout evaluation.** Read-only research and analysis.
+Record type: **Source-Scout evaluation, with Blue's issued subsystem verdict recorded in § 12.**
 Date: **2026-08-13**
 Evidence retrieval date: **2026-08-13** (all external sources accessed this date unless stated).
-Branch: `feature/backup-recovery-source-scout`
+Branch: `feature/backup-recovery-verdict-finalization` (evidence produced on
+`feature/backup-recovery-source-scout`)
 Base `main`: `4d0548e592d34e8407e939981bf4787c054387ad` (subject `Merge Release 1.0 decision reconciliation`)
-Revision: **3** — **independent-review corrections.** Revision 2 was reviewed and returned
-**`VERDICT: FAIL`** with seven findings. This revision applies all seven. **No Blue verdict
-has been issued on this branch, and none is issued here.**
+Revision: **4** — **verdict finalization.** Revision 3 was examined by a fresh independent
+Standard-class reviewer and returned **`VERDICT: PASS`**. Blue has since issued the subsystem
+verdict, and **revision 4 records it verbatim** (§ 12). Revisions 1–3, their corrections, and
+the full review history — including the earlier `VERDICT: FAIL` and its seven findings — are
+preserved below unchanged as the evidence trail.
 
 **Revision history.**
 
@@ -17,6 +20,14 @@ has been issued on this branch, and none is issued here.**
 | 1 | 2026-08-13 | First submission at content tip `ccb8b524`. |
 | 2 | 2026-08-13 | **Corrective.** Revision 1 inferred "commits absent from GitHub" from "no configured upstream." That inference is invalid. A live `git ls-remote --heads origin` enumeration showed **8 remote heads covering 61 of 66 local branch tips**, leaving **5 unreachable** — 4 pre-existing plus this intentionally unpushed branch. Every claim derived from the faulty inference is corrected, the risk ranking is re-derived, and the Architecture C rationale is restated on its corrected basis (§ 9). `.merge-gate\` is corrected to **11 plan files plus 1 run helper**. Candidate versions, licensing, pricing, `safeStorage` findings, architecture facts, and source citations are unchanged. |
 | 3 | 2026-08-13 | **Independent review returned `VERDICT: FAIL`; all seven findings applied.** (1) The last stale `6-of-66` coverage claim is removed from the handoff. (2) **Architecture A's off-site copy is redesigned** — a *separate* restic repository reached through restic's rclone backend and populated by repository-aware `restic copy`, replacing an unstated file-level replication step. (3–4) The worktree inventory is corrected to a **dated snapshot**: 33 `git worktree list` rows, 32 registered linked worktrees, 27 under `.worktrees\`, 5 registered siblings, 9 physical sibling directories. Dirtiness is now **measured**, not inferred. (5) Ref-counting commands are scoped to `git for-each-ref refs/heads`. (6) **Plaintext `*.bundle` files are removed from removable media**; bundles are staged, verified, and captured *inside* encrypted restic snapshots — and the "two independent restore mechanisms" claim for Architecture C is **withdrawn**. (7) `.git` size is re-recorded as a timestamped snapshot with its method. Candidate versions, licensing, pricing, `safeStorage` findings, and source citations are unchanged. |
+
+| 4 | 2026-08-13 | **Verdict finalization.** Revision 3 passed a fresh independent Standard-class review (`VERDICT: PASS`). Blue then issued the subsystem verdict **`ADOPT`** under an explicit issuing statement, recorded verbatim in § 12 together with the bounded-prototype boundary, the **split immutability experiment** (append-only-key immutability as the primary pass condition; compliance-mode Object Lock reported separately), **scope-coverage staleness** requirements, the **metadata-only** credential-exclusion proof, the **corrected DPAPI framing**, and different-machine restore acceptance. **No evidence, measurement, candidate finding, disposition, citation, or recommendation from revisions 1–3 was altered, softened, or removed.** The former `NOT YET ISSUED` ending is retained as labelled superseded history in § 12.9. |
+
+**What revision 4 does not touch.** No candidate was re-researched, no measurement re-taken,
+no architecture re-ranked, and no earlier conclusion rewritten. Revision 4 adds Blue's verdict
+and the boundary that follows from it. Sections 0–11 stand exactly as reviewed. **No software
+was installed, no account or application key created, no storage configured, no data copied,
+backed up, restored, scanned, or uploaded, and no secret read.**
 
 **What revision 3 does not touch.** No new candidate sweep was run. No candidate version,
 license, price, security finding, disposition, or citation was re-checked or altered, except
@@ -31,11 +42,19 @@ Architecture A as well, **the Git-native artifact is no longer a differentiator 
 C** — the honest remaining difference is the off-site destination (§ 8 Q7). `ADOPT` and the
 restic-versus-Kopia conditional are re-checked in § 9 and **survive unchanged**.
 
-**Subsystem verdict: NOT YET ISSUED.** This record presents evidence and a recommended
-direction. It does not authorize installation, configuration, a backup, a restore, an
-account, or a purchase. Per `AGENTS.md` § *OSS-FIRST PROCUREMENT GATE — HARD INVARIANT*
+**Subsystem verdict: ISSUED — `ADOPT`.** Recorded verbatim in § 12.1, with Blue's issuing
+statement, on 2026-08-13. Per `AGENTS.md` § *OSS-FIRST PROCUREMENT GATE — HARD INVARIANT*
 item 3, only Blue issues the subsystem verdict, and only ADOPT, FORK, PROTOTYPE,
-PATTERN-MINE, or BUILD FRESH are final.
+PATTERN-MINE, or BUILD FRESH are final. **What the verdict authorizes is a bounded prototype
+under its own reviewed work order, and nothing more** — not production backup configuration,
+not production-data upload, not a recurring schedule, not software installation, not account
+or application-key creation, and not any claim that Blue Helm is protected (§ 12.2).
+
+> **SUPERSEDED — revisions 1–3 read:** *"Subsystem verdict: NOT YET ISSUED. This record
+> presents evidence and a recommended direction. It does not authorize installation,
+> configuration, a backup, a restore, an account, or a purchase."* That was accurate while
+> the verdict was outstanding. It is superseded by § 12 and retained for provenance, not
+> reinterpreted.
 
 ## 0. What this record is, and the honest state of the problem
 
@@ -767,6 +786,11 @@ work orders, handoffs, command-line arguments, Windows user environment variable
 
 ## 9. Recommendation — re-derived after the § 0 and revision-3 corrections, and not a verdict
 
+> **Reading note added in revision 4.** This section remains what it always was: the
+> Source-Scout **recommendation** and the reasoning behind it, written before any verdict
+> existed. It is preserved unchanged. **Blue's actual issued verdict is § 12**, and where the
+> two differ in scope, § 12 controls. Nothing in § 9 should be read as authorization.
+
 **This section was re-derived twice, not patched.** Revision 1 rested substantially on the
 claim that sixty branch histories existed nowhere but this disk. That claim was wrong: 61 of
 66 local tips are reachable from live remote heads. **Revision 3 then re-checked every
@@ -959,9 +983,16 @@ uncertainty resolved before committing — bounded to the single experiment name
 * **Backup and recovery is the first remaining Release 1.0 workstream** —
   `BLUE-HELM-MASTER-STATUS.md` § *Remaining work — Blue Helm 1.0, in order*, entry 1, and a
   blocking prerequisite of the release gate at entry 10.
-* **Implementation remains unauthorized** until Blue issues a verdict and it is recorded on
-  `main` in this tracked record. This branch changes no roadmap state; roadmap updates
-  belong to a later verdict-finalization work order.
+* **The verdict is issued; production implementation remains unauthorized.** Blue issued
+  `ADOPT` on 2026-08-13 (§ 12.1). What it authorizes is a **bounded prototype under its own
+  reviewed work order** — not production backup configuration, production-data upload, a
+  recurring schedule, or any claim of completed protection (§ 12.2). **This record is not yet
+  on `main`.** It sits on `feature/backup-recovery-verdict-finalization`, unmerged and
+  unpushed, pending independent review and Blue's merge authorization. Until that merge, the
+  tracked-record requirement of `AGENTS.md` gate item 6 is **satisfied in form but not yet on
+  the canonical branch** — which is precisely the failure mode
+  `docs/DECISION-RECONCILIATION-release-1.0.md` § 4 records for the stranded July 30 verdict,
+  and the reason this branch must not be left unmerged indefinitely.
 
 ## 11. Procurement gate status
 
@@ -969,10 +1000,278 @@ uncertainty resolved before committing — bounded to the single experiment name
 | --- | --- |
 | 1. Source-Scout evaluation of maintained OSS, official SDKs, libraries | **Satisfied** — §§ 3–5 |
 | 2. Candidates with license, maintenance, telemetry, security surface, Windows support, adopt-vs-build effort | **Satisfied** — § 4 |
-| 3. One explicit Blue verdict (ADOPT/FORK/PROTOTYPE/PATTERN-MINE/BUILD FRESH) | **NOT SATISFIED — awaiting Blue.** § 9 recommends a direction only |
-| 6. Verdict recorded verbatim in a tracked record under `docs/` named for the subsystem | **Pending** — this file is the record; the verdict line is absent by design |
+| 3. One explicit Blue verdict (ADOPT/FORK/PROTOTYPE/PATTERN-MINE/BUILD FRESH) | **SATISFIED** — Blue issued **`ADOPT`** on 2026-08-13 under an explicit issuing statement, recorded verbatim in § 12.1 |
+| 4. If Blue named an OSS base, ADOPT/FORK is the default reading; never silently narrowed to PATTERN-MINE | **SATISFIED** — the issued verdict is `ADOPT` and names restic as the adopted engine (§ 12.1) |
+| 5. PATTERN-MINE does not authorize rebuilding the subsystem | **NOT ENGAGED** — the verdict is `ADOPT`, not PATTERN-MINE; no build-fresh work is proposed or authorized |
+| 6. Verdict recorded verbatim in a tracked record under `docs/` named for the subsystem | **SATISFIED IN FORM, PENDING MERGE** — this file is the record and now carries the verbatim verdict; it reaches `main` only when this branch is independently reviewed and Blue authorizes the merge |
+| 7. Restate the verbatim verdict and identify the record by path in every work order and handoff | **SATISFIED for this branch** — `docs/BUILDER-HANDOFF-backup-recovery-source-scout.md` restates it verbatim and names this record by path; **binding on every later backup work order**, including the prototype |
 | 9. "No suitable OSS exists" requires documented search evidence | **Not claimed.** Suitable OSS plainly exists |
+
+## 12. Blue's issued verdict, and the boundary it sets
+
+Added in revision 4. Sections 0–11 are the reviewed evidence and are unchanged. This section
+records the decision Blue made on that evidence.
+
+### 12.1 Authorization and the verdict, verbatim
+
+**Blue's issuing statement, verbatim:**
+
+> I ISSUE THE BACKUP AND RECOVERY ADOPT VERDICT EXACTLY AS DRAFTED.
+
+Recorded 2026-08-13. This record was written only after that statement was made. Discussion,
+a recommendation, a reviewer `VERDICT: PASS`, and a proposed verdict draft were each treated
+as **insufficient** to authorize finalization, per the verdict-finalization work order.
+
+**Blue's subsystem verdict, verbatim:**
+
+> ADOPT — Independent backup and recovery: adopt restic as Blue Helm's backup engine, using its supported Windows VSS capture and encrypted repository format. Protect Agent Command Center and the project repositories it manages with an external removable copy and a separate encrypted Backblaze B2 off-site repository; GitHub remains an additional convenience and is not counted as one of the required backup copies. Blue Helm owns the allowlisted include/exclude policy, serialized scheduling, Git-bundle staging and verification, failure and staleness alerts, retention, integrity checks, credential-exclusion controls, and restore evidence.
+>
+> Exclude Electron `safeStorage` ciphertext, provider credentials, project secret files, provider/session configuration, shell history, and any other secret-bearing state not explicitly approved for protection. Credentials must be re-established through the documented human-controlled path. Recovery material must be stored independently of the computer and repository.
+>
+> Before production scheduling, authorize only a bounded prototype proving:
+>
+> 1. VSS-consistent capture to an external removable repository and a separate encrypted Backblaze B2 repository.
+> 2. Whether B2 Object Lock plus a least-privilege application key that cannot delete backup objects can safely host the restic repository, including the exact effect on `forget`, `prune`, retention, maintenance, cost, and recovery. If workable off-site immutability cannot be demonstrated, stop and return to Blue for a fresh restic-versus-Kopia decision.
+> 3. Visible failed-job and stale-backup detection.
+> 4. An allowlist-shaped credential-exclusion policy, verified against the restored tree using known sentinels and secret-shaped detection. The scanner may report only bounded metadata and must never print matched values or surrounding secret content.
+> 5. An isolated restore without the active workspace or GitHub.
+> 6. A successful restore and verification on a different Windows machine or clean VM, including repository history, declared non-Git state, credential exclusion, and the documented credential re-establishment path.
+>
+> No production backup configuration, production-data upload, unattended recurring schedule, or claim of completed recovery protection is authorized by this verdict alone.
+
+**Selected architecture.** The verdict selects restic with an external removable copy and a
+separate encrypted Backblaze B2 off-site repository — the shape § 5 records as **Architecture
+C**. Per § 9, C's surviving advantage over A was the off-site destination, and Blue's answer
+to § 8 Q7 is **B2**, so C stands rather than converging into A. Choosing B2 also removes the
+OneDrive desktop-sync ambiguity structurally rather than by rule (§ 12.8).
+
+**Engine rationale, as decided.** Blue selected restic over Kopia on Windows capture
+simplicity: restic's `--use-fs-snapshot` is a supported built-in flag, where Kopia's Windows
+shadow-copy path is a Blue-authored `--before-folder-action` script (§ 4.1, § 4.2). The
+tradeoff is explicit and is **not** presented as cost-free: this does not buy Kopia's
+compliance-mode Object Lock, and § 12.3 is the experiment that tests what immutability restic
+can actually reach.
+
+### 12.2 What `ADOPT` authorizes, and what it does not
+
+**Authorized now:**
+
+* Adopt **restic** as the selected backup engine for this subsystem.
+* Write a **separate bounded prototype specification** under its own work order.
+* Later **execute only that prototype**, after the specification has had its own independent
+  review and Blue's authorization.
+* Evaluate the external USB and Backblaze B2 destinations using **disposable or synthetic
+  prototype material** — never production credentials or secret-bearing state.
+* Design the Blue Helm-owned orchestration around the adopted engine (§ 9).
+
+**Not authorized by this verdict:**
+
+* Production backup configuration.
+* Production-data upload.
+* Unattended or recurring scheduling.
+* Any claim that Blue Helm is protected, or that recovery protection is complete.
+* Installing restic or rclone through this branch.
+* Creating a Backblaze or Microsoft account, or any application key, through this branch.
+* Backing up real credentials or secret-bearing state.
+* Merging or pushing without the normal review and authorization path.
+
+**Nothing in this record has been exercised.** No architecture has been run. No backup, copy,
+restore, scan, or upload has occurred at any point across revisions 1–4.
+
+### 12.3 The bounded prototype — immutability split into two distinct controls
+
+The prototype must test **two different controls** and report them separately. Collapsing
+them would either overstate restic's immutability or discard a workable control because a
+stricter one failed.
+
+#### A. Append-only-key immutability — **primary pass condition**
+
+Test whether:
+
+* Scheduled backup and copy operations can run under a **least-privilege B2 application key**
+  that can create and write the required objects but **cannot delete backup objects**.
+* A compromised scheduled-backup environment therefore **cannot delete retained off-site
+  snapshots**.
+* `forget` and `prune` — which require delete access — occur **only** through a **separately
+  held privileged maintenance credential**.
+* That privileged credential is **unavailable** to the scheduled job and to the ordinary pane
+  environment.
+* Maintenance runs in an **explicit controlled window**.
+* Failure or absence of append-only protection **refuses visibly**.
+* Key permissions and actual destructive behaviour are proven by **negative controls** — an
+  attempted delete under the restricted key must be observed to fail — **not inferred from
+  configuration text**.
+
+*Supporting evidence already on record.* Restic's own documentation states that `forget` and
+`prune` "require full read, write and delete access to the repository," and recommends, for
+append-only backends, using "a separate and well-secured client whenever full access to the
+repository is needed, e.g. for administrative tasks such as running `forget`, `prune`."
+Backblaze's application-key capability model separates `writeFiles` from `deleteFiles`, so a
+write-without-delete key is expressible. This control is therefore expected to be reachable —
+but it must be **demonstrated**, not assumed.
+
+#### B. Compliance-mode Object Lock — **separately reported experiment**
+
+Test and report:
+
+* Whether compliance-mode Object Lock can coexist safely with a restic repository.
+* The exact effect on `forget`, `prune`, repository growth, retention, maintenance, cost, and
+  recovery.
+* **Restic's lack of object-lock awareness** — § 4.1 records issues #4992 and #2202 closed and
+  proposal #3195 open since 2020-12-27, and restic has no equivalent of Kopia's
+  `--extend-object-locks` maintenance handling.
+* Whether locked objects **prevent normal repository maintenance**.
+* Whether the control is operationally usable, or would require reconsidering Kopia.
+
+**Compliance-mode Object Lock is not the pass condition.** The stop-and-return trigger is:
+
+> **No workable off-site immutability of either reviewed kind can be demonstrated.**
+
+If append-only-key immutability succeeds but compliance-mode Object Lock does not, **report
+both results accurately and do not treat the prototype as failed.** If neither works safely,
+**stop and return to Blue for a fresh restic-versus-Kopia decision** before any production
+work.
+
+### 12.4 Scope-coverage staleness — the allowlist must not silently shrink
+
+An allowlist fails safe for secrecy and **unsafe for coverage**: a newly managed repository
+is silently unprotected until someone adds it. That is failure class **F8** (§ 1) re-entering
+through the include policy rather than the scheduler.
+
+The prototype specification must include:
+
+* A **canonical inventory** of every repository and non-Git state category Blue Helm claims to
+  manage.
+* **Comparison of that inventory against the protected allowlist on every run.**
+* **Visible refusal or warning** when a managed repository or state category is absent from
+  the allowlist.
+* Detection of **newly created** managed repositories.
+* Detection of paths that **moved or disappeared**.
+* A **last-success timestamp per declared protection unit**, or another equivalently
+  reviewable scope-evidence model.
+* **No silent success** when the scheduled job ran but omitted a declared unit.
+* Tests proving **both**: an unapproved secret-bearing path is excluded, **and** a newly
+  managed repository is surfaced as unprotected.
+
+Three staleness kinds must be distinguished, each with its own visible evidence:
+
+| Kind | Meaning |
+| --- | --- |
+| **Job staleness** | The backup did not run, or failed |
+| **Copy staleness** | One destination did not receive the completed snapshot |
+| **Coverage staleness** | The job succeeded, but the declared managed scope was incomplete |
+
+*Scope note.* The verdict extends protection to "the project repositories it manages." § 2
+S16 records that `D:\Workspace\Automation-Chores`, `D:\Workspace\.reference`, and the **4
+`agent-command-center-*` physical directories that are not registered worktrees** have
+**unexamined contents**. The § 2 sizing conclusion ("tens of megabytes") was measured for the
+narrower Agent Command Center set and **must be re-measured** against the canonical inventory
+rather than inherited.
+
+### 12.5 Credential-exclusion proof — allowlist-shaped, metadata-only reporting
+
+Carried into the prototype specification:
+
+* **Allowlist-shaped capture.**
+* **Known non-secret sentinels** proving intended files were included.
+* **Known secret-shaped synthetic sentinels** proving excluded paths were excluded.
+* A **post-restore secret-shaped scan**.
+* **Bounded metadata-only reporting**: counts, rule identifiers, disposition, and pass/fail
+  only.
+* **No matched value.** **No surrounding content.** **No secret-bearing path** where the path
+  itself is sensitive.
+* **Logs and retained evidence must remain metadata-only** — the § 6.11 drill record is kept
+  on `main`, so a scanner that echoed matches would convert the negative control into a
+  disclosure surface.
+* A **positive control** proving the scanner detects the synthetic secret.
+* A **negative control** proving the reporting layer does not emit it.
+
+**No real secret may be created merely to test the scanner.**
+
+### 12.6 DPAPI — bypassed by exclusion, not answered by migration
+
+The different-machine restore **must not be written up as proving whether existing Windows
+DPAPI ciphertext is portable.** Because `secure.json` is excluded, that question is
+**deliberately bypassed by design**, not resolved.
+
+The prototype must prove:
+
+* Recovery succeeds **without** `secure.json`.
+* The restored machine **does not depend on decrypting the original DPAPI ciphertext**.
+* Credential re-establishment through the **documented human-controlled path** works.
+* The restored tree contains **no excluded `secure.json`**.
+
+**Do not copy, migrate, or attempt to decrypt the original `secure.json` during the
+prototype.** The § 2.1 portability question remains **UNVERIFIED** and stays that way; the
+design's correctness does not depend on answering it.
+
+### 12.7 Different-machine acceptance
+
+The bounded prototype must include restoration to **a clean Windows VM or a physically
+different Windows computer**.
+
+The destination must not rely on: the source machine's workspace; GitHub; existing
+source-machine DPAPI state; existing provider credentials; or undocumented knowledge held only
+by an active agent session.
+
+It must verify:
+
+* Declared Git refs and representative objects — per namespace, per § 6.1 and § 6.6.
+* Declared non-Git state.
+* **Worktree repair, pruning, and reconstruction** behaviour.
+* Bundle extraction and `git bundle verify`.
+* Credential exclusion.
+* Human-controlled credential re-establishment.
+* App launch, or appropriate read-only validation.
+* Safe cleanup that **cannot affect the source workspace**.
+* Retained evidence on `main`.
+
+### 12.8 Independent-review observations carried forward as specification requirements
+
+From the fresh independent Standard-class review that returned `VERDICT: PASS` on revision 3:
+
+* **If OneDrive is ever reconsidered**, its desktop client must be **affirmatively excluded**
+  from any live repository path. Merely "not pointing it there" is insufficient, because a
+  repository inside a synced root is mirrored by default. Selecting B2 avoids this case
+  entirely rather than mitigating it.
+* **Git-bundle handling applies consistently to every restic architecture** — staged,
+  verified, captured inside the encrypted snapshot, guarded cleanup. § 5.1's integrity row
+  credits `git bundle verify` only to C; the § 5.2 rule is common to all.
+* **Deliberately failed and stale job evidence belongs inside the formal restore/prototype
+  acceptance plan**, not only in the § 9 experiment narrative.
+* **Worktree recovery must address repair, pruning, and reconstruction** — `git worktree
+  repair` alone does not cover worktrees that were not restored, and a bundle-only path
+  carries no worktree metadata at all.
+* **File History's minor known-folder enumeration** (§ 4.4 omits Contacts and Favorites) does
+  **not** change its rejection; the state locations are still outside its scope.
+* **No architecture has been exercised.** Every behavioural claim in this record remains
+  documentation-sourced.
+
+### 12.9 Review history, and the superseded ending
+
+| Stage | Result |
+| --- | --- |
+| Initial Source-Scout submission (rev 1, `ccb8b524`) | Submitted |
+| Pre-review accuracy correction (rev 2, `b079d0f9`) | Reachability inference corrected before review |
+| First independent Standard-class review of rev 2 | **`VERDICT: FAIL`** — seven findings, three merge-blocking |
+| Revision-3 corrections (`a796952a`) | All seven findings applied |
+| Fresh independent Standard-class review of rev 3 | **`VERDICT: PASS`** — all seven confirmed corrected, with six non-blocking observations |
+| Blue's authorization and verdict | **`ADOPT`**, issued 2026-08-13 (§ 12.1) |
+| This verdict-finalization branch | Documentation-only; records the verdict and its boundary; stops for fresh independent review |
+
+**The first review was a `FAIL` and is recorded as one.** It is not rewritten as though it had
+passed originally, and revision 3 did not become correct retroactively — it became correct by
+being corrected and re-reviewed.
+
+> **SUPERSEDED ENDING — revisions 1–3 ended with:**
+>
+> **BLUE SUBSYSTEM VERDICT: NOT YET ISSUED — IMPLEMENTATION REMAINS UNAUTHORIZED**
+>
+> That line was accurate for revisions 1–3 and is retained here as provenance. It is
+> superseded by the verdict in § 12.1 and by the ending below. **Implementation beyond the
+> bounded prototype remains unauthorized regardless** (§ 12.2) — the supersession changes who
+> has decided, not what is permitted to be built.
 
 ---
 
-**BLUE SUBSYSTEM VERDICT: NOT YET ISSUED — IMPLEMENTATION REMAINS UNAUTHORIZED**
+**BLUE SUBSYSTEM VERDICT: ADOPT**

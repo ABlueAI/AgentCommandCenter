@@ -659,15 +659,42 @@ This is load-bearing context, not historical decoration:
 > their own procurement work and work orders, and neither is authorized to begin
 > by this list.
 
-1. **Independent backup and recovery. BLOCKING 1.0 PREREQUISITE — and the next
-   implementation area after the decision-reconciliation branch lands.** Blue
-   Helm's release risk is not only "does the feature work" but "can this project
+1. **Independent backup and recovery. BLOCKING 1.0 PREREQUISITE — NOT COMPLETE.**
+   **Procurement gate status, August 13: Source-Scout evaluation complete;
+   independent Standard-class review returned `VERDICT: PASS`; Blue issued the
+   canonical tracked verdict **`ADOPT`**.** Procurement record:
+   `docs/OSS-PROCUREMENT-backup-recovery.md` (verdict in its § 12).
+   **Adopted engine: restic**, with an external removable copy and a separate
+   encrypted **Backblaze B2** off-site repository; GitHub is an additional
+   convenience and is **not** one of the required backup copies.
+
+   **The next authorized technical stage is a bounded prototype under its own
+   reviewed work order.** It must prove VSS-consistent capture to both
+   destinations, off-site immutability (append-only-key immutability is the
+   primary pass condition; compliance-mode Object Lock is reported separately),
+   visible failed-job and stale-backup detection including **coverage
+   staleness**, an allowlist-shaped credential-exclusion policy verified with
+   **metadata-only** reporting, an isolated restore without the active workspace
+   or GitHub, and a restore on a **different Windows machine or clean VM**.
+
+   **Still unauthorized:** production backup configuration, production-data
+   upload, unattended recurring schedules, software installation, account or
+   application-key creation, and any claim that Blue Helm is protected.
+
+   **This entry and the 1.0 blocker are NOT complete.** Completion still requires
+   reviewed implementation, both destinations, visible failure and staleness
+   detection, coverage-staleness detection, credential-exclusion proof,
+   different-machine restore, integrity verification, and retained recovery
+   evidence on `main`. **A verdict is not protection.**
+
+   Blue Helm's release risk is not only "does the feature work" but "can this project
    survive a lost disk, a bad delete, or a compromised account." Nothing in
    `main` currently answers that. Requirements:
    - **Its own Source-Scout evaluation** and **its own tracked Blue verdict** in
      its own procurement decision record under `docs/`, per `AGENTS.md` §
      *OSS-FIRST PROCUREMENT GATE — HARD INVARIANT*. Backup tooling is a
      subsystem like any other; it does not inherit another subsystem's verdict.
+     **Satisfied** — record and verdict as above, pending merge to `main`.
    - **At least three recoverable copies across two storage forms, with one
      off-site.**
    - **Coverage of both Git history and declared non-Git application state** —

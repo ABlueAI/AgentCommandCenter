@@ -1,16 +1,29 @@
-# Builder Handoff — Independent Backup and Recovery Source-Scout
+# Builder Handoff — Independent Backup and Recovery Source-Scout, and ADOPT Verdict Finalization
 
-Branch: `feature/backup-recovery-source-scout`
-Worktree: `.worktrees\backup-recovery-source-scout`
+Branch: `feature/backup-recovery-verdict-finalization`
+Worktree: `.worktrees\backup-recovery-verdict-finalization`
+Branched from: `3000250bbb127aac8252d427843f60bfdd9553cb` (the Source-Scout handoff-only tail)
 Fork-point SHA: `4d0548e592d34e8407e939981bf4787c054387ad`
 Pre-merge `main` SHA: `4d0548e592d34e8407e939981bf4787c054387ad`
-Reviewed content tip: the content commit below; the branch tip is the handoff-only tail that pins the
-review artifact
+Reviewed content tip: the verdict-finalization content commit below; the branch tip is the
+handoff-only tail that pins the review artifacts
 Merge commit SHA: **Pending until merge**
+
+Preceding branch: `feature/backup-recovery-source-scout` — Source-Scout evidence, reviewed content
+tip `a796952ac691c8b54138a51fff6e106500445353`, handoff-only tail
+`3000250bbb127aac8252d427843f60bfdd9553cb`. **Not merged.** Its five review artifacts are preserved
+byte-identical and were neither regenerated nor renamed.
 
 **Status: NOT MERGED, NOT PUSHED.** This branch stops for a fresh independent
 **Standard-class** review. Per `AGENTS.md`, Blue remains the only merge authority and Claude Code
 never merges its own work.
+
+**Why a separate branch.** `AGENTS.md` requires **one invariant per branch**, and the Source-Scout
+branch's declared invariant was "produce the evaluation and change nothing else," explicitly
+including **no roadmap state update**. Verdict finalization changes roadmap state
+(`BLUE-HELM-MASTER-STATUS.md`) and therefore carries a different invariant. The Source-Scout branch
+was also reviewed at a specific shape — reviewed content tip plus handoff-only tail — and appending
+a third content commit would have buried the passed tip mid-branch.
 
 ## Independent review result — revision 2
 
@@ -32,8 +45,34 @@ findings were raised; **all seven are applied in revision 3**.
 | 6 | **Low** | No — corrected now | Loose plaintext `*.bundle` files sat beside the restic repository on removable media; the encryption-ownership line covered only bundles *inside* the repository | Bundles staged, verified, and captured **inside** encrypted snapshots; the "two independent restore mechanisms" claim **withdrawn** (record § 5.3) |
 | 7 | **Low/informational** | No | `.git` recorded as 624 files / 6.1 MB, a mutable measurement presented as fixed | Re-measured and labelled with exact time and method (record note ‡) |
 
-**No reviewer has yet examined revision 3, and no Blue verdict has been issued at any point on this
-branch.** This handoff records the review outcome; it does not claim a passing one.
+> **SUPERSEDED — this section previously read:** *"No reviewer has yet examined revision 3, and no
+> Blue verdict has been issued at any point on this branch."* Accurate when written. Revision 3 has
+> since been reviewed (`VERDICT: PASS`) and Blue has since issued `ADOPT`. Retained for provenance.
+
+## Independent review result — revision 3
+
+A **fresh independent Standard-class reviewer** — not the Source-Scout author, not the revision-3
+correction author, and not the reviewer who issued the preceding `VERDICT: FAIL` — examined the
+controlling cumulative range `4d0548e5...a796952a` and returned, literally:
+
+> `VERDICT: PASS`
+
+The reviewer independently reproduced every load-bearing measurement on this host: 66 local heads /
+30 remote-tracking / 3 other refs / 0 tags / 99 bare `for-each-ref` / 0 stash entries / 6 configured
+upstreams; 8 live remote heads with 61 of 66 tips reachable and the same 5 unreachable branches by
+name; 33 worktree rows / 32 registered / 27 under `.worktrees\` / 5 registered siblings / 9 physical
+siblings / 4 unregistered; 4 of 33 rows dirty, all untracked-only, zero tracked modifications;
+`.merge-gate\` at 11 `*.psd1` plus 1 `*.ps1`. External claims were re-verified against primary
+sources — restic's rclone backend and `copy`/`init --from-repo --copy-chunker-params` docs, rclone's
+Tier 1 OneDrive listing, restic's VSS text, `git bundle` limitations, Electron's DPAPI wording,
+Kopia's object-lock commands and maintenance constraint, Backblaze pricing and Object Lock cost,
+Duplicati's LICENSE and live `proprietary/` subtree, and the restic issue states #4992 / #2202 /
+#3195. All five artifacts matched their declared sizes and SHA-256 identities and regenerated
+byte-identically.
+
+**All seven prior findings were confirmed corrected.** Six non-blocking observations were raised and
+are carried forward as specification requirements — recorded in procurement record § 12.8 and
+restated in § 12 below.
 
 **Revision 3 — independent-review corrections.** All seven findings applied. Candidate versions,
 licensing, pricing, `safeStorage` findings, security advisories, candidate dispositions, and source
@@ -45,41 +84,81 @@ byte-identical.**
 
 ## 0. Procurement authority
 
-Tracked record created by this branch: **`docs/OSS-PROCUREMENT-backup-recovery.md`**.
+Tracked procurement record: **`docs/OSS-PROCUREMENT-backup-recovery.md`** (created by the
+Source-Scout branch; the verdict is recorded in its § 12).
 
-**Subsystem verdict status, verbatim, as this record ends:**
+**Blue's issuing statement, verbatim:**
 
-> BLUE SUBSYSTEM VERDICT: NOT YET ISSUED — IMPLEMENTATION REMAINS UNAUTHORIZED
+> I ISSUE THE BACKUP AND RECOVERY ADOPT VERDICT EXACTLY AS DRAFTED.
 
-This is a Source-Scout evaluation only. Per `AGENTS.md` § *OSS-FIRST PROCUREMENT GATE — HARD
-INVARIANT* item 3, only Blue issues the subsystem verdict, and only **ADOPT, FORK, PROTOTYPE,
-PATTERN-MINE, or BUILD FRESH** are final. § 9 of the record **recommends a direction** and does not
-issue one.
+Recorded 2026-08-13. Editing began only after this statement. Discussion, a recommendation, the
+reviewer's `VERDICT: PASS`, and a proposed verdict draft were each treated as **insufficient**
+authorization, per the verdict-finalization work order's human-authorization precondition.
 
-**What this branch does NOT authorize:** installing or configuring backup software, creating a
-production backup, uploading data anywhere, signing into or creating a cloud account, incurring a
-subscription, reading or exporting secrets, modifying application code or configuration, running a
-restore drill or prototype, issuing a Blue verdict, merging, or pushing.
+**Subsystem verdict, verbatim, as the procurement record now ends — `BLUE SUBSYSTEM VERDICT: ADOPT`:**
+
+> ADOPT — Independent backup and recovery: adopt restic as Blue Helm's backup engine, using its supported Windows VSS capture and encrypted repository format. Protect Agent Command Center and the project repositories it manages with an external removable copy and a separate encrypted Backblaze B2 off-site repository; GitHub remains an additional convenience and is not counted as one of the required backup copies. Blue Helm owns the allowlisted include/exclude policy, serialized scheduling, Git-bundle staging and verification, failure and staleness alerts, retention, integrity checks, credential-exclusion controls, and restore evidence.
+>
+> Exclude Electron `safeStorage` ciphertext, provider credentials, project secret files, provider/session configuration, shell history, and any other secret-bearing state not explicitly approved for protection. Credentials must be re-established through the documented human-controlled path. Recovery material must be stored independently of the computer and repository.
+>
+> Before production scheduling, authorize only a bounded prototype proving:
+>
+> 1. VSS-consistent capture to an external removable repository and a separate encrypted Backblaze B2 repository.
+> 2. Whether B2 Object Lock plus a least-privilege application key that cannot delete backup objects can safely host the restic repository, including the exact effect on `forget`, `prune`, retention, maintenance, cost, and recovery. If workable off-site immutability cannot be demonstrated, stop and return to Blue for a fresh restic-versus-Kopia decision.
+> 3. Visible failed-job and stale-backup detection.
+> 4. An allowlist-shaped credential-exclusion policy, verified against the restored tree using known sentinels and secret-shaped detection. The scanner may report only bounded metadata and must never print matched values or surrounding secret content.
+> 5. An isolated restore without the active workspace or GitHub.
+> 6. A successful restore and verification on a different Windows machine or clean VM, including repository history, declared non-Git state, credential exclusion, and the documented credential re-establishment path.
+>
+> No production backup configuration, production-data upload, unattended recurring schedule, or claim of completed recovery protection is authorized by this verdict alone.
+
+Per `AGENTS.md` § *OSS-FIRST PROCUREMENT GATE — HARD INVARIANT* item 3, only Blue issues the
+subsystem verdict, and only **ADOPT, FORK, PROTOTYPE, PATTERN-MINE, or BUILD FRESH** are final.
+Item 7 requires this verbatim restatement and the record path in **every** work order and handoff
+concerning the subsystem — **including the prototype work order that follows.**
+
+> **SUPERSEDED — this section previously read:** *"Subsystem verdict status, verbatim, as this
+> record ends: BLUE SUBSYSTEM VERDICT: NOT YET ISSUED — IMPLEMENTATION REMAINS UNAUTHORIZED. This is
+> a Source-Scout evaluation only."* Accurate for revisions 1–3. Retained for provenance.
+
+**What this branch does NOT authorize:** installing restic, rclone, or any backup software;
+configuring storage; creating a Backblaze or Microsoft account or any application key; creating a
+production backup; uploading, copying, restoring, or scanning production data; running the bounded
+prototype; implementing scheduling or alerts; modifying application code or configuration; reading
+or exporting secrets; merging; or pushing. **Recording a verdict is not executing it.**
 
 ## 1. Intended invariant
 
-**One invariant: produce the required OSS-first procurement evaluation for independent backup and
-recovery, and change nothing else.** Every change is documentation. No application code, test,
-dependency, configuration, script, provider setting, hook, or GitHub configuration is touched, and no
-roadmap state is updated.
+**One invariant: convert Blue's issued backup-and-recovery `ADOPT` verdict into durable tracked
+state, and change nothing else.** Every change is documentation. No application code, test,
+dependency, configuration, script, provider setting, hook, GitHub configuration, storage target, or
+external account is touched. No software is installed. No backup, restore, upload, scan, or
+prototype is run.
+
+> **Source-Scout branch invariant, for provenance:** *"produce the required OSS-first procurement
+> evaluation for independent backup and recovery, and change nothing else … and no roadmap state is
+> updated."* That branch honoured it. Roadmap state changes here, on its own branch, which is why
+> this is a separate branch rather than a third commit on that one.
 
 ## 2. Files changed
 
+Exactly three tracked files, as the work order allows:
+
 | File | Kind | Change |
 | --- | --- | --- |
-| `docs/OSS-PROCUREMENT-backup-recovery.md` | tracked, **new** | The procurement record: failure-class analysis, state inventory, candidate cards, three complete architectures, restore-drill design, key-loss options, Blue's decision questions, recommended direction, gate status |
-| `docs/BUILDER-HANDOFF-backup-recovery-source-scout.md` | tracked, **new** | This handoff |
+| `docs/OSS-PROCUREMENT-backup-recovery.md` | tracked, **modified** | New § 12 recording Blue's issuing statement and verdict verbatim, the ADOPT authorization boundary, the split immutability experiment, scope-coverage staleness, the metadata-only credential-exclusion proof, the corrected DPAPI framing, different-machine acceptance, carried-forward review observations, and review history. Header, revision table, verdict-status block, § 10 authorization bullet, and § 11 gate table updated. Record now ends **`BLUE SUBSYSTEM VERDICT: ADOPT`**; the former ending is preserved as labelled superseded history in § 12.9 |
+| `docs/BUILDER-HANDOFF-backup-recovery-source-scout.md` | tracked, **modified** | This handoff: revision-3 `VERDICT: PASS` recorded, Blue's authorization and verdict restated verbatim with the record path, verdict-finalization scope, artifacts |
+| `BLUE-HELM-MASTER-STATUS.md` | tracked, **modified** | Remaining-work **entry 1 only** — Source-Scout complete, review `VERDICT: PASS`, canonical verdict ADOPT, record path, restic adopted, bounded prototype next, production work still unauthorized, blocker not complete |
 
 **Nothing else changed.** No `app/`, no `scripts/`, no test, no `package.json`, no lockfile, no
-`.github/`, no `AGENTS.md`, no `BLUE-HELM-MASTER-STATUS.md`, no provider settings file.
+`.github/`, no `AGENTS.md`, no provider settings file, no other roadmap entry.
 
-**`BLUE-HELM-MASTER-STATUS.md` was deliberately not updated**, per the work order: roadmap state
-changes only after a later verdict-finalization work order.
+**Sections 0–11 of the procurement record are unchanged in substance.** No evidence, measurement,
+candidate finding, disposition, citation, or recommendation from revisions 1–3 was altered, softened,
+or removed. **No earlier review artifact was modified or regenerated.**
+
+**Roadmap edits are deliberately narrow.** Only entry 1 is touched. No unrelated roadmap item is
+reordered, renumbered, or reworded.
 
 ## 3. What the evaluation found
 
@@ -440,7 +519,9 @@ the state of the gates beyond what `main` already records.
 | Revision 2 content tip (reviewed → `VERDICT: FAIL`, retained) | `b079d0f9d092544e9f83e46a84cb212924599f4a` |
 | Revision 2 handoff-only tail | `7bda19afb33f8ce0677996dec2ba922af1b7f732` |
 | **Revision 3 reviewed content tip** | **`a796952ac691c8b54138a51fff6e106500445353`** |
-| Branch tip | the revision-3 handoff-only tail commit that pins this table |
+| Revision 3 handoff-only tail (base of this branch) | `3000250bbb127aac8252d427843f60bfdd9553cb` |
+| **Revision 4 reviewed content tip** (verdict finalization) | **pinned by the tail commit below** |
+| Branch tip | the revision-4 handoff-only tail commit that pins this table |
 
 **Review the revision-3 cumulative range** — it is the controlling artifact. The revision-3 focused
 range is provided so this correction can be audited in isolation against the reviewed revision-2 tip.
@@ -453,11 +534,18 @@ range is provided so this correction can be audited in isolation against the rev
 | 2 | `.agent-review-backup-recovery-correction.diff` **(rev 2 focused, unmodified)** | `9e9ad01d...b079d0f9` | 2 files, 211 insertions, 62 deletions | **38,060 bytes** | `f28056f131908992cabea030eca85c3cfb93e11b0863ab3a06169f2729106ba7` |
 | 3 | `.agent-review-backup-recovery-source-scout-cumulative.diff` **(rev 2 cumulative, unmodified)** | `4d0548e5...b079d0f9` | 2 files, 1,087 insertions, 0 deletions | **82,975 bytes** | `9d915b5098ef274eb8e37710d7c709ecd58e9bf8c54a3d05aec1accedfb5855a` |
 | 4 | `.agent-review-backup-recovery-revision-3.diff` **(rev 3 focused)** | `7bda19af...a796952a` | 2 files, 559 insertions, 171 deletions | **93,269 bytes** | `9adf3f3533b9c5e377732a67f7259d3c56f783f5f2b605d19774182023d913e0` |
-| 5 | `.agent-review-backup-recovery-revision-3-cumulative.diff` **(rev 3 cumulative — CONTROLLING)** | `4d0548e5...a796952a` | 2 files, 1,500 insertions, 0 deletions | **120,725 bytes** | `f2736eead1598abf580e57f0e9807162b99c7ebfdc83c7f0d76b5851df3a5450` |
+| 5 | `.agent-review-backup-recovery-revision-3-cumulative.diff` **(rev 3 cumulative)** | `4d0548e5...a796952a` | 2 files, 1,500 insertions, 0 deletions | **120,725 bytes** | `f2736eead1598abf580e57f0e9807162b99c7ebfdc83c7f0d76b5851df3a5450` |
+| 6 | `.agent-review-backup-recovery-verdict-finalization.diff` **(rev 4 focused)** | `3000250b...<rev 4 tip>` | *pinned by the tail commit* | *pinned by the tail commit* | *pinned by the tail commit* |
+| 7 | `.agent-review-backup-recovery-verdict-finalization-cumulative.diff` **(rev 4 cumulative — CONTROLLING)** | `4d0548e5...<rev 4 tip>` | *pinned by the tail commit* | *pinned by the tail commit* | *pinned by the tail commit* |
 
-**Artifacts 1–3 are preserved byte-identical** — each re-hashed at the start of revision 3 and
-unchanged. None was regenerated, renamed, or overwritten. **Revision 3 writes new filenames rather
-than touching any existing artifact.**
+**Artifacts 1–5 are preserved byte-identical** — each re-hashed at the start of revision 4 and
+unchanged. None was regenerated, renamed, or overwritten. **Revision 4 writes new filenames rather
+than touching any existing artifact.** Artifacts 1–3 live in the Source-Scout worktree; artifacts 4–5
+were re-verified there before this branch was created.
+
+**Review the revision-4 cumulative range** `4d0548e5...<rev 4 tip>` — it is the controlling artifact,
+and it carries the full Source-Scout evidence plus the verdict finalization. The revision-4 focused
+range `3000250b...<rev 4 tip>` isolates the finalization against the passed revision-3 tail.
 
 All were created with `git diff --output` (never PowerShell `>`) and are gitignored via
 `.gitignore:33`. **Artifacts 4 and 5 were each regenerated from their stated range to a separate
@@ -504,19 +592,42 @@ findings (1 High / 2 Medium / 3 Low–Low-Medium / 1 informational), three of th
 verdict is recorded literally and **not** characterised as a partial pass. All seven findings are
 applied in revision 3; the full table is in the *Independent review result* section above.
 
-**Revision 3 — none yet.** This branch stops for a **fresh independent Standard-class review** of the
-revision-3 cumulative range. The revision-3 corrections were written by the same session that produced
-the revision-2 review, so **that reviewer is not independent of this revision** and must not review
-it — a different reviewer is required.
+**Revision 3 — `VERDICT: PASS`.** Fresh independent Standard-class review of the controlling
+cumulative range `4d0548e5...a796952a`, by a reviewer independent of the Source-Scout author, the
+revision-3 correction author, and the reviewer who issued the revision-2 `FAIL`. All seven findings
+confirmed corrected; six non-blocking observations raised and carried forward (record § 12.8).
+
+**Revision 4 (this verdict-finalization branch) — none yet.** This branch stops for a **fresh
+independent Standard-class review**. The reviewer who passed revision 3 participated in drafting this
+finalization and is **not independent of it**; a different reviewer is required.
 
 ## Reviewer verdict source
 
 Revision 2: independent Standard-class review recorded above, verdict line `VERDICT: FAIL`.
-Revision 3: **pending.**
+Revision 3: fresh independent Standard-class review, verdict line `VERDICT: PASS`.
+Revision 4: **pending.**
+
+## Verdict-finalization scope, stated plainly
+
+This branch **records a decision**. It does not act on one.
+
+* Blue's issuing statement and verdict are recorded **verbatim** in both documents.
+* The procurement record now ends **`BLUE SUBSYSTEM VERDICT: ADOPT`**; the former ending survives
+  only inside a labelled superseded block (record § 12.9).
+* The earlier `VERDICT: FAIL` is preserved **as a FAIL**, not rewritten as though it had passed.
+* All five earlier review artifacts are **byte-identical**; none was regenerated or renamed.
+* **No architecture has been exercised.** No software installed, no account or application key
+  created, no storage configured, no data copied, backed up, restored, scanned, or uploaded, no
+  prototype run, no schedule created, and no secret read — in revision 4 as in revisions 1–3.
+* The next authorized technical stage is a **bounded prototype under its own reviewed work order**,
+  which must restate the verbatim verdict and name the record path per `AGENTS.md` gate item 7.
 
 ---
 
-**BLUE SUBSYSTEM VERDICT: NOT YET ISSUED — IMPLEMENTATION REMAINS UNAUTHORIZED** — independent backup
-and recovery, evaluated 2026-08-13 in `docs/OSS-PROCUREMENT-backup-recovery.md`. **Implementation,
-installation, configuration, and any restore drill remain unauthorized until Blue issues a verdict and
-it is recorded on `main`.**
+**BLUE SUBSYSTEM VERDICT: ADOPT** — independent backup and recovery, evaluated 2026-08-13 and issued
+by Blue 2026-08-13, recorded in `docs/OSS-PROCUREMENT-backup-recovery.md` § 12. **The verdict
+authorizes a bounded prototype under its own reviewed work order and nothing more.** Production
+backup configuration, production-data upload, unattended recurring scheduling, software installation,
+account or application-key creation, and any claim of completed recovery protection remain
+**unauthorized**. This record reaches `main` only when this branch is independently reviewed and Blue
+authorizes the merge.
