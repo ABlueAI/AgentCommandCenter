@@ -273,24 +273,47 @@ the state of the gates beyond what `main` already records.
    and the near-zero-cost mitigation (pushing the four stranded branches) should be named without
    being conflated with the subsystem or treated as authorized.
 
-## 11. Review artifact
+## 11. Review artifacts
+
+### Commit shape
 
 | Field | Value |
 | --- | --- |
 | Base (pre-merge `main`) | `4d0548e592d34e8407e939981bf4787c054387ad` |
-| **Reviewed content tip** | **`ccb8b5246de03cd8974aba68a4aa738798c0ce99`** |
+| Revision 1 content tip (superseded, retained) | `ccb8b5246de03cd8974aba68a4aa738798c0ce99` |
+| Revision 1 handoff-only tail | `9e9ad01d8e42574cda7e8ed7911ed998da8290e5` |
+| **Corrected reviewed content tip** | **`b079d0f9d092544e9f83e46a84cb212924599f4a`** |
 | Branch tip | the handoff-only tail commit that pins this table |
-| Reviewed range | `4d0548e592d34e8407e939981bf4787c054387ad...ccb8b5246de03cd8974aba68a4aa738798c0ce99` |
 
-| Artifact | Shortstat | Size | SHA-256 |
-| --- | --- | --- | --- |
-| `.agent-review-backup-recovery-source-scout.diff` | **2 files, 917 insertions, 0 deletions** | **68,901 bytes** | `c1a36fb402ea4580e5061cbefe89317d3a812af3dc374b5741769af77b788e4c` |
+**Review the corrected cumulative range.** The focused range is provided so the correction itself can
+be audited in isolation.
 
-Created with `git diff --output` (never PowerShell `>`) and gitignored via `.gitignore:33`.
-**Regenerated from its stated range to a separate temporary file and proven byte-identical by `cmp`;
-only the temporary copy was removed.** `git diff --check` is clean (exit 0) on the range.
+### The three pinned artifacts
 
-**Exact changed-file list for the reviewed range** — two new tracked Markdown files, nothing else:
+| # | Artifact | Range | Shortstat | Size | SHA-256 |
+| --- | --- | --- | --- | ---: | --- |
+| 1 | `.agent-review-backup-recovery-source-scout.diff` **(original, unmodified)** | `4d0548e5...ccb8b524` | 2 files, 917 insertions, 0 deletions | **68,901 bytes** | `c1a36fb402ea4580e5061cbefe89317d3a812af3dc374b5741769af77b788e4c` |
+| 2 | `.agent-review-backup-recovery-correction.diff` **(focused correction)** | `9e9ad01d...b079d0f9` | 2 files, 211 insertions, 62 deletions | **38,060 bytes** | `f28056f131908992cabea030eca85c3cfb93e11b0863ab3a06169f2729106ba7` |
+| 3 | `.agent-review-backup-recovery-source-scout-cumulative.diff` **(corrected cumulative)** | `4d0548e5...b079d0f9` | 2 files, 1,087 insertions, 0 deletions | **82,975 bytes** | `9d915b5098ef274eb8e37710d7c709ecd58e9bf8c54a3d05aec1accedfb5855a` |
+
+**Artifact 1 is preserved byte-identical** — re-hashed after the correction and unchanged at
+`c1a36fb4…88e4c` / 68,901 bytes. It was not regenerated, renamed, or overwritten.
+
+All three were created with `git diff --output` (never PowerShell `>`) and are gitignored via
+`.gitignore:33`. **Artifacts 2 and 3 were each regenerated from their stated range to a separate
+temporary file and proven byte-identical by `cmp`; only the temporary copies were removed.**
+`git diff --check` is clean (exit 0) on **both** new ranges.
+
+### Changed-file lists
+
+**Focused range** `9e9ad01d...b079d0f9` — exactly the two declared Markdown files:
+
+| Status | Path |
+| --- | --- |
+| `M` | `docs/BUILDER-HANDOFF-backup-recovery-source-scout.md` |
+| `M` | `docs/OSS-PROCUREMENT-backup-recovery.md` |
+
+**Corrected cumulative range** `4d0548e5...b079d0f9` — the same two files, still the only additions:
 
 | Status | Path |
 | --- | --- |
@@ -299,10 +322,12 @@ only the temporary copy was removed.** `git diff --check` is clean (exit 0) on t
 
 **Gate disposition: documentation-only; the app and Pester gates were NOT run** (§ 6). No application
 code, test, dependency, configuration, script, provider setting, hook, GitHub configuration, backup
-target, or external account is present in this range, and no production data was copied or uploaded.
+target, or external account is present in either range, and no production data was copied or uploaded.
+No backup, restore, installation, upload, account creation, or model session occurred during the
+correction.
 
-**The tail commit above this content tip touches only this handoff document**, and the pinned artifact
-ends at the content tip and excludes the tail.
+**The tail commit above the corrected content tip touches only this handoff document**, and artifacts
+2 and 3 both end at the corrected content tip and exclude the tail.
 
 ## Review-diff rule
 
