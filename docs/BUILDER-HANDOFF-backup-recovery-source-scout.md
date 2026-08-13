@@ -154,7 +154,7 @@ describes itself and alters no decision, no evidence, and no roadmap state.
 
 ## 2. Files changed
 
-Exactly three tracked files across the cumulative range `4d0548e5...<rev 5 tip>`, as the work orders
+Exactly three tracked files across the cumulative range `4d0548e5...e0e1b1c7`, as the work orders
 allow. **Revision 5 changed only the middle row** — the procurement record and the Master Status are
 byte-identical to the revision-4 reviewed tip `a57f8a6f`:
 
@@ -622,7 +622,7 @@ the state of the gates beyond what `main` already records.
 | Revision 3 handoff-only tail (base of this branch) | `3000250bbb127aac8252d427843f60bfdd9553cb` |
 | **Revision 4 reviewed content tip** (verdict finalization) | **`a57f8a6fe30ee886fb91f05d2c80d50249571c98`** |
 | Revision 4 handoff-only tail (base of the revision-5 correction) | `73f217468b331f2903b2fcc009a94df2d19c9b58` |
-| **Revision 5 reviewed content tip** (handoff accuracy correction) | **pinned by the tail commit below** |
+| **Revision 5 reviewed content tip** (handoff accuracy correction) | **`e0e1b1c70b7106c9726393c7863c1f6515c51523`** |
 | Branch tip | the revision-5 handoff-only tail commit that pins this table |
 
 > **SUPERSEDED REVIEW INSTRUCTION — REVISION 3 ONLY.** This paragraph previously read: *"Review the
@@ -652,17 +652,23 @@ undercount is corrected here.
 | 5 | `.agent-review-backup-recovery-revision-3-cumulative.diff` **(rev 3 cumulative)** | `4d0548e5...a796952a` | 2 files, 1,500 insertions, 0 deletions | **120,725 bytes** | `f2736eead1598abf580e57f0e9807162b99c7ebfdc83c7f0d76b5851df3a5450` |
 | 6 | `.agent-review-backup-recovery-verdict-finalization.diff` **(rev 4 focused)** | `3000250b...a57f8a6f` | 3 files, 500 insertions, 63 deletions | **52,044 bytes** | `6746c868fb689fa5abdc9eae2b23c12a36c72a6f716e1d35f0bc21e13c30a342` |
 | 7 | `.agent-review-backup-recovery-verdict-finalization-cumulative.diff` **(rev 4 cumulative — superseded as controlling by artifact 9)** | `4d0548e5...a57f8a6f` | 3 files, 1,940 insertions, 3 deletions | **154,341 bytes** | `2fee8bebd0b9d27d05bb29d8c4b28c5571738578812304335003e8ea83ef742d` |
-| 8 | `.agent-review-backup-recovery-handoff-accuracy.diff` **(rev 5 focused)** | `73f21746...<rev 5 tip>` | *pinned by the tail commit* | *pinned by the tail commit* | *pinned by the tail commit* |
-| 9 | `.agent-review-backup-recovery-handoff-accuracy-cumulative.diff` **(rev 5 cumulative — CONTROLLING)** | `4d0548e5...<rev 5 tip>` | *pinned by the tail commit* | *pinned by the tail commit* | *pinned by the tail commit* |
+| 8 | `.agent-review-backup-recovery-handoff-accuracy.diff` **(rev 5 focused)** | `73f21746...e0e1b1c7` | 1 file, 267 insertions, 27 deletions | **29,685 bytes** | `5d5f62c50c9382a6f0a3201876b1e7a94d6cade7401653fd52836e6d868d3020` |
+| 9 | `.agent-review-backup-recovery-handoff-accuracy-cumulative.diff` **(rev 5 cumulative — CONTROLLING)** | `4d0548e5...e0e1b1c7` | 3 files, 2,221 insertions, 3 deletions | **174,101 bytes** | `dedb3d63d3360c2db29d22920e66b6d6458966d25032846bfd824de58bb455b2` |
 
-**Artifacts 1–7 are preserved byte-identical** — each re-hashed at the start of revision 5 and
-unchanged. None was regenerated, renamed, or overwritten. **Revision 5 writes new filenames rather
-than touching any existing artifact.** Artifacts 1–5 live in the Source-Scout worktree, which remains
-clean at `3000250b`; artifacts 6–7 live in this worktree and were re-verified before any edit.
+**Artifacts 1–7 are preserved byte-identical** — each re-hashed at the start of revision 5 and again
+after the corrective commit, and unchanged in both checks. None was regenerated, renamed, or
+overwritten. **Revision 5 writes new filenames rather than touching any existing artifact.**
+Artifacts 1–5 live in the Source-Scout worktree, which remains clean at `3000250b`; artifacts 6–7
+live in this worktree and were re-verified before any edit.
 
-**Review the revision-5 cumulative range** `4d0548e5...<rev 5 tip>` — **it is the controlling
+**Artifacts 8 and 9 were created with `git diff --output`** (never PowerShell `>`), are gitignored via
+`.gitignore:33`, and were **each regenerated from their stated range to a separate temporary file and
+proven byte-identical with `cmp`**; only the temporary copies were removed. `git diff --check` is
+clean (exit 0) on **both** revision-5 ranges.
+
+**Review the revision-5 cumulative range** `4d0548e5...e0e1b1c7` — **it is the controlling
 artifact.** It carries the full Source-Scout evidence, the verdict finalization, and this
-handoff-accuracy correction. The revision-5 focused range `73f21746...<rev 5 tip>` isolates the
+handoff-accuracy correction. The revision-5 focused range `73f21746...e0e1b1c7` isolates the
 correction against the reviewed revision-4 tail.
 
 > **Why the controlling artifact moved from 7 to 9.** Artifact 7 controlled the review that returned
@@ -714,13 +720,13 @@ and `origin/main` remain at `4d0548e592d34e8407e939981bf4787c054387ad`.
 
 ### Changed-file lists — revision 5
 
-**Focused range** `73f21746...<rev 5 tip>` — exactly one file, this handoff:
+**Focused range** `73f21746...e0e1b1c7` — exactly one file, this handoff:
 
 | Status | Path |
 | --- | --- |
 | `M` | `docs/BUILDER-HANDOFF-backup-recovery-source-scout.md` |
 
-**Cumulative range** `4d0548e5...<rev 5 tip>` — still exactly the three intended Markdown files:
+**Cumulative range** `4d0548e5...e0e1b1c7` — still exactly the three intended Markdown files:
 
 | Status | Path |
 | --- | --- |
