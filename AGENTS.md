@@ -2,8 +2,8 @@
 
 ## What this project is
 A self-hosted, multi-agent coding command center built on tools I already own —
-Claude Code + git worktrees, with an optional visual board layer (Vibe Kanban)
-and a deferred second-opinion agent (Codex CLI/IDE). The goal is to mirror the *workflow* of a
+Claude Code and Codex in separate git worktrees, with an optional visual board
+layer (Vibe Kanban). The goal is to mirror the *workflow* of a
 parallel-agent "vibe coding" setup — multiple agents working in parallel, planned and
 reviewed by me — WITHOUT paying for or routing through any third-party agent platform.
 
@@ -24,7 +24,8 @@ payment setup. Owning the stack is cheaper, fully portable, and safer.
   tooling and worth naming explicitly rather than guessing around.
 - ChatGPT desktop is installed and connected to this local repository.
 - Claude Code is the primary coding tool and is connected to GitHub.
-- Codex CLI/IDE is optional and deferred as a second-opinion agent.
+- Codex desktop/CLI is an active secondary builder and independent verifier for
+  bounded work assigned by Blue; it never shares Claude Code's worktree.
 - Helper scripts live in `scripts/` (PowerShell `.ps1` + bash `.sh` equivalents).
 
 ## Repository layout
@@ -97,10 +98,13 @@ Before specifying, prototyping, or implementing any new subsystem:
 ## Model routing (which agent does what)
 - ChatGPT desktop with GPT-5.6 handles most planning, architecture, research,
   review, and project-state maintenance.
-- Claude Code is the primary builder: Sonnet for fast implementation and Opus
-  for deep review, architecture, and tricky bugs.
-- Codex CLI/IDE is deferred. If enabled later, it is an independent verifier or
-  fallback and never shares Claude Code's worktree.
+- Claude Code is a primary builder: Sonnet for fast implementation and Opus for
+  deep review, architecture, and tricky bugs.
+- Codex desktop/CLI is an active secondary builder and verifier. During the
+  four-day 1.0 release push, Blue deliberately spreads bounded work between
+  Claude and Codex to stay inside provider usage limits; this is a scheduling
+  constraint, not a lower quality bar. Codex never shares Claude Code's
+  worktree, and a reviewed tip that is rebased must be reviewed again.
 - I (human) stay the router and the final reviewer.
 
 ## Explicitly OUT OF SCOPE for now (deferred, with guardrails)

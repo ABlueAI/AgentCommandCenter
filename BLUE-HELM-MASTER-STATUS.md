@@ -2,17 +2,18 @@
 ### ⭐ Open THIS file first. The other briefs are deep reference only.
 
 **What this is:** the current project-state source of truth plus the historical
-Fri→Sun execution plan that produced the present baseline. Use the **July 23
-checkpoint below** for current scope and ordering. The dated Day 0–3 sections
-and older checkpoints remain as provenance and are not active calendar promises.
+execution plans that produced the present baseline. Use the **August 14 release
+scope reset checkpoint below** for current 1.0 scope and ordering. Older
+checkpoints and dated plans remain as provenance and are not active promises.
 
-**⏱ CURRENT SHIP GOAL:** Blue Helm 1.0 is a local Windows daily driver for
-coding orchestration, Video Scout research, and one-place access to Blue's
-business tools. Finish the explicitly labelled **remaining-work sequence** in
-the July 23 checkpoint, pass the full release gate, then use the app for one
-complete workday before acceptance. Blue Helm 1.0 includes a bounded, portable
-family-distribution package and setup guide, but not a public Store launch or a
-permanent feature freeze; the resulting field report seeds Blue Helm 2.0.
+**⏱ CURRENT SHIP GOAL:** Blue Helm 1.0 is Blue's personal Windows daily driver:
+an agent supervisor for coding orchestration, Video Scout research, and
+one-place access to daily business destinations. Finish the seven active items
+in the August 14 checkpoint, pass their security and human gates, complete a
+full daily-driver day, and then run the release gate. Portable family
+distribution is deferred to 2.0; 1.0 is not a public Store launch or permanent
+feature freeze. Four days yields 1.0 only if every discovery gate passes;
+otherwise it yields a release candidate plus an explicit blocker list.
 
 **Functional acceptance rule:** a visible control must work end-to-end, show an
 honest in-progress state, and surface failure visibly. A dead button, silent
@@ -236,6 +237,94 @@ R3 roadmap entry remains a roadmap note, not a pane-status procurement verdict.
 **Dockview's completed procurement decision did not transfer to pane-status**;
 finishing Dockview satisfied Dockview's gate only, and pane-status's verdict is
 its own.
+
+## Current checkpoint — August 14 — RELEASE 1.0 SCOPE RESET; SEVEN ACTIVE ITEMS
+
+> **PENDING REVIEW AND MERGE.** This checkpoint is authored on
+> `codex/release-1.0-scope-reset`, based on live-fetched `main` and
+> `origin/main` at `bd07da5678ea604da32fee692120cf9bbc6a3c43`. It becomes the
+> controlling tracked scope only after independent review and merge.
+
+Blue authorized this documentation-only reset with the exact issuing line
+`AUTHORIZE RELEASE 1.0 SCOPE RESET AND BACKUP EVIDENCE RECORD`. The detailed
+plan is `docs/RELEASE-1.0-FOUR-DAY-PLAN.md`; the measured local recovery drill
+is `docs/BACKUP-RECOVERY-EVIDENCE-2026-08-14.md`.
+
+**Product boundary:** Blue Helm is an owned, self-hosted desktop **agent
+supervisor / command center**, not an agent runtime or model provider. Claude
+Code and Codex remain the runtimes; Blue Helm launches, isolates, arranges, and
+helps Blue supervise them. The 1.0 target is Blue's personal Windows daily
+driver.
+
+**The seven active 1.0 items, in controlling integration order:**
+
+1. Quick Links: its own structured URL-policy boundary and visible refusal.
+2. Pane-status production completion, rebased onto merged Quick Links before
+   its review; no paid live provider turn until turn accounting is resolved or
+   mechanically bounded.
+3. P1 fenced-role environment containment at `app/main.js:1033`, integrated
+   after the PTY environment path is stable.
+4. Fence completion: WO-6/WO-7, P4 fail-closed enforcement, and the adversarial
+   Read/WebFetch matrix on a quiet system.
+5. One full daily-driver day with builders idle and Blue as the instrument.
+6. Clean-machine/VM installation and restore-path testing, including the
+   measured Windows long-path risk.
+7. Release triage and gate: blocker disposition, branch classification,
+   retained evidence, and the 1.0 release decision.
+
+**Controlling calendar and hard dependency:** before Day 1, land this reset and
+the backup evidence, complete the turn-accounting preflight, and prepare the VM.
+Day 1 runs Quick Links in Codex and pane-status build/unit-test work in Claude,
+with no live provider turns. Day 2 is Quick Links review/merge → pane-status
+rebase/review → P1 integration → the quiet-system fence test. Day 3 is the full
+daily-driver day, builders idle. Day 4 is blocker triage, clean-machine test,
+and release gate. **If P1 or the fence test has not passed by the end of Day 2,
+the daily-driver day moves. The date never overrides the security gate.**
+
+**Integration and review rules:** Quick Links lands first. A rebased pane-status
+tip receives a fresh review; the earlier verdict does not survive the rebase.
+P1 lands last because it changes the PTY environment boundary and can invalidate
+assumptions reviewed in pane-status. Pane-status uses a mixed tier: Full-class
+for settings lifecycle, pipe/token boundary, dead-reporter expiry, version
+fail-closed, turn accounting, and consequential-action isolation; Standard-
+class for badge presentation and Dockview identity. Full-class security review
+comes from a fresh independent session.
+
+**Quick Links ruling:** it is a bounded extension of the already-owned external
+launcher boundary, so the OSS procurement gate does not apply. “Extension” is
+policy-only: Quick Links **must not reuse** the existing `open-external` handler.
+It gets a pure URL policy module with structured parsing, `http:`/`https:` only,
+trusted window and main-frame enforcement, bounded input, visible refusal, and
+bounded metadata-only logging. The existing handler's prefix-regex weakness is
+a separate post-1.0 finding and is not refactored in the Quick Links branch.
+The product label is **Starboard Platform**, never `CRM` or `Starboard CRM`.
+
+**Backup status:** the August 14 drill proves a useful but bounded fact: an
+encrypted restic 0.19.1 snapshot of `D:\Workspace` was written to a repository
+on a different physical disk and a representative tracked file was read from an
+isolated restore. It does **not** prove off-site survival, scheduling,
+stale-backup detection, complete secret exclusion, or independent recovery
+material. Blue explicitly accepts those residuals for personal 1.0 and defers
+the production backup subsystem; the evidence record is controlling and the
+older “no backup exists” statement is stale, not reinterpreted.
+
+**Explicit 1.0 deferrals:** production backup automation/off-site recovery,
+Quick Check and merge-evidence automation, session persistence/resume UX,
+portable family distribution, the full environment/distribution audit,
+business-data MCP integration, Windows Hello/passkey merge approval, Sentry/
+PostHog, and autonomous remediation. Reasons and re-entry conditions are in the
+release plan; the clean-machine test remains in 1.0 even though portable
+distribution does not.
+
+**Branch closeout policy:** classify every branch as `LANDED`, `SUPERSEDED`,
+`DEFERRED`, or `ABANDONED`. Delete only after its commits/evidence are preserved
+where required and the exact local and remote targets are verified. Do not
+delete the backup-specification branch as part of 1.0 cleanup.
+
+> **SUPERSEDED SCOPE PRESERVED AS HISTORY.** The August 12 eleven-item queue and
+> the July 23 portable-family ship goal below were accurate statements of their
+> then-current plans. They are not deleted or reinterpreted, but they are no
+> longer the active 1.0 scope once this checkpoint lands.
 
 ## Current checkpoint — August 12 — RELEASE 1.0 DECISION RECONCILIATION; PANE-STATUS VERDICT IS NOW `BUILD FRESH`
 
@@ -659,6 +748,12 @@ This is load-bearing context, not historical decoration:
 > their own procurement work and work orders, and neither is authorized to begin
 > by this list.
 
+> **SUPERSEDED AS THE ACTIVE 1.0 QUEUE — August 14 scope reset.** The eleven
+> entries below are retained as decision provenance. The active seven-item
+> release scope and deferrals are in the August 14 checkpoint and
+> `docs/RELEASE-1.0-FOUR-DAY-PLAN.md`; do not execute this historical numbering
+> as the current queue.
+
 1. **Independent backup and recovery. BLOCKING 1.0 PREREQUISITE — NOT COMPLETE.**
    **Procurement gate status, August 13: Source-Scout evaluation complete;
    independent Standard-class review returned `VERDICT: PASS`; Blue issued the
@@ -694,7 +789,8 @@ This is load-bearing context, not historical decoration:
      its own procurement decision record under `docs/`, per `AGENTS.md` §
      *OSS-FIRST PROCUREMENT GATE — HARD INVARIANT*. Backup tooling is a
      subsystem like any other; it does not inherit another subsystem's verdict.
-     **Satisfied** — record and verdict as above, pending merge to `main`.
+     **Satisfied** — record and verdict are present on `main` at the August 14
+     baseline. The production backup system remains deferred by the scope reset.
    - **At least three recoverable copies across two storage forms, with one
      off-site.**
    - **Coverage of both Git history and declared non-Git application state** —
@@ -821,8 +917,9 @@ This is load-bearing context, not historical decoration:
    > read *"NEXT IN QUEUE — NOT YET AUTHORIZED"* and required all three
    > procurement preconditions before any work. All three are now satisfied;
    > that wording is **stale, not reinterpreted**.
-4. **Quick Links.** Configurable, main-validated HTTP/HTTPS links. `CRM` /
-   `Starboard CRM` opens Blue's Hexona Systems login and `Outlook` opens Outlook
+4. **Quick Links.** Configurable, main-validated HTTP/HTTPS links. **Historical
+   labels `CRM` / `Starboard CRM` are stale; the correct product label is
+   `Starboard Platform`.** It opens Blue's Hexona Systems login and `Outlook` opens Outlook
    Web in the Windows default browser. No embedded webviews, native CRM/mail
    panel, Electron-held business credentials, or agent access in 1.0. Its P12
    prerequisite is satisfied (see the note above).
