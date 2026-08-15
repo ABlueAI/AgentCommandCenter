@@ -23,8 +23,8 @@ durable without implementing or authorizing any product feature.
 | Worktree | `.worktrees/release-1.0-scope-reset` |
 | Pre-merge `main` | `bd07da5678ea604da32fee692120cf9bbc6a3c43` |
 | Live `origin/main` after fetch | `bd07da5678ea604da32fee692120cf9bbc6a3c43` |
-| Reviewed content tip | `PENDING` |
-| Handoff-only tail / branch tip | `PENDING` |
+| Reviewed content tip | `85b95f2aac99404ae30f82c4b408502d7b8c6607` |
+| Handoff-only tail / branch tip | this document's finalization commit; exact SHA accompanies the review request |
 
 Before branch creation, a real `git fetch --prune origin` completed and local
 `main`, `origin/main`, and the checked-out base were verified equal with zero
@@ -101,11 +101,25 @@ roadmap item complete.
 
 Documentation-only verification:
 
-- `git diff --check` on the reviewed and full branch ranges: `PENDING`;
-- exact tracked-file census: `PENDING`;
-- pinned artifact: `PENDING`;
-- artifact byte-identical regeneration proof: `PENDING`;
-- worktree tracked state: `PENDING`.
+- reviewed range:
+  `bd07da5678ea604da32fee692120cf9bbc6a3c43...85b95f2aac99404ae30f82c4b408502d7b8c6607`;
+- shortstat: 6 files, 692 insertions, 22 deletions;
+- exact census: three modified Markdown/control-plane documents and three new
+  Markdown documents, exactly as listed in § 3;
+- `git diff --check`: clean on the reviewed range;
+- pinned artifact: `.agent-review-release-1.0-scope-reset.diff`;
+- artifact size: 39,358 bytes;
+- artifact SHA-256:
+  `e7339ec6b8a68a04f40b7ac1c97db17bfe3df5777ffd2f089bfb19b374b01b10`;
+- artifact created with `git diff --output`, regenerated to a distinct temporary
+  file, and proven byte-identical before the temporary was removed;
+- artifact ignored by the tracked `.gitignore:33` rule; and
+- local `main` and `origin/main` remained equal to the recorded base after the
+  content commit.
+
+The final review request must additionally verify that the branch tip is one
+commit above the reviewed content tip, that it touches only this handoff, that
+the full range passes `git diff --check`, and that tracked state is clean.
 
 App and Pester gates are not run because this branch changes documentation and
 collaboration policy only. No production/runtime surface changes.
