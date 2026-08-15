@@ -240,10 +240,11 @@ its own.
 
 ## Current checkpoint — August 14 — RELEASE 1.0 SCOPE RESET; SEVEN ACTIVE ITEMS
 
-> **PENDING REVIEW AND MERGE.** This checkpoint is authored on
-> `codex/release-1.0-scope-reset`, based on live-fetched `main` and
-> `origin/main` at `bd07da5678ea604da32fee692120cf9bbc6a3c43`. It becomes the
-> controlling tracked scope only after independent review and merge.
+> **BASELINE PROVENANCE.** This checkpoint was prepared on
+> `codex/release-1.0-scope-reset` after a live fetch proved local `main` and
+> `origin/main` equal at `bd07da5678ea604da32fee692120cf9bbc6a3c43`.
+> Review and merge status belongs in the branch handoff/closeout rather than in
+> this durable scope statement.
 
 Blue authorized this documentation-only reset with the exact issuing line
 `AUTHORIZE RELEASE 1.0 SCOPE RESET AND BACKUP EVIDENCE RECORD`. The detailed
