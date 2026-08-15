@@ -23,7 +23,7 @@ durable without implementing or authorizing any product feature.
 | Worktree | `.worktrees/release-1.0-scope-reset` |
 | Pre-merge `main` | `bd07da5678ea604da32fee692120cf9bbc6a3c43` |
 | Live `origin/main` after fetch | `bd07da5678ea604da32fee692120cf9bbc6a3c43` |
-| Reviewed content tip | `85b95f2aac99404ae30f82c4b408502d7b8c6607` |
+| Reviewed content tip | `6884b6047357289e7d8d8276b7bc654c53030b23` |
 | Handoff-only tail / branch tip | this document's finalization commit; exact SHA accompanies the review request |
 
 Before branch creation, a real `git fetch --prune origin` completed and local
@@ -102,15 +102,15 @@ roadmap item complete.
 Documentation-only verification:
 
 - reviewed range:
-  `bd07da5678ea604da32fee692120cf9bbc6a3c43...85b95f2aac99404ae30f82c4b408502d7b8c6607`;
-- shortstat: 6 files, 692 insertions, 22 deletions;
+  `bd07da5678ea604da32fee692120cf9bbc6a3c43...6884b6047357289e7d8d8276b7bc654c53030b23`;
+- shortstat: 6 files, 707 insertions, 22 deletions;
 - exact census: three modified Markdown/control-plane documents and three new
   Markdown documents, exactly as listed in § 3;
 - `git diff --check`: clean on the reviewed range;
 - pinned artifact: `.agent-review-release-1.0-scope-reset.diff`;
-- artifact size: 39,358 bytes;
+- artifact size: 40,338 bytes;
 - artifact SHA-256:
-  `e7339ec6b8a68a04f40b7ac1c97db17bfe3df5777ffd2f089bfb19b374b01b10`;
+  `701eb5403ae4b71b632b281f857449466c7d6fa56d2b93900e7b134809b0439e`;
 - artifact created with `git diff --output`, regenerated to a distinct temporary
   file, and proven byte-identical before the temporary was removed;
 - artifact ignored by the tracked `.gitignore:33` rule; and
