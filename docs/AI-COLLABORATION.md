@@ -22,10 +22,13 @@
 
 ## Codex CLI / IDE
 
-- Optional secondary builder or verifier, currently deferred.
+- Active secondary builder or verifier for bounded work assigned by Blue.
 - Never shares a worktree with Claude Code.
 - Does not replace Claude Code as the primary coding surface unless Blue makes
   that decision explicitly.
+- During the four-day 1.0 release push, work may be split between Claude and
+  Codex to manage usage limits. The same worktree isolation, review tier, test
+  gates, and human merge authority apply to both.
 
 ## Required branch handoff
 
