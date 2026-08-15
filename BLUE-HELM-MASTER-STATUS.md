@@ -299,11 +299,15 @@ trusted window and main-frame enforcement, bounded input, visible refusal, and
 bounded metadata-only logging. The existing handler's prefix-regex weakness is
 a separate post-1.0 finding and is not refactored in the Quick Links branch.
 The product label is **Starboard Platform**, never `CRM` or `Starboard CRM`.
+The 1.0 default seed set is exactly **Starboard Platform** and **Outlook Web**;
+any additional default requires Blue's explicit addition before the work order.
 
-**Backup status:** the August 14 drill proves a useful but bounded fact: an
-encrypted restic 0.19.1 snapshot of `D:\Workspace` was written to a repository
-on a different physical disk and a representative tracked file was read from an
-isolated restore. It does **not** prove off-site survival, scheduling,
+**Backup status:** the August 14 drill proves a useful but bounded fact: two
+encrypted restic 0.19.1 snapshots of `D:\Workspace` were written to a repository
+on a different physical disk. The first exposed an included `.env`; the second
+(`9b7f3cfe`) excluded `.env` patterns and its restore scan was clean. The source
+and restore each counted 2,725 files, and a representative tracked file was read
+from the corrected `D:\restore-test\D\Workspace\...` path. It does **not** prove off-site survival, scheduling,
 stale-backup detection, complete secret exclusion, or independent recovery
 material. Blue explicitly accepts those residuals for personal 1.0 and defers
 the production backup subsystem; the evidence record is controlling and the

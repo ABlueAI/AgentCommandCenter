@@ -60,6 +60,8 @@ The correction also records:
 - no pane-status live provider turn before independent accounting exists;
 - a dedicated structured Quick Links URL policy rather than reuse of the weak
   existing handler;
+- the 1.0 Quick Links default seed set pinned to exactly Starboard Platform and
+  Outlook Web;
 - `app/main.js:1033` as the corrected P1 environment-boundary reference;
 - **Starboard Platform** as the corrected product label;
 - active Codex/Claude load-sharing in separate worktrees; and
@@ -86,9 +88,12 @@ carried from the completed human/Claude drill. It records:
 - repository `C:\blue-helm-backup`;
 - distinct physical disks for source and repository;
 - 9 data packs totaling 103,963,207 bytes and 2 snapshot blobs;
-- the representative restore/read of `BLUE-HELM-MASTER-STATUS.md`;
-- the `.env` capture as a negative control and the insufficient two-entry
-  denylist shape;
+- first-snapshot `.env` capture followed by second snapshot `9b7f3cfe`, which
+  added `.env` exclusions and produced a clean restored-tree scan;
+- the corrected `D:\restore-test\D\Workspace\...` restore path;
+- equal recursive counts of 2,725 source and restored files plus the
+  representative read of `BLUE-HELM-MASTER-STATUS.md`;
+- why the corrected extension denylist still is not a production secret policy;
 - the Codex long-path result (253 current / 266 projected under restore); and
 - every major unproven protection: off-site, schedule, staleness, independent
   recovery material, complete exclusion, integrity, VSS, and clean-machine
@@ -96,6 +101,18 @@ carried from the completed human/Claude drill. It records:
 
 The record does not expose a secret and does not claim the production backup
 roadmap item complete.
+
+## 6.1 Pre-review accuracy correction — 2026-08-15
+
+Blue identified four improvements before independent review; this is not a
+reviewer verdict. The evidence record now distinguishes the first snapshot that
+captured `.env` from second snapshot `9b7f3cfe`, records the clean second-restore
+scan and equal 2,725-file counts, and corrects the restic drive-letter nesting
+in the restore path. The release plan now assigns the turn-accounting preflight
+to Blue, defines evidence and pass/block outcomes, supplies a hook-independent
+admission-budget fallback, and pins Quick Links defaults to Starboard Platform
+and Outlook Web. No runtime command or new provider turn was used for these
+documentation corrections.
 
 ## 7. Verification and gates
 

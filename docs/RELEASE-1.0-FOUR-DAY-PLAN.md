@@ -33,8 +33,11 @@ tests hidden environmental dependencies even for a personal daily driver.
 
 ### 2.1 Quick Links — 0.5 day
 
-Deliver a small, visible set of configurable browser destinations including
-**Starboard Platform**, Outlook, GitHub, and other approved daily destinations.
+Deliver a small, visible set of configurable browser destinations. The 1.0
+default seed set is pinned to exactly **Starboard Platform** and **Outlook Web**.
+The storage format may support later additions, but GitHub or any other default
+requires Blue to add it explicitly before the Quick Links work order begins;
+“other approved daily destinations” is not implementation authority.
 
 Blue's binding procurement ruling is:
 
@@ -78,6 +81,35 @@ Before any further paid live provider run, the unexplained four-turn use under
 a three-turn authorization must be explained or enforceable turn accounting
 must bound the run independently of the hook being tested. Day 1 therefore
 allows implementation and unit tests but **no live provider turns**.
+
+#### Turn-accounting preflight — owner, evidence, and outcomes
+
+**Owner:** Blue makes the disposition. A planning/review session that is not the
+Claude pane or hook under test assembles the evidence; Claude may identify
+implementation facts but cannot certify its own accounting.
+
+**Method, without a new model turn:** reconcile the retained app/main logs,
+hook events, PTY/session timestamps, provider usage evidence available to Blue,
+and Blue's prompt recollection into a chronological table. Every observed
+`UserPromptSubmit`/`Stop` cycle must have a named cause. The preflight records
+which source independently supports each row and preserves ambiguity rather
+than assigning the unexplained fourth turn by guess.
+
+**Satisfactory outcome A — explained:** all four observed turns reconcile to
+named actions and Blue signs the explanation. The next live experiment still
+receives a written prompt/turn budget and an outside-the-hook observer.
+
+**Satisfactory outcome B — mechanically bounded:** if the overrun remains
+unexplained, a separate reviewed change implements a main-owned test admission
+budget. For controlled live evidence runs, direct terminal prompt input is
+disabled; the harness decrements the budget **before** it writes each authorized
+prompt to the PTY and visibly refuses prompt N+1. Unit tests prove zero-budget,
+N+1, restart, and failure paths without a provider session. Hook events may be
+compared with the ledger but may not increment or certify it.
+
+**Blocking outcome:** if neither A nor B is complete before Day 1, pane-status
+may continue with code and unit tests but no live provider session occurs. The
+release calendar moves rather than weakening this condition.
 
 Review is intentionally mixed-tier:
 
@@ -136,7 +168,8 @@ with blockers. The release date never changes the definition of complete.
 ### Before Day 1
 
 1. Review and land this scope reset and the backup evidence record.
-2. Complete the pane-status turn-accounting preflight.
+2. Blue completes and signs the pane-status turn-accounting preflight in
+   § 2.2, using outcome A or B; otherwise live pane-status runs remain blocked.
 3. Prepare the clean Windows VM.
 4. Issue exact, bounded Quick Links and pane-status work orders.
 
