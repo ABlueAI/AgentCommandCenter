@@ -336,9 +336,11 @@ process.stdout.write('\nindex.html ships the EMBEDDED dock and loads no Dockview
   // The assertion below names the expected file, so a FUTURE extra script still fails here rather
   // than riding in on this bump.
   const scriptTags = (indexSrc.match(/<script[^>]*src=/g) || []).length;
-  assert(scriptTags === 22, `index.html loads exactly 22 <script src> tags — the original 21 plus the gated pane-status prototype badge (found ${scriptTags})`);
+  assert(scriptTags === 23, `index.html loads exactly 23 <script src> tags — the original 21 plus the pane-status badge and Quick Links view (found ${scriptTags})`);
   assert(/<script src="pane-status-badge\.js"><\/script>/.test(indexSrc),
     'the 22nd script is exactly the pane-status prototype badge');
+  assert(/<script src="quick-links-view\.js"><\/script>/.test(indexSrc),
+    'the 23rd script is exactly the bounded Quick Links renderer controller');
   assert(indexSrc.indexOf('BLUE SUBSYSTEM VERDICT: PROTOTYPE') !== -1,
     'index.html records the procurement verdict that authorizes that prototype script');
 }

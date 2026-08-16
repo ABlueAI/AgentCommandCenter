@@ -26,6 +26,12 @@ contextBridge.exposeInMainWorld('cc', {
   openTerminal: (p) => ipcRenderer.invoke('open-terminal', p),
   openExternal: (u) => ipcRenderer.invoke('open-external', u),
 
+  // Quick Links has dedicated invoke-only channels. Open accepts a stored opaque ID only; there is
+  // no Quick Links bridge capable of submitting a URL or using the legacy open-external channel.
+  quickLinksList: () => ipcRenderer.invoke('quick-links-list'),
+  quickLinksSave: (text) => ipcRenderer.invoke('quick-links-save', text),
+  quickLinksOpen: (id) => ipcRenderer.invoke('quick-links-open', id),
+
   // vibe-kanban desktop app (launched, not embedded — see main.js)
   openBoard: () => ipcRenderer.invoke('open-board'),
   pickBoardApp: () => ipcRenderer.invoke('pick-board-app'),
