@@ -2,8 +2,8 @@
 
 ## 0. Status
 
-**STOPPED FOR FRESH INDEPENDENT STANDARD-CLASS REVIEW.** Nothing merged or
-pushed. Blue alone authorizes merge and push.
+**INDEPENDENT STANDARD-CLASS REVIEW PASSED.** Blue authorized merge and push;
+the repository merge gate remains the required final pre-merge authority.
 
 ## 1. Authority and invariant
 
@@ -30,8 +30,9 @@ No URL was guessed or committed before that approval.
 | Isolated worktree | `C:\Users\levij\.codex\worktrees\91ad\agent-command-center` |
 | Fork point / pre-merge `main` | `a2121ca36727bbb3294fd61a057f13730b8a1d17` |
 | Fetched `origin/main` at dispatch | `a2121ca36727bbb3294fd61a057f13730b8a1d17` |
-| Reviewed content tip | `6e660096ba794b305f43de45672612e2b52ef7a9` |
-| Handoff-only tail / branch tip | this document's amended census-correction commit; exact SHA accompanies the refreshed review request |
+| Functional code tip | `6e660096ba794b305f43de45672612e2b52ef7a9` |
+| Reviewed endpoint | `85854e4b487e57567c50ec5d8dcdf35408d6c813` |
+| Handoff-only tail / branch tip | this document's post-review metadata commit; exact SHA accompanies the merge-gate result |
 | Merge commit | Pending until Blue authorizes merge |
 
 Before editing, a real `git fetch origin --prune` completed and the checked-out
@@ -55,6 +56,7 @@ base, local `main`, and `origin/main` were verified equal to the fork point.
 - `app/renderer/styles.css`
 - `app/package.json`
 - `app/dockview-default-path.test.js`
+- `docs/BUILDER-HANDOFF-quick-links.md`
 
 No dependency, lockfile, PowerShell, provider-setting, credential, pane-status,
 turn-accounting, fence, backup, or legacy-handler change is in the range.
@@ -179,6 +181,15 @@ pre-test absence. No lasting user-data change remains.
   depends on later Microsoft 365 provisioning/migration.
 - Repair of the old arbitrary-URL `open-external` boundary remains deliberately
   post-1.0 and out of scope.
+- The reviewer found that some accepted non-ASCII path URLs can fail
+  revalidation because encoded UTF-8 continuation bytes overlap the encoded
+  control-byte refusal range. This fails closed and does not affect either
+  approved ASCII default; idempotent handling is a post-1.0 hardening item.
+- Deliberately fail-closed corrupt persisted data requires manual repair or
+  removal because there is no in-app reset flow.
+- Atomic writes flush the temporary file before rename but do not flush the
+  containing directory, leaving a narrow Windows power-loss durability
+  residual.
 
 ## 9. Unexpected pre-existing findings
 
@@ -190,7 +201,7 @@ still correctly ignores the pinned review artifact.
 
 Reviewed range:
 
-`a2121ca36727bbb3294fd61a057f13730b8a1d17...6e660096ba794b305f43de45672612e2b52ef7a9`
+`a2121ca36727bbb3294fd61a057f13730b8a1d17...85854e4b487e57567c50ec5d8dcdf35408d6c813`
 
 Pinned artifact:
 
@@ -198,12 +209,12 @@ Pinned artifact:
 
 Generation command shape:
 
-`git diff --output=.agent-review-quick-links.diff a2121ca36727bbb3294fd61a057f13730b8a1d17...6e660096ba794b305f43de45672612e2b52ef7a9`
+`git diff --output=.agent-review-quick-links.diff a2121ca36727bbb3294fd61a057f13730b8a1d17...85854e4b487e57567c50ec5d8dcdf35408d6c813`
 
-- shortstat: `16 files changed, 1382 insertions(+), 2 deletions(-)`;
-- size: `81,011` bytes;
+- shortstat: `17 files changed, 1619 insertions(+), 2 deletions(-)`;
+- size: `91,934` bytes;
 - SHA-256:
-  `f1cc5c1e1c1be242bf453c876fc6b3e206487da42ed0a0749923b3313cc8fa00`;
+  `03797c53fd2c2aaefc647007b3bab72c0253fd9fb5b4d14cd2240e6146c3dda9`;
 - independently regenerated SHA-256: identical; and
 - pinned artifact: ignored by tracked Git rules and not committed.
 
@@ -230,8 +241,13 @@ Generation command shape:
 
 ## 12. Reviewer verdict
 
-Pending fresh independent Standard-class review.
+Independent read-only Standard-class review of the exact refreshed endpoint and
+pinned artifact found no blocking issues and confirmed they are suitable for
+this single handoff-only tail and the repository merge gate.
 
-Reviewer verdict source: pending.
+Reviewer verdict source: Codex reviewer task
+`/root/quick_links_refresh_review`, completed 2026-08-16.
 
-The reviewer must return a literal `VERDICT: PASS` or `VERDICT: FAIL` line.
+Nonblocking findings are recorded in Section 8.
+
+`VERDICT: PASS`
