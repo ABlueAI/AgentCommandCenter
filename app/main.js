@@ -49,6 +49,18 @@ const {
 // Revision 2: discovers the Claude version FROM THE EXECUTABLE THIS FILE LAUNCHES. Revision 1 shipped
 // no discovery at all, so every badge resolved to `unknown/version-mismatch` in the real application.
 const { createClaudeVersionResolver } = require('./prototype-pane-status/pane-status-version');
+// MAIN-OWNED TURN ADMISSION BUDGET — Blue's turn-accounting OUTCOME B. For a controlled live evidence
+// run, main owns a durable per-pane allowance: direct terminal input to the controlled pane is blocked
+// here, and a paid prompt reaches the PTY only through the narrow controlled-submission handler, which
+// decrements and PERSISTS before it writes. Requiring these modules is inert — with the gate unset,
+// parseAdmissionConfig returns the disabled plan and createAdmissionBudget returns an object whose
+// every method refuses, so no pane is controlled and `pty-write` behaves exactly as it did before.
+// The budget is deliberately independent of the pane-status hook it exists to bound: nothing in
+// prototype-pane-status/ can reach the ledger. See app/admission-budget.js.
+const admissionConfig = require('./admission-budget-config');
+const { createAdmissionBudget } = require('./admission-budget');
+const { createAdmissionLedgerStore } = require('./admission-budget-store');
+const { createAdmissionIpc, CHANNEL_SUBMIT: ADMISSION_CHANNEL_SUBMIT } = require('./admission-ipc');
 // K8 media-permission boundary: both session permission handlers come from this pure,
 // dependency-free, unit-tested module (media-permission-policy.test.js). A grant requires
 // the trusted window's main frame + the exact entry document + audio-only proof; every
@@ -117,6 +129,20 @@ const dockviewLayoutEnabled = !classicLayoutEnabled;
 // as `classicLayoutEnabled`: main decides, the renderer is told, and renderer script cannot forge a
 // process argument to flip it.
 const paneStatusPrototypeEnabled = paneStatusPrototypeGateOn(process.env);
+// TURN ADMISSION BUDGET: parsed ONCE, here, from this process's own startup environment — before the
+// window exists and before any PTY is spawned. The renderer and the provider process are downstream of
+// this line and cannot reach it: renderer script cannot alter this process's environment, and every
+// admission key is stripped from each child PTY environment below (see ptyEnv in `pty-start`).
+// A malformed or absent configuration yields the DISABLED plan with allowance 0.
+const admissionPlan = admissionConfig.parseAdmissionConfig(process.env);
+const admissionEnabled = admissionPlan.enabled === true;
+// The renderer's controlled-run surface is ABSENT, not inert, when no run is configured — the same
+// posture as the Dockview and pane-status tokens above.
+const ADMISSION_RENDERER_ARG = '--blue-helm-admission-budget';
+// Late-bound: constructed at app-ready (it needs Electron `userData`). Until then, and forever when
+// the plan is disabled, this stays the refusing object created by createAdmissionBudget(disabledPlan).
+let admissionBudget = createAdmissionBudget({ plan: admissionPlan });
+let admissionIpc = null;
 
 // ---- tunable defaults (marked ? — change to taste) --------------------------
 const DEFAULT_PROJECTS_ROOT = 'D:\\Workspace';            // (?) where your git repos live
@@ -289,9 +315,15 @@ function createWindow() {
       // with the gate off there is no preload method, no renderer subscription and no badge global,
       // rather than an inert one. The two tokens are separate strings and neither can be derived
       // from the other.
+      //
+      // The TURN ADMISSION BUDGET adds a THIRD independent token, present only when a controlled run
+      // is configured. It carries no run id, no allowance and no pane id — only the fact that a
+      // controlled-run surface should exist, so the preload can expose the submit/state pair. Every
+      // number still comes from main, over IPC, at read time.
       additionalArguments: [
         ...(classicLayoutEnabled ? [CLASSIC_LAYOUT_RENDERER_ARG] : []),
         ...(paneStatusPrototypeEnabled ? [PANE_STATUS_RENDERER_ARG] : []),
+        ...(admissionEnabled ? [ADMISSION_RENDERER_ARG] : []),
       ],
     },
   });
@@ -499,6 +531,50 @@ app.whenReady().then(() => {
     },
   });
   ipcMain.handle('library-followup', (e, req) => followupIpc.handleAsk(e, req));
+
+  // ---- Turn admission budget boundary ----------------------------------------------------------
+  // Registered ONLY when a controlled run is configured. With no run, these two channels do not exist
+  // at all, so an invoke from anywhere rejects with "no handler registered" — the same strongest-form
+  // absence the Dockview block below uses. Nothing about the ordinary application changes.
+  //
+  // Trust anchors are the canonical ones (ENTRY_URL + the late-bound trusted window), so this surface
+  // is no weaker than the existing privileged boundaries. The renderer supplies no path, no run id, no
+  // allowance and no terminator: it supplies a pane id and one bounded prompt, and main owns the rest.
+  if (admissionEnabled) {
+    const admissionGate = createTrustedSenderGate({ entryUrl: ENTRY_URL, getTrustedWindow: () => win });
+    const admissionStore = createAdmissionLedgerStore({ userDataDir: app.getPath('userData') });
+    admissionBudget = createAdmissionBudget({
+      plan: admissionPlan,
+      storage: admissionStore,
+      now: () => Date.now(),
+      // The writer is the ONLY path from an admission to the PTY, and it is main's own handle map —
+      // not something the renderer named. A missing pane throws, which the budget converts into
+      // `write-failed-after-admission` rather than a silent success.
+      writer: (paneId, bytes) => {
+        const p = ptys.get(paneId);
+        if (!p) throw new Error('pty-missing');
+        p.write(bytes);
+      },
+      isPaneRunning: (paneId) => ptys.has(paneId),
+      log: (line) => { tlog(line); if (win && !win.isDestroyed()) win.webContents.send('main-error', line); },
+    });
+    const init = admissionBudget.initialize();
+    if (!init.ok) {
+      // Fail closed and stay closed. A ledger that could not be read or created leaves the budget in
+      // its refusing state; the run does not proceed on an assumed allowance.
+      const line = `[admission] run NOT started: ${init.reason}. No prompt can be admitted; resolve this before any live run.`;
+      tlog(line);
+      if (win && !win.isDestroyed()) win.webContents.send('main-error', line);
+    }
+    admissionIpc = createAdmissionIpc({
+      budget: admissionBudget,
+      assessSender: (e) => admissionGate.assess(e),
+      logRefusal: (line) => { tlog(`[admission] ${line}`); if (win && !win.isDestroyed()) win.webContents.send('main-error', line); },
+      now: () => Date.now(),
+    });
+    admissionIpc.register(ipcMain);
+    tlog(`[admission] controlled run active — direct terminal input will be blocked for the bound pane; only ${ADMISSION_CHANNEL_SUBMIT} may send a prompt`);
+  }
 
   // ---- Dockview layout boundary --------------------------------------------------------------
   // Registered ONLY when Dockview is the active layout engine — i.e. always, EXCEPT in classic
@@ -1062,8 +1138,14 @@ ipcMain.handle('pty-start', (_e, opts) => {
   // reported as blocked rather than worked around. The token exists only here and in main's memory:
   // never in argv, a log line, a file, the renderer, or a persistent environment variable.
   const paneStatusEnv = paneStatus.envForPane(opts);
+  // TURN ADMISSION BUDGET — the child must not be able to read, and therefore must not be able to
+  // reason about or rewrite, the configuration that bounds its own paid turns. `stripAdmissionEnv`
+  // returns a COPY of process.env with every key in ADMISSION_ENV_KEYS removed; the spread below then
+  // starts from that copy rather than from process.env. Without this the run id and allowance would
+  // ride into every PTY exactly the way a `setx` credential does, and any Bash step inside the agent
+  // could read them.
   const ptyEnv = {
-    ...process.env,
+    ...admissionConfig.stripAdmissionEnv(process.env),
     CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1',  // scrub credentials from Claude Code's own subprocesses
     ...(opts.videoScout ? { GEMINI_API_KEY: geminiKey } : {}),
     ...paneStatusEnv,
@@ -1096,12 +1178,45 @@ ipcMain.handle('pty-start', (_e, opts) => {
   // returned to the renderer). It intentionally OUTLIVES p.onExit below -- a finished run's report
   // stays openable until the pane is explicitly closed (pty-kill) or the window shuts down.
   if (acceptedRunId) { videoScoutRunIds.set(id, acceptedRunId); tlog(`pty-start: registered video-scout runId for pane ${id}`); }
+  // TURN ADMISSION BUDGET: the run claims its pane HERE, at the first successful spawn, because
+  // renderer pane ids are minted at runtime and cannot be known when the plan is parsed at startup.
+  // The claim is persisted immutably, so a second pane is refused rather than re-pointed — the budget
+  // cannot move. A refused claim leaves the pane completely ordinary: it is simply not the controlled
+  // pane, and the run stays unbound rather than binding to the wrong terminal.
+  if (admissionEnabled && admissionBudget.enabled) {
+    const claim = admissionBudget.claimPane(id);
+    if (!claim.ok && claim.reason !== 'admission-pane-already-bound') {
+      const line = `[admission] pane not bound to the controlled run: ${claim.reason}`;
+      tlog(line);
+      if (win && !win.isDestroyed()) win.webContents.send('main-error', line);
+    }
+  }
   p.onData((data) => { if (win && !win.isDestroyed()) win.webContents.send('pty-data', { id, data }); });
   // NOTE: onExit removes the PTY handle but deliberately does NOT remove the run-ID mapping (V5b1).
-  p.onExit(() => { ptys.delete(id); if (win && !win.isDestroyed()) win.webContents.send('pty-exit', { id }); });
+  p.onExit(() => {
+    ptys.delete(id);
+    // The controlled pane's process is gone: close the run. Any unused allowance is VOIDED here and is
+    // never transferred to another pane. Consumed admissions stay consumed.
+    if (admissionEnabled && admissionBudget.enabled) admissionBudget.notePaneExit(id);
+    if (admissionIpc) admissionIpc.forgetPane(id);
+    if (win && !win.isDestroyed()) win.webContents.send('pty-exit', { id });
+  });
   return { ok: true };
 });
-ipcMain.on('pty-write', (_e, { id, data }) => { const p = ptys.get(id); if (p) p.write(data); });
+// TURN ADMISSION BUDGET — THE DIRECT-INPUT CHOKEPOINT.
+//
+// Every ordinary route into a PTY converges here: `term.onData` (typing), the clipboard consumer's
+// paste, the speech-to-text delivery, and any shell-input helper all call `cc.ptyWrite`, which is this
+// channel. Blocking in MAIN rather than in each renderer call site is what makes the block complete:
+// a control character, an Enter, a bracketed paste, or a future call site added by someone who never
+// read this comment all arrive at the same line and are refused by the same check.
+//
+// The refusal is visible (bounded reason on the Logs channel, throttled so a held key cannot flood it)
+// and it never echoes the bytes. Uncontrolled panes take the original path, byte-for-byte.
+ipcMain.on('pty-write', (_e, { id, data }) => {
+  if (admissionIpc && admissionIpc.refuseDirectWrite(id)) return; // refused: nothing reaches the PTY
+  const p = ptys.get(id); if (p) p.write(data);
+});
 ipcMain.on('pty-resize', (_e, { id, cols, rows }) => { const p = ptys.get(id); if (p) { try { p.resize(cols, rows); } catch (err) { tlog(`pty-resize ${id} failed (process likely exiting): ${(err && err.message) || err}`); } } });
 ipcMain.on('pty-kill', (_e, id) => {
   const p = ptys.get(id); if (p) { try { p.kill(); } catch {} ptys.delete(id); }
@@ -1110,6 +1225,10 @@ ipcMain.on('pty-kill', (_e, id) => {
   // EXPERIMENT A: the pane is gone, so its token must die with it. Releasing here (not on pty-exit)
   // matches the run-ID registry's rule — a finished agent's pane still exists until Blue closes it.
   paneStatus.releasePane(id);
+  // TURN ADMISSION BUDGET: an explicitly closed pane closes its run too. Same rule as pty-exit — the
+  // remainder is voided, never transferred, and the consumed count is untouched.
+  if (admissionEnabled && admissionBudget.enabled) admissionBudget.notePaneExit(id);
+  if (admissionIpc) admissionIpc.forgetPane(id);
 });
 
 // ---- IPC: vibe-kanban board -------------------------------------------------

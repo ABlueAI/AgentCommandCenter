@@ -63,10 +63,52 @@ function sha(s) { return crypto.createHash('sha256').update(s, 'utf8').digest('h
 //   * `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'` is still set on every PTY, unchanged and unweakened.
 //     Asserted separately below so it cannot be lost in a future re-pin.
 //
+// RE-PINNED AGAIN for the MAIN-OWNED TURN ADMISSION BUDGET (Blue's turn-accounting OUTCOME B).
+// Blue's authorization, verbatim: I SELECT TURN-ACCOUNTING OUTCOME B. THE FOURTH TURN REMAINS
+// UNEXPLAINED. NO LIVE PANE-STATUS PROVIDER SESSION IS AUTHORIZED UNTIL THE MAIN-OWNED ADMISSION
+// BUDGET IS REVIEWED AND LANDED.
+//
+// This tripwire fired, which is exactly what it is for. The change is legitimate and is the point of
+// the work order: bounding paid turns REQUIRES touching the PTY boundary, because that boundary is
+// where a paid prompt becomes a real cost. Two regions moved:
+//
+//   * `ptyEnv block`      236 -> 271 bytes. ONE substitution, +35 bytes:
+//         ...process.env
+//     became
+//         ...admissionConfig.stripAdmissionEnv(process.env)
+//     `stripAdmissionEnv` returns a COPY of the parent environment with every key in
+//     ADMISSION_ENV_KEYS removed, so the run id and allowance that bound a pane's paid turns are not
+//     readable by that pane — the same class of leak `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` exists to
+//     prevent, applied to the cost control instead of a credential. Nothing else in the block moved:
+//     the scrub, the video-scout key scoping, and the pane-status spread are byte-identical.
+//     The key list is asserted complete by admission-budget-config.test.js, which fails if an
+//     ENV_* constant is added without being added to the scrub list.
+//
+//   * `pty-start handler` 9913 -> 12443 bytes. Three additions, no deletions and no reordering:
+//       1. the seven-line comment above `const ptyEnv` explaining the scrub, plus the +35 above;
+//       2. a pane-claim block after a successful spawn — the run binds to the FIRST eligible pane,
+//          because renderer pane ids are minted at runtime and cannot be known when the plan is
+//          parsed at startup. The binding is persisted immutably, so a second pane is refused rather
+//          than re-pointed; a refused claim leaves the pane completely ordinary;
+//       3. `p.onExit` grew from a one-liner to a block that also calls `admissionBudget.notePaneExit`
+//          and `admissionIpc.forgetPane`, so a dead pane's unused allowance is VOIDED rather than
+//          left claimable by another pane.
+//
+// What did NOT change, and is the reason this re-pin is safe to accept:
+//   * `fenced-role cwd gate` — byte-for-byte IDENTICAL again: 1354 bytes, sha ae9dce92…, the same
+//     value as the ORIGINAL reviewed base. The credential/fence containment logic has still never
+//     been touched by any of these three re-pins.
+//   * `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'` is still set on every PTY, unchanged and unweakened
+//     (asserted separately below).
+//   * The spawn itself, its arguments, the cwd resolution, and the video-scout validation path are
+//     all unmoved.
+//
 // Prior hashes, retained so every reviewed base stays reproducible:
 //   ptyEnv block      213  b83cd467dc52406d7c402d89864f39f3bc71639516987ff2768902de273c0820  (base)
+//   ptyEnv block      236  cd1007432e476ed49e99383c44b18dabcc817b085f078327b9dd1b61eefb7415  (rev 1/2)
 //   pty-start handler 8714 21c9ab2fc8be096a2be0ec0609070ac74c2d94a5fc6125c2b16e2b3f3e45e421  (base)
 //   pty-start handler 9289 abe919c44da95b76df1cc5b4547aad5ccba83a24c4c3ab1d0f77f2e6454d4d53  (rev 1)
+//   pty-start handler 9913 67cb161c6dea42ca9b8be3bc87f783e264a7cab8d73607cdd0d79747fbba8c73  (rev 2)
 // ---------------------------------------------------------------------------------------------
 
 // Region definitions: [name, startAnchor, endAnchor, expected byte length, expected sha256].
@@ -82,15 +124,15 @@ const REGIONS = [
     name: 'ptyEnv block',
     start: 'const ptyEnv = {',
     end: 'let p;',
-    len: 236,
-    sha: 'cd1007432e476ed49e99383c44b18dabcc817b085f078327b9dd1b61eefb7415',
+    len: 271,
+    sha: '2a399a9890fbeccd05141779f69958878f42232a8a42e2f9e0aaf992408657f8',
   },
   {
     name: 'pty-start handler',
     start: "ipcMain.handle('pty-start', (_e, opts) => {",
     end: "ipcMain.on('pty-write'",
-    len: 9913,
-    sha: '67cb161c6dea42ca9b8be3bc87f783e264a7cab8d73607cdd0d79747fbba8c73',
+    len: 12443,
+    sha: 'b5fe654e0d638de756079e7a0d67fa1fbba134f40f9d99a189091df9f1c7a945',
   },
 ];
 
@@ -129,6 +171,27 @@ assert(src.indexOf('paneStatus.setObservedVersion(') !== -1,
   'main.js feeds a DISCOVERED provider version into the prototype (never a hard-coded one)');
 assert(!/createPaneStatusPrototype\(\{[\s\S]{0,400}?observedVersion/.test(src),
   'and never hard-codes observedVersion at construction');
+
+// TURN ADMISSION BUDGET content assertions — the reason THIS re-pin happened, pinned as behaviour so
+// the next re-pin cannot quietly drop them along with the hash. A hash says something moved; these say
+// whether the cost control is still wired.
+assert(src.indexOf('...admissionConfig.stripAdmissionEnv(process.env)') !== -1,
+  'ptyEnv is built from the admission-scrubbed environment copy, not raw process.env');
+{
+  // The scrub must be the FIRST spread in ptyEnv: a later `...process.env` would put the keys back.
+  const envBlock = src.slice(src.indexOf('const ptyEnv = {'), src.indexOf('let p;', src.indexOf('const ptyEnv = {')));
+  assert(!/\.\.\.process\.env\b/.test(envBlock),
+    'the ptyEnv block never spreads raw process.env — the admission keys cannot be reintroduced');
+  assert(envBlock.indexOf('...admissionConfig.stripAdmissionEnv(process.env)') <
+         envBlock.indexOf("CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'"),
+    'the scrubbed copy is the base of the object, with the credential scrub layered on top of it');
+}
+assert(/admissionBudget\.claimPane\(id\)/.test(src),
+  'pty-start binds the controlled run to the first eligible pane, in main');
+assert(/admissionBudget\.notePaneExit\(id\)/.test(src),
+  'a pane exit voids the remaining allowance rather than leaving it claimable');
+assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src),
+  'main.js never calls a mutation that could restore or extend an allowance (none exists)');
 
 process.stdout.write(`\nlauncher-fence-invariant: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);
