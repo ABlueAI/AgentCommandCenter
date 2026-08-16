@@ -83,6 +83,11 @@ const { createFollowupChildRunner } = require('./followup-child');
 // no effect in classic recovery mode: the IPC handlers below are not registered there, and the
 // renderer cannot reach a layout operation the preload never exposed.
 const { createLayoutStore } = require('./dockview-layout-store');
+// Quick Links: a separate pure URL/config policy, fixed userData store, and trusted open-by-ID IPC.
+// This boundary intentionally does not reuse or modify the legacy open-external handler below.
+const { createQuickLinksStore } = require('./quick-links-store');
+const { createQuickLinksIpc } = require('./quick-links-ipc');
+const { buildDefaultConfig: buildQuickLinksDefaultConfig } = require('./quick-links-policy');
 
 // ---- Layout engine selection (MAIN decides; the renderer can never change it) -------------------
 // Blue's ADOPT verdict makes Dockview the PRODUCTION pane-layout engine, so `npm start` — no flag —
@@ -357,6 +362,34 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('clipboard-read', (e) => clipboardIpc.handleClipboardRead(e));
   ipcMain.handle('clipboard-write', (e, payload) => clipboardIpc.handleClipboardWrite(e, payload));
+
+  // Quick Links privileged operations all pass the canonical trusted sender/frame/document gate
+  // inside quick-links-ipc.js. The renderer may request OS dispatch only by a stored opaque ID.
+  // Blue approved both exact production seed destinations on 2026-08-16. The builder did not infer
+  // either address: these are the two values supplied at the explicit URL checkpoint.
+  const quickLinksDefaults = buildQuickLinksDefaultConfig({
+    starboardUrl: 'https://jlautomationsystems.com/',
+    outlookUrl: 'https://outlook.office365.com/',
+  });
+  if (!quickLinksDefaults.ok) throw new Error('quick-links: approved defaults failed closed policy');
+  const quickLinksStore = createQuickLinksStore({
+    userDataDir: app.getPath('userData'),
+    defaultConfig: quickLinksDefaults.config,
+  });
+  const quickLinksIpc = createQuickLinksIpc({
+    entryUrl: ENTRY_URL,
+    getTrustedWindow: () => win,
+    store: quickLinksStore,
+    openExternal: (url) => shell.openExternal(url),
+    log: (line) => {
+      const refused = line.includes(' result=refused');
+      (refused ? console.error : console.log)(line);
+      if (refused && win && !win.isDestroyed()) win.webContents.send('main-error', line);
+    },
+  });
+  ipcMain.handle('quick-links-list', (e) => quickLinksIpc.handleList(e));
+  ipcMain.handle('quick-links-save', (e, text) => quickLinksIpc.handleSave(e, text));
+  ipcMain.handle('quick-links-open', (e, id) => quickLinksIpc.handleOpen(e, id));
 
   // EXPERIMENT A — PROTOTYPE, Claude only, one pane. docs/OSS-PROCUREMENT-pane-status.md,
   // "BLUE SUBSYSTEM VERDICT: PROTOTYPE". Bounded prototype work only; production implementation,

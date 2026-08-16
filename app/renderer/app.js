@@ -5,6 +5,15 @@ const $ = (sel) => document.querySelector(sel);
 const ACCEPTANCE_BUILD = 'V5 STACK CONTENT ACCEPTANCE 2026-07-21.14';
 const state = { repo: '', githubUrl: '', worktrees: [], chosenRole: 'builder', chosenCli: 'claude', hardTask: false, theme: 'obsidian', ttsVoice: '', ttsSpeed: 1, videoModel: 'gemini-2.5-flash-lite', mediaResolution: 'MEDIUM', analysisMode: 'transcript' };
 const audioModules = window.ccAudioModuleHealth.createAudioModuleHealth();
+const quickLinksView = window.ccQuickLinksView.createQuickLinksView({
+  document,
+  api: {
+    list: () => cc.quickLinksList(),
+    save: (text) => cc.quickLinksSave(text),
+    open: (id) => cc.quickLinksOpen(id),
+  },
+  log: (line) => appendLog(line),
+});
 
 function audioModuleFromFailure(source, detail) {
   const text = `${source || ''} ${detail || ''}`.toLowerCase();
@@ -1257,6 +1266,7 @@ async function boot() {
   updateKeyBanner(await cc.getGeminiKeyStatus());
   await refreshRepos();
   wireUi();
+  await quickLinksView.load();
   document.title = `Blue Helm — ${ACCEPTANCE_BUILD}`;
   const buildBadge = $('#audioBuild');
   if (buildBadge) buildBadge.textContent = ACCEPTANCE_BUILD; // single source: the const above
@@ -1606,6 +1616,7 @@ function wireUi() {
     };
   });
   setupLibrary();   // V5b2: wire the Library controls (refresh / filters / sort / copy / maximize)
+  quickLinksView.mount();
   $('#newTermShell').onclick = () => openInAppTerminal({ worktree: state.repo || undefined });
 
   // Gemini key banner

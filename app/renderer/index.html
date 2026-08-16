@@ -63,6 +63,23 @@
         <button id="openBoard" class="action accent">🗂️ Open Vibe Kanban</button>
       </div>
 
+      <div class="group quick-links" aria-labelledby="quickLinksTitle">
+        <div class="group-title" id="quickLinksTitle">
+          Quick Links
+          <button id="quickLinksManage" class="mini" type="button">Manage</button>
+        </div>
+        <div id="quickLinksList" class="quick-links-list" aria-live="polite"></div>
+        <div id="quickLinksEditor" class="quick-links-editor hidden">
+          <div id="quickLinksRows" class="quick-links-rows"></div>
+          <button id="quickLinksAdd" class="ghost ql-add" type="button">+ Add link</button>
+          <div class="quick-links-actions">
+            <button id="quickLinksCancel" class="ghost" type="button">Cancel</button>
+            <button id="quickLinksSave" class="mini accent" type="button">Save Changes</button>
+          </div>
+        </div>
+        <div id="quickLinksStatus" class="quick-links-status" role="status" aria-live="polite"></div>
+      </div>
+
       <div class="group grow">
         <div class="group-title">
           Agents
@@ -303,6 +320,7 @@
   <script src="clipboard-consumer.js"></script>
   <script src="library-view.js"></script>
   <script src="report-followup.js"></script>
+  <script src="quick-links-view.js"></script>
   <script src="tts-selection.js"></script>
   <script src="audio-module-health.js"></script>
   <script src="stt-target-lock.js"></script>
