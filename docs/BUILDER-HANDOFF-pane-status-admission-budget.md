@@ -4,7 +4,7 @@ Branch: `feature/pane-status-admission-budget`
 Worktree: `.worktrees\pane-status-admission-budget`
 Fork-point SHA: `a2121ca36727bbb3294fd61a057f13730b8a1d17`
 Pre-merge `main` SHA: `a2121ca36727bbb3294fd61a057f13730b8a1d17`
-Reviewed content tip: pinned in § 10
+Reviewed content tip: `5f8cb59d7a17334a06735816d45160352e987f32`
 Branch tip: the handoff-only tail commit that pins the review artifact
 Merge commit SHA: **Pending until merge**
 
@@ -302,14 +302,14 @@ Read-only Git, Node test execution, and one local filesystem junction.
 | Field | Value |
 | --- | --- |
 | Base (pre-merge `main`) | `a2121ca36727bbb3294fd61a057f13730b8a1d17` |
-| **Reviewed content tip** | **`REVIEWED_TIP`** |
+| **Reviewed content tip** | **`5f8cb59d7a17334a06735816d45160352e987f32`** |
 | Branch tip | the handoff-only tail commit that pins this table |
 
 ### The pinned artifact
 
 | Artifact | Range | Shortstat | Size | SHA-256 |
 | --- | --- | --- | ---: | --- |
-| `.agent-review-pane-status-admission-budget.diff` | `a2121ca3...REVIEWED_TIP` | `SHORTSTAT` | `SIZE` bytes | `SHA256` |
+| `.agent-review-pane-status-admission-budget.diff` | `a2121ca3...5f8cb59d` | 13 files, 3,308 insertions, 8 deletions | **187,699** | `4fc2ed34cc049b603233e564874cc1ee854388af7a8c8ff000d14cc5d99290a6` |
 
 Created with `git diff --output` (never PowerShell `>`), gitignored via `.gitignore:33`, and
 **regenerated from its stated range to a separate temporary file and proven byte-identical with
@@ -317,7 +317,7 @@ Created with `git diff --output` (never PowerShell `>`), gitignored via `.gitign
 
 ### Changed-file list
 
-**Range** `a2121ca3...REVIEWED_TIP`:
+**Range** `a2121ca3...5f8cb59d`:
 
 | Status | Path |
 | --- | --- |
@@ -366,7 +366,7 @@ treated as a merge authorization.
 
 * Before merge, use `git diff main...<tip>`.
 * After merge, reproduce with `git diff <recorded-pre-merge-main>...<tip>` — here
-  `git diff a2121ca3...REVIEWED_TIP`.
+  `git diff a2121ca3...5f8cb59d`.
 * Always use `--output`; never PowerShell `>`.
 * Retain the literal `VERDICT: PASS|FAIL` line and name the review that produced it. A paraphrase or
   implied verdict is not a merge-gate verdict.
