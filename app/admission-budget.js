@@ -520,6 +520,14 @@ function createAdmissionBudget(deps) {
       runState: record.state,
       paneBound: record.paneId !== null && !record.bindingStale,
       bindingStale: record.bindingStale === true,
+      // The bound pane id, so a controlled-run UI can NAME the pane it is about to spend a turn on
+      // rather than just claim one exists. Safe to expose: this id was MINTED BY THE RENDERER at
+      // `pty-start` (`pty1`, `pty2`, `library`), so it is telling the renderer something it already
+      // knows, and it is bounded by PANE_ID_PATTERN in admission-budget-config.js. It is deliberately
+      // NULL whenever the binding is stale — after a restart the persisted id names a pane from the
+      // previous process that no longer exists, and showing it would invite Blue to spend a turn on a
+      // pane that is not there. `paneBound` and this field therefore always agree.
+      paneId: record.paneId !== null && !record.bindingStale ? record.paneId : null,
     };
   }
 

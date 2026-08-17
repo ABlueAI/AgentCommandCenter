@@ -137,6 +137,12 @@
           </div>
           <button id="newTermShell" class="mini accent">+ Shell</button>
         </div>
+        <!-- MAIN-OWNED TURN ADMISSION BUDGET host. EMPTY IN MARKUP, and it stays empty unless a
+             controlled run is configured: admission-view.js builds the bar into this element only
+             when the preload exposed `window.ccAdmission`, which happens only when main added the
+             controlled-run token to `additionalArguments`. With no run configured there is no field,
+             no button and no status text — the surface is ABSENT, not merely disabled. -->
+        <div id="admissionHost" class="admission-host"></div>
         <div id="terminalGrid" class="term-grid">
           <div class="empty muted" id="termEmpty">No terminals open. Open an agent from the <b>Agents</b> tab, or click <b>+ Shell</b>.</div>
         </div>
@@ -321,6 +327,10 @@
   <script src="library-view.js"></script>
   <script src="report-followup.js"></script>
   <script src="quick-links-view.js"></script>
+  <!-- MAIN-OWNED TURN ADMISSION BUDGET view. Loading it is inert: it only publishes a factory. app.js
+       calls that factory ONLY when `window.ccAdmission` exists, so with no controlled run configured
+       nothing is constructed, nothing is mounted, and #admissionHost keeps zero children. -->
+  <script src="admission-view.js"></script>
   <script src="tts-selection.js"></script>
   <script src="audio-module-health.js"></script>
   <script src="stt-target-lock.js"></script>

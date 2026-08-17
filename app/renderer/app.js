@@ -14,6 +14,22 @@ const quickLinksView = window.ccQuickLinksView.createQuickLinksView({
   },
   log: (line) => appendLog(line),
 });
+// MAIN-OWNED TURN ADMISSION BUDGET — ABSENT, NOT INERT.
+// `window.ccAdmission` exists only when main put the controlled-run token in `additionalArguments`,
+// which it does only when a run is configured in ITS OWN startup environment. Renderer script cannot
+// add a process argument, so it cannot make this non-null. With no run configured this stays null,
+// nothing is constructed, `mount()` is never reached, and #admissionHost keeps zero children.
+//
+// This view is NOT a second way into a PTY. It can only ask main to spend one admission over
+// `ccAdmission.submitPrompt`; ordinary `cc.ptyWrite` traffic to the controlled pane is refused in
+// main at the single `pty-write` chokepoint, and that refusal is not something this file can waive.
+const admissionView = window.ccAdmission
+  ? window.ccAdmissionView.createAdmissionView({
+      document,
+      bridge: window.ccAdmission,
+      log: (line) => appendLog(line),
+    })
+  : null;
 
 function audioModuleFromFailure(source, detail) {
   const text = `${source || ''} ${detail || ''}`.toLowerCase();
@@ -1267,6 +1283,8 @@ async function boot() {
   await refreshRepos();
   wireUi();
   await quickLinksView.load();
+  // Pull the controlled run's bounded counts once the bar exists. No-op with no run configured.
+  if (admissionView) await admissionView.refresh();
   document.title = `Blue Helm — ${ACCEPTANCE_BUILD}`;
   const buildBadge = $('#audioBuild');
   if (buildBadge) buildBadge.textContent = ACCEPTANCE_BUILD; // single source: the const above
@@ -1617,6 +1635,9 @@ function wireUi() {
   });
   setupLibrary();   // V5b2: wire the Library controls (refresh / filters / sort / copy / maximize)
   quickLinksView.mount();
+  // Builds the controlled-run bar into #admissionHost. With no run configured `admissionView` is null
+  // and this line does nothing at all — no element, no handler, no listener.
+  if (admissionView) admissionView.mount();
   $('#newTermShell').onclick = () => openInAppTerminal({ worktree: state.repo || undefined });
 
   // Gemini key banner

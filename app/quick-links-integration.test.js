@@ -20,11 +20,26 @@ function read(rel) { return fs.readFileSync(path.join(APP, rel), 'utf8'); }
 function fromBase(rel, encoding = 'utf8') {
   return execFileSync('git', ['show', `${BASE}:app/${rel}`], { cwd: REPO, encoding });
 }
+// ANCHOR CORRECTED during the turn-admission-budget integration, because it was measuring the wrong
+// thing. The end anchor used to be `'\n  });'` — an INDENTED closer — but this handler's own closing
+// line is `});` at column 0. The old slice therefore ran past the handler and stopped at the first
+// indented `});` much further down main.js, capturing 12,551 characters of unrelated code (the whole
+// of pty-start, pty-write, pty-kill and the vibe-kanban board handlers) under the name "legacy
+// open-external handler".
+//
+// That made the assertion both too weak and too strong: too weak because a real edit to the two lines
+// that matter was never isolated, and too strong because ANY edit anywhere in 12 KB of neighbouring
+// code failed it. The admission budget's `p.onExit` block — which legitimately ends in an indented
+// `});` — tripped it while leaving the open-external handler untouched.
+//
+// The corrected anchor bounds the handler exactly. Verified across three revisions: the handler is
+// 141 bytes and byte-identical at the dispatched base a2121ca3, at Quick Links main 5bbe3635, and on
+// this branch. The assertion below now pins those 141 bytes and nothing else.
 function legacyHandler(source) {
   const start = source.indexOf("ipcMain.handle('open-external'");
   if (start < 0) return null;
-  const end = source.indexOf('\n  });', start);
-  return end < 0 ? null : source.slice(start, end + '\n  });'.length);
+  const end = source.indexOf('\n});', start);
+  return end < 0 ? null : source.slice(start, end + '\n});'.length);
 }
 
 process.stdout.write('\nlegacy external-launcher isolation\n');
@@ -35,6 +50,14 @@ const oldBase = legacyHandler(baseMain);
 assert(oldCurrent !== null && oldBase !== null, 'legacy open-external handler is present in current and base source');
 assert(oldCurrent.replace(/\r\n/g, '\n') === oldBase.replace(/\r\n/g, '\n'),
   'legacy open-external handler source is content-identical to dispatched base');
+// Pin the corrected anchor's own behaviour, so a future edit cannot silently widen this region back
+// out into neighbouring code without the change being visible here.
+assert(oldBase.replace(/\r\n/g, '\n').length === 141,
+  'the extracted region is the 141-byte handler itself, not a slice of surrounding code');
+assert(oldCurrent.replace(/\r\n/g, '\n').split('\n').length === 3,
+  'the extracted region is exactly the handler\'s three lines');
+assert(!oldCurrent.includes('pty-start') && !oldCurrent.includes('pty-write'),
+  'the extracted region does not reach into the PTY handlers');
 
 const featureSources = [
   'quick-links-policy.js', 'quick-links-store.js', 'quick-links-ipc.js', 'renderer/quick-links-view.js',

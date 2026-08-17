@@ -413,15 +413,28 @@ async function testRollback() {
   assert(recordOf(storage).admitted === 2,
     'the live process re-persists from its own count, so the rollback granted no extra turn');
 
-  // Cross-process rollback: a NEW budget instance whose high-water mark is seeded by a first load
-  // must refuse when a later load reports fewer admissions.
+  // COMMENT CORRECTED during the Quick Links integration. The previous wording here claimed this
+  // block proved a CROSS-PROCESS rollback guard — "a NEW budget instance ... must refuse when a later
+  // load reports fewer admissions". It does not, and neither does the implementation. Every assertion
+  // below is unchanged; only the false claim above them is removed.
+  //
+  // `highWaterAdmitted` is PER-INSTANCE and starts at 0, and `initialize()` short-circuits once a
+  // record is loaded, so a fresh instance never reaches the `existing.admitted < highWaterAdmitted`
+  // comparison with a non-zero mark. What the assertions here actually establish is ADOPTION: a new
+  // instance takes the ledger's current count at face value. An offline edit of the ledger between
+  // runs therefore restores the budget — an accepted residual, documented in
+  // docs/BUILDER-HANDOFF-pane-status-admission-budget.md, and pinned by
+  // admission-ui-integration.test.js so it stays a known property rather than a surprise.
+  //
+  // It is a residual and not a hole because the budget bounds what CLAUDE CODE can spend: the ledger
+  // lives under Electron `userData`, never inside a worktree, and every admission env key is stripped
+  // from each PTY environment, so the agent can neither find nor rewrite it.
   const s2 = makeStorage();
   const b = makeBudget({ storage: s2 });
   b.budget.initialize();
   b.budget.claimPane('pty1');
   await b.budget.submitPrompt('pty1', SENTINEL);
   await b.budget.submitPrompt('pty1', SENTINEL);
-  // Re-initialising a fresh instance over a rolled-back file, in the SAME process, trips the guard.
   const rolled = budgetModule.createAdmissionBudget({
     plan: makePlan(), storage: s2, now: () => 1, writer: () => {}, log: () => {},
   });

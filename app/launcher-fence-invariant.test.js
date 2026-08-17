@@ -109,6 +109,31 @@ function sha(s) { return crypto.createHash('sha256').update(s, 'utf8').digest('h
 //   pty-start handler 8714 21c9ab2fc8be096a2be0ec0609070ac74c2d94a5fc6125c2b16e2b3f3e45e421  (base)
 //   pty-start handler 9289 abe919c44da95b76df1cc5b4547aad5ccba83a24c4c3ab1d0f77f2e6454d4d53  (rev 1)
 //   pty-start handler 9913 67cb161c6dea42ca9b8be3bc87f783e264a7cab8d73607cdd0d79747fbba8c73  (rev 2)
+//
+// NOT RE-PINNED for the QUICK LINKS INTEGRATION REBASE — and that is the finding, not an omission.
+//
+// The admission branch was rebased from a2121ca3 onto main 5bbe3635 ("Merge Quick Links Release 1.0").
+// A rebase can silently drop a side, so all three regions were recomputed INDEPENDENTLY from the raw
+// bytes of four separate revisions rather than inferred from the fact that this file still passes:
+//
+//   revision                                  fenced-role gate      ptyEnv block      pty-start handler
+//   a6bba64b  original reviewed base          1354 / ae9dce92…      213 / b83cd467…    8714 / 21c9ab2f…
+//   5bbe3635  main, Quick Links landed        1354 / ae9dce92…      236 / cd100743…    9913 / 67cb161c…
+//   5f8cb59d  admission, pre-rebase           1354 / ae9dce92…      271 / 2a399a98…   12443 / b5fe654e…
+//   (this)    admission, post-rebase          1354 / ae9dce92…      271 / 2a399a98…   12443 / b5fe654e…
+//
+// Two things are proven by that table, and neither was taken on trust:
+//   1. Quick Links did not touch this boundary. At 5bbe3635 the ptyEnv block and the pty-start handler
+//      still carry the EXACT revision-2 values (236 / cd100743… and 9913 / 67cb161c…) that predate the
+//      admission work entirely. The claim "Quick Links did not modify pty-start" is therefore measured,
+//      not assumed from the merge's file list.
+//   2. The rebase composed rather than replaced. Post-rebase, both moved regions equal the pre-rebase
+//      admission values byte-for-byte, so the admission delta survived the rebase intact and no Quick
+//      Links content was displaced from inside these regions.
+//
+//   * `fenced-role cwd gate` — 1354 bytes, sha ae9dce92…, IDENTICAL at all four points above, which
+//     now includes both the Quick Links merge and this rebase. The credential/fence containment logic
+//     has never been touched by any revision, by either feature, or by the integration between them.
 // ---------------------------------------------------------------------------------------------
 
 // Region definitions: [name, startAnchor, endAnchor, expected byte length, expected sha256].
