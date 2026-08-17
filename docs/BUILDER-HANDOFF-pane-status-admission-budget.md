@@ -4,37 +4,42 @@ Branch: `feature/pane-status-admission-budget`
 Worktree: `.worktrees\pane-status-admission-budget`
 Fork-point SHA: `5bbe3635736f18c9b8d4b50a23c7b51955f7bd0f`
 Pre-merge `main` SHA: `5bbe3635736f18c9b8d4b50a23c7b51955f7bd0f` (`Merge Quick Links Release 1.0`)
-**Reviewed integration content tip: `26eee3fa024d4b716a0fd8e3daf17e76fdad510f`**
+Prior integration content tip: `26eee3fa024d4b716a0fd8e3daf17e76fdad510f`
+**Reviewed corrective content tip: `88da5844130d961fcb9c094dfc41cdc30cc46399`**
 Branch tip: the handoff-only tail commit that pins the review artifacts
 Merge commit SHA: **Pending until merge**
 
-**Status: NOT MERGED, NOT PUSHED. Stops for an independent Full-class review of the COMPLETE REBASED
-RANGE.**
+**Status: NOT MERGED, NOT PUSHED. Stops for an independent Full-class review of the COMPLETE
+CUMULATIVE RANGE `5bbe3635...88da5844130d961fcb9c094dfc41cdc30cc46399`.**
 
-**THE PRE-REBASE REVIEW DOES NOT SURVIVE THIS INTEGRATION.** The earlier content tip
-`5f8cb59d7a17334a06735816d45160352e987f32` was built against `a2121ca3`, which is no longer the base.
-Any verdict on that tip, and the artifact
-`.agent-review-pane-status-admission-budget.diff`, are **pre-integration evidence only** — see § 10.
-The controlling artifacts are the two named in § 10.1.
+**NEITHER EARLIER TIP HAS EVER HELD A PASSING VERDICT.** The pre-rebase tip `5f8cb59d` was built
+against `a2121ca3`, which is no longer the base; the integration tip `26eee3fa` was superseded by this
+correction. Both earlier artifacts are **historical evidence only** — see § 10. The controlling
+artifact is the cumulative one in § 10.1.
 
-### What changed since the pre-rebase tip
+### What changed in this corrective round
 
-| | Pre-rebase | Now |
+| | After integration (`26eee3fa`) | Now |
 | --- | --- | --- |
-| Base | `a2121ca3` | **`5bbe3635`** (Quick Links landed) |
-| Chain entries | 56 | **63** |
-| Assertions | 4,118 | **4,616** |
-| Controlled-run UI | none | **built** (§ 4.6) |
-| Pester | not run | **run: 955 passed, 0 failed** |
-
-## 0.1 Prior review history for this branch
-
-The pre-rebase content tip `5f8cb59d` was submitted for Full-class review and **that review was never
-returned before the rebase**, so this branch has **never held a passing verdict** against any base. A
-reviewer should treat the whole rebased range as unreviewed rather than as a delta on top of accepted
-work.
+| False provider-inaccessibility claims | present in 5 files | **corrected; boundary stated in module headers** (§ 4.8) |
+| `REASON.STORAGE_ROLLED_BACK` + `highWaterAdmitted` | present but unreachable | **REMOVED** (§ 4.9) |
+| Ledger integrity | structural validation only | **+ unkeyed SHA-256 checksum, honestly scoped** (§ 4.10) |
+| Chain entries | 63 | **63** (unchanged — no new suites) |
+| Assertions | 4,616 | **4,673** |
+| `BLUE-HELM-MASTER-STATUS.md` | no ledger residual | **residual + void conditions recorded** (§ 12) |
 
 ## 0. Blue authorization — verbatim
+
+**THIS corrective work order:**
+
+> I ACCEPT THE ADMISSION LEDGER AS AN ACCIDENTAL-SPEND CONTROL, NOT A SECURITY BOUNDARY AGAINST A MALICIOUS OR COMPROMISED SAME-USER PANE. CORRECT THE FALSE PROVIDER-INACCESSIBILITY CLAIMS, REMOVE THE UNREACHABLE ROLLBACK GUARD, AND RETURN FOR FULL REVIEW.
+
+Blue's additional requirements, all satisfied: the limitation is in the module's own header (§ 4.8);
+it is recorded in `BLUE-HELM-MASTER-STATUS.md` beside the pane-status provenance residual (§ 12);
+cheap, honestly described tamper detection is retained and did **not** grow into another subsystem
+(§ 4.10).
+
+**The originating work order for the branch:**
 
 > I SELECT TURN-ACCOUNTING OUTCOME B. THE FOURTH TURN REMAINS UNEXPLAINED. NO LIVE PANE-STATUS PROVIDER SESSION IS AUTHORIZED UNTIL THE MAIN-OWNED ADMISSION BUDGET IS REVIEWED AND LANDED.
 
@@ -116,6 +121,20 @@ The ten core rules from the work order, and where each is enforced:
 | `app/renderer/styles.css` | modified | `.admission-*` rules; nothing applies unless the bar was built |
 | `app/quick-links-integration.test.js` | modified | **A mis-anchored tripwire corrected — see § 4.7.** Three assertions added |
 | `app/dockview-default-path.test.js` | modified | Script-tag count re-pinned 23 → 24 with rationale and a named-file assertion |
+
+**Files changed by THIS corrective round (9):**
+
+| File | Change |
+| --- | --- |
+| `app/admission-budget.js` | Threat-boundary header block (§ 4.8); `STORAGE_ROLLED_BACK` + `highWaterAdmitted` removed with a removal note in place (§ 4.9); `STORAGE_INTEGRITY_MISMATCH` added and mapped from the store's reason |
+| `app/admission-budget-store.js` | Threat-boundary + checksum-scope header block; `canonicalize`/`checksumOf`; verify-and-strip on load; stamp on save; `INTEGRITY_MISMATCH` reason (§ 4.10) |
+| `app/main.js` | Both false claims corrected — the require comment and the `ptyEnv` comment (§ 4.8) |
+| `app/launcher-fence-invariant.test.js` | False `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` analogy retracted; **fourth re-pin**, `pty-start` 12443 → 13170, comment-only, with `ptyEnv` and the fenced-role gate both proven unmoved |
+| `app/admission-budget.test.js` | Section renamed off the removed guard; false residual justification retracted; pane-status tripwire narrowed to the truthful claim; boundary-statement assertions added |
+| `app/admission-budget-store.test.js` | The whole checksum section, including the labelled accepted limitations and the no-new-dependency scan |
+| `app/admission-ui-integration.test.js` | Integrity detection end-to-end; labelled replay/recompute/delete negative controls; plan-mismatch moved onto its own intact ledger; dead-guard-is-gone assertions |
+| `BLUE-HELM-MASTER-STATUS.md` | The accepted-residuals section and the four void conditions (§ 12) |
+| `docs/BUILDER-HANDOFF-pane-status-admission-budget.md` | This document (the handoff-only tail) |
 
 **No PowerShell changed** — no `.ps1`, no `.psd1`, no `scripts/` file. **Pester was run anyway**
 because the work order asked for it: `scripts\run-pester.ps1` → **955 passed, 0 failed, 0 skipped**
@@ -264,6 +283,110 @@ assertions now pin the region's own width (141 bytes, exactly 3 lines, and it mu
 PTY handlers) so it cannot silently widen back out. **The assertion's intent is unchanged and its
 subject is unchanged — only its aim is fixed.**
 
+### 4.8 THE FALSE PROVIDER-INACCESSIBILITY CLAIMS — what they were, and where they were
+
+**This is the most important section for a reviewer.** Earlier revisions of this branch asserted, in
+code and in this document, that the provider process could not reach the admission ledger. **That was
+false.** The claim was retracted at Blue's direction and the real boundary is now stated in the
+modules' own headers.
+
+The corrected statement, which now appears verbatim in `app/admission-budget.js` and
+`app/admission-budget-store.js`:
+
+> This budget bounds accidental paid-turn spend through Blue Helm's controlled input paths. It is not a
+> security boundary against a malicious or compromised process running as the same Windows user. Such a
+> process may locate, delete, replace, or rewrite the local ledger directly.
+
+**Every site that carried the false claim, and what it says now:**
+
+| File | The false claim | Corrected to |
+| --- | --- | --- |
+| `app/admission-budget.js` header | "WHAT CANNOT TOUCH THE LEDGER" — read as inaccessibility | A full threat-boundary block: the narrow true claim (no supported pane-status module API mutates admission state), each retracted inference named, and the list of what *does* still protect against accident |
+| `app/admission-budget-store.js` header | *(no boundary statement at all — silence read as safety)* | The same boundary block, plus the checksum's exact scope |
+| `app/main.js` require comment | "nothing in prototype-pane-status/ can reach the ledger" | "NO SUPPORTED PANE-STATUS MODULE API MUTATES ADMISSION STATE … That is a CODE-LEVEL property, NOT a claim of OS-level inaccessibility" |
+| `app/main.js` `ptyEnv` comment | "the child must not be able to read, and therefore must not be able to reason about or rewrite, the configuration that bounds its own paid turns" | States that the strip hides the run id and allowance **and nothing more**; names `APPDATA`/`USERPROFILE` as still present; states that the scrub line is not evidence of inaccessibility |
+| `app/launcher-fence-invariant.test.js` re-pin note | drew an analogy to `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` implying the pane cannot reach the cost control | "It can." — followed by the four specific reasons |
+| `app/admission-budget.test.js` residual note | "the agent can neither find nor rewrite it" | The claim is quoted and marked **FALSE**, with each reason it fails |
+| `app/admission-ui-integration.test.js` § 15 | "Claude Code cannot reach this file" | Replaced by the integrity-checksum block with its limitations labelled |
+| this handoff § 8 | "the agent can neither locate nor rewrite it" | Rewritten (§ 8) |
+
+**The four required distinctions, each now stated where the relevant code lives:**
+
+1. Stripping admission environment keys hides the configured **run ID and allowance** from the pane
+   environment. That is its entire effect.
+2. It does **not** hide Electron `userData`.
+3. It creates **no** filesystem isolation — `APPDATA`, `USERPROFILE`, repository source, and plain
+   filesystem enumeration may each reveal the ledger location.
+4. `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` is **not** evidence that the same-user Claude process cannot
+   reach the ledger; and the absence of an import from `prototype-pane-status/` proves only that **no
+   supported code-level API** connects those modules to the ledger, **not** OS-level inaccessibility.
+
+**A note on what could NOT be mechanically enforced, and why.** I first added a negative source scan
+asserting the retracted phrases were absent from the three modules. **It failed, correctly**: the
+corrections *quote* those sentences in order to retract them, and no regex distinguishes quotation
+from assertion. The scan was replaced with **positive** assertions — each of the three files must
+contain the boundary statement and the "accidental-spend control" naming — and the limitation of that
+approach is stated in the test itself. A reviewer who finds an inaccessibility phrase in these files
+will find the retraction beside it.
+
+### 4.9 The dead rollback guard is REMOVED
+
+`REASON.STORAGE_ROLLED_BACK` (`admission-ledger-rolled-back`), the `highWaterAdmitted` variable, its
+comparison in `initialize()`, and both of its update sites are **gone**. So are the comments and test
+sections that claimed cross-process or cross-restart rollback protection.
+
+**Nothing replaces it, and no new prevention claim replaces it.** The removal is recorded in place — a
+comment at the former reason-code site explains what it claimed, why it never worked (a per-instance
+mark starting at 0, plus an `initialize()` that short-circuits once loaded, made the comparison
+unreachable for the case its name implied), and that a dead guarantee is worse than an absent one
+because it invites reliance.
+
+`admission-budget.test.js`'s section was renamed from **"rollback tripwire"** to **"ledger replaced
+underneath: live count authoritative, new process adopts"** — a name that describes behaviour instead
+of a guard that no longer exists. Every assertion in it is preserved.
+
+**Asserted gone**, so it cannot quietly return: `REASON` has no `STORAGE_ROLLED_BACK` key, and no
+reason *value* anywhere equals `admission-ledger-rolled-back`.
+
+### 4.10 The integrity checksum — exact scope, and why it stayed small
+
+Implemented, because it remained a small dependency-free delta: two functions and one reason code
+inside the existing store, at the single read boundary and the single write boundary.
+
+| Property | Value |
+| --- | --- |
+| Algorithm | SHA-256, **unkeyed**, via Node's built-in `crypto` |
+| Input | Deterministic canonical serialization of the validated ledger content, **excluding** the `checksum` field |
+| Stored as | `checksum` on the ledger document, required on **every** persisted ledger |
+| Verified | On load, **before any run record is accepted** |
+| On mismatch | Fails closed visibly as `admission-ledger-integrity-mismatch`; the file is **never** repaired, deleted, or overwritten |
+| Atomicity | Unchanged — write-temp-then-rename is untouched |
+| New dependencies | **None.** Asserted: the store requires only `fs`, `path`, `crypto` |
+
+**Canonicalization matters and is tested.** `JSON.stringify` is order-sensitive and the `runs` map is
+built by insertion, so a checksum over raw output would mismatch after a semantically identical
+rewrite — turning a corruption detector into a source of false refusals. Keys are sorted at every
+depth, array order is preserved as data, and the `checksum` field is excluded from its own input.
+
+**WHAT IT IS NOT — stated in the header, in the tests, and in Master Status:**
+
+- **Not authentication.** There is no key and deliberately none: a secret stored beside the thing it
+  protects, readable by the same user, would move the claim without changing it.
+- **Not hostile tamper resistance.** A same-user process can recompute the checksum. **Asserted** as
+  an accepted limitation, not hidden.
+- **Not rollback prevention.** Replaying an earlier valid checksummed ledger **is accepted and not
+  detected**. Asserted as a labelled negative control.
+- Deleting the ledger still recreates a fresh run under the existing `not-found` rule. Asserted.
+
+`timingSafeEqual` is deliberately **not** used, and the code says why: both values are already on this
+machine and readable by this user, so there is no secret to leak through timing. Reaching for it would
+imply an adversary model this control does not claim.
+
+**No unchecksummed-ledger migration path exists, and none is needed** — no production ledger has been
+created by an authorized live run, and none was created during this work. A ledger with an absent or
+malformed checksum is **refused**, which is both the fail-closed direction and the only way to stop
+"delete the field" being a trivial bypass.
+
 ## 5. Exact test results
 
 **Full application gate: `npm test` — PASS, exit 0.**
@@ -303,6 +426,53 @@ assertion was weakened, deleted, or converted to a weaker form.**
 Chain entries: `57 + 4 (admission) + 2 (new UI suites) = 63`, no duplicates — asserted inside
 `admission-ui-integration.test.js`, which also asserts all 5 Quick Links suites and all 6 admission
 suites are present.
+
+### 5.0b THIS CORRECTIVE ROUND — reconciled from the established 4,616 baseline
+
+**`npm test` — PASS, exit 0. 63 suites, 4,673 assertions, 0 failures.** Both reporting formats counted.
+
+| Source | Assertions |
+| --- | ---: |
+| Established baseline (integration tip `26eee3fa`) | 4,616 |
+| — `admission-budget-store.test.js` (35 → 69): the whole checksum section — round-trip, canonicalization, five un-recomputed mutations, seven malformed-checksum shapes, refusal hygiene, three labelled accepted limitations, and the no-new-dependency scan | **+34** |
+| — `admission-ui-integration.test.js` (140 → 153): integrity mismatch detected / refuses / cannot self-heal, the labelled replay and delete negative controls, the plan-mismatch case moved onto its own intact ledger, and the dead-guard-is-gone assertions | **+13** |
+| — `admission-budget.test.js` (205 → 215): the narrowed pane-status tripwire plus the boundary-statement assertions across three modules | **+10** |
+| **Total** | **4,673** |
+
+**No new suites, so the chain stays at 63 entries.** Corrections belong in the suites that carried the
+false claims, not in a new file that leaves the old ones untouched.
+
+**Three suites changed, all upward. No suite vanished, and nothing was weakened** — verified by set
+difference against the previous run, not by inspection.
+
+### 5.0c This corrective work order's 15 required tests
+
+`B` = `admission-budget.test.js`, `S` = `admission-budget-store.test.js`,
+`I` = `admission-ui-integration.test.js`, `V` = `renderer/admission-view.test.js`,
+`Q` = `quick-links-integration.test.js`, `F` = `launcher-fence-invariant.test.js`.
+
+| # | Required test | Where | Result |
+| --- | --- | --- | --- |
+| 1 | The unreachable rollback reason and high-water implementation no longer exist | I — `REASON` has no `STORAGE_ROLLED_BACK` key and no value equals `admission-ledger-rolled-back` | PASS |
+| 2 | A valid checksummed ledger loads | S — loads, content intact, and the `checksum` field is stripped before the policy layer sees it | PASS |
+| 3 | Changing `admitted`/`remaining` without updating the checksum visibly refuses | S — five un-recomputed mutations (`admitted`, `allowance`, `state`, an added run, a removed run). I — end-to-end, refused as `admission-ledger-integrity-mismatch` | PASS |
+| 4 | Checksum mismatch produces zero PTY writes | I — no prompt can be admitted through a mismatched ledger; the budget stays fatally closed | PASS |
+| 5 | Checksum mismatch cannot self-heal into a new allowance | I — a further budget over the same file refuses again; the rejected file is byte-for-byte as found | PASS |
+| 6 | Malformed, oversized, linked, directory, version-mismatched, plan-mismatched files still refuse | S (all file-level cases, unchanged) + B (13 hostile documents) + I — **the plan-mismatch case was moved onto its own intact ledger**, because against a corrupted file it would have passed for the wrong reason | PASS |
+| 7 | Atomic persistence remains intact | S — write-temp-then-rename untouched; a throwing `writeFileSync` leaves the previous ledger in place | PASS |
+| 8 | Durable decrement before write remains intact | B — the writer snapshots the persisted ledger and already counts its own admission. I — the on-disk ledger at writer time shows the decrement | PASS |
+| 9 | Writer failure remains spent | B + I — consumed, not refunded, `admission-write-failed-after-admission` | PASS |
+| 10 | Controlled-pane direct input remains blocked | I — a 9-keystroke burst reaches the PTY 0 times; refusal visible on the Logs channel | PASS |
+| 11 | Uncontrolled panes remain unchanged | I — all 11 keystrokes pass through; nothing blocked with no run configured | PASS |
+| 12 | Gate-off remains absent, not inert | V + I — `mount()` builds nothing, host keeps zero children, channels registered only inside main's enabled branch | PASS |
+| 13 | Prompt content absent from the ledger, checksum input evidence, logs, errors, IPC responses, DOM | I — a sentinel is scanned across the **real ledger file** (which is exactly the checksum's input), main-side logs, renderer logs, the rendered DOM, and both IPC payloads, while confirming it did reach the PTY | PASS |
+| 14 | Source tripwires use the narrower truthful claim | B — the assertion now reads *"no supported pane-status module API mutates admission state"*, plus positive boundary-statement assertions across three modules (see § 4.8 for what could not be enforced) | PASS |
+| 15 | Quick Links behaviour and its corrected 141-byte anchor remain intact | Q — 43 assertions incl. the 141-byte/3-line pins. I — preload methods, main handlers, DOM ids, script tag, `app.js` call sites, CSS, and all 5 suites in the chain. F — the fenced-role region still `1354 / ae9dce92…` | PASS |
+
+**Negative control, explicitly labelled as an accepted limitation and NOT a passing security
+property:** `I` and `S` both demonstrate that **replaying an earlier valid checksummed ledger is
+accepted**, that **an edit which recomputes the checksum is accepted**, and that **deleting the ledger
+recreates a fresh run**. Each assertion label begins with `ACCEPTED LIMITATION:`.
 
 ### 5.1 Required-test coverage map
 
@@ -353,7 +523,7 @@ stubbed).
 | 12 | No renderer path bypasses `admission-submit-prompt` | V + I — the six source tripwires in § 4.6, plus: exactly **one** `pty-write` handler in main, the admission check ordered **before** any write in it, and exactly **two** `p.write(` call sites both accounted for | PASS |
 | 13 | Persist failure writes nothing | I — the real ledger path is replaced by a **directory** so the atomic rename genuinely fails: 0 writes, 0 spent, and the run stays refusing afterwards (fail closed, no self-healing) | PASS |
 | 14 | Writer failure not refunded after durable decrement | I — a throwing writer consumes the admission, the refreshed UI shows it spent, the UI says "not refunded", and the budget really is one turn poorer | PASS |
-| 15 | Restart, rollback tripwire, pane binding, zero budget intact | I — restart preserves the spent count and refuses to rebind; **the rollback tripwire's true scope is pinned, including what it does not cover (§ 8)**; configuration top-up refuses; binding cannot move; a dead pane closes the run; allowance 0 yields the refusing budget | PASS |
+| 15 | Restart, **ledger integrity**, pane binding, zero budget intact | I — restart preserves the spent count and refuses to rebind; an un-recomputed edit is DETECTED and refuses; the accepted replay/recompute/delete limitations are labelled as such (§ 4.10); configuration top-up refuses on its own intact ledger; binding cannot move; a dead pane closes the run; allowance 0 yields the refusing budget. **The rollback tripwire named in the earlier revision of this row no longer exists (§ 4.9).** | PASS |
 | 16 | Gate-off leaves `window.ccAdmission` undefined | V — the preload gate is the only exposure site and no **code** mentions the bridge before it. I — the token and the handler registration both sit inside main's enabled branch, registered exactly once | PASS |
 
 ### 5.2 Restart, crash-window and negative-control results
@@ -414,26 +584,33 @@ Read-only Git, Node and Pester test execution, and one local filesystem junction
 
 ## 7. Manual verification
 
-**Before any edit — every starting-state item verified, none assumed:**
+**Before this corrective round — every starting-state item verified, none assumed:**
 
 * `git fetch origin --prune` run for real; `main` = `origin/main` =
-  `5bbe3635736f18c9b8d4b50a23c7b51955f7bd0f`, subject **`Merge Quick Links Release 1.0`** — matching the
-  work order exactly.
-* Existing admission content `5f8cb59d…` and tail `90dd577c…` confirmed present, with the tail's parent
-  equal to the content tip.
-* The admission worktree's tracked state was clean (`git status --porcelain` empty).
-* The root worktree carried only `?? .worktrees/` — **no user-owned tracked change** to disturb.
-* **The Quick Links gate was MEASURED, not accepted:** the chain was parsed to 57 entries and
-  `npm test` was run on `main`, yielding 57 reporting suites / 3,883 assertions / 0 failures.
-* `docs/BUILDER-HANDOFF-quick-links.md` present.
+  `5bbe3635736f18c9b8d4b50a23c7b51955f7bd0f`.
+* Branch tip `4ac56ac5f97b29139eda847b08b313602179fd48`, with its parent equal to the prior content tip
+  `26eee3fa024d4b716a0fd8e3daf17e76fdad510f`.
+* Worktree tracked state clean; root worktree carried only `?? .worktrees/`.
+* **Both controlling artifacts verified by size AND hash before editing**, and both preserved
+  unchanged afterwards (re-verified — § 10.2):
+  * cumulative `279,666` / `fa968feff6c2aac8883baaa15140f11766fb1d143484fd2811b4eec43c4f873b`
+  * focused `99,031` / `5e64b8e9cbe80a9a671d902986a3a469a4519ac050cd5dfdf27ef67cd6db7448`
+* The 4,616-assertion / 955-Pester baseline was the measured result of this branch's own prior runs.
+
+**Earlier, before the integration round (retained):**
+
+* The Quick Links gate was **measured, not accepted** — 57 entries, 57 reporting suites, 3,883
+  assertions, 0 failures, by running `npm test` on `main`.
 
 **After the edits:**
 
-* `git diff --check` clean (exit 0).
-* Changed-file list is exactly the 21 entries in § 10.2; nothing outside `app/` and `docs/`.
-* No `.ps1`, `.psd1`, or `scripts/` file changed — Pester run regardless, with a measured zero delta.
+* `git diff --check` clean (exit 0) on **both** the focused and cumulative ranges.
+* No `.ps1`, `.psd1`, or `scripts/` file changed — **Pester run regardless: 955 passed, 0 failed,
+  identical to the pre-correction run.**
 * `main` and `origin/main` remain at `5bbe3635736f18c9b8d4b50a23c7b51955f7bd0f`. **Nothing merged,
   nothing pushed.**
+* **No admission ledger was created by this work.** No production ledger exists; every ledger touched
+  was inside a per-test temporary directory that the suite removes.
 * The composition was **proven**, not eyeballed: the `+`/`-` payload of `git diff 5bbe3635 -- <file>`
   is line-for-line identical to `git diff a2121ca3 5f8cb59d -- <file>` for both `app/main.js` (125
   lines) and `app/preload.js` (28 lines), so the rebase preserved main plus exactly the admission delta
@@ -445,33 +622,39 @@ Read-only Git, Node and Pester test execution, and one local filesystem junction
 
 ## 8. Known limitations
 
-* **A local file ledger cannot defend against an operator with filesystem access.** Deleting
-  `admission-ledger.json` outright returns the run to "never created", and the next start would mint a
-  fresh allowance. The design raises the cost of that — one file holds every run, so a targeted
-  deletion is a wholesale one, and an in-session rollback is caught by the high-water tripwire — but
-  this is a **bound against accident and against the provider process, not against the human running
-  the app.** Blue is the human running the app, so this is the correct threat model; it is stated so
-  the control is not read as stronger than it is.
-* **CORRECTED AND SHARPENED THIS ROUND — the rollback tripwire is narrower than its name, and is
-  effectively unreachable for the case people will assume it covers.** `highWaterAdmitted` in
-  `admission-budget.js` is **per-instance and starts at 0**, and `initialize()` short-circuits once a
-  record is loaded. Consequently no instance ever reaches the `existing.admitted < highWaterAdmitted`
-  comparison holding a non-zero mark, and **`REASON.STORAGE_ROLLED_BACK` cannot fire for an offline
-  ledger edit made between runs**. Measured directly: after two admissions, rewriting `admitted` to `0`
-  in the file and starting a new instance yields `admitted = 0, remaining = 3` — **the budget is fully
-  restored.** A *live* instance is unaffected, because it re-persists from its own memory.
+* **THE GOVERNING LIMITATION — the ledger is an accidental-spend control, not a security boundary.**
+  Blue's authorization, verbatim:
 
-  The prior handoff described this as "only partly covered", which understated it, and a comment in
-  `admission-budget.test.js` asserted outright that the block there *proved* cross-process protection.
-  **That comment is corrected on this branch and every assertion in it is preserved**; the real
-  behaviour is now pinned by `admission-ui-integration.test.js` so it stays a known property.
+  > I ACCEPT THE ADMISSION LEDGER AS AN ACCIDENTAL-SPEND CONTROL, NOT A SECURITY BOUNDARY AGAINST A
+  > MALICIOUS OR COMPROMISED SAME-USER PANE. CORRECT THE FALSE PROVIDER-INACCESSIBILITY CLAIMS, REMOVE
+  > THE UNREACHABLE ROLLBACK GUARD, AND RETURN FOR FULL REVIEW.
 
-  It remains a **residual rather than a hole** because the budget bounds what **Claude Code** can spend:
-  the ledger lives under Electron `userData`, never inside a worktree, and every admission env key is
-  stripped from each PTY environment, so the agent can neither locate nor rewrite it. It does not, and
-  was never designed to, bound what Blue can do to Blue's own machine. **The guards that DO survive a
-  restart are the ones that matter for accidental top-ups** — a raised `BLUE_HELM_ADMISSION_ALLOWANCE`
-  refuses with `admission-ledger-plan-mismatch`, asserted.
+  **A malicious or compromised process running as the same Windows user may locate, delete, replace, or
+  rewrite the local ledger directly.** The provider process in a pane is such a process. Deleting the
+  ledger returns the run to "never created" and the next start mints a fresh allowance; replacing it
+  with an earlier valid copy restores spent turns; rewriting it and recomputing the unkeyed checksum is
+  accepted. All three are **asserted** in the suites, labelled `ACCEPTED LIMITATION:`.
+
+  **The prior revision of this bullet claimed the opposite and was wrong.** It said the ledger "lives
+  under Electron `userData`, never inside a worktree, and every admission env key is stripped from each
+  PTY environment, so the agent can neither locate nor rewrite it." Each clause fails: stripping the
+  env keys hides only the run id and allowance; `userData` is not concealed by it; `APPDATA` and
+  `USERPROFILE` are in every PTY; the ledger filename is a literal in readable repository source; and a
+  PTY child has the same file access main has. **Full retraction table in § 4.8.**
+
+  **What genuinely survives** is a bound on accidental spend through Blue Helm's own input paths: the
+  durable decrement before any PTY byte, the no-refund rule after a post-persist writer failure, the
+  plan-mismatch refusal (so a raised `BLUE_HELM_ADMISSION_ALLOWANCE` plus a restart cannot top a run
+  up), the structural and integrity refusals, and the direct-input block on the controlled pane.
+* **The dead rollback guard is gone rather than fixed.** `REASON.STORAGE_ROLLED_BACK` and
+  `highWaterAdmitted` were removed at Blue's direction (§ 4.9). **Nothing replaces them and no new
+  prevention claim replaces them.** A real cross-restart rollback guard would need the high-water mark
+  persisted somewhere a same-user process cannot rewrite — which is a different threat model and a
+  different work order, not a tweak here.
+* **The integrity checksum is unkeyed and detects accidents only** (§ 4.10). It catches corruption and
+  edits that did not recompute it. It is not authentication, not hostile tamper resistance, and not
+  rollback prevention. Replay is undetected. This is deliberate: a key stored beside the file it
+  protects, readable by the same user, would move the claim without changing it.
 * **The controlled-run UI is minimal by instruction, and single-line by necessity.** The prompt field is
   an `<input type="text">`, not a textarea, because the budget's validator rejects **all** C0/C1 control
   characters — including `\n`. A multi-line prompt is therefore impossible by design, and the UI says so
@@ -503,16 +686,21 @@ Read-only Git, Node and Pester test execution, and one local filesystem junction
   vibe-kanban board handlers. Both too weak and too strong at once. Corrected here to bound the real
   141-byte handler, with three assertions pinning the region's own width. **Full detail in § 4.7.** The
   handler itself is byte-identical at `a2121ca3`, `5bbe3635` and this branch.
-* **NEW — `REASON.STORAGE_ROLLED_BACK` is effectively dead code, and a test comment claimed otherwise.**
-  See § 8. Measured, corrected, and pinned; the code itself was deliberately **not** redesigned, because
-  this work order is the UI and the integration, not a budget redesign. **If Blue wants a real
-  cross-restart rollback guard, that is a separate work order** — the mechanism would be persisting the
-  high-water mark rather than holding it in memory.
-* **The `pty-start` byte-invariance tripwire did NOT need a fourth re-pin**, which is the first good news
-  it has produced in three branches: Quick Links left the region alone and the rebase composed cleanly.
-  The observation from the last round still stands, though — the region is a busy intersection, and if a
-  fourth genuine re-pin arrives it is worth splitting the credential-critical part from the lifecycle
-  part so they can move independently.
+* **`REASON.STORAGE_ROLLED_BACK` was dead code that advertised a guarantee, and it is now REMOVED.**
+  Reported in the integration round with the code left untouched (correctly — that round's scope was the
+  UI and the rebase); **Blue then directed its removal, and this round removed it** (§ 4.9). The earlier
+  revision of this bullet said "the code itself was deliberately not redesigned", which no longer holds.
+  **A real cross-restart rollback guard remains a separate work order** — it would require the
+  high-water mark persisted somewhere a same-user process cannot rewrite, which is a different threat
+  model than the one Blue has accepted.
+* **The `pty-start` byte-invariance tripwire IS now on its fourth re-pin** — the previous revision of
+  this bullet said it "did NOT need a fourth", which was true of the integration round and is no longer
+  true. This round's re-pin is **comment-only** (12443 → 13170), and the two things that make it safe to
+  accept are measured rather than asserted: `ptyEnv` is unchanged at 271 / `2a399a98…`, so the
+  environment handed to a PTY was not touched, and the fenced-role gate is unchanged at 1354 /
+  `ae9dce92…`. **The standing recommendation is now stronger: four re-pins in four rounds means the
+  region is a busy intersection, and splitting the credential-critical part from the lifecycle part so
+  they can move independently is worth its own small work order.**
 * **`TextDecoder`'s `ignoreBOM` flag reads backwards, and the existing comment in
   `dockview-layout-store.js` describes it incorrectly.** `ignoreBOM: false` (the default) *strips* a
   leading BOM; it does not surface it as U+FEFF. The dockview comment claims the opposite. This branch
@@ -533,23 +721,39 @@ Read-only Git, Node and Pester test execution, and one local filesystem junction
 | Base (pre-merge `main`) | `5bbe3635736f18c9b8d4b50a23c7b51955f7bd0f` — `Merge Quick Links Release 1.0` |
 | Rebased admission implementation | `fc8a60b` (was `5f8cb59d` pre-rebase) |
 | Rebased prior handoff pin | `93401b6` (was `90dd577c` pre-rebase) |
-| **Reviewed integration content tip** | **`26eee3fa024d4b716a0fd8e3daf17e76fdad510f`** |
-| Branch tip | exactly **one** new handoff-only tail commit above the content tip, pinning this section |
+| Integration content (superseded) | `26eee3fa024d4b716a0fd8e3daf17e76fdad510f` |
+| Integration handoff tail (superseded) | `4ac56ac5f97b29139eda847b08b313602179fd48` |
+| **Reviewed corrective content tip** | **`88da5844130d961fcb9c094dfc41cdc30cc46399`** |
+| Branch tip | exactly **one** new handoff-only tail commit above it, touching only this file |
 
 ### 10.1 The controlling artifacts
 
 Both created with `git diff --output` (never a PowerShell `>` redirect), both gitignored via
 `.gitignore:33`, and both **regenerated from their stated range to a separate temporary file and proven
-byte-identical with `cmp` (exit 0)**; only the temporary copies were removed.
+byte-identical with `cmp` (exit 0)**; only the temporary copies were removed. `git diff --check` is
+clean (exit 0) on **both** ranges and on the working tree.
 
 | Artifact | Range | Shortstat | Size | SHA-256 |
 | --- | --- | --- | ---: | --- |
-| **`.agent-review-admission-quick-links-integration-cumulative.diff`** — *the controlling artifact* | `5bbe3635...26eee3fa` | 21 files, 4,785 insertions, 11 deletions | **279,666** | `fa968feff6c2aac8883baaa15140f11766fb1d143484fd2811b4eec43c4f873b` |
-| **`.agent-review-admission-controlled-prompt-focused.diff`** — this round's work alone | `93401b6...26eee3fa` | 12 files, 1,481 insertions, 7 deletions | **99,031** | `5e64b8e9cbe80a9a671d902986a3a469a4519ac050cd5dfdf27ef67cd6db7448` |
+| **`.agent-review-admission-threat-boundary-cumulative.diff`** — **THE CONTROLLING ARTIFACT** | `5bbe3635...88da5844` | 22 files, 5,610 insertions, 11 deletions | **339,512** | `e0bd4d265326ffe1db7a98224ab8a242969882927ad91d6356b3689416a1fcca` |
+| `.agent-review-admission-threat-boundary-correction-focused.diff` — this corrective round alone | `4ac56ac...88da5844` | 8 files, 630 insertions, 74 deletions | **62,142** | `985c8fa3244523c0540c8c49c234a696ff94c57b350d6e37b44044468f5d6226` |
 
-**Review the CUMULATIVE artifact.** The focused one is a convenience for seeing what this round added on
-top of the rebased implementation; it is **not** sufficient for a verdict, because the implementation it
-sits on has never itself held a passing review (§ 0.1).
+**Review the CUMULATIVE artifact.** The focused one shows only the correction; it is **not** sufficient
+for a verdict, because nothing beneath it has ever held a passing review (§ 0.1) and because the
+correction is only meaningful against the claims it retracts.
+
+### 10.1b Superseded artifacts — PRESERVED UNCHANGED, not review targets
+
+All three are retained exactly as generated, hashes re-verified after this round:
+
+| Artifact | Range | Size | SHA-256 | Status |
+| --- | --- | ---: | --- | --- |
+| `.agent-review-admission-quick-links-integration-cumulative.diff` | `5bbe3635...26eee3fa` | 279,666 | `fa968feff6c2aac8883baaa15140f11766fb1d143484fd2811b4eec43c4f873b` | superseded by the row above |
+| `.agent-review-admission-controlled-prompt-focused.diff` | `93401b6...26eee3fa` | 99,031 | `5e64b8e9cbe80a9a671d902986a3a469a4519ac050cd5dfdf27ef67cd6db7448` | superseded |
+| `.agent-review-pane-status-admission-budget.diff` | `a2121ca3...5f8cb59d` | 187,699 | `4fc2ed34cc049b603233e564874cc1ee854388af7a8c8ff000d14cc5d99290a6` | pre-integration; cites SHAs no longer on the branch |
+
+**None was overwritten or renamed**, and each states a range that no longer describes the branch tip.
+They are history, not review targets.
 
 ### 10.2 Pre-integration evidence — NOT the controlling artifact
 
@@ -609,26 +813,71 @@ that are no longer on this branch: `a2121ca3` is no longer the base, and `5f8cb5
 
 ### 11.2 What a reviewer must NOT carry over
 
-**A pre-rebase verdict does not survive this integration**, and no pre-rebase verdict exists anyway
-(§ 0.1). The reviewer must evaluate the **complete rebased range** `5bbe3635...26eee3fa` via the
-cumulative artifact in § 10.1, not the pre-integration artifact in § 10.2 and not the focused diff
-alone.
+**No verdict exists for any tip of this branch.** The reviewer must evaluate the **complete cumulative
+range** `5bbe3635...88da5844130d961fcb9c094dfc41cdc30cc46399` via the cumulative artifact in § 10.1 — not the pre-integration
+artifact, not the superseded integration artifact, and not the correction-focused diff alone.
+
+## 12. `BLUE-HELM-MASTER-STATUS.md` change
+
+One section added, **beside the existing pane-status provenance residual** in the Experiment A
+checkpoint, titled **"ACCEPTED RESIDUALS — reporter provenance AND admission-ledger integrity"**. It
+records:
+
+* Blue's authorization **verbatim**;
+* that the ledger is an accidental-spend control over Blue Helm's input paths;
+* that it is **not** a security boundary against a malicious or compromised same-user pane, with the
+  four specific corrections (env strip hides only run id and allowance; no `userData` concealment; no
+  filesystem isolation; the env scrub and the missing import prove neither);
+* that checksum protection detects **accidental edits only**, with replay, recompute and deletion named
+  as undetected;
+* that the unreachable rollback guard was removed and **nothing replaces its claim**;
+* that provider provenance and ledger integrity are accepted residuals **in the same
+  advisory/human-controlled category**;
+* the **four automatic void conditions**, verbatim from the work order: if pane status or admission
+  state ever authorizes an action, triggers automation, controls merge/push/approval/restart/process
+  termination/credentials or another consequential operation, or is represented as protection against a
+  hostile local process — **both acceptances become void and require a new threat decision.**
+
+**No unrelated roadmap entry was reordered and no historical checkpoint was reinterpreted.** The
+insertion is additive, placed inside the current-baseline Experiment A section, and every superseded
+checkpoint below it is untouched.
 
 ## Review-diff rule
 
 * Before merge (this is the current state), use `git diff main...<tip>` — here
-  **`git diff 5bbe3635...26eee3fa`**.
+  **`git diff 5bbe3635...88da5844130d961fcb9c094dfc41cdc30cc46399`**.
 * After merge, the three-dot form goes empty, so reproduce with
   `git diff <recorded-pre-merge-main>...<tip>` using the SHAs recorded in § 10.
-* Four SHAs for this branch: fork-point `5bbe3635`, pre-merge `main` `5bbe3635`, content tip
-  `26eee3fa`, merge commit **pending**.
+* Four SHAs for this branch: fork-point `5bbe3635`, pre-merge `main` `5bbe3635`, corrective content tip
+  `88da5844130d961fcb9c094dfc41cdc30cc46399`, merge commit **pending**.
 * Always use `--output`; never PowerShell `>`.
 * Retain the literal `VERDICT: PASS|FAIL` line and name the review that produced it. A paraphrase or
   implied verdict is not a merge-gate verdict.
 
 ## Recommended review focus
 
-**Full-class**, per the work order, over the **complete rebased range**. In priority order:
+### The five decisions this review is required to reach
+
+The corrective work order names them. Each should be answered explicitly in the verdict:
+
+1. **Do the code and documentation now state the accepted threat boundary honestly?** The statement is
+   in the headers of `admission-budget.js` and `admission-budget-store.js`, in two places in `main.js`,
+   in the fence tripwire's re-pin note, in two test files, in § 4.8 here, and in Master Status § 12.
+   Read at least the two module headers directly rather than this summary of them.
+2. **Does any dead rollback guarantee survive?** `REASON.STORAGE_ROLLED_BACK` and `highWaterAdmitted`
+   should be absent from `app/` entirely — grep for both, and for the string
+   `admission-ledger-rolled-back`, rather than trusting § 4.9. The only surviving occurrences should be
+   the removal note at the former reason-code site and the retraction prose.
+3. **Does the checksum language overclaim anywhere?** Look for "authentication", "tamper", "secure",
+   "prevents", "protects against" near the checksum in code, tests, handoff and Master Status. The
+   intended claim is exactly: detects accidental corruption and edits that did not recompute it.
+4. **Does the admission control still prevent accidental N+1 input through Blue Helm?** This is the
+   property the whole branch exists for, and it must not have been weakened by the corrections. Exercise
+   allowance N → N+1 refused → zero PTY writes, and the direct-input block on the controlled pane.
+5. **Do Quick Links and fenced-launch behaviour remain intact?** The fenced-role region should still be
+   `1354 / ae9dce92…`; Quick Links' 43 assertions should still pass with the 141-byte anchor.
+
+### Supporting focus, in priority order
 
 1. **The integration itself.** Did the rebase drop anything? The claim is that `app/main.js` and
    `app/preload.js` equal `main` plus exactly the admission delta — reproduce that comparison rather
@@ -650,20 +899,29 @@ alone.
 7. **§ 4.7, the corrected Quick Links anchor.** Is the narrowed region the right one? Independently
    confirm the 141-byte handler is unchanged from `a2121ca3`. **This is a change to another feature's
    test — it deserves scrutiny, not acceptance.**
-8. **§ 8, the rollback residual.** Verify the measurement: rewind `admitted` in a ledger, start a fresh
-   budget, and confirm it adopts the rewound count. Then judge whether that residual is acceptable, or
-   whether it warrants its own work order before any live run.
-9. **The environment scrub.** Can any admission key reach a child PTY? Is the key list complete?
-10. **Content hygiene.** Can a prompt reach a log, an error, the ledger, an IPC payload, or the DOM?
-11. **The census.** `3,883 + 458 + 275 = 4,616`. Re-derive it; confirm no suite silently lost
-    assertions and that exactly the three named suites changed.
-12. **Scope.** Is this only turn admission plus its minimal UI? Has any pane-status production work,
-    provider onboarding, hook installation, or badge work crept in?
+8. **§ 4.10, the checksum's canonicalization.** Insertion order must not change the digest, or an
+   identical rewrite would produce false refusals. Confirm the `checksum` field is excluded from its own
+   input, and that stripping the field is refused rather than tolerated.
+9. **The accepted limitations, as limitations.** Every `ACCEPTED LIMITATION:` assertion is documenting
+   something the control does **not** do. Confirm none of them is presented as a passing security
+   property, and judge whether Blue's acceptance covers each one.
+10. **The environment scrub.** Can any admission key reach a child PTY? Is the key list complete? Note
+    the corrected framing: this hides configuration, it does not protect the ledger.
+11. **Content hygiene.** Can a prompt reach a log, an error, the ledger — which is now also the
+    checksum's input — an IPC payload, or the DOM?
+12. **The census.** `4,616 + 57 = 4,673` for this round, and `3,883 + 458 + 275 = 4,616` for the
+    cumulative range. Re-derive both; confirm no suite silently lost assertions.
+13. **Scope.** Is this only the correction plus turn admission and its minimal UI? Has any pane-status
+    production work, provider onboarding, hook installation, or badge work crept in?
+14. **What could NOT be mechanically enforced (§ 4.8).** A negative source scan for the retracted
+    phrases was tried and removed, because the corrections quote those phrases in order to retract them.
+    Judge whether the positive assertions that replaced it are sufficient, or whether a different
+    mechanism is wanted.
 
 ## Reviewer verdict
 
 **None yet.** This branch stops for a fresh independent **Full-class** review, by a reviewer who is not
-the author, of the complete rebased range `5bbe3635...26eee3fa`.
+the author, of the complete cumulative range `5bbe3635...88da5844130d961fcb9c094dfc41cdc30cc46399`.
 
 ## Reviewer verdict source
 
