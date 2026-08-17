@@ -68,6 +68,7 @@ const admissionConfig = require('./admission-budget-config');
 const { createAdmissionBudget } = require('./admission-budget');
 const { createAdmissionLedgerStore } = require('./admission-budget-store');
 const { createAdmissionIpc, CHANNEL_SUBMIT: ADMISSION_CHANNEL_SUBMIT } = require('./admission-ipc');
+const { focusExistingWindow } = require('./single-instance');
 // K8 media-permission boundary: both session permission handlers come from this pure,
 // dependency-free, unit-tested module (media-permission-policy.test.js). A grant requires
 // the trusted window's main frame + the exact entry document + audio-only proof; every
@@ -275,6 +276,18 @@ function loadGeminiKey() {
 }
 
 let win = null;
+// A second app process would own a separate process-local inFlight guard and could otherwise race the
+// same final paid admission. Accidental duplicate launches are inside this control's threat model, so
+// Electron's OS-backed application lock is acquired before either process may create a window or PTY.
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  console.error('[single-instance] another Blue Helm instance owns the application lock; exiting');
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    focusExistingWindow(() => win, (line) => console.log(line));
+  });
+}
 // Canonical trusted entry document — the ONE definition shared by win.loadFile(), the
 // navigation lockdown, and the media-permission policy, so the three trust anchors can
 // never drift apart (independently reconstructed path/origin strings are how they would).
@@ -365,7 +378,7 @@ function createWindow() {
   win.webContents.on('will-redirect', guardNav('will-redirect'));
 }
 
-app.whenReady().then(() => {
+if (hasSingleInstanceLock) app.whenReady().then(() => {
   loadGeminiKey(); // decrypt stored GEMINI_API_KEY into memory before any PTY can launch
   // K8 media-permission hardening: grant ONLY a microphone-only request ('media' with
   // mediaTypes exactly ['audio']) coming from this window's main frame at the exact

@@ -308,6 +308,12 @@ function harness(opts = {}) {
     'the writer-failure text states the turn is NOT refunded');
   assert(reasonText('admission-persist-failed').includes('NOTHING was sent'),
     'the persist-failure text states nothing was sent');
+  assert(reasonText('admission-ledger-unreadable').includes('NOTHING was sent'),
+    'the unreadable-ledger text states nothing was sent');
+  assert(reasonText('admission-ledger-integrity-mismatch').includes('left unchanged'),
+    'the integrity text states the rejected file was left unchanged');
+  assert(reasonText('admission-ledger-conflict').includes('existing app window'),
+    'the conflict text directs Blue to the existing app window');
 
   // -- 8. state refreshes after success AND refusal ----------------------------------------------
   process.stdout.write('\n(8) state REFRESHES after both success and refusal\n');
@@ -349,7 +355,8 @@ function harness(opts = {}) {
     const h = harness({ getState: () => ({ ok: true, state: { enabled: true, ok: false, reason: 'admission-ledger-unreadable' } }) });
     h.view.mount();
     eq(await h.view.refresh(), false, 'an unhealthy ledger state is refused');
-    assert(h.status().textContent.includes('admission-ledger-unreadable'), 'the ledger reason stays visible');
+    assert(h.status().textContent.includes('could not be read safely'),
+      'the unreadable-ledger reason stays visible in human-readable form');
     eq(h.send().disabled, true, 'Send is disabled on an unhealthy ledger');
   }
 

@@ -202,6 +202,48 @@ async function settle() { for (let i = 0; i < 4; i += 1) await new Promise((r) =
     eq(s2written.length, 1, 'exactly one write reached the PTY');
   }
 
+  // ---- (5b) two main-process budgets cannot spend one durable turn ------------------------------
+  section('(5b) two app-process budgets cannot spend the same last turn');
+  {
+    const seed = makeStack({ allowance: 1 });
+    eq(seed.budget.claimPane('pty1').ok, true, 'a prior session establishes the one-turn controlled pane');
+    const rebindPlan = config.parseAdmissionConfig({
+      BLUE_HELM_ADMISSION_ENABLED: '1',
+      BLUE_HELM_ADMISSION_RUN_ID: RUN_ID,
+      BLUE_HELM_ADMISSION_ALLOWANCE: '1',
+      BLUE_HELM_ADMISSION_REBIND: '1',
+    });
+    const writesA = [];
+    const writesB = [];
+    const instanceA = budgetModule.createAdmissionBudget({
+      plan: rebindPlan,
+      storage: storeModule.createAdmissionLedgerStore({ userDataDir: seed.userDataDir }),
+      now: () => 2001, isPaneRunning: () => true,
+      writer: (_paneId, bytes) => { writesA.push(bytes); }, log: () => {},
+    });
+    const instanceB = budgetModule.createAdmissionBudget({
+      plan: rebindPlan,
+      storage: storeModule.createAdmissionLedgerStore({ userDataDir: seed.userDataDir }),
+      now: () => 2002, isPaneRunning: () => true,
+      writer: (_paneId, bytes) => { writesB.push(bytes); }, log: () => {},
+    });
+    eq(instanceA.initialize().ok, true, 'process A loads the shared starting revision');
+    eq(instanceB.initialize().ok, true, 'process B loads the same shared starting revision');
+    eq(instanceA.claimPane('pty1').ok, true, 'process A wins the locked rebind CAS');
+    const losingClaim = instanceB.claimPane('pty1');
+    eq(losingClaim.ok, false, 'process B is refused after its revision becomes stale');
+    eq(losingClaim.reason, 'admission-ledger-conflict', 'the loser receives the visible bounded conflict reason');
+    const [resultA, resultB] = await Promise.all([
+      instanceA.submitPrompt('pty1', 'process A prompt'),
+      instanceB.submitPrompt('pty1', 'process B prompt'),
+    ]);
+    eq(resultA.ok, true, 'exactly the CAS winner admits its prompt');
+    eq(resultB.ok, false, 'the stale process cannot admit a prompt');
+    eq(writesA.length + writesB.length, 1, 'exactly one PTY write occurs across both app processes');
+    eq(readLedger(seed.userDataDir).runs[RUN_ID].admitted, 1,
+      'the shared durable ledger records admitted: 1');
+  }
+
   // ---- (6) N+1 refuses, and the ledger does not move --------------------------------------------
   section('(6) N+1 refuses and the ledger does not move');
   {
@@ -369,8 +411,8 @@ async function settle() { for (let i = 0; i < 4; i += 1) await new Promise((r) =
     assert(main.includes('const p = ptys.get(paneId);'), "the budget's writer resolves the pane from main's own map");
   }
 
-  // ---- (13) persist failure writes NOTHING -------------------------------------------------------
-  section('(13) a persistence failure writes NOTHING and spends NOTHING');
+  // ---- (13) live ledger access failure writes NOTHING -------------------------------------------
+  section('(13) a live ledger access failure writes NOTHING and spends NOTHING');
   {
     const s = makeStack({ allowance: 3 });
     s.budget.claimPane('pty1');
@@ -398,7 +440,7 @@ async function settle() { for (let i = 0; i < 4; i += 1) await new Promise((r) =
     eq(s.record().admitted, 0, 'the failed attempt consumed NO admission');
     const post = await s.ipc.handleGetState(TRUSTED);
     eq(post.state.ok, false, 'the budget reports itself unhealthy rather than pretending to be fine');
-    eq(post.state.reason, 'admission-persist-failed', 'and names the persist failure as the cause');
+    eq(post.state.reason, 'admission-ledger-unreadable', 'and names the rejected live reload as the cause');
   }
 
   // ---- (14) writer failure is NOT refunded --------------------------------------------------------
@@ -463,7 +505,16 @@ async function settle() { for (let i = 0; i < 4; i += 1) await new Promise((r) =
     const rewound = JSON.parse(fs.readFileSync(ledgerFile, 'utf8'));
     rewound.runs[RUN_ID].admitted = 0;
     fs.writeFileSync(ledgerFile, JSON.stringify(rewound));   // checksum left stale on purpose
-    eq(b2.state().admitted, 1, 'a LIVE instance is unaffected by the file being rewritten underneath it');
+    eq(b2.state().admitted, 1, 'a loaded instance does not mutate merely because the file changed');
+    const rejectedBytes = fs.readFileSync(ledgerFile);
+    const writesBeforeMismatch = s.written.length;
+    s.input().value = 'must refuse after live integrity mismatch';
+    eq(await s.view.submit(), false, 'the LIVE admission path refuses the checksum-mismatched reload');
+    eq(s.budget.state().reason, 'admission-ledger-integrity-mismatch',
+      'the live refusal preserves the distinct integrity reason');
+    eq(s.written.length, writesBeforeMismatch, 'the live integrity refusal performs ZERO PTY writes');
+    assert(fs.readFileSync(ledgerFile).equals(rejectedBytes),
+      'the live integrity refusal leaves the rejected file BYTE-IDENTICAL');
     const b3 = budgetModule.createAdmissionBudget({
       plan: plan2,
       storage: storeModule.createAdmissionLedgerStore({ userDataDir: s.userDataDir }),

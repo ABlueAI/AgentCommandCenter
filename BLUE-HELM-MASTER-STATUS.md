@@ -555,6 +555,14 @@ resistance, and **not** rollback prevention. A same-user process can recompute
 it; replaying an earlier valid checksummed ledger is not detected; deleting the
 ledger still recreates a fresh run.
 
+Every live mutation now repeats that validated read and refuses before `save`
+on an integrity or read failure. Cooperating writers use a locked checksum-
+revision compare-and-swap, and Electron's single-instance lock prevents an
+accidental second Blue Helm launch from creating independent PTYs; a second
+launch restores and focuses the existing window. These mechanisms close the
+accidental duplicate-process spend path. They do **not** change the same-user
+threat boundary above, authenticate the ledger, or prevent replay/deletion.
+
 **The unreachable rollback guard was REMOVED.** `REASON.STORAGE_ROLLED_BACK` and
 its `highWaterAdmitted` comparison advertised a cross-restart guarantee the code
 never delivered. Nothing replaces it, and **no new prevention claim replaces it.**

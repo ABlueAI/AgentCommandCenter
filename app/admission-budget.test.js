@@ -42,6 +42,8 @@ const CC = (n) => String.fromCharCode(n);
 
 /** In-memory ledger storage. `disk` survives across budget instances, which is how "restart" is simulated. */
 function makeStorage(initial) {
+  let revisionCounter = initial === undefined ? 0 : 1;
+  const revision = () => revisionCounter.toString(16).padStart(64, '0');
   const s = {
     disk: initial === undefined ? null : initial, // null models "file does not exist"
     failSave: false,
@@ -52,14 +54,21 @@ function makeStorage(initial) {
       if (s.failLoad) return { ok: false, reason: s.failLoad };
       if (s.disk === null) return { ok: false, reason: 'not-found' };
       // Deep clone so a caller cannot mutate "the file" by holding the object we returned.
-      return { ok: true, doc: JSON.parse(JSON.stringify(s.disk)) };
+      return { ok: true, doc: JSON.parse(JSON.stringify(s.disk)), revision: revision() };
     },
-    save(doc) {
+    save(doc, expectedRevision) {
       s.saves += 1;
       if (s.throwOnSave) throw new Error('storage exploded');
       if (s.failSave) return { ok: false, reason: 'write-failed' };
+      const actualRevision = s.disk === null ? null : revision();
+      if (expectedRevision !== actualRevision) return { ok: false, reason: 'conflict' };
       s.disk = JSON.parse(JSON.stringify(doc));
-      return { ok: true };
+      revisionCounter += 1;
+      return { ok: true, revision: revision() };
+    },
+    replace(doc) {
+      s.disk = JSON.parse(JSON.stringify(doc));
+      revisionCounter += 1;
     },
   };
   return s;
@@ -202,6 +211,38 @@ async function testPersistFailure() {
   const tr = await t.budget.submitPrompt('pty1', SENTINEL);
   assert(tr.ok === false && tr.reason === REASON.PERSIST_FAILED, 'a THROWING storage save refuses too');
   assert(t.writes.length === 0, 'a throwing storage save writes nothing to the PTY');
+
+  // Exact reviewer reproduction: a live reload rejects an integrity mismatch. Detection must be the
+  // terminal decision — it must not collapse to an empty ledger and then overwrite the evidence.
+  const mismatch = makeBudget();
+  mismatch.budget.initialize();
+  mismatch.budget.claimPane('pty1');
+  const rejectedBytes = JSON.stringify(mismatch.storage.disk);
+  const savesBeforeMismatch = mismatch.storage.saves;
+  mismatch.storage.failLoad = 'integrity-mismatch';
+  const mr = await mismatch.budget.submitPrompt('pty1', SENTINEL);
+  assert(mr.ok === false && mr.reason === REASON.STORAGE_INTEGRITY_MISMATCH,
+    'a live integrity mismatch refuses with its distinct visible reason');
+  assert(mismatch.storage.saves === savesBeforeMismatch,
+    'an integrity-mismatched reload causes ZERO save calls');
+  assert(mismatch.writes.length === 0, 'an integrity-mismatched reload causes ZERO PTY writes');
+  assert(JSON.stringify(mismatch.storage.disk) === rejectedBytes,
+    'the rejected ledger remains byte-for-byte identical in the storage model');
+
+  // A transient read failure is equally non-creatable and must preserve every prior run record.
+  const unreadable = makeBudget();
+  unreadable.budget.initialize();
+  unreadable.budget.claimPane('pty1');
+  const historyBefore = JSON.stringify(unreadable.storage.disk);
+  const savesBeforeReadFailure = unreadable.storage.saves;
+  unreadable.storage.failLoad = 'read-failed';
+  const ur = await unreadable.budget.submitPrompt('pty1', SENTINEL);
+  assert(ur.ok === false && ur.reason === REASON.STORAGE_UNREADABLE,
+    'a live transient read failure refuses rather than minting an empty history');
+  assert(unreadable.storage.saves === savesBeforeReadFailure && unreadable.writes.length === 0,
+    'the live read failure causes zero saves and zero PTY writes');
+  assert(JSON.stringify(unreadable.storage.disk) === historyBefore,
+    'the transient failure preserves every prior run record');
 }
 
 async function testWriterFailureNotRefunded() {
@@ -405,9 +446,10 @@ async function testLedgerReplacedUnderneath() {
   // advertised a cross-restart guarantee the implementation never delivered. Keeping a section named
   // after a guard that no longer exists is exactly how a dead guarantee gets re-believed.
   //
-  // What this section establishes now is narrower and true: a LIVE process keeps its own count, and a
-  // NEW process ADOPTS whatever the ledger says. Both are stated as behaviour, neither as protection.
-  section('ledger replaced underneath: live count authoritative, new process adopts');
+  // What this section establishes now is narrower and true: a LIVE cooperating process detects a
+  // changed revision and refuses rather than clobbering it. A NEW process still ADOPTS any valid
+  // replacement. The latter is stated as behaviour, not protection.
+  section('ledger replaced underneath: live process conflicts, new process adopts');
   const storage = makeStorage();
   const live = makeBudget({ storage });
   live.budget.initialize();
@@ -416,11 +458,17 @@ async function testLedgerReplacedUnderneath() {
   assert(recordOf(storage).admitted === 1, 'one admission consumed');
 
   // Someone restores an older copy of the ledger beneath a LIVE run.
-  storage.disk.runs[RUN_ID].admitted = 0;
+  const replacement = JSON.parse(JSON.stringify(storage.disk));
+  replacement.runs[RUN_ID].admitted = 0;
+  storage.replace(replacement);
+  const savesBefore = storage.saves;
+  const writesBefore = live.writes.length;
   const after = await live.budget.submitPrompt('pty1', SENTINEL);
-  assert(after.ok === true, 'the live in-memory count remains authoritative for the running process');
-  assert(recordOf(storage).admitted === 2,
-    'the live process re-persists from its own count, so the replaced file granted no extra turn');
+  assert(after.ok === false && after.reason === REASON.STORAGE_CONFLICT,
+    'the live process refuses a changed cooperating-writer revision');
+  assert(storage.saves === savesBefore, 'the stale process does not call save after the preflight conflict');
+  assert(live.writes.length === writesBefore, 'the stale process writes zero prompt bytes');
+  assert(recordOf(storage).admitted === 0, 'the replacement is not overwritten by stale in-memory state');
 
   // ADOPTION, NOT PROTECTION — and the false justification that used to sit here is removed.
   //
@@ -503,6 +551,41 @@ async function testConcurrency() {
   const ok = results.filter((r) => r.ok === true).length;
   assert(ok <= 2 && w2.length <= 2, `10 simultaneous requests against an allowance of 2 produced ${w2.length} write(s)`);
   assert(recordOf(s2, 'evidence-run-0003').admitted <= 2, 'the durable count never exceeds the allowance');
+
+  // Reviewer reproduction at the process boundary. Both state machines load the same durable
+  // revision before either rebinds. The first CAS wins; the stale process becomes visibly fatal and
+  // cannot spend the same last turn.
+  const shared = makeStorage();
+  const oneTurnPlan = makePlan({ allowance: 1, rebind: true, runId: 'evidence-run-0004' });
+  const seed = makeBudget({ plan: oneTurnPlan, storage: shared });
+  assert(seed.budget.initialize().ok === true && seed.budget.claimPane('pty1').ok === true,
+    'the shared one-turn ledger is seeded with a prior-session binding');
+
+  const writesA = [];
+  const writesB = [];
+  const instanceA = budgetModule.createAdmissionBudget({
+    plan: oneTurnPlan, storage: shared, now: () => 5,
+    writer: (_paneId, bytes) => { writesA.push(bytes); }, log: () => {},
+  });
+  const instanceB = budgetModule.createAdmissionBudget({
+    plan: oneTurnPlan, storage: shared, now: () => 6,
+    writer: (_paneId, bytes) => { writesB.push(bytes); }, log: () => {},
+  });
+  assert(instanceA.initialize().ok === true && instanceB.initialize().ok === true,
+    'two process-local budgets can observe the same starting revision');
+  const claimA = instanceA.claimPane('pty1');
+  const claimB = instanceB.claimPane('pty1');
+  assert(claimA.ok === true && claimB.ok === false && claimB.reason === REASON.STORAGE_CONFLICT,
+    'exactly one stale-session rebind wins and the other visibly conflicts');
+  const [processA, processB] = await Promise.all([
+    instanceA.submitPrompt('pty1', `${SENTINEL}-PROCESS-A`),
+    instanceB.submitPrompt('pty1', `${SENTINEL}-PROCESS-B`),
+  ]);
+  assert(processA.ok === true && processB.ok === false && processB.reason === REASON.STORAGE_CONFLICT,
+    'two app-process budgets produce exactly one admitted prompt');
+  assert(writesA.length + writesB.length === 1, 'two process-local writers receive exactly one PTY write total');
+  assert(recordOf(shared, 'evidence-run-0004').admitted === 1,
+    'the shared ledger records admitted: 1 after the two-process race');
 }
 
 async function testPaneBinding() {
@@ -697,13 +780,15 @@ function testNoMutationSurface() {
 function testSourceTripwires() {
   section('required test 21: source tripwires on the ordering rule');
   const src = fs.readFileSync(path.join(__dirname, 'admission-budget.js'), 'utf8');
-  const persistIdx = src.indexOf('const persisted = persist(currentDoc());');
+  const persistIdx = src.lastIndexOf('const persisted = persist();', src.indexOf('await writer(paneId, promptText + SUBMISSION_TERMINATOR)'));
   const writerIdx = src.indexOf('await writer(paneId, promptText + SUBMISSION_TERMINATOR)');
   assert(persistIdx !== -1, 'the admission path contains the pre-write persist');
   assert(writerIdx !== -1, 'the admission path contains the writer call');
   assert(persistIdx < writerIdx, 'in source order, the durable persist precedes the writer call');
   assert((src.match(/await writer\(/g) || []).length === 1,
     'there is exactly ONE writer invocation in the module — no second path to the PTY');
+  assert(!/function currentDoc\(/.test(src),
+    'there is no fallback helper that can collapse a rejected reload into an empty ledger');
 
   const mainSrc = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
   assert(/if \(admissionIpc && admissionIpc\.refuseDirectWrite\(id\)\) return;/.test(mainSrc),

@@ -115,6 +115,7 @@ const REASON = Object.freeze({
   // accidental-spend control rather than a security boundary and directed its removal. Nothing
   // replaces it, and no prevention claim replaces it either — see the header.
   STORAGE_INTEGRITY_MISMATCH: 'admission-ledger-integrity-mismatch',
+  STORAGE_CONFLICT: 'admission-ledger-conflict',
   STORAGE_CORRUPT_COUNTS: 'admission-ledger-corrupt-counts',
   STORAGE_PLAN_MISMATCH: 'admission-ledger-plan-mismatch',
   STORAGE_TOO_MANY_RUNS: 'admission-ledger-too-many-runs',
@@ -139,6 +140,7 @@ const REASON = Object.freeze({
 // Bound on the persisted run map. A ledger that has accumulated more than this many runs is refused
 // rather than pruned: silently evicting a run record is exactly how a consumed count would come back.
 const MAX_PERSISTED_RUNS = 64;
+const REVISION_PATTERN = /^[0-9a-f]{64}$/;
 
 // ---- pure validation -------------------------------------------------------------------------
 
@@ -214,7 +216,8 @@ function createDisabledBudget(reason) {
 /**
  * deps:
  *   plan     -> the frozen plan from admission-budget-config.parseAdmissionConfig()
- *   storage  -> { load(): {ok,doc}|{ok:false,reason}, save(doc): {ok:true}|{ok:false,reason} }
+ *   storage  -> { load(): {ok,doc,revision}|{ok:false,reason},
+ *                 save(doc,expectedRevision): {ok:true,revision}|{ok:false,reason} }
  *   now()    -> ms epoch (injected clock)
  *   writer(paneId, bytes) -> writes to the PTY. May throw or reject; both are handled.
  *   isPaneRunning(paneId) -> optional; false means the PTY is gone and nothing may be written
@@ -239,6 +242,10 @@ function createAdmissionBudget(deps) {
 
   // In-memory run record, authoritative for this process once initialize() succeeds.
   let record = null;
+  // Exact checksum revision last observed from storage. `null` means and only means a load returned
+  // genuine `not-found`. It is a cooperating-writer CAS token, not authentication or rollback
+  // prevention; a same-user process can still replace the ledger and recompute its checksum.
+  let ledgerRevision = null;
   let initialized = false;
   let fatalReason = null; // once set, every operation refuses with it — no self-healing
 
@@ -258,6 +265,13 @@ function createAdmissionBudget(deps) {
     return Math.max(0, record.allowance - record.admitted);
   }
 
+  function storageFailureReason(reason) {
+    if (reason === 'integrity-mismatch') return REASON.STORAGE_INTEGRITY_MISMATCH;
+    if (reason === 'conflict' || reason === 'revision-required') return REASON.STORAGE_CONFLICT;
+    if (reason === 'not-found' && ledgerRevision !== null) return REASON.STORAGE_CONFLICT;
+    return REASON.STORAGE_UNREADABLE;
+  }
+
   /** Load the ledger and adopt or create THIS run's record. Fail-closed on every anomaly. */
   function initialize() {
     if (fatalReason) return { ok: false, reason: fatalReason };
@@ -269,9 +283,10 @@ function createAdmissionBudget(deps) {
       // signals it distinctly. Every other read outcome — permission denied, device error, reparse
       // point, oversize — leaves us unable to establish what has already been consumed, so we refuse.
       if (loaded && loaded.reason === 'not-found') {
+        ledgerRevision = null;
         record = newRecord();
-        const persisted = persist(emptyLedger());
-        if (!persisted.ok) return fail(REASON.PERSIST_FAILED);
+        const persisted = persist();
+        if (!persisted.ok) return fail(persisted.reason);
         initialized = true;
         log(`[admission] run created; allowance ${record.allowance}, admitted 0`);
         return { ok: true, state: state() };
@@ -285,6 +300,10 @@ function createAdmissionBudget(deps) {
     }
 
     const doc = loaded.doc;
+    if (typeof loaded.revision !== 'string' || !REVISION_PATTERN.test(loaded.revision)) {
+      return fail(REASON.STORAGE_UNREADABLE);
+    }
+    ledgerRevision = loaded.revision;
     if (!isPlausibleLedger(doc)) {
       // Distinguish a version mismatch from generic malformation so the operator knows whether this is
       // a migration question or a corruption question. Both refuse; neither rewrites the file.
@@ -305,8 +324,8 @@ function createAdmissionBudget(deps) {
       // the ONLY path that mints an allowance, and it cannot fire for a run the ledger already knows.
       if (runIds.length >= MAX_PERSISTED_RUNS) return fail(REASON.STORAGE_TOO_MANY_RUNS);
       record = newRecord();
-      const persisted = persist(doc);
-      if (!persisted.ok) return fail(REASON.PERSIST_FAILED);
+      const persisted = persist();
+      if (!persisted.ok) return fail(persisted.reason);
       initialized = true;
       log(`[admission] run created; allowance ${record.allowance}, admitted 0`);
       return { ok: true, state: state() };
@@ -358,9 +377,41 @@ function createAdmissionBudget(deps) {
     };
   }
 
-  /** Write the current record into the supplied ledger document and save it atomically. */
-  function persist(baseDoc) {
-    const doc = isPlausibleLedger(baseDoc) ? { schemaVersion: SCHEMA_VERSION, runs: { ...baseDoc.runs } } : emptyLedger();
+  /**
+   * Re-read, validate, compare the revision, then save with the same expected revision. The store
+   * repeats the comparison while holding its cross-process lock. No rejected read reaches save(),
+   * so a corrupt or transiently unreadable ledger remains byte-identical for diagnosis.
+   */
+  function persist() {
+    let loaded;
+    try {
+      loaded = storage.load();
+    } catch {
+      return { ok: false, reason: REASON.STORAGE_UNREADABLE };
+    }
+
+    let baseDoc;
+    if (ledgerRevision === null) {
+      if (!loaded || loaded.ok === true || loaded.reason !== 'not-found') {
+        return { ok: false, reason: loaded && loaded.ok === false
+          ? storageFailureReason(loaded.reason)
+          : REASON.STORAGE_CONFLICT };
+      }
+      baseDoc = emptyLedger();
+    } else {
+      if (!loaded || loaded.ok !== true) {
+        return { ok: false, reason: storageFailureReason(loaded && loaded.reason) };
+      }
+      if (!isPlausibleLedger(loaded.doc)) {
+        return { ok: false, reason: REASON.STORAGE_MALFORMED };
+      }
+      if (loaded.revision !== ledgerRevision) {
+        return { ok: false, reason: REASON.STORAGE_CONFLICT };
+      }
+      baseDoc = loaded.doc;
+    }
+
+    const doc = { schemaVersion: SCHEMA_VERSION, runs: { ...baseDoc.runs } };
     record.updatedUtc = now();
     doc.runs[record.runId] = {
       runId: record.runId,
@@ -374,19 +425,28 @@ function createAdmissionBudget(deps) {
     };
     let saved;
     try {
-      saved = storage.save(doc);
+      saved = storage.save(doc, ledgerRevision);
     } catch {
       return { ok: false, reason: REASON.PERSIST_FAILED };
     }
-    if (!saved || saved.ok !== true) return { ok: false, reason: REASON.PERSIST_FAILED };
+    if (!saved || saved.ok !== true) {
+      if (saved && (saved.reason === 'conflict' || saved.reason === 'revision-required')) {
+        return { ok: false, reason: REASON.STORAGE_CONFLICT };
+      }
+      if (saved && saved.reason === 'integrity-mismatch') {
+        return { ok: false, reason: REASON.STORAGE_INTEGRITY_MISMATCH };
+      }
+      if (saved && saved.reason && saved.reason !== 'write-failed' &&
+          saved.reason !== 'not-serializable') {
+        return { ok: false, reason: storageFailureReason(saved.reason) };
+      }
+      return { ok: false, reason: REASON.PERSIST_FAILED };
+    }
+    if (typeof saved.revision !== 'string' || !REVISION_PATTERN.test(saved.revision)) {
+      return { ok: false, reason: REASON.PERSIST_FAILED };
+    }
+    ledgerRevision = saved.revision;
     return { ok: true };
-  }
-
-  /** Re-read the ledger so a concurrent writer's other-run records survive our save. */
-  function currentDoc() {
-    const loaded = storage.load();
-    if (loaded && loaded.ok === true && isPlausibleLedger(loaded.doc)) return loaded.doc;
-    return emptyLedger();
   }
 
   /**
@@ -417,16 +477,17 @@ function createAdmissionBudget(deps) {
       return { ok: false, reason: REASON.PANE_BINDING_STALE };
     }
 
+    const previousPaneId = record.paneId;
     const previouslyStale = record.bindingStale;
     record.paneId = paneId;
     record.bindingStale = false;
-    const persisted = persist(currentDoc());
+    const persisted = persist();
     if (!persisted.ok) {
       // Roll the in-memory binding back so a failed persist cannot leave main believing a pane is
       // controlled while the durable record disagrees.
-      record.paneId = previouslyStale ? record.paneId : null;
+      record.paneId = previousPaneId;
       record.bindingStale = previouslyStale;
-      return fail(REASON.PERSIST_FAILED);
+      return fail(persisted.reason);
     }
     log(`[admission] pane bound; remaining ${remaining()}`);
     return { ok: true, alreadyBound: false, state: state() };
@@ -458,8 +519,8 @@ function createAdmissionBudget(deps) {
     if (typeof paneId !== 'string' || record.paneId !== paneId) return false;
     if (record.state === RUN_STATE.CLOSED) return false;
     record.state = RUN_STATE.CLOSED;
-    const persisted = persist(currentDoc());
-    if (!persisted.ok) { fail(REASON.PERSIST_FAILED); return false; }
+    const persisted = persist();
+    if (!persisted.ok) { fail(persisted.reason); return false; }
     log(`[admission] pane exited; run closed with ${remaining()} unused admission(s) voided`);
     return true;
   }
@@ -468,7 +529,8 @@ function createAdmissionBudget(deps) {
   function countRefusal() {
     if (!record) return;
     record.refused += 1;
-    persist(currentDoc());
+    const persisted = persist();
+    if (!persisted.ok) fail(persisted.reason);
   }
 
   /**
@@ -517,14 +579,14 @@ function createAdmissionBudget(deps) {
       if (record.admitted >= record.allowance) record.state = RUN_STATE.EXHAUSTED;
 
       // ---- (3) durable persist BEFORE any byte reaches the PTY --------------------------------
-      const persisted = persist(currentDoc());
+      const persisted = persist();
       if (!persisted.ok) {
         // Undo the in-memory decrement: nothing was written, so nothing was consumed. This is the one
         // rollback in the module and it is safe precisely because the writer has not run.
         record.admitted -= 1;
         record.state = record.admitted >= record.allowance ? RUN_STATE.EXHAUSTED : RUN_STATE.OPEN;
         log('[admission] REFUSED: the ledger could not be persisted; nothing was written to the PTY');
-        return fail(REASON.PERSIST_FAILED);
+        return fail(persisted.reason);
       }
       const admittedIndex = record.admitted;
 

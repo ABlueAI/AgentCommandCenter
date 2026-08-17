@@ -17,7 +17,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const {
-  createAdmissionLedgerStore, LEDGER_FILENAME, MAX_RAW_BYTES, STORE_REASON,
+  createAdmissionLedgerStore, LEDGER_FILENAME, LOCK_FILENAME, MAX_RAW_BYTES, STORE_REASON,
   CHECKSUM_FIELD, canonicalize, checksumOf,
 } = require('./admission-budget-store');
 
@@ -63,6 +63,8 @@ try {
     const store = createAdmissionLedgerStore({ userDataDir: dir });
     assert(store.ledgerPath() === path.join(dir, LEDGER_FILENAME),
       'the ledger path is the main-supplied directory plus a CONSTANT filename');
+    assert(store.lockPath() === path.join(dir, LOCK_FILENAME),
+      'the lock path is the same main-supplied directory plus a CONSTANT filename');
     assert(!store.ledgerPath().includes('evidence-run'),
       'the run id is NOT part of the path — one ledger holds every run, so one atomic write is consistent');
   }
@@ -83,10 +85,13 @@ try {
   {
     const dir = freshDir('roundtrip');
     const store = createAdmissionLedgerStore({ userDataDir: dir });
-    const saved = store.save(GOOD_DOC);
+    const saved = store.save(GOOD_DOC, null);
     assert(saved.ok === true, 'a valid document saves');
+    assert(typeof saved.revision === 'string' && /^[0-9a-f]{64}$/.test(saved.revision),
+      'save returns the new checksum revision');
     const loaded = store.load();
     assert(loaded.ok === true, 'the saved document loads back');
+    assert(loaded.revision === saved.revision, 'load returns the same checksum revision');
     assert(JSON.stringify(loaded.doc) === JSON.stringify(GOOD_DOC), 'the round trip is faithful');
 
     // No temp files survive a successful save.
@@ -96,13 +101,63 @@ try {
     // A second save replaces in place; the previous content is gone but the path is the same file.
     const updated = { ...GOOD_DOC, runs: { ...GOOD_DOC.runs } };
     updated.runs['evidence-run-0001'] = { ...updated.runs['evidence-run-0001'], admitted: 2 };
-    assert(store.save(updated).ok === true, 'a second save succeeds');
+    assert(store.save(updated, loaded.revision).ok === true, 'a second save succeeds with the observed revision');
     assert(store.load().doc.runs['evidence-run-0001'].admitted === 2, 'the replacement is visible');
     assert(fs.readdirSync(dir).filter((f) => f.endsWith('.tmp')).length === 0, 'still no .tmp leftovers');
-    assert(fs.readdirSync(dir).length === 1, 'exactly one file exists in the directory');
+    assert(fs.readdirSync(dir).length === 1, 'exactly one file exists in the directory (the lock was removed)');
   }
 
-  // ---- 4. every non-absent failure has its OWN reason ----------------------------------------------
+  // ---- 4. locked compare-and-swap ---------------------------------------------------------------
+  section('locked compare-and-swap across cooperating processes');
+  {
+    const dir = freshDir('cas-stale');
+    const first = createAdmissionLedgerStore({ userDataDir: dir });
+    const second = createAdmissionLedgerStore({ userDataDir: dir });
+    assert(first.save(GOOD_DOC, null).ok === true, 'the initial CAS creates only from observed absence');
+    const seenByFirst = first.load();
+    const seenBySecond = second.load();
+    assert(seenByFirst.revision === seenBySecond.revision,
+      'two cooperating processes can observe the same starting revision');
+
+    const winner = JSON.parse(JSON.stringify(GOOD_DOC));
+    winner.runs['evidence-run-0001'].admitted = 2;
+    const loser = JSON.parse(JSON.stringify(GOOD_DOC));
+    loser.runs['evidence-run-0001'].admitted = 3;
+    assert(first.save(winner, seenByFirst.revision).ok === true, 'the first writer wins the revision');
+    const rejected = second.save(loser, seenBySecond.revision);
+    assert(rejected.ok === false && rejected.reason === STORE_REASON.CONFLICT,
+      'a stale second writer receives the bounded conflict reason');
+    assert(second.load().doc.runs['evidence-run-0001'].admitted === 2,
+      'the stale writer cannot clobber the winner');
+  }
+  {
+    const dir = freshDir('cas-lock');
+    const store = createAdmissionLedgerStore({ userDataDir: dir });
+    store.save(GOOD_DOC, null);
+    const loaded = store.load();
+    const before = fs.readFileSync(store.ledgerPath());
+    // Model another live application process holding the fixed lock. Remove exactly the lock this
+    // test created, in this test-owned directory, after asserting the refusal.
+    fs.writeFileSync(store.lockPath(), 'test-owned-lock', 'utf8');
+    const changed = JSON.parse(JSON.stringify(GOOD_DOC));
+    changed.runs['evidence-run-0001'].admitted = 2;
+    const rejected = store.save(changed, loaded.revision);
+    assert(rejected.ok === false && rejected.reason === STORE_REASON.CONFLICT,
+      'an already-held cross-process lock refuses visibly');
+    assert(fs.readFileSync(store.ledgerPath()).equals(before),
+      'a lock conflict leaves the canonical ledger byte-identical');
+    fs.rmSync(store.lockPath());
+  }
+  {
+    const dir = freshDir('cas-revision-required');
+    const store = createAdmissionLedgerStore({ userDataDir: dir });
+    const rejected = store.save(GOOD_DOC);
+    assert(rejected.ok === false && rejected.reason === STORE_REASON.REVISION_REQUIRED,
+      'save cannot omit the observed revision contract');
+    assert(!fs.existsSync(store.ledgerPath()), 'an omitted revision writes no ledger');
+  }
+
+  // ---- 5. every non-absent failure has its OWN reason ----------------------------------------------
   section('hostile files fail closed with distinct reasons');
   {
     const dir = freshDir('notregular');
@@ -177,7 +232,7 @@ try {
     const store = createAdmissionLedgerStore({ userDataDir: dir });
     const cyclic = { schemaVersion: 1, runs: {} };
     cyclic.self = cyclic;
-    const r = store.save(cyclic);
+    const r = store.save(cyclic, null);
     assert(r.ok === false && r.reason === STORE_REASON.NOT_SERIALIZABLE, 'an unserializable document refuses');
     assert(!fs.existsSync(store.ledgerPath()), 'nothing was written for an unserializable document');
   }
@@ -185,7 +240,7 @@ try {
     const dir = freshDir('oversizesave');
     const store = createAdmissionLedgerStore({ userDataDir: dir });
     const huge = { schemaVersion: 1, runs: { big: 'x'.repeat(MAX_RAW_BYTES) } };
-    const r = store.save(huge);
+    const r = store.save(huge, null);
     assert(r.ok === false && r.reason === STORE_REASON.TOO_LARGE, 'an oversize document refuses to save');
     assert(!fs.existsSync(store.ledgerPath()), 'nothing was written for an oversize document');
   }
@@ -194,7 +249,8 @@ try {
     // throws, and prove the good file is still the good file.
     const dir = freshDir('renamefail');
     const real = createAdmissionLedgerStore({ userDataDir: dir });
-    real.save(GOOD_DOC);
+    real.save(GOOD_DOC, null);
+    const revision = real.load().revision;
     const before = fs.readFileSync(real.ledgerPath(), 'utf8');
 
     const flaky = createAdmissionLedgerStore({
@@ -205,7 +261,7 @@ try {
       },
     });
     const bad = { schemaVersion: 1, runs: { 'evidence-run-0001': { ...GOOD_DOC.runs['evidence-run-0001'], admitted: 99 } } };
-    const r = flaky.save(bad);
+    const r = flaky.save(bad, revision);
     assert(r.ok === false && r.reason === STORE_REASON.WRITE_FAILED, 'a failed rename reports write-failed');
     assert(fs.readFileSync(real.ledgerPath(), 'utf8') === before,
       'the PREVIOUS ledger is byte-identical after a failed rename — the canonical file was never unlinked');
@@ -216,13 +272,14 @@ try {
     // A failed WRITE (before any rename) must also leave the previous ledger intact.
     const dir = freshDir('writefail');
     const real = createAdmissionLedgerStore({ userDataDir: dir });
-    real.save(GOOD_DOC);
+    real.save(GOOD_DOC, null);
+    const revision = real.load().revision;
     const before = fs.readFileSync(real.ledgerPath(), 'utf8');
     const flaky = createAdmissionLedgerStore({
       userDataDir: dir,
       fsImpl: { ...fs, writeFileSync: () => { throw new Error('disk full'); } },
     });
-    const r = flaky.save(GOOD_DOC);
+    const r = flaky.save(GOOD_DOC, revision);
     assert(r.ok === false && r.reason === STORE_REASON.WRITE_FAILED, 'a failed write reports write-failed');
     assert(fs.readFileSync(real.ledgerPath(), 'utf8') === before, 'the previous ledger survives a failed write');
   }
@@ -276,7 +333,7 @@ try {
   {
     const dir = freshDir('checksum-roundtrip');
     const store = createAdmissionLedgerStore({ userDataDir: dir });
-    assert(store.save(GOOD_DOC).ok === true, 'save() succeeds');
+    assert(store.save(GOOD_DOC, null).ok === true, 'save() succeeds');
     const onDisk = JSON.parse(fs.readFileSync(store.ledgerPath(), 'utf8'));
     assert(typeof onDisk[CHECKSUM_FIELD] === 'string' && /^[0-9a-f]{64}$/.test(onDisk[CHECKSUM_FIELD]),
       'every persisted ledger carries a 64-hex SHA-256 checksum');
@@ -287,7 +344,7 @@ try {
       'the checksum field is STRIPPED before the policy layer sees the doc');
     // Round-tripping a loaded doc back through save() must reproduce the same checksum: the field is
     // excluded from its own input, so content that has not changed hashes the same.
-    assert(store.save(back.doc).ok === true, 're-saving a loaded doc succeeds');
+    assert(store.save(back.doc, back.revision).ok === true, 're-saving a loaded doc succeeds');
     assert(JSON.parse(fs.readFileSync(store.ledgerPath(), 'utf8'))[CHECKSUM_FIELD] === onDisk[CHECKSUM_FIELD],
       'an unchanged content round-trip produces an IDENTICAL checksum (canonical, order-independent)');
   }
@@ -315,7 +372,7 @@ try {
     ]) {
       const dir = freshDir(`checksum-mutate-${label.replace(/\W+/g, '-')}`);
       const store = createAdmissionLedgerStore({ userDataDir: dir });
-      store.save(GOOD_DOC);
+      store.save(GOOD_DOC, null);
       const doc = JSON.parse(fs.readFileSync(store.ledgerPath(), 'utf8'));
       mutate(doc);                                        // checksum left stale on purpose
       fs.writeFileSync(store.ledgerPath(), JSON.stringify(doc, null, 2), 'utf8');
@@ -351,7 +408,7 @@ try {
     // The refusal must not leak content, and must not repair the file.
     const dir = freshDir('checksum-hygiene');
     const store = createAdmissionLedgerStore({ userDataDir: dir });
-    store.save(GOOD_DOC);
+    store.save(GOOD_DOC, null);
     const doc = JSON.parse(fs.readFileSync(store.ledgerPath(), 'utf8'));
     doc.runs['evidence-run-0001'].runId = 'LEDGER-CONTENT-MARKER-DO-NOT-ECHO';
     const before = JSON.stringify(doc, null, 2);
@@ -369,7 +426,7 @@ try {
     // consequence of an unkeyed checksum under Blue's stated threat boundary.
     const dir = freshDir('checksum-accepted-limits');
     const store = createAdmissionLedgerStore({ userDataDir: dir });
-    store.save(GOOD_DOC);
+    store.save(GOOD_DOC, null);
     const early = fs.readFileSync(store.ledgerPath(), 'utf8');
 
     // (a) A same-user process can RECOMPUTE the checksum, so an edit that does so is accepted.

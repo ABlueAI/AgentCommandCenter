@@ -6,9 +6,9 @@
 //
 // SCOPE. This module owns only the things a file boundary must own: the fixed path under Electron
 // `userData`, the pre-parse byte bound, the ordinary-file and reparse-point refusals, strict UTF-8
-// decoding, JSON parsing, and the atomic write. It owns NO admission policy — every rule about
-// allowances, decrements, rollback and pane binding lives in the pure `admission-budget.js`, which
-// receives this object as its injected `storage`.
+// decoding, JSON parsing, and the locked compare-and-swap atomic write. It owns NO admission policy
+// — every rule about allowances, decrements and pane binding lives in the pure
+// `admission-budget.js`, which receives this object as its injected `storage`.
 //
 // Same split, and largely the same code shape, as `dockview-layout-store.js`. That is deliberate: the
 // atomic-replace pattern there has already been reviewed, and a second, subtly different persistence
@@ -67,6 +67,7 @@ const crypto = require('crypto');
 // reaches this path, and the run id is deliberately NOT part of it — one ledger holds every run, so a
 // single atomic write keeps the whole history consistent.
 const LEDGER_FILENAME = 'admission-ledger.json';
+const LOCK_FILENAME = 'admission-ledger.json.lock';
 
 // A ledger is a small map of small records. 256 KiB is orders of magnitude more than
 // MAX_PERSISTED_RUNS records need and still bounds a hostile or corrupted file before it is parsed.
@@ -88,6 +89,10 @@ const STORE_REASON = Object.freeze({
   // `invalid-json` (the bytes parsed fine) and from `not-found` (there IS a ledger), so the policy
   // layer fails closed on it rather than treating it as a creatable absence.
   INTEGRITY_MISMATCH: 'integrity-mismatch',
+  // A cooperating writer changed the ledger after this caller read it, or another process currently
+  // owns the write lock. This is an accidental-concurrency refusal, not hostile-process isolation.
+  CONFLICT: 'conflict',
+  REVISION_REQUIRED: 'revision-required',
   WRITE_FAILED: 'write-failed',
   NOT_SERIALIZABLE: 'not-serializable',
 });
@@ -132,6 +137,7 @@ function createAdmissionLedgerStore({ userDataDir, fsImpl = fs } = {}) {
     throw new Error('createAdmissionLedgerStore: userDataDir is required');
   }
   const ledgerPath = path.join(userDataDir, LEDGER_FILENAME);
+  const lockPath = path.join(userDataDir, LOCK_FILENAME);
 
   /**
    * Read + parse. Never throws; always returns a bounded result.
@@ -207,7 +213,9 @@ function createAdmissionLedgerStore({ userDataDir, fsImpl = fs } = {}) {
     // field exists, round-trip it, or risk feeding it back into its own input.
     const doc = { ...parsed };
     delete doc[CHECKSUM_FIELD];
-    return { ok: true, doc };
+    // The checksum is also the compare-and-swap revision token. That does not strengthen it into
+    // authentication: a same-user process can still rewrite the document and recompute this value.
+    return { ok: true, doc, revision: claimed };
   }
 
   /**
@@ -217,7 +225,14 @@ function createAdmissionLedgerStore({ userDataDir, fsImpl = fs } = {}) {
    *
    * The caller treats any non-ok result as "nothing was admitted" and writes no bytes to the PTY.
    */
-  function save(doc) {
+  function save(doc, expectedRevision) {
+    // `null` means the caller observed a genuine first-run absence. Every existing ledger must be
+    // paired with the exact revision returned by load(); an omitted or invented expectation is not
+    // allowed to overwrite durable history.
+    if (expectedRevision !== null &&
+        (typeof expectedRevision !== 'string' || !CHECKSUM_PATTERN.test(expectedRevision))) {
+      return refuse(STORE_REASON.REVISION_REQUIRED);
+    }
     // Stamp the checksum here, at the single write boundary, so no caller can persist an
     // unchecksummed ledger by forgetting to. Any inherited `checksum` on the incoming doc is
     // discarded and recomputed rather than trusted — it is excluded from `canonicalize` regardless,
@@ -243,23 +258,53 @@ function createAdmissionLedgerStore({ userDataDir, fsImpl = fs } = {}) {
     if (typeof text !== 'string') return refuse(STORE_REASON.NOT_SERIALIZABLE);
     if (Buffer.byteLength(text, 'utf8') > MAX_RAW_BYTES) return refuse(STORE_REASON.TOO_LARGE);
 
-    const tmp = ledgerPath + '.' + process.pid + '.' + Math.random().toString(36).slice(2) + '.tmp';
+    let lockFd;
     try {
-      fsImpl.writeFileSync(tmp, text, { encoding: 'utf8' });
-      fsImpl.renameSync(tmp, ledgerPath);
-    } catch {
-      try { fsImpl.rmSync(tmp, { force: true }); } catch { /* temp cleanup is best-effort */ }
-      return refuse(STORE_REASON.WRITE_FAILED);
+      // `wx` is the cross-process serialization primitive. A second Blue Helm process is accidental,
+      // not adversarial, and therefore inside this control's boundary. The lock plus the revision
+      // comparison prevents two such processes from spending the same last admission.
+      lockFd = fsImpl.openSync(lockPath, 'wx');
+    } catch (err) {
+      return refuse(err && err.code === 'EEXIST' ? STORE_REASON.CONFLICT : STORE_REASON.WRITE_FAILED);
     }
-    return { ok: true };
+
+    try {
+      // Re-read only after owning the lock. The policy layer also preflights so an already-rejected
+      // file never reaches save(); this second check closes the race between that read and replace.
+      const current = load();
+      if (expectedRevision === null) {
+        if (!current || current.ok === true || current.reason !== STORE_REASON.NOT_FOUND) {
+          return current && current.ok === false && current.reason !== STORE_REASON.NOT_FOUND
+            ? current
+            : refuse(STORE_REASON.CONFLICT);
+        }
+      } else {
+        if (!current || current.ok !== true) return current || refuse(STORE_REASON.READ_FAILED);
+        if (current.revision !== expectedRevision) return refuse(STORE_REASON.CONFLICT);
+      }
+
+      const tmp = ledgerPath + '.' + process.pid + '.' + Math.random().toString(36).slice(2) + '.tmp';
+      try {
+        fsImpl.writeFileSync(tmp, text, { encoding: 'utf8' });
+        fsImpl.renameSync(tmp, ledgerPath);
+      } catch {
+        try { fsImpl.rmSync(tmp, { force: true }); } catch { /* temp cleanup is best-effort */ }
+        return refuse(STORE_REASON.WRITE_FAILED);
+      }
+      return { ok: true, revision: stamped[CHECKSUM_FIELD] };
+    } finally {
+      try { fsImpl.closeSync(lockFd); } catch { /* close is best-effort after the decision */ }
+      try { fsImpl.rmSync(lockPath, { force: true }); } catch { /* a leftover lock fails closed */ }
+    }
   }
 
-  return { load, save, ledgerPath: () => ledgerPath };
+  return { load, save, ledgerPath: () => ledgerPath, lockPath: () => lockPath };
 }
 
 const api = {
   createAdmissionLedgerStore,
   LEDGER_FILENAME,
+  LOCK_FILENAME,
   MAX_RAW_BYTES,
   STORE_REASON,
   // Exported for tests and for anyone who needs to reproduce a checksum by hand. Exporting it is
