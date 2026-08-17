@@ -8,7 +8,9 @@
 //   * the decrement is DURABLE BEFORE the writer is ever called;
 //   * a persistence failure writes nothing;
 //   * a writer failure after a successful persist is NOT refunded;
-//   * a restart cannot restore a consumed turn, by file, by configuration, or by rollback;
+//   * a restart cannot restore a consumed turn by CONFIGURATION (a raised allowance refuses with a
+//     plan mismatch). A restart over a REPLACED ledger file adopts it — an accepted residual under
+//     Blue's stated threat boundary, not a defended property; see admission-budget.js's header;
 //   * a budget cannot move between panes, and a pane exit voids rather than transfers.
 //
 // Everything is injected: storage, clock, writer. There is no fs mutation, no Electron, no PTY, and no
@@ -397,8 +399,15 @@ async function testHostileLedgers() {
   }
 }
 
-async function testRollback() {
-  section('rollback tripwire: a ledger that moves backwards');
+async function testLedgerReplacedUnderneath() {
+  // RENAMED from `testRollback` / "rollback tripwire". There is no rollback tripwire any more: the
+  // `STORAGE_ROLLED_BACK` reason and its `highWaterAdmitted` comparison were REMOVED, because they
+  // advertised a cross-restart guarantee the implementation never delivered. Keeping a section named
+  // after a guard that no longer exists is exactly how a dead guarantee gets re-believed.
+  //
+  // What this section establishes now is narrower and true: a LIVE process keeps its own count, and a
+  // NEW process ADOPTS whatever the ledger says. Both are stated as behaviour, neither as protection.
+  section('ledger replaced underneath: live count authoritative, new process adopts');
   const storage = makeStorage();
   const live = makeBudget({ storage });
   live.budget.initialize();
@@ -411,24 +420,25 @@ async function testRollback() {
   const after = await live.budget.submitPrompt('pty1', SENTINEL);
   assert(after.ok === true, 'the live in-memory count remains authoritative for the running process');
   assert(recordOf(storage).admitted === 2,
-    'the live process re-persists from its own count, so the rollback granted no extra turn');
+    'the live process re-persists from its own count, so the replaced file granted no extra turn');
 
-  // COMMENT CORRECTED during the Quick Links integration. The previous wording here claimed this
-  // block proved a CROSS-PROCESS rollback guard — "a NEW budget instance ... must refuse when a later
-  // load reports fewer admissions". It does not, and neither does the implementation. Every assertion
-  // below is unchanged; only the false claim above them is removed.
+  // ADOPTION, NOT PROTECTION — and the false justification that used to sit here is removed.
   //
-  // `highWaterAdmitted` is PER-INSTANCE and starts at 0, and `initialize()` short-circuits once a
-  // record is loaded, so a fresh instance never reaches the `existing.admitted < highWaterAdmitted`
-  // comparison with a non-zero mark. What the assertions here actually establish is ADOPTION: a new
-  // instance takes the ledger's current count at face value. An offline edit of the ledger between
-  // runs therefore restores the budget — an accepted residual, documented in
-  // docs/BUILDER-HANDOFF-pane-status-admission-budget.md, and pinned by
-  // admission-ui-integration.test.js so it stays a known property rather than a surprise.
+  // A new instance takes the ledger's current count at face value, so an offline edit between runs
+  // restores the budget. The previous comment excused this by claiming "the agent can neither find nor
+  // rewrite it" because the ledger lives under `userData` and the admission env keys are stripped.
+  // THAT WAS FALSE:
+  //   * stripping the env keys hides the run id and allowance from the pane, and nothing else;
+  //   * it does not hide `userData` and creates no filesystem isolation — `APPDATA`/`USERPROFILE` are
+  //     in every PTY and the ledger filename is a literal in readable repository source;
+  //   * a PTY child runs as the same Windows user as main, with the same access to that file.
   //
-  // It is a residual and not a hole because the budget bounds what CLAUDE CODE can spend: the ledger
-  // lives under Electron `userData`, never inside a worktree, and every admission env key is stripped
-  // from each PTY environment, so the agent can neither find nor rewrite it.
+  // Blue's authorization, verbatim: I ACCEPT THE ADMISSION LEDGER AS AN ACCIDENTAL-SPEND CONTROL, NOT
+  // A SECURITY BOUNDARY AGAINST A MALICIOUS OR COMPROMISED SAME-USER PANE. CORRECT THE FALSE
+  // PROVIDER-INACCESSIBILITY CLAIMS, REMOVE THE UNREACHABLE ROLLBACK GUARD, AND RETURN FOR FULL REVIEW.
+  //
+  // So this is an ACCEPTED RESIDUAL under a stated boundary, not a defended property. The assertions
+  // below are unchanged and describe adoption plainly.
   const s2 = makeStorage();
   const b = makeBudget({ storage: s2 });
   b.budget.initialize();
@@ -631,14 +641,57 @@ function testNoMutationSurface() {
   assert(h.budget.state().remaining === 3 && h.budget.state().admitted === 0,
     'mutating the returned state view does not change the budget');
 
-  // Source tripwire: the pane-status prototype must not be able to reach the admission modules at all.
+  // SOURCE TRIPWIRE — NARROWED TO THE TRUTHFUL CLAIM.
+  //
+  // What this establishes: NO SUPPORTED PANE-STATUS MODULE API MUTATES ADMISSION STATE. No module
+  // under prototype-pane-status/ imports an admission module, and (asserted above) no admission
+  // method exists that could increment, refund, reset or extend an allowance.
+  //
+  // What it does NOT establish, and used to be read as establishing: OS-level inaccessibility. The
+  // absence of an import proves only that no supported CODE PATH connects those modules to the
+  // ledger. A process running as the same Windows user — including the provider process in a pane —
+  // can locate, delete, replace or rewrite the ledger file directly, whatever this scan says. See the
+  // threat-boundary header in admission-budget.js.
   const protoDir = path.join(__dirname, 'prototype-pane-status');
   const protoFiles = fs.readdirSync(protoDir).filter((f) => f.endsWith('.js'));
   assert(protoFiles.length > 0, 'the pane-status prototype directory has sources to scan');
   const offenders = protoFiles.filter((f) =>
     /require\(['"][^'"]*admission[^'"]*['"]\)/.test(fs.readFileSync(path.join(protoDir, f), 'utf8')));
   assert(offenders.length === 0,
-    `no pane-status prototype module imports an admission module (found: ${offenders.join(', ') || 'none'})`);
+    `no supported pane-status module API mutates admission state — no module imports one `
+    + `(found: ${offenders.join(', ') || 'none'})`);
+
+  // The threat boundary must be stated in the module's own header, not only in the handoff, and no
+  // file may reintroduce the retracted inaccessibility claims.
+  const budgetSrc = fs.readFileSync(path.join(__dirname, 'admission-budget.js'), 'utf8');
+  assert(/not a security boundary against a malicious or compromised process/i.test(budgetSrc),
+    'admission-budget.js states the threat boundary in its own header');
+  assert(/may locate, delete, replace, or rewrite the local ledger directly/i.test(budgetSrc),
+    'and says explicitly what a same-user process can do to the ledger');
+  // NOTE ON WHAT IS *NOT* ASSERTED HERE, AND WHY.
+  //
+  // A negative source scan for the retracted phrases ("cannot reach the ledger", "can neither find
+  // nor rewrite it") does not work and was removed after it failed: the corrections QUOTE those exact
+  // sentences in order to retract them, so any such scan flags the fix as the defect. A regex cannot
+  // tell quotation from assertion. What IS mechanically checkable is that each file carries the
+  // positive boundary statement, so that is what is asserted — a reader who finds an inaccessibility
+  // claim in these files will also find the retraction beside it.
+  for (const [file, src] of [
+    ['admission-budget.js', budgetSrc],
+    ['admission-budget-store.js', fs.readFileSync(path.join(__dirname, 'admission-budget-store.js'), 'utf8')],
+    ['main.js', fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8')],
+  ]) {
+    assert(/accidental-spend control/i.test(src),
+      `${file} names the control as an ACCIDENTAL-SPEND control`);
+    assert(/not a security boundary|no filesystem isolation|same Windows user/i.test(src),
+      `${file} states that it is not a boundary against a same-user process`);
+  }
+  // The strip's real, narrow effect must be stated wherever the strip is performed.
+  const mainSrc = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+  assert(/hides the (configured )?RUN ID and ALLOWANCE|hides the run's CONFIGURATION/i.test(mainSrc),
+    'main.js states that stripping the env keys hides only the run configuration');
+  assert(/APPDATA/.test(mainSrc) && /USERPROFILE/.test(mainSrc),
+    'main.js names the environment variables that still reveal the ledger location');
 }
 
 function testSourceTripwires() {
@@ -670,7 +723,7 @@ function testSourceTripwires() {
   await testWriterFailureNotRefunded();
   await testRestartAndCrashWindows();
   await testHostileLedgers();
-  await testRollback();
+  await testLedgerReplacedUnderneath();
   await testConcurrency();
   await testPaneBinding();
   testPromptValidation();

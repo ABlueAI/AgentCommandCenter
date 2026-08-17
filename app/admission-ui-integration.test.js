@@ -425,8 +425,8 @@ async function settle() { for (let i = 0; i < 4; i += 1) await new Promise((r) =
     eq(await s.view.submit(), false, 'the budget is now exhausted — the failed write really did cost a turn');
   }
 
-  // ---- (15) restart, rollback tripwire, pane binding, zero budget ---------------------------------
-  section('(15) restart, rollback tripwire, pane binding and zero budget still hold');
+  // ---- (15) restart, ledger integrity, pane binding, zero budget ----------------------------------
+  section('(15) restart, ledger integrity, pane binding and zero budget still hold');
   {
     // Restart: a second process over the SAME ledger sees the spent turns and refuses to rebind.
     const s = makeStack({ allowance: 3 });
@@ -450,48 +450,106 @@ async function settle() { for (let i = 0; i < 4; i += 1) await new Promise((r) =
     eq(b2.state().paneId, null, 'and the stale pane id is NOT shown to the UI');
     eq(b2.claimPane('pty1').ok, false, 'a stale binding refuses to rebind without the explicit rebind flag');
 
-    // ROLLBACK TRIPWIRE — SCOPE PINNED HERE, INCLUDING WHAT IT DOES **NOT** COVER.
+    // LEDGER INTEGRITY — what the checksum catches, and what it explicitly does not.
     //
-    // `highWaterAdmitted` in admission-budget.js is PER-INSTANCE and starts at 0, and `initialize()`
-    // short-circuits once a record is loaded. So the guard at the `existing.admitted < highWater`
-    // comparison protects a LIVE instance against a concurrent writer rewinding the file underneath
-    // it — it does NOT and cannot detect an OFFLINE edit made between two runs, because the process
-    // that would notice no longer exists and its successor starts with a high-water mark of 0.
+    // The dead `STORAGE_ROLLED_BACK` guard is GONE (see below for the assertion that it is gone). In
+    // its place there is an unkeyed SHA-256 checksum over a canonical serialization of the ledger,
+    // verified before any run record is accepted. Blue's authorization, verbatim: I ACCEPT THE
+    // ADMISSION LEDGER AS AN ACCIDENTAL-SPEND CONTROL, NOT A SECURITY BOUNDARY AGAINST A MALICIOUS OR
+    // COMPROMISED SAME-USER PANE.
     //
-    // These assertions pin the behaviour that ACTUALLY EXISTS rather than the behaviour the name
-    // suggests. Editing the ledger file restores the budget. That is an accepted residual, not a
-    // defect to be discovered later: the budget exists to bound what CLAUDE CODE can spend, and
-    // Claude Code cannot reach this file (it lives under Electron `userData`, never in a worktree,
-    // and every admission env key is stripped from the PTY environment). It does not, and was never
-    // designed to, bound what Blue can do to Blue's own machine.
+    // CASE A — an edit that did NOT recompute the checksum is DETECTED and refused.
     const ledgerFile = path.join(s.userDataDir, 'admission-ledger.json');
     const rewound = JSON.parse(fs.readFileSync(ledgerFile, 'utf8'));
     rewound.runs[RUN_ID].admitted = 0;
-    fs.writeFileSync(ledgerFile, JSON.stringify(rewound));
-    eq(b2.state().admitted, 1, 'a LIVE instance is not affected by the file being rewound underneath it');
+    fs.writeFileSync(ledgerFile, JSON.stringify(rewound));   // checksum left stale on purpose
+    eq(b2.state().admitted, 1, 'a LIVE instance is unaffected by the file being rewritten underneath it');
     const b3 = budgetModule.createAdmissionBudget({
       plan: plan2,
       storage: storeModule.createAdmissionLedgerStore({ userDataDir: s.userDataDir }),
       now: () => 9100, isPaneRunning: () => true, writer: () => {}, log: () => {},
     });
     const init3 = b3.initialize();
-    eq(init3.ok, true, 'LIMITATION: a NEW process adopts an offline-rewound ledger instead of refusing');
-    eq(b3.state().admitted, 0, 'LIMITATION: the spent turn is forgotten after an offline ledger edit');
-    assert(budgetModule.REASON.STORAGE_ROLLED_BACK === 'admission-ledger-rolled-back',
-      'the rollback reason constant exists (reachable only for an in-process rewind)');
+    eq(init3.ok, false, 'an edit that did not recompute the checksum is DETECTED and refused');
+    eq(init3.reason, 'admission-ledger-integrity-mismatch', 'and is named accurately');
+    eq(b3.state().ok, false, 'the budget stays fatally closed rather than adopting the edited count');
+    const mismatchIpc = ipcModule.createAdmissionIpc({ budget: b3, assessSender: () => ({ ok: true }), now: () => 1 });
+    const mismatchResult = await mismatchIpc.handleSubmitPrompt(TRUSTED, { paneId: 'pty1', prompt: 'x' });
+    eq(mismatchResult.ok, false, 'no prompt can be admitted through a checksum-mismatched ledger');
+    // It cannot self-heal into a fresh allowance, and it never rewrites the file it rejected.
+    const afterRefusal = fs.readFileSync(ledgerFile, 'utf8');
+    eq(JSON.parse(afterRefusal).runs[RUN_ID].admitted, 0, 'the rejected ledger is left exactly as found');
+    const b3again = budgetModule.createAdmissionBudget({
+      plan: plan2,
+      storage: storeModule.createAdmissionLedgerStore({ userDataDir: s.userDataDir }),
+      now: () => 9150, isPaneRunning: () => true, writer: () => {}, log: () => {},
+    });
+    eq(b3again.initialize().ok, false, 'a further attempt still refuses — no self-healing into a new allowance');
 
-    // The guards that DO survive a restart are the ones that matter for accidental top-ups:
+    // CASE B — NEGATIVE CONTROL, AND NOT A PASSING SECURITY PROPERTY.
+    // Replaying an EARLIER VALID checksummed ledger IS accepted. The checksum is unkeyed, so an
+    // earlier genuine file is indistinguishable from the current one by content alone. This is the
+    // ACCEPTED SAME-USER / REPLAY LIMITATION under Blue's stated boundary — it is recorded here so the
+    // behaviour is known, NOT because it is desirable.
+    const s2 = makeStack({ allowance: 3 });
+    s2.budget.claimPane('pty1');
+    s2.view.mount(); await s2.view.refresh();
+    const earlyCopy = fs.readFileSync(path.join(s2.userDataDir, 'admission-ledger.json'), 'utf8');
+    s2.input().value = 'spend one';
+    eq(await s2.view.submit(), true, 'a turn is spent on the second stack');
+    eq(s2.record().admitted, 1, 'the ledger records it');
+    fs.writeFileSync(path.join(s2.userDataDir, 'admission-ledger.json'), earlyCopy); // valid, older
+    const replayed = budgetModule.createAdmissionBudget({
+      plan: s2.plan,
+      storage: storeModule.createAdmissionLedgerStore({ userDataDir: s2.userDataDir }),
+      now: () => 9300, isPaneRunning: () => true, writer: () => {}, log: () => {},
+    });
+    const replayInit = replayed.initialize();
+    eq(replayInit.ok, true, 'ACCEPTED LIMITATION: replaying an earlier VALID checksummed ledger is not detected');
+    eq(replayed.state().admitted, 0, 'ACCEPTED LIMITATION: the spent turn is forgotten by the replay');
+    // CASE C — deleting the ledger still recreates a fresh run under the not-found rule. Also an
+    // accepted consequence, stated rather than defended.
+    fs.rmSync(path.join(s2.userDataDir, 'admission-ledger.json'));
+    const recreated = budgetModule.createAdmissionBudget({
+      plan: s2.plan,
+      storage: storeModule.createAdmissionLedgerStore({ userDataDir: s2.userDataDir }),
+      now: () => 9400, isPaneRunning: () => true, writer: () => {}, log: () => {},
+    });
+    eq(recreated.initialize().ok, true, 'ACCEPTED LIMITATION: deleting the ledger recreates a fresh run');
+    eq(recreated.state().admitted, 0, 'ACCEPTED LIMITATION: with a full allowance');
+
+    // THE DEAD GUARD IS GONE — asserted, so it cannot quietly return.
+    assert(!Object.prototype.hasOwnProperty.call(budgetModule.REASON, 'STORAGE_ROLLED_BACK'),
+      'REASON.STORAGE_ROLLED_BACK no longer exists');
+    assert(!Object.values(budgetModule.REASON).includes('admission-ledger-rolled-back'),
+      'no reason value claims rollback protection');
+    eq(budgetModule.REASON.STORAGE_INTEGRITY_MISMATCH, 'admission-ledger-integrity-mismatch',
+      'the accurately named integrity reason replaces it');
+
+    // The guard that DOES survive a restart, and is the one that matters for ACCIDENTAL top-ups:
+    // raising BLUE_HELM_ADMISSION_ALLOWANCE and restarting must not grant more turns.
+    //
+    // This runs on its own fresh stack with an INTACT, properly checksummed ledger. The `s` stack's
+    // file was deliberately corrupted above, and against that file every budget refuses with
+    // `integrity-mismatch` first — which would make a plan-mismatch assertion there pass or fail for
+    // the wrong reason. Testing one refusal at a time is the whole point of separating them.
+    const s3 = makeStack({ allowance: 3 });
+    s3.budget.claimPane('pty1');
+    s3.view.mount(); await s3.view.refresh();
+    s3.input().value = 'establish the run';
+    eq(await s3.view.submit(), true, 'a turn is spent so the run is durably recorded at allowance 3');
     const planBigger = config.parseAdmissionConfig({
       BLUE_HELM_ADMISSION_ENABLED: '1', BLUE_HELM_ADMISSION_RUN_ID: RUN_ID, BLUE_HELM_ADMISSION_ALLOWANCE: '9',
     });
     const b4 = budgetModule.createAdmissionBudget({
       plan: planBigger,
-      storage: storeModule.createAdmissionLedgerStore({ userDataDir: s.userDataDir }),
+      storage: storeModule.createAdmissionLedgerStore({ userDataDir: s3.userDataDir }),
       now: () => 9200, isPaneRunning: () => true, writer: () => {}, log: () => {},
     });
     const init4 = b4.initialize();
     eq(init4.ok, false, 'raising the configured allowance and restarting does NOT top the run up');
-    eq(init4.reason, 'admission-ledger-plan-mismatch', 'it fails closed with a plan mismatch');
+    eq(init4.reason, 'admission-ledger-plan-mismatch',
+      'it fails closed with a PLAN mismatch — the ledger itself is intact, so this is not the integrity path');
     const toppedIpc = ipcModule.createAdmissionIpc({ budget: b4, assessSender: () => ({ ok: true }), now: () => 1 });
     const toppedResult = await toppedIpc.handleSubmitPrompt(TRUSTED, { paneId: 'pty1', prompt: 'x' });
     eq(toppedResult.ok, false, 'and no prompt can be admitted through the mismatched run');

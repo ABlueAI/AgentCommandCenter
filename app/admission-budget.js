@@ -26,9 +26,55 @@
 // every rule below — including the crash windows and the concurrency race — is exercised in plain node
 // by admission-budget.test.js against fakes.
 //
-// WHAT CANNOT TOUCH THE LEDGER. There is no method here that increments, refunds, resets, extends, or
-// certifies an allowance. Provider output, hook events, badge state and PTY bytes reach no function in
-// this file. That is a structural property, not a policy check: the mutation does not exist to call.
+// ============================================================================================
+// THREAT BOUNDARY — WHAT THIS CONTROL IS, AND WHAT IT IS NOT
+//
+// This budget bounds accidental paid-turn spend through Blue Helm's controlled input paths. It is
+// not a security boundary against a malicious or compromised process running as the same Windows
+// user. Such a process may locate, delete, replace, or rewrite the local ledger directly.
+//
+// Blue's authorization, verbatim:
+//   I ACCEPT THE ADMISSION LEDGER AS AN ACCIDENTAL-SPEND CONTROL, NOT A SECURITY BOUNDARY AGAINST A
+//   MALICIOUS OR COMPROMISED SAME-USER PANE. CORRECT THE FALSE PROVIDER-INACCESSIBILITY CLAIMS,
+//   REMOVE THE UNREACHABLE ROLLBACK GUARD, AND RETURN FOR FULL REVIEW.
+//
+// Earlier revisions of this file, of main.js, of these tests and of the handoff claimed or implied
+// that the provider process could not reach the ledger. THAT WAS FALSE, and the specific errors are
+// worth naming so they are not reintroduced:
+//   * Stripping the admission environment keys from a PTY hides the configured RUN ID and ALLOWANCE
+//     from that pane. It does NOT hide Electron `userData`, and it creates NO filesystem isolation.
+//     `APPDATA` / `USERPROFILE` are present in every PTY, the ledger filename is a literal in
+//     readable repository source, and filesystem enumeration finds the file regardless.
+//   * `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` is about credentials in Claude Code's own subprocesses. It
+//     is NOT evidence that a same-user Claude process cannot reach this ledger.
+//   * A PTY child runs as the same Windows user as main and has the same file access main has.
+//
+// WHAT IS ACTUALLY TRUE — the narrower claim, which is the one this file can support:
+//
+//   NO SUPPORTED PANE-STATUS MODULE API MUTATES ADMISSION STATE. There is no method in this file
+//   that increments, refunds, resets, extends, or certifies an allowance. Provider output, hook
+//   events, badge state and PTY bytes reach no function here, and nothing under
+//   `app/prototype-pane-status/` imports an admission module. That is a code-level structural
+//   property: the mutation does not exist to call.
+//
+//   It is NOT a claim of OS-level inaccessibility. The absence of an import proves only that no
+//   supported code path connects those modules to the ledger.
+//
+// WHAT SURVIVES AS A REAL PROTECTION, all of it against accident and against the supported input
+// paths rather than against a hostile local process:
+//   * a durable decrement before any byte reaches the PTY;
+//   * no refund after a post-persist writer failure;
+//   * refusal on a plan mismatch, so raising the configured allowance and restarting cannot top a
+//     run up;
+//   * refusal on a malformed, unreadable, version-mismatched or checksum-mismatched ledger;
+//   * refusal of direct input to the controlled pane, and unchanged behaviour for every other pane.
+//
+// WHAT WAS REMOVED. The `STORAGE_ROLLED_BACK` reason and its `highWaterAdmitted` comparison are
+// gone. They advertised a cross-restart rollback guarantee the code never delivered (the mark was
+// per-instance and started at 0, and `initialize()` short-circuits once loaded, so the comparison
+// was unreachable for the case its name implied). Nothing replaces it and no new prevention claim
+// replaces it. An earlier valid ledger can be replayed; that is accepted, not defended against.
+// ============================================================================================
 
 const config = require('./admission-budget-config');
 
@@ -59,7 +105,16 @@ const REASON = Object.freeze({
   STORAGE_UNREADABLE: 'admission-ledger-unreadable',
   STORAGE_MALFORMED: 'admission-ledger-malformed',
   STORAGE_VERSION_MISMATCH: 'admission-ledger-version-mismatch',
-  STORAGE_ROLLED_BACK: 'admission-ledger-rolled-back',
+  // REMOVED: STORAGE_ROLLED_BACK ('admission-ledger-rolled-back').
+  //
+  // It advertised a cross-restart rollback guarantee that the implementation never delivered. Its
+  // comparison was against a PER-INSTANCE high-water mark that started at 0 every time, and
+  // `initialize()` short-circuits once a record is loaded, so no instance ever reached the comparison
+  // holding a non-zero mark. The reason code was unreachable for the case its name implied, and a
+  // dead guarantee is worse than an absent one: it invites reliance. Blue accepted the ledger as an
+  // accidental-spend control rather than a security boundary and directed its removal. Nothing
+  // replaces it, and no prevention claim replaces it either — see the header.
+  STORAGE_INTEGRITY_MISMATCH: 'admission-ledger-integrity-mismatch',
   STORAGE_CORRUPT_COUNTS: 'admission-ledger-corrupt-counts',
   STORAGE_PLAN_MISMATCH: 'admission-ledger-plan-mismatch',
   STORAGE_TOO_MANY_RUNS: 'admission-ledger-too-many-runs',
@@ -187,11 +242,6 @@ function createAdmissionBudget(deps) {
   let initialized = false;
   let fatalReason = null; // once set, every operation refuses with it — no self-healing
 
-  // ROLLBACK TRIPWIRE. The highest `admitted` this process has ever observed for this run. A later
-  // load reporting fewer admissions means the file moved backwards — a restored copy, an editor, a
-  // sync client — and that is exactly how consumed turns would come back. Refuse; never re-adopt.
-  let highWaterAdmitted = 0;
-
   // Single-flight guard. The admission path is async at the writer, so two invokes could otherwise
   // interleave between the in-memory decrement and the persist. Refusing the second is the
   // fail-closed serialization: it can lose a legitimate prompt, never double-spend the last one.
@@ -226,6 +276,11 @@ function createAdmissionBudget(deps) {
         log(`[admission] run created; allowance ${record.allowance}, admitted 0`);
         return { ok: true, state: state() };
       }
+      // An integrity mismatch is named distinctly so the operator learns WHICH kind of unreadable
+      // this is: the bytes parsed, but the ledger's content does not match its own checksum. It is
+      // still fail-closed and it still never rewrites or repairs the file — a mismatching ledger is
+      // left exactly as found for diagnosis, and cannot self-heal into a fresh allowance.
+      if (loaded && loaded.reason === 'integrity-mismatch') return fail(REASON.STORAGE_INTEGRITY_MISMATCH);
       return fail(REASON.STORAGE_UNREADABLE);
     }
 
@@ -264,7 +319,10 @@ function createAdmissionBudget(deps) {
     // "restart restores turns" hole, reached through configuration instead of through the file.
     if (existing.allowance !== plan.allowance) return fail(REASON.STORAGE_PLAN_MISMATCH);
     if (existing.admitted > existing.allowance) return fail(REASON.STORAGE_CORRUPT_COUNTS);
-    if (existing.admitted < highWaterAdmitted) return fail(REASON.STORAGE_ROLLED_BACK);
+    // NOTE: there is deliberately NO check here that the count has not moved backwards since a
+    // previous process saw it. See the header — a ledger replaced or rewritten by another process
+    // running as this user is outside the accepted boundary, and the removed high-water comparison
+    // only ever appeared to cover it.
 
     record = {
       runId: existing.runId,
@@ -280,7 +338,6 @@ function createAdmissionBudget(deps) {
       // Only an explicit main-owned REBIND may re-bind, and re-binding never changes `admitted`.
       bindingStale: existing.paneId !== null,
     };
-    highWaterAdmitted = Math.max(highWaterAdmitted, record.admitted);
     initialized = true;
     log(`[admission] run resumed; allowance ${record.allowance}, admitted ${record.admitted}, remaining ${remaining()}`);
     return { ok: true, state: state() };
@@ -469,7 +526,6 @@ function createAdmissionBudget(deps) {
         log('[admission] REFUSED: the ledger could not be persisted; nothing was written to the PTY');
         return fail(REASON.PERSIST_FAILED);
       }
-      highWaterAdmitted = Math.max(highWaterAdmitted, record.admitted);
       const admittedIndex = record.admitted;
 
       // ---- (4) writer -------------------------------------------------------------------------

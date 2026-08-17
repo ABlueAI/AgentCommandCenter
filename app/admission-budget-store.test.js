@@ -16,7 +16,10 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { createAdmissionLedgerStore, LEDGER_FILENAME, MAX_RAW_BYTES, STORE_REASON } = require('./admission-budget-store');
+const {
+  createAdmissionLedgerStore, LEDGER_FILENAME, MAX_RAW_BYTES, STORE_REASON,
+  CHECKSUM_FIELD, canonicalize, checksumOf,
+} = require('./admission-budget-store');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -260,6 +263,149 @@ try {
     assert(text.indexOf('SECRET-LEDGER-CONTENT-MARKER') === -1, 'a refusal never echoes file contents');
     assert(text.indexOf(dir) === -1, 'a refusal never echoes the path');
     assert(Object.values(STORE_REASON).includes(r.reason), 'the reason is one of the declared constants');
+  }
+
+  // ---- 7. integrity checksum ----------------------------------------------------------------------
+  //
+  // WHAT IS BEING TESTED, STATED PRECISELY. The checksum detects accidental corruption and edits that
+  // did not recompute it. It is unkeyed, so it is NOT authentication, NOT hostile tamper resistance,
+  // and NOT rollback prevention. Blue's authorization, verbatim: I ACCEPT THE ADMISSION LEDGER AS AN
+  // ACCIDENTAL-SPEND CONTROL, NOT A SECURITY BOUNDARY AGAINST A MALICIOUS OR COMPROMISED SAME-USER
+  // PANE. The limitations are asserted below alongside the protections, deliberately labelled.
+  section('integrity checksum: accidental-edit detection only');
+  {
+    const dir = freshDir('checksum-roundtrip');
+    const store = createAdmissionLedgerStore({ userDataDir: dir });
+    assert(store.save(GOOD_DOC).ok === true, 'save() succeeds');
+    const onDisk = JSON.parse(fs.readFileSync(store.ledgerPath(), 'utf8'));
+    assert(typeof onDisk[CHECKSUM_FIELD] === 'string' && /^[0-9a-f]{64}$/.test(onDisk[CHECKSUM_FIELD]),
+      'every persisted ledger carries a 64-hex SHA-256 checksum');
+    const back = store.load();
+    assert(back.ok === true, 'a valid checksummed ledger LOADS');
+    assert(back.doc.runs['evidence-run-0001'].admitted === 1, 'with its content intact');
+    assert(!Object.prototype.hasOwnProperty.call(back.doc, CHECKSUM_FIELD),
+      'the checksum field is STRIPPED before the policy layer sees the doc');
+    // Round-tripping a loaded doc back through save() must reproduce the same checksum: the field is
+    // excluded from its own input, so content that has not changed hashes the same.
+    assert(store.save(back.doc).ok === true, 're-saving a loaded doc succeeds');
+    assert(JSON.parse(fs.readFileSync(store.ledgerPath(), 'utf8'))[CHECKSUM_FIELD] === onDisk[CHECKSUM_FIELD],
+      'an unchanged content round-trip produces an IDENTICAL checksum (canonical, order-independent)');
+  }
+  {
+    // Canonical serialization: insertion order must not change the checksum, or a semantically
+    // identical rewrite would produce false refusals.
+    const a = { schemaVersion: 1, runs: { r2: { x: 1 }, r1: { y: 2 } } };
+    const b = { runs: { r1: { y: 2 }, r2: { x: 1 } }, schemaVersion: 1 };
+    assert(canonicalize(a) === canonicalize(b), 'canonical form is independent of key insertion order');
+    assert(checksumOf(a) === checksumOf(b), 'and so is the checksum');
+    assert(canonicalize({ a: [3, 1, 2] }) === '{"a":[3,1,2]}', 'array ORDER is preserved (it is data)');
+    assert(checksumOf({ x: 1, [CHECKSUM_FIELD]: 'deadbeef' }) === checksumOf({ x: 1 }),
+      'the checksum field is excluded from its own input');
+  }
+  {
+    // MUTATION WITHOUT RECOMPUTING — the case this exists to catch.
+    for (const [label, mutate] of [
+      ['admitted', (d) => { d.runs['evidence-run-0001'].admitted = 0; }],
+      ['allowance', (d) => { d.runs['evidence-run-0001'].allowance = 9; }],
+      // NOTE: must differ from GOOD_DOC's existing 'open', or the "mutation" is a no-op and the
+      // checksum legitimately still matches — which is a broken test, not a broken check.
+      ['state', (d) => { d.runs['evidence-run-0001'].state = 'closed'; }],
+      ['a whole added run', (d) => { d.runs.smuggled = { runId: 'smuggled', allowance: 9 }; }],
+      ['a removed run', (d) => { delete d.runs['evidence-run-0001']; }],
+    ]) {
+      const dir = freshDir(`checksum-mutate-${label.replace(/\W+/g, '-')}`);
+      const store = createAdmissionLedgerStore({ userDataDir: dir });
+      store.save(GOOD_DOC);
+      const doc = JSON.parse(fs.readFileSync(store.ledgerPath(), 'utf8'));
+      mutate(doc);                                        // checksum left stale on purpose
+      fs.writeFileSync(store.ledgerPath(), JSON.stringify(doc, null, 2), 'utf8');
+      const r = store.load();
+      assert(r.ok === false && r.reason === STORE_REASON.INTEGRITY_MISMATCH,
+        `editing ${label} without recomputing the checksum is DETECTED`);
+    }
+  }
+  {
+    // A missing or malformed checksum is refused, not tolerated — otherwise stripping the field would
+    // be the trivial bypass. There is no unchecksummed-ledger migration path and none is needed: no
+    // production ledger has been created by an authorized live run.
+    for (const [label, value] of [
+      ['absent', undefined],
+      ['empty', ''],
+      ['too short', 'abc123'],
+      ['uppercase hex', 'A'.repeat(64)],
+      ['non-hex', 'z'.repeat(64)],
+      ['wrong type', 12345],
+      ['null', null],
+    ]) {
+      const dir = freshDir(`checksum-shape-${label.replace(/\W+/g, '-')}`);
+      const store = createAdmissionLedgerStore({ userDataDir: dir });
+      const doc = JSON.parse(JSON.stringify(GOOD_DOC));
+      if (value !== undefined) doc[CHECKSUM_FIELD] = value;
+      fs.writeFileSync(store.ledgerPath(), JSON.stringify(doc, null, 2), 'utf8');
+      const r = store.load();
+      assert(r.ok === false && r.reason === STORE_REASON.INTEGRITY_MISMATCH,
+        `a ${label} checksum is refused`);
+    }
+  }
+  {
+    // The refusal must not leak content, and must not repair the file.
+    const dir = freshDir('checksum-hygiene');
+    const store = createAdmissionLedgerStore({ userDataDir: dir });
+    store.save(GOOD_DOC);
+    const doc = JSON.parse(fs.readFileSync(store.ledgerPath(), 'utf8'));
+    doc.runs['evidence-run-0001'].runId = 'LEDGER-CONTENT-MARKER-DO-NOT-ECHO';
+    const before = JSON.stringify(doc, null, 2);
+    fs.writeFileSync(store.ledgerPath(), before, 'utf8');
+    const r = store.load();
+    assert(r.ok === false, 'the tampered ledger is refused');
+    assert(JSON.stringify(r).indexOf('LEDGER-CONTENT-MARKER-DO-NOT-ECHO') === -1,
+      'the integrity refusal never echoes ledger content');
+    assert(JSON.stringify(r).indexOf(dir) === -1, 'nor the path');
+    assert(fs.readFileSync(store.ledgerPath(), 'utf8') === before,
+      'the rejected file is left EXACTLY as found — never repaired, deleted, or overwritten');
+  }
+  {
+    // ACCEPTED LIMITATIONS, ASSERTED AS SUCH. None of these is a passing security property; each is a
+    // consequence of an unkeyed checksum under Blue's stated threat boundary.
+    const dir = freshDir('checksum-accepted-limits');
+    const store = createAdmissionLedgerStore({ userDataDir: dir });
+    store.save(GOOD_DOC);
+    const early = fs.readFileSync(store.ledgerPath(), 'utf8');
+
+    // (a) A same-user process can RECOMPUTE the checksum, so an edit that does so is accepted.
+    const doc = JSON.parse(early);
+    delete doc[CHECKSUM_FIELD];
+    doc.runs['evidence-run-0001'].admitted = 0;
+    doc[CHECKSUM_FIELD] = checksumOf(doc);
+    fs.writeFileSync(store.ledgerPath(), JSON.stringify(doc, null, 2), 'utf8');
+    const recomputed = store.load();
+    assert(recomputed.ok === true && recomputed.doc.runs['evidence-run-0001'].admitted === 0,
+      'ACCEPTED LIMITATION: an edit that RECOMPUTES the checksum is accepted (it is unkeyed by design)');
+
+    // (b) Replaying an earlier VALID checksummed ledger is not detected.
+    fs.writeFileSync(store.ledgerPath(), early, 'utf8');
+    const replay = store.load();
+    assert(replay.ok === true && replay.doc.runs['evidence-run-0001'].admitted === 1,
+      'ACCEPTED LIMITATION: replaying an earlier valid checksummed ledger is not detected');
+
+    // (c) Deleting the ledger still returns the creatable `not-found`.
+    fs.rmSync(store.ledgerPath());
+    assert(store.load().reason === STORE_REASON.NOT_FOUND,
+      'ACCEPTED LIMITATION: deleting the ledger still yields not-found, which recreates a fresh run');
+  }
+  {
+    // No new dependency, and no key material anywhere.
+    const src = fs.readFileSync(path.join(__dirname, 'admission-budget-store.js'), 'utf8');
+    const requires = src.match(/require\('([^']+)'\)/g) || [];
+    assert(requires.every((r) => /'(fs|path|crypto)'/.test(r)),
+      `the store requires only node built-ins (saw ${requires.join(' ')})`);
+    assert(!/createHmac|scrypt|pbkdf2|randomBytes|dpapi|safeStorage|registry/i.test(src),
+      'no HMAC, no key derivation, no DPAPI, no registry anchor — an unkeyed digest only');
+    const code = src.split(/\r?\n/).filter((l) => !l.trim().startsWith('//')).join('\n');
+    assert(!/authenticat|tamper-?proof|tamper-?resist/i.test(code),
+      'the code does not describe the checksum as authentication or tamper resistance');
+    assert(/not a security boundary against a malicious or compromised process/i.test(src),
+      'the store header states the threat boundary verbatim');
   }
 } finally {
   // Remove ONLY the directory this test created. Never a computed or inherited root.

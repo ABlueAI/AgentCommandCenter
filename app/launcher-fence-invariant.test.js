@@ -78,11 +78,20 @@ function sha(s) { return crypto.createHash('sha256').update(s, 'utf8').digest('h
 //         ...admissionConfig.stripAdmissionEnv(process.env)
 //     `stripAdmissionEnv` returns a COPY of the parent environment with every key in
 //     ADMISSION_ENV_KEYS removed, so the run id and allowance that bound a pane's paid turns are not
-//     readable by that pane — the same class of leak `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` exists to
-//     prevent, applied to the cost control instead of a credential. Nothing else in the block moved:
-//     the scrub, the video-scout key scoping, and the pane-status spread are byte-identical.
-//     The key list is asserted complete by admission-budget-config.test.js, which fails if an
-//     ENV_* constant is added without being added to the scrub list.
+//     present in that pane's environment. Nothing else in the block moved: the scrub, the video-scout
+//     key scoping, and the pane-status spread are byte-identical. The key list is asserted complete by
+//     admission-budget-config.test.js, which fails if an ENV_* constant is added without being added
+//     to the scrub list.
+//
+//     WHAT THAT DOES NOT MEAN — the earlier wording here drew a false analogy to
+//     `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` and implied the pane therefore cannot reach the cost control.
+//     It can. Removing those keys hides the run's CONFIGURATION from the pane environment and nothing
+//     more: it does not hide Electron `userData`, it creates no filesystem isolation, `APPDATA` and
+//     `USERPROFILE` are still in the child environment, and the ledger filename is a literal in
+//     readable repository source. A PTY child runs as the same Windows user as main and has the same
+//     access to that file. The admission ledger is an ACCIDENTAL-SPEND control over Blue Helm's input
+//     paths, not a boundary against a malicious or compromised same-user process. See the
+//     threat-boundary header in app/admission-budget.js.
 //
 //   * `pty-start handler` 9913 -> 12443 bytes. Three additions, no deletions and no reordering:
 //       1. the seven-line comment above `const ptyEnv` explaining the scrub, plus the +35 above;
@@ -134,6 +143,34 @@ function sha(s) { return crypto.createHash('sha256').update(s, 'utf8').digest('h
 //   * `fenced-role cwd gate` — 1354 bytes, sha ae9dce92…, IDENTICAL at all four points above, which
 //     now includes both the Quick Links merge and this rebase. The credential/fence containment logic
 //     has never been touched by any revision, by either feature, or by the integration between them.
+//
+// RE-PINNED (fourth time) for the ADMISSION LEDGER THREAT-BOUNDARY CORRECTION.
+// Blue's authorization, verbatim:
+//   I ACCEPT THE ADMISSION LEDGER AS AN ACCIDENTAL-SPEND CONTROL, NOT A SECURITY BOUNDARY AGAINST A
+//   MALICIOUS OR COMPROMISED SAME-USER PANE. CORRECT THE FALSE PROVIDER-INACCESSIBILITY CLAIMS,
+//   REMOVE THE UNREACHABLE ROLLBACK GUARD, AND RETURN FOR FULL REVIEW.
+//
+// EXACTLY ONE REGION MOVED, AND THE CHANGE IS COMMENT-ONLY:
+//   * `pty-start handler` 12443 -> 13170 bytes. The comment above `const ptyEnv` was corrected: it
+//     used to say the child "must not be able to read, and therefore must not be able to reason about
+//     or rewrite" its own budget configuration, which overstated what stripping environment keys
+//     achieves. The replacement states plainly that the strip hides the run id and allowance from the
+//     pane environment and nothing more — no `userData` concealment, no filesystem isolation, and no
+//     implication that `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` prevents a same-user process from reaching
+//     the ledger.
+//
+// NO EXECUTABLE STATEMENT IN THIS REGION CHANGED. That is the load-bearing claim of this re-pin, and
+// it is independently checkable two ways:
+//   1. `ptyEnv block` is STILL 271 / 2a399a98… — byte-identical to the previous pin. The environment
+//      actually handed to a PTY was not touched at all, because the corrected text sits ABOVE the
+//      `const ptyEnv = {` anchor and therefore outside that region while remaining inside the wider
+//      pty-start region.
+//   2. `fenced-role cwd gate` is STILL 1354 / ae9dce92… — the same value as the ORIGINAL reviewed
+//      base, now across four re-pins, two features and one rebase.
+// The +727 bytes are the net comment delta. Every content assertion below still passes unchanged.
+//
+// Prior hash for the region that moved, retained:
+//   pty-start handler 12443 b5fe654e0d638de756079e7a0d67fa1fbba134f40f9d99a189091df9f1c7a945  (rev 3)
 // ---------------------------------------------------------------------------------------------
 
 // Region definitions: [name, startAnchor, endAnchor, expected byte length, expected sha256].
@@ -156,8 +193,8 @@ const REGIONS = [
     name: 'pty-start handler',
     start: "ipcMain.handle('pty-start', (_e, opts) => {",
     end: "ipcMain.on('pty-write'",
-    len: 12443,
-    sha: 'b5fe654e0d638de756079e7a0d67fa1fbba134f40f9d99a189091df9f1c7a945',
+    len: 13170,
+    sha: 'eb3c26968e6c447f15b4e5ccbe2c999912d189213ed006615efc25938738dfe0',
   },
 ];
 

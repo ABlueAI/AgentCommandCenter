@@ -55,8 +55,15 @@ const { createClaudeVersionResolver } = require('./prototype-pane-status/pane-st
 // decrements and PERSISTS before it writes. Requiring these modules is inert — with the gate unset,
 // parseAdmissionConfig returns the disabled plan and createAdmissionBudget returns an object whose
 // every method refuses, so no pane is controlled and `pty-write` behaves exactly as it did before.
-// The budget is deliberately independent of the pane-status hook it exists to bound: nothing in
-// prototype-pane-status/ can reach the ledger. See app/admission-budget.js.
+// The budget is deliberately independent of the pane-status hook it exists to bound: NO SUPPORTED
+// PANE-STATUS MODULE API MUTATES ADMISSION STATE — nothing under prototype-pane-status/ imports an
+// admission module, and no admission method increments, refunds, resets or extends an allowance.
+//
+// That is a CODE-LEVEL property, not a claim of OS-level inaccessibility. This is an ACCIDENTAL-SPEND
+// control over Blue Helm's own input paths, NOT a security boundary against a malicious or compromised
+// process running as the same Windows user — such a process can locate, delete, replace or rewrite the
+// ledger file directly. Read the threat-boundary header in app/admission-budget.js before relying on
+// this for anything.
 const admissionConfig = require('./admission-budget-config');
 const { createAdmissionBudget } = require('./admission-budget');
 const { createAdmissionLedgerStore } = require('./admission-budget-store');
@@ -1138,12 +1145,21 @@ ipcMain.handle('pty-start', (_e, opts) => {
   // reported as blocked rather than worked around. The token exists only here and in main's memory:
   // never in argv, a log line, a file, the renderer, or a persistent environment variable.
   const paneStatusEnv = paneStatus.envForPane(opts);
-  // TURN ADMISSION BUDGET — the child must not be able to read, and therefore must not be able to
-  // reason about or rewrite, the configuration that bounds its own paid turns. `stripAdmissionEnv`
-  // returns a COPY of process.env with every key in ADMISSION_ENV_KEYS removed; the spread below then
-  // starts from that copy rather than from process.env. Without this the run id and allowance would
-  // ride into every PTY exactly the way a `setx` credential does, and any Bash step inside the agent
-  // could read them.
+  // TURN ADMISSION BUDGET — keep the run's CONFIGURATION out of the pane's environment.
+  // `stripAdmissionEnv` returns a COPY of process.env with every key in ADMISSION_ENV_KEYS removed;
+  // the spread below starts from that copy rather than from process.env. Without it the run id and
+  // allowance would ride into every PTY exactly the way a `setx` credential does, and any Bash step
+  // inside the agent could read them.
+  //
+  // WHAT THIS DOES AND DOES NOT ACHIEVE — the earlier comment here overstated it:
+  //   * It hides the configured RUN ID and ALLOWANCE from the pane environment. That is all.
+  //   * It does NOT hide Electron `userData`, and it creates NO filesystem isolation. `APPDATA` and
+  //     `USERPROFILE` remain in the child environment, the ledger filename is a literal in readable
+  //     repository source, and enumeration finds the file anyway.
+  //   * The `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` line below concerns credentials in Claude Code's own
+  //     subprocesses; it is NOT evidence that a same-user Claude process cannot reach the ledger.
+  // The ledger is an accidental-spend control, not a boundary against a hostile same-user process.
+  // See the threat-boundary header in app/admission-budget.js.
   const ptyEnv = {
     ...admissionConfig.stripAdmissionEnv(process.env),
     CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1',  // scrub credentials from Claude Code's own subprocesses

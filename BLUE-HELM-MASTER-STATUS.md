@@ -502,6 +502,76 @@ adopted subsystem. The canonical verdict in
 justify** — not further prototype building by default. Any next step needs its
 own work order.
 
+### ACCEPTED RESIDUALS — reporter provenance AND admission-ledger integrity
+
+**These two sit in the same category: advisory, human-controlled, and explicitly
+NOT protection against a hostile local process.** They are recorded together
+because accepting one while misreading the other as stronger is the failure mode.
+
+**Residual 1 — reporter provenance (Experiment A).** A pane descendant can forge
+an allowlisted event, so the badge is **advisory, not authenticated truth**.
+Unchanged by the entry below.
+
+**Residual 2 — admission-ledger integrity (turn admission budget).** Blue's
+authorization, verbatim:
+
+> I ACCEPT THE ADMISSION LEDGER AS AN ACCIDENTAL-SPEND CONTROL, NOT A SECURITY
+> BOUNDARY AGAINST A MALICIOUS OR COMPROMISED SAME-USER PANE. CORRECT THE FALSE
+> PROVIDER-INACCESSIBILITY CLAIMS, REMOVE THE UNREACHABLE ROLLBACK GUARD, AND
+> RETURN FOR FULL REVIEW.
+
+What the admission budget **is**: an accidental-spend control over Blue Helm's
+own controlled input paths. It bounds paid turns admitted through the controlled
+prompt path, refuses direct terminal input to the controlled pane, decrements
+durably before any byte reaches the PTY, does not refund a post-persist writer
+failure, and refuses a plan mismatch so that raising the configured allowance and
+restarting cannot top a run up.
+
+What it is **not**: a security boundary against a malicious or compromised
+process running as the same Windows user. **Such a process may locate, delete,
+replace, or rewrite the local ledger directly.** Specifically — each of these was
+stated falsely in earlier revisions and is now corrected in the modules' own
+headers:
+
+- Stripping the admission environment keys hides the configured **run ID and
+  allowance** from the pane environment. That is its entire effect.
+- It does **not** hide Electron `userData` and creates **no** filesystem
+  isolation. `APPDATA` / `USERPROFILE` are present in every PTY, the ledger
+  filename is a literal in readable repository source, and plain filesystem
+  enumeration finds it.
+- `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` concerns credentials in Claude Code's own
+  subprocesses. It is **not** evidence that a same-user Claude process cannot
+  reach the ledger.
+- The absence of an import from `prototype-pane-status/` proves only that **no
+  supported pane-status module API mutates admission state**. It is not proof of
+  OS-level inaccessibility.
+
+**Checksum protection detects accidental edits only.** Every persisted ledger
+carries an unkeyed SHA-256 checksum over a canonical serialization, verified
+before any run record is accepted; a mismatch fails closed visibly as
+`admission-ledger-integrity-mismatch`, and the rejected file is never repaired,
+deleted, or overwritten. It is **not** authentication, **not** hostile tamper
+resistance, and **not** rollback prevention. A same-user process can recompute
+it; replaying an earlier valid checksummed ledger is not detected; deleting the
+ledger still recreates a fresh run.
+
+**The unreachable rollback guard was REMOVED.** `REASON.STORAGE_ROLLED_BACK` and
+its `highWaterAdmitted` comparison advertised a cross-restart guarantee the code
+never delivered. Nothing replaces it, and **no new prevention claim replaces it.**
+
+**BOTH ACCEPTANCES BECOME VOID AUTOMATICALLY, AND REQUIRE A NEW THREAT DECISION,
+IF PANE STATUS OR ADMISSION STATE EVER:**
+
+1. **authorizes an action**;
+2. **triggers automation**;
+3. **controls merge, push, approval, restart, process termination, credentials,
+   or another consequential operation**;
+4. **is represented as protection against a hostile local process.**
+
+Until then both remain advisory inputs to a human who is watching. Neither may be
+cited as a control in any argument that an operation is safe to perform
+automatically.
+
 ## Current checkpoint — August 11 — PANE-STATUS PROCUREMENT MERGED AND PUSHED; PROTOTYPE VERDICT IN `main`
 
 > **SUPERSEDED AS THE CURRENT BASELINE — retained as historical provenance.**
