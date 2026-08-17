@@ -85,7 +85,7 @@ function sha(s) { return crypto.createHash('sha256').update(s, 'utf8').digest('h
 //
 //     WHAT THAT DOES NOT MEAN — the earlier wording here drew a false analogy to
 //     `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` and implied the pane therefore cannot reach the cost control.
-//     It can. Removing those keys hides the run's CONFIGURATION from the pane environment and nothing
+//     It can. Removing those keys prevents their inheritance into the pane environment and nothing
 //     more: it does not hide Electron `userData`, it creates no filesystem isolation, `APPDATA` and
 //     `USERPROFILE` are still in the child environment, and the ledger filename is a literal in
 //     readable repository source. A PTY child runs as the same Windows user as main and has the same
@@ -154,8 +154,9 @@ function sha(s) { return crypto.createHash('sha256').update(s, 'utf8').digest('h
 //   * `pty-start handler` 12443 -> 13170 bytes. The comment above `const ptyEnv` was corrected: it
 //     used to say the child "must not be able to read, and therefore must not be able to reason about
 //     or rewrite" its own budget configuration, which overstated what stripping environment keys
-//     achieves. The replacement states plainly that the strip hides the run id and allowance from the
-//     pane environment and nothing more — no `userData` concealment, no filesystem isolation, and no
+//     achieves. The replacement states plainly that the strip removes the run-id and allowance keys
+//     from the inherited pane environment and nothing more — no `userData` concealment, no filesystem
+//     isolation, and no
 //     implication that `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` prevents a same-user process from reaching
 //     the ledger.
 //
@@ -171,6 +172,15 @@ function sha(s) { return crypto.createHash('sha256').update(s, 'utf8').digest('h
 //
 // Prior hash for the region that moved, retained:
 //   pty-start handler 12443 b5fe654e0d638de756079e7a0d67fa1fbba134f40f9d99a189091df9f1c7a945  (rev 3)
+//
+// RE-PINNED (fifth time) for the PROTECTIVE ADMISSION STATE-MACHINE CORRECTION.
+// The fenced-role gate and ptyEnv executable block remain byte-identical. The wider pty-start handler
+// intentionally changes admission composition: the pure launch policy now distinguishes absent from
+// invalid configuration, selects only eligible Claude panes, refuses launch-time prompts, durably
+// claims before spawn, and closes/voids a claimed run when spawn fails. Generic/admitted PTY bytes now
+// converge in admission-pty-boundary.js, outside this region, behind a private main-local capability.
+// Prior threat-correction hash retained:
+//   pty-start handler 13170 eb3c26968e6c447f15b4e5ccbe2c999912d189213ed006615efc25938738dfe0  (rev 4)
 // ---------------------------------------------------------------------------------------------
 
 // Region definitions: [name, startAnchor, endAnchor, expected byte length, expected sha256].
@@ -193,8 +203,8 @@ const REGIONS = [
     name: 'pty-start handler',
     start: "ipcMain.handle('pty-start', (_e, opts) => {",
     end: "ipcMain.on('pty-write'",
-    len: 13170,
-    sha: 'eb3c26968e6c447f15b4e5ccbe2c999912d189213ed006615efc25938738dfe0',
+    len: 13458,
+    sha: '653b0c3363577ae6754f5eeb260036115d9c0c330b6c2731b3896ebf0f684c82',
   },
 ];
 
@@ -248,8 +258,8 @@ assert(src.indexOf('...admissionConfig.stripAdmissionEnv(process.env)') !== -1,
          envBlock.indexOf("CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'"),
     'the scrubbed copy is the base of the object, with the credential scrub layered on top of it');
 }
-assert(/admissionBudget\.claimPane\(id\)/.test(src),
-  'pty-start binds the controlled run to the first eligible pane, in main');
+assert(/prepareAdmissionPaneLaunch\(\{/.test(src),
+  'pty-start delegates pre-spawn eligible-pane claiming to the protective launch policy');
 assert(/admissionBudget\.notePaneExit\(id\)/.test(src),
   'a pane exit voids the remaining allowance rather than leaving it claimable');
 assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src),

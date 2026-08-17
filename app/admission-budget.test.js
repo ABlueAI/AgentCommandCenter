@@ -21,6 +21,7 @@ const fs = require('fs');
 const path = require('path');
 const budgetModule = require('./admission-budget');
 const config = require('./admission-budget-config');
+const { createAdmissionPtyBoundary } = require('./admission-pty-boundary');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -202,6 +203,8 @@ async function testPersistFailure() {
   assert(again.ok === false && again.reason === REASON.PERSIST_FAILED,
     'the budget stays refusing after a persistence failure — no silent self-healing');
   assert(h.writes.length === 0, 'still zero writes');
+  assert(h.budget.isDirectInputBlocked('pty1') === true,
+    'a fatal submission-persist failure preserves the bound pane protection');
 
   // A storage layer that THROWS rather than returning a refusal must behave identically.
   const t = makeBudget();
@@ -228,6 +231,20 @@ async function testPersistFailure() {
   assert(mismatch.writes.length === 0, 'an integrity-mismatched reload causes ZERO PTY writes');
   assert(JSON.stringify(mismatch.storage.disk) === rejectedBytes,
     'the rejected ledger remains byte-for-byte identical in the storage model');
+  assert(mismatch.budget.isDirectInputBlocked('pty1') === true,
+    'the integrity failure cannot erase the pane designation or reopen generic input');
+  {
+    const bypassWrites = [];
+    const refusals = [];
+    const finalWriter = createAdmissionPtyBoundary({
+      getPty: () => ({ write: (bytes) => bypassWrites.push(bytes) }),
+      isDirectInputBlocked: (paneId) => mismatch.budget.isDirectInputBlocked(paneId),
+      onDirectRefusal: (paneId) => refusals.push(paneId),
+    });
+    const direct = finalWriter.writeDirect('pty1', SENTINEL);
+    assert(direct.ok === false && bypassWrites.length === 0 && refusals.length === 1,
+      'exact reviewer reproduction: post-mismatch generic PTY input is visibly refused with zero writes');
+  }
 
   // A transient read failure is equally non-creatable and must preserve every prior run record.
   const unreadable = makeBudget();
@@ -243,6 +260,23 @@ async function testPersistFailure() {
     'the live read failure causes zero saves and zero PTY writes');
   assert(JSON.stringify(unreadable.storage.disk) === historyBefore,
     'the transient failure preserves every prior run record');
+  assert(unreadable.budget.isDirectInputBlocked('pty1') === true,
+    'a live read failure preserves direct-input protection for the bound pane');
+
+  // A first claim that cannot persist latches PENDING protection before the save attempt. No PTY is
+  // running yet, but a generic route using the selected id still cannot exploit the failed claim.
+  const claimFailure = makeBudget();
+  claimFailure.budget.initialize();
+  claimFailure.storage.failSave = true;
+  const failedClaim = claimFailure.budget.claimPane('pty7');
+  assert(failedClaim.ok === false && failedClaim.reason === REASON.PERSIST_FAILED,
+    'a first-pane claim persistence failure refuses');
+  assert(claimFailure.budget.designationState() === budgetModule.DESIGNATION_STATE.PENDING &&
+    claimFailure.budget.isDirectInputBlocked('pty7') === true,
+  'the failed first claim remains pending-protected rather than becoming ordinary');
+  assert(claimFailure.budget.notePaneExit('pty7') === true &&
+    claimFailure.budget.isDirectInputBlocked('pty7') === false,
+  'confirmed absence/exit releases only the process-local designation while fatal health remains');
 }
 
 async function testWriterFailureNotRefunded() {
@@ -476,7 +510,7 @@ async function testLedgerReplacedUnderneath() {
   // restores the budget. The previous comment excused this by claiming "the agent can neither find nor
   // rewrite it" because the ledger lives under `userData` and the admission env keys are stripped.
   // THAT WAS FALSE:
-  //   * stripping the env keys hides the run id and allowance from the pane, and nothing else;
+  //   * stripping removes the run-id and allowance keys from the inherited pane environment only;
   //   * it does not hide `userData` and creates no filesystem isolation — `APPDATA`/`USERPROFILE` are
   //     in every PTY and the ledger filename is a literal in readable repository source;
   //   * a PTY child runs as the same Windows user as main, with the same access to that file.
@@ -630,6 +664,8 @@ async function testPaneBinding() {
     assert(h.budget.notePaneExit('pty1') === true, 'the bound pane exit closes the run');
     assert(recordOf(h.storage).state === RUN_STATE.CLOSED, 'the run is durably CLOSED');
     assert(recordOf(h.storage).admitted === 1, 'the consumed count is untouched by the exit');
+    assert(h.budget.isDirectInputBlocked('pty1') === false,
+      'confirmed process exit releases process-local direct-input protection');
 
     const afterExit = await h.budget.submitPrompt('pty1', SENTINEL);
     assert(afterExit.ok === false && afterExit.reason === REASON.RUN_CLOSED,
@@ -708,9 +744,9 @@ function testNoMutationSurface() {
 
   const surface = Object.keys(h.budget).sort();
   assert(JSON.stringify(surface) === JSON.stringify(
-    ['boundPaneId', 'claimPane', 'enabled', 'initialize', 'isControlledPane', 'isDirectInputBlocked',
-      'notePaneExit', 'state', 'submitPrompt']),
-    'the live budget exposes exactly the nine expected members and nothing else');
+    ['boundPaneId', 'claimPane', 'designationState', 'enabled', 'initialize', 'isControlledPane',
+      'isDirectInputBlocked', 'notePaneExit', 'state', 'submitPrompt']),
+    'the live budget exposes exactly the ten expected members and nothing else');
 
   for (const m of ['setAllowance', 'increaseAllowance', 'addAdmission', 'reset', 'refund', 'certify',
     'grant', 'topUp', 'applyHookEvent', 'onProviderEvent', 'setAdmitted', 'setState']) {
@@ -761,6 +797,7 @@ function testNoMutationSurface() {
   // claim in these files will also find the retraction beside it.
   for (const [file, src] of [
     ['admission-budget.js', budgetSrc],
+    ['admission-budget-config.js', fs.readFileSync(path.join(__dirname, 'admission-budget-config.js'), 'utf8')],
     ['admission-budget-store.js', fs.readFileSync(path.join(__dirname, 'admission-budget-store.js'), 'utf8')],
     ['main.js', fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8')],
   ]) {
@@ -769,10 +806,38 @@ function testNoMutationSurface() {
     assert(/not a security boundary|no filesystem isolation|same Windows user/i.test(src),
       `${file} states that it is not a boundary against a same-user process`);
   }
+  // Complete first-party PRODUCTION scan for the concrete overclaims that previously survived a
+  // narrower file list. Tests retain clearly labelled historical quotations, so this scan excludes
+  // *.test.js while the explicit assertions above verify the controlling tests' positive wording.
+  const productionFiles = [];
+  function walkProduction(dir) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name === 'vendor') continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walkProduction(full);
+      else if (entry.isFile() && entry.name.endsWith('.js') && !entry.name.endsWith('.test.js') &&
+        !entry.name.includes('harness')) productionFiles.push(full);
+    }
+  }
+  walkProduction(__dirname);
+  const overclaim = /(?:hides? (?:the )?(?:configured )?(?:run id|run's configuration|allowance)|cannot (?:read|find|locate|reach|rewrite|access).{0,80}(?:ledger|allowance|run id)|unreadable by the pty|can neither find nor rewrite)/i;
+  const explicitRetraction = /(?:that was false|not evidence|does not mean|not a claim|earlier|previous|retract|contrary to)/i;
+  const overclaimOffenders = [];
+  for (const file of productionFiles) {
+    const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+    for (let i = 0; i < lines.length; i += 1) {
+      if (!overclaim.test(lines[i])) continue;
+      const context = lines.slice(Math.max(0, i - 2), i + 3).join(' ');
+      if (!explicitRetraction.test(context)) overclaimOffenders.push(`${path.relative(__dirname, file)}:${i + 1}`);
+    }
+  }
+  assert(overclaimOffenders.length === 0,
+    `complete first-party production scan finds no provider-inaccessibility overclaim ` +
+    `(found: ${overclaimOffenders.map((f) => path.relative(__dirname, f)).join(', ') || 'none'})`);
   // The strip's real, narrow effect must be stated wherever the strip is performed.
   const mainSrc = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
-  assert(/hides the (configured )?RUN ID and ALLOWANCE|hides the run's CONFIGURATION/i.test(mainSrc),
-    'main.js states that stripping the env keys hides only the run configuration');
+  assert(/removes? .*keys?.*inherited|not inherited/i.test(mainSrc),
+    'main.js states only that stripping removes keys from the inherited PTY environment');
   assert(/APPDATA/.test(mainSrc) && /USERPROFILE/.test(mainSrc),
     'main.js names the environment variables that still reveal the ledger location');
 }
@@ -791,12 +856,15 @@ function testSourceTripwires() {
     'there is no fallback helper that can collapse a rejected reload into an empty ledger');
 
   const mainSrc = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
-  assert(/if \(admissionIpc && admissionIpc\.refuseDirectWrite\(id\)\) return;/.test(mainSrc),
-    "main.js's pty-write handler returns before p.write when the direct write is refused");
+  assert(/admissionPtyBoundary\.writeDirect\(id, data\)/.test(mainSrc),
+    "main.js's generic pty-write handler terminates at the capability-enforcing boundary");
   assert(/admissionBudget\.notePaneExit\(id\)/.test(mainSrc),
     'main.js closes the run on pane exit');
-  assert(/admissionBudget\.claimPane\(id\)/.test(mainSrc),
-    'main.js claims the pane at pty-start');
+  const launchSrc = fs.readFileSync(path.join(__dirname, 'admission-pane-launch.js'), 'utf8');
+  assert(/budget\.claimPane\(paneId\)/.test(launchSrc) && /prepareAdmissionPaneLaunch\(\{/.test(mainSrc),
+    'main delegates durable eligible-pane claiming to the pure launch policy');
+  assert(mainSrc.indexOf('prepareAdmissionPaneLaunch({') < mainSrc.indexOf("pty.spawn('powershell.exe'"),
+    'the durable launch-policy claim occurs before pty.spawn in source order');
 }
 
 // ---- run -------------------------------------------------------------------------------------------

@@ -68,6 +68,10 @@ const admissionConfig = require('./admission-budget-config');
 const { createAdmissionBudget } = require('./admission-budget');
 const { createAdmissionLedgerStore } = require('./admission-budget-store');
 const { createAdmissionIpc, CHANNEL_SUBMIT: ADMISSION_CHANNEL_SUBMIT } = require('./admission-ipc');
+const {
+  createAdmissionPtyBoundary,
+} = require('./admission-pty-boundary');
+const { prepareAdmissionPaneLaunch, closeAfterFailedSpawn } = require('./admission-pane-launch');
 const { focusExistingWindow } = require('./single-instance');
 // K8 media-permission boundary: both session permission handlers come from this pure,
 // dependency-free, unit-tested module (media-permission-policy.test.js). A grant requires
@@ -141,7 +145,8 @@ const paneStatusPrototypeEnabled = paneStatusPrototypeGateOn(process.env);
 // window exists and before any PTY is spawned. The renderer and the provider process are downstream of
 // this line and cannot reach it: renderer script cannot alter this process's environment, and every
 // admission key is stripped from each child PTY environment below (see ptyEnv in `pty-start`).
-// A malformed or absent configuration yields the DISABLED plan with allowance 0.
+// Complete absence is ordinary mode. Any present-but-invalid admission configuration is a protective
+// failure: eligible Claude-pane startup is visibly refused rather than silently becoming ordinary.
 const admissionPlan = admissionConfig.parseAdmissionConfig(process.env);
 const admissionEnabled = admissionPlan.enabled === true;
 // The renderer's controlled-run surface is ABSENT, not inert, when no run is configured — the same
@@ -294,6 +299,15 @@ if (!hasSingleInstanceLock) {
 const ENTRY_PATH = path.join(__dirname, 'renderer', 'index.html');
 const ENTRY_URL = pathToFileURL(ENTRY_PATH).toString();
 const ptys = new Map(); // terminal id -> pty process (in-app terminals)
+// The only production PTY write primitive. Its admitted closure holds a module-private capability;
+// generic IPC can never manufacture that capability from renderer-controlled data.
+const admissionPtyBoundary = createAdmissionPtyBoundary({
+  getPty: (paneId) => ptys.get(paneId),
+  isDirectInputBlocked: (paneId) => admissionBudget.isDirectInputBlocked(paneId),
+  onDirectRefusal: (paneId) => {
+    if (admissionIpc) admissionIpc.refuseDirectWrite(paneId);
+  },
+});
 // EXPERIMENT A prototype handle. Assigned once the window exists; until then, and whenever the gate
 // env var is unset, it is the inert object (see createInertPrototype) so every call site below is
 // safe without a null check or a flag test.
@@ -567,14 +581,10 @@ if (hasSingleInstanceLock) app.whenReady().then(() => {
       plan: admissionPlan,
       storage: admissionStore,
       now: () => Date.now(),
-      // The writer is the ONLY path from an admission to the PTY, and it is main's own handle map —
-      // not something the renderer named. A missing pane throws, which the budget converts into
-      // `write-failed-after-admission` rather than a silent success.
-      writer: (paneId, bytes) => {
-        const p = ptys.get(paneId);
-        if (!p) throw new Error('pty-missing');
-        p.write(bytes);
-      },
+      // The admitted closure carries a module-private capability into the ONE final PTY-write
+      // chokepoint. No renderer/IPC field can manufacture it. A missing pane rejects and the budget
+      // reports `write-failed-after-admission` without refunding the durable admission.
+      writer: admissionPtyBoundary.writeAdmitted,
       isPaneRunning: (paneId) => ptys.has(paneId),
       log: (line) => { tlog(line); if (win && !win.isDestroyed()) win.webContents.send('main-error', line); },
     });
@@ -1049,6 +1059,14 @@ ipcMain.handle('open-external', async (_e, url) => {
 ipcMain.handle('pty-start', (_e, opts) => {
   tlog(`pty-start: START id=${opts.id} role=${opts.role || 'none'} cwd=${opts.cwd || '(unset)'}`);
   const { id, cols, rows } = opts;
+  let admissionPaneClaimed = false;
+  const refuseAdmissionStart = (reason) => {
+    const line = `[admission] eligible Claude pane startup REFUSED [${reason}]`;
+    tlog(line);
+    if (win && !win.isDestroyed()) win.webContents.send('main-error', line);
+    return { ok: false, error: reason };
+  };
+
   // V5b1: the main-issued run ID for this pane, if it is a video-scout launch. Registered only after
   // a successful spawn (below), so a refused/failed launch leaves no mapping.
   let acceptedRunId = null;
@@ -1157,15 +1175,27 @@ ipcMain.handle('pty-start', (_e, opts) => {
   // prevents the hook reporter from inheriting these two variables the experiment is blocked and
   // reported as blocked rather than worked around. The token exists only here and in main's memory:
   // never in argv, a log line, a file, the renderer, or a persistent environment variable.
+  // Select and durably claim the first eligible Claude pane BEFORE any process exists. An ineligible
+  // shell/Codex/Gemini/Video-Scout pane never calls claimPane and cannot consume the run. A second
+  // eligible pane after another pane is bound remains non-target; every other claim failure refuses
+  // startup without briefly exposing an unprotected process.
+  const admissionLaunch = prepareAdmissionPaneLaunch({
+    plan: admissionPlan,
+    budget: admissionBudget,
+    opts,
+    validRoles: VALID_ROLES,
+  });
+  if (!admissionLaunch.ok) return refuseAdmissionStart(admissionLaunch.reason);
+  admissionPaneClaimed = admissionLaunch.controlled === true;
+
   const paneStatusEnv = paneStatus.envForPane(opts);
   // TURN ADMISSION BUDGET — keep the run's CONFIGURATION out of the pane's environment.
   // `stripAdmissionEnv` returns a COPY of process.env with every key in ADMISSION_ENV_KEYS removed;
-  // the spread below starts from that copy rather than from process.env. Without it the run id and
-  // allowance would ride into every PTY exactly the way a `setx` credential does, and any Bash step
-  // inside the agent could read them.
+  // the spread below starts from that copy rather than from process.env. Its narrow guarantee is that
+  // those keys are not INHERITED by the PTY. It does not make their values unknowable elsewhere.
   //
   // WHAT THIS DOES AND DOES NOT ACHIEVE — the earlier comment here overstated it:
-  //   * It hides the configured RUN ID and ALLOWANCE from the pane environment. That is all.
+  //   * It removes the configured RUN ID and ALLOWANCE keys from the inherited pane environment.
   //   * It does NOT hide Electron `userData`, and it creates NO filesystem isolation. `APPDATA` and
   //     `USERPROFILE` remain in the child environment, the ledger filename is a literal in readable
   //     repository source, and enumeration finds the file anyway.
@@ -1198,6 +1228,9 @@ ipcMain.handle('pty-start', (_e, opts) => {
     // CLASSIC layout a failed start only logs, so the slot stayed bound to a pane with no process and
     // every later Claude pane silently got no status until the app restarted.
     paneStatus.releasePane(id);
+    // A durable pre-spawn claim exists but no process does. Close the run and void its remainder; the
+    // already-persisted claim is never transferred to another pane.
+    closeAfterFailedSpawn(admissionBudget, id, admissionLaunch);
     if (win && !win.isDestroyed()) win.webContents.send('pty-exit', { id });
     return { ok: false, error: String((e && e.message) || e) };
   }
@@ -1207,19 +1240,6 @@ ipcMain.handle('pty-start', (_e, opts) => {
   // returned to the renderer). It intentionally OUTLIVES p.onExit below -- a finished run's report
   // stays openable until the pane is explicitly closed (pty-kill) or the window shuts down.
   if (acceptedRunId) { videoScoutRunIds.set(id, acceptedRunId); tlog(`pty-start: registered video-scout runId for pane ${id}`); }
-  // TURN ADMISSION BUDGET: the run claims its pane HERE, at the first successful spawn, because
-  // renderer pane ids are minted at runtime and cannot be known when the plan is parsed at startup.
-  // The claim is persisted immutably, so a second pane is refused rather than re-pointed — the budget
-  // cannot move. A refused claim leaves the pane completely ordinary: it is simply not the controlled
-  // pane, and the run stays unbound rather than binding to the wrong terminal.
-  if (admissionEnabled && admissionBudget.enabled) {
-    const claim = admissionBudget.claimPane(id);
-    if (!claim.ok && claim.reason !== 'admission-pane-already-bound') {
-      const line = `[admission] pane not bound to the controlled run: ${claim.reason}`;
-      tlog(line);
-      if (win && !win.isDestroyed()) win.webContents.send('main-error', line);
-    }
-  }
   p.onData((data) => { if (win && !win.isDestroyed()) win.webContents.send('pty-data', { id, data }); });
   // NOTE: onExit removes the PTY handle but deliberately does NOT remove the run-ID mapping (V5b1).
   p.onExit(() => {
@@ -1243,8 +1263,7 @@ ipcMain.handle('pty-start', (_e, opts) => {
 // The refusal is visible (bounded reason on the Logs channel, throttled so a held key cannot flood it)
 // and it never echoes the bytes. Uncontrolled panes take the original path, byte-for-byte.
 ipcMain.on('pty-write', (_e, { id, data }) => {
-  if (admissionIpc && admissionIpc.refuseDirectWrite(id)) return; // refused: nothing reaches the PTY
-  const p = ptys.get(id); if (p) p.write(data);
+  admissionPtyBoundary.writeDirect(id, data);
 });
 ipcMain.on('pty-resize', (_e, { id, cols, rows }) => { const p = ptys.get(id); if (p) { try { p.resize(cols, rows); } catch (err) { tlog(`pty-resize ${id} failed (process likely exiting): ${(err && err.message) || err}`); } } });
 ipcMain.on('pty-kill', (_e, id) => {

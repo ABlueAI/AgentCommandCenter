@@ -7,16 +7,18 @@
 //   I SELECT TURN-ACCOUNTING OUTCOME B. THE FOURTH TURN REMAINS UNEXPLAINED. NO LIVE PANE-STATUS
 //   PROVIDER SESSION IS AUTHORIZED UNTIL THE MAIN-OWNED ADMISSION BUDGET IS REVIEWED AND LANDED.
 //
-// WHY THIS FILE EXISTS SEPARATELY. The allowance is a cost control. If the renderer, the provider
-// process, or anything downstream of them could name the run or pick the number, the control would be
-// decorative. So the whole configuration decision is made ONCE, here, from this process's own startup
-// environment, before any window exists and before any PTY is spawned — and the same module exports
-// the exact key list main must strip from every child PTY environment, so the values that decided the
-// budget cannot be read or rewritten by the thing being budgeted.
+// WHY THIS FILE EXISTS SEPARATELY. The allowance is a cost control. The whole configuration decision
+// is made ONCE, here, from main's startup environment, before any window exists and before any PTY is
+// spawned. The same module exports the exact key list main removes from child PTY environments. That
+// removal prevents environment INHERITANCE only: it does not hide userData, prevent filesystem access,
+// or stop a same-user process from locating/recomputing/rewriting the unkeyed ledger.
+// This is an ACCIDENTAL-SPEND control through supported Blue Helm paths, not a security boundary
+// against a malicious or compromised same-user process.
 //
-// FAIL-CLOSED BY CONSTRUCTION: every parse failure, every missing field, every out-of-range number,
-// and every unrecognized shape yields the DISABLED plan with allowance 0. There is no branch in this
-// file that returns an enabled plan from partial input.
+// THREE STATES, NOT ONE DISABLED BUCKET. Completely absent configuration is the ordinary application.
+// Any admission key being present means protection was requested. A partial, malformed, out-of-range,
+// or unrecognized request is INVALID and must visibly refuse eligible Claude-pane startup in main; it
+// must never silently become the ordinary application. Only a complete valid request enables a run.
 //
 // PURE. No fs, no Electron, no process. `parseAdmissionConfig(env)` takes the environment as an
 // argument so the whole matrix is unit-testable in plain node.
@@ -51,9 +53,9 @@ const ENV_PANE_ID = 'BLUE_HELM_ADMISSION_PANE_ID';
 const ENV_REBIND = 'BLUE_HELM_ADMISSION_REBIND';
 
 // EVERY admission-control key, including the ones this build does not read yet. main strips this
-// whole list from each child PTY environment (see stripAdmissionEnv). Listing a key here is what makes
-// it unreadable by the PTY; forgetting one is the leak, so the list is exported and asserted by
-// admission-budget-config.test.js against the module's own constants.
+// whole list from each child PTY environment (see stripAdmissionEnv). Listing a key here prevents
+// inheritance into the PTY; it does not make the value unknowable to a same-user process. The list is
+// exported and asserted by admission-budget-config.test.js against the module's own constants.
 const ADMISSION_ENV_KEYS = Object.freeze([
   ENV_ENABLED,
   ENV_RUN_ID,
@@ -73,19 +75,32 @@ const CONFIG_REASON = Object.freeze({
   BAD_REBIND: 'admission-bad-rebind-flag',
 });
 
+const CONFIG_STATUS = Object.freeze({
+  ABSENT: 'absent',
+  VALID: 'valid',
+  INVALID: 'invalid',
+});
+
 const SCHEMA_VERSION = 1;
 
-/** The one disabled plan. Frozen, so a caller cannot flip `enabled` on the object it was handed. */
-function disabledPlan(reason) {
+/** A frozen non-live plan. `requested` distinguishes ordinary absence from protective failure. */
+function disabledPlan(reason, status) {
+  const configStatus = status || CONFIG_STATUS.ABSENT;
   return Object.freeze({
     schemaVersion: SCHEMA_VERSION,
     enabled: false,
+    requested: configStatus !== CONFIG_STATUS.ABSENT,
+    configStatus,
     allowance: 0,
     runId: null,
     paneId: null,
     rebind: false,
     reason: reason || CONFIG_REASON.DISABLED,
   });
+}
+
+function invalidPlan(reason) {
+  return disabledPlan(reason, CONFIG_STATUS.INVALID);
 }
 
 /**
@@ -97,28 +112,28 @@ function disabledPlan(reason) {
  * pins the run to exactly that pane and nothing else can claim it.
  *
  * Returns a frozen plan. `enabled: true` requires the flag to be exactly '1' AND a well-formed run id
- * AND a well-formed allowance. Anything else is disabled with a bounded reason.
+ * AND a well-formed allowance. Completely absent keys return ABSENT; any malformed attempted request
+ * returns INVALID so main can visibly refuse eligible Claude-pane startup.
  */
 function parseAdmissionConfig(env) {
   const e = env && typeof env === 'object' ? env : {};
 
+  const requested = ADMISSION_ENV_KEYS.some((key) => Object.prototype.hasOwnProperty.call(e, key));
+  if (!requested) return disabledPlan(CONFIG_REASON.DISABLED, CONFIG_STATUS.ABSENT);
+
   const rawEnabled = e[ENV_ENABLED];
-  // Absent means "not configured", which is the ordinary case and not an error worth a distinct
-  // reason. Present-but-not-'1' IS worth one: it means someone tried and got the syntax wrong, and a
-  // silent disable there would look identical to a working budget.
-  if (rawEnabled === undefined || rawEnabled === null || rawEnabled === '') return disabledPlan(CONFIG_REASON.DISABLED);
-  if (rawEnabled !== '1') return disabledPlan(CONFIG_REASON.BAD_ENABLED);
+  if (rawEnabled !== '1') return invalidPlan(CONFIG_REASON.BAD_ENABLED);
 
   const rawRunId = e[ENV_RUN_ID];
-  if (typeof rawRunId !== 'string' || !RUN_ID_PATTERN.test(rawRunId)) return disabledPlan(CONFIG_REASON.BAD_RUN_ID);
+  if (typeof rawRunId !== 'string' || !RUN_ID_PATTERN.test(rawRunId)) return invalidPlan(CONFIG_REASON.BAD_RUN_ID);
 
   const rawAllowance = e[ENV_ALLOWANCE];
   if (typeof rawAllowance !== 'string' || !ALLOWANCE_PATTERN.test(rawAllowance)) {
-    return disabledPlan(CONFIG_REASON.BAD_ALLOWANCE);
+    return invalidPlan(CONFIG_REASON.BAD_ALLOWANCE);
   }
   const allowance = Number(rawAllowance);
   if (!Number.isSafeInteger(allowance) || allowance < 1 || allowance > MAX_ALLOWANCE) {
-    return disabledPlan(CONFIG_REASON.BAD_ALLOWANCE);
+    return invalidPlan(CONFIG_REASON.BAD_ALLOWANCE);
   }
 
   // Optional pin. Present-but-malformed refuses rather than falling back to "claim any pane" — a
@@ -126,7 +141,7 @@ function parseAdmissionConfig(env) {
   const rawPaneId = e[ENV_PANE_ID];
   let paneId = null;
   if (rawPaneId !== undefined && rawPaneId !== null && rawPaneId !== '') {
-    if (typeof rawPaneId !== 'string' || !PANE_ID_PATTERN.test(rawPaneId)) return disabledPlan(CONFIG_REASON.BAD_PANE_ID);
+    if (typeof rawPaneId !== 'string' || !PANE_ID_PATTERN.test(rawPaneId)) return invalidPlan(CONFIG_REASON.BAD_PANE_ID);
     paneId = rawPaneId;
   }
 
@@ -136,13 +151,15 @@ function parseAdmissionConfig(env) {
   const rawRebind = e[ENV_REBIND];
   let rebind = false;
   if (rawRebind !== undefined && rawRebind !== null && rawRebind !== '') {
-    if (rawRebind !== '1') return disabledPlan(CONFIG_REASON.BAD_REBIND);
+    if (rawRebind !== '1') return invalidPlan(CONFIG_REASON.BAD_REBIND);
     rebind = true;
   }
 
   return Object.freeze({
     schemaVersion: SCHEMA_VERSION,
     enabled: true,
+    requested: true,
+    configStatus: CONFIG_STATUS.VALID,
     allowance,
     runId: rawRunId,
     paneId,
@@ -153,8 +170,9 @@ function parseAdmissionConfig(env) {
 
 /**
  * Return a COPY of `env` with every admission-control key removed. main builds each PTY environment
- * through this, so the provider process cannot read the run id, cannot read the allowance, and cannot
- * set them for anything it spawns itself.
+ * through this, so those keys are not inherited by the provider or its descendants. This is not a
+ * secrecy or filesystem boundary: a same-user process can locate the ledger, learn the values, replace
+ * it with a recomputed checksum, and choose environment variables for processes it spawns itself.
  *
  * A copy, not a mutation: `process.env` is this process's own configuration and must survive intact.
  */
@@ -183,9 +201,11 @@ const api = {
   ENV_REBIND,
   ADMISSION_ENV_KEYS,
   CONFIG_REASON,
+  CONFIG_STATUS,
   parseAdmissionConfig,
   stripAdmissionEnv,
   hasAdmissionEnv,
   disabledPlan,
+  invalidPlan,
 };
 if (typeof module === 'object' && module.exports) module.exports = api;

@@ -4,8 +4,8 @@
 // The startup configuration boundary for the MAIN-OWNED TURN ADMISSION BUDGET.
 //
 // What this suite is defending: the allowance is a cost control, so the ONLY acceptable outcome of a
-// malformed, partial, or hostile configuration is DISABLED. Every negative case below must produce
-// allowance 0, and the positive case must require every field to be exactly right.
+// malformed, partial, or hostile REQUEST is INVALID protective mode, never ordinary absence. Every
+// negative case below must produce allowance 0, and the positive case requires every field exactly.
 //
 // It also owns the environment-scrub proof (required test 18): the exact key list main strips from
 // each child PTY environment is asserted here against the module's own constants, so adding a new
@@ -38,6 +38,8 @@ process.stdout.write('\n-- valid configuration --\n');
 {
   const plan = config.parseAdmissionConfig(validEnv());
   assert(plan.enabled === true, 'a complete valid configuration enables the run');
+  assert(plan.requested === true && plan.configStatus === config.CONFIG_STATUS.VALID,
+    'a valid request is explicitly distinguished from absence and invalidity');
   assert(plan.allowance === 3, 'the allowance is the parsed integer');
   assert(plan.runId === 'evidence-run-0001', 'the run id is carried through');
   assert(plan.paneId === null, 'pane id is null when unpinned (claimed later at pty-start)');
@@ -57,18 +59,33 @@ process.stdout.write('\n-- valid configuration --\n');
 
 // ---- 2. required test 1: disabled / default-zero ------------------------------------------------
 
-process.stdout.write('\n-- disabled and default-zero (required test 1) --\n');
+process.stdout.write('\n-- absent versus invalid protective configuration (required test 1) --\n');
 {
-  const cases = [
+  const absentCases = [
     ['{} (nothing configured)', {}],
     ['undefined env', undefined],
     ['null env', null],
     ['a non-object env', 'BLUE_HELM_ADMISSION_ENABLED=1'],
-    ['empty enabled flag', validEnv({ BLUE_HELM_ADMISSION_ENABLED: '' })],
   ];
-  for (const [label, env] of cases) {
+  for (const [label, env] of absentCases) {
     const plan = config.parseAdmissionConfig(env);
-    assert(plan.enabled === false && plan.allowance === 0, `${label} -> disabled with allowance 0`);
+    assert(plan.enabled === false && plan.allowance === 0 && plan.requested === false &&
+      plan.configStatus === config.CONFIG_STATUS.ABSENT,
+    `${label} -> ordinary absence with allowance 0`);
+  }
+
+  const invalidCases = [
+    ['empty enabled flag', validEnv({ BLUE_HELM_ADMISSION_ENABLED: '' })],
+    ['run id without enabled flag', { BLUE_HELM_ADMISSION_RUN_ID: 'evidence-run-0001' }],
+    ['allowance without enabled flag', { BLUE_HELM_ADMISSION_ALLOWANCE: '3' }],
+    ['pane pin without enabled flag', { BLUE_HELM_ADMISSION_PANE_ID: 'pty1' }],
+    ['rebind without enabled flag', { BLUE_HELM_ADMISSION_REBIND: '1' }],
+  ];
+  for (const [label, env] of invalidCases) {
+    const plan = config.parseAdmissionConfig(env);
+    assert(plan.enabled === false && plan.allowance === 0 && plan.requested === true &&
+      plan.configStatus === config.CONFIG_STATUS.INVALID,
+    `${label} -> protective invalidity with allowance 0`);
   }
 }
 
@@ -79,7 +96,8 @@ process.stdout.write('\n-- malformed fields fail closed --\n');
   const badEnabled = ['0', 'true', 'yes', ' 1', '1 ', '01', 'TRUE'];
   for (const v of badEnabled) {
     const plan = config.parseAdmissionConfig(validEnv({ BLUE_HELM_ADMISSION_ENABLED: v }));
-    assert(plan.enabled === false && plan.reason === config.CONFIG_REASON.BAD_ENABLED,
+    assert(plan.enabled === false && plan.reason === config.CONFIG_REASON.BAD_ENABLED && plan.requested === true &&
+      plan.configStatus === config.CONFIG_STATUS.INVALID,
       `enabled=${JSON.stringify(v)} refuses (only the exact string "1" enables)`);
   }
 }
@@ -175,6 +193,8 @@ process.stdout.write('\n-- source tripwires --\n');
     'the ptyEnv literal no longer spreads raw process.env');
   assert(mainSrc.includes('parseAdmissionConfig(process.env)'),
     'main.js parses the admission plan once, from its own startup environment');
+  assert(mainSrc.includes('prepareAdmissionPaneLaunch({'),
+    'main delegates every pane start to the protective admission launch policy before spawn');
 }
 
 process.stdout.write(`\nadmission-budget-config: ${passed} passed, ${failed} failed\n`);

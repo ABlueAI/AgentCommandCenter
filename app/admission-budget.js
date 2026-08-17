@@ -41,8 +41,9 @@
 // Earlier revisions of this file, of main.js, of these tests and of the handoff claimed or implied
 // that the provider process could not reach the ledger. THAT WAS FALSE, and the specific errors are
 // worth naming so they are not reintroduced:
-//   * Stripping the admission environment keys from a PTY hides the configured RUN ID and ALLOWANCE
-//     from that pane. It does NOT hide Electron `userData`, and it creates NO filesystem isolation.
+//   * Stripping the admission environment keys prevents those keys from being INHERITED by the PTY.
+//     It does not make their values unknowable: the same-user pane can read them from the ledger and
+//     choose environment values for descendants. It does NOT hide Electron `userData` or isolate files.
 //     `APPDATA` / `USERPROFILE` are present in every PTY, the ledger filename is a literal in
 //     readable repository source, and filesystem enumeration finds the file regardless.
 //   * `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` is about credentials in Claude Code's own subprocesses. It
@@ -94,6 +95,16 @@ const RUN_STATE = Object.freeze({
   OPEN: 'open',           // admissions remain
   EXHAUSTED: 'exhausted', // allowance fully consumed
   CLOSED: 'closed',       // pane exited or run torn down; no further admission, remainder is void
+});
+
+// Process-local pane designation is deliberately separate from ledger health and durable run state.
+// A fatal ledger error may stop admission, but it must never turn a pending/bound protected pane into
+// an ordinary pane. Only process exit/failed spawn moves the designation to EXITED.
+const DESIGNATION_STATE = Object.freeze({
+  UNBOUND: 'unbound',
+  PENDING: 'pending',
+  BOUND: 'bound',
+  EXITED: 'exited',
 });
 
 // Every refusal reason. Constants only. A reason NEVER contains a prompt, a pane id supplied by an
@@ -208,6 +219,7 @@ function createDisabledBudget(reason) {
     async submitPrompt() { return { ok: false, reason: r }; },
     state() { return { enabled: false, reason: r }; },
     boundPaneId() { return null; },
+    designationState() { return DESIGNATION_STATE.UNBOUND; },
   };
 }
 
@@ -248,6 +260,11 @@ function createAdmissionBudget(deps) {
   let ledgerRevision = null;
   let initialized = false;
   let fatalReason = null; // once set, every operation refuses with it — no self-healing
+  // A configured pin is protected even if initialization later fails. For unpinned runs this becomes
+  // PENDING immediately before the first eligible pane claim is persisted. It is never derived from
+  // `fatalReason`: ledger health can only preserve/tighten protection, never erase designation.
+  let protectedPaneId = plan.paneId || null;
+  let designation = protectedPaneId ? DESIGNATION_STATE.PENDING : DESIGNATION_STATE.UNBOUND;
 
   // Single-flight guard. The admission path is async at the writer, so two invokes could otherwise
   // interleave between the in-memory decrement and the persist. Refusing the second is the
@@ -263,6 +280,13 @@ function createAdmissionBudget(deps) {
   function remaining() {
     if (!record) return 0;
     return Math.max(0, record.allowance - record.admitted);
+  }
+
+  function markInitializedDesignation() {
+    if (record && record.paneId !== null && record.bindingStale !== true) {
+      protectedPaneId = record.paneId;
+      designation = DESIGNATION_STATE.BOUND;
+    }
   }
 
   function storageFailureReason(reason) {
@@ -288,6 +312,7 @@ function createAdmissionBudget(deps) {
         const persisted = persist();
         if (!persisted.ok) return fail(persisted.reason);
         initialized = true;
+        markInitializedDesignation();
         log(`[admission] run created; allowance ${record.allowance}, admitted 0`);
         return { ok: true, state: state() };
       }
@@ -327,6 +352,7 @@ function createAdmissionBudget(deps) {
       const persisted = persist();
       if (!persisted.ok) return fail(persisted.reason);
       initialized = true;
+      markInitializedDesignation();
       log(`[admission] run created; allowance ${record.allowance}, admitted 0`);
       return { ok: true, state: state() };
     }
@@ -358,6 +384,7 @@ function createAdmissionBudget(deps) {
       bindingStale: existing.paneId !== null,
     };
     initialized = true;
+    markInitializedDesignation();
     log(`[admission] run resumed; allowance ${record.allowance}, admitted ${record.admitted}, remaining ${remaining()}`);
     return { ok: true, state: state() };
   }
@@ -465,7 +492,11 @@ function createAdmissionBudget(deps) {
     if (record.state === RUN_STATE.CLOSED) return { ok: false, reason: REASON.RUN_CLOSED };
 
     if (record.paneId !== null && !record.bindingStale) {
-      if (record.paneId === paneId) return { ok: true, alreadyBound: true, state: state() };
+      if (record.paneId === paneId) {
+        protectedPaneId = paneId;
+        designation = DESIGNATION_STATE.BOUND;
+        return { ok: true, alreadyBound: true, state: state() };
+      }
       log('[admission] REFUSED pane claim: this run is already bound to another pane');
       return { ok: false, reason: REASON.PANE_ALREADY_BOUND };
     }
@@ -479,32 +510,35 @@ function createAdmissionBudget(deps) {
 
     const previousPaneId = record.paneId;
     const previouslyStale = record.bindingStale;
+    protectedPaneId = paneId;
+    designation = DESIGNATION_STATE.PENDING;
     record.paneId = paneId;
     record.bindingStale = false;
     const persisted = persist();
     if (!persisted.ok) {
-      // Roll the in-memory binding back so a failed persist cannot leave main believing a pane is
-      // controlled while the durable record disagrees.
+      // Restore the record to the last durable shape, but deliberately KEEP the process-local pending
+      // designation. A failed claim cannot make this selected pane ordinary and expose generic input.
       record.paneId = previousPaneId;
       record.bindingStale = previouslyStale;
       return fail(persisted.reason);
     }
+    designation = DESIGNATION_STATE.BOUND;
     log(`[admission] pane bound; remaining ${remaining()}`);
     return { ok: true, alreadyBound: false, state: state() };
   }
 
-  /** True only for the one bound pane of a live, initialized run. */
+  /** True for this process's pending/bound protected pane, independently of ledger health. */
   function isControlledPane(paneId) {
-    if (fatalReason || !initialized || !record) return false;
     if (typeof paneId !== 'string') return false;
-    if (record.bindingStale) return false;
-    return record.paneId === paneId;
+    return protectedPaneId === paneId &&
+      (designation === DESIGNATION_STATE.PENDING || designation === DESIGNATION_STATE.BOUND);
   }
 
   /**
-   * Direct terminal input is blocked for the controlled pane for the WHOLE life of the run, including
-   * after the allowance is exhausted and after the run is closed. Unblocking an exhausted run would
-   * hand the keyboard back at exactly the moment the budget stopped counting.
+   * Direct terminal input is blocked for the pending/bound pane for the WHOLE process lifetime,
+   * including after exhaustion, closure, or fatal ledger failure. Only confirmed process exit releases
+   * the process-local designation; unblocking an exhausted live pane would hand the keyboard back at
+   * exactly the moment the budget stopped counting.
    */
   function isDirectInputBlocked(paneId) {
     return isControlledPane(paneId);
@@ -515,9 +549,13 @@ function createAdmissionBudget(deps) {
    * admissions stay consumed.
    */
   function notePaneExit(paneId) {
-    if (fatalReason || !initialized || !record) return false;
-    if (typeof paneId !== 'string' || record.paneId !== paneId) return false;
-    if (record.state === RUN_STATE.CLOSED) return false;
+    if (typeof paneId !== 'string' || protectedPaneId !== paneId) return false;
+    // Release only because main has established that no process exists (exit, kill, or failed spawn).
+    // Do this even in a fatal state: there is no handle left to receive input. Fatal health remains.
+    designation = DESIGNATION_STATE.EXITED;
+    protectedPaneId = null;
+    if (fatalReason || !initialized || !record) return true;
+    if (record.state === RUN_STATE.CLOSED) return true;
     record.state = RUN_STATE.CLOSED;
     const persisted = persist();
     if (!persisted.ok) { fail(persisted.reason); return false; }
@@ -626,8 +664,22 @@ function createAdmissionBudget(deps) {
    * IPC that reaches one.
    */
   function state() {
-    if (fatalReason) return { enabled: true, ok: false, reason: fatalReason };
-    if (!initialized || !record) return { enabled: true, ok: false, reason: REASON.NOT_INITIALIZED };
+    if (fatalReason) return {
+      enabled: true,
+      ok: false,
+      reason: fatalReason,
+      designation,
+      paneBound: designation === DESIGNATION_STATE.BOUND,
+      paneId: designation === DESIGNATION_STATE.BOUND ? protectedPaneId : null,
+    };
+    if (!initialized || !record) return {
+      enabled: true,
+      ok: false,
+      reason: REASON.NOT_INITIALIZED,
+      designation,
+      paneBound: false,
+      paneId: null,
+    };
     return {
       enabled: true,
       ok: true,
@@ -636,7 +688,8 @@ function createAdmissionBudget(deps) {
       remaining: remaining(),
       refused: record.refused,
       runState: record.state,
-      paneBound: record.paneId !== null && !record.bindingStale,
+      paneBound: designation === DESIGNATION_STATE.BOUND,
+      designation,
       bindingStale: record.bindingStale === true,
       // The bound pane id, so a controlled-run UI can NAME the pane it is about to spend a turn on
       // rather than just claim one exists. Safe to expose: this id was MINTED BY THE RENDERER at
@@ -645,7 +698,7 @@ function createAdmissionBudget(deps) {
       // NULL whenever the binding is stale — after a restart the persisted id names a pane from the
       // previous process that no longer exists, and showing it would invite Blue to spend a turn on a
       // pane that is not there. `paneBound` and this field therefore always agree.
-      paneId: record.paneId !== null && !record.bindingStale ? record.paneId : null,
+      paneId: designation === DESIGNATION_STATE.BOUND ? protectedPaneId : null,
     };
   }
 
@@ -658,7 +711,8 @@ function createAdmissionBudget(deps) {
     notePaneExit,
     submitPrompt,
     state,
-    boundPaneId: () => (record && !record.bindingStale ? record.paneId : null),
+    boundPaneId: () => (designation === DESIGNATION_STATE.BOUND ? protectedPaneId : null),
+    designationState: () => designation,
   };
 }
 
@@ -668,6 +722,7 @@ const api = {
   MAX_PROMPT_CHARS,
   MAX_PERSISTED_RUNS,
   RUN_STATE,
+  DESIGNATION_STATE,
   REASON,
   validatePrompt,
   isPlausibleRecord,

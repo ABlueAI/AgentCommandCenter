@@ -384,7 +384,7 @@ async function settle() { for (let i = 0; i < 4; i += 1) await new Promise((r) =
     const chain = JSON.parse(read('package.json')).scripts.test.split('&&').map((s) => s.trim());
     eq(chain.length, new Set(chain).size, 'no duplicate entry in the test chain');
     eq(chain.filter((c) => c.includes('quick-links')).length, 5, 'all 5 Quick Links suites are in the chain');
-    eq(chain.filter((c) => c.includes('admission')).length, 6, 'all 6 admission suites are in the chain');
+    eq(chain.filter((c) => c.includes('admission')).length, 8, 'all 8 admission suites are in the chain');
   }
 
   // ---- (12) no renderer path bypasses admission-submit-prompt -----------------------------------
@@ -394,21 +394,21 @@ async function settle() { for (let i = 0; i < 4; i += 1) await new Promise((r) =
     const code = view.split(/\r?\n/).filter((l) => !l.trim().startsWith('//')).join('\n');
     eq((code.match(/ptyWrite/g) || []).length, 0, 'the view never calls ptyWrite');
     eq((code.match(/submitPrompt\(/g) || []).length, 1, 'the view has exactly one submit call site');
-    // main's chokepoint is a single line and the admission check is FIRST in it.
+    // Both generic and admitted writes converge on the capability-enforcing module.
     const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
     const handler = main.slice(main.indexOf("ipcMain.on('pty-write'"));
     const body = handler.slice(0, handler.indexOf("ipcMain.on('pty-resize'"));
-    assert(body.indexOf('admissionIpc.refuseDirectWrite(id)') < body.indexOf('p.write(data)'),
-      'the admission check runs BEFORE any write in the pty-write handler');
+    assert(body.includes('admissionPtyBoundary.writeDirect(id, data)'),
+      'generic input terminates at the final capability-enforcing writer');
     eq((main.match(/ipcMain\.on\('pty-write'/g) || []).length, 1, 'there is exactly ONE pty-write handler');
-    // Exactly TWO ways bytes reach a terminal in main, and both are accounted for: the admission
-    // budget's injected writer (which runs only AFTER a durable decrement) and the pty-write handler
-    // (which runs only AFTER the admission check refuses or allows). A third would be a bypass.
-    eq((main.match(/p\.write\(/g) || []).length, 2, 'exactly two p.write() call sites exist in main');
-    eq((main.match(/p\.write\(bytes\)/g) || []).length, 1, "one is the budget's injected writer");
-    eq((main.match(/p\.write\(data\)/g) || []).length, 1, 'the other is the guarded pty-write handler');
-    // The budget's writer is the only other route to the terminal, and main supplies it itself.
-    assert(main.includes('const p = ptys.get(paneId);'), "the budget's writer resolves the pane from main's own map");
+    const boundary = fs.readFileSync(path.join(__dirname, 'admission-pty-boundary.js'), 'utf8');
+    eq((main.match(/\.write\(/g) || []).length, 0, 'main contains no independent PTY write primitive');
+    eq((boundary.match(/pty\.write\(bytes\)/g) || []).length, 1,
+      'exactly one production PTY write primitive exists in the final boundary');
+    assert(main.includes('writer: admissionPtyBoundary.writeAdmitted'),
+      "the budget receives the private capability-bearing admitted closure");
+    assert(main.includes('getPty: (paneId) => ptys.get(paneId)'),
+      'the final boundary resolves panes only from main-owned handles');
   }
 
   // ---- (13) live ledger access failure writes NOTHING -------------------------------------------

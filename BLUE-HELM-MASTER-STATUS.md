@@ -533,8 +533,9 @@ replace, or rewrite the local ledger directly.** Specifically — each of these 
 stated falsely in earlier revisions and is now corrected in the modules' own
 headers:
 
-- Stripping the admission environment keys hides the configured **run ID and
-  allowance** from the pane environment. That is its entire effect.
+- Stripping the admission environment keys prevents those keys from being
+  **inherited** by the pane. It does not make their values unknowable: the same
+  user can read them from the ledger and choose environment values for descendants.
 - It does **not** hide Electron `userData` and creates **no** filesystem
   isolation. `APPDATA` / `USERPROFILE` are present in every PTY, the ledger
   filename is a literal in readable repository source, and plain filesystem
@@ -562,6 +563,19 @@ accidental second Blue Helm launch from creating independent PTYs; a second
 launch restores and focuses the existing window. These mechanisms close the
 accidental duplicate-process spend path. They do **not** change the same-user
 threat boundary above, authenticate the ledger, or prevent replay/deletion.
+
+The protective input boundary is process-local and route-complete: completely
+absent admission configuration leaves Blue Helm ordinary, while any malformed
+attempted configuration refuses eligible Claude-pane startup visibly. Only bare
+Claude and configured Claude roles may claim the run. The intended pane is
+selected and durably claimed before spawn; a nonempty launch-time prompt is
+refused for that pane, and spawn failure closes the claimed run and voids the
+remainder. Pending/bound pane designation is separate from ledger health, so a
+checksum, read, CAS, claim, or persistence failure cannot convert that pane into
+an ordinary pane. Generic and durably admitted input converge at one final PTY
+writer, whose admitted route uses a main-local capability unavailable to IPC or
+renderer code. This remains an accidental-spend property of supported Blue Helm
+paths, not same-user isolation.
 
 **The unreachable rollback guard was REMOVED.** `REASON.STORAGE_ROLLED_BACK` and
 its `highWaterAdmitted` comparison advertised a cross-restart guarantee the code

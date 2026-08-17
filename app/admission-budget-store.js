@@ -41,9 +41,9 @@
 //     source; and plain filesystem enumeration finds it regardless.
 //   * There is NO filesystem isolation. A PTY child runs as the same Windows user as main and has
 //     the same access to that file as main does.
-//   * Stripping the admission environment keys hides the configured RUN ID and ALLOWANCE from the
-//     pane environment. That is all it does. It does not hide `userData`, and it grants no
-//     protection over the file.
+//   * Stripping the admission environment keys prevents inheritance of those keys into the pane. It
+//     does not make their values unknowable: the same-user pane can read them from this ledger and
+//     choose environment values for descendants. It does not hide `userData` or protect the file.
 //   * `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` concerns credentials in Claude Code's own subprocesses. It
 //     is not evidence that a same-user Claude process cannot reach this ledger.
 //
