@@ -16,7 +16,27 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const src = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+// LINE-ENDING NORMALIZATION — READ THIS BEFORE RE-PINNING ANYTHING BELOW.
+//
+// These anchors hash a REGION OF SOURCE, so they only mean anything if the same commit always yields
+// the same characters. It did not. `.gitattributes` sets `* text=auto` and this machine has
+// `core.autocrlf=true`, so main.js is stored LF and checked out CRLF — but a builder whose editor
+// appends NEW lines with a bare LF into an already-CRLF working file leaves a MIXED-ending file that
+// still commits to the identical blob. That is exactly what happened here: the previous pins were
+// measured on such a mixed working tree, and a CLEAN CHECKOUT OF THE VERY SAME COMMIT produced a
+// `pty-start handler` region 35 characters longer — failing this suite for a region that had not
+// changed by a single character. A tripwire that fires on checkout state rather than on content is
+// worse than no tripwire: it trains the next reader to re-pin without looking.
+//
+// So the source is NORMALIZED TO LF before slicing and hashing. The pins below are now reproducible
+// from the committed object itself — `git show <sha>:app/main.js` — on any machine and under any
+// autocrlf setting, rather than from one particular working tree.
+//
+// UNIT CHANGE, ONE TIME: the historical counts in the comment block below were measured in CRLF units
+// and are NOT comparable to the LF units used from here on. Each guarded region was verified
+// byte-identical to the previous branch tip at the moment these values were rebased.
+const rawSrc = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+const src = rawSrc.split('\r\n').join('\n');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -189,22 +209,22 @@ const REGIONS = [
     name: 'fenced-role cwd gate',
     start: 'if (!opts.videoScout && opts.role && FENCED_ROLES.has(opts.role)) {',
     end: '// Never spawn into a missing directory',
-    len: 1354,
-    sha: 'ae9dce92cbdd76da7d96ff5b9c5c070e3a96f4ca1f4c1c06b77eb13ccba62060', // UNCHANGED from base
+    len: 1326,
+    sha: '9a1255f1e81e0a9e4e289ab15380707dd6bcc1d410ffd16f44adddb99b16f8c6', // UNCHANGED content; LF units
   },
   {
     name: 'ptyEnv block',
     start: 'const ptyEnv = {',
     end: 'let p;',
-    len: 271,
-    sha: '2a399a9890fbeccd05141779f69958878f42232a8a42e2f9e0aaf992408657f8',
+    len: 265,
+    sha: 'b0bc588013e85de54042a0f19f30d187d8fcd22c2fec5f4e9596ad3527e1b77d',
   },
   {
     name: 'pty-start handler',
     start: "ipcMain.handle('pty-start', (_e, opts) => {",
     end: "ipcMain.on('pty-write'",
-    len: 13458,
-    sha: '653b0c3363577ae6754f5eeb260036115d9c0c330b6c2731b3896ebf0f684c82',
+    len: 13287,
+    sha: '3ad6db301a3fa0e101195f439012ee42ca25ba6b31040b10d0196d23b7141bb3',
   },
 ];
 

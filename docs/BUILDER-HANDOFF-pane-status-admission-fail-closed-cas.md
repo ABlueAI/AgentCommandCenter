@@ -1,14 +1,27 @@
 # Builder Handoff — Pane-status admission fail-closed/CAS correction
 
-Date: 2026-08-17  
-Branch: `codex/pane-status-admission-fail-closed-cas`  
-Forked from failed-review handoff tip: `9c076025741dc74663fd86b352727edfe1368fa7`  
-Pre-merge `main`: `5bbe3635736f18c9b8d4b50a23c7b51955f7bd0f`  
-Corrective content tip: `1a3b11b175e1fd7dd29fe9efb645776ea01c5ab0`  
+Date: 2026-08-17
+Branch: `codex/pane-status-admission-fail-closed-cas`
+Forked from failed-review handoff tip: `9c076025741dc74663fd86b352727edfe1368fa7`
+Pre-merge `main`: `5bbe3635736f18c9b8d4b50a23c7b51955f7bd0f`
+Corrective content tip: `1a3b11b175e1fd7dd29fe9efb645776ea01c5ab0`
 Merge commit: pending; nothing merged or pushed
 
 The handoff-only branch tip is the commit containing this document and must be read from the branch
 ref. A commit cannot truthfully contain its own SHA.
+
+> **SUPERSEDED IN ONE RESPECT — retained verbatim as historical provenance.** This record is a true
+> account of what that branch state contained, and its review history is **not** rewritten or
+> softened. One thing it describes no longer exists: the **application-wide Electron
+> single-instance lock** (`app/main.js`, `app/single-instance.js`, `app/single-instance.test.js`,
+> and the `single-instance.test.js` gate row below). A later independent Full-class review found
+> that the global lock was unnecessary for ledger correctness, changed startup for every gate-off
+> user, and made `--classic-layout` recovery unreachable while a Dockview instance held it. It was
+> **removed**, not repaired, and replaced by nothing. Cross-process correctness is carried entirely
+> by the ledger store’s `wx` lock and checksum-revision CAS, now proved with independent OS
+> processes in `app/admission-process-cas.test.js`. See
+> `docs/BUILDER-HANDOFF-pane-status-admission-protective-state-machine.md` for the correction and
+> its gate counts. **Read the single-instance items below as history, not as current state.**
 
 ## Intended invariant
 

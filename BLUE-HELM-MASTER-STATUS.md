@@ -557,12 +557,23 @@ it; replaying an earlier valid checksummed ledger is not detected; deleting the
 ledger still recreates a fresh run.
 
 Every live mutation now repeats that validated read and refuses before `save`
-on an integrity or read failure. Cooperating writers use a locked checksum-
-revision compare-and-swap, and Electron's single-instance lock prevents an
-accidental second Blue Helm launch from creating independent PTYs; a second
-launch restores and focuses the existing window. These mechanisms close the
-accidental duplicate-process spend path. They do **not** change the same-user
-threat boundary above, authenticate the ledger, or prevent replay/deletion.
+on an integrity or read failure. Cooperating writers — including two entirely
+separate Blue Helm processes — are serialized by the ledger store’s own `wx`
+lock file plus a checksum-revision compare-and-swap, which together close the
+accidental duplicate-process spend path. That is the whole mechanism: it does
+**not** change the same-user threat boundary above, authenticate the ledger, or
+prevent replay/deletion.
+
+**The application-wide single-instance lock was REMOVED.** An earlier revision
+called `app.requestSingleInstanceLock()` unconditionally in `app/main.js` and
+described it as part of the duplicate-process story. Ledger correctness never
+depended on it — `app/admission-process-cas.test.js` proves the property with two
+genuinely independent OS processes racing a one-turn ledger, with no application
+singleton anywhere — while the global lock changed startup for every gate-off
+user and made `--classic-layout` recovery unreachable whenever a Dockview
+instance already held the lock. It had no separate product authority, so it was
+removed rather than repaired, and no other application-wide singleton replaced
+it. **No admission claim rests on single-instance startup.**
 
 The protective input boundary is process-local and route-complete: completely
 absent admission configuration leaves Blue Helm ordinary, while any malformed

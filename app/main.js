@@ -65,14 +65,13 @@ const { createClaudeVersionResolver } = require('./prototype-pane-status/pane-st
 // ledger file directly. Read the threat-boundary header in app/admission-budget.js before relying on
 // this for anything.
 const admissionConfig = require('./admission-budget-config');
-const { createAdmissionBudget } = require('./admission-budget');
+const { createAdmissionBudget, REASON: ADMISSION_REASON } = require('./admission-budget');
 const { createAdmissionLedgerStore } = require('./admission-budget-store');
 const { createAdmissionIpc, CHANNEL_SUBMIT: ADMISSION_CHANNEL_SUBMIT } = require('./admission-ipc');
 const {
   createAdmissionPtyBoundary,
 } = require('./admission-pty-boundary');
 const { prepareAdmissionPaneLaunch, closeAfterFailedSpawn } = require('./admission-pane-launch');
-const { focusExistingWindow } = require('./single-instance');
 // K8 media-permission boundary: both session permission handlers come from this pure,
 // dependency-free, unit-tested module (media-permission-policy.test.js). A grant requires
 // the trusted window's main frame + the exact entry document + audio-only proof; every
@@ -152,9 +151,30 @@ const admissionEnabled = admissionPlan.enabled === true;
 // The renderer's controlled-run surface is ABSENT, not inert, when no run is configured — the same
 // posture as the Dockview and pane-status tokens above.
 const ADMISSION_RENDERER_ARG = '--blue-helm-admission-budget';
-// Late-bound: constructed at app-ready (it needs Electron `userData`). Until then, and forever when
-// the plan is disabled, this stays the refusing object created by createAdmissionBudget(disabledPlan).
-let admissionBudget = createAdmissionBudget({ plan: admissionPlan });
+// PRE-READY PLACEHOLDER — ALWAYS BUILT FROM A DISABLED PLAN, NEVER FROM `admissionPlan`.
+//
+// The live budget needs three things that DO NOT EXIST at module-evaluation time: Electron
+// `userData` (available only after app readiness), the ledger store built on it, and the
+// module-private admitted PTY writer. `createAdmissionBudget` enforces that dependency by THROWING
+// when it is handed an enabled plan without storage and a writer.
+//
+// Passing `admissionPlan` here therefore crashed the main process at `require` time for exactly the
+// configuration this control exists to serve — before `app.whenReady()`, before any uncaught-exception
+// handler, and before a window could report it. A valid controlled run could never start. The bug was
+// invisible to the suite because main.js was only ever READ AS TEXT, never evaluated; see
+// admission-main-startup.test.js, which now evaluates this entry under all three configuration shapes.
+//
+// So the pre-ready object is built from a DISABLED plan unconditionally. It refuses every method with
+// `admission-not-initialized`, which is safe in the strongest sense: before readiness there is no
+// window, no PTY and no pane, so a refusing object cannot create an admission opportunity — it can
+// only deny one. The live, store-backed budget replaces it EXACTLY ONCE inside app readiness below.
+//
+// `admissionPlan` itself is untouched and still governs the launch policy: absence stays ordinary and
+// a malformed REQUEST still refuses eligible Claude startup, because `prepareAdmissionPaneLaunch`
+// reads the plan directly and rejects an invalid one before it ever consults this object.
+let admissionBudget = createAdmissionBudget({
+  plan: admissionConfig.disabledPlan(ADMISSION_REASON.NOT_INITIALIZED),
+});
 let admissionIpc = null;
 
 // ---- tunable defaults (marked ? — change to taste) --------------------------
@@ -281,18 +301,6 @@ function loadGeminiKey() {
 }
 
 let win = null;
-// A second app process would own a separate process-local inFlight guard and could otherwise race the
-// same final paid admission. Accidental duplicate launches are inside this control's threat model, so
-// Electron's OS-backed application lock is acquired before either process may create a window or PTY.
-const hasSingleInstanceLock = app.requestSingleInstanceLock();
-if (!hasSingleInstanceLock) {
-  console.error('[single-instance] another Blue Helm instance owns the application lock; exiting');
-  app.quit();
-} else {
-  app.on('second-instance', () => {
-    focusExistingWindow(() => win, (line) => console.log(line));
-  });
-}
 // Canonical trusted entry document — the ONE definition shared by win.loadFile(), the
 // navigation lockdown, and the media-permission policy, so the three trust anchors can
 // never drift apart (independently reconstructed path/origin strings are how they would).
@@ -392,7 +400,7 @@ function createWindow() {
   win.webContents.on('will-redirect', guardNav('will-redirect'));
 }
 
-if (hasSingleInstanceLock) app.whenReady().then(() => {
+app.whenReady().then(() => {
   loadGeminiKey(); // decrypt stored GEMINI_API_KEY into memory before any PTY can launch
   // K8 media-permission hardening: grant ONLY a microphone-only request ('media' with
   // mediaTypes exactly ['audio']) coming from this window's main frame at the exact

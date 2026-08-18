@@ -384,7 +384,10 @@ async function settle() { for (let i = 0; i < 4; i += 1) await new Promise((r) =
     const chain = JSON.parse(read('package.json')).scripts.test.split('&&').map((s) => s.trim());
     eq(chain.length, new Set(chain).size, 'no duplicate entry in the test chain');
     eq(chain.filter((c) => c.includes('quick-links')).length, 5, 'all 5 Quick Links suites are in the chain');
-    eq(chain.filter((c) => c.includes('admission')).length, 8, 'all 8 admission suites are in the chain');
+    // 10 = the 8 original admission suites + admission-main-startup (the semantic main-entry
+    // startup test) + admission-process-cas (the independent-process ledger CAS test). Both were added
+    // by the bootstrap/recovery correction; single-instance.test.js was removed with its module.
+    eq(chain.filter((c) => c.includes('admission')).length, 10, 'all 10 admission suites are in the chain');
   }
 
   // ---- (12) no renderer path bypasses admission-submit-prompt -----------------------------------
