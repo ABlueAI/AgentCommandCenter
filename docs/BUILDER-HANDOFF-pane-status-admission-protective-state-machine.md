@@ -2,14 +2,22 @@
 
 Date: 2026-08-18
 Branch: `codex/pane-status-admission-protective-state-machine`
+Closeout branch: `codex/pane-status-admission-closeout`
+Closeout review class: **Standard** — one tracked Markdown file records already-completed review and
+merge facts; no production, test, configuration, dependency, or procurement boundary changes.
+Merged feature fork-point SHA: `5bbe3635736f18c9b8d4b50a23c7b51955f7bd0f`
 Pre-merge `main`: `5bbe3635736f18c9b8d4b50a23c7b51955f7bd0f`
 Previously reviewed content tip (FAILED): `346d771c095fe2283fe505f70f5a9eb5324ffe3a`
 Previous handoff-only tail: `8c492092a8f011c9caf8788977be634537bf1118`
 Corrected content tip: `36b8d678efd03580662d0a6b60d10ffdb75e8a12`
-Merge commit: pending; nothing merged or pushed
+Merged branch tip: `7794151571ea5e7414283ffb608834a90bd38c1f`
+Merge commit: `2ef73c39ce9f310eace902429824b8405c24f3d8`
+Merge state: merged to `main`, pushed, and confirmed equal to `origin/main`
+Closeout base SHA: `2ef73c39ce9f310eace902429824b8405c24f3d8`
 
-The handoff-only branch tip is the commit containing this document and must be read from the branch
-ref. A commit cannot truthfully contain its own SHA. The tail touches only this file.
+The original handoff-only branch tip is the merged branch tip above. This closeout is another
+documentation-only tail and touches only this file. Its own commit cannot truthfully contain its own
+SHA, so the closeout tip must be resolved from the closeout branch ref until that branch is merged.
 
 ## Review result being answered — verbatim
 
@@ -26,6 +34,77 @@ Reviewed base `5bbe3635736f18c9b8d4b50a23c7b51955f7bd0f`; reviewed content tip
 
 **This history is not rewritten or softened.** The FAIL stands as the record of what `346d771c`
 contained.
+
+## Final review and merge closeout — verbatim
+
+The fresh independent Full-class review of the complete corrected content range returned this exact
+line:
+
+```
+VERDICT: PASS  (CLASS: Full · INDEPENDENCE: CONFIRMED)
+```
+
+Reviewer verdict source: the fresh independent Full-class review report delivered to Blue on
+2026-08-18 and pasted verbatim into the Codex task that authorized this closeout. The report reviewed
+the cumulative range `5bbe3635736f18c9b8d4b50a23c7b51955f7bd0f...36b8d678efd03580662d0a6b60d10ffdb75e8a12`.
+This tracked quotation is the durable repository record of the literal verdict line; the earlier FAIL
+above remains the durable result for the earlier failed content tip.
+
+The retained four-SHA record is:
+
+| Identity | SHA |
+| --- | --- |
+| Fork point | `5bbe3635736f18c9b8d4b50a23c7b51955f7bd0f` |
+| Pre-merge `main` | `5bbe3635736f18c9b8d4b50a23c7b51955f7bd0f` |
+| Branch tip | `7794151571ea5e7414283ffb608834a90bd38c1f` |
+| Merge commit | `2ef73c39ce9f310eace902429824b8405c24f3d8` |
+
+### Merge evidence
+
+1. A read-only `scripts/merge-gate.ps1` preflight used a plan pinning the base, reviewed content tip,
+   branch tip, this handoff, and the cumulative pinned diff. It returned `PREFLIGHT: PASS` and predicted
+   tree `addd526d2e7e8c697e4e31435a7240fe4fb530eb`.
+2. Blue authorized the merge. `git merge --no-ff` produced merge commit `2ef73c39` with parents
+   `5bbe3635` and `7794151`. Its tree is exactly the predicted tree
+   `addd526d2e7e8c697e4e31435a7240fe4fb530eb`; the merge delta is 30 files, 8,048 insertions, and 14
+   deletions.
+3. The reviewed delta was re-derived from recorded pre-merge `main` and reproduced
+   `.agent-review-admission-bootstrap-recovery-cumulative.diff` byte-identically before and after the
+   push: 474,745 bytes, SHA-256
+   `70c42d430ecfc0e8b119bb6566f768cb0f69698f6ca160cc998ce3c1cc6c9fdf`.
+4. Merged-main gates ran on `2ef73c39` and exited 0: application **67 suites, 4,888 assertions, 0
+   failures**; Pester **955 passed, 0 failed, 0 skipped**.
+5. The push fast-forwarded `main` from `5bbe3635` to `2ef73c39`. A fresh fetch confirmed local `main`
+   and `origin/main` both equal `2ef73c39ce9f310eace902429824b8405c24f3d8`.
+
+`merge-gate.ps1 -Apply` requires an interactive typed confirmation that the executing shell could not
+supply. The executor therefore ran the read-only preflight, performed the Blue-authorized merge
+manually, and then proved that the applied merge tree was exactly the preflight-predicted tree. The
+temporary staging copy of the pinned artifact was removed; the two originals in the review worktree
+remain unchanged at SHA-256
+`70c42d430ecfc0e8b119bb6566f768cb0f69698f6ca160cc998ce3c1cc6c9fdf` and
+`e0c35ae20be1ccda04c55cf715b0c3dc793c68877f6be5e05545063145e6c82b`. The plan remains under the
+gitignored `.merge-gate/` directory.
+
+### Separation-of-duties observation
+
+The same independent reviewing agent executed the merge after Blue issued the merge order. Blue
+remained the human merge authority, and the reviewer was independent of the builder/correction author,
+so the reported `INDEPENDENCE: CONFIRMED` line is retained verbatim. Having the reviewer also act as
+merge executor is nevertheless weaker separation than the usual project shape and is recorded here
+rather than silently treated as equivalent.
+
+### Open non-blocking Low findings
+
+The Full-class PASS classified these as non-blocking. The merge did **not** fix them:
+
+| Finding | Open state |
+| --- | --- |
+| `admission-main-startup.test.js` leaves six `%TEMP%\bh-main-startup-*` directories per suite run. | **OPEN** — no cleanup path exists. |
+| `admission-process-cas.test.js` names final-admission-save contention, but the exercised contention resolves at the durable pane claim. | **OPEN** — evidence naming/scope must be corrected without overstating what the test proves. |
+| Six `uncaughtException` listeners accumulate per `admission-main-startup.test.js` run. | **OPEN** — listener cleanup is absent. |
+
+These are retained follow-ups, not implicit work authorization and not reasons to reinterpret the PASS.
 
 ## Procurement authority
 
@@ -339,7 +418,10 @@ New, from this correction:
   ordinary behaviour, and it is safe for the ledger: `admission-process-cas.test.js` proves the `wx`
   lock and revision CAS admit exactly once across independent processes.
 
-## What a fresh reviewer should focus on
+## Final-review requirements — completed
+
+The following were the controlling requirements for the fresh Full-class review that returned the PASS
+recorded above. They remain here so the verdict's required scope is not lost after merge:
 
 1. Reproduce the cumulative artifact identity and review `5bbe3635...36b8d678` in full.
 2. Evaluate `app/main.js` independently under a valid admission configuration and confirm it reaches
@@ -356,11 +438,24 @@ New, from this correction:
 
 ## Boundary statement
 
-No Claude or other provider session, pane-status hook, paid prompt, model turn, app server, remote TUI,
-Experiment B, or production `dockview-layout.json` was launched, installed, sent, consumed or touched.
-Electron activity was limited to the repository's inert local test harnesses; the new startup suite
-stubs Electron entirely and never starts one. Nothing was merged or pushed.
+During construction, correction, review, merge, and closeout, no Claude or other provider session,
+pane-status hook, paid prompt, model turn, app server, remote TUI, Experiment B, or production
+`dockview-layout.json` was launched, installed, sent, consumed, or touched. Electron activity was
+limited to the repository's inert local test harnesses; the startup suite stubs Electron entirely and
+never starts one.
 
-Reviewer verdict: **pending fresh independent Full-class review by someone who did not author this
-correction.** This handoff is not merge authorization. Production pane-status implementation and live
-provider runs remain blocked until the admission control passes that review and lands.
+Reviewer verdict: `VERDICT: PASS  (CLASS: Full · INDEPENDENCE: CONFIRMED)`.
+
+The admission control is merged and pushed at `2ef73c39`. That merge and this documentation-only
+closeout authorize nothing beyond the reviewed admission subsystem. The canonical procurement record
+remains `docs/OSS-PROCUREMENT-pane-status.md`, with verdict
+`BLUE SUBSYSTEM VERDICT: BUILD FRESH`. Production pane-status specification and implementation,
+Experiment B, all app-server runtime testing, providers beyond Claude Code, and autonomous
+consequential actions remain unauthorized. Section 13.5's precondition remains binding: enforceable
+turn accounting must precede another paid live run. Landing the admission control does not itself
+authorize such a run. The ledger remains an accidental-spend control, not a same-user security
+boundary, and the accepted provenance and ledger residuals void automatically if admission or pane
+status ever becomes consequential or automated.
+
+This closeout is not merge authorization for its own branch. It stops for review of the handoff-only
+delta; Blue remains the sole authority to merge or push it.
