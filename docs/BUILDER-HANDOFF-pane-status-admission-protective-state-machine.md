@@ -14,6 +14,7 @@ Merged branch tip: `7794151571ea5e7414283ffb608834a90bd38c1f`
 Merge commit: `2ef73c39ce9f310eace902429824b8405c24f3d8`
 Merge state: merged to `main`, pushed, and confirmed equal to `origin/main`
 Closeout base SHA: `2ef73c39ce9f310eace902429824b8405c24f3d8`
+Reviewed closeout content tip: `eb0dbbc3ac560cc9b5a3b221954c8794562b67e8`
 
 The original handoff-only branch tip is the merged branch tip above. This closeout is another
 documentation-only tail and touches only this file. Its own commit cannot truthfully contain its own
@@ -133,6 +134,31 @@ The correction narrows the statement to the product and test-harness boundary an
 external Claude/Codex work sessions did occur. It does not change production code, test results, merge
 evidence, procurement authority, accepted residuals, or the three open Low findings. The FAIL remains
 the verdict for `e93fe17`; the corrected branch tip requires a fresh independent Standard-class review.
+
+## Closeout correction review — PASS
+
+The fresh independent Standard-class correction review examined reviewed content tip
+`eb0dbbc3ac560cc9b5a3b221954c8794562b67e8` through both retained artifacts:
+
+| Artifact | Range | Size | SHA-256 |
+| --- | --- | ---: | --- |
+| `.agent-review-pane-status-admission-closeout-boundary-cumulative.diff` | `2ef73c39...eb0dbbc3` | 11,438 bytes | `4fcc5e79124e7fc10d330845698c4c4fa8e2b2c1fe233234d0f59bf741fbb434` |
+| `.agent-review-pane-status-admission-closeout-boundary-focused.diff` | `e93fe173...eb0dbbc3` | 4,096 bytes | `914c11e1e0e531ebea09f8ad3b45d235d8d56cc5e93de0dbf4ad88c1fbf0439a` |
+
+The reviewer found no findings: both artifacts matched their supplied identities and regenerated
+byte-identically; both ranges passed `git diff --check`; the focused delta was one Markdown file with
+39 insertions and 7 deletions; and every earlier closeout and admission artifact remained unchanged.
+No runtime test was required for this documentation-only correction. The reviewer returned, verbatim:
+
+```
+VERDICT: PASS
+CLASS: Standard
+INDEPENDENCE: CONFIRMED
+```
+
+This PASS applies to corrected closeout content tip `eb0dbbc3`. It does not erase or reinterpret the
+FAIL on `e93fe17`. The commit containing this section is a final handoff-only tail that records the
+review result; resolve its SHA from the closeout branch ref because a commit cannot contain its own SHA.
 
 ## Procurement authority
 
@@ -497,5 +523,6 @@ boundary, and the accepted provenance and ledger residuals void automatically if
 status ever becomes consequential or automated.
 
 This closeout is not merge authorization for its own branch. It stops for review of the handoff-only
-delta; Blue remains the sole authority to merge or push it. The closeout's first independent
-Standard-class review returned FAIL as recorded above, and this correction has no review verdict yet.
+delta; Blue remains the sole authority to merge or push it. The first independent Standard-class review
+returned FAIL on `e93fe17`; the corrected content at `eb0dbbc3` then received the independent PASS
+recorded above. This final tail records that verdict and makes no further substantive correction.
