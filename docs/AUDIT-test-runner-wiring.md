@@ -242,5 +242,144 @@ audited by the watchdog.
 
 ## Status
 
-Read-only audit. No runner, test file, or configuration was modified. No repair is proposed here;
-F1–F4 await Blue's authorization before any change.
+Read-only audit. No runner, test file, or configuration was modified. The register below carries the
+disposition of every item; R1 is the only one with work committed.
+
+## Findings register
+
+Self-contained by design: a reader arriving here needs no prior session. Reference commits —
+`8c6bfce` is main at audit time, `55ec2d9` is the audit commit on `audit/test-runner-wiring`,
+`cf6c1a8` is the R1 fix on `fix/pester-reachability-exact-match`.
+
+| ID | Item | Disposition |
+| --- | --- | --- |
+| **R1** | Pester guard used substring, not exact match | **Fix committed, awaiting review** (`cf6c1a8`) |
+| **F5** | Three summary output formats across suites | **Open — do next** (enabler for F1) |
+| **F1** | 3,988 executed assertions counted nowhere | **Open** (depends on F5) |
+| **F2** | `*.Spec.ps1` invisible to runner and contract | **Open** (latent; zero instances) |
+| **F3** | Discovery floor `>= 14` against 35 actual | **Open — expect deletion, not a bump** (likely redundant after F2) |
+| **F4** | Walk skips `vendor`, `dist`, `source-material` | **Closed — no action** |
+| **R2** | Coordinated double-removal is silent | **Won't fix — recorded so it is not rediscovered** |
+
+### R1 — Pester reachability guard used a substring test — FIX COMMITTED, AWAITING REVIEW
+
+`scripts/test-reachability.Tests.ps1` asserted its sibling's wiring with
+`$pkg.scripts.test.Contains('test-reachability.test.js')` — a substring test against the whole script
+string. It caught **removal** but not **neutering**: changing the chain entry to
+`node test-reachability.test.js || exit 0` leaves the filename present, so `Contains()` still passed
+while the Node-side meta-test's failures stopped failing the chain. A disarmed watchdog was
+indistinguishable from a working one — and this is the guard protecting all 67 suites.
+
+The Node side had already solved this and recorded why: `app/test-reachability.test.js` tokenizes on
+`&&` and compares each `node <path>` for equality, commenting that a substring false-negative would be
+self-defeating. That reasoning had never been applied to the assertion guarding the Node side itself.
+
+Fixed on `fix/pester-reachability-exact-match` (`cf6c1a8`) by **porting** the Node logic rather than
+writing new matching, so the two sides stay symmetric. Proven in both directions with
+`app/package.json` temporarily neutered, then reverted byte-identical: before the fix 4 passed /
+0 failed (defect green), after the fix 3 passed / 1 failed (caught), after revert 4 passed / 0 failed
+(no false positive). Branch gates matched main exactly: app 67/4,888/0, Pester 955/0/0. Not merged.
+
+### F5 — Suites emit three different summary formats — OPEN, DO NEXT
+
+Suite summaries appear in three shapes: `name: N passed, M failed`, bare `N passed, M failed`, and
+`file.test.js: N assertions passed`. Any single-pattern regex over the gate log therefore undercounts
+to **59 suites / 4,447 assertions** — a shortfall plausible enough to look like real gate erosion.
+
+This is the **root cause of the counting trap**, and its cost is documented rather than hypothetical:
+it produced a mid-audit false positive in the audit that found it, and two work orders were opened
+against gate shrinkage that had never occurred. It is also the **enabler for F1** — no reliable
+assertion total can be derived from the log while three formats coexist, so F1 cannot be closed
+first. Do this one next: normalize the summary line, then F1 becomes measurable.
+
+### F1 — 3,988 executed assertions are counted nowhere — OPEN, DEPENDS ON F5
+
+Three Node suites run only inside Pester wrappers, each wrapper contributing roughly 4 assertions
+(exit code 0, no `FAIL` lines, zero failed in its own summary) while the wrapped suite's real count
+disappears:
+
+| Node suite | Wrapper | Assertions |
+| --- | --- | ---: |
+| `app/renderer/video-model-policy.test.js` | `scripts/video-model-policy-node.Tests.ps1` | 398 |
+| `scripts/gemini-video-sdk.test.js` | `scripts/gemini-video-sdk-node.Tests.ps1` | 3,491 |
+| `scripts/gemini-followup.test.js` | `scripts/gemini-followup-node.Tests.ps1` | 99 |
+
+True executed total on `8c6bfce` is **9,831**, not the **5,843** implied by the "app 67/4,888/0 plus
+Pester 955/0/0" pairing cited in every merge record in this repository.
+
+Not a coverage hole — failures propagate by exit code, so a broken wrapped suite still fails the gate.
+The defect is that **the cited ceiling is decorative rather than load-bearing**: a quiet erosion inside
+a wrapped suite cannot move the number anyone reads. The figure looks like a coverage measure and is
+not one.
+
+### F2 — `*.Spec.ps1` is invisible to every runner — OPEN, LATENT
+
+`run-pester.ps1` filters `*.Tests.ps1` only; Pester's own discovery uses the same convention; and the
+Node meta-test's reachability contract covers only `*.test.js` and `*.Tests.ps1`. A suite added as
+`*.Spec.ps1` would be executed by nothing and flagged by nothing — passing green exactly as the five
+historical orphans did. Zero such files exist today, so nothing is currently unreachable.
+
+**Fix at the contract layer, not the glob.** Widening the runner's filter alone leaves the meta-test
+contract enumerating extensions, and the class simply regenerates under the next unlisted extension.
+The contract should define what counts as a test file and require that every such file be reachable.
+
+### F3 — Discovery floor asserts `>= 14` against 35 actual — OPEN, EXPECT DELETION
+
+Both meta-tests assert a floor of 14 Pester suites while 35 exist; 21 could be deleted before either
+objects. More fundamentally a floor only ever catches **mass deletion**, never the single-file
+disappearance that is the failure mode this repo has actually experienced five times.
+
+**Do not bump the number** — a floor that tracks growth is still blind to the real case. Expect this
+assertion to become redundant once F2 extends the contract to cover every test file by identity
+rather than by count, at which point delete it.
+
+### F4 — Reachability walk skips three directory names — CLOSED, NO ACTION
+
+The walk never descends into `vendor`, `dist`, or `source-material` (alongside `node_modules`, `.git`,
+`.worktrees`). Documented and deliberate: `source-material` holds archived snapshots containing
+historical copies of repo files, which would otherwise generate false orphan reports. Recorded for
+completeness only — a genuine suite placed under those paths would not be audited.
+
+### R2 — Coordinated double-removal is silent — WON'T FIX
+
+Deleting `scripts/test-reachability.Tests.ps1` **and** unhooking the Node entry from the chain in a
+single change is undetectable: the app gate runs 66 green suites (the assertion that would have caught
+the missing sibling left with it), and Pester runs 34 green suites with the `>= 14` floor still
+satisfied. Neither watchdog survives to name the other.
+
+**Deliberately not fixed.** Every mutual-guard loop has this property, and adding a third guard merely
+relocates it — that guard is then itself unguarded. This class terminates in commit review, not in
+automation. Recorded here so a future audit recognizes it as an accepted structural limit rather than
+rediscovering it as a new gap.
+
+### Corrected premise — the shrinkage never existed
+
+The audit was opened on a suspected collapse of the app gate. There was none. `npm test` on `8c6bfce`
+reports **67 suites / 4,888 assertions / 0 failures**.
+
+The two figures that prompted it were misread: **205** was a single suite's own summary line
+(`video-scout-args.test.js`), and **134** was the last line of a 5,279-line log
+(`renderer/admission-view.test.js`), each taken for a total. The wiring is sound — 68 test files, 67
+chained, Y-rows summing to exactly 4,888 across exactly 67 files, no duplicates, no entry naming a
+missing file, and no zero-assertion suite. The one unchained file is reached by a Pester wrapper.
+
+Recorded because the misreading was itself caused by F5, and because a future reader encountering
+"205" or "134" in the history should not re-open this investigation.
+
+### Hygiene — unrelated to test wiring, non-blocking
+
+**H1 — `.worktrees/` is untracked but not ignored.** Verified: `git check-ignore` matches no rule for
+it, and `git status` reports it as `?? .worktrees/`. It currently holds **35** worktree directories.
+A single `git add .` at the repo root would stage all of them. Every other local-only artifact class
+in this repo is ignored explicitly — `.merge-gate/`, `.agent-review*.diff`, `media/`, `node_modules/`.
+`.worktrees/` is the omission. Adding it to `.gitignore` is a one-line change, deliberately not made
+here because this branch is documentation-only.
+
+**H2 — 15 loose `.agent-review-*.diff` files at the repo root.** Note the correction to the figure
+this was reported with: there are **15**, not 16, and they **are** already ignored, by
+`.gitignore:33` (`.agent-review*.diff`). So they cannot be committed by accident — that half of the
+concern does not apply. The exposure runs the other way: because they are ignored, `git clean -xdf`
+or `-Xdf` deletes them, and being ignored is precisely what puts them in range. They are review
+evidence pinned by SHA-256 in handoff documents, so their loss would break the reproduction path
+those documents describe. No action proposed; the durable fix is to stop treating a gitignored
+working-directory file as an archival artifact.
