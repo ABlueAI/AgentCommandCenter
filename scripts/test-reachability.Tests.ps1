@@ -59,8 +59,40 @@ Describe 'test-runner reachability (Pester family)' {
         (Get-Content -LiteralPath $runner -Raw) -match "Recurse\s+-Filter\s+'\*\.Tests\.ps1'" | Should Be $true
     }
 
-    It 'the Node-side meta-test is wired into app/package.json (mutual anti-orphan watchdog)' {
+    It 'the Node-side meta-test is wired into app/package.json as a bare node invocation (mutual anti-orphan watchdog)' {
+        # EXACT-TOKEN matching, PORTED from app/test-reachability.test.js so the two sides
+        # stay symmetric. The previous .Contains() substring test caught REMOVAL but not
+        # NEUTERING: `node test-reachability.test.js || exit 0` keeps the filename present,
+        # so Contains() still passed while the watchdog's own failures no longer failed the
+        # chain — a disarmed guard indistinguishable from a working one. The Node side
+        # already tokenizes the script on '&&' and compares each `node <path>` for equality,
+        # noting there that a substring false-negative would be self-defeating; the same
+        # reasoning applies here, to the assertion that guards the Node side itself.
         $pkg = Get-Content -LiteralPath (Join-Path $repoRoot 'app\package.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-        $pkg.scripts.test.Contains('test-reachability.test.js') | Should Be $true
+        $testScript = [string]$pkg.scripts.test
+        $segments = @($testScript -split '&&' | ForEach-Object { $_.Trim() })
+        $wired = @(
+            $segments |
+                Where-Object { $_.StartsWith('node ') } |
+                ForEach-Object { $_.Substring(5).Trim() }
+        )
+        # Case-sensitive equality, matching the Node side's Set membership test. Any
+        # trailing modifier (||, ;, a redirect, a comment) lands inside the segment and
+        # makes it unequal, which is the whole point.
+        $exact = @($wired | Where-Object { $_ -ceq 'test-reachability.test.js' })
+
+        # Joined names on purpose, as in the stray check above: a failure must NAME what
+        # it found against what it expected, not merely report false.
+        $expected = 'wired: exactly one bare "node test-reachability.test.js" chain segment'
+        $mentions = @($segments | Where-Object { $_ -like '*test-reachability.test.js*' })
+        $verdict = if ($exact.Count -eq 1) {
+            $expected
+        }
+        else {
+            "expected exactly one chain segment equal to 'node test-reachability.test.js'; " +
+            "found $($exact.Count) exact match(es) among $($wired.Count) node invocation(s). " +
+            "Segments mentioning the file: [" + ($mentions -join ' | ') + "]"
+        }
+        $verdict | Should Be $expected
     }
 }
