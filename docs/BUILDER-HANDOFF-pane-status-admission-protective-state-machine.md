@@ -38,10 +38,12 @@ contained.
 ## Final review and merge closeout — verbatim
 
 The fresh independent Full-class review of the complete corrected content range returned this exact
-line:
+three-line block:
 
 ```
-VERDICT: PASS  (CLASS: Full · INDEPENDENCE: CONFIRMED)
+VERDICT: PASS
+CLASS: Full
+INDEPENDENCE: CONFIRMED
 ```
 
 Reviewer verdict source: the fresh independent Full-class review report delivered to Blue on
@@ -444,7 +446,13 @@ pane-status hook, paid prompt, model turn, app server, remote TUI, Experiment B,
 limited to the repository's inert local test harnesses; the startup suite stubs Electron entirely and
 never starts one.
 
-Reviewer verdict: `VERDICT: PASS  (CLASS: Full · INDEPENDENCE: CONFIRMED)`.
+Reviewer verdict, verbatim:
+
+```
+VERDICT: PASS
+CLASS: Full
+INDEPENDENCE: CONFIRMED
+```
 
 The admission control is merged and pushed at `2ef73c39`. That merge and this documentation-only
 closeout authorize nothing beyond the reviewed admission subsystem. The canonical procurement record
