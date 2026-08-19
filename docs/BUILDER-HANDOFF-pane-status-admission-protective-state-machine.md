@@ -108,6 +108,32 @@ The Full-class PASS classified these as non-blocking. The merge did **not** fix 
 
 These are retained follow-ups, not implicit work authorization and not reasons to reinterpret the PASS.
 
+## Closeout Standard review — FAIL and correction
+
+The first independent Standard-class review of this closeout examined
+`2ef73c39ce9f310eace902429824b8405c24f3d8...e93fe17392de01d60e8da3494679778cd7be9684`
+through `.agent-review-pane-status-admission-closeout-verbatim-cumulative.diff` (9,410 bytes, SHA-256
+`bb43f6025478f5ca8c5add432e8b6698a45d66bda1bff81e27f189301f6bbe82`). The reviewer independently
+regenerated the artifact byte-identically, passed `git diff --check`, reconciled the Git topology,
+merge tree, SHAs, statistics, and retained artifact hashes, and returned:
+
+```
+VERDICT: FAIL
+CLASS: Standard
+INDEPENDENCE: CONFIRMED
+```
+
+The blocking P2 finding was accurate: the boundary statement claimed that no provider session or
+model turn occurred during construction, review, merge, or closeout, while this record itself identifies
+the external Codex task that authorized and wrote the closeout. The claim confused **activity exercised
+by Blue Helm or its repository test harnesses** with the Claude/Codex work sessions that performed the
+repository work.
+
+The correction narrows the statement to the product and test-harness boundary and explicitly says that
+external Claude/Codex work sessions did occur. It does not change production code, test results, merge
+evidence, procurement authority, accepted residuals, or the three open Low findings. The FAIL remains
+the verdict for `e93fe17`; the corrected branch tip requires a fresh independent Standard-class review.
+
 ## Procurement authority
 
 Tracked procurement record: `docs/OSS-PROCUREMENT-pane-status.md`.
@@ -440,13 +466,18 @@ recorded above. They remain here so the verdict's required scope is not lost aft
 
 ## Boundary statement
 
-During construction, correction, review, merge, and closeout, no Claude or other provider session,
-pane-status hook, paid prompt, model turn, app server, remote TUI, Experiment B, or production
-`dockview-layout.json` was launched, installed, sent, consumed, or touched. Electron activity was
-limited to the repository's inert local test harnesses; the startup suite stubs Electron entirely and
-never starts one.
+As part of exercising the admission or pane-status runtime, **Blue Helm and its repository test
+harnesses** launched no Claude or other provider CLI session and sent or consumed no paid provider
+prompt or model turn. They also did not launch, install, or exercise a pane-status hook, app server,
+remote TUI, or Experiment B, and did not read or write production `dockview-layout.json`. Electron
+activity was limited to the repository's inert local test harnesses; the startup suite stubs Electron
+entirely and never starts one.
 
-Reviewer verdict, verbatim:
+External Claude and Codex work sessions did perform the repository construction, correction, review,
+merge, and closeout described in this handoff. The product/test-harness boundary above does not claim
+that those work sessions were absent.
+
+Admission-content reviewer verdict, verbatim:
 
 ```
 VERDICT: PASS
@@ -466,4 +497,5 @@ boundary, and the accepted provenance and ledger residuals void automatically if
 status ever becomes consequential or automated.
 
 This closeout is not merge authorization for its own branch. It stops for review of the handoff-only
-delta; Blue remains the sole authority to merge or push it.
+delta; Blue remains the sole authority to merge or push it. The closeout's first independent
+Standard-class review returned FAIL as recorded above, and this correction has no review verdict yet.
