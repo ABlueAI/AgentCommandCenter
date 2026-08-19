@@ -125,3 +125,31 @@ if (process.argv.includes('--blue-helm-pane-status-prototype')) {
     onPaneStatusPrototype: (cb) => ipcRenderer.on('pane-status-prototype', (_e, v) => cb(v)),
   }));
 }
+
+// ---- MAIN-OWNED TURN ADMISSION BUDGET bridge ----------------------------------------------------
+// docs/OSS-PROCUREMENT-pane-status.md — "BLUE SUBSYSTEM VERDICT: BUILD FRESH".
+// Blue's authorization, verbatim: I SELECT TURN-ACCOUNTING OUTCOME B. THE FOURTH TURN REMAINS
+// UNEXPLAINED. NO LIVE PANE-STATUS PROVIDER SESSION IS AUTHORIZED UNTIL THE MAIN-OWNED ADMISSION
+// BUDGET IS REVIEWED AND LANDED.
+//
+// ABSENT, NOT INERT. With no controlled run configured, `window.ccAdmission` is undefined: there is no
+// method to call and main has registered no handler, so even a forged invoke has nothing to reach.
+// Renderer script cannot add a process argument, so it cannot conjure this bridge into existence.
+//
+// THE SURFACE IS EXACTLY TWO INVOKES, AND NEITHER IS A SETTER:
+//   submitPrompt({ paneId, prompt }) -> asks main to spend ONE admission. Main validates the sender,
+//     the shape and the prompt, decrements and PERSISTS the ledger, and only then writes to the PTY.
+//     Main appends the submission terminator; the renderer cannot supply one (control characters are
+//     refused) and therefore cannot get two prompts out of one admission.
+//   getState() -> bounded counts for a controlled-run UI.
+//
+// There is deliberately NO setAllowance, NO reset, NO certify, and NO generic write. The renderer is
+// TOLD the numbers; it can never change what they mean. A refusal returns a bounded reason constant
+// and never carries prompt text back.
+if (process.argv.includes('--blue-helm-admission-budget')) {
+  contextBridge.exposeInMainWorld('ccAdmission', Object.freeze({
+    enabled: true,
+    submitPrompt: (req) => ipcRenderer.invoke('admission-submit-prompt', req),
+    getState: () => ipcRenderer.invoke('admission-get-state'),
+  }));
+}

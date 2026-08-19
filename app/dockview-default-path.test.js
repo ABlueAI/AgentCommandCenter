@@ -335,12 +335,23 @@ process.stdout.write('\nindex.html ships the EMBEDDED dock and loads no Dockview
   //
   // The assertion below names the expected file, so a FUTURE extra script still fails here rather
   // than riding in on this bump.
+  //
+  // RE-PINNED AGAIN for the MAIN-OWNED TURN ADMISSION BUDGET. 23 -> 24. The one addition is
+  // `admission-view.js`, and it has the same ABSENT-NOT-INERT posture as `pane-status-badge.js`
+  // described above: a classic <script> tag cannot be conditional, so the file is always LOADED, but
+  // loading it publishes only a FACTORY (`window.ccAdmissionView`). app.js invokes that factory solely
+  // when `window.ccAdmission` exists, which the preload creates solely when main passed the
+  // controlled-run token at window construction. With no run configured nothing is constructed,
+  // `mount()` is never reached, and #admissionHost keeps zero children — asserted in
+  // renderer/admission-view.test.js and admission-ui-integration.test.js.
   const scriptTags = (indexSrc.match(/<script[^>]*src=/g) || []).length;
-  assert(scriptTags === 23, `index.html loads exactly 23 <script src> tags — the original 21 plus the pane-status badge and Quick Links view (found ${scriptTags})`);
+  assert(scriptTags === 24, `index.html loads exactly 24 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view and the admission view (found ${scriptTags})`);
   assert(/<script src="pane-status-badge\.js"><\/script>/.test(indexSrc),
     'the 22nd script is exactly the pane-status prototype badge');
   assert(/<script src="quick-links-view\.js"><\/script>/.test(indexSrc),
     'the 23rd script is exactly the bounded Quick Links renderer controller');
+  assert(/<script src="admission-view\.js"><\/script>/.test(indexSrc),
+    'the 24th script is exactly the controlled-run admission view');
   assert(indexSrc.indexOf('BLUE SUBSYSTEM VERDICT: PROTOTYPE') !== -1,
     'index.html records the procurement verdict that authorizes that prototype script');
 }

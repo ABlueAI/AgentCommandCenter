@@ -16,7 +16,27 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const src = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+// LINE-ENDING NORMALIZATION — READ THIS BEFORE RE-PINNING ANYTHING BELOW.
+//
+// These anchors hash a REGION OF SOURCE, so they only mean anything if the same commit always yields
+// the same characters. It did not. `.gitattributes` sets `* text=auto` and this machine has
+// `core.autocrlf=true`, so main.js is stored LF and checked out CRLF — but a builder whose editor
+// appends NEW lines with a bare LF into an already-CRLF working file leaves a MIXED-ending file that
+// still commits to the identical blob. That is exactly what happened here: the previous pins were
+// measured on such a mixed working tree, and a CLEAN CHECKOUT OF THE VERY SAME COMMIT produced a
+// `pty-start handler` region 35 characters longer — failing this suite for a region that had not
+// changed by a single character. A tripwire that fires on checkout state rather than on content is
+// worse than no tripwire: it trains the next reader to re-pin without looking.
+//
+// So the source is NORMALIZED TO LF before slicing and hashing. The pins below are now reproducible
+// from the committed object itself — `git show <sha>:app/main.js` — on any machine and under any
+// autocrlf setting, rather than from one particular working tree.
+//
+// UNIT CHANGE, ONE TIME: the historical counts in the comment block below were measured in CRLF units
+// and are NOT comparable to the LF units used from here on. Each guarded region was verified
+// byte-identical to the previous branch tip at the moment these values were rebased.
+const rawSrc = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+const src = rawSrc.split('\r\n').join('\n');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -63,10 +83,124 @@ function sha(s) { return crypto.createHash('sha256').update(s, 'utf8').digest('h
 //   * `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'` is still set on every PTY, unchanged and unweakened.
 //     Asserted separately below so it cannot be lost in a future re-pin.
 //
+// RE-PINNED AGAIN for the MAIN-OWNED TURN ADMISSION BUDGET (Blue's turn-accounting OUTCOME B).
+// Blue's authorization, verbatim: I SELECT TURN-ACCOUNTING OUTCOME B. THE FOURTH TURN REMAINS
+// UNEXPLAINED. NO LIVE PANE-STATUS PROVIDER SESSION IS AUTHORIZED UNTIL THE MAIN-OWNED ADMISSION
+// BUDGET IS REVIEWED AND LANDED.
+//
+// This tripwire fired, which is exactly what it is for. The change is legitimate and is the point of
+// the work order: bounding paid turns REQUIRES touching the PTY boundary, because that boundary is
+// where a paid prompt becomes a real cost. Two regions moved:
+//
+//   * `ptyEnv block`      236 -> 271 bytes. ONE substitution, +35 bytes:
+//         ...process.env
+//     became
+//         ...admissionConfig.stripAdmissionEnv(process.env)
+//     `stripAdmissionEnv` returns a COPY of the parent environment with every key in
+//     ADMISSION_ENV_KEYS removed, so the run id and allowance that bound a pane's paid turns are not
+//     present in that pane's environment. Nothing else in the block moved: the scrub, the video-scout
+//     key scoping, and the pane-status spread are byte-identical. The key list is asserted complete by
+//     admission-budget-config.test.js, which fails if an ENV_* constant is added without being added
+//     to the scrub list.
+//
+//     WHAT THAT DOES NOT MEAN — the earlier wording here drew a false analogy to
+//     `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` and implied the pane therefore cannot reach the cost control.
+//     It can. Removing those keys prevents their inheritance into the pane environment and nothing
+//     more: it does not hide Electron `userData`, it creates no filesystem isolation, `APPDATA` and
+//     `USERPROFILE` are still in the child environment, and the ledger filename is a literal in
+//     readable repository source. A PTY child runs as the same Windows user as main and has the same
+//     access to that file. The admission ledger is an ACCIDENTAL-SPEND control over Blue Helm's input
+//     paths, not a boundary against a malicious or compromised same-user process. See the
+//     threat-boundary header in app/admission-budget.js.
+//
+//   * `pty-start handler` 9913 -> 12443 bytes. Three additions, no deletions and no reordering:
+//       1. the seven-line comment above `const ptyEnv` explaining the scrub, plus the +35 above;
+//       2. a pane-claim block after a successful spawn — the run binds to the FIRST eligible pane,
+//          because renderer pane ids are minted at runtime and cannot be known when the plan is
+//          parsed at startup. The binding is persisted immutably, so a second pane is refused rather
+//          than re-pointed; a refused claim leaves the pane completely ordinary;
+//       3. `p.onExit` grew from a one-liner to a block that also calls `admissionBudget.notePaneExit`
+//          and `admissionIpc.forgetPane`, so a dead pane's unused allowance is VOIDED rather than
+//          left claimable by another pane.
+//
+// What did NOT change, and is the reason this re-pin is safe to accept:
+//   * `fenced-role cwd gate` — byte-for-byte IDENTICAL again: 1354 bytes, sha ae9dce92…, the same
+//     value as the ORIGINAL reviewed base. The credential/fence containment logic has still never
+//     been touched by any of these three re-pins.
+//   * `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'` is still set on every PTY, unchanged and unweakened
+//     (asserted separately below).
+//   * The spawn itself, its arguments, the cwd resolution, and the video-scout validation path are
+//     all unmoved.
+//
 // Prior hashes, retained so every reviewed base stays reproducible:
 //   ptyEnv block      213  b83cd467dc52406d7c402d89864f39f3bc71639516987ff2768902de273c0820  (base)
+//   ptyEnv block      236  cd1007432e476ed49e99383c44b18dabcc817b085f078327b9dd1b61eefb7415  (rev 1/2)
 //   pty-start handler 8714 21c9ab2fc8be096a2be0ec0609070ac74c2d94a5fc6125c2b16e2b3f3e45e421  (base)
 //   pty-start handler 9289 abe919c44da95b76df1cc5b4547aad5ccba83a24c4c3ab1d0f77f2e6454d4d53  (rev 1)
+//   pty-start handler 9913 67cb161c6dea42ca9b8be3bc87f783e264a7cab8d73607cdd0d79747fbba8c73  (rev 2)
+//
+// NOT RE-PINNED for the QUICK LINKS INTEGRATION REBASE — and that is the finding, not an omission.
+//
+// The admission branch was rebased from a2121ca3 onto main 5bbe3635 ("Merge Quick Links Release 1.0").
+// A rebase can silently drop a side, so all three regions were recomputed INDEPENDENTLY from the raw
+// bytes of four separate revisions rather than inferred from the fact that this file still passes:
+//
+//   revision                                  fenced-role gate      ptyEnv block      pty-start handler
+//   a6bba64b  original reviewed base          1354 / ae9dce92…      213 / b83cd467…    8714 / 21c9ab2f…
+//   5bbe3635  main, Quick Links landed        1354 / ae9dce92…      236 / cd100743…    9913 / 67cb161c…
+//   5f8cb59d  admission, pre-rebase           1354 / ae9dce92…      271 / 2a399a98…   12443 / b5fe654e…
+//   (this)    admission, post-rebase          1354 / ae9dce92…      271 / 2a399a98…   12443 / b5fe654e…
+//
+// Two things are proven by that table, and neither was taken on trust:
+//   1. Quick Links did not touch this boundary. At 5bbe3635 the ptyEnv block and the pty-start handler
+//      still carry the EXACT revision-2 values (236 / cd100743… and 9913 / 67cb161c…) that predate the
+//      admission work entirely. The claim "Quick Links did not modify pty-start" is therefore measured,
+//      not assumed from the merge's file list.
+//   2. The rebase composed rather than replaced. Post-rebase, both moved regions equal the pre-rebase
+//      admission values byte-for-byte, so the admission delta survived the rebase intact and no Quick
+//      Links content was displaced from inside these regions.
+//
+//   * `fenced-role cwd gate` — 1354 bytes, sha ae9dce92…, IDENTICAL at all four points above, which
+//     now includes both the Quick Links merge and this rebase. The credential/fence containment logic
+//     has never been touched by any revision, by either feature, or by the integration between them.
+//
+// RE-PINNED (fourth time) for the ADMISSION LEDGER THREAT-BOUNDARY CORRECTION.
+// Blue's authorization, verbatim:
+//   I ACCEPT THE ADMISSION LEDGER AS AN ACCIDENTAL-SPEND CONTROL, NOT A SECURITY BOUNDARY AGAINST A
+//   MALICIOUS OR COMPROMISED SAME-USER PANE. CORRECT THE FALSE PROVIDER-INACCESSIBILITY CLAIMS,
+//   REMOVE THE UNREACHABLE ROLLBACK GUARD, AND RETURN FOR FULL REVIEW.
+//
+// EXACTLY ONE REGION MOVED, AND THE CHANGE IS COMMENT-ONLY:
+//   * `pty-start handler` 12443 -> 13170 bytes. The comment above `const ptyEnv` was corrected: it
+//     used to say the child "must not be able to read, and therefore must not be able to reason about
+//     or rewrite" its own budget configuration, which overstated what stripping environment keys
+//     achieves. The replacement states plainly that the strip removes the run-id and allowance keys
+//     from the inherited pane environment and nothing more — no `userData` concealment, no filesystem
+//     isolation, and no
+//     implication that `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` prevents a same-user process from reaching
+//     the ledger.
+//
+// NO EXECUTABLE STATEMENT IN THIS REGION CHANGED. That is the load-bearing claim of this re-pin, and
+// it is independently checkable two ways:
+//   1. `ptyEnv block` is STILL 271 / 2a399a98… — byte-identical to the previous pin. The environment
+//      actually handed to a PTY was not touched at all, because the corrected text sits ABOVE the
+//      `const ptyEnv = {` anchor and therefore outside that region while remaining inside the wider
+//      pty-start region.
+//   2. `fenced-role cwd gate` is STILL 1354 / ae9dce92… — the same value as the ORIGINAL reviewed
+//      base, now across four re-pins, two features and one rebase.
+// The +727 bytes are the net comment delta. Every content assertion below still passes unchanged.
+//
+// Prior hash for the region that moved, retained:
+//   pty-start handler 12443 b5fe654e0d638de756079e7a0d67fa1fbba134f40f9d99a189091df9f1c7a945  (rev 3)
+//
+// RE-PINNED (fifth time) for the PROTECTIVE ADMISSION STATE-MACHINE CORRECTION.
+// The fenced-role gate and ptyEnv executable block remain byte-identical. The wider pty-start handler
+// intentionally changes admission composition: the pure launch policy now distinguishes absent from
+// invalid configuration, selects only eligible Claude panes, refuses launch-time prompts, durably
+// claims before spawn, and closes/voids a claimed run when spawn fails. Generic/admitted PTY bytes now
+// converge in admission-pty-boundary.js, outside this region, behind a private main-local capability.
+// Prior threat-correction hash retained:
+//   pty-start handler 13170 eb3c26968e6c447f15b4e5ccbe2c999912d189213ed006615efc25938738dfe0  (rev 4)
 // ---------------------------------------------------------------------------------------------
 
 // Region definitions: [name, startAnchor, endAnchor, expected byte length, expected sha256].
@@ -75,22 +209,22 @@ const REGIONS = [
     name: 'fenced-role cwd gate',
     start: 'if (!opts.videoScout && opts.role && FENCED_ROLES.has(opts.role)) {',
     end: '// Never spawn into a missing directory',
-    len: 1354,
-    sha: 'ae9dce92cbdd76da7d96ff5b9c5c070e3a96f4ca1f4c1c06b77eb13ccba62060', // UNCHANGED from base
+    len: 1326,
+    sha: '9a1255f1e81e0a9e4e289ab15380707dd6bcc1d410ffd16f44adddb99b16f8c6', // UNCHANGED content; LF units
   },
   {
     name: 'ptyEnv block',
     start: 'const ptyEnv = {',
     end: 'let p;',
-    len: 236,
-    sha: 'cd1007432e476ed49e99383c44b18dabcc817b085f078327b9dd1b61eefb7415',
+    len: 265,
+    sha: 'b0bc588013e85de54042a0f19f30d187d8fcd22c2fec5f4e9596ad3527e1b77d',
   },
   {
     name: 'pty-start handler',
     start: "ipcMain.handle('pty-start', (_e, opts) => {",
     end: "ipcMain.on('pty-write'",
-    len: 9913,
-    sha: '67cb161c6dea42ca9b8be3bc87f783e264a7cab8d73607cdd0d79747fbba8c73',
+    len: 13287,
+    sha: '3ad6db301a3fa0e101195f439012ee42ca25ba6b31040b10d0196d23b7141bb3',
   },
 ];
 
@@ -129,6 +263,27 @@ assert(src.indexOf('paneStatus.setObservedVersion(') !== -1,
   'main.js feeds a DISCOVERED provider version into the prototype (never a hard-coded one)');
 assert(!/createPaneStatusPrototype\(\{[\s\S]{0,400}?observedVersion/.test(src),
   'and never hard-codes observedVersion at construction');
+
+// TURN ADMISSION BUDGET content assertions — the reason THIS re-pin happened, pinned as behaviour so
+// the next re-pin cannot quietly drop them along with the hash. A hash says something moved; these say
+// whether the cost control is still wired.
+assert(src.indexOf('...admissionConfig.stripAdmissionEnv(process.env)') !== -1,
+  'ptyEnv is built from the admission-scrubbed environment copy, not raw process.env');
+{
+  // The scrub must be the FIRST spread in ptyEnv: a later `...process.env` would put the keys back.
+  const envBlock = src.slice(src.indexOf('const ptyEnv = {'), src.indexOf('let p;', src.indexOf('const ptyEnv = {')));
+  assert(!/\.\.\.process\.env\b/.test(envBlock),
+    'the ptyEnv block never spreads raw process.env — the admission keys cannot be reintroduced');
+  assert(envBlock.indexOf('...admissionConfig.stripAdmissionEnv(process.env)') <
+         envBlock.indexOf("CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'"),
+    'the scrubbed copy is the base of the object, with the credential scrub layered on top of it');
+}
+assert(/prepareAdmissionPaneLaunch\(\{/.test(src),
+  'pty-start delegates pre-spawn eligible-pane claiming to the protective launch policy');
+assert(/admissionBudget\.notePaneExit\(id\)/.test(src),
+  'a pane exit voids the remaining allowance rather than leaving it claimable');
+assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src),
+  'main.js never calls a mutation that could restore or extend an allowance (none exists)');
 
 process.stdout.write(`\nlauncher-fence-invariant: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);
