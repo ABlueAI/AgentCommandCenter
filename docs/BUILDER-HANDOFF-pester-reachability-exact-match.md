@@ -8,7 +8,8 @@
 | **Historical fork point** (record only) | `8c6bfce6c36bbe0adda8dda46f6bab728e6ae38f` |
 | **Implementation / code tip, unchanged** | `cf6c1a8bf0c7844509d549abd8b9395aed900d8c` |
 | Inbound main-integration merge | `cbd3e43a5725f9f1f3483adebbe6d1ca505f5721` |
-| **Reviewed content tip == branch tip** | the corrective commit that carries this revision |
+| **Reviewed content tip** | `96fab88a852fc89758d34bfd4d4f45fe3ee4da63` — the corrective commit that carries this revision |
+| Branch tip | the verdict-only tail commit; see “R1 verdict tail” below |
 
 Branch: `fix/pester-reachability-exact-match`
 
@@ -393,7 +394,60 @@ embedded in the document they contain; each identity — exact byte size, SHA-25
 an empty binary comparison against its twin — is recorded in the Builder's closing
 report and is reproducible by regenerating the same range.
 
-Reviewer verdict: **FAIL (both retained above).** No corrective PASS is claimed. There
-is no verdict-only tail on this branch; every handoff revision is a content commit and
-the corrective commit is the branch tip (`reviewedTip == branchTip`). A verdict tail
-may MODIFY this file only after an independent PASS.
+Reviewer verdict **as of the reviewed content tip `96fab88`**: **FAIL (both retained
+above).** No corrective PASS was claimed by this document at that tip. That status is
+superseded by the independent PASS recorded in the verdict tail below, which **erases
+neither FAIL**.
+
+Every handoff revision through `96fab88` is a content commit, and `96fab88` is the
+reviewed content tip. The branch tip is now the verdict-only tail commit below, so
+`reviewedTip != branchTip`. A verdict tail may MODIFY this file only after an
+independent PASS; that condition is now met.
+
+## R1 verdict tail — independent focused/cumulative review of `96fab88`
+
+**This section is the verdict-only tail. It is NOT reviewed content.** It was added
+after the review, in a handoff-only commit that modifies no file other than this one.
+No implementation or test code, reviewed-content statistic, prior FAIL block, Blue
+disposition, measurement record, or pinned artifact was altered by it. No artifact was
+regenerated and no runtime gate was re-run; the reviewed artifacts continue to pin
+`96fab88a852fc89758d34bfd4d4f45fe3ee4da63` and exclude this tail.
+
+**Reading the reviewed content above:** every `<branch tip>` / `<new reviewed tip>`
+placeholder in the sections above denotes the reviewed content tip `96fab88`, which
+was the branch tip at the time that content was written and reviewed. This tail is the
+only commit after it.
+
+Source: the **independent focused/cumulative review of `96fab88`**. Retained verbatim:
+
+```
+VERDICT: PASS
+CLASS: Standard
+INDEPENDENCE: CONFIRMED
+```
+
+### Record
+
+- **Findings: none.**
+- **Reviewed cumulative range:** `34af8bf...96fab88`.
+- **Focused correction range:** `7f2ebff...96fab88`.
+- **R4 cumulative artifact** (`.agent-review-pester-reachability-exact-match-r4.diff`):
+  **24,359 bytes**, SHA-256
+  `4372817b9ee077ede9e041ae57d1f7a4b7a4c154d4ba201bb9cd09f34068558f`.
+- **R4 focused artifact**
+  (`.agent-review-pester-reachability-exact-match-r4-focused.diff`): **10,369 bytes**,
+  SHA-256 `b021715001ed07238a2e6987b99f033adfc26b4bf19468eec977fe9241e8cf7c`.
+- **Both artifacts reproduced byte-identically** against their independently generated
+  `.regen.diff` twins.
+
+### Scope of the PASS
+
+- **The PASS does not erase either earlier FAIL.** Both FAIL blocks above stand,
+  unaltered, as the recorded verdicts on the tips they addressed.
+- **Blue's dispositions and all open follow-ups remain unchanged** — the bounded
+  app-gate non-attribution disposition and its three amendments, the contract
+  disposition, and every item under *Known limitations and open items*, including gate
+  reliability, the separate `dockview-app-integration` maximize assertion, and
+  Node-side duplicate rejection.
+- **No merge or push is authorized by the verdict itself.** Merge authorization is a
+  separate decision and has not been given. Nothing has been merged or pushed.
