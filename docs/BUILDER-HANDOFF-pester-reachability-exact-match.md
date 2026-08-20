@@ -1,74 +1,99 @@
 # Builder Handoff — Pester-Side Exact-Token Reachability Match
 
 Branch: `fix/pester-reachability-exact-match`
-Fork point / base: `8c6bfce6c36bbe0adda8dda46f6bab728e6ae38f` (main tip at fork time)
-Pre-merge main: `8c6bfce6c36bbe0adda8dda46f6bab728e6ae38f` — identical to the base; no
-commits landed on `main` between fork and this handoff, so fork point, base, and
-pre-merge main are the same SHA.
-Code tip (implementation, unchanged): `cf6c1a8bf0c7844509d549abd8b9395aed900d8c`
+Fork point / reviewed base: `8c6bfce6c36bbe0adda8dda46f6bab728e6ae38f`
+Implementation / code tip (unchanged): `cf6c1a8bf0c7844509d549abd8b9395aed900d8c`
 
-## CORRECTION — the earlier handoff-tail claim is WITHDRAWN
+## Independent review outcome — retained verbatim
 
-A previous revision of this document claimed that commit `7e7cb31` was a
-merge-gate-valid documentation-only handoff tail sitting above the reviewed code tip
-`cf6c1a8`. **That claim was wrong and is withdrawn.** It is mechanically invalid
-under the tail policy in `scripts/merge-gate.ps1:503-529`, for two independent
-reasons, both verified against the real commits:
+The independent review of `8c6bfce...bc4fa45` returned:
 
-1. **`scripts/merge-gate.ps1:517`** requires every path in the tail diff to be status
-   `M` (`$parts[0] -cne 'M'` refuses otherwise). `git diff --name-status --no-renames
-   cf6c1a8 7e7cb31` yields `A docs/BUILDER-HANDOFF-pester-reachability-exact-match.md`
-   — an ADD, not a MODIFY. Refusal text would be
-   `REFUSED: handoff tail may only MODIFY docs/BUILDER-HANDOFF-pester-reachability-exact-match.md (found: A ...)`.
+```
+VERDICT: FAIL
+CLASS: Standard
+INDEPENDENCE: CONFIRMED
+```
+
+Source: independent Standard-class review of the range
+`8c6bfce6c36bbe0adda8dda46f6bab728e6ae38f...bc4fa4592f2cfd27e4e5f218d32044bcd81ef13d`
+(the prior branch tip). The corrections that review required are applied in this
+revision and enumerated below. **No corrective PASS is claimed by this document.**
+This revision is submitted for a fresh independent Standard review; the FAIL above
+stands as the current recorded verdict until an independent reviewer supersedes it.
+
+## Branch topology and the pre-merge-main record
+
+- **Fork point / reviewed base:** `8c6bfce6c36bbe0adda8dda46f6bab728e6ae38f`. This is
+  also `merge-base(main, branchTip)`, verified against both local main and
+  `origin/main`.
+- **Current local `main`:** `34af8bf340eaa518bca3b9aa7109025f47b8992d` — the
+  test-runner-wiring audit merge. **This SHA is the current pre-merge snapshot** and
+  **must be refreshed if `main` advances before merge authorization.**
+- **Current `origin/main`:** `8c6bfce6c36bbe0adda8dda46f6bab728e6ae38f`.
+
+**Local `main` does NOT equal `origin/main`.** The audit merge (`34af8bf`) is local
+and **unpushed**; the earlier revision of this handoff wrongly recorded `8c6bfce` as
+both fork point and pre-merge main, and that stale claim is withdrawn. `8c6bfce`
+remains correct as fork point and reviewed base only.
+
+The audit merge touches only `docs/AUDIT-test-runner-wiring.md` and
+`docs/BUILDER-HANDOFF-test-runner-wiring-audit.md` — no file this branch touches, and
+no file either gate executes.
+
+## The earlier handoff-tail claim remains WITHDRAWN
+
+A revision before `bc4fa45` claimed commit `7e7cb31` was a merge-gate-valid
+documentation-only handoff tail above the code tip `cf6c1a8`. That claim is
+**withdrawn**; it is mechanically invalid under `scripts/merge-gate.ps1:503-529` for
+two independent, verified reasons:
+
+1. **`scripts/merge-gate.ps1:517`** requires every tail path to be status `M`.
+   `git diff --name-status --no-renames cf6c1a8 7e7cb31` yields
+   `A docs/BUILDER-HANDOFF-pester-reachability-exact-match.md` — an ADD.
 2. **`scripts/merge-gate.ps1:522-525`** requires the handoff doc to exist as a
-   regular `100644` blob at **both** endpoints, `reviewedTip` and `branchTip`.
+   regular `100644` blob at **both** endpoints.
    `git ls-tree cf6c1a8 -- docs/BUILDER-HANDOFF-pester-reachability-exact-match.md`
-   returns empty. Refusal text would be
-   `REFUSED: docs/BUILDER-HANDOFF-pester-reachability-exact-match.md does not exist at cf6c1a8`.
+   is empty.
 
-The root cause is structural, not editorial: **the handoff did not exist at the code
-tip**, so a tail could only ever ADD it. The tail policy exists for the case where an
-already-reviewed handoff is amended (e.g. to append a verdict) above an
-already-reviewed code tip — it cannot be used to introduce the handoff in the first
-place.
-
-### Consequence for the next review
-
-**The next review must cover the FULL branch range** — `8c6bfce6c36bbe0adda8dda46f6bab728e6ae38f`
-through the corrected handoff tip (the commit that contains this corrected document),
-with **no handoff tail** and therefore `reviewedTip == branchTip`. The corrected
-handoff tip is itself the reviewed content tip; this document is in-scope reviewed
-content, not out-of-scope narration.
-
-Only **after** an independent PASS over that full range may a final verdict tail
-MODIFY this already-existing handoff — at that point both merge-gate conditions are
-satisfiable, because the doc will exist at the reviewed tip and the tail will be a
-genuine `M`.
+Root cause is structural: the handoff did not exist at the code tip, so a tail could
+only ADD it. **There is no handoff-only tail on this branch.** Every revision of this
+document has landed as a content commit, and the current corrective commit is the
+branch tip: `reviewedTip == branchTip`. A verdict-only tail may MODIFY this file only
+after an independent PASS over the full range.
 
 ## What this branch does
 
-Ports the Node-side meta-test's exact-token matching to its Pester-side mirror, so
-both halves of the mutual anti-orphan watchdog pair use the same matching
-discipline. `app/test-reachability.test.js` already tokenizes `app/package.json`'s
-`"test"` script on `&&` and requires an exact `node <path>` segment match (hardened
-in the prior `test-reachability-meta` branch after a Reviewer MEDIUM about substring
-masking). `scripts/test-reachability.Tests.ps1` still used `.Contains()` — a
-substring test that catches a REMOVED wiring but not a NEUTERED one, since
-`node test-reachability.test.js || exit 0` still contains the filename as a
-substring while silently disarming the watchdog it is supposed to verify. This
-branch replaces the `.Contains()` check with the same tokenize-and-exact-match
-logic.
+Ports the Node-side meta-test's exact-token matching to its Pester-side mirror.
+`app/test-reachability.test.js` already tokenizes `app/package.json`'s `"test"`
+script on `&&` and requires an exact `node <path>` segment match.
+`scripts/test-reachability.Tests.ps1` still used `.Contains()` — a substring test
+that catches a REMOVED wiring but not a NEUTERED one, since
+`node test-reachability.test.js || exit 0` still contains the filename as a substring
+while silently disarming the watchdog it is supposed to verify. This branch replaces
+`.Contains()` with tokenize-and-exact-match.
 
-Tier: **Standard-class**, test-tooling only. Worst case of a defect here is a false
-gate pass/fail in a meta-test that watches other tests; no runtime code, no
-dependency, no production surface is touched.
+Tier: **Standard-class**, test-tooling only. No runtime code, no dependency, no
+production surface.
 
-## Exact one-file code delta
+## Changed-file statistics — code delta vs full reviewed range
 
-Only `scripts/test-reachability.Tests.ps1` changes (+34/-2 lines, one `It` block).
-No other file in the repo differs from base. `app/package.json` is confirmed
-byte-identical to base (see Negative Controls below — it is restored to that exact
-state after each control run).
+These are two different ranges and were previously conflated. Stated precisely:
+
+- **Implementation/code delta, `8c6bfce...cf6c1a8`:** changes **one** tracked file,
+  `scripts/test-reachability.Tests.ps1` (+34/−2). Within this range, and only this
+  range, no other file in the repository differs from the reviewed base.
+- **Full reviewed range, `8c6bfce...<corrective tip>`:** changes **two** tracked
+  files — `scripts/test-reachability.Tests.ps1` (the Pester suite) and
+  `docs/BUILDER-HANDOFF-pester-reachability-exact-match.md` (this builder handoff).
+- **`app/package.json` remains byte-identical to the reviewed base**, SHA-256
+  `9622fa0ab2d90dfe80e02fff8ad88c843eeeec0c4d9a585277b3c04da1595462`, confirmed by
+  an empty `git diff 8c6bfce HEAD -- app/package.json`.
+
+The unqualified claim "No other file in the repo differs from base" has been removed;
+it was true only of the code delta and could be misread as describing the full
+reviewed range.
+
+## The code delta
 
 Before:
 ```powershell
@@ -80,152 +105,196 @@ It 'the Node-side meta-test is wired into app/package.json (mutual anti-orphan w
 
 After: tokenizes `$pkg.scripts.test` on `&&`, trims each segment, keeps segments
 starting with `node `, strips that prefix, and requires exactly one segment
-case-sensitively equal (`-ceq`) to `test-reachability.test.js`. On failure, the
-assertion message reports the exact-match count, the total node-invocation count,
-and — separately — every chain segment that merely *mentions* the filename as a
-substring (`$mentions`, built with `-like '*test-reachability.test.js*'` over
-`$segments`, independent of the `$exact` match result), so a NEUTERED entry is named
-in the failure output even though it fails the exact check. See
+case-sensitively equal (`-ceq`) to `test-reachability.test.js`. On failure the
+message reports the exact-match count, the node-invocation count, and — separately —
+every segment that merely *mentions* the filename (`$mentions`, built with `-like`
+over `$segments`, independent of `$exact`). See
 `scripts/test-reachability.Tests.ps1:62-97`.
+
+## Node/Pester symmetry — precise, not identical
+
+The two sides are **not** the same rule. Both enforce **case-sensitive exact-token
+matching** over the `&&`-tokenized `node <path>` segments, but they differ on
+duplicates:
+
+- **Pester** (`scripts/test-reachability.Tests.ps1:82-96`) requires **exactly one**
+  occurrence — `$exact.Count -eq 1` — and therefore **rejects duplicates**.
+- **Node** (`app/test-reachability.test.js:73-79, 112-114`) builds a `Set` and tests
+  membership with `wiredPkgPaths.has(...)`. Set construction collapses duplicates, so
+  Node **does not reject duplicate identical invocations**.
+
+Verified by execution against a duplicated chain entry (`node test-reachability.test.js`
+present twice, `app/package.json` restored byte-identically afterwards):
+
+- Node: `test-reachability: 6 passed, 0 failed`, exit 0 — **accepted** the duplicate.
+- Pester: **FAILED** —
+  `expected exactly one chain segment equal to 'node test-reachability.test.js'; found 2 exact match(es) among 68 node invocation(s). Segments mentioning the file: [node test-reachability.test.js | node test-reachability.test.js]`
+
+The earlier "same rule, two runners" wording is withdrawn as inaccurate. The Pester
+side is strictly stricter on multiplicity.
 
 ## Negative controls — procedure and results
 
-Both controls were run against the real `app/package.json` (not a disposable fixture
-copy, since the assertion under test reads that exact path via
-`Join-Path $repoRoot 'app\package.json'`). Procedure for each: (1)
-`cp app/package.json app/package.json.orig-backup`, verified via SHA-256 match; (2)
-mutate `app/package.json` in place; (3) run the guard suite via
-`Invoke-Pester -Path scripts\test-reachability.Tests.ps1`; (4) restore from the
-backup, re-verify SHA-256 equality, delete the backup, confirm
-`git status --porcelain` is empty.
+Run against the real `app/package.json` (the assertion reads that exact path via
+`Join-Path $repoRoot 'app\package.json'`). For each: back up and SHA-256-verify,
+mutate in place, run `Invoke-Pester -Path scripts\test-reachability.Tests.ps1`,
+restore, re-verify SHA-256, delete the backup, confirm `git status --porcelain` empty.
 
-**a. NEUTERING** — `node test-reachability.test.js` rewritten in place to
-`node test-reachability.test.js || exit 0` (single edit, chain otherwise untouched).
-Result: guard **FAILED** (`Passed: 3 Failed: 1`), naming the offending segment:
+**a. NEUTERING** — rewritten to `node test-reachability.test.js || exit 0`.
+Guard **FAILED** (`Passed: 3 Failed: 1`), naming the segment:
 ```
 expected exactly one chain segment equal to 'node test-reachability.test.js';
 found 0 exact match(es) among 67 node invocation(s). Segments mentioning the
 file: [node test-reachability.test.js || exit 0]
 ```
-This is the exact scenario the old `.Contains()` check passed.
+This is the exact case the old `.Contains()` check passed.
 
-**b. REMOVAL** — the entire `node test-reachability.test.js && ` chain prefix
-deleted, so the test script starts with `node admission-main-startup.test.js`; the
-filename is fully absent from `app/package.json` (`grep -c` = 0). Result: guard
-**FAILED** (`Passed: 3 Failed: 1`), and did not pass-by-absence:
+**b. REMOVAL** — the whole `node test-reachability.test.js && ` prefix deleted;
+filename absent (`grep -c` = 0). Guard **FAILED** (`Passed: 3 Failed: 1`), not by
+absence:
 ```
 expected exactly one chain segment equal to 'node test-reachability.test.js';
 found 0 exact match(es) among 66 node invocation(s). Segments mentioning the
 file: []
 ```
 
-After each control, `app/package.json` was restored and SHA-256-verified
-byte-identical to the pre-mutation backup
-(`9622fa0ab2d90dfe80e02fff8ad88c843eeeec0c4d9a585277b3c04da1595462` before and after
-both controls), the backup file was deleted, and `git status --porcelain` returned
+**c. DUPLICATE** (added this revision) — see the symmetry section above.
+
+After every control `app/package.json` was restored and verified byte-identical
+(`9622fa0a…` before and after each), the backup deleted, and `git status --porcelain`
 empty. `app/package.json` was never left modified.
-
-## Diagnostic separation (point of review focus)
-
-Confirmed by direct read of `scripts/test-reachability.Tests.ps1:82-96`: `$exact`
-(the pass/fail gate, `-ceq` equality) and `$mentions` (the diagnostic naming, `-like`
-substring) are two independently computed collections over `$segments`. `$mentions`
-never feeds `$exact` or the `Should Be` gate — it exists solely so a failure message
-can name what a substring scan found, without that scan being able to make the gate
-itself pass.
 
 ## Gates
 
-**Full app gate — 67 suites / 4,888 assertions / 0 failures.** This is the
-established, authoritative result for this tree and the figure of record.
-`npm test` in `app/` exits **0**.
+### Pester gate — PASS, rerun this revision
 
-The authoritative count was reconciled by executing all 67 chain suites
-individually (every one exited 0; `SUITES_NONZERO_EXIT: 0`):
-- 65 suites self-report in `N passed, N failed` form, summing to **4,870**;
-- 2 suites report in a different form, `N assertions passed` —
-  `renderer/audio-module-health.test.js` (9) and
-  `renderer/tts-audio-contract.test.js` (9) — contributing **18**;
-- 4,870 + 18 = **4,888**, 0 failures.
-
-**A raw `✓`-line count of the combined log is NOT the gate result and is not
-authoritative.** It is log-shape evidence only. That count is 4,825, and it
-undercounts for three format reasons, all reconciled: 46 assertions print with a
-`PASS ` prefix rather than `✓` (4,825 + 46 = 4,871 assertion lines); the two suites
-above print only a summary line and no per-assertion lines (−18 relative to the
-authoritative total); and `dockview-default-path.test.js` prints one more line than
-the 380 assertions it reports (+1). 4,871 + 18 − 1 = 4,888. Any future handoff should
-quote the 67 / 4,888 / 0 figure, never a checkmark-line count.
-
-**Pester gate:** `powershell -ExecutionPolicy Bypass -File scripts/run-pester.ps1`
-exits **0** — `Passed: 955 Failed: 0 Skipped: 0 Pending: 0 Inconclusive: 0`;
+`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-pester.ps1`
+→ exit **0**; `Tests completed in 113.84s`;
+**`Passed: 955 Failed: 0 Skipped: 0 Pending: 0 Inconclusive: 0`**;
 `run-pester: 955 passed, 0 failed, 0 skipped (of 955)`.
 
-No code change resulted from the negative controls (both proved the implementation
-correct as committed at `cf6c1a8`), and the corrective commit carrying this document
-changes only this Markdown file, so the gates above remain the valid record for the
-code tip.
+### App gate — INTERMITTENT FAILURE OBSERVED; no fresh green gate is claimed
 
-Security-sensitive surfaces touched: none. No runtime code, no production code, no
-dependency, and no permanent `app/package.json` change.
+**A fresh green app gate is NOT claimed, and the earlier builder-run PASS is NOT
+reinterpreted as an independently reproduced PASS.**
+
+Command (run from `app/`): `npm test`
+
+**Run 1 — FAILED.** Exit code **1**. Failing suite:
+`dockview-app-integration.test.js` — `290 passed, 1 failed`. The chain is `&&`-joined,
+so it stopped there; 15 suite summaries had been emitted. Failing assertion, verbatim:
+```
+  ✗ FAIL: the maximized pane grew to the whole surface (100 -> 100)
+```
+in the `maximize routes by OWNERSHIP — the two mechanisms never both run` block. The
+sibling assertion immediately after it passed (`the sibling collapsed (100 -> 1)`),
+i.e. the sibling did collapse but the maximized pane's own measured width did not
+change within the assertion window — a geometry/timing observation, not a logic
+refusal.
+
+**GPU subprocess evidence: NONE in this run.** A search of the full log for
+`gpu`, `1073741515`, `crash`, `subprocess`, `renderer process`, and `exited with`
+returned no matching diagnostic. **This is a different failure from the one the
+independent reviewer observed** (reviewer: `dockview-bootstrap.test.js` failing with
+Electron GPU subprocess exit `-1073741515`, i.e. `0xC0000135` /
+`STATUS_DLL_NOT_FOUND`). Both are Electron-dependent Dockview suites, but the suite,
+the symptom, and the evidence differ; they are recorded separately rather than
+treated as one reproduction.
+
+**Run 2 — PASSED.** Exit code **0**, zero `✗` lines, totals reconciling to
+**67 suites / 4,888 assertions / 0 failures** (4,870 from the 65 suites reporting
+`N passed, N failed`, plus 18 from the two reporting `N assertions passed`:
+`renderer/audio-module-health.test.js` 9 and `renderer/tts-audio-contract.test.js` 9).
+
+**Targeted diagnostic — branch worktree:** `node dockview-app-integration.test.js`
+standalone, 3 consecutive runs → **3/3 exit 0, `291 passed, 0 failed`** each.
+
+**Smallest equivalent diagnostic on current main (`34af8bf`), no worktree modified:**
+- `node dockview-app-integration.test.js` standalone, 3 runs → **3/3 exit 0,
+  `291 passed, 0 failed`** each.
+- Full `npm test` chain on main → **exit 0**, zero failures.
+- `git status --porcelain` in the main worktree was byte-for-byte identical before and
+  after (`?? .worktrees/` only, pre-existing). Main was not modified.
+
+**Attribution — this failure cannot be caused by R1.** The entire `app/` tree is
+byte-identical between current main and this branch tip:
+`git diff --name-only 34af8bf <branch tip> -- app/` is **empty**, and
+`git diff --name-only 8c6bfce <branch tip> -- '*.js'` is **empty**. R1 changes one
+PowerShell file and one Markdown file; it changes **zero** JavaScript, so the Node
+gate executes provably identical inputs on both sides. The observed failure is
+environmental/timing-dependent and pre-existing.
+
+**Disposition required.** Observed app-gate results across this session: branch
+PASS, branch **FAIL**, branch PASS; main PASS. The gate is intermittent at roughly
+one failure in three full-chain runs on this machine, in a class of Electron-dependent
+Dockview assertions that the independent reviewer also hit (by a different route).
+**Stopping here for Blue's explicit disposition of this environmental blocker.** No
+merge authorization should be inferred from the green Run 2.
 
 ## Known limitations
 
-- Same accepted gap as the Node-side implementation this ports: an entry that names
-  the file without being its own bare invocation would still have to collide exactly
-  with `node test-reachability.test.js` to pass — the realistic failure mode guarded
-  against is accidental disarming (a stray `||`, a removed line), not a deliberately
+- Accepted gap shared with the Node side: an entry naming the file without being its
+  own bare invocation must collide exactly with `node test-reachability.test.js` to
+  pass. The realistic failure mode guarded against is accidental disarming, not a
   crafted decoy.
-- The check is case-sensitive (`-ceq`) and whitespace-trimmed per segment only; it
-  does not tolerate alternate valid invocations of the same script (e.g.
-  `node ./test-reachability.test.js`) — consistent with the Node side's own
-  `wiredPkgPaths` set, which has the identical constraint.
-- No production/runtime/dependency change of any kind in this branch.
+- Case-sensitive (`-ceq`), whitespace-trimmed per segment only; alternate valid
+  invocations (e.g. `node ./test-reachability.test.js`) are not tolerated —
+  consistent with the Node side's `wiredPkgPaths` set.
+- The Node/Pester duplicate asymmetry documented above is a real, deliberate
+  divergence, not an oversight; the Node side would need its own `filter`-and-count
+  change to match, which is out of scope here.
+- The app gate is currently intermittent for reasons unrelated to this branch (see
+  above), which limits how strongly any single green run can be relied upon.
 
 ## Reviewer focus
 
-- `scripts/test-reachability.Tests.ps1:62-97` — the ported exact-match logic:
-  tokenization on `&&`, the `node ` prefix strip, `-ceq` exactness, and that
-  `$mentions` cannot influence `$exact`.
-- Symmetry with `app/test-reachability.test.js:73-79`'s existing `wiredPkgPaths`
-  logic — same rule, two runners.
-- The negative-control results above as the proof the fix does what it claims.
-- **This document itself**, which is in-scope reviewed content in the full-range
-  review, including the withdrawal above and the corrected gate accounting.
+- `scripts/test-reachability.Tests.ps1:62-97` — tokenization on `&&`, the `node `
+  prefix strip, `-ceq` exactness, `$exact.Count -eq 1`, and that `$mentions` cannot
+  influence `$exact`.
+- The Node/Pester asymmetry section — that it is stated accurately, with its
+  execution evidence.
+- The app-gate section — that it records an observed failure honestly and claims no
+  fresh green gate.
+- **This document itself**, in-scope reviewed content in the full-range review.
 - Proportionality: one `It` block changed in code, nothing else.
 
 ## Review artifacts
 
-Three artifacts exist; all are gitignored `.agent-review-*.diff` files, consistent
-with repo practice. The earlier two are **preserved unmodified** as supporting
-evidence for the code delta.
+**Four** artifacts exist in the worktree (the earlier revision miscounted them as
+three). All are gitignored `.agent-review-*.diff` files. All four are retained; none
+is removed.
 
-**1. Code-focused artifact (preserved, supporting evidence)** — base → code tip,
-excludes all handoff commits:
-```
-git diff 8c6bfce6c36bbe0adda8dda46f6bab728e6ae38f cf6c1a8bf0c7844509d549abd8b9395aed900d8c --output=.agent-review-pester-reachability-exact-match.diff
-```
+**1. Code-focused artifact** — `8c6bfce...cf6c1a8` (code delta only):
 - `.agent-review-pester-reachability-exact-match.diff`
 - 2,943 bytes
 - SHA-256: `6ac73e66bc6428deb11f541c8d415fef40764e85fd55d4d723b0f58de929bc44`
 
-**2. Reproducibility twin (preserved)** — same range, regenerated to a separate file;
-byte-identical to artifact 1 (same size, same hash, empty `diff`):
+**2. Code-focused regeneration twin** — same range, byte-identical to artifact 1:
 - `.agent-review-pester-reachability-exact-match.regen.diff`
 - 2,943 bytes
 - SHA-256: `6ac73e66bc6428deb11f541c8d415fef40764e85fd55d4d723b0f58de929bc44`
 
-**3. Full-branch cumulative artifact (the one the next review must use)** — base
-through the corrected handoff tip, `reviewedTip == branchTip`, no tail:
-```
-git diff 8c6bfce6c36bbe0adda8dda46f6bab728e6ae38f <corrected-handoff-tip> --output=.agent-review-pester-reachability-exact-match-full.diff
-```
-This artifact necessarily spans the commit that introduces this very document, so its
-size and SHA-256 cannot be embedded in the document it contains. Its identity is
-recorded in the Builder's closing report for this branch and is independently
-verifiable by regenerating the same range and comparing — the regeneration and
-byte-identity check were performed as part of pinning it.
+**3. Full-range artifact for the superseded tip** — `8c6bfce...bc4fa45`:
+- `.agent-review-pester-reachability-exact-match-full.diff`
+- 16,034 bytes
+- SHA-256: `23729b58e340547c33b8e25069af5099cf47ecb16c6cb08e33fd935a4cb086eb`
 
-Reviewer verdict: **not yet recorded.** This corrected handoff tip is the
-review-ready content tip. A verdict tail may MODIFY this file only after an
-independent PASS over the full range described above.
+**4. Regeneration twin of artifact 3** — byte-identical to artifact 3:
+- `.agent-review-pester-reachability-exact-match-full.regen.diff`
+- 16,034 bytes
+- SHA-256: `23729b58e340547c33b8e25069af5099cf47ecb16c6cb08e33fd935a4cb086eb`
+
+**5. New full-range artifact for THIS corrective tip** — the artifact the fresh
+review must use, generated with `git diff --output` (never PowerShell redirection):
+```
+git diff 8c6bfce6c36bbe0adda8dda46f6bab728e6ae38f <corrective tip> --output=.agent-review-pester-reachability-exact-match-r2.diff
+```
+It necessarily spans the commit introducing this text, so its size and SHA-256 cannot
+be embedded in the document it contains. Its identity — exact byte size, SHA-256, and
+an empty binary comparison against an independently regenerated twin
+(`.agent-review-pester-reachability-exact-match-r2.regen.diff`) — is recorded in the
+Builder's closing report and is reproducible by regenerating the same range.
+
+Reviewer verdict: **FAIL (retained above).** No corrective PASS is claimed. This
+corrective tip is submitted for a fresh independent Standard review, subject to Blue's
+disposition of the app-gate environmental blocker.
