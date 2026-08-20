@@ -71,8 +71,8 @@ The blocking findings were:
 3. The Pester location split was recorded as 12 direct and 23 under `scripts/lib/`; the enumerated
    list itself demonstrates the correct split is 11 direct and 24 under `scripts/lib/`.
 
-This handoff records the FAIL as historical review evidence. It does **not** claim a corrective PASS.
-The correction requires a fresh independent Standard-class review.
+This handoff records the FAIL as historical review evidence. At that stage no corrective PASS
+existed. The later correction-v2 PASS recorded below does not erase or reinterpret this FAIL.
 
 ## Correction made at `41ee4b4`
 
@@ -110,10 +110,10 @@ The blocking findings were:
    not a mechanically valid handoff-only tail: merge-gate requires the declared handoff path to be a
    regular blob at both `reviewedTip` and `branchTip`.
 
-The earlier claim that `0a60c817` was a valid handoff-only tail is withdrawn. This current commit is
-a new corrective **content** commit containing both the audit wording fix and an already-existing,
-modified handoff blob. It is the next reviewed content tip. No post-PASS tail exists yet, and no
-corrective PASS is claimed.
+The earlier claim that `0a60c817` was a valid handoff-only tail is withdrawn. Commit `080cbf0` is a
+new corrective **content** commit containing both the audit wording fix and an already-existing,
+modified handoff blob. At that reviewed content tip no post-PASS tail or corrective PASS existed.
+The later PASS and permitted handoff-only tail are recorded below without changing that history.
 
 ## Superseded first-correction artifact and checks
 
@@ -150,9 +150,38 @@ Range: 8c6bfce6c36bbe0adda8dda46f6bab728e6ae38f...<current-corrected-content-tip
 Range: 0a60c81771a1a119f9a342d9f3eedf4659a80acf...<current-corrected-content-tip>
 ```
 
-Their exact tip, sizes, SHA-256 identities, reproduction checks, and diff statistics are supplied in
-the external review packet and may be stamped into this handoff only in a later handoff-only commit
-after an independent PASS.
+Their exact tip, sizes, SHA-256 identities, reproduction checks, and diff statistics were supplied in
+the external review packet and are stamped below in this later handoff-only commit after the
+independent PASS.
+
+## Final independent correction-v2 review result — preserved verbatim
+
+```text
+VERDICT: PASS
+CLASS: Standard
+INDEPENDENCE: CONFIRMED
+```
+
+Source: fresh independent correction-v2 review of reviewed content tip
+`080cbf0e844fd33820a3f9f112bae9fa93e5d600`.
+
+Reviewed artifacts:
+
+```text
+.agent-review-test-runner-wiring-audit-correction-v2-cumulative.diff
+Range: 8c6bfce6c36bbe0adda8dda46f6bab728e6ae38f...080cbf0e844fd33820a3f9f112bae9fa93e5d600
+Size: 36,500 bytes
+SHA-256: 181b5243562c7109f669943208242e72d2bf5916a73bcdc375084553f215760b
+
+.agent-review-test-runner-wiring-audit-correction-v2-focused.diff
+Range: 0a60c81771a1a119f9a342d9f3eedf4659a80acf...080cbf0e844fd33820a3f9f112bae9fa93e5d600
+Size: 14,802 bytes
+SHA-256: 501cf40e8e5ea5f18c46fc942b5d5e60803123e58f8ba43d0d762da7f5041851
+```
+
+The reviewer regenerated both artifacts byte-identically, confirmed both ranges pass
+`git diff --check`, and reported no findings. This PASS applies specifically to corrected content tip
+`080cbf0`; it does not erase or reinterpret either prior independent FAIL.
 
 Runtime gates were not run because the correction is documentation-only and changes no executable
 surface. The audit's previously recorded runtime measurements are historical evidence, not gates run
@@ -180,7 +209,7 @@ This branch authorizes only the two documentation files listed above. It does no
 - changes to R1, runtime tests, application code, Pester code, configuration, or dependencies;
 - merge or push without Blue's authorization after an independent PASS.
 
-## Recommended independent review focus
+## Independent correction-v2 review focus — completed
 
 1. Confirm the reviewer did not author the correction and is independent of this handoff.
 2. Reproduce both v2 artifacts named above and verify their supplied sizes and SHA-256 identities
@@ -193,28 +222,21 @@ This branch authorizes only the two documentation files listed above. It does no
 6. Confirm no “F5 do next” authority survives and the controlling release order remains with
    `BLUE-HELM-MASTER-STATUS.md`.
 7. Confirm the 11-direct/24-library split matches the enumerated 35 Pester files.
-8. Confirm both independent FAIL results are retained verbatim and no corrective PASS is claimed.
+8. Confirm both independent FAIL results are retained verbatim and any later PASS is scoped only to
+   the corrected content it reviewed.
 9. Confirm no executable or unrelated tracked path changed.
-
-Required review result:
-
-```text
-VERDICT: PASS|FAIL
-CLASS: Standard
-INDEPENDENCE: CONFIRMED|NOT CONFIRMED
-```
 
 ## Handoff-tail policy
 
 `0a60c817` is explicitly **not** a valid handoff-only tail because this handoff did not exist at
-reviewed tip `41ee4b4`. The current corrective content commit fixes the topology: this handoff is now
-a regular blob in the reviewed content tree. No tail exists yet.
+reviewed tip `41ee4b4`. Corrective content commit `080cbf0` fixes the topology: this handoff is a
+regular blob in its reviewed content tree.
 
-After an independent PASS over the current content tip, the only permitted tail is a commit modifying
-this already-existing handoff to record the literal verdict and final artifact identities. A
-merge-gate plan must then set `reviewedTip` to the current corrective content commit and `branchTip`
-to that later handoff-only commit. Any other content change invalidates the artifacts and requires a
-new cumulative artifact and review.
+The commit containing the final PASS section above is the permitted handoff-only tail. It modifies
+only this already-existing handoff to retain the literal verdict and final artifact identities. The
+merge-gate plan must set `reviewedTip` to `080cbf0e844fd33820a3f9f112bae9fa93e5d600` and `branchTip`
+to the exact SHA of this handoff-only commit supplied in the merge packet. Any later content change
+invalidates the artifacts and requires a new cumulative artifact and review.
 
 Always use three-dot diffs and `git diff --output`; never use PowerShell `>` for pinned artifacts.
 Pinned `.agent-review-*.diff` files remain gitignored local review artifacts.
