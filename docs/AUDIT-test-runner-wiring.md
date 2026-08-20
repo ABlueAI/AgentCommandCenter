@@ -13,8 +13,9 @@ Date: 2026-08-19.
 there are no broken chain entries and no zero-assertion suites. The one `app/` test file outside the
 chain is deliberately reached by a Pester wrapper, not an orphan.
 
-Two real findings remain, neither a correctness hole: an **assertion accounting gap** of 3,988
-executed-but-uncounted Node assertions (F1), and a **latent discovery gap** for `*.Spec.ps1` (F2).
+Two real findings remain, neither a correctness hole: an **assertion accounting gap** of 3,988 Node
+assertions absent from both headline gate summaries (F1), and a **latent discovery gap** for
+`*.Spec.ps1` (F2).
 Two weaker observations (F3, F4) follow.
 
 ## 1. How `npm test` resolves its 67 suites
@@ -175,11 +176,12 @@ reached.
 
 ## 4. Findings
 
-### F1 — Assertion accounting gap: 3,988 executed assertions appear in neither headline number
+### F1 — Assertion accounting gap: 3,988 Node assertions absent from both headline gate summaries
 
 Three Node suites are reached only through Pester wrappers. Each wrapper contributes one or more
 Pester `It` test cases that check properties such as exit code 0, no `FAIL` lines, and zero failures
-in the Node summary, while the wrapped suite's own Node assertions are counted nowhere:
+in the Node summary, while the wrapped suite's own Node assertions are absent from both headline gate
+summaries:
 
 | Node suite | Wrapper | Its own assertions | Counted in 4,888? | Counted in 955? |
 | --- | --- | ---: | :---: | :---: |
@@ -187,10 +189,10 @@ in the Node summary, while the wrapped suite's own Node assertions are counted n
 | `scripts/gemini-video-sdk.test.js` | `scripts/gemini-video-sdk-node.Tests.ps1` | 3,491 | No | No |
 | `scripts/gemini-followup.test.js` | `scripts/gemini-followup-node.Tests.ps1` | 99 | No | No |
 
-**Total wrapped Node assertions absent from both headline summaries: 3,988.** The three available
+**Total wrapped Node assertions absent from both headline gate summaries: 3,988.** The three available
 figures use two different units and must remain separate: the app gate reports 4,888 Node assertions;
 the Pester gate reports 955 passed `It` test cases, not executed `Should` assertions; and the wrapped
-Node suites report 3,988 Node assertions that appear in neither headline. Therefore neither 5,843 nor
+Node suites report 3,988 Node assertions absent from both headline gate summaries. Therefore neither 5,843 nor
 9,831 is a valid executed-assertion total, and no percentage understatement can be derived from these
 figures. An aggregate requires actual Pester assertion executions to be measured under a defined
 reporting contract that also prevents double-counting wrapper-executed Node suites.
@@ -259,7 +261,7 @@ Self-contained by design: a reader arriving here needs no prior session. Referen
 | --- | --- | --- |
 | **R1** | Pester guard used substring, not exact match | **Fix committed, awaiting review** (`cf6c1a8`) |
 | **F5** | Three summary output formats across suites | **Open — recommendation pending Blue priority and a bounded specification** |
-| **F1** | 3,988 wrapped Node assertions absent from both headline summaries | **Open — requires a defined aggregation/reporting contract** |
+| **F1** | 3,988 wrapped Node assertions absent from both headline gate summaries | **Open — requires a defined aggregation/reporting contract** |
 | **F2** | `*.Spec.ps1` invisible to runner and contract | **Open** (latent; zero instances) |
 | **F3** | Discovery floor `>= 14` against 35 actual | **Open — expect deletion, not a bump** (likely redundant after F2) |
 | **F4** | Walk skips `vendor`, `dist`, `source-material` | **Closed — no action** |
@@ -303,11 +305,11 @@ audit does not reprioritize it. Before any runner or aggregator is specified or 
 must also determine whether the proposal extends existing test tooling or creates a new subsystem
 subject to the OSS procurement gate.
 
-### F1 — 3,988 wrapped Node assertions appear in neither headline — OPEN, CONTRACT REQUIRED
+### F1 — 3,988 wrapped Node assertions absent from both headline gate summaries — OPEN, CONTRACT REQUIRED
 
 Three Node suites run only inside Pester wrappers. The wrappers contribute Pester `It` cases that
 check properties such as exit code 0, no `FAIL` lines, and zero failures in the Node summary, while
-the wrapped suites' own Node counts disappear from both headline summaries:
+the wrapped suites' own Node counts are absent from both headline gate summaries:
 
 | Node suite | Wrapper | Assertions |
 | --- | --- | ---: |
@@ -316,7 +318,7 @@ the wrapped suites' own Node counts disappear from both headline summaries:
 | `scripts/gemini-followup.test.js` | `scripts/gemini-followup-node.Tests.ps1` | 99 |
 
 The measurements on `8c6bfce` are 4,888 app-chain Node assertions, 955 passed Pester `It` test cases,
-and 3,988 wrapped Node assertions absent from both headlines. The 955 Pester result is not a count of
+and 3,988 wrapped Node assertions absent from both headline gate summaries. The 955 Pester result is not a count of
 executed `Should` assertions, so adding it to either Node figure would mix units. F1 needs a specified
 aggregation/reporting contract that measures actual Pester assertion executions, represents the
 wrapper-executed Node suites, and prevents double-counting. Summary normalization under F5 neither

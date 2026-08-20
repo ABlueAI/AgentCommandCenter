@@ -9,16 +9,21 @@ Original audit commits:
 - Initial audit: `55ec2d9186799e10fdc625a5efeb14ee53cb312a`
 - Original reviewed audit tip: `47f2eb9be999258e63fe59e84ed8af0661b3cdcb`
 
-Corrected content tip: `41ee4b434420a61bf5459557e2bf2d5f135c6793`
+First corrected audit-only tip: `41ee4b434420a61bf5459557e2bf2d5f135c6793`
+
+Invalid attempted handoff tail: `0a60c81771a1a119f9a342d9f3eedf4659a80acf`
+
+Current corrected review target: the content commit containing this section. Its exact SHA is
+recorded in the external review packet because a commit cannot contain its own identity.
 
 Merge commit: pending; nothing merged or pushed.
 
 ## Classification and invariant
 
-**Standard-class.** The corrected content changes one Markdown audit, and the handoff tail adds one
-Markdown file. No code, configuration, dependency, runner, test, credential, or runtime behavior is
-changed. Accuracy and queue authority remain load-bearing because the audit is intended to be a
-durable project record.
+**Standard-class.** The current corrected content commit modifies two existing Markdown files: the
+audit and this handoff. No code, configuration, dependency, runner, test, credential, or runtime
+behavior is changed. Accuracy, queue authority, and merge-gate topology are load-bearing because the
+audit and handoff are intended to be durable project records.
 
 Intended invariant: the audit must keep unlike test-counting units separate, must not present an
 unsupported aggregate or coverage percentage, must not imply that summary normalization supplies an
@@ -29,12 +34,17 @@ OSS procurement evaluation.
 
 ## Files
 
-Corrected content commit `41ee4b4`:
+First corrected audit-only commit `41ee4b4`:
 
 - `docs/AUDIT-test-runner-wiring.md`
 
-Handoff-only tail:
+Invalid attempted handoff tail `0a60c817`:
 
+- `docs/BUILDER-HANDOFF-test-runner-wiring-audit.md`
+
+Current corrective content commit:
+
+- `docs/AUDIT-test-runner-wiring.md`
 - `docs/BUILDER-HANDOFF-test-runner-wiring-audit.md`
 
 No other tracked file is authorized on this branch.
@@ -70,7 +80,7 @@ The correction requires a fresh independent Standard-class review.
   labeled measurements:
   - 4,888 app-chain Node assertions;
   - 955 passed Pester `It` test cases, explicitly not a count of `Should` assertions;
-  - 3,988 wrapped Node assertions absent from both headline summaries.
+  - 3,988 wrapped Node assertions absent from both headline gate summaries.
 - Stated that no aggregate is valid until actual Pester assertion executions are measured under a
   defined reporting contract that prevents wrapper double-counting.
 - Separated F5 from F1. F5 is a log-format/readability/parser concern; it does not cause top-level
@@ -81,9 +91,34 @@ The correction requires a fresh independent Standard-class review.
 - Explicitly deferred to `BLUE-HELM-MASTER-STATUS.md` as the controlling release order.
 - Corrected the Pester location split to 11 direct and 24 under `scripts/lib/`.
 
-## Review artifact and mechanical checks
+## Second independent review result — preserved verbatim
 
-Pinned cumulative content artifact:
+The independent Standard-class review of `41ee4b4` plus attempted tail `0a60c817` returned:
+
+```text
+VERDICT: FAIL
+CLASS: Standard
+INDEPENDENCE: CONFIRMED
+```
+
+The blocking findings were:
+
+1. Two broad current-voice phrases survived: “executed-but-uncounted” in the headline and “counted
+   nowhere” in F1. The honest scope is that the 3,988 wrapped Node assertions are **absent from both
+   headline gate summaries**; the Pester headline still counts the wrapper `It` cases.
+2. Commit `0a60c817` first added this handoff after reviewed content tip `41ee4b4`. It therefore was
+   not a mechanically valid handoff-only tail: merge-gate requires the declared handoff path to be a
+   regular blob at both `reviewedTip` and `branchTip`.
+
+The earlier claim that `0a60c817` was a valid handoff-only tail is withdrawn. This current commit is
+a new corrective **content** commit containing both the audit wording fix and an already-existing,
+modified handoff blob. It is the next reviewed content tip. No post-PASS tail exists yet, and no
+corrective PASS is claimed.
+
+## Superseded first-correction artifact and checks
+
+The first-correction artifact is preserved for provenance but is not the controlling artifact for
+the current review target:
 
 ```text
 .agent-review-test-runner-wiring-audit-correction-cumulative.diff
@@ -92,7 +127,7 @@ Size: 25,255 bytes
 SHA-256: bfe69af8155317163012a5e3e91ead37768d33fd3d26832a3cb03cbb81272c49
 ```
 
-The artifact was generated with `git diff --output`. A second independently named verification diff
+That artifact was generated with `git diff --output`. A second independently named verification diff
 was generated from the same range; its size and SHA-256 were identical. Only after that identity was
 proved was the verification file removed. Existing review artifacts were not altered.
 
@@ -103,6 +138,21 @@ Checks at corrected content tip `41ee4b4`:
 - Focused correction: 1 file changed, 37 insertions, 22 deletions.
 - Cumulative content range: 1 file changed, 400 insertions.
 - Cumulative changed path: only `docs/AUDIT-test-runner-wiring.md`.
+
+The controlling review packet for the current corrected content tip must use these new artifacts,
+generated after the current commit exists:
+
+```text
+.agent-review-test-runner-wiring-audit-correction-v2-cumulative.diff
+Range: 8c6bfce6c36bbe0adda8dda46f6bab728e6ae38f...<current-corrected-content-tip>
+
+.agent-review-test-runner-wiring-audit-correction-v2-focused.diff
+Range: 0a60c81771a1a119f9a342d9f3eedf4659a80acf...<current-corrected-content-tip>
+```
+
+Their exact tip, sizes, SHA-256 identities, reproduction checks, and diff statistics are supplied in
+the external review packet and may be stamped into this handoff only in a later handoff-only commit
+after an independent PASS.
 
 Runtime gates were not run because the correction is documentation-only and changes no executable
 surface. The audit's previously recorded runtime measurements are historical evidence, not gates run
@@ -133,7 +183,8 @@ This branch authorizes only the two documentation files listed above. It does no
 ## Recommended independent review focus
 
 1. Confirm the reviewer did not author the correction and is independent of this handoff.
-2. Reproduce the pinned artifact and verify its size and SHA-256 byte-identically.
+2. Reproduce both v2 artifacts named above and verify their supplied sizes and SHA-256 identities
+   byte-identically. Do not use the superseded first-correction artifact as the controlling input.
 3. Search the entire corrected audit for every 9,831, 5,843, and percentage claim; each number may
    appear only to state explicitly that it is **not** a valid executed-assertion total.
 4. Confirm 4,888 Node assertions, 955 passed Pester `It` cases, and 3,988 wrapped Node assertions stay
@@ -142,7 +193,7 @@ This branch authorizes only the two documentation files listed above. It does no
 6. Confirm no “F5 do next” authority survives and the controlling release order remains with
    `BLUE-HELM-MASTER-STATUS.md`.
 7. Confirm the 11-direct/24-library split matches the enumerated 35 Pester files.
-8. Confirm the original independent FAIL is retained verbatim and no corrective PASS is claimed.
+8. Confirm both independent FAIL results are retained verbatim and no corrective PASS is claimed.
 9. Confirm no executable or unrelated tracked path changed.
 
 Required review result:
@@ -155,11 +206,15 @@ INDEPENDENCE: CONFIRMED|NOT CONFIRMED
 
 ## Handoff-tail policy
 
-The pinned artifact ends at corrected content tip `41ee4b4`. This handoff is the only permitted
-post-review tail. The final branch tip therefore differs from the reviewed content tip and must be
-recorded separately in any merge-gate plan as `branchTip`; `reviewedTip` remains `41ee4b4`. Review the
-handoff tail as documentation-only before merge. Any later content change invalidates the artifact
-and requires a new cumulative artifact and review.
+`0a60c817` is explicitly **not** a valid handoff-only tail because this handoff did not exist at
+reviewed tip `41ee4b4`. The current corrective content commit fixes the topology: this handoff is now
+a regular blob in the reviewed content tree. No tail exists yet.
+
+After an independent PASS over the current content tip, the only permitted tail is a commit modifying
+this already-existing handoff to record the literal verdict and final artifact identities. A
+merge-gate plan must then set `reviewedTip` to the current corrective content commit and `branchTip`
+to that later handoff-only commit. Any other content change invalidates the artifacts and requires a
+new cumulative artifact and review.
 
 Always use three-dot diffs and `git diff --output`; never use PowerShell `>` for pinned artifacts.
 Pinned `.agent-review-*.diff` files remain gitignored local review artifacts.
