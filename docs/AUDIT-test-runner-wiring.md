@@ -152,8 +152,8 @@ spelling the reachability watchdog recognises. This is the repo's documented "K5
 **Paths searched:** the entire repository tree rooted at `D:\Workspace\agent-command-center`,
 pruning only `.worktrees/` and `node_modules/`, matching both `*.Tests.ps1` and `*.Spec.ps1`.
 
-**Result: 35 files, all `*.Tests.ps1`, zero `*.Spec.ps1`.** All 35 live under `scripts/` — 12 directly
-and 23 under `scripts/lib/` — therefore all fall inside the runner's recursive root and all are
+**Result: 35 files, all `*.Tests.ps1`, zero `*.Spec.ps1`.** All 35 live under `scripts/` — 11 directly
+and 24 under `scripts/lib/` — therefore all fall inside the runner's recursive root and all are
 reached.
 
 <details>
@@ -177,19 +177,23 @@ reached.
 
 ### F1 — Assertion accounting gap: 3,988 executed assertions appear in neither headline number
 
-Three Node suites are reached only through Pester wrappers. Each wrapper contributes a handful of
-Pester assertions (exit code 0, no `FAIL` lines, zero failed in its own summary) while the wrapped
-suite's real assertions are counted nowhere:
+Three Node suites are reached only through Pester wrappers. Each wrapper contributes one or more
+Pester `It` test cases that check properties such as exit code 0, no `FAIL` lines, and zero failures
+in the Node summary, while the wrapped suite's own Node assertions are counted nowhere:
 
 | Node suite | Wrapper | Its own assertions | Counted in 4,888? | Counted in 955? |
 | --- | --- | ---: | :---: | :---: |
-| `app/renderer/video-model-policy.test.js` | `scripts/video-model-policy-node.Tests.ps1` | 398 | No | No (4 wrapper assertions only) |
+| `app/renderer/video-model-policy.test.js` | `scripts/video-model-policy-node.Tests.ps1` | 398 | No | No (wrapper `It` cases only) |
 | `scripts/gemini-video-sdk.test.js` | `scripts/gemini-video-sdk-node.Tests.ps1` | 3,491 | No | No |
 | `scripts/gemini-followup.test.js` | `scripts/gemini-followup-node.Tests.ps1` | 99 | No | No |
 
-**Total executed but uncounted: 3,988.** The repository's true executed assertion count on `8c6bfce`
-is therefore **9,831** (4,888 + 955 + 3,988), not the 5,843 the two headline gate figures imply — the
-recorded numbers understate coverage by roughly 40%.
+**Total wrapped Node assertions absent from both headline summaries: 3,988.** The three available
+figures use two different units and must remain separate: the app gate reports 4,888 Node assertions;
+the Pester gate reports 955 passed `It` test cases, not executed `Should` assertions; and the wrapped
+Node suites report 3,988 Node assertions that appear in neither headline. Therefore neither 5,843 nor
+9,831 is a valid executed-assertion total, and no percentage understatement can be derived from these
+figures. An aggregate requires actual Pester assertion executions to be measured under a defined
+reporting contract that also prevents double-counting wrapper-executed Node suites.
 
 This is an accounting defect, not a correctness hole: a failure inside any wrapped suite still fails
 its wrapper on exit code and propagates to the gate. But every merge record in this repo cites
@@ -254,8 +258,8 @@ Self-contained by design: a reader arriving here needs no prior session. Referen
 | ID | Item | Disposition |
 | --- | --- | --- |
 | **R1** | Pester guard used substring, not exact match | **Fix committed, awaiting review** (`cf6c1a8`) |
-| **F5** | Three summary output formats across suites | **Open — do next** (enabler for F1) |
-| **F1** | 3,988 executed assertions counted nowhere | **Open** (depends on F5) |
+| **F5** | Three summary output formats across suites | **Open — recommendation pending Blue priority and a bounded specification** |
+| **F1** | 3,988 wrapped Node assertions absent from both headline summaries | **Open — requires a defined aggregation/reporting contract** |
 | **F2** | `*.Spec.ps1` invisible to runner and contract | **Open** (latent; zero instances) |
 | **F3** | Discovery floor `>= 14` against 35 actual | **Open — expect deletion, not a bump** (likely redundant after F2) |
 | **F4** | Walk skips `vendor`, `dist`, `source-material` | **Closed — no action** |
@@ -280,23 +284,30 @@ writing new matching, so the two sides stay symmetric. Proven in both directions
 0 failed (defect green), after the fix 3 passed / 1 failed (caught), after revert 4 passed / 0 failed
 (no false positive). Branch gates matched main exactly: app 67/4,888/0, Pester 955/0/0. Not merged.
 
-### F5 — Suites emit three different summary formats — OPEN, DO NEXT
+### F5 — Suites emit three different summary formats — OPEN, PRIORITY NOT AUTHORIZED
 
 Suite summaries appear in three shapes: `name: N passed, M failed`, bare `N passed, M failed`, and
 `file.test.js: N assertions passed`. Any single-pattern regex over the gate log therefore undercounts
 to **59 suites / 4,447 assertions** — a shortfall plausible enough to look like real gate erosion.
 
-This is the **root cause of the counting trap**, and its cost is documented rather than hypothetical:
+This is the **root cause of the log-parsing trap**, and its cost is documented rather than hypothetical:
 it produced a mid-audit false positive in the audit that found it, and two work orders were opened
-against gate shrinkage that had never occurred. It is also the **enabler for F1** — no reliable
-assertion total can be derived from the log while three formats coexist, so F1 cannot be closed
-first. Do this one next: normalize the summary line, then F1 becomes measurable.
+against gate shrinkage that had never occurred. Normalizing these summaries would improve readability
+and make one parser shape sufficient for the 67-entry app chain. It would **not** make the top-level
+app or Pester summaries include the wrapper-executed Node totals, and it is not an enabler or
+prerequisite for F1.
 
-### F1 — 3,988 executed assertions are counted nowhere — OPEN, DEPENDS ON F5
+This audit recommends considering F5 only after Blue makes a priority decision and issues a bounded
+specification/work order. `BLUE-HELM-MASTER-STATUS.md` remains the controlling release order; this
+audit does not reprioritize it. Before any runner or aggregator is specified or built, the work order
+must also determine whether the proposal extends existing test tooling or creates a new subsystem
+subject to the OSS procurement gate.
 
-Three Node suites run only inside Pester wrappers, each wrapper contributing roughly 4 assertions
-(exit code 0, no `FAIL` lines, zero failed in its own summary) while the wrapped suite's real count
-disappears:
+### F1 — 3,988 wrapped Node assertions appear in neither headline — OPEN, CONTRACT REQUIRED
+
+Three Node suites run only inside Pester wrappers. The wrappers contribute Pester `It` cases that
+check properties such as exit code 0, no `FAIL` lines, and zero failures in the Node summary, while
+the wrapped suites' own Node counts disappear from both headline summaries:
 
 | Node suite | Wrapper | Assertions |
 | --- | --- | ---: |
@@ -304,8 +315,12 @@ disappears:
 | `scripts/gemini-video-sdk.test.js` | `scripts/gemini-video-sdk-node.Tests.ps1` | 3,491 |
 | `scripts/gemini-followup.test.js` | `scripts/gemini-followup-node.Tests.ps1` | 99 |
 
-True executed total on `8c6bfce` is **9,831**, not the **5,843** implied by the "app 67/4,888/0 plus
-Pester 955/0/0" pairing cited in every merge record in this repository.
+The measurements on `8c6bfce` are 4,888 app-chain Node assertions, 955 passed Pester `It` test cases,
+and 3,988 wrapped Node assertions absent from both headlines. The 955 Pester result is not a count of
+executed `Should` assertions, so adding it to either Node figure would mix units. F1 needs a specified
+aggregation/reporting contract that measures actual Pester assertion executions, represents the
+wrapper-executed Node suites, and prevents double-counting. Summary normalization under F5 neither
+defines nor supplies that contract.
 
 Not a coverage hole — failures propagate by exit code, so a broken wrapped suite still fails the gate.
 The defect is that **the cited ceiling is decorative rather than load-bearing**: a quiet erosion inside
