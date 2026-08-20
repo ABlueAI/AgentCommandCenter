@@ -40,21 +40,65 @@ Verified afterwards:
 
 ### Full reviewed delta from the reviewed base
 
-`git diff --stat 34af8bf <branch tip>` identifies **only the actual R1 files**:
+These figures describe the **current** reviewed tip — the corrective commit that
+carries this revision — and were calculated after all prose edits were final.
+`git diff --numstat 34af8bf <branch tip>` (histogram-free, so the counts are exact
+and unambiguous) identifies **only the actual R1 files**:
 
 ```
-docs/BUILDER-HANDOFF-pester-reachability-exact-match.md | 300 +++++++++++++++++++++
-scripts/test-reachability.Tests.ps1                     |  36 ++-
-2 files changed, 334 insertions(+), 2 deletions(-)
+399	0	docs/BUILDER-HANDOFF-pester-reachability-exact-match.md
+34	2	scripts/test-reachability.Tests.ps1
 ```
 
-- `scripts/test-reachability.Tests.ps1` — the one-file R1 code change (+34/−2).
-- `docs/BUILDER-HANDOFF-pester-reachability-exact-match.md` — this handoff.
+Equivalently, `2 files changed, 433 insertions(+), 2 deletions(-)`.
+
+- `scripts/test-reachability.Tests.ps1` — the one-file R1 code change,
+  **+34 / −2**. This is the only code in the delta and it is unchanged since the
+  implementation tip `cf6c1a8`.
+- `docs/BUILDER-HANDOFF-pester-reachability-exact-match.md` — this handoff,
+  **+399 / −0** (the file does not exist at the reviewed base, so the whole
+  document counts as insertions).
 
 Nothing else differs from the reviewed base. The audit documents the merge brought in
 are part of `34af8bf` itself and therefore do not appear in this delta.
 
-## Independent review outcome — retained verbatim
+#### Superseded statistics — applicable to `7f2ebff` ONLY
+
+The previous revision of this section carried figures that were written before its own
+commit and were therefore stale on arrival. For the record, the true statistics **at
+tip `7f2ebff`** — and at no other tip — were:
+
+```
+335	0	docs/BUILDER-HANDOFF-pester-reachability-exact-match.md
+34	2	scripts/test-reachability.Tests.ps1
+```
+
+i.e. handoff 335 insertions; Pester suite 34 insertions / 2 deletions; total 369
+insertions / 2 deletions. Those numbers are historical and **must not** be read as
+describing the current tip. Every unlabeled stale statistic has been removed.
+
+## Latest independent review outcome — retained verbatim
+
+```
+VERDICT: FAIL
+CLASS: Standard
+INDEPENDENCE: CONFIRMED
+```
+
+Source: independent Standard-class review of
+`34af8bf340eaa518bca3b9aa7109025f47b8992d...7f2ebff03e63a537d5df3f45c8a943d45e2b81ac`.
+
+Finding, retained as stated: the handoff's reviewed-delta statistics were stale. At
+`7f2ebff` the actual range was handoff 335 insertions; Pester suite 34 insertions /
+2 deletions; total 369 insertions / 2 deletions.
+
+**Correction applied:** documentation only. The reviewed-delta section above now
+carries figures calculated *after* all prose edits were complete, so they describe the
+current tip rather than a pre-edit guess; the `7f2ebff` figures are retained solely
+under an explicit `7f2ebff`-only label. No implementation, test code, or runtime
+behavior was touched by this correction.
+
+## Prior independent review outcome — retained verbatim
 
 ```
 VERDICT: FAIL
@@ -65,9 +109,9 @@ INDEPENDENCE: CONFIRMED
 Source: independent Standard-class review of
 `8c6bfce6c36bbe0adda8dda46f6bab728e6ae38f...bc4fa4592f2cfd27e4e5f218d32044bcd81ef13d`.
 
-**No corrective PASS is claimed.** The FAIL above stands as the recorded verdict until
-an independent reviewer supersedes it. This revision is submitted for a fresh
-independent Standard review.
+**No corrective PASS is claimed** for either review. Both FAILs stand as the recorded
+verdicts until an independent reviewer supersedes them. This revision is submitted for
+a focused independent Standard re-review.
 
 ## Blue's app-gate disposition — retained verbatim
 
@@ -249,24 +293,36 @@ After every control `app/package.json` was restored and verified byte-identical
 (`9622fa0a…5462` before and after each), the backup deleted, and
 `git status --porcelain` empty. `app/package.json` was never left modified.
 
-## Verification performed for this revision
+## Test evidence — carried forward, executed at `7f2ebff`
+
+The current correction is **documentation-only**: it changes no implementation, no
+test code, and no runtime behavior, and the `scripts/` and `app/` trees are unchanged
+from `7f2ebff`. No runtime tests were required or re-run for it, and **no new run is
+claimed**. The following results were executed against `7f2ebff` and are retained as
+already-reviewed evidence:
 
 - **Changed Pester suite alone** — `Invoke-Pester -Path scripts\test-reachability.Tests.ps1`:
   **4 passed, 0 failed.**
 - **Full Pester gate** — `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-pester.ps1`:
   exit **0**, **`Passed: 955 Failed: 0 Skipped: 0 Pending: 0 Inconclusive: 0`**.
-- **`git diff --check`** over the focused correction range and the full reviewed range
-  from `34af8bf` — both clean (rc 0, no output).
+
+Structural checks **re-executed for the current revision** (these are cheap and range
+dependent, so they were not carried forward):
+
+- **`git diff --check`** over the R4 focused range `7f2ebff...<branch tip>` and the
+  full reviewed range `34af8bf...<branch tip>` — both clean (rc 0, no output).
 - **`app/package.json` byte-identity** — empty diff vs `34af8bf`; SHA-256
   `9622fa0a…5462`.
 - **`app/` tree comparison vs `34af8bf`** — empty; tree hash `e0aaaaab…db943` on both
   sides.
+- **Implementation identity** — `scripts/test-reachability.Tests.ps1` byte-identical
+  to the implementation tip `cf6c1a8`.
 - **Worktree cleanliness** — `git status --porcelain` empty.
 
-**No app gate was re-run for this revision and no clean app gate is claimed**, per
-Blue's bounded non-attribution disposition above and the instruction not to spend
-further app-gate runs. The authoritative gate-reliability record is the 20/20
-measurement recorded above.
+**No app gate was re-run and no clean app gate is claimed**, per Blue's bounded
+non-attribution disposition above and the instruction not to spend further app-gate
+runs. The authoritative gate-reliability record is the 20/20 measurement recorded
+above.
 
 ## Known limitations and open items
 
@@ -312,24 +368,32 @@ files, not tracked content.
 | 4 | `.agent-review-pester-reachability-exact-match-full.regen.diff` | 16,034 | `23729b58e340547c33b8e25069af5099cf47ecb16c6cb08e33fd935a4cb086eb` | same as 3 |
 | 5 | `.agent-review-pester-reachability-exact-match-r2.diff` | 19,044 | `4fa00564e2af6913a680008d6f3602ed2a4e0f01b87ed8f53274d2564f55f8f3` | `8c6bfce...4b63708` |
 | 6 | `.agent-review-pester-reachability-exact-match-r2.regen.diff` | 19,044 | `4fa00564e2af6913a680008d6f3602ed2a4e0f01b87ed8f53274d2564f55f8f3` | same as 5 |
+| 7 | `.agent-review-pester-reachability-exact-match-r3.diff` | 21,040 | `5989a552145b6d736803de91856d7787d811f795f3785104e79adf9842a38beb` | `34af8bf...7f2ebff` |
+| 8 | `.agent-review-pester-reachability-exact-match-r3.regen.diff` | 21,040 | `5989a552145b6d736803de91856d7787d811f795f3785104e79adf9842a38beb` | same as 7 |
 
-Artifacts 1–6 are pinned against the **historical fork point** `8c6bfce` and are
-retained as history. They are **not** the artifact for this review.
+Artifacts 1–6 are pinned against the **historical fork point** `8c6bfce`; artifacts
+7–8 are pinned against the reviewed base `34af8bf` at the **superseded** tip
+`7f2ebff`. All eight are retained unchanged as history. **None of them is the artifact
+for this review.**
 
-**New pinned cumulative artifact for this review** — against the **reviewed base**
-`34af8bf`, generated with `git diff --output` (never PowerShell redirection):
-```
-git diff 34af8bf340eaa518bca3b9aa7109025f47b8992d...<new reviewed tip> --output=.agent-review-pester-reachability-exact-match-r3.diff
-```
-Because `34af8bf` is now an ancestor of the branch tip, the three-dot and two-dot
-forms are equivalent for this range. The artifact necessarily spans the commit
-introducing this text, so its byte size and SHA-256 cannot be embedded in the document
-it contains; its identity — exact byte size, SHA-256, and an empty binary comparison
-against an independently generated twin
-(`.agent-review-pester-reachability-exact-match-r3.regen.diff`) — is recorded in the
-Builder's closing report and is reproducible by regenerating the same range.
+**New pinned artifacts for this review**, both generated with `git diff --output`
+(never PowerShell redirection), each with an independently generated twin:
 
-Reviewer verdict: **FAIL (retained above).** No corrective PASS is claimed. There is
-no verdict-only tail on this branch; every handoff revision is a content commit and
+- **R4 cumulative** — `34af8bf...<new reviewed tip>`:
+  `.agent-review-pester-reachability-exact-match-r4.diff`
+  (twin: `.agent-review-pester-reachability-exact-match-r4.regen.diff`)
+- **R4 focused** — `7f2ebff...<new reviewed tip>`, the documentation-only correction
+  in isolation: `.agent-review-pester-reachability-exact-match-r4-focused.diff`
+  (twin: `.agent-review-pester-reachability-exact-match-r4-focused.regen.diff`)
+
+Because `34af8bf` and `7f2ebff` are both ancestors of the branch tip, the three-dot
+and two-dot forms are equivalent for both ranges. Both artifacts necessarily span the
+commit introducing this text, so their byte sizes and SHA-256 values cannot be
+embedded in the document they contain; each identity — exact byte size, SHA-256, and
+an empty binary comparison against its twin — is recorded in the Builder's closing
+report and is reproducible by regenerating the same range.
+
+Reviewer verdict: **FAIL (both retained above).** No corrective PASS is claimed. There
+is no verdict-only tail on this branch; every handoff revision is a content commit and
 the corrective commit is the branch tip (`reviewedTip == branchTip`). A verdict tail
 may MODIFY this file only after an independent PASS.
