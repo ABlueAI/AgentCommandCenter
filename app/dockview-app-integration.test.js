@@ -384,8 +384,20 @@ process.stdout.write('\nmaximize routes by OWNERSHIP — the two mechanisms neve
   assert(M.before.glyphs.pty1 === '⛶' && M.before.glyphs.pty2 === '⛶', 'both buttons offer Maximize');
 
   assert(M.maximized.hasMaximizedGroup === true, 'clicking ⛶ on a hosted pane maximizes its Dockview group');
-  assert(M.maximized.boxes.pty1.w > M.before.boxes.pty1.w,
-    `the maximized pane grew to the whole surface (${M.before.boxes.pty1.w} -> ${M.maximized.boxes.pty1.w})`);
+  // Geometry is only admissible once the harness observed the surface stop moving. Without this the
+  // next assertions can compare two readings of Dockview's clamped placeholder (surface and every
+  // group all report 100) and call that a measurement.
+  assert(M.before.geometrySettled === true,
+    `the surface geometry settled before measuring (${M.before.settleReads} reads)`);
+  assert(M.maximized.geometrySettled === true,
+    `the surface geometry settled after maximizing (${M.maximized.settleReads} reads)`);
+  assert(M.before.surface.surface.w === M.before.surface.dock.w && M.before.surface.dock.w > 0,
+    `the Dockview surface fills its container, so it is a real layout (dock ${M.before.surface.dock.w}, surface ${M.before.surface.surface.w})`);
+  // The pane must occupy the WHOLE available surface, not merely more pixels than before.
+  assert(M.before.boxes.pty1.w < M.before.surface.surface.w,
+    `the pane shared the surface before maximizing (${M.before.boxes.pty1.w} of ${M.before.surface.surface.w})`);
+  assert(M.maximized.boxes.pty1.w === M.maximized.surface.surface.w,
+    `the maximized pane occupies the whole surface (${M.before.boxes.pty1.w} -> ${M.maximized.boxes.pty1.w} of ${M.maximized.surface.surface.w})`);
   assert(M.maximized.boxes.pty2.w <= 2,
     `the sibling collapsed (${M.before.boxes.pty2.w} -> ${M.maximized.boxes.pty2.w})`);
   // THE ROUTING CLAIM: the classic maximizer left no trace, so it did not also run.
@@ -397,6 +409,8 @@ process.stdout.write('\nmaximize routes by OWNERSHIP — the two mechanisms neve
   assert(M.maximized.glyphs.pty2 === '⛶', 'the sibling\'s button still offers Maximize');
   assert(!/maximize REFUSED/.test(M.maximized.logs), 'no refusal was logged on the success path');
 
+  assert(M.restored.geometrySettled === true,
+    `the surface geometry settled after restoring (${M.restored.settleReads} reads)`);
   assert(M.restored.hasMaximizedGroup === false, 'clicking again exits the maximized group');
   assert(M.restored.boxes.pty1.w === M.before.boxes.pty1.w
       && M.restored.boxes.pty2.w === M.before.boxes.pty2.w,
