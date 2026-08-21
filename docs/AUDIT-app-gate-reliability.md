@@ -141,7 +141,7 @@ green runs and the Aug 20 failing sample.
 | Binary differs between worktrees | `electron.exe` SHA-256 `F9D584073947EC9B1027278DAD35BE0E6FE0443F954A8448E9B0B3D34ECEEC1B`, length 232,351,232, identical in the main worktree and the measurement worktree | **excluded** — positive evidence; byte identity was measured directly |
 | OS update or reboot | last hotfix installed 2026-08-14; last boot 2026-08-14 19:44 | **narrowed** — no hotfix or boot inside the window according to the inspected sources |
 | GPU driver change | NVIDIA GeForce RTX 5080 Laptop GPU driver 32.0.16.1088 dated 2026-07-21; Intel Graphics 32.0.101.8424 dated 2026-01-05; both `Status=OK`, `ConfigManagerErrorCode=0` | **not established** — these are *current* properties read after the fact; no Aug 19 baseline was captured, so they do not prove the driver state was unchanged across the transition |
-| DLL injection surfaces | `AppInit_DLLs` empty with `LoadAppInit_DLLs=0` in both registry views; `AppCertDlls` key absent; no Image File Execution Options entry for `electron`, `node`, or `chrome` | **narrowed** — the three checked mechanisms show nothing; they do not cover every injection or overlay mechanism (see the residual hypothesis below) |
+| DLL injection surfaces | `AppInit_DLLs` empty with `LoadAppInit_DLLs=0` in both registry views; `AppCertDlls` key absent; no Image File Execution Options entry for `electron`, `node`, or `chrome` | **narrowed** — the three checked mechanisms show nothing; they do not cover every injection or overlay mechanism |
 | Third-party security software | only Windows Defender is registered in `root\SecurityCenter2` | **narrowed** — current registration only; `SecurityCenter2` lists registered AV products, not every filter driver, hook, or overlay |
 | Antivirus detection or quarantine | `Get-MpThreatDetection` records no detections | **narrowed** — no detection *recorded* at query time; that is not the same as no interference |
 | Code-integrity / Smart App Control block | the CodeIntegrity operational log contains **zero events on 2026-08-20**; `VerifiedAndReputablePolicyState = 0` (SAC off); `UsermodeCodeIntegrityPolicyEnforcementStatus = 0` | **narrowed** — zero events in the checked log for that date, plus a current policy read; neither establishes the policy state as it stood during the Aug 19 runs |
@@ -155,25 +155,27 @@ no combination of them establishes that the host was unchanged across the Aug 19
 transition. Where a candidate needs to be genuinely excluded, it needs positive evidence of
 the kind carried by the hash-comparison row and the two reproduction rows.
 
-**Unproven residual hypothesis — NVIDIA overlay injection (`nvspcap64.dll`).** Recorded as
-a **residual hypothesis only**, carried forward because the injection-surface row above is
-a narrowing rather than an exclusion.
+**OBSERVATION — DEFERRED, NOT INVESTIGATED.**
 
-- Fact: `C:\Windows\System32\nvspcap64.dll` is present on this host — 1,424,496 bytes,
-  mtime 2026-07-02 06:45:29 -0400, SHA-256
-  `3d892235ac110f2d1784fea441764ad4c7a005032d6b9ab422acf1d9983a7c3d`. It is an NVIDIA
-  capture/overlay component belonging to the same vendor stack as the RTX 5080 driver in
-  the row above. This presence check was performed on 2026-08-21, after the fact.
-- Fact: NVIDIA overlay components load into target processes through vendor mechanisms
-  that are **not** `AppInit_DLLs`, `AppCertDlls`, or Image File Execution Options, so the
-  three checks performed above would not have observed them.
-- Not established: whether this module, or any NVIDIA overlay component, was loaded into
-  the Electron main process or into either failing child during the Aug 19 or Aug 20 runs.
-  The retained logs do not record loaded modules, so the retained evidence cannot decide it
-  either way.
-- Not established: any causal relationship to `0xC0000135` or to the launch failure. The
-  hypothesis is recorded so that it is not silently dropped — **not** as a finding, and not
-  as a competitor ranked against the environment hypothesis below.
+Windows Code Integrity logs referenced `C:\Windows\System32\nvspcap64.dll` on August 15,
+17, 19, and 21. No such event was recorded during the August 20 measurement window.
+
+A read-only inspection on August 21 established that the file exists. Its local version
+metadata identifies it as:
+
+- Company: NVIDIA Corporation
+- Product: NVIDIA App
+- Description: NVIDIA Game Proxy
+
+The retained evidence does not establish whether this module — or any NVIDIA capture or
+overlay component — loaded into the Electron main process, renderer, or GPU child during
+either the green or failing runs. It does not establish any causal relationship to
+`0xC0000135`.
+
+Possible relevance to the broader child-process injection class is inference, not fact.
+
+**DISPOSITION: DEFERRED; not on the critical path.** Do not promote it to an active lead
+without new evidence tying it to an affected Electron process or the measurement window.
 
 **Signing observation, recorded in the required wording.**
 
@@ -224,8 +226,7 @@ property only**. It is explicitly **not** offered as a common cause for Tracks A
 **Result.** Unknown. The green-versus-failing transition is **not reconciled**. Of the
 candidates above, three are genuine exclusions resting on positive evidence and the rest
 are narrowings or open questions; an exclusion is not a cause in any case, and a narrowing
-is not even an exclusion. The environment hypothesis and the NVIDIA overlay residual are
-both unproven, and neither is ranked against the other.
+is not even an exclusion. The inherited-environment hypothesis remains unproven.
 
 ---
 
