@@ -19,12 +19,25 @@ observations are tracked and are **deliberately not merged into one class**:
 | Suite | `app/dockview-bootstrap.test.js` (chain segment 14) | `app/dockview-app-integration.test.js` (chain segment 15) |
 | Symptom | Electron child processes fail to launch; GPU exit `0xC0000135` | maximize assertion `100 -> 100` |
 | Observations | 20/20 in the valid sample, plus 2 targeted runs | 1, no GPU evidence, 0/20 in the sample |
-| Root cause | not established | not established |
+| Root cause | not established | **established — see the Track B status note below** |
 
-**No common cause is claimed, and none may be inferred from this record.** Track B is
-currently unobservable because segment 15 cannot run while segment 14 aborts the chain.
-That is a sequencing dependency of the `&&` chain, **not** evidence of a shared cause,
-and Track B must not be closed, reclassified, or dispositioned on Track A's evidence.
+**No common cause is claimed, and none may be inferred from this record.** Track B was
+unobservable while segment 15 could not run because segment 14 aborted the chain. That was a
+sequencing dependency of the `&&` chain, **not** evidence of a shared cause, and Track B was
+not closed, reclassified, or dispositioned on Track A's evidence.
+
+**Track B status — RESOLVED as a gate measurement defect, on its own evidence.** On 2026-08-21,
+with segment 14 passing, segment 15 ran and reproduced the recorded `100 -> 100` symptom. The
+cause is in the gate, not the product: the maximize scenario sampled geometry after a log-based
+settle plus fixed sleeps, neither of which proves the Dockview surface has been laid out. With
+`#terminalDock` at zero width, Dockview reports a clamped 100px placeholder for the surface and
+for every group, so both panes read 100 and the growth check compared the placeholder with
+itself. Forcing the dock to zero width reproduces the signature exactly (dock 0, surface 100,
+both panes 100). Shipped maximize behavior was measured correct throughout: 508 -> 1016 with the
+sibling collapsing to 1 and an exact restore. Corrected on `fix/dockview-maximize-gate` by
+waiting on observable Dockview state plus settled geometry and asserting whole-surface
+occupancy; `app/renderer/dockview-prototype.js` was not changed. This resolves Track B only —
+Track A, AGR-1, and AGR-2 are untouched by it.
 
 Evidence base: the preserved 20-run measurement (snapshot `34af8bf`, `app` tree
 `e0aaaaab…db943`), summary SHA-256

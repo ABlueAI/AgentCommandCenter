@@ -270,6 +270,50 @@ const PRELUDE = `(() => {
     const r = el.getBoundingClientRect();
     return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
   };
+  // The Dockview surface: the element Dockview lays its groups out inside, and the container that
+  // gives it its width. Both are needed, because a surface that is narrower than its container has
+  // not been laid out yet.
+  win.__cc.dockSurface = () => {
+    const dock = doc.getElementById('terminalDock');
+    const surface = dock ? (dock.querySelector('.dv-dockview') || dock.firstElementChild) : null;
+    return { dock: win.__cc.box(dock), surface: win.__cc.box(surface || dock) };
+  };
+  // LOAD-BEARING. Geometry is only meaningful once Dockview has actually laid the surface out, and
+  // neither the settle LOG LINE nor a fixed sleep proves that. Under load #terminalDock can still
+  // be zero-width when a scenario measures; Dockview then reports its 100px floor for the surface
+  // and for every group, which is indistinguishable from a real measurement except that it is
+  // wrong — a maximised pane and its un-maximised sibling both read 100 and "did it grow?" is
+  // silently unanswerable. So: wait for the caller's observable Dockview state, for the surface to
+  // have real width that fills its container, and for two consecutive frames to measure the same
+  // thing. Returns ok:false rather than guessing, so the caller can fail visibly.
+  win.__cc.stableGeometry = async (pred, ms) => {
+    const read = () => {
+      const api = win.__cc.api;
+      const { dock, surface } = win.__cc.dockSurface();
+      return {
+        dock: dock ? dock.w : -1,
+        surface: surface ? surface.w : -1,
+        groups: api ? api.groups.map((g) => Math.round(g.element.getBoundingClientRect().width)) : [],
+      };
+    };
+    const nextFrame = () => new Promise((r) => win.requestAnimationFrame(() => setTimeout(r, 32)));
+    const deadline = Date.now() + (ms || 20000);
+    let prev = null;
+    let reads = 0;
+    while (Date.now() < deadline) {
+      let stateOk = false;
+      try { stateOk = !!pred(); } catch { stateOk = false; }
+      const now = read();
+      reads++;
+      // A surface narrower than the container it lives in is a clamped placeholder, not a layout.
+      const laidOut = now.dock > 0 && now.surface >= now.dock && now.groups.length > 0;
+      const settled = prev !== null && JSON.stringify(prev) === JSON.stringify(now);
+      if (stateOk && laidOut && settled) return { ok: true, reads, geometry: now };
+      prev = now;
+      await nextFrame();
+    }
+    return { ok: false, reads, geometry: read() };
+  };
   return { installed: true };
 })()`;
 
@@ -835,8 +879,8 @@ async function scenarioMaximize() {
   const split = await run(win, `(async () => {
     const api = window.__cc.api;
     api.getPanel('pty2').api.moveTo({ group: api.getPanel('pty1').api.group, position: 'right' });
-    await window.__cc.sleep(300);
-    return { groups: api.groups.length, panels: api.panels.map((p) => p.id) };
+    const settle = await window.__cc.stableGeometry(() => window.__cc.api.groups.length === 2);
+    return { groups: api.groups.length, panels: api.panels.map((p) => p.id), settle };
   })()`);
 
   // Pane elements are addressed through the panel that owns them, so identity is never guessed
@@ -848,8 +892,12 @@ async function scenarioMaximize() {
       return p && p.api.group && p.api.group.element ? p.api.group.element.querySelector('.term-pane') : null;
     };`;
 
-  const before = await run(win, `(() => {${PANE_PROBE}
+  const before = await run(win, `(async () => {${PANE_PROBE}
+    const settle = await window.__cc.stableGeometry(() => api.groups.length === 2 && !api.hasMaximizedGroup());
     return {
+      geometrySettled: settle.ok,
+      settleReads: settle.reads,
+      surface: window.__cc.dockSurface(),
       boxes: { pty1: window.__cc.box(paneOf('pty1')), pty2: window.__cc.box(paneOf('pty2')) },
       hasMaximizedGroup: api.hasMaximizedGroup(),
       owned: window.ccDockviewDiagnostics.snapshot().ownedPaneIds,
@@ -859,11 +907,15 @@ async function scenarioMaximize() {
 
   const maximized = await run(win, `(async () => {${PANE_PROBE}
     paneOf('pty1').querySelector('.max').click();
-    await window.__cc.sleep(350);
+    // Wait on the Dockview state the click is supposed to produce, plus settled geometry.
+    const settle = await window.__cc.stableGeometry(() => api.hasMaximizedGroup() === true);
     const grid = document.getElementById('terminalGrid');
     const p1 = paneOf('pty1');
     const p2 = paneOf('pty2');
     return {
+      geometrySettled: settle.ok,
+      settleReads: settle.reads,
+      surface: window.__cc.dockSurface(),
       boxes: { pty1: window.__cc.box(p1), pty2: window.__cc.box(p2) },
       hasMaximizedGroup: api.hasMaximizedGroup(),
       // The CLASSIC maximizer's markers must be absent: it must not have run at all.
@@ -876,8 +928,11 @@ async function scenarioMaximize() {
 
   const restored = await run(win, `(async () => {${PANE_PROBE}
     paneOf('pty1').querySelector('.max').click();
-    await window.__cc.sleep(350);
+    const settle = await window.__cc.stableGeometry(() => api.hasMaximizedGroup() === false);
     return {
+      geometrySettled: settle.ok,
+      settleReads: settle.reads,
+      surface: window.__cc.dockSurface(),
       boxes: { pty1: window.__cc.box(paneOf('pty1')), pty2: window.__cc.box(paneOf('pty2')) },
       hasMaximizedGroup: api.hasMaximizedGroup(),
       glyphs: { pty1: paneOf('pty1').querySelector('.max').textContent, pty2: paneOf('pty2').querySelector('.max').textContent },
