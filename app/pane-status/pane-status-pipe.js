@@ -1,73 +1,69 @@
 'use strict';
-// EXPERIMENT A — PROTOTYPE ONLY. Claude Code only, one pane only.
+// Blue Helm production pane status — the out-of-band transport.
 //
 // Procurement record: docs/OSS-PROCUREMENT-pane-status.md
-// Blue's verdict, verbatim: BLUE SUBSYSTEM VERDICT: PROTOTYPE
+// Blue's verdict, verbatim: BLUE SUBSYSTEM VERDICT: BUILD FRESH
 //
-// The out-of-band transport: a MAIN-PROCESS-OWNED WINDOWS NAMED PIPE.
+// A MAIN-PROCESS-OWNED WINDOWS NAMED PIPE, and deliberately not either of the two obvious alternatives:
 //
-// WHY A NAMED PIPE AND NOT THE OTHER TWO OBVIOUS OPTIONS:
 //   * Not terminal output. § 8 threat 1 of the procurement record: anything a pane can print, pane
-//     CONTENT can forge. A status channel that shares a byte stream with model output is forgeable by
-//     the model, by a file the model cats, and by a dependency's build log. Out-of-band is the whole
-//     point.
+//     CONTENT can forge. A status channel sharing a byte stream with model output is forgeable by the
+//     model, by a file the model cats, and by a dependency's build log. Out-of-band is the point.
 //   * Not a TCP listener, not even on loopback. A loopback socket is reachable by every process and
-//     every user session on the machine, and creating one is an explicit kill criterion for this
-//     experiment. A named pipe is addressed by name, not by port, and never appears on the network.
+//     every user session on the machine. A named pipe is addressed by name, never by port, and never
+//     appears on the network.
 //
-// `net` is injected so the transport is testable in plain node against a stub, and so the real module
-// is the only thing that ever binds a pipe.
+// `net` is injected, so the transport is testable against a stub and the real module is the only
+// thing that ever binds a pipe.
+//
+// THE PIPE NAME IS NOT A SECRET and is not treated as one. The TOKEN is the authority. The name is
+// unique per app run only so a stale pipe from a crashed run can never be mistaken for the live one.
 
 const protocol = require('./pane-status-protocol');
 
-// A connection may not sit open forever, may not send unbounded bytes, and may not fan out. These are
-// all deliberately small: the only legitimate client writes ~110 bytes once and disconnects.
+// A connection may not sit open forever, may not send unbounded bytes, and may not fan out. All
+// deliberately small: the only legitimate client writes ~110 bytes once and disconnects.
 const CONNECTION_IDLE_MS = 5000;
 const MAX_CONNECTION_BYTES = 4096;      // several max-size messages' worth, then the peer is dropped
-const MAX_CONCURRENT_CONNECTIONS = 8;   // hooks run in parallel; 8 is far above any real burst
+const MAX_CONCURRENT_CONNECTIONS = 16;  // PreToolUse/PostToolUse fire per tool call across panes
 const MAX_MESSAGES_PER_CONNECTION = 4;
 
-/**
- * Build the per-run pipe name. Unique per app run so a stale pipe from a crashed run can never be
- * mistaken for the live one, and so two runs cannot collide.
- *
- * NOTE the name itself is not a secret and is not treated as one — the token is the authority. The
- * uniqueness is about correctness (no cross-run confusion), not about hiding the endpoint.
- */
 function buildPipeName(uniqueSuffix) {
   if (typeof uniqueSuffix !== 'string' || !/^[0-9a-f]{8,64}$/.test(uniqueSuffix)) {
-    throw new Error('pane-status-server: pipe suffix must be 8-64 lowercase hex chars');
+    throw new Error('pane-status-pipe: pipe suffix must be 8-64 lowercase hex chars');
   }
   return `\\\\.\\pipe\\blue-helm-pane-status-${uniqueSuffix}`;
 }
 
 /**
  * deps:
- *   net           -> node net module (injected)
- *   store         -> pane-status-store instance
- *   pipeName      -> full pipe path from buildPipeName()
- *   onStateChange({paneId,state,reason}) -> called ONLY after a message is accepted
- *   log(line)     -> bounded logger. Never receives a token or a message body.
- *   now()         -> injected clock, for latency accounting
+ *   net          -> node net module (injected)
+ *   registry     -> pane-status-registry instance
+ *   pipeName     -> full pipe path from buildPipeName()
+ *   onStateChange(view) -> called ONLY after a message is accepted AND changed something
+ *   log(line)    -> bounded logger. Never receives a token or a message body.
+ *   now()        -> injected clock, for latency accounting
+ *
+ * THIS MODULE PERFORMS NO PROCESS CREATION AND NO PROCESS CONTROL. It has no child_process import and
+ * no path to one; that is asserted by the negative-control suite, not merely intended.
  */
-function createPaneStatusServer(deps) {
+function createPaneStatusPipe(deps) {
   const d = deps || {};
   const net = d.net;
-  const store = d.store;
+  const registry = d.registry;
   const pipeName = d.pipeName;
   const onStateChange = typeof d.onStateChange === 'function' ? d.onStateChange : () => {};
   const log = typeof d.log === 'function' ? d.log : () => {};
   const now = typeof d.now === 'function' ? d.now : () => Date.now();
-  if (!net || typeof net.createServer !== 'function') throw new Error('pane-status-server: net is required');
-  if (!store) throw new Error('pane-status-server: store is required');
+  if (!net || typeof net.createServer !== 'function') throw new Error('pane-status-pipe: net is required');
+  if (!registry) throw new Error('pane-status-pipe: registry is required');
   if (typeof pipeName !== 'string' || pipeName.indexOf('\\\\.\\pipe\\') !== 0) {
-    throw new Error('pane-status-server: pipeName must be a \\\\.\\pipe\\ path');
+    throw new Error('pane-status-pipe: pipeName must be a \\\\.\\pipe\\ path');
   }
 
   let server = null;
   let live = 0;
-  const counters = { accepted: 0, refused: 0, connections: 0, dropped: 0 };
-  const deliveries = []; // bounded latency samples for the evidence document
+  const counters = { accepted: 0, refused: 0, connections: 0, dropped: 0, noop: 0 };
 
   function handleConnection(socket) {
     counters.connections += 1;
@@ -83,7 +79,6 @@ function createPaneStatusServer(deps) {
     let bytes = 0;
     let messages = 0;
     let closed = false;
-    const arrivedAt = now();
 
     const done = () => {
       if (closed) return;
@@ -94,8 +89,7 @@ function createPaneStatusServer(deps) {
 
     try { socket.setTimeout(CONNECTION_IDLE_MS); } catch { /* stub sockets may not implement it */ }
     socket.on('timeout', () => { counters.dropped += 1; log('[pane-status] connection closed: idle timeout'); done(); });
-    // A transport error is never fatal to the app and never prints the peer's bytes.
-    socket.on('error', () => { counters.dropped += 1; done(); });
+    socket.on('error', () => { counters.dropped += 1; done(); });   // never prints the peer's bytes
     socket.on('close', done);
     socket.on('end', done);
 
@@ -107,7 +101,7 @@ function createPaneStatusServer(deps) {
       // unbounded blob one byte under the per-message limit at a time.
       if (bytes > MAX_CONNECTION_BYTES) {
         counters.refused += 1;
-        store.countRefusal();
+        registry.countRefusal();
         log(`[pane-status] REFUSED: ${protocol.REFUSE.OVERSIZE} (connection byte bound exceeded)`);
         done();
         return;
@@ -119,45 +113,43 @@ function createPaneStatusServer(deps) {
         buffer = buffer.slice(nl + 1);
         if (++messages > MAX_MESSAGES_PER_CONNECTION) {
           counters.refused += 1;
-          store.countRefusal();
+          registry.countRefusal();
           log('[pane-status] REFUSED: message-count bound exceeded on one connection');
           done();
           return;
         }
-        deliverLine(line, arrivedAt);
+        deliverLine(line);
       }
       // A partial line larger than one legal message can never complete into a legal one.
       if (Buffer.byteLength(buffer, 'utf8') > protocol.MAX_MESSAGE_BYTES) {
         counters.refused += 1;
-        store.countRefusal();
+        registry.countRefusal();
         log(`[pane-status] REFUSED: ${protocol.REFUSE.OVERSIZE} (unterminated line exceeds message bound)`);
         done();
       }
     });
   }
 
-  function deliverLine(line, arrivedAt) {
-    const parsed = protocol.parseMessage(line);
+  function deliverLine(line) {
+    const parsed = protocol.decodeMessage(String(line).trim());
     if (!parsed.ok) {
       counters.refused += 1;
-      store.countRefusal();
-      // `parsed.reason` is a bounded constant from the protocol module. The line itself is never
-      // logged — that is the difference between a useful log and a transcript leak.
+      registry.countRefusal();
+      // `parsed.reason` is a bounded constant. The line itself is NEVER logged — that is the
+      // difference between a useful log and a transcript leak.
       log(`[pane-status] REFUSED: ${parsed.reason}`);
       return;
     }
-    const applied = store.applyMessage({ event: parsed.event, token: parsed.token });
+    const applied = registry.applyMessage({ e: parsed.e, t: parsed.t });
     if (!applied.ok) {
       counters.refused += 1;
       log(`[pane-status] REFUSED: ${applied.reason}`);
       return;
     }
+    if (applied.applied === 'none') { counters.noop += 1; return; }
     counters.accepted += 1;
-    const view = store.viewFor(applied.paneId);
-    if (deliveries.length < 200) deliveries.push({ event: parsed.event, deliveredMs: now() - arrivedAt });
-    // Event name is safe to log: it is one of six allowlisted constants, never free text.
-    log(`[pane-status] accepted ${parsed.event} -> ${view ? view.state : 'unknown'}`);
-    onStateChange(view);
+    const view = registry.viewFor(applied.paneId);
+    if (view) onStateChange(view);
   }
 
   function start() {
@@ -165,7 +157,8 @@ function createPaneStatusServer(deps) {
     try {
       server = net.createServer(handleConnection);
       server.on('error', (err) => {
-        // Bounded, sentinel-free. A pipe that cannot bind is a visible failure, not a silent one.
+        // Bounded and sentinel-free. A pipe that cannot bind is a VISIBLE failure: the controller
+        // turns this into an `unknown` badge rather than pretending the transport is up.
         log(`[pane-status] transport error: ${err && err.code ? err.code : 'unknown'}`);
       });
       server.listen(pipeName);
@@ -173,7 +166,7 @@ function createPaneStatusServer(deps) {
       server = null;
       return { ok: false, error: (err && err.code) || 'listen-failed' };
     }
-    log('[pane-status] PROTOTYPE named-pipe listener started (per-run unique name, no network socket)');
+    log('[pane-status] named-pipe listener started (per-run unique name, no network socket)');
     return { ok: true, pipeName };
   }
 
@@ -181,30 +174,21 @@ function createPaneStatusServer(deps) {
     if (!server) return false;
     try { server.close(); } catch { /* already closing */ }
     server = null;
-    log('[pane-status] PROTOTYPE named-pipe listener stopped');
+    log('[pane-status] named-pipe listener stopped');
     return true;
   }
 
-  function metrics() {
-    const samples = deliveries.map((x) => x.deliveredMs).sort((a, b) => a - b);
-    return {
-      ...counters,
-      samples: samples.length,
-      minMs: samples.length ? samples[0] : null,
-      medianMs: samples.length ? samples[Math.floor(samples.length / 2)] : null,
-      maxMs: samples.length ? samples[samples.length - 1] : null,
-    };
-  }
+  function metrics() { return Object.assign({}, counters, { live }); }
 
   return { start, stop, metrics, deliverLine, isListening: () => !!server };
 }
 
 const api = {
-  createPaneStatusServer,
-  buildPipeName,
   CONNECTION_IDLE_MS,
   MAX_CONNECTION_BYTES,
   MAX_CONCURRENT_CONNECTIONS,
   MAX_MESSAGES_PER_CONNECTION,
+  buildPipeName,
+  createPaneStatusPipe,
 };
 if (typeof module === 'object' && module.exports) module.exports = api;

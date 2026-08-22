@@ -159,21 +159,28 @@ process.stdout.write('\nthe layout decision is MAIN\'s, and the DEFAULT is Dockv
   assert(/const CLASSIC_LAYOUT_RENDERER_ARG = '--cc-classic-layout';/.test(mainSrc),
     'the renderer-side token is a distinct string from the launch flag');
   // RE-PINNED (Experiment A revision 2), and not silently. `additionalArguments` was a single
-  // ternary; it is now a spread list because the pane-status PROTOTYPE forwards its OWN gate token
-  // the same way, so the preload can make its bridge ABSENT rather than inert when the gate is off.
+  // ternary; it became a spread list because the pane-status PROTOTYPE forwarded its OWN gate token
+  // the same way, so the preload could make its bridge ABSENT rather than inert when the gate was off.
   //
-  // Old pin, retained so the reviewed base stays reproducible:
+  // RE-PINNED AGAIN when the prototype was retired. Production pane status forwards NO token at all:
+  // its bridge is exposed unconditionally in the trusted window, and "is it set up?" is a runtime
+  // question its four zero-argument invokes answer, not a question about whether an object exists.
+  // The assertion below is therefore the STRONGER one — no pane-status token may appear here again
+  // without this pin being re-argued.
+  //
+  // Old pins, retained so each reviewed base stays reproducible:
   //   additionalArguments: classicLayoutEnabled ? [CLASSIC_LAYOUT_RENDERER_ARG] : []
+  //   ...(paneStatusPrototypeEnabled ? [PANE_STATUS_RENDERER_ARG] : [])
   //
-  // The replacement is stronger than a shape match: it asserts that EVERY entry is conditional, so
-  // "the production path forwards an empty list" survives any future addition instead of having to
-  // be re-argued each time.
+  // The generic check below is stronger than a shape match: it asserts that EVERY entry is
+  // conditional, so "the production path forwards an empty list" survives any future addition
+  // instead of having to be re-argued each time.
   assert(/additionalArguments:\s*\[/.test(mainSrc),
     'main still forwards renderer-side decisions via additionalArguments');
   assert(/\.\.\.\(classicLayoutEnabled \? \[CLASSIC_LAYOUT_RENDERER_ARG\] : \[\]\)/.test(mainSrc),
     'the classic-layout token is present ONLY in recovery mode');
-  assert(/\.\.\.\(paneStatusPrototypeEnabled \? \[PANE_STATUS_RENDERER_ARG\] : \[\]\)/.test(mainSrc),
-    'the pane-status prototype token is present ONLY when its gate is on');
+  assert(!/PANE_STATUS_RENDERER_ARG/.test(mainSrc),
+    'production pane status forwards NO renderer token — its bridge is unconditional, so there is no gate to forward');
   // CORRECTED (revision 3, Low finding 2). The previous version FILTERED to lines beginning with
   // `...` before checking them, so an unconditional NON-spread entry (`SOME_ARG,`) was discarded
   // rather than caught, and the tripwire passed while the production path forwarded a non-empty

@@ -1203,6 +1203,12 @@ async function startLayoutEngine() {
   } catch { /* a diagnostic surface must never be able to break startup */ }
 }
 
+// PANE STATUS badge instance, held at module scope because two different scopes need it: `boot()`
+// constructs it and subscribes it to main's view pushes, while `buildDockviewHost()` — which runs in
+// its own scope — has to reach it to re-attach badges after a Dockview layout change. It stays `null`
+// until boot() runs, and every call site tolerates null rather than assuming construction succeeded.
+let paneStatusBadge = null;
+
 // The controlled surface the adapter is allowed to use. Everything privileged stays on this side:
 // the adapter never sees cc.*, a path, a role, a prompt, or report content.
 function buildDockviewHost(container) {
@@ -1245,6 +1251,11 @@ function buildDockviewHost(container) {
       const t = terms.get(paneId);
       if (t) { activeTermId = paneId; try { t.term.focus(); } catch {} }
     },
+    // PANE STATUS re-attachment after a Dockview layout change. Dockview reparents pane elements,
+    // which can drop the badge NODE; the STATE lives in the badge module keyed by pane id and is
+    // unaffected, so this restores the visual without inventing or resetting a status. Returns the
+    // number of badges re-attached so the adapter's own tests can assert it actually ran.
+    reattachPaneStatus: () => (paneStatusBadge ? paneStatusBadge.reattachAll() : 0),
     // Pane creation goes through the EXISTING code path, so the prototype's terminals are real
     // PTYs carrying the app's own clipboard, OSC 52, TTS, Dictate, and close wiring — not stand-ins.
     createTerminalPane: async () => {
@@ -1305,34 +1316,49 @@ async function boot() {
 // Receive-only. Main pushes a token-free { paneId, state, reason, prototype } view; the renderer has
 // no way to request status, enroll a pane, or reach the transport.
 //
-// REVISION 2 — gate off means ABSENT. `window.ccPaneStatus` exists only when main forwarded the gate
-// token into the preload's argv, and `window.ccPaneStatusBadge` exists only when that bridge does.
-// With the gate off, both are undefined, no badge instance is constructed, and nothing subscribes —
-// rather than an inert subscription waiting on a channel main never uses.
+// PRODUCTION. The bridge is exposed unconditionally in the trusted window, so the badge and the
+// toolbar control are always constructed. Whether pane status is SET UP is a runtime question the
+// toolbar control asks and answers honestly — it is not a question about whether an object exists.
 //
 // State is keyed by the app's pane id — the same key `terms`, main's PTY map, and Dockview's registry
 // use — so a badge follows its PROCESS, not its position. That is what makes a Dockview drag unable
 // to hand one pane's status to another.
-const paneStatusBadge = (window.ccPaneStatus && window.ccPaneStatus.enabled && window.ccPaneStatusBadge)
+paneStatusBadge = (window.ccPaneStatus && window.ccPaneStatusBadge)
   ? window.ccPaneStatusBadge.createPaneStatusBadge({
       document,
       log: appendLog,
       getPaneElement: (paneId) => { const t = terms.get(paneId); return t ? t.pane : null; },
     })
   : null;
+// The compact Claude status control in the existing Terminals toolbar. Its three possible actions map
+// one-to-one onto three of the four zero-argument invokes; there is no control here that sets a pane's
+// status, reaches a token, or names a path.
+const paneStatusSetup = (window.ccPaneStatus && window.ccPaneStatusBadge)
+  ? window.ccPaneStatusBadge.createSetupControl({
+      document,
+      log: appendLog,
+      bridge: window.ccPaneStatus,
+      getToolbarElement: () => document.querySelector('#terminals-toolbar')
+        || document.querySelector('.term-toolbar')
+        || document.querySelector('#term-toolbar'),
+    })
+  : null;
 if (paneStatusBadge) {
-  window.ccPaneStatus.onPaneStatusPrototype((view) => {
+  window.ccPaneStatus.onView((view) => {
     const shown = paneStatusBadge.update(view);
     if (shown && view && view.paneId) {
-      appendLog(`[pane-status PROTOTYPE] ${view.paneId} -> ${shown.label}${view.reason ? ` (${view.reason})` : ''}\n`);
+      appendLog(`[pane-status] ${view.paneId} -> ${shown.label}${view.reason ? ` (${view.reason})` : ''}\n`);
     }
   });
-  // NOTE (revision 2): no `window.ccPaneStatusReattach` global. Revision 1 defined one and NOTHING
-  // in the application ever called it, while the evidence claimed live re-attachment was proven. The
-  // unreachable global is removed rather than left as a false affordance. Dockview reparenting can
-  // still drop the badge NODE; the STATE is unaffected (it lives in the badge module keyed by pane
-  // id) and `update()` re-creates the node via ensureBadge on the very next event. That is
-  // self-healing on the next update — not live re-attachment, and the evidence now says so.
+}
+if (paneStatusSetup) {
+  window.ccPaneStatus.onSetupState((setup) => { paneStatusSetup.render(setup); });
+  // Ask once at startup so the control is honest before main pushes anything.
+  Promise.resolve(paneStatusSetup.refresh()).catch(() => {
+    // A failed first read must be VISIBLE, not silent: the control stays at its "off" default and the
+    // Logs tab says why. Fixed constant — no path, no settings content, no token.
+    appendLog('[pane-status] could not read setup state at startup; the control shows "off" until it can.\n');
+  });
 }
   window.addEventListener('resize', fitAllTerms);
   // PRODUCTION layout engine. On a normal launch this loads Dockview and, only after activation and

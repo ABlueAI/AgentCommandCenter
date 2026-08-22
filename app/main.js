@@ -8,6 +8,7 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 const fs = require('fs');
 const { spawn, execFile, execFileSync } = require('child_process');
+const crypto = require('crypto');
 const pty = require('@lydell/node-pty'); // prebuilt ConPTY — powers in-app terminals
 // Video-scout's Gemini model/media-resolution options are untrusted IPC input, same posture as
 // every other renderer-supplied field. The allowlists + arg-building logic live in this small,
@@ -37,18 +38,19 @@ const { createLauncherIpc } = require('./launcher-ipc');
 // The one canonical fail-closed sender/frame/URL trust gate (shared with clipboard/library/followup).
 // P12 adds the two launcher handlers as callers so they, too, refuse any non-trusted-window sender.
 const { createTrustedSenderGate } = require('./trusted-ipc-sender');
-// EXPERIMENT A (PROTOTYPE, Claude only) — docs/OSS-PROCUREMENT-pane-status.md,
-// "BLUE SUBSYSTEM VERDICT: PROTOTYPE". Requiring this module is inert: with the gate env var unset,
-// createPaneStatusPrototype() returns an object whose every method is a no-op, so no pipe, token, IPC
-// channel, badge, or PTY environment change exists. See prototype-pane-status/pane-status-prototype.js.
-const {
-  createPaneStatusPrototype,
-  isPrototypeEnabled: paneStatusPrototypeGateOn,
-  RENDERER_ARG: PANE_STATUS_RENDERER_ARG,
-} = require('./prototype-pane-status/pane-status-prototype');
-// Revision 2: discovers the Claude version FROM THE EXECUTABLE THIS FILE LAUNCHES. Revision 1 shipped
-// no discovery at all, so every badge resolved to `unknown/version-mismatch` in the real application.
-const { createClaudeVersionResolver } = require('./prototype-pane-status/pane-status-version');
+// PRODUCTION PANE STATUS — docs/OSS-PROCUREMENT-pane-status.md,
+// "BLUE SUBSYSTEM VERDICT: BUILD FRESH". Advisory, pane-ID-bound Claude Code lifecycle status with
+// reversible setup and removal. Requiring these modules is inert: the controller listens on nothing,
+// mints nothing, and changes no PTY environment until startup reconciliation finds a VERIFIED
+// installation, which only exists after a human explicitly ran setup from the Terminals toolbar.
+//
+// PANE STATUS CANNOT AUTHORIZE OR INITIATE A CONSEQUENTIAL ACTION. Nothing under app/pane-status/
+// imports an admission module, spawns or controls a process on any provider-event path, or reaches
+// approval, merge, push, pane closure, or credentials. See pane-status-isolation.test.js.
+const { createPaneStatusController } = require('./pane-status/pane-status-controller');
+const { registerPaneStatusIpc, createPublishers } = require('./pane-status/pane-status-ipc');
+const paneStatusDoc = require('./pane-status/pane-status-settings-doc');
+const paneStatusShim = require('./pane-status/pane-status-runtime-shim');
 // MAIN-OWNED TURN ADMISSION BUDGET — Blue's turn-accounting OUTCOME B. For a controlled live evidence
 // run, main owns a durable per-pane allowance: direct terminal input to the controlled pane is blocked
 // here, and a paid prompt reaches the PTY only through the narrow controlled-submission handler, which
@@ -56,7 +58,7 @@ const { createClaudeVersionResolver } = require('./prototype-pane-status/pane-st
 // parseAdmissionConfig returns the disabled plan and createAdmissionBudget returns an object whose
 // every method refuses, so no pane is controlled and `pty-write` behaves exactly as it did before.
 // The budget is deliberately independent of the pane-status hook it exists to bound: NO SUPPORTED
-// PANE-STATUS MODULE API MUTATES ADMISSION STATE — nothing under prototype-pane-status/ imports an
+// PANE-STATUS MODULE API MUTATES ADMISSION STATE — nothing under app/pane-status/ imports an
 // admission module, and no admission method increments, refunds, resets or extends an allowance.
 //
 // That is a CODE-LEVEL property, not a claim of OS-level inaccessibility. This is an ACCIDENTAL-SPEND
@@ -135,11 +137,9 @@ const classicLayoutEnabled = process.argv.includes(CLASSIC_LAYOUT_FLAG);
 // Dockview is the production engine: everything Dockview-related is gated on this, and it is true
 // unless the operator explicitly asked for recovery mode.
 const dockviewLayoutEnabled = !classicLayoutEnabled;
-// EXPERIMENT A (PROTOTYPE) gate, read ONCE here because the window is constructed before the
-// prototype object is, and the preload's shape has to be decided at construction time. Same posture
-// as `classicLayoutEnabled`: main decides, the renderer is told, and renderer script cannot forge a
-// process argument to flip it.
-const paneStatusPrototypeEnabled = paneStatusPrototypeGateOn(process.env);
+// PRODUCTION PANE STATUS needs no launch-time gate. The prototype had one because its renderer
+// surface had to be ABSENT when disabled; the production bridge is exposed unconditionally in the
+// trusted window, and "is it set up?" is answered at runtime by the four IPC invokes.
 // TURN ADMISSION BUDGET: parsed ONCE, here, from this process's own startup environment — before the
 // window exists and before any PTY is spawned. The renderer and the provider process are downstream of
 // this line and cannot reach it: renderer script cannot alter this process's environment, and every
@@ -316,10 +316,44 @@ const admissionPtyBoundary = createAdmissionPtyBoundary({
     if (admissionIpc) admissionIpc.refuseDirectWrite(paneId);
   },
 });
-// EXPERIMENT A prototype handle. Assigned once the window exists; until then, and whenever the gate
-// env var is unset, it is the inert object (see createInertPrototype) so every call site below is
-// safe without a null check or a flag test.
-let paneStatus = { enabled: false, envForPane: () => ({}), releasePane: () => false, stop: () => false };
+// PRODUCTION pane-status controller handle. Assigned once the window exists; until then it is this
+// inert stand-in, so every call site below is safe without a null check or a flag test. `enrollPane`
+// returning { ok:false } simply means a pane carries no status environment — never an error, and
+// never a reason not to spawn the pane.
+let paneStatus = {
+  enrollPane: () => ({ ok: false, reason: 'not-ready' }),
+  releasePane: () => false,
+  shutdown: () => false,
+};
+
+/**
+ * The installation's NONSECRET id, generated once and then stable forever.
+ *
+ * It identifies WHICH Blue Helm installation owns a hook group — it authenticates nothing and never
+ * appears on the wire. It is stable because it is baked into the shim PATH that Claude settings point
+ * at, so regenerating it would orphan the groups already installed and make this installation look
+ * like a different one to its own removal logic.
+ *
+ * Stored beside the descriptor rather than inside it: the descriptor is deleted on removal, and the
+ * identity of this installation must survive an install/remove cycle.
+ */
+function resolvePaneStatusInstallId(userDataPath) {
+  const idPath = path.join(userDataPath, 'pane-status-install-id');
+  try {
+    const existing = fs.readFileSync(idPath, 'utf8').trim();
+    if (paneStatusDoc.INSTALL_ID_PATTERN.test(existing)) return existing;
+  } catch { /* first run, or unreadable — fall through and mint one */ }
+  const minted = crypto.randomBytes(16).toString('hex');
+  try {
+    fs.mkdirSync(userDataPath, { recursive: true });
+    fs.writeFileSync(idPath, minted + '\n', 'utf8');
+  } catch {
+    // A machine we cannot write an id to cannot durably own hooks either. Returning the minted value
+    // still lets startup reconciliation run and report honestly; setup will fail visibly at the
+    // descriptor write rather than silently installing something it can never identify again.
+  }
+  return minted;
+}
 // V5b1: pane id -> main-issued video-scout run ID. Deliberately SEPARATE from `ptys`: it must
 // SURVIVE the PTY's exit (so the finished pane can still open its report in V5b2) and is removed only
 // when the pane is explicitly closed (pty-kill) or the window shuts down (window-all-closed).
@@ -352,11 +386,9 @@ function createWindow() {
       // cannot add, remove, or forge it. Empty array = production Dockview; the token is present
       // ONLY when the operator launched recovery mode.
       //
-      // EXPERIMENT A (PROTOTYPE) adds a SECOND independent token, present only when the prototype
-      // gate is on. The preload uses it to decide whether the pane-status bridge exists at all —
-      // with the gate off there is no preload method, no renderer subscription and no badge global,
-      // rather than an inert one. The two tokens are separate strings and neither can be derived
-      // from the other.
+      // PRODUCTION PANE STATUS adds NO token here. Its bridge is exposed unconditionally in the
+      // trusted window, because whether pane status is SET UP is a runtime question its four invokes
+      // answer honestly, rather than a question about whether an object exists.
       //
       // The TURN ADMISSION BUDGET adds a THIRD independent token, present only when a controlled run
       // is configured. It carries no run id, no allowance and no pane id — only the fact that a
@@ -364,7 +396,6 @@ function createWindow() {
       // number still comes from main, over IPC, at read time.
       additionalArguments: [
         ...(classicLayoutEnabled ? [CLASSIC_LAYOUT_RENDERER_ARG] : []),
-        ...(paneStatusPrototypeEnabled ? [PANE_STATUS_RENDERER_ARG] : []),
         ...(admissionEnabled ? [ADMISSION_RENDERER_ARG] : []),
       ],
     },
@@ -465,68 +496,118 @@ app.whenReady().then(() => {
   ipcMain.handle('quick-links-save', (e, text) => quickLinksIpc.handleSave(e, text));
   ipcMain.handle('quick-links-open', (e, id) => quickLinksIpc.handleOpen(e, id));
 
-  // EXPERIMENT A — PROTOTYPE, Claude only, one pane. docs/OSS-PROCUREMENT-pane-status.md,
-  // "BLUE SUBSYSTEM VERDICT: PROTOTYPE". Bounded prototype work only; production implementation,
-  // Experiment B, and app-server runtime testing remain unauthorized.
+  // PRODUCTION PANE STATUS — docs/OSS-PROCUREMENT-pane-status.md,
+  // "BLUE SUBSYSTEM VERDICT: BUILD FRESH". Advisory, pane-ID-bound Claude Code lifecycle status.
   //
-  // With BLUE_HELM_PANE_STATUS_PROTOTYPE unset this is the INERT object: nothing is listened on,
-  // nothing is minted, and `envForPane()` returns {} for every pane forever. The send() below is
-  // one-way main -> renderer and carries only { paneId, state, reason, prototype } — there is no
-  // renderer-callable handler here at all, so this adds no new attack surface to the IPC boundary.
-  paneStatus = createPaneStatusPrototype({
-    env: process.env,
-    path,
-    appDir: __dirname,
+  // NOTHING HAPPENS HERE WITHOUT A PRIOR EXPLICIT SETUP. `start()` reconciles the APP-OWNED
+  // descriptor — it never writes Claude settings — and only opens the transport when it finds a
+  // verified installation that a human installed from the Terminals toolbar. On a machine that never
+  // ran setup this listens on nothing, mints nothing, and leaves every PTY environment untouched.
+  //
+  // TWO CHILD-PROCESS DEPENDENCIES, BOTH INJECTED HERE AND NOWHERE ELSE (§ 15):
+  //   A. resolveVersion            — explicit setup, installed-startup discovery, ordered re-probe.
+  //   B. resolveProcessStartTime   — natively-confirmed clearStaleLock only.
+  // Neither is reachable from a provider event, the heartbeat, freshness, rendering, enrollment, or
+  // revocation. That is asserted by pane-status-isolation.test.js, not merely intended here.
+  const paneStatusPublishers = createPublishers(() => win);
+  const paneStatusUserData = app.getPath('userData');
+  // The REAL Claude settings location. Tests never reach this line: every suite injects a temp path.
+  const paneStatusSettingsDir = path.join(app.getPath('home'), '.claude');
+  const paneStatusSettingsPath = path.join(paneStatusSettingsDir, 'settings.json');
+
+  paneStatus = createPaneStatusController({
+    userDataPath: paneStatusUserData,
+    settingsDir: paneStatusSettingsDir,
+    settingsPath: paneStatusSettingsPath,
+    installId: resolvePaneStatusInstallId(paneStatusUserData),
+    cmdExe: paneStatusShim.resolveCmdExe(process.env),
+    reporterPath: path.join(__dirname, 'pane-status', 'pane-status-reporter.js'),
+    currentRuntimePath: process.execPath,
+    net: require('net'),
+    crypto,
+    randomToken: () => crypto.randomBytes(32).toString('hex'),
+    // Dependency A. Resolves the version FROM THE EXECUTABLE A PANE ACTUALLY LAUNCHES — `AGENT_CMD.claude`
+    // with this process's own environment, never a guessed path and never another installation's
+    // package metadata. Fail-closed: any failure leaves the version null and every badge `unknown`.
+    resolveVersion: () => new Promise((resolve) => {
+      try {
+        require('child_process').execFile(
+          AGENT_CMD.claude, ['--version'],
+          { windowsHide: true, timeout: 15000, shell: false },
+          (err, stdout) => resolve(err
+            ? { ok: false }
+            : { ok: true, raw: String(stdout || ''), executable: AGENT_CMD.claude }),
+        );
+      } catch { resolve({ ok: false }); }
+    }),
+    // Dependency B. PID plus PROCESS START TIME, because a recycled PID is otherwise indistinguishable
+    // from the original lock owner. Anything it cannot determine becomes a conservative refusal.
+    resolveProcessStartTime: (pid) => new Promise((resolve) => {
+      try {
+        require('child_process').execFile(
+          process.env.ComSpec ? 'powershell.exe' : 'powershell.exe',
+          ['-NoProfile', '-NonInteractive', '-Command',
+            `$p = Get-Process -Id ${Number(pid)} -ErrorAction SilentlyContinue; ` +
+            'if ($p) { "RUNNING " + [int64]($p.StartTime.ToUniversalTime() - [datetime]"1970-01-01").TotalMilliseconds } else { "GONE" }'],
+          { windowsHide: true, timeout: 15000, shell: false },
+          (err, stdout) => {
+            if (err) return resolve({ ok: false });
+            const out = String(stdout || '').trim();
+            if (out === 'GONE') return resolve({ ok: true, running: false });
+            const m = /^RUNNING\s+(\d+)$/.exec(out);
+            if (!m) return resolve({ ok: false });
+            resolve({ ok: true, running: true, startTimeMs: Number(m[1]) });
+          },
+        );
+      } catch { resolve({ ok: false }); }
+    }),
+    publishView: paneStatusPublishers.publishView,
+    publishSetupState: paneStatusPublishers.publishSetupState,
     log: (line) => tlog(line),
-    send: (channel, payload) => { if (win && !win.isDestroyed()) win.webContents.send(channel, payload); },
   });
-  if (paneStatus.enabled) {
-    const started = paneStatus.start();
-    if (!started.ok) {
-      const msg = `[pane-status] PROTOTYPE listener failed to start (${started.error || started.reason}) — panes will show "unknown".`;
+
+  // The four zero-argument invokes. Each runs the canonical trusted-sender gate BEFORE any filesystem
+  // access, lock inspection, or child process — the same gate clipboard, library and the launchers use.
+  registerPaneStatusIpc({
+    ipcMain,
+    trustedSenderGate: createTrustedSenderGate({ entryUrl: ENTRY_URL, getTrustedWindow: () => win }),
+    controller: paneStatus,
+    // NATIVE main-process confirmation. A renderer-drawn dialog is content the renderer controls;
+    // deleting another process's lock file is the one action here that reaches outside this app, so it
+    // gets a real human at a real OS dialog.
+    confirmNatively: async () => {
+      const { dialog } = require('electron');
+      const res = await dialog.showMessageBox(win, {
+        type: 'warning',
+        buttons: ['Cancel', 'Clear the lock'],
+        defaultId: 0,
+        cancelId: 0,
+        title: 'Clear stale pane-status lock',
+        message: 'Clear the pane-status settings lock?',
+        detail: 'Only do this if no other Blue Helm window is setting up or removing pane status. '
+          + 'Blue Helm will still refuse unless it can prove the process that created the lock is gone.',
+      });
+      return res.response === 1;
+    },
+    log: (line) => tlog(line),
+  });
+
+  paneStatus.start().then((res) => {
+    if (res && res.setupState && res.setupState !== 'ready' && res.setupState !== 'disabled') {
+      // A non-ready installed state is a VISIBLE outcome, not a silent one. The detail is a bounded
+      // constant: no path, no environment value, no command output, no token.
+      const msg = `[pane-status] setup state: ${res.setupState}${res.detail ? ` (${res.detail})` : ''} — panes show "unknown".`;
       console.error(msg);
       if (win && !win.isDestroyed()) win.webContents.send('main-error', msg);
     }
-    // REVISION 2 — the defect that made revision 1 unreachable in the real app. Discover the Claude
-    // version FROM THE SAME EXECUTABLE a pane launches: `AGENT_CMD.claude` resolved by PowerShell
-    // with the PTY's own environment, never a guessed path and never another installation's package
-    // metadata. Asynchronous, because it costs a PowerShell profile load and must not delay startup;
-    // the store reads the version at view time, so a later answer governs every subsequent event,
-    // heartbeat tick and renderer update, and any pane that already enrolled is refreshed.
-    //
-    // FAIL-CLOSED: a resolution failure, an erroring version command, an unparsable string or a
-    // timeout all leave the version null, which keeps every badge at `unknown` with a visible
-    // reason. It never assumes compatibility.
-    createClaudeVersionResolver({
-      execFile: require('child_process').execFile,
-      env: process.env,
-      commandName: AGENT_CMD.claude,
-      log: (line) => tlog(line),
-    }).discover().then((found) => {
-      const supported = paneStatus.setObservedVersion(found.ok ? found.version : null);
-      if (!found.ok) {
-        const msg = `[pane-status] PROTOTYPE could not establish the Claude version (${found.reason}) — panes stay "unknown".`;
-        console.error(msg);
-        if (win && !win.isDestroyed()) win.webContents.send('main-error', msg);
-        return;
-      }
-      if (!supported) {
-        // Not an error — the honest, designed outcome. The badge says `unknown` and explains why.
-        const msg = `[pane-status] PROTOTYPE: Claude ${found.version} at ${found.source} is not a version this prototype was exercised against — panes stay "unknown" (version-mismatch).`;
-        console.error(msg);
-        if (win && !win.isDestroyed()) win.webContents.send('main-error', msg);
-      }
-    }).catch(() => {
-      // Revision 3, Low finding 4. `discover()` is built never to reject, but the handler ABOVE can
-      // still throw — e.g. `win.webContents.send` racing window teardown between the isDestroyed()
-      // check and the send. Without this, that becomes an unhandled rejection: a silent failure, and
-      // this repo requires the opposite. The message is a fixed constant: no path, no environment
-      // value, no command output, no token, and deliberately not the caught error's own text.
-      const msg = '[pane-status] PROTOTYPE version discovery handler failed — panes stay "unknown".';
-      console.error(msg);
-      if (win && !win.isDestroyed()) win.webContents.send('main-error', msg);
-    });
-  }
+  }).catch(() => {
+    // start() is built never to reject, but the handler above can still throw — e.g. webContents.send
+    // racing window teardown. Without this that becomes an unhandled rejection: a silent failure, and
+    // this repo requires the opposite. Fixed constant, deliberately not the caught error's own text.
+    const msg = '[pane-status] startup reconciliation handler failed — panes stay "unknown".';
+    console.error(msg);
+    if (win && !win.isDestroyed()) win.webContents.send('main-error', msg);
+  });
 
   // V5b2 Library/report read boundary — same trust anchors (canonical ENTRY_URL + the late-bound
   // trusted window). List/Read run the PowerShell library boundary shell-free; Open Report resolves a
@@ -1196,7 +1277,13 @@ ipcMain.handle('pty-start', (_e, opts) => {
   if (!admissionLaunch.ok) return refuseAdmissionStart(admissionLaunch.reason);
   admissionPaneClaimed = admissionLaunch.controlled === true;
 
-  const paneStatusEnv = paneStatus.envForPane(opts);
+  // PRODUCTION PANE STATUS — enroll this pane and carry its per-pane token into the PTY environment.
+  // This is the ONLY place a token leaves main: Claude Code inherits it, and hands it to the reporter,
+  // which is what binds a status message to THIS pane and no other. A refusal (pane status not set up,
+  // version unverified, reconciliation required) returns {} and the pane simply launches without a
+  // status environment — never an error, and never a reason to block the spawn.
+  const paneStatusEnrollment = paneStatus.enrollPane(id);
+  const paneStatusEnv = paneStatusEnrollment.ok ? paneStatusEnrollment.env : {};
   // TURN ADMISSION BUDGET — keep the run's CONFIGURATION out of the pane's environment.
   // `stripAdmissionEnv` returns a COPY of process.env with every key in ADMISSION_ENV_KEYS removed;
   // the spread below starts from that copy rather than from process.env. Its narrow guarantee is that

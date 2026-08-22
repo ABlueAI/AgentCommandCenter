@@ -104,27 +104,33 @@ contextBridge.exposeInMainWorld('ccDockview', Object.freeze(
       }
 ));
 
-// ---- EXPERIMENT A prototype pane-status bridge --------------------------------------------------
-// docs/OSS-PROCUREMENT-pane-status.md — "BLUE SUBSYSTEM VERDICT: PROTOTYPE".
+// ---- PRODUCTION pane-status bridge --------------------------------------------------------------
+// docs/OSS-PROCUREMENT-pane-status.md — "BLUE SUBSYSTEM VERDICT: BUILD FRESH".
 //
-// REVISION 2: ABSENT, NOT INERT. Revision 1 exposed `cc.onPaneStatusPrototype` unconditionally and
-// relied on main never sending — so with the gate off the method, the renderer subscription and the
-// badge global all still existed. The work order required the surface to be ABSENT when disabled, so
-// the whole bridge now hangs off the token main forwards at window construction. Renderer script
-// cannot add a process argument, so it cannot conjure this bridge into existence.
+// UNCONDITIONAL, and that is the deliberate change from Experiment A. The prototype hid behind a gate
+// token so the surface would be ABSENT when disabled. Pane status is now a FEATURE of the app rather
+// than an experiment, so the bridge always exists in the trusted window; whether it is SET UP is a
+// runtime question the four invokes answer honestly, not a question about whether an object exists.
 //
-// GATE OFF -> `window.ccPaneStatus` is undefined. Not `{enabled:false}` — undefined. Nothing to call,
-//             nothing to subscribe to, and `pane-status-badge.js` publishes no global because it
-//             checks for this object before doing so.
-// GATE ON  -> exactly one RECEIVE-ONLY channel. There is no invoke() counterpart anywhere, so the
-//             renderer cannot request status, enroll a pane, or reach the transport: main pushes a
-//             token-free { paneId, state, reason, prototype } view and that is the entire surface.
-if (process.argv.includes('--blue-helm-pane-status-prototype')) {
-  contextBridge.exposeInMainWorld('ccPaneStatus', Object.freeze({
-    enabled: true,
-    onPaneStatusPrototype: (cb) => ipcRenderer.on('pane-status-prototype', (_e, v) => cb(v)),
-  }));
-}
+// THE ENTIRE SURFACE IS FOUR ZERO-ARGUMENT INVOKES AND ONE SUBSCRIPTION.
+//
+// Every invoke takes NO ARGUMENTS. That is the security argument, and it is structural: a handler that
+// accepts no request body cannot be asked for a path, a pane, a token, or a file, because there is no
+// parameter through which to ask. Main validates the sender against the canonical trusted-sender gate
+// before it touches the filesystem, inspects the lock, or runs a child process.
+//
+// WHAT IS DELIBERATELY ABSENT: any status setter, any enrollment or revocation call, any path, any
+// token, any settings content. The renderer may ask what state setup is in, ask to install, ask to
+// remove, ask to clear a stale lock, and receive token-free { paneId, state, reason } views. Nothing
+// here can authorize or initiate a consequential action.
+contextBridge.exposeInMainWorld('ccPaneStatus', Object.freeze({
+  getSetupState: () => ipcRenderer.invoke('pane-status-get-setup-state'),
+  install: () => ipcRenderer.invoke('pane-status-install'),
+  remove: () => ipcRenderer.invoke('pane-status-remove'),
+  clearStaleLock: () => ipcRenderer.invoke('pane-status-clear-stale-lock'),
+  onView: (cb) => ipcRenderer.on('pane-status-view', (_e, v) => cb(v)),
+  onSetupState: (cb) => ipcRenderer.on('pane-status-setup-state', (_e, s) => cb(s)),
+}));
 
 // ---- MAIN-OWNED TURN ADMISSION BUDGET bridge ----------------------------------------------------
 // docs/OSS-PROCUREMENT-pane-status.md — "BLUE SUBSYSTEM VERDICT: BUILD FRESH".

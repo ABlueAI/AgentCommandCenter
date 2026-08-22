@@ -223,8 +223,12 @@ const REGIONS = [
     name: 'pty-start handler',
     start: "ipcMain.handle('pty-start', (_e, opts) => {",
     end: "ipcMain.on('pty-write'",
-    len: 13287,
-    sha: '3ad6db301a3fa0e101195f439012ee42ca25ba6b31040b10d0196d23b7141bb3',
+    // RE-PINNED when Experiment A was retired and production pane status landed. The handler now
+    // enrolls the pane through the production controller instead of the prototype's envForPane().
+    // Previous pin, retained so the earlier reviewed base stays reproducible:
+    //   len 13287 / sha 3ad6db301a3fa0e101195f439012ee42ca25ba6b31040b10d0196d23b7141bb3
+    len: 13864,
+    sha: '1b6929a2e691c2e418ab529a80411e26f58a1d32a6f08b2ceb1b085e3db96274',
   },
 ];
 
@@ -246,9 +250,14 @@ assert(!/CLAUDE_CODE_SUBPROCESS_ENV_SCRUB\s*:\s*'0'/.test(src) && !/CLAUDE_CODE_
   'the credential scrub is never set to a disabled value');
 assert(src.indexOf('...(opts.videoScout ? { GEMINI_API_KEY: geminiKey } : {})') !== -1,
   'the video-scout key injection is still scoped to video-scout panes only');
-// The prototype addition must remain a no-op-by-default spread, not an unconditional injection.
-assert(src.indexOf('const paneStatusEnv = paneStatus.envForPane(opts);') !== -1,
-  'the pane-status prototype env is computed through the gated envForPane()');
+// The pane-status addition must remain a no-op-by-default spread, not an unconditional injection.
+// Production form: the controller ENROLLS the pane and returns { ok, env }; a refusal yields {} and the
+// pane launches with no status environment at all. Previous prototype form, retained for provenance:
+//   const paneStatusEnv = paneStatus.envForPane(opts);
+assert(src.indexOf('const paneStatusEnrollment = paneStatus.enrollPane(id);') !== -1,
+  'the pane is enrolled through the production controller');
+assert(src.indexOf('const paneStatusEnv = paneStatusEnrollment.ok ? paneStatusEnrollment.env : {};') !== -1,
+  'and a refused enrolment contributes an EMPTY env rather than blocking the spawn');
 assert(!/BLUE_HELM_PANE_STATUS_TOKEN\s*:/.test(src),
   'main.js never writes a literal pane-status token into ptyEnv (the store mints it)');
 // Revision 2 content assertions — the reason THIS re-pin happened, pinned as behaviour so the next
@@ -259,8 +268,15 @@ assert(!/BLUE_HELM_PANE_STATUS_TOKEN\s*:/.test(src),
   assert(failBlock.indexOf('paneStatus.releasePane(id)') !== -1,
     'a failed pty.spawn releases the pane-status enrolment in main\'s own failure path');
 }
-assert(src.indexOf('paneStatus.setObservedVersion(') !== -1,
-  'main.js feeds a DISCOVERED provider version into the prototype (never a hard-coded one)');
+// Production form: the version is DISCOVERED by an injected resolver that runs the application's own
+// command-resolution path, and the gate is exact-match and fail-closed. Never a hard-coded version.
+// Previous prototype form, retained for provenance:  paneStatus.setObservedVersion(
+assert(/resolveVersion:\s*\(\)\s*=>/.test(src),
+  'main.js injects a version RESOLVER into the pane-status controller');
+assert(src.indexOf("AGENT_CMD.claude, ['--version']") !== -1,
+  'and it discovers the version from the SAME executable a pane launches, never a hard-coded one');
+assert(!/supportedVersions\s*:\s*\[/.test(src),
+  'main.js does not hard-code a supported-version list — that lives in pane-status-version.js');
 assert(!/createPaneStatusPrototype\(\{[\s\S]{0,400}?observedVersion/.test(src),
   'and never hard-codes observedVersion at construction');
 
