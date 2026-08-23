@@ -48,6 +48,23 @@ const SETUP_STATE = Object.freeze({
 });
 
 /**
+ * R3 — REMOVAL HAS THREE OUTCOMES, NOT TWO, AND THE THIRD ONE IS NEW.
+ *
+ *   COMPLETE                  the filesystem transaction landed AND the renderer confirmed delivery
+ *   PRESENTATION_UNCONFIRMED  the filesystem transaction landed; delivery was NOT confirmed
+ *   (refusal)                 nothing was written; carried on the ok:false path, unchanged
+ *
+ * The middle one did not exist in the previously reviewed contract. It is deliberately NOT collapsed
+ * into an unconditional ok:true: a caller reading only `ok` would announce a clean removal over a
+ * display that may still be showing live pane badges. It is equally not an ok:false — the settings
+ * transaction is finished and correct, and presentation failure never rolls it back.
+ */
+const REMOVAL_DISPOSITION = Object.freeze({
+  COMPLETE: 'complete',
+  PRESENTATION_UNCONFIRMED: 'presentation-unconfirmed',
+});
+
+/**
  * deps (all injected; nothing is resolved from a real home directory here):
  *   userDataPath, settingsPath, installId, cmdExe, reporterPath, currentRuntimePath
  *   net, crypto
@@ -113,6 +130,33 @@ function createPaneStatusController(deps) {
   let inFlight = false;
   let reportingEnabled = false;
   let shutDown = false;
+  // R3. Monotonic count of renderer pushes that were NOT confirmed delivered. Never reset; callers
+  // read it before and after an operation and compare, so concurrent activity cannot mask a failure.
+  let deliveryFailures = 0;
+
+  /**
+   * R3 — RENDERER DELIVERY IS OBSERVED, NEVER ASSUMED. The publishers already returned false when the
+   * window is gone, has no webContents, or the send threw; every one of those returns used to be
+   * discarded at the call site, so a dropped notice was indistinguishable from a delivered one. These
+   * two wrappers are now the ONLY places this module publishes. A failure increments the counter and
+   * is logged. Neither wrapper touches the registry, the settings, or the descriptor: observing that a
+   * window did not answer must never change what is on disk.
+   */
+  function deliverView(view) {
+    try { if (publishView(view) === false) deliveryFailures++; }
+    catch (e) {
+      deliveryFailures++;
+      log(`[pane-status] view delivery failed: ${(e && e.code) || 'send-threw'}`);
+    }
+  }
+
+  function deliverSetupState(state) {
+    try { if (publishSetupState(state) === false) deliveryFailures++; }
+    catch (e) {
+      deliveryFailures++;
+      log(`[pane-status] setup-state delivery failed: ${(e && e.code) || 'send-threw'}`);
+    }
+  }
 
   function setSetupState(state, detail) {
     setupState = state;
@@ -122,7 +166,7 @@ function createPaneStatusController(deps) {
     registry.setOverrideReason(overrideReasonFor(state));
     // Send the FULL state object; pane-status-ipc projects it down to the renderer-visible subset.
     // Passing a partial object here would silently blank fields the toolbar needs.
-    publishSetupState(getSetupState());
+    deliverSetupState(getSetupState());
     publishAllViews();
   }
 
@@ -139,7 +183,7 @@ function createPaneStatusController(deps) {
   }
 
   function publishAllViews() {
-    for (const view of registry.views()) if (view) publishView(view);
+    for (const view of registry.views()) if (view) deliverView(view);
   }
 
   // ------------------------------------------------------------------ pane lifecycle (no spawning)
@@ -151,7 +195,7 @@ function createPaneStatusController(deps) {
     if (!reportingEnabled || !pipe) return { ok: false, reason: 'not-ready' };
     const res = registry.enroll(paneId);
     if (!res.ok) return res;
-    publishView(registry.viewFor(paneId));
+    deliverView(registry.viewFor(paneId));
     return {
       ok: true,
       env: {
@@ -170,7 +214,7 @@ function createPaneStatusController(deps) {
   function releasePane(paneId, reason) {
     const had = registry.has(paneId);
     registry.revoke(paneId, reason || 'pane-released');
-    if (had) publishView({ paneId, state: 'unknown', reason: freshness.UNKNOWN_REASON.NO_SIGNAL });
+    if (had) deliverView({ paneId, state: 'unknown', reason: freshness.UNKNOWN_REASON.NO_SIGNAL });
     return had;
   }
 
@@ -193,7 +237,7 @@ function createPaneStatusController(deps) {
    */
   function notePaneExit(paneId) {
     const had = registry.has(paneId);
-    if (had) publishView({ paneId, state: 'exited', reason: null });
+    if (had) deliverView({ paneId, state: 'exited', reason: null });
     registry.revoke(paneId, 'pty-exit');
     return had;
   }
@@ -247,7 +291,7 @@ function createPaneStatusController(deps) {
     const pipeName = pipeMod.buildPipeName(suffix);
     const server = pipeMod.createPaneStatusPipe({
       net, registry, pipeName, log, now,
-      onStateChange: (view) => publishView(view),
+      onStateChange: (view) => deliverView(view),
       onFatal: (code) => onTransportLost(code),
     });
     const res = await server.start();
@@ -356,18 +400,39 @@ function createPaneStatusController(deps) {
         return res;
       }
 
-      // ORDER MATTERS. Publish the honest reason FIRST, while the panes still exist to be addressed,
-      // and only then revoke. Revoking first would blank the badges and leave nothing to explain them.
+      // ORDER MATTERS, and under R3 the order is load-bearing rather than merely polite.
+      //
+      // STEP 1 — commit the AUTHORITATIVE state as non-live BEFORE a single byte is published. From
+      // here on `registry.viewFor()` resolves every pane to unknown/hook-removed, so the answer this
+      // process would give a refresh is already correct even if nothing reaches the renderer.
+      // Publishing first and committing second would make delivery the source of truth, which is the
+      // whole defect: a dropped push would leave the authoritative state claiming panes are live.
       registry.setOverrideReason(freshness.UNKNOWN_REASON.HOOK_REMOVED);
+
+      // STEP 2 — attempt the existing publication, while the panes still exist to be addressed.
+      // Revoking before this would blank the badges and leave nothing to explain them.
+      const deliveryBefore = deliveryFailures;
       for (const paneId of registry.enrolledPaneIds()) {
-        publishView({ paneId, state: 'unknown', reason: freshness.UNKNOWN_REASON.HOOK_REMOVED });
+        deliverView({ paneId, state: 'unknown', reason: freshness.UNKNOWN_REASON.HOOK_REMOVED });
       }
+
+      // STEP 3 — revoke REGARDLESS of whether any of that was delivered. These tokens authorise
+      // reports about an installation that no longer exists; a renderer that missed the notice is not
+      // a reason to keep minting trust. Delivery failure must never restore or retain tokens.
       registry.revokeAll('hook-removed');
 
       stopHeartbeat();
       if (pipe) { pipe.server.stop(); pipe = null; }
       setSetupState(SETUP_STATE.DISABLED, 'removed');
-      return { ok: true, setupState };
+
+      // STEPS 4 and 5 — the settings transaction is finished and is NEVER rolled back because a
+      // window did not answer. Only the claim we are entitled to make differs.
+      if (deliveryFailures !== deliveryBefore) {
+        log('[pane-status] removal COMPLETED on disk, but the renderer did not confirm delivery of the '
+          + 'hook-removed notice; the displayed pane status may be stale until it is refreshed');
+        return { ok: true, setupState, disposition: REMOVAL_DISPOSITION.PRESENTATION_UNCONFIRMED };
+      }
+      return { ok: true, setupState, disposition: REMOVAL_DISPOSITION.COMPLETE };
     } finally {
       inFlight = false;
     }
@@ -433,5 +498,5 @@ function createPaneStatusController(deps) {
   };
 }
 
-const api = { SETUP_STATE, createPaneStatusController };
+const api = { SETUP_STATE, REMOVAL_DISPOSITION, createPaneStatusController };
 if (typeof module === 'object' && module.exports) module.exports = api;

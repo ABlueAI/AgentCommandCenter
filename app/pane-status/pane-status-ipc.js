@@ -147,6 +147,11 @@ function registerPaneStatusIpc(deps) {
       // this to keep showing what it was showing and point at manual recovery, rather than presenting
       // the subsystem as broken or disabled.
       retained: res.retained === true,
+      // R3. The THIRD removal outcome. `ok` alone cannot express "the settings transaction finished
+      // but we could not confirm the renderer was told", so the disposition rides alongside it as a
+      // single bounded constant — the same shape `retained` already uses, not a new field family and
+      // not a new channel. It is null on every refusal, where `reason`/`detail` already say more.
+      disposition: res.ok === true ? boundedDetail(res.disposition) : null,
       setup: projectSetupState(controller.getSetupState()),
     };
   });

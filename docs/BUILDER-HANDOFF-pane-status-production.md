@@ -710,3 +710,221 @@ A **fresh independent cumulative Codex Full review** of `83cacf9333e9ed05b3ef137
 reviewer. The builder has not reviewed this correction.
 
 Live acceptance remains **NOT PERFORMED** and separately authorized.
+
+---
+
+# 10. CORRECTION ROUND — Work Order 5, Binding Amendments B and C
+
+## 10.1 What this round contains, and what it does NOT
+
+This builder holds Work Order 4, Binding Amendment A, Binding Amendment B and Binding Amendment C.
+**It does not hold the consolidated Work Order 5 body.** Amendment C names R3; the order that
+enumerates R1 and R2 was never received. Only **R3** is corrected here.
+
+Nothing in this section should be read as a claim that Work Order 5 is complete. If R1 and R2 exist,
+they are untouched, and the next commit on this branch is expected to carry them.
+
+Constraints still in force from Work Order 4, none of them relaxed by B or C: no self-review, no real
+Claude settings access or mutation, no real hook installation or removal, no provider session or model
+turn, no live acceptance, no merge, no push. `a71937e1` and `add8a4dc` are both preserved unamended.
+
+## 10.2 The false-success inspection (Amendment B § 1)
+
+Inspection was limited to the seven authorized files and their directly corresponding tests. No wider
+subsystem audit was performed and no unrelated implementation was touched.
+
+`pane-status-settings-doc.js` · `pane-status-settings-txn.js` · `pane-status-recovery.js` ·
+`pane-status-controller.js` · `pane-status-badge.js` · `pane-status-ipc.js` · `preload.js`
+
+Three candidates were raised. One is corrected (R3); two were ruled NO CORRECTION and are recorded
+verbatim in § 10.4.
+
+Also observed, and offered as an inspection note rather than a finding: **`preload.js` has no directly
+corresponding test file.** Its pane-status surface is four zero-argument invokes, exercised only
+indirectly through suites that read the preload source. This round did not change that.
+
+Clean on inspection: the removal A–E classification, `retained` propagation from transaction to
+renderer, and the recovery cleanup paths, which already check both results and refuse rather than
+announce a completed removal.
+
+## 10.3 R3 — removal now has a THIRD outcome (Amendment C § 1 and § 2)
+
+### The defect
+
+`createPublishers.send()` returns `false` in three distinct situations — the window is gone, it has no
+`webContents`, or `wc.send` threw — and **every call site discarded that boolean.** The `catch` was
+silent. A removal whose hook-removed notice was dropped still revoked every token and still returned a
+plain `{ ok: true }`. The renderer kept presenting live pane badges over an installation that no longer
+existed, and nothing in the log, the UI, or the return value said so.
+
+This defeated a deliberate, documented ordering. The comment in `remove()` already said:
+
+> ORDER MATTERS. Publish the honest reason FIRST, while the panes still exist to be addressed,
+> and only then revoke. Revoking first would blank the badges and leave nothing to explain them.
+
+Publishing first is worthless if the publish silently no-ops.
+
+### The mechanism, exactly as Amendment C § 1 specifies it
+
+1. **Commit the authoritative registry state as non-live BEFORE publishing.**
+   `registry.setOverrideReason(HOOK_REMOVED)` runs first, so from that instant `registry.viewFor()`
+   resolves every pane to `unknown` / `hook-removed`. The answer this process would give a refresh is
+   already correct even if not one byte reaches the renderer. Publishing first and committing second
+   would make *delivery* the source of truth, which is the defect itself.
+2. **Attempt the existing publication**, while the panes still exist to be addressed.
+3. **Revoke all tokens regardless of publication success.** These tokens authorise reports about an
+   installation that is gone; a renderer that missed the notice is not a reason to keep minting trust.
+4. Delivery confirmed → the normal successful-removal disposition.
+5. Delivery returned `false` or threw → the filesystem transaction is **not** rolled back, tokens are
+   **not** restored, and a bounded partial-success disposition is returned. The renderer action path
+   then re-reads authoritative state over the existing `getSetupState()` path. If that refresh also
+   fails, the prior presentation is retained and the operator is told explicitly that removal
+   completed, the display could not be refreshed, and what is on screen may be stale.
+
+### The third outcome
+
+| Outcome | `ok` | `disposition` | On disk | Presentation |
+|---|---|---|---|---|
+| Full success | `true` | `complete` | removed | confirmed updated |
+| **Filesystem success, presentation unconfirmed** | `true` | `presentation-unconfirmed` | **removed** | **not confirmed** |
+| Refusal / failure | `false` | `null` | unchanged | `reason` + `detail` surfaced |
+
+**This third disposition did not exist in the previously reviewed contract.** It is a new outcome on a
+path a reviewer previously read as binary, and it therefore **requires fresh Full-class scrutiny** — it
+is not a cosmetic addition to an already-reviewed shape.
+
+It is deliberately **not collapsed into an unconditional `ok:true`**: a caller reading only `ok` would
+announce a clean removal over a display that may still show live badges. It is equally **not an
+`ok:false`**: the settings transaction is finished and correct, and presentation failure never rolls it
+back — proven by comparing the on-disk result of a delivered and an undelivered removal, which are
+identical.
+
+### No new IPC surface
+
+Amendment C § 1 permits expansion only if the existing mechanism is demonstrably insufficient. **It was
+not insufficient.** The registry plus the existing `getSetupState()` refresh carried the whole
+mechanism. Pinned by assertion:
+
+- the channel table is **byte-for-byte the same seven channels** that existed at `add8a4dc`;
+- `preload.js` is unchanged and still exposes **exactly four zero-argument invokes**, and the string
+  `disposition` does not appear in it;
+- the disposition travels **inside the existing remove response**, through the **same**
+  `boundedDetail()` filter every other constant uses — the same shape `retained` already established.
+
+No new channel, no new subscription, no new badge method, no new response-field family.
+
+### Scope note on the delivery wrappers
+
+The two wrappers (`deliverView`, `deliverSetupState`) are now the only places the controller publishes,
+so *every* push in that module observes its result rather than discarding it. That is broader than the
+`remove()` path alone, but it is confined to `pane-status-controller.js` — an in-scope file — and it is
+what makes the disposition trustworthy: a counter that only some publishers increment would report
+"confirmed" for a window that had already stopped answering.
+
+## 10.4 F-2 and F-3 — NO CORRECTION (Amendment C § 4, carried verbatim)
+
+> **F-2 — NO CORRECTION:** ok:true reflects a filesystem installation that genuinely completed. The
+> authoritative version-mismatch setup state separately and honestly reports that the installed hooks
+> cannot presently be used. This is not false success.
+
+> **F-3 — NO CORRECTION:** No current producer returns ok:false without a non-empty reason. The
+> defensive renderer condition is not presently reachable as a defect.
+
+Neither was changed. The R3 renderer branch is keyed on `ok === true` plus the disposition, so it does
+not disturb either ruling: the F-3 condition it sits beside is untouched.
+
+## 10.5 Assertion reconciliation (Amendment C § 3)
+
+Both figures below are parsed from **retained raw gate output**, not from recollection. The `add8a4dc`
+baseline was re-demonstrated by checking that commit out into a detached worktree and running its own
+complete gate; its format split was measured, not inferred.
+
+Counting uses three ordered rules, because the shapes overlap: `^(\d+) tests: (\d+) passed` must be
+tried before `^(.+?): (\d+) passed`, or a suite gets "named" `17 tests`.
+
+**Baseline — `add8a4dc`, complete app gate, exit 0**
+
+| Observed format | Suites | Assertions |
+|---|---:|---:|
+| named, standard — `<name>: N passed, M failed` | 64 | 4,841 |
+| named, assertions — `<name>: N assertions passed` | 2 | 18 |
+| unnamed, bare — `N passed, M failed` | 6 | 423 |
+| unnamed, tests-prefixed — `T tests: N passed, M failed` | 10 | 289 |
+| **Combined** | **82** | **5,571** |
+
+82 summary lines against 82 registered segments — every segment accounted for. **This re-demonstrates
+the expected 5,571 exactly.**
+
+**This tree — R3 correction, complete app gate, exit 0**
+
+| Observed format | Suites | Assertions |
+|---|---:|---:|
+| named, standard | 65 | 4,910 |
+| named, assertions | 2 | 18 |
+| unnamed, bare | 6 | 423 |
+| unnamed, tests-prefixed | 10 | 289 |
+| **Combined** | **83** | **5,640** |
+
+83 summary lines against 83 registered segments — every segment accounted for.
+
+**Exact delta: +69, entirely within the named-standard format**, and fully attributed by diffing the
+two captures suite by suite:
+
+| Suite | Baseline | Now | Δ | Why |
+|---|---:|---:|---:|---|
+| `pane-status-presentation` | — | 63 | **+63** | new suite (R3) |
+| `pane-status-isolation` | 126 | 131 | **+5** | enumerates `pane-status/*.js`; one new file adds five per-file assertions |
+| `test-summary-formats` | 118 | 119 | **+1** | enumerates suites and their summary shapes |
+| every other suite | | | **0** | byte-identical counts |
+
+63 + 5 + 1 = 69. **No unexplained assertions.**
+
+A note on the two formats that cannot be told apart from output alone: the named-standard shape is
+produced both by a template literal and by string concatenation. That distinction is a property of the
+*source*, not of the gate output, so it is not presented above as two observed formats.
+
+## 10.6 Gates
+
+| Gate | Result |
+|---|---|
+| Complete app gate, this tree | **exit 0 — 83 suites, 5,640 assertions, 0 failures** |
+| Complete app gate, `add8a4dc` baseline (detached worktree) | **exit 0 — 82 suites, 5,571 assertions, 0 failures** |
+| Focused pane-status, 21 suites | **1,186 assertions, 0 failures** |
+
+**The app gate did not split.** `dockview-bootstrap.test.js` passed in both complete runs, so no AGR
+exception candidate arises from this round and none is submitted.
+
+**AGR described accurately, per Amendment B § 3:** the Dockview-bootstrap failure is **historically
+intermittent — not a deterministic known failure.** No stability claim is made here. Two green runs are
+two observations, not evidence of stability, and no N≥20 campaign was run or is authorized. Had a run
+hit it, admissibility as a named exception would have been **Codex's determination alone**, not the
+builder's.
+
+Pester was not re-run in this round: no PowerShell source was touched. It stood at 955/0/0 at
+`add8a4dc`.
+
+**Ordering disclosure.** The complete gate ran on the tree as it now stands, with one exception in the
+same pattern as § 9.9: **this section was written into the handoff after the final gate run.** No
+source, test, or configuration file changed after the gate.
+
+## 10.7 Review requested
+
+R3 introduces a removal outcome that did not exist in the reviewed contract, so this needs a **fresh
+independent cumulative Codex Full review**, not a scoped one. Claude remains disqualified: every commit
+on this branch carries `Co-Authored-By: Claude Opus 5`, and the builder has not reviewed this
+correction.
+
+Specific things worth a reviewer's attention:
+
+1. Whether committing the registry override *before* publication is genuinely sufficient to make the
+   authoritative state correct in every interleaving, or whether a caller can observe the window
+   between the override and the revoke.
+2. Whether treating a `publishSetupState` failure during the final `setSetupState` as part of the same
+   disposition is right, or whether the disposition should reflect only the per-pane notice.
+3. Whether the renderer's re-read closes the loop, given that a window which cannot receive a push may
+   equally fail to answer an invoke — the stale-presentation warning is the fallback for exactly that,
+   and it is the branch a reviewer should press hardest on.
+4. Whether `preload.js` lacking a directly corresponding test suite is acceptable.
+
+Live acceptance remains **NOT PERFORMED** and separately authorized. Enrolled per-tool-call overhead
+remains **NOT MEASURED**.

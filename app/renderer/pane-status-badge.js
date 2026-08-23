@@ -297,6 +297,23 @@
         else if (action === 'remove') res = await bridge.remove();
         else if (action === 'clear') res = await bridge.clearStaleLock();
         if (res && res.setup) render(res.setup);
+
+        // R3. The removal finished on disk but main could not confirm the renderer was told pane
+        // status is no longer live. Re-read the AUTHORITATIVE state over the existing getSetupState
+        // path rather than trusting the payload we just received — that payload travelled the same
+        // way the notice that went missing did. No new channel and no new subscription is involved.
+        if (res && res.ok === true && res.disposition === 'presentation-unconfirmed') {
+          let refreshed = null;
+          try { refreshed = await refresh(); } catch { refreshed = null; }
+          if (!refreshed) {
+            // Both the push AND the pull failed. Keep the prior presentation — blanking it would
+            // assert a state we could not read — and say plainly that what is on screen may be stale.
+            log('[pane-status] removal COMPLETED: the hooks and the installation record are gone. '
+              + 'The display could not be refreshed, so any pane status still shown above may be '
+              + 'stale. Reload the window to resynchronise.\n');
+          }
+        }
+
         if (res && res.ok === false && res.reason) {
           // A refusal is a VISIBLE outcome, never a swallowed one. Both constants are surfaced: the
           // outer reason says WHAT was refused, the bounded detail says WHY, and the detail is the one
