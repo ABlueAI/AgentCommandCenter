@@ -46,6 +46,8 @@ const RECONCILE_REASON = Object.freeze({
   DESCRIPTOR_CORRUPT: 'descriptor-corrupt',
   DESCRIPTOR_NEWER_SCHEMA: 'descriptor-newer-schema',
   SETTINGS_UNREADABLE: 'settings-unreadable',
+  // R1. A group carrying our installation ID survives outside the descriptor-recorded groups.
+  STRAY_GROUP: 'installation-group-outside-record',
   GROUPS_MODIFIED: 'installed-groups-modified-externally',
   GROUPS_VANISHED: 'installed-groups-absent-externally',
   OTHER_INSTALL: 'another-installation-owns-hooks',
@@ -231,6 +233,23 @@ function createRecovery(deps) {
 
     // ---- interrupted removal ------------------------------------------------------------------
     if (state === TXN.REMOVE_PENDING || state === TXN.REMOVE_WRITTEN || state === TXN.REMOVE_VERIFIED) {
+      // R1 — ALL-EVENTS VERIFICATION BEFORE ANY CLEANUP, from all three interrupted-removal states.
+      //
+      // `present` only ever looked at the events the descriptor names, and a stray group of ours at an
+      // unrecorded event leaves every one of them reading ABSENT — which is exactly the branch below
+      // that deletes the shim and retires the descriptor. That would strand a live hook pointing at a
+      // deleted reporter and destroy the only record naming it. Settings are not written here at all;
+      // both artifacts are retained and the operator is sent to reconciliation.
+      const strays = recordedGroups
+        ? doc.strayInstallGroups(settingsBefore.value, recordedGroups, installId)
+        : doc.groupsWithInstallId(settingsBefore.value, installId);
+      if (strays.length > 0) {
+        putDescriptor(TXN.RECONCILIATION_REQUIRED, value);
+        log('[pane-status] interrupted removal HELD: a hook group for this installation survives '
+          + 'outside the recorded groups; the shim and the installation record are retained');
+        return { outcome: OUTCOME.RECONCILIATION_REQUIRED, reason: RECONCILE_REASON.STRAY_GROUP };
+      }
+
       if (present.overall === doc.OWNERSHIP.ABSENT || present.overall === doc.OWNERSHIP.FOREIGN) {
         // FINISHING A VERIFIED CLEANUP (finding 12). The settings are already clean, so this is the
         // safe half of the two-resource protocol: only app-owned artifacts are retired, and BOTH

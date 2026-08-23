@@ -293,9 +293,34 @@
       busy = true;
       try {
         let res = null;
-        if (action === 'install') res = await bridge.install();
-        else if (action === 'remove') res = await bridge.remove();
-        else if (action === 'clear') res = await bridge.clearStaleLock();
+        let rejected = false;
+
+        // R2. These three invokes are the only awaits here that can REJECT — main can tear down
+        // mid-call, or the channel can go away. THE CATCH BINDING IS DELIBERATELY OMITTED: with
+        // nothing in scope there is no exception message, stack, path, settings fragment, environment
+        // value, token or credential that can reach the log, even by mistake later.
+        try {
+          if (action === 'install') res = await bridge.install();
+          else if (action === 'remove') res = await bridge.remove();
+          else if (action === 'clear') res = await bridge.clearStaleLock();
+        } catch { rejected = true; }
+
+        if (rejected) {
+          // A FIXED line. `action` is one of exactly three internal constants, so the whole message is
+          // bounded by construction and contains nothing the caller or the failure supplied.
+          log(`[pane-status] ${action} failed: the request did not complete.\n`);
+          // EXACTLY ONE refresh attempt. Not a retry loop: if the bridge just rejected, hammering it
+          // proves nothing and delays telling the operator.
+          let refreshed = null;
+          try { refreshed = await refresh(); } catch { refreshed = null; }
+          if (!refreshed) {
+            // Prior presentation is retained — blanking it would assert a state we could not read.
+            log(`[pane-status] ${action} is UNCONFIRMED: the setup state could not be refreshed, so `
+              + 'the displayed pane status may be stale. Reload the window to resynchronise.\n');
+          }
+          return;
+        }
+
         if (res && res.setup) render(res.setup);
 
         // R3. The removal finished on disk but main could not confirm the renderer was told pane

@@ -398,6 +398,31 @@ function otherInstallGroups(settings, installId) {
   return found;
 }
 
+/**
+ * R1 — EVERY GROUP OF OURS THAT THE DESCRIPTOR DOES NOT ACCOUNT FOR.
+ *
+ * Returns [event, index, group] for each group carrying `installId` that is NOT one of the
+ * descriptor-recorded groups for the event it actually sits in. The recorded set is keyed by event, so
+ * a group of ours that was MOVED to a different event — even an event we never install into — is a
+ * stray: the record says it is at PreToolUse, the file has it at SessionStart, and removing only what
+ * the record names would leave a live hook pointing at a reporter we are about to delete.
+ *
+ * Groups belonging to OTHER installation IDs are not strays and are never returned here. Their
+ * presence is legitimate coexistence.
+ */
+function strayInstallGroups(settings, recordedGroups, installId) {
+  const recorded = recordedGroups && typeof recordedGroups === 'object' && !Array.isArray(recordedGroups)
+    ? recordedGroups : {};
+  const found = [];
+  for (const entry of groupsWithInstallId(settings, installId)) {
+    const ev = entry[0];
+    const group = entry[2];
+    const targets = Array.isArray(recorded[ev]) ? recorded[ev] : [];
+    if (!targets.some((t) => sameGroup(group, t))) found.push(entry);
+  }
+  return found;
+}
+
 // The removal-time classification of the work order as replaced by Binding Amendment A section 2.
 const REMOVAL_OUTCOME = Object.freeze({
   REMOVE: 'remove-recorded-groups',
@@ -412,6 +437,8 @@ const REMOVAL_REFUSAL = Object.freeze({
   AMBIGUOUS: 'removal-ambiguous-ownership',
   OTHER_INSTALL_ONLY: 'removal-only-another-installation-present',
   NO_RECORDED_GROUPS: 'removal-no-recorded-groups',
+  // R1. A group of ours survives somewhere the descriptor does not name it.
+  STRAY_GROUP: 'removal-installation-group-outside-record',
 });
 
 /** Per-event removal state for ONE recorded event. Pure; the aggregate rule lives below it. */
@@ -483,6 +510,29 @@ function classifyRemoval(settings, recordedGroups, installId) {
 
   if (ambiguous > 0) return { outcome: REMOVAL_OUTCOME.REFUSE, reason: REMOVAL_REFUSAL.AMBIGUOUS, perEvent };
   if (modified > 0) return { outcome: REMOVAL_OUTCOME.REFUSE, reason: REMOVAL_REFUSAL.MODIFIED, perEvent };
+  // R1 — ALL-EVENTS VERIFICATION.
+  //
+  // Everything above this line reasons only about the events the descriptor names. That was the hole:
+  // a group of ours that drifted to an unrecorded event left every recorded event looking perfectly
+  // exact (or perfectly absent), so removal proceeded, deleted the shim and retired the descriptor —
+  // and the stray hook stayed live in settings, invoking a reporter that no longer exists, with no
+  // record left that would let us find it again.
+  //
+  // Reconciliation rather than a bare refusal: the descriptor no longer describes the file, which is
+  // precisely the condition the recovery document exists to resolve. Nothing is written, the shim and
+  // the descriptor are retained, and no success is reported.
+  const strays = strayInstallGroups(settings, recordedGroups, installId);
+  if (strays.length > 0) {
+    return {
+      outcome: REMOVAL_OUTCOME.RECONCILE,
+      reason: REMOVAL_REFUSAL.STRAY_GROUP,
+      perEvent,
+      strayEvents: strays.map((s) => s[0]).filter((v, i, a) => a.indexOf(v) === i).sort(),
+    };
+  }
+
+  // Recorded events that are exact alongside recorded events that vanished, with nothing of ours
+  // loose anywhere. A genuine partial installation, not a drifted one.
   if (exact > 0 && absent > 0) return { outcome: REMOVAL_OUTCOME.REFUSE, reason: REMOVAL_REFUSAL.PARTIAL, perEvent };
 
   const others = otherInstallGroups(settings, installId);
@@ -533,6 +583,7 @@ const api = {
   groupBelongsTo,
   groupsWithInstallId,
   otherInstallGroups,
+  strayInstallGroups,
   classifyRecordedEvent,
   classifyRemoval,
   buildShimDir,

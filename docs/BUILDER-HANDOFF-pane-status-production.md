@@ -928,3 +928,164 @@ Specific things worth a reviewer's attention:
 
 Live acceptance remains **NOT PERFORMED** and separately authorized. Enrolled per-tool-call overhead
 remains **NOT MEASURED**.
+
+---
+
+# 11. WORK ORDER 5 COMPLETE — R1, R2 and R3 mapped separately
+
+Work Order 5 landed in two parts: R3 arrived first via Binding Amendment C and was committed as
+`567a53a`; R1 and R2 arrived afterwards as the required continuation and are committed on top of it.
+Neither earlier tip was amended — `a71937e1`, `add8a4dc` and `567a53a` are all ancestors of the final
+tip.
+
+| | Finding | Where it lives | Suite | Assertions |
+|---|---|---|---|---|
+| **R1** | All-events removal verification | `pane-status-settings-doc.js`, `pane-status-recovery.js` | `pane-status-all-events-removal.test.js` | 62 |
+| **R2** | Rejected renderer actions | `pane-status-badge.js` | `pane-status-rejected-action.test.js` | 68 |
+| **R3** | Third removal outcome | `pane-status-controller.js`, `pane-status-ipc.js`, `pane-status-badge.js` | `pane-status-presentation.test.js` | 63 |
+
+## 11.1 R1 — all-events removal verification
+
+**The hole.** Every removal decision reasoned only over the events the *descriptor* names. A hook group
+carrying our installation ID that had drifted to an event we do not install into was invisible to all
+of it: every recorded event then read `absent`, removal took the already-absent branch, deleted the
+shim and retired the descriptor — and the stray group stayed live in the settings file, invoking a
+reporter that no longer existed, with the only record that could have found it now destroyed. The
+interrupted-removal recovery path had the identical hole from all three REMOVE states.
+
+**The rule.** Before direct removal or interrupted-removal recovery may report already-absent or delete
+the shim or descriptor, the whole document is scanned for this installation ID. Anything of ours
+outside the exact recorded groups means reconciliation: settings byte-identical, shim and descriptor
+retained, no success reported.
+
+**Implementation.** `strayInstallGroups(settings, recordedGroups, installId)` in the doc module returns
+every group carrying our ID that is not one of the recorded groups *for the event it actually sits in*.
+`classifyRemoval` consults it and returns `RECONCILE` / `removal-installation-group-outside-record`.
+Recovery consults the same function before any cleanup and holds with `installation-group-outside-record`.
+
+**Placement note, and it is deliberate.** The stray gate sits *after* the ambiguous and modified checks
+but *before* the partial check. After ambiguous/modified because those describe in-place corruption at
+recorded events, and a modified group still carries our ID — gating earlier would reclassify every
+existing modified-group case as a stray and change behaviour a previous review already accepted.
+Before partial because a group genuinely *moved* to an unrecorded event produces exactly the partial
+signature, and "a group of ours is loose somewhere" is the more accurate and more actionable reason.
+
+**Groups owned by other installations are never strays.** They are preserved byte-identically and in
+their existing relative order. The test proves this non-vacuously: the foreign groups are built by
+cloning a real installed group and swapping the ID inside the shim path in `args`, which is where
+ownership actually lives — a hand-written plausible-looking group yields `installIdOf === null`, and
+every coexistence assertion would then pass against an empty list. Absolute indices legitimately shift
+when a group between two of theirs is removed, so the assertion pins `[event, group]` and array order,
+not the index.
+
+Covered: copied to an unrecorded event · moved to an unrecorded event · **all recorded groups gone with
+one stray left behind** (the dangerous one, previously a silent already-absent cleanup) · genuinely
+absent · coexistence with another installation · interrupted recovery from REMOVE_PENDING,
+REMOVE_WRITTEN and REMOVE_VERIFIED · a genuinely clean interrupted removal still completing.
+
+## 11.2 R2 — rejected renderer actions
+
+**The hole.** The three bridge invokes were awaited inside a `try`/`finally` with no `catch`. A
+rejection escaped `onAction()` entirely: an unhandled rejection, no log line, no refresh, and a toolbar
+still presenting whatever it presented before with nothing to suggest doubt.
+
+**The rule, implemented exactly.** Catch it; emit a fixed bounded metadata-safe line; attempt exactly
+one `getSetupState()` refresh; render the authoritative state if that succeeds; otherwise retain the
+prior presentation and state plainly that the action is unconfirmed, that setup state could not be
+refreshed, and that the display may be stale.
+
+**The leak is prevented structurally, not by careful wording.** The catch binding is deliberately
+omitted — `catch { rejected = true; }` — so there is nothing in scope to print. The badge binds **no**
+catch parameter anywhere in the file, asserted by count. Only the three action constants are ever
+interpolated, so every line is bounded by construction. The test throws an exception carrying a path, a
+key-shaped string, a token assignment, a 32-hex value, an environment variable name and a stack frame,
+and proves none of them reaches any log line on either refresh path.
+
+Exact visible log disposition, asserted verbatim for all three actions:
+
+- refresh succeeds → **one** line: `[pane-status] <action> failed: the request did not complete.`
+- refresh fails → **two** lines; the second names the action, says `UNCONFIRMED`, says the setup state
+  could not be refreshed, and says the displayed pane status may be stale.
+
+## 11.3 R3 — unchanged
+
+R3 was not redesigned. R1 and R2 integration revealed no conflict with it: R1 acts inside the
+transaction, before any presentation question arises, and R2's branch is keyed on a *rejected* promise
+while R3's is keyed on a *resolved* one carrying `disposition === 'presentation-unconfirmed'`. The
+third outcome and the IPC shape are exactly as committed in `567a53a`. Both suites assert the
+non-interference directly: a resolving action triggers no R2 refresh, and a refusal triggers no R3
+refresh.
+
+## 11.4 Rulings carried verbatim
+
+> **F-2 — NO CORRECTION:** ok:true reflects a filesystem installation that genuinely completed. The
+> authoritative version-mismatch setup state separately and honestly reports that the installed hooks
+> cannot presently be used. This is not false success.
+
+> **F-3 — NO CORRECTION:** No current producer returns ok:false without a non-empty reason. The
+> defensive renderer condition is not presently reachable as a defect.
+
+## 11.5 Gates and reconciliation
+
+| Gate | Result |
+|---|---|
+| Focused pane-status, 23 suites | **1,325 assertions, 0 failures** |
+| Complete app gate | **exit 0 — 85 suites, 5,781 assertions, 0 failures** |
+| Pester, re-run on this tip | **exit 0 — 955 passed, 0 failed, 0 skipped** |
+
+**By observed summary format**, parsed from retained raw gate output:
+
+| Observed format | Suites | Assertions |
+|---|---:|---:|
+| named, standard — `<name>: N passed, M failed` | 67 | 5,051 |
+| named, assertions — `<name>: N assertions passed` | 2 | 18 |
+| unnamed, bare — `N passed, M failed` | 6 | 423 |
+| unnamed, tests-prefixed — `T tests: N passed, M failed` | 10 | 289 |
+| **Combined** | **85** | **5,781** |
+
+85 summary lines against 85 registered segments — every segment accounted for, none skipped.
+
+**Exact delta from the demonstrated intermediate baseline of 5,640 / 83 at `567a53a`: +141**, attributed
+by diffing the two captures suite by suite:
+
+| Suite | At `567a53a` | Now | Δ | Why |
+|---|---:|---:|---:|---|
+| `pane-status-all-events-removal` | — | 62 | **+62** | new suite (R1) |
+| `pane-status-rejected-action` | — | 68 | **+68** | new suite (R2) |
+| `pane-status-isolation` | 131 | 140 | **+9** | per-file scans over two new files |
+| `test-summary-formats` | 119 | 121 | **+2** | one per new suite |
+| every other suite | | | **0** | byte-identical counts |
+
+62 + 68 + 9 + 2 = 141. The isolation suite contributes **5 + 4**, not 5 + 5: its fifth per-file
+assertion, "roots its writes in a temp directory", applies only to suites that write files, and the R2
+suite writes none. **No unexplained assertions.**
+
+**The app gate did not split**, in this round or the previous one. `dockview-bootstrap.test.js` passed,
+so no AGR exception candidate arises and none is submitted. The failure remains **historically
+intermittent, not a deterministic known failure**; three green complete runs across this branch are
+three observations and are not a stability claim.
+
+**Ordering disclosure.** The complete gate and Pester ran on the tree as it now stands, with the same
+single exception as § 9.9 and § 10.6: **this section was written into the handoff after those runs.** No
+source, test, or configuration file changed after the gates.
+
+## 11.6 Review requested
+
+A **fresh independent cumulative Codex Full review** of `83cacf93…` to the final tip. Claude remains
+disqualified — every commit carries `Co-Authored-By: Claude Opus 5` — and the builder has not reviewed
+any of R1, R2 or R3.
+
+Worth pressing on:
+
+1. **R1's gate placement** between the modified and partial checks (§ 11.1). It is a judgement call
+   about which refusal reason is most useful, and it changes the reported reason for a moved group.
+2. Whether reconciliation is the right disposition for a stray, versus a plain refusal.
+3. Whether `strayInstallGroups` should also treat a *duplicate* of a recorded group at a recorded event
+   as a stray. It currently does — the recorded set is matched by value, so a second identical copy at
+   the same event is not among the recorded groups for it.
+4. R2's structural no-binding argument: it depends on nobody later adding a bound catch to that file.
+   The assertion pins that, but a reviewer should decide whether a lint rule would be better.
+5. `preload.js` still has no directly corresponding test suite.
+
+Live acceptance remains **NOT PERFORMED** and separately authorized. Enrolled per-tool-call overhead
+remains **NOT MEASURED**.
