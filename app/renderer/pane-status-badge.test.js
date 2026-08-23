@@ -233,6 +233,63 @@ const doc = { createElement: () => makeEl() };
     assert(toolbar.querySelector('.pane-status-setup-action').disabled === true, 'and the button is disabled');
     assert(toolbar.querySelector('.pane-status-setup-action').hidden === true, 'and hidden');
 
+    // ---- A RETAINED REFUSAL IS NOT DAMAGE (advisory review, finding 4 / Binding Amendment A § 2 D)
+    //
+    // Removal can refuse having written NOTHING: modified, partial or ambiguous ownership. The control
+    // must then keep showing what it was showing — the installation is intact and still working — name
+    // the specific cause, and point at manual recovery. It must NOT present the subsystem as disabled,
+    // and it must NOT offer an automatic Remove as the fix for a state where automatic removal refuses.
+    {
+      const bar2 = makeEl('toolbar');
+      const seen = [];
+      const said = [];
+      const refusing = {
+        getSetupState: async () => ({ ok: true, setup: { state: 'ready' } }),
+        install: async () => ({ ok: true, setup: { state: 'ready' } }),
+        remove: async () => {
+          seen.push('remove');
+          return {
+            ok: false,
+            reason: 'txn-removal-refused',
+            detail: 'removal-owned-entry-modified',
+            retained: true,
+            setup: { state: 'ready' },      // main put the presentation back exactly as it was
+          };
+        },
+        clearStaleLock: async () => ({ ok: false, reason: 'lock-missing' }),
+      };
+      const c2 = badgeMod.createSetupControl({
+        document: doc, getToolbarElement: () => bar2, bridge: refusing, log: (l) => said.push(l),
+      });
+      await c2.refresh();
+      eq(c2.currentState(), 'ready', 'the control starts from the installed state');
+      await c2.onAction();
+      assert(seen.includes('remove'), 'the Remove action reaches bridge.remove()');
+      eq(c2.currentState(), 'ready',
+        'after a RETAINED refusal the control still shows READY — the installation was not touched');
+      assert(bar2.querySelector('.pane-status-setup-action').textContent === 'Remove',
+        'and still offers Remove, because there is nothing broken to repair');
+      assert(said.some((l) => l.indexOf('removal-owned-entry-modified') !== -1),
+        'the SPECIFIC cause is surfaced, not just the generic outer reason');
+      assert(said.some((l) => l.indexOf('txn-removal-refused') !== -1), 'along with what was refused');
+      assert(said.some((l) => l.indexOf('nothing was changed') !== -1),
+        'the log says plainly that nothing was changed');
+      assert(said.some((l) => l.indexOf('RECOVERY-pane-status-hooks.md') !== -1),
+        'and points at the manual recovery document');
+      for (const l of said) {
+        assert(l.indexOf('settings.json') === -1, 'no log line names a settings file');
+        assert(!/[A-Za-z]:\\/.test(l), 'and none carries an absolute path');
+      }
+    }
+
+    // ---- the states where automatic removal MUST refuse never offer it as a recovery action
+    for (const state of ['reconciliation-required', 'malformed', 'other-installation']) {
+      const d = badgeMod.describeSetup({ state });
+      assert(d.action !== 'remove',
+        `"${state}" does not offer an automatic Remove — automatic removal refuses from here`);
+      assert(d.action !== 'install', `"${state}" does not offer an automatic Set up either`);
+    }
+
     process.stdout.write(`\npane-status-badge: ${passed} passed, ${failed} failed\n`);
     process.exit(failed ? 1 : 0);
   })().catch((e) => { process.stderr.write('UNCAUGHT: ' + (e && e.stack) + '\n'); process.exit(1); });

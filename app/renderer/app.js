@@ -1333,14 +1333,26 @@ paneStatusBadge = (window.ccPaneStatus && window.ccPaneStatusBadge)
 // The compact Claude status control in the existing Terminals toolbar. Its three possible actions map
 // one-to-one onto three of the four zero-argument invokes; there is no control here that sets a pane's
 // status, reaches a token, or names a path.
+//
+// CORRECTED (advisory review, finding 2). This used to query `#terminals-toolbar`, `.term-toolbar` and
+// `#term-toolbar` — three selectors, NONE of which exists anywhere in index.html. Every one returned
+// null, so `createSetupControl` mounted nothing and the entire setup surface was unreachable in the
+// running application: there was no way to install or remove the hooks from the UI at all. The suite
+// that "covered" it passed because it injected its own `getToolbarElement`, which is precisely the
+// mistake — a test that supplies the integration point cannot prove the integration point exists.
+//
+// The real element is `.term-bar` (app/renderer/index.html), which is what Work Order 1 J.1 specified,
+// and `#paneStatusHost` is the empty placeholder inside it — a sibling of `.tts-controls`, immediately
+// before `#newTermShell`, mirroring `#admissionHost`. Falling back to the bar itself keeps the control
+// reachable if the placeholder is ever removed, and both halves are asserted against the REAL markup.
 const paneStatusSetup = (window.ccPaneStatus && window.ccPaneStatusBadge)
   ? window.ccPaneStatusBadge.createSetupControl({
       document,
       log: appendLog,
       bridge: window.ccPaneStatus,
-      getToolbarElement: () => document.querySelector('#terminals-toolbar')
-        || document.querySelector('.term-toolbar')
-        || document.querySelector('#term-toolbar'),
+      // No `getToolbarElement` here. The mount point is resolved by the production
+      // `resolveSetupHost` inside the badge module, against this document, so a suite cannot make the
+      // integration work by supplying an element the real page does not have.
     })
   : null;
 if (paneStatusBadge) {

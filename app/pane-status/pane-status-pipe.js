@@ -53,6 +53,8 @@ function createPaneStatusPipe(deps) {
   const registry = d.registry;
   const pipeName = d.pipeName;
   const onStateChange = typeof d.onStateChange === 'function' ? d.onStateChange : () => {};
+  // Called when the transport dies AFTER it was ready. The controller uses this to leave READY.
+  const onFatal = typeof d.onFatal === 'function' ? d.onFatal : () => {};
   const log = typeof d.log === 'function' ? d.log : () => {};
   const now = typeof d.now === 'function' ? d.now : () => Date.now();
   if (!net || typeof net.createServer !== 'function') throw new Error('pane-status-pipe: net is required');
@@ -62,6 +64,8 @@ function createPaneStatusPipe(deps) {
   }
 
   let server = null;
+  // READY is the 'listening' event, not the listen() call. See start().
+  let listening = false;
   let live = 0;
   const counters = { accepted: 0, refused: 0, connections: 0, dropped: 0, noop: 0 };
 
@@ -152,35 +156,74 @@ function createPaneStatusPipe(deps) {
     if (view) onStateChange(view);
   }
 
+  /**
+   * START THE LISTENER, AND DO NOT CLAIM READY UNTIL IT IS ACTUALLY LISTENING.
+   *
+   * CORRECTION (advisory review, finding 9): `server.listen()` is ASYNCHRONOUS. The previous build
+   * returned `{ ok:true }` on the next line and the controller went straight to READY — so a pipe that
+   * failed to bind (EADDRINUSE from a crashed run, EACCES from a policy) produced a green badge, a
+   * running heartbeat, and panes enrolled with a token nothing was listening for. The bind error
+   * arrived milliseconds later on the `error` handler, which only logged it.
+   *
+   * Now readiness is the `listening` event and nothing else. An error BEFORE readiness fails the
+   * start; an error AFTER readiness is reported to the controller through `onFatal`, which takes the
+   * subsystem out of READY rather than leaving it claiming a transport it no longer has.
+   */
   function start() {
-    if (server) return { ok: true, pipeName };
-    try {
-      server = net.createServer(handleConnection);
-      server.on('error', (err) => {
-        // Bounded and sentinel-free. A pipe that cannot bind is a VISIBLE failure: the controller
-        // turns this into an `unknown` badge rather than pretending the transport is up.
-        log(`[pane-status] transport error: ${err && err.code ? err.code : 'unknown'}`);
+    if (server) return Promise.resolve({ ok: true, pipeName });
+    return new Promise((resolve) => {
+      let settled = false;
+      let s;
+      try { s = net.createServer(handleConnection); }
+      catch (err) { resolve({ ok: false, error: (err && err.code) || 'create-failed' }); return; }
+
+      const failBeforeReady = (code) => {
+        if (settled) return;
+        settled = true;
+        listening = false;
+        server = null;
+        // Partial server state is cleaned up: a server object that never bound still holds handles.
+        try { s.close(); } catch { /* never bound */ }
+        log(`[pane-status] transport FAILED to start: ${code}`);
+        resolve({ ok: false, error: code });
+      };
+
+      s.on('error', (err) => {
+        const code = err && err.code ? err.code : 'unknown';
+        if (!settled) { failBeforeReady(code); return; }
+        // After readiness. Visible, never a crash, and never silently survivable: the controller is
+        // told, and it stops claiming READY.
+        listening = false;
+        log(`[pane-status] transport error after start: ${code}`);
+        try { onFatal(code); } catch { /* a failing handler must not take the process down */ }
       });
-      server.listen(pipeName);
-    } catch (err) {
-      server = null;
-      return { ok: false, error: (err && err.code) || 'listen-failed' };
-    }
-    log('[pane-status] named-pipe listener started (per-run unique name, no network socket)');
-    return { ok: true, pipeName };
+
+      s.once('listening', () => {
+        if (settled) return;
+        settled = true;
+        server = s;
+        listening = true;
+        log('[pane-status] named-pipe listener started (per-run unique name, no network socket)');
+        resolve({ ok: true, pipeName });
+      });
+
+      try { s.listen(pipeName); }
+      catch (err) { failBeforeReady((err && err.code) || 'listen-failed'); }
+    });
   }
 
   function stop() {
     if (!server) return false;
     try { server.close(); } catch { /* already closing */ }
     server = null;
+    listening = false;
     log('[pane-status] named-pipe listener stopped');
     return true;
   }
 
   function metrics() { return Object.assign({}, counters, { live }); }
 
-  return { start, stop, metrics, deliverLine, isListening: () => !!server };
+  return { start, stop, metrics, deliverLine, isListening: () => listening };
 }
 
 const api = {

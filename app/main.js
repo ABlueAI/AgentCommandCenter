@@ -51,6 +51,11 @@ const { createPaneStatusController } = require('./pane-status/pane-status-contro
 const { registerPaneStatusIpc, createPublishers } = require('./pane-status/pane-status-ipc');
 const paneStatusDoc = require('./pane-status/pane-status-settings-doc');
 const paneStatusShim = require('./pane-status/pane-status-runtime-shim');
+// The pane-equivalent version resolver (dependency A) and the bounded absolute PowerShell used by the
+// natively-confirmed stale-lock liveness check (dependency B). Both are injected into the controller
+// below and nowhere else; no provider-event path can reach either.
+const paneStatusVersionMod = require('./pane-status/pane-status-version');
+const paneStatusLockMod = require('./pane-status/pane-status-lock');
 // MAIN-OWNED TURN ADMISSION BUDGET — Blue's turn-accounting OUTCOME B. For a controlled live evidence
 // run, main owns a durable per-pane allowance: direct terminal input to the controlled pane is blocked
 // here, and a paid prompt reaches the PTY only through the narrow controlled-submission handler, which
@@ -323,6 +328,7 @@ const admissionPtyBoundary = createAdmissionPtyBoundary({
 let paneStatus = {
   enrollPane: () => ({ ok: false, reason: 'not-ready' }),
   releasePane: () => false,
+  notePaneExit: () => false,
   shutdown: () => false,
 };
 
@@ -526,26 +532,48 @@ app.whenReady().then(() => {
     net: require('net'),
     crypto,
     randomToken: () => crypto.randomBytes(32).toString('hex'),
-    // Dependency A. Resolves the version FROM THE EXECUTABLE A PANE ACTUALLY LAUNCHES — `AGENT_CMD.claude`
-    // with this process's own environment, never a guessed path and never another installation's
-    // package metadata. Fail-closed: any failure leaves the version null and every badge `unknown`.
-    resolveVersion: () => new Promise((resolve) => {
-      try {
-        require('child_process').execFile(
-          AGENT_CMD.claude, ['--version'],
-          { windowsHide: true, timeout: 15000, shell: false },
-          (err, stdout) => resolve(err
-            ? { ok: false }
-            : { ok: true, raw: String(stdout || ''), executable: AGENT_CMD.claude }),
-        );
-      } catch { resolve({ ok: false }); }
-    }),
+    // Dependency A. THE VERSION GATE MUST PROBE THE SAME `claude` THE PANE LAUNCHES.
+    //
+    // CORRECTED (advisory review, finding 3). This used to be `execFile('claude', ['--version'])`
+    // straight from Electron main, which resolves against MAIN'S PATH. The pane, by contrast, is a
+    // PowerShell PTY launched with -NoLogo -ExecutionPolicy Bypass -NoExit, and it LOADS THE USER'S
+    // POWERSHELL PROFILE — which can prepend to PATH or define a `claude` function. Those two
+    // resolutions can name different executables; the reviewed prototype recorded exactly that
+    // happening on this machine, so main's answer was never evidence about the pane's binary.
+    //
+    // (The spawn call itself is deliberately NOT reproduced in this comment. A source-order
+    //  assertion in admission-budget.test.js locates the real pty.spawn by its literal text, and a
+    //  comment containing that text would be found first and make the assertion measure the wrong
+    //  line — a defect this branch already caused once.)
+    //
+    // The resolver below runs ONE PowerShell process with the pane's flags minus `-NoExit`, resolves
+    // the bare name with Get-Command inside it, and invokes THAT resolved source for `--version`. No
+    // `-NoProfile`: the pane loads the profile, so the probe must too. Fail-closed at every branch —
+    // not found, empty source, timeout, nonzero exit, unparseable output — leaves the version null and
+    // every badge `unknown`/`version-mismatch`.
+    resolveVersion: () => paneStatusVersionMod.createClaudeVersionResolver({
+      execFile: require('child_process').execFile,
+      // The PATH/PATHEXT the PTY will inherit. `stripAdmissionEnv` removes only admission keys, so
+      // command resolution is identical between this map and the one pty-start builds.
+      env: process.env,
+      commandName: AGENT_CMD.claude,
+      log: (line) => tlog(line),
+    }).discover(),
     // Dependency B. PID plus PROCESS START TIME, because a recycled PID is otherwise indistinguishable
     // from the original lock owner. Anything it cannot determine becomes a conservative refusal.
+    //
+    // CORRECTED (advisory review, finding 7). The executable used to be selected by
+    // `process.env.ComSpec ? 'powershell.exe' : 'powershell.exe'` — a ternary whose branches are
+    // identical, so it consulted an environment variable and then ignored it, and handed a BARE NAME
+    // to execFile either way. A bare name is resolved through PATH. This one is resolved to a bounded
+    // absolute path under the validated system directory, and if it is not there the answer is
+    // "liveness unknown", which the lock turns into a refusal to clear.
     resolveProcessStartTime: (pid) => new Promise((resolve) => {
+      const ps = paneStatusLockMod.resolveWindowsPowerShellPath(process.env);
+      if (!ps.ok) { tlog(`[pane-status] liveness resolver unavailable (${ps.reason})`); return resolve({ ok: false }); }
       try {
         require('child_process').execFile(
-          process.env.ComSpec ? 'powershell.exe' : 'powershell.exe',
+          ps.path,
           ['-NoProfile', '-NonInteractive', '-Command',
             `$p = Get-Process -Id ${Number(pid)} -ErrorAction SilentlyContinue; ` +
             'if ($p) { "RUNNING " + [int64]($p.StartTime.ToUniversalTime() - [datetime]"1970-01-01").TotalMilliseconds } else { "GONE" }'],
@@ -764,6 +792,10 @@ app.on('window-all-closed', () => {
   for (const p of ptys.values()) { try { p.kill(); } catch {} }
   ptys.clear();
   videoScoutRunIds.clear(); // window shutdown: the run-ID mapping is process-lifetime only
+  // PANE STATUS teardown (finding 6). Clears the heartbeat, stops the named pipe, revokes every
+  // token. Idempotent, and it initiates no process control of its own — the pane kills above are the
+  // launcher's, not pane status's.
+  try { paneStatus.shutdown(); } catch (e) { tlog('[pane-status] shutdown failed: ' + ((e && e.message) || e)); }
   if (process.platform !== 'darwin') app.quit();
 });
 
@@ -1337,8 +1369,23 @@ ipcMain.handle('pty-start', (_e, opts) => {
   if (acceptedRunId) { videoScoutRunIds.set(id, acceptedRunId); tlog(`pty-start: registered video-scout runId for pane ${id}`); }
   p.onData((data) => { if (win && !win.isDestroyed()) win.webContents.send('pty-data', { id, data }); });
   // NOTE: onExit removes the PTY handle but deliberately does NOT remove the run-ID mapping (V5b1).
+  //
+  // TWO REGISTRIES, TWO DELIBERATELY DIFFERENT LIFETIMES — and the difference is the point.
+  //
+  //   videoScoutRunIds  OUTLIVES the process. A finished run's report must stay openable from the pane
+  //                     until Blue explicitly closes it (pty-kill) or the window shuts down. That is
+  //                     V5b1's rule and it is unchanged here.
+  //   pane status       DIES WITH the process. It is not a stored artifact; it is a live claim about a
+  //                     running program, backed by a bearer token. Keeping either alive past exit would
+  //                     display `working` for a process that no longer exists and leave a valid token
+  //                     with no legitimate holder for the whole 120-second staleness window.
+  //
+  // So pane status is notified HERE (finding 6 / Work Order 1 § F.7: PTY exit is authoritative and does
+  // not wait for a SessionEnd hook that may never fire), while the run-ID mapping is deliberately not.
   p.onExit(() => {
     ptys.delete(id);
+    // PANE STATUS: publish `exited` first, while the pane is still addressable, then revoke its token.
+    paneStatus.notePaneExit(id);
     // The controlled pane's process is gone: close the run. Any unused allowance is VOIDED here and is
     // never transferred to another pane. Consumed admissions stay consumed.
     if (admissionEnabled && admissionBudget.enabled) admissionBudget.notePaneExit(id);

@@ -37,6 +37,24 @@ const IPC_REFUSAL = Object.freeze({
 });
 
 /**
+ * A refusal DETAIL, allowed across the boundary only if it is shaped like a bounded constant.
+ *
+ * Every detail this subsystem produces is a value from a frozen constant object — `removal-owned-
+ * entry-modified`, `lock-held-by-another-process`, `hooks-not-an-object` — or an errno such as
+ * `EACCES`. The specific one is what tells a person which manual-recovery section to read, so it is
+ * genuinely useful; `txn-removal-refused` alone is not actionable.
+ *
+ * The shape is enforced rather than trusted. Anything containing a separator, a space, a quote, a
+ * dot, or more than 64 characters is dropped: a path, a settings fragment, or an interpolated command
+ * output cannot satisfy this pattern, so no future edit that widens a `detail` can leak one through
+ * this channel by accident.
+ */
+const BOUNDED_DETAIL = /^[A-Za-z][A-Za-z0-9-]{0,63}$/;
+function boundedDetail(value) {
+  return (typeof value === 'string' && BOUNDED_DETAIL.test(value)) ? value : null;
+}
+
+/**
  * Project the controller's setup state down to what the renderer may see.
  *
  * The controller's own getSetupState() carries a lock path and a descriptor path because the main
@@ -112,6 +130,7 @@ function registerPaneStatusIpc(deps) {
     return {
       ok: res.ok === true,
       reason: res.ok === true ? null : (res.reason || null),
+      detail: res.ok === true ? null : boundedDetail(res.detail),
       setup: projectSetupState(controller.getSetupState()),
     };
   });
@@ -123,6 +142,11 @@ function registerPaneStatusIpc(deps) {
     return {
       ok: res.ok === true,
       reason: res.ok === true ? null : (res.reason || null),
+      detail: res.ok === true ? null : boundedDetail(res.detail),
+      // A RETAINED refusal means nothing was written and the installation is intact. The control uses
+      // this to keep showing what it was showing and point at manual recovery, rather than presenting
+      // the subsystem as broken or disabled.
+      retained: res.retained === true,
       setup: projectSetupState(controller.getSetupState()),
     };
   });

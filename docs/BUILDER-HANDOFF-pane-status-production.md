@@ -188,6 +188,14 @@ worktree, not inferred.
 Format reconciliation: 74 suites report `N passed, M failed` (5,018 assertions) and 2 report
 `N assertions passed` (18), totalling 5,036.
 
+> **CORRECTED — see § 9.3.** The **total of 5,036 is right and was confirmed by re-running the
+> complete gate at this exact commit**, but the sentence above misdescribes how it is reached. This
+> repository emits **five** summary shapes, not two, and **16 of those "74 suites" print no suite name
+> at all**. A reconciliation anchored on a suite name loses six of them entirely; one anchored on
+> `<anything>: N passed` reads another ten suites' `"17 tests"` as if it were a suite name and gets
+> the right number by luck. § 9.3 gives the measured breakdown, and
+> `app/test-summary-formats.test.js` now fails visibly if a sixth shape appears.
+
 ### 5.1 Gate honesty — the app gate was run four times, and why
 
 § 21 says run each gate once and do not retry to manufacture green. Disclosed in full: the complete app
@@ -300,3 +308,405 @@ tail recursion, per the precedent already set for the pane-status admission clos
 
 **Stop point.** No merge, no push, no hook installation, no real settings mutation, no provider session,
 and no live acceptance. Progress: **70%**.
+
+---
+
+# 9. CORRECTION ROUND — Work Order 4 + Binding Amendment A
+
+Everything above this line describes the branch as it stood at `a71937e1`. That tip received an
+**advisory FAIL**. This section records what was corrected and how it was proven.
+
+**The advisory review's own limitation stands and is not withdrawn.** It was not the independent
+cumulative Full review this branch requires: the reviewer was not a fresh Codex session, and its
+findings are treated here as a competent list of defects to correct, not as a discharged review
+obligation. Two of its statements were wrong and are corrected below (§ 9.7). **A fresh independent
+cumulative Codex Full review of `83cacf93…new tip` is still required, and has not happened.**
+
+The builder of this correction is the same Claude builder that authored `a71937e1`, on Blue's
+instruction. **The builder has not reviewed its own correction and must not.**
+
+## 9.1 Design-conformance pass (Amendment A § 1) — run BEFORE any code was edited
+
+The two headline defects were not missing requirements; they were **silent departures from accepted
+design**. So the first act of this round was to recover the accepted design and walk it.
+
+Work Orders 1, 1R and 2-Amendment-A were never committed to this repository — they exist only in the
+design session's transcript. They were recovered verbatim from it before any file was touched:
+WO-1 (73,375 bytes), WO-1R (11,065), the WO-1R addendum response (69,674), and WO-2 Amendment A
+(7,281). Every row below was checked against the working tree, not against the handoff.
+
+### Silent design drops found
+
+Three. All are corrected in this branch; all are reported here even though corrected, as Amendment A
+§ 1 requires.
+
+| # | Accepted design | What `a71937e1` actually did | Status |
+|---|---|---|---|
+| S1 | **WO-1 § J.1** — the setup control mounts in the existing Terminals `.term-bar`, in a `#paneStatusHost` placeholder, sibling of `.tts-controls`, immediately before `#newTermShell` | Queried `#terminals-toolbar`, `.term-toolbar`, `#term-toolbar` — **none of which exists in `index.html`**. Nothing mounted. The setup surface was unreachable in the running application. | **RESTORED** |
+| S2 | **WO-1 § F.8 / WO-1R § E.2** — the version probe resolves `claude` through a PowerShell that mirrors the pane's launch, **without `-NoProfile`**, via `Get-Command` then `& $source --version` | `execFile('claude', ['--version'])` from Electron main, resolving against **main's** PATH. This is the exact defect the reviewed prototype's revision 1 had already been failed for. | **RESTORED** |
+| S3 | **WO-1 § F.7** — on `p.onExit` the controller sets the pane to `exited` **immediately**, then revokes the token | `p.onExit` did not touch pane status at all. `controller.shutdown()` existed, was correct, and was **called from nowhere**. | **RESTORED** |
+
+**No deviation from accepted design is retained in this branch.** There is no row below dispositioned
+`DEVIATED — EXPLICITLY AUTHORIZED`, so there is no deviation authority to cite. The one place where
+conformance would have required *changing* accepted design rather than restoring it is recorded in
+§ 9.7 as a correction to the advisory review, not as a deviation.
+
+### Conformance matrix — WO-1 §§ C–J
+
+| Requirement (source) | Intended production behaviour | Implementing file | Proving test | Disposition |
+|---|---|---|---|---|
+| C.1 protocol | pure wire contract, exact key set, size-before-parse | `pane-status-protocol.js` | `pane-status-protocol.test.js` | IMPLEMENTED AS SPECIFIED |
+| C.1 registry | `Map<paneId>`, `applyMessage` takes **no** paneId, constant-time compare | `pane-status-registry.js` | `pane-status-registry.test.js` | IMPLEMENTED AS SPECIFIED |
+| C.1 pipe | named pipe only, per-run unique name, byte/connection/message caps | `pane-status-pipe.js` | `pane-status-pipe.test.js` | IMPLEMENTED AS SPECIFIED |
+| C.1 reporter | reads only `hook_event_name`, fresh message, always exit 0 | `pane-status-reporter.js` | `pane-status-chain.test.js` | IMPLEMENTED AS SPECIFIED |
+| C.1 version | resolve the pane's own command, exact-string allowlist, never semver | `pane-status-version.js` | `pane-status-resolution.test.js` | **RESTORED this round (S2)** |
+| C.1 freshness | per-state bounds, heartbeat, `resolveDisplayState` | `pane-status-freshness.js` | `pane-status-freshness.test.js` | IMPLEMENTED AS SPECIFIED |
+| C.1 controller | enrolment, revocation, heartbeat, **PTY-exit authority**, setup state | `pane-status-controller.js` | `pane-status-lifecycle.test.js` | **RESTORED this round (S3)** |
+| C.1 preload bridge | `window.ccPaneStatus`, unconditional (WO-1R § 1 supersedes WO-1's "absent") | `app/preload.js` | `pane-status-ipc.test.js` | IMPLEMENTED AS SPECIFIED |
+| C.1 badge | keyed by pane id, `reattach()` wired to the Dockview layout path | `renderer/pane-status-badge.js` | `pane-status-badge.test.js` | IMPLEMENTED AS SPECIFIED |
+| C.1 setup view | compact control in the existing Terminals `.term-bar` | `renderer/pane-status-badge.js` (`resolveSetupHost`) | `pane-status-setup-mount.test.js` | **RESTORED this round (S1)** |
+| C.1 settings split | pure document model vs I/O transaction | `…-settings-doc.js` / `…-settings-txn.js` | `…-settings-doc.test.js`, `pane-status-removal.test.js` | IMPLEMENTED AS SPECIFIED |
+| D.1 lock target | a **new** lock over `~/.claude/settings.json`; `claudeJsonLock` not reused or cited | `pane-status-lock.js` | `pane-status-lock.test.js` | IMPLEMENTED AS SPECIFIED |
+| D.2 three layers | in-process mutex + exclusive lock file + content-hash CAS | `pane-status-lock.js`, `…-settings-txn.js` | `pane-status-write-failure.test.js` | IMPLEMENTED AS SPECIFIED |
+| D.3 ownership | exact-group equality, never marker-sniffing | `…-settings-doc.js` | `pane-status-removal.test.js` | **STRENGTHENED this round** — equality is now key-order-independent |
+| D.4 setup order | classify → pure append → CAS → atomic write → verify → rollback | `…-settings-txn.js` | `pane-status-txn.test.js` | IMPLEMENTED AS SPECIFIED |
+| D.5 removal | reads the **current** file, subtracts only exact owned groups | `…-settings-txn.js` | `pane-status-removal.test.js` | **RESTORED this round** — `a71937e1` performed no classification at all |
+| D.6 crash recovery | both interrupted states benign and decidable | `pane-status-recovery.js` | `pane-status-recovery.test.js` | IMPLEMENTED AS SPECIFIED |
+| E IPC | 4 invokes + 2 pushes, **no request body**, trusted-sender gate before any I/O | `pane-status-ipc.js` | `pane-status-ipc.test.js` | IMPLEMENTED AS SPECIFIED |
+| E omissions | no setter, no paneId parameter, no token or path across the boundary | `pane-status-ipc.js` | `pane-status-ipc.test.js` | IMPLEMENTED AS SPECIFIED |
+| F.1 events | exactly eight; `PostToolUse` refresh-only | `pane-status-protocol.js` | `pane-status-protocol.test.js` | IMPLEMENTED AS SPECIFIED |
+| F.2/F.3 token | token is the sole pane selector; revocation on release | `pane-status-registry.js` | `pane-status-registry.test.js` | IMPLEMENTED AS SPECIFIED |
+| F.4/F.5 bounds | `HEARTBEAT_MS=5000`, `MAX_NONTERMINAL_STALE_MS=120000`, worst case 125 s **derived** | `pane-status-freshness.js` | `pane-status-freshness.test.js` | IMPLEMENTED AS SPECIFIED |
+| F.6 terminal | `failed`/`exited` never age to `unknown` | `pane-status-freshness.js` | `pane-status-freshness.test.js` | IMPLEMENTED AS SPECIFIED |
+| F.7 pane release | **PTY exit → `exited` immediately, then revoke**; explicit close → `unknown/released` | `pane-status-controller.js`, `app/main.js` | `pane-status-lifecycle.test.js` | **RESTORED this round (S3)** |
+| F.8 version binding | same interpreter, same flags, no `-NoProfile`, invoke the resolved source | `pane-status-version.js`, `app/main.js` | `pane-status-resolution.test.js` | **RESTORED this round (S2)** |
+| F.9 fail-closed | version checked **first** in `resolveDisplayState` | `pane-status-freshness.js` | `pane-status-freshness.test.js` | IMPLEMENTED AS SPECIFIED |
+| G.1–G.3 isolation | zero process creation / consequential action from any event path | all modules | `pane-status-isolation.test.js` | IMPLEMENTED AS SPECIFIED |
+| G.4 residual | reporter provenance accepted, advisory-only, auto-void if it becomes an automation input | docs | § 6 above | IMPLEMENTED AS SPECIFIED |
+| H acceptance | criteria 1 and 2 remain irreducibly manual and are reported separately | docs | § 6 above | IMPLEMENTED AS SPECIFIED |
+| I census | predicted vs actual changed paths | — | § 9.8 | IMPLEMENTED AS SPECIFIED |
+| J.1 UI placement | `#paneStatusHost` in `.term-bar`, empty in markup | `renderer/index.html` | `pane-status-setup-mount.test.js` | **RESTORED this round (S1)** |
+| J.1 badge states | seven states, `unknown` always carries a reason | `renderer/pane-status-badge.js` | `pane-status-badge.test.js` | IMPLEMENTED AS SPECIFIED |
+| J.1 Dockview | `reattach` wired for the first time, state keyed by pane id only | `renderer/app.js`, `dockview-prototype.js` | `pane-status-badge.test.js` | IMPLEMENTED AS SPECIFIED |
+| J.2 D1–D8 | eight deviations from the prototype, all still in force | — | — | IMPLEMENTED AS SPECIFIED |
+| J.3 open decisions | all four resolved by WO-1R and Blue's answers | — | — | NOT APPLICABLE (superseded) |
+| J.4 R1–R8 | risks recorded, none silently closed | docs | § 6, § 7 | IMPLEMENTED AS SPECIFIED |
+
+### Conformance matrix — WO-1R binding resolutions
+
+| # | Resolution | Disposition | Evidence |
+|---|---|---|---|
+| 1 | bridge unconditional in the trusted window; installed-hook state is the gate | IMPLEMENTED | `preload.js:126` exposes unconditionally; `pane-status-ipc.test.js` |
+| 2 | exactly eight events; `PreToolUse`→working, `PostToolUse` refresh-only-if-working; 120 s / 5 s / 125 s | IMPLEMENTED | `pane-status-protocol.js`, `pane-status-freshness.js` |
+| 3 | spawn-rate risk re-rated to Medium; early exit; timeout; measurement plan | IMPLEMENTED | § 9.5; `pane-status-reporter.js` exits before reading stdin when unenrolled |
+| 4 | version probe on the acceptance machine; provisional exact entry | IMPLEMENTED | § 9.4 |
+| 5 | exact hook command and runtime; no system Node; no accidental Electron window; `nodeExe` eliminated | IMPLEMENTED | `pane-status-runtime-shim.js`; § 9.5 measured 0 windows |
+| 6 | install identity in owner marker, descriptor, and lock; four-way cross-install classification | IMPLEMENTED | id appears in the shim path, `descriptor.installId`, `lock.installId`; `pane-status-removal.test.js` |
+| 7 | descriptor `pane-status-installation.json` under userData; bounded metadata only | IMPLEMENTED | `pane-status-descriptor.js:33`; `FORBIDDEN_KEYS` enforced on write |
+| 8 | explicit two-resource transaction state machine covering every crash point | IMPLEMENTED | `TXN` states; `pane-status-recovery.test.js` |
+| 9 | pre-write CAS **and** CAS-guarded rollback; `reconciliation-required`; no torn-file fallback | IMPLEMENTED | **STRENGTHENED this round** — see finding 5, § 9.2 |
+| 10 | removal targets the **descriptor's recorded** groups, not the current build's | IMPLEMENTED | `pane-status-removal.test.js` proves removal survives an upgrade-shaped difference |
+| 11 | `clearStaleLock`: trusted sender, native confirm, PID + start time, byte-compare before unlink, never age-based | IMPLEMENTED | **STRENGTHENED this round** — see finding 7, § 9.2 |
+| 12 | tracked manual recovery document | IMPLEMENTED | `docs/RECOVERY-pane-status-hooks.md`, extended this round |
+| 13 | singleton scans cover production runtime only, excluding tests/docs/fixtures | IMPLEMENTED | `pane-status-isolation.test.js` § 2 |
+| 14 | `BLUE-HELM-MASTER-STATUS.md` participates in the Full-class review | IMPLEMENTED | in the census |
+| 15 | user-scope accepted; machine-wide spawn and uninstall hazards stay explicit | IMPLEMENTED | § 6; master-status deferred section |
+
+### Conformance matrix — WO-2 Binding Amendment A
+
+| # | Amendment | Disposition | Evidence |
+|---|---|---|---|
+| 1 | 1.0 runtime is the unpackaged developer Electron app; no packaged-runtime claim | IMPLEMENTED | § 6; master-status deferred section |
+| 2 | full-chain invocation; zero exit at all three layers; official schema; `.cmd` never the executable | IMPLEMENTED | § 3, § 9.5 |
+| 3 | zero process creation from any event path; exactly two injected exceptions | IMPLEMENTED | `pane-status-isolation.test.js` |
+| 4 | version re-probe before live acceptance; never widen, never silently append | IMPLEMENTED | § 9.4 |
+| 5 | 200-run full-chain measurement; enrolled path deliberately unmeasured | IMPLEMENTED | **now reproducible** — § 9.5 |
+| 6 | assertion baseline reported with commit identity, reconciled across every format | IMPLEMENTED | **corrected this round** — § 9.3 |
+| 7 | discovery gate is hard; the 30-point milestone is indivisible | IMPLEMENTED | § 3 |
+
+## 9.2 The findings, and what each correction actually changes
+
+| # | Severity | Correction | Regression proof |
+|---|---|---|---|
+| 2 | HIGH | The setup control now mounts through a **production** resolver (`resolveSetupHost`) that queries the real `.term-bar` and its `#paneStatusHost` placeholder. `app.js` no longer supplies a mount point at all, so a suite cannot make the integration work by injecting one. | `pane-status-setup-mount.test.js` builds its DOM **by parsing the real `index.html`** and drives the real `createSetupControl` with only a document and a bridge. |
+| 3 | HIGH | Version resolution goes through one PowerShell with the pane's flags, **no `-NoProfile`**, `Get-Command` then `& $source --version`. Carried forward from the reviewed prototype including its revision-3 source-before-error ordering. | `pane-status-resolution.test.js`: A-vs-B fixture, flag parity read out of `main.js`, bare name appears exactly once, eight fail-closed branches. |
+| 4 | MEDIUM | Removal **classifies before it mutates**, against the descriptor's recorded groups, with key-order-independent structural equality. Verification is install-ID-scoped across the whole document. | `pane-status-removal.test.js`, 78 assertions — the A–E case table below. |
+| 5 | MEDIUM | `atomicWriteFileSync` tags the phase it reached; a failed write is re-classified by re-reading the file against the pre-transaction and attempted hashes. **Landed-but-unverified never writes IDLE.** | `pane-status-write-failure.test.js` injects all six required failure points. |
+| 6 | — | `p.onExit` → `paneStatus.notePaneExit(id)`; `window-all-closed` → `paneStatus.shutdown()`, idempotent. | `pane-status-lifecycle.test.js`, including the dual-lifetime proof (§ 9.6). |
+| 7 | — | The liveness resolver uses a bounded absolute PowerShell under the validated system directory. The no-op ternary is gone. | `pane-status-resolution.test.js` poisons PATH, Path, PATHEXT and ComSpec. |
+| 8 | — | **Measured, and the code was right.** `+` does **not** break the chain. The comment claiming it did is withdrawn. | § 9.5. |
+| 9 | — | `start()` resolves on `listening`. A pre-listen error fails the start; a post-ready error takes the subsystem out of READY. | `pane-status-lifecycle.test.js`, `pane-status-pipe.test.js`. |
+| 10 | — | A `hooks` value that is an array, a scalar or null — or an event value that is not an array — is a **refusal**. An array is never spread into numeric keys. | `pane-status-settings-doc.test.js`, with the old transformation kept as a negative control. |
+| 11 | — | A lock whose exclusive create succeeded but whose write or fsync failed is **cleaned up**, with identity proven by prefix match; a replacement by another process survives. | `pane-status-write-failure.test.js`. |
+| 12 | — | Shim and descriptor deletion results decide the reported outcome. The descriptor is retained at `REMOVE_VERIFIED` while cleanup is incomplete, and startup finishes it. | `pane-status-write-failure.test.js`. |
+| 13 | — | `scripts/pane-status-chain-perf.js`, tracked, temp-only, outside the production runtime tree. | `pane-status-isolation.test.js` § 4 proves nothing under `app/` requires it. |
+| 14 | — | Assertion reconciliation corrected and made self-defending. | § 9.3. |
+
+### Setup versus removal: cross-install classification (Amendment A § 2)
+
+| Situation | SETUP | REMOVAL |
+|---|---|---|
+| No Blue Helm groups present | install | nothing to remove; cleanup proceeds (case C) |
+| Our groups present and exact | refuse `already-installed` | **remove ours** (case A) |
+| Our groups exact **+ another installation present** | refuse `owned-by-another-install` | **remove only ours; theirs preserved byte-for-byte and in order** (case B) |
+| Our groups partial / modified / ambiguous | refuse | **refuse the whole operation**; settings, descriptor and shim all byte-identical (case D) |
+| Only another installation present | refuse `owned-by-another-install` | **reconciliation-required** — never a claimed success (case E) |
+
+**Byte-identity result for the preserved other-install groups:** in the case-B fixture, three foreign
+groups are placed — two *before* ours in their event, one *after* — and after removal all three are
+present, byte-identical, in the same events, in the same relative order. Verification compares
+`(event, group)` pairs and deliberately **excludes the array index**, because removing our group
+necessarily shifts every later index in that event; an index-sensitive comparison failed every
+legitimate case-B removal, which is how that subtlety was found.
+
+## 9.3 Assertion reconciliation — the previous explanation was wrong; the total was right
+
+Amendment A § 3 forbade assuming the arithmetic. Measured:
+
+**This repository's gate emits FIVE summary shapes, not two.**
+
+| Shape | Form on stdout | Suites | Named? |
+|---|---|---|---|
+| A | `name: N passed, M failed` (template literal) | 62 | yes |
+| B | `name: N passed, M failed` (concatenation) | 2 | yes |
+| C | `basename: N assertions passed` | 2 | yes |
+| D | `N passed, M failed` | 6 | **no** |
+| E | `T tests: N passed, M failed` | 10 | **no** |
+
+The previous handoff described this as "74 suites emitting `name: N passed, M failed` plus 2 emitting
+`N assertions passed`". Sixteen of those 74 print no name at all. The consequence matters in both
+directions: a reconciliation anchored on a suite **name** silently loses all six shape-D suites, and
+one anchored on `<anything>: N passed` reads shape E's `"17 tests"` as if it were a suite name — and
+takes the right number by luck. **The 5,036 total was correct; the account of how it was reached was
+not**, which is exactly the condition under which a future suite goes missing unnoticed.
+
+### Format-C evidence, run rather than assumed
+
+    renderer/audio-module-health.test.js  ->  "audio-module-health.test.js: 9 assertions passed"
+    renderer/tts-audio-contract.test.js   ->  "tts-audio-contract.test.js: 9 assertions passed"
+                                                                          Format C total = 18
+
+### Verdict on the three candidates Amendment A § 3 named
+
+| Candidate | Verdict |
+|---|---|
+| Format A/B = 5,018 at `a71937e1` | **Value CONFIRMED, label CORRECTED.** 5,018 is A+B+D+E, not "A/B". |
+| Format C = 18 at `a71937e1` | **CONFIRMED** by running both suites — 9 + 9. |
+| Total = 5,036 at `a71937e1` | **CONFIRMED.** |
+
+The `a71937e1` baseline was **measured, not reconstructed**: a temporary detached worktree at that
+exact commit, its own complete app gate, counted under all five rules. That run is reported honestly
+in § 9.9 — it exited 1.
+
+## 9.4 Version probe — fixture proof and host proof, kept apart (Amendment A § 5)
+
+**Automated fixture proof (construction).** `pane-status-resolution.test.js` proves the resolver
+launches PowerShell with the pane's flags read out of `main.js`, that `-NoProfile` is absent, that the
+script uses `Get-Command` and invokes the resolved source, that the bare name appears exactly once,
+and — with an injected A-vs-B result — that the gate trusts **B**, the pane resolution.
+
+**Read-only host comparison (2026-08-23, this machine).** No provider session, no prompt, no turn.
+
+| | Method A (superseded: `execFile('claude', …)`) | Method B (production PowerShell resolver) |
+|---|---|---|
+| resolved executable | `C:\Users\levij\.local\bin\claude.exe` | `C:\Users\levij\.local\bin\claude.exe` |
+| raw output | `2.1.228 (Claude Code)` | `2.1.228 (Claude Code)` |
+| parsed | `2.1.228` | `2.1.228` |
+
+**They agree today, so the historical divergence is NOT reproduced on this host, and no claim is made
+that it was.** The divergent fixture is retained as construction proof. What the probe *did* show is
+that the divergence **condition still exists**: `where.exe claude` lists three candidates on this
+machine — the `.local\bin` executable and both npm shims — the same two installations behind the
+prototype's revision-1 defect. They agree only because `.local\bin` currently precedes npm for both
+resolution paths. A PATH or profile edit separates them again, and only method B follows the pane.
+
+`SUPPORTED_CLAUDE_VERSIONS` remains **one provisional entry**, `2.1.228`. A third probe through
+method B is required immediately before live acceptance; any difference stops the run.
+
+## 9.5 Performance — now reproducible, and the `+` question settled
+
+`node scripts/pane-status-chain-perf.js 200`, run 2026-08-23 on the correction tree:
+
+| | |
+|---|---|
+| runs | 200, full chain `cmd.exe → args → shim → Electron-as-node → reporter.js` |
+| p50 / p95 / max / min | **323.9 ms / 374.0 ms / 563.7 ms / 260.3 ms** |
+| exit codes | `{"0": 200}` |
+| stdout / stderr escaped | 0 / 200 and 0 / 200 |
+| Electron process residue | 0 |
+| Blue Helm windows appeared | **0** |
+| enrolled? | **no** — the pane variables are deliberately absent |
+
+> **ENROLLED PER-TOOL-CALL OVERHEAD IS NOT YET MEASURED. PRETOOLUSE AND POSTTOOLUSE PRODUCE TWO
+> REPORTER INVOCATIONS PER TOOL CALL. THIS IS A REQUIRED CONTROLLED-LIVE ACCEPTANCE MEASUREMENT, NOT
+> EVIDENCE ESTABLISHED BY THE 200-RUN UNENROLLED HARNESS.**
+
+### The `+` metacharacter claim — withdrawn
+
+A real full-chain fixture, spawned exactly as Claude Code spawns an exec-form hook:
+
+| directory component | escaped as | exit | reporter ran? |
+|---|---|---|---|
+| `lab+dir` | `lab+dir` (unchanged) | 0 | **yes** |
+| `lab +dir` | `lab^ +dir` (space only) | 0 | **yes** |
+| `lab+&dir` | `lab+^&dir` (`&` only) | 0 | **yes** |
+| `labdir` (control) | unchanged | 0 | **yes** |
+
+cmd.exe does not treat `+` as a command-line metacharacter. **No escaping was added** — the code was
+already right and the comment was wrong, so the comment was corrected. `CMD_META` remains
+`/[&^()<>|;,= ]/g`.
+
+## 9.6 The p.onExit comment, quoted verbatim, and the dual-lifetime proof (Amendment A § 4)
+
+The existing comment, reproduced exactly as it stood at `a71937e1`:
+
+> ```
+> // V5b1: record pane->runId for a video-scout launch. This is stored internally ONLY (never
+> // returned to the renderer). It intentionally OUTLIVES p.onExit below -- a finished run's report
+> // stays openable until the pane is explicitly closed (pty-kill) or the window shuts down.
+> ```
+> ```
+> // NOTE: onExit removes the PTY handle but deliberately does NOT remove the run-ID mapping (V5b1).
+> ```
+
+**Its rationale is correct and applies to the video-scout report mapping — a stored artifact.** A
+finished run's report is still worth opening after the process that produced it has gone, so the
+mapping must outlive `p.onExit` and is dropped only on explicit close or window teardown.
+
+**That rationale does not extend to a pane-status bearer token or an active-state claim.** Pane status
+is not a stored artifact; it is a live claim about a running program, backed by a token. Keeping
+either alive past exit displays `working` for a process that no longer exists — a confidently wrong
+display, the one thing the invariant forbids — and leaves a valid token with no legitimate holder for
+the whole 120-second staleness window.
+
+Both are now proven simultaneously in one test that drives the real controller and the **real**
+`createRunIdRegistry`:
+
+* pane status publishes `exited` and revokes its token on PTY exit;
+* `videoScoutRunIds` still holds the completed run's mapping, byte-identical, after that same exit;
+* explicit pane close still removes the video-run mapping;
+* window teardown still clears it;
+* `admissionBudget.notePaneExit(id)` and `admissionIpc.forgetPane(id)` are still called on exit.
+
+The wiring itself is proven structurally against `main.js`'s real handler bodies, not against a
+re-creation: `p.onExit` calls `notePaneExit` and does **not** call `videoScoutRunIds.remove`;
+`pty-kill` does the reverse; `window-all-closed` calls `shutdown()` and still clears the mapping.
+
+## 9.7 Two things the advisory review got wrong
+
+Reported per Amendment A § 1's requirement to report findings rather than quietly absorb them.
+
+1. **The assertion-format claim.** The advisory review counted one summary format and concluded the
+   total was misreported. Measured, there are five formats and **the total was right**; it was the
+   *description* that was wrong. Corrected in § 9.3 in the direction the evidence pointed, not the
+   direction the review asserted.
+2. **The `+` metacharacter claim.** Escaping `+` was proposed as a correction. A real full-chain
+   fixture shows `+` needs no escaping. Adding it would have been superstition; the comment was
+   corrected instead of the code (§ 9.5).
+
+## 9.8 What changed in this round
+
+**29 paths — 22 modified, 7 added, 0 deleted, 0 renamed.**
+
+Added (7):
+
+| Path | What it is |
+|---|---|
+| `app/pane-status/pane-status-removal.test.js` | finding 4 / Amendment A § 2 — the A–E removal matrix |
+| `app/pane-status/pane-status-write-failure.test.js` | findings 5, 11, 12 — every injected failure point |
+| `app/pane-status/pane-status-resolution.test.js` | findings 3 and 7 — which executable, both ways |
+| `app/pane-status/pane-status-lifecycle.test.js` | findings 6 and 9 — PTY exit, teardown, transport readiness |
+| `app/renderer/pane-status-setup-mount.test.js` | finding 2 — the control mounts in the REAL markup |
+| `app/test-summary-formats.test.js` | Amendment A § 3 — a sixth summary shape fails visibly |
+| `scripts/pane-status-chain-perf.js` | finding 13 — the reproducible 200-run harness |
+
+Modified (22): `app/main.js` · `app/package.json` · `app/launcher-fence-invariant.test.js` ·
+`app/pane-status/{controller, descriptor, ipc, lock, pipe, recovery, runtime-shim, settings-doc,
+settings-txn, version}.js` · `app/pane-status/{isolation, pipe, settings-doc}.test.js` ·
+`app/renderer/{app.js, index.html, pane-status-badge.js, pane-status-badge.test.js}` ·
+`docs/BUILDER-HANDOFF-pane-status-production.md` · `docs/RECOVERY-pane-status-hooks.md`.
+
+Two modifications are worth calling out because they are **assertions being changed**, which always
+deserves scrutiny:
+
+* `app/launcher-fence-invariant.test.js` — the `pty-start` handler byte/SHA pin moved (LF units
+  13,864 → 14,993) because `p.onExit` now calls `notePaneExit`. Both previous pins are retained
+  inline. Separately, an assertion there **pinned the defect in place**: it asserted
+  `AGENT_CMD.claude, ['--version']` was present and labelled it "the SAME executable a pane launches".
+  It was not, and it would have blocked finding 3's fix. It is replaced by three strictly stronger
+  assertions — the resolver must go through the pane-equivalent PowerShell path, must resolve the same
+  bare command name, and the direct-exec form must be **absent**.
+* `app/pane-status/pane-status-pipe.test.js` — `server.start()` is now awaited, because it returns a
+  promise that settles on `listening`. No assertion was weakened; six call sites gained `await`.
+
+**A comment nearly broke an unrelated test, and that is recorded in the code.** A correction comment
+in `main.js` quoted `pty.spawn('powershell.exe'…)` verbatim, which made
+`admission-budget.test.js`'s source-order assertion find the comment instead of the real call. The
+comment was reworded and now carries a note saying why it must not reproduce that text.
+
+## 9.9 Gates, and how many times they ran
+
+| Gate | Result |
+|---|---|
+| Focused pane-status suites (20) | **1,118 assertions, 0 failures** |
+| Complete app gate (`npm test` in `app/`) | **exit 0 — 82 suites, 5,571 assertions, 0 failures** |
+| Complete Pester gate (`scripts\run-pester.ps1`) | **exit 0 — 955 passed, 0 failed, 0 skipped** |
+
+### Reconciliation, measured at both ends under all five shapes
+
+| Component | Δ |
+|---|---|
+| baseline at `a71937e1ad0f2fdb77be9b852ff5066755157639` | **5,036** |
+| six new suites (63 + 78 + 90 + 31 + 70 + 118) | **+450** |
+| `pane-status-settings-doc` 43 → 81 (hooks-structure + deepEqual) | **+38** |
+| `pane-status-isolation` 99 → 126 (perf-harness exclusion + two new suites scanned) | **+27** |
+| `pane-status-badge` 86 → 104 (retained-refusal presentation) | **+18** |
+| `launcher-fence-invariant` 24 → 26 (defect-pinning assertion replaced by three) | **+2** |
+| suites retired | **0** |
+| **new tip total** | **5,036 + 535 = 5,571** ✔ |
+
+By shape at the new tip: A 62 suites + B 2 = **4,841**; C 2 = **18**; D 6 = **423**; E 10 = **289**.
+82 summary lines for 82 registered segments — every one attributed.
+
+### Honest disclosure of every complete-gate run
+
+Three complete app-gate runs happened in this round. None was a retry of an unchanged tree.
+
+1. **Correction tree, exploratory — exit 0.** Run after the code corrections and before the
+   documentation, to find collateral breakage early. It found none, because the three real breakages
+   (`launcher-fence-invariant`'s pin and its defect-pinning assertion, and `admission-budget`'s
+   source-order assertion) had already been found and fixed by running those suites individually
+   first.
+2. **Baseline worktree at `a71937e1` — exit 1.** A temporary detached worktree, created solely to
+   MEASURE the baseline rather than reconstruct it arithmetically. It failed 2 assertions in
+   `admission-process-cas.test.js` — an eight-way concurrent process race — and because `npm test`
+   chains with `&&`, the run aborted there and `renderer/admission-view.test.js` never executed. On
+   the same tree, `admission-process-cas` passes **16/0 standalone**. **That suite is timing-sensitive
+   under load, not broken**, and it is not a suite this branch touches. The baseline figure of 5,036
+   is therefore the observed 4,900 plus the 2 assertions the flaky suite would have reported plus the
+   134 from the segment that never ran — each of which was measured, not assumed. The worktree was
+   removed afterwards.
+3. **Correction tree, final — exit 0**, the run reported in the table above.
+
+The Pester gate ran **once**, on the final tree: 955 / 0 / 0.
+
+**One edit followed the final gate run**: the gate results in this section were written into this
+document. No source file, no test, and no configuration changed after the gates ran — a fact the
+pinned diff and the artifact hashes make checkable.
+
+### Nothing real was touched
+
+No real Claude settings were read or written; no hook was installed or removed; no provider session
+was opened; no prompt was submitted; no model turn was consumed. The version probe and the `+`
+fixture are read-only and temp-only. `pane-status-isolation.test.js` fails the gate if any suite names
+a real settings path, calls `os.homedir()`, or reads `USERPROFILE`/`HOME`, and it now applies the same
+rule to the performance harness.
+
+## 9.10 Review requested
+
+A **fresh independent cumulative Codex Full review** of `83cacf9333e9ed05b3ef137a21a619a1070fd004`
+… the new tip. Not Claude: every commit on this branch, including this correction, carries
+`Co-Authored-By: Claude Opus 5`, and by this repository's own precedent that disqualifies Claude as
+reviewer. The builder has not reviewed this correction.
+
+Live acceptance remains **NOT PERFORMED** and separately authorized.

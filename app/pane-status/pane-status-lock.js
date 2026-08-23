@@ -35,9 +35,42 @@ const LOCK_REFUSAL = Object.freeze({
   CHANGED: 'lock-changed-under-us',
   MISSING: 'lock-missing',
   CREATE_FAILED: 'lock-create-failed',
+  CLEANUP_FAILED: 'lock-create-failed-and-not-cleaned',
+  POWERSHELL_UNRESOLVED: 'liveness-resolver-unavailable',
 });
 
 function lockPath(settingsDir) { return path.join(settingsDir, LOCK_BASENAME); }
+
+// The Windows PowerShell executable, resolved as a BOUNDED ABSOLUTE PATH under the system directory.
+//
+// CORRECTION (advisory review, finding 7): main.js previously chose the liveness resolver's executable
+// with `process.env.ComSpec ? 'powershell.exe' : 'powershell.exe'` — a ternary whose two branches are
+// identical, so it read an environment variable and then ignored it, and either way handed a BARE NAME
+// to execFile. A bare name is resolved through PATH, and PATH is attacker-influenced on a shared
+// machine. This is the only place in the subsystem that decides which PowerShell runs, so it resolves
+// one absolute path and checks that it is really there.
+//
+// PATH is never consulted. ComSpec is never consulted. Nothing the renderer can supply reaches this.
+// A missing or unusable executable is a REFUSAL, which the caller turns into liveness-unknown and
+// therefore into a conservative refusal to clear the lock — never into an assumption that the owner
+// is dead.
+const WINDOWS_POWERSHELL_RELATIVE = Object.freeze(['System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe']);
+
+function resolveWindowsPowerShellPath(env, existsSync) {
+  const e = env || {};
+  const exists = typeof existsSync === 'function' ? existsSync : fs.existsSync;
+  const root = (typeof e.SystemRoot === 'string' && e.SystemRoot)
+    ? e.SystemRoot
+    : ((typeof e.windir === 'string' && e.windir) ? e.windir : 'C:\\Windows');
+  if (typeof root !== 'string' || !root || !path.isAbsolute(root)) {
+    return { ok: false, reason: LOCK_REFUSAL.POWERSHELL_UNRESOLVED };
+  }
+  const candidate = path.join(root, ...WINDOWS_POWERSHELL_RELATIVE);
+  let present = false;
+  try { present = !!exists(candidate); } catch { present = false; }
+  if (!present) return { ok: false, reason: LOCK_REFUSAL.POWERSHELL_UNRESOLVED };
+  return { ok: true, path: candidate };
+}
 
 /**
  * This process's start time, in ms epoch, WITHOUT spawning anything. process.uptime() is seconds of
@@ -125,8 +158,10 @@ function createPaneStatusLock(deps) {
     const text = serialize(body);
     try { fs.mkdirSync(settingsDir, { recursive: true }); } catch { /* already there */ }
     let fd = null;
+    let created = false;
     try {
       fd = fs.openSync(target, 'wx');
+      created = true;
       fs.writeSync(fd, text, 0, 'utf8');
       fs.fsyncSync(fd);
     } catch (e) {
@@ -135,10 +170,47 @@ function createPaneStatusLock(deps) {
         log('[pane-status] settings lock is held; refusing to proceed');
         return { ok: false, reason: LOCK_REFUSAL.HELD };
       }
+      // CORRECTION (advisory review, finding 11). The exclusive create SUCCEEDED and the write or the
+      // fsync then failed. The previous build returned CREATE_FAILED and walked away, leaving an empty
+      // or truncated lock file behind: every later acquire got EEXIST, and confirmClearStaleLock could
+      // not rescue it because the stub does not parse. An ordinary caught I/O error must not
+      // manufacture the crash state that manual recovery exists for.
+      if (created) {
+        const cleaned = removeOwnPartialLock(text);
+        if (!cleaned.ok) {
+          log('[pane-status] settings lock could not be created OR cleaned up; manual recovery required');
+          return { ok: false, reason: LOCK_REFUSAL.CLEANUP_FAILED, detail: cleaned.reason };
+        }
+      }
       return { ok: false, reason: LOCK_REFUSAL.CREATE_FAILED };
     }
     try { fs.closeSync(fd); } catch { /* already closed */ }
     return { ok: true, createdByUs: true, body, bytes: text };
+  }
+
+  /**
+   * Delete a lock THIS acquisition just created and failed to finish writing.
+   *
+   * Identity is proven, not assumed: the file's current bytes must be a PREFIX of the text we were in
+   * the middle of writing — which covers the empty file, a torn partial write, and the complete text.
+   * Anything else is a replacement created by another process in the microseconds since our exclusive
+   * create, and it is not ours to delete.
+   */
+  function removeOwnPartialLock(intendedText) {
+    let current;
+    try { current = fs.readFileSync(target, 'utf8'); }
+    catch (e) {
+      if (e && e.code === 'ENOENT') return { ok: true, alreadyGone: true };
+      return { ok: false, reason: LOCK_REFUSAL.UNREADABLE };
+    }
+    if (current.length > intendedText.length || intendedText.slice(0, current.length) !== current) {
+      return { ok: false, reason: LOCK_REFUSAL.NOT_OURS };
+    }
+    try { fs.unlinkSync(target); } catch (e) {
+      if (e && e.code === 'ENOENT') return { ok: true, alreadyGone: true };
+      return { ok: false, reason: LOCK_REFUSAL.UNREADABLE };
+    }
+    return { ok: true };
   }
 
   /**
@@ -258,6 +330,8 @@ const api = {
   LOCK_SCHEMA_VERSION,
   LOCK_REFUSAL,
   START_TIME_TOLERANCE_MS,
+  WINDOWS_POWERSHELL_RELATIVE,
+  resolveWindowsPowerShellPath,
   lockPath,
   ownStartTimeMs,
   buildLockBody,

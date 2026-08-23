@@ -109,31 +109,62 @@ function assertNoForbiddenKeys(value, trail) {
  * No copy-over fallback exists. A fallback that is not atomic would silently weaken the one property
  * the whole two-resource protocol rests on.
  */
+// How far an atomic write got before it failed. CORRECTION (advisory review, finding 5): a caught
+// exception from this function used to be indistinguishable from "nothing was written". It is not.
+// The read-back happens AFTER renameSync, so an EREADBACK — or a plain read failure — means the
+// replacement DID land. A caller that treats that as a pre-write failure records IDLE while eight
+// hook groups are live in somebody's settings file, which is the one state the two-resource protocol
+// exists to make impossible.
+const WRITE_PHASE = Object.freeze({
+  PRE_RENAME: 'pre-rename',    // temp write or fsync failed; the target was never touched
+  RENAME: 'rename',            // renameSync itself threw; the target was not replaced
+  POST_RENAME: 'post-rename',  // the replacement LANDED and verification failed afterwards
+});
+
 function atomicWriteFileSync(targetPath, contents) {
   const dir = path.dirname(targetPath);
   const tmp = path.join(dir, '.' + path.basename(targetPath) + '.' + crypto.randomBytes(6).toString('hex') + '.tmp');
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(tmp, contents, { encoding: 'utf8' });
-
-  // Durability: reopen 'r+' (NOT 'r') and fsync. See the EPERM note above.
-  let fd = null;
+  let phase = WRITE_PHASE.PRE_RENAME;
+  let renamed = false;
   try {
-    fd = fs.openSync(tmp, 'r+');
-    fs.fsyncSync(fd);
-  } finally {
-    if (fd !== null) { try { fs.closeSync(fd); } catch { /* already closed */ } }
-  }
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(tmp, contents, { encoding: 'utf8' });
 
-  fs.renameSync(tmp, targetPath);
+    // Durability: reopen 'r+' (NOT 'r') and fsync. See the EPERM note above.
+    let fd = null;
+    try {
+      fd = fs.openSync(tmp, 'r+');
+      fs.fsyncSync(fd);
+    } finally {
+      if (fd !== null) { try { fs.closeSync(fd); } catch { /* already closed */ } }
+    }
 
-  // Read back and compare bytes. A write we cannot prove landed is a write we treat as failed.
-  const readBack = fs.readFileSync(targetPath, 'utf8');
-  if (readBack !== contents) {
-    const err = new Error('pane-status-descriptor: atomic write read-back mismatch');
-    err.code = 'EREADBACK';
-    throw err;
+    phase = WRITE_PHASE.RENAME;
+    fs.renameSync(tmp, targetPath);
+    renamed = true;
+    phase = WRITE_PHASE.POST_RENAME;
+
+    // Read back and compare bytes. A write we cannot prove landed is a write we treat as failed —
+    // but the failure is now labelled, because "landed and unverified" is a different world from
+    // "never written" and the caller has to be able to tell them apart.
+    const readBack = fs.readFileSync(targetPath, 'utf8');
+    if (readBack !== contents) {
+      const err = new Error('pane-status-descriptor: atomic write read-back mismatch');
+      err.code = 'EREADBACK';
+      throw err;
+    }
+    return { ok: true, bytes: Buffer.byteLength(contents, 'utf8'), sha256: sha256(contents) };
+  } catch (e) {
+    if (e && typeof e === 'object') {
+      e.paneStatusWritePhase = phase;
+      e.paneStatusRenamed = renamed;
+    }
+    // Clean up the temp file ONLY while it is still a temp file. After a successful rename the name
+    // belongs to the target, and unlinking it would delete the very bytes we just wrote. The name is
+    // freshly random, so nothing else can be holding it.
+    if (!renamed) { try { fs.unlinkSync(tmp); } catch { /* never existed, or already gone */ } }
+    throw e;
   }
-  return { ok: true, bytes: Buffer.byteLength(contents, 'utf8'), sha256: sha256(contents) };
 }
 
 /**
@@ -260,6 +291,7 @@ function exists(userDataPath) {
 
 const api = {
   SCHEMA_VERSION,
+  WRITE_PHASE,
   DESCRIPTOR_BASENAME,
   TXN,
   TXN_STATES,

@@ -112,6 +112,7 @@ function createPaneStatusController(deps) {
   let heartbeat = null;
   let inFlight = false;
   let reportingEnabled = false;
+  let shutDown = false;
 
   function setSetupState(state, detail) {
     setupState = state;
@@ -160,11 +161,40 @@ function createPaneStatusController(deps) {
     };
   }
 
-  /** Spawn failure, PTY exit, explicit pane close, window teardown. Zero process control. */
+  /**
+   * EXPLICIT pane close (pty-kill), spawn failure, window teardown. Zero process control.
+   *
+   * The pane is going away as a UI object, so the honest badge is `unknown`/`no-signal`: there is
+   * nothing left to report about. This is deliberately NOT the PTY-exit path — see notePaneExit.
+   */
   function releasePane(paneId, reason) {
     const had = registry.has(paneId);
     registry.revoke(paneId, reason || 'pane-released');
     if (had) publishView({ paneId, state: 'unknown', reason: freshness.UNKNOWN_REASON.NO_SIGNAL });
+    return had;
+  }
+
+  /**
+   * PTY PROCESS EXIT — main's own knowledge, and therefore AUTHORITATIVE.
+   *
+   * CORRECTION (advisory review, finding 6). Work Order 1 § F.7 specified this and the previous build
+   * dropped it silently: `p.onExit` touched pane status not at all, so a pane whose process had
+   * genuinely ended kept its last state and its live token until the 120-second staleness bound
+   * eventually aged it into `unknown`. Two consequences, both wrong. The badge showed `working` for a
+   * process that no longer existed — a confidently wrong display, which is the one thing the invariant
+   * forbids — and the token stayed valid for two minutes after the only legitimate holder had died.
+   *
+   * ORDER MATTERS, the same way it does in remove(): publish `exited` FIRST, while the pane is still
+   * addressable, then revoke. Revoking first would blank the badge and leave nothing to explain it.
+   *
+   * This does NOT wait for a `SessionEnd` hook, which may never arrive, and it is a DISTINCT operation
+   * from releasePane because the two mean different things: `exited` is a real terminal lifecycle
+   * state a human wants to see, `unknown`/`no-signal` is the absence of one.
+   */
+  function notePaneExit(paneId) {
+    const had = registry.has(paneId);
+    if (had) publishView({ paneId, state: 'exited', reason: null });
+    registry.revoke(paneId, 'pty-exit');
     return had;
   }
 
@@ -198,7 +228,7 @@ function createPaneStatusController(deps) {
       return { ok: true, setupState, detail: versionGate.reason() };
     }
 
-    const started = startTransport();
+    const started = await startTransport();
     if (!started.ok) {
       setSetupState(SETUP_STATE.MALFORMED, started.error || 'transport-failed');
       return { ok: false, setupState, detail: started.error };
@@ -207,19 +237,40 @@ function createPaneStatusController(deps) {
     return { ok: true, setupState };
   }
 
-  function startTransport() {
+  /**
+   * ASYNCHRONOUS. The heartbeat starts only after the pipe is genuinely listening (finding 9), so a
+   * bind failure can never produce a READY badge over a transport nothing is bound to.
+   */
+  async function startTransport() {
     if (pipe) return { ok: true, pipeName: pipe.pipeName };
     const suffix = cryptoModule.randomBytes(16).toString('hex');
     const pipeName = pipeMod.buildPipeName(suffix);
     const server = pipeMod.createPaneStatusPipe({
       net, registry, pipeName, log, now,
       onStateChange: (view) => publishView(view),
+      onFatal: (code) => onTransportLost(code),
     });
-    const res = server.start();
+    const res = await server.start();
+    // Nothing is assigned on failure: `pipe` stays null, so no pane can enroll and no heartbeat runs.
     if (!res.ok) return res;
     pipe = { server, pipeName };
     startHeartbeat();
     return { ok: true, pipeName };
+  }
+
+  /**
+   * The transport died AFTER it was ready. The subsystem stops claiming READY — enrollment is refused
+   * from the next pane onwards, the heartbeat stops, and every enrolled badge goes honestly `unknown`.
+   * Existing tokens are NOT revoked: nothing is listening for them, so they cannot do harm, and
+   * revoking would destroy the pane identities a later repair would need.
+   */
+  function onTransportLost(code) {
+    if (!pipe) return;
+    stopHeartbeat();
+    try { pipe.server.stop(); } catch { /* already closing */ }
+    pipe = null;
+    log(`[pane-status] transport lost after start (${code || 'unknown'}) — panes show "unknown"`);
+    setSetupState(SETUP_STATE.MALFORMED, 'transport-lost');
   }
 
   /**
@@ -268,7 +319,7 @@ function createPaneStatusController(deps) {
         setSetupState(SETUP_STATE.VERSION_MISMATCH, versionGate.reason());
         return { ok: true, setupState, versionSupported: false };
       }
-      const started = startTransport();
+      const started = await startTransport();
       if (!started.ok) {
         setSetupState(SETUP_STATE.MALFORMED, started.error || 'transport-failed');
         return { ok: false, reason: started.error };
@@ -282,12 +333,24 @@ function createPaneStatusController(deps) {
 
   async function remove() {
     if (inFlight) return { ok: false, reason: 'in-flight' };
+    // Captured so a refusal that wrote NOTHING can put the presentation back exactly as it was.
+    const priorState = setupState;
+    const priorDetail = setupDetail;
     inFlight = true;
     setSetupState(SETUP_STATE.IN_FLIGHT, 'remove');
     try {
       const res = await txn.remove();
       if (!res.ok) {
-        if (res.reconciliationRequired) setSetupState(SETUP_STATE.RECONCILIATION_REQUIRED, res.reason);
+        // A RETAINED refusal (Binding Amendment A § 2 case D): settings, descriptor and shim are all
+        // byte-identical to what they were. The installation is intact and still working, so there is
+        // no success result, no token revocation, and no disabled presentation — the control goes back
+        // to what it was showing and surfaces the refusal reason plus the manual-recovery pointer.
+        if (res.retained === true && !res.reconciliationRequired) {
+          setSetupState(priorState, priorDetail);
+          log(`[pane-status] removal refused (${res.detail || res.reason}); installation left intact`);
+          return res;
+        }
+        if (res.reconciliationRequired) setSetupState(SETUP_STATE.RECONCILIATION_REQUIRED, res.detail || res.reason);
         else if (res.reason === txnMod.TXN_REFUSAL.LOCK_HELD) setSetupState(SETUP_STATE.LOCKED, res.detail);
         else setSetupState(SETUP_STATE.RECONCILIATION_REQUIRED, res.reason);
         return res;
@@ -330,12 +393,20 @@ function createPaneStatusController(deps) {
     };
   }
 
-  /** Window teardown. Revoke everything; still no process control. */
+  /**
+   * WINDOW TEARDOWN. Clears the heartbeat, stops the pipe, revokes every token. IDEMPOTENT: called
+   * twice it does nothing the second time, because teardown can arrive from more than one place
+   * (window-all-closed, an explicit quit) and a double revoke-all would publish views for panes that
+   * no longer exist. Still zero process control — it cannot kill, relaunch, or quit anything.
+   */
   function shutdown() {
+    if (shutDown) return false;
+    shutDown = true;
     stopHeartbeat();
     registry.revokeAll('window-teardown');
-    if (pipe) { pipe.server.stop(); pipe = null; }
+    if (pipe) { try { pipe.server.stop(); } catch { /* already closing */ } pipe = null; }
     reportingEnabled = false;
+    return true;
   }
 
   return {
@@ -347,7 +418,9 @@ function createPaneStatusController(deps) {
     getSetupState,
     enrollPane,
     releasePane,
+    notePaneExit,
     shutdown,
+    isShutDown: () => shutDown,
     // exposed for tests and for the IPC layer; none of these spawn
     registry,
     versionGate,

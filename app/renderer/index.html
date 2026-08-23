@@ -135,6 +135,12 @@
               <option value="2">2.0×</option>
             </select>
           </div>
+          <!-- MAIN-OWNED PANE STATUS setup control. EMPTY IN MARKUP, exactly like #admissionHost
+               below: pane-status-badge.js builds the compact "Claude status" control into this
+               element, and what it says is a RUNTIME question (is the hook set installed?) rather
+               than a question about whether an object exists. Work Order 1 J.1 placed it here — a
+               sibling of .tts-controls, immediately before #newTermShell — and this is that element. -->
+          <div id="paneStatusHost" class="pane-status-host"></div>
           <button id="newTermShell" class="mini accent">+ Shell</button>
         </div>
         <!-- MAIN-OWNED TURN ADMISSION BUDGET host. EMPTY IN MARKUP, and it stays empty unless a

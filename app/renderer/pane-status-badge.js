@@ -219,20 +219,50 @@
   }
 
   /**
+   * WHERE THE SETUP CONTROL MOUNTS — the one production answer, resolved from the real document.
+   *
+   * CORRECTED (advisory review, finding 2). app/renderer/app.js used to supply its own
+   * `getToolbarElement` that queried `#terminals-toolbar`, `.term-toolbar` and `#term-toolbar` — none
+   * of which exists in index.html. All three returned null, so nothing ever mounted and the whole
+   * setup surface was unreachable in the running application. The suite that covered the control
+   * passed anyway, because it injected a toolbar of its own: a test that supplies the integration
+   * point cannot prove the integration point exists.
+   *
+   * So the lookup lives HERE, in production code, with the caller supplying only a document. The real
+   * element is `.term-bar` (Work Order 1 § J.1), and `#paneStatusHost` is the empty placeholder inside
+   * it — a sibling of `.tts-controls`, immediately before `#newTermShell`, mirroring `#admissionHost`.
+   * The bar itself is the fallback so the control stays reachable if the placeholder is ever removed.
+   */
+  function resolveSetupHost(document) {
+    if (!document || typeof document.querySelector !== 'function') return null;
+    const bar = document.querySelector('.term-bar');
+    if (!bar) return null;
+    if (typeof bar.querySelector === 'function') {
+      const host = bar.querySelector('#paneStatusHost');
+      if (host) return host;
+    }
+    return bar;
+  }
+
+  /**
    * The compact Claude status control for the existing Terminals toolbar.
    *
    * Its three possible actions map one-to-one onto three of the four IPC invokes. There is no control
    * here that sets a pane's status, reaches a token, or names a path.
    *
    * deps:
-   *   document, getToolbarElement() -> the toolbar node
+   *   document -> the real document. The mount point is resolved from it by resolveSetupHost.
+   *   getToolbarElement() -> OPTIONAL override, for suites that deliberately test the control's own
+   *                          behaviour in isolation. Production never passes it.
    *   bridge  -> window.ccPaneStatus
    *   log(line)
    */
   function createSetupControl(deps) {
     const d = deps || {};
     const doc = d.document;
-    const getToolbar = typeof d.getToolbarElement === 'function' ? d.getToolbarElement : () => null;
+    const getToolbar = typeof d.getToolbarElement === 'function'
+      ? d.getToolbarElement
+      : () => resolveSetupHost(doc);
     const bridge = d.bridge || null;
     const log = typeof d.log === 'function' ? d.log : () => {};
     let root = null, labelEl = null, actionEl = null;
@@ -268,8 +298,17 @@
         else if (action === 'clear') res = await bridge.clearStaleLock();
         if (res && res.setup) render(res.setup);
         if (res && res.ok === false && res.reason) {
-          // A refusal is a VISIBLE outcome, never a swallowed one.
-          log(`[pane-status] ${action} refused: ${res.reason}\n`);
+          // A refusal is a VISIBLE outcome, never a swallowed one. Both constants are surfaced: the
+          // outer reason says WHAT was refused, the bounded detail says WHY, and the detail is the one
+          // that names a manual-recovery section. Neither is ever a path or a settings value.
+          const why = res.detail ? `${res.reason} (${res.detail})` : res.reason;
+          log(`[pane-status] ${action} refused: ${why}\n`);
+          if (res.retained === true) {
+            // Nothing was written. Say so plainly, so a refusal does not read as damage, and point at
+            // the document that explains how to finish by hand.
+            log('[pane-status] nothing was changed: your Claude settings, the installation record and '
+              + 'the reporter are all exactly as they were. See docs/RECOVERY-pane-status-hooks.md.\n');
+          }
         }
       } finally {
         busy = false;
@@ -306,7 +345,7 @@
   }
 
   const api = {
-    describeView, describeSetup, createPaneStatusBadge, createSetupControl,
+    describeView, describeSetup, createPaneStatusBadge, createSetupControl, resolveSetupHost,
     STATE_LABEL, REASON_TEXT, STATE_CLASS, SETUP_TEXT, SETUP_CLASS,
   };
 

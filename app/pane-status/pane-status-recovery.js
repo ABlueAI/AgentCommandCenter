@@ -53,6 +53,7 @@ const RECONCILE_REASON = Object.freeze({
   ALREADY_REQUIRED: 'already-reconciliation-required',
   SHIM_REPAIR_FAILED: 'shim-repair-failed',
   SHIM_REPAIRED: 'shim-repaired-after-runtime-change',
+  CLEANUP_INCOMPLETE: 'removal-cleanup-incomplete',
 });
 
 /**
@@ -231,8 +232,22 @@ function createRecovery(deps) {
     // ---- interrupted removal ------------------------------------------------------------------
     if (state === TXN.REMOVE_PENDING || state === TXN.REMOVE_WRITTEN || state === TXN.REMOVE_VERIFIED) {
       if (present.overall === doc.OWNERSHIP.ABSENT || present.overall === doc.OWNERSHIP.FOREIGN) {
-        descriptorMod.remove(userDataPath);
-        try { fs.unlinkSync(shimPath); } catch { /* already gone */ }
+        // FINISHING A VERIFIED CLEANUP (finding 12). The settings are already clean, so this is the
+        // safe half of the two-resource protocol: only app-owned artifacts are retired, and BOTH
+        // results are checked. A cleanup that cannot be completed is reported as such rather than
+        // announced as a completed removal — the descriptor stays put and the next start tries again.
+        let shimRetired = true;
+        try { fs.unlinkSync(shimPath); }
+        catch (e) { if (!e || e.code !== 'ENOENT') shimRetired = false; }
+        if (!shimRetired) {
+          log('[pane-status] interrupted removal: settings are clean but the shim could not be deleted');
+          return { outcome: OUTCOME.RECONCILIATION_REQUIRED, reason: RECONCILE_REASON.CLEANUP_INCOMPLETE };
+        }
+        const retired = descriptorMod.remove(userDataPath);
+        if (!retired || retired.ok !== true) {
+          log('[pane-status] interrupted removal: settings are clean but the descriptor could not be retired');
+          return { outcome: OUTCOME.RECONCILIATION_REQUIRED, reason: RECONCILE_REASON.CLEANUP_INCOMPLETE };
+        }
         log('[pane-status] interrupted removal COMPLETED: groups are gone, descriptor retired');
         return { outcome: OUTCOME.REMOVED, reason: RECONCILE_REASON.REMOVAL_COMPLETED };
       }

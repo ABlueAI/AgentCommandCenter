@@ -95,6 +95,32 @@ Then delete Blue Helm's own record so it stops believing it is installed:
 Leave `pane-status-install-id` alone unless you are removing Blue Helm entirely; it is how this
 installation recognises its own groups next time.
 
+### When Blue Helm refuses to Remove
+
+Pressing **Remove** can come back refused. That is a designed outcome, not a fault, and it means
+**nothing at all was written**: your Claude settings, Blue Helm's installation record, and the
+reporter shim are all byte-for-byte as they were, no pane token was revoked, and the toolbar goes back
+to showing exactly what it showed before you pressed it.
+
+Blue Helm compares what is in the settings file **now** against the exact groups it recorded when it
+installed them — not against what this build would write today, which is why removal still works after
+an upgrade. It removes only if every recorded group is present and unmodified. The Logs tab names the
+specific cause:
+
+| Logged cause | What it means | What to do |
+|---|---|---|
+| `removal-owned-entry-modified` | One of your groups was edited after setup — a changed timeout, an added field, a different matcher. | Removal is refused **for all eight events**, not just the edited one: a half-removed hook set is worse than either endpoint. Remove by hand per §2. |
+| `removal-partial-installation` | Some of your recorded groups are present and others are gone. | Same: remove the remaining ones by hand per §2. |
+| `removal-ambiguous-ownership` | One matcher group holds your hook **alongside** somebody else's, or one event holds two of your groups. | Blue Helm will not rewrite a group it does not wholly own. Follow §2 rule 5. |
+| `removal-only-another-installation-present` | Your groups are gone, but **another** installation's are there. | This is not "already removed" — something changed the file behind Blue Helm's back. See §3 and §5. |
+| `lock-held-by-another-process` | A setup or removal is in flight, here or in another Blue Helm window. | Wait. If nothing else is running, see §6. |
+| `hooks-not-an-object`, `hook-event-not-an-array`, `hook-matcher-group-malformed` | The `hooks` section of the settings file is not the shape Claude Code's schema describes. | Blue Helm refuses to reshape a file it does not own — an array silently rewritten into numbered keys is data loss, not a repair. Fix the structure by hand, or restore your backup from §0. |
+
+**Automatic Remove is never offered as the fix for any of these.** In the states where automatic
+removal must refuse — *needs attention*, *unreadable*, *other install* — the toolbar shows no button
+at all, deliberately: a one-click action that is guaranteed to refuse is worse than no button, because
+it teaches people to click past refusals.
+
 ---
 
 ## 3. "Another Blue Helm installation owns hooks"

@@ -31,9 +31,18 @@
 //   quoting: ['/d','/c', <shim>, '>nul','2>nul','&','exit','/b','0'].
 //
 //   That alone is still not enough. cmd.exe re-parses metacharacters after removing the quoting, so a
-//   shim path containing & ^ ( ) ; , = or + breaks even though the encoder quoted it. Caret-escaping
-//   those characters — AND the space — fixes every measured case (17/17). Escaping metacharacters but
-//   not the space fails on `lab &dir` and `lab ^dir`, so the space is part of the rule, not decoration.
+//   shim path containing & ^ ( ) < > | ; , or = breaks even though the encoder quoted it.
+//   Caret-escaping those characters — AND the space — fixes every measured case (17/17). Escaping
+//   metacharacters but not the space fails on `lab &dir` and `lab ^dir`, so the space is part of the
+//   rule, not decoration.
+//
+//   `+` IS NOT ONE OF THEM, and an earlier revision of this comment wrongly said it was. Corrected by
+//   a real full-chain fixture (advisory review, finding 8): a directory component `lab+dir`, with no
+//   other escaped metacharacter present, ran cmd.exe -> shim -> Electron-as-node -> reporter and
+//   DELIVERED, exit 0, empty stdout and stderr — as did `lab +dir` (space escaped, `+` not) and
+//   `lab+&dir` (`&` escaped, `+` not) against a `labdir` control. cmd.exe simply does not treat `+`
+//   as a command-line metacharacter. Escaping it would be superstition, so it stays unescaped and the
+//   claim is withdrawn rather than the code being changed to match a wrong comment.
 //
 //   Paired percent signs are irreducible: cmd expands %VAR% before caret processing and `^` cannot
 //   escape `%` on a command line. Such a path is REFUSED, visibly, rather than encoded wrongly.

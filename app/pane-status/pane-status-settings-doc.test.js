@@ -146,5 +146,70 @@ assert(doc.parse('{oops').ok === false, 'malformed JSON is refused');
 assert(doc.parse('[1,2]').ok === false, 'a top-level array is refused');
 assert(doc.parse(doc.serialize({ a: 1 })).value.a === 1, 'serialize/parse round-trips');
 
+// -------------------------------------------------------------------------------------------------
+// THE `hooks` SUBTREE MUST BE THE SHAPE THE PROVIDER SCHEMA DESCRIBES (advisory review, finding 10)
+// -------------------------------------------------------------------------------------------------
+// The previous build tested `typeof settings.hooks === 'object'`, which is TRUE for an array and for
+// null. An ARRAY therefore flowed into `Object.assign({}, base.hooks)` and came back out as an object
+// with numeric keys — a silent structural rewrite of a file we do not own. A SCALAR was replaced
+// outright. Both are now visible refusals that write nothing.
+process.stdout.write('\nmalformed hooks structures REFUSE rather than being transformed\n');
+{
+  const bad = [
+    ['an array', { hooks: [] }, doc.HOOKS_REFUSAL.NOT_AN_OBJECT],
+    ['a populated array', { hooks: [{ matcher: '', hooks: [] }] }, doc.HOOKS_REFUSAL.NOT_AN_OBJECT],
+    ['a string', { hooks: 'enabled' }, doc.HOOKS_REFUSAL.NOT_AN_OBJECT],
+    ['a number', { hooks: 3 }, doc.HOOKS_REFUSAL.NOT_AN_OBJECT],
+    ['a boolean', { hooks: true }, doc.HOOKS_REFUSAL.NOT_AN_OBJECT],
+    ['null', { hooks: null }, doc.HOOKS_REFUSAL.NULL],
+    ['an installed event holding an object', { hooks: { Stop: { matcher: '' } } }, doc.HOOKS_REFUSAL.EVENT_NOT_AN_ARRAY],
+    ['an installed event holding a string', { hooks: { PreToolUse: 'x' } }, doc.HOOKS_REFUSAL.EVENT_NOT_AN_ARRAY],
+    ['a matcher group that is a scalar', { hooks: { Stop: ['nope'] } }, doc.HOOKS_REFUSAL.GROUP_MALFORMED],
+    ['a matcher group that is an array', { hooks: { Stop: [[]] } }, doc.HOOKS_REFUSAL.GROUP_MALFORMED],
+    ['a matcher group whose hooks is not an array', { hooks: { Stop: [{ matcher: '', hooks: {} }] } }, doc.HOOKS_REFUSAL.GROUP_MALFORMED],
+  ];
+  for (const [label, value, reason] of bad) {
+    const v = doc.validateHooksStructure(value);
+    assert(v.ok === false, `hooks as ${label} is REFUSED`);
+    assert(v.reason === reason, `  with reason ${reason} (got ${v.reason})`);
+  }
+
+  const good = [
+    ['absent entirely', {}],
+    ['an empty object', { hooks: {} }],
+    ['a well-formed installed event', { hooks: { Stop: [{ matcher: '', hooks: [{ type: 'command', command: 'x' }] }] } }],
+    ['an UNRELATED event with a shape we do not understand', { hooks: { PreCompact: 'whatever it means' } }],
+    ['a group with no hooks key at all', { hooks: { Stop: [{ matcher: 'Bash' }] } }],
+  ];
+  for (const [label, value] of good) {
+    assert(doc.validateHooksStructure(value).ok === true, `hooks ${label} is accepted`);
+  }
+
+  // NEGATIVE CONTROL: the transformation the old guard performed must not be reachable any more.
+  const arrayHooks = { hooks: [{ matcher: '', hooks: [] }] };
+  const wouldHaveBeen = Object.assign({}, arrayHooks.hooks);
+  assert(Object.prototype.hasOwnProperty.call(wouldHaveBeen, '0'),
+    'NEGATIVE CONTROL: spreading an array really does produce numeric keys — that was the defect');
+  assert(doc.validateHooksStructure(arrayHooks).ok === false,
+    'and the structural gate now stops it before any spread happens');
+}
+
+// -------------------------------------------------------------------------------------------------
+// KEY-ORDER-INDEPENDENT EQUALITY (advisory review, finding 4)
+// -------------------------------------------------------------------------------------------------
+process.stdout.write('\ndeepEqual compares meaning, not serialization\n');
+{
+  assert(doc.deepEqual({ a: 1, b: 2 }, { b: 2, a: 1 }), 'key order does not matter');
+  assert(doc.deepEqual({ a: [{ x: 1, y: 2 }] }, { a: [{ y: 2, x: 1 }] }), 'nested key order does not matter either');
+  assert(!doc.deepEqual([1, 2], [2, 1]), 'ARRAY order still does — hook order is meaningful');
+  assert(!doc.deepEqual({ a: 1 }, { a: 1, b: undefined }), 'an extra key is a difference even when undefined');
+  assert(!doc.deepEqual({ a: 1 }, { a: '1' }), 'a type change is a difference');
+  assert(!doc.deepEqual({ a: 1 }, null), 'null is not an empty object');
+  assert(!doc.deepEqual([], {}), 'an array is not an object');
+  assert(doc.deepEqual(null, null) && doc.deepEqual(3, 3) && doc.deepEqual('x', 'x'), 'primitives compare by value');
+  assert(JSON.stringify({ a: 1, b: 2 }) !== JSON.stringify({ b: 2, a: 1 }),
+    'NEGATIVE CONTROL: JSON.stringify DOES disagree on key order — which is why it was the wrong tool');
+}
+
 process.stdout.write(`\npane-status-settings-doc: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

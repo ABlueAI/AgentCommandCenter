@@ -225,10 +225,19 @@ const REGIONS = [
     end: "ipcMain.on('pty-write'",
     // RE-PINNED when Experiment A was retired and production pane status landed. The handler now
     // enrolls the pane through the production controller instead of the prototype's envForPane().
-    // Previous pin, retained so the earlier reviewed base stays reproducible:
-    //   len 13287 / sha 3ad6db301a3fa0e101195f439012ee42ca25ba6b31040b10d0196d23b7141bb3
-    len: 13864,
-    sha: '1b6929a2e691c2e418ab529a80411e26f58a1d32a6f08b2ceb1b085e3db96274',
+    //
+    // RE-PINNED AGAIN (seventh time) for the PANE-STATUS PRODUCTION CORRECTION. Exactly one thing
+    // changed inside this region: `p.onExit` now calls `paneStatus.notePaneExit(id)`, so a pane whose
+    // PROCESS ended publishes `exited` and has its token revoked immediately, instead of displaying a
+    // stale `working` for up to 120 seconds behind a still-valid token. Work Order 1 § F.7 specified
+    // that and the previous build dropped it silently. The accompanying comment records why the
+    // video-scout run-ID mapping is deliberately NOT touched on the same path.
+    //
+    // Previous pins, retained so the earlier reviewed bases stay reproducible:
+    //   len 13287 / sha 3ad6db301a3fa0e101195f439012ee42ca25ba6b31040b10d0196d23b7141bb3  (CRLF units)
+    //   len 13864 / sha 1b6929a2e691c2e418ab529a80411e26f58a1d32a6f08b2ceb1b085e3db96274  (LF units)
+    len: 14993,
+    sha: '03eab4cd2bd2fd44c182ad3901b5735696c76fbf4a9345ebb49f1db161c7a30b',
   },
 ];
 
@@ -273,8 +282,18 @@ assert(!/BLUE_HELM_PANE_STATUS_TOKEN\s*:/.test(src),
 // Previous prototype form, retained for provenance:  paneStatus.setObservedVersion(
 assert(/resolveVersion:\s*\(\)\s*=>/.test(src),
   'main.js injects a version RESOLVER into the pane-status controller');
-assert(src.indexOf("AGENT_CMD.claude, ['--version']") !== -1,
-  'and it discovers the version from the SAME executable a pane launches, never a hard-coded one');
+// CORRECTED (advisory review, finding 3). The previous assertion here pinned
+// `AGENT_CMD.claude, ['--version']` — an execFile from Electron main — and called that "the SAME
+// executable a pane launches". It was not: main resolves against main's PATH, while the pane resolves
+// inside a PowerShell that loads the user's profile. The assertion was therefore pinning the defect in
+// place and would have blocked the fix. It is replaced by a STRICTLY STRONGER one: the resolver must
+// go through the pane-equivalent PowerShell path, and the direct-exec form must be gone.
+assert(/createClaudeVersionResolver\(\{/.test(src),
+  'and it discovers the version through the pane-equivalent PowerShell resolver');
+assert(/commandName:\s*AGENT_CMD\.claude/.test(src),
+  'resolving the same bare command name a pane launches, never a hard-coded path');
+assert(src.indexOf("AGENT_CMD.claude, ['--version']") === -1,
+  'NEGATIVE CONTROL: main.js no longer execs the bare command directly from the Electron process');
 assert(!/supportedVersions\s*:\s*\[/.test(src),
   'main.js does not hard-code a supported-version list — that lives in pane-status-version.js');
 assert(!/createPaneStatusPrototype\(\{[\s\S]{0,400}?observedVersion/.test(src),

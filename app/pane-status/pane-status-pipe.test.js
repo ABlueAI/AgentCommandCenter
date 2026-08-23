@@ -56,7 +56,7 @@ const settle = (ms) => new Promise((r) => setTimeout(r, ms || 250));
   // ---------------------------------------------------------------- happy path
   {
     const rig = makeRig();
-    assert(rig.server.start().ok === true, 'the listener starts');
+    assert((await rig.server.start()).ok === true, 'the listener starts');
     assert(rig.server.isListening() === true, 'and reports listening');
     const tok = rig.registry.enroll('pty1').token;
     await send(rig.pipeName, protocol.encodeMessage('UserPromptSubmit', tok));
@@ -70,7 +70,7 @@ const settle = (ms) => new Promise((r) => setTimeout(r, ms || 250));
   // ---------------------------------------------------------------- refusals do not leak bytes
   {
     const rig = makeRig();
-    rig.server.start();
+    await rig.server.start();
     rig.registry.enroll('pty1');
     const SENTINEL = 'SENTINEL-PIPE-LEAK-9f2c';
     await send(rig.pipeName, JSON.stringify({ v: 1, e: 'Stop', t: 'x'.repeat(64), secret: SENTINEL }) + '\n');
@@ -85,7 +85,7 @@ const settle = (ms) => new Promise((r) => setTimeout(r, ms || 250));
   // ---------------------------------------------------------------- unknown token
   {
     const rig = makeRig();
-    rig.server.start();
+    await rig.server.start();
     rig.registry.enroll('pty1');
     await send(rig.pipeName, protocol.encodeMessage('Stop', 'd'.repeat(64)));
     await settle();
@@ -96,7 +96,7 @@ const settle = (ms) => new Promise((r) => setTimeout(r, ms || 250));
   // ---------------------------------------------------------------- connection byte bound
   {
     const rig = makeRig();
-    rig.server.start();
+    await rig.server.start();
     const tok = rig.registry.enroll('pty1').token;
     const flood = 'x'.repeat(pipeMod.MAX_CONNECTION_BYTES + 1000);
     await send(rig.pipeName, flood);
@@ -113,7 +113,7 @@ const settle = (ms) => new Promise((r) => setTimeout(r, ms || 250));
   // ---------------------------------------------------------------- messages-per-connection bound
   {
     const rig = makeRig();
-    rig.server.start();
+    await rig.server.start();
     const tok = rig.registry.enroll('pty1').token;
     let payload = '';
     for (let i = 0; i < pipeMod.MAX_MESSAGES_PER_CONNECTION + 3; i++) payload += protocol.encodeMessage('Stop', tok);
@@ -127,7 +127,7 @@ const settle = (ms) => new Promise((r) => setTimeout(r, ms || 250));
   // ---------------------------------------------------------------- unterminated oversize line
   {
     const rig = makeRig();
-    rig.server.start();
+    await rig.server.start();
     rig.registry.enroll('pty1');
     await send(rig.pipeName, '{"v":1,"e":"Stop","t":"' + 'a'.repeat(protocol.MAX_MESSAGE_BYTES) + '');
     await settle();

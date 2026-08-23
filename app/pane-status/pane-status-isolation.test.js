@@ -234,6 +234,45 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bh-isolation-'));
     }
   }
 
+  // ---------------------------------------------------------------------------------------------
+  // 4. THE PERFORMANCE HARNESS IS OUTSIDE THE PRODUCTION RUNTIME (§ 13)
+  // ---------------------------------------------------------------------------------------------
+  // The harness spawns 200 real cmd.exe -> shim -> Electron -> reporter chains. That is exactly the
+  // thing every module under app/pane-status/ is forbidden to do, so it does not live there: it is a
+  // builder-operated script in scripts/, reachable only by running it deliberately.
+  {
+    const harness = path.join(APP_DIR, '..', 'scripts', 'pane-status-chain-perf.js');
+    assert(fs.existsSync(harness), 'the reproducible full-chain performance harness is tracked in scripts/');
+
+    const harnessSrc = fs.readFileSync(harness, 'utf8');
+    assert(/require\(\s*['"]child_process['"]\s*\)/.test(harnessSrc),
+      'it DOES create processes — which is precisely why it must not be a production module');
+    assert(/mkdtempSync/.test(harnessSrc) && /os\.tmpdir\s*\(/.test(harnessSrc),
+      'every path it uses is a temp fixture');
+    assert(!/\.claude[\\/\\\\]+settings\.json/.test(harnessSrc), 'it never names a real settings file');
+    assert(!/os\.homedir\s*\(/.test(harnessSrc) && !/process\.env\.(USERPROFILE|HOME)\b/.test(harnessSrc),
+      'and never resolves a real home directory');
+    assert(/ENROLLED PER-TOOL-CALL OVERHEAD IS NOT MEASURED/.test(harnessSrc),
+      'it states prominently that the enrolled path is NOT what it measures');
+
+    // NOT REACHABLE FROM PRODUCTION. No file the application loads may require it.
+    const EXCLUDE = new Set(['node_modules', 'dist', 'out', 'build', 'vendor', '.worktrees', '.git']);
+    const prod = [];
+    (function walkProd(dirPath) {
+      for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
+        if (entry.isDirectory()) { if (!EXCLUDE.has(entry.name)) walkProd(path.join(dirPath, entry.name)); }
+        else if (entry.isFile() && entry.name.endsWith('.js') && !entry.name.endsWith('.test.js')) {
+          prod.push(path.join(dirPath, entry.name));
+        }
+      }
+    })(APP_DIR);
+    const importers = prod.filter((f) => /pane-status-chain-perf/.test(fs.readFileSync(f, 'utf8')));
+    assert(importers.length === 0,
+      `no production module under app/ requires the harness (${importers.map((h) => path.relative(APP_DIR, h)).join(', ')})`);
+    assert(harness.indexOf(path.join('app', 'pane-status')) === -1,
+      'and it does not sit inside the production module directory');
+  }
+
   try { fs.rmSync(root, { recursive: true, force: true }); } catch { /* best effort */ }
   process.stdout.write(`\npane-status-isolation: ${passed} passed, ${failed} failed\n`);
   process.exit(failed ? 1 : 0);
