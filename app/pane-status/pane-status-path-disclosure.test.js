@@ -17,14 +17,26 @@
 // as the executable source, and the failing probe's injected error really does carry it in its
 // message, stack, cmd and path fields. Only then is absence meaningful.
 //
-// EVERY APPLICABLE PRODUCTION SINK IS CAPTURED AND NAMED:
-//   1. the injected provider-resolution logger (what main.js hands to `tlog`)
-//   2. console.log / console.warn / console.error  (what tlog itself writes through)
-//   3. renderer main-error payloads sent through webContents.send
-//   4. controller results  (start / install return values)
-//   5. IPC responses       (every registered pane-status handler)
-//   6. setup-state reason and detail fields
-//   7. anything propagated across the resolver's own public boundary, resolved OR rejected
+// SINK COVERAGE — CORRECTED (WO-9). An earlier version of this header claimed seven sinks, two of
+// which this file MODELLED rather than executed. An independent reviewer called those two assertions
+// vacuous and was right. They are relabelled below to say exactly what they do prove, and the real
+// route is proven in `pane-status-disclosure-route.test.js`, which boots the REAL main.js and captures
+// what the REAL `tlog` writes.
+//
+// WHAT THIS FILE GENUINELY EXERCISES, over an ISOLATED controller:
+//   1. the injected provider-resolution logger — the same shape main.js hands to `tlog`, but this
+//      file supplies its own; it does NOT prove anything about tlog itself
+//   2. controller results  (start / install return values)
+//   3. IPC responses       (every registered pane-status handler)
+//   4. setup-state reason and detail fields
+//   5. anything propagated across the resolver's own public boundary, resolved OR rejected
+//   6. the pane-status VIEW and SETUP-STATE renderer channels, through the real `createPublishers`
+//      over a fake window. These are NOT the `main-error` channel and are never evidence about it.
+//   7. incidental console output during an isolated run — retained as a cheap backstop only, and
+//      explicitly NOT evidence about the tlog route
+//
+// WHAT IT DOES NOT EXERCISE: the real `tlog`, and the real `main-error` channel. Both are covered by
+// `pane-status-disclosure-route.test.js`.
 
 const crypto = require('crypto');
 const fs = require('fs');
@@ -70,7 +82,22 @@ function execFileFail(file, args, opts, cb) {
   setImmediate(() => cb(makeProbeError(), '', `spawn ${POISON} ENOENT`));
 }
 
-/** Capture console for the duration of one async operation — this is the sink tlog writes through. */
+/**
+ * execFile stub: Get-Command SUCCEEDED — SOURCE_TAG is present and carries the poison path — and the
+ * version command then failed. This is the fixture where a path IS known at failure time, and it must
+ * classify as `version-command-failed`, never `provider-not-found` (the provider was found) and never
+ * `version-probe-failed` (the process ran).
+ */
+function execFilePostFail(file, args, opts, cb) {
+  const stdout = `${versionMod.SOURCE_TAG}${POISON}\n${versionMod.ERROR_TAG}the version command exited 1\n`;
+  setImmediate(() => cb(null, stdout, ''));
+}
+
+/**
+ * Capture console for the duration of one async operation. This is a BACKSTOP ONLY: the real `tlog`
+ * is not on the stack in this file, so an empty capture here proves nothing. The real console route is
+ * proven in `pane-status-disclosure-route.test.js`.
+ */
 async function withConsoleCaptured(fn) {
   const lines = [];
   const orig = { log: console.log, warn: console.warn, error: console.error };
@@ -93,8 +120,10 @@ function makeRig(execFileStub) {
 
   const sinks = { resolverLog: [], controllerLog: [], views: [], setups: [], rendererSends: [] };
 
-  // Sink 1 + 3: main.js hands the resolver a logger wired to tlog, and pushes to the renderer through
-  // webContents.send. Both are modelled here rather than assumed.
+  // The logger has the same SHAPE main.js hands to tlog, but it is this file's own — it is not tlog,
+  // and nothing here should be read as evidence about tlog. The publishers below are the REAL
+  // `createPublishers`, so the pane-status view and setup-state channels are genuinely exercised;
+  // `main-error` is a different channel and is not touched here at all.
   const resolver = () => versionMod.createClaudeVersionResolver({
     execFile: execFileStub,
     env: { PATH: 'C:\\Windows\\System32', PATHEXT: '.EXE;.CMD' },
@@ -197,12 +226,12 @@ function assertNoDisclosure(blob, label) {
     assert(rig.sinks.resolverLog.join('\n').indexOf(versionMod.RESOLUTION_METHOD) !== -1,
       'emitting the bounded resolution method instead of a path');
 
-    assertNoDisclosure(everything(rig.sinks.resolverLog), 'sink 1 provider-resolution logger');
-    assertNoDisclosure(everything(captured.consoleLines), 'sink 2 console/tlog');
-    assertNoDisclosure(everything(rig.sinks.rendererSends), 'sink 3 renderer webContents.send');
-    assertNoDisclosure(everything(rig.sinks.controllerLog), 'sink 4a controller log');
-    assertNoDisclosure(everything(responses), 'sink 5 IPC responses');
-    assertNoDisclosure(everything([setup.detail, setup.versionReason, setup]), 'sink 6 setup state');
+    assertNoDisclosure(everything(rig.sinks.resolverLog), 'injected provider-resolution logger');
+    assertNoDisclosure(everything(captured.consoleLines), 'incidental console (NOT the tlog route)');
+    assertNoDisclosure(everything(rig.sinks.rendererSends), 'pane-status view/setup-state channels (NOT main-error)');
+    assertNoDisclosure(everything(rig.sinks.controllerLog), 'controller log');
+    assertNoDisclosure(everything(responses), 'IPC responses');
+    assertNoDisclosure(everything([setup.detail, setup.versionReason, setup]), 'setup state reason/detail');
   }
 
   // -----------------------------------------------------------------------------------------------
@@ -232,14 +261,14 @@ function assertNoDisclosure(blob, label) {
       'and the failure value carries no smuggled extra field');
 
     assert(rig.sinks.resolverLog.length > 0, 'the resolution logger emitted on the failure path too');
-    assertNoDisclosure(everything(rig.sinks.resolverLog), 'sink 1 provider-resolution logger');
-    assertNoDisclosure(everything(captured.consoleLines), 'sink 2 console/tlog');
-    assertNoDisclosure(everything(rig.sinks.rendererSends), 'sink 3 renderer webContents.send');
-    assertNoDisclosure(everything(rig.sinks.controllerLog), 'sink 4a controller log');
-    assertNoDisclosure(everything(captured.value.started), 'sink 4b controller start() result');
-    assertNoDisclosure(everything(responses), 'sink 5 IPC responses');
-    assertNoDisclosure(everything([setup.detail, setup.versionReason, setup]), 'sink 6 setup state');
-    assertNoDisclosure(everything([boundary]), 'sink 7 resolver public boundary');
+    assertNoDisclosure(everything(rig.sinks.resolverLog), 'injected provider-resolution logger');
+    assertNoDisclosure(everything(captured.consoleLines), 'incidental console (NOT the tlog route)');
+    assertNoDisclosure(everything(rig.sinks.rendererSends), 'pane-status view/setup-state channels (NOT main-error)');
+    assertNoDisclosure(everything(rig.sinks.controllerLog), 'controller log');
+    assertNoDisclosure(everything(captured.value.started), 'controller start() result');
+    assertNoDisclosure(everything(responses), 'IPC responses');
+    assertNoDisclosure(everything([setup.detail, setup.versionReason, setup]), 'setup state reason/detail');
+    assertNoDisclosure(everything([boundary]), 'resolver public boundary');
 
     // The raw error object must not be stringified anywhere at all.
     const all = everything([rig.sinks.resolverLog, captured.consoleLines, rig.sinks.rendererSends,
@@ -309,6 +338,61 @@ function assertNoDisclosure(blob, label) {
       'no log template interpolates outcome.source');
     assert(/\$\{[a-zA-Z.]*executable\}/.test(code) === false,
       'and none interpolates an executable field either');
+  }
+
+  // -----------------------------------------------------------------------------------------------
+  process.stdout.write('\n7. Post-resolution failure: SOURCE_TAG present, version command failed\n');
+  // -----------------------------------------------------------------------------------------------
+  {
+    const rig = makeRig(execFilePostFail);
+    const captured = await withConsoleCaptured(async () => rig.resolver());
+    const outcome = captured.value;
+
+    // NON-VACUITY: this is the failure path on which a path IS known.
+    eq(outcome.source, POISON,
+      'NON-VACUITY: Get-Command succeeded, so the FAILURE outcome still carries the poison path');
+
+    // Binding Amendment A § 1 — redaction must not destroy the bounded diagnostic distinction.
+    eq(outcome.ok, false, 'classification: not ok');
+    eq(outcome.reason, 'version-command-failed', 'the reason is EXACTLY version-command-failed');
+    assert(outcome.reason !== 'provider-not-found',
+      'it did not collapse to provider-not-found — the provider WAS found');
+    assert(outcome.reason !== 'version-probe-failed',
+      'nor to version-probe-failed — the process ran; the version command is what failed');
+    eq(outcome.version, null, 'no version is claimed');
+
+    // A gate fed this outcome must stay fail-closed and keep a bounded reason.
+    const gate = versionMod.createVersionGate({
+      resolveVersion: rig.resolver, supportedVersions: ['2.1.228'], log: () => {},
+    });
+    await gate.probe();
+    eq(gate.supported(), false, 'the gate refuses — fail-closed');
+    eq(gate.reason(), versionMod.VERSION_REFUSAL.RESOLVER_FAILED,
+      'with a bounded refusal reason, not raw failure text');
+
+    assertNoDisclosure(everything(rig.sinks.resolverLog), 'injected provider-resolution logger');
+    assertNoDisclosure(everything(captured.consoleLines), 'incidental console (NOT the tlog route)');
+    assertNoDisclosure(everything([outcome.reason, outcome.version, outcome.raw]),
+      'the operator-visible fields of the outcome');
+    assertNoDisclosure(everything([gate.reason(), gate.record().reason]), 'gate reason');
+  }
+
+  // -----------------------------------------------------------------------------------------------
+  process.stdout.write('\n8. The successful path keeps its full diagnostic classification\n');
+  // -----------------------------------------------------------------------------------------------
+  {
+    const rig = makeRig(execFileOk);
+    const outcome = await rig.resolver();
+    eq(outcome.ok, true, 'ok is true');
+    eq(outcome.version, '2.1.228', 'a parsed version is reported');
+    eq(outcome.reason, null, 'and there is no refusal reason');
+
+    const failRig = makeRig(execFileFail);
+    const failed2 = await failRig.resolver();
+    eq(failed2.reason, 'version-probe-failed',
+      'while a pre-resolution process failure stays EXACTLY version-probe-failed');
+    assert(failed2.reason !== 'version-command-failed',
+      'the two failure kinds remain distinguishable after redaction');
   }
 
   try { fs.rmSync(root, { recursive: true, force: true }); } catch { /* best effort */ }

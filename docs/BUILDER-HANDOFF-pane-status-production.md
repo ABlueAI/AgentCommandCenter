@@ -1127,18 +1127,53 @@ tests.
 and maps it to a bounded constant. The raw error is never logged, returned, forwarded or stringified,
 and the resolver does not reject — a failure is a bounded value.
 
-**Sinks exercised** (Binding Amendment A § 1 — "captured logs" alone is insufficient, so each is named):
+**Sinks exercised — CORRECTED BY WO-9. The claim originally made here was overstated.**
 
-| # | Sink | How it is captured |
+The first version of this table listed seven sinks, and **two of them were modelled rather than
+executed**. The independent reviewer found those assertions vacuous, and was right:
+
+- *"Console output used by tlog"* replaced `console.log` around a resolver the test had built itself.
+  **The real `tlog` was never on the stack**, so nothing it did could have been observed.
+- *"Renderer main-error payloads"* watched `createPublishers`, which sends on the pane-status **view**
+  and **setup-state** channels. `main-error` is a **different channel** that `tlog` writes directly.
+  That assertion could not have caught a leak through `main-error` even in principle.
+
+Both are now proven by executing the real route. `pane-status-disclosure-route.test.js` evaluates the
+REAL `app/main.js` under a stubbed Electron and `child_process`, captures what the REAL `tlog` writes
+to `console.log` and sends on `main-error`, and drives resolution through **main.js’s own**
+`resolveVersion` dependency — the closure calling `createClaudeVersionResolver({…}).discover()` with
+`log: (line) => tlog(line)`, captured from the real `createPaneStatusController({…})` construction
+rather than reconstructed. If main.js stops routing provider resolution through `tlog`, that suite
+fails: no console line and no `main-error` payload would appear.
+
+| # | Sink | Proven by | How |
+|---|---|---|---|
+| 1 | **Real `tlog` console output** | `pane-status-disclosure-route` | real main.js booted; `console.log` captured; probe emissions separated from boot emissions |
+| 2 | **Real `main-error` renderer payloads** | `pane-status-disclosure-route` | Electron stub records `webContents.send`; only `channel === 'main-error'` counts |
+| 3 | Injected provider-resolution logger | `pane-status-path-disclosure` | same shape main.js hands to `tlog`; **not** evidence about tlog itself |
+| 4 | Controller results | `pane-status-path-disclosure` | `install()` / `start()` return values, plus the controller log |
+| 5 | IPC responses | `pane-status-path-disclosure` | every registered channel invoked through `registerPaneStatusIpc` |
+| 6 | Setup-state reason and detail | `pane-status-path-disclosure` | `getSetupState().detail`, `.versionReason`, and the whole object |
+| 7 | Resolver public boundary | both | the resolved value, and a rejection had one occurred |
+| 8 | Pane-status view / setup-state channels | `pane-status-path-disclosure` | real `createPublishers` over a fake window — **not** `main-error`, and never cited as evidence about it |
+
+**Non-vacuity is asserted before disclosure is checked.** The route suite asserts that at least one
+real `tlog` console emission and at least one real `main-error` emission occurred, that every one of
+them matches the version-resolution text rather than an unrelated startup message, and that they
+carry the real `tlog` `[TIMING +Nms]` prefix — which only the real `tlog` produces.
+
+**Three fixtures, not two.** WO-9 added the case that had been missing:
+
+| Fixture | Injected | Required classification |
 |---|---|---|
-| 1 | Injected provider-resolution logger | the logger `main.js` hands to `tlog` |
-| 2 | Console output used by tlog | `console.log`/`warn`/`error` replaced for the duration |
-| 3 | Renderer main-error payloads | real `createPublishers` over a fake window recording `webContents.send` |
-| 4 | Controller results | `install()` and `start()` return values, plus the controller log |
-| 5 | IPC responses | every registered channel invoked through `registerPaneStatusIpc` |
-| 6 | Setup-state reason and detail | `getSetupState().detail`, `.versionReason`, and the whole object |
-| 7 | Resolver public boundary | the resolved value, and a rejection had one occurred |
+| Successful resolution | `SOURCE_TAG` carries the poison path; version parses | `ok:true`, version `2.1.228`, **no** refusal reason |
+| Pre-resolution process failure | `execFile` error carrying the poison path in `message`, `stack`, `cmd`, `path`, `spawnfile`, plus an errno | **exactly** `version-probe-failed` — not `provider-not-found`, not `version-command-failed` |
+| **Post-resolution version-command failure** | `SOURCE_TAG` **present** with the poison path, then `ERROR_TAG` | **exactly** `version-command-failed` — not `provider-not-found` (the provider *was* found), not `version-probe-failed` (the process ran) |
 
+The third fixture matters because it is the failure path on which an executable path **is** known:
+`outcome.source` is non-null at failure time, so it is the one most able to leak. Per Binding
+Amendment A § 1, redaction must remove the sensitive detail **without destroying the bounded
+diagnostic distinction**, and each fixture asserts its exact classification survives.
 **Non-vacuity first.** Before any absence is asserted, the suite proves presence: the successful probe
 genuinely receives the poison path as its executable source, and the failing probe's injected error
 genuinely carries it in `message`, `stack`, `cmd`, `path` and `spawnfile`. Both paths are then scanned
@@ -1352,3 +1387,92 @@ PERFORMED**; enrolled per-tool-call overhead remains **NOT MEASURED**.
 **Ordering disclosure.** The complete gate and Pester ran on the tree as it now stands, with the same
 single exception as §§ 9.9, 10.6 and 11.5: **this section was written into the handoff after those
 runs.** No source, test, or configuration file changed after the gates.
+
+---
+
+# 13. DISCLOSURE-PROOF CORRECTION — Work Order 9 + Binding Amendment A
+
+**What was wrong.** The WO-7 disclosure proof (§ 12.1) claimed seven sinks. Two of them were
+**modelled, not executed**, and the independent reviewer found those assertions **vacuous**:
+
+- The *"console output used by tlog"* sink replaced `console.log` around a resolver the test had built
+  itself. **The real `tlog` was never on the stack.** An empty capture proved nothing.
+- The *"renderer main-error payloads"* sink watched `createPublishers`, which sends on the pane-status
+  **view** and **setup-state** channels. **`main-error` is a different channel**, written directly by
+  `tlog`. That assertion could not have caught a leak through `main-error` even in principle.
+
+Both criticisms are accepted in full. § 12.1's table is corrected in place rather than left standing.
+
+**What replaces them.** A new suite, `app/pane-status/pane-status-disclosure-route.test.js`, executes
+the real production route:
+
+- It evaluates the **real `app/main.js`** through the `Module._load` pattern already established in
+  `app/admission-main-startup.test.js`, with `electron`, `@lydell/node-pty` and `child_process` stubbed.
+- It captures what the **real `tlog`** writes to `console.log`, and what it sends through
+  `webContents.send` — counting **only** `channel === 'main-error'`.
+- It drives resolution through **main.js's own `resolveVersion` dependency**: the closure that calls
+  `paneStatusVersionMod.createClaudeVersionResolver({…}).discover()` and supplies `log: (line) => tlog(line)`.
+  That closure is **captured from the real `createPaneStatusController({…})` construction** by wrapping
+  the controller module in the loader hook — it is not a separately reconstructed equivalent. **If
+  main.js stops routing provider resolution through `tlog`, this suite fails**, because no console line
+  and no `main-error` payload would appear.
+
+**Non-vacuity is asserted before any disclosure check.** Per fixture: at least one real `tlog` console
+emission occurred; at least one real `main-error` emission occurred; every probe emission matches the
+version-resolution text rather than an unrelated startup message; and the emissions carry the real
+`[TIMING +Nms]` prefix, which only `tlog` produces. Probe emissions are separated from boot emissions
+so a startup message can never be mistaken for evidence.
+
+**Three fixtures, and the third is new.** Successful resolution; pre-resolution `execFile` failure; and
+**post-resolution version-command failure** — `SOURCE_TAG` present carrying the poison path, then
+`ERROR_TAG`. The third matters because it is the failure path on which an executable path **is** known
+(`outcome.source` is non-null at failure time), making it the one most able to leak. It had no coverage
+before.
+
+**Classification survives redaction (Binding Amendment A § 1).** Each fixture asserts its exact
+diagnostic outcome, so redaction removed sensitive detail without flattening the distinctions:
+
+| Fixture | Required classification |
+|---|---|
+| Success | `ok:true`, parsed version `2.1.228`, **no** refusal reason |
+| Pre-resolution failure | **exactly** `version-probe-failed` — not `provider-not-found`, not `version-command-failed` |
+| Post-resolution failure | **exactly** `version-command-failed` — not `provider-not-found` (the provider *was* found), not `version-probe-failed` (the process ran) |
+
+**No production source was changed.** No test seam was required: the loader hook reaches the real
+wiring without touching `app/main.js` or any runtime module. Only test files and this document changed.
+
+## 13.1 Verification
+
+| Gate | Result |
+|---|---|
+| `pane-status-disclosure-route` directly | **58 passed, 0 failed** |
+| `pane-status-path-disclosure` directly | **101 passed, 0 failed** |
+| Focused pane-status, 25 suites | **1,522 assertions, 0 failures** |
+| Complete app gate | **exit 0 — 87 suites, 5,980 assertions, 0 failures** |
+| `git diff --check`, cumulative and focused | clean |
+| **Pester** | **955 passed / 0 failed / 0 skipped — INHERITED from the independent run at `5074f5b`; not rerun because this correction changed only JavaScript tests and documentation, with all production and PowerShell sources byte-identical.** |
+
+**By observed summary format:** named-standard 69 / 5,250 · named-assertions 2 / 18 · unnamed bare
+6 / 423 · unnamed tests-prefixed 10 / 289 = **87 suites / 5,980**. 87 summary lines against 87
+registered segments — every segment accounted for.
+
+**Delta from the established 5,891 / 86 at `5074f5b`: +89**, attributed by per-suite diff:
+
+| Suite | At `5074f5b` | Now | Δ | Why |
+|---|---:|---:|---:|---|
+| `pane-status-disclosure-route` | — | 58 | **+58** | new suite: the real production route |
+| `pane-status-path-disclosure` | 76 | 101 | **+25** | third fixture and classification assertions |
+| `pane-status-isolation` | 145 | 150 | **+5** | per-file scans over one new file |
+| `test-summary-formats` | 122 | 123 | **+1** | one per new suite |
+| every other suite | | | **0** | byte-identical counts |
+
+58 + 25 + 5 + 1 = 89. No unexplained assertions.
+
+**AGR was not triggered.** The complete gate exited 0 with `dockview-bootstrap` 203/0 and
+`dockview-app-integration` 296/0. Nothing was routed as an exception candidate and nothing was retried.
+This adds one green complete-chain observation for each segment to the § 12.6 history; the counts there
+describe runs up to `527451d` and are not restated here.
+
+**Runtime sources byte-identical.** The `app/` tree differs from `5074f5b` only by test files and
+`app/package.json`'s test-chain registration; every runtime source file is unchanged, which is what
+makes the inherited Pester result valid rather than assumed.
