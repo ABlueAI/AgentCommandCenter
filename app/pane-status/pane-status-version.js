@@ -114,11 +114,47 @@ const VERSION_REFUSAL = Object.freeze({
   RESOLVER_FAILED: 'version-resolver-failed',
 });
 
-// `claude --version` prints something like "2.1.196 (Claude Code)". We take the leading dotted triple
-// and nothing else. A string we cannot parse this precisely is not a version we are willing to act on.
-const VERSION_PATTERN = /^\s*(\d+\.\d+\.\d+)\b/;
+// THE EXACT VERSION GRAMMAR. This parser accepts TWO forms and nothing else:
+//
+//   A.  a bare exact dotted triple                              "2.1.241"
+//   B.  that triple, exactly ONE ASCII space (0x20), and the
+//       CASE-SENSITIVE literal "(Claude Code)"                  "2.1.241 (Claude Code)"
+//
+// Surrounding whitespace - including the CRLF framing Windows PowerShell actually produces - is
+// tolerated. Additional NON-EMPTY content is not.
+//
+// WHY THIS IS NARROWER THAN IT LOOKS, AND WHY IT HAD TO BE. The previous pattern was
+// `/^\s*(\d+\.\d+\.\d+)\b/`: it took the LEADING triple and ignored whatever followed. An
+// independent Full review proved that this normalizes genuinely distinct, never-probed builds onto
+// an allowlisted string and OPENS the gate:
+//
+//     "2.1.241-beta"   -> parsed 2.1.241 -> supported   (a prerelease that was never probed)
+//     "2.1.241+build"  -> parsed 2.1.241 -> supported   (a different build of it)
+//     "2.1.241.1"      -> parsed 2.1.241 -> supported   (a four-component version entirely)
+//
+// The allowlist was never widened. The PARSER was doing the widening, upstream of it, by discarding
+// the very bytes that made those strings different. Exact membership is only as exact as the string
+// handed to it, so the exactness has to start here.
+//
+// The accepted parenthetical form is sourced from a real acceptance-machine probe (handoff section
+// 16), never inferred from documentation. That probe captured raw stdout as CRLF-framed, with the
+// version text byte-exactly:
+//     32 2e 31 2e 32 34 31 20 28 43 6c 61 75 64 65 20 43 6f 64 65 29
+// i.e. a single 0x20 before `(Claude Code)`. Two internal spaces, a different case, or any trailing
+// content is a DIFFERENT output shape from a build this project has not probed. It is refused, not
+// normalized.
+//
+// `$` deliberately carries no `m` flag: it anchors to end-of-input, so a second non-empty line
+// cannot satisfy it. The `\s*` on either side accepts blank framing only.
+const VERSION_PATTERN = /^\s*(\d+\.\d+\.\d+)(?: \(Claude Code\))?\s*$/;
 
-/** Extract the exact version from raw resolver output. Returns null when it cannot be parsed. */
+/**
+ * Extract the exact version from raw resolver output. Returns null when the output is not exactly
+ * one of the two accepted forms above.
+ *
+ * Null is a REFUSAL, not a fallback. The caller turns it into `version-unparseable` and the gate
+ * stays closed, which is the correct answer for output this project cannot positively identify.
+ */
 function parseVersion(raw) {
   if (typeof raw !== 'string') return null;
   const m = VERSION_PATTERN.exec(raw);

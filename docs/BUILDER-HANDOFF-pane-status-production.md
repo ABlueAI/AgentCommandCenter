@@ -1687,8 +1687,132 @@ reporter still inherits its pipe and token, or that hook timing is unchanged.
 
 ## 15.6 Scope
 
-Two tracked paths changed: `app/pane-status/pane-status-version.js` (one added array entry plus its
+**Three** tracked paths changed (corrected by WO15A-R § 7 — the original wording said "Two ... plus
+this document", which undercounted its own diff): `app/pane-status/pane-status-version.js` (one added array entry plus its
 provisional comment) and `app/pane-status/pane-status-version.test.js` (the admission proofs), plus
 this document. No other production source, no `app/package.json` registration, no IPC or preload
 surface, no PowerShell, no dependency and no lockfile change. Nothing merged, pushed, installed, or
 live-tested under Work Order 15A.
+
+---
+
+# 16. VACUOUS COMPOSITION PROOF — a recurring defect class on this branch (Work Order 15A-R)
+
+## 16.1 The class
+
+> **VACUOUS COMPOSITION PROOF** — an assertion passes against a modeled sink or a leaf function
+> while bypassing the composed production path it claims to establish.
+
+It is dangerous precisely because it is *green*. The suite reports a pass, the handoff cites that
+pass as evidence, and a reviewer reading the label rather than the stack has no signal. Three
+occurrences have now been found on this branch, each by an independent review rather than by the
+builder, which is itself the strongest argument for the prevention rule in § 16.3.
+
+## 16.2 The three occurrences
+
+### Occurrence 1 — the `tlog` console sink (WO-7 § 12.1, corrected by WO-9)
+
+- **Claimed:** raw paths never reach the console output used by `tlog`.
+- **Bypassed:** the real `tlog` in `app/main.js`. The test replaced `console.log` around a resolver
+  it had constructed itself.
+- **Why it passed vacuously:** `tlog` was never on the stack, so the capture was empty for a reason
+  unrelated to redaction. An empty capture from a path the claimed sink never occupied proves
+  nothing at all.
+- **Composed entry point now supplying the proof:** `pane-status-disclosure-route.test.js`, which
+  drives the REAL `tlog`/`main-error` route (commit `8c60962`).
+
+### Occurrence 2 — the `main-error` renderer sink (WO-7 § 12.1, corrected by WO-9)
+
+- **Claimed:** raw paths never reach renderer `main-error` payloads.
+- **Bypassed:** the `main-error` channel itself. The test watched `createPublishers`, which sends on
+  the pane-status **view** and **setup-state** channels.
+- **Why it passed non-representatively:** `main-error` is a different channel, written directly by
+  `tlog`. The assertion could not have caught a leak through it *even in principle*.
+- **Composed entry point now supplying the proof:** the same real-route disclosure test.
+
+### Occurrence 3 — the version allowlist leaf (WO15A, corrected by WO15A-R)
+
+- **Claimed:** a suffixed build of an admitted version is not supported —
+  `isVersionSupported('2.1.241-beta', shipped) === false`.
+- **Bypassed:** `parseVersion()`. Production never hands raw resolver output to
+  `isVersionSupported()`; it parses first and passes the *parsed* string.
+- **Why it passed non-representatively:** the leaf genuinely rejects the suffixed string, so the
+  assertion was true. But under the then-current parser `/^\s*(\d+\.\d+\.\d+)\b/`, raw
+  `2.1.241-beta` normalized to `2.1.241` **before** membership was ever consulted, and the gate
+  OPENED. The test asserted the opposite of production behaviour while remaining literally true.
+  The independent review's negative control is reproduced verbatim as a regression test:
+
+  | Raw resolver output | Old parser | Old membership | Old gate |
+  |---|---|---|---|
+  | `2.1.241-beta` | `2.1.241` | true | **OPEN** |
+  | `2.1.241+build` | `2.1.241` | true | **OPEN** |
+  | `2.1.241.1` | `2.1.241` | true | **OPEN** |
+
+- **Composed entry point now supplying the proof:** `createVersionGate() -> parseVersion() ->
+  isVersionSupported()` driven against the real shipped `SUPPORTED_CLAUDE_VERSIONS`, plus a
+  resolver-level fixture built from the exact tagged CRLF PowerShell stdout observed on the
+  acceptance machine, so `readTag` and `parseVersion` are both on the stack rather than simulated.
+  The original leaf assertion is retained, relabelled `[supplementary]`, and explicitly disclaimed
+  as not proof of raw-output rejection.
+
+**The allowlist was never the weakness in any of these.** In occurrence 3 the widening happened
+*upstream* of the exact-membership check, in a parser that discarded the bytes making two builds
+different. Exact membership is only ever as exact as the string handed to it.
+
+## 16.3 Standing prevention rule
+
+> Every load-bearing absence, refusal, disclosure, or compatibility assertion must first prove that
+> its input reached the **composed production entry point**, and that the asserted output came from
+> the **real destination** being claimed.
+
+Operationally: name the entry point the production caller uses, drive the test through it, and if a
+sink is claimed, assert on that sink by identity — never on a stand-in that merely resembles it.
+
+---
+
+# 17. HANDOFF CLAIM AUDIT (Work Order 15A-R § 7)
+
+Executed before submission. This is prevention for the recurring overstated-handoff class, not
+authorization for broader edits.
+
+| # | Check | Result |
+|---|---|---|
+| 1 | Every claimed disclosure sink is actually traversed | **PASS** — the two modeled sinks are corrected in place (§ 12.1 / § 13) and registered above; `pane-status-disclosure-route` 156/0 drives the real route. |
+| 2 | Every claimed timing prefix is asserted on the sink named | **PASS** — the `[TIMING +Nms]` claim was narrowed in place at § 14 to the console sink it is actually pinned on; no both-sinks claim survives. |
+| 3 | Every claimed rejected raw version is tested through the composed production gate | **PASS** — all twelve Section-3 rejects are driven through `createVersionGate()`, and the three review negative controls additionally through the resolver-level tagged fixture. |
+| 4 | Every changed-path count matches `git diff --name-status` | **PASS** — three paths, verified against `--name-status`; the WO15A "Two tracked paths" wording is corrected in § 15.6. |
+| 5 | Every test total is derived from observed summaries | **PASS** — totals are read from suite output, not predicted. |
+| 6 | No inherited result is described as freshly run | **PASS** — Pester is labelled INHERITED and the diff proves no PowerShell file changed. |
+| 7 | No provisional version admission is described as live compatibility | **PASS** — § 15.5 states the admission is provisional until Work Order 15 passes; nothing here claims 2.1.241 live compatibility. |
+
+**Audit finding.** Check 4 caught a real defect in this document: the WO15A scope statement said
+"Two tracked paths ... plus this document", which undercounted its own three-path diff. Corrected in
+§ 15.6 rather than left standing.
+
+---
+
+# 18. AGR HISTORY — carried forward, not rerun (Work Order 15A-R § 8)
+
+Recorded from the independent review execution. **Not rerun and not reclassified here.**
+
+- `dockview-bootstrap` failed once with the established Electron/GPU `0xC0000135` family.
+- `dockview-app-integration` failed once with the same family.
+- Neither suite was retried.
+- The remaining suffix ran once and passed **71/71**.
+- All **87** registered suites were attempted exactly once.
+- No third suite failed.
+- Nothing in the focused range touched either Dockview suite or its launch dependencies.
+
+**This is the second consecutive review execution in which both named Dockview suites showed the
+same Electron-family signature.**
+
+That sentence is the whole claim. No stability claim, no causal claim, and no N>=20 measurement
+claim is made or implied, and Track A and Track B product findings are not merged.
+
+**THIS BUILDER GATE RUN DID NOT REPRODUCE THE SIGNATURE.** The Work Order 15A-R complete app gate
+exited `0` on a single run: `dockview-bootstrap` **203/0** and `dockview-app-integration` **296/0**,
+each attempted exactly once, with no retry and no AGR routing. This is recorded because omitting it
+would let the paragraph above be read as a claim that the Electron-family signature is persistent.
+It is not such a claim in either direction: two review executions showed it, this builder execution
+did not, and three observations establish nothing about a distribution. The independent review's
+observation is carried forward unchanged and is not reclassified by this run.

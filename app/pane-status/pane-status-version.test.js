@@ -58,8 +58,14 @@ assert(versionMod.SUPPORTED_CLAUDE_VERSIONS.every((v) => /^\d+\.\d+\.\d+$/.test(
     assert(versionMod.isVersionSupported(near, shipped) === false,
       `an unlisted neighbour ${near} is NOT supported by the shipped list`);
   }
+  // SUPPLEMENTARY ONLY - NOT proof of raw-output rejection. WO15A-R: an independent Full review
+  // found this assertion non-representative, and it was right. Production never hands a raw string
+  // to isVersionSupported(); it hands it to parseVersion() FIRST. Under the old parser
+  // '2.1.241-beta' normalized to '2.1.241' and the gate OPENED, while this leaf-level assertion
+  // passed and appeared to prove the opposite. The load-bearing proof is the composed-path block
+  // below; this line survives only as evidence about the leaf function itself.
   assert(versionMod.isVersionSupported('2.1.241-beta', shipped) === false,
-    'a suffixed build of an admitted version is NOT supported');
+    '[supplementary] the leaf membership check rejects a suffixed string handed to it directly');
   assert(versionMod.parseVersion('2.1.241 (Claude Code)') === '2.1.241',
     'the real 2.1.241 --version line parses to the exact admitted string');
 }
@@ -138,6 +144,87 @@ assert(versionMod.SUPPORTED_CLAUDE_VERSIONS.every((v) => /^\d+\.\d+\.\d+$/.test(
     await gate.probe();
     assert(gate.supported() === false && gate.reason() === versionMod.VERSION_REFUSAL.UNSUPPORTED,
       'the patch release immediately after an admitted one is refused as unsupported');
+  }
+
+  // ------------------------------------------------- WO15A-R: THE COMPOSED PRODUCTION PATH
+  // Everything above this line tests a leaf. This block tests what production actually runs:
+  //     createVersionGate() -> parseVersion() -> isVersionSupported()
+  // against the REAL shipped allowlist. The independent Full review's negative control is
+  // reproduced here as a regression test: under the old leading-triple parser, each of
+  // '2.1.241-beta', '2.1.241+build' and '2.1.241.1' parsed to '2.1.241' and OPENED this gate.
+  const SHIPPED = versionMod.SUPPORTED_CLAUDE_VERSIONS;
+  const gateFor = (raw) => versionMod.createVersionGate({
+    resolveVersion: async () => ({ ok: true, raw }),
+    supportedVersions: SHIPPED,
+  });
+
+  // --- positive: the two accepted forms, and the real observed Windows framing ---
+  for (const raw of ['2.1.241', '2.1.241 (Claude Code)', '2.1.241 (Claude Code)\r\n', '2.1.228', '2.1.228 (Claude Code)']) {
+    const gate = gateFor(raw);
+    assert(gate.supported() === false, `gate is CLOSED before probing ${JSON.stringify(raw)}`);
+    const r = await gate.probe();
+    assert(r.ok === true && gate.supported() === true && gate.reason() === null,
+      `composed path ADMITS ${JSON.stringify(raw)}`);
+  }
+
+  // --- negative: malformed / unprobed shapes must be UNPARSEABLE, never normalized ---
+  // These are the review's exact negative control plus the remaining Section 3 rejects.
+  for (const raw of ['2.1.241-beta', '2.1.241+build', '2.1.241.1', '2.1.241  (Claude Code)',
+                     '2.1.241 (claude code)', '2.1.241 (CLAUDE CODE)', '2.1.241 (Claude Code) junk',
+                     'claude 2.1.241', 'v2.1.241', '2.1', '2.1.241\nfoo', '']) {
+    const gate = gateFor(raw);
+    await gate.probe();
+    assert(gate.supported() === false,
+      `composed path REFUSES ${JSON.stringify(raw)} - it is not normalized onto an admitted version`);
+    assert(gate.reason() === versionMod.VERSION_REFUSAL.UNPARSEABLE,
+      `and classifies ${JSON.stringify(raw)} as version-unparseable`);
+  }
+
+  // --- negative: WELL-FORMED but unlisted must be UNSUPPORTED, a different bounded reason ---
+  for (const raw of ['2.1.240', '2.1.242', '2.1.239', '2.1.229', '2.1.227', '2.1.240 (Claude Code)']) {
+    const gate = gateFor(raw);
+    await gate.probe();
+    assert(gate.supported() === false, `composed path REFUSES unlisted ${JSON.stringify(raw)}`);
+    assert(gate.reason() === versionMod.VERSION_REFUSAL.UNSUPPORTED,
+      `and classifies unlisted ${JSON.stringify(raw)} as version-unsupported, not unparseable`);
+  }
+
+  // --- resolver-level fixture: the REAL tagged PowerShell stdout framing observed on the
+  // acceptance machine (CRLF-framed, single 0x20 before the case-sensitive literal). This
+  // exercises interpretProbe -> readTag -> parseVersion rather than reconstructing a parsed
+  // version by hand, so the tag extraction is part of what is proven.
+  const tagged = (versionText) =>
+    versionMod.SOURCE_TAG + 'C:\\Users\\acceptance\\.local\\bin\\claude.exe\r\n'
+    + versionMod.VERSION_TAG + versionText + '\r\n';
+  const resolverFor = (versionText) => versionMod.createClaudeVersionResolver({
+    execFile: (_exe, _args, _opts, cb) => cb(null, tagged(versionText)),
+    env: {},
+    commandName: 'claude',
+  });
+  {
+    const res = await resolverFor('2.1.241 (Claude Code)').discover();
+    assert(res.ok === true && res.version === '2.1.241',
+      'the real tagged CRLF resolver output parses to exactly 2.1.241 through readTag + parseVersion');
+    const gate = versionMod.createVersionGate({
+      resolveVersion: () => resolverFor('2.1.241 (Claude Code)').discover(),
+      supportedVersions: SHIPPED,
+    });
+    assert(gate.supported() === false, 'gate closed before the resolver-backed probe');
+    await gate.probe();
+    assert(gate.supported() === true && gate.reason() === null,
+      'the full resolver -> gate -> allowlist chain admits the real observed output');
+  }
+  for (const bad of ['2.1.241-beta', '2.1.241+build', '2.1.241.1']) {
+    const res = await resolverFor(bad).discover();
+    assert(res.ok === false && res.version === null && res.reason === 'version-unparseable',
+      `the resolver refuses tagged output ${JSON.stringify(bad)} as version-unparseable`);
+    const gate = versionMod.createVersionGate({
+      resolveVersion: () => resolverFor(bad).discover(),
+      supportedVersions: SHIPPED,
+    });
+    await gate.probe();
+    assert(gate.supported() === false,
+      `and the gate STAYS CLOSED for tagged ${JSON.stringify(bad)} - the review's negative control`);
   }
 
   // ---------------------------------------------------------------- the module cannot spawn
