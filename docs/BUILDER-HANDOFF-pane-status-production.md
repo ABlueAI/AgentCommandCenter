@@ -1245,48 +1245,103 @@ all unchanged. The IPC channel table is still the same seven channels and `prelo
 
 76 + 28 + 5 + 1 = 110. No unexplained assertions.
 
-## 12.6 AGR — not triggered, and the observation history
+## 12.6 AGR — not triggered by this round's gates; corrected observation history
 
-**The narrow exception of WO-7 § 6 was NOT triggered.** The complete app gate exited 0.
-`dockview-bootstrap` reported 203/0 and `dockview-app-integration` 296/0. No suite failed, so nothing
-was routed as an exception candidate and nothing was retried.
+**The narrow exception of WO-7 § 6 was NOT triggered by the gates run for this round.** The complete
+app gate at `527451d` exited 0, `dockview-bootstrap` reported 203/0 and `dockview-app-integration`
+296/0, so nothing was routed as an exception candidate and nothing was retried.
+
+**That is not the whole picture, and the first version of this section wrongly implied it was.** The
+independent Full review of `83cacf93...d650d75` ran its own complete gate and **did** hit the AGR
+failure, in both Dockview suites. That review is an observation in its own right and is now recorded
+below. Two consequences follow, and both correct statements made earlier in this document:
+
+1. **Segment 15 now has an Electron-family failure.** The previous count said zero. The review's
+   segment 15 failure occurred during the **suffix run** required by the exception procedure, and it
+   was an Electron launch/profile/GPU failure — **not** the maximize product assertion.
+2. The earlier caveat "segment 15's single failure is a product assertion and is explicitly outside the
+   WO-7 § 6 exception" **no longer holds as written**. Segment 15 now has two failures of two different
+   kinds: one product assertion (outside the exception) and one Electron-family failure (within it).
 
 **Observation history (Binding Amendment A § 3).** Assembled from retained logs, the committed audit,
-and already-recorded runs. **No new runs, no repetitions, and no diagnostic campaign were performed.**
+already-recorded runs, and the independent review's reported result. **No new runs, no repetitions and
+no diagnostic campaign were performed for this table.** Each row is one execution context; the `Runs`
+column makes the arithmetic explicit so every aggregate below can be checked against the rows.
 
-| Date | Commit / tree | Context | Segment 14 | Segment 15 | Failure family / note | Evidence |
-|---|---|---|---|---|---|---|
-| 2026-08-20 | app tree `e0aaaaab` | complete chain, ×20 | **FAIL ×20** | **UNRUN ×20** (chain aborted at 14) | Electron child-launch: `render-process-gone`, `launch-failed`, GPU `0xC0000135` | `docs/AUDIT-app-gate-reliability.md` |
-| earlier | `8c6bfce`, `2ef73c39` | complete chain | **PASS** | **PASS** | 67 suites / 4,888 assertions; a 67-suite report necessarily executed 14 | audit § AGR-2 |
-| 2026-08-21 | `8ec8b78e` (app tree `e0aaaaab`) | **standalone**, run A inherited env | **PASS** 203/0 | not exercised | — | Phase 2 A/B record |
-| 2026-08-21 | `8ec8b78e` (app tree `e0aaaaab`) | **standalone**, run B crashpad var removed | **PASS** 203/0 | not exercised | — | Phase 2 A/B record |
-| 2026-08-21 | `8ec8b78e` | complete chain | **PASS** 203/0 | **FAIL** 290/1 | product assertion `the maximized pane grew to the whole surface (100 -> 100)` — **not** the Electron family | audit / handoff |
-| 2026-08-21 | `249af9a` | complete chain | **PASS** 203/0 | **PASS** 296/0 | Track B resolved as a gate-measurement defect | `fix/dockview-maximize-gate` |
-| 2026-08-21 | `249af9a` | segment 15 standalone ×5 targeted | not exercised | **PASS** (incl. 291/0) | original Track B failure never reproduced on demand | audit / handoff |
-| 2026-08-23 | `a71937e1` | complete chain | **PASS** 203/0 | **PASS** 296/0 | run exited 1 at `admission-process-cas` — a different suite, not Dockview | `appgate-a71937e.txt` |
-| 2026-08-23 | `add8a4dc` | complete chain | **PASS** 203/0 | **PASS** 296/0 | — | `gate-baseline.txt`, `appgate-final.txt` |
-| 2026-08-23 | `567a53a` | complete chain | **PASS** 203/0 | **PASS** 296/0 | — | `gate-r3.txt` |
-| 2026-08-23 | `d650d75` | complete chain | **PASS** 203/0 | **PASS** 296/0 | — | `gate-final.txt` |
-| 2026-08-23 | this tip | complete chain | **PASS** 203/0 | **PASS** 296/0 | — | `gate-wo7.txt` |
+| # | Date | Commit / tree | Execution context | Runs | Segment 14 | Segment 15 | Family / note | Evidence |
+|---|---|---|---|---:|---|---|---|---|
+| 1 | 2026-08-20 | app tree `e0aaaaab` | complete chain | **20** | **FAIL** | **UNRUN** (chain aborted at 14) | Electron child-launch: `render-process-gone`, `launch-failed`, GPU `0xC0000135`. **One campaign, one day.** | `docs/AUDIT-app-gate-reliability.md` |
+| 2 | earlier | `8c6bfce` | complete chain | 1 | PASS | PASS | 67 suites / 4,888 assertions | audit § AGR-2 |
+| 3 | earlier | `2ef73c39` | complete chain | 1 | PASS | PASS | 67 suites / 4,888 assertions | audit § AGR-2 |
+| 4 | 2026-08-21 | `8ec8b78e` (tree `e0aaaaab`) | **standalone**, segment 14 only | 1 | PASS 203/0 | not exercised | Phase 2 run A, inherited env | Phase 2 A/B record |
+| 5 | 2026-08-21 | `8ec8b78e` (tree `e0aaaaab`) | **standalone**, segment 14 only | 1 | PASS 203/0 | not exercised | Phase 2 run B, crashpad var removed | Phase 2 A/B record |
+| 6 | 2026-08-21 | `8ec8b78e` | complete chain | 1 | PASS 203/0 | **FAIL** 290/1 | **product assertion** `maximized pane grew to the whole surface (100 -> 100)` — not the Electron family | audit / handoff |
+| 7 | 2026-08-21 | `249af9a` | complete chain | 1 | PASS 203/0 | PASS 296/0 | Track B resolved as a gate-measurement defect | `fix/dockview-maximize-gate` |
+| 8 | 2026-08-21 | `249af9a` | **standalone**, segment 15 only, targeted | **5** | not exercised | PASS (incl. 291/0) | the original Track B failure never reproduced on demand | audit / handoff |
+| 9 | 2026-08-23 | `a71937e1` | complete chain | 1 | PASS 203/0 | PASS 296/0 | run exited 1 at `admission-process-cas` — a different suite, not Dockview | `appgate-a71937e.txt` |
+| 10 | 2026-08-23 | `add8a4dc` | complete chain | 1 | PASS 203/0 | PASS 296/0 | WO-4 final gate | `appgate-final.txt` |
+| 11 | 2026-08-23 | `add8a4dc` | complete chain | 1 | PASS 203/0 | PASS 296/0 | WO-5 R3 baseline re-measurement, detached worktree — a **second, separate** execution at the same commit | `gate-baseline.txt` |
+| 12 | 2026-08-23 | `567a53a` | complete chain | 1 | PASS 203/0 | PASS 296/0 | WO-5 R3 | `gate-r3.txt` |
+| 13 | 2026-08-23 | `d650d75` | complete chain | 1 | PASS 203/0 | PASS 296/0 | WO-5 R1 + R2 | `gate-final.txt` |
+| 14 | 2026-08-23 | `83cacf93...d650d75` | complete chain — **INDEPENDENT FULL REVIEW** | 1 | **FAIL** | **UNRUN** in this execution (run separately as row 15) | Electron child-launch family | independent Full review report |
+| 15 | 2026-08-23 | `83cacf93...d650d75` | **suffix run** required by the § 6 procedure — **INDEPENDENT FULL REVIEW** | 1 | not exercised | **FAIL** | Electron launch / profile / GPU failure. **NOT the maximize product assertion.** | independent Full review report |
+| 16 | 2026-08-23 | `527451d` | complete chain | 1 | PASS 203/0 | PASS 296/0 | WO-7, this round — counted **once** | `gate-wo7.txt` |
 
-**Documented counts, per segment, reported separately:**
+**Segment 14 — counts derived from the rows above**
 
-| | Segment 14 `dockview-bootstrap` | Segment 15 `dockview-app-integration` |
-|---|---:|---:|
-| Green observations | **11** (2 standalone, 9 complete-chain) | **11** (5 targeted standalone, 6 complete-chain) |
-| Electron-launch / `0xC0000135` observations | **20** | **0** |
-| Product-assertion failures | **0** | **1** (maximize `100 -> 100`) |
-| Unrun (chain aborted upstream) | **0** | **20** |
+| Category | Count | Rows |
+|---|---:|---|
+| Green, complete chain | 10 | 2, 3, 6, 7, 9, 10, 11, 12, 13, 16 |
+| Green, standalone | 2 | 4, 5 |
+| **Green, total** | **12** | |
+| Electron-launch / `0xC0000135`, **2026-08-20 campaign** | 20 | 1 |
+| Electron-launch / `0xC0000135`, **independent Full review** | 1 | 14 |
+| **Electron-launch, total** | **21** | |
+| Product-assertion failures | 0 | — |
+| Unrun (chain aborted upstream) | 0 | — |
+| **Total executions in which segment 14 was exercised** | **33** | 12 + 21 |
 
-**Caveats, stated rather than glossed.** These are documented observations only; no missing run is
-inferred and **no statistical stability is claimed**. The counts are not a uniform sample: the 20
-failures come from one deliberate measurement campaign on a single day, the greens are spread across
-different commits, environments and purposes, and standalone runs are not equivalent evidence to
-complete-chain runs. Segment 15's twenty "unrun" observations are a *consequence* of segment 14
-aborting the chain and say nothing about segment 15 itself. **Segment 15's single failure is a product
-assertion and is explicitly outside the WO-7 § 6 exception.** The purpose of this table is to let the
-independent reviewer weigh the narrow exception against what has actually been recorded — not to argue
-that the failure is resolved.
+**Segment 15 — counts derived from the rows above**
+
+| Category | Count | Rows |
+|---|---:|---|
+| Green, complete chain | 9 | 2, 3, 7, 9, 10, 11, 12, 13, 16 |
+| Green, standalone (targeted) | 5 | 8 |
+| **Green, total** | **14** | |
+| Electron launch / profile / GPU, **independent Full review suffix run** | 1 | 15 |
+| Product-assertion failures (maximize `100 -> 100`) | 1 | 6 |
+| Unrun, **2026-08-20 campaign** | 20 | 1 |
+| Unrun, **independent Full review** complete chain | 1 | 14 |
+| **Unrun, total** | **21** | |
+| **Total executions in which segment 15 was exercised or recorded unrun** | **37** | 14 + 1 + 1 + 21 |
+
+Rows 4 and 5 are excluded from every segment 15 count and row 8 from every segment 14 count: those
+executions did not exercise the other segment at all, which is not the same as it being unrun because
+the chain aborted. Row 15 is excluded from the segment 14 counts for the same reason.
+
+**Caveats, stated rather than glossed.**
+
+- These are documented observations only. **No missing run is inferred and no statistical stability is
+  claimed, in either direction.** Twelve greens do not make segment 14 reliable, and twenty-one
+  failures do not make it deterministic.
+- The sample is **not uniform**. The twenty segment-14 failures come from a single deliberate
+  measurement campaign on a single day (row 1) and are kept separate from the single independent-review
+  failure (row 14) throughout. The greens are spread across different commits, environments, machines
+  and purposes.
+- **Standalone, complete-chain and suffix executions are not equivalent evidence** and are labelled
+  separately everywhere above. A suffix run in particular starts a fresh Electron process outside the
+  chain that normally precedes it.
+- Segment 15's twenty campaign "unrun" observations are a *consequence* of segment 14 aborting the
+  chain and say nothing about segment 15 itself. The same is true of row 14's single unrun.
+- **The independent review's result is recorded from its report, not from a capture held by this
+  builder.** Nothing was re-run to confirm it, and no AGR remediation was performed or is authorized.
+- Additional complete-chain captures from this session exist in the scratchpad (`app-gate*.txt`,
+  `appgate1.txt`) whose commit attribution cannot be established from the file alone. They are
+  **deliberately excluded** from every count above rather than attributed by guesswork, so the table
+  is a conservative subset of what was actually executed.
+
+Whether the independent review's own run qualifies as an admissible exception candidate under WO-7 § 6
+is **that reviewer's determination, not the builder's**.
 
 ## 12.7 Review requested
 
