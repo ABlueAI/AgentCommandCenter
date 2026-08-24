@@ -1162,6 +1162,11 @@ real `tlog` console emission and at least one real `main-error` emission occurre
 them matches the version-resolution text rather than an unrelated startup message, and that they
 carry the real `tlog` `[TIMING +Nms]` prefix — which only the real `tlog` produces.
 
+> **NARROWED BY WO-11 — as first written, the prefix sentence above was wider than its proof.** The
+> `[TIMING +Nms]` assertion ran against **console emissions only**; the `main-error` payloads were
+> never prefix-checked. Both sinks are pinned as of WO-11, and the paired payloads are additionally
+> asserted byte-identical. See § 14.3.
+
 **Three fixtures, not two.** WO-9 added the case that had been missing:
 
 | Fixture | Injected | Required classification |
@@ -1420,7 +1425,9 @@ the real production route:
 **Non-vacuity is asserted before any disclosure check.** Per fixture: at least one real `tlog` console
 emission occurred; at least one real `main-error` emission occurred; every probe emission matches the
 version-resolution text rather than an unrelated startup message; and the emissions carry the real
-`[TIMING +Nms]` prefix, which only `tlog` produces. Probe emissions are separated from boot emissions
+`[TIMING +Nms]` prefix, which only `tlog` produces. **NARROWED BY WO-11: as first written that last
+clause was checked on console emissions ONLY — the `main-error` payloads were not prefix-pinned. Both
+sinks are pinned as of WO-11; see § 14.3.** Probe emissions are separated from boot emissions
 so a startup message can never be mistaken for evidence.
 
 **Three fixtures, and the third is new.** Successful resolution; pre-resolution `execFile` failure; and
@@ -1476,3 +1483,125 @@ describe runs up to `527451d` and are not restated here.
 **Runtime sources byte-identical.** The `app/` tree differs from `5074f5b` only by test files and
 `app/package.json`'s test-chain registration; every runtime source file is unchanged, which is what
 makes the inherited Pester result valid rather than assumed.
+
+---
+
+# 14. HARNESS-ISOLATION CLOSURE — Work Order 11 + Binding Amendment A
+
+The independent review of `8c60962` found **three harness-isolation defects**. None was a production
+disclosure defect — the redaction itself held — but all three weakened the proof, and one of them was
+actively unsafe. All are corrected inside the existing suite; no new test file and no new registered
+segment were added, so the app gate stays at **87 suites**.
+
+| Defect | Severity | Disposition |
+|---|---|---|
+| Leaked `uncaughtException` listeners across fixtures | **unsafe** — accumulating handlers over torn-down fixtures | **CORRECTED** |
+| Shallow `child_process` mock left real process APIs reachable | **unsafe** — a startup path could have spawned for real | **CORRECTED** |
+| `[TIMING +Nms]` pinned on console only, claimed for both sinks | overstated proof | **CORRECTED, and the claim narrowed in place** |
+
+## 14.1 Leaked process listeners
+
+**What was wrong.** Loading `main.js` registers process-level handlers, `uncaughtException` among
+them, and the harness removed none of them. Three fixtures meant three accumulating handlers, each
+holding a closure over a fixture that had already been torn down. The leak is now **proven, not
+assumed**: each fixture asserts that `main.js` really did introduce an `uncaughtException` listener
+before asserting that it was removed, so the cleanup assertions cannot pass vacuously.
+
+**The correction.** A single `ORIGINAL_LISTENERS` snapshot is taken at module scope, **before any
+evaluation of `main.js`**, recording every `process.eventNames()` entry and the identity *and order*
+of every `process.rawListeners(event)` result. It is passed into each fixture explicitly, and each
+fixture asserts `baselineUsed === ORIGINAL_LISTENERS` — so fixtures 2 and 3 provably do **not** adopt
+the preceding fixture's post-state as their baseline, which would have normalised an earlier leak.
+
+In `finally`, only listeners introduced *after* that baseline are removed, one at a time.
+**`removeAllListeners()` is never used**: this process also carries runner-owned and Node-owned
+handlers, and destroying those would be a worse defect than the one being fixed.
+
+After every fixture: `process.rawListeners('uncaughtException')` is identity- and order-equivalent to
+the original; no process event retains anything introduced; and a dedicated section proves the counts
+did not accumulate across all three.
+
+**Also restored in `finally`, on every path including a throw:** `Module._load`, `console.log`, the
+module cache, `process.env` (added keys deleted, changed keys restored), `setInterval`/`setTimeout`
+plus every timer the fixture created, and the temp `userData` directory — whose removal each fixture
+now asserts, so no filesystem residue is left behind.
+
+## 14.2 Fail-closed `child_process`
+
+**What was wrong.** The mock was `Object.assign({}, realCp, { execFile })`. That is a shallow copy:
+`spawn`, `spawnSync`, `exec`, `execSync`, `execFileSync` and `fork` were all still **the real
+implementations**, reachable by anything main.js's startup happened to call.
+
+**The correction.** The mock is built on `Object.create(null)` and is fail-closed. Only the fixture's
+`execFile` does anything. Every other **callable** export of the real module — not merely the six the
+order names, but anything callable the runtime exposes — is replaced by a stub that records the
+attempted API name and throws a fixed test-only refusal. Non-callable exports pass through unchanged.
+
+Asserted per fixture: the fixture `execFile` was invoked **exactly once**; **no** blocked API was
+invoked; and for every named API the mock's function is **not** the real one. A dedicated section
+additionally calls each blocked API directly, proving it throws and is recorded rather than spawning,
+and sweeps every callable export of the real module to confirm **none** is reachable through the mock.
+
+## 14.3 Both sinks prefix-pinned
+
+**What was wrong.** The `[TIMING +Nms]` assertion ran against console emissions only, while §§ 12.1 and
+13 stated the emissions carried the prefix without qualification. The proof was narrower than the
+claim. Both statements are now narrowed **in place** rather than left standing.
+
+**The correction.** For every fixture, using the bounded pattern `[TIMING +<integer>ms]`:
+
+- at least one real console emission and at least one real `main-error` emission exist;
+- **every** matching console emission carries the prefix;
+- **every** matching `main-error` payload carries the prefix;
+- the paired payloads are **byte-identical**, index by index, with equal counts.
+
+Byte-identity is the strongest available check here and is not incidental: `tlog` builds **one**
+string and hands the same one to `console.log` and to `webContents.send`. A reconstructed or
+re-formatted message would not match. Unrelated boot emissions still cannot satisfy any of it — probe
+emissions are separated from boot emissions, and every probe emission on both sinks is asserted to be
+version-resolution text.
+
+## 14.4 Verification
+
+| Gate | Result |
+|---|---|
+| `pane-status-disclosure-route` directly | **156 passed, 0 failed** |
+| Focused pane-status, 25 suites | **1,620 assertions, 0 failures** |
+| Complete app gate | **exit 0 — 87 suites, 6,078 assertions, 0 failures** |
+| `git diff --check`, cumulative and focused | clean |
+| **Pester** | **955 passed / 0 failed / 0 skipped — INHERITED from the independent run at `5074f5b`; not rerun, because this correction changed one JavaScript test file and this document, with all production and PowerShell sources byte-identical.** |
+
+**By observed summary format:** named-standard 69 / 5,348 · named-assertions 2 / 18 · unnamed bare
+6 / 423 · unnamed tests-prefixed 10 / 289 = **87 suites / 6,078**. 87 summary lines against 87
+registered segments.
+
+**Delta from 5,980 / 87 at `8c60962`: +98, and the suite count is unchanged**, which is exactly what a
+pure assertion change inside an existing suite should look like:
+
+| Suite | At `8c60962` | Now | Δ |
+|---|---:|---:|---:|
+| `pane-status-disclosure-route` | 58 | 156 | **+98** |
+| every other suite | | | **0** |
+| **Registered segments** | **87** | **87** | **0** |
+
+`pane-status-isolation` and `test-summary-formats` are unchanged this round — both scale with the
+number of test *files*, and no file was added.
+
+**AGR was not triggered.** The complete gate exited 0 with `dockview-bootstrap` 203/0 and
+`dockview-app-integration` 296/0. Nothing was routed and nothing was retried.
+
+## 14.5 Terminator acknowledged (Binding Amendment A § 3)
+
+This was the **third** correction round concerning the disclosure proof. The terminator is recorded and
+accepted: **if the next independent review finds another material harness-isolation or proof-validity
+defect — as opposed to an actual production disclosure defect — no further incremental patch to this
+loader harness is authorized.** The response instead is to stop, preserve the production correction and
+the existing evidence, record that the `main.js` loader-harness approach has become too complex to
+establish confidently by incremental fixes, and reopen **only the test architecture** to choose a
+simpler bounded proof mechanism before any further implementation.
+
+Progress remains **70%**.
+
+**Scope.** Two tracked paths changed: `app/pane-status/pane-status-disclosure-route.test.js` and this
+document. No production source, no `app/package.json` registration, no IPC or preload surface, no
+PowerShell, no dependency and no lockfile change.
