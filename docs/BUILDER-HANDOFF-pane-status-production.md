@@ -1080,12 +1080,220 @@ Worth pressing on:
 1. **R1's gate placement** between the modified and partial checks (§ 11.1). It is a judgement call
    about which refusal reason is most useful, and it changes the reported reason for a moved group.
 2. Whether reconciliation is the right disposition for a stray, versus a plain refusal.
-3. Whether `strayInstallGroups` should also treat a *duplicate* of a recorded group at a recorded event
-   as a stray. It currently does — the recorded set is matched by value, so a second identical copy at
-   the same event is not among the recorded groups for it.
+3. **CORRECTED — the original claim here was wrong; see § 12.3.** This item asserted that
+   `strayInstallGroups` treats an identical duplicate of a recorded group as a stray. It does not.
+   Membership is set-style and matched by VALUE, so a byte-identical duplicate matches the recorded
+   group and is not a stray. Duplicates are rejected one layer up, conservatively, through the existing
+   ambiguous/duplicate classification.
 4. R2's structural no-binding argument: it depends on nobody later adding a bound catch to that file.
    The assertion pins that, but a reviewer should decide whether a lint rule would be better.
 5. `preload.js` still has no directly corresponding test suite.
 
 Live acceptance remains **NOT PERFORMED** and separately authorized. Enrolled per-tool-call overhead
 remains **NOT MEASURED**.
+
+---
+
+# 12. FULL-REVIEW CORRECTIONS — Work Order 7 + Binding Amendment A
+
+The first independent Full review of this branch returned three findings. All three are corrected
+here, in one commit on top of `d650d75`. Nothing was amended: `a71937e1`, `add8a4dc`, `567a53a` and
+`d650d75` are all ancestors of this tip.
+
+| Finding | Disposition |
+|---|---|
+| Provider absolute path disclosed to application logging | **CORRECTED** — bounded classification only |
+| Stray reconciliation did not survive a restart | **CORRECTED** — re-derived at steady-state startup |
+| Handoff claimed `strayInstallGroups` detects identical duplicates | **CORRECTED (documentation)** — the claim was false |
+
+## 12.1 Provider-path disclosure
+
+**The finding.** `createClaudeVersionResolver` logged `outcome.source` — the resolved absolute
+executable path — on every successful resolution. `main.js` wires that logger to `tlog`, so the path
+reached the Logs tab and from there into anything a log is copied into. It disclosed where the
+operator's provider is installed. Nothing downstream needed it.
+
+**The correction.** The success and failure lines now carry a fixed bounded classification: the
+resolution method (`powershell-get-command`) plus the success/failure category. `outcome.reason` was
+already one of a fixed set of constants and `outcome.version` is a parsed version, never a path.
+
+**What did NOT change.** Version verification is not weakened and executable selection is untouched.
+The same executable is resolved, the same one is probed, fail-closed exact-match gating still refuses a
+version outside the allowlist. The path is preserved internally — it remains on the resolver's return
+value and in the acceptance record — and reaches no sink. `record()` has exactly two callers, both
+tests.
+
+**Failures never carry the raw error.** `interpretProbe` reads only the truthiness of the error object
+and maps it to a bounded constant. The raw error is never logged, returned, forwarded or stringified,
+and the resolver does not reject — a failure is a bounded value.
+
+**Sinks exercised** (Binding Amendment A § 1 — "captured logs" alone is insufficient, so each is named):
+
+| # | Sink | How it is captured |
+|---|---|---|
+| 1 | Injected provider-resolution logger | the logger `main.js` hands to `tlog` |
+| 2 | Console output used by tlog | `console.log`/`warn`/`error` replaced for the duration |
+| 3 | Renderer main-error payloads | real `createPublishers` over a fake window recording `webContents.send` |
+| 4 | Controller results | `install()` and `start()` return values, plus the controller log |
+| 5 | IPC responses | every registered channel invoked through `registerPaneStatusIpc` |
+| 6 | Setup-state reason and detail | `getSetupState().detail`, `.versionReason`, and the whole object |
+| 7 | Resolver public boundary | the resolved value, and a rejection had one occurred |
+
+**Non-vacuity first.** Before any absence is asserted, the suite proves presence: the successful probe
+genuinely receives the poison path as its executable source, and the failing probe's injected error
+genuinely carries it in `message`, `stack`, `cmd`, `path` and `spawnfile`. Both paths are then scanned
+for the absolute path, its distinctive filename, and its distinctive directory. The raw error's errno,
+message and stack frames are separately proven absent.
+
+## 12.2 Stray reconciliation across restart
+
+**The finding.** R1 made *removal* refuse when a group carrying our installation ID survives outside
+the recorded groups, but steady-state startup never looked. The next launch classified the document as
+installed-and-exact, reported clean, and the badge went green over a settings file that still had a
+loose hook of ours in it. **Restarting laundered the problem.**
+
+**The correction.** Steady-state recovery runs the same `strayInstallGroups` scan, with the same
+current install ID, over all events — and returns reconciliation-required even when every
+descriptor-recorded group is exact. Settings, descriptor, shim and every group are left unchanged.
+
+**No persisted flag, deliberately.** The order forbids a flag that merely remembers a derivable
+outcome, and it would be the wrong mechanism anyway: it would need its own invalidation story to avoid
+outliving the condition it records. Recomputing from settings on every start is what makes the answer
+survive a restart *and* what lets a genuine reconciliation clear it with no bookkeeping. The test pins
+this directly — after the stray is detected, the descriptor file is **byte-identical** and its
+transaction state is still `INSTALLED`.
+
+**Precedence unchanged.** The steady-state gate sits after the existing MODIFIED / VANISHED /
+OTHER_INSTALL / AMBIGUOUS branches, all of which already reconcile. Only the previously-clean
+OWNED_EXACT path is affected, so no accepted classification precedence moved.
+
+Proven: removal refuses · immediate state is reconciliation-required · a **second** controller over the
+same bytes still says reconciliation-required · a **third** says it too, proving re-derivation rather
+than a one-shot observation · REMOVE_PENDING, REMOVE_WRITTEN and REMOVE_VERIFIED retain the same safety
+· foreign-install groups alone recover **clean** and stay byte-identical · once the stray is genuinely
+reconciled by hand, the very next start is clean.
+
+## 12.3 The identical-duplicate claim — corrected
+
+The previous handoff (§ 11.6 item 3) stated that `strayInstallGroups` treats an identical duplicate of
+a recorded group as a stray. **That was wrong.** Stated accurately:
+
+- Membership is **set-style and matched by value**, so a byte-identical duplicate **matches** the
+  recorded group and is therefore **not** a stray.
+- Duplicate exact groups remain **conservatively rejected** through the existing ambiguous/duplicate
+  classification: `classifyRecordedEvent` counts the groups at an event carrying our ID and returns
+  `ambiguous` as soon as more than one is found.
+- The stray scan is **not** claimed to detect them. The implementation was not changed to match the
+  earlier inaccurate statement.
+
+**Existing coverage, cited as required by Binding Amendment A § 2.** `app/pane-status/pane-status-removal.test.js`
+§ D drives a refusal matrix that includes the case labelled `'a second copy of our group in one event'`,
+which pushes a deep clone of `hooks.Stop[0]` back into `hooks.Stop`. For every case in that matrix it
+asserts: removal refuses; the reason is `TXN_REFUSAL.REMOVAL_REFUSED`; `retained === true`; settings are
+byte-identical; the descriptor is byte-identical; the shim is still present.
+
+That covers the outcome but **not** the classification, and it does not prove both copies carry the
+current installation ID. Those two gaps are closed by a new focused case
+(`pane-status-all-events-removal.test.js` § 12), which additionally proves: both groups at the event
+genuinely carry the current install ID and are byte-identical to each other; `strayInstallGroups`
+returns **zero**; `classifyRemoval` returns REFUSE with reason `AMBIGUOUS`; and the per-event
+classification for that event is `ambiguous`.
+
+## 12.4 Accepted rulings preserved
+
+R1's placement (after ambiguous/modified, before partial), R2's rejected-action behaviour, R3's
+filesystem-success/presentation-unconfirmed disposition, and the F-2 and F-3 no-correction rulings are
+all unchanged. The IPC channel table is still the same seven channels and `preload.js` is untouched.
+
+> **F-2 — NO CORRECTION:** ok:true reflects a filesystem installation that genuinely completed. The
+> authoritative version-mismatch setup state separately and honestly reports that the installed hooks
+> cannot presently be used. This is not false success.
+
+> **F-3 — NO CORRECTION:** No current producer returns ok:false without a non-empty reason. The
+> defensive renderer condition is not presently reachable as a defect.
+
+## 12.5 Gates
+
+| Gate | Result |
+|---|---|
+| Focused pane-status, 24 suites | **1,434 assertions, 0 failures** |
+| Complete app gate | **exit 0 — 86 suites, 5,891 assertions, 0 failures** |
+| Pester | **exit 0 — 955 passed, 0 failed, 0 skipped** |
+| `git diff --check`, cumulative and focused | clean |
+
+**By observed summary format**, from retained raw output:
+
+| Observed format | Suites | Assertions |
+|---|---:|---:|
+| named, standard | 68 | 5,161 |
+| named, assertions | 2 | 18 |
+| unnamed, bare | 6 | 423 |
+| unnamed, tests-prefixed | 10 | 289 |
+| **Combined** | **86** | **5,891** |
+
+86 summary lines against 86 registered segments — every segment accounted for.
+
+**Delta from 5,781 / 85 at `d650d75`: +110**, attributed by per-suite diff:
+
+| Suite | At `d650d75` | Now | Δ | Why |
+|---|---:|---:|---:|---|
+| `pane-status-path-disclosure` | — | 76 | **+76** | new suite (§ 12.1) |
+| `pane-status-all-events-removal` | 62 | 90 | **+28** | restart durability and duplicate cases |
+| `pane-status-isolation` | 140 | 145 | **+5** | per-file scans over one new file |
+| `test-summary-formats` | 121 | 122 | **+1** | one per new suite |
+| every other suite | | | **0** | byte-identical counts |
+
+76 + 28 + 5 + 1 = 110. No unexplained assertions.
+
+## 12.6 AGR — not triggered, and the observation history
+
+**The narrow exception of WO-7 § 6 was NOT triggered.** The complete app gate exited 0.
+`dockview-bootstrap` reported 203/0 and `dockview-app-integration` 296/0. No suite failed, so nothing
+was routed as an exception candidate and nothing was retried.
+
+**Observation history (Binding Amendment A § 3).** Assembled from retained logs, the committed audit,
+and already-recorded runs. **No new runs, no repetitions, and no diagnostic campaign were performed.**
+
+| Date | Commit / tree | Context | Segment 14 | Segment 15 | Failure family / note | Evidence |
+|---|---|---|---|---|---|---|
+| 2026-08-20 | app tree `e0aaaaab` | complete chain, ×20 | **FAIL ×20** | **UNRUN ×20** (chain aborted at 14) | Electron child-launch: `render-process-gone`, `launch-failed`, GPU `0xC0000135` | `docs/AUDIT-app-gate-reliability.md` |
+| earlier | `8c6bfce`, `2ef73c39` | complete chain | **PASS** | **PASS** | 67 suites / 4,888 assertions; a 67-suite report necessarily executed 14 | audit § AGR-2 |
+| 2026-08-21 | `8ec8b78e` (app tree `e0aaaaab`) | **standalone**, run A inherited env | **PASS** 203/0 | not exercised | — | Phase 2 A/B record |
+| 2026-08-21 | `8ec8b78e` (app tree `e0aaaaab`) | **standalone**, run B crashpad var removed | **PASS** 203/0 | not exercised | — | Phase 2 A/B record |
+| 2026-08-21 | `8ec8b78e` | complete chain | **PASS** 203/0 | **FAIL** 290/1 | product assertion `the maximized pane grew to the whole surface (100 -> 100)` — **not** the Electron family | audit / handoff |
+| 2026-08-21 | `249af9a` | complete chain | **PASS** 203/0 | **PASS** 296/0 | Track B resolved as a gate-measurement defect | `fix/dockview-maximize-gate` |
+| 2026-08-21 | `249af9a` | segment 15 standalone ×5 targeted | not exercised | **PASS** (incl. 291/0) | original Track B failure never reproduced on demand | audit / handoff |
+| 2026-08-23 | `a71937e1` | complete chain | **PASS** 203/0 | **PASS** 296/0 | run exited 1 at `admission-process-cas` — a different suite, not Dockview | `appgate-a71937e.txt` |
+| 2026-08-23 | `add8a4dc` | complete chain | **PASS** 203/0 | **PASS** 296/0 | — | `gate-baseline.txt`, `appgate-final.txt` |
+| 2026-08-23 | `567a53a` | complete chain | **PASS** 203/0 | **PASS** 296/0 | — | `gate-r3.txt` |
+| 2026-08-23 | `d650d75` | complete chain | **PASS** 203/0 | **PASS** 296/0 | — | `gate-final.txt` |
+| 2026-08-23 | this tip | complete chain | **PASS** 203/0 | **PASS** 296/0 | — | `gate-wo7.txt` |
+
+**Documented counts, per segment, reported separately:**
+
+| | Segment 14 `dockview-bootstrap` | Segment 15 `dockview-app-integration` |
+|---|---:|---:|
+| Green observations | **11** (2 standalone, 9 complete-chain) | **11** (5 targeted standalone, 6 complete-chain) |
+| Electron-launch / `0xC0000135` observations | **20** | **0** |
+| Product-assertion failures | **0** | **1** (maximize `100 -> 100`) |
+| Unrun (chain aborted upstream) | **0** | **20** |
+
+**Caveats, stated rather than glossed.** These are documented observations only; no missing run is
+inferred and **no statistical stability is claimed**. The counts are not a uniform sample: the 20
+failures come from one deliberate measurement campaign on a single day, the greens are spread across
+different commits, environments and purposes, and standalone runs are not equivalent evidence to
+complete-chain runs. Segment 15's twenty "unrun" observations are a *consequence* of segment 14
+aborting the chain and say nothing about segment 15 itself. **Segment 15's single failure is a product
+assertion and is explicitly outside the WO-7 § 6 exception.** The purpose of this table is to let the
+independent reviewer weigh the narrow exception against what has actually been recorded — not to argue
+that the failure is resolved.
+
+## 12.7 Review requested
+
+A **fresh independent cumulative Codex Full review** of `83cacf93…` to this tip. Claude remains
+disqualified; the builder has not reviewed any of these corrections. Live acceptance remains **NOT
+PERFORMED**; enrolled per-tool-call overhead remains **NOT MEASURED**.
+
+**Ordering disclosure.** The complete gate and Pester ran on the tree as it now stands, with the same
+single exception as §§ 9.9, 10.6 and 11.5: **this section was written into the handoff after those
+runs.** No source, test, or configuration file changed after the gates.

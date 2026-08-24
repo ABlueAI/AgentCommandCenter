@@ -344,6 +344,174 @@ function makeRecovery(rig) {
       'while the same document has no strays for a different installation');
   }
 
+  // ===============================================================================================
+  // WO-7 § 2 — the same safety must survive a RESTART, and must do so without a persisted flag.
+  // ===============================================================================================
+
+  /** A SECOND controller over the same on-disk state. This is the simulated restart. */
+  function reopen(r) {
+    const logs = [];
+    const c = controllerMod.createPaneStatusController({
+      userDataPath: r.userData, settingsDir: path.dirname(r.settingsPath), settingsPath: r.settingsPath,
+      installId: OURS,
+      cmdExe: shimMod.resolveCmdExe(process.env),
+      reporterPath: path.join(__dirname, 'pane-status-reporter.js'),
+      currentRuntimePath: process.execPath,
+      net: require('net'), crypto,
+      randomToken: () => crypto.randomBytes(32).toString('hex'),
+      resolveVersion: async () => ({ ok: true, raw: '9.9.9 (Claude Code)' }),
+      resolveProcessStartTime: async () => ({ ok: true, running: false }),
+      supportedVersions: ['9.9.9'],
+      publishView: () => true, publishSetupState: () => true,
+      now: () => 1000, log: (l) => logs.push(String(l)),
+    });
+    return { c, logs };
+  }
+
+  // -----------------------------------------------------------------------------------------------
+  process.stdout.write('\n9. A stray OUTLIVES A RESTART — steady-state startup re-derives it\n');
+  // -----------------------------------------------------------------------------------------------
+  {
+    const rig = makeRig();
+    await rig.c.install();
+    const recorded = descriptorMod.read(rig.userData).value.installedGroups;
+    const shim = descriptorMod.read(rig.userData).value.runtime.shimPath;
+    const firstEvent = Object.keys(recorded)[0];
+
+    // Every recorded group stays EXACT. Only a duplicate location is added, so nothing the old
+    // steady-state path examined was wrong — which is exactly why it reported clean and went green.
+    const s = readSettings(rig.settingsPath);
+    s.hooks[UNRECORDED_EVENT] = [JSON.parse(JSON.stringify(recorded[firstEvent][0]))];
+    writeSettings(rig.settingsPath, s);
+    const before = fs.readFileSync(rig.settingsPath, 'utf8');
+    const descriptorBefore = fs.readFileSync(descriptorMod.descriptorPath(rig.userData), 'utf8');
+
+    const refused = await rig.c.remove();
+    eq(refused.ok, false, 'removal refuses, as R1 already established');
+
+    // THE RESTART. A brand-new controller and recovery over the same bytes on disk.
+    const second = reopen(rig);
+    const started = await second.c.start();
+    eq(started.ok, true, 'the fresh instance starts');
+    eq(second.c.getSetupState().state, 'reconciliation-required',
+      'and it reports RECONCILIATION-REQUIRED — restarting no longer launders the stray');
+    eq(second.c.getSetupState().detail, recoveryMod.RECONCILE_REASON.STRAY_GROUP,
+      'naming the stray group as the reason');
+    assert(second.c.isReporting() === false, 'and reporting stays disabled');
+
+    // A THIRD instance: proves the answer is RE-DERIVED every start, not a one-shot observation.
+    const third = reopen(rig);
+    await third.c.start();
+    eq(third.c.getSetupState().state, 'reconciliation-required',
+      'a third instance says the same — it is recomputed, not remembered');
+
+    // NO PERSISTED FLAG. The descriptor must be untouched: the settings file is the source of truth.
+    eq(fs.readFileSync(descriptorMod.descriptorPath(rig.userData), 'utf8'), descriptorBefore,
+      'the descriptor is BYTE-IDENTICAL — no reconciliation flag was written');
+    eq(descriptorMod.read(rig.userData).value.transactionState, 'INSTALLED',
+      'its transaction state is still INSTALLED, so nothing was persisted to remember this');
+    eq(fs.readFileSync(rig.settingsPath, 'utf8'), before, 'settings are BYTE-IDENTICAL');
+    assert(fs.existsSync(shim), 'the shim is retained');
+    eq(doc.groupsWithInstallId(readSettings(rig.settingsPath), OURS).length, 9,
+      'and all nine groups — eight recorded plus the stray — are exactly where they were');
+  }
+
+  // -----------------------------------------------------------------------------------------------
+  process.stdout.write('\n10. Foreign groups alone recover CLEAN and stay byte-identical\n');
+  // -----------------------------------------------------------------------------------------------
+  {
+    const rig = makeRig();
+    await rig.c.install();
+    const recorded = descriptorMod.read(rig.userData).value.installedGroups;
+    const firstEvent = Object.keys(recorded)[0];
+
+    const s = readSettings(rig.settingsPath);
+    s.hooks[UNRECORDED_EVENT] = [reassignInstallId(recorded[firstEvent][0], THEIRS)];
+    writeSettings(rig.settingsPath, s);
+    const foreignBefore = JSON.stringify(doc.groupsWithInstallId(readSettings(rig.settingsPath), THEIRS));
+    eq(doc.groupsWithInstallId(readSettings(rig.settingsPath), THEIRS).length, 1,
+      'the fixture really does hold a foreign group');
+
+    const second = reopen(rig);
+    await second.c.start();
+    eq(second.c.getSetupState().state, 'ready',
+      'a foreign group is coexistence, NOT a reconciliation trigger — startup is clean');
+    eq(JSON.stringify(doc.groupsWithInstallId(readSettings(rig.settingsPath), THEIRS)), foreignBefore,
+      'and their group is byte-identical afterwards');
+    second.c.shutdown();
+  }
+
+  // -----------------------------------------------------------------------------------------------
+  process.stdout.write('\n11. Once the stray is genuinely reconciled, a restart goes clean again\n');
+  // -----------------------------------------------------------------------------------------------
+  {
+    const rig = makeRig();
+    await rig.c.install();
+    const recorded = descriptorMod.read(rig.userData).value.installedGroups;
+    const firstEvent = Object.keys(recorded)[0];
+
+    const s = readSettings(rig.settingsPath);
+    s.hooks[UNRECORDED_EVENT] = [JSON.parse(JSON.stringify(recorded[firstEvent][0]))];
+    writeSettings(rig.settingsPath, s);
+
+    const blocked = reopen(rig);
+    await blocked.c.start();
+    eq(blocked.c.getSetupState().state, 'reconciliation-required', 'blocked while the stray is present');
+
+    // The operator reconciles by hand, exactly as docs/RECOVERY-pane-status-hooks.md describes.
+    const fixed = readSettings(rig.settingsPath);
+    delete fixed.hooks[UNRECORDED_EVENT];
+    writeSettings(rig.settingsPath, fixed);
+
+    const after = reopen(rig);
+    await after.c.start();
+    eq(after.c.getSetupState().state, 'ready',
+      'and the very next start is clean — no flag had to be cleared, because none was ever written');
+    after.c.shutdown();
+  }
+
+  // -----------------------------------------------------------------------------------------------
+  process.stdout.write('\n12. An IDENTICAL DUPLICATE is ambiguous, NOT a stray (WO-7 § 3)\n');
+  // -----------------------------------------------------------------------------------------------
+  {
+    const rig = makeRig();
+    await rig.c.install();
+    const recorded = descriptorMod.read(rig.userData).value.installedGroups;
+    const shim = descriptorMod.read(rig.userData).value.runtime.shimPath;
+    const firstEvent = Object.keys(recorded)[0];
+
+    const s = readSettings(rig.settingsPath);
+    s.hooks[firstEvent].push(JSON.parse(JSON.stringify(s.hooks[firstEvent][0])));
+    writeSettings(rig.settingsPath, s);
+    const before = fs.readFileSync(rig.settingsPath, 'utf8');
+    const descriptorBefore = fs.readFileSync(descriptorMod.descriptorPath(rig.userData), 'utf8');
+
+    // Both copies genuinely carry the CURRENT installation ID — otherwise this proves nothing.
+    const atEvent = readSettings(rig.settingsPath).hooks[firstEvent].filter((g) => doc.groupBelongsTo(g, OURS));
+    eq(atEvent.length, 2, 'both groups at that event genuinely carry the current installation ID');
+    eq(JSON.stringify(atEvent[0]), JSON.stringify(atEvent[1]), 'and they are byte-identical to each other');
+
+    // THE CORRECTION. Set-style membership means an identical duplicate MATCHES the recorded group,
+    // so the stray scan does not see it. The handoff previously claimed otherwise; that was wrong.
+    eq(doc.strayInstallGroups(readSettings(rig.settingsPath), recorded, OURS).length, 0,
+      'strayInstallGroups does NOT report it — value matching means the duplicate matches the record');
+
+    // It is caught one layer up instead, and conservatively.
+    const cls = doc.classifyRemoval(readSettings(rig.settingsPath), recorded, OURS);
+    eq(cls.outcome, doc.REMOVAL_OUTCOME.REFUSE, 'classification REFUSES');
+    eq(cls.reason, doc.REMOVAL_REFUSAL.AMBIGUOUS, 'through the ambiguous/duplicate path');
+    eq(cls.perEvent[firstEvent], 'ambiguous', `and ${firstEvent} is classified ambiguous`);
+
+    const res = await rig.c.remove();
+    eq(res.ok, false, 'removal refuses');
+    eq(res.detail, doc.REMOVAL_REFUSAL.AMBIGUOUS, 'with the ambiguous reason');
+    eq(res.retained, true, 'reporting that everything was retained');
+    eq(fs.readFileSync(rig.settingsPath, 'utf8'), before, 'settings are BYTE-IDENTICAL');
+    eq(fs.readFileSync(descriptorMod.descriptorPath(rig.userData), 'utf8'), descriptorBefore,
+      'the descriptor is BYTE-IDENTICAL');
+    assert(fs.existsSync(shim), 'and the shim is NOT deleted');
+  }
+
   try { fs.rmSync(root, { recursive: true, force: true }); } catch { /* best effort */ }
   process.stdout.write(`\npane-status-all-events-removal: ${passed} passed, ${failed} failed\n`);
   process.exit(failed ? 1 : 0);

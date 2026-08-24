@@ -287,6 +287,20 @@ function interpretProbe(result) {
 }
 
 /**
+ * WO-7 § 1 — THE OPERATOR-VISIBLE CLASSIFICATION OF A RESOLUTION, AND NOTHING ELSE.
+ *
+ * The resolved executable is an absolute filesystem path. It used to be interpolated straight into the
+ * provider-resolution log line, and main.js wires that logger to `tlog` — so the path reached the Logs
+ * tab, and from there anywhere a log is copied. It disclosed where the operator's provider is
+ * installed, which is neither the operator's decision nor anything the log needed to say.
+ *
+ * What replaces it is a fixed, bounded classification: HOW the provider was resolved, and whether that
+ * succeeded. The path itself is still resolved, still verified, and still the executable the probe
+ * invokes — it is simply never rendered anywhere a human or a file can read it.
+ */
+const RESOLUTION_METHOD = 'powershell-get-command';
+
+/**
  * deps:
  *   execFile(file, args, opts, cb) -> node child_process.execFile. INJECTED — this module still never
  *                                     imports child_process, so no provider-event path can reach one.
@@ -322,9 +336,19 @@ function createClaudeVersionResolver(deps) {
       const finish = (outcome) => {
         if (settled) return;
         settled = true;
-        if (outcome.ok) log(`[pane-status] provider resolved: ${outcome.source} (version ${outcome.version})`);
-        else log(`[pane-status] provider version NOT established (${outcome.reason}) — panes stay "unknown"`);
-        // `executable` is the gate's field name for the same fact `source` names here.
+        // WO-7 § 1. `outcome.source` is an ABSOLUTE EXECUTABLE PATH and must never be interpolated
+        // here: this logger is wired to tlog in main.js. Only the resolution method and the
+        // success/failure classification are operator-visible; `outcome.reason` is already one of a
+        // fixed set of bounded constants, and `outcome.version` is a parsed version, never a path.
+        if (outcome.ok) {
+          log(`[pane-status] provider resolved via ${RESOLUTION_METHOD} (version ${outcome.version})`);
+        } else {
+          log(`[pane-status] provider version NOT established via ${RESOLUTION_METHOD} `
+            + `(${outcome.reason}) — panes stay "unknown"`);
+        }
+        // `executable` is the gate's field name for the same fact `source` names here. It stays on the
+        // returned object because the acceptance record needs it, and it reaches no sink: nothing
+        // logs it, the controller never puts it in setup state, and IPC never projects it.
         resolve(Object.assign({ executable: outcome.source }, outcome));
       };
       try {
@@ -359,6 +383,7 @@ const api = {
   SOURCE_TAG,
   VERSION_TAG,
   ERROR_TAG,
+  RESOLUTION_METHOD,
   buildProbeScript,
   readTag,
   interpretProbe,

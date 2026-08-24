@@ -302,6 +302,27 @@ function createRecovery(deps) {
       };
     }
 
+    // WO-7 § 2 — A STRAY OF OURS MUST OUTLIVE A RESTART, and it does because this is RE-DERIVED.
+    //
+    // Removal already refuses when a group carrying our installation ID survives outside the recorded
+    // groups (R1), but steady-state startup never looked. So the very next launch classified the
+    // document as installed-and-exact, reported CLEAN, and the badge went green over a settings file
+    // with a loose hook of ours still in it. Restarting laundered the problem.
+    //
+    // DELIBERATELY NO DESCRIPTOR WRITE. A persisted reconciliation flag would only remember something
+    // the settings file already states, and would then need its own invalidation story to avoid
+    // outliving the condition. Recomputing it on every start is what makes it survive a restart AND
+    // what lets a genuine reconciliation clear it with no bookkeeping at all. Settings, descriptor,
+    // shim and every group — ours and anyone else's — are left exactly as they are.
+    //
+    // Groups owned by OTHER installations are not strays and never reach this branch.
+    const steadyStrays = doc.strayInstallGroups(settingsBefore.value, value.installedGroups, installId);
+    if (steadyStrays.length > 0) {
+      log('[pane-status] a hook group for this installation survives outside the recorded groups; '
+        + 'reporting stays disabled pending reconciliation');
+      return { outcome: OUTCOME.RECONCILIATION_REQUIRED, reason: RECONCILE_REASON.STRAY_GROUP };
+    }
+
     // Installed and exact. Last job: make the shim agree with this build.
     const shim = reconcileShim(value);
     if (!shim.ok) {
