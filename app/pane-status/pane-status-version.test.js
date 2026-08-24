@@ -36,6 +36,34 @@ assert(Object.isFrozen(versionMod.SUPPORTED_CLAUDE_VERSIONS), 'and is frozen');
 assert(versionMod.SUPPORTED_CLAUDE_VERSIONS.every((v) => /^\d+\.\d+\.\d+$/.test(v)),
   'every shipped entry is an EXACT triple — no ranges, no carets, no wildcards');
 
+// WO15A — the shipped list admits EXACTLY the two probed versions and nothing adjacent to them.
+// 2.1.241 was admitted only after Claude Code auto-updated mid-order and this fail-closed gate
+// stopped Work Order 15 before its paid turn. Both entries are recorded probe results, never
+// inferences about a neighbouring release.
+{
+  const shipped = versionMod.SUPPORTED_CLAUDE_VERSIONS;
+  assert(shipped.length === 2, 'the shipped list holds exactly two entries');
+  assert(shipped.indexOf('2.1.228') !== -1, '2.1.228 is retained');
+  assert(shipped.indexOf('2.1.241') !== -1, '2.1.241 is admitted');
+  assert(shipped.slice().sort().join(',') === '2.1.228,2.1.241',
+    'the shipped list is exactly {2.1.228, 2.1.241} — no third entry crept in');
+
+  // Accepted against the SHIPPED array, not a local fixture.
+  assert(versionMod.isVersionSupported('2.1.241', shipped) === true, '2.1.241 is supported by the shipped list');
+  assert(versionMod.isVersionSupported('2.1.228', shipped) === true, '2.1.228 is still supported by the shipped list');
+
+  // Adjacency must stay worthless. These are precisely the versions a range, prefix, minimum-version
+  // or semver rule would wrongly admit; each one failing is what proves no such rule was introduced.
+  for (const near of ['2.1.240', '2.1.242', '2.1.227', '2.1.229', '2.1.239', '2.1.24', '2.1.2410']) {
+    assert(versionMod.isVersionSupported(near, shipped) === false,
+      `an unlisted neighbour ${near} is NOT supported by the shipped list`);
+  }
+  assert(versionMod.isVersionSupported('2.1.241-beta', shipped) === false,
+    'a suffixed build of an admitted version is NOT supported');
+  assert(versionMod.parseVersion('2.1.241 (Claude Code)') === '2.1.241',
+    'the real 2.1.241 --version line parses to the exact admitted string');
+}
+
 // ---------------------------------------------------------------- the gate, fail-closed
 (async () => {
   {
@@ -88,6 +116,28 @@ assert(versionMod.SUPPORTED_CLAUDE_VERSIONS.every((v) => /^\d+\.\d+\.\d+$/.test(
     assert(rec.executable === 'C:/x/claude.exe', 'and the resolved executable');
     assert(rec.supported === true, 'and the verdict');
     assert(JSON.stringify(rec).indexOf('token') === -1, 'and no token');
+  }
+
+  // WO15A — the GATE, driven by the SHIPPED list rather than a fixture: it opens on the real 2.1.241
+  // version line and stays closed on the very next patch release.
+  {
+    const gate = versionMod.createVersionGate({
+      resolveVersion: async () => ({ ok: true, raw: '2.1.241 (Claude Code)' }),
+      supportedVersions: versionMod.SUPPORTED_CLAUDE_VERSIONS,
+    });
+    assert(gate.supported() === false, 'even an admitted version is NOT assumed supported before the probe runs');
+    const r = await gate.probe();
+    assert(r.ok === true && r.supported === true, 'probing the real 2.1.241 version line opens the gate');
+    assert(gate.supported() === true && gate.reason() === null, 'and the gate reports no refusal reason');
+  }
+  {
+    const gate = versionMod.createVersionGate({
+      resolveVersion: async () => ({ ok: true, raw: '2.1.242 (Claude Code)' }),
+      supportedVersions: versionMod.SUPPORTED_CLAUDE_VERSIONS,
+    });
+    await gate.probe();
+    assert(gate.supported() === false && gate.reason() === versionMod.VERSION_REFUSAL.UNSUPPORTED,
+      'the patch release immediately after an admitted one is refused as unsupported');
   }
 
   // ---------------------------------------------------------------- the module cannot spawn

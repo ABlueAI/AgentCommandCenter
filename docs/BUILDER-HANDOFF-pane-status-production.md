@@ -1605,3 +1605,90 @@ Progress remains **70%**.
 **Scope.** Two tracked paths changed: `app/pane-status/pane-status-disclosure-route.test.js` and this
 document. No production source, no `app/package.json` registration, no IPC or preload surface, no
 PowerShell, no dependency and no lockfile change.
+
+---
+
+# 15. COMPATIBILITY ADMISSION — Claude Code 2.1.241 (Work Order 15A)
+
+## 15.1 What stopped, and why it is a good outcome
+
+Work Order 15 (live-acceptance delta) was authorized and began its clean preflight. Every check
+passed — SHAs, PASS-receipt artifact hashes, clean worktrees, zero stray harnesses, zero Electron
+processes, zero pane-status pipes, no prior OTLP receiver, no pane-status hooks in settings, shim and
+descriptor absent, PreToolUse/PostToolUse hooks matching `Read` both zero, and no telemetry variable
+at User or Machine scope — **except the mandatory pre-acceptance version re-probe.**
+
+**Claude Code auto-updated from 2.1.228 to 2.1.241 partway through 2026-08-24.** `claude.exe` was
+rewritten at **2026-08-24T13:46:28Z**: after the Work Order 13 live acceptance had already run to
+completion on 2.1.228 that morning, and before the Work Order 15 preflight that evening.
+
+`SUPPORTED_CLAUDE_VERSIONS` held exactly one entry, `'2.1.228'`, so the probe returned an unlisted
+version and **the order stopped before the OTLP receiver was created, before any settings mutation,
+and before the paid turn** — precisely as § 6.1 of this document requires.
+
+**The gate prevented a wasted paid turn.** Had the run proceeded, `setObservedVersion` would have
+fail-closed to `null`, every pane would have shown `unknown` with reason `version-mismatch`, no
+lifecycle event would have been attributable, and the paid turn would have produced no usable
+observation. This is the first time the version gate has fired against a real, unplanned provider
+update rather than a fixture. It behaved exactly as designed, and that is evidence for the
+subsystem, not against it.
+
+## 15.2 The exact probe result
+
+METHOD B (production pane-equivalent resolver: one PowerShell, pane flags minus `-NoExit`, profile
+LOADED, `Get-Command claude`, then `& $source --version`), run immediately before the edit:
+
+| Field | Value |
+|---|---|
+| Probe time (UTC) | `2026-08-24T21:09:11Z` |
+| Raw version line | `2.1.241 (Claude Code)` |
+| Parsed | `2.1.241` |
+| Resolved executable | unchanged from the prior record — **path match: true** |
+| Provider session | none |
+| Paid turn consumed | none |
+
+## 15.3 The admission, and its deliberate narrowness
+
+`SUPPORTED_CLAUDE_VERSIONS` now holds exactly two exact strings: `'2.1.228'` and `'2.1.241'`.
+
+**No range, prefix, wildcard, minimum-version rule, semver comparison, or automatic trust of an
+adjacent release was introduced.** The tests prove this negatively as well as positively: `2.1.240`,
+`2.1.242`, `2.1.239`, `2.1.229`, `2.1.227`, `2.1.24`, `2.1.2410` and `2.1.241-beta` are each asserted
+**unsupported** against the shipped array. Those are exactly the versions a looser rule would have
+wrongly admitted, so each failing assertion is what demonstrates no such rule exists.
+
+## 15.4 Changelog evidence — supporting only, never a compatibility claim
+
+The official 2.1.229–2.1.241 entries were read. Nothing documents the removal or alteration of a
+contract this subsystem depends on. Adjacent-surface entries are recorded so a reviewer can weigh
+them directly:
+
+| Version | Entry | Bearing on pane status |
+|---|---|---|
+| 2.1.239 | OpenTelemetry: tool executions deferred by a `PreToolUse` hook resume in the original turn's trace | Trace shape only; no hook contract change. Relevant to WO15's OTLP timing capture. |
+| 2.1.233 | `SessionStart` hooks report source `"fork"` for a forked session | **Additive.** This subsystem reads only `hook_event_name`, never `source`. |
+| 2.1.232 | `PreToolUse` `ask` floors at a prompt for unsandboxed Bash; MCP `headersHelper` runs without inherited credential env vars | No fenced role has Bash. See the watch item below. |
+| 2.1.229 | Server-supplied hook support for self-hosted runner sessions | Additive. |
+
+**Watch item, stated plainly because it is the one that could actually bite.** 2.1.232 shows
+Anthropic actively *narrowing* environment inheritance into child processes — for MCP
+`headersHelper`, not for hooks. Pane status depends on Claude Code passing
+`BLUE_HELM_PANE_STATUS_PIPE` and `BLUE_HELM_PANE_STATUS_TOKEN` through to hook children. **That
+contract is observed, not documented**, and this admission does not prove it still holds on 2.1.241.
+Only the live run can establish that.
+
+## 15.5 Status
+
+**The admission is PROVISIONAL until Work Order 15 passes on 2.1.241.** It records the exact version
+the application would launch. It does **not** establish that the eight hook events fire, that the
+reporter still inherits its pipe and token, or that hook timing is unchanged.
+
+**Progress remains 80%.**
+
+## 15.6 Scope
+
+Two tracked paths changed: `app/pane-status/pane-status-version.js` (one added array entry plus its
+provisional comment) and `app/pane-status/pane-status-version.test.js` (the admission proofs), plus
+this document. No other production source, no `app/package.json` registration, no IPC or preload
+surface, no PowerShell, no dependency and no lockfile change. Nothing merged, pushed, installed, or
+live-tested under Work Order 15A.

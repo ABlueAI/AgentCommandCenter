@@ -65,6 +65,46 @@ const SUPPORTED_CLAUDE_VERSIONS = Object.freeze([
   // provider session and needs a fresh provisional code change, a regenerated artifact, and a fresh
   // Full review.
   '2.1.228',
+  // PROVISIONAL - WORK ORDER 15A, 2026-08-24. Claude Code AUTO-UPDATED between the Work Order 13 live
+  // acceptance (which ran entirely on 2.1.228 earlier that same day) and the Work Order 15 preflight:
+  // `claude.exe` was rewritten at 2026-08-24T13:46:28Z. The mandatory pre-acceptance METHOD B re-probe
+  // therefore returned a version this array did not list, and the order STOPPED before the OTLP
+  // receiver, before any settings mutation, and before the paid turn - exactly as the paragraph above
+  // requires. The fail-closed gate did its job against a real, unplanned provider update, and it
+  // prevented a paid turn that could only have produced `unknown`/`version-mismatch` badges.
+  //
+  //   METHOD B (production) re-probe, 2026-08-24T21:09:11Z, on the acceptance machine:
+  //     resolved executable : C:\Users\levij\.local\bin\claude.exe   (path match: true)
+  //     raw version line    : "2.1.241 (Claude Code)"
+  //     parsed              : 2.1.241
+  //   No provider session was opened and no model turn was consumed to obtain this.
+  //
+  // CHANGELOG EVIDENCE IS SUPPORTING ONLY, NEVER A COMPATIBILITY CLAIM. The official 2.1.229-2.1.241
+  // entries were read. Nothing in them documents the removal or alteration of a contract this
+  // subsystem uses: `hook_event_name` on the eight installed events, hook-child inheritance of
+  // BLUE_HELM_PANE_STATUS_PIPE/TOKEN, or the `hook_execution_complete` telemetry fields. The entries
+  // that touch adjacent surfaces are recorded so a reviewer can weigh them instead of taking a
+  // summary on trust:
+  //     2.1.239  OpenTelemetry: tool executions deferred by a PreToolUse hook now resume in the
+  //              original turn's trace rather than starting a new one. Trace shape only.
+  //     2.1.233  SessionStart hooks report source "fork" for a forked session. ADDITIVE: this module
+  //              reads only `hook_event_name` and never `source`, so a new source value cannot reach
+  //              it.
+  //     2.1.232  PreToolUse `ask` now floors at a prompt for unsandboxed Bash (no fenced role has
+  //              Bash), and MCP `headersHelper` runs WITHOUT inherited credential env vars.
+  //     2.1.229  Server-supplied hook support for self-hosted runner sessions. Additive.
+  //
+  // THE WATCH ITEM, stated plainly because it is the one that could actually bite: 2.1.232 shows
+  // Anthropic actively NARROWING environment inheritance into child processes - for MCP
+  // `headersHelper`, not for hooks. Pane status depends on Claude Code passing
+  // BLUE_HELM_PANE_STATUS_PIPE and BLUE_HELM_PANE_STATUS_TOKEN through to hook children. That
+  // contract is observed, not documented, and this admission does not prove it still holds here.
+  //
+  // THIS IS A VERSION PROBE, NOT A LIVE ACCEPTANCE. It records the exact version the application
+  // would launch. It does NOT establish that the eight hook events fire, that the reporter still
+  // inherits its pipe and token, or that hook timing is unchanged. The admission stays PROVISIONAL
+  // until Work Order 15 passes on this version. Progress remains 80%.
+  '2.1.241',
 ]);
 
 const VERSION_REFUSAL = Object.freeze({
