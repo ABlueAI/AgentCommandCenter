@@ -55,7 +55,7 @@
 //   NO SUPPORTED PANE-STATUS MODULE API MUTATES ADMISSION STATE. There is no method in this file
 //   that increments, refunds, resets, extends, or certifies an allowance. Provider output, hook
 //   events, badge state and PTY bytes reach no function here, and nothing under
-//   `app/prototype-pane-status/` imports an admission module. That is a code-level structural
+//   `app/pane-status/` imports an admission module. That is a code-level structural
 //   property: the mutation does not exist to call.
 //
 //   It is NOT a claim of OS-level inaccessibility. The absence of an import proves only that no

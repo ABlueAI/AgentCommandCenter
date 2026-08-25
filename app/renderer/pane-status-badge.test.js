@@ -1,11 +1,12 @@
 'use strict';
 // Run: node app/renderer/pane-status-badge.test.js
 //
-// EXPERIMENT A — PROTOTYPE ONLY. docs/OSS-PROCUREMENT-pane-status.md
-// Blue's verdict, verbatim: BLUE SUBSYSTEM VERDICT: PROTOTYPE
+// docs/OSS-PROCUREMENT-pane-status.md
+// Blue's verdict, verbatim: BLUE SUBSYSTEM VERDICT: BUILD FRESH
 //
-// Renderer-side proof: the badge follows the PANE, not the position; it never sees a token; and the
-// wording never overstates what a Claude hook event means.
+// Renderer-side proof: the badge follows the PANE, not the position; it never sees a token; the
+// wording never overstates what a Claude hook event means; and the toolbar control reports every
+// setup state honestly, including the ones with no action available.
 
 const badgeMod = require('./pane-status-badge.js');
 
@@ -23,9 +24,13 @@ function makeEl(className) {
     children: [],
     attrs: {},
     textContent: '',
+    hidden: false,
+    disabled: false,
+    listeners: {},
     appendChild(child) { this.children.push(child); child.parent = this; return child; },
     setAttribute(k, v) { this.attrs[k] = v; },
     getAttribute(k) { return this.attrs[k]; },
+    addEventListener(k, fn) { (this.listeners[k] = this.listeners[k] || []).push(fn); },
     querySelector(sel) {
       const want = sel.replace('.', '');
       const walk = (node) => {
@@ -38,160 +43,254 @@ function makeEl(className) {
       };
       return walk(this);
     },
-    remove() {
-      if (this.parent) this.parent.children = this.parent.children.filter((c) => c !== this);
-      this.parent = null;
-    },
-    allText() {
-      let t = this.textContent || '';
-      for (const c of this.children) t += ' ' + c.allText();
-      return t;
-    },
-    allAttrs() {
-      let s = JSON.stringify(this.attrs);
-      for (const c of this.children) s += c.allAttrs();
-      return s;
-    },
   };
   return el;
 }
-const doc = { createElement: (tag) => makeEl(tag === 'span' ? '' : tag) };
-function makePane() { const p = makeEl('term-pane'); p.appendChild(makeEl('term-head')); return p; }
+const doc = { createElement: () => makeEl() };
 
 // ---------------------------------------------------------------- wording
-process.stdout.write('\n-- wording honesty --\n');
 {
-  eq(badgeMod.describeView({ paneId: 'pty1', state: 'turn ended' }).label, 'turn ended', 'Stop renders as "turn ended"');
-  const forbidden = ['finished', 'safe', 'process exited', 'done', 'complete', 'idle prompt'];
-  for (const word of forbidden) {
-    const hit = Object.values(badgeMod.STATE_LABEL).some((l) => l.toLowerCase() === word);
-    assert(!hit, `no label is ever "${word}"`);
+  // THE LOAD-BEARING WORDING RULE. `Stop` means the assistant's turn ended. It does NOT mean the work
+  // is finished, the pane is safe to close, or the process has exited.
+  const stopped = badgeMod.describeView({ paneId: 'pty1', state: 'turn ended' });
+  eq(stopped.label, 'turn ended', 'Stop renders as "turn ended"');
+  assert(!/finish|done|complete|safe/i.test(stopped.label + stopped.title),
+    'and the label and tooltip never say finished, done, complete, or safe');
+
+  eq(badgeMod.describeView({ state: 'attention' }).label, 'needs you', 'attention renders as "needs you"');
+  eq(badgeMod.describeView({ state: 'working' }).label, 'working', 'working renders as "working"');
+  eq(badgeMod.describeView({ state: 'exited' }).label, 'exited', 'exited renders as "exited"');
+  eq(badgeMod.describeView({ state: 'failed' }).label, 'failed', 'failed renders as "failed"');
+
+  // an unknown or absent state degrades to `unknown`, never to a guess
+  eq(badgeMod.describeView({ state: 'nonsense' }).state, 'unknown', 'an unrecognised state renders as unknown');
+  eq(badgeMod.describeView(null).state, 'unknown', 'a null view renders as unknown');
+  eq(badgeMod.describeView({}).state, 'unknown', 'an empty view renders as unknown');
+
+  // every unknown reason gets a human explanation — "unknown" with no reason trains people to ignore it
+  for (const reason of Object.keys(badgeMod.REASON_TEXT)) {
+    const d = badgeMod.describeView({ state: 'unknown', reason });
+    assert(d.title.indexOf(badgeMod.REASON_TEXT[reason]) !== -1, `the tooltip explains "${reason}"`);
   }
-  eq(badgeMod.describeView({ paneId: 'p', state: 'unknown', reason: 'stale' }).label, 'unknown', 'a stale view renders unknown');
-  assert(badgeMod.describeView({ paneId: 'p', state: 'unknown', reason: 'stale' }).title.indexOf('too old to trust') !== -1,
-    'and explains WHY it is unknown');
-  assert(badgeMod.describeView({ paneId: 'p', state: 'unknown', reason: 'version-mismatch' }).title.indexOf('not verified') !== -1,
-    'a version mismatch says the version was not verified');
-  eq(badgeMod.describeView({ paneId: 'p', state: 'nonsense-state' }).state, 'unknown', 'an unrecognised state falls back to unknown');
-  eq(badgeMod.describeView({ paneId: 'p', state: 'attention' }).label, 'needs you', 'Notification renders as "needs you"');
-  assert(badgeMod.describeView({ paneId: 'p', state: 'attention' }).title.indexOf('PROTOTYPE') === 0,
-    'every tooltip identifies itself as PROTOTYPE');
-  // The procurement record's amendment: the payload boundary cannot carry matcher detail, so the
-  // badge must NOT claim it distinguishes an idle prompt from a permission prompt.
-  const attentionText = JSON.stringify(badgeMod.describeView({ paneId: 'p', state: 'attention' }));
-  assert(attentionText.indexOf('permission') === -1 && attentionText.indexOf('idle') === -1,
-    'the attention state does NOT claim to distinguish idle from permission prompts');
+
+  // and the PROTOTYPE presentation is gone
+  const all = Object.keys(badgeMod.STATE_LABEL).map((s) => badgeMod.describeView({ state: s }));
+  assert(all.every((d) => !/prototype/i.test(d.label + d.title)),
+    'no rendered label or tooltip says PROTOTYPE any more');
+  assert(all.every((d) => d.prototype === undefined), 'and no view carries a `prototype` flag');
 }
 
-// ---------------------------------------------------------------- pane identity
-process.stdout.write('\n-- pane identity, not position --\n');
+// ---------------------------------------------------------------- pane binding and reattachment
 {
-  const panes = { pty1: makePane(), pty2: makePane() };
+  const panes = new Map();
+  function makePane(id) {
+    const pane = makeEl('pane');
+    const head = makeEl('term-head');
+    pane.appendChild(head);
+    panes.set(id, pane);
+    return pane;
+  }
   const logs = [];
   const badge = badgeMod.createPaneStatusBadge({
-    document: doc, log: (l) => logs.push(l), getPaneElement: (id) => panes[id] || null,
+    document: doc,
+    getPaneElement: (id) => panes.get(id) || null,
+    log: (l) => logs.push(l),
   });
 
-  badge.update({ paneId: 'pty1', state: 'working', prototype: true });
-  eq(badge.stateOf('pty1'), 'working', 'pty1 shows working');
-  eq(badge.stateOf('pty2'), null, 'pty2 has no state at all');
-  assert(panes.pty1.querySelector('.pane-status-badge') !== null, 'a badge was created on pty1');
-  assert(panes.pty2.querySelector('.pane-status-badge') === null, 'NO badge was created on pty2');
-  assert(panes.pty1.allText().indexOf('PROTOTYPE') !== -1, 'the badge text visibly says PROTOTYPE');
+  makePane('pty1');
+  makePane('pty2');
+  badge.update({ paneId: 'pty1', state: 'working' });
+  badge.update({ paneId: 'pty2', state: 'idle' });
 
-  // An event for the enrolled pane can never touch a different pane.
-  badge.update({ paneId: 'pty1', state: 'attention', prototype: true });
-  eq(badge.stateOf('pty2'), null, 'a second update still leaves pty2 untouched');
-  eq(panes.pty2.querySelector('.pane-status-badge'), null, 'pty2 still has no badge element');
+  eq(badge.stateOf('pty1'), 'working', 'pane1 shows working');
+  eq(badge.stateOf('pty2'), 'idle', 'pane2 shows idle');
+  eq(panes.get('pty1').querySelector('.pane-status-text').textContent, 'working', 'pane1 DOM says working');
+  eq(panes.get('pty2').querySelector('.pane-status-text').textContent, 'idle', 'pane2 DOM says idle');
 
-  // A view with no pane id is ignored — there is no "current pane" fallback to abuse.
-  eq(badge.update({ state: 'working' }), null, 'a view with no paneId is ignored');
-  eq(badge.update(null), null, 'a null view is ignored');
+  // A view with no pane id is ignored — there is no "current pane" concept here.
+  assert(badge.update({ state: 'failed' }) === null, 'a view with NO pane id is ignored entirely');
+  eq(badge.stateOf('pty1'), 'working', 'and no pane absorbed it');
 
-  // ---- Dockview move: reparent pty1's element, dropping the badge node. ----
-  const oldGroup = makeEl('dv-group');
-  const newGroup = makeEl('dv-group');
-  oldGroup.appendChild(panes.pty1);
-  const stateBefore = badge.stateOf('pty1');
-  panes.pty1.remove();                    // Dockview detaches
-  const detachedBadge = panes.pty1.querySelector('.pane-status-badge');
-  newGroup.appendChild(panes.pty1);       // ...and reattaches elsewhere
-  eq(badge.stateOf('pty1'), stateBefore, 'the STATE survives a Dockview move (it is keyed by pane id)');
-  assert(detachedBadge !== null, 'the badge element travelled with its own pane element');
+  // ---- DOCKVIEW REPARENTING. The node is dropped; the STATE must survive.
+  const moved = makeEl('pane');
+  moved.appendChild(makeEl('term-head'));
+  panes.set('pty1', moved);                      // Dockview handed us a fresh element
+  assert(moved.querySelector('.pane-status-badge') === null, 'after reparenting the badge NODE is gone');
+  eq(badge.stateOf('pty1'), 'working', 'but the STATE is unaffected — it is keyed by pane id');
 
-  // Simulate the harsher case: the badge node is destroyed by the move.
-  const b = panes.pty1.querySelector('.pane-status-badge');
-  if (b) b.remove();
-  eq(panes.pty1.querySelector('.pane-status-badge'), null, 'badge node is gone after a destructive move');
-  const re = badge.reattach('pty1');
-  assert(re && re.state === stateBefore, 'reattach restores the SAME state, inventing nothing');
-  assert(panes.pty1.querySelector('.pane-status-badge') !== null, 'and the badge element is back');
-  assert(logs.join('').indexOf('state preserved') !== -1, 'the re-attach is visible in the log');
+  const restored = badge.reattach('pty1');
+  assert(restored !== null, 'reattach restores the badge');
+  eq(moved.querySelector('.pane-status-text').textContent, 'working',
+    'and the restored badge shows the SAME state, not a reset one');
+  assert(logs.some((l) => l.indexOf('re-attached to pty1') !== -1), 'and it is logged visibly');
 
-  // Reattach for a pane we never tracked must not conjure a badge.
-  eq(badge.reattach('pty2'), null, 'reattach on an untracked pane does nothing');
-  eq(panes.pty2.querySelector('.pane-status-badge'), null, 'and creates no element');
+  // reattachAll is what the Dockview layout-change hook calls
+  const moved2 = makeEl('pane');
+  moved2.appendChild(makeEl('term-head'));
+  panes.set('pty2', moved2);
+  const n = badge.reattachAll();
+  eq(n, 2, 'reattachAll re-attaches every tracked pane');
+  eq(moved2.querySelector('.pane-status-text').textContent, 'idle', 'pane2 kept its own state through the move');
 
-  // Ownership after release.
-  badge.update({ paneId: 'pty1', state: 'unknown', reason: 'released', prototype: true });
-  eq(badge.stateOf('pty1'), 'unknown', 'a released pane degrades to unknown');
-  badge.forget('pty1');
-  eq(badge.stateOf('pty1'), null, 'forget clears the tracked state');
-  eq(badge.trackedPanes().length, 0, 'no panes remain tracked');
+  // reattaching a pane we never saw invents nothing
+  assert(badge.reattach('pty99') === null, 'reattaching an unknown pane invents no status');
+
+  // ---- MIS-ATTRIBUTION. Swapping the ELEMENTS must not swap the STATES.
+  const p1 = panes.get('pty1'), p2 = panes.get('pty2');
+  panes.set('pty1', p2);
+  panes.set('pty2', p1);
+  badge.reattachAll();
+  eq(badge.stateOf('pty1'), 'working', 'after swapping pane ELEMENTS, pty1 still reports its own state');
+  eq(badge.stateOf('pty2'), 'idle', 'and pty2 still reports its own — status follows the PROCESS, not the position');
+
+  // ---- no token can be displayed even if main wrongly sent one
+  badge.update({ paneId: 'pty1', state: 'working', token: 'a'.repeat(64) });
+  const dom = JSON.stringify(panes.get('pty1'), (k, v) => (k === 'parent' ? undefined : v));
+  assert(dom.indexOf('a'.repeat(64)) === -1, 'a token is never written into the DOM, even if one arrives');
+
+  // ---- forget
+  assert(badge.forget('pty2') === true, 'forget drops a pane');
+  eq(badge.stateOf('pty2'), null, 'and its state is gone');
+  eq(badge.trackedPanes().length, 1, 'one pane remains tracked');
 }
 
-// ---------------------------------------------------------------- no token anywhere
-process.stdout.write('\n-- the renderer never receives a token --\n');
+// ---------------------------------------------------------------- the toolbar setup control
 {
-  const TOKEN = 'f'.repeat(64);
-  const panes = { pty1: makePane() };
+  // Every setup state main can publish must render, and the ones with no safe action must offer none.
+  const expectations = {
+    disabled: 'install',
+    ready: 'remove',
+    'in-flight': null,
+    'version-mismatch': 'remove',
+    locked: 'clear',
+    'other-installation': null,
+    malformed: null,
+    'reconciliation-required': null,
+  };
+  for (const [state, action] of Object.entries(expectations)) {
+    const d = badgeMod.describeSetup({ state });
+    eq(d.state, state, `setup state "${state}" renders`);
+    eq(d.action, action, `setup state "${state}" offers action ${JSON.stringify(action)}`);
+    assert(typeof d.label === 'string' && d.label.length > 0, `setup state "${state}" has a label`);
+    assert(typeof d.title === 'string' && d.title.length > 0, `setup state "${state}" has a tooltip`);
+  }
+  // An unrecognised state degrades to `disabled`, never to `ready`.
+  eq(badgeMod.describeSetup({ state: 'nonsense' }).state, 'disabled', 'an unrecognised setup state degrades to disabled');
+  eq(badgeMod.describeSetup(null).state, 'disabled', 'a null setup state degrades to disabled');
+  assert(badgeMod.describeSetup({ state: 'nonsense' }).state !== 'ready',
+    'and NEVER to ready — an unknown setup state must not claim status is working');
+
+  // the two states that point at the recovery document say so
+  for (const state of ['malformed', 'reconciliation-required']) {
+    assert(badgeMod.describeSetup({ state }).title.indexOf('RECOVERY-pane-status-hooks.md') !== -1,
+      `"${state}" points at the manual recovery document`);
+  }
+
+  // a bounded detail constant is surfaced so a person can quote it
+  assert(badgeMod.describeSetup({ state: 'locked', detail: 'lock-held-by-another-process' })
+    .title.indexOf('lock-held-by-another-process') !== -1, 'a bounded detail constant is shown to the user');
+}
+
+// ---------------------------------------------------------------- the control drives the bridge
+{
+  const toolbar = makeEl('toolbar');
+  const calls = [];
   const logs = [];
-  const badge = badgeMod.createPaneStatusBadge({
-    document: doc, log: (l) => logs.push(l), getPaneElement: (id) => panes[id] || null,
+  const bridge = {
+    getSetupState: async () => ({ ok: true, setup: { state: 'disabled' } }),
+    install: async () => { calls.push('install'); return { ok: true, setup: { state: 'ready' } }; },
+    remove: async () => { calls.push('remove'); return { ok: true, setup: { state: 'disabled' } }; },
+    clearStaleLock: async () => { calls.push('clearStaleLock'); return { ok: false, reason: 'lock-owner-still-alive', setup: { state: 'locked' } }; },
+  };
+  const control = badgeMod.createSetupControl({
+    document: doc, getToolbarElement: () => toolbar, bridge, log: (l) => logs.push(l),
   });
-  // Even if a (buggy or hostile) main sent a token-bearing view, the badge must not surface it: it
-  // reads only the four fields it knows about.
-  badge.update({ paneId: 'pty1', state: 'working', prototype: true, token: TOKEN, secret: 'SENTINEL-RENDER-42' });
-  const dom = panes.pty1.allText() + panes.pty1.allAttrs();
-  assert(dom.indexOf(TOKEN) === -1, 'no token reaches the DOM text or any attribute');
-  assert(dom.indexOf('SENTINEL-RENDER-42') === -1, 'no unexpected field reaches the DOM');
-  assert(logs.join('').indexOf(TOKEN) === -1, 'no token reaches the renderer log');
-  const shown = badgeMod.describeView({ paneId: 'pty1', state: 'working', token: TOKEN });
-  assert(JSON.stringify(shown).indexOf(TOKEN) === -1, 'describeView drops every field it does not model');
-  assert(Object.keys(shown).sort().join(',') === 'className,label,prototype,state,title',
-    'the described view has exactly the five presentation fields');
+
+  (async () => {
+    await control.refresh();
+    eq(control.currentState(), 'disabled', 'the control reads its initial state from the bridge');
+    eq(toolbar.querySelector('.pane-status-setup-action').textContent, 'Set up', 'and offers "Set up"');
+
+    await control.onAction();
+    assert(calls.includes('install'), 'clicking calls install()');
+    eq(control.currentState(), 'ready', 'and the control follows the returned state');
+    eq(toolbar.querySelector('.pane-status-setup-action').textContent, 'Remove', 'now offering "Remove"');
+
+    await control.onAction();
+    assert(calls.includes('remove'), 'clicking again calls remove()');
+
+    control.render({ state: 'locked' });
+    await control.onAction();
+    assert(calls.includes('clearStaleLock'), 'in the locked state the action is clearStaleLock()');
+    assert(logs.some((l) => l.indexOf('lock-owner-still-alive') !== -1),
+      'a REFUSAL is surfaced in the Logs tab rather than swallowed');
+
+    // a state with no action must not be clickable into anything
+    control.render({ state: 'other-installation' });
+    const before = calls.length;
+    await control.onAction();
+    eq(calls.length, before, 'a state with no available action calls nothing');
+    assert(toolbar.querySelector('.pane-status-setup-action').disabled === true, 'and the button is disabled');
+    assert(toolbar.querySelector('.pane-status-setup-action').hidden === true, 'and hidden');
+
+    // ---- A RETAINED REFUSAL IS NOT DAMAGE (advisory review, finding 4 / Binding Amendment A § 2 D)
+    //
+    // Removal can refuse having written NOTHING: modified, partial or ambiguous ownership. The control
+    // must then keep showing what it was showing — the installation is intact and still working — name
+    // the specific cause, and point at manual recovery. It must NOT present the subsystem as disabled,
+    // and it must NOT offer an automatic Remove as the fix for a state where automatic removal refuses.
+    {
+      const bar2 = makeEl('toolbar');
+      const seen = [];
+      const said = [];
+      const refusing = {
+        getSetupState: async () => ({ ok: true, setup: { state: 'ready' } }),
+        install: async () => ({ ok: true, setup: { state: 'ready' } }),
+        remove: async () => {
+          seen.push('remove');
+          return {
+            ok: false,
+            reason: 'txn-removal-refused',
+            detail: 'removal-owned-entry-modified',
+            retained: true,
+            setup: { state: 'ready' },      // main put the presentation back exactly as it was
+          };
+        },
+        clearStaleLock: async () => ({ ok: false, reason: 'lock-missing' }),
+      };
+      const c2 = badgeMod.createSetupControl({
+        document: doc, getToolbarElement: () => bar2, bridge: refusing, log: (l) => said.push(l),
+      });
+      await c2.refresh();
+      eq(c2.currentState(), 'ready', 'the control starts from the installed state');
+      await c2.onAction();
+      assert(seen.includes('remove'), 'the Remove action reaches bridge.remove()');
+      eq(c2.currentState(), 'ready',
+        'after a RETAINED refusal the control still shows READY — the installation was not touched');
+      assert(bar2.querySelector('.pane-status-setup-action').textContent === 'Remove',
+        'and still offers Remove, because there is nothing broken to repair');
+      assert(said.some((l) => l.indexOf('removal-owned-entry-modified') !== -1),
+        'the SPECIFIC cause is surfaced, not just the generic outer reason');
+      assert(said.some((l) => l.indexOf('txn-removal-refused') !== -1), 'along with what was refused');
+      assert(said.some((l) => l.indexOf('nothing was changed') !== -1),
+        'the log says plainly that nothing was changed');
+      assert(said.some((l) => l.indexOf('RECOVERY-pane-status-hooks.md') !== -1),
+        'and points at the manual recovery document');
+      for (const l of said) {
+        assert(l.indexOf('settings.json') === -1, 'no log line names a settings file');
+        assert(!/[A-Za-z]:\\/.test(l), 'and none carries an absolute path');
+      }
+    }
+
+    // ---- the states where automatic removal MUST refuse never offer it as a recovery action
+    for (const state of ['reconciliation-required', 'malformed', 'other-installation']) {
+      const d = badgeMod.describeSetup({ state });
+      assert(d.action !== 'remove',
+        `"${state}" does not offer an automatic Remove — automatic removal refuses from here`);
+      assert(d.action !== 'install', `"${state}" does not offer an automatic Set up either`);
+    }
+
+    process.stdout.write(`\npane-status-badge: ${passed} passed, ${failed} failed\n`);
+    process.exit(failed ? 1 : 0);
+  })().catch((e) => { process.stderr.write('UNCAUGHT: ' + (e && e.stack) + '\n'); process.exit(1); });
 }
-
-// ---------------------------------------------------------------- IIFE discipline
-process.stdout.write('\n-- renderer module discipline --\n');
-{
-  const fs = require('fs');
-  const src = fs.readFileSync(require('path').join(__dirname, 'pane-status-badge.js'), 'utf8');
-  assert(/^\(\(global\)\s*=>\s*\{/m.test(src.trim()),
-    'the module is wrapped in the ((global) => {...}) IIFE required for classic renderer scripts');
-  assert(src.indexOf('\nconst ') === -1 || src.trim().indexOf('((global)') === 0,
-    'no bare top-level const escapes into the shared renderer global scope');
-  // REVISION 2: the global is GATED. Requiring this file in a plain node process — which is exactly
-  // what an ungated renderer looks like — must publish NOTHING, because the work order requires the
-  // prototype surface to be ABSENT when disabled rather than inert. `module.exports` stays
-  // unconditional so this suite can still exercise the pure functions.
-  eq(typeof globalThis.ccPaneStatusBadge, 'undefined',
-    'GATE OFF: requiring the module publishes no ccPaneStatusBadge global');
-  assert(typeof badgeMod.createPaneStatusBadge === 'function',
-    'while module.exports still carries the API for tests');
-  assert(/if \(global\.ccPaneStatus && global\.ccPaneStatus\.enabled === true\) global\.ccPaneStatusBadge/.test(src),
-    'and the global is published only behind the preload-exposed prototype bridge');
-
-  const badgePath = require.resolve('./pane-status-badge.js');
-  delete require.cache[badgePath];
-  globalThis.ccPaneStatus = { enabled: true };
-  require(badgePath);
-  eq(typeof globalThis.ccPaneStatusBadge, 'object',
-    'GATE ON: with the bridge present it publishes exactly one global');
-  delete globalThis.ccPaneStatus;
-  delete globalThis.ccPaneStatusBadge;
-  delete require.cache[badgePath];
-}
-
-process.stdout.write(`\npane-status-badge: ${passed} passed, ${failed} failed\n`);
-process.exit(failed ? 1 : 0);

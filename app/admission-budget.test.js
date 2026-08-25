@@ -763,17 +763,22 @@ function testNoMutationSurface() {
   // SOURCE TRIPWIRE — NARROWED TO THE TRUTHFUL CLAIM.
   //
   // What this establishes: NO SUPPORTED PANE-STATUS MODULE API MUTATES ADMISSION STATE. No module
-  // under prototype-pane-status/ imports an admission module, and (asserted above) no admission
-  // method exists that could increment, refund, reset or extend an allowance.
+  // under app/pane-status/ imports an admission module, and (asserted above) no admission method
+  // exists that could increment, refund, reset or extend an allowance.
+  //
+  // Retargeted when Experiment A was retired: this scanned `prototype-pane-status/` while that was the
+  // only pane-status code in the tree. The production subsystem replaced it, and the tripwire follows
+  // the code rather than the directory name — the same property is also asserted from the other side
+  // in pane-status-isolation.test.js.
   //
   // What it does NOT establish, and used to be read as establishing: OS-level inaccessibility. The
   // absence of an import proves only that no supported CODE PATH connects those modules to the
   // ledger. A process running as the same Windows user — including the provider process in a pane —
   // can locate, delete, replace or rewrite the ledger file directly, whatever this scan says. See the
   // threat-boundary header in admission-budget.js.
-  const protoDir = path.join(__dirname, 'prototype-pane-status');
+  const protoDir = path.join(__dirname, 'pane-status');
   const protoFiles = fs.readdirSync(protoDir).filter((f) => f.endsWith('.js'));
-  assert(protoFiles.length > 0, 'the pane-status prototype directory has sources to scan');
+  assert(protoFiles.length > 0, 'the pane-status module directory has sources to scan');
   const offenders = protoFiles.filter((f) =>
     /require\(['"][^'"]*admission[^'"]*['"]\)/.test(fs.readFileSync(path.join(protoDir, f), 'utf8')));
   assert(offenders.length === 0,

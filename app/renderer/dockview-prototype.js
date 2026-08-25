@@ -354,7 +354,18 @@
       if (controller) controller.schedule();
     });
 
-    api.onDidLayoutChange(() => registry.scheduleAll());
+    api.onDidLayoutChange(() => {
+      registry.scheduleAll();
+      // PANE STATUS. Dockview reparents pane elements on a layout change, which can drop the badge
+      // NODE. The badge STATE is unaffected — it lives in the badge module keyed by pane id — so
+      // re-attaching restores the visual without inventing, resetting, or re-keying a status.
+      //
+      // This is deliberately keyed by pane id and never by group, position, tab index, or "the active
+      // pane": a status indicator that followed POSITION would hand one pane's status to another the
+      // moment somebody dragged a tab, which is exactly threat 10 of the procurement record.
+      const badge = host && typeof host.reattachPaneStatus === 'function' ? host : null;
+      if (badge) badge.reattachPaneStatus();
+    });
 
     const onWindowResize = () => registry.scheduleAll();
     window.addEventListener('resize', onWindowResize);

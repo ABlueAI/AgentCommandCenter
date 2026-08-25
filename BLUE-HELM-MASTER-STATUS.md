@@ -1298,6 +1298,42 @@ replacement evaluation · and additions identified by the daily-driver report.
 Run R15 after real use so alternatives are compared against observed friction,
 not hypothetical feature lists.
 
+#### Pane status — packaged-runtime compatibility (deferred, NOT claimed)
+
+**Blue Helm 1.0's pane-status release runtime is the unpackaged, developer-installed
+Electron application run from this repository.** That is the runtime the subsystem was
+built against, measured on, and is documented for. The later clean-machine/VM release
+item must install and exercise **that same documented developer runtime**, including
+pane-status setup, reporter invocation, removal, and recovery — pane status is *not*
+excluded from it.
+
+**No packaged-runtime compatibility is claimed.** MSIX, Electron Forge,
+electron-builder, the family installer, and any other packaged runtime are untested
+for pane status, and nothing in the 1.0 record should be read as saying otherwise.
+Deferred to 2.0, with these specific reasons recorded now so they are not rediscovered:
+
+- **Packaged builds may disable Electron's `runAsNode` fuse.** The hook chain runs the
+  reporter as `Electron with ELECTRON_RUN_AS_NODE=1`. A build that disables that fuse
+  breaks the chain outright — the shim would launch a GUI process instead of a script
+  host, or fail. This is the single largest packaging risk.
+- **Packaged path visibility may differ.** The hook entry embeds an absolute shim path
+  beneath `app.getPath('userData')`, and the shim embeds an absolute path to the
+  Electron runtime. Both may move, be virtualised, or be unreadable from outside the
+  package under MSIX-style containment.
+- **User-scope Claude settings are shared across Blue Helm installations.** A packaged
+  install and a developer install on the same machine write to the *same* settings
+  file. The install-ID ownership model handles this — it is why "another installation
+  owns hooks" is a first-class, visible refusal — but it has not been exercised across
+  a packaged/unpackaged pair.
+- **Uninstalling without removal strands hooks.** An uninstaller that removes the app
+  without running pane-status removal leaves eight hook entries pointing at a shim that
+  no longer exists. This is *safe* — every stranded link in the chain is proven to fail
+  silently and exit zero — but the entries remain until a human clears them, and a
+  packaged uninstaller has no hook into Blue Helm's removal path.
+  See `docs/RECOVERY-pane-status-hooks.md` § 7.
+- **Packaged-runtime compatibility requires its own later validation.** Not an
+  inference from the developer-runtime evidence, and not a small one.
+
 ## Current checkpoint — July 22 — V5 VIDEO SCOUT STACK MERGED & ACCEPTED
 
 **The full V5 stack is human-merged to `main` and accepted.** The five reviewed

@@ -1,11 +1,11 @@
 ((global) => {
   'use strict';
-  // EXPERIMENT A — PROTOTYPE ONLY. Renderer badge for one Claude pane.
+  // Blue Helm production pane status — renderer badge and the Terminals-toolbar setup control.
   //
   // Procurement record: docs/OSS-PROCUREMENT-pane-status.md
-  // Blue's verdict, verbatim: BLUE SUBSYSTEM VERDICT: PROTOTYPE
+  // Blue's verdict, verbatim: BLUE SUBSYSTEM VERDICT: BUILD FRESH
   //
-  // IIFE, per the V1a lesson recorded in the repo: classic renderer <script> files share ONE global
+  // IIFE, per the V1a lesson recorded in this repo: classic renderer <script> files share ONE global
   // scope, and a bare top-level `const` here can collide with another module and kill the renderer
   // while every node test stays green.
   //
@@ -16,8 +16,11 @@
   // PANE BINDING: state is keyed by the app's own pane id (`pty<N>`), the same key main uses for the
   // PTY and Dockview uses for its panel registry. It is deliberately NOT keyed by DOM position, tab
   // index, Dockview group, panel ordinal, or "the active pane": those all change when Blue drags a
-  // pane, and a status indicator that follows the position rather than the process is exactly the
+  // pane, and a status indicator that follows the POSITION rather than the PROCESS is exactly the
   // mis-attribution threat 10 of the procurement record describes.
+  //
+  // THE BADGE IS ADVISORY. It renders a word. It has no control that acts on a pane, no path to the
+  // token, and nothing it displays authorizes anything.
 
   const STATE_LABEL = {
     idle: 'idle',
@@ -34,9 +37,10 @@
   const REASON_TEXT = {
     'no-signal': 'No status signal received yet.',
     stale: 'No signal recently — the last state is too old to trust.',
-    'version-mismatch': 'This Claude Code version was not verified by the prototype.',
-    'unsupported-signal': 'The reporter sent an event this prototype does not display.',
-    released: 'Status reporting ended for this pane.',
+    'version-mismatch': 'This Claude Code version has not been verified for pane status.',
+    'hook-removed': 'Status reporting was removed for this installation.',
+    'reconciliation-required': 'Pane status needs attention — see the Claude status control.',
+    'not-installed': 'Pane status is not set up.',
   };
 
   const STATE_CLASS = {
@@ -47,6 +51,62 @@
     failed: 'ps-failed',
     exited: 'ps-exited',
     unknown: 'ps-unknown',
+  };
+
+  // The toolbar control's vocabulary. Each entry is a DISTINCT situation with a distinct fix, which is
+  // the whole reason they are not collapsed into a single "error".
+  const SETUP_TEXT = {
+    disabled: {
+      label: 'Claude status: off',
+      title: 'Pane status is not set up. Choose Set up to install the Claude Code hooks.',
+      action: 'install',
+    },
+    ready: {
+      label: 'Claude status: on',
+      title: 'Pane status is active. Choose Remove to uninstall the Claude Code hooks.',
+      action: 'remove',
+    },
+    'in-flight': {
+      label: 'Claude status: working…',
+      title: 'A setup or removal is in progress.',
+      action: null,
+    },
+    'version-mismatch': {
+      label: 'Claude status: unknown',
+      title: 'This Claude Code version has not been verified for pane status, so every pane shows unknown.',
+      action: 'remove',
+    },
+    locked: {
+      label: 'Claude status: locked',
+      title: 'Another process holds the settings lock. If that process is gone, choose Clear stale lock.',
+      action: 'clear',
+    },
+    'other-installation': {
+      label: 'Claude status: other install',
+      title: 'Another Blue Helm installation owns the Claude Code hooks. This installation will not change them.',
+      action: null,
+    },
+    malformed: {
+      label: 'Claude status: unreadable',
+      title: 'The Claude settings file or the installation record could not be read. See docs/RECOVERY-pane-status-hooks.md.',
+      action: null,
+    },
+    'reconciliation-required': {
+      label: 'Claude status: needs attention',
+      title: 'Setup could not be reconciled automatically. Reporting is disabled. See docs/RECOVERY-pane-status-hooks.md.',
+      action: null,
+    },
+  };
+
+  const SETUP_CLASS = {
+    disabled: 'ps-setup-off',
+    ready: 'ps-setup-on',
+    'in-flight': 'ps-setup-busy',
+    'version-mismatch': 'ps-setup-warn',
+    locked: 'ps-setup-warn',
+    'other-installation': 'ps-setup-warn',
+    malformed: 'ps-setup-error',
+    'reconciliation-required': 'ps-setup-error',
   };
 
   /**
@@ -60,9 +120,20 @@
     const label = STATE_LABEL[state];
     const reason = (v.reason && REASON_TEXT[v.reason]) || null;
     const title = reason
-      ? `PROTOTYPE pane status — ${label}. ${reason}`
-      : `PROTOTYPE pane status — ${label}. Claude Code hook signal (Experiment A).`;
-    return { state, label, title, className: STATE_CLASS[state], prototype: true };
+      ? `Claude pane status — ${label}. ${reason}`
+      : `Claude pane status — ${label}. Advisory only; derived from Claude Code hook signals.`;
+    return { state, label, title, className: STATE_CLASS[state], reason: v.reason || null };
+  }
+
+  /** PURE. Given a setup state from main, produce the toolbar control's appearance. */
+  function describeSetup(setup) {
+    const s = setup || {};
+    const key = Object.prototype.hasOwnProperty.call(SETUP_TEXT, s.state) ? s.state : 'disabled';
+    const base = SETUP_TEXT[key];
+    // A detail is a bounded constant from main; it is appended so a person can quote it into the
+    // recovery document without hunting through logs.
+    const title = s.detail ? `${base.title} (${s.detail})` : base.title;
+    return { state: key, label: base.label, title, className: SETUP_CLASS[key], action: base.action };
   }
 
   /**
@@ -88,21 +159,25 @@
       if (!host || typeof host.appendChild !== 'function') return null;
       el = doc.createElement('span');
       el.className = 'pane-status-badge';
-      // The word PROTOTYPE is part of the control, not a comment: the work order requires prototype
-      // mode to visibly identify itself, and a status dot with no provenance is exactly the thing a
-      // future reader would mistake for a shipped feature.
-      const tag = doc.createElement('span');
-      tag.className = 'pane-status-proto';
-      tag.textContent = 'PROTOTYPE';
       const dot = doc.createElement('span');
       dot.className = 'pane-status-dot';
       const text = doc.createElement('span');
       text.className = 'pane-status-text';
-      el.appendChild(tag);
       el.appendChild(dot);
       el.appendChild(text);
       host.appendChild(el);
       return el;
+    }
+
+    function paint(paneId, shown) {
+      const el = ensureBadge(paneId);
+      if (!el) return null;
+      el.className = `pane-status-badge ${shown.className}`;
+      el.setAttribute('title', shown.title);
+      el.setAttribute('data-pane-status', shown.state);
+      const text = el.querySelector('.pane-status-text');
+      if (text) text.textContent = shown.label;
+      return shown;
     }
 
     /** Apply a view from main. Ignores anything without a pane id — there is no "current pane" here. */
@@ -110,13 +185,8 @@
       if (!view || typeof view.paneId !== 'string' || !view.paneId) return null;
       const shown = describeView(view);
       views.set(view.paneId, shown);
-      const el = ensureBadge(view.paneId);
-      if (!el) return shown; // pane not in the DOM (yet, or any more) — state is still remembered
-      el.className = `pane-status-badge ${shown.className}`;
-      el.setAttribute('title', shown.title);
-      el.setAttribute('data-pane-status', shown.state);
-      const text = el.querySelector('.pane-status-text');
-      if (text) text.textContent = shown.label;
+      // A pane not in the DOM (yet, or any more) still has its state remembered.
+      paint(view.paneId, shown);
       return shown;
     }
 
@@ -128,34 +198,202 @@
     function reattach(paneId) {
       const shown = views.get(paneId);
       if (!shown) return null;
-      const el = ensureBadge(paneId);
-      if (!el) return null;
-      el.className = `pane-status-badge ${shown.className}`;
-      el.setAttribute('title', shown.title);
-      el.setAttribute('data-pane-status', shown.state);
-      const text = el.querySelector('.pane-status-text');
-      if (text) text.textContent = shown.label;
+      const painted = paint(paneId, shown);
+      if (!painted) return null;
       log(`[pane-status] badge re-attached to ${paneId} after a layout change (state preserved: ${shown.state})\n`);
       return shown;
+    }
+
+    /** Re-attach every tracked pane. Wired to Dockview's layout-change event. */
+    function reattachAll() {
+      let n = 0;
+      for (const paneId of views.keys()) if (reattach(paneId)) n++;
+      return n;
     }
 
     function forget(paneId) { return views.delete(paneId); }
     function stateOf(paneId) { const v = views.get(paneId); return v ? v.state : null; }
     function trackedPanes() { return [...views.keys()]; }
 
-    return { update, reattach, forget, stateOf, trackedPanes, describeView };
+    return { update, reattach, reattachAll, forget, stateOf, trackedPanes, describeView };
   }
 
-  const api = { describeView, createPaneStatusBadge, STATE_LABEL, REASON_TEXT, STATE_CLASS };
+  /**
+   * WHERE THE SETUP CONTROL MOUNTS — the one production answer, resolved from the real document.
+   *
+   * CORRECTED (advisory review, finding 2). app/renderer/app.js used to supply its own
+   * `getToolbarElement` that queried `#terminals-toolbar`, `.term-toolbar` and `#term-toolbar` — none
+   * of which exists in index.html. All three returned null, so nothing ever mounted and the whole
+   * setup surface was unreachable in the running application. The suite that covered the control
+   * passed anyway, because it injected a toolbar of its own: a test that supplies the integration
+   * point cannot prove the integration point exists.
+   *
+   * So the lookup lives HERE, in production code, with the caller supplying only a document. The real
+   * element is `.term-bar` (Work Order 1 § J.1), and `#paneStatusHost` is the empty placeholder inside
+   * it — a sibling of `.tts-controls`, immediately before `#newTermShell`, mirroring `#admissionHost`.
+   * The bar itself is the fallback so the control stays reachable if the placeholder is ever removed.
+   */
+  function resolveSetupHost(document) {
+    if (!document || typeof document.querySelector !== 'function') return null;
+    const bar = document.querySelector('.term-bar');
+    if (!bar) return null;
+    if (typeof bar.querySelector === 'function') {
+      const host = bar.querySelector('#paneStatusHost');
+      if (host) return host;
+    }
+    return bar;
+  }
 
-  // REVISION 2 — gate off means ABSENT, not inert. `index.html` loads this file unconditionally (a
-  // classic <script> tag cannot be conditional), so the GLOBAL is what has to disappear. It is
-  // published only when the preload actually exposed the prototype bridge, which happens only when
-  // main forwarded the gate token at window construction. With the gate off this module therefore
-  // defines nothing on `window`: no `ccPaneStatusBadge`, and app.js finds nothing to construct.
-  //
-  // `module.exports` is unconditional so the node test can exercise the pure functions without
-  // pretending to be a gated renderer.
-  if (global.ccPaneStatus && global.ccPaneStatus.enabled === true) global.ccPaneStatusBadge = api;
+  /**
+   * The compact Claude status control for the existing Terminals toolbar.
+   *
+   * Its three possible actions map one-to-one onto three of the four IPC invokes. There is no control
+   * here that sets a pane's status, reaches a token, or names a path.
+   *
+   * deps:
+   *   document -> the real document. The mount point is resolved from it by resolveSetupHost.
+   *   getToolbarElement() -> OPTIONAL override, for suites that deliberately test the control's own
+   *                          behaviour in isolation. Production never passes it.
+   *   bridge  -> window.ccPaneStatus
+   *   log(line)
+   */
+  function createSetupControl(deps) {
+    const d = deps || {};
+    const doc = d.document;
+    const getToolbar = typeof d.getToolbarElement === 'function'
+      ? d.getToolbarElement
+      : () => resolveSetupHost(doc);
+    const bridge = d.bridge || null;
+    const log = typeof d.log === 'function' ? d.log : () => {};
+    let root = null, labelEl = null, actionEl = null;
+    let current = describeSetup({ state: 'disabled' });
+    let busy = false;
+
+    function ensure() {
+      if (root) return root;
+      const toolbar = getToolbar();
+      if (!toolbar || typeof toolbar.appendChild !== 'function') return null;
+      root = doc.createElement('span');
+      root.className = 'pane-status-setup';
+      labelEl = doc.createElement('span');
+      labelEl.className = 'pane-status-setup-label';
+      actionEl = doc.createElement('button');
+      actionEl.className = 'pane-status-setup-action';
+      actionEl.setAttribute('type', 'button');
+      if (typeof actionEl.addEventListener === 'function') actionEl.addEventListener('click', onAction);
+      root.appendChild(labelEl);
+      root.appendChild(actionEl);
+      toolbar.appendChild(root);
+      return root;
+    }
+
+    async function onAction() {
+      if (!bridge || busy || !current.action) return;
+      const action = current.action;
+      busy = true;
+      try {
+        let res = null;
+        let rejected = false;
+
+        // R2. These three invokes are the only awaits here that can REJECT — main can tear down
+        // mid-call, or the channel can go away. THE CATCH BINDING IS DELIBERATELY OMITTED: with
+        // nothing in scope there is no exception message, stack, path, settings fragment, environment
+        // value, token or credential that can reach the log, even by mistake later.
+        try {
+          if (action === 'install') res = await bridge.install();
+          else if (action === 'remove') res = await bridge.remove();
+          else if (action === 'clear') res = await bridge.clearStaleLock();
+        } catch { rejected = true; }
+
+        if (rejected) {
+          // A FIXED line. `action` is one of exactly three internal constants, so the whole message is
+          // bounded by construction and contains nothing the caller or the failure supplied.
+          log(`[pane-status] ${action} failed: the request did not complete.\n`);
+          // EXACTLY ONE refresh attempt. Not a retry loop: if the bridge just rejected, hammering it
+          // proves nothing and delays telling the operator.
+          let refreshed = null;
+          try { refreshed = await refresh(); } catch { refreshed = null; }
+          if (!refreshed) {
+            // Prior presentation is retained — blanking it would assert a state we could not read.
+            log(`[pane-status] ${action} is UNCONFIRMED: the setup state could not be refreshed, so `
+              + 'the displayed pane status may be stale. Reload the window to resynchronise.\n');
+          }
+          return;
+        }
+
+        if (res && res.setup) render(res.setup);
+
+        // R3. The removal finished on disk but main could not confirm the renderer was told pane
+        // status is no longer live. Re-read the AUTHORITATIVE state over the existing getSetupState
+        // path rather than trusting the payload we just received — that payload travelled the same
+        // way the notice that went missing did. No new channel and no new subscription is involved.
+        if (res && res.ok === true && res.disposition === 'presentation-unconfirmed') {
+          let refreshed = null;
+          try { refreshed = await refresh(); } catch { refreshed = null; }
+          if (!refreshed) {
+            // Both the push AND the pull failed. Keep the prior presentation — blanking it would
+            // assert a state we could not read — and say plainly that what is on screen may be stale.
+            log('[pane-status] removal COMPLETED: the hooks and the installation record are gone. '
+              + 'The display could not be refreshed, so any pane status still shown above may be '
+              + 'stale. Reload the window to resynchronise.\n');
+          }
+        }
+
+        if (res && res.ok === false && res.reason) {
+          // A refusal is a VISIBLE outcome, never a swallowed one. Both constants are surfaced: the
+          // outer reason says WHAT was refused, the bounded detail says WHY, and the detail is the one
+          // that names a manual-recovery section. Neither is ever a path or a settings value.
+          const why = res.detail ? `${res.reason} (${res.detail})` : res.reason;
+          log(`[pane-status] ${action} refused: ${why}\n`);
+          if (res.retained === true) {
+            // Nothing was written. Say so plainly, so a refusal does not read as damage, and point at
+            // the document that explains how to finish by hand.
+            log('[pane-status] nothing was changed: your Claude settings, the installation record and '
+              + 'the reporter are all exactly as they were. See docs/RECOVERY-pane-status-hooks.md.\n');
+          }
+        }
+      } finally {
+        busy = false;
+      }
+    }
+
+    function render(setup) {
+      current = describeSetup(setup);
+      const el = ensure();
+      if (!el) return current;
+      el.className = `pane-status-setup ${current.className}`;
+      el.setAttribute('title', current.title);
+      el.setAttribute('data-pane-status-setup', current.state);
+      if (labelEl) labelEl.textContent = current.label;
+      if (actionEl) {
+        const text = current.action === 'install' ? 'Set up'
+          : current.action === 'remove' ? 'Remove'
+            : current.action === 'clear' ? 'Clear stale lock' : '';
+        actionEl.textContent = text;
+        actionEl.hidden = !current.action;
+        actionEl.disabled = !current.action;
+      }
+      return current;
+    }
+
+    async function refresh() {
+      if (!bridge || typeof bridge.getSetupState !== 'function') return null;
+      const res = await bridge.getSetupState();
+      if (res && res.ok && res.setup) return render(res.setup);
+      return null;
+    }
+
+    return { render, refresh, onAction, currentState: () => current.state, currentAction: () => current.action };
+  }
+
+  const api = {
+    describeView, describeSetup, createPaneStatusBadge, createSetupControl, resolveSetupHost,
+    STATE_LABEL, REASON_TEXT, STATE_CLASS, SETUP_TEXT, SETUP_CLASS,
+  };
+
+  // Production: the bridge is exposed unconditionally in the trusted window, so the badge global is
+  // published unconditionally too. There is no gate token any more — pane status is a feature of the
+  // app, and whether it is SET UP is a runtime question the toolbar control answers honestly.
+  global.ccPaneStatusBadge = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
