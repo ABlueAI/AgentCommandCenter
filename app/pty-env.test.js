@@ -2,9 +2,10 @@
 // Run: node app/pty-env.test.js
 //
 // P1 FENCED-ROLE ENVIRONMENT CONTAINMENT. Exercises the ACTUAL pure builder with poisoned base
-// environments, all role/launch classes, explicit pane-status injection, case-insensitive Windows
-// names, and one real child process. Source tripwires inspect app/main.js only so their own fixture
-// text cannot satisfy the production-wiring assertions.
+// environments, all role/launch classes, explicit pane-status injection, ASCII-case-insensitive
+// Windows names, a libuv proxy/negative contrast, and the production node-pty/ConPTY spawn path.
+// Source tripwires inspect app/main.js only so their own fixture text cannot satisfy the
+// production-wiring assertions.
 
 const assertNode = require('assert');
 const fs = require('fs');
@@ -17,6 +18,78 @@ const {
   buildPtyEnv,
 } = require('./pty-env');
 
+const IDENTITY_NAMES = ['USERNAME', 'USERDOMAIN', 'LOGONSERVER'];
+const IDENTITY_POISON = Object.freeze({
+  USERNAME: 'poison-real-parent-username',
+  USERDOMAIN: 'poison-real-parent-domain',
+  LOGONSERVER: 'poison-real-parent-logonserver',
+});
+
+async function runIdentityProbeChild() {
+  const pty = require('@lydell/node-pty');
+  const fenced = buildPtyEnv({
+    baseEnv: process.env,
+    fencedRole: true,
+    videoScout: false,
+    paneStatusEnv: {},
+  });
+  const builtIdentity = Object.fromEntries(IDENTITY_NAMES.map((name) => [name,
+    Object.prototype.hasOwnProperty.call(fenced, name) ? fenced[name] : null]));
+  const libuvChild = spawnSync(process.execPath, ['-e',
+    `process.stdout.write(JSON.stringify(Object.fromEntries(${JSON.stringify(IDENTITY_NAMES)}.map((name) => [name, process.env[name] ?? null]))))`,
+  ], { env: fenced, encoding: 'utf8', windowsHide: true });
+  if (libuvChild.status !== 0) throw new Error(`libuv child failed: ${libuvChild.stderr || libuvChild.status}`);
+
+  const command = [
+    "$names = @('USERNAME','USERDOMAIN','LOGONSERVER')",
+    "$values = foreach ($name in $names) { [Environment]::GetEnvironmentVariable($name, 'Process') }",
+    "[Console]::WriteLine('__P1_IDENTITY__' + ($values -join '|'))",
+    'exit',
+  ].join('; ');
+  const nodePtyIdentity = await new Promise((resolve, reject) => {
+    let output = '';
+    let settled = false;
+    const child = pty.spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command], {
+      name: 'xterm-256color',
+      cols: 80,
+      rows: 24,
+      cwd: process.cwd(),
+      env: fenced,
+    });
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try { child.kill(); } catch {}
+      reject(new Error('node-pty identity probe timed out'));
+    }, 10000);
+    child.onData((data) => { output += data; });
+    child.onExit(() => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      const marker = '__P1_IDENTITY__';
+      const start = output.lastIndexOf(marker);
+      if (start < 0) return reject(new Error(`node-pty probe emitted no identity marker: ${JSON.stringify(output)}`));
+      const line = output.slice(start + marker.length).split(/\r?\n/, 1)[0]
+        .replace(/\x1b\[[0-?]*[ -\/]*[@-~]/g, '').trim();
+      const values = line.split('|');
+      resolve(Object.fromEntries(IDENTITY_NAMES.map((name, index) => [name, values[index] || ''])));
+    });
+  });
+
+  process.stdout.write(JSON.stringify({
+    builtIdentity,
+    libuvIdentity: JSON.parse(libuvChild.stdout),
+    nodePtyIdentity,
+  }));
+}
+
+if (process.argv[2] === '--identity-probe-child') {
+  runIdentityProbeChild().then(() => process.exit(0)).catch((error) => {
+    process.stderr.write(String((error && error.stack) || error));
+    process.exit(1);
+  });
+} else {
 let passed = 0, failed = 0;
 function assert(cond, label) {
   if (cond) { process.stdout.write(`  ✓ ${label}\n`); passed++; }
@@ -154,8 +227,41 @@ process.stdout.write('\n-- case collisions and unknown omission --\n');
   const copied = copyAllowedWindowsEnv({ Path: 'first', PATH: 'second', UnknownThing: 'x' });
   deepEqual(copied, { Path: 'first' }, 'synthetic case-colliding entries are deduplicated deterministically: first insertion wins');
   assert(!Object.prototype.hasOwnProperty.call(copied, 'UnknownThing'), 'an unknown ambient variable is absent by construction');
+  deepEqual(copyAllowedWindowsEnv({ 'Oſ': 'evil-os', 'SyſtemRoot': 'evil-sysroot', 'Programﬁles': 'evil-programfiles' }), {},
+    'non-ASCII Unicode folds cannot alias allowlisted ASCII names');
   const sparse = buildPtyEnv({ baseEnv: {}, fencedRole: true, videoScout: false, paneStatusEnv: {} });
   deepEqual(sparse, { CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1' }, 'missing allowlisted entries are not invented');
+  const sparseUnfenced = buildPtyEnv({ baseEnv: null, fencedRole: false, videoScout: false, paneStatusEnv: {} });
+  deepEqual(sparseUnfenced, { CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1' },
+    'invalid base input is normalized to an empty object on the unfenced path too');
+}
+
+process.stdout.write('\n-- explicit pane-status key boundary --\n');
+{
+  const env = buildPtyEnv({
+    baseEnv: BASE_ENV,
+    fencedRole: false,
+    videoScout: true,
+    geminiKey: 'main-issued-gemini',
+    paneStatusEnv: {
+      ...PANE_ENV,
+      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '0',
+      GEMINI_API_KEY: 'pane-status-collision',
+      Path: 'pane-status-path-collision',
+      BLUE_HELM_PANE_STATUS_EXTRA: 'unapproved-pane-status-entry',
+    },
+  });
+  assert(env.CLAUDE_CODE_SUBPROCESS_ENV_SCRUB === '1',
+    'pane-status-shaped input cannot disable the forced Claude subprocess scrub');
+  assert(env.GEMINI_API_KEY === 'main-issued-gemini',
+    'pane-status-shaped input cannot replace the explicit Video Scout key');
+  assert(env.Path === BASE_ENV.Path,
+    'pane-status-shaped input cannot replace an ambient operational entry');
+  assert(!Object.prototype.hasOwnProperty.call(env, 'BLUE_HELM_PANE_STATUS_EXTRA'),
+    'only the two exact pane-status transport names are admitted');
+  assert(env.BLUE_HELM_PANE_STATUS_PIPE === PANE_ENV.BLUE_HELM_PANE_STATUS_PIPE
+    && env.BLUE_HELM_PANE_STATUS_TOKEN === PANE_ENV.BLUE_HELM_PANE_STATUS_TOKEN,
+  'the two exact pane-status transport values still survive');
 }
 
 process.stdout.write('\n-- complete role and launch matrix --\n');
@@ -207,7 +313,7 @@ for (const [label, opts] of [
   deepEqual(actual, expected, `${label} remains deep-equal to the pre-P1 unfenced expression`);
 }
 
-process.stdout.write('\n-- real child inheritance and negative control --\n');
+process.stdout.write('\n-- libuv proxy, production node-pty inheritance, and negative control --\n');
 {
   const fenced = buildPtyEnv({
     baseEnv: { ...process.env, ...BASE_ENV },
@@ -216,25 +322,17 @@ process.stdout.write('\n-- real child inheritance and negative control --\n');
     paneStatusEnv: PANE_ENV,
   });
   const observed = observedChildEnv(fenced);
-  assert(observed.ok, 'a real child starts with the constructed fenced environment and reports its observed key set');
+  assert(observed.ok, 'a libuv proxy child starts with the constructed fenced environment and reports its observed key set');
   if (observed.ok) {
     const builtKeys = foldedKeys(fenced);
     const childKeys = foldedKeys(observed.env);
     const missing = builtKeys.filter((name) => !childKeys.includes(name));
     const added = childKeys.filter((name) => !builtKeys.includes(name));
-    deepEqual(missing, [], 'the real child observes every key in the constructed environment');
-    if (process.platform === 'win32') {
-      deepEqual(added, ['LOGONSERVER', 'USERDOMAIN', 'USERNAME'],
-        'Windows adds only its three measured identity defaults; none came from the ambient fixture');
-    } else {
-      deepEqual(added, [], 'a non-Windows child adds no key beyond the constructed environment');
-    }
-    assert(!Object.values(observed.env).includes('poison-anthropic'), 'the real child cannot observe the credential poison');
-    assert(!Object.values(observed.env).some((value) => typeof value === 'string' && value.startsWith('poison-tier2-'))
-      && !Object.values(observed.env).includes('poison-unknown-logonserver'),
-    'the real child does not inherit the rejected Tier 2 or unknown identity values from the fixture');
+    deepEqual(missing, [], 'the libuv proxy child observes every key in the constructed environment');
+    if (process.platform !== 'win32') deepEqual(added, [], 'a non-Windows libuv child adds no key beyond the constructed environment');
+    assert(!Object.values(observed.env).includes('poison-anthropic'), 'the libuv proxy child cannot observe non-required credential poison');
     assert(observed.env.BLUE_HELM_PANE_STATUS_TOKEN === PANE_ENV.BLUE_HELM_PANE_STATUS_TOKEN,
-      'the real child observes the explicit pane-status token');
+      'the libuv proxy child observes the explicit pane-status token');
   }
 
   const negativeControlEnv = {
@@ -244,12 +342,43 @@ process.stdout.write('\n-- real child inheritance and negative control --\n');
   const negativeObserved = observedChildEnv(negativeControlEnv);
   assert(negativeObserved.ok && negativeObserved.env.ANTHROPIC_API_KEY === POISON.ANTHROPIC_API_KEY,
     'NEGATIVE CONTROL: deliberately admitting the poison makes the real-child detector observe it');
+
+  if (process.platform === 'win32') {
+    const inheritanceProbe = spawnSync(process.execPath, [__filename, '--identity-probe-child'], {
+      env: { ...process.env, ...IDENTITY_POISON },
+      cwd: __dirname,
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 15000,
+    });
+    assert(inheritanceProbe.status === 0,
+      'the isolated poisoned-parent inheritance probe completes on Windows');
+    let measured = null;
+    try { measured = inheritanceProbe.status === 0 ? JSON.parse(inheritanceProbe.stdout) : null; } catch {}
+    assert(Boolean(measured), 'the poisoned-parent inheritance probe returns parseable structured evidence');
+    if (measured) {
+      deepEqual(measured.builtIdentity, { USERNAME: null, USERDOMAIN: null, LOGONSERVER: null },
+        'the pure builder omits all three rejected identity variables before either spawn path');
+      deepEqual(measured.libuvIdentity, IDENTITY_POISON,
+        'libuv back-fills its required identity variables from the real poisoned parent environment');
+      deepEqual(measured.nodePtyIdentity, { USERNAME: '', USERDOMAIN: '', LOGONSERVER: '' },
+        'the production node-pty/ConPTY path preserves their omission and does not back-fill parent identity values');
+    }
+  } else {
+    assert(true, 'Windows-only parent-inheritance comparison is not applicable on this platform');
+  }
 }
 
 process.stdout.write('\n-- production main-process wiring --\n');
 {
   // Intentionally read main.js only. None of the assertion needles below can match this test file.
   const mainSrc = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+  const fencedRolesMatch = mainSrc.match(/const FENCED_ROLES = new Set\(\[([^\]]+)\]\);/);
+  const mainFencedRoles = fencedRolesMatch
+    ? [...fencedRolesMatch[1].matchAll(/'([^']+)'/g)].map((match) => match[1])
+    : [];
+  deepEqual(mainFencedRoles, [...FENCED_ROLES],
+    'the complete-role matrix stays synchronized with main.js FENCED_ROLES');
   const spawnMatches = mainSrc.match(/\bpty\.spawn\(/g) || [];
   assert(spawnMatches.length === 1, 'main.js has exactly one pty.spawn sink');
   assert(mainSrc.includes('const fencedRole = !opts.videoScout && opts.role && FENCED_ROLES.has(opts.role);'),
@@ -270,3 +399,4 @@ process.stdout.write('\n-- production main-process wiring --\n');
 
 process.stdout.write(`\npty-env: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);
+}

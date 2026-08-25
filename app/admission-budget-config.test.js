@@ -194,9 +194,9 @@ process.stdout.write('\n-- source tripwires --\n');
     'main.js passes the actual process environment to the centralized PTY builder');
   assert(!/\.\.\.process\.env\b/.test(ptyEnvBlock),
     'the real main.js ptyEnv construction never spreads raw process.env');
-  assert(ptyEnvSrc.includes(': stripAdmissionEnv(baseEnv);'),
+  assert(ptyEnvSrc.includes(': stripAdmissionEnv(source);'),
     'pty-env.js preserves stripAdmissionEnv as the unfenced ambient construction path');
-  assert(ptyEnvSrc.includes('? copyAllowedWindowsEnv(baseEnv, FENCED_ENV_ALLOWLIST)'),
+  assert(ptyEnvSrc.includes('? copyAllowedWindowsEnv(source, FENCED_ENV_ALLOWLIST)'),
     'pty-env.js builds fenced ambient inheritance only through the fixed allowlist copier');
   assert(mainSrc.includes('parseAdmissionConfig(process.env)'),
     'main.js parses the admission plan once, from its own startup environment');

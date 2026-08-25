@@ -266,8 +266,9 @@ driver.
 3. P1 fenced-role environment containment at
    `ipcMain.handle('pty-start') -> buildPtyEnv -> pty.spawn`, integrated after
    the PTY environment path is stable.
-4. Fence completion: WO-6/WO-7, P4 fail-closed enforcement, and the adversarial
-   Read/WebFetch matrix on a quiet system.
+4. Fence completion: `pty-start` trusted-sender/classifier integrity, WO-6/WO-7,
+   P4 fail-closed enforcement, and the adversarial Read/WebFetch matrix on a
+   quiet system.
 5. One full daily-driver day with builders idle and Blue as the instrument.
 6. Clean-machine/VM installation and restore-path testing, including the
    measured Windows long-path risk.
@@ -306,6 +307,20 @@ structurally pinned, and adversarial live/provider behavior remains part of the
 later fence-completion item. Blue's controlling procurement disposition is:
 “P1 hardens the existing owned PTY environment boundary and introduces no new
 subsystem or dependency; the OSS procurement gate does not reopen.”
+
+**P1 Revision 2 scope correction — August 25:** the P1 merge claim is limited to
+environment filtering **given the existing classification decision**. The
+current `pty-start` handler does not apply a trusted-sender gate, and renderer-
+supplied role/Video-Scout classification is therefore not claimed as a new P1
+security boundary; its integrity is explicit remaining work in item 4 above.
+Source inspection established that `buildAgentCommand` exact-matches the same
+role spellings without normalization and that its agent-role branch is mutually
+exclusive with the Video Scout branch. A poisoned-parent comparison further
+established two distinct Windows behaviors: libuv `child_process` back-fills
+its required `USERNAME`, `USERDOMAIN`, and `LOGONSERVER` entries from the real
+parent, while the production `@lydell/node-pty`/ConPTY path preserved their
+omission. The test records libuv only as a proxy/negative contrast and uses the
+production spawn mechanism for the P1 inheritance claim.
 
 **Quick Links ruling:** it is a bounded extension of the already-owned external
 launcher boundary, so the OSS procurement gate does not apply. “Extension” is

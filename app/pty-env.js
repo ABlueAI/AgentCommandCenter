@@ -13,8 +13,9 @@
 
 const { stripAdmissionEnv } = require('./admission-budget-config');
 
-// Blue-approved Tier 1 allowlist, 2026-08-25. Matching is case-insensitive because Windows
-// environment names are case-insensitive. A copied entry keeps its source spelling and exact value.
+// Blue-approved Tier 1 allowlist, 2026-08-25. Matching is ASCII-case-insensitive because every
+// approved name is ASCII and Unicode case folding would admit non-Windows-equivalent aliases. A
+// copied entry keeps its source spelling and exact value.
 const FENCED_ENV_ALLOWLIST = Object.freeze([
   'PATH',
   'PATHEXT',
@@ -39,8 +40,18 @@ const FENCED_ENV_ALLOWLIST = Object.freeze([
   'OS',
 ]);
 
+const PANE_STATUS_ENV_KEYS = Object.freeze([
+  'BLUE_HELM_PANE_STATUS_PIPE',
+  'BLUE_HELM_PANE_STATUS_TOKEN',
+]);
+
+function foldAsciiWindowsEnvName(name) {
+  if (typeof name !== 'string' || !/^[\x20-\x7E]+$/.test(name)) return null;
+  return name.replace(/[a-z]/g, (ch) => ch.toUpperCase());
+}
+
 /**
- * Copy only allowlisted Windows environment entries from baseEnv.
+ * Copy only allowlisted, printable-ASCII Windows environment entries from baseEnv.
  *
  * `allowedNames` is injectable only so the negative-control test can deliberately admit its poison
  * and prove the detector observes it. Production buildPtyEnv always supplies the frozen Tier 1 list.
@@ -50,12 +61,13 @@ const FENCED_ENV_ALLOWLIST = Object.freeze([
 function copyAllowedWindowsEnv(baseEnv, allowedNames) {
   const source = baseEnv && typeof baseEnv === 'object' ? baseEnv : {};
   const approved = Array.isArray(allowedNames) ? allowedNames : FENCED_ENV_ALLOWLIST;
-  const approvedFolded = new Set(approved.map((name) => String(name).toUpperCase()));
+  const approvedFolded = new Set(approved.map(foldAsciiWindowsEnvName).filter(Boolean));
   const copiedFolded = new Set();
   const out = {};
 
   for (const name of Object.keys(source)) {
-    const folded = name.toUpperCase();
+    const folded = foldAsciiWindowsEnvName(name);
+    if (!folded) continue;
     if (!approvedFolded.has(folded) || copiedFolded.has(folded)) continue;
     if (typeof source[name] !== 'string') continue;
     out[name] = source[name];
@@ -71,12 +83,18 @@ function copyAllowedWindowsEnv(baseEnv, allowedNames) {
  *   !opts.videoScout && opts.role && FENCED_ROLES.has(opts.role)
  */
 function buildPtyEnv({ baseEnv, fencedRole, videoScout, geminiKey, paneStatusEnv }) {
+  const source = baseEnv && typeof baseEnv === 'object' ? baseEnv : {};
   const ambient = fencedRole
-    ? copyAllowedWindowsEnv(baseEnv, FENCED_ENV_ALLOWLIST)
-    : stripAdmissionEnv(baseEnv);
-  const explicitPaneStatus = paneStatusEnv && typeof paneStatusEnv === 'object'
-    ? paneStatusEnv
-    : {};
+    ? copyAllowedWindowsEnv(source, FENCED_ENV_ALLOWLIST)
+    : stripAdmissionEnv(source);
+  const explicitPaneStatus = {};
+  // Pane status owns exactly these two transport names. Copying an arbitrary enrollment object here
+  // would let a future/corrupt controller overwrite the forced scrub, Video Scout key, or Tier 1.
+  if (paneStatusEnv && typeof paneStatusEnv === 'object') {
+    for (const name of PANE_STATUS_ENV_KEYS) {
+      if (typeof paneStatusEnv[name] === 'string') explicitPaneStatus[name] = paneStatusEnv[name];
+    }
+  }
 
   return {
     ...ambient,
