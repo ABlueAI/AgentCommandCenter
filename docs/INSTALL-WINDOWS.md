@@ -72,22 +72,48 @@ procedure.
 > application. Reconciling SETUP-WINDOWS.md is separate work; it is not changed
 > by this guide.
 
-No compiler toolchain is required: `@lydell/node-pty` resolves to a prebuilt
-platform package, and only `onnxruntime-node`, `protobufjs`, and `sharp` declare
-install scripts in the tracked lockfile.
+**Compiler toolchain — what the tracked files actually show.** The tracked
+dependency graph uses platform/prebuilt packages: `@lydell/node-pty` resolves to
+a per-platform prebuilt (`@lydell/node-pty-win32-x64`), and the lockfile contains
+**no observed `node-gyp`, `prebuild-install`, or `node-addon-api` dependency**.
+Three packages do declare install scripts — `onnxruntime-node`, `protobufjs`, and
+`sharp`. That is **lockfile structure, not an observed clean install**: it is
+consistent with needing no compiler, but it does not prove that none of those
+install scripts falls back to building from source on a machine without
+prebuilts. **The clean-machine run must confirm that no compiler fallback is
+required** and record the result.
 
 ---
 
 ## 3. Clone the repository
 
-Windows-native PowerShell. Choose any folder you own; the examples use
-`D:\Workspace` because that is the current default projects root, **not** because
-that path must exist on your machine (§ 6).
+Windows-native PowerShell. The clone target is a **path under your user
+profile**, so these commands run unchanged on a machine that has only a `C:`
+drive — including the prepared clean VM.
 
 ```powershell
-git clone https://github.com/<owner>/agent-command-center.git D:\Workspace\agent-command-center
-cd D:\Workspace\agent-command-center
+$RepoRoot = Join-Path $env:USERPROFILE 'source\AgentCommandCenter'
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $RepoRoot) | Out-Null
+git clone https://github.com/ABlueAI/AgentCommandCenter.git $RepoRoot
+Set-Location $RepoRoot
 ```
+
+`https://github.com/ABlueAI/AgentCommandCenter.git` is this repository's actual
+`origin` remote, corroborated by [PROJECT-STATE.md](PROJECT-STATE.md) ("Repo:
+github.com/ABlueAI/AgentCommandCenter"). Note that the **remote repository name
+and the local folder name differ** in Blue's own checkout (`AgentCommandCenter`
+vs `agent-command-center`); neither name is load-bearing, because every later
+command derives its path from `$RepoRoot`.
+
+> **`$RepoRoot` is a PowerShell session variable.** Sections 4, 5, 6, 8 and 10.1
+> reuse it. If you open a new PowerShell window, set it again with the first line
+> above — or substitute your own absolute path. Nothing in the application reads
+> this variable; it exists only to keep this guide's commands portable.
+
+Put the checkout anywhere you own. `D:\Workspace` appears later in this guide
+**only** as the application's current default *projects root* (§ 6) — a separate
+setting, a machine-specific default, and not a requirement that any `D:` drive
+exist.
 
 The application source lives under **`app\`**, and **`app\package.json` is the
 only `package.json` in the repository — there is no root-level `package.json` and
@@ -100,7 +126,7 @@ resolves helper scripts as `path.join(__dirname, '..', 'scripts')`
 ## 4. Install dependencies
 
 ```powershell
-cd D:\Workspace\agent-command-center\app
+Set-Location (Join-Path $RepoRoot 'app')
 npm ci
 ```
 
@@ -127,8 +153,8 @@ expected and safe on a fresh clone.
 **Required before any fenced role can be treated as installed.**
 
 ```powershell
-cd D:\Workspace\agent-command-center
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\sync-roles.ps1
+Set-Location $RepoRoot
+powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoRoot 'scripts\sync-roles.ps1')
 ```
 
 That invocation is **process-local**: `-ExecutionPolicy Bypass` on a single
@@ -177,7 +203,7 @@ before using any role.
 ## 6. First launch
 
 ```powershell
-cd D:\Workspace\agent-command-center\app
+Set-Location (Join-Path $RepoRoot 'app')
 npm start
 ```
 
@@ -266,11 +292,22 @@ than falling back to plaintext.
 **Rules, not suggestions:**
 
 - **Never** use `setx` — or any persistent Windows user/machine environment
-  variable — for a provider credential. Every PTY inherits `process.env`, so a
-  credential stored that way is readable from any agent's Bash step. Blue Helm
-  sets `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` on every PTY specifically to limit
-  that exposure (`app/main.js:1276-1340`; `AGENTS.md` § How I work, item 8). If a
-  key was previously set with `setx`, remove it: System Properties → Environment
+  variable — for a provider credential. A value persisted that way is present in
+  the **application's own ambient environment** and is spread into **at least the
+  unfenced PTYs** — plain shells, Plain-CLI panes, and Video Scout — because
+  `pty-start` builds each PTY environment from `process.env`
+  (`app/main.js:1276-1340`). Among the six deployed roles, only **Builder** is
+  granted the `Bash` tool (`agent-roles/builder.md`); the three fenced roles hold
+  `WebSearch, WebFetch, Read, Write` and Reviewer and Codebase Scout hold
+  `Read, Grep, Glob`, so today there is no fenced-role Bash step to read it. That
+  narrows the blast radius; it does **not** make `setx` acceptable — the value is
+  still ambient, still persistent, and still outside `safeStorage`. Blue Helm
+  sets `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` on every PTY to limit what Claude
+  Code forwards into subprocesses it spawns itself (`app/main.js:1276-1340`;
+  `AGENTS.md` § How I work, item 8), and P1 fenced-role environment containment
+  (release plan § 2.3) is separately tightening what fenced PTYs inherit —
+  **neither is a reason to persist a secret in the environment.** If a key was
+  previously set with `setx`, remove it: System Properties → Environment
   Variables → User variables → delete the entry, or
   `[Environment]::SetEnvironmentVariable('GEMINI_API_KEY', $null, 'User')`.
 - **Never** copy `secure.json`, DPAPI ciphertext, or any key material between
@@ -329,12 +366,12 @@ Optional developer checks, once dependencies are installed — neither is requir
 for the application to run:
 
 ```powershell
-cd D:\Workspace\agent-command-center\app
+Set-Location (Join-Path $RepoRoot 'app')
 npm test
 ```
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File D:\Workspace\agent-command-center\scripts\run-pester.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoRoot 'scripts\run-pester.ps1')
 ```
 
 Video Scout verification is deliberately excluded here: it downloads media and
@@ -426,8 +463,9 @@ machine has not been inspected.** Do not state it as a fact about your specific
 executable until you have checked it:
 
 ```powershell
-Get-AuthenticodeSignature .\node_modules\electron\dist\electron.exe | Format-List Status, SignerCertificate
-Get-Item .\node_modules\electron\dist\electron.exe -Stream *
+$ElectronExe = Join-Path $RepoRoot 'app\node_modules\electron\dist\electron.exe'
+Get-AuthenticodeSignature $ElectronExe | Format-List Status, SignerCertificate
+Get-Item $ElectronExe -Stream *
 ```
 
 Report what those two commands actually return, rather than assuming the
