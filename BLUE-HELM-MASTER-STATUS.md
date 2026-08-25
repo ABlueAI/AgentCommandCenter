@@ -263,8 +263,9 @@ driver.
 2. Pane-status production completion, rebased onto merged Quick Links before
    its review; no paid live provider turn until turn accounting is resolved or
    mechanically bounded.
-3. P1 fenced-role environment containment at `app/main.js:1033`, integrated
-   after the PTY environment path is stable.
+3. P1 fenced-role environment containment at
+   `ipcMain.handle('pty-start') -> buildPtyEnv -> pty.spawn`, integrated after
+   the PTY environment path is stable.
 4. Fence completion: WO-6/WO-7, P4 fail-closed enforcement, and the adversarial
    Read/WebFetch matrix on a quiet system.
 5. One full daily-driver day with builders idle and Blue as the instrument.
@@ -290,6 +291,21 @@ for settings lifecycle, pipe/token boundary, dead-reporter expiry, version
 fail-closed, turn accounting, and consequential-action isolation; Standard-
 class for badge presentation and Dockview identity. Full-class security review
 comes from a fresh independent session.
+
+**P1 implementation checkpoint — August 25:** branch
+`codex/p1-fenced-role-env-containment`, forked from merged pane-status baseline
+`d64192ba680d932623e5557793a159076e26d8d6`, is prepared for independent
+Full-class review; it is **not merged or authorized to merge**. The existing
+fenced-role predicate now selects a pure environment builder that starts from
+an empty object and copies only Blue's exact Tier 1 Windows allowlist. Unfenced
+panes, including Video Scout, retain the pre-P1 admission-scrubbed base behavior;
+the Claude subprocess scrub, Video Scout safeStorage key, and pane-status
+enrollment values are layered explicitly in that order. Environment values are
+not logged. Filtering is dynamically proven, main-process wiring is
+structurally pinned, and adversarial live/provider behavior remains part of the
+later fence-completion item. Blue's controlling procurement disposition is:
+“P1 hardens the existing owned PTY environment boundary and introduces no new
+subsystem or dependency; the OSS procurement gate does not reopen.”
 
 **Quick Links ruling:** it is a bounded extension of the already-owned external
 launcher boundary, so the OSS procurement gate does not apply. “Extension” is

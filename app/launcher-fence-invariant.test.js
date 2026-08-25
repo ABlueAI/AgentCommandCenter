@@ -15,6 +15,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { buildPtyEnv } = require('./pty-env');
 
 // LINE-ENDING NORMALIZATION — READ THIS BEFORE RE-PINNING ANYTHING BELOW.
 //
@@ -201,6 +202,29 @@ function sha(s) { return crypto.createHash('sha256').update(s, 'utf8').digest('h
 // converge in admission-pty-boundary.js, outside this region, behind a private main-local capability.
 // Prior threat-correction hash retained:
 //   pty-start handler 13170 eb3c26968e6c447f15b4e5ccbe2c999912d189213ed006615efc25938738dfe0  (rev 4)
+//
+// RE-PINNED (eighth time) for P1 FENCED-ROLE ENVIRONMENT CONTAINMENT. The one PTY environment
+// literal moved into the pure, dynamically tested buildPtyEnv module. main now computes the standing
+// fenced-role predicate, passes process.env as INPUT rather than spreading it, and hands the returned
+// ptyEnv to the same single pty.spawn sink. The wider handler is shorter because stale prototype and
+// setx-residue commentary was replaced by the precise P1 boundary and explicit-injection ordering.
+//
+// What did NOT change:
+//   * `fenced-role cwd gate` remains 1326 / 9a1255f1... byte-for-byte identical.
+//   * pane-status enrollment still occurs before environment construction, and the exact returned
+//     paneStatusEnv is passed to the builder.
+//   * the spawn executable, argv, cwd, failure cleanup, and one pty.spawn sink remain in place.
+//
+// Previous production pins retained:
+//   ptyEnv block      265   b0bc588013e85de54042a0f19f30d187d8fcd22c2fec5f4e9596ad3527e1b77d
+//   pty-start handler 14993 03eab4cd2bd2fd44c182ad3901b5735696c76fbf4a9345ebb49f1db161c7a30b
+//
+// REVISION 1, authorized by Blue after the first app gate: the executable statements and ptyEnv
+// block remain byte-identical. The handler comment restores the admission ledger's required positive
+// threat-boundary statements (inherited-key effect, APPDATA/USERPROFILE visibility, and
+// ACCIDENTAL-SPEND classification) after admission-budget.test.js correctly rejected their omission.
+// Pre-revision P1 handler pin retained: 12808 /
+// 658100cfb25734f0efb9d87997efd249fcaa0576f69e354c3b2440afc4802814.
 // ---------------------------------------------------------------------------------------------
 
 // Region definitions: [name, startAnchor, endAnchor, expected byte length, expected sha256].
@@ -214,10 +238,10 @@ const REGIONS = [
   },
   {
     name: 'ptyEnv block',
-    start: 'const ptyEnv = {',
+    start: 'const fencedRole = !opts.videoScout && opts.role && FENCED_ROLES.has(opts.role);',
     end: 'let p;',
-    len: 265,
-    sha: 'b0bc588013e85de54042a0f19f30d187d8fcd22c2fec5f4e9596ad3527e1b77d',
+    len: 229,
+    sha: '18cf42b434ee922ee61194d9316150c0b766591e063d0b0545f6aebc8d85cb54',
   },
   {
     name: 'pty-start handler',
@@ -236,8 +260,8 @@ const REGIONS = [
     // Previous pins, retained so the earlier reviewed bases stay reproducible:
     //   len 13287 / sha 3ad6db301a3fa0e101195f439012ee42ca25ba6b31040b10d0196d23b7141bb3  (CRLF units)
     //   len 13864 / sha 1b6929a2e691c2e418ab529a80411e26f58a1d32a6f08b2ceb1b085e3db96274  (LF units)
-    len: 14993,
-    sha: '03eab4cd2bd2fd44c182ad3901b5735696c76fbf4a9345ebb49f1db161c7a30b',
+    len: 13205,
+    sha: '14d3ae60ed6ea32e4231fdef7d0979e160207b0580466f53178a4b9f86098486',
   },
 ];
 
@@ -248,17 +272,26 @@ for (const r of REGIONS) {
   assert(sha(seg) === r.sha, `${r.name}: sha256 byte-for-byte unchanged from reviewed base`);
 }
 
-// CONTENT assertions that survive any future re-pin. A hash tells you something moved; these tell you
-// whether the thing that matters is still there. Added with Experiment A precisely because a re-pin
-// happened — the next person to re-pin must not be able to quietly drop the scrub along with it.
-assert(src.indexOf("CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'") !== -1,
-  'ptyEnv still sets CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1 on every PTY');
-assert((src.match(/CLAUDE_CODE_SUBPROCESS_ENV_SCRUB/g) || []).length >= 1,
-  'the credential scrub is present and was not renamed away');
-assert(!/CLAUDE_CODE_SUBPROCESS_ENV_SCRUB\s*:\s*'0'/.test(src) && !/CLAUDE_CODE_SUBPROCESS_ENV_SCRUB\s*:\s*''/.test(src),
-  'the credential scrub is never set to a disabled value');
-assert(src.indexOf('...(opts.videoScout ? { GEMINI_API_KEY: geminiKey } : {})') !== -1,
-  'the video-scout key injection is still scoped to video-scout panes only');
+// CONTENT assertions that survive any future re-pin. The pure builder is exercised here rather than
+// matching comments that merely mention the intended behavior.
+{
+  const ordinary = buildPtyEnv({ baseEnv: {}, fencedRole: false, videoScout: false, paneStatusEnv: {} });
+  assert(ordinary.CLAUDE_CODE_SUBPROCESS_ENV_SCRUB === '1',
+    'the production builder sets CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1 on every PTY');
+  const video = buildPtyEnv({
+    baseEnv: { GEMINI_API_KEY: 'ambient' }, fencedRole: false, videoScout: true,
+    geminiKey: 'explicit', paneStatusEnv: {},
+  });
+  assert(video.GEMINI_API_KEY === 'explicit',
+    'the production builder gives Video Scout the explicit main-issued key, not ambient residue');
+  const fenced = buildPtyEnv({
+    baseEnv: { GEMINI_API_KEY: 'ambient' }, fencedRole: true, videoScout: false, paneStatusEnv: {},
+  });
+  assert(!Object.prototype.hasOwnProperty.call(fenced, 'GEMINI_API_KEY'),
+    'the production builder gives a fenced non-Video-Scout pane no Gemini key');
+}
+assert(src.indexOf('const ptyEnv = buildPtyEnv({') !== -1,
+  'main.js obtains the real ptyEnv from the production builder');
 // The pane-status addition must remain a no-op-by-default spread, not an unconditional injection.
 // Production form: the controller ENROLLS the pane and returns { ok, env }; a refusal yields {} and the
 // pane launches with no status environment at all. Previous prototype form, retained for provenance:
@@ -302,16 +335,15 @@ assert(!/createPaneStatusPrototype\(\{[\s\S]{0,400}?observedVersion/.test(src),
 // TURN ADMISSION BUDGET content assertions — the reason THIS re-pin happened, pinned as behaviour so
 // the next re-pin cannot quietly drop them along with the hash. A hash says something moved; these say
 // whether the cost control is still wired.
-assert(src.indexOf('...admissionConfig.stripAdmissionEnv(process.env)') !== -1,
-  'ptyEnv is built from the admission-scrubbed environment copy, not raw process.env');
+assert(src.indexOf('baseEnv: process.env,') !== -1,
+  'main.js passes process.env only as builder input, never as a spread at the sink');
 {
-  // The scrub must be the FIRST spread in ptyEnv: a later `...process.env` would put the keys back.
-  const envBlock = src.slice(src.indexOf('const ptyEnv = {'), src.indexOf('let p;', src.indexOf('const ptyEnv = {')));
+  const envBlock = src.slice(src.indexOf('const fencedRole = !opts.videoScout'),
+    src.indexOf('let p;', src.indexOf('const fencedRole = !opts.videoScout')));
   assert(!/\.\.\.process\.env\b/.test(envBlock),
-    'the ptyEnv block never spreads raw process.env — the admission keys cannot be reintroduced');
-  assert(envBlock.indexOf('...admissionConfig.stripAdmissionEnv(process.env)') <
-         envBlock.indexOf("CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'"),
-    'the scrubbed copy is the base of the object, with the credential scrub layered on top of it');
+    'the main.js ptyEnv block never spreads raw process.env');
+  assert(envBlock.indexOf('baseEnv: process.env,') > envBlock.indexOf('const ptyEnv = buildPtyEnv({'),
+    'process.env is passed inside the bounded buildPtyEnv call');
 }
 assert(/prepareAdmissionPaneLaunch\(\{/.test(src),
   'pty-start delegates pre-spawn eligible-pane claiming to the protective launch policy');

@@ -72,6 +72,10 @@ const paneStatusLockMod = require('./pane-status/pane-status-lock');
 // ledger file directly. Read the threat-boundary header in app/admission-budget.js before relying on
 // this for anything.
 const admissionConfig = require('./admission-budget-config');
+// P1 fenced-role environment containment. The pure builder keeps unfenced panes on the existing
+// admission-scrubbed environment expression while constructing fenced role environments only from
+// Blue's explicit Tier 1 Windows allowlist. See app/pty-env.test.js.
+const { buildPtyEnv } = require('./pty-env');
 const { createAdmissionBudget, REASON: ADMISSION_REASON } = require('./admission-budget');
 const { createAdmissionLedgerStore } = require('./admission-budget-store');
 const { createAdmissionIpc, CHANNEL_SUBMIT: ADMISSION_CHANNEL_SUBMIT } = require('./admission-ipc');
@@ -553,8 +557,10 @@ app.whenReady().then(() => {
     // every badge `unknown`/`version-mismatch`.
     resolveVersion: () => paneStatusVersionMod.createClaudeVersionResolver({
       execFile: require('child_process').execFile,
-      // The PATH/PATHEXT the PTY will inherit. `stripAdmissionEnv` removes only admission keys, so
-      // command resolution is identical between this map and the one pty-start builds.
+      // The PATH/PATHEXT the PTY will inherit. Unfenced construction removes only admission keys;
+      // fenced construction copies both names case-insensitively with their exact values. Command
+      // resolution therefore stays identical even though fenced PTYs omit every unrelated ambient
+      // entry by construction.
       env: process.env,
       commandName: AGENT_CMD.claude,
       log: (line) => tlog(line),
@@ -1278,28 +1284,6 @@ ipcMain.handle('pty-start', (_e, opts) => {
     const run = buildAgentCommand(opts); // role / bare CLI / undefined => plain shell
     if (run) args.push('-Command', run);
   }
-  // CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1 tells Claude Code not to forward the parent
-  // environment into subprocesses it spawns itself: Bash tool calls, PreToolUse/PostToolUse
-  // hook commands, and MCP servers all inherit the PTY env by default. Without this flag, a
-  // Bash step inside any agent can read every secret in process.env (e.g. a GEMINI_API_KEY
-  // left in HKCU:\Environment via setx). Set on every PTY — harmless for non-Claude panes,
-  // essential for agent panes. Defined here, in pty-start; also documented in CLAUDE.md.
-  //
-  // Video-scout PTYs additionally receive GEMINI_API_KEY from safeStorage (decrypted in
-  // main memory, never written to disk) so feed-gemini.ps1 can reach the Gemini API.
-  // IMPORTANT: if GEMINI_API_KEY was previously persisted via `setx`, it is still present
-  // in process.env and leaks into every PTY via the spread below. Remove it from the Windows
-  // user environment manually (see CLAUDE.md). That removal is a pre-req for full per-role
-  // env filtering (Blue Helm checklist item 2).
-  // EXPERIMENT A (PROTOTYPE): {} for every pane unless the gate env var is set AND this is the single
-  // enrolled Claude pane. The scrub above is NOT weakened — it stays exactly as it was, and if it
-  // prevents the hook reporter from inheriting these two variables the experiment is blocked and
-  // reported as blocked rather than worked around. The token exists only here and in main's memory:
-  // never in argv, a log line, a file, the renderer, or a persistent environment variable.
-  // Select and durably claim the first eligible Claude pane BEFORE any process exists. An ineligible
-  // shell/Codex/Gemini/Video-Scout pane never calls claimPane and cannot consume the run. A second
-  // eligible pane after another pane is bound remains non-target; every other claim failure refuses
-  // startup without briefly exposing an unprotected process.
   const admissionLaunch = prepareAdmissionPaneLaunch({
     plan: admissionPlan,
     budget: admissionBudget,
@@ -1316,28 +1300,31 @@ ipcMain.handle('pty-start', (_e, opts) => {
   // status environment — never an error, and never a reason to block the spawn.
   const paneStatusEnrollment = paneStatus.enrollPane(id);
   const paneStatusEnv = paneStatusEnrollment.ok ? paneStatusEnrollment.env : {};
-  // TURN ADMISSION BUDGET — keep the run's CONFIGURATION out of the pane's environment.
-  // `stripAdmissionEnv` returns a COPY of process.env with every key in ADMISSION_ENV_KEYS removed;
-  // the spread below starts from that copy rather than from process.env. Its narrow guarantee is that
-  // those keys are not INHERITED by the PTY. It does not make their values unknowable elsewhere.
+  // P1 FENCED-ROLE ENVIRONMENT CONTAINMENT. This is defense-in-depth against a latent credential
+  // boundary, not a claim that today's fenced role tool declarations expose a direct native-Windows
+  // environment-reading path. Fenced roles start from an EMPTY object in buildPtyEnv and receive only
+  // Blue's Tier 1 Windows allowlist. Unfenced panes retain the exact pre-P1 base behavior: an
+  // admission-scrubbed copy of process.env. Video Scout remains deliberately unfenced.
   //
-  // WHAT THIS DOES AND DOES NOT ACHIEVE — the earlier comment here overstated it:
-  //   * It removes the configured RUN ID and ALLOWANCE keys from the inherited pane environment.
-  //   * It does NOT hide Electron `userData`, and it creates NO filesystem isolation. `APPDATA` and
-  //     `USERPROFILE` remain in the child environment, the ledger filename is a literal in readable
-  //     repository source, and enumeration finds the file anyway.
-  //   * The `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` line below concerns credentials in Claude Code's own
-  //     subprocesses; it is NOT evidence that a same-user Claude process cannot reach the ledger.
-  // The ledger is an accidental-spend control, not a boundary against a hostile same-user process.
-  // See the threat-boundary header in app/admission-budget.js.
-  const ptyEnv = {
-    ...admissionConfig.stripAdmissionEnv(process.env),
-    CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1',  // scrub credentials from Claude Code's own subprocesses
-    ...(opts.videoScout ? { GEMINI_API_KEY: geminiKey } : {}),
-    ...paneStatusEnv,
-  };
+  // EXPLICIT MAIN-ISSUED ORDER: ambient base, then CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, then Video
+  // Scout's safeStorage GEMINI_API_KEY when applicable, then this exact enrollment-produced
+  // paneStatusEnv. Neither pane-status entry is recovered from process.env, and no environment value
+  // is logged. For unfenced panes, stripAdmissionEnv removes admission keys from the inherited PTY
+  // environment; for fenced panes those keys are absent because they are outside Tier 1. This filters
+  // inheritance only; it creates no same-user filesystem isolation. APPDATA and USERPROFILE remain
+  // available, and a same-user process can still locate the ledger. The ledger remains an
+  // ACCIDENTAL-SPEND control, not a security boundary against a malicious or compromised pane.
+  const fencedRole = !opts.videoScout && opts.role && FENCED_ROLES.has(opts.role);
+  const ptyEnv = buildPtyEnv({
+    baseEnv: process.env,
+    fencedRole,
+    videoScout: opts.videoScout,
+    geminiKey,
+    paneStatusEnv,
+  });
   let p;
-  tlog(`pty-start: env built — CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, GEMINI_API_KEY ${opts.videoScout ? 'injected (video-scout)' : 'not added by app (check for setx residue)'}`);
+  const envMode = fencedRole ? 'fenced-tier-1' : 'unfenced-current';
+  tlog(`pty-start: env built — mode=${envMode}; scrub=forced; video-scout-key=${opts.videoScout ? 'explicit' : 'not-explicit'}; pane-status=${paneStatusEnrollment.ok ? 'enrolled' : 'not-enrolled'}`);
   tlog(`pty-start: pty.spawn START cwd=${cwd}`);
   try {
     p = pty.spawn('powershell.exe', args, {

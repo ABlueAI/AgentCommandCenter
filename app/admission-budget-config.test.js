@@ -184,13 +184,20 @@ process.stdout.write('\n-- required test 18: PTY environment scrub --\n');
 process.stdout.write('\n-- source tripwires --\n');
 {
   const mainSrc = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
-  assert(mainSrc.includes('admissionConfig.stripAdmissionEnv(process.env)'),
-    'main.js builds the PTY environment from stripAdmissionEnv(process.env), not from process.env directly');
-  // The spread that builds ptyEnv must not start from raw process.env any more. Catching the literal
-  // is crude but it is exactly the regression that would silently re-leak the configuration.
-  const ptyEnvBlock = mainSrc.slice(mainSrc.indexOf('const ptyEnv = {'), mainSrc.indexOf('const ptyEnv = {') + 400);
-  assert(ptyEnvBlock.length > 0 && !/\.\.\.process\.env\b/.test(ptyEnvBlock),
-    'the ptyEnv literal no longer spreads raw process.env');
+  const ptyEnvSrc = fs.readFileSync(path.join(__dirname, 'pty-env.js'), 'utf8');
+  const envStart = mainSrc.indexOf('const ptyEnv = buildPtyEnv({');
+  const envEnd = envStart < 0 ? -1 : mainSrc.indexOf('let p;', envStart);
+  assert(envStart >= 0 && envEnd > envStart,
+    'main.js constructs the real ptyEnv through buildPtyEnv at a bounded source region');
+  const ptyEnvBlock = envStart >= 0 && envEnd > envStart ? mainSrc.slice(envStart, envEnd) : '';
+  assert(ptyEnvBlock.includes('baseEnv: process.env,'),
+    'main.js passes the actual process environment to the centralized PTY builder');
+  assert(!/\.\.\.process\.env\b/.test(ptyEnvBlock),
+    'the real main.js ptyEnv construction never spreads raw process.env');
+  assert(ptyEnvSrc.includes(': stripAdmissionEnv(baseEnv);'),
+    'pty-env.js preserves stripAdmissionEnv as the unfenced ambient construction path');
+  assert(ptyEnvSrc.includes('? copyAllowedWindowsEnv(baseEnv, FENCED_ENV_ALLOWLIST)'),
+    'pty-env.js builds fenced ambient inheritance only through the fixed allowlist copier');
   assert(mainSrc.includes('parseAdmissionConfig(process.env)'),
     'main.js parses the admission plan once, from its own startup environment');
   assert(mainSrc.includes('prepareAdmissionPaneLaunch({'),
