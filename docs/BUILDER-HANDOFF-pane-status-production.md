@@ -44,16 +44,27 @@ quoting, then caret-escapes cmd metacharacters **and the space**:
 
 Evidence and the full candidate matrix are in § 3 below.
 
-### 0.3 ENROLLED PER-TOOL-CALL OVERHEAD IS NOT YET MEASURED
+### 0.3 ENROLLED PER-TOOL-CALL OVERHEAD — ONE OBSERVATION, ONLY PARTLY ATTRIBUTABLE
 
-> **ENROLLED PER-TOOL-CALL OVERHEAD IS NOT YET MEASURED.**
-> **PRETOOLUSE AND POSTTOOLUSE PRODUCE TWO REPORTER INVOCATIONS PER TOOL CALL.**
-> **THIS IS A REQUIRED CONTROLLED-LIVE ACCEPTANCE MEASUREMENT, NOT EVIDENCE ESTABLISHED BY THE
-> 200-RUN UNENROLLED HARNESS.**
+> **CORRECTED BY WORK ORDER 16.** This banner previously read, in full, "ENROLLED PER-TOOL-CALL
+> OVERHEAD IS NOT YET MEASURED." Work Order 15 took exactly one controlled enrolled measurement, so
+> the unqualified claim is no longer true and is corrected here rather than left standing. The
+> measurement and its disposition are in § 19.D.
+>
+> **PRETOOLUSE AND POSTTOOLUSE STILL PRODUCE TWO REPORTER INVOCATIONS PER TOOL CALL.**
+> **ONE enrolled PreToolUse observation IS attributable to pane status: 382 ms at `num_hooks: 1`.**
+> **The PostToolUse observation, 406 ms, is an AGGREGATE across two successful runtime hooks, and NO
+> portion of it is assigned to pane status.**
+> **THIS IS ONE CONTROLLED OBSERVATION. It is not a distribution, stability, p50, p95, or general
+> performance claim, and it is still not evidence established by the 200-RUN UNENROLLED HARNESS.**
 
 The 200-run harness measured the **unenrolled** chain at **p50 336 ms**. Two invocations per tool call
 implies roughly **0.67 s of added latency per tool call** if the enrolled path costs the same — and
 nobody has shown that it does. Treat the number as a floor, not a result.
+
+One enrolled PreToolUse observation now exists (§ 19.D). One observation does not convert this floor
+into a result, and it is deliberately **not** compared against the 200-run p50: a single sample and a
+200-run distribution are not comparable quantities.
 
 ---
 
@@ -537,9 +548,11 @@ method B is required immediately before live acceptance; any difference stops th
 | Blue Helm windows appeared | **0** |
 | enrolled? | **no** — the pane variables are deliberately absent |
 
-> **ENROLLED PER-TOOL-CALL OVERHEAD IS NOT YET MEASURED. PRETOOLUSE AND POSTTOOLUSE PRODUCE TWO
-> REPORTER INVOCATIONS PER TOOL CALL. THIS IS A REQUIRED CONTROLLED-LIVE ACCEPTANCE MEASUREMENT, NOT
-> EVIDENCE ESTABLISHED BY THE 200-RUN UNENROLLED HARNESS.**
+> **SUPERSEDED IN PART BY § 19.D (Work Order 16).** As written for the 200-run harness this said
+> "ENROLLED PER-TOOL-CALL OVERHEAD IS NOT YET MEASURED"; one enrolled PreToolUse observation now
+> exists. What still stands unchanged: **PRETOOLUSE AND POSTTOOLUSE PRODUCE TWO REPORTER INVOCATIONS
+> PER TOOL CALL**, and **the 200-RUN UNENROLLED HARNESS ESTABLISHES NOTHING ABOUT THE ENROLLED
+> PATH.** The table above remains an unenrolled result.
 
 ### The `+` metacharacter claim — withdrawn
 
@@ -1683,7 +1696,13 @@ Only the live run can establish that.
 the application would launch. It does **not** establish that the eight hook events fire, that the
 reporter still inherits its pipe and token, or that hook timing is unchanged.
 
-**Progress remains 80%.**
+**RESOLVED — see § 19 (Work Order 16).** Work Order 15 subsequently ran live on 2.1.241 and returned
+PASS WITH DOCUMENTED MEASUREMENT RESIDUAL. All eight event groups installed and the reporter did
+inherit its pipe and token on 2.1.241, so the admission is **no longer provisional**. The paragraph
+above is retained unedited because it was accurate when written; only this resolution is added.
+
+**Progress at Work Order 15A: 80%** — a point-in-time snapshot, not a standing claim. Current status
+is § 19.G.
 
 ## 15.6 Scope
 
@@ -1783,7 +1802,7 @@ authorization for broader edits.
 | 4 | Every changed-path count matches `git diff --name-status` | **PASS** — three paths, verified against `--name-status`; the WO15A "Two tracked paths" wording is corrected in § 15.6. |
 | 5 | Every test total is derived from observed summaries | **PASS** — totals are read from suite output, not predicted. |
 | 6 | No inherited result is described as freshly run | **PASS** — Pester is labelled INHERITED and the diff proves no PowerShell file changed. |
-| 7 | No provisional version admission is described as live compatibility | **PASS** — § 15.5 states the admission is provisional until Work Order 15 passes; nothing here claims 2.1.241 live compatibility. |
+| 7 | No provisional version admission is described as live compatibility | **PASS as of Work Order 15A-R** — § 15.5 stated the admission was provisional until Work Order 15 passed, and nothing in § § 1–18 claimed 2.1.241 live compatibility. **Updated by Work Order 16:** § 19 now records live acceptance on 2.1.241, so the admission is no longer provisional and § 15.5 carries the resolution note. The check itself is unchanged — a live-acceptance claim is now backed by a live run. |
 
 **Audit finding.** Check 4 caught a real defect in this document: the WO15A scope statement said
 "Two tracked paths ... plus this document", which undercounted its own three-path diff. Corrected in
@@ -1816,3 +1835,192 @@ would let the paragraph above be read as a claim that the Electron-family signat
 It is not such a claim in either direction: two review executions showed it, this builder execution
 did not, and three observations establish nothing about a distribution. The independent review's
 observation is carried forward unchanged and is not reclassified by this run.
+
+---
+
+# 19. LIVE ACCEPTANCE — controlled enrolled run on Claude Code 2.1.241 (Work Order 16)
+
+Recorded from the Work Order 15 controlled live-acceptance exercise executed against reviewed content
+tip `4d78cbd68690b3629d520396f728522a048a4d6c`. This section is the administrative tail: it changes
+no production source, test, configuration, dependency or lockfile.
+
+## 19.A Version boundary
+
+| Item | Recorded value |
+|---|---|
+| Probe timestamp | `2026-08-25T02:47:58Z` |
+| Parsed version | `2.1.241` |
+| Raw resolver output | exactly `2.1.241 (Claude Code)` |
+| Parser used | the **production** parser in `app/pane-status/pane-status-version.js` — not a local regex |
+| Executable path | matched the previously probed installation (`path_match: true`) |
+| Line endings | CRLF, as previously observed |
+| Allowlist | admitted by the shipped frozen `SUPPORTED_CLAUDE_VERSIONS` |
+
+`DISABLE_AUTOUPDATER=1` was set **process-local only**, in the launched process environment. It was
+never persisted. Verified after the exercise: **no telemetry or autoupdate variable is set at User or
+Machine scope** — `CLAUDE_CODE_ENABLE_TELEMETRY`, `OTEL_LOGS_EXPORTER`,
+`OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`, `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_METRICS_EXPORTER`,
+`OTEL_LOGS_EXPORT_INTERVAL`, `DISABLE_AUTOUPDATER` and `DISABLE_TELEMETRY` all read `none` at both
+scopes. The installed version was still `2.1.241` afterwards, so the pin held for the whole run.
+
+## 19.B Paid-turn proof
+
+- **Exactly one** provider turn was consumed.
+- **Exactly one** `Read` tool call was made.
+- **No other tool** was used, and there was **no retry**.
+- **Blue explicitly confirmed the reply was exactly `PANE_STATUS_LIVE_OK`.**
+
+The single tool call is independently visible in the telemetry of § 19.D as exactly one
+`PreToolUse:Read` and exactly one `PostToolUse:Read`.
+
+## 19.C Lifecycle proof
+
+Observed sequence:
+
+```
+enrolled
+  -> SessionStart      / idle
+  -> UserPromptSubmit  / working
+  -> PreToolUse        / working
+  -> PostToolUse       / working
+  -> Stop              / turn ended
+  -> SessionEnd        / exited
+```
+
+What this establishes, stated no more strongly than the run supports:
+
+- **`PreToolUse` arrived while the pane was already `working`, and correctly produced no second
+  visible transition.** A state machine that re-rendered here would have been wrong.
+- **`PostToolUse` was refresh-only.** It caused no state change, false or otherwise.
+- **The badge never reported `finished`.** `Stop` rendered `turn ended`, which is the intended
+  wording; `finished` would have overclaimed completion of work the application cannot observe.
+- **`SessionEnd` was accepted while the token remained valid**, and the pane became `exited`.
+
+### The earlier unknown-token result was not a product defect
+
+Work Order 13 saw `SessionEnd` refused as an unknown token. The cause was **sequencing in the
+exercise, not the product**: the pane was released 296 ms *before* `SessionEnd` arrived, so by the
+time the event reached the listener the token had already been legitimately revoked. Refusing an
+event bearing a revoked token is the fail-closed behaviour the design requires.
+
+The correction cost **zero paid turns**: exiting the Claude session first and selecting Remove only
+afterwards left the token valid long enough for the event to land. That is what § 19.C records.
+
+## 19.D Telemetry
+
+Captured through a loopback-only OTLP receiver that retained exactly five fields per record and never
+wrote or printed a raw request body. The complete retained capture, verbatim:
+
+```json
+{"hook_event":"PreToolUse","hook_name":"PreToolUse:Read","num_hooks":"1","num_success":"1","total_duration_ms":"382"}
+{"hook_event":"PostToolUse","hook_name":"PostToolUse:Read","num_hooks":"2","num_success":"2","total_duration_ms":"406"}
+```
+
+| Field | PreToolUse | PostToolUse |
+|---|---|---|
+| `hook_name` | `PreToolUse:Read` | `PostToolUse:Read` |
+| `num_hooks` | **1** | **2** |
+| `num_success` | **1** | **2** |
+| `total_duration_ms` | **382** | **406** |
+
+### Disposition
+
+- **PreToolUse is one attributable pane-status observation of 382 ms.** `num_hooks: 1` means the
+  reporter was the only hook that ran, so the duration belongs to it.
+- **PostToolUse is an aggregate 406 ms across two successful runtime hooks.**
+- **No portion of the 406 ms is assigned to pane status.** Not a half, not a proportion, not an
+  estimate. The measurement does not decompose and it will not be made to.
+- **The second runtime hook was not exposed by Claude Code’s read-only hook inventory.** The `/hooks`
+  view reported `PostToolUse (1)`, and the settings file independently agreed: one entry, one
+  `command` hook, empty matcher. That is the whole finding. **It is not claimed to be proven
+  internal to Claude Code** — the inventory simply does not account for the second execution, and
+  this exercise did not establish what does.
+- **This is one controlled observation only.** No distribution, stability, p50, p95, or general
+  performance characteristic is claimed or implied.
+
+### Objective A is ACCEPTED WITH RESIDUAL, not PASS
+
+The residual is **provider/runtime telemetry attribution**, not a pane-status product defect. Pane
+status reported correctly at every event; what is missing is the ability to attribute an aggregate
+PostToolUse duration to a single hook when the runtime runs more hooks than the inventory lists.
+
+**This residual does not authorize another paid measurement campaign.** It is recorded so that a
+later reader does not mistake the aggregate for a pane-status cost, and so that nobody re-runs a paid
+exercise expecting a cleaner number that this build cannot produce.
+
+### Method finding worth carrying forward
+
+A settings-file hook count is **necessary but not sufficient** for attribution. The preflight for this
+run counted hooks in `settings.json` and reported `PostToolUse: 0`, while the runtime reported
+`num_hooks: 2`. **`num_hooks` in the telemetry record is the only authoritative attribution check.**
+Any future timing claim must be gated on it, not on a configuration count.
+
+## 19.E Cleanup
+
+| Check | Result |
+|---|---|
+| All eight owned event groups removed | **YES** |
+| `hooks` key in Claude settings | **ABSENT** |
+| Unrelated settings preserved | **byte-identical** — `effortLevel`, `model`, `permissions`, `theme`, `tui`; 0 keys added, 0 removed |
+| Wholesale baseline restoration | **NONE** — the surviving keys were never overwritten from a backup |
+| Shim | **ABSENT** (`pane-status-reporter.cmd` not present anywhere under user data) |
+| Descriptor | **ABSENT** (`pane-status-installation.json`) |
+| Pane-status named pipes | **0** |
+| Stray pane-status harnesses | **0** |
+| OTLP receiver | **stopped**; its loopback port is no longer listening |
+| Emergency settings baseline | **deleted after target verification**; the live settings file was not touched by the deletion |
+| Raw telemetry capture | **never existed** — only the five sanitized fields were ever written |
+| Telemetry variables persisted | **NONE** at User or Machine scope |
+
+Two residuals are deliberate and recorded rather than removed:
+
+- **`pane-status-install-id` remains** in the application user-data directory. This is the documented
+  **nonsecret** residual: a 32-hex-character identifier that lets a later install recognise its own
+  prior ownership. It is not the shim, not the descriptor, and it grants nothing.
+- **The owner directory `<userData>/pane-status/` remains and is empty** (0 entries, including
+  hidden). The shim it once contained is gone. `pane-status-settings-txn.js` states the reason
+  directly: the shim *directory* is not decisive, because another file in it or a handle held by an
+  indexer must not be allowed to fail a removal. Removal is judged on the shim file, the descriptor,
+  and the settings groups — all three of which are clear.
+
+## 19.F AGR standing history
+
+**Three consecutive independent verification runs** observed both named Dockview suites failing
+*before* product assertions, with the same Electron/GPU `0xC0000135` family signature, while the
+reviewed focused ranges changed **neither Dockview nor its launch dependencies**.
+
+That sentence is the entire claim. Explicitly:
+
+- This is **standing exception history**. It is **not** a stability claim and **not** an N>=20
+  measurement campaign.
+- It does **not** extend to any other suite.
+- It does **not** extend to a product assertion — see the § 14 entry where a Dockview suite failed on
+  a genuine product assertion, which this history does not cover.
+- It does **not** extend to another signature, to an omitted suite, or to a retry.
+- It does **not** license routing a future failure around the gate. Admissibility of any AGR
+  exception remains an independent-review decision, not a builder decision.
+
+The § 18 record stands unchanged, including the note that the Work Order 15A-R **builder** gate run
+did **not** reproduce the signature (`dockview-bootstrap` 203/0, `dockview-app-integration` 296/0,
+each attempted once). Builder gate runs are not independent verification runs; both records are kept
+because suppressing either would misrepresent the signature as more — or less — persistent than the
+observations support.
+
+## 19.G Final status
+
+| Item | Status |
+|---|---|
+| Live acceptance | **PASS WITH DOCUMENTED MEASUREMENT RESIDUAL** |
+| Objective A — bounded PreToolUse and PostToolUse measurement | **ACCEPTED WITH RESIDUAL** (§ 19.D) |
+| Objective B — `SessionEnd` observed as `exited` | **PASS** (§ 19.C) |
+| Pane-status production | **90%** |
+| Merge | **outstanding** |
+| Push | **outstanding** |
+
+**No production source, test, configuration, dependency, or lockfile changed after reviewed content
+tip `4d78cbd68690b3629d520396f728522a048a4d6c`.** The only tracked change in the administrative tail
+is this document.
+
+Percentages recorded in earlier sections (70% at § 9 and § 14, 80% at § 15.5) are **point-in-time
+snapshots** taken when those work orders closed. This section supersedes them; they are retained
+rather than rewritten so the progression stays auditable.
