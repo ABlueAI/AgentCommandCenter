@@ -6,7 +6,7 @@ Fork-point SHA: `d64192ba680d932623e5557793a159076e26d8d6`
 
 Pre-merge main SHA: `d64192ba680d932623e5557793a159076e26d8d6`
 
-Reviewed content tip SHA: `7297b76a3b88e8d017ee61ec08239d10ae69bb00`
+Reviewed content tip SHA: `f4f0814928fbbffa972da7df74a0c81dad31fbb1`
 
 Branch tail: this handoff document only; the reviewed content tip above is the
 three-dot review endpoint.
@@ -75,13 +75,63 @@ verbatim:
 
 > authorize revision 5
 
-Revision 5 is limited to a closed conservative reserved-family invariant, a
-generated whole-Unicode alias corpus, direct ConPTY lookup measurements,
-`__proto__`-safe copying, main-issued-first defense-in-depth ordering, accurate
-comments, the same source pins and AGR tree, and an updated artifact packet. It
+Revision 5 was limited to its then-proposed closed conservative reserved-family
+invariant, a generated Unicode single-substitution corpus, direct ConPTY lookup
+measurements, `__proto__`-safe copying, main-issued-first construction, comments,
+the same source pins and AGR tree, and an updated artifact packet. It
 has the same exact four-path cap as Revisions 3 and 4 and authorizes no
 `main.js`, package, dependency, lockfile, provider-session, merge, or push
 change.
+
+The independent Revision 5 review retained this controlling verdict verbatim:
+
+> VERDICT: FAIL — CHANGES REQUESTED — NOT AUTHORIZED FOR MERGE
+
+It confirmed the containment property and found four accuracy blockers: the
+single-substitution corpus omitted underscore-folding scalars; U+FB01 produced
+no reserved alias without explicit accounting; the pinned `main.js` comment
+described the opposite construction order and overstated pane-status copying;
+and the main-issued-first defense-in-depth rationale was not measured at the
+production spawn boundary. Blue authorized the bounded Revision 6 correction
+verbatim:
+
+> AUTHORIZE REVISION 6.
+
+Revision 6 is test, assertion, comment, pin, and evidence work only. It permits
+no production-logic change. Its exact six paths are `app/pty-env.js`,
+`app/pty-env.test.js`, `app/main.js`,
+`app/launcher-fence-invariant.test.js`, `BLUE-HELM-MASTER-STATUS.md`, and this
+handoff-only tail. All six are already members of the cumulative eight-path cap;
+the cumulative cap therefore cannot grow. Revision 6 deliberately reopens
+`main.js` after three four-path revisions, but only to correct the two inaccurate
+comments inside the pinned handler.
+
+### Revision 6 pre-registered pin predictions and B4 stop rule
+
+These predictions were written before the Revision 6 `main.js` edit and before
+any pin was remeasured:
+
+- The `229`-byte P1 environment block is exactly the executable statements from
+  `const fencedRole = ...` through the closing `});`, normalized to LF with a
+  trailing newline and containing zero comment bytes. A comment-only edit
+  outside that block cannot move its length or SHA-256. **If it moves, the edit
+  exceeded Revision 6 scope and work stops.**
+- The `1326`-byte fenced-role cwd gate is a different source region. Revision 6
+  does not edit it. **If its length or SHA-256 moves, the edit exceeded scope and
+  work stops.**
+- The `13205`-byte full `pty-start` handler includes the inaccurate comment and
+  therefore must move. Its replacement pin is accepted only alongside a pinned
+  `main.js`-only diff from `4372f9f` proving that the handler delta is comment-
+  only; a passing self-updated tripwire is not treated as independent proof.
+
+Before final comment wording, the installed node-pty/ConPTY path will receive a
+canonical name and ASCII-case alias in both insertion orders and report both the
+canonical lookup value and the full relevant child name list. The decision is
+pre-registered: local first-wins evidence permits retaining the current
+construction with narrowly local wording; last-wins means the current direction
+is wrong and Revision 6 stops because reversing it is a production-logic change;
+collapse before both names arrive retires the defense-in-depth rationale; any
+ambiguous outcome also stops for direction.
 
 The controlling OSS disposition is verbatim:
 
@@ -114,12 +164,19 @@ by lowercase then uppercase produces an exact printable-ASCII reserved name.
 This is a deliberate conservative denylist superset, not a claim that JavaScript
 reproduces Windows NLS comparison. Video Scout additionally reserves
 `GEMINI_API_KEY`; if the main-issued key is not a non-empty string, the name
-remains absent rather than falling back to ambient residue. Main then places,
-in order, before the filtered ambient entries:
+remains absent rather than falling back to ambient residue. The builder's object
+literal constructs these explicit string entries before spreading the filtered
+ambient object:
 
 1. `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1`;
 2. Video Scout's safeStorage `GEMINI_API_KEY`, only for Video Scout;
-3. only the two exact main-issued pane-status transport entries.
+3. at most the two exact pane-status transport names, only when their values are
+   strings.
+
+This is construction order, not a universal `Object.keys` enumeration claim:
+integer-like ambient names enumerate first under JavaScript rules. The local
+node-pty/ConPTY duplicate measurement is recorded separately, and containment
+does not depend on either ordering behavior.
 
 That correction is reserved-key-only. Unrelated unfenced ambient duplicates
 such as `Path`/`PATH` remain untouched because globally choosing a winner could
@@ -161,6 +218,15 @@ Revision 5 has the same exact four-path cap: `app/pty-env.js`,
 Its content commit changes exactly the first three; the final tail changes only
 this handoff. The cumulative branch remains exactly the same eight paths.
 
+Revision 6 has an exact six-path cap: `app/pty-env.js`,
+`app/pty-env.test.js`, `app/main.js`,
+`app/launcher-fence-invariant.test.js`, `BLUE-HELM-MASTER-STATUS.md`, and this
+handoff-only tail. Its content commit changes exactly the first five; the final
+tail changes only this handoff. Every R6 path is already in the cumulative list
+above, so the cumulative branch remains exactly eight paths. `main.js` is
+reopened after three revisions that excluded it, but its R6 delta is comment-
+only and separately pinned.
+
 ## Security-sensitive surfaces touched
 
 - `ipcMain.handle('pty-start') -> buildPtyEnv -> pty.spawn`
@@ -185,7 +251,7 @@ collision resolves deterministically to first insertion. Missing entries are
 not invented. Unicode aliases such as `Oſ`, `SyſtemRoot`, and `Programﬁles` are
 rejected rather than folded into allowlisted names.
 
-The 176-assertion suite poisons credential, provider, business, admission,
+The 185-assertion suite poisons credential, provider, business, admission,
 host-tooling, unknown, Tier 2, and pane-status-shaped variables; exercises all
 six roles plus Video Scout, bare CLI, and plain shell; proves explicit
 pane-status filtering and reserved-name collision removal; proves
@@ -193,25 +259,39 @@ pane-status filtering and reserved-name collision removal; proves
 detector negative control and names-only production ConPTY measurement; and
 structurally traces the builder output into the single `pty.spawn`.
 
-Revision 4's named aliases are retained as history. Revision 5 replaces their
-open enumeration with a generated whole-Unicode conservative corpus. For every
-Unicode scalar value, the test independently applies NFKC/lower/upper; when a
-non-ASCII character becomes ASCII letters that can replace a substring in one
-of the four reserved canonical names, the resulting alias enters the corpus.
-The complete generated corpus contains more than 1,000 aliases. One constructed
-environment contains all of them, and the oracle requires each reserved family
-to be absent or represented exactly once in canonical ASCII spelling. The
-reviewer-named U+00DF, U+0131, U+017F, U+FB01, U+FB05, U+FB06, U+212A, and
-U+1E9E mappings are asserted explicitly. `ſAFE_HARBOR` traverses the
-ASCII-collapse path but is non-reserved and remains present.
+Revision 4's named aliases are retained as history. Revision 5 introduced a
+generated Unicode single-substitution corpus but incorrectly filtered candidate
+folds to letters and described that bounded corpus as complete. Revision 6
+removes the character-class pre-filter entirely: for every Unicode scalar, the
+test independently applies NFKC/lower/upper and asks each frozen canonical name
+directly whether the entire folded string is a substring. The resulting corpus
+contains exactly `3165` aliases on the tested runtime, including scalars that
+fold to underscore. Its boundary is explicit: it is exhaustive for one-scalar
+substitutions, not combinatorial multi-substitutions. Whole-string production
+folding covers composition, proven by `GEMıNı_API_KEY` and
+`BLUE_HELM_PANE_ﬅATUſ_PIPE` controls. One constructed environment contains the
+whole generated corpus plus both controls, and the closed oracle requires each
+reserved family to be absent or represented exactly once in canonical ASCII
+spelling.
+
+The expected reviewer-code-point representative set is derived from the same
+canonical-substring rule and compared as an exact set. U+FB01 folds to `FI` and
+produces no reserved alias because none of the current canonical names contains
+`FI`; if a future name gains that substring, the derived set changes without a
+magic count. `ſAFE_HARBOR` still traverses the ASCII-collapse path but is non-
+reserved and remains present.
 
 The strict ASCII fold remains the only allowlist mechanism. The conservative
 fallback is reachable only from reserved-name omission and can remove but never
 admit. A null-prototype intermediate preserves an own `__proto__` ambient key
 without invoking a prototype setter, and the helper still returns a plain
-object. Canonical main-issued values are placed before filtered ambient values
-as defense in depth; correctness does not depend on ordering because the whole
-conservative reserved family is removed first.
+object. The code constructs canonical main-issued values before spreading the
+filtered ambient object. The installed node-pty/ConPTY path locally measured
+first-inserted lookup when both ASCII-case variants genuinely reached the child
+in both orders. That is local evidence only, not a Windows invariant.
+Correctness does not depend on ordering because the whole conservative reserved
+family is removed first; integer-like ambient names follow JavaScript's own
+enumeration rules and may enumerate before the canonical strings.
 
 ### B1 — corrected mechanism and production measurement
 
@@ -343,21 +423,25 @@ dependency tree. The lockfile is unchanged and procurement does not reopen.
 
 ## Re-pinned committed regions
 
-The pins were rechecked from normalized `git show
-7297b76a3b88e8d017ee61ec08239d10ae69bb00:app/main.js` bytes. Revisions 2, 3,
-4, and 5 did not modify `main.js`, so every Revision 1 pin remains exact:
+The Revision 6 handoff pre-registered the pin outcomes before `main.js` changed.
+The pins were then rechecked from normalized `git show
+f4f0814928fbbffa972da7df74a0c81dad31fbb1:app/main.js` bytes:
 
 - fenced-role cwd gate, unchanged: length `1326`, SHA-256
   `9a1255f1e81e0a9e4e289ab15380707dd6bcc1d410ffd16f44adddb99b16f8c6`
 - P1 environment block: length `229`, SHA-256
   `18cf42b434ee922ee61194d9316150c0b766591e063d0b0545f6aebc8d85cb54`
-- Revision 1 `pty-start` handler: length `13205`, SHA-256
-  `14d3ae60ed6ea32e4231fdef7d0979e160207b0580466f53178a4b9f86098486`
+- Revision 6 `pty-start` handler: length `13484`, SHA-256
+  `ab6f6cd37752029c52d4a89fb99331a319f8b032a011b297d78d22beeafea161`
 
-The Revision 1 handler restores the required inherited-key effect,
-`APPDATA`/`USERPROFILE` visibility, and accidental-spend threat-boundary
-statements. Executable statements in the P1 environment block were unchanged
-from the first P1 gate attempt.
+As predicted, the separate `1326` gate and comment-free `229` executable block
+remain byte-identical. Only the wider handler moved because it contains the
+corrected comment. The old `13205` /
+`14d3ae60ed6ea32e4231fdef7d0979e160207b0580466f53178a4b9f86098486`
+pin is retained in launcher history. The dedicated R6 `main.js`-only artifact
+from `4372f9f` proves the source delta is comment-only: an independent scan of
+its added/removed lines counted `11` changed lines and `0` non-comment changed
+lines.
 
 ## Commands run and exact results
 
@@ -383,6 +467,12 @@ Fresh Revision 4 focused Node gates:
 Fresh Revision 5 focused Node gates:
 
 - `node app/pty-env.test.js` — **176 passed, 0 failed, 0 skipped**
+- `node app/launcher-fence-invariant.test.js` — **26 passed, 0 failed**
+- `node app/admission-budget-config.test.js` — **86 passed, 0 failed**
+
+Fresh Revision 6 focused Node gates:
+
+- `node app/pty-env.test.js` — **185 passed, 0 failed, 0 skipped**
 - `node app/launcher-fence-invariant.test.js` — **26 passed, 0 failed**
 - `node app/admission-budget-config.test.js` — **86 passed, 0 failed**
 
@@ -441,6 +531,13 @@ sandbox:
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
   scripts/run-pester.ps1` — **955 passed, 0 failed, 0 skipped (of 955)**, exit
   `0`, in `136.64s`.
+
+Revision 6 reran that authoritative gate outside the restricted filesystem
+sandbox:
+
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+  scripts/run-pester.ps1` — **955 passed, 0 failed, 0 skipped (of 955)**, exit
+  `0`, in `136.58s`.
 
 ### App gate and AGR routing
 
@@ -581,6 +678,33 @@ or product assertion. Unlike Revision 4, Revision 5 retains the suffix's final
 exit code. This packet routes the exact evidence to independent review; it does
 not grant its own exception or merge authorization.
 
+### Revision 6 fork-point control and fresh branch gate
+
+Revision 6 repeated the same narrow tree from a new exact-fork materialization
+of tracked `app/` at `d64192ba680d932623e5557793a159076e26d8d6`, linked only
+to the already-installed branch dependencies. The temporary fork's bootstrap
+file again measured SHA-256
+`071d3dd18f37e990862c92d836d947d2d28535436fa9428e867948e0dc1f5e67`.
+Each control ran once:
+
+- `node dockview-bootstrap.test.js` — exit `1`; the two-report parser failure at
+  position `259`, `render-process-gone` / `loadFile ERR_FAILED`, and GPU exit
+  `-1073741515` (`0xC0000135`);
+- `node dockview-app-integration.test.js` — exit `1`; no report, production
+  `loadFile ERR_FAILED`, and GPU exit `-1073741515` (`0xC0000135`).
+
+The fresh branch `npm.cmd test` invocation ran once, confirmed all 88 registered
+suites, and stopped at bootstrap before product assertions with the exact
+fork-point-matched signature. The next unexecuted integration suite ran once and
+stopped before assertions with its fork-point-matched signature. The registered
+suffix from `renderer/dockview-fit-policy.test.js` through the final suite ran
+once and exited `0`; the Revision 6 `pty-env.test.js` was green at **185/0/0**.
+
+All **88 registered suites were attempted exactly once**: **86 green**, only
+the two named pre-assertion AGR candidates, no retry, omission, other failure,
+or product assertion. This packet routes the evidence to independent review and
+does not grant its own AGR exception or merge authorization.
+
 The exact user-issued AGR rule was:
 
 - run once, with no retry;
@@ -620,9 +744,10 @@ gates above.
   real parent. That is not the production PTY mechanism and is not generalized
   into a claim about Windows or ConPTY.
 - Windows resolution of case-equivalent names in a duplicate-bearing
-  environment block is treated as unspecified. The JavaScript conservative
+  environment block is not generalized from one VM. The JavaScript conservative
   fold is explicitly not claimed to reproduce Windows NLS comparison. The
-  direct ConPTY results are local platform evidence only. Revision 5 guarantees
+  direct ConPTY result — both names arrived and canonical lookup was first-wins
+  in both insertion orders — is local platform evidence only. Revision 6 guarantees
   one canonical entry for each reserved/main-issued family under the documented
   conservative superset; unrelated unfenced ambient duplicates remain a
   separate known item.
@@ -634,36 +759,45 @@ gates above.
   filtering invariant.
 - The two Dockview pre-assertion observations require independent AGR
   disposition before merge authorization.
-- Revision 4's suffix exit-code gap remains historical evidence. Revision 5 ran
-  a fresh gate under the same authorized tree and retained the suffix exit `0`.
+- Revision 4's suffix exit-code gap remains historical evidence. Revisions 5 and
+  6 each ran a fresh gate under the same authorized tree and retained suffix
+  exit `0`.
+- A late per-case ConPTY unavailability still returns one aggregate SKIP and
+  discards earlier successful production-probe evidence from that invocation.
+  This is fail-safe but less informative than per-case partial accounting.
+- The unfenced parity path intentionally preserves pre-P1 non-string ambient
+  values. P1 does not type-normalize arbitrary unfenced environment values.
 
 ## Recommended Full-class review focus
 
-Focused Full-class re-review is requested for the Revision 4 blockers, artifact
+Focused Full-class re-review is requested for the Revision 5 blockers, artifact
 coverage, and AGR evidence:
 
-1. Verify the conservative fold is denylist-only, is not presented as Windows
-   NLS equivalence, covers the whole independently generated alias corpus, and
-   cannot admit a fenced allowlist name.
-2. Verify the closed oracle: for each of the four reserved canonical families,
-   the final environment contains either no member or exactly one member in the
-   canonical ASCII spelling. Check the generated whole-corpus construction and
-   the reviewer-named code-point assertions rather than only named fixtures.
-3. Verify `ſAFE_HARBOR` reaches the ASCII-collapse/non-reserved branch and is
-   retained; verify own `__proto__` is preserved safely and the returned value
-   remains a plain object.
-4. Verify main-issued keys are ordered before filtered ambient entries as
-   defense in depth, while the guarantee itself is independent of order.
-5. Verify each direct ConPTY platform case first proves the exact alias entered,
-   then records canonical lookup; distinguish the local observed empty Unicode
-   resolution set from the conservative cross-platform invariant.
-6. Artifact coverage: use the complete `main.js` source artifact for
-   `FENCED_ROLES`, `buildAgentCommand`, and the sender boundary; use the external
-   tail artifact for this post-content handoff commit.
-7. AGR: compare each once-only Revision 5 fork-point and branch observation
+1. Verify corpus eligibility is derived solely from folded-string membership in
+   the canonical names, includes underscore folds, and is honestly bounded to
+   exhaustive single-scalar substitution. Verify both composed controls exercise
+   whole-string folding and leave only canonical reserved families.
+2. Verify the reviewer-code-point expected set is derived by the same rule and
+   compared for exact equality. Confirm U+FB01's current exclusion follows from
+   the absence of `FI`, without a hard-coded representative count.
+3. Verify the duplicate-bearing ConPTY probe records the full relevant name list
+   and exactly one canonical lookup in both orders. Treat first-wins as local
+   evidence only; confirm last-wins or ambiguous would fail.
+4. Verify the integer-like ambient key disproves the old universal enumeration
+   assertion and that no current text presents construction order as the
+   containment invariant.
+5. Verify the pre-registered pin prediction: `1326` and `229` are exact, only the
+   handler moved to `13484` / `ab6f6cd3…`, and the dedicated `main.js`-only diff
+   from `4372f9f` contains comment changes only, correcting both inaccuracies.
+6. Verify the derived parent timeout and exactly-one marker checks close N1/N3;
+   confirm partial-result accounting and unfenced value typing are recorded as
+   limitations rather than new claims.
+7. Artifact coverage: use the cumulative, focused R6, complete `main.js`, and
+   R6 `main.js`-only artifacts; use the external tail artifact for this handoff.
+8. AGR: compare each once-only Revision 6 fork-point and branch observation
    against the supplied rule. Confirm the suffix from suite 3 through 88 exited
    `0` and that no retry or omission occurred.
-8. Verify the cumulative eight-path cap and the Revision 5 four-path cap.
+9. Verify the cumulative eight-path cap and the Revision 6 six-path cap.
 
 ## Review diff
 
@@ -672,44 +806,56 @@ Pinned cumulative artifact:
 
 Command:
 
-`git diff --output=.agent-review-codex-p1-fenced-role-env-containment.diff d64192ba680d932623e5557793a159076e26d8d6...7297b76a3b88e8d017ee61ec08239d10ae69bb00`
+`git diff --output=.agent-review-codex-p1-fenced-role-env-containment.diff d64192ba680d932623e5557793a159076e26d8d6...f4f0814928fbbffa972da7df74a0c81dad31fbb1`
 
-Pinned cumulative diff byte length: `117544`
+Pinned cumulative diff byte length: `136380`
 
 Pinned diff SHA-256:
-`72d0449a56a3fcc0aba518d6abca43aa668cad787c79565e3244c86f17684cdd`
+`cd9075f0ec5a6eae8c0390662b97e99e648352f8d252f7a6f17bb3b32203a1b0`
 
-Pinned focused Revision 5 artifact:
-`.agent-review-codex-p1-fenced-role-env-containment-r5.diff`
+Pinned focused Revision 6 artifact:
+`.agent-review-codex-p1-fenced-role-env-containment-r6.diff`
 
 Command:
 
-`git diff --output=.agent-review-codex-p1-fenced-role-env-containment-r5.diff 4cdb01b0b909fdffe2e135aa3d52a8090785931f...7297b76a3b88e8d017ee61ec08239d10ae69bb00`
+`git diff --output=.agent-review-codex-p1-fenced-role-env-containment-r6.diff ccd7de8be56ed46ed43078c26b031122ff2b57f2...f4f0814928fbbffa972da7df74a0c81dad31fbb1`
 
-Focused diff byte length: `31155`
+Focused diff byte length: `26358`
 
 Focused diff SHA-256:
-`94a12858ad62942921d1062bc651554f28a23e4e6197415038cf9604d4cff625`
+`55fe539f06354f93c4a5896f5aac30ebf4962576eb36b5cd94e85fbd078a5099`
 
 Pinned complete `main.js` source artifact:
 `.agent-review-codex-p1-fenced-role-env-containment-main-source.diff`
 
 Command:
 
-`git diff --output=.agent-review-codex-p1-fenced-role-env-containment-main-source.diff 4b825dc642cb6eb9a060e54bf8d69288fbee4904 7297b76a3b88e8d017ee61ec08239d10ae69bb00 -- app/main.js`
+`git diff --output=.agent-review-codex-p1-fenced-role-env-containment-main-source.diff 4b825dc642cb6eb9a060e54bf8d69288fbee4904 f4f0814928fbbffa972da7df74a0c81dad31fbb1 -- app/main.js`
 
-Main-source artifact byte length: `89559`
+Main-source artifact byte length: `89841`
 
 Main-source artifact SHA-256:
-`80a30280f0621bcabccb2c5ea67024c7ad2c8a159104f6868d70211067027257`
+`72c0df60a87630d3351e6cfbfae10b1e3feb5f7c1da8957216048d0163d8d187`
 
-All three content artifacts were regenerated to explicitly named twins,
+Pinned Revision 6 `main.js`-only comment artifact:
+`.agent-review-codex-p1-fenced-role-env-containment-r6-main-comment.diff`
+
+Command:
+
+`git diff --output=.agent-review-codex-p1-fenced-role-env-containment-r6-main-comment.diff 4372f9fa13734ada1674a265caba1725deae21fd...f4f0814928fbbffa972da7df74a0c81dad31fbb1 -- app/main.js`
+
+Main-comment artifact byte length: `1739`
+
+Main-comment artifact SHA-256:
+`fb52d09b9c86c93a6007235eae797602134e1e189fd513a5c537c7d547ff2887`
+
+All four content artifacts were regenerated to explicitly named twins,
 compared byte-for-byte, and the identical twins removed. All are gitignored by
 `.gitignore:33`.
 
 After the handoff-only tail commit, the external review packet also includes
-`.agent-review-codex-p1-fenced-role-env-containment-r5-tail.diff`, generated
-from content tip `7297b76` to the final tail tip. Its byte count and SHA-256 are
+`.agent-review-codex-p1-fenced-role-env-containment-r6-tail.diff`, generated
+from content tip `f4f0814` to the final tail tip. Its byte count and SHA-256 are
 reported outside this file after that commit; embedding its own identity here
 would create a self-reference loop.
 
@@ -741,12 +887,19 @@ Round-4 focused reviewer verdict, retained verbatim:
 `VERDICT: FAIL — CHANGES REQUESTED — NOT AUTHORIZED FOR MERGE`
 
 That verdict applies to Revision 4 content tip `4372f9f` with handoff tail
-`4cdb01b`. Revision 5 reviewed-content candidate `7297b76` responds to its three
-related Unicode proof blockers and accepted non-blocking hardening items, but
-has no PASS. Independent focused Full-class re-review is pending. No merge or
-push is authorized.
+`4cdb01b`.
+
+Round-5 focused reviewer verdict, retained verbatim:
+
+`VERDICT: FAIL — CHANGES REQUESTED — NOT AUTHORIZED FOR MERGE`
+
+That verdict applies to Revision 5 content tip `7297b76` with handoff tail
+`ccd7de8`. Revision 6 reviewed-content candidate `f4f0814` responds to all four
+accuracy blockers and accepted N1/N3 hardening, but has no PASS. Independent
+focused Full-class re-review is pending. No merge or push is authorized.
 
 Reviewer verdict sources:
 
 - `C:\Users\levij\Downloads\REVIEW-full-class-p1-fenced-role-env-containment.md`
 - `C:\Users\levij\.codex\attachments\8f904ddb-c7ac-45a2-8997-a2521d7bd5c2\pasted-text.txt`
+- `C:\Users\levij\.codex\attachments\fbc8725d-cd13-412b-819e-294355e9e268\pasted-text.txt`
