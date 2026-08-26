@@ -25,6 +25,11 @@ const IDENTITY_POISON = Object.freeze({
   USERDOMAIN: 'poison-real-parent-domain',
   LOGONSERVER: 'poison-real-parent-logonserver',
 });
+const UNICODE_RESERVED_POISON = Object.freeze({
+  'CLAUDE_CODE_ſUBPROCESS_ENV_SCRUB': 'ambient-unicode-scrub-poison',
+  'GEMıNI_API_KEY': 'ambient-unicode-gemini-poison',
+  'BLUE_HELM_PANE_STATUS_PıPE': 'ambient-unicode-pipe-poison',
+});
 
 function runNodePtyTextProbe(pty, env, marker, payloadLines) {
   const beginMarker = `${marker}_BEGIN`;
@@ -125,14 +130,16 @@ async function runIdentityProbeChild() {
     return;
   }
 
+  const collisionSource = {
+    ...process.env,
+    claude_code_subprocess_env_scrub: 'ambient-scrub-poison',
+    gemini_api_key: 'ambient-gemini-poison',
+    Blue_Helm_Pane_Status_Pipe: 'ambient-pipe-poison',
+    blue_helm_pane_status_token: 'ambient-token-poison',
+    ...UNICODE_RESERVED_POISON,
+  };
   const collisionEnv = buildPtyEnv({
-    baseEnv: {
-      ...process.env,
-      claude_code_subprocess_env_scrub: 'ambient-scrub-poison',
-      gemini_api_key: 'ambient-gemini-poison',
-      Blue_Helm_Pane_Status_Pipe: 'ambient-pipe-poison',
-      blue_helm_pane_status_token: 'ambient-token-poison',
-    },
+    baseEnv: collisionSource,
     fencedRole: false,
     videoScout: true,
     geminiKey: 'sentinel-main-gemini',
@@ -165,6 +172,8 @@ async function runIdentityProbeChild() {
       userdomain: markedValue(fencedProbe.payload, '__P1_USERDOMAIN__'),
       logonserver: markedValue(fencedProbe.payload, '__P1_LOGONSERVER__'),
     },
+    collisionSourceUnicodePoisonPresent: Object.keys(UNICODE_RESERVED_POISON)
+      .every((name) => Object.prototype.hasOwnProperty.call(collisionSource, name)),
     collisionBuiltNames: Object.keys(collisionEnv).sort(),
     nodePtyCollision: {
       names: markedValues(collisionProbe.payload, '__P1_RESERVED_NAME__'),
@@ -283,6 +292,7 @@ const BASE_ENV = {
   gemini_api_key: 'ambient-case-gemini-poison',
   Blue_Helm_Pane_Status_Pipe: 'ambient-case-pipe-poison',
   blue_helm_pane_status_token: 'ambient-case-token-poison',
+  ...UNICODE_RESERVED_POISON,
   ...POISON,
 };
 
@@ -299,6 +309,10 @@ process.stdout.write('\n-- approved Tier 1 allowlist --\n');
   assert(FENCED_ENV_ALLOWLIST.includes('ProgramFiles(x86)'), 'ProgramFiles(x86) is an explicit positive control');
   for (const name of Object.keys(POISON)) {
     assert(Object.prototype.hasOwnProperty.call(BASE_ENV, name), `poison ${name} genuinely entered the base fixture`);
+  }
+  for (const name of Object.keys(UNICODE_RESERVED_POISON)) {
+    assert(Object.prototype.hasOwnProperty.call(BASE_ENV, name),
+      `Unicode reserved-alias poison ${name} genuinely entered the base fixture`);
   }
 }
 
@@ -349,17 +363,23 @@ process.stdout.write('\n-- case collisions and unknown omission --\n');
     PATH: 'second-path',
     claude_code_subprocess_env_scrub: 'ambient-scrub',
     Blue_Helm_Pane_Status_Token: 'ambient-token',
+    ...UNICODE_RESERVED_POISON,
   };
   deepEqual(omitReservedWindowsEnv(reservedSource, [
-    'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB', 'BLUE_HELM_PANE_STATUS_TOKEN',
+    'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB', 'GEMINI_API_KEY',
+    'BLUE_HELM_PANE_STATUS_PIPE', 'BLUE_HELM_PANE_STATUS_TOKEN',
   ]), { Path: 'first-path', PATH: 'second-path' },
-  'reserved removal deletes every ASCII-case variant but preserves unrelated ambient duplicates and order');
+  'reserved removal deletes ASCII-case and Unicode-to-ASCII aliases while preserving unrelated duplicates and order');
   deepEqual(reservedSource, {
     Path: 'first-path',
     PATH: 'second-path',
     claude_code_subprocess_env_scrub: 'ambient-scrub',
     Blue_Helm_Pane_Status_Token: 'ambient-token',
+    ...UNICODE_RESERVED_POISON,
   }, 'reserved removal returns a fresh object without mutating its input');
+  const unrelatedUnicode = { 'BLUE_HELM_💙': 'unrelated-unicode' };
+  deepEqual(omitReservedWindowsEnv(unrelatedUnicode, ALWAYS_RESERVED_ENV_NAMES), unrelatedUnicode,
+    'the denylist-only Unicode fallback preserves an unrelated ambient Unicode name');
   const sparse = buildPtyEnv({ baseEnv: {}, fencedRole: true, videoScout: false, paneStatusEnv: {} });
   deepEqual(sparse, { CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1' }, 'missing allowlisted entries are not invented');
   const sparseUnfenced = buildPtyEnv({ baseEnv: null, fencedRole: false, videoScout: false, paneStatusEnv: {} });
@@ -417,6 +437,7 @@ process.stdout.write('\n-- explicit pane-status key boundary --\n');
   for (const poison of [
     'ambient-scrub-poison', 'ambient-case-gemini-poison',
     'ambient-case-pipe-poison', 'ambient-case-token-poison',
+    ...Object.values(UNICODE_RESERVED_POISON),
   ]) {
     assert(!Object.values(env).includes(poison), `reserved ambient poison ${poison} is absent`);
   }
@@ -425,7 +446,11 @@ process.stdout.write('\n-- explicit pane-status key boundary --\n');
 process.stdout.write('\n-- fail-closed Video Scout key reservation --\n');
 for (const badKey of [undefined, null, '', 0]) {
   const env = buildPtyEnv({
-    baseEnv: { GEMINI_API_KEY: 'ambient-upper', gemini_api_key: 'ambient-lower' },
+    baseEnv: {
+      GEMINI_API_KEY: 'ambient-upper',
+      gemini_api_key: 'ambient-lower',
+      GEMıNI_API_KEY: 'ambient-unicode',
+    },
     fencedRole: false,
     videoScout: true,
     geminiKey: badKey,
@@ -449,6 +474,7 @@ for (const badKey of [undefined, null, '', 0]) {
     baseEnv: {
       Blue_Helm_Pane_Status_Pipe: 'ambient-unenrolled-pipe',
       blue_helm_pane_status_token: 'ambient-unenrolled-token',
+      BLUE_HELM_PANE_STATUS_PıPE: 'ambient-unenrolled-unicode-pipe',
     },
     fencedRole: false,
     videoScout: false,
@@ -586,6 +612,12 @@ process.stdout.write('\n-- libuv proxy, production node-pty inheritance, and neg
         'the fenced production child observes exactly one main-issued scrub name');
 
       const collision = measured.nodePtyCollision;
+      assert(measured.collisionSourceUnicodePoisonPresent === true,
+        'the production collision probe genuinely supplied every Unicode-to-ASCII reserved alias');
+      for (const name of Object.keys(UNICODE_RESERVED_POISON)) {
+        assert(!measured.collisionBuiltNames.includes(name) && !collision.names.includes(name),
+          `Unicode reserved alias ${name} is absent before and after production node-pty`);
+      }
       assert(collision.scrub === '1' && collision.scrub !== 'ambient-scrub-poison',
         'production node-pty observes the forced scrub sentinel and not ambient case poison');
       assert(collision.gemini === 'sentinel-main-gemini' && collision.gemini !== 'ambient-gemini-poison',

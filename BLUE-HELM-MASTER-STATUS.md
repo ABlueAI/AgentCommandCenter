@@ -347,6 +347,31 @@ two fork-point-matched pre-assertion Electron/GPU `0xC0000135` AGR candidates.
 Independent focused Full re-review remains required; there is no merge
 authorization.
 
+**P1 Revision 4 correction — August 26:** the independent Revision 3 verdict is
+retained verbatim: `VERDICT: FAIL — CHANGES REQUESTED — NOT AUTHORIZED FOR
+MERGE`. Its remaining blocker showed that strict ASCII folding alone did not
+remove non-ASCII ambient spellings whose Unicode uppercase collapses to an exact
+ASCII reserved name, including dotless-i and long-s aliases of the scrub,
+Gemini, and pane-status pipe names. The reserved-name omission path now applies
+a second, denylist-only check when strict ASCII folding refuses a source name:
+Unicode uppercase must collapse to printable ASCII and then exactly match the
+already-frozen reserved set before the entry is removed. That fallback can
+never admit an allowlist entry and does not globally deduplicate ambient names;
+an unrelated Unicode ambient-name negative control remains present.
+
+The pure builder and the installed `@lydell/node-pty`/ConPTY production probe
+both receive all three non-ASCII poisons and prove them absent before and after
+the production spawn, while the canonical main-issued sentinels remain visible.
+Focused results are `pty-env` **120/0/0**, unchanged source pins **26/0**, and
+admission configuration **86/0**; authoritative Pester is **955/0/0**. The two
+fork-point controls and the fresh branch gate reproduced the same pre-assertion
+Electron/GPU `0xC0000135` signatures exactly once. The one suffix invocation
+ran to process completion with no visible failure in the retained stream, but
+its output exceeded the execution window and the controller did not retain its
+terminal exit code; that capture limitation is review evidence, not a green
+claim. Revision 4 remains unmerged and requires its own independent Full-class
+verdict.
+
 **Quick Links ruling:** it is a bounded extension of the already-owned external
 launcher boundary, so the OSS procurement gate does not apply. “Extension” is
 policy-only: Quick Links **must not reuse** the existing `open-external` handler.

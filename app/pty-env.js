@@ -5,9 +5,9 @@
 // OSS procurement gate does not reopen. Fenced roles receive a Windows environment built from an
 // EMPTY object and this exact Tier 1 allowlist. Unfenced panes begin with the pre-P1 environment
 // expression from stripAdmissionEnv(baseEnv), with one deliberate correction: before explicit
-// main-issued values are layered, all ASCII-case-insensitive ambient variants of those reserved names
-// are removed — the Claude subprocess scrub, Video Scout's safeStorage key, and the exact pane-status
-// transport names.
+// main-issued values are layered, all ASCII-case-insensitive ambient variants — plus non-ASCII names
+// whose Unicode uppercase collapses to exact ASCII reserved names — are removed for the Claude
+// subprocess scrub, Video Scout's safeStorage key, and the exact pane-status transport names.
 //
 // Pure: no Electron, process, filesystem, logging, or spawning. Environment values are never
 // inspected, transformed, or emitted here.
@@ -53,6 +53,16 @@ function foldAsciiWindowsEnvName(name) {
   return name.replace(/[a-z]/g, (ch) => ch.toUpperCase());
 }
 
+// DENYLIST-ONLY fallback. This can never admit a name: when the strict ASCII fold refuses a source
+// spelling, Unicode uppercase is used only to ask whether it collapses to a printable-ASCII reserved
+// name. If so, fail closed and drop it. This catches aliases such as dotless-i/long-s while leaving
+// unrelated Unicode ambient names and unrelated ASCII duplicates untouched.
+function foldReservedUnicodeAliasToAscii(name) {
+  if (typeof name !== 'string') return null;
+  const wide = name.toUpperCase();
+  return /^[\x20-\x7E]+$/.test(wide) ? wide : null;
+}
+
 /**
  * Copy only allowlisted, printable-ASCII Windows environment entries from baseEnv.
  *
@@ -80,7 +90,8 @@ function copyAllowedWindowsEnv(baseEnv, allowedNames) {
 }
 
 /**
- * Return a fresh copy without ASCII-case-insensitive variants of `reservedNames`.
+ * Return a fresh copy without ASCII-case-insensitive variants of `reservedNames`, including
+ * non-ASCII spellings whose Unicode uppercase collapses to an exact printable-ASCII reserved name.
  *
  * This intentionally does not deduplicate unrelated ambient-vs-ambient variants. Changing which
  * Path/PATH, TEMP/Temp, or other unfenced value wins would be a separate launch-behaviour change.
@@ -92,7 +103,8 @@ function omitReservedWindowsEnv(baseEnv, reservedNames) {
 
   for (const name of Object.keys(source)) {
     const folded = foldAsciiWindowsEnvName(name);
-    if (folded && reservedFolded.has(folded)) continue;
+    const reservedCandidate = folded || foldReservedUnicodeAliasToAscii(name);
+    if (reservedCandidate && reservedFolded.has(reservedCandidate)) continue;
     out[name] = source[name];
   }
   return out;
