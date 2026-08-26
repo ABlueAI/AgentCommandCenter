@@ -6,7 +6,7 @@ Fork-point SHA: `d64192ba680d932623e5557793a159076e26d8d6`
 
 Pre-merge main SHA: `d64192ba680d932623e5557793a159076e26d8d6`
 
-Reviewed content tip SHA: `6574192cf26ff28201f9931c02b4721ad24703a9`
+Reviewed content tip SHA: `4372f9fa13734ada1674a265caba1725deae21fd`
 
 Branch tail: this handoff document only; the reviewed content tip above is the
 three-dot review endpoint.
@@ -47,6 +47,22 @@ resolves. They also require exact B2 source excerpts, one fork-point AGR control
 run per named suite, fail-closed missing Gemini behavior, and unchanged `229` /
 `13205` source pins. No merge or push was authorized.
 
+The independent Revision 3 review retained this controlling verdict verbatim:
+
+> VERDICT: FAIL — CHANGES REQUESTED — NOT AUTHORIZED FOR MERGE
+
+It found one remaining blocker: non-ASCII ambient spellings whose Unicode
+uppercase collapses to an exact ASCII reserved name survived the strict ASCII
+denylist comparison. Blue then authorized the bounded Revision 4 correction
+verbatim:
+
+> authorized
+
+Revision 4 is limited to denylist-only rejection of those reserved aliases,
+pure and production ConPTY regression coverage, the same source pins and AGR
+tree, and an expanded artifact packet. It authorizes no `main.js`, dependency,
+lockfile, provider-session, merge, or push change.
+
 The controlling OSS disposition is verbatim:
 
 > P1 hardens the existing owned PTY environment boundary and introduces no new
@@ -73,9 +89,11 @@ Unfenced builder, reviewer, codebase-scout, bare CLI, plain PowerShell, and
 Video Scout launches begin with the pre-P1 `stripAdmissionEnv(process.env)`
 base. Before explicit values are layered, every ASCII-case-insensitive ambient
 variant of the always-main-owned scrub and pane-status transport names is
-removed. Video Scout additionally reserves `GEMINI_API_KEY`; if the main-issued
-key is not a non-empty string, the name remains absent rather than falling back
-to ambient residue. Main then layers, in order:
+removed. A non-ASCII spelling is also removed if and only if its Unicode
+uppercase collapses to an exact printable-ASCII reserved name. Video Scout
+additionally reserves `GEMINI_API_KEY`; if the main-issued key is not a
+non-empty string, the name remains absent rather than falling back to ambient
+residue. Main then layers, in order:
 
 1. `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1`;
 2. Video Scout's safeStorage `GEMINI_API_KEY`, only for Video Scout;
@@ -111,6 +129,11 @@ The cumulative branch remains exactly the eight paths above. `app/package.json`
 was not changed for Revision 3 because the production ConPTY proof remains in
 the already-registered `app/pty-env.test.js` suite.
 
+Revision 4 has the same exact four-path cap: `app/pty-env.js`,
+`app/pty-env.test.js`, `BLUE-HELM-MASTER-STATUS.md`, and this handoff-only tail.
+The cumulative branch remains exactly the same eight paths, and the existing
+registered suite still requires no package change.
+
 ## Security-sensitive surfaces touched
 
 - `ipcMain.handle('pty-start') -> buildPtyEnv -> pty.spawn`
@@ -135,13 +158,22 @@ collision resolves deterministically to first insertion. Missing entries are
 not invented. Unicode aliases such as `Oſ`, `SyſtemRoot`, and `Programﬁles` are
 rejected rather than folded into allowlisted names.
 
-The 109-assertion suite poisons credential, provider, business, admission,
+The 120-assertion suite poisons credential, provider, business, admission,
 host-tooling, unknown, Tier 2, and pane-status-shaped variables; exercises all
 six roles plus Video Scout, bare CLI, and plain shell; proves explicit
 pane-status filtering and reserved-name collision removal; proves
 `process.env` is byte-identical before and after builder use; includes a
 detector negative control and names-only production ConPTY measurement; and
 structurally traces the builder output into the single `pty.spawn`.
+
+Revision 4 adds `CLAUDE_CODE_ſUBPROCESS_ENV_SCRUB`, `GEMıNI_API_KEY`, and
+`BLUE_HELM_PANE_STATUS_PıPE` as genuine fixture and production-spawn poison.
+The strict ASCII fold remains the only allowlist mechanism. Only when that fold
+refuses a source name does a second helper uppercase the spelling and ask
+whether the result is printable ASCII and an exact member of the frozen
+reserved denylist. It can remove but never admit a name. An unrelated
+`BLUE_HELM_💙` entry is retained as the negative control against broad Unicode
+deletion.
 
 ### B1 — corrected mechanism and production measurement
 
@@ -185,7 +217,7 @@ on every completion path, and counts unavailable ConPTY as SKIP rather than PASS
 
 ### B2 — evidence supplied and claim narrowed
 
-Normalized committed `main.js` evidence at `6574192` (the blob is unchanged
+Normalized committed `main.js` evidence at `4372f9f` (the blob is unchanged
 from `67a175e`):
 
 - role-command classifier, from `const VALID_ROLES =` to before the Video Scout
@@ -251,9 +283,11 @@ else { const run = buildAgentCommand(opts); ... }`.
 Pane status now admits only `BLUE_HELM_PANE_STATUS_PIPE` and
 `BLUE_HELM_PANE_STATUS_TOKEN`; a hostile-shaped enrollment object cannot replace
 the forced scrub, Video Scout key, `PATH`, or add an extra status entry. ASCII-
-only folding closes the Unicode alias channel. Both fenced and unfenced paths
-normalize invalid `baseEnv` input to `{}`. Finally, the test parses main's actual
-`FENCED_ROLES` declaration and fails if its complete matrix drifts.
+only folding governs admission, while the Revision 4 Unicode fallback is
+denylist-only and closes the reserved-name alias channel. Both fenced and
+unfenced paths normalize invalid `baseEnv` input to `{}`. Finally, the test
+parses main's actual `FENCED_ROLES` declaration and fails if its complete matrix
+drifts.
 
 Filtering is dynamically proven; main-process wiring is structurally pinned;
 adversarial live/provider behavior remains for the later fence-completion item.
@@ -271,8 +305,8 @@ dependency tree. The lockfile is unchanged and procurement does not reopen.
 ## Re-pinned committed regions
 
 The pins were rechecked from normalized `git show
-6574192cf26ff28201f9931c02b4721ad24703a9:app/main.js` bytes. Revisions 2 and 3
-did not modify `main.js`, so every Revision 1 pin remains exact:
+4372f9fa13734ada1674a265caba1725deae21fd:app/main.js` bytes. Revisions 2, 3,
+and 4 did not modify `main.js`, so every Revision 1 pin remains exact:
 
 - fenced-role cwd gate, unchanged: length `1326`, SHA-256
   `9a1255f1e81e0a9e4e289ab15380707dd6bcc1d410ffd16f44adddb99b16f8c6`
@@ -301,6 +335,18 @@ Fresh Revision 3 focused Node gates:
 - `node app/launcher-fence-invariant.test.js` — **26 passed, 0 failed**
 - `node app/admission-budget-config.test.js` — **86 passed, 0 failed**
 
+Fresh Revision 4 focused Node gates:
+
+- `node app/pty-env.test.js` — **120 passed, 0 failed, 0 skipped**
+- `node app/launcher-fence-invariant.test.js` — **26 passed, 0 failed**
+- `node app/admission-budget-config.test.js` — **86 passed, 0 failed**
+
+The Revision 4 production collision source genuinely contained all three
+non-ASCII aliases. The pure map and the installed node-pty/ConPTY child both
+omitted them, observed the canonical main sentinels, retained the unrelated
+Unicode negative control, and retained the existing fenced names-only result
+with `added=[]`, `missing=[]`, and no identity back-fill.
+
 The launcher invariant independently re-proved the unchanged `229`-byte
 environment-block pin and `13205`-byte handler pin at the reviewed content tip.
 
@@ -326,6 +372,13 @@ filesystem sandbox:
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
   scripts/run-pester.ps1` — **955 passed, 0 failed, 0 skipped (of 955)**, exit
   `0`, in `136.12s`.
+
+Revision 4 reran that authoritative gate outside the restricted filesystem
+sandbox:
+
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+  scripts/run-pester.ps1` — **955 passed, 0 failed, 0 skipped (of 955)**, exit
+  `0`, in `149.5s`.
 
 ### App gate and AGR routing
 
@@ -405,6 +458,35 @@ or product assertion. The updated `pty-env.test.js` ran in that suffix and was
 green at **109/0/0**. The builder records and routes this evidence; it does not
 grant its own exception or merge authorization.
 
+### Revision 4 fork-point control and fresh branch gate
+
+By Revision 4, the primary `main` worktree had advanced beyond `d64192ba`. To
+avoid moving it, the tracked `app/` tree from exact commit
+`d64192ba680d932623e5557793a159076e26d8d6` was materialized under the Windows
+temporary directory and linked only to the branch's already-installed
+`app/node_modules`. No source came from current `main`. Each control suite ran
+once from that exact source snapshot:
+
+- `node dockview-bootstrap.test.js` — exit `1`; the two-report parser failure at
+  position `259`, `render-process-gone` / `launch-failed`, `ERR_FAILED (-2)`,
+  and GPU exit `-1073741515` (`0xC0000135`);
+- `node dockview-app-integration.test.js` — exit `1`; no report, production
+  scenario `ERR_FAILED (-2)`, and GPU exit `-1073741515` (`0xC0000135`).
+
+One fresh Revision 4 branch gate then followed the same tree. `npm.cmd test`
+stopped at bootstrap with the fork-point-matched signature. App integration
+ran once and stopped with its fork-point-matched signature. The remaining
+suffix was invoked once from `renderer/dockview-fit-policy.test.js` through the
+final registered suite. Its retained stream showed green summaries through
+`admission-budget-config.test.js` and no visible failure, and the process then
+exited. However, the output exceeded the execution window; the controller lost
+the session handle before the terminal chunk and exit code were collected.
+Therefore Revision 4 does **not** claim **86 green**, exact complete output
+reconciliation, or a passed app gate. No suite or suffix was retried to conceal
+that evidence gap. The two named branch failures still match their fork-point
+controls, but the incomplete suffix capture is routed to independent review as
+a limitation rather than an AGR admission.
+
 The exact user-issued AGR rule was:
 
 - run once, with no retry;
@@ -444,9 +526,10 @@ gates above.
   real parent. That is not the production PTY mechanism and is not generalized
   into a claim about Windows or ConPTY.
 - Windows resolution of case-equivalent names in a duplicate-bearing
-  environment block is treated as unspecified. Revision 3 guarantees one
-  canonical entry only for reserved/main-issued names; unrelated unfenced
-  ambient duplicates remain a separate known item.
+  environment block is treated as unspecified. Revision 4 guarantees one
+  canonical entry only for reserved/main-issued names, including the tested
+  Unicode-to-ASCII reserved aliases; unrelated unfenced ambient duplicates
+  remain a separate known item.
 - Non-Video-Scout unfenced panes still inherit ambient Gemini residue. P1 does
   not present reserved Video Scout injection as global Gemini containment.
 - `pty-start` lacks a trusted-sender gate. Classification integrity is outside
@@ -455,23 +538,29 @@ gates above.
   filtering invariant.
 - The two Dockview pre-assertion observations require independent AGR
   disposition before merge authorization.
+- The Revision 4 suffix process completed, but its terminal chunk and exit code
+  were not retained. No complete-green Revision 4 app-gate claim is made.
 
 ## Recommended Full-class review focus
 
-Focused re-review is requested only for the prior review's B1–B3 and AGR items:
+Focused Full-class re-review is requested for the Revision 3 blocker, artifact
+coverage, and AGR evidence:
 
-1. B1/B3: inspect reserved-key-only collision removal, fail-closed Video Scout
-   Gemini omission, `process.env` immutability, and the real production ConPTY
-   sentinel observation. Confirm the handoff makes no insertion-order claim.
-2. B1: verify the complete names-only fenced measurement, `added=[]` /
+1. B-1: verify Unicode uppercase is reachable only from the reserved-name
+   omission path, can never admit an allowlist name, removes the three supplied
+   aliases, and retains the unrelated Unicode negative control.
+2. Verify the complete names-only fenced measurement, `added=[]` /
    `missing=[]`, and absence of identity back-fill on the production path.
-3. B2: verify the pasted exact excerpts and narrowed claim; confirm sender/
-   classifier integrity is explicit remaining work, not implied complete.
-4. N1/N2/N6: inspect ASCII-only folding, symmetric input normalization, and
-   main-role synchronization.
+3. Artifact coverage: use the complete `main.js` source artifact for
+   `FENCED_ROLES`, `buildAgentCommand`, and the sender boundary; use the external
+   tail artifact for this post-content handoff commit.
+4. Confirm sender/classifier integrity, non-Video-Scout Gemini residue, value
+   typing, `__proto__`, and broader mutation questions remain explicit
+   non-blocking/deferred items rather than new claims.
 5. AGR: compare the once-only fork-point and branch observations against the
-   supplied rule and make the independent admissibility decision.
-6. Verify the cumulative eight-path cap and this handoff-only tail.
+   supplied rule, including the Revision 4 suffix capture limitation. The
+   builder does not ask the reviewer to infer a green exit.
+6. Verify the cumulative eight-path cap and the Revision 4 four-path cap.
 
 ## Review diff
 
@@ -480,28 +569,46 @@ Pinned cumulative artifact:
 
 Command:
 
-`git diff d64192ba680d932623e5557793a159076e26d8d6...6574192cf26ff28201f9931c02b4721ad24703a9 --output=.agent-review-codex-p1-fenced-role-env-containment.diff`
+`git diff --output=.agent-review-codex-p1-fenced-role-env-containment.diff d64192ba680d932623e5557793a159076e26d8d6...4372f9fa13734ada1674a265caba1725deae21fd`
 
-Pinned cumulative diff byte length: `85729`
+Pinned cumulative diff byte length: `99314`
 
 Pinned diff SHA-256:
-`7e48c4d32e98f212ff5db297bbb07ef11c87d06c633499ec0f0e12e86170ce01`
+`f4f7be54352333097b30e25c3f7609b19a8bd98d0c6cb53b07a4b71998257fb9`
 
-Pinned focused Revision 3 artifact:
-`.agent-review-codex-p1-fenced-role-env-containment-r3.diff`
+Pinned focused Revision 4 artifact:
+`.agent-review-codex-p1-fenced-role-env-containment-r4.diff`
 
 Command:
 
-`git diff 9d835226ecc7d475a23d04c1dbf5743d7d82b4c2...6574192cf26ff28201f9931c02b4721ad24703a9 --output=.agent-review-codex-p1-fenced-role-env-containment-r3.diff`
+`git diff --output=.agent-review-codex-p1-fenced-role-env-containment-r4.diff 29f86240e9ca5e3fe6c94582f5d581e484c96203...4372f9fa13734ada1674a265caba1725deae21fd`
 
-Focused diff byte length: `30444`
+Focused diff byte length: `12003`
 
 Focused diff SHA-256:
-`c4a12265edb996c106908fa01f3916264ba260a1f6fde4e09de90489a1fbc1c6`
+`597d858e9cb78f2700c860d2c5f394bf0e838fb720185bed373e5695f5955d55`
 
-Both artifacts were regenerated to explicitly named twins, compared
-byte-for-byte, and the identical twins removed. Both retained artifacts are
-gitignored by `.gitignore:33`.
+Pinned complete `main.js` source artifact:
+`.agent-review-codex-p1-fenced-role-env-containment-main-source.diff`
+
+Command:
+
+`git diff --output=.agent-review-codex-p1-fenced-role-env-containment-main-source.diff 4b825dc642cb6eb9a060e54bf8d69288fbee4904 4372f9fa13734ada1674a265caba1725deae21fd -- app/main.js`
+
+Main-source artifact byte length: `89559`
+
+Main-source artifact SHA-256:
+`80a30280f0621bcabccb2c5ea67024c7ad2c8a159104f6868d70211067027257`
+
+All three content artifacts were regenerated to explicitly named twins,
+compared byte-for-byte, and the identical twins removed. All are gitignored by
+`.gitignore:33`.
+
+After the handoff-only tail commit, the external review packet also includes
+`.agent-review-codex-p1-fenced-role-env-containment-r4-tail.diff`, generated
+from content tip `4372f9f` to the final tail tip. Its byte count and SHA-256 are
+reported outside this file after that commit; embedding its own identity here
+would create a self-reference loop.
 
 After merge, reproduce the reviewed delta from the recorded pre-merge main SHA,
 not from the then-advanced `main` name.
@@ -517,9 +624,17 @@ Round-2 focused reviewer verdict, retained verbatim:
 `VERDICT: FAIL — CHANGES REQUESTED — NOT AUTHORIZED FOR MERGE`
 
 That verdict applies to Revision 2 content tip `67a175e` with handoff tail
-`9d83522`. Revision 3 reviewed-content candidate `6574192` responds to the one
-remaining blocker but has no PASS. Focused independent Full re-review is
-pending.
+`9d83522`.
+
+Round-3 focused reviewer verdict, retained verbatim:
+
+`VERDICT: FAIL — CHANGES REQUESTED — NOT AUTHORIZED FOR MERGE`
+
+That verdict applies to Revision 3 content tip `6574192` with handoff tail
+`29f8624`. Revision 4 reviewed-content candidate `4372f9f` responds to its one
+blocking Unicode-reserved-alias finding but has no PASS. Independent focused
+Full-class re-review is pending, and the app-suffix capture limitation is
+explicit evidence for that reviewer.
 
 Reviewer verdict source:
 `C:\Users\levij\Downloads\REVIEW-full-class-p1-fenced-role-env-containment.md`
