@@ -3,10 +3,11 @@
 //
 // P1 hardens the existing, owned pty-start boundary. It adds no subsystem or dependency, so the
 // OSS procurement gate does not reopen. Fenced roles receive a Windows environment built from an
-// EMPTY object and this exact Tier 1 allowlist. Unfenced panes retain the pre-P1 environment
-// expression through stripAdmissionEnv(baseEnv). Explicit main-issued values are layered only after
-// ambient construction: the Claude subprocess scrub, Video Scout's safeStorage key, then the exact
-// pane-status enrollment environment.
+// EMPTY object and this exact Tier 1 allowlist. Unfenced panes begin with the pre-P1 environment
+// expression from stripAdmissionEnv(baseEnv), with one deliberate correction: before explicit
+// main-issued values are layered, all ASCII-case-insensitive ambient variants of those reserved names
+// are removed — the Claude subprocess scrub, Video Scout's safeStorage key, and the exact pane-status
+// transport names.
 //
 // Pure: no Electron, process, filesystem, logging, or spawning. Environment values are never
 // inspected, transformed, or emitted here.
@@ -44,6 +45,8 @@ const PANE_STATUS_ENV_KEYS = Object.freeze([
   'BLUE_HELM_PANE_STATUS_PIPE',
   'BLUE_HELM_PANE_STATUS_TOKEN',
 ]);
+const SUBPROCESS_SCRUB_ENV_KEY = 'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB';
+const GEMINI_ENV_KEY = 'GEMINI_API_KEY';
 
 function foldAsciiWindowsEnvName(name) {
   if (typeof name !== 'string' || !/^[\x20-\x7E]+$/.test(name)) return null;
@@ -77,6 +80,25 @@ function copyAllowedWindowsEnv(baseEnv, allowedNames) {
 }
 
 /**
+ * Return a fresh copy without ASCII-case-insensitive variants of `reservedNames`.
+ *
+ * This intentionally does not deduplicate unrelated ambient-vs-ambient variants. Changing which
+ * Path/PATH, TEMP/Temp, or other unfenced value wins would be a separate launch-behaviour change.
+ */
+function omitReservedWindowsEnv(baseEnv, reservedNames) {
+  const source = baseEnv && typeof baseEnv === 'object' ? baseEnv : {};
+  const reservedFolded = new Set((reservedNames || []).map(foldAsciiWindowsEnvName).filter(Boolean));
+  const out = {};
+
+  for (const name of Object.keys(source)) {
+    const folded = foldAsciiWindowsEnvName(name);
+    if (folded && reservedFolded.has(folded)) continue;
+    out[name] = source[name];
+  }
+  return out;
+}
+
+/**
  * Construct the exact environment handed to pty.spawn.
  *
  * `fencedRole` is computed in main from the standing predicate:
@@ -84,9 +106,15 @@ function copyAllowedWindowsEnv(baseEnv, allowedNames) {
  */
 function buildPtyEnv({ baseEnv, fencedRole, videoScout, geminiKey, paneStatusEnv }) {
   const source = baseEnv && typeof baseEnv === 'object' ? baseEnv : {};
-  const ambient = fencedRole
+  const ambientBase = fencedRole
     ? copyAllowedWindowsEnv(source, FENCED_ENV_ALLOWLIST)
     : stripAdmissionEnv(source);
+  // Pane-status owns its names even when this pane is not enrolled. Scrub is always main-issued.
+  // Video Scout also reserves Gemini even when the supplied key is absent/invalid, so ambient residue
+  // cannot become an implicit credential fallback.
+  const reservedNames = [SUBPROCESS_SCRUB_ENV_KEY, ...PANE_STATUS_ENV_KEYS];
+  if (videoScout) reservedNames.push(GEMINI_ENV_KEY);
+  const ambient = omitReservedWindowsEnv(ambientBase, reservedNames);
   const explicitPaneStatus = {};
   // Pane status owns exactly these two transport names. Copying an arbitrary enrollment object here
   // would let a future/corrupt controller overwrite the forced scrub, Video Scout key, or Tier 1.
@@ -98,8 +126,10 @@ function buildPtyEnv({ baseEnv, fencedRole, videoScout, geminiKey, paneStatusEnv
 
   return {
     ...ambient,
-    CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1',
-    ...(videoScout ? { GEMINI_API_KEY: geminiKey } : {}),
+    [SUBPROCESS_SCRUB_ENV_KEY]: '1',
+    ...(videoScout && typeof geminiKey === 'string' && geminiKey
+      ? { [GEMINI_ENV_KEY]: geminiKey }
+      : {}),
     ...explicitPaneStatus,
   };
 }
@@ -107,6 +137,7 @@ function buildPtyEnv({ baseEnv, fencedRole, videoScout, geminiKey, paneStatusEnv
 const api = {
   FENCED_ENV_ALLOWLIST,
   copyAllowedWindowsEnv,
+  omitReservedWindowsEnv,
   buildPtyEnv,
 };
 if (typeof module === 'object' && module.exports) module.exports = api;

@@ -299,10 +299,9 @@ comes from a fresh independent session.
 Full-class review; it is **not merged or authorized to merge**. The existing
 fenced-role predicate now selects a pure environment builder that starts from
 an empty object and copies only Blue's exact Tier 1 Windows allowlist. Unfenced
-panes, including Video Scout, retain the pre-P1 admission-scrubbed base behavior;
-the Claude subprocess scrub, Video Scout safeStorage key, and pane-status
-enrollment values are layered explicitly in that order. Environment values are
-not logged. Filtering is dynamically proven, main-process wiring is
+panes begin with the pre-P1 admission-scrubbed base; before main-owned values are
+layered, ASCII-case-insensitive ambient variants of those reserved names are
+removed. Environment values are not logged. Filtering is dynamically proven, main-process wiring is
 structurally pinned, and adversarial live/provider behavior remains part of the
 later fence-completion item. Blue's controlling procurement disposition is:
 “P1 hardens the existing owned PTY environment boundary and introduces no new
@@ -321,6 +320,32 @@ its required `USERNAME`, `USERDOMAIN`, and `LOGONSERVER` entries from the real
 parent, while the production `@lydell/node-pty`/ConPTY path preserved their
 omission. The test records libuv only as a proxy/negative contrast and uses the
 production spawn mechanism for the P1 inheritance claim.
+
+**P1 Revision 3 correction — August 25:** the focused Revision 2 verdict was
+retained verbatim: `VERDICT: FAIL — CHANGES REQUESTED — NOT AUTHORIZED FOR
+MERGE`. The remaining blocker was a pre-existing environment-layering shape
+that became load-bearing in P1: a differently cased ambient spelling could
+coexist with a canonical main-issued key, leaving Windows lookup behavior
+unspecified. The builder now removes every ASCII-case-insensitive ambient
+variant of the always-main-owned scrub and pane-status transport names, and of
+`GEMINI_API_KEY` for Video Scout, before injecting one canonical value. Missing
+or invalid Video Scout Gemini input reserves the name but injects nothing;
+ambient residue is never a fallback. Pane-status names remain reserved even
+when enrollment is absent. The operation uses fresh copies and a test proves
+`process.env` is byte-identical before and after construction. Unrelated
+ambient-vs-ambient duplicates remain deliberately unchanged; non-Video-Scout
+unfenced panes also retain ambient Gemini residue as pre-existing behavior.
+
+The real `@lydell/node-pty`/ConPTY measurement observed all constructed Tier 1
+names plus the one explicit scrub key, with `added=[]`, `missing=[]`, and no
+`USERNAME`/`USERDOMAIN`/`LOGONSERVER` back-fill. A separate case-poisoned Video
+Scout probe observed only the main-issued scrub, Gemini, pipe, and token
+sentinels. Focused results are `pty-env` **109/0/0** and the unchanged-pin gate
+**26/0** (environment block `229`, handler `13205`); Pester is **955/0/0**.
+The fresh 88-suite app gate attempted every suite once: 86 green and only the
+two fork-point-matched pre-assertion Electron/GPU `0xC0000135` AGR candidates.
+Independent focused Full re-review remains required; there is no merge
+authorization.
 
 **Quick Links ruling:** it is a bounded extension of the already-owned external
 launcher boundary, so the OSS procurement gate does not apply. “Extension” is
