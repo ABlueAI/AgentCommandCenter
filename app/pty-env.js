@@ -5,9 +5,9 @@
 // OSS procurement gate does not reopen. Fenced roles receive a Windows environment built from an
 // EMPTY object and this exact Tier 1 allowlist. Unfenced panes begin with the pre-P1 environment
 // expression from stripAdmissionEnv(baseEnv), with one deliberate correction: before explicit
-// main-issued values are layered, all ASCII-case-insensitive ambient variants — plus non-ASCII names
-// whose Unicode uppercase collapses to exact ASCII reserved names — are removed for the Claude
-// subprocess scrub, Video Scout's safeStorage key, and the exact pane-status transport names.
+// main-issued values are layered, all ASCII-case-insensitive ambient variants — plus a conservative
+// non-ASCII superset of exact ASCII reserved names — are removed for the Claude subprocess scrub,
+// Video Scout's safeStorage key, and the exact pane-status transport names.
 //
 // Pure: no Electron, process, filesystem, logging, or spawning. Environment values are never
 // inspected, transformed, or emitted here.
@@ -53,13 +53,15 @@ function foldAsciiWindowsEnvName(name) {
   return name.replace(/[a-z]/g, (ch) => ch.toUpperCase());
 }
 
-// DENYLIST-ONLY fallback. This can never admit a name: when the strict ASCII fold refuses a source
-// spelling, Unicode uppercase is used only to ask whether it collapses to a printable-ASCII reserved
-// name. If so, fail closed and drop it. This catches aliases such as dotless-i/long-s while leaving
-// unrelated Unicode ambient names and unrelated ASCII duplicates untouched.
-function foldReservedUnicodeAliasToAscii(name) {
+// DENYLIST-ONLY conservative fallback. This can never admit a name: when the strict ASCII fold
+// refuses a source spelling, compatibility normalization plus lower-then-upper casing is used only
+// to ask whether it collapses to a printable-ASCII reserved name. This is intentionally a superset,
+// not a claim about Windows' NLS comparison: it may fail closed on spellings Windows treats as
+// distinct (for example ligatures), but it covers compatibility and one-way case mappings such as
+// Kelvin sign, capital sharp-s, dotless-i, and long-s. Unrelated ASCII duplicates remain untouched.
+function foldReservedConservativeAliasToAscii(name) {
   if (typeof name !== 'string') return null;
-  const wide = name.toUpperCase();
+  const wide = name.normalize('NFKC').toLowerCase().toUpperCase();
   return /^[\x20-\x7E]+$/.test(wide) ? wide : null;
 }
 
@@ -90,8 +92,8 @@ function copyAllowedWindowsEnv(baseEnv, allowedNames) {
 }
 
 /**
- * Return a fresh copy without ASCII-case-insensitive variants of `reservedNames`, including
- * non-ASCII spellings whose Unicode uppercase collapses to an exact printable-ASCII reserved name.
+ * Return a fresh copy without ASCII-case-insensitive variants of `reservedNames`, including the
+ * denylist-only conservative non-ASCII superset described above.
  *
  * This intentionally does not deduplicate unrelated ambient-vs-ambient variants. Changing which
  * Path/PATH, TEMP/Temp, or other unfenced value wins would be a separate launch-behaviour change.
@@ -99,15 +101,17 @@ function copyAllowedWindowsEnv(baseEnv, allowedNames) {
 function omitReservedWindowsEnv(baseEnv, reservedNames) {
   const source = baseEnv && typeof baseEnv === 'object' ? baseEnv : {};
   const reservedFolded = new Set((reservedNames || []).map(foldAsciiWindowsEnvName).filter(Boolean));
-  const out = {};
+  // A null prototype makes `__proto__` an ordinary ambient key during the copy. The returned spread
+  // is a plain object and preserves that own property without invoking Object.prototype's setter.
+  const out = Object.create(null);
 
   for (const name of Object.keys(source)) {
     const folded = foldAsciiWindowsEnvName(name);
-    const reservedCandidate = folded || foldReservedUnicodeAliasToAscii(name);
+    const reservedCandidate = folded || foldReservedConservativeAliasToAscii(name);
     if (reservedCandidate && reservedFolded.has(reservedCandidate)) continue;
     out[name] = source[name];
   }
-  return out;
+  return { ...out };
 }
 
 /**
@@ -136,13 +140,16 @@ function buildPtyEnv({ baseEnv, fencedRole, videoScout, geminiKey, paneStatusEnv
     }
   }
 
+  // Canonical main-issued entries are placed first as defense-in-depth. Correctness does not depend
+  // on insertion order: the ambient copy above has already removed the entire conservative reserved
+  // family, so the later spread cannot carry a canonical or conservative-alias collision.
   return {
-    ...ambient,
     [SUBPROCESS_SCRUB_ENV_KEY]: '1',
     ...(videoScout && typeof geminiKey === 'string' && geminiKey
       ? { [GEMINI_ENV_KEY]: geminiKey }
       : {}),
     ...explicitPaneStatus,
+    ...ambient,
   };
 }
 

@@ -372,6 +372,42 @@ terminal exit code; that capture limitation is review evidence, not a green
 claim. Revision 4 remains unmerged and requires its own independent Full-class
 verdict.
 
+**P1 Revision 5 correction — August 26:** the independent Revision 4 verdict is
+retained verbatim: `VERDICT: FAIL — CHANGES REQUESTED — NOT AUTHORIZED FOR
+MERGE`. Revision 5 does not claim that JavaScript case conversion reproduces
+Windows NLS comparison. Instead, the reserved-name denylist uses a documented
+conservative superset: NFKC normalization followed by lowercase then uppercase,
+accepted only when the result is printable ASCII and exactly matches a frozen
+reserved name. This may deliberately remove non-ASCII names Windows would keep;
+it cannot admit an allowlist name. The test independently generates the complete
+Unicode scalar corpus whose conservative fold can replace an ASCII substring in
+one of the four reserved names, builds one environment containing the whole
+corpus, and asserts the closed invariant that each reserved family is either
+absent or represented exactly once in canonical ASCII spelling. The generated
+corpus contains more than 1,000 aliases and covers the reviewer-named dotless-i,
+long-s, Kelvin, sharp-s/capital-sharp-s, and ligature families. The non-reserved
+`ſAFE_HARBOR` control traverses the ASCII-collapse path and remains present.
+
+The installed `@lydell/node-pty`/ConPTY probe measured Windows lookup directly.
+An ASCII lowercase control resolved through its canonical spelling. Each of the
+eight reviewer-named non-ASCII spellings genuinely entered the child under its
+exact name, while none resolved through the canonical reserved spelling on this
+VM. That measurement is recorded as platform evidence, not generalized into a
+Windows equivalence claim; the conservative denylist removes every measured
+alias regardless. Reserved canonical values are layered before ambient values as
+defense in depth, while correctness remains independent of insertion order.
+`omitReservedWindowsEnv` now copies through a null-prototype intermediate so an
+own `__proto__` entry is preserved without prototype mutation, then returns a
+plain object.
+
+Focused results are `pty-env` **176/0/0**, unchanged source pins **26/0**, and
+admission configuration **86/0**; authoritative Pester is **955/0/0**. The fresh
+88-suite app gate used the same AGR decision tree. The bootstrap and direct
+integration segments each reproduced the fork-point pre-assertion Electron
+`ERR_FAILED` / GPU `0xC0000135` signature exactly once; the registered suffix
+from the next suite through the end completed once with exit `0`. Revision 5
+remains unmerged and requires its own independent Full-class verdict.
+
 **Quick Links ruling:** it is a bounded extension of the already-owned external
 launcher boundary, so the OSS procurement gate does not apply. “Extension” is
 policy-only: Quick Links **must not reuse** the existing `open-external` handler.
