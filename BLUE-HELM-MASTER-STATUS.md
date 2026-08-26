@@ -408,6 +408,62 @@ integration segments each reproduced the fork-point pre-assertion Electron
 from the next suite through the end completed once with exit `0`. Revision 5
 remains unmerged and requires its own independent Full-class verdict.
 
+**P1 Revision 6 correction — August 26:** the independent Revision 5 verdict is
+retained verbatim: `VERDICT: FAIL — CHANGES REQUESTED — NOT AUTHORIZED FOR
+MERGE`. It confirmed the containment property and found four accuracy blockers,
+not a security regression. Revision 6 changes tests, assertions, comments, pins,
+and evidence only; production logic is unchanged. Its six paths are all members
+of the existing cumulative eight-path cap. It deliberately reopens `main.js`
+after three four-path revisions solely to correct two inaccurate comments inside
+the pinned handler.
+
+The generated corpus is now derived from the reserved canonical names: after a
+Unicode scalar is conservatively folded, the generator asks each canonical name
+directly whether that complete folded string is a substring. There is no
+character-class pre-filter to drift when a canonical name changes. The resulting
+exhaustive corpus is explicitly scoped to **single-scalar substitutions**; the
+whole-string production fold covers composed substitutions, and the two bounded
+controls `GEMıNı_API_KEY` and `BLUE_HELM_PANE_ﬅATUſ_PIPE` prove that path. The
+expected reviewer-code-point representative set is derived by the same
+canonical-substring rule and asserted as exact set equality. U+FB01 folds to
+`FI` and is explicitly absent because none of the current canonical names
+contains `FI`; a future name containing `FI` changes the derived set rather than
+silently preserving a magic count.
+
+Before editing `main.js`, Revision 6 pre-registered that the comment-free
+`229`-byte executable environment block and separate `1326`-byte cwd gate must
+remain byte-identical, while the full `13205`-byte handler must move. The old
+tripwire then failed exactly that way: `1326` and `229` retained their prior
+hashes, while only the handler moved. The new handler pin is length `13484`,
+SHA-256 `ab6f6cd37752029c52d4a89fb99331a319f8b032a011b297d78d22beeafea161`.
+An independently pinned `main.js`-only diff from the Revision 4 content tip to
+the Revision 6 content tip must show that the executable handler content is
+unchanged and only the comments moved. The corrected main comment now describes
+both facts accurately: the builder constructs explicit entries before filtered
+ambient entries, and it copies at most the two exact pane-status transport names
+whose values are strings.
+
+The installed `@lydell/node-pty`/ConPTY measurement placed canonical and
+ASCII-case-alias scrub names into the child environment in both insertion
+orders. Both exact spellings appeared in the child's full relevant name list.
+Canonical lookup returned the canonical sentinel when canonical was inserted
+first and the alias sentinel when the alias was inserted first: local
+**first-wins** evidence. This is not generalized into a Windows guarantee, and
+correctness still relies on reserved-family removal. The test now includes an
+integer-like ambient key and makes no universal JavaScript enumeration-order
+claim. Its parent timeout is derived from the complete sequential probe count,
+and every platform lookup must emit exactly one canonical-result marker.
+
+Fresh focused results are `pty-env` **185/0/0**, launcher/source pins **26/0**,
+and admission configuration **86/0**. Authoritative Pester is **955/0/0**, exit
+`0`, in `136.58s`. The fresh 88-suite app gate followed the same once-only AGR
+tree. Exact-fork bootstrap and integration controls reproduced their respective
+pre-assertion parse/no-report `ERR_FAILED` and GPU `0xC0000135` signatures.
+Branch bootstrap and integration matched those controls; the registered suffix
+from suite 3 through suite 88 completed once with exit `0`. Therefore all 88
+suites were attempted exactly once: 86 green and only the two named AGR
+candidates. Revision 6 remains unmerged and has no PASS or merge authorization.
+
 **Quick Links ruling:** it is a bounded extension of the already-owned external
 launcher boundary, so the OSS procurement gate does not apply. “Extension” is
 policy-only: Quick Links **must not reuse** the existing `open-external` handler.

@@ -1306,10 +1306,13 @@ ipcMain.handle('pty-start', (_e, opts) => {
   // Blue's Tier 1 Windows allowlist. Unfenced panes retain the exact pre-P1 base behavior: an
   // admission-scrubbed copy of process.env. Video Scout remains deliberately unfenced.
   //
-  // EXPLICIT MAIN-ISSUED ORDER: ambient base, then CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, then Video
-  // Scout's safeStorage GEMINI_API_KEY when applicable, then this exact enrollment-produced
-  // paneStatusEnv. Neither pane-status entry is recovered from process.env, and no environment value
-  // is logged. For unfenced panes, stripAdmissionEnv removes admission keys from the inherited PTY
+  // buildPtyEnv constructs CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, Video Scout's safeStorage
+  // GEMINI_API_KEY when applicable, and at most the two exact string-valued pane-status transport
+  // entries before spreading the filtered ambient base. The installed node-pty/ConPTY path locally
+  // measured first-inserted lookup for ASCII-case duplicates in either order; that is not a universal
+  // Windows claim, and correctness relies on reserved-family filtering rather than ordering. Neither
+  // pane-status entry is recovered from process.env, and no environment value is logged. For
+  // unfenced panes, stripAdmissionEnv removes admission keys from the inherited PTY
   // environment; for fenced panes those keys are absent because they are outside Tier 1. This filters
   // inheritance only; it creates no same-user filesystem isolation. APPDATA and USERPROFILE remain
   // available, and a same-user process can still locate the ledger. The ledger remains an

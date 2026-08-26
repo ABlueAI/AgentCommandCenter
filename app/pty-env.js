@@ -140,9 +140,11 @@ function buildPtyEnv({ baseEnv, fencedRole, videoScout, geminiKey, paneStatusEnv
     }
   }
 
-  // Canonical main-issued entries are placed first as defense-in-depth. Correctness does not depend
-  // on insertion order: the ambient copy above has already removed the entire conservative reserved
-  // family, so the later spread cannot carry a canonical or conservative-alias collision.
+  // Construct canonical main-issued entries before spreading the filtered ambient object. On the
+  // locally measured node-pty/ConPTY path, ASCII-case duplicates both reached the child and lookup
+  // resolved the first inserted value in either order. That is local evidence, not a cross-Windows
+  // guarantee. Correctness does not depend on order: the ambient copy above removes the entire
+  // conservative reserved family before this object is built.
   return {
     [SUBPROCESS_SCRUB_ENV_KEY]: '1',
     ...(videoScout && typeof geminiKey === 'string' && geminiKey

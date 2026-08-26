@@ -212,7 +212,8 @@ function sha(s) { return crypto.createHash('sha256').update(s, 'utf8').digest('h
 // What did NOT change:
 //   * `fenced-role cwd gate` remains 1326 / 9a1255f1... byte-for-byte identical.
 //   * pane-status enrollment still occurs before environment construction, and the exact returned
-//     paneStatusEnv is passed to the builder.
+//     paneStatusEnv is passed as builder input; the builder copies only the two exact transport keys
+//     whose values are strings.
 //   * the spawn executable, argv, cwd, failure cleanup, and one pty.spawn sink remain in place.
 //
 // Previous production pins retained:
@@ -225,6 +226,18 @@ function sha(s) { return crypto.createHash('sha256').update(s, 'utf8').digest('h
 // ACCIDENTAL-SPEND classification) after admission-budget.test.js correctly rejected their omission.
 // Pre-revision P1 handler pin retained: 12808 /
 // 658100cfb25734f0efb9d87997efd249fcaa0576f69e354c3b2440afc4802814.
+//
+// RE-PINNED (ninth time) for P1 REVISION 6 COMMENT ACCURACY. Before main.js was edited, the handoff
+// pre-registered that the 1326-byte cwd gate and 229-byte executable ptyEnv block MUST remain exact,
+// while the full handler MUST move because it includes the inaccurate comment. The old pin then
+// failed exactly that way: gate and block passed; only the handler reported 13484 !== 13205 and a
+// changed hash. The main.js-only R6 artifact is the independent evidence: it contains only comment
+// lines correcting construction order and the two-key/string-value pane-status boundary. No
+// executable statement changed. The immutable pins remeasured exactly as predicted:
+//   fenced-role cwd gate 1326 / 9a1255f1e81e0a9e4e289ab15380707dd6bcc1d410ffd16f44adddb99b16f8c6
+//   ptyEnv block         229 / 18cf42b434ee922ee61194d9316150c0b766591e063d0b0545f6aebc8d85cb54
+// Previous handler pin retained:
+//   pty-start handler 13205 / 14d3ae60ed6ea32e4231fdef7d0979e160207b0580466f53178a4b9f86098486
 // ---------------------------------------------------------------------------------------------
 
 // Region definitions: [name, startAnchor, endAnchor, expected byte length, expected sha256].
@@ -260,8 +273,8 @@ const REGIONS = [
     // Previous pins, retained so the earlier reviewed bases stay reproducible:
     //   len 13287 / sha 3ad6db301a3fa0e101195f439012ee42ca25ba6b31040b10d0196d23b7141bb3  (CRLF units)
     //   len 13864 / sha 1b6929a2e691c2e418ab529a80411e26f58a1d32a6f08b2ceb1b085e3db96274  (LF units)
-    len: 13205,
-    sha: '14d3ae60ed6ea32e4231fdef7d0979e160207b0580466f53178a4b9f86098486',
+    len: 13484,
+    sha: 'ab6f6cd37752029c52d4a89fb99331a319f8b032a011b297d78d22beeafea161',
   },
 ];
 
