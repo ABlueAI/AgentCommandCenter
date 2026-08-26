@@ -6,7 +6,7 @@ Fork-point SHA: `d64192ba680d932623e5557793a159076e26d8d6`
 
 Pre-merge main SHA: `d64192ba680d932623e5557793a159076e26d8d6`
 
-Reviewed content tip SHA: `67a175e4f4b5e1f4053c31e9d3b3d051f774fdab`
+Reviewed content tip SHA: `6574192cf26ff28201f9931c02b4721ad24703a9`
 
 Branch tail: this handoff document only; the reviewed content tip above is the
 three-dot review endpoint.
@@ -31,6 +31,22 @@ corrections, B2 claim narrowing, one fork-point execution of each named
 Dockview suite, and one fresh branch app gate under the existing AGR tree. It
 authorized no provider session, dependency, `main.js` change, merge, or push.
 
+After the focused Revision 2 verdict, the supplied reviewer-concurrence record
+gave the bounded Revision 3 plan this controlling line verbatim:
+
+> VERDICT ON PLAN: AUTHORIZED AS AMENDED — bounded correction, no procurement
+> reopen, no merge authorization.
+
+The seven amendments require: honest unspecified Windows collision semantics;
+ASCII-only comparisons; reserved-key-only removal rather than global unfenced
+deduplication; proof that `process.env` is not mutated; deliberately amended
+unfenced expectations; a names-only fenced ConPTY key-set measurement; sentinel-
+only, timeout-bounded, kill-on-exit production probes with explicit SKIP
+accounting; and confirmation that `@lydell/node-pty` is already the module main
+resolves. They also require exact B2 source excerpts, one fork-point AGR control
+run per named suite, fail-closed missing Gemini behavior, and unchanged `229` /
+`13205` source pins. No merge or push was authorized.
+
 The controlling OSS disposition is verbatim:
 
 > P1 hardens the existing owned PTY environment boundary and introduces no new
@@ -54,12 +70,22 @@ trusted-sender gate to `pty-start`. That is explicit fence-completion work in
 `BLUE-HELM-MASTER-STATUS.md` item 4.
 
 Unfenced builder, reviewer, codebase-scout, bare CLI, plain PowerShell, and
-Video Scout launches retain the pre-P1 `stripAdmissionEnv(process.env)` base
-behavior. Main then layers, in order:
+Video Scout launches begin with the pre-P1 `stripAdmissionEnv(process.env)`
+base. Before explicit values are layered, every ASCII-case-insensitive ambient
+variant of the always-main-owned scrub and pane-status transport names is
+removed. Video Scout additionally reserves `GEMINI_API_KEY`; if the main-issued
+key is not a non-empty string, the name remains absent rather than falling back
+to ambient residue. Main then layers, in order:
 
 1. `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1`;
 2. Video Scout's safeStorage `GEMINI_API_KEY`, only for Video Scout;
 3. only the two exact main-issued pane-status transport entries.
+
+That correction is reserved-key-only. Unrelated unfenced ambient duplicates
+such as `Path`/`PATH` remain untouched because globally choosing a winner could
+change launch behavior. Non-Video-Scout unfenced panes deliberately retain
+ambient `GEMINI_API_KEY` residue in any casing; this branch does not claim to
+contain Gemini outside Video Scout or fenced roles.
 
 No environment name/value collection is emitted to logs. The admission ledger
 remains an accidental-spend control, not a hostile same-user security boundary;
@@ -78,6 +104,12 @@ remains an accidental-spend control, not a hostile same-user security boundary;
 
 No lockfile, dependency, renderer, preload, provider, credential-store, or
 PowerShell production file changed.
+
+Revision 3 itself has an exact four-path cap: `app/pty-env.js`,
+`app/pty-env.test.js`, `BLUE-HELM-MASTER-STATUS.md`, and this handoff-only tail.
+The cumulative branch remains exactly the eight paths above. `app/package.json`
+was not changed for Revision 3 because the production ConPTY proof remains in
+the already-registered `app/pty-env.test.js` suite.
 
 ## Security-sensitive surfaces touched
 
@@ -103,12 +135,13 @@ collision resolves deterministically to first insertion. Missing entries are
 not invented. Unicode aliases such as `Oſ`, `SyſtemRoot`, and `Programﬁles` are
 rejected rather than folded into allowlisted names.
 
-The 83-assertion suite poisons credential, provider, business, admission,
+The 109-assertion suite poisons credential, provider, business, admission,
 host-tooling, unknown, Tier 2, and pane-status-shaped variables; exercises all
 six roles plus Video Scout, bare CLI, and plain shell; proves explicit
-pane-status filtering and collision refusal; includes a detector negative
-control; and structurally traces the builder output into the single
-`pty.spawn`.
+pane-status filtering and reserved-name collision removal; proves
+`process.env` is byte-identical before and after builder use; includes a
+detector negative control and names-only production ConPTY measurement; and
+structurally traces the builder output into the single `pty.spawn`.
 
 ### B1 — corrected mechanism and production measurement
 
@@ -126,9 +159,34 @@ child observed all three values as empty. This directly measures the production
 spawn mechanism and proves it preserves the builder's omission; the libuv child
 is retained only as a proxy/negative contrast. No agent or provider was launched.
 
+Revision 3 also closes the remaining case-collision blocker. The pre-P1
+expression already layered canonical main values after ambient entries; P1 did
+not introduce that shape, but made its guarantee load-bearing. If differently
+cased Windows-equivalent names coexist in an environment block, which value a
+lookup returns is unspecified. The branch therefore makes no insertion-order or
+"first wins" production claim: it removes all ASCII-case-insensitive ambient
+variants of reserved names before adding at most one canonical entry.
+
+The fenced PowerShell child reported this complete names-only set:
+
+`APPDATA`, `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB`, `ComSpec`, `HOMEDRIVE`,
+`HOMEPATH`, `LOCALAPPDATA`, `NUMBER_OF_PROCESSORS`, `OS`, `PATH`, `PATHEXT`,
+`PROCESSOR_ARCHITECTURE`, `ProgramData`, `ProgramFiles`, `ProgramFiles(x86)`,
+`ProgramW6432`, `PSModulePath`, `SystemDrive`, `SystemRoot`, `TEMP`, `TMP`,
+`USERPROFILE`, `windir`.
+
+After removing the explicit scrub from that observation, its diff against the
+constructed Tier 1 set was exactly `added=[]`, `missing=[]`. A separate
+case-poisoned Video Scout map passed through the same builder and installed
+`@lydell/node-pty`; PowerShell observed `1`, `sentinel-main-gemini`,
+`sentinel-main-pipe`, and `sentinel-main-token`, and none of the ambient poison.
+The harness uses `-NoProfile -NonInteractive`, a 10-second timeout, kills the PTY
+on every completion path, and counts unavailable ConPTY as SKIP rather than PASS.
+
 ### B2 — evidence supplied and claim narrowed
 
-Normalized committed `main.js` evidence at `67a175e`:
+Normalized committed `main.js` evidence at `6574192` (the blob is unchanged
+from `67a175e`):
 
 - role-command classifier, from `const VALID_ROLES =` to before the Video Scout
   section: length `1744`, SHA-256
@@ -146,6 +204,48 @@ named `_e` and no trusted-sender gate is applied. The latter is not hidden or
 declared safe: P1's claim is filtering given that existing decision, and sender/
 classifier integrity is explicit remaining fence-completion work.
 
+The exact requested read-only excerpts are included here so the claim can be
+reviewed from the artifact alone. Fenced-role declaration:
+
+```js
+const FENCED_ROLES = new Set(['web-scout', 'operator', 'source-scout']);
+```
+
+Role command classifier, verbatim:
+
+```js
+function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }) {
+  if (role && VALID_ROLES.has(role)) {
+    // `--agent` is a Claude feature, so roles always launch on the Claude CLI regardless
+    // of any cli hint (the Gemini video-scout path injects its brief differently — Phase C).
+    let cmd = AGENT_CMD.claude + ' --agent ' + role;
+    if (VALID_MODELS.has(model)) cmd += ' --model ' + model;
+    if (VALID_EFFORTS.has(effort)) cmd += ' --effort ' + effort;
+    // Optional opening prompt (e.g. the reviewer's "review this diff"). Strip shell-significant
+    // characters so it stays a single safe quoted argument inside the powershell -Command string.
+    if (initialPrompt && typeof initialPrompt === 'string') {
+      const clean = initialPrompt.replace(/["`$\r\n]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (clean) cmd += ' "' + clean + '"';
+    }
+    return cmd;
+  }
+  return AGENT_CMD[cli || agent]; // undefined when unknown/falsy -> plain shell
+}
+```
+
+`pty-start` sender boundary, verbatim:
+
+```js
+ipcMain.handle('pty-start', (_e, opts) => {
+  tlog(`pty-start: START id=${opts.id} role=${opts.role || 'none'} cwd=${opts.cwd || '(unset)'}`);
+  const { id, cols, rows } = opts;
+```
+
+There is no sender-trust check between receipt of `_e` and use of `opts`; `_e`
+is unused. This is evidence of the deferred boundary, not a claim that it is
+safe. The mutually exclusive dispatch remains `if (opts.videoScout) { ... }
+else { const run = buildAgentCommand(opts); ... }`.
+
 ### B3, N1, N2, and N6
 
 Pane status now admits only `BLUE_HELM_PANE_STATUS_PIPE` and
@@ -158,11 +258,21 @@ normalize invalid `baseEnv` input to `{}`. Finally, the test parses main's actua
 Filtering is dynamically proven; main-process wiring is structurally pinned;
 adversarial live/provider behavior remains for the later fence-completion item.
 
+### Existing production PTY module identity
+
+No dependency was added. `app/package.json` already declares
+`"@lydell/node-pty": "^1.2.0-beta.12"`, and `app/main.js` already requires
+`@lydell/node-pty`. A `Module.createRequire` anchored at the committed
+`app/main.js` resolved
+`D:\Workspace\agent-command-center\app\node_modules\@lydell\node-pty\index.js`.
+The linked worktree's `app/node_modules` is a junction to that same application
+dependency tree. The lockfile is unchanged and procurement does not reopen.
+
 ## Re-pinned committed regions
 
 The pins were rechecked from normalized `git show
-67a175e4f4b5e1f4053c31e9d3b3d051f774fdab:app/main.js` bytes. Revision 2 did
-not modify `main.js`, so every Revision 1 pin remains exact:
+6574192cf26ff28201f9931c02b4721ad24703a9:app/main.js` bytes. Revisions 2 and 3
+did not modify `main.js`, so every Revision 1 pin remains exact:
 
 - fenced-role cwd gate, unchanged: length `1326`, SHA-256
   `9a1255f1e81e0a9e4e289ab15380707dd6bcc1d410ffd16f44adddb99b16f8c6`
@@ -178,12 +288,21 @@ from the first P1 gate attempt.
 
 ## Commands run and exact results
 
-Focused Node gates:
+Revision 2 focused Node gates, retained as history:
 
 - `node app/pty-env.test.js` — **83 passed, 0 failed**
 - `node app/launcher-fence-invariant.test.js` — **26 passed, 0 failed**
 - `node app/admission-budget-config.test.js` — **86 passed, 0 failed**
 - `node app/admission-budget.test.js` — **243 passed, 0 failed**
+
+Fresh Revision 3 focused Node gates:
+
+- `node app/pty-env.test.js` — **109 passed, 0 failed, 0 skipped**
+- `node app/launcher-fence-invariant.test.js` — **26 passed, 0 failed**
+- `node app/admission-budget-config.test.js` — **86 passed, 0 failed**
+
+The launcher invariant independently re-proved the unchanged `229`-byte
+environment-block pin and `13205`-byte handler pin at the reviewed content tip.
 
 Pester:
 
@@ -200,6 +319,13 @@ Pester:
 Pester was not rerun for Revision 2: the corrective delta changes no PowerShell,
 Pester, package registration, or runner file. The green 955 result above is
 carried forward and is not described as fresh.
+
+Revision 3 did run the promised authoritative Pester gate outside the restricted
+filesystem sandbox:
+
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+  scripts/run-pester.ps1` — **955 passed, 0 failed, 0 skipped (of 955)**, exit
+  `0`, in `136.12s`.
 
 ### App gate and AGR routing
 
@@ -254,6 +380,31 @@ other failure, or product assertion.
 This is direct same-machine fork-point non-attribution evidence. The builder
 still does not grant the exception.
 
+### Revision 3 fork-point control and fresh branch gate
+
+The amended authorization required a fresh control at fork point `d64192ba`.
+Each named suite was run exactly once in the real `main` worktree:
+
+- `node dockview-bootstrap.test.js` — exit `1`; the two-report parser failure at
+  position `259`, `render-process-gone` / `launch-failed`, `ERR_FAILED (-2)`,
+  and GPU exit `-1073741515` (`0xC0000135`);
+- `node dockview-app-integration.test.js` — exit `1`; no report, production
+  scenario `ERR_FAILED (-2)`, and GPU exit `-1073741515` (`0xC0000135`).
+
+One fresh Revision 3 `npm.cmd test` gate then used the same AGR tree. The chain
+ran from the first registered suite through `dockview-bootstrap.test.js`, which
+stopped before product assertions with the fork-point-matched signature. The
+next unexecuted suite, `dockview-app-integration.test.js`, ran once and stopped
+before product assertions with its fork-point-matched signature. The remaining
+suffix from `renderer/dockview-fit-policy.test.js` through
+`renderer/admission-view.test.js` ran once and exited `0`.
+
+All **88 registered suites were attempted exactly once**: **86 green**, only
+the two named pre-assertion AGR candidates, no retry, omission, other failure,
+or product assertion. The updated `pty-env.test.js` ran in that suffix and was
+green at **109/0/0**. The builder records and routes this evidence; it does not
+grant its own exception or merge authorization.
+
 The exact user-issued AGR rule was:
 
 - run once, with no retry;
@@ -292,6 +443,12 @@ gates above.
 - libuv-spawned Windows children back-fill required identity entries from their
   real parent. That is not the production PTY mechanism and is not generalized
   into a claim about Windows or ConPTY.
+- Windows resolution of case-equivalent names in a duplicate-bearing
+  environment block is treated as unspecified. Revision 3 guarantees one
+  canonical entry only for reserved/main-issued names; unrelated unfenced
+  ambient duplicates remain a separate known item.
+- Non-Video-Scout unfenced panes still inherit ambient Gemini residue. P1 does
+  not present reserved Video Scout injection as global Gemini containment.
 - `pty-start` lacks a trusted-sender gate. Classification integrity is outside
   the narrowed P1 invariant and remains explicit fence-completion work.
 - Same-user filesystem access remains possible and is outside this environment
@@ -303,15 +460,18 @@ gates above.
 
 Focused re-review is requested only for the prior review's B1–B3 and AGR items:
 
-1. B1: inspect the real-parent poison and libuv-versus-node-pty measurement;
-   confirm the fixture-only assertion and false Windows attribution are gone.
-2. B2: verify the two pinned supporting regions and the narrowed claim; confirm
-   sender/classifier integrity is explicit remaining work, not implied complete.
-3. B3/N1/N2/N6: inspect exact pane-status filtering, collision tests, ASCII-only
-   folding, symmetric input normalization, and main-role synchronization.
-4. AGR: compare the once-only fork-point and branch observations against the
+1. B1/B3: inspect reserved-key-only collision removal, fail-closed Video Scout
+   Gemini omission, `process.env` immutability, and the real production ConPTY
+   sentinel observation. Confirm the handoff makes no insertion-order claim.
+2. B1: verify the complete names-only fenced measurement, `added=[]` /
+   `missing=[]`, and absence of identity back-fill on the production path.
+3. B2: verify the pasted exact excerpts and narrowed claim; confirm sender/
+   classifier integrity is explicit remaining work, not implied complete.
+4. N1/N2/N6: inspect ASCII-only folding, symmetric input normalization, and
+   main-role synchronization.
+5. AGR: compare the once-only fork-point and branch observations against the
    supplied rule and make the independent admissibility decision.
-5. Verify the cumulative eight-path cap and this handoff-only tail.
+6. Verify the cumulative eight-path cap and this handoff-only tail.
 
 ## Review diff
 
@@ -320,34 +480,46 @@ Pinned cumulative artifact:
 
 Command:
 
-`git diff d64192ba680d932623e5557793a159076e26d8d6...67a175e4f4b5e1f4053c31e9d3b3d051f774fdab --output=.agent-review-codex-p1-fenced-role-env-containment.diff`
+`git diff d64192ba680d932623e5557793a159076e26d8d6...6574192cf26ff28201f9931c02b4721ad24703a9 --output=.agent-review-codex-p1-fenced-role-env-containment.diff`
 
-Pinned cumulative diff byte length: `63962`
+Pinned cumulative diff byte length: `85729`
 
 Pinned diff SHA-256:
-`33f041ab209df76c94ea8af0884190d7421a3c011e070750c845d17cfd2145f6`
+`7e48c4d32e98f212ff5db297bbb07ef11c87d06c633499ec0f0e12e86170ce01`
 
-Pinned focused Revision 2 artifact:
-`.agent-review-codex-p1-fenced-role-env-containment-r2.diff`
+Pinned focused Revision 3 artifact:
+`.agent-review-codex-p1-fenced-role-env-containment-r3.diff`
 
 Command:
 
-`git diff e49628e68e839baf8957abd7604101fe522f3047...67a175e4f4b5e1f4053c31e9d3b3d051f774fdab --output=.agent-review-codex-p1-fenced-role-env-containment-r2.diff`
+`git diff 9d835226ecc7d475a23d04c1dbf5743d7d82b4c2...6574192cf26ff28201f9931c02b4721ad24703a9 --output=.agent-review-codex-p1-fenced-role-env-containment-r3.diff`
 
-Focused diff byte length: `18879`
+Focused diff byte length: `30444`
 
 Focused diff SHA-256:
-`5935ffd1c9d3353a2e85538d0cbdf2d128a703e3e32856fd7cf02cb0b4286210`
+`c4a12265edb996c106908fa01f3916264ba260a1f6fde4e09de90489a1fbc1c6`
+
+Both artifacts were regenerated to explicitly named twins, compared
+byte-for-byte, and the identical twins removed. Both retained artifacts are
+gitignored by `.gitignore:33`.
 
 After merge, reproduce the reviewed delta from the recorded pre-merge main SHA,
 not from the then-advanced `main` name.
 
-Prior reviewer verdict, retained verbatim:
+Round-1 reviewer verdict, retained verbatim:
 
 `VERDICT: CHANGES REQUESTED — NOT AUTHORIZED FOR MERGE`
 
-That verdict applies to reviewed content tip `94a1cbd`; Revision 2 at `67a175e`
-responds to it but has no PASS. Focused independent Full re-review is pending.
+That verdict applies to reviewed content tip `94a1cbd`.
+
+Round-2 focused reviewer verdict, retained verbatim:
+
+`VERDICT: FAIL — CHANGES REQUESTED — NOT AUTHORIZED FOR MERGE`
+
+That verdict applies to Revision 2 content tip `67a175e` with handoff tail
+`9d83522`. Revision 3 reviewed-content candidate `6574192` responds to the one
+remaining blocker but has no PASS. Focused independent Full re-review is
+pending.
 
 Reviewer verdict source:
 `C:\Users\levij\Downloads\REVIEW-full-class-p1-fenced-role-env-containment.md`
