@@ -518,7 +518,7 @@ the handoff after the content is sealed. Revision 7's exact seven paths are all
 inside the cumulative eight-path cap;
 `app/package.json` remains untouched.
 
-**P1 Revision 7 independent verdict and AGR residual — August 27:** the fresh
+**P1 Revision 7 merged / complete — August 27:** the fresh
 independent Full-class review reconstructed `app/main.js` and `app/pty-env.js`
 from the supplied artifacts, independently recomputed all three source pins,
 ran its own adversarial pure-builder battery, verified all five artifact
@@ -533,11 +533,21 @@ narrow AGR rule because the exact-fork and branch signatures match, all 88
 registered suites are accounted for exactly once, and the failures lie outside
 the six R7 content paths. That decision proves non-attribution to P1; it does
 **not** turn the two pre-assertion suites into product-coverage evidence. Their
-product assertions have remained unexecuted through seven P1 revisions, so the
-accepted residual is tracked as **OPEN** in
-`docs/AUDIT-app-gate-reliability.md`. The PASS is a review verdict, not Blue
-merge authorization. Verdict finalization is documentation-only; the branch
-remains unmerged and must stop before merge or push.
+product assertions remained unexecuted through seven P1 revisions, so that
+accepted residual was recorded as AGR-3 in
+`docs/AUDIT-app-gate-reliability.md` before merge.
+
+Blue then merged final branch tip `135d423` into pre-merge `main` `72aabb5`
+with the no-fast-forward merge commit `76dd083` and pushed it. The reviewed
+production/security content tip is `4bee857`; the reviewed verdict-finalization
+content tip is `b9ed8ad`. The authoritative merged-main app gate subsequently
+reached both Dockview suites' product assertions and exited successfully,
+closing AGR-3, and the authoritative merged tree passed Pester **955/0/0**.
+P1 fenced-role environment containment is therefore **MERGED / COMPLETE**.
+
+This completion does **not** absorb or close the separate **Fence completion**
+item. `pty-start` trusted-sender/classifier integrity, WO-6/WO-7, P4 fail-closed
+enforcement, and the adversarial Read/WebFetch matrix remain separate work.
 
 **Quick Links ruling:** it is a bounded extension of the already-owned external
 launcher boundary, so the OSS procurement gate does not apply. “Extension” is

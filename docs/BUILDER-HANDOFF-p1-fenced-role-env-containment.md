@@ -4,14 +4,17 @@ Branch: `codex/p1-fenced-role-env-containment`
 
 Fork-point SHA: `d64192ba680d932623e5557793a159076e26d8d6`
 
-Pre-merge main SHA: `d64192ba680d932623e5557793a159076e26d8d6`
+Pre-merge main SHA: `72aabb513bf6a893a8a325dd21cc20f77316acaa`
 
-Reviewed content tip SHA: `4bee857990ae2e5cbf84bee4deb5e7881c71738b`
+Reviewed production/security content tip SHA:
+`4bee857990ae2e5cbf84bee4deb5e7881c71738b`
 
-Branch tail: this handoff document only; the reviewed content tip above is the
-three-dot review endpoint.
+Reviewed verdict-finalization content tip SHA:
+`b9ed8ad27c194e84e9c0c1eabc4149b0806b378f`
 
-Merge commit SHA: Pending until review and human-authorized merge.
+Final branch tip SHA: `135d4232b48cadd4cada4982c3072e9f2b408649`
+
+Merge commit SHA: `76dd083ead5648322af22678c279d6524c79a44b`
 
 ## Authorization and procurement disposition
 
@@ -1114,3 +1117,23 @@ Reviewer verdict sources:
 - `C:\Users\levij\.codex\attachments\448ce087-db2c-420a-97d5-ed7a3a40fd65\pasted-text.txt`
 - `C:\Users\levij\.codex\attachments\955d466f-312e-4055-8ec7-5868206186ea\pasted-text.txt`
 - `C:\Users\levij\.codex\attachments\c8679446-f06b-4c25-bf7a-5b8cea430e48\pasted-text.txt`
+
+## Post-merge closeout — August 27
+
+Blue merged final branch tip `135d423` into pre-merge `main` `72aabb5` with a
+real no-fast-forward merge at `76dd083`, then pushed it. The merge retains the
+Full-class production/security review of content tip `4bee857` and the
+Standard-class verdict-finalization review of content tip `b9ed8ad`; the final
+`135d423` commit is the handoff-only branch tail.
+
+The authoritative gate on merged `main` at `76dd083` reached the product
+assertions in both `dockview-bootstrap.test.js` and
+`dockview-app-integration.test.js` and exited successfully. That later evidence
+closes AGR-3's accepted coverage residual. The authoritative merged tree also
+passed Pester **955/0/0**. This documentation-only closeout does not rerun the
+app gate or the full Pester suite and does not claim that it did.
+
+P1 fenced-role environment containment is therefore **MERGED / COMPLETE**.
+This closes only P1. Trusted-sender/classifier integrity, WO-6/WO-7, P4
+fail-closed enforcement, and the adversarial Read/WebFetch matrix remain
+separate **Fence completion** work.
