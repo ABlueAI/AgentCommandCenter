@@ -243,6 +243,33 @@ is not even an exclusion. The inherited-environment hypothesis remains unproven.
 
 ---
 
+## AGR-3 — P1 exception proves non-attribution but leaves Dockview assertions unexecuted — OPEN
+
+**Status:** OPEN. Accepted coverage residual. **No implementation fix is authorized by
+this entry.**
+
+During independent Full-class review of P1 fenced-role environment containment Revision
+7, the reviewer admitted the two named Dockview suite failures under the existing narrow
+AGR decision tree. The exact-fork and branch observations matched their respective
+pre-assertion Electron `ERR_FAILED` / GPU `0xC0000135` signatures; all 88 registered suites
+were accounted for exactly once as 14 before the two named suites, each named suite once,
+and the remaining 72-suite suffix once with exit `0`. The reviewer therefore found the
+failures non-attributable to P1 and returned `VERDICT: PASS` for the reviewed R7 content.
+
+That exception establishes **non-attribution, not coverage**. Neither
+`app/dockview-bootstrap.test.js` nor `app/dockview-app-integration.test.js` reached its
+product assertions in the fresh P1 app gate, and those assertions have now gone
+unexecuted through seven consecutive P1 revisions. The correct accounting is therefore
+“86 suites green; two named pre-assertion AGR exceptions accepted,” not “all 88 suites
+green.” This residual remains open until a future authorized run reaches both suites'
+product assertions or a separately authorized reliability repair restores that coverage.
+
+Source: independent Full-class review of P1 R7 content tip `4bee857` with handoff tail
+`d2d9c90`, recorded during the August 27 verdict-finalization pass. Its controlling line
+is retained verbatim: `VERDICT: PASS`.
+
+---
+
 ## Rules this audit inherits
 
 - Do not suppress Electron errors, add blind retries, weaken assertions, or relabel a
@@ -253,7 +280,7 @@ is not even an exclusion. The inherited-environment hypothesis remains unproven.
   procurement gate in `AGENTS.md`. Ordinary repair of the existing harness does not
   itself reopen procurement.
 - Findings F1 and F5 belong to `docs/AUDIT-test-runner-wiring.md` and are unrelated to
-  AGR-1 and AGR-2. F1 remains a separate aggregation/reporting-contract problem.
+  AGR-1, AGR-2, and AGR-3. F1 remains a separate aggregation/reporting-contract problem.
 
 ## Evidence preservation
 
@@ -325,4 +352,5 @@ This tail is verdict-only and is **unreviewed by construction**: it cannot conta
 SHA, and reviewing it would spawn a further tail. The pinned artifact continues to pin the
 reviewed content tip `06f29e6` and excludes this commit. The PASS records the review
 outcome on that tip; it does **not** close AGR-1 or AGR-2, which remain **OPEN**, and it
-authorizes no fix, no merge, and no push.
+does not close the later AGR-3 coverage residual. It authorizes no fix, no merge, and no
+push.

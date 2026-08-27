@@ -263,10 +263,12 @@ driver.
 2. Pane-status production completion, rebased onto merged Quick Links before
    its review; no paid live provider turn until turn accounting is resolved or
    mechanically bounded.
-3. P1 fenced-role environment containment at `app/main.js:1033`, integrated
-   after the PTY environment path is stable.
-4. Fence completion: WO-6/WO-7, P4 fail-closed enforcement, and the adversarial
-   Read/WebFetch matrix on a quiet system.
+3. P1 fenced-role environment containment at
+   `ipcMain.handle('pty-start') -> buildPtyEnv -> pty.spawn`, integrated after
+   the PTY environment path is stable.
+4. Fence completion: `pty-start` trusted-sender/classifier integrity, WO-6/WO-7,
+   P4 fail-closed enforcement, and the adversarial Read/WebFetch matrix on a
+   quiet system.
 5. One full daily-driver day with builders idle and Blue as the instrument.
 6. Clean-machine/VM installation and restore-path testing, including the
    measured Windows long-path risk.
@@ -290,6 +292,252 @@ for settings lifecycle, pipe/token boundary, dead-reporter expiry, version
 fail-closed, turn accounting, and consequential-action isolation; Standard-
 class for badge presentation and Dockview identity. Full-class security review
 comes from a fresh independent session.
+
+**P1 implementation checkpoint — August 25:** branch
+`codex/p1-fenced-role-env-containment`, forked from merged pane-status baseline
+`d64192ba680d932623e5557793a159076e26d8d6`, is prepared for independent
+Full-class review; it is **not merged or authorized to merge**. The existing
+fenced-role predicate now selects a pure environment builder that starts from
+an empty object and copies only Blue's exact Tier 1 Windows allowlist. Unfenced
+panes begin with the admission-scrubbed base but retain only printable-ASCII
+ambient names; before main-owned values are layered, every ASCII-case variant
+of an emitted or absent-but-owned name is removed. Values are not inspected,
+transformed, or logged. Filtering is dynamically proven, main-process wiring is
+structurally pinned, and adversarial live/provider behavior remains part of the
+later fence-completion item. Blue's controlling procurement disposition is:
+“P1 hardens the existing owned PTY environment boundary and introduces no new
+subsystem or dependency; the OSS procurement gate does not reopen.”
+
+**P1 Revision 2 scope correction — August 25:** the P1 merge claim is limited to
+environment filtering **given the existing classification decision**. The
+current `pty-start` handler does not apply a trusted-sender gate, and renderer-
+supplied role/Video-Scout classification is therefore not claimed as a new P1
+security boundary; its integrity is explicit remaining work in item 4 above.
+Source inspection established that `buildAgentCommand` exact-matches the same
+role spellings without normalization and that its agent-role branch is mutually
+exclusive with the Video Scout branch. A poisoned-parent comparison further
+established two distinct Windows behaviors: libuv `child_process` back-fills
+its required `USERNAME`, `USERDOMAIN`, and `LOGONSERVER` entries from the real
+parent, while the production `@lydell/node-pty`/ConPTY path preserved their
+omission. The test records libuv only as a proxy/negative contrast and uses the
+production spawn mechanism for the P1 inheritance claim.
+
+**P1 Revision 3 correction — August 25:** the focused Revision 2 verdict was
+retained verbatim: `VERDICT: FAIL — CHANGES REQUESTED — NOT AUTHORIZED FOR
+MERGE`. The remaining blocker was a pre-existing environment-layering shape
+that became load-bearing in P1: a differently cased ambient spelling could
+coexist with a canonical main-issued key, leaving Windows lookup behavior
+unspecified. The builder now removes every ASCII-case-insensitive ambient
+variant of the always-main-owned scrub and pane-status transport names, and of
+`GEMINI_API_KEY` for Video Scout, before injecting one canonical value. Missing
+or invalid Video Scout Gemini input reserves the name but injects nothing;
+ambient residue is never a fallback. Pane-status names remain reserved even
+when enrollment is absent. The operation uses fresh copies and a test proves
+`process.env` is byte-identical before and after construction. Unrelated
+ambient-vs-ambient duplicates remain deliberately unchanged; non-Video-Scout
+unfenced panes also retain ambient Gemini residue as pre-existing behavior.
+
+The real `@lydell/node-pty`/ConPTY measurement observed all constructed Tier 1
+names plus the one explicit scrub key, with `added=[]`, `missing=[]`, and no
+`USERNAME`/`USERDOMAIN`/`LOGONSERVER` back-fill. A separate case-poisoned Video
+Scout probe observed only the main-issued scrub, Gemini, pipe, and token
+sentinels. Focused results are `pty-env` **109/0/0** and the unchanged-pin gate
+**26/0** (environment block `229`, handler `13205`); Pester is **955/0/0**.
+The fresh 88-suite app gate attempted every suite once: 86 green and only the
+two fork-point-matched pre-assertion Electron/GPU `0xC0000135` AGR candidates.
+Independent focused Full re-review remains required; there is no merge
+authorization.
+
+**P1 Revision 4 correction — August 26:** the independent Revision 3 verdict is
+retained verbatim: `VERDICT: FAIL — CHANGES REQUESTED — NOT AUTHORIZED FOR
+MERGE`. Its remaining blocker showed that strict ASCII folding alone did not
+remove non-ASCII ambient spellings whose Unicode uppercase collapses to an exact
+ASCII reserved name, including dotless-i and long-s aliases of the scrub,
+Gemini, and pane-status pipe names. The reserved-name omission path now applies
+a second, denylist-only check when strict ASCII folding refuses a source name:
+Unicode uppercase must collapse to printable ASCII and then exactly match the
+already-frozen reserved set before the entry is removed. That fallback can
+never admit an allowlist entry and does not globally deduplicate ambient names;
+an unrelated Unicode ambient-name negative control remains present.
+
+The pure builder and the installed `@lydell/node-pty`/ConPTY production probe
+both receive all three non-ASCII poisons and prove them absent before and after
+the production spawn, while the canonical main-issued sentinels remain visible.
+Focused results are `pty-env` **120/0/0**, unchanged source pins **26/0**, and
+admission configuration **86/0**; authoritative Pester is **955/0/0**. The two
+fork-point controls and the fresh branch gate reproduced the same pre-assertion
+Electron/GPU `0xC0000135` signatures exactly once. The one suffix invocation
+ran to process completion with no visible failure in the retained stream, but
+its output exceeded the execution window and the controller did not retain its
+terminal exit code; that capture limitation is review evidence, not a green
+claim. Revision 4 remains unmerged and requires its own independent Full-class
+verdict.
+
+**P1 Revision 5 correction — August 26:** the independent Revision 4 verdict is
+retained verbatim: `VERDICT: FAIL — CHANGES REQUESTED — NOT AUTHORIZED FOR
+MERGE`. Revision 5 does not claim that JavaScript case conversion reproduces
+Windows NLS comparison. Instead, the reserved-name denylist uses a documented
+conservative superset: NFKC normalization followed by lowercase then uppercase,
+accepted only when the result is printable ASCII and exactly matches a frozen
+reserved name. This may deliberately remove non-ASCII names Windows would keep;
+it cannot admit an allowlist name. The test independently generates the complete
+Unicode scalar corpus whose conservative fold can replace an ASCII substring in
+one of the four reserved names, builds one environment containing the whole
+corpus, and asserts the closed invariant that each reserved family is either
+absent or represented exactly once in canonical ASCII spelling. The generated
+corpus contains more than 1,000 aliases and covers the reviewer-named dotless-i,
+long-s, Kelvin, sharp-s/capital-sharp-s, and ligature families. The non-reserved
+`ſAFE_HARBOR` control traverses the ASCII-collapse path and remains present.
+
+The installed `@lydell/node-pty`/ConPTY probe measured Windows lookup directly.
+An ASCII lowercase control resolved through its canonical spelling. Each of the
+eight reviewer-named non-ASCII spellings genuinely entered the child under its
+exact name, while none resolved through the canonical reserved spelling on this
+VM. That measurement is recorded as platform evidence, not generalized into a
+Windows equivalence claim; the conservative denylist removes every measured
+alias regardless. Reserved canonical values are layered before ambient values as
+defense in depth, while correctness remains independent of insertion order.
+`omitReservedWindowsEnv` now copies through a null-prototype intermediate so an
+own `__proto__` entry is preserved without prototype mutation, then returns a
+plain object.
+
+Focused results are `pty-env` **176/0/0**, unchanged source pins **26/0**, and
+admission configuration **86/0**; authoritative Pester is **955/0/0**. The fresh
+88-suite app gate used the same AGR decision tree. The bootstrap and direct
+integration segments each reproduced the fork-point pre-assertion Electron
+`ERR_FAILED` / GPU `0xC0000135` signature exactly once; the registered suffix
+from the next suite through the end completed once with exit `0`. Revision 5
+remains unmerged and requires its own independent Full-class verdict.
+
+**P1 Revision 6 correction — August 26:** the independent Revision 5 verdict is
+retained verbatim: `VERDICT: FAIL — CHANGES REQUESTED — NOT AUTHORIZED FOR
+MERGE`. It confirmed the containment property and found four accuracy blockers,
+not a security regression. Revision 6 changes tests, assertions, comments, pins,
+and evidence only; production logic is unchanged. Its six paths are all members
+of the existing cumulative eight-path cap. It deliberately reopens `main.js`
+after three four-path revisions solely to correct two inaccurate comments inside
+the pinned handler.
+
+The generated corpus is now derived from the reserved canonical names: after a
+Unicode scalar is conservatively folded, the generator asks each canonical name
+directly whether that complete folded string is a substring. There is no
+character-class pre-filter to drift when a canonical name changes. The resulting
+exhaustive corpus is explicitly scoped to **single-scalar substitutions**; the
+whole-string production fold covers composed substitutions, and the two bounded
+controls `GEMıNı_API_KEY` and `BLUE_HELM_PANE_ﬅATUſ_PIPE` prove that path. The
+expected reviewer-code-point representative set is derived by the same
+canonical-substring rule and asserted as exact set equality. U+FB01 folds to
+`FI` and is explicitly absent because none of the current canonical names
+contains `FI`; a future name containing `FI` changes the derived set rather than
+silently preserving a magic count.
+
+Before editing `main.js`, Revision 6 pre-registered that the comment-free
+`229`-UTF-16-code-unit executable environment block and separate
+`1326`-UTF-16-code-unit cwd gate must remain byte-identical by SHA-256, while the
+full `13205`-UTF-16-code-unit handler must move. The old
+tripwire then failed exactly that way: `1326` and `229` retained their prior
+hashes, while only the handler moved. The new handler pin is length `13484`,
+SHA-256 `ab6f6cd37752029c52d4a89fb99331a319f8b032a011b297d78d22beeafea161`.
+An independently pinned `main.js`-only diff from the Revision 4 content tip to
+the Revision 6 content tip must show that the executable handler content is
+unchanged and only the comments moved. The corrected main comment now describes
+both facts accurately: the builder constructs explicit entries before filtered
+ambient entries, and it copies at most the two exact pane-status transport names
+whose values are strings.
+
+The installed `@lydell/node-pty`/ConPTY measurement placed canonical and
+ASCII-case-alias scrub names into the child environment in both insertion
+orders. Both exact spellings appeared in the child's full relevant name list.
+Canonical lookup returned the canonical sentinel when canonical was inserted
+first and the alias sentinel when the alias was inserted first: local
+**first-wins** evidence. This is not generalized into a Windows guarantee, and
+correctness still relies on reserved-family removal. The test now includes an
+integer-like ambient key and makes no universal JavaScript enumeration-order
+claim. Its parent timeout is derived from the complete sequential probe count,
+and every platform lookup must emit exactly one canonical-result marker.
+
+Fresh focused results are `pty-env` **185/0/0**, launcher/source pins **26/0**,
+and admission configuration **86/0**. Authoritative Pester is **955/0/0**, exit
+`0`, in `136.58s`. The fresh 88-suite app gate followed the same once-only AGR
+tree. Exact-fork bootstrap and integration controls reproduced their respective
+pre-assertion parse/no-report `ERR_FAILED` and GPU `0xC0000135` signatures.
+Branch bootstrap and integration matched those controls; the registered suffix
+from suite 3 through suite 88 completed once with exit `0`. Therefore all 88
+suites were attempted exactly once: 86 green and only the two named AGR
+candidates. Revision 6 remains unmerged and has no PASS or merge authorization.
+
+**P1 Revision 7 correction — August 26:** the independent Revision 6 review did
+not issue a literal `VERDICT:` line and did not authorize merge. It reproduced
+the containment result but found that the emitted main-issued map and reserved
+name list could drift, while the NFKC-based denylist retained every non-ASCII
+name it could not collapse and its test oracle duplicated the same relation.
+Blue explicitly authorized the production behavior change: unfenced ambient
+inheritance now keeps only names matching printable ASCII. This changes the P1
+invariant and retires the inherited “exact pre-P1 base” claim. It is a name-only
+boundary: Unicode values and synthetic non-string values under surviving ASCII
+names remain exact and uninspected.
+
+`buildMainIssuedEnv` constructs explicit entries first. Each call's reserved
+set is derived as `Object.keys(mainIssued)` plus both absent-but-owned pane-
+status transport names and, for Video Scout only, the absent-but-owned Gemini
+name. The 40-call Video Scout/Gemini/pane-status matrix proves the exact union
+and makes future emitted-key drift structural rather than conventional. Ambient
+removal uses only the strict printable-ASCII fold; the NFKC helper, copied test
+oracle, generated single-substitution corpus (which measured `3165` only on the
+Revision 6 runtime), multi-substitution fixtures, U+FB01 accounting, and
+duplicate-order probe are retired. All eight previously named Unicode aliases
+remain regression inputs and are rejected by the single ASCII-name rule.
+
+The valid pre-flight probe under Node `v24.18.0` measured 69 real parent
+environment names and zero outside printable ASCII; no values or types were
+read. A malformed first attempt omitted the regex character-class brackets and
+was discarded before implementation. The valid zero result establishes only
+that the new name filter is inert for that measured parent environment.
+
+Revision 7 reopens `main.js` only to correct the stale pre-P1 and ConPTY-ordering
+comments. Before re-pinning, the existing invariant passed the `1326`- and
+`229`-UTF-16-code-unit regions exactly and failed only the wider handler at
+`13566 !== 13484`. The new handler pin is `13566` UTF-16 code units, SHA-256
+`da784a2e5c6be38e4daecc0e7fdfaf1f404aacfa5aac2cd01c8f6c2e2235fad9`.
+The launcher now labels its numeric lengths correctly as JavaScript UTF-16 code
+units; hashes remain over UTF-8 bytes. A dedicated `main.js`-only artifact from
+`f4f0814` must prove every R7 main delta is comment-only.
+
+Initial focused results are `pty-env` **156/0/0**—the registered decrease below
+185 after corpus retirement—launcher/source pins **26/0**, and admission
+configuration **87/0**. The fenced production ConPTY names-only probe remains
+`added=[]`, `missing=[]`; the libuv identity back-fill contrast remains. Full
+Pester is **955/0/0**, exit `0`, in `136.31s`. The fresh app gate followed the
+same one-shot AGR tree: the two exact-fork controls reproduced their respective
+bootstrap parse and integration no-report `ERR_FAILED` / GPU `0xC0000135`
+signatures; branch bootstrap and integration matched once; and the remaining
+72-suite suffix exited `0`. All 88 registered suites were attempted exactly
+once: 86 green and only the two named AGR candidates. The content commit,
+artifact identities, and a new independent Full-class verdict are recorded in
+the handoff after the content is sealed. Revision 7's exact seven paths are all
+inside the cumulative eight-path cap;
+`app/package.json` remains untouched.
+
+**P1 Revision 7 independent verdict and AGR residual — August 27:** the fresh
+independent Full-class review reconstructed `app/main.js` and `app/pty-env.js`
+from the supplied artifacts, independently recomputed all three source pins,
+ran its own adversarial pure-builder battery, verified all five artifact
+identities and both path caps, and returned the controlling verdict verbatim:
+`VERDICT: PASS`. It found no Critical, High, or Medium issue. Its two Low
+observations—metadata-only visibility for rejected inherited names and
+main-issued-last ordering as future defense in depth—are explicitly
+non-blocking and authorize no production change.
+
+The reviewer independently admitted the two named Dockview failures under the
+narrow AGR rule because the exact-fork and branch signatures match, all 88
+registered suites are accounted for exactly once, and the failures lie outside
+the six R7 content paths. That decision proves non-attribution to P1; it does
+**not** turn the two pre-assertion suites into product-coverage evidence. Their
+product assertions have remained unexecuted through seven P1 revisions, so the
+accepted residual is tracked as **OPEN** in
+`docs/AUDIT-app-gate-reliability.md`. The PASS is a review verdict, not Blue
+merge authorization. Verdict finalization is documentation-only; the branch
+remains unmerged and must stop before merge or push.
 
 **Quick Links ruling:** it is a bounded extension of the already-owned external
 launcher boundary, so the OSS procurement gate does not apply. “Extension” is
