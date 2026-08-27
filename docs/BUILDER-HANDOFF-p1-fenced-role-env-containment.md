@@ -901,8 +901,10 @@ gates above.
   the narrowed P1 invariant and remains explicit fence-completion work.
 - Same-user filesystem access remains possible and is outside this environment
   filtering invariant.
-- The two Dockview pre-assertion observations require independent AGR
-  disposition before merge authorization.
+- Independent Full-class review admitted the two Dockview pre-assertion
+  observations under the narrow AGR rule. That establishes non-attribution to
+  P1, not product-assertion coverage; the accepted open residual is tracked as
+  AGR-3 in `docs/AUDIT-app-gate-reliability.md`.
 - Revision 4's suffix exit-code gap remains historical evidence. Revisions 5 and
   6 each ran a fresh gate under the same authorized tree and retained suffix
   exit `0`; Revision 7's fresh gate is recorded separately below.
@@ -913,10 +915,10 @@ gates above.
   surviving printable-ASCII names. P1 does not type-normalize arbitrary
   unfenced environment values.
 
-## Recommended Full-class review focus
+## Completed Revision 7 Full-class review focus
 
-Focused Full-class re-review is requested for Revision 7 production behavior,
-artifact coverage, and AGR evidence:
+The independent Full-class review completed these Revision 7 focus items for
+production behavior, artifact coverage, and AGR evidence:
 
 1. Verify unfenced inheritance keeps only names matching printable ASCII while
    preserving values and value types exactly; confirm fenced Tier 1 behavior is
@@ -951,12 +953,12 @@ Pinned cumulative artifact:
 
 Command:
 
-`git diff --output=.agent-review-codex-p1-fenced-role-env-containment.diff d64192ba680d932623e5557793a159076e26d8d6...4bee857990ae2e5cbf84bee4deb5e7881c71738b`
+`git diff --output=.agent-review-codex-p1-fenced-role-env-containment.diff d64192ba680d932623e5557793a159076e26d8d6...b9ed8ad`
 
-Pinned cumulative diff byte length: `141194`
+Pinned verdict-finalization cumulative diff byte length: `154807`
 
-Pinned diff SHA-256:
-`71fe72a4d6d73d02193998476c49a4ebcaf09c8732c0c37fbc749c53c4320aee`
+Pinned verdict-finalization cumulative diff SHA-256:
+`e47d57cdf52491eb3a5bcc22b990c57fdcd82b191f9fe0f5cf3763b2406b1d06`
 
 Pinned focused Revision 7 artifact:
 `.agent-review-codex-p1-fenced-role-env-containment-r7.diff`
@@ -997,15 +999,35 @@ Main-comment artifact SHA-256:
 The R7 main-comment artifact contains `11` added/removed lines and `0` changed
 lines whose content after the diff marker is not a `//` comment.
 
-All four content artifacts were regenerated to explicitly named twins,
-compared byte-for-byte, and the identical twins removed. All are gitignored by
-`.gitignore:33`.
+The three R7-focused/source artifacts retain their recorded identities. The
+updated cumulative artifact supersedes the prior R7 cumulative bytes at the
+same path. It and the focused verdict-finalization artifact below were each
+regenerated to an explicitly named twin, compared byte-for-byte, and the
+identical twins removed. All are gitignored by `.gitignore:33`.
 
-After the handoff-only tail commit, the external review packet also includes
+Pinned focused verdict-finalization artifact:
+`.agent-review-codex-p1-fenced-role-env-containment-verdict-finalization.diff`
+
+Command:
+
+`git diff --output=.agent-review-codex-p1-fenced-role-env-containment-verdict-finalization.diff d2d9c907ebb9fea20b50f1715baba27c1efca1c6...b9ed8ad`
+
+Focused verdict-finalization diff byte length: `5097`
+
+Focused verdict-finalization diff SHA-256:
+`1c1f2ec2ced7de03b191427ec0f58decf4c0a2268df6726a3be05b8726bc3f2a`
+
+The sealed R7 packet includes
 `.agent-review-codex-p1-fenced-role-env-containment-r7-tail.diff`, generated
-from content tip `4bee857` to the final tail tip. Its byte count and SHA-256 are
-reported outside this file after that commit; embedding its own identity here
-would create a self-reference loop.
+from content tip `4bee857` to R7 handoff tail `d2d9c90`: `36048` bytes, SHA-256
+`f609be026df0f93074c470865e95a12eedf47299c4ca6c9f770ce2c0d95627e0`.
+
+After the verdict-finalization handoff-only tail commit, the external review
+packet also includes
+`.agent-review-codex-p1-fenced-role-env-containment-verdict-finalization-tail.diff`,
+generated from content tip `b9ed8ad` to the final tail tip. Its byte count and
+SHA-256 are reported outside this file after that commit; embedding its own
+identity here would create a self-reference loop.
 
 After merge, reproduce the reviewed delta from the recorded pre-merge main SHA,
 not from the then-advanced `main` name.
@@ -1046,9 +1068,43 @@ That verdict applies to Revision 5 content tip `7297b76` with handoff tail
 
 The Revision 6 review of content tip `f4f0814` with handoff tail `5ea5869` did
 not issue a literal `VERDICT:` line and explicitly did not authorize merge. Its
-F1/F2/F3/F4/F5 findings are the authority for Revision 7. Revision 7 content tip
-`4bee857` responds to them but has no PASS. Independent focused Full-class re-
-review is pending. No merge or push is authorized.
+F1/F2/F3/F4/F5 findings are the authority for Revision 7.
+
+Revision 7 content tip `4bee857` with handoff tail `d2d9c90` received a fresh
+independent Full-class review. Its controlling verdict is retained verbatim:
+
+`VERDICT: PASS`
+
+The reviewer found no Critical, High, or Medium issue. LOW-1 recommends a
+future metadata-only rejected-name count; LOW-2 identifies main-issued-last as
+future defense in depth. Both are explicitly non-blocking and neither
+authorizes a production change. The reviewer independently admitted the two
+named pre-assertion Dockview failures under the existing AGR rule, while
+requiring the unexecuted product-assertion coverage to remain visible. That
+accepted residual is now AGR-3 in
+`docs/AUDIT-app-gate-reliability.md`.
+
+Blue authorized this finalization verbatim:
+
+> **AUTHORIZE VERDICT FINALIZATION:** record the Revision 7 `VERDICT: PASS`
+> verbatim, update the P1 master status and handoff, record the two-suite AGR
+> coverage residual in `docs/AUDIT-app-gate-reliability.md`, regenerate the
+> review artifacts, and stop before merge.
+
+Verdict-finalization content commit `b9ed8ad` changes exactly
+`BLUE-HELM-MASTER-STATUS.md` and `docs/AUDIT-app-gate-reliability.md`. This
+handoff-only tail changes exactly this handoff. The authorized finalization
+therefore has a three-path cap and no application, test, package, lockfile, or
+dependency delta. It expands the cumulative branch path set from eight to nine
+only by adding the already-tracked AGR audit document; the original R7
+seven-path cap and its reviewed production bytes remain unchanged.
+
+A focused Standard documentation review is requested over the finalization
+content and this handoff tail. The Revision 7 `VERDICT: PASS` remains the
+controlling production/security verdict; the new review needs only to verify
+verbatim verdict preservation, AGR-3 accuracy, status/handoff consistency,
+three-path finalization scope, artifact identities, and the absence of any
+application delta. No merge or push is authorized.
 
 Reviewer verdict sources:
 
@@ -1057,3 +1113,4 @@ Reviewer verdict sources:
 - `C:\Users\levij\.codex\attachments\fbc8725d-cd13-412b-819e-294355e9e268\pasted-text.txt`
 - `C:\Users\levij\.codex\attachments\448ce087-db2c-420a-97d5-ed7a3a40fd65\pasted-text.txt`
 - `C:\Users\levij\.codex\attachments\955d466f-312e-4055-8ec7-5868206186ea\pasted-text.txt`
+- `C:\Users\levij\.codex\attachments\c8679446-f06b-4c25-bf7a-5b8cea430e48\pasted-text.txt`
