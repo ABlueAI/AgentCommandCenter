@@ -243,10 +243,10 @@ is not even an exclusion. The inherited-environment hypothesis remains unproven.
 
 ---
 
-## AGR-3 — P1 exception proves non-attribution but leaves Dockview assertions unexecuted — OPEN
+## AGR-3 — Merged-main gate reached both Dockview product assertion sets — CLOSED
 
-**Status:** OPEN. Accepted coverage residual. **No implementation fix is authorized by
-this entry.**
+**Status:** CLOSED on the later authorized merged-main gate. **No implementation fix was
+required or authorized by this entry.** AGR-1 and AGR-2 remain **OPEN**.
 
 During independent Full-class review of P1 fenced-role environment containment Revision
 7, the reviewer admitted the two named Dockview suite failures under the existing narrow
@@ -256,17 +256,28 @@ were accounted for exactly once as 14 before the two named suites, each named su
 and the remaining 72-suite suffix once with exit `0`. The reviewer therefore found the
 failures non-attributable to P1 and returned `VERDICT: PASS` for the reviewed R7 content.
 
-That exception establishes **non-attribution, not coverage**. Neither
+That exception established **non-attribution, not coverage**. Neither
 `app/dockview-bootstrap.test.js` nor `app/dockview-app-integration.test.js` reached its
-product assertions in the fresh P1 app gate, and those assertions have now gone
+product assertions in the fresh P1 app gate, and those assertions had gone
 unexecuted through seven consecutive P1 revisions. The correct accounting is therefore
 “86 suites green; two named pre-assertion AGR exceptions accepted,” not “all 88 suites
-green.” This residual remains open until a future authorized run reaches both suites'
-product assertions or a separately authorized reliability repair restores that coverage.
+green.” The residual was required to remain open until a future authorized run reached
+both suites' product assertions or a separately authorized reliability repair restored
+that coverage.
+
+That closure condition was later met on merged `main` at
+`76dd083ead5648322af22678c279d6524c79a44b`: the authorized merged-main app gate
+reached both Dockview suites' product assertions and exited successfully. AGR-3 is
+therefore closed on direct coverage evidence, not by reinterpreting the earlier P1
+exception. This does not resolve or narrow AGR-1's report-parsing defect or AGR-2's
+unreconciled historical green-versus-failing transition; both remain open.
 
 Source: independent Full-class review of P1 R7 content tip `4bee857` with handoff tail
 `d2d9c90`, recorded during the August 27 verdict-finalization pass. Its controlling line
 is retained verbatim: `VERDICT: PASS`.
+
+Closure source: the later authorized app gate on merged `main` at `76dd083`, which
+reached both named suites' product assertions and exited successfully.
 
 ---
 
