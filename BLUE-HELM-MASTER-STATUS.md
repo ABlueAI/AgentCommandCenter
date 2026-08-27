@@ -518,6 +518,27 @@ the handoff after the content is sealed. Revision 7's exact seven paths are all
 inside the cumulative eight-path cap;
 `app/package.json` remains untouched.
 
+**P1 Revision 7 independent verdict and AGR residual — August 27:** the fresh
+independent Full-class review reconstructed `app/main.js` and `app/pty-env.js`
+from the supplied artifacts, independently recomputed all three source pins,
+ran its own adversarial pure-builder battery, verified all five artifact
+identities and both path caps, and returned the controlling verdict verbatim:
+`VERDICT: PASS`. It found no Critical, High, or Medium issue. Its two Low
+observations—metadata-only visibility for rejected inherited names and
+main-issued-last ordering as future defense in depth—are explicitly
+non-blocking and authorize no production change.
+
+The reviewer independently admitted the two named Dockview failures under the
+narrow AGR rule because the exact-fork and branch signatures match, all 88
+registered suites are accounted for exactly once, and the failures lie outside
+the six R7 content paths. That decision proves non-attribution to P1; it does
+**not** turn the two pre-assertion suites into product-coverage evidence. Their
+product assertions have remained unexecuted through seven P1 revisions, so the
+accepted residual is tracked as **OPEN** in
+`docs/AUDIT-app-gate-reliability.md`. The PASS is a review verdict, not Blue
+merge authorization. Verdict finalization is documentation-only; the branch
+remains unmerged and must stop before merge or push.
+
 **Quick Links ruling:** it is a bounded extension of the already-owned external
 launcher boundary, so the OSS procurement gate does not apply. “Extension” is
 policy-only: Quick Links **must not reuse** the existing `open-external` handler.
