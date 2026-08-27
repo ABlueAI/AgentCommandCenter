@@ -194,8 +194,12 @@ process.stdout.write('\n-- source tripwires --\n');
     'main.js passes the actual process environment to the centralized PTY builder');
   assert(!/\.\.\.process\.env\b/.test(ptyEnvBlock),
     'the real main.js ptyEnv construction never spreads raw process.env');
-  assert(ptyEnvSrc.includes(': stripAdmissionEnv(source);'),
-    'pty-env.js preserves stripAdmissionEnv as the unfenced ambient construction path');
+  assert(ptyEnvSrc.includes(': stripAdmissionEnv(source);')
+    && ptyEnvSrc.includes('const ambient = omitReservedWindowsEnv(ambientBase, reservedNames);')
+    && ptyEnvSrc.includes('if (!folded || reservedFolded.has(folded)) continue;'),
+  'pty-env.js composes admission scrubbing with the printable-ASCII inherited-name boundary');
+  assert(!ptyEnvSrc.includes(".normalize('NFKC')"),
+    'the unfenced inherited-name boundary has no ICU/Unicode normalization dependency');
   assert(ptyEnvSrc.includes('? copyAllowedWindowsEnv(source, FENCED_ENV_ALLOWLIST)'),
     'pty-env.js builds fenced ambient inheritance only through the fixed allowlist copier');
   assert(mainSrc.includes('parseAdmissionConfig(process.env)'),

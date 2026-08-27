@@ -4,10 +4,9 @@
 // P1 hardens the existing, owned pty-start boundary. It adds no subsystem or dependency, so the
 // OSS procurement gate does not reopen. Fenced roles receive a Windows environment built from an
 // EMPTY object and this exact Tier 1 allowlist. Unfenced panes begin with the pre-P1 environment
-// expression from stripAdmissionEnv(baseEnv), with one deliberate correction: before explicit
-// main-issued values are layered, all ASCII-case-insensitive ambient variants — plus a conservative
-// non-ASCII superset of exact ASCII reserved names — are removed for the Claude subprocess scrub,
-// Video Scout's safeStorage key, and the exact pane-status transport names.
+// expression from stripAdmissionEnv(baseEnv), with one deliberate correction: only printable-ASCII
+// ambient names survive, and every ASCII-case-insensitive variant of a main-owned name is removed
+// before explicit values are layered. Values are never inspected or transformed.
 //
 // Pure: no Electron, process, filesystem, logging, or spawning. Environment values are never
 // inspected, transformed, or emitted here.
@@ -53,18 +52,6 @@ function foldAsciiWindowsEnvName(name) {
   return name.replace(/[a-z]/g, (ch) => ch.toUpperCase());
 }
 
-// DENYLIST-ONLY conservative fallback. This can never admit a name: when the strict ASCII fold
-// refuses a source spelling, compatibility normalization plus lower-then-upper casing is used only
-// to ask whether it collapses to a printable-ASCII reserved name. This is intentionally a superset,
-// not a claim about Windows' NLS comparison: it may fail closed on spellings Windows treats as
-// distinct (for example ligatures), but it covers compatibility and one-way case mappings such as
-// Kelvin sign, capital sharp-s, dotless-i, and long-s. Unrelated ASCII duplicates remain untouched.
-function foldReservedConservativeAliasToAscii(name) {
-  if (typeof name !== 'string') return null;
-  const wide = name.normalize('NFKC').toLowerCase().toUpperCase();
-  return /^[\x20-\x7E]+$/.test(wide) ? wide : null;
-}
-
 /**
  * Copy only allowlisted, printable-ASCII Windows environment entries from baseEnv.
  *
@@ -92,11 +79,12 @@ function copyAllowedWindowsEnv(baseEnv, allowedNames) {
 }
 
 /**
- * Return a fresh copy without ASCII-case-insensitive variants of `reservedNames`, including the
- * denylist-only conservative non-ASCII superset described above.
+ * Return a fresh copy containing only printable-ASCII names and excluding every
+ * ASCII-case-insensitive variant of `reservedNames`.
  *
  * This intentionally does not deduplicate unrelated ambient-vs-ambient variants. Changing which
  * Path/PATH, TEMP/Temp, or other unfenced value wins would be a separate launch-behaviour change.
+ * Values are copied exactly without a type check; the boundary applies to names only.
  */
 function omitReservedWindowsEnv(baseEnv, reservedNames) {
   const source = baseEnv && typeof baseEnv === 'object' ? baseEnv : {};
@@ -107,11 +95,37 @@ function omitReservedWindowsEnv(baseEnv, reservedNames) {
 
   for (const name of Object.keys(source)) {
     const folded = foldAsciiWindowsEnvName(name);
-    const reservedCandidate = folded || foldReservedConservativeAliasToAscii(name);
-    if (reservedCandidate && reservedFolded.has(reservedCandidate)) continue;
+    if (!folded || reservedFolded.has(folded)) continue;
     out[name] = source[name];
   }
   return { ...out };
+}
+
+/**
+ * Build explicit main-issued entries and the complete name set they own for this call.
+ *
+ * `Object.keys(mainIssued)` makes every emitted key reserved by construction. Pane-status names are
+ * owned even when enrollment supplies no string value; Video Scout similarly owns Gemini even when
+ * safeStorage supplies no valid key, preventing ambient fallback in both absent-value cases.
+ */
+function buildMainIssuedEnv({ videoScout, geminiKey, paneStatusEnv }) {
+  const mainIssued = { [SUBPROCESS_SCRUB_ENV_KEY]: '1' };
+  if (videoScout && typeof geminiKey === 'string' && geminiKey) {
+    mainIssued[GEMINI_ENV_KEY] = geminiKey;
+  }
+  // Pane status owns exactly these two transport names. Copying an arbitrary enrollment object here
+  // would let a future/corrupt controller overwrite the forced scrub, Video Scout key, or Tier 1.
+  if (paneStatusEnv && typeof paneStatusEnv === 'object') {
+    for (const name of PANE_STATUS_ENV_KEYS) {
+      if (typeof paneStatusEnv[name] === 'string') mainIssued[name] = paneStatusEnv[name];
+    }
+  }
+  const reservedNames = [...new Set([
+    ...Object.keys(mainIssued),
+    ...PANE_STATUS_ENV_KEYS,
+    ...(videoScout ? [GEMINI_ENV_KEY] : []),
+  ])];
+  return { mainIssued, reservedNames };
 }
 
 /**
@@ -122,35 +136,17 @@ function omitReservedWindowsEnv(baseEnv, reservedNames) {
  */
 function buildPtyEnv({ baseEnv, fencedRole, videoScout, geminiKey, paneStatusEnv }) {
   const source = baseEnv && typeof baseEnv === 'object' ? baseEnv : {};
+  const { mainIssued, reservedNames } = buildMainIssuedEnv({ videoScout, geminiKey, paneStatusEnv });
   const ambientBase = fencedRole
     ? copyAllowedWindowsEnv(source, FENCED_ENV_ALLOWLIST)
     : stripAdmissionEnv(source);
-  // Pane-status owns its names even when this pane is not enrolled. Scrub is always main-issued.
-  // Video Scout also reserves Gemini even when the supplied key is absent/invalid, so ambient residue
-  // cannot become an implicit credential fallback.
-  const reservedNames = [SUBPROCESS_SCRUB_ENV_KEY, ...PANE_STATUS_ENV_KEYS];
-  if (videoScout) reservedNames.push(GEMINI_ENV_KEY);
   const ambient = omitReservedWindowsEnv(ambientBase, reservedNames);
-  const explicitPaneStatus = {};
-  // Pane status owns exactly these two transport names. Copying an arbitrary enrollment object here
-  // would let a future/corrupt controller overwrite the forced scrub, Video Scout key, or Tier 1.
-  if (paneStatusEnv && typeof paneStatusEnv === 'object') {
-    for (const name of PANE_STATUS_ENV_KEYS) {
-      if (typeof paneStatusEnv[name] === 'string') explicitPaneStatus[name] = paneStatusEnv[name];
-    }
-  }
 
-  // Construct canonical main-issued entries before spreading the filtered ambient object. On the
-  // locally measured node-pty/ConPTY path, ASCII-case duplicates both reached the child and lookup
-  // resolved the first inserted value in either order. That is local evidence, not a cross-Windows
-  // guarantee. Correctness does not depend on order: the ambient copy above removes the entire
-  // conservative reserved family before this object is built.
+  // Main-issued entries are constructed first and ambient remains last, preserving the reviewed
+  // object shape. Correctness does not depend on collision order: only printable-ASCII ambient names
+  // survive, and every emitted or absent-but-owned main key is removed case-insensitively first.
   return {
-    [SUBPROCESS_SCRUB_ENV_KEY]: '1',
-    ...(videoScout && typeof geminiKey === 'string' && geminiKey
-      ? { [GEMINI_ENV_KEY]: geminiKey }
-      : {}),
-    ...explicitPaneStatus,
+    ...mainIssued,
     ...ambient,
   };
 }
@@ -159,6 +155,7 @@ const api = {
   FENCED_ENV_ALLOWLIST,
   copyAllowedWindowsEnv,
   omitReservedWindowsEnv,
+  buildMainIssuedEnv,
   buildPtyEnv,
 };
 if (typeof module === 'object' && module.exports) module.exports = api;

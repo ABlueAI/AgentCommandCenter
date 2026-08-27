@@ -299,9 +299,10 @@ comes from a fresh independent session.
 Full-class review; it is **not merged or authorized to merge**. The existing
 fenced-role predicate now selects a pure environment builder that starts from
 an empty object and copies only Blue's exact Tier 1 Windows allowlist. Unfenced
-panes begin with the pre-P1 admission-scrubbed base; before main-owned values are
-layered, ASCII-case-insensitive ambient variants of those reserved names are
-removed. Environment values are not logged. Filtering is dynamically proven, main-process wiring is
+panes begin with the admission-scrubbed base but retain only printable-ASCII
+ambient names; before main-owned values are layered, every ASCII-case variant
+of an emitted or absent-but-owned name is removed. Values are not inspected,
+transformed, or logged. Filtering is dynamically proven, main-process wiring is
 structurally pinned, and adversarial live/provider behavior remains part of the
 later fence-completion item. Blue's controlling procurement disposition is:
 “P1 hardens the existing owned PTY environment boundary and introduces no new
@@ -431,8 +432,9 @@ contains `FI`; a future name containing `FI` changes the derived set rather than
 silently preserving a magic count.
 
 Before editing `main.js`, Revision 6 pre-registered that the comment-free
-`229`-byte executable environment block and separate `1326`-byte cwd gate must
-remain byte-identical, while the full `13205`-byte handler must move. The old
+`229`-UTF-16-code-unit executable environment block and separate
+`1326`-UTF-16-code-unit cwd gate must remain byte-identical by SHA-256, while the
+full `13205`-UTF-16-code-unit handler must move. The old
 tripwire then failed exactly that way: `1326` and `229` retained their prior
 hashes, while only the handler moved. The new handler pin is length `13484`,
 SHA-256 `ab6f6cd37752029c52d4a89fb99331a319f8b032a011b297d78d22beeafea161`.
@@ -463,6 +465,58 @@ Branch bootstrap and integration matched those controls; the registered suffix
 from suite 3 through suite 88 completed once with exit `0`. Therefore all 88
 suites were attempted exactly once: 86 green and only the two named AGR
 candidates. Revision 6 remains unmerged and has no PASS or merge authorization.
+
+**P1 Revision 7 correction — August 26:** the independent Revision 6 review did
+not issue a literal `VERDICT:` line and did not authorize merge. It reproduced
+the containment result but found that the emitted main-issued map and reserved
+name list could drift, while the NFKC-based denylist retained every non-ASCII
+name it could not collapse and its test oracle duplicated the same relation.
+Blue explicitly authorized the production behavior change: unfenced ambient
+inheritance now keeps only names matching printable ASCII. This changes the P1
+invariant and retires the inherited “exact pre-P1 base” claim. It is a name-only
+boundary: Unicode values and synthetic non-string values under surviving ASCII
+names remain exact and uninspected.
+
+`buildMainIssuedEnv` constructs explicit entries first. Each call's reserved
+set is derived as `Object.keys(mainIssued)` plus both absent-but-owned pane-
+status transport names and, for Video Scout only, the absent-but-owned Gemini
+name. The 40-call Video Scout/Gemini/pane-status matrix proves the exact union
+and makes future emitted-key drift structural rather than conventional. Ambient
+removal uses only the strict printable-ASCII fold; the NFKC helper, copied test
+oracle, generated single-substitution corpus (which measured `3165` only on the
+Revision 6 runtime), multi-substitution fixtures, U+FB01 accounting, and
+duplicate-order probe are retired. All eight previously named Unicode aliases
+remain regression inputs and are rejected by the single ASCII-name rule.
+
+The valid pre-flight probe under Node `v24.18.0` measured 69 real parent
+environment names and zero outside printable ASCII; no values or types were
+read. A malformed first attempt omitted the regex character-class brackets and
+was discarded before implementation. The valid zero result establishes only
+that the new name filter is inert for that measured parent environment.
+
+Revision 7 reopens `main.js` only to correct the stale pre-P1 and ConPTY-ordering
+comments. Before re-pinning, the existing invariant passed the `1326`- and
+`229`-UTF-16-code-unit regions exactly and failed only the wider handler at
+`13566 !== 13484`. The new handler pin is `13566` UTF-16 code units, SHA-256
+`da784a2e5c6be38e4daecc0e7fdfaf1f404aacfa5aac2cd01c8f6c2e2235fad9`.
+The launcher now labels its numeric lengths correctly as JavaScript UTF-16 code
+units; hashes remain over UTF-8 bytes. A dedicated `main.js`-only artifact from
+`f4f0814` must prove every R7 main delta is comment-only.
+
+Initial focused results are `pty-env` **156/0/0**—the registered decrease below
+185 after corpus retirement—launcher/source pins **26/0**, and admission
+configuration **87/0**. The fenced production ConPTY names-only probe remains
+`added=[]`, `missing=[]`; the libuv identity back-fill contrast remains. Full
+Pester is **955/0/0**, exit `0`, in `136.31s`. The fresh app gate followed the
+same one-shot AGR tree: the two exact-fork controls reproduced their respective
+bootstrap parse and integration no-report `ERR_FAILED` / GPU `0xC0000135`
+signatures; branch bootstrap and integration matched once; and the remaining
+72-suite suffix exited `0`. All 88 registered suites were attempted exactly
+once: 86 green and only the two named AGR candidates. The content commit,
+artifact identities, and a new independent Full-class verdict are recorded in
+the handoff after the content is sealed. Revision 7's exact seven paths are all
+inside the cumulative eight-path cap;
+`app/package.json` remains untouched.
 
 **Quick Links ruling:** it is a bounded extension of the already-owned external
 launcher boundary, so the OSS procurement gate does not apply. “Extension” is

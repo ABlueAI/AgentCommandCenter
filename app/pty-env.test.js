@@ -16,6 +16,7 @@ const {
   FENCED_ENV_ALLOWLIST,
   copyAllowedWindowsEnv,
   omitReservedWindowsEnv,
+  buildMainIssuedEnv,
   buildPtyEnv,
 } = require('./pty-env');
 
@@ -42,80 +43,15 @@ const PLATFORM_ALIAS_CODE_POINTS = Object.freeze([
   0x1E9E, // capital sharp-s
 ]);
 const CHILD_PROBE_TIMEOUT_MS = 10000;
-
-// Independent test oracle for the production helper's documented conservative relation. Generate
-// the whole Unicode corpus rather than adding only the spellings a reviewer happened to name.
-function foldConservativeNameForTest(name) {
-  if (typeof name !== 'string') return null;
-  const folded = name.normalize('NFKC').toLowerCase().toUpperCase();
-  return /^[\x20-\x7E]+$/.test(folded) ? folded : null;
-}
-
-function generateReservedAliasCorpus() {
-  const aliases = new Map();
-  for (let codePoint = 0x80; codePoint <= 0x10FFFF; codePoint++) {
-    if (codePoint >= 0xD800 && codePoint <= 0xDFFF) continue;
-    const character = String.fromCodePoint(codePoint);
-    const foldedCharacter = foldConservativeNameForTest(character);
-    if (!foldedCharacter) continue;
-    for (const canonical of RESERVED_CANONICAL_NAMES) {
-      let offset = canonical.indexOf(foldedCharacter);
-      while (offset >= 0) {
-        const alias = canonical.slice(0, offset) + character + canonical.slice(offset + foldedCharacter.length);
-        if (!aliases.has(alias)) {
-          aliases.set(alias, Object.freeze({ alias, canonical, codePoint, foldedCharacter, offset }));
-        }
-        offset = canonical.indexOf(foldedCharacter, offset + 1);
-      }
-    }
-  }
-  return Object.freeze([...aliases.values()]);
-}
-
-const GENERATED_RESERVED_ALIAS_CORPUS = generateReservedAliasCorpus();
-const PLATFORM_ALIAS_CODE_POINT_SET = new Set(PLATFORM_ALIAS_CODE_POINTS);
-const EXPECTED_REPRESENTATIVE_CODE_POINTS = Object.freeze(PLATFORM_ALIAS_CODE_POINTS.filter((codePoint) => {
-  const foldedCharacter = foldConservativeNameForTest(String.fromCodePoint(codePoint));
-  return foldedCharacter && RESERVED_CANONICAL_NAMES.some((canonical) => canonical.includes(foldedCharacter));
-}));
-const representativeByCodePoint = new Map();
-for (const entry of GENERATED_RESERVED_ALIAS_CORPUS) {
-  if (PLATFORM_ALIAS_CODE_POINT_SET.has(entry.codePoint) && !representativeByCodePoint.has(entry.codePoint)) {
-    representativeByCodePoint.set(entry.codePoint, entry);
-  }
-}
-const REPRESENTATIVE_RESERVED_POISON = Object.freeze(Object.fromEntries(
-  [...representativeByCodePoint.values()].map((entry) => [
-    entry.alias,
-    `ambient-generated-u${entry.codePoint.toString(16)}-poison`,
-  ]),
+const NON_ASCII_REGRESSION_NAMES = Object.freeze(PLATFORM_ALIAS_CODE_POINTS.map((codePoint) => Object.freeze({
+  label: `U+${codePoint.toString(16).toUpperCase().padStart(4, '0')}`,
+  name: `P1_${String.fromCodePoint(codePoint)}_REGRESSION`,
+  value: `unicode-u${codePoint.toString(16)}-poison`,
+})));
+const NON_ASCII_REGRESSION_POISON = Object.freeze(Object.fromEntries(
+  NON_ASCII_REGRESSION_NAMES.map((entry) => [entry.name, entry.value]),
 ));
-const MULTI_SUBSTITUTION_ALIASES = Object.freeze([
-  Object.freeze({ alias: 'GEMıNı_API_KEY', canonical: 'GEMINI_API_KEY' }),
-  Object.freeze({ alias: 'BLUE_HELM_PANE_ﬅATUſ_PIPE', canonical: 'BLUE_HELM_PANE_STATUS_PIPE' }),
-]);
-const PLATFORM_ALIAS_CASES = Object.freeze([
-  Object.freeze({
-    label: 'ascii-case-control',
-    alias: 'p1_ascii_case_control',
-    canonical: 'P1_ASCII_CASE_CONTROL',
-    value: 'ascii-case-control-value',
-  }),
-  ...PLATFORM_ALIAS_CODE_POINTS.map((codePoint) => {
-    const alias = String.fromCodePoint(codePoint);
-    return Object.freeze({
-      label: `U+${codePoint.toString(16).toUpperCase().padStart(4, '0')}`,
-      alias,
-      canonical: foldConservativeNameForTest(alias),
-      value: `unicode-u${codePoint.toString(16)}-value`,
-    });
-  }),
-]);
-const DUPLICATE_ORDER_CASES = Object.freeze([
-  Object.freeze({ label: 'canonical-first', order: Object.freeze(['canonical', 'alias']) }),
-  Object.freeze({ label: 'alias-first', order: Object.freeze(['alias', 'canonical']) }),
-]);
-const SEQUENTIAL_PROBE_COUNT = 2 + PLATFORM_ALIAS_CASES.length + DUPLICATE_ORDER_CASES.length;
+const SEQUENTIAL_PROBE_COUNT = 2;
 const PRODUCTION_PROBE_PARENT_TIMEOUT_MS = 2 * SEQUENTIAL_PROBE_COUNT * CHILD_PROBE_TIMEOUT_MS;
 
 function runNodePtyTextProbe(pty, env, marker, payloadLines) {
@@ -223,7 +159,7 @@ async function runIdentityProbeChild() {
     gemini_api_key: 'ambient-gemini-poison',
     Blue_Helm_Pane_Status_Pipe: 'ambient-pipe-poison',
     blue_helm_pane_status_token: 'ambient-token-poison',
-    ...REPRESENTATIVE_RESERVED_POISON,
+    ...NON_ASCII_REGRESSION_POISON,
   };
   const collisionEnv = buildPtyEnv({
     baseEnv: collisionSource,
@@ -248,74 +184,6 @@ async function runIdentityProbeChild() {
     return;
   }
 
-  // Ask the actual Windows environment lookup, through the production node-pty/ConPTY path, whether
-  // each non-ASCII candidate resolves under its conservative ASCII spelling. The exact alias lookup
-  // is the negative control proving node-pty really put that spelling into the child environment.
-  const platformAliasMeasurements = [];
-  const platformProbeBase = copyAllowedWindowsEnv(process.env, FENCED_ENV_ALLOWLIST);
-  for (const aliasCase of PLATFORM_ALIAS_CASES) {
-    const quotedAlias = aliasCase.alias.replace(/'/g, "''");
-    const quotedCanonical = aliasCase.canonical.replace(/'/g, "''");
-    const aliasProbe = await runNodePtyTextProbe(pty, {
-      ...platformProbeBase,
-      [aliasCase.alias]: aliasCase.value,
-    }, '__P1_PLATFORM_ALIAS__', [
-      `[Console]::WriteLine('__P1_ALIAS_EXACT__' + [Environment]::GetEnvironmentVariable('${quotedAlias}', 'Process'))`,
-      `[Console]::WriteLine('__P1_ALIAS_CANONICAL__' + [Environment]::GetEnvironmentVariable('${quotedCanonical}', 'Process'))`,
-    ]);
-    if (aliasProbe.unavailable) {
-      process.stdout.write(JSON.stringify({ skipped: true, reason: aliasProbe.reason }));
-      return;
-    }
-    const exactLookups = markedValues(aliasProbe.payload, '__P1_ALIAS_EXACT__');
-    const canonicalLookups = markedValues(aliasProbe.payload, '__P1_ALIAS_CANONICAL__');
-    if (exactLookups.length !== 1 || canonicalLookups.length !== 1) {
-      throw new Error(`${aliasCase.label} probe emitted ambiguous lookup marker counts: exact=${exactLookups.length} canonical=${canonicalLookups.length}`);
-    }
-    platformAliasMeasurements.push({
-      ...aliasCase,
-      aliasLookup: exactLookups[0],
-      canonicalLookup: canonicalLookups[0],
-    });
-  }
-
-  // This bypasses buildPtyEnv deliberately: the builder removes ASCII-case collisions. The probe
-  // asks whether a duplicate-bearing object reaches the production node-pty/ConPTY child as two
-  // names, and which value canonical lookup returns, in both construction orders.
-  const duplicateCanonical = 'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB';
-  const duplicateAlias = 'claude_code_subprocess_env_scrub';
-  const duplicateValues = Object.freeze({
-    canonical: 'duplicate-canonical-value',
-    alias: 'duplicate-alias-value',
-  });
-  const duplicateMeasurements = [];
-  for (const orderCase of DUPLICATE_ORDER_CASES) {
-    const duplicateEnv = { ...platformProbeBase };
-    for (const kind of orderCase.order) {
-      duplicateEnv[kind === 'canonical' ? duplicateCanonical : duplicateAlias] = duplicateValues[kind];
-    }
-    const duplicateProbe = await runNodePtyTextProbe(pty, duplicateEnv, '__P1_DUPLICATE_ENV__', [
-      `$pairNames = @([Environment]::GetEnvironmentVariables('Process').Keys | ForEach-Object { [string]$_ } | Where-Object { [StringComparer]::OrdinalIgnoreCase.Equals($_, '${duplicateCanonical}') } | Sort-Object)`,
-      "foreach ($name in $pairNames) { [Console]::WriteLine('__P1_DUPLICATE_NAME__' + $name) }",
-      `[Console]::WriteLine('__P1_DUPLICATE_LOOKUP__' + [Environment]::GetEnvironmentVariable('${duplicateCanonical}', 'Process'))`,
-    ]);
-    if (duplicateProbe.unavailable) {
-      process.stdout.write(JSON.stringify({ skipped: true, reason: duplicateProbe.reason }));
-      return;
-    }
-    const duplicateLookups = markedValues(duplicateProbe.payload, '__P1_DUPLICATE_LOOKUP__');
-    if (duplicateLookups.length !== 1) {
-      throw new Error(`${orderCase.label} duplicate probe emitted ${duplicateLookups.length} lookup markers`);
-    }
-    duplicateMeasurements.push({
-      label: orderCase.label,
-      order: orderCase.order,
-      names: markedValues(duplicateProbe.payload, '__P1_DUPLICATE_NAME__'),
-      canonicalLookup: duplicateLookups[0],
-      values: duplicateValues,
-    });
-  }
-
   process.stdout.write(JSON.stringify({
     builtIdentity,
     libuvIdentity: JSON.parse(libuvChild.stdout),
@@ -327,7 +195,7 @@ async function runIdentityProbeChild() {
       userdomain: markedValue(fencedProbe.payload, '__P1_USERDOMAIN__'),
       logonserver: markedValue(fencedProbe.payload, '__P1_LOGONSERVER__'),
     },
-    collisionSourceUnicodePoisonPresent: Object.keys(REPRESENTATIVE_RESERVED_POISON)
+    collisionSourceNonAsciiPoisonPresent: Object.keys(NON_ASCII_REGRESSION_POISON)
       .every((name) => Object.prototype.hasOwnProperty.call(collisionSource, name)),
     collisionBuiltNames: Object.keys(collisionEnv).sort(),
     nodePtyCollision: {
@@ -337,8 +205,6 @@ async function runIdentityProbeChild() {
       pipe: markedValue(collisionProbe.payload, '__P1_PIPE__'),
       token: markedValue(collisionProbe.payload, '__P1_TOKEN__'),
     },
-    platformAliasMeasurements,
-    duplicateMeasurements,
   }));
 }
 
@@ -369,10 +235,21 @@ function foldAscii(name) {
     ? name.replace(/[a-z]/g, (ch) => ch.toUpperCase())
     : null;
 }
+function caseVariants(name) {
+  const variants = new Set([name, name.toLowerCase(), name.toUpperCase()]);
+  variants.add([...name].map((ch, index) => index % 2 ? ch.toLowerCase() : ch.toUpperCase()).join(''));
+  for (let index = 0; index < name.length; index++) {
+    if (!/[A-Za-z]/.test(name[index])) continue;
+    variants.add(name.slice(0, index)
+      + (name[index] === name[index].toUpperCase() ? name[index].toLowerCase() : name[index].toUpperCase())
+      + name.slice(index + 1));
+  }
+  return [...variants];
+}
 function reservedFamilyNames(envOrNames, expectedName) {
   const names = Array.isArray(envOrNames) ? envOrNames : Object.keys(envOrNames || {});
-  const expected = foldConservativeNameForTest(expectedName);
-  return names.filter((name) => foldConservativeNameForTest(name) === expected);
+  const expected = foldAscii(expectedName);
+  return names.filter((name) => foldAscii(name) === expected);
 }
 function hasExactCanonicalReservedFamily(envOrNames, expectedName, expectedCount) {
   const family = reservedFamilyNames(envOrNames, expectedName);
@@ -455,7 +332,7 @@ const BASE_ENV = {
   gemini_api_key: 'ambient-case-gemini-poison',
   Blue_Helm_Pane_Status_Pipe: 'ambient-case-pipe-poison',
   blue_helm_pane_status_token: 'ambient-case-token-poison',
-  ...REPRESENTATIVE_RESERVED_POISON,
+  ...NON_ASCII_REGRESSION_POISON,
   ...POISON,
 };
 
@@ -473,27 +350,12 @@ process.stdout.write('\n-- approved Tier 1 allowlist --\n');
   for (const name of Object.keys(POISON)) {
     assert(Object.prototype.hasOwnProperty.call(BASE_ENV, name), `poison ${name} genuinely entered the base fixture`);
   }
-  for (const name of Object.keys(REPRESENTATIVE_RESERVED_POISON)) {
+  for (const name of Object.keys(NON_ASCII_REGRESSION_POISON)) {
     assert(Object.prototype.hasOwnProperty.call(BASE_ENV, name),
-      `generated Unicode reserved-alias poison ${name} genuinely entered the base fixture`);
+      `named non-ASCII regression poison ${name} genuinely entered the base fixture`);
   }
-  assert(GENERATED_RESERVED_ALIAS_CORPUS.length > 1000,
-    'the single-substitution conservative corpus is generated across Unicode rather than limited to named reviewer examples');
-  process.stdout.write(`  MEASURED generated single-substitution corpus: ${GENERATED_RESERVED_ALIAS_CORPUS.length} aliases\n`);
-  assert(GENERATED_RESERVED_ALIAS_CORPUS.some((entry) => entry.foldedCharacter === '_'),
-    'corpus eligibility is derived from canonical substrings and includes Unicode scalars that fold to underscore');
-  deepEqual([...representativeByCodePoint.keys()].sort((a, b) => a - b),
-    [...EXPECTED_REPRESENTATIVE_CODE_POINTS].sort((a, b) => a - b),
-  'the representative poison set is exactly the reviewer code points that can substitute into current reserved names');
-  assert(foldConservativeNameForTest(String.fromCodePoint(0xFB01)) === 'FI'
-    && !RESERVED_CANONICAL_NAMES.some((canonical) => canonical.includes('FI'))
-    && !EXPECTED_REPRESENTATIVE_CODE_POINTS.includes(0xFB01),
-  'U+FB01 is explicitly excluded because FI is not a substring of any current reserved canonical name');
-  for (const codePoint of PLATFORM_ALIAS_CODE_POINTS) {
-    const folded = foldConservativeNameForTest(String.fromCodePoint(codePoint));
-    assert(typeof folded === 'string',
-      `the conservative oracle maps U+${codePoint.toString(16).toUpperCase().padStart(4, '0')} -> ${folded}`);
-  }
+  assert(NON_ASCII_REGRESSION_NAMES.length === 8,
+    'all eight reviewer-named platform aliases remain explicit regression inputs');
 }
 
 process.stdout.write('\n-- fenced construction --\n');
@@ -543,25 +405,58 @@ process.stdout.write('\n-- case collisions and unknown omission --\n');
     PATH: 'second-path',
     claude_code_subprocess_env_scrub: 'ambient-scrub',
     Blue_Helm_Pane_Status_Token: 'ambient-token',
-    ...REPRESENTATIVE_RESERVED_POISON,
+    ...NON_ASCII_REGRESSION_POISON,
   };
   deepEqual(omitReservedWindowsEnv(reservedSource, [
     'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB', 'GEMINI_API_KEY',
     'BLUE_HELM_PANE_STATUS_PIPE', 'BLUE_HELM_PANE_STATUS_TOKEN',
   ]), { Path: 'first-path', PATH: 'second-path' },
-  'reserved removal deletes ASCII-case and Unicode-to-ASCII aliases while preserving unrelated duplicates and order');
+  'unfenced inheritance removes reserved ASCII-case variants and every non-ASCII name while preserving unrelated printable duplicates');
   deepEqual(reservedSource, {
     Path: 'first-path',
     PATH: 'second-path',
     claude_code_subprocess_env_scrub: 'ambient-scrub',
     Blue_Helm_Pane_Status_Token: 'ambient-token',
-    ...REPRESENTATIVE_RESERVED_POISON,
+    ...NON_ASCII_REGRESSION_POISON,
   }, 'reserved removal returns a fresh object without mutating its input');
-  const branchControl = { 'ſAFE_HARBOR': 'non-reserved-conservative-branch' };
-  assert(foldConservativeNameForTest('ſAFE_HARBOR') === 'SAFE_HARBOR',
-    'the non-reserved Unicode control genuinely collapses to printable ASCII');
-  deepEqual(omitReservedWindowsEnv(branchControl, ALWAYS_RESERVED_ENV_NAMES), branchControl,
-    'the denylist-only conservative branch preserves a collapsed printable-ASCII name that is not reserved');
+
+  const opaqueValue = Object.freeze({ path: 'C:\\café\\unchanged' });
+  const nameBoundarySource = {
+    SAFE_UNICODE_VALUE: 'C:\\résumé\\unchanged',
+    SAFE_NON_STRING_VALUE: opaqueValue,
+    'ſAFE_HARBOR': 'non-ascii-name',
+    'BAD\tCONTROL': 'control-name',
+  };
+  const nameBoundary = omitReservedWindowsEnv(nameBoundarySource, ALWAYS_RESERVED_ENV_NAMES);
+  assert(nameBoundary.SAFE_UNICODE_VALUE === nameBoundarySource.SAFE_UNICODE_VALUE,
+    'a printable-ASCII name preserves its exact Unicode value');
+  assert(nameBoundary.SAFE_NON_STRING_VALUE === opaqueValue,
+    'the unfenced name boundary adds no value-type filter and preserves object identity');
+  assert(!Object.prototype.hasOwnProperty.call(nameBoundary, 'ſAFE_HARBOR')
+    && !Object.prototype.hasOwnProperty.call(nameBoundary, 'BAD\tCONTROL'),
+  'non-ASCII and non-printable-ASCII names are rejected independently of their values');
+
+  for (const canonical of RESERVED_CANONICAL_NAMES) {
+    const variants = caseVariants(canonical);
+    const casePoison = Object.fromEntries(variants.map((name, index) => [name, `case-${index}-poison`]));
+    const expectedMainIssued = canonical === 'GEMINI_API_KEY'
+      ? { GEMINI_API_KEY: 'main-gemini' }
+      : canonical === 'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB'
+        ? { CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1' }
+        : { [canonical]: PANE_ENV[canonical] };
+    const caseEnv = buildPtyEnv({
+      baseEnv: casePoison,
+      fencedRole: false,
+      videoScout: canonical === 'GEMINI_API_KEY',
+      geminiKey: 'main-gemini',
+      paneStatusEnv: canonical.startsWith('BLUE_HELM_') ? PANE_ENV : {},
+    });
+    assert(variants.every((name) => !Object.prototype.hasOwnProperty.call(caseEnv, name) || name === canonical)
+      && hasExactCanonicalReservedFamily(caseEnv, canonical, 1)
+      && caseEnv[canonical] === expectedMainIssued[canonical],
+    `case-permutation property removes every generated ASCII variant of ${canonical} before canonical injection`);
+  }
+
   const protoSource = Object.create(null);
   protoSource.__proto__ = 'ambient-proto-value';
   protoSource.Path = 'ambient-path';
@@ -572,42 +467,60 @@ process.stdout.write('\n-- case collisions and unknown omission --\n');
   assert(Object.getPrototypeOf(protoCopy) === Object.prototype,
     'reserved omission returns a normal plain environment object after the null-prototype internal copy');
 
-  const generatedAliasSource = {
-    ...Object.fromEntries(GENERATED_RESERVED_ALIAS_CORPUS.map((entry) => [
-      entry.alias,
-      `generated-u${entry.codePoint.toString(16)}-poison`,
-    ])),
-    ...Object.fromEntries(MULTI_SUBSTITUTION_ALIASES.map((entry, index) => [
-      entry.alias,
-      `multi-substitution-${index}-poison`,
-    ])),
-  };
-  const generatedAliasEnv = buildPtyEnv({
-    baseEnv: generatedAliasSource,
+  const regressionEnv = buildPtyEnv({
+    baseEnv: NON_ASCII_REGRESSION_POISON,
     fencedRole: false,
     videoScout: true,
-    geminiKey: 'generated-main-gemini',
+    geminiKey: 'regression-main-gemini',
     paneStatusEnv: PANE_ENV,
   });
-  deepEqual(generatedAliasEnv, {
+  deepEqual(regressionEnv, {
     CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1',
-    GEMINI_API_KEY: 'generated-main-gemini',
+    GEMINI_API_KEY: 'regression-main-gemini',
     ...PANE_ENV,
-  }, 'the generated single-substitution corpus plus bounded multi-substitution controls leave only canonical main-issued reserved names');
-  for (const name of RESERVED_CANONICAL_NAMES) {
-    assert(hasExactCanonicalReservedFamily(generatedAliasEnv, name, 1),
-      `the generated-corpus output has exactly one canonical ${name} and no conservative collider`);
-  }
-  for (const entry of MULTI_SUBSTITUTION_ALIASES) {
-    assert(foldConservativeNameForTest(entry.alias) === entry.canonical
-      && !Object.prototype.hasOwnProperty.call(generatedAliasEnv, entry.alias),
-    `whole-string folding removes bounded multi-substitution alias ${entry.alias}`);
+  }, 'all eight named non-ASCII platform aliases are absent for the single printable-ASCII-name rule');
+  for (const entry of NON_ASCII_REGRESSION_NAMES) {
+    assert(!Object.prototype.hasOwnProperty.call(regressionEnv, entry.name),
+      `${entry.label} regression name is absent from unfenced output`);
   }
   const sparse = buildPtyEnv({ baseEnv: {}, fencedRole: true, videoScout: false, paneStatusEnv: {} });
   deepEqual(sparse, { CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1' }, 'missing allowlisted entries are not invented');
   const sparseUnfenced = buildPtyEnv({ baseEnv: null, fencedRole: false, videoScout: false, paneStatusEnv: {} });
   deepEqual(sparseUnfenced, { CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1' },
     'invalid base input is normalized to an empty object on the unfenced path too');
+}
+
+process.stdout.write('\n-- main-issued reservation drift matrix --\n');
+{
+  const geminiCases = [undefined, null, '', 0, 'matrix-main-gemini'];
+  const paneCases = [
+    undefined,
+    {},
+    PANE_ENV,
+    { BLUE_HELM_PANE_STATUS_PIPE: 7, BLUE_HELM_PANE_STATUS_TOKEN: null },
+  ];
+  const failures = [];
+  let calls = 0;
+  for (const videoScout of [false, true]) {
+    for (const geminiKey of geminiCases) {
+      for (const paneStatusEnv of paneCases) {
+        calls++;
+        const { mainIssued, reservedNames } = buildMainIssuedEnv({ videoScout, geminiKey, paneStatusEnv });
+        const expectedReserved = [...new Set([
+          ...Object.keys(mainIssued),
+          ...ALWAYS_RESERVED_ENV_NAMES.slice(1),
+          ...(videoScout ? ['GEMINI_API_KEY'] : []),
+        ])];
+        if (!Object.keys(mainIssued).every((name) => reservedNames.includes(name))
+          || JSON.stringify(reservedNames) !== JSON.stringify(expectedReserved)) {
+          failures.push({ videoScout, geminiKey, paneStatusEnv, mainIssued, reservedNames, expectedReserved });
+        }
+      }
+    }
+  }
+  assert(calls === 40, 'reservation drift matrix covers 2 Video Scout × 5 Gemini × 4 pane-status cases');
+  assert(failures.length === 0,
+    'every matrix call reserves exactly emitted keys plus absent-but-owned pane-status and Video Scout Gemini names');
 }
 
 process.stdout.write('\n-- process environment immutability --\n');
@@ -657,12 +570,12 @@ process.stdout.write('\n-- explicit pane-status key boundary --\n');
     'BLUE_HELM_PANE_STATUS_PIPE', 'BLUE_HELM_PANE_STATUS_TOKEN',
   ]) {
     assert(hasExactCanonicalReservedFamily(env, name, 1),
-      `the unfenced Video Scout environment contains exactly one canonical ${name} and no conservative collider`);
+      `the unfenced Video Scout environment contains exactly one canonical ${name} and no ASCII-case collider`);
   }
   for (const poison of [
     'ambient-scrub-poison', 'ambient-case-gemini-poison',
     'ambient-case-pipe-poison', 'ambient-case-token-poison',
-    ...Object.values(REPRESENTATIVE_RESERVED_POISON),
+    ...Object.values(NON_ASCII_REGRESSION_POISON),
   ]) {
     assert(!Object.values(env).includes(poison), `reserved ambient poison ${poison} is absent`);
   }
@@ -720,14 +633,14 @@ for (const role of ALL_ROLES) {
   if (FENCED_ROLES.has(role)) {
     assert(!Object.values(actual).includes('poison-anthropic'), `${role} uses the fenced builder path`);
   } else {
-    // Revision 3 deliberately narrows the old deep-equality claim: the unfenced base is otherwise
-    // unchanged, but every conservative reserved-family spelling is now removed before composition.
+    // Revision 7 deliberately narrows the old deep-equality claim: only printable-ASCII ambient
+    // names survive, and every ASCII-case variant of a main-owned name is removed before composition.
     const expected = {
       CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1',
       ...PANE_ENV,
       ...omitReservedWindowsEnv(admissionConfig.stripAdmissionEnv(BASE_ENV), ALWAYS_RESERVED_ENV_NAMES),
     };
-    deepEqual(actual, expected, `${role} preserves unfenced ambient behavior except reserved main-owned names`);
+    deepEqual(actual, expected, `${role} preserves printable-ASCII unfenced ambient behavior except reserved main-owned names`);
   }
 }
 {
@@ -761,7 +674,7 @@ for (const [label, opts] of [
     ...PANE_ENV,
     ...omitReservedWindowsEnv(admissionConfig.stripAdmissionEnv(BASE_ENV), ALWAYS_RESERVED_ENV_NAMES),
   };
-  deepEqual(actual, expected, `${label} preserves unfenced ambient behavior except reserved main-owned names`);
+  deepEqual(actual, expected, `${label} preserves printable-ASCII unfenced ambient behavior except reserved main-owned names`);
 }
 
 process.stdout.write('\n-- libuv proxy, production node-pty inheritance, and negative control --\n');
@@ -837,11 +750,11 @@ process.stdout.write('\n-- libuv proxy, production node-pty inheritance, and neg
         'the fenced production child observes exactly one canonical main-issued scrub name');
 
       const collision = measured.nodePtyCollision;
-      assert(measured.collisionSourceUnicodePoisonPresent === true,
-        'the production collision probe genuinely supplied every generated representative reserved alias');
-      for (const name of Object.keys(REPRESENTATIVE_RESERVED_POISON)) {
+      assert(measured.collisionSourceNonAsciiPoisonPresent === true,
+        'the production collision probe genuinely supplied all eight named non-ASCII regressions');
+      for (const name of Object.keys(NON_ASCII_REGRESSION_POISON)) {
         assert(!measured.collisionBuiltNames.includes(name) && !collision.names.includes(name),
-          `generated conservative reserved alias ${name} is absent before and after production node-pty`);
+          `non-ASCII regression name ${name} is absent before and after production node-pty`);
       }
       assert(collision.scrub === '1' && collision.scrub !== 'ambient-scrub-poison',
         'production node-pty observes the forced scrub sentinel and not ambient case poison');
@@ -857,62 +770,8 @@ process.stdout.write('\n-- libuv proxy, production node-pty inheritance, and neg
       ]) {
         assert(hasExactCanonicalReservedFamily(measured.collisionBuiltNames, name, 1)
           && hasExactCanonicalReservedFamily(collision.names, name, 1),
-        `builder and production child each contain one canonical ${name} and no conservative collider`);
+        `builder and production child each contain one canonical ${name} and no ASCII-case collider`);
       }
-
-      const aliasMeasurements = Array.isArray(measured.platformAliasMeasurements)
-        ? measured.platformAliasMeasurements : [];
-      assert(aliasMeasurements.length === PLATFORM_ALIAS_CASES.length,
-        'the production platform probe reports the ASCII control and every generated Unicode candidate family');
-      const asciiControl = aliasMeasurements.find((entry) => entry.label === 'ascii-case-control');
-      assert(asciiControl && asciiControl.aliasLookup === asciiControl.value
-        && asciiControl.canonicalLookup === asciiControl.value,
-      'POSITIVE CONTROL: Windows resolves an ASCII case variant through the production ConPTY environment');
-      const unicodeMeasurements = aliasMeasurements.filter((entry) => entry.label !== 'ascii-case-control');
-      for (const entry of unicodeMeasurements) {
-        assert(entry.aliasLookup === entry.value,
-          `${entry.label} genuinely entered the production ConPTY child under its exact alias spelling`);
-        assert(entry.canonicalLookup === '' || entry.canonicalLookup === entry.value,
-          `${entry.label} canonical lookup reports a bounded yes/no platform result`);
-        assert(foldConservativeNameForTest(entry.alias) === entry.canonical,
-          `${entry.label} is contained by the conservative reserved-family oracle regardless of platform result`);
-      }
-      const resolvedUnicode = unicodeMeasurements
-        .filter((entry) => entry.canonicalLookup === entry.value)
-        .map((entry) => entry.label);
-      process.stdout.write(`  MEASURED Windows non-ASCII alias resolutions: ${JSON.stringify(resolvedUnicode)}\n`);
-
-      const duplicateMeasurements = Array.isArray(measured.duplicateMeasurements)
-        ? measured.duplicateMeasurements : [];
-      assert(duplicateMeasurements.length === DUPLICATE_ORDER_CASES.length,
-        'the production duplicate-bearing probe reports both insertion orders');
-      const duplicateByLabel = new Map(duplicateMeasurements.map((entry) => [entry.label, entry]));
-      const canonicalName = 'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB';
-      const aliasName = 'claude_code_subprocess_env_scrub';
-      const orderedMeasurements = DUPLICATE_ORDER_CASES.map((orderCase) => duplicateByLabel.get(orderCase.label));
-      for (const entry of orderedMeasurements) {
-        assert(entry && Array.isArray(entry.names) && typeof entry.canonicalLookup === 'string',
-          `${entry ? entry.label : 'missing'} reports the child name list and one canonical lookup`);
-      }
-      const bothNamesArrived = orderedMeasurements.every((entry) => entry
-        && entry.names.length === 2
-        && entry.names.includes(canonicalName)
-        && entry.names.includes(aliasName));
-      const firstWins = bothNamesArrived && orderedMeasurements.every((entry) =>
-        entry.canonicalLookup === entry.values[entry.order[0]]);
-      const lastWins = bothNamesArrived && orderedMeasurements.every((entry) =>
-        entry.canonicalLookup === entry.values[entry.order[entry.order.length - 1]]);
-      const collapsedToSingleName = orderedMeasurements.every((entry) => entry
-        && entry.names.length === 1
-        && (entry.names[0] === canonicalName || entry.names[0] === aliasName)
-        && (entry.canonicalLookup === entry.values.canonical || entry.canonicalLookup === entry.values.alias));
-      const duplicateOutcome = firstWins ? 'first-wins'
-        : lastWins ? 'last-wins'
-          : collapsedToSingleName ? 'collapsed-to-single-name'
-            : 'ambiguous';
-      process.stdout.write(`  MEASURED duplicate-bearing node-pty outcome: ${duplicateOutcome} ${JSON.stringify(duplicateMeasurements)}\n`);
-      assert(duplicateOutcome === 'first-wins' || duplicateOutcome === 'collapsed-to-single-name',
-        'the duplicate-bearing production measurement is first-wins or collapsed, never last-wins/ambiguous');
     }
   } else {
     skip('Windows-only production node-pty/ConPTY measurement is not applicable on this platform');

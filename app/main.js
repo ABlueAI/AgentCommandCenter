@@ -1303,14 +1303,15 @@ ipcMain.handle('pty-start', (_e, opts) => {
   // P1 FENCED-ROLE ENVIRONMENT CONTAINMENT. This is defense-in-depth against a latent credential
   // boundary, not a claim that today's fenced role tool declarations expose a direct native-Windows
   // environment-reading path. Fenced roles start from an EMPTY object in buildPtyEnv and receive only
-  // Blue's Tier 1 Windows allowlist. Unfenced panes retain the exact pre-P1 base behavior: an
-  // admission-scrubbed copy of process.env. Video Scout remains deliberately unfenced.
+  // Blue's Tier 1 Windows allowlist. Unfenced panes retain an admission-scrubbed copy of process.env
+  // after rejecting every inherited name that is not printable ASCII. Video Scout remains
+  // deliberately unfenced and uses that same inherited-name boundary.
   //
   // buildPtyEnv constructs CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, Video Scout's safeStorage
   // GEMINI_API_KEY when applicable, and at most the two exact string-valued pane-status transport
-  // entries before spreading the filtered ambient base. The installed node-pty/ConPTY path locally
-  // measured first-inserted lookup for ASCII-case duplicates in either order; that is not a universal
-  // Windows claim, and correctness relies on reserved-family filtering rather than ordering. Neither
+  // entries before spreading the filtered ambient base. The reserved set is derived from the emitted
+  // main-issued map plus absent-but-owned pane-status names and Video Scout's Gemini name; every
+  // ASCII-case ambient variant is removed first, so correctness does not depend on key ordering. Neither
   // pane-status entry is recovered from process.env, and no environment value is logged. For
   // unfenced panes, stripAdmissionEnv removes admission keys from the inherited PTY
   // environment; for fenced panes those keys are absent because they are outside Tier 1. This filters

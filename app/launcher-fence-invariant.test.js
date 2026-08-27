@@ -36,6 +36,9 @@ const { buildPtyEnv } = require('./pty-env');
 // UNIT CHANGE, ONE TIME: the historical counts in the comment block below were measured in CRLF units
 // and are NOT comparable to the LF units used from here on. Each guarded region was verified
 // byte-identical to the previous branch tip at the moment these values were rebased.
+// UNIT CORRECTION, REVISION 7: every numeric region length in this file is JavaScript String.length —
+// UTF-16 code units — not bytes. Earlier history saying a numeric count was "bytes" is mislabeled.
+// The accompanying SHA-256 is over the region's UTF-8 bytes and remains the byte-identity proof.
 const rawSrc = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
 const src = rawSrc.split('\r\n').join('\n');
 
@@ -228,7 +231,7 @@ function sha(s) { return crypto.createHash('sha256').update(s, 'utf8').digest('h
 // 658100cfb25734f0efb9d87997efd249fcaa0576f69e354c3b2440afc4802814.
 //
 // RE-PINNED (ninth time) for P1 REVISION 6 COMMENT ACCURACY. Before main.js was edited, the handoff
-// pre-registered that the 1326-byte cwd gate and 229-byte executable ptyEnv block MUST remain exact,
+// pre-registered that the 1326-code-unit cwd gate and 229-code-unit executable ptyEnv block MUST remain exact,
 // while the full handler MUST move because it includes the inaccurate comment. The old pin then
 // failed exactly that way: gate and block passed; only the handler reported 13484 !== 13205 and a
 // changed hash. The main.js-only R6 artifact is the independent evidence: it contains only comment
@@ -238,22 +241,31 @@ function sha(s) { return crypto.createHash('sha256').update(s, 'utf8').digest('h
 //   ptyEnv block         229 / 18cf42b434ee922ee61194d9316150c0b766591e063d0b0545f6aebc8d85cb54
 // Previous handler pin retained:
 //   pty-start handler 13205 / 14d3ae60ed6ea32e4231fdef7d0979e160207b0580466f53178a4b9f86098486
+//
+// RE-PINNED (tenth time) for P1 REVISION 7 COMMENT ACCURACY. The existing tripwire was run before
+// this pin changed: the 1326-code-unit cwd gate and 229-code-unit executable ptyEnv block passed;
+// only the handler failed at 13566 !== 13484 plus its changed hash. A dedicated main.js-only diff
+// from f4f0814 is required to prove the handler delta changes comment lines only. The comment now
+// states the printable-ASCII unfenced-name boundary, derived reservation union, and ordering-
+// independent argument; it retires the exact-pre-P1 and duplicate-order claims.
+// Previous handler pin retained:
+//   pty-start handler 13484 / ab6f6cd37752029c52d4a89fb99331a319f8b032a011b297d78d22beeafea161
 // ---------------------------------------------------------------------------------------------
 
-// Region definitions: [name, startAnchor, endAnchor, expected byte length, expected sha256].
+// Region definitions: start/end anchors, expected UTF-16 code-unit length, and UTF-8 SHA-256.
 const REGIONS = [
   {
     name: 'fenced-role cwd gate',
     start: 'if (!opts.videoScout && opts.role && FENCED_ROLES.has(opts.role)) {',
     end: '// Never spawn into a missing directory',
-    len: 1326,
+    utf16Length: 1326,
     sha: '9a1255f1e81e0a9e4e289ab15380707dd6bcc1d410ffd16f44adddb99b16f8c6', // UNCHANGED content; LF units
   },
   {
     name: 'ptyEnv block',
     start: 'const fencedRole = !opts.videoScout && opts.role && FENCED_ROLES.has(opts.role);',
     end: 'let p;',
-    len: 229,
+    utf16Length: 229,
     sha: '18cf42b434ee922ee61194d9316150c0b766591e063d0b0545f6aebc8d85cb54',
   },
   {
@@ -273,15 +285,16 @@ const REGIONS = [
     // Previous pins, retained so the earlier reviewed bases stay reproducible:
     //   len 13287 / sha 3ad6db301a3fa0e101195f439012ee42ca25ba6b31040b10d0196d23b7141bb3  (CRLF units)
     //   len 13864 / sha 1b6929a2e691c2e418ab529a80411e26f58a1d32a6f08b2ceb1b085e3db96274  (LF units)
-    len: 13484,
-    sha: 'ab6f6cd37752029c52d4a89fb99331a319f8b032a011b297d78d22beeafea161',
+    utf16Length: 13566,
+    sha: 'da784a2e5c6be38e4daecc0e7fdfaf1f404aacfa5aac2cd01c8f6c2e2235fad9',
   },
 ];
 
 for (const r of REGIONS) {
   const seg = slice(r.start, r.end);
   if (seg === null) { assert(false, `region present: ${r.name}`); continue; }
-  assert(seg.length === r.len, `${r.name}: byte length unchanged (${seg.length} === ${r.len})`);
+  assert(seg.length === r.utf16Length,
+    `${r.name}: UTF-16 code-unit length unchanged (${seg.length} === ${r.utf16Length})`);
   assert(sha(seg) === r.sha, `${r.name}: sha256 byte-for-byte unchanged from reviewed base`);
 }
 
