@@ -790,12 +790,22 @@ process.stdout.write('\n-- production main-process wiring --\n');
     'the complete-role matrix stays synchronized with main.js FENCED_ROLES');
   const spawnMatches = mainSrc.match(/\bpty\.spawn\(/g) || [];
   assert(spawnMatches.length === 1, 'main.js has exactly one pty.spawn sink');
-  assert(mainSrc.includes('const fencedRole = !opts.videoScout && opts.role && FENCED_ROLES.has(opts.role);'),
-    'main.js computes the standing fenced-role predicate at the real pty-start boundary');
+  // FENCE COMPLETION re-anchor. The fence decision is no longer RE-DERIVED from renderer fields at
+  // this sink; it is the single main-owned classification computed once by the pty-start authority.
+  // The intent of this assertion is unchanged and its guarantee is STRICTLY STRONGER: the positive
+  // check pins that the sink consumes the classified verdict, and the negative control below pins
+  // that the old renderer-field derivation is gone from main.js ENTIRELY, not merely from this line.
+  assert(mainSrc.includes('const fencedRole = launch.fenced;'),
+    'main.js computes the fenced-role decision from the main-owned classification at the real pty-start boundary');
+  assert(!mainSrc.includes('FENCED_ROLES.has(opts.role)'),
+    'NEGATIVE CONTROL: main.js never re-derives the fence decision from the renderer-supplied role');
   assert(mainSrc.includes('const ptyEnv = buildPtyEnv({'), 'main.js obtains ptyEnv from the production builder');
   assert(mainSrc.includes('baseEnv: process.env,'), 'main.js passes the actual ambient process environment into the builder');
   assert(mainSrc.includes('fencedRole,'), 'main.js passes the computed fence decision into the builder');
-  assert(mainSrc.includes('videoScout: opts.videoScout,'), 'main.js passes Video Scout identity explicitly into the builder');
+  assert(mainSrc.includes('videoScout: launch.videoScout,'),
+    'main.js passes Video Scout identity explicitly into the builder, from the classification');
+  assert(!/opts\.videoScout/.test(mainSrc),
+    'NEGATIVE CONTROL: main.js never reads the renderer videoScout field for any decision');
   assert(mainSrc.includes('paneStatusEnv,'),
     'main.js passes the enrollment result to the builder, which filters the two exact string-valued pane-status names');
   assert(/pty\.spawn\('powershell\.exe',[\s\S]*?env:\s*ptyEnv,/.test(mainSrc),

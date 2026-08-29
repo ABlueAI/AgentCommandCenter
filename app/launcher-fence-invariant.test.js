@@ -55,6 +55,18 @@ function slice(startAnchor, endAnchor) {
 }
 function sha(s) { return crypto.createHash('sha256').update(s, 'utf8').digest('hex'); }
 
+// ANCHOR GUARD. Two regions below are built with a bare `indexOf`. When an anchor literal moves,
+// `indexOf` returns -1 and `src.slice(-1, ...)` yields '', which does NOT make the whole suite pass
+// silently — the two POSITIVE assertions over those regions both evaluate `-1 > -1` / `-1 !== -1`
+// and FAIL. Exactly one assertion degrades quietly: the negative `!/\.\.\.process\.env\b/` test,
+// which is vacuously true on an empty string. `mustFind` is here for that narrow reason — it turns a
+// confusing indirect failure into a precise immediate one and closes that single vacuous negative.
+function mustFind(haystack, needle, label) {
+  const i = haystack.indexOf(needle);
+  if (i === -1) throw new Error(`anchor missing (${label}): ${JSON.stringify(needle)} — update the anchor, do not delete the assertion`);
+  return i;
+}
+
 // ---------------------------------------------------------------------------------------------
 // RE-PINNED for Experiment A (pane-status PROTOTYPE), and deliberately not silently.
 //
@@ -256,21 +268,37 @@ function sha(s) { return crypto.createHash('sha256').update(s, 'utf8').digest('h
 const REGIONS = [
   {
     name: 'fenced-role cwd gate',
-    start: 'if (!opts.videoScout && opts.role && FENCED_ROLES.has(opts.role)) {',
+    // RE-PINNED (fence completion). The start anchor is now the CLASSIFIED verdict rather than the
+    // renderer-field predicate, and the two refusal strings became bounded reason CONSTANTS: the
+    // previous messages interpolated declaredCwd / resolvedCwd / resolvedRoot into the Logs tab and
+    // the renderer error channel, which cannot coexist with a payload-free refusal. The CONTAINMENT
+    // LOGIC is unchanged — same realpath resolution, same win32 case fold, same
+    // startsWith(root + path.sep) prefix rule, still ordered BEFORE the USERPROFILE fallback.
+    // Previous pin retained: 1326 / 9a1255f1e81e0a9e4e289ab15380707dd6bcc1d410ffd16f44adddb99b16f8c6
+    start: 'if (launch.fenced) {',
     end: '// Never spawn into a missing directory',
-    utf16Length: 1326,
-    sha: '9a1255f1e81e0a9e4e289ab15380707dd6bcc1d410ffd16f44adddb99b16f8c6', // UNCHANGED content; LF units
+    utf16Length: 1896,
+    sha: 'ba003038c21fb4c802fa0d86c0d65dd1e12774f24e57fe6568d15182c36d8de0',
   },
   {
     name: 'ptyEnv block',
-    start: 'const fencedRole = !opts.videoScout && opts.role && FENCED_ROLES.has(opts.role);',
+    // RE-PINNED (fence completion). The anchor was the THIRD copy of the renderer-field predicate and
+    // is now the single classified verdict. buildPtyEnv's ARGUMENTS and every P1 environment
+    // semantic are unchanged; the behavioural assertions below prove that independently of this hash.
+    // Previous pin retained: 229 / 18cf42b434ee922ee61194d9316150c0b766591e063d0b0545f6aebc8d85cb54
+    start: 'const fencedRole = launch.fenced;',
     end: 'let p;',
-    utf16Length: 229,
-    sha: '18cf42b434ee922ee61194d9316150c0b766591e063d0b0545f6aebc8d85cb54',
+    utf16Length: 184,
+    sha: 'f64b6bd93abb18dced7c8d114d3ea82b98349d317878aa84dd04c25f17f7bb7b',
   },
   {
     name: 'pty-start handler',
-    start: "ipcMain.handle('pty-start', (_e, opts) => {",
+    // RE-PINNED (fence completion). The handler now runs the main-owned launch authority as its
+    // FIRST statement — trusted sender, then classification — before any log, filesystem read,
+    // pane-status enrolment, admission claim, command construction or spawn. The IPC event parameter
+    // is consequently `e` rather than `_e`, which moves this region's own start anchor.
+    // Previous pin retained: 13566 / da784a2e5c6be38e4daecc0e7fdfaf1f404aacfa5aac2cd01c8f6c2e2235fad9
+    start: "ipcMain.handle('pty-start', (e, opts) => {",
     end: "ipcMain.on('pty-write'",
     // RE-PINNED when Experiment A was retired and production pane status landed. The handler now
     // enrolls the pane through the production controller instead of the prototype's envForPane().
@@ -285,8 +313,8 @@ const REGIONS = [
     // Previous pins, retained so the earlier reviewed bases stay reproducible:
     //   len 13287 / sha 3ad6db301a3fa0e101195f439012ee42ca25ba6b31040b10d0196d23b7141bb3  (CRLF units)
     //   len 13864 / sha 1b6929a2e691c2e418ab529a80411e26f58a1d32a6f08b2ceb1b085e3db96274  (LF units)
-    utf16Length: 13566,
-    sha: 'da784a2e5c6be38e4daecc0e7fdfaf1f404aacfa5aac2cd01c8f6c2e2235fad9',
+    utf16Length: 14805,
+    sha: 'cbe2f345015245108e84656014f9e66c6a3c1eb187c866a1255ce2e9ae649376',
   },
 ];
 
@@ -331,8 +359,8 @@ assert(!/BLUE_HELM_PANE_STATUS_TOKEN\s*:/.test(src),
 // Revision 2 content assertions — the reason THIS re-pin happened, pinned as behaviour so the next
 // re-pin cannot quietly drop them along with the hash.
 {
-  const failTail = src.slice(src.indexOf('pty-start: pty.spawn FAILED'));
-  const failBlock = failTail.slice(0, failTail.indexOf('return { ok: false'));
+  const failTail = src.slice(mustFind(src, 'pty-start: pty.spawn FAILED', 'spawn-failure block'));
+  const failBlock = failTail.slice(0, mustFind(failTail, 'return { ok: false', 'spawn-failure block end'));
   assert(failBlock.indexOf('paneStatus.releasePane(id)') !== -1,
     'a failed pty.spawn releases the pane-status enrolment in main\'s own failure path');
 }
@@ -364,12 +392,13 @@ assert(!/createPaneStatusPrototype\(\{[\s\S]{0,400}?observedVersion/.test(src),
 assert(src.indexOf('baseEnv: process.env,') !== -1,
   'main.js passes process.env only as builder input, never as a spread at the sink');
 {
-  const envBlock = src.slice(src.indexOf('const fencedRole = !opts.videoScout'),
-    src.indexOf('let p;', src.indexOf('const fencedRole = !opts.videoScout')));
+  const envStart = mustFind(src, 'const fencedRole = launch.fenced;', 'ptyEnv block');
+  const envBlock = src.slice(envStart, src.indexOf('let p;', envStart));
   assert(!/\.\.\.process\.env\b/.test(envBlock),
     'the main.js ptyEnv block never spreads raw process.env');
   assert(envBlock.indexOf('baseEnv: process.env,') > envBlock.indexOf('const ptyEnv = buildPtyEnv({'),
     'process.env is passed inside the bounded buildPtyEnv call');
+  assert(envBlock.length > 0, 'the ptyEnv region actually resolved (mustFind guards the anchor)');
 }
 assert(/prepareAdmissionPaneLaunch\(\{/.test(src),
   'pty-start delegates pre-spawn eligible-pane claiming to the protective launch policy');

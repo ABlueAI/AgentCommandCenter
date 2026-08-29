@@ -38,6 +38,15 @@ const { createLauncherIpc } = require('./launcher-ipc');
 // The one canonical fail-closed sender/frame/URL trust gate (shared with clipboard/library/followup).
 // P12 adds the two launcher handlers as callers so they, too, refuse any non-trusted-window sender.
 const { createTrustedSenderGate } = require('./trusted-ipc-sender');
+// FENCE COMPLETION — main-owned launch authority for `pty-start`. Classification happens ONCE here
+// instead of being re-derived from renderer fields at three separate decision points; the effective
+// role definition is resolved across the documented scopes and refuses when it cannot be
+// established; and the fenced-role declaration must carry the canonical fence hook and no forbidden
+// tool. See docs/BUILDER-HANDOFF-fence-completion.md.
+const { classifyPtyLaunch, KIND: LAUNCH_KIND } = require('./pty-launch-classify');
+const { createRoleDefinitionResolver } = require('./role-definition-resolver');
+const { assertFencedRoleDefinition, FORBIDDEN_TOOLS } = require('./role-fence-policy');
+const { createPtyStartAuthority } = require('./pty-start-authority');
 // PRODUCTION PANE STATUS — docs/OSS-PROCUREMENT-pane-status.md,
 // "BLUE SUBSYSTEM VERDICT: BUILD FRESH". Advisory, pane-ID-bound Claude Code lifecycle status with
 // reversible setup and removal. Requiring these modules is inert: the controller listens on nothing,
@@ -233,11 +242,23 @@ const VALID_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 //   role set    -> `claude --agent <role> [--model x] [--effort y]` (roles are a Claude feature)
 //   cli only    -> bare CLI (claude/codex/gemini)
 //   neither     -> undefined => plain PowerShell shell
-function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }) {
-  if (role && VALID_ROLES.has(role)) {
+function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, launch) {
+  // FENCE COMPLETION: identity comes from the MAIN-OWNED classification when one is supplied, so the
+  // command, the fence decision, the environment tier and the admission verdict all read one result
+  // rather than each re-deriving from renderer fields. `launch.role` is already validated against
+  // VALID_ROLES by the classifier; the `role` fallback preserves the pre-existing behaviour for the
+  // pure-unit call sites that pass no classification.
+  const effectiveRole = (launch && launch.kind === 'role') ? launch.role : role;
+  if (effectiveRole && VALID_ROLES.has(effectiveRole)) {
     // `--agent` is a Claude feature, so roles always launch on the Claude CLI regardless
     // of any cli hint (the Gemini video-scout path injects its brief differently — Phase C).
-    let cmd = AGENT_CMD.claude + ' --agent ' + role;
+    let cmd = AGENT_CMD.claude + ' --agent ' + effectiveRole;
+    // P4 DIRECT ENFORCEMENT. Inspecting the role declaration proves what the file SAYS; these
+    // arguments change what the launched CLI can DO. Bare-name denials remove the tools from model
+    // context and remain effective through the permission evaluation path. They are MAIN-ISSUED
+    // constants — `FORBIDDEN_TOOLS` from role-fence-policy.js — and no renderer field reaches them.
+    // The declaration checks are retained alongside as drift/refusal evidence, not replaced by this.
+    if (launch && launch.fenced === true) cmd += ' --disallowedTools ' + FORBIDDEN_TOOLS.join(' ');
     if (VALID_MODELS.has(model)) cmd += ' --model ' + model;
     if (VALID_EFFORTS.has(effort)) cmd += ' --effort ' + effort;
     // Optional opening prompt (e.g. the reviewer's "review this diff"). Strip shell-significant
@@ -1007,8 +1028,18 @@ ipcMain.handle('ensure-output-dir', async (_e, { role }) => {
   tlog(`ensure-output-dir: START role="${role}"`);
   const safeRole = String(role || 'output').replace(/[^a-z0-9-]/gi, '') || 'output';
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const dir = path.join(loadSettings().projectsRoot, '.command-center', 'outputs', `${safeRole}-${stamp}`);
-  try { fs.mkdirSync(dir, { recursive: true }); }
+  // WO-7 UNIQUENESS. The stamp has SECOND precision, so concurrent launches of the SAME role in the
+  // same second previously produced the SAME directory: `mkdirSync(..., {recursive:true})` succeeds
+  // on an existing directory, so N callers all "succeeded" into ONE sandbox with ONE trust entry.
+  // Two fenced agents sharing a sandbox is a fence-isolation defect, not a naming nuisance.
+  // `mkdtempSync` creates the directory ATOMICALLY AND EXCLUSIVELY — a random suffix followed by a
+  // recursive mkdir would leave the same hole open under a different name.
+  const outputsRoot = path.join(loadSettings().projectsRoot, '.command-center', 'outputs');
+  let dir;
+  try {
+    fs.mkdirSync(outputsRoot, { recursive: true });   // the PARENT only; never the sandbox itself
+    dir = fs.mkdtempSync(path.join(outputsRoot, `${safeRole}-${stamp}-`));
+  }
   catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
   tlog('ensure-output-dir: mkdirSync done');
 
@@ -1079,26 +1110,22 @@ ipcMain.handle('ensure-output-dir', async (_e, { role }) => {
 ipcMain.handle('verify-fence', async (_e, { role }) => {
   tlog(`verify-fence: START role="${role}"`);
   if (!VALID_ROLES.has(role)) return { ok: false, error: 'unknown role' };
-  const home = process.env.USERPROFILE || app.getPath('home');
-  const agentFile = path.join(home, '.claude', 'agents', `${role}.md`);
-  const fix = 'Run scripts\\sync-roles.ps1, then relaunch.';
-  if (!fs.existsSync(agentFile)) return { ok: false, error: `Role "${role}" is not deployed (${agentFile} missing). ${fix}` };
-  let text = '';
-  try { text = fs.readFileSync(agentFile, 'utf8'); }
-  catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
-  if (/__CC_HOOK__/.test(text)) return { ok: false, error: `Role "${role}" still has the unsubstituted __CC_HOOK__ placeholder. ${fix}` };
-  // Pull the hook path out of:  command: "node \"<abs path>/fence-write.js\""
-  const m = text.match(/command:\s*"node\s+\\"(.+?fence-write\.js)\\"/i);
-  if (!/PreToolUse/.test(text) || !m) return { ok: false, error: `Role "${role}" has no PreToolUse path-fence wired in. ${fix}` };
-  if (!fs.existsSync(m[1])) return { ok: false, error: `Path-fence hook missing at ${m[1]}. ${fix}` };
-  // Confirm the matcher actually includes Read — a write-only matcher (the pre-P1 state)
-  // would pass every check above while leaving reads completely unguarded.
-  const matcherLine = text.match(/matcher:\s*"([^"]*)"/i);
-  if (!matcherLine || !/\bRead\b/.test(matcherLine[1])) {
-    return { ok: false, error: `Role "${role}" has a path-fence but its matcher doesn't include Read — reads are unguarded. ${fix}` };
-  }
+  // NOT AN ENFORCEMENT POINT — EARLY RENDERER FEEDBACK ONLY. `pty-start` never calls this handler,
+  // so a bypassed renderer can skip it entirely and still reach a spawn. Enforcement lives in the
+  // main-owned authority inside `pty-start`. This exists so the operator sees a clear reason in the
+  // UI before a launch attempt, and it delegates to THE SAME resolver and policy modules so early
+  // feedback can never disagree with what the spawn boundary will decide.
+  //
+  // The regexes this replaced bound nothing structurally: an independent probe drove this handler
+  // against synthetic content and got ok:true for a role whose matcher covered only `Read` while it
+  // still declared `Write`, and for a role with an EMPTY PreToolUse list whose fence command sat
+  // under `PostToolUse`.
+  if (!FENCED_ROLES.has(role)) return { ok: false, error: 'role-not-fenced' };
+  const outputsRoot = path.join(loadSettings().projectsRoot, '.command-center', 'outputs');
+  const check = ptyStartAuthority.authorizeFencedRole({ role, cwd: outputsRoot });
+  if (!check.ok) return { ok: false, error: check.reason };
   tlog('verify-fence: END ok');
-  return { ok: true, hookPath: m[1] };
+  return { ok: true, hookPath: check.hookPath };
 });
 
 // Build a review diff for a worktree (this branch vs main, including uncommitted work) and
@@ -1157,6 +1184,60 @@ function listLauncherAuthorizedDirs() {
 // failure of EITHER refuses VISIBLY (Logs tab) and spawns NOTHING. The executable is then resolved
 // deterministically from main-owned env (never a renderer path) and spawned shell:false.
 const launcherGate = createTrustedSenderGate({ entryUrl: ENTRY_URL, getTrustedWindow: () => win });
+
+// ---- FENCE COMPLETION: main-owned `pty-start` launch authority -------------------------------
+// Same trust anchors as every other privileged surface (canonical ENTRY_URL + the late-bound
+// trusted window), so this boundary is no weaker than the existing ones.
+const CANONICAL_FENCE_HOOK = path.join(process.env.USERPROFILE || app.getPath('home'), '.claude', 'hooks', 'fence-write.js');
+const TRACKED_FENCE_HOOK = path.join(SCRIPTS_DIR, 'hooks', 'fence-write.js');
+const sha256File = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+// The deployed hook must be byte-identical to the hook THIS build ships. Computed once at startup
+// from the tracked file; a missing tracked hook yields null, which makes every content comparison
+// fail closed rather than silently accepting an arbitrary file named fence-write.js.
+let trackedFenceHookSha = null;
+try { trackedFenceHookSha = sha256File(TRACKED_FENCE_HOOK); }
+catch (e) { tlog(`fence-policy: tracked hook unreadable — every fenced launch will refuse: ${(e && e.code) || 'error'}`); }
+
+const roleDefinitionResolver = createRoleDefinitionResolver({
+  fsx: {
+    existsSync: (p) => fs.existsSync(p),
+    readdirSync: (p, o) => fs.readdirSync(p, o),
+    readFileSync: (p, e) => fs.readFileSync(p, e),
+  },
+  homeDir: process.env.USERPROFILE || app.getPath('home'),
+  // Presence of an organization policy key refuses; an unanswerable probe also refuses. `reg query`
+  // exits non-zero with ERROR_FILE_NOT_FOUND for an absent key, which is the only "absent" answer.
+  probeRegistryKey: (key) => {
+    if (process.platform !== 'win32') return { present: false };
+    try {
+      execFileSync('reg', ['query', key], { stdio: ['ignore', 'ignore', 'ignore'] });
+      return { present: true };
+    } catch (e) {
+      if (e && e.status === 1) return { present: false };
+      throw e;                       // any other failure is UNREADABLE, and refuses upstream
+    }
+  },
+});
+
+const ptyStartAuthority = createPtyStartAuthority({
+  assessSender: (e) => launcherGate.assess(e),
+  classify: (opts) => classifyPtyLaunch(opts, {
+    validRoles: VALID_ROLES, fencedRoles: FENCED_ROLES, validClis: new Set(Object.keys(AGENT_CMD)),
+  }),
+  resolveDefinition: (req) => roleDefinitionResolver.resolve(req),
+  assertPolicy: (req) => assertFencedRoleDefinition({
+    role: req.role,
+    text: req.text,
+    canonicalHookPath: CANONICAL_FENCE_HOOK,
+    trackedHookSha256: trackedFenceHookSha,
+    fsx: { existsSync: (p) => fs.existsSync(p), realpathSync: (p) => fs.realpathSync.native(p) },
+    hashFile: sha256File,
+    platform: process.platform,
+  }),
+  // Bounded visible refusal on the same main-error channel the launcher/nav refusals use — reason
+  // CONSTANT only, never a path, prompt, environment value, or other renderer payload.
+  logRefusal: (line) => { tlog(line); if (win && !win.isDestroyed()) win.webContents.send('main-error', line); },
+});
 const launcherAuthorizer = createLauncherAuthorizer({
   realpath: (p) => fs.realpathSync.native(p),
   isDirectory: (p) => fs.statSync(p).isDirectory(),
@@ -1183,8 +1264,17 @@ ipcMain.handle('open-external', async (_e, url) => {
 // Each renderer terminal pane gets a real ConPTY here: PowerShell spawned in the
 // worktree, optionally running the chosen agent CLI, with bytes streamed both ways.
 // This is what makes agents run *inside* the Command Center window.
-ipcMain.handle('pty-start', (_e, opts) => {
-  tlog(`pty-start: START id=${opts.id} role=${opts.role || 'none'} cwd=${opts.cwd || '(unset)'}`);
+ipcMain.handle('pty-start', (e, opts) => {
+  // FIRST STATEMENT, DELIBERATELY. Sender trust and main-owned classification run before ANY log,
+  // filesystem read, pane-status enrolment, admission claim, command construction or spawn. The
+  // previous handler logged `opts.cwd` and `opts.role` here — before any validation — and
+  // dereferenced `opts.id` on a malformed payload, producing a TypeError instead of a visible
+  // refusal. Both are closed by moving the gate ahead of the log and refusing on a bad shape.
+  const authorized = ptyStartAuthority.assess(e, opts);
+  if (!authorized.ok) return { ok: false, error: authorized.reason };
+  const launch = authorized.launch;
+  // Bounded: kind and the fence verdict only. No cwd, no role-supplied string, no prompt.
+  tlog(`pty-start: START kind=${launch.kind} fenced=${launch.fenced}`);
   const { id, cols, rows } = opts;
   let admissionPaneClaimed = false;
   const refuseAdmissionStart = (reason) => {
@@ -1203,18 +1293,21 @@ ipcMain.handle('pty-start', (_e, opts) => {
   // same "tool-enforced-not-convention" principle the hook itself is built on. Uses the
   // same realpath + case-fold logic as fence-write.js so both layers agree on what "inside"
   // means and can't be split by a symlink or a Unicode/case path trick.
-  if (!opts.videoScout && opts.role && FENCED_ROLES.has(opts.role)) {
-    const fenceRefuse = (msg) => {
-      tlog(msg);
-      if (win && !win.isDestroyed()) win.webContents.send('main-error', msg);
-      return { ok: false, error: msg };
+  if (launch.fenced) {
+    // Reason CONSTANTS only. The pre-existing messages interpolated `declaredCwd`, `resolvedCwd`
+    // and `resolvedRoot` into the Logs tab and the renderer error channel; a refusal must not echo
+    // an attacker-influenced path back out. The CONTAINMENT LOGIC below is unchanged: same
+    // realpath resolution, same win32 case fold, same `startsWith(root + path.sep)` prefix rule,
+    // and still placed BEFORE the missing-cwd fallback to USERPROFILE.
+    const fenceRefuse = (reason) => {
+      const line = `Fenced launch refused [${reason}]`;
+      tlog(line);
+      if (win && !win.isDestroyed()) win.webContents.send('main-error', line);
+      return { ok: false, error: reason };
     };
     const declaredCwd = opts.cwd;
     if (!declaredCwd || !fs.existsSync(declaredCwd)) {
-      return fenceRefuse(
-        `Fenced role "${opts.role}" refused: cwd "${declaredCwd || '(unset)'}" does not exist. ` +
-        `Call ensure-output-dir and pass its result as cwd before spawning.`
-      );
+      return fenceRefuse('fenced-cwd-missing');
     }
     const outputsRoot = path.join(loadSettings().projectsRoot, '.command-center', 'outputs');
     const fold = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
@@ -1223,12 +1316,15 @@ ipcMain.handle('pty-start', (_e, opts) => {
     const within = fold(resolvedCwd) === fold(resolvedRoot) ||
                    fold(resolvedCwd).startsWith(fold(resolvedRoot) + path.sep);
     if (!within) {
-      return fenceRefuse(
-        `Fenced role "${opts.role}" refused: cwd "${resolvedCwd}" is outside the outputs sandbox ` +
-        `("${resolvedRoot}"). Call ensure-output-dir and pass its result as cwd before spawning.`
-      );
+      return fenceRefuse('fenced-cwd-outside-outputs-sandbox');
     }
-    tlog(`pty-start: fenced-role cwd check PASSED (${resolvedCwd} ⊆ ${resolvedRoot})`);
+    tlog('pty-start: fenced-role cwd check PASSED');
+
+    // PHASE 2, AND ONLY NOW. Containment is established, so the resolver walks from a cwd main has
+    // already proven. No role directory is scanned for a launch whose cwd was never validated.
+    const fencePolicy = ptyStartAuthority.authorizeFencedRole({ role: launch.role, cwd: resolvedCwd });
+    if (!fencePolicy.ok) return { ok: false, error: fencePolicy.reason };
+    tlog(`pty-start: fenced-role declaration ACCEPTED (scope=${fencePolicy.scope})`);
   }
 
   // Never spawn into a missing directory: ConPTY throws Windows error 267 (ERROR_DIRECTORY)
@@ -1236,7 +1332,7 @@ ipcMain.handle('pty-start', (_e, opts) => {
   const cwd = (opts.cwd && fs.existsSync(opts.cwd)) ? opts.cwd : process.env.USERPROFILE;
   // -ExecutionPolicy Bypass so npm .ps1 shims (claude/codex/gemini) always launch.
   const args = ['-NoLogo', '-ExecutionPolicy', 'Bypass', '-NoExit'];
-  if (opts.videoScout) {
+  if (launch.videoScout) {
     if (!geminiKey) {
       if (win && !win.isDestroyed()) win.webContents.send('main-error',
         'GEMINI_API_KEY not configured — enter it in the key setup banner and save before launching Video Scout.');
@@ -1281,7 +1377,7 @@ ipcMain.handle('pty-start', (_e, opts) => {
     }
     args.push(...geminiArgs);
   } else {
-    const run = buildAgentCommand(opts); // role / bare CLI / undefined => plain shell
+    const run = buildAgentCommand(opts, launch); // role / bare CLI / undefined => plain shell
     if (run) args.push('-Command', run);
   }
   const admissionLaunch = prepareAdmissionPaneLaunch({
@@ -1318,17 +1414,17 @@ ipcMain.handle('pty-start', (_e, opts) => {
   // inheritance only; it creates no same-user filesystem isolation. APPDATA and USERPROFILE remain
   // available, and a same-user process can still locate the ledger. The ledger remains an
   // ACCIDENTAL-SPEND control, not a security boundary against a malicious or compromised pane.
-  const fencedRole = !opts.videoScout && opts.role && FENCED_ROLES.has(opts.role);
+  const fencedRole = launch.fenced;
   const ptyEnv = buildPtyEnv({
     baseEnv: process.env,
     fencedRole,
-    videoScout: opts.videoScout,
+    videoScout: launch.videoScout,
     geminiKey,
     paneStatusEnv,
   });
   let p;
   const envMode = fencedRole ? 'fenced-tier-1' : 'unfenced-current';
-  tlog(`pty-start: env built — mode=${envMode}; scrub=forced; video-scout-key=${opts.videoScout ? 'explicit' : 'not-explicit'}; pane-status=${paneStatusEnrollment.ok ? 'enrolled' : 'not-enrolled'}`);
+  tlog(`pty-start: env built — mode=${envMode}; scrub=forced; video-scout-key=${launch.videoScout ? 'explicit' : 'not-explicit'}; pane-status=${paneStatusEnrollment.ok ? 'enrolled' : 'not-enrolled'}`);
   tlog(`pty-start: pty.spawn START cwd=${cwd}`);
   try {
     p = pty.spawn('powershell.exe', args, {
