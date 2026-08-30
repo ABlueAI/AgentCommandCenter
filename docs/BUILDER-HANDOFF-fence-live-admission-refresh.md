@@ -1,6 +1,6 @@
 # Builder Handoff — Fence Live Admission Refresh Correction
 
-Status: PRE-REGISTERED BEFORE SOURCE EDITS  
+Status: BLOCKED CHECKPOINT — IMPLEMENTED; FULL-APP GATE NOT PASSED
 Branch: `codex/fence-live-admission-refresh`  
 Stacked base / reviewed Fence tip: `1efcc99b2f795e3623558e54ba3067bcf6385b32`  
 Reviewed Fence production/security tip: `96720f96edfc97414ebb8d3c39b2b3a0975936b5`  
@@ -138,4 +138,100 @@ still stops without merge or push.
 
 ## Completion record
 
-Pending implementation, gates, pinned artifacts, and independent review.
+Pre-registration was committed before source edits as `b67aad3` (`docs:
+preregister admission refresh correction`). The implementation remains inside
+the exact three-path cap and adds the pre-registered production-wiring proof.
+
+Completed gates:
+
+- focused: `admission-ui-integration: 176 passed, 0 failed`;
+- syntax: both authorized JavaScript files passed `node --check`;
+- whitespace: `git diff --check` passed; and
+- Pester: after rerunning with normal read access to the user Git ignore file,
+  `955 passed, 0 failed, 0 skipped (of 955)`.
+
+The first sandboxed Pester pass was not authoritative: it reported `922/955`
+because the sandbox denied reads of
+`C:\Users\levij\.config\git\ignore`, contaminating merge-gate fixture status,
+and prevented the installed Gemini CLI config-only check from initializing.
+The approved non-Electron rerun cleared both environment causes. Its Gemini
+check used `--list-extensions`; no model request was made.
+
+The full-app gate is not complete. `npm.cmd test` reaches two real hidden
+Electron renderer harnesses, `dockview-bootstrap.test.js` and
+`dockview-app-integration.test.js`. The sandboxed attempt stopped at the first
+harness with Electron environment errors (`safeStorage` decrypt failure, GPU
+process exit, then `ERR_FAILED` loading the local harness file). An unsandboxed
+harness rerun was denied because Blue's authorization also says, "Do not ...
+start Electron." No workaround or retry was attempted.
+
+Stop condition: Blue must clarify whether the repository's hidden Electron
+renderer test harnesses are authorized solely as part of `npm.cmd test`. This
+would not authorize `npm start`, a visible feature app launch, a ledger rebind,
+or any provider prompt. Until then, the correction tip, pinned artifacts, and
+independent Full-class review remain pending so the reviewer is not handed a
+range with an unresolved required gate.
+
+Blue then authorized one narrow full-app test attempt, but required an immediate
+stop if a harness opened a visible app, reached live state, accessed live user
+configuration, or deviated from test isolation. Source preflight found that the
+mandatory `dockview-app-integration.test.js` child is not hidden:
+`dockview-app-harness.js` explicitly documents that its windows are shown and
+calls `win.showInactive()` in `makeWindow`. The harness also does not redirect
+Electron's `userData` path before `app.whenReady()`, so the no-live-user-config
+limit cannot be guaranteed; the earlier sandboxed failure's `safeStorage`
+decrypt diagnostic is consistent with Electron reaching that default profile.
+The authorized one-time `npm.cmd test` run was therefore not launched or
+consumed. Final commit, pinned artifacts, and independent review remain pending.
+
+Blue subsequently authorized a revised one-time exception permitting only the
+inactive `dockview-app-harness.js` windows and requiring a fresh disposable
+profile fixture. The single attempt used verified process-local fixture paths
+for `APPDATA`, `LOCALAPPDATA`, `TEMP`, `TMP`, `USERPROFILE`, `HOME`, Claude
+configuration, and npm configuration/cache. Provider credential variables were
+removed from that process and its children. No User or Machine environment
+variable was modified.
+
+The 96-suite gate stopped at registered suite 15,
+`dockview-bootstrap.test.js`. Suites 1-14 passed, including the 96-command
+reachability/summary checks and `dockview-default-path: 380 passed, 0 failed`.
+The bootstrap test's Electron child then returned no stdout and no stderr, so
+the parent reported:
+
+> FAIL: the harness produced no parseable JSON report (no output)
+
+The second Electron suite and suites 16-96 did not run. The command exited 1.
+The one authorized attempt is consumed; no retry is authorized or attempted.
+Post-run checks proved the exact fixture no longer exists and zero Electron
+processes from this correction worktree remain. Because the required full-app
+gate was not green, no passing-gate claim, pinned artifact, or independent
+review was produced at that stop.
+
+Blue authorized one narrow AGR falsification without retrying suite 15 on the
+correction branch. A disposable detached worktree at exact fork point
+`1efcc99b2f795e3623558e54ba3067bcf6385b32` ran
+`dockview-bootstrap.test.js` once under the same process-local isolation
+manifest. It reproduced the correction-branch signature exactly: the two
+harness setup checks passed, then the parent reported `the harness produced no
+parseable JSON report (no output)` with empty stdout and empty stderr, exiting
+1. Its fixture and detached worktree were removed after identity and
+containment checks.
+
+Per the AGR authorization, registered suites 16-96 were then started exactly
+once on the correction worktree without rerunning suites 1-15. Suite 16,
+`dockview-app-integration.test.js`, immediately failed with the same pre-report
+`no output` signature and exit 1. Suites 17-96 were not run. The tail fixture
+was removed and a post-run check found zero correction-worktree Electron
+processes. Because the 16-96 tail did not pass, suite 15 is not recorded as an
+admissible AGR candidate and final commit, pinned artifacts, and independent
+review remain prohibited.
+
+## Blocked checkpoint preservation
+
+Blue later authorized preserving this exact three-path correction as a clearly
+labeled blocked checkpoint before a separate stacked harness-reliability
+branch. This checkpoint records the implemented admission refresh and its green
+focused, syntax, and Pester evidence, but it does **not** claim that the 96-suite
+full-app gate passed. The failed suite-15 and suite-16 evidence above remains
+the controlling full-app result for this checkpoint. It is not merge-ready and
+has no independent Full-class verdict.
