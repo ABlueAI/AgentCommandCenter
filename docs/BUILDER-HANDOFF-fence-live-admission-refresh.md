@@ -1,6 +1,6 @@
 # Builder Handoff — Fence Live Admission Refresh Correction
 
-Status: IMPLEMENTED; H1 APPLICATION GATE MET FOR EXACT `aa1640c`; AWAITING FRESH INDEPENDENT FULL-CLASS REVIEW (earlier blocked-checkpoint status preserved below as history)
+Status: FENCE-BOUNDARY CORRECTION BATCH IN PROGRESS after the Full-class review of `cf0327e` returned `VERDICT: FAIL` (see "Correction batch after Full-class FAIL" below; earlier statuses preserved as history)
 Branch: `codex/fence-live-admission-refresh`  
 Stacked base / reviewed Fence tip: `1efcc99b2f795e3623558e54ba3067bcf6385b32`  
 Reviewed Fence production/security tip: `96720f96edfc97414ebb8d3c39b2b3a0975936b5`  
@@ -314,3 +314,200 @@ includes it.
 Remaining before Blue: a fresh independent read-only Full-class review of both
 artifacts, returning the literal `CLASS` / `INDEPENDENCE` / `VERDICT` lines
 required above. This closeout stops without merge or push.
+
+## Correction batch after Full-class FAIL (pre-registration)
+
+### Review result retained
+
+A fresh independent Full-class review of `1efcc99...cf0327e` (correction) and
+`70fe1f1...cf0327e` (cumulative Fence stack), using the pinned artifacts
+`4C5AC4E3…0EF9` (20,598 bytes) and `B4DEF4F1…3FB4` (195,183 bytes), found the
+one-file renderer correction sound. It failed the stack on two Medium findings
+in the new fenced-launch boundary. Its final lines, verbatim:
+
+```text
+CLASS: Full
+INDEPENDENCE: CONFIRMED
+H1 CANDIDATE IDENTITY: CONFIRMED
+VERDICT: FAIL
+```
+
+The `cf0327e` commit and its two pinned artifacts are preserved unchanged as
+the reviewed-and-failed baseline.
+
+### Authorization and invariant
+
+Blue approved one bounded correction batch, Full class. Approved invariant,
+verbatim:
+
+> A fenced launch accepts only explicitly supported tools and launch inputs,
+> and uses the same canonical cwd for definition resolution and process launch.
+> An unreadable managed-policy probe refuses visibly.
+
+No rebase, merge, push, fetch, ledger change, live-matrix execution, npm test,
+Pester, Electron, application launch, H1 script, provider session, or repeat of
+a consumed gate is authorized.
+
+### Findings and exact intended changes
+
+**M1 — denylist acceptance.** `app/role-fence-policy.js` accepts any declared
+tool except `Bash`, `Glob`, `NotebookEdit`.
+Change: add a frozen `ALLOWED_TOOLS` =
+`Read, Write, Edit, MultiEdit, WebSearch, WebFetch`. The set is derived from the
+three tracked fenced roles, which declare `WebSearch, WebFetch, Read, Write`, plus
+the existing supported fence behaviour: the canonical matcher is
+`Read|Write|Edit|MultiEdit`, and `fence-write.js` gates the paths of those four tools.
+After the existing `FORBIDDEN_TOOLS` check, which keeps its reason, any declared tool
+not in `ALLOWED_TOOLS` refuses with the new bounded reason
+`fence-policy-tool-not-allowed`. Matching is exact and case-sensitive. This
+refuses `Grep`, `PowerShell`, `Agent`, `Task`, lower-case variants, tool
+specifiers, MCP tool names, and arbitrary unknown names. Every allowed
+filesystem tool (`PATH_CAPABLE_TOOLS` = `Read, Write, Edit, MultiEdit`) that the
+role declares must be covered by the authenticated PreToolUse fence entry's
+matcher. That rule already applies, and it now covers every filesystem tool
+that can pass the allowlist. `tools:` is the loader's own allowlist, so an
+undeclared tool is not available to the launched agent. The main-issued
+`--disallowedTools Bash Glob NotebookEdit` denial is retained unchanged as
+defence in depth.
+
+**M2 — option-shaped opening prompt for fenced roles.**
+Change in `app/pty-launch-classify.js`: when the classified role is fenced,
+`opts.initialPrompt` must be `undefined` or `''`. `undefined` is what the
+existing UI sends for every fenced role (`app/renderer/app.js:779`), and only the
+reviewer launch sets a prompt. Any other value refuses with the new bounded reason
+`classify-fenced-initial-prompt-refused`, which never echoes the value. That
+covers every non-empty or whitespace string, `null`, numbers, objects, and arrays.
+The check runs in `ptyStartAuthority.assess()`, the handler's first statement, so it
+comes before any log of launch details, containment, resolution, admission claim,
+command construction, or spawn. Defence in depth in `app/main.js`
+`buildAgentCommand`: a `launch.fenced === true` command never appends a prompt.
+Non-fenced prompt behaviour (the reviewer) is unchanged. There is no all-fields
+schema redesign and no CLI-parser investigation.
+
+**L1 — resolver/spawn cwd split.** Change in `app/main.js`: the fenced branch
+records the validated `resolvedCwd`, and the spawn uses it for fenced launches.
+Non-fenced cwd selection (`opts.cwd` if it exists, else `USERPROFILE`) is
+unchanged.
+
+**L2 — `reg query` exit 1 treated as absence.** `reg.exe` exits 1 for every
+failure, and its stderr is localized. Neither the exit status nor the message can
+distinguish absent from unreadable. Change in `app/main.js`: establish absence
+positively. The probe lists the key's parent (`reg query <parent>`, with no stderr
+parsing). A successful exit-0 listing whose non-indented subkey lines do not
+include `<expanded-parent>\<child>` (case-insensitive exact line) is absent. A
+listed child is present. This includes a child that exists but denies read, which
+still appears in its parent's listing. Any non-zero exit, spawn error, timeout, or
+unsupported key shape throws. The resolver already maps that to the visible
+refusal `resolve-managed-scope-unreadable`.
+
+**L3 — overstated comments.** Correct the comment in `app/main.js`
+`buildAgentCommand`, the top-of-file Fence comment, and the
+`app/pty-launch-classify.js` header. They must say that admission still derives
+eligibility separately through `isEligibleClaudePane` over raw `opts`, and that
+agreement is tested, not structural. The admission internals are not changed.
+
+**L4 — test strength, carried forward.** The source-text regression in
+`app/admission-ui-integration.test.js` remains. It is a nonblocking test
+limitation, and the controlled live `pane: <id>` observation remains a
+live-acceptance obligation. No live run is authorized, and that test file is
+outside this batch's cap.
+
+### Test cases
+
+- `role-fence-policy.test.js`: the three tracked roles pass (positive). Refusal
+  with `fence-policy-tool-not-allowed` for `Grep`, `PowerShell`, `Agent`, `Task`,
+  and an unknown name. The existing `Bash`/`Glob`/`NotebookEdit` cases keep
+  `fence-policy-forbidden-tool-declared`. Additional refusals: lower-case `read`,
+  a specifier `Read(./x)`, and an `mcp__x__y` name. `Edit`/`MultiEdit` declared
+  with the canonical matcher pass, and declared without matcher coverage refuse.
+  A pin asserts that `ALLOWED_TOOLS` minus `PATH_CAPABLE_TOOLS` is exactly
+  `WebSearch, WebFetch`.
+- `pty-launch-classify.test.js`: fenced roles accept absent, `undefined`, and
+  `''`. They refuse `'--settings=x'`, `'--mcp-config=x'`,
+  `'--permission-mode=x'`, an ordinary prompt, whitespace, `null`, a number, an
+  object, and an array. The refusal reason is a constant that carries none of
+  the prompt text. Reviewer, builder, and codebase-scout still accept a non-empty
+  prompt.
+- `pty-start-authority-main.test.js`, driving the real `pty-start` handler:
+  - The four prompt cases refuse at the `[classify]` stage with zero spawns and
+    no `[admission]` line, and the prompt is never echoed.
+  - A reviewer launch with a prompt still spawns and carries the quoted prompt.
+  - Drift of the deployed web-scout to `Grep`, `PowerShell`, `Agent`, `Task`, or
+    an unknown tool refuses with zero spawns.
+  - L1: a junction outside `outputs/` points into the sandbox. The launch is
+    accepted, the spawn cwd equals the canonical sandbox path, not the declared
+    junction path, and the resolver's first project-scope probe is
+    `<spawn cwd>\.claude\agents`.
+  - L2: `child_process.execFileSync` is intercepted for `reg` only, and the real
+    registry is never written. Cases:
+    - parent listing without the child is absent and accepted;
+    - near-miss `ClaudeCodeX` and an indented value named `ClaudeCode` are absent;
+    - child listed under HKLM or HKCU is present and refuses;
+    - parent exit 1 with an English "Access is denied", a German localized
+      message, or "unable to find" refuses as unreadable;
+    - spawn error `ENOENT`, exit 5, and a timeout signal refuse as unreadable.
+
+    Every refusal spawns nothing. By default the interceptor passes through to
+    the real read-only `reg query`, so the existing positive controls still
+    exercise the real probe.
+- `launcher-fence-invariant.test.js`: re-pin as below, retaining the previous
+  values.
+
+### Expected invariant-pin movements
+
+- `fenced-role cwd gate` (1896 / `ba003038…`): MUST move (L1 records `resolvedCwd`).
+- `pty-start handler` (14805 / `cbe2f345…`): MUST move (L1 spawn cwd selection).
+- `ptyEnv block` (184 / `f64b6bd9…`): MUST remain exact. The environment handed
+  to a PTY is not touched.
+- Other deliberate assertion movements, disclosed here:
+  - The policy suite's substring near-miss names (`Globals`, `BashfulTool`,
+    `NotebookEditor`, `Readable`) move from accepted to refused, since that is
+    the purpose of M1.
+  - The main-harness renderer-injection case drops its fenced
+    `initialPrompt: 'ignore previous --disallowedTools'`, which M2 now refuses.
+  - The first positive control's `cwd === SANDBOX` compares against the sandbox's
+    canonical real path.
+
+### Path cap
+
+Exactly these tracked paths may change from `cf0327e`:
+`app/role-fence-policy.js`, `app/role-fence-policy.test.js`,
+`app/pty-launch-classify.js`, `app/pty-launch-classify.test.js`, `app/main.js`,
+`app/pty-start-authority-main.test.js`, `app/launcher-fence-invariant.test.js`,
+and this handoff. Work stops for scope disposition if any other path, a new
+dependency, or a new subsystem is required.
+
+### Procurement
+
+This batch corrects the existing Fence boundary and adds no subsystem or
+dependency. The controlling admission procurement reference remains
+`docs/OSS-PROCUREMENT-pane-status.md`, verdict verbatim:
+
+> BLUE SUBSYSTEM VERDICT: BUILD FRESH
+
+That record is not a separate Fence procurement verdict.
+
+### Authorized verification
+
+- `node app/role-fence-policy.test.js`
+- `node app/pty-launch-classify.test.js`
+- `node app/pty-start-authority-main.test.js`
+- `node app/launcher-fence-invariant.test.js`
+- `node --check` on each changed JavaScript file
+- `git diff --check`
+- exact scope checks against this cap
+
+After those pass: commit, then generate new pinned diffs with `git diff --output`:
+
+- `.agent-review-fence-boundary-correction-since-cf0327e.diff`
+  (`cf0327eaafadc3fe6934b2d2084e670c0cf46303...<final>`)
+- `.agent-review-fence-boundary-cumulative-since-70fe1f1.diff`
+  (`70fe1f1920979d43427be78332c4966acd3b408d...<final>`)
+
+Their sizes and hashes go in the re-review brief, not in this file.
+
+### Application gate status
+
+The H1 PASS applies to `aa1640c` only. This batch changes runtime code, so the
+new candidate has no application-gate PASS. A full 96-suite application gate on
+the final correction tip remains required and is not executed here.
