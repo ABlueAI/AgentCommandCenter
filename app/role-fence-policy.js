@@ -49,6 +49,7 @@ const REASON = Object.freeze({
   PARSE: 'fence-policy-declaration-unparseable',
   IDENTITY_MISMATCH: 'fence-policy-identity-mismatch',
   TOOLS_ABSENT: 'fence-policy-tools-not-declared',
+  TOOLS_EMPTY: 'fence-policy-tools-declared-empty',
   FORBIDDEN_TOOL: 'fence-policy-forbidden-tool-declared',
   TOOL_NOT_ALLOWED: 'fence-policy-tool-not-allowed',
   PRETOOLUSE_MISSING: 'fence-policy-pretooluse-absent-or-empty',
@@ -94,6 +95,12 @@ function assertFencedRoleDefinition(input) {
   // An OMITTED `tools:` key inherits ALL tools, which includes Bash. Fail closed — this is
   // documented loader behaviour, not a defensive guess.
   if (!parsed.toolsDeclared) return refuse(REASON.TOOLS_ABSENT);
+  // A DECLARED-BUT-EMPTY `tools:` (`tools:`, `tools: ""`, `tools: ,` and their whitespace/quoted
+  // equivalents) also refuses. Without this, the allowlist loops below have nothing to check and
+  // no matcher coverage is required, so the policy would accept it. Whether the CLI treats an empty
+  // value as omitted (inherit ALL tools) is NOT established here, and this refusal does not depend on
+  // it: an empty declaration is never a tool set this fence was reviewed against.
+  if (parsed.tools.length === 0) return refuse(REASON.TOOLS_EMPTY);
 
   // `disallowedTools` is deliberately NOT consulted here: a denylist must never be able to rescue a
   // forbidden entry that the allowlist granted. Policy is evaluated on `tools:` alone.

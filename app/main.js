@@ -1215,22 +1215,62 @@ catch (e) { tlog(`fence-policy: tracked hook unreadable — every fenced launch 
 // A child that exists but denies read still appears in its parent's listing, so it classifies as
 // PRESENT. Any non-zero exit, spawn error or timeout on the parent throws: the resolver maps that to
 // the visible refusal `resolve-managed-scope-unreadable`.
+//
+// "NO MATCHING LINE" IS NOT ENOUGH (re-review N2). A successful exit with empty, garbled or
+// unexpectedly shaped output must not read as absence, so absence is accepted only from a listing
+// RECOGNIZED as the exact parent's. Accepted structural forms (case-insensitive; trailing whitespace
+// ignored):
+//   * blank / whitespace-only line                          — ignored;
+//   * header: the exact expanded parent path                — at most once, before any subkey line;
+//   * value line: 4-space indent, name, 4 spaces, REG_<TYPE>, optional data
+//                                                           — only after the header, before subkeys;
+//   * direct subkey: `<exact parent>\<one segment, no further backslash>`.
+// Any other non-blank line (grandchild, wrong parent, error text, a misplaced value line) makes the
+// listing UNRECOGNIZED, and so does a listing with neither a header nor a subkey line. Unrecognized
+// throws, which refuses upstream. The header is optional because whether reg.exe prints the key's own
+// path when it has no values is not assumed; pty-start-authority-main.test.js records the real
+// listing's shape.
 const REGISTRY_HIVES = Object.freeze({ HKLM: 'HKEY_LOCAL_MACHINE', HKCU: 'HKEY_CURRENT_USER' });
+const REG_VALUE_LINE = /^ {4}\S.*? {4}REG_[A-Z0-9_]+(?: {4}.*)?$/;
 function probeManagedRegistryKey(key) {
   if (process.platform !== 'win32') return { present: false };
   const parts = String(key).split('\\');
   const hive = REGISTRY_HIVES[parts[0]];
   if (!hive || parts.length < 3 || parts.some((seg) => seg === '')) throw new Error('registry-probe-unsupported-key');
   const parentKey = parts.slice(0, -1).join('\\');
+  const parentLine = [hive].concat(parts.slice(1, -1)).join('\\').toLowerCase();
   const childLine = [hive].concat(parts.slice(1)).join('\\').toLowerCase();
   const listing = execFileSync('reg', ['query', parentKey], {
     encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true, timeout: 10000, maxBuffer: 4 * 1024 * 1024,
   });
+  const unrecognized = () => new Error('registry-probe-unrecognized-listing');
+  let headerSeen = false;
+  let subkeys = 0;
+  let present = false;
   for (const raw of String(listing).split(/\r?\n/)) {
-    if (raw === '' || /^\s/.test(raw)) continue;          // blank, or an indented value line
-    if (raw.trimEnd().toLowerCase() === childLine) return { present: true };
+    const line = raw.replace(/\s+$/, '');
+    if (line === '') continue;
+    const lower = line.toLowerCase();
+    if (lower === parentLine) {
+      if (headerSeen || subkeys > 0) throw unrecognized();
+      headerSeen = true;
+      continue;
+    }
+    if (REG_VALUE_LINE.test(line)) {
+      if (!headerSeen || subkeys > 0) throw unrecognized();
+      continue;
+    }
+    if (lower.startsWith(parentLine + '\\')) {
+      const segment = lower.slice(parentLine.length + 1);
+      if (segment === '' || segment.indexOf('\\') !== -1) throw unrecognized();
+      subkeys += 1;
+      if (lower === childLine) present = true;
+      continue;
+    }
+    throw unrecognized();
   }
-  return { present: false };
+  if (!headerSeen && subkeys === 0) throw unrecognized();
+  return { present: present };
 }
 
 const roleDefinitionResolver = createRoleDefinitionResolver({

@@ -52,6 +52,8 @@ const REASON = Object.freeze({
   SCAN_CAP: 'resolve-scan-cap-exceeded',
   CANDIDATE_UNREADABLE: 'resolve-candidate-unreadable',
   CANDIDATE_UNSUPPORTED: 'resolve-candidate-unsupported-grammar',
+  LINKED_ENTRY: 'resolve-agent-tree-linked-entry',
+  UNSUPPORTED_ENTRY: 'resolve-agent-tree-unsupported-entry',
   AMBIGUOUS_IDENTITY: 'resolve-ambiguous-identity',
   ROLE_NOT_DEPLOYED: 'resolve-role-not-deployed',
   BAD_INPUT: 'resolve-bad-input',
@@ -116,11 +118,26 @@ function createRoleDefinitionResolver(deps) {
       catch (e) { return refuse(REASON.CANDIDATE_UNREADABLE); }
       for (const ent of entries) {
         const full = path.join(dir, ent.name);
+        // ENTRY TYPE FIRST, BEFORE ANY EXTENSION FILTER. A linked entry (symbolic link or, on
+        // Windows, a junction — both reported by Node as links) is REFUSED, never followed and never
+        // skipped: the CLI may follow it, so skipping could hide the definition it actually loads or
+        // an ambiguity with it. Anything that is not plainly a link, directory or regular file — or
+        // that does not expose the type methods at all — refuses as unsupported.
+        //
+        // BOUNDARY OF THIS CHECK: it inspects the type Node reports for each entry INSIDE a scanned
+        // tree. It does not lstat the `.claude/agents` roots or their ancestors, cannot distinguish
+        // hard links, and does not claim complete reparse-point protection.
+        if (typeof ent.isSymbolicLink !== 'function' || typeof ent.isDirectory !== 'function' ||
+            typeof ent.isFile !== 'function') {
+          return refuse(REASON.UNSUPPORTED_ENTRY);
+        }
+        if (ent.isSymbolicLink()) return refuse(REASON.LINKED_ENTRY);
         if (ent.isDirectory()) {
           const r = walk(full, depth + 1);
           if (!r.ok) return r;
           continue;
         }
+        if (!ent.isFile()) return refuse(REASON.UNSUPPORTED_ENTRY);
         if (!/\.md$/i.test(ent.name)) continue;
         fileCount++;
         if (fileCount > caps.filesPerDir) return refuse(REASON.SCAN_CAP);

@@ -1,6 +1,6 @@
 # Builder Handoff — Fence Live Admission Refresh Correction
 
-Status: SECOND CORRECTION BATCH (N1/N2/N3) IN PROGRESS after the Full-class re-review of `42d76f1` returned `VERDICT: FAIL`. Earlier: first correction batch complete at `42d76f1`. The Full-class review of `cf0327e` returned `VERDICT: FAIL` (see "Correction batch after Full-class FAIL"; earlier statuses preserved as history)
+Status: SECOND CORRECTION BATCH (N1/N2/N3) COMPLETE (authorized suites green); AWAITING FRESH FULL-CLASS RE-REVIEW AND AN APPLICATION GATE ON THE NEW TIP. The re-review of `42d76f1` returned `VERDICT: FAIL`. Earlier: first correction batch complete at `42d76f1`. The Full-class review of `cf0327e` returned `VERDICT: FAIL` (see "Correction batch after Full-class FAIL"; earlier statuses preserved as history)
 Branch: `codex/fence-live-admission-refresh`  
 Stacked base / reviewed Fence tip: `1efcc99b2f795e3623558e54ba3067bcf6385b32`  
 Reviewed Fence production/security tip: `96720f96edfc97414ebb8d3c39b2b3a0975936b5`  
@@ -843,3 +843,121 @@ Their sizes and hashes are reported in the re-review brief.
 
 H1 remains passed for `aa1640c` only. The corrected candidate still requires
 its own application gate after review. That gate is not executed here.
+
+### Completion record (N1/N2/N3 batch)
+
+Pre-registration was committed before any source edit as `7eb299f`
+(`docs: preregister N1/N2/N3 fence correction batch`). The implementation stays
+within the eight-path cap. `app/launcher-fence-invariant.test.js` is unchanged,
+and no dependency or subsystem was added.
+
+Suite inspection before running:
+
+- The policy, resolver and classifier suites are pure. They use the real parser
+  and injected directory entries.
+- The main-wiring suite keeps its mocked Electron and PTY. It uses a disposable
+  drive-root fixture with `USERPROFILE`, `userData` and projects redirected,
+  and it clears admission environment variables.
+- Its new N3 cases create real directory junctions only inside that fixture's
+  `~/.claude/agents`, and remove them afterwards.
+- Registry access is limited to the existing read-only `reg query` of the two
+  policy parents. There are no registry writes, no ACL changes, no VM, and no
+  provider calls.
+
+Authorized verification on the final tree:
+
+| Check | Result |
+|---|---|
+| `node app/role-fence-policy.test.js` | `80 passed, 0 failed` |
+| `node app/role-definition-resolver.test.js` | `35 passed, 0 failed` |
+| `node app/pty-launch-classify.test.js` | `149 passed, 0 failed` (M2 preserved) |
+| `node app/pty-start-authority-main.test.js` | `251 passed, 0 failed`; fixture removed |
+| `node app/launcher-fence-invariant.test.js` | `29 passed, 0 failed`, with no pin changed |
+| `node --check` on all six changed JavaScript files | all passed |
+| `git diff --check` | passed |
+
+**Red run against the previous implementation.** A scratch copy of `42d76f1`
+(`git archive` of `app`, `agent-roles`, `scripts` outside the repository;
+`app/main.js` blob `302b2cd2…`, identical to `42d76f1`) was run once with the
+three new test files overlaid. Every failure is one of the new N1, N2 or N3
+cases:
+
+| Suite | Result against `42d76f1` |
+|---|---|
+| `role-fence-policy` | `66 passed, 14 failed`: all seven empty forms are accepted there |
+| `role-definition-resolver` | `30 passed, 5 failed`: both linked entries, the unsupported entry, the untyped entry, and the project-scope link |
+| `pty-start-authority-main` | `218 passed, 33 failed` |
+
+In the main-wiring suite, the old code **spawned** a PTY in these cases:
+
+- every empty-tools drift, which confirms N1's real-handler consequence;
+- all eight unrecognized registry listings;
+- the linked `linked-roles` junction.
+
+The linked `linked.md` junction refused there only incidentally, with a
+different reason.
+
+**Real registry structure observed.** In the default read-only pass-through,
+both real listings on this workstation were recognized and have NO header line:
+
+- `HKLM\SOFTWARE\Policies`: header false, 1 subkey, 0 values;
+- `HKCU\SOFTWARE\Policies`: header false, 2 subkeys, 0 values.
+
+So `reg.exe` omits the key's own path for a value-less key here. Requiring the
+header, which the re-review suggested, would have refused every fenced launch on
+this workstation. The header-optional forms were pre-registered for exactly this
+reason, and the observation now confirms that choice.
+
+**Disclosed test movement.** The L2 `near-miss` simulated listing used to include
+a grandchild line (`Microsoft\ClaudeCode`). Under N2 that line is unrecognized,
+so it moved to its own refusing `grandchild` case. The remaining `near-miss` case
+(`ClaudeCodeX`, `XClaudeCode`, and an indented value named `ClaudeCode`) is still
+absent and accepted.
+
+Finding disposition:
+
+- **N1: fixed.** `fence-policy-tools-declared-empty` refuses all seven
+  declared-but-empty forms the real parser accepts. The canonical hook is
+  otherwise intact, and each case produces zero spawns and no admission line.
+  The omitted key keeps `fence-policy-tools-not-declared`. `tools: ''` remains a
+  parse refusal. This batch establishes nothing about the CLI's empty-tools
+  semantics, because the refusal does not depend on them.
+- **N2: fixed.** Absence requires a listing recognized as the exact parent's.
+  Empty success, blank-only success, garbled text, a wrong-parent listing, a
+  grandchild line, error text on exit 0, a value line without a header, and a
+  duplicate header all refuse as `resolve-managed-scope-unreadable`. Valid
+  absent listings, with or without a header, are accepted, and a case-folded
+  child is present. The real listing's structure is asserted and printed as
+  shape only. A real *present* key is still not observed on a real host, and
+  doing so would need the unauthorized registry write.
+- **N3: fixed.** Linked entries refuse with `resolve-agent-tree-linked-entry`,
+  and entries that are neither files, directories nor links, or that lack type
+  methods, refuse with `resolve-agent-tree-unsupported-entry`. Both checks run
+  before extension filtering, links are never followed, and ordinary traversal
+  and non-Markdown skipping are retained. This is proven with injected entries
+  and with real junctions. The boundary is as pre-registered: it checks entries
+  inside scanned trees only, does not lstat the roots, cannot see hard links,
+  and makes no complete reparse-point claim.
+- **N4, N5: carried** as disclosed informational residuals.
+- **L4: carried** as a nonblocking test limitation and a live-acceptance
+  obligation.
+- **M2, L1, L3: preserved.** The classifier suite and the M2/L1 main-harness
+  cases are unchanged and green.
+
+Invariant pins, unchanged as pre-registered:
+
+| Region | Length / SHA-256 |
+|---|---|
+| `fenced-role cwd gate` | 2183 / `080893bc…` |
+| `ptyEnv block` | 184 / `f64b6bd9…` |
+| `pty-start handler` | 15225 / `128aecae…` |
+
+Remaining before Blue:
+
+1. a fresh independent Full-class re-review of the new artifacts;
+2. the application gate (the full 96-suite run) on the final tip, since the H1
+   `APPLICATION GATE: MET` covers `aa1640c` only;
+3. the carried live obligations: L4, and the controlled Read/WebFetch matrix
+   including an undeclared-tool unavailability check.
+
+None of these was executed here.

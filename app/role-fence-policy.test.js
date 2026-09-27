@@ -215,6 +215,34 @@ section('M1 — explicit allowlist: only supported tools may be declared');
   assert(webOnly.ok === true, 'a role declaring only the two web tools needs no path coverage');
 }
 
+section('N1 — a declared-but-EMPTY tools value refuses (real parser, hook otherwise intact)');
+{
+  const { parseRoleFrontmatter } = require('./role-frontmatter');
+  // Insert the exact raw `tools` line; everything else (canonical hook path, tracked hash, canonical
+  // matcher) is the healthy default, so only the tools line can decide.
+  const withToolsLine = (line) => build({ tools: null }).replace('description: d', 'description: d\n' + line);
+  const EMPTY_FORMS = ['tools:', 'tools: ""', 'tools: ,', 'tools:    ', 'tools: "   "', 'tools: " , "', 'tools: , ,'];
+  for (const line of EMPTY_FORMS) {
+    const text = withToolsLine(line);
+    const p = parseRoleFrontmatter(text);
+    assert(p.ok && p.toolsDeclared === true && Array.isArray(p.tools) && p.tools.length === 0,
+      'parser view: ' + JSON.stringify(line) + ' is declared-but-empty (so this measures the POLICY)');
+    const r = check(text);
+    assert(!r.ok && r.reason === REASON.TOOLS_EMPTY,
+      'REFUSES ' + JSON.stringify(line) + ' with ' + REASON.TOOLS_EMPTY);
+    assert(Object.values(REASON).indexOf(r.reason) !== -1 && r.reason.indexOf('/') === -1,
+      JSON.stringify(line) + ': the reason is a bounded constant');
+  }
+  const omitted = check(build({ tools: null }));
+  assert(!omitted.ok && omitted.reason === REASON.TOOLS_ABSENT,
+    'an OMITTED tools key still refuses with its own reason (the parser distinction is preserved)');
+  const singleQuoted = check(withToolsLine("tools: ''"));
+  assert(!singleQuoted.ok && singleQuoted.reason === REASON.PARSE,
+    "a single-quoted tools: '' is already refused by the parser, not accepted as empty");
+  const healthy = check(withToolsLine('tools: WebSearch, WebFetch, Read, Write'));
+  assert(healthy.ok === true, 'the same construction with the tracked tool list still passes (control)');
+}
+
 section('IDENTITY AND PARSE');
 {
   assert(check(build({ name: 'operator' }), 'web-scout').reason === REASON.IDENTITY_MISMATCH,

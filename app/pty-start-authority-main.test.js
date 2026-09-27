@@ -126,6 +126,7 @@ const ptyStub = {
 const realCp = require('child_process');
 record.regMode = 'real';
 record.regCalls = [];
+record.realRegListings = [];
 function expandHive(k) {
   return String(k).replace(/^HKLM(?=\\)/, 'HKEY_LOCAL_MACHINE').replace(/^HKCU(?=\\)/, 'HKEY_CURRENT_USER');
 }
@@ -137,9 +138,23 @@ function fakeReg(mode, args) {
   switch (mode) {
     case 'absent': return listing(['Microsoft', 'Google'], ['    SomeValue    REG_SZ    x']);
     case 'absent-empty': return listing([]);
-    case 'near-miss': return listing(['ClaudeCodeX', 'Microsoft\\ClaudeCode', 'XClaudeCode'], ['    ClaudeCode    REG_DWORD    0x1']);
+    // MOVED (N2): this mode used to include a grandchild line `Microsoft\ClaudeCode`, which the
+    // structural recognizer now REFUSES as unexplained; that line has its own 'grandchild' case.
+    case 'near-miss': return listing(['ClaudeCodeX', 'XClaudeCode'], ['    ClaudeCode    REG_DWORD    0x1']);
+    // A recognizable listing WITHOUT the header line (subkeys only): accepted, because whether reg.exe
+    // prints the header for a value-less key is not assumed.
+    case 'absent-noheader': return ['', parent + '\\Microsoft', parent + '\\Google', ''].join('\r\n');
     case 'present-hklm': return listing(isHklm ? ['Microsoft', 'ClaudeCode'] : ['Microsoft']);
     case 'present-hkcu': return listing(isHklm ? ['Microsoft'] : ['CLAUDECODE']);
+    // N2 — exit 0 with output that is NOT a recognizable listing of the exact parent. Each must refuse.
+    case 'empty-success': return '';
+    case 'blank-success': return '\r\n   \r\n\r\n';
+    case 'garbled': return 'ÿþ\u0000g a r b l e d\r\n';
+    case 'wrong-parent': return ['', 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Other', 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Other\\Microsoft', ''].join('\r\n');
+    case 'grandchild': return listing(['Microsoft', 'Microsoft\\ClaudeCode']);
+    case 'error-text': return ['', parent, 'ERROR: Access is denied.', ''].join('\r\n');
+    case 'value-no-header': return ['', '    SomeValue    REG_SZ    x', parent + '\\Microsoft', ''].join('\r\n');
+    case 'duplicate-header': return ['', parent, '', parent, parent + '\\Microsoft', ''].join('\r\n');
     case 'denied-en': throw regFailure({ status: 1, stderr: 'ERROR: Access is denied.\r\n' });
     case 'denied-de': throw regFailure({ status: 1, stderr: 'FEHLER: Zugriff verweigert\r\n' });
     case 'parent-not-found': throw regFailure({ status: 1, stderr: 'ERROR: The system was unable to find the specified registry key or value.\r\n' });
@@ -154,6 +169,10 @@ const cpWrapped = Object.assign({}, realCp, {
     if (file === 'reg') {
       record.regCalls.push((args || []).slice());
       if (record.regMode !== 'real') return fakeReg(record.regMode, args || []);
+      // Real read-only pass-through: keep the ACTUAL listing so its structure can be asserted (N2).
+      const out = realCp.execFileSync.apply(realCp, arguments);
+      record.realRegListings.push({ parent: (args || [])[1], out: String(out) });
+      return out;
     }
     return realCp.execFileSync.apply(realCp, arguments);
   },
@@ -409,6 +428,16 @@ Module._load = function (request) {
       ['enoent', false, 'resolve-managed-scope-unreadable'],
       ['exit5', false, 'resolve-managed-scope-unreadable'],
       ['timeout', false, 'resolve-managed-scope-unreadable'],
+      // N2 — absence needs a RECOGNIZABLE listing of the exact parent, not merely "no match".
+      ['absent-noheader', true, null],
+      ['empty-success', false, 'resolve-managed-scope-unreadable'],
+      ['blank-success', false, 'resolve-managed-scope-unreadable'],
+      ['garbled', false, 'resolve-managed-scope-unreadable'],
+      ['wrong-parent', false, 'resolve-managed-scope-unreadable'],
+      ['grandchild', false, 'resolve-managed-scope-unreadable'],
+      ['error-text', false, 'resolve-managed-scope-unreadable'],
+      ['value-no-header', false, 'resolve-managed-scope-unreadable'],
+      ['duplicate-header', false, 'resolve-managed-scope-unreadable'],
     ];
     for (const [mode, launches, reason] of cases) {
       record.regMode = mode;
@@ -432,6 +461,94 @@ Module._load = function (request) {
     record.regMode = 'real';
   } else {
     assert(true, 'L2 registry cases are Windows-only (probe returns absent off Windows)');
+  }
+
+  section('N2 REAL MODE — the actual read-only reg listings match the accepted structural forms');
+  if (process.platform === 'win32') {
+    // Independent test oracle for the pre-registered forms. It is written separately from main.js's
+    // recognizer so the real listing's STRUCTURE is observed here, not assumed. Only the shape (header
+    // seen, subkey and value counts) is printed — never a key name.
+    const VALUE = /^ {4}\S.*? {4}REG_[A-Z0-9_]+(?: {4}.*)?$/;
+    const shapeOf = (parentShort, out) => {
+      const parent = expandHive(parentShort).toLowerCase();
+      const shape = { recognized: true, header: false, subkeys: 0, values: 0 };
+      for (const raw of out.split(/\r?\n/)) {
+        const line = raw.replace(/\s+$/, '');
+        if (line === '') continue;
+        const lower = line.toLowerCase();
+        if (lower === parent && !shape.header && shape.subkeys === 0) { shape.header = true; continue; }
+        if (VALUE.test(line) && shape.header && shape.subkeys === 0) { shape.values += 1; continue; }
+        if (lower.indexOf(parent + '\\') === 0 && lower.slice(parent.length + 1).indexOf('\\') === -1 &&
+            lower.length > parent.length + 1) { shape.subkeys += 1; continue; }
+        shape.recognized = false;
+      }
+      if (!shape.header && shape.subkeys === 0) shape.recognized = false;
+      return shape;
+    };
+    const seen = new Map();
+    for (const l of record.realRegListings) if (!seen.has(l.parent)) seen.set(l.parent, l.out);
+    assert(seen.has('HKLM\\SOFTWARE\\Policies') && seen.has('HKCU\\SOFTWARE\\Policies'),
+      'the positive controls ran the REAL read-only probe for both policy parents');
+    for (const [parent, out] of seen) {
+      const s = shapeOf(parent, out);
+      process.stdout.write('    observed real listing shape for ' + parent + ': header=' + s.header +
+        ' subkeys=' + s.subkeys + ' values=' + s.values + '\n');
+      assert(s.recognized === true, parent + ': the real listing is a RECOGNIZABLE listing of the exact parent');
+      assert(!/\\claudecode\s*$/im.test(out),
+        parent + ': and it names no ClaudeCode child (consistent with the launches it allowed)');
+    }
+  } else {
+    assert(true, 'N2 real-mode observation is Windows-only');
+  }
+
+  section('N1 DRIFT — a deployed fenced role whose tools value is declared-but-EMPTY refuses at spawn');
+  {
+    const file = path.join(AGENTS, 'web-scout.md');
+    const clean = fs.readFileSync(file, 'utf8');
+    const TRACKED_TOOLS = 'tools: WebSearch, WebFetch, Read, Write';
+    assert(clean.indexOf(TRACKED_TOOLS) !== -1, 'fixture: the deployed role carries the tracked tools line');
+    // Canonical hook path, tracked hook hash and canonical matcher stay intact: only the tools line moves.
+    for (const line of ['tools:', 'tools: ""', 'tools: ,', 'tools:    ', 'tools: "   "', 'tools: " , "', 'tools: , ,']) {
+      fs.writeFileSync(file, clean.replace(TRACKED_TOOLS, line), 'utf8');
+      const before = record.ptySpawns;
+      const errBefore = record.mainErrors.length;
+      const res = await ptyStart(goodEvent, { id: 'drift-n1', role: 'web-scout', cli: 'claude', cwd: SANDBOX });
+      const lines = record.mainErrors.slice(errBefore);
+      assert(res && res.ok === false && res.error === 'fence-policy-tools-declared-empty',
+        JSON.stringify(line) + ': REFUSED with the bounded empty-tools reason');
+      assert(record.ptySpawns === before, JSON.stringify(line) + ': ZERO PTYs spawned');
+      assert(lines.every((l) => l.indexOf('[admission]') === -1),
+        JSON.stringify(line) + ': no admission line (refused before any admission claim)');
+    }
+    fs.writeFileSync(file, clean, 'utf8');
+    const before = record.ptySpawns;
+    const ok = await ptyStart(goodEvent, { id: 'drift-n1-restored', role: 'web-scout', cli: 'claude', cwd: SANDBOX });
+    assert(record.ptySpawns === before + 1 && (!ok || ok.ok !== false), 'the restored tracked role launches again');
+  }
+
+  section('N3 — a REAL junction inside the fixture ~/.claude/agents refuses; it is never followed or skipped');
+  {
+    // Real Node Dirent types from a real NTFS junction (no elevation needed). Only the disposable
+    // fixture's agents tree is touched; no deployed role tree is.
+    const target = path.join(FIX, 'linked-target');
+    fs.mkdirSync(target, { recursive: true });
+    for (const name of ['linked-roles', 'linked.md']) {
+      const link = path.join(AGENTS, name);
+      let made = false;
+      try { fs.symlinkSync(target, link, 'junction'); made = true; } catch (e) { made = false; }
+      assert(made, 'fixture: junction ' + JSON.stringify(name) + ' created inside the fixture agents tree');
+      if (!made) continue;
+      const before = record.ptySpawns;
+      let res = null;
+      try { res = await ptyStart(goodEvent, { id: 'n3', role: 'web-scout', cli: 'claude', cwd: SANDBOX }); }
+      finally { try { fs.rmdirSync(link); } catch (e) { /* removed with FIX at the end */ } }
+      assert(res && res.ok === false && res.error === 'resolve-agent-tree-linked-entry',
+        JSON.stringify(name) + ': REFUSED as a linked agent-tree entry');
+      assert(record.ptySpawns === before, JSON.stringify(name) + ': ZERO PTYs spawned');
+    }
+    const before = record.ptySpawns;
+    const ok = await ptyStart(goodEvent, { id: 'n3-restored', role: 'web-scout', cli: 'claude', cwd: SANDBOX });
+    assert(record.ptySpawns === before + 1 && (!ok || ok.ok !== false), 'with the junctions removed the clean tree launches again');
   }
 
   section('verify-fence delegates to the SAME policy (early feedback, not enforcement)');

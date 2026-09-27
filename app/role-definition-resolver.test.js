@@ -53,7 +53,10 @@ function makeFsx(files) {
         const rel = key.slice(base.length + 1);
         const first = rel.split(path.sep)[0];
         const isDir = rel.indexOf(path.sep) !== -1;
-        if (!out.has(first)) out.set(first, { name: first, isDirectory: () => isDir });
+        // Full Dirent-shaped entry: the resolver classifies entry TYPE before any extension filter.
+        if (!out.has(first)) {
+          out.set(first, { name: first, isDirectory: () => isDir, isFile: () => !isDir, isSymbolicLink: () => false });
+        }
       }
       return Array.from(out.values());
     },
@@ -198,6 +201,62 @@ section('DOCUMENTATION FILES ARE SKIPPED, NOT REFUSED');
   files[HOME + '\\.claude\\agents\\nameless.md'] = '---\ndescription: d\n---\n';
   const r = make(files).resolve({ role: 'web-scout', cwd: SANDBOX });
   assert(r.ok === true, 'a no-frontmatter file and a no-name file are skipped as documentation');
+}
+
+section('N3 \u2014 linked or unsupported agent-tree entries REFUSE; they are never followed or skipped');
+{
+  // Injected directory responses: add synthetic entries to one directory's listing, typed the way
+  // Node reports them. On Windows a junction or symlink is reported as isSymbolicLink() true and
+  // isDirectory()/isFile() false. The linked target is NEVER read: readFileSync on it throws, so a
+  // resolver that followed the link instead of refusing would report unreadable, not linked.
+  const USER_AGENTS = HOME + '\\.claude\\agents';
+  function withEntries(files, dir, extra) {
+    const base = makeFsx(files);
+    const target = path.resolve(dir).toLowerCase();
+    return Object.assign({}, base, {
+      readdirSync: (p, o) => {
+        const listed = base.readdirSync(p, o);
+        return path.resolve(p).toLowerCase() === target ? listed.concat(extra) : listed;
+      },
+    });
+  }
+  const linkEntry = (name) => ({ name, isDirectory: () => false, isFile: () => false, isSymbolicLink: () => true });
+  const specialEntry = (name) => ({ name, isDirectory: () => false, isFile: () => false, isSymbolicLink: () => false });
+
+  const files = {}; files[USER_WS] = roleDoc('web-scout');
+  const linkedDir = make(files, { fsx: withEntries(files, USER_AGENTS, [linkEntry('linked-roles')]) })
+    .resolve({ role: 'web-scout', cwd: SANDBOX });
+  assert(!linkedDir.ok && linkedDir.reason === REASON.LINKED_ENTRY,
+    'REFUSES a linked subdirectory with NO .md suffix (previously skipped silently)');
+
+  const linkedMd = make(files, { fsx: withEntries(files, USER_AGENTS, [linkEntry('other.md')]) })
+    .resolve({ role: 'web-scout', cwd: SANDBOX });
+  assert(!linkedMd.ok && linkedMd.reason === REASON.LINKED_ENTRY,
+    'REFUSES a linked .md entry before it is read (never followed)');
+
+  const special = make(files, { fsx: withEntries(files, USER_AGENTS, [specialEntry('pipe-or-device')]) })
+    .resolve({ role: 'web-scout', cwd: SANDBOX });
+  assert(!special.ok && special.reason === REASON.UNSUPPORTED_ENTRY,
+    'REFUSES an entry that is neither a link, a directory nor a regular file');
+
+  const untyped = make(files, { fsx: withEntries(files, USER_AGENTS, [{ name: 'bare', isDirectory: () => false }]) })
+    .resolve({ role: 'web-scout', cwd: SANDBOX });
+  assert(!untyped.ok && untyped.reason === REASON.UNSUPPORTED_ENTRY,
+    'REFUSES an entry that does not expose the type methods (fail closed, no guessing)');
+
+  // A link in a PROJECT tree refuses too, even though user scope would otherwise resolve.
+  const projAgents = 'D:\\Workspace\\.claude\\agents';
+  const pfiles = {}; pfiles[USER_WS] = roleDoc('web-scout'); pfiles[projAgents + '\\keep.md'] = roleDoc('operator');
+  const projLink = make(pfiles, { fsx: withEntries(pfiles, projAgents, [linkEntry('nested')]) })
+    .resolve({ role: 'web-scout', cwd: SANDBOX });
+  assert(!projLink.ok && projLink.reason === REASON.LINKED_ENTRY, 'REFUSES a linked entry in a project-scope tree');
+
+  // Retained ordinary behaviour.
+  const ordinary = {}; ordinary[USER_AGENTS + '\\nested\\deep.md'] = roleDoc('web-scout');
+  ordinary[USER_AGENTS + '\\notes.txt'] = 'plain text, not markdown';
+  const okr = make(ordinary).resolve({ role: 'web-scout', cwd: SANDBOX });
+  assert(okr.ok === true && okr.scope === 'user',
+    'ordinary nested directories are still traversed and ordinary non-Markdown files still skipped');
 }
 
 section('NOT DEPLOYED / BAD INPUT');
