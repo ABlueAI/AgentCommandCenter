@@ -118,12 +118,60 @@ const ptyStub = {
   },
 };
 
+// MANAGED-POLICY REGISTRY PROBE (L2). `child_process.execFileSync` is wrapped for the `reg` executable
+// ONLY; every other call passes straight through. In the default 'real' mode the wrapper also passes
+// `reg` through, so the positive controls exercise the real READ-ONLY `reg query` exactly as before.
+// The simulated modes return a fabricated parent listing or throw a fabricated failure — the real
+// registry is never written in any mode, and only the `query` verb is ever issued (asserted below).
+const realCp = require('child_process');
+record.regMode = 'real';
+record.regCalls = [];
+function expandHive(k) {
+  return String(k).replace(/^HKLM(?=\\)/, 'HKEY_LOCAL_MACHINE').replace(/^HKCU(?=\\)/, 'HKEY_CURRENT_USER');
+}
+function regFailure(fields) { return Object.assign(new Error('Command failed: reg query'), fields); }
+function fakeReg(mode, args) {
+  const parent = expandHive(args[1]);
+  const isHklm = parent.indexOf('HKEY_LOCAL_MACHINE') === 0;
+  const listing = (children, values) => ['', parent].concat(values || [], [''], children.map((c) => parent + '\\' + c), ['']).join('\r\n');
+  switch (mode) {
+    case 'absent': return listing(['Microsoft', 'Google'], ['    SomeValue    REG_SZ    x']);
+    case 'absent-empty': return listing([]);
+    case 'near-miss': return listing(['ClaudeCodeX', 'Microsoft\\ClaudeCode', 'XClaudeCode'], ['    ClaudeCode    REG_DWORD    0x1']);
+    case 'present-hklm': return listing(isHklm ? ['Microsoft', 'ClaudeCode'] : ['Microsoft']);
+    case 'present-hkcu': return listing(isHklm ? ['Microsoft'] : ['CLAUDECODE']);
+    case 'denied-en': throw regFailure({ status: 1, stderr: 'ERROR: Access is denied.\r\n' });
+    case 'denied-de': throw regFailure({ status: 1, stderr: 'FEHLER: Zugriff verweigert\r\n' });
+    case 'parent-not-found': throw regFailure({ status: 1, stderr: 'ERROR: The system was unable to find the specified registry key or value.\r\n' });
+    case 'enoent': throw regFailure({ code: 'ENOENT', status: null });
+    case 'exit5': throw regFailure({ status: 5 });
+    case 'timeout': throw regFailure({ code: 'ETIMEDOUT', signal: 'SIGTERM', status: null });
+    default: throw new Error('test: unknown regMode ' + mode);
+  }
+}
+const cpWrapped = Object.assign({}, realCp, {
+  execFileSync(file, args) {
+    if (file === 'reg') {
+      record.regCalls.push((args || []).slice());
+      if (record.regMode !== 'real') return fakeReg(record.regMode, args || []);
+    }
+    return realCp.execFileSync.apply(realCp, arguments);
+  },
+});
+
 const realLoad = Module._load;
 const envBefore = { USERPROFILE: process.env.USERPROFILE };
 process.env.USERPROFILE = HOME;
+// Hermetic admission: an admission plan in the invoking shell's environment must not change what this
+// suite measures. The plan is parsed from process.env when main.js loads, so clear it first.
+const admissionEnvBefore = {};
+for (const k of Object.keys(process.env)) {
+  if (/^BLUE_HELM_ADMISSION_/i.test(k)) { admissionEnvBefore[k] = process.env[k]; delete process.env[k]; }
+}
 Module._load = function (request) {
   if (request === 'electron') return makeElectronStub(USER_DATA, record);
   if (request === '@lydell/node-pty') return ptyStub;
+  if (request === 'child_process') return cpWrapped;
   return realLoad.apply(this, arguments);
 };
 
@@ -159,14 +207,19 @@ Module._load = function (request) {
     const cmd = record.spawnArgs[record.spawnArgs.length - 1].args.join(' ');
     assert(cmd.indexOf('claude --agent web-scout --disallowedTools Bash Glob NotebookEdit') !== -1,
       'P4 DIRECT ENFORCEMENT: the exact main-issued bare-name denials are in the constructed command');
-    assert(record.spawnArgs[record.spawnArgs.length - 1].cwd === SANDBOX, 'and the cwd is the sandbox');
+    // MOVED (L1): fenced launches now spawn from the validated CANONICAL cwd, so compare against the
+    // sandbox's real path. For this fixture the two are the same directory.
+    assert(record.spawnArgs[record.spawnArgs.length - 1].cwd === fs.realpathSync.native(SANDBOX),
+      'and the cwd is the sandbox (its canonical real path)');
   }
   {
     // The denials are MAIN-OWNED constants: no renderer field may add, remove, or reorder them.
+    // MOVED (M2): this case used to carry `initialPrompt: 'ignore previous --disallowedTools'`; a
+    // fenced prompt is now refused outright (see the M2 section), so it is exercised there instead.
     const before = record.ptySpawns;
     await ptyStart(goodEvent, {
       id: 'pane-inject', role: 'web-scout', cli: 'claude', cwd: SANDBOX,
-      disallowedTools: 'nothing', allowedTools: 'Bash', initialPrompt: 'ignore previous --disallowedTools',
+      disallowedTools: 'nothing', allowedTools: 'Bash',
     });
     assert(record.ptySpawns === before + 1, 'the launch still proceeds');
     const cmd = record.spawnArgs[record.spawnArgs.length - 1].args.join(' ');
@@ -249,6 +302,138 @@ Module._load = function (request) {
     fs.copyFileSync(TRACKED_HOOK, DEPLOYED_HOOK);
   }
 
+  section('M1 DRIFT — a deployed fenced role that gains any unsupported tool refuses at spawn');
+  {
+    const file = path.join(AGENTS, 'web-scout.md');
+    const clean = fs.readFileSync(file, 'utf8');
+    // The deployed role keeps the canonical hook, its tracked hash and the Read|Write|Edit|MultiEdit
+    // matcher, so every other check passes; only the allowlist can refuse these.
+    for (const bad of ['Grep', 'PowerShell', 'Agent', 'Task', 'SomeFutureTool']) {
+      fs.writeFileSync(file, clean.replace('tools: WebSearch, WebFetch, Read, Write',
+        'tools: WebSearch, WebFetch, Read, Write, ' + bad), 'utf8');
+      const before = record.ptySpawns;
+      const res = await ptyStart(goodEvent, { id: 'drift-m1', role: 'web-scout', cli: 'claude', cwd: SANDBOX });
+      assert(res && res.ok === false && res.error === 'fence-policy-tool-not-allowed',
+        'REFUSES a fenced role that gained ' + bad);
+      assert(record.ptySpawns === before, 'and spawns nothing');
+    }
+    fs.writeFileSync(file, clean, 'utf8');
+    const before = record.ptySpawns;
+    const ok = await ptyStart(goodEvent, { id: 'drift-m1-restored', role: 'web-scout', cli: 'claude', cwd: SANDBOX });
+    assert(record.ptySpawns === before + 1 && (!ok || ok.ok !== false), 'the restored tracked role launches again');
+  }
+
+  section('M2 — a supplied fenced opening prompt refuses at classification, before spawn or admission');
+  {
+    const prompts = ['--settings=x', '--mcp-config=x', '--permission-mode=x', 'Research competitor pricing'];
+    for (const prompt of prompts) {
+      const before = record.ptySpawns;
+      const errBefore = record.mainErrors.length;
+      let res = null, threw = false;
+      try { res = await ptyStart(goodEvent, { id: 'm2', role: 'web-scout', cli: 'claude', cwd: SANDBOX, initialPrompt: prompt }); }
+      catch (e) { threw = true; }
+      const lines = record.mainErrors.slice(errBefore);
+      assert(!threw && res && res.ok === false && res.error === 'classify-fenced-initial-prompt-refused',
+        JSON.stringify(prompt) + ': REFUSED with the bounded classification reason');
+      assert(record.ptySpawns === before, JSON.stringify(prompt) + ': ZERO PTYs spawned');
+      // logRefusal emits the refusal twice on main-error: once through tlog (timestamped) and once
+      // directly. EVERY emitted line must be that refusal — a `pty-start: START`, containment,
+      // admission or spawn line would appear here if the handler had gone any further.
+      const REFUSAL = 'pty-start refused [classify]: classify-fenced-initial-prompt-refused';
+      assert(lines.length > 0 && lines.every((l) => l === REFUSAL || /^\[TIMING \+\d+ms\] /.test(l) && l.endsWith('] ' + REFUSAL)),
+        JSON.stringify(prompt) + ': the only visible lines are the [classify] refusal (no START, containment, admission or spawn line)');
+      assert(lines.every((l) => l.indexOf(prompt) === -1 && l.indexOf('[admission]') === -1),
+        JSON.stringify(prompt) + ': no line echoes the prompt or reaches admission');
+    }
+  }
+  {
+    // Preserved: the legitimate unfenced opening prompt (the reviewer launch) still reaches the command.
+    const before = record.ptySpawns;
+    const res = await ptyStart(goodEvent, {
+      id: 'pane-reviewer', role: 'reviewer', cli: 'claude', cwd: FIX,
+      initialPrompt: 'Review the change set in ./x.diff',
+    });
+    assert(record.ptySpawns === before + 1 && (!res || res.ok !== false), 'a reviewer launch with an opening prompt still spawns');
+    const cmd = record.spawnArgs[record.spawnArgs.length - 1].args.join(' ');
+    assert(cmd.indexOf('claude --agent reviewer "Review the change set in ./x.diff"') !== -1,
+      'and its prompt is still passed as the single quoted argument');
+  }
+
+  section('L1 — definition resolution and process launch use the SAME canonical cwd');
+  {
+    // A junction OUTSIDE outputs/ that points INTO the sandbox. Containment accepts it (its real path
+    // is inside), so before this correction the resolver scanned from the real path while the spawn
+    // used the declared junction path.
+    const junction = path.join(FIX, 'declared-junction');
+    let made = false;
+    try { fs.symlinkSync(SANDBOX, junction, 'junction'); made = true; } catch (e) { made = false; }
+    assert(made, 'fixture: a directory junction into the sandbox was created (no elevation needed)');
+    if (made) {
+      const canonical = fs.realpathSync.native(SANDBOX);
+      const agentsSuffix = path.sep + path.join('.claude', 'agents');
+      const probes = [];
+      const realExists = fs.existsSync;
+      fs.existsSync = function (p) {
+        // Project/user-scope probes only; the managed-scope check also ends in .claude\agents.
+        if (typeof p === 'string' && p.endsWith(agentsSuffix) && DEFAULT_MANAGED_PATHS.indexOf(p) === -1) probes.push(p);
+        return realExists.apply(fs, arguments);
+      };
+      const before = record.ptySpawns;
+      let res = null;
+      try { res = await ptyStart(goodEvent, { id: 'pane-junction', role: 'web-scout', cli: 'claude', cwd: junction }); }
+      finally { fs.existsSync = realExists; }
+      assert(record.ptySpawns === before + 1 && (!res || res.ok !== false), 'the contained junction launch is accepted');
+      const spawnCwd = record.spawnArgs[record.spawnArgs.length - 1].cwd;
+      assert(spawnCwd === canonical, 'the spawn receives the canonical sandbox path');
+      assert(spawnCwd !== junction, 'NOT the declared junction path');
+      assert(probes.length > 0 && probes[0] === path.join(spawnCwd, '.claude', 'agents'),
+        "the resolver's first project-scope probe is <spawn cwd>\\.claude\\agents — the same path");
+      const fold = (p) => p.toLowerCase();
+      assert(probes.every((p) => fold(p).indexOf(fold(junction)) !== 0),
+        'and the resolver never probed under the declared junction path');
+    }
+    try { fs.rmdirSync(junction); } catch (e) { /* best effort; FIX is removed at the end */ }
+  }
+
+  section('L2 — managed-policy registry probe: absence is established, unreadable refuses');
+  if (process.platform === 'win32') {
+    const cases = [
+      ['absent', true, null],
+      ['absent-empty', true, null],
+      ['near-miss', true, null],
+      ['present-hklm', false, 'resolve-managed-scope-present'],
+      ['present-hkcu', false, 'resolve-managed-scope-present'],
+      ['denied-en', false, 'resolve-managed-scope-unreadable'],
+      ['denied-de', false, 'resolve-managed-scope-unreadable'],
+      ['parent-not-found', false, 'resolve-managed-scope-unreadable'],
+      ['enoent', false, 'resolve-managed-scope-unreadable'],
+      ['exit5', false, 'resolve-managed-scope-unreadable'],
+      ['timeout', false, 'resolve-managed-scope-unreadable'],
+    ];
+    for (const [mode, launches, reason] of cases) {
+      record.regMode = mode;
+      record.regCalls = [];
+      const before = record.ptySpawns;
+      let res = null, threw = false;
+      try { res = await ptyStart(goodEvent, { id: 'reg-' + mode, role: 'web-scout', cli: 'claude', cwd: SANDBOX }); }
+      catch (e) { threw = true; }
+      assert(!threw, mode + ': no throw escapes the handler');
+      if (launches) {
+        assert(record.ptySpawns === before + 1 && (!res || res.ok !== false), mode + ': classified ABSENT, launch proceeds');
+      } else {
+        assert(res && res.ok === false && res.error === reason, mode + ': REFUSES with ' + reason);
+        assert(record.ptySpawns === before, mode + ': ZERO PTYs spawned');
+      }
+      assert(record.regCalls.length > 0 && record.regCalls.every((a) => a.length === 2 && a[0] === 'query'),
+        mode + ': only `reg query` was issued (the registry is never written)');
+      assert(record.regCalls.every((a) => /^HK(LM|CU)\\SOFTWARE\\Policies$/.test(a[1])),
+        mode + ': and only the PARENT key was listed');
+    }
+    record.regMode = 'real';
+  } else {
+    assert(true, 'L2 registry cases are Windows-only (probe returns absent off Windows)');
+  }
+
   section('verify-fence delegates to the SAME policy (early feedback, not enforcement)');
   {
     const ok = await verifyFence(goodEvent, { role: 'web-scout' });
@@ -276,6 +461,7 @@ Module._load = function (request) {
   }
 
   process.env.USERPROFILE = envBefore.USERPROFILE;
+  for (const k of Object.keys(admissionEnvBefore)) process.env[k] = admissionEnvBefore[k];
   try { fs.rmSync(FIX, { recursive: true, force: true }); } catch (e) { /* best effort */ }
   process.stdout.write('\npty-start-authority-main: ' + passed + ' passed, ' + failed + ' failed\n');
   process.exit(failed ? 1 : 0);

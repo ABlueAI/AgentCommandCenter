@@ -41,8 +41,9 @@ const { createTrustedSenderGate } = require('./trusted-ipc-sender');
 // FENCE COMPLETION — main-owned launch authority for `pty-start`. Classification happens ONCE here
 // instead of being re-derived from renderer fields at three separate decision points; the effective
 // role definition is resolved across the documented scopes and refuses when it cannot be
-// established; and the fenced-role declaration must carry the canonical fence hook and no forbidden
-// tool. See docs/BUILDER-HANDOFF-fence-completion.md.
+// established; and the fenced-role declaration must carry the canonical fence hook and declare only
+// allowlisted tools. Admission eligibility is still derived separately (see buildAgentCommand).
+// See docs/BUILDER-HANDOFF-fence-completion.md.
 const { classifyPtyLaunch, KIND: LAUNCH_KIND } = require('./pty-launch-classify');
 const { createRoleDefinitionResolver } = require('./role-definition-resolver');
 const { assertFencedRoleDefinition, FORBIDDEN_TOOLS } = require('./role-fence-policy');
@@ -244,10 +245,12 @@ const VALID_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 //   neither     -> undefined => plain PowerShell shell
 function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, launch) {
   // FENCE COMPLETION: identity comes from the MAIN-OWNED classification when one is supplied, so the
-  // command, the fence decision, the environment tier and the admission verdict all read one result
-  // rather than each re-deriving from renderer fields. `launch.role` is already validated against
-  // VALID_ROLES by the classifier; the `role` fallback preserves the pre-existing behaviour for the
-  // pure-unit call sites that pass no classification.
+  // command, the fence decision and the environment tier read one result rather than each
+  // re-deriving from renderer fields. The admission verdict does NOT read it: prepareAdmissionPaneLaunch
+  // still derives eligibility from the raw opts through isEligibleClaudePane, and the two derivations
+  // agree by test (pty-launch-classify.test.js), not by construction. `launch.role` is already
+  // validated against VALID_ROLES by the classifier; the `role` fallback preserves the pre-existing
+  // behaviour for the pure-unit call sites that pass no classification.
   const effectiveRole = (launch && launch.kind === 'role') ? launch.role : role;
   if (effectiveRole && VALID_ROLES.has(effectiveRole)) {
     // `--agent` is a Claude feature, so roles always launch on the Claude CLI regardless
@@ -263,7 +266,9 @@ function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, l
     if (VALID_EFFORTS.has(effort)) cmd += ' --effort ' + effort;
     // Optional opening prompt (e.g. the reviewer's "review this diff"). Strip shell-significant
     // characters so it stays a single safe quoted argument inside the powershell -Command string.
-    if (initialPrompt && typeof initialPrompt === 'string') {
+    // A FENCED command never carries one: the classifier already refuses a supplied fenced prompt
+    // (it could be parsed as a CLI option), and this second check keeps that true here as well.
+    if (!(launch && launch.fenced === true) && initialPrompt && typeof initialPrompt === 'string') {
       const clean = initialPrompt.replace(/["`$\r\n]/g, ' ').replace(/\s+/g, ' ').trim();
       if (clean) cmd += ' "' + clean + '"';
     }
@@ -1198,6 +1203,36 @@ let trackedFenceHookSha = null;
 try { trackedFenceHookSha = sha256File(TRACKED_FENCE_HOOK); }
 catch (e) { tlog(`fence-policy: tracked hook unreadable — every fenced launch will refuse: ${(e && e.code) || 'error'}`); }
 
+// MANAGED-POLICY REGISTRY PROBE. Presence of an organization policy key refuses; so does any answer
+// this probe cannot establish positively.
+//
+// `reg query <key>` exits 1 for EVERY failure — absent key, access denied, anything else — and its
+// stderr is localized, so neither the exit status nor the message distinguishes "absent" from
+// "unreadable". (The previous probe treated every exit 1 as absent, so an access-denied key read as
+// no policy at all.) Absence is therefore established POSITIVELY: list the key's PARENT, and a
+// successful (exit 0) listing whose subkey lines do not name the child proves the child does not
+// exist. Subkey lines are full registry paths, which are not localized, and value lines are indented.
+// A child that exists but denies read still appears in its parent's listing, so it classifies as
+// PRESENT. Any non-zero exit, spawn error or timeout on the parent throws: the resolver maps that to
+// the visible refusal `resolve-managed-scope-unreadable`.
+const REGISTRY_HIVES = Object.freeze({ HKLM: 'HKEY_LOCAL_MACHINE', HKCU: 'HKEY_CURRENT_USER' });
+function probeManagedRegistryKey(key) {
+  if (process.platform !== 'win32') return { present: false };
+  const parts = String(key).split('\\');
+  const hive = REGISTRY_HIVES[parts[0]];
+  if (!hive || parts.length < 3 || parts.some((seg) => seg === '')) throw new Error('registry-probe-unsupported-key');
+  const parentKey = parts.slice(0, -1).join('\\');
+  const childLine = [hive].concat(parts.slice(1)).join('\\').toLowerCase();
+  const listing = execFileSync('reg', ['query', parentKey], {
+    encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true, timeout: 10000, maxBuffer: 4 * 1024 * 1024,
+  });
+  for (const raw of String(listing).split(/\r?\n/)) {
+    if (raw === '' || /^\s/.test(raw)) continue;          // blank, or an indented value line
+    if (raw.trimEnd().toLowerCase() === childLine) return { present: true };
+  }
+  return { present: false };
+}
+
 const roleDefinitionResolver = createRoleDefinitionResolver({
   fsx: {
     existsSync: (p) => fs.existsSync(p),
@@ -1205,18 +1240,7 @@ const roleDefinitionResolver = createRoleDefinitionResolver({
     readFileSync: (p, e) => fs.readFileSync(p, e),
   },
   homeDir: process.env.USERPROFILE || app.getPath('home'),
-  // Presence of an organization policy key refuses; an unanswerable probe also refuses. `reg query`
-  // exits non-zero with ERROR_FILE_NOT_FOUND for an absent key, which is the only "absent" answer.
-  probeRegistryKey: (key) => {
-    if (process.platform !== 'win32') return { present: false };
-    try {
-      execFileSync('reg', ['query', key], { stdio: ['ignore', 'ignore', 'ignore'] });
-      return { present: true };
-    } catch (e) {
-      if (e && e.status === 1) return { present: false };
-      throw e;                       // any other failure is UNREADABLE, and refuses upstream
-    }
-  },
+  probeRegistryKey: probeManagedRegistryKey,
 });
 
 const ptyStartAuthority = createPtyStartAuthority({
@@ -1293,6 +1317,7 @@ ipcMain.handle('pty-start', (e, opts) => {
   // same "tool-enforced-not-convention" principle the hook itself is built on. Uses the
   // same realpath + case-fold logic as fence-write.js so both layers agree on what "inside"
   // means and can't be split by a symlink or a Unicode/case path trick.
+  let fencedCwd = null;
   if (launch.fenced) {
     // Reason CONSTANTS only. The pre-existing messages interpolated `declaredCwd`, `resolvedCwd`
     // and `resolvedRoot` into the Logs tab and the renderer error channel; a refusal must not echo
@@ -1325,11 +1350,17 @@ ipcMain.handle('pty-start', (e, opts) => {
     const fencePolicy = ptyStartAuthority.authorizeFencedRole({ role: launch.role, cwd: resolvedCwd });
     if (!fencePolicy.ok) return { ok: false, error: fencePolicy.reason };
     tlog(`pty-start: fenced-role declaration ACCEPTED (scope=${fencePolicy.scope})`);
+    // The process launches from the SAME canonical path the definition was resolved from. Spawning
+    // from the declared path instead would let the CLI discover project agents along ancestors of a
+    // junction/symlink that the resolver never scanned.
+    fencedCwd = resolvedCwd;
   }
 
   // Never spawn into a missing directory: ConPTY throws Windows error 267 (ERROR_DIRECTORY)
   // from a worker thread, which would surface as a fatal uncaught exception.
-  const cwd = (opts.cwd && fs.existsSync(opts.cwd)) ? opts.cwd : process.env.USERPROFILE;
+  // Fenced: the validated canonical cwd. Everything else: unchanged.
+  const cwd = fencedCwd !== null ? fencedCwd
+    : ((opts.cwd && fs.existsSync(opts.cwd)) ? opts.cwd : process.env.USERPROFILE);
   // -ExecutionPolicy Bypass so npm .ps1 shims (claude/codex/gemini) always launch.
   const args = ['-NoLogo', '-ExecutionPolicy', 'Bypass', '-NoExit'];
   if (launch.videoScout) {

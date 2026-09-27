@@ -1,6 +1,6 @@
 # Builder Handoff — Fence Live Admission Refresh Correction
 
-Status: FENCE-BOUNDARY CORRECTION BATCH IN PROGRESS after the Full-class review of `cf0327e` returned `VERDICT: FAIL` (see "Correction batch after Full-class FAIL" below; earlier statuses preserved as history)
+Status: FENCE-BOUNDARY CORRECTION BATCH COMPLETE (focused suites green); AWAITING FRESH FULL-CLASS RE-REVIEW AND AN APPLICATION GATE ON THE NEW TIP. The Full-class review of `cf0327e` returned `VERDICT: FAIL` (see "Correction batch after Full-class FAIL"; earlier statuses preserved as history)
 Branch: `codex/fence-live-admission-refresh`  
 Stacked base / reviewed Fence tip: `1efcc99b2f795e3623558e54ba3067bcf6385b32`  
 Reviewed Fence production/security tip: `96720f96edfc97414ebb8d3c39b2b3a0975936b5`  
@@ -511,3 +511,100 @@ Their sizes and hashes go in the re-review brief, not in this file.
 The H1 PASS applies to `aa1640c` only. This batch changes runtime code, so the
 new candidate has no application-gate PASS. A full 96-suite application gate on
 the final correction tip remains required and is not executed here.
+
+### Completion record (correction batch)
+
+Pre-registration was committed before any source edit as `fe51fd1` (`docs:
+preregister fence boundary correction batch`). The implementation stays inside
+the eight-path cap. No dependency or subsystem was added.
+
+Before running them, I inspected the four focused suites:
+
+- The policy and classifier suites are pure.
+- The launcher invariant suite reads `main.js` source text only.
+- The main-wiring suite replaces `electron` and `@lydell/node-pty` through a
+  `Module._load` hook. It runs on a disposable drive-root fixture, with
+  `USERPROFILE`, `userData`, and the projects root redirected into that fixture.
+  It now also clears any `BLUE_HELM_ADMISSION_*` variables before loading `main.js`
+  and restores them at the end.
+- Pane-status version discovery never runs, because the fixture has no verified
+  installation.
+- The only real external call is the read-only `reg query` of the two policy
+  parents in the default pass-through mode.
+- No suite makes a provider call or changes live configuration.
+
+Authorized verification results:
+
+| Check | Result |
+|---|---|
+| `node app/role-fence-policy.test.js` | `56 passed, 0 failed` |
+| `node app/pty-launch-classify.test.js` | `149 passed, 0 failed` |
+| `node app/pty-start-authority-main.test.js` | `172 passed, 0 failed`; fixture removed afterwards |
+| `node app/launcher-fence-invariant.test.js` | `29 passed, 0 failed` (after the re-pin below) |
+| `node --check` on all seven changed JavaScript files | all passed |
+| `git diff --check` | passed |
+
+The first main-wiring run reported `168 passed, 4 failed`. The four failures
+were all the same over-strict M2 assertion, which expected exactly one visible
+line. `logRefusal` emits the refusal twice on `main-error`: once timestamped
+through `tlog` and once directly. The assertion now requires every emitted line
+to be that `[classify]` refusal. No production code changed for this.
+
+Before the re-pin, the invariant tripwire failed exactly as pre-registered:
+
+| Region | Before | After |
+|---|---|---|
+| `fenced-role cwd gate` | 1896 / `ba003038c21fb4c802fa0d86c0d65dd1e12774f24e57fe6568d15182c36d8de0` | 2183 / `080893bcf88208575975d6cea67703c646b944e9495e625cf82d71520d7b93dc` |
+| `pty-start handler` | 14805 / `cbe2f345015245108e84656014f9e66c6a3c1eb187c866a1255ce2e9ae649376` | 15225 / `128aecaefc5fe7a9332d5fb3ff6e281c6f7bf69ded8ceed153421895de94f1d5` |
+| `ptyEnv block` | 184 / `f64b6bd93abb18dced7c8d114d3ea82b98349d317878aa84dd04c25f17f7bb7b` | unchanged, as required |
+
+Previous values are retained in the test file. Two content assertions now pin
+the L1 wiring. The environment handed to a PTY is untouched.
+
+Finding disposition:
+
+- **M1: fixed.** The explicit allowlist refuses `Grep`, `PowerShell`, `Agent`,
+  `Task`, unknown names, lower-case variants, specifiers, and MCP names. This is
+  proven by the unit suite and by deployed-role drift through the real handler.
+  The tracked roles still pass, and the CLI denial is unchanged.
+- **M2: fixed.** A fenced `initialPrompt` other than absent or `''` refuses at
+  classification. `--settings=x`, `--mcp-config=x`, `--permission-mode=x`, and an
+  ordinary prompt each produced zero spawns and only the `[classify]` refusal
+  line, with no echo. The reviewer's prompt still reaches its command.
+  `buildAgentCommand` also drops any fenced prompt as defence in depth.
+- **L1: fixed.** A junction outside `outputs/` into the sandbox is accepted,
+  spawns from the canonical path, and the resolver's first project probe is
+  `<spawn cwd>\.claude\agents`. It never probed under the junction path.
+  Non-fenced cwd selection is unchanged.
+- **L2: fixed.** Absence is established by a successful parent listing. Simulated
+  cases:
+  - absent, empty, and near-miss listings: accepted;
+  - HKLM or HKCU child present: `resolve-managed-scope-present`;
+  - English and German access-denied, parent not found, `ENOENT`, exit 5, and
+    timeout: `resolve-managed-scope-unreadable`, with zero spawns.
+
+  Only `reg query` of the parent was issued. On this workstation, the real
+  pass-through probe classified both keys absent, since the positive controls
+  launched.
+- **L3: fixed.** The comments in `main.js` (top-of-file and `buildAgentCommand`)
+  and the classifier header now state that admission derives eligibility
+  separately and that agreement is tested. Admission internals are unchanged.
+- **L4: carried forward**, unchanged. It is a nonblocking test limitation and a
+  live-acceptance obligation, with no live run authorized.
+
+Other main.js-reading suites were grepped read-only for exact text or region
+pins on the changed code. None pins `const cwd`, the probe, the prompt
+sanitizer, or the changed comments. `pty-env.test.js` pins
+`const fencedRole = launch.fenced;`, which is unchanged. This is source
+inspection only. The suites were not run.
+
+Remaining before Blue:
+
+1. a fresh independent Full-class re-review of the new pinned artifacts;
+2. an application gate (the full 96-suite run) on the final correction tip. The
+   H1 `APPLICATION GATE: MET` applies to `aa1640c` only and does not cover this
+   code;
+3. the carried live-acceptance obligations (L4 and the controlled Read/WebFetch
+   matrix).
+
+None of these was executed here.

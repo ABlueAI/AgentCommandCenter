@@ -23,11 +23,26 @@ const { parseRoleFrontmatter } = require('./role-frontmatter');
 
 // The dormant-but-catastrophic set. `Bash` gives a shell the path fence cannot gate (its input is a
 // command string, not a file path); `Glob` and `NotebookEdit` reach paths the matcher does not cover.
+// Kept as its own list for two reasons: it is the main-issued `--disallowedTools` denial (defense in
+// depth at the CLI), and it keeps its specific refusal reason. ALLOWED_TOOLS below already excludes it.
 const FORBIDDEN_TOOLS = Object.freeze(['Bash', 'Glob', 'NotebookEdit']);
 
 // Tools whose invocation carries a filesystem path and therefore MUST be covered by the fence
 // matcher when the role declares them.
 const PATH_CAPABLE_TOOLS = Object.freeze(['Read', 'Write', 'Edit', 'MultiEdit']);
+
+// THE EXPLICIT ALLOWLIST. A fenced role may declare ONLY these tools; anything else refuses. It
+// replaces acceptance-by-denylist, under which any tool not named in FORBIDDEN_TOOLS was accepted
+// with no hook coverage — `Grep` (content search anywhere), `PowerShell` (the Windows equivalent of
+// the shell Bash is forbidden for), `Agent`/`Task` (delegation outside the frontmatter hook), or any
+// name a future CLI adds.
+//
+// Derived, not guessed: the three tracked fenced roles declare exactly `WebSearch, WebFetch, Read,
+// Write`; the canonical matcher is `Read|Write|Edit|MultiEdit`, and fence-write.js gates the path
+// of those four. So every allowed filesystem tool is a PATH_CAPABLE_TOOLS member the matcher check
+// below requires coverage for, and the only non-filesystem entries are the two web tools. Adding a
+// tool here is a policy change that needs its own review.
+const ALLOWED_TOOLS = Object.freeze(['Read', 'Write', 'Edit', 'MultiEdit', 'WebSearch', 'WebFetch']);
 
 const REASON = Object.freeze({
   PLACEHOLDER: 'fence-policy-unsubstituted-hook-placeholder',
@@ -35,6 +50,7 @@ const REASON = Object.freeze({
   IDENTITY_MISMATCH: 'fence-policy-identity-mismatch',
   TOOLS_ABSENT: 'fence-policy-tools-not-declared',
   FORBIDDEN_TOOL: 'fence-policy-forbidden-tool-declared',
+  TOOL_NOT_ALLOWED: 'fence-policy-tool-not-allowed',
   PRETOOLUSE_MISSING: 'fence-policy-pretooluse-absent-or-empty',
   HOOK_NOT_IN_PRETOOLUSE: 'fence-policy-fence-hook-not-in-pretooluse-entry',
   HOOK_COMMAND_FORM: 'fence-policy-hook-command-form-unsupported',
@@ -83,6 +99,11 @@ function assertFencedRoleDefinition(input) {
   // forbidden entry that the allowlist granted. Policy is evaluated on `tools:` alone.
   for (const t of parsed.tools) {
     if (FORBIDDEN_TOOLS.indexOf(t) !== -1) return refuse(REASON.FORBIDDEN_TOOL);
+  }
+  // Allowlist: exact, case-sensitive names only. Unknown names, lower-case variants, specifiers such
+  // as `Read(./x)` and MCP tool names all refuse — none is a tool this fence was reviewed against.
+  for (const t of parsed.tools) {
+    if (ALLOWED_TOOLS.indexOf(t) === -1) return refuse(REASON.TOOL_NOT_ALLOWED);
   }
 
   const pre = parsed.events && parsed.events.PreToolUse;
@@ -136,6 +157,7 @@ function assertFencedRoleDefinition(input) {
 }
 
 module.exports = {
+  ALLOWED_TOOLS: ALLOWED_TOOLS,
   FORBIDDEN_TOOLS: FORBIDDEN_TOOLS,
   PATH_CAPABLE_TOOLS: PATH_CAPABLE_TOOLS,
   REASON: REASON,

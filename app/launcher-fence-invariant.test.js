@@ -275,10 +275,17 @@ const REGIONS = [
     // LOGIC is unchanged — same realpath resolution, same win32 case fold, same
     // startsWith(root + path.sep) prefix rule, still ordered BEFORE the USERPROFILE fallback.
     // Previous pin retained: 1326 / 9a1255f1e81e0a9e4e289ab15380707dd6bcc1d410ffd16f44adddb99b16f8c6
+    //
+    // RE-PINNED (fence boundary correction, L1; pre-registered as MUST move). The only executable
+    // addition is `fencedCwd = resolvedCwd;` after the declaration is accepted, plus its comment, so the
+    // process launches from the same canonical path the definition was resolved from. The containment
+    // logic itself is unchanged. The `let fencedCwd = null;` declaration sits just ABOVE this region's
+    // start anchor. Behaviourally proven by the junction case in pty-start-authority-main.test.js.
+    // Previous pin retained: 1896 / ba003038c21fb4c802fa0d86c0d65dd1e12774f24e57fe6568d15182c36d8de0
     start: 'if (launch.fenced) {',
     end: '// Never spawn into a missing directory',
-    utf16Length: 1896,
-    sha: 'ba003038c21fb4c802fa0d86c0d65dd1e12774f24e57fe6568d15182c36d8de0',
+    utf16Length: 2183,
+    sha: '080893bcf88208575975d6cea67703c646b944e9495e625cf82d71520d7b93dc',
   },
   {
     name: 'ptyEnv block',
@@ -313,8 +320,15 @@ const REGIONS = [
     // Previous pins, retained so the earlier reviewed bases stay reproducible:
     //   len 13287 / sha 3ad6db301a3fa0e101195f439012ee42ca25ba6b31040b10d0196d23b7141bb3  (CRLF units)
     //   len 13864 / sha 1b6929a2e691c2e418ab529a80411e26f58a1d32a6f08b2ceb1b085e3db96274  (LF units)
-    utf16Length: 14805,
-    sha: 'cbe2f345015245108e84656014f9e66c6a3c1eb187c866a1255ce2e9ae649376',
+    //
+    // RE-PINNED (fence boundary correction, L1; pre-registered as MUST move). Three changes inside
+    // this region: `let fencedCwd = null;` before the fenced gate, the gate change pinned above, and
+    // the spawn cwd selection `fencedCwd !== null ? fencedCwd : <unchanged opts.cwd/USERPROFILE rule>`.
+    // The ptyEnv block is byte-identical (184 / f64b6bd9…). M2 and the M1 allowlist live OUTSIDE this
+    // region (classifier and policy modules), and so does the L2 probe (above the handler).
+    // Previous pin retained: 14805 / cbe2f345015245108e84656014f9e66c6a3c1eb187c866a1255ce2e9ae649376
+    utf16Length: 15225,
+    sha: '128aecaefc5fe7a9332d5fb3ff6e281c6f7bf69ded8ceed153421895de94f1d5',
   },
 ];
 
@@ -406,6 +420,19 @@ assert(/admissionBudget\.notePaneExit\(id\)/.test(src),
   'a pane exit voids the remaining allowance rather than leaving it claimable');
 assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src),
   'main.js never calls a mutation that could restore or extend an allowance (none exists)');
+
+// FENCE BOUNDARY CORRECTION (L1) content assertions — pinned as wiring so a future re-pin cannot drop
+// them with the hash. The fenced branch records the canonical cwd it resolved from, and the spawn cwd
+// uses it for fenced launches while the non-fenced rule is unchanged.
+{
+  const gateStart = mustFind(src, 'if (launch.fenced) {', 'fenced gate');
+  const gate = src.slice(gateStart, mustFind(src, '// Never spawn into a missing directory', 'fenced gate end'));
+  const assignAt = gate.indexOf('fencedCwd = resolvedCwd;');
+  assert(assignAt !== -1 && assignAt > gate.indexOf('ptyStartAuthority.authorizeFencedRole({ role: launch.role, cwd: resolvedCwd })'),
+    'L1: the fenced branch records resolvedCwd only AFTER the definition resolved from it was accepted');
+  assert(src.indexOf("const cwd = fencedCwd !== null ? fencedCwd\n    : ((opts.cwd && fs.existsSync(opts.cwd)) ? opts.cwd : process.env.USERPROFILE);") !== -1,
+    'L1: fenced launches spawn from that canonical cwd; the non-fenced cwd rule is unchanged');
+}
 
 process.stdout.write(`\nlauncher-fence-invariant: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

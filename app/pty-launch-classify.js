@@ -4,13 +4,20 @@
 // Before this module, `pty-start` re-derived "is this fenced / is this Video Scout" three separate
 // times from renderer-supplied fields (`!opts.videoScout && opts.role && FENCED_ROLES.has(opts.role)`),
 // and `admission-pty-boundary.js` derived it a fourth time with STRICTER truthiness (`=== true`). Four
-// derivations of one decision can disagree; this module makes the decision once, in main, and every
-// consumer reads the same result object.
+// derivations of one decision can disagree; this module makes the decision once, in main, and the
+// command, the fence decision and the environment tier read the same result object.
+//
+// ADMISSION IS THE EXCEPTION, STATED PRECISELY. `prepareAdmissionPaneLaunch` does NOT consume this
+// result: it still derives eligibility separately from the raw `opts` through `isEligibleClaudePane`.
+// The loose/strict split is closed because this classifier refuses the divergent shapes before
+// admission runs, and pty-launch-classify.test.js pins that the two derivations agree for every shape
+// accepted here. That is tested agreement, not a shared input.
 //
 // Pure: no Electron, filesystem, process, logging, or spawning. Renderer input is untrusted.
 //
 // ACCEPTED SHAPES ARE THE REAL ONES THE UI SENDS (app/renderer/app.js:442 and :2102):
-//   role pane   -> { role: <one of VALID_ROLES>, cli: 'claude' }
+//   role pane   -> { role: <one of VALID_ROLES>, cli: 'claude' }  (initialPrompt: undefined, except
+//                  the reviewer launch, which supplies one; fenced roles never do — see below)
 //   Video Scout -> { role: 'video-scout', videoScout: true, cli: null }
 //   CLI pane    -> { role: null, cli: 'claude'|'codex'|'gemini' }
 //   shell pane  -> { role: null, cli: null }
@@ -33,6 +40,7 @@ const REASON = Object.freeze({
   VIDEO_SCOUT_FLAG_NOT_BOOLEAN: 'classify-video-scout-flag-not-boolean',
   VIDEO_SCOUT_ROLE_MISMATCH: 'classify-video-scout-role-mismatch',
   UNKNOWN_CLI: 'classify-unknown-cli',
+  FENCED_INITIAL_PROMPT: 'classify-fenced-initial-prompt-refused',
 });
 
 /**
@@ -88,7 +96,18 @@ function classifyPtyLaunch(opts, deps) {
     // (main.js: `if (role && VALID_ROLES.has(role))` is tested before `AGENT_CMD[cli || agent]`),
     // so a mismatched `{role:'web-scout', cli:'codex'}` launches web-scout on Claude and the codex
     // hint is ignored — it is ACCEPTED, not refused, and every consumer agrees via this result.
-    return { ok: true, kind: KIND.ROLE, role, cli: null, fenced: fencedRoles.has(role), videoScout: false };
+    const fenced = fencedRoles.has(role);
+    // FENCED ROLES TAKE NO OPENING PROMPT. The UI never sends one for them (app/renderer/app.js
+    // passes `initialPrompt: undefined`; only the reviewer launch sets it), and a supplied value is
+    // an argv element the CLI may parse as an OPTION — `--settings=<file>`, `--mcp-config=<file>`,
+    // `--permission-mode=<mode>` — rather than as prompt text. Accept only the absent/empty forms;
+    // refuse every other value, well-formed or not, here at the first boundary, before containment,
+    // resolution, admission claim, command construction or spawn. The reason never echoes the value.
+    if (fenced) {
+      const prompt = opts.initialPrompt;
+      if (prompt !== undefined && prompt !== '') return { ok: false, reason: REASON.FENCED_INITIAL_PROMPT };
+    }
+    return { ok: true, kind: KIND.ROLE, role, cli: null, fenced, videoScout: false };
   }
 
   // No role: the cli/agent hint decides. Same `opts.cli || opts.agent` precedence as app.js:442.

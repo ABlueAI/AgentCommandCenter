@@ -106,6 +106,44 @@ for (const bad of [null, undefined, 'string', 42, true, [], [1, 2]]) {
   assert(go(proto).ok === true, 'a null-prototype options object still classifies');
 }
 
+section('M2 \u2014 fenced roles take no opening prompt; unfenced prompt behaviour is unchanged');
+{
+  // The absent/empty forms the UI actually produces for fenced roles: app/renderer/app.js passes
+  // `initialPrompt: opts.initialPrompt`, which is undefined for every non-reviewer launch.
+  for (const role of FENCED_ROLES) {
+    const absent = go({ id: 'p', role, cli: 'claude', cwd: 'D:\\x' });
+    assert(absent.ok === true && absent.fenced === true, role + ': no initialPrompt key is accepted');
+    const undef = go({ id: 'p', role, cli: 'claude', initialPrompt: undefined });
+    assert(undef.ok === true && undef.fenced === true, role + ': initialPrompt undefined (the real UI shape) is accepted');
+    const empty = go({ id: 'p', role, cli: 'claude', initialPrompt: '' });
+    assert(empty.ok === true && empty.fenced === true, role + ': an empty initialPrompt is accepted');
+  }
+  const refused = [
+    '--settings=x', '--mcp-config=x', '--permission-mode=x',
+    'Research competitor pricing and write a report', '   ', '\n',
+    null, 0, 42, true, {}, [], ['--settings=x'],
+  ];
+  for (const role of FENCED_ROLES) {
+    for (const v of refused) {
+      const r = go({ id: 'p', role, cli: 'claude', initialPrompt: v });
+      assert(r.ok === false && r.reason === REASON.FENCED_INITIAL_PROMPT,
+        role + ': REFUSES supplied initialPrompt ' + JSON.stringify(v));
+      if (typeof v === 'string' && v.trim()) {
+        assert(r.reason.indexOf(v) === -1 && r.reason.indexOf('--') === -1,
+          role + ': and the refusal reason does not echo the prompt');
+      }
+    }
+  }
+  // Unfenced roles keep the legitimate opening-prompt path (the reviewer's "review this diff").
+  for (const role of ['reviewer', 'builder', 'codebase-scout']) {
+    const r = go({ id: 'p', role, cli: 'claude', initialPrompt: 'Review the change set in ./x.diff' });
+    assert(r.ok === true && r.fenced === false, role + ': a non-empty opening prompt is still accepted (unfenced)');
+  }
+  // CLI and shell panes never consulted initialPrompt; still accepted.
+  assert(go({ id: 'p', role: null, cli: 'claude', initialPrompt: 'hi' }).ok === true,
+    'a bare Claude CLI pane is unaffected by the fenced-prompt rule');
+}
+
 section('REFUSAL REASONS ARE BOUNDED CONSTANTS');
 {
   const secret = 'D:\\Users\\levij\\.ssh\\id_rsa';

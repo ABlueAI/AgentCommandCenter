@@ -13,7 +13,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { assertFencedRoleDefinition, FORBIDDEN_TOOLS, REASON } = require('./role-fence-policy');
+const { assertFencedRoleDefinition, ALLOWED_TOOLS, FORBIDDEN_TOOLS, PATH_CAPABLE_TOOLS, REASON } = require('./role-fence-policy');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -158,10 +158,61 @@ for (const t of FORBIDDEN_TOOLS) {
     .replace('model: sonnet', '') .replace('description: d', 'description: d\ndisallowedTools: Bash'));
   assert(!denylistRescue.ok && denylistRescue.reason === REASON.FORBIDDEN_TOOL,
     'a disallowedTools entry can NEVER rescue a forbidden tool granted by tools:');
+  // MOVED (fence boundary correction, M1). These near-misses used to be ACCEPTED, because the policy
+  // refused only the three named tools. Under the explicit allowlist they are unknown names and
+  // refuse, and the reason stays distinct from FORBIDDEN_TOOL: exact matching still applies.
   for (const near of ['Globals', 'BashfulTool', 'NotebookEditor', 'Readable']) {
     const r = check(build({ tools: 'Read, Write, ' + near }));
-    assert(r.ok === true, 'substring near-miss is not a forbidden tool: ' + near);
+    assert(!r.ok && r.reason === REASON.TOOL_NOT_ALLOWED,
+      'substring near-miss is not a forbidden tool, and as an unknown name it now REFUSES: ' + near);
   }
+}
+
+section('M1 — explicit allowlist: only supported tools may be declared');
+{
+  // The allowlist is exactly the tracked roles' tools plus the two further path tools the canonical
+  // matcher and fence-write.js already gate. Every allowed filesystem tool is path-capable (so it is
+  // subject to matcher coverage below); the only non-filesystem entries are the two web tools.
+  assert(JSON.stringify(ALLOWED_TOOLS) === JSON.stringify(['Read', 'Write', 'Edit', 'MultiEdit', 'WebSearch', 'WebFetch']),
+    'ALLOWED_TOOLS is exactly Read, Write, Edit, MultiEdit, WebSearch, WebFetch');
+  const nonPath = ALLOWED_TOOLS.filter((t) => PATH_CAPABLE_TOOLS.indexOf(t) === -1);
+  assert(JSON.stringify(nonPath) === JSON.stringify(['WebSearch', 'WebFetch']),
+    'every allowed tool except WebSearch/WebFetch is path-capable and therefore requires hook coverage');
+  assert(PATH_CAPABLE_TOOLS.every((t) => ALLOWED_TOOLS.indexOf(t) !== -1),
+    'and every path-capable tool the matcher check knows about is on the allowlist');
+  assert(FORBIDDEN_TOOLS.every((t) => ALLOWED_TOOLS.indexOf(t) === -1),
+    'no forbidden tool is on the allowlist');
+
+  // Negative controls: the reviewer's counterexample (Grep), the Windows shell (PowerShell), the
+  // delegation tools (Agent, Task), and an arbitrary unknown name. Each is added to an otherwise
+  // healthy declaration that keeps the canonical hook and matcher, so ONLY the tool decides.
+  for (const t of ['Grep', 'PowerShell', 'Agent', 'Task', 'SomeFutureTool']) {
+    const r = check(build({ tools: 'WebSearch, WebFetch, Read, Write, ' + t }));
+    assert(!r.ok && r.reason === REASON.TOOL_NOT_ALLOWED, 'REFUSES a fenced role declaring ' + t);
+  }
+  {
+    // The exact drift scenario from the review: canonical hook, matcher Read|Write|Edit|MultiEdit,
+    // tools gains Grep. Every other check passes; the allowlist is what refuses it.
+    const r = check(build({ tools: 'WebSearch, WebFetch, Read, Write, Grep' }));
+    assert(!r.ok && r.reason === REASON.TOOL_NOT_ALLOWED,
+      'REVIEW COUNTEREXAMPLE REFUSES: web-scout drifted to WebSearch, WebFetch, Read, Write, Grep');
+  }
+  for (const t of ['read', 'bash', 'Read(./x)', 'mcp__x__y', 'WebFetch(domain:example.com)']) {
+    const r = check(build({ tools: 'Read, Write, ' + t }));
+    assert(!r.ok && (r.reason === REASON.TOOL_NOT_ALLOWED || r.reason === REASON.PARSE),
+      'REFUSES a non-exact or unsupported tool name: ' + t);
+  }
+
+  // Positive controls beyond the tracked roles: Edit and MultiEdit are allowed WHEN covered.
+  const withEdits = check(build({ tools: 'WebSearch, WebFetch, Read, Write, Edit, MultiEdit' }));
+  assert(withEdits.ok === true, 'Edit and MultiEdit are accepted under the canonical Read|Write|Edit|MultiEdit matcher');
+  for (const t of ['Edit', 'MultiEdit']) {
+    const r = check(build({ tools: 'Read, Write, ' + t, matcher: 'Read|Write' }));
+    assert(!r.ok && r.reason === REASON.MATCHER_COVERAGE,
+      'but a declared ' + t + ' the fence matcher does not cover REFUSES');
+  }
+  const webOnly = check(build({ tools: 'WebSearch, WebFetch', matcher: 'Read' }));
+  assert(webOnly.ok === true, 'a role declaring only the two web tools needs no path coverage');
 }
 
 section('IDENTITY AND PARSE');
