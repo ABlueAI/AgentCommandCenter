@@ -1,6 +1,6 @@
 # Builder Handoff — Fence Live Admission Refresh Correction
 
-Status: BLOCKED CHECKPOINT — IMPLEMENTED; FULL-APP GATE NOT PASSED
+Status: IMPLEMENTED; H1 APPLICATION GATE MET FOR EXACT `aa1640c`; AWAITING FRESH INDEPENDENT FULL-CLASS REVIEW (earlier blocked-checkpoint status preserved below as history)
 Branch: `codex/fence-live-admission-refresh`  
 Stacked base / reviewed Fence tip: `1efcc99b2f795e3623558e54ba3067bcf6385b32`  
 Reviewed Fence production/security tip: `96720f96edfc97414ebb8d3c39b2b3a0975936b5`  
@@ -235,3 +235,82 @@ focused, syntax, and Pester evidence, but it does **not** claim that the 96-suit
 full-app gate passed. The failed suite-15 and suite-16 evidence above remains
 the controlling full-app result for this checkpoint. It is not merge-ready and
 has no independent Full-class verdict.
+
+## H1 application gate closeout (completed for exact `aa1640c`)
+
+The history above is preserved unchanged. The workstation suite-15/suite-16
+failures, the consumed one-time attempts, and the AGR falsification remain the
+record of what happened on the primary workstation; they were not rerun or
+reinterpreted, and that host's Electron harness failure is not cured by this
+closeout.
+
+The required full-app gate was subsequently satisfied on a separate qualified
+host. The R13b external H1 application gate ran exactly once against checkpoint
+`aa1640cde37240295a5ba748f1c38cd3d82ddf39`:
+
+- host BLD (NZXT H1 Mini), Windows build 26200.9550, boot 4693;
+- chain: G2 host qualification PASS, G3 independent qualification review PASS,
+  G4 dry run and G5 Validate each accepted after independent review, then one
+  Execute attempt completed 2026-09-27 00:48Z;
+- attempt marker `h1-gate-attempt-aa1640c.json`: `sourceTip`
+  `aa1640cde37240295a5ba748f1c38cd3d82ddf39`, created 2026-09-27T00:45:37Z,
+  runner SHA-256 `F59F86A9CD6DE9A7D21BD67E3DB82344C18EB79019A739E27A6CE7EDA518A201`;
+- result: exit 0, no timeout, stdout 448,283 bytes and stderr 8,470 bytes, both
+  untruncated;
+- all 96 ordered test-suite clauses completed successfully under the retained
+  review's assessment, which rests on the launcher's first-nonzero-stop behavior
+  rather than the 94 conventional summary lines. One individual sub-check, the
+  symlink-refusal case in `admission-budget-store.test.js`, printed `SKIPPED`
+  on the non-elevated host; source inspection is its accepted substitute
+  evidence. Not every sub-check executed;
+- the application attempt marker is consumed. The gate must not be rerun.
+
+Evidence identities (SHA-256):
+
+- Execute seal identity: `32F39E284F6E5465132E93EB6A06E37AD67850DB72F3928C2CB0EF32ED469911`
+- Final post-run review identity file: `34231F93B9BD396B4E5C22D989A65A96594670C3A422C3D3E09C9DCA74616B87`
+- Review report (23,876 bytes): `184AD432C0AB87B01CF73B448240DD0F9A7D710D3F8023B251734FCEA64B62D4`
+- Transfer package `H1-TRANSFER-BUNDLE-20260927.zip` (14,962,739 bytes):
+  `50FCE1378B69A5D3D9345F24983A9B6E0B815B9D8ED8490083CA97B9695EAB1D`
+
+On 2026-09-27 the builder authenticated the transfer package on the primary
+workstation without executing any of its content. It matched the recorded size and
+hash and its external checksum, including bundle-manifest SHA-256
+`A436AACF6DC01AB85B306A5EB53502EC1B71AE7689B24F33F5B7AB0E3FB640D1`. All 1,015
+entries are present, and all 1,012 manifest-listed payloads match their recorded
+size and hash, with no unlisted or unsafe paths. The review identity, report,
+seal, and runner identities above were recomputed from the archive.
+
+The retained independent Full-class post-run review's final verdict, verbatim:
+
+```text
+CLASS: Full
+INDEPENDENCE: CONFIRMED
+STDERR CLASSIFICATION: NO FAILURE INDICATION
+APPLICATION GATE: MET
+VERDICT: PASS
+```
+
+Scope of that verdict: it establishes the application gate for `aa1640c` only.
+It is an H1 gate review. It is **not** the independent Full-class code review
+of this correction or of the cumulative Fence stack that this handoff requires,
+and it authorizes nothing further: no merge, push, deployment, ledger change,
+live prompt, or fixture disposal. Carried residuals include the skipped symlink
+sub-check (N-1), the absence of an in-Execute native-module load measurement
+(N-2, accepted on same-boot G2 evidence and 97/97 pre/post pins), 11 Node
+`MODULE_TYPELESS_PACKAGE_JSON` stderr notices (not to be silenced by adding
+`"type"` without separate scope assessment), and the open production node-pty
+PID-cleanup risk.
+
+This closeout commit changes only this handoff. The runtime and test tree of
+the final review endpoint is therefore identical to the H1-tested `aa1640c`,
+and the branch still differs from `1efcc99` in exactly the three pre-registered
+paths. The correction-only and cumulative artifacts are generated from this
+final commit using the pre-registered three-dot ranges and filenames. Their byte
+lengths and SHA-256 values are recorded in the independent review brief rather
+than here, because a committed file cannot contain the hash of a diff that
+includes it.
+
+Remaining before Blue: a fresh independent read-only Full-class review of both
+artifacts, returning the literal `CLASS` / `INDEPENDENCE` / `VERDICT` lines
+required above. This closeout stops without merge or push.
