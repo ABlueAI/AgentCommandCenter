@@ -1,6 +1,6 @@
 # Builder Handoff — Fence Live Admission Refresh Correction
 
-Status: SECOND CORRECTION BATCH (N1/N2/N3) COMPLETE (authorized suites green); AWAITING FRESH FULL-CLASS RE-REVIEW AND AN APPLICATION GATE ON THE NEW TIP. The re-review of `42d76f1` returned `VERDICT: FAIL`. Earlier: first correction batch complete at `42d76f1`. The Full-class review of `cf0327e` returned `VERDICT: FAIL` (see "Correction batch after Full-class FAIL"; earlier statuses preserved as history)
+Status: CUMULATIVE INDEPENDENT FULL-CLASS CODE REVIEW PASS at `4d6577b`; APPLICATION GATE FOR `4d6577b` OUTSTANDING; LIVE ACCEPTANCE OUTSTANDING; MERGE/PUSH NOT AUTHORIZED (see the review closeout at the end; earlier FAIL records and statuses preserved as history below)
 Branch: `codex/fence-live-admission-refresh`  
 Stacked base / reviewed Fence tip: `1efcc99b2f795e3623558e54ba3067bcf6385b32`  
 Reviewed Fence production/security tip: `96720f96edfc97414ebb8d3c39b2b3a0975936b5`  
@@ -961,3 +961,296 @@ Remaining before Blue:
    including an undeclared-tool unavailability check.
 
 None of these was executed here.
+
+## Independent Full-class cumulative review: PASS at `4d6577b` (review closeout)
+
+This tail is documentation only. The reviewed code is still exact
+`4d6577b698d5cb64c1f3bf85477f03b6d69127a0`, and that commit remains the
+intended application-gate candidate. This commit changes only this handoff, so
+the application and test tree of `4d6577b` (tree
+`6b2e154ca9b4f0456efedd671edc51919396d240`) is the reviewed tree. The earlier
+FAIL records for `cf0327e` and `42d76f1` above are preserved unchanged.
+
+### Current status
+
+| Item | Status |
+|---|---|
+| Cumulative independent Full-class code review | **PASS** at `4d6577b` |
+| Application gate for `4d6577b` (full 96-suite run) | **OUTSTANDING**. H1 `APPLICATION GATE: MET` covers `aa1640c` only. |
+| Live acceptance (L4 `pane: <id>` observation; controlled Read/WebFetch fence matrix) | **OUTSTANDING** |
+| Merge / push | **NOT AUTHORIZED** |
+
+### Reviewed endpoint, ranges and artifact identities
+
+- Reviewed endpoint: `4d6577b698d5cb64c1f3bf85477f03b6d69127a0`
+- Base: `70fe1f1920979d43427be78332c4966acd3b408d`, which is also the merge-base
+- Prior failed tip: `42d76f1c3df7e2977f5d5e8c7bdcca38de699be5`
+
+| Artifact | Range | Bytes | SHA-256 |
+|---|---|---|---|
+| `.agent-review-fence-n1n2n3-correction-since-42d76f1.diff` | `42d76f1c3df7e2977f5d5e8c7bdcca38de699be5...4d6577b698d5cb64c1f3bf85477f03b6d69127a0` | 42,846 | `4DD866805A80D1508FA581C3C5C00CA8A9F44E33AFF608906821C9AAA767E8A1` |
+| `.agent-review-fence-n1n2n3-cumulative-since-70fe1f1.diff` | `70fe1f1920979d43427be78332c4966acd3b408d...4d6577b698d5cb64c1f3bf85477f03b6d69127a0` | 271,101 | `A26FEF985F6E9F909DC4A8190B54981209F597A05B94CF789E61CE043FED4D70` |
+
+These hashes can be recorded here because both diffs end at `4d6577b` and
+therefore exclude this tail. They are not regenerated against the tail.
+
+### Independent review report (verbatim)
+
+The report is reproduced exactly as supplied, between the delimiter lines.
+
+<!-- BEGIN VERBATIM INDEPENDENT REVIEW REPORT (4d6577b) -->
+
+Full-class re-review: Fence Completion / admission-refresh stack at 4d6577b
+There are no blocking findings, so the code-review verdict is PASS. The application gate for 4d6577b is still outstanding.
+
+1. Starting state and scope — verified
+Check	Result
+Branch / HEAD	codex/fence-live-admission-refresh / 4d6577b698d5cb64c1f3bf85477f03b6d69127a0
+Working tree	Clean. The only untracked entries are the ignored .agent-review-*.diff files and app/node_modules/.
+Ancestry	First-parent chain is aa1640c → cf0327e → fe51fd1 → 42d76f1 → 7eb299f → 4d6577b. 1efcc99 is an ancestor.
+Merge-base with 70fe1f1	70fe1f1920979d43427be78332c4966acd3b408d
+7eb299f	Changes only docs/BUILDER-HANDOFF-fence-live-admission-refresh.md and precedes the implementation commit.
+42d76f1...4d6577b	Exactly the seven authorized paths. No package or dependency file changes.
+Cumulative app/package.json	One line changed. It registers the eight new suites, for 96 in total.
+app/launcher-fence-invariant.test.js	Blob b43ae911… is identical at 42d76f1 and 4d6577b.
+Invariant pins	The three regions are anchored inside the pty-start handler (main.js:1331 onward). The only main.js hunks in the correction are at lines 1218–1273, above the handler, so the pinned regions cannot have moved.
+2. Artifact authentication — both match
+Artifact	Bytes	SHA-256	Fresh diff
+.agent-review-fence-n1n2n3-correction-since-42d76f1.diff	42846 ✔	4DD86680…A767E8A1 ✔	cmp: byte-identical
+.agent-review-fence-n1n2n3-cumulative-since-70fe1f1.diff	271101 ✔	A26FEF98…043FED4D70 ✔	cmp: byte-identical
+The comparison diffs were generated with git diff --no-color --no-ext-diff --output into the session scratchpad, outside the repository:
+
+C:\Users\levij\AppData\Local\Temp\claude\C--Users-levij\b2de638d-0476-412a-a381-f957c59d9943\scratchpad\rev-4d6577b-correction-42d76f1.diff
+…\scratchpad\rev-4d6577b-cumulative-70fe1f1.diff
+No pinned artifact was touched.
+
+3. Independence disclosure
+Building: I did not take part in building any of these changes.
+Prior reviews: I have no recollection or record of taking part in the earlier reviews. That is a limit of what I can know, not proof that I didn't.
+Memory and builder context: the memory directory holds no MEMORY.md, and nothing about this project was loaded. I inherited no builder context. My only knowledge of earlier findings comes from the brief and the handoff documents.
+Model family: I am the same model family (Claude) as the builder. This is disclosed, and it does not by itself affect independence.
+4. N1 — empty tool declarations: fixed
+The policy now refuses before any other tool check: role-fence-policy.js:103 returns TOOLS_EMPTY when parsed.tools.length === 0. This comes after the TOOLS_ABSENT check at :97 and before the forbidden-tool and allowlist loops.
+
+How the real parser (role-frontmatter.js) handles each empty form:
+
+tools: and tools:␠␠␠ store an empty scalar at :114-123, which parseList turns into [].
+
+tools: "", tools: "   " and tools: " , " are unquoted at :39-55. Splitting on commas, trimming and filtering then gives [].
+
+tools: , and tools: , , split to empty items, which are filtered out to give [].
+
+Other shapes are refused by the parser before the policy sees them:
+
+tools: '' gives the literal '', which fails TOOL_OK.
+tools: [] hits the unsupported value-lead check.
+tools: with an indented list below it is an unsupported structure.
+All three end as the policy reason PARSE.
+
+The check tests length === 0 rather than listing forms. So any other spelling that the parser reduces to [] is refused too, including Unicode whitespace removed by trim().
+
+Where it runs: the check sits inside authorizeFencedRole. That runs after containment and before buildAgentCommand, prepareAdmissionPaneLaunch, pane-status enrolment and spawn (main.js:1386-1389 versus :1447 onward). verify-fence calls the same function.
+Tests:
+The policy test drives the real parser.
+It first checks the parser's own view (toolsDeclared: true, tools: []), so the case really measures the policy.
+Only the tools line changes; the hook path, hash and matcher stay canonical.
+Omitted and declared-empty keys keep separate reasons.
+A positive control with the tracked tool list is kept.
+The main harness drifts the deployed fixture to each of the seven forms. It asserts the bounded reason, zero spawns and no [admission] line, then restores the file and shows the tracked role launches again.
+CLI behaviour: nothing here shows how the CLI treats an empty tools: value, and the code comment correctly says so. The refusal does not depend on it.
+5. N2 — validated registry listings: fixed
+Why it holds. In probeManagedRegistryKey (main.js:1235-1274), the present flag is sticky. Every line is either:
+
+ignored (blank),
+accepted as the header, a value line or a direct subkey of the exact parent, or
+rejected by throwing, which becomes a visible refusal.
+So the result is present: false only when the whole listing was recognized and none of its lines equals the child path. Any lines injected through value names or data can only add lines or cause a throw. They cannot hide a real …\ClaudeCode subkey line. I found no way to bypass the check this way.
+
+Item-by-item assessment:
+
+Exact parent and hive expansion. parentLine and childLine come from the constant key with the hive expanded. A sibling-prefix near miss such as …\PoliciesX\… fails startsWith(parentLine + '\\') and throws.
+Headerless listings. These are accepted only when every non-blank line is <exact parent>\<one segment>. That is enough to identify the exact parent: every line carries the full expanded parent prefix, and output for any other key would carry a different prefix and throw. The builder's host observation (HKLM: one subkey, HKCU: two, neither with a header) supports making the header optional.
+Empty, blank-only or garbled successful output. No header and no subkey means unrecognized, which refuses. UTF-16 or NUL-laden output matches no form and throws.
+Grandchildren, duplicate or misplaced headers, a value line before the header, a value line after subkeys. All throw.
+Value-line syntax. The pattern is ^ {4}\S.*? {4}REG_[A-Z0-9_]+(?: {4}.*)?$, and trailing whitespace is stripped first, so a data-less (Default) line is accepted. Some unusual lines throw: a value name with a leading space, an unfamiliar type label, or data containing an embedded CR/LF. Each is a conservative false refusal, not a bypass.
+Case folding, whitespace, encoding. toLowerCase on both sides, and a trailing \r is stripped. The output is decoded as UTF-8, though reg.exe likely writes in the OEM code page. Non-ASCII subkey names decode lossily, and under a DBCS code page a trail byte of 0x5C could show up as a stray backslash. Either way the line throws, so the effect is a false refusal. The child path is pure ASCII, so detecting it is unaffected. Unicode case quirks such as the Kelvin sign could only create a false "present".
+Non-zero exit, ENOENT, timeout (10 s), maxBuffer (4 MiB). execFileSync throws, and the resolver maps that to resolve-managed-scope-unreadable (role-definition-resolver.js:89-91). The simulated-mode cases cover all of these.
+Ordering. The registry probe runs inside resolve(), after containment and before any spawn or admission side effect.
+6. N3 — agent-tree entry types: fixed
+Ordering: entries are classified by type before any extension filtering (role-definition-resolver.js:130-141):
+If the type methods are missing: UNSUPPORTED_ENTRY.
+If isSymbolicLink(): LINKED_ENTRY, returned before any read or recursion.
+If isDirectory(): recurse, as before.
+If not isFile(): UNSUPPORTED_ENTRY.
+Otherwise the .md filter applies as before.
+Before the fix: at 42d76f1, a linked directory named without .md was silently skipped. A linked .md was followed; if it pointed at a directory, it was refused only by accident as CANDIDATE_UNREADABLE.
+Real deployment: scripts/sync-roles.ps1:52 deploys with WriteAllText, which writes regular files. The tracked deployment therefore does not trigger the new refusal.
+Test fixtures:
+The injected entries separate "refused as a link" from "followed". A followed link would hit a throwing readFileSync and report CANDIDATE_UNREADABLE instead.
+The real-junction case works inside a drive-root mkdtemp fixture (FIX\home\.claude\agents), with its target FIX\linked-target also inside the fixture.
+Cleanup runs rmdirSync(link) in a finally, then rmSync(FIX, {recursive, force}). Both remove the junction itself, not its target, and the target is inside the fixture anyway.
+USERPROFILE is redirected to the fixture, and no deployed role tree is touched.
+Limits, stated in both the code and the handoff:
+The roots and their ancestors are not checked with lstat.
+Hard links cannot be detected.
+This is not complete reparse-point protection.
+7. Cumulative review and regression assessment
+The correction does not touch any of the items below. Having read the cumulative code, I found the earlier accepted conclusions still hold:
+
+Trusted sender and classification: ptyStartAuthority.assess(e, opts) is the first statement of the handler (main.js:1338), ahead of any log, filesystem read, admission or spawn. The classifier:
+requires a strictly boolean videoScout;
+requires Video Scout's flag and role to agree in both directions;
+lets the role win over the CLI hint;
+refuses unknown roles and CLIs.
+M2: a fenced initialPrompt is refused unless it is undefined or '' (pty-launch-classify.js:106-109). buildAgentCommand also drops it for fenced launches (main.js diff at :55). Intact.
+L1: authorizeFencedRole({cwd: resolvedCwd}) and then fencedCwd = resolvedCwd, so spawn uses the same canonical path. Intact.
+L3: the comments now say admission eligibility is derived separately, with agreement shown by tests. Accurate and intact.
+Frontmatter parsing, resolution precedence, allowlist, hook/matcher binding: unchanged from 42d76f1 apart from N1. Tool checks, then PreToolUse ownership, canonical real path, content SHA and matcher coverage run in that order.
+Sandbox: mkdtempSync gives exclusive creation, and the .claude.json lock chain is unchanged.
+P1 environment containment: buildPtyEnv reads launch.fenced. The ptyEnv block pin is unchanged.
+Admission refresh: it runs only after the success gate (renderer/app.js:793-801), and refresh() handles its own IPC failures visibly (admission-view.js:241-256).
+Test registration: all eight new suites are in npm test.
+Red and green evidence (read, not rerun). The builder's failure counts against the old 42d76f1 code line up with the new assertions:
+
+Policy, 14 failures: 7 empty forms × 2 assertions. Refused and bounded reason fail; the parser-view assertion passes on old code.
+Resolver, 5 failures: the five N3 assertions.
+Main harness, 33 failures:
+Group	Arithmetic	Failures
+N1 drift	7 forms × 2 assertions	14
+N2 refusal modes	8 modes × 2 assertions	16
+N3 junctions	linked-roles 2, plus linked.md 1 (wrong reason)	3
+Total		33
+No assertion was weakened. The one moved case, the grandchild line removed from near-miss, now has its own stricter grandchild case that expects a refusal. All of this is the builder's reported output. I did not run any tests, and the mocked PTY means none of it shows a real provider process.
+
+8. Findings, ranked
+Blocking: none.
+
+F1 — Low (evidence limitation / host compatibility, not a bypass). main.js:1272. if (!headerSeen && subkeys === 0) throw.
+
+Failure scenario: HKLM\SOFTWARE\Policies or HKCU\SOFTWARE\Policies exists but has no values or subkeys, and reg.exe prints empty or blank output for it. Every fenced launch, and verify-fence, would then refuse with resolve-managed-scope-unreadable.
+A missing parent already refuses through exit 1, as accepted under L2.
+What empty output looks like for an empty key was inferred, not observed. I have no evidence on how common such hosts are.
+The header-plus-values form is likewise only simulated, not observed on a real host.
+The failure is fail-closed and visible. It should be recorded as an application-gate and host-compatibility item.
+F2 — Informational (broader N3 refusal, upstream evidence only).
+
+Upstream libuv v1.x src/win/fs.c (fs__scandir, fetched during this review) sets the entry type as follows:
+FILE_ATTRIBUTE_DEVICE → CHAR
+otherwise FILE_ATTRIBUTE_REPARSE_POINT → LINK
+otherwise directory → DIR
+otherwise FILE
+So any reparse-point entry inside a scanned tree would be refused as resolve-agent-tree-linked-entry, not only symlinks and junctions. That could include cloud-sync placeholders, dedup files and AF_UNIX sockets that carry the reparse-point attribute.
+This is conservative. It is not verified against the libuv bundled in the installed Electron 42.5.0. The system Node reports libuv 1.52.1, but that is not the Electron runtime.
+I have not verified any specific OneDrive or dedup case, and I am not claiming that files in a OneDrive folder are generally reparse points.
+F3 — Informational (documentation accuracy). docs/BUILDER-HANDOFF-fence-live-admission-refresh.md:750.
+
+The pre-registered regression case says a linked x.md refuses "even though its target content would parse as a matching role."
+Neither implemented test does that. The injected link's target is unreadable by design, and the real linked.md junction points at an empty directory.
+The implementation refuses regardless of target, so the logic is covered. The description overstates the fixture, though. The completion record does not repeat the claim. A correction note is advisable, but it is not a condition of approval.
+F4 — Informational (test-host prerequisite, not a product defect). pty-start-authority-main.test.js, N2 real-mode section.
+
+Its "oracle" largely repeats the production parser. It is observed-format evidence, not an independent implementation.
+It asserts that no real ClaudeCode child exists. On a host with a genuine policy key, the positive controls and this assertion would fail, which is correct product behaviour.
+A real present key has not been exercised, and none should be created.
+F5 — Informational (pre-existing surface, optional hardening).
+
+verify-fence (main.js:1115) and ensure-output-dir do not call the trusted-sender gate.
+After the cumulative rewrite, verify-fence also triggers the read-only resolver and reg query on request.
+reg is resolved by name (main.js:1243), not by an absolute System32 path.
+The threat model already excludes same-user attackers. Not a condition of approval.
+Carried, disposition unchanged:
+
+N4 (informational): verify-fence resolves from the uncanonicalized outputs root and shares the pty-start refused […] log prefix.
+N5 (informational): the LAUNCH_KIND import at main.js:47 is still unused.
+L4 (nonblocking): the admission-refresh test inspects source text, and live acceptance is still owed.
+9. The self-check observations
+A (empty Policies key): I agree with it, at the "inferred" evidence level. See F1.
+B (broader reparse refusal): confirmed from upstream source, not from local measurement. See F2.
+C (registry test assumptions): agreed. It is a test-host prerequisite. See F4.
+The self-check is context only and is not relied on for this verdict.
+
+10. Handoff, procurement, H1
+Handoff integrity:
+Between 42d76f1 and 4d6577b, the only line removed from the handoff is the Status line, which was replaced. Everything else was appended.
+The earlier literal VERDICT: FAIL blocks for cf0327e and 42d76f1 are preserved (:332, :633-634).
+The pre-registration text and eight-path cap are intact.
+The finding dispositions are accurate, except for F3.
+The limitations and remaining verification are listed at :954-963.
+Unverified claim: :907 says the prior re-review suggested requiring the header. I cannot verify that from the records I have.
+Procurement: docs/OSS-PROCUREMENT-pane-status.md:1798 reads verbatim BLUE SUBSYSTEM VERDICT: BUILD FRESH. This is the admission procurement record, not a separate verdict for the Fence. merge-gate.ps1 does not check procurement prose.
+H1: it passed only for aa1640cde37240295a5ba748f1c38cd3d82ddf39. I did not consult or rerun the H1 bundle.
+11. Remaining verification (not established by this review)
+The application gate: the full 96-suite run on 4d6577b.
+L4 live acceptance, and the controlled Read/WebFetch matrix, including a check that undeclared tools are unavailable.
+A real-host observation of an empty Policies parent (F1) and of the header-with-values listing form.
+Entry-type behaviour under the libuv in Electron 42.5.0 for non-link reparse points (F2).
+A real present ClaudeCode policy key has never been exercised, and this review does not claim it.
+CLASS: Full
+INDEPENDENCE: CONFIRMED
+APPLICATION GATE FOR 4d6577b: OUTSTANDING
+VERDICT: PASS
+
+This verdict covers the code review only. It does not establish the outstanding application gate, and it does not authorize live testing, provider prompts, merge or push.
+
+<!-- END VERBATIM INDEPENDENT REVIEW REPORT (4d6577b) -->
+
+Terminal fields, retained exactly:
+
+```text
+CLASS: Full
+INDEPENDENCE: CONFIRMED
+APPLICATION GATE FOR 4d6577b: OUTSTANDING
+VERDICT: PASS
+```
+
+### Disposition of nonblocking findings
+
+None of these is promoted to a release-blocking experiment, and no code changes
+are made for them.
+
+- **F1 (Low): possible host-compatibility false refusal.** An existing
+  `SOFTWARE\Policies` parent with no values and no subkeys may produce empty
+  output, which the probe refuses. What `reg.exe` prints for an empty key is
+  inferred, not observed. The header-with-values form is also only simulated.
+  This is carried as an application-gate and host-compatibility observation.
+- **F2 (Informational): broader reparse-point classification.** The reviewer's
+  reading of upstream libuv implies that any reparse-point entry inside a scanned
+  agents tree refuses as a linked entry. This is not verified for the libuv
+  bundled in the installed Electron, or for specific cloud-sync or dedup files.
+- **F3 (Informational): fixture description correction.** The linked-file
+  fixtures did NOT contain a readable matching-role target:
+  - the injected linked `other.md` has a target that is never readable by design;
+  - the real `linked.md` junction points at an empty directory.
+
+  The implementation refuses regardless of the target. The historical
+  pre-registration wording ("even though its target content would parse as a
+  matching role") is left unedited and is superseded by this note.
+- **F4 (Informational): real-mode registry checks.** They record the real
+  listing's output shape, and they assume the test host has no managed
+  `ClaudeCode` policy. They are not an independent parser implementation, since
+  the oracle largely mirrors the production recognizer.
+- **F5, N4, N5:** retained as nonblocking observations.
+  - F5: `verify-fence` and `ensure-output-dir` have no trusted-sender gate, and
+    `reg` is resolved by name.
+  - N4: `verify-fence` resolves from the uncanonicalized root and shares the log
+    prefix.
+  - N5: the `LAUNCH_KIND` import is unused.
+- **L4 and the controlled live fence matrix remain outstanding.** A check that
+  undeclared tools are unavailable belongs in the future live-test proposal and
+  requires an explicit prompt budget.
+
+On the reviewer's "unverified claim" about the earlier suggestion to require
+the header: the `42d76f1` re-review report, as supplied to the builder, stated
+under N2: "Fix: accept absence only if the listing contains the expanded parent
+header line; otherwise throw." That report was not reproduced verbatim in this
+handoff; only its terminal fields were. So the quotation rests on the supplied
+report, not on a tracked record.
+
+### Procurement
+
+The admission procurement reference is unchanged: `docs/OSS-PROCUREMENT-pane-status.md`,
+verdict verbatim:
+
+> BLUE SUBSYSTEM VERDICT: BUILD FRESH
+
+That verdict is not a separate Fence procurement verdict.
