@@ -1,6 +1,6 @@
 # Builder Handoff — Fence Live Admission Refresh Correction
 
-Status: FENCE-BOUNDARY CORRECTION BATCH COMPLETE (focused suites green); AWAITING FRESH FULL-CLASS RE-REVIEW AND AN APPLICATION GATE ON THE NEW TIP. The Full-class review of `cf0327e` returned `VERDICT: FAIL` (see "Correction batch after Full-class FAIL"; earlier statuses preserved as history)
+Status: SECOND CORRECTION BATCH (N1/N2/N3) IN PROGRESS after the Full-class re-review of `42d76f1` returned `VERDICT: FAIL`. Earlier: first correction batch complete at `42d76f1`. The Full-class review of `cf0327e` returned `VERDICT: FAIL` (see "Correction batch after Full-class FAIL"; earlier statuses preserved as history)
 Branch: `codex/fence-live-admission-refresh`  
 Stacked base / reviewed Fence tip: `1efcc99b2f795e3623558e54ba3067bcf6385b32`  
 Reviewed Fence production/security tip: `96720f96edfc97414ebb8d3c39b2b3a0975936b5`  
@@ -608,3 +608,238 @@ Remaining before Blue:
    matrix).
 
 None of these was executed here.
+
+## Second correction batch after Full-class re-review FAIL (pre-registration)
+
+### Review result retained
+
+A fresh independent Full-class re-review of `42d76f1` checked:
+
+- the correction artifact
+  `.agent-review-fence-boundary-correction-since-cf0327e.diff`
+  (58,633 bytes, `B167D193…F471`);
+- the cumulative artifact
+  `.agent-review-fence-boundary-cumulative-since-70fe1f1.diff`
+  (237,202 bytes, `B6624C45…3182`).
+
+It found M2, L1 and L3 correctly fixed, L2 acceptable with a Low gap, and L4
+accurately carried forward. It failed the branch on one Medium finding (N1),
+added two Low findings (N2, N3), and made two informational notes (N4, N5). Its
+terminal fields, verbatim:
+
+```text
+CLASS: Full
+INDEPENDENCE: CONFIRMED
+APPLICATION GATE FOR 42d76f1: OUTSTANDING
+VERDICT: FAIL
+```
+
+The reviewer disclosed that it is the same model as the builder. Its
+independence is at the session, context and memory level. `42d76f1`, `fe51fd1`,
+`cf0327e` and all four earlier pinned artifacts are preserved unchanged.
+
+### Authorization
+
+Blue approved one bounded Full-class batch for N1, N2 and N3. No npm test,
+Pester, Electron or application launch, provider prompt, ledger change, VM
+experiment, registry write, ACL change, rebase, fetch, merge or push is
+authorized, and no consumed H1 procedure may be rerun.
+
+### Finding dispositions and exact intended changes
+
+**N1 (Medium, blocking): empty `tools:` passes the fence policy.**
+Change in `app/role-fence-policy.js`: immediately after the existing
+`TOOLS_ABSENT` check, refuse `parsed.tools.length === 0` with the new bounded
+reason `fence-policy-tools-declared-empty`. The parser is unchanged, and it keeps
+its omitted versus declared-but-empty distinction; the policy simply refuses
+both. The policy makes no claim about how the CLI treats an empty `tools:`
+value, because the refusal does not depend on that.
+
+These are the seven empty-equivalent forms the real parser accepts as
+`toolsDeclared: true, tools: []` (measured against `app/role-frontmatter.js` at
+`42d76f1`):
+
+- `tools:`
+- `tools: ""`
+- `tools: ,`
+- `tools:` followed by whitespace only
+- `tools: "   "`
+- `tools: " , "`
+- `tools: , ,`
+
+A single-quoted `tools: ''` is already refused by the parser as
+`frontmatter-unsupported-value`, and a case pins that too.
+
+**N2 (Low): registry absence inferred from "no line matched".**
+Change in `app/main.js` `probeManagedRegistryKey`. A successful exit is still
+required, and absence is accepted only when the whole `reg query <parent>`
+listing is recognizable for the exact expanded parent. The accepted structural
+forms are listed below. Line comparison is case-insensitive, with trailing
+whitespace ignored.
+
+- A blank or whitespace-only line is ignored.
+- A header line equal to the exact expanded parent path may appear at most once,
+  and only before any subkey line.
+- A value line (four-space indent, a name, four spaces, `REG_<TYPE>`, and
+  optional data) is permitted only after the header and before any subkey line.
+- A direct-subkey line is the exact expanded parent, a backslash, then one
+  non-empty segment containing no further backslash.
+- Every other non-blank line makes the listing unrecognized. That includes a
+  grandchild path, a wrong-parent path, error text, an unindented non-key line,
+  and a value line in the wrong position.
+- The listing must contain at least one header or subkey line. An empty or
+  blank-only success is unrecognized.
+
+An unrecognized listing throws, and the resolver already maps that to the
+visible refusal `resolve-managed-scope-unreadable`. A recognized listing that
+contains the child's subkey line is present. A recognized listing without it is
+absent. The existing case folding, value-line skipping, 10-second timeout, 4 MiB
+output bound and failure refusals are retained.
+
+The header is optional because the builder has not established whether
+`reg.exe` prints the key's own path when the key has no values. That structural
+assumption becomes observable instead of assumed: in the default read-only
+pass-through mode, the main-wiring test records the real listing and asserts
+that it matches these forms. It then prints only the observed shape, meaning
+whether a header was seen and the counts of subkey and value lines, and no key
+names.
+
+**N3 (Low): linked subdirectories silently skipped during agent-tree scans.**
+Change in `app/role-definition-resolver.js` `scanAgentsTree`. Each directory
+entry is classified by its entry-type methods before any extension filtering:
+
+- A link (`isSymbolicLink()`) refuses with the new reason
+  `resolve-agent-tree-linked-entry`, whatever its name. Links are never
+  followed.
+- A directory is traversed as before.
+- A regular file is filtered by `.md` as before.
+- Anything else, including an entry lacking the type methods, refuses with the
+  new reason `resolve-agent-tree-unsupported-entry`.
+
+Boundary of what this proves:
+
+- It checks the type Node reports for each entry *inside* a scanned
+  `.claude/agents` tree. On Windows, Node reports junctions and symbolic links
+  there as links.
+- It does not lstat the scanned root directories or their ancestors.
+- It cannot distinguish hard links.
+- It does not claim complete reparse-point protection.
+
+**N4 (informational)** is carried as a disclosed residual. `verify-fence`
+resolves from the uncanonicalized outputs root, and its refusals are logged
+through the shared `pty-start refused […]` prefix.
+**N5 (informational)** is carried as a disclosed residual. The `KIND:
+LAUNCH_KIND` import in `app/main.js` is unused.
+**L4** remains a nonblocking test limitation and a live-acceptance obligation.
+M2, L1 and L3 are preserved unchanged.
+
+### Regression cases
+
+- `role-fence-policy.test.js`, using the real parser:
+  - All seven empty-equivalent forms refuse with
+    `fence-policy-tools-declared-empty`. The canonical hook, the tracked hash and
+    the canonical matcher are otherwise intact in each case, and the reason is a
+    bounded constant.
+  - The parser's own view is asserted for each form (`toolsDeclared: true`,
+    `tools: []`), so the case measures the policy and not a parser refusal.
+  - An omitted key still refuses with `fence-policy-tools-not-declared`.
+  - `tools: ''` remains a parse refusal.
+  - The existing positive and M1 controls are retained.
+- `role-definition-resolver.test.js`, using injected directory entries:
+  - A linked subdirectory without a `.md` suffix refuses as a linked entry.
+  - A linked `x.md` refuses as a linked entry, even though its target content
+    would parse as a matching role.
+  - An entry that is neither a file, a directory nor a link refuses as
+    unsupported, and so does an entry without type methods.
+  - Ordinary nested-directory traversal and the skipping of ordinary non-Markdown
+    files (`notes.txt`) are retained.
+  - The virtual filesystem's entries gain `isFile` and `isSymbolicLink`.
+- `pty-start-authority-main.test.js`, driving the real handler:
+  - N1: the deployed fixture `web-scout.md` drifts to each empty form. Each
+    refuses with `fence-policy-tools-declared-empty`, zero spawns and no
+    `[admission]` line.
+  - N2 simulated cases: valid absent with a header and values, valid absent
+    without a header, and a case-folded present child all behave as expected.
+    Empty success, blank-only success, garbled text, a wrong-parent listing, a
+    grandchild line under a header, error text on exit 0, and a value line
+    without a header each refuse as `resolve-managed-scope-unreadable` with zero
+    spawns.
+  - N2 real mode: the pass-through listing is recorded and asserted structurally
+    recognizable, and its shape is printed without key names.
+  - N3: a real directory junction is created inside the fixture's
+    `~/.claude/agents`, once without and once with a `.md` name. Each refuses
+    with `resolve-agent-tree-linked-entry` and zero spawns. The junction is
+    removed and the clean tree launches again. No deployed role tree is touched.
+- `pty-launch-classify.test.js` is run unchanged, to confirm that M2 is
+  preserved.
+- `launcher-fence-invariant.test.js` is run unchanged.
+
+Where practical, the new cases are also run once against the `42d76f1`
+implementation, from a scratch copy outside the repository, to show they fail
+there before passing here.
+
+### Invariant pins
+
+No pin movement is expected. `probeManagedRegistryKey` sits above the
+`pty-start` handler region, and N1 and N3 live in other modules. The three pins
+must remain exact:
+
+| Region | Length / SHA-256 |
+|---|---|
+| `fenced-role cwd gate` | 2183 / `080893bc…` |
+| `ptyEnv block` | 184 / `f64b6bd9…` |
+| `pty-start handler` | 15225 / `128aecae…` |
+
+`launcher-fence-invariant.test.js` is in the cap but is not expected to change.
+
+### Path cap
+
+Exactly these tracked paths may change from `42d76f1`:
+
+- `app/role-fence-policy.js`
+- `app/role-fence-policy.test.js`
+- `app/role-definition-resolver.js`
+- `app/role-definition-resolver.test.js`
+- `app/main.js`
+- `app/pty-start-authority-main.test.js`
+- `app/launcher-fence-invariant.test.js`
+- this handoff
+
+Work stops for disposition if another path, a dependency or a subsystem is
+needed.
+
+### Procurement
+
+This batch corrects the existing Fence boundary without adding a subsystem. The
+admission record remains `docs/OSS-PROCUREMENT-pane-status.md`, verdict
+verbatim:
+
+> BLUE SUBSYSTEM VERDICT: BUILD FRESH
+
+That verdict is not a separate Fence procurement verdict.
+
+### Verification and artifacts
+
+Authorized suites:
+
+- `role-fence-policy.test.js`
+- `role-definition-resolver.test.js`
+- `pty-launch-classify.test.js`
+- `pty-start-authority-main.test.js`
+- `launcher-fence-invariant.test.js`
+
+Also authorized: `node --check` on changed JavaScript, `git diff --check`, and
+exact scope checks.
+
+After verification and commit, new pinned diffs are generated with
+`git diff --output`:
+
+- `.agent-review-fence-n1n2n3-correction-since-42d76f1.diff`
+  (`42d76f1c3df7e2977f5d5e8c7bdcca38de699be5...<final>`)
+- `.agent-review-fence-n1n2n3-cumulative-since-70fe1f1.diff`
+  (`70fe1f1920979d43427be78332c4966acd3b408d...<final>`)
+
+Their sizes and hashes are reported in the re-review brief.
+
+H1 remains passed for `aa1640c` only. The corrected candidate still requires
+its own application gate after review. That gate is not executed here.
