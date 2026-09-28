@@ -167,11 +167,12 @@ async function testExactlyNThenRefuse() {
     'the refusal is visible in the log stream');
   assert(recordOf(h.storage).state === RUN_STATE.EXHAUSTED, 'the run is durably marked exhausted');
 
-  // The submission terminator is main's, appended exactly once, and the caller never supplied it.
-  assert(h.writes[0].bytes === `${SENTINEL}-1${SUBMISSION_TERMINATOR}`,
-    'main appends exactly the submission terminator and nothing else');
-  assert(h.writes[0].bytes.split(SUBMISSION_TERMINATOR).length - 1 === 1,
-    'exactly ONE terminator per admission — one complete prompt');
+  // The budget hands the writer the validated prompt text ONLY. The terminator belongs to main's final
+  // PTY boundary, which writes it separately (see testTwoPhaseDelivery); the caller never supplies it.
+  assert(h.writes[0].bytes === `${SENTINEL}-1`,
+    'the budget passes exactly the prompt text to the one admitted-delivery call');
+  assert(h.writes[0].bytes.indexOf(SUBMISSION_TERMINATOR) === -1,
+    'the budget never appends the submission terminator itself');
 
   section('required test 19: prompt content never leaves the boundary');
   assert(JSON.stringify(h.storage.disk).indexOf(SENTINEL) === -1, 'the sentinel is absent from the persisted ledger');
@@ -300,6 +301,82 @@ async function testWriterFailureNotRefunded() {
   assert(ar.ok === false && ar.reason === REASON.WRITE_FAILED_AFTER_ADMISSION,
     'an async-rejecting writer also reports write-failed-after-admission');
   assert(recordOf(a.storage).admitted === 1, 'the async failure is also not refunded');
+}
+
+/**
+ * The corrected framing end to end through the REAL final boundary: text, bounded delay, terminator.
+ * A manual scheduler stands in for the delay so nothing sleeps.
+ */
+async function testTwoPhaseDelivery() {
+  section('run -c correction: two-phase admitted delivery through the real boundary');
+  const { SUBMIT_DELAY_MS } = require('./admission-pty-boundary');
+  const flush = async () => { for (let i = 0; i < 4; i += 1) await new Promise((r) => setImmediate(r)); };
+  function stack() {
+    const ptyWrites = [];
+    const pending = [];
+    const requested = [];
+    const handles = new Map([['pty1', { write: (b) => ptyWrites.push(b) }]]);
+    let budget = null;
+    const boundary = createAdmissionPtyBoundary({
+      getPty: (id) => handles.get(id),
+      isDirectInputBlocked: (id) => budget.isDirectInputBlocked(id),
+      delay: (ms) => { requested.push(ms); return new Promise((resolve) => pending.push(resolve)); },
+    });
+    const h = makeBudget({ writer: (id, text) => boundary.writeAdmitted(id, text), isPaneRunning: (id) => handles.has(id) });
+    budget = h.budget;
+    const release = async () => { for (const r of pending.splice(0)) r(); await flush(); };
+    return { ...h, ptyWrites, requested, handles, release };
+  }
+
+  {
+    const s = stack();
+    s.budget.initialize();
+    s.budget.claimPane('pty1');
+    let result = null;
+    const first = s.budget.submitPrompt('pty1', `${SENTINEL}-A`).then((r) => { result = r; });
+    await flush();
+    assert(s.ptyWrites.length === 1 && s.ptyWrites[0] === `${SENTINEL}-A`, 'phase 1: the PTY receives the prompt text alone');
+    assert(recordOf(s.storage).admitted === 1, 'the admission was durable before the first PTY byte');
+    assert(s.requested.length === 1 && s.requested[0] === SUBMIT_DELAY_MS, 'one bounded framing delay is pending');
+    assert(result === null, 'the submission has not resolved during the delay');
+
+    // Single-flight holds across the WHOLE delivery, including the delay.
+    const second = await s.budget.submitPrompt('pty1', `${SENTINEL}-B`);
+    assert(second.ok === false && second.reason === REASON.IN_FLIGHT,
+      'a second submit during the framing delay is refused as in-flight');
+    assert(s.ptyWrites.length === 1 && recordOf(s.storage).admitted === 1,
+      'the in-flight refusal wrote nothing and admitted nothing');
+
+    await s.release();
+    await first;
+    assert(s.ptyWrites.length === 2 && s.ptyWrites[1] === SUBMISSION_TERMINATOR, 'phase 2: the terminator is written alone');
+    assert(result && result.ok === true && result.admitted === 1 && result.remaining === 2,
+      'the submission resolves as admitted only after both writes');
+
+    const third = s.budget.submitPrompt('pty1', `${SENTINEL}-C`);
+    await flush();
+    await s.release();
+    const r3 = await third;
+    assert(r3.ok === true && s.ptyWrites.length === 4, 'after completion the next submission proceeds normally');
+  }
+
+  {
+    const s = stack();
+    s.budget.initialize();
+    s.budget.claimPane('pty1');
+    const pendingSubmit = s.budget.submitPrompt('pty1', SENTINEL);
+    await flush();
+    s.handles.delete('pty1'); // the pane exits during the framing delay
+    await s.release();
+    const r = await pendingSubmit;
+    assert(r.ok === false && r.reason === REASON.WRITE_FAILED_AFTER_ADMISSION,
+      'a pane lost during the delay reports write-failed-after-admission');
+    assert(recordOf(s.storage).admitted === 1, 'the admission stays CONSUMED on disk — no refund');
+    assert(s.ptyWrites.length === 1 && s.ptyWrites.indexOf(SUBMISSION_TERMINATOR) === -1,
+      'no terminator was written after the pane was lost');
+    assert(s.logs.join('\n').indexOf(SENTINEL) === -1 && JSON.stringify(r).indexOf(SENTINEL) === -1,
+      'the phase-2 failure logs and returns no prompt content');
+  }
 }
 
 async function testRestartAndCrashWindows() {
@@ -850,8 +927,8 @@ function testNoMutationSurface() {
 function testSourceTripwires() {
   section('required test 21: source tripwires on the ordering rule');
   const src = fs.readFileSync(path.join(__dirname, 'admission-budget.js'), 'utf8');
-  const persistIdx = src.lastIndexOf('const persisted = persist();', src.indexOf('await writer(paneId, promptText + SUBMISSION_TERMINATOR)'));
-  const writerIdx = src.indexOf('await writer(paneId, promptText + SUBMISSION_TERMINATOR)');
+  const persistIdx = src.lastIndexOf('const persisted = persist();', src.indexOf('await writer(paneId, promptText)'));
+  const writerIdx = src.indexOf('await writer(paneId, promptText)');
   assert(persistIdx !== -1, 'the admission path contains the pre-write persist');
   assert(writerIdx !== -1, 'the admission path contains the writer call');
   assert(persistIdx < writerIdx, 'in source order, the durable persist precedes the writer call');
@@ -879,6 +956,7 @@ function testSourceTripwires() {
   await testExactlyNThenRefuse();
   await testPersistFailure();
   await testWriterFailureNotRefunded();
+  await testTwoPhaseDelivery();
   await testRestartAndCrashWindows();
   await testHostileLedgers();
   await testLedgerReplacedUnderneath();

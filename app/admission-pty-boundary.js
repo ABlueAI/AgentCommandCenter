@@ -12,7 +12,23 @@
 const WRITE_REASON = Object.freeze({
   DIRECT_INPUT_BLOCKED: 'admission-direct-input-blocked',
   PTY_MISSING: 'pty-missing',
+  BAD_ADMITTED_TEXT: 'admission-bad-admitted-text',
 });
+
+// The exact byte main writes to submit one admitted prompt to a ConPTY-hosted CLI. Carriage return is
+// what the terminal treats as Enter. It is written by THIS module only — never supplied by a caller.
+const SUBMISSION_TERMINATOR = '\r';
+
+// PROVISIONAL framing interval between the prompt text and its terminator. Claude Code v2.1.283 took a
+// single text+CR burst as pasted multiline input and left the prompt unsent (controlled live run -c).
+// Writing the CR separately, after this gap, is intended to arrive as its own Enter keypress. 300 ms is
+// NOT proven against Claude Code: the deterministic fake-TUI test proves only the intended separation,
+// and a separately authorized live run is the compatibility proof. Main-owned; never renderer-supplied.
+const SUBMIT_DELAY_MS = 300;
+
+function realDelay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /** True only for pane launch shapes that run Claude Code under Blue Helm's supported launch policy. */
 function isEligibleClaudePane(opts, validRoles) {
@@ -35,6 +51,7 @@ function hasNonemptyInitialPrompt(opts) {
  *   getPty(id)               -> returns the main-owned PTY handle
  *   isDirectInputBlocked(id) -> true for pending/bound protected panes, including fatal states
  *   onDirectRefusal(id)      -> bounded visible notification; never receives input bytes
+ *   delay(ms)                -> optional; resolves after ms. Injected by tests so nothing sleeps.
  */
 function createAdmissionPtyBoundary(deps) {
   const d = deps || {};
@@ -43,6 +60,7 @@ function createAdmissionPtyBoundary(deps) {
     throw new Error('admission-pty-boundary: isDirectInputBlocked is required');
   }
   const onDirectRefusal = typeof d.onDirectRefusal === 'function' ? d.onDirectRefusal : () => {};
+  const delay = typeof d.delay === 'function' ? d.delay : realDelay;
   const admittedCapability = Symbol('main-owned-durable-admission');
 
   // The sole production write call. `capability` is never accepted from an IPC payload.
@@ -61,9 +79,25 @@ function createAdmissionPtyBoundary(deps) {
     return writeAtChokePoint(paneId, bytes, null);
   }
 
-  async function writeAdmitted(paneId, bytes) {
-    const result = writeAtChokePoint(paneId, bytes, admittedCapability);
-    if (!result.ok) throw new Error(result.reason);
+  /**
+   * Deliver ONE durably admitted prompt as one submitted turn, in two phases through the same choke
+   * point: the text, then — after SUBMIT_DELAY_MS — the terminator alone. Resolves only after both
+   * writes; the budget's single-flight guard is held across the whole await. Any failure rejects, and
+   * the budget reports it as consumed-not-refunded. The terminator is never written to a handle other
+   * than the one that received the text.
+   */
+  async function writeAdmitted(paneId, promptText) {
+    if (typeof promptText !== 'string' || promptText.length === 0 || /[\r\n]/.test(promptText)) {
+      throw new Error(WRITE_REASON.BAD_ADMITTED_TEXT);
+    }
+    const handle = d.getPty(paneId);
+    if (!handle) throw new Error(WRITE_REASON.PTY_MISSING);
+    const text = writeAtChokePoint(paneId, promptText, admittedCapability);
+    if (!text.ok) throw new Error(text.reason);
+    await delay(SUBMIT_DELAY_MS);
+    if (d.getPty(paneId) !== handle) throw new Error(WRITE_REASON.PTY_MISSING);
+    const submit = writeAtChokePoint(paneId, SUBMISSION_TERMINATOR, admittedCapability);
+    if (!submit.ok) throw new Error(submit.reason);
   }
 
   return Object.freeze({ writeDirect, writeAdmitted });
@@ -71,6 +105,8 @@ function createAdmissionPtyBoundary(deps) {
 
 module.exports = {
   WRITE_REASON,
+  SUBMISSION_TERMINATOR,
+  SUBMIT_DELAY_MS,
   isEligibleClaudePane,
   hasNonemptyInitialPrompt,
   createAdmissionPtyBoundary,

@@ -820,7 +820,27 @@ app.whenReady().then(() => {
   createWindow();
 });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+// TURN ADMISSION BUDGET — SHUTDOWN CLOSURE. node-pty's onExit is asynchronous, so a quit that kills the
+// PTYs and exits synchronously never reaches it and the controlled run stayed OPEN with its remainder
+// (controlled live run -c). Close it here, synchronously, before ptys.clear()/app.quit()/teardown can
+// bypass it: kill the controlled pane, then ALWAYS note its exit (finally), even if kill() threw.
+// notePaneExit persists synchronously, voids the unused remainder and keeps consumed admissions; a
+// persistence failure goes through the budget's visible fail-closed path. Idempotent: once closed, the
+// pane is no longer controlled, so a second call (before-quit, then window-all-closed) does nothing.
+function closeControlledRunOnShutdown() {
+  if (!(admissionEnabled && admissionBudget.enabled)) return;
+  for (const [id, p] of ptys) {
+    if (!admissionBudget.isControlledPane(id)) continue;
+    try { p.kill(); } catch {} finally {
+      admissionBudget.notePaneExit(id);
+      if (admissionIpc) admissionIpc.forgetPane(id);
+    }
+  }
+}
+// A quit started by app.quit() (e.g. the default menu's Exit) never emits window-all-closed.
+app.on('before-quit', () => { closeControlledRunOnShutdown(); });
 app.on('window-all-closed', () => {
+  closeControlledRunOnShutdown();
   for (const p of ptys.values()) { try { p.kill(); } catch {} }
   ptys.clear();
   videoScoutRunIds.clear(); // window shutdown: the run-ID mapping is process-lifetime only

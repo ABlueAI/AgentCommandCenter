@@ -166,10 +166,11 @@ async function settle() { for (let i = 0; i < 4; i += 1) await new Promise((r) =
     s.input().value = 'first controlled prompt';
     s.send().onclick();
     await settle();
-    eq(s.written.length, 1, 'exactly one write reached the PTY writer');
+    eq(s.written.length, 1, 'exactly one admitted-delivery call reached the PTY writer');
     eq(s.written[0].paneId, 'pty1', 'it went to the bound pane');
-    assert(s.written[0].bytes.startsWith('first controlled prompt'), 'the prompt reached the terminal');
-    assert(s.written[0].bytes.endsWith('\r'), 'MAIN appended the submission terminator');
+    eq(s.written[0].bytes, 'first controlled prompt', 'the budget handed the writer exactly the prompt text');
+    assert(s.written[0].bytes.indexOf('\r') === -1,
+      'no terminator from the budget or renderer — main\'s final PTY boundary frames the submission');
     eq(s.record().admitted, 1, 'the ledger recorded one admission');
     eq(s.written[0].ledgerOnDisk.runs[RUN_ID].admitted, 1,
       'the decrement was DURABLE ON DISK BEFORE the write happened');

@@ -78,13 +78,12 @@
 // ============================================================================================
 
 const config = require('./admission-budget-config');
+// The submission terminator is owned by the final main-owned PTY boundary, which writes it separately
+// after the prompt text. Re-exported here so callers keep ONE definition. The budget never appends it,
+// and no caller can decide how (or how many times) its text is submitted.
+const { SUBMISSION_TERMINATOR } = require('./admission-pty-boundary');
 
 const SCHEMA_VERSION = 1;
-
-// The exact byte main appends to submit one prompt to a ConPTY-hosted CLI. Carriage return is what
-// the terminal treats as Enter. It is a CONSTANT here and is appended by main — never supplied by the
-// caller — so a caller cannot decide how (or how many times) its text is submitted.
-const SUBMISSION_TERMINATOR = '\r';
 
 // Prompt bounds. Generous enough for a real evidence prompt, small enough that a runaway renderer
 // cannot push megabytes through the boundary.
@@ -231,7 +230,8 @@ function createDisabledBudget(reason) {
  *   storage  -> { load(): {ok,doc,revision}|{ok:false,reason},
  *                 save(doc,expectedRevision): {ok:true,revision}|{ok:false,reason} }
  *   now()    -> ms epoch (injected clock)
- *   writer(paneId, bytes) -> writes to the PTY. May throw or reject; both are handled.
+ *   writer(paneId, promptText) -> delivers one validated prompt as one submission (main's boundary
+ *                 frames text + terminator). May throw or reject; both are handled, never refunded.
  *   isPaneRunning(paneId) -> optional; false means the PTY is gone and nothing may be written
  *   log(line) -> optional bounded logger. NEVER called with prompt text.
  */
@@ -629,8 +629,11 @@ function createAdmissionBudget(deps) {
       const admittedIndex = record.admitted;
 
       // ---- (4) writer -------------------------------------------------------------------------
+      // ONE admitted-delivery call. The writer (main's final PTY boundary) frames the submission: the
+      // text, a bounded delay, then the terminator alone. It resolves only after both writes, so the
+      // single-flight guard above covers the whole delivery.
       try {
-        await writer(paneId, promptText + SUBMISSION_TERMINATOR);
+        await writer(paneId, promptText);
       } catch {
         // NOT refunded, by design. The admission is durably spent and we cannot know how much of the
         // prompt reached the PTY. Report it as its own bounded reason so the operator sees a consumed

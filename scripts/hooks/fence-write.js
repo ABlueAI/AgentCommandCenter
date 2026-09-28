@@ -31,6 +31,9 @@
 const fs = require('fs');
 const path = require('path');
 
+const REFUSAL_MESSAGE =
+  'Blocked by Blue Helm path fence: this role may only access files inside its own sandbox. [fence-outside-sandbox]';
+
 // Resolve the real (symlink-free) path. Walks up to the nearest existing ancestor if the
 // target doesn't exist yet, then re-appends the unresolved tail, so a brand-new file inside
 // a real sandbox dir still resolves correctly instead of throwing ENOENT.
@@ -62,9 +65,8 @@ process.stdin.on('end', () => {
 
   if (within) process.exit(0); // allowed
 
-  process.stderr.write(
-    `Path fence: "${resolved}" (from "${target}") is outside this role's sandbox (${root}). ` +
-    `This role may only access files inside its own output folder.`
-  );
+  // One CONSTANT refusal. It never names the requested path, the resolved path, the cwd or the sandbox
+  // root: the refusal is shown to the model and in the pane, and a path is itself disclosure.
+  process.stderr.write(REFUSAL_MESSAGE);
   process.exit(2); // block
 });

@@ -34,15 +34,18 @@ function assert(cond, label) {
 function section(t) { process.stdout.write('\n' + t + '\n'); }
 
 const MAIN_PATH = path.join(__dirname, 'main.js');
+const ENTRY_URL = require('url').pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).toString();
 
 // ---- the Electron stub ------------------------------------------------------------------------
 // Only the surface main.js actually touches: app.{whenReady,getPath,on,quit}, BrowserWindow,
 // ipcMain.{handle,on}, session.defaultSession, safeStorage, shell, dialog, clipboard.
 function makeElectronStub(userDataDir, record) {
   const fakeWebContents = {
-    on() {}, send() {}, setWindowOpenHandler() {}, openDevTools() {},
+    mainFrame: { url: ENTRY_URL },
+    on() {}, send(ch, line) { record.sent.push(String(line)); }, setWindowOpenHandler() {}, openDevTools() {},
     session: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} },
   };
+  record.webContents = fakeWebContents;
   function fakeWindow() {
     const w = {
       webContents: fakeWebContents,
@@ -60,8 +63,12 @@ function makeElectronStub(userDataDir, record) {
     app: {
       whenReady: () => Promise.resolve(),
       getPath: (name) => (name === 'userData' ? userDataDir : os.tmpdir()),
-      on(evt) { record.appEvents.push(evt); },
-      quit() { record.quitCalls += 1; },
+      on(evt, fn) {
+        record.appEvents.push(evt);
+        if (!record.appHandlers.has(evt)) record.appHandlers.set(evt, []);
+        record.appHandlers.get(evt).push(fn);
+      },
+      quit() { record.quitCalls += 1; if (record.onQuit) record.onQuit(); },
       // CORRECTION 2 TRIPWIRE. The global single-instance policy was removed. If main ever calls
       // this again, the scenario fails loudly instead of silently reinstating an app-wide startup
       // change that has no product authority and breaks `--classic-layout` recovery.
@@ -96,15 +103,26 @@ const ADMISSION_KEYS = [
  * Evaluate the REAL app/main.js with a given admission environment, then drive it to readiness.
  * Returns everything the assertions need, including any throw from module evaluation itself.
  */
-async function bootMain(admissionEnv) {
-  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bh-main-startup-'));
+async function bootMain(admissionEnv, options) {
+  const opt = options || {};
+  const userDataDir = opt.userDataDir || fs.mkdtempSync(path.join(os.tmpdir(), 'bh-main-startup-'));
   const record = {
-    handled: new Map(), on: new Map(), appEvents: [], windowsCreated: 0,
-    quitCalls: 0, singleInstanceLockCalls: 0, ptySpawns: 0,
+    handled: new Map(), on: new Map(), appEvents: [], appHandlers: new Map(), windowsCreated: 0,
+    quitCalls: 0, singleInstanceLockCalls: 0, ptySpawns: 0, kills: 0, sent: [], onQuit: null,
   };
   const electronStub = makeElectronStub(userDataDir, record);
+  // Only the shutdown scenarios opt in to a spawnable PTY. It is a plain object: no process exists,
+  // and its onExit callback is recorded but NEVER invoked — exactly the teardown race in which a
+  // synchronous quit outruns node-pty's asynchronous exit notification.
   const ptyStub = {
-    spawn() { record.ptySpawns += 1; throw new Error('pty.spawn must not run in this test'); },
+    spawn() {
+      record.ptySpawns += 1;
+      if (!opt.spawnable) throw new Error('pty.spawn must not run in this test');
+      return {
+        pid: 4242, onData() {}, onExit() {}, write() {}, resize() {},
+        kill() { record.kills += 1; if (opt.killThrows) throw new Error('kill failed'); },
+      };
+    },
   };
 
   // Route `electron` and the native PTY binding to the stubs for the duration of this scenario.
@@ -264,6 +282,92 @@ const LEDGER = 'admission-ledger.json';
     const submitted = await preReady.submitPrompt('pty1', 'x');
     assert(submitted.ok === false && submitted.reason === budgetModule.REASON.NOT_INITIALIZED,
       'it can never admit a prompt, and says why');
+  }
+
+  // ---- (6) application shutdown durably closes the controlled run (run -c correction) ----------
+  section('(6) application shutdown closes the controlled run before teardown can bypass it');
+  {
+    const SHUT_ENV = Object.assign({}, VALID_ENV, { BLUE_HELM_ADMISSION_RUN_ID: 'shutdown-probe-run' });
+    const runOf = (dir) => {
+      const p = path.join(dir, LEDGER);
+      if (!fs.existsSync(p)) return null;
+      const doc = JSON.parse(fs.readFileSync(p, 'utf8'));
+      return (doc.runs && doc.runs['shutdown-probe-run']) || null;
+    };
+    const fire = (r, evt) => { for (const fn of (r.record.appHandlers.get(evt) || [])) fn({ preventDefault() {} }); };
+    // The budget's own log line (tlog also forwards a [TIMING]-prefixed copy of every line).
+    const closeLines = (r) => r.record.sent.filter((l) => /^\[admission\] pane exited; run closed/.test(l));
+    async function bindControlledPane(r) {
+      const ptyStart = r.record.handled.get('pty-start');
+      const ev = { sender: r.record.webContents, senderFrame: r.record.webContents.mainFrame };
+      return ptyStart(ev, { id: 'pty1', cli: 'claude', cols: 80, rows: 24 });
+    }
+
+    // S1 — window-all-closed with a bound pane whose onExit never fires.
+    const r1 = await bootMain(SHUT_ENV, { spawnable: true });
+    assert(r1.loadError === null, 'S1: main.js evaluates under a valid controlled run');
+    const bound = await bindControlledPane(r1);
+    assert(bound && bound.ok !== false && r1.record.ptySpawns === 1, 'S1: one eligible Claude pane spawned');
+    const before = runOf(r1.userDataDir);
+    assert(!!before && before.paneId === 'pty1' && before.state === 'open' && before.admitted === 0,
+      'S1: the ledger shows the run bound to pty1 and open');
+    let atQuit = null;
+    r1.record.onQuit = () => { atQuit = runOf(r1.userDataDir); };
+    fire(r1, 'window-all-closed');
+    const after = runOf(r1.userDataDir);
+    assert(!!after && after.state === 'closed', 'S1: window-all-closed durably CLOSED the run');
+    assert(!!atQuit && atQuit.state === 'closed', 'S1: the closure was durable BEFORE app.quit() ran');
+    assert(after.admitted === 0 && after.allowance === 3 && after.paneId === 'pty1',
+      'S1: consumed count, allowance and pane are unchanged; the remainder is void, never transferred');
+    assert(closeLines(r1).length === 1 && /3 unused admission\(s\) voided/.test(closeLines(r1)[0]),
+      'S1: the closure and voided remainder are visibly logged once');
+    assert(r1.record.kills >= 1, 'S1: the controlled pane was killed');
+
+    // S1b — a kill() that throws must not prevent the durable closure.
+    const r1b = await bootMain(Object.assign({}, SHUT_ENV, { BLUE_HELM_ADMISSION_RUN_ID: 'shutdown-probe-run' }),
+      { spawnable: true, killThrows: true });
+    await bindControlledPane(r1b);
+    fire(r1b, 'window-all-closed');
+    const after1b = runOf(r1b.userDataDir);
+    assert(!!after1b && after1b.state === 'closed' && r1b.record.kills >= 1,
+      'S1b: the run closes even when kill() throws (notePaneExit runs in finally)');
+
+    // S2 — before-quit (app.quit() path, no window-all-closed) and then window-all-closed: ONE closure.
+    const r2 = await bootMain(SHUT_ENV, { spawnable: true });
+    await bindControlledPane(r2);
+    fire(r2, 'before-quit');
+    const afterQuit = runOf(r2.userDataDir);
+    assert(!!afterQuit && afterQuit.state === 'closed', 'S2: before-quit alone durably closes the run');
+    fire(r2, 'window-all-closed');
+    const afterBoth = runOf(r2.userDataDir);
+    assert(closeLines(r2).length === 1, 'S2: before-quit then window-all-closed closes exactly once');
+    assert(!!afterBoth && afterBoth.updatedUtc === afterQuit.updatedUtc,
+      'S2: the second shutdown event performed no further ledger write');
+
+    // S3 — a later initialization with the same run id observes a CLOSED run and refuses the pane.
+    const r3 = await bootMain(SHUT_ENV, { userDataDir: r1.userDataDir });
+    assert(r3.loadError === null, 'S3: main.js re-evaluates against the closed ledger');
+    const res3 = await bindControlledPane(r3);
+    assert(!!res3 && res3.ok === false && res3.error === 'admission-run-closed',
+      'S3: an eligible Claude pane is refused with admission-run-closed');
+    assert(r3.record.ptySpawns === 0, 'S3: the refused pane never reaches pty.spawn');
+    const run3 = runOf(r1.userDataDir);
+    assert(!!run3 && run3.state === 'closed' && run3.admitted === 0, 'S3: the ledger still records the closed run');
+
+    // S4 — source tripwire on the ordering.
+    const src = fs.readFileSync(MAIN_PATH, 'utf8');
+    const wac = src.slice(src.indexOf("app.on('window-all-closed'"));
+    const wacBody = wac.slice(0, wac.indexOf('\n});'));
+    assert(wacBody.indexOf('closeControlledRunOnShutdown()') !== -1 &&
+      wacBody.indexOf('closeControlledRunOnShutdown()') < wacBody.indexOf('ptys.clear()') &&
+      wacBody.indexOf('closeControlledRunOnShutdown()') < wacBody.indexOf('app.quit()'),
+      'S4: window-all-closed closes the run before ptys.clear() and app.quit()');
+    assert(/app\.on\('before-quit', \(\) => \{ closeControlledRunOnShutdown\(\); \}\);/.test(src),
+      'S4: before-quit closes the run too');
+    const helper = src.slice(src.indexOf('function closeControlledRunOnShutdown()'));
+    const helperBody = helper.slice(0, helper.indexOf('\n}\n') === -1 ? helper.indexOf('\r\n}\r\n') : helper.indexOf('\n}\n'));
+    assert(/try \{ p\.kill\(\); \} catch \{\} finally \{\s*admissionBudget\.notePaneExit\(id\);/.test(helperBody),
+      'S4: notePaneExit is attempted in finally, even if kill() throws');
   }
 
   process.stdout.write('\nadmission-main-startup: ' + passed + ' passed, ' + failed + ' failed\n');

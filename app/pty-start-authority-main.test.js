@@ -577,6 +577,72 @@ Module._load = function (request) {
       'and the launcher round-trip accepts it (the happy path still holds end to end)');
   }
 
+  section('FENCE HOOK — the deployed fence-write.js refuses with ONE constant, path-free message');
+  {
+    // The hook THIS suite deployed (byte-identical to scripts/hooks/fence-write.js), executed directly as
+    // a child `node` process with a synthetic PreToolUse payload. No Claude, no provider, no real sandbox.
+    const { spawnSync } = require('child_process');
+    const REFUSAL =
+      'Blocked by Blue Helm path fence: this role may only access files inside its own sandbox. [fence-outside-sandbox]';
+    const OUTSIDE = path.join(FIX, 'outside-fixture');
+    const JTARGET = path.join(OUTSIDE, 'junction-target');
+    fs.mkdirSync(JTARGET, { recursive: true });
+    for (const f of [path.join(OUTSIDE, 'absolute-read.txt'), path.join(OUTSIDE, 'traversal-read.txt'),
+      path.join(JTARGET, 'junction-read.txt')]) fs.writeFileSync(f, 'SYNTHETIC-FIXTURE', 'utf8');
+    fs.writeFileSync(path.join(SANDBOX, 'cwd-marker.txt'), 'BH-FIXTURE-CWD-MARKER', 'utf8');
+    const link = path.join(SANDBOX, 'linked-outside');
+    const runHook = (toolName, filePath) => spawnSync(process.execPath, [DEPLOYED_HOOK], {
+      input: JSON.stringify({ cwd: SANDBOX, tool_name: toolName, tool_input: { file_path: filePath } }),
+      encoding: 'utf8', timeout: 20000,
+    });
+    // Everything a refusal must never disclose, in both separator spellings and case-folded.
+    const secretsFor = (target, resolvedTarget) => [
+      target, resolvedTarget, SANDBOX, fs.realpathSync.native(SANDBOX), FIX, OUTSIDE,
+      path.basename(target), 'outside-fixture', 'linked-outside', 'web-scout-fixture',
+    ].filter(Boolean).reduce((all, s) => all.concat([s, s.replace(/\\/g, '/')]), [])
+      .map((s) => s.toLowerCase());
+    function assertRefused(label, toolName, target, resolvedTarget) {
+      const r = runHook(toolName, target);
+      assert(r.status === 2, label + ': refused with exit code 2');
+      assert(r.stderr === REFUSAL, label + ': stderr is exactly the constant refusal');
+      const lower = String(r.stderr).toLowerCase() + String(r.stdout).toLowerCase();
+      const leaked = secretsFor(target, resolvedTarget).filter((s) => lower.indexOf(s) !== -1);
+      assert(leaked.length === 0, label + ': discloses no requested, resolved, cwd or sandbox path, and no file name');
+    }
+
+    let madeLink = false;
+    try {
+      fs.symlinkSync(JTARGET, link, 'junction');
+      madeLink = true;
+    } catch (e) { /* asserted below */ }
+    assert(madeLink, 'fixture: a real directory junction was created inside the sandbox');
+    try {
+      const absTarget = path.join(OUTSIDE, 'absolute-read.txt');
+      assertRefused('absolute path outside the sandbox', 'Read', absTarget, fs.realpathSync.native(absTarget));
+      const travReal = path.join(OUTSIDE, 'traversal-read.txt');
+      const travTarget = path.relative(SANDBOX, travReal);
+      assert(travTarget.startsWith('..' + path.sep), 'fixture: the traversal target is relative and climbs out');
+      assertRefused('relative traversal out of the sandbox', 'Read', travTarget, fs.realpathSync.native(travReal));
+      if (madeLink) {
+        const jTarget = '.' + path.sep + path.join('linked-outside', 'junction-read.txt');
+        assertRefused('read through an in-sandbox junction', 'Read', jTarget,
+          fs.realpathSync.native(path.join(JTARGET, 'junction-read.txt')));
+      }
+      const writeTarget = path.join(OUTSIDE, 'outside-write.txt');
+      assertRefused('write outside the sandbox', 'Write', writeTarget, writeTarget);
+      assert(!fs.existsSync(writeTarget), 'the refused write target does not exist');
+
+      const inRead = runHook('Read', '.' + path.sep + 'cwd-marker.txt');
+      assert(inRead.status === 0 && inRead.stderr === '', 'an in-sandbox read is still ALLOWED (exit 0, silent)');
+      const inWrite = runHook('Write', path.join(SANDBOX, 'report.md'));
+      assert(inWrite.status === 0 && inWrite.stderr === '', 'a new in-sandbox write is still ALLOWED (exit 0, silent)');
+    } finally {
+      if (madeLink) { try { fs.rmdirSync(link); } catch (e) { /* removed with FIX at the end */ } }
+    }
+    const hookSrc = fs.readFileSync(TRACKED_HOOK, 'utf8');
+    assert(!/\$\{(resolved|target|root)\}/.test(hookSrc), 'the tracked hook interpolates no path into any message');
+  }
+
   process.env.USERPROFILE = envBefore.USERPROFILE;
   for (const k of Object.keys(admissionEnvBefore)) process.env[k] = admissionEnvBefore[k];
   try { fs.rmSync(FIX, { recursive: true, force: true }); } catch (e) { /* best effort */ }
