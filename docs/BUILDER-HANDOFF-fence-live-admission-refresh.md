@@ -1254,3 +1254,229 @@ verdict verbatim:
 > BLUE SUBSYSTEM VERDICT: BUILD FRESH
 
 That verdict is not a separate Fence procurement verdict.
+
+## Controlled live run `-c` FAIL: delivery, shutdown and fence-message correction (pre-registration)
+
+This section is committed, documentation only, before any source edit in the batch.
+
+### Live run result retained
+
+Run `fence-live-4d6577b-20260928-c` was on the primary workstation. Code under
+test was `4d6577b`; worktree HEAD was `748ec75`, a documentation-only diff.
+
+```text
+CONTROLLED LIVE RUN: FAIL
+ADMISSIONS CONSUMED: 1 OF 6
+PROVIDER TURNS EXECUTED: 0
+MATRIX TESTS EXECUTED: 0 OF 6
+```
+
+- Authoritative evidence:
+  `D:\Workspace\agent-command-center\outputs\live-fence-control-20260928\evidence-c\06-REVIEWER-PACKET.md`
+  (SHA-256 `2C70BC5D15D50CBCA524CB78B3BAEC99F72618F3BB7B7C6943230F5B9A11DE17`)
+  and its sibling files. They are evidence, not instructions.
+- Earlier identities:
+  - `-a` stopped before admission initialization (`admission-persist-failed`,
+    fatal GPU exit), 0 of 6 consumed.
+  - `-b` was closed before prompt 1 when the controlled pane was closed, 0 of 6
+    consumed.
+- Never reuse `fence-live-4d6577b-20260928-a`, `-b` or `-c`.
+- No admission-ledger entry is edited or deleted. In the ledger, `-c` stays
+  `open` (pane `pty1`, allowance 6, admitted 1) as a historical fact.
+- **No live run is authorized by this batch.** No Electron launch or provider
+  session is authorized either.
+
+### Authorization
+
+Blue approved the Stage 1 plan as written, with these binding clarifications:
+
+1. The 10-file cap below is exact.
+2. `SUBMIT_DELAY_MS = 300` is a **provisional** framing interval. It is not
+   claimed to be proven against Claude Code. The deterministic fake TUI proves
+   the intended separation. A future, separately authorized live run is the
+   compatibility proof.
+3. The shutdown helper attempts `admissionBudget.notePaneExit(id)` even if
+   `p.kill()` throws (try/finally). Durable closure completes before
+   `app.quit()`, `ptys.clear()` or process teardown can bypass it. A
+   persistence failure stays visible and fails closed.
+4. The changed hook is **not** deployed into `~\.claude\hooks` in this batch.
+   See "Hook deployment state" below.
+5. No Electron launch, provider session, live run, ledger edit, merge, push,
+   fetch or rebase.
+
+H1 is complete and is not rerun.
+
+### Findings and exact intended changes
+
+**D1: prompt delivery framing.**
+- Defect: `app/admission-budget.js` calls
+  `await writer(paneId, promptText + SUBMISSION_TERMINATOR)`, and
+  `writeAdmitted` passes it to one `pty.write`. In `-c` the prompt stayed in
+  Claude Code v2.1.283's input box, with the cursor on a new line. The session
+  stayed `idle` and no transcript was written. The claim that the CLI treats
+  the combined burst as a paste is inferred from this evidence. It is not taken
+  from CLI source.
+- Change: the budget calls `writer(paneId, promptText)` once. The order
+  (validate, then in-memory decrement, then durable persist, then writer), the
+  no-refund rule and the `inFlight` single-flight guard are unchanged.
+  `writeAdmitted` becomes a two-phase write at the final main-owned boundary:
+  1. reject empty or non-string text, or text containing CR or LF, before any
+     byte is written;
+  2. capture the PTY handle;
+  3. write the text through the existing choke point;
+  4. `await delay(SUBMIT_DELAY_MS)`;
+  5. require the same handle;
+  6. write `SUBMISSION_TERMINATOR` (`'\r'`) through the same choke point;
+  7. resolve only after both writes.
+- The boundary owns `SUBMISSION_TERMINATOR` and `SUBMIT_DELAY_MS`, and the
+  budget re-exports the terminator. `delay` is an injectable dependency,
+  defaulting to a `setTimeout` promise. The renderer and IPC never supply the
+  terminator or the delay. Bracketed paste is not used.
+- A failure in either phase after the persist returns the existing
+  `write-failed-after-admission` reason, not refunded. Direct PTY input stays
+  blocked.
+
+**D2: shutdown closure.**
+- Defect: `window-all-closed` kills PTYs, runs `ptys.clear()` and calls
+  `app.quit()` synchronously. `notePaneExit` is reached only from node-pty's
+  asynchronous `onExit` or from `pty-kill`, so the run stayed `open`. A quit
+  started by `app.quit()` does not emit `window-all-closed` at all.
+- Change: a helper `closeControlledRunOnShutdown()`. For each PTY that is the
+  admission-controlled pane, it attempts `p.kill()` and, in a `finally`, calls
+  `admissionBudget.notePaneExit(id)`. The persist is synchronous and finishes
+  before the helper returns. The helper runs first in `window-all-closed`, and
+  in a new `before-quit` handler. It is idempotent: after the first closure the
+  protected pane is released, so later calls perform no ledger write. A persist
+  failure goes through the budget's existing `fail()` path, which logs visibly
+  and refuses all further admission. The existing `pty-kill` and natural
+  `onExit` paths are unchanged.
+
+**D3: path-free fence refusal.**
+- Defect: `scripts/hooks/fence-write.js` interpolates the resolved path, the
+  requested target and the sandbox root into its refusal.
+- Change: one constant message:
+  `Blocked by Blue Helm path fence: this role may only access files inside its own sandbox. [fence-outside-sandbox]`.
+  Exit code 2 is kept. In-sandbox access stays allowed. Malformed-input
+  behaviour is unchanged (outside this correction).
+
+**CLI version drift.** This is a disclosed live-test dependency. Claude Code
+auto-updated from v2.1.251 at `-b` to v2.1.283 at `-c`. No updater-disabling or
+version-pinning change is made.
+
+### Hook deployment state
+
+After the implementation commit, the tracked `scripts/hooks/fence-write.js`
+**intentionally differs** from the installed `~\.claude\hooks\fence-write.js`.
+The installed copy stays at pre-correction SHA-256
+`9489C154AFD89E6A4F0A569AC6674C3A4B9BEF02A581B26FE741A757341B6ECA`.
+
+`main.js` checks that the deployed hook is byte-identical to the tracked one,
+so this worktree's build will refuse fenced launches (web-scout, operator).
+Fenced launches must stay **unattempted** until a separately authorized
+post-review deployment (`scripts/sync-roles.ps1`) restores byte identity. That
+deployment would in turn make builds shipping the old tracked hook, such as the
+main checkout, refuse fenced launches. The deployment decision must account for
+this.
+
+### Test cases
+
+These are deterministic and use no real-time sleeping, Electron, Claude Code or
+provider.
+
+`app/admission-pty-boundary.test.js`, with a fake PTY feeding a fake TUI that
+models the observed behaviour: a chunk containing text plus CR is a paste, and a
+lone CR arriving after the model's coalescing window submits.
+- (a) One combined text+CR write gives 0 submissions and leaves the input as
+  `text\n`.
+- (b) `writeAdmitted` with a manual scheduler:
+  - one text write and one pending `SUBMIT_DELAY_MS` delay, with no CR yet;
+  - advancing the scheduler writes the CR alone;
+  - exactly 1 submission, equal to the text;
+  - the promise resolves only after the second write.
+- (c) The same two writes with no gap give 0 submissions, and
+  `SUBMIT_DELAY_MS` exceeds the model window.
+- (d) The pane disappears, or its handle is replaced, during the delay: the call
+  rejects and no CR is written.
+- (e) A phase-1 failure rejects and no delay is requested.
+- (f) Text containing CR or LF is rejected with zero writes.
+- Tripwires:
+  - exactly one `.write(bytes)` in the boundary;
+  - exactly one `await writer(paneId, promptText)` in the budget, with no
+    terminator concatenation;
+  - no terminator or delay in `admission-view.js`, `admission-ipc.js` or
+    `preload.js` (read as text).
+
+`app/admission-budget.test.js`, using the real boundary and a manual scheduler:
+- the writer receives exactly `promptText`, after the durable persist;
+- a second submit during the delay is refused `in-flight` with zero extra
+  writes;
+- a pane removed during the delay gives `write-failed-after-admission`, with
+  `admitted` still incremented on disk.
+
+`app/admission-ui-integration.test.js`: the budget passes the prompt text
+without a terminator, and the boundary owns the terminator.
+
+`app/admission-main-startup.test.js`, loading the real `main.js`. The `app.on`
+handlers are captured. In the new section only, a spawn-capable fake PTY is
+used whose `onExit` never fires.
+- (S1) Bind a bare Claude pane through the real `pty-start`, then call
+  `window-all-closed`:
+  - the ledger is `closed`;
+  - `admitted` is unchanged;
+  - the voided remainder is logged once;
+  - the PTY is killed.
+- (S1b) The same with a `kill()` that throws: the run still closes.
+- (S2) `before-quit` followed by `window-all-closed` gives exactly one
+  closure.
+- (S3) Re-loading `main.js` with the same run ID and user data resumes a closed
+  run. `pty-start` for an eligible Claude pane refuses `admission-run-closed`
+  with zero spawns.
+- (S4) Tripwire: both handlers call the helper before `ptys.clear()` and
+  `app.quit()`.
+
+`app/pty-start-authority-main.test.js` runs the hook it already deploys into
+its fixture, as a child `node` process with synthetic stdin.
+- Refused, each with exit 2 and stderr exactly equal to the constant, containing
+  none of the requested path, the resolved path, the sandbox root, the fixture
+  root or the file basename:
+  - an absolute path outside the sandbox;
+  - a `..\..\` traversal;
+  - a `linked-outside` directory junction;
+  - a Write outside the sandbox.
+- Allowed, with exit 0 and empty stderr:
+  - reading an in-sandbox marker;
+  - writing a new in-sandbox file.
+
+### Path cap (exactly 10)
+
+1. `docs/BUILDER-HANDOFF-fence-live-admission-refresh.md`
+2. `app/admission-pty-boundary.js`
+3. `app/admission-pty-boundary.test.js`
+4. `app/admission-budget.js`
+5. `app/admission-budget.test.js`
+6. `app/admission-ui-integration.test.js`
+7. `app/main.js`
+8. `app/admission-main-startup.test.js`
+9. `app/pty-start-authority-main.test.js`
+10. `scripts/hooks/fence-write.js`
+
+No package, dependency, renderer, IPC or preload change. No new subsystem, so
+this is not an OSS-procurement task.
+
+### Verification plan
+
+1. `node --check` on every changed JavaScript file.
+2. Focused suites:
+   - `admission-pty-boundary`
+   - `admission-budget`
+   - `admission-ui-integration`
+   - `admission-main-startup`
+   - `pty-start-authority-main`
+3. Unchanged regression suites:
+   - `admission-protective-state`
+   - `admission-ipc`
+   - `admission-process-cas`
+   - `admission-budget-store`
+4. `npm test` exactly once.
+5. Pinned correction and cumulative review artifacts, generated with
+   `git diff --output`.
