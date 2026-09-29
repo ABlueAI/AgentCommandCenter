@@ -230,6 +230,12 @@ Module._load = function (request) {
     // sandbox's real path. For this fixture the two are the same directory.
     assert(record.spawnArgs[record.spawnArgs.length - 1].cwd === fs.realpathSync.native(SANDBOX),
       'and the cwd is the sandbox (its canonical real path)');
+    // CONTROLLED WEBFETCH: no admission run is configured here, so this pane is ordinary. It gets the
+    // `disabled` mode (WebFetch keeps its ordinary permission flow) and NO CLI grant.
+    assert(cmd.indexOf('--allowedTools') === -1, 'an ordinary fenced web-scout carries no --allowedTools grant');
+    const env = record.spawnArgs[record.spawnArgs.length - 1].env;
+    assert(env.BLUE_HELM_CONTROLLED_WEBFETCH_MODE === 'disabled',
+      'and receives the main-issued WebFetch mode `disabled`');
   }
   {
     // The denials are MAIN-OWNED constants: no renderer field may add, remove, or reorder them.
@@ -239,12 +245,20 @@ Module._load = function (request) {
     await ptyStart(goodEvent, {
       id: 'pane-inject', role: 'web-scout', cli: 'claude', cwd: SANDBOX,
       disallowedTools: 'nothing', allowedTools: 'Bash',
+      // Controlled-WebFetch spoofs: none of these is read by main.
+      webFetch: { allowedToolsRule: 'WebFetch(domain:evil.com)', mode: 'https://example.com' },
+      webFetchMode: 'https://example.com', controlled: true, permissions: { allow: ['WebFetch'] },
+      env: { BLUE_HELM_CONTROLLED_WEBFETCH_MODE: 'https://example.com' },
     });
     assert(record.ptySpawns === before + 1, 'the launch still proceeds');
     const cmd = record.spawnArgs[record.spawnArgs.length - 1].args.join(' ');
     assert((cmd.match(/--disallowedTools Bash Glob NotebookEdit/g) || []).length === 1,
       'renderer fields cannot alter the denial arguments');
     assert(cmd.indexOf('--allowedTools') === -1, 'and cannot introduce an allowlist argument');
+    assert(cmd.indexOf('evil.com') === -1 && cmd.indexOf('WebFetch(') === -1,
+      'renderer WebFetch fields cannot introduce a WebFetch grant');
+    assert(record.spawnArgs[record.spawnArgs.length - 1].env.BLUE_HELM_CONTROLLED_WEBFETCH_MODE === 'disabled',
+      'nor raise the pane\'s WebFetch mode above `disabled`');
   }
   {
     const before = record.ptySpawns;
@@ -253,6 +267,10 @@ Module._load = function (request) {
     const cmd = record.spawnArgs[record.spawnArgs.length - 1].args.join(' ');
     assert(cmd.indexOf('--agent builder') !== -1, 'as the builder agent');
     assert(cmd.indexOf('--disallowedTools') === -1, 'and carries NO denials — it is deliberately unfenced');
+    const env = record.spawnArgs[record.spawnArgs.length - 1].env;
+    assert(cmd.indexOf('--allowedTools') === -1
+      && !Object.keys(env).some((k) => k.toUpperCase() === 'BLUE_HELM_CONTROLLED_WEBFETCH_MODE'),
+    'and gets no WebFetch grant and no WebFetch mode');
   }
 
   section('REFUSALS — every one must spawn ZERO PTYs in main');
@@ -560,7 +578,10 @@ Module._load = function (request) {
       'an unfenced role reports role-not-fenced rather than claiming a fence');
     const file = path.join(AGENTS, 'web-scout.md');
     const clean = fs.readFileSync(file, 'utf8');
-    fs.writeFileSync(file, clean.replace('matcher: "Read|Write|Edit|MultiEdit"', 'matcher: "Read"'), 'utf8');
+    // MOVED (controlled WebFetch): the tracked web-scout matcher now also routes WebFetch to the hook.
+    assert(clean.indexOf('matcher: "Read|Write|Edit|MultiEdit|WebFetch"') !== -1,
+      'fixture: the deployed web-scout carries the widened single matcher');
+    fs.writeFileSync(file, clean.replace('matcher: "Read|Write|Edit|MultiEdit|WebFetch"', 'matcher: "Read"'), 'utf8');
     const narrowed = await verifyFence(goodEvent, { role: 'web-scout' });
     assert(narrowed && narrowed.ok === false && narrowed.error === 'fence-policy-matcher-does-not-cover-declared-tools',
       'the probe counterexample (matcher covers Read, tools still declare Write) now REFUSES');
@@ -591,18 +612,29 @@ Module._load = function (request) {
       path.join(JTARGET, 'junction-read.txt')]) fs.writeFileSync(f, 'SYNTHETIC-FIXTURE', 'utf8');
     fs.writeFileSync(path.join(SANDBOX, 'cwd-marker.txt'), 'BH-FIXTURE-CWD-MARKER', 'utf8');
     const link = path.join(SANDBOX, 'linked-outside');
-    const runHook = (toolName, filePath) => spawnSync(process.execPath, [DEPLOYED_HOOK], {
-      input: JSON.stringify({ cwd: SANDBOX, tool_name: toolName, tool_input: { file_path: filePath } }),
-      encoding: 'utf8', timeout: 20000,
+    // The hook reads the controlled-WebFetch mode from its OWN environment, so every run sets it
+    // explicitly: removed in every ASCII case, then set only when a mode is given.
+    const MODE_KEY = 'BLUE_HELM_CONTROLLED_WEBFETCH_MODE';
+    const ORIGIN_MODE = 'https://example.com';
+    const envWithMode = (mode) => {
+      const env = {};
+      for (const k of Object.keys(process.env)) if (k.toUpperCase() !== MODE_KEY) env[k] = process.env[k];
+      if (mode !== undefined) env[MODE_KEY] = mode;
+      return env;
+    };
+    const runRaw = (stdin, mode) => spawnSync(process.execPath, [DEPLOYED_HOOK], {
+      input: stdin, encoding: 'utf8', timeout: 20000, env: envWithMode(mode),
     });
+    const runHook = (toolName, filePath, mode) => runRaw(
+      JSON.stringify({ cwd: SANDBOX, tool_name: toolName, tool_input: { file_path: filePath } }), mode);
     // Everything a refusal must never disclose, in both separator spellings and case-folded.
     const secretsFor = (target, resolvedTarget) => [
       target, resolvedTarget, SANDBOX, fs.realpathSync.native(SANDBOX), FIX, OUTSIDE,
       path.basename(target), 'outside-fixture', 'linked-outside', 'web-scout-fixture',
     ].filter(Boolean).reduce((all, s) => all.concat([s, s.replace(/\\/g, '/')]), [])
       .map((s) => s.toLowerCase());
-    function assertRefused(label, toolName, target, resolvedTarget) {
-      const r = runHook(toolName, target);
+    function assertRefused(label, toolName, target, resolvedTarget, mode) {
+      const r = runHook(toolName, target, mode);
       assert(r.status === 2, label + ': refused with exit code 2');
       assert(r.stderr === REFUSAL, label + ': stderr is exactly the constant refusal');
       const lower = String(r.stderr).toLowerCase() + String(r.stdout).toLowerCase();
@@ -617,30 +649,165 @@ Module._load = function (request) {
     } catch (e) { /* asserted below */ }
     assert(madeLink, 'fixture: a real directory junction was created inside the sandbox');
     try {
-      const absTarget = path.join(OUTSIDE, 'absolute-read.txt');
-      assertRefused('absolute path outside the sandbox', 'Read', absTarget, fs.realpathSync.native(absTarget));
-      const travReal = path.join(OUTSIDE, 'traversal-read.txt');
-      const travTarget = path.relative(SANDBOX, travReal);
-      assert(travTarget.startsWith('..' + path.sep), 'fixture: the traversal target is relative and climbs out');
-      assertRefused('relative traversal out of the sandbox', 'Read', travTarget, fs.realpathSync.native(travReal));
-      if (madeLink) {
-        const jTarget = '.' + path.sep + path.join('linked-outside', 'junction-read.txt');
-        assertRefused('read through an in-sandbox junction', 'Read', jTarget,
-          fs.realpathSync.native(path.join(JTARGET, 'junction-read.txt')));
-      }
-      const writeTarget = path.join(OUTSIDE, 'outside-write.txt');
-      assertRefused('write outside the sandbox', 'Write', writeTarget, writeTarget);
-      assert(!fs.existsSync(writeTarget), 'the refused write target does not exist');
+      // Well-formed Read/Write behaviour is identical in every WebFetch mode, including a missing one.
+      for (const [modeLabel, mode] of [['mode missing', undefined], ['mode disabled', 'disabled'], ['mode origin', ORIGIN_MODE]]) {
+        const tag = (s) => s + ' [' + modeLabel + ']';
+        const absTarget = path.join(OUTSIDE, 'absolute-read.txt');
+        assertRefused(tag('absolute path outside the sandbox'), 'Read', absTarget, fs.realpathSync.native(absTarget), mode);
+        const travReal = path.join(OUTSIDE, 'traversal-read.txt');
+        const travTarget = path.relative(SANDBOX, travReal);
+        assert(travTarget.startsWith('..' + path.sep), 'fixture: the traversal target is relative and climbs out');
+        assertRefused(tag('relative traversal out of the sandbox'), 'Read', travTarget, fs.realpathSync.native(travReal), mode);
+        if (madeLink) {
+          const jTarget = '.' + path.sep + path.join('linked-outside', 'junction-read.txt');
+          assertRefused(tag('read through an in-sandbox junction'), 'Read', jTarget,
+            fs.realpathSync.native(path.join(JTARGET, 'junction-read.txt')), mode);
+        }
+        const writeTarget = path.join(OUTSIDE, 'outside-write.txt');
+        assertRefused(tag('write outside the sandbox'), 'Write', writeTarget, writeTarget, mode);
+        assert(!fs.existsSync(writeTarget), tag('the refused write target does not exist'));
 
-      const inRead = runHook('Read', '.' + path.sep + 'cwd-marker.txt');
-      assert(inRead.status === 0 && inRead.stderr === '', 'an in-sandbox read is still ALLOWED (exit 0, silent)');
-      const inWrite = runHook('Write', path.join(SANDBOX, 'report.md'));
-      assert(inWrite.status === 0 && inWrite.stderr === '', 'a new in-sandbox write is still ALLOWED (exit 0, silent)');
+        const inRead = runHook('Read', '.' + path.sep + 'cwd-marker.txt', mode);
+        assert(inRead.status === 0 && inRead.stderr === '', tag('an in-sandbox read is still ALLOWED (exit 0, silent)'));
+        const inWrite = runHook('Write', path.join(SANDBOX, 'report.md'), mode);
+        assert(inWrite.status === 0 && inWrite.stderr === '', tag('a new in-sandbox write is still ALLOWED (exit 0, silent)'));
+      }
     } finally {
       if (madeLink) { try { fs.rmdirSync(link); } catch (e) { /* removed with FIX at the end */ } }
     }
     const hookSrc = fs.readFileSync(TRACKED_HOOK, 'utf8');
     assert(!/\$\{(resolved|target|root)\}/.test(hookSrc), 'the tracked hook interpolates no path into any message');
+
+    section('FENCE HOOK — controlled WebFetch gate (origin mode, disabled mode, missing or bad mode)');
+    const WEB_REFUSAL =
+      'Blocked by Blue Helm web fence: this pane may not fetch that destination. [fence-webfetch-denied]';
+    const INPUT_REFUSAL =
+      'Blocked by Blue Helm fence: the tool request could not be verified. [fence-input-unverifiable]';
+    const fetchPayload = (url, extra) => JSON.stringify(Object.assign(
+      { cwd: SANDBOX, tool_name: 'WebFetch', tool_input: { url, prompt: 'Return the page title.' } }, extra || {}));
+    const runFetch = (url, mode, extra) => runRaw(fetchPayload(url, extra), mode);
+    // A refusal must never echo the destination: the full URL, its host (beyond the constant's own
+    // words) or its port.
+    const leakFree = (r, url) => {
+      const out = (String(r.stderr) + String(r.stdout)).toLowerCase();
+      const parts = [];
+      if (typeof url === 'string' && url.length) {
+        parts.push(url.toLowerCase());
+        try {
+          const u = new URL(url);
+          if (u.hostname) parts.push(u.hostname.toLowerCase());
+          if (u.port) parts.push(':' + u.port);
+        } catch (e) { /* malformed: the raw string is enough */ }
+      }
+      return parts.every((p) => out.indexOf(p) === -1);
+    };
+    const assertFetchAllowed = (label, url, mode) => {
+      const r = runFetch(url, mode);
+      assert(r.status === 0 && r.stderr === '' && r.stdout === '', label + ': allowed (exit 0, silent)');
+    };
+    const assertFetchRefused = (label, url, mode, extra) => {
+      const r = runFetch(url, mode, extra);
+      assert(r.status === 2 && r.stderr === WEB_REFUSAL, label + ': refused, stderr exactly the web constant');
+      assert(leakFree(r, url), label + ': the refusal names no URL, host or port');
+    };
+
+    // ORIGIN MODE — the controlled pane. Only https://example.com on the default port, no userinfo.
+    assertFetchAllowed('origin mode: https://example.com/', 'https://example.com/', ORIGIN_MODE);
+    assertFetchAllowed('origin mode: https://EXAMPLE.com:443/x (case and default port normalize)',
+      'https://EXAMPLE.com:443/x', ORIGIN_MODE);
+    const refusedInOrigin = [
+      ['alternate port', 'https://example.com:8443/'],
+      ['http scheme (the CLI would upgrade it; refused before that)', 'http://example.com/'],
+      ['www subdomain', 'https://www.example.com/'],
+      ['other subdomain', 'https://a.example.com/'],
+      ['suffix trick', 'https://example.com.evil.com/'],
+      ['other host', 'https://evil.com/'],
+      ['userinfo', 'https://user@example.com/'],
+      ['userinfo pointing elsewhere', 'https://example.com@evil.com/'],
+      ['password userinfo', 'https://u:p@example.com/'],
+      ['trailing dot', 'https://example.com./'],
+      ['IPv4 address', 'https://93.184.215.14/'],
+      ['IPv6 loopback', 'https://[::1]/'],
+      ['punycode look-alike', 'https://xn--exmple-cua.com/'],
+      ['file scheme', 'file:///C:/Windows/win.ini'],
+      ['malformed URL', 'https://'],
+      ['not a URL', 'example.com'],
+      ['empty URL', ''],
+      ['over-long URL (2001 characters)', 'https://example.com/' + 'a'.repeat(2001 - 'https://example.com/'.length)],
+      ['Claude Code pre-approved host', 'https://docs.python.org/'],
+    ];
+    for (const [label, url] of refusedInOrigin) assertFetchRefused('origin mode: ' + label, url, ORIGIN_MODE);
+    assert(('https://example.com/' + 'a'.repeat(2000 - 'https://example.com/'.length)).length === 2000
+      && runFetch('https://example.com/' + 'a'.repeat(2000 - 'https://example.com/'.length), ORIGIN_MODE).status === 0,
+    'origin mode: a 2000-character example.com URL is still allowed (the bound is inclusive)');
+    for (const [label, input] of [
+      ['missing url', {}],
+      ['non-string url', { url: ['https://example.com/'] }],
+      ['numeric url', { url: 443 }],
+    ]) {
+      const r = runRaw(JSON.stringify({ cwd: SANDBOX, tool_name: 'WebFetch', tool_input: input }), ORIGIN_MODE);
+      assert(r.status === 2 && r.stderr === WEB_REFUSAL, 'origin mode: ' + label + ' is refused with the web constant');
+    }
+    {
+      const r = runRaw(JSON.stringify({ cwd: SANDBOX, tool_name: 'WebFetch' }), ORIGIN_MODE);
+      assert(r.status === 2 && r.stderr === WEB_REFUSAL, 'origin mode: a WebFetch with no tool_input is refused');
+    }
+
+    // DISABLED MODE — every other fenced web-scout pane. The hook defers to Claude Code's ordinary
+    // permission flow; it grants nothing (only the controlled pane carries --allowedTools).
+    for (const url of ['https://example.com/', 'https://example.com:8443/', 'https://evil.com/', 'not a url']) {
+      const r = runFetch(url, 'disabled');
+      assert(r.status === 0 && r.stderr === '', 'disabled mode: ' + JSON.stringify(url) + ' defers (exit 0, silent)');
+    }
+
+    // MISSING OR UNEXPECTED MODE — fails closed, even for the one allowed destination.
+    for (const [label, mode] of [
+      ['missing', undefined], ['empty', ''], ['whitespace-padded origin', ' https://example.com'],
+      ['origin with trailing slash', 'https://example.com/'], ['upper-case origin', 'HTTPS://EXAMPLE.COM'],
+      ['http origin', 'http://example.com'], ['www origin', 'https://www.example.com'],
+      ['explicit-port origin', 'https://example.com:443'], ['Disabled (case)', 'Disabled'],
+      ['disabled with a trailing space', 'disabled '], ['arbitrary', 'allow'],
+    ]) {
+      assertFetchRefused('mode ' + label + ': https://example.com/', 'https://example.com/', mode);
+    }
+    // The mode comes from the hook's own environment only; a payload cannot supply or raise it.
+    assertFetchRefused('mode missing, payload claims origin mode', 'https://example.com/', undefined,
+      { mode: ORIGIN_MODE, [MODE_KEY]: ORIGIN_MODE, env: { [MODE_KEY]: ORIGIN_MODE } });
+    {
+      const r = runFetch('https://example.com/', 'disabled',
+        { tool_input: { url: 'https://evil.com/', [MODE_KEY]: ORIGIN_MODE } });
+      assert(r.status === 0 && r.stderr === '',
+        'disabled mode stays disabled whatever the payload carries (defers; grants nothing itself)');
+    }
+
+    // MALFORMED OR UNREADABLE INPUT (mandatory correction 1). Only an exact `disabled` mode keeps the
+    // historical behaviour; origin, missing and any invalid mode refuse with the input constant.
+    const malformedInputs = [
+      ['unparseable stdin', 'not json {'],
+      ['empty stdin', ''],
+      ['JSON null', 'null'],
+      ['JSON array', '[]'],
+      ['JSON string', '"WebFetch"'],
+      ['object without tool_name', JSON.stringify({ cwd: SANDBOX, tool_input: { url: 'https://example.com/' } })],
+      ['non-string tool_name', JSON.stringify({ cwd: SANDBOX, tool_name: ['WebFetch'], tool_input: { url: 'https://example.com/' } })],
+    ];
+    for (const [modeLabel, mode] of [['origin', ORIGIN_MODE], ['missing', undefined], ['empty', ''], ['invalid', 'allow']]) {
+      for (const [label, stdin] of malformedInputs) {
+        const r = runRaw(stdin, mode);
+        assert(r.status === 2 && r.stderr === INPUT_REFUSAL,
+          'mode ' + modeLabel + ' + ' + label + ': refused with the input constant');
+      }
+    }
+    {
+      const r = runRaw('not json {', 'disabled');
+      assert(r.status === 0 && r.stderr === '', 'mode disabled + unparseable stdin: historical exit 0 preserved');
+      const r2 = runRaw('null', 'disabled');
+      assert(r2.status === 0 && r2.stderr === '', 'mode disabled + JSON null: historical behaviour (nothing path-like, exit 0)');
+      const outside = path.join(OUTSIDE, 'absolute-read.txt');
+      const r3 = runRaw(JSON.stringify({ cwd: SANDBOX, tool_input: { file_path: outside } }), 'disabled');
+      assert(r3.status === 2 && r3.stderr === REFUSAL,
+        'mode disabled + no tool_name: continues to the unchanged path check (outside path refused)');
+    }
   }
 
   process.env.USERPROFILE = envBefore.USERPROFILE;

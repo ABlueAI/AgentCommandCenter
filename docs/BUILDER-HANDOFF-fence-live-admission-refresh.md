@@ -1965,3 +1965,94 @@ State at this amendment:
   unchanged.
 
 A thirteenth path stops the batch before it is modified.
+
+### Completion record (controlled WebFetch batch)
+
+Pre-registration `5b2b99c` and cap amendment `55c3f0f` were both committed,
+documentation only, before any further source edit. The implementation commit
+touches exactly the 12 approved paths. No dependency, package, renderer, IPC or
+preload change, and no new subsystem.
+
+As implemented:
+- `role-fence-policy.js`: frozen `CONTROLLED_WEBFETCH`, validated at module load
+  (throws if invalid); `controlledWebFetchLaunch()` returns the rule only for
+  strict `fenced === true`, `role === 'web-scout'`, `controlled === true`.
+- `main.js`: the non-video command is built after `prepareAdmissionPaneLaunch`;
+  the grant decision reads only `launch.fenced`, the classified role and
+  `admissionLaunch.controlled`; `--allowedTools 'WebFetch(domain:example.com)'`
+  follows the denials only when the rule is non-null; the mode goes to
+  `buildPtyEnv`.
+- `pty-env.js`: the mode name is reserved for every pane; it is emitted only for
+  a fenced pane and only as exactly the origin or `disabled`.
+- `fence-write.js`: the WebFetch gate and malformed-input table exactly as
+  pre-registered; Read/Write path logic and its message unchanged.
+- `web-scout.md`: single matcher `Read|Write|Edit|MultiEdit|WebFetch`.
+
+Pins that moved, each explained in its file with the previous pin retained:
+
+| Pin | Before | After |
+|---|---|---|
+| `launcher-fence-invariant` ptyEnv block | 184 / `f64b6bd9…` | 217 / `8227036c…` (one added `webFetchMode` argument) |
+| `launcher-fence-invariant` pty-start handler | 15225 / `128aecae…` | 15987 / `b47bba25…` (command build moved after the claim, grant decision, comment) |
+| `launcher-fence-invariant` fenced-role cwd gate | 2183 / `080893bc…` | unchanged |
+| `role-frontmatter` web-scout matcher | `Read\|Write\|Edit\|MultiEdit` | `Read\|Write\|Edit\|MultiEdit\|WebFetch` (exactly one entry still required) |
+| `pty-env` reservation matrix | 3 always-reserved names | plus the WebFetch mode name |
+| `pty-start-authority-main` narrowing fixture | old matcher string | widened matcher string |
+
+`launcher-fence-invariant` also gained three wiring assertions: claim, then
+grant decision, then command; exactly one `buildAgentCommand(` in the handler;
+the decision reads no `opts` field.
+
+Verification on the final tree:
+
+| Check | Result |
+|---|---|
+| `node --check` on all ten changed JavaScript files | all passed |
+| `role-fence-policy` | 133 passed, 0 failed |
+| `pty-env` | 193 passed, 0 failed |
+| `admission-main-startup` | 97 passed, 0 failed |
+| `pty-start-authority-main` | 412 passed, 0 failed |
+| `launcher-fence-invariant` | 32 passed, 0 failed |
+| `role-frontmatter` | 43 passed, 0 failed |
+| Unchanged regressions: `admission-pty-boundary` 57, `admission-budget` 256, `admission-ui-integration` 176, `admission-protective-state` 53, `admission-ipc` 135, `admission-process-cas` 16, `admission-budget-store` 81, `admission-budget-config` 87, `pty-start-authority` 59, `pty-launch-classify` 149, `role-definition-resolver` 35 | all 0 failed |
+| `npm test` (once) | exit 0; 96 suites (94 counted-shape plus 2 `assertions passed`); 7,321 passed, 0 failed |
+
+The +252 over the previous gate (7,069) equals the per-suite deltas above.
+
+**Red run against the previous code.** A scratch `git archive` of `55c3f0f`
+(`app/main.js` blob `57b241f2…`) with the six changed test files overlaid, run
+once outside the repository:
+
+| Suite | Result against `55c3f0f` |
+|---|---|
+| `role-fence-policy` | throws: `controlledWebFetchProblems` absent |
+| `pty-env` | throws: `CONTROLLED_WEBFETCH` absent |
+| `admission-main-startup` | 89 passed, 8 failed (all section 7) |
+| `pty-start-authority-main` | 345 passed, 67 failed (WebFetch gate, malformed input, mode, matcher) |
+| `launcher-fence-invariant` | 26 passed, 6 failed (both moved pins, two new wiring assertions) |
+| `role-frontmatter` | 42 passed, 1 failed (matcher) |
+
+The red run also showed a real pre-existing gap now closed: an ambient
+`blue_helm_controlled_webfetch_mode` variant reached unfenced builder and bare
+Claude panes. The name is now reserved for every pane.
+
+**Mutation check.** Replacing `controlled: admissionLaunch.controlled === true`
+with `controlled: true` in `main.js` made section 7 fail 4 cases (non-target
+and ordinary web-scout received the grant). `main.js` was restored and verified
+byte-identical by SHA-256 before any other run.
+
+Fixtures: section 7 of `admission-main-startup` uses a drive-root fixture
+(role resolution walks the sandbox's ancestors, so a profile-nested fixture
+would find the real `~/.claude/agents`) and removes it afterwards. Hook cases run
+the tracked hook as a child `node` process with an explicit environment. No
+Electron, Claude Code, provider, network, deployment or ledger was touched.
+
+**Deployment state.** The tracked hook and `web-scout.md` now differ from the
+installed user-scope copies (the `-d` rollback restored hook
+`9489C154…6ECA`). This build therefore refuses fenced launches until a
+separately authorized post-review deployment; that deployment would make builds
+shipping the old tracked hook, such as the main checkout, refuse fenced
+launches, and would make `web-scout` outside Blue Helm refuse WebFetch (D3).
+
+Pinned review artifacts end at the implementation commit and are generated
+after it, so their identities are reported outside this document.

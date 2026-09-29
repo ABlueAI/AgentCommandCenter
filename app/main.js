@@ -46,7 +46,7 @@ const { createTrustedSenderGate } = require('./trusted-ipc-sender');
 // See docs/BUILDER-HANDOFF-fence-completion.md.
 const { classifyPtyLaunch, KIND: LAUNCH_KIND } = require('./pty-launch-classify');
 const { createRoleDefinitionResolver } = require('./role-definition-resolver');
-const { assertFencedRoleDefinition, FORBIDDEN_TOOLS } = require('./role-fence-policy');
+const { assertFencedRoleDefinition, FORBIDDEN_TOOLS, controlledWebFetchLaunch } = require('./role-fence-policy');
 const { createPtyStartAuthority } = require('./pty-start-authority');
 // PRODUCTION PANE STATUS — docs/OSS-PROCUREMENT-pane-status.md,
 // "BLUE SUBSYSTEM VERDICT: BUILD FRESH". Advisory, pane-ID-bound Claude Code lifecycle status with
@@ -243,7 +243,7 @@ const VALID_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 //   role set    -> `claude --agent <role> [--model x] [--effort y]` (roles are a Claude feature)
 //   cli only    -> bare CLI (claude/codex/gemini)
 //   neither     -> undefined => plain PowerShell shell
-function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, launch) {
+function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, launch, webFetch) {
   // FENCE COMPLETION: identity comes from the MAIN-OWNED classification when one is supplied, so the
   // command, the fence decision and the environment tier read one result rather than each
   // re-deriving from renderer fields. The admission verdict does NOT read it: prepareAdmissionPaneLaunch
@@ -262,6 +262,13 @@ function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, l
     // constants — `FORBIDDEN_TOOLS` from role-fence-policy.js — and no renderer field reaches them.
     // The declaration checks are retained alongside as drift/refusal evidence, not replaced by this.
     if (launch && launch.fenced === true) cmd += ' --disallowedTools ' + FORBIDDEN_TOOLS.join(' ');
+    // CONTROLLED WEBFETCH GRANT. `webFetch` comes only from controlledWebFetchLaunch(), computed in
+    // pty-start from main-owned values AFTER the admission claim; its rule is non-null for the
+    // admission-controlled fenced web-scout pane alone. Single quotes keep the parentheses literal
+    // inside the powershell -Command string. The fence hook's origin gate is the narrower layer.
+    if (launch && launch.fenced === true && webFetch && typeof webFetch.allowedToolsRule === 'string') {
+      cmd += " --allowedTools '" + webFetch.allowedToolsRule + "'";
+    }
     if (VALID_MODELS.has(model)) cmd += ' --model ' + model;
     if (VALID_EFFORTS.has(effort)) cmd += ' --effort ' + effort;
     // Optional opening prompt (e.g. the reviewer's "review this diff"). Strip shell-significant
@@ -1467,9 +1474,6 @@ ipcMain.handle('pty-start', (e, opts) => {
       return { ok: false, error: geminiError };
     }
     args.push(...geminiArgs);
-  } else {
-    const run = buildAgentCommand(opts, launch); // role / bare CLI / undefined => plain shell
-    if (run) args.push('-Command', run);
   }
   const admissionLaunch = prepareAdmissionPaneLaunch({
     plan: admissionPlan,
@@ -1479,6 +1483,19 @@ ipcMain.handle('pty-start', (e, opts) => {
   });
   if (!admissionLaunch.ok) return refuseAdmissionStart(admissionLaunch.reason);
   admissionPaneClaimed = admissionLaunch.controlled === true;
+  // CONTROLLED WEBFETCH. Decided only AFTER the claim, because the grant depends on whether THIS pane
+  // is the admission-controlled one; the non-video command is therefore built here rather than before
+  // the claim (that branch contains no refusal, so no refusal changes order). Every input is
+  // main-owned: the classified fence verdict and role, and the claim's own result.
+  const webFetch = controlledWebFetchLaunch({
+    fenced: launch.fenced === true,
+    role: launch.kind === LAUNCH_KIND.ROLE ? launch.role : null,
+    controlled: admissionLaunch.controlled === true,
+  });
+  if (!launch.videoScout) {
+    const run = buildAgentCommand(opts, launch, webFetch); // role / bare CLI / undefined => plain shell
+    if (run) args.push('-Command', run);
+  }
 
   // PRODUCTION PANE STATUS — enroll this pane and carry its per-pane token into the PTY environment.
   // This is the ONLY place a token leaves main: Claude Code inherits it, and hands it to the reporter,
@@ -1495,9 +1512,10 @@ ipcMain.handle('pty-start', (e, opts) => {
   // deliberately unfenced and uses that same inherited-name boundary.
   //
   // buildPtyEnv constructs CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, Video Scout's safeStorage
-  // GEMINI_API_KEY when applicable, and at most the two exact string-valued pane-status transport
-  // entries before spreading the filtered ambient base. The reserved set is derived from the emitted
-  // main-issued map plus absent-but-owned pane-status names and Video Scout's Gemini name; every
+  // GEMINI_API_KEY when applicable, at most the two exact string-valued pane-status transport
+  // entries, and, for a fenced web-scout pane only, the controlled-WebFetch mode chosen above, before
+  // spreading the filtered ambient base. The reserved set is derived from the emitted main-issued map
+  // plus absent-but-owned pane-status names, Video Scout's Gemini name and the WebFetch mode name; every
   // ASCII-case ambient variant is removed first, so correctness does not depend on key ordering. Neither
   // pane-status entry is recovered from process.env, and no environment value is logged. For
   // unfenced panes, stripAdmissionEnv removes admission keys from the inherited PTY
@@ -1512,6 +1530,7 @@ ipcMain.handle('pty-start', (e, opts) => {
     videoScout: launch.videoScout,
     geminiKey,
     paneStatusEnv,
+    webFetchMode: webFetch.mode,
   });
   let p;
   const envMode = fencedRole ? 'fenced-tier-1' : 'unfenced-current';

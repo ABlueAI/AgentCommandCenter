@@ -12,6 +12,7 @@
 // inspected, transformed, or emitted here.
 
 const { stripAdmissionEnv } = require('./admission-budget-config');
+const { CONTROLLED_WEBFETCH } = require('./role-fence-policy');
 
 // Blue-approved Tier 1 allowlist, 2026-08-25. Matching is ASCII-case-insensitive because every
 // approved name is ASCII and Unicode case folding would admit non-Windows-equivalent aliases. A
@@ -46,6 +47,11 @@ const PANE_STATUS_ENV_KEYS = Object.freeze([
 ]);
 const SUBPROCESS_SCRUB_ENV_KEY = 'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB';
 const GEMINI_ENV_KEY = 'GEMINI_API_KEY';
+// Controlled-WebFetch mode (see role-fence-policy.js). ALWAYS reserved, for every pane, so no ambient or
+// inherited spelling can supply it; emitted only for a fenced pane and only with one of the two values
+// main can issue. Any other value is simply not emitted, and the hook refuses WebFetch on a missing mode.
+const WEBFETCH_MODE_ENV_KEY = CONTROLLED_WEBFETCH.modeEnvKey;
+const WEBFETCH_MODE_VALUES = Object.freeze([CONTROLLED_WEBFETCH.origin, CONTROLLED_WEBFETCH.disabledMode]);
 
 function foldAsciiWindowsEnvName(name) {
   if (typeof name !== 'string' || !/^[\x20-\x7E]+$/.test(name)) return null;
@@ -106,9 +112,10 @@ function omitReservedWindowsEnv(baseEnv, reservedNames) {
  *
  * `Object.keys(mainIssued)` makes every emitted key reserved by construction. Pane-status names are
  * owned even when enrollment supplies no string value; Video Scout similarly owns Gemini even when
- * safeStorage supplies no valid key, preventing ambient fallback in both absent-value cases.
+ * safeStorage supplies no valid key, preventing ambient fallback in both absent-value cases. The
+ * controlled-WebFetch mode name is owned for EVERY pane, emitted or not.
  */
-function buildMainIssuedEnv({ videoScout, geminiKey, paneStatusEnv }) {
+function buildMainIssuedEnv({ videoScout, geminiKey, paneStatusEnv, fencedRole, webFetchMode }) {
   const mainIssued = { [SUBPROCESS_SCRUB_ENV_KEY]: '1' };
   if (videoScout && typeof geminiKey === 'string' && geminiKey) {
     mainIssued[GEMINI_ENV_KEY] = geminiKey;
@@ -120,10 +127,14 @@ function buildMainIssuedEnv({ videoScout, geminiKey, paneStatusEnv }) {
       if (typeof paneStatusEnv[name] === 'string') mainIssued[name] = paneStatusEnv[name];
     }
   }
+  if (fencedRole === true && WEBFETCH_MODE_VALUES.indexOf(webFetchMode) !== -1) {
+    mainIssued[WEBFETCH_MODE_ENV_KEY] = webFetchMode;
+  }
   const reservedNames = [...new Set([
     ...Object.keys(mainIssued),
     ...PANE_STATUS_ENV_KEYS,
     ...(videoScout ? [GEMINI_ENV_KEY] : []),
+    WEBFETCH_MODE_ENV_KEY,
   ])];
   return { mainIssued, reservedNames };
 }
@@ -134,9 +145,11 @@ function buildMainIssuedEnv({ videoScout, geminiKey, paneStatusEnv }) {
  * `fencedRole` is computed in main from the standing predicate:
  *   !opts.videoScout && opts.role && FENCED_ROLES.has(opts.role)
  */
-function buildPtyEnv({ baseEnv, fencedRole, videoScout, geminiKey, paneStatusEnv }) {
+function buildPtyEnv({ baseEnv, fencedRole, videoScout, geminiKey, paneStatusEnv, webFetchMode }) {
   const source = baseEnv && typeof baseEnv === 'object' ? baseEnv : {};
-  const { mainIssued, reservedNames } = buildMainIssuedEnv({ videoScout, geminiKey, paneStatusEnv });
+  const { mainIssued, reservedNames } = buildMainIssuedEnv({
+    videoScout, geminiKey, paneStatusEnv, fencedRole, webFetchMode,
+  });
   const ambientBase = fencedRole
     ? copyAllowedWindowsEnv(source, FENCED_ENV_ALLOWLIST)
     : stripAdmissionEnv(source);

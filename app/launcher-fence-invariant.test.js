@@ -293,10 +293,17 @@ const REGIONS = [
     // is now the single classified verdict. buildPtyEnv's ARGUMENTS and every P1 environment
     // semantic are unchanged; the behavioural assertions below prove that independently of this hash.
     // Previous pin retained: 229 / 18cf42b434ee922ee61194d9316150c0b766591e063d0b0545f6aebc8d85cb54
+    //
+    // RE-PINNED (controlled WebFetch grant, run -d case 6; Blue-approved cap path 11). Exactly ONE
+    // added line, +33 code units: `    webFetchMode: webFetch.mode,` as a new buildPtyEnv argument.
+    // `webFetch` is controlledWebFetchLaunch()'s main-owned result (see the handler note below); the
+    // builder emits it only for a fenced pane and only as `https://example.com` or `disabled`, and
+    // reserves its name for every pane. Every other argument, the scrub and P1 are byte-identical.
+    // Previous pin retained: 184 / f64b6bd93abb18dced7c8d114d3ea82b98349d317878aa84dd04c25f17f7bb7b
     start: 'const fencedRole = launch.fenced;',
     end: 'let p;',
-    utf16Length: 184,
-    sha: 'f64b6bd93abb18dced7c8d114d3ea82b98349d317878aa84dd04c25f17f7bb7b',
+    utf16Length: 217,
+    sha: '8227036cb1ce84d0c32fd38ff4999c6db71a9625dc6beba26b9a85dd6bec5f08',
   },
   {
     name: 'pty-start handler',
@@ -327,8 +334,24 @@ const REGIONS = [
     // The ptyEnv block is byte-identical (184 / f64b6bd9…). M2 and the M1 allowlist live OUTSIDE this
     // region (classifier and policy modules), and so does the L2 probe (above the handler).
     // Previous pin retained: 14805 / cbe2f345015245108e84656014f9e66c6a3c1eb187c866a1255ce2e9ae649376
-    utf16Length: 15225,
-    sha: '128aecaefc5fe7a9332d5fb3ff6e281c6f7bf69ded8ceed153421895de94f1d5',
+    //
+    // RE-PINNED (controlled WebFetch grant, run -d case 6; Blue-approved cap path 11). The grant must
+    // depend on whether THIS pane is the admission-controlled one, which is known only after
+    // prepareAdmissionPaneLaunch claims it. Changes inside this region, 15225 -> 15987 code units:
+    //   1. the non-video `else { const run = buildAgentCommand(opts, launch); ... }` branch was removed
+    //      from before the claim, leaving the video-scout `if` closed on its own;
+    //   2. after `admissionPaneClaimed = ...`, a commented `const webFetch = controlledWebFetchLaunch({
+    //      fenced, role, controlled })` built from the classified verdict and the claim's own result
+    //      only, followed by `if (!launch.videoScout) { buildAgentCommand(opts, launch, webFetch) ... }`
+    //      — the same command construction, moved (that branch contains no refusal, so no refusal
+    //      changes order);
+    //   3. the ptyEnv block's one added `webFetchMode` argument (pinned above) and the matching words
+    //      in the comment above `const fencedRole`.
+    // The fenced-role cwd gate is byte-identical (2183 / 080893bc…). The sender gate, classification,
+    // admission claim and refusal paths, spawn sink, cwd selection and failure cleanup are unchanged.
+    // Previous pin retained: 15225 / 128aecaefc5fe7a9332d5fb3ff6e281c6f7bf69ded8ceed153421895de94f1d5
+    utf16Length: 15987,
+    sha: 'b47bba25ac869e5b9acf87d7bd6158f799df4a8f9cd2df5d8365ae7e07dc3d2c',
   },
 ];
 
@@ -432,6 +455,27 @@ assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src)
     'L1: the fenced branch records resolvedCwd only AFTER the definition resolved from it was accepted');
   assert(src.indexOf("const cwd = fencedCwd !== null ? fencedCwd\n    : ((opts.cwd && fs.existsSync(opts.cwd)) ? opts.cwd : process.env.USERPROFILE);") !== -1,
     'L1: fenced launches spawn from that canonical cwd; the non-fenced cwd rule is unchanged');
+}
+
+// CONTROLLED WEBFETCH content assertions — pinned as wiring so a future re-pin cannot drop them with the
+// hash. The grant is decided only after the admission claim, only from main-owned values, and the
+// command is built exactly once, after that decision.
+{
+  const hStart = mustFind(src, "ipcMain.handle('pty-start', (e, opts) => {", 'pty-start handler');
+  const handler = src.slice(hStart, mustFind(src, "ipcMain.on('pty-write'", 'pty-start handler end'));
+  const claimAt = handler.indexOf('admissionPaneClaimed = admissionLaunch.controlled === true;');
+  const decideAt = handler.indexOf('const webFetch = controlledWebFetchLaunch({');
+  const buildAt = handler.indexOf('buildAgentCommand(opts, launch, webFetch)');
+  assert(claimAt !== -1 && decideAt > claimAt && buildAt > decideAt,
+    'WebFetch: the claim, then the grant decision, then the command — in that order');
+  assert((handler.match(/buildAgentCommand\(/g) || []).length === 1,
+    'WebFetch: the handler builds the command exactly once (no pre-claim copy survives)');
+  const decide = handler.slice(decideAt, handler.indexOf('});', decideAt));
+  assert(decide.indexOf('fenced: launch.fenced === true,') !== -1
+    && decide.indexOf('role: launch.kind === LAUNCH_KIND.ROLE ? launch.role : null,') !== -1
+    && decide.indexOf('controlled: admissionLaunch.controlled === true,') !== -1
+    && decide.indexOf('opts.') === -1,
+    'WebFetch: the decision reads only the classified verdict and the claim result, never opts');
 }
 
 process.stdout.write(`\nlauncher-fence-invariant: ${passed} passed, ${failed} failed\n`);

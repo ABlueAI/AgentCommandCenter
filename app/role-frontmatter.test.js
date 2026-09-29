@@ -47,7 +47,9 @@ for (const r of ['web-scout', 'operator', 'source-scout', 'builder', 'reviewer',
 {
   const ws = parseRoleFrontmatter(fs.readFileSync(path.join(ROLES_DIR, 'web-scout.md'), 'utf8'));
   assert(ws.events.PreToolUse.length === 1, 'web-scout has exactly one PreToolUse entry');
-  assert(ws.events.PreToolUse[0].matcher === 'Read|Write|Edit|MultiEdit', 'its matcher is read structurally');
+  // MOVED (controlled WebFetch): web-scout's single matcher also routes WebFetch to the fence hook's
+  // origin gate. Previous expectation: 'Read|Write|Edit|MultiEdit'.
+  assert(ws.events.PreToolUse[0].matcher === 'Read|Write|Edit|MultiEdit|WebFetch', 'its matcher is read structurally');
   assert(ws.events.PreToolUse[0].hooks[0].type === 'command', 'its hook type is read structurally');
   // A PLAIN scalar may carry interior quotes; codebase-scout's tracked description does. Refusing
   // that would false-refuse a real deployed role and, because resolution parses every sibling in a

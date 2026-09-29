@@ -510,6 +510,8 @@ process.stdout.write('\n-- main-issued reservation drift matrix --\n');
           ...Object.keys(mainIssued),
           ...ALWAYS_RESERVED_ENV_NAMES.slice(1),
           ...(videoScout ? ['GEMINI_API_KEY'] : []),
+          // MOVED (controlled WebFetch): the mode name is owned by EVERY pane, issued or not.
+          'BLUE_HELM_CONTROLLED_WEBFETCH_MODE',
         ])];
         if (!Object.keys(mainIssued).every((name) => reservedNames.includes(name))
           || JSON.stringify(reservedNames) !== JSON.stringify(expectedReserved)) {
@@ -520,7 +522,60 @@ process.stdout.write('\n-- main-issued reservation drift matrix --\n');
   }
   assert(calls === 40, 'reservation drift matrix covers 2 Video Scout × 5 Gemini × 4 pane-status cases');
   assert(failures.length === 0,
-    'every matrix call reserves exactly emitted keys plus absent-but-owned pane-status and Video Scout Gemini names');
+    'every matrix call reserves exactly emitted keys plus absent-but-owned pane-status, Video Scout Gemini and WebFetch-mode names');
+}
+
+process.stdout.write('\n-- controlled WebFetch mode (main-issued, fenced only, exact values) --\n');
+{
+  const { CONTROLLED_WEBFETCH } = require('./role-fence-policy');
+  const KEY = 'BLUE_HELM_CONTROLLED_WEBFETCH_MODE';
+  assert(CONTROLLED_WEBFETCH.modeEnvKey === KEY, 'the mode name is the policy constant');
+  // Claude Code's subprocess scrub strips names with secret-like segments; the mode must not look like one.
+  const segments = KEY.split('_');
+  const scrubLike = ['TOKEN', 'SECRET', 'PASSWORD', 'PASSWD', 'PASSPHRASE', 'KEY', 'AUTH', 'COOKIE', 'PAT',
+    'DSN', 'WEBHOOK', 'CREDENTIAL', 'CREDENTIALS', 'CREDS', 'PWD', 'PASS', 'JWT', 'CONN', 'CONNECT',
+    'CONNECTION', 'KEYS', 'SECRETS', 'PASSWORDS'];
+  assert(segments.every((s) => scrubLike.indexOf(s) === -1) && !/TOKEN|SECRET|PASSW|JWT/.test(KEY),
+    'the mode name carries no secret-like segment the CLI scrub strips');
+
+  const ambient = {
+    Path: 'C:\\Windows',
+    BLUE_HELM_CONTROLLED_WEBFETCH_MODE: 'https://example.com',
+    blue_helm_controlled_webfetch_mode: 'https://example.com',
+    Blue_Helm_Controlled_WebFetch_Mode: 'https://example.com',
+  };
+  const count = (env) => Object.keys(env).filter((n) => n.toUpperCase() === KEY).length;
+  for (const fencedRole of [true, false]) {
+    for (const mode of [CONTROLLED_WEBFETCH.origin, CONTROLLED_WEBFETCH.disabledMode]) {
+      const env = buildPtyEnv({ baseEnv: ambient, fencedRole, videoScout: false, paneStatusEnv: {}, webFetchMode: mode });
+      if (fencedRole) {
+        assert(env[KEY] === mode && count(env) === 1,
+          `fenced pane receives exactly one canonical mode, ${JSON.stringify(mode)}`);
+      } else {
+        assert(count(env) === 0, `an unfenced pane never receives the mode (asked for ${JSON.stringify(mode)})`);
+      }
+    }
+  }
+  for (const bad of [undefined, null, '', ' https://example.com', 'https://example.com/', 'HTTPS://EXAMPLE.COM',
+    'http://example.com', 'https://www.example.com', 'https://example.com:443', 'Disabled', 'disabled ', 1, true]) {
+    for (const fencedRole of [true, false]) {
+      const env = buildPtyEnv({ baseEnv: ambient, fencedRole, videoScout: false, paneStatusEnv: {}, webFetchMode: bad });
+      assert(count(env) === 0,
+        `mode ${JSON.stringify(bad)} (${fencedRole ? 'fenced' : 'unfenced'}) is not emitted, and no ambient variant survives`);
+    }
+  }
+  // Ambient variants never reach a pane that is issued nothing, on either path, including Video Scout.
+  const plainUnfenced = buildPtyEnv({ baseEnv: ambient, fencedRole: false, videoScout: false, paneStatusEnv: {} });
+  const plainFenced = buildPtyEnv({ baseEnv: ambient, fencedRole: true, videoScout: false, paneStatusEnv: {} });
+  const video = buildPtyEnv({ baseEnv: ambient, fencedRole: false, videoScout: true, geminiKey: 'g', paneStatusEnv: {} });
+  assert(count(plainUnfenced) === 0 && count(plainFenced) === 0 && count(video) === 0,
+    'with no mode issued, no ASCII-case ambient variant reaches an unfenced, fenced or Video Scout pane');
+  assert(plainUnfenced.Path === 'C:\\Windows', 'unrelated unfenced ambient entries are unchanged');
+  // A mode can never displace the forced scrub.
+  const fenced = buildPtyEnv({ baseEnv: {}, fencedRole: true, videoScout: false, paneStatusEnv: {},
+    webFetchMode: CONTROLLED_WEBFETCH.origin });
+  deepEqual(fenced, { CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1', [KEY]: CONTROLLED_WEBFETCH.origin },
+    'a controlled fenced pane gets exactly the scrub and the mode from an empty base');
 }
 
 process.stdout.write('\n-- process environment immutability --\n');

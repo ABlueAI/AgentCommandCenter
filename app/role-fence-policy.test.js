@@ -269,5 +269,98 @@ section('REFUSAL REASONS ARE BOUNDED CONSTANTS');
   assert(r.reason.indexOf('secret') === -1 && r.reason.indexOf('/') === -1, 'and carries no path');
 }
 
+section('CONTROLLED WEBFETCH — the one main-issued destination, frozen and self-validated');
+{
+  const policy = require('./role-fence-policy');
+  const C = policy.CONTROLLED_WEBFETCH;
+  assert(JSON.stringify(C) === JSON.stringify({
+    role: 'web-scout',
+    origin: 'https://example.com',
+    hostname: 'example.com',
+    allowedToolsRule: 'WebFetch(domain:example.com)',
+    modeEnvKey: 'BLUE_HELM_CONTROLLED_WEBFETCH_MODE',
+    disabledMode: 'disabled',
+  }), 'the constant carries exactly the reviewed values');
+  assert(Object.isFrozen(C), 'and is frozen');
+  assert(policy.controlledWebFetchProblems(C).length === 0, 'the shipped constant validates');
+
+  const bad = (label, patch, field) => {
+    const probs = policy.controlledWebFetchProblems(Object.assign({}, C, patch));
+    assert(probs.indexOf(field) !== -1, 'the validator REFUSES ' + label + ' [' + field + ']');
+  };
+  bad('a wildcard host', { hostname: '*.example.com', origin: 'https://*.example.com', allowedToolsRule: 'WebFetch(domain:*.example.com)' }, 'hostname');
+  bad('an all-domains rule', { allowedToolsRule: 'WebFetch(domain:*)' }, 'allowedToolsRule');
+  bad('a host with a port', { hostname: 'example.com:8443', origin: 'https://example.com:8443', allowedToolsRule: 'WebFetch(domain:example.com:8443)' }, 'hostname');
+  bad('a dotless host', { hostname: 'localhost', origin: 'https://localhost', allowedToolsRule: 'WebFetch(domain:localhost)' }, 'hostname');
+  bad('an upper-case host', { hostname: 'Example.com', origin: 'https://Example.com', allowedToolsRule: 'WebFetch(domain:Example.com)' }, 'hostname');
+  bad('an http origin', { origin: 'http://example.com' }, 'origin');
+  bad('an origin with a path', { origin: 'https://example.com/' }, 'origin');
+  bad('an origin with an explicit port', { origin: 'https://example.com:443' }, 'origin');
+  bad('a rule for another host', { allowedToolsRule: 'WebFetch(domain:evil.com)' }, 'allowedToolsRule');
+  bad('a rule with a second rule after a comma', { allowedToolsRule: 'WebFetch(domain:example.com),Bash' }, 'allowedToolsRule');
+  bad('a rule with a space', { allowedToolsRule: 'WebFetch(domain:example.com) Bash' }, 'allowedToolsRule');
+  bad('a bare-tool rule', { allowedToolsRule: 'WebFetch' }, 'allowedToolsRule');
+  bad('a different tool', { allowedToolsRule: 'WebSearch(domain:example.com)' }, 'allowedToolsRule');
+  bad('a key outside the BLUE_HELM_ namespace', { modeEnvKey: 'WEBFETCH_MODE' }, 'modeEnvKey');
+  bad('a lower-case key', { modeEnvKey: 'BLUE_HELM_controlled' }, 'modeEnvKey');
+  bad('a disabled value equal to the origin', { disabledMode: 'https://example.com' }, 'disabledMode');
+  bad('another role', { role: 'operator' }, 'role');
+  assert(policy.controlledWebFetchProblems(null).length > 0, 'the validator REFUSES a missing policy');
+
+  const L = policy.controlledWebFetchLaunch;
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const GRANT = { allowedToolsRule: 'WebFetch(domain:example.com)', mode: 'https://example.com' };
+  const DISABLED = { allowedToolsRule: null, mode: 'disabled' };
+  const NONE = { allowedToolsRule: null, mode: null };
+  assert(same(L({ fenced: true, role: 'web-scout', controlled: true }), GRANT),
+    'the admission-controlled fenced web-scout pane gets the rule and the origin mode');
+  assert(same(L({ fenced: true, role: 'web-scout', controlled: false }), DISABLED),
+    'an uncontrolled (ordinary or non-target) fenced web-scout pane gets disabled and NO rule');
+  for (const truthy of [1, 'true', {}, [], 'yes']) {
+    assert(same(L({ fenced: true, role: 'web-scout', controlled: truthy }), DISABLED),
+      'controlled=' + JSON.stringify(truthy) + ' is not strict true: disabled, no rule');
+    assert(same(L({ fenced: truthy, role: 'web-scout', controlled: true }), NONE),
+      'fenced=' + JSON.stringify(truthy) + ' is not strict true: nothing');
+  }
+  for (const role of ['operator', 'source-scout', 'builder', 'reviewer', 'Web-Scout', 'web-scout ', null, undefined]) {
+    assert(same(L({ fenced: true, role, controlled: true }), NONE),
+      'role ' + JSON.stringify(role) + ' gets no rule and no mode, even when controlled');
+  }
+  assert(same(L({ fenced: false, role: 'web-scout', controlled: true }), NONE),
+    'an unfenced launch (e.g. Video Scout) gets nothing');
+  assert(same(L(undefined), NONE) && same(L(null), NONE), 'missing input gets nothing');
+}
+
+section('CONTROLLED WEBFETCH — web-scout matcher widened, coverage rule intact');
+{
+  const deployed = fs.readFileSync(path.join(ROLES_DIR, 'web-scout.md'), 'utf8').replace('__CC_HOOK__', HOOK);
+  const res = check(deployed, 'web-scout');
+  assert(res.ok === true && res.matcher === 'Read|Write|Edit|MultiEdit|WebFetch',
+    'the tracked web-scout carries the widened single matcher and still passes');
+  const narrowed = check(deployed.replace('matcher: "Read|Write|Edit|MultiEdit|WebFetch"', 'matcher: "Read"'), 'web-scout');
+  assert(narrowed.ok === false && narrowed.reason === REASON.MATCHER_COVERAGE,
+    'narrowing that matcher to Read still REFUSES (Write uncovered)');
+  const webOnly = check(build({ matcher: 'WebFetch' }));
+  assert(webOnly.ok === false && webOnly.reason === REASON.MATCHER_COVERAGE,
+    'a matcher covering only WebFetch REFUSES: it never substitutes for path coverage');
+  for (const r of ['operator', 'source-scout']) {
+    const t = fs.readFileSync(path.join(ROLES_DIR, r + '.md'), 'utf8');
+    assert(t.indexOf('matcher: "Read|Write|Edit|MultiEdit"') !== -1 && t.indexOf('WebFetch"') === -1,
+      r + ' keeps the unchanged matcher (WebFetch never reaches the hook there)');
+  }
+}
+
+section('CONTROLLED WEBFETCH — the standalone hook carries the same literals (drift tripwire)');
+{
+  const C = require('./role-fence-policy').CONTROLLED_WEBFETCH;
+  const hook = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'hooks', 'fence-write.js'), 'utf8');
+  const lit = (name) => { const m = new RegExp('const ' + name + " = '([^']*)';").exec(hook); return m ? m[1] : null; };
+  assert(lit('WEBFETCH_MODE_ENV') === C.modeEnvKey, 'hook mode name === policy modeEnvKey');
+  assert(lit('WEBFETCH_ORIGIN') === C.origin, 'hook origin === policy origin');
+  assert(lit('WEBFETCH_HOSTNAME') === C.hostname, 'hook hostname === policy hostname');
+  assert(lit('WEBFETCH_DISABLED') === C.disabledMode, 'hook disabled value === policy disabledMode');
+  assert(/const WEBFETCH_MAX_URL_LENGTH = 2000;/.test(hook), 'hook URL length bound is 2000');
+}
+
 process.stdout.write('\nrole-fence-policy: ' + passed + ' passed, ' + failed + ' failed\n');
 process.exit(failed ? 1 : 0);

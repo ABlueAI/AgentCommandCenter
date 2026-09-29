@@ -38,11 +38,86 @@ const PATH_CAPABLE_TOOLS = Object.freeze(['Read', 'Write', 'Edit', 'MultiEdit'])
 // name a future CLI adds.
 //
 // Derived, not guessed: the three tracked fenced roles declare exactly `WebSearch, WebFetch, Read,
-// Write`; the canonical matcher is `Read|Write|Edit|MultiEdit`, and fence-write.js gates the path
-// of those four. So every allowed filesystem tool is a PATH_CAPABLE_TOOLS member the matcher check
+// Write`; the canonical matcher is `Read|Write|Edit|MultiEdit` (web-scout's adds `WebFetch` for the
+// controlled-WebFetch gate below), and fence-write.js gates the path of those four. So every allowed filesystem tool is a PATH_CAPABLE_TOOLS member the matcher check
 // below requires coverage for, and the only non-filesystem entries are the two web tools. Adding a
 // tool here is a policy change that needs its own review.
 const ALLOWED_TOOLS = Object.freeze(['Read', 'Write', 'Edit', 'MultiEdit', 'WebSearch', 'WebFetch']);
+
+// CONTROLLED WEBFETCH GRANT (run -d case 6). The ONE destination a controlled run may fetch without a
+// terminal permission dialog, which controlled-run admission cannot answer. MAIN-ISSUED, like
+// FORBIDDEN_TOOLS: no renderer field, role Markdown or prompt text reaches it.
+//
+// Two layers, because the CLI rule alone is too wide. Claude Code keys WebFetch permission on the URL's
+// hostname only (port, scheme, path and userinfo discarded) and auto-allows its built-in pre-approved
+// hosts, so `allowedToolsRule` by itself would approve https://example.com:8443/ and docs hosts. The
+// fence hook therefore applies the exact origin gate first, switched on by `modeEnvKey`, which main
+// issues to every fenced web-scout pane: the origin for the admission-controlled pane, `disabledMode`
+// for every other one. A missing or unexpected mode refuses WebFetch in the hook, so losing the
+// variable can never leave the CLI grant without the gate.
+//
+// Blue decision D1 bounds what this guarantees: the INITIAL request must be https://example.com on the
+// default HTTPS port. Claude Code may internally follow its built-in example.com/www.example.com
+// redirect rule, which no hook or permission check sees.
+//
+// scripts/hooks/fence-write.js is deployed standalone and cannot require this module; it carries the
+// same literals, and a tripwire test holds them equal.
+const CONTROLLED_WEBFETCH = Object.freeze({
+  role: 'web-scout',
+  origin: 'https://example.com',
+  hostname: 'example.com',
+  allowedToolsRule: 'WebFetch(domain:example.com)',
+  modeEnvKey: 'BLUE_HELM_CONTROLLED_WEBFETCH_MODE',
+  disabledMode: 'disabled',
+});
+
+/**
+ * Validate a controlled-WebFetch policy object. Returns the list of problems (empty when valid).
+ * Checked when this module loads, so a malformed constant stops the application instead of issuing a
+ * wider grant than reviewed.
+ */
+function controlledWebFetchProblems(p) {
+  const problems = [];
+  const v = p && typeof p === 'object' ? p : {};
+  if (v.role !== 'web-scout') problems.push('role');
+  // Plain lowercase DNS labels with at least one dot: no wildcard, port, userinfo, path or space.
+  if (typeof v.hostname !== 'string' || !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(v.hostname)) problems.push('hostname');
+  if (typeof v.origin !== 'string' || v.origin !== 'https://' + v.hostname) {
+    problems.push('origin');
+  } else {
+    let u = null;
+    try { u = new URL(v.origin); } catch (e) { u = null; }
+    if (!u || u.origin !== v.origin || u.port !== '' || u.hostname !== v.hostname) problems.push('origin');
+  }
+  if (typeof v.allowedToolsRule !== 'string' || v.allowedToolsRule !== 'WebFetch(domain:' + v.hostname + ')') {
+    problems.push('allowedToolsRule');
+  }
+  if (typeof v.modeEnvKey !== 'string' || !/^BLUE_HELM_[A-Z_]+$/.test(v.modeEnvKey)) problems.push('modeEnvKey');
+  if (v.disabledMode !== 'disabled' || v.disabledMode === v.origin) problems.push('disabledMode');
+  return problems;
+}
+
+{
+  const problems = controlledWebFetchProblems(CONTROLLED_WEBFETCH);
+  if (problems.length) throw new Error('role-fence-policy: CONTROLLED_WEBFETCH invalid: ' + problems.join(', '));
+}
+
+/**
+ * controlledWebFetchLaunch({ fenced, role, controlled }) -> { allowedToolsRule, mode }
+ *
+ * Every input is MAIN-OWNED: `fenced` and `role` from the main classification, `controlled` from the
+ * admission claim. Only a strict `true` counts. `allowedToolsRule` is non-null for the controlled,
+ * fenced web-scout pane alone; `mode` is issued to every fenced web-scout pane and to nothing else.
+ */
+function controlledWebFetchLaunch(input) {
+  const i = input || {};
+  const fencedWebScout = i.fenced === true && i.role === CONTROLLED_WEBFETCH.role;
+  if (!fencedWebScout) return { allowedToolsRule: null, mode: null };
+  if (i.controlled === true) {
+    return { allowedToolsRule: CONTROLLED_WEBFETCH.allowedToolsRule, mode: CONTROLLED_WEBFETCH.origin };
+  }
+  return { allowedToolsRule: null, mode: CONTROLLED_WEBFETCH.disabledMode };
+}
 
 const REASON = Object.freeze({
   PLACEHOLDER: 'fence-policy-unsubstituted-hook-placeholder',
@@ -165,6 +240,9 @@ function assertFencedRoleDefinition(input) {
 
 module.exports = {
   ALLOWED_TOOLS: ALLOWED_TOOLS,
+  CONTROLLED_WEBFETCH: CONTROLLED_WEBFETCH,
+  controlledWebFetchProblems: controlledWebFetchProblems,
+  controlledWebFetchLaunch: controlledWebFetchLaunch,
   FORBIDDEN_TOOLS: FORBIDDEN_TOOLS,
   PATH_CAPABLE_TOOLS: PATH_CAPABLE_TOOLS,
   REASON: REASON,
