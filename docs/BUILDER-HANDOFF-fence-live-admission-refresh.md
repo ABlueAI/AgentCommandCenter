@@ -1933,3 +1933,35 @@ reports only the requested URL.
 5. The CLI-prefixed hook command path in refusals remains (ruled after `-d`).
 6. Malformed hook input now refuses in every pane whose mode is not exactly
    `disabled` (correction 1).
+
+### Amendment: path cap expanded from 10 to 12 (Blue-approved)
+
+Documentation only, committed before any further source or test edit.
+
+Blue approved expanding the cap from 10 to 12 paths. The two added paths are
+approved only for these changes and grant no additional production behavior or
+broader invariant:
+
+11. `app/launcher-fence-invariant.test.js`: it pins the SHA-256 and length of the
+    whole `pty-start` handler and of the `ptyEnv` block in `main.js`. The grant
+    depends on `admissionLaunch.controlled`, which exists only inside that handler
+    after the admission claim, so the handler must change and both pins must be
+    re-measured. The previous pins are retained, each region's change is
+    explained, and no invariant check is weakened, removed or bypassed.
+12. `app/role-frontmatter.test.js`: line 50 asserts the tracked `web-scout.md`
+    matcher is exactly `Read|Write|Edit|MultiEdit`. Adding `WebFetch` to that
+    single matcher is what routes WebFetch to the hook gate, so only that
+    expectation changes. The requirement of exactly one PreToolUse entry (line
+    49) is preserved.
+
+State at this amendment:
+- `app/role-fence-policy.js` had already been modified (the frozen
+  `CONTROLLED_WEBFETCH` constant, its load-time validation and
+  `controlledWebFetchLaunch()`), and remained **uncommitted** and unstaged. It is
+  inside the original cap.
+- No out-of-cap path had been modified.
+- The invariant, decisions D1-D4, the eight-admission matrix, the bounded
+  prompts, stop conditions W1-W7 and all other scope and prohibitions are
+  unchanged.
+
+A thirteenth path stops the batch before it is modified.
