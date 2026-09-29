@@ -1480,3 +1480,104 @@ this is not an OSS-procurement task.
 4. `npm test` exactly once.
 5. Pinned correction and cumulative review artifacts, generated with
    `git diff --output`.
+
+## Independent Full-class review of the run `-c` correction: PASS at `e2738ed` (review closeout)
+
+This tail is documentation only. The reviewed and tested application code is
+exact `e2738ed5cc50ea4f0e05a379c4109dc7baa0f346`, tree
+`ba4fc7073ce743191e539cf5d91f26c44c3c63f8`. This commit changes only this
+handoff, so that application and test tree is the reviewed tree. The run `-c`
+FAIL record and the pre-registration above are preserved unchanged.
+
+### Current status
+
+| Item | Status |
+|---|---|
+| Independent Full-class review of the run `-c` correction | **PASS** at `e2738ed` |
+| Full npm gate at `e2738ed` (builder-reported) | 96 suites, 7,069 passed, 0 failed |
+| Hook deployment (`scripts/sync-roles.ps1`) | **NOT AUTHORIZED**. Installed and tracked hooks intentionally differ. |
+| Fenced launches | **MUST REMAIN UNATTEMPTED** until an authorized post-review deployment |
+| Live six-case controlled fence matrix | **NOT YET PASSED**. No live run is authorized. |
+| Merge / push / fetch / rebase | **NOT AUTHORIZED** |
+
+### Review result (verbatim)
+
+```text
+CLASS: Full
+INDEPENDENCE: CONFIRMED
+REVIEWED CORRECTION RANGE: 4d6577b698d5cb64c1f3bf85477f03b6d69127a0...e2738ed5cc50ea4f0e05a379c4109dc7baa0f346
+REVIEWED CUMULATIVE RANGE: 70fe1f1920979d43427be78332c4966acd3b408d...e2738ed5cc50ea4f0e05a379c4109dc7baa0f346
+TESTED APPLICATION CODE: e2738ed5cc50ea4f0e05a379c4109dc7baa0f346
+VERDICT: PASS
+```
+
+### Independent checks performed (as reported by the reviewer)
+
+- The worktree was clean and the branch topology correct.
+- Pre-registration commit `e793237` touched only this handoff document.
+- Implementation commit `e2738ed` touched only the nine approved
+  implementation and test paths.
+- `node --check` passed on all nine changed JavaScript files.
+- Focused and regression reruns:
+
+  | Suite | Result |
+  |---|---|
+  | admission-pty-boundary | 57/0 |
+  | admission-budget | 256/0 |
+  | admission-ui-integration | 176/0 |
+  | admission-main-startup | 79/0 |
+  | pty-start-authority-main | 269/0 |
+  | admission-protective-state | 53/0 |
+  | admission-ipc | 135/0 |
+  | admission-process-cas | 16/0 |
+  | admission-budget-store | 81/0 |
+
+- Builder-reported full npm gate: 96 suites, 7,069 passed, 0 failed.
+- Both pinned review artifacts were regenerated independently and matched
+  byte-for-byte.
+- The installed hook remains intentionally unchanged. The reviewed tracked
+  hook differs:
+
+  | Hook | SHA-256 |
+  |---|---|
+  | Installed `~\.claude\hooks\fence-write.js` | `9489C154AFD89E6A4F0A569AC6674C3A4B9BEF02A581B26FE741A757341B6ECA` |
+  | Reviewed tracked `scripts/hooks/fence-write.js` | `E8328FA00578C307B8029E317000DA33CBDBBED98BB80077B8CEC98913FC5D6C` |
+
+### Reviewed endpoint, ranges and artifact identities
+
+- Reviewed endpoint: `e2738ed5cc50ea4f0e05a379c4109dc7baa0f346`
+- Correction base: `4d6577b698d5cb64c1f3bf85477f03b6d69127a0`, the prior
+  reviewed code endpoint
+- Cumulative base: `70fe1f1920979d43427be78332c4966acd3b408d`, the merge-base
+
+| Artifact | Range | Bytes | SHA-256 |
+|---|---|---|---|
+| `.agent-review-run-c-correction-since-4d6577b.diff` | `4d6577b698d5cb64c1f3bf85477f03b6d69127a0...e2738ed5cc50ea4f0e05a379c4109dc7baa0f346` | 79,804 | `3BA46AE511092588FE77DD704AF11B5796C39DF801F2508AED5B57736CC2BCE9` |
+| `.agent-review-run-c-cumulative-since-70fe1f1.diff` | `70fe1f1920979d43427be78332c4966acd3b408d...e2738ed5cc50ea4f0e05a379c4109dc7baa0f346` | 348,479 | `9AAA9CE6BEC7089572091B4DFAAC5AFC91D40300FB540C7B70AFFA7EE5E87586` |
+
+Both diffs end at `e2738ed` and so exclude this tail. They are not regenerated
+against it. Artifacts that end at this closeout commit necessarily include this
+section, so their identities are reported outside this document.
+
+### Retained residuals
+
+1. `SUBMIT_DELAY_MS = 300` is provisional. The automated tests prove the
+   separation, not compatibility with the currently installed Claude Code
+   version. Claude Code drifted from v2.1.251 to v2.1.283 between runs `-b` and
+   `-c`.
+2. Fenced launches must stay unattempted until the tracked hook is deployed
+   through a separately authorized post-review deployment. That deployment
+   would make builds shipping the old tracked hook, such as the main checkout,
+   refuse fenced launches.
+3. Run IDs `fence-live-4d6577b-20260928-a`, `-b` and `-c` must never be reused.
+   No admission-ledger entry is edited. In the ledger, `-c` stays `open` as
+   history.
+4. H1 is complete and must never be rerun.
+5. The live six-case controlled fence matrix has not yet passed.
+6. **Pre-existing test-runner caveat, recorded as separate maintenance and not
+   part of this batch:**
+   - `app/pty-start-authority-main.test.js` can let `main.js`'s global
+     `uncaughtException` handler swallow an unexpected harness exception.
+   - A restricted reviewer run exposed this.
+   - The required drive-root run completed 269/0.
+   - This closeout does not expand into another implementation change.
