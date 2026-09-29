@@ -1,9 +1,10 @@
 # Builder Handoff — Deterministic Role Deployment (`sync-roles.ps1`)
 
-Status: PRE-REGISTERED; IMPLEMENTATION NOT STARTED; INDEPENDENT FULL-CLASS REVIEW REQUIRED; DEPLOYMENT, MERGE AND PUSH NOT AUTHORIZED
-Branch: `codex/sync-roles-deterministic-deploy`  
-Base: `bc9cae27dd7f373f69707899613aed5c853363a4` (merged `main`, pushed)  
-Worktree: `D:\Workspace\agent-command-center\.worktrees\sync-roles-deterministic-deploy`
+Status: IMPLEMENTED AND VERIFIED (C2; see the completion record at the end); INDEPENDENT FULL-CLASS REVIEW REQUIRED; DEPLOYMENT, MERGE AND PUSH NOT AUTHORIZED
+
+- Branch: `codex/sync-roles-deterministic-deploy`
+- Base: `bc9cae27dd7f373f69707899613aed5c853363a4` (merged `main`, pushed)
+- Worktree: `D:\Workspace\agent-command-center\.worktrees\sync-roles-deterministic-deploy`
 
 ## Authorization
 
@@ -258,3 +259,89 @@ verdict is quoted verbatim:
 8. The Pester gate requires Pester 3.x or 4.x.
 9. H1 is complete and must never be rerun. `CONTEXT-SYNC.md` remains preserved
    in `outputs\pre-merge-quarantine-20260929\` for its own feature branch.
+
+## Completion record (C2)
+
+C1 (pre-registration): `e1a6a07ba407b8a287bb4c410214464537d7460e`, parent
+`bc9cae2`, this document only. C2 changes the other two capped paths and this
+document (completion record; C1's two trailing-whitespace header lines, which
+`git diff --check` flagged, are reformatted as a list). Everything pre-registered
+above is otherwise preserved unchanged.
+
+### Implementation
+
+`scripts/sync-roles.ps1` (base blob `b3a5828162acd683b105969b30a22a159028048b`,
+new blob `71c30bf3be5bf38409486e4c76426b7b2e82833a`) implements the
+pre-registered design:
+
+- `ConvertTo-DeployedRoleBytes` (pure): refuses a leading UTF-8 BOM (D1),
+  decodes with `UTF8Encoding($false, $true)` and refuses malformed input,
+  refuses a lone CR (D2), normalizes LF/CRLF to CRLF, replaces every exact
+  `__CC_HOOK__`, and returns UTF-8 without BOM. Refusals name only the file.
+- `Invoke-SyncRoles` Phase A: `agent-roles\` must exist; the hook source must
+  exist and be byte-readable (D6, replacing the old missing-hook warning); role
+  files (`*.md`, excluding `README.md`) are sorted with `[StringComparer]::Ordinal`
+  (D7); each is byte-read and prepared in memory. Any failure throws with "No
+  destination was changed." before any destination directory or file is touched.
+- Phase B: creates the destination directories, writes the pre-read hook bytes
+  and the prepared role bytes with `WriteAllBytes` (D3, D4) to user scope and the
+  optional `-ProjectDir` scope, and re-reads every written file, refusing on any
+  byte mismatch (D5). Console reporting is unchanged in form.
+- A dot-source guard (`$MyInvocation.InvocationName -ne '.'`) lets the tests
+  load the functions without deploying; `-File` and `&` invocations deploy.
+
+`scripts/sync-roles.Tests.ps1` (new blob
+`b622773781935706a7919a31f527c379a3a25149`, Pester 3.4, ASCII-only) has 29 tests
+covering every pre-registered case: the six real-role identities from
+working-tree, LF and CRLF sources; pure BOM/malformed/lone-CR refusals; LF/CRLF
+byte-identity with CRLF-only BOM-less output and intact non-ASCII (em dash,
+accented Latin, CJK, a four-byte emoji); trailing-newline preservation; exact
+placeholder replacement; `-ProjectDir` identity and `README.md` exclusion;
+byte-for-byte LF and CRLF hooks and the console report; overwrite of existing
+destinations; ordinal ordering (report order `B, a, c` and first refusal
+`B-bad.md`); malformed-first, malformed-last, BOM and lone-CR refusals each with
+seeded user and project destinations byte-, length- and mtime-identical and, on
+a fresh profile, no `.claude` directory created in either scope; missing and
+exclusively locked hook sources (seeded and fresh); the existing `agent-roles/`
+and no-roles refusals; and a final isolation test proving `USERPROFILE` was
+restored and the real profile's `.claude\hooks` and `.claude\agents` files are
+byte-, length- and mtime-identical to before the suite.
+
+### Verification results
+
+| Gate | Result |
+|---|---|
+| Parse checks (`sync-roles.ps1`, `sync-roles.Tests.ps1`) | 0 errors each; both files ASCII-only (the test file was re-parsed after the harness fix) |
+| Focused `sync-roles.Tests.ps1` (Pester 3.4) | 29 passed, 0 failed (second run; see below) |
+| Full `scripts\run-pester.ps1` | exit 0; 36 suites; 984 passed, 0 failed, 0 skipped (955 before + 29) |
+| Full app `npm.cmd test` | exit 0; 96 suites (94 counted-shape plus 2 `assertions passed`); 7,340 passed, 0 failed |
+| Real profile `.claude\hooks` + `.claude\agents` | byte-identical before and after every run above (independent check outside the suite as well) |
+| `git diff --check bc9cae2` | clean (run at C2) |
+| Path cap `git diff --name-only bc9cae2...C2` | exactly the three capped paths |
+
+Deviation, recorded honestly: the first focused run was 23 passed, 6 failed. All
+six failures were a test-harness defect, not a script defect: the destination
+snapshot covered the whole fixture profile, and the Windows PowerShell 5.1 child
+process itself creates `<profile>\AppData\Roaming` at startup (including in runs
+that refuse before any write). In every failure the `.claude` destination trees
+were byte-, length- and mtime-identical. The helper was corrected to snapshot
+exactly the destination trees (`<profile>\.claude`, `<project>\.claude`) and the
+focused suite was rerun once (29/0). The full Pester and app gates each ran once,
+after the fix.
+
+The full Pester run's only stderr line is the video-scout suite's own simulated
+`HTTP 503 - attempt 1/3; retrying` message. The app gate ran through a local,
+gitignored junction `app\node_modules` -> the main checkout's `app\node_modules`
+(the same arrangement the reviewed fence worktree used; `package.json` and
+`package-lock.json` are unchanged from `bc9cae2`), so no dependency changed.
+
+No deployment, Electron launch, provider prompt, ledger edit, merge or push
+occurred. The installed user-scope hook and roles remain the rolled-back
+pre-deployment state.
+
+### Next steps (each separately authorized)
+
+1. Independent Full-class review of `bc9cae2...C2` against the pinned artifact.
+2. Merge through `scripts\merge-gate.ps1`.
+3. A separately authorized deployment from the merged checkout with backups,
+   a fresh rollback procedure and the identities above as required values.
