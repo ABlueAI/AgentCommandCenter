@@ -2228,3 +2228,107 @@ Verification on the final tree:
 Deployment state is unchanged from the previous completion record. Pinned
 review artifacts end at the correction commit and are reported outside this
 document.
+
+## Independent Full-class re-review of the controlled WebFetch batch: PASS at `d919942` (review closeout)
+
+This tail is documentation only. The reviewed and tested application code is
+exact `d91994296f76d0e2188970ebde5c0621fe1b90c6`, tree
+`03c31034ac930f3932f872f0114512a4b3403898`. This commit changes only this
+handoff, so that application and test tree is the reviewed tree. The run `-d`
+record, the pre-registrations, the cap amendment, the `87e2337` FAIL record and
+both completion records above are preserved unchanged.
+
+### Current status
+
+| Item | Status |
+|---|---|
+| Independent Full-class re-review | **PASS** at `d919942`, no findings |
+| Prior review at `87e2337` | FAIL (matcher coverage), closed by `d919942` |
+| Full npm gate at `d919942` (independently reconciled) | 96 suites, 7,340 passed, 0 failed |
+| Hook and role deployment (`scripts/sync-roles.ps1`) | **NOT AUTHORIZED**. Installed and tracked copies intentionally differ. |
+| Fenced launches from this build | **MUST REMAIN UNATTEMPTED** until an authorized post-review deployment |
+| Controlled live run `-e` (eight admissions) | **NOT AUTHORIZED**; run ID not created |
+| Merge / push / fetch / rebase | **NOT AUTHORIZED** |
+
+### Review result (verbatim)
+
+```text
+CLASS: Full
+INDEPENDENCE: CONFIRMED
+REVIEWED CORRECTION RANGE: a315695f3dcce3900a8bc5c829a27e6a66aa9043...d91994296f76d0e2188970ebde5c0621fe1b90c6
+REVIEWED CUMULATIVE RANGE: 70fe1f1920979d43427be78332c4966acd3b408d...d91994296f76d0e2188970ebde5c0621fe1b90c6
+TESTED APPLICATION CODE: d91994296f76d0e2188970ebde5c0621fe1b90c6
+VERDICT: PASS
+```
+
+No findings. The reviewer recorded that the matcher-coverage defect is closed: a
+`web-scout` matcher omitting only WebFetch refuses; the refusal occurs before the
+admission claim; zero PTYs spawn and no CLI grant is constructed; operator and
+source-scout behavior is unchanged; and the stricter role-identity rule is
+acceptable.
+
+### Independent checks performed (as reported by the reviewer)
+
+- Clean worktree and correct commit and tree identities.
+- `2f9aa1f` is documentation only; `d919942` changes exactly the five
+  registered paths.
+- Both artifacts regenerated identically.
+- Focused suites and the eleven regression suites all passed.
+- Full gate independently reconciled: 96 suites, 7,340 passed, 0 failed.
+- `git diff --check` and all four changed JavaScript syntax checks passed.
+
+The reviewer stated that the verdict authorizes neither deployment nor merge.
+
+### Reviewed endpoint, ranges and artifact identities
+
+- Reviewed endpoint: `d91994296f76d0e2188970ebde5c0621fe1b90c6`
+- Correction base: `a315695f3dcce3900a8bc5c829a27e6a66aa9043`, the prior
+  reviewed documentation endpoint (code `e2738ed`)
+- Cumulative base: `70fe1f1920979d43427be78332c4966acd3b408d`, the merge-base
+
+| Artifact | Range | Bytes | SHA-256 |
+|---|---|---|---|
+| `.agent-review-run-d-webfetch-fix-correction-since-a315695.diff` | `a315695...d919942` | 112,642 | `9E7F3E55F5AF3B4006A6702FCD2204E83F086E2044DAA2CA84EE1588F5B24D5A` |
+| `.agent-review-run-d-webfetch-fix-cumulative-since-70fe1f1.diff` | `70fe1f1...d919942` | 445,311 | `A0F71257CE89FE8FFAB40607108D6D46D3E87DA15316E99286DF6CDD42D62F50` |
+
+Both diffs end at `d919942` and so exclude this tail. Artifacts that end at this
+closeout commit necessarily include this section, so their identities are
+reported outside this document.
+
+Hook identities at closeout:
+
+| Hook | SHA-256 |
+|---|---|
+| Installed `~\.claude\hooks\fence-write.js` (after the `-d` rollback) | `9489C154AFD89E6A4F0A569AC6674C3A4B9BEF02A581B26FE741A757341B6ECA` |
+| Reviewed tracked `scripts/hooks/fence-write.js` | `A04A95BC247C8969B3156F432DA25E4193E4B66B26FF9F911C0EA9B80AB3820A` (7,051 B) |
+
+### Next steps (each separately authorized)
+
+1. Post-review deployment and zero-cost preflight: re-hash `claude.exe` (W7),
+   back up the user-scope files with a manifest, run `scripts/sync-roles.ps1`,
+   verify byte identity of the hook and all roles (the policy now refuses a
+   `web-scout` whose deployed matcher lacks WebFetch, so a partial deployment
+   refuses rather than launching ungated).
+2. Controlled live run `fence-live-<impl-sha7>-<run-date>-e`, allowance 8, with
+   the pre-registered matrix, bounded prompts and stop conditions W1-W7.
+3. Authorized rollback afterwards.
+
+### Retained residuals
+
+1. D1: only the initial WebFetch request is gated; Claude Code may internally
+   follow its example.com/www.example.com redirect rule, unobservably.
+2. The mode reaching the real PreToolUse hook is unobserved until live cases 6
+   and 7.
+3. Matching and redirect behavior were read from Claude Code 2.1.284; a changed
+   binary stops the run (W7).
+4. WebSearch in the controlled pane still meets the unanswerable prompt; it is
+   not authorized and fails closed as a hang.
+5. The CLI-prefixed hook command path in refusals remains (ruled after `-d`).
+6. Malformed hook input refuses in every pane whose mode is not exactly
+   `disabled`.
+7. While deployed: the main checkout refuses fenced launches, and `web-scout`
+   outside Blue Helm refuses WebFetch (D3).
+8. Run IDs `fence-live-4d6577b-20260928-a`, `-b`, `-c` and
+   `fence-live-e2738ed-20260928-d` are never reused. No admission-ledger entry
+   is edited.
+9. H1 is complete and must never be rerun.
