@@ -585,6 +585,16 @@ Module._load = function (request) {
     const narrowed = await verifyFence(goodEvent, { role: 'web-scout' });
     assert(narrowed && narrowed.ok === false && narrowed.error === 'fence-policy-matcher-does-not-cover-declared-tools',
       'the probe counterexample (matcher covers Read, tools still declare Write) now REFUSES');
+    // Full-class review counterexample (FAIL at 87e2337): only WebFetch removed, Read/Write still covered.
+    fs.writeFileSync(file, clean.replace('matcher: "Read|Write|Edit|MultiEdit|WebFetch"', 'matcher: "Read|Write|Edit|MultiEdit"'), 'utf8');
+    const noWebFetch = await verifyFence(goodEvent, { role: 'web-scout' });
+    assert(noWebFetch && noWebFetch.ok === false && noWebFetch.error === 'fence-policy-matcher-does-not-cover-declared-tools',
+      'a deployed web-scout whose matcher omits only WebFetch REFUSES (the grant would bypass the origin gate)');
+    const before = record.ptySpawns;
+    const spawnRes = await ptyStart(goodEvent, { id: 'no-webfetch-matcher', role: 'web-scout', cli: 'claude', cwd: SANDBOX });
+    assert(record.ptySpawns === before && spawnRes && spawnRes.ok === false
+      && spawnRes.error === 'fence-policy-matcher-does-not-cover-declared-tools',
+    'and its launch is refused at spawn with zero PTYs');
     fs.writeFileSync(file, clean, 'utf8');
   }
 

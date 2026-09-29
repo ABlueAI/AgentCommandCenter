@@ -43,7 +43,9 @@ function build(o) {
   lines.push(opt.hooks === undefined ? [
     'hooks:',
     '  PreToolUse:',
-    '    - matcher: "' + (opt.matcher || 'Read|Write|Edit|MultiEdit') + '"',
+    // MOVED (controlled WebFetch): the default is the canonical web-scout matcher, which must also
+    // route WebFetch to the hook. Previous default: 'Read|Write|Edit|MultiEdit'.
+    '    - matcher: "' + (opt.matcher || 'Read|Write|Edit|MultiEdit|WebFetch') + '"',
     '      hooks:',
     '        - type: ' + (opt.type || 'command'),
     '          command: "node \\"' + (opt.hookPath || HOOK) + '\\""',
@@ -72,8 +74,12 @@ section('N1 \u2014 matcher covers Read but the role still declares Write (probe 
   const r = check(build({ matcher: 'Read', tools: 'WebSearch, WebFetch, Read, Write' }));
   assert(r.ok === false && r.reason === REASON.MATCHER_COVERAGE,
     'REFUSES: an uncovered Write is no longer accepted (the old regex asked only for Read)');
-  const readOnly = check(build({ matcher: 'Read', tools: 'WebSearch, WebFetch, Read' }));
+  // MOVED (controlled WebFetch): web-scout must also cover WebFetch, so its Read-only variant carries
+  // `Read|WebFetch`; the Read-alone path-coverage point is kept on operator, which receives no grant.
+  const readOnly = check(build({ matcher: 'Read|WebFetch', tools: 'WebSearch, WebFetch, Read' }));
   assert(readOnly.ok === true, 'but a role that declares no Write is legitimately covered by Read alone');
+  const readOnlyOperator = check(build({ name: 'operator', matcher: 'Read', tools: 'WebSearch, WebFetch, Read' }), 'operator');
+  assert(readOnlyOperator.ok === true, 'operator declaring no Write is covered by Read alone (no WebFetch coverage needed)');
 }
 
 section('N2 \u2014 empty PreToolUse with the fence command under PostToolUse (probe counterexample)');
@@ -205,14 +211,18 @@ section('M1 — explicit allowlist: only supported tools may be declared');
 
   // Positive controls beyond the tracked roles: Edit and MultiEdit are allowed WHEN covered.
   const withEdits = check(build({ tools: 'WebSearch, WebFetch, Read, Write, Edit, MultiEdit' }));
-  assert(withEdits.ok === true, 'Edit and MultiEdit are accepted under the canonical Read|Write|Edit|MultiEdit matcher');
+  assert(withEdits.ok === true, 'Edit and MultiEdit are accepted under the canonical Read|Write|Edit|MultiEdit|WebFetch matcher');
   for (const t of ['Edit', 'MultiEdit']) {
     const r = check(build({ tools: 'Read, Write, ' + t, matcher: 'Read|Write' }));
     assert(!r.ok && r.reason === REASON.MATCHER_COVERAGE,
       'but a declared ' + t + ' the fence matcher does not cover REFUSES');
   }
-  const webOnly = check(build({ tools: 'WebSearch, WebFetch', matcher: 'Read' }));
+  // MOVED (controlled WebFetch): web-scout's matcher must still carry WebFetch, so the no-path-coverage
+  // point uses `WebFetch` for web-scout and the previous `Read` for operator.
+  const webOnly = check(build({ tools: 'WebSearch, WebFetch', matcher: 'WebFetch' }));
   assert(webOnly.ok === true, 'a role declaring only the two web tools needs no path coverage');
+  const webOnlyOperator = check(build({ name: 'operator', tools: 'WebSearch, WebFetch', matcher: 'Read' }), 'operator');
+  assert(webOnlyOperator.ok === true, 'operator declaring only the two web tools needs no coverage at all');
 }
 
 section('N1 — a declared-but-EMPTY tools value refuses (real parser, hook otherwise intact)');
@@ -347,6 +357,35 @@ section('CONTROLLED WEBFETCH — web-scout matcher widened, coverage rule intact
     const t = fs.readFileSync(path.join(ROLES_DIR, r + '.md'), 'utf8');
     assert(t.indexOf('matcher: "Read|Write|Edit|MultiEdit"') !== -1 && t.indexOf('WebFetch"') === -1,
       r + ' keeps the unchanged matcher (WebFetch never reaches the hook there)');
+  }
+
+  // FULL-CLASS REVIEW COUNTEREXAMPLE (FAIL at 87e2337). The deployed web-scout keeps the canonical,
+  // hash-valid hook and full Read/Write/Edit/MultiEdit coverage; ONLY WebFetch is removed from the
+  // matcher. Main would issue the CLI grant to this role, so it must refuse.
+  const oldMatcher = deployed.replace('matcher: "Read|Write|Edit|MultiEdit|WebFetch"', 'matcher: "Read|Write|Edit|MultiEdit"');
+  assert(oldMatcher !== deployed && oldMatcher.indexOf('tools: WebSearch, WebFetch, Read, Write') !== -1,
+    'fixture: only WebFetch was removed from the deployed web-scout matcher; the tools line still declares it');
+  const drift = check(oldMatcher, 'web-scout');
+  assert(drift.ok === false && drift.reason === REASON.MATCHER_COVERAGE,
+    'REVIEW COUNTEREXAMPLE REFUSES: web-scout declaring WebFetch whose matcher omits only WebFetch');
+  for (const m of ['Write|Read|MultiEdit|Edit', 'Read|Write|Edit|MultiEdit|WebSearch', 'Read|Write|Edit|MultiEdit|Webfetch']) {
+    const r = check(build({ matcher: m }));
+    assert(r.ok === false && r.reason === REASON.MATCHER_COVERAGE,
+      'web-scout matcher ' + JSON.stringify(m) + ' (no exact WebFetch) REFUSES');
+  }
+  // Stricter than the minimum: the grant follows role identity, so web-scout must cover WebFetch even
+  // when its tools line omits it.
+  const undeclared = check(build({ tools: 'WebSearch, Read, Write', matcher: 'Read|Write|Edit|MultiEdit' }));
+  assert(undeclared.ok === false && undeclared.reason === REASON.MATCHER_COVERAGE,
+    'web-scout that omits WebFetch from tools but also from its matcher REFUSES');
+  const undeclaredCovered = check(build({ tools: 'WebSearch, Read, Write' }));
+  assert(undeclaredCovered.ok === true, 'and passes once its matcher covers WebFetch');
+  // operator and source-scout behaviour is preserved: no WebFetch coverage is required of them.
+  for (const r of ['operator', 'source-scout']) {
+    const dep = fs.readFileSync(path.join(ROLES_DIR, r + '.md'), 'utf8').replace('__CC_HOOK__', HOOK);
+    assert(check(dep, r).ok === true, r + ' as tracked (old matcher, declares WebFetch) still passes');
+    const synth = check(build({ name: r, matcher: 'Read|Write|Edit|MultiEdit' }), r);
+    assert(synth.ok === true, r + ' declaring WebFetch without WebFetch coverage still passes (no grant is issued to it)');
   }
 }
 

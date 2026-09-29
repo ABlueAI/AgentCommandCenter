@@ -2167,3 +2167,64 @@ Full-class review.
 Still not authorized: deployment or user-scope sync, Electron or Claude Code
 launch, live run, provider prompt, run-ID creation, ledger edit, merge, push,
 fetch, rebase, H1 rerun.
+
+### Completion record (matcher-coverage correction)
+
+Pre-registration `2f9aa1f` (documentation only) preceded every source edit.
+The correction commit touches exactly the five pre-registered paths, all within
+the approved 12. `app/main.js`, the hook, the roles and `pty-env.js` are
+unchanged, so no `launcher-fence-invariant` pin moved.
+
+As implemented: after the existing path-capable coverage loop, on the same
+owning PreToolUse entry, `assertFencedRoleDefinition()` refuses with
+`MATCHER_COVERAGE` when `role === CONTROLLED_WEBFETCH.role` and the matcher does
+not contain exactly `WebFetch`. This holds whether or not the role declares
+WebFetch (the stricter interpretation stated above). operator and source-scout
+are not affected.
+
+Existing policy cases whose synthetic `web-scout` fixture used the old matcher,
+updated without changing what each case proves:
+
+| Case | Change |
+|---|---|
+| `build()` default matcher | now the canonical `Read\|Write\|Edit\|MultiEdit\|WebFetch` |
+| N1 "declares no Write is covered by Read alone" | web-scout uses `Read\|WebFetch`; an added operator case keeps `Read` alone |
+| "Edit and MultiEdit are accepted under the canonical matcher" | label names the new canonical matcher |
+| "only the two web tools needs no path coverage" | web-scout uses `WebFetch`; an added operator case keeps `Read` |
+| N1-empty "tracked tool list still passes (control)" | passes through the new default |
+
+New counterexamples:
+- policy: the deployed web-scout with only WebFetch removed refuses
+  `MATCHER_COVERAGE`; so do `Write|Read|MultiEdit|Edit`,
+  `...|WebSearch` and the wrong-case `...|Webfetch`; a web-scout omitting
+  WebFetch from both tools and matcher refuses; tracked and synthetic
+  operator/source-scout without WebFetch coverage still pass;
+- `pty-start-authority-main`: `verify-fence` refuses the same deployed state,
+  and `pty-start` refuses it with zero PTYs;
+- `admission-main-startup` W5: under a valid controlled run the web-scout start
+  is refused with `fence-policy-matcher-does-not-cover-declared-tools`, zero
+  PTYs, and the run stays unbound (`paneId` null, `admitted` 0).
+
+**Red check.** With only `app/role-fence-policy.js` temporarily reverted to
+`87e2337` (then restored and verified byte-identical, SHA-256 `4ec81448…265e`),
+the new cases fail: `role-fence-policy` 141/5, `admission-main-startup` 98/3
+(the controlled pane spawned carrying the grant), `pty-start-authority-main`
+412/2. That reproduces the review finding end to end.
+
+Verification on the final tree:
+
+| Check | Result |
+|---|---|
+| `node --check` on the four changed JavaScript files | all passed |
+| `role-fence-policy` | 146 passed, 0 failed |
+| `pty-env` | 193 passed, 0 failed |
+| `admission-main-startup` | 101 passed, 0 failed |
+| `pty-start-authority-main` | 414 passed, 0 failed |
+| `launcher-fence-invariant` | 32 passed, 0 failed (no pin moved) |
+| `role-frontmatter` | 43 passed, 0 failed |
+| The eleven unchanged regression suites | same counts as at `87e2337`, all 0 failed |
+| `npm test` (once) | exit 0; 96 suites; 7,340 passed, 0 failed (+19 over `87e2337`) |
+
+Deployment state is unchanged from the previous completion record. Pinned
+review artifacts end at the correction commit and are reported outside this
+document.

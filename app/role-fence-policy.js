@@ -234,6 +234,13 @@ function assertFencedRoleDefinition(input) {
   for (const t of required) {
     if (!covered.has(t)) return refuse(REASON.MATCHER_COVERAGE);
   }
+  // CONTROLLED WEBFETCH. Main issues the WebFetch CLI grant on role IDENTITY (the controlled fenced
+  // web-scout pane), not on the declared tool list, and that grant is only as narrow as the hook's origin
+  // gate. So the role main grants to must route WebFetch through this same canonical hook entry, whether
+  // or not its `tools:` line declares WebFetch. Without this, a drifted deployed role (for example an
+  // interrupted sync-roles.ps1 that installed the new hook but not the new matcher) would be accepted,
+  // receive the grant, and fetch past the gate. Other roles receive no grant and are unaffected.
+  if (role === CONTROLLED_WEBFETCH.role && !covered.has('WebFetch')) return refuse(REASON.MATCHER_COVERAGE);
 
   return { ok: true, hookPath: owningHookPath, tools: parsed.tools, matcher: matcher };
 }

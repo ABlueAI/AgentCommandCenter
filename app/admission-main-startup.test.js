@@ -482,6 +482,30 @@ const LEDGER = 'admission-ledger.json';
       const l4 = JSON.parse(fs.readFileSync(path.join(r4.userDataDir, LEDGER), 'utf8'));
       assert(!!cb.spawned && l4.runs['webfetch-probe-builder'].paneId === 'pty1' && noWebFetch(cb),
         'W4: a controlled unfenced builder gets no WebFetch grant or mode');
+
+      // W5 — FULL-CLASS REVIEW COUNTEREXAMPLE (FAIL at 87e2337). A partially deployed web-scout: the new
+      // canonical hook is installed and hash-valid, but the role still carries the OLD matcher, so
+      // WebFetch would never reach the origin gate. Under a valid controlled run it must refuse before
+      // any claim or spawn, so no pane ever carries the CLI grant.
+      const wsFile = path.join(AGENTS, 'web-scout.md');
+      const wsClean = fs.readFileSync(wsFile, 'utf8');
+      const wsOld = wsClean.replace('matcher: "Read|Write|Edit|MultiEdit|WebFetch"', 'matcher: "Read|Write|Edit|MultiEdit"');
+      assert(wsOld !== wsClean, 'W5: fixture: only WebFetch removed from the deployed web-scout matcher');
+      fs.writeFileSync(wsFile, wsOld, 'utf8');
+      try {
+        const r5 = await boot(Object.assign({}, ENV, { BLUE_HELM_ADMISSION_RUN_ID: 'webfetch-probe-drift' }));
+        const before5 = r5.record.ptySpawns;
+        const d = await start(r5, { id: 'pty1', role: 'web-scout', cli: 'claude', cwd: SANDBOX });
+        assert(!!d.res && d.res.ok === false && d.res.error === 'fence-policy-matcher-does-not-cover-declared-tools',
+          'W5: the controlled web-scout start is REFUSED for missing WebFetch matcher coverage');
+        assert(r5.record.ptySpawns === before5 && d.spawned === null,
+          'W5: zero PTYs are spawned, so no command ever carries the CLI grant');
+        const l5 = JSON.parse(fs.readFileSync(path.join(r5.userDataDir, LEDGER), 'utf8'));
+        assert(l5.runs['webfetch-probe-drift'].paneId === null && l5.runs['webfetch-probe-drift'].admitted === 0,
+          'W5: the run stays unbound: the refusal precedes the admission claim');
+      } finally {
+        fs.writeFileSync(wsFile, wsClean, 'utf8');
+      }
     } finally {
       if (userProfileBefore === undefined) delete process.env.USERPROFILE; else process.env.USERPROFILE = userProfileBefore;
       try { fs.rmSync(FIX, { recursive: true, force: true }); } catch (e) { /* best effort */ }
