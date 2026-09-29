@@ -793,7 +793,13 @@ function openInAppTerminal(opts = {}) {
     if (layoutInstance) closeThisPane();
   };
   Promise.resolve(startResult).then(
-    (res) => { if (!res || res.ok !== true) onStartFailed((res && res.error) || 'refused'); },
+    async (res) => {
+      if (!res || res.ok !== true) { onStartFailed((res && res.error) || 'refused'); return; }
+      // `ptyStart` is the operation that lets main bind an eligible pane. Boot's earlier snapshot can
+      // therefore be legitimately unbound; pull main's post-start truth before Blue uses the bar.
+      // With no controlled run `admissionView` is null, so ordinary launches add no IPC call.
+      if (admissionView) await admissionView.refresh();
+    },
     () => onStartFailed('ipc-rejected'),
   );
   // The settle-in refit. Guarded on the pane still being live, because a start failure can close it

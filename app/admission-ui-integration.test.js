@@ -166,10 +166,11 @@ async function settle() { for (let i = 0; i < 4; i += 1) await new Promise((r) =
     s.input().value = 'first controlled prompt';
     s.send().onclick();
     await settle();
-    eq(s.written.length, 1, 'exactly one write reached the PTY writer');
+    eq(s.written.length, 1, 'exactly one admitted-delivery call reached the PTY writer');
     eq(s.written[0].paneId, 'pty1', 'it went to the bound pane');
-    assert(s.written[0].bytes.startsWith('first controlled prompt'), 'the prompt reached the terminal');
-    assert(s.written[0].bytes.endsWith('\r'), 'MAIN appended the submission terminator');
+    eq(s.written[0].bytes, 'first controlled prompt', 'the budget handed the writer exactly the prompt text');
+    assert(s.written[0].bytes.indexOf('\r') === -1,
+      'no terminator from the budget or renderer — main\'s final PTY boundary frames the submission');
     eq(s.record().admitted, 1, 'the ledger recorded one admission');
     eq(s.written[0].ledgerOnDisk.runs[RUN_ID].admitted, 1,
       'the decrement was DURABLE ON DISK BEFORE the write happened');
@@ -412,6 +413,34 @@ async function settle() { for (let i = 0; i < 4; i += 1) await new Promise((r) =
       "the budget receives the private capability-bearing admitted closure");
     assert(main.includes('getPty: (paneId) => ptys.get(paneId)'),
       'the final boundary resolves panes only from main-owned handles');
+  }
+
+  // ---- (12b) production pty-start settlement refreshes the mounted admission view ---------------
+  section('(12b) production wiring refreshes admission state only after a successful pane start');
+  {
+    const appJs = fs.readFileSync(path.join(__dirname, 'renderer', 'app.js'), 'utf8');
+    const openStart = appJs.indexOf('function openInAppTerminal(opts = {}) {');
+    const openEnd = appJs.indexOf('// ---- Dockview layout engine scripts', openStart);
+    assert(openStart >= 0 && openEnd > openStart, 'the real openInAppTerminal production function is pinned');
+    const productionOpen = appJs.slice(openStart, openEnd);
+    const ptyStartAt = productionOpen.indexOf('const startResult = cc.ptyStart(');
+    const settlementAt = productionOpen.indexOf('Promise.resolve(startResult).then(');
+    const successGate = "if (!res || res.ok !== true) { onStartFailed((res && res.error) || 'refused'); return; }";
+    const successGateAt = productionOpen.indexOf(successGate, settlementAt);
+    const refreshLine = 'if (admissionView) await admissionView.refresh();';
+    const refreshAt = productionOpen.indexOf(refreshLine, settlementAt);
+    const rejectAt = productionOpen.indexOf("() => onStartFailed('ipc-rejected')", settlementAt);
+    assert(ptyStartAt >= 0, 'the proof starts at the real cc.ptyStart call');
+    assert(settlementAt > ptyStartAt, 'settlement remains downstream of the real ptyStart promise');
+    assert(successGateAt > settlementAt, 'a refused start returns through the existing failure cleanup');
+    assert(refreshAt > successGateAt, 'the admission refresh is reachable only after the success gate');
+    assert(rejectAt > refreshAt, 'an IPC rejection still takes the failure handler instead of refreshing');
+    eq((productionOpen.match(/admissionView\.refresh\(\)/g) || []).length, 1,
+      'openInAppTerminal has exactly one post-start admission refresh');
+    eq((productionOpen.match(/cc\.ptyStart\(/g) || []).length, 1,
+      'the production launch transaction still issues exactly one ptyStart');
+    assert(productionOpen.includes('if (admissionView) await admissionView.refresh();'),
+      'no admission bridge means ordinary launches make no refresh IPC call');
   }
 
   // ---- (13) live ledger access failure writes NOTHING -------------------------------------------

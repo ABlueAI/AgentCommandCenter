@@ -8,7 +8,7 @@ permissionMode: default
 color: cyan
 hooks:
   PreToolUse:
-    - matcher: "Read|Write|Edit|MultiEdit"
+    - matcher: "Read|Write|Edit|MultiEdit|WebFetch"
       hooks:
         - type: command
           command: "node \"__CC_HOOK__\""
