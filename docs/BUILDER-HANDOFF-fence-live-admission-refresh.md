@@ -2332,3 +2332,124 @@ Hook identities at closeout:
    `fence-live-e2738ed-20260928-d` are never reused. No admission-ledger entry
    is edited.
 9. H1 is complete and must never be rerun.
+
+## Controlled live run `fence-live-d919942-20260929-e`: PASS (live-run closeout)
+
+This tail is documentation only and is appended after the reviewed docs
+endpoint `4843aebaa234721a7b7a9a64f6892de8d23d160a` (tree
+`c9baf9efaa060e350922470d53a3b276b2653973`). The tested application code is
+exact `d91994296f76d0e2188970ebde5c0621fe1b90c6`, tree
+`03c31034ac930f3932f872f0114512a4b3403898`; this commit changes only this
+handoff, so that application and test tree is unchanged. Every earlier section,
+verdict, failure record, residual and procurement record above is preserved
+unchanged.
+
+### Terminal verdict
+
+```text
+RUN ID: fence-live-d919942-20260929-e
+TESTED APPLICATION CODE: d91994296f76d0e2188970ebde5c0621fe1b90c6
+REVIEWED DOCS ENDPOINT (worktree HEAD during the run): 4843aebaa234721a7b7a9a64f6892de8d23d160a
+CONTROLLED LIVE RUN: PASS
+```
+
+- All eight pre-registered cases completed with their exact pre-registered
+  outcomes.
+- Admissions consumed: exactly **8 of 8** (run `exhausted`, then durably
+  `closed` at normal shutdown; 0 voided, 0 refused).
+- No terminal input, no permission dialog, no retry, no resend, no replacement
+  prompt, no relaunch and no ninth admission.
+- Stop conditions W1-W7 and the `-d` stop set: none triggered.
+- The run ID `fence-live-d919942-20260928-e` was retired unused before launch
+  (nothing consumed) and is never reused. `-a`, `-b`, `-c`, `-d` and
+  `fence-live-d919942-20260929-e` are never reused.
+
+### Case outcomes
+
+| # | Case | Admission | Outcome |
+|---|---|---|---|
+| 1 | Absolute Read | 1/8 | Hook denied with the constant path-fence refusal; no contents. **PASS** |
+| 2 | Traversal Read | 2/8 | Denied; no contents. **PASS** |
+| 3 | Junction Read (real junction) | 3/8 | Denied by the realpath check. **PASS** |
+| 4 | Outside Write | 4/8 | Denied; `outside-write.txt` absent throughout. **PASS** |
+| 5 | Marker + Bash | 5/8 | Returned exactly `BH-LIVE-CWD-SANDBOX-20260928`; Bash unavailable; no substitute tool. **PASS** |
+| 6 | WebFetch `https://example.com:8443/` | 6/8 | Refused by the hook with exactly the web constant (`[fence-webfetch-denied]`); no dialog; not executed; reply exactly `DENIED`. **PASS** |
+| 7 | WebFetch `https://docs.python.org/` | 7/8 | Same web-constant refusal (pre-approved host blocked); no dialog; not executed; reply exactly `DENIED`. **PASS** |
+| 8 | WebFetch `https://example.com/` | 8/8 | Executed with no dialog or terminal input: 200 OK, 713 B, reported URL `https://example.com/`, no redirect; reply exactly `Example Domain`. **PASS** |
+
+Tool usage across the transcript: Read 4, Write 1, WebFetch 3; exactly eight
+user prompts; no Bash, WebSearch, MCP or substitute tool. The hook's own
+web-refusal output equals the web constant byte-for-byte and contains no URL,
+host or port.
+
+### Identities
+
+| Item | Identity |
+|---|---|
+| Claude Code | v2.1.284, `C:\Users\levij\.local\bin\claude.exe`, 246,480,032 B, SHA-256 `0416631E846F743110DA5282409776FA1313E65F33A588AAE066EAF8DB0FDA7D` (unchanged throughout; W7 clear) |
+| Launch file | `launch-command-20260929-UNEXECUTED.txt`, SHA-256 `0EEC2C896E8FAE86B1025584493270DA33DA4537E64AF4572B181F1D2BC05025`, authenticated before use |
+| Installed hook during the run | `A04A95BC247C8969B3156F432DA25E4193E4B66B26FF9F911C0EA9B80AB3820A` (7,051 B), byte-identical to tracked |
+| Pane / session | `pty1`; CLI argv included `--allowedTools WebFetch(domain:example.com)`; session `8f75c58a-11d3-41fb-bcc4-6fe5185360f8` |
+| Final ledger `%APPDATA%\command-center\admission-ledger.json` | SHA-256 `1998F3AAC6F462DB1201B2E846612D8863A9FAA33D1B92206685409AF4FAF9CA` (1,477 B) |
+| `-e` ledger entry | `{"runId":"fence-live-d919942-20260929-e","paneId":"pty1","allowance":8,"admitted":8,"refused":0,"state":"closed"}` |
+
+Runs `-a` through `-d` are byte-for-byte unchanged in the ledger. No lock
+existed at any point. No ledger entry was edited by hand.
+
+| Evidence file | Bytes | SHA-256 |
+|---|---|---|
+| `electron-stdout.log` | 11,732 | `0F3E07069A09D14AF1345A00B557238AE9C0E6E930F451CFC9CD2320520F3AE1` |
+| `electron-stderr.log` (only the 3 launch-time media-permission lines also present in `-c` and `-d`) | 174 | `9BCF35BC732729CB4E353267459D7B74A8DD639CCBC2558B168A76924996AD42` |
+| `transcript.final.jsonl` (the post-case-8 transcript plus 3 CLI bookkeeping entries written at exit) | 86,603 | `0CF1AC3C2113F6BCCC03CBA0CF092D8F9EA9CDED0D7E98AFBCF6BCDF99D74378` |
+
+Evidence folder:
+`D:\Workspace\agent-command-center\outputs\live-fence-control-20260928\evidence-e\`
+
+- Reviewer packet:
+  `D:\Workspace\agent-command-center\outputs\live-fence-control-20260928\evidence-e\99-REVIEWER-PACKET.md`,
+  SHA-256 `68E5169C678295F229702E9C5628253482F8C9A20BA1163B9B3F36B79425DDCD`
+- Final evidence inventory: `evidence-e\99-evidence-inventory-final.txt`,
+  SHA-256 `3AB76CE7E30CA3D2C16C1E92693CCAA37E209C2CDDA378F4CD6F46CAAB0F6793`
+  (76 files, including 8 operator screenshots, one after each admission)
+
+### Rollback
+
+The authorized rollback (`rollback-procedure-UNEXECUTED.txt`, SHA-256
+`118B09500F54FC6014A4BEFE95400DA50919C99E0863015F3EFD16724CF838FA`) was executed
+exactly once, after Electron had fully exited: exit 0, empty stderr. It was
+independently verified **7/7** against `manifest-deployment-before.json`
+(SHA-256 `B4D51EB575DE18EC539B7D1DD3EFE4D56C4BCE68F48C6F40023EE362D55F40BF`).
+The installed hook is again
+`9489C154AFD89E6A4F0A569AC6674C3A4B9BEF02A581B26FE741A757341B6ECA`, and the
+six roles are back to their pre-deployment identities. The backups are intact,
+and the rollback did not touch the ledger. Consequence: the reviewed worktree
+build again refuses fenced launches until a separately authorized deployment.
+
+### Residuals (from the reviewer packet, unweakened)
+
+1. D1: case 8 proves the initial-request invariant only. An internal
+   example.com/www.example.com redirect would not be observable (the result
+   reports the requested URL); none is indicated.
+2. The CLI hook-command path prefix in refusals (ruled after `-d`).
+3. WebSearch in the controlled pane was not exercised; it is not authorized and
+   would meet the unanswerable prompt.
+4. `source-scout.md` ANSI-read mojibake from `sync-roles.ps1` on PowerShell 5.1
+   (Blue's E5 ruling); pre-existing, prose only.
+5. Claude Code behavior is pinned to v2.1.284; later versions need
+   re-inspection.
+6. Operator process note: the 20260928 attempt stalled while assistant messages
+   were being relayed (clipboard overwrites); its run ID was retired unused with
+   nothing consumed.
+7. H1 is complete and was not rerun. No source edit, commit, merge, push, fetch,
+   rebase or ledger edit occurred during the run.
+
+The retained residuals of the `d919942` review closeout above stand as written.
+
+### Current status
+
+| Item | Status |
+|---|---|
+| Controlled live run `fence-live-d919942-20260929-e` | **PASS**, 8 of 8 admissions, closed |
+| Deployment | Rolled back once and verified 7/7 |
+| H1 | Complete; not rerun; must never be rerun |
+| Merge / push / fetch / rebase | **NOT AUTHORIZED**. The live PASS does not itself authorize merge or push. |
