@@ -11,7 +11,10 @@
 <body>
   <!-- Top bar: brand + active repo selector + global refresh -->
   <header class="topbar">
-    <div class="brand"><span class="anchor">⚓</span> Mako</div>
+    <div class="brand" role="img" aria-label="Mako">
+      <img class="brand-mark" src="assets/mako-mark.svg" alt="" width="40" height="40" />
+      <img class="brand-wordmark" src="assets/mako-wordmark.svg" alt="" width="110" height="20" />
+    </div>
     <div class="repo-picker">
       <label>Repo</label>
       <select id="repoSelect"></select>

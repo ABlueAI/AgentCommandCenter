@@ -29,7 +29,95 @@ const install = read('..', 'docs', 'INSTALL-WINDOWS.md');
 
 assert(main.includes("title: 'Mako'"), 'the initial BrowserWindow title is Mako');
 assert(html.includes('<title>Mako</title>'), 'the static document title is Mako');
-assert(html.includes('<span class="anchor">\u2693</span> Mako'), 'the top-bar brand is Mako and keeps the anchor');
+assert(html.includes('class="brand" role="img" aria-label="Mako"'),
+  'the top-bar artwork has one accessible Mako name');
+const brand = html.match(/<div class="brand"[^>]*>([\s\S]*?)<\/div>/)?.[1] || '';
+assert(/src="assets\/mako-mark.svg"[\s\S]*src="assets\/mako-wordmark.svg"/.test(brand),
+  'the local shark precedes the local outlined wordmark');
+assert((brand.match(/alt=""/g) || []).length === 2 && !brand.includes('\u2693'),
+  'the old anchor is removed and decorative images do not duplicate the accessible name');
+assert(main.includes("icon: path.join(__dirname, 'assets', 'mako.ico')"),
+  'the window icon is the fixed local ICO, independent of the working directory');
+
+const css = read('renderer', 'styles.css');
+assert(/\.brand\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;[^}]*flex:\s*0 0 auto;/.test(css),
+  'the brand remains an aligned, non-shrinking horizontal lockup');
+assert(/\.brand-mark\s*\{[^}]*width:\s*40px;[^}]*height:\s*40px;/.test(css) &&
+  /\.brand-wordmark\s*\{[^}]*width:\s*110px;[^}]*height:\s*20px;[^}]*object-fit:\s*contain;/.test(css),
+  'header asset dimensions are bounded without distorting the artwork');
+
+const mark = read('renderer', 'assets', 'mako-mark.svg');
+const wordmark = read('renderer', 'assets', 'mako-wordmark.svg');
+const allowedTags = new Set(['svg', 'title', 'defs', 'linearGradient', 'stop', 'rect', 'g', 'path']);
+for (const [name, svg] of [['mark', mark], ['wordmark', wordmark]]) {
+  const body = svg.replace(/<!--[\s\S]*?-->/g, '');
+  const tags = [...body.matchAll(/<\/?([\w:-]+)/g)].map(match => match[1]);
+  assert(tags.every(tag => allowedTags.has(tag)), `${name}: only static vector elements`);
+  assert(!/\b(?:href|src|style|on\w+)\s*=|<!DOCTYPE|<!ENTITY|<\?xml-stylesheet/i.test(body),
+    `${name}: no external content, event handlers, stylesheet, or entity expansion`);
+  assert(!/<(?:text|image|script|foreignObject)\b|@font-face|data:/i.test(body),
+    `${name}: no embedded raster, font dependency, or executable content`);
+  assert(svg.length < 10000 && svg.includes('<title>Mako'), `${name}: small, named local artwork`);
+}
+assert(mark.includes('viewBox="0 0 1024 1024"') &&
+  /<rect[^>]*width="1024"[^>]*height="1024"[^>]*fill="#000"/.test(mark),
+  'the app mark includes its own black square background');
+const silhouette = mark.match(/fill="url\(#navy\)" d="([^"]+)"/)?.[1] || '';
+const points = (silhouette.match(/\d+/g) || []).map(Number);
+const pairs = Array.from({length: points.length / 2}, (_, i) => [points[i * 2], points[i * 2 + 1]]);
+assert(pairs.length > 10 && pairs.every(([x, y]) => pairs.some(([mx, my]) => mx === 938 - x && my === y)),
+  'the shark silhouette is exactly mirrored about its centerline');
+
+// These outlined glyphs deliberately use only absolute M/L/H/Q/Z commands.
+// Check the geometry, not merely a comment claiming that the k has no descender.
+function pathYCoordinates(data) {
+  const tokens = data.match(/[A-Za-z]|-?\d+(?:\.\d+)?/g) || [];
+  const ys = [];
+  let i = 0;
+  while (i < tokens.length) {
+    const command = tokens[i++];
+    if (command === 'M' || command === 'L') {
+      i++; ys.push(Number(tokens[i++]));
+      while (i < tokens.length && !/^[A-Za-z]$/.test(tokens[i])) {
+        i++; ys.push(Number(tokens[i++]));
+      }
+    } else if (command === 'Q') {
+      i++; ys.push(Number(tokens[i++])); i++; ys.push(Number(tokens[i++]));
+    } else if (command === 'H') { i++; }
+    else if (command !== 'Z') { throw new Error(`Unexpected glyph path command: ${command}`); }
+  }
+  return ys;
+}
+for (const letter of ['m', 'a', 'k', 'o']) {
+  const data = wordmark.match(new RegExp(`id="letter-${letter}" d="([^"]+)"`))?.[1] || '';
+  const ys = pathYCoordinates(data);
+  assert(ys.length > 0 && ys.every(Number.isFinite) && Math.max(...ys) === 194,
+    `${letter}: shared baseline 194, including every curve control point (no descending k leg)`);
+  if (letter === 'a' || letter === 'o') {
+    assert(Math.min(...ys) === 59, `${letter}: lowercase x-height 59`);
+  }
+}
+
+const ico = fs.readFileSync(path.join(__dirname, 'assets', 'mako.ico'));
+const iconSizes = [16, 24, 32, 48, 64, 128, 256];
+assert(ico.readUInt16LE(0) === 0 && ico.readUInt16LE(2) === 1 && ico.readUInt16LE(4) === iconSizes.length,
+  'the Windows ICO has the expected header and seven resolutions');
+let iconEnd = 6 + iconSizes.length * 16;
+for (let i = 0; i < iconSizes.length; i++) {
+  const pos = 6 + i * 16;
+  const size = iconSizes[i];
+  const bytes = ico.readUInt32LE(pos + 8);
+  const start = ico.readUInt32LE(pos + 12);
+  const png = ico.subarray(start, start + bytes);
+  assert((ico[pos] || 256) === size && (ico[pos + 1] || 256) === size &&
+    ico.readUInt16LE(pos + 4) === 1 && ico.readUInt16LE(pos + 6) === 32 &&
+    start === iconEnd && png.length === bytes && png.length > 32 &&
+    png.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')) &&
+    png.readUInt32BE(16) === size && png.readUInt32BE(20) === size,
+    `ICO ${size}px: contiguous valid PNG frame with matching dimensions`);
+  iconEnd = start + bytes;
+}
+assert(iconEnd === ico.length, 'the ICO has no trailing payload');
 assert(renderer.includes('document.title = `Mako \u2014 ${ACCEPTANCE_BUILD}`'),
   'the acceptance title is Mako plus the unchanged build marker');
 assert(main.includes('no other Mako window') && main.includes('Mako will still refuse'),

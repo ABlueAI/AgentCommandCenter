@@ -419,6 +419,7 @@ function createWindow() {
     width: 1320, height: 860, minWidth: 980, minHeight: 640,
     backgroundColor: '#0b0f14',
     title: 'Mako',
+    icon: path.join(__dirname, 'assets', 'mako.ico'),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
