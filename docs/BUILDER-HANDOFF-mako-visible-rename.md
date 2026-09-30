@@ -241,6 +241,42 @@ Reviewer verdict: Pending
 
 Reviewer verdict source: Pending independent Full-class review
 
+## Approved visual-identity amendment (pre-implementation)
+
+Blue approved the following 17-path amendment after selecting the connected-white shark
+and refined 10A wordmark (shared baseline, corrected k leg, lowercase o). This supersedes
+the earlier anchor-retention requirement and 13-path ceiling for subsequent work only;
+the prior implementation and validation records above remain historical evidence.
+
+The original 13 authorized paths remain in scope, plus exactly:
+
+14. `app/renderer/assets/mako-mark.svg`
+15. `app/renderer/assets/mako-wordmark.svg`
+16. `app/assets/mako.ico`
+17. `app/renderer/styles.css`
+
+Replace the top-bar anchor with the shark at left and outlined Mako lettering at right;
+set the normal app-window icon to the black-background shark. The static SVG assets must
+contain no scripts, external resources, embedded font dependency, or new runtime library.
+The wordmark uses the selected lettering as outlined artwork rather than a font install.
+The mark geometry is mirrored; the approved cobalt dorsal facet remains intentionally
+one-sided. Preserve the connected white fin/M accent and solid black eyes.
+
+Within the existing scope, update `app/main.js`, `app/renderer/index.html`, the branding
+tests, and this handoff. Do not modify hook bytes again, change integrity enforcement,
+reason codes, admission behavior, data paths, or provider behavior. No eighteenth path is
+authorized. Preserve the earlier pinned review diff and generate a separately named one.
+
+Validation: focused branding/affected tests, the app and Pester gates, and a fully restarted
+normal-app visual smoke at usable header sizes. The smoke authorizes no agent pane,
+provider prompt, controlled run/admission, or ledger mutation. Close normally afterward.
+Independent Full-class review remains pending, security-focused on the original bounded
+hook change with proportionate review of the visual assets and wiring.
+
+Deployment, shortcut mutation, merge, and push remain separately authorized. H1 is
+complete and must not be rerun. This is branding maintenance, not a new subsystem;
+no additional OSS procurement decision or new dependency is introduced.
+
 ## Review-diff rule
 
 - Before merge, use `git diff 8b6c9638c06599b688911a5f4b5871d6b7c11079...<tip>`.
