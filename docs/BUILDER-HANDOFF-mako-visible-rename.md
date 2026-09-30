@@ -6,11 +6,13 @@ Fork-point SHA: `8b6c9638c06599b688911a5f4b5871d6b7c11079`
 
 Pre-merge main SHA: `8b6c9638c06599b688911a5f4b5871d6b7c11079`
 
-Tested application SHA: `3b1fdf625e3c0e17038bd4b33d376badd5ec3fda`
+Tested application SHA (latest, logo integration): `5b066b952828bc0631469f05e1d41f24f78c1e29`
 
-Tested application tree: `0122b8192aff537b2ec8309472b7707d1787e37a`
+Tested application tree (latest): `b9c70328222c050d4cd7a231ce3f9471f36593df`
 
-Review endpoint SHA: Pending this handoff-only smoke record and independent review
+Review endpoint SHA: The documentation-only tail recording the logo validation below;
+its exact SHA and pinned-diff identities are reported outside this committed document.
+Independent review remains pending.
 
 Merge commit SHA: Pending until merge
 
@@ -276,6 +278,109 @@ hook change with proportionate review of the visual assets and wiring.
 Deployment, shortcut mutation, merge, and push remain separately authorized. H1 is
 complete and must not be rerun. This is branding maintenance, not a new subsystem;
 no additional OSS procurement decision or new dependency is introduced.
+
+## Logo integration completion and validation (2026-09-30)
+
+This is the current completion record; the earlier rename-only measurements above are
+retained, not attributed to this newer application tree.
+
+- Scope amendment committed before integration: `cb2387e` (parent `da5271b`).
+- Tested application commit: `5b066b952828bc0631469f05e1d41f24f78c1e29`.
+- Tested tree: `b9c70328222c050d4cd7a231ce3f9471f36593df`.
+- Exactly the amended 17 paths differ from the unchanged fork point. The logo implementation
+  commit changes seven paths: the two SVGs, ICO, main window option, header HTML, header CSS,
+  and existing branding test. There is no new package or lockfile change.
+- The approved raster direction was redrawn as static outlined vector geometry, not used as
+  a screenshot in the app. The shark outline is mathematically mirrored, with the approved
+  one-sided cobalt facet. The white fin accents connect to the central M. Wordmark glyphs
+  share baseline 194; lowercase a/o share x-height 59. The k has no descender. This is custom
+  artwork, not a named commercial font or a font installation.
+- The top bar uses local image assets with a single accessible name, `Mako`; icon left,
+  lettering right. At the normal layout the mark is 40px square and the wordmark 110x20px.
+- `BrowserWindow.icon` resolves the fixed local ICO relative to `__dirname`. The ICO has
+  PNG frames at 16, 24, 32, 48, 64, 128, and 256px. No shortcut is modified.
+
+Asset identities (working-file bytes at validation):
+
+| Asset | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `app/renderer/assets/mako-mark.svg` | 955 | `30B70EA00BD767184E101406063961EE403F4B367138085475E2E85F1E7172FB` |
+| `app/renderer/assets/mako-wordmark.svg` | 1,101 | `C3D4070A8044F85CD897E31213618FB2958440B1EE95FEF8D7DD6B97036C355D` |
+| `app/assets/mako.ico` | 19,339 | `6411C345AFF620CE4394B26294B1D9D9A5C30D7F7054F80D65416F14D4146154` |
+
+The ICO was rendered from the SVG with the already-bundled Sharp 0.35.4 tool, not a new
+application dependency. The build-only utility and approved image reference are retained in
+`D:\Workspace\agent-command-center\outputs\mako-visible-rename-logo-20260930\`.
+`build-mako-assets.cjs` SHA-256 is
+`E8E8E77DEAF8A4A9ADFA80611AD8C72D9D91DE79DF9673C9A9A47D4037A3713A`.
+It takes a worktree root argument and writes the ICO plus a visual proof; it is not invoked
+at app startup. SVG checks reject executable/external content and embedded raster/fonts.
+
+### Automated results on the latest application tree
+
+- Branding: **52 passed, 0 failed** (30 assertions added to the earlier 22).
+- Affected pane-maximize suite: **40 passed, 0 failed**.
+- Full app: **97 suites, 7,393 passed, 0 failed**, exit 0. Counted as 95 summaries of
+  `N passed, M failed` plus the two assertion-only suites (9 each).
+- Full Pester: **984 passed, 0 failed, 0 skipped**, exit 0; 130.79 seconds.
+- Changed JavaScript syntax checks and `git diff --check`: PASS.
+- Hook bytes remain `E21F28D5...135B09`, unchanged by the entire visual amendment.
+- The previous `.agent-review-mako-visible-rename.diff` remains unchanged at SHA-256
+  `853709308925325BB6D33EC69140E1CFA6A3862DD94E5E1DA488D561C7D98483`.
+
+The first full-app invocation stopped at missing `node_modules/dockview/package.json`:
+the build-only dependency guard had mistakenly matched a test name in the package-script
+diff and did not create the dependency junction. The guard was corrected to compare the
+actual dependency objects and lockfile; the first log was retained, and run 2 passed.
+The temporary, verified junction to main's unchanged dependencies was removed after smoke;
+the target dependency directory was verified intact. No install was performed.
+
+### Restarted normal-app visual smoke
+
+**PASS** at `5b066b9`. Electron was initially absent. The normal application was launched
+once (PID 32336), without controlled-run variables, provider prompts, or an agent pane.
+Computer Use observed the worktree's canonical file URL, the Mako window title, a single
+accessible `graphic Mako`, the shark window icon, and the unclipped shark/wordmark header.
+The small wordmark's k baseline and lowercase o are legible. Screenshot capture is 1309x855;
+a border-drag attempt selected page text rather than resizing, so this record does not
+claim minimum-width acceptance. No persistent layout setting was changed. The sizing menu
+was dismissed and the app was closed normally with Alt+F4; no Electron remained.
+
+Post-smoke, all seven installed hook/role files match pre-smoke size, SHA-256, and mtime.
+The ledger remains 1,477 bytes, SHA-256
+`1998F3AAC6F462DB1201B2E846612D8863A9FAA33D1B92206685409AF4FAF9CA`,
+mtime `2026-09-29T05:06:09.7112180Z`. No ledger lock or Process/User/Machine admission
+environment was present. No deployment or ledger edit occurred.
+
+The first post-smoke verifier compared serialized objects and falsely reported a mismatch
+because PowerShell 7 deserialized ISO timestamp strings as DateTime. Field-by-field hash,
+size, path, and UTC-tick comparison proved no file change. The evidence-only verifier was
+corrected and passed without relaunching or changing application code.
+
+Evidence directory: `D:\Workspace\agent-command-center\outputs\mako-visible-rename-logo-20260930\`.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| `mako-logo-npm-test-run2.log` | `3F9563C8BA7E0DE093A2CBB2C60DD931B0B92582FCB9573F6846B5A4C9604530` |
+| `mako-logo-pester.log` | `DC6E9B687E2132D8B4A9E180EAF12DA9AF1CE57E3F1961D29CC883010700F646` |
+| `mako-logo-live-smoke.png` | `C800FA192329114D4C58D54EB479DA8A94DEC54CEC49635BC3F5FCEAB5B46C41` |
+| `mako-logo-electron-stdout.log` | `17CE08603EF2F3775319E20E109C2B10F608DFEFD960517038D479A7D31AAC0E` |
+| `mako-logo-electron-stderr.log` | `9BCF35BC732729CB4E353267459D7B74A8DD639CCBC2558B168A76924996AD42` |
+
+Stderr contains only the three established audio-permission denial diagnostics.
+
+### Remaining gates and review transport
+
+Independent Full-class review remains pending. This builder validation is not that verdict.
+Review the original hook rename/security invariants and the added static asset wiring at
+their respective risk levels. Preserve H1 and prior Fence/live acceptance as complete.
+No deployment, shortcut mutation, merge, push, provider prompt, admission, or H1 rerun is
+authorized or performed by this record. Main remains at the fork point.
+
+Generate new pinned cumulative and logo-only diffs with `git diff --no-color --no-ext-diff
+--binary <base>...<endpoint> --output=<new-file>`, using bases `8b6c9638` and `da5271b`
+respectively. The binary option retains the ICO payload. Keep the previous diff unchanged;
+report endpoint and new diff hashes outside the committed document.
 
 ## Review-diff rule
 
