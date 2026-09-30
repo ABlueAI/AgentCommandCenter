@@ -10,9 +10,18 @@ Tested application SHA (latest, logo integration): `5b066b952828bc0631469f05e1d4
 
 Tested application tree (latest): `b9c70328222c050d4cd7a231ce3f9471f36593df`
 
-Review endpoint SHA: The documentation-only tail recording the logo validation below;
-its exact SHA and pinned-diff identities are reported outside this committed document.
-Independent review remains pending.
+Review endpoint SHA (documentation only): `578a2f1a0132aca485bf1894507bb243f7b30075`
+
+Independent review: **Full-class cumulative review PASS** at review endpoint `578a2f1`
+(reviewed application code `5b066b9`). See "Independent Full-class review closeout" at the
+end of this document. The closeout commit is a further documentation-only tail; its own SHA
+and the artifacts ending at it are reported outside this committed document. Deployment,
+shortcut mutation, merge, and push remain **not authorized**.
+
+> **Reading this document.** The 17-path visual-identity amendment (`cb2387e`) supersedes
+> every earlier 13-path inventory and every earlier anchor-retention statement below. Those
+> older statements are retained unchanged as history and are individually marked
+> **SUPERSEDED**.
 
 Merge commit SHA: Pending until merge
 
@@ -32,6 +41,10 @@ This is branding maintenance, not a new subsystem. The OSS-first procurement gat
 triggered because no dependency, SDK, service, or subsystem is introduced.
 
 ## Authorized 13-path cap
+
+> **SUPERSEDED (history only).** This 13-path cap was replaced by Blue's 17-path
+> visual-identity amendment (`cb2387e`, below). The current authorized inventory is the 17
+> paths in that amendment, confirmed by the independent review closeout at the end.
 
 No fourteenth path may be edited without a new approval.
 
@@ -64,6 +77,10 @@ The following must remain unchanged:
 The existing anchor icon remains. This branch changes the visible name, not the visual
 identity system.
 
+> **SUPERSEDED (history only).** The anchor-retention requirement above was replaced by the
+> 17-path visual-identity amendment (`cb2387e`). The reviewed application at `5b066b9`
+> removes the ⚓ anchor and uses the approved shark mark and outlined wordmark.
+
 ## Security-sensitive surface and explicit hook re-pin
 
 The only authorized edit to `scripts/hooks/fence-write.js` is changing the three
@@ -83,6 +100,10 @@ Final tracked hook identity after the approved three-string rename:
 
 - byte length: `7,036`
 - SHA-256: `E21F28D5BB2181D44CDEF787DD65550C4CFDEAAA1FC1FDAA23E5EB68CA135B09`
+
+> **Closeout clarification.** Both identities above are Windows CRLF working-tree
+> identities, which is what `app/main.js` hashes at runtime. They are not Git-blob
+> identities. The exact blob and CRLF identities are measured in the review closeout below.
 
 There is no literal production hook hash to patch: `app/main.js` computes the
 tracked file's SHA-256 at startup and `app/role-fence-policy.js` compares it with the deployed
@@ -127,6 +148,10 @@ branding and current-documentation edits receive proportionate review. This bran
 reopen H1 or the accepted Fence architecture.
 
 ## Files changed
+
+> **SUPERSEDED (history only).** This 13-path list describes the rename-only endpoint
+> `da5271b`. At the reviewed application `5b066b9` and review endpoint `578a2f1`, exactly the
+> 17 amended paths differ from the fork point; see the review closeout at the end.
 
 Exactly the authorized 13 paths differ from the fork point. The implementation changes the
 12 product/test/current-documentation paths and retains this pre-registration handoff as the
@@ -201,7 +226,8 @@ Bounded restarted-app smoke: **PASS** against tested application commit `3b1fdf6
 - The app was launched once from this worktree with the normal Electron entry point.
 - The live window title was exactly
   `Mako — V5 STACK CONTENT ACCEPTANCE 2026-07-21.14`.
-- The live top-level brand was `⚓ Mako`.
+- The live top-level brand was `⚓ Mako`. *(History at `3b1fdf6` only; SUPERSEDED by the
+  logo amendment, which removed the anchor.)*
 - The loaded document URL pointed to this worktree's `app/renderer/index.html`.
 - No provider prompt, agent pane, controlled admission, shortcut change, or user-scope
   deployment was attempted.
@@ -229,6 +255,9 @@ None at pre-registration.
 
 ## Recommended review focus
 
+> **SUPERSEDED (history only).** The review was conducted against the 17-path amended
+> scope, not the 13-path cap named here.
+
 Confirm that the 13-path cap held; historical evidence and technical identifiers did not
 move; the hook diff changes only the three brand literals; stable reason codes and enforcement
 remain unchanged; and the new hook identity is consistently measured and enforced.
@@ -239,9 +268,14 @@ Generate with:
 
 `git diff --no-color --no-ext-diff 8b6c9638c06599b688911a5f4b5871d6b7c11079...<tip-sha> --output=.agent-review-mako-visible-rename.diff`
 
-Reviewer verdict: Pending
+Reviewer verdict: PASS
 
-Reviewer verdict source: Pending independent Full-class review
+Reviewer verdict source: Independent Full-class cumulative review of
+`8b6c9638c06599b688911a5f4b5871d6b7c11079...578a2f1a0132aca485bf1894507bb243f7b30075`
+(reviewed application code `5b066b952828bc0631469f05e1d41f24f78c1e29`); recorded verbatim in
+"Independent Full-class review closeout" at the end of this document. The rename-only diff
+command above is retained as history; the reviewed artifacts used `--binary` and are listed
+in the closeout.
 
 ## Approved visual-identity amendment (pre-implementation)
 
@@ -308,6 +342,11 @@ Asset identities (working-file bytes at validation):
 | `app/renderer/assets/mako-wordmark.svg` | 1,101 | `C3D4070A8044F85CD897E31213618FB2958440B1EE95FEF8D7DD6B97036C355D` |
 | `app/assets/mako.ico` | 19,339 | `6411C345AFF620CE4394B26294B1D9D9A5C30D7F7054F80D65416F14D4146154` |
 
+> **Closeout clarification.** The two SVG rows are the Git-blob (LF) identities. A normal
+> Windows checkout of this repository materializes the SVGs as CRLF with different bytes
+> and hashes; both forms are measured in the review closeout below. The ICO is
+> binary-detected and identical in every checkout.
+
 The ICO was rendered from the SVG with the already-bundled Sharp 0.35.4 tool, not a new
 application dependency. The build-only utility and approved image reference are retained in
 `D:\Workspace\agent-command-center\outputs\mako-visible-rename-logo-20260930\`.
@@ -371,6 +410,9 @@ Stderr contains only the three established audio-permission denial diagnostics.
 
 ### Remaining gates and review transport
 
+> **Status superseded by the review closeout below:** the independent Full-class review is
+> complete with `VERDICT: PASS`. The text in this subsection is retained as history.
+
 Independent Full-class review remains pending. This builder validation is not that verdict.
 Review the original hook rename/security invariants and the added static asset wiring at
 their respective risk levels. Preserve H1 and prior Fence/live acceptance as complete.
@@ -389,3 +431,214 @@ report endpoint and new diff hashes outside the committed document.
 - Always use `--output`; do not use PowerShell `>` for pinned review diffs.
 - Retain the literal `VERDICT: PASS|FAIL` line and identify the review that produced it.
 - Pinned `.agent-review-*.diff` files remain local and gitignored.
+
+## Independent Full-class review closeout: PASS at `578a2f1` (documentation only)
+
+This closeout is documentation only and changes only this handoff. The application code and
+assets remain exactly those reviewed at `5b066b952828bc0631469f05e1d41f24f78c1e29`
+(tree `b9c70328222c050d4cd7a231ce3f9471f36593df`). The review endpoint
+`578a2f1a0132aca485bf1894507bb243f7b30075` is itself documentation only: relative to
+`5b066b9` it changes only this handoff. Every earlier record above is preserved as history;
+superseded statements are marked in place.
+
+### Current status
+
+| Item | Status |
+| --- | --- |
+| Independent Full-class cumulative review | **PASS** at `578a2f1` (application code `5b066b9`) |
+| Reviewed scope | Exactly the 17 amended paths; no eighteenth path |
+| User-scope hook deployment | **NOT AUTHORIZED**. Installed hook (`A04A95BC…3820A`) and tracked hook (`E21F28D5…135B09`) intentionally differ. |
+| Fenced launches from a merged build | **Will refuse** on hook-content mismatch until a separately authorized deployment |
+| Desktop-shortcut mutation | **NOT AUTHORIZED** |
+| Merge | **NOT AUTHORIZED** (separate Blue decision) |
+| Push | **NOT AUTHORIZED** |
+| Fetch / rebase | Not authorized; not performed |
+| H1 and the controlled live fence qualification | Complete; **not reopened** and not rerun |
+| `main` | Unchanged at `8b6c9638c06599b688911a5f4b5871d6b7c11079` |
+
+### Review result (verbatim)
+
+```text
+CLASS: Full
+INDEPENDENCE: CONFIRMED
+REVIEWED BASE: 8b6c9638c06599b688911a5f4b5871d6b7c11079
+REVIEWED APPLICATION COMMIT: 5b066b952828bc0631469f05e1d41f24f78c1e29
+REVIEWED ENDPOINT: 578a2f1a0132aca485bf1894507bb243f7b30075
+REVIEWED RANGES: 8b6c9638c06599b688911a5f4b5871d6b7c11079...578a2f1a0132aca485bf1894507bb243f7b30075 (cumulative, 17 paths)
+                 da5271b93e689b2935ffb6b156bf498c6114fd03...578a2f1a0132aca485bf1894507bb243f7b30075 (visual amendment)
+ARTIFACT AUTHENTICATION: PASS
+VERDICT: PASS
+```
+
+No blocking findings. Four low or informational notes are carried forward below without
+change in substance. The reviewer stated that PASS makes the cumulative 17-path branch
+suitable for this documentation-only closeout and then a separately authorized merge
+process, and that it does not authorize deployment, shortcut mutation, merge, push, or an
+H1 rerun.
+
+Independence note: the independent reviewer (Claude Code, Opus) had no part in building or
+validating this branch. At Blue's explicit authorization, the same review session wrote
+this documentation-only closeout; it changes no reviewed code, test, script, hook, or asset.
+
+### Reviewed identities, ranges and artifacts
+
+- Fork point / pre-merge main: `8b6c9638c06599b688911a5f4b5871d6b7c11079`
+- Rename-only endpoint: `da5271b93e689b2935ffb6b156bf498c6114fd03`
+- Visual-scope pre-registration: `cb2387ed3f84fa91ecc2a3c5facf7d3f3c8a1d62`
+- Reviewed application commit: `5b066b952828bc0631469f05e1d41f24f78c1e29`,
+  tree `b9c70328222c050d4cd7a231ce3f9471f36593df`
+- Review endpoint (documentation only; parent `5b066b9`):
+  `578a2f1a0132aca485bf1894507bb243f7b30075`
+
+Each reviewed artifact below was authenticated by size and SHA-256. The reviewer also
+regenerated both reviewed diffs with
+`git diff --no-color --no-ext-diff --binary <base>...578a2f1 --output=<file>` and got
+byte-identical results.
+
+| Artifact | Range | Bytes | SHA-256 |
+| --- | --- | ---: | --- |
+| `.agent-review-mako-logo-final-cumulative.diff` | `8b6c963...578a2f1` | 83,614 | `A45780715FFB0CAA8A8A3AB7B1AD513CE9A1773DB9D60ED9AC023563FFC752D9` |
+| `.agent-review-mako-logo-amendment.diff` | `da5271b...578a2f1` | 45,088 | `02B37E123C8E83B5A81AC17E0C83A7C23B2DB6AA0E8179A4E96E0AE8F0EE7AC3` |
+| `.agent-review-mako-visible-rename.diff` (earlier, preserved) | rename-only | 41,370 | `853709308925325BB6D33EC69140E1CFA6A3862DD94E5E1DA488D561C7D98483` |
+| `outputs\mako-visible-rename-logo-20260930\REVIEWER-BRIEF.md` | n/a | 4,452 | `F777D404674E2904F0D54307B6875D0409768795AA78ABEB08E7E721361CC8C0` |
+
+The five evidence files listed in the logo completion record above, and
+`build-mako-assets.cjs`, all matched their recorded SHA-256 values.
+
+### Checks performed by the reviewer
+
+- **Identity and scope.** HEAD `578a2f1`, parent `5b066b9`, worktree clean. Exactly the 17
+  amended paths differ from `8b6c963`; only this handoff differs between `5b066b9` and
+  `578a2f1`. In `app/package.json` only `description` and `scripts.test` changed; the test
+  script gained `node mako-branding.test.js` and lost nothing (96 → 97 entries). The
+  dependency objects and `app/package-lock.json` are unchanged. Every removed line outside
+  this handoff is a visible "Blue Helm" or "Command Center" string, the anchor markup and
+  CSS, or the test-script line. The `command-center` package name, `.command-center`,
+  `%APPDATA%\command-center`, `BLUE_HELM_*` identifiers, IPC names, reason codes, the
+  repository path, commands, and historical evidence are intact.
+- **Hook (Full-class focus).** The word-level diff of `scripts/hooks/fence-write.js` shows
+  exactly three `Blue Helm` → `Mako` substitutions (lines 58, 60, 63). Applying those three
+  substitutions to the fork-point hook reproduces the reviewed hook byte for byte. There is
+  no change to enforcement, path/origin/tool/destination resolution, allow/deny branches,
+  response shape, or admission behavior. `fence-webfetch-denied`,
+  `fence-input-unverifiable` and `fence-outside-sandbox` each appear exactly once.
+  `app/role-fence-policy.js` is unchanged. `app/main.js:1226-1231` hashes the tracked hook
+  at startup and `app/role-fence-policy.js:227` refuses with
+  `fence-policy-hook-content-not-tracked-identity` on any mismatch, so fenced launches fail
+  closed until a separately authorized deployment.
+- **Artwork and UI.** Both SVGs use only `svg`, `title`, `defs`, `linearGradient`, `stop`,
+  `rect`, `g` and `path`. They contain no script, event handler, `href`/`src`/`style`
+  attribute, external resource, `foreignObject`, raster, data URL, `<text>`, font
+  dependency, DOCTYPE or ENTITY. The wordmark is outlined paths only. The top bar has one
+  accessible name (`role="img" aria-label="Mako"`) with two `alt=""` images; the shark
+  precedes the wordmark; the anchor and all `.anchor` consumers are gone. Header sizes are
+  bounded at 40×40 and 110×20 with `object-fit: contain`, and no rule depends on a fixed
+  top-bar height. `BrowserWindow.icon` is `path.join(__dirname, 'assets', 'mako.ico')`. The
+  ICO parsed independently as type 1 with seven contiguous 32-bpp RGBA PNG frames (16, 24,
+  32, 48, 64, 128, 256), each ending exactly at IEND, with 0 trailing bytes. The silhouette,
+  eyes and white accents mirror about x = 469; the white accent is one polygon joining the
+  fins to the central M. Every wordmark glyph's lowest point, including curve control
+  points, is 194; the a and o share top 59; the k has no descender; the o is lowercase
+  height and narrower than the a.
+
+### Test and evidence assessment
+
+- Reviewer reruns (read-only): branding 52/0; pane-maximize 40/0; launcher-fence-invariant
+  32/0 (static source checks); `node --check` passed on all eight changed JavaScript files,
+  including the hook; `git diff --check` passed.
+- Builder app log (run 2): 95 summaries totalling 7,375 passed and 0 failed, plus two
+  9-assertion suites, reconciling to 7,393. Pester: 984 passed, 0 failed, 0 skipped.
+- Smoke: the before and after snapshots are byte-identical for the ledger (1,477 bytes,
+  `1998F3AAC6F462DB1201B2E846612D8863A9FAA33D1B92206685409AF4FAF9CA`) and all seven
+  installed hook and role files. Stdout shows no pane or admission activity. Stderr holds
+  only the three established audio-permission denial diagnostics. The screenshot shows the
+  Mako title and the shark to the left of the wordmark, plus the disclosed stray text
+  selection.
+- Not rerun by the reviewer: `pty-start-authority-main` and `role-fence-policy`, because of
+  their documented drive-root fixture side effects. The authenticated full-suite log was
+  relied on for both.
+
+### Measured line-ending identities
+
+Measured at closeout from Git objects, read-only. The blob form is `git cat-file blob`.
+The CRLF form is `git -c core.autocrlf=true cat-file --filters`, cross-checked against an
+independent LF→CRLF conversion of the blob (byte-identical in every case). All values agree
+with the independent review.
+
+| Object | Git blob OID | Blob (LF) bytes | Blob (LF) SHA-256 | CRLF bytes | CRLF SHA-256 |
+| --- | --- | ---: | --- | ---: | --- |
+| `scripts/hooks/fence-write.js` at `5b066b9` (unchanged at `578a2f1`) | `c8e9fa88aa9521f4a32aaab9da3beec4f7c52dbc` | 6,904 | `6F000954B670B440E9B4B25E51579BA99218AF51891BD0D115F0F81371F3FD7F` | 7,036 | `E21F28D5BB2181D44CDEF787DD65550C4CFDEAAA1FC1FDAA23E5EB68CA135B09` |
+| `scripts/hooks/fence-write.js` at fork `8b6c963` | `e8e808153971d6339a57d1bf05df4de540125f00` | 6,919 | `97A55552358425BA1FD3A21FFBC81E99C8506C801A7343BAA538310A221B31B2` | 7,051 | `A04A95BC247C8969B3156F432DA25E4193E4B66B26FF9F911C0EA9B80AB3820A` |
+| `app/renderer/assets/mako-mark.svg` | `17ecc92f7aa2e8c131cc1664c19adf1561c5b796` | 955 | `30B70EA00BD767184E101406063961EE403F4B367138085475E2E85F1E7172FB` | 972 | `6728B0FF60BBB95B538694CA04B56546A589C52E4508D14F145208B0A132C03B` |
+| `app/renderer/assets/mako-wordmark.svg` | `98c18ceb8a1efaad35a954b842037c5167c4aa87` | 1,101 | `C3D4070A8044F85CD897E31213618FB2958440B1EE95FEF8D7DD6B97036C355D` | 1,112 | `3CC46E07DBBCC858B0E4D0DD8A283B53D4C434648BBE218B24B741A8C5C2C68D` |
+| `app/assets/mako.ico` (binary-detected, never converted) | `ac799fe12fe909aa1c20dd63e395da57a1794412` | 19,339 | `6411C345AFF620CE4394B26294B1D9D9A5C30D7F7054F80D65416F14D4146154` | 19,339 | `6411C345AFF620CE4394B26294B1D9D9A5C30D7F7054F80D65416F14D4146154` |
+
+The fork-point SVG and ICO paths did not exist; those files are new on this branch.
+
+Filesystem state at closeout (read-only):
+
+- This worktree's hook: 7,036 bytes, `E21F28D5BB2181D44CDEF787DD65550C4CFDEAAA1FC1FDAA23E5EB68CA135B09`,
+  byte-identical to the CRLF form of the `5b066b9` blob.
+- This worktree's SVGs: 955 and 1,101 bytes, LF, byte-identical to their blobs. They were
+  written directly by the builder and never re-materialized by a checkout.
+- This worktree's ICO: 19,339 bytes, `6411C345AFF620CE4394B26294B1D9D9A5C30D7F7054F80D65416F14D4146154`.
+- Installed `%USERPROFILE%\.claude\hooks\fence-write.js`: 7,051 bytes,
+  `A04A95BC247C8969B3156F432DA25E4193E4B66B26FF9F911C0EA9B80AB3820A`, byte-identical to the
+  CRLF form of the fork-point blob.
+- Main checkout `D:\Workspace\agent-command-center\scripts\hooks\fence-write.js`: 7,051
+  bytes, `A04A95BC247C8969B3156F432DA25E4193E4B66B26FF9F911C0EA9B80AB3820A`.
+
+Materialization rule, measured on this machine: with the repository's `* text=auto`
+attribute on Windows, text files materialize as CRLF under `core.autocrlf=true` **and**
+under `core.autocrlf=false` (because `core.eol` is unset, i.e. native). They materialize as
+LF only under `core.autocrlf=input` or `core.eol=lf`. This machine's system gitconfig sets
+`core.autocrlf=true`.
+
+### Reviewer notes carried forward
+
+1. **Hook Git-blob versus CRLF working-tree identity.** The tracked-hook identity
+   `E21F28D5BB2181D44CDEF787DD65550C4CFDEAAA1FC1FDAA23E5EB68CA135B09` (7,036 bytes) is the
+   Windows CRLF working-tree identity. The Git blob is 6,904 bytes,
+   `6F000954B670B440E9B4B25E51579BA99218AF51891BD0D115F0F81371F3FD7F`. The runtime check
+   hashes working-tree bytes (`app/main.js:1226-1231`) and compares them with the installed
+   hook (`app/role-fence-policy.js:227`). This relationship is not new: at the fork point
+   the installed `A04A95BC…3820A` is the CRLF form of blob `97A55552…31B2`. A checkout that
+   materializes LF would compute `6F000954…FD7F`, mismatch a CRLF deployment, and fail
+   closed. Any later deployment must install bytes equal to the running build's
+   materialized tracked hook, and the deployment work order must state which form it
+   verifies.
+2. **SVG LF/CRLF materialization; `.gitattributes` deferred.** The recorded SVG identities
+   (955 and 1,101 bytes) are Git-blob/LF identities. A fresh Windows checkout, including
+   `main` after merge, materializes 972 and 1,112 bytes with the CRLF hashes above. Both
+   forms render identically; no test pins SVG bytes or hashes; the ICO is unaffected.
+   Explicit `.gitattributes` rules for `*.svg` and `*.ico` are deferred to a separately
+   authorized branch; `.gitattributes` is outside the 17-path cap and outside this closeout.
+3. **Superseded 13-path and anchor wording.** The earlier 13-path inventory and
+   anchor-retention statements ("Authorized 13-path cap", "Preserved compatibility and
+   evidence", "Files changed", the `3b1fdf6` smoke brand line, and "Recommended review
+   focus") are superseded by the 17-path visual-identity amendment (`cb2387e`), which
+   authorized removing the anchor. Each is marked **SUPERSEDED** in place and retained
+   unchanged as history.
+4. **Slight logo-facet asymmetry, intentional and visually accepted.** The cobalt dorsal
+   facet is intentionally one-sided, as the approved amendment specifies. Its apex vertex
+   sits at x = 468, against the silhouette's mirror centerline at x = 469
+   (`app/renderer/assets/mako-mark.svg:13`): a 1-unit offset in a 1024-unit viewBox. Blue's
+   closeout authorization records this slight asymmetry as intentional and visually
+   accepted. The silhouette, eyes and white accents are exactly mirrored.
+
+### Residuals
+
+- Minimum-width header layout remains unverified; only the normal 1309×855 header was
+  verified.
+- The artwork is an approved vector redraw of the approved concept, not an image trace or a
+  pixel-identical copy.
+- Line-ending behavior must be respected during deployment (note 1).
+- Merged code will refuse fenced launches on hook-content mismatch until a separately
+  authorized deployment installs the reviewed hook bytes.
+- H1 and the completed controlled live fence qualification are not reopened.
+
+### Closeout transport
+
+Pinned artifacts that end at this closeout commit necessarily include this section, so
+their identities are reported outside this document. All earlier artifacts and evidence
+are preserved unchanged.
