@@ -50,7 +50,7 @@ function electronStub() {
   const w = new Proxy({ webContents: wc, isDestroyed: () => false }, { get(t, k) { return k in t ? t[k] : () => {}; } });
   class BrowserWindow { constructor() { return w; } static getAllWindows() { return []; } }
   return {
-    app: { whenReady: () => Promise.resolve(), getPath: (n) => (n === 'userData' ? USER_DATA : HOME), on() {}, quit() {}, requestSingleInstanceLock() { throw new Error('no'); } },
+    app: { whenReady: () => Promise.resolve(), getPath: (n) => (n === 'userData' ? USER_DATA : HOME), setAppUserModelId() {}, on() {}, quit() {}, requestSingleInstanceLock() { throw new Error('no'); } },
     BrowserWindow,
     ipcMain: { handle(ch, fn) { record.handled.set(ch, fn); }, on(ch, fn) { record.on.set(ch, fn); } },
     shell: { openExternal: async () => {}, openPath: async () => {} },

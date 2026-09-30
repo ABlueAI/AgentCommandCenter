@@ -37,7 +37,7 @@ const MAIN_PATH = path.join(__dirname, 'main.js');
 const ENTRY_URL = require('url').pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).toString();
 
 // ---- the Electron stub ------------------------------------------------------------------------
-// Only the surface main.js actually touches: app.{whenReady,getPath,on,quit}, BrowserWindow,
+// Only the surface main.js actually touches: app.{whenReady,getPath,setAppUserModelId,on,quit}, BrowserWindow,
 // ipcMain.{handle,on}, session.defaultSession, safeStorage, shell, dialog, clipboard.
 function makeElectronStub(userDataDir, record) {
   const fakeWebContents = {
@@ -61,8 +61,13 @@ function makeElectronStub(userDataDir, record) {
   }
   return {
     app: {
-      whenReady: () => Promise.resolve(),
+      whenReady: () => { record.whenReadyCalls += 1; return Promise.resolve(); },
       getPath: (name) => (name === 'userData' ? userDataDir : os.tmpdir()),
+      // Windows taskbar identity: record each call together with what already existed at that
+      // moment, so section (8) can prove the ID is set once, before readiness and before any window.
+      setAppUserModelId(id) {
+        record.appUserModelIds.push({ id, whenReadyCalls: record.whenReadyCalls, windowsCreated: record.windowsCreated });
+      },
       on(evt, fn) {
         record.appEvents.push(evt);
         if (!record.appHandlers.has(evt)) record.appHandlers.set(evt, []);
@@ -109,6 +114,7 @@ async function bootMain(admissionEnv, options) {
   const record = {
     handled: new Map(), on: new Map(), appEvents: [], appHandlers: new Map(), windowsCreated: 0,
     quitCalls: 0, singleInstanceLockCalls: 0, ptySpawns: 0, kills: 0, sent: [], onQuit: null, spawns: [],
+    whenReadyCalls: 0, appUserModelIds: [],
   };
   const electronStub = makeElectronStub(userDataDir, record);
   // Only the shutdown scenarios opt in to a spawnable PTY. It is a plain object: no process exists,
@@ -509,6 +515,36 @@ const LEDGER = 'admission-ledger.json';
     } finally {
       if (userProfileBefore === undefined) delete process.env.USERPROFILE; else process.env.USERPROFILE = userProfileBefore;
       try { fs.rmSync(FIX, { recursive: true, force: true }); } catch (e) { /* best effort */ }
+    }
+  }
+
+  // ---- (8) Windows taskbar identity: one explicit AppUserModelID, set before readiness ------------
+  section('(8) the Windows AppUserModelID is set once, before readiness and before any window');
+  {
+    const onWindows = process.platform === 'win32';
+    const shapes = [
+      ['absent', {}],
+      ['valid', VALID_ENV],
+      ['malformed', Object.assign({}, VALID_ENV, { BLUE_HELM_ADMISSION_ALLOWANCE: '300' })],
+    ];
+    for (const [label, env] of shapes) {
+      const r = await bootMain(env);
+      const calls = r.record.appUserModelIds;
+      assert(r.loadError === null, '[' + label + '] main.js evaluates with the identity call in place' +
+        (r.loadError ? ' (threw: ' + r.loadError.message + ')' : ''));
+      assert(calls.length === (onWindows ? 1 : 0),
+        '[' + label + '] setAppUserModelId is called exactly ' + (onWindows ? 'once' : 'never (not Windows)') +
+        ' per evaluation (saw ' + calls.length + ')');
+      if (onWindows) {
+        assert(calls.length === 1 && calls[0].id === 'ABlueAI.Mako',
+          '[' + label + '] the identity is exactly ABlueAI.Mako');
+        assert(calls.length === 1 && calls[0].whenReadyCalls === 0,
+          '[' + label + '] it is set before app.whenReady() is invoked');
+        assert(calls.length === 1 && calls[0].windowsCreated === 0,
+          '[' + label + '] it is set before any BrowserWindow exists');
+      }
+      assert(r.record.whenReadyCalls === 1 && r.record.windowsCreated === 1,
+        '[' + label + '] readiness and the single window still follow');
     }
   }
 
