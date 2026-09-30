@@ -184,7 +184,7 @@ const css = read('styles.css');
 {
   const MARKER = 'V5 STACK CONTENT ACCEPTANCE 2026-07-21.14';
   assert(appSrc.includes(`const ACCEPTANCE_BUILD = '${MARKER}';`), 'app.js pins the V1a acceptance marker');
-  assert(appSrc.includes('document.title = `Blue Helm — ${ACCEPTANCE_BUILD}`')
+  assert(appSrc.includes('document.title = `Mako — ${ACCEPTANCE_BUILD}`')
     && appSrc.includes('appendLog(`[build] ${ACCEPTANCE_BUILD}\\n`)'),
     'marker reaches the window title and the startup Logs');
   assert(html.includes(`>${MARKER}</span>`), 'marker is visible in the Terminals bar UI');

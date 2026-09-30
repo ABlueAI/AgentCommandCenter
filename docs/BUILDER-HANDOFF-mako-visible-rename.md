@@ -73,8 +73,12 @@ Baseline tracked and installed hook identity at the fork point:
 
 - SHA-256: `A04A95BC247C8969B3156F432DA25E4193E4B66B26FF9F911C0EA9B80AB3820A`
 
-The final tracked hook byte length and SHA-256 will be measured after implementation and
-recorded here. There is no literal production hook hash to patch: `app/main.js` computes the
+Final tracked hook identity after the approved three-string rename:
+
+- byte length: `7,036`
+- SHA-256: `E21F28D5BB2181D44CDEF787DD65550C4CFDEAAA1FC1FDAA23E5EB68CA135B09`
+
+There is no literal production hook hash to patch: `app/main.js` computes the
 tracked file's SHA-256 at startup and `app/role-fence-policy.js` compares it with the deployed
 file. The existing role-policy mismatch tests remain unchanged and must pass. The exact
 refusal-message assertions in `app/pty-start-authority-main.test.js` move with the approved
@@ -118,19 +122,75 @@ reopen H1 or the accepted Fence architecture.
 
 ## Files changed
 
-Pre-registration only at this commit. Final list pending implementation.
+Exactly the authorized 13 paths differ from the fork point. The implementation changes the
+12 product/test/current-documentation paths and retains this pre-registration handoff as the
+thirteenth path:
+
+1. `app/main.js`
+2. `app/package.json`
+3. `app/renderer/index.html`
+4. `app/renderer/app.js`
+5. `app/renderer/admission-view.js`
+6. `app/renderer/pane-status-badge.js`
+7. `scripts/hooks/fence-write.js`
+8. `app/renderer/pane-maximize.test.js`
+9. `app/pty-start-authority-main.test.js`
+10. `app/mako-branding.test.js`
+11. `app/README.md`
+12. `docs/INSTALL-WINDOWS.md`
+13. `docs/BUILDER-HANDOFF-mako-visible-rename.md`
 
 ## Commands run
 
-Pending.
+- `node mako-branding.test.js`
+- `node renderer/pane-maximize.test.js`
+- `node role-fence-policy.test.js`
+- `node pty-start-authority-main.test.js`
+- `node --check` for every changed JavaScript file
+- `npm test`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\run-pester.ps1`
+- `git diff --check`
+- read-only branding, reason-code, compatibility-identifier, path-cap, and hook-diff scans
 
 ## Exact test results
 
-Pending.
+- Branding contract: `22` passed, `0` failed.
+- Pane maximize affected-string suite: `40` passed, `0` failed.
+- Role fence policy: `146` passed, `0` failed.
+- PTY authority/main: `414` passed, `0` failed.
+- JavaScript syntax checks: all changed JavaScript files passed.
+- Full app gate: `97` suites, `7,363` passed, `0` failed. This reconciles to the
+  accepted 96-suite/7,340-assertion baseline plus the 22 new branding assertions and the
+  package-script reachability assertion.
+- Full Pester gate: `984` passed, `0` failed, `0` skipped; completed in `100.9s`.
+- `git diff --check`: passed.
+
+The full app gate used the fork point's already-installed dependency tree through a temporary
+directory junction because this managed worktree intentionally had no independent
+`app/node_modules`. Package dependencies and `app/package-lock.json` are unchanged. The
+junction is test infrastructure only, is gitignored, and will be removed after the bounded
+smoke.
+
+Test-log identities retained outside the repository:
+
+- app: `C:\Users\levij\AppData\Local\Temp\mako-visible-rename-npm-test.log`,
+  `534,249` bytes, SHA-256
+  `7B04F26BE67A9F962B3C5CC107D310F62B3F20E269A3576ACE792E559E110A63`;
+- Pester: `C:\Users\levij\AppData\Local\Temp\mako-visible-rename-pester.log`,
+  `151,770` bytes, SHA-256
+  `1DCE96C45C8E1DDB1EA9C71FBD320B85B8FC06D8B66CD1817FD68A9FD551850E`.
+
+The first sandboxed PTY-authority invocation encountered its documented Windows drive-root
+fixture fallback: the managed worktree is on `C:` and the sandbox prevented creating the
+drive-root fixture, so the fallback saw the user's real role directory. The same suite was
+then run outside the filesystem sandbox and passed `414/0`; this was a harness-environment
+condition, not a product assertion failure.
 
 ## Manual verification
 
-Pending.
+Bounded restarted-app smoke pending. It remains limited to visible branding inspection with
+no provider prompt, agent pane, controlled admission, ledger mutation, deployment, or
+shortcut change.
 
 ## Known limitations
 

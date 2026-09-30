@@ -1302,7 +1302,7 @@ async function boot() {
   await quickLinksView.load();
   // Pull the controlled run's bounded counts once the bar exists. No-op with no run configured.
   if (admissionView) await admissionView.refresh();
-  document.title = `Blue Helm — ${ACCEPTANCE_BUILD}`;
+  document.title = `Mako — ${ACCEPTANCE_BUILD}`;
   const buildBadge = $('#audioBuild');
   if (buildBadge) buildBadge.textContent = ACCEPTANCE_BUILD; // single source: the const above
   appendLog(`[build] ${ACCEPTANCE_BUILD}\n`);

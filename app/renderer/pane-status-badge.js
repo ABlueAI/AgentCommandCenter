@@ -83,7 +83,7 @@
     },
     'other-installation': {
       label: 'Claude status: other install',
-      title: 'Another Blue Helm installation owns the Claude Code hooks. This installation will not change them.',
+      title: 'Another Mako installation owns the Claude Code hooks. This installation will not change them.',
       action: null,
     },
     malformed: {

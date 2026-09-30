@@ -1,8 +1,8 @@
-# Blue Helm — Windows Source-Tree Installation Guide
+# Mako — Windows Source-Tree Installation Guide
 
 ## 1. Scope and honesty
 
-This guide installs and runs **Blue Helm from a Git checkout of this repository**.
+This guide installs and runs **Mako from a Git checkout of this repository**.
 You clone the repo, install `app/` dependencies from the tracked lockfile, deploy
 the agent roles and the write-fence hook, and start the Electron application with
 its tracked `start` script.
@@ -28,7 +28,7 @@ developer-installed Electron application run from this repository
 (`BLUE-HELM-MASTER-STATUS.md` → "Pane status — packaged-runtime compatibility").
 Portable family distribution and public distribution are 2.0 items.
 
-Provider accounts are yours. Blue Helm is not a model provider; Claude Code and
+Provider accounts are yours. Mako is not a model provider; Claude Code and
 the Gemini API are reached with **your own** credentials, configured on **this**
 machine. Never transfer another machine's credentials here.
 
@@ -49,7 +49,7 @@ Every row is classified as one of:
 | Git (on `PATH`) | Launch | The repo is obtained with `git clone`, and the app shells out to `git` for repo discovery, worktree listing, the origin remote, and review diffs. `scripts/new-agent.ps1` is pure `git`. | `app/main.js:803-806`, `app/main.js:1105`, `scripts/new-agent.ps1` |
 | Node.js **≥ 22.12.0** + its bundled npm | Launch | Strictest `engines.node` floor in the tracked lockfile, from `electron@42.5.0`. Use the npm that ships with that Node install; the lockfile is `lockfileVersion: 3`. | `app/package-lock.json:902-919` (`"node_modules/electron"` → `"engines": { "node": ">= 22.12.0" }`), `app/package-lock.json:4` |
 | Network access to the npm registry | Launch | `npm ci` fetches the locked dependency tree. `electron` depends on `@electron/get`, which retrieves the Electron runtime binary — so the install also needs Electron's download host reachable. *(The dependency is tracked fact; exactly when the binary is fetched is an inference, not verified in this order.)* | `app/package-lock.json` (`node_modules/electron` → `dependencies["@electron/get"]`) |
-| Claude Code CLI, installed and authenticated | Launch (for agent panes) | Every role pane runs `claude --agent <role>`; the Plain picker can also launch a bare `claude`. Blue Helm never authenticates for you — sign in through Claude Code itself. The Electron shell starts without it, but no builder/reviewer/scout pane can work. | `app/main.js:216`, `app/main.js:232-247` (`AGENT_CMD.claude`, `buildAgentCommand`), `app/renderer/index.html:247-254`, `AGENTS.md` § Environment |
+| Claude Code CLI, installed and authenticated | Launch (for agent panes) | Every role pane runs `claude --agent <role>`; the Plain picker can also launch a bare `claude`. Mako never authenticates for you — sign in through Claude Code itself. The Electron shell starts without it, but no builder/reviewer/scout pane can work. | `app/main.js:216`, `app/main.js:232-247` (`AGENT_CMD.claude`, `buildAgentCommand`), `app/renderer/index.html:247-254`, `AGENTS.md` § Environment |
 | Codex CLI (`codex` on `PATH`) | Optional | Only reachable from the **Plain** role's CLI sub-picker. Nothing in startup, roles, fences, or Video Scout depends on it. | `app/main.js:216` (`AGENT_CMD.codex`), `docs/SMOKE-TEST.md` § B |
 | Gemini CLI (`gemini` on `PATH`) | Feature — Video Scout, CLI route only | `feed-gemini.ps1` resolves `gemini` from `PATH`, falling back to `%APPDATA%\npm\gemini.cmd`. Absent, the script saves the download and reports that it was never analyzed. The **SDK route** (public YouTube URL, video mode) does not use the CLI at all. Also reachable from the Plain picker. | `scripts/feed-gemini.ps1:477-481`, `scripts/feed-gemini.ps1:646`, `scripts/gemini-video-sdk.js:1-15` |
 | `GEMINI_API_KEY` | Feature — Video Scout | A Video Scout pane is **refused** without a stored key. Set it only through the in-app key banner (§ 7). | `app/main.js:1234-1237`, `app/renderer/index.html:45-48` |
@@ -63,7 +63,7 @@ Every row is classified as one of:
 **`restic` is deliberately absent from this table.** It belongs to the separate
 backup/restore exercise
 ([BACKUP-RECOVERY-EVIDENCE-2026-08-14.md](BACKUP-RECOVERY-EVIDENCE-2026-08-14.md)),
-not to installing or launching Blue Helm. Do not install it as part of this
+not to installing or launching Mako. Do not install it as part of this
 procedure.
 
 > **Known documentation conflict.** [SETUP-WINDOWS.md](SETUP-WINDOWS.md) still
@@ -271,10 +271,10 @@ State these plainly rather than discovering them on a new machine:
 ## 7. Provider setup
 
 **Claude authentication is owned by Claude Code.** Install and sign in to Claude
-Code through its own flow, in a normal terminal. Blue Helm launches the `claude`
+Code through its own flow, in a normal terminal. Mako launches the `claude`
 CLI; it never collects, stores, proxies, or refreshes a Claude credential.
 
-**Gemini credentials are configured inside Blue Helm.** Use the in-app key
+**Gemini credentials are configured inside Mako.** Use the in-app key
 banner:
 
 1. Paste the key into the key field in the header banner
@@ -301,7 +301,7 @@ than falling back to plaintext.
   `WebSearch, WebFetch, Read, Write` and Reviewer and Codebase Scout hold
   `Read, Grep, Glob`, so today there is no fenced-role Bash step to read it. That
   narrows the blast radius; it does **not** make `setx` acceptable — the value is
-  still ambient, still persistent, and still outside `safeStorage`. Blue Helm
+  still ambient, still persistent, and still outside `safeStorage`. Mako
   sets `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` on every PTY to limit what Claude
   Code forwards into subprocesses it spawns itself (`app/main.js:1276-1340`;
   `AGENTS.md` § How I work, item 8), and P1 fenced-role environment containment
@@ -315,7 +315,7 @@ than falling back to plaintext.
   at best unreadable and at worst a leaked secret. Configure each machine
   separately through the UI.
 - Codex and Gemini setup is **feature-specific**. Neither is required to launch
-  Blue Helm or to run a Claude builder pane.
+  Mako or to run a Claude builder pane.
 
 ---
 
@@ -479,7 +479,7 @@ Windows 11 may display:
 > Windows can't tell who created this app.
 
 The app does not start. Windows refuses to load the unsigned Electron executable
-**before any Blue Helm code runs**, so Blue Helm cannot catch, log, or override
+**before any Mako code runs**, so Mako cannot catch, log, or override
 it.
 
 This message is primarily about publisher identity and reputation. It is not by
@@ -498,7 +498,7 @@ Smart App Control off.
 
 Turning Smart App Control off removes a preventive layer that blocks unknown or
 unsigned executables. It does not disable Microsoft Defender or other independent
-protections, but it is a real reduction in defense. **Blue Helm must never change
+protections, but it is a real reduction in defense. **Mako must never change
 this setting automatically, and turning it off is not the default remedy.** If
 you do not accept that trade-off, stop and use a trusted distribution route
 instead — which, for 1.0, means this does not get solved by repackaging
@@ -518,7 +518,7 @@ If you knowingly accept the trade-off, these steps are **human-only**:
 4. Set Smart App Control to **Off** and confirm the Windows prompt.
 5. Restart only if Windows requests it.
 6. Reopen Windows Security and confirm the displayed state.
-7. Launch Blue Helm again.
+7. Launch Mako again.
 
 Do not automate these steps, edit the registry, or install a policy bypass.
 
@@ -570,7 +570,7 @@ problem, not a trust problem, and it deserves its own diagnostic work order.
   use the bounded process-local form in § 5.
 - Do not install a self-signed certificate and describe it as equivalent to a
   publicly trusted publisher signature.
-- Do not download Electron or Blue Helm components from unofficial mirrors.
+- Do not download Electron or Mako components from unofficial mirrors.
 - Do not copy provider credentials, `secure.json`, or DPAPI ciphertext between
   machines.
 - Do not persist provider credentials in environment variables (`setx`).

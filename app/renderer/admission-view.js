@@ -64,7 +64,7 @@
     'admission-persist-failed': 'The ledger could not be written, so NOTHING was sent and no turn was spent.',
     'admission-ledger-unreadable': 'The ledger could not be read safely, so NOTHING was sent and no turn was spent.',
     'admission-ledger-integrity-mismatch': 'The ledger failed its integrity check, so NOTHING was sent and the rejected file was left unchanged.',
-    'admission-ledger-conflict': 'Another Blue Helm process changed or is updating the ledger. NOTHING was sent; use the existing app window.',
+    'admission-ledger-conflict': 'Another Mako process changed or is updating the ledger. NOTHING was sent; use the existing app window.',
     'admission-ledger-malformed': 'The ledger is malformed, so NOTHING was sent and the rejected file was left unchanged.',
     'admission-ledger-version-mismatch': 'The ledger version is unsupported, so NOTHING was sent and the rejected file was left unchanged.',
     'admission-write-failed-after-admission': 'The turn was recorded but the terminal write failed. This turn IS spent and is not refunded.',
