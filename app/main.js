@@ -418,7 +418,8 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1320, height: 860, minWidth: 980, minHeight: 640,
     backgroundColor: '#0b0f14',
-    title: 'Command Center',
+    title: 'Mako',
+    icon: path.join(__dirname, 'assets', 'mako.ico'),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -651,8 +652,8 @@ app.whenReady().then(() => {
         cancelId: 0,
         title: 'Clear stale pane-status lock',
         message: 'Clear the pane-status settings lock?',
-        detail: 'Only do this if no other Blue Helm window is setting up or removing pane status. '
-          + 'Blue Helm will still refuse unless it can prove the process that created the lock is gone.',
+        detail: 'Only do this if no other Mako window is setting up or removing pane status. '
+          + 'Mako will still refuse unless it can prove the process that created the lock is gone.',
       });
       return res.response === 1;
     },

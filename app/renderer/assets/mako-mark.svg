@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 1024 1024">
+  <title>Mako shark</title>
+  <defs>
+    <linearGradient id="navy" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#102549"/>
+      <stop offset="1" stop-color="#14275f"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="176" fill="#000"/>
+  <!-- Mirrored silhouette and connected white accents; the dorsal facet is directional. -->
+  <g transform="translate(43 230)">
+    <path fill="url(#navy)" d="M469 0 525 148 632 251 692 354 938 564 650 477 571 560 571 398 469 487 367 398 367 560 288 477 0 564 246 354 306 251 413 148Z"/>
+    <path fill="#3f65f4" d="M469 0 468 174 306 251 413 148Z"/>
+    <path fill="#000" d="M306 251 383 307 426 407Z M632 251 555 307 512 407Z"/>
+    <path fill="#fff" d="M469 487 312 324 322 387 55 527 289 444 367 560 367 398 469 481 571 398 571 560 649 444 883 527 616 387 626 324Z"/>
+  </g>
+</svg>

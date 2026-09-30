@@ -614,7 +614,7 @@ Module._load = function (request) {
     // a child `node` process with a synthetic PreToolUse payload. No Claude, no provider, no real sandbox.
     const { spawnSync } = require('child_process');
     const REFUSAL =
-      'Blocked by Blue Helm path fence: this role may only access files inside its own sandbox. [fence-outside-sandbox]';
+      'Blocked by Mako path fence: this role may only access files inside its own sandbox. [fence-outside-sandbox]';
     const OUTSIDE = path.join(FIX, 'outside-fixture');
     const JTARGET = path.join(OUTSIDE, 'junction-target');
     fs.mkdirSync(JTARGET, { recursive: true });
@@ -690,9 +690,9 @@ Module._load = function (request) {
 
     section('FENCE HOOK — controlled WebFetch gate (origin mode, disabled mode, missing or bad mode)');
     const WEB_REFUSAL =
-      'Blocked by Blue Helm web fence: this pane may not fetch that destination. [fence-webfetch-denied]';
+      'Blocked by Mako web fence: this pane may not fetch that destination. [fence-webfetch-denied]';
     const INPUT_REFUSAL =
-      'Blocked by Blue Helm fence: the tool request could not be verified. [fence-input-unverifiable]';
+      'Blocked by Mako fence: the tool request could not be verified. [fence-input-unverifiable]';
     const fetchPayload = (url, extra) => JSON.stringify(Object.assign(
       { cwd: SANDBOX, tool_name: 'WebFetch', tool_input: { url, prompt: 'Return the page title.' } }, extra || {}));
     const runFetch = (url, mode, extra) => runRaw(fetchPayload(url, extra), mode);

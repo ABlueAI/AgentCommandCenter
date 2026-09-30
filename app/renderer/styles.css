@@ -53,8 +53,9 @@ code { font-family: var(--mono); color: var(--accent-2); }
   display: flex; align-items: center; gap: 16px;
   padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--border);
 }
-.brand { font-weight: 600; letter-spacing: .3px; }
-.brand .anchor { color: var(--accent); }
+.brand { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.brand-mark { display: block; width: 40px; height: 40px; }
+.brand-wordmark { display: block; width: 110px; height: 20px; object-fit: contain; }
 .repo-picker { display: flex; align-items: center; gap: 6px; }
 .repo-picker label { color: var(--muted); font-size: 12px; }
 .theme-picker { display: flex; align-items: center; gap: 6px; }

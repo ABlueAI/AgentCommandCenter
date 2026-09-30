@@ -55,12 +55,12 @@ const WEBFETCH_DISABLED = 'disabled';
 const WEBFETCH_MAX_URL_LENGTH = 2000;
 
 const WEBFETCH_REFUSAL_MESSAGE =
-  'Blocked by Blue Helm web fence: this pane may not fetch that destination. [fence-webfetch-denied]';
+  'Blocked by Mako web fence: this pane may not fetch that destination. [fence-webfetch-denied]';
 const INPUT_REFUSAL_MESSAGE =
-  'Blocked by Blue Helm fence: the tool request could not be verified. [fence-input-unverifiable]';
+  'Blocked by Mako fence: the tool request could not be verified. [fence-input-unverifiable]';
 
 const REFUSAL_MESSAGE =
-  'Blocked by Blue Helm path fence: this role may only access files inside its own sandbox. [fence-outside-sandbox]';
+  'Blocked by Mako path fence: this role may only access files inside its own sandbox. [fence-outside-sandbox]';
 
 // Resolve the real (symlink-free) path. Walks up to the nearest existing ancestor if the
 // target doesn't exist yet, then re-appends the unresolved tail, so a brand-new file inside

@@ -1,4 +1,4 @@
-# Command Center (desktop app)
+# Mako (desktop app)
 
 A one-click **dark launcher** that ties your agentic dev tools into a single window:
 parallel **Claude / Codex / Gemini** agents running in **embedded terminals**, the
@@ -11,7 +11,7 @@ cd D:\Workspace\agent-command-center\app
 npm install      # first time only (pulls Electron + node-pty + xterm)
 npm start
 ```
-(Or double-click the **Command Center** desktop shortcut.)
+(Or double-click the **Mako** desktop shortcut.)
 
 ## What it does
 - **Repo picker** — scans your projects root (default `D:\Workspace`, change with 📁) for git repos.
