@@ -6,7 +6,11 @@ Fork-point SHA: `8b6c9638c06599b688911a5f4b5871d6b7c11079`
 
 Pre-merge main SHA: `8b6c9638c06599b688911a5f4b5871d6b7c11079`
 
-Tip SHA: Pending implementation and review
+Tested application SHA: `3b1fdf625e3c0e17038bd4b33d376badd5ec3fda`
+
+Tested application tree: `0122b8192aff537b2ec8309472b7707d1787e37a`
+
+Review endpoint SHA: Pending this handoff-only smoke record and independent review
 
 Merge commit SHA: Pending until merge
 
@@ -168,8 +172,8 @@ thirteenth path:
 The full app gate used the fork point's already-installed dependency tree through a temporary
 directory junction because this managed worktree intentionally had no independent
 `app/node_modules`. Package dependencies and `app/package-lock.json` are unchanged. The
-junction is test infrastructure only, is gitignored, and will be removed after the bounded
-smoke.
+junction was test infrastructure only, was gitignored, and was removed after the bounded
+smoke after its exact path, reparse-point type, and target were reverified.
 
 Test-log identities retained outside the repository:
 
@@ -188,9 +192,28 @@ condition, not a product assertion failure.
 
 ## Manual verification
 
-Bounded restarted-app smoke pending. It remains limited to visible branding inspection with
-no provider prompt, agent pane, controlled admission, ledger mutation, deployment, or
-shortcut change.
+Bounded restarted-app smoke: **PASS** against tested application commit `3b1fdf6`.
+
+- Pre-smoke: no Electron process was running; no process, user, or machine
+  `BLUE_HELM_ADMISSION_*` value was present.
+- The app was launched once from this worktree with the normal Electron entry point.
+- The live window title was exactly
+  `Mako — V5 STACK CONTENT ACCEPTANCE 2026-07-21.14`.
+- The live top-level brand was `⚓ Mako`.
+- The loaded document URL pointed to this worktree's `app/renderer/index.html`.
+- No provider prompt, agent pane, controlled admission, shortcut change, or user-scope
+  deployment was attempted.
+- The app was closed normally with `Alt+F4`; no Electron process remained.
+- The admission ledger was unchanged in bytes, modified time, and identity:
+  `1,477` bytes, mtime `2026-09-29T05:06:09.7112180Z`, SHA-256
+  `1998F3AAC6F462DB1201B2E846612D8863A9FAA33D1B92206685409AF4FAF9CA`.
+- The installed user-scope hook was unchanged at `7,051` bytes, SHA-256
+  `A04A95BC247C8969B3156F432DA25E4193E4B66B26FF9F911C0EA9B80AB3820A`.
+- Smoke stdout: `290` bytes, SHA-256
+  `2DE0878C3FBDB2B9B8DB936B5F0587543DEFAFE5B2FAA372E9E91C16033B9FBB`.
+- Smoke stderr: `174` bytes, SHA-256
+  `9BCF35BC732729CB4E353267459D7B74A8DD639CCBC2558B168A76924996AD42`;
+  it contains only the established audio-permission denial diagnostics.
 
 ## Known limitations
 
