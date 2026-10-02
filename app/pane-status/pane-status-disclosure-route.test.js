@@ -221,6 +221,7 @@ function makeElectronStub(userDataDir, sends) {
     app: {
       whenReady: () => Promise.resolve(),
       getPath: (name) => (name === 'userData' ? userDataDir : os.tmpdir()),
+      setAppUserModelId() {},
       on() {}, quit() {},
       requestSingleInstanceLock() { throw new Error('main.js must not request the single-instance lock'); },
     },

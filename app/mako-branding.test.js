@@ -7,6 +7,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 let passed = 0;
 let failed = 0;
@@ -118,6 +119,32 @@ for (let i = 0; i < iconSizes.length; i++) {
   iconEnd = start + bytes;
 }
 assert(iconEnd === ico.length, 'the ICO has no trailing payload');
+assert(crypto.createHash('sha256').update(ico).digest('hex') ===
+  '6411c345aff620ce4394b26294b1d9d9a5c30d7f7054f80d65416f14d4146154',
+  'the approved Mako ICO bytes are unchanged (binary, identical in every checkout)');
+assert(count(main, "icon: path.join(__dirname, 'assets', 'mako.ico')") === 1,
+  'the one BrowserWindow still receives the Mako ICO');
+
+// Windows taskbar identity: one explicit AppUserModelID, set at module startup. The taskbar showed
+// the shared electron.exe atom until the process declared its own identity before any window.
+const aumidDecl = "const MAKO_APP_USER_MODEL_ID = 'ABlueAI.Mako';";
+const aumidCall = "if (process.platform === 'win32') app.setAppUserModelId(MAKO_APP_USER_MODEL_ID);";
+assert(count(main, aumidDecl) === 1 && count(main, 'MAKO_APP_USER_MODEL_ID =') === 1,
+  'the Windows AppUserModelID is declared exactly once, as ABlueAI.Mako');
+assert(count(main, 'setAppUserModelId(') === 1 && count(main, aumidCall) === 1,
+  'exactly one setAppUserModelId call, under one win32 guard, passes that constant');
+assert(/^if \(process\.platform === 'win32'\) app\.setAppUserModelId\(MAKO_APP_USER_MODEL_ID\);\r?$/m.test(main),
+  'the call is an unindented module-scope statement, evaluated during startup');
+const aumidAt = main.indexOf(aumidCall);
+assert(aumidAt > main.indexOf(aumidDecl) && main.indexOf(aumidDecl) > -1,
+  'the constant is declared before it is used');
+for (const later of ['app.whenReady().then(', 'function createWindow(', 'new BrowserWindow(']) {
+  assert(aumidAt > -1 && main.indexOf(later) > aumidAt, `the identity is set before the first ${later}`);
+}
+assert(!/setAppDetails|app\.setName\(|typeof app\.setAppUserModelId/.test(main),
+  'no window app details, app rename, or method-existence skip accompanies the identity');
+assert(!Object.prototype.hasOwnProperty.call(pkg, 'productName'),
+  'package metadata adds no productName, so the userData identity stays command-center');
 assert(renderer.includes('document.title = `Mako \u2014 ${ACCEPTANCE_BUILD}`'),
   'the acceptance title is Mako plus the unchanged build marker');
 assert(main.includes('no other Mako window') && main.includes('Mako will still refuse'),

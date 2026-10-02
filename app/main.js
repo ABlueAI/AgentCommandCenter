@@ -133,6 +133,16 @@ const { createQuickLinksStore } = require('./quick-links-store');
 const { createQuickLinksIpc } = require('./quick-links-ipc');
 const { buildDefaultConfig: buildQuickLinksDefaultConfig } = require('./quick-links-policy');
 
+// ---- Windows taskbar identity (branding) --------------------------------------------------------
+// One stable, explicit AppUserModelID, so Windows attributes this process's windows to Mako rather
+// than to the implicit identity of the shared, unpackaged electron.exe (whose atom icon is what the
+// taskbar button showed). Windows requires a process-level ID to be set during startup, before any
+// UI exists, so this runs at module evaluation: before app.whenReady(), createWindow() and every
+// BrowserWindow. It changes the shell identity only; the `command-center` app name, the userData
+// directory and the admission ledger stored there are untouched.
+const MAKO_APP_USER_MODEL_ID = 'ABlueAI.Mako';
+if (process.platform === 'win32') app.setAppUserModelId(MAKO_APP_USER_MODEL_ID);
+
 // ---- Layout engine selection (MAIN decides; the renderer can never change it) -------------------
 // Blue's ADOPT verdict makes Dockview the PRODUCTION pane-layout engine, so `npm start` — no flag —
 // gets Dockview. The former hand-built grid survives as a bounded EMERGENCY RECOVERY surface behind
