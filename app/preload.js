@@ -33,10 +33,6 @@ contextBridge.exposeInMainWorld('cc', {
   quickLinksSave: (text) => ipcRenderer.invoke('quick-links-save', text),
   quickLinksOpen: (id) => ipcRenderer.invoke('quick-links-open', id),
 
-  // vibe-kanban desktop app (launched, not embedded — see main.js)
-  openBoard: () => ipcRenderer.invoke('open-board'),
-  pickBoardApp: () => ipcRenderer.invoke('pick-board-app'),
-
   // in-app terminals (node-pty)
   tlogReset: () => ipcRenderer.invoke('tlog-reset'),
   ptyStart: (o) => ipcRenderer.invoke('pty-start', o),

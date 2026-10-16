@@ -1666,15 +1666,6 @@ function wireUi() {
   $('#openTerminal').onclick = () => state.repo && cc.openTerminal(state.repo);
   $('#openGithub').onclick = () => state.githubUrl && cc.openExternal(state.githubUrl);
 
-  // Launch the installed Vibe Kanban desktop app; if not found, let the user locate it.
-  const openBoard = async () => {
-    const r = await cc.openBoard();
-    if (!r || !r.ok) { const p = await cc.pickBoardApp(); if (p) await cc.openBoard(); }
-  };
-  $('#openBoard').onclick = openBoard;
-  $('#openBoard2').onclick = openBoard;
-  $('#locateBoard').onclick = async () => { const p = await cc.pickBoardApp(); if (p) await cc.openBoard(); };
-
   // tabs
   document.querySelectorAll('.tab').forEach((t) => {
     t.onclick = () => {
