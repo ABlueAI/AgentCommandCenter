@@ -5,6 +5,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('cc', {
   // settings & repos
   getSettings: () => ipcRenderer.invoke('get-settings'),
+  buildInfo: () => ipcRenderer.invoke('build-info'),
   saveSettings: (p) => ipcRenderer.invoke('save-settings', p),
   pickFolder: () => ipcRenderer.invoke('pick-folder'),
   listRepos: () => ipcRenderer.invoke('list-repos'),

@@ -2,7 +2,6 @@
 // No Node here by design; this file is pure UI + IPC calls.
 
 const $ = (sel) => document.querySelector(sel);
-const ACCEPTANCE_BUILD = 'V5 STACK CONTENT ACCEPTANCE 2026-07-21.14';
 const state = { repo: '', githubUrl: '', worktrees: [], chosenRole: 'builder', chosenCli: 'claude', hardTask: false, theme: 'obsidian', ttsVoice: '', ttsSpeed: 1, videoModel: 'gemini-2.5-flash-lite', mediaResolution: 'MEDIUM', analysisMode: 'transcript' };
 const audioModules = window.ccAudioModuleHealth.createAudioModuleHealth();
 const quickLinksView = window.ccQuickLinksView.createQuickLinksView({
@@ -1311,10 +1310,14 @@ async function boot() {
   await quickLinksView.load();
   // Pull the controlled run's bounded counts once the bar exists. No-op with no run configured.
   if (admissionView) await admissionView.refresh();
-  document.title = `Mako — ${ACCEPTANCE_BUILD}`;
+  // The running build, from main's build-info (version + branch@commit of this checkout).
+  let buildLabel = 'Mako · build unknown';
+  try { const info = await cc.buildInfo(); if (info && typeof info.label === 'string') buildLabel = info.label; }
+  catch { appendLog('[build] build info unavailable\n'); }
+  document.title = buildLabel;
   const buildBadge = $('#audioBuild');
-  if (buildBadge) buildBadge.textContent = ACCEPTANCE_BUILD; // single source: the const above
-  appendLog(`[build] ${ACCEPTANCE_BUILD}\n`);
+  if (buildBadge) { buildBadge.textContent = buildLabel; buildBadge.title = 'Running build: version, branch and commit of this checkout'; }
+  appendLog(`[build] ${buildLabel}\n`);
   cc.onPtyData(({ id, data }) => {
     const t = terms.get(id);
     if (t) { t.term.write(data); t.parser.feed(data); }

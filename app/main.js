@@ -22,6 +22,7 @@ const { generateRunId, createRunIdRegistry } = require('./video-scout-run-id');
 // Untrusted IPC `task` names flow into a filesystem path and a git branch name; validate them here
 // (the enforcement boundary) before any fs/git/spawn call. See app/task-name.js / finding #4.
 const { validateTask } = require('./task-name');
+const { readBuildInfo } = require('./build-info');
 // Navigation-lockdown decisions (deny window.open / off-app navigation) and the shell-free launcher
 // arg builders. Both dependency-free + unit-tested (nav-guard.test.js / launchers.test.js).
 const { decideWindowOpen, decideNavigation, refusalLine } = require('./nav-guard');
@@ -927,6 +928,15 @@ function remoteToHttps(remote) {
 
 // ---- IPC: repos & settings --------------------------------------------------
 ipcMain.handle('get-settings', async () => loadSettings());
+// Build identity for the Terminals bar and window title (build-info.js): this checkout's version,
+// branch and commit, read once on first request. Non-sensitive by construction.
+let buildInfoPromise = null;
+ipcMain.handle('build-info', () => {
+  if (!buildInfoPromise) {
+    buildInfoPromise = readBuildInfo({ version: require('./package.json').version, runGit: (args) => git(args, __dirname) });
+  }
+  return buildInfoPromise;
+});
 ipcMain.handle('save-settings', async (_e, partial) => {
   const s = { ...loadSettings(), ...partial };
   saveSettings(s);

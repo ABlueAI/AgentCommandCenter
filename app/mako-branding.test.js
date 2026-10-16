@@ -145,8 +145,12 @@ assert(!/setAppDetails|app\.setName\(|typeof app\.setAppUserModelId/.test(main),
   'no window app details, app rename, or method-existence skip accompanies the identity');
 assert(!Object.prototype.hasOwnProperty.call(pkg, 'productName'),
   'package metadata adds no productName, so the userData identity stays command-center');
-assert(renderer.includes('document.title = `Mako \u2014 ${ACCEPTANCE_BUILD}`'),
-  'the acceptance title is Mako plus the unchanged build marker');
+// 2026-10-16: the static acceptance marker became the real build label from build-info.js, which
+// always begins with the product name.
+assert(renderer.includes('document.title = buildLabel') && renderer.includes("let buildLabel = 'Mako "),
+  'the window title is the Mako build label');
+assert(require('./build-info').formatBuildLabel({ version: '1.0.0', commit: 'abc1234' }).indexOf('Mako ') === 0,
+  'every build label begins with the Mako name');
 assert(main.includes('no other Mako window') && main.includes('Mako will still refuse'),
   'the stale-lock confirmation uses the Mako name');
 assert(admission.includes('Another Mako process changed or is updating the ledger.'),
