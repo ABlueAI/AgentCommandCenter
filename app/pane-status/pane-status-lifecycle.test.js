@@ -286,6 +286,38 @@ function makeController(overrides) {
     }
   }
 
+  // -----------------------------------------------------------------------------------------------
+  process.stdout.write('\n10. A newer same-major Claude Code is READY but says it is unverified\n');
+  // -----------------------------------------------------------------------------------------------
+  {
+    // The real version on Blue's machine during the September runs, against the shipped floor.
+    const rig = makeController({
+      resolveVersion: async () => ({ ok: true, raw: '2.1.283 (Claude Code)' }),
+      supportedVersions: ['2.1.228', '2.1.241'],
+    });
+    await rig.c.install();
+    eq(rig.c.getSetupState().state, 'ready', 'an unlisted 2.1.283 reaches ready instead of version-mismatch');
+    eq(rig.c.getSetupState().detail, 'version-unverified', 'and the setup detail says the version is unverified');
+    assert(rig.c.enrollPane('u1').ok === true, 'so its panes enroll and can show real status');
+    rig.c.shutdown();
+  }
+  {
+    const rig = makeController();     // the fixture's listed 9.9.9
+    await rig.c.install();
+    eq(rig.c.getSetupState().detail, null, 'a VERIFIED version is ready with no detail');
+    rig.c.shutdown();
+  }
+  {
+    const rig = makeController({
+      resolveVersion: async () => ({ ok: true, raw: '3.0.0 (Claude Code)' }),
+      supportedVersions: ['2.1.228'],
+    });
+    await rig.c.install();
+    eq(rig.c.getSetupState().state, 'version-mismatch', 'a new MAJOR version is still refused');
+    eq(rig.c.enrollPane('u2').ok, false, 'and its panes do not enroll');
+    rig.c.shutdown();
+  }
+
   try { fs.rmSync(root, { recursive: true, force: true }); } catch { /* best effort */ }
   process.stdout.write(`\npane-status-lifecycle: ${passed} passed, ${failed} failed\n`);
   process.exit(failed ? 1 : 0);

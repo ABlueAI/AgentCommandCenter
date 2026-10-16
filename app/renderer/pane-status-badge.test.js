@@ -189,6 +189,16 @@ const doc = { createElement: () => makeEl() };
   // a bounded detail constant is surfaced so a person can quote it
   assert(badgeMod.describeSetup({ state: 'locked', detail: 'lock-held-by-another-process' })
     .title.indexOf('lock-held-by-another-process') !== -1, 'a bounded detail constant is shown to the user');
+
+  // READY on an unverified (newer, same-major) Claude Code stays "on" and says it is untested
+  {
+    const d = badgeMod.describeSetup({ state: 'ready', detail: 'version-unverified' });
+    eq(d.label, 'Claude status: on', 'an unverified version still reads as on');
+    eq(d.action, 'remove', 'and still offers Remove');
+    assert(/newer than the last one tested/.test(d.title), 'and the tooltip says the version was not tested');
+    assert(!/newer than the last one tested/.test(badgeMod.describeSetup({ state: 'ready' }).title),
+      'a verified ready state does not carry that warning');
+  }
 }
 
 // ---------------------------------------------------------------- the control drives the bridge

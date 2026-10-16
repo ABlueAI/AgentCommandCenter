@@ -37,7 +37,7 @@
   const REASON_TEXT = {
     'no-signal': 'No status signal received yet.',
     stale: 'No signal recently — the last state is too old to trust.',
-    'version-mismatch': 'This Claude Code version has not been verified for pane status.',
+    'version-mismatch': 'This Claude Code version is not supported for pane status (older than the supported floor, a new major version, or unreadable).',
     'hook-removed': 'Status reporting was removed for this installation.',
     'reconciliation-required': 'Pane status needs attention — see the Claude status control.',
     'not-installed': 'Pane status is not set up.',
@@ -73,7 +73,7 @@
     },
     'version-mismatch': {
       label: 'Claude status: unknown',
-      title: 'This Claude Code version has not been verified for pane status, so every pane shows unknown.',
+      title: 'This Claude Code version is not supported for pane status (older than the supported floor, a new major version, or unreadable), so every pane shows unknown.',
       action: 'remove',
     },
     locked: {
@@ -125,14 +125,20 @@
     return { state, label, title, className: STATE_CLASS[state], reason: v.reason || null };
   }
 
+  // READY on a Claude Code release newer than any probed on an acceptance machine. Reporting is on;
+  // the control says so rather than pretending the version was tested.
+  const UNVERIFIED_READY_TITLE = 'Pane status is active on a Claude Code version newer than the last one '
+    + 'tested with Mako. Status is shown; if badges look wrong, report it. Choose Remove to uninstall the Claude Code hooks.';
+
   /** PURE. Given a setup state from main, produce the toolbar control's appearance. */
   function describeSetup(setup) {
     const s = setup || {};
     const key = Object.prototype.hasOwnProperty.call(SETUP_TEXT, s.state) ? s.state : 'disabled';
     const base = SETUP_TEXT[key];
+    const baseTitle = key === 'ready' && s.detail === 'version-unverified' ? UNVERIFIED_READY_TITLE : base.title;
     // A detail is a bounded constant from main; it is appended so a person can quote it into the
     // recovery document without hunting through logs.
-    const title = s.detail ? `${base.title} (${s.detail})` : base.title;
+    const title = s.detail ? `${baseTitle} (${s.detail})` : baseTitle;
     return { state: key, label: base.label, title, className: SETUP_CLASS[key], action: base.action };
   }
 

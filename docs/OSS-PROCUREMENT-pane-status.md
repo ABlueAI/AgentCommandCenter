@@ -1793,6 +1793,36 @@ authenticated truth**.
 * **Providers beyond Claude Code remain unauthorized.**
 * **No new authentication scheme for reporter provenance is authorized or invented here.**
 
+## 14. October 16 amendment — accept later same-major Claude Code releases
+
+### 14.1 Why
+
+The § 13.2 authorization said "fail closed to `unknown` for unverified versions", implemented as an
+exact-match allowlist (`2.1.228`, `2.1.241`). Claude Code updates itself; Blue's machine ran 2.1.250
+and later 2.1.283 during September. Every badge therefore showed `unknown`, and during the October
+daily-driver workday Blue reported that colored pane status was "non-existent".
+
+### 14.2 Blue's decision, verbatim (2026-10-16 chat, answering the proposed change)
+
+> i am not fully understanding this question but i want to say yes. i definitely dont want the
+> alternative version. this sounds like what we want.
+
+The proposal it answered: show status on any Claude Code release at or above 2.1.228 with the same
+major version, mark versions never probed as unverified, and keep the freshness timeout as the safety
+net. The rejected alternative was pinning Claude Code to a tested version.
+
+### 14.3 What changes and what does not
+
+* Versions in `SUPPORTED_CLAUDE_VERSIONS` remain the only VERIFIED versions; entries are still added
+  only from a recorded probe.
+* A release with the same major version at or above `MINIMUM_CLAUDE_VERSION` (2.1.228) is SUPPORTED:
+  reporting is on and the setup control's tooltip says the version is unverified
+  (setup detail `version-unverified`).
+* Older releases, a different major version, and output that does not parse exactly remain refused
+  with `version-mismatch`.
+* The advisory-only boundary of § 13.4 is unchanged. Status still cannot trigger any action, and a
+  silent or broken reporter still becomes `unknown` through freshness.
+
 ---
 
 **BLUE SUBSYSTEM VERDICT: BUILD FRESH**
