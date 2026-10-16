@@ -351,8 +351,13 @@ process.stdout.write('\nindex.html ships the EMBEDDED dock and loads no Dockview
   // controlled-run token at window construction. With no run configured nothing is constructed,
   // `mount()` is never reached, and #admissionHost keeps zero children — asserted in
   // renderer/admission-view.test.js and admission-ui-integration.test.js.
+  //
+  // RE-PINNED for Shift+Enter (2026-10-16). 24 -> 25. The one addition is `term-keys.js`, a pure key
+  // mapping helper that publishes `window.ccTermKeys` and touches no DOM.
   const scriptTags = (indexSrc.match(/<script[^>]*src=/g) || []).length;
-  assert(scriptTags === 24, `index.html loads exactly 24 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view and the admission view (found ${scriptTags})`);
+  assert(scriptTags === 25, `index.html loads exactly 25 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view and the terminal key mapping (found ${scriptTags})`);
+  assert(/<script src="term-keys\.js"><\/script>/.test(indexSrc),
+    'the added script is exactly the terminal key mapping helper');
   assert(/<script src="pane-status-badge\.js"><\/script>/.test(indexSrc),
     'the 22nd script is exactly the pane-status prototype badge');
   assert(/<script src="quick-links-view\.js"><\/script>/.test(indexSrc),

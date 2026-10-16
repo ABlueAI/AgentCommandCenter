@@ -496,7 +496,16 @@ function openInAppTerminal(opts = {}) {
     log: appendLog,
     paneId: id,
   });
+  // The CLI this pane actually runs: a role always launches its role CLI.
+  const paneCli = role ? ROLES[role].cli : cli;
   term.attachCustomKeyEventHandler((e) => {
+    // Shift+Enter -> newline in Claude Code panes (term-keys.js). preventDefault stops the browser
+    // keypress that would otherwise make xterm also send a submitting CR.
+    const remap = window.ccTermKeys.resolveKey(e, paneCli);
+    if (remap.handled) {
+      if (remap.send) { e.preventDefault(); cc.ptyWrite(id, remap.send); }
+      return false;
+    }
     if (e.type !== 'keydown' || !e.ctrlKey) return true;
     const isV = e.code === 'KeyV' || (e.key && e.key.toLowerCase() === 'v');
     const isC = e.code === 'KeyC' || (e.key && e.key.toLowerCase() === 'c');
