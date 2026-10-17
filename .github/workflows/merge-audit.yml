@@ -1,0 +1,70 @@
+# Merge audit: a tripwire, not a gate. Every change that lands on main is checked after the fact,
+# and anything that did not arrive the approved way opens a "security-alert" issue for Blue.
+#
+#   ALERT  a commit reached main without a merged pull request (direct push or bypass)
+#   ALERT  a pull request from an agent account merged without Blue's approval
+#   ALERT  a pull request was merged by anyone other than Blue
+#
+# While agents still act through Blue's own GitHub account (before docs/SETUP-GUARDRAILS.md
+# step B), GitHub cannot tell an agent from Blue, so only the first check can fire. After step B,
+# all three apply. The token can read the repo and open issues; it cannot merge or approve.
+name: Merge audit
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v8
+        env:
+          HUMAN_APPROVER: ABlueAI
+        with:
+          script: |
+            const human = process.env.HUMAN_APPROVER;
+            const { owner, repo } = context.repo;
+            const problems = [];
+            const commits = context.payload.commits && context.payload.commits.length
+              ? context.payload.commits.map((c) => c.id)
+              : [context.sha];
+            const checked = new Set();
+            for (const sha of commits) {
+              const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({ owner, repo, commit_sha: sha });
+              const merged = prs.filter((p) => p.merged_at && p.base.ref === 'main');
+              if (merged.length === 0) {
+                problems.push(`Commit ${sha.slice(0, 7)} reached main without a merged pull request.`);
+                continue;
+              }
+              for (const pr of merged) {
+                if (checked.has(pr.number)) continue;
+                checked.add(pr.number);
+                const { data: full } = await github.rest.pulls.get({ owner, repo, pull_number: pr.number });
+                const mergedBy = full.merged_by && full.merged_by.login;
+                if (mergedBy !== human) problems.push(`PR #${pr.number} was merged by ${mergedBy || 'unknown'}, not ${human}.`);
+                if (full.user.login !== human) {
+                  const { data: reviews } = await github.rest.pulls.listReviews({ owner, repo, pull_number: pr.number });
+                  const approved = reviews.some((r) => r.user && r.user.login === human && r.state === 'APPROVED');
+                  if (!approved) problems.push(`PR #${pr.number} by ${full.user.login} merged without an approval from ${human}.`);
+                }
+              }
+            }
+            if (problems.length === 0) { core.info('Merge audit: every change on main arrived through an approved pull request.'); return; }
+            const body = [
+              `@${human} the merge audit found a change on main that did not arrive the approved way.`,
+              '',
+              ...problems.map((p) => `- ${p}`),
+              '',
+              `Push: ${context.payload.compare || context.sha}`,
+              'Check docs/SETUP-GUARDRAILS.md. If this was you on purpose, close this issue with a note.',
+            ].join('\n');
+            const title = 'Security alert: unapproved change on main';
+            try { await github.rest.issues.create({ owner, repo, title, body, labels: ['security-alert'] }); }
+            catch { await github.rest.issues.create({ owner, repo, title, body }); }
+            core.setFailed(problems.join(' '));

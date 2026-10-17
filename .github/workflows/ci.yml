@@ -1,0 +1,50 @@
+# CI: the same two gates a contributor runs locally, on GitHub's Windows machines.
+#   app tests   -> `npm test` in app/ (the full node + Electron chain)
+#   PowerShell  -> scripts/run-pester.ps1 (every *.Tests.ps1, Pester 3.x/4.x)
+# Read-only token. This workflow never merges, approves, labels or pushes anything.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: App tests (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Install app dependencies
+        working-directory: app
+        run: npm ci --no-audit --no-fund
+      - name: npm test
+        working-directory: app
+        run: npm test
+
+  pester:
+    name: PowerShell tests (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: run-pester.ps1 (Windows PowerShell 5.1, built-in Pester 3.4)
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-pester.ps1
