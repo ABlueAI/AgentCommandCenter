@@ -1,15 +1,16 @@
 # Mako status
 
-Updated 2026-10-17 by Claude (PR #27). Every PR that changes the state updates this file.
+Updated 2026-10-17 by Claude, after PR #27 merged. Every PR that changes the state updates this file.
 
 ## Right now
 
 - **Your next steps:** [BLUE-CHECKLIST.md](BLUE-CHECKLIST.md), in order.
 
-- **Release:** Mako 1.0 release candidate in PR #27 (version 1.0.0). Not yet merged or tagged.
-- **Plan:** 1.1 month-one plan drafted in [docs/PLAN-1.1.md](docs/PLAN-1.1.md) (25 sessions).
-- **Guardrails:** repo-side files are in PR #27. The GitHub settings in
-  [docs/SETUP-GUARDRAILS.md](docs/SETUP-GUARDRAILS.md) still need Blue's clicks.
+- **Release:** Mako 1.0 release candidate merged to `main` on 2026-10-17 (PR #27, merge commit
+  `4d60c9e`, version 1.0.0). Not yet tagged: the PC smoke test comes first (checklist steps 4 and 5).
+- **Plan:** 1.1 month-one plan approved with that merge: [docs/PLAN-1.1.md](docs/PLAN-1.1.md).
+- **Guardrails:** repo-side files are live on `main`, and the merge audit passed on its first run. The
+  GitHub settings (checklist steps 2 and 7) still need Blue's clicks.
 
 ## 1.0: done
 
@@ -24,7 +25,7 @@ daily-driver workday · Shift+Enter newline · real build label · Vibe Kanban r
 2. On Blue's PC: recover the lost reviewer and builder conversations before about **2026-11-03**,
    when Claude Code deletes 30-day-old transcripts; short smoke test. Steps:
    [docs/handoff/FINISH-1.0.md](docs/handoff/FINISH-1.0.md).
-3. Blue merges PR #27 and approves the `v1.0.0` tag.
+3. ~~Blue merges PR #27~~ Done 2026-10-17. Then Blue approves the `v1.0.0` tag (checklist step 5).
 
 Known limitations shipping with 1.0 are in [docs/RELEASE-NOTES-1.0.md](docs/RELEASE-NOTES-1.0.md).
 
