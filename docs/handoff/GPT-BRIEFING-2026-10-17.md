@@ -32,8 +32,9 @@ PR #27. Everything below is either in the repository or quoted from Blue.
   - Vibe Kanban board removed. Bloop shut down in April 2026; Mako now opens on Agents.
   - Windows CI on GitHub (`npm test` plus Pester), merge guardrails, the new rulebook, the plan and
     these handoffs.
-- **Tests:** on Linux, the same pass and fail set as `main` plus 2 new suites passing (19 suites need
-  Windows). Windows CI: PowerShell suites pass; the app suite is being driven to green.
+- **Tests:** Windows CI on GitHub is green: the full `npm test` chain and Pester 983 passed, 0 failed.
+  Blue's PC recorded 984 on October 2; the one-test gap is likely machine-specific and is checked in
+  FINISH-1.0.
 - **Left for 1.0, on Blue's PC** (docs/handoff/FINISH-1.0.md):
   - Recover the lost October 4 and 5 conversations before about November 3, when Claude Code's 30-day
     transcript cleanup removes them.

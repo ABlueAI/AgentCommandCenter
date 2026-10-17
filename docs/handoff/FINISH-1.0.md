@@ -16,8 +16,10 @@ Claude Desktop, or `claude` in a terminal opened in `D:\Workspace\agent-command-
 - PR #27 (`claude/youthful-heisenberg-sed4co`) holds the 1.0 release candidate: four fixes (status
   colors on current Claude Code, Shift+Enter, real build label and version 1.0.0, Vibe Kanban
   removed), Windows CI, merge guardrails, the new rulebook, the 1.1 plan and these docs.
-- Linux test run: same pass and fail set as `main`, plus 2 new suites passing. Windows CI: PowerShell
-  suites pass; the app suite is being driven to green on the PR.
+- Windows CI on PR #27 is green: the full `npm test` chain and `run-pester.ps1` (983 passed, 0 failed).
+  The October 2 taskbar record shows 984 on Blue's PC. Run `scripts\run-pester.ps1` once here and
+  note the count; a one-test difference is expected to be machine-specific (none of PR #27 touches
+  `scripts/`).
 - Never rerun H1 or the timed shortcut scripts (see docs/DECISIONS.md).
 
 ## A. Recover the lost conversations (urgent: before about 2026-11-03)

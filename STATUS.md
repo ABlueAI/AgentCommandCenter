@@ -17,7 +17,8 @@ daily-driver workday · Shift+Enter newline · real build label · Vibe Kanban r
 
 ## 1.0: left
 
-1. Windows CI green on PR #27 (Claude is driving this).
+1. ~~Windows CI green on PR #27~~ Done: app tests and PowerShell tests (983 passed, 0 failed) pass on
+   GitHub's Windows runner.
 2. On Blue's PC: recover the lost reviewer and builder conversations before about **2026-11-03**,
    when Claude Code deletes 30-day-old transcripts; short smoke test. Steps:
    [docs/handoff/FINISH-1.0.md](docs/handoff/FINISH-1.0.md).
