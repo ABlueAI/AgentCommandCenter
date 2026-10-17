@@ -24,6 +24,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # quick-links-integration compares against an older commit with `git show`
       - uses: actions/setup-node@v5
         with:
           node-version: 22
