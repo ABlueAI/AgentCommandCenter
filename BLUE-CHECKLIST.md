@@ -4,14 +4,14 @@ Everything Blue needs to do, in order, with when and how long. Agents keep it cu
 Blue goes here instead of living only in a chat message. Agents tick a box only when they have verified
 it, adding the date and how they checked. Blue can tick boxes himself, or tell any agent "step N done".
 
-Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md (until
-PR #27 merges, open it from the PR's "Files changed" tab).
+Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
 Last updated 2026-10-17 by Claude.
 
 ## Today
 
-- [ ] **1. Merge PR #27.** About 2 minutes.
+- [x] **1. Merge PR #27.** About 2 minutes. *Verified 2026-10-17: merged by ABlueAI at 22:35 UTC as
+  merge commit `4d60c9e`; the merge audit passed.*
   - Open https://github.com/ABlueAI/AgentCommandCenter/pull/27, read the TLDR at the top, then click
     **Merge pull request** and **Confirm merge**.
   - You decided that green CI plus your read of the TLDR is enough review for this PR. Codex reviews
