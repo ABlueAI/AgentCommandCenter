@@ -2,7 +2,6 @@
 // No Node here by design; this file is pure UI + IPC calls.
 
 const $ = (sel) => document.querySelector(sel);
-const ACCEPTANCE_BUILD = 'V5 STACK CONTENT ACCEPTANCE 2026-07-21.14';
 const state = { repo: '', githubUrl: '', worktrees: [], chosenRole: 'builder', chosenCli: 'claude', hardTask: false, theme: 'obsidian', ttsVoice: '', ttsSpeed: 1, videoModel: 'gemini-2.5-flash-lite', mediaResolution: 'MEDIUM', analysisMode: 'transcript' };
 const audioModules = window.ccAudioModuleHealth.createAudioModuleHealth();
 const quickLinksView = window.ccQuickLinksView.createQuickLinksView({
@@ -496,7 +495,16 @@ function openInAppTerminal(opts = {}) {
     log: appendLog,
     paneId: id,
   });
+  // The CLI this pane actually runs: a role always launches its role CLI.
+  const paneCli = role ? ROLES[role].cli : cli;
   term.attachCustomKeyEventHandler((e) => {
+    // Shift+Enter -> newline in Claude Code panes (term-keys.js). preventDefault stops the browser
+    // keypress that would otherwise make xterm also send a submitting CR.
+    const remap = window.ccTermKeys.resolveKey(e, paneCli);
+    if (remap.handled) {
+      if (remap.send) { e.preventDefault(); cc.ptyWrite(id, remap.send); }
+      return false;
+    }
     if (e.type !== 'keydown' || !e.ctrlKey) return true;
     const isV = e.code === 'KeyV' || (e.key && e.key.toLowerCase() === 'v');
     const isC = e.code === 'KeyC' || (e.key && e.key.toLowerCase() === 'c');
@@ -1302,10 +1310,14 @@ async function boot() {
   await quickLinksView.load();
   // Pull the controlled run's bounded counts once the bar exists. No-op with no run configured.
   if (admissionView) await admissionView.refresh();
-  document.title = `Mako — ${ACCEPTANCE_BUILD}`;
+  // The running build, from main's build-info (version + branch@commit of this checkout).
+  let buildLabel = 'Mako · build unknown';
+  try { const info = await cc.buildInfo(); if (info && typeof info.label === 'string') buildLabel = info.label; }
+  catch { appendLog('[build] build info unavailable\n'); }
+  document.title = buildLabel;
   const buildBadge = $('#audioBuild');
-  if (buildBadge) buildBadge.textContent = ACCEPTANCE_BUILD; // single source: the const above
-  appendLog(`[build] ${ACCEPTANCE_BUILD}\n`);
+  if (buildBadge) { buildBadge.textContent = buildLabel; buildBadge.title = 'Running build: version, branch and commit of this checkout'; }
+  appendLog(`[build] ${buildLabel}\n`);
   cc.onPtyData(({ id, data }) => {
     const t = terms.get(id);
     if (t) { t.term.write(data); t.parser.feed(data); }
@@ -1653,15 +1665,6 @@ function wireUi() {
   $('#openVscode').onclick = () => state.repo && cc.openVscode(state.repo);
   $('#openTerminal').onclick = () => state.repo && cc.openTerminal(state.repo);
   $('#openGithub').onclick = () => state.githubUrl && cc.openExternal(state.githubUrl);
-
-  // Launch the installed Vibe Kanban desktop app; if not found, let the user locate it.
-  const openBoard = async () => {
-    const r = await cc.openBoard();
-    if (!r || !r.ok) { const p = await cc.pickBoardApp(); if (p) await cc.openBoard(); }
-  };
-  $('#openBoard').onclick = openBoard;
-  $('#openBoard2').onclick = openBoard;
-  $('#locateBoard').onclick = async () => { const p = await cc.pickBoardApp(); if (p) await cc.openBoard(); };
 
   // tabs
   document.querySelectorAll('.tab').forEach((t) => {

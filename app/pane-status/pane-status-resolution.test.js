@@ -121,20 +121,20 @@ process.stdout.write('\n   installation A on Electron PATH vs installation B in 
     assert(calls[0].opts.windowsHide === true, 'and no window');
     eq(calls[0].opts.env.PATH, 'C:\\electron\\path', 'the injected environment is passed through unaltered');
 
-    // The GATE re-parses independently and gates on exact membership.
+    // The GATE re-parses independently: verified on exact membership, supported at or above the floor.
     const gate = versionMod.createVersionGate({
       resolveVersion: () => Promise.resolve(res), supportedVersions: ['2.1.228'], log: () => {},
     });
     const probed = await gate.probe();
-    assert(probed.supported === true, 'the gate accepts the exact version it was given');
+    assert(probed.supported === true && probed.verified === true, 'the gate accepts and verifies the exact version it was given');
     eq(gate.record().executable, B, 'and its acceptance record names B');
 
     const narrow = versionMod.createVersionGate({
-      resolveVersion: () => Promise.resolve(res), supportedVersions: ['2.1.227'], log: () => {},
+      resolveVersion: () => Promise.resolve(res), supportedVersions: ['2.1.227'], minimumVersion: '2.1.229', log: () => {},
     });
     await narrow.probe();
-    assert(narrow.supported() === false, 'a NEIGHBOURING patch version is not supported');
-    eq(narrow.reason(), versionMod.VERSION_REFUSAL.UNSUPPORTED, 'exact membership only — never a range');
+    assert(narrow.supported() === false, 'an unlisted version below the floor is not supported');
+    eq(narrow.reason(), versionMod.VERSION_REFUSAL.UNSUPPORTED, 'and is refused as version-unsupported');
 
     await failClosed();
   });

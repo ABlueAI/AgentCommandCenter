@@ -1,20 +1,27 @@
 'use strict';
-// Blue Helm production pane status — fail-closed Claude Code version gating.
+// Blue Helm production pane status — Claude Code version gating.
 //
 // Procurement record: docs/OSS-PROCUREMENT-pane-status.md
 // Blue's verdict, verbatim: BLUE SUBSYSTEM VERDICT: BUILD FRESH
+// Amended by Blue on 2026-10-16 (record § "October 16 amendment"): accept later releases of the same
+// major version instead of failing closed on every unlisted version.
 //
 // WHY THIS EXISTS. Pane status reads Claude Code's hook lifecycle. That lifecycle is an INTERNAL
 // contract of somebody else's program: event names, payload shape, and firing order can change in any
-// release, and nothing obliges Claude Code to tell us. A subsystem that kept displaying `working`
-// against a version whose events it no longer understands would be confidently wrong, which is the
-// one outcome the invariant forbids. So the gate is EXACT-MATCH and FAIL-CLOSED:
+// release, and nothing obliges Claude Code to tell us.
 //
-//   * only versions that were actually observed and tested on an acceptance machine are supported;
-//   * there are NO RANGES, no semver caret, no "greater than". A range is a claim about software that
-//     has not been written yet;
-//   * an unresolved, unparseable, or unlisted version is NOT supported, and the badge shows
-//     `unknown` with reason `version-mismatch`. It never shows a lifecycle state.
+// WHY IT IS NO LONGER EXACT-MATCH. The original gate admitted only the exact strings below. Claude
+// Code updates itself, so on Blue's real machine (2.1.250, later 2.1.283) every badge sat at
+// `unknown` and the feature looked absent during the daily-driver workday. The badge is advisory and
+// can trigger nothing, and freshness (pane-status-freshness.js) already turns a silent or broken
+// reporter into `unknown`, so a newer release that changed its events degrades to `unknown` rather
+// than to a confidently wrong state. The gate is therefore:
+//
+//   * VERIFIED: the exact strings in SUPPORTED_CLAUDE_VERSIONS, observed on an acceptance machine;
+//   * ACCEPTED, UNVERIFIED: any later release with the same major version as
+//     MINIMUM_CLAUDE_VERSION. Status is shown; the setup control says the version is unverified;
+//   * REFUSED: anything older than MINIMUM_CLAUDE_VERSION, a different major version, or output that
+//     does not parse exactly. Those show `unknown` with reason `version-mismatch`.
 //
 // THE CHILD-PROCESS BOUNDARY. Resolving a version means running an executable, and § 15 of the work
 // order permits that in exactly three places: explicit setup, installed-startup discovery, and an
@@ -22,7 +29,8 @@
 // imports child_process. Provider events, heartbeat, freshness, rendering, enrollment and revocation
 // cannot reach a spawn from here, because there is no spawn here to reach.
 
-// Versions proven on an acceptance machine, exact strings only.
+// Versions proven on an acceptance machine, exact strings only. Membership makes a version VERIFIED;
+// acceptance of later releases is MINIMUM_CLAUDE_VERSION's job, not this list's.
 //
 // PROVISIONAL. Entries are added ONLY by the read-only version probe of § 18, one exact string at a
 // time, on the machine that ran it. An entry is a statement that a human ran the probe and recorded
@@ -107,6 +115,11 @@ const SUPPORTED_CLAUDE_VERSIONS = Object.freeze([
   '2.1.241',
 ]);
 
+// The oldest release accepted at all: the first version the eight-event hook contract was verified
+// on. Later releases of the SAME MAJOR version are accepted as unverified; a new major version is a
+// declared breaking change and is refused until it is probed and listed above.
+const MINIMUM_CLAUDE_VERSION = '2.1.228';
+
 const VERSION_REFUSAL = Object.freeze({
   NOT_PROBED: 'version-not-probed',
   UNPARSEABLE: 'version-unparseable',
@@ -161,14 +174,36 @@ function parseVersion(raw) {
   return m ? m[1] : null;
 }
 
-/**
- * Exact membership. Deliberately not a comparison — `indexOf` on a frozen list of strings is the
- * whole policy, and it is impossible to accidentally widen.
- */
-function isVersionSupported(version, supportedVersions) {
+const EXACT_TRIPLE = /^\d+\.\d+\.\d+$/;
+
+/** Numeric comparison of two exact dotted triples: negative, zero, or positive. */
+function compareVersions(a, b) {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if (pa[i] !== pb[i]) return pa[i] - pb[i];
+  }
+  return 0;
+}
+
+/** Exact membership in the list of versions observed on an acceptance machine. */
+function isVersionVerified(version, supportedVersions) {
   const list = supportedVersions || SUPPORTED_CLAUDE_VERSIONS;
   if (typeof version !== 'string' || version.length === 0) return false;
   return list.indexOf(version) !== -1;
+}
+
+/**
+ * Verified, or an exact triple with the floor's major version at or above the floor. Only an exact
+ * triple is ever compared, so a suffixed string such as "2.1.241-beta" can never be widened onto a
+ * number here; parseVersion() has already refused it upstream as well.
+ */
+function isVersionSupported(version, supportedVersions, minimumVersion) {
+  if (isVersionVerified(version, supportedVersions)) return true;
+  if (typeof version !== 'string' || !EXACT_TRIPLE.test(version)) return false;
+  const floor = minimumVersion || MINIMUM_CLAUDE_VERSION;
+  if (version.split('.')[0] !== floor.split('.')[0]) return false;
+  return compareVersions(version, floor) >= 0;
 }
 
 /**
@@ -176,12 +211,14 @@ function isVersionSupported(version, supportedVersions) {
  *   resolveVersion() -> { ok, raw, exit, executable } | Promise thereof.  INJECTED. The only
  *                       child-process dependency in the whole subsystem's version path.
  *   supportedVersions -> optional override (tests pin their own list)
+ *   minimumVersion    -> optional override of MINIMUM_CLAUDE_VERSION (tests pin their own floor)
  *   log(line)         -> bounded logger. Receives version strings, never payloads or tokens.
  */
 function createVersionGate(deps) {
   const d = deps || {};
   const resolveVersion = typeof d.resolveVersion === 'function' ? d.resolveVersion : null;
   const supportedVersions = d.supportedVersions || SUPPORTED_CLAUDE_VERSIONS;
+  const minimumVersion = d.minimumVersion || MINIMUM_CLAUDE_VERSION;
   const log = typeof d.log === 'function' ? d.log : () => {};
 
   // State starts at "not probed", which is NOT supported. Fail-closed means the default answer is no.
@@ -223,15 +260,20 @@ function createVersionGate(deps) {
     }
 
     observed = parsed;
-    const supported = isVersionSupported(observed, supportedVersions);
+    const supported = isVersionSupported(observed, supportedVersions, minimumVersion);
+    const verified = isVersionVerified(observed, supportedVersions);
     lastReason = supported ? null : VERSION_REFUSAL.UNSUPPORTED;
     // The version string is bounded and non-sensitive, so it is safe to log; a payload never is.
-    log(`[pane-status] Claude version resolved: ${observed} (${supported ? 'supported' : 'NOT supported'})`);
-    return { ok: true, version: observed, supported, raw: lastRaw, executable: lastExecutable };
+    const verdict = !supported ? 'NOT supported' : (verified ? 'supported, verified' : 'supported, unverified');
+    log(`[pane-status] Claude version resolved: ${observed} (${verdict})`);
+    return { ok: true, version: observed, supported, verified, raw: lastRaw, executable: lastExecutable };
   }
 
-  /** The gate itself. No probe yet, a failed probe, and an unlisted version are all equally "no". */
-  function supported() { return isVersionSupported(observed, supportedVersions); }
+  /** The gate itself. No probe yet, a failed probe, and a refused version are all equally "no". */
+  function supported() { return isVersionSupported(observed, supportedVersions, minimumVersion); }
+
+  /** True only when the observed version is one actually probed on an acceptance machine. */
+  function verified() { return isVersionVerified(observed, supportedVersions); }
 
   /** Why the gate says no, as a bounded constant. null when it says yes. */
   function reason() { return supported() ? null : (lastReason || VERSION_REFUSAL.NOT_PROBED); }
@@ -243,12 +285,14 @@ function createVersionGate(deps) {
       raw: lastRaw,
       executable: lastExecutable,
       supported: supported(),
+      verified: verified(),
       reason: reason(),
       supportedVersions: Array.from(supportedVersions),
+      minimumVersion,
     };
   }
 
-  return { probe, supported, reason, record, observedVersion: () => observed };
+  return { probe, supported, verified, reason, record, observedVersion: () => observed };
 }
 
 // =================================================================================================
@@ -448,9 +492,12 @@ function createClaudeVersionResolver(deps) {
 
 const api = {
   SUPPORTED_CLAUDE_VERSIONS,
+  MINIMUM_CLAUDE_VERSION,
   VERSION_REFUSAL,
   VERSION_PATTERN,
   parseVersion,
+  compareVersions,
+  isVersionVerified,
   isVersionSupported,
   createVersionGate,
   PS_EXE,

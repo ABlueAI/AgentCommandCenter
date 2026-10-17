@@ -1,5 +1,7 @@
 # Blue Helm 1.0 — Four-Day Release Plan
 
+> **HISTORICAL since 2026-10-17.** Current state: [STATUS.md](../STATUS.md). Rules: [AGENTS.md](../AGENTS.md). Plan: [docs/PLAN-1.1.md](../docs/PLAN-1.1.md). This file is kept as background; its queues and procedures are not current instructions.
+
 ## 0. Authority, status, and purpose
 
 Blue issued this exact authorization on 2026-08-14:

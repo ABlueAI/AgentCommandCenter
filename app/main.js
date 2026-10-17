@@ -1,6 +1,6 @@
 // Command Center — Electron main process.
 // This is the "orchestrator": it owns the window and shells out to the real tools
-// (git worktrees, VSCode, Windows Terminal, vibe-kanban, the browser). The renderer
+// (git worktrees, VSCode, Windows Terminal, the browser). The renderer
 // never touches Node directly — everything goes through the IPC handlers below.
 
 const { app, BrowserWindow, ipcMain, shell, dialog, session, safeStorage, clipboard } = require('electron');
@@ -22,6 +22,7 @@ const { generateRunId, createRunIdRegistry } = require('./video-scout-run-id');
 // Untrusted IPC `task` names flow into a filesystem path and a git branch name; validate them here
 // (the enforcement boundary) before any fs/git/spawn call. See app/task-name.js / finding #4.
 const { validateTask } = require('./task-name');
+const { readBuildInfo } = require('./build-info');
 // Navigation-lockdown decisions (deny window.open / off-app navigation) and the shell-free launcher
 // arg builders. Both dependency-free + unit-tested (nav-guard.test.js / launchers.test.js).
 const { decideWindowOpen, decideNavigation, refusalLine } = require('./nav-guard');
@@ -461,8 +462,7 @@ function createWindow() {
   // middle-click, or a window.open must never repoint this window or spawn an uncontrolled child
   // window. Deny new windows (forwarding http(s) to the OS browser), and allow navigation ONLY back
   // to our own entry document (the module-level ENTRY_URL). Pure decisions live in nav-guard.js.
-  // This is the app's only BrowserWindow (the board is a separately-launched desktop app, not a
-  // webview here).
+  // This is the app's only BrowserWindow.
   // Surface every denial through the same main-error -> renderer channel the launcher %-path refusal
   // uses (refuse-visibly rule): a blocked navigation/popup must never be a silent no-op. refusalLine
   // strips control chars + truncates the (attacker-influenced) URL so this can't become a log sink.
@@ -927,6 +927,15 @@ function remoteToHttps(remote) {
 
 // ---- IPC: repos & settings --------------------------------------------------
 ipcMain.handle('get-settings', async () => loadSettings());
+// Build identity for the Terminals bar and window title (build-info.js): this checkout's version,
+// branch and commit, read once on first request. Non-sensitive by construction.
+let buildInfoPromise = null;
+ipcMain.handle('build-info', () => {
+  if (!buildInfoPromise) {
+    buildInfoPromise = readBuildInfo({ version: require('./package.json').version, runGit: (args) => git(args, __dirname) });
+  }
+  return buildInfoPromise;
+});
 ipcMain.handle('save-settings', async (_e, partial) => {
   const s = { ...loadSettings(), ...partial };
   saveSettings(s);
@@ -1629,36 +1638,3 @@ ipcMain.on('pty-kill', (_e, id) => {
   if (admissionIpc) admissionIpc.forgetPane(id);
 });
 
-// ---- IPC: vibe-kanban board -------------------------------------------------
-// Start the board as a child process and sniff its stdout for the localhost URL,
-// then hand that URL to the renderer to load into the embedded <webview>.
-// vibe-kanban's hosted CDN died when Bloop shut down (04/2026), so the embedded
-// CLI-server board can't be fetched. Instead we launch the installed standalone
-// Vibe Kanban desktop app (from its GitHub release). Resolution order: saved path
-// -> Start Menu shortcut -> common install dirs.
-function findBoardApp() {
-  const s = loadSettings();
-  if (s.boardAppPath && fs.existsSync(s.boardAppPath)) return s.boardAppPath;
-  const lnk = path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Vibe Kanban.lnk');
-  if (fs.existsSync(lnk)) return lnk; // shell.openPath resolves the .lnk for us
-  const guesses = [
-    path.join(process.env.LOCALAPPDATA || '', 'Vibe Kanban', 'vibe-kanban-tauri.exe'),
-    'C:\\Program Files\\Vibe Kanban\\vibe-kanban-tauri.exe',
-  ];
-  return guesses.find((p) => fs.existsSync(p)) || null;
-}
-ipcMain.handle('open-board', async () => {
-  const target = findBoardApp();
-  if (!target) return { ok: false };
-  const err = await shell.openPath(target); // returns '' on success
-  return { ok: !err, error: err };
-});
-ipcMain.handle('pick-board-app', async () => {
-  const r = await dialog.showOpenDialog(win, {
-    properties: ['openFile'],
-    filters: [{ name: 'Vibe Kanban', extensions: ['exe', 'lnk'] }],
-  });
-  if (r.canceled) return null;
-  saveSettings({ ...loadSettings(), boardAppPath: r.filePaths[0] });
-  return r.filePaths[0];
-});

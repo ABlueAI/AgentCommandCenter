@@ -158,8 +158,6 @@ select {
 .tabpane { flex: 1; min-height: 0; display: none; }
 .tabpane.active { display: flex; flex-direction: column; }
 
-/* board webview fills the pane */
-#boardView { flex: 1; border: none; background: #fff; }
 .pane-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; color: var(--muted); }
 .pane-empty .big { font-size: 46px; }
 .pane-empty .hint { font-size: 12px; }

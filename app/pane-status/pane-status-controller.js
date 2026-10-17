@@ -47,6 +47,10 @@ const SETUP_STATE = Object.freeze({
   RECONCILIATION_REQUIRED: 'reconciliation-required',
 });
 
+// The READY detail when the running Claude Code is accepted but was never probed on an acceptance
+// machine. Reporting is fully on; the toolbar only says so.
+const VERSION_UNVERIFIED_DETAIL = 'version-unverified';
+
 /**
  * R3 — REMOVAL HAS THREE OUTCOMES, NOT TWO, AND THE THIRD ONE IS NEW.
  *
@@ -97,6 +101,7 @@ function createPaneStatusController(deps) {
   const versionGate = versionMod.createVersionGate({
     resolveVersion: d.resolveVersion,
     supportedVersions: d.supportedVersions,
+    minimumVersion: d.minimumVersion,
     log,
   });
 
@@ -277,7 +282,7 @@ function createPaneStatusController(deps) {
       setSetupState(SETUP_STATE.MALFORMED, started.error || 'transport-failed');
       return { ok: false, setupState, detail: started.error };
     }
-    setSetupState(SETUP_STATE.READY, null);
+    setSetupState(SETUP_STATE.READY, versionGate.verified() ? null : VERSION_UNVERIFIED_DETAIL);
     return { ok: true, setupState };
   }
 
@@ -368,7 +373,7 @@ function createPaneStatusController(deps) {
         setSetupState(SETUP_STATE.MALFORMED, started.error || 'transport-failed');
         return { ok: false, reason: started.error };
       }
-      setSetupState(SETUP_STATE.READY, null);
+      setSetupState(SETUP_STATE.READY, versionGate.verified() ? null : VERSION_UNVERIFIED_DETAIL);
       return { ok: true, setupState };
     } finally {
       inFlight = false;

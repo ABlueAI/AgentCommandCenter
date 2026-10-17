@@ -318,11 +318,13 @@ function assertNoDisclosure(blob, label) {
     eq(gate.record().executable, POISON,
       'and the acceptance record still names it — internal, and reaching no sink (proved above)');
 
+    // Since the 2026-10-16 amendment a version is supported when verified OR at/above the floor, so
+    // the refusal case is an unlisted version BELOW the floor (the probe reports 2.1.228).
     const strict = versionMod.createVersionGate({
-      resolveVersion: rig.resolver, supportedVersions: ['9.9.9'], log: () => {},
+      resolveVersion: rig.resolver, supportedVersions: ['9.9.9'], minimumVersion: '2.1.229', log: () => {},
     });
     await strict.probe();
-    eq(strict.supported(), false, 'a version outside the allowlist is still refused');
+    eq(strict.supported(), false, 'an unlisted version below the floor is still refused');
     eq(strict.reason(), versionMod.VERSION_REFUSAL.UNSUPPORTED, 'with the unsupported reason — fail-closed intact');
   }
 

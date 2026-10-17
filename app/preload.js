@@ -5,6 +5,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('cc', {
   // settings & repos
   getSettings: () => ipcRenderer.invoke('get-settings'),
+  buildInfo: () => ipcRenderer.invoke('build-info'),
   saveSettings: (p) => ipcRenderer.invoke('save-settings', p),
   pickFolder: () => ipcRenderer.invoke('pick-folder'),
   listRepos: () => ipcRenderer.invoke('list-repos'),
@@ -31,10 +32,6 @@ contextBridge.exposeInMainWorld('cc', {
   quickLinksList: () => ipcRenderer.invoke('quick-links-list'),
   quickLinksSave: (text) => ipcRenderer.invoke('quick-links-save', text),
   quickLinksOpen: (id) => ipcRenderer.invoke('quick-links-open', id),
-
-  // vibe-kanban desktop app (launched, not embedded — see main.js)
-  openBoard: () => ipcRenderer.invoke('open-board'),
-  pickBoardApp: () => ipcRenderer.invoke('pick-board-app'),
 
   // in-app terminals (node-pty)
   tlogReset: () => ipcRenderer.invoke('tlog-reset'),

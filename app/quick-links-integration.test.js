@@ -121,10 +121,16 @@ const currentPkg = JSON.parse(read('package.json'));
 const basePkg = JSON.parse(fromBase('package.json'));
 assert(JSON.stringify(currentPkg.dependencies) === JSON.stringify(basePkg.dependencies), 'runtime dependencies unchanged from base');
 assert(JSON.stringify(currentPkg.devDependencies) === JSON.stringify(basePkg.devDependencies), 'devDependencies unchanged from base');
-let lockUnchanged = true;
-try { execFileSync('git', ['diff', '--quiet', BASE, '--', 'app/package-lock.json'], { cwd: REPO }); }
-catch { lockUnchanged = false; }
-assert(lockUnchanged, 'package-lock.json has no delta from base');
+// Compared as JSON with the app's OWN version fields set aside: the 1.0.0 release bump (2026-10-16)
+// changes those two fields and nothing else, and the point here is that no dependency changed.
+const withoutOwnVersion = (lockText) => {
+  const lock = JSON.parse(lockText);
+  delete lock.version;
+  if (lock.packages && lock.packages['']) delete lock.packages[''].version;
+  return JSON.stringify(lock);
+};
+assert(withoutOwnVersion(read('package-lock.json')) === withoutOwnVersion(fromBase('package-lock.json')),
+  'package-lock.json has no dependency delta from base');
 const requiredTests = [
   'quick-links-policy.test.js', 'quick-links-store.test.js', 'quick-links-ipc.test.js',
   'quick-links-integration.test.js', 'renderer/quick-links-view.test.js',

@@ -1,5 +1,7 @@
 # Agent Command Center — Project State (2026-06-30)
 
+> **HISTORICAL since 2026-10-17.** Current state: [STATUS.md](../STATUS.md). Rules: [AGENTS.md](../AGENTS.md). Plan: [docs/PLAN-1.1.md](../docs/PLAN-1.1.md). This file is kept as background; its queues and procedures are not current instructions.
+
 > Portable snapshot to brief a fresh chat / pick up the build. Keep it current.
 
 ## What it is

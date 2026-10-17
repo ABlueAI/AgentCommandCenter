@@ -1,8 +1,9 @@
 'use strict';
 // Run: node app/pane-status/pane-status-version.test.js
 //
-// Fail-closed version gating. The point of every assertion here is that the DEFAULT ANSWER IS NO:
-// not probed, probe failed, unparseable, and unlisted are all equally unsupported.
+// Version gating. The DEFAULT ANSWER IS STILL NO: not probed, probe failed, unparseable, older than
+// the floor, and a different major version are all unsupported. Since Blue's 2026-10-16 amendment, a
+// later release of the floor's major version is SUPPORTED but not VERIFIED.
 
 const versionMod = require('./pane-status-version');
 
@@ -22,13 +23,24 @@ assert(versionMod.parseVersion('') === null, 'empty output does not parse');
 assert(versionMod.parseVersion(null) === null, 'null does not parse');
 assert(versionMod.parseVersion('claude 2.1.196') === null, 'the triple must be at the START — no scanning for one anywhere');
 
-// ---------------------------------------------------------------- exact membership, never ranges
+// ---------------------------------------------------------------- verified list plus a same-major floor
 assert(versionMod.isVersionSupported('2.1.196', ['2.1.196']) === true, 'an exactly listed version is supported');
-assert(versionMod.isVersionSupported('2.1.197', ['2.1.196']) === false, 'the NEXT patch release is NOT supported');
-assert(versionMod.isVersionSupported('2.1.195', ['2.1.196']) === false, 'the PREVIOUS patch release is NOT supported');
-assert(versionMod.isVersionSupported('2.1.196', []) === false, 'an empty list supports nothing');
+assert(versionMod.isVersionVerified('2.1.196', ['2.1.196']) === true, 'and verified');
+assert(versionMod.isVersionSupported('2.1.197', ['2.1.196'], '2.1.200') === false, 'an unlisted version BELOW the floor is NOT supported');
+assert(versionMod.isVersionSupported('2.1.195', ['2.1.196']) === false, 'an unlisted version below the default floor is NOT supported');
+assert(versionMod.isVersionSupported('2.1.196', [], '2.1.200') === false, 'an empty list below the floor supports nothing');
 assert(versionMod.isVersionSupported(null, ['2.1.196']) === false, 'null is not supported');
 assert(versionMod.isVersionSupported('', ['2.1.196']) === false, 'empty string is not supported');
+assert(versionMod.MINIMUM_CLAUDE_VERSION === '2.1.228', 'the shipped floor is the first verified version, 2.1.228');
+assert(versionMod.isVersionSupported('2.1.228', []) === true, 'the floor itself is supported');
+assert(versionMod.isVersionSupported('2.1.283', []) === true, 'a later patch release of the same major version is supported');
+assert(versionMod.isVersionVerified('2.1.283', versionMod.SUPPORTED_CLAUDE_VERSIONS) === false, 'but is NOT verified');
+assert(versionMod.isVersionSupported('2.2.0', []) === true, 'a later minor release of the same major version is supported');
+assert(versionMod.isVersionSupported('2.1.227', []) === false, 'the release just below the floor is NOT supported');
+assert(versionMod.isVersionSupported('3.0.0', []) === false, 'a NEW MAJOR version is NOT supported');
+assert(versionMod.isVersionSupported('1.9.999', []) === false, 'an OLDER major version is NOT supported');
+assert(versionMod.isVersionSupported('2.1.300-beta', []) === false, 'a suffixed string is never compared as a number');
+assert(versionMod.compareVersions('2.1.10', '2.1.9') > 0, 'comparison is numeric, not lexical');
 
 // The shipped list is PROVISIONAL and is filled only by the § 18 probe.
 assert(Array.isArray(versionMod.SUPPORTED_CLAUDE_VERSIONS), 'the shipped supported list exists');
@@ -52,11 +64,15 @@ assert(versionMod.SUPPORTED_CLAUDE_VERSIONS.every((v) => /^\d+\.\d+\.\d+$/.test(
   assert(versionMod.isVersionSupported('2.1.241', shipped) === true, '2.1.241 is supported by the shipped list');
   assert(versionMod.isVersionSupported('2.1.228', shipped) === true, '2.1.228 is still supported by the shipped list');
 
-  // Adjacency must stay worthless. These are precisely the versions a range, prefix, minimum-version
-  // or semver rule would wrongly admit; each one failing is what proves no such rule was introduced.
-  for (const near of ['2.1.240', '2.1.242', '2.1.227', '2.1.229', '2.1.239', '2.1.24', '2.1.2410']) {
-    assert(versionMod.isVersionSupported(near, shipped) === false,
-      `an unlisted neighbour ${near} is NOT supported by the shipped list`);
+  // Since the 2026-10-16 amendment, unlisted releases at or above the floor are supported but not
+  // verified, and releases below it stay refused. Verification still means exact membership.
+  for (const near of ['2.1.240', '2.1.242', '2.1.229', '2.1.239', '2.1.2410']) {
+    assert(versionMod.isVersionSupported(near, shipped) === true && versionMod.isVersionVerified(near, shipped) === false,
+      `an unlisted release ${near} at or above the floor is supported but NOT verified`);
+  }
+  for (const below of ['2.1.227', '2.1.24']) {
+    assert(versionMod.isVersionSupported(below, shipped) === false,
+      `an unlisted release ${below} below the floor is NOT supported`);
   }
   // SUPPLEMENTARY ONLY - NOT proof of raw-output rejection. WO15A-R: an independent Full review
   // found this assertion non-representative, and it was right. Production never hands a raw string
@@ -77,8 +93,8 @@ assert(versionMod.SUPPORTED_CLAUDE_VERSIONS.every((v) => /^\d+\.\d+\.\d+$/.test(
     assert(gate.supported() === false, 'BEFORE any probe the gate says NO');
     assert(gate.reason() === versionMod.VERSION_REFUSAL.NOT_PROBED, 'and the reason is version-not-probed');
     const r = await gate.probe();
-    assert(r.ok === true && r.supported === true, 'a listed version probes as supported');
-    assert(gate.supported() === true && gate.reason() === null, 'and the gate opens');
+    assert(r.ok === true && r.supported === true && r.verified === true, 'a listed version probes as supported and verified');
+    assert(gate.supported() === true && gate.verified() === true && gate.reason() === null, 'and the gate opens');
   }
   {
     const gate = versionMod.createVersionGate({ resolveVersion: async () => ({ ok: true, raw: '9.9.8' }), supportedVersions: ['9.9.9'] });
@@ -120,12 +136,13 @@ assert(versionMod.SUPPORTED_CLAUDE_VERSIONS.every((v) => /^\d+\.\d+\.\d+$/.test(
     assert(rec.observed === '9.9.9', 'the record carries the exact parsed version');
     assert(rec.raw === '9.9.9 (Claude Code)', 'and the raw output');
     assert(rec.executable === 'C:/x/claude.exe', 'and the resolved executable');
-    assert(rec.supported === true, 'and the verdict');
+    assert(rec.supported === true && rec.verified === true, 'and the verdict');
+    assert(rec.minimumVersion === versionMod.MINIMUM_CLAUDE_VERSION, 'and the floor it was judged against');
     assert(JSON.stringify(rec).indexOf('token') === -1, 'and no token');
   }
 
   // WO15A — the GATE, driven by the SHIPPED list rather than a fixture: it opens on the real 2.1.241
-  // version line and stays closed on the very next patch release.
+  // version line, and (since the 2026-10-16 amendment) opens UNVERIFIED on the next patch release.
   {
     const gate = versionMod.createVersionGate({
       resolveVersion: async () => ({ ok: true, raw: '2.1.241 (Claude Code)' }),
@@ -141,9 +158,11 @@ assert(versionMod.SUPPORTED_CLAUDE_VERSIONS.every((v) => /^\d+\.\d+\.\d+$/.test(
       resolveVersion: async () => ({ ok: true, raw: '2.1.242 (Claude Code)' }),
       supportedVersions: versionMod.SUPPORTED_CLAUDE_VERSIONS,
     });
-    await gate.probe();
-    assert(gate.supported() === false && gate.reason() === versionMod.VERSION_REFUSAL.UNSUPPORTED,
-      'the patch release immediately after an admitted one is refused as unsupported');
+    const r = await gate.probe();
+    assert(r.supported === true && r.verified === false,
+      'the patch release immediately after an admitted one is supported but unverified');
+    assert(gate.supported() === true && gate.verified() === false && gate.reason() === null,
+      'and the gate opens without a refusal reason');
   }
 
   // ------------------------------------------------- WO15A-R: THE COMPOSED PRODUCTION PATH
@@ -180,13 +199,22 @@ assert(versionMod.SUPPORTED_CLAUDE_VERSIONS.every((v) => /^\d+\.\d+\.\d+$/.test(
       `and classifies ${JSON.stringify(raw)} as version-unparseable`);
   }
 
-  // --- negative: WELL-FORMED but unlisted must be UNSUPPORTED, a different bounded reason ---
-  for (const raw of ['2.1.240', '2.1.242', '2.1.239', '2.1.229', '2.1.227', '2.1.240 (Claude Code)']) {
+  // --- negative: WELL-FORMED but below the floor or another major must be UNSUPPORTED ---
+  for (const raw of ['2.1.227', '2.1.196', '2.0.999', '3.0.0', '1.9.300', '3.0.0 (Claude Code)']) {
     const gate = gateFor(raw);
     await gate.probe();
-    assert(gate.supported() === false, `composed path REFUSES unlisted ${JSON.stringify(raw)}`);
+    assert(gate.supported() === false, `composed path REFUSES ${JSON.stringify(raw)}`);
     assert(gate.reason() === versionMod.VERSION_REFUSAL.UNSUPPORTED,
-      `and classifies unlisted ${JSON.stringify(raw)} as version-unsupported, not unparseable`);
+      `and classifies ${JSON.stringify(raw)} as version-unsupported, not unparseable`);
+  }
+
+  // --- positive, unverified: later same-major releases, including the real versions Blue's machine
+  // ran during the September runs (2.1.250, 2.1.283) ---
+  for (const raw of ['2.1.242', '2.1.250', '2.1.283 (Claude Code)', '2.1.300 (Claude Code)\r\n', '2.2.0']) {
+    const gate = gateFor(raw);
+    await gate.probe();
+    assert(gate.supported() === true && gate.verified() === false && gate.reason() === null,
+      `composed path ADMITS ${JSON.stringify(raw)} as supported but unverified`);
   }
 
   // --- resolver-level fixture: the REAL tagged PowerShell stdout framing observed on the
