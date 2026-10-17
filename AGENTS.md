@@ -17,8 +17,11 @@ Every session, any agent, starts by reading these on `main`:
 1. `STATUS.md`: where things stand right now.
 2. `docs/PLAN-1.1.md`: the ordered session plan and what is next.
 3. `docs/DECISIONS.md`: what Blue has decided, with dates and his words.
+4. `BLUE-CHECKLIST.md`: everything Blue has to do, in order.
 
-Every PR updates `STATUS.md` if the state changed. When Blue decides something, append it to
+Anything Blue must do goes into `BLUE-CHECKLIST.md` in order, with when, how long and how you will
+verify it, never only in a chat message or a PR. Tick a box only after verifying it, with the date
+and how you checked. Every PR updates `STATUS.md` if the state changed. When Blue decides something, append it to
 `docs/DECISIONS.md`. Plans and decisions live in the repo, not in chat history, so Claude, Codex and
 GPT all work from the same facts. Merging a PR is how Blue approves a change to any of them.
 

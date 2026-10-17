@@ -6,10 +6,13 @@ Claude Desktop, or `claude` in a terminal opened in `D:\Workspace\agent-command-
 
 ## Paste this to start the session
 
-> Read docs/handoff/FINISH-1.0.md, AGENTS.md, STATUS.md and docs/DECISIONS.md in
-> D:\Workspace\agent-command-center and finish Mako 1.0 by following the handoff in order. Work at
-> High authority (auto mode). Do step A now even if PR #27 is not merged yet. Ask me only where the
+> In D:\Workspace\agent-command-center run `git switch main` and `git pull`. Then read
+> docs/handoff/FINISH-1.0.md, AGENTS.md, STATUS.md and docs/DECISIONS.md, and finish Mako 1.0 by
+> following the handoff in order. Work at High authority (auto mode). Ask me only where the
 > handoff says "Blue". Don't delete anything, and don't merge or tag without my explicit OK.
+
+This is step 4 of BLUE-CHECKLIST.md and assumes PR #27 is already merged (step 1). Tick steps 4 and
+5 in BLUE-CHECKLIST.md as you complete them.
 
 ## State when this was written
 

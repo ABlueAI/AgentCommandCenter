@@ -36,7 +36,7 @@ updates its own row.
 | S01 | **Finish guardrails.** Blue does the clicks in docs/SETUP-GUARDRAILS.md; Claude then opens a test PR from the agent account and confirms it cannot merge without Blue's approval. | Test PR blocked without approval; merge audit quiet on a proper merge. | High | blue | PR #27 merged | READY |
 | S02 | **CI and dependency hygiene.** Pin GitHub Actions to commit SHAs; make CI a required check; `npm audit fix` for the 11 advisories with dictation and TTS regression checks. | CI green and required; advisories fixed or each one explained. | High | windows | S01 | READY |
 | S03 | **Plan to issues.** Labels (authority, lane, plan-change, needs-blue, sensitive, security-alert), task issue template, "1.1 Month 1" milestone, a GitHub Project board (Ready, Running, Needs Blue, Ready to merge, Done), and a workflow that keeps one issue per session in sync with this file. | Board mirrors this table automatically. | Max | cloud | S01 | READY |
-| S04 | **Daily runner and digest.** A scheduled cloud session each morning runs the next READY sessions; an evening digest lists ready PRs with TLDR links and open questions, sent as a notification. | Two consecutive days run unattended and the digest arrives. | High | blue | S01, S03 | READY |
+| S04 | **Daily runner and digest.** A scheduled cloud session at **8:01 AM Blue's local time** (just after Claude's weekly usage reset) runs the next READY sessions; an evening digest lists ready PRs with TLDR links and open questions, sent as a notification. Each morning it first checks BLUE-CHECKLIST.md steps 1, 7 and 8; until they are done it only sends a "waiting on step N" notice. | Two consecutive days run unattended and the digest arrives. | High | blue | S01, S03 | READY |
 | S05 | **Needs-you alerts.** Windows notification when a Mako pane needs input or a turn ends; setup note for phone alerts through Claude Remote Control. | Toast appears on a real Claude pane; phone alert documented. | Medium | windows | S01 | READY |
 | S06 | **Process cleanup and link hardening.** Kill the whole process tree when a pane or Mako closes (the node-pty limitation); route the old `open-external` handler through the Quick Links URL policy. Sensitive. | No leftover claude.exe or node.exe after close; link tests pass. | High | windows | S01 | READY |
 | S07 | **Stable and dev copies of Mako.** A dev instance uses its own settings folder and never takes over Claude hooks, so agents can change Mako while Blue keeps using it. | Both run side by side without touching each other's state. | High | windows | S06 | READY |
@@ -61,7 +61,7 @@ updates its own row.
 
 ### Blue's inputs this month
 
-S01 GitHub clicks (about 20 minutes) · S04 pick the runner's start time · S12 Hexona URL · S13 install
+S01 GitHub clicks (about 20 minutes) · S04 confirm your time zone (start time is 8:01 AM) · S12 Hexona URL · S13 install
 Obsidian · S14 UI examples · S16 Dodaios verdict · S17 pick a design · S21 pick a logo · S23 approve
 paperwork · S24 authorize HighLevel · every merge.
 
@@ -80,3 +80,4 @@ does both) · Vibe Kanban (removed in 1.0).
 ## Change log
 
 - 2026-10-17: plan created (PR #27).
+- 2026-10-17: S04 start time set to 8:01 AM local, with the prerequisite check (Blue).

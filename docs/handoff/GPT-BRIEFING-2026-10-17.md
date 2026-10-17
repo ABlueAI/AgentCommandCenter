@@ -176,7 +176,7 @@ unmerged one steers nothing.
 
 ## 9. Files
 
-`AGENTS.md` · `CLAUDE.md` · `STATUS.md` · `docs/DECISIONS.md` · `docs/PLAN-1.1.md` ·
+`AGENTS.md` · `CLAUDE.md` · `STATUS.md` · `BLUE-CHECKLIST.md` (Blue's steps, in order) · `docs/DECISIONS.md` · `docs/PLAN-1.1.md` ·
 `docs/SETUP-GUARDRAILS.md` · `docs/RELEASE-NOTES-1.0.md` · `docs/handoff/FINISH-1.0.md` ·
 `docs/OSS-PROCUREMENT-pane-status.md` § 14 · `.github/pull_request_template.md` ·
 `.github/workflows/ci.yml` · `.github/workflows/merge-audit.yml` · `.claude/settings.json` ·

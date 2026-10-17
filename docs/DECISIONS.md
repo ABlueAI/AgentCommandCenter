@@ -7,6 +7,10 @@ of editing an old one, and say which entry it replaces. Agents follow the newest
 
 | Decision | Blue's words |
 |---|---|
+| node-pty leftover-process risk accepted as a known 1.0 limitation, fixed in S06 (replaces the "confirm" entry below). | "leftover-process limitation for 1.0: yes that is fine." |
+| PR #27 is merged on green CI plus Blue's read of the TLDR; Codex reviews every PR after it. | "okay that is fine" |
+| The daily runner starts at 8:01 AM Blue's local time, one minute after Claude's weekly usage reset. Time zone still to be confirmed (BLUE-CHECKLIST.md step 3). | "morning daily runner should probably start at 8:01 AM since claudes weekly usage resets at 8AM." |
+| Everything Blue must do lives in BLUE-CHECKLIST.md, in order, with when to do it; never only in a chat message. | "you will need to list all of my steps in order and when to complete them otherwise you dont know what ive completed and things can get missed." |
 | Lighter operating rules replace the review rituals; work flows through GitHub PRs. | "yes, approved." · "i am on board with the PR ready plan." |
 | Every change on its own branch; only Blue merges; no auto-merge, ever. | "this seems the best way to keep things secure while also moving quickly." |
 | Every PR that is ready to merge carries a TLDR with facts and uncertainty. | "i would like to recieve a TLDR every time something is at this stage ready to be merged. i need the facts and i need to know if there is any uncertainty" |

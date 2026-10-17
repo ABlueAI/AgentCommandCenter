@@ -7,7 +7,8 @@ rulebook:
 
 Claude-specific notes:
 
-- Start every session by reading `STATUS.md`, `docs/PLAN-1.1.md` and `docs/DECISIONS.md` on `main`.
+- Start every session by reading `STATUS.md`, `docs/PLAN-1.1.md`, `docs/DECISIONS.md` and
+  `BLUE-CHECKLIST.md` on `main`.
 - In cloud sessions, stay subscribed to your own PR and fix CI failures and review findings until it
   is green, then update the TLDR and mark it ready.
 - `.claude/settings.json` denies merge and push-to-main tools. Do not work around it.

@@ -4,6 +4,8 @@ Updated 2026-10-17 by Claude (PR #27). Every PR that changes the state updates t
 
 ## Right now
 
+- **Your next steps:** [BLUE-CHECKLIST.md](BLUE-CHECKLIST.md), in order.
+
 - **Release:** Mako 1.0 release candidate in PR #27 (version 1.0.0). Not yet merged or tagged.
 - **Plan:** 1.1 month-one plan drafted in [docs/PLAN-1.1.md](docs/PLAN-1.1.md) (25 sessions).
 - **Guardrails:** repo-side files are in PR #27. The GitHub settings in
