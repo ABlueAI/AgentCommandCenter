@@ -1,4 +1,7 @@
 # BLUE HELM — CHAT HANDOFF #4 (July 12, 2026)
+
+> **HISTORICAL since 2026-10-17.** Current state: [STATUS.md](STATUS.md). Rules: [AGENTS.md](AGENTS.md). Plan: [docs/PLAN-1.1.md](docs/PLAN-1.1.md). This file is kept as background; its queues and procedures are not current instructions.
+
 ## Platform-transfer edition — Blue is moving orchestration chat to another platform; Claude continues as the CODING layer (Claude Code)
 
 **Read this + `BLUE-HELM-MASTER-STATUS.md` (source of truth) + repo `AGENTS.md`

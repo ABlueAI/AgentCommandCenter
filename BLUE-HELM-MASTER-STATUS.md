@@ -1,4 +1,7 @@
 # Blue Helm — Master Status & Runbook
+
+> **HISTORICAL since 2026-10-17.** Current state: [STATUS.md](STATUS.md). Rules: [AGENTS.md](AGENTS.md). Plan: [docs/PLAN-1.1.md](docs/PLAN-1.1.md). This file is kept as background; its queues and procedures are not current instructions.
+
 ### ⭐ Open THIS file first. The other briefs are deep reference only.
 
 **What this is:** the current project-state source of truth plus the historical
