@@ -98,6 +98,11 @@ runs on its own.
   - **d.** Settings > Rules > Rulesets > `protect-main` > Require a pull request: required approvals
     **1**; check **Dismiss stale pull request approvals when new commits are pushed**, **Require
     review from Code Owners**, and **Require approval of the most recent reviewable push**. Save.
+  - **e. Give the runner the repository** (2 minutes, after c). Open https://claude.ai/code/routines,
+    open **Mako daily runner**, add the repository `ABlueAI/AgentCommandCenter`, and save. Leave the
+    schedule and prompt as they are. Without this the runner can check the gate but cannot open pull
+    requests (seen on its first run, 2026-10-18). If the routine can't be edited, tell Claude and it
+    will walk you through recreating it with the prompt in docs/RUNNER.md.
   - *Done when:* you say "Part B done". Claude opens a test PR as the agent account and confirms it
     cannot merge without your approval.
 - [ ] **8. Upgrade Claude to Max 5x.** About 2 minutes. claude.ai > Settings > Billing. Keep ChatGPT Plus.

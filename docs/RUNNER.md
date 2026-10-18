@@ -19,14 +19,17 @@ account: GitHub `get_me` must not return `ABlueAI`) and 8 (Max 5x). If any fails
 "Mako runner: waiting on step N" and touches nothing. It fails closed: if it cannot check, the step
 counts as not done.
 
-## Known limitation, to verify on the first run
+## First run (2026-10-18): gate works, repository access missing
 
-The scheduled task was created from a cloud session, and its record lists no connectors and no
-attached repository. The runner's prompt attaches the repository itself (`add_repo`), and the gate
-needs nothing else, so the "waiting" notices work either way. Whether it can open pull requests once
-the gate passes is not yet confirmed. Claude checks the first runs; if GitHub access is missing, the
-fix is to recreate the task from claude.ai's scheduled tasks page with `ABlueAI/AgentCommandCenter`
-selected and the prompt below, and Claude will add that to BLUE-CHECKLIST.md with exact steps.
+- **What worked:** it fired at 12:02 UTC (8:02 AM Eastern) and cloned the public repo over git. It
+  read the checklist, found the GitHub login was still `ABlueAI`, and sent the phone notice "waiting
+  on step 7 and step 8". It created nothing and finished in under a minute.
+- **What's missing:** the scheduled task was created from a cloud session, so it has no attached
+  repository. The run had no GitHub tools (`get_me`, pull requests) and no `add_repo`, and checked the
+  login with the `gh` CLI instead. That's enough for the gate but not for opening pull requests.
+- **Fix:** BLUE-CHECKLIST.md step 7e. After Claude is connected to the agent account, Blue adds
+  `ABlueAI/AgentCommandCenter` to the routine at claude.ai/code/routines. Claude confirms on the next
+  run that the GitHub tools are present and the login is the agent account.
 
 ## How to change it
 
