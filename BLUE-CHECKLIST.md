@@ -161,9 +161,9 @@ on its own, one session at a time on Pro.
     `docs/SETUP-APP-SETTINGS.md`, without personal details, so every agent knows it.
   - *Done when:* you've changed them and said so.
 - [ ] **11. Close the false security alert, issue #35.** 1 minute, right after you merge the
-  merge-audit PR (branch `claude/merge-audit-stacked-prs`).
+  merge-audit PR, #37.
   - Open https://github.com/ABlueAI/AgentCommandCenter/issues/35, comment "False alarm: commits
-    arrived via PR #34 (37009eb), merged by ABlueAI; audit fixed in #PRNUM", then **Close issue**.
+    arrived via PR #34 (37009eb), merged by ABlueAI; audit fixed in #37", then **Close issue**.
   - Agents never close security alerts themselves.
   - *Done when:* issue #35 shows Closed, and the merge audit run for that merge passed with no new
     alert. Claude checks both.
