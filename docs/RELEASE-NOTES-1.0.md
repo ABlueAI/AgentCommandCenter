@@ -1,7 +1,7 @@
 # Mako 1.0 release notes
 
-Status: **release candidate**, merged to `main` on 2026-10-17 (PR #27) and smoke-tested on Blue's PC
-on 2026-10-18. Becomes final when Blue approves the `v1.0.0` tag.
+Status: **released** as `v1.0.0` on 2026-10-18 (tag at `main` commit `37009eb`). Smoke-tested on
+Blue's PC the same day.
 
 ## What Mako 1.0 is
 
@@ -23,7 +23,7 @@ each in its own git worktree, on his existing primary workstation.
   need them. Claude panes run with subprocess environment scrubbing.
 - **Identity:** Mako name, icon, taskbar identity and desktop shortcut.
 
-## New in the release candidate
+## New in 1.0 (since the July build)
 
 - Pane status colors now appear on current Claude Code versions (previously only two exact versions
   from August were accepted, so every badge showed "unknown").

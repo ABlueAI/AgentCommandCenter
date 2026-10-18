@@ -6,10 +6,12 @@ Updated 2026-10-18 by Claude. Every PR that changes the state updates this file.
 
 - **Your next steps:** [BLUE-CHECKLIST.md](BLUE-CHECKLIST.md), in order.
 
-- **Release:** Mako 1.0 release candidate merged to `main` on 2026-10-17 (PR #27, merge commit
-  `4d60c9e`, version 1.0.0). The PC smoke test passed on 2026-10-18 (below). Not yet tagged: the
-  `v1.0.0` tag waits until Blue merges PR #33 (the Electron-binary fix), then goes on that `main`
-  (Blue's decision, 2026-10-18; checklist step 5).
+- **Release: Mako 1.0.0 is released.**
+  - Tag `v1.0.0` was created on 2026-10-18 at `main` commit `37009eb`, which includes the
+    Electron-binary fix (PR #33, landed on `main` through PR #34).
+  - Before tagging, on Blue's PC: `npm ci` restored Electron's binary by itself, and Mako opened from
+    the desktop shortcut showing `Mako 1.0.0 · main@37009eb`.
+  - The GitHub release is "Mako 1.0.0", from docs/RELEASE-NOTES-1.0.md.
 - **Plan:** 1.1 month-one plan approved with that merge: [docs/PLAN-1.1.md](docs/PLAN-1.1.md).
 - **Guardrails:**
   - The repo-side files are live on `main`, and the merge audit has passed on every merge.
@@ -24,14 +26,17 @@ Updated 2026-10-18 by Claude. Every PR that changes the state updates this file.
 Quick Links · pane status (now works on current Claude Code) · P1 environment containment · H1
 acceptance · fence stack and deterministic roles · Mako branding, taskbar identity and shortcut ·
 daily-driver workday · Shift+Enter newline · real build label · Vibe Kanban removed · Windows CI ·
-lost-work recovery · PC smoke test.
+lost-work recovery · PC smoke test · Electron binary installed by `npm ci` · `v1.0.0` tag.
 
 ## 1.0: left
 
 1. ~~Windows CI green on PR #27~~ Done: app tests and PowerShell tests (983 passed, 0 failed) pass on
    GitHub's Windows runner.
 2. ~~On Blue's PC: recover the lost conversations; smoke test~~ Done 2026-10-18 (results below).
-3. ~~Blue merges PR #27~~ Done 2026-10-17. The `v1.0.0` tag follows once PR #33 is merged (checklist step 5).
+3. ~~Blue merges PR #27~~ Done 2026-10-17.
+4. ~~Tag `v1.0.0`~~ Done 2026-10-18 at `37009eb`, after PR #33's fix reached `main` (PR #34).
+
+Nothing is left for 1.0.
 
 Known limitations shipping with 1.0 are in [docs/RELEASE-NOTES-1.0.md](docs/RELEASE-NOTES-1.0.md).
 
@@ -50,8 +55,8 @@ Known limitations shipping with 1.0 are in [docs/RELEASE-NOTES-1.0.md](docs/RELE
   `app\node_modules\electron\dist\electron.exe` directly, so it took a manual
   `node node_modules\electron\install.js`. The cause is Electron 42 itself: it has no install script
   and downloads lazily on the first `npm start`. Fixed in PR #33: an `app/package.json` postinstall
-  downloads and checks the binary, and `npm test` now fails first if it is missing. Until PR #33 is
-  merged, the manual step still applies.
+  downloads and checks the binary, and `npm test` now fails first if it is missing. On `main` since
+  PR #34; it was verified on the PC with a clean `npm ci` at `37009eb`.
 - **Recovered work:** the missing reviewer work was found intact. It is two Claude Code conversations
   Mako had open on Oct 6 and 7 (business research). Blue confirmed it is the missing work. Mako
   doesn't reopen panes after a restart, so it looked lost; both can be resumed with `claude --resume`.
@@ -67,5 +72,4 @@ Known limitations shipping with 1.0 are in [docs/RELEASE-NOTES-1.0.md](docs/RELE
 
 ## Next
 
-1. Blue merges PR #33. Then the PC session tags `v1.0.0` on that `main` (checklist step 5).
-2. Then 1.1 session S01 (finish guardrails, then the daily runner). See the plan.
+1.1 session S01 (finish guardrails, then the daily runner). See the plan.
