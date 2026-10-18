@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-18 by Claude (PC session: steps 4 and 5).
+Last updated 2026-10-18 by Claude (step 11 verified; steps 7d and daily merging clarified).
 
 ## Today
 
@@ -123,10 +123,14 @@ on its own, one session at a time on Pro.
     you keep using `ABlueAI` to approve and merge.
   - **d.** Do this only after c, and after merging any open PR Claude made before c. GitHub never
     lets a PR's author approve their own PR, and until c Claude's PRs are authored as `ABlueAI`, so
-    they would be stuck. Settings > Rules > Rulesets > `protect-main` > Require a pull request:
+    they would be stuck. Before you start, check that no Claude PR is open:
+    https://github.com/ABlueAI/AgentCommandCenter/pulls should list none authored by `ABlueAI`
+    (merge or close any that are). Settings > Rules > Rulesets > `protect-main` > Require a pull request:
     required approvals **1**; check **Dismiss stale pull request approvals when new commits are
     pushed**, **Require review from Code Owners**, and **Require approval of the most recent
     reviewable push**. Save.
+    - From then on every agent PR shows **Review required**. You click **Approve** (Files changed >
+      Review changes > Approve > Submit review), then **Merge**. That extra click is the protection.
   - **e. Give the runner the repository** (2 minutes, after c). Open https://claude.ai/code/routines,
     open **Mako daily runner**, add the repository `ABlueAI/AgentCommandCenter`, and save. Leave the
     schedule and prompt as they are. Without this the runner can check the gate but cannot open pull
@@ -167,8 +171,11 @@ on its own, one session at a time on Pro.
   - Claude replies with the exact toggles to change and writes the agreed setup into
     `docs/SETUP-APP-SETTINGS.md`, without personal details, so every agent knows it.
   - *Done when:* you've changed them and said so.
-- [ ] **11. Close the false security alert, issue #35.** 1 minute, right after you merge the
-  merge-audit PR, #37.
+- [x] **11. Close the false security alert, issue #35.** 1 minute, right after you merge the
+  merge-audit PR, #37. *Verified 2026-10-18 through GitHub's API: #35 was closed by ABlueAI at
+  19:08:04 UTC, one second after #37 merged (`f23a7bf`). The merge audit passed on that push and on
+  #36's (`6f73602`), and no new security-alert issue opened. The suggested note was not posted as a
+  comment; nothing else depends on it.*
   - Open https://github.com/ABlueAI/AgentCommandCenter/issues/35, comment "False alarm: commits
     arrived via PR #34 (37009eb), merged by ABlueAI; audit fixed in #37", then **Close issue**.
   - Agents never close security alerts themselves.
@@ -178,7 +185,8 @@ on its own, one session at a time on Pro.
 ## Every day, once the runner is on
 
 - **Morning (about 5 minutes):** check your phone. Answer anything marked "needs Blue".
-- **Evening (10 to 20 minutes):** read the TLDR on each PR marked ready, and merge.
+- **Evening (10 to 20 minutes):** read the TLDR on each PR marked ready, then **Approve** it and
+  **Merge**. Until step 7d is done there is no Approve step, only Merge.
 
 ## Coming up this month (the runner will ask when it gets there)
 

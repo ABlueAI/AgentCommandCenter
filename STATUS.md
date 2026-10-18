@@ -20,8 +20,8 @@ Updated 2026-10-18 by Claude. Every PR that changes the state updates this file.
   - Part B (step 7, the agent account) is next. Until it is done, agents still act as `ABlueAI`.
   - The merge audit raised a false alert on 2026-10-18 (issue #35): PR #33 was stacked on #32's
     branch, and its commits reached `main` through PR #34. The audit now counts every commit of a PR
-    merged into `main`, and AGENTS.md forbids stacked PRs. Fixed in PR #37; Blue closes
-    #35 after merging it (checklist step 11).
+    merged into `main`, and AGENTS.md forbids stacked PRs. Fixed in PR #37, merged 2026-10-18;
+    the audit passed on that merge and Blue closed #35 (checklist step 11, verified).
 - **Daily runner:** scheduled for 8:01 AM Eastern from 2026-10-18 ([docs/RUNNER.md](docs/RUNNER.md)).
   Until checklist step 7 is done it only sends a "waiting on step N" notice.
 
