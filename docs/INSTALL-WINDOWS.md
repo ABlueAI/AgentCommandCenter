@@ -48,7 +48,7 @@ Every row is classified as one of:
 | Windows PowerShell 5.1 | Launch | Every terminal pane and every helper invocation is `powershell.exe`. Panes: `pty.spawn('powershell.exe', …)`. Helpers: `execFile('powershell', …)`. `scripts/run-pester.ps1` declares `#Requires -Version 5.1`. | `app/main.js:1343`, `app/main.js:205`, `app/main.js:946`, `scripts/run-pester.ps1:1` |
 | Git (on `PATH`) | Launch | The repo is obtained with `git clone`, and the app shells out to `git` for repo discovery, worktree listing, the origin remote, and review diffs. `scripts/new-agent.ps1` is pure `git`. | `app/main.js:803-806`, `app/main.js:1105`, `scripts/new-agent.ps1` |
 | Node.js **≥ 22.12.0** + its bundled npm | Launch | Strictest `engines.node` floor in the tracked lockfile, from `electron@42.5.0`. Use the npm that ships with that Node install; the lockfile is `lockfileVersion: 3`. | `app/package-lock.json:902-919` (`"node_modules/electron"` → `"engines": { "node": ">= 22.12.0" }`), `app/package-lock.json:4` |
-| Network access to the npm registry | Launch | `npm ci` fetches the locked dependency tree. `electron` depends on `@electron/get`, which retrieves the Electron runtime binary — so the install also needs Electron's download host reachable. *(The dependency is tracked fact; exactly when the binary is fetched is an inference, not verified in this order.)* | `app/package-lock.json` (`node_modules/electron` → `dependencies["@electron/get"]`) |
+| Network access to the npm registry | Launch | `npm ci` fetches the locked dependency tree. `electron` depends on `@electron/get`, which retrieves the Electron runtime binary — so the install also needs Electron's download host reachable. Electron 42 has no install script of its own; `app/package.json`'s `postinstall` fetches the binary during `npm ci` (§ 4, verified with npm 11.16.0 on 2026-10-18). | `app/package-lock.json` (`node_modules/electron` → `dependencies["@electron/get"]`) |
 | Claude Code CLI, installed and authenticated | Launch (for agent panes) | Every role pane runs `claude --agent <role>`; the Plain picker can also launch a bare `claude`. Mako never authenticates for you — sign in through Claude Code itself. The Electron shell starts without it, but no builder/reviewer/scout pane can work. | `app/main.js:216`, `app/main.js:232-247` (`AGENT_CMD.claude`, `buildAgentCommand`), `app/renderer/index.html:247-254`, `AGENTS.md` § Environment |
 | Codex CLI (`codex` on `PATH`) | Optional | Only reachable from the **Plain** role's CLI sub-picker. Nothing in startup, roles, fences, or Video Scout depends on it. | `app/main.js:216` (`AGENT_CMD.codex`), `docs/SMOKE-TEST.md` § B |
 | Gemini CLI (`gemini` on `PATH`) | Feature — Video Scout, CLI route only | `feed-gemini.ps1` resolves `gemini` from `PATH`, falling back to `%APPDATA%\npm\gemini.cmd`. Absent, the script saves the download and reports that it was never analyzed. The **SDK route** (public YouTube URL, video mode) does not use the CLI at all. Also reachable from the Plain picker. | `scripts/feed-gemini.ps1:477-481`, `scripts/feed-gemini.ps1:646`, `scripts/gemini-video-sdk.js:1-15` |
@@ -140,6 +140,14 @@ tracked lockfile, `npm ci` is the correct command.
 
 `npm ci` deletes any existing `app\node_modules` before installing. That is
 expected and safe on a fresh clone.
+
+**Electron's binary.** Electron 42 no longer downloads its runtime at install
+time, so `app/package.json` has a `postinstall` (`node ensure-electron-binary.js`)
+that runs Electron's own `install.js`, then checks that
+`app\node_modules\electron\dist\electron.exe` exists. A good `npm ci` prints
+`ensure-electron-binary: Electron 42.5.0 ready at ...`; a failed download fails
+`npm ci`. With `--ignore-scripts`, run `node ensure-electron-binary.js` in
+`app\` yourself, or `npm test` fails at its first suite (`electron-binary.test.js`).
 
 > This documentation order did **not** run `npm ci`, `npm install`, or any
 > dependency update, and changed neither `app/package.json` nor

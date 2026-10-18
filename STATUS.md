@@ -45,10 +45,12 @@ Known limitations shipping with 1.0 are in [docs/RELEASE-NOTES-1.0.md](docs/RELE
   - Claude Code is 2.1.302, so the "unverified" tooltip is expected.
 - **Tests on this PC:** `scripts\run-pester.ps1` gave 984 passed, 0 failed. CI's 983 is the expected
   one-test machine difference, the same 984 as the October 2 record. `npm test` in `app/` passed.
-- **Install note:** `npm ci` (npm 11.16) no longer downloads Electron 42's binary, and the desktop
-  shortcut runs `app\node_modules\electron\dist\electron.exe` directly. So after `npm ci`, run
-  `node node_modules\electron\install.js` in `app/` once, or Mako won't start from the shortcut.
-  Added to the release notes and the handoff.
+- **Install note:** `npm ci` did not download Electron 42's binary, and the desktop shortcut runs
+  `app\node_modules\electron\dist\electron.exe` directly, so it took a manual
+  `node node_modules\electron\install.js`. The cause is Electron 42 itself: it has no install script
+  and downloads lazily on the first `npm start`. Fixed in PR #33: an `app/package.json` postinstall
+  downloads and checks the binary, and `npm test` now fails first if it is missing. Until PR #33 is
+  merged, the manual step still applies.
 - **Recovered work:** the missing reviewer work was found intact. It is two Claude Code conversations
   Mako had open on Oct 6 and 7 (business research). Blue confirmed it is the missing work. Mako
   doesn't reopen panes after a restart, so it looked lost; both can be resumed with `claude --resume`.
