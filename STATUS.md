@@ -8,7 +8,8 @@ Updated 2026-10-18 by Claude. Every PR that changes the state updates this file.
 
 - **Release:** Mako 1.0 release candidate merged to `main` on 2026-10-17 (PR #27, merge commit
   `4d60c9e`, version 1.0.0). The PC smoke test passed on 2026-10-18 (below). Not yet tagged: the
-  `v1.0.0` tag waits for Blue to say "tag 1.0" (checklist step 5).
+  `v1.0.0` tag waits until Blue merges PR #33 (the Electron-binary fix), then goes on that `main`
+  (Blue's decision, 2026-10-18; checklist step 5).
 - **Plan:** 1.1 month-one plan approved with that merge: [docs/PLAN-1.1.md](docs/PLAN-1.1.md).
 - **Guardrails:**
   - The repo-side files are live on `main`, and the merge audit has passed on every merge.
@@ -30,7 +31,7 @@ lost-work recovery · PC smoke test.
 1. ~~Windows CI green on PR #27~~ Done: app tests and PowerShell tests (983 passed, 0 failed) pass on
    GitHub's Windows runner.
 2. ~~On Blue's PC: recover the lost conversations; smoke test~~ Done 2026-10-18 (results below).
-3. ~~Blue merges PR #27~~ Done 2026-10-17. Then Blue approves the `v1.0.0` tag (checklist step 5).
+3. ~~Blue merges PR #27~~ Done 2026-10-17. The `v1.0.0` tag follows once PR #33 is merged (checklist step 5).
 
 Known limitations shipping with 1.0 are in [docs/RELEASE-NOTES-1.0.md](docs/RELEASE-NOTES-1.0.md).
 
@@ -66,5 +67,5 @@ Known limitations shipping with 1.0 are in [docs/RELEASE-NOTES-1.0.md](docs/RELE
 
 ## Next
 
-1. Blue says "tag 1.0" (checklist step 5).
+1. Blue merges PR #33. Then the PC session tags `v1.0.0` on that `main` (checklist step 5).
 2. Then 1.1 session S01 (finish guardrails, then the daily runner). See the plan.

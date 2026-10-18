@@ -87,8 +87,12 @@ Last updated 2026-10-18 by Claude (PC session: step 4).
     2. Set Windows Update **Active hours**, so updates stop restarting the PC mid-work.
     3. A **3-minute smoke test**: build label, Shift+Enter, colored status badges, and no Board tab.
   - *Done when:* that session updates STATUS.md with the results in a PR.
-- [ ] **5. Say "tag 1.0".** About 1 minute, after step 4's smoke test passes. Say it in the PC session.
-  - *Done when:* tag `v1.0.0` exists on GitHub. **Mako 1.0 is released.**
+- [ ] **5. Merge PR #33, then tag 1.0.** About 2 minutes, after step 4's smoke test passes.
+  - The tag waits for PR #33, the Electron-binary fix (your decision, 2026-10-18). Merge PR #33 when
+    its CI is green. PR #32 has to be merged first.
+  - Then the PC session tags `v1.0.0` on that `main`. You already gave the OK in that decision.
+  - *Done when:* tag `v1.0.0` exists on GitHub at a commit that includes PR #33. **Mako 1.0 is
+    released.**
 - [ ] **6. Bring GPT up to date.** About 2 minutes, any time.
   - Download https://github.com/ABlueAI/AgentCommandCenter/blob/main/docs/handoff/GPT-BRIEFING-2026-10-17.md
     (or the copy sent in the Claude chat) and upload it to ChatGPT with: "Read this; it is the current
