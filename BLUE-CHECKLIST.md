@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-17 by Claude.
+Last updated 2026-10-18 by Claude.
 
 ## Today
 
@@ -18,10 +18,12 @@ Last updated 2026-10-17 by Claude.
     every PR after it (step 2e).
   - *Done when:* the PR shows "Merged". Claude checks.
 - [ ] **2. Guardrails, Part A.** About 10 minutes, right after step 1.
-  - **a. Auto-merge off.** Repo > Settings > General > Pull Requests: uncheck **Allow auto-merge**.
-  - **b. Read-only Actions.** Settings > Actions > General > Workflow permissions: choose **Read
-    repository contents and packages permissions**, uncheck **Allow GitHub Actions to create and
-    approve pull requests**, and click **Save**.
+  - **a. Auto-merge off.** *Already off (Blue, 2026-10-18).* Nothing to do.
+  - **b. Read-only Actions.** Settings > Actions > General > Workflow permissions: check that **Read
+    repository contents and packages permissions** is selected and **Allow GitHub Actions to create
+    and approve pull requests** is unchecked. Both are GitHub's defaults for new repositories, so they
+    may already be set; if you change anything, click **Save**. This is separate from auto-merge: it
+    stops a workflow file, which an agent could add in a PR, from approving pull requests.
   - **c. Protect main.** Settings > Rules > Rulesets > **New ruleset** > **New branch ruleset**:
     - Name `protect-main`, Enforcement **Active**, Bypass list **empty**.
     - Target branches > Add target > **Include default branch**.
@@ -34,15 +36,25 @@ Last updated 2026-10-17 by Claude.
   - **e. Codex reviews.** chatgpt.com/codex > Settings > connect GitHub if asked > **Code review**:
     enable it for `ABlueAI/AgentCommandCenter` and turn on **Automatic reviews**. If your Plus plan
     doesn't show automatic reviews, tell Claude.
+    - When GitHub asks which repositories, choose **Only select repositories** and pick
+      `AgentCommandCenter`, not **All repositories**. "All" would automatically open every future
+      repo to it, including the private business repo planned for client work. Adding a repo later
+      takes about 30 seconds (github.com > Settings > Applications > the app > **Configure**), and
+      agents put that on this checklist whenever a new repo needs it.
   - **f. Account security.** github.com > Settings > Password and authentication: make sure
     two-factor authentication is on, and add a passkey if you don't have one.
+  - **g. ChatGPT computer use off.** ChatGPT desktop app > Settings > Computer use: turn off **Any
+    App**, and **Microsoft Excel** unless you use ChatGPT inside Excel. Don't install the Chrome or
+    Edge extensions, and keep **Always-allowed apps** empty. Once allowed, it clicks and types in your
+    apps as you, including a browser signed in to GitHub as `ABlueAI`, which would get around every
+    guardrail on this list. Nothing in the plan uses it.
   - *Done when:* you say "Part A done". Claude confirms it on the next PR: GitHub lists the two
     Windows checks as **Required**, the PR shows as blocked until they pass, and a Codex review
     appears. (Claude never tests protection by pushing to main; that is forbidden even as a test.)
-- [ ] **3. Tell Claude your time zone.** 5 seconds. The daily runner starts at **8:01 AM your local
-  time**, one minute after Claude's weekly usage reset. Reply with your time zone (for example
-  "Eastern").
-  - *Done when:* Claude creates the runner's schedule and records it in docs/DECISIONS.md.
+- [x] **3. Tell Claude your time zone.** 5 seconds. *Verified 2026-10-18: Blue said "i am EST". The
+  scheduled task "Mako daily runner" was created for 8:01 AM America/New_York (Eastern, follows
+  daylight saving), one minute after Claude's weekly usage reset, and recorded in docs/DECISIONS.md.
+  First run 2026-10-18. Details: docs/RUNNER.md.*
 
 ## This week (hard deadline: about Nov 3)
 
@@ -71,7 +83,7 @@ Last updated 2026-10-17 by Claude.
 
 ## Before the daily runner starts building
 
-The runner can be switched on as soon as step 3 is done. Each morning it first checks steps 1, 7 and 8,
+The runner is on since 2026-10-18 (8:01 AM Eastern). Each morning it first checks steps 1, 7 and 8,
 and does nothing except send you a "waiting on step N" notice until they are complete. After that it
 runs on its own.
 
@@ -86,10 +98,44 @@ runs on its own.
   - **d.** Settings > Rules > Rulesets > `protect-main` > Require a pull request: required approvals
     **1**; check **Dismiss stale pull request approvals when new commits are pushed**, **Require
     review from Code Owners**, and **Require approval of the most recent reviewable push**. Save.
+  - **e. Give the runner the repository** (2 minutes, after c). Open https://claude.ai/code/routines,
+    open **Mako daily runner**, add the repository `ABlueAI/AgentCommandCenter`, and save. Leave the
+    schedule and prompt as they are. Without this the runner can check the gate but cannot open pull
+    requests (seen on its first run, 2026-10-18). If the routine can't be edited, tell Claude and it
+    will walk you through recreating it with the prompt in docs/RUNNER.md.
   - *Done when:* you say "Part B done". Claude opens a test PR as the agent account and confirms it
     cannot merge without your approval.
 - [ ] **8. Upgrade Claude to Max 5x.** About 2 minutes. claude.ai > Settings > Billing. Keep ChatGPT Plus.
   - *Done when:* you say so. The runner then allows 2 sessions in parallel.
+
+## Any time (not blocking)
+
+- [ ] **9. Password manager.** About 45 minutes, any time. Recommended: **Bitwarden, free plan**
+  (open source, independently audited, unlimited passwords and devices). For nothing in the cloud at
+  all, KeePassXC instead, but then you handle syncing and backups yourself.
+  - Install the Windows app, the phone app and the browser extension from bitwarden.com.
+  - Master password: 5 or more random words (Bitwarden's generator makes one). Write it on paper,
+    keep it somewhere safe at home, and don't store it digitally. It is the one thing that protects
+    the vault, because the vault is encrypted with it before it leaves your device.
+  - Turn on two-step login for Bitwarden itself (Settings > Security > Two-step login) with an
+    authenticator app. Put Bitwarden's recovery code on the same paper.
+  - Move these first: email, GitHub, Claude, OpenAI, Apple or Google, bank. Change any password you
+    have used on more than one site.
+  - Recovery codes: for email, GitHub and Bitwarden, keep a paper copy with the master password; for
+    other accounts, the item's notes field is fine. Keep 2FA codes in a separate authenticator app
+    with backup (Bitwarden's built-in codes need Premium, and keeping them separate is safer anyway).
+  - API keys go in Bitwarden secure notes; keys Mako uses go in Mako's key setup. Never in this repo,
+    Windows environment variables, or a chat with any AI, Claude included.
+  - Once moved, turn off password saving in Chrome and Edge so there is one place.
+  - Don't connect it to ChatGPT's **Passwords** setting or let any AI agent drive it.
+  - *Done when:* you say so. It's yours, so Claude doesn't verify anything.
+- [ ] **10. App settings review.** About 20 minutes, this week, after step 2.
+  - Screenshot every page of: ChatGPT desktop app > Settings; claude.ai > Settings and the Claude
+    desktop app's settings; github.com > Settings > Applications (Installed GitHub Apps and
+    Authorized OAuth Apps). Send them to Claude in one message.
+  - Claude replies with the exact toggles to change and writes the agreed setup into
+    `docs/SETUP-APP-SETTINGS.md`, without personal details, so every agent knows it.
+  - *Done when:* you've changed them and said so.
 
 ## Every day, once the runner is on
 
