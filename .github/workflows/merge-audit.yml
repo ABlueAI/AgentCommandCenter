@@ -1,7 +1,9 @@
 # Merge audit: a tripwire, not a gate. Every change that lands on main is checked after the fact,
 # and anything that did not arrive the approved way opens a "security-alert" issue for Blue.
 #
-#   ALERT  a commit reached main without a merged pull request (direct push or bypass)
+#   ALERT  a commit reached main without a merged pull request (direct push or bypass). A commit
+#          counts as merged when any PR merged into main includes it, so commits that first went
+#          through a stacked PR and then reached main inside another PR do not alert (issue #35).
 #   ALERT  a pull request from an agent account merged without Blue's approval
 #   ALERT  a pull request was merged by anyone other than Blue
 #
@@ -23,38 +25,22 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
+      # The decision logic lives in .github/scripts/merge-audit.js so `npm test` covers it.
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/github-script@v8
         env:
           HUMAN_APPROVER: ABlueAI
         with:
           script: |
+            const { auditPush, githubApi } = require('./.github/scripts/merge-audit.js');
             const human = process.env.HUMAN_APPROVER;
             const { owner, repo } = context.repo;
-            const problems = [];
-            const commits = context.payload.commits && context.payload.commits.length
+            const shas = context.payload.commits && context.payload.commits.length
               ? context.payload.commits.map((c) => c.id)
               : [context.sha];
-            const checked = new Set();
-            for (const sha of commits) {
-              const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({ owner, repo, commit_sha: sha });
-              const merged = prs.filter((p) => p.merged_at && p.base.ref === 'main');
-              if (merged.length === 0) {
-                problems.push(`Commit ${sha.slice(0, 7)} reached main without a merged pull request.`);
-                continue;
-              }
-              for (const pr of merged) {
-                if (checked.has(pr.number)) continue;
-                checked.add(pr.number);
-                const { data: full } = await github.rest.pulls.get({ owner, repo, pull_number: pr.number });
-                const mergedBy = full.merged_by && full.merged_by.login;
-                if (mergedBy !== human) problems.push(`PR #${pr.number} was merged by ${mergedBy || 'unknown'}, not ${human}.`);
-                if (full.user.login !== human) {
-                  const { data: reviews } = await github.rest.pulls.listReviews({ owner, repo, pull_number: pr.number });
-                  const approved = reviews.some((r) => r.user && r.user.login === human && r.state === 'APPROVED');
-                  if (!approved) problems.push(`PR #${pr.number} by ${full.user.login} merged without an approval from ${human}.`);
-                }
-              }
-            }
+            const problems = await auditPush({ shas, human, api: githubApi(github, { owner, repo }) });
             if (problems.length === 0) { core.info('Merge audit: every change on main arrived through an approved pull request.'); return; }
             const body = [
               `@${human} the merge audit found a change on main that did not arrive the approved way.`,

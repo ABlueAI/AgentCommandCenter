@@ -7,6 +7,8 @@ of editing an old one, and say which entry it replaces. Agents follow the newest
 
 | Decision | Blue's words |
 |---|---|
+| Every PR targets `main`; no stacked PRs (AGENTS.md "How work flows"). Prompted by the false merge-audit alert in issue #35, which came from PR #33 being merged into PR #32's branch. | "every PR targets `main`; no stacked PRs. If work depends on an unmerged PR, wait, or include the change in that PR." (work order for the issue #35 fix; merging that PR is Blue's approval) |
+| The merge audit counts a commit as merged when any PR merged into `main` includes it, keeping all three alerts and the fail-closed behaviour. | "Flag only commits that no merged-to-main PR covers." (same work order) |
 | The `v1.0.0` tag waits for the Electron-binary fix (PR #33). Once Blue merges it, the PC session tags `v1.0.0` on that `main`. | "Hold the tag until the Electron binary fix PR is merged, then tag v1.0.0 on that main." |
 | The recovered Oct 6–7 reviewer conversations (business research, two Mako panes) are the missing work from the closure. | "Yes, that's it" (answer in the PC session, FINISH-1.0 step A4). |
 | The missing builder task is dropped: no transcript exists and Blue can't recall it. | "Can't recall, drop it" |

@@ -28,7 +28,10 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
 ## How work flows
 
 1. Work starts from a plan session or an issue, on its own branch.
-2. The builder implements, runs the tests, and opens a pull request using the template.
+2. The builder implements, runs the tests, and opens a pull request using the template. Every PR
+   targets `main`; no stacked PRs. If the work depends on an unmerged PR, wait for it to merge, or
+   put the change in that PR. (A PR merged into another PR's branch reaches `main` only indirectly,
+   which is how the false merge-audit alert in issue #35 happened.)
 3. CI runs on Windows; an independent reviewer (Codex code review, or a different agent) reviews.
 4. The builder fixes CI failures and review findings itself. After 3 failed fix rounds on the same
    problem, it stops and marks the PR "needs Blue" with its diagnosis and options.
