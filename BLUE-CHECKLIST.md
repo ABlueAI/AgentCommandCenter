@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-18 by Claude (PC session: step 4).
+Last updated 2026-10-18 by Claude (PC session: steps 4 and 5).
 
 ## Today
 
@@ -87,7 +87,14 @@ Last updated 2026-10-18 by Claude (PC session: step 4).
     2. Set Windows Update **Active hours**, so updates stop restarting the PC mid-work.
     3. A **3-minute smoke test**: build label, Shift+Enter, colored status badges, and no Board tab.
   - *Done when:* that session updates STATUS.md with the results in a PR.
-- [ ] **5. Merge PR #33, then tag 1.0.** About 2 minutes, after step 4's smoke test passes.
+- [x] **5. Merge PR #33, then tag 1.0.** About 2 minutes, after step 4's smoke test passes.
+  *Verified 2026-10-18:*
+  - *PR #33 merged into the #32 branch, so its fix reached `main` through PR #34 (merged by
+    ABlueAI).*
+  - *On the PC, a clean `npm ci` at `37009eb` restored Electron, and Blue opened Mako from the
+    shortcut showing `main@37009eb`.*
+  - *Annotated tag `v1.0.0` was pushed at `37009eb`; `git ls-remote` shows it on GitHub. The GitHub
+    release was created from it.*
   - The tag waits for PR #33, the Electron-binary fix (your decision, 2026-10-18). Merge PR #33 when
     its CI is green. PR #32 has to be merged first.
   - Then the PC session tags `v1.0.0` on that `main`. You already gave the OK in that decision.
