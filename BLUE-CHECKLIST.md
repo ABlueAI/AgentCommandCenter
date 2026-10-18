@@ -17,7 +17,13 @@ Last updated 2026-10-18 by Claude.
   - You decided that green CI plus your read of the TLDR is enough review for this PR. Codex reviews
     every PR after it (step 2e).
   - *Done when:* the PR shows "Merged". Claude checks.
-- [ ] **2. Guardrails, Part A.** About 10 minutes, right after step 1.
+- [x] **2. Guardrails, Part A.** About 10 minutes, right after step 1. *Blue: "part A is done"
+  (2026-10-18). Verified 2026-10-18 through GitHub's public API:*
+  - *Auto-merge is off.*
+  - *The ruleset on `main` is active with deletion protection, force-push blocking, a required pull
+    request (0 approvals for now), and both Windows checks required.*
+  - *Steps b, d, f and g are account settings Claude can't read, so they rest on Blue's word.*
+  - *Step e is verified: Codex reviewed PR #30 automatically when it was opened (15:52 UTC).*
   - **a. Auto-merge off.** *Already off (Blue, 2026-10-18).* Nothing to do.
   - **b. Read-only Actions.** Settings > Actions > General > Workflow permissions: check that **Read
     repository contents and packages permissions** is selected and **Allow GitHub Actions to create
@@ -95,9 +101,12 @@ runs on its own.
   - **c.** In a private browser window, sign in to GitHub as `ablueai-agent`, then open
     https://claude.ai/connect-github and connect. Claude's cloud sessions now act as the agent account;
     you keep using `ABlueAI` to approve and merge.
-  - **d.** Settings > Rules > Rulesets > `protect-main` > Require a pull request: required approvals
-    **1**; check **Dismiss stale pull request approvals when new commits are pushed**, **Require
-    review from Code Owners**, and **Require approval of the most recent reviewable push**. Save.
+  - **d.** Do this only after c, and after merging any open PR Claude made before c. GitHub never
+    lets a PR's author approve their own PR, and until c Claude's PRs are authored as `ABlueAI`, so
+    they would be stuck. Settings > Rules > Rulesets > `protect-main` > Require a pull request:
+    required approvals **1**; check **Dismiss stale pull request approvals when new commits are
+    pushed**, **Require review from Code Owners**, and **Require approval of the most recent
+    reviewable push**. Save.
   - **e. Give the runner the repository** (2 minutes, after c). Open https://claude.ai/code/routines,
     open **Mako daily runner**, add the repository `ABlueAI/AgentCommandCenter`, and save. Leave the
     schedule and prompt as they are. Without this the runner can check the gate but cannot open pull
