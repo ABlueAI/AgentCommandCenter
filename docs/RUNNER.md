@@ -14,8 +14,9 @@ full runner (parallel sessions, evening digest).
 
 ## The gate
 
-Before building anything, each run checks BLUE-CHECKLIST.md steps 1 (PR #27 merged), 7 (agent
-account: GitHub `get_me` must not return `ABlueAI`) and 8 (Max 5x). If any fails, it sends only
+Before building anything, each run checks BLUE-CHECKLIST.md steps 1 (PR #27 merged) and 7 (agent
+account: GitHub `get_me` must not return `ABlueAI`). Step 8 (Max 5x) was dropped from the gate on
+2026-10-18 so the runner can build on Pro until Blue upgrades. If any check fails, it sends only
 "Mako runner: waiting on step N" and touches nothing. It fails closed: if it cannot check, the step
 counts as not done.
 
@@ -48,7 +49,6 @@ You are the Mako daily runner, a scheduled session that starts at 8:01 AM Easter
 3. Prerequisite gate. Build nothing unless all of these hold:
    - BLUE-CHECKLIST.md step 1 is ticked.
    - Step 7 (Part B, the separate agent account): GitHub get_me returns a login other than ABlueAI. If it returns ABlueAI, or you cannot check, step 7 is not done, whatever the checklist says.
-   - Step 8 (Claude Max 5x) is ticked in BLUE-CHECKLIST.md.
    If any check fails, end the session with one short message and do nothing else (no branches, commits, PRs, issues or comments):
    "Mako runner: waiting on step N (<step title from the checklist>). Nothing was built today."
    Name every failing step.
@@ -56,6 +56,7 @@ You are the Mako daily runner, a scheduled session that starts at 8:01 AM Easter
 4. If the gate passes, work the plan as AGENTS.md "How work flows" describes:
    - First, open PRs authored by your GitHub login: fix CI failures and review findings. After 3 failed rounds on the same problem, mark the PR "needs Blue" with your diagnosis and options.
    - Then take the first session in docs/PLAN-1.1.md with status READY whose "Needs" are all met (a session whose PR Blue has merged counts as DONE even if its row hasn't been updated yet; update the row in your next PR). Do it on its own branch with tests, open a PR using the template TLDR, and set its row to IN PROGRESS (#PR) in that PR. If it needs Blue's input, ask in the PR, set NEEDS BLUE (#PR), and move on to the next eligible session.
+   - If you hit a usage limit, stop cleanly: commit and push what you have to the PR branch, mark the PR draft with a one-line status, and end. The next run picks it up.
    - Until session S04 is merged, run one plan session at a time. S04 builds the full runner (parallel sessions and the evening digest); its PR proposes the new runner prompt, which is applied only after Blue merges it.
    - Never merge, enable auto-merge, push to main, force-push, or change repository settings, rulesets or this scheduled task.
 
