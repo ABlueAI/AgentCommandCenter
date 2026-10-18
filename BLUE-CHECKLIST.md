@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-18 by Claude.
+Last updated 2026-10-18 by Claude (PC session: step 4).
 
 ## Today
 
@@ -64,7 +64,14 @@ Last updated 2026-10-18 by Claude.
 
 ## This week (hard deadline: about Nov 3)
 
-- [ ] **4. Finish 1.0 on your PC.** About 15 minutes of your attention; the agent does the rest.
+- [x] **4. Finish 1.0 on your PC.** About 15 minutes of your attention; the agent does the rest.
+  *Verified 2026-10-18 by the PC session:*
+  - *Lost work: Blue confirmed the recovered reviewer conversations are the missing work. The builder
+    task was dropped because Blue can't recall it.*
+  - *Active hours: set (Blue's word, since Claude can't read that setting).*
+  - *Smoke test: Blue answered each row; Claude confirmed that Mako was running from the shortcut at
+    `ab5ce5a`.*
+  - *Results are in STATUS.md through the close-out PR.*
   - Open Claude Desktop, or open a terminal in `D:\Workspace\agent-command-center` and run `claude`.
     Paste this:
 

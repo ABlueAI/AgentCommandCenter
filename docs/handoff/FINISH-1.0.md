@@ -62,7 +62,10 @@ work is from the October 4 and 5 workday (possibly also October 16).
    cd D:\Workspace\agent-command-center
    git switch main; git pull
    cd app; npm ci
+   node node_modules\electron\install.js
    ```
+   The last line restores Electron's binary. `npm ci` no longer downloads it, and the desktop
+   shortcut runs it directly (found during the 2026-10-18 run).
 3. Start Mako from the desktop shortcut.
 
 ## C. Three-minute smoke test (Blue, with the agent watching)

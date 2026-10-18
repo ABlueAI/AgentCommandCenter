@@ -1,7 +1,7 @@
 # Mako 1.0 release notes
 
-Status: **release candidate** (PR #27). Becomes final when Blue merges PR #27 and approves the `v1.0.0`
-tag.
+Status: **release candidate**, merged to `main` on 2026-10-17 (PR #27) and smoke-tested on Blue's PC
+on 2026-10-18. Becomes final when Blue approves the `v1.0.0` tag.
 
 ## What Mako 1.0 is
 
@@ -55,3 +55,8 @@ each in its own git worktree, on his existing primary workstation.
 
 Fully close Mako (not just the window), pull `main`, run `npm ci` in `app/` if dependencies changed,
 then start it from the desktop shortcut. The toolbar shows which commit is running.
+
+After any `npm ci`, also run `node node_modules\electron\install.js` in `app/`. With npm 11, `npm ci`
+no longer downloads Electron's binary, and the desktop shortcut starts
+`app\node_modules\electron\dist\electron.exe` directly, so Mako won't open until the binary is back
+(seen on 2026-10-18). `npm start` would fetch it on its own; the shortcut doesn't.
