@@ -3,6 +3,13 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-10-18
+
+| Decision | Blue's words |
+|---|---|
+| Time zone is Eastern. The daily runner is scheduled for 8:01 AM America/New_York, following daylight saving (scheduled task "Mako daily runner", created 2026-10-18; docs/RUNNER.md). Completes the 2026-10-17 runner entry. | "by the way i am EST." |
+| Auto-merge was already off before the guardrail setup (checklist step 2a). | "auto merge was already off" |
+
 ## 2026-10-17
 
 | Decision | Blue's words |

@@ -61,7 +61,7 @@ updates its own row.
 
 ### Blue's inputs this month
 
-S01 GitHub clicks (about 20 minutes) · S04 confirm your time zone (start time is 8:01 AM) · S12 Hexona URL · S13 install
+S01 GitHub clicks (about 20 minutes) · S04 time zone (given 2026-10-18: Eastern, 8:01 AM) · S12 Hexona URL · S13 install
 Obsidian · S14 UI examples · S16 Dodaios verdict · S17 pick a design · S21 pick a logo · S23 approve
 paperwork · S24 authorize HighLevel · every merge.
 
