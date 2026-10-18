@@ -23,7 +23,7 @@ Last updated 2026-10-18 by Claude.
   - *The ruleset on `main` is active with deletion protection, force-push blocking, a required pull
     request (0 approvals for now), and both Windows checks required.*
   - *Steps b, d, f and g are account settings Claude can't read, so they rest on Blue's word.*
-  - *Step e is confirmed when Codex reviews the next PR.*
+  - *Step e is verified: Codex reviewed PR #30 automatically when it was opened (15:52 UTC).*
   - **a. Auto-merge off.** *Already off (Blue, 2026-10-18).* Nothing to do.
   - **b. Read-only Actions.** Settings > Actions > General > Workflow permissions: check that **Read
     repository contents and packages permissions** is selected and **Allow GitHub Actions to create
