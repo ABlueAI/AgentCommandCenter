@@ -62,10 +62,10 @@ work is from the October 4 and 5 workday (possibly also October 16).
    cd D:\Workspace\agent-command-center
    git switch main; git pull
    cd app; npm ci
-   node node_modules\electron\install.js
    ```
-   The last line restores Electron's binary. `npm ci` no longer downloads it, and the desktop
-   shortcut runs it directly (found during the 2026-10-18 run).
+   `npm ci` ends with `ensure-electron-binary: Electron 42.5.0 ready at ...`. That step restores the
+   binary the desktop shortcut runs directly (PR #33). On the 2026-10-18 run, before that fix, it
+   took a manual `node node_modules\electron\install.js`.
 3. Start Mako from the desktop shortcut.
 
 ## C. Three-minute smoke test (Blue, with the agent watching)

@@ -56,7 +56,9 @@ each in its own git worktree, on his existing primary workstation.
 Fully close Mako (not just the window), pull `main`, run `npm ci` in `app/` if dependencies changed,
 then start it from the desktop shortcut. The toolbar shows which commit is running.
 
-After any `npm ci`, also run `node node_modules\electron\install.js` in `app/`. With npm 11, `npm ci`
-no longer downloads Electron's binary, and the desktop shortcut starts
-`app\node_modules\electron\dist\electron.exe` directly, so Mako won't open until the binary is back
-(seen on 2026-10-18). `npm start` would fetch it on its own; the shortcut doesn't.
+`npm ci` also downloads Electron's binary, through the `postinstall` in `app/package.json` (PR #33).
+Electron 42 stopped doing that itself and fetches it only on the first `npm start`, but the desktop
+shortcut starts `app\node_modules\electron\dist\electron.exe` directly, so before that fix Mako
+wouldn't open after an `npm ci` (seen on 2026-10-18). If `npm ci` fails at the
+`ensure-electron-binary` step, the download failed (offline or a proxy): fix that and rerun `npm ci`.
+If you install with `--ignore-scripts`, run `node ensure-electron-binary.js` in `app/` afterwards.
