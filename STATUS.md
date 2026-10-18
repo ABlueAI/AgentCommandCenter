@@ -9,8 +9,11 @@ Updated 2026-10-18 by Claude. Every PR that changes the state updates this file.
 - **Release:** Mako 1.0 release candidate merged to `main` on 2026-10-17 (PR #27, merge commit
   `4d60c9e`, version 1.0.0). Not yet tagged: the PC smoke test comes first (checklist steps 4 and 5).
 - **Plan:** 1.1 month-one plan approved with that merge: [docs/PLAN-1.1.md](docs/PLAN-1.1.md).
-- **Guardrails:** repo-side files are live on `main`, and the merge audit passed on both merges. The
-  GitHub settings (checklist steps 2 and 7) still need Blue's clicks.
+- **Guardrails:**
+  - The repo-side files are live on `main`, and the merge audit has passed on every merge.
+  - Part A (checklist step 2) is done and verified on 2026-10-18. `main` now requires a pull request
+    and both Windows checks, and blocks force-pushes and deletion.
+  - Part B (step 7, the agent account) is next. Until it is done, agents still act as `ABlueAI`.
 - **Daily runner:** scheduled for 8:01 AM Eastern from 2026-10-18 ([docs/RUNNER.md](docs/RUNNER.md)).
   Until checklist steps 7 and 8 are done it only sends a "waiting on step N" notice.
 
