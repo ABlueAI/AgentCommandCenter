@@ -7,6 +7,8 @@ of editing an old one, and say which entry it replaces. Agents follow the newest
 
 | Decision | Blue's words |
 |---|---|
+| Build now on Pro: the runner no longer waits for Max 5x (step 8 dropped from its gate). Upgrade to Max 5x on Wednesday 2026-10-21, after Tuesday's reset and before Pro renews Thursday. Replaces the 2026-10-17 gate on steps 1, 7 and 8. | "i would like to keep building today on the pro plan as it resets tuesday id like to get the most out of it. i will get the Pro Max subscription on Wednesday ... lets just run it." |
+| Finish 1.0 within 1 to 2 days, well before the Nov 3 transcript deadline. | "i would like to finish 1.0 well before nov 3. more like 1 to 2 days from now..." |
 | Time zone is Eastern. The daily runner is scheduled for 8:01 AM America/New_York, following daylight saving (scheduled task "Mako daily runner", created 2026-10-18; docs/RUNNER.md). Completes the 2026-10-17 runner entry. | "by the way i am EST." |
 | Auto-merge was already off before the guardrail setup (checklist step 2a). | "auto merge was already off" |
 

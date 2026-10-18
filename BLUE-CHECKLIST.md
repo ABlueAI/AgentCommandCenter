@@ -89,15 +89,17 @@ Last updated 2026-10-18 by Claude.
 
 ## Before the daily runner starts building
 
-The runner is on since 2026-10-18 (8:01 AM Eastern). Each morning it first checks steps 1, 7 and 8,
-and does nothing except send you a "waiting on step N" notice until they are complete. After that it
-runs on its own.
+The runner is on since 2026-10-18 (8:01 AM Eastern). Each morning it first checks steps 1 and 7, and
+does nothing except send you a "waiting on step N" notice until they are complete. After that it runs
+on its own, one session at a time on Pro.
 
 - [ ] **7. Guardrails, Part B: a separate GitHub account for agents.** About 15 minutes.
   - **a.** Create a free GitHub account, for example `ablueai-agent`, with its own email (a "+agent"
     alias of your email usually works). Turn on two-factor authentication.
-  - **b.** Repo > Settings > Collaborators > **Add people** > `ablueai-agent` > role **Write**. Accept
-    the invitation while signed in as the agent account.
+  - **b.** Signed in as `ABlueAI`: repo > Settings > Collaborators > **Add people** > `ablueai-agent`.
+    Repos on a personal account have no role picker; collaborators get write access, which is what
+    we want. Then, signed in as the agent account, accept the invitation (from its email, or
+    https://github.com/ABlueAI/AgentCommandCenter/invitations).
   - **c.** In a private browser window, sign in to GitHub as `ablueai-agent`, then open
     https://claude.ai/connect-github and connect. Claude's cloud sessions now act as the agent account;
     you keep using `ABlueAI` to approve and merge.
@@ -114,8 +116,10 @@ runs on its own.
     will walk you through recreating it with the prompt in docs/RUNNER.md.
   - *Done when:* you say "Part B done". Claude opens a test PR as the agent account and confirms it
     cannot merge without your approval.
-- [ ] **8. Upgrade Claude to Max 5x.** About 2 minutes. claude.ai > Settings > Billing. Keep ChatGPT Plus.
-  - *Done when:* you say so. The runner then allows 2 sessions in parallel.
+- [ ] **8. Upgrade Claude to Max 5x.** About 2 minutes, on **Wednesday 2026-10-21**, after Pro's weekly
+  reset on Tuesday and before Pro renews on Thursday. claude.ai > Settings > Billing. Keep ChatGPT Plus.
+  No longer blocks the runner; it builds one session at a time on Pro until then.
+  - *Done when:* you say so. After S04, the runner then allows 2 sessions in parallel.
 
 ## Any time (not blocking)
 

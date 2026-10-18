@@ -47,8 +47,9 @@ could still press Merge on a green PR. Part B closes that.
 1. **Create the agent account.** A free GitHub account such as `ablueai-agent`, with its own email
    address (a "+agent" alias usually works). GitHub's terms allow one machine account per person.
    Turn on two-factor authentication for it.
-2. **Give it Write access only.** Repo > Settings > Collaborators > Add people > `ablueai-agent` >
-   role **Write** (not Maintain, not Admin). Accept the invite from the agent account.
+2. **Give it collaborator access.** Repo > Settings > Collaborators > Add people > `ablueai-agent`.
+   Personal-account repos have no role picker: collaborators can push branches and open PRs but can't
+   change settings. Accept the invite from the agent account.
 3. **Point Claude at it.** In a private browser window, sign in to GitHub as `ablueai-agent`, then go
    to claude.ai/connect-github and connect. Claude's cloud sessions now act as the agent account. You
    keep using `ABlueAI` on github.com and the GitHub app to approve and merge. If Codex will open PRs,
