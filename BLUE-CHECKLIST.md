@@ -249,7 +249,8 @@ on its own, one session at a time on Pro.
     90-day expiry.
   - Its final home is Mako's in-app key setup (Electron safeStorage). Never `setx` or a Windows
     environment variable (AGENTS.md "Security rules").
-  - Until S06 adds a GitHub slot to Mako's key setup, it waits only in Bitwarden (step 15b).
+  - Until S06 gives it a home in Mako (the plan doesn't yet say how; S06 decides), it waits only in
+    Bitwarden (step 15b).
   - *Done when:* the S06 PR shows a pull request opened from a local Mako pane with `ABlueAgent` as its
     author. Claude checks that on GitHub; the S06 PR confirms the exact token scopes.
 - [ ] **15. Token hygiene: find old tokens, and rules for any new one.** About 20 minutes, this week.
@@ -277,7 +278,9 @@ on its own, one session at a time on Pro.
       https://console.anthropic.com (API keys page) and https://aistudio.google.com/apikey (Gemini,
       the key Mako's Video Scout uses; also Google Cloud > APIs & Services > Credentials if you made
       keys there).
-    - If something breaks after a revoke, make a fresh, narrower token by the rules in b.
+    - If something breaks after a revoke, make a fresh, narrower token by the rules in b. If local
+      pushes from your PC break, sign in to Git again instead (Git Credential Manager asks on the
+      next push), and tell Claude.
   - **b. Rules for every new token**, including step 14's:
     - GitHub tokens: fine-grained only, limited to one repository, with the fewest permissions that
       do the job. Other keys: the fewest permissions the provider offers.
@@ -294,9 +297,9 @@ on its own, one session at a time on Pro.
       is optional, below): Mako's key setup, or a GitHub environment secret restricted to `main`.
       A provider key Mako's key setup can't hold yet waits only in Bitwarden. Never into any AI
       chat (Claude included), a file, this repo, or `setx`.
-    - Today Mako's key setup stores only the Gemini key; S06 adds a place for a GitHub token. Until
-      then, make no GitHub token for your PC other than step 14's. If you make step 14's token
-      before S06 asks for it, it waits only in Bitwarden, then goes into Mako's key setup in S06.
+    - Today Mako's key setup stores only the Gemini key. S06 gives step 14's GitHub token a home in
+      Mako (the plan doesn't yet say how). Until then, make no GitHub token for your PC other than
+      step 14's. If you make it before S06 asks for it, it waits only in Bitwarden.
     - A secret a repo workflow uses goes in a GitHub environment whose deployment branches are
       `main` only, and that workflow must never check out or run code from a PR.
     - Expiry 90 days (1 year at most). Tell Claude the expiry date (never the token), and Claude
