@@ -54,8 +54,8 @@ could still press Merge on a green PR. Part B closes that.
    change settings. Accept the invite from the agent account.
 3. **Point Claude at it.** In a private browser window, sign in to GitHub as `ablueai-agent`, then go
    to claude.ai/connect-github and connect. Claude's cloud sessions now act as the agent account. You
-   keep using `ABlueAI` on github.com and the GitHub app to approve and merge. If Codex will open PRs,
-   connect Codex's GitHub to the agent account the same way.
+   keep using `ABlueAI` on github.com and the GitHub app to approve and merge. Codex stays linked to
+   `ABlueAI` and is used only as an optional reviewer, never to open PRs (Blue, 2026-10-19).
 4. **Require your approval.** Edit `protect-main` > Require a pull request: required approvals **1**;
    check **Dismiss stale pull request approvals when new commits are pushed**, **Require review from
    Code Owners**, and **Require approval of the most recent reviewable push**. Save.
@@ -66,7 +66,7 @@ could still press Merge on a green PR. Part B closes that.
 
 | Actor | Can push to main | Can merge a PR |
 |---|---|---|
-| Claude, Codex, any agent (agent account, Write role) | No | No: needs Blue's approval, and the agent cannot approve as Blue |
+| Claude or any agent (agent account, Write role) | No | No: needs Blue's approval, and the agent cannot approve as Blue |
 | A GitHub Actions workflow | No | No: read-only token, cannot approve |
 | Someone opening a PR from a fork | No | No |
 | Blue (ABlueAI) | No (PR required for everyone) | Yes, after CI passes, approving the agent's PR |

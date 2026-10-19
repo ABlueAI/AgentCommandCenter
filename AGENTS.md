@@ -34,10 +34,16 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
    which is how the false merge-audit alert in issue #35 happened.)
 3. CI runs on Windows. Before marking the PR ready, the builder runs the `pr-reviewer` subagent
    (`.claude/agents/pr-reviewer.md`, Claude Opus, read-only, no shell) on its own PR. It gives the
-   reviewer only the PR number, the TLDR and the diff saved to a file, never its own reasoning. It posts the result as a PR
-   comment headed "Independent review (Opus)", fixes or answers every finding, and re-runs the
-   reviewer after fixes, posting each run. The TLDR's review line cites the latest such comment.
-   Codex review is optional: Blue may still request one by hand.
+   reviewer only the PR number, the TLDR and the diff saved to a file, never its own reasoning.
+   - If the subagent isn't loaded (agent files load only when a session starts), run a fresh Opus
+     agent with read tools only and the body of `pr-reviewer.md` as its instructions, and say so in
+     the comment and the TLDR. If neither is possible, mark the PR "needs Blue". Never skip it.
+   - Before posting, check the report for secrets or anything quoted from outside the repo, and
+     remove it with a note. Otherwise post the reviewer's report verbatim as a PR comment headed
+     "Independent review (Opus)", followed by the builder's response to each finding.
+   - Fix or answer every finding, re-run the reviewer after fixes, and post each run. The TLDR's
+     review line cites the latest such comment.
+   - Codex review is optional: Blue may still request one by hand.
 4. The builder fixes CI failures and review findings itself. After 3 failed fix rounds on the same
    problem, it stops and marks the PR "needs Blue" with its diagnosis and options.
 5. When CI is green and review findings are resolved, the builder updates the TLDR and marks the PR
