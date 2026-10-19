@@ -297,8 +297,10 @@ on its own, one session at a time on Pro.
 
 You can start on the first one now, which saves time later.
 
-- **Session S28:** your agent-roles package (new role texts, from your agent-roles chat), as a PR or
-  an issue titled `S28: agent-roles package`. S28 stays `NEEDS BLUE (package)` until it arrives.
+- **Session S28:** your agent-roles package (new role texts, from your agent-roles chat), as an issue
+  titled `S28: agent-roles package`, or hand it to any agent to open the PR. Not as a PR of your
+  own: you can't approve your own PR, so it couldn't merge. S28 stays `NEEDS BLUE (package)` until
+  it arrives.
 - **Session S27 (Composer):** your research and placement from the plan-review chat. S27 stays NEEDS
   BLUE until then.
 - **Session S14:** UI examples. Screenshots or links of designs you like. **Start a folder now.**
