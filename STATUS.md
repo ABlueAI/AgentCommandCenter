@@ -31,7 +31,13 @@ Updated 2026-10-19 by Claude. Every PR that changes the state updates this file.
     after Blue approved and merged it. The audit now also finds a PR merged into `main` by its merge
     commit when that lookup comes back empty; everything else still alerts. A replay against GitHub's
     live data for the #39 push gives the three #40 alerts with the old audit and none with the fix.
-    Blue closes #40 after the fix merges (checklist step 12).
+    The fix merged as PR #41 (`8846eed`), the audit passed on that merge, and Blue closed #40
+    (checklist step 12, verified 2026-10-19).
+  - Independent review: Codex reviewed Blue's PRs automatically but not the agent's (#39 skipped,
+    #41 only on request), its "All PRs" setting won't save, and it ignores review requests from
+    `ABlueAgent` (tested on PR #42). Blue chose a separate Claude
+    Opus reviewer instead (checklist step 13). Builders run the read-only `pr-reviewer` subagent on
+    their own PR and post "Independent review (Opus)" before marking it ready. Codex is optional.
 - **Daily runner:** scheduled for 8:01 AM Eastern from 2026-10-18 ([docs/RUNNER.md](docs/RUNNER.md)).
   The repository was attached on 2026-10-18 (step 7e), and its gate (steps 1 and 7) now passes, so
   from the next run it should start building S01. That run is the first proof it can open PRs.

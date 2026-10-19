@@ -32,7 +32,18 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
    targets `main`; no stacked PRs. If the work depends on an unmerged PR, wait for it to merge, or
    put the change in that PR. (A PR merged into another PR's branch reaches `main` only indirectly,
    which is how the false merge-audit alert in issue #35 happened.)
-3. CI runs on Windows; an independent reviewer (Codex code review, or a different agent) reviews.
+3. CI runs on Windows. Before marking the PR ready, the builder runs the `pr-reviewer` subagent
+   (`.claude/agents/pr-reviewer.md`, Claude Opus, read-only, no shell) on its own PR. It gives the
+   reviewer only the PR number, the TLDR and the diff saved to a file, never its own reasoning.
+   - If the subagent isn't loaded (agent files load only when a session starts), run a fresh Opus
+     agent with read tools only and the body of `pr-reviewer.md` as its instructions, and say so in
+     the comment and the TLDR. If neither is possible, mark the PR "needs Blue". Never skip it.
+   - Before posting, check the report for secrets or anything quoted from outside the repo, and
+     remove it with a note. Otherwise post the reviewer's report verbatim as a PR comment headed
+     "Independent review (Opus)", followed by the builder's response to each finding.
+   - Fix or answer every finding, re-run the reviewer after fixes, and post each run. The TLDR's
+     review line cites the latest such comment.
+   - Codex review is optional: Blue may still request one by hand.
 4. The builder fixes CI failures and review findings itself. After 3 failed fix rounds on the same
    problem, it stops and marks the PR "needs Blue" with its diagnosis and options.
 5. When CI is green and review findings are resolved, the builder updates the TLDR and marks the PR
@@ -115,8 +126,10 @@ listeners · CI workflows, `.github/`, `.claude/`, repository settings · this f
 
 - **Blue**: sets goals, approves plan changes, merges. Owns credentials and repository settings.
 - **Claude Code**: primary builder (Sonnet for routine work, Opus for hard problems and reviews).
-- **Codex / GPT**: independent reviewer on every PR, second-opinion builder, and planning partner.
-  Works in its own branch, never Claude's.
+- **Reviewer subagent** (`.claude/agents/pr-reviewer.md`, Claude Opus): the required independent
+  review on every PR, run by the builder before it marks the PR ready.
+- **Codex / GPT**: optional reviewer when Blue requests one by hand, second-opinion builder, and
+  planning partner. Works in its own branch, never Claude's. Nothing in the workflow depends on it.
 - Plans and reviews happen in the repo (PRs, issues, these files), never by copying text between apps.
 
 ## Out of scope unless Blue explicitly approves the guardrails first

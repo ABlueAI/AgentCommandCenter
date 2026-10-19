@@ -28,9 +28,11 @@ personal approval.
    - Save.
 4. **Phone alerts.** GitHub mobile app > Settings > Notifications: on for **Pull requests** and
    **Reviews requested**. Optional: a filter for issues labelled `security-alert`.
-5. **Codex reviews.** chatgpt.com/codex > Settings > Code review: enable it for
-   `ABlueAI/AgentCommandCenter` and turn on **Automatic reviews**. If your Plus plan does not offer
-   automatic reviews, tell Claude; the fallback is a reviewer agent in CI. When GitHub asks which
+5. **Codex reviews (optional since 2026-10-19).** The required independent review is now the
+   `pr-reviewer` subagent the builder runs on its own PR (AGENTS.md "How work flows" step 3,
+   `.claude/agents/pr-reviewer.md`). Codex reviewed your PRs automatically but not the agent's
+   (#39, #41), so it's an extra you can request by hand. If you keep it: chatgpt.com/codex > Settings > Code review, enable it for
+   `ABlueAI/AgentCommandCenter`. When GitHub asks which
    repositories the app may access, choose **Only select repositories**, not all: every repository an
    AI app can reach is one a prompt injection can reach, and future private business repos should be
    opted in one at a time.
@@ -52,8 +54,8 @@ could still press Merge on a green PR. Part B closes that.
    change settings. Accept the invite from the agent account.
 3. **Point Claude at it.** In a private browser window, sign in to GitHub as `ablueai-agent`, then go
    to claude.ai/connect-github and connect. Claude's cloud sessions now act as the agent account. You
-   keep using `ABlueAI` on github.com and the GitHub app to approve and merge. If Codex will open PRs,
-   connect Codex's GitHub to the agent account the same way.
+   keep using `ABlueAI` on github.com and the GitHub app to approve and merge. Codex stays linked to
+   `ABlueAI` (Blue, 2026-10-19), so it is not connected to the agent account.
 4. **Require your approval.** Edit `protect-main` > Require a pull request: required approvals **1**;
    check **Dismiss stale pull request approvals when new commits are pushed**, **Require review from
    Code Owners**, and **Require approval of the most recent reviewable push**. Save.
@@ -64,7 +66,7 @@ could still press Merge on a green PR. Part B closes that.
 
 | Actor | Can push to main | Can merge a PR |
 |---|---|---|
-| Claude, Codex, any agent (agent account, Write role) | No | No: needs Blue's approval, and the agent cannot approve as Blue |
+| Claude or any agent (agent account, Write role) | No | No: needs Blue's approval, and the agent cannot approve as Blue |
 | A GitHub Actions workflow | No | No: read-only token, cannot approve |
 | Someone opening a PR from a fork | No | No |
 | Blue (ABlueAI) | No (PR required for everyone) | Yes, after CI passes, approving the agent's PR |
@@ -78,6 +80,14 @@ The merge audit workflow opens a `security-alert` issue if anything reaches main
   (Mako already injects per-pane credentials, so it can supply the agent's token). Until then, local
   agents only verify; they don't open PRs.
 - **Rulesets themselves.** Only repo admins can edit them, and agents are not admins.
+- **Codex is linked to you.** Codex stays linked to `ABlueAI` (Blue, 2026-10-19), not to the
+  restricted agent account. Its review comments on this repo appear as
+  `chatgpt-codex-connector[bot]` (seen on PR #42). A branch or PR it created through that link would
+  likely be attributed to `ABlueAI`. GitHub never lets a PR's author approve it, so such a PR
+  couldn't merge under `protect-main`. Whether Codex may build at all while linked there is Blue's
+  call (open question in PR #42). Claude recommends using it only as a reviewer until he decides.
+  Not verified: which account a Codex-created branch or PR is attributed to, and whether a Codex
+  review could ever count as an approval.
 - **AI that drives your own screen or browser.** ChatGPT computer use, browser agents and extensions
   (including Claude in Chrome, which S15 evaluates) act as you in every account you are signed in to,
   so GitHub would see Blue clicking Merge. Use them only in a separate browser profile that is not

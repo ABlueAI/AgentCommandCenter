@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-19 by Claude (step 12: close false alert #40 after the audit fix; step 13: Codex reviews for agent PRs).
+Last updated 2026-10-19 by Claude (steps 9 and 12 ticked; step 13: Opus reviewer replaces Codex).
 
 ## Today
 
@@ -172,7 +172,8 @@ on its own, one session at a time on Pro.
 
 ## Any time (not blocking)
 
-- [ ] **9. Password manager.** About 45 minutes, any time. Recommended: **Bitwarden, free plan**
+- [x] **9. Password manager.** About 45 minutes, any time. *Done 2026-10-19 on Blue's word: "password
+  storage is set up". It's his, so Claude verified nothing.* Recommended: **Bitwarden, free plan**
   (open source, independently audited, unlimited passwords and devices). For nothing in the cloud at
   all, KeePassXC instead, but then you handle syncing and backups yourself.
   - Install the Windows app, the phone app and the browser extension from bitwarden.com.
@@ -209,8 +210,10 @@ on its own, one session at a time on Pro.
   - *Done when:* issue #35 shows Closed, and the merge audit run for that merge passed with no new
     alert. Claude checks both.
 
-- [ ] **12. Close the false security alert, issue #40.** 1 minute, right after you merge the
-  merge-audit fix PR (the one that adds this step).
+- [x] **12. Close the false security alert, issue #40.** 1 minute, right after you merge the
+  merge-audit fix PR (the one that adds this step). *Verified 2026-10-19 through GitHub's API: #40
+  was closed by ABlueAI at 04:53:47 UTC, one second after the fix PR #41 merged (`8846eed`). The
+  merge audit run on `main` at `8846eed` succeeded, and no security-alert issue is open.*
   - Why it's false: #40 says PR #39's commits reached `main` without a merged PR. They didn't: #39
     holds exactly `281de31` and `a0798d0`, you approved `a0798d0`, and you merged it as `0b6d432`.
     GitHub's commit-to-PR lookup, which the audit relied on, came back empty for all three and was
@@ -221,14 +224,22 @@ on its own, one session at a time on Pro.
   - Agents never close security alerts themselves.
   - *Done when:* #40 shows Closed, and the merge audit run for the fix's merge passed with no new
     alert. Claude checks both.
-- [ ] **13. Let Codex review agent PRs.** About 3 minutes, today, before the runner's first PR.
-  - Why: Codex reviewed every PR you opened (#30, #34 to #38) but none of the agent account's (#39
-    and the audit fix). Its automatic reviews most likely cover only PRs you author.
-  - chatgpt.com/codex > Settings > **Code review**: if there is a choice of whose pull requests it
-    reviews, pick everyone's (or add `ABlueAgent`), then save. If there is no such choice, tell
-    Claude.
-  - Until then, on each agent PR comment `@codex review` to ask for one by hand.
-  - *Done when:* the next agent PR gets a Codex review without that comment. Claude checks.
+- [ ] **13. Independent review for agent PRs.** Nothing more to do: done when you merge PR #42.
+  - What was found (2026-10-19):
+    - Codex reviewed every PR you authored automatically ("PR opened", #36 to #38), but skipped #39
+      and reviewed #41 only after your manual comment. Both were authored by `ABlueAgent`.
+    - The repo's Codex setting shows Review = "Follow personal preferences". Changing it to "All
+      PRs" fails with "Unable to save repository settings. Try again."
+    - Agents requesting the review themselves (`@codex review` from `ABlueAgent` on PR #42):
+      **FAIL**. Four seconds later Codex replied "To use Codex here, create a Codex account and
+      connect to github" and didn't review. Codex ignores accounts not linked to ChatGPT.
+  - Your choice (option 3): a separate Claude Opus reviewer replaces Codex as the required
+    independent review, so Mako doesn't depend on ChatGPT. The builder runs the read-only `pr-reviewer`
+    subagent (`.claude/agents/pr-reviewer.md`) on its own PR before marking it ready, and posts the
+    result as a PR comment headed "Independent review (Opus)". It fixes or answers every finding and
+    re-runs it after fixes (AGENTS.md "How work flows" step 3, and the runner prompt).
+  - Codex review is optional now. You can still request one by hand, but nothing waits for it.
+  - *Done when:* PR #42 merges with its "Independent review (Opus)" comment linked in the TLDR.
 
 ## Every day, once the runner is on
 

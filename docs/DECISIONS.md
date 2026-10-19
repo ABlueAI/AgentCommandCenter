@@ -7,6 +7,9 @@ of editing an old one, and say which entry it replaces. Agents follow the newest
 
 | Decision | Blue's words |
 |---|---|
+| A separate Claude Opus reviewer replaces Codex as the required independent review: the builder runs the read-only `pr-reviewer` subagent (`.claude/agents/pr-reviewer.md`) on its own PR before marking it ready and posts "Independent review (Opus)" as a PR comment (AGENTS.md "How work flows" step 3; runner prompt in docs/RUNNER.md). Codex review becomes optional, on Blue's request only. This replaces the same day's unmerged plan for agents to comment `@codex review` themselves, which failed: Codex ignores accounts not linked to ChatGPT (BLUE-CHECKLIST.md step 13). Replaces the 2026-10-17 entry "Codex reviews every PR after it". | "lets just do option 3, less reliant on gpt so i can drop that subscription if need be" |
+| Claude's GitHub link stays on `ABlueAgent`; Codex stays linked to `ABlueAI` (not re-linked to the agent account). | "nah, im not doing that" |
+| Password manager is set up (BLUE-CHECKLIST.md step 9). | "password storage is set up" |
 | Fix the merge audit's false alert on agent PRs (issue #40) instead of closing one alert per merge: when GitHub links a commit to no PR, also match it against the merge commits of PRs merged into `main`. | "yes, open the audit fix PR. id rather not deal with this every time." |
 | Guardrails Part B (checklist step 7) is complete. The agent account is `ABlueAgent` (write access), Claude's cloud sessions act as it, and every PR into `main` needs Blue's approval as code owner. Done with the guide session on 2026-10-18; verified as `ABlueAgent` on 2026-10-19 (BLUE-CHECKLIST.md step 7). | Blue did steps 7a to 7e with the guide session on 2026-10-18 and ran the checker session (step 7f). Merging the checker's PR is his approval of this entry. |
 
