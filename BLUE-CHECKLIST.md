@@ -264,7 +264,8 @@ on its own, one session at a time on Pro.
     raised, chipmunk pitch.
   - Check the Claude pane's status badge still changes from working to turn ended.
   - *Done when:* you tell any agent "step 15 passed", or what failed. The agent ticks this with the
-    date. A failure gets a fix PR, or a revert of the Electron bump, before other work.
+    date. A failure gets a fix PR, or a revert of the Electron bump, before other work, and the
+    agent sets S02 back to IN PROGRESS in docs/PLAN-1.1.md until it is fixed.
 
 ## Every day, once the runner is on
 
