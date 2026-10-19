@@ -240,7 +240,7 @@ on its own, one session at a time on Pro.
     re-runs it after fixes (AGENTS.md "How work flows" step 3, and the runner prompt).
   - Codex review is optional now. You can still request one by hand, but nothing waits for it.
   - *Done when:* PR #42 merges with its "Independent review (Opus)" comment linked in the TLDR.
-- [ ] **14. Agent token for local agents (proposed in PR #44; applies once Blue merges it).** About 10
+- [ ] **14. Agent token for local agents (approved with PR #44, merged 2026-10-19).** About 10
   minutes, any time before session S06 (the runner won't start S06 until this is ticked). Today local
   agents on your PC push as `ABlueAI`, the account that can approve and merge.
   - Signed in as `ABlueAgent`: GitHub > Settings > Developer settings > Personal access tokens >
@@ -260,7 +260,8 @@ on its own, one session at a time on Pro.
   - **Dictation:** click a Claude pane, click 🎤 Dictate, say a sentence, click it again. The text
     should land in that pane.
   - **Text to speech:** select some text in a pane and click that pane's 🔊 button. It should speak
-    in your chosen voice.
+    in your chosen voice. Then set the speed to 2.0× and speak again: it should be faster without a
+    raised, chipmunk pitch.
   - Check the Claude pane's status badge still changes from working to turn ended.
   - *Done when:* you tell any agent "step 15 passed", or what failed. The agent ticks this with the
     date. A failure gets a fix PR, or a revert of the Electron bump, before other work.

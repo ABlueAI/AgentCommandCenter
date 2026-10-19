@@ -68,3 +68,6 @@ and TTS checked on Blue's PC, since the models run on his GPU.
   request matches facts probed on Electron 42.5.0 (`securityOrigin` `file:///` and the exact
   requesting URL). If 42.11.15 reports them differently, the policy refuses the microphone and CI
   stays green. Dictation working in BLUE-CHECKLIST.md step 15 is what confirms they still hold.
+  Likewise `app/renderer/tts.js` relies on two facts probed on 42.5.0: unprefixed `preservesPitch`
+  works, and a `play()` that starts after synthesis (well after the click) still resolves. Step
+  15's TTS check at 1.0× and 2.0× confirms both.

@@ -61,7 +61,7 @@ updates its own row.
 
 ### Blue's inputs this month
 
-S01 GitHub clicks (about 20 minutes) · S06 `ABlueAgent` token for local agents (proposed) · S04 time zone (given 2026-10-18: Eastern, 8:01 AM) · S12 Hexona URL · S13 install
+S01 GitHub clicks (about 20 minutes) · S06 `ABlueAgent` token for local agents (checklist step 14) · S04 time zone (given 2026-10-18: Eastern, 8:01 AM) · S12 Hexona URL · S13 install
 Obsidian · S14 UI examples · S16 Dodaios verdict · S17 pick a design · S21 pick a logo · S23 approve
 paperwork · S24 authorize HighLevel · every merge.
 
@@ -84,3 +84,4 @@ does both) · Vibe Kanban (removed in 1.0).
 - 2026-10-18: step 8 (Max 5x) dropped from the runner's gate; it builds on Pro, one session at a time, until Blue upgrades on 2026-10-21 (Blue).
 - 2026-10-19: S06 gains the local-agent account move (proposed, pending Blue; PR #44).
 - 2026-10-19: S01 marked DONE (#44). Evidence: agent PR #39 stayed blocked until Blue approved it (checklist 7f); the merge audit passed on the #41 merge (`8846eed`, checklist 12). Moving local agents to the agent account was not in S01's done-when, so it is added to S06 (plan change, pending Blue).
+- 2026-10-19: the S06 local-agent account move and checklist step 14 approved: Blue merged PR #44 (`80a8dac`, 13:58 UTC).
