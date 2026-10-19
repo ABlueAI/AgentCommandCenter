@@ -73,7 +73,8 @@ updates its own row.
    and pick the interval from them. Read on 2026-10-19 at https://code.claude.com/docs/en/routines
    (routines are a research preview, so S04 re-checks):
    - the minimum interval is one hour; more frequent cron expressions are rejected;
-   - scheduled runs are capped at 100 per hour per account; the page states no daily cap;
+   - scheduled runs are capped at 100 per hour per account; the page states no daily cap (S04
+     re-checks for one, since an hourly schedule depends on it);
    - at the subscription usage limit, new runs are rejected until the usage window resets, unless
      usage credits (paid, metered overage) are turned on;
    - a run set exactly on the hour can start several minutes late.
@@ -111,7 +112,8 @@ updates its own row.
 7. **Evening digest.** One phone notification at a set time (default 8 PM Eastern, one setting): PRs
    ready to merge with TLDR links, needs-Blue questions, and blocked items. Other fires notify only
    when Blue has something to answer.
-8. **Applying it.** The S04 PR proposes the new prompt and schedule in docs/RUNNER.md. An interactive
+8. **Applying it.** The S04 PR proposes the new prompt and schedule in docs/RUNNER.md. The prompt
+   carries AGENTS.md's Codex-handle rule into every comment, review post and summary it writes. An interactive
    session applies them to the scheduled task after Blue merges it. The runner never edits itself.
 
 ### S26 details: Codex builder lane
