@@ -40,9 +40,10 @@ assert(usesCount >= 5, `every uses: line was checked (${usesCount} found, at lea
 
 process.stdout.write('\nCI job names match the required checks on main\n');
 const ci = fs.readFileSync(path.join(workflowsDir, 'ci.yml'), 'utf8');
-for (const check of ['App tests (Windows)', 'PowerShell tests (Windows)']) {
-  assert(new RegExp(`^\\s+name:\\s*${check.replace(/[()]/g, '\\$&')}\\s*$`, 'm').test(ci),
-    `ci.yml has a job named "${check}"`);
+// Anchored to the job key, so a step that happens to carry the same text can't stand in for it.
+for (const [job, check] of [['app', 'App tests (Windows)'], ['pester', 'PowerShell tests (Windows)']]) {
+  assert(new RegExp(`^  ${job}:\\r?\\n    name: ${check.replace(/[()]/g, '\\$&')}\\s*$`, 'm').test(ci),
+    `ci.yml job "${job}" is named "${check}"`);
 }
 
 process.stdout.write('\naudited packages stay at or above their fixed versions\n');

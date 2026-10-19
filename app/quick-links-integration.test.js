@@ -125,9 +125,23 @@ assert(JSON.stringify(currentPkg.devDependencies) === JSON.stringify(basePkg.dev
 // changes those two fields and nothing else, and the point here is that no dependency changed.
 // Also set aside: the 1.1 S02 `npm audit fix` (docs/DEPENDENCY-ADVISORIES.md), which moved exactly
 // these four packages to patched versions inside their existing ranges, and the root
-// hasInstallScript flag npm writes for the app's postinstall. Only those fields may differ;
-// any other lockfile change still fails here.
-const AUDIT_FIX_PACKAGES = ['node_modules/electron', 'node_modules/protobufjs', 'node_modules/tar', 'node_modules/undici'];
+// hasInstallScript flag npm writes for the app's postinstall. Those four entries must match the
+// audited version, registry tarball and integrity below exactly; any other lockfile change still
+// fails here, and so does any later move of these four until this list is updated with it.
+const AUDIT_FIX = {
+  'node_modules/electron': ['42.11.15', 'sha512-pZOe/Qga4o3t6q9WdL6hV0hYjjlcagJsSCFp3Zc4rxyqTYsIQr6macePGoQefXkdKFnsA4VvwqHjYxTUSiE3qA=='],
+  'node_modules/protobufjs': ['7.6.6', 'sha512-dYDWdjSl5RNb7SgPxGQcRU+GtvP7s2fpkrY0r432PcOIaZ0/rBcxEZnQN67iJhFuQiVw754JDoPruPCNdGsbjg=='],
+  'node_modules/tar': ['7.5.22', 'sha512-MFO/QzvtAOmJbkhOaCTvbGcFN9L9b+JunIsDwaKljSOdcLMea3NJ1k9Usz/rjdfSXTq4dfzfeS7W4p4YOAAHeA=='],
+  'node_modules/undici': ['7.30.1', 'sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg=='],
+};
+const currentLock = JSON.parse(read('package-lock.json'));
+for (const [key, [version, integrity]] of Object.entries(AUDIT_FIX)) {
+  const entry = currentLock.packages[key] || {};
+  const name = key.slice('node_modules/'.length);
+  assert(entry.version === version && entry.integrity === integrity
+    && entry.resolved === `https://registry.npmjs.org/${name}/-/${name}-${version}.tgz`,
+    `${name} is the audited ${version} from registry.npmjs.org with the audited integrity`);
+}
 const withoutOwnVersion = (lockText) => {
   const lock = JSON.parse(lockText);
   delete lock.version;
@@ -135,7 +149,7 @@ const withoutOwnVersion = (lockText) => {
     delete lock.packages[''].version;
     delete lock.packages[''].hasInstallScript;
   }
-  for (const key of AUDIT_FIX_PACKAGES) {
+  for (const key of Object.keys(AUDIT_FIX)) {
     if (lock.packages && lock.packages[key]) {
       delete lock.packages[key].version;
       delete lock.packages[key].resolved;
