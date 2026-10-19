@@ -80,7 +80,9 @@ The merge audit workflow opens a `security-alert` issue if anything reaches main
   agent account (proposed in PR #44, pending Blue); Mako already injects per-pane credentials, so it can supply the agent's token.
   Until then, local agents only verify; they don't open PRs.
 - **Rulesets themselves.** Only repo admins can edit them, and agents are not admins.
-- **Codex is linked to you.** Codex stays linked to `ABlueAI` (Blue, 2026-10-19), not to the
+- **Codex is linked to you, for now.** On 2026-10-19 Blue decided to move Codex's GitHub link to
+  `ABlueAgent` (BLUE-CHECKLIST.md step 16, proposed in PR #PRNUM, after which session S26 lets Codex
+  build). Until he does, the rest of this item holds. Codex stays linked to `ABlueAI`, not to the
   restricted agent account. Its review comments on this repo appear as
   `chatgpt-codex-connector[bot]` (seen on PR #42). A branch or PR it created through that link would
   likely be attributed to `ABlueAI`. GitHub never lets a PR's author approve it, so such a PR

@@ -94,3 +94,8 @@ Known limitations shipping with 1.0 are in [docs/RELEASE-NOTES-1.0.md](docs/RELE
 ## Next
 
 1.1 session S01 (finish guardrails) is marked DONE in PR #44, with its evidence in the plan's change log; S02 and S03 are next. Plan change proposed: S06 also moves local agents off Blue's git login. See the plan.
+
+Plan change proposed in PR #PRNUM (pending Blue): S04 becomes an all-day runner with an evening digest
+and needs only S01, so it can run next; new session S26 adds Codex as a second builder once Blue
+re-links Codex's GitHub to `ABlueAgent` (checklist step 16). Today's runner is unchanged until S04
+merges.

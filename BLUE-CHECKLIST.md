@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-19 by Claude (step 14 added for S06's agent token).
+Last updated 2026-10-19 by Claude (step 16 added: re-link Codex to `ABlueAgent`).
 
 ## Today
 
@@ -168,7 +168,8 @@ on its own, one session at a time on Pro.
 - [ ] **8. Upgrade Claude to Max 5x.** About 2 minutes, on **Wednesday 2026-10-21**, after Pro's weekly
   reset on Tuesday and before Pro renews on Thursday. claude.ai > Settings > Billing. Keep ChatGPT Plus.
   No longer blocks the runner; it builds one session at a time on Pro until then.
-  - *Done when:* you say so. After S04, the runner then allows 2 sessions in parallel.
+  - *Done when:* you say so. After S04, the runner then allows 2 sessions in parallel, later 3 (one
+    setting in docs/RUNNER.md).
 
 ## Any time (not blocking)
 
@@ -251,6 +252,25 @@ on its own, one session at a time on Pro.
     environment variable (AGENTS.md "Security rules").
   - *Done when:* the S06 PR shows a pull request opened from a local Mako pane with `ABlueAgent` as its
     author. Claude checks that on GitHub; the S06 PR confirms the exact token scopes.
+- [ ] **16. Re-link Codex's GitHub to `ABlueAgent` (proposed in PR #PRNUM; do it once Blue merges
+  it).** About 10 minutes, any time before session S26 (the runner won't start S26 until this is
+  ticked). Your decision of 2026-10-19: Codex builds as the agent account, so you can approve its PRs.
+  Same ChatGPT Plus account, no new seat. (Numbered 16 because open PRs #45 and #46 both use 15.
+  Whichever merges later renumbers.)
+  - Open a private browser window and sign in to GitHub there as `ABlueAgent`.
+  - In that same window, sign in to https://chatgpt.com with your **own** ChatGPT account. Don't make a
+    new one.
+  - Settings > Apps (or Connectors) > GitHub > **Disconnect**, then **Connect**, and authorize as
+    `ABlueAgent`.
+  - If it offers to install the ChatGPT/Codex GitHub app on `ABlueAgent`, skip it. The agent owns no
+    repositories, and the app stays installed on `ABlueAI/AgentCommandCenter` from step 2e.
+  - Then open https://chatgpt.com/codex > Settings and check that `ABlueAI/AgentCommandCenter` is still
+    listed with code review on and **Automatic reviews** on.
+  - Expect: Codex's automatic reviews follow the linked account, so from now on they cover the agent's
+    PRs. They may stop covering PRs you open as `ABlueAI`, and an `@codex` comment from `ABlueAI` may
+    no longer work. Not verified; tell Claude if you need either.
+  - *Done when:* the next agent PR gets a Codex review without anyone commenting. Claude checks the
+    PR on GitHub and ticks this with the date.
 
 ## Every day, once the runner is on
 
