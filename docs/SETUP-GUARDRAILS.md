@@ -80,12 +80,14 @@ The merge audit workflow opens a `security-alert` issue if anything reaches main
   (Mako already injects per-pane credentials, so it can supply the agent's token). Until then, local
   agents only verify; they don't open PRs.
 - **Rulesets themselves.** Only repo admins can edit them, and agents are not admins.
-- **Codex acts as you.** Codex stays linked to `ABlueAI` (Blue, 2026-10-19), so any comment,
-  branch or PR it makes on GitHub is attributed to Blue's owner account, not the restricted agent
-  account. A PR it opened would be authored by `ABlueAI`, and GitHub never lets a PR's author approve
-  it, so it couldn't merge under `protect-main`. Whether Codex may build at all while linked there is
-  Blue's call (open question in PR #42). Claude recommends using it only as a reviewer until he
-  decides. Not verified: whether a Codex review could ever count as an approval.
+- **Codex is linked to you.** Codex stays linked to `ABlueAI` (Blue, 2026-10-19), not to the
+  restricted agent account. Its review comments on this repo appear as
+  `chatgpt-codex-connector[bot]` (seen on PR #42). A branch or PR it created through that link would
+  likely be attributed to `ABlueAI`. GitHub never lets a PR's author approve it, so such a PR
+  couldn't merge under `protect-main`. Whether Codex may build at all while linked there is Blue's
+  call (open question in PR #42). Claude recommends using it only as a reviewer until he decides.
+  Not verified: which account a Codex-created branch or PR is attributed to, and whether a Codex
+  review could ever count as an approval.
 - **AI that drives your own screen or browser.** ChatGPT computer use, browser agents and extensions
   (including Claude in Chrome, which S15 evaluates) act as you in every account you are signed in to,
   so GitHub would see Blue clicking Merge. Use them only in a separate browser profile that is not
