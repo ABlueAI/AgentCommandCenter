@@ -76,7 +76,7 @@ The merge audit workflow opens a `security-alert` issue if anything reaches main
 ## What is still not covered
 
 - **Your own account.** Anyone who gets into ABlueAI can approve and merge. A passkey is the defense.
-- **Local agents on your PC** push with your git login until S01 moves them to the agent account
+- **Local agents on your PC** push with your git login until a later session moves them to the agent account (none owns that yet)
   (Mako already injects per-pane credentials, so it can supply the agent's token). Until then, local
   agents only verify; they don't open PRs.
 - **Rulesets themselves.** Only repo admins can edit them, and agents are not admins.

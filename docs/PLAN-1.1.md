@@ -19,7 +19,7 @@ Drafted 2026-10-17 by Claude for Blue. Approved when the PR that adds it is merg
 
 ### Status values
 
-`READY` · `IN PROGRESS (#44)` · `NEEDS BLUE (#PR)` · `DONE (#PR)` · `DROPPED (reason)`. The session's PR
+`READY` · `IN PROGRESS (#PR)` · `NEEDS BLUE (#PR)` · `DONE (#PR)` · `DROPPED (reason)`. The session's PR
 updates its own row.
 
 ### When the plan changes
@@ -33,7 +33,7 @@ updates its own row.
 
 | # | Session | Done when | Auth | Lane | Needs | Status |
 |---|---|---|---|---|---|---|
-| S01 | **Finish guardrails.** Blue does the clicks in docs/SETUP-GUARDRAILS.md; Claude then opens a test PR from the agent account and confirms it cannot merge without Blue's approval. | Test PR blocked without approval; merge audit quiet on a proper merge. | High | blue | PR #27 merged | IN PROGRESS (#44) |
+| S01 | **Finish guardrails.** Blue does the clicks in docs/SETUP-GUARDRAILS.md; Claude then opens a test PR from the agent account and confirms it cannot merge without Blue's approval. | Test PR blocked without approval; merge audit quiet on a proper merge. | High | blue | PR #27 merged | DONE (#44) |
 | S02 | **CI and dependency hygiene.** Pin GitHub Actions to commit SHAs; make CI a required check; `npm audit fix` for the 11 advisories with dictation and TTS regression checks. | CI green and required; advisories fixed or each one explained. | High | windows | S01 | READY |
 | S03 | **Plan to issues.** Labels (authority, lane, plan-change, needs-blue, sensitive, security-alert), task issue template, "1.1 Month 1" milestone, a GitHub Project board (Ready, Running, Needs Blue, Ready to merge, Done), and a workflow that keeps one issue per session in sync with this file. | Board mirrors this table automatically. | Max | cloud | S01 | READY |
 | S04 | **Daily runner and digest.** A scheduled cloud session at **8:01 AM Blue's local time** (just after Claude's weekly usage reset) runs the next READY sessions; an evening digest lists ready PRs with TLDR links and open questions, sent as a notification. Each morning it first checks BLUE-CHECKLIST.md steps 1 and 7; until they are done it only sends a "waiting on step N" notice. | Two consecutive days run unattended and the digest arrives. | High | blue | S01, S03 | READY |
@@ -81,4 +81,5 @@ does both) · Vibe Kanban (removed in 1.0).
 
 - 2026-10-17: plan created (PR #27).
 - 2026-10-17: S04 start time set to 8:01 AM local, with the prerequisite check (Blue).
+- 2026-10-19: S01 marked DONE (#44). Evidence: agent PR #39 stayed blocked until Blue approved it (checklist 7f); the merge audit passed on the #41 merge (`8846eed`, checklist 12). Moving local agents to the agent account was not in S01's done-when and has no owning session yet (see STATUS.md).
 - 2026-10-18: step 8 (Max 5x) dropped from the runner's gate; it builds on Pro, one session at a time, until Blue upgrades on 2026-10-21 (Blue).
