@@ -227,8 +227,10 @@ on its own, one session at a time on Pro.
 - [x] **13. Independent review for agent PRs.** *Verified 2026-10-19 through GitHub's API: PR #42 was merged
   by ABlueAI at 06:10 UTC as `246d743`, its TLDR links its "Independent review (Opus)" comments, and
   the merge audit run on `246d743` succeeded. The new runner prompt was applied to the scheduled task
-  at 06:11 UTC; the task read back after the update shows the prompt from `docs/RUNNER.md` on `main`
-  and the repository still attached.*
+  at 06:11 UTC; the update call's response showed the prompt from `docs/RUNNER.md` on `main` and the
+  repository still attached. A read of the task after PR #44 merged shows the same prompt but does
+  not list attached repositories; the 12:02 UTC run on the new prompt opened PR #44 from the
+  repository, and the prompt's step 1 attaches it if it is ever missing.*
   - What was found (2026-10-19):
     - Codex reviewed every PR you authored automatically ("PR opened", #36 to #38), but skipped #39
       and reviewed #41 only after your manual comment. Both were authored by `ABlueAgent`.
