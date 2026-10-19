@@ -94,4 +94,4 @@ Known limitations shipping with 1.0 are in [docs/RELEASE-NOTES-1.0.md](docs/RELE
 
 ## Next
 
-1.1 session S01 (finish guardrails) is DONE: PR #44 merged 2026-10-19, with its evidence in the plan's change log. S02 and S03 are next. S06 also moves local agents off Blue's git login (plan change approved with that merge). See the plan.
+1.1 session S01 (finish guardrails) is DONE: PR #44 merged 2026-10-19, with its evidence in the plan's change log. S02 (CI and dependency hygiene) is PR #45; S03 is next. S06 also moves local agents off Blue's git login (plan change approved with that merge). See the plan.
