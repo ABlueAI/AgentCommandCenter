@@ -82,9 +82,10 @@ updates its own row.
    resumes soon after any usage reset, overnight too. A fire with nothing to do ends after a quick
    check. If day one shows idle fires costing real usage, drop to every 2 hours.
 2. **Each fire.** It runs today's gate, then fixes the open PRs authored by its login on `claude/`
-   branches, then starts every READY session whose Needs are met and that no open PR or issue titled
-   with its number (`Sxx:`) has claimed, up to the parallel cap. A builder opens its PR as a draft
-   first; that is the claim. No two fires work on the same PR or session at once: a build can outlast
+   branches, then starts every READY session whose Needs are met and that nobody has claimed, up to
+   the parallel cap. A claim is an open PR titled with the session number (`Sxx:`), or an open issue
+   with the `agent-claimed` label (how Codex claims, S26). S03's per-session sync issues are not
+   claims, whatever their titles. S04 creates the label if S03 hasn't. A builder opens its PR as a draft first; that is the claim. No two fires work on the same PR or session at once: a build can outlast
    the hour, so S04 defines a lock a later fire can see (for example an `agent-running` label with a
    start time that expires after a set number of hours) and a separate marker for "paused at a usage
    limit", since draft alone can't tell the two apart.
@@ -115,29 +116,29 @@ updates its own row.
 
 ### S26 details: Codex builder lane
 
-1. **Claims.** Codex takes a READY session only through a claim the runner's check sees: an open
-   issue or PR titled `Sxx:`. The runner opens the issue when it hands Codex a session. Codex's PR
-   sets its own row to IN PROGRESS.
+1. **Claims.** Codex takes a READY session only through a claim the runner's check sees (S04 item 2):
+   an open issue labeled `agent-claimed`, which the runner opens when it hands Codex a session, then
+   Codex's own PR titled `Sxx:`, which sets its own row to IN PROGRESS.
 2. **Rules.** Codex follows AGENTS.md (it reads that file directly). It opens PRs as `ABlueAgent` from
    its own `codex/` branches, never Claude's. It gets the same "Independent review (Opus)", run and
    posted by the runner, plus Codex's automatic review. The runner's "fix own PRs" step leaves Codex's
    PRs to Codex. AGENTS.md "How work flows" step 3 has the builder run `pr-reviewer` itself, which
    Codex can't, so the S26 PR changes that step for Codex-built PRs (sensitive). Once Codex is linked
    to `ABlueAgent`, any comment by that account that mentions Codex by its handle may start a Codex
-   task, so agents never write the literal mention except to hand Codex a task on purpose (write
-   "at-codex" when quoting it). S26 re-checks how Codex reads mentions.
+   task. AGENTS.md "Security rules" already forbids writing it except to hand Codex a task on purpose
+   (this plan change). S26 re-checks how Codex reads mentions.
 3. **How Codex starts.** Options, from official OpenAI docs read on 2026-10-19
    (developers.openai.com/codex; S26 re-checks them, plus which account Codex's PRs are attributed to
    and whether a Codex review could ever count as an approval, and then adds Codex to the "who can
    merge" table in docs/SETUP-GUARDRAILS.md):
    - (a) **Codex app scheduled tasks** run on Blue's PC only while it is on and the app is open, in
      the Windows sandbox. They push with the PC's git login, which is Blue's until S06 moves it.
-   - (b) **An `@codex <task>` comment** from the linked account starts a Codex cloud task (Linux) that
+   - (b) **An at-codex task comment** (the handle followed by the task) from the linked account starts a Codex cloud task (Linux) that
      can push to the branch. The docs call this path a "legacy cloud chat", so it may change.
    - (c) **The Codex GitHub Action** needs a paid OpenAI API key: new spending, rejected.
    - (d) **ChatGPT's event-triggered tasks** run on the web; not verified for coding work.
 
-   Pick: (b). The runner posts the `@codex` task comment as `ABlueAgent` on the claim issue, so Codex
+   Pick: (b). The runner posts the at-codex task comment as `ABlueAgent` on the claim issue, so Codex
    works while Blue's PC is off. Add (a) for work that needs a real Windows check once S06 has moved
    local agents to `ABlueAgent`.
 4. **Default split.** Codex takes windows-lane sessions it can verify in its Windows sandbox (path a)
@@ -147,7 +148,7 @@ updates its own row.
 
 ### Blue's inputs this month
 
-S01 GitHub clicks (about 20 minutes) · S06 `ABlueAgent` token for local agents (proposed) · S04 time zone (given 2026-10-18: Eastern, 8:01 AM) · S12 Hexona URL · S13 install
+S01 GitHub clicks (about 20 minutes) · S06 `ABlueAgent` token for local agents (proposed) · S04 time zone (given 2026-10-18: Eastern) and digest time (default 8 PM) · S12 Hexona URL · S13 install
 Obsidian · S14 UI examples · S16 Dodaios verdict · S17 pick a design · S21 pick a logo · S23 approve
 paperwork · S24 authorize HighLevel · S26 re-link Codex to `ABlueAgent` (checklist step 16, proposed) · every
 merge.
@@ -171,4 +172,4 @@ does both) · Vibe Kanban (removed in 1.0).
 - 2026-10-18: step 8 (Max 5x) dropped from the runner's gate; it builds on Pro, one session at a time, until Blue upgrades on 2026-10-21 (Blue).
 - 2026-10-19: S06 gains the local-agent account move (proposed, pending Blue; PR #44).
 - 2026-10-19: S01 marked DONE (#44). Evidence: agent PR #39 stayed blocked until Blue approved it (checklist 7f); the merge audit passed on the #41 merge (`8846eed`, checklist 12). Moving local agents to the agent account was not in S01's done-when, so it is added to S06 (plan change, pending Blue).
-- 2026-10-19 (proposed, pending Blue): S04 rewritten from "Daily runner and digest" into "All-day runner and digest", after Blue asked for a runner that works all day while he reviews and merges once in the evening (docs/DECISIONS.md, 2026-10-19). S04's Needs change from "S01, S03" to "S01": the runner reads this table and open PRs and issues on GitHub, not S03's board, which only mirrors them, so S04 can run next and S03 in parallel. "How this plan runs" now describes the all-day runner and the evening sitting. New session S26 "Codex builder lane" (needs S04 and checklist step 16, Blue's Codex re-link), so this month now has 26 sessions instead of 25. AGENTS.md: once S04 is merged, session PRs stop editing STATUS.md, to avoid conflicts between parallel PRs.
+- 2026-10-19 (proposed, pending Blue): S04 rewritten from "Daily runner and digest" into "All-day runner and digest", after Blue asked for a runner that works all day while he reviews and merges once in the evening (docs/DECISIONS.md, 2026-10-19). S04's Needs change from "S01, S03" to "S01": the runner reads this table and open PRs and issues on GitHub, not S03's board, which only mirrors them, so S04 can run next and S03 in parallel. "How this plan runs" now describes the all-day runner and the evening sitting. New session S26 "Codex builder lane" (needs S04 and checklist step 16, Blue's Codex re-link), so this month now has 26 sessions instead of 25. AGENTS.md: once S04 is merged, session PRs stop editing STATUS.md, to avoid conflicts between parallel PRs; on merge, a checklist-numbering rule and a rule against writing Codex's handle in GitHub text.

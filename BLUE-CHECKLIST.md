@@ -267,10 +267,10 @@ on its own, one session at a time on Pro.
   - Then open https://chatgpt.com/codex > Settings and check that `ABlueAI/AgentCommandCenter` is still
     listed with code review on and **Automatic reviews** on.
   - Expect: any comment by `ABlueAgent` that mentions Codex by its handle may now start a Codex task
-    on your Plus usage. Agents never write that mention except to hand Codex a task on purpose
-    (session S26).
+    on your Plus usage. AGENTS.md forbids agents to write that mention except to hand Codex a task on
+    purpose.
   - Expect: Codex's automatic reviews follow the linked account, so from now on they cover the agent's
-    PRs. They may stop covering PRs you open as `ABlueAI`, and an `@codex` comment from `ABlueAI` may
+    PRs. They may stop covering PRs you open as `ABlueAI`, and an at-codex comment from `ABlueAI` may
     no longer work. Not verified; tell Claude if you need either.
   - *Done when:* the next agent PR gets a Codex review without anyone commenting. Claude checks the
     PR on GitHub and ticks this with the date.

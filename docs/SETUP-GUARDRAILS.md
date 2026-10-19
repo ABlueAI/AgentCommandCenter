@@ -55,7 +55,8 @@ could still press Merge on a green PR. Part B closes that.
 3. **Point Claude at it.** In a private browser window, sign in to GitHub as `ablueai-agent`, then go
    to claude.ai/connect-github and connect. Claude's cloud sessions now act as the agent account. You
    keep using `ABlueAI` on github.com and the GitHub app to approve and merge. Codex stays linked to
-   `ABlueAI` (Blue, 2026-10-19), so it is not connected to the agent account.
+   `ABlueAI` until Blue re-links it to the agent account (BLUE-CHECKLIST.md step 16, decided
+   2026-10-19; see "Codex is linked to you, for now" below).
 4. **Require your approval.** Edit `protect-main` > Require a pull request: required approvals **1**;
    check **Dismiss stale pull request approvals when new commits are pushed**, **Require review from
    Code Owners**, and **Require approval of the most recent reviewable push**. Save.
