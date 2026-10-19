@@ -123,8 +123,8 @@ listeners · CI workflows, `.github/`, `.claude/`, repository settings · this f
   If a key was set with `setx`, remove it: System Properties > Environment Variables > User variables,
   or `[Environment]::SetEnvironmentVariable('KEY_NAME', $null, 'User')`.
 - Fenced agent roles never get email, CRM or business credentials by default.
-- Never write Codex's GitHub handle (the at-sign followed by `codex`) in a GitHub comment, PR body,
-  issue or commit message; write "at-codex" when quoting it, including when quoting repo files,
+- Never write Codex's GitHub handle (the at-sign followed by `codex`) in any GitHub text: titles,
+  bodies, comments, reviews, commit messages, branch names or labels; write "at-codex" when quoting it, including when quoting repo files,
   which may keep the handle. The only exceptions: a comment by `ABlueAI` on that PR or issue
   asks for it (and nobody else has edited it; check its edit history, since write access lets others
   edit it, and if the author or history can't be checked, the exception doesn't apply), Blue asks the agent directly in its own session, or, once session S26 is merged, the
