@@ -93,4 +93,4 @@ Known limitations shipping with 1.0 are in [docs/RELEASE-NOTES-1.0.md](docs/RELE
 
 ## Next
 
-1.1 session S01 (finish guardrails, then the daily runner). See the plan.
+1.1 session S01 (finish guardrails) is in a PR that records its evidence; S02 and S03 are next. See the plan.
