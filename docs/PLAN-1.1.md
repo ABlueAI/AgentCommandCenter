@@ -143,8 +143,8 @@ updates its own row.
    Pick: (b). The runner posts the at-codex task comment as `ABlueAgent` on the claim issue, so Codex
    works while Blue's PC is off. Add (a) for work that needs a real Windows check once S06 has moved
    local agents to `ABlueAgent`.
-4. **Default split.** Codex takes windows-lane sessions it can verify in its Windows sandbox (path a)
-   or on the Windows CI checks (path b). Claude takes the rest.
+4. **Default split.** Codex takes windows-lane sessions it can verify on the Windows CI checks (path
+   b), or in its Windows sandbox (path a, only after S06). Claude takes the rest.
 5. **No dependency on it.** Codex usage stays within ChatGPT Plus, with no credits bought. Nothing
    waits on Codex: if Blue drops ChatGPT, Claude takes every session.
 
@@ -174,4 +174,4 @@ does both) · Vibe Kanban (removed in 1.0).
 - 2026-10-18: step 8 (Max 5x) dropped from the runner's gate; it builds on Pro, one session at a time, until Blue upgrades on 2026-10-21 (Blue).
 - 2026-10-19: S06 gains the local-agent account move (proposed, pending Blue; PR #44).
 - 2026-10-19: S01 marked DONE (#44). Evidence: agent PR #39 stayed blocked until Blue approved it (checklist 7f); the merge audit passed on the #41 merge (`8846eed`, checklist 12). Moving local agents to the agent account was not in S01's done-when, so it is added to S06 (plan change, pending Blue).
-- 2026-10-19 (proposed, pending Blue): S04 rewritten from "Daily runner and digest" into "All-day runner and digest", after Blue asked for a runner that works all day while he reviews and merges once in the evening (docs/DECISIONS.md, 2026-10-19). S04's Needs change from "S01, S03" to "S01": the runner reads this table and open PRs and issues on GitHub, not S03's board, which only mirrors them, so S04 can run next and S03 in parallel. "How this plan runs" now describes the all-day runner and the evening sitting. New session S26 "Codex builder lane" (needs S04 and checklist step 16, Blue's Codex re-link), so this month now has 26 sessions instead of 25. AGENTS.md: once S04 is merged, session PRs stop editing STATUS.md, to avoid conflicts between parallel PRs; on merge, a checklist-numbering rule and a rule against writing Codex's handle in GitHub text.
+- 2026-10-19 (proposed, pending Blue): S04 rewritten from "Daily runner and digest" into "All-day runner and digest", after Blue asked for a runner that works all day while he reviews and merges once in the evening (docs/DECISIONS.md, 2026-10-19). S04's Needs change from "S01, S03" to "S01": the runner reads this table and open PRs and issues on GitHub, not S03's board, which only mirrors them, so S04 can run next and S03 in parallel. "How this plan runs" now describes the all-day runner and the evening sitting. New session S26 "Codex builder lane" (needs S04 and checklist step 16, Blue's Codex re-link), so this month now has 26 sessions instead of 25. The parallel cap on Max 5x goes from "at most 2" to 2, then 3 after a week of usage shows room. AGENTS.md: once S04 is merged, session PRs stop editing STATUS.md, to avoid conflicts between parallel PRs; on merge, a checklist-numbering rule and a rule against writing Codex's handle in GitHub text.

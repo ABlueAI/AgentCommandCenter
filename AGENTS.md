@@ -45,11 +45,13 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      agent with read tools only and the body of `pr-reviewer.md` as its instructions, and say so in
      the comment and the TLDR. If neither is possible, mark the PR "needs Blue". Never skip it.
    - Before posting, check the report for secrets or anything quoted from outside the repo, and
-     remove it with a note. Replace Codex's handle with "at-codex" (see "Security rules"). Otherwise post the reviewer's report verbatim as a PR comment headed
-     "Independent review (Opus)", followed by the builder's response to each finding.
+     remove it with a note, and replace Codex's handle with "at-codex" (see "Security rules").
+     Otherwise post the reviewer's report verbatim as a PR comment headed "Independent review
+     (Opus)", followed by the builder's response to each finding.
    - Fix or answer every finding, re-run the reviewer after fixes, and post each run. The TLDR's
      review line cites the latest such comment.
-   - Codex review is optional: Blue may still request one by hand.
+   - Codex review is optional: Blue may still request one by hand. Once Codex is linked to the agent
+     account (BLUE-CHECKLIST.md step 16), Blue asks an agent to post the request on purpose instead.
 4. The builder fixes CI failures and review findings itself. After 3 failed fix rounds on the same
    problem, it stops and marks the PR "needs Blue" with its diagnosis and options.
 5. When CI is green and review findings are resolved, the builder updates the TLDR and marks the PR

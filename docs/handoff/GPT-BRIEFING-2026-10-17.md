@@ -117,7 +117,7 @@ unmerged one steers nothing.
 - **Claude Code permission modes** map onto the four authority levels: plan (Minimum), acceptEdits
   (Medium), auto (High), and full permissions only inside a sandbox (Maximum). Claude's own sandbox
   does not run on native Windows, only WSL2.
-- **Codex reviews GitHub PRs automatically** and can fix findings (`@codex fix it`). Claude's managed
+- **Codex reviews GitHub PRs automatically** and can fix findings (at-codex fix it). Claude's managed
   Code Review is Team/Enterprise only.
 - **Claude Routines** run scheduled or GitHub-triggered cloud sessions (research preview, with daily
   caps). Claude Remote Control and the open-source Happy app give phone check-ins and alerts.

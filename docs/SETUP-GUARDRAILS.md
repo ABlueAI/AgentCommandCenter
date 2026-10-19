@@ -83,14 +83,16 @@ The merge audit workflow opens a `security-alert` issue if anything reaches main
 - **Rulesets themselves.** Only repo admins can edit them, and agents are not admins.
 - **Codex is linked to you, for now.** On 2026-10-19 Blue decided to move Codex's GitHub link to
   `ABlueAgent` (BLUE-CHECKLIST.md step 16, proposed in PR #47, after which session S26 lets Codex
-  build). The re-link gives Codex's OAuth grant the agent's write access instead of Blue's. S26
-  checks the open questions at the end of this item before Codex builds and adds Codex to the table
-  above. Until the re-link, Codex stays linked to `ABlueAI`, not to the restricted agent account. Its review comments on this repo appear as
+  build). The re-link gives Codex's OAuth grant the agent's write access instead of Blue's. From the
+  re-link on, any `ABlueAgent` comment containing Codex's handle may start a Codex task that can
+  push; the only safeguard until S26 is the AGENTS.md rule against writing the handle. S26 is the
+  first planned Codex build: it checks the open questions at the end of this item first and adds
+  Codex to the table above. Until the re-link, Codex stays linked to `ABlueAI`, not to the restricted agent account. Its review comments on this repo appear as
   `chatgpt-codex-connector[bot]` (seen on PR #42). A branch or PR it created through that link would
   likely be attributed to `ABlueAI`. GitHub never lets a PR's author approve it, so such a PR
-  couldn't merge under `protect-main`. So Codex builds only after the re-link (Blue's decision of
-  2026-10-19 in docs/DECISIONS.md answers the open question from PR #42); until then it only
-  reviews.
+  couldn't merge under `protect-main`. So Codex is not asked to build before the re-link (Blue's
+  decision of 2026-10-19 in docs/DECISIONS.md answers the open question from PR #42); until then it
+  only reviews.
   Not verified: which account a Codex-created branch or PR is attributed to, and whether a Codex
   review could ever count as an approval.
 - **AI that drives your own screen or browser.** ChatGPT computer use, browser agents and extensions

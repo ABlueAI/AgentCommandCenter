@@ -231,7 +231,7 @@ on its own, one session at a time on Pro.
       and reviewed #41 only after your manual comment. Both were authored by `ABlueAgent`.
     - The repo's Codex setting shows Review = "Follow personal preferences". Changing it to "All
       PRs" fails with "Unable to save repository settings. Try again."
-    - Agents requesting the review themselves (`@codex review` from `ABlueAgent` on PR #42):
+    - Agents requesting the review themselves (at-codex review from `ABlueAgent` on PR #42):
       **FAIL**. Four seconds later Codex replied "To use Codex here, create a Codex account and
       connect to github" and didn't review. Codex ignores accounts not linked to ChatGPT.
   - Your choice (option 3): a separate Claude Opus reviewer replaces Codex as the required
@@ -270,8 +270,10 @@ on its own, one session at a time on Pro.
     on your Plus usage. AGENTS.md forbids agents to write that mention except to hand Codex a task on
     purpose.
   - Expect: Codex's automatic reviews follow the linked account, so from now on they cover the agent's
-    PRs. They may stop covering PRs you open as `ABlueAI`, and an at-codex comment from `ABlueAI` may
-    no longer work. Not verified; tell Claude if you need either.
+    PRs. Going by step 13 (automatic reviews covered only the linked account's PRs, and Codex refused
+    a request from an account not linked to ChatGPT), they will likely stop covering PRs you open as
+    `ABlueAI`, and a review request you comment as `ABlueAI` will likely fail. To get a Codex review
+    by hand after this, ask an agent to post the request.
   - *Done when:* the next agent PR gets a Codex review without anyone commenting. Claude checks the
     PR on GitHub and ticks this with the date.
 
