@@ -224,7 +224,7 @@ on its own, one session at a time on Pro.
   - Agents never close security alerts themselves.
   - *Done when:* #40 shows Closed, and the merge audit run for the fix's merge passed with no new
     alert. Claude checks both.
-- [ ] **13. Let Codex review agent PRs.** Nothing for you to click; Claude checks.
+- [ ] **13. Let Codex review agent PRs.** Blocked: needs your choice of the next option (below).
   - What was found (2026-10-19): Codex reviewed every PR you authored with trigger "PR opened"
     (#36 to #38), but skipped #39 and reviewed #41 only after your manual comment ("Manual
     request"). Both #39 and #41 were authored by `ABlueAgent`.
@@ -233,12 +233,27 @@ on its own, one session at a time on Pro.
     open". Changing Review to "All PRs" fails with "Unable to save repository settings. Try again."
     (Blue, 2026-10-19, after refreshing and reloading).
   - You declined re-linking Codex's GitHub to `ABlueAgent`.
-  - Fix: agents request the review themselves by commenting `@codex review` on their own PRs
-    (AGENTS.md "How work flows" step 2 and the runner prompt in docs/RUNNER.md, added in the PR
-    that rewrote this step). You never type it.
+  - Tried: agents request the review themselves by commenting `@codex review` on their own PRs
+    (AGENTS.md "How work flows" step 2 and the runner prompt in docs/RUNNER.md, added in PR #42).
+  - **Result: FAIL.** On PR #42, `ABlueAgent` commented `@codex review` at 05:19:44 UTC; four seconds
+    later Codex replied "To use Codex here, create a Codex account and connect to github" and did
+    not review. Codex only honors requests from a GitHub account linked to a Codex account. The
+    rule stays in AGENTS.md as the record of the attempt; agents report the missing review in the
+    TLDR's review line.
+  - Next options (you never type the comment in any of them):
+    1. **Recommended: a workflow posts the request as you.** A GitHub Actions workflow on
+       `pull_request_target` (opened, ready for review) comments `@codex review` using a
+       fine-grained token for `ABlueAI`, limited to this repo with only **Issues: read and write**
+       (enough to comment, not to approve or merge). `pull_request_target` runs the workflow from
+       `main`, so an agent PR can't change what the token does. About 5 minutes for you, once:
+       create the token and add it as a repository secret. Sensitive (a credential and a CI
+       workflow), so it needs its own PR and your approval first.
+    2. A different independent reviewer, which AGENTS.md already allows: a separate Claude review
+       session on each agent PR. Nothing for you to set up, but it's not a second model.
+    3. Give `ABlueAgent` its own ChatGPT/Codex account. A new account, and possibly a paid plan,
+       so only if you want it.
   - Optional for you: report the save error to OpenAI (Codex help or chatgpt.com support).
-  - *Done when:* the self-request on the PR that rewrote this step gets a Codex review, and the next
-    runner PR's does too. Claude checks both.
+  - *Done when:* an agent PR gets an independent review without you typing anything. Claude checks.
 
 ## Every day, once the runner is on
 
