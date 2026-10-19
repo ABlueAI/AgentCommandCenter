@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-19 by Claude (step 7 verified as the agent account; 7c clarified; 7f added).
+Last updated 2026-10-19 by Claude (step 12: close false alert #40 after the audit fix; step 13: Codex reviews for agent PRs).
 
 ## Today
 
@@ -208,6 +208,27 @@ on its own, one session at a time on Pro.
   - Agents never close security alerts themselves.
   - *Done when:* issue #35 shows Closed, and the merge audit run for that merge passed with no new
     alert. Claude checks both.
+
+- [ ] **12. Close the false security alert, issue #40.** 1 minute, right after you merge the
+  merge-audit fix PR (the one that adds this step).
+  - Why it's false: #40 says PR #39's commits reached `main` without a merged PR. They didn't: #39
+    holds exactly `281de31` and `a0798d0`, you approved `a0798d0`, and you merged it as `0b6d432`.
+    GitHub's commit-to-PR lookup, which the audit relied on, came back empty for all three and was
+    still empty 10 minutes later. The fix also checks the merge commit of each PR merged into `main`.
+  - Open https://github.com/ABlueAI/AgentCommandCenter/issues/40, comment "False alarm: commits
+    came via PR #39 (merge 0b6d432), approved and merged by ABlueAI. Audit fixed in the follow-up
+    PR", then **Close issue**.
+  - Agents never close security alerts themselves.
+  - *Done when:* #40 shows Closed, and the merge audit run for the fix's merge passed with no new
+    alert. Claude checks both.
+- [ ] **13. Let Codex review agent PRs.** About 3 minutes, today, before the runner's first PR.
+  - Why: Codex reviewed every PR you opened (#30, #34 to #38) but none of the agent account's (#39
+    and the audit fix). Its automatic reviews most likely cover only PRs you author.
+  - chatgpt.com/codex > Settings > **Code review**: if there is a choice of whose pull requests it
+    reviews, pick everyone's (or add `ABlueAgent`), then save. If there is no such choice, tell
+    Claude.
+  - Until then, on each agent PR comment `@codex review` to ask for one by hand.
+  - *Done when:* the next agent PR gets a Codex review without that comment. Claude checks.
 
 ## Every day, once the runner is on
 

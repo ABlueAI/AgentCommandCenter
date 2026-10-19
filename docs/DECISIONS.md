@@ -7,6 +7,7 @@ of editing an old one, and say which entry it replaces. Agents follow the newest
 
 | Decision | Blue's words |
 |---|---|
+| Fix the merge audit's false alert on agent PRs (issue #40) instead of closing one alert per merge: when GitHub links a commit to no PR, also match it against the merge commits of PRs merged into `main`. | "yes, open the audit fix PR. id rather not deal with this every time." |
 | Guardrails Part B (checklist step 7) is complete. The agent account is `ABlueAgent` (write access), Claude's cloud sessions act as it, and every PR into `main` needs Blue's approval as code owner. Done with the guide session on 2026-10-18; verified as `ABlueAgent` on 2026-10-19 (BLUE-CHECKLIST.md step 7). | Blue did steps 7a to 7e with the guide session on 2026-10-18 and ran the checker session (step 7f). Merging the checker's PR is his approval of this entry. |
 
 ## 2026-10-18

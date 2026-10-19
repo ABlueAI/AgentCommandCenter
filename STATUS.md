@@ -26,6 +26,12 @@ Updated 2026-10-19 by Claude. Every PR that changes the state updates this file.
     branch, and its commits reached `main` through PR #34. The audit now counts every commit of a PR
     merged into `main`, and AGENTS.md forbids stacked PRs. Fixed in PR #37, merged 2026-10-18;
     the audit passed on that merge and Blue closed #35 (checklist step 11, verified).
+  - A second false alert on 2026-10-19 (issue #40): on PR #39, the first PR authored by
+    `ABlueAgent`, GitHub's commit-to-PR lookup returned no PR for any of its commits, even 10 minutes
+    after Blue approved and merged it. The audit now also finds a PR merged into `main` by its merge
+    commit when that lookup comes back empty; everything else still alerts. A replay against GitHub's
+    live data for the #39 push gives the three #40 alerts with the old audit and none with the fix.
+    Blue closes #40 after the fix merges (checklist step 12).
 - **Daily runner:** scheduled for 8:01 AM Eastern from 2026-10-18 ([docs/RUNNER.md](docs/RUNNER.md)).
   The repository was attached on 2026-10-18 (step 7e), and its gate (steps 1 and 7) now passes, so
   from the next run it should start building S01. That run is the first proof it can open PRs.
