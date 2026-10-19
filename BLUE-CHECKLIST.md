@@ -252,6 +252,9 @@ on its own, one session at a time on Pro.
     environment variable (AGENTS.md "Security rules").
   - *Done when:* the S06 PR shows a pull request opened from a local Mako pane with `ABlueAgent` as its
     author. Claude checks that on GitHub; the S06 PR confirms the exact token scopes.
+
+## After session S04 is applied (not before)
+
 - [ ] **16. Not yet: re-link Codex's GitHub to `ABlueAgent` (proposed in PR #47; not before S04's
   prompt is applied; blocks S26).** About 10 minutes. Do it only after session S04's new runner prompt is applied (the S04 PR's TLDR says when), and before
   S26 (the runner won't start S26 until this is ticked). Waiting closes a gap: until then the live
