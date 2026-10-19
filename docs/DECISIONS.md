@@ -7,6 +7,9 @@ of editing an old one, and say which entry it replaces. Agents follow the newest
 
 | Decision | Blue's words |
 |---|---|
+| Agents request Codex reviews themselves: right after opening a PR (and after marking a draft ready) the builder comments `@codex review` on it (AGENTS.md "How work flows" step 2; runner prompt in docs/RUNNER.md). Blue does not type it. Codex's "All PRs" review setting fails to save on OpenAI's side (BLUE-CHECKLIST.md step 13). | "no im not doing it myself everytime. lets just fix it right now" |
+| Claude's GitHub link stays on `ABlueAgent`; Codex stays linked to `ABlueAI` (not re-linked to the agent account). | "nah, im not doing that" |
+| Password manager is set up (BLUE-CHECKLIST.md step 9). | "password storage is set up" |
 | Fix the merge audit's false alert on agent PRs (issue #40) instead of closing one alert per merge: when GitHub links a commit to no PR, also match it against the merge commits of PRs merged into `main`. | "yes, open the audit fix PR. id rather not deal with this every time." |
 | Guardrails Part B (checklist step 7) is complete. The agent account is `ABlueAgent` (write access), Claude's cloud sessions act as it, and every PR into `main` needs Blue's approval as code owner. Done with the guide session on 2026-10-18; verified as `ABlueAgent` on 2026-10-19 (BLUE-CHECKLIST.md step 7). | Blue did steps 7a to 7e with the guide session on 2026-10-18 and ran the checker session (step 7f). Merging the checker's PR is his approval of this entry. |
 

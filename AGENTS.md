@@ -31,7 +31,10 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
 2. The builder implements, runs the tests, and opens a pull request using the template. Every PR
    targets `main`; no stacked PRs. If the work depends on an unmerged PR, wait for it to merge, or
    put the change in that PR. (A PR merged into another PR's branch reaches `main` only indirectly,
-   which is how the false merge-audit alert in issue #35 happened.)
+   which is how the false merge-audit alert in issue #35 happened.) Right after opening the PR, and
+   again after marking a draft ready, the builder comments exactly `@codex review` on its own PR:
+   Codex reviews automatically only the PRs Blue authors. If no Codex reaction or review appears
+   within 15 minutes, the builder says so in the TLDR's review line.
 3. CI runs on Windows; an independent reviewer (Codex code review, or a different agent) reviews.
 4. The builder fixes CI failures and review findings itself. After 3 failed fix rounds on the same
    problem, it stops and marks the PR "needs Blue" with its diagnosis and options.

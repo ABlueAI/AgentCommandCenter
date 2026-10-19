@@ -31,7 +31,12 @@ Updated 2026-10-19 by Claude. Every PR that changes the state updates this file.
     after Blue approved and merged it. The audit now also finds a PR merged into `main` by its merge
     commit when that lookup comes back empty; everything else still alerts. A replay against GitHub's
     live data for the #39 push gives the three #40 alerts with the old audit and none with the fix.
-    Blue closes #40 after the fix merges (checklist step 12).
+    The fix merged as PR #41 (`8846eed`), the audit passed on that merge, and Blue closed #40
+    (checklist step 12, verified 2026-10-19).
+  - Codex reviews automatically only PRs Blue authors; its "All PRs" setting fails to save on
+    OpenAI's side. Agents now comment `@codex review` on their own PRs (AGENTS.md, runner prompt;
+    checklist step 13). The runner's live prompt gets this only after Blue merges and an interactive
+    session applies it.
 - **Daily runner:** scheduled for 8:01 AM Eastern from 2026-10-18 ([docs/RUNNER.md](docs/RUNNER.md)).
   The repository was attached on 2026-10-18 (step 7e), and its gate (steps 1 and 7) now passes, so
   from the next run it should start building S01. That run is the first proof it can open PRs.
