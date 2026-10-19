@@ -33,8 +33,8 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
    put the change in that PR. (A PR merged into another PR's branch reaches `main` only indirectly,
    which is how the false merge-audit alert in issue #35 happened.)
 3. CI runs on Windows. Before marking the PR ready, the builder runs the `pr-reviewer` subagent
-   (`.claude/agents/pr-reviewer.md`, Claude Opus, read-only) on its own PR. It gives the reviewer only
-   the PR number, the TLDR and the diff, never its own reasoning. It posts the result as a PR
+   (`.claude/agents/pr-reviewer.md`, Claude Opus, read-only, no shell) on its own PR. It gives the
+   reviewer only the PR number, the TLDR and the diff saved to a file, never its own reasoning. It posts the result as a PR
    comment headed "Independent review (Opus)", fixes or answers every finding, and re-runs the
    reviewer after fixes, posting each run. The TLDR's review line cites the latest such comment.
    Codex review is optional: Blue may still request one by hand.

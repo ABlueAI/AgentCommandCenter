@@ -28,9 +28,11 @@ personal approval.
    - Save.
 4. **Phone alerts.** GitHub mobile app > Settings > Notifications: on for **Pull requests** and
    **Reviews requested**. Optional: a filter for issues labelled `security-alert`.
-5. **Codex reviews.** chatgpt.com/codex > Settings > Code review: enable it for
-   `ABlueAI/AgentCommandCenter` and turn on **Automatic reviews**. If your Plus plan does not offer
-   automatic reviews, tell Claude; the fallback is a reviewer agent in CI. When GitHub asks which
+5. **Codex reviews (optional since 2026-10-19).** The required independent review is now the
+   `pr-reviewer` subagent the builder runs on its own PR (AGENTS.md "How work flows" step 3,
+   `.claude/agents/pr-reviewer.md`). Codex reviews only PRs you author, so it's an extra you can
+   request by hand. If you keep it: chatgpt.com/codex > Settings > Code review, enable it for
+   `ABlueAI/AgentCommandCenter`. When GitHub asks which
    repositories the app may access, choose **Only select repositories**, not all: every repository an
    AI app can reach is one a prompt injection can reach, and future private business repos should be
    opted in one at a time.
