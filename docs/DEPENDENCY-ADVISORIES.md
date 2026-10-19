@@ -60,7 +60,11 @@ and TTS checked on Blue's PC, since the models run on his GPU.
 
 - **CI (Windows):** the dictation and TTS suites in `npm test` (`renderer/stt*.test.js`,
   `renderer/tts*.test.js`, `renderer/audio-module-health.test.js`, `renderer/wav-encode.test.js`,
-  `media-permission-policy.test.js`). The speech stack's own packages did not change, so these
-  pin the contract the Electron update must keep.
-- **Only on Blue's PC:** real microphone capture, WebGPU inference and audio playback on the new
-  Electron. See BLUE-CHECKLIST.md step 15.
+  `media-permission-policy.test.js`). They run under plain Node and check Mako's own code against
+  the unchanged `@huggingface/transformers` 3.8.1 and vendored `kokoro-js` 1.2.1 bundles. They do
+  not run inside Electron, so they can't see a runtime change.
+- **Only on Blue's PC:** real microphone capture, WebGPU inference and audio playback on Electron
+  42.11.15. In particular, `app/media-permission-policy.js` grants the microphone only when the
+  request matches facts probed on Electron 42.5.0 (`securityOrigin` `file:///` and the exact
+  requesting URL). If 42.11.15 reports them differently, the policy refuses the microphone and CI
+  stays green. Dictation working in BLUE-CHECKLIST.md step 15 is what confirms they still hold.

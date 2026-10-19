@@ -255,7 +255,7 @@ on its own, one session at a time on Pro.
   next time you sit down at your PC. S02 moves Mako from Electron 42.5.0 to 42.11.15 for six security
   fixes. CI covers the code, but only your PC has the microphone, GPU and speakers.
   - Fully close Mako. In PowerShell: `cd` to the repo, `git switch main`, `git pull`, then `cd app`
-    and `npm ci`. It should end with `ensure-electron-binary: Electron 42.11.15 ready at ...`.
+    and `npm ci`. It should print `ensure-electron-binary: Electron 42.11.15 ready at ...`.
   - Start Mako from the desktop shortcut. The title should show the new `main@` commit.
   - **Dictation:** click a Claude pane, click 🎤 Dictate, say a sentence, click it again. The text
     should land in that pane.
