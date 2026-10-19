@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-18 by Claude (step 11 verified; steps 7d and daily merging clarified).
+Last updated 2026-10-19 by Claude (step 7 verified as the agent account; 7c clarified; 7f added).
 
 ## Today
 
@@ -111,7 +111,20 @@ The runner is on since 2026-10-18 (8:01 AM Eastern). Each morning it first check
 does nothing except send you a "waiting on step N" notice until they are complete. After that it runs
 on its own, one session at a time on Pro.
 
-- [ ] **7. Guardrails, Part B: a separate GitHub account for agents.** About 15 minutes.
+- [x] **7. Guardrails, Part B: a separate GitHub account for agents.** About 15 minutes. *Done
+  2026-10-18 with the guide session. Verified 2026-10-19 by the checker session, acting as the agent
+  account:*
+  - *GitHub `get_me` returns `ABlueAgent`, not `ABlueAI`.*
+  - *7b: the collaborator list shows `ABlueAgent` with write access (`ABlueAI` is admin).*
+  - *7d: GitHub's rules API for `main` (ruleset `protect-main`, id 25323429) shows 1 required
+    approval, code owner review, dismiss stale approvals on push, approval of the most recent push,
+    and both Windows checks still required. CODEOWNERS is `* @ABlueAI`.*
+  - *7e: the guide session confirmed the repository is attached to **Mako daily runner** on
+    2026-10-18. The checker's read of the task shows it enabled, schedule unchanged (8:01 AM
+    Eastern), next run 2026-10-19 12:01 UTC, but that view doesn't list repositories. Tomorrow's run
+    confirms it (see "Done when").*
+  - *7a (2FA on the agent account) and 7c (Claude connected to `ABlueAgent`) rest on Blue's word and
+    screenshots; Claude can't read either setting. 7c is borne out by `get_me` above.*
   - **a.** Create a free GitHub account, for example `ablueai-agent`, with its own email (a "+agent"
     alias of your email usually works). Turn on two-factor authentication.
   - **b.** Signed in as `ABlueAI`: repo > Settings > Collaborators > **Add people** > `ablueai-agent`.
@@ -121,6 +134,12 @@ on its own, one session at a time on Pro.
   - **c.** In a private browser window, sign in to GitHub as `ablueai-agent`, then open
     https://claude.ai/connect-github and connect. Claude's cloud sessions now act as the agent account;
     you keep using `ABlueAI` to approve and merge.
+    - Sign in to claude.ai with your **own** Claude account in that private window. Don't make a new
+      Claude account; only GitHub is signed in as the agent there.
+    - The connectors page then shows a warning like "ABlueAgent: Not installed". That is expected:
+      the agent account owns no repositories, so the app has nothing to install on.
+    - If it offers to install the Claude GitHub app on `ABlueAgent`, cancel.
+    - What matters is the green **Check repository status** line for `ABlueAI/AgentCommandCenter`.
   - **d.** Do this only after c, and after merging any open PR Claude made before c. GitHub never
     lets a PR's author approve their own PR, and until c Claude's PRs are authored as `ABlueAI`, so
     they would be stuck. Before you start, check that no Claude PR is open:
@@ -136,8 +155,13 @@ on its own, one session at a time on Pro.
     schedule and prompt as they are. Without this the runner can check the gate but cannot open pull
     requests (seen on its first run, 2026-10-18). If the routine can't be edited, tell Claude and it
     will walk you through recreating it with the prompt in docs/RUNNER.md.
-  - *Done when:* you say "Part B done". Claude opens a test PR as the agent account and confirms it
-    cannot merge without your approval.
+  - [ ] **f. Run the checker session** (5 minutes, after a to e). Open https://claude.ai/code, select
+    `ABlueAI/AgentCommandCenter`, paste the checker prompt Claude gave you, and let it run. It checks
+    the items above as the agent account and opens one small PR. When that PR's CI is green, approve
+    it (Files changed > Review changes > Approve > Submit review), then **Merge**.
+  - *Done when:* you say "Part B done" and the checker's PR, authored by the agent account, showed as
+    blocked after CI passed until you approved it. On the next morning's run the runner starts
+    building S01 instead of sending "waiting on step 7".
 - [ ] **8. Upgrade Claude to Max 5x.** About 2 minutes, on **Wednesday 2026-10-21**, after Pro's weekly
   reset on Tuesday and before Pro renews on Thursday. claude.ai > Settings > Billing. Keep ChatGPT Plus.
   No longer blocks the runner; it builds one session at a time on Pro until then.
@@ -186,7 +210,7 @@ on its own, one session at a time on Pro.
 
 - **Morning (about 5 minutes):** check your phone. Answer anything marked "needs Blue".
 - **Evening (10 to 20 minutes):** read the TLDR on each PR marked ready, then **Approve** it and
-  **Merge**. Until step 7d is done there is no Approve step, only Merge.
+  **Merge**. Since step 7d every agent PR needs your Approve before Merge.
 
 ## Coming up this month (the runner will ask when it gets there)
 
