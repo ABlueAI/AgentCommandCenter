@@ -224,7 +224,9 @@ on its own, one session at a time on Pro.
   - Agents never close security alerts themselves.
   - *Done when:* #40 shows Closed, and the merge audit run for the fix's merge passed with no new
     alert. Claude checks both.
-- [ ] **13. Independent review for agent PRs.** Nothing more to do: done when you merge PR #42.
+- [x] **13. Independent review for agent PRs.** *Verified 2026-10-19: PR #42 merged by ABlueAI at
+  06:10 UTC as `246d743`, with its "Independent review (Opus)" comments linked in the TLDR; the
+  merge audit passed. The new runner prompt was applied to the scheduled task the same minute.*
   - What was found (2026-10-19):
     - Codex reviewed every PR you authored automatically ("PR opened", #36 to #38), but skipped #39
       and reviewed #41 only after your manual comment. Both were authored by `ABlueAgent`.
