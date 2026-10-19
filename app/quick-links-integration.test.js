@@ -123,14 +123,29 @@ assert(JSON.stringify(currentPkg.dependencies) === JSON.stringify(basePkg.depend
 assert(JSON.stringify(currentPkg.devDependencies) === JSON.stringify(basePkg.devDependencies), 'devDependencies unchanged from base');
 // Compared as JSON with the app's OWN version fields set aside: the 1.0.0 release bump (2026-10-16)
 // changes those two fields and nothing else, and the point here is that no dependency changed.
+// Also set aside: the 1.1 S02 `npm audit fix` (docs/DEPENDENCY-ADVISORIES.md), which moved exactly
+// these four packages to patched versions inside their existing ranges, and the root
+// hasInstallScript flag npm writes for the app's postinstall. Only those fields may differ;
+// any other lockfile change still fails here.
+const AUDIT_FIX_PACKAGES = ['node_modules/electron', 'node_modules/protobufjs', 'node_modules/tar', 'node_modules/undici'];
 const withoutOwnVersion = (lockText) => {
   const lock = JSON.parse(lockText);
   delete lock.version;
-  if (lock.packages && lock.packages['']) delete lock.packages[''].version;
+  if (lock.packages && lock.packages['']) {
+    delete lock.packages[''].version;
+    delete lock.packages[''].hasInstallScript;
+  }
+  for (const key of AUDIT_FIX_PACKAGES) {
+    if (lock.packages && lock.packages[key]) {
+      delete lock.packages[key].version;
+      delete lock.packages[key].resolved;
+      delete lock.packages[key].integrity;
+    }
+  }
   return JSON.stringify(lock);
 };
 assert(withoutOwnVersion(read('package-lock.json')) === withoutOwnVersion(fromBase('package-lock.json')),
-  'package-lock.json has no dependency delta from base');
+  'package-lock.json has no dependency delta from base beyond the S02 audit fix');
 const requiredTests = [
   'quick-links-policy.test.js', 'quick-links-store.test.js', 'quick-links-ipc.test.js',
   'quick-links-integration.test.js', 'renderer/quick-links-view.test.js',

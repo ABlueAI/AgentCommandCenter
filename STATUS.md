@@ -13,6 +13,12 @@ Updated 2026-10-19 by Claude. Every PR that changes the state updates this file.
     the desktop shortcut showing `Mako 1.0.0 · main@37009eb`.
   - The GitHub release is "Mako 1.0.0", from docs/RELEASE-NOTES-1.0.md.
 - **Plan:** 1.1 month-one plan approved with that merge: [docs/PLAN-1.1.md](docs/PLAN-1.1.md).
+- **CI and dependencies (S02, PR #PR):** every GitHub Action is pinned to a commit SHA, and both
+  Windows checks were confirmed as required on `main` (ruleset `protect-main`, read 2026-10-19).
+  `npm audit` is down from 11 advisories to 7: Electron 42.11.15, `undici`, `tar` and `protobufjs`
+  are patched. The 7 left are in the speech stack's Node-side packages, which Mako's renderer never
+  loads; each is explained in [docs/DEPENDENCY-ADVISORIES.md](docs/DEPENDENCY-ADVISORIES.md).
+  Dictation and TTS on the new Electron still need a check on Blue's PC (checklist step 15).
 - **Guardrails:**
   - The repo-side files are live on `main`, and the merge audit has passed on every merge.
   - Part A (checklist step 2) is done and verified on 2026-10-18. `main` now requires a pull request

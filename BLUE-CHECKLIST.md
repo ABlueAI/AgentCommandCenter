@@ -251,6 +251,19 @@ on its own, one session at a time on Pro.
     environment variable (AGENTS.md "Security rules").
   - *Done when:* the S06 PR shows a pull request opened from a local Mako pane with `ABlueAgent` as its
     author. Claude checks that on GitHub; the S06 PR confirms the exact token scopes.
+- [ ] **15. Check voice on the new Electron (after you merge the S02 PR).** About 10 minutes, the
+  next time you sit down at your PC. S02 moves Mako from Electron 42.5.0 to 42.11.15 for six security
+  fixes. CI covers the code, but only your PC has the microphone, GPU and speakers.
+  - Fully close Mako. In PowerShell: `cd` to the repo, `git switch main`, `git pull`, then `cd app`
+    and `npm ci`. It should end with `ensure-electron-binary: Electron 42.11.15 ready at ...`.
+  - Start Mako from the desktop shortcut. The title should show the new `main@` commit.
+  - **Dictation:** click a Claude pane, click 🎤 Dictate, say a sentence, click it again. The text
+    should land in that pane.
+  - **Text to speech:** select some text in a pane and click that pane's 🔊 button. It should speak
+    in your chosen voice.
+  - Check the Claude pane's status badge still changes from working to turn ended.
+  - *Done when:* you tell any agent "step 15 passed", or what failed. The agent ticks this with the
+    date. A failure gets a fix PR, or a revert of the Electron bump, before other work.
 
 ## Every day, once the runner is on
 
