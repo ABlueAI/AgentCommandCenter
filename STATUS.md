@@ -33,8 +33,9 @@ Updated 2026-10-19 by Claude. Every PR that changes the state updates this file.
     live data for the #39 push gives the three #40 alerts with the old audit and none with the fix.
     The fix merged as PR #41 (`8846eed`), the audit passed on that merge, and Blue closed #40
     (checklist step 12, verified 2026-10-19).
-  - Independent review: Codex automatically reviews only PRs Blue authors, its "All PRs" setting won't save, and
-    it ignores review requests from `ABlueAgent` (tested on PR #42). Blue chose a separate Claude
+  - Independent review: Codex reviewed Blue's PRs automatically but not the agent's (#39 skipped,
+    #41 only on request), its "All PRs" setting won't save, and it ignores review requests from
+    `ABlueAgent` (tested on PR #42). Blue chose a separate Claude
     Opus reviewer instead (checklist step 13). Builders run the read-only `pr-reviewer` subagent on
     their own PR and post "Independent review (Opus)" before marking it ready. Codex is optional.
 - **Daily runner:** scheduled for 8:01 AM Eastern from 2026-10-18 ([docs/RUNNER.md](docs/RUNNER.md)).
