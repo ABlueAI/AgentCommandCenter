@@ -302,7 +302,7 @@ on its own, one session at a time on Pro.
 You can start on the first one now, which saves time later.
 
 - **Session S28:** your agent-roles package (new role texts, from your agent-roles chat), as an issue
-  you open yourself as `ABlueAI`, titled `S28: agent-roles package` (agents ignore one opened, or
+  you open yourself as `ABlueAI`, titled `agent-roles package (S28)` (agents ignore one opened, or
   edited, by anyone else), or hand it to an agent in its own session to open the PR. Not as a PR of your
   own: you can't approve your own PR, so it couldn't merge. S28 stays `NEEDS BLUE (package)` until
   it arrives.
