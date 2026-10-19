@@ -21,7 +21,7 @@ Updated 2026-10-19 by Claude. Every PR that changes the state updates this file.
     checker session. Cloud agents now act as `ABlueAgent` (write access, no admin). `main` needs 1
     approval from a code owner (`ABlueAI`), approval of the latest push, and both Windows checks, so
     no agent PR merges without Blue's Approve. Local agents on Blue's PC still use his git login until
-    S01 moves them (docs/SETUP-GUARDRAILS.md, "What is still not covered").
+    S06 moves them (proposed in PR #44, pending Blue; see docs/SETUP-GUARDRAILS.md, "What is still not covered").
   - The merge audit raised a false alert on 2026-10-18 (issue #35): PR #33 was stacked on #32's
     branch, and its commits reached `main` through PR #34. The audit now counts every commit of a PR
     merged into `main`, and AGENTS.md forbids stacked PRs. Fixed in PR #37, merged 2026-10-18;
@@ -40,7 +40,7 @@ Updated 2026-10-19 by Claude. Every PR that changes the state updates this file.
     their own PR and post "Independent review (Opus)" before marking it ready. Codex is optional.
 - **Daily runner:** scheduled for 8:01 AM Eastern from 2026-10-18 ([docs/RUNNER.md](docs/RUNNER.md)).
   The repository was attached on 2026-10-18 (step 7e), and its gate (steps 1 and 7) now passes, so
-  from the next run it should start building S01. That run is the first proof it can open PRs.
+  the 2026-10-19 run started and opened PR #44, the first proof it can open PRs.
 
 ## 1.0: done
 
@@ -93,4 +93,4 @@ Known limitations shipping with 1.0 are in [docs/RELEASE-NOTES-1.0.md](docs/RELE
 
 ## Next
 
-1.1 session S01 (finish guardrails, then the daily runner). See the plan.
+1.1 session S01 (finish guardrails) is marked DONE in PR #44, with its evidence in the plan's change log; S02 and S03 are next. Plan change proposed: S06 also moves local agents off Blue's git login. See the plan.
