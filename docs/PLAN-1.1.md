@@ -1,12 +1,13 @@
-# Mako 1.1: month-one plan (26 sessions)
+# Mako 1.1: month-one plan (28 sessions)
 
 Drafted 2026-10-17 by Claude for Blue. Approved when the PR that adds it is merged. Changes only through
 `plan-change` PRs (rules below).
 
 **Latest change (2026-10-19, proposed, pending Blue):** S04 becomes an all-day runner that fires
 through the day, works sessions in parallel up to a cap and sends one evening digest; S04 now needs
-only S01; new session S26 adds Codex as a second builder. Details below the session table and in
-the change log.
+only S01; new session S26 adds Codex as a second builder; new sessions S27 (Composer) and S28 (agent
+profile refresh); session-end notices start with READY TO MERGE or NOT READY; a pause button and usage
+alert in S04 and S11. Details below the session table and in the change log.
 
 ## How this plan runs
 
@@ -45,13 +46,14 @@ updates its own row.
 | S03 | **Plan to issues.** Labels (authority, lane, plan-change, needs-blue, sensitive, security-alert), task issue template, "1.1 Month 1" milestone, a GitHub Project board (Ready, Running, Needs Blue, Ready to merge, Done), and a workflow that keeps one issue per session in sync with this file. | Board mirrors this table automatically. | Max | cloud | S01 | READY |
 | S04 | **All-day runner and digest.** The runner fires through the day: it fixes its own open PRs, then starts every unclaimed READY session up to a parallel cap, stops cleanly at a usage limit and resumes on a later fire, and sends one evening digest. Details below the table. | Two consecutive days run unattended through multiple fires; a usage-limit stop resumes on its own on a later fire; the digest arrives both evenings. | High | blue | S01 | READY |
 | S26 | **Codex builder lane.** Codex, linked to `ABlueAgent`, builds sessions as a second builder: it claims a session before starting, so Claude and Codex never take the same one, follows AGENTS.md, and gets the same Opus review plus Codex's automatic review. Details below the table. | One session built end to end by Codex: a PR authored by `ABlueAgent` from a `codex/` branch with no Claude builder on it, an Opus review and a Codex automatic review, merged by Blue. | High | cloud | S04, checklist step 16 (Codex re-linked to `ABlueAgent`) | READY |
+| S28 | **Agent profile refresh.** Update the bodies of agent-roles/*.md from Blue's package (details from his agent-roles chat); a change to frontmatter tools or permissions is sensitive. Run the role tests, then deploy with scripts/sync-roles.ps1. If the package isn't ready, mark NEEDS BLUE and move on. | Role tests pass in CI (app/role-frontmatter.test.js, app/role-fence-policy.test.js, scripts/sync-roles.Tests.ps1); scripts/sync-roles.ps1 deploys on Blue's PC and Blue confirms the roles launch. | High | blue | S01, Blue's agent-roles package | READY |
 | S05 | **Needs-you alerts.** Windows notification when a Mako pane needs input or a turn ends; setup note for phone alerts through Claude Remote Control. | Toast appears on a real Claude pane; phone alert documented. | Medium | windows | S01 | READY |
 | S06 | **Process cleanup and link hardening.** Kill the whole process tree when a pane or Mako closes (the node-pty limitation); route the old `open-external` handler through the Quick Links URL policy; move local agents on Blue's PC from his git login to the `ABlueAgent` account (Mako already injects per-pane credentials). Sensitive. | No leftover claude.exe or node.exe after close; link tests pass; a PR opened by a local agent shows `ABlueAgent` as its author. Needs an `ABlueAgent` token from Blue (checklist step 14). | High | windows | S01, checklist step 14 | READY |
 | S07 | **Stable and dev copies of Mako.** A dev instance uses its own settings folder and never takes over Claude hooks, so agents can change Mako while Blue keeps using it. | Both run side by side without touching each other's state. | High | windows | S06 | READY |
 | S08 | **Session memory 1.** Record each pane's Claude session ID, role and worktree when it starts and stops. | Records survive a restart; covered by tests. | Max | cloud | S07 | READY |
 | S09 | **Session memory 2.** On relaunch, offer Resume per pane (`claude --resume <id>`) or Start fresh; document transcript retention (`cleanupPeriodDays`). | Closing and reopening Mako brings the conversation back. | High | windows | S08 | READY |
 | S10 | **One-click authority.** Minimum, Medium, High and Maximum in Mako, mapped to Claude permission modes (plan, acceptEdits, auto); Maximum sends the task to a cloud session instead of granting full permissions locally. Sensitive. | Each level launches with the right mode; Maximum never runs unsandboxed. | High | windows | S07 | READY |
-| S11 | **Usage panel.** 5-hour and weekly usage with reset countdown (Claude's `/usage` data or ccusage). Claude Code's built-in auto-continue does the resuming. | Panel matches `/usage` on Blue's account. | Medium | windows | S07 | READY |
+| S11 | **Usage panel.** 5-hour and weekly usage with reset countdown (Claude's `/usage` data or ccusage). Claude Code's built-in auto-continue does the resuming. A warning at about 90% of either limit, and Pause and Resume buttons that turn the runner routine off and on, if that can be done safely (no claude.ai login stored in Mako without its own sensitive review); otherwise the button opens claude.ai/code/routines. | Panel matches `/usage` on Blue's account; the 90% warning shows; Pause stops the runner, or opens the routines page. | Medium | windows | S07 | READY |
 | S12 | **Quick Links bundle.** Claude desktop, Codex app, GitHub PRs and Project board, Obsidian vault, Hexona, Hermes and Dodaios docs. | Links open; Blue confirms the Hexona URL. | Medium | blue | S01 | READY |
 | S13 | **Obsidian Skills.** One-page OSS note quoting Blue's ADOPT; install kepano/obsidian-skills; private vault outside this public repo with an index that links to STATUS, PLAN and DECISIONS. | Agents can read and update the vault index. Blue installs the Obsidian app (2 minutes). | Medium | blue | S01 | READY |
 | S14 | **Design tools and brief.** Install UI UX Pro Max; write the design brief; collect Blue's UI examples. | Brief plus Blue's examples in the repo. | Medium | blue | S01 | READY |
@@ -59,6 +61,7 @@ updates its own row.
 | S16 | **Dodaios trial.** One-day sandboxed evaluation with no real credentials; report recommending keep Mako, adopt a piece, or fork. | Report and Blue's verdict recorded. | Minimum | blue | S01 | READY |
 | S17 | **Design directions.** Two or three clickable concepts from Blue's examples. | Blue picks one. | Medium | blue | S14 | READY |
 | S18 | **New layout, part 1.** Navigation, pane area and toolbar in the chosen design, behind a setting so the old layout stays available. | Daily use works in the new layout. | High | windows | S17 | READY |
+| S27 | **Composer.** One Mako pane takes a large task and fans it out to several agents, and can split and compose sessions. A must-have early in 1.1 (Blue). Placement and details come from Blue's separate plan-review chat. | Set by Blue's research. | High | windows | S18, Blue's research | NEEDS BLUE (Blue's research) |
 | S19 | **New layout, part 2.** Pane and status visuals; "needs you" stands out. | Blue accepts the look. | High | windows | S18 | READY |
 | S20 | **New layout, part 3.** Library, Logs and settings restyled; old layout removed after Blue accepts. | One consistent design. | High | windows | S19 | READY |
 | S21 | **Logo readability.** "M" variants at 16 to 48 px; Blue picks; taskbar and shortcut icons updated. | Blue can read the M on the taskbar. | Medium | blue | S07 | READY |
@@ -79,6 +82,7 @@ updates its own row.
    - at the subscription usage limit, new runs are rejected until the usage window resets, unless
      usage credits (paid, metered overage) are turned on;
    - a run set exactly on the hour can start several minutes late.
+   - not yet researched: whether a cloud session can read plan usage (S04 item 9).
 
    Proposed: every hour at :07, around the clock (`CRON_TZ=America/New_York 7 * * * *`), so work
    resumes soon after any usage reset, overnight too. A fire with nothing to do ends after a quick
@@ -109,20 +113,38 @@ updates its own row.
      change the state outside a session (plan changes, guardrails, releases);
    - a new checklist step takes the next number not used on `main` or by an open PR. If two PRs still
      end up with the same number, the one that merges second renumbers by merging `main`, never by
-     force-pushing.
+     force-pushing;
+   - this reduces conflicts but doesn't remove them: git also flags edits to adjacent rows. The PR
+     that hits one merges `main` and resolves it, never force-pushing.
 7. **Evening digest.** One phone notification at a set time (default 8 PM Eastern, one setting): PRs
    ready to merge with TLDR links, needs-Blue questions, and blocked items. Other fires notify only
-   when Blue has something to answer.
+   when Blue has something to answer. Every session-end message and notification starts with
+   `READY TO MERGE` (CI green, review done, PR marked ready) or `NOT READY: <reason>` (AGENTS.md
+   "How work flows" step 5); Blue acts only on `READY TO MERGE`.
 8. **Applying it.** The S04 PR proposes the new prompt and schedule in docs/RUNNER.md. The prompt
-   carries AGENTS.md's Codex-handle rule into every comment, review post and summary it writes. An interactive
-   session applies them to the scheduled task after Blue merges it. The runner never edits itself.
+   carries AGENTS.md's Codex-handle rule into every comment, review post and summary it writes. An
+   interactive session applies them to the scheduled task in the same sitting as Blue's merge,
+   because the old prompt's one-at-a-time limit ends when S04 merges. The runner never edits
+   itself.
+9. **Pause button and usage alert** (Blue: "really more of a pause button here and or on Mako ... so
+   i can still use claude as needed without burning through all usage"). No automatic stop at a
+   fixed percentage. S04:
+   - documents the stop button in docs/RUNNER.md and the checklist: turn the routine off at
+     claude.ai/code/routines and stop any running cloud sessions; turn it back on to resume;
+   - researches, from official docs, whether a cloud session can read plan usage. If it can, the
+     runner sends Blue one phone notice once usage passes about 90% of the 5-hour or weekly limit;
+   - the runner never starts a new session late in a usage window (S04 sets the threshold from what
+     it can read; if it can read nothing, it says so and relies on the clean stop in item 4).
+   - S11 adds the same 90% warning and Pause and Resume buttons in Mako.
 
 ### S26 details: Codex builder lane
 
 1. **Claims.** Codex takes a READY session only through a claim the runner's check sees (S04 item 2):
    an open issue labeled `agent-claimed`, which the runner opens when it hands Codex a session, then
    Codex's own PR titled `Sxx:`, which sets its own row to IN PROGRESS.
-2. **Rules.** Codex follows AGENTS.md (it reads that file directly). It opens PRs as `ABlueAgent` from
+2. **Rules.** Codex follows AGENTS.md (it reads that file directly). The claim issue is on a public
+   repo, so the runner locks its conversation to collaborators and its hand-off tells Codex to act
+   only on that comment; S26 checks what context Codex reads from the thread. It opens PRs as `ABlueAgent` from
    its own `codex/` branches, never Claude's. It gets the same "Independent review (Opus)", run and
    posted by the runner, plus Codex's automatic review. The runner's "fix own PRs" step leaves Codex's
    PRs to Codex. AGENTS.md "How work flows" step 3 has the builder run `pr-reviewer` itself, which
@@ -133,7 +155,8 @@ updates its own row.
    change). Nothing enforces that technically, so S26 treats it as a rule, not a control. S26 re-checks how Codex reads mentions.
 3. **How Codex starts.** Options, from search-result extracts of developers.openai.com (the site was
    blocked from the session that wrote this, 2026-10-19; S26 reads the pages themselves, plus which account Codex's PRs are attributed to
-   and whether a Codex review could ever count as an approval, and then adds Codex to the "who can
+   and whether a Codex review could ever count as an approval, which token Codex pushes with (the
+   linked user's OAuth or the app installation), and then adds Codex to the "who can
    merge" table in docs/SETUP-GUARDRAILS.md):
    - (a) **Codex app scheduled tasks** run on Blue's PC only while it is on and the app is open, in
      the Windows sandbox. They push with the PC's git login, which is Blue's until S06 moves it.
@@ -157,8 +180,8 @@ updates its own row.
 
 S01 GitHub clicks (about 20 minutes) · S06 `ABlueAgent` token for local agents (proposed) · S04 time zone (given 2026-10-18: Eastern) and digest time (default 8 PM) · S12 Hexona URL · S13 install
 Obsidian · S14 UI examples · S16 Dodaios verdict · S17 pick a design · S21 pick a logo · S23 approve
-paperwork · S24 authorize HighLevel · S26 re-link Codex to `ABlueAgent` (checklist step 16, proposed) · every
-merge.
+paperwork · S24 authorize HighLevel · S26 re-link Codex to `ABlueAgent` (checklist step 16, proposed) · S27
+Composer research · S28 agent-roles package · every merge.
 
 ## Month two and later (not scheduled yet)
 
@@ -180,3 +203,4 @@ does both) · Vibe Kanban (removed in 1.0).
 - 2026-10-19: S06 gains the local-agent account move (proposed, pending Blue; PR #44).
 - 2026-10-19: S01 marked DONE (#44). Evidence: agent PR #39 stayed blocked until Blue approved it (checklist 7f); the merge audit passed on the #41 merge (`8846eed`, checklist 12). Moving local agents to the agent account was not in S01's done-when, so it is added to S06 (plan change, pending Blue).
 - 2026-10-19 (proposed, pending Blue): S04 rewritten from "Daily runner and digest" into "All-day runner and digest", after Blue asked for a runner that works all day while he reviews and merges once in the evening (docs/DECISIONS.md, 2026-10-19). S04's Needs change from "S01, S03" to "S01": the runner reads this table and open PRs and issues on GitHub, not S03's board, which only mirrors them, so S04 can run next and S03 in parallel. "How this plan runs" now describes the all-day runner and the evening sitting. New session S26 "Codex builder lane" (needs S04 and checklist step 16, Blue's Codex re-link), so this month now has 26 sessions instead of 25. Because the runner works in table order, S26 comes ahead of S05 to S25 once S04 is merged and step 16 is ticked; that is intended, so Codex starts building early and in parallel. The parallel cap on Max 5x goes from "at most 2" to 2, then 3 after a week of usage shows room. AGENTS.md: once S04 is merged and applied, session PRs stop editing STATUS.md, to avoid conflicts between parallel PRs; on merge, a checklist-numbering rule and a rule against writing Codex's handle in GitHub text.
+- 2026-10-19 (proposed, pending Blue; same PR, Blue's additions): every session-end message and phone notification starts with "READY TO MERGE" or "NOT READY: <reason>" (AGENTS.md "How work flows" step 5, S04 item 7). Pause button and usage alert instead of an automatic stop: S04 item 9 documents the stop button, researches whether a cloud session can read plan usage for a 90% notice, and never starts a session late in a usage window; S11 gains a 90% warning and Pause and Resume buttons. New S27 "Composer" (a must-have early in 1.1, after S18, NEEDS BLUE for Blue's research) and S28 "Agent profile refresh" (after S26, needs S01 and Blue's agent-roles package). The month now has 28 sessions.

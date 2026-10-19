@@ -83,7 +83,9 @@ The merge audit workflow opens a `security-alert` issue if anything reaches main
 - **Rulesets themselves.** Only repo admins can edit them, and agents are not admins.
 - **Codex is linked to you, for now.** On 2026-10-19 Blue decided to move Codex's GitHub link to
   `ABlueAgent` (BLUE-CHECKLIST.md step 16, proposed in PR #47, after which session S26 lets Codex
-  build). The re-link gives Codex's OAuth grant the agent's write access instead of Blue's. From the
+  build). The re-link is expected to give Codex's OAuth grant the agent's write access instead of
+  Blue's. Not verified: Codex may push through the ChatGPT/Codex app installed on the repo (step 2e)
+  rather than the linked user's token, so S26 checks which one it uses. From the
   re-link on, any `ABlueAgent` comment containing Codex's handle may start a Codex task that can
   push. AGENTS.md forbids agents to write the handle unless Blue asks (a comment by `ABlueAI`, or his
   own message to the agent) or, after S26, for the runner's hand-off. That is a rule, not a

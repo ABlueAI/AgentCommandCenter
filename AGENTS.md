@@ -25,7 +25,7 @@ and how you checked. Every PR updates `STATUS.md` if the state changed. Once ses
 runner is merged and applied to the scheduled task, plan-session PRs change only their own row in
 `docs/PLAN-1.1.md` (unless the PR carries a plan change with the `plan-change` label), add to
 `BLUE-CHECKLIST.md` and `docs/DECISIONS.md` only the steps and decisions they need, and leave
-`STATUS.md` to the runner's status PR, so parallel PRs don't conflict; PRs that change the state
+`STATUS.md` to the runner's status PR, to reduce conflicts between parallel PRs; PRs that change the state
 outside a session (plan changes, guardrails, releases) still update it. A new checklist step takes
 the next number not used on `main` or by an open PR; if two PRs still end up with the same number,
 the one that merges second renumbers by merging `main`, never by force-pushing. When Blue decides
@@ -59,6 +59,9 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
    problem, it stops and marks the PR "needs Blue" with its diagnosis and options.
 5. When CI is green and review findings are resolved, the builder updates the TLDR and marks the PR
    ready. That TLDR is Blue's merge briefing.
+   - Every session-end message and phone notification starts with `READY TO MERGE` (CI green,
+     independent review done, PR marked ready) or `NOT READY: <reason>`. Blue acts only on
+     `READY TO MERGE`.
 6. Blue merges. Nobody and nothing else does.
 
 ### Never

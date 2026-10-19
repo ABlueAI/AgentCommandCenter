@@ -252,9 +252,10 @@ on its own, one session at a time on Pro.
     environment variable (AGENTS.md "Security rules").
   - *Done when:* the S06 PR shows a pull request opened from a local Mako pane with `ABlueAgent` as its
     author. Claude checks that on GitHub; the S06 PR confirms the exact token scopes.
-- [ ] **16. Re-link Codex's GitHub to `ABlueAgent` (proposed in PR #47; do it once Blue merges
-  it).** About 10 minutes, any time before session S26 (the runner won't start S26 until this is
-  ticked). Your decision of 2026-10-19: Codex builds as the agent account, so you can approve its PRs
+- [ ] **16. Re-link Codex's GitHub to `ABlueAgent` (proposed in PR #47).** About 10 minutes. Do it
+  only after session S04's new runner prompt is applied (the S04 PR's TLDR says when), and before
+  S26 (the runner won't start S26 until this is ticked). Waiting closes a gap: until then the live
+  runner prompt says to post reviews "verbatim", and a quoted Codex handle could start a Codex task. Your decision of 2026-10-19: Codex builds as the agent account, so you can approve its PRs
   (expected; session S26 verifies which account Codex's PRs are attributed to).
   Same ChatGPT Plus account, no new seat. (Numbered 16 because open PRs #45 and #46 both use 15; the
   one of those that merges later renumbers to the next number not in use.)
@@ -281,8 +282,10 @@ on its own, one session at a time on Pro.
     `ABlueAI`, and a review request you comment as `ABlueAI` will likely fail. To get a Codex review
     by hand after this, ask an agent to post the request: comment on the PR as `ABlueAI`, or tell the
     agent in its own session.
-  - *Done when:* the next agent PR gets a Codex review without anyone commenting. Claude checks the
-    PR on GitHub and ticks this with the date.
+  - *Done when:* you tell an agent it's done and send a screenshot of chatgpt.com/codex settings
+    showing the GitHub account `ABlueAgent` and `ABlueAI/AgentCommandCenter` still listed. The agent
+    ticks this with the date. Whether the next agent PR then gets a Codex review without anyone
+    commenting is recorded as an observation for S26, not a condition for this step.
 
 ## Every day, once the runner is on
 
@@ -294,6 +297,10 @@ on its own, one session at a time on Pro.
 
 You can start on the first one now, which saves time later.
 
+- **Session S28:** your agent-roles package (new role texts, from your agent-roles chat). Until it's
+  in the repo, the runner marks S28 NEEDS BLUE and moves on.
+- **Session S27 (Composer):** your research and placement from the plan-review chat. S27 stays NEEDS
+  BLUE until then.
 - **Session S14:** UI examples. Screenshots or links of designs you like. **Start a folder now.**
 - **Session S12:** your Hexona login URL.
 - **Session S13:** install the Obsidian app (2 minutes).

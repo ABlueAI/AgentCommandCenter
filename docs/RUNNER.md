@@ -14,7 +14,8 @@ full runner (parallel sessions, evening digest).
 - **Note (PR #47):** the prompt below says to post the review "verbatim". Since PR #47, AGENTS.md
   step 3, which the prompt says governs everything, also replaces Codex's handle with "at-codex"
   before posting. The runner reads AGENTS.md, not this file, and S04's new prompt will say so
-  itself. The prompt and schedule are unchanged.
+  itself. The prompt and schedule are unchanged. When S04 merges, this prompt's one-at-a-time limit
+  ends, so S04's prompt is applied in the same sitting (PLAN-1.1.md S04 item 8).
 
 ## The gate
 
