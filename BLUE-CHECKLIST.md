@@ -249,6 +249,7 @@ on its own, one session at a time on Pro.
     90-day expiry.
   - Paste it only into Mako's in-app key setup (Electron safeStorage). Never `setx` or a Windows
     environment variable (AGENTS.md "Security rules").
+  - Until S06 adds a GitHub slot to Mako's key setup, keep it only in Bitwarden (step 15b).
   - *Done when:* the S06 PR shows a pull request opened from a local Mako pane with `ABlueAgent` as its
     author. Claude checks that on GitHub; the S06 PR confirms the exact token scopes.
 - [ ] **15. Token hygiene: find old tokens, and rules for any new one.** About 20 minutes, this week.
@@ -257,7 +258,8 @@ on its own, one session at a time on Pro.
     its last-used date.
     - Classic tokens: https://github.com/settings/tokens
     - Fine-grained tokens: https://github.com/settings/personal-access-tokens
-    - Authorized apps: https://github.com/settings/applications
+    - Apps: https://github.com/settings/applications. Check all three tabs: Installed GitHub Apps,
+      Authorized GitHub Apps and Authorized OAuth Apps.
     - SSH keys: https://github.com/settings/keys
     - Revoke anything you don't recognize or that hasn't been used for months.
     - Keep the Git login on your PC that local agents push with today (often listed as **Git
@@ -285,19 +287,21 @@ on its own, one session at a time on Pro.
       This step doesn't approve one.
     - Paste it straight from the provider's token page into its one destination (a Bitwarden copy
       is optional, below): Mako's key setup, or a GitHub environment secret restricted to `main`.
-      Never into any AI chat (Claude included), a file, this repo, or `setx`.
+      A provider key Mako's key setup can't hold yet waits only in Bitwarden. Never into any AI
+      chat (Claude included), a file, this repo, or `setx`.
     - Today Mako's key setup stores only the Gemini key; S06 adds a place for a GitHub token. Until
       then, make no GitHub token for your PC other than step 14's. If you make step 14's token
       before S06 asks for it, it waits only in Bitwarden, then goes into Mako's key setup in S06.
     - A secret a repo workflow uses goes in a GitHub environment whose deployment branches are
       `main` only, and that workflow must never check out or run code from a PR.
-    - Expiry 90 days (1 year at most). Whoever sets it up adds a dated renewal reminder under "Dated
-      reminders" below.
+    - Expiry 90 days (1 year at most). Tell Claude the expiry date (never the token), and Claude
+      adds a dated renewal reminder under "Dated reminders" below.
     - Saving a copy in Bitwarden is optional for these tokens. Not storing one at all, and making a
       new one when it expires, is also fine. For new tokens and keys this replaces step 9's "API
       keys go in Bitwarden secure notes".
-    - If it might have leaked: GitHub > Settings > Developer settings > Personal access tokens >
-      Fine-grained tokens > the token > **Revoke**, then tell Claude.
+    - If it might have leaked: revoke it on its provider's page, then tell Claude. GitHub: Settings >
+      Developer settings > Personal access tokens > Fine-grained tokens > the token > **Revoke**. API
+      keys: the pages in a.
   - **c. Turn on push protection.** Signed in as `ABlueAI`: repo Settings > Code security (it may be
     labelled Advanced Security) > Secret scanning (or Secret Protection) > **Push protection** >
     Enable. It is free for public repositories and blocks pushes that contain a recognizable secret.
