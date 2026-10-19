@@ -251,7 +251,7 @@ on its own, one session at a time on Pro.
     environment variable (AGENTS.md "Security rules").
   - *Done when:* the S06 PR shows a pull request opened from a local Mako pane with `ABlueAgent` as its
     author. Claude checks that on GitHub; the S06 PR confirms the exact token scopes.
-- [ ] **15. Check voice on the new Electron (after you merge the S02 PR).** About 10 minutes, the
+- [ ] **15. Check voice on the new Electron (after you merge PR #45, S02).** About 10 minutes, the
   next time you sit down at your PC. S02 moves Mako from Electron 42.5.0 to 42.11.15 for six security
   fixes. CI covers the code, but only your PC has the microphone, GPU and speakers.
   - Fully close Mako. In PowerShell: `cd` to the repo, `git switch main`, `git pull`, then `cd app`

@@ -19,7 +19,7 @@ Drafted 2026-10-17 by Claude for Blue. Approved when the PR that adds it is merg
 
 ### Status values
 
-`READY` · `IN PROGRESS (#PR)` · `NEEDS BLUE (#PR)` · `DONE (#PR)` · `DROPPED (reason)`. The session's PR
+`READY` · `IN PROGRESS (#45)` · `NEEDS BLUE (#PR)` · `DONE (#PR)` · `DROPPED (reason)`. The session's PR
 updates its own row.
 
 ### When the plan changes
@@ -34,7 +34,7 @@ updates its own row.
 | # | Session | Done when | Auth | Lane | Needs | Status |
 |---|---|---|---|---|---|---|
 | S01 | **Finish guardrails.** Blue does the clicks in docs/SETUP-GUARDRAILS.md; Claude then opens a test PR from the agent account and confirms it cannot merge without Blue's approval. | Test PR blocked without approval; merge audit quiet on a proper merge. | High | blue | PR #27 merged | DONE (#44) |
-| S02 | **CI and dependency hygiene.** Pin GitHub Actions to commit SHAs; make CI a required check; `npm audit fix` for the 11 advisories with dictation and TTS regression checks. | CI green and required; advisories fixed or each one explained. | High | windows | S01 | IN PROGRESS (#PR) |
+| S02 | **CI and dependency hygiene.** Pin GitHub Actions to commit SHAs; make CI a required check; `npm audit fix` for the 11 advisories with dictation and TTS regression checks. | CI green and required; advisories fixed or each one explained. | High | windows | S01 | IN PROGRESS (#45) |
 | S03 | **Plan to issues.** Labels (authority, lane, plan-change, needs-blue, sensitive, security-alert), task issue template, "1.1 Month 1" milestone, a GitHub Project board (Ready, Running, Needs Blue, Ready to merge, Done), and a workflow that keeps one issue per session in sync with this file. | Board mirrors this table automatically. | Max | cloud | S01 | READY |
 | S04 | **Daily runner and digest.** A scheduled cloud session at **8:01 AM Blue's local time** (just after Claude's weekly usage reset) runs the next READY sessions; an evening digest lists ready PRs with TLDR links and open questions, sent as a notification. Each morning it first checks BLUE-CHECKLIST.md steps 1 and 7; until they are done it only sends a "waiting on step N" notice. | Two consecutive days run unattended and the digest arrives. | High | blue | S01, S03 | READY |
 | S05 | **Needs-you alerts.** Windows notification when a Mako pane needs input or a turn ends; setup note for phone alerts through Claude Remote Control. | Toast appears on a real Claude pane; phone alert documented. | Medium | windows | S01 | READY |
