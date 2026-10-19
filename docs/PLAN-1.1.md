@@ -46,7 +46,7 @@ alert in S04 and S11. Details below the session table and in the change log.
 | S03 | **Plan to issues.** Labels (authority, lane, plan-change, needs-blue, sensitive, security-alert), task issue template, "1.1 Month 1" milestone, a GitHub Project board (Ready, Running, Needs Blue, Ready to merge, Done), and a workflow that keeps one issue per session in sync with this file. | Board mirrors this table automatically. | Max | cloud | S01 | READY |
 | S04 | **All-day runner and digest.** The runner fires through the day: it fixes its own open PRs, then starts every unclaimed READY session up to a parallel cap, stops cleanly at a usage limit and resumes on a later fire, and sends one evening digest. Details below the table. | Two consecutive days run unattended through multiple fires; a usage-limit stop resumes on its own on a later fire; the digest arrives both evenings. | High | blue | S01 | READY |
 | S26 | **Codex builder lane.** Codex, linked to `ABlueAgent`, builds sessions as a second builder: it claims a session before starting, so Claude and Codex never take the same one, follows AGENTS.md, and gets the same Opus review plus Codex's automatic review. Details below the table. | One session built end to end by Codex: a PR authored by `ABlueAgent` from a `codex/` branch with no Claude builder on it, an Opus review and a Codex automatic review, merged by Blue. | High | cloud | S04, checklist step 16 (Codex re-linked to `ABlueAgent`) | READY |
-| S28 | **Agent profile refresh.** Update the bodies of agent-roles/*.md from Blue's package (details from his agent-roles chat); a change to frontmatter tools or permissions is sensitive. Run the role tests, then deploy with scripts/sync-roles.ps1. If the package isn't ready, set the row to `NEEDS BLUE (package)` and move on. | Role tests pass in CI (app/role-frontmatter.test.js, app/role-fence-policy.test.js, scripts/sync-roles.Tests.ps1); scripts/sync-roles.ps1 deploys on Blue's PC and Blue confirms the roles launch. | High | blue | S01, Blue's agent-roles package | READY |
+| S28 | **Agent profile refresh.** Update the bodies of agent-roles/*.md from Blue's package (details from his agent-roles chat); a change to frontmatter tools or permissions is sensitive. Run the role tests, then deploy with scripts/sync-roles.ps1. The package arrives as a PR or an issue titled `S28: agent-roles package`; until then the row stays `NEEDS BLUE (package)`, and the PR that brings it (or the next runner PR) sets it to READY. | Role tests pass in CI (app/role-frontmatter.test.js, app/role-fence-policy.test.js, scripts/sync-roles.Tests.ps1); scripts/sync-roles.ps1 deploys on Blue's PC and Blue confirms the roles launch. | High | blue | S01, Blue's agent-roles package | NEEDS BLUE (package) |
 | S05 | **Needs-you alerts.** Windows notification when a Mako pane needs input or a turn ends; setup note for phone alerts through Claude Remote Control. | Toast appears on a real Claude pane; phone alert documented. | Medium | windows | S01 | READY |
 | S06 | **Process cleanup and link hardening.** Kill the whole process tree when a pane or Mako closes (the node-pty limitation); route the old `open-external` handler through the Quick Links URL policy; move local agents on Blue's PC from his git login to the `ABlueAgent` account (Mako already injects per-pane credentials). Sensitive. | No leftover claude.exe or node.exe after close; link tests pass; a PR opened by a local agent shows `ABlueAgent` as its author. Needs an `ABlueAgent` token from Blue (checklist step 14). | High | windows | S01, checklist step 14 | READY |
 | S07 | **Stable and dev copies of Mako.** A dev instance uses its own settings folder and never takes over Claude hooks, so agents can change Mako while Blue keeps using it. | Both run side by side without touching each other's state. | High | windows | S06 | READY |
@@ -61,7 +61,7 @@ alert in S04 and S11. Details below the session table and in the change log.
 | S16 | **Dodaios trial.** One-day sandboxed evaluation with no real credentials; report recommending keep Mako, adopt a piece, or fork. | Report and Blue's verdict recorded. | Minimum | blue | S01 | READY |
 | S17 | **Design directions.** Two or three clickable concepts from Blue's examples. | Blue picks one. | Medium | blue | S14 | READY |
 | S18 | **New layout, part 1.** Navigation, pane area and toolbar in the chosen design, behind a setting so the old layout stays available. | Daily use works in the new layout. | High | windows | S17 | READY |
-| S27 | **Composer.** One Mako pane takes a large task and fans it out to several agents, and can split and compose sessions. A must-have early in 1.1 (Blue). Placement and details come from Blue's separate plan-review chat. | Set by Blue's research. | High | windows | S18, Blue's research | NEEDS BLUE (Blue's research) |
+| S27 | **Composer.** One Mako pane takes a large task and fans it out to several agents, and can split and compose sessions. A must-have early in 1.1 (Blue). Listed after S18 as Blue asked; its dependencies, final placement and details come from his separate plan-review chat. | Set by Blue's research. | High | windows | Blue's research | NEEDS BLUE (Blue's research) |
 | S19 | **New layout, part 2.** Pane and status visuals; "needs you" stands out. | Blue accepts the look. | High | windows | S18 | READY |
 | S20 | **New layout, part 3.** Library, Logs and settings restyled; old layout removed after Blue accepts. | One consistent design. | High | windows | S19 | READY |
 | S21 | **Logo readability.** "M" variants at 16 to 48 px; Blue picks; taskbar and shortcut icons updated. | Blue can read the M on the taskbar. | Medium | blue | S07 | READY |
@@ -89,7 +89,8 @@ alert in S04 and S11. Details below the session table and in the change log.
    check. If day one shows idle fires costing real usage, drop to every 2 hours.
 2. **Each fire.** It runs today's gate, then fixes the open PRs the runner itself opened (marked
    with a `runner` label; interactive sessions also open PRs as `ABlueAgent` from `claude/` branches,
-   and the runner leaves those alone), then starts every READY session whose Needs are met and that nobody has claimed, up to
+   and the runner leaves those alone; when S04 is applied, it labels today's runner's open PRs),
+   then starts every READY session whose Needs are met and that nobody has claimed, up to
    the parallel cap. A claim is an open PR titled with the session number (`Sxx:`), or an open issue
    with the `agent-claimed` label (how Codex claims, S26). S03's per-session sync issues are not
    claims, whatever their titles. S04 creates the label if S03 hasn't. A builder opens its PR as a draft first; that is the claim. No two fires work on the same PR or session at once: a build can outlast
@@ -145,8 +146,9 @@ alert in S04 and S11. Details below the session table and in the change log.
 1. **Claims.** Codex takes a READY session only through a claim the runner's check sees (S04 item 2):
    an open issue labeled `agent-claimed`, which the runner opens when it hands Codex a session, then
    Codex's own PR titled `Sxx:`, which sets its own row to IN PROGRESS. The trial build in S26's
-   done-when happens before S26 is merged, so the runner can't hand it over yet: Blue starts it with
-   a comment as `ABlueAI` on the claim issue (allowed by AGENTS.md), and the runner session runs
+   done-when happens before S26 is merged, so the runner can't hand it over yet. Instead, the S26
+   builder (a Claude session) opens the claim issue; Blue comments on it as `ABlueAI` asking that
+   session to hand Codex the task (allowed by AGENTS.md); the session posts the hand-off, then runs
    `pr-reviewer` on Codex's PR and posts "Independent review (Opus)" for it.
 2. **Rules.** Codex follows AGENTS.md (it reads that file directly). The claim issue is on a public
    repo, so the runner locks its conversation to collaborators and its hand-off tells Codex to act
