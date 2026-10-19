@@ -13,7 +13,8 @@ full runner (parallel sessions, evening digest).
   Blue's claude.ai account.
 - **Note (PR #47):** the prompt below says to post the review "verbatim". Since PR #47, AGENTS.md
   step 3, which the prompt says governs everything, also replaces Codex's handle with "at-codex"
-  before posting. S04's new prompt says so itself. The prompt and schedule are unchanged.
+  before posting. The runner reads AGENTS.md, not this file, and S04's new prompt will say so
+  itself. The prompt and schedule are unchanged.
 
 ## The gate
 

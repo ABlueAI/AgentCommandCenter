@@ -254,7 +254,8 @@ on its own, one session at a time on Pro.
     author. Claude checks that on GitHub; the S06 PR confirms the exact token scopes.
 - [ ] **16. Re-link Codex's GitHub to `ABlueAgent` (proposed in PR #47; do it once Blue merges
   it).** About 10 minutes, any time before session S26 (the runner won't start S26 until this is
-  ticked). Your decision of 2026-10-19: Codex builds as the agent account, so you can approve its PRs.
+  ticked). Your decision of 2026-10-19: Codex builds as the agent account, so you can approve its PRs
+  (expected; session S26 verifies which account Codex's PRs are attributed to).
   Same ChatGPT Plus account, no new seat. (Numbered 16 because open PRs #45 and #46 both use 15; the
   one of those that merges later renumbers to the next number not in use.)
   - Open a private browser window and sign in to GitHub there as `ABlueAgent`.

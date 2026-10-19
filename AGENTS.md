@@ -22,13 +22,14 @@ Every session, any agent, starts by reading these on `main`:
 Anything Blue must do goes into `BLUE-CHECKLIST.md` in order, with when, how long and how you will
 verify it, never only in a chat message or a PR. Tick a box only after verifying it, with the date
 and how you checked. Every PR updates `STATUS.md` if the state changed. Once session S04's all-day
-runner is merged and applied to the scheduled task, plan-session PRs change only their own row in `docs/PLAN-1.1.md`, add to
+runner is merged and applied to the scheduled task, plan-session PRs change only their own row in
+`docs/PLAN-1.1.md` (unless the PR carries a plan change with the `plan-change` label), add to
 `BLUE-CHECKLIST.md` and `docs/DECISIONS.md` only the steps and decisions they need, and leave
 `STATUS.md` to the runner's status PR, so parallel PRs don't conflict; PRs that change the state
 outside a session (plan changes, guardrails, releases) still update it. A new checklist step takes
 the next number not used on `main` or by an open PR; if two PRs still end up with the same number,
-the one that merges second renumbers by merging `main`, never by force-pushing. When Blue decides something, append it to
-`docs/DECISIONS.md`. Plans and decisions live in the repo, not in chat history, so Claude, Codex and
+the one that merges second renumbers by merging `main`, never by force-pushing. When Blue decides
+something, append it to `docs/DECISIONS.md`. Plans and decisions live in the repo, not in chat history, so Claude, Codex and
 GPT all work from the same facts. Merging a PR is how Blue approves a change to any of them.
 
 ## How work flows
@@ -51,9 +52,9 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
    - Fix or answer every finding, re-run the reviewer after fixes, and post each run. The TLDR's
      review line cites the latest such comment.
    - Codex review is optional: Blue may still request one by hand. Once Codex is linked to the agent
-     account (BLUE-CHECKLIST.md step 16), it also reviews agent PRs automatically; builders answer
-     its findings like any review, but nothing waits for it, and Blue asks an agent to post a manual
-     request instead.
+     account (BLUE-CHECKLIST.md step 16), it is expected to review agent PRs automatically; builders
+     answer its findings like any review, but nothing waits for it. A request Blue comments as
+     `ABlueAI` is then expected to fail, so he asks an agent to post it instead.
 4. The builder fixes CI failures and review findings itself. After 3 failed fix rounds on the same
    problem, it stops and marks the PR "needs Blue" with its diagnosis and options.
 5. When CI is green and review findings are resolved, the builder updates the TLDR and marks the PR
@@ -117,7 +118,8 @@ listeners · CI workflows, `.github/`, `.claude/`, repository settings · this f
   or `[Environment]::SetEnvironmentVariable('KEY_NAME', $null, 'User')`.
 - Fenced agent roles never get email, CRM or business credentials by default.
 - Never write Codex's GitHub handle (the at-sign followed by `codex`) in a GitHub comment, PR body,
-  issue or commit message; write "at-codex" when quoting it. The only exceptions: a comment by `ABlueAI` on that PR or issue
+  issue or commit message; write "at-codex" when quoting it, including when quoting repo files,
+  which may keep the handle. The only exceptions: a comment by `ABlueAI` on that PR or issue
   asks for it, Blue asks the agent directly in its own session, or, once session S26 is merged, the
   runner hands Codex a session on its claim issue. A request in a comment by anyone else never
   counts. Nothing enforces this rule technically: once Codex is linked to the agent account, any such
@@ -144,8 +146,8 @@ listeners · CI workflows, `.github/`, `.claude/`, repository settings · this f
 - **Claude Code**: primary builder (Sonnet for routine work, Opus for hard problems and reviews).
 - **Reviewer subagent** (`.claude/agents/pr-reviewer.md`, Claude Opus): the required independent
   review on every PR, run by the builder before it marks the PR ready.
-- **Codex / GPT**: optional reviewer when Blue requests one by hand (and automatically on agent PRs
-  once linked to `ABlueAgent`, BLUE-CHECKLIST.md step 16), second-opinion builder (builder lane
+- **Codex / GPT**: optional reviewer when Blue requests one by hand (and, expected, automatically on
+  agent PRs once linked to `ABlueAgent`, BLUE-CHECKLIST.md step 16), second-opinion builder (builder lane
   planned in S26), and planning partner. Works in its own branch, never Claude's. Nothing in the workflow depends on it.
 - Plans and reviews happen in the repo (PRs, issues, these files), never by copying text between apps.
 
