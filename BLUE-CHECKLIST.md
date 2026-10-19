@@ -267,8 +267,11 @@ on its own, one session at a time on Pro.
   - Then open https://chatgpt.com/codex > Settings and check that `ABlueAI/AgentCommandCenter` is still
     listed with code review on and **Automatic reviews** on.
   - Expect: any comment by `ABlueAgent` that mentions Codex by its handle may now start a Codex task
-    on your Plus usage. AGENTS.md forbids agents to write that mention except to hand Codex a task on
-    purpose.
+    on your Plus usage. AGENTS.md forbids agents to write that mention unless you ask for it in your
+    own message, or, after session S26, when the runner hands Codex a session.
+  - Expect: if ChatGPT uses this same GitHub connection outside Codex (not verified), it now acts as
+    `ABlueAgent` everywhere, so repositories only `ABlueAI` can reach, such as a future private
+    business repo, drop out of ChatGPT and Codex. Session S26 checks this.
   - Expect: Codex's automatic reviews follow the linked account, so from now on they cover the agent's
     PRs. Going by step 13 (automatic reviews covered only the linked account's PRs, and Codex refused
     a request from an account not linked to ChatGPT), they will likely stop covering PRs you open as

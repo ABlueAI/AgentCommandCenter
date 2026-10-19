@@ -17,7 +17,7 @@ the change log.
 - **The all-day runner** (built in S04) fires many times a day on `main`. Each fire first fixes its own
   open PRs, then starts every `READY` session whose dependencies are merged and that nobody has
   claimed, up to the parallel cap. A session that needs Blue posts its question in the PR and the
-  runner moves on, so nothing waits idle. Until S04 is merged, today's runner (docs/RUNNER.md) fires
+  runner moves on, so nothing waits idle. Until S04 is merged and applied, today's runner (docs/RUNNER.md) fires
   once a day at 8:01 AM Eastern and runs one session at a time.
 - **Parallel work:** the cap is one setting (S04 puts it in docs/RUNNER.md): 1 on Claude Pro, 2 to 3 on
   Max 5x after Blue's upgrade on 2026-10-21, to stay under the weekly cap; 3 or 4 on Max 20x.
@@ -127,8 +127,9 @@ updates its own row.
    PRs to Codex. AGENTS.md "How work flows" step 3 has the builder run `pr-reviewer` itself, which
    Codex can't, so the S26 PR changes that step for Codex-built PRs (sensitive). Once Codex is linked
    to `ABlueAgent`, any comment by that account that mentions Codex by its handle may start a Codex
-   task. AGENTS.md "Security rules" already forbids writing it except to hand Codex a task on purpose
-   (this plan change). S26 re-checks how Codex reads mentions.
+   task. AGENTS.md "Security rules" forbids writing it except when Blue asks in his own message or,
+   once S26 is merged, for the runner's claim-issue hand-off (this plan change), so Codex builds
+   nothing before S26 unless Blue asks. S26 re-checks how Codex reads mentions.
 3. **How Codex starts.** Options, from official OpenAI docs read on 2026-10-19
    (developers.openai.com/codex; S26 re-checks them, plus which account Codex's PRs are attributed to
    and whether a Codex review could ever count as an approval, and then adds Codex to the "who can
