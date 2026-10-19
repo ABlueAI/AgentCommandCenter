@@ -252,8 +252,8 @@ on its own, one session at a time on Pro.
     environment variable (AGENTS.md "Security rules").
   - *Done when:* the S06 PR shows a pull request opened from a local Mako pane with `ABlueAgent` as its
     author. Claude checks that on GitHub; the S06 PR confirms the exact token scopes.
-- [ ] **16. Not yet: re-link Codex's GitHub to `ABlueAgent` (proposed in PR #47).** About 10
-  minutes. Do it only after session S04's new runner prompt is applied (the S04 PR's TLDR says when), and before
+- [ ] **16. Not yet: re-link Codex's GitHub to `ABlueAgent` (proposed in PR #47; not before S04's
+  prompt is applied; blocks S26).** About 10 minutes. Do it only after session S04's new runner prompt is applied (the S04 PR's TLDR says when), and before
   S26 (the runner won't start S26 until this is ticked). Waiting closes a gap: until then the live
   runner prompt says to post reviews "verbatim", and a quoted Codex handle could start a Codex task. Your decision of 2026-10-19: Codex builds as the agent account, so you can approve its PRs
   (expected; session S26 verifies which account Codex's PRs are attributed to).
@@ -298,8 +298,8 @@ on its own, one session at a time on Pro.
 You can start on the first one now, which saves time later.
 
 - **Session S28:** your agent-roles package (new role texts, from your agent-roles chat), as an issue
-  you open yourself as `ABlueAI`, titled `S28: agent-roles package` (agents ignore one opened by
-  anyone else), or hand it to an agent in its own session to open the PR. Not as a PR of your
+  you open yourself as `ABlueAI`, titled `S28: agent-roles package` (agents ignore one opened, or
+  edited, by anyone else), or hand it to an agent in its own session to open the PR. Not as a PR of your
   own: you can't approve your own PR, so it couldn't merge. S28 stays `NEEDS BLUE (package)` until
   it arrives.
 - **Session S27 (Composer):** your research and placement from the plan-review chat. S27 stays NEEDS
