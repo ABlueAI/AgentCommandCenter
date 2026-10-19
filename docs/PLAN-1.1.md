@@ -81,5 +81,5 @@ does both) · Vibe Kanban (removed in 1.0).
 
 - 2026-10-17: plan created (PR #27).
 - 2026-10-17: S04 start time set to 8:01 AM local, with the prerequisite check (Blue).
-- 2026-10-19: S01 marked DONE (#44). Evidence: agent PR #39 stayed blocked until Blue approved it (checklist 7f); the merge audit passed on the #41 merge (`8846eed`, checklist 12). Moving local agents to the agent account was not in S01's done-when and has no owning session yet (see STATUS.md).
 - 2026-10-18: step 8 (Max 5x) dropped from the runner's gate; it builds on Pro, one session at a time, until Blue upgrades on 2026-10-21 (Blue).
+- 2026-10-19: S01 marked DONE (#44). Evidence: agent PR #39 stayed blocked until Blue approved it (checklist 7f); the merge audit passed on the #41 merge (`8846eed`, checklist 12). Moving local agents to the agent account was not in S01's done-when and has no owning session yet (see STATUS.md).
