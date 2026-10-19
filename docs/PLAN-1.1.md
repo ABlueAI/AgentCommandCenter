@@ -19,7 +19,7 @@ Drafted 2026-10-17 by Claude for Blue. Approved when the PR that adds it is merg
 
 ### Status values
 
-`READY` · `IN PROGRESS (#45)` · `NEEDS BLUE (#PR)` · `DONE (#PR)` · `DROPPED (reason)`. The session's PR
+`READY` · `IN PROGRESS (#PR)` · `NEEDS BLUE (#PR)` · `DONE (#PR)` · `DROPPED (reason)`. The session's PR
 updates its own row.
 
 ### When the plan changes
