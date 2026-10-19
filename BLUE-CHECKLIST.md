@@ -235,7 +235,7 @@ on its own, one session at a time on Pro.
       connect to github" and didn't review. Codex ignores accounts not linked to ChatGPT.
   - Your choice (option 3): a separate Claude Opus reviewer replaces Codex as the required
     independent review, so Mako doesn't depend on ChatGPT. The builder runs the read-only `reviewer`
-    subagent (`.claude/agents/reviewer.md`) on its own PR before marking it ready, and posts the
+    subagent (`.claude/agents/pr-reviewer.md`) on its own PR before marking it ready, and posts the
     result as a PR comment headed "Independent review (Opus)". It fixes or answers every finding and
     re-runs it after fixes (AGENTS.md "How work flows" step 3, and the runner prompt).
   - Codex review is optional now. You can still request one by hand, but nothing waits for it.

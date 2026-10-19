@@ -35,7 +35,7 @@ Updated 2026-10-19 by Claude. Every PR that changes the state updates this file.
     (checklist step 12, verified 2026-10-19).
   - Independent review: Codex reviews only PRs Blue authors, its "All PRs" setting won't save, and
     it ignores review requests from `ABlueAgent` (tested on PR #42). Blue chose a separate Claude
-    Opus reviewer instead (checklist step 13). Builders run the read-only `reviewer` subagent on
+    Opus reviewer instead (checklist step 13). Builders run the read-only `pr-reviewer` subagent on
     their own PR and post "Independent review (Opus)" before marking it ready. Codex is optional.
 - **Daily runner:** scheduled for 8:01 AM Eastern from 2026-10-18 ([docs/RUNNER.md](docs/RUNNER.md)).
   The repository was attached on 2026-10-18 (step 7e), and its gate (steps 1 and 7) now passes, so
