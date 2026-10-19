@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-19 by Claude (step 14 added for S06's agent token).
+Last updated 2026-10-19 by Claude (step 15 added: token hygiene).
 
 ## Today
 
@@ -251,6 +251,43 @@ on its own, one session at a time on Pro.
     environment variable (AGENTS.md "Security rules").
   - *Done when:* the S06 PR shows a pull request opened from a local Mako pane with `ABlueAgent` as its
     author. Claude checks that on GitHub; the S06 PR confirms the exact token scopes.
+- [ ] **15. Token hygiene: find old tokens, and rules for any new one.** About 20 minutes, this week.
+  - **a. Audit old tokens, on both `ABlueAI` and `ABlueAgent`** (sign in to each in turn). A lost
+    token's value can't be recovered: GitHub shows a token only once, but it lists every token with
+    its last-used date.
+    - Classic tokens: https://github.com/settings/tokens
+    - Fine-grained tokens: https://github.com/settings/personal-access-tokens
+    - Authorized apps: https://github.com/settings/applications
+    - SSH keys: https://github.com/settings/keys
+    - Revoke anything you don't recognize or that hasn't been used for months.
+    - Do the same for API keys at https://platform.openai.com/api-keys and https://console.anthropic.com
+      (API keys page).
+    - If something breaks after a revoke, make a fresh, narrower token by the rules in b.
+  - **b. Rules for every new token**, including step 14's and any future token that posts Codex
+    review comments:
+    - Fine-grained only, limited to one repository, with the fewest permissions that do the job.
+    - A token of `ABlueAI` must never have **Pull requests: write**: it could submit an Approve as
+      you and defeat the `protect-main` ruleset. **Issues: read and write** is enough to comment on
+      PRs.
+    - Paste it straight from GitHub's token page into its one destination: Mako's key setup, or a
+      GitHub environment secret restricted to `main`. Never into any AI chat (Claude included), a
+      file, this repo, or `setx`.
+    - A secret a repo workflow uses goes in a GitHub environment whose deployment branches are
+      `main` only, and that workflow must never check out or run code from a PR.
+    - Expiry 90 days (1 year at most). Whoever sets it up adds a dated renewal reminder under "Dated
+      reminders" below.
+    - Saving it in Bitwarden is optional. Not storing it at all, and making a new one when it
+      expires, is also fine.
+    - If it might have leaked: GitHub > Settings > Developer settings > Personal access tokens >
+      Fine-grained tokens > the token > **Revoke**, then tell Claude.
+  - **c. Turn on push protection.** Signed in as `ABlueAI`: repo Settings > Code security > Secret
+    scanning (it may be labelled Secret Protection) > **Push protection** > Enable. It is free for
+    public repositories and blocks pushes that contain a recognizable secret. This is your click;
+    agents never change repository settings.
+  - *Done when:* you say the audit is done and push protection shows enabled. Claude then tries to
+    confirm push protection through GitHub's API (`security_and_analysis` on the repository). GitHub
+    shows that field only to repository admins, and agents have write access, so Claude expects not
+    to be able to read it; it says so and ticks this on your word.
 
 ## Every day, once the runner is on
 
