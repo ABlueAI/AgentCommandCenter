@@ -7,8 +7,14 @@
 // branch (a stacked PR) and later reached main through a PR whose merge commit is the only one GitHub
 // associates with it (issue #35). A commit no merged-to-main PR covers is still an alert.
 //
+// GitHub's commit-to-PR association can also come back empty for a PR that did merge into main: it
+// did for PR #39, the first PR authored by the agent account, and was still empty 10 minutes later
+// (issue #40). So when a commit has no associated PR, the audit also looks for a PR merged into main
+// whose merge commit is that commit, then covers that PR's own commits as above.
+//
 // `api` is injected so the workflow passes GitHub's REST client and tests pass fixtures:
 //   prsForCommit(sha)    -> [{ number, merged_at, base: { ref } }]
+//   recentPrsIntoMain()  -> [{ number, merged_at, base: { ref }, merge_commit_sha }] (closed PRs, newest first)
 //   prCommits(number)    -> [sha]
 //   getPr(number)        -> { user: { login }, merged_by: { login } | null }
 //   prReviews(number)    -> [{ user: { login } | null, state }]
@@ -30,6 +36,16 @@ async function auditPush({ shas, human, api }) {
       if (!pr.merged_at || !pr.base || pr.base.ref !== BASE) continue;
       mergedPrs.set(pr.number, pr);
       covered.add(sha);
+    }
+  }
+
+  const unassociated = shas.filter((sha) => !covered.has(sha));
+  if (unassociated.length > 0) {
+    for (const pr of await api.recentPrsIntoMain()) {
+      if (!pr.merged_at || !pr.base || pr.base.ref !== BASE) continue;
+      if (!unassociated.includes(pr.merge_commit_sha)) continue;
+      mergedPrs.set(pr.number, pr);
+      covered.add(pr.merge_commit_sha);
     }
   }
 
@@ -55,11 +71,15 @@ async function auditPush({ shas, human, api }) {
   return problems;
 }
 
-// Adapter from actions/github-script's `github` client. Every list is paginated.
+// Adapter from actions/github-script's `github` client. Every list is paginated except
+// recentPrsIntoMain, which reads the 100 most recently updated closed PRs: a PR that just merged is
+// among them, and a commit it misses still alerts.
 function githubApi(github, { owner, repo }) {
   return {
     prsForCommit: (commit_sha) =>
       github.paginate(github.rest.repos.listPullRequestsAssociatedWithCommit, { owner, repo, commit_sha, per_page: 100 }),
+    recentPrsIntoMain: async () =>
+      (await github.rest.pulls.list({ owner, repo, state: 'closed', base: BASE, sort: 'updated', direction: 'desc', per_page: 100 })).data,
     prCommits: async (pull_number) =>
       (await github.paginate(github.rest.pulls.listCommits, { owner, repo, pull_number, per_page: 100 })).map((c) => c.sha),
     getPr: async (pull_number) => (await github.rest.pulls.get({ owner, repo, pull_number })).data,

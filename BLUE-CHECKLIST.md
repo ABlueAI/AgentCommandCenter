@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-19 by Claude (step 7 verified as the agent account; 7c clarified; 7f added).
+Last updated 2026-10-19 by Claude (step 12 added: close the false alert #40 after the audit fix merges).
 
 ## Today
 
@@ -207,6 +207,19 @@ on its own, one session at a time on Pro.
     arrived via PR #34 (37009eb), merged by ABlueAI; audit fixed in #37", then **Close issue**.
   - Agents never close security alerts themselves.
   - *Done when:* issue #35 shows Closed, and the merge audit run for that merge passed with no new
+    alert. Claude checks both.
+
+- [ ] **12. Close the false security alert, issue #40.** 1 minute, right after you merge the
+  merge-audit fix PR (the one that adds this step).
+  - Why it's false: #40 says PR #39's commits reached `main` without a merged PR. They didn't: #39
+    holds exactly `281de31` and `a0798d0`, you approved `a0798d0`, and you merged it as `0b6d432`.
+    GitHub's commit-to-PR lookup, which the audit relied on, came back empty for all three and was
+    still empty 10 minutes later. The fix also checks the merge commit of each PR merged into `main`.
+  - Open https://github.com/ABlueAI/AgentCommandCenter/issues/40, comment "False alarm: commits
+    came via PR #39 (merge 0b6d432), approved and merged by ABlueAI. Audit fixed in the follow-up
+    PR", then **Close issue**.
+  - Agents never close security alerts themselves.
+  - *Done when:* #40 shows Closed, and the merge audit run for the fix's merge passed with no new
     alert. Claude checks both.
 
 ## Every day, once the runner is on
