@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-19 by Claude (steps 9 and 12 ticked; step 13: agents request Codex reviews themselves).
+Last updated 2026-10-19 by Claude (steps 9 and 12 ticked; step 13: Opus reviewer replaces Codex).
 
 ## Today
 
@@ -224,36 +224,22 @@ on its own, one session at a time on Pro.
   - Agents never close security alerts themselves.
   - *Done when:* #40 shows Closed, and the merge audit run for the fix's merge passed with no new
     alert. Claude checks both.
-- [ ] **13. Let Codex review agent PRs.** Blocked: needs your choice of the next option (below).
-  - What was found (2026-10-19): Codex reviewed every PR you authored with trigger "PR opened"
-    (#36 to #38), but skipped #39 and reviewed #41 only after your manual comment ("Manual
-    request"). Both #39 and #41 were authored by `ABlueAgent`.
-  - The repo's Codex setting (chatgpt.com/codex > Settings > Code review >
-    `ABlueAI/AgentCommandCenter`) shows Review = "Follow personal preferences", Trigger = "On PR
-    open". Changing Review to "All PRs" fails with "Unable to save repository settings. Try again."
-    (Blue, 2026-10-19, after refreshing and reloading).
-  - You declined re-linking Codex's GitHub to `ABlueAgent`.
-  - Tried: agents request the review themselves by commenting `@codex review` on their own PRs
-    (AGENTS.md "How work flows" step 2 and the runner prompt in docs/RUNNER.md, added in PR #42).
-  - **Result: FAIL.** On PR #42, `ABlueAgent` commented `@codex review` at 05:19:44 UTC; four seconds
-    later Codex replied "To use Codex here, create a Codex account and connect to github" and did
-    not review. Codex only honors requests from a GitHub account linked to a Codex account. The
-    rule stays in AGENTS.md as the record of the attempt; agents report the missing review in the
-    TLDR's review line.
-  - Next options (you never type the comment in any of them):
-    1. **Recommended: a workflow posts the request as you.** A GitHub Actions workflow on
-       `pull_request_target` (opened, ready for review) comments `@codex review` using a
-       fine-grained token for `ABlueAI`, limited to this repo with only **Issues: read and write**
-       (enough to comment, not to approve or merge). `pull_request_target` runs the workflow from
-       `main`, so an agent PR can't change what the token does. About 5 minutes for you, once:
-       create the token and add it as a repository secret. Sensitive (a credential and a CI
-       workflow), so it needs its own PR and your approval first.
-    2. A different independent reviewer, which AGENTS.md already allows: a separate Claude review
-       session on each agent PR. Nothing for you to set up, but it's not a second model.
-    3. Give `ABlueAgent` its own ChatGPT/Codex account. A new account, and possibly a paid plan,
-       so only if you want it.
-  - Optional for you: report the save error to OpenAI (Codex help or chatgpt.com support).
-  - *Done when:* an agent PR gets an independent review without you typing anything. Claude checks.
+- [ ] **13. Independent review for agent PRs.** Nothing more to do: done when you merge PR #42.
+  - What was found (2026-10-19):
+    - Codex reviewed every PR you authored automatically ("PR opened", #36 to #38), but skipped #39
+      and reviewed #41 only after your manual comment. Both were authored by `ABlueAgent`.
+    - The repo's Codex setting shows Review = "Follow personal preferences". Changing it to "All
+      PRs" fails with "Unable to save repository settings. Try again."
+    - Agents requesting the review themselves (`@codex review` from `ABlueAgent` on PR #42):
+      **FAIL**. Four seconds later Codex replied "To use Codex here, create a Codex account and
+      connect to github" and didn't review. Codex ignores accounts not linked to ChatGPT.
+  - Your choice (option 3): a separate Claude Opus reviewer replaces Codex as the required
+    independent review, so Mako doesn't depend on ChatGPT. The builder runs the read-only `reviewer`
+    subagent (`.claude/agents/reviewer.md`) on its own PR before marking it ready, and posts the
+    result as a PR comment headed "Independent review (Opus)". It fixes or answers every finding and
+    re-runs it after fixes (AGENTS.md "How work flows" step 3, and the runner prompt).
+  - Codex review is optional now. You can still request one by hand, but nothing waits for it.
+  - *Done when:* PR #42 merges. It was proven on #42 itself; its TLDR links the review comment.
 
 ## Every day, once the runner is on
 
