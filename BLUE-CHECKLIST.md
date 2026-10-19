@@ -260,10 +260,12 @@ on its own, one session at a time on Pro.
     - Authorized apps: https://github.com/settings/applications
     - SSH keys: https://github.com/settings/keys
     - Revoke anything you don't recognize or that hasn't been used for months.
-    - Keep these until step 14 (session S06) replaces them: the Git login on your PC that local
-      agents push with today (often listed as **Git Credential Manager** or **GitHub CLI** under
-      authorized apps), and the Claude and ChatGPT/Codex entries. Revoking them breaks local pushes
-      or step 7c, and a new token doesn't bring an app link back.
+    - Keep the Git login on your PC that local agents push with today (often listed as **Git
+      Credential Manager** or **GitHub CLI** under authorized apps) until step 14 (session S06)
+      replaces it; revoking it breaks local pushes.
+    - Keep the Claude and ChatGPT/Codex entries for as long as you use them: revoking Claude's link
+      on `ABlueAgent` breaks cloud sessions (step 7c), and revoking Codex on `ABlueAI` breaks Codex
+      review (step 2e). A new token doesn't bring an app link back.
     - Do the same for API keys at https://platform.openai.com/api-keys,
       https://console.anthropic.com (API keys page) and https://aistudio.google.com/apikey (Gemini,
       the key Mako's Video Scout uses; also Google Cloud > APIs & Services > Credentials if you made
@@ -272,10 +274,11 @@ on its own, one session at a time on Pro.
   - **b. Rules for every new token**, including step 14's:
     - GitHub tokens: fine-grained only, limited to one repository, with the fewest permissions that
       do the job. Other keys: the fewest permissions the provider offers.
-    - A token of `ABlueAI` must never have **Pull requests: write**: it could submit an Approve as
-      you and defeat the `protect-main` ruleset. For commenting on PRs, **Issues: read and write**
-      should be enough (from community sources; not yet checked against GitHub's docs, so the PR
-      that creates such a token confirms it).
+    - A token of `ABlueAI` must never have **Pull requests: write** (it could submit an Approve as
+      you and defeat the `protect-main` ruleset), nor **Contents: write**, **Administration** or
+      **Workflows** (it could push or merge as you, edit the ruleset, or change CI). For commenting
+      on PRs, **Issues: read and write** should be enough (from community sources; not yet checked
+      against GitHub's docs, so the PR that creates such a token confirms it).
     - Any `ABlueAI` token that automation or an agent would use, such as one that posts Codex review
       comments, needs its own PR and your decision first. Its comments would look exactly like
       yours, and with Issues write it could also close the merge audit's security-alert issues.
@@ -284,13 +287,15 @@ on its own, one session at a time on Pro.
       is optional, below): Mako's key setup, or a GitHub environment secret restricted to `main`.
       Never into any AI chat (Claude included), a file, this repo, or `setx`.
     - Today Mako's key setup stores only the Gemini key; S06 adds a place for a GitHub token. Until
-      then, make no GitHub token for your PC other than step 14's, and follow step 14 for that one.
+      then, make no GitHub token for your PC other than step 14's. If you make step 14's token
+      before S06 asks for it, it waits only in Bitwarden, then goes into Mako's key setup in S06.
     - A secret a repo workflow uses goes in a GitHub environment whose deployment branches are
       `main` only, and that workflow must never check out or run code from a PR.
     - Expiry 90 days (1 year at most). Whoever sets it up adds a dated renewal reminder under "Dated
       reminders" below.
     - Saving a copy in Bitwarden is optional for these tokens. Not storing one at all, and making a
-      new one when it expires, is also fine.
+      new one when it expires, is also fine. For new tokens and keys this replaces step 9's "API
+      keys go in Bitwarden secure notes".
     - If it might have leaked: GitHub > Settings > Developer settings > Personal access tokens >
       Fine-grained tokens > the token > **Revoke**, then tell Claude.
   - **c. Turn on push protection.** Signed in as `ABlueAI`: repo Settings > Code security (it may be
