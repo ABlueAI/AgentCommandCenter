@@ -21,8 +21,10 @@ Rules for all agents are in [AGENTS.md](../AGENTS.md). This page is the short ve
 
 ## Codex / GPT
 
-- Optional reviewer when Blue requests one by hand, second-opinion builder, planning partner.
-  Nothing in the workflow depends on it.
+- Optional reviewer when Blue requests one by hand (and, expected, automatically on agent PRs once
+  linked to `ABlueAgent`, BLUE-CHECKLIST.md step 16), second-opinion builder (builder lane planned in
+  S26), planning partner. Nothing in the workflow depends on it. AGENTS.md "Who does what" is the
+  full version.
 - Reads the same files Claude reads (`AGENTS.md`, `STATUS.md`, `docs/PLAN-1.1.md`,
   `docs/DECISIONS.md`). Proposes plan changes as PRs, not as chat to be copied.
 - Never shares a worktree or branch with Claude.
