@@ -267,8 +267,10 @@ on its own, one session at a time on Pro.
   - Then open https://chatgpt.com/codex > Settings and check that `ABlueAI/AgentCommandCenter` is still
     listed with code review on and **Automatic reviews** on.
   - Expect: any comment by `ABlueAgent` that mentions Codex by its handle may now start a Codex task
-    on your Plus usage. AGENTS.md forbids agents to write that mention unless you ask for it in your
-    own message, or, after session S26, when the runner hands Codex a session.
+    on your Plus usage. AGENTS.md forbids agents to write that mention unless you ask for it (in a
+    comment as `ABlueAI` or in your own message to the agent), or, after session S26, when the runner
+    hands Codex a session. Nothing enforces that rule, so a mistaken agent comment could still start
+    a Codex task that pushes a branch; it can't merge.
   - Expect: if ChatGPT uses this same GitHub connection outside Codex (not verified), it now acts as
     `ABlueAgent` everywhere, so repositories only `ABlueAI` can reach, such as a future private
     business repo, drop out of ChatGPT and Codex. Session S26 checks this.
@@ -276,7 +278,8 @@ on its own, one session at a time on Pro.
     PRs. Going by step 13 (automatic reviews covered only the linked account's PRs, and Codex refused
     a request from an account not linked to ChatGPT), they will likely stop covering PRs you open as
     `ABlueAI`, and a review request you comment as `ABlueAI` will likely fail. To get a Codex review
-    by hand after this, ask an agent to post the request.
+    by hand after this, ask an agent to post the request: comment on the PR as `ABlueAI`, or tell the
+    agent in its own session.
   - *Done when:* the next agent PR gets a Codex review without anyone commenting. Claude checks the
     PR on GitHub and ticks this with the date.
 

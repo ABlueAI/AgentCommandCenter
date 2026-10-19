@@ -85,8 +85,10 @@ The merge audit workflow opens a `security-alert` issue if anything reaches main
   `ABlueAgent` (BLUE-CHECKLIST.md step 16, proposed in PR #47, after which session S26 lets Codex
   build). The re-link gives Codex's OAuth grant the agent's write access instead of Blue's. From the
   re-link on, any `ABlueAgent` comment containing Codex's handle may start a Codex task that can
-  push. AGENTS.md forbids agents to write the handle unless Blue asks in his own message (and, after
-  S26, for the runner's hand-off), so until S26 Codex builds only when Blue asks. S26 is the
+  push. AGENTS.md forbids agents to write the handle unless Blue asks (a comment by `ABlueAI`, or his
+  own message to the agent) or, after S26, for the runner's hand-off. That is a rule, not a
+  control: a mistaken or injected agent comment could still start a Codex task that pushes a branch.
+  Merging still needs Blue's approval. S26 is the
   first planned Codex build: it checks the open questions at the end of this item first and adds
   Codex to the table above. Until the re-link, Codex stays linked to `ABlueAI`, not to the restricted agent account. Its review comments on this repo appear as
   `chatgpt-codex-connector[bot]` (seen on PR #42). A branch or PR it created through that link would

@@ -21,7 +21,7 @@ the change log.
   once a day at 8:01 AM Eastern and runs one session at a time.
 - **Parallel work:** the cap is one setting (S04 puts it in docs/RUNNER.md): 1 on Claude Pro, 2 to 3 on
   Max 5x after Blue's upgrade on 2026-10-21, to stay under the weekly cap; 3 or 4 on Max 20x.
-- **Blue's day:** once S04 is merged, one sitting in the evening, 10 to 20 minutes: read the digest,
+- **Blue's day:** once S04 is merged and applied, one sitting in the evening, 10 to 20 minutes: read the digest,
   answer anything marked "needs Blue", then approve and merge every PR that is ready.
 
 ### Status values
@@ -127,9 +127,9 @@ updates its own row.
    PRs to Codex. AGENTS.md "How work flows" step 3 has the builder run `pr-reviewer` itself, which
    Codex can't, so the S26 PR changes that step for Codex-built PRs (sensitive). Once Codex is linked
    to `ABlueAgent`, any comment by that account that mentions Codex by its handle may start a Codex
-   task. AGENTS.md "Security rules" forbids writing it except when Blue asks in his own message or,
-   once S26 is merged, for the runner's claim-issue hand-off (this plan change), so Codex builds
-   nothing before S26 unless Blue asks. S26 re-checks how Codex reads mentions.
+   task. AGENTS.md "Security rules" forbids writing it unless a comment by `ABlueAI` or Blue's own
+   message to the agent asks, or, once S26 is merged, for the runner's claim-issue hand-off (this plan
+   change). Nothing enforces that technically, so S26 treats it as a rule, not a control. S26 re-checks how Codex reads mentions.
 3. **How Codex starts.** Options, from official OpenAI docs read on 2026-10-19
    (developers.openai.com/codex; S26 re-checks them, plus which account Codex's PRs are attributed to
    and whether a Codex review could ever count as an approval, and then adds Codex to the "who can
@@ -140,6 +140,9 @@ updates its own row.
      can push to the branch. The docs call this path a "legacy cloud chat", so it may change.
    - (c) **The Codex GitHub Action** needs a paid OpenAI API key: new spending, rejected.
    - (d) **ChatGPT's event-triggered tasks** run on the web; not verified for coding work.
+
+   Not verified: whether a mention on an issue, as opposed to a PR, starts a task; if it doesn't,
+   the runner opens a draft claim PR instead of an issue.
 
    Pick: (b). The runner posts the at-codex task comment as `ABlueAgent` on the claim issue, so Codex
    works while Blue's PC is off. Add (a) for work that needs a real Windows check once S06 has moved
@@ -175,4 +178,4 @@ does both) · Vibe Kanban (removed in 1.0).
 - 2026-10-18: step 8 (Max 5x) dropped from the runner's gate; it builds on Pro, one session at a time, until Blue upgrades on 2026-10-21 (Blue).
 - 2026-10-19: S06 gains the local-agent account move (proposed, pending Blue; PR #44).
 - 2026-10-19: S01 marked DONE (#44). Evidence: agent PR #39 stayed blocked until Blue approved it (checklist 7f); the merge audit passed on the #41 merge (`8846eed`, checklist 12). Moving local agents to the agent account was not in S01's done-when, so it is added to S06 (plan change, pending Blue).
-- 2026-10-19 (proposed, pending Blue): S04 rewritten from "Daily runner and digest" into "All-day runner and digest", after Blue asked for a runner that works all day while he reviews and merges once in the evening (docs/DECISIONS.md, 2026-10-19). S04's Needs change from "S01, S03" to "S01": the runner reads this table and open PRs and issues on GitHub, not S03's board, which only mirrors them, so S04 can run next and S03 in parallel. "How this plan runs" now describes the all-day runner and the evening sitting. New session S26 "Codex builder lane" (needs S04 and checklist step 16, Blue's Codex re-link), so this month now has 26 sessions instead of 25. The parallel cap on Max 5x goes from "at most 2" to 2, then 3 after a week of usage shows room. AGENTS.md: once S04 is merged, session PRs stop editing STATUS.md, to avoid conflicts between parallel PRs; on merge, a checklist-numbering rule and a rule against writing Codex's handle in GitHub text.
+- 2026-10-19 (proposed, pending Blue): S04 rewritten from "Daily runner and digest" into "All-day runner and digest", after Blue asked for a runner that works all day while he reviews and merges once in the evening (docs/DECISIONS.md, 2026-10-19). S04's Needs change from "S01, S03" to "S01": the runner reads this table and open PRs and issues on GitHub, not S03's board, which only mirrors them, so S04 can run next and S03 in parallel. "How this plan runs" now describes the all-day runner and the evening sitting. New session S26 "Codex builder lane" (needs S04 and checklist step 16, Blue's Codex re-link), so this month now has 26 sessions instead of 25. The parallel cap on Max 5x goes from "at most 2" to 2, then 3 after a week of usage shows room. AGENTS.md: once S04 is merged and applied, session PRs stop editing STATUS.md, to avoid conflicts between parallel PRs; on merge, a checklist-numbering rule and a rule against writing Codex's handle in GitHub text.
