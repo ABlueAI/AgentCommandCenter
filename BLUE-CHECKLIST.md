@@ -271,8 +271,8 @@ on its own, one session at a time on Pro.
     listed with code review on and **Automatic reviews** on.
   - Expect: any comment by `ABlueAgent` that mentions Codex by its handle may now start a Codex task
     on your Plus usage. AGENTS.md forbids agents to write that mention unless you ask for it (in a
-    comment as `ABlueAI` or in your own message to the agent), or, after session S26, when the runner
-    hands Codex a session. Nothing enforces that rule, so a mistaken agent comment could still start
+    comment as `ABlueAI` or in your own message to the agent); session S26 may add the runner's
+    hand-off as an exception. Nothing enforces that rule, so a mistaken agent comment could still start
     a Codex task that pushes a branch; it can't merge.
   - Expect: if ChatGPT uses this same GitHub connection outside Codex (not verified), it now acts as
     `ABlueAgent` everywhere, so repositories only `ABlueAI` can reach, such as a future private

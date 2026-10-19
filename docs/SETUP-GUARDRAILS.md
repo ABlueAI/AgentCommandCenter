@@ -31,7 +31,8 @@ personal approval.
 5. **Codex reviews (optional since 2026-10-19).** The required independent review is now the
    `pr-reviewer` subagent the builder runs on its own PR (AGENTS.md "How work flows" step 3,
    `.claude/agents/pr-reviewer.md`). Codex reviewed your PRs automatically but not the agent's
-   (#39, #41), so it's an extra you can request by hand. If you keep it: chatgpt.com/codex > Settings > Code review, enable it for
+   (#39, #41), so it's an extra you can request by hand. After BLUE-CHECKLIST.md step 16, ask an agent
+   to post the request (AGENTS.md step 3). If you keep it: chatgpt.com/codex > Settings > Code review, enable it for
    `ABlueAI/AgentCommandCenter`. When GitHub asks which
    repositories the app may access, choose **Only select repositories**, not all: every repository an
    AI app can reach is one a prompt injection can reach, and future private business repos should be
@@ -88,7 +89,7 @@ The merge audit workflow opens a `security-alert` issue if anything reaches main
   rather than the linked user's token, so S26 checks which one it uses. From the
   re-link on, any `ABlueAgent` comment containing Codex's handle may start a Codex task that can
   push. AGENTS.md forbids agents to write the handle unless Blue asks (a comment by `ABlueAI`, or his
-  own message to the agent) or, after S26, for the runner's hand-off. That is a rule, not a
+  own message to the agent); S26 may add the runner's hand-off as an exception. That is a rule, not a
   control: a mistaken or injected agent comment could still start a Codex task that pushes a branch.
   Merging still needs Blue's approval. S26 is the
   first planned Codex build: it checks the open questions at the end of this item first and adds
