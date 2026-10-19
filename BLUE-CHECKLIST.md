@@ -155,7 +155,10 @@ on its own, one session at a time on Pro.
     schedule and prompt as they are. Without this the runner can check the gate but cannot open pull
     requests (seen on its first run, 2026-10-18). If the routine can't be edited, tell Claude and it
     will walk you through recreating it with the prompt in docs/RUNNER.md.
-  - [ ] **f. Run the checker session** (5 minutes, after a to e). Open https://claude.ai/code, select
+  - [x] **f. Run the checker session** (5 minutes, after a to e). *Verified 2026-10-19: the checker
+    opened PR #39 as `ABlueAgent`; GitHub requested `ABlueAI` as code owner, and after both Windows
+    checks passed (03:53 UTC) it still showed the PR as blocked, with no review yet. Your Approve
+    and Merge of #39 is the last click.* Open https://claude.ai/code, select
     `ABlueAI/AgentCommandCenter`, paste the checker prompt Claude gave you, and let it run. It checks
     the items above as the agent account and opens one small PR. When that PR's CI is green, approve
     it (Files changed > Review changes > Approve > Submit review), then **Merge**.
