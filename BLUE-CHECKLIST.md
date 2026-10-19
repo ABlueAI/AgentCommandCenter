@@ -263,7 +263,8 @@ on its own, one session at a time on Pro.
   - In that same window, sign in to https://chatgpt.com with your **own** ChatGPT account. Don't make a
     new one.
   - Settings > Apps (or Connectors) > GitHub > **Disconnect**, then **Connect**, and authorize as
-    `ABlueAgent`.
+    `ABlueAgent`. (Menu path not verified, because OpenAI's docs were blocked when this was written;
+    if it differs, stop and tell an agent.)
   - If it offers to install the ChatGPT/Codex GitHub app on `ABlueAgent`, skip it. The agent owns no
     repositories, and the app stays installed on `ABlueAI/AgentCommandCenter` from step 2e.
   - Then open https://chatgpt.com/codex > Settings and check that `ABlueAI/AgentCommandCenter` is still
