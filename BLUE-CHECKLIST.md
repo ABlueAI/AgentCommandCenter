@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-19 by Claude (steps 9, 12 and 13 ticked; Opus reviewer replaces Codex).
+Last updated 2026-10-19 by Claude (step 13 ticked; step 14 approved with PR #44).
 
 ## Today
 
@@ -244,6 +244,17 @@ on its own, one session at a time on Pro.
     re-runs it after fixes (AGENTS.md "How work flows" step 3, and the runner prompt).
   - Codex review is optional now. You can still request one by hand, but nothing waits for it.
   - *Done when:* PR #42 merges with its "Independent review (Opus)" comment linked in the TLDR.
+- [ ] **14. Agent token for local agents (approved with PR #44, merged 2026-10-19).** About 10
+  minutes, any time before session S06 (the runner won't start S06 until this is ticked). Today local
+  agents on your PC push as `ABlueAI`, the account that can approve and merge.
+  - Signed in as `ABlueAgent`: GitHub > Settings > Developer settings > Personal access tokens >
+    Fine-grained tokens > Generate. Limit it to `ABlueAI/AgentCommandCenter`, with Contents and Pull
+    requests set to Read and write and nothing else (no admin, no workflow or settings access), and a
+    90-day expiry.
+  - Paste it only into Mako's in-app key setup (Electron safeStorage). Never `setx` or a Windows
+    environment variable (AGENTS.md "Security rules").
+  - *Done when:* the S06 PR shows a pull request opened from a local Mako pane with `ABlueAgent` as its
+    author. Claude checks that on GitHub; the S06 PR confirms the exact token scopes.
 
 ## Every day, once the runner is on
 
