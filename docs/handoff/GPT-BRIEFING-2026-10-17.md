@@ -119,8 +119,9 @@ unmerged one steers nothing.
   does not run on native Windows, only WSL2.
 - **Codex reviews GitHub PRs automatically** and can fix findings (at-codex fix it). Claude's managed
   Code Review is Team/Enterprise only.
-- **Claude Routines** run scheduled or GitHub-triggered cloud sessions (research preview, with usage
-  limits; see docs/PLAN-1.1.md S04 item 1 for the limits read on 2026-10-19). Claude Remote Control and the open-source Happy app give phone check-ins and alerts.
+- **Claude Routines** run scheduled or GitHub-triggered cloud sessions (research preview, with daily
+  caps; the routines page read on 2026-10-19 lists only hourly limits, and S04 confirms which holds,
+  docs/PLAN-1.1.md S04 item 1). Claude Remote Control and the open-source Happy app give phone check-ins and alerts.
 - **Usage visibility:** `/usage` in Claude Code, or ccusage.
 - **Conclusion:** don't rebuild orchestration inside Electron. Mako becomes the local cockpit (voice,
   Video Scout, Quick Links, local panes, status) and connects to these tools.
