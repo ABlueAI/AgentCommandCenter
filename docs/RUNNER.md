@@ -39,7 +39,7 @@ scheduled task. The runner itself never edits its own schedule or prompt.
 
 Pending: step 4's review instruction (the pr-reviewer subagent and its "Independent review (Opus)"
 comment) comes from PR #42. It reaches the scheduled task only after Blue merges that PR and an
-interactive session applies the prompt.
+interactive session applies the prompt. That session deletes this note in its own PR.
 
 ## Current prompt (verbatim)
 
