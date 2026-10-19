@@ -298,7 +298,7 @@ on its own, one session at a time on Pro.
 You can start on the first one now, which saves time later.
 
 - **Session S28:** your agent-roles package (new role texts, from your agent-roles chat). Until it's
-  in the repo, the runner marks S28 NEEDS BLUE and moves on.
+  in the repo, the runner sets S28 to `NEEDS BLUE (package)` and moves on.
 - **Session S27 (Composer):** your research and placement from the plan-review chat. S27 stays NEEDS
   BLUE until then.
 - **Session S14:** UI examples. Screenshots or links of designs you like. **Start a folder now.**

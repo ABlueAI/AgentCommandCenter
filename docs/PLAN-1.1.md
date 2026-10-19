@@ -27,8 +27,8 @@ alert in S04 and S11. Details below the session table and in the change log.
 
 ### Status values
 
-`READY` · `IN PROGRESS (#PR)` · `NEEDS BLUE (#PR)` · `DONE (#PR)` · `DROPPED (reason)`. The session's PR
-updates its own row.
+`READY` · `IN PROGRESS (#PR)` · `NEEDS BLUE (#PR)` (or `NEEDS BLUE (reason)` before any PR exists) ·
+`DONE (#PR)` · `DROPPED (reason)`. The session's PR updates its own row.
 
 ### When the plan changes
 
@@ -46,7 +46,7 @@ updates its own row.
 | S03 | **Plan to issues.** Labels (authority, lane, plan-change, needs-blue, sensitive, security-alert), task issue template, "1.1 Month 1" milestone, a GitHub Project board (Ready, Running, Needs Blue, Ready to merge, Done), and a workflow that keeps one issue per session in sync with this file. | Board mirrors this table automatically. | Max | cloud | S01 | READY |
 | S04 | **All-day runner and digest.** The runner fires through the day: it fixes its own open PRs, then starts every unclaimed READY session up to a parallel cap, stops cleanly at a usage limit and resumes on a later fire, and sends one evening digest. Details below the table. | Two consecutive days run unattended through multiple fires; a usage-limit stop resumes on its own on a later fire; the digest arrives both evenings. | High | blue | S01 | READY |
 | S26 | **Codex builder lane.** Codex, linked to `ABlueAgent`, builds sessions as a second builder: it claims a session before starting, so Claude and Codex never take the same one, follows AGENTS.md, and gets the same Opus review plus Codex's automatic review. Details below the table. | One session built end to end by Codex: a PR authored by `ABlueAgent` from a `codex/` branch with no Claude builder on it, an Opus review and a Codex automatic review, merged by Blue. | High | cloud | S04, checklist step 16 (Codex re-linked to `ABlueAgent`) | READY |
-| S28 | **Agent profile refresh.** Update the bodies of agent-roles/*.md from Blue's package (details from his agent-roles chat); a change to frontmatter tools or permissions is sensitive. Run the role tests, then deploy with scripts/sync-roles.ps1. If the package isn't ready, mark NEEDS BLUE and move on. | Role tests pass in CI (app/role-frontmatter.test.js, app/role-fence-policy.test.js, scripts/sync-roles.Tests.ps1); scripts/sync-roles.ps1 deploys on Blue's PC and Blue confirms the roles launch. | High | blue | S01, Blue's agent-roles package | READY |
+| S28 | **Agent profile refresh.** Update the bodies of agent-roles/*.md from Blue's package (details from his agent-roles chat); a change to frontmatter tools or permissions is sensitive. Run the role tests, then deploy with scripts/sync-roles.ps1. If the package isn't ready, set the row to `NEEDS BLUE (package)` and move on. | Role tests pass in CI (app/role-frontmatter.test.js, app/role-fence-policy.test.js, scripts/sync-roles.Tests.ps1); scripts/sync-roles.ps1 deploys on Blue's PC and Blue confirms the roles launch. | High | blue | S01, Blue's agent-roles package | READY |
 | S05 | **Needs-you alerts.** Windows notification when a Mako pane needs input or a turn ends; setup note for phone alerts through Claude Remote Control. | Toast appears on a real Claude pane; phone alert documented. | Medium | windows | S01 | READY |
 | S06 | **Process cleanup and link hardening.** Kill the whole process tree when a pane or Mako closes (the node-pty limitation); route the old `open-external` handler through the Quick Links URL policy; move local agents on Blue's PC from his git login to the `ABlueAgent` account (Mako already injects per-pane credentials). Sensitive. | No leftover claude.exe or node.exe after close; link tests pass; a PR opened by a local agent shows `ABlueAgent` as its author. Needs an `ABlueAgent` token from Blue (checklist step 14). | High | windows | S01, checklist step 14 | READY |
 | S07 | **Stable and dev copies of Mako.** A dev instance uses its own settings folder and never takes over Claude hooks, so agents can change Mako while Blue keeps using it. | Both run side by side without touching each other's state. | High | windows | S06 | READY |
@@ -87,8 +87,9 @@ updates its own row.
    Proposed: every hour at :07, around the clock (`CRON_TZ=America/New_York 7 * * * *`), so work
    resumes soon after any usage reset, overnight too. A fire with nothing to do ends after a quick
    check. If day one shows idle fires costing real usage, drop to every 2 hours.
-2. **Each fire.** It runs today's gate, then fixes the open PRs authored by its login on `claude/`
-   branches, then starts every READY session whose Needs are met and that nobody has claimed, up to
+2. **Each fire.** It runs today's gate, then fixes the open PRs the runner itself opened (marked
+   with a `runner` label; interactive sessions also open PRs as `ABlueAgent` from `claude/` branches,
+   and the runner leaves those alone), then starts every READY session whose Needs are met and that nobody has claimed, up to
    the parallel cap. A claim is an open PR titled with the session number (`Sxx:`), or an open issue
    with the `agent-claimed` label (how Codex claims, S26). S03's per-session sync issues are not
    claims, whatever their titles. S04 creates the label if S03 hasn't. A builder opens its PR as a draft first; that is the claim. No two fires work on the same PR or session at once: a build can outlast
@@ -118,9 +119,11 @@ updates its own row.
      that hits one merges `main` and resolves it, never force-pushing.
 7. **Evening digest.** One phone notification at a set time (default 8 PM Eastern, one setting): PRs
    ready to merge with TLDR links, needs-Blue questions, and blocked items. Other fires notify only
-   when Blue has something to answer. Every session-end message and notification starts with
-   `READY TO MERGE` (CI green, review done, PR marked ready) or `NOT READY: <reason>` (AGENTS.md
-   "How work flows" step 5); Blue acts only on `READY TO MERGE`.
+   when Blue has something to answer; S04 confirms that hourly fires don't each send a phone
+   notification, and sets the routine's notifications so they don't. Each PR's line in the digest,
+   and every other session-end notice, starts with `READY TO MERGE` (CI green, review done, PR
+   marked ready) or `NOT READY: <reason>` (AGENTS.md "How work flows" step 5); Blue merges only on
+   `READY TO MERGE`.
 8. **Applying it.** The S04 PR proposes the new prompt and schedule in docs/RUNNER.md. The prompt
    carries AGENTS.md's Codex-handle rule into every comment, review post and summary it writes. An
    interactive session applies them to the scheduled task in the same sitting as Blue's merge,
@@ -141,7 +144,10 @@ updates its own row.
 
 1. **Claims.** Codex takes a READY session only through a claim the runner's check sees (S04 item 2):
    an open issue labeled `agent-claimed`, which the runner opens when it hands Codex a session, then
-   Codex's own PR titled `Sxx:`, which sets its own row to IN PROGRESS.
+   Codex's own PR titled `Sxx:`, which sets its own row to IN PROGRESS. The trial build in S26's
+   done-when happens before S26 is merged, so the runner can't hand it over yet: Blue starts it with
+   a comment as `ABlueAI` on the claim issue (allowed by AGENTS.md), and the runner session runs
+   `pr-reviewer` on Codex's PR and posts "Independent review (Opus)" for it.
 2. **Rules.** Codex follows AGENTS.md (it reads that file directly). The claim issue is on a public
    repo, so the runner locks its conversation to collaborators and its hand-off tells Codex to act
    only on that comment; S26 checks what context Codex reads from the thread. It opens PRs as `ABlueAgent` from

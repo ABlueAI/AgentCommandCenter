@@ -15,7 +15,9 @@ full runner (parallel sessions, evening digest).
   step 3, which the prompt says governs everything, also replaces Codex's handle with "at-codex"
   before posting. The runner reads AGENTS.md, not this file, and S04's new prompt will say so
   itself. The prompt and schedule are unchanged. When S04 merges, this prompt's one-at-a-time limit
-  ends, so S04's prompt is applied in the same sitting (PLAN-1.1.md S04 item 8).
+  ends, so S04's prompt is applied in the same sitting (PLAN-1.1.md S04 item 8). Also since PR #47,
+  AGENTS.md step 5 heads messages with `READY TO MERGE` or `NOT READY: <reason>`: the gate notice
+  below starts with `NOT READY: `, and each PR in the summary gets its own line headed that way.
 
 ## The gate
 
