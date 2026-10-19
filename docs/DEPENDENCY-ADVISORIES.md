@@ -13,6 +13,14 @@ What `npm audit` reports for `app/package-lock.json`, and what was done about ea
 
 Measured with `npm audit --package-lock-only` against the public registry on 2026-10-19.
 
+**Keeping it current.** Nothing refreshes this automatically yet. CI doesn't run `npm audit`, and
+the GitHub Actions in `.github/workflows/` are pinned to commit SHAs, so they no longer pick up new
+minor or patch releases by themselves. Until that changes, any session that touches dependencies or
+workflows re-runs `npm audit --package-lock-only` in `app/`, checks each action's tag with
+`git ls-remote --tags https://github.com/actions/<name>`, and updates this page and the pins. The
+automated option is a Dependabot config for `github-actions` and `npm`. That is a `.github/` change
+that opens PRs on its own, so it waits for Blue's decision.
+
 ## Fixed by `npm audit fix` (no breaking changes)
 
 Each moved inside the range `app/package.json` already allowed, so `package.json` is unchanged and
