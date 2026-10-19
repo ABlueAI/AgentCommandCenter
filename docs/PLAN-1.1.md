@@ -133,7 +133,8 @@ runner's status PR marks merged sessions DONE; S04 item 6).
    carries AGENTS.md's Codex-handle rule into every comment, review post and summary it writes. An
    interactive session applies them to the scheduled task in the same sitting as Blue's merge,
    because the old prompt's one-at-a-time limit ends when S04 merges; the S04 PR adds that as a
-   checklist step ("right after merging S04, start a session to apply its prompt"). The runner never edits
+   checklist step ("right after merging S04, start a session to apply its prompt") and rewrites the
+   checklist's "Every day, once the runner is on" section to the one evening sitting. The runner never edits
    itself.
 9. **Pause button and usage alert** (Blue: "really more of a pause button here and or on Mako ... so
    i can still use claude as needed without burning through all usage"). No automatic stop at a
