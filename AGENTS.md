@@ -22,7 +22,8 @@ Every session, any agent, starts by reading these on `main`:
 Anything Blue must do goes into `BLUE-CHECKLIST.md` in order, with when, how long and how you will
 verify it, never only in a chat message or a PR. Tick a box only after verifying it, with the date
 and how you checked. Every PR updates `STATUS.md` if the state changed. Once session S04's all-day
-runner is merged and applied to the scheduled task, plan-session PRs change only their own row in
+runner is merged and applied to the scheduled task (recorded as the ticked BLUE-CHECKLIST.md step
+that S04 adds), plan-session PRs change only their own row in
 `docs/PLAN-1.1.md` (unless the PR carries a plan change with the `plan-change` label), add to
 `BLUE-CHECKLIST.md` and `docs/DECISIONS.md` only the steps and decisions they need, and leave
 `STATUS.md` to the runner's status PR, to reduce conflicts between parallel PRs; PRs that change the state

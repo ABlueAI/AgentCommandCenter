@@ -98,7 +98,8 @@ Known limitations shipping with 1.0 are in [docs/RELEASE-NOTES-1.0.md](docs/RELE
 Plan change proposed in PR #47 (pending Blue): S04 becomes an all-day runner with an evening digest
 and needs only S01, so it can run right after S02 and S03; new session S26 adds Codex as a second builder once Blue
 re-links Codex's GitHub to `ABlueAgent` (checklist step 16). Also proposed there: READY TO MERGE /
-NOT READY at the start of every session-end notice, a pause button and usage alert (S04, S11), and
+NOT READY at the start of every session-end notice, documented pausing and a usage alert (S04) and
+a Pause button in Mako where it can be done safely (S11), and
 new sessions S27 Composer and S28 agent profile refresh. Today's runner prompt and schedule stay as
 they are until S04 is merged and applied; the checklist-numbering, Codex-handle and READY TO MERGE rules apply from this PR's merge, the
 STATUS.md and plan-row rule once S04 is merged and applied.
