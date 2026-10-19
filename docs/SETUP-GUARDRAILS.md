@@ -81,7 +81,7 @@ The merge audit workflow opens a `security-alert` issue if anything reaches main
   Until then, local agents only verify; they don't open PRs.
 - **Rulesets themselves.** Only repo admins can edit them, and agents are not admins.
 - **Codex is linked to you, for now.** On 2026-10-19 Blue decided to move Codex's GitHub link to
-  `ABlueAgent` (BLUE-CHECKLIST.md step 16, proposed in PR #PRNUM, after which session S26 lets Codex
+  `ABlueAgent` (BLUE-CHECKLIST.md step 16, proposed in PR #47, after which session S26 lets Codex
   build). Until he does, the rest of this item holds. Codex stays linked to `ABlueAI`, not to the
   restricted agent account. Its review comments on this repo appear as
   `chatgpt-codex-connector[bot]` (seen on PR #42). A branch or PR it created through that link would

@@ -252,7 +252,7 @@ on its own, one session at a time on Pro.
     environment variable (AGENTS.md "Security rules").
   - *Done when:* the S06 PR shows a pull request opened from a local Mako pane with `ABlueAgent` as its
     author. Claude checks that on GitHub; the S06 PR confirms the exact token scopes.
-- [ ] **16. Re-link Codex's GitHub to `ABlueAgent` (proposed in PR #PRNUM; do it once Blue merges
+- [ ] **16. Re-link Codex's GitHub to `ABlueAgent` (proposed in PR #47; do it once Blue merges
   it).** About 10 minutes, any time before session S26 (the runner won't start S26 until this is
   ticked). Your decision of 2026-10-19: Codex builds as the agent account, so you can approve its PRs.
   Same ChatGPT Plus account, no new seat. (Numbered 16 because open PRs #45 and #46 both use 15.

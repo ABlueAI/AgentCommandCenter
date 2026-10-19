@@ -7,7 +7,7 @@ of editing an old one, and say which entry it replaces. Agents follow the newest
 
 | Decision | Blue's words |
 |---|---|
-| **Proposed, pending Blue (PR #PRNUM):** S04 becomes "All-day runner and digest" and needs only S01; new session S26 "Codex builder lane"; once S04 is merged, session PRs stop editing STATUS.md (AGENTS.md). Merging PR #PRNUM approves it. | (none yet) |
+| **Proposed, pending Blue (PR #47):** S04 becomes "All-day runner and digest" and needs only S01; new session S26 "Codex builder lane"; once S04 is merged, session PRs stop editing STATUS.md (AGENTS.md). Merging PR #47 approves it. | (none yet) |
 | The runner runs all day: it keeps building through the day, and Blue reviews once at the end of the day and merges everything that is ready after review. He takes the back seat and wants to push hard and fast. Asked whether the runner should run all day, he chose "Yes, all day". Planned as the S04 rewrite (proposed entry above). | "if we can set it up so that it runs all day, i review at the end of the day and merge everything that is ready after review, this would be the best system for me." · "take the backseat" · "push hard and fast" |
 | Codex's GitHub connection moves from `ABlueAI` to `ABlueAgent`, so Codex can build and its PRs are ones Blue can approve. Same ChatGPT Plus account, no new seat. Blue re-links it (BLUE-CHECKLIST.md step 16). Replaces the Codex half of the entry below, "Codex stays linked to `ABlueAI`"; Claude's link stays on `ABlueAgent`. | "Yes" (asked whether to re-link Codex's GitHub to `ABlueAgent` so Codex can build) |
 | **Proposed, pending Blue (PR #44):** S01 is DONE; moving local agents off Blue's git login to `ABlueAgent` becomes part of S06. Merging PR #44 approves it. | (none yet) |
