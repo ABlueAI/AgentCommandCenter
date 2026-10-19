@@ -13,7 +13,7 @@ Updated 2026-10-19 by Claude. Every PR that changes the state updates this file.
     the desktop shortcut showing `Mako 1.0.0 · main@37009eb`.
   - The GitHub release is "Mako 1.0.0", from docs/RELEASE-NOTES-1.0.md.
 - **Plan:** 1.1 month-one plan approved with that merge: [docs/PLAN-1.1.md](docs/PLAN-1.1.md).
-- **CI and dependencies (S02, PR #45):** every GitHub Action is pinned to a commit SHA, and both
+- **CI and dependencies (S02, done in PR #45):** every GitHub Action is pinned to a commit SHA, and both
   Windows checks were confirmed as required on `main` (ruleset `protect-main`, read 2026-10-19).
   `npm audit` is down from 11 advisories to 7: Electron 42.11.15, `undici`, `tar` and `protobufjs`
   are patched. The 7 left are in the speech stack's Node-side packages, which Mako's renderer never
@@ -99,4 +99,4 @@ Known limitations shipping with 1.0 are in [docs/RELEASE-NOTES-1.0.md](docs/RELE
 
 ## Next
 
-1.1 session S01 (finish guardrails) is marked DONE in PR #44, with its evidence in the plan's change log; S02 and S03 are next. Plan change proposed: S06 also moves local agents off Blue's git login. See the plan.
+1.1 session S01 (finish guardrails) is DONE: PR #44 merged 2026-10-19, with its evidence in the plan's change log. S02 (CI and dependency hygiene) is PR #45; S03 is next. S06 also moves local agents off Blue's git login (plan change approved with that merge). See the plan.
