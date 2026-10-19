@@ -247,9 +247,9 @@ on its own, one session at a time on Pro.
     Fine-grained tokens > Generate. Limit it to `ABlueAI/AgentCommandCenter`, with Contents and Pull
     requests set to Read and write and nothing else (no admin, no workflow or settings access), and a
     90-day expiry.
-  - Paste it only into Mako's in-app key setup (Electron safeStorage). Never `setx` or a Windows
+  - Its final home is Mako's in-app key setup (Electron safeStorage). Never `setx` or a Windows
     environment variable (AGENTS.md "Security rules").
-  - Until S06 adds a GitHub slot to Mako's key setup, keep it only in Bitwarden (step 15b).
+  - Until S06 adds a GitHub slot to Mako's key setup, it waits only in Bitwarden (step 15b).
   - *Done when:* the S06 PR shows a pull request opened from a local Mako pane with `ABlueAgent` as its
     author. Claude checks that on GitHub; the S06 PR confirms the exact token scopes.
 - [ ] **15. Token hygiene: find old tokens, and rules for any new one.** About 20 minutes, this week.
@@ -265,9 +265,14 @@ on its own, one session at a time on Pro.
     - Keep the Git login on your PC that local agents push with today (often listed as **Git
       Credential Manager** or **GitHub CLI** under authorized apps) until step 14 (session S06)
       replaces it; revoking it breaks local pushes.
-    - Keep the Claude and ChatGPT/Codex entries for as long as you use them: revoking Claude's link
-      on `ABlueAgent` breaks cloud sessions (step 7c), and revoking Codex on `ABlueAI` breaks Codex
-      review (step 2e). A new token doesn't bring an app link back.
+    - On `ABlueAgent`, keep Claude's authorization: it is how cloud sessions act as the agent (step
+      7c).
+    - On `ABlueAI`, keep the Claude installation under Installed GitHub Apps (cloud sessions and the
+      runner reach the repo through it) and the ChatGPT/Codex authorization and installation (Codex
+      review, step 2e). A new token doesn't bring an app link back.
+    - If `ABlueAI` still shows Claude under Authorized GitHub Apps, it is left over from before step
+      7c and can act as you: revoke it. That removes the authorization, not the installation. If a
+      cloud session can't reach the repo afterwards, tell Claude.
     - Do the same for API keys at https://platform.openai.com/api-keys,
       https://console.anthropic.com (API keys page) and https://aistudio.google.com/apikey (Gemini,
       the key Mako's Video Scout uses; also Google Cloud > APIs & Services > Credentials if you made
@@ -300,8 +305,8 @@ on its own, one session at a time on Pro.
       new one when it expires, is also fine. For new tokens and keys this replaces step 9's "API
       keys go in Bitwarden secure notes".
     - If it might have leaked: revoke it on its provider's page, then tell Claude. GitHub: Settings >
-      Developer settings > Personal access tokens > Fine-grained tokens > the token > **Revoke**. API
-      keys: the pages in a.
+      Developer settings > Personal access tokens > Fine-grained tokens (or Tokens (classic)) > the
+      token > **Revoke** or **Delete**, whichever GitHub shows. API keys: the pages in a.
   - **c. Turn on push protection.** Signed in as `ABlueAI`: repo Settings > Code security (it may be
     labelled Advanced Security) > Secret scanning (or Secret Protection) > **Push protection** >
     Enable. It is free for public repositories and blocks pushes that contain a recognizable secret.
