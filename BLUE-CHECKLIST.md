@@ -260,30 +260,44 @@ on its own, one session at a time on Pro.
     - Authorized apps: https://github.com/settings/applications
     - SSH keys: https://github.com/settings/keys
     - Revoke anything you don't recognize or that hasn't been used for months.
-    - Do the same for API keys at https://platform.openai.com/api-keys and https://console.anthropic.com
-      (API keys page).
+    - Keep these until step 14 (session S06) replaces them: the Git login on your PC that local
+      agents push with today (often listed as **Git Credential Manager** or **GitHub CLI** under
+      authorized apps), and the Claude and ChatGPT/Codex entries. Revoking them breaks local pushes
+      or step 7c, and a new token doesn't bring an app link back.
+    - Do the same for API keys at https://platform.openai.com/api-keys,
+      https://console.anthropic.com (API keys page) and https://aistudio.google.com/apikey (Gemini,
+      the key Mako's Video Scout uses; also Google Cloud > APIs & Services > Credentials if you made
+      keys there).
     - If something breaks after a revoke, make a fresh, narrower token by the rules in b.
-  - **b. Rules for every new token**, including step 14's and any future token that posts Codex
-    review comments:
-    - Fine-grained only, limited to one repository, with the fewest permissions that do the job.
+  - **b. Rules for every new token**, including step 14's:
+    - GitHub tokens: fine-grained only, limited to one repository, with the fewest permissions that
+      do the job. Other keys: the fewest permissions the provider offers.
     - A token of `ABlueAI` must never have **Pull requests: write**: it could submit an Approve as
-      you and defeat the `protect-main` ruleset. **Issues: read and write** is enough to comment on
-      PRs.
-    - Paste it straight from GitHub's token page into its one destination: Mako's key setup, or a
-      GitHub environment secret restricted to `main`. Never into any AI chat (Claude included), a
-      file, this repo, or `setx`.
+      you and defeat the `protect-main` ruleset. For commenting on PRs, **Issues: read and write**
+      should be enough (from community sources; not yet checked against GitHub's docs, so the PR
+      that creates such a token confirms it).
+    - Any `ABlueAI` token that automation or an agent would use, such as one that posts Codex review
+      comments, needs its own PR and your decision first. Its comments would look exactly like
+      yours, and with Issues write it could also close the merge audit's security-alert issues.
+      This step doesn't approve one.
+    - Paste it straight from the provider's token page into its one destination (a Bitwarden copy
+      is optional, below): Mako's key setup, or a GitHub environment secret restricted to `main`.
+      Never into any AI chat (Claude included), a file, this repo, or `setx`.
+    - Today Mako's key setup stores only the Gemini key; S06 adds a place for a GitHub token. Until
+      then, make no GitHub token for your PC other than step 14's, and follow step 14 for that one.
     - A secret a repo workflow uses goes in a GitHub environment whose deployment branches are
       `main` only, and that workflow must never check out or run code from a PR.
     - Expiry 90 days (1 year at most). Whoever sets it up adds a dated renewal reminder under "Dated
       reminders" below.
-    - Saving it in Bitwarden is optional. Not storing it at all, and making a new one when it
-      expires, is also fine.
+    - Saving a copy in Bitwarden is optional for these tokens. Not storing one at all, and making a
+      new one when it expires, is also fine.
     - If it might have leaked: GitHub > Settings > Developer settings > Personal access tokens >
       Fine-grained tokens > the token > **Revoke**, then tell Claude.
-  - **c. Turn on push protection.** Signed in as `ABlueAI`: repo Settings > Code security > Secret
-    scanning (it may be labelled Secret Protection) > **Push protection** > Enable. It is free for
-    public repositories and blocks pushes that contain a recognizable secret. This is your click;
-    agents never change repository settings.
+  - **c. Turn on push protection.** Signed in as `ABlueAI`: repo Settings > Code security (it may be
+    labelled Advanced Security) > Secret scanning (or Secret Protection) > **Push protection** >
+    Enable. It is free for public repositories and blocks pushes that contain a recognizable secret.
+    If it already shows enabled, nothing to do. This is your click; agents never change repository
+    settings.
   - *Done when:* you say the audit is done and push protection shows enabled. Claude then tries to
     confirm push protection through GitHub's API (`security_and_analysis` on the repository). GitHub
     shows that field only to repository admins, and agents have write access, so Claude expects not
