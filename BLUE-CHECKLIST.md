@@ -255,8 +255,8 @@ on its own, one session at a time on Pro.
 - [ ] **16. Re-link Codex's GitHub to `ABlueAgent` (proposed in PR #47; do it once Blue merges
   it).** About 10 minutes, any time before session S26 (the runner won't start S26 until this is
   ticked). Your decision of 2026-10-19: Codex builds as the agent account, so you can approve its PRs.
-  Same ChatGPT Plus account, no new seat. (Numbered 16 because open PRs #45 and #46 both use 15.
-  Whichever merges later renumbers.)
+  Same ChatGPT Plus account, no new seat. (Numbered 16 because open PRs #45 and #46 both use 15; the
+  one of those that merges later renumbers to the next number not in use.)
   - Open a private browser window and sign in to GitHub there as `ABlueAgent`.
   - In that same window, sign in to https://chatgpt.com with your **own** ChatGPT account. Don't make a
     new one.
@@ -266,6 +266,9 @@ on its own, one session at a time on Pro.
     repositories, and the app stays installed on `ABlueAI/AgentCommandCenter` from step 2e.
   - Then open https://chatgpt.com/codex > Settings and check that `ABlueAI/AgentCommandCenter` is still
     listed with code review on and **Automatic reviews** on.
+  - Expect: any comment by `ABlueAgent` that mentions Codex by its handle may now start a Codex task
+    on your Plus usage. Agents never write that mention except to hand Codex a task on purpose
+    (session S26).
   - Expect: Codex's automatic reviews follow the linked account, so from now on they cover the agent's
     PRs. They may stop covering PRs you open as `ABlueAI`, and an `@codex` comment from `ABlueAI` may
     no longer work. Not verified; tell Claude if you need either.

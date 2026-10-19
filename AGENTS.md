@@ -22,11 +22,12 @@ Every session, any agent, starts by reading these on `main`:
 Anything Blue must do goes into `BLUE-CHECKLIST.md` in order, with when, how long and how you will
 verify it, never only in a chat message or a PR. Tick a box only after verifying it, with the date
 and how you checked. Every PR updates `STATUS.md` if the state changed. Once session S04's all-day
-runner is merged, plan-session PRs change only their own row in `docs/PLAN-1.1.md` (plus any checklist
-step or decision they add) and leave `STATUS.md` to the runner's status PR, so parallel PRs don't
-conflict; PRs that change the state outside a session (plan changes, guardrails, releases) still
-update it. A new checklist step takes the next number free on `main`; if two open PRs take the same
-one, the one that merges second renumbers by merging `main`, never by force-pushing. When Blue decides something, append it to
+runner is merged, plan-session PRs change only their own row in `docs/PLAN-1.1.md`, add to
+`BLUE-CHECKLIST.md` and `docs/DECISIONS.md` only the steps and decisions they need, and leave
+`STATUS.md` to the runner's status PR, so parallel PRs don't conflict; PRs that change the state
+outside a session (plan changes, guardrails, releases) still update it. A new checklist step takes
+the next number not used on `main` or by an open PR; if two PRs still end up with the same number,
+the one that merges second renumbers by merging `main`, never by force-pushing. When Blue decides something, append it to
 `docs/DECISIONS.md`. Plans and decisions live in the repo, not in chat history, so Claude, Codex and
 GPT all work from the same facts. Merging a PR is how Blue approves a change to any of them.
 

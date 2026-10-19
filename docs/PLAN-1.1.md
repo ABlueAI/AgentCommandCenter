@@ -84,9 +84,13 @@ updates its own row.
 2. **Each fire.** It runs today's gate, then fixes the open PRs authored by its login on `claude/`
    branches, then starts every READY session whose Needs are met and that no open PR or issue titled
    with its number (`Sxx:`) has claimed, up to the parallel cap. A builder opens its PR as a draft
-   first; that is the claim. No two fires work on the same PR or session at once.
+   first; that is the claim. No two fires work on the same PR or session at once: a build can outlast
+   the hour, so S04 defines a lock a later fire can see (for example an `agent-running` label with a
+   start time that expires after a set number of hours) and a separate marker for "paused at a usage
+   limit", since draft alone can't tell the two apart.
 3. **Parallel cap.** One setting in docs/RUNNER.md, read each fire: 1 on Pro; 2 after Blue's Max 5x
-   upgrade on 2026-10-21; 3 once a week of usage shows there is room.
+   upgrade on 2026-10-21; 3 once a week of usage shows there is room. It counts every session being
+   built across overlapping fires, not sessions per fire.
 4. **Usage limits.** Builders commit and push after every meaningful step, because a session at the
    limit can't act. If it still can, it marks the PR draft with a one-line status and ends. A later
    fire resumes after the reset. Never paid extra usage: S04 adds a checklist step for Blue to
@@ -94,11 +98,15 @@ updates its own row.
 5. **Dependencies.** A session whose Needs include an unmerged PR waits for Blue's merge (no stacked
    PRs, AGENTS.md). Independent sessions never wait.
 6. **Fewer merge conflicts between parallel PRs** (AGENTS.md rule, changed with this plan change):
-   - session PRs change only their own row in this table;
+   - session PRs change only their own row in this table, and add only the checklist steps and
+     decisions they need;
+   - the runner's status PR marks merged sessions DONE, replacing today's "update the row in your
+     next PR" (S04's new prompt drops that line);
    - STATUS.md is updated by one status PR that the runner keeps open and refreshes, and by PRs that
      change the state outside a session (plan changes, guardrails, releases);
-   - a new checklist step takes the next number free on `main`. If two open PRs take the same number,
-     the one that merges second renumbers by merging `main`, never by force-pushing.
+   - a new checklist step takes the next number not used on `main` or by an open PR. If two PRs still
+     end up with the same number, the one that merges second renumbers by merging `main`, never by
+     force-pushing.
 7. **Evening digest.** One phone notification at a set time (default 8 PM Eastern, one setting): PRs
    ready to merge with TLDR links, needs-Blue questions, and blocked items. Other fires notify only
    when Blue has something to answer.
@@ -113,9 +121,15 @@ updates its own row.
 2. **Rules.** Codex follows AGENTS.md (it reads that file directly). It opens PRs as `ABlueAgent` from
    its own `codex/` branches, never Claude's. It gets the same "Independent review (Opus)", run and
    posted by the runner, plus Codex's automatic review. The runner's "fix own PRs" step leaves Codex's
-   PRs to Codex.
+   PRs to Codex. AGENTS.md "How work flows" step 3 has the builder run `pr-reviewer` itself, which
+   Codex can't, so the S26 PR changes that step for Codex-built PRs (sensitive). Once Codex is linked
+   to `ABlueAgent`, any comment by that account that mentions Codex by its handle may start a Codex
+   task, so agents never write the literal mention except to hand Codex a task on purpose (write
+   "at-codex" when quoting it). S26 re-checks how Codex reads mentions.
 3. **How Codex starts.** Options, from official OpenAI docs read on 2026-10-19
-   (developers.openai.com/codex; S26 re-checks):
+   (developers.openai.com/codex; S26 re-checks them, plus which account Codex's PRs are attributed to
+   and whether a Codex review could ever count as an approval, and then adds Codex to the "who can
+   merge" table in docs/SETUP-GUARDRAILS.md):
    - (a) **Codex app scheduled tasks** run on Blue's PC only while it is on and the app is open, in
      the Windows sandbox. They push with the PC's git login, which is Blue's until S06 moves it.
    - (b) **An `@codex <task>` comment** from the linked account starts a Codex cloud task (Linux) that
