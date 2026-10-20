@@ -244,9 +244,13 @@ on its own, one session at a time on Pro.
   minutes, any time before session S06 (the runner won't start S06 until this is ticked). Today local
   agents on your PC push as `ABlueAI`, the account that can approve and merge.
   - Signed in as `ABlueAgent`: GitHub > Settings > Developer settings > Personal access tokens >
-    Fine-grained tokens > Generate. Limit it to `ABlueAI/AgentCommandCenter`, with Contents and Pull
-    requests set to Read and write and nothing else (no admin, no workflow or settings access), and a
-    90-day expiry.
+    **Tokens (classic)** > Generate new token (classic). Tick only **public_repo** (no `repo`,
+    `workflow`, `admin` or `delete_repo`), with a 90-day expiry.
+  - Why classic: GitHub doesn't support fine-grained tokens for an account that is only a
+    collaborator on a personal account's repository, which is what `ABlueAgent` is here (found by
+    Codex on PR #46, checked against GitHub's docs). `public_repo` reaches every public repository
+    `ABlueAgent` can write to, and today that is only this one; without `workflow` it can't change
+    CI. Don't give `ABlueAgent` write access to another repository without revisiting this token.
   - Its final home is Mako's in-app key setup (Electron safeStorage). Never `setx` or a Windows
     environment variable (AGENTS.md "Security rules").
   - Until S06 gives it a home in Mako (the plan doesn't yet say how; S06 decides), it waits only in
@@ -282,8 +286,11 @@ on its own, one session at a time on Pro.
       pushes from your PC break, sign in to Git again instead (Git Credential Manager asks on the
       next push), and tell Claude.
   - **b. Rules for every new token**, including step 14's:
-    - GitHub tokens: fine-grained only, limited to one repository, with the fewest permissions that
-      do the job. Other keys: the fewest permissions the provider offers.
+    - GitHub tokens: fine-grained, limited to one repository, with the fewest permissions that do
+      the job. The one exception is where GitHub doesn't support fine-grained tokens: an account that
+      is only a collaborator on a personal account's repository, as `ABlueAgent` is here. There, use
+      a classic token with the single narrowest scope (step 14: `public_repo` only). Other keys: the
+      fewest permissions the provider offers.
     - A token of `ABlueAI` must never have **Pull requests: write** (it could submit an Approve as
       you and defeat the `protect-main` ruleset), nor **Contents: write**, **Administration** or
       **Workflows** (it could push or merge as you, edit the ruleset, or change CI). For commenting
