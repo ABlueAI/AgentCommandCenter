@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-20 by Claude (step 17 added: token hygiene; step 14's token changed to classic `public_repo`; step 16 is taken by open PR #47).
+Last updated 2026-10-20 by Claude (step 17 added: token hygiene; step 14's token changed to classic `public_repo`; steps 18 to 20 added in PR #48; step 16 is taken by open PR #47).
 
 ## Today
 
@@ -104,12 +104,14 @@ Last updated 2026-10-20 by Claude (step 17 added: token hygiene; step 14's token
   - Download https://github.com/ABlueAI/AgentCommandCenter/blob/main/docs/handoff/GPT-BRIEFING-2026-10-17.md
     (or the copy sent in the Claude chat) and upload it to ChatGPT with: "Read this; it is the current
     state of Mako. From now on we coordinate through the GitHub repo."
+  - The briefing dates from 2026-10-17. Where it differs from docs/PLAN-1.1.md on `main` (for
+    example S16 is now the Composer research and the UI sessions are on hold), the plan wins.
 
 ## Before the daily runner starts building
 
 The runner is on since 2026-10-18 (8:01 AM Eastern). Each morning it first checks steps 1 and 7, and
 does nothing except send you a "waiting on step N" notice until they are complete. After that it runs
-on its own, one session at a time on Pro.
+on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
 
 - [x] **7. Guardrails, Part B: a separate GitHub account for agents.** About 15 minutes. *Done
   2026-10-18 with the guide session. Verified 2026-10-19 by the checker session, acting as the agent
@@ -165,9 +167,13 @@ on its own, one session at a time on Pro.
   - *Done when:* you say "Part B done" and the checker's PR, authored by the agent account, showed as
     blocked after CI passed until you approved it. On the next morning's run the runner starts
     building S01 instead of sending "waiting on step 7".
-- [ ] **8. Upgrade Claude to Max 5x.** About 2 minutes, on **Wednesday 2026-10-21**, after Pro's weekly
-  reset on Tuesday and before Pro renews on Thursday. claude.ai > Settings > Billing. Keep ChatGPT Plus.
+- [ ] **8. Upgrade Claude to Max 5x.** About 2 minutes, on **Wednesday 2026-10-28** (moved from
+  2026-10-21 on 2026-10-20), after you have used your remaining Pro resets: in your words, "2 full
+  resets & a weekly reset", plus 3 ChatGPT resets. claude.ai > Settings > Billing. Keep ChatGPT Plus.
   No longer blocks the runner; it builds one session at a time on Pro until then.
+  - The 2026-10-21 date was picked to upgrade before Pro renews on Thursday. If Pro renews on
+    Thursday 2026-10-22, it renews once more before the upgrade; Settings > Billing shows the renewal
+    date and how an upgrade is charged.
   - *Done when:* you say so. After S04, the runner then allows 2 sessions in parallel.
 
 ## Any time (not blocking)
@@ -378,6 +384,29 @@ on its own, one session at a time on Pro.
     shows that field only to repository admins, and agents have write access, so Claude expects not
     to be able to read it; it says so and ticks this on your word.
 
+- [ ] **18. Say go on the UI when your examples are ready.** About 1 minute, any time. The UI sessions
+  (S14 and S17 to S20) are on `HOLD (Blue)` in docs/PLAN-1.1.md (PR #48), so the runner skips them.
+  When your UI examples folder is ready, tell any agent "go on the UI". It records your words in
+  docs/DECISIONS.md and sets those rows back to READY in a PR; merging that PR starts them.
+  - *Done when:* that DECISIONS.md entry is on `main`. Claude checks.
+- [ ] **19. Give your Composer verdict after S16.** About 15 minutes, after the S16 PR opens. Read
+  `docs/decisions/OSS-composer.md`, answer its open questions, and give a verdict on each option
+  (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD FRESH) in your own words, in the S16 PR or to any
+  agent. Spending on Gumloop or any paid service needs your explicit OK there.
+  - *Done when:* your verdict is recorded word for word in OSS-composer.md and docs/DECISIONS.md.
+    A later plan change then adds the Composer build sessions.
+
+- [ ] **20. Check what Codex's GitHub link can reach.** About 3 minutes, any time soon. You linked
+  ChatGPT/Codex's GitHub to `ABlueAgent` on 2026-10-20 (STATUS.md), and nobody has checked its scope
+  since.
+  - Signed in as `ABlueAI`: github.com > Settings > Applications > **Installed GitHub Apps** > the
+    ChatGPT/Codex app > **Configure**. It should say **Only select repositories** with only
+    `AgentCommandCenter` (as in step 2e). If it says **All repositories**, switch it back and save.
+  - Signed in as `ABlueAgent` (private window): github.com > Settings > Applications. Check
+    **Installed GitHub Apps** (should be none) and **Authorized GitHub Apps** (the ChatGPT/Codex entry
+    is expected; note what else is listed).
+  - *Done when:* you tell any agent what both pages show; it records that in STATUS.md with the date.
+
 ## Every day, once the runner is on
 
 - **Morning (about 5 minutes):** check your phone. Answer anything marked "needs Blue".
@@ -388,7 +417,9 @@ on its own, one session at a time on Pro.
 
 You can start on the first one now, which saves time later.
 
-- **Session S14:** UI examples. Screenshots or links of designs you like. **Start a folder now.**
+- **Session S14 (on hold until you say go, step 18):** UI examples. Screenshots or links of designs
+  you like, including dashboards for different tasks (coding, research, business). **Start a folder
+  now.**
 - **Session S06, after its PR merges:** remove the `ABlueAI` Git login from your PC (about 5
   minutes). The S06 PR names exactly which entries.
   - On the PC: delete the Credential Manager entry and the `gh` login. If you keep them because
@@ -400,8 +431,8 @@ You can start on the first one now, which saves time later.
   - *Done when:* you say so (Claude can't read Credential Manager or your authorized apps).
 - **Session S12:** your Hexona login URL.
 - **Session S13:** install the Obsidian app (2 minutes).
-- **Session S16:** your verdict on the Dodaios trial report.
-- **Session S17:** pick one of 2 or 3 design directions.
+- **Session S16:** your Composer verdict (step 19), including the Dodaios trial.
+- **Session S17 (on hold with S14):** pick one of 2 or 3 design directions.
 - **Session S21:** pick a logo variant.
 - **Session S23:** approve the client paperwork drafts.
 - **Session S24:** authorize the GoHighLevel connector in claude.ai (read-only token).
@@ -409,4 +440,4 @@ You can start on the first one now, which saves time later.
 ## Dated reminders
 
 - **About 2026-11-17:** reassess plans. Is Max 5x enough, or move to 20x? The month review (S25)
-  brings the numbers.
+  brings the numbers. With the upgrade on 2026-10-28, that covers about 3 weeks of Max 5x use.
