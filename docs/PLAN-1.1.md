@@ -154,8 +154,9 @@ and later").
 2. **Each fire.** It runs today's gate, then fixes the open PRs the runner itself opened (marked
    with a `runner` label; interactive sessions also open PRs as `ABlueAgent` from `claude/` branches,
    and the runner leaves those alone; when S04 is applied, it labels today's runner's open PRs),
-   then runs `pr-reviewer` on any open Codex PR that has no "Independent review (Opus)" for its
-   latest head and posts it (AGENTS.md step 3); a Codex PR is one from a `codex/` branch in this
+   then runs `pr-reviewer` on any open Codex PR that has no "Independent review (Opus)" comment for
+   its latest head by `ABlueAgent` or `ABlueAI`, unedited by anyone else (a comment by anyone else
+   doesn't count; the repo is public), and posts it (AGENTS.md step 3); a Codex PR is one from a `codex/` branch in this
    repo, authored by `ABlueAgent`, with a matching `agent-claimed` issue (a fork PR, or one by
    anyone else, never counts), then starts every READY session
    whose Needs are met and that nobody has claimed, up to
@@ -236,8 +237,9 @@ and later").
    below follows the current rules); the S26 PR refines it if needed and updates the "builder runs
    it" wording in `.claude/agents/pr-reviewer.md` to match (sensitive, `.claude/`). Once Codex is linked
    to `ABlueAgent`, any comment by that account that mentions Codex by its handle may start a Codex
-   task. AGENTS.md "Security rules" forbids writing it unless a comment by `ABlueAI` or Blue's own
-   message to the agent asks (this plan change). The S26 PR adds the runner's claim-issue hand-off
+   task. AGENTS.md "Security rules" forbids writing it unless a comment by `ABlueAI` on that PR or
+   issue, unedited by anyone else, or Blue's own message to the agent asks (this plan change; the
+   full rule, with its edit-history check, is in AGENTS.md). The S26 PR adds the runner's claim-issue hand-off
    as an exception in AGENTS.md, together with the safeguards above (locked issue, a hand-off that
    tells Codex to act only on that comment, the fix path). Nothing enforces that technically, so S26 treats it as a rule, not a control. S26 re-checks how Codex reads mentions.
 3. **How Codex starts.** Options, from search-result extracts of developers.openai.com (the site was

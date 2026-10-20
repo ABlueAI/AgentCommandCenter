@@ -90,7 +90,8 @@ The merge audit workflow opens a `security-alert` issue if anything reaches main
   the linked user's token, so S26 checks which one it uses, and checklist step 20 checks what the app
   and the link can reach. Any `ABlueAgent` comment containing Codex's handle may start a Codex task
   that can push a branch. AGENTS.md (once PR #47 merges) forbids agents to write the handle unless
-  Blue asks (a comment by `ABlueAI`, or his own message to the agent); S26 may add the runner's
+  Blue asks (a comment by `ABlueAI` on that PR or issue, unedited by anyone else, or his own message
+  to the agent; the full rule is in AGENTS.md "Security rules"); S26 may add the runner's
   hand-off as an exception. That is a rule, not a control: a mistaken or injected agent comment could
   still start such a task. Merging still needs Blue's approval. S26 is the first planned Codex build:
   it checks the open questions below first and adds Codex to the table above. Its review comments
