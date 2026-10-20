@@ -293,9 +293,9 @@ on its own, one session at a time on Pro.
     - SSH keys: https://github.com/settings/keys
     - Revoke anything you don't recognize or that hasn't been used for months.
     - Keep the Git login on your PC that local agents push with today (often listed as **Git
-      Credential Manager** or **GitHub CLI** under authorized apps) until step 14 (session S06)
-      replaces it; revoking it breaks local pushes. Its removal after S06 is under "Coming up this
-      month".
+      Credential Manager** or **GitHub CLI** under authorized apps) until session S06 merges and
+      replaces it (ticking step 14 alone doesn't); revoking it breaks local pushes. Its removal
+      after S06 is under "Coming up this month".
     - On `ABlueAgent`, keep Claude's authorization: it is how cloud sessions act as the agent (step
       7c).
     - On `ABlueAI`, keep the Claude installation under Installed GitHub Apps (cloud sessions and the
