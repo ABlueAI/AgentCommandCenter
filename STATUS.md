@@ -54,14 +54,13 @@ Updated 2026-10-20 by Claude. Every PR that changes the state updates this file.
   - Codex auto-review test (2026-10-20): **PASS**. Blue says he linked ChatGPT/Codex's GitHub to
     `ABlueAgent` on 2026-10-20. On PR #48, authored by `ABlueAgent`, Codex started a review 9 seconds
     after the PR opened, with no `@codex review` comment (its summary's "Review trigger" reads "PR
-    opened"), and completed it on `cc58b93` at 15:16 UTC with no findings. `main` has no Codex re-link
-    checklist step yet (PR #47 adds step 16, ticked with this evidence, and the DECISIONS entry), so the result is recorded
-    here. The Opus review stays the required one; Codex adds a second opinion.
+    opened"), and completed it on `cc58b93` at 15:16 UTC with no findings. The result is recorded
+    here and in BLUE-CHECKLIST.md step 16 (added and ticked in PR #47). The Opus review stays the required one; Codex adds a second opinion.
   - Manual Codex requests from `ABlueAI` now fail: Blue's `@codex review` on PR #48 (16:13 UTC) got
     "To use Codex here, create a Codex account and connect to github" and no review. Likely cause, not
     verified: Codex's GitHub link moved to `ABlueAgent`, so `ABlueAI` is no longer a linked account.
     Automatic reviews on PR open still work. Whether Codex now answers a manual request from
-    `ABlueAgent` was not tested. PR #47's proposed step 16 predicted both results.
+    `ABlueAgent` was not tested. Step 16 (PR #47) had predicted both results.
   - Scope of the re-link: not verified. The Codex GitHub app was installed only on
     `ABlueAI/AgentCommandCenter` ("Only select repositories", checklist step 2e, 2026-10-18); that was
     not re-checked after the 2026-10-20 re-link, and what the new link authorizes on `ABlueAgent` was
