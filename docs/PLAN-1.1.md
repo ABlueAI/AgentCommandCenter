@@ -34,7 +34,7 @@ updates its own row.
 | # | Session | Done when | Auth | Lane | Needs | Status |
 |---|---|---|---|---|---|---|
 | S01 | **Finish guardrails.** Blue does the clicks in docs/SETUP-GUARDRAILS.md; Claude then opens a test PR from the agent account and confirms it cannot merge without Blue's approval. | Test PR blocked without approval; merge audit quiet on a proper merge. | High | blue | PR #27 merged | DONE (#44) |
-| S02 | **CI and dependency hygiene.** Pin GitHub Actions to commit SHAs; make CI a required check; `npm audit fix` for the 11 advisories with dictation and TTS regression checks. | CI green and required; advisories fixed or each one explained. | High | windows | S01 | READY |
+| S02 | **CI and dependency hygiene.** Pin GitHub Actions to commit SHAs; make CI a required check; `npm audit fix` for the 11 advisories with dictation and TTS regression checks. | CI green and required; advisories fixed or each one explained. | High | windows | S01 | DONE (#45) |
 | S03 | **Plan to issues.** Labels (authority, lane, plan-change, needs-blue, sensitive, security-alert), task issue template, "1.1 Month 1" milestone, a GitHub Project board (Ready, Running, Needs Blue, Ready to merge, Done), and a workflow that keeps one issue per session in sync with this file. | Board mirrors this table automatically. | Max | cloud | S01 | READY |
 | S04 | **Daily runner and digest.** A scheduled cloud session at **8:01 AM Blue's local time** (just after Claude's weekly usage reset) runs the next READY sessions; an evening digest lists ready PRs with TLDR links and open questions, sent as a notification. Each morning it first checks BLUE-CHECKLIST.md steps 1 and 7; until they are done it only sends a "waiting on step N" notice. | Two consecutive days run unattended and the digest arrives. | High | blue | S01, S03 | READY |
 | S05 | **Needs-you alerts.** Windows notification when a Mako pane needs input or a turn ends; setup note for phone alerts through Claude Remote Control. | Toast appears on a real Claude pane; phone alert documented. | Medium | windows | S01 | READY |
@@ -61,7 +61,7 @@ updates its own row.
 
 ### Blue's inputs this month
 
-S01 GitHub clicks (about 20 minutes) · S06 `ABlueAgent` token for local agents (proposed) · S04 time zone (given 2026-10-18: Eastern, 8:01 AM) · S12 Hexona URL · S13 install
+S01 GitHub clicks (about 20 minutes) · S06 `ABlueAgent` token for local agents (checklist step 14) · S04 time zone (given 2026-10-18: Eastern, 8:01 AM) · S12 Hexona URL · S13 install
 Obsidian · S14 UI examples · S16 Dodaios verdict · S17 pick a design · S21 pick a logo · S23 approve
 paperwork · S24 authorize HighLevel · every merge.
 
@@ -84,3 +84,4 @@ does both) · Vibe Kanban (removed in 1.0).
 - 2026-10-18: step 8 (Max 5x) dropped from the runner's gate; it builds on Pro, one session at a time, until Blue upgrades on 2026-10-21 (Blue).
 - 2026-10-19: S06 gains the local-agent account move (proposed, pending Blue; PR #44).
 - 2026-10-19: S01 marked DONE (#44). Evidence: agent PR #39 stayed blocked until Blue approved it (checklist 7f); the merge audit passed on the #41 merge (`8846eed`, checklist 12). Moving local agents to the agent account was not in S01's done-when, so it is added to S06 (plan change, pending Blue).
+- 2026-10-19: the S06 local-agent account move and checklist step 14 approved: Blue merged PR #44 (`80a8dac`, 13:58 UTC).

@@ -7,6 +7,7 @@ of editing an old one, and say which entry it replaces. Agents follow the newest
 
 | Decision | Blue's words |
 |---|---|
+| S01 is DONE, and moving local agents off Blue's git login to `ABlueAgent` is part of S06, with checklist step 14 for its token. Replaces the "proposed, pending Blue (PR #44)" entry below. | Blue merged PR #44 on 2026-10-19 at 13:58 UTC (`80a8dac`); merging is approval (PLAN-1.1.md "When the plan changes"). |
 | **Proposed, pending Blue (PR #44):** S01 is DONE; moving local agents off Blue's git login to `ABlueAgent` becomes part of S06. Merging PR #44 approves it. | (none yet) |
 | A separate Claude Opus reviewer replaces Codex as the required independent review: the builder runs the read-only `pr-reviewer` subagent (`.claude/agents/pr-reviewer.md`) on its own PR before marking it ready and posts "Independent review (Opus)" as a PR comment (AGENTS.md "How work flows" step 3; runner prompt in docs/RUNNER.md). Codex review becomes optional, on Blue's request only. This replaces the same day's unmerged plan for agents to comment `@codex review` themselves, which failed: Codex ignores accounts not linked to ChatGPT (BLUE-CHECKLIST.md step 13). Replaces the 2026-10-17 entry "Codex reviews every PR after it". | "lets just do option 3, less reliant on gpt so i can drop that subscription if need be" |
 | Claude's GitHub link stays on `ABlueAgent`; Codex stays linked to `ABlueAI` (not re-linked to the agent account). | "nah, im not doing that" |
