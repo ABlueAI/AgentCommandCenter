@@ -162,11 +162,12 @@ runner's status PR marks merged sessions DONE; S04 item 6).
    repo, so the runner locks its conversation to collaborators and its hand-off tells Codex to act
    only on that comment; S26 checks what context Codex reads from the thread. It opens PRs as `ABlueAgent` from
    its own `codex/` branches, never Claude's. It gets the same "Independent review (Opus)", run and
-   posted by the runner, plus Codex's automatic review. The runner's "fix own PRs" step leaves Codex's
+   posted by the Claude session that handed it the task, or the next runner fire if that session
+   has ended (AGENTS.md step 3), plus Codex's automatic review. The runner's "fix own PRs" step leaves Codex's
    PRs to Codex; the S26 PR defines who fixes CI failures and review findings on Codex's PRs (a
    fix-request exception scoped to Codex's own PR, or Claude takes the fixes), and until then each
    request needs a comment by `ABlueAI`. AGENTS.md "How work flows" step 3 lets the Claude session that handed Codex the task
-   run `pr-reviewer` on Codex's PR, because Codex can't (added by this plan change, so the trial build
+   (or the next runner fire) run `pr-reviewer` on Codex's PR, because Codex can't (added by this plan change, so the trial build
    below follows the current rules); the S26 PR refines it if needed (sensitive). Once Codex is linked
    to `ABlueAgent`, any comment by that account that mentions Codex by its handle may start a Codex
    task. AGENTS.md "Security rules" forbids writing it unless a comment by `ABlueAI` or Blue's own
