@@ -9,9 +9,9 @@ only S01; new session S26 adds Codex as a second builder; new sessions S27 (Comp
 profile refresh); session-end notices start with READY TO MERGE or NOT READY; S04 documents pausing
 through the claude.ai routines page and adds a usage alert, and S11 adds a Pause button in Mako where
 it can be done safely. Details below the session table and in the change log. Merging PR #47 approves
-all of this; the next PR after that merge (or the runner's status PR, once S04 is applied) drops the
-"proposed" wording here, in the change log, STATUS, the checklist and SETUP-GUARDRAILS, and adds an
-"approved: Blue merged PR #47" change-log entry.
+all of this; a dedicated follow-up PR (or the runner's status PR, once S04 is applied) drops the
+"proposed" wording in this note, STATUS, the checklist and SETUP-GUARDRAILS, and appends an
+"approved: Blue merged PR #47" change-log entry (earlier change-log entries stay as they are).
 
 ## How this plan runs
 
@@ -120,8 +120,8 @@ runner's status PR marks merged sessions DONE; S04 item 6).
 5. **Dependencies.** A session whose Needs include an unmerged PR waits for Blue's merge (no stacked
    PRs, AGENTS.md). Independent sessions never wait.
 6. **Fewer merge conflicts between parallel PRs** (AGENTS.md rule, changed with this plan change):
-   - session PRs change only their own row in this table, and add only the checklist steps and
-     decisions they need;
+   - session PRs change only their own row in this table (unless they carry a plan change with the
+     `plan-change` label, AGENTS.md), and add only the checklist steps and decisions they need;
    - the runner's status PR marks merged sessions DONE, replacing today's "update the row in your
      next PR" (S04's new prompt drops that line);
    - STATUS.md is updated by one status PR that the runner keeps open and refreshes, and by PRs that
