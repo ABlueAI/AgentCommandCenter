@@ -242,8 +242,8 @@ on its own, one session at a time on Pro.
   - Codex review is optional now. You can still request one by hand, but nothing waits for it.
   - *Done when:* PR #42 merges with its "Independent review (Opus)" comment linked in the TLDR.
 - [ ] **14. Agent token for local agents (approved with PR #44; token type changed by PR #46).**
-  About 10 minutes, any time before session S06 (the runner won't start S06 until this is ticked). Today local
-  agents on your PC push as `ABlueAI`, the account that can approve and merge.
+  About 10 minutes, any time before session S06 (the runner won't start S06 until this is ticked).
+  Today local agents on your PC push as `ABlueAI`, the account that can approve and merge.
   - Signed in as `ABlueAgent`: GitHub > Settings > Developer settings > Personal access tokens >
     **Tokens (classic)** > Generate new token (classic). Tick only **public_repo** (no `repo`,
     `workflow`, `admin` or `delete_repo`), with a 90-day expiry. S06 confirms this scope is enough
