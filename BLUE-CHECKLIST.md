@@ -284,9 +284,12 @@ on its own, one session at a time on Pro.
       https://console.anthropic.com (API keys page) and https://aistudio.google.com/apikey (Gemini,
       the key Mako's Video Scout uses; also Google Cloud > APIs & Services > Credentials if you made
       keys there).
+    - On `ABlueAI/AgentCommandCenter`: Settings > Deploy keys, and Settings > Secrets and variables
+      > Actions. Remove anything you don't recognize.
     - If something breaks after a revoke, make a fresh, narrower token by the rules in b. If local
       pushes from your PC break, sign in to Git again instead (Git Credential Manager asks on the
-      next push), and tell Claude.
+      next push), and tell Claude. That restores the login you already had; it is the one exception
+      to b's `ABlueAI` rules, until step 14 (S06) replaces it.
   - **b. Rules for every new token**, including step 14's:
     - GitHub tokens: fine-grained, limited to one repository, with the fewest permissions that do
       the job. The one exception is where GitHub doesn't support fine-grained tokens: an account that
