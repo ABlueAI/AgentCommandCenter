@@ -2,6 +2,8 @@
 #   app tests   -> `npm test` in app/ (the full node + Electron chain)
 #   PowerShell  -> scripts/run-pester.ps1 (every *.Tests.ps1, Pester 3.x/4.x)
 # Read-only token. This workflow never merges, approves, labels or pushes anything.
+# Actions are pinned to full commit SHAs (tag in the trailing comment); app/ci-hygiene.test.js
+# fails if a `uses:` line is not. The two job names are required checks on main: don't rename them.
 name: CI
 
 on:
@@ -23,10 +25,10 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0 # quick-links-integration compares against an older commit with `git show`
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: npm
@@ -43,8 +45,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
       - name: run-pester.ps1 (Windows PowerShell 5.1, built-in Pester 3.4)

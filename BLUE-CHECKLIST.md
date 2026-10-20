@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-19 by Claude (step 15 added: token hygiene; step 14's token changed to classic `public_repo`).
+Last updated 2026-10-20 by Claude (step 17 added: token hygiene; step 14's token changed to classic `public_repo`; step 16 is taken by open PR #47).
 
 ## Today
 
@@ -189,7 +189,7 @@ on its own, one session at a time on Pro.
     with backup (Bitwarden's built-in codes need Premium, and keeping them separate is safer anyway).
   - API keys go in Bitwarden secure notes; keys Mako uses go in Mako's key setup. Never in this repo,
     Windows environment variables, or a chat with any AI, Claude included. (For new tokens, see step
-    15b.)
+    17b.)
   - Once moved, turn off password saving in Chrome and Edge so there is one place.
   - Don't connect it to ChatGPT's **Passwords** setting or let any AI agent drive it.
   - *Done when:* you say so. It's yours, so Claude doesn't verify anything.
@@ -241,7 +241,7 @@ on its own, one session at a time on Pro.
     re-runs it after fixes (AGENTS.md "How work flows" step 3, and the runner prompt).
   - Codex review is optional now. You can still request one by hand, but nothing waits for it.
   - *Done when:* PR #42 merges with its "Independent review (Opus)" comment linked in the TLDR.
-- [ ] **14. Agent token for local agents (proposed in PR #44; applies once Blue merges it).** About 10
+- [ ] **14. Agent token for local agents (approved with PR #44, merged 2026-10-19).** About 10
   minutes, any time before session S06 (the runner won't start S06 until this is ticked). Today local
   agents on your PC push as `ABlueAI`, the account that can approve and merge.
   - Signed in as `ABlueAgent`: GitHub > Settings > Developer settings > Personal access tokens >
@@ -260,10 +260,25 @@ on its own, one session at a time on Pro.
   - Its final home is Mako's in-app key setup (Electron safeStorage). Never `setx` or a Windows
     environment variable (AGENTS.md "Security rules").
   - Until S06 gives it a home in Mako (the plan doesn't yet say how; S06 decides), it waits only in
-    Bitwarden (step 15b).
+    Bitwarden (step 17b).
   - *Done when:* the S06 PR shows a pull request opened from a local Mako pane with `ABlueAgent` as its
     author. Claude checks that on GitHub; the S06 PR confirms the exact token scopes.
-- [ ] **15. Token hygiene: find old tokens, and rules for any new one.** About 20 minutes, this week.
+- [ ] **15. Check voice on the new Electron (after you merge PR #45, S02).** About 10 minutes, the
+  next time you sit down at your PC. S02 moves Mako from Electron 42.5.0 to 42.11.15 for six security
+  fixes. CI covers the code, but only your PC has the microphone, GPU and speakers.
+  - Fully close Mako. In PowerShell: `cd` to the repo, `git switch main`, `git pull`, then `cd app`
+    and `npm ci`. It should print `ensure-electron-binary: Electron 42.11.15 ready at ...`.
+  - Start Mako from the desktop shortcut. The title should show the new `main@` commit.
+  - **Dictation:** click a Claude pane, click 🎤 Dictate, say a sentence, click it again. The text
+    should land in that pane.
+  - **Text to speech:** select some text in a pane and click that pane's 🔊 button. It should speak
+    in your chosen voice. Then set the speed to 2.0× and speak again: it should be faster without a
+    raised, chipmunk pitch.
+  - Check the Claude pane's status badge still changes from working to turn ended.
+  - *Done when:* you tell any agent "step 15 passed", or what failed. The agent ticks this with the
+    date. A failure gets a fix PR, or a revert of the Electron bump, before other work, and the
+    agent sets S02 back to IN PROGRESS in docs/PLAN-1.1.md until it is fixed.
+- [ ] **17. Token hygiene: find old tokens, and rules for any new one.** About 20 minutes, this week.
   - **a. Audit old tokens, on both `ABlueAI` and `ABlueAgent`** (sign in to each in turn). A lost
     token's value can't be recovered: GitHub shows a token only once, but it lists every token with
     its last-used date.
