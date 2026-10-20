@@ -248,8 +248,8 @@ on its own, one session at a time on Pro.
     **Tokens (classic)** > Generate new token (classic). Tick only **public_repo** (no `repo`,
     `workflow`, `admin` or `delete_repo`), with a 90-day expiry. S06 confirms this scope is enough
     for how it uses the token; if it needs more (for example `gh auth login --with-token`, which may
-    expect `repo` and `read:org`; passing the token as `GH_TOKEN` to a pane avoids that), S06 asks
-    you first.
+    expect `repo` and `read:org`; passing it as `GH_TOKEN` to a pane may avoid that, not verified:
+    S06 checks it survives the subprocess scrub), S06 asks you first.
   - Why classic: GitHub doesn't support fine-grained tokens for an account that is only a
     collaborator on a personal account's repository, which is what `ABlueAgent` is here (found by
     Codex on PR #46; GitHub's docs as quoted in a search result, not yet read directly). With
@@ -261,8 +261,9 @@ on its own, one session at a time on Pro.
     environment variable (AGENTS.md "Security rules").
   - Until S06 gives it a home in Mako (the plan doesn't yet say how; S06 decides), it waits only in
     Bitwarden (step 17b).
-  - *Done when:* you say the token exists and is in Bitwarden. Claude ticks it on your word (it
-    can't see the token), which lets the runner start S06. The S06 PR then shows a pull request
+  - *Done when:* you say the token exists and is in Bitwarden, and tell Claude its expiry date
+    (never the token). Claude adds the renewal reminder under "Dated reminders" (step 17b) and
+    ticks this on your word (it can't see the token), which lets the runner start S06. The S06 PR then shows a pull request
     opened from a local Mako pane with `ABlueAgent` as its author and confirms the exact scopes.
 - [ ] **15. Check voice on the new Electron (after you merge PR #45, S02).** About 10 minutes, the
   next time you sit down at your PC. S02 moves Mako from Electron 42.5.0 to 42.11.15 for six security
