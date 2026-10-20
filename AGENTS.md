@@ -46,6 +46,9 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
    - If the subagent isn't loaded (agent files load only when a session starts), run a fresh Opus
      agent with read tools only and the body of `pr-reviewer.md` as its instructions, and say so in
      the comment and the TLDR. If neither is possible, mark the PR "needs Blue". Never skip it.
+   - If the builder can't run `pr-reviewer` itself (Codex), the Claude session that handed it the
+     task runs it on the builder's PR the same way and posts it, and says so in the comment. The PR
+     isn't marked ready until that review is posted and its findings are fixed or answered.
    - Before posting, check the report for secrets or anything quoted from outside the repo, and
      remove it with a note, and replace Codex's handle with "at-codex" (see "Security rules").
      Otherwise post the reviewer's report verbatim apart from those edits, as a PR comment headed
