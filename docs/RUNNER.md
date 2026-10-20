@@ -14,8 +14,9 @@ full runner (parallel sessions, evening digest).
 - **Note (PR #47):** the prompt below says to post the review "verbatim". Since PR #47, AGENTS.md
   step 3, which the prompt says governs everything, also replaces Codex's handle with "at-codex"
   before posting. The runner reads AGENTS.md, not this file, and S04's new prompt will say so
-  itself. The prompt and schedule are unchanged. When S04 merges, this prompt's one-at-a-time limit
-  ends, so S04's prompt is applied in the same sitting (PLAN-1.1.md S04 item 8). Also since PR #47,
+  itself. The prompt and schedule are unchanged. This prompt's own one-at-a-time limit ends when S04
+  merges, but PLAN-1.1.md "How this plan runs", which the runner reads, keeps it until S04's prompt
+  is applied; S04's prompt is applied in the same sitting as its merge (PLAN-1.1.md S04 item 8). Also since PR #47,
   AGENTS.md step 5 heads messages with `READY TO MERGE` or `NOT READY: <reason>`. The gate notice
   is expected to start with `NOT READY: ` and each PR in the summary to get its own line headed that
   way, but not verified: the prompt still quotes the old gate text, and "The gate" below describes

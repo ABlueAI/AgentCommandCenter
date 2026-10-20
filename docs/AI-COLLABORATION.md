@@ -17,7 +17,8 @@ Rules for all agents are in [AGENTS.md](../AGENTS.md). This page is the short ve
 
 - The required independent review on every PR: `.claude/agents/pr-reviewer.md`, read-only. The
   builder runs it on its own PR before marking it ready and posts "Independent review (Opus)"
-  (AGENTS.md "How work flows" step 3).
+  (for Codex's PRs, the Claude session that handed it the task, the next runner fire, or a session
+  Blue starts; AGENTS.md "How work flows" step 3).
 
 ## Codex / GPT
 
