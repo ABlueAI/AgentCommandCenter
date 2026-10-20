@@ -315,14 +315,14 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
       7c).
     - On `ABlueAI`, keep the Claude installation under Installed GitHub Apps (cloud sessions and the
       runner reach the repo through it) and the ChatGPT/Codex installation. Keep the ChatGPT/Codex
-      authorization on whichever account Codex is linked to (`ABlueAI` per step 2e, or `ABlueAgent`
-      if you moved it). A new token doesn't bring an app link back.
+      authorization on `ABlueAgent` (re-linked 2026-10-20; step 20 checks its scope). A new token
+      doesn't bring an app link back.
     - If `ABlueAI` still shows Claude under Authorized GitHub Apps, it is left over from before step
       7c and can act as you: revoke it. That removes the authorization, not the installation. If a
       cloud session can't reach the repo afterwards, tell Claude.
-    - Likewise, if Codex is now linked to `ABlueAgent`, a ChatGPT/Codex authorization still listed
-      under `ABlueAI`'s Authorized GitHub Apps or OAuth Apps is left over and can act as you: revoke
-      it (not the installation).
+    - Likewise, a ChatGPT/Codex authorization still listed under `ABlueAI`'s Authorized GitHub Apps
+      or OAuth Apps is left over from before the re-link and can act as you: revoke it (not the
+      installation).
     - Do the same for API keys at https://platform.openai.com/api-keys,
       https://console.anthropic.com (API keys page) and https://aistudio.google.com/apikey (Gemini,
       the key Mako's Video Scout uses; also Google Cloud > APIs & Services > Credentials if you made
