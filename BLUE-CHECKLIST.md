@@ -260,11 +260,6 @@ on its own, one session at a time on Pro.
     environment variable (AGENTS.md "Security rules").
   - Until S06 gives it a home in Mako (the plan doesn't yet say how; S06 decides), it waits only in
     Bitwarden (step 15b).
-  - After S06 merges, remove the `ABlueAI` Git login from the PC unless you still push as yourself
-    there (the S06 PR says which): delete Windows Credential Manager > Windows Credentials >
-    `git:https://github.com`, run `gh auth logout` if the GitHub CLI is signed in as `ABlueAI`, and
-    revoke the matching Git Credential Manager or GitHub CLI entry under `ABlueAI`'s Authorized
-    OAuth Apps.
   - *Done when:* the S06 PR shows a pull request opened from a local Mako pane with `ABlueAgent` as its
     author. Claude checks that on GitHub; the S06 PR confirms the exact token scopes.
 - [ ] **15. Token hygiene: find old tokens, and rules for any new one.** About 20 minutes, this week.
@@ -279,7 +274,8 @@ on its own, one session at a time on Pro.
     - Revoke anything you don't recognize or that hasn't been used for months.
     - Keep the Git login on your PC that local agents push with today (often listed as **Git
       Credential Manager** or **GitHub CLI** under authorized apps) until step 14 (session S06)
-      replaces it; revoking it breaks local pushes.
+      replaces it; revoking it breaks local pushes. Its removal after S06 is under "Coming up this
+      month".
     - On `ABlueAgent`, keep Claude's authorization: it is how cloud sessions act as the agent (step
       7c).
     - On `ABlueAI`, keep the Claude installation under Installed GitHub Apps (cloud sessions and the
@@ -352,6 +348,11 @@ on its own, one session at a time on Pro.
 You can start on the first one now, which saves time later.
 
 - **Session S14:** UI examples. Screenshots or links of designs you like. **Start a folder now.**
+- **Session S06, after its PR merges:** remove the `ABlueAI` Git login from your PC (about 5
+  minutes), unless you push as `ABlueAI` from this or any other machine. The S06 PR names exactly
+  which Credential Manager entry, which `gh` login and which authorized app to remove; revoking an
+  app under Authorized OAuth Apps signs it out on every machine. *Done when:* you say so (Claude
+  can't read Credential Manager or your authorized apps).
 - **Session S12:** your Hexona login URL.
 - **Session S13:** install the Obsidian app (2 minutes).
 - **Session S16:** your verdict on the Dodaios trial report.
