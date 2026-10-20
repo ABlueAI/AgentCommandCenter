@@ -108,7 +108,8 @@ Last updated 2026-10-19 by Claude (step 16 added: re-link Codex to `ABlueAgent`)
 ## Before the daily runner starts building
 
 The runner is on since 2026-10-18 (8:01 AM Eastern). Each morning it first checks steps 1 and 7, and
-does nothing except send you a "waiting on step N" notice until they are complete. After that it runs
+does nothing except send you a "waiting on step N" notice until they are complete (once PR #47 merges,
+it is expected to start with `NOT READY:`; not verified until S04's prompt). After that it runs
 on its own, one session at a time on Pro.
 
 - [x] **7. Guardrails, Part B: a separate GitHub account for agents.** About 15 minutes. *Done
