@@ -47,6 +47,7 @@ Updated 2026-10-19 by Claude. Every PR that changes the state updates this file.
 - **Daily runner:** scheduled for 8:01 AM Eastern from 2026-10-18 ([docs/RUNNER.md](docs/RUNNER.md)).
   The repository was attached on 2026-10-18 (step 7e), and its gate (steps 1 and 7) now passes, so
   the 2026-10-19 run started and opened PR #44, the first proof it can open PRs.
+  Its prompt includes the `pr-reviewer` step since 2026-10-19 (applied after PR #42 merged).
 
 ## 1.0: done
 
