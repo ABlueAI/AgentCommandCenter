@@ -25,7 +25,8 @@ The session's PR updates its own row.
 
 `HOLD (Blue)`: the runner skips the row (it only starts `READY` rows) until Blue says go. His "go" is
 recorded, in his words, in docs/DECISIONS.md, and the same PR sets the row back to `READY`; merging that
-PR releases it. A row whose Needs include a held session waits as well.
+PR releases it. A row whose Needs include a held session waits as well. S03's board and issue sync show
+held rows as held (a Hold column or a `hold` label), never as Ready.
 
 ### When the plan changes
 
@@ -77,11 +78,14 @@ unchanged.
 
 - **Dodaios** (https://github.com/Dodaios/Dodaios, formerly Personal Jarvis): the one-day sandboxed
   trial, with no real credentials. Cover its fan-out to several panes, the voice "person you talk to",
-  persistent agents, summaries and updates, Windows install, licence and telemetry. Blue named it, so
+  persistent agents, summaries and updates, Windows install (from its docs; a hands-on Windows install
+  runs only in a sandbox, such as the Codex Windows sandbox, with no real credentials), licence and
+  telemetry. Blue named it, so
   ADOPT or FORK of the relevant piece is the default; narrowing that to "study and rebuild" needs his
   OK.
-- **Claude Code Agent Teams and subagents, and Claude desktop's linked sessions**, the pattern Blue
-  named.
+- **Claude desktop's linked sessions**, the pattern Blue named (his 2026-10-20 plan-review brief
+  describes the Composer as fanning work out "like Claude desktop's linked sessions"), and **Claude
+  Code Agent Teams and subagents** (also listed in that brief).
 - **Microsoft Conductor** (already in docs/research/RESEARCH-mako-1.1-2026-10-16.md, section J).
 - **The R15 pattern mine:** parallel-code, crystal, Emdash.
 - **Cloudroom** (davidondrej/cloudroom-core and cloudroom-gui): verify its Windows support on GitHub.
@@ -138,4 +142,4 @@ does both) · Vibe Kanban (removed in 1.0).
 - 2026-10-19: S01 marked DONE (#44). Evidence: agent PR #39 stayed blocked until Blue approved it (checklist 7f); the merge audit passed on the #41 merge (`8846eed`, checklist 12). Moving local agents to the agent account was not in S01's done-when, so it is added to S06 (plan change, pending Blue).
 - 2026-10-19: the S06 local-agent account move and checklist step 14 approved: Blue merged PR #44 (`80a8dac`, 13:58 UTC).
 - 2026-10-20: the Max 5x upgrade moves from Wednesday 2026-10-21 to Wednesday 2026-10-28, so Blue can use his remaining Pro resets; the runner stays at one session at a time on Pro until then, and "Parallel work" now says so (Blue; docs/DECISIONS.md 2026-10-20).
-- 2026-10-20 (proposed, pending Blue; PR #48): new status `HOLD (Blue)`; S14 and S17 to S20 (the UI sessions) set to `HOLD (Blue)` until Blue says go; S14's brief adds a main dashboard plus task-specific layouts; S16 widened from "Dodaios trial" into "Composer research (includes the Dodaios trial)", with "S16 details" below the table; S25's Needs change from S20 (now held) to "runs in the last week of month one, from 2026-11-14"; Blue's inputs gain "say go on the UI" and the S16 Composer verdict; "Month two and later" gains Composer build sessions and workflow automations, both after S16. S21 (logo) stays READY. Blue's words are in docs/DECISIONS.md, 2026-10-20.
+- 2026-10-20 (proposed, pending Blue; PR #48): new status `HOLD (Blue)`; S14 and S17 to S20 (the UI sessions) set to `HOLD (Blue)` until Blue says go; S14's brief adds a main dashboard plus task-specific layouts; S16 widened from "Dodaios trial" into "Composer research (includes the Dodaios trial)", with "S16 details" below the table; S25's Needs change from S20 (now held) to "runs in the last week of month one, from 2026-11-14"; Blue's inputs gain "say go on the UI" and the S16 Composer verdict; "Month two and later" gains Composer build sessions and workflow automations, both after S16. S21 (logo) stays READY. S03's board and sync must show held rows as held, not Ready. Blue's words are in docs/DECISIONS.md, 2026-10-20.

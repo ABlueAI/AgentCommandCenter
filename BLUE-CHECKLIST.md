@@ -313,4 +313,4 @@ You can start on the first one now, which saves time later.
 ## Dated reminders
 
 - **About 2026-11-17:** reassess plans. Is Max 5x enough, or move to 20x? The month review (S25)
-  brings the numbers.
+  brings the numbers. With the upgrade on 2026-10-28, that covers about 3 weeks of Max 5x use.
