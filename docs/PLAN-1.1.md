@@ -24,10 +24,10 @@ appends a DECISIONS.md entry that replaces the proposed PR #47 entry.
   open PRs, then starts every `READY` session whose dependencies are merged and that nobody has
   claimed, up to the parallel cap. A session that needs Blue posts its question in the PR and the
   runner moves on, so nothing waits idle. Until S04's prompt is applied to the scheduled task (the ticked checklist
-  step S04 adds), today's runner (docs/RUNNER.md) fires once a day at 8:01 AM Eastern and runs one
-  session at a time, even after S04 merges (expected, not verified: its own prompt drops that limit
-  at S04's merge); S04's prompt is applied in the same sitting as its merge
-  (S04 item 8).
+  step S04 adds), today's runner (docs/RUNNER.md) fires once a day at 8:01 AM Eastern, and it runs one
+  session at a time until then, even after S04 merges. Its own prompt drops that limit at S04's merge,
+  and whether this line holds it to one is not verified, so the safeguard is applying S04's prompt in
+  the same sitting as its merge (S04 item 8).
 - **Parallel work:** the cap is one setting (S04 puts it in docs/RUNNER.md): 1 on Claude Pro, 2 to 3 on
   Max 5x after Blue's upgrade on 2026-10-21, to stay under the weekly cap; 3 or 4 on Max 20x.
 - **Blue's day:** once S04 is merged and applied, one sitting in the evening, 10 to 20 minutes: read the digest,
@@ -142,7 +142,7 @@ runner's status PR marks merged sessions DONE; S04 item 6).
 8. **Applying it.** The S04 PR proposes the new prompt and schedule in docs/RUNNER.md. The prompt
    carries AGENTS.md's Codex-handle rule into every comment, review post and summary it writes. An
    interactive session applies them to the scheduled task in the same sitting as Blue's merge,
-   because the old prompt's one-at-a-time limit ends when S04 merges; the S04 PR adds that as a
+   because the old prompt's own one-at-a-time limit ends when S04 merges; the S04 PR adds that as a
    checklist step ("right after merging S04, start a session to apply its prompt") and rewrites the
    checklist's "Every day, once the runner is on" section to the one evening sitting. The runner never edits
    itself.
