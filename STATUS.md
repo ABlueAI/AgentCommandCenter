@@ -61,7 +61,10 @@ Updated 2026-10-20 by Claude. Every PR that changes the state updates this file.
     "To use Codex here, create a Codex account and connect to github" and no review. Likely cause, not
     verified: Codex's GitHub link moved to `ABlueAgent`, so `ABlueAI` is no longer a linked account.
     Automatic reviews on PR open still work. Whether Codex now answers a manual request from
-    `ABlueAgent` was not tested.
+    `ABlueAgent` was not tested. PR #47's proposed step 16 predicted both results.
+  - Scope of the re-link: not verified. The Codex GitHub app stays installed only on
+    `ABlueAI/AgentCommandCenter` ("Only select repositories", checklist step 2e); what the new link
+    authorizes on `ABlueAgent` was not checked. PR #47's step 16 covers the re-link and its checks.
 - **Daily runner:** scheduled for 8:01 AM Eastern from 2026-10-18 ([docs/RUNNER.md](docs/RUNNER.md)).
   The repository was attached on 2026-10-18 (step 7e), and its gate (steps 1 and 7) now passes, so
   the 2026-10-19 run started and opened PR #44, the first proof it can open PRs.

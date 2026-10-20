@@ -104,6 +104,8 @@ Last updated 2026-10-20 by Claude (step 8 moved to 2026-10-28; steps 18 and 19 a
   - Download https://github.com/ABlueAI/AgentCommandCenter/blob/main/docs/handoff/GPT-BRIEFING-2026-10-17.md
     (or the copy sent in the Claude chat) and upload it to ChatGPT with: "Read this; it is the current
     state of Mako. From now on we coordinate through the GitHub repo."
+  - The briefing dates from 2026-10-17. Where it differs from docs/PLAN-1.1.md on `main` (for
+    example S16 is now the Composer research and the UI sessions are on hold), the plan wins.
 
 ## Before the daily runner starts building
 
