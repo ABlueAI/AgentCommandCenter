@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-20 by Claude (step 8 moved to 2026-10-28; steps 18 and 19 added in PR #48).
+Last updated 2026-10-20 by Claude (step 8 moved to 2026-10-28; steps 18, 19 and 20 added in PR #48).
 
 ## Today
 
@@ -290,6 +290,17 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   agent. Spending on Gumloop or any paid service needs your explicit OK there.
   - *Done when:* your verdict is recorded word for word in OSS-composer.md and docs/DECISIONS.md.
     A later plan change then adds the Composer build sessions.
+
+- [ ] **20. Check what Codex's GitHub link can reach.** About 3 minutes, any time soon. You linked
+  ChatGPT/Codex's GitHub to `ABlueAgent` on 2026-10-20 (STATUS.md), and nobody has checked its scope
+  since.
+  - Signed in as `ABlueAI`: github.com > Settings > Applications > **Installed GitHub Apps** > the
+    ChatGPT/Codex app > **Configure**. It should say **Only select repositories** with only
+    `AgentCommandCenter` (as in step 2e). If it says **All repositories**, switch it back and save.
+  - Signed in as `ABlueAgent` (private window): github.com > Settings > Applications. Check
+    **Installed GitHub Apps** (should be none) and **Authorized GitHub Apps** (the ChatGPT/Codex entry
+    is expected; note what else is listed).
+  - *Done when:* you tell any agent what both pages show; it records that in STATUS.md with the date.
 
 ## Every day, once the runner is on
 

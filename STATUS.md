@@ -65,7 +65,7 @@ Updated 2026-10-20 by Claude. Every PR that changes the state updates this file.
   - Scope of the re-link: not verified. The Codex GitHub app was installed only on
     `ABlueAI/AgentCommandCenter` ("Only select repositories", checklist step 2e, 2026-10-18); that was
     not re-checked after the 2026-10-20 re-link, and what the new link authorizes on `ABlueAgent` was
-    not checked either. PR #47's step 16 covers the re-link and its checks.
+    not checked either. Checklist step 20 asks Blue to check both (added in PR #48).
 - **Daily runner:** scheduled for 8:01 AM Eastern from 2026-10-18 ([docs/RUNNER.md](docs/RUNNER.md)).
   The repository was attached on 2026-10-18 (step 7e), and its gate (steps 1 and 7) now passes, so
   the 2026-10-19 run started and opened PR #44, the first proof it can open PRs.
