@@ -66,8 +66,8 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
    ready. That TLDR is Blue's merge briefing.
    - Every session-end message and phone notification about a PR starts with `READY TO MERGE` (CI
      green, independent review done and every finding fixed or answered, PR marked ready) or `NOT READY: <reason>`. A summary covering
-     several PRs starts each PR's line that way; a message about no PR (such as the runner's gate
-     notice) starts with `NOT READY: <reason>`. Blue merges only on `READY TO MERGE`; a reason that
+     several PRs starts each PR's line that way; a session-end message or phone notification about no
+     PR (such as the runner's gate notice) starts with `NOT READY: <reason>`. Blue merges only on `READY TO MERGE`; a reason that
      needs his answer says so.
 6. Blue merges. Nobody and nothing else does.
 
