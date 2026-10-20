@@ -307,8 +307,8 @@ on its own, one session at a time on Pro.
       keys there).
     - On `ABlueAI/AgentCommandCenter`: Settings > Deploy keys, and Settings > Secrets and variables
       > Actions. Remove anything you don't recognize.
-    - If something breaks after a revoke, make a fresh, narrower token by the rules in b, except on
-      your PC before S06: tell Claude instead. If local pushes from your PC break, sign in to Git
+    - If something breaks after a revoke, make a fresh, narrower token by the rules in b, except a
+      GitHub token for your PC before S06: tell Claude instead. If local pushes from your PC break, sign in to Git
       again (Git Credential Manager asks on the next push), and tell Claude. That restores the login
       you already had (exception 2 in b).
   - **b. Rules for every new token**, including step 14's:
