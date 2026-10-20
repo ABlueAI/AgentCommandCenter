@@ -19,7 +19,7 @@ Updated 2026-10-20 by Codex (S05 in progress). Every PR that changes the state u
   are patched. The 7 left are in the speech stack's Node-side packages, which Mako's renderer never
   loads; each is explained in [docs/DEPENDENCY-ADVISORIES.md](docs/DEPENDENCY-ADVISORIES.md).
   Dictation and TTS on the new Electron still need a check on Blue's PC (checklist step 15).
-- **Needs-you alerts (S05, in progress):** the S05 branch observes the existing pane-status views
+- **Needs-you alerts (S05, PR #49, in progress):** the S05 branch observes the existing pane-status views
   and uses Electron's native Windows notifications for attention and turn-ended transitions.
   The phone setup note is [docs/NEEDS-YOU-ALERTS.md](docs/NEEDS-YOU-ALERTS.md). Independent Claude
   Opus review, both Windows CI checks and Blue's real-pane toast check (checklist step 17) remain

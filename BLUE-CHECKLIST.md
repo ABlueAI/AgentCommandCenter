@@ -273,7 +273,7 @@ on its own, one session at a time on Pro.
     date. A failure gets a fix PR, or a revert of the Electron bump, before other work, and the
     agent sets S02 back to IN PROGRESS in docs/PLAN-1.1.md until it is fixed.
 
-- [ ] **16. Independent review for the Codex-built S05 PR.** About **2 minutes** to hand off,
+- [ ] **16. Independent review for the Codex-built S05 PR #49.** About **2 minutes** to hand off,
   after the PR is open and before it can be ready. Ask Claude to run the Opus `pr-reviewer`
   defined in `.claude/agents/pr-reviewer.md`, read-only with no shell. Give it only the PR number,
   the TLDR and the diff saved to a file, not the builder's reasoning. The Claude reviewer posts
