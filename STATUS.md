@@ -1,6 +1,6 @@
 # Mako status
 
-Updated 2026-10-19 by Claude. Every PR that changes the state updates this file.
+Updated 2026-10-20 by Claude. Every PR that changes the state updates this file.
 
 ## Right now
 
@@ -13,6 +13,13 @@ Updated 2026-10-19 by Claude. Every PR that changes the state updates this file.
     the desktop shortcut showing `Mako 1.0.0 · main@37009eb`.
   - The GitHub release is "Mako 1.0.0", from docs/RELEASE-NOTES-1.0.md.
 - **Plan:** 1.1 month-one plan approved with that merge: [docs/PLAN-1.1.md](docs/PLAN-1.1.md).
+  - **UI sessions on hold, Composer research planned (approved with the PR #48 merge):** S14
+    and S17 to S20 are `HOLD (Blue)` until Blue says go (checklist step 18). S16 becomes "Composer
+    research (includes the Dodaios trial)", ending in `docs/decisions/OSS-composer.md` and Blue's
+    verdict (step 19); Composer build sessions and workflow automations come in a later plan change.
+    S21 (logo) stays READY.
+- **Claude plan:** Blue upgrades to Max 5x on Wednesday 2026-10-28 (moved from 2026-10-21 on
+  2026-10-20; checklist step 8). Until then the runner builds one session at a time on Pro.
 - **CI and dependencies (S02, done in PR #45):** every GitHub Action is pinned to a commit SHA, and both
   Windows checks were confirmed as required on `main` (ruleset `protect-main`, read 2026-10-19).
   `npm audit` is down from 11 advisories to 7: Electron 42.11.15, `undici`, `tar` and `protobufjs`
@@ -44,6 +51,21 @@ Updated 2026-10-19 by Claude. Every PR that changes the state updates this file.
     `ABlueAgent` (tested on PR #42). Blue chose a separate Claude
     Opus reviewer instead (checklist step 13). Builders run the read-only `pr-reviewer` subagent on
     their own PR and post "Independent review (Opus)" before marking it ready. Codex is optional.
+  - Codex auto-review test (2026-10-20): **PASS**. Blue says he linked ChatGPT/Codex's GitHub to
+    `ABlueAgent` on 2026-10-20. On PR #48, authored by `ABlueAgent`, Codex started a review 9 seconds
+    after the PR opened, with no `@codex review` comment (its summary's "Review trigger" reads "PR
+    opened"), and completed it on `cc58b93` at 15:16 UTC with no findings. `main` has no Codex re-link
+    checklist step yet (PR #47 proposes step 16 and the DECISIONS entry), so the result is recorded
+    here. The Opus review stays the required one; Codex adds a second opinion.
+  - Manual Codex requests from `ABlueAI` now fail: Blue's `@codex review` on PR #48 (16:13 UTC) got
+    "To use Codex here, create a Codex account and connect to github" and no review. Likely cause, not
+    verified: Codex's GitHub link moved to `ABlueAgent`, so `ABlueAI` is no longer a linked account.
+    Automatic reviews on PR open still work. Whether Codex now answers a manual request from
+    `ABlueAgent` was not tested. PR #47's proposed step 16 predicted both results.
+  - Scope of the re-link: not verified. The Codex GitHub app was installed only on
+    `ABlueAI/AgentCommandCenter` ("Only select repositories", checklist step 2e, 2026-10-18); that was
+    not re-checked after the 2026-10-20 re-link, and what the new link authorizes on `ABlueAgent` was
+    not checked either. Checklist step 20 asks Blue to check both (added in PR #48).
 - **Daily runner:** scheduled for 8:01 AM Eastern from 2026-10-18 ([docs/RUNNER.md](docs/RUNNER.md)).
   The repository was attached on 2026-10-18 (step 7e), and its gate (steps 1 and 7) now passes, so
   the 2026-10-19 run started and opened PR #44, the first proof it can open PRs.
@@ -100,4 +122,4 @@ Known limitations shipping with 1.0 are in [docs/RELEASE-NOTES-1.0.md](docs/RELE
 
 ## Next
 
-1.1 session S01 (finish guardrails) is DONE: PR #44 merged 2026-10-19, with its evidence in the plan's change log. S02 (CI and dependency hygiene) is PR #45; S03 is next. S06 also moves local agents off Blue's git login (plan change approved with that merge). See the plan.
+1.1 session S01 (finish guardrails) is DONE: PR #44 merged 2026-10-19, with its evidence in the plan's change log. S02 (CI and dependency hygiene) is DONE (#45); S03 is next. The UI sessions (S14, S17 to S20) are on hold until Blue says go, and S16 becomes the Composer research (approved with the PR #48 merge). S06 also moves local agents off Blue's git login (plan change approved with that merge). See the plan.
