@@ -1,6 +1,6 @@
 # Mako status
 
-Updated 2026-10-19 by Claude. Every PR that changes the state updates this file.
+Updated 2026-10-20 by Claude. Every PR that changes the state updates this file.
 
 ## Right now
 
@@ -13,6 +13,13 @@ Updated 2026-10-19 by Claude. Every PR that changes the state updates this file.
     the desktop shortcut showing `Mako 1.0.0 · main@37009eb`.
   - The GitHub release is "Mako 1.0.0", from docs/RELEASE-NOTES-1.0.md.
 - **Plan:** 1.1 month-one plan approved with that merge: [docs/PLAN-1.1.md](docs/PLAN-1.1.md).
+  - **UI sessions on hold, Composer research planned (proposed in PR #48, pending Blue's merge):** S14
+    and S17 to S20 are `HOLD (Blue)` until Blue says go (checklist step 18). S16 becomes "Composer
+    research (includes the Dodaios trial)", ending in `docs/decisions/OSS-composer.md` and Blue's
+    verdict (step 19); Composer build sessions and workflow automations come in a later plan change.
+    S21 (logo) stays READY.
+- **Claude plan:** Blue upgrades to Max 5x on Wednesday 2026-10-28 (moved from 2026-10-21 on
+  2026-10-20; checklist step 8). Until then the runner builds one session at a time on Pro.
 - **CI and dependencies (S02, done in PR #45):** every GitHub Action is pinned to a commit SHA, and both
   Windows checks were confirmed as required on `main` (ruleset `protect-main`, read 2026-10-19).
   `npm audit` is down from 11 advisories to 7: Electron 42.11.15, `undici`, `tar` and `protobufjs`
@@ -100,4 +107,4 @@ Known limitations shipping with 1.0 are in [docs/RELEASE-NOTES-1.0.md](docs/RELE
 
 ## Next
 
-1.1 session S01 (finish guardrails) is DONE: PR #44 merged 2026-10-19, with its evidence in the plan's change log. S02 (CI and dependency hygiene) is PR #45; S03 is next. S06 also moves local agents off Blue's git login (plan change approved with that merge). See the plan.
+1.1 session S01 (finish guardrails) is DONE: PR #44 merged 2026-10-19, with its evidence in the plan's change log. S02 (CI and dependency hygiene) is DONE (#45); S03 is next. The UI sessions (S14, S17 to S20) are on hold until Blue says go, and S16 becomes the Composer research (PR #48, pending). S06 also moves local agents off Blue's git login (plan change approved with that merge). See the plan.
