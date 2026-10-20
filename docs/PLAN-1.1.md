@@ -8,7 +8,10 @@ through the day, works sessions in parallel up to a cap and sends one evening di
 only S01; new session S26 adds Codex as a second builder; new sessions S27 (Composer) and S28 (agent
 profile refresh); session-end notices start with READY TO MERGE or NOT READY; S04 documents pausing
 through the claude.ai routines page and adds a usage alert, and S11 adds a Pause button in Mako where
-it can be done safely. Details below the session table and in the change log.
+it can be done safely. Details below the session table and in the change log. Merging PR #47 approves
+all of this; the next PR after that merge (or the runner's status PR, once S04 is applied) drops the
+"proposed" wording here, in the change log, STATUS, the checklist and SETUP-GUARDRAILS, and adds an
+"approved: Blue merged PR #47" change-log entry.
 
 ## How this plan runs
 
