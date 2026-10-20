@@ -35,11 +35,8 @@ counts as not done.
 ## How to change it
 
 Change the prompt below in a PR. After Blue merges it, an interactive session applies it to the
-scheduled task. The runner itself never edits its own schedule or prompt.
-
-Pending: step 4's review instruction (the pr-reviewer subagent and its "Independent review (Opus)"
-comment) comes from PR #42. It reaches the scheduled task only after Blue merges that PR and an
-interactive session applies the prompt. That session deletes this note in its own PR.
+scheduled task. The runner itself never edits its own schedule or prompt. Last applied 2026-10-19
+(PR #42, the reviewer step).
 
 ## Current prompt (verbatim)
 
