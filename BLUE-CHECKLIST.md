@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-19 by Claude (step 15 added: token hygiene).
+Last updated 2026-10-19 by Claude (step 15 added: token hygiene; step 14's token changed to classic `public_repo`).
 
 ## Today
 
@@ -257,9 +257,11 @@ on its own, one session at a time on Pro.
     environment variable (AGENTS.md "Security rules").
   - Until S06 gives it a home in Mako (the plan doesn't yet say how; S06 decides), it waits only in
     Bitwarden (step 15b).
-  - After S06 merges, remove the `ABlueAI` Git login from the PC (Windows Credential Manager >
-    Windows Credentials > `git:https://github.com`) unless you still push as yourself there; the S06
-    PR says which.
+  - After S06 merges, remove the `ABlueAI` Git login from the PC unless you still push as yourself
+    there (the S06 PR says which): delete Windows Credential Manager > Windows Credentials >
+    `git:https://github.com`, run `gh auth logout` if the GitHub CLI is signed in as `ABlueAI`, and
+    revoke the matching Git Credential Manager or GitHub CLI entry under `ABlueAI`'s Authorized
+    OAuth Apps.
   - *Done when:* the S06 PR shows a pull request opened from a local Mako pane with `ABlueAgent` as its
     author. Claude checks that on GitHub; the S06 PR confirms the exact token scopes.
 - [ ] **15. Token hygiene: find old tokens, and rules for any new one.** About 20 minutes, this week.
@@ -292,13 +294,13 @@ on its own, one session at a time on Pro.
     - If something breaks after a revoke, make a fresh, narrower token by the rules in b. If local
       pushes from your PC break, sign in to Git again instead (Git Credential Manager asks on the
       next push), and tell Claude. That restores the login you already had; it is the one exception
-      to b's `ABlueAI` rules, until step 14 (S06) replaces it.
+      to b's GitHub token rules, until step 14 (S06) replaces it.
   - **b. Rules for every new token**, including step 14's:
     - GitHub tokens: fine-grained, limited to one repository, with the fewest permissions that do
-      the job. The one exception is where GitHub doesn't support fine-grained tokens: an account that
-      is only a collaborator on a personal account's repository, as `ABlueAgent` is here. There, use
-      a classic token with the single narrowest scope (step 14: `public_repo` only). Other keys: the
-      fewest permissions the provider offers.
+      the job. There are two exceptions. Where GitHub doesn't support fine-grained tokens (an
+      account that is only a collaborator on a personal account's repository, as `ABlueAgent` is
+      here), use a classic token with the single narrowest scope (step 14: `public_repo` only). And
+      the Git re-sign-in in a. Other keys: the fewest permissions the provider offers.
     - A token of `ABlueAI` must never have **Pull requests: write** (it could submit an Approve as
       you and defeat the `protect-main` ruleset), nor **Contents: write**, **Administration** or
       **Workflows** (it could push or merge as you, edit the ruleset, or change CI). For commenting
