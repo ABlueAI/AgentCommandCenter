@@ -3,6 +3,12 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-10-20
+
+| Decision | Blue's words |
+|---|---|
+| S05 uses the existing pane-status code and prefers Electron's built-in notifications; the OSS choice is recorded in [decisions/OSS-pane-notifications.md](decisions/OSS-pane-notifications.md). The real-pane toast check and Claude Opus review remain pending. | "Build on Mako's existing pane-status code (app/pane-status/) rather than adding a second hook." / "prefer Electron's built-in Notification API, and record the choice." |
+
 ## 2026-10-19
 
 | Decision | Blue's words |
