@@ -13,6 +13,12 @@ Updated 2026-10-19 by Claude. Every PR that changes the state updates this file.
     the desktop shortcut showing `Mako 1.0.0 · main@37009eb`.
   - The GitHub release is "Mako 1.0.0", from docs/RELEASE-NOTES-1.0.md.
 - **Plan:** 1.1 month-one plan approved with that merge: [docs/PLAN-1.1.md](docs/PLAN-1.1.md).
+- **CI and dependencies (S02, done in PR #45):** every GitHub Action is pinned to a commit SHA, and both
+  Windows checks were confirmed as required on `main` (ruleset `protect-main`, read 2026-10-19).
+  `npm audit` is down from 11 advisories to 7: Electron 42.11.15, `undici`, `tar` and `protobufjs`
+  are patched. The 7 left are in the speech stack's Node-side packages, which Mako's renderer never
+  loads; each is explained in [docs/DEPENDENCY-ADVISORIES.md](docs/DEPENDENCY-ADVISORIES.md).
+  Dictation and TTS on the new Electron still need a check on Blue's PC (checklist step 15).
 - **Guardrails:**
   - The repo-side files are live on `main`, and the merge audit has passed on every merge.
   - Part A (checklist step 2) is done and verified on 2026-10-18. `main` now requires a pull request
@@ -21,7 +27,7 @@ Updated 2026-10-19 by Claude. Every PR that changes the state updates this file.
     checker session. Cloud agents now act as `ABlueAgent` (write access, no admin). `main` needs 1
     approval from a code owner (`ABlueAI`), approval of the latest push, and both Windows checks, so
     no agent PR merges without Blue's Approve. Local agents on Blue's PC still use his git login until
-    S06 moves them (proposed in PR #44, pending Blue; see docs/SETUP-GUARDRAILS.md, "What is still not covered").
+    S06 moves them (approved with PR #44; see docs/SETUP-GUARDRAILS.md, "What is still not covered").
   - The merge audit raised a false alert on 2026-10-18 (issue #35): PR #33 was stacked on #32's
     branch, and its commits reached `main` through PR #34. The audit now counts every commit of a PR
     merged into `main`, and AGENTS.md forbids stacked PRs. Fixed in PR #37, merged 2026-10-18;
@@ -93,10 +99,10 @@ Known limitations shipping with 1.0 are in [docs/RELEASE-NOTES-1.0.md](docs/RELE
 
 ## Next
 
-1.1 session S01 (finish guardrails) is marked DONE in PR #44, with its evidence in the plan's change log; S02 and S03 are next. Plan change proposed: S06 also moves local agents off Blue's git login. See the plan.
+1.1 session S01 (finish guardrails) is DONE: PR #44 merged 2026-10-19, with its evidence in the plan's change log. S02 (CI and dependency hygiene) is DONE: PR #45 merged 2026-10-20 (00:07 UTC); S03 is next. S06 also moves local agents off Blue's git login (plan change approved with that merge). See the plan.
 
 Plan change proposed in PR #47 (pending Blue): S04 becomes an all-day runner with an evening digest
-and needs only S01, so it can run right after S02 and S03; new session S26 adds Codex as a second builder once Blue
+and needs only S01, so it can run right after S03; new session S26 adds Codex as a second builder once Blue
 re-links Codex's GitHub to `ABlueAgent` (checklist step 16). Also proposed there: READY TO MERGE /
 NOT READY at the start of every session-end notice, documented pausing and a usage alert (S04) and
 a Pause button in Mako where it can be done safely (S11), and
