@@ -257,6 +257,9 @@ on its own, one session at a time on Pro.
     environment variable (AGENTS.md "Security rules").
   - Until S06 gives it a home in Mako (the plan doesn't yet say how; S06 decides), it waits only in
     Bitwarden (step 15b).
+  - After S06 merges, remove the `ABlueAI` Git login from the PC (Windows Credential Manager >
+    Windows Credentials > `git:https://github.com`) unless you still push as yourself there; the S06
+    PR says which.
   - *Done when:* the S06 PR shows a pull request opened from a local Mako pane with `ABlueAgent` as its
     author. Claude checks that on GitHub; the S06 PR confirms the exact token scopes.
 - [ ] **15. Token hygiene: find old tokens, and rules for any new one.** About 20 minutes, this week.
@@ -314,8 +317,9 @@ on its own, one session at a time on Pro.
       step 14's. If you make it before S06 asks for it, it waits only in Bitwarden.
     - A secret a repo workflow uses goes in a GitHub environment whose deployment branches are
       `main` only, and that workflow must never check out or run code from a PR.
-    - Expiry 90 days (1 year at most). Tell Claude the expiry date (never the token), and Claude
-      adds a dated renewal reminder under "Dated reminders" below.
+    - Expiry 90 days (1 year at most) where the provider lets you set one. Tell Claude the expiry
+      date (never the token), and Claude adds a dated renewal reminder under "Dated reminders"
+      below; for a key with no expiry setting, Claude adds a reminder to rotate it at 90 days.
     - Saving a copy in Bitwarden is optional for these tokens. Not storing one at all, and making a
       new one when it expires, is also fine. For new tokens and keys this replaces step 9's "API
       keys go in Bitwarden secure notes".
