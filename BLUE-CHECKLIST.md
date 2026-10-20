@@ -255,7 +255,9 @@ on its own, one session at a time on Pro.
     `workflow`, `admin` or `delete_repo`), with a 90-day expiry. S06 confirms this scope is enough
     for how it uses the token; if it needs more (for example `gh auth login --with-token`, which may
     expect `repo` and `read:org`; passing it as `GH_TOKEN` to a pane may avoid that, not verified:
-    S06 checks it survives the subprocess scrub), S06 asks you first.
+    S06 checks it survives the subprocess scrub), S06 asks you first. GitHub may also refuse a
+    push without `workflow` when the branch brings in `main`'s workflow changes (not verified);
+    S06 checks that case too.
   - Why classic: GitHub doesn't support fine-grained tokens for an account that is only a
     collaborator on a personal account's repository, which is what `ABlueAgent` is here (found by
     Codex on PR #46; GitHub's docs as quoted in a search result, not yet read directly). With
@@ -332,7 +334,8 @@ on its own, one session at a time on Pro.
       account's repository: a classic token with the single narrowest scope (step 14: `public_repo`
       only), never for `ABlueAI`; (2) until S06, the PC's existing `ABlueAI` Git login and signing
       in to it again (a). After S06, only if you keep that login under "Coming up this month",
-      with the pane isolation the S06 PR shows.
+      with the pane isolation the S06 PR shows. Your own `ABlueAI` sign-in in a browser or a
+      separate Windows account where no agents run is also covered.
     - GitHub tokens: fine-grained, limited to one repository, with the fewest permissions that do
       the job. Other keys: the fewest permissions the provider offers.
     - A token of `ABlueAI` must never have **Pull requests: write** (it could submit an Approve as
