@@ -50,7 +50,8 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      task runs it on the builder's PR the same way and posts it, and says so in the comment; if that
      session has ended, the next runner fire (or a session Blue starts) does it. The PR
      isn't marked ready until that review is posted (by `ABlueAgent` or `ABlueAI`, unedited by anyone
-     else; a comment by anyone else doesn't count) and its findings are fixed or answered.
+     else; a comment by anyone else doesn't count; whether Codex itself can comment as `ABlueAgent` is
+     checked in S26) and its findings are fixed or answered.
    - Before posting, check the report for secrets or anything quoted from outside the repo, and
      remove it with a note, and replace Codex's handle with "at-codex" (see "Security rules").
      Otherwise post the reviewer's report verbatim apart from those edits, as a PR comment headed

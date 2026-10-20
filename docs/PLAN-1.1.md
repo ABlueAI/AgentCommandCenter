@@ -39,7 +39,8 @@ appends a DECISIONS.md entry that replaces the proposed PR #47 entry.
 
 `READY` · `IN PROGRESS (#PR)` · `NEEDS BLUE (#PR)` (or `NEEDS BLUE (reason)` before any PR exists) ·
 `HOLD (Blue)` · `DONE (#PR)` · `DROPPED (reason)`. The session's PR updates its own row (after S04 is applied, the
-runner's status PR marks merged sessions DONE; S04 item 6).
+runner's status PR marks merged sessions DONE; S04 item 6). A `DROPPED` row's other columns are
+ignored: no issue, labels or claims are made from it.
 
 `HOLD (Blue)`: the runner skips the row (it only starts `READY` rows) until Blue says go. His "go" is
 recorded, in his words, in docs/DECISIONS.md, and the same PR sets the row back to `READY`; merging that
@@ -77,7 +78,7 @@ held rows as held (a Hold column or a `hold` label), never as Ready.
 | S16 | **Composer research (includes the Dodaios trial).** Research for the Composer (one Mako pane that takes a large task, fans it out to several agents, and lets Blue compose and split sessions from it) and for workflow automation. Any hands-on trial, including the one-day Dodaios trial, runs only in a sandbox with no real credentials. Scope and what it must cover: "S16 details" below the table. | `docs/decisions/OSS-composer.md` exists in the AGENTS.md OSS shape: each option has a verdict proposal (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD FRESH) and a blank for Blue's verdict, word for word, and it ends with an open-questions list for Blue. Blue's verdict is then recorded. | Minimum | blue | S01 | READY |
 | S17 | **Design directions.** Two or three clickable concepts from Blue's examples. | Blue picks one. | Medium | blue | S14 | HOLD (Blue) |
 | S18 | **New layout, part 1.** Navigation, pane area and toolbar in the chosen design, behind a setting so the old layout stays available. | Daily use works in the new layout. | High | windows | S17 | HOLD (Blue) |
-| S27 | **Composer.** Dropped: PR #48 (merged 2026-10-20) folded the Composer into S16, "Composer research (includes the Dodaios trial)", with Composer build sessions in a later plan change after Blue's S16 verdict. | None (dropped). | None | none | None | DROPPED (folded into S16 by PR #48) |
+| S27 | **Composer.** Dropped: PR #48 (merged 2026-10-20) folded the Composer into S16, "Composer research (includes the Dodaios trial)", with Composer build sessions in a later plan change after Blue's S16 verdict. | — | — | — | — | DROPPED (folded into S16 by PR #48) |
 | S19 | **New layout, part 2.** Pane and status visuals; "needs you" stands out. | Blue accepts the look. | High | windows | S18 | HOLD (Blue) |
 | S20 | **New layout, part 3.** Library, Logs and settings restyled; old layout removed after Blue accepts. | One consistent design. | High | windows | S19 | HOLD (Blue) |
 | S21 | **Logo readability.** "M" variants at 16 to 48 px; Blue picks; taskbar and shortcut icons updated. | Blue can read the M on the taskbar. | Medium | blue | S07 | READY |
@@ -245,7 +246,10 @@ and later").
 3. **How Codex starts.** Options, from search-result extracts of developers.openai.com (the site was
    blocked from the session that wrote this, 2026-10-19; S26 reads the pages themselves, plus which account Codex's PRs are attributed to
    and whether a Codex review could ever count as an approval, which token Codex pushes with (the
-   linked user's OAuth or the app installation), and then adds Codex to the "who can
+   linked user's OAuth or the app installation), whether Codex can post comments as `ABlueAgent`
+   (if it can, a Codex PR's "Independent review (Opus)" counts only when it is posted by `ABlueAI`
+   or tied to the Claude session or runner fire that ran it, for example by the comment ID the
+   runner records; S26 sets this in AGENTS.md step 3 and S04's prompt), and then adds Codex to the "who can
    merge" table in docs/SETUP-GUARDRAILS.md):
    - (a) **Codex app scheduled tasks** run on Blue's PC only while it is on and the app is open, in
      the Windows sandbox. They push with the PC's git login, which is Blue's until S06 moves it.
