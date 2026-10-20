@@ -83,10 +83,10 @@ unchanged.
   telemetry. Blue named it, so
   ADOPT or FORK of the relevant piece is the default; narrowing that to "study and rebuild" needs his
   OK.
-- **Claude desktop's linked sessions**, the pattern Blue named in his 2026-10-20 plan-review brief
-  (the Composer fans work out to several agents the way linked sessions do), and **Claude Code Agent
-  Teams and subagents**, also listed in that brief. The brief itself is not in the repo; Blue's words
-  from that chat are in docs/DECISIONS.md, 2026-10-20.
+- **Claude desktop's linked sessions** (the Composer fans work out to several agents the way linked
+  sessions do) and **Claude Code Agent Teams and subagents**. Both come from the 2026-10-20 brief for
+  this plan change, which names linked sessions as Blue's pattern; that brief is not in the repo, and
+  none of Blue's quotes in docs/DECISIONS.md mention them.
 - **Microsoft Conductor** (already in docs/research/RESEARCH-mako-1.1-2026-10-16.md, section J).
 - **The R15 pattern mine:** parallel-code, crystal, Emdash.
 - **Cloudroom** (davidondrej/cloudroom-core and cloudroom-gui): verify its Windows support on GitHub.
