@@ -247,8 +247,9 @@ on its own, one session at a time on Pro.
   - Signed in as `ABlueAgent`: GitHub > Settings > Developer settings > Personal access tokens >
     **Tokens (classic)** > Generate new token (classic). Tick only **public_repo** (no `repo`,
     `workflow`, `admin` or `delete_repo`), with a 90-day expiry. S06 confirms this scope is enough
-    for how it uses the token; if it needs more (for example the GitHub CLI's token login, which may
-    expect `repo`), S06 asks you first.
+    for how it uses the token; if it needs more (for example `gh auth login --with-token`, which may
+    expect `repo` and `read:org`; passing the token as `GH_TOKEN` to a pane avoids that), S06 asks
+    you first.
   - Why classic: GitHub doesn't support fine-grained tokens for an account that is only a
     collaborator on a personal account's repository, which is what `ABlueAgent` is here (found by
     Codex on PR #46; GitHub's docs as quoted in a search result, not yet read directly). With
@@ -292,14 +293,15 @@ on its own, one session at a time on Pro.
       > Actions. Remove anything you don't recognize.
     - If something breaks after a revoke, make a fresh, narrower token by the rules in b. If local
       pushes from your PC break, sign in to Git again instead (Git Credential Manager asks on the
-      next push), and tell Claude. That restores the login you already had; it is the second of
-      b's two exceptions to the GitHub token rules, until step 14 (S06) replaces it.
+      next push), and tell Claude. That restores the login you already had (exception 2 in b).
   - **b. Rules for every new token**, including step 14's:
+    - Two exceptions apply to every GitHub rule below: (1) where GitHub doesn't support
+      fine-grained tokens (an account that is only a collaborator on a personal account's
+      repository, as `ABlueAgent` is here), a classic token with the single narrowest scope (step
+      14: `public_repo` only); (2) until S06, the PC's existing `ABlueAI` Git login and signing in
+      to it again (a).
     - GitHub tokens: fine-grained, limited to one repository, with the fewest permissions that do
-      the job. There are two exceptions. Where GitHub doesn't support fine-grained tokens (an
-      account that is only a collaborator on a personal account's repository, as `ABlueAgent` is
-      here), use a classic token with the single narrowest scope (step 14: `public_repo` only). And
-      the Git re-sign-in in a. Other keys: the fewest permissions the provider offers.
+      the job. Other keys: the fewest permissions the provider offers.
     - A token of `ABlueAI` must never have **Pull requests: write** (it could submit an Approve as
       you and defeat the `protect-main` ruleset), nor **Contents: write**, **Administration** or
       **Workflows** (it could push or merge as you, edit the ruleset, or change CI). For commenting
@@ -349,10 +351,12 @@ You can start on the first one now, which saves time later.
 
 - **Session S14:** UI examples. Screenshots or links of designs you like. **Start a folder now.**
 - **Session S06, after its PR merges:** remove the `ABlueAI` Git login from your PC (about 5
-  minutes), unless you push as `ABlueAI` from this or any other machine. The S06 PR names exactly
-  which Credential Manager entry, which `gh` login and which authorized app to remove; revoking an
-  app under Authorized OAuth Apps signs it out on every machine. *Done when:* you say so (Claude
-  can't read Credential Manager or your authorized apps).
+  minutes). The S06 PR names exactly which entries.
+  - On the PC: delete the Credential Manager entry and the `gh` login, unless you yourself push as
+    `ABlueAI` from this PC.
+  - On GitHub: revoke the matching app under Authorized OAuth Apps only if you push as `ABlueAI`
+    from no machine, since that signs it out everywhere.
+  - *Done when:* you say so (Claude can't read Credential Manager or your authorized apps).
 - **Session S12:** your Hexona login URL.
 - **Session S13:** install the Obsidian app (2 minutes).
 - **Session S16:** your verdict on the Dodaios trial report.
