@@ -296,8 +296,8 @@ on its own, one session at a time on Pro.
       > Actions. Remove anything you don't recognize.
     - If something breaks after a revoke, make a fresh, narrower token by the rules in b. If local
       pushes from your PC break, sign in to Git again instead (Git Credential Manager asks on the
-      next push), and tell Claude. That restores the login you already had; it is the second of b's two
-      exceptions to the GitHub token rules, until step 14 (S06) replaces it.
+      next push), and tell Claude. That restores the login you already had; it is the second of
+      b's two exceptions to the GitHub token rules, until step 14 (S06) replaces it.
   - **b. Rules for every new token**, including step 14's:
     - GitHub tokens: fine-grained, limited to one repository, with the fewest permissions that do
       the job. There are two exceptions. Where GitHub doesn't support fine-grained tokens (an
