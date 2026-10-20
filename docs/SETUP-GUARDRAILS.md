@@ -32,7 +32,7 @@ personal approval.
    `pr-reviewer` subagent the builder runs on its own PR (AGENTS.md "How work flows" step 3,
    `.claude/agents/pr-reviewer.md`). Codex reviewed your PRs automatically but not the agent's
    (#39, #41), so it's an extra you can request by hand. After BLUE-CHECKLIST.md step 16, ask an agent
-   to post the request (AGENTS.md step 3). If you keep it: chatgpt.com/codex > Settings > Code review, enable it for
+   to post the request (AGENTS.md step 3; not tested yet whether Codex answers it, STATUS.md). If you keep it: chatgpt.com/codex > Settings > Code review, enable it for
    `ABlueAI/AgentCommandCenter`. When GitHub asks which
    repositories the app may access, choose **Only select repositories**, not all: every repository an
    AI app can reach is one a prompt injection can reach, and future private business repos should be

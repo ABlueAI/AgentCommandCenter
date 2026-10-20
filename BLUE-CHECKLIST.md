@@ -298,7 +298,7 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     merge). Merging PR #47 closes that gap.
   - What changed: Codex reviews agent PRs automatically; a review request you comment as `ABlueAI` now
     fails, so ask an agent to post it (comment on the PR as `ABlueAI`, or tell the agent in its own
-    session). If ChatGPT uses this same GitHub connection outside Codex (not verified), repositories
+    session); whether Codex answers an agent's request is not tested yet (STATUS.md). If ChatGPT uses this same GitHub connection outside Codex (not verified), repositories
     only `ABlueAI` can reach drop out of ChatGPT and Codex; session S26 checks this.
 
 - [ ] **18. Say go on the UI when your examples are ready.** About 1 minute, any time. The UI sessions
