@@ -259,7 +259,7 @@ on its own, one session at a time on Pro.
     as `ABlueAgent` on any public repository, and create public repositories under `ABlueAgent`.
     Don't give `ABlueAgent` write access to another repository without revisiting this token.
   - Its final home is Mako's in-app key setup (Electron safeStorage). Never `setx` or a Windows
-    environment variable (AGENTS.md "Security rules").
+    user environment variable (AGENTS.md "Security rules").
   - Until S06 gives it a home in Mako (the plan doesn't yet say how; S06 decides), it waits only in
     Bitwarden (step 17b).
   - *Done when:* you say the token exists and is in Bitwarden, and tell Claude its expiry date
@@ -291,7 +291,8 @@ on its own, one session at a time on Pro.
     - Apps: https://github.com/settings/applications. Check all three tabs: Installed GitHub Apps,
       Authorized GitHub Apps and Authorized OAuth Apps.
     - SSH keys: https://github.com/settings/keys
-    - Revoke anything you don't recognize or that hasn't been used for months.
+    - Except the items listed below to keep, revoke anything you don't recognize or that hasn't
+      been used for months.
     - Keep the Git login on your PC that local agents push with today (often listed as **Git
       Credential Manager** or **GitHub CLI** under authorized apps) until session S06 merges and
       replaces it (ticking step 14 alone doesn't); revoking it breaks local pushes. Its removal
