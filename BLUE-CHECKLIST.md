@@ -338,7 +338,7 @@ on its own, one session at a time on Pro.
       chat (Claude included), a file, this repo, or `setx`.
     - Today Mako's key setup stores only the Gemini key. S06 gives step 14's GitHub token a home in
       Mako (the plan doesn't yet say how). Until then, make no GitHub token for your PC other than
-      step 14's. If you make it before S06 asks for it, it waits only in Bitwarden.
+      step 14's, and step 14's waits only in Bitwarden (S06 can't start until it exists).
     - A secret a repo workflow uses goes in a GitHub environment whose deployment branches are
       `main` only, and that workflow must never check out or run code from a PR.
     - Expiry 90 days (1 year at most) where the provider lets you set one. Tell Claude the expiry
@@ -354,6 +354,8 @@ on its own, one session at a time on Pro.
   - **c. Turn on push protection.** Signed in as `ABlueAI`: repo Settings > Code security (it may be
     labelled Advanced Security) > Secret scanning (or Secret Protection) > **Push protection** >
     Enable. It is free for public repositories and blocks pushes that contain a recognizable secret.
+    The person pushing can still override a block by giving a reason, so it catches accidents, not
+    deliberate pushes.
     If it already shows enabled, nothing to do. This is your click; agents never change repository
     settings.
   - *Done when:* you say the audit is done and push protection shows enabled. Claude then tries to
