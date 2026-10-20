@@ -312,8 +312,9 @@ on its own, one session at a time on Pro.
       > Actions. Remove anything you don't recognize.
     - If something breaks after a revoke, make a fresh, narrower token by the rules in b, except a
       GitHub token for your PC before S06: tell Claude instead. If local pushes from your PC break,
-      sign in to Git again (Git Credential Manager asks on the next push), and tell Claude. That
-      restores the login you already had (exception 2 in b).
+      sign in to Git again (Git Credential Manager asks on the next push; first make sure the
+      browser is signed in as `ABlueAI`, not `ABlueAgent`), and tell Claude. That restores the
+      login you already had (exception 2 in b).
   - **b. Rules for every new token**, including step 14's:
     - Two exceptions apply to every GitHub rule below: (1) for `ABlueAgent` only, because GitHub
       doesn't support fine-grained tokens for an account that is only a collaborator on a personal
