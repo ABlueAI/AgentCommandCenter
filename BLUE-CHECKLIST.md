@@ -261,8 +261,9 @@ on its own, one session at a time on Pro.
     environment variable (AGENTS.md "Security rules").
   - Until S06 gives it a home in Mako (the plan doesn't yet say how; S06 decides), it waits only in
     Bitwarden (step 17b).
-  - *Done when:* the S06 PR shows a pull request opened from a local Mako pane with `ABlueAgent` as its
-    author. Claude checks that on GitHub; the S06 PR confirms the exact token scopes.
+  - *Done when:* you say the token exists and is in Bitwarden. Claude ticks it on your word (it
+    can't see the token), which lets the runner start S06. The S06 PR then shows a pull request
+    opened from a local Mako pane with `ABlueAgent` as its author and confirms the exact scopes.
 - [ ] **15. Check voice on the new Electron (after you merge PR #45, S02).** About 10 minutes, the
   next time you sit down at your PC. S02 moves Mako from Electron 42.5.0 to 42.11.15 for six security
   fixes. CI covers the code, but only your PC has the microphone, GPU and speakers.
@@ -306,15 +307,17 @@ on its own, one session at a time on Pro.
       keys there).
     - On `ABlueAI/AgentCommandCenter`: Settings > Deploy keys, and Settings > Secrets and variables
       > Actions. Remove anything you don't recognize.
-    - If something breaks after a revoke, make a fresh, narrower token by the rules in b. If local
-      pushes from your PC break, sign in to Git again instead (Git Credential Manager asks on the
-      next push), and tell Claude. That restores the login you already had (exception 2 in b).
+    - If something breaks after a revoke, make a fresh, narrower token by the rules in b, except on
+      your PC before S06: tell Claude instead. If local pushes from your PC break, sign in to Git
+      again (Git Credential Manager asks on the next push), and tell Claude. That restores the login
+      you already had (exception 2 in b).
   - **b. Rules for every new token**, including step 14's:
     - Two exceptions apply to every GitHub rule below: (1) for `ABlueAgent` only, because GitHub
       doesn't support fine-grained tokens for an account that is only a collaborator on a personal
       account's repository: a classic token with the single narrowest scope (step 14: `public_repo`
       only), never for `ABlueAI`; (2) until S06, the PC's existing `ABlueAI` Git login and signing
-      in to it again (a).
+      in to it again (a). After S06, only if you keep that login under "Coming up this month",
+      with the pane isolation the S06 PR shows.
     - GitHub tokens: fine-grained, limited to one repository, with the fewest permissions that do
       the job. Other keys: the fewest permissions the provider offers.
     - A token of `ABlueAI` must never have **Pull requests: write** (it could submit an Approve as
