@@ -107,5 +107,5 @@ re-links Codex's GitHub to `ABlueAgent` (checklist step 16). Also proposed there
 NOT READY at the start of every session-end notice, documented pausing and a usage alert (S04) and
 a Pause button in Mako where it can be done safely (S11), and
 new sessions S27 Composer and S28 agent profile refresh. Today's runner prompt and schedule stay as
-they are until S04 is merged and applied; the checklist-numbering, Codex-handle and READY TO MERGE rules apply from this PR's merge, the
+they are until S04 is merged and applied; the checklist-numbering, Codex-handle, READY TO MERGE and Codex-PR review rules apply from this PR's merge, the
 STATUS.md and plan-row rule once S04 is merged and applied.
