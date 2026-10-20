@@ -263,8 +263,9 @@ on its own, one session at a time on Pro.
     Bitwarden (step 17b).
   - *Done when:* you say the token exists and is in Bitwarden, and tell Claude its expiry date
     (never the token). Claude adds the renewal reminder under "Dated reminders" (step 17b) and
-    ticks this on your word (it can't see the token), which lets the runner start S06. The S06 PR then shows a pull request
-    opened from a local Mako pane with `ABlueAgent` as its author and confirms the exact scopes.
+    ticks this on your word (it can't see the token), which lets the runner start S06. The S06 PR
+    then shows a pull request opened from a local Mako pane with `ABlueAgent` as its author and
+    confirms the exact scopes.
 - [ ] **15. Check voice on the new Electron (after you merge PR #45, S02).** About 10 minutes, the
   next time you sit down at your PC. S02 moves Mako from Electron 42.5.0 to 42.11.15 for six security
   fixes. CI covers the code, but only your PC has the microphone, GPU and speakers.
