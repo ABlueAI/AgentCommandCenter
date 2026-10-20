@@ -241,8 +241,8 @@ on its own, one session at a time on Pro.
     re-runs it after fixes (AGENTS.md "How work flows" step 3, and the runner prompt).
   - Codex review is optional now. You can still request one by hand, but nothing waits for it.
   - *Done when:* PR #42 merges with its "Independent review (Opus)" comment linked in the TLDR.
-- [ ] **14. Agent token for local agents (approved with PR #44, merged 2026-10-19).** About 10
-  minutes, any time before session S06 (the runner won't start S06 until this is ticked). Today local
+- [ ] **14. Agent token for local agents (approved with PR #44; token type changed by PR #46).**
+  About 10 minutes, any time before session S06 (the runner won't start S06 until this is ticked). Today local
   agents on your PC push as `ABlueAI`, the account that can approve and merge.
   - Signed in as `ABlueAgent`: GitHub > Settings > Developer settings > Personal access tokens >
     **Tokens (classic)** > Generate new token (classic). Tick only **public_repo** (no `repo`,
@@ -310,11 +310,11 @@ on its own, one session at a time on Pro.
       pushes from your PC break, sign in to Git again instead (Git Credential Manager asks on the
       next push), and tell Claude. That restores the login you already had (exception 2 in b).
   - **b. Rules for every new token**, including step 14's:
-    - Two exceptions apply to every GitHub rule below: (1) where GitHub doesn't support
-      fine-grained tokens (an account that is only a collaborator on a personal account's
-      repository, as `ABlueAgent` is here), a classic token with the single narrowest scope (step
-      14: `public_repo` only); (2) until S06, the PC's existing `ABlueAI` Git login and signing in
-      to it again (a).
+    - Two exceptions apply to every GitHub rule below: (1) for `ABlueAgent` only, because GitHub
+      doesn't support fine-grained tokens for an account that is only a collaborator on a personal
+      account's repository: a classic token with the single narrowest scope (step 14: `public_repo`
+      only), never for `ABlueAI`; (2) until S06, the PC's existing `ABlueAI` Git login and signing
+      in to it again (a).
     - GitHub tokens: fine-grained, limited to one repository, with the fewest permissions that do
       the job. Other keys: the fewest permissions the provider offers.
     - A token of `ABlueAI` must never have **Pull requests: write** (it could submit an Approve as
@@ -367,8 +367,10 @@ You can start on the first one now, which saves time later.
 - **Session S14:** UI examples. Screenshots or links of designs you like. **Start a folder now.**
 - **Session S06, after its PR merges:** remove the `ABlueAI` Git login from your PC (about 5
   minutes). The S06 PR names exactly which entries.
-  - On the PC: delete the Credential Manager entry and the `gh` login, unless you yourself push as
-    `ABlueAI` from this PC.
+  - On the PC: delete the Credential Manager entry and the `gh` login. If you keep them because
+    you push as `ABlueAI` from this PC, local agents running under your Windows account can still
+    read them and act as you, so the S06 PR must show how panes are kept from them; otherwise push
+    as `ABlueAI` from a browser or a separate Windows account instead.
   - On GitHub: revoke the matching app under Authorized OAuth Apps only if you push as `ABlueAI`
     from no machine, since that signs it out everywhere.
   - *Done when:* you say so (Claude can't read Credential Manager or your authorized apps).
