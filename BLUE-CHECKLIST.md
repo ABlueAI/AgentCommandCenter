@@ -317,13 +317,6 @@ on its own, one session at a time on Pro.
 You can start on the first one now, which saves time later.
 
 - **Session S14:** UI examples. Screenshots or links of designs you like. **Start a folder now.**
-- **Session S28 (waits on you; the runner won't ask):** your agent-roles package (new role texts, from your agent-roles chat), as an issue
-  you open yourself as `ABlueAI`, titled `agent-roles package (S28)` (agents ignore one opened, or
-  edited, by anyone else), or hand it to an agent in its own session to open the PR. Not as a PR of your
-  own: you can't approve your own PR, so it couldn't merge. S28 stays `NEEDS BLUE (package)` until
-  it arrives.
-- **Session S27, Composer (waits on you; the runner won't ask):** your research and placement from the plan-review chat. S27 stays NEEDS
-  BLUE until then.
 - **Session S12:** your Hexona login URL.
 - **Session S13:** install the Obsidian app (2 minutes).
 - **Session S16:** your verdict on the Dodaios trial report.
@@ -331,6 +324,16 @@ You can start on the first one now, which saves time later.
 - **Session S21:** pick a logo variant.
 - **Session S23:** approve the client paperwork drafts.
 - **Session S24:** authorize the GoHighLevel connector in claude.ai (read-only token).
+
+## Waiting on you (the runner won't ask)
+
+- **Session S28:** your agent-roles package (new role texts, from your agent-roles chat), as an issue
+  you open yourself as `ABlueAI`, titled `agent-roles package (S28)` (agents ignore one opened, or
+  edited, by anyone else), or hand it to an agent in its own session to open the PR. Not as a PR of your
+  own: you can't approve your own PR, so it couldn't merge. S28 stays `NEEDS BLUE (package)` until
+  it arrives.
+- **Session S27, Composer:** your research and placement from the plan-review chat. S27 stays NEEDS
+  BLUE until then.
 
 ## Dated reminders
 

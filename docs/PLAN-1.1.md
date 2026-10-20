@@ -10,7 +10,8 @@ profile refresh); session-end notices start with READY TO MERGE or NOT READY; S0
 through the claude.ai routines page and adds a usage alert, and S11 adds a Pause button in Mako where
 it can be done safely. Details below the session table and in the change log. Merging PR #47 approves
 all of this; a dedicated follow-up PR (or the runner's status PR, once S04 is applied) drops the
-"proposed" wording in this note, STATUS, the checklist and SETUP-GUARDRAILS, appends an
+"proposed" wording in this note, the "Blue's inputs this month" line, STATUS, the checklist and
+SETUP-GUARDRAILS, appends an
 "approved: Blue merged PR #47" change-log entry (earlier change-log entries stay as they are), and
 appends a DECISIONS.md entry that replaces the proposed PR #47 entry.
 
