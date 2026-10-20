@@ -188,7 +188,8 @@ on its own, one session at a time on Pro.
     other accounts, the item's notes field is fine. Keep 2FA codes in a separate authenticator app
     with backup (Bitwarden's built-in codes need Premium, and keeping them separate is safer anyway).
   - API keys go in Bitwarden secure notes; keys Mako uses go in Mako's key setup. Never in this repo,
-    Windows environment variables, or a chat with any AI, Claude included.
+    Windows environment variables, or a chat with any AI, Claude included. (For new tokens, see step
+    15b.)
   - Once moved, turn off password saving in Chrome and Edge so there is one place.
   - Don't connect it to ChatGPT's **Passwords** setting or let any AI agent drive it.
   - *Done when:* you say so. It's yours, so Claude doesn't verify anything.
@@ -245,7 +246,9 @@ on its own, one session at a time on Pro.
   agents on your PC push as `ABlueAI`, the account that can approve and merge.
   - Signed in as `ABlueAgent`: GitHub > Settings > Developer settings > Personal access tokens >
     **Tokens (classic)** > Generate new token (classic). Tick only **public_repo** (no `repo`,
-    `workflow`, `admin` or `delete_repo`), with a 90-day expiry.
+    `workflow`, `admin` or `delete_repo`), with a 90-day expiry. S06 confirms this scope is enough
+    for how it uses the token; if it needs more (for example the GitHub CLI's token login, which may
+    expect `repo`), S06 asks you first.
   - Why classic: GitHub doesn't support fine-grained tokens for an account that is only a
     collaborator on a personal account's repository, which is what `ABlueAgent` is here (found by
     Codex on PR #46; GitHub's docs as quoted in a search result, not yet read directly). With
@@ -293,8 +296,8 @@ on its own, one session at a time on Pro.
       > Actions. Remove anything you don't recognize.
     - If something breaks after a revoke, make a fresh, narrower token by the rules in b. If local
       pushes from your PC break, sign in to Git again instead (Git Credential Manager asks on the
-      next push), and tell Claude. That restores the login you already had; it is the one exception
-      to b's GitHub token rules, until step 14 (S06) replaces it.
+      next push), and tell Claude. That restores the login you already had; it is the second of b's two
+      exceptions to the GitHub token rules, until step 14 (S06) replaces it.
   - **b. Rules for every new token**, including step 14's:
     - GitHub tokens: fine-grained, limited to one repository, with the fewest permissions that do
       the job. There are two exceptions. Where GitHub doesn't support fine-grained tokens (an
