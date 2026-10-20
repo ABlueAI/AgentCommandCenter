@@ -51,6 +51,12 @@ Updated 2026-10-20 by Claude. Every PR that changes the state updates this file.
     `ABlueAgent` (tested on PR #42). Blue chose a separate Claude
     Opus reviewer instead (checklist step 13). Builders run the read-only `pr-reviewer` subagent on
     their own PR and post "Independent review (Opus)" before marking it ready. Codex is optional.
+  - Codex auto-review test (2026-10-20): **PASS**. Blue says he linked ChatGPT/Codex's GitHub to
+    `ABlueAgent` on 2026-10-20. On PR #48, authored by `ABlueAgent`, Codex started a review 9 seconds
+    after the PR opened, with no `@codex review` comment (its summary's "Review trigger" reads "PR
+    opened"), and completed it on `cc58b93` at 15:16 UTC with no findings. `main` has no Codex re-link
+    checklist step yet (PR #47 proposes step 16 and the DECISIONS entry), so the result is recorded
+    here. The Opus review stays the required one; Codex adds a second opinion.
 - **Daily runner:** scheduled for 8:01 AM Eastern from 2026-10-18 ([docs/RUNNER.md](docs/RUNNER.md)).
   The repository was attached on 2026-10-18 (step 7e), and its gate (steps 1 and 7) now passes, so
   the 2026-10-19 run started and opened PR #44, the first proof it can open PRs.
