@@ -254,9 +254,10 @@ on its own, one session at a time on Pro.
     collaborator on a personal account's repository, which is what `ABlueAgent` is here (found by
     Codex on PR #46; GitHub's docs as quoted in a search result, not yet read directly). With
     `public_repo` it can push code only where `ABlueAgent` has write access, today only this repo,
-    and without `workflow` it can't change CI. It can also open issues, PRs and comments as
-    `ABlueAgent` on any public repository, and create public repositories under `ABlueAgent`. Don't
-    give `ABlueAgent` write access to another repository without revisiting this token.
+    and without `workflow` it can't edit workflow files (it can still change the code CI runs on
+    its own PRs, which can't merge without your Approve). It can also open issues, PRs and comments
+    as `ABlueAgent` on any public repository, and create public repositories under `ABlueAgent`.
+    Don't give `ABlueAgent` write access to another repository without revisiting this token.
   - Its final home is Mako's in-app key setup (Electron safeStorage). Never `setx` or a Windows
     environment variable (AGENTS.md "Security rules").
   - Until S06 gives it a home in Mako (the plan doesn't yet say how; S06 decides), it waits only in
@@ -343,9 +344,10 @@ on its own, one session at a time on Pro.
     - Expiry 90 days (1 year at most) where the provider lets you set one. Tell Claude the expiry
       date (never the token), and Claude adds a dated renewal reminder under "Dated reminders"
       below; for a key with no expiry setting, Claude adds a reminder to rotate it at 90 days.
-    - Saving a copy in Bitwarden is optional for these tokens. Not storing one at all, and making a
-      new one when it expires, is also fine. For new tokens and keys this replaces step 9's "API
-      keys go in Bitwarden secure notes".
+    - For a token that goes into Mako's key setup or a GitHub environment secret, a Bitwarden copy
+      is optional; not storing one at all, and making a new one when it expires, is also fine. A
+      token with no home yet (step 14's before S06) must wait in Bitwarden. For new tokens and keys
+      this replaces step 9's "API keys go in Bitwarden secure notes".
     - If it might have leaked: revoke it on its provider's page, then tell Claude. GitHub: Settings >
       Developer settings > Personal access tokens > Fine-grained tokens (or Tokens (classic)) > the
       token > **Revoke** or **Delete**, whichever GitHub shows. API keys: the pages in a.
