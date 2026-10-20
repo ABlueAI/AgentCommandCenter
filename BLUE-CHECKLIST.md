@@ -306,8 +306,9 @@ on its own, one session at a time on Pro.
     - On `ABlueAgent`, keep Claude's authorization: it is how cloud sessions act as the agent (step
       7c).
     - On `ABlueAI`, keep the Claude installation under Installed GitHub Apps (cloud sessions and the
-      runner reach the repo through it) and the ChatGPT/Codex authorization and installation (Codex
-      review, step 2e). A new token doesn't bring an app link back.
+      runner reach the repo through it) and the ChatGPT/Codex installation. Keep the ChatGPT/Codex
+      authorization on whichever account Codex is linked to (`ABlueAI` per step 2e, or `ABlueAgent`
+      if you moved it). A new token doesn't bring an app link back.
     - If `ABlueAI` still shows Claude under Authorized GitHub Apps, it is left over from before step
       7c and can act as you: revoke it. That removes the authorization, not the installation. If a
       cloud session can't reach the repo afterwards, tell Claude.
