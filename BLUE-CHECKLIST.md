@@ -248,9 +248,11 @@ on its own, one session at a time on Pro.
     `workflow`, `admin` or `delete_repo`), with a 90-day expiry.
   - Why classic: GitHub doesn't support fine-grained tokens for an account that is only a
     collaborator on a personal account's repository, which is what `ABlueAgent` is here (found by
-    Codex on PR #46, checked against GitHub's docs). `public_repo` reaches every public repository
-    `ABlueAgent` can write to, and today that is only this one; without `workflow` it can't change
-    CI. Don't give `ABlueAgent` write access to another repository without revisiting this token.
+    Codex on PR #46; GitHub's docs as quoted in a search result, not yet read directly). With
+    `public_repo` it can push code only where `ABlueAgent` has write access, today only this repo,
+    and without `workflow` it can't change CI. It can also open issues, PRs and comments as
+    `ABlueAgent` on any public repository, and create public repositories under `ABlueAgent`. Don't
+    give `ABlueAgent` write access to another repository without revisiting this token.
   - Its final home is Mako's in-app key setup (Electron safeStorage). Never `setx` or a Windows
     environment variable (AGENTS.md "Security rules").
   - Until S06 gives it a home in Mako (the plan doesn't yet say how; S06 decides), it waits only in
