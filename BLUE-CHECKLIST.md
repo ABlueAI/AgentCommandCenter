@@ -6,7 +6,8 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-19 by Claude (step 16 added: re-link Codex to `ABlueAgent`).
+Last updated 2026-10-20 by Claude (step 8 moved to 2026-10-28; steps 18, 19 and 20 added in PR #48; step 16
+added and ticked in PR #47).
 
 ## Today
 
@@ -104,13 +105,15 @@ Last updated 2026-10-19 by Claude (step 16 added: re-link Codex to `ABlueAgent`)
   - Download https://github.com/ABlueAI/AgentCommandCenter/blob/main/docs/handoff/GPT-BRIEFING-2026-10-17.md
     (or the copy sent in the Claude chat) and upload it to ChatGPT with: "Read this; it is the current
     state of Mako. From now on we coordinate through the GitHub repo."
+  - The briefing dates from 2026-10-17. Where it differs from docs/PLAN-1.1.md on `main` (for
+    example S16 is now the Composer research and the UI sessions are on hold), the plan wins.
 
 ## Before the daily runner starts building
 
 The runner is on since 2026-10-18 (8:01 AM Eastern). Each morning it first checks steps 1 and 7, and
 does nothing except send you a "waiting on step N" notice until they are complete (once PR #47 merges,
 it is expected to start with `NOT READY:`; not verified until S04's prompt). After that it runs
-on its own, one session at a time on Pro.
+on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
 
 - [x] **7. Guardrails, Part B: a separate GitHub account for agents.** About 15 minutes. *Done
   2026-10-18 with the guide session. Verified 2026-10-19 by the checker session, acting as the agent
@@ -166,9 +169,13 @@ on its own, one session at a time on Pro.
   - *Done when:* you say "Part B done" and the checker's PR, authored by the agent account, showed as
     blocked after CI passed until you approved it. On the next morning's run the runner starts
     building S01 instead of sending "waiting on step 7".
-- [ ] **8. Upgrade Claude to Max 5x.** About 2 minutes, on **Wednesday 2026-10-21**, after Pro's weekly
-  reset on Tuesday and before Pro renews on Thursday. claude.ai > Settings > Billing. Keep ChatGPT Plus.
+- [ ] **8. Upgrade Claude to Max 5x.** About 2 minutes, on **Wednesday 2026-10-28** (moved from
+  2026-10-21 on 2026-10-20), after you have used your remaining Pro resets: in your words, "2 full
+  resets & a weekly reset", plus 3 ChatGPT resets. claude.ai > Settings > Billing. Keep ChatGPT Plus.
   No longer blocks the runner; it builds one session at a time on Pro until then.
+  - The 2026-10-21 date was picked to upgrade before Pro renews on Thursday. If Pro renews on
+    Thursday 2026-10-22, it renews once more before the upgrade; Settings > Billing shows the renewal
+    date and how an upgrade is charged.
   - *Done when:* you say so. After S04, the runner then allows 2 sessions in parallel, later 3 (one
     setting in docs/RUNNER.md).
 
@@ -226,7 +233,13 @@ on its own, one session at a time on Pro.
   - Agents never close security alerts themselves.
   - *Done when:* #40 shows Closed, and the merge audit run for the fix's merge passed with no new
     alert. Claude checks both.
-- [ ] **13. Independent review for agent PRs.** Nothing more to do: done when you merge PR #42.
+- [x] **13. Independent review for agent PRs.** *Verified 2026-10-19 through GitHub's API: PR #42 was merged
+  by ABlueAI at 06:10 UTC as `246d743`, its TLDR links its "Independent review (Opus)" comments, and
+  the merge audit run on `246d743` succeeded. The new runner prompt was applied to the scheduled task
+  at 06:11 UTC; the update call's response showed the prompt from `docs/RUNNER.md` on `main` and the
+  repository still attached. A read of the task after PR #44 merged shows the same prompt but does
+  not list attached repositories; the 12:02 UTC run on the new prompt opened PR #44 from the
+  repository, and the prompt's step 1 attaches it if it is ever missing.*
   - What was found (2026-10-19):
     - Codex reviewed every PR you authored automatically ("PR opened", #36 to #38), but skipped #39
       and reviewed #41 only after your manual comment. Both were authored by `ABlueAgent`.
@@ -269,43 +282,47 @@ on its own, one session at a time on Pro.
     date. A failure gets a fix PR, or a revert of the Electron bump, before other work, and the
     agent sets S02 back to IN PROGRESS in docs/PLAN-1.1.md until it is fixed.
 
-## After session S04 is applied (not before)
+- [x] **16. Re-link Codex's GitHub to `ABlueAgent`.** *Done early, on 2026-10-20, before S04's prompt
+  (your word, relayed to the PR #48 session; docs/DECISIONS.md, 2026-10-20). Verified 2026-10-20 on
+  GitHub rather than by the screenshot this step first asked for: Codex reviewed `ABlueAgent`'s PR #48
+  automatically 9 seconds after it opened (trigger "PR opened"), with no request from anyone, and your
+  own manual request as `ABlueAI` on PR #48 was refused (STATUS.md). What the link can reach is step
+  20.* Your decision of 2026-10-19: Codex builds as the agent account, so you can approve its PRs
+  (expected; session S26 verifies which account Codex's PRs are attributed to). Same ChatGPT Plus
+  account, no new seat. (Numbered 16 because step 15 is the voice check from PR #45; open PR #46 also
+  used 15 and has been asked to take 17.)
+  - Done before S04's prompt, so today's runner prompt still says to post reviews "verbatim". Once PR
+    #47 merges, AGENTS.md's Codex-handle rule and step 3's replace-the-handle check govern it
+    (docs/RUNNER.md note). Until then nothing in the repo tells agents not to write Codex's handle,
+    and any `ABlueAgent` comment containing it may start a Codex task that pushes a branch (it can't
+    merge). Merging PR #47 closes that gap.
+  - What changed: Codex reviews agent PRs automatically; a review request you comment as `ABlueAI` now
+    fails, so ask an agent to post it (comment on the PR as `ABlueAI`, or tell the agent in its own
+    session). If ChatGPT uses this same GitHub connection outside Codex (not verified), repositories
+    only `ABlueAI` can reach drop out of ChatGPT and Codex; session S26 checks this.
 
-- [ ] **16. Not yet: re-link Codex's GitHub to `ABlueAgent` (proposed in PR #47; not before S04's
-  prompt is applied; blocks S26).** About 10 minutes. Do it only after session S04's new runner prompt is applied (the S04 PR's TLDR says when), and before
-  S26 (the runner won't start S26 until this is ticked). Waiting closes a gap: until then the live
-  runner prompt says to post reviews "verbatim", and a quoted Codex handle could start a Codex task. Your decision of 2026-10-19: Codex builds as the agent account, so you can approve its PRs
-  (expected; session S26 verifies which account Codex's PRs are attributed to).
-  Same ChatGPT Plus account, no new seat. (Numbered 16 because step 15 is the voice check from PR #45;
-  open PR #46 also used 15, so it renumbers when it merges.)
-  - Open a private browser window and sign in to GitHub there as `ABlueAgent`.
-  - In that same window, sign in to https://chatgpt.com with your **own** ChatGPT account. Don't make a
-    new one.
-  - Settings > Apps (or Connectors) > GitHub > **Disconnect**, then **Connect**, and authorize as
-    `ABlueAgent`. (Menu path not verified, because OpenAI's docs were blocked when this was written;
-    if it differs, stop and tell an agent.)
-  - If it offers to install the ChatGPT/Codex GitHub app on `ABlueAgent`, skip it. The agent owns no
-    repositories, and the app stays installed on `ABlueAI/AgentCommandCenter` from step 2e.
-  - Then open https://chatgpt.com/codex > Settings and check that `ABlueAI/AgentCommandCenter` is still
-    listed with code review on and **Automatic reviews** on.
-  - Expect: any comment by `ABlueAgent` that mentions Codex by its handle may now start a Codex task
-    on your Plus usage. AGENTS.md forbids agents to write that mention unless you ask for it (in a
-    comment as `ABlueAI` or in your own message to the agent); session S26 may add the runner's
-    hand-off as an exception. Nothing enforces that rule, so a mistaken agent comment could still start
-    a Codex task that pushes a branch; it can't merge.
-  - Expect: if ChatGPT uses this same GitHub connection outside Codex (not verified), it now acts as
-    `ABlueAgent` everywhere, so repositories only `ABlueAI` can reach, such as a future private
-    business repo, drop out of ChatGPT and Codex. Session S26 checks this.
-  - Expect: Codex's automatic reviews follow the linked account, so from now on they cover the agent's
-    PRs. Going by step 13 (automatic reviews covered only the linked account's PRs, and Codex refused
-    a request from an account not linked to ChatGPT), they will likely stop covering PRs you open as
-    `ABlueAI`, and a review request you comment as `ABlueAI` will likely fail. To get a Codex review
-    by hand after this, ask an agent to post the request: comment on the PR as `ABlueAI`, or tell the
-    agent in its own session.
-  - *Done when:* you tell an agent it's done and send a screenshot of chatgpt.com/codex settings
-    showing the GitHub account `ABlueAgent` and `ABlueAI/AgentCommandCenter` still listed. The agent
-    ticks this with the date. Whether the next agent PR then gets a Codex review without anyone
-    commenting is recorded as an observation for S26, not a condition for this step.
+- [ ] **18. Say go on the UI when your examples are ready.** About 1 minute, any time. The UI sessions
+  (S14 and S17 to S20) are on `HOLD (Blue)` in docs/PLAN-1.1.md (PR #48), so the runner skips them.
+  When your UI examples folder is ready, tell any agent "go on the UI". It records your words in
+  docs/DECISIONS.md and sets those rows back to READY in a PR; merging that PR starts them.
+  - *Done when:* that DECISIONS.md entry is on `main`. Claude checks.
+- [ ] **19. Give your Composer verdict after S16.** About 15 minutes, after the S16 PR opens. Read
+  `docs/decisions/OSS-composer.md`, answer its open questions, and give a verdict on each option
+  (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD FRESH) in your own words, in the S16 PR or to any
+  agent. Spending on Gumloop or any paid service needs your explicit OK there.
+  - *Done when:* your verdict is recorded word for word in OSS-composer.md and docs/DECISIONS.md.
+    A later plan change then adds the Composer build sessions.
+
+- [ ] **20. Check what Codex's GitHub link can reach.** About 3 minutes, any time soon. You linked
+  ChatGPT/Codex's GitHub to `ABlueAgent` on 2026-10-20 (STATUS.md), and nobody has checked its scope
+  since.
+  - Signed in as `ABlueAI`: github.com > Settings > Applications > **Installed GitHub Apps** > the
+    ChatGPT/Codex app > **Configure**. It should say **Only select repositories** with only
+    `AgentCommandCenter` (as in step 2e). If it says **All repositories**, switch it back and save.
+  - Signed in as `ABlueAgent` (private window): github.com > Settings > Applications. Check
+    **Installed GitHub Apps** (should be none) and **Authorized GitHub Apps** (the ChatGPT/Codex entry
+    is expected; note what else is listed).
+  - *Done when:* you tell any agent what both pages show; it records that in STATUS.md with the date.
 
 ## Every day, once the runner is on
 
@@ -317,11 +334,13 @@ on its own, one session at a time on Pro.
 
 You can start on the first one now, which saves time later.
 
-- **Session S14:** UI examples. Screenshots or links of designs you like. **Start a folder now.**
+- **Session S14 (on hold until you say go, step 18):** UI examples. Screenshots or links of designs
+  you like, including dashboards for different tasks (coding, research, business). **Start a folder
+  now.**
 - **Session S12:** your Hexona login URL.
 - **Session S13:** install the Obsidian app (2 minutes).
-- **Session S16:** your verdict on the Dodaios trial report.
-- **Session S17:** pick one of 2 or 3 design directions.
+- **Session S16:** your Composer verdict (step 19), including the Dodaios trial.
+- **Session S17 (on hold with S14):** pick one of 2 or 3 design directions.
 - **Session S21:** pick a logo variant.
 - **Session S23:** approve the client paperwork drafts.
 - **Session S24:** authorize the GoHighLevel connector in claude.ai (read-only token).
@@ -333,10 +352,8 @@ You can start on the first one now, which saves time later.
   edited, by anyone else), or hand it to an agent in its own session to open the PR. Not as a PR of your
   own: you can't approve your own PR, so it couldn't merge. S28 stays `NEEDS BLUE (package)` until
   it arrives.
-- **Session S27, Composer:** your research and placement from the plan-review chat. S27 stays NEEDS
-  BLUE until then.
 
 ## Dated reminders
 
 - **About 2026-11-17:** reassess plans. Is Max 5x enough, or move to 20x? The month review (S25)
-  brings the numbers.
+  brings the numbers. With the upgrade on 2026-10-28, that covers about 3 weeks of Max 5x use.

@@ -1,12 +1,12 @@
-# Mako 1.1: month-one plan (28 sessions)
+# Mako 1.1: month-one plan (28 sessions, 27 active)
 
 Drafted 2026-10-17 by Claude for Blue. Approved when the PR that adds it is merged. Changes only through
 `plan-change` PRs (rules below).
 
 **Latest change (2026-10-19, proposed, pending Blue):** S04 becomes an all-day runner that fires
 through the day, works sessions in parallel up to a cap and sends one evening digest; S04 now needs
-only S01; new session S26 adds Codex as a second builder; new sessions S27 (Composer) and S28 (agent
-profile refresh); session-end notices start with READY TO MERGE or NOT READY; S04 documents pausing
+only S01; new session S26 adds Codex as a second builder; new session S28 (agent profile refresh;
+S27, Composer, is dropped because PR #48 folded it into S16); session-end notices start with READY TO MERGE or NOT READY; S04 documents pausing
 through the claude.ai routines page and adds a usage alert, and S11 adds a Pause button in Mako where
 it can be done safely. Details below the session table and in the change log. Merging PR #47 approves
 all of this; a dedicated follow-up PR (or the runner's status PR, once S04 is applied) drops the
@@ -29,16 +29,22 @@ appends a DECISIONS.md entry that replaces the proposed PR #47 entry.
   session at a time until then, even after S04 merges. Its own prompt drops that limit at S04's merge,
   and whether this line holds it to one is not verified, so the safeguard is applying S04's prompt in
   the same sitting as its merge (S04 item 8).
-- **Parallel work:** the cap is one setting (S04 puts it in docs/RUNNER.md): 1 on Claude Pro, 2 to 3 on
-  Max 5x after Blue's upgrade on 2026-10-21, to stay under the weekly cap; 3 or 4 on Max 20x.
+- **Parallel work:** the cap is one setting (S04 puts it in docs/RUNNER.md): 1 on Claude Pro, until Blue
+  upgrades to Max 5x on Wednesday 2026-10-28 (BLUE-CHECKLIST.md step 8); then 2, and 3 once a week of
+  usage shows room, to stay under the weekly cap; 3 or 4 on Max 20x.
 - **Blue's day:** once S04 is merged and applied, one sitting in the evening, 10 to 20 minutes: read the digest,
   answer anything marked "needs Blue", then approve and merge every PR that is ready.
 
 ### Status values
 
 `READY` · `IN PROGRESS (#PR)` · `NEEDS BLUE (#PR)` (or `NEEDS BLUE (reason)` before any PR exists) ·
-`DONE (#PR)` · `DROPPED (reason)`. The session's PR updates its own row (after S04 is applied, the
+`HOLD (Blue)` · `DONE (#PR)` · `DROPPED (reason)`. The session's PR updates its own row (after S04 is applied, the
 runner's status PR marks merged sessions DONE; S04 item 6).
+
+`HOLD (Blue)`: the runner skips the row (it only starts `READY` rows) until Blue says go. His "go" is
+recorded, in his words, in docs/DECISIONS.md, and the same PR sets the row back to `READY`; merging that
+PR releases it. A row whose Needs include a held session waits as well. S03's board and issue sync show
+held rows as held (a Hold column or a `hold` label), never as Ready.
 
 ### When the plan changes
 
@@ -53,7 +59,7 @@ runner's status PR marks merged sessions DONE; S04 item 6).
 |---|---|---|---|---|---|---|
 | S01 | **Finish guardrails.** Blue does the clicks in docs/SETUP-GUARDRAILS.md; Claude then opens a test PR from the agent account and confirms it cannot merge without Blue's approval. | Test PR blocked without approval; merge audit quiet on a proper merge. | High | blue | PR #27 merged | DONE (#44) |
 | S02 | **CI and dependency hygiene.** Pin GitHub Actions to commit SHAs; make CI a required check; `npm audit fix` for the 11 advisories with dictation and TTS regression checks. | CI green and required; advisories fixed or each one explained. | High | windows | S01 | DONE (#45) |
-| S03 | **Plan to issues.** Labels (authority, lane, plan-change, needs-blue, sensitive, security-alert), task issue template, "1.1 Month 1" milestone, a GitHub Project board (Ready, Running, Needs Blue, Ready to merge, Done), and a workflow that keeps one issue per session in sync with this file. Sync issues are titled `Sxx: <title>`, and the sync matches only that prefix on issues it created itself. | Board mirrors this table automatically. | Max | cloud | S01 | READY |
+| S03 | **Plan to issues.** Labels (authority, lane, plan-change, needs-blue, sensitive, security-alert), task issue template, "1.1 Month 1" milestone, a GitHub Project board (Ready, Running, Needs Blue, Hold, Ready to merge, Done), and a workflow that keeps one issue per session in sync with this file. Sync issues are titled `Sxx: <title>`, and the sync matches only that prefix on issues it created itself. | Board mirrors this table automatically. | Max | cloud | S01 | READY |
 | S04 | **All-day runner and digest.** The runner fires through the day: it fixes its own open PRs, then starts every unclaimed READY session up to a parallel cap, stops cleanly at a usage limit and resumes on a later fire, and sends one evening digest. Details below the table. | Two consecutive days run unattended through multiple fires; a usage-limit stop resumes on its own on a later fire; the digest arrives both evenings. | High | blue | S01 | READY |
 | S26 | **Codex builder lane.** Codex, linked to `ABlueAgent`, builds sessions as a second builder: it claims a session before starting, so Claude and Codex never take the same one, follows AGENTS.md, and gets the same Opus review plus Codex's automatic review. Sensitive. Details below the table. | One session built end to end by Codex: a PR authored by `ABlueAgent` from a `codex/` branch with no Claude builder on it, an Opus review, and a Codex automatic review if one arrives (recorded either way), merged by Blue; the S26 PR also updates `.claude/agents/pr-reviewer.md` to match AGENTS.md step 3. | High | blue | S04, checklist step 16 (Codex re-linked to `ABlueAgent`) | READY |
 | S28 | **Agent profile refresh.** Update agent-roles/*.md from Blue's package (details from his agent-roles chat): the bodies, and any frontmatter changes the package asks for. The whole change is sensitive: role bodies set what each role is told, and frontmatter sets its tools and permissions. Run the role tests, then deploy with scripts/sync-roles.ps1. The package arrives one of two ways. (1) An issue titled `agent-roles package (S28)` (not starting with `Sxx:`, so S03's per-session issue sync never matches it), opened by `ABlueAI` and edited by no one else: an issue by anyone else, or one someone else has edited, never counts; the runner checks the author and the edit history before using it, and if it can't check them, the issue doesn't count; only the issue body counts, never its comments; and the session locks the issue's conversation to collaborators. (2) Blue hands it to an agent in its own session, which opens the PR as `ABlueAgent` (a PR Blue opens himself couldn't get the code-owner approval it needs). Until then the row stays `NEEDS BLUE (package)`. Before S04 is applied, an interactive session (on Blue's request) checks the issue's author and edit history and sets the row to READY in a PR; after that, the runner's status PR does it, with the same check in S04's prompt. The runner starts S28 once Blue merges that PR. | Role tests pass in CI (app/role-frontmatter.test.js, app/role-fence-policy.test.js, scripts/sync-roles.Tests.ps1); scripts/sync-roles.ps1 deploys on Blue's PC and Blue confirms the roles launch. | High | blue | S01, Blue's agent-roles package | NEEDS BLUE (package) |
@@ -66,19 +72,67 @@ runner's status PR marks merged sessions DONE; S04 item 6).
 | S11 | **Usage panel.** 5-hour and weekly usage with reset countdown (Claude's `/usage` data or ccusage). Claude Code's built-in auto-continue does the resuming. A warning at about 90% of either limit, and Pause and Resume buttons that turn the runner routine off and on, if that can be done safely (no claude.ai login stored in Mako without its own sensitive review); otherwise the button opens claude.ai/code/routines. Sensitive if it stores or uses a claude.ai login or token. | Panel matches `/usage` on Blue's account; the 90% warning shows; Pause stops the runner, or opens the routines page. | Medium | windows | S07 | READY |
 | S12 | **Quick Links bundle.** Claude desktop, Codex app, GitHub PRs and Project board, Obsidian vault, Hexona, Hermes and Dodaios docs. | Links open; Blue confirms the Hexona URL. | Medium | blue | S01 | READY |
 | S13 | **Obsidian Skills.** One-page OSS note quoting Blue's ADOPT; install kepano/obsidian-skills; private vault outside this public repo with an index that links to STATUS, PLAN and DECISIONS. | Agents can read and update the vault index. Blue installs the Obsidian app (2 minutes). | Medium | blue | S01 | READY |
-| S14 | **Design tools and brief.** Install UI UX Pro Max; write the design brief; collect Blue's UI examples. | Brief plus Blue's examples in the repo. | Medium | blue | S01 | READY |
+| S14 | **Design tools and brief.** Install UI UX Pro Max; write the design brief, covering a main dashboard plus task-specific layouts Blue can switch between (for example coding, research and business; Blue chooses the final set); collect Blue's UI examples. | Brief plus Blue's examples in the repo. | Medium | blue | S01 | HOLD (Blue) |
 | S15 | **Research capture.** "Send this page to Reviewer" flow; evaluate Claude in Chrome on Windows; research agents stay read-only. | Blue sends a Reddit thread to a reviewer without copy and paste. | Medium | windows | S10 | READY |
-| S16 | **Dodaios trial.** One-day sandboxed evaluation with no real credentials; report recommending keep Mako, adopt a piece, or fork. | Report and Blue's verdict recorded. | Minimum | blue | S01 | READY |
-| S17 | **Design directions.** Two or three clickable concepts from Blue's examples. | Blue picks one. | Medium | blue | S14 | READY |
-| S18 | **New layout, part 1.** Navigation, pane area and toolbar in the chosen design, behind a setting so the old layout stays available. | Daily use works in the new layout. | High | windows | S17 | READY |
-| S27 | **Composer.** One Mako pane takes a large task and fans it out to several agents, and can split and compose sessions. A must-have early in 1.1 (Blue). Listed after S18 as Blue asked; its dependencies, final placement and details come from his separate plan-review chat. | Set by Blue's research. | High | windows | Blue's research | NEEDS BLUE (Blue's research) |
-| S19 | **New layout, part 2.** Pane and status visuals; "needs you" stands out. | Blue accepts the look. | High | windows | S18 | READY |
-| S20 | **New layout, part 3.** Library, Logs and settings restyled; old layout removed after Blue accepts. | One consistent design. | High | windows | S19 | READY |
+| S16 | **Composer research (includes the Dodaios trial).** Research for the Composer (one Mako pane that takes a large task, fans it out to several agents, and lets Blue compose and split sessions from it) and for workflow automation. Any hands-on trial, including the one-day Dodaios trial, runs only in a sandbox with no real credentials. Scope and what it must cover: "S16 details" below the table. | `docs/decisions/OSS-composer.md` exists in the AGENTS.md OSS shape: each option has a verdict proposal (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD FRESH) and a blank for Blue's verdict, word for word, and it ends with an open-questions list for Blue. Blue's verdict is then recorded. | Minimum | blue | S01 | READY |
+| S17 | **Design directions.** Two or three clickable concepts from Blue's examples. | Blue picks one. | Medium | blue | S14 | HOLD (Blue) |
+| S18 | **New layout, part 1.** Navigation, pane area and toolbar in the chosen design, behind a setting so the old layout stays available. | Daily use works in the new layout. | High | windows | S17 | HOLD (Blue) |
+| S27 | **Composer.** Dropped: PR #48 (merged 2026-10-20) folded the Composer into S16, "Composer research (includes the Dodaios trial)", with Composer build sessions in a later plan change after Blue's S16 verdict. | None (dropped). | None | none | None | DROPPED (folded into S16 by PR #48) |
+| S19 | **New layout, part 2.** Pane and status visuals; "needs you" stands out. | Blue accepts the look. | High | windows | S18 | HOLD (Blue) |
+| S20 | **New layout, part 3.** Library, Logs and settings restyled; old layout removed after Blue accepts. | One consistent design. | High | windows | S19 | HOLD (Blue) |
 | S21 | **Logo readability.** "M" variants at 16 to 48 px; Blue picks; taskbar and shortcut icons updated. | Blue can read the M on the taskbar. | Medium | blue | S07 | READY |
 | S22 | **Marina research brief.** Charlotte County independent marinas from public sources (no Google Maps scraping): basics, likely pain points, outreach angles. Output goes in a private repo. | Brief delivered privately. | Minimum | cloud | S01 | READY |
 | S23 | **Client paperwork drafts.** Intake questionnaire, scope-of-work template, contract template, bucket-of-hours and retainer terms. Blue builds the form in Hexona. | Blue approves the drafts. | Medium | blue | S22 | READY |
 | S24 | **HighLevel connection.** Blue authorizes the GoHighLevel connector in claude.ai with a read-only token; one read-only workflow, such as listing new inquiries. Sensitive. | Read-only workflow works; no writes possible. | High | blue | S23 | READY |
-| S25 | **Month review.** What shipped, interruptions, fix rounds, usage against the plan; month two drafted as a plan-change PR. | Month-two plan PR open. | Medium | cloud | S20 | READY |
+| S25 | **Month review.** What shipped, interruptions, fix rounds, usage against the plan; month two drafted as a plan-change PR. | Month-two plan PR open. | Medium | cloud | runs in the last week of month one, from 2026-11-14 (not before that date) | READY |
+
+### S16 details: Composer research
+
+Background: the Composer is not in this plan yet. Its ancestor is the deferred "Coordinator"
+(docs/source-material/2026-07-14-browser-transfer/originals/BLUE-HELM-PROGRESS-MAP-7-1-2026.docx,
+sections 4 and 5; the last line of agent-roles/operator.md; docs/PROJECT-STATE.md:101;
+BLUE-HELM-MASTER-STATUS.md R15, around line 2842). The Operator role (agent-roles/operator.md) is not
+a Composer shell: it is a fenced marketing role that can't start or read other panes, and S16 leaves it
+unchanged.
+
+**Options to cover:**
+
+- **Dodaios** (https://github.com/Dodaios/Dodaios, formerly Personal Jarvis): the one-day sandboxed
+  trial, with no real credentials. Cover its fan-out to several panes, the voice "person you talk to",
+  persistent agents, summaries and updates, Windows install (from its docs; a hands-on Windows install
+  runs only in a sandbox, such as the Codex Windows sandbox, with no real credentials), licence and
+  telemetry. Blue named it, so
+  ADOPT or FORK of the relevant piece is the default; narrowing that to "study and rebuild" needs his
+  OK.
+- **Claude desktop's linked sessions** (the Composer fans work out to several agents the way linked
+  sessions do) and **Claude Code Agent Teams and subagents**. Both come from the 2026-10-20 brief for
+  this plan change, which names linked sessions as Blue's pattern; that brief is not in the repo, and
+  none of Blue's quotes in docs/DECISIONS.md mention them.
+- **Microsoft Conductor** (already in docs/research/RESEARCH-mako-1.1-2026-10-16.md, section J).
+- **The R15 pattern mine:** parallel-code, crystal, Emdash.
+- **Cloudroom** (davidondrej/cloudroom-core and cloudroom-gui): verify its Windows support on GitHub.
+  As read on 2026-10-20 it is macOS plus a Linux alpha, which would make it pattern-mine only.
+- **Workflow automation:** Gumloop as Blue's UX template. It is closed, paid SaaS, so no adoption
+  without Blue's OK on spending. Also n8n (check its licence) and Activepieces as open-source options.
+
+**Must cover:** how a Composer fits Mako's guardrails (authority levels, S10; the usage cap and
+parallel cap, S04; Blue merging everything); that it would be a new, sensitive role, because it starts
+panes and reads their output; and how its voice reuses Mako's existing whisper STT and Kokoro TTS.
+
+**Open questions for Blue**, listed at the end of OSS-composer.md, plus any the research raises:
+
+1. Does the Composer only split and dispatch work, or also review and merge-brief it? (Only Blue merges
+   either way.)
+2. Local panes, cloud sessions, or both?
+3. Does it start agents itself, or propose a split that Blue approves?
+4. How much usage can one Composer task spend?
+5. Voice: always listening (wake word), or push to talk?
+6. Updates: in the app only, on the phone, or spoken?
+7. One persistent "chief of staff" with memory, or one Composer per task?
+8. Are workflow automations part of the Composer, or a separate feature?
+
+Composer build sessions are added by a later plan change, after Blue's verdict on S16 (see "Month two
+and later").
 
 ### S04 details: all-day runner and digest
 
@@ -113,7 +167,7 @@ runner's status PR marks merged sessions DONE; S04 item 6).
    start time that expires after a set number of hours) and a separate marker for "paused at a usage
    limit", since draft alone can't tell the two apart.
 3. **Parallel cap.** One setting in docs/RUNNER.md, read each fire: 1 on Pro; 2 after Blue's Max 5x
-   upgrade on 2026-10-21; 3 once a week of usage shows there is room. It counts every session being
+   upgrade on 2026-10-28; 3 once a week of usage shows there is room. It counts every session being
    built across overlapping fires, not sessions per fire.
 4. **Usage limits.** Builders commit and push after every meaningful step, because a session at the
    limit can't act. If it still can, it marks the PR draft with a one-line status and ends. A later
@@ -212,16 +266,19 @@ runner's status PR marks merged sessions DONE; S04 item 6).
 ### Blue's inputs this month
 
 S01 GitHub clicks (about 20 minutes) · S06 `ABlueAgent` token for local agents (checklist step 14) · S04 time zone (given 2026-10-18: Eastern) and digest time (default 8 PM) · S12 Hexona URL · S13 install
-Obsidian · S14 UI examples · S16 Dodaios verdict · S17 pick a design · S21 pick a logo · S23 approve
-paperwork · S24 authorize HighLevel · S26 re-link Codex to `ABlueAgent` (checklist step 16, proposed) · S27
-Composer research · S28 agent-roles package · every merge.
+Obsidian · say go on the UI (S14, S17–S20; checklist step 18) · S14 UI examples · S16 Composer verdict
+(checklist step 19) · S17 pick a design · S21 pick a logo · S23 approve paperwork · S24 authorize
+HighLevel · S26 Codex re-link to `ABlueAgent` (checklist step 16, done 2026-10-20) · S28 agent-roles
+package · every merge.
 
 ## Month two and later (not scheduled yet)
 
 Brother's separate Windows install and packaging (target April 2027; Smart App Control and code-signing
 decision) · cost reporting beyond the usage panel · command palette · per-task setup scripts and ports ·
 voice-addressed panes · Microsoft 365 through Claude's connector instead of a built-in mail panel ·
-Hermes trial · any work orders from the Dodaios verdict.
+Hermes trial · Composer build sessions, added by a later plan change after Blue's verdict on S16 (target:
+alongside or after S18–S20) · workflow automations (after S16) · any other work orders from the S16
+verdict.
 
 Dropped, with reasons in docs/DECISIONS.md once Blue confirms: Jev (paid classifier, nothing to
 solve) · claude-mem (telemetry on by default, reads Claude credentials, overlaps built-in memory and
@@ -236,5 +293,8 @@ does both) · Vibe Kanban (removed in 1.0).
 - 2026-10-19: S06 gains the local-agent account move (proposed, pending Blue; PR #44).
 - 2026-10-19: S01 marked DONE (#44). Evidence: agent PR #39 stayed blocked until Blue approved it (checklist 7f); the merge audit passed on the #41 merge (`8846eed`, checklist 12). Moving local agents to the agent account was not in S01's done-when, so it is added to S06 (plan change, pending Blue).
 - 2026-10-19: the S06 local-agent account move and checklist step 14 approved: Blue merged PR #44 (`80a8dac`, 13:58 UTC).
+- 2026-10-20: the Max 5x upgrade moves from Wednesday 2026-10-21 to Wednesday 2026-10-28, so Blue can use his remaining Pro resets; the runner stays at one session at a time on Pro until then, and "Parallel work" now says so (Blue; docs/DECISIONS.md 2026-10-20).
+- 2026-10-20 (proposed, pending Blue; PR #48): new status `HOLD (Blue)`; S14 and S17 to S20 (the UI sessions) set to `HOLD (Blue)` until Blue says go; S14's brief adds a main dashboard plus task-specific layouts; S16 widened from "Dodaios trial" into "Composer research (includes the Dodaios trial)", with "S16 details" below the table; S25's Needs change from S20 (now held) to "runs in the last week of month one, from 2026-11-14 (not before that date)", wording and date from the 2026-10-20 brief for this change; Blue's inputs gain "say go on the UI" and the S16 Composer verdict; "Month two and later" gains Composer build sessions and workflow automations, both after S16. S21 (logo) stays READY. S03's board and sync must show held rows as held, not Ready (S03's board gains a Hold column). Blue's words are in docs/DECISIONS.md, 2026-10-20.
 - 2026-10-19 (proposed, pending Blue): S04 rewritten from "Daily runner and digest" into "All-day runner and digest", after Blue asked for a runner that works all day while he reviews and merges once in the evening (docs/DECISIONS.md, 2026-10-19). S04's Needs change from "S01, S03" to "S01": the runner reads this table and open PRs and issues on GitHub, not S03's board, which only mirrors them, so the runner takes S04 right after S03 (S02 is done). S03's row now says its sync issues are titled `Sxx: <title>` and that the sync matches only that prefix on issues it created itself, so Blue's S28 package issue is never touched. "How this plan runs" now describes the all-day runner and the evening sitting. New session S26 "Codex builder lane" (needs S04 and checklist step 16, Blue's Codex re-link). Because the runner works in table order, S26 comes ahead of S05 to S25 once S04 is merged and step 16 is ticked; that is intended, so Codex starts building early and in parallel. The parallel cap on Max 5x goes from "at most 2" to 2, then 3 after a week of usage shows room. AGENTS.md: once S04 is merged and applied, session PRs change only their own row here (unless labelled `plan-change`), add only the checklist steps and decisions they need, and stop editing STATUS.md, to reduce conflicts between parallel PRs; after step 16, Codex's automatic reviews are answered like any review; on merge, a checklist-numbering rule, a rule against writing Codex's handle in GitHub text, and a step 3 rule that a Claude session (or the next runner fire) reviews Codex's PRs.
 - 2026-10-19 (proposed, pending Blue; same PR, Blue's additions): every session-end message and phone notification starts with "READY TO MERGE" or "NOT READY: <reason>" (AGENTS.md "How work flows" step 5, S04 item 7). Pause button and usage alert instead of an automatic stop: S04 item 9 documents the stop button, researches whether a cloud session can read plan usage for a 90% notice, and never starts a session late in a usage window; S11 gains a 90% warning and Pause and Resume buttons. New S27 "Composer" (a must-have early in 1.1, listed after S18, NEEDS BLUE for Blue's research) and S28 "Agent profile refresh" (after S26, needs S01 and Blue's agent-roles package; once his package arrives the runner takes it ahead of S05 to S25, which is intended, because it applies material Blue has just handed over). The month now has 28 sessions.
+- 2026-10-20 (proposed, pending Blue; PR #47, after merging PR #48): S27 "Composer" is DROPPED, because PR #48 (merged) folded the Composer into S16 "Composer research", with build sessions in a later plan change after Blue's S16 verdict, following his newer words to push the UI and Composer back; this month has 27 active sessions. S04's parallel cap follows the upgrade's new date, 2026-10-28. Checklist step 16 (the Codex re-link) is ticked: Blue did it on 2026-10-20.
