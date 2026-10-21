@@ -429,12 +429,16 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   writes the brief). S17 to S20 are built by Codex, which you start yourself once S14 and S26 are
   done; the runner never builds them (docs/PLAN-1.1.md "UI sessions: who builds").
   - *Done when:* that DECISIONS.md entry is on `main`. Claude checks.
-- [ ] **19. Give your Composer verdict after S16.** About 15 minutes, after the S16 PR opens. Read
+- [x] **19. Give your Composer verdict after S16.** About 15 minutes, after the S16 PR opens. Read
   `docs/decisions/OSS-composer.md`, answer its open questions, and give a verdict on each option
   (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD FRESH) in your own words, in the S16 PR or to any
   agent. Spending on Gumloop or any paid service needs your explicit OK there.
   - *Done when:* your verdict is recorded word for word in OSS-composer.md and docs/DECISIONS.md.
     A later plan change then adds the Composer build sessions.
+  - *Done 2026-10-21:* Blue gave his verdict in his own session: "everything stays open for study,
+    questions deferred". No option is adopted; the open questions wait for more OSS review. PR #82
+    records his words in OSS-composer.md and docs/DECISIONS.md (checked in the PR's diff). What the
+    later Composer plan change contains is his call.
 
 - [x] **20. Check what Codex's GitHub link can reach.** About 3 minutes, any time soon. *Done
   2026-10-21 on Blue's word: "yes it is only select repositories. with my main few checked and i will
@@ -555,7 +559,7 @@ You can start on the first one now, which saves time later.
 - **Session S13:** install the Obsidian app (2 minutes).
 - **Session S26:** comment as `ABlueAI` on its claim issue to start Codex's trial build (the session
   tells you when and what to write).
-- **Session S16:** your Composer verdict (step 19), including the Dodaios trial.
+- **Session S16:** ~~your Composer verdict (step 19)~~ Done 2026-10-21: everything stays open for study, questions deferred.
 - **Session S17 (on hold with S14):** pick one of 2 or 3 design directions.
 - **Session S21:** pick a logo variant.
 - **Session S23:** approve the client paperwork drafts.

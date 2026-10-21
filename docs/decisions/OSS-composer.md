@@ -1,16 +1,26 @@
 # S16: Composer research (includes the Dodaios trial)
 
-2026-10-21, plan session S16 (PR #82). Research only: no Mako code changes. Blue's verdicts go in
-the blank lines below, word for word (BLUE-CHECKLIST.md step 19).
+2026-10-21, plan session S16 (PR #82). Research only: no Mako code changes. Blue's verdict, given
+on 2026-10-21, is recorded below, word for word (BLUE-CHECKLIST.md step 19).
 
 The **Composer** is one Mako pane that takes a large task, fans it out to several agents, and lets
 Blue compose and split sessions from it (docs/PLAN-1.1.md, "S16 details"). Blue also wants it to be
 "almost to be a person i can communicate with ... to run all of the agents and ... recieve updates
 and get summaries from an inteligent role" (docs/DECISIONS.md, 2026-10-20).
 
+## Blue's verdict (2026-10-21)
+
+No option is adopted, rejected or scheduled. Every option below stays open for study, and the open
+questions are deferred, to be answered as more OSS material is reviewed. The proposed verdicts and
+the recommended direction below are the builder's proposals and input for that later work, not
+decisions. Blue, in his own session on 2026-10-21:
+
+- "bottom line, you wont be able to come up with the best answer for creating the composer, nor will i. it will come from a lot of input from a lot of OSS material and we will figure out the good and bad tidbits and find something i like. but for now i dont have all of the answers and that will need to be answered down the line"
+- "no, this does not cover my conclusion. everything stays open for study, questions deferred"
+
 ## One-page summary
 
-**Recommended direction (detail at the end):** build the Composer as a thin, Mako-owned layer on
+**Recommended direction (builder's proposal, not adopted; detail at the end):** build the Composer as a thin, Mako-owned layer on
 top of Claude Code's own parallel-agent features, with Mako's existing voice; run a credentialed
 Dodaios prototype (a later sandboxed session, not S16) before deciding whether to adopt Dodaios as the Composer's engine; and mine the
 other tools for patterns.
@@ -35,12 +45,9 @@ Opus 5.5, and asks Blue only before Opus 5.5 at max effort. The Claude Code opti
 Dodaios's panes can set model and effort per agent; Dodaios's fan-out call can't (see "The model
 rule" below). Mako enforces the rule in its own launch code, not in the Composer's prompt.
 
-**How to give your verdict:** read this summary, the "Open questions" and "Recommended direction"
-at the end. Then give a verdict per row (one word is enough, or "agree with all proposals") and
-answer the open questions, in a comment by `ABlueAI` on PR #82 that nobody else has edited, or to
-an agent in your own session (as the repo's other rules count only your own words). The agent copies your words into the blank
-lines below and into docs/DECISIONS.md. Spending on Gumloop or any paid service needs your explicit
-OK there.
+**Blue's verdict:** every option stays open for study and the open questions are deferred (see
+"Blue's verdict" above). The "Proposed verdict" column is the builder's proposal only. Spending on
+Gumloop or any paid service still needs Blue's explicit OK.
 
 ## What every option is judged against
 
@@ -61,7 +68,7 @@ OK there.
   renderer, app/renderer/stt-bootstrap.js) and Kokoro TTS (`Kokoro-82M`, app/renderer/tts.js). The
   Composer would be the one voice that speaks. docs/PROJECT-STATE.md's roadmap proposes that
   background panes chime instead of talking over it, and a voice per role; neither is built yet
-  (today Mako has one global voice, `am_michael`).
+  (today Mako has one global voice, default `am_michael`, selectable).
 - **Windows first, OSS first, no telemetry surprises, failures visible** (AGENTS.md).
 
 ## The model rule
@@ -195,13 +202,14 @@ next step is a one-day credentialed prototype on Windows (open question 9), runn
 beside Mako on a throwaway repo, with the checks above as pass or fail. That prototype is not part of
 S16, which allows no real credentials: it needs its own sensitive plan row (credentials) in the
 later Composer plan change, and it runs only where AGENTS.md allows Maximum-style runs (the Codex
-app's Windows sandbox, or Windows Sandbox if Blue accepts it as one), because Dodaios's mission
+app's Windows sandbox; Windows Sandbox only if AGENTS.md's Maximum row is first changed to
+include it), because Dodaios's mission
 workers run with permission prompts off. If it passes, a build session
 adopts it behind a Mako pane (Dodaios's web UI on `127.0.0.1`, panes pinned to Mako's permission
 modes); if it fails, its patterns are mined with Blue's OK. Forking a piece into Mako's Electron and
 Node code would effectively be a rewrite from Python, so FORK is not proposed.
 
-Blue's verdict, word for word: ______________________________
+Blue's verdict, word for word: "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
 
 ### 2. Claude Code subagents, agent view and cross-session messaging
 
@@ -232,7 +240,7 @@ built in; Mako's whisper and Kokoro do it.
 dispatches, cross-session messaging for updates, agent view's state and summary model as the pattern
 for the Composer's status list).
 
-Blue's verdict, word for word: ______________________________
+Blue's verdict, word for word: "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
 
 ### 3. Claude Code Agent Teams
 
@@ -254,7 +262,7 @@ model rule can be held by subagent definitions with a fixed `model` and `effort`
 **Proposed verdict: PROTOTYPE** (one research-only trial in a single Mako pane, after the Composer's
 first build session, to compare with Mako-launched panes).
 
-Blue's verdict, word for word: ______________________________
+Blue's verdict, word for word: "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
 
 ### 4. Claude desktop's linked sessions and Claude Code Projects
 
@@ -290,9 +298,9 @@ before a Projects trial. No voice in Projects; it lives outside Mako.
 a throwaway repo once it reaches Blue's account and the merge gap is closed, to compare its
 coordinator and summaries with the Composer.
 
-Blue's verdict, word for word (linked sessions): ______________________________
+Blue's verdict, word for word (linked sessions): "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
 
-Blue's verdict, word for word (Projects): ______________________________
+Blue's verdict, word for word (Projects): "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
 
 ### 5. Microsoft Conductor
 
@@ -317,7 +325,7 @@ spending (AGENTS.md: ask Blue). Copilot is its default provider and Blue doesn't
 effort in a file under version control; revisit for workflow automation if Blue wants workflows as
 code).
 
-Blue's verdict, word for word: ______________________________
+Blue's verdict, word for word: "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
 
 ### 6. The R15 pattern mine: parallel-code, crystal, Emdash
 
@@ -349,11 +357,11 @@ task, issue intake. None adds a voice coordinator.
 **Proposed verdicts:** parallel-code **PATTERN-MINE** · crystal **PATTERN-MINE** (history only;
 deprecated) · Emdash **PATTERN-MINE**.
 
-Blue's verdict, word for word (parallel-code): ______________________________
+Blue's verdict, word for word (parallel-code): "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
 
-Blue's verdict, word for word (crystal): ______________________________
+Blue's verdict, word for word (crystal): "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
 
-Blue's verdict, word for word (Emdash): ______________________________
+Blue's verdict, word for word (Emdash): "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
 
 ### 7. Cloudroom (cloudroom-core and cloudroom-gui)
 
@@ -378,7 +386,7 @@ localhost only. Hosted cloud is invite-only.
 **Proposed verdict: PATTERN-MINE** (Teleport is the same idea as Mako's Maximum level, which sends a
 task to a cloud session; the agent-as-separate-OS-user model is worth noting for S10).
 
-Blue's verdict, word for word: ______________________________
+Blue's verdict, word for word: "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
 
 ### 8. Workflow automation: Gumloop, n8n, Activepieces
 
@@ -415,11 +423,11 @@ credentials by default. Voice: none of them speaks; the Composer could start a w
 spending without Blue's OK) · n8n **PATTERN-MINE** (licence and default telemetry) · Activepieces
 **PROTOTYPE** (in the later workflow-automation session, sandboxed, no real credentials).
 
-Blue's verdict, word for word (Gumloop): ______________________________
+Blue's verdict, word for word (Gumloop): "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
 
-Blue's verdict, word for word (n8n): ______________________________
+Blue's verdict, word for word (n8n): "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
 
-Blue's verdict, word for word (Activepieces): ______________________________
+Blue's verdict, word for word (Activepieces): "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
 
 ## What was checked, and what was not
 
@@ -435,6 +443,9 @@ Blue's verdict, word for word (Activepieces): ______________________________
   treated as data and not followed.
 
 ## Open questions for Blue
+
+Deferred by Blue on 2026-10-21 ("questions deferred"). They stay here as the list to answer down
+the line, as the OSS review goes on.
 
 From the S16 row:
 
@@ -454,8 +465,8 @@ Raised by the research:
    model. Should a later session run a one-day trial on Windows with your Claude subscription signed in,
    on a throwaway repo, with no business data? It can't run under S16, which allows no real
    credentials: a "yes" here only records the decision, and the trial gets its own sensitive plan row
-   in the later Composer plan change. It runs in the Codex app's Windows sandbox or, if you accept it
-   as a sandbox, Windows Sandbox; a separate Windows user is not a sandbox under AGENTS.md.
+   in the later Composer plan change. It runs in the Codex app's Windows sandbox; Windows Sandbox only if AGENTS.md's
+   Maximum row is first changed to include it; a separate Windows user is not a sandbox under AGENTS.md.
    (Recommended: yes, time-boxed.)
 10. **Merging after your approval.** Cloud project threads, and possibly any `ABlueAgent` actor that
     doesn't read `.claude/settings.json`, might be able to merge a PR once you approve it (issue #85,
@@ -472,6 +483,8 @@ Raised by the research:
     5.5 for small chores, or always Opus 5.5?
 
 ## Recommended direction
+
+The builder's proposal, not adopted: Blue's verdict keeps every option open for study.
 
 Build the Composer as a thin layer that Mako owns: one Composer pane, a sensitive role, that talks
 with Blue through Mako's existing whisper and Kokoro voice, proposes a split with a model and effort

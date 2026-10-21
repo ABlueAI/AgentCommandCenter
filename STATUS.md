@@ -29,8 +29,9 @@ Updated 2026-10-21 by Claude. Every PR that changes the state updates this file.
 - **Composer research (S16, PR #82):** [docs/decisions/OSS-composer.md](docs/decisions/OSS-composer.md)
   covers Dodaios (sandboxed trial without any model or key), Claude Code's parallel-agent features
   and Projects, Microsoft Conductor, the R15 pattern mine, Cloudroom (no Windows build) and workflow
-  automation, each with a proposed verdict. It waits for Blue's verdict and answers (checklist step
-  19); Composer build sessions come in a later plan change.
+  automation, each with a proposed verdict. Blue's verdict (2026-10-21, checklist step 19): everything
+  stays open for study, questions deferred; the Composer's design is to come from more OSS review.
+  No Composer build session is planned yet.
 - **Needs-you alerts (S05, PR #49 merged 2026-10-21, still IN PROGRESS):** Mako observes the
   existing pane-status views and uses Electron's native Windows notifications for attention and
   turn-ended transitions. The phone setup note is [docs/NEEDS-YOU-ALERTS.md](docs/NEEDS-YOU-ALERTS.md).
