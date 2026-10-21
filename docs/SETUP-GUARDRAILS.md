@@ -31,7 +31,8 @@ personal approval.
 5. **Codex reviews (optional since 2026-10-19).** The required independent review is now the
    `pr-reviewer` subagent the builder runs on its own PR (AGENTS.md "How work flows" step 3,
    `.claude/agents/pr-reviewer.md`). Codex reviewed your PRs automatically but not the agent's
-   (#39, #41), so it's an extra you can request by hand. If you keep it: chatgpt.com/codex > Settings > Code review, enable it for
+   (#39, #41), so it's an extra you can request by hand. After BLUE-CHECKLIST.md step 16, ask an agent
+   to post the request (AGENTS.md step 3; this worked on PR #47 on 2026-10-21, STATUS.md). If you keep it: chatgpt.com/codex > Settings > Code review, enable it for
    `ABlueAI/AgentCommandCenter`. When GitHub asks which
    repositories the app may access, choose **Only select repositories**, not all: every repository an
    AI app can reach is one a prompt injection can reach, and future private business repos should be
@@ -54,8 +55,9 @@ could still press Merge on a green PR. Part B closes that.
    change settings. Accept the invite from the agent account.
 3. **Point Claude at it.** In a private browser window, sign in to GitHub as `ablueai-agent`, then go
    to claude.ai/connect-github and connect. Claude's cloud sessions now act as the agent account. You
-   keep using `ABlueAI` on github.com and the GitHub app to approve and merge. Codex stays linked to
-   `ABlueAI` (Blue, 2026-10-19), so it is not connected to the agent account.
+   keep using `ABlueAI` on github.com and the GitHub app to approve and merge. Codex was linked to
+   `ABlueAI` until Blue re-linked it to the agent account on 2026-10-20 (BLUE-CHECKLIST.md step 16;
+   see "Codex is linked to the agent account" below).
 4. **Require your approval.** Edit `protect-main` > Require a pull request: required approvals **1**;
    check **Dismiss stale pull request approvals when new commits are pushed**, **Require review from
    Code Owners**, and **Require approval of the most recent reviewable push**. Save.
@@ -77,15 +79,25 @@ The merge audit workflow opens a `security-alert` issue if anything reaches main
 
 - **Your own account.** Anyone who gets into ABlueAI can approve and merge. A passkey is the defense.
 - **Local agents on your PC** push with your git login. Session S06 moves them to the
-  agent account (approved with PR #44); Mako already injects per-pane credentials, so it can supply the agent's token.
+  agent account (approved with PR #44). Today the only provider key Mako injects is the Gemini key,
+  for Video Scout panes (it also passes a per-pane pane-status token through `buildPtyEnv`); how it
+  will store and pass the agent's token is part of S06 (docs/PLAN-1.1.md).
   Until then, local agents only verify; they don't open PRs.
 - **Rulesets themselves.** Only repo admins can edit them, and agents are not admins.
-- **Codex is linked to you.** Codex stays linked to `ABlueAI` (Blue, 2026-10-19), not to the
-  restricted agent account. Its review comments on this repo appear as
-  `chatgpt-codex-connector[bot]` (seen on PR #42). A branch or PR it created through that link would
-  likely be attributed to `ABlueAI`. GitHub never lets a PR's author approve it, so such a PR
-  couldn't merge under `protect-main`. Whether Codex may build at all while linked there is Blue's
-  call (open question in PR #42). Claude recommends using it only as a reviewer until he decides.
+- **Codex is linked to the agent account (since 2026-10-20).** Blue re-linked Codex's GitHub to
+  `ABlueAgent` on 2026-10-20 (BLUE-CHECKLIST.md step 16; docs/DECISIONS.md, 2026-10-20). Codex now
+  reviews agent PRs automatically, and a review request from `ABlueAI` is refused (STATUS.md). The
+  re-link is expected to give Codex's OAuth grant the agent's write access instead of Blue's. Not
+  verified: Codex may push through the ChatGPT/Codex app installed on the repo (step 2e) rather than
+  the linked user's token, so S26 checks which one it uses, and checklist step 20 checks what the app
+  and the link can reach. Any `ABlueAgent` comment containing Codex's handle may start a Codex task
+  that can push a branch. AGENTS.md (once PR #47 merges) forbids agents to write the handle unless
+  Blue asks (a comment by `ABlueAI` on that PR or issue, unedited by anyone else, or his own message
+  to the agent; the full rule is in AGENTS.md "Security rules"); S26 may add the runner's
+  hand-off as an exception. That is a rule, not a control: a mistaken or injected agent comment could
+  still start such a task. Merging still needs Blue's approval. S26 is the first planned Codex build:
+  it checks the open questions below first and adds Codex to the table above. Its review comments
+  appear as `chatgpt-codex-connector[bot]` (seen on PR #42).
   Not verified: which account a Codex-created branch or PR is attributed to, and whether a Codex
   review could ever count as an approval.
 - **AI that drives your own screen or browser.** ChatGPT computer use, browser agents and extensions

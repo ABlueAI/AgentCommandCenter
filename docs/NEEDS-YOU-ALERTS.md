@@ -29,7 +29,7 @@ activator registration for unpackaged apps; Mako adds no registration helper. OS
 failures appear in Mako's Logs. Electron's support check alone does not prove a toast appeared.
 Linux/macOS notification delivery is outside this Windows feature's scope.
 
-The **2-minute real-Claude-pane check** is [BLUE-CHECKLIST.md step 17](../BLUE-CHECKLIST.md).
+The **2-minute real-Claude-pane check** is [BLUE-CHECKLIST.md step 23](../BLUE-CHECKLIST.md).
 Windows CI tests the notification boundary with a fake native API; it cannot verify the toast on
 Blue's PC. That acceptance check is pending until Blue reports the build label and observed toasts.
 
@@ -60,7 +60,7 @@ delivery.
    that result and consult the current official setup/troubleshooting guide.
    Stop after about 2 minutes; do not buy or connect a new service for this check.
 
-Phone connection/push delivery is **not verified** by the cloud tests. Checklist step 18 is
+Phone connection/push delivery is **not verified** by the cloud tests. Checklist step 24 is
 optional; S05's documentation obligation is this setup note, while the real Windows toast remains
 an acceptance gate.
 

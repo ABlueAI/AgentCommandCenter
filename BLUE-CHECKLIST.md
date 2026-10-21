@@ -6,7 +6,10 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-20 by Codex (S05 review/toast/phone checks added; none ticked).
+Last updated 2026-10-21 by Claude (S05 checks added as steps 23 and 24, PR #49; step 6 dropped by Blue, PR #51; step 17 moved after step 16;
+PR #46's token rules approved with its merge). Earlier: step 17 added and step 14's token changed to
+classic `public_repo` (PR #46); step 8 moved to 2026-10-28 and steps 18 to 20 added (PR #48); step 16
+added and ticked, with the 2026-10-21 Codex agent-request result (PR #47).
 
 ## Today
 
@@ -100,16 +103,17 @@ Last updated 2026-10-20 by Codex (S05 review/toast/phone checks added; none tick
   - Then the PC session tags `v1.0.0` on that `main`. You already gave the OK in that decision.
   - *Done when:* tag `v1.0.0` exists on GitHub at a commit that includes PR #33. **Mako 1.0 is
     released.**
-- [ ] **6. Bring GPT up to date.** About 2 minutes, any time.
-  - Download https://github.com/ABlueAI/AgentCommandCenter/blob/main/docs/handoff/GPT-BRIEFING-2026-10-17.md
-    (or the copy sent in the Claude chat) and upload it to ChatGPT with: "Read this; it is the current
-    state of Mako. From now on we coordinate through the GitHub repo."
+- **6. ~~Bring GPT up to date.~~ Dropped.** *Dropped 2026-10-21 by Blue: "drop step 6, its an
+  automatic process now. no need" (docs/DECISIONS.md). Nothing to do; the number stays so no other
+  step is renumbered. The 2026-10-17 GPT briefing (docs/handoff/GPT-BRIEFING-2026-10-17.md) is out
+  of date: where it differs from docs/PLAN-1.1.md or docs/DECISIONS.md on `main`, those win.*
 
 ## Before the daily runner starts building
 
 The runner is on since 2026-10-18 (8:01 AM Eastern). Each morning it first checks steps 1 and 7, and
-does nothing except send you a "waiting on step N" notice until they are complete. After that it runs
-on its own, one session at a time on Pro.
+does nothing except send you a "waiting on step N" notice until they are complete (once PR #47 merges,
+it is expected to start with `NOT READY:`; not verified until S04's prompt). After that it runs
+on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
 
 - [x] **7. Guardrails, Part B: a separate GitHub account for agents.** About 15 minutes. *Done
   2026-10-18 with the guide session. Verified 2026-10-19 by the checker session, acting as the agent
@@ -165,10 +169,15 @@ on its own, one session at a time on Pro.
   - *Done when:* you say "Part B done" and the checker's PR, authored by the agent account, showed as
     blocked after CI passed until you approved it. On the next morning's run the runner starts
     building S01 instead of sending "waiting on step 7".
-- [ ] **8. Upgrade Claude to Max 5x.** About 2 minutes, on **Wednesday 2026-10-21**, after Pro's weekly
-  reset on Tuesday and before Pro renews on Thursday. claude.ai > Settings > Billing. Keep ChatGPT Plus.
+- [ ] **8. Upgrade Claude to Max 5x.** About 2 minutes, on **Wednesday 2026-10-28** (moved from
+  2026-10-21 on 2026-10-20), after you have used your remaining Pro resets: in your words, "2 full
+  resets & a weekly reset", plus 3 ChatGPT resets. claude.ai > Settings > Billing. Keep ChatGPT Plus.
   No longer blocks the runner; it builds one session at a time on Pro until then.
-  - *Done when:* you say so. After S04, the runner then allows 2 sessions in parallel.
+  - The 2026-10-21 date was picked to upgrade before Pro renews on Thursday. If Pro renews on
+    Thursday 2026-10-22, it renews once more before the upgrade; Settings > Billing shows the renewal
+    date and how an upgrade is charged.
+  - *Done when:* you say so. After S04, the runner then allows 2 sessions in parallel, later 3 (one
+    setting in docs/RUNNER.md).
 
 ## Any time (not blocking)
 
@@ -188,7 +197,8 @@ on its own, one session at a time on Pro.
     other accounts, the item's notes field is fine. Keep 2FA codes in a separate authenticator app
     with backup (Bitwarden's built-in codes need Premium, and keeping them separate is safer anyway).
   - API keys go in Bitwarden secure notes; keys Mako uses go in Mako's key setup. Never in this repo,
-    Windows environment variables, or a chat with any AI, Claude included.
+    Windows environment variables, or a chat with any AI, Claude included. (For new tokens, see step
+    17b.)
   - Once moved, turn off password saving in Chrome and Edge so there is one place.
   - Don't connect it to ChatGPT's **Passwords** setting or let any AI agent drive it.
   - *Done when:* you say so. It's yours, so Claude doesn't verify anything.
@@ -236,7 +246,7 @@ on its own, one session at a time on Pro.
       and reviewed #41 only after your manual comment. Both were authored by `ABlueAgent`.
     - The repo's Codex setting shows Review = "Follow personal preferences". Changing it to "All
       PRs" fails with "Unable to save repository settings. Try again."
-    - Agents requesting the review themselves (`@codex review` from `ABlueAgent` on PR #42):
+    - Agents requesting the review themselves (at-codex review from `ABlueAgent` on PR #42):
       **FAIL**. Four seconds later Codex replied "To use Codex here, create a Codex account and
       connect to github" and didn't review. Codex ignores accounts not linked to ChatGPT.
   - Your choice (option 3): a separate Claude Opus reviewer replaces Codex as the required
@@ -244,19 +254,37 @@ on its own, one session at a time on Pro.
     subagent (`.claude/agents/pr-reviewer.md`) on its own PR before marking it ready, and posts the
     result as a PR comment headed "Independent review (Opus)". It fixes or answers every finding and
     re-runs it after fixes (AGENTS.md "How work flows" step 3, and the runner prompt).
-  - Codex review is optional now. You can still request one by hand, but nothing waits for it.
+  - Codex review is optional now. You can still request one by hand, but nothing waits for it (since
+    step 16, ask an agent to post the request; yours as `ABlueAI` is refused).
   - *Done when:* PR #42 merges with its "Independent review (Opus)" comment linked in the TLDR.
-- [ ] **14. Agent token for local agents (approved with PR #44, merged 2026-10-19).** About 10
-  minutes, any time before session S06 (the runner won't start S06 until this is ticked). Today local
-  agents on your PC push as `ABlueAI`, the account that can approve and merge.
+- [ ] **14. Agent token for local agents (approved with PR #44; token type changed by PR #46).**
+  About 10 minutes, any time before session S06 (the runner won't start S06 until this is ticked).
+  Today local agents on your PC push as `ABlueAI`, the account that can approve and merge.
   - Signed in as `ABlueAgent`: GitHub > Settings > Developer settings > Personal access tokens >
-    Fine-grained tokens > Generate. Limit it to `ABlueAI/AgentCommandCenter`, with Contents and Pull
-    requests set to Read and write and nothing else (no admin, no workflow or settings access), and a
-    90-day expiry.
-  - Paste it only into Mako's in-app key setup (Electron safeStorage). Never `setx` or a Windows
-    environment variable (AGENTS.md "Security rules").
-  - *Done when:* the S06 PR shows a pull request opened from a local Mako pane with `ABlueAgent` as its
-    author. Claude checks that on GitHub; the S06 PR confirms the exact token scopes.
+    **Tokens (classic)** > Generate new token (classic). Tick only **public_repo** (no `repo`,
+    `workflow`, `admin` or `delete_repo`), with a 90-day expiry. S06 confirms this scope is enough
+    for how it uses the token; if it needs more (for example `gh auth login --with-token`, which may
+    expect `repo` and `read:org`; passing it as `GH_TOKEN` to a pane may avoid that, not verified:
+    S06 checks it survives the subprocess scrub), S06 asks you first. GitHub may also refuse a
+    push without `workflow` when the branch brings in `main`'s workflow changes (not verified);
+    S06 checks that case too.
+  - Why classic: GitHub doesn't support fine-grained tokens for an account that is only a
+    collaborator on a personal account's repository, which is what `ABlueAgent` is here (found by
+    Codex on PR #46; GitHub's docs as quoted in a search result, not yet read directly). With
+    `public_repo` it can push code only where `ABlueAgent` has write access, today only this repo,
+    and without `workflow` it can't edit workflow files (it can still change the code CI runs on
+    its own PRs, which can't merge without your Approve). It can also open issues, PRs and comments
+    as `ABlueAgent` on any public repository, and create public repositories under `ABlueAgent`.
+    Don't give `ABlueAgent` write access to another repository without revisiting this token.
+  - Its final home is Mako's in-app key setup (Electron safeStorage). Never `setx` or a Windows
+    user environment variable (AGENTS.md "Security rules").
+  - Until S06 gives it a home in Mako (the plan doesn't yet say how; S06 decides), it waits only in
+    Bitwarden (step 17b).
+  - *Done when:* you say the token exists and is in Bitwarden, and tell Claude its expiry date
+    (never the token). Claude adds the renewal reminder under "Dated reminders" (step 17b) and
+    ticks this on your word (it can't see the token), which lets the runner start S06. The S06 PR
+    then shows a pull request opened from a local Mako pane with `ABlueAgent` as its author and
+    confirms the exact scopes.
 - [ ] **15. Check voice on the new Electron (after you merge PR #45, S02).** About 10 minutes, the
   next time you sit down at your PC. S02 moves Mako from Electron 42.5.0 to 42.11.15 for six security
   fixes. CI covers the code, but only your PC has the microphone, GPU and speakers.
@@ -272,16 +300,138 @@ on its own, one session at a time on Pro.
   - *Done when:* you tell any agent "step 15 passed", or what failed. The agent ticks this with the
     date. A failure gets a fix PR, or a revert of the Electron bump, before other work, and the
     agent sets S02 back to IN PROGRESS in docs/PLAN-1.1.md until it is fixed.
+- [x] **16. Re-link Codex's GitHub to `ABlueAgent`.** *Done early, on 2026-10-20, before S04's prompt
+  (your word, relayed to the PR #48 session; docs/DECISIONS.md, 2026-10-20). Verified 2026-10-20 on
+  GitHub rather than by the screenshot this step first asked for: Codex reviewed `ABlueAgent`'s PR #48
+  automatically 9 seconds after it opened (trigger "PR opened"), with no request from anyone, and your
+  own manual request as `ABlueAI` on PR #48 was refused (STATUS.md). What the link can reach is step
+  20.* Your decision of 2026-10-19: Codex builds as the agent account, so you can approve its PRs
+  (expected; session S26 verifies which account Codex's PRs are attributed to). Same ChatGPT Plus
+  account, no new seat. (Numbered 16 because step 15 is the voice check from PR #45; PR #46 took 17.)
+  - Done before S04's prompt, so today's runner prompt still says to post reviews "verbatim". Once PR
+    #47 merges, AGENTS.md's Codex-handle rule and step 3's replace-the-handle check govern it
+    (docs/RUNNER.md note). Until then nothing in the repo tells agents not to write Codex's handle,
+    and any `ABlueAgent` comment containing it may start a Codex task that pushes a branch (it can't
+    merge). Merging PR #47 closes that gap.
+  - What changed: Codex reviews agent PRs automatically; a review request you comment as `ABlueAI` now
+    fails, so ask an agent to post it (comment on the PR as `ABlueAI`, or tell the agent in its own
+    session); an agent's request worked on PR #47 on 2026-10-21 (STATUS.md). If ChatGPT uses this same GitHub connection outside Codex (not verified), repositories
+    only `ABlueAI` can reach drop out of ChatGPT and Codex; session S26 checks this.
+- [ ] **17. Token hygiene: find old tokens, and rules for any new one.** About 20 minutes, this week.
+  - **a. Audit old tokens, on both `ABlueAI` and `ABlueAgent`** (sign in to each in turn). A lost
+    token's value can't be recovered: GitHub shows a token only once, but it lists every token with
+    its last-used date.
+    - Classic tokens: https://github.com/settings/tokens
+    - Fine-grained tokens: https://github.com/settings/personal-access-tokens
+    - Apps: https://github.com/settings/applications. Check all three tabs: Installed GitHub Apps,
+      Authorized GitHub Apps and Authorized OAuth Apps.
+    - SSH keys: https://github.com/settings/keys
+    - Except the items listed below to keep, revoke anything you don't recognize or that hasn't
+      been used for months.
+    - Keep the Git login on your PC that local agents push with today (often listed as **Git
+      Credential Manager** or **GitHub CLI** under authorized apps) until session S06 merges and
+      replaces it (ticking step 14 alone doesn't); revoking it breaks local pushes. Its removal
+      after S06 is under "Coming up this month".
+    - On `ABlueAgent`, keep Claude's authorization: it is how cloud sessions act as the agent (step
+      7c).
+    - On `ABlueAI`, keep the Claude installation under Installed GitHub Apps (cloud sessions and the
+      runner reach the repo through it) and the ChatGPT/Codex installation. Keep the ChatGPT/Codex
+      authorization on `ABlueAgent` (re-linked 2026-10-20; step 20 checks its scope). A new token
+      doesn't bring an app link back.
+    - If `ABlueAI` still shows Claude under Authorized GitHub Apps, it is left over from before step
+      7c and can act as you: revoke it. That removes the authorization, not the installation. If a
+      cloud session can't reach the repo afterwards, tell Claude.
+    - Likewise, a ChatGPT/Codex authorization still listed under `ABlueAI`'s Authorized GitHub Apps
+      or OAuth Apps is left over from before the re-link and can act as you: revoke it (not the
+      installation).
+    - Do the same for API keys at https://platform.openai.com/api-keys,
+      https://console.anthropic.com (API keys page) and https://aistudio.google.com/apikey (Gemini,
+      the key Mako's Video Scout uses; also Google Cloud > APIs & Services > Credentials if you made
+      keys there).
+    - On `ABlueAI/AgentCommandCenter`: Settings > Deploy keys, and Settings > Secrets and variables
+      > Actions. Remove anything you don't recognize.
+    - If something breaks after a revoke, make a fresh, narrower token by the rules in b, except a
+      GitHub token for your PC before S06: tell Claude instead. If local pushes from your PC break,
+      sign in to Git again (Git Credential Manager asks on the next push; first make sure the
+      browser is signed in as `ABlueAI`, not `ABlueAgent`), and tell Claude. That restores the
+      login you already had (exception 2 in b).
+  - **b. Rules for every new token**, including step 14's:
+    - Two exceptions apply to every GitHub rule below: (1) for `ABlueAgent` only, because GitHub
+      doesn't support fine-grained tokens for an account that is only a collaborator on a personal
+      account's repository: a classic token with the single narrowest scope (step 14: `public_repo`
+      only), never for `ABlueAI`; (2) until S06, the PC's existing `ABlueAI` Git login and signing
+      in to it again (a). After S06, only if you keep that login under "Coming up this month",
+      with the pane isolation the S06 PR shows. Your own `ABlueAI` sign-in in a browser or a
+      separate Windows account where no agents run is also covered.
+    - GitHub tokens: fine-grained, limited to one repository, with the fewest permissions that do
+      the job. Other keys: the fewest permissions the provider offers.
+    - A token of `ABlueAI` must never have **Pull requests: write** (it could submit an Approve as
+      you and defeat the `protect-main` ruleset), nor **Contents: write**, **Administration** or
+      **Workflows** (it could push or merge as you, edit the ruleset, or change CI). For commenting
+      on PRs, **Issues: read and write** should be enough (from community sources; not yet checked
+      against GitHub's docs, so the PR that creates such a token confirms it).
+    - Any `ABlueAI` token that automation or an agent would use, such as one that posts Codex review
+      comments, needs its own PR and your decision first. Its comments would look exactly like
+      yours, and with Issues write it could also close the merge audit's security-alert issues.
+      This step doesn't approve one.
+    - Paste it straight from the provider's token page into its one destination (a Bitwarden copy
+      is optional, below): Mako's key setup, or a GitHub environment secret restricted to `main`.
+      A provider key Mako's key setup can't hold yet waits only in Bitwarden. Never into any AI
+      chat (Claude included), a file, this repo, or `setx`.
+    - Today Mako's key setup stores only the Gemini key. S06 gives step 14's GitHub token a home in
+      Mako (the plan doesn't yet say how). Until then, make no GitHub token for your PC other than
+      step 14's, and step 14's waits only in Bitwarden (S06 can't start until it exists).
+    - A secret a repo workflow uses goes in a GitHub environment whose deployment branches are
+      `main` only, and that workflow must never check out or run code from a PR.
+    - Expiry 90 days (1 year at most) where the provider lets you set one. Tell Claude the expiry
+      date (never the token), and Claude adds a dated renewal reminder under "Dated reminders"
+      below; for a key with no expiry setting, Claude adds a reminder to rotate it at 90 days.
+    - For a token that goes into Mako's key setup or a GitHub environment secret, a Bitwarden copy
+      is optional; not storing one at all, and making a new one when it expires, is also fine. A
+      token with no home yet (step 14's before S06) must wait in Bitwarden. For new tokens and keys
+      this replaces step 9's "API keys go in Bitwarden secure notes".
+    - If it might have leaked: revoke it on its provider's page, then tell Claude. GitHub: Settings >
+      Developer settings > Personal access tokens > Fine-grained tokens (or Tokens (classic)) > the
+      token > **Revoke** or **Delete**, whichever GitHub shows. API keys: the pages in a.
+  - **c. Turn on push protection.** Signed in as `ABlueAI`: repo Settings > Code security (it may be
+    labelled Advanced Security) > Secret scanning (or Secret Protection) > **Push protection** >
+    Enable. It is free for public repositories and blocks pushes that contain a recognizable secret.
+    The person pushing can still override a block by giving a reason, so it catches accidents, not
+    deliberate pushes.
+    If it already shows enabled, nothing to do. This is your click; agents never change repository
+    settings.
+  - *Done when:* you say the audit is done and push protection shows enabled. Claude then tries to
+    confirm push protection through GitHub's API (`security_and_analysis` on the repository). GitHub
+    shows that field only to repository admins, and agents have write access, so Claude expects not
+    to be able to read it; it says so and ticks this on your word.
 
-- [ ] **16. Independent review for the Codex-built S05 PR #49.** About **2 minutes** to hand off,
-  after the PR is open and before it can be ready. Ask Claude to run the Opus `pr-reviewer`
-  defined in `.claude/agents/pr-reviewer.md`, read-only with no shell. Give it only the PR number,
-  the TLDR and the diff saved to a file, not the builder's reasoning. The Claude reviewer posts
-  its independent report; findings must be fixed/answered and re-reviewed as AGENTS.md requires.
-  - *Done when:* the PR links the latest **Independent review (Opus)** report and its findings
-    are resolved. **Review: pending Claude Opus review.** The PR stays NOT READY meanwhile.
-- [ ] **17. S05 needs-you toast on a real Claude pane.** About **2 minutes**, after the S05 PR's
-  Windows checks pass and Claude Opus has reviewed it, before calling S05 done. Use the S05 branch
+- [ ] **18. Say go on the UI when your examples are ready.** About 1 minute, any time. The UI sessions
+  (S14 and S17 to S20) are on `HOLD (Blue)` in docs/PLAN-1.1.md (PR #48), so the runner skips them.
+  When your UI examples folder is ready, tell any agent "go on the UI". It records your words in
+  docs/DECISIONS.md and sets those rows back to READY in a PR; merging that PR starts them.
+  - *Done when:* that DECISIONS.md entry is on `main`. Claude checks.
+- [ ] **19. Give your Composer verdict after S16.** About 15 minutes, after the S16 PR opens. Read
+  `docs/decisions/OSS-composer.md`, answer its open questions, and give a verdict on each option
+  (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD FRESH) in your own words, in the S16 PR or to any
+  agent. Spending on Gumloop or any paid service needs your explicit OK there.
+  - *Done when:* your verdict is recorded word for word in OSS-composer.md and docs/DECISIONS.md.
+    A later plan change then adds the Composer build sessions.
+
+- [ ] **20. Check what Codex's GitHub link can reach.** About 3 minutes, any time soon. You linked
+  ChatGPT/Codex's GitHub to `ABlueAgent` on 2026-10-20 (STATUS.md), and nobody has checked its scope
+  since.
+  - Signed in as `ABlueAI`: github.com > Settings > Applications > **Installed GitHub Apps** > the
+    ChatGPT/Codex app > **Configure**. It should say **Only select repositories** with only
+    `AgentCommandCenter` (as in step 2e). If it says **All repositories**, switch it back and save.
+  - Signed in as `ABlueAgent` (private window): github.com > Settings > Applications. Check
+    **Installed GitHub Apps** (should be none) and **Authorized GitHub Apps** (the ChatGPT/Codex entry
+    is expected; note what else is listed).
+  - *Done when:* you tell any agent what both pages show; it records that in STATUS.md with the date.
+
+- [ ] **23. S05 needs-you toast on a real Claude pane.** About **2 minutes**, after the S05 PR's
+  Windows checks pass and Claude Opus has reviewed it, before calling S05 done. (Numbered 23 because `main` uses 1 to 20 and open PRs #52 and #53
+  use 21 and 22. The earlier step 16 in this PR, the Opus review hand-off, was dropped: since PR #42
+  the runner reviews Codex PRs itself, AGENTS.md step 3.) Use the S05 branch
   on your PC; fully close and restart Mako after installing that branch's app dependencies.
   - Launch a **new real Claude pane** with Mako's existing pane-status setup enabled (an old pane
     may not carry the status token). Send a short request such as "Reply with one word: ready".
@@ -296,8 +446,8 @@ on its own, one session at a time on Pro.
     Stop at 2 minutes and report which event/badge/toast failed; do not mark the box complete.
   - *Done when:* Blue reports both observed toasts and the running build label; the checking agent
     records that evidence and date here. **Pending; not verified in the Linux cloud.**
-- [ ] **18. Optional phone alerts via Claude Remote Control (S05).** About **2 minutes** after
-  step 17, if wanted. Follow [docs/NEEDS-YOU-ALERTS.md](docs/NEEDS-YOU-ALERTS.md#phone-alerts-through-claude-remote-control).
+- [ ] **24. Optional phone alerts via Claude Remote Control (S05).** About **2 minutes** after
+  step 23, if wanted. Follow [docs/NEEDS-YOU-ALERTS.md](docs/NEEDS-YOU-ALERTS.md#phone-alerts-through-claude-remote-control).
   Connect the same real pane from your phone, enable Claude's available push-notification choices
   and the phone's OS notification permission, then request a harmless test push. This uses your
   existing Claude account; do not add an account, subscription, Mako hook or API key for it.
@@ -314,16 +464,37 @@ on its own, one session at a time on Pro.
 
 You can start on the first one now, which saves time later.
 
-- **Session S14:** UI examples. Screenshots or links of designs you like. **Start a folder now.**
+- **Session S14 (on hold until you say go, step 18):** UI examples. Screenshots or links of designs
+  you like, including dashboards for different tasks (coding, research, business). **Start a folder
+  now.**
+- **Session S06, after its PR merges:** remove the `ABlueAI` Git login from your PC (about 5
+  minutes). The S06 PR names exactly which entries.
+  - On the PC: delete the Credential Manager entry and the `gh` login. If you keep them because
+    you push as `ABlueAI` from this PC, local agents running under your Windows account can still
+    read them and act as you, so the S06 PR must show how panes are kept from them; otherwise push
+    as `ABlueAI` from a browser or a separate Windows account instead.
+  - On GitHub: revoke the matching app under Authorized OAuth Apps only if you push as `ABlueAI`
+    from no machine, since that signs it out everywhere.
+  - *Done when:* you say so (Claude can't read Credential Manager or your authorized apps).
 - **Session S12:** your Hexona login URL.
 - **Session S13:** install the Obsidian app (2 minutes).
-- **Session S16:** your verdict on the Dodaios trial report.
-- **Session S17:** pick one of 2 or 3 design directions.
+- **Session S26:** comment as `ABlueAI` on its claim issue to start Codex's trial build (the session
+  tells you when and what to write).
+- **Session S16:** your Composer verdict (step 19), including the Dodaios trial.
+- **Session S17 (on hold with S14):** pick one of 2 or 3 design directions.
 - **Session S21:** pick a logo variant.
 - **Session S23:** approve the client paperwork drafts.
 - **Session S24:** authorize the GoHighLevel connector in claude.ai (read-only token).
 
+## Waiting on you (the runner won't ask)
+
+- **Session S28:** your agent-roles package (new role texts, from your agent-roles chat), as an issue
+  you open yourself as `ABlueAI`, titled `agent-roles package (S28)` (agents ignore one opened, or
+  edited, by anyone else), or hand it to an agent in its own session to open the PR. Not as a PR of your
+  own: you can't approve your own PR, so it couldn't merge. S28 stays `NEEDS BLUE (package)` until
+  it arrives.
+
 ## Dated reminders
 
 - **About 2026-11-17:** reassess plans. Is Max 5x enough, or move to 20x? The month review (S25)
-  brings the numbers.
+  brings the numbers. With the upgrade on 2026-10-28, that covers about 3 weeks of Max 5x use.
