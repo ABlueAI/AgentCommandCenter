@@ -59,8 +59,9 @@ Updated 2026-10-20 by Claude. Every PR that changes the state updates this file.
   - Manual Codex requests from `ABlueAI` now fail: Blue's `@codex review` on PR #48 (16:13 UTC) got
     "To use Codex here, create a Codex account and connect to github" and no review. Likely cause, not
     verified: Codex's GitHub link moved to `ABlueAgent`, so `ABlueAI` is no longer a linked account.
-    Automatic reviews on PR open still work. Whether Codex now answers a manual request from
-    `ABlueAgent` was not tested.
+    Automatic reviews on PR open still work. A manual request from `ABlueAgent` works: an agent's
+    review request on PR #47 (03:43 UTC, 2026-10-21) got a Codex review of `1544d35` 3 minutes later,
+    with no findings.
   - Scope of the re-link: not verified. The Codex GitHub app was installed only on
     `ABlueAI/AgentCommandCenter` ("Only select repositories", checklist step 2e, 2026-10-18); that was
     not re-checked after the 2026-10-20 re-link, and what the new link authorizes on `ABlueAgent` was
