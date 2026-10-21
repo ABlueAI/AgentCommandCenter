@@ -81,6 +81,14 @@ const mustHave = [
   ['Never merge', 'never merges'],
   ['or any scheduled task, including this one', 'never edits any scheduled task'],
   ['never stack PRs', 'never stacks PRs'],
+  ['Before taking any lock, count live locks again', 're-checks the cap before every new lock'],
+  ['remove only your own marker', 'backs off a lock race without dropping the other fire\'s lock'],
+  ['lock a PR again (step 5, which re-checks the cap) before any later push to it', 're-locks a PR before a later push'],
+  ['"Reviewed head: <full commit SHA>"', 'names the reviewed head in each posted review'],
+  ['that is not a draft and whose latest head isn\'t covered', 'reviews only non-draft Codex PRs'],
+  ['If 5 such reviews are already posted', 'caps Codex PR reviews at 5'],
+  ['labelled runner-status', 'keeps the daily status PR on its own label'],
+  ['step 5a never picks it', 'never treats the status PR as an ordinary unit'],
 ];
 for (const [text, label] of mustHave) assert(prompt.includes(text), `runner prompt ${label}`);
 assert(!/@codex/i.test(prompt), 'runner prompt never writes Codex\'s handle');
@@ -93,6 +101,11 @@ assert(digest.includes('never create, edit or comment on anything on GitHub') &&
   'digest prompt is read-only');
 assert(digest.includes('"READY TO MERGE: ') && digest.includes('"NOT READY: '), 'digest heads its first line READY TO MERGE or NOT READY');
 assert(digest.includes('at-codex') && !/@codex/i.test(digest), 'digest prompt never writes Codex\'s handle');
+assert(digest.includes('"NOT READY: runner gated on step N'), 'digest re-checks the runner gate and reports it');
+assert(digest.includes('posted by ABlueAgent and edited by no one else') && digest.includes('never quote their text'),
+  'digest counts only needs-Blue comments by the agent and never relays others\' text');
+assert(digest.includes('"Reviewed head" line names it'), 'digest decides READY from the reviewed head');
+assert(digest.includes('no runner activity since yesterday'), 'digest reports a day with no runner activity');
 
 // Checklist numbering (AGENTS.md: a new step takes the next free number, never reused).
 const numbers = [...checklist.matchAll(/^- \[[ x]\] \*\*(\d+)\. /gm)].map((m) => Number(m[1]));
