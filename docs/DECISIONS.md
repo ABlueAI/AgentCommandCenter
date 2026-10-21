@@ -8,6 +8,7 @@ of editing an old one, and say which entry it replaces. Agents follow the newest
 | Decision | Blue's words |
 |---|---|
 | BLUE-CHECKLIST.md step 6 ("Bring GPT up to date": upload the 2026-10-17 GPT briefing to ChatGPT) is dropped: Blue says it is now an automatic process. The step stays in the checklist, marked dropped, so no step is renumbered. Blue's words don't say which mechanism makes it automatic, and none is recorded here. | "drop step 6, its an automatic process now. no need" |
+| The token rules (BLUE-CHECKLIST.md step 17), checklist step 14's classic `public_repo` token and new done-when, and the S06 token items in docs/PLAN-1.1.md are approved. Replaces the "Proposed, pending Blue (PR #46)" entry below. | Blue approved and merged PR #46 on 2026-10-21 at 05:18 UTC (`97af4ea`); merging is approval (PLAN-1.1.md "When the plan changes"). |
 
 ## 2026-10-20
 
