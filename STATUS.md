@@ -79,7 +79,7 @@ Updated 2026-10-21 by Claude. Every PR that changes the state updates this file.
   the 2026-10-19 run started and opened PR #44, the first proof it can open PRs.
   Its prompt includes the `pr-reviewer` step since 2026-10-19 (applied after PR #42 merged), and
   the capped review loop since 2026-10-21 (PR #52's prompt, applied 21:19 UTC and read back the same
-  day; checklist step 21). Proposed in PR #NN (pending Blue): every builder skips a plan session
+  day; checklist step 21). Proposed in PR #83 (pending Blue): every builder skips a plan session
   that already has an open PR titled with its ID (`Sxx:`) and opens its own PR early, so two
   builders never take the same session; the runner prompt is applied after the merge (checklist
   step 26).

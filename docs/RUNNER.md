@@ -56,13 +56,13 @@ scheduled task. The runner itself never edits its own schedule or prompt.
 prompt from `main` to `trig_01RnFDLAH1jJZfdhJ9wCU87W` at 21:19 UTC (BLUE-CHECKLIST.md step 21). It
 read the task back: the prompt matched `main` exactly, the model was `claude-opus-5-5`,
 `ABlueAI/AgentCommandCenter` was still attached, the task was enabled, and the next run was
-2026-10-22 12:01 UTC. The PR #NN session re-read the task the same day and confirmed all of that
+2026-10-22 12:01 UTC. The PR #83 session re-read the task the same day and confirmed all of that
 except the repository, which its read doesn't show.
 
-**Not applied yet (PR #NN, the claim check):** the prompt below adds to step 4 that the runner skips
+**Not applied yet (PR #83, the claim check):** the prompt below adds to step 4 that the runner skips
 any READY session already claimed by an open PR titled with its ID (`Sxx:`), and opens its own PR
 early with that title (AGENTS.md "How work flows" step 1). The scheduled task keeps the PR #52
-prompt until an interactive session applies this one after Blue merges PR #NN
+prompt until an interactive session applies this one after Blue merges PR #83
 (BLUE-CHECKLIST.md step 26). Until then the old text runs; the runner reads AGENTS.md, which has
 the same rule once this PR merges, but whether it follows it without the prompt saying so is not
 verified.
