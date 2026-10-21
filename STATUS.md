@@ -122,6 +122,12 @@ Known limitations shipping with 1.0 are in [docs/RELEASE-NOTES-1.0.md](docs/RELE
 
 ## Next
 
+Token hygiene (PR #46, merged 2026-10-21): checklist step 17 has Blue audit old tokens and keys on both
+accounts, sets the rules for every new token, and turns on push protection. Step 14's `ABlueAgent`
+token is now a classic `public_repo` token, because GitHub doesn't support fine-grained tokens for an
+account that is only a collaborator on a personal account's repository. Step 14 is ticked when Blue says
+the token exists and is in Bitwarden. S06 decides how Mako stores and passes it.
+
 1.1 session S01 (finish guardrails) is DONE: PR #44 merged 2026-10-19, with its evidence in the plan's change log. S02 (CI and dependency hygiene) is DONE (#45); S03 is next. The UI sessions (S14, S17 to S20) are on hold until Blue says go, and S16 becomes the Composer research (approved with the PR #48 merge). S06 also moves local agents off Blue's git login (plan change approved with that merge). See the plan.
 
 Plan change proposed in PR #47 (pending Blue): S04 becomes an all-day runner with an evening digest

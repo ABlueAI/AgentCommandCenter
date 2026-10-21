@@ -3,6 +3,12 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-10-21
+
+| Decision | Blue's words |
+|---|---|
+| The token rules (BLUE-CHECKLIST.md step 17), checklist step 14's classic `public_repo` token and new done-when, and the S06 token items in docs/PLAN-1.1.md are approved. Replaces the "Proposed, pending Blue (PR #46)" entry below. | Blue approved and merged PR #46 on 2026-10-21 at 05:18 UTC (`97af4ea`); merging is approval (PLAN-1.1.md "When the plan changes"). |
+
 ## 2026-10-20
 
 | Decision | Blue's words |

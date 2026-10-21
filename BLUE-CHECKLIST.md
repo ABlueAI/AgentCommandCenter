@@ -6,8 +6,10 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-21 by Claude (step 17 added: token hygiene; step 14's token changed to classic
-`public_repo` (PR #46); step 8 moved, steps 18 to 20 added (PR #48); step 16 added and ticked (PR #47)).
+Last updated 2026-10-21 by Claude (step 17 moved after step 16; PR #46's token rules approved
+with its merge). Earlier: step 17 added and step 14's token changed to classic `public_repo`
+(PR #46); step 8 moved to 2026-10-28 and steps 18 to 20 added (PR #48); step 16 added and ticked,
+with the 2026-10-21 Codex agent-request result (PR #47).
 
 ## Today
 
@@ -300,6 +302,23 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - *Done when:* you tell any agent "step 15 passed", or what failed. The agent ticks this with the
     date. A failure gets a fix PR, or a revert of the Electron bump, before other work, and the
     agent sets S02 back to IN PROGRESS in docs/PLAN-1.1.md until it is fixed.
+- [x] **16. Re-link Codex's GitHub to `ABlueAgent`.** *Done early, on 2026-10-20, before S04's prompt
+  (your word, relayed to the PR #48 session; docs/DECISIONS.md, 2026-10-20). Verified 2026-10-20 on
+  GitHub rather than by the screenshot this step first asked for: Codex reviewed `ABlueAgent`'s PR #48
+  automatically 9 seconds after it opened (trigger "PR opened"), with no request from anyone, and your
+  own manual request as `ABlueAI` on PR #48 was refused (STATUS.md). What the link can reach is step
+  20.* Your decision of 2026-10-19: Codex builds as the agent account, so you can approve its PRs
+  (expected; session S26 verifies which account Codex's PRs are attributed to). Same ChatGPT Plus
+  account, no new seat. (Numbered 16 because step 15 is the voice check from PR #45; PR #46 took 17.)
+  - Done before S04's prompt, so today's runner prompt still says to post reviews "verbatim". Once PR
+    #47 merges, AGENTS.md's Codex-handle rule and step 3's replace-the-handle check govern it
+    (docs/RUNNER.md note). Until then nothing in the repo tells agents not to write Codex's handle,
+    and any `ABlueAgent` comment containing it may start a Codex task that pushes a branch (it can't
+    merge). Merging PR #47 closes that gap.
+  - What changed: Codex reviews agent PRs automatically; a review request you comment as `ABlueAI` now
+    fails, so ask an agent to post it (comment on the PR as `ABlueAI`, or tell the agent in its own
+    session); an agent's request worked on PR #47 on 2026-10-21 (STATUS.md). If ChatGPT uses this same GitHub connection outside Codex (not verified), repositories
+    only `ABlueAI` can reach drop out of ChatGPT and Codex; session S26 checks this.
 - [ ] **17. Token hygiene: find old tokens, and rules for any new one.** About 20 minutes, this week.
   - **a. Audit old tokens, on both `ABlueAI` and `ABlueAgent`** (sign in to each in turn). A lost
     token's value can't be recovered: GitHub shows a token only once, but it lists every token with
@@ -387,25 +406,6 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     confirm push protection through GitHub's API (`security_and_analysis` on the repository). GitHub
     shows that field only to repository admins, and agents have write access, so Claude expects not
     to be able to read it; it says so and ticks this on your word.
-
-- [x] **16. Re-link Codex's GitHub to `ABlueAgent`.** *Done early, on 2026-10-20, before S04's prompt
-  (your word, relayed to the PR #48 session; docs/DECISIONS.md, 2026-10-20). Verified 2026-10-20 on
-  GitHub rather than by the screenshot this step first asked for: Codex reviewed `ABlueAgent`'s PR #48
-  automatically 9 seconds after it opened (trigger "PR opened"), with no request from anyone, and your
-  own manual request as `ABlueAI` on PR #48 was refused (STATUS.md). What the link can reach is step
-  20.* Your decision of 2026-10-19: Codex builds as the agent account, so you can approve its PRs
-  (expected; session S26 verifies which account Codex's PRs are attributed to). Same ChatGPT Plus
-  account, no new seat. (Numbered 16 because step 15 is the voice check from PR #45; open PR #46 also
-  used 15 and has been asked to take 17.)
-  - Done before S04's prompt, so today's runner prompt still says to post reviews "verbatim". Once PR
-    #47 merges, AGENTS.md's Codex-handle rule and step 3's replace-the-handle check govern it
-    (docs/RUNNER.md note). Until then nothing in the repo tells agents not to write Codex's handle,
-    and any `ABlueAgent` comment containing it may start a Codex task that pushes a branch (it can't
-    merge). Merging PR #47 closes that gap.
-  - What changed: Codex reviews agent PRs automatically; a review request you comment as `ABlueAI` now
-    fails, so ask an agent to post it (comment on the PR as `ABlueAI`, or tell the agent in its own
-    session); an agent's request worked on PR #47 on 2026-10-21 (STATUS.md). If ChatGPT uses this same GitHub connection outside Codex (not verified), repositories
-    only `ABlueAI` can reach drop out of ChatGPT and Codex; session S26 checks this.
 
 - [ ] **18. Say go on the UI when your examples are ready.** About 1 minute, any time. The UI sessions
   (S14 and S17 to S20) are on `HOLD (Blue)` in docs/PLAN-1.1.md (PR #48), so the runner skips them.
