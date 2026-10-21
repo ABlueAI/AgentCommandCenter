@@ -409,7 +409,9 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
 - [ ] **18. Say go on the UI when your examples are ready.** About 1 minute, any time. The UI sessions
   (S14 and S17 to S20) are on `HOLD (Blue)` in docs/PLAN-1.1.md (PR #48), so the runner skips them.
   When your UI examples folder is ready, tell any agent "go on the UI". It records your words in
-  docs/DECISIONS.md and sets those rows back to READY in a PR; merging that PR starts them.
+  docs/DECISIONS.md and sets those rows back to READY in a PR. Merging that PR starts S14 (Claude
+  writes the brief). S17 to S20 are built by Codex, which you start yourself once S14 and S26 are
+  done; the runner never builds them (docs/PLAN-1.1.md "UI sessions: who builds").
   - *Done when:* that DECISIONS.md entry is on `main`. Claude checks.
 - [ ] **19. Give your Composer verdict after S16.** About 15 minutes, after the S16 PR opens. Read
   `docs/decisions/OSS-composer.md`, answer its open questions, and give a verdict on each option

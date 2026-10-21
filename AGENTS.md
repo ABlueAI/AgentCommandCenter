@@ -98,7 +98,9 @@ mostly low, findings. Every PR follows it, including the builder's own fixes.
 - **Fix in one batch.** The builder fixes or answers all high and medium findings together, in one
   push. Low findings never block: they go in the "Follow-ups" list at the end of the TLDR, and
   become a plan row or an issue if they are real work. Out-of-scope findings go there too, whatever
-  their severity; a high one becomes an issue before the PR is marked ready.
+  their severity; a high one becomes an issue before the PR is marked ready. After the batch, the
+  builder re-runs the reviewer on the delta. The PR isn't marked ready until the latest run shows no
+  high or medium finding still open, apart from ones the builder has answered in the PR.
 - **Later runs check only the fixes.** Run 2 and run 3 get the PR number, the TLDR, the delta since
   the last run and the previous findings, and check only those, not the whole PR again.
 - **At most 3 runs.** If high or medium findings are still open after run 3, the builder stops: no
@@ -202,7 +204,10 @@ listeners · CI workflows, `.github/`, `.claude/`, repository settings · this f
   Claude session that handed it the task, the next runner fire, or a session Blue starts; step 3).
 - **Codex / GPT**: optional reviewer (since it was linked to `ABlueAgent`, BLUE-CHECKLIST.md step 16,
   2026-10-20, it reviews agent PRs automatically; a manual request goes through an agent, step 3), second-opinion builder (builder lane
-  planned in S26), and planning partner. Works in its own branch, never Claude's. Nothing in the workflow depends on it.
+  planned in S26), the builder of the UI sessions S17 to S20 (started by Blue, reviewed by Claude
+  Opus; docs/PLAN-1.1.md "UI sessions: who builds"), and planning partner. Works in its own branch,
+  never Claude's. Nothing else in the workflow depends on it: if Blue drops it, the UI sessions need
+  a plan change.
 - Plans and reviews happen in the repo (PRs, issues, these files), never by copying text between apps.
 
 ## Out of scope unless Blue explicitly approves the guardrails first

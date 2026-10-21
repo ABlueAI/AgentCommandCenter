@@ -39,8 +39,9 @@ You run at most 3 times on a PR (5 for any reason at all), so each run has to co
   report every problem you can find now. Don't hold findings back for a later run: there may not be
   one.
 - **Re-run: check only the delta.** For each previous finding, say whether the delta fixed it. Then
-  report only new problems the delta itself introduced. Don't re-review the rest of the PR, and
-  don't raise findings about lines the delta didn't touch.
+  report only new problems the delta itself causes, including ones that show up elsewhere: a stale
+  caller, or another doc that now contradicts it. Don't re-review unchanged lines for their own
+  sake.
 - **Judge against the stated scope.** The scope is what the TLDR's "What and why" says the PR does.
   A problem the diff introduces is in scope. A problem that was already there, or that the PR
   doesn't claim to fix, is out of scope: report it marked `[out of scope]`, so the builder lists it

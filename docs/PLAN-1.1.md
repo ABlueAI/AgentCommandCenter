@@ -6,7 +6,8 @@ Drafted 2026-10-17 by Claude for Blue. Approved when the PR that adds it is merg
 **Latest change (2026-10-21, proposed, pending Blue; PR #52):** the UI sessions get one builder.
 Claude Opus writes S14's design brief (words and structure, not code); Codex builds S17 to S20, and
 Blue iterates on the look with Codex and ChatGPT directly; Claude Opus reviews every UI PR for bugs,
-security and the plan, not taste. The rows stay `HOLD (Blue)`. S16's Composer research gains a
+security and the plan, not taste. S17 also waits for S26 (the Codex builder lane). The rows stay
+`HOLD (Blue)`. S16's Composer research gains a
 model-choice requirement. Details in "UI sessions: who builds" and "S16 details". Merging PR #52
 approves it.
 
@@ -86,7 +87,7 @@ held rows as held (a Hold column or a `hold` label), never as Ready.
 | S14 | **Design tools and brief.** Claude Opus writes the design brief from Blue's UI examples and his dashboard list: words and structure, not code. It covers a main dashboard plus task-specific layouts Blue can switch between (for example coding, research and business; Blue chooses the final set). Also: install UI UX Pro Max; collect Blue's UI examples. | Brief plus Blue's examples in the repo. | Medium | blue | S01 | HOLD (Blue) |
 | S15 | **Research capture.** "Send this page to Reviewer" flow; evaluate Claude in Chrome on Windows; research agents stay read-only. | Blue sends a Reddit thread to a reviewer without copy and paste. | Medium | windows | S10 | READY |
 | S16 | **Composer research (includes the Dodaios trial).** Research for the Composer (one Mako pane that takes a large task, fans it out to several agents, and lets Blue compose and split sessions from it) and for workflow automation. Any hands-on trial, including the one-day Dodaios trial, runs only in a sandbox with no real credentials. Scope and what it must cover: "S16 details" below the table. | `docs/decisions/OSS-composer.md` exists in the AGENTS.md OSS shape: each option has a verdict proposal (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD FRESH) and a blank for Blue's verdict, word for word, and it ends with an open-questions list for Blue. Blue's verdict is then recorded. | Minimum | blue | S01 | READY |
-| S17 | **Design directions.** Codex builds (Blue starts it): two or three clickable concepts from S14's brief and Blue's examples. Blue iterates with Codex and ChatGPT directly. | Blue picks one. | Medium | blue | S14 | HOLD (Blue) |
+| S17 | **Design directions.** Codex builds (Blue starts it): two or three clickable concepts from S14's brief and Blue's examples. Blue iterates with Codex and ChatGPT directly. | Blue picks one. | Medium | blue | S14, S26 | HOLD (Blue) |
 | S18 | **New layout, part 1.** Codex builds (Blue starts it): navigation, pane area and toolbar in the chosen design, behind a setting so the old layout stays available. | Daily use works in the new layout. | High | windows | S17 | HOLD (Blue) |
 | S27 | **Composer.** Dropped: PR #48 (merged 2026-10-20) folded the Composer into S16, "Composer research (includes the Dodaios trial)", with Composer build sessions in a later plan change after Blue's S16 verdict. | — | — | — | — | DROPPED (folded into S16 by PR #48) |
 | S19 | **New layout, part 2.** Codex builds (Blue starts it): pane and status visuals; "needs you" stands out. | Blue accepts the look. | High | windows | S18 | HOLD (Blue) |
@@ -109,9 +110,11 @@ Blue: "this structure is fine by me, please proceed in updating this item". The 
   visuals the whole way. Codex works on its own `codex/` branches (AGENTS.md "Who does what").
 - **Every UI PR:** Claude Opus runs the required review (AGENTS.md "How work flows" step 3, the
   Codex-PR case) for bugs, security and the plan, not taste. Blue judges the look.
-- Not settled here: which account Codex's PRs are attributed to (S26 checks; a PR Blue authors
-  himself can't get the code-owner approval it needs), and which Claude session reviews a UI PR
-  before S04's runner can (until then, a session Blue starts, as AGENTS.md step 3 allows).
+- **S17 waits for S26** (Needs: S14, S26). S26 settles which account Codex's PRs are attributed to
+  (a PR Blue authors himself can't get the code-owner approval it needs), how Codex claims a
+  session, and who fixes CI failures and review findings on Codex's PRs. Not settled here: which
+  Claude session reviews a UI PR before S04's runner can (until then, a session Blue starts, as
+  AGENTS.md step 3 allows).
 
 ### S16 details: Composer research
 
@@ -231,8 +234,7 @@ and later").
    ready to merge with TLDR links, needs-Blue questions, and blocked items. Other fires notify only
    when Blue has something to answer; S04 confirms that hourly fires don't each send a phone
    notification, and sets the routine's notifications so they don't. Each PR's line in the digest,
-   and every other session-end notice, starts with `READY TO MERGE` (CI green, review done with every finding
-   fixed or answered, PR marked ready) or `NOT READY: <reason>` (AGENTS.md "How work flows" step 5); Blue merges only on
+   and every other session-end notice, starts with `READY TO MERGE` (as defined in AGENTS.md "How work flows" step 5) or `NOT READY: <reason>` (same step); Blue merges only on
    `READY TO MERGE`.
 8. **Applying it.** The S04 PR proposes the new prompt and schedule in docs/RUNNER.md. The prompt
    carries AGENTS.md's Codex-handle rule into every comment, review post and summary it writes. An
@@ -307,7 +309,7 @@ and later").
 4. **Default split.** Codex takes windows-lane sessions it can verify on the Windows CI checks (path
    b), or in its Windows sandbox (path a, only after S06). Claude takes the rest.
 5. **No dependency on it.** Codex usage stays within ChatGPT Plus, with no credits bought. Nothing
-   waits on Codex: if Blue drops ChatGPT, Claude takes every session.
+   waits on Codex: if Blue drops ChatGPT, Claude takes every session (for the UI sessions S17 to S20, which Codex builds, after a plan change; "UI sessions: who builds").
 
 ### Blue's inputs this month
 
@@ -346,4 +348,4 @@ does both) · Vibe Kanban (removed in 1.0).
 - 2026-10-19 (proposed, pending Blue; same PR, Blue's additions): every session-end message and phone notification starts with "READY TO MERGE" or "NOT READY: <reason>" (AGENTS.md "How work flows" step 5, S04 item 7). Pause button and usage alert instead of an automatic stop: S04 item 9 documents the stop button, researches whether a cloud session can read plan usage for a 90% notice, and never starts a session late in a usage window; S11 gains a 90% warning and Pause and Resume buttons. New S27 "Composer" (a must-have early in 1.1, listed after S18, NEEDS BLUE for Blue's research) and S28 "Agent profile refresh" (after S26, needs S01 and Blue's agent-roles package; once his package arrives the runner takes it ahead of S05 to S25, which is intended, because it applies material Blue has just handed over). The month now has 28 sessions.
 - 2026-10-20 (proposed, pending Blue; PR #47, after merging PR #48): S27 "Composer" is DROPPED, because PR #48 (merged) folded the Composer into S16 "Composer research", with build sessions in a later plan change after Blue's S16 verdict, following his newer words to push the UI and Composer back; this month has 27 active sessions. S04's parallel cap follows the upgrade's new date, 2026-10-28. Checklist step 16 (the Codex re-link) is ticked: Blue did it on 2026-10-20.
 - 2026-10-20: S06 gains the token-storage, scope and `ABlueAI`-login-removal items that step 14's classic `public_repo` token needs (proposed, pending Blue; PR #46).
-- 2026-10-21 (proposed, pending Blue; PR #52): the UI sessions get one builder. S14: Claude Opus writes the design brief from Blue's examples and dashboard list (words and structure, not code). S17 to S20: Codex builds all of it, started by Blue, who iterates with Codex and ChatGPT directly; the runner and Claude sessions never build those rows. Every UI PR: Claude Opus reviews for bugs, security and the plan, not taste; Blue judges the look. The rows stay `HOLD (Blue)`. S16 gains the Composer model-choice requirement (picks the model itself, prefers Opus 5.5, asks only before Opus 5.5 at max effort). Blue's words are in docs/DECISIONS.md, 2026-10-21.
+- 2026-10-21 (proposed, pending Blue; PR #52): the UI sessions get one builder. S14: Claude Opus writes the design brief from Blue's examples and dashboard list (words and structure, not code). S17 to S20: Codex builds all of it, started by Blue, who iterates with Codex and ChatGPT directly; the runner and Claude sessions never build those rows. Every UI PR: Claude Opus reviews for bugs, security and the plan, not taste; Blue judges the look. S17's Needs gain S26, so Codex's PR attribution, claims and fix path are settled before the UI build starts. The rows stay `HOLD (Blue)`. S16 gains the Composer model-choice requirement (picks the model itself, prefers Opus 5.5, asks only before Opus 5.5 at max effort). Blue's words are in docs/DECISIONS.md, 2026-10-21.
