@@ -7,7 +7,7 @@ of editing an old one, and say which entry it replaces. Agents follow the newest
 
 | Decision | Blue's words |
 |---|---|
-| BLUE-CHECKLIST.md step 6 ("Bring GPT up to date": upload the 2026-10-17 GPT briefing to ChatGPT) is dropped, because keeping ChatGPT/Codex up to date is now automatic. The step stays in the checklist, marked dropped, so no step is renumbered. Blue's words don't say which mechanism makes it automatic; Codex reads the repo directly since its GitHub link moved to `ABlueAgent` (2026-10-20). | "drop step 6, its an automatic process now. no need" |
+| BLUE-CHECKLIST.md step 6 ("Bring GPT up to date": upload the 2026-10-17 GPT briefing to ChatGPT) is dropped: Blue says it is now an automatic process. The step stays in the checklist, marked dropped, so no step is renumbered. Blue's words don't say which mechanism makes it automatic, and none is recorded here. | "drop step 6, its an automatic process now. no need" |
 
 ## 2026-10-20
 
