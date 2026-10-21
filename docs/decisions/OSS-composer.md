@@ -13,7 +13,10 @@ and get summaries from an inteligent role" (docs/DECISIONS.md, 2026-10-20).
 No option is adopted, rejected or scheduled. Every option below stays open for study, and the open
 questions are deferred, to be answered as more OSS material is reviewed. The proposed verdicts and
 the recommended direction below are the builder's proposals and input for that later work, not
-decisions. Blue, in his own session on 2026-10-21:
+decisions. Blue, in his own session on 2026-10-21 (his second message answered the builder's
+offer to record "everything stays open for study, questions deferred" as his verdict; the builder
+reads the opening "no" as rejecting merging without a recorded verdict, not that phrase, and Blue is
+asked to confirm on PR #82):
 
 - "bottom line, you wont be able to come up with the best answer for creating the composer, nor will i. it will come from a lot of input from a lot of OSS material and we will figure out the good and bad tidbits and find something i like. but for now i dont have all of the answers and that will need to be answered down the line"
 - "no, this does not cover my conclusion. everything stays open for study, questions deferred"
@@ -45,8 +48,8 @@ Opus 5.5, and asks Blue only before Opus 5.5 at max effort. The Claude Code opti
 Dodaios's panes can set model and effort per agent; Dodaios's fan-out call can't (see "The model
 rule" below). Mako enforces the rule in its own launch code, not in the Composer's prompt.
 
-**Blue's verdict:** every option stays open for study and the open questions are deferred (see
-"Blue's verdict" above). The "Proposed verdict" column is the builder's proposal only. Spending on
+**Blue's verdict:** see "Blue's verdict" above (both of his messages): every option stays open for
+study and the open questions are deferred. The "Proposed verdict" column is the builder's proposal only. Spending on
 Gumloop or any paid service still needs Blue's explicit OK.
 
 ## What every option is judged against
@@ -209,7 +212,7 @@ adopts it behind a Mako pane (Dodaios's web UI on `127.0.0.1`, panes pinned to M
 modes); if it fails, its patterns are mined with Blue's OK. Forking a piece into Mako's Electron and
 Node code would effectively be a rewrite from Python, so FORK is not proposed.
 
-Blue's verdict, word for word: "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
+Blue's verdict, word for word: see "Blue's verdict" at the top (2026-10-21, both of his messages).
 
 ### 2. Claude Code subagents, agent view and cross-session messaging
 
@@ -240,7 +243,7 @@ built in; Mako's whisper and Kokoro do it.
 dispatches, cross-session messaging for updates, agent view's state and summary model as the pattern
 for the Composer's status list).
 
-Blue's verdict, word for word: "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
+Blue's verdict, word for word: see "Blue's verdict" at the top (2026-10-21, both of his messages).
 
 ### 3. Claude Code Agent Teams
 
@@ -262,7 +265,7 @@ model rule can be held by subagent definitions with a fixed `model` and `effort`
 **Proposed verdict: PROTOTYPE** (one research-only trial in a single Mako pane, after the Composer's
 first build session, to compare with Mako-launched panes).
 
-Blue's verdict, word for word: "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
+Blue's verdict, word for word: see "Blue's verdict" at the top (2026-10-21, both of his messages).
 
 ### 4. Claude desktop's linked sessions and Claude Code Projects
 
@@ -298,9 +301,9 @@ before a Projects trial. No voice in Projects; it lives outside Mako.
 a throwaway repo once it reaches Blue's account and the merge gap is closed, to compare its
 coordinator and summaries with the Composer.
 
-Blue's verdict, word for word (linked sessions): "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
+Blue's verdict, word for word (linked sessions): see "Blue's verdict" at the top (2026-10-21, both of his messages).
 
-Blue's verdict, word for word (Projects): "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
+Blue's verdict, word for word (Projects): see "Blue's verdict" at the top (2026-10-21, both of his messages).
 
 ### 5. Microsoft Conductor
 
@@ -325,7 +328,7 @@ spending (AGENTS.md: ask Blue). Copilot is its default provider and Blue doesn't
 effort in a file under version control; revisit for workflow automation if Blue wants workflows as
 code).
 
-Blue's verdict, word for word: "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
+Blue's verdict, word for word: see "Blue's verdict" at the top (2026-10-21, both of his messages).
 
 ### 6. The R15 pattern mine: parallel-code, crystal, Emdash
 
@@ -357,11 +360,11 @@ task, issue intake. None adds a voice coordinator.
 **Proposed verdicts:** parallel-code **PATTERN-MINE** · crystal **PATTERN-MINE** (history only;
 deprecated) · Emdash **PATTERN-MINE**.
 
-Blue's verdict, word for word (parallel-code): "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
+Blue's verdict, word for word (parallel-code): see "Blue's verdict" at the top (2026-10-21, both of his messages).
 
-Blue's verdict, word for word (crystal): "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
+Blue's verdict, word for word (crystal): see "Blue's verdict" at the top (2026-10-21, both of his messages).
 
-Blue's verdict, word for word (Emdash): "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
+Blue's verdict, word for word (Emdash): see "Blue's verdict" at the top (2026-10-21, both of his messages).
 
 ### 7. Cloudroom (cloudroom-core and cloudroom-gui)
 
@@ -386,7 +389,7 @@ localhost only. Hosted cloud is invite-only.
 **Proposed verdict: PATTERN-MINE** (Teleport is the same idea as Mako's Maximum level, which sends a
 task to a cloud session; the agent-as-separate-OS-user model is worth noting for S10).
 
-Blue's verdict, word for word: "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
+Blue's verdict, word for word: see "Blue's verdict" at the top (2026-10-21, both of his messages).
 
 ### 8. Workflow automation: Gumloop, n8n, Activepieces
 
@@ -423,11 +426,11 @@ credentials by default. Voice: none of them speaks; the Composer could start a w
 spending without Blue's OK) · n8n **PATTERN-MINE** (licence and default telemetry) · Activepieces
 **PROTOTYPE** (in the later workflow-automation session, sandboxed, no real credentials).
 
-Blue's verdict, word for word (Gumloop): "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
+Blue's verdict, word for word (Gumloop): see "Blue's verdict" at the top (2026-10-21, both of his messages).
 
-Blue's verdict, word for word (n8n): "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
+Blue's verdict, word for word (n8n): see "Blue's verdict" at the top (2026-10-21, both of his messages).
 
-Blue's verdict, word for word (Activepieces): "everything stays open for study, questions deferred" (2026-10-21; see "Blue's verdict" at the top).
+Blue's verdict, word for word (Activepieces): see "Blue's verdict" at the top (2026-10-21, both of his messages).
 
 ## What was checked, and what was not
 

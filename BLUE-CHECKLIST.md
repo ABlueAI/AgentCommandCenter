@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-21 by Claude (step 21 added: apply the capped review loop to the runner, PR #52;
+Last updated 2026-10-21 by Claude (step 19 ticked with Blue's Composer verdict, PR #82; step 21 added: apply the capped review loop to the runner, PR #52;
 step 25 added for the S03 plan board, PR #54; "Do next" order added, step 20 ticked, step 22 added, PR #53;
 S05 checks added as steps 23 and 24, PR #49; step 6 dropped by Blue, PR #51; step 17 moved after
 step 16; PR #46's token rules approved with its merge). Earlier: step 17 added and step 14's token
@@ -435,8 +435,11 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   agent. Spending on Gumloop or any paid service needs your explicit OK there.
   - *Done when:* your verdict is recorded word for word in OSS-composer.md and docs/DECISIONS.md.
     A later plan change then adds the Composer build sessions.
-  - *Done 2026-10-21:* Blue gave his verdict in his own session: "everything stays open for study,
-    questions deferred". No option is adopted; the open questions wait for more OSS review. PR #82
+  - *Done 2026-10-21:* Blue gave his verdict in his own session, in two messages, both recorded
+    word for word: "it will come from a lot of input from a lot of OSS material and we will figure
+    out the good and bad tidbits and find something i like" and "no, this does not cover my
+    conclusion. everything stays open for study, questions deferred". No option is adopted; the open
+    questions wait for more OSS review. PR #82
     records his words in OSS-composer.md and docs/DECISIONS.md (checked in the PR's diff). What the
     later Composer plan change contains is his call.
 
@@ -559,7 +562,7 @@ You can start on the first one now, which saves time later.
 - **Session S13:** install the Obsidian app (2 minutes).
 - **Session S26:** comment as `ABlueAI` on its claim issue to start Codex's trial build (the session
   tells you when and what to write).
-- **Session S16:** ~~your Composer verdict (step 19)~~ Done 2026-10-21: everything stays open for study, questions deferred.
+- **Session S16:** ~~your Composer verdict (step 19)~~ Done 2026-10-21: no option adopted, everything open for study, questions deferred (step 19).
 - **Session S17 (on hold with S14):** pick one of 2 or 3 design directions.
 - **Session S21:** pick a logo variant.
 - **Session S23:** approve the client paperwork drafts.

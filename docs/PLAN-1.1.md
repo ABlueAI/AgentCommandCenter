@@ -315,7 +315,7 @@ and later").
 
 S01 GitHub clicks (about 20 minutes) · S06 `ABlueAgent` token for local agents (checklist step 14) · S04 time zone (given 2026-10-18: Eastern) and digest time (default 8 PM) · S12 Hexona URL · S13 install
 Obsidian · say go on the UI (S14, S17–S20; checklist step 18) · S14 UI examples · S16 Composer verdict
-(checklist step 19) · S17 to S20 iterate on the look with Codex and ChatGPT · S17 pick a design · S21 pick a logo · S23 approve paperwork · S24 authorize
+(checklist step 19, done 2026-10-21, PR #82) · S17 to S20 iterate on the look with Codex and ChatGPT · S17 pick a design · S21 pick a logo · S23 approve paperwork · S24 authorize
 HighLevel · S26 Codex re-link to `ABlueAgent` (checklist step 16, done 2026-10-20) and your `ABlueAI`
 hand-off comment on the claim issue for its trial · S28 agent-roles
 package · every merge.
