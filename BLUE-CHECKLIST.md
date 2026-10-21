@@ -6,7 +6,8 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-21 by Claude (step 25 added for the S03 plan board, PR #54; "Do next" order added, step 20 ticked, step 22 added, PR #53;
+Last updated 2026-10-21 by Claude (step 21 added: apply the capped review loop to the runner, PR #52;
+step 25 added for the S03 plan board, PR #54; "Do next" order added, step 20 ticked, step 22 added, PR #53;
 S05 checks added as steps 23 and 24, PR #49; step 6 dropped by Blue, PR #51; step 17 moved after
 step 16; PR #46's token rules approved with its merge). Earlier: step 17 added and step 14's token
 changed to classic `public_repo` (PR #46); step 8 moved to 2026-10-28 and steps 18 to 20 added (PR
@@ -424,7 +425,9 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
 - [ ] **18. Say go on the UI when your examples are ready.** About 1 minute, any time. The UI sessions
   (S14 and S17 to S20) are on `HOLD (Blue)` in docs/PLAN-1.1.md (PR #48), so the runner skips them.
   When your UI examples folder is ready, tell any agent "go on the UI". It records your words in
-  docs/DECISIONS.md and sets those rows back to READY in a PR; merging that PR starts them.
+  docs/DECISIONS.md and sets those rows back to READY in a PR. Merging that PR starts S14 (Claude
+  writes the brief). S17 to S20 are built by Codex, which you start yourself once S14 and S26 are
+  done; the runner never builds them (docs/PLAN-1.1.md "UI sessions: who builds").
   - *Done when:* that DECISIONS.md entry is on `main`. Claude checks.
 - [ ] **19. Give your Composer verdict after S16.** About 15 minutes, after the S16 PR opens. Read
   `docs/decisions/OSS-composer.md`, answer its open questions, and give a verdict on each option
@@ -452,6 +455,13 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     **Installed GitHub Apps** (should be none) and **Authorized GitHub Apps** (the ChatGPT/Codex entry
     is expected; note what else is listed).
   - *Done when:* you tell any agent what both pages show; it records that in STATUS.md with the date.
+
+- [ ] **21. Have the runner's new prompt applied (after you merge PR #52).** About 2 minutes, right
+  after you merge PR #52 (the capped review loop). Tell any Claude session "apply the runner prompt
+  from docs/RUNNER.md". It updates only the prompt of the scheduled task "Mako daily runner" from
+  `main`; the schedule and the model (Opus 5.5) stay as they are. The runner never edits itself.
+  - *Done when:* that session reads the scheduled task back, its prompt matches docs/RUNNER.md
+    "Current prompt (verbatim)" on `main`, and it ticks this step with the date and how it checked.
 
 - [ ] **22. Evaluate qodo-ai/pr-agent as Mako's PR reviewer.** About 20 minutes of your own time,
   whenever you get to it ("add it to my list, i will get to it"). (Numbered 22 because open PR #52

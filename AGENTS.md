@@ -28,8 +28,10 @@ that S04 adds), plan-session PRs change only their own row in
 `BLUE-CHECKLIST.md` and `docs/DECISIONS.md` only the steps and decisions they need, and leave
 `STATUS.md` to the runner's status PR, to reduce conflicts between parallel PRs; PRs that change the state
 outside a session (plan changes, guardrails, releases) still update it. A new checklist step takes
-the next number not used on `main` or by an open PR; if two PRs still end up with the same number,
-the one that merges second renumbers by merging `main`, never by force-pushing. When Blue decides
+the next number not used on `main` or by an open PR when the PR opens, and keeps it through review.
+Steps already on `main` are never renumbered by a PR after its first review. If two PRs still end
+up with the same number, the one that merges second renumbers only its own new step by merging
+`main`, never by force-pushing. When Blue decides
 something, append it to `docs/DECISIONS.md`. Plans and decisions live in the repo, not in chat history, so Claude, Codex and
 GPT all work from the same facts. Merging a PR is how Blue approves a change to any of them.
 
@@ -41,8 +43,10 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
    put the change in that PR. (A PR merged into another PR's branch reaches `main` only indirectly,
    which is how the false merge-audit alert in issue #35 happened.)
 3. CI runs on Windows. Before marking the PR ready, the builder runs the `pr-reviewer` subagent
-   (`.claude/agents/pr-reviewer.md`, Claude Opus, read-only, no shell) on its own PR. It gives the
-   reviewer only the PR number, the TLDR and the diff saved to a file, never its own reasoning.
+   (`.claude/agents/pr-reviewer.md`, Claude Opus, read-only, no shell) on its own PR. On the first
+   run it gives the reviewer only the PR number, the TLDR and the diff saved to a file; on a later
+   run, the delta since the last run and the previous findings instead of the whole diff ("The
+   review loop" below). Never its own reasoning.
    - If the subagent isn't loaded (agent files load only when a session starts), run a fresh Opus
      agent with read tools only and the body of `pr-reviewer.md` as its instructions, and say so in
      the comment and the TLDR. If neither is possible, mark the PR "needs Blue". Never skip it.
@@ -56,22 +60,57 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      remove it with a note, and replace Codex's handle with "at-codex" (see "Security rules").
      Otherwise post the reviewer's report verbatim apart from those edits, as a PR comment headed
      "Independent review (Opus)", followed by the builder's response to each finding.
-   - Fix or answer every finding, re-run the reviewer after fixes, and post each run. The TLDR's
-     review line cites the latest such comment.
+   - Fix findings and re-run the reviewer as "The review loop" below says, and post each run. The
+     TLDR's review line cites the latest such comment.
    - Codex review is optional. Since Codex was linked to the agent account (BLUE-CHECKLIST.md step
-     16, 2026-10-20), it reviews agent PRs automatically; builders answer its findings like any
-     review, but nothing waits for it. A manual request Blue comments as `ABlueAI` is refused, so he
+     16, 2026-10-20), it reviews agent PRs automatically; builders rank its findings high, medium or
+     low and handle them like the Opus review's (high and medium in the next fix batch, low ones to
+     Follow-ups), but nothing waits for it and its reviews don't count toward the run cap. A manual request Blue comments as `ABlueAI` is refused, so he
      asks an agent to post it instead (this worked on PR #47 on 2026-10-21; STATUS.md).
 4. The builder fixes CI failures and review findings itself. After 3 failed fix rounds on the same
-   problem, it stops and marks the PR "needs Blue" with its diagnosis and options.
-5. When CI is green and review findings are resolved, the builder updates the TLDR and marks the PR
-   ready. That TLDR is Blue's merge briefing.
+   CI problem, it stops and marks the PR "needs Blue" with its diagnosis and options. Review findings
+   follow the run cap in "The review loop" below.
+5. When CI is green and no high or medium review finding is open (low ones are listed under
+   Follow-ups), the builder updates the TLDR and marks the PR ready. That TLDR is Blue's merge
+   briefing.
+   - After the PR is marked ready, nobody pushes to it except to fix a CI failure, resolve a merge
+     conflict, or do what Blue asks. A push dismisses Blue's approval, so the TLDR says why any such
+     push happened.
    - Every session-end message and phone notification about a PR starts with `READY TO MERGE` (CI
-     green, independent review done and every finding fixed or answered, PR marked ready) or `NOT READY: <reason>`. A summary covering
+     green, independent review done and every high and medium finding fixed or answered, low ones
+     listed as follow-ups, PR marked ready) or `NOT READY: <reason>`. A summary covering
      several PRs starts each PR's line that way; a session-end message or phone notification about no
      PR (such as the runner's gate notice) starts with `NOT READY: <reason>`. Blue merges only on `READY TO MERGE`; a reason that
      needs his answer says so.
 6. Blue merges. Nobody and nothing else does.
+
+### The review loop
+
+Adopted 2026-10-21 (docs/DECISIONS.md), after PR #46, a docs-only PR, took 37 commits and 31 review
+runs: none found a high finding, and after run 6 found nothing, 25 more runs each found a few new,
+mostly low, findings. Every PR follows it, including the builder's own fixes.
+
+- **One scope per PR.** The PR's stated scope is what its TLDR's "What and why" says it does.
+  Problems outside it become follow-ups, never more commits in that PR.
+- **Run 1 is a complete audit.** The reviewer reads the whole diff once, finds every problem at
+  once, judges each against the PR's stated scope, and ranks each high, medium or low
+  (`.claude/agents/pr-reviewer.md`).
+- **Fix in one batch.** The builder fixes or answers all high and medium findings together, in one
+  push. Low findings never block: they go in the "Follow-ups" list at the end of the TLDR, and
+  become a plan row or an issue if they are real work. Out-of-scope findings go there too, whatever
+  their severity; a high one becomes an issue before the PR is marked ready. After the batch, the
+  builder re-runs the reviewer on the delta. The PR isn't marked ready until the latest run shows no
+  high or medium finding still open, apart from ones the builder has answered in the PR.
+- **Later runs check only the fixes.** Each later run gets the PR number, the TLDR, the delta since
+  the last run and the previous findings, and checks only those, not the whole PR again.
+- **At most 5 runs per PR**, for any reason, including re-runs after merging `main`. If high or
+  medium findings are still open after run 5, the builder stops: no more fix rounds and no sixth
+  run. It marks the PR "needs Blue" and asks Blue how to proceed, in the PR and in its session-end
+  message, with its diagnosis and the solutions it sees, so the PR doesn't spiral.
+- **Merging `main`** to resolve a conflict needs no new review unless the merge changed content
+  beyond the conflict.
+- **No formatting-only commits** (rewraps, reflowed lines) after the first review.
+- **No pushes after the PR is marked ready**, except the three in "How work flows" step 5.
 
 ### Never
 
@@ -85,7 +124,8 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
 
 Facts only, in this order: what and why · ready to merge or not · decisions Blue must make (with a
 recommendation) · uncertainty and how to check it in under 2 minutes · plan changes · sensitive areas
-touched · test results (CI, local, not covered) · review verdict and open findings. Say "none" rather
+touched · test results (CI, local, not covered) · review verdict and open findings · follow-ups
+(low and out-of-scope findings, see "The review loop"). Say "none" rather
 than leaving a line out. Never present an assumption as a fact.
 
 ## Deciding without asking
@@ -163,7 +203,10 @@ listeners · CI workflows, `.github/`, `.claude/`, repository settings · this f
   Claude session that handed it the task, the next runner fire, or a session Blue starts; step 3).
 - **Codex / GPT**: optional reviewer (since it was linked to `ABlueAgent`, BLUE-CHECKLIST.md step 16,
   2026-10-20, it reviews agent PRs automatically; a manual request goes through an agent, step 3), second-opinion builder (builder lane
-  planned in S26), and planning partner. Works in its own branch, never Claude's. Nothing in the workflow depends on it.
+  planned in S26), the builder of the UI sessions S17 to S20 (started by Blue, reviewed by Claude
+  Opus; docs/PLAN-1.1.md "UI sessions: who builds"), and planning partner. Works in its own branch,
+  never Claude's. Nothing else in the workflow depends on it: if Blue drops it, the UI sessions need
+  a plan change.
 - Plans and reviews happen in the repo (PRs, issues, these files), never by copying text between apps.
 
 ## Out of scope unless Blue explicitly approves the guardrails first
