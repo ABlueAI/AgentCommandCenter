@@ -101,13 +101,12 @@ mostly low, findings. Every PR follows it, including the builder's own fixes.
   their severity; a high one becomes an issue before the PR is marked ready. After the batch, the
   builder re-runs the reviewer on the delta. The PR isn't marked ready until the latest run shows no
   high or medium finding still open, apart from ones the builder has answered in the PR.
-- **Later runs check only the fixes.** Run 2 and run 3 get the PR number, the TLDR, the delta since
-  the last run and the previous findings, and check only those, not the whole PR again.
-- **At most 3 runs.** If high or medium findings are still open after run 3, the builder stops: no
-  more fix rounds. It posts a short whole-PR audit (one more reviewer run) and marks the PR "needs
-  Blue" with its diagnosis and options.
-- **Ceiling of 5 runs** per PR for any reason, including re-runs after merging `main`. Nothing runs
-  a sixth; Blue decides what happens next.
+- **Later runs check only the fixes.** Each later run gets the PR number, the TLDR, the delta since
+  the last run and the previous findings, and checks only those, not the whole PR again.
+- **At most 5 runs per PR**, for any reason, including re-runs after merging `main`. If high or
+  medium findings are still open after run 5, the builder stops: no more fix rounds and no sixth
+  run. It marks the PR "needs Blue" and asks Blue how to proceed, in the PR and in its session-end
+  message, with its diagnosis and the solutions it sees, so the PR doesn't spiral.
 - **Merging `main`** to resolve a conflict needs no new review unless the merge changed content
   beyond the conflict.
 - **No formatting-only commits** (rewraps, reflowed lines) after the first review.

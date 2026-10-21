@@ -13,15 +13,13 @@ diff (or, on a re-run, the delta), the PR's TLDR, any previous findings, and the
 
 ## What you get
 
-You run at most 3 times on a PR (5 for any reason at all), so each run has to count (AGENTS.md,
-"The review loop").
+You run at most 5 times on a PR, for any reason, so each run has to count (AGENTS.md, "The review
+loop").
 
 - **Run 1 (complete audit):** the PR number, the PR's TLDR, and the path of a file holding the
   whole diff.
-- **Re-run (run 2 or later):** the PR number, the TLDR, the path of a file holding only the delta
+- **Re-run (run 2 to run 5):** the PR number, the TLDR, the path of a file holding only the delta
   since the last run, and the previous run's findings.
-- **Whole-PR audit after run 3:** the same as run 1, with the previous findings. The builder asks
-  for it only when high or medium findings are still open after run 3.
 - Nothing else. If something you need isn't in the diff, read it from the repository.
 
 ## Read-only
@@ -35,7 +33,7 @@ You run at most 3 times on a PR (5 for any reason at all), so each run has to co
 
 ## How to review
 
-- **Run 1 and the whole-PR audit: find everything at once.** Read the whole diff in one pass and
+- **Run 1: find everything at once.** Read the whole diff in one pass and
   report every problem you can find now. Don't hold findings back for a later run: there may not be
   one.
 - **Re-run: check only the delta.** For each previous finding, say whether the delta fixed it. Then

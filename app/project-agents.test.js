@@ -66,10 +66,10 @@ for (const file of agents) {
     'pr-reviewer.md does one complete first audit and checks only the delta on a re-run');
   assert(reviewer.includes('**Non-blocking:**'), 'pr-reviewer.md labels low findings non-blocking');
   const rules = fs.readFileSync(path.join(repoRoot, 'AGENTS.md'), 'utf8');
-  assert(rules.includes('### The review loop') && rules.includes('**At most 3 runs.**') && rules.includes('**Ceiling of 5 runs**'),
-    'AGENTS.md caps review runs at 3, with a ceiling of 5');
+  assert(rules.includes('### The review loop') && rules.includes('**At most 5 runs per PR**') && !rules.includes('At most 3 runs'),
+    'AGENTS.md caps review runs at 5, then asks Blue');
   const runner = fs.readFileSync(path.join(repoRoot, 'docs', 'RUNNER.md'), 'utf8');
-  assert(runner.includes('AGENTS.md "The review loop"') && runner.includes('At most 3 runs') && !runner.includes('re-run it after fixes, and cite'),
+  assert(runner.includes('AGENTS.md "The review loop"') && runner.includes('At most 5 runs on a PR') && !runner.includes('At most 3 runs') && !runner.includes('re-run it after fixes, and cite'),
     'docs/RUNNER.md prompt uses the capped review loop');
 }
 

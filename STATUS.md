@@ -74,7 +74,7 @@ Updated 2026-10-21 by Claude. Every PR that changes the state updates this file.
   back from the scheduled task the same day; docs/RUNNER.md).
 - **Review loop (proposed in PR #52, pending Blue):** every PR gets one complete first review ranked
   high, medium and low; high and medium findings are fixed in one batch, low ones go to Follow-ups;
-  later runs check only the fixes; at most 3 runs, then "needs Blue", and never more than 5; one
+  later runs check only the fixes; at most 5 runs, then "needs Blue" with questions for Blue; one
   scope per PR; no pushes after a PR is marked ready except for CI, a conflict or Blue asking
   (AGENTS.md "The review loop"). It applies to every PR once merged; the runner's prompt is updated
   right after (checklist step 21). Why: PR #46 took 37 commits and 31 review runs, none with a high
