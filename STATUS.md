@@ -4,7 +4,7 @@ Updated 2026-10-21 by Claude. Every PR that changes the state updates this file.
 
 ## Right now
 
-- **Your next steps:** [BLUE-CHECKLIST.md](BLUE-CHECKLIST.md), in order.
+- **Your next steps:** [BLUE-CHECKLIST.md](BLUE-CHECKLIST.md), starting with its "Do next" box.
 
 - **Release: Mako 1.0.0 is released.**
   - Tag `v1.0.0` was created on 2026-10-18 at `main` commit `37009eb`, which includes the
@@ -67,10 +67,10 @@ Updated 2026-10-21 by Claude. Every PR that changes the state updates this file.
     Automatic reviews on PR open still work. A manual request from `ABlueAgent` works: an agent's
     review request on PR #47 (03:43 UTC, 2026-10-21) got a Codex review of `1544d35` 3 minutes later,
     with no findings.
-  - Scope of the re-link: not verified. The Codex GitHub app was installed only on
-    `ABlueAI/AgentCommandCenter` ("Only select repositories", checklist step 2e, 2026-10-18); that was
-    not re-checked after the 2026-10-20 re-link, and what the new link authorizes on `ABlueAgent` was
-    not checked either. Checklist step 20 asks Blue to check both (added in PR #48).
+  - Scope of the re-link (checklist step 20, done 2026-10-21 on Blue's word): the ChatGPT/Codex
+    installation on `ABlueAI` is set to "Only select repositories", with Blue's main few repositories
+    selected, not only `AgentCommandCenter`; he adds new ones as they're created. What the link
+    authorizes on `ABlueAgent` (step 20's second page) wasn't reported, and Blue asked to move on.
 - **Daily runner:** scheduled for 8:01 AM Eastern from 2026-10-18 ([docs/RUNNER.md](docs/RUNNER.md)).
   The repository was attached on 2026-10-18 (step 7e), and its gate (steps 1 and 7) now passes, so
   the 2026-10-19 run started and opened PR #44, the first proof it can open PRs.
