@@ -331,7 +331,9 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
       7c).
     - On `ABlueAI`, keep the Claude installation under Installed GitHub Apps (cloud sessions and the
       runner reach the repo through it) and the ChatGPT/Codex installation. Keep the ChatGPT/Codex
-      authorization on `ABlueAgent` (re-linked 2026-10-20; step 20 checks its scope). A new token
+      authorization on `ABlueAgent` (re-linked 2026-10-20). While on `ABlueAgent`'s Applications page,
+      also do the part of step 20 that wasn't reported: **Installed GitHub Apps** should be none;
+      note what **Authorized GitHub Apps** lists besides ChatGPT/Codex, and tell Claude. A new token
       doesn't bring an app link back.
     - If `ABlueAI` still shows Claude under Authorized GitHub Apps, it is left over from before step
       7c and can act as you: revoke it. That removes the authorization, not the installation. If a
@@ -436,12 +438,14 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   have to add more when they are created. thats it, move on." The ChatGPT/Codex installation on
   `ABlueAI` is set to **Only select repositories**, with Blue's main few repositories selected, not
   only `AgentCommandCenter`; he adds new ones as they're created. Claude can't read that page, so this
-  rests on his word. The `ABlueAgent` page (second bullet) wasn't reported and Blue asked to move on,
-  so it was not checked. Recorded in STATUS.md.* You linked ChatGPT/Codex's GitHub to `ABlueAgent` on
+  rests on his word. Whether any of them is private isn't recorded. The `ABlueAgent` page (second
+  bullet) wasn't reported and Blue asked to move on, so that check moved to step 17a. Recorded in
+  STATUS.md and docs/DECISIONS.md.* You linked ChatGPT/Codex's GitHub to `ABlueAgent` on
   2026-10-20 (STATUS.md), and nobody has checked its scope since.
   - Signed in as `ABlueAI`: github.com > Settings > Applications > **Installed GitHub Apps** > the
-    ChatGPT/Codex app > **Configure**. It should say **Only select repositories** with only
-    `AgentCommandCenter` (as in step 2e). If it says **All repositories**, switch it back and save.
+    ChatGPT/Codex app > **Configure**. It should say **Only select repositories** (step 2e); since
+    2026-10-21 that is your main few repositories, not only `AgentCommandCenter`. If it says **All
+    repositories**, switch it back and save.
   - Signed in as `ABlueAgent` (private window): github.com > Settings > Applications. Check
     **Installed GitHub Apps** (should be none) and **Authorized GitHub Apps** (the ChatGPT/Codex entry
     is expected; note what else is listed).
@@ -453,10 +457,13 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - What it is: an open-source PR reviewer, https://github.com/qodo-ai/pr-agent. Under AGENTS.md's
     OSS-first rule it is a candidate to replace or back up Mako's custom review loop (the
     `pr-reviewer` subagent and its re-runs).
-  - Give a verdict: ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD FRESH. If you want it researched
-    first, tell any agent; it writes `docs/decisions/OSS-pr-review.md` for you to read before you
-    decide. Anything that would need a new key, account or spending comes back to you first.
-  - *Done when:* your verdict, in your own words, is recorded in docs/DECISIONS.md.
+  - Give a verdict: ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD FRESH, in your own words. An
+    agent writes the one-page record, `docs/decisions/OSS-pr-review.md` (the options and your
+    verdict, AGENTS.md "Engineering rules"); if you want it researched first, it writes the options
+    there before you decide. Anything that would need a new key, account or spending comes back to
+    you first.
+  - *Done when:* your verdict is recorded word for word in `docs/decisions/OSS-pr-review.md` and
+    docs/DECISIONS.md.
 
 ## Every day, once the runner is on
 
