@@ -1,6 +1,6 @@
 # Mako status
 
-Updated 2026-10-20 by Claude. Every PR that changes the state updates this file.
+Updated 2026-10-21 by Claude. Every PR that changes the state updates this file.
 
 ## Right now
 
@@ -47,21 +47,21 @@ Updated 2026-10-20 by Claude. Every PR that changes the state updates this file.
     The fix merged as PR #41 (`8846eed`), the audit passed on that merge, and Blue closed #40
     (checklist step 12, verified 2026-10-19).
   - Independent review: Codex reviewed Blue's PRs automatically but not the agent's (#39 skipped,
-    #41 only on request), its "All PRs" setting won't save, and it ignores review requests from
-    `ABlueAgent` (tested on PR #42). Blue chose a separate Claude
+    #41 only on request), its "All PRs" setting won't save, and, before the 2026-10-20 re-link, it ignored review
+    requests from `ABlueAgent` (PR #42; they work now, see below). Blue chose a separate Claude
     Opus reviewer instead (checklist step 13). Builders run the read-only `pr-reviewer` subagent on
     their own PR and post "Independent review (Opus)" before marking it ready. Codex is optional.
   - Codex auto-review test (2026-10-20): **PASS**. Blue says he linked ChatGPT/Codex's GitHub to
     `ABlueAgent` on 2026-10-20. On PR #48, authored by `ABlueAgent`, Codex started a review 9 seconds
     after the PR opened, with no `@codex review` comment (its summary's "Review trigger" reads "PR
-    opened"), and completed it on `cc58b93` at 15:16 UTC with no findings. `main` has no Codex re-link
-    checklist step yet (PR #47 proposes step 16 and the DECISIONS entry), so the result is recorded
-    here. The Opus review stays the required one; Codex adds a second opinion.
+    opened"), and completed it on `cc58b93` at 15:16 UTC with no findings. The result is recorded
+    here and in BLUE-CHECKLIST.md step 16 (added and ticked in PR #47). The Opus review stays the required one; Codex adds a second opinion.
   - Manual Codex requests from `ABlueAI` now fail: Blue's `@codex review` on PR #48 (16:13 UTC) got
     "To use Codex here, create a Codex account and connect to github" and no review. Likely cause, not
     verified: Codex's GitHub link moved to `ABlueAgent`, so `ABlueAI` is no longer a linked account.
-    Automatic reviews on PR open still work. Whether Codex now answers a manual request from
-    `ABlueAgent` was not tested. PR #47's proposed step 16 predicted both results.
+    Automatic reviews on PR open still work. A manual request from `ABlueAgent` works: an agent's
+    review request on PR #47 (03:43 UTC, 2026-10-21) got a Codex review of `1544d35` 3 minutes later,
+    with no findings.
   - Scope of the re-link: not verified. The Codex GitHub app was installed only on
     `ABlueAI/AgentCommandCenter` ("Only select repositories", checklist step 2e, 2026-10-18); that was
     not re-checked after the 2026-10-20 re-link, and what the new link authorizes on `ABlueAgent` was
@@ -123,3 +123,13 @@ Known limitations shipping with 1.0 are in [docs/RELEASE-NOTES-1.0.md](docs/RELE
 ## Next
 
 1.1 session S01 (finish guardrails) is DONE: PR #44 merged 2026-10-19, with its evidence in the plan's change log. S02 (CI and dependency hygiene) is DONE (#45); S03 is next. The UI sessions (S14, S17 to S20) are on hold until Blue says go, and S16 becomes the Composer research (approved with the PR #48 merge). S06 also moves local agents off Blue's git login (plan change approved with that merge). See the plan.
+
+Plan change proposed in PR #47 (pending Blue): S04 becomes an all-day runner with an evening digest
+and needs only S01, so it can run right after S03; new session S26 adds Codex as a second builder
+(Codex's GitHub is already linked to `ABlueAgent`: checklist step 16, done 2026-10-20). Also proposed
+there: READY TO MERGE / NOT READY at the start of every session-end notice, documented pausing and a
+usage alert (S04), a Pause button in Mako where it can be done safely (S11), and new session S28
+agent profile refresh. S27 (Composer) from the same PR is dropped, because PR #48 folded the Composer
+into S16. Today's runner prompt and schedule stay as they are until S04 is merged and applied; the
+checklist-numbering, Codex-handle, READY TO MERGE and Codex-PR review rules apply from this PR's
+merge, the STATUS.md and plan-row rule once S04 is merged and applied.

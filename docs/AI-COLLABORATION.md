@@ -17,12 +17,16 @@ Rules for all agents are in [AGENTS.md](../AGENTS.md). This page is the short ve
 
 - The required independent review on every PR: `.claude/agents/pr-reviewer.md`, read-only. The
   builder runs it on its own PR before marking it ready and posts "Independent review (Opus)"
-  (AGENTS.md "How work flows" step 3).
+  (for Codex's PRs, the Claude session that handed it the task, the next runner fire, or a session
+  Blue starts; AGENTS.md "How work flows" step 3).
 
 ## Codex / GPT
 
-- Optional reviewer when Blue requests one by hand, second-opinion builder, planning partner.
-  Nothing in the workflow depends on it.
+- Optional reviewer (since it was linked to `ABlueAgent`, BLUE-CHECKLIST.md step 16, 2026-10-20, it
+  reviews agent PRs automatically; a manual request goes through an agent, AGENTS.md step 3),
+  second-opinion builder (builder lane planned in
+  S26), planning partner. Nothing in the workflow depends on it. AGENTS.md "Who does what" is the
+  full version.
 - Reads the same files Claude reads (`AGENTS.md`, `STATUS.md`, `docs/PLAN-1.1.md`,
   `docs/DECISIONS.md`). Proposes plan changes as PRs, not as chat to be copied.
 - Never shares a worktree or branch with Claude.
