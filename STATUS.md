@@ -77,7 +77,7 @@ Updated 2026-10-21 by Claude. Every PR that changes the state updates this file.
   later runs check only the fixes; at most 3 runs, then "needs Blue", and never more than 5; one
   scope per PR; no pushes after a PR is marked ready except for CI, a conflict or Blue asking
   (AGENTS.md "The review loop"). It applies to every PR once merged; the runner's prompt is updated
-  right after (checklist step 21). Why: PR #46 took 36 commits and 31 review runs, none with a high
+  right after (checklist step 21). Why: PR #46 took 37 commits and 31 review runs, none with a high
   finding.
 
 ## 1.0: done

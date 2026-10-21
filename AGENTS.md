@@ -86,8 +86,9 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
 
 ### The review loop
 
-Adopted 2026-10-21 (docs/DECISIONS.md), after PR #46, a docs-only PR, took 36 commits and 31 review
-runs that each found a few new low nits. Every PR follows it, including the builder's own fixes.
+Adopted 2026-10-21 (docs/DECISIONS.md), after PR #46, a docs-only PR, took 37 commits and 31 review
+runs: none found a high finding, and after run 6 found nothing, 25 more runs each found a few new,
+mostly low, findings. Every PR follows it, including the builder's own fixes.
 
 - **One scope per PR.** The PR's stated scope is what its TLDR's "What and why" says it does.
   Problems outside it become follow-ups, never more commits in that PR.
