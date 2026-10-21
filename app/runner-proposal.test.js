@@ -19,8 +19,10 @@ function assert(cond, label) {
 }
 
 const repoRoot = path.join(__dirname, '..');
-const runner = fs.readFileSync(path.join(repoRoot, 'docs', 'RUNNER.md'), 'utf8');
-const checklist = fs.readFileSync(path.join(repoRoot, 'BLUE-CHECKLIST.md'), 'utf8');
+// Windows checkouts get CRLF line endings (git autocrlf), so normalise before matching on "\n".
+const read = (...parts) => fs.readFileSync(path.join(repoRoot, ...parts), 'utf8').replace(/\r\n/g, '\n');
+const runner = read('docs', 'RUNNER.md');
+const checklist = read('BLUE-CHECKLIST.md');
 
 function fenced(heading) {
   const at = runner.indexOf(heading);
