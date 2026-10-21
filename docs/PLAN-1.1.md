@@ -238,8 +238,8 @@ and later").
    request needs a comment by `ABlueAI`. AGENTS.md "How work flows" step 3 lets the Claude session that handed Codex the task
    (or the next runner fire) run `pr-reviewer` on Codex's PR, because Codex can't (added by this plan change, so the trial build
    below follows the current rules); the S26 PR refines it if needed and updates the "builder runs
-   it" wording in `.claude/agents/pr-reviewer.md` to match (sensitive, `.claude/`). Once Codex is linked
-   to `ABlueAgent`, any comment by that account that mentions Codex by its handle may start a Codex
+   it" wording in `.claude/agents/pr-reviewer.md` to match (sensitive, `.claude/`). Codex is linked to
+   `ABlueAgent` (since 2026-10-20), so any comment by that account that mentions Codex by its handle may start a Codex
    task. AGENTS.md "Security rules" forbids writing it unless a comment by `ABlueAI` on that PR or
    issue, unedited by anyone else, or Blue's own message to the agent asks (this plan change; the
    full rule, with its edit-history check, is in AGENTS.md). The S26 PR adds the runner's claim-issue hand-off

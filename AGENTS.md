@@ -161,8 +161,8 @@ listeners · CI workflows, `.github/`, `.claude/`, repository settings · this f
 - **Reviewer subagent** (`.claude/agents/pr-reviewer.md`, Claude Opus): the required independent
   review on every PR, run by the builder before it marks the PR ready (for Codex's PRs, by the
   Claude session that handed it the task, the next runner fire, or a session Blue starts; step 3).
-- **Codex / GPT**: optional reviewer when Blue requests one by hand (and, expected, automatically on
-  agent PRs once linked to `ABlueAgent`, BLUE-CHECKLIST.md step 16), second-opinion builder (builder lane
+- **Codex / GPT**: optional reviewer (since it was linked to `ABlueAgent`, BLUE-CHECKLIST.md step 16,
+  2026-10-20, it reviews agent PRs automatically; a manual request goes through an agent, step 3), second-opinion builder (builder lane
   planned in S26), and planning partner. Works in its own branch, never Claude's. Nothing in the workflow depends on it.
 - Plans and reviews happen in the repo (PRs, issues, these files), never by copying text between apps.
 
