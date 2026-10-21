@@ -253,7 +253,8 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     subagent (`.claude/agents/pr-reviewer.md`) on its own PR before marking it ready, and posts the
     result as a PR comment headed "Independent review (Opus)". It fixes or answers every finding and
     re-runs it after fixes (AGENTS.md "How work flows" step 3, and the runner prompt).
-  - Codex review is optional now. You can still request one by hand, but nothing waits for it.
+  - Codex review is optional now. You can still request one by hand, but nothing waits for it (since
+    step 16, ask an agent to post the request; yours as `ABlueAI` is refused).
   - *Done when:* PR #42 merges with its "Independent review (Opus)" comment linked in the TLDR.
 - [ ] **14. Agent token for local agents (approved with PR #44, merged 2026-10-19).** About 10
   minutes, any time before session S06 (the runner won't start S06 until this is ticked). Today local
@@ -339,6 +340,8 @@ You can start on the first one now, which saves time later.
   now.**
 - **Session S12:** your Hexona login URL.
 - **Session S13:** install the Obsidian app (2 minutes).
+- **Session S26:** comment as `ABlueAI` on its claim issue to start Codex's trial build (the session
+  tells you when and what to write).
 - **Session S16:** your Composer verdict (step 19), including the Dodaios trial.
 - **Session S17 (on hold with S14):** pick one of 2 or 3 design directions.
 - **Session S21:** pick a logo variant.

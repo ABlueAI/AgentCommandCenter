@@ -58,11 +58,10 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      "Independent review (Opus)", followed by the builder's response to each finding.
    - Fix or answer every finding, re-run the reviewer after fixes, and post each run. The TLDR's
      review line cites the latest such comment.
-   - Codex review is optional: Blue may still request one by hand. Once Codex is linked to the agent
-     account (BLUE-CHECKLIST.md step 16), it is expected to review agent PRs automatically; builders
-     answer its findings like any review, but nothing waits for it. A request Blue comments as
-     `ABlueAI` is then expected to fail, so he asks an agent to post it instead (this worked on PR #47
-     on 2026-10-21; STATUS.md).
+   - Codex review is optional. Since Codex was linked to the agent account (BLUE-CHECKLIST.md step
+     16, 2026-10-20), it reviews agent PRs automatically; builders answer its findings like any
+     review, but nothing waits for it. A manual request Blue comments as `ABlueAI` is refused, so he
+     asks an agent to post it instead (this worked on PR #47 on 2026-10-21; STATUS.md).
 4. The builder fixes CI failures and review findings itself. After 3 failed fix rounds on the same
    problem, it stops and marks the PR "needs Blue" with its diagnosis and options.
 5. When CI is green and review findings are resolved, the builder updates the TLDR and marks the PR
