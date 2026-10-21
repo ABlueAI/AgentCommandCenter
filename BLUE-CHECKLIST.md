@@ -6,8 +6,22 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-21 by Claude (step 6 dropped by Blue; step 17 added: token hygiene; step 14's token changed to classic
-`public_repo` (PR #46); step 8 moved, steps 18 to 20 added (PR #48); step 16 added and ticked (PR #47)).
+Last updated 2026-10-21 by Claude ("Do next" order added, step 20 ticked, step 22 added; earlier: step 6
+dropped by Blue; step 17 added: token hygiene; step 14's token changed to classic `public_repo` (PR #46);
+step 8 moved, steps 18 to 20 added (PR #48); step 16 added and ticked (PR #47)).
+
+## Do next, in this order
+
+Your words (2026-10-21): "we will walk through this. place it where you prioritize it in relation to
+other remaining items." Claude's order for what is left:
+
+1. **Step 15**, the voice check on the new Electron, first: a failure means a fix or a revert of the
+   Electron bump before other work.
+2. **Step 14**, the agent token, walked through with an agent (tell any agent "walk me through step
+   14"). It unblocks S06 and everything after it (S07 to S11, S21), and Codex's next build (from the
+   hand-off for this order; the plan doesn't name that dependency yet).
+3. **Step 17**, the token audit and push protection.
+4. **Wednesday 2026-10-28: step 8**, the Max upgrade.
 
 ## Today
 
@@ -417,9 +431,14 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - *Done when:* your verdict is recorded word for word in OSS-composer.md and docs/DECISIONS.md.
     A later plan change then adds the Composer build sessions.
 
-- [ ] **20. Check what Codex's GitHub link can reach.** About 3 minutes, any time soon. You linked
-  ChatGPT/Codex's GitHub to `ABlueAgent` on 2026-10-20 (STATUS.md), and nobody has checked its scope
-  since.
+- [x] **20. Check what Codex's GitHub link can reach.** About 3 minutes, any time soon. *Done
+  2026-10-21 on Blue's word: "yes it is only select repositories. with my main few checked and i will
+  have to add more when they are created. thats it, move on." The ChatGPT/Codex installation on
+  `ABlueAI` is set to **Only select repositories**, with Blue's main few repositories selected, not
+  only `AgentCommandCenter`; he adds new ones as they're created. Claude can't read that page, so this
+  rests on his word. The `ABlueAgent` page (second bullet) wasn't reported and Blue asked to move on,
+  so it was not checked. Recorded in STATUS.md.* You linked ChatGPT/Codex's GitHub to `ABlueAgent` on
+  2026-10-20 (STATUS.md), and nobody has checked its scope since.
   - Signed in as `ABlueAI`: github.com > Settings > Applications > **Installed GitHub Apps** > the
     ChatGPT/Codex app > **Configure**. It should say **Only select repositories** with only
     `AgentCommandCenter` (as in step 2e). If it says **All repositories**, switch it back and save.
@@ -427,6 +446,17 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     **Installed GitHub Apps** (should be none) and **Authorized GitHub Apps** (the ChatGPT/Codex entry
     is expected; note what else is listed).
   - *Done when:* you tell any agent what both pages show; it records that in STATUS.md with the date.
+
+- [ ] **22. Evaluate qodo-ai/pr-agent as Mako's PR reviewer.** About 20 minutes of your own time,
+  whenever you get to it ("add it to my list, i will get to it"). (Numbered 22 because open PR #52
+  uses 21.)
+  - What it is: an open-source PR reviewer, https://github.com/qodo-ai/pr-agent. Under AGENTS.md's
+    OSS-first rule it is a candidate to replace or back up Mako's custom review loop (the
+    `pr-reviewer` subagent and its re-runs).
+  - Give a verdict: ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD FRESH. If you want it researched
+    first, tell any agent; it writes `docs/decisions/OSS-pr-review.md` for you to read before you
+    decide. Anything that would need a new key, account or spending comes back to you first.
+  - *Done when:* your verdict, in your own words, is recorded in docs/DECISIONS.md.
 
 ## Every day, once the runner is on
 
