@@ -438,7 +438,9 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   have to add more when they are created. thats it, move on." The ChatGPT/Codex installation on
   `ABlueAI` is set to **Only select repositories**, with Blue's main few repositories selected, not
   only `AgentCommandCenter`; he adds new ones as they're created. Claude can't read that page, so this
-  rests on his word. Whether any of them is private isn't recorded. The `ABlueAgent` page (second
+  rests on his word. Whether any of them is private isn't recorded. If Codex works through this
+  installation rather than `ABlueAgent`'s own access (not verified; S26 checks which it uses), a Codex
+  task can reach every selected repository, not only this one. The `ABlueAgent` page (second
   bullet) wasn't reported and Blue asked to move on, so that check moved to step 17a. Recorded in
   STATUS.md and docs/DECISIONS.md.* You linked ChatGPT/Codex's GitHub to `ABlueAgent` on
   2026-10-20 (STATUS.md), and nobody has checked its scope since.
