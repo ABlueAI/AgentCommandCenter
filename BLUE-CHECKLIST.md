@@ -6,8 +6,8 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-20 by Claude (step 8 moved to 2026-10-28; steps 18, 19 and 20 added in PR #48; step 16
-added and ticked in PR #47).
+Last updated 2026-10-21 by Claude (step 8 moved to 2026-10-28; steps 18, 19 and 20 added in PR #48; step 16
+added and ticked in PR #47, with the 2026-10-21 Codex agent-request result).
 
 ## Today
 
