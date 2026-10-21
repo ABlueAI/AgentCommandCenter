@@ -154,7 +154,9 @@ and later").
    check. If day one shows idle fires costing real usage, drop to every 2 hours.
 2. **Each fire.** It runs today's gate, then fixes the open PRs the runner itself opened (marked
    with a `runner` label; interactive sessions also open PRs as `ABlueAgent` from `claude/` branches,
-   and the runner leaves those alone; when S04 is applied, it labels today's runner's open PRs),
+   and the runner leaves those alone; when S04 is applied, the session applying it labels a PR
+   `runner` only if it can confirm today's scheduled task opened it, for example from the routine's
+   run history; if it can't tell, it labels none and lists them for Blue in the S04 PR),
    then runs `pr-reviewer` on any open Codex PR that has no "Independent review (Opus)" comment for
    its latest head by `ABlueAgent` or `ABlueAI`, unedited by anyone else (a comment by anyone else
    doesn't count; the repo is public), and posts it (AGENTS.md step 3); a Codex PR is one from a `codex/` branch in this
