@@ -81,7 +81,8 @@ Updated 2026-10-21 by Claude. Every PR that changes the state updates this file.
   the capped review loop since 2026-10-21 (PR #52's prompt, applied 21:19 UTC and read back the same
   day; checklist step 21). Proposed in PR #83 (pending Blue): every builder skips a plan session
   that already has an open PR titled with its ID (`Sxx:`) and opens its own PR early, so two
-  builders never take the same session; the runner prompt is applied after the merge (checklist
+  builders don't start the same session (a runner fire still treats every open `ABlueAgent` PR as
+  its own until S04's `runner` label); the runner prompt is applied after the merge (checklist
   step 26).
   It runs on Opus 5.5 since 2026-10-21, changed by an interactive session at Blue's request (read
   back from the scheduled task the same day; docs/RUNNER.md).

@@ -80,7 +80,7 @@ for (const file of agents) {
   assert(rules.includes('**Claim a plan session before building it.**') && rules.includes('whoever opened it'),
     'AGENTS.md has every builder check for an open Sxx: PR before starting a session');
   const runner = fs.readFileSync(path.join(repoRoot, 'docs', 'RUNNER.md'), 'utf8');
-  const prompt = (runner.match(/## Current prompt \(verbatim\)\s*```text\n([\s\S]*?)\n```/) || [])[1] || '';
+  const prompt = (runner.match(/## Current prompt \(verbatim\)\s*```text\r?\n([\s\S]*?)\r?\n```/) || [])[1] || '';
   assert(prompt.includes('Also skip any READY session that is already claimed') && prompt.includes('open its PR early'),
     'docs/RUNNER.md prompt skips claimed sessions and claims its own early');
 }
