@@ -103,7 +103,8 @@ Last updated 2026-10-21 by Claude (step 6 dropped by Blue; step 17 added: token 
     released.**
 - **6. ~~Bring GPT up to date.~~ Dropped.** *Dropped 2026-10-21 by Blue: "drop step 6, its an
   automatic process now. no need" (docs/DECISIONS.md). Nothing to do; the number stays so no other
-  step is renumbered.*
+  step is renumbered. The 2026-10-17 GPT briefing (docs/handoff/GPT-BRIEFING-2026-10-17.md) is out
+  of date: where it differs from docs/PLAN-1.1.md or docs/DECISIONS.md on `main`, those win.*
 
 ## Before the daily runner starts building
 
