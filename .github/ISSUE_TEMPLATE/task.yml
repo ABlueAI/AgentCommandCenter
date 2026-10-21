@@ -1,0 +1,59 @@
+# A task outside the plan's sessions (AGENTS.md "How work flows": work starts from a plan session or
+# an issue). Plan sessions get their own `Sxx: ` issues from the plan sync; don't open those by hand.
+name: Task
+description: A piece of work for an agent, outside the plan's sessions.
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This repository is public: no secrets, client data or private business material here (AGENTS.md "Security rules").
+        Plan sessions are tracked by the `Sxx: ` issues the plan sync opens. Don't start a title with `Sxx: `.
+  - type: textarea
+    id: what
+    attributes:
+      label: What and why
+      description: The outcome you want and the reason for it.
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      description: How anyone can check it is finished.
+    validations:
+      required: true
+  - type: dropdown
+    id: authority
+    attributes:
+      label: Authority
+      description: AGENTS.md "Authority levels". Maximum runs only in a sandbox (cloud session).
+      options:
+        - Minimum (read, research, plan; no edits)
+        - Medium (edit and test in the task's branch)
+        - High (multi-step, few interruptions)
+        - Maximum (sandbox only)
+    validations:
+      required: true
+  - type: dropdown
+    id: lane
+    attributes:
+      label: Lane
+      options:
+        - cloud
+        - windows
+        - blue
+    validations:
+      required: true
+  - type: checkboxes
+    id: sensitive
+    attributes:
+      label: Sensitive areas
+      description: AGENTS.md "Sensitive areas". Tick any the task touches; the PR flags them in its TLDR.
+      options:
+        - label: Credentials and tokens, process control, payments, client data, network listeners, CI, `.github/`, `.claude/`, repository settings, AGENTS.md or CLAUDE.md
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Links, constraints, anything the builder should read first.

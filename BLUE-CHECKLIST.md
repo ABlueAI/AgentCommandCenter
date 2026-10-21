@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-21 by Claude ("Do next" order added, step 20 ticked, step 22 added, PR #53;
+Last updated 2026-10-21 by Claude (step 25 added for the S03 plan board, PR #54; "Do next" order added, step 20 ticked, step 22 added, PR #53;
 S05 checks added as steps 23 and 24, PR #49; step 6 dropped by Blue, PR #51; step 17 moved after
 step 16; PR #46's token rules approved with its merge). Earlier: step 17 added and step 14's token
 changed to classic `public_repo` (PR #46); step 8 moved to 2026-10-28 and steps 18 to 20 added (PR
@@ -494,6 +494,30 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   existing Claude account; do not add an account, subscription, Mako hook or API key for it.
   - *Done when:* the session is visible on your phone and a push is observed; report a missing
     setting or unavailable account feature instead of assuming delivery. **Optional; unverified.**
+
+- [ ] **25. Connect the plan board (S03).** About **10 minutes**, after you merge the S03 PR, #54. The
+  plan sync already keeps one issue per session with labels and the "1.1 Month 1" milestone using
+  GitHub's own token; only the Project board needs a token of its own, because GitHub's built-in
+  token can't write a project on your account. Recommended: a token on `ABlueAgent` that can touch
+  projects only, never repositories.
+  - Signed in as `ABlueAI`: your profile > **Projects** > **New project** > **Board**, name it
+    "Mako 1.1". In its **Status** field, make exactly these options: `Ready`, `Running`,
+    `Needs Blue`, `Hold`, `Ready to merge`, `Done` (rename or delete the defaults). Note the number at
+    the end of the project's URL. Project **Settings** > **Manage access** > invite `ABlueAgent`
+    with **Write**.
+  - Signed in as `ABlueAgent` (private window): Settings > Developer settings > Personal access
+    tokens > **Tokens (classic)** > Generate new token. Note "Mako plan board", expiry 90 days,
+    tick **only** `project`. Copy it; never paste it into a chat or the repo.
+  - Signed in as `ABlueAI`: the repository > Settings > **Environments** > `plan-board` (the sync
+    created it on its first run; if not, **New environment** with that name). **Deployment branches
+    and tags** > **Selected branches and tags** > add `main`. Add environment secret
+    `PLAN_BOARD_TOKEN` (the token) and environment variable `PLAN_BOARD_NUMBER` (the project number).
+  - Then Actions > **Plan sync** > **Run workflow**.
+  - *Done when:* that run's summary says "Board: synced" and the board shows every session in its
+    column, and you have told Claude the token's expiry date (never the token), so it adds the
+    renewal reminder under "Dated reminders" (step 17b). Tell any agent; it checks the run and the
+    board and ticks this with the date. If the run fails, the agent reads its log; no agent ever sees
+    the token. When the token expires, every hourly run fails visibly until it is replaced.
 
 ## Every day, once the runner is on
 

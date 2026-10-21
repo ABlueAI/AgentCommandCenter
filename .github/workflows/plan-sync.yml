@@ -1,0 +1,85 @@
+# Plan sync (session S03): keeps one issue per docs/PLAN-1.1.md session, the labels and the
+# "1.1 Month 1" milestone in step with the plan on main, and, once Blue connects it, the Project
+# board's Status column too. The plan is the source of truth; the issues and board only mirror it.
+#
+# Runs on main only (a push that changes the plan or this sync, hourly so a PR leaving draft shows
+# as "Ready to merge", and by hand). It reads nothing from pull requests or issues opened by others
+# beyond a PR's open/draft state, and only edits issues github-actions[bot] opened with an
+# `Sxx: ` title. Decision logic: .github/scripts/plan-sync.js, tested by plan-sync.test.js
+# (scripts/plan-sync-node.Tests.ps1 runs it in CI).
+#
+# The board: GITHUB_TOKEN cannot write a user-owned Project, so the board step needs the
+# PLAN_BOARD_TOKEN secret and the PLAN_BOARD_NUMBER variable (BLUE-CHECKLIST.md step 25), both in the
+# `plan-board` environment, which only `main` may deploy to: a workflow an agent adds on a branch
+# can't read the token. Until both exist the run says so in a warning and its summary; with only one
+# of them it fails. Each run shows up as a deployment to `plan-board`; that is expected.
+# Actions are pinned to full commit SHAs (tag in the trailing comment); app/ci-hygiene.test.js
+# fails if a `uses:` line is not.
+name: Plan sync
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/PLAN-1.1.md
+      - .github/scripts/plan-sync.js
+      - .github/workflows/plan-sync.yml
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: plan-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    environment: plan-board
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          PLAN_BOARD_TOKEN: ${{ secrets.PLAN_BOARD_TOKEN }}
+          PLAN_BOARD_NUMBER: ${{ vars.PLAN_BOARD_NUMBER }}
+          PLAN_BOARD_OWNER: ABlueAI
+        with:
+          script: |
+            const fs = require('fs');
+            const { syncPlan, githubApi, githubBoard } = require('./.github/scripts/plan-sync.js');
+            const { owner, repo } = context.repo;
+            const token = process.env.PLAN_BOARD_TOKEN;
+            const number = process.env.PLAN_BOARD_NUMBER;
+            let board = null;
+            if (token && number) {
+              if (!/^\d+$/.test(number)) { core.setFailed('PLAN_BOARD_NUMBER must be the project number from its URL.'); return; }
+              board = githubBoard(getOctokit(token).graphql, { login: process.env.PLAN_BOARD_OWNER, number: Number(number) });
+            } else if (token || number) {
+              core.setFailed('Only one of the PLAN_BOARD_TOKEN secret and the PLAN_BOARD_NUMBER variable is set; set both (BLUE-CHECKLIST.md step 25).');
+              return;
+            } else {
+              core.warning('Board not connected yet: issues and labels are synced, the Project board is not (BLUE-CHECKLIST.md step 25).');
+            }
+            const summary = await syncPlan({
+              markdown: fs.readFileSync('docs/PLAN-1.1.md', 'utf8'),
+              planUrl: `https://github.com/${owner}/${repo}/blob/main/docs/PLAN-1.1.md`,
+              api: githubApi(github, { owner, repo }),
+              board,
+              log: (line) => core.info(line),
+            });
+            await core.summary
+              .addHeading('Plan sync')
+              .addRaw(board ? 'Board: synced.' : 'Board: not connected (BLUE-CHECKLIST.md step 25).')
+              .addTable([
+                [{ data: 'Session', header: true }, { data: 'Column', header: true }, { data: 'Issue', header: true }],
+                ...summary.map((s) => [s.id, s.column || 'dropped', s.issue ? `#${s.issue}` : '-']),
+              ])
+              .write();
