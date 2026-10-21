@@ -72,7 +72,7 @@ Updated 2026-10-21 by Claude. Every PR that changes the state updates this file.
   Its prompt includes the `pr-reviewer` step since 2026-10-19 (applied after PR #42 merged).
   It runs on Opus 5.5 since 2026-10-21, changed by an interactive session at Blue's request (read
   back from the scheduled task the same day; docs/RUNNER.md).
-- **Review loop (proposed in PR #NN, pending Blue):** every PR gets one complete first review ranked
+- **Review loop (proposed in PR #52, pending Blue):** every PR gets one complete first review ranked
   high, medium and low; high and medium findings are fixed in one batch, low ones go to Follow-ups;
   later runs check only the fixes; at most 3 runs, then "needs Blue", and never more than 5; one
   scope per PR; no pushes after a PR is marked ready except for CI, a conflict or Blue asking

@@ -3,11 +3,11 @@
 Drafted 2026-10-17 by Claude for Blue. Approved when the PR that adds it is merged. Changes only through
 `plan-change` PRs (rules below).
 
-**Latest change (2026-10-21, proposed, pending Blue; PR #NN):** the UI sessions get one builder.
+**Latest change (2026-10-21, proposed, pending Blue; PR #52):** the UI sessions get one builder.
 Claude Opus writes S14's design brief (words and structure, not code); Codex builds S17 to S20, and
 Blue iterates on the look with Codex and ChatGPT directly; Claude Opus reviews every UI PR for bugs,
 security and the plan, not taste. The rows stay `HOLD (Blue)`. S16's Composer research gains a
-model-choice requirement. Details in "UI sessions: who builds" and "S16 details". Merging PR #NN
+model-choice requirement. Details in "UI sessions: who builds" and "S16 details". Merging PR #52
 approves it.
 
 **Earlier change (2026-10-19, proposed, pending Blue):** S04 becomes an all-day runner that fires
@@ -346,4 +346,4 @@ does both) · Vibe Kanban (removed in 1.0).
 - 2026-10-19 (proposed, pending Blue; same PR, Blue's additions): every session-end message and phone notification starts with "READY TO MERGE" or "NOT READY: <reason>" (AGENTS.md "How work flows" step 5, S04 item 7). Pause button and usage alert instead of an automatic stop: S04 item 9 documents the stop button, researches whether a cloud session can read plan usage for a 90% notice, and never starts a session late in a usage window; S11 gains a 90% warning and Pause and Resume buttons. New S27 "Composer" (a must-have early in 1.1, listed after S18, NEEDS BLUE for Blue's research) and S28 "Agent profile refresh" (after S26, needs S01 and Blue's agent-roles package; once his package arrives the runner takes it ahead of S05 to S25, which is intended, because it applies material Blue has just handed over). The month now has 28 sessions.
 - 2026-10-20 (proposed, pending Blue; PR #47, after merging PR #48): S27 "Composer" is DROPPED, because PR #48 (merged) folded the Composer into S16 "Composer research", with build sessions in a later plan change after Blue's S16 verdict, following his newer words to push the UI and Composer back; this month has 27 active sessions. S04's parallel cap follows the upgrade's new date, 2026-10-28. Checklist step 16 (the Codex re-link) is ticked: Blue did it on 2026-10-20.
 - 2026-10-20: S06 gains the token-storage, scope and `ABlueAI`-login-removal items that step 14's classic `public_repo` token needs (proposed, pending Blue; PR #46).
-- 2026-10-21 (proposed, pending Blue; PR #NN): the UI sessions get one builder. S14: Claude Opus writes the design brief from Blue's examples and dashboard list (words and structure, not code). S17 to S20: Codex builds all of it, started by Blue, who iterates with Codex and ChatGPT directly; the runner and Claude sessions never build those rows. Every UI PR: Claude Opus reviews for bugs, security and the plan, not taste; Blue judges the look. The rows stay `HOLD (Blue)`. S16 gains the Composer model-choice requirement (picks the model itself, prefers Opus 5.5, asks only before Opus 5.5 at max effort). Blue's words are in docs/DECISIONS.md, 2026-10-21.
+- 2026-10-21 (proposed, pending Blue; PR #52): the UI sessions get one builder. S14: Claude Opus writes the design brief from Blue's examples and dashboard list (words and structure, not code). S17 to S20: Codex builds all of it, started by Blue, who iterates with Codex and ChatGPT directly; the runner and Claude sessions never build those rows. Every UI PR: Claude Opus reviews for bugs, security and the plan, not taste; Blue judges the look. The rows stay `HOLD (Blue)`. S16 gains the Composer model-choice requirement (picks the model itself, prefers Opus 5.5, asks only before Opus 5.5 at max effort). Blue's words are in docs/DECISIONS.md, 2026-10-21.

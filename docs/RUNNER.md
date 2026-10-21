@@ -13,7 +13,7 @@ full runner (parallel sessions, evening digest).
   Blue's claude.ai account.
 - **Model:** Opus 5.5. Changed on 2026-10-21 by an interactive session at Blue's request ("Also
   switch the runner to Opus 5.5."; docs/DECISIONS.md, 2026-10-21). Checked read-only on 2026-10-21
-  from the PR #NN session: the scheduled task shows Opus 5.5, last updated 05:30 UTC that day, and
+  from the PR #52 session: the scheduled task shows Opus 5.5, last updated 05:30 UTC that day, and
   its prompt is still the PR #42 prompt.
 - **Note (PR #47):** the prompt below says to post the review "verbatim". Since PR #47, AGENTS.md
   step 3, which the prompt says governs everything, also replaces Codex's handle with "at-codex"
@@ -52,10 +52,10 @@ Change the prompt below in a PR. After Blue merges it, an interactive session ap
 scheduled task. The runner itself never edits its own schedule or prompt. Last applied 2026-10-19
 (PR #42, the reviewer step).
 
-**Not applied yet (PR #NN, the capped review loop):** the prompt below replaces step 4's "fix or
+**Not applied yet (PR #52, the capped review loop):** the prompt below replaces step 4's "fix or
 answer every finding, re-run it after fixes" with the capped loop in AGENTS.md "The review loop".
 The scheduled task keeps the PR #42 prompt until an interactive session applies this one after
-Blue merges PR #NN (BLUE-CHECKLIST.md step 21). Until then the old text runs, but the prompt's
+Blue merges PR #52 (BLUE-CHECKLIST.md step 21). Until then the old text runs, but the prompt's
 first lines say AGENTS.md governs everything, so the runner is expected to follow the capped loop
 anyway (not verified).
 
