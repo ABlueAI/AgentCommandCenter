@@ -234,7 +234,9 @@ and later").
    posted by the Claude session that handed it the task, or the next runner fire if that session
    has ended (AGENTS.md step 3), plus Codex's automatic review. The runner's "fix own PRs" step leaves Codex's
    PRs to Codex; the S26 PR defines who fixes CI failures and review findings on Codex's PRs (a
-   fix-request exception scoped to Codex's own PR, or Claude takes the fixes), and until then each
+   fix-request exception scoped to Codex's own PR, or Claude takes the fixes, which needs the
+   S26 PR to amend the no-shared-branch rule in AGENTS.md "Who does what" and
+   docs/AI-COLLABORATION.md), and until then each
    request needs a comment by `ABlueAI`. AGENTS.md "How work flows" step 3 lets the Claude session that handed Codex the task
    (or the next runner fire) run `pr-reviewer` on Codex's PR, because Codex can't (added by this plan change, so the trial build
    below follows the current rules); the S26 PR refines it if needed and updates the "builder runs
