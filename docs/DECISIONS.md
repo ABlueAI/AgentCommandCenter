@@ -3,6 +3,12 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-10-21
+
+| Decision | Blue's words |
+|---|---|
+| BLUE-CHECKLIST.md step 6 ("Bring GPT up to date": upload the 2026-10-17 GPT briefing to ChatGPT) is dropped: Blue says it is now an automatic process. The step stays in the checklist, marked dropped, so no step is renumbered. Blue's words don't say which mechanism makes it automatic, and none is recorded here. | "drop step 6, its an automatic process now. no need" |
+
 ## 2026-10-20
 
 | Decision | Blue's words |

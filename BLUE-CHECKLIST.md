@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-21 by Claude (step 17 added: token hygiene; step 14's token changed to classic
+Last updated 2026-10-21 by Claude (step 6 dropped by Blue; step 17 added: token hygiene; step 14's token changed to classic
 `public_repo` (PR #46); step 8 moved, steps 18 to 20 added (PR #48); step 16 added and ticked (PR #47)).
 
 ## Today
@@ -101,12 +101,10 @@ Last updated 2026-10-21 by Claude (step 17 added: token hygiene; step 14's token
   - Then the PC session tags `v1.0.0` on that `main`. You already gave the OK in that decision.
   - *Done when:* tag `v1.0.0` exists on GitHub at a commit that includes PR #33. **Mako 1.0 is
     released.**
-- [ ] **6. Bring GPT up to date.** About 2 minutes, any time.
-  - Download https://github.com/ABlueAI/AgentCommandCenter/blob/main/docs/handoff/GPT-BRIEFING-2026-10-17.md
-    (or the copy sent in the Claude chat) and upload it to ChatGPT with: "Read this; it is the current
-    state of Mako. From now on we coordinate through the GitHub repo."
-  - The briefing dates from 2026-10-17. Where it differs from docs/PLAN-1.1.md on `main` (for
-    example S16 is now the Composer research and the UI sessions are on hold), the plan wins.
+- **6. ~~Bring GPT up to date.~~ Dropped.** *Dropped 2026-10-21 by Blue: "drop step 6, its an
+  automatic process now. no need" (docs/DECISIONS.md). Nothing to do; the number stays so no other
+  step is renumbered. The 2026-10-17 GPT briefing (docs/handoff/GPT-BRIEFING-2026-10-17.md) is out
+  of date: where it differs from docs/PLAN-1.1.md or docs/DECISIONS.md on `main`, those win.*
 
 ## Before the daily runner starts building
 
