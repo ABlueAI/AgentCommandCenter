@@ -21,10 +21,12 @@ followed about a minute later by a "needs attention" toast for the same pane. Ma
 because hiding the second one would also hide a real permission prompt after a turn ends.
 
 Repeated state views and heartbeat updates do not repeat a toast. A new working/idle state re-arms
-it for the next attention/turn-ended transition. Each pane deduplicates independently. State
-changes, pane closure, hook removal and shutdown dismiss the retained toast. A status going stale
-(about 2 minutes without a new hook event) leaves the toast in place, so it is still there when you
-come back; it becoming fresh again does not replay it. Clicking a current toast restores/focuses Mako; inspect the pane
+it for the next attention/turn-ended transition. Each pane deduplicates independently. A change
+to another known state (working, idle, attention, turn ended), pane exit or failure, a pane being
+released, hook removal and shutdown dismiss the retained toast. A status going stale (about 2
+minutes without a new hook event) or unknown for another reason (version mismatch, reconciliation
+required, status setup turned off) leaves the toast in place, so it is still there when you come
+back; it becoming fresh again does not replay it. Clicking a current toast restores/focuses Mako; inspect the pane
 status badges to find the pane. Toasts contain only fixed text, never paths, task names or output.
 
 Windows must allow notifications for Mako (or Electron when running from the source checkout).
