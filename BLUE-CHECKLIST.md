@@ -456,7 +456,7 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - *Done when:* the session is visible on your phone and a push is observed; report a missing
     setting or unavailable account feature instead of assuming delivery. **Optional; unverified.**
 
-- [ ] **25. Connect the plan board (S03).** About **10 minutes**, after you merge the S03 PR. The
+- [ ] **25. Connect the plan board (S03).** About **10 minutes**, after you merge the S03 PR, #54. The
   plan sync already keeps one issue per session with labels and the "1.1 Month 1" milestone using
   GitHub's own token; only the Project board needs a token of its own, because GitHub's built-in
   token can't write a project on your account. Recommended: a token on `ABlueAgent` that can touch

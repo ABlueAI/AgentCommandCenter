@@ -2,7 +2,7 @@
 
 2026-10-21. Proposed choice: **BUILD FRESH**, a small script run by GitHub's official
 `actions/github-script` (already adopted for the merge audit), with GitHub's own Projects board as the
-board. Blue's verdict, word for word: _pending; merging the S03 PR approves BUILD FRESH._
+board. Blue's verdict, word for word: _pending; merging PR #54 approves BUILD FRESH._
 
 What S03 needs: docs/PLAN-1.1.md stays the source of truth, and one issue per session, its labels,
 the milestone and a board column follow every change to the table automatically, touching only
