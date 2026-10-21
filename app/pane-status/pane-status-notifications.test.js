@@ -57,6 +57,13 @@ test('heartbeat duplicates and stale/outage recovery do not replay a toast', () 
   assert.equal(r.shown.length, 1);
   r.view('working'); r.view('attention'); assert.equal(r.shown.length, 2);
 });
+test('stale and outage views leave an unseen toast open', () => {
+  for (const reason of ['stale','version-mismatch','reconciliation-required']) {
+    const r = rig(); r.view('turn ended'); const n = r.shown[0];
+    r.view('unknown', 'pty1', reason);
+    assert.equal(n.closed, 0); n.emit('click'); assert.deepEqual(r.actions, ['show','focus']);
+  }
+});
 test('panes deduplicate independently; release and ID reuse discard old state', () => {
   const r = rig(); r.view('attention'); r.view('attention','pty2');
   r.view('unknown','pty1','no-signal'); r.view('attention');

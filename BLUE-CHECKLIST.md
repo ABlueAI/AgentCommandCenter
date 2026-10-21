@@ -429,9 +429,7 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - *Done when:* you tell any agent what both pages show; it records that in STATUS.md with the date.
 
 - [ ] **23. S05 needs-you toast on a real Claude pane.** About **2 minutes**, after the S05 PR's
-  Windows checks pass and Claude Opus has reviewed it, before calling S05 done. (Numbered 23 because `main` uses 1 to 20 and open PRs #52 and #53
-  use 21 and 22. The earlier step 16 in this PR, the Opus review hand-off, was dropped: since PR #42
-  the runner reviews Codex PRs itself, AGENTS.md step 3.) Use the S05 branch
+  Windows checks pass and Claude Opus has reviewed it, before calling S05 done. Use the S05 branch
   on your PC; fully close and restart Mako after installing that branch's app dependencies.
   - Launch a **new real Claude pane** with Mako's existing pane-status setup enabled (an old pane
     may not carry the status token). Send a short request such as "Reply with one word: ready".
@@ -441,6 +439,10 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     emits its existing Notification hook, confirm **Mako — Claude needs attention** appears.
     Duplicate status/heartbeat updates should not add duplicate toasts. Clicking a toast should
     bring Mako forward. A turn-ended toast does not mean the task is finished.
+  - Also tell the agent: (a) whether a **needs attention** toast followed a **turn ended** toast
+    about a minute later with no permission prompt (expected, since Claude also notifies on idle
+    input; not yet seen on a real pane); (b) whether a toast you left for over 2 minutes was still
+    in Windows' notification list.
   - If no toast appears, check Windows Settings > System > Notifications (Mako/Electron), turn
     off Do not disturb for this check, confirm the pane's badge changes, and check Mako's Logs.
     Stop at 2 minutes and report which event/badge/toast failed; do not mark the box complete.

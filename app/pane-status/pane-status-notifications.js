@@ -34,11 +34,13 @@ function createPaneStatusNotifications({ Notification, platform, getWindow, log 
     if (disposed || platform !== 'win32' || !view || typeof view.paneId !== 'string') return;
     const { paneId, state, reason } = view;
     if (state === 'unknown') {
-      dismiss(paneId);
-      // A heartbeat becoming stale (or a transport/version outage) must never re-arm an alert.
-      // Clear only when a pane is new/released or the hooks have been removed.
+      // A heartbeat becoming stale (or a transport/version outage) must never re-arm an alert,
+      // and must not take back a toast Blue has not seen yet: attention and turn-ended age to
+      // stale after the freshness window. Clear only when a pane is new/released or the hooks
+      // have been removed.
       if (reason === 'no-signal' || reason === 'hook-removed') {
         states.delete(paneId);
+        dismiss(paneId);
       }
       return;
     }

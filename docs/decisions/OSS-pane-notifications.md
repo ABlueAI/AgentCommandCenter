@@ -2,11 +2,11 @@
 
 2026-10-20. Choice: **ADOPT** Electron's built-in main-process `Notification` API.
 
-Blue's direction, verbatim:
+Direction from the S05 task hand-off to Codex (not Blue's own recorded words), verbatim:
 
 > Before adding any notification library, follow AGENTS.md "OSS first": prefer Electron's built-in Notification API, and record the choice.
 
-This implements that preference; it is not a claim that Blue has approved the PR.
+Blue's verdict, word for word: _pending; merging PR #49 approves ADOPT._
 
 Options considered:
 

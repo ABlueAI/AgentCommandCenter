@@ -15,10 +15,16 @@ The existing privacy-preserving status protocol does not carry the notification'
 so Mako does not distinguish permission prompts from other Claude notifications. A turn ending
 does not prove a task, subagent or process is finished. Failed/exited/unknown panes do not toast.
 
+Expect two toasts for one turn sometimes (not yet verified on a real pane): Claude Code also sends
+`Notification` when its input has been idle for about a minute, so a "turn ended" toast can be
+followed about a minute later by a "needs attention" toast for the same pane. Mako keeps both,
+because hiding the second one would also hide a real permission prompt after a turn ends.
+
 Repeated state views and heartbeat updates do not repeat a toast. A new working/idle state re-arms
 it for the next attention/turn-ended transition. Each pane deduplicates independently. State
-changes, staleness, pane closure and shutdown dismiss the retained toast; a stale status becoming
-fresh again does not replay it. Clicking a current toast restores/focuses Mako; inspect the pane
+changes, pane closure, hook removal and shutdown dismiss the retained toast. A status going stale
+(about 2 minutes without a new hook event) leaves the toast in place, so it is still there when you
+come back; it becoming fresh again does not replay it. Clicking a current toast restores/focuses Mako; inspect the pane
 status badges to find the pane. Toasts contain only fixed text, never paths, task names or output.
 
 Windows must allow notifications for Mako (or Electron when running from the source checkout).
