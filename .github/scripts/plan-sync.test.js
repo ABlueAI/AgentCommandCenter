@@ -69,7 +69,9 @@ function fakeBoard(columns = COLUMNS) {
   assert(real.find((s) => s.id === 'S06').sensitive, 'S06 ("Sensitive.") is marked sensitive');
   assert(!real.find((s) => s.id === 'S08').sensitive, 'S08 is not marked sensitive');
   for (const id of ['S06', 'S10', 'S24', 'S26', 'S28']) assert(real.find((s) => s.id === id).sensitive, `${id} is marked sensitive`);
-  assert(!s03.sensitive, 'S03 is not marked sensitive by its own label list ("sensitive, security-alert")');
+  assert(s03.sensitive, 'S03 (a new .github/ workflow) is marked sensitive');
+  assert(!parsePlan(plan(row('S09', 'Labels', 'READY', { text: 'Labels (needs-blue, sensitive, security-alert).' })))[0].sensitive,
+    'a lowercase label list ("sensitive, security-alert") does not mark a row sensitive');
   await throws(() => parsePlan(plan(row('S01', 'A', 'MAYBE'))), /unknown status "MAYBE"/, 'an unknown status throws');
   await throws(() => parsePlan('# no table'), /header not found/, 'a missing table throws');
   await throws(() => parsePlan(plan('| S01 | **A.** | x | High | cloud | READY |\n')), /6 cells/, 'a row with a missing cell throws');
