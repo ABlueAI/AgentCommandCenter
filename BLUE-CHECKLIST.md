@@ -6,7 +6,8 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-21 by Claude (step 6 dropped by Blue; step 17 added: token hygiene; step 14's token changed to classic
+Last updated 2026-10-21 by Claude (step 21 added: apply the capped review loop to the runner (PR #NN);
+step 6 dropped by Blue; step 17 added: token hygiene; step 14's token changed to classic
 `public_repo` (PR #46); step 8 moved, steps 18 to 20 added (PR #48); step 16 added and ticked (PR #47)).
 
 ## Today
@@ -427,6 +428,13 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     **Installed GitHub Apps** (should be none) and **Authorized GitHub Apps** (the ChatGPT/Codex entry
     is expected; note what else is listed).
   - *Done when:* you tell any agent what both pages show; it records that in STATUS.md with the date.
+
+- [ ] **21. Have the runner's new prompt applied (after you merge PR #NN).** About 2 minutes, right
+  after you merge PR #NN (the capped review loop). Tell any Claude session "apply the runner prompt
+  from docs/RUNNER.md". It updates only the prompt of the scheduled task "Mako daily runner" from
+  `main`; the schedule and the model (Opus 5.5) stay as they are. The runner never edits itself.
+  - *Done when:* that session reads the scheduled task back, its prompt matches docs/RUNNER.md
+    "Current prompt (verbatim)" on `main`, and it ticks this step with the date and how it checked.
 
 ## Every day, once the runner is on
 

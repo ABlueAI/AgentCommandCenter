@@ -6,6 +6,8 @@
 // frontmatter is unparseable. A project agent whose `name` matched a Mako role would also shadow
 // that role. This pins both: every tracked project agent parses under Mako's frontmatter grammar,
 // and none reuses a role name from agent-roles/.
+// It also pins the capped review loop (AGENTS.md "The review loop") where the reviewer, the rulebook
+// and the runner prompt each state it, so one can't drift back to unlimited re-runs alone.
 
 const fs = require('fs');
 const path = require('path');
@@ -56,6 +58,19 @@ for (const file of agents) {
   assert(parsed.ok && parsed.name === 'pr-reviewer', 'pr-reviewer.md declares name pr-reviewer');
   assert(parsed.ok && tools.length > 0 && tools.every((t) => ['Read', 'Grep', 'Glob'].includes(t)),
     `pr-reviewer has only read tools (got ${JSON.stringify(tools)})`);
+}
+
+{
+  const reviewer = fs.readFileSync(path.join(agentsDir, 'pr-reviewer.md'), 'utf8');
+  assert(reviewer.includes('**Run 1 (complete audit):**') && reviewer.includes('**Re-run: check only the delta.**'),
+    'pr-reviewer.md does one complete first audit and checks only the delta on a re-run');
+  assert(reviewer.includes('**Non-blocking:**'), 'pr-reviewer.md labels low findings non-blocking');
+  const rules = fs.readFileSync(path.join(repoRoot, 'AGENTS.md'), 'utf8');
+  assert(rules.includes('### The review loop') && rules.includes('**At most 3 runs.**') && rules.includes('**Ceiling of 5 runs**'),
+    'AGENTS.md caps review runs at 3, with a ceiling of 5');
+  const runner = fs.readFileSync(path.join(repoRoot, 'docs', 'RUNNER.md'), 'utf8');
+  assert(runner.includes('AGENTS.md "The review loop"') && runner.includes('At most 3 runs') && !runner.includes('re-run it after fixes, and cite'),
+    'docs/RUNNER.md prompt uses the capped review loop');
 }
 
 process.stdout.write(`\nproject-agents: ${passed} passed, ${failed} failed\n`);

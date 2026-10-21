@@ -70,6 +70,15 @@ Updated 2026-10-21 by Claude. Every PR that changes the state updates this file.
   The repository was attached on 2026-10-18 (step 7e), and its gate (steps 1 and 7) now passes, so
   the 2026-10-19 run started and opened PR #44, the first proof it can open PRs.
   Its prompt includes the `pr-reviewer` step since 2026-10-19 (applied after PR #42 merged).
+  It runs on Opus 5.5 since 2026-10-21, changed by an interactive session at Blue's request (read
+  back from the scheduled task the same day; docs/RUNNER.md).
+- **Review loop (proposed in PR #NN, pending Blue):** every PR gets one complete first review ranked
+  high, medium and low; high and medium findings are fixed in one batch, low ones go to Follow-ups;
+  later runs check only the fixes; at most 3 runs, then "needs Blue", and never more than 5; one
+  scope per PR; no pushes after a PR is marked ready except for CI, a conflict or Blue asking
+  (AGENTS.md "The review loop"). It applies to every PR once merged; the runner's prompt is updated
+  right after (checklist step 21). Why: PR #46 took 36 commits and 31 review runs, none with a high
+  finding.
 
 ## 1.0: done
 
