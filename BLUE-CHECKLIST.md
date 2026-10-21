@@ -7,10 +7,10 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
 Last updated 2026-10-21 by Claude ("Do next" order added, step 20 ticked, step 22 added, PR #53;
-step 6 dropped by Blue, PR #51; step 17 moved after step 16; PR #46's token rules approved with its
-merge). Earlier: step 17 added and step 14's token changed to classic `public_repo` (PR #46); step 8
-moved to 2026-10-28 and steps 18 to 20 added (PR #48); step 16 added and ticked, with the 2026-10-21
-Codex agent-request result (PR #47).
+S05 checks added as steps 23 and 24, PR #49; step 6 dropped by Blue, PR #51; step 17 moved after
+step 16; PR #46's token rules approved with its merge). Earlier: step 17 added and step 14's token
+changed to classic `public_repo` (PR #46); step 8 moved to 2026-10-28 and steps 18 to 20 added (PR
+#48); step 16 added and ticked, with the 2026-10-21 Codex agent-request result (PR #47).
 
 ## Do next, in this order
 
@@ -466,6 +466,34 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     you first.
   - *Done when:* your verdict is recorded word for word in `docs/decisions/OSS-pr-review.md` and
     docs/DECISIONS.md.
+
+- [ ] **23. S05 needs-you toast on a real Claude pane.** About **2 minutes**, after the S05 PR's
+  Windows checks pass and Claude Opus has reviewed it, before calling S05 done. Use the S05 branch
+  on your PC; fully close and restart Mako after installing that branch's app dependencies.
+  - Launch a **new real Claude pane** with Mako's existing pane-status setup enabled (an old pane
+    may not carry the status token). Send a short request such as "Reply with one word: ready".
+    Confirm a Windows **Mako — Claude turn ended** toast appears when its badge says turn ended.
+  - Trigger a normal permission/input request in that pane, using a harmless read-only action
+    under Claude's normal permission mode; do not weaken permissions just to test. When Claude
+    emits its existing Notification hook, confirm **Mako — Claude needs attention** appears.
+    Duplicate status/heartbeat updates should not add duplicate toasts. Clicking a toast should
+    bring Mako forward. A turn-ended toast does not mean the task is finished.
+  - Also tell the agent: (a) whether a **needs attention** toast followed a **turn ended** toast
+    about a minute later with no permission prompt (expected, since Claude also notifies on idle
+    input; not yet seen on a real pane); (b) whether a toast you left for over 2 minutes was still
+    in Windows' notification list.
+  - If no toast appears, check Windows Settings > System > Notifications (Mako/Electron), turn
+    off Do not disturb for this check, confirm the pane's badge changes, and check Mako's Logs.
+    Stop at 2 minutes and report which event/badge/toast failed; do not mark the box complete.
+  - *Done when:* Blue reports both observed toasts and the running build label; the checking agent
+    records that evidence and date here. **Pending; not verified in the Linux cloud.**
+- [ ] **24. Optional phone alerts via Claude Remote Control (S05).** About **2 minutes** after
+  step 23, if wanted. Follow [docs/NEEDS-YOU-ALERTS.md](docs/NEEDS-YOU-ALERTS.md#phone-alerts-through-claude-remote-control).
+  Connect the same real pane from your phone, enable Claude's available push-notification choices
+  and the phone's OS notification permission, then request a harmless test push. This uses your
+  existing Claude account; do not add an account, subscription, Mako hook or API key for it.
+  - *Done when:* the session is visible on your phone and a push is observed; report a missing
+    setting or unavailable account feature instead of assuming delivery. **Optional; unverified.**
 
 ## Every day, once the runner is on
 

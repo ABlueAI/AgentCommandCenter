@@ -3,7 +3,7 @@
 // (git worktrees, VSCode, Windows Terminal, the browser). The renderer
 // never touches Node directly — everything goes through the IPC handlers below.
 
-const { app, BrowserWindow, ipcMain, shell, dialog, session, safeStorage, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, session, safeStorage, clipboard, Notification } = require('electron');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const fs = require('fs');
@@ -60,6 +60,7 @@ const { createPtyStartAuthority } = require('./pty-start-authority');
 // approval, merge, push, pane closure, or credentials. See pane-status-isolation.test.js.
 const { createPaneStatusController } = require('./pane-status/pane-status-controller');
 const { registerPaneStatusIpc, createPublishers } = require('./pane-status/pane-status-ipc');
+const { createPaneStatusNotifications } = require('./pane-status/pane-status-notifications');
 const paneStatusDoc = require('./pane-status/pane-status-settings-doc');
 const paneStatusShim = require('./pane-status/pane-status-runtime-shim');
 // The pane-equivalent version resolver (dependency A) and the bounded absolute PowerShell used by the
@@ -354,6 +355,11 @@ function loadGeminiKey() {
 }
 
 let win = null;
+// Inert until a validated pane-status view is published after app readiness.
+const paneStatusNotifications = createPaneStatusNotifications({
+  Notification, platform: process.platform, getWindow: () => win,
+  log: (line) => tlog(line),
+});
 // Canonical trusted entry document — the ONE definition shared by win.loadFile(), the
 // navigation lockdown, and the media-permission policy, so the three trust anchors can
 // never drift apart (independently reconstructed path/origin strings are how they would).
@@ -639,7 +645,11 @@ app.whenReady().then(() => {
         );
       } catch { resolve({ ok: false }); }
     }),
-    publishView: paneStatusPublishers.publishView,
+    publishView: (view) => {
+      const delivered = paneStatusPublishers.publishView(view);
+      paneStatusNotifications.observe(view);
+      return delivered; // Keep renderer-delivery accounting independent of OS toast delivery.
+    },
     publishSetupState: paneStatusPublishers.publishSetupState,
     log: (line) => tlog(line),
   });
@@ -857,7 +867,9 @@ function closeControlledRunOnShutdown() {
 }
 // A quit started by app.quit() (e.g. the default menu's Exit) never emits window-all-closed.
 app.on('before-quit', () => { closeControlledRunOnShutdown(); });
+app.on('will-quit', () => { paneStatusNotifications.dispose(); });
 app.on('window-all-closed', () => {
+  paneStatusNotifications.dispose();
   closeControlledRunOnShutdown();
   for (const p of ptys.values()) { try { p.kill(); } catch {} }
   ptys.clear();
