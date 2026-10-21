@@ -12,13 +12,13 @@ and get summaries from an inteligent role" (docs/DECISIONS.md, 2026-10-20).
 
 **Recommended direction (detail at the end):** build the Composer as a thin, Mako-owned layer on
 top of Claude Code's own parallel-agent features, with Mako's existing voice; run a credentialed
-Dodaios prototype before deciding whether to adopt Dodaios as the Composer's engine; and mine the
+Dodaios prototype (a later sandboxed session, not S16) before deciding whether to adopt Dodaios as the Composer's engine; and mine the
 other tools for patterns.
 
 | Option | What it is | Licence · upkeep · Windows | Proposed verdict |
 |---|---|---|---|
 | **Dodaios** (formerly Personal Jarvis) | Python "agent OS": coding-agent panes with call-signs, voice fan-out, a lead agent, persistent agents, background missions | Apache-2.0 (MIT up to 1.6.0) · 4.0.1 on 2026-10-20, one maintainer, very fast releases · Windows installer and docs | **PROTOTYPE, aimed at ADOPT** (keeps Blue's ADOPT/FORK default) |
-| **Claude Code subagents, agent view, cross-session messaging** | Built into the Claude Code CLI Blue already runs | Anthropic product (no extra install or cost) · all work on native Windows | **ADOPT** as the Composer's building blocks |
+| **Claude Code subagents, agent view, cross-session messaging** | Built into the Claude Code CLI Blue already runs | Anthropic product (no extra install or cost) · subagents and cross-session messaging work on native Windows; agent view (research preview) on Windows not verified | **ADOPT** as the Composer's building blocks |
 | **Claude Code Agent Teams** | A lead session that spawns teammates, shared task list, mailbox | Experimental, off by default · split panes not supported in Windows Terminal | **PROTOTYPE** |
 | **Claude desktop's linked sessions** (cross-session access) **and Claude Code Projects** | Desktop sessions that list and message each other; Projects: one conversation that starts and tracks parallel threads | Anthropic product · Projects is a public beta on Pro and Max, rolling out gradually | Linked sessions: **PATTERN-MINE** · Projects: **PROTOTYPE** |
 | **Microsoft Conductor** | YAML multi-agent workflows with deterministic routing and human gates | MIT · 0.1.42 on 2026-10-06 · Windows install script | **PATTERN-MINE** |
@@ -36,8 +36,9 @@ Dodaios's panes can set model and effort per agent; Dodaios's fan-out call can't
 rule" below). Mako enforces the rule in its own launch code, not in the Composer's prompt.
 
 **How to give your verdict:** read this summary, the "Open questions" and "Recommended direction"
-at the end. Then, in PR #82 or to any agent, give a verdict per row (one word is enough, or "agree
-with all proposals") and answer the open questions. The agent copies your words into the blank
+at the end. Then give a verdict per row (one word is enough, or "agree with all proposals") and
+answer the open questions, in a comment by `ABlueAI` on PR #82 that nobody else has edited, or to
+an agent in your own session (as the repo's other rules count only your own words). The agent copies your words into the blank
 lines below and into docs/DECISIONS.md. Spending on Gumloop or any paid service needs your explicit
 OK there.
 
@@ -46,7 +47,8 @@ OK there.
 - **Authority levels (S10).** The Composer never starts a pane above the level Blue gave the task
   (Minimum, Medium, High; Maximum only as a cloud session). It never raises a level itself.
 - **Usage and parallel caps (S04).** Every pane the Composer starts counts against the parallel cap
-  in docs/RUNNER.md (1 on Pro; 2 after Blue's Max 5x upgrade on 2026-10-28; 3 later) and stops at a
+  S04 adds to docs/RUNNER.md (docs/PLAN-1.1.md, "Parallel work": 1 on Pro; 2 after Blue's Max 5x
+  upgrade on 2026-10-28; 3 once a week of usage shows room). Until S04, one session at a time. It stops at a
   usage limit. Never paid extra usage.
 - **Blue merges everything.** The Composer may write a merge briefing; it never merges, approves, or
   enables auto-merge.
@@ -57,8 +59,9 @@ OK there.
   never a shell command. The Operator role stays unchanged (agent-roles/operator.md).
 - **Voice reuse.** Mako already ships whisper STT (`onnx-community/whisper-large-v3-turbo` in the
   renderer, app/renderer/stt-bootstrap.js) and Kokoro TTS (`Kokoro-82M`, app/renderer/tts.js). The
-  Composer is the one voice that speaks; per docs/PROJECT-STATE.md, background panes chime instead
-  of talking over it, and each role can have its own voice.
+  Composer would be the one voice that speaks. docs/PROJECT-STATE.md's roadmap proposes that
+  background panes chime instead of talking over it, and a voice per role; neither is built yet
+  (today Mako has one global voice, `am_michael`).
 - **Windows first, OSS first, no telemetry surprises, failures visible** (AGENTS.md).
 
 ## The model rule
@@ -147,10 +150,10 @@ contacted while idle.
 **Sandbox trial (2026-10-21, this cloud container, Linux, no keys or accounts).**
 
 1. Installed `dodaios==4.0.1` from PyPI into its own Python 3.12 virtual environment (686 MB, 122
-   packages). `dodaios --doctor` reported "OK with warnings": no coding-agent CLI installed, brain
+   packages). This step used the sandbox's normal network access and was not logged. `dodaios --doctor` reported "OK with warnings": no coding-agent CLI installed, brain
    provider `claude-api` without a key, no desktop.
-2. Ran `dodaios serve` headless with an empty home folder, no proxy (so nothing could leave the
-   sandbox) and a Python audit hook logging every host lookup, socket connect and subprocess. It
+2. Ran `dodaios serve` (and, before it, `--doctor`) headless with an empty home folder, no proxy (so
+   nothing could leave the sandbox) and a Python audit hook logging every host lookup, socket connect and subprocess. It
    listened on `127.0.0.1:47821` only. `GET /api/health` answered `{"ok":true,"version":"4.0.1"}`.
    POST calls without a trusted `Origin` header were refused ("Untrusted Origin header"), which is a
    good guard against other local pages.
@@ -189,7 +192,11 @@ rebuild". The relevant piece is the Agentic IDE plus the lead agent: fan-out, ca
 recaps, team threads. Whether it can be adopted depends on things a model-less trial can't show: how
 good the split and recaps are, and whether its defaults can be pinned to Mako's guardrails. So the
 next step is a one-day credentialed prototype on Windows (open question 9), running Dodaios as-is
-beside Mako on a throwaway repo, with the checks above as pass or fail. If it passes, a build session
+beside Mako on a throwaway repo, with the checks above as pass or fail. That prototype is not part of
+S16, which allows no real credentials: it needs its own sensitive plan row (credentials) in the
+later Composer plan change, and it runs only where AGENTS.md allows Maximum-style runs (the Codex
+app's Windows sandbox, or Windows Sandbox if Blue accepts it as one), because Dodaios's mission
+workers run with permission prompts off. If it passes, a build session
 adopts it behind a Mako pane (Dodaios's web UI on `127.0.0.1`, panes pinned to Mako's permission
 modes); if it fails, its patterns are mined with Blue's OK. Forking a piece into Mako's Electron and
 Node code would effectively be a rewrite from Python, so FORK is not proposed.
@@ -274,8 +281,10 @@ beta on Pro and Max, rolling out gradually; 200 new threads a day across project
 given in chat is "a preference rather than a cap", so S04's cap isn't enforced; and "Cloud threads
 don't read permission rules from a repository's `.claude/settings.json`", so the repo's deny rule on
 merge tools would not apply. `main` still needs Blue's code-owner approval, but after he approves, a
-thread could merge. That would break "Blue merges. Nobody and nothing else does." unless it is closed
-on GitHub's side first (PR #82's Follow-ups). No voice in Projects; it lives outside Mako.
+thread might be able to merge. This is not specific to Projects: any `ABlueAgent` actor that doesn't
+read `.claude/settings.json` may have the same opening today, and nothing recorded in the repo shows
+the ruleset limiting who can merge (not verified; issue #85). It needs closing on GitHub's side
+before a Projects trial. No voice in Projects; it lives outside Mako.
 
 **Proposed verdicts.** Linked sessions: **PATTERN-MINE**. Projects: **PROTOTYPE**: one small project on
 a throwaway repo once it reaches Blue's account and the merge gap is closed, to compare its
@@ -442,12 +451,16 @@ From the S16 row:
 Raised by the research:
 
 9. **Dodaios prototype with a real login.** Its fan-out, recaps and voice can't be judged without a
-   model. May a one-day trial run on Windows with your Claude subscription signed in, in Windows
-   Sandbox or a separate Windows user, on a throwaway repo, with no business data? (Recommended: yes,
-   time-boxed, as the Dodaios prototype step.)
-10. **Projects and merging.** Cloud project threads ignore the repo's `.claude/settings.json`, so after
-    you approve a PR a thread could merge it. Close that on GitHub's side before any Projects trial?
-    (Recommended: yes, as its own guardrail PR; see PR #82's Follow-ups.)
+   model. Should a later session run a one-day trial on Windows with your Claude subscription signed in,
+   on a throwaway repo, with no business data? It can't run under S16, which allows no real
+   credentials: a "yes" here only records the decision, and the trial gets its own sensitive plan row
+   in the later Composer plan change. It runs in the Codex app's Windows sandbox or, if you accept it
+   as a sandbox, Windows Sandbox; a separate Windows user is not a sandbox under AGENTS.md.
+   (Recommended: yes, time-boxed.)
+10. **Merging after your approval.** Cloud project threads, and possibly any `ABlueAgent` actor that
+    doesn't read `.claude/settings.json`, might be able to merge a PR once you approve it (issue #85,
+    not verified). Close that on GitHub's side before any Projects trial? (Recommended: yes, as its
+    own guardrail PR.)
 11. Does the Composer dispatch to Codex panes too, or only Claude Code?
 12. Agent Teams can form teams without asking once turned on. May it be turned on for the Composer's
     pane only, for one trial?
@@ -467,10 +480,11 @@ environment scrub, authority level, S04 cap and the code-enforced Opus 5.5 max-e
 gets updates through Claude Code's cross-session messaging and Mako's pane status, and writes
 summaries modelled on agent view's state list and Dodaios's delivered and undelivered receipts and
 recaps. Claude Code's subagents, agent view and cross-session messaging are adopted as building
-blocks, because they already run on Blue's Windows PC and plan. Before that build is finalized, run
-the one-day credentialed Dodaios prototype: if Dodaios's lead agent and fan-out are good enough and
+blocks, because they come with the Claude Code Blue already runs on Windows and his plan (agent
+view's Windows support still to be checked). Before that build is finalized, a later session with
+its own sensitive plan row runs the one-day credentialed Dodaios prototype in a sandbox: if Dodaios's lead agent and fan-out are good enough and
 its defaults can be pinned to Mako's guardrails, the build adopts it behind a Mako pane instead of
 building the coordinator; if not, its patterns are mined with Blue's OK. Agent Teams and Projects get
-small trials for comparison, Projects only after the merge gap is closed. Conductor, parallel-code,
+small trials for comparison, Projects only after the merge gap (issue #85) is closed. Conductor, parallel-code,
 crystal, Emdash, Cloudroom, Gumloop and n8n are pattern sources only, and Activepieces is the
 prototype candidate for the later workflow-automation session.
