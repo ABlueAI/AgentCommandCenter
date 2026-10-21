@@ -7,7 +7,10 @@
 //
 // Ownership: the sync only ever touches issues that github-actions[bot] opened AND whose title starts
 // with `Sxx: `. An issue anyone else opened is never read or edited, whatever its title, so Blue's
-// S28 package issue (`agent-roles package (S28)`) and the runner's claims are never touched.
+// S28 package issue (`agent-roles package (S28)`) and the runner's claims are never touched. Limit:
+// github-actions[bot] is the author for every workflow using GITHUB_TOKEN, not only this one, so an
+// `Sxx: ` issue another workflow opened would be adopted (or, as a second one, fail the run visibly).
+// No workflow in this repository opens such issues.
 //
 // Status to board column:
 //   READY               -> Ready
@@ -15,7 +18,8 @@
 //   NEEDS BLUE (...)    -> Needs Blue
 //   HOLD (Blue)         -> Hold (never Ready, docs/PLAN-1.1.md "Status values")
 //   DONE (#PR)          -> Done (issue closed as completed)
-//   DROPPED (...)       -> no issue; an existing one is closed as not planned and left off the board
+//   DROPPED (...)       -> no issue; an existing one is closed as not planned, loses its managed
+//                          labels and is removed from the board
 // Any other status, a malformed row or two sync issues for one session throws, so the workflow fails
 // visibly instead of guessing.
 //
@@ -31,6 +35,7 @@
 //   api.getPr(number)                -> { state, draft }
 //   board.columns()                  -> { [column name]: optionId }
 //   board.place(issueNodeId, optionId)
+//   board.remove(issueNodeId)        (no-op when the issue isn't on the board)
 // Any error from `api` or `board` propagates.
 
 const BOT = 'github-actions[bot]';
@@ -144,6 +149,7 @@ function desiredLabels(s, col, current) {
   return [...keep, ...want].sort();
 }
 
+const unmanaged = (labels) => labels.filter((n) => !MANAGED(n)).sort();
 const sameSet = (a, b) => a.length === b.length && [...a].sort().every((x, i) => x === [...b].sort()[i]);
 
 async function syncPlan({ markdown, planUrl, api, board = null, log = () => {} }) {
@@ -182,9 +188,15 @@ async function syncPlan({ markdown, planUrl, api, board = null, log = () => {} }
     const issue = mine.get(s.id);
     const col = column(s, prs);
     if (col === null) { // DROPPED
-      if (issue && issue.state !== 'closed') {
-        await api.updateIssue(issue.number, { state: 'closed', state_reason: 'not_planned' });
-        log(`${s.id}: dropped, closed #${issue.number}`);
+      if (issue) {
+        const fields = {};
+        if (issue.state !== 'closed' || issue.state_reason !== 'not_planned') Object.assign(fields, { state: 'closed', state_reason: 'not_planned' });
+        if (!sameSet(issue.labels, unmanaged(issue.labels))) fields.labels = unmanaged(issue.labels);
+        if (Object.keys(fields).length) {
+          await api.updateIssue(issue.number, fields);
+          log(`${s.id}: dropped, updated #${issue.number} (${Object.keys(fields).join(', ')})`);
+        }
+        if (columns) await board.remove(issue.node_id);
       }
       summary.push({ id: s.id, column: null, issue: issue ? issue.number : null });
       continue;
@@ -209,9 +221,10 @@ async function syncPlan({ markdown, planUrl, api, board = null, log = () => {} }
       if (issue.body !== want.body) fields.body = want.body;
       if (!sameSet(issue.labels, want.labels)) fields.labels = want.labels;
       if (issue.milestone !== want.milestone) fields.milestone = want.milestone;
-      if (issue.state !== want.state) {
-        fields.state = want.state;
-        if (want.state === 'closed') fields.state_reason = 'completed';
+      if (issue.state !== want.state) fields.state = want.state;
+      if (want.state === 'closed' && issue.state_reason !== 'completed') {
+        fields.state = 'closed';
+        fields.state_reason = 'completed';
       }
       if (Object.keys(fields).length) {
         await api.updateIssue(number, fields);
@@ -236,6 +249,7 @@ function githubApi(github, { owner, repo }) {
       .filter((i) => !i.pull_request)
       .map((i) => ({
         number: i.number, node_id: i.node_id, title: i.title, body: i.body || '', state: i.state,
+        state_reason: i.state_reason || null,
         labels: i.labels.map((l) => (typeof l === 'string' ? l : l.name)),
         milestone: i.milestone ? i.milestone.number : null, user: i.user && i.user.login,
       })),
@@ -273,6 +287,18 @@ function githubBoard(graphql, { login, number }) {
         `mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) { updateProjectV2ItemFieldValue(input: {
           projectId: $project, itemId: $item, fieldId: $field, value: { singleSelectOptionId: $option } }) { projectV2Item { id } } }`,
         { project: project.id, item: added.addProjectV2ItemById.item.id, field: project.fieldId, option: optionId });
+    },
+    remove: async (contentId) => {
+      if (!project) throw new Error('plan sync: board.columns() must run before remove()');
+      const res = await graphql(
+        `query($content: ID!) { node(id: $content) { ... on Issue { projectItems(first: 50) { nodes { id project { id } } } } } }`,
+        { content: contentId });
+      const items = ((res.node && res.node.projectItems && res.node.projectItems.nodes) || []).filter((n) => n.project.id === project.id);
+      for (const item of items) {
+        await graphql(
+          `mutation($project: ID!, $item: ID!) { deleteProjectV2Item(input: { projectId: $project, itemId: $item }) { deletedItemId } }`,
+          { project: project.id, item: item.id });
+      }
     },
   };
 }

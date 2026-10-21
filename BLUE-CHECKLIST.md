@@ -475,8 +475,10 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     `PLAN_BOARD_TOKEN` (the token) and environment variable `PLAN_BOARD_NUMBER` (the project number).
   - Then Actions > **Plan sync** > **Run workflow**.
   - *Done when:* that run's summary says "Board: synced" and the board shows every session in its
-    column. Tell any agent; it checks the run and the board and ticks this with the date. If the
-    run fails, the agent reads its log; no agent ever sees the token.
+    column, and you have told Claude the token's expiry date (never the token), so it adds the
+    renewal reminder under "Dated reminders" (step 17b). Tell any agent; it checks the run and the
+    board and ticks this with the date. If the run fails, the agent reads its log; no agent ever sees
+    the token. When the token expires, every hourly run fails visibly until it is replaced.
 
 ## Every day, once the runner is on
 

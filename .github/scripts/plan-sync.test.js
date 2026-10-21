@@ -50,10 +50,11 @@ function fakeRepo({ labels = [], milestones = [], issues = [], prs = {} } = {}) 
   return { api, state };
 }
 function fakeBoard(columns = COLUMNS) {
-  const placed = [];
-  return { placed, board: {
+  const placed = [], removed = [];
+  return { placed, removed, board: {
     columns: async () => Object.fromEntries(columns.map((c) => [c, `opt-${c}`])),
     place: async (node, option) => { placed.push([node, option]); },
+    remove: async (node) => { removed.push(node); },
   } };
 }
 
@@ -67,6 +68,8 @@ function fakeBoard(columns = COLUMNS) {
   assert(real.some((s) => s.status.kind === 'dropped'), 'the real plan has a DROPPED row and it parses');
   assert(real.find((s) => s.id === 'S06').sensitive, 'S06 ("Sensitive.") is marked sensitive');
   assert(!real.find((s) => s.id === 'S08').sensitive, 'S08 is not marked sensitive');
+  for (const id of ['S06', 'S10', 'S24', 'S26', 'S28']) assert(real.find((s) => s.id === id).sensitive, `${id} is marked sensitive`);
+  assert(!s03.sensitive, 'S03 is not marked sensitive by its own label list ("sensitive, security-alert")');
   await throws(() => parsePlan(plan(row('S01', 'A', 'MAYBE'))), /unknown status "MAYBE"/, 'an unknown status throws');
   await throws(() => parsePlan('# no table'), /header not found/, 'a missing table throws');
   await throws(() => parsePlan(plan('| S01 | **A.** | x | High | cloud | READY |\n')), /6 cells/, 'a row with a missing cell throws');
@@ -141,6 +144,12 @@ function fakeBoard(columns = COLUMNS) {
     eq([state.issues.get(8).state, state.issues.get(8).state_reason], ['closed', 'not_planned'], 'a DROPPED session\'s existing issue is closed as not planned');
   }
 
+  {
+    const { api, state } = fakeRepo({ issues: [{ number: 8, title: 'S27: Composer', user: BOT, state: 'closed', state_reason: 'not_planned', labels: ['status: done'] }] });
+    await syncPlan({ markdown: plan(row('S27', 'Composer', 'DONE (#60)')), planUrl: URL, api });
+    eq([state.issues.get(8).state, state.issues.get(8).state_reason], ['closed', 'completed'], 'a row going from DROPPED to DONE re-closes its issue as completed');
+  }
+
   process.stdout.write('\nIN PROGRESS shows Ready to merge only while its PR is open and not a draft\n');
   for (const [pr, want] of [[{ state: 'open', draft: false }, 'Ready to merge'], [{ state: 'open', draft: true }, 'Running'], [{ state: 'closed', draft: false }, 'Running']]) {
     const { api } = fakeRepo({ prs: { 9: pr } });
@@ -154,6 +163,20 @@ function fakeBoard(columns = COLUMNS) {
     const { board, placed } = fakeBoard();
     await syncPlan({ markdown: plan(row('S01', 'A', 'READY'), row('S02', 'B', 'IN PROGRESS (#9)'), row('S03', 'C', 'DROPPED (x)')), planUrl: URL, api, board });
     eq(placed, [['N100', 'opt-Ready'], ['N101', 'opt-Ready to merge']], 'each issue is placed in its column; DROPPED rows stay off the board');
+  }
+  {
+    const { api, state } = fakeRepo();
+    const { board, placed, removed } = fakeBoard();
+    const md = plan(row('S01', 'A', 'READY', { text: 'Sensitive.' }));
+    await syncPlan({ markdown: md, planUrl: URL, api, board });
+    const issue = state.issues.get(100);
+    await syncPlan({ markdown: md.replace('| READY |', '| DROPPED (folded) |'), planUrl: URL, api, board });
+    eq(removed, ['N100'], 'a placed session that becomes DROPPED is removed from the board');
+    eq([issue.state, issue.state_reason, issue.labels], ['closed', 'not_planned', []], 'and its issue is closed as not planned without managed labels');
+    state.writes.length = 0;
+    await syncPlan({ markdown: md.replace('| READY |', '| DROPPED (folded) |'), planUrl: URL, api, board });
+    eq(state.writes, [], 'a DROPPED issue already tidied is not written again');
+    eq(placed.length, 1, 'and is never placed again');
   }
   {
     const { api, state } = fakeRepo();
@@ -173,7 +196,7 @@ function fakeBoard(columns = COLUMNS) {
         { number: 2, title: 'S02: pr', labels: [], user: { login: BOT }, pull_request: {} }]; } } },
     };
     const issues = await githubApi(github, { owner: 'o', repo: 'r' }).listIssues();
-    eq(issues, [{ number: 1, node_id: 'A', title: 'S01: x', body: '', state: 'open', labels: ['hold', 'plain'], milestone: 3, user: BOT }],
+    eq(issues, [{ number: 1, node_id: 'A', title: 'S01: x', body: '', state: 'open', state_reason: null, labels: ['hold', 'plain'], milestone: 3, user: BOT }],
       'issues are normalised and pull requests filtered out');
     eq(calls[0].state, 'all', 'closed issues are listed too, so a reopened plan row never opens a duplicate');
   }
