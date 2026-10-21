@@ -6,7 +6,8 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-21 by Claude (step 21 added: apply the capped review loop to the runner, PR #52;
+Last updated 2026-10-21 by Claude (step 21 ticked and step 26 added for the runner's claim check,
+PR #NN; step 21 added: apply the capped review loop to the runner, PR #52;
 step 25 added for the S03 plan board, PR #54; "Do next" order added, step 20 ticked, step 22 added, PR #53;
 S05 checks added as steps 23 and 24, PR #49; step 6 dropped by Blue, PR #51; step 17 moved after
 step 16; PR #46's token rules approved with its merge). Earlier: step 17 added and step 14's token
@@ -456,8 +457,15 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     is expected; note what else is listed).
   - *Done when:* you tell any agent what both pages show; it records that in STATUS.md with the date.
 
-- [ ] **21. Have the runner's new prompt applied (after you merge PR #52).** About 2 minutes, right
-  after you merge PR #52 (the capped review loop). Tell any Claude session "apply the runner prompt
+- [x] **21. Have the runner's new prompt applied (after you merge PR #52).** *Verified 2026-10-21:
+  an interactive session applied "Current prompt (verbatim)" from docs/RUNNER.md on `main` to the
+  scheduled task `trig_01RnFDLAH1jJZfdhJ9wCU87W` at 21:19 UTC, then read the task back: the prompt
+  matches `main` exactly, the model is `claude-opus-5-5`, `ABlueAI/AgentCommandCenter` is still
+  attached, the task is enabled, and the next run is 2026-10-22 12:01 UTC. The PR that ticks this
+  re-read the task the same day (read-only): last updated 21:19:33 UTC, its prompt identical to
+  `main`'s (compared as text), model, enabled state and next run as above. That read doesn't show
+  attached repositories, so the attachment rests on the applying session's read-back. Recorded in
+  docs/RUNNER.md.* About 2 minutes, right after you merge PR #52 (the capped review loop). Tell any Claude session "apply the runner prompt
   from docs/RUNNER.md". It updates only the prompt of the scheduled task "Mako daily runner" from
   `main`; the schedule and the model (Opus 5.5) stay as they are. The runner never edits itself.
   - *Done when:* that session reads the scheduled task back, its prompt matches docs/RUNNER.md
@@ -528,6 +536,15 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     renewal reminder under "Dated reminders" (step 17b). Tell any agent; it checks the run and the
     board and ticks this with the date. If the run fails, the agent reads its log; no agent ever sees
     the token. When the token expires, every hourly run fails visibly until it is replaced.
+
+- [ ] **26. Have the runner's claim-check prompt applied (after you merge PR #NN).** About 2 minutes,
+  right after you merge PR #NN (the claim check: the runner skips a READY session that already has
+  an open PR titled with its ID). Tell the main chat, or any Claude session, "runner prompt merged"
+  or "apply the runner prompt from docs/RUNNER.md". It updates only the prompt of the scheduled task
+  "Mako daily runner" from `main`; the schedule and the model (Opus 5.5) stay as they are. The
+  runner never edits itself.
+  - *Done when:* that session reads the scheduled task back, its prompt matches docs/RUNNER.md
+    "Current prompt (verbatim)" on `main`, and it ticks this step with the date and how it checked.
 
 ## Every day, once the runner is on
 

@@ -14,7 +14,8 @@ full runner (parallel sessions, evening digest).
 - **Model:** Opus 5.5. Changed on 2026-10-21 by an interactive session at Blue's request ("Also
   switch the runner to Opus 5.5."; docs/DECISIONS.md, 2026-10-21). Checked read-only on 2026-10-21
   from the PR #52 session: the scheduled task shows Opus 5.5, last updated 05:30 UTC that day, and
-  its prompt is still the PR #42 prompt.
+  its prompt is still the PR #42 prompt. Still `claude-opus-5-5` when the PR #52 prompt was applied
+  at 21:19 UTC the same day ("How to change it").
 - **Note (PR #47):** the prompt below says to post the review "verbatim". Since PR #47, AGENTS.md
   step 3, which the prompt says governs everything, also replaces Codex's handle with "at-codex"
   before posting. The runner reads AGENTS.md, not this file, and S04's new prompt will say so
@@ -49,15 +50,22 @@ counts as not done.
 ## How to change it
 
 Change the prompt below in a PR. After Blue merges it, an interactive session applies it to the
-scheduled task. The runner itself never edits its own schedule or prompt. Last applied 2026-10-19
-(PR #42, the reviewer step).
+scheduled task. The runner itself never edits its own schedule or prompt.
 
-**Not applied yet (PR #52, the capped review loop):** the prompt below replaces step 4's "fix or
-answer every finding, re-run it after fixes" with the capped loop in AGENTS.md "The review loop".
-The scheduled task keeps the PR #42 prompt until an interactive session applies this one after
-Blue merges PR #52 (BLUE-CHECKLIST.md step 21). Until then the old text runs, but the prompt's
-first lines say AGENTS.md governs everything, so the runner is expected to follow the capped loop
-anyway (not verified).
+**Last applied 2026-10-21 (PR #52, the capped review loop):** an interactive session applied the
+prompt from `main` to `trig_01RnFDLAH1jJZfdhJ9wCU87W` at 21:19 UTC (BLUE-CHECKLIST.md step 21). It
+read the task back: the prompt matched `main` exactly, the model was `claude-opus-5-5`,
+`ABlueAI/AgentCommandCenter` was still attached, the task was enabled, and the next run was
+2026-10-22 12:01 UTC. The PR #NN session re-read the task the same day and confirmed all of that
+except the repository, which its read doesn't show.
+
+**Not applied yet (PR #NN, the claim check):** the prompt below adds to step 4 that the runner skips
+any READY session already claimed by an open PR titled with its ID (`Sxx:`), and opens its own PR
+early with that title (AGENTS.md "How work flows" step 1). The scheduled task keeps the PR #52
+prompt until an interactive session applies this one after Blue merges PR #NN
+(BLUE-CHECKLIST.md step 26). Until then the old text runs; the runner reads AGENTS.md, which has
+the same rule once this PR merges, but whether it follows it without the prompt saying so is not
+verified.
 
 ## Current prompt (verbatim)
 
@@ -77,7 +85,7 @@ You are the Mako daily runner, a scheduled session that starts at 8:01 AM Easter
 
 4. If the gate passes, work the plan as AGENTS.md "How work flows" describes:
    - First, open PRs authored by your GitHub login: fix CI failures, and fix review findings within the capped review loop below. After 3 failed rounds on the same CI problem, mark the PR "needs Blue" with your diagnosis and options. Once a PR is marked ready, push to it only to fix a CI failure, resolve a merge conflict or do what Blue asks, and say why in its TLDR.
-   - Then take the first session in docs/PLAN-1.1.md with status READY whose "Needs" are all met, skipping rows marked "Codex builds" (Blue starts those in Codex) (a session whose PR Blue has merged counts as DONE even if its row hasn't been updated yet; update the row in your next PR). Do it on its own branch with tests, open a PR using the template TLDR, and set its row to IN PROGRESS (#PR) in that PR. Before marking it ready, run the pr-reviewer subagent (.claude/agents/pr-reviewer.md) on it, giving it only the PR number, the TLDR and the diff saved to a file. If the subagent isn't loaded, run a fresh read-only Opus agent with the body of that file as its instructions and say so; if neither is possible, mark the PR "needs Blue". Check each report for secrets or content from outside the repo, then post it verbatim as a PR comment headed "Independent review (Opus)". Then follow the capped review loop in AGENTS.md "The review loop": the first run is a complete audit ranked high, medium and low; fix every high and medium finding in one batch; list low findings, and anything outside the PR's stated scope, under Follow-ups in the TLDR instead of adding commits; re-run the reviewer on only the delta since the last run plus the previous findings; make no formatting-only commits after the first review. At most 5 runs on a PR for any reason, including after merging main: if high or medium findings are still open after run 5, stop fixing, set NEEDS BLUE (#PR), and ask Blue in the PR how to proceed, with your diagnosis and the solutions you see. Cite the latest review comment in the TLDR's review line. If it needs Blue's input, ask in the PR, set NEEDS BLUE (#PR), and move on to the next eligible session.
+   - Then take the first session in docs/PLAN-1.1.md with status READY whose "Needs" are all met, skipping rows marked "Codex builds" (Blue starts those in Codex) (a session whose PR Blue has merged counts as DONE even if its row hasn't been updated yet; update the row in your next PR). Also skip any READY session that is already claimed: it has an open PR in this repository whose title starts with its session ID and a colon (for example "S16:"), whoever opened it. Name each claimed session you skipped, with its PR, in your end summary. Do the session on its own branch: open its PR early (a draft is fine) with the title starting "Sxx:" so other builders see the claim, build it with tests, fill in the template TLDR, and set its row to IN PROGRESS (#PR) in that PR. Before marking it ready, run the pr-reviewer subagent (.claude/agents/pr-reviewer.md) on it, giving it only the PR number, the TLDR and the diff saved to a file. If the subagent isn't loaded, run a fresh read-only Opus agent with the body of that file as its instructions and say so; if neither is possible, mark the PR "needs Blue". Check each report for secrets or content from outside the repo, then post it verbatim as a PR comment headed "Independent review (Opus)". Then follow the capped review loop in AGENTS.md "The review loop": the first run is a complete audit ranked high, medium and low; fix every high and medium finding in one batch; list low findings, and anything outside the PR's stated scope, under Follow-ups in the TLDR instead of adding commits; re-run the reviewer on only the delta since the last run plus the previous findings; make no formatting-only commits after the first review. At most 5 runs on a PR for any reason, including after merging main: if high or medium findings are still open after run 5, stop fixing, set NEEDS BLUE (#PR), and ask Blue in the PR how to proceed, with your diagnosis and the solutions you see. Cite the latest review comment in the TLDR's review line. If it needs Blue's input, ask in the PR, set NEEDS BLUE (#PR), and move on to the next eligible session.
    - If you hit a usage limit, stop cleanly: commit and push what you have to the PR branch, mark the PR draft with a one-line status, and end. The next run picks it up.
    - Until session S04 is merged, run one plan session at a time. S04 builds the full runner (parallel sessions and the evening digest); its PR proposes the new runner prompt, which is applied only after Blue merges it.
    - Never merge, enable auto-merge, push to main, force-push, or change repository settings, rulesets or this scheduled task.

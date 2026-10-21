@@ -8,6 +8,8 @@
 // and none reuses a role name from agent-roles/.
 // It also pins the capped review loop (AGENTS.md "The review loop") where the reviewer, the rulebook
 // and the runner prompt each state it, so one can't drift back to unlimited re-runs alone.
+// And it pins the claim check (AGENTS.md "How work flows" step 1) in the rulebook and inside the
+// runner's verbatim prompt, so two builders don't take the same plan session.
 
 const fs = require('fs');
 const path = require('path');
@@ -71,6 +73,16 @@ for (const file of agents) {
   const runner = fs.readFileSync(path.join(repoRoot, 'docs', 'RUNNER.md'), 'utf8');
   assert(runner.includes('AGENTS.md "The review loop"') && runner.includes('At most 5 runs on a PR') && !runner.includes('At most 3 runs') && !runner.includes('re-run it after fixes, and cite'),
     'docs/RUNNER.md prompt uses the capped review loop');
+}
+
+{
+  const rules = fs.readFileSync(path.join(repoRoot, 'AGENTS.md'), 'utf8');
+  assert(rules.includes('**Claim a plan session before building it.**') && rules.includes('whoever opened it'),
+    'AGENTS.md has every builder check for an open Sxx: PR before starting a session');
+  const runner = fs.readFileSync(path.join(repoRoot, 'docs', 'RUNNER.md'), 'utf8');
+  const prompt = (runner.match(/## Current prompt \(verbatim\)\s*```text\n([\s\S]*?)\n```/) || [])[1] || '';
+  assert(prompt.includes('Also skip any READY session that is already claimed') && prompt.includes('open its PR early'),
+    'docs/RUNNER.md prompt skips claimed sessions and claims its own early');
 }
 
 process.stdout.write(`\nproject-agents: ${passed} passed, ${failed} failed\n`);
