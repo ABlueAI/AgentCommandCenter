@@ -6,7 +6,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { syncPlan, parsePlan, githubApi, COLUMNS, LABELS, MILESTONE, BOT, MARKER } = require('./plan-sync');
+const { syncPlan, parsePlan, githubApi, githubBoard, COLUMNS, LABELS, MILESTONE, BOT, MARKER } = require('./plan-sync');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -199,6 +199,36 @@ function fakeBoard(columns = COLUMNS) {
     eq(issues, [{ number: 1, node_id: 'A', title: 'S01: x', body: '', state: 'open', state_reason: null, labels: ['hold', 'plain'], milestone: 3, user: BOT }],
       'issues are normalised and pull requests filtered out');
     eq(calls[0].state, 'all', 'closed issues are listed too, so a reopened plan row never opens a duplicate');
+  }
+
+  process.stdout.write('\nthe GraphQL board adapter\n');
+  {
+    const calls = [];
+    const graphql = async (query, vars) => {
+      calls.push([query.replace(/\s+/g, ' ').trim().split(' ').slice(0, 2).join(' '), vars]);
+      if (/projectV2\(number/.test(query)) return { user: { projectV2: { id: 'P', field: { id: 'F', options: [{ id: 'o1', name: 'Ready' }, { id: 'o2', name: 'Done' }] } } } };
+      if (/addProjectV2ItemById/.test(query)) return { addProjectV2ItemById: { item: { id: 'ITEM' } } };
+      if (/projectItems/.test(query)) return { node: { projectItems: { nodes: vars.content === 'I2'
+        ? [{ id: 'mine', project: { id: 'P' } }, { id: 'other', project: { id: 'Q' } }, { id: 'hidden', project: null }] : [] } } };
+      return {};
+    };
+    const b = githubBoard(graphql, { login: 'ABlueAI', number: 3 });
+    await throws(() => b.place('I1', 'o1'), /columns\(\) must run before place/, 'place() refuses before columns()');
+    eq(await b.columns(), { Ready: 'o1', Done: 'o2' }, 'columns() maps the Status options by name');
+    eq(calls[0][1], { login: 'ABlueAI', number: 3 }, 'columns() asks for the configured user project');
+    calls.length = 0;
+    await b.place('I1', 'o2');
+    eq(calls.map((c) => c[1]), [{ project: 'P', content: 'I1' }, { project: 'P', item: 'ITEM', field: 'F', option: 'o2' }], 'place() adds the issue, then sets its Status');
+    calls.length = 0;
+    await b.remove('I2');
+    eq(calls.slice(1).map((c) => c[1]), [{ project: 'P', item: 'mine' }], 'remove() deletes only this project\'s item (other and unreadable projects are left alone)');
+    calls.length = 0;
+    await b.remove('I3');
+    eq(calls.length, 1, 'remove() of an issue not on the board only looks it up');
+    const none = githubBoard(async () => ({ user: { projectV2: null } }), { login: 'x', number: 1 });
+    await throws(() => none.columns(), /not found or not readable/, 'a missing project throws');
+    const nofield = githubBoard(async () => ({ user: { projectV2: { id: 'P', field: null } } }), { login: 'x', number: 1 });
+    await throws(() => nofield.columns(), /no single-select "Status" field/, 'a board without a Status field throws');
   }
 
   process.stdout.write(`\nplan-sync: ${passed} passed, ${failed} failed\n`);

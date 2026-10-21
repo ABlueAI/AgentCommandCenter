@@ -293,7 +293,7 @@ function githubBoard(graphql, { login, number }) {
       const res = await graphql(
         `query($content: ID!) { node(id: $content) { ... on Issue { projectItems(first: 50) { nodes { id project { id } } } } } }`,
         { content: contentId });
-      const items = ((res.node && res.node.projectItems && res.node.projectItems.nodes) || []).filter((n) => n.project.id === project.id);
+      const items = ((res.node && res.node.projectItems && res.node.projectItems.nodes) || []).filter((n) => n.project && n.project.id === project.id);
       for (const item of items) {
         await graphql(
           `mutation($project: ID!, $item: ID!) { deleteProjectV2Item(input: { projectId: $project, itemId: $item }) { deletedItemId } }`,
