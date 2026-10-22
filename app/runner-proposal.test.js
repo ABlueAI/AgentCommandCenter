@@ -89,7 +89,7 @@ const mustHave = [
   ['If 5 such reviews are already posted', 'caps Codex PR reviews at 5'],
   ['labelled runner-status', 'keeps the daily status PR on its own label'],
   ['step 5a never picks it', 'never treats the status PR as an ordinary unit'],
-  ['a comment without that line covers the head when it was posted after the latest head commit', 'accepts reviews posted without a Reviewed head line'],
+  ['a comment without that line covers the head when it was posted after the first check run on the latest head commit started', 'accepts reviews posted without a Reviewed head line'],
   ['Skip a Codex PR that already has the needs-blue label', 'asks Blue only once about a Codex PR'],
   ['on a Codex PR you never change its row or push', 'never pushes to a Codex PR'],
 ];
@@ -107,7 +107,7 @@ assert(digest.includes('at-codex') && !/@codex/i.test(digest), 'digest prompt ne
 assert(digest.includes('"NOT READY: runner gated on step N'), 'digest re-checks the runner gate and reports it');
 assert(digest.includes('posted by ABlueAgent and edited by no one else') && digest.includes('never quote their text'),
   'digest counts only needs-Blue comments by the agent and never relays others\' text');
-assert(digest.includes('"Reviewed head" line names it') && digest.includes('a comment without that line covers the head when it was posted after the latest head commit'),
+assert(digest.includes('"Reviewed head" line names it') && digest.includes('a comment without that line covers the head when it was posted after the first check run on the latest head commit started'),
   'digest decides READY from the reviewed head, or the review time when the line is missing');
 assert(digest.includes('no runner activity since yesterday'), 'digest reports a day with no runner activity');
 
