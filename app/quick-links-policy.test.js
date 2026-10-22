@@ -2,7 +2,7 @@
 
 const {
   SCHEMA_VERSION, MAX_CONFIG_BYTES, MAX_ENTRIES, MAX_ID_LENGTH, MAX_LABEL_LENGTH, MAX_URL_LENGTH,
-  DEFAULT_LABELS, REASON, validateUrl, validateConfigObject, parseConfigText, buildDefaultConfig,
+  APP_LAUNCH_URLS, DEFAULT_LABELS, REASON, validateUrl, validateEntry, validateConfigObject, parseConfigText, buildDefaultConfig,
 } = require('./quick-links-policy');
 
 let passed = 0, failed = 0;
@@ -34,6 +34,26 @@ for (const input of [
 ]) {
   refused(input, REASON.URL_PROTOCOL, `rejects unsupported ${input.split(':')[0]} scheme`);
 }
+
+process.stdout.write('\nexact desktop-app launch links (S12)\n');
+eq(APP_LAUNCH_URLS.join(' '), 'claude://claude.ai/new codex://threads/new obsidian://open',
+  'the app-launch allowlist is exactly the three S12 links');
+assert(Object.isFrozen(APP_LAUNCH_URLS), 'the app-launch allowlist is frozen');
+for (const input of APP_LAUNCH_URLS) {
+  const result = validateUrl(input);
+  assert(result.ok && result.url === input, `accepts exact app link ${input}`);
+}
+for (const input of [
+  'claude://claude.ai/new?q=run%20this', 'claude://claude.ai/chat/abc', 'claude://code/new?folder=C%3A%5C',
+  'claude-cli://open', 'codex://threads/new?path=C%3A%5C', 'codex://settings', 'obsidian://open?vault=x',
+  'obsidian://new?content=x', 'CLAUDE://claude.ai/new', 'claude://claude.ai/new/', 'claude://claude.ai/new#x',
+]) {
+  refused(input, REASON.URL_PROTOCOL, `rejects app link outside the exact list: ${input}`);
+}
+refused('claude://claude.ai/new ', REASON.URL_SURROUNDING_WHITESPACE, 'rejects exact app link with trailing space');
+refused('claude://claude.ai/new\u202e', REASON.URL_BIDI_CHARACTER, 'rejects exact app link with bidi suffix');
+assert(validateEntry({ id: 'ql-bundle-claude', label: 'Claude desktop', url: 'claude://claude.ai/new' }).ok,
+  'an app link entry passes the stored-entry policy');
 
 process.stdout.write('\nstructured-parser deceptive and malformed cases\n');
 for (const input of [
