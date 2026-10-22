@@ -38,7 +38,7 @@ Updated 2026-10-22 by Claude. Every PR that changes the state updates this file.
   turn-ended transitions. The phone setup note is [docs/NEEDS-YOU-ALERTS.md](docs/NEEDS-YOU-ALERTS.md).
   S05 is done once Blue's real-pane toast check passes (checklist step 23); no Windows toast or phone
   delivery has been verified yet.
-- **Quick Links bundle (S12, PR #PRNUM, in progress):** Quick Links' editor gets "+ Add Mako
+- **Quick Links bundle (S12, PR #86, in progress):** Quick Links' editor gets "+ Add Mako
   bundle", which adds seven links (Claude desktop, Codex app, Mako PRs, Project board, Obsidian
   vault, Hermes docs, Dodaios docs) without touching existing ones. The URL policy now also accepts
   exactly three app links (`claude://claude.ai/new`, `codex://threads/new`, `obsidian://open`) and

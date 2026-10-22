@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-22 by Claude (step 29 added for the S12 Quick Links bundle, PR #PRNUM; step 19 ticked with Blue's Composer verdict, PR #82; step 21 added: apply the capped review loop to the runner, PR #52;
+Last updated 2026-10-22 by Claude (step 29 added for the S12 Quick Links bundle, PR #86; step 19 ticked with Blue's Composer verdict, PR #82; step 21 added: apply the capped review loop to the runner, PR #52;
 step 25 added for the S03 plan board, PR #54; "Do next" order added, step 20 ticked, step 22 added, PR #53;
 S05 checks added as steps 23 and 24, PR #49; step 6 dropped by Blue, PR #51; step 17 moved after
 step 16; PR #46's token rules approved with its merge). Earlier: step 17 added and step 14's token
@@ -539,7 +539,7 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     the token. When the token expires, every hourly run fails visibly until it is replaced.
 
 - [ ] **29. Quick Links bundle on your PC (S12).** About **5 minutes**, after you merge the S12 PR,
-  #PRNUM. Pull `main`, then fully close and restart Mako (renderer changes need a full restart).
+  #86. Pull `main`, then fully close and restart Mako (renderer changes need a full restart).
   - Quick Links > **Manage** > **+ Add Mako bundle** > **Save Changes**. Seven links appear: Claude
     desktop, Codex app, Mako PRs, Project board, Obsidian vault, Hermes docs, Dodaios docs. Your
     Starboard and Outlook links stay.
