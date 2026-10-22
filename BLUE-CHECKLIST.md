@@ -437,8 +437,10 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     A later plan change then adds the Composer build sessions.
   - *Done 2026-10-21:* Blue gave his verdict in his own session, in two messages, both recorded
     word for word: "it will come from a lot of input from a lot of OSS material and we will figure
-    out the good and bad tidbits and find something i like" and "no, this does not cover my
-    conclusion. everything stays open for study, questions deferred". No option is adopted; the open
+    out the good and bad tidbits and find something i like" (excerpt; full text in
+    docs/DECISIONS.md) and "no, this does not cover my conclusion. everything stays open for study,
+    questions deferred". He confirmed this reading on 2026-10-22: "Confirming the verdict, yes,
+    true". No option is adopted; the open
     questions wait for more OSS review. PR #82
     records his words in OSS-composer.md and docs/DECISIONS.md (checked in the PR's diff). What the
     later Composer plan change contains is his call.

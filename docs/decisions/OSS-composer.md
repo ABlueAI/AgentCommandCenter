@@ -15,8 +15,8 @@ questions are deferred, to be answered as more OSS material is reviewed. The pro
 the recommended direction below are the builder's proposals and input for that later work, not
 decisions. Blue, in his own session on 2026-10-21 (his second message answered the builder's
 offer to record "everything stays open for study, questions deferred" as his verdict; the builder
-reads the opening "no" as rejecting merging without a recorded verdict, not that phrase, and Blue is
-asked to confirm on PR #82):
+reads the opening "no" as rejecting merging without a recorded verdict, not that phrase; Blue
+confirmed that reading on 2026-10-22: "Confirming the verdict, yes, true"):
 
 - "bottom line, you wont be able to come up with the best answer for creating the composer, nor will i. it will come from a lot of input from a lot of OSS material and we will figure out the good and bad tidbits and find something i like. but for now i dont have all of the answers and that will need to be answered down the line"
 - "no, this does not cover my conclusion. everything stays open for study, questions deferred"
