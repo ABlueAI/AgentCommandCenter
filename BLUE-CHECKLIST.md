@@ -546,10 +546,12 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - Click each once. The three app links (Claude desktop, Codex app, Obsidian vault) open the app
     if it is installed; Windows asks which app to use if it isn't (Obsidian comes with S13). The
     rest open in your browser. "Project board" opens your projects list until S03's board exists.
-  - Your Hexona login: **Manage** > **+ Add link**, label it, paste the URL you use, **Save
-    Changes**. It isn't bundled because the repo has no confirmed login URL for it.
-  - *Done when:* you tell an agent which links opened and that Hexona is added (never paste a
-    login or password); it ticks this with the date. A link that fails: say which and what
+  - Your Hexona login: the repo's records say your existing **Starboard Platform** link
+    (`https://jlautomationsystems.com/`) opens your Hexona Systems login. Click it: if that is
+    your Hexona login, there is nothing to add. If not, **Manage** > **+ Add link**, label it, paste
+    the URL you use, **Save Changes**.
+  - *Done when:* you tell an agent which links opened and whether Starboard Platform is your
+    Hexona login or you added another link (never paste a login or password); it ticks this with the date. A link that fails: say which and what
     happened, and Mako's Logs line (it names a reason, never the URL).
 
 ## Every day, once the runner is on
@@ -574,7 +576,7 @@ You can start on the first one now, which saves time later.
   - On GitHub: revoke the matching app under Authorized OAuth Apps only if you push as `ABlueAI`
     from no machine, since that signs it out everywhere.
   - *Done when:* you say so (Claude can't read Credential Manager or your authorized apps).
-- **Session S12:** add your Hexona login URL in Mako yourself (step 29).
+- **Session S12:** confirm your Hexona login link in Mako (step 29).
 - **Session S13:** install the Obsidian app (2 minutes).
 - **Session S26:** comment as `ABlueAI` on its claim issue to start Codex's trial build (the session
   tells you when and what to write).

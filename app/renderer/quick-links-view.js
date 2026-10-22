@@ -10,7 +10,7 @@
   const ID_PATTERN = /^[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?$/;
   // Session S12's bundle. Fixed IDs let "Add Mako bundle" skip links already added; main still
   // validates every entry on Save (quick-links-policy.js, including its APP_LAUNCH_URLS list).
-  // Blue's business-platform login is not here: he adds his own URL with "+ Add link".
+  // Blue's business-platform login is not here: the "Starboard Platform" seed already opens it.
   const BUNDLE_ENTRIES = Object.freeze([
     Object.freeze({ id: 'ql-bundle-claude', label: 'Claude desktop', url: 'claude://claude.ai/new' }),
     Object.freeze({ id: 'ql-bundle-codex', label: 'Codex app', url: 'codex://threads/new' }),

@@ -42,8 +42,8 @@ Updated 2026-10-22 by Claude. Every PR that changes the state updates this file.
   bundle", which adds seven links (Claude desktop, Codex app, Mako PRs, Project board, Obsidian
   vault, Hermes docs, Dodaios docs) without touching existing ones. The URL policy now also accepts
   exactly three app links (`claude://claude.ai/new`, `codex://threads/new`, `obsidian://open`) and
-  nothing else outside http(s). Blue adds his Hexona URL himself and checks the links on his PC
-  (checklist step 29).
+  nothing else outside http(s). Blue checks the links on his PC and confirms whether his existing
+  "Starboard Platform" link is his Hexona login (checklist step 29).
 - **Plan to issues (S03, PR #54, in progress):** a workflow keeps one `Sxx: <title>` issue per plan
   session, with status, authority, lane and sensitive labels and the "1.1 Month 1" milestone, in step
   with docs/PLAN-1.1.md on `main`. The Project board joins once Blue connects it (checklist step 25).
