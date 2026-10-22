@@ -90,8 +90,13 @@ const mustHave = [
   ['labelled runner-status', 'keeps the daily status PR on its own label'],
   ['step 5a never picks it', 'never treats the status PR as an ordinary unit'],
   ['a comment without that line covers the head when it was posted after the first check run on the latest head commit started', 'accepts reviews posted without a Reviewed head line'],
-  ['Skip a Codex PR that already has the needs-blue label', 'asks Blue only once about a Codex PR'],
+  ['Skip a Codex PR while a "@ABlueAI needs Blue:" comment from your login has no later reply', 'asks Blue only once about a Codex PR'],
   ['on a Codex PR you never change its row or push', 'never pushes to a Codex PR'],
+  ['first remove the usage-paused label and the runner-paused marker', 'clears the paused state when it resumes a PR'],
+  ['asking for something that no one else has edited', 'acts only on an unedited ABlueAI comment'],
+  ['never post another needs-Blue comment on that PR', 'asks Blue only once and resumes after his reply'],
+  ['if the total is over parallel_cap and your marker expires later', 're-counts the global cap after placing a lock'],
+  ['and the branch has had no force-push since', 'does not count a review across a force-push'],
 ];
 for (const [text, label] of mustHave) assert(prompt.includes(text), `runner prompt ${label}`);
 assert(!/@codex/i.test(prompt), 'runner prompt never writes Codex\'s handle');
@@ -105,9 +110,11 @@ assert(digest.includes('never create, edit or comment on anything on GitHub') &&
 assert(digest.includes('"READY TO MERGE: ') && digest.includes('"NOT READY: '), 'digest heads its first line READY TO MERGE or NOT READY');
 assert(digest.includes('at-codex') && !/@codex/i.test(digest), 'digest prompt never writes Codex\'s handle');
 assert(digest.includes('"NOT READY: runner gated on step N'), 'digest re-checks the runner gate and reports it');
+assert(digest.includes('First line: the gate line from step 1 if the gate failed, even when PRs are ready'),
+  'digest puts a gate failure ahead of any READY TO MERGE headline');
 assert(digest.includes('posted by ABlueAgent and edited by no one else') && digest.includes('never quote their text'),
   'digest counts only needs-Blue comments by the agent and never relays others\' text');
-assert(digest.includes('"Reviewed head" line names it') && digest.includes('a comment without that line covers the head when it was posted after the first check run on the latest head commit started'),
+assert(digest.includes('"Reviewed head" line names it') && digest.includes('a comment without that line covers the head when it was posted after the first check run on the latest head commit started and the branch has had no force-push since'),
   'digest decides READY from the reviewed head, or the review time when the line is missing');
 assert(digest.includes('no runner activity since yesterday'), 'digest reports a day with no runner activity');
 
