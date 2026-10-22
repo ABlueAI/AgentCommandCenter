@@ -1,6 +1,7 @@
 'use strict';
 
-const { createQuickLinksView } = require('./quick-links-view');
+const { createQuickLinksView, BUNDLE_ENTRIES, MAX_ENTRIES } = require('./quick-links-view');
+const policy = require('../quick-links-policy');
 
 let passed = 0, failed = 0;
 function assert(condition, label) {
@@ -36,7 +37,7 @@ function makeDocument() {
   const ids = {};
   for (const [id, tag] of Object.entries({
     quickLinksStatus: 'div', quickLinksList: 'div', quickLinksManage: 'button', quickLinksEditor: 'div',
-    quickLinksRows: 'div', quickLinksAdd: 'button', quickLinksSave: 'button', quickLinksCancel: 'button',
+    quickLinksRows: 'div', quickLinksAdd: 'button', quickLinksAddBundle: 'button', quickLinksSave: 'button', quickLinksCancel: 'button',
   })) ids[id] = new Element(tag, id);
   return {
     ids,
@@ -144,6 +145,48 @@ function harness(overrides = {}) {
     assert(!h.view.add(), 'bad generated ID refuses visibly');
     assert(h.document.ids.quickLinksStatus.textContent.includes('id-generation-failed'),
       'ID generation failure is visible');
+  }
+
+  process.stdout.write('\nMako bundle (S12)\n');
+  {
+    eq(BUNDLE_ENTRIES.map((link) => link.label).join(', '),
+      'Claude desktop, Codex app, Mako PRs, Project board, Obsidian vault, Hermes docs, Dodaios docs',
+      'the bundle holds the S12 links in order');
+    for (const link of BUNDLE_ENTRIES) {
+      assert(policy.validateEntry({ ...link }).ok, `bundle link ${link.id} passes main's policy`);
+    }
+    assert(policy.validateConfigObject({ schemaVersion: 1, entries: BUNDLE_ENTRIES.map((l) => ({ ...l })) }).ok,
+      'the whole bundle passes main\'s config policy (unique IDs, within the cap)');
+    assert(!BUNDLE_ENTRIES.some((link) => /hexona/i.test(link.url)), 'no guessed Hexona URL is bundled');
+    eq(policy.MAX_ENTRIES, MAX_ENTRIES, 'renderer and policy share the entry cap');
+  }
+  {
+    const h = harness(); await h.view.load(); h.view.startManage();
+    eq(h.view.addBundle(), BUNDLE_ENTRIES.length, 'Add Mako bundle adds every bundle link');
+    eq(h.calls.save.length, 0, 'adding the bundle stores nothing before Save');
+    assert(await h.view.save(), 'Save persists the bundle');
+    eq(h.view.snapshot().entries.length, 2 + BUNDLE_ENTRIES.length, 'seeds plus bundle are visible after Save');
+    h.view.startManage();
+    eq(h.view.addBundle(), 0, 'adding the bundle again adds nothing');
+    assert(h.document.ids.quickLinksStatus.textContent.includes('already'), 'a repeat add says the bundle is there');
+    h.view.cancel();
+  }
+  {
+    const h = harness(); await h.view.load(); h.view.startManage();
+    h.view.add();
+    h.view.updateDraft('ql-random-fixture', { label: 'My PRs', url: BUNDLE_ENTRIES[2].url });
+    eq(h.view.addBundle(), BUNDLE_ENTRIES.length - 1, 'a link with the same URL under another ID is not added twice');
+  }
+  {
+    let n = 0;
+    const ids = () => `ql-fill-${n += 1}`;
+    const filler = harness({ makeId: ids }); await filler.view.load(); filler.view.startManage();
+    for (let i = 0; i < 6; i += 1) filler.view.add();
+    eq(filler.view.addBundle(), MAX_ENTRIES - 8, 'only the links that fit under the cap are added');
+    assert(filler.document.ids.quickLinksStatus.classList.contains('ql-error'), 'a partial add is shown as an error');
+    assert(filler.document.ids.quickLinksAddBundle.disabled, 'the bundle button is disabled at the cap');
+    assert(filler.logs.join('').includes('operation=add-bundle result=refused reason=too-many-entries'),
+      'a partial add is logged with a bounded reason');
   }
 
   process.stdout.write('\ninert DOM rendering\n');

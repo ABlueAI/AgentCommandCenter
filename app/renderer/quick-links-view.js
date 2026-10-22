@@ -8,6 +8,18 @@
   const SCHEMA_VERSION = 1;
   const MAX_ENTRIES = 12;
   const ID_PATTERN = /^[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?$/;
+  // Session S12's bundle. Fixed IDs let "Add Mako bundle" skip links already added; main still
+  // validates every entry on Save (quick-links-policy.js, including its APP_LAUNCH_URLS list).
+  // Blue's business-platform login is not here: he adds his own URL with "+ Add link".
+  const BUNDLE_ENTRIES = Object.freeze([
+    Object.freeze({ id: 'ql-bundle-claude', label: 'Claude desktop', url: 'claude://claude.ai/new' }),
+    Object.freeze({ id: 'ql-bundle-codex', label: 'Codex app', url: 'codex://threads/new' }),
+    Object.freeze({ id: 'ql-bundle-prs', label: 'Mako PRs', url: 'https://github.com/ABlueAI/AgentCommandCenter/pulls' }),
+    Object.freeze({ id: 'ql-bundle-board', label: 'Project board', url: 'https://github.com/users/ABlueAI/projects' }),
+    Object.freeze({ id: 'ql-bundle-obsidian', label: 'Obsidian vault', url: 'obsidian://open' }),
+    Object.freeze({ id: 'ql-bundle-hermes', label: 'Hermes docs', url: 'https://hermes-agent.nousresearch.com/docs/' }),
+    Object.freeze({ id: 'ql-bundle-dodaios', label: 'Dodaios docs', url: 'https://github.com/Dodaios/Dodaios/tree/main/docs' }),
+  ]);
 
   function boundedReason(value) {
     return typeof value === 'string' && /^[a-z0-9-]{1,64}$/.test(value) ? value : 'unknown-error';
@@ -56,7 +68,7 @@
       try { result = await api.open(id); }
       catch { announceFailure('Open', 'ipc-failed'); return false; }
       if (!result || !result.ok) { announceFailure('Open', result && result.error); return false; }
-      setStatus('Opened in your default browser.', false);
+      setStatus('Opened.', false);
       log('[quick-links-ui] operation=open result=ok\n');
       return true;
     }
@@ -115,6 +127,7 @@
         row.appendChild(label); row.appendChild(url); row.appendChild(remove); host.appendChild(row);
       }
       byId('quickLinksAdd').disabled = state.draft.length >= MAX_ENTRIES;
+      byId('quickLinksAddBundle').disabled = state.draft.length >= MAX_ENTRIES;
     }
 
     function setManaging(enabled) {
@@ -145,6 +158,25 @@
       state.draft.push({ id, label: '', url: '' });
       renderEditor();
       return true;
+    }
+
+    // Adds the bundle links the draft doesn't already have (same ID or same URL), in order, up to
+    // the entry cap. Nothing is stored until Save Changes.
+    function addBundle() {
+      const missing = BUNDLE_ENTRIES.filter((link) => !state.draft.some(
+        (entry) => entry.id === link.id || entry.url === link.url));
+      if (missing.length === 0) { setStatus('The Mako bundle is already in your links.', false); return 0; }
+      const room = MAX_ENTRIES - state.draft.length;
+      const added = missing.slice(0, Math.max(0, room));
+      for (const link of added) state.draft.push({ ...link });
+      renderEditor();
+      if (added.length < missing.length) {
+        setStatus(`Added ${added.length} of ${missing.length} bundle links: the limit is ${MAX_ENTRIES} links. Remove some, then add the bundle again.`, true);
+        log(`[quick-links-ui] operation=add-bundle result=refused reason=too-many-entries count=${added.length}\n`);
+        return added.length;
+      }
+      setStatus(`Added ${added.length} bundle link${added.length === 1 ? '' : 's'}. Save Changes to keep them.`, false);
+      return added.length;
     }
 
     async function save() {
@@ -194,13 +226,14 @@
     function mount() {
       byId('quickLinksManage').onclick = () => startManage();
       byId('quickLinksAdd').onclick = () => add();
+      byId('quickLinksAddBundle').onclick = () => { addBundle(); };
       byId('quickLinksSave').onclick = () => { save(); };
       byId('quickLinksCancel').onclick = () => cancel();
       renderList();
     }
 
     return {
-      mount, load, startManage, cancel, add, save, openById, updateDraft, removeDraft,
+      mount, load, startManage, cancel, add, addBundle, save, openById, updateDraft, removeDraft,
       snapshot: () => ({
         entries: state.entries.map((entry) => ({ ...entry })),
         draft: state.draft.map((entry) => ({ ...entry })),
@@ -210,5 +243,5 @@
     };
   }
 
-  return { createQuickLinksView, boundedReason, SCHEMA_VERSION, MAX_ENTRIES };
+  return { createQuickLinksView, boundedReason, SCHEMA_VERSION, MAX_ENTRIES, BUNDLE_ENTRIES };
 });

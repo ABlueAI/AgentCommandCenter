@@ -11,6 +11,16 @@ const MAX_ID_LENGTH = 64;
 const MAX_LABEL_LENGTH = 80;
 const MAX_URL_LENGTH = 2048;
 
+// Desktop-app launch links (session S12). Only these exact strings are accepted outside http(s):
+// no other path, query or fragment on these schemes, and no other custom scheme. Each is the
+// app's documented "open" route: support.claude.com article 14729294 (claude://), the Codex app
+// docs at developers.openai.com/codex/app (codex://), and Obsidian's URI docs (obsidian://).
+const APP_LAUNCH_URLS = Object.freeze([
+  'claude://claude.ai/new',
+  'codex://threads/new',
+  'obsidian://open',
+]);
+
 const DEFAULT_LABELS = Object.freeze(['Starboard Platform', 'Outlook Web']);
 const DEFAULT_IDS = Object.freeze(['ql-seed-a', 'ql-seed-b']);
 
@@ -73,6 +83,7 @@ function validateUrl(input) {
   if (input !== input.trim()) return refuse(REASON.URL_SURROUNDING_WHITESPACE);
   if (CONTROL_RE.test(input)) return refuse(REASON.URL_CONTROL_CHARACTER);
   if (BIDI_RE.test(input)) return refuse(REASON.URL_BIDI_CHARACTER);
+  if (APP_LAUNCH_URLS.includes(input)) return { ok: true, url: input };
   if (/^[a-z][a-z0-9+.-]*:/i.test(input) && !/^https?:/i.test(input)) {
     return refuse(REASON.URL_PROTOCOL);
   }
@@ -181,6 +192,7 @@ module.exports = {
   MAX_ID_LENGTH,
   MAX_LABEL_LENGTH,
   MAX_URL_LENGTH,
+  APP_LAUNCH_URLS,
   DEFAULT_LABELS,
   DEFAULT_IDS,
   REASON,
