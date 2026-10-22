@@ -90,15 +90,21 @@ Updated 2026-10-22 by Claude. Every PR that changes the state updates this file.
 - **Daily runner:** scheduled for 8:01 AM Eastern from 2026-10-18 ([docs/RUNNER.md](docs/RUNNER.md)).
   The repository was attached on 2026-10-18 (step 7e), and its gate (steps 1 and 7) now passes, so
   the 2026-10-19 run started and opened PR #44, the first proof it can open PRs.
-  Its prompt includes the `pr-reviewer` step since 2026-10-19 (applied after PR #42 merged).
+  Its prompt includes the `pr-reviewer` step since 2026-10-19 (applied after PR #42 merged), and
+  the capped review loop since 2026-10-21 (PR #52's prompt, applied 21:19 UTC and read back the same
+  day; checklist step 21). Proposed in PR #83 (pending Blue): every builder skips a plan session
+  that already has an open PR titled with its ID (`Sxx:`) and opens its own PR early, so two
+  builders don't start the same session (a runner fire still treats every open `ABlueAgent` PR as
+  its own until S04's `runner` label); the runner prompt is applied after the merge (checklist
+  step 26).
   It runs on Opus 5.5 since 2026-10-21, changed by an interactive session at Blue's request (read
   back from the scheduled task the same day; docs/RUNNER.md).
-- **Review loop (proposed in PR #52, pending Blue):** every PR gets one complete first review ranked
+- **Review loop (adopted: PR #52 merged 2026-10-21, applied to the runner the same day):** every PR gets one complete first review ranked
   high, medium and low; high and medium findings are fixed in one batch, low ones go to Follow-ups;
   later runs check only the fixes; at most 5 runs, then "needs Blue" with questions for Blue; one
   scope per PR; no pushes after a PR is marked ready except for CI, a conflict or Blue asking
-  (AGENTS.md "The review loop"). It applies to every PR once merged; the runner's prompt is updated
-  right after (checklist step 21). Why: PR #46 took 37 commits and 31 review runs, none with a high
+  (AGENTS.md "The review loop"). It applies to every PR; the runner's prompt carries it since
+  2026-10-21 (checklist step 21). Why: PR #46 took 37 commits and 31 review runs, none with a high
   finding.
 
 ## 1.0: done
