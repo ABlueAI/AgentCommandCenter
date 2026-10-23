@@ -1,6 +1,6 @@
 # Mako status
 
-Updated 2026-10-23 by Claude (PR #115). Every PR that changes the state updates this file.
+Updated 2026-10-23 by Claude (PR #118). Every PR that changes the state updates this file.
 
 ## Right now
 
@@ -68,6 +68,8 @@ Updated 2026-10-23 by Claude (PR #115). Every PR that changes the state updates 
     approval from a code owner (`ABlueAI`), approval of the latest push, and both Windows checks, so
     no agent PR merges without Blue's Approve. Local agents on Blue's PC still use his git login until
     S06 moves them (approved with PR #44; see docs/SETUP-GUARDRAILS.md, "What is still not covered").
+    The `ABlueAgent` token for that move exists (checklist step 14, ticked 2026-10-23 on Blue's
+    word; expires 2027-01-21, renew by 2027-01-14), so S06 can start.
   - The merge audit raised a false alert on 2026-10-18 (issue #35): PR #33 was stacked on #32's
     branch, and its commits reached `main` through PR #34. The audit now counts every commit of a PR
     merged into `main`, and AGENTS.md forbids stacked PRs. Fixed in PR #37, merged 2026-10-18;
@@ -175,8 +177,8 @@ both accounts and API keys with each provider, sets the rules for every new toke
 on push protection. Step 14's `ABlueAgent` token is now a classic `public_repo` token, because
 GitHub doesn't support fine-grained tokens for an account that is only a collaborator on a personal
 account's repository (found by Codex on PR #46; GitHub's docs not yet read directly, step 14). Step
-14 is ticked when Blue says the token exists and is in Bitwarden and gives its expiry date. S06
-decides how Mako stores and passes it.
+14 was ticked on 2026-10-23 on Blue's word (PR #118; see Guardrails above). S06 decides how Mako
+stores and passes it.
 
 1.1 session S01 (finish guardrails) is DONE: PR #44 merged 2026-10-19, with its evidence in the plan's change log. S02 (CI and dependency hygiene) is DONE (#45); S03 is next. The UI sessions (S14, S17 to S20) are on hold until Blue says go, and S16 becomes the Composer research (approved with the PR #48 merge). S06 also moves local agents off Blue's git login (plan change approved with that merge). See the plan.
 
