@@ -304,8 +304,10 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
 - [x] **14. Agent token for local agents (approved with PR #44; token type changed by PR #46).**
   *Verified 2026-10-23 on Blue's word in chat ("token done, expires 1/23/3037", then "date is
   updated to reflect true 90 day date 1/21/2027"): it expires 2027-01-21. Claude can't see the
-  token. It is a classic token for `ABlueAgent` with only `public_repo`, kept in
-  Bitwarden. The renewal reminder is under "Dated reminders".* About 10 minutes, any time before
+  token. That it is a classic token for `ABlueAgent` with only `public_repo`, kept in Bitwarden,
+  is Blue's word as relayed by the session that handed off this task, not in the words quoted here;
+  not verified, and S06's PR confirms the scope. The renewal reminder is under "Dated
+  reminders".* About 10 minutes, any time before
   session S06 (the runner won't start S06 until this is ticked).
   Today local agents on your PC push as `ABlueAI`, the account that can approve and merge.
   - Signed in as `ABlueAgent`: GitHub > Settings > Developer settings > Personal access tokens >
@@ -671,11 +673,11 @@ You can start on the first one now, which saves time later.
 
 ## Dated reminders
 
+- **About 2026-11-17:** reassess plans. Is Max 5x enough, or move to 20x? The month review (S25)
+  brings the numbers. With the upgrade on 2026-10-28, that covers about 3 weeks of Max 5x use.
 - **By 2027-01-14:** renew the `ABlueAgent` classic token (`public_repo` only, step 14), a week
   before it expires on 2027-01-21. Signed in as `ABlueAgent`, it is listed on
   https://github.com/settings/tokens. Make the new token by step 14's
   instructions and step 17b's rules, put it where the old one lives (Bitwarden, or Mako's key setup
   once S06 gives it a home), tell Claude the new expiry date (never the token) so it moves this
   reminder, then delete the old token on the same page.
-- **About 2026-11-17:** reassess plans. Is Max 5x enough, or move to 20x? The month review (S25)
-  brings the numbers. With the upgrade on 2026-10-28, that covers about 3 weeks of Max 5x use.
