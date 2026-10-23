@@ -608,7 +608,7 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     the invite signed in as `ABlueAgent` (private window).
   - Claude GitHub App: github.com > Settings > Applications > Claude > **Configure** > add the new
     repo (Only select repositories). Leave Codex's app as is unless you want Codex reviews there.
-  - Reply on the S22 PR with the repo name.
+  - Reply on the S22 PR (#116) with the repo name.
   - *Done when:* a runner fire attaches the repo and pushes the brief's branch there (it ticks this
     with the date and the commit); if it can't reach the repo, it says why on the PR.
 

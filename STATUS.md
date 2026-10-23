@@ -47,7 +47,7 @@ Updated 2026-10-22 by Claude. Every PR that changes the state updates this file.
 - **Plan to issues (S03, PR #54, in progress):** a workflow keeps one `Sxx: <title>` issue per plan
   session, with status, authority, lane and sensitive labels and the "1.1 Month 1" milestone, in step
   with docs/PLAN-1.1.md on `main`. The Project board joins once Blue connects it (checklist step 25).
-- **Marina research brief (S22, PR #PR, needs Blue):** S22's brief must go in a private
+- **Marina research brief (S22, PR #116, needs Blue):** S22's brief must go in a private
   repository, and none exists yet. Blue creates one and gives `ABlueAgent` write access (checklist
   step 32); a later runner fire then does the research and pushes the brief there.
 - **All-day runner (S04, PR #84, in progress, pending Blue):** proposed in docs/RUNNER.md "S04: the

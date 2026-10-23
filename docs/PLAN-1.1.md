@@ -48,7 +48,7 @@ appends a DECISIONS.md entry that replaces the proposed PR #47 entry.
 
 ### Status values
 
-`READY` · `IN PROGRESS (#PR)` · `NEEDS BLUE (#PR)` (or `NEEDS BLUE (reason)` before any PR exists) ·
+`READY` · `IN PROGRESS (#PR)` · `NEEDS BLUE (#116)` (or `NEEDS BLUE (reason)` before any PR exists) ·
 `HOLD (Blue)` · `DONE (#PR)` · `DROPPED (reason)`. The session's PR updates its own row (after S04 is applied, the
 runner's status PR marks merged sessions DONE; S04 item 6). A `DROPPED` row's other columns are
 ignored: no issue, labels or claims are made from it.
@@ -93,7 +93,7 @@ held rows as held (a Hold column or a `hold` label), never as Ready.
 | S19 | **New layout, part 2.** Codex builds (Blue starts it): pane and status visuals; "needs you" stands out. | Blue accepts the look. | High | windows | S18 | HOLD (Blue) |
 | S20 | **New layout, part 3.** Codex builds (Blue starts it): Library, Logs and settings restyled; old layout removed after Blue accepts. | One consistent design. | High | windows | S19 | HOLD (Blue) |
 | S21 | **Logo readability.** "M" variants at 16 to 48 px; Blue picks; taskbar and shortcut icons updated. | Blue can read the M on the taskbar. | Medium | blue | S07 | READY |
-| S22 | **Marina research brief.** Charlotte County independent marinas from public sources (no Google Maps scraping): basics, likely pain points, outreach angles. Output goes in a private repo. | Brief delivered privately. | Minimum | cloud | S01 | NEEDS BLUE (#PR) |
+| S22 | **Marina research brief.** Charlotte County independent marinas from public sources (no Google Maps scraping): basics, likely pain points, outreach angles. Output goes in a private repo. | Brief delivered privately. | Minimum | cloud | S01 | NEEDS BLUE (#116) |
 | S23 | **Client paperwork drafts.** Intake questionnaire, scope-of-work template, contract template, bucket-of-hours and retainer terms. Blue builds the form in Hexona. | Blue approves the drafts. | Medium | blue | S22 | READY |
 | S24 | **HighLevel connection.** Blue authorizes the GoHighLevel connector in claude.ai with a read-only token; one read-only workflow, such as listing new inquiries. Sensitive. | Read-only workflow works; no writes possible. | High | blue | S23 | READY |
 | S25 | **Month review.** What shipped, interruptions, fix rounds, usage against the plan; month two drafted as a plan-change PR. | Month-two plan PR open. | Medium | cloud | runs in the last week of month one, from 2026-11-14 (not before that date) | READY |
