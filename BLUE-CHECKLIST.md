@@ -216,6 +216,17 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - **Pause any time:** on that page switch **Mako all-day runner** off, then stop any runner
     session still working at https://claude.ai/code. Switch it back on to resume. Leave the digest
     on; it only reads.
+  - **Left to do, as read on 2026-10-23 at about 07:40 UTC** (docs/RUNNER.md "Applied so far"; about
+    3 minutes at https://claude.ai/code/routines):
+    - **Mako daily runner:** switch it **off**. It is still on and fires at 8:01 AM with the new
+      prompt, next to the new hourly runner.
+    - **Mako evening digest:** switch it **on**. It was created off, so no digest is sent yet.
+    - **Connectors:** open each new task > Edit > Advanced settings > Connectors and remove them
+      all. The digest has your GoHighLevel CRM (GHL_MCP_X_CLAUDE), Claude_Docs and
+      Claude_Code_Remote attached, and the runner has Claude_Docs; neither needs any. If you want
+      to keep one, tell the agent which and why, and it records that here.
+    - After the S04 follow-up PR merges: tell the main chat "apply the runner and digest prompts
+      from docs/RUNNER.md", so both tasks get the fixed prompts.
   - *Done when:* that session reads all three tasks back (schedule, model Opus 5.5, notifications,
     on or off, prompt matching `main`), the first hourly fire afterwards works a PR as `ABlueAgent`
     (which proves the repository is attached), and it ticks this step with the date and how it
