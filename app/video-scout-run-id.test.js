@@ -120,7 +120,8 @@ const mainSrc = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8').replace
   assert(/videoScoutRunIds\.set\(id, acceptedRunId\)/.test(mainSrc), 'main.js registers pane->runId after a successful spawn');
   const onExit = mainSrc.slice(mainSrc.indexOf('p.onExit(('), mainSrc.indexOf('return { ok: true }'));
   assert(!/videoScoutRunIds\.(remove|delete|clear)/.test(onExit), 'onExit does NOT remove the run-ID mapping (it survives PTY exit)');
-  assert(/ipcMain\.on\('pty-kill'[\s\S]{0,220}videoScoutRunIds\.remove\(id\)/.test(mainSrc), 'pty-kill removes the mapping (explicit pane close)');
+  // S06 made pty-kill's first line longer (the process-tree kill), so the window is 320, not 220.
+  assert(/ipcMain\.on\('pty-kill'[\s\S]{0,320}videoScoutRunIds\.remove\(id\)/.test(mainSrc), 'pty-kill removes the mapping (explicit pane close)');
   assert(/window-all-closed[\s\S]{0,220}videoScoutRunIds\.clear\(\)/.test(mainSrc), 'window-all-closed clears the registry (window shutdown)');
 }
 

@@ -3,6 +3,12 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-10-23
+
+| Decision | Blue's words |
+|---|---|
+| **Proposed, pending Blue (PR #121, S06):** step 14's `ABlueAgent` token lives in Mako's key setup (Electron safeStorage, `secure.json`, like the Gemini key) and reaches only unfenced agent panes (a bare CLI or an unfenced role), as `GH_TOKEN` with git's credential helpers reset to `gh auth git-credential` and the `ABlueAgent` commit identity (app/agent-git-env.js). Fenced roles, Video Scout and plain shell panes never get it. The token keeps only `public_repo`; Claude's recommendation (not his words) is not to add `workflow`, and to bring `main`'s workflow changes into an agent branch with GitHub's "Update branch" button or a cloud session if a local push is refused for it. Merging PR #121 approves it. | (none yet) |
+
 ## 2026-10-21
 
 | Decision | Blue's words |
