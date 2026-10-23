@@ -38,6 +38,12 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
 ## How work flows
 
 1. Work starts from a plan session or an issue, on its own branch.
+   - **Claim a plan session before building it.** Every builder (the Claude runner, Codex, or a
+     session Blue starts by hand) first checks for an open PR in this repository whose title starts
+     with that session's ID and a colon (for example `S16:`), whoever opened it. If one exists, the
+     session is claimed: leave it to that PR. When starting a session, open its PR early (a draft is
+     fine) with the title starting `Sxx:`, so other builders see the claim. This holds until S04's
+     claim rule (docs/PLAN-1.1.md, "S04 details") is merged and applied.
 2. The builder implements, runs the tests, and opens a pull request using the template. Every PR
    targets `main`; no stacked PRs. If the work depends on an unmerged PR, wait for it to merge, or
    put the change in that PR. (A PR merged into another PR's branch reaches `main` only indirectly,

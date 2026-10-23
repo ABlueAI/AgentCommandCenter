@@ -6,7 +6,8 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-21 by Claude (step 21 added: apply the capped review loop to the runner, PR #52;
+Last updated 2026-10-22 by Claude (step 29 added for the S12 Quick Links bundle, PR #86; step 21
+ticked and step 26 added for the runner's claim check, PR #83; step 19 ticked with Blue's Composer verdict, PR #82; step 21 added: apply the capped review loop to the runner, PR #52;
 step 25 added for the S03 plan board, PR #54; "Do next" order added, step 20 ticked, step 22 added, PR #53;
 S05 checks added as steps 23 and 24, PR #49; step 6 dropped by Blue, PR #51; step 17 moved after
 step 16; PR #46's token rules approved with its merge). Earlier: step 17 added and step 14's token
@@ -457,12 +458,21 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   writes the brief). S17 to S20 are built by Codex, which you start yourself once S14 and S26 are
   done; the runner never builds them (docs/PLAN-1.1.md "UI sessions: who builds").
   - *Done when:* that DECISIONS.md entry is on `main`. Claude checks.
-- [ ] **19. Give your Composer verdict after S16.** About 15 minutes, after the S16 PR opens. Read
+- [x] **19. Give your Composer verdict after S16.** About 15 minutes, after the S16 PR opens. Read
   `docs/decisions/OSS-composer.md`, answer its open questions, and give a verdict on each option
   (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD FRESH) in your own words, in the S16 PR or to any
   agent. Spending on Gumloop or any paid service needs your explicit OK there.
   - *Done when:* your verdict is recorded word for word in OSS-composer.md and docs/DECISIONS.md.
     A later plan change then adds the Composer build sessions.
+  - *Done 2026-10-21:* Blue gave his verdict in his own session, in two messages, both recorded
+    word for word: "it will come from a lot of input from a lot of OSS material and we will figure
+    out the good and bad tidbits and find something i like" (excerpt; full text in
+    docs/DECISIONS.md) and "no, this does not cover my conclusion. everything stays open for study,
+    questions deferred". He confirmed this reading on 2026-10-22: "Confirming the verdict, yes,
+    true". No option is adopted; the open
+    questions wait for more OSS review. PR #82
+    records his words in OSS-composer.md and docs/DECISIONS.md (checked in the PR's diff). What the
+    later Composer plan change contains is his call.
 
 - [x] **20. Check what Codex's GitHub link can reach.** About 3 minutes, any time soon. *Done
   2026-10-21 on Blue's word: "yes it is only select repositories. with my main few checked and i will
@@ -484,8 +494,15 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     is expected; note what else is listed).
   - *Done when:* you tell any agent what both pages show; it records that in STATUS.md with the date.
 
-- [ ] **21. Have the runner's new prompt applied (after you merge PR #52).** About 2 minutes, right
-  after you merge PR #52 (the capped review loop). Tell any Claude session "apply the runner prompt
+- [x] **21. Have the runner's new prompt applied (after you merge PR #52).** *Verified 2026-10-21:
+  an interactive session applied "Current prompt (verbatim)" from docs/RUNNER.md on `main` to the
+  scheduled task `trig_01RnFDLAH1jJZfdhJ9wCU87W` at 21:19 UTC, then read the task back: the prompt
+  matches `main` exactly, the model is `claude-opus-5-5`, `ABlueAI/AgentCommandCenter` is still
+  attached, the task is enabled, and the next run is 2026-10-22 12:01 UTC. The PR that ticks this
+  re-read the task the same day (read-only): last updated 21:19:33 UTC, its prompt identical to
+  `main`'s (compared as text), model, enabled state and next run as above. That read doesn't show
+  attached repositories, so the attachment rests on the applying session's read-back. Recorded in
+  docs/RUNNER.md.* About 2 minutes, right after you merge PR #52 (the capped review loop). Tell any Claude session "apply the runner prompt
   from docs/RUNNER.md". It updates only the prompt of the scheduled task "Mako daily runner" from
   `main`; the schedule and the model (Opus 5.5) stay as they are. The runner never edits itself.
   - *Done when:* that session reads the scheduled task back, its prompt matches docs/RUNNER.md
@@ -557,6 +574,31 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     board and ticks this with the date. If the run fails, the agent reads its log; no agent ever sees
     the token. When the token expires, every hourly run fails visibly until it is replaced.
 
+- [ ] **26. Have the runner's claim-check prompt applied (after you merge PR #83).** About 2 minutes,
+  right after you merge PR #83 (the claim check: the runner skips a READY session that already has
+  an open PR titled with its ID). Tell the main chat, or any Claude session, "runner prompt merged"
+  or "apply the runner prompt from docs/RUNNER.md". It updates only the prompt of the scheduled task
+  "Mako daily runner" from `main`; the schedule and the model (Opus 5.5) stay as they are. The
+  runner never edits itself.
+  - *Done when:* that session reads the scheduled task back, its prompt matches docs/RUNNER.md
+    "Current prompt (verbatim)" on `main`, and it ticks this step with the date and how it checked.
+
+- [ ] **29. Quick Links bundle on your PC (S12).** About **5 minutes**, after you merge the S12 PR,
+  #86. Pull `main`, then fully close and restart Mako (renderer changes need a full restart).
+  - Quick Links > **Manage** > **+ Add Mako bundle** > **Save Changes**. Seven links appear: Claude
+    desktop, Codex app, Mako PRs, Project board, Obsidian vault, Hermes docs, Dodaios docs. Your
+    Starboard and Outlook links stay.
+  - Click each once. The three app links (Claude desktop, Codex app, Obsidian vault) open the app
+    if it is installed; Windows asks which app to use if it isn't (Obsidian comes with S13). The
+    rest open in your browser. "Project board" opens your projects list until S03's board exists.
+  - Your Hexona login: the repo's records say your existing **Starboard Platform** link
+    (`https://jlautomationsystems.com/`) opens your Hexona Systems login. Click it: if that is
+    your Hexona login, there is nothing to add. If not, **Manage** > **+ Add link**, label it, paste
+    the URL you use, **Save Changes**.
+  - *Done when:* you tell an agent which links opened and whether Starboard Platform is your
+    Hexona login or you added another link (never paste a login or password); it ticks this with the date. A link that fails: say which and what
+    happened, and Mako's Logs line (it names a reason, never the URL).
+
 ## Every day, once the runner is on
 
 Once S04 is applied (step 27), the runner works all day and you do one sitting in the evening:
@@ -587,11 +629,11 @@ You can start on the first one now, which saves time later.
   - On GitHub: revoke the matching app under Authorized OAuth Apps only if you push as `ABlueAI`
     from no machine, since that signs it out everywhere.
   - *Done when:* you say so (Claude can't read Credential Manager or your authorized apps).
-- **Session S12:** your Hexona login URL.
+- **Session S12:** confirm your Hexona login link in Mako (step 29).
 - **Session S13:** install the Obsidian app (2 minutes).
 - **Session S26:** comment as `ABlueAI` on its claim issue to start Codex's trial build (the session
   tells you when and what to write).
-- **Session S16:** your Composer verdict (step 19), including the Dodaios trial.
+- **Session S16:** ~~your Composer verdict (step 19)~~ Done 2026-10-21: no option adopted, everything open for study, questions deferred (step 19).
 - **Session S17 (on hold with S14):** pick one of 2 or 3 design directions.
 - **Session S21:** pick a logo variant.
 - **Session S23:** approve the client paperwork drafts.

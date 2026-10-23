@@ -1,6 +1,6 @@
 # Mako status
 
-Updated 2026-10-21 by Claude. Every PR that changes the state updates this file.
+Updated 2026-10-22 by Claude. Every PR that changes the state updates this file.
 
 ## Right now
 
@@ -26,11 +26,24 @@ Updated 2026-10-21 by Claude. Every PR that changes the state updates this file.
   are patched. The 7 left are in the speech stack's Node-side packages, which Mako's renderer never
   loads; each is explained in [docs/DEPENDENCY-ADVISORIES.md](docs/DEPENDENCY-ADVISORIES.md).
   Dictation and TTS on the new Electron still need a check on Blue's PC (checklist step 15).
+- **Composer research (S16, PR #82):** [docs/decisions/OSS-composer.md](docs/decisions/OSS-composer.md)
+  covers Dodaios (sandboxed trial without any model or key), Claude Code's parallel-agent features
+  and Projects, Microsoft Conductor, the R15 pattern mine, Cloudroom (no Windows build) and workflow
+  automation, each with a proposed verdict. Blue's verdict (2026-10-21, checklist step 19; his words in
+  docs/DECISIONS.md): no option adopted, everything stays open for study, questions deferred; the
+  Composer's design is to come from more OSS review.
+  No Composer build session is planned yet.
 - **Needs-you alerts (S05, PR #49 merged 2026-10-21, still IN PROGRESS):** Mako observes the
   existing pane-status views and uses Electron's native Windows notifications for attention and
   turn-ended transitions. The phone setup note is [docs/NEEDS-YOU-ALERTS.md](docs/NEEDS-YOU-ALERTS.md).
   S05 is done once Blue's real-pane toast check passes (checklist step 23); no Windows toast or phone
   delivery has been verified yet.
+- **Quick Links bundle (S12, PR #86, in progress):** Quick Links' editor gets "+ Add Mako
+  bundle", which adds seven links (Claude desktop, Codex app, Mako PRs, Project board, Obsidian
+  vault, Hermes docs, Dodaios docs) without touching existing ones. The URL policy now also accepts
+  exactly three app links (`claude://claude.ai/new`, `codex://threads/new`, `obsidian://open`) and
+  nothing else outside http(s). Blue checks the links on his PC and confirms whether his existing
+  "Starboard Platform" link is his Hexona login (checklist step 29).
 - **Plan to issues (S03, PR #54, in progress):** a workflow keeps one `Sxx: <title>` issue per plan
   session, with status, authority, lane and sensitive labels and the "1.1 Month 1" milestone, in step
   with docs/PLAN-1.1.md on `main`. The Project board joins once Blue connects it (checklist step 25).
@@ -84,15 +97,21 @@ Updated 2026-10-21 by Claude. Every PR that changes the state updates this file.
 - **Daily runner:** scheduled for 8:01 AM Eastern from 2026-10-18 ([docs/RUNNER.md](docs/RUNNER.md)).
   The repository was attached on 2026-10-18 (step 7e), and its gate (steps 1 and 7) now passes, so
   the 2026-10-19 run started and opened PR #44, the first proof it can open PRs.
-  Its prompt includes the `pr-reviewer` step since 2026-10-19 (applied after PR #42 merged).
+  Its prompt includes the `pr-reviewer` step since 2026-10-19 (applied after PR #42 merged), and
+  the capped review loop since 2026-10-21 (PR #52's prompt, applied 21:19 UTC and read back the same
+  day; checklist step 21). Proposed in PR #83 (pending Blue): every builder skips a plan session
+  that already has an open PR titled with its ID (`Sxx:`) and opens its own PR early, so two
+  builders don't start the same session (a runner fire still treats every open `ABlueAgent` PR as
+  its own until S04's `runner` label); the runner prompt is applied after the merge (checklist
+  step 26).
   It runs on Opus 5.5 since 2026-10-21, changed by an interactive session at Blue's request (read
   back from the scheduled task the same day; docs/RUNNER.md).
-- **Review loop (proposed in PR #52, pending Blue):** every PR gets one complete first review ranked
+- **Review loop (adopted: PR #52 merged 2026-10-21, applied to the runner the same day):** every PR gets one complete first review ranked
   high, medium and low; high and medium findings are fixed in one batch, low ones go to Follow-ups;
   later runs check only the fixes; at most 5 runs, then "needs Blue" with questions for Blue; one
   scope per PR; no pushes after a PR is marked ready except for CI, a conflict or Blue asking
-  (AGENTS.md "The review loop"). It applies to every PR once merged; the runner's prompt is updated
-  right after (checklist step 21). Why: PR #46 took 37 commits and 31 review runs, none with a high
+  (AGENTS.md "The review loop"). It applies to every PR; the runner's prompt carries it since
+  2026-10-21 (checklist step 21). Why: PR #46 took 37 commits and 31 review runs, none with a high
   finding.
 
 ## 1.0: done
