@@ -59,6 +59,10 @@ Updated 2026-10-23 by Claude (PRs #118 and #119). Every PR that changes the stat
   checklist on GitHub) an `AGENTS.md` and a `CLAUDE.md`; the kepano/obsidian-skills plugin is to be installed in
   Claude Code from the vault (ADOPT recorded in docs/decisions/OSS-obsidian-skills.md). Blue sets it up
   on his PC (checklist step 31). Only local agents can reach the vault.
+- **Marina research brief (S22, PR #116, in progress):** the brief is in Blue's private repo
+  `ABlueAI/Mako-Business` (PR 1 there, commit `24ddc8e`; checklist step 32 ticked). The cloud session
+  couldn't open web pages, so its facts come from search extracts of public pages and need a check
+  on each source before outreach. No marina data is in this repo.
 - **All-day runner (S04, PR #84, in progress, pending Blue):** proposed in docs/RUNNER.md "S04: the
   all-day runner": hourly fires at :07 Eastern, a parallel cap of 1 on Pro counted from expiring
   locks, a clean stop and resume at usage limits, no phone notification per fire, and one evening
