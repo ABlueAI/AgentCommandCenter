@@ -650,9 +650,12 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     - `gh api user --jq .login`: expected `ABlueAgent`.
     - `git remote -v`: expected `https://github.com/...` (S06 covers HTTPS remotes only; a
       `git@github.com:` remote would push with your SSH key, so tell the agent if you see one).
-    - `printf "protocol=https\nhost=github.com\n\n" | git credential fill`: expected a line
-      `username=x-access-token` (the ABlueAgent token through gh). If it shows your own username
-      or asks for a password, stop and tell the agent.
+    - `printf "protocol=https\nhost=github.com\n\n" | git credential fill | grep -v '^password='`
+      (the `grep` keeps the token itself out of the output): expected `protocol=https`,
+      `host=github.com` and `username=x-access-token` (the ABlueAgent token through gh), with no
+      `password=` line. If it shows your own username or asks for a password, stop and tell the
+      agent. If a `password=` line ever appears, the token is in that session's transcript:
+      revoke it (step 17b) and make a new one.
     In a plain shell pane, `gh api user --jq .login` still shows your own login (plain shells are
     yours, not agents').
   - **A PR from a local pane (5 minutes).** Ask that pane: "make a branch `s06-local-check`, add a
