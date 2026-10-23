@@ -1,6 +1,6 @@
 # Mako status
 
-Updated 2026-10-23 by Claude (PR #PRNUM). Every PR that changes the state updates this file.
+Updated 2026-10-23 by Claude (PR #118). Every PR that changes the state updates this file.
 
 ## Right now
 

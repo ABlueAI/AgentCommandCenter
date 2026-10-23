@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-23 by Claude (step 14 ticked on Blue's word and its token renewal reminder added under "Dated reminders", PR #PRNUM; step 31 added for the S13 Obsidian vault, PR #115; step 29 added for the S12 Quick Links bundle, PR #86; step 21
+Last updated 2026-10-23 by Claude (step 14 ticked on Blue's word and its token renewal reminder added under "Dated reminders", PR #118; step 31 added for the S13 Obsidian vault, PR #115; step 29 added for the S12 Quick Links bundle, PR #86; step 21
 ticked and step 26 added for the runner's claim check, PR #83; step 19 ticked with Blue's Composer verdict, PR #82; step 21 added: apply the capped review loop to the runner, PR #52;
 step 25 added for the S03 plan board, PR #54; "Do next" order added, step 20 ticked, step 22 added, PR #53;
 S05 checks added as steps 23 and 24, PR #49; step 6 dropped by Blue, PR #51; step 17 moved after
