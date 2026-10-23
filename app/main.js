@@ -88,6 +88,12 @@ const admissionConfig = require('./admission-budget-config');
 // admission-scrubbed environment expression while constructing fenced role environments only from
 // Blue's explicit Tier 1 Windows allowlist. See app/pty-env.test.js.
 const { buildPtyEnv } = require('./pty-env');
+// S06: kill a pane's whole process tree (taskkill /T) before pty.kill(); see process-tree.js.
+const { createProcessTreeKiller } = require('./process-tree');
+const processTree = createProcessTreeKiller({
+  platform: process.platform, env: process.env, execFile, execFileSync,
+  log: (line) => tlog(line),
+});
 const { createAdmissionBudget, REASON: ADMISSION_REASON } = require('./admission-budget');
 const { createAdmissionLedgerStore } = require('./admission-budget-store');
 const { createAdmissionIpc, CHANNEL_SUBMIT: ADMISSION_CHANNEL_SUBMIT } = require('./admission-ipc');
@@ -133,7 +139,9 @@ const { createLayoutStore } = require('./dockview-layout-store');
 // This boundary intentionally does not reuse or modify the legacy open-external handler below.
 const { createQuickLinksStore } = require('./quick-links-store');
 const { createQuickLinksIpc } = require('./quick-links-ipc');
-const { buildDefaultConfig: buildQuickLinksDefaultConfig } = require('./quick-links-policy');
+const { buildDefaultConfig: buildQuickLinksDefaultConfig, validateUrl: validateQuickLinkUrl } = require('./quick-links-policy');
+// S06: the legacy open-external channel goes through the same URL policy (open-external-ipc.js).
+const { createOpenExternalIpc } = require('./open-external-ipc');
 
 // ---- Windows taskbar identity (branding) --------------------------------------------------------
 // One stable, explicit AppUserModelID, so Windows attributes this process's windows to Mako rather
@@ -865,11 +873,22 @@ function closeControlledRunOnShutdown() {
     }
   }
 }
+// S06: on quit, kill every pane's process tree synchronously, once, BEFORE any pty.kill() below:
+// taskkill /T walks the tree through the live shell, and an asynchronous kill would never finish.
+let paneTreesKilledOnShutdown = false;
+function killPaneTreesOnShutdown() {
+  if (paneTreesKilledOnShutdown) return;
+  paneTreesKilledOnShutdown = true;
+  processTree.killTreesSync([...ptys.values()].map((p) => p && p.pid));
+}
 // A quit started by app.quit() (e.g. the default menu's Exit) never emits window-all-closed.
+// Listeners run in registration order, so the tree kill runs before the controlled-run closure.
+app.on('before-quit', () => { killPaneTreesOnShutdown(); });
 app.on('before-quit', () => { closeControlledRunOnShutdown(); });
 app.on('will-quit', () => { paneStatusNotifications.dispose(); });
 app.on('window-all-closed', () => {
   paneStatusNotifications.dispose();
+  killPaneTreesOnShutdown();
   closeControlledRunOnShutdown();
   for (const p of ptys.values()) { try { p.kill(); } catch {} }
   ptys.clear();
@@ -1379,9 +1398,14 @@ const launcherIpc = createLauncherIpc({
 ipcMain.handle('open-vscode', async (e, p) => launcherIpc.handleOpenVscode(e, p));
 ipcMain.handle('open-terminal', async (e, p) => launcherIpc.handleOpenTerminal(e, p));
 // Only ever hand http(s) URLs to the OS — never file:, vbscript:, etc. from terminal output.
-ipcMain.handle('open-external', async (_e, url) => {
-  if (typeof url === 'string' && /^https?:\/\//i.test(url)) shell.openExternal(url);
+// S06: trusted sender, then the Quick Links URL policy, then http(s) only (open-external-ipc.js).
+const openExternalIpc = createOpenExternalIpc({
+  assessSender: (e) => launcherGate.assess(e),
+  validateUrl: validateQuickLinkUrl,
+  openExternal: (url) => shell.openExternal(url),
+  logRefusal: (line) => { tlog(line); if (win && !win.isDestroyed()) win.webContents.send('main-error', line); },
 });
+ipcMain.handle('open-external', async (e, url) => openExternalIpc.handleOpenExternal(e, url));
 
 // ---- IPC: in-app terminals (node-pty + xterm.js) ---------------------------
 // Each renderer terminal pane gets a real ConPTY here: PowerShell spawned in the
@@ -1637,8 +1661,9 @@ ipcMain.on('pty-write', (_e, { id, data }) => {
   admissionPtyBoundary.writeDirect(id, data);
 });
 ipcMain.on('pty-resize', (_e, { id, cols, rows }) => { const p = ptys.get(id); if (p) { try { p.resize(cols, rows); } catch (err) { tlog(`pty-resize ${id} failed (process likely exiting): ${(err && err.message) || err}`); } } });
+// S06: pty-kill kills the pane's process tree first (taskkill /T needs the live shell), then pty.kill().
 ipcMain.on('pty-kill', (_e, id) => {
-  const p = ptys.get(id); if (p) { try { p.kill(); } catch {} ptys.delete(id); }
+  const p = ptys.get(id); if (p) { ptys.delete(id); processTree.killTree(p.pid, () => { try { p.kill(); } catch {} }); }
   // Explicit pane close: the run's report is no longer reachable from the UI, so drop the mapping.
   videoScoutRunIds.remove(id);
   // EXPERIMENT A: the pane is gone, so its token must die with it. Releasing here (not on pty-exit)
