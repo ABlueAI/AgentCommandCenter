@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-23 by Claude (step 30 added for the S26 Codex trial, PR #114; step 29 added for the S12 Quick Links bundle, PR #86; step 21
+Last updated 2026-10-23 by Claude (step 30 added for the S26 Codex trial, PR #114; step 14 ticked on Blue's word and its token renewal reminder added under "Dated reminders", PR #118; step 31 added for the S13 Obsidian vault, PR #115; step 29 added for the S12 Quick Links bundle, PR #86; step 21
 ticked and step 26 added for the runner's claim check, PR #83; step 19 ticked with Blue's Composer verdict, PR #82; step 21 added: apply the capped review loop to the runner, PR #52;
 step 25 added for the S03 plan board, PR #54; "Do next" order added, step 20 ticked, step 22 added, PR #53;
 S05 checks added as steps 23 and 24, PR #49; step 6 dropped by Blue, PR #51; step 17 moved after
@@ -21,9 +21,9 @@ other remaining items." Claude's order for what is left:
 
 1. **Step 15**, the voice check on the new Electron, first: a failure means a fix or a revert of the
    Electron bump before other work.
-2. **Step 14**, the agent token, walked through with an agent (tell any agent "walk me through step
-   14"). It unblocks S06 and everything after it (S07 to S11, S21), and Codex's next build (from the
-   hand-off for this order; the plan doesn't name that dependency yet).
+2. ~~**Step 14**, the agent token~~ Done 2026-10-23 on your word. It unblocks S06 and everything
+   after it (S07 to S11, S21), and Codex's next build (from the hand-off for this order; the plan
+   doesn't name that dependency yet).
 3. **Step 17**, the token audit and push protection.
 4. **Wednesday 2026-10-28: step 8**, the Max upgrade.
 5. **When you merge S04 (PR #84): step 28, then step 27**, in the same sitting.
@@ -301,8 +301,14 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - Codex review is optional now. You can still request one by hand, but nothing waits for it (since
     step 16, ask an agent to post the request; yours as `ABlueAI` is refused).
   - *Done when:* PR #42 merges with its "Independent review (Opus)" comment linked in the TLDR.
-- [ ] **14. Agent token for local agents (approved with PR #44; token type changed by PR #46).**
-  About 10 minutes, any time before session S06 (the runner won't start S06 until this is ticked).
+- [x] **14. Agent token for local agents (approved with PR #44; token type changed by PR #46).**
+  *Verified 2026-10-23 on Blue's word in chat ("token done, expires 1/23/3037", then "date is
+  updated to reflect true 90 day date 1/21/2027"): it expires 2027-01-21. Claude can't see the
+  token. That it is a classic token for `ABlueAgent` with only `public_repo`, kept in Bitwarden,
+  is Blue's word as relayed by the session that handed off this task, not in the words quoted here;
+  not verified, and S06's PR confirms the scope. The renewal reminder is under "Dated
+  reminders".* About 10 minutes, any time before
+  session S06 (the runner won't start S06 until this is ticked).
   Today local agents on your PC push as `ABlueAI`, the account that can approve and merge.
   - Signed in as `ABlueAgent`: GitHub > Settings > Developer settings > Personal access tokens >
     **Tokens (classic)** > Generate new token (classic). Tick only **public_repo** (no `repo`,
@@ -614,6 +620,40 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     whether the issue mention started the task and what context Codex read, in
     docs/CODEX-BUILDER-LANE.md, and ticks this with the date.
 
+- [ ] **31. Obsidian vault and skills on your PC (S13).** About **10 minutes**, after you merge the
+  S13 PR, #115.
+  - Install the Obsidian app from obsidian.md (free for personal use).
+  - Pull `main`, then in PowerShell from the repo folder:
+    `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\new-mako-vault.ps1 -Path D:\Workspace\Mako-Vault`
+    (another folder is fine, as long as it is outside the repo; the script refuses one inside it).
+    It prints `created` for `Mako index.md`, `AGENTS.md` and `CLAUDE.md`.
+  - In Obsidian: **Open folder as vault** > pick that folder. Open `Mako index.md` and click the
+    STATUS link once.
+  - In PowerShell: `cd D:\Workspace\Mako-Vault`, start `claude`, run
+    `/plugin marketplace add kepano/obsidian-skills`, then `/plugin`, install the Obsidian skills
+    plugin it lists, and choose the project scope if it asks. (These names come from search
+    extracts, not the plugin's own page; if they differ, tell the agent what you saw.)
+  - Still in that session, ask: "Read Mako index.md and add a note called Test with a link to it
+    under Notes." Check the note and the link appear in Obsidian.
+  - *Done when:* you tell an agent the vault opened, the plugin installed and the test note and
+    link appeared (or what failed); it ticks this with the date and S13 is marked done.
+
+- [x] **32. A private repo for S22's marina brief.** *Verified 2026-10-23 by the all-day runner:
+  Blue replied on PR #116 that the brief goes in `mako-business`; GitHub reports
+  `ABlueAI/Mako-Business` as private with push access for `ABlueAgent`; the runner attached it
+  and pushed the brief's branch `s22-marina-brief` (commit `24ddc8e`, PR 1 in that repo).*
+  About **3 minutes**, whenever you like (S22 waits on it; nothing else does). S22's output goes in a private repository, never this public one
+  (AGENTS.md "Security rules"), and none exists yet.
+  - github.com > **New repository**, owner `ABlueAI`, name `mako-business` (or your choice; tell
+    the agent), **Private**, add a README. No other settings.
+  - Repository > Settings > Collaborators > **Add people**: `ABlueAgent`, role **Write**, and accept
+    the invite signed in as `ABlueAgent` (private window).
+  - Claude GitHub App: github.com > Settings > Applications > Claude > **Configure** > add the new
+    repo (Only select repositories). Leave Codex's app as is unless you want Codex reviews there.
+  - Reply on the S22 PR (#116) with the repo name.
+  - *Done when:* a runner fire attaches the repo and pushes the brief's branch there (it ticks this
+    with the date and the commit); if it can't reach the repo, it says why on the PR.
+
 ## Every day, once the runner is on
 
 Once S04 is applied (step 27), the runner works all day and you do one sitting in the evening:
@@ -645,7 +685,7 @@ You can start on the first one now, which saves time later.
     from no machine, since that signs it out everywhere.
   - *Done when:* you say so (Claude can't read Credential Manager or your authorized apps).
 - **Session S12:** confirm your Hexona login link in Mako (step 29).
-- **Session S13:** install the Obsidian app (2 minutes).
+- **Session S13:** install Obsidian, create the vault and install the skills (step 31).
 - **Session S26:** lock its claim issue and comment as `ABlueAI` to start Codex's trial build (step 30).
 - **Session S16:** ~~your Composer verdict (step 19)~~ Done 2026-10-21: no option adopted, everything open for study, questions deferred (step 19).
 - **Session S17 (on hold with S14):** pick one of 2 or 3 design directions.
@@ -665,3 +705,11 @@ You can start on the first one now, which saves time later.
 
 - **About 2026-11-17:** reassess plans. Is Max 5x enough, or move to 20x? The month review (S25)
   brings the numbers. With the upgrade on 2026-10-28, that covers about 3 weeks of Max 5x use.
+- **By 2027-01-14:** renew the `ABlueAgent` classic token (`public_repo` only, step 14), a week
+  before it expires on 2027-01-21. Signed in as `ABlueAgent`, it is listed on
+  https://github.com/settings/tokens. Make the new token by step 14's
+  instructions and step 17b's rules, put it where the old one lives (Bitwarden, or Mako's key setup
+  once S06 gives it a home), tell Claude the new expiry date (never the token) so it moves this
+  reminder. Then check the new token works: once S06 has given it a home, have a local Mako pane
+  push a branch with it; before S06, check the token page lists it with only `public_repo`. Delete
+  the old token on the same page only after that check passes.
