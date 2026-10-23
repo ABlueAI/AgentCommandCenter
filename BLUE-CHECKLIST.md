@@ -644,10 +644,17 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - **Token (2 minutes).** Mako shows a 🐙 "ABlueAgent token not stored" banner. Paste step 14's
     token from Bitwarden into it and click **Save encrypted** (never into a chat). The banner turns
     into "Agent token ✓". Restart Mako once more so the token loads at startup.
-  - **Who an agent pane is (3 minutes).** Open a new Claude pane on this repo and ask it to run
-    `gh api user --jq .login` and `git config --get-all credential.helper`. Expected: `ABlueAgent`,
-    then an empty line and nothing else. In a plain shell pane, `gh api user --jq .login` still
-    shows your own login (plain shells are yours, not agents').
+  - **Who an agent pane is (3 minutes).** Open a new Claude pane on this repo and ask Claude to run
+    these with its Bash tool (so the check passes through Claude Code's subprocess scrub), one at a
+    time, and show you the output:
+    - `gh api user --jq .login`: expected `ABlueAgent`.
+    - `git remote -v`: expected `https://github.com/...` (S06 covers HTTPS remotes only; a
+      `git@github.com:` remote would push with your SSH key, so tell the agent if you see one).
+    - `printf "protocol=https\nhost=github.com\n\n" | git credential fill`: expected a line
+      `username=x-access-token` (the ABlueAgent token through gh). If it shows your own username
+      or asks for a password, stop and tell the agent.
+    In a plain shell pane, `gh api user --jq .login` still shows your own login (plain shells are
+    yours, not agents').
   - **A PR from a local pane (5 minutes).** Ask that pane: "make a branch `s06-local-check`, add a
     line to docs/S06-LOCAL-CHECK.md, commit, push, and open a draft PR titled `S06 local check`."
     Expected: GitHub shows the PR and its commit authored by `ABlueAgent`. Tell the agent the PR
@@ -691,12 +698,14 @@ You can start on the first one now, which saves time later.
   - Agent panes no longer use either (S06 resets git's credential helpers and gives them the
     `ABlueAgent` token), but a program running as your Windows user can still read them, which is
     why they go.
-  - On the PC: delete the Credential Manager entry and the `gh` login. If you keep them because
-    you push as `ABlueAI` from this PC, local agents running under your Windows account can still
-    read them and act as you, so the S06 PR must show how panes are kept from them; otherwise push
-    as `ABlueAI` from a browser or a separate Windows account instead.
-  - On GitHub: revoke the matching app under Authorized OAuth Apps only if you push as `ABlueAI`
-    from no machine, since that signs it out everywhere.
+  - If you keep them because you push as `ABlueAI` from this PC: S06 keeps agent panes from
+    *using* them (git's helpers are reset, gh takes the agent token first), but a program running
+    under your Windows account can still read them and act as you. Removing them, and pushing as
+    `ABlueAI` from a browser or a separate Windows account, is the safer choice.
+  - On GitHub, signed in as `ABlueAI`: Settings > Applications > **Authorized OAuth Apps**. The
+    PC's logins are usually listed as **Git Credential Manager** and **GitHub CLI** (usual names,
+    not read from your account). Revoke each one only if no other machine of yours uses it, since
+    revoking signs it out everywhere; if you're unsure, revoke it and sign in again where needed.
   - *Done when:* you say so (Claude can't read Credential Manager or your authorized apps).
 - **Session S12:** confirm your Hexona login link in Mako (step 29).
 - **Session S13:** install Obsidian, create the vault and install the skills (step 31).

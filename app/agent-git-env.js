@@ -16,7 +16,9 @@
 //   GIT_AUTHOR_* / GIT_COMMITTER_*   commits are attributed to ABlueAgent (its noreply address).
 // Claude Code's subprocess scrub (CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1) leaves GH_TOKEN and
 // GIT_CONFIG_* in place (code.claude.com/docs/en/env-vars, "What the subprocess environment scrub
-// removes", read 2026-10-23), so Claude's Bash tool still sees them.
+// removes", read 2026-10-23), so Claude's Bash tool still sees them. Not yet seen on Blue's PC:
+// checklist step 35 checks it from a Claude pane's Bash tool, along with `git credential fill`.
+// Assumes HTTPS remotes; an SSH remote never asks a credential helper.
 //
 // Who gets it: unfenced agent panes only (a bare CLI pane, or an unfenced role). Fenced roles,
 // Video Scout and plain shell panes never do; a plain shell is Blue's own terminal. For an agent pane
