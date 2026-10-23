@@ -585,7 +585,9 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     board and ticks this with the date. If the run fails, the agent reads its log; no agent ever sees
     the token. When the token expires, every hourly run fails visibly until it is replaced.
 
-- [ ] **26. Have the runner's claim-check prompt applied (after you merge PR #83).** About 2 minutes,
+- [ ] **26. Have the runner's claim-check prompt applied (after you merge PR #83).** *Superseded,
+  won't be done: S04 (PR #84) replaced this prompt, and step 27 turns "Mako daily runner" off.
+  Don't apply a prompt to that task; use step 27's last bullet instead.* About 2 minutes,
   right after you merge PR #83 (the claim check: the runner skips a READY session that already has
   an open PR titled with its ID). Tell the main chat, or any Claude session, "runner prompt merged"
   or "apply the runner prompt from docs/RUNNER.md". It updates only the prompt of the scheduled task

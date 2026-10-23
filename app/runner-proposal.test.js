@@ -101,6 +101,7 @@ const mustHave = [
   ['or at the same minute on a PR with a higher number than that fire\'s', 'breaks ties in the global-cap back-off'],
   ['from then on, work it only as his reply asks, and otherwise skip it', 'settles what happens on a Codex PR after Blue replies'],
   ['and it isn\'t marked ready yet (update its TLDR and mark it ready)', 'picks up a finished PR whose checks passed later'],
+  ['it has no needs-blue label and no "@ABlueAI needs Blue:" comment from your login without a later reply', 'never marks a PR ready while Blue is asked'],
 ];
 for (const [text, label] of mustHave) assert(prompt.includes(text), `runner prompt ${label}`);
 assert(!/@codex/i.test(prompt), 'runner prompt never writes Codex\'s handle');
@@ -114,8 +115,9 @@ assert(digest.includes('never create, edit or comment on anything on GitHub') &&
 assert(digest.includes('"READY TO MERGE: ') && digest.includes('"NOT READY: '), 'digest heads its first line READY TO MERGE or NOT READY');
 assert(digest.includes('at-codex') && !/@codex/i.test(digest), 'digest prompt never writes Codex\'s handle');
 assert(digest.includes('"NOT READY: runner gated on step N'), 'digest re-checks the runner gate and reports it');
-assert(digest.includes('a comment whose edit history you can\'t read doesn\'t count either'),
-  'digest ignores comments whose edit history it cannot read');
+assert(digest.includes('a review comment or reply whose edit history you can\'t read doesn\'t count either')
+  && digest.includes('"NOT READY: needs Blue (comment couldn\'t be checked)"'),
+  'digest fails closed on comments whose edit history it cannot read');
 assert(digest.includes('if you can\'t check for force-pushes it doesn\'t cover the head'),
   'digest treats an unreadable force-push history as not covered');
 assert(digest.includes('First line: the gate line from step 1 if the gate failed, even when PRs are ready'),
