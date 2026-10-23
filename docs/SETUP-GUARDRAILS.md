@@ -78,11 +78,13 @@ The merge audit workflow opens a `security-alert` issue if anything reaches main
 ## What is still not covered
 
 - **Your own account.** Anyone who gets into ABlueAI can approve and merge. A passkey is the defense.
-- **Local agents on your PC** push with your git login. Session S06 moves them to the
-  agent account (approved with PR #44). Today the only provider key Mako injects is the Gemini key,
-  for Video Scout panes (it also passes a per-pane pane-status token through `buildPtyEnv`); how it
-  will store and pass the agent's token is part of S06 (docs/PLAN-1.1.md).
-  Until then, local agents only verify; they don't open PRs.
+- **Local agents on your PC** push with your git login until you save the `ABlueAgent` token in
+  Mako (checklist step 35). Session S06 (PR #121) stores it with safeStorage, like the Gemini key,
+  and gives it only to unfenced agent panes, as `GH_TOKEN` plus git's credential helpers reset to
+  gh's own (app/agent-git-env.js); fenced roles, Video Scout and plain shell panes never get it.
+  Without the token, Mako says so once per run. Your `ABlueAI` login stays on the PC until you
+  remove it ("Coming up this month" in the checklist), and a program running as you can still read
+  it.
 - **Rulesets themselves.** Only repo admins can edit them, and agents are not admins.
 - **Codex is linked to the agent account (since 2026-10-20).** Blue re-linked Codex's GitHub to
   `ABlueAgent` on 2026-10-20 (BLUE-CHECKLIST.md step 16; docs/DECISIONS.md, 2026-10-20). Codex now

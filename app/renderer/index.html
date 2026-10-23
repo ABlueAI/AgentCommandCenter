@@ -42,6 +42,11 @@
       <button id="geminiKeyChange" class="ghost tiny">Change</button>
       <button id="geminiKeyClear" class="ghost tiny">Clear</button>
     </div>
+    <div id="agentTokenStored" class="key-stored hidden" title="ABlueAgent GitHub token stored &amp; encrypted via OS credential store; agent panes push as ABlueAgent">
+      🐙 <span class="muted small">Agent token ✓</span>
+      <button id="agentTokenChange" class="ghost tiny">Change</button>
+      <button id="agentTokenClear" class="ghost tiny">Clear</button>
+    </div>
   </header>
 
   <!-- Shown only when GEMINI_API_KEY is not yet stored -->
@@ -49,6 +54,13 @@
     <span>🔑 <b>GEMINI_API_KEY</b> not stored — Video Scout needs it.</span>
     <input id="geminiKeyInput" type="password" placeholder="Paste your AI Studio key (AIza…)" autocomplete="off" spellcheck="false" />
     <button id="geminiKeySave" class="action accent">Save encrypted</button>
+  </div>
+
+  <!-- S06: shown only when the ABlueAgent GitHub token (checklist step 14) is not yet stored -->
+  <div id="agentTokenBanner" class="key-banner hidden">
+    <span>🐙 <b>ABlueAgent token</b> not stored — agent panes push with your own git login.</span>
+    <input id="agentTokenInput" type="password" placeholder="Paste the ABlueAgent token (ghp_…)" autocomplete="off" spellcheck="false" />
+    <button id="agentTokenSave" class="action accent">Save encrypted</button>
   </div>
 
   <div class="layout">

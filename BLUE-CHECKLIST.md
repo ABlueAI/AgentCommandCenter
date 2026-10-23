@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-23 by Claude (step 14 ticked on Blue's word and its token renewal reminder added under "Dated reminders", PR #118; step 31 added for the S13 Obsidian vault, PR #115; step 29 added for the S12 Quick Links bundle, PR #86; step 21
+Last updated 2026-10-23 by Claude (step 35 added for S06, PR #121; step 14 ticked on Blue's word and its token renewal reminder added under "Dated reminders", PR #118; step 31 added for the S13 Obsidian vault, PR #115; step 29 added for the S12 Quick Links bundle, PR #86; step 21
 ticked and step 26 added for the runner's claim check, PR #83; step 19 ticked with Blue's Composer verdict, PR #82; step 21 added: apply the capped review loop to the runner, PR #52;
 step 25 added for the S03 plan board, PR #54; "Do next" order added, step 20 ticked, step 22 added, PR #53;
 S05 checks added as steps 23 and 24, PR #49; step 6 dropped by Blue, PR #51; step 17 moved after
@@ -639,6 +639,27 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - *Done when:* a runner fire attaches the repo and pushes the brief's branch there (it ticks this
     with the date and the commit); if it can't reach the repo, it says why on the PR.
 
+- [ ] **35. S06 on your PC: agent token, leftover processes, links.** About **15 minutes**, after
+  you merge the S06 PR, #121. Pull `main`, run `npm ci` in `app`, and restart Mako fully.
+  - **Token (2 minutes).** Mako shows a 🐙 "ABlueAgent token not stored" banner. Paste step 14's
+    token from Bitwarden into it and click **Save encrypted** (never into a chat). The banner turns
+    into "Agent token ✓". Restart Mako once more so the token loads at startup.
+  - **Who an agent pane is (3 minutes).** Open a new Claude pane on this repo and ask it to run
+    `gh api user --jq .login` and `git config --get-all credential.helper`. Expected: `ABlueAgent`,
+    then an empty line and nothing else. In a plain shell pane, `gh api user --jq .login` still
+    shows your own login (plain shells are yours, not agents').
+  - **A PR from a local pane (5 minutes).** Ask that pane: "make a branch `s06-local-check`, add a
+    line to docs/S06-LOCAL-CHECK.md, commit, push, and open a draft PR titled `S06 local check`."
+    Expected: GitHub shows the PR and its commit authored by `ABlueAgent`. Tell the agent the PR
+    number; it confirms the author and closes the PR unmerged. If the push is refused with a
+    message about the `workflow` scope, tell the agent (see the S06 PR's decision on that scope).
+  - **No leftover processes (3 minutes).** Open two Claude panes, close one with its ✕, then quit
+    Mako from the menu. Task Manager > Details: no `claude.exe`, and no `node.exe` you didn't start
+    yourself. Mako's Logs show `[process-tree] ... tree killed`.
+  - **Links (1 minute).** Click a GitHub link printed in a Claude pane: it opens in your browser.
+  - *Done when:* you tell an agent the results (or what failed). It checks the test PR's author on
+    GitHub, ticks this with the date, and marks S06 done in the next status PR.
+
 ## Every day, once the runner is on
 
 Once S04 is applied (step 27), the runner works all day and you do one sitting in the evening:
@@ -660,8 +681,16 @@ You can start on the first one now, which saves time later.
 - **Session S14 (on hold until you say go, step 18):** UI examples. Screenshots or links of designs
   you like, including dashboards for different tasks (coding, research, business). **Start a folder
   now.**
-- **Session S06, after its PR merges:** remove the `ABlueAI` Git login from your PC (about 5
-  minutes). The S06 PR names exactly which entries.
+- **Session S06, after step 35 passes:** remove the `ABlueAI` Git login from your PC (about 5
+  minutes). The entries (from the S06 PR, #121):
+  - Windows: Control Panel > Credential Manager > **Windows Credentials** > Generic Credentials:
+    remove `git:https://github.com` (Git Credential Manager's login), and any other
+    `git:https://...github.com` entry.
+  - PowerShell: `gh auth status` lists the accounts gh stores; `gh auth logout --hostname github.com
+    --user ABlueAI` removes yours.
+  - Agent panes no longer use either (S06 resets git's credential helpers and gives them the
+    `ABlueAgent` token), but a program running as your Windows user can still read them, which is
+    why they go.
   - On the PC: delete the Credential Manager entry and the `gh` login. If you keep them because
     you push as `ABlueAI` from this PC, local agents running under your Windows account can still
     read them and act as you, so the S06 PR must show how panes are kept from them; otherwise push
