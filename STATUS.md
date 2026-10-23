@@ -1,6 +1,6 @@
 # Mako status
 
-Updated 2026-10-23 by Claude (PR #118). Every PR that changes the state updates this file.
+Updated 2026-10-23 by the all-day runner's status PR (merges up to PR #118). Every PR that changes the state updates this file.
 
 ## Right now
 
@@ -47,18 +47,20 @@ Updated 2026-10-23 by Claude (PR #118). Every PR that changes the state updates 
 - **Plan to issues (S03, PR #54, in progress):** a workflow keeps one `Sxx: <title>` issue per plan
   session, with status, authority, lane and sensitive labels and the "1.1 Month 1" milestone, in step
   with docs/PLAN-1.1.md on `main`. The Project board joins once Blue connects it (checklist step 25).
+  PR #54 merged 2026-10-21. Two sets of sync issues are open, `#57` to `#81` (2026-10-21) and `#89`
+  to `#113` (2026-10-22), one issue per session in each; the cause isn't diagnosed yet.
 - **Obsidian Skills (S13, PR #115, in progress):** `scripts/new-mako-vault.ps1` creates Blue's
   private vault outside this repo, with `Mako index.md` (links to STATUS, PLAN, DECISIONS and the
   checklist on GitHub) an `AGENTS.md` and a `CLAUDE.md`; the kepano/obsidian-skills plugin is to be installed in
   Claude Code from the vault (ADOPT recorded in docs/decisions/OSS-obsidian-skills.md). Blue sets it up
   on his PC (checklist step 31). Only local agents can reach the vault.
-- **All-day runner (S04, PR #84, in progress, pending Blue):** proposed in docs/RUNNER.md "S04: the
-  all-day runner": hourly fires at :07 Eastern, a parallel cap of 1 on Pro counted from expiring
-  locks, a clean stop and resume at usage limits, no phone notification per fire, and one evening
-  digest at 8:03 PM. Researched from the official docs on 2026-10-21: the minimum interval is one
-  hour, no daily run cap is stated, and no documented way lets a cloud session read plan usage, so
-  the 90% warning moves to S11. Nothing is applied until Blue merges it; then steps 28 and 27 in
-  the same sitting.
+- **All-day runner (S04, PR #84 merged 2026-10-23, partly applied):** the hourly runner
+  (`trig_01LPKxs49xvwN7mcuGLGwyN8`, :07 Eastern, no push) is on and fired at 07:09 UTC. As read
+  on 2026-10-23 at about 07:40 UTC, the evening digest (`trig_0166nBynncK2BWPaarALAq8q`) is off,
+  the old daily runner is still on with the new prompt, and both new tasks have connectors the plan
+  didn't call for (the digest has the GoHighLevel CRM). Blue's clicks are in checklist step 27;
+  steps 27 and 28 aren't ticked. The S04 follow-up PR fixes the prompts' open follow-ups and
+  records this read-back (docs/RUNNER.md "Applied so far").
 - **Guardrails:**
   - The repo-side files are live on `main`, and the merge audit has passed on every merge.
   - Part A (checklist step 2) is done and verified on 2026-10-18. `main` now requires a pull request
@@ -106,11 +108,11 @@ Updated 2026-10-23 by Claude (PR #118). Every PR that changes the state updates 
   the 2026-10-19 run started and opened PR #44, the first proof it can open PRs.
   Its prompt includes the `pr-reviewer` step since 2026-10-19 (applied after PR #42 merged), and
   the capped review loop since 2026-10-21 (PR #52's prompt, applied 21:19 UTC and read back the same
-  day; checklist step 21). Proposed in PR #83 (pending Blue): every builder skips a plan session
-  that already has an open PR titled with its ID (`Sxx:`) and opens its own PR early, so two
-  builders don't start the same session (a runner fire still treats every open `ABlueAgent` PR as
-  its own until S04's `runner` label); the runner prompt is applied after the merge (checklist
-  step 26).
+  day; checklist step 21). The claim check (PR #83, merged 2026-10-22) is in AGENTS.md: every
+  builder skips a plan session that already has an open PR titled with its ID (`Sxx:`) and opens
+  its own PR early, so two builders don't start the same session. Its prompt for this task
+  (checklist step 26) was never applied; S04's hourly runner (PR #84, merged 2026-10-23) carries
+  the claim check instead.
   It runs on Opus 5.5 since 2026-10-21, changed by an interactive session at Blue's request (read
   back from the scheduled task the same day; docs/RUNNER.md).
 - **Review loop (adopted: PR #52 merged 2026-10-21, applied to the runner the same day):** every PR gets one complete first review ranked
@@ -180,14 +182,16 @@ account's repository (found by Codex on PR #46; GitHub's docs not yet read direc
 14 was ticked on 2026-10-23 on Blue's word (PR #118; see Guardrails above). S06 decides how Mako
 stores and passes it.
 
-1.1 session S01 (finish guardrails) is DONE: PR #44 merged 2026-10-19, with its evidence in the plan's change log. S02 (CI and dependency hygiene) is DONE (#45); S03 is next. The UI sessions (S14, S17 to S20) are on hold until Blue says go, and S16 becomes the Composer research (approved with the PR #48 merge). S06 also moves local agents off Blue's git login (plan change approved with that merge). See the plan.
+1.1 session S01 (finish guardrails) is DONE: PR #44 merged 2026-10-19, with its evidence in the plan's change log. S02 (CI and dependency hygiene) is DONE (#45). S03 (#54), S04 (#84), S05 (#49), S12 (#86) and S13 (#115) are merged but stay IN
+PROGRESS until their "Done when" is met (S03: checklist step 25; S04: two unattended days and step
+27; S05: step 23; S12: step 29; S13: step 31); S16 is DONE (#82). The UI sessions (S14, S17 to S20) are on hold until Blue says go, and S16 becomes the Composer research (approved with the PR #48 merge). S06 also moves local agents off Blue's git login (plan change approved with that merge). See the plan.
 
-Plan change proposed in PR #47 (pending Blue): S04 becomes an all-day runner with an evening digest
+Plan change approved: Blue merged PR #47 on 2026-10-21. S04 becomes an all-day runner with an evening digest
 and needs only S01, so it can run right after S03; new session S26 adds Codex as a second builder
-(Codex's GitHub is already linked to `ABlueAgent`: checklist step 16, done 2026-10-20). Also proposed
+(Codex's GitHub is already linked to `ABlueAgent`: checklist step 16, done 2026-10-20). Also approved
 there: READY TO MERGE / NOT READY at the start of every session-end notice, documented pausing and a
 usage alert (S04), a Pause button in Mako where it can be done safely (S11), and new session S28
 agent profile refresh. S27 (Composer) from the same PR is dropped, because PR #48 folded the Composer
-into S16. Today's runner prompt and schedule stay as they are until S04 is merged and applied; the
-checklist-numbering, Codex-handle, READY TO MERGE and Codex-PR review rules apply from this PR's
-merge, the STATUS.md and plan-row rule once S04 is merged and applied.
+into S16. The checklist-numbering, Codex-handle, READY TO MERGE and Codex-PR review rules apply
+since that merge; the STATUS.md and plan-row rule applies once S04 is applied (S04 merged
+2026-10-23 as PR #84; checklist step 27 isn't ticked yet).
