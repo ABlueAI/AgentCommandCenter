@@ -3,7 +3,7 @@
 Drafted 2026-10-17 by Claude for Blue. Approved when the PR that adds it is merged. Changes only through
 `plan-change` PRs (rules below).
 
-**Latest change (2026-10-23, proposed, pending Blue; PR #118):** a GoHighLevel lead pipeline for
+**Latest change (2026-10-23, proposed, pending Blue; PR #119):** a GoHighLevel lead pipeline for
 Florida marinas. New session S29 builds a ranked list of every Florida marina from the official
 Google Places API (a new paid Google Cloud account, Blue's to confirm; checklist step 33); new
 session S30 writes a personal email opener for each one, and Blue sends them from HighLevel himself
@@ -11,7 +11,7 @@ in approved batches of about 20; S24's one read-only workflow becomes a reply/le
 separate claude.ai scheduled task that notifies Blue only when there is a new reply or lead
 (checklist step 34 before it goes live). Marina and lead data stay in the private repo
 `ABlueAI/mako-business`, never here. Appointment prep and a morning lead brief are held. S22 is
-unchanged. Details in "S29 and S30 details", "S24 details" and the change log. Merging PR #118
+unchanged. Details in "S29 and S30 details", "S24 details" and the change log. Merging PR #119
 approves it.
 
 **Earlier change (2026-10-21, proposed, pending Blue; PR #52):** the UI sessions get one builder.
@@ -97,7 +97,7 @@ held rows as held (a Hold column or a `hold` label), never as Ready.
 | S10 | **One-click authority.** Minimum, Medium, High and Maximum in Mako, mapped to Claude permission modes (plan, acceptEdits, auto); Maximum sends the task to a cloud session instead of granting full permissions locally. Sensitive. | Each level launches with the right mode; Maximum never runs unsandboxed. | High | windows | S07 | READY |
 | S11 | **Usage panel.** 5-hour and weekly usage with reset countdown (Claude's `/usage` data or ccusage). Claude Code's built-in auto-continue does the resuming. A warning at about 90% of either limit, and Pause and Resume buttons that turn the runner routine off and on, if that can be done safely (no claude.ai login stored in Mako without its own sensitive review); otherwise the button opens claude.ai/code/routines. Sensitive if it stores or uses a claude.ai login or token. | Panel matches `/usage` on Blue's account; the 90% warning shows; Pause stops the runner, or opens the routines page. | Medium | windows | S07 | READY |
 | S12 | **Quick Links bundle.** Claude desktop, Codex app, GitHub PRs and Project board, Obsidian vault, Hexona, Hermes and Dodaios docs. | Links open; Blue confirms the Hexona URL. | Medium | blue | S01 | IN PROGRESS (#86) |
-| S13 | **Obsidian Skills.** One-page OSS note quoting Blue's ADOPT; install kepano/obsidian-skills; private vault outside this public repo with an index that links to STATUS, PLAN and DECISIONS. | Agents can read and update the vault index. Blue installs the Obsidian app (2 minutes). | Medium | blue | S01 | READY |
+| S13 | **Obsidian Skills.** One-page OSS note quoting Blue's ADOPT; install kepano/obsidian-skills; private vault outside this public repo with an index that links to STATUS, PLAN and DECISIONS. | Agents can read and update the vault index. Blue installs the Obsidian app (2 minutes). | Medium | blue | S01 | IN PROGRESS (#115) |
 | S14 | **Design tools and brief.** Claude Opus writes the design brief from Blue's UI examples and his dashboard list: words and structure, not code. It covers a main dashboard plus task-specific layouts Blue can switch between (for example coding, research and business; Blue chooses the final set). Also: install UI UX Pro Max; collect Blue's UI examples. | Brief plus Blue's examples in the repo. | Medium | blue | S01 | HOLD (Blue) |
 | S15 | **Research capture.** "Send this page to Reviewer" flow; evaluate Claude in Chrome on Windows; research agents stay read-only. | Blue sends a Reddit thread to a reviewer without copy and paste. | Medium | windows | S10 | READY |
 | S16 | **Composer research (includes the Dodaios trial).** Research for the Composer (one Mako pane that takes a large task, fans it out to several agents, and lets Blue compose and split sessions from it) and for workflow automation. Any hands-on trial, including the one-day Dodaios trial, runs only in a sandbox with no real credentials. Scope and what it must cover: "S16 details" below the table. | `docs/decisions/OSS-composer.md` exists in the AGENTS.md OSS shape: each option has a verdict proposal (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD FRESH) and a blank for Blue's verdict, word for word, and it ends with an open-questions list for Blue. Blue's verdict is then recorded. | Minimum | blue | S01 | DONE (#82) |
@@ -132,7 +132,7 @@ Blue: "this structure is fine by me, please proceed in updating this item". The 
   Claude session reviews a UI PR before S04's runner can (until then, a session Blue starts, as
   AGENTS.md step 3 allows).
 
-### S29 and S30 details: Florida marina list and outreach openers (proposed, pending Blue; PR #118)
+### S29 and S30 details: Florida marina list and outreach openers (proposed, pending Blue; PR #119)
 
 Blue (2026-10-23, docs/DECISIONS.md): once S22 is done, find all the marinas, then contact them in
 bulk with messages tailored to each business, so they sound personal, not automated.
@@ -187,7 +187,7 @@ Neither session ever gets the GoHighLevel connector.
 5. **Claude never sends.** S30 writes the CSV only. Blue imports it into a HighLevel email
    campaign and approves batches of about 20 before anything goes out.
 
-### S24 details: HighLevel connection and reply/lead watcher (proposed, pending Blue; PR #118)
+### S24 details: HighLevel connection and reply/lead watcher (proposed, pending Blue; PR #119)
 
 1. **Connector.** Blue authorizes the GoHighLevel connector in claude.ai with a read-only token.
    Before the watcher goes live he sends a screenshot of the connector's permission scopes, never
@@ -457,4 +457,4 @@ does both) · Vibe Kanban (removed in 1.0).
 - 2026-10-21: S03 marked IN PROGRESS (#54).
 - 2026-10-21 (proposed, pending Blue; PR #54): S28's row gains the word "Sensitive.", as S06, S10, S24 and S26 have, so S03's plan sync labels it sensitive (it matches the capitalised word). Wording only: S28's scope, needs and status are unchanged. S03's own row gains "Sensitive (a new `.github/` workflow)." for the same reason.
 - 2026-10-21 (proposed, pending Blue; PR #52): the UI sessions get one builder. S14: Claude Opus writes the design brief from Blue's examples and dashboard list (words and structure, not code). S17 to S20: Codex builds all of it, started by Blue, who iterates with Codex and ChatGPT directly; the runner and Claude sessions never build those rows. Every UI PR: Claude Opus reviews for bugs, security and the plan, not taste; Blue judges the look. S17's Needs gain S26, so Codex's PR attribution, claims and fix path are settled before the UI build starts. The rows stay `HOLD (Blue)`. S16 gains the Composer model-choice requirement (picks the model itself, prefers Opus 5.5, asks only before Opus 5.5 at max effort). Blue's words are in docs/DECISIONS.md, 2026-10-21.
-- 2026-10-23 (proposed, pending Blue; PR #118): GoHighLevel lead pipeline for Florida marinas. New S29 "Florida marina list" (official Google Places API only, output only in the private repo `ABlueAI/mako-business`; needs S22 merged and checklist step 33, a new paid Google Cloud billing account with a Places API key and a budget alert, Blue's spending decision to confirm) and new S30 "Personalized outreach openers" (email only, CAN-SPAM, Claude never sends; Blue approves batches of about 20 in HighLevel; needs S29). Both are business rows that Blue starts in a separate cloud environment holding the key; the runner never starts them. S24 is reshaped: its one read-only workflow is the reply/lead watcher, a separate claude.ai scheduled task (7:30 AM to 7:30 PM Eastern hourly plus 8:00 PM) that notifies Blue only when there is something new, with checklist step 34 (connector scope screenshot) before it goes live; it is the one exception to "fenced agent roles never get CRM credentials by default". Appointment prep and a morning lead brief are held. S22 (PR #116) is unchanged. The month now has 30 sessions, 29 active. Blue's words are in docs/DECISIONS.md, 2026-10-23.
+- 2026-10-23 (proposed, pending Blue; PR #119): GoHighLevel lead pipeline for Florida marinas. New S29 "Florida marina list" (official Google Places API only, output only in the private repo `ABlueAI/mako-business`; needs S22 merged and checklist step 33, a new paid Google Cloud billing account with a Places API key and a budget alert, Blue's spending decision to confirm) and new S30 "Personalized outreach openers" (email only, CAN-SPAM, Claude never sends; Blue approves batches of about 20 in HighLevel; needs S29). Both are business rows that Blue starts in a separate cloud environment holding the key; the runner never starts them. S24 is reshaped: its one read-only workflow is the reply/lead watcher, a separate claude.ai scheduled task (7:30 AM to 7:30 PM Eastern hourly plus 8:00 PM) that notifies Blue only when there is something new, with checklist step 34 (connector scope screenshot) before it goes live; it is the one exception to "fenced agent roles never get CRM credentials by default". Appointment prep and a morning lead brief are held. S22 (PR #116) is unchanged. The month now has 30 sessions, 29 active. Blue's words are in docs/DECISIONS.md, 2026-10-23.
