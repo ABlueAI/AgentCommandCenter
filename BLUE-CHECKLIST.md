@@ -623,6 +623,22 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - *Done when:* you tell an agent the vault opened, the plugin installed and the test note and
     link appeared (or what failed); it ticks this with the date and S13 is marked done.
 
+- [x] **32. A private repo for S22's marina brief.** *Verified 2026-10-23 by the all-day runner:
+  Blue replied on PR #116 that the brief goes in `mako-business`; GitHub reports
+  `ABlueAI/Mako-Business` as private with push access for `ABlueAgent`; the runner attached it
+  and pushed the brief's branch `s22-marina-brief` (commit `24ddc8e`, PR 1 in that repo).*
+  About **3 minutes**, whenever you like (S22 waits on it; nothing else does). S22's output goes in a private repository, never this public one
+  (AGENTS.md "Security rules"), and none exists yet.
+  - github.com > **New repository**, owner `ABlueAI`, name `mako-business` (or your choice; tell
+    the agent), **Private**, add a README. No other settings.
+  - Repository > Settings > Collaborators > **Add people**: `ABlueAgent`, role **Write**, and accept
+    the invite signed in as `ABlueAgent` (private window).
+  - Claude GitHub App: github.com > Settings > Applications > Claude > **Configure** > add the new
+    repo (Only select repositories). Leave Codex's app as is unless you want Codex reviews there.
+  - Reply on the S22 PR (#116) with the repo name.
+  - *Done when:* a runner fire attaches the repo and pushes the brief's branch there (it ticks this
+    with the date and the commit); if it can't reach the repo, it says why on the PR.
+
 ## Every day, once the runner is on
 
 Once S04 is applied (step 27), the runner works all day and you do one sitting in the evening:
