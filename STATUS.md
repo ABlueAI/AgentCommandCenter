@@ -49,8 +49,8 @@ Updated 2026-10-23 by Claude (PR #115). Every PR that changes the state updates 
   with docs/PLAN-1.1.md on `main`. The Project board joins once Blue connects it (checklist step 25).
 - **Obsidian Skills (S13, PR #115, in progress):** `scripts/new-mako-vault.ps1` creates Blue's
   private vault outside this repo, with `Mako index.md` (links to STATUS, PLAN, DECISIONS and the
-  checklist on GitHub) and an `AGENTS.md`; the kepano/obsidian-skills plugin is installed in Claude
-  Code from the vault (ADOPT recorded in docs/decisions/OSS-obsidian-skills.md). Blue sets it up
+  checklist on GitHub) an `AGENTS.md` and a `CLAUDE.md`; the kepano/obsidian-skills plugin is to be installed in
+  Claude Code from the vault (ADOPT recorded in docs/decisions/OSS-obsidian-skills.md). Blue sets it up
   on his PC (checklist step 31). Only local agents can reach the vault.
 - **All-day runner (S04, PR #84, in progress, pending Blue):** proposed in docs/RUNNER.md "S04: the
   all-day runner": hourly fires at :07 Eastern, a parallel cap of 1 on Pro counted from expiring

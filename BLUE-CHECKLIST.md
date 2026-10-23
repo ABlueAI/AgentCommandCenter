@@ -605,7 +605,7 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - Pull `main`, then in PowerShell from the repo folder:
     `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\new-mako-vault.ps1 -Path D:\Workspace\Mako-Vault`
     (another folder is fine, as long as it is outside the repo; the script refuses one inside it).
-    It prints `created` for `Mako index.md` and `AGENTS.md`.
+    It prints `created` for `Mako index.md`, `AGENTS.md` and `CLAUDE.md`.
   - In Obsidian: **Open folder as vault** > pick that folder. Open `Mako index.md` and click the
     STATUS link once.
   - In PowerShell: `cd D:\Workspace\Mako-Vault`, start `claude`, run

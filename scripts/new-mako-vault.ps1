@@ -2,12 +2,14 @@
 <#
 .SYNOPSIS
   Create Blue's private Mako vault for Obsidian (S13): a folder outside this public repository with
-  an index that links to STATUS, PLAN, DECISIONS and the checklist, plus an AGENTS.md for agents.
+  an index that links to STATUS, PLAN, DECISIONS and the checklist, plus an AGENTS.md for agents and
+  a CLAUDE.md that imports it.
 .DESCRIPTION
-  Never overwrites: an existing index or AGENTS.md is left as it is and reported. Refuses a path
+  Never overwrites: an existing index, AGENTS.md or CLAUDE.md is left as it is and reported. Refuses a path
   inside this repository (it is public, and the vault is private by design; docs/PLAN-1.1.md S13).
   Writes no credentials and reads none. The links point at GitHub, so the vault holds no copy of
-  the repository's files.
+  the repository's files. The inside-the-repo check compares paths as text; it doesn't resolve
+  junctions, symlinks or subst drives.
 .EXAMPLE
   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\new-mako-vault.ps1 -Path D:\Workspace\Mako-Vault
 #>
@@ -18,6 +20,8 @@ param(
 $script:MvRepoUrl = 'https://github.com/ABlueAI/AgentCommandCenter/blob/main'
 $script:MvIndexName = 'Mako index.md'
 $script:MvAgentsName = 'AGENTS.md'
+# Claude Code loads CLAUDE.md, not AGENTS.md, so CLAUDE.md imports it (as this repository's does).
+$script:MvClaudeName = 'CLAUDE.md'
 
 function Get-MakoVaultFullPath {
     param([string]$LiteralPath)
@@ -90,7 +94,8 @@ function New-MakoVault {
     $result = @()
     foreach ($f in @(
             @{ Name = $script:MvIndexName; Text = (Get-MakoVaultIndexText) },
-            @{ Name = $script:MvAgentsName; Text = (Get-MakoVaultAgentsText) })) {
+            @{ Name = $script:MvAgentsName; Text = (Get-MakoVaultAgentsText) },
+            @{ Name = $script:MvClaudeName; Text = "@AGENTS.md`n" })) {
         $target = Join-Path $full $f.Name
         if (Test-Path -LiteralPath $target) {
             $result += [pscustomobject]@{ File = $target; Action = 'kept' }

@@ -18,13 +18,14 @@ function New-MvTempRoot {
 }
 
 Describe 'new-mako-vault' {
-    It 'creates the folder, the index and AGENTS.md' {
+    It 'creates the folder, the index, AGENTS.md and a CLAUDE.md that imports it' {
         $root = New-MvTempRoot
         try {
             $vault = Join-Path $root 'Mako-Vault'
             $r = @(New-MakoVault -Path $vault -RepoRoot $script:MvRepoRoot)
-            $r.Count | Should Be 2
-            @($r | Where-Object { $_.Action -eq 'created' }).Count | Should Be 2
+            $r.Count | Should Be 3
+            @($r | Where-Object { $_.Action -eq 'created' }).Count | Should Be 3
+            [System.IO.File]::ReadAllText((Join-Path $vault 'CLAUDE.md')).Trim() | Should Be '@AGENTS.md'
             Test-Path -LiteralPath (Join-Path $vault 'Mako index.md') | Should Be $true
             Test-Path -LiteralPath (Join-Path $vault 'AGENTS.md') | Should Be $true
         }
@@ -39,15 +40,16 @@ Describe 'new-mako-vault' {
         }
     }
 
-    It 'never overwrites an existing index or AGENTS.md' {
+    It 'never overwrites an existing index' {
         $root = New-MvTempRoot
         try {
             $index = Join-Path $root 'Mako index.md'
             [System.IO.File]::WriteAllText($index, 'Blue notes')
             $r = @(New-MakoVault -Path $root -RepoRoot $script:MvRepoRoot)
             [System.IO.File]::ReadAllText($index) | Should Be 'Blue notes'
-            ($r | Where-Object { $_.File -eq $index }).Action | Should Be 'kept'
+            ($r | Where-Object { $_.File -like '*Mako index.md' }).Action | Should Be 'kept'
             ($r | Where-Object { $_.File -like '*AGENTS.md' }).Action | Should Be 'created'
+            ($r | Where-Object { $_.File -like '*CLAUDE.md' }).Action | Should Be 'created'
         }
         finally { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
     }

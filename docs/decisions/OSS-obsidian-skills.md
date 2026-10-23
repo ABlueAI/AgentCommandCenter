@@ -32,7 +32,8 @@ option was searched for.
 
 - The vault is a plain folder on Blue's PC, outside this public repository, created by
   `scripts/new-mako-vault.ps1` (default `D:\Workspace\Mako-Vault`). The script refuses any folder
-  inside the repository and never overwrites an existing index or `AGENTS.md`.
+  inside the repository and never overwrites an existing index, `AGENTS.md` or `CLAUDE.md` (which
+  imports `AGENTS.md`, so Claude Code loads the vault's rules).
 - The index links to the shared brain on GitHub instead of copying it, so nothing private flows
   into the repository and nothing in the vault goes stale.
 - The plugin is installed in Claude Code from the vault folder (BLUE-CHECKLIST.md step 31), so it
