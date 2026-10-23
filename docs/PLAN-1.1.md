@@ -48,7 +48,7 @@ appends a DECISIONS.md entry that replaces the proposed PR #47 entry.
 
 ### Status values
 
-`READY` · `IN PROGRESS (#PR)` · `NEEDS BLUE (#116)` (or `NEEDS BLUE (reason)` before any PR exists) ·
+`READY` · `IN PROGRESS (#PR)` · `NEEDS BLUE (#PR)` (or `NEEDS BLUE (reason)` before any PR exists) ·
 `HOLD (Blue)` · `DONE (#PR)` · `DROPPED (reason)`. The session's PR updates its own row (after S04 is applied, the
 runner's status PR marks merged sessions DONE; S04 item 6). A `DROPPED` row's other columns are
 ignored: no issue, labels or claims are made from it.
