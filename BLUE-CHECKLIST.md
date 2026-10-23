@@ -26,6 +26,7 @@ other remaining items." Claude's order for what is left:
    hand-off for this order; the plan doesn't name that dependency yet).
 3. **Step 17**, the token audit and push protection.
 4. **Wednesday 2026-10-28: step 8**, the Max upgrade.
+5. **When you merge S04 (PR #84): step 28, then step 27**, in the same sitting.
 
 ## Today
 
@@ -194,6 +195,33 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     date and how an upgrade is charged.
   - *Done when:* you say so. After S04, the runner then allows 2 sessions in parallel, later 3 (one
     setting in docs/RUNNER.md).
+
+- [ ] **28. Confirm usage credits are off (S04).** 1 minute, before step 27. Open
+  https://claude.ai/settings/usage and check that **Usage credits** are off. With them on, scheduled
+  runs keep going past your usage limit on paid, metered overage; with them off, new runs are
+  rejected until the usage window resets, which is what the all-day runner expects (docs/RUNNER.md,
+  "Limits, from the official docs").
+  - *Done when:* you tell any agent "usage credits are off". Claude can't read that page, so it
+    records your word and the date here.
+- [ ] **27. Right after merging S04 (PR #84), have its runner applied.** About 10 minutes, in the
+  same sitting as the merge, after step 28. Merging S04 ends the old runner's one-at-a-time rule,
+  so don't leave this for the morning. Tell the main chat "S04 merged".
+  - That session follows docs/RUNNER.md "Applying it": it creates **Mako all-day runner** (every
+    hour at :07 Eastern, no phone notifications) and **Mako evening digest** (8:03 PM Eastern, one
+    phone notification), and turns off, without deleting, **Mako daily runner**.
+  - Your part, about 2 minutes: at https://claude.ai/code/routines open each new task > the menu
+    next to its name > **Edit** > **Advanced settings** > **Repository**, add
+    `ABlueAI/AgentCommandCenter`, then **Save changes**. A task an agent creates has no repository
+    (seen on the first run, 2026-10-18).
+  - **Pause any time:** on that page switch **Mako all-day runner** off, then stop any runner
+    session still working at https://claude.ai/code. Switch it back on to resume. Leave the digest
+    on; it only reads.
+  - *Done when:* that session reads all three tasks back (schedule, model Opus 5.5, notifications,
+    on or off, prompt matching `main`), the first hourly fire afterwards works a PR as `ABlueAgent`
+    (which proves the repository is attached), and it ticks this step with the date and how it
+    checked. S04 itself is done after two days in a row run unattended through several fires, a
+    usage-limit stop resumes on its own, and the digest arrives both evenings; then tell any agent
+    "check S04".
 
 ## Any time (not blocking)
 
@@ -573,9 +601,17 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
 
 ## Every day, once the runner is on
 
-- **Morning (about 5 minutes):** check your phone. Answer anything marked "needs Blue".
-- **Evening (10 to 20 minutes):** read the TLDR on each PR marked ready, then **Approve** it and
-  **Merge**. Since step 7d every agent PR needs your Approve before Merge.
+Once S04 is applied (step 27), the runner works all day and you do one sitting in the evening:
+
+- **Evening, after the 8:03 PM digest (10 to 20 minutes):** read the digest on your phone. Answer
+  each "needs Blue" question in its PR. For each PR the digest marks `READY TO MERGE`, read its
+  TLDR, then Files changed > Review changes > Approve > Submit review, then Merge pull request >
+  Confirm merge. Merge only on `READY TO MERGE`.
+- **During the day: nothing.** A question for you also arrives as a GitHub notification (a PR
+  comment starting "@ABlueAI needs Blue:"); it can wait for the evening.
+- **To pause or resume:** the switch on the routines page (step 27).
+- **Until step 27 is done:** the old runner fires once, at 8:01 AM. Check your phone in the
+  morning for "needs Blue", and approve and merge ready PRs in the evening as above.
 
 ## Coming up this month (the runner will ask when it gets there)
 
