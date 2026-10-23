@@ -623,8 +623,11 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - *Done when:* you tell an agent the vault opened, the plugin installed and the test note and
     link appeared (or what failed); it ticks this with the date and S13 is marked done.
 
-- [ ] **32. A private repo for S22's marina brief.** About **3 minutes**, whenever you like (S22
-  waits on it; nothing else does). S22's output goes in a private repository, never this public one
+- [x] **32. A private repo for S22's marina brief.** *Verified 2026-10-23 by the all-day runner:
+  Blue replied on PR #116 that the brief goes in `mako-business`; GitHub reports
+  `ABlueAI/Mako-Business` as private with push access for `ABlueAgent`; the runner attached it
+  and pushed the brief's branch `s22-marina-brief` (commit `24ddc8e`, PR 1 in that repo).*
+  About **3 minutes**, whenever you like (S22 waits on it; nothing else does). S22's output goes in a private repository, never this public one
   (AGENTS.md "Security rules"), and none exists yet.
   - github.com > **New repository**, owner `ABlueAI`, name `mako-business` (or your choice; tell
     the agent), **Private**, add a README. No other settings.
