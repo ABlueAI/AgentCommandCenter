@@ -28,7 +28,8 @@ function legacyHandler(source) {
   const start = source.indexOf("ipcMain.handle('open-external'");
   if (start < 0) return null;
   const end = source.indexOf('\n', start);
-  return end < 0 ? null : source.slice(start, end);
+  // Windows CI checks the file out with CRLF; drop the line's own '\r'.
+  return end < 0 ? null : source.slice(start, end).replace(/\r$/, '');
 }
 
 process.stdout.write('\nlegacy external-launcher routed through the URL policy (S06)\n');
