@@ -606,6 +606,8 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     as `ABlueAI`: "hand this to Codex". Agents can't lock issues, so this is yours.
   - The builder posts the one hand-off comment (docs/CODEX-BUILDER-LANE.md "The lane", item 3).
     Codex opens a PR from a `codex/` branch; the builder runs the Opus review on it.
+  - Before you approve Codex's PR, open the review comment's "Run by:" link and check it is a
+    Claude session that reviewed that PR (Codex might be able to post as `ABlueAgent`).
   - While it runs (1 minute): in ChatGPT's Codex task list, open the task and note whether it
     started from the issue comment and what it shows as context; tell the builder.
   - *Done when:* Codex's PR is reviewed and you merge it; the builder records which account pushed,
@@ -644,8 +646,7 @@ You can start on the first one now, which saves time later.
   - *Done when:* you say so (Claude can't read Credential Manager or your authorized apps).
 - **Session S12:** confirm your Hexona login link in Mako (step 29).
 - **Session S13:** install the Obsidian app (2 minutes).
-- **Session S26:** comment as `ABlueAI` on its claim issue to start Codex's trial build (the session
-  tells you when and what to write).
+- **Session S26:** lock its claim issue and comment as `ABlueAI` to start Codex's trial build (step 30).
 - **Session S16:** ~~your Composer verdict (step 19)~~ Done 2026-10-21: no option adopted, everything open for study, questions deferred (step 19).
 - **Session S17 (on hold with S14):** pick one of 2 or 3 design directions.
 - **Session S21:** pick a logo variant.

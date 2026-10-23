@@ -94,10 +94,10 @@ The merge audit workflow opens a `security-alert` issue if anything reaches main
   and the link can reach. Any `ABlueAgent` comment containing Codex's handle may start a Codex task
   that can push a branch. AGENTS.md (once PR #47 merges) forbids agents to write the handle unless
   Blue asks (a comment by `ABlueAI` on that PR or issue, unedited by anyone else, or his own message
-  to the agent; the full rule is in AGENTS.md "Security rules"); S26 may add the runner's
-  hand-off as an exception. That is a rule, not a control: a mistaken or injected agent comment could
-  still start such a task. Merging still needs Blue's approval. S26 is the first planned Codex build:
-  it checks the open questions below first and adds Codex to the table above. Its review comments
+  to the agent; the full rule is in AGENTS.md "Security rules"); S26 (PR #114) adds the Codex-lane
+  hand-off and fix request as narrow exceptions. That is a rule, not a control: a mistaken or injected agent comment could
+  still start such a task. Merging still needs Blue's approval. S26 adds Codex to the table above and
+  answers what it can below (docs/CODEX-BUILDER-LANE.md). Its review comments
   appear as `chatgpt-codex-connector[bot]` (seen on PR #42).
   Checked in S26 (docs/CODEX-BUILDER-LANE.md, 2026-10-23): Codex's PR #49 was opened as
   `ABlueAgent`, and a Codex review can't count as an approval. Still not verified: which token
