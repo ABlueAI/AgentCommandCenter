@@ -102,6 +102,7 @@ const mustHave = [
   ['from then on, work it only as his reply asks, and otherwise skip it', 'settles what happens on a Codex PR after Blue replies'],
   ['and it isn\'t marked ready yet (update its TLDR and mark it ready)', 'picks up a finished PR whose checks passed later'],
   ['it has no needs-blue label and no "@ABlueAI needs Blue:" comment from your login without a later reply', 'never marks a PR ready while Blue is asked'],
+  ['it carries the needs-blue label and the latest "@ABlueAI needs Blue:" comment from your login has a later reply', 'resumes its own PR once per answered question'],
   ['remove the needs-blue label, set its row back from NEEDS BLUE to IN PROGRESS (#PR), and do what his reply asks', 'resumes its own PR after Blue answers'],
 ];
 for (const [text, label] of mustHave) assert(prompt.includes(text), `runner prompt ${label}`);
