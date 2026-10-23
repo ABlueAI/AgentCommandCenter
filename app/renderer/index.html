@@ -42,11 +42,6 @@
       <button id="geminiKeyChange" class="ghost tiny">Change</button>
       <button id="geminiKeyClear" class="ghost tiny">Clear</button>
     </div>
-    <div id="agentTokenStored" class="key-stored hidden" title="ABlueAgent GitHub token stored &amp; encrypted via OS credential store; agent panes push as ABlueAgent">
-      🐙 <span class="muted small">Agent token ✓</span>
-      <button id="agentTokenChange" class="ghost tiny">Change</button>
-      <button id="agentTokenClear" class="ghost tiny">Clear</button>
-    </div>
   </header>
 
   <!-- Shown only when GEMINI_API_KEY is not yet stored -->
@@ -71,6 +66,12 @@
         <button id="openVscode" class="action">🖥️ Open in VSCode</button>
         <button id="openGithub" class="action">🐙 Open GitHub</button>
         <button id="openTerminal" class="action">▶️ Open Terminal</button>
+        <!-- S06: in the sidebar, not the top bar, so it can never widen the top bar -->
+        <div id="agentTokenStored" class="key-stored agent-token-stored hidden" title="ABlueAgent GitHub token stored &amp; encrypted via OS credential store; agent panes push as ABlueAgent">
+          🐙 <span class="muted small">Agent token ✓</span>
+          <button id="agentTokenChange" class="ghost tiny">Change</button>
+          <button id="agentTokenClear" class="ghost tiny">Clear</button>
+        </div>
       </div>
 
       <div class="group quick-links" aria-labelledby="quickLinksTitle">
