@@ -680,4 +680,6 @@ You can start on the first one now, which saves time later.
   https://github.com/settings/tokens. Make the new token by step 14's
   instructions and step 17b's rules, put it where the old one lives (Bitwarden, or Mako's key setup
   once S06 gives it a home), tell Claude the new expiry date (never the token) so it moves this
-  reminder, then delete the old token on the same page.
+  reminder. Then check the new token works: once S06 has given it a home, have a local Mako pane
+  push a branch with it; before S06, check the token page lists it with only `public_repo`. Delete
+  the old token on the same page only after that check passes.
