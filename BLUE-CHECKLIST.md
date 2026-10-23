@@ -644,6 +644,8 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     Edit): under Network secrets (or as an environment variable) named `GOOGLE_PLACES_API_KEY`, add
     `places.googleapis.com` under the network's Allowed domains, and attach `ABlueAI/mako-business`.
     Never the runner's environment. Never paste the key in a chat, an issue, a PR or a repo.
+  - After S29 merges, before you start S30: delete the key from that environment (it stays in your
+    password manager), then widen its network access so S30 can read marina websites.
   - *Done when:* you tell an agent the budget, the quota (or that there is none) and the
     environment's name (never the key).
     The S29 session then checks the variable is set without printing it, and ticks this step with
@@ -698,8 +700,9 @@ You can start on the first one now, which saves time later.
 - **Session S23:** approve the client paperwork drafts.
 - **Session S29:** Google Cloud billing, Places API key and budget alert (step 33), then start S29
   in the business environment.
-- **Session S30:** import the CSV into a HighLevel email campaign and approve each batch of about 20
-  before it sends.
+- **Session S30:** first delete the Places key from the business environment and widen its network
+  access (step 33's last bullet), then start S30. Afterwards, import the CSV into a HighLevel email
+  campaign and approve each batch of about 20 before it sends.
 - **Session S24:** authorize the GoHighLevel connector in claude.ai (read-only token), then the scope
   screenshot (step 34) before the reply/lead watcher goes live.
 
