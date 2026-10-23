@@ -1,6 +1,6 @@
 # Mako status
 
-Updated 2026-10-22 by Claude. Every PR that changes the state updates this file.
+Updated 2026-10-23 by Claude (PR #115). Every PR that changes the state updates this file.
 
 ## Right now
 
@@ -47,6 +47,11 @@ Updated 2026-10-22 by Claude. Every PR that changes the state updates this file.
 - **Plan to issues (S03, PR #54, in progress):** a workflow keeps one `Sxx: <title>` issue per plan
   session, with status, authority, lane and sensitive labels and the "1.1 Month 1" milestone, in step
   with docs/PLAN-1.1.md on `main`. The Project board joins once Blue connects it (checklist step 25).
+- **Obsidian Skills (S13, PR #115, in progress):** `scripts/new-mako-vault.ps1` creates Blue's
+  private vault outside this repo, with `Mako index.md` (links to STATUS, PLAN, DECISIONS and the
+  checklist on GitHub) an `AGENTS.md` and a `CLAUDE.md`; the kepano/obsidian-skills plugin is to be installed in
+  Claude Code from the vault (ADOPT recorded in docs/decisions/OSS-obsidian-skills.md). Blue sets it up
+  on his PC (checklist step 31). Only local agents can reach the vault.
 - **All-day runner (S04, PR #84 merged 2026-10-23, partly applied):** the hourly runner
   (`trig_01LPKxs49xvwN7mcuGLGwyN8`, :07 Eastern, no push) is on and fired at 07:09 UTC. As read
   on 2026-10-23 at about 07:40 UTC, the evening digest (`trig_0166nBynncK2BWPaarALAq8q`) is off,

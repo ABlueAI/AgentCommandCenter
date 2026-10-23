@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-22 by Claude (step 29 added for the S12 Quick Links bundle, PR #86; step 21
+Last updated 2026-10-23 by Claude (step 31 added for the S13 Obsidian vault, PR #115; step 29 added for the S12 Quick Links bundle, PR #86; step 21
 ticked and step 26 added for the runner's claim check, PR #83; step 19 ticked with Blue's Composer verdict, PR #82; step 21 added: apply the capped review loop to the runner, PR #52;
 step 25 added for the S03 plan board, PR #54; "Do next" order added, step 20 ticked, step 22 added, PR #53;
 S05 checks added as steps 23 and 24, PR #49; step 6 dropped by Blue, PR #51; step 17 moved after
@@ -612,6 +612,24 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     Hexona login or you added another link (never paste a login or password); it ticks this with the date. A link that fails: say which and what
     happened, and Mako's Logs line (it names a reason, never the URL).
 
+- [ ] **31. Obsidian vault and skills on your PC (S13).** About **10 minutes**, after you merge the
+  S13 PR, #115.
+  - Install the Obsidian app from obsidian.md (free for personal use).
+  - Pull `main`, then in PowerShell from the repo folder:
+    `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\new-mako-vault.ps1 -Path D:\Workspace\Mako-Vault`
+    (another folder is fine, as long as it is outside the repo; the script refuses one inside it).
+    It prints `created` for `Mako index.md`, `AGENTS.md` and `CLAUDE.md`.
+  - In Obsidian: **Open folder as vault** > pick that folder. Open `Mako index.md` and click the
+    STATUS link once.
+  - In PowerShell: `cd D:\Workspace\Mako-Vault`, start `claude`, run
+    `/plugin marketplace add kepano/obsidian-skills`, then `/plugin`, install the Obsidian skills
+    plugin it lists, and choose the project scope if it asks. (These names come from search
+    extracts, not the plugin's own page; if they differ, tell the agent what you saw.)
+  - Still in that session, ask: "Read Mako index.md and add a note called Test with a link to it
+    under Notes." Check the note and the link appear in Obsidian.
+  - *Done when:* you tell an agent the vault opened, the plugin installed and the test note and
+    link appeared (or what failed); it ticks this with the date and S13 is marked done.
+
 ## Every day, once the runner is on
 
 Once S04 is applied (step 27), the runner works all day and you do one sitting in the evening:
@@ -643,7 +661,7 @@ You can start on the first one now, which saves time later.
     from no machine, since that signs it out everywhere.
   - *Done when:* you say so (Claude can't read Credential Manager or your authorized apps).
 - **Session S12:** confirm your Hexona login link in Mako (step 29).
-- **Session S13:** install the Obsidian app (2 minutes).
+- **Session S13:** install Obsidian, create the vault and install the skills (step 31).
 - **Session S26:** comment as `ABlueAI` on its claim issue to start Codex's trial build (the session
   tells you when and what to write).
 - **Session S16:** ~~your Composer verdict (step 19)~~ Done 2026-10-21: no option adopted, everything open for study, questions deferred (step 19).
