@@ -1305,7 +1305,10 @@ async function boot() {
   if (s && s.ttsVoice) state.ttsVoice = s.ttsVoice;
   if (s && s.ttsSpeed) state.ttsSpeed = s.ttsSpeed;
   updateKeyBanner(await cc.getGeminiKeyStatus());
-  updateAgentTokenBanner(await cc.getAgentTokenStatus());
+  // S06: not awaited, so the token check adds no IPC round trip to the boot path (pane startup is
+  // timing-sensitive); a failed check leaves the banner showing and says so in the Logs tab.
+  cc.getAgentTokenStatus().then(updateAgentTokenBanner)
+    .catch(() => { updateAgentTokenBanner(null); appendLog('[agent token] status check failed\n'); });
   await refreshRepos();
   wireUi();
   await quickLinksView.load();
