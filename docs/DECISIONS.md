@@ -3,6 +3,12 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-10-23
+
+| Decision | Blue's words |
+|---|---|
+| **Proposed, pending Blue (PR #114):** the Codex builder lane (S26), as set out in docs/CODEX-BUILDER-LANE.md: Codex takes `windows`-lane sessions that aren't sensitive; it is handed a session by one comment from `ABlueAgent` on a locked `agent-claimed` claim issue that tells it to act only on that comment; Blue locks each claim issue, because agents can't; Codex fixes its own PRs after a fix request from the reviewing Claude session, scoped to its open findings or failing check (a second exception to the Codex-handle rule in AGENTS.md "Security rules"); Claude never pushes to a `codex/` branch unless Blue asks; an Opus review on a Codex PR by `ABlueAgent` counts only with a "Run by:" line linking the Claude session or runner fire that ran it. Why: Codex's PR #49 was opened as `ABlueAgent`, so Codex may also be able to comment as that account. The trial session (option A or B on PR #114) is Blue's pick. Merging PR #114 approves it. | None yet; the design is Claude's proposal from docs/PLAN-1.1.md "S26 details". |
+
 ## 2026-10-21
 
 | Decision | Blue's words |

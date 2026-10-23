@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-22 by Claude (step 29 added for the S12 Quick Links bundle, PR #86; step 21
+Last updated 2026-10-23 by Claude (step 30 added for the S26 Codex trial, PR #114; step 29 added for the S12 Quick Links bundle, PR #86; step 21
 ticked and step 26 added for the runner's claim check, PR #83; step 19 ticked with Blue's Composer verdict, PR #82; step 21 added: apply the capped review loop to the runner, PR #52;
 step 25 added for the S03 plan board, PR #54; "Do next" order added, step 20 ticked, step 22 added, PR #53;
 S05 checks added as steps 23 and 24, PR #49; step 6 dropped by Blue, PR #51; step 17 moved after
@@ -598,6 +598,19 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - *Done when:* you tell an agent which links opened and whether Starboard Platform is your
     Hexona login or you added another link (never paste a login or password); it ticks this with the date. A link that fails: say which and what
     happened, and Mako's Logs line (it names a reason, never the URL).
+
+- [ ] **30. Codex trial build (S26).** About **3 minutes**, in two parts, after you answer the
+  trial question on PR #114 ((A) wait for S07, or (B) the small `not-installed` test task now).
+  - The builder opens a claim issue titled `Sxx:` (or `S26 trial:` for option B), labelled
+    `agent-claimed`. Open it, click **Lock conversation** (right sidebar) > **Lock**. Then comment
+    as `ABlueAI`: "hand this to Codex". Agents can't lock issues, so this is yours.
+  - The builder posts the one hand-off comment (docs/CODEX-BUILDER-LANE.md "The lane", item 3).
+    Codex opens a PR from a `codex/` branch; the builder runs the Opus review on it.
+  - While it runs (1 minute): in ChatGPT's Codex task list, open the task and note whether it
+    started from the issue comment and what it shows as context; tell the builder.
+  - *Done when:* Codex's PR is reviewed and you merge it; the builder records which account pushed,
+    whether the issue mention started the task and what context Codex read, in
+    docs/CODEX-BUILDER-LANE.md, and ticks this with the date.
 
 ## Every day, once the runner is on
 
