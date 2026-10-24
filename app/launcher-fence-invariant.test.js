@@ -492,5 +492,27 @@ assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src)
     'WebFetch: the decision reads only the classified verdict and the claim result, never opts');
 }
 
+// S10 AUTHORITY wiring. The level is resolved inside the classify step the pty-start authority runs
+// first (so a refused level spawns nothing), and the command reads the permission mode only through
+// permissionModeArg, which re-checks it against the main-owned table and the fence verdict.
+{
+  const cStart = mustFind(src, 'const ptyStartAuthority = createPtyStartAuthority({', 'pty-start authority construction');
+  const construction = src.slice(cStart, mustFind(src, 'resolveDefinition: (req) =>', 'resolveDefinition'));
+  const classifyAt = construction.indexOf('classifyPtyLaunch(opts, {');
+  const applyAt = construction.indexOf('applyAuthority(launch, opts.authority)');
+  assert(classifyAt !== -1 && applyAt > classifyAt
+    && construction.indexOf('if (!launch || launch.ok !== true) return launch;') > classifyAt,
+  'S10: classify runs first, and the level is applied only to an accepted classification');
+  const bStart = mustFind(src, 'function buildAgentCommand(', 'buildAgentCommand');
+  const builder = src.slice(bStart, mustFind(src, '// Video-scout: download a video', 'buildAgentCommand end'));
+  assert((builder.match(/permissionModeArg\(launch\)/g) || []).length === 2,
+    'S10: buildAgentCommand adds the mode only through permissionModeArg (role and bare claude)');
+  assert(!/\.authority\b/.test(builder) && !/\.permissionMode\b/.test(builder),
+    'S10: buildAgentCommand never reads the renderer level or a raw mode field');
+  const promptAt = builder.indexOf('// Optional opening prompt');
+  assert(builder.indexOf('cmd += permissionModeArg(launch);') !== -1 && builder.indexOf('cmd += permissionModeArg(launch);') < promptAt,
+    'S10: in a role command the mode comes before the opening prompt');
+}
+
 process.stdout.write(`\nlauncher-fence-invariant: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

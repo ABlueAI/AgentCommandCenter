@@ -46,6 +46,8 @@ const { createTrustedSenderGate } = require('./trusted-ipc-sender');
 // allowlisted tools. Admission eligibility is still derived separately (see buildAgentCommand).
 // See docs/BUILDER-HANDOFF-fence-completion.md.
 const { classifyPtyLaunch, KIND: LAUNCH_KIND } = require('./pty-launch-classify');
+// S10: the authority level Blue picks maps to a main-owned Claude permission mode (authority-level.js).
+const { applyAuthority, permissionModeArg } = require('./authority-level');
 const { createRoleDefinitionResolver } = require('./role-definition-resolver');
 const { assertFencedRoleDefinition, FORBIDDEN_TOOLS, controlledWebFetchLaunch } = require('./role-fence-policy');
 const { createPtyStartAuthority } = require('./pty-start-authority');
@@ -272,8 +274,8 @@ const VALID_MODELS = new Set(['sonnet', 'opus', 'haiku', 'fable']);
 const VALID_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 
 // Resolve a launch spec to the command run inside the PTY. Three cases:
-//   role set    -> `claude --agent <role> [--model x] [--effort y]` (roles are a Claude feature)
-//   cli only    -> bare CLI (claude/codex/gemini)
+//   role set    -> `claude --agent <role> [--model x] [--effort y] [--permission-mode m]` (roles are a Claude feature)
+//   cli only    -> bare CLI (claude/codex/gemini); `claude` may carry `--permission-mode m`
 //   neither     -> undefined => plain PowerShell shell
 function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, launch, webFetch) {
   // FENCE COMPLETION: identity comes from the MAIN-OWNED classification when one is supplied, so the
@@ -303,6 +305,9 @@ function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, l
     }
     if (VALID_MODELS.has(model)) cmd += ' --model ' + model;
     if (VALID_EFFORTS.has(effort)) cmd += ' --effort ' + effort;
+    // S10: the authority level's permission mode, a main-owned constant chosen in the classify step
+    // (authority-level.js). Never set for a fenced role; permissionModeArg re-checks both.
+    cmd += permissionModeArg(launch);
     // Optional opening prompt (e.g. the reviewer's "review this diff"). Strip shell-significant
     // characters so it stays a single safe quoted argument inside the powershell -Command string.
     // A FENCED command never carries one: the classifier already refuses a supplied fenced prompt
@@ -313,6 +318,8 @@ function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, l
     }
     return cmd;
   }
+  // S10: a bare `claude` pane carries the authority level's permission mode too.
+  if (launch && launch.kind === 'cli' && launch.cli === 'claude') return AGENT_CMD.claude + permissionModeArg(launch);
   return AGENT_CMD[cli || agent]; // undefined when unknown/falsy -> plain shell
 }
 
@@ -1398,9 +1405,19 @@ const roleDefinitionResolver = createRoleDefinitionResolver({
 
 const ptyStartAuthority = createPtyStartAuthority({
   assessSender: (e) => launcherGate.assess(e),
-  classify: (opts) => classifyPtyLaunch(opts, {
-    validRoles: VALID_ROLES, fencedRoles: FENCED_ROLES, validClis: new Set(Object.keys(AGENT_CMD)),
-  }),
+  // S10: the authority level is resolved right after classification, so a refused level (unknown, or
+  // Maximum for a Claude pane) refuses before anything else runs, and the command reads the result.
+  classify: (opts) => {
+    const launch = classifyPtyLaunch(opts, {
+      validRoles: VALID_ROLES, fencedRoles: FENCED_ROLES, validClis: new Set(Object.keys(AGENT_CMD)),
+    });
+    if (!launch || launch.ok !== true) return launch;
+    const withAuthority = applyAuthority(launch, opts.authority);
+    if (withAuthority.ok === true && withAuthority.authority !== null) {
+      tlog(`pty-start: authority=${withAuthority.authority} permission-mode=${withAuthority.permissionMode || 'not-applied'}`);
+    }
+    return withAuthority;
+  },
   resolveDefinition: (req) => roleDefinitionResolver.resolve(req),
   assertPolicy: (req) => assertFencedRoleDefinition({
     role: req.role,
