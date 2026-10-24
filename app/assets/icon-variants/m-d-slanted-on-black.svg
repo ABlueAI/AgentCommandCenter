@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 16 16">
+  <title>Mako M, variant D</title>
+  <!-- S21 candidate. White block M slanted like the wordmark's italic m, on the current black tile. Same M as A to C, slanted, so its edges are off the pixel grid. -->
+  <rect width="16" height="16" rx="3" fill="#000"/>
+  <path fill="#fff" transform="translate(8 8) skewX(-12) scale(0.86 1) translate(-8 -8)" d="M2 13V3H4.6L8 8.1 11.4 3H14V13H11.6V7.2L8 12.2 4.4 7.2V13Z"/>
+</svg>

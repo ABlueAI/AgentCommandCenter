@@ -1,6 +1,6 @@
 # Mako status
 
-Updated 2026-10-24 by Claude (PR #123). Every PR that changes the state updates this file.
+Updated 2026-10-24 by Claude (PR #127). Every PR that changes the state updates this file.
 
 ## Right now
 
@@ -17,7 +17,7 @@ Updated 2026-10-24 by Claude (PR #123). Every PR that changes the state updates 
     and S17 to S20 are `HOLD (Blue)` until Blue says go (checklist step 18). S16 becomes "Composer
     research (includes the Dodaios trial)", ending in `docs/decisions/OSS-composer.md` and Blue's
     verdict (step 19); Composer build sessions and workflow automations come in a later plan change.
-    S21 (logo) stays READY.
+    S21 (logo) stayed READY; it is now in progress (PR #127, below).
 - **Claude plan:** Blue upgrades to Max 5x on Wednesday 2026-10-28 (moved from 2026-10-21 on
   2026-10-20; checklist step 8). Until then the runner builds one session at a time on Pro.
 - **CI and dependencies (S02, done in PR #45):** every GitHub Action is pinned to a commit SHA, and both
@@ -47,6 +47,9 @@ Updated 2026-10-24 by Claude (PR #123). Every PR that changes the state updates 
 - **Plan to issues (S03, PR #54, in progress):** a workflow keeps one `Sxx: <title>` issue per plan
   session, with status, authority, lane and sensitive labels and the "1.1 Month 1" milestone, in step
   with docs/PLAN-1.1.md on `main`. The Project board joins once Blue connects it (checklist step 25).
+- **Logo readability (S21, PR #127, in progress):** four "M" taskbar icons, A to D, with a preview
+  sheet at 16 to 48 px in docs/LOGO-VARIANTS.md. Blue picks one (checklist step 42); then it
+  replaces `app/assets/mako.ico` in the same PR. The app icon is unchanged until then.
 - **Obsidian Skills (S13, PR #115, in progress):** `scripts/new-mako-vault.ps1` creates Blue's
   private vault outside this repo, with `Mako index.md` (links to STATUS, PLAN, DECISIONS and the
   checklist on GitHub) an `AGENTS.md` and a `CLAUDE.md`; the kepano/obsidian-skills plugin is to be installed in
