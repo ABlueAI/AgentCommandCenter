@@ -720,6 +720,28 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - Restart Mako: the level you picked last is still selected.
   - *Done when:* you tell an agent what you saw (or what differed). It ticks this with the date, and
     the status PR marks S10 done.
+- [ ] **41. S11 on your PC: usage panel.** About **10 minutes**, after you merge the S11 PR, #126.
+  Details in docs/USAGE-PANEL.md.
+  - Pull `main` in your usual (stable) copy, not the dev copy, and restart Mako fully. The top bar
+    shows `5h –`, `Week –`, "No usage yet" and a **Set up** button. Click **Set up** (it copies one
+    line), then close Mako.
+  - Open `%USERPROFILE%\.claude\settings.json` in Notepad. If it already has a `"statusLine"`, stop
+    and tell an agent (this would replace it); likewise if the file doesn't exist or is just `{}`.
+    Otherwise paste the copied line on a new line right
+    after the first `{`, and put a comma at the end of the pasted line. Save. Check it in PowerShell:
+    `node -e "JSON.parse(require('fs').readFileSync(process.env.USERPROFILE+'/.claude/settings.json','utf8'));console.log('ok')"`
+    prints `ok` (anything else: undo the paste and tell an agent).
+  - Open Mako and a Claude pane, and send one short message. Claude's status line shows `usage 5h
+    N% · week N%`, and within 30 seconds Mako's top bar shows the same two numbers with reset
+    countdowns. Type `/usage` in that pane: the percentages match (they can differ by a point or
+    two if time has passed).
+  - The 90% warning, with a test file. In PowerShell:
+    `node -e "require('fs').writeFileSync(process.env.LOCALAPPDATA+'/Mako/usage.json',JSON.stringify({v:1,captured_at:Date.now(),five_hour:{used_percentage:95,resets_at:Math.floor(Date.now()/1000)+3600}}))"`.
+    Within 30 seconds the panel turns red and says "90%+ used: pause the runner". Send one more
+    message in the Claude pane to put the real figures back.
+  - Click **Pause runner**: claude.ai/code/routines opens in your browser.
+  - *Done when:* you tell an agent what you saw (or what differed). It ticks this with the date, and
+    the status PR marks S11 done.
 
 ## Every day, once the runner is on
 

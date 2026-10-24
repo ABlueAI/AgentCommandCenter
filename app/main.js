@@ -39,6 +39,8 @@ const { createLauncherIpc } = require('./launcher-ipc');
 // The one canonical fail-closed sender/frame/URL trust gate (shared with clipboard/library/followup).
 // P12 adds the two launcher handlers as callers so they, too, refuse any non-trusted-window sender.
 const { createTrustedSenderGate } = require('./trusted-ipc-sender');
+const { createUsageIpc } = require('./usage-ipc');
+const { defaultUsageFilePath } = require('./usage/usage-file');
 // FENCE COMPLETION — main-owned launch authority for `pty-start`. Classification happens ONCE here
 // instead of being re-derived from renderer fields at three separate decision points; the effective
 // role definition is resolved across the documented scopes and refuses when it cannot be
@@ -1460,6 +1462,20 @@ const openExternalIpc = createOpenExternalIpc({
   logRefusal: (line) => { tlog(line); if (win && !win.isDestroyed()) win.webContents.send('main-error', line); },
 });
 ipcMain.handle('open-external', async (e, url) => openExternalIpc.handleOpenExternal(e, url));
+
+// S11 usage panel: plan usage saved by Claude Code's status line (usage/usage-statusline.js), read
+// back as validated numbers only. One file per Windows user, shared by stable and dev copies.
+const usageIpc = createUsageIpc({
+  assessSender: (e) => launcherGate.assess(e),
+  statFile: (p) => fs.statSync(p),
+  readFile: (p) => fs.readFileSync(p, 'utf8'),
+  filePath: defaultUsageFilePath({ env: process.env, homedir: app.getPath('home'), platform: process.platform }),
+  scriptPath: path.join(__dirname, 'usage', 'usage-statusline.js'),
+  // The dev copy never offers the statusLine setting (instance-profile.js: no Claude hooks).
+  offerSetup: instanceProfile.claudeHooks === true,
+  logRefusal: (line) => { tlog(line); if (win && !win.isDestroyed()) win.webContents.send('main-error', line); },
+});
+ipcMain.handle('usage-read', (e) => usageIpc.handleRead(e));
 
 // ---- IPC: ABlueAgent GitHub token (S06; safeStorage, same rules as the Gemini key) ---------------
 // Trusted sender only. The renderer can learn whether a token is stored and save or clear one; the

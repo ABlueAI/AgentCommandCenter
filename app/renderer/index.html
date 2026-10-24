@@ -22,6 +22,14 @@
       <button id="refresh" class="ghost" title="Refresh">⟳</button>
     </div>
     <div class="spacer"></div>
+    <!-- S11 usage panel (usage-view.js): plan usage saved by Claude Code's status line. -->
+    <div id="usagePanel" class="usage-panel" title="Claude plan usage, from Claude Code's status line (docs/USAGE-PANEL.md)">
+      <span id="usageFive" class="usage-window">5h –</span>
+      <span id="usageWeek" class="usage-window">Week –</span>
+      <span id="usageNote" class="usage-note"></span>
+      <button id="usageSetup" class="ghost tiny hidden" title="Copy the statusLine setting for ~/.claude/settings.json (checklist step 41)">Set up</button>
+      <button id="usageRoutines" class="ghost tiny" title="Pause or resume the runner on claude.ai/code/routines">Pause runner</button>
+    </div>
     <div class="theme-picker">
       <label>Theme</label>
       <select id="themeSelect">
@@ -345,6 +353,7 @@
   <script src="library-view.js"></script>
   <script src="report-followup.js"></script>
   <script src="quick-links-view.js"></script>
+  <script src="usage-view.js"></script>
   <!-- MAIN-OWNED TURN ADMISSION BUDGET view. Loading it is inert: it only publishes a factory. app.js
        calls that factory ONLY when `window.ccAdmission` exists, so with no controlled run configured
        nothing is constructed, nothing is mounted, and #admissionHost keeps zero children. -->

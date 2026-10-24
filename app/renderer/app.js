@@ -13,6 +13,16 @@ const quickLinksView = window.ccQuickLinksView.createQuickLinksView({
   },
   log: (line) => appendLog(line),
 });
+// S11: plan usage panel in the top bar (usage-view.js).
+const usageView = window.ccUsageView.createUsageView({
+  document,
+  api: {
+    read: () => cc.usageRead(),
+    copy: (text) => cc.clipboardWrite(text),
+    openExternal: (url) => cc.openExternal(url),
+  },
+  log: (line) => appendLog(line),
+});
 // MAIN-OWNED TURN ADMISSION BUDGET — ABSENT, NOT INERT.
 // `window.ccAdmission` exists only when main put the controlled-run token in `additionalArguments`,
 // which it does only when a run is configured in ITS OWN startup environment. Renderer script cannot
@@ -1721,6 +1731,7 @@ function wireUi() {
   });
   setupLibrary();   // V5b2: wire the Library controls (refresh / filters / sort / copy / maximize)
   quickLinksView.mount();
+  usageView.mount();
   // Builds the controlled-run bar into #admissionHost. With no run configured `admissionView` is null
   // and this line does nothing at all — no element, no handler, no listener.
   if (admissionView) admissionView.mount();
