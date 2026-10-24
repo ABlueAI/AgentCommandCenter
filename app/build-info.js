@@ -9,13 +9,15 @@
 
 const SHORT_SHA = /^[0-9a-f]{7,40}$/;
 const SAFE_BRANCH = /^[A-Za-z0-9._\/-]{1,100}$/;
+const SAFE_TAG = /^[a-z]{1,16}$/;
 
 /**
  * runGit(args) -> Promise<string>, resolving to trimmed stdout or '' on any failure (never rejects).
- * Returns { version, branch, commit, dirty, label }; unknown parts are null rather than guessed.
+ * Returns { version, instanceTag, branch, commit, dirty, label }; unknown parts are null rather than guessed.
  */
-async function readBuildInfo({ version, runGit }) {
+async function readBuildInfo({ version, instanceTag, runGit }) {
   const ver = typeof version === 'string' && version ? version : null;
+  const tag = typeof instanceTag === 'string' && SAFE_TAG.test(instanceTag) ? instanceTag : null;
   let commit = null, branch = null, dirty = null;
   if (typeof runGit === 'function') {
     const [sha, ref, status] = await Promise.all([
@@ -27,12 +29,16 @@ async function readBuildInfo({ version, runGit }) {
     if (SAFE_BRANCH.test(ref)) branch = ref;
     if (commit && typeof status === 'string') dirty = status.length > 0;
   }
-  return { version: ver, branch, commit, dirty, label: formatBuildLabel({ version: ver, branch, commit, dirty }) };
+  return { version: ver, instanceTag: tag, branch, commit, dirty, label: formatBuildLabel({ version: ver, instanceTag: tag, branch, commit, dirty }) };
 }
 
-/** "Mako 1.0.0 · main@abc1234", with "+ local edits" when tracked files differ from that commit. */
-function formatBuildLabel({ version, branch, commit, dirty }) {
-  const name = version ? `Mako ${version}` : 'Mako';
+/**
+ * "Mako 1.0.0 · main@abc1234", with "+ local edits" when tracked files differ from that commit.
+ * The dev copy (S07, instance-profile.js) reads "Mako (dev) 1.0.0 · …" so the two windows differ.
+ */
+function formatBuildLabel({ version, instanceTag, branch, commit, dirty }) {
+  const app = typeof instanceTag === 'string' && SAFE_TAG.test(instanceTag) ? `Mako (${instanceTag})` : 'Mako';
+  const name = version ? `${app} ${version}` : app;
   if (!commit) return `${name} · commit unknown`;
   const where = branch && branch !== 'HEAD' ? `${branch}@${commit}` : commit;
   return `${name} · ${where}${dirty ? ' + local edits' : ''}`;
