@@ -1691,7 +1691,7 @@ function wireUi() {
       state.authority = window.ccAuthorityChoice.normalizeLevel(e.target.value).level;
       sel.value = state.authority;
       Promise.resolve(cc.saveSettings({ authority: state.authority }))
-        .catch(() => appendLog('[authority] could not save the level; Mako won't remember it after a restart\n'));
+        .catch(() => appendLog('[authority] could not save the level; Mako will not remember it after a restart\n'));
       appendLog(`[authority] new Claude panes start at ${window.ccAuthorityChoice.LABELS[state.authority]}\n`);
     };
   }
