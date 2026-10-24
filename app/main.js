@@ -88,6 +88,14 @@ const admissionConfig = require('./admission-budget-config');
 // admission-scrubbed environment expression while constructing fenced role environments only from
 // Blue's explicit Tier 1 Windows allowlist. See app/pty-env.test.js.
 const { buildPtyEnv } = require('./pty-env');
+// S06: local agent panes push as ABlueAgent with the token from Mako's key setup (agent-git-env.js).
+const { isAgentToken, isAgentPane } = require('./agent-git-env');
+// S06: kill a pane's whole process tree (taskkill /T) before pty.kill(); see process-tree.js.
+const { createProcessTreeKiller } = require('./process-tree');
+const processTree = createProcessTreeKiller({
+  platform: process.platform, env: process.env, execFile, execFileSync,
+  log: (line) => tlog(line),
+});
 const { createAdmissionBudget, REASON: ADMISSION_REASON } = require('./admission-budget');
 const { createAdmissionLedgerStore } = require('./admission-budget-store');
 const { createAdmissionIpc, CHANNEL_SUBMIT: ADMISSION_CHANNEL_SUBMIT } = require('./admission-ipc');
@@ -133,7 +141,9 @@ const { createLayoutStore } = require('./dockview-layout-store');
 // This boundary intentionally does not reuse or modify the legacy open-external handler below.
 const { createQuickLinksStore } = require('./quick-links-store');
 const { createQuickLinksIpc } = require('./quick-links-ipc');
-const { buildDefaultConfig: buildQuickLinksDefaultConfig } = require('./quick-links-policy');
+const { buildDefaultConfig: buildQuickLinksDefaultConfig, validateUrl: validateQuickLinkUrl } = require('./quick-links-policy');
+// S06: the legacy open-external channel goes through the same URL policy (open-external-ipc.js).
+const { createOpenExternalIpc } = require('./open-external-ipc');
 
 // ---- Windows taskbar identity (branding) --------------------------------------------------------
 // One stable, explicit AppUserModelID, so Windows attributes this process's windows to Mako rather
@@ -345,6 +355,18 @@ function loadSecure() {
 function saveSecure(s) { fs.writeFileSync(securePath(), JSON.stringify(s)); }
 
 let geminiKey = null; // decrypted GEMINI_API_KEY; null = not configured
+// S06: decrypted ABlueAgent GitHub token (checklist step 14); null = not configured. Same store and
+// rules as the Gemini key: ciphertext on disk, plaintext only in main memory and agent pane envs.
+let agentGitToken = null;
+function loadAgentGitToken() {
+  if (!safeStorage.isEncryptionAvailable()) return;
+  const s = loadSecure();
+  if (!s.agentGitTokenEnc) return;
+  try {
+    const t = safeStorage.decryptString(Buffer.from(s.agentGitTokenEnc, 'base64'));
+    agentGitToken = isAgentToken(t) ? t : null;
+  } catch { tlog('[agent-git] stored ABlueAgent token unreadable (different OS user?); agent panes use your own git login'); }
+}
 
 function loadGeminiKey() {
   if (!safeStorage.isEncryptionAvailable()) return;
@@ -493,6 +515,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
   loadGeminiKey(); // decrypt stored GEMINI_API_KEY into memory before any PTY can launch
+  loadAgentGitToken(); // S06: the ABlueAgent token, likewise before any PTY can launch
   // K8 media-permission hardening: grant ONLY a microphone-only request ('media' with
   // mediaTypes exactly ['audio']) coming from this window's main frame at the exact
   // entry document with the trusted file: origin — the in-app Whisper dictation path.
@@ -865,11 +888,22 @@ function closeControlledRunOnShutdown() {
     }
   }
 }
+// S06: on quit, kill every pane's process tree synchronously, once, BEFORE any pty.kill() below:
+// taskkill /T walks the tree through the live shell, and an asynchronous kill would never finish.
+let paneTreesKilledOnShutdown = false;
+function killPaneTreesOnShutdown() {
+  if (paneTreesKilledOnShutdown) return;
+  paneTreesKilledOnShutdown = true;
+  processTree.killTreesSync([...ptys.values()].map((p) => p && p.pid));
+}
 // A quit started by app.quit() (e.g. the default menu's Exit) never emits window-all-closed.
+// Listeners run in registration order, so the tree kill runs before the controlled-run closure.
+app.on('before-quit', () => { killPaneTreesOnShutdown(); });
 app.on('before-quit', () => { closeControlledRunOnShutdown(); });
 app.on('will-quit', () => { paneStatusNotifications.dispose(); });
 app.on('window-all-closed', () => {
   paneStatusNotifications.dispose();
+  killPaneTreesOnShutdown();
   closeControlledRunOnShutdown();
   for (const p of ptys.values()) { try { p.kill(); } catch {} }
   ptys.clear();
@@ -1379,9 +1413,47 @@ const launcherIpc = createLauncherIpc({
 ipcMain.handle('open-vscode', async (e, p) => launcherIpc.handleOpenVscode(e, p));
 ipcMain.handle('open-terminal', async (e, p) => launcherIpc.handleOpenTerminal(e, p));
 // Only ever hand http(s) URLs to the OS — never file:, vbscript:, etc. from terminal output.
-ipcMain.handle('open-external', async (_e, url) => {
-  if (typeof url === 'string' && /^https?:\/\//i.test(url)) shell.openExternal(url);
+// S06: trusted sender, then the Quick Links URL policy, then http(s) only (open-external-ipc.js).
+const openExternalIpc = createOpenExternalIpc({
+  assessSender: (e) => launcherGate.assess(e),
+  validateUrl: validateQuickLinkUrl,
+  openExternal: (url) => shell.openExternal(url),
+  logRefusal: (line) => { tlog(line); if (win && !win.isDestroyed()) win.webContents.send('main-error', line); },
 });
+ipcMain.handle('open-external', async (e, url) => openExternalIpc.handleOpenExternal(e, url));
+
+// ---- IPC: ABlueAgent GitHub token (S06; safeStorage, same rules as the Gemini key) ---------------
+// Trusted sender only. The renderer can learn whether a token is stored and save or clear one; the
+// plaintext never travels back. Only a ghp_/github_pat_ shaped value is accepted, and no value is
+// ever logged or echoed in an error.
+ipcMain.handle('get-agent-token-status', (e) => {
+  const g = launcherGate.assess(e);
+  if (!g.ok) return { ok: false, error: g.reason };
+  return { ok: true, hasToken: agentGitToken !== null, available: safeStorage.isEncryptionAvailable() };
+});
+ipcMain.handle('set-agent-token', (e, token) => {
+  const g = launcherGate.assess(e);
+  if (!g.ok) return { ok: false, error: g.reason };
+  const t = typeof token === 'string' ? token.trim() : '';
+  if (!isAgentToken(t)) return { ok: false, error: 'not a GitHub token (expected ghp_… or github_pat_…)' };
+  if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'safeStorage encryption not available on this system' };
+  try {
+    const enc = safeStorage.encryptString(t);
+    const s = loadSecure(); s.agentGitTokenEnc = enc.toString('base64'); saveSecure(s);
+    agentGitToken = t;
+    tlog('[agent-git] ABlueAgent token stored; new agent panes push as ABlueAgent');
+    return { ok: true };
+  } catch { return { ok: false, error: 'could not encrypt or save the token' }; }
+});
+ipcMain.handle('clear-agent-token', (e) => {
+  const g = launcherGate.assess(e);
+  if (!g.ok) return { ok: false, error: g.reason };
+  const s = loadSecure(); delete s.agentGitTokenEnc; saveSecure(s);
+  agentGitToken = null;
+  tlog('[agent-git] ABlueAgent token cleared; new agent panes use your own git login');
+  return { ok: true };
+});
+let agentTokenMissingNoticeSent = false;
 
 // ---- IPC: in-app terminals (node-pty + xterm.js) ---------------------------
 // Each renderer terminal pane gets a real ConPTY here: PowerShell spawned in the
@@ -1556,6 +1628,7 @@ ipcMain.handle('pty-start', (e, opts) => {
   // available, and a same-user process can still locate the ledger. The ledger remains an
   // ACCIDENTAL-SPEND control, not a security boundary against a malicious or compromised pane.
   const fencedRole = launch.fenced;
+  const agentPane = isAgentPane(launch);
   const ptyEnv = buildPtyEnv({
     baseEnv: process.env,
     fencedRole,
@@ -1563,10 +1636,18 @@ ipcMain.handle('pty-start', (e, opts) => {
     geminiKey,
     paneStatusEnv,
     webFetchMode: webFetch.mode,
+    agentGit: agentPane,
+    agentGitToken,
   });
   let p;
   const envMode = fencedRole ? 'fenced-tier-1' : 'unfenced-current';
-  tlog(`pty-start: env built — mode=${envMode}; scrub=forced; video-scout-key=${launch.videoScout ? 'explicit' : 'not-explicit'}; pane-status=${paneStatusEnrollment.ok ? 'enrolled' : 'not-enrolled'}`);
+  tlog(`pty-start: env built — mode=${envMode}; scrub=forced; video-scout-key=${launch.videoScout ? 'explicit' : 'not-explicit'}; pane-status=${paneStatusEnrollment.ok ? 'enrolled' : 'not-enrolled'}; agent-git=${agentPane ? (agentGitToken ? 'ABlueAgent' : 'no-token') : 'n/a'}`);
+  // S06: no silent fallback. Without the token an agent pane still pushes with Blue's own git login;
+  // say so once per run on the visible error channel.
+  if (agentPane && !agentGitToken && !agentTokenMissingNoticeSent) {
+    agentTokenMissingNoticeSent = true;
+    if (win && !win.isDestroyed()) win.webContents.send('main-error', 'Agent pane started WITHOUT the ABlueAgent token: it pushes with your own git login. Save the token in the key setup (🐙) to fix.');
+  }
   tlog(`pty-start: pty.spawn START cwd=${cwd}`);
   try {
     p = pty.spawn('powershell.exe', args, {
@@ -1637,8 +1718,9 @@ ipcMain.on('pty-write', (_e, { id, data }) => {
   admissionPtyBoundary.writeDirect(id, data);
 });
 ipcMain.on('pty-resize', (_e, { id, cols, rows }) => { const p = ptys.get(id); if (p) { try { p.resize(cols, rows); } catch (err) { tlog(`pty-resize ${id} failed (process likely exiting): ${(err && err.message) || err}`); } } });
+// S06: pty-kill kills the pane's process tree first (taskkill /T needs the live shell), then pty.kill().
 ipcMain.on('pty-kill', (_e, id) => {
-  const p = ptys.get(id); if (p) { try { p.kill(); } catch {} ptys.delete(id); }
+  const p = ptys.get(id); if (p) { ptys.delete(id); processTree.killTree(p.pid, () => { try { p.kill(); } catch {} }); }
   // Explicit pane close: the run's report is no longer reachable from the UI, so drop the mapping.
   videoScoutRunIds.remove(id);
   // EXPERIMENT A: the pane is gone, so its token must die with it. Releasing here (not on pty-exit)
