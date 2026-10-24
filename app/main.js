@@ -1407,6 +1407,8 @@ const ptyStartAuthority = createPtyStartAuthority({
   assessSender: (e) => launcherGate.assess(e),
   // S10: the authority level is resolved right after classification, so a refused level (unknown, or
   // Maximum for a Claude pane) refuses before anything else runs, and the command reads the result.
+  // Its one log line runs after the sender gate and carries only the validated level name and the
+  // main-owned mode, never a renderer string.
   classify: (opts) => {
     const launch = classifyPtyLaunch(opts, {
       validRoles: VALID_ROLES, fencedRoles: FENCED_ROLES, validClis: new Set(Object.keys(AGENT_CMD)),

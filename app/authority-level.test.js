@@ -32,6 +32,11 @@ assert(!(LEVEL.MAXIMUM in PERMISSION_MODE), 'Maximum has no local permission mod
 assert(Object.values(PERMISSION_MODE).every((m) => m !== 'bypassPermissions' && m !== 'dontAsk'),
   'no level ever maps to bypassPermissions or dontAsk');
 assert(CLOUD_SESSION_URL === 'https://claude.ai/code', 'Maximum goes to claude.ai/code');
+{
+  // The renderer opens it through open-external, which runs the Quick Links URL policy first.
+  const v = require('./quick-links-policy').validateUrl(CLOUD_SESSION_URL);
+  assert(v.ok === true && v.url === CLOUD_SESSION_URL, 'the open-external URL policy accepts it unchanged');
+}
 assert(Object.isFrozen(PERMISSION_MODE) && Object.isFrozen(LEVELS) && Object.isFrozen(LEVEL), 'the tables are frozen');
 
 process.stdout.write('\nUNFENCED CLAUDE PANES GET THE MODE\n');
