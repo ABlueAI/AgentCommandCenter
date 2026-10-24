@@ -216,6 +216,17 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - **Pause any time:** on that page switch **Mako all-day runner** off, then stop any runner
     session still working at https://claude.ai/code. Switch it back on to resume. Leave the digest
     on; it only reads.
+  - **Left to do, as read on 2026-10-23 at about 07:40 UTC** (docs/RUNNER.md "Applied so far"; about
+    3 minutes at https://claude.ai/code/routines):
+    - **Mako daily runner:** switch it **off**. It is still on and fires at 8:01 AM with the new
+      prompt, next to the new hourly runner.
+    - **Mako evening digest:** switch it **on**. It was created off, so no digest is sent yet.
+    - **Connectors:** open each new task > Edit > Advanced settings > Connectors and remove them
+      all. The digest has your GoHighLevel CRM (GHL_MCP_X_CLAUDE), Claude_Docs and
+      Claude_Code_Remote attached, and the runner has Claude_Docs; neither needs any. If you want
+      to keep one, tell the agent which and why, and it records that here.
+    - After the S04 follow-up PR merges: tell the main chat "apply the runner and digest prompts
+      from docs/RUNNER.md", so both tasks get the fixed prompts.
   - *Done when:* that session reads all three tasks back (schedule, model Opus 5.5, notifications,
     on or off, prompt matching `main`), the first hourly fire afterwards works a PR as `ABlueAgent`
     (which proves the repository is attached), and it ticks this step with the date and how it
@@ -580,7 +591,9 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     board and ticks this with the date. If the run fails, the agent reads its log; no agent ever sees
     the token. When the token expires, every hourly run fails visibly until it is replaced.
 
-- [ ] **26. Have the runner's claim-check prompt applied (after you merge PR #83).** About 2 minutes,
+- [ ] **26. Have the runner's claim-check prompt applied (after you merge PR #83).** *Superseded,
+  won't be done: S04 (PR #84) replaced this prompt, and step 27 turns "Mako daily runner" off.
+  Don't apply a prompt to that task; use step 27's last bullet instead.* About 2 minutes,
   right after you merge PR #83 (the claim check: the runner skips a READY session that already has
   an open PR titled with its ID). Tell the main chat, or any Claude session, "runner prompt merged"
   or "apply the runner prompt from docs/RUNNER.md". It updates only the prompt of the scheduled task

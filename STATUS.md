@@ -66,13 +66,13 @@ Updated 2026-10-24 by Claude (PR #123). Every PR that changes the state updates 
   `Mako (dev)` title, and it never installs or changes Claude Code hooks. The stable copy is
   unchanged. How to run it and what the two still share: [docs/DEV-INSTANCE.md](docs/DEV-INSTANCE.md).
   Blue checks both side by side on his PC (checklist step 38).
-- **All-day runner (S04, PR #84, in progress, pending Blue):** proposed in docs/RUNNER.md "S04: the
-  all-day runner": hourly fires at :07 Eastern, a parallel cap of 1 on Pro counted from expiring
-  locks, a clean stop and resume at usage limits, no phone notification per fire, and one evening
-  digest at 8:03 PM. Researched from the official docs on 2026-10-21: the minimum interval is one
-  hour, no daily run cap is stated, and no documented way lets a cloud session read plan usage, so
-  the 90% warning moves to S11. Nothing is applied until Blue merges it; then steps 28 and 27 in
-  the same sitting.
+- **All-day runner (S04, PR #84 merged 2026-10-23, partly applied):** the hourly runner
+  (`trig_01LPKxs49xvwN7mcuGLGwyN8`, :07 Eastern, no push) is on and fired at 07:09 UTC. As read
+  on 2026-10-23 at about 07:40 UTC, the evening digest (`trig_0166nBynncK2BWPaarALAq8q`) is off,
+  the old daily runner is still on with the new prompt, and both new tasks have connectors the plan
+  didn't call for (the digest has the GoHighLevel CRM). Blue's clicks are in checklist step 27;
+  steps 27 and 28 aren't ticked. The S04 follow-up PR fixes the prompts' open follow-ups and
+  records this read-back (docs/RUNNER.md "Applied so far").
 - **Guardrails:**
   - The repo-side files are live on `main`, and the merge audit has passed on every merge.
   - Part A (checklist step 2) is done and verified on 2026-10-18. `main` now requires a pull request
