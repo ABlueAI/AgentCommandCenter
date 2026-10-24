@@ -354,13 +354,18 @@ process.stdout.write('\nindex.html ships the EMBEDDED dock and loads no Dockview
   //
   // RE-PINNED for Shift+Enter (2026-10-16). 24 -> 25. The one addition is `term-keys.js`, a pure key
   // mapping helper that publishes `window.ccTermKeys` and touches no DOM.
+  //
+  // RE-PINNED for S10 one-click authority (2026-10-24). 25 -> 26. The one addition is
+  // `authority-choice.js`, a pure helper that publishes `window.ccAuthorityChoice` and touches no DOM.
   const scriptTags = (indexSrc.match(/<script[^>]*src=/g) || []).length;
-  // S11 adds the usage panel view: 25 -> 26.
-  assert(scriptTags === 26, `index.html loads exactly 26 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view, the terminal key mapping and the usage panel view (found ${scriptTags})`);
+  // S11 adds the usage panel view: 26 -> 27 (after S10's authority choice).
+  assert(scriptTags === 27, `index.html loads exactly 27 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view, the terminal key mapping, the authority choice and the usage panel view (found ${scriptTags})`);
   assert(/<script src="usage-view\.js"><\/script>/.test(indexSrc),
-    'the 26th script is exactly the S11 usage panel view');
+    'the S11 usage panel view is loaded');
   assert(/<script src="term-keys\.js"><\/script>/.test(indexSrc),
     'the added script is exactly the terminal key mapping helper');
+  assert(/<script src="authority-choice\.js"><\/script>/.test(indexSrc),
+    'S10: the added script is exactly the authority choice helper');
   assert(/<script src="pane-status-badge\.js"><\/script>/.test(indexSrc),
     'the 22nd script is exactly the pane-status prototype badge');
   assert(/<script src="quick-links-view\.js"><\/script>/.test(indexSrc),
