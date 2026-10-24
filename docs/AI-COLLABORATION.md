@@ -24,12 +24,12 @@ Rules for all agents are in [AGENTS.md](../AGENTS.md). This page is the short ve
 
 - Optional reviewer (since it was linked to `ABlueAgent`, BLUE-CHECKLIST.md step 16, 2026-10-20, it
   reviews agent PRs automatically; a manual request goes through an agent, AGENTS.md step 3),
-  second-opinion builder (builder lane planned in
-  S26), builder of the UI sessions S17 to S20 (docs/PLAN-1.1.md "UI sessions: who builds"), planning
+  second builder for `windows`-lane sessions that aren't sensitive (docs/CODEX-BUILDER-LANE.md), builder of the UI sessions S17 to S20 (docs/PLAN-1.1.md "UI sessions: who builds"), planning
   partner. Nothing else in the workflow depends on it. AGENTS.md "Who does what" is the full version.
 - Reads the same files Claude reads (`AGENTS.md`, `STATUS.md`, `docs/PLAN-1.1.md`,
   `docs/DECISIONS.md`). Proposes plan changes as PRs, not as chat to be copied.
-- Never shares a worktree or branch with Claude.
+- Never shares a worktree or branch with Claude: Codex fixes its own PRs, and Claude pushes to a
+  `codex/` branch only when Blue asks.
 
 ## Shared memory
 

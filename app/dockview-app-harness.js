@@ -1341,6 +1341,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('list-worktrees', () => []);
   ipcMain.handle('repo-github-url', () => '');
   ipcMain.handle('get-gemini-key-status', () => ({ hasKey: true }));
+  ipcMain.handle('get-agent-token-status', () => ({ ok: true, hasToken: true })); // S06
   ipcMain.handle('tlog-reset', () => ({ ok: true }));
   ipcMain.handle('pty-start', async (_e, o) => {
     ipc.ptyStart.push((o && o.id) || 'unknown');

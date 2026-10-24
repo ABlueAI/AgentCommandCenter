@@ -300,10 +300,17 @@ const REGIONS = [
     // builder emits it only for a fenced pane and only as `https://example.com` or `disabled`, and
     // reserves its name for every pane. Every other argument, the scrub and P1 are byte-identical.
     // Previous pin retained: 184 / f64b6bd93abb18dced7c8d114d3ea82b98349d317878aa84dd04c25f17f7bb7b
+    //
+    // RE-PINNED (S06, local agents push as ABlueAgent). Added: `const agentPane = isAgentPane(launch);`
+    // after `const fencedRole`, and two buildPtyEnv arguments, `agentGit: agentPane,` and
+    // `agentGitToken,`. isAgentPane is false for every fenced role and for Video Scout, and buildPtyEnv
+    // itself refuses the identity for either (pty-env.test.js and agent-git-env.test.js prove it).
+    // Every other argument, the scrub and P1 are byte-identical.
+    // Previous pin retained: 217 / 8227036cb1ce84d0c32fd38ff4999c6db71a9625dc6beba26b9a85dd6bec5f08
     start: 'const fencedRole = launch.fenced;',
     end: 'let p;',
-    utf16Length: 217,
-    sha: '8227036cb1ce84d0c32fd38ff4999c6db71a9625dc6beba26b9a85dd6bec5f08',
+    utf16Length: 302,
+    sha: 'fc8deeab81b2e88627956f87b871de00f210e5515ee82236214572db21b70088',
   },
   {
     name: 'pty-start handler',
@@ -350,8 +357,15 @@ const REGIONS = [
     // The fenced-role cwd gate is byte-identical (2183 / 080893bc…). The sender gate, classification,
     // admission claim and refusal paths, spawn sink, cwd selection and failure cleanup are unchanged.
     // Previous pin retained: 15225 / 128aecaefc5fe7a9332d5fb3ff6e281c6f7bf69ded8ceed153421895de94f1d5
-    utf16Length: 15987,
-    sha: 'b47bba25ac869e5b9acf87d7bd6158f799df4a8f9cd2df5d8365ae7e07dc3d2c',
+    //
+    // RE-PINNED (S06, local agents push as ABlueAgent), 15987 -> 16623 code units. Changes inside this
+    // region: the ptyEnv block's agent-git lines (pinned above); `agent-git=<ABlueAgent|no-token|n/a>`
+    // appended to the `env built` log line (a constant, never the token); and one visible main-error
+    // notice per run when an agent pane starts without the token. The sender gate, classification,
+    // fenced-role cwd gate, admission claim, spawn sink and failure cleanup are unchanged.
+    // Previous pin retained: 15987 / b47bba25ac869e5b9acf87d7bd6158f799df4a8f9cd2df5d8365ae7e07dc3d2c
+    utf16Length: 16623,
+    sha: 'b0f27ef86d23317389cca04e57810dba1534a468f3bac9d1187311ccc7871ebc',
   },
 ];
 

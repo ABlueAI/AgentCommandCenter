@@ -21,6 +21,10 @@ contextBridge.exposeInMainWorld('cc', {
   getGeminiKeyStatus: () => ipcRenderer.invoke('get-gemini-key-status'),
   setGeminiKey: (key) => ipcRenderer.invoke('set-gemini-key', key),
   clearGeminiKey: () => ipcRenderer.invoke('clear-gemini-key'),
+  // S06: the ABlueAgent GitHub token for agent panes (status, save, clear; never read back).
+  getAgentTokenStatus: () => ipcRenderer.invoke('get-agent-token-status'),
+  setAgentToken: (token) => ipcRenderer.invoke('set-agent-token', token),
+  clearAgentToken: () => ipcRenderer.invoke('clear-agent-token'),
 
   // one-click launchers
   openVscode: (p) => ipcRenderer.invoke('open-vscode', p),
