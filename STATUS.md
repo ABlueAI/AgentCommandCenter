@@ -1,6 +1,6 @@
 # Mako status
 
-Updated 2026-10-24 by Claude (PR #123). Every PR that changes the state updates this file.
+Updated 2026-10-24 by Claude (PRs #119 and #123). Every PR that changes the state updates this file.
 
 ## Right now
 
@@ -18,6 +18,13 @@ Updated 2026-10-24 by Claude (PR #123). Every PR that changes the state updates 
     research (includes the Dodaios trial)", ending in `docs/decisions/OSS-composer.md` and Blue's
     verdict (step 19); Composer build sessions and workflow automations come in a later plan change.
     S21 (logo) stays READY.
+- **GoHighLevel lead pipeline (plan change proposed in PR #119, pending Blue):** new S29 ranks
+  every Florida marina from the official Google Places API (a new paid Google Cloud account, Blue's
+  to confirm; checklist step 33), new S30 writes a personal email opener for each, and Blue sends
+  them from HighLevel in approved batches of about 20; S24's read-only workflow becomes a reply/lead
+  watcher (a separate scheduled task, 7:30 AM to 8:00 PM Eastern, notifying only on news; step 34
+  first). Marina and lead data stay in the private repo `ABlueAI/mako-business`. Nothing is
+  scheduled or built until Blue merges it; S22 (PR #116) is unchanged.
 - **Claude plan:** Blue upgrades to Max 5x on Wednesday 2026-10-28 (moved from 2026-10-21 on
   2026-10-20; checklist step 8). Until then the runner builds one session at a time on Pro.
 - **CI and dependencies (S02, done in PR #45):** every GitHub Action is pinned to a commit SHA, and both
