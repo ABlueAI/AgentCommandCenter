@@ -13,7 +13,8 @@ taskbar the black tile disappears into it. There is no letter to read.
 ## The candidates
 
 Four "M" icons, in `app/assets/icon-variants/`. Each is a hand-drawn SVG (a block M on a
-16-unit grid, so the 16, 32 and 48 px frames land on whole pixels) and a ready-made ICO with the
+16-unit grid; its outer edges land on whole pixels at 16, 32 and 48 px, its inner stem edges and
+D's slant do not) and a ready-made ICO with the
 same seven PNG frames as today's `mako.ico` (16, 24, 32, 48, 64, 128, 256 px). The colours are the
 shark's own: black tile, navy `#14275f`, accent blue `#3f65f4`.
 
@@ -37,8 +38,10 @@ Blue's PC.
 Only the Windows icon: the picked ICO replaces `app/assets/mako.ico` (the file the window, and so
 the taskbar button, already uses through `icon:` in `app/main.js`), and the hash pin in
 `app/mako-branding.test.js` moves to it. The shark and wordmark in Mako's top bar stay as they are.
-The desktop shortcut takes its icon from its own settings (`electron.exe,0` today), so Blue points
-it at `app\assets\mako.ico` once (checklist step 42).
+The desktop shortcut takes its icon from its own settings (last recorded as `electron.exe,0`, in
+July 2026, and not re-checked since; the shortcut may still be named "Command Center"), so Blue
+points it at `app\assets\mako.ico` once (checklist step 42), before checking the taskbar: a
+launch through the shortcut may show the shortcut's icon.
 
 ## Re-rendering
 

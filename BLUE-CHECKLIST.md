@@ -714,11 +714,13 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     Recommendation (Claude's, not your words): **C**, white M on the accent blue.
   - An agent then makes your pick the app icon in the same PR, and it comes back to you as `READY TO
     MERGE`.
-  - **Check (after merging, 3 minutes):** pull `main` and restart Mako fully. The taskbar button
-    shows the M. If it still shows the shark, Windows is using its cached icon: unpin and re-pin
-    Mako, or sign out and back in.
-  - **Desktop shortcut (1 minute):** right-click the Mako desktop shortcut > Properties > Change
-    Icon... > Browse..., pick `app\assets\mako.ico` in your Mako checkout, then OK twice.
+  - **Desktop shortcut (1 minute, after merging):** pull `main`, then right-click the Mako desktop shortcut (it may
+    still be named "Command Center") > Properties > Change Icon... > Browse..., pick
+    `app\assets\mako.ico` in your Mako checkout, then OK twice. Its icon was last recorded as
+    `electron.exe,0` (July 2026, not re-checked).
+  - **Check (then, 2 minutes):** restart Mako fully from the shortcut. The taskbar
+    button shows the M. If it still shows the shark, Windows is using its cached icon: unpin and
+    re-pin Mako, or sign out and back in.
   - *Done when:* you tell an agent you can read the M on the taskbar (or what you saw). It ticks
     this with the date, and the status PR marks S21 done.
 

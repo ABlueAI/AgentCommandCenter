@@ -6,7 +6,9 @@
 //
 // Dev-only tool, not part of the app or `npm test`. It needs Playwright with Chromium, which is not
 // a Mako dependency: run it where Playwright is installed (the cloud session that made the files),
-// or `npm i --no-save playwright` and `npx playwright install chromium` in a scratch folder first.
+// or `npm i --no-save playwright` and `npx playwright install chromium` in a scratch folder first,
+// then point Node at that folder, since Node resolves modules from the script's own folder:
+// PowerShell `$env:NODE_PATH = '<scratch folder>\node_modules'`, or `NODE_PATH=...` in bash.
 // Run from the repo root: node scripts/logo/render-icon-variants.js
 
 const fs = require('fs');
