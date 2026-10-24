@@ -63,6 +63,11 @@ Updated 2026-10-23 by Claude (PRs #118 and #119). Every PR that changes the stat
   `ABlueAI/Mako-Business` (PR 1 there, commit `24ddc8e`; checklist step 32 ticked). The cloud session
   couldn't open web pages, so its facts come from search extracts of public pages and need a check
   on each source before outreach. No marina data is in this repo.
+- **Codex builder lane (S26, PR #114, in progress, needs Blue):** docs/CODEX-BUILDER-LANE.md
+  records what is known (Codex's PRs are opened as `ABlueAgent`; its reviews can't approve) and
+  proposes the lane: hand-off on a locked `agent-claimed` issue, Codex fixes its own PRs, Blue
+  checks the "Run by:" link of the Opus review before approving a Codex PR. Blue picks the trial
+  task on PR #114 (checklist step 30).
 - **All-day runner (S04, PR #84, in progress, pending Blue):** proposed in docs/RUNNER.md "S04: the
   all-day runner": hourly fires at :07 Eastern, a parallel cap of 1 on Pro counted from expiring
   locks, a clean stop and resume at usage limits, no phone notification per fire, and one evening
