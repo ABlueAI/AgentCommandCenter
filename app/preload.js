@@ -37,6 +37,9 @@ contextBridge.exposeInMainWorld('cc', {
   quickLinksSave: (text) => ipcRenderer.invoke('quick-links-save', text),
   quickLinksOpen: (id) => ipcRenderer.invoke('quick-links-open', id),
 
+  // S11 usage panel (invoke-only): validated plan-usage numbers from the status-line snapshot.
+  usageRead: () => ipcRenderer.invoke('usage-read'),
+
   // in-app terminals (node-pty)
   tlogReset: () => ipcRenderer.invoke('tlog-reset'),
   ptyStart: (o) => ipcRenderer.invoke('pty-start', o),
