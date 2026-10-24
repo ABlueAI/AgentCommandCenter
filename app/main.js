@@ -152,8 +152,8 @@ const { resolveInstanceProfile, createDevPaneStatusController } = require('./ins
 // than to the implicit identity of the shared, unpackaged electron.exe (whose atom icon is what the
 // taskbar button showed). Windows requires a process-level ID to be set during startup, before any
 // UI exists, so this runs at module evaluation: before app.whenReady(), createWindow() and every
-// BrowserWindow. It changes the shell identity only; the `command-center` app name, the userData
-// directory and the admission ledger stored there are untouched.
+// BrowserWindow. It changes the shell identity only; the `command-center` app name, and (for the
+// stable copy) the userData directory and the admission ledger stored there, are untouched.
 //
 // S07: the dev copy (`--dev-instance`) takes its own ID, so Windows shows it as a separate taskbar
 // button, and its own userData folder. Electron only honours a userData change made before the app
