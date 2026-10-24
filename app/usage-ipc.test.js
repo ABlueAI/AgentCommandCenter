@@ -20,7 +20,7 @@ const GOOD = JSON.stringify({ v: 1, captured_at: NOW, five_hour: { used_percenta
 const FILE = 'C:\\Users\\blue\\AppData\\Local\\Mako\\usage.json';
 const SCRIPT = 'C:\\Mako\\AgentCommandCenter\\app\\usage\\usage-statusline.js';
 
-function make({ trusted = true, stat, read } = {}) {
+function make({ trusted = true, stat, read, offerSetup = true } = {}) {
   const logs = [];
   const calls = { stat: 0, read: 0 };
   const ipc = createUsageIpc({
@@ -29,6 +29,7 @@ function make({ trusted = true, stat, read } = {}) {
     readFile: (p) => { calls.read += 1; assert(p === FILE, 'reads the main-owned path'); return read ? read() : GOOD; },
     filePath: FILE,
     scriptPath: SCRIPT,
+    offerSetup,
     logRefusal: (line) => logs.push(line),
   });
   return { ipc, logs, calls };
@@ -96,11 +97,24 @@ process.stdout.write('\nhandleRead\n');
   eq(ipc.handleRead({}).reason, 'usage-file-unreadable', 'an unreadable file is refused');
 }
 {
+  // The dev copy (S07) never offers the statusLine setting, but still shows the shared figures.
+  const dev = make({ offerSetup: false });
+  eq(dev.ipc.setupLine, undefined, 'dev copy: no setup line built');
+  const r = dev.ipc.handleRead({});
+  assert(r.ok && r.state === 'ok' && r.fiveHour.usedPercentage === 42.3, 'dev copy: figures still shown');
+  assert(!('setupLine' in r), 'dev copy: no setup line in an ok result');
+  const missing = make({ offerSetup: false, stat: enoent }).ipc.handleRead({});
+  assert(missing.ok && missing.state === 'not-set-up' && !('setupLine' in missing), 'dev copy: no setup line when there is no file');
+  const bad = make({ offerSetup: false, read: () => '{' }).ipc.handleRead({});
+  assert(!bad.ok && !('setupLine' in bad), 'dev copy: no setup line on a refusal');
+}
+{
   let threw = 0;
-  for (const bad of [{}, { assessSender: () => ({ ok: true }) }]) {
+  const base = { assessSender: () => ({ ok: true }), statFile: () => ({}), readFile: () => '', filePath: FILE, scriptPath: SCRIPT };
+  for (const bad of [{}, { assessSender: () => ({ ok: true }) }, base, Object.assign({}, base, { offerSetup: 'yes' })]) {
     try { createUsageIpc(bad); } catch { threw += 1; }
   }
-  eq(threw, 2, 'construction refuses missing dependencies');
+  eq(threw, 4, 'construction refuses missing dependencies and a non-boolean offerSetup');
 }
 
 process.stdout.write('\nwiring\n');
@@ -108,6 +122,7 @@ process.stdout.write('\nwiring\n');
   const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
   assert(/const usageIpc = createUsageIpc\(\{\s*assessSender: \(e\) => launcherGate\.assess\(e\),/.test(main), 'main builds the handler on the shared trusted-sender gate');
   assert(/scriptPath: path\.join\(__dirname, 'usage', 'usage-statusline\.js'\)/.test(main), 'the setup line points at this copy\'s status-line script');
+  assert(/offerSetup: instanceProfile\.claudeHooks === true,/.test(main), 'only the copy that may change Claude hooks (stable) offers the setup line');
   assert(/ipcMain\.handle\('usage-read', \(e\) => usageIpc\.handleRead\(e\)\);/.test(main), 'usage-read passes only the event (no renderer payload)');
   const preload = fs.readFileSync(path.join(__dirname, 'preload.js'), 'utf8');
   assert(/usageRead: \(\) => ipcRenderer\.invoke\('usage-read'\),/.test(preload), 'preload exposes usageRead with no arguments');

@@ -5,6 +5,10 @@
 // The renderer sends nothing and never receives a path except inside `setupLine`, the statusLine
 // setting it offers to copy for Blue (a fixed, main-built string pointing at this copy's
 // usage-statusline.js). No claude.ai login, cookie or token is read or stored (docs/USAGE-PANEL.md).
+//
+// Only the stable copy offers that line (`offerSetup`). The dev copy is where agents change code, and
+// like its pane-status controller (instance-profile.js) it must never get Claude Code to run its
+// files for every session; it still reads and shows the shared figures.
 
 const usageFile = require('./usage/usage-file');
 
@@ -21,18 +25,22 @@ function createUsageIpc(deps) {
   const readFile = deps && deps.readFile;         // (path) => string
   const filePath = deps && deps.filePath;
   const scriptPath = deps && deps.scriptPath;
+  const offerSetup = deps && deps.offerSetup;
   const logRefusal = (deps && deps.logRefusal) || (() => {});
   for (const [name, fn] of [['assessSender', assessSender], ['statFile', statFile], ['readFile', readFile]]) {
     if (typeof fn !== 'function') throw new Error(`usage-ipc: ${name} must be a function.`);
   }
   if (typeof filePath !== 'string' || !filePath) throw new Error('usage-ipc: filePath is required.');
   if (typeof scriptPath !== 'string' || !scriptPath) throw new Error('usage-ipc: scriptPath is required.');
-  const setupLine = buildSetupLine(scriptPath);
+  if (typeof offerSetup !== 'boolean') throw new Error('usage-ipc: offerSetup must be true or false.');
+  // Undefined in the dev copy, so it is left out of every result below and no Set up button shows.
+  const setupLine = offerSetup ? buildSetupLine(scriptPath) : undefined;
+  const withSetup = (result) => (setupLine === undefined ? result : Object.assign(result, { setupLine }));
   // A bad file is refused visibly, but once per reason, not on every 30-second poll.
   const logged = new Set();
   function refuseOnce(reason) {
     if (!logged.has(reason)) { logged.add(reason); logRefusal(`Usage panel: ${reason}`); }
-    return { ok: false, reason, setupLine };
+    return withSetup({ ok: false, reason });
   }
 
   function handleRead(event) {
@@ -45,20 +53,19 @@ function createUsageIpc(deps) {
       text = readFile(filePath);
     } catch (err) {
       // Not there yet: the status line isn't set up, or no session has had a reply since.
-      if (err && err.code === 'ENOENT') return { ok: true, state: 'not-set-up', setupLine };
+      if (err && err.code === 'ENOENT') return withSetup({ ok: true, state: 'not-set-up' });
       return refuseOnce('usage-file-unreadable');
     }
     const parsed = usageFile.parseSnapshot(text);
     if (!parsed.ok) return refuseOnce(parsed.reason);
     logged.clear();
-    return {
+    return withSetup({
       ok: true,
       state: 'ok',
       capturedAt: parsed.capturedAt,
       fiveHour: parsed.fiveHour,
       sevenDay: parsed.sevenDay,
-      setupLine,
-    };
+    });
   }
 
   return { handleRead, setupLine };

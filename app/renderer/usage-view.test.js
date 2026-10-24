@@ -78,7 +78,9 @@ process.stdout.write('\nsummarize\n');
   eq(stale.note, 'as of 40m ago', 'old figures say how old they are');
 
   const ns = summarize({ ok: true, state: 'not-set-up', setupLine: 'x' }, NOW);
-  assert(ns.showSetup && ns.note.startsWith('Not set up'), 'not set up: the setup button and a note');
+  assert(ns.showSetup && ns.note === 'No usage yet: set up (step 41) or wait for a Claude reply', 'no file: the setup button, and a note that doesn\'t claim it isn\'t set up');
+  const dev = summarize({ ok: true, state: 'not-set-up' }, NOW);
+  assert(!dev.showSetup && dev.note.includes('dev copy'), 'dev copy (no setup line): no setup button, and says where to set it up');
 
   const bad = summarize({ ok: false, reason: 'usage-file-malformed', setupLine: 'x' }, NOW);
   eq(bad.note, 'Usage unavailable (usage-file-malformed)', 'a refusal is shown with its reason');

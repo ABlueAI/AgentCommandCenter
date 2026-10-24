@@ -707,10 +707,12 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     the status PR marks S07 done.
 - [ ] **41. S11 on your PC: usage panel.** About **10 minutes**, after you merge the S11 PR, #126.
   Details in docs/USAGE-PANEL.md.
-  - Pull `main` and restart Mako fully. The top bar shows `5h –`, `Week –`, "Not set up" and a **Set
-    up** button. Click **Set up** (it copies one line), then close Mako.
+  - Pull `main` in your usual (stable) copy, not the dev copy, and restart Mako fully. The top bar
+    shows `5h –`, `Week –`, "No usage yet" and a **Set up** button. Click **Set up** (it copies one
+    line), then close Mako.
   - Open `%USERPROFILE%\.claude\settings.json` in Notepad. If it already has a `"statusLine"`, stop
-    and tell an agent (this would replace it). Otherwise paste the copied line on a new line right
+    and tell an agent (this would replace it); likewise if the file doesn't exist or is just `{}`.
+    Otherwise paste the copied line on a new line right
     after the first `{`, and put a comma at the end of the pasted line. Save. Check it in PowerShell:
     `node -e "JSON.parse(require('fs').readFileSync(process.env.USERPROFILE+'/.claude/settings.json','utf8'));console.log('ok')"`
     prints `ok` (anything else: undo the paste and tell an agent).

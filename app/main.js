@@ -1452,6 +1452,8 @@ const usageIpc = createUsageIpc({
   readFile: (p) => fs.readFileSync(p, 'utf8'),
   filePath: defaultUsageFilePath({ env: process.env, homedir: app.getPath('home'), platform: process.platform }),
   scriptPath: path.join(__dirname, 'usage', 'usage-statusline.js'),
+  // The dev copy never offers the statusLine setting (instance-profile.js: no Claude hooks).
+  offerSetup: instanceProfile.claudeHooks === true,
   logRefusal: (line) => { tlog(line); if (win && !win.isDestroyed()) win.webContents.send('main-error', line); },
 });
 ipcMain.handle('usage-read', (e) => usageIpc.handleRead(e));

@@ -10,11 +10,11 @@ is switched off and on (docs/RUNNER.md).
 Claude Code passes plan usage to its **status line** command: `rate_limits.five_hour` and
 `rate_limits.seven_day`, each with `used_percentage` (0 to 100) and `resets_at` (Unix epoch
 seconds). They appear "only for claude.ai Pro and Max subscribers ... and only after the first API
-response in the session" (https://code.claude.com/docs/en/statusline). These are the same figures
-`/usage` shows.
+response in the session" (https://code.claude.com/docs/en/statusline). They are documented as the plan's usage;
+step 41 checks that they match `/usage`.
 
-1. Blue sets `statusLine` in `%USERPROFILE%\.claude\settings.json` once (BLUE-CHECKLIST.md step 41)
-   to run `node "<Mako>/app/usage/usage-statusline.js"`. The panel's **Set up** button copies the
+1. Blue sets `statusLine` in `%USERPROFILE%\.claude\settings.json` once (BLUE-CHECKLIST.md step 41),
+   from his usual (stable) copy, to run `node "<Mako>/app/usage/usage-statusline.js"`. The panel's **Set up** button copies the
    exact line, with this copy's path.
 2. After each Claude reply, in any local Claude Code session (in Mako or not), Claude Code runs that
    script. It reads the two windows and nothing else from the session data (no session ID, folder,
@@ -34,7 +34,10 @@ One file per Windows user: usage belongs to the claude.ai account, so the stable
 - `5h 42% · 1h 12m` and `Week 18% · 2d 4h`: used, and time to reset.
 - `reset`: the window's reset time has passed; new figures come with the next Claude reply.
 - `as of 40m ago`: the newest figures are more than 15 minutes old (no Claude reply since).
-- `Not set up`: no usage file yet. Click **Set up** and follow step 41.
+- `No usage yet`: no usage file yet, because the status line isn't set up or no local Claude session
+  has had a reply since. Click **Set up** and follow step 41, or wait for a reply.
+- `No usage yet (dev copy: ...)`: the dev copy (S07) never offers the setup line, since that would
+  make every Claude session run the dev copy's code; set it up from your usual copy.
 - `Usage unavailable (<reason>)`: the file couldn't be read or isn't valid; the Logs tab has the
   reason once.
 - Red with `⚠ 90%+ used: pause the runner`: either window is at 90% or more. The Logs tab records it

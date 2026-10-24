@@ -57,9 +57,13 @@
       };
     }
     if (result.state === 'not-set-up') {
+      // No file can also mean set up but no Claude reply yet, so this doesn't claim "not set up".
+      // Without a setup line (the dev copy) there is nothing to copy here.
+      const canSetUp = typeof result.setupLine === 'string';
       return {
         five: { text: '5h –', title: '', warn: false }, week: { text: 'Week –', title: '', warn: false },
-        note: 'Not set up: copy the status line setting', warn: false, showSetup: true,
+        note: canSetUp ? 'No usage yet: set up (step 41) or wait for a Claude reply' : 'No usage yet (dev copy: set up from your usual copy)',
+        warn: false, showSetup: canSetUp,
       };
     }
     const five = describeWindow('5h', result.fiveHour, nowMs);
