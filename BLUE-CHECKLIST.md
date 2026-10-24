@@ -6,7 +6,8 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-23 by Claude (step 35 added for S06, PR #121; step 30 added for the S26 Codex trial, PR #114; step 14 ticked on Blue's word and its token renewal reminder added under "Dated reminders", PR #118; step 31 added for the S13 Obsidian vault, PR #115; step 29 added for the S12 Quick Links bundle, PR #86; step 21
+Last updated 2026-10-23 by Claude (steps 33, 34 and 36 added for the GoHighLevel lead pipeline,
+S29 and S24, PR #119, proposed; step 35 added for S06, PR #121; step 30 added for the S26 Codex trial, PR #114; step 14 ticked on Blue's word and its token renewal reminder added under "Dated reminders", PR #118; step 31 added for the S13 Obsidian vault, PR #115; step 29 added for the S12 Quick Links bundle, PR #86; step 21
 ticked and step 26 added for the runner's claim check, PR #83; step 19 ticked with Blue's Composer verdict, PR #82; step 21 added: apply the capped review loop to the runner, PR #52;
 step 25 added for the S03 plan board, PR #54; "Do next" order added, step 20 ticked, step 22 added, PR #53;
 S05 checks added as steps 23 and 24, PR #49; step 6 dropped by Blue, PR #51; step 17 moved after
@@ -27,6 +28,9 @@ other remaining items." Claude's order for what is left:
 3. **Step 17**, the token audit and push protection.
 4. **Wednesday 2026-10-28: step 8**, the Max upgrade.
 5. **When you merge S04 (PR #84): step 28, then step 27**, in the same sitting.
+6. **After you merge the lead-pipeline plan change (PR #119; S22 is merged): step 33**, then
+   start S29. After S29 merges, **step 36** before you start S30. **Step 34** waits until S24 is
+   ready for its watcher.
 
 ## Today
 
@@ -667,6 +671,40 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - *Done when:* a runner fire attaches the repo and pushes the brief's branch there (it ticks this
     with the date and the commit); if it can't reach the repo, it says why on the PR.
 
+- [ ] **33. Google Cloud billing, a Places API key and a budget alert (before S29).** About **15
+  minutes**, after you merge the lead-pipeline plan change (PR #119) and before you start S29.
+  This is new spending on a new paid account: your decision. Claude recommends it (S29 should stay
+  within Google's free monthly usage, so the expected cost is $0; docs/PLAN-1.1.md "S29 and S30
+  details").
+  - In the Google Cloud console: create a project (for example "mako-places"), create a billing
+    account and link it to the project, then enable **Places API (New)**.
+  - **Credentials** > **Create credentials** > **API key**. Restrict it: API restrictions, Places
+    API (New) only.
+  - **Billing** > **Budgets & alerts**: a budget of **$1** with email alerts. A budget alert only
+    emails you; it doesn't stop spending. So also open the Places API's **Quotas** page: if it offers
+    a per-day request limit, set it to about **300**, a hard limit S29 can't pass. If it offers none
+    (not verified), say so; S29 then relies on its own request count and the alert.
+  - Save the key in your password manager. Then put it in a separate cloud environment for business
+    sessions (for example "Mako business"; the cloud environment menu in a session's title bar, then
+    Edit): under Network secrets (or as an environment variable) named `GOOGLE_PLACES_API_KEY`. Under
+    the network's Allowed domains add only `places.googleapis.com`, `cloud.google.com` and
+    `developers.google.com` (S29 reads Google's terms and pricing there), and attach
+    `ABlueAI/mako-business`. Never the runner's environment. Never paste the key in a chat, an
+    issue, a PR or a repo.
+  - *Done when:* you tell an agent the budget, the quota (or that there is none) and the
+    environment's name (never the key).
+    The S29 session then checks the variable is set without printing it, and ticks this step with
+    the date and how it checked.
+
+- [ ] **34. Screenshot of the HighLevel connector's permission scopes (before S24's watcher goes
+  live).** About **3 minutes**, when the S24 session asks, after you authorize the GoHighLevel
+  connector in claude.ai with a read-only token.
+  - Open the connector's permission or scope page and take a screenshot that shows every scope.
+    Make sure it shows no token, key or password; crop anything that does.
+  - Send it to the S24 session only (not in a GitHub issue or PR; this repository is public).
+  - *Done when:* the S24 session confirms every scope is read-only and ticks this step with the
+    date. Any write scope stops the watcher until you remove it.
+
 - [ ] **35. S06 on your PC: agent token, leftover processes, links.** About **15 minutes**, after
   you merge the S06 PR, #121. Pull `main`, run `npm ci` in `app`, and restart Mako fully.
   - **Token (2 minutes).** Mako shows a 🐙 "ABlueAgent token not stored" banner. Paste step 14's
@@ -697,6 +735,17 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - **Links (1 minute).** Click a GitHub link printed in a Claude pane: it opens in your browser.
   - *Done when:* you tell an agent the results (or what failed). It checks the test PR's author on
     GitHub, ticks this with the date, and marks S06 done in the next status PR.
+
+- [ ] **36. Delete the Places key before S30.** About **3 minutes**, after S29 merges and before you
+  start S30. S30 reads marina websites, which can carry injected instructions, so it runs without
+  the key.
+  - In the business environment's settings (the cloud environment menu in a session's title bar,
+    then Edit): delete `GOOGLE_PLACES_API_KEY` from Network secrets and from environment variables.
+    It stays in your password manager for any later refresh of the list.
+  - Then widen that environment's network access so S30 can read marina websites (a broader access
+    level, since the sites aren't known in advance).
+  - *Done when:* the S30 session finds `GOOGLE_PLACES_API_KEY` unset (without printing anything)
+    and you confirm the secrets list no longer holds the key; it ticks this with the date.
 
 - [ ] **38. S07 on your PC: stable and dev copies side by side.** About **12 minutes**, after you
   merge the S07 PR, #123. Steps are in docs/DEV-INSTANCE.md.
@@ -788,7 +837,13 @@ You can start on the first one now, which saves time later.
 - **Session S17 (on hold with S14):** pick one of 2 or 3 design directions.
 - **Session S21:** pick a logo variant.
 - **Session S23:** approve the client paperwork drafts.
-- **Session S24:** authorize the GoHighLevel connector in claude.ai (read-only token).
+- **Session S29:** Google Cloud billing, Places API key and budget alert (step 33), then start S29
+  in the business environment.
+- **Session S30:** first delete the Places key from the business environment and widen its network
+  access (step 36), then start S30. Afterwards, import the CSV into a HighLevel email
+  campaign and approve each batch of about 20 before it sends.
+- **Session S24:** authorize the GoHighLevel connector in claude.ai (read-only token), then the scope
+  screenshot (step 34) before the reply/lead watcher goes live.
 
 ## Waiting on you (the runner won't ask)
 
