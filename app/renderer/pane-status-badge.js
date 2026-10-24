@@ -96,6 +96,12 @@
       title: 'Setup could not be reconciled automatically. Reporting is disabled. See docs/RECOVERY-pane-status-hooks.md.',
       action: null,
     },
+    // S07: the dev copy never touches Claude Code hooks (app/instance-profile.js), so it offers no action.
+    'dev-instance': {
+      label: 'Claude status: off (dev copy)',
+      title: 'This is the dev copy of Mako. It never installs or changes the Claude Code hooks; pane status works in the stable copy.',
+      action: null,
+    },
   };
 
   const SETUP_CLASS = {
@@ -107,6 +113,7 @@
     'other-installation': 'ps-setup-warn',
     malformed: 'ps-setup-error',
     'reconciliation-required': 'ps-setup-error',
+    'dev-instance': 'ps-setup-off',
   };
 
   /**

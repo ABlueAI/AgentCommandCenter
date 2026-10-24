@@ -70,6 +70,18 @@ const fakeGit = (answers) => async (args) => {
     eq(info.branch, null, 'a branch name with unexpected characters is dropped');
   }
   eq(formatBuildLabel({ version: null, commit: null }), 'Mako · commit unknown', 'no version and no commit still renders');
+  // S07: the dev copy names itself in the title and build badge; anything but a short lowercase tag is dropped.
+  {
+    const info = await readBuildInfo({
+      version: '1.0.0',
+      instanceTag: 'dev',
+      runGit: fakeGit({ 'rev-parse --short HEAD': 'f57066c', 'rev-parse --abbrev-ref HEAD': 'claude/x', 'status --porcelain --untracked-files=no': '' }),
+    });
+    eq(info.label, 'Mako (dev) 1.0.0 · claude/x@f57066c', 'the dev copy is labelled (dev)');
+    eq(info.instanceTag, 'dev', 'and reports its tag');
+  }
+  eq(formatBuildLabel({ version: '1.0.0', instanceTag: null, commit: 'f57066c', branch: 'main' }), 'Mako 1.0.0 · main@f57066c', 'the stable copy keeps the plain label');
+  eq(formatBuildLabel({ version: '1.0.0', instanceTag: '<b>x</b>', commit: 'f57066c', branch: 'main' }), 'Mako 1.0.0 · main@f57066c', 'an unexpected tag is dropped');
 
   const pkg = require('./package.json');
   eq(pkg.version, '1.0.0', 'package.json carries the 1.0.0 release version');
