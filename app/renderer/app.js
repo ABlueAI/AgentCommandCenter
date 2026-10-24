@@ -1305,6 +1305,10 @@ async function boot() {
   if (s && s.ttsVoice) state.ttsVoice = s.ttsVoice;
   if (s && s.ttsSpeed) state.ttsSpeed = s.ttsSpeed;
   updateKeyBanner(await cc.getGeminiKeyStatus());
+  // S06: not awaited, so the token check adds no IPC round trip to the boot path (pane startup is
+  // timing-sensitive); a failed check leaves the banner showing and says so in the Logs tab.
+  cc.getAgentTokenStatus().then(updateAgentTokenBanner)
+    .catch(() => { updateAgentTokenBanner(null); appendLog('[agent token] status check failed\n'); });
   await refreshRepos();
   wireUi();
   await quickLinksView.load();
@@ -1645,6 +1649,13 @@ function updateKeyBanner(status) {
   $('#keyStored').classList.toggle('hidden', !hasKey);
 }
 
+// ---- ABlueAgent token banner (S06) ------------------------------------------
+function updateAgentTokenBanner(status) {
+  const hasToken = !!(status && status.ok && status.hasToken);
+  $('#agentTokenBanner').classList.toggle('hidden', hasToken);
+  $('#agentTokenStored').classList.toggle('hidden', !hasToken);
+}
+
 // ---- logs -------------------------------------------------------------------
 function appendLog(text) {
   const log = $('#logView');
@@ -1704,6 +1715,23 @@ function wireUi() {
   $('#geminiKeyClear').onclick = async () => {
     await cc.clearGeminiKey();
     updateKeyBanner({ hasKey: false });
+  };
+
+  // ABlueAgent token banner (S06). The token is sent once to main and never read back.
+  $('#agentTokenSave').onclick = async () => {
+    const token = $('#agentTokenInput').value.trim();
+    if (!token) { $('#agentTokenInput').focus(); return; }
+    const r = await cc.setAgentToken(token);
+    $('#agentTokenInput').value = '';
+    if (r && r.ok) updateAgentTokenBanner({ ok: true, hasToken: true });
+    else appendLog(`[agent token] save failed: ${(r && r.error) || 'unknown error'}\n`);
+  };
+  $('#agentTokenInput').onkeydown = (e) => { if (e.key === 'Enter') $('#agentTokenSave').click(); };
+  $('#agentTokenChange').onclick = () => updateAgentTokenBanner({ ok: true, hasToken: false });
+  $('#agentTokenClear').onclick = async () => {
+    const r = await cc.clearAgentToken();
+    if (r && r.ok) updateAgentTokenBanner({ ok: true, hasToken: false });
+    else appendLog(`[agent token] clear failed: ${(r && r.error) || 'unknown error'}\n`);
   };
 
   // new-agent modal
