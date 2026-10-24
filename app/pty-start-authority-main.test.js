@@ -109,12 +109,14 @@ for (const r of ['web-scout', 'operator', 'source-scout', 'builder']) {
 }
 const SANDBOX = fs.mkdtempSync(path.join(OUTPUTS, 'web-scout-fixture-'));
 
-const record = { handled: new Map(), on: new Map(), windowsCreated: 0, ptySpawns: 0, spawnArgs: [], mainErrors: [], webContents: null };
+const record = { handled: new Map(), on: new Map(), windowsCreated: 0, ptySpawns: 0, spawnArgs: [], exitHandlers: [], mainErrors: [], webContents: null };
 const ptyStub = {
   spawn(file, args, opts) {
     record.ptySpawns += 1;
     record.spawnArgs.push({ file, args, cwd: opts && opts.cwd, env: opts && opts.env });
-    return new Proxy({ onData() {}, onExit() {}, write() {}, resize() {}, kill() {}, pid: 1234 },
+    // onExit handlers are kept so the S08 section can simulate a process exit without pty-kill (which
+    // would run a real tree kill on the stub's pid).
+    return new Proxy({ onData() {}, onExit(cb) { record.exitHandlers.push(cb); }, write() {}, resize() {}, kill() {}, pid: 1234 },
       { get(t, k) { return k in t ? t[k] : () => {}; } });
   },
 };
@@ -272,6 +274,44 @@ Module._load = function (request) {
     assert(cmd.indexOf('--allowedTools') === -1
       && !Object.keys(env).some((k) => k.toUpperCase() === 'BLUE_HELM_CONTROLLED_WEBFETCH_MODE'),
     'and gets no WebFetch grant and no WebFetch mode');
+  }
+
+  section('S08 SESSION MEMORY — main mints the Claude session ID and records the pane');
+  {
+    const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+    const memPath = path.join(USER_DATA, 'session-memory.json');
+    const readMem = () => JSON.parse(fs.readFileSync(memPath, 'utf8'));
+    const lastCmd = () => record.spawnArgs[record.spawnArgs.length - 1].args.join(' ');
+    const before = record.ptySpawns;
+    await ptyStart(goodEvent, { id: 'pane-s08', role: 'builder', cli: 'claude', cwd: FIX, sessionId: '11111111-1111-1111-1111-111111111111' });
+    assert(record.ptySpawns === before + 1, 'a builder pane launches');
+    const m = lastCmd().match(new RegExp('claude --agent builder --session-id (' + UUID + ')$'));
+    assert(m !== null, 'its command ends with a main-minted --session-id UUID');
+    assert(lastCmd().indexOf('11111111-1111-1111-1111-111111111111') === -1, 'a renderer-supplied sessionId is ignored');
+    const sid = m && m[1];
+    let mem = readMem();
+    let rec = mem.records.find((r) => r.sessionId === sid);
+    assert(mem.version === 1 && rec && rec.paneId === 'pane-s08' && rec.role === 'builder' && rec.cli === 'claude'
+      && rec.worktree === FIX && typeof rec.startedAt === 'string' && rec.stoppedAt === null,
+      'session-memory.json in userData records the session ID, pane, role and worktree, still open');
+    record.exitHandlers[record.exitHandlers.length - 1]();
+    rec = readMem().records.find((r) => r.sessionId === sid);
+    assert(rec && typeof rec.stoppedAt === 'string' && rec.stopReason === 'exited', 'the process exit closes the record as `exited`');
+
+    await ptyStart(goodEvent, { id: 'pane-s08-cli', role: null, cli: 'claude', cwd: FIX });
+    const m2 = lastCmd().match(new RegExp('-Command claude --session-id (' + UUID + ')$'));
+    assert(m2 !== null && m2[1] !== sid, 'a bare claude CLI pane gets its own fresh session ID');
+    rec = readMem().records.find((r) => r.sessionId === (m2 && m2[1]));
+    assert(rec && rec.role === null && rec.cli === 'claude', 'and is recorded with no role');
+    const count = readMem().records.length;
+    await ptyStart(goodEvent, { id: 'pane-s08-codex', role: null, cli: 'codex', cwd: FIX });
+    assert(lastCmd().indexOf('--session-id') === -1, 'a codex pane gets no --session-id');
+    await ptyStart(goodEvent, { id: 'pane-s08-shell', role: null, cli: null, cwd: FIX });
+    assert(lastCmd().indexOf('--session-id') === -1, 'a plain shell pane gets no --session-id');
+    assert(readMem().records.length === count, 'and neither is recorded');
+    const spawnsBefore = record.ptySpawns;
+    await ptyStart(goodEvent, { id: 'pane-s08-bad', role: 'Builder', cli: 'claude', cwd: FIX });
+    assert(record.ptySpawns === spawnsBefore && readMem().records.length === count, 'a refused launch spawns nothing and records nothing');
   }
 
   section('REFUSALS — every one must spawn ZERO PTYs in main');

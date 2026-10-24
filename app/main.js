@@ -140,6 +140,7 @@ const { createLayoutStore } = require('./dockview-layout-store');
 // Quick Links: a separate pure URL/config policy, fixed userData store, and trusted open-by-ID IPC.
 // This boundary intentionally does not reuse or modify the legacy open-external handler below.
 const { createQuickLinksStore } = require('./quick-links-store');
+const sessionMemoryMod = require('./session-memory');
 const { createQuickLinksIpc } = require('./quick-links-ipc');
 const { buildDefaultConfig: buildQuickLinksDefaultConfig, validateUrl: validateQuickLinkUrl } = require('./quick-links-policy');
 // S06: the legacy open-external channel goes through the same URL policy (open-external-ipc.js).
@@ -275,7 +276,11 @@ const VALID_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 //   role set    -> `claude --agent <role> [--model x] [--effort y]` (roles are a Claude feature)
 //   cli only    -> bare CLI (claude/codex/gemini)
 //   neither     -> undefined => plain PowerShell shell
-function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, launch, webFetch) {
+function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, launch, webFetch, sessionId) {
+  // S08: `sessionId` is MAIN-MINTED (crypto.randomUUID in pty-start) and re-checked as a UUID before
+  // it is spliced in, so only hex digits and hyphens can reach the -Command string. It goes last,
+  // after any opening prompt, which leaves every earlier argument in place.
+  const sessionArg = sessionMemoryMod.isSessionId(sessionId) ? ' --session-id ' + sessionId : '';
   // FENCE COMPLETION: identity comes from the MAIN-OWNED classification when one is supplied, so the
   // command, the fence decision and the environment tier read one result rather than each
   // re-deriving from renderer fields. The admission verdict does NOT read it: prepareAdmissionPaneLaunch
@@ -311,9 +316,10 @@ function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, l
       const clean = initialPrompt.replace(/["`$\r\n]/g, ' ').replace(/\s+/g, ' ').trim();
       if (clean) cmd += ' "' + clean + '"';
     }
-    return cmd;
+    return cmd + sessionArg;
   }
-  return AGENT_CMD[cli || agent]; // undefined when unknown/falsy -> plain shell
+  const bare = AGENT_CMD[cli || agent]; // undefined when unknown/falsy -> plain shell
+  return bare === AGENT_CMD.claude ? bare + sessionArg : bare;
 }
 
 // Video-scout: download a video and analyze it with Gemini (visual + spoken) via feed-gemini.ps1.
@@ -526,6 +532,8 @@ function createWindow() {
 app.whenReady().then(() => {
   loadGeminiKey(); // decrypt stored GEMINI_API_KEY into memory before any PTY can launch
   loadAgentGitToken(); // S06: the ABlueAgent token, likewise before any PTY can launch
+  // S08: a record still open now was never closed (a crash or a forced kill): close it as `unknown`.
+  noteSessionMemory(sessionMemory().closeOpen(sessionMemoryMod.STOP_REASON.UNKNOWN));
   // K8 media-permission hardening: grant ONLY a microphone-only request ('media' with
   // mediaTypes exactly ['audio']) coming from this window's main frame at the exact
   // entry document with the trusted file: origin — the in-app Whisper dictation path.
@@ -910,6 +918,10 @@ let paneTreesKilledOnShutdown = false;
 function killPaneTreesOnShutdown() {
   if (paneTreesKilledOnShutdown) return;
   paneTreesKilledOnShutdown = true;
+  // S08: close the open session records first, so they read `mako-closed` rather than the `exited`
+  // the tree kill below would produce.
+  noteSessionMemory(sessionMemory().closeOpen(sessionMemoryMod.STOP_REASON.MAKO_CLOSED));
+  paneSessions.clear();
   processTree.killTreesSync([...ptys.values()].map((p) => p && p.pid));
 }
 // A quit started by app.quit() (e.g. the default menu's Exit) never emits window-all-closed.
@@ -1475,6 +1487,35 @@ ipcMain.handle('clear-agent-token', (e) => {
 });
 let agentTokenMissingNoticeSent = false;
 
+// ---- S08: session memory ---------------------------------------------------------------------
+// Main-owned record of each Claude pane's session ID, role and worktree (app/session-memory.js).
+// It never gates a launch: a refused read or write is logged and shown once per reason on the
+// visible error channel, and the pane still starts.
+let sessionMemoryStore = null;
+function sessionMemory() {
+  if (!sessionMemoryStore) sessionMemoryStore = sessionMemoryMod.createSessionMemoryStore({ userDataDir: app.getPath('userData') });
+  return sessionMemoryStore;
+}
+const sessionMemoryNoticesSent = new Set();
+function noteSessionMemory(res) {
+  if (res && res.ok) return;
+  const reason = (res && res.reason) || 'session-memory-failed';
+  tlog(`[session-memory] refused [${reason}]`);
+  // Counted as sent only once it reaches a window, so a refusal at startup shows on the next one.
+  if (sessionMemoryNoticesSent.has(reason) || !win || win.isDestroyed()) return;
+  sessionMemoryNoticesSent.add(reason);
+  win.webContents.send('main-error',
+    `Session memory refused [${reason}]: Claude session IDs are not being recorded (${sessionMemoryMod.FILENAME} in Mako's settings folder).`);
+}
+// paneId -> the main-minted session ID of the Claude pane running in it.
+const paneSessions = new Map();
+function stopPaneSession(id, reason) {
+  const sid = paneSessions.get(id);
+  if (!sid) return;
+  paneSessions.delete(id);
+  noteSessionMemory(sessionMemory().recordStop(sid, reason));
+}
+
 // ---- IPC: in-app terminals (node-pty + xterm.js) ---------------------------
 // Each renderer terminal pane gets a real ConPTY here: PowerShell spawned in the
 // worktree, optionally running the chosen agent CLI, with bytes streamed both ways.
@@ -1616,8 +1657,11 @@ ipcMain.handle('pty-start', (e, opts) => {
     role: launch.kind === LAUNCH_KIND.ROLE ? launch.role : null,
     controlled: admissionLaunch.controlled === true,
   });
+  // S08: every Claude pane (a role pane, or a bare `claude` CLI pane) gets a main-minted session ID.
+  const claudeSessionId = (launch.kind === LAUNCH_KIND.ROLE || (launch.kind === LAUNCH_KIND.CLI && launch.cli === 'claude'))
+    ? crypto.randomUUID() : null;
   if (!launch.videoScout) {
-    const run = buildAgentCommand(opts, launch, webFetch); // role / bare CLI / undefined => plain shell
+    const run = buildAgentCommand(opts, launch, webFetch, claudeSessionId); // role / bare CLI / undefined => plain shell
     if (run) args.push('-Command', run);
   }
 
@@ -1693,6 +1737,14 @@ ipcMain.handle('pty-start', (e, opts) => {
   }
   tlog('pty-start: pty.spawn END ok');
   ptys.set(id, p);
+  if (claudeSessionId) {
+    // Recorded only after a successful spawn, so a refused or failed launch leaves no record.
+    const rec = sessionMemory().recordStart({
+      sessionId: claudeSessionId, paneId: id, role: launch.role, cli: 'claude', worktree: cwd,
+    });
+    noteSessionMemory(rec);
+    if (rec.ok) paneSessions.set(id, claudeSessionId);
+  }
   // V5b1: record pane->runId for a video-scout launch. This is stored internally ONLY (never
   // returned to the renderer). It intentionally OUTLIVES p.onExit below -- a finished run's report
   // stays openable until the pane is explicitly closed (pty-kill) or the window shuts down.
@@ -1714,6 +1766,7 @@ ipcMain.handle('pty-start', (e, opts) => {
   // not wait for a SessionEnd hook that may never fire), while the run-ID mapping is deliberately not.
   p.onExit(() => {
     ptys.delete(id);
+    stopPaneSession(id, sessionMemoryMod.STOP_REASON.EXITED);
     // PANE STATUS: publish `exited` first, while the pane is still addressable, then revoke its token.
     paneStatus.notePaneExit(id);
     // The controlled pane's process is gone: close the run. Any unused allowance is VOIDED here and is
@@ -1740,6 +1793,7 @@ ipcMain.on('pty-write', (_e, { id, data }) => {
 ipcMain.on('pty-resize', (_e, { id, cols, rows }) => { const p = ptys.get(id); if (p) { try { p.resize(cols, rows); } catch (err) { tlog(`pty-resize ${id} failed (process likely exiting): ${(err && err.message) || err}`); } } });
 // S06: pty-kill kills the pane's process tree first (taskkill /T needs the live shell), then pty.kill().
 ipcMain.on('pty-kill', (_e, id) => {
+  stopPaneSession(id, sessionMemoryMod.STOP_REASON.CLOSED);
   const p = ptys.get(id); if (p) { ptys.delete(id); processTree.killTree(p.pid, () => { try { p.kill(); } catch {} }); }
   // Explicit pane close: the run's report is no longer reachable from the UI, so drop the mapping.
   videoScoutRunIds.remove(id);

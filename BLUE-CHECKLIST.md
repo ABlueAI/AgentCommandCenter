@@ -706,6 +706,16 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - *Done when:* you tell an agent what you saw (or what differed). It ticks this with the date, and
     the status PR marks S07 done.
 
+- [ ] **39. S08 on your PC: session memory.** About **3 minutes**, after you merge the S08 PR, #124.
+  - Pull `main` and restart Mako fully. Open a builder pane, wait for Claude to start, then close
+    the pane.
+  - Open `%APPDATA%\command-center\session-memory.json` in Notepad: the last record shows
+    `"role": "builder"`, your worktree folder, a `startedAt` and a `stoppedAt` time, and
+    `"stopReason": "closed"`.
+  - In a PowerShell window in that worktree, run `claude --resume <the record's sessionId>`: the
+    conversation from that pane opens. Exit it.
+  - *Done when:* you tell an agent what you saw (or what differed). It ticks this with the date.
+
 ## Every day, once the runner is on
 
 Once S04 is applied (step 27), the runner works all day and you do one sitting in the evening:

@@ -364,8 +364,18 @@ const REGIONS = [
     // notice per run when an agent pane starts without the token. The sender gate, classification,
     // fenced-role cwd gate, admission claim, spawn sink and failure cleanup are unchanged.
     // Previous pin retained: 15987 / b47bba25ac869e5b9acf87d7bd6158f799df4a8f9cd2df5d8365ae7e07dc3d2c
-    utf16Length: 16623,
-    sha: 'b0f27ef86d23317389cca04e57810dba1534a468f3bac9d1187311ccc7871ebc',
+    //
+    // RE-PINNED (S08, session memory 1), 16623 -> 17319 code units. Changes inside this region, all
+    // additions: `const claudeSessionId = <role or claude CLI pane> ? crypto.randomUUID() : null;` just
+    // before the command is built, passed as buildAgentCommand's fourth argument (a main-minted UUID,
+    // re-checked as one before it is spliced in); a `recordStart` block after `ptys.set(id, p)`, so
+    // only a spawned pane is recorded; and one `stopPaneSession(id, EXITED)` call in `p.onExit`. The
+    // sender gate, classification, fenced-role cwd gate, admission claim, WebFetch decision, ptyEnv
+    // block, spawn sink and failure cleanup are unchanged. The S08 assertions at the end of this file
+    // pin the new wiring.
+    // Previous pin retained: 16623 / b0f27ef86d23317389cca04e57810dba1534a468f3bac9d1187311ccc7871ebc
+    utf16Length: 17319,
+    sha: '31c856186b935487cee310e115df5e3ba2811a14b87edbca04e12e2d371d777d',
   },
 ];
 
@@ -479,7 +489,7 @@ assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src)
   const handler = src.slice(hStart, mustFind(src, "ipcMain.on('pty-write'", 'pty-start handler end'));
   const claimAt = handler.indexOf('admissionPaneClaimed = admissionLaunch.controlled === true;');
   const decideAt = handler.indexOf('const webFetch = controlledWebFetchLaunch({');
-  const buildAt = handler.indexOf('buildAgentCommand(opts, launch, webFetch)');
+  const buildAt = handler.indexOf('buildAgentCommand(opts, launch, webFetch, claudeSessionId)');
   assert(claimAt !== -1 && decideAt > claimAt && buildAt > decideAt,
     'WebFetch: the claim, then the grant decision, then the command — in that order');
   assert((handler.match(/buildAgentCommand\(/g) || []).length === 1,
@@ -490,6 +500,27 @@ assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src)
     && decide.indexOf('controlled: admissionLaunch.controlled === true,') !== -1
     && decide.indexOf('opts.') === -1,
     'WebFetch: the decision reads only the classified verdict and the claim result, never opts');
+}
+
+// S08 SESSION MEMORY content assertions — pinned as wiring so a future re-pin cannot drop them with
+// the hash. The session ID is minted in main, after the WebFetch decision, only for Claude panes; it is
+// recorded only after a successful spawn; and the command builder accepts only a UUID.
+{
+  const hStart = mustFind(src, "ipcMain.handle('pty-start', (e, opts) => {", 'pty-start handler');
+  const handler = src.slice(hStart, mustFind(src, "ipcMain.on('pty-write'", 'pty-start handler end'));
+  const mintAt = handler.indexOf('const claudeSessionId = (launch.kind === LAUNCH_KIND.ROLE || (launch.kind === LAUNCH_KIND.CLI && launch.cli === \'claude\'))\n    ? crypto.randomUUID() : null;');
+  assert(mintAt !== -1 && mintAt > handler.indexOf('const webFetch = controlledWebFetchLaunch({')
+    && mintAt < handler.indexOf('buildAgentCommand(opts, launch, webFetch, claudeSessionId)'),
+    'S08: the session ID is main-minted (crypto.randomUUID) for role and claude CLI panes, before the command');
+  assert((handler.match(/opts\.sessionId|opts\[/g) || []).length === 0,
+    'S08: the handler never reads a session ID (or any computed field) from the renderer');
+  const startAt = handler.indexOf('sessionMemory().recordStart({');
+  assert(startAt !== -1 && startAt > handler.indexOf("tlog('pty-start: pty.spawn END ok');"),
+    'S08: a session is recorded only after a successful spawn');
+  const builder = src.slice(mustFind(src, 'function buildAgentCommand(', 'buildAgentCommand'),
+    mustFind(src, '// Video-scout: download a video', 'buildAgentCommand end'));
+  assert(builder.indexOf("const sessionArg = sessionMemoryMod.isSessionId(sessionId) ? ' --session-id ' + sessionId : '';") !== -1,
+    'S08: buildAgentCommand splices --session-id only for a value that passes the UUID check');
 }
 
 process.stdout.write(`\nlauncher-fence-invariant: ${passed} passed, ${failed} failed\n`);
