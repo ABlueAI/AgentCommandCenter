@@ -685,6 +685,21 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - *Done when:* you tell an agent the results (or what failed). It checks the test PR's author on
     GitHub, ticks this with the date, and marks S06 done in the next status PR.
 
+- [ ] **37. Review the client paperwork drafts (S23).** About **30 minutes**, any time this week;
+  S24 waits on your approval. The drafts are in your private repo, PR 2 at
+  https://github.com/ABlueAI/Mako-Business/pull/2 (never in this public repo).
+  - Read `paperwork/README.md` first: it lists your eight decisions (business name, hourly rate,
+    hour blocks, monthly plans, unused hours, payment terms, who pays for software, notice period),
+    each with Claude's recommendation.
+  - Answer them on PR #122 here (prices are fine there only if you don't mind them public; otherwise
+    comment on PR 2 in the private repo and say on PR #122 that you did). The runner fills them in.
+  - Before a client signs: a Florida-licensed attorney reviews the services agreement and Schedule A,
+    and an accountant confirms whether sales tax applies (not part of this step; the README says so).
+  - When the questionnaire reads right, build it as a form in Hexona from
+    `paperwork/01-intake-questionnaire.md` (about 30 more minutes, separate sitting is fine).
+  - *Done when:* you say on PR #122 that you approve the drafts (or what to change); the runner
+    applies your answers in PR 2, and ticks this with the date and your words.
+
 - [ ] **38. S07 on your PC: stable and dev copies side by side.** About **12 minutes**, after you
   merge the S07 PR, #123. Steps are in docs/DEV-INSTANCE.md.
   - Pull `main` in your usual checkout and restart Mako fully: the title still reads `Mako 1.0.0 ·
@@ -752,7 +767,7 @@ You can start on the first one now, which saves time later.
 - **Session S16:** ~~your Composer verdict (step 19)~~ Done 2026-10-21: no option adopted, everything open for study, questions deferred (step 19).
 - **Session S17 (on hold with S14):** pick one of 2 or 3 design directions.
 - **Session S21:** pick a logo variant.
-- **Session S23:** approve the client paperwork drafts.
+- **Session S23:** approve the client paperwork drafts (step 37).
 - **Session S24:** authorize the GoHighLevel connector in claude.ai (read-only token).
 
 ## Waiting on you (the runner won't ask)
