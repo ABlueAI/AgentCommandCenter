@@ -252,6 +252,11 @@ input:focus { outline: none; border-color: var(--accent); }
 }
 .key-banner input { flex: 1; max-width: 340px; }
 .key-stored { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+/* S11 usage panel */
+.usage-panel { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-right: 12px; }
+.usage-panel .usage-window { white-space: nowrap; }
+.usage-panel .usage-note { font-size: 11px; white-space: nowrap; }
+.usage-panel.usage-warn { color: var(--danger); font-weight: 600; }
 .agent-token-stored { flex-wrap: wrap; padding: 4px 2px 0; }
 .tiny { font-size: 11px; padding: 2px 7px; line-height: 1.4; }
 

@@ -355,7 +355,10 @@ process.stdout.write('\nindex.html ships the EMBEDDED dock and loads no Dockview
   // RE-PINNED for Shift+Enter (2026-10-16). 24 -> 25. The one addition is `term-keys.js`, a pure key
   // mapping helper that publishes `window.ccTermKeys` and touches no DOM.
   const scriptTags = (indexSrc.match(/<script[^>]*src=/g) || []).length;
-  assert(scriptTags === 25, `index.html loads exactly 25 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view and the terminal key mapping (found ${scriptTags})`);
+  // S11 adds the usage panel view: 25 -> 26.
+  assert(scriptTags === 26, `index.html loads exactly 26 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view, the terminal key mapping and the usage panel view (found ${scriptTags})`);
+  assert(/<script src="usage-view\.js"><\/script>/.test(indexSrc),
+    'the 26th script is exactly the S11 usage panel view');
   assert(/<script src="term-keys\.js"><\/script>/.test(indexSrc),
     'the added script is exactly the terminal key mapping helper');
   assert(/<script src="pane-status-badge\.js"><\/script>/.test(indexSrc),
