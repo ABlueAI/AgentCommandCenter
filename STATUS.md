@@ -1,6 +1,6 @@
 # Mako status
 
-Updated 2026-10-23 by Claude (PRs #118 and #119). Every PR that changes the state updates this file.
+Updated 2026-10-24 by Claude (PRs #119 and #123). Every PR that changes the state updates this file.
 
 ## Right now
 
@@ -68,6 +68,11 @@ Updated 2026-10-23 by Claude (PRs #118 and #119). Every PR that changes the stat
   proposes the lane: hand-off on a locked `agent-claimed` issue, Codex fixes its own PRs, Blue
   checks the "Run by:" link of the Opus review before approving a Codex PR. Blue picks the trial
   task on PR #114 (checklist step 30).
+- **Stable and dev copies (S07, PR #123, in progress):** `npm run start:dev` starts a dev copy of
+  Mako with its own settings folder (`%APPDATA%\command-center-dev`), its own taskbar button and a
+  `Mako (dev)` title, and it never installs or changes Claude Code hooks. The stable copy is
+  unchanged. How to run it and what the two still share: [docs/DEV-INSTANCE.md](docs/DEV-INSTANCE.md).
+  Blue checks both side by side on his PC (checklist step 38).
 - **All-day runner (S04, PR #84, in progress, pending Blue):** proposed in docs/RUNNER.md "S04: the
   all-day runner": hourly fires at :07 Eastern, a parallel cap of 1 on Pro counted from expiring
   locks, a clean stop and resume at usage limits, no phone notification per fire, and one evening

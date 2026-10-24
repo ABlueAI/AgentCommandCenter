@@ -127,10 +127,14 @@ assert(count(main, "icon: path.join(__dirname, 'assets', 'mako.ico')") === 1,
 
 // Windows taskbar identity: one explicit AppUserModelID, set at module startup. The taskbar showed
 // the shared electron.exe atom until the process declared its own identity before any window.
-const aumidDecl = "const MAKO_APP_USER_MODEL_ID = 'ABlueAI.Mako';";
+// S07: the ID now comes from the instance profile, ABlueAI.Mako for the stable copy (unchanged) and
+// its own ID for the dev copy (instance-profile.test.js covers the selection).
+const instanceProfiles = require('./instance-profile').PROFILES;
+const aumidDecl = 'const MAKO_APP_USER_MODEL_ID = instanceProfile.appUserModelId;';
 const aumidCall = "if (process.platform === 'win32') app.setAppUserModelId(MAKO_APP_USER_MODEL_ID);";
-assert(count(main, aumidDecl) === 1 && count(main, 'MAKO_APP_USER_MODEL_ID =') === 1,
-  'the Windows AppUserModelID is declared exactly once, as ABlueAI.Mako');
+assert(count(main, aumidDecl) === 1 && count(main, 'MAKO_APP_USER_MODEL_ID =') === 1 &&
+  instanceProfiles.stable.appUserModelId === 'ABlueAI.Mako' && instanceProfiles.dev.appUserModelId !== 'ABlueAI.Mako',
+  'the Windows AppUserModelID is declared exactly once, ABlueAI.Mako for the stable copy and another for dev');
 assert(count(main, 'setAppUserModelId(') === 1 && count(main, aumidCall) === 1,
   'exactly one setAppUserModelId call, under one win32 guard, passes that constant');
 assert(/^if \(process\.platform === 'win32'\) app\.setAppUserModelId\(MAKO_APP_USER_MODEL_ID\);\r?$/m.test(main),

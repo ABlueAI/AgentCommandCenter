@@ -166,6 +166,7 @@ const doc = { createElement: () => makeEl() };
     'other-installation': null,
     malformed: null,
     'reconciliation-required': null,
+    'dev-instance': null, // S07: the dev copy never touches Claude Code hooks
   };
   for (const [state, action] of Object.entries(expectations)) {
     const d = badgeMod.describeSetup({ state });
@@ -174,6 +175,7 @@ const doc = { createElement: () => makeEl() };
     assert(typeof d.label === 'string' && d.label.length > 0, `setup state "${state}" has a label`);
     assert(typeof d.title === 'string' && d.title.length > 0, `setup state "${state}" has a tooltip`);
   }
+  eq(badgeMod.describeSetup({ state: 'dev-instance' }).className, 'ps-setup-off', 'the dev copy shows as off');
   // An unrecognised state degrades to `disabled`, never to `ready`.
   eq(badgeMod.describeSetup({ state: 'nonsense' }).state, 'disabled', 'an unrecognised setup state degrades to disabled');
   eq(badgeMod.describeSetup(null).state, 'disabled', 'a null setup state degrades to disabled');
