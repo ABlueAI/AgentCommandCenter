@@ -2,7 +2,7 @@
 // No Node here by design; this file is pure UI + IPC calls.
 
 const $ = (sel) => document.querySelector(sel);
-const state = { repo: '', githubUrl: '', worktrees: [], chosenRole: 'builder', chosenCli: 'claude', hardTask: false, theme: 'obsidian', ttsVoice: '', ttsSpeed: 1, videoModel: 'gemini-2.5-flash-lite', mediaResolution: 'MEDIUM', analysisMode: 'transcript' };
+const state = { repo: '', githubUrl: '', worktrees: [], chosenRole: 'builder', chosenCli: 'claude', hardTask: false, theme: 'obsidian', ttsVoice: '', ttsSpeed: 1, videoModel: 'gemini-2.5-flash-lite', mediaResolution: 'MEDIUM', analysisMode: 'transcript', authority: window.ccAuthorityChoice.DEFAULT_LEVEL };
 const audioModules = window.ccAudioModuleHealth.createAudioModuleHealth();
 const quickLinksView = window.ccQuickLinksView.createQuickLinksView({
   document,
@@ -439,6 +439,16 @@ function showTermEmpty() {
   }
 }
 function openInAppTerminal(opts = {}) {
+  // S10: Maximum never runs a Claude agent on this PC (authority-choice.js). No pane is created and
+  // no PTY is requested: the task goes to a cloud session instead, through the vetted open-external
+  // path. Main refuses a Claude pane at Maximum as well (app/authority-level.js).
+  if (window.ccAuthorityChoice.routeLaunch(opts, state.authority) === 'cloud') {
+    appendLog('[authority] Maximum: no local Claude pane started; opening a cloud session (claude.ai/code). Start the task there.\n');
+    Promise.resolve(cc.openExternal(window.ccAuthorityChoice.CLOUD_SESSION_URL))
+      .then((r) => { if (!r || r.ok !== true) appendLog(`[authority] could not open claude.ai/code: ${(r && r.reason) || 'unknown'}\n`); })
+      .catch(() => appendLog('[authority] could not open claude.ai/code: open-failed\n'));
+    return;
+  }
   const { worktree, title } = opts;
   const cli = opts.cli || opts.agent || null;
   const role = (opts.role && ROLES[opts.role]) ? opts.role : null;
@@ -784,7 +794,7 @@ function openInAppTerminal(opts = {}) {
   }
 
   // EXACTLY ONE ptyStart, on every path, and only after the pane is visible and owned.
-  const startResult = cc.ptyStart({ id, cwd: worktree, cli, role, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, videoModel: opts.videoModel, mediaResolution: opts.mediaResolution, analysisMode: opts.analysisMode, startOffset: opts.startOffset, endOffset: opts.endOffset, sliceRanges: opts.sliceRanges, analysisFocus: opts.analysisFocus, cols: term.cols, rows: term.rows });
+  const startResult = cc.ptyStart({ id, cwd: worktree, cli, role, authority: state.authority, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, videoModel: opts.videoModel, mediaResolution: opts.mediaResolution, analysisMode: opts.analysisMode, startOffset: opts.startOffset, endOffset: opts.endOffset, sliceRanges: opts.sliceRanges, analysisFocus: opts.analysisFocus, cols: term.cols, rows: term.rows });
   // A refused or rejected start must not leave a Dockview panel behind: the panel would be a ghost
   // host for a terminal that never ran, and a later Save would persist it. Convergence goes through
   // the SAME idempotent close path the ✕ uses, so the panel, the observer, the xterm and the map
@@ -1304,6 +1314,12 @@ async function boot() {
   applyTheme((s && s.theme) || 'obsidian');
   if (s && s.ttsVoice) state.ttsVoice = s.ttsVoice;
   if (s && s.ttsSpeed) state.ttsSpeed = s.ttsSpeed;
+  {
+    // S10: the remembered authority level. An unknown stored value falls back to the default, visibly.
+    const a = window.ccAuthorityChoice.normalizeLevel(s ? s.authority : undefined);
+    state.authority = a.level;
+    if (a.fellBack) appendLog(`[authority] stored level not recognised; using ${a.level}\n`);
+  }
   updateKeyBanner(await cc.getGeminiKeyStatus());
   // S06: not awaited, so the token check adds no IPC round trip to the boot path (pane startup is
   // timing-sensitive); a failed check leaves the banner showing and says so in the Logs tab.
@@ -1667,6 +1683,17 @@ function appendLog(text) {
 function wireUi() {
   $('#repoSelect').onchange = (e) => { state.repo = e.target.value; onRepoChange(); };
   $('#themeSelect').onchange = (e) => applyTheme(e.target.value);
+  {
+    // S10: one click sets the authority for every Claude pane started after it (not running ones).
+    const sel = $('#authoritySelect');
+    sel.value = state.authority;
+    sel.onchange = (e) => {
+      state.authority = window.ccAuthorityChoice.normalizeLevel(e.target.value).level;
+      sel.value = state.authority;
+      cc.saveSettings({ authority: state.authority });
+      appendLog(`[authority] new Claude panes start at ${window.ccAuthorityChoice.LABELS[state.authority]}\n`);
+    };
+  }
   $('#refresh').onclick = refreshRepos;
   $('#changeRoot').onclick = async () => {
     const dir = await cc.pickFolder();

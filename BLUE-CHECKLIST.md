@@ -705,6 +705,19 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     stable copy's panes and its Claude status keep working.
   - *Done when:* you tell an agent what you saw (or what differed). It ticks this with the date, and
     the status PR marks S07 done.
+- [ ] **40. S10 on your PC: one-click authority.** About **5 minutes**, after you merge the S10 PR,
+  #125. Details in docs/AUTHORITY-LEVELS.md.
+  - Pull `main` and restart Mako fully. The terminal toolbar shows **Authority** set to "Medium ·
+    accept edits".
+  - Pick **Minimum**, open a builder pane (or a plain Claude pane): Claude's footer shows plan mode.
+    Pick **Medium**, open another: it shows accept edits. Pick **High**, open another: it shows auto
+    mode. If Claude says auto mode isn't available on your plan, say so; that's the one thing not
+    verified here.
+  - Pick **Maximum** and open a Claude pane: no pane opens, claude.ai/code opens in your browser, and
+    the Logs tab says why. A Codex pane at Maximum still opens on your PC as before.
+  - Restart Mako: the level you picked last is still selected.
+  - *Done when:* you tell an agent what you saw (or what differed). It ticks this with the date, and
+    the status PR marks S10 done.
 
 ## Every day, once the runner is on
 

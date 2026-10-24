@@ -142,6 +142,15 @@
                than a question about whether an object exists. Work Order 1 J.1 placed it here — a
                sibling of .tts-controls, immediately before #newTermShell — and this is that element. -->
           <div id="paneStatusHost" class="pane-status-host"></div>
+          <!-- S10 one-click authority: the level new Claude panes start at (authority-choice.js). Main maps
+               it to a permission mode (app/authority-level.js); Maximum opens a cloud session instead. -->
+          <label class="muted small" for="authoritySelect">Authority</label>
+          <select id="authoritySelect" title="Authority for Claude panes you start next. Minimum: plan mode, no edits. Medium: edits accepted, commands ask. High: auto mode. Maximum: the task goes to a cloud session (claude.ai/code), never this PC. Fenced roles keep their own fence.">
+            <option value="minimum">Minimum · plan</option>
+            <option value="medium">Medium · accept edits</option>
+            <option value="high">High · auto</option>
+            <option value="maximum">Maximum · cloud</option>
+          </select>
           <button id="newTermShell" class="mini accent">+ Shell</button>
         </div>
         <!-- MAIN-OWNED TURN ADMISSION BUDGET host. EMPTY IN MARKUP, and it stays empty unless a
@@ -328,6 +337,7 @@
   <script src="video-model-policy.js"></script>
   <script src="analysis-focus.js"></script>
   <script src="agent-dom.js"></script>
+  <script src="authority-choice.js"></script>
   <script src="term-copy.js"></script>
   <script src="term-keys.js"></script>
   <script src="pane-maximize.js"></script>
