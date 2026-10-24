@@ -365,17 +365,19 @@ const REGIONS = [
     // fenced-role cwd gate, admission claim, spawn sink and failure cleanup are unchanged.
     // Previous pin retained: 15987 / b47bba25ac869e5b9acf87d7bd6158f799df4a8f9cd2df5d8365ae7e07dc3d2c
     //
-    // RE-PINNED (S08, session memory 1), 16623 -> 17319 code units. Changes inside this region, all
+    // RE-PINNED (S08, session memory 1), 16623 -> 17354 code units. Changes inside this region, all
     // additions: `const claudeSessionId = <role or claude CLI pane> ? crypto.randomUUID() : null;` just
     // before the command is built, passed as buildAgentCommand's fourth argument (a main-minted UUID,
     // re-checked as one before it is spliced in); a `recordStart` block after `ptys.set(id, p)`, so
-    // only a spawned pane is recorded; and one `stopPaneSession(id, EXITED)` call in `p.onExit`. The
+    // only a spawned pane is recorded, through the throw-proof `sessionMemoryCall`; and one
+    // `stopPaneSession(id, EXITED, claudeSessionId)` call in `p.onExit`, which closes only this launch's
+    // own session. The
     // sender gate, classification, fenced-role cwd gate, admission claim, WebFetch decision, ptyEnv
     // block, spawn sink and failure cleanup are unchanged. The S08 assertions at the end of this file
     // pin the new wiring.
     // Previous pin retained: 16623 / b0f27ef86d23317389cca04e57810dba1534a468f3bac9d1187311ccc7871ebc
-    utf16Length: 17319,
-    sha: '31c856186b935487cee310e115df5e3ba2811a14b87edbca04e12e2d371d777d',
+    utf16Length: 17354,
+    sha: '1ed564dea4af33f5dbe7afcb47b0d0cb2178ff1fb289a60b2e37a3d078581b2d',
   },
 ];
 
@@ -521,6 +523,24 @@ assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src)
     mustFind(src, '// Video-scout: download a video', 'buildAgentCommand end'));
   assert(builder.indexOf("const sessionArg = sessionMemoryMod.isSessionId(sessionId) ? ' --session-id ' + sessionId : '';") !== -1,
     'S08: buildAgentCommand splices --session-id only for a value that passes the UUID check');
+  assert(handler.indexOf('if (claudeSessionId) stopPaneSession(id, sessionMemoryMod.STOP_REASON.EXITED, claudeSessionId);') > handler.indexOf('p.onExit(() => {'),
+    'S08: the process exit closes only the session this launch started, as `exited`');
+  // The three call sites outside pty-start. Each runs AFTER its kill, so recording can never block one.
+  const kill = src.slice(mustFind(src, "ipcMain.on('pty-kill'", 'pty-kill'), src.indexOf('\n});', src.indexOf("ipcMain.on('pty-kill'")));
+  const closeAt = kill.indexOf('stopPaneSession(id, sessionMemoryMod.STOP_REASON.CLOSED);');
+  assert(closeAt !== -1 && closeAt > kill.indexOf('processTree.killTree(p.pid'),
+    'S08: pty-kill closes the record as `closed`, after the tree kill is started');
+  const shut = src.slice(mustFind(src, 'function killPaneTreesOnShutdown() {', 'shutdown kill'), src.indexOf('\n}', src.indexOf('function killPaneTreesOnShutdown() {')));
+  const madeAt = shut.indexOf('sessionMemoryCall(() => sessionMemory().closeOpen(sessionMemoryMod.STOP_REASON.MAKO_CLOSED));');
+  assert(madeAt !== -1 && madeAt > shut.indexOf('processTree.killTreesSync('),
+    'S08: shutdown closes open records as `mako-closed`, after the synchronous tree kill');
+  const readyAt = mustFind(src, 'app.whenReady().then(() => {', 'whenReady');
+  const ready = src.slice(readyAt, src.indexOf('createMediaPermissionHandlers(', readyAt));
+  assert(ready.indexOf('sessionMemoryCall(() => sessionMemory().closeOpen(sessionMemoryMod.STOP_REASON.UNKNOWN));') !== -1,
+    'S08: at startup, records left open are closed as `unknown`');
+  const call = src.slice(mustFind(src, 'function sessionMemoryCall(fn) {', 'sessionMemoryCall'), src.indexOf('\n}', src.indexOf('function sessionMemoryCall(fn) {')));
+  assert(call.indexOf('try {') !== -1 && call.indexOf('catch (e)') !== -1,
+    'S08: every session-memory call is wrapped, so a throw never reaches a kill or a launch');
 }
 
 process.stdout.write(`\nlauncher-fence-invariant: ${passed} passed, ${failed} failed\n`);

@@ -25,7 +25,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // Why a record stopped. `unknown` is set at startup for a record Mako never closed (a crash or a
 // forced kill), so a stop time is never invented as if it were observed.
 const STOP_REASON = Object.freeze({
-  EXITED: 'exited',             // the pane's process exited
+  EXITED: 'exited',             // the pane's shell exited (panes run PowerShell -NoExit, so not
+                                // when Claude alone quits)
   CLOSED: 'closed',             // Blue closed the pane
   MAKO_CLOSED: 'mako-closed',   // Mako shut down with the pane open
   UNKNOWN: 'unknown',           // found still open at the next start

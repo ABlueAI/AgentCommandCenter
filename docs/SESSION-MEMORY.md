@@ -20,7 +20,7 @@ Each record has:
 | `cli` | Always `claude` for now. |
 | `worktree` | The folder the pane started in. |
 | `startedAt`, `stoppedAt` | UTC times. `stoppedAt` is `null` while the pane runs. |
-| `stopReason` | `exited` (the process ended), `closed` (you closed the pane), `mako-closed` (Mako shut down with it open) or `unknown` (Mako found it still open at its next start, after a crash or a forced kill). |
+| `stopReason` | `exited` (the pane's shell exited; quitting Claude alone leaves the shell running, so the record stays open), `closed` (you closed the pane), `mako-closed` (Mako shut down with it open) or `unknown` (Mako found it still open at its next start, after a crash or a forced kill). |
 
 ## Where it lives
 

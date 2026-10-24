@@ -533,7 +533,7 @@ app.whenReady().then(() => {
   loadGeminiKey(); // decrypt stored GEMINI_API_KEY into memory before any PTY can launch
   loadAgentGitToken(); // S06: the ABlueAgent token, likewise before any PTY can launch
   // S08: a record still open now was never closed (a crash or a forced kill): close it as `unknown`.
-  noteSessionMemory(sessionMemory().closeOpen(sessionMemoryMod.STOP_REASON.UNKNOWN));
+  sessionMemoryCall(() => sessionMemory().closeOpen(sessionMemoryMod.STOP_REASON.UNKNOWN));
   // K8 media-permission hardening: grant ONLY a microphone-only request ('media' with
   // mediaTypes exactly ['audio']) coming from this window's main frame at the exact
   // entry document with the trusted file: origin — the in-app Whisper dictation path.
@@ -918,11 +918,11 @@ let paneTreesKilledOnShutdown = false;
 function killPaneTreesOnShutdown() {
   if (paneTreesKilledOnShutdown) return;
   paneTreesKilledOnShutdown = true;
-  // S08: close the open session records first, so they read `mako-closed` rather than the `exited`
-  // the tree kill below would produce.
-  noteSessionMemory(sessionMemory().closeOpen(sessionMemoryMod.STOP_REASON.MAKO_CLOSED));
-  paneSessions.clear();
   processTree.killTreesSync([...ptys.values()].map((p) => p && p.pid));
+  // S08: after the kill, so recording can never block it. The panes' exits arrive later, through the
+  // event loop, so the open records still read `mako-closed` rather than `exited`.
+  sessionMemoryCall(() => sessionMemory().closeOpen(sessionMemoryMod.STOP_REASON.MAKO_CLOSED));
+  paneSessions.clear();
 }
 // A quit started by app.quit() (e.g. the default menu's Exit) never emits window-all-closed.
 // Listeners run in registration order, so the tree kill runs before the controlled-run closure.
@@ -1507,13 +1507,21 @@ function noteSessionMemory(res) {
   win.webContents.send('main-error',
     `Session memory refused [${reason}]: Claude session IDs are not being recorded (${sessionMemoryMod.FILENAME} in Mako's settings folder).`);
 }
+// Every session-memory call goes through here: a throw is logged, never passed on, so recording can
+// never stop a launch, a kill or a shutdown.
+function sessionMemoryCall(fn) {
+  try { const res = fn(); noteSessionMemory(res); return res; }
+  catch (e) { tlog(`[session-memory] failed: ${(e && e.message) || e}`); return { ok: false }; }
+}
 // paneId -> the main-minted session ID of the Claude pane running in it.
 const paneSessions = new Map();
-function stopPaneSession(id, reason) {
+// `expected`, when given, is the session the caller started: a pane id the renderer reused (after a
+// reload) then maps to a newer session, which an old pane's exit must not close.
+function stopPaneSession(id, reason, expected) {
   const sid = paneSessions.get(id);
-  if (!sid) return;
+  if (!sid || (expected !== undefined && sid !== expected)) return;
   paneSessions.delete(id);
-  noteSessionMemory(sessionMemory().recordStop(sid, reason));
+  sessionMemoryCall(() => sessionMemory().recordStop(sid, reason));
 }
 
 // ---- IPC: in-app terminals (node-pty + xterm.js) ---------------------------
@@ -1739,10 +1747,9 @@ ipcMain.handle('pty-start', (e, opts) => {
   ptys.set(id, p);
   if (claudeSessionId) {
     // Recorded only after a successful spawn, so a refused or failed launch leaves no record.
-    const rec = sessionMemory().recordStart({
+    const rec = sessionMemoryCall(() => sessionMemory().recordStart({
       sessionId: claudeSessionId, paneId: id, role: launch.role, cli: 'claude', worktree: cwd,
-    });
-    noteSessionMemory(rec);
+    }));
     if (rec.ok) paneSessions.set(id, claudeSessionId);
   }
   // V5b1: record pane->runId for a video-scout launch. This is stored internally ONLY (never
@@ -1766,7 +1773,7 @@ ipcMain.handle('pty-start', (e, opts) => {
   // not wait for a SessionEnd hook that may never fire), while the run-ID mapping is deliberately not.
   p.onExit(() => {
     ptys.delete(id);
-    stopPaneSession(id, sessionMemoryMod.STOP_REASON.EXITED);
+    if (claudeSessionId) stopPaneSession(id, sessionMemoryMod.STOP_REASON.EXITED, claudeSessionId);
     // PANE STATUS: publish `exited` first, while the pane is still addressable, then revoke its token.
     paneStatus.notePaneExit(id);
     // The controlled pane's process is gone: close the run. Any unused allowance is VOIDED here and is
@@ -1793,7 +1800,6 @@ ipcMain.on('pty-write', (_e, { id, data }) => {
 ipcMain.on('pty-resize', (_e, { id, cols, rows }) => { const p = ptys.get(id); if (p) { try { p.resize(cols, rows); } catch (err) { tlog(`pty-resize ${id} failed (process likely exiting): ${(err && err.message) || err}`); } } });
 // S06: pty-kill kills the pane's process tree first (taskkill /T needs the live shell), then pty.kill().
 ipcMain.on('pty-kill', (_e, id) => {
-  stopPaneSession(id, sessionMemoryMod.STOP_REASON.CLOSED);
   const p = ptys.get(id); if (p) { ptys.delete(id); processTree.killTree(p.pid, () => { try { p.kill(); } catch {} }); }
   // Explicit pane close: the run's report is no longer reachable from the UI, so drop the mapping.
   videoScoutRunIds.remove(id);
@@ -1804,5 +1810,7 @@ ipcMain.on('pty-kill', (_e, id) => {
   // remainder is voided, never transferred, and the consumed count is untouched.
   if (admissionEnabled && admissionBudget.enabled) admissionBudget.notePaneExit(id);
   if (admissionIpc) admissionIpc.forgetPane(id);
+  // S08: last, after the kill is started, so recording can never block it.
+  stopPaneSession(id, sessionMemoryMod.STOP_REASON.CLOSED);
 });
 
