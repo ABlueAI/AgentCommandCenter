@@ -69,6 +69,7 @@ could still press Merge on a green PR. Part B closes that.
 | Actor | Can push to main | Can merge a PR |
 |---|---|---|
 | Claude or any agent (agent account, Write role) | No | No: needs Blue's approval, and the agent cannot approve as Blue |
+| Codex (linked to the agent account) | No | No: its PRs are opened as the agent account, its reviews come from `chatgpt-codex-connector[bot]` as comments, and neither can give the code owner's approval (docs/CODEX-BUILDER-LANE.md) |
 | A GitHub Actions workflow | No | No: read-only token, cannot approve |
 | Someone opening a PR from a fork | No | No |
 | Blue (ABlueAI) | No (PR required for everyone) | Yes, after CI passes, approving the agent's PR |
@@ -96,13 +97,14 @@ The merge audit workflow opens a `security-alert` issue if anything reaches main
   and the link can reach. Any `ABlueAgent` comment containing Codex's handle may start a Codex task
   that can push a branch. AGENTS.md (once PR #47 merges) forbids agents to write the handle unless
   Blue asks (a comment by `ABlueAI` on that PR or issue, unedited by anyone else, or his own message
-  to the agent; the full rule is in AGENTS.md "Security rules"); S26 may add the runner's
-  hand-off as an exception. That is a rule, not a control: a mistaken or injected agent comment could
-  still start such a task. Merging still needs Blue's approval. S26 is the first planned Codex build:
-  it checks the open questions below first and adds Codex to the table above. Its review comments
+  to the agent; the full rule is in AGENTS.md "Security rules"); S26 (PR #114) adds the Codex-lane
+  hand-off and fix request as narrow exceptions. That is a rule, not a control: a mistaken or injected agent comment could
+  still start such a task. Merging still needs Blue's approval. S26 adds Codex to the table above and
+  answers what it can below (docs/CODEX-BUILDER-LANE.md). Its review comments
   appear as `chatgpt-codex-connector[bot]` (seen on PR #42).
-  Not verified: which account a Codex-created branch or PR is attributed to, and whether a Codex
-  review could ever count as an approval.
+  Checked in S26 (docs/CODEX-BUILDER-LANE.md, 2026-10-23): Codex's PR #49 was opened as
+  `ABlueAgent`, and a Codex review can't count as an approval. Still not verified: which token
+  Codex pushes with, and whether it can comment as `ABlueAgent`; S26's trial checks them.
 - **AI that drives your own screen or browser.** ChatGPT computer use, browser agents and extensions
   (including Claude in Chrome, which S15 evaluates) act as you in every account you are signed in to,
   so GitHub would see Blue clicking Merge. Use them only in a separate browser profile that is not
