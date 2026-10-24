@@ -706,6 +706,22 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - *Done when:* you tell an agent what you saw (or what differed). It ticks this with the date, and
     the status PR marks S07 done.
 
+- [ ] **42. S21: pick the Mako taskbar icon, then check it.** About **2 minutes** now, then **3
+  minutes** after you merge the S21 PR, #127.
+  - **Pick (now, 2 minutes):** open docs/LOGO-VARIANTS.md on the S21 PR's branch (Files changed >
+    the file > View file) and look at the sheet: today's shark and four "M" icons, A to D, at 16 to
+    48 px on a dark and a light taskbar. Reply on PR #127 with the letter, or what to change.
+    Recommendation (Claude's, not your words): **C**, white M on the accent blue.
+  - An agent then makes your pick the app icon in the same PR, and it comes back to you as `READY TO
+    MERGE`.
+  - **Check (after merging, 3 minutes):** pull `main` and restart Mako fully. The taskbar button
+    shows the M. If it still shows the shark, Windows is using its cached icon: unpin and re-pin
+    Mako, or sign out and back in.
+  - **Desktop shortcut (1 minute):** right-click the Mako desktop shortcut > Properties > Change
+    Icon... > Browse..., pick `app\assets\mako.ico` in your Mako checkout, then OK twice.
+  - *Done when:* you tell an agent you can read the M on the taskbar (or what you saw). It ticks
+    this with the date, and the status PR marks S21 done.
+
 ## Every day, once the runner is on
 
 Once S04 is applied (step 27), the runner works all day and you do one sitting in the evening:
@@ -751,7 +767,7 @@ You can start on the first one now, which saves time later.
 - **Session S26:** lock its claim issue and comment as `ABlueAI` to start Codex's trial build (step 30).
 - **Session S16:** ~~your Composer verdict (step 19)~~ Done 2026-10-21: no option adopted, everything open for study, questions deferred (step 19).
 - **Session S17 (on hold with S14):** pick one of 2 or 3 design directions.
-- **Session S21:** pick a logo variant.
+- **Session S21:** pick a logo variant (step 42).
 - **Session S23:** approve the client paperwork drafts.
 - **Session S24:** authorize the GoHighLevel connector in claude.ai (read-only token).
 

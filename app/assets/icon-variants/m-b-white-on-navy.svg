@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 16 16">
+  <title>Mako M, variant B</title>
+  <!-- S21 candidate. White block M on the shark's navy. Drawn on a 16-unit grid so 16, 32 and 48 px frames land on whole pixels. -->
+  <rect width="16" height="16" rx="3" fill="#14275f"/>
+  <path fill="#fff" d="M2 13V3H4.6L8 8.1 11.4 3H14V13H11.6V7.2L8 12.2 4.4 7.2V13Z"/>
+</svg>
