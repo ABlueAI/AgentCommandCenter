@@ -144,16 +144,26 @@ const { createQuickLinksIpc } = require('./quick-links-ipc');
 const { buildDefaultConfig: buildQuickLinksDefaultConfig, validateUrl: validateQuickLinkUrl } = require('./quick-links-policy');
 // S06: the legacy open-external channel goes through the same URL policy (open-external-ipc.js).
 const { createOpenExternalIpc } = require('./open-external-ipc');
+// S07: which copy this process is (stable or dev), decided once from argv (instance-profile.js).
+const { resolveInstanceProfile, createDevPaneStatusController } = require('./instance-profile');
 
 // ---- Windows taskbar identity (branding) --------------------------------------------------------
 // One stable, explicit AppUserModelID, so Windows attributes this process's windows to Mako rather
 // than to the implicit identity of the shared, unpackaged electron.exe (whose atom icon is what the
 // taskbar button showed). Windows requires a process-level ID to be set during startup, before any
 // UI exists, so this runs at module evaluation: before app.whenReady(), createWindow() and every
-// BrowserWindow. It changes the shell identity only; the `command-center` app name, the userData
-// directory and the admission ledger stored there are untouched.
-const MAKO_APP_USER_MODEL_ID = 'ABlueAI.Mako';
+// BrowserWindow. It changes the shell identity only; the `command-center` app name, and (for the
+// stable copy) the userData directory and the admission ledger stored there, are untouched.
+//
+// S07: the dev copy (`--dev-instance`) takes its own ID, so Windows shows it as a separate taskbar
+// button, and its own userData folder. Electron only honours a userData change made before the app
+// is ready, and nothing above this line reads userData, so it is set here at module evaluation.
+const instanceProfile = resolveInstanceProfile(process.argv);
+const MAKO_APP_USER_MODEL_ID = instanceProfile.appUserModelId;
 if (process.platform === 'win32') app.setAppUserModelId(MAKO_APP_USER_MODEL_ID);
+if (instanceProfile.userDataDirName) {
+  app.setPath('userData', path.join(app.getPath('appData'), instanceProfile.userDataDirName));
+}
 
 // ---- Layout engine selection (MAIN decides; the renderer can never change it) -------------------
 // Blue's ADOPT verdict makes Dockview the PRODUCTION pane-layout engine, so `npm start` — no flag —
@@ -598,7 +608,9 @@ app.whenReady().then(() => {
   const paneStatusSettingsDir = path.join(app.getPath('home'), '.claude');
   const paneStatusSettingsPath = path.join(paneStatusSettingsDir, 'settings.json');
 
-  paneStatus = createPaneStatusController({
+  // S07: the dev copy never installs, removes or changes Claude Code hooks, so it gets the inert
+  // controller (instance-profile.js): no listener, no Claude settings write, no lock clearing.
+  paneStatus = !instanceProfile.claudeHooks ? createDevPaneStatusController() : createPaneStatusController({
     userDataPath: paneStatusUserData,
     settingsDir: paneStatusSettingsDir,
     settingsPath: paneStatusSettingsPath,
@@ -704,6 +716,10 @@ app.whenReady().then(() => {
   });
 
   paneStatus.start().then((res) => {
+    if (!instanceProfile.claudeHooks) {
+      tlog('[pane-status] dev instance: Claude Code hooks are left to the stable copy; panes show no status.');
+      return;
+    }
     if (res && res.setupState && res.setupState !== 'ready' && res.setupState !== 'disabled') {
       // A non-ready installed state is a VISIBLE outcome, not a silent one. The detail is a bounded
       // constant: no path, no environment value, no command output, no token.
@@ -978,7 +994,11 @@ ipcMain.handle('get-settings', async () => loadSettings());
 let buildInfoPromise = null;
 ipcMain.handle('build-info', () => {
   if (!buildInfoPromise) {
-    buildInfoPromise = readBuildInfo({ version: require('./package.json').version, runGit: (args) => git(args, __dirname) });
+    buildInfoPromise = readBuildInfo({
+      version: require('./package.json').version,
+      instanceTag: instanceProfile.buildLabelTag,
+      runGit: (args) => git(args, __dirname),
+    });
   }
   return buildInfoPromise;
 });
