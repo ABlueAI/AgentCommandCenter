@@ -61,6 +61,11 @@ Updated 2026-10-24 by Claude (PR #122). Every PR that changes the state updates 
   in Blue's private repo `ABlueAI/Mako-Business` (PR 2 there). Every price and policy is a
   placeholder for Blue (checklist step 37); not legal advice, so an attorney reviews the agreement
   before first use. No client data is in this repo.
+- **Codex builder lane (S26, PR #114, in progress, needs Blue):** docs/CODEX-BUILDER-LANE.md
+  records what is known (Codex's PRs are opened as `ABlueAgent`; its reviews can't approve) and
+  proposes the lane: hand-off on a locked `agent-claimed` issue, Codex fixes its own PRs, Blue
+  checks the "Run by:" link of the Opus review before approving a Codex PR. Blue picks the trial
+  task on PR #114 (checklist step 30).
 - **All-day runner (S04, PR #84, in progress, pending Blue):** proposed in docs/RUNNER.md "S04: the
   all-day runner": hourly fires at :07 Eastern, a parallel cap of 1 on Pro counted from expiring
   locks, a clean stop and resume at usage limits, no phone notification per fire, and one evening
