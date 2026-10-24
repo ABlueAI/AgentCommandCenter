@@ -56,7 +56,7 @@ Updated 2026-10-24 by Claude (PR #122). Every PR that changes the state updates 
   `ABlueAI/Mako-Business` (PR 1 there, commit `24ddc8e`; checklist step 32 ticked). The cloud session
   couldn't open web pages, so its facts come from search extracts of public pages and need a check
   on each source before outreach. No marina data is in this repo.
-- **Client paperwork drafts (S23, PR #122, in progress):** an intake questionnaire laid out for a
+- **Client paperwork drafts (S23, PR #122, needs Blue):** an intake questionnaire laid out for a
   Hexona form, a scope-of-work template, a services agreement and its hours and retainer schedule,
   in Blue's private repo `ABlueAI/Mako-Business` (PR 2 there). Every price and policy is a
   placeholder for Blue (checklist step 37); not legal advice, so an attorney reviews the agreement
