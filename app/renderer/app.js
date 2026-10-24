@@ -1690,7 +1690,8 @@ function wireUi() {
     sel.onchange = (e) => {
       state.authority = window.ccAuthorityChoice.normalizeLevel(e.target.value).level;
       sel.value = state.authority;
-      cc.saveSettings({ authority: state.authority });
+      Promise.resolve(cc.saveSettings({ authority: state.authority }))
+        .catch(() => appendLog('[authority] could not save the level; it resets to Medium on restart\n'));
       appendLog(`[authority] new Claude panes start at ${window.ccAuthorityChoice.LABELS[state.authority]}\n`);
     };
   }

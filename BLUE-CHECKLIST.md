@@ -709,10 +709,12 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   #125. Details in docs/AUTHORITY-LEVELS.md.
   - Pull `main` and restart Mako fully. The terminal toolbar shows **Authority** set to "Medium ·
     accept edits".
-  - Pick **Minimum**, open a builder pane (or a plain Claude pane): Claude's footer shows plan mode.
-    Pick **Medium**, open another: it shows accept edits. Pick **High**, open another: it shows auto
-    mode. If Claude says auto mode isn't available on your plan, say so; that's the one thing not
-    verified here.
+  - Pick **Minimum** and open a **builder** pane (a role pane, not a plain Claude pane): Claude's
+    footer shows plan mode. Pick **Medium**, open another builder pane: it shows accept edits. Pick
+    **High**, open another: it shows auto mode. A builder pane is the one that matters: its role
+    file says `permissionMode: default`, and whether Mako's flag wins over that isn't verified
+    here. If a builder pane shows the normal mode instead, or Claude says auto mode isn't available
+    on your plan, say so. A plain Claude pane at each level is an optional extra check.
   - Pick **Maximum** and open a Claude pane: no pane opens, claude.ai/code opens in your browser, and
     the Logs tab says why. A Codex pane at Maximum still opens on your PC as before.
   - Restart Mako: the level you picked last is still selected.

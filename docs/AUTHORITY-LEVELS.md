@@ -41,8 +41,13 @@ so it never runs a Claude agent on Blue's PC.
 
 ## Limits
 
-- A worktree that a launch flow creates before starting its pane is still created at Maximum; only
-  the pane is skipped.
+- Setup a launch flow does before its pane (a worktree, a fenced role's sandbox folder, the
+  reviewer's diff) still happens at Maximum; only the pane is skipped.
+- The role files in agent-roles/ declare `permissionMode: default`. Whether Claude Code's
+  `--permission-mode` flag wins over that frontmatter for `claude --agent <role>` is not verified
+  here; BLUE-CHECKLIST.md step 40 checks it on a builder pane. If the frontmatter wins, a follow-up
+  drops `permissionMode` from the unfenced role files (agent-roles/README.md already treats launch
+  flags as an overlay on the frontmatter).
 - Changing the level doesn't change panes that are already running. Inside a pane, Claude Code's own
   Shift+Tab still cycles modes; Mako doesn't block that.
 - Whether `auto` is available on Blue's current plan is not verified here (BLUE-CHECKLIST.md step 40
