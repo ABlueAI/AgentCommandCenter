@@ -685,6 +685,23 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - *Done when:* you tell an agent the results (or what failed). It checks the test PR's author on
     GitHub, ticks this with the date, and marks S06 done in the next status PR.
 
+- [ ] **38. S07 on your PC: stable and dev copies side by side.** About **10 minutes**, after you
+  merge the S07 PR, #123. Steps are in docs/DEV-INSTANCE.md.
+  - Pull `main` in your usual checkout and restart Mako fully: the title still reads `Mako 1.0.0 ·
+    main@...`, your settings and Quick Links are as before, and the toolbar's Claude status shows
+    what it showed before (for example "Claude status: on").
+  - Make the dev copy once (`git worktree add ..\AgentCommandCenter-dev main`, then `npm ci` in its
+    `app`), and run `npm run start:dev` there while the stable copy stays open. Expected: a second
+    window titled `Mako (dev) 1.0.0 · main@...` with its own taskbar button, and its toolbar shows
+    "Claude status: off (dev copy)" with no button.
+  - In the dev copy, change one thing (for example add a Quick Link, or change the projects root).
+    The stable copy doesn't show it, before or after restarting it. `%APPDATA%\command-center-dev`
+    now exists beside `%APPDATA%\command-center`.
+  - Open a Claude pane in each copy: both start. Close the dev copy; the stable copy's panes and its
+    Claude status keep working.
+  - *Done when:* you tell an agent what you saw (or what differed). It ticks this with the date, and
+    the status PR marks S07 done.
+
 ## Every day, once the runner is on
 
 Once S04 is applied (step 27), the runner works all day and you do one sitting in the evening:
