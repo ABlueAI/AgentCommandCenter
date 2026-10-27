@@ -87,8 +87,9 @@ updates this file.
   Blue checks it on his PC (checklist step 44).
 - **Process cleanup and link hardening (S06, PR #121 merged 2026-10-23, in progress):** closing a
   pane or Mako ends its whole process tree, the old `open-external` handler goes through the Quick
-  Links URL policy, and the `ABlueAgent` token is stored in Mako's key setup (safeStorage) and given
-  only to unfenced agent panes. Blue checks it on his PC (checklist step 35).
+  Links URL policy, and Mako can store the `ABlueAgent` token in its key setup (safeStorage) and
+  give it only to unfenced agent panes once Blue saves it there. Blue checks it on his PC (checklist
+  step 35).
 - **One-click authority (S10, PR #125 merged 2026-10-24, in progress):** the terminal toolbar's
   **Authority** selector starts new Claude panes at Minimum (`plan`), Medium (`acceptEdits`, the
   default) or High (`auto`); Maximum opens claude.ai/code instead of a local pane. Mako never
@@ -154,11 +155,11 @@ updates this file.
   the 2026-10-19 run started and opened PR #44, the first proof it can open PRs.
   Its prompt includes the `pr-reviewer` step since 2026-10-19 (applied after PR #42 merged), and
   the capped review loop since 2026-10-21 (PR #52's prompt, applied 21:19 UTC and read back the same
-  day; checklist step 21). Proposed in PR #83 (pending Blue): every builder skips a plan session
+  day; checklist step 21). PR #83 (merged 2026-10-22): every builder skips a plan session
   that already has an open PR titled with its ID (`Sxx:`) and opens its own PR early, so two
-  builders don't start the same session (a runner fire still treats every open `ABlueAgent` PR as
-  its own until S04's `runner` label); the runner prompt is applied after the merge (checklist
-  step 26).
+  builders don't start the same session. Its prompt (checklist step 26) is superseded by S04's:
+  what each live task runs now is in the S04 bullet above and docs/RUNNER.md "Superseded on the
+  live tasks" and "Applied so far".
   It runs on Opus 5.5 since 2026-10-21, changed by an interactive session at Blue's request (read
   back from the scheduled task the same day; docs/RUNNER.md).
 - **Review loop (adopted: PR #52 merged 2026-10-21, applied to the runner the same day):** every PR gets one complete first review ranked
@@ -232,10 +233,10 @@ it in Mako's key setup (safeStorage) and gives it only to unfenced agent panes.
 
 Plan change merged in PR #47 (2026-10-21): S04 becomes an all-day runner with an evening digest
 and needs only S01, so it can run right after S03; new session S26 adds Codex as a second builder
-(Codex's GitHub is already linked to `ABlueAgent`: checklist step 16, done 2026-10-20). Also proposed
-there: READY TO MERGE / NOT READY at the start of every session-end notice, documented pausing and a
+(Codex's GitHub is already linked to `ABlueAgent`: checklist step 16, done 2026-10-20). Also in
+it: READY TO MERGE / NOT READY at the start of every session-end notice, documented pausing and a
 usage alert (S04), a Pause button in Mako where it can be done safely (S11), and new session S28
 agent profile refresh. S27 (Composer) from the same PR is dropped, because PR #48 folded the Composer
-into S16. Today's runner prompt and schedule stay as they are until S04 is merged and applied; the
+into S16. S04 merged as PR #84 and is partly applied (see the S04 bullet above); the
 checklist-numbering, Codex-handle, READY TO MERGE and Codex-PR review rules apply from this PR's
 merge, the STATUS.md and plan-row rule once S04 is merged and applied.
