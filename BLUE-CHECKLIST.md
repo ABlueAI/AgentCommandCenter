@@ -805,6 +805,27 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - *Done when:* you tell an agent what you saw (or what differed). It ticks this with the date, and
     the status PR marks S11 done.
 
+- [ ] **43. S15: research capture, your verdict and a Claude in Chrome check.** About **15 minutes**,
+  any time before S15 is built (PR #130). Read docs/decisions/OSS-research-capture.md on the PR's
+  branch first (3 minutes).
+  - **Verdict (1 minute):** reply on PR #130 with ADOPT (Claude in Chrome through `claude --chrome`,
+    as proposed), another option from the record, or what to change. The proposal runs one
+    read-only pane on your PC in a separate Chrome profile; your verdict also covers that exception
+    to "web-reading agents run at Minimum or in the cloud" (AGENTS.md).
+  - **Separate Chrome profile (3 minutes):** in Chrome, profile icon > Add > Continue without an
+    account, name it "Mako research". Sign in to nothing sensitive there (no email, bank or
+    HighLevel). Install Claude in Chrome from the Chrome Web Store in that profile and sign in to
+    Claude.
+  - **Check it reads a page (5 minutes):** in that profile open any Reddit thread. In PowerShell, in
+    any folder, run `claude --chrome`, then type: `Read the Reddit thread in my current tab and
+    give me its title and the first comment. Do not click or type anything.` It should answer
+    with both. Say whether it asked to choose a browser, and whether anything was clicked.
+  - **Tool list (2 minutes):** in the same window type `/mcp`, choose `claude-in-chrome`, then View
+    tools. Copy the list of tool names (names only) into your reply on PR #130. The build allows
+    only the reading tools from that list.
+  - *Done when:* your verdict, what you saw and the tool list are on PR #130. An agent ticks this
+    with the date and builds the button.
+
 ## Every day, once the runner is on
 
 Once S04 is applied (step 27), the runner works all day and you do one sitting in the evening:
