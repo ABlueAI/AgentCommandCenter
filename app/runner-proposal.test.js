@@ -95,8 +95,15 @@ const mustHave = [
   ['first remove the usage-paused label and the runner-paused marker', 'clears the paused state when it resumes a PR'],
   ['asking for something that no one else has edited', 'acts only on an unedited ABlueAI comment'],
   ['never post another needs-Blue comment on that PR', 'asks Blue only once and resumes after his reply'],
-  ['if the total is over parallel_cap and your marker expires later', 're-counts the global cap after placing a lock'],
+  ['rank all live locks by expiry, earliest first, and on the same minute by PR number, lowest first: if yours ranks past parallel_cap', 're-counts the global cap after placing a lock and backs off only past the cap'],
   ['and the branch has had no force-push since', 'does not count a review across a force-push'],
+  ['if you can\'t check for force-pushes, the comment doesn\'t cover the head', 'treats an unreadable force-push history as not covered'],
+  ['an "Independent review (Opus)" comment covers its latest head (as in 5b)', 'marks a PR ready only when a review covers its latest head'],
+  ['from then on, work it only as his reply asks, and otherwise skip it', 'settles what happens on a Codex PR after Blue replies'],
+  ['and it isn\'t marked ready yet (update its TLDR and mark it ready)', 'picks up a finished PR whose checks passed later'],
+  ['it has no needs-blue label and no "@ABlueAI needs Blue:" comment from your login without a later reply', 'never marks a PR ready while Blue is asked'],
+  ['it carries the needs-blue label and the latest "@ABlueAI needs Blue:" comment from your login has a later reply', 'resumes its own PR once per answered question'],
+  ['remove the needs-blue label, set its row back from NEEDS BLUE to IN PROGRESS (#PR), and do what his reply asks', 'resumes its own PR after Blue answers'],
 ];
 for (const [text, label] of mustHave) assert(prompt.includes(text), `runner prompt ${label}`);
 assert(!/@codex/i.test(prompt), 'runner prompt never writes Codex\'s handle');
@@ -110,6 +117,11 @@ assert(digest.includes('never create, edit or comment on anything on GitHub') &&
 assert(digest.includes('"READY TO MERGE: ') && digest.includes('"NOT READY: '), 'digest heads its first line READY TO MERGE or NOT READY');
 assert(digest.includes('at-codex') && !/@codex/i.test(digest), 'digest prompt never writes Codex\'s handle');
 assert(digest.includes('"NOT READY: runner gated on step N'), 'digest re-checks the runner gate and reports it');
+assert(digest.includes('a review comment or reply whose edit history you can\'t read doesn\'t count either')
+  && digest.includes('"NOT READY: needs Blue (comment couldn\'t be checked)"'),
+  'digest fails closed on comments whose edit history it cannot read');
+assert(digest.includes('if you can\'t check for force-pushes it doesn\'t cover the head'),
+  'digest treats an unreadable force-push history as not covered');
 assert(digest.includes('First line: the gate line from step 1 if the gate failed, even when PRs are ready'),
   'digest puts a gate failure ahead of any READY TO MERGE headline');
 assert(digest.includes('posted by ABlueAgent and edited by no one else') && digest.includes('never quote their text'),

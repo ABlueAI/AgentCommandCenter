@@ -1,6 +1,6 @@
 # Mako status
 
-Updated 2026-10-24 by Claude (PR #127). Every PR that changes the state updates this file.
+Updated 2026-10-24 by Claude (PRs #119, #123 and #127). Every PR that changes the state updates this file.
 
 ## Right now
 
@@ -18,6 +18,13 @@ Updated 2026-10-24 by Claude (PR #127). Every PR that changes the state updates 
     research (includes the Dodaios trial)", ending in `docs/decisions/OSS-composer.md` and Blue's
     verdict (step 19); Composer build sessions and workflow automations come in a later plan change.
     S21 (logo) stayed READY; it is now in progress (PR #127, below).
+- **GoHighLevel lead pipeline (plan change proposed in PR #119, pending Blue):** new S29 ranks
+  every Florida marina from the official Google Places API (a new paid Google Cloud account, Blue's
+  to confirm; checklist step 33), new S30 writes a personal email opener for each, and Blue sends
+  them from HighLevel in approved batches of about 20; S24's read-only workflow becomes a reply/lead
+  watcher (a separate scheduled task, 7:30 AM to 8:00 PM Eastern, notifying only on news; step 34
+  first). Marina and lead data stay in the private repo `ABlueAI/mako-business`. Nothing is
+  scheduled or built until Blue merges it; S22 (PR #116) is unchanged.
 - **Claude plan:** Blue upgrades to Max 5x on Wednesday 2026-10-28 (moved from 2026-10-21 on
   2026-10-20; checklist step 8). Until then the runner builds one session at a time on Pro.
 - **CI and dependencies (S02, done in PR #45):** every GitHub Action is pinned to a commit SHA, and both
@@ -69,13 +76,13 @@ Updated 2026-10-24 by Claude (PR #127). Every PR that changes the state updates 
   `Mako (dev)` title, and it never installs or changes Claude Code hooks. The stable copy is
   unchanged. How to run it and what the two still share: [docs/DEV-INSTANCE.md](docs/DEV-INSTANCE.md).
   Blue checks both side by side on his PC (checklist step 38).
-- **All-day runner (S04, PR #84, in progress, pending Blue):** proposed in docs/RUNNER.md "S04: the
-  all-day runner": hourly fires at :07 Eastern, a parallel cap of 1 on Pro counted from expiring
-  locks, a clean stop and resume at usage limits, no phone notification per fire, and one evening
-  digest at 8:03 PM. Researched from the official docs on 2026-10-21: the minimum interval is one
-  hour, no daily run cap is stated, and no documented way lets a cloud session read plan usage, so
-  the 90% warning moves to S11. Nothing is applied until Blue merges it; then steps 28 and 27 in
-  the same sitting.
+- **All-day runner (S04, PR #84 merged 2026-10-23, partly applied):** the hourly runner
+  (`trig_01LPKxs49xvwN7mcuGLGwyN8`, :07 Eastern, no push) is on and fired at 07:09 UTC. As read
+  on 2026-10-23 at about 07:40 UTC, the evening digest (`trig_0166nBynncK2BWPaarALAq8q`) is off,
+  the old daily runner is still on with the new prompt, and both new tasks have connectors the plan
+  didn't call for (the digest has the GoHighLevel CRM). Blue's clicks are in checklist step 27;
+  steps 27 and 28 aren't ticked. The S04 follow-up PR fixes the prompts' open follow-ups and
+  records this read-back (docs/RUNNER.md "Applied so far").
 - **Guardrails:**
   - The repo-side files are live on `main`, and the merge audit has passed on every merge.
   - Part A (checklist step 2) is done and verified on 2026-10-18. `main` now requires a pull request
