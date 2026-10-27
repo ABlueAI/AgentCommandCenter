@@ -1,6 +1,6 @@
 # Mako status
 
-Updated 2026-10-24 by Claude (PRs #119, #123 and #127). Every PR that changes the state updates this file.
+Updated 2026-10-27 by Claude (PR #127). Every PR that changes the state updates this file.
 
 ## Right now
 
@@ -55,8 +55,10 @@ Updated 2026-10-24 by Claude (PRs #119, #123 and #127). Every PR that changes th
   session, with status, authority, lane and sensitive labels and the "1.1 Month 1" milestone, in step
   with docs/PLAN-1.1.md on `main`. The Project board joins once Blue connects it (checklist step 25).
 - **Logo readability (S21, PR #127, in progress):** four "M" taskbar icons, A to D, with a preview
-  sheet at 16 to 48 px in docs/LOGO-VARIANTS.md. Blue picks one (checklist step 42); then it
-  replaces `app/assets/mako.ico` in the same PR. The app icon is unchanged until then.
+  sheet at 16 to 48 px in docs/LOGO-VARIANTS.md. Blue picked C, white M on the accent blue
+  (2026-10-26), and it now replaces the shark in `app/assets/mako.ico` in the same PR; the top bar
+  keeps the shark and wordmark. After merging, Blue points the desktop shortcut at it and checks the
+  taskbar (checklist step 42).
 - **Obsidian Skills (S13, PR #115, in progress):** `scripts/new-mako-vault.ps1` creates Blue's
   private vault outside this repo, with `Mako index.md` (links to STATUS, PLAN, DECISIONS and the
   checklist on GitHub) an `AGENTS.md` and a `CLAUDE.md`; the kepano/obsidian-skills plugin is to be installed in

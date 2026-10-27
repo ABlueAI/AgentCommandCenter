@@ -22,7 +22,7 @@ shark's own: black tile, navy `#14275f`, accent blue `#3f65f4`.
 |---|---|---|
 | A | White M on black | Closest to today's tile. Crisp, but the tile edge fades on a dark taskbar. |
 | B | White M on navy | Keeps the shark's navy; the tile shows on both dark and light taskbars. |
-| C | White M on accent blue | Brightest; stands out most on both taskbars. Recommended. |
+| C | White M on accent blue | Brightest; stands out most on both taskbars. **Blue's pick (2026-10-26).** |
 | D | Slanted white M on black | Echoes the wordmark's italic m; the slant softens its edges at 16 px. |
 
 ![The current icon and variants A to D at 16 to 48 px, on a dark and a light taskbar](assets/s21-logo-variants.png)
@@ -33,9 +33,12 @@ are drawn from the next larger frame, as Windows does. It was rendered by Chromi
 session, so it is close to, not identical with, what Windows draws; the real check is step 42 on
 Blue's PC.
 
-## What changes after Blue picks
+## What changed after Blue picked C
 
-Only the Windows icon: the picked ICO replaces `app/assets/mako.ico` (the file the window, and so
+Blue picked C on PR #127 (2026-10-26). The sheet above was drawn before the swap, so its first
+row shows the shark; re-rendering now draws today's `mako.ico`, which is C, in that row.
+
+Only the Windows icon changes: the picked ICO replaces `app/assets/mako.ico` (the file the window, and so
 the taskbar button, already uses through `icon:` in `app/main.js`), and the hash pin in
 `app/mako-branding.test.js` moves to it. The shark and wordmark in Mako's top bar stay as they are.
 The desktop shortcut takes its icon from its own settings (last recorded as `electron.exe,0`, in

@@ -74,7 +74,7 @@ function sheetRow(label, frames) {
 async function main() {
   const browser = await chromium.launch();
   const page = await browser.newPage({ deviceScaleFactor: 1 });
-  const rows = [sheetRow('Current (shark)', readIcoFrames(fs.readFileSync(CURRENT_ICO)))];
+  const rows = [sheetRow('Current (mako.ico)', readIcoFrames(fs.readFileSync(CURRENT_ICO)))];
   const files = fs.readdirSync(VARIANT_DIR).filter(f => f.endsWith('.svg')).sort();
   for (const file of files) {
     const svg = fs.readFileSync(path.join(VARIANT_DIR, file), 'utf8');

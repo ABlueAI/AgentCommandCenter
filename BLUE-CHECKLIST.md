@@ -810,7 +810,9 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - **Pick (now, 2 minutes):** open docs/LOGO-VARIANTS.md on the S21 PR's branch (Files changed >
     the file > View file) and look at the sheet: today's shark and four "M" icons, A to D, at 16 to
     48 px on a dark and a light taskbar. Reply on PR #127 with the letter, or what to change.
-    Recommendation (Claude's, not your words): **C**, white M on the accent blue.
+    Recommendation (Claude's, not your words): **C**, white M on the accent blue. *Picked 2026-10-26:
+    Blue replied "C" on PR #127 (comment by ABlueAI, posted from his main chat at his request; read
+    by the runner 2026-10-27).*
   - An agent then makes your pick the app icon in the same PR, and it comes back to you as `READY TO
     MERGE`.
   - **Desktop shortcut (1 minute, after merging):** pull `main`, then right-click the Mako desktop shortcut (it may

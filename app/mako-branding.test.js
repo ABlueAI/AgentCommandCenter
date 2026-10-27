@@ -119,9 +119,14 @@ for (let i = 0; i < iconSizes.length; i++) {
   iconEnd = start + bytes;
 }
 assert(iconEnd === ico.length, 'the ICO has no trailing payload');
+// S21: Blue picked variant C (white M on the accent blue) on PR #127, 2026-10-26, so mako.ico is now
+// a byte copy of app/assets/icon-variants/m-c-white-on-blue.ico. Previous pin (the shark tile):
+// 6411c345aff620ce4394b26294b1d9d9a5c30d7f7054f80d65416f14d4146154.
 assert(crypto.createHash('sha256').update(ico).digest('hex') ===
-  '6411c345aff620ce4394b26294b1d9d9a5c30d7f7054f80d65416f14d4146154',
+  'a3d372a7d1fa08b6faaee136d1e5b300d6a8fb8e66c52a38c455f41362678d9c',
   'the approved Mako ICO bytes are unchanged (binary, identical in every checkout)');
+assert(ico.equals(fs.readFileSync(path.join(__dirname, 'assets', 'icon-variants', 'm-c-white-on-blue.ico'))),
+  'S21: mako.ico is Blue\'s pick, variant C');
 assert(count(main, "icon: path.join(__dirname, 'assets', 'mako.ico')") === 1,
   'the one BrowserWindow still receives the Mako ICO');
 

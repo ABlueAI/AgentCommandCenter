@@ -3,6 +3,12 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-10-26
+
+| Decision | Blue's words |
+|---|---|
+| S21 (PR #127): Mako's taskbar and window icon becomes variant C, a white M on the shark's accent blue, replacing the shark tile in `app/assets/mako.ico`. The top bar's shark and wordmark stay. | "C — white M on the accent blue." (posted on PR #127 by Claude from Blue's main chat at his request: "if not just go with C") |
+
 ## 2026-10-23
 
 | Decision | Blue's words |
