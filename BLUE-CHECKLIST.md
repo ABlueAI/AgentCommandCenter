@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-23 by Claude (steps 33, 34 and 36 added for the GoHighLevel lead pipeline,
+Last updated 2026-10-27 by Claude (step 43 added for S15, PR #130; steps 33, 34 and 36 added for the GoHighLevel lead pipeline,
 S29 and S24, PR #119, proposed; step 35 added for S06, PR #121; step 30 added for the S26 Codex trial, PR #114; step 14 ticked on Blue's word and its token renewal reminder added under "Dated reminders", PR #118; step 31 added for the S13 Obsidian vault, PR #115; step 29 added for the S12 Quick Links bundle, PR #86; step 21
 ticked and step 26 added for the runner's claim check, PR #83; step 19 ticked with Blue's Composer verdict, PR #82; step 21 added: apply the capped review loop to the runner, PR #52;
 step 25 added for the S03 plan board, PR #54; "Do next" order added, step 20 ticked, step 22 added, PR #53;
@@ -809,17 +809,22 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   any time before S15 is built (PR #130). Read docs/decisions/OSS-research-capture.md on the PR's
   branch first (3 minutes).
   - **Verdict (1 minute):** reply on PR #130 with ADOPT (Claude in Chrome through `claude --chrome`,
-    as proposed), another option from the record, or what to change. The proposal runs one
-    read-only pane on your PC in a separate Chrome profile; your verdict also covers that exception
-    to "web-reading agents run at Minimum or in the cloud" (AGENTS.md).
+    as proposed), another option from the record, or what to change. The proposal runs one fenced
+    pane on your PC, in a separate Chrome profile, that can only read the page and write its own
+    report; your verdict also covers that exception to "web-reading agents run at Minimum or in the
+    cloud" (AGENTS.md). Give the verdict before the check below.
   - **Separate Chrome profile (3 minutes):** in Chrome, profile icon > Add > Continue without an
     account, name it "Mako research". Sign in to nothing sensitive there (no email, bank or
     HighLevel). Install Claude in Chrome from the Chrome Web Store in that profile and sign in to
     Claude.
-  - **Check it reads a page (5 minutes):** in that profile open any Reddit thread. In PowerShell, in
-    any folder, run `claude --chrome`, then type: `Read the Reddit thread in my current tab and
-    give me its title and the first comment. Do not click or type anything.` It should answer
-    with both. Say whether it asked to choose a browser, and whether anything was clicked.
+  - **Check it reads a page (5 minutes):** in that profile open any Reddit thread. In PowerShell,
+    make a new empty folder and go into it (`mkdir $env:TEMP\chrome-check; cd
+    $env:TEMP\chrome-check`), so no project settings apply, then run `claude --chrome
+    --permission-mode plan` and type: `Read the Reddit thread in my current tab and give me its
+    title and the first comment. Do not click or type anything.` If it asks to approve a browser
+    tool, approve only ones that read (page text, tab list) and deny anything that clicks, types,
+    navigates or fills a form. It should answer with both. Say whether it asked to choose a browser,
+    which tools it asked for, and whether anything was clicked.
   - **Tool list (2 minutes):** in the same window type `/mcp`, choose `claude-in-chrome`, then View
     tools. Copy the list of tool names (names only) into your reply on PR #130. The build allows
     only the reading tools from that list.

@@ -34,18 +34,24 @@ plan); Electron is MIT. No new paid service.
 
 ## How the adopted option would be built (after Blue's verdict)
 
-1. A **Send current page to Reviewer** button in Mako. It starts a read-only "page reader" pane:
-   `claude --chrome` with a fixed opening prompt (read the active tab, write its text and the
-   thread's comments to one report file in the pane's fenced outputs folder, change nothing in the
-   browser). Blue switches from the browser to Mako and clicks once: no copy and paste.
+1. A **Send current page to Reviewer** button in Mako. It starts a "page reader" pane: a new
+   **fenced role**, like web-scout (its own outputs folder under Mako's path fence, Write allowed
+   only there, no shell, no edits to any repo), launched as `claude --agent page-reader --chrome`
+   with a fixed opening prompt (read the active tab, write its text and the thread's comments to
+   one report file in its outputs folder, change nothing in the browser). It is not a Minimum
+   pane: Minimum is plan mode with no edits, so it couldn't write the report. Blue switches from
+   the browser to Mako and clicks once: no copy and paste.
 2. **Read-only by permission rules, not by the prompt.** Claude Code matches MCP tools as
    `mcp__claude-in-chrome__<tool>` (code.claude.com/docs/en/permissions). The pane allows only the
    reading tools and denies the rest (clicking, typing, form filling, navigation, uploads). The
    official docs name only `tabs_context_mcp` and `browser_batch`; the full list comes from
-   `/mcp` on Blue's PC (step 43), and the allowlist is pinned in a test from that list.
+   `/mcp` on Blue's PC (step 43), and the allowlist is pinned in a test from that list. A batch or
+   wrapper tool such as `browser_batch` counts as non-reading, and stays denied, unless the docs
+   show it can only read.
 3. **The Reviewer then reads the report file**, as it reads a diff today, so the Reviewer itself
    keeps no web or browser tool.
-4. Only this pane starts with `--chrome`. Claude Code's docs say a project can't turn Chrome on by
+4. The build needs S10's authority levels and launch path, which are on `main` (PR #125, merged).
+5. Only this pane starts with `--chrome`. Claude Code's docs say a project can't turn Chrome on by
    itself ("a project can't turn on Claude in Chrome"), so other panes stay off unless Blue runs
    `/chrome` in them.
 
@@ -56,12 +62,14 @@ plan); Electron is MIT. No new paid service.
   only, a report-only prompt and a separate Chrome profile limit what an injected page can do.
 - **Blue's logged-in browser.** AGENTS.md runs web-reading agents at Minimum or in the cloud. This
   pane runs on Blue's PC, so step 43 uses a **separate Chrome profile with no sensitive accounts**
-  (Anthropic's own advice) and the pane runs at Minimum with no shell. Blue's verdict covers this
-  exception.
+  (Anthropic's own advice), and the pane is a fenced role with no shell that can write only its
+  own report. Blue's verdict covers this exception.
 - **Browser support.** The Claude Code page lists Chrome and Edge; the extension's help page says
   Chrome only. Step 43 uses Chrome.
 - **Sign-in.** Chrome integration needs a `/login` sign-in; with an API key or long-lived token,
-  Claude Code keeps it off. Mako's panes use Blue's normal sign-in.
+  Claude Code keeps it off. Assumption, not verified in `app/main.js`: Mako's Claude panes use
+  Blue's normal sign-in. The build checks that the page-reader pane starts with no Anthropic API
+  key in its environment.
 
 ## Sources
 

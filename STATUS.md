@@ -1,6 +1,6 @@
 # Mako status
 
-Updated 2026-10-24 by Claude (PRs #119 and #123). Every PR that changes the state updates this file.
+Updated 2026-10-27 by Claude (PR #130). Every PR that changes the state updates this file.
 
 ## Right now
 
@@ -57,7 +57,7 @@ Updated 2026-10-24 by Claude (PRs #119 and #123). Every PR that changes the stat
 - **Research capture (S15, PR #130, needs Blue):** Mako's Reviewer can't open web pages, and
   Claude Code's WebFetch can't reach Reddit. docs/decisions/OSS-research-capture.md proposes ADOPT
   Claude in Chrome through `claude --chrome`, behind one "Send current page to Reviewer" button that
-  starts a read-only page-reader pane. Blue's verdict, a check in a separate Chrome profile and the
+  starts a fenced page-reader pane that can only read the page and write its own report. Blue's verdict, a check in a separate Chrome profile and the
   browser tool list come first (checklist step 43); nothing is built before that.
 - **Obsidian Skills (S13, PR #115, in progress):** `scripts/new-mako-vault.ps1` creates Blue's
   private vault outside this repo, with `Mako index.md` (links to STATUS, PLAN, DECISIONS and the
