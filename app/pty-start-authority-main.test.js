@@ -109,12 +109,14 @@ for (const r of ['web-scout', 'operator', 'source-scout', 'builder']) {
 }
 const SANDBOX = fs.mkdtempSync(path.join(OUTPUTS, 'web-scout-fixture-'));
 
-const record = { handled: new Map(), on: new Map(), windowsCreated: 0, ptySpawns: 0, spawnArgs: [], mainErrors: [], webContents: null };
+const record = { handled: new Map(), on: new Map(), windowsCreated: 0, ptySpawns: 0, spawnArgs: [], exitHandlers: [], mainErrors: [], webContents: null };
 const ptyStub = {
   spawn(file, args, opts) {
     record.ptySpawns += 1;
     record.spawnArgs.push({ file, args, cwd: opts && opts.cwd, env: opts && opts.env });
-    return new Proxy({ onData() {}, onExit() {}, write() {}, resize() {}, kill() {}, pid: 1234 },
+    // onExit handlers are kept so the S08 section can simulate a process exit without pty-kill (which
+    // would run a real tree kill on the stub's pid).
+    return new Proxy({ onData() {}, onExit(cb) { record.exitHandlers.push(cb); }, write() {}, resize() {}, kill() {}, pid: 1234 },
       { get(t, k) { return k in t ? t[k] : () => {}; } });
   },
 };
@@ -272,6 +274,110 @@ Module._load = function (request) {
     assert(cmd.indexOf('--allowedTools') === -1
       && !Object.keys(env).some((k) => k.toUpperCase() === 'BLUE_HELM_CONTROLLED_WEBFETCH_MODE'),
     'and gets no WebFetch grant and no WebFetch mode');
+  }
+
+  section('S08 SESSION MEMORY — main mints the Claude session ID and records the pane');
+  {
+    const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+    const memPath = path.join(USER_DATA, 'session-memory.json');
+    const readMem = () => JSON.parse(fs.readFileSync(memPath, 'utf8'));
+    const lastCmd = () => record.spawnArgs[record.spawnArgs.length - 1].args.join(' ');
+    const before = record.ptySpawns;
+    await ptyStart(goodEvent, { id: 'pane-s08', role: 'builder', cli: 'claude', cwd: FIX, sessionId: '11111111-1111-1111-1111-111111111111' });
+    assert(record.ptySpawns === before + 1, 'a builder pane launches');
+    const m = lastCmd().match(new RegExp('claude --agent builder --session-id (' + UUID + ')$'));
+    assert(m !== null, 'its command ends with a main-minted --session-id UUID');
+    assert(lastCmd().indexOf('11111111-1111-1111-1111-111111111111') === -1, 'a renderer-supplied sessionId is ignored');
+    const sid = m && m[1];
+    let mem = readMem();
+    let rec = mem.records.find((r) => r.sessionId === sid);
+    assert(mem.version === 1 && rec && rec.paneId === 'pane-s08' && rec.role === 'builder' && rec.cli === 'claude'
+      && rec.worktree === FIX && typeof rec.startedAt === 'string' && rec.stoppedAt === null,
+      'session-memory.json in userData records the session ID, pane, role and worktree, still open');
+    record.exitHandlers[record.exitHandlers.length - 1]();
+    rec = readMem().records.find((r) => r.sessionId === sid);
+    assert(rec && typeof rec.stoppedAt === 'string' && rec.stopReason === 'exited', 'the process exit closes the record as `exited`');
+
+    await ptyStart(goodEvent, { id: 'pane-s08-cli', role: null, cli: 'claude', cwd: FIX });
+    const m2 = lastCmd().match(new RegExp('-Command claude --session-id (' + UUID + ')$'));
+    assert(m2 !== null && m2[1] !== sid, 'a bare claude CLI pane gets its own fresh session ID');
+    rec = readMem().records.find((r) => r.sessionId === (m2 && m2[1]));
+    assert(rec && rec.role === null && rec.cli === 'claude', 'and is recorded with no role');
+    const count = readMem().records.length;
+    await ptyStart(goodEvent, { id: 'pane-s08-codex', role: null, cli: 'codex', cwd: FIX });
+    assert(lastCmd().indexOf('--session-id') === -1, 'a codex pane gets no --session-id');
+    await ptyStart(goodEvent, { id: 'pane-s08-shell', role: null, cli: null, cwd: FIX });
+    assert(lastCmd().indexOf('--session-id') === -1, 'a plain shell pane gets no --session-id');
+    assert(readMem().records.length === count, 'and neither is recorded');
+    const spawnsBefore = record.ptySpawns;
+    await ptyStart(goodEvent, { id: 'pane-s08-bad', role: 'Builder', cli: 'claude', cwd: FIX });
+    assert(record.ptySpawns === spawnsBefore && readMem().records.length === count, 'a refused launch spawns nothing and records nothing');
+  }
+
+  section('S09 SESSION RESUME — only an offered session resumes, in its own folder and role');
+  {
+    const memPath = path.join(USER_DATA, 'session-memory.json');
+    const readMem = () => JSON.parse(fs.readFileSync(memPath, 'utf8'));
+    const lastCmd = () => record.spawnArgs[record.spawnArgs.length - 1].args.join(' ');
+    const SID = '5e55a0b1-0000-4000-8000-000000000009';
+    const SID_BARE = '5e55a0b1-0000-4000-8000-00000000000b';
+    const SID_GONE = '5e55a0b1-0000-4000-8000-00000000000c';
+    const stopped = { startedAt: '2026-10-27T09:00:00.000Z', stoppedAt: '2026-10-27T10:00:00.000Z', stopReason: 'mako-closed', cli: 'claude' };
+    const mem = readMem();
+    mem.records.push(Object.assign({ sessionId: SID, paneId: 'old1', role: 'builder', worktree: FIX }, stopped));
+    mem.records.push(Object.assign({ sessionId: SID_BARE, paneId: 'old2', role: null, worktree: FIX }, stopped));
+    mem.records.push(Object.assign({ sessionId: SID_GONE, paneId: 'old3', role: null, worktree: path.join(FIX, 'gone') }, stopped));
+    fs.writeFileSync(memPath, JSON.stringify(mem));
+
+    const offerIpc = record.handled.get('session-resume-offer');
+    const dismissIpc = record.handled.get('session-resume-dismiss');
+    assert(typeof offerIpc === 'function' && typeof dismissIpc === 'function', 'main registers session-resume-offer and session-resume-dismiss');
+    const untrusted = { sender: { other: 1 }, senderFrame: wc.mainFrame };
+    assert((await offerIpc(untrusted)).ok === false && (await dismissIpc(untrusted, SID)).ok === false,
+      'both refuse an untrusted sender');
+    const offer = await offerIpc(goodEvent);
+    const ids = offer.ok ? offer.rows.map((r) => r.sessionId).sort() : [];
+    assert(offer.ok && ids.join() === [SID, SID_BARE, SID_GONE].sort().join(), 'the offer lists the panes open when Mako closed');
+    const gone = offer.ok && offer.rows.find((r) => r.sessionId === SID_GONE);
+    assert(gone && gone.worktreeMissing === true, 'a pane whose folder is gone is flagged');
+
+    const refusedResumes = [
+      ['a different folder', { id: 'pane-r1', role: 'builder', cli: 'claude', cwd: SANDBOX, resumeSessionId: SID }],
+      ['a different role', { id: 'pane-r2', role: 'reviewer', cli: 'claude', cwd: FIX, resumeSessionId: SID }],
+      ['a codex pane', { id: 'pane-r3', role: null, cli: 'codex', cwd: FIX, resumeSessionId: SID_BARE }],
+      ['an opening prompt', { id: 'pane-r4', role: 'builder', cli: 'claude', cwd: FIX, resumeSessionId: SID, initialPrompt: 'hi' }],
+      ['an ID not offered', { id: 'pane-r5', role: 'builder', cli: 'claude', cwd: FIX, resumeSessionId: '5e55a0b1-0000-4000-8000-0000000000ff' }],
+      ['a hostile ID', { id: 'pane-r6', role: 'builder', cli: 'claude', cwd: FIX, resumeSessionId: SID + ' --dangerously-skip-permissions' }],
+      ['a folder that is gone (main falls back to USERPROFILE)', { id: 'pane-r7', role: null, cli: 'claude', cwd: path.join(FIX, 'gone'), resumeSessionId: SID_GONE }],
+    ];
+    for (const [label, opts] of refusedResumes) {
+      const before = record.ptySpawns;
+      const errs = record.mainErrors.length;
+      const res = await ptyStart(goodEvent, opts);
+      assert(res && res.ok === false && record.ptySpawns === before
+        && record.mainErrors.slice(errs).some((l) => /^Resume refused \[resume-[a-z-]+\]$/.test(l)),
+      'resume with ' + label + ': refused visibly, ZERO PTYs');
+    }
+
+    const before = record.ptySpawns;
+    const res = await ptyStart(goodEvent, { id: 'pane-resume', role: 'builder', cli: 'claude', cwd: FIX, resumeSessionId: SID });
+    assert(res && res.ok === true && record.ptySpawns === before + 1, 'an offered builder session resumes in its folder');
+    assert(new RegExp('claude --agent builder --resume ' + SID + '$').test(lastCmd()) && lastCmd().indexOf('--session-id') === -1,
+      'its command ends with --resume <the recorded ID>, and mints no new --session-id');
+    let r = readMem().records.find((x) => x.sessionId === SID);
+    assert(r && r.paneId === 'pane-resume' && r.stoppedAt === null && r.stopReason === null && r.startedAt === stopped.startedAt,
+      'the same record is open again, in the new pane');
+    const twice = await ptyStart(goodEvent, { id: 'pane-resume-2', role: 'builder', cli: 'claude', cwd: FIX, resumeSessionId: SID });
+    assert(twice && twice.ok === false && record.ptySpawns === before + 1, 'the same session can\'t be resumed into a second pane');
+    const after = await offerIpc(goodEvent);
+    assert(after.ok && !after.rows.some((x) => x.sessionId === SID), 'and it leaves the offer');
+
+    assert((await dismissIpc(goodEvent, SID_BARE)).ok === true, 'Start fresh marks a session answered');
+    r = readMem().records.find((x) => x.sessionId === SID_BARE);
+    assert(r && r.offered === true, 'its record says so');
+    const fresh = await ptyStart(goodEvent, { id: 'pane-resume-3', role: null, cli: 'claude', cwd: FIX, resumeSessionId: SID_BARE });
+    assert(fresh && fresh.ok === false, 'a dismissed session can no longer be resumed');
+    assert((await dismissIpc(goodEvent, 'not-a-uuid')).ok === false, 'dismiss refuses a non-UUID');
   }
 
   section('REFUSALS — every one must spawn ZERO PTYs in main');
