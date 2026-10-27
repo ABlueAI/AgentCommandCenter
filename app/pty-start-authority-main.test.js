@@ -437,6 +437,68 @@ Module._load = function (request) {
       'and its prompt is still passed as the single quoted argument');
   }
 
+  section('S10 — the authority level picks a main-owned permission mode; Maximum never spawns a Claude pane');
+  {
+    const lastCmd = () => record.spawnArgs[record.spawnArgs.length - 1].args.join(' ');
+    for (const [level, mode] of [['minimum', 'plan'], ['medium', 'acceptEdits'], ['high', 'auto']]) {
+      let before = record.ptySpawns;
+      await ptyStart(goodEvent, { id: 'pane-auth-b-' + level, role: 'builder', cli: 'claude', cwd: FIX, authority: level });
+      assert(record.ptySpawns === before + 1, `builder at ${level} spawns`);
+      assert(lastCmd().indexOf('claude --agent builder --permission-mode ' + mode) !== -1, `and launches with --permission-mode ${mode}`);
+      before = record.ptySpawns;
+      await ptyStart(goodEvent, { id: 'pane-auth-c-' + level, role: null, cli: 'claude', cwd: FIX, authority: level });
+      assert(record.ptySpawns === before + 1 && / claude --permission-mode /.test(' ' + lastCmd()) && lastCmd().indexOf('--permission-mode ' + mode) !== -1,
+        `a bare claude pane at ${level} launches with --permission-mode ${mode}`);
+    }
+    {
+      const before = record.ptySpawns;
+      await ptyStart(goodEvent, {
+        id: 'pane-auth-prompt', role: 'reviewer', cli: 'claude', cwd: FIX, authority: 'minimum',
+        initialPrompt: 'Review the change set in ./x.diff',
+      });
+      assert(record.ptySpawns === before + 1
+        && lastCmd().indexOf('claude --agent reviewer --permission-mode plan "Review the change set in ./x.diff"') !== -1,
+      'the mode sits before the reviewer\'s opening prompt');
+    }
+    {
+      const before = record.ptySpawns;
+      await ptyStart(goodEvent, { id: 'pane-auth-none', role: 'builder', cli: 'claude', cwd: FIX });
+      assert(record.ptySpawns === before + 1 && lastCmd().indexOf('--permission-mode') === -1,
+        'no level sent: the pre-S10 command, no --permission-mode');
+    }
+    {
+      const before = record.ptySpawns;
+      await ptyStart(goodEvent, { id: 'pane-auth-fenced', role: 'web-scout', cli: 'claude', cwd: SANDBOX, authority: 'high' });
+      assert(record.ptySpawns === before + 1 && lastCmd().indexOf('--permission-mode') === -1
+        && lastCmd().indexOf('--disallowedTools Bash Glob NotebookEdit') !== -1,
+      'a fenced role at High keeps its fence and gets no permission mode');
+    }
+    for (const cli of ['codex', 'gemini']) {
+      const before = record.ptySpawns;
+      await ptyStart(goodEvent, { id: 'pane-auth-' + cli, role: null, cli, cwd: FIX, authority: 'maximum' });
+      assert(record.ptySpawns === before + 1 && lastCmd().indexOf('--permission-mode') === -1,
+        `a ${cli} pane at Maximum launches as before (no Claude mode)`);
+    }
+    const auth = [
+      ['builder at maximum', { id: 'x1', role: 'builder', cli: 'claude', cwd: FIX, authority: 'maximum' }, 'authority-maximum-runs-in-cloud'],
+      ['bare claude at maximum', { id: 'x2', role: null, cli: 'claude', cwd: FIX, authority: 'maximum' }, 'authority-maximum-runs-in-cloud'],
+      ['web-scout at maximum', { id: 'x3', role: 'web-scout', cli: 'claude', cwd: SANDBOX, authority: 'maximum' }, 'authority-maximum-runs-in-cloud'],
+      ['a mode name as the level', { id: 'x4', role: 'builder', cli: 'claude', cwd: FIX, authority: 'bypassPermissions' }, 'authority-unknown-level'],
+      ['an injected level', { id: 'x5', role: 'builder', cli: 'claude', cwd: FIX, authority: 'high --dangerously-skip-permissions' }, 'authority-unknown-level'],
+      ['a non-string level', { id: 'x6', role: 'builder', cli: 'claude', cwd: FIX, authority: { level: 'high' } }, 'authority-unknown-level'],
+    ];
+    for (const [label, opts, reason] of auth) {
+      const before = record.ptySpawns;
+      const sentBefore = record.mainErrors.length;
+      const res = await ptyStart(goodEvent, opts);
+      assert(res && res.ok === false && res.error === reason, `${label}: refused (${reason})`);
+      assert(record.ptySpawns === before, `${label}: zero PTYs spawned`);
+      const lines = record.mainErrors.slice(sentBefore);
+      assert(lines.some((l) => l.indexOf('pty-start refused [classify]: ' + reason) !== -1), `${label}: the refusal is visible`);
+      assert(lines.every((l) => l.indexOf('dangerously') === -1 && l.indexOf('bypassPermissions') === -1), `${label}: no line echoes the value`);
+    }
+  }
+
   section('L1 — definition resolution and process launch use the SAME canonical cwd');
   {
     // A junction OUTSIDE outputs/ that points INTO the sandbox. Containment accepts it (its real path
