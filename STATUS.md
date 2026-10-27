@@ -83,6 +83,12 @@ Updated 2026-10-27 by Claude (PR #127). Every PR that changes the state updates 
   records it with the pane's role, worktree and start and stop times; the records survive a restart.
   Nothing is resumed yet (that's S09). How it works: [docs/SESSION-MEMORY.md](docs/SESSION-MEMORY.md).
   Blue checks it on his PC (checklist step 39).
+- **Session memory 2 (S09, PR #131, in progress):** when Mako opens after closing (or stopping
+  unexpectedly) with Claude panes open, the Terminals tab offers **Resume** (the same role in the
+  same folder, with `claude --resume <id>`) or **Start fresh** for each one. Main checks every
+  Resume against its own records; fenced roles are never resumed. Claude Code deletes transcripts
+  after `cleanupPeriodDays` (30 days by default). Details: [docs/SESSION-MEMORY.md](docs/SESSION-MEMORY.md).
+  Blue checks it on his PC (checklist step 44).
 - **All-day runner (S04, PR #84 merged 2026-10-23, partly applied):** the hourly runner
   (`trig_01LPKxs49xvwN7mcuGLGwyN8`, :07 Eastern, no push) is on and fired at 07:09 UTC. As read
   on 2026-10-23 at about 07:40 UTC, the evening digest (`trig_0166nBynncK2BWPaarALAq8q`) is off,

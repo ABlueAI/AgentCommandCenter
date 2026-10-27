@@ -175,6 +175,62 @@ section('construction');
   assert(threw, 'userDataDir is required');
 }
 
+section('S09: resumeOffer offers the newest batch of panes open when Mako went away');
+{
+  const dir = freshDir();
+  const s = createSessionMemoryStore({ userDataDir: dir, now: clock('2026-10-27T09:00:00Z') });
+  const old1 = id(), a = id(), b = id(), closed = id(), codex = id();
+  s.recordStart({ sessionId: old1, paneId: 'p1', role: 'builder', cli: 'claude', worktree: 'D:\\w\\one' });
+  s.closeOpen(STOP_REASON.MAKO_CLOSED);                        // run 1 ends with old1 open
+  s.recordStart({ sessionId: a, paneId: 'p1', role: 'builder', cli: 'claude', worktree: 'D:\\w\\one' });
+  s.recordStart({ sessionId: b, paneId: 'p2', role: null, cli: 'claude', worktree: 'D:\\w\\two' });
+  s.recordStart({ sessionId: closed, paneId: 'p3', role: 'reviewer', cli: 'claude', worktree: 'D:\\w\\one' });
+  s.recordStart({ sessionId: codex, paneId: 'p4', role: null, cli: 'codex', worktree: 'D:\\w\\one' });
+  s.recordStop(closed, STOP_REASON.CLOSED);
+  s.closeOpen(STOP_REASON.UNKNOWN);                            // run 2 crashed with a, b and codex open
+  const offer = s.resumeOffer();
+  const ids = offer.ok ? offer.records.map((r) => r.sessionId).sort() : [];
+  assert(offer.ok && ids.join() === [a, b].sort().join(), 'only the newest batch\'s Claude panes are offered (not old1, the closed pane, or codex)');
+  const rec = (sid) => s.list().records.find((r) => r.sessionId === sid);
+  assert(rec(old1).offered === true, 'the older run\'s record is marked offered, so it never comes back');
+  assert(rec(a).offered === undefined && rec(closed).offered === undefined, 'the offered batch and other records are left as they were');
+  assert(s.resumeOffer().records.length === 2, 'asking again offers the same batch (nothing is answered yet)');
+
+  assert(s.markOffered(b).ok && rec(b).offered === true, 'markOffered (Start fresh) marks one record');
+  assert(s.resumeOffer().records.map((r) => r.sessionId).join() === a, 'and it is no longer offered');
+  assert(s.markOffered(id()).ok, 'markOffered on an unknown session changes nothing');
+  assert(!s.markOffered('nope').ok && s.markOffered('nope').reason === REASON.BAD_SESSION_ID, 'markOffered refuses a non-UUID');
+
+  const r = s.recordResume({ sessionId: a, paneId: 'pty9' });
+  assert(r.ok && rec(a).stoppedAt === null && rec(a).stopReason === null && rec(a).paneId === 'pty9'
+    && !('offered' in rec(a)) && rec(a).startedAt === '2026-10-27T09:00:03.000Z',
+  'recordResume opens the same record again in the new pane, keeping its start time');
+  const again = s.recordResume({ sessionId: a, paneId: 'pty10' });
+  assert(!again.ok && again.reason === REASON.NOT_RESUMABLE, 'an open record can\'t be resumed twice');
+  for (const [label, sid] of [['offered', b], ['closed by Blue', closed], ['unknown', id()]]) {
+    const x = s.recordResume({ sessionId: sid, paneId: 'p' });
+    assert(!x.ok && x.reason === REASON.NOT_RESUMABLE, 'recordResume refuses a record that is ' + label);
+  }
+  assert(s.resumeOffer().records.length === 0, 'with a resumed and b answered, nothing is offered');
+  s.closeOpen(STOP_REASON.MAKO_CLOSED);                        // run 3 closes with the resumed pane open
+  const next = s.resumeOffer();
+  assert(next.ok && next.records.map((x) => x.sessionId).join() === a, 'the resumed pane is offered again after the next close');
+}
+
+section('S09: `offered` keeps S08 files valid and refuses a bad value');
+{
+  const dir = freshDir();
+  const base = { sessionId: id(), paneId: 'p1', role: null, cli: 'claude', worktree: 'D:\\w',
+    startedAt: '2026-10-27T09:00:00.000Z', stoppedAt: '2026-10-27T10:00:00.000Z', stopReason: 'mako-closed' };
+  fs.writeFileSync(path.join(dir, FILENAME), JSON.stringify({ version: 1, records: [base] }));
+  const s = createSessionMemoryStore({ userDataDir: dir });
+  assert(s.list().ok && s.resumeOffer().records.length === 1, 'an S08 file (no `offered`) reads and is offered');
+  fs.writeFileSync(path.join(dir, FILENAME), JSON.stringify({ version: 1, records: [Object.assign({}, base, { offered: 'yes' })] }));
+  const bad = s.resumeOffer();
+  assert(!bad.ok && bad.reason === REASON.INVALID, 'a non-boolean `offered` makes the file invalid, and resumeOffer refuses');
+  assert(JSON.parse(fs.readFileSync(path.join(dir, FILENAME), 'utf8')).records[0].offered === 'yes', 'and the file is left exactly as it was');
+}
+
 try { fs.rmSync(ROOT, { recursive: true, force: true }); } catch { /* best effort */ }
 process.stdout.write('\nsession-memory: ' + passed + ' passed, ' + failed + ' failed\n');
 process.exit(failed ? 1 : 0);

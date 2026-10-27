@@ -804,7 +804,8 @@ function openInAppTerminal(opts = {}) {
   }
 
   // EXACTLY ONE ptyStart, on every path, and only after the pane is visible and owned.
-  const startResult = cc.ptyStart({ id, cwd: worktree, cli, role, authority: state.authority, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, videoModel: opts.videoModel, mediaResolution: opts.mediaResolution, analysisMode: opts.analysisMode, startOffset: opts.startOffset, endOffset: opts.endOffset, sliceRanges: opts.sliceRanges, analysisFocus: opts.analysisFocus, cols: term.cols, rows: term.rows });
+  // S09: `resumeSessionId` comes only from main's own offer (offerResume, above boot); main checks it again.
+  const startResult = cc.ptyStart({ id, cwd: worktree, cli, role, authority: state.authority, resumeSessionId: opts.resumeSessionId, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, videoModel: opts.videoModel, mediaResolution: opts.mediaResolution, analysisMode: opts.analysisMode, startOffset: opts.startOffset, endOffset: opts.endOffset, sliceRanges: opts.sliceRanges, analysisFocus: opts.analysisFocus, cols: term.cols, rows: term.rows });
   // A refused or rejected start must not leave a Dockview panel behind: the panel would be a ghost
   // host for a terminal that never ran, and a later Save would persist it. Convergence goes through
   // the SAME idempotent close path the ✕ uses, so the panel, the observer, the xterm and the map
@@ -1319,6 +1320,54 @@ function buildDockviewHost(container) {
 }
 
 // ---- boot -------------------------------------------------------------------
+// ---- S09: Resume or Start fresh ------------------------------------------------------------------
+// Asked once at startup. Main lists the Claude panes that were open when Mako last closed
+// (app/session-resume.js) and checks every Resume again in pty-start, so a row here is only a
+// suggestion. Resume reopens the same role in the same folder with `claude --resume`; Start fresh
+// opens it with a new conversation; either way main stops offering that session.
+async function offerResume() {
+  const host = $('#resumeHost');
+  if (!host || !window.ccSessionResumeView) return;
+  const dismiss = (row) => Promise.resolve(cc.sessionResumeDismiss(row.sessionId))
+    .then((r) => { if (!r || r.ok !== true) appendLog(`[resume] could not record your choice: ${(r && r.error) || 'unknown'}\n`); })
+    .catch(() => appendLog('[resume] could not record your choice: ipc-rejected\n'));
+  const paneOpts = (row) => ({ worktree: row.worktree, role: row.role || undefined, cli: 'claude' });
+  const resumeView = window.ccSessionResumeView.create({
+    document,
+    host,
+    roleLabel: (r) => (ROLES[r] ? ROLES[r].label : r),
+    onResume: (row) => {
+      // Maximum sends Claude tasks to a cloud session, which can't continue a conversation on this PC.
+      if (state.authority === 'maximum') {
+        appendLog('[resume] Maximum starts no local Claude pane, so nothing can be resumed here. Pick another authority level, then Resume.\n');
+        return false;
+      }
+      appendLog(`[resume] resuming a ${row.role || 'claude'} pane with claude --resume\n`);
+      openInAppTerminal(Object.assign(paneOpts(row), { resumeSessionId: row.sessionId }));
+      return true;
+    },
+    onFresh: (row) => {
+      // Same rule as Resume: at Maximum nothing starts here, so the session isn't dismissed either.
+      if (state.authority === 'maximum') {
+        appendLog('[resume] Maximum starts no local Claude pane. Pick another authority level, then Start fresh.\n');
+        return false;
+      }
+      dismiss(row);
+      openInAppTerminal(paneOpts(row));
+      return true;
+    },
+    onDismiss: dismiss,
+  });
+  let offer = null;
+  try { offer = await cc.sessionResumeOffer(); } catch { offer = null; }
+  if (!offer || offer.ok !== true) {
+    appendLog(`[resume] could not read what to offer: ${(offer && offer.error) || 'ipc-rejected'}\n`);
+    return;
+  }
+  if (offer.rows.length) appendLog(`[resume] ${offer.rows.length} Claude pane(s) were open when Mako last closed; offering Resume or Start fresh\n`);
+  resumeView.render(offer.rows);
+}
+
 async function boot() {
   const s = await cc.getSettings();
   applyTheme((s && s.theme) || 'obsidian');
@@ -1357,6 +1406,8 @@ async function boot() {
     if (t) { t.parser.flush(); t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n'); }
   });
   cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));
+  // S09: after the main-error listener, so a session-memory refusal or a refused Resume is shown.
+  await offerResume();
 
 // EXPERIMENT A — PROTOTYPE pane status (Claude only, one pane).
 // docs/OSS-PROCUREMENT-pane-status.md — "BLUE SUBSYSTEM VERDICT: PROTOTYPE".

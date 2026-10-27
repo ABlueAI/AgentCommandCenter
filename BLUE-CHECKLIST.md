@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-23 by Claude (steps 33, 34 and 36 added for the GoHighLevel lead pipeline,
+Last updated 2026-10-27 by Claude (step 44 added for S09 session resume, PR #131; steps 33, 34 and 36 added for the GoHighLevel lead pipeline,
 S29 and S24, PR #119, proposed; step 35 added for S06, PR #121; step 30 added for the S26 Codex trial, PR #114; step 14 ticked on Blue's word and its token renewal reminder added under "Dated reminders", PR #118; step 31 added for the S13 Obsidian vault, PR #115; step 29 added for the S12 Quick Links bundle, PR #86; step 21
 ticked and step 26 added for the runner's claim check, PR #83; step 19 ticked with Blue's Composer verdict, PR #82; step 21 added: apply the capped review loop to the runner, PR #52;
 step 25 added for the S03 plan board, PR #54; "Do next" order added, step 20 ticked, step 22 added, PR #53;
@@ -834,6 +834,20 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     re-pin Mako, or sign out and back in.
   - *Done when:* you tell an agent you can read the M on the taskbar (or what you saw). It ticks
     this with the date, and the status PR marks S21 done.
+
+- [ ] **44. S09 on your PC: Resume or Start fresh.** About **5 minutes**, after you merge the S09
+  PR, #131 (and S08's step 39, which it builds on).
+  - Pull `main` and restart Mako fully. Open a builder pane on a worktree and a bare `claude` pane,
+    and ask the builder something short (for example "say hello"). Close Mako with both open.
+  - Start Mako again. The Terminals tab shows "2 Claude panes were open when Mako last closed",
+    one row each, with **Resume** and **Start fresh**.
+  - Click **Resume** on the builder row: a builder pane opens in the same worktree, and Claude shows
+    the earlier conversation (your "say hello"). Click **Start fresh** on the other: a new `claude`
+    pane opens with an empty conversation.
+  - Close Mako with only the resumed builder open and start it again: the builder is offered once
+    more. Click **Not now**: the offer goes away and doesn't come back on the next start.
+  - *Done when:* you tell an agent what you saw (or what differed), in particular whether the
+    resumed builder kept its role. It ticks this with the date, and the status PR marks S09 done.
 
 ## Every day, once the runner is on
 

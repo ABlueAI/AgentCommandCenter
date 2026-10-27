@@ -145,6 +145,7 @@ const { createLayoutStore } = require('./dockview-layout-store');
 // This boundary intentionally does not reuse or modify the legacy open-external handler below.
 const { createQuickLinksStore } = require('./quick-links-store');
 const sessionMemoryMod = require('./session-memory');
+const sessionResume = require('./session-resume');
 const { createQuickLinksIpc } = require('./quick-links-ipc');
 const { buildDefaultConfig: buildQuickLinksDefaultConfig, validateUrl: validateQuickLinkUrl } = require('./quick-links-policy');
 // S06: the legacy open-external channel goes through the same URL policy (open-external-ipc.js).
@@ -280,11 +281,15 @@ const VALID_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 //   role set    -> `claude --agent <role> [--model x] [--effort y] [--permission-mode m]` (roles are a Claude feature)
 //   cli only    -> bare CLI (claude/codex/gemini); `claude` may carry `--permission-mode m`
 //   neither     -> undefined => plain PowerShell shell
-function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, launch, webFetch, sessionId) {
+function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, launch, webFetch, sessionId, resume) {
   // S08: `sessionId` is MAIN-MINTED (crypto.randomUUID in pty-start) and re-checked as a UUID before
   // it is spliced in, so only hex digits and hyphens can reach the -Command string. It goes last,
   // after any opening prompt, which leaves every earlier argument in place.
-  const sessionArg = sessionMemoryMod.isSessionId(sessionId) ? ' --session-id ' + sessionId : '';
+  // S09: `resume` (strictly true) resumes that session instead: the ID then comes from main's own
+  // session-memory record (session-resume.js checkResume), never from the renderer, and the same UUID
+  // check applies. checkResume refuses an opening prompt with a resume, so none precedes it.
+  const sessionArg = sessionMemoryMod.isSessionId(sessionId)
+    ? (resume === true ? ' --resume ' : ' --session-id ') + sessionId : '';
   // FENCE COMPLETION: identity comes from the MAIN-OWNED classification when one is supplied, so the
   // command, the fence decision and the environment tier read one result rather than each
   // re-deriving from renderer fields. The admission verdict does NOT read it: prepareAdmissionPaneLaunch
@@ -1559,6 +1564,36 @@ function stopPaneSession(id, reason, expected) {
   sessionMemoryCall(() => sessionMemory().recordStop(sid, reason));
 }
 
+// ---- S09: Resume or Start fresh ----------------------------------------------------------------
+// The renderer asks once at startup what to offer, and says when Blue chose Start fresh or dismissed
+// a row. Trusted sender only. Resume itself goes through pty-start (`resumeSessionId`), where
+// session-resume.js checks it against this same offer.
+// Windows paths compare case-insensitively, after resolving `.`/`..` (no symlinks are followed here;
+// the spawn folder and the recorded folder are both the folder pty-start used).
+function sameResumeFolder(a, b) {
+  const fold = (p) => (process.platform === 'win32' ? path.resolve(p).toLowerCase() : path.resolve(p));
+  return fold(a) === fold(b);
+}
+ipcMain.handle('session-resume-offer', (e) => {
+  const g = launcherGate.assess(e);
+  if (!g.ok) return { ok: false, error: g.reason };
+  const offer = sessionMemoryCall(() => sessionMemory().resumeOffer());
+  if (!offer || offer.ok !== true) return { ok: false, error: sessionResume.REASON.OFFER_UNREADABLE };
+  const running = new Set(paneSessions.values());
+  const rows = sessionResume.offerView(offer.records.filter((r) => !running.has(r.sessionId)), {
+    fencedRoles: FENCED_ROLES,
+    exists: (p) => fs.existsSync(p),
+  });
+  tlog(`[session-memory] resume offer: ${rows.length} pane(s)`);
+  return { ok: true, rows, retentionDays: sessionResume.DEFAULT_RETENTION_DAYS };
+});
+ipcMain.handle('session-resume-dismiss', (e, sessionId) => {
+  const g = launcherGate.assess(e);
+  if (!g.ok) return { ok: false, error: g.reason };
+  const res = sessionMemoryCall(() => sessionMemory().markOffered(sessionId));
+  return res && res.ok ? { ok: true } : { ok: false, error: (res && res.reason) || 'session-memory-failed' };
+});
+
 // ---- IPC: in-app terminals (node-pty + xterm.js) ---------------------------
 // Each renderer terminal pane gets a real ConPTY here: PowerShell spawned in the
 // worktree, optionally running the chosen agent CLI, with bytes streamed both ways.
@@ -1636,6 +1671,25 @@ ipcMain.handle('pty-start', (e, opts) => {
   // Fenced: the validated canonical cwd. Everything else: unchanged.
   const cwd = fencedCwd !== null ? fencedCwd
     : ((opts.cwd && fs.existsSync(opts.cwd)) ? opts.cwd : process.env.USERPROFILE);
+  // S09: a resume request is checked here, before the admission claim and the spawn, against main's
+  // own offer (session-resume.js). A refusal is visible and starts nothing; no silent fresh start.
+  const resumeCheck = sessionResume.checkResume({
+    requested: opts.resumeSessionId,
+    launch,
+    cwd,
+    initialPrompt: opts.initialPrompt,
+    offer: opts.resumeSessionId === undefined || opts.resumeSessionId === null
+      ? null : sessionMemoryCall(() => sessionMemory().resumeOffer()),
+    running: new Set(paneSessions.values()),
+    sameFolder: sameResumeFolder,
+  });
+  if (!resumeCheck.ok) {
+    const line = `Resume refused [${resumeCheck.reason}]`;
+    tlog(line);
+    if (win && !win.isDestroyed()) win.webContents.send('main-error', line);
+    return { ok: false, error: resumeCheck.reason };
+  }
+  const resumeSessionId = resumeCheck.sessionId;
   // -ExecutionPolicy Bypass so npm .ps1 shims (claude/codex/gemini) always launch.
   const args = ['-NoLogo', '-ExecutionPolicy', 'Bypass', '-NoExit'];
   if (launch.videoScout) {
@@ -1701,10 +1755,12 @@ ipcMain.handle('pty-start', (e, opts) => {
     controlled: admissionLaunch.controlled === true,
   });
   // S08: every Claude pane (a role pane, or a bare `claude` CLI pane) gets a main-minted session ID.
-  const claudeSessionId = (launch.kind === LAUNCH_KIND.ROLE || (launch.kind === LAUNCH_KIND.CLI && launch.cli === 'claude'))
-    ? crypto.randomUUID() : null;
+  // S09: a checked resume keeps the record's own ID instead.
+  const claudeSessionId = resumeSessionId
+    || ((launch.kind === LAUNCH_KIND.ROLE || (launch.kind === LAUNCH_KIND.CLI && launch.cli === 'claude'))
+      ? crypto.randomUUID() : null);
   if (!launch.videoScout) {
-    const run = buildAgentCommand(opts, launch, webFetch, claudeSessionId); // role / bare CLI / undefined => plain shell
+    const run = buildAgentCommand(opts, launch, webFetch, claudeSessionId, resumeSessionId !== null); // role / bare CLI / undefined => plain shell
     if (run) args.push('-Command', run);
   }
 
@@ -1782,10 +1838,16 @@ ipcMain.handle('pty-start', (e, opts) => {
   ptys.set(id, p);
   if (claudeSessionId) {
     // Recorded only after a successful spawn, so a refused or failed launch leaves no record.
-    const rec = sessionMemoryCall(() => sessionMemory().recordStart({
-      sessionId: claudeSessionId, paneId: id, role: launch.role, cli: 'claude', worktree: cwd,
-    }));
-    if (rec.ok) paneSessions.set(id, claudeSessionId);
+    // S09: a resumed session opens its existing record again in this pane.
+    const rec = resumeSessionId
+      ? sessionMemoryCall(() => sessionMemory().recordResume({ sessionId: claudeSessionId, paneId: id }))
+      : sessionMemoryCall(() => sessionMemory().recordStart({
+        sessionId: claudeSessionId, paneId: id, role: launch.role, cli: 'claude', worktree: cwd,
+      }));
+    if (resumeSessionId) tlog(`pty-start: resumed a recorded Claude session (record ${rec.ok ? 'reopened' : 'not reopened'})`);
+    // A resumed session is running even if its record couldn't be reopened, so it stays in
+    // paneSessions and a second Resume of it is refused as already running.
+    if (rec.ok || resumeSessionId) paneSessions.set(id, claudeSessionId);
   }
   // V5b1: record pane->runId for a video-scout launch. This is stored internally ONLY (never
   // returned to the renderer). It intentionally OUTLIVES p.onExit below -- a finished run's report
