@@ -78,6 +78,11 @@ Updated 2026-10-27 by Claude (PR #127). Every PR that changes the state updates 
   `Mako (dev)` title, and it never installs or changes Claude Code hooks. The stable copy is
   unchanged. How to run it and what the two still share: [docs/DEV-INSTANCE.md](docs/DEV-INSTANCE.md).
   Blue checks both side by side on his PC (checklist step 38).
+- **Session memory 1 (S08, PR #124, in progress):** every Claude pane Mako starts gets a session ID
+  that Mako picks and passes with `--session-id`, and `session-memory.json` in Mako's settings folder
+  records it with the pane's role, worktree and start and stop times; the records survive a restart.
+  Nothing is resumed yet (that's S09). How it works: [docs/SESSION-MEMORY.md](docs/SESSION-MEMORY.md).
+  Blue checks it on his PC (checklist step 39).
 - **All-day runner (S04, PR #84 merged 2026-10-23, partly applied):** the hourly runner
   (`trig_01LPKxs49xvwN7mcuGLGwyN8`, :07 Eastern, no push) is on and fired at 07:09 UTC. As read
   on 2026-10-23 at about 07:40 UTC, the evening digest (`trig_0166nBynncK2BWPaarALAq8q`) is off,

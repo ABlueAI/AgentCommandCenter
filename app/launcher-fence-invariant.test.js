@@ -364,8 +364,20 @@ const REGIONS = [
     // notice per run when an agent pane starts without the token. The sender gate, classification,
     // fenced-role cwd gate, admission claim, spawn sink and failure cleanup are unchanged.
     // Previous pin retained: 15987 / b47bba25ac869e5b9acf87d7bd6158f799df4a8f9cd2df5d8365ae7e07dc3d2c
-    utf16Length: 16623,
-    sha: 'b0f27ef86d23317389cca04e57810dba1534a468f3bac9d1187311ccc7871ebc',
+    //
+    // RE-PINNED (S08, session memory 1), 16623 -> 17354 code units. Changes inside this region, all
+    // additions: `const claudeSessionId = <role or claude CLI pane> ? crypto.randomUUID() : null;` just
+    // before the command is built, passed as buildAgentCommand's fourth argument (a main-minted UUID,
+    // re-checked as one before it is spliced in); a `recordStart` block after `ptys.set(id, p)`, so
+    // only a spawned pane is recorded, through the throw-proof `sessionMemoryCall`; and one
+    // `stopPaneSession(id, EXITED, claudeSessionId)` call in `p.onExit`, which closes only this launch's
+    // own session. The
+    // sender gate, classification, fenced-role cwd gate, admission claim, WebFetch decision, ptyEnv
+    // block, spawn sink and failure cleanup are unchanged. The S08 assertions at the end of this file
+    // pin the new wiring.
+    // Previous pin retained: 16623 / b0f27ef86d23317389cca04e57810dba1534a468f3bac9d1187311ccc7871ebc
+    utf16Length: 17354,
+    sha: '1ed564dea4af33f5dbe7afcb47b0d0cb2178ff1fb289a60b2e37a3d078581b2d',
   },
 ];
 
@@ -479,7 +491,7 @@ assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src)
   const handler = src.slice(hStart, mustFind(src, "ipcMain.on('pty-write'", 'pty-start handler end'));
   const claimAt = handler.indexOf('admissionPaneClaimed = admissionLaunch.controlled === true;');
   const decideAt = handler.indexOf('const webFetch = controlledWebFetchLaunch({');
-  const buildAt = handler.indexOf('buildAgentCommand(opts, launch, webFetch)');
+  const buildAt = handler.indexOf('buildAgentCommand(opts, launch, webFetch, claudeSessionId)');
   assert(claimAt !== -1 && decideAt > claimAt && buildAt > decideAt,
     'WebFetch: the claim, then the grant decision, then the command — in that order');
   assert((handler.match(/buildAgentCommand\(/g) || []).length === 1,
@@ -490,6 +502,45 @@ assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src)
     && decide.indexOf('controlled: admissionLaunch.controlled === true,') !== -1
     && decide.indexOf('opts.') === -1,
     'WebFetch: the decision reads only the classified verdict and the claim result, never opts');
+}
+
+// S08 SESSION MEMORY content assertions — pinned as wiring so a future re-pin cannot drop them with
+// the hash. The session ID is minted in main, after the WebFetch decision, only for Claude panes; it is
+// recorded only after a successful spawn; and the command builder accepts only a UUID.
+{
+  const hStart = mustFind(src, "ipcMain.handle('pty-start', (e, opts) => {", 'pty-start handler');
+  const handler = src.slice(hStart, mustFind(src, "ipcMain.on('pty-write'", 'pty-start handler end'));
+  const mintAt = handler.indexOf('const claudeSessionId = (launch.kind === LAUNCH_KIND.ROLE || (launch.kind === LAUNCH_KIND.CLI && launch.cli === \'claude\'))\n    ? crypto.randomUUID() : null;');
+  assert(mintAt !== -1 && mintAt > handler.indexOf('const webFetch = controlledWebFetchLaunch({')
+    && mintAt < handler.indexOf('buildAgentCommand(opts, launch, webFetch, claudeSessionId)'),
+    'S08: the session ID is main-minted (crypto.randomUUID) for role and claude CLI panes, before the command');
+  assert((handler.match(/opts\.sessionId|opts\[/g) || []).length === 0,
+    'S08: the handler never reads a session ID (or any computed field) from the renderer');
+  const startAt = handler.indexOf('sessionMemory().recordStart({');
+  assert(startAt !== -1 && startAt > handler.indexOf("tlog('pty-start: pty.spawn END ok');"),
+    'S08: a session is recorded only after a successful spawn');
+  const builder = src.slice(mustFind(src, 'function buildAgentCommand(', 'buildAgentCommand'),
+    mustFind(src, '// Video-scout: download a video', 'buildAgentCommand end'));
+  assert(builder.indexOf("const sessionArg = sessionMemoryMod.isSessionId(sessionId) ? ' --session-id ' + sessionId : '';") !== -1,
+    'S08: buildAgentCommand splices --session-id only for a value that passes the UUID check');
+  assert(handler.indexOf('if (claudeSessionId) stopPaneSession(id, sessionMemoryMod.STOP_REASON.EXITED, claudeSessionId);') > handler.indexOf('p.onExit(() => {'),
+    'S08: the process exit closes only the session this launch started, as `exited`');
+  // The three call sites outside pty-start. Each runs AFTER its kill, so recording can never block one.
+  const kill = src.slice(mustFind(src, "ipcMain.on('pty-kill'", 'pty-kill'), src.indexOf('\n});', src.indexOf("ipcMain.on('pty-kill'")));
+  const closeAt = kill.indexOf('stopPaneSession(id, sessionMemoryMod.STOP_REASON.CLOSED);');
+  assert(closeAt !== -1 && closeAt > kill.indexOf('processTree.killTree(p.pid'),
+    'S08: pty-kill closes the record as `closed`, after the tree kill is started');
+  const shut = src.slice(mustFind(src, 'function killPaneTreesOnShutdown() {', 'shutdown kill'), src.indexOf('\n}', src.indexOf('function killPaneTreesOnShutdown() {')));
+  const madeAt = shut.indexOf('sessionMemoryCall(() => sessionMemory().closeOpen(sessionMemoryMod.STOP_REASON.MAKO_CLOSED));');
+  assert(madeAt !== -1 && madeAt > shut.indexOf('processTree.killTreesSync('),
+    'S08: shutdown closes open records as `mako-closed`, after the synchronous tree kill');
+  const readyAt = mustFind(src, 'app.whenReady().then(() => {', 'whenReady');
+  const ready = src.slice(readyAt, src.indexOf('createMediaPermissionHandlers(', readyAt));
+  assert(ready.indexOf('sessionMemoryCall(() => sessionMemory().closeOpen(sessionMemoryMod.STOP_REASON.UNKNOWN));') !== -1,
+    'S08: at startup, records left open are closed as `unknown`');
+  const call = src.slice(mustFind(src, 'function sessionMemoryCall(fn) {', 'sessionMemoryCall'), src.indexOf('\n}', src.indexOf('function sessionMemoryCall(fn) {')));
+  assert(call.indexOf('try {') !== -1 && call.indexOf('catch (e)') !== -1,
+    'S08: every session-memory call is wrapped, so a throw never reaches a kill or a launch');
 }
 
 // S10 AUTHORITY wiring. The level is resolved inside the classify step the pty-start authority runs
