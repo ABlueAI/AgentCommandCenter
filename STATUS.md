@@ -1,6 +1,7 @@
 # Mako status
 
-Updated 2026-10-27 by Claude (PR #131). Every PR that changes the state updates this file.
+Updated 2026-10-27 by the all-day runner's status PR for 2026-10-27. Every PR that changes the state
+updates this file.
 
 ## Right now
 
@@ -18,13 +19,13 @@ Updated 2026-10-27 by Claude (PR #131). Every PR that changes the state updates 
     research (includes the Dodaios trial)", ending in `docs/decisions/OSS-composer.md` and Blue's
     verdict (step 19); Composer build sessions and workflow automations come in a later plan change.
     S21 (logo) stays READY.
-- **GoHighLevel lead pipeline (plan change proposed in PR #119, pending Blue):** new S29 ranks
+- **GoHighLevel lead pipeline (plan change merged in PR #119 on 2026-10-24):** new S29 ranks
   every Florida marina from the official Google Places API (a new paid Google Cloud account, Blue's
   to confirm; checklist step 33), new S30 writes a personal email opener for each, and Blue sends
   them from HighLevel in approved batches of about 20; S24's read-only workflow becomes a reply/lead
   watcher (a separate scheduled task, 7:30 AM to 8:00 PM Eastern, notifying only on news; step 34
-  first). Marina and lead data stay in the private repo `ABlueAI/mako-business`. Nothing is
-  scheduled or built until Blue merges it; S22 (PR #116) is unchanged.
+  first). Marina and lead data stay in the private repo `ABlueAI/mako-business`. S29 and S30 are
+  `HOLD (Blue)` until he starts them; S29 also waits on step 33, and the watcher on step 34.
 - **Claude plan:** Blue upgrades to Max 5x on Wednesday 2026-10-28 (moved from 2026-10-21 on
   2026-10-20; checklist step 8). Until then the runner builds one session at a time on Pro.
 - **CI and dependencies (S02, done in PR #45):** every GitHub Action is pinned to a commit SHA, and both
@@ -59,11 +60,11 @@ Updated 2026-10-27 by Claude (PR #131). Every PR that changes the state updates 
   checklist on GitHub) an `AGENTS.md` and a `CLAUDE.md`; the kepano/obsidian-skills plugin is to be installed in
   Claude Code from the vault (ADOPT recorded in docs/decisions/OSS-obsidian-skills.md). Blue sets it up
   on his PC (checklist step 31). Only local agents can reach the vault.
-- **Marina research brief (S22, PR #116, in progress):** the brief is in Blue's private repo
+- **Marina research brief (S22, PR #116 merged 2026-10-23, in progress):** the brief is in Blue's private repo
   `ABlueAI/Mako-Business` (PR 1 there, commit `24ddc8e`; checklist step 32 ticked). The cloud session
   couldn't open web pages, so its facts come from search extracts of public pages and need a check
   on each source before outreach. No marina data is in this repo.
-- **Codex builder lane (S26, PR #114, in progress, needs Blue):** docs/CODEX-BUILDER-LANE.md
+- **Codex builder lane (S26, PR #114 merged 2026-10-23, needs Blue):** docs/CODEX-BUILDER-LANE.md
   records what is known (Codex's PRs are opened as `ABlueAgent`; its reviews can't approve) and
   proposes the lane: hand-off on a locked `agent-claimed` issue, Codex fixes its own PRs, Blue
   checks the "Run by:" link of the Opus review before approving a Codex PR. Blue picks the trial
@@ -84,13 +85,27 @@ Updated 2026-10-27 by Claude (PR #131). Every PR that changes the state updates 
   Resume against its own records; fenced roles are never resumed. Claude Code deletes transcripts
   after `cleanupPeriodDays` (30 days by default). Details: [docs/SESSION-MEMORY.md](docs/SESSION-MEMORY.md).
   Blue checks it on his PC (checklist step 44).
+- **Process cleanup and link hardening (S06, PR #121 merged 2026-10-23, in progress):** closing a
+  pane or Mako ends its whole process tree, the old `open-external` handler goes through the Quick
+  Links URL policy, and the `ABlueAgent` token is stored in Mako's key setup (safeStorage) and given
+  only to unfenced agent panes. Blue checks it on his PC (checklist step 35).
+- **One-click authority (S10, PR #125 merged 2026-10-24, in progress):** the terminal toolbar's
+  **Authority** selector starts new Claude panes at Minimum (`plan`), Medium (`acceptEdits`, the
+  default) or High (`auto`); Maximum opens claude.ai/code instead of a local pane. Mako never
+  launches `bypassPermissions`. Details: [docs/AUTHORITY-LEVELS.md](docs/AUTHORITY-LEVELS.md). Blue
+  checks it on his PC (checklist step 40); whether Mako's flag wins over a role file's
+  `permissionMode: default` isn't verified yet.
+- **Usage panel (S11, PR #126 merged 2026-10-24, in progress):** Mako's top bar shows the 5-hour
+  and weekly usage with reset countdowns, read from Claude Code's status line data once Blue sets
+  the `statusLine` line; it turns red at 90% and **Pause runner** opens claude.ai/code/routines.
+  Details: [docs/USAGE-PANEL.md](docs/USAGE-PANEL.md). Blue checks it on his PC (checklist step 41).
 - **All-day runner (S04, PR #84 merged 2026-10-23, partly applied):** the hourly runner
   (`trig_01LPKxs49xvwN7mcuGLGwyN8`, :07 Eastern, no push) is on and fired at 07:09 UTC. As read
   on 2026-10-23 at about 07:40 UTC, the evening digest (`trig_0166nBynncK2BWPaarALAq8q`) is off,
   the old daily runner is still on with the new prompt, and both new tasks have connectors the plan
   didn't call for (the digest has the GoHighLevel CRM). Blue's clicks are in checklist step 27;
-  steps 27 and 28 aren't ticked. The S04 follow-up PR fixes the prompts' open follow-ups and
-  records this read-back (docs/RUNNER.md "Applied so far").
+  steps 27 and 28 aren't ticked. The S04 follow-up fixed the prompts' open follow-ups and
+  recorded this read-back (PR #117, merged 2026-10-24; docs/RUNNER.md "Applied so far").
 - **Guardrails:**
   - The repo-side files are live on `main`, and the merge audit has passed on every merge.
   - Part A (checklist step 2) is done and verified on 2026-10-18. `main` now requires a pull request
@@ -99,7 +114,7 @@ Updated 2026-10-27 by Claude (PR #131). Every PR that changes the state updates 
     checker session. Cloud agents now act as `ABlueAgent` (write access, no admin). `main` needs 1
     approval from a code owner (`ABlueAI`), approval of the latest push, and both Windows checks, so
     no agent PR merges without Blue's Approve. Local agents on Blue's PC still use his git login until
-    he saves the `ABlueAgent` token in Mako after S06 (PR #121) merges and checklist step 35 passes;
+    he saves the `ABlueAgent` token in Mako (S06, PR #121, merged 2026-10-23) and checklist step 35 passes;
     until then they only verify and don't open PRs (docs/SETUP-GUARDRAILS.md, "What is still not
     covered"). The token exists (checklist step 14, ticked 2026-10-23 on Blue's word; expires
     2027-01-21, renew by 2027-01-14).
@@ -215,7 +230,7 @@ it in Mako's key setup (safeStorage) and gives it only to unfenced agent panes.
 
 1.1 session S01 (finish guardrails) is DONE: PR #44 merged 2026-10-19, with its evidence in the plan's change log. S02 (CI and dependency hygiene) is DONE (#45); S03 is next. The UI sessions (S14, S17 to S20) are on hold until Blue says go, and S16 becomes the Composer research (approved with the PR #48 merge). S06 also moves local agents off Blue's git login (plan change approved with that merge). See the plan.
 
-Plan change proposed in PR #47 (pending Blue): S04 becomes an all-day runner with an evening digest
+Plan change merged in PR #47 (2026-10-21): S04 becomes an all-day runner with an evening digest
 and needs only S01, so it can run right after S03; new session S26 adds Codex as a second builder
 (Codex's GitHub is already linked to `ABlueAgent`: checklist step 16, done 2026-10-20). Also proposed
 there: READY TO MERGE / NOT READY at the start of every session-end notice, documented pausing and a
