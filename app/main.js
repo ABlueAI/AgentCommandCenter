@@ -1845,7 +1845,9 @@ ipcMain.handle('pty-start', (e, opts) => {
         sessionId: claudeSessionId, paneId: id, role: launch.role, cli: 'claude', worktree: cwd,
       }));
     if (resumeSessionId) tlog(`pty-start: resumed a recorded Claude session (record ${rec.ok ? 'reopened' : 'not reopened'})`);
-    if (rec.ok) paneSessions.set(id, claudeSessionId);
+    // A resumed session is running even if its record couldn't be reopened, so it stays in
+    // paneSessions and a second Resume of it is refused as already running.
+    if (rec.ok || resumeSessionId) paneSessions.set(id, claudeSessionId);
   }
   // V5b1: record pane->runId for a video-scout launch. This is stored internally ONLY (never
   // returned to the renderer). It intentionally OUTLIVES p.onExit below -- a finished run's report

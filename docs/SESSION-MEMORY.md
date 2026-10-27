@@ -64,7 +64,7 @@ starting anything. The pane must be the same kind (the same role, or a bare `cla
 same folder as the record, with no opening prompt, and the session must not already be running in
 another pane. The ID that reaches `--resume` is main's own copy from `session-memory.json`, never
 the value the window sent. A refused Resume starts nothing and shows `Resume refused [<reason>]` in
-the Logs tab and the error banner.
+the Logs tab.
 
 Fenced roles (web-scout, operator, source-scout) are never offered. They are one-shot research
 panes with a new outputs folder each run, and resuming one would carry web content from an old run
@@ -78,9 +78,9 @@ or Dismiss, or when a newer batch replaces the record's. S08's copy of Mako igno
 Resume works only while Claude Code still has the conversation's transcript. Claude Code deletes
 transcripts older than `cleanupPeriodDays`, a setting in `~/.claude/settings.json`; the default is
 30 days. Mako doesn't read or change it. A row for a session that stopped more than 30 days ago
-says the conversation may have been deleted. If it has, `claude --resume` says it can't find the
-conversation and the pane is left at a PowerShell prompt in that folder; close it and use Start
-fresh. To keep transcripts longer, raise `cleanupPeriodDays` in `~/.claude/settings.json`, for
+says the conversation may have been deleted. If it has, `claude --resume` is expected to say it
+can't find the conversation and leave the pane at a PowerShell prompt in that folder (not yet
+checked on Windows); close it and use Start fresh. To keep transcripts longer, raise `cleanupPeriodDays` in `~/.claude/settings.json`, for
 example `"cleanupPeriodDays": 90`.
 
 Transcripts live under `~/.claude/projects/`, in a folder named after the worktree's path, which

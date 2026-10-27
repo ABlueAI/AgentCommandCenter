@@ -377,19 +377,20 @@ const REGIONS = [
     // pin the new wiring.
     // Previous pin retained: 16623 / b0f27ef86d23317389cca04e57810dba1534a468f3bac9d1187311ccc7871ebc
     //
-    // RE-PINNED (S09, session memory 2: Resume or Start fresh), 17354 -> 18673 code units. Changes
+    // RE-PINNED (S09, session memory 2: Resume or Start fresh), 17354 -> 18861 code units. Changes
     // inside this region: right after the spawn cwd is chosen, and before the admission claim, a
     // `sessionResume.checkResume({...})` call whose refusal is a visible `Resume refused [<reason>]`
     // line and `{ ok:false }` with nothing spawned; `claudeSessionId` takes the checked
     // `resumeSessionId` (main's own copy from session memory) before falling back to the S08 mint;
     // buildAgentCommand gets a fifth argument, `resumeSessionId !== null`; and after the spawn a
-    // resumed session calls `recordResume` instead of `recordStart`, plus one bounded log line. The
+    // resumed session calls `recordResume` instead of `recordStart`, plus one bounded log line, and is
+    // kept in paneSessions even if its record couldn't be reopened (so it still counts as running). The
     // sender gate, classification, fenced-role cwd gate, admission claim, WebFetch decision, ptyEnv
     // block, spawn sink and failure cleanup are unchanged. The S09 assertions at the end of this file
     // pin the new wiring.
     // Previous pin retained: 17354 / 1ed564dea4af33f5dbe7afcb47b0d0cb2178ff1fb289a60b2e37a3d078581b2d
-    utf16Length: 18673,
-    sha: '487bed66c959c1a9008a1ff9b52680f89314191d6fb7f3c99cfcbb45d0e77517',
+    utf16Length: 18861,
+    sha: '790e4fa29a245a5064c1d1da05940f73f8a7b0c250747150bb601d378ef313f6',
   },
 ];
 
@@ -552,6 +553,8 @@ assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src)
   const resumeAt = handler.indexOf('sessionMemory().recordResume({ sessionId: claudeSessionId, paneId: id })');
   assert(resumeAt !== -1 && resumeAt > handler.indexOf("tlog('pty-start: pty.spawn END ok');"),
     'S09: a resumed record is reopened only after a successful spawn');
+  assert(handler.indexOf('if (rec.ok || resumeSessionId) paneSessions.set(id, claudeSessionId);') > resumeAt,
+    'S09: a resumed session counts as running even if its record could not be reopened');
   assert(handler.indexOf('if (claudeSessionId) stopPaneSession(id, sessionMemoryMod.STOP_REASON.EXITED, claudeSessionId);') > handler.indexOf('p.onExit(() => {'),
     'S08: the process exit closes only the session this launch started, as `exited`');
   // The three call sites outside pty-start. Each runs AFTER its kill, so recording can never block one.

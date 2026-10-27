@@ -50,7 +50,7 @@ const row = (o) => Object.assign({
   const v = view.create({
     document: doc, host, roleLabel,
     onResume: (r) => { calls.push(['resume', r.sessionId]); return r.role !== 'reviewer'; },
-    onFresh: (r) => calls.push(['fresh', r.sessionId]),
+    onFresh: (r) => { calls.push(['fresh', r.sessionId]); return r.sessionId !== 'keep'; },
     onDismiss: (r) => calls.push(['dismiss', r.sessionId]),
   });
   v.render([]);
@@ -76,6 +76,10 @@ const row = (o) => Object.assign({
   assert(/One Claude pane was open/.test(host.textContent), 'the heading follows the count');
   btn('Dismiss').onclick();
   assert(calls.pop().join() === 'dismiss,c' && host.className === 'resume-host hidden', 'Dismiss removes the last row and hides the offer');
+
+  v.render([row({ sessionId: 'keep' })]);
+  btn('Start fresh').onclick();
+  assert(calls.pop().join() === 'fresh,keep' && v.rows().length === 1, 'when Start fresh is declined (returns false) the row stays');
 
   v.render([A, B]);
   calls.length = 0;

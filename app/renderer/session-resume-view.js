@@ -26,8 +26,8 @@
     return { label: `${who} · ${folderName(row.worktree)}`, detail: `${how} ${when}`, title: row.worktree || '', warnings };
   }
 
-  // host: the empty #resumeHost element. Handlers get the row; onResume returns false to keep the row
-  // (for example at Maximum, where no local Claude pane starts).
+  // host: the empty #resumeHost element. Handlers get the row; onResume and onFresh return false to keep
+  // the row (for example at Maximum, where no local Claude pane starts).
   function create(deps) {
     const d = deps || {};
     const doc = d.document;
@@ -78,7 +78,9 @@
           line.appendChild(button('Resume', 'mini accent', 'Open this pane again with claude --resume', () => {
             if (onResume(row) !== false) drop(row);
           }));
-          line.appendChild(button('Start fresh', 'mini ghost', 'Open the same pane with a new conversation', () => { drop(row); onFresh(row); }));
+          line.appendChild(button('Start fresh', 'mini ghost', 'Open the same pane with a new conversation', () => {
+            if (onFresh(row) !== false) drop(row);
+          }));
         }
         box.appendChild(line);
       }

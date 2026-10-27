@@ -804,7 +804,7 @@ function openInAppTerminal(opts = {}) {
   }
 
   // EXACTLY ONE ptyStart, on every path, and only after the pane is visible and owned.
-  // S09: `resumeSessionId` comes only from main's own offer (resumeOffered below); main checks it again.
+  // S09: `resumeSessionId` comes only from main's own offer (offerResume, above boot); main checks it again.
   const startResult = cc.ptyStart({ id, cwd: worktree, cli, role, authority: state.authority, resumeSessionId: opts.resumeSessionId, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, videoModel: opts.videoModel, mediaResolution: opts.mediaResolution, analysisMode: opts.analysisMode, startOffset: opts.startOffset, endOffset: opts.endOffset, sliceRanges: opts.sliceRanges, analysisFocus: opts.analysisFocus, cols: term.cols, rows: term.rows });
   // A refused or rejected start must not leave a Dockview panel behind: the panel would be a ghost
   // host for a terminal that never ran, and a later Save would persist it. Convergence goes through
@@ -1346,7 +1346,16 @@ async function offerResume() {
       openInAppTerminal(Object.assign(paneOpts(row), { resumeSessionId: row.sessionId }));
       return true;
     },
-    onFresh: (row) => { dismiss(row); openInAppTerminal(paneOpts(row)); },
+    onFresh: (row) => {
+      // Same rule as Resume: at Maximum nothing starts here, so the session isn't dismissed either.
+      if (state.authority === 'maximum') {
+        appendLog('[resume] Maximum starts no local Claude pane. Pick another authority level, then Start fresh.\n');
+        return false;
+      }
+      dismiss(row);
+      openInAppTerminal(paneOpts(row));
+      return true;
+    },
     onDismiss: dismiss,
   });
   let offer = null;
@@ -1378,7 +1387,6 @@ async function boot() {
   await refreshRepos();
   wireUi();
   await quickLinksView.load();
-  await offerResume();
   // Pull the controlled run's bounded counts once the bar exists. No-op with no run configured.
   if (admissionView) await admissionView.refresh();
   // The running build, from main's build-info (version + branch@commit of this checkout).
@@ -1398,6 +1406,8 @@ async function boot() {
     if (t) { t.parser.flush(); t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n'); }
   });
   cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));
+  // S09: after the main-error listener, so a session-memory refusal or a refused Resume is shown.
+  await offerResume();
 
 // EXPERIMENT A — PROTOTYPE pane status (Claude only, one pane).
 // docs/OSS-PROCUREMENT-pane-status.md — "BLUE SUBSYSTEM VERDICT: PROTOTYPE".
