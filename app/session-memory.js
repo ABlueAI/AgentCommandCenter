@@ -2,7 +2,7 @@
 
 // S08 session memory: a main-owned record of each Claude pane Mako launches (its Claude session ID,
 // role and worktree) with when it started and stopped. S09 reads it to offer Resume
-// (`claude --resume <id>`).
+// (`claude --resume <id>`) for the panes that were open when Mako last closed.
 //
 // The session ID is MAIN-ISSUED: main mints a UUID, passes it to Claude Code as `--session-id`, and
 // records it here. Nothing is read from Claude's hook payloads or transcripts, and the renderer never
@@ -32,6 +32,8 @@ const STOP_REASON = Object.freeze({
   UNKNOWN: 'unknown',           // found still open at the next start
 });
 const STOP_REASONS = new Set(Object.values(STOP_REASON));
+// S09: the stops that mean "the pane was still open when Mako went away", so Resume is offered.
+const RESUMABLE_STOPS = new Set([STOP_REASON.MAKO_CLOSED, STOP_REASON.UNKNOWN]);
 
 const REASON = Object.freeze({
   READ_FAILED: 'session-memory-read-failed',
@@ -43,6 +45,7 @@ const REASON = Object.freeze({
   BAD_SESSION_ID: 'session-memory-bad-session-id',
   DUPLICATE_SESSION_ID: 'session-memory-duplicate-session-id',
   BAD_STOP_REASON: 'session-memory-bad-stop-reason',
+  NOT_RESUMABLE: 'session-memory-not-resumable',
 });
 
 function refuse(reason) { return { ok: false, reason }; }
@@ -67,6 +70,8 @@ function validRecord(r) {
   if (r.paneId !== null && boundedPaneId(r.paneId) !== r.paneId) return false;
   for (const k of ['role', 'cli', 'worktree']) if (r[k] !== null && boundedText(r[k]) !== r[k]) return false;
   if (!isIsoTime(r.startedAt)) return false;
+  // S09: `offered` is optional, so S08's files stay valid and S08 ignores it.
+  if (r.offered !== undefined && typeof r.offered !== 'boolean') return false;
   if (r.stoppedAt === null) return r.stopReason === null;
   return isIsoTime(r.stoppedAt) && STOP_REASONS.has(r.stopReason);
 }
@@ -185,9 +190,61 @@ function createSessionMemoryStore({ userDataDir, fsImpl = fs, now = () => new Da
 
   function list() { return read(); }
 
-  return { recordStart, recordStop, closeOpen, list, filePath: () => filePath };
+  // S09: what to offer to resume. A record qualifies when it was still open when Mako went away
+  // (`mako-closed` or `unknown`), is a Claude pane, and Blue hasn't answered for it yet. Only the
+  // newest batch is offered: closeOpen gives every record it closes the same stop time, so that time
+  // identifies one Mako run. Older unanswered records are marked offered here, so a past run never
+  // comes back after a newer one.
+  function resumeOffer() {
+    let batch = [];
+    const res = update((records) => {
+      const open = records.filter((r) => r.cli === 'claude' && RESUMABLE_STOPS.has(r.stopReason) && r.offered !== true);
+      if (open.length === 0) return { ok: true, changed: false, records };
+      const latest = open.reduce((m, r) => (Date.parse(r.stoppedAt) > Date.parse(m) ? r.stoppedAt : m), open[0].stoppedAt);
+      let changed = false;
+      for (const r of open) {
+        if (r.stoppedAt === latest) batch.push(Object.assign({}, r));
+        else { r.offered = true; changed = true; }
+      }
+      return { ok: true, changed, records };
+    });
+    if (!res.ok) return res;
+    return { ok: true, records: batch };
+  }
+
+  // Blue chose Start fresh (or dismissed the offer) for this record: never offer it again.
+  function markOffered(sessionId) {
+    if (!isSessionId(sessionId)) return refuse(REASON.BAD_SESSION_ID);
+    return update((records) => {
+      const r = records.find((x) => x.sessionId === sessionId);
+      if (!r || r.offered === true || r.stoppedAt === null) return { ok: true, changed: false, records };
+      r.offered = true;
+      return { ok: true, changed: true, records };
+    });
+  }
+
+  // The pane was resumed with `claude --resume`: Claude Code keeps the same session ID, so the same
+  // record opens again in its new pane. Clearing `offered` lets the next relaunch offer it again
+  // once this pane is open when Mako closes. An open record can't be resumed twice.
+  function recordResume({ sessionId, paneId } = {}) {
+    if (!isSessionId(sessionId)) return refuse(REASON.BAD_SESSION_ID);
+    return update((records) => {
+      const r = records.find((x) => x.sessionId === sessionId);
+      if (!r || !RESUMABLE_STOPS.has(r.stopReason) || r.offered === true) return refuse(REASON.NOT_RESUMABLE);
+      r.paneId = boundedPaneId(paneId);
+      r.stoppedAt = null;
+      r.stopReason = null;
+      delete r.offered;
+      return { ok: true, changed: true, records };
+    });
+  }
+
+  return {
+    recordStart, recordStop, closeOpen, list, resumeOffer, markOffered, recordResume,
+    filePath: () => filePath,
+  };
 }
 
 module.exports = {
-  createSessionMemoryStore, isSessionId, FILENAME, VERSION, MAX_RECORDS, STOP_REASON, REASON,
+  createSessionMemoryStore, isSessionId, FILENAME, VERSION, MAX_RECORDS, STOP_REASON, RESUMABLE_STOPS, REASON,
 };

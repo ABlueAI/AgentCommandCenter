@@ -359,7 +359,11 @@ process.stdout.write('\nindex.html ships the EMBEDDED dock and loads no Dockview
   // `authority-choice.js`, a pure helper that publishes `window.ccAuthorityChoice` and touches no DOM.
   const scriptTags = (indexSrc.match(/<script[^>]*src=/g) || []).length;
   // S11 adds the usage panel view: 26 -> 27 (after S10's authority choice).
-  assert(scriptTags === 27, `index.html loads exactly 27 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view, the terminal key mapping, the authority choice and the usage panel view (found ${scriptTags})`);
+  // S09 adds the Resume or Start fresh view: 27 -> 28. `session-resume-view.js` publishes
+  // `window.ccSessionResumeView` and builds into #resumeHost only when app.js asks it to.
+  assert(scriptTags === 28, `index.html loads exactly 28 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view, the terminal key mapping, the authority choice, the usage panel view and the resume view (found ${scriptTags})`);
+  assert(/<script src="session-resume-view\.js"><\/script>/.test(indexSrc),
+    'the S09 resume view is loaded');
   assert(/<script src="usage-view\.js"><\/script>/.test(indexSrc),
     'the S11 usage panel view is loaded');
   assert(/<script src="term-keys\.js"><\/script>/.test(indexSrc),

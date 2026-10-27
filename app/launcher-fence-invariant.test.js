@@ -376,8 +376,21 @@ const REGIONS = [
     // block, spawn sink and failure cleanup are unchanged. The S08 assertions at the end of this file
     // pin the new wiring.
     // Previous pin retained: 16623 / b0f27ef86d23317389cca04e57810dba1534a468f3bac9d1187311ccc7871ebc
-    utf16Length: 17354,
-    sha: '1ed564dea4af33f5dbe7afcb47b0d0cb2178ff1fb289a60b2e37a3d078581b2d',
+    //
+    // RE-PINNED (S09, session memory 2: Resume or Start fresh), 17354 -> 18861 code units. Changes
+    // inside this region: right after the spawn cwd is chosen, and before the admission claim, a
+    // `sessionResume.checkResume({...})` call whose refusal is a visible `Resume refused [<reason>]`
+    // line and `{ ok:false }` with nothing spawned; `claudeSessionId` takes the checked
+    // `resumeSessionId` (main's own copy from session memory) before falling back to the S08 mint;
+    // buildAgentCommand gets a fifth argument, `resumeSessionId !== null`; and after the spawn a
+    // resumed session calls `recordResume` instead of `recordStart`, plus one bounded log line, and is
+    // kept in paneSessions even if its record couldn't be reopened (so it still counts as running). The
+    // sender gate, classification, fenced-role cwd gate, admission claim, WebFetch decision, ptyEnv
+    // block, spawn sink and failure cleanup are unchanged. The S09 assertions at the end of this file
+    // pin the new wiring.
+    // Previous pin retained: 17354 / 1ed564dea4af33f5dbe7afcb47b0d0cb2178ff1fb289a60b2e37a3d078581b2d
+    utf16Length: 18861,
+    sha: '790e4fa29a245a5064c1d1da05940f73f8a7b0c250747150bb601d378ef313f6',
   },
 ];
 
@@ -491,7 +504,7 @@ assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src)
   const handler = src.slice(hStart, mustFind(src, "ipcMain.on('pty-write'", 'pty-start handler end'));
   const claimAt = handler.indexOf('admissionPaneClaimed = admissionLaunch.controlled === true;');
   const decideAt = handler.indexOf('const webFetch = controlledWebFetchLaunch({');
-  const buildAt = handler.indexOf('buildAgentCommand(opts, launch, webFetch, claudeSessionId)');
+  const buildAt = handler.indexOf('buildAgentCommand(opts, launch, webFetch, claudeSessionId, resumeSessionId !== null)');
   assert(claimAt !== -1 && decideAt > claimAt && buildAt > decideAt,
     'WebFetch: the claim, then the grant decision, then the command — in that order');
   assert((handler.match(/buildAgentCommand\(/g) || []).length === 1,
@@ -510,9 +523,9 @@ assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src)
 {
   const hStart = mustFind(src, "ipcMain.handle('pty-start', (e, opts) => {", 'pty-start handler');
   const handler = src.slice(hStart, mustFind(src, "ipcMain.on('pty-write'", 'pty-start handler end'));
-  const mintAt = handler.indexOf('const claudeSessionId = (launch.kind === LAUNCH_KIND.ROLE || (launch.kind === LAUNCH_KIND.CLI && launch.cli === \'claude\'))\n    ? crypto.randomUUID() : null;');
+  const mintAt = handler.indexOf('const claudeSessionId = resumeSessionId\n    || ((launch.kind === LAUNCH_KIND.ROLE || (launch.kind === LAUNCH_KIND.CLI && launch.cli === \'claude\'))\n      ? crypto.randomUUID() : null);');
   assert(mintAt !== -1 && mintAt > handler.indexOf('const webFetch = controlledWebFetchLaunch({')
-    && mintAt < handler.indexOf('buildAgentCommand(opts, launch, webFetch, claudeSessionId)'),
+    && mintAt < handler.indexOf('buildAgentCommand(opts, launch, webFetch, claudeSessionId, resumeSessionId !== null)'),
     'S08: the session ID is main-minted (crypto.randomUUID) for role and claude CLI panes, before the command');
   assert((handler.match(/opts\.sessionId|opts\[/g) || []).length === 0,
     'S08: the handler never reads a session ID (or any computed field) from the renderer');
@@ -521,8 +534,27 @@ assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src)
     'S08: a session is recorded only after a successful spawn');
   const builder = src.slice(mustFind(src, 'function buildAgentCommand(', 'buildAgentCommand'),
     mustFind(src, '// Video-scout: download a video', 'buildAgentCommand end'));
-  assert(builder.indexOf("const sessionArg = sessionMemoryMod.isSessionId(sessionId) ? ' --session-id ' + sessionId : '';") !== -1,
-    'S08: buildAgentCommand splices --session-id only for a value that passes the UUID check');
+  assert(builder.indexOf("const sessionArg = sessionMemoryMod.isSessionId(sessionId)\n    ? (resume === true ? ' --resume ' : ' --session-id ') + sessionId : '';") !== -1,
+    'S08/S09: buildAgentCommand splices --session-id (or, for a strict true `resume`, --resume) only for a value that passes the UUID check');
+  // S09: the resume check runs after the spawn cwd is chosen and before the admission claim, a refusal
+  // returns before anything else, and only main's checked copy of the ID can reach the command.
+  const checkAt = handler.indexOf('const resumeCheck = sessionResume.checkResume({');
+  assert(checkAt !== -1 && checkAt > handler.indexOf('const cwd = fencedCwd !== null ? fencedCwd')
+    && checkAt < handler.indexOf('const admissionLaunch = prepareAdmissionPaneLaunch({'),
+    'S09: the resume check runs after the spawn cwd is chosen and before the admission claim');
+  const refuseAt = handler.indexOf('if (!resumeCheck.ok) {');
+  assert(refuseAt > checkAt && handler.indexOf("return { ok: false, error: resumeCheck.reason };", refuseAt) !== -1
+    && handler.indexOf("return { ok: false, error: resumeCheck.reason };", refuseAt) < handler.indexOf('const admissionLaunch = prepareAdmissionPaneLaunch({'),
+    'S09: a refused resume returns a refusal before the admission claim (no silent fresh start)');
+  assert(handler.indexOf('const resumeSessionId = resumeCheck.sessionId;') > refuseAt
+    && (handler.match(/opts\.resumeSessionId/g) || []).length === 3
+    && handler.indexOf('requested: opts.resumeSessionId,') !== -1,
+    'S09: the renderer value is only compared (checkResume\'s `requested`); the ID used is checkResume\'s');
+  const resumeAt = handler.indexOf('sessionMemory().recordResume({ sessionId: claudeSessionId, paneId: id })');
+  assert(resumeAt !== -1 && resumeAt > handler.indexOf("tlog('pty-start: pty.spawn END ok');"),
+    'S09: a resumed record is reopened only after a successful spawn');
+  assert(handler.indexOf('if (rec.ok || resumeSessionId) paneSessions.set(id, claudeSessionId);') > resumeAt,
+    'S09: a resumed session counts as running even if its record could not be reopened');
   assert(handler.indexOf('if (claudeSessionId) stopPaneSession(id, sessionMemoryMod.STOP_REASON.EXITED, claudeSessionId);') > handler.indexOf('p.onExit(() => {'),
     'S08: the process exit closes only the session this launch started, as `exited`');
   // The three call sites outside pty-start. Each runs AFTER its kill, so recording can never block one.
