@@ -6,7 +6,8 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-23 by Claude (step 35 added for S06, PR #121; step 30 added for the S26 Codex trial, PR #114; step 14 ticked on Blue's word and its token renewal reminder added under "Dated reminders", PR #118; step 31 added for the S13 Obsidian vault, PR #115; step 29 added for the S12 Quick Links bundle, PR #86; step 21
+Last updated 2026-10-23 by Claude (steps 33, 34 and 36 added for the GoHighLevel lead pipeline,
+S29 and S24, PR #119, proposed; step 35 added for S06, PR #121; step 30 added for the S26 Codex trial, PR #114; step 14 ticked on Blue's word and its token renewal reminder added under "Dated reminders", PR #118; step 31 added for the S13 Obsidian vault, PR #115; step 29 added for the S12 Quick Links bundle, PR #86; step 21
 ticked and step 26 added for the runner's claim check, PR #83; step 19 ticked with Blue's Composer verdict, PR #82; step 21 added: apply the capped review loop to the runner, PR #52;
 step 25 added for the S03 plan board, PR #54; "Do next" order added, step 20 ticked, step 22 added, PR #53;
 S05 checks added as steps 23 and 24, PR #49; step 6 dropped by Blue, PR #51; step 17 moved after
@@ -27,6 +28,9 @@ other remaining items." Claude's order for what is left:
 3. **Step 17**, the token audit and push protection.
 4. **Wednesday 2026-10-28: step 8**, the Max upgrade.
 5. **When you merge S04 (PR #84): step 28, then step 27**, in the same sitting.
+6. **After you merge the lead-pipeline plan change (PR #119; S22 is merged): step 33**, then
+   start S29. After S29 merges, **step 36** before you start S30. **Step 34** waits until S24 is
+   ready for its watcher.
 
 ## Today
 
@@ -216,6 +220,17 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - **Pause any time:** on that page switch **Mako all-day runner** off, then stop any runner
     session still working at https://claude.ai/code. Switch it back on to resume. Leave the digest
     on; it only reads.
+  - **Left to do, as read on 2026-10-23 at about 07:40 UTC** (docs/RUNNER.md "Applied so far"; about
+    3 minutes at https://claude.ai/code/routines):
+    - **Mako daily runner:** switch it **off**. It is still on and fires at 8:01 AM with the new
+      prompt, next to the new hourly runner.
+    - **Mako evening digest:** switch it **on**. It was created off, so no digest is sent yet.
+    - **Connectors:** open each new task > Edit > Advanced settings > Connectors and remove them
+      all. The digest has your GoHighLevel CRM (GHL_MCP_X_CLAUDE), Claude_Docs and
+      Claude_Code_Remote attached, and the runner has Claude_Docs; neither needs any. If you want
+      to keep one, tell the agent which and why, and it records that here.
+    - After the S04 follow-up PR merges: tell the main chat "apply the runner and digest prompts
+      from docs/RUNNER.md", so both tasks get the fixed prompts.
   - *Done when:* that session reads all three tasks back (schedule, model Opus 5.5, notifications,
     on or off, prompt matching `main`), the first hourly fire afterwards works a PR as `ABlueAgent`
     (which proves the repository is attached), and it ticks this step with the date and how it
@@ -580,7 +595,9 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     board and ticks this with the date. If the run fails, the agent reads its log; no agent ever sees
     the token. When the token expires, every hourly run fails visibly until it is replaced.
 
-- [ ] **26. Have the runner's claim-check prompt applied (after you merge PR #83).** About 2 minutes,
+- [ ] **26. Have the runner's claim-check prompt applied (after you merge PR #83).** *Superseded,
+  won't be done: S04 (PR #84) replaced this prompt, and step 27 turns "Mako daily runner" off.
+  Don't apply a prompt to that task; use step 27's last bullet instead.* About 2 minutes,
   right after you merge PR #83 (the claim check: the runner skips a READY session that already has
   an open PR titled with its ID). Tell the main chat, or any Claude session, "runner prompt merged"
   or "apply the runner prompt from docs/RUNNER.md". It updates only the prompt of the scheduled task
@@ -654,6 +671,40 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - *Done when:* a runner fire attaches the repo and pushes the brief's branch there (it ticks this
     with the date and the commit); if it can't reach the repo, it says why on the PR.
 
+- [ ] **33. Google Cloud billing, a Places API key and a budget alert (before S29).** About **15
+  minutes**, after you merge the lead-pipeline plan change (PR #119) and before you start S29.
+  This is new spending on a new paid account: your decision. Claude recommends it (S29 should stay
+  within Google's free monthly usage, so the expected cost is $0; docs/PLAN-1.1.md "S29 and S30
+  details").
+  - In the Google Cloud console: create a project (for example "mako-places"), create a billing
+    account and link it to the project, then enable **Places API (New)**.
+  - **Credentials** > **Create credentials** > **API key**. Restrict it: API restrictions, Places
+    API (New) only.
+  - **Billing** > **Budgets & alerts**: a budget of **$1** with email alerts. A budget alert only
+    emails you; it doesn't stop spending. So also open the Places API's **Quotas** page: if it offers
+    a per-day request limit, set it to about **300**, a hard limit S29 can't pass. If it offers none
+    (not verified), say so; S29 then relies on its own request count and the alert.
+  - Save the key in your password manager. Then put it in a separate cloud environment for business
+    sessions (for example "Mako business"; the cloud environment menu in a session's title bar, then
+    Edit): under Network secrets (or as an environment variable) named `GOOGLE_PLACES_API_KEY`. Under
+    the network's Allowed domains add only `places.googleapis.com`, `cloud.google.com` and
+    `developers.google.com` (S29 reads Google's terms and pricing there), and attach
+    `ABlueAI/mako-business`. Never the runner's environment. Never paste the key in a chat, an
+    issue, a PR or a repo.
+  - *Done when:* you tell an agent the budget, the quota (or that there is none) and the
+    environment's name (never the key).
+    The S29 session then checks the variable is set without printing it, and ticks this step with
+    the date and how it checked.
+
+- [ ] **34. Screenshot of the HighLevel connector's permission scopes (before S24's watcher goes
+  live).** About **3 minutes**, when the S24 session asks, after you authorize the GoHighLevel
+  connector in claude.ai with a read-only token.
+  - Open the connector's permission or scope page and take a screenshot that shows every scope.
+    Make sure it shows no token, key or password; crop anything that does.
+  - Send it to the S24 session only (not in a GitHub issue or PR; this repository is public).
+  - *Done when:* the S24 session confirms every scope is read-only and ticks this step with the
+    date. Any write scope stops the watcher until you remove it.
+
 - [ ] **35. S06 on your PC: agent token, leftover processes, links.** About **15 minutes**, after
   you merge the S06 PR, #121. Pull `main`, run `npm ci` in `app`, and restart Mako fully.
   - **Token (2 minutes).** Mako shows a 🐙 "ABlueAgent token not stored" banner. Paste step 14's
@@ -684,6 +735,17 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - **Links (1 minute).** Click a GitHub link printed in a Claude pane: it opens in your browser.
   - *Done when:* you tell an agent the results (or what failed). It checks the test PR's author on
     GitHub, ticks this with the date, and marks S06 done in the next status PR.
+
+- [ ] **36. Delete the Places key before S30.** About **3 minutes**, after S29 merges and before you
+  start S30. S30 reads marina websites, which can carry injected instructions, so it runs without
+  the key.
+  - In the business environment's settings (the cloud environment menu in a session's title bar,
+    then Edit): delete `GOOGLE_PLACES_API_KEY` from Network secrets and from environment variables.
+    It stays in your password manager for any later refresh of the list.
+  - Then widen that environment's network access so S30 can read marina websites (a broader access
+    level, since the sites aren't known in advance).
+  - *Done when:* the S30 session finds `GOOGLE_PLACES_API_KEY` unset (without printing anything)
+    and you confirm the secrets list no longer holds the key; it ticks this with the date.
 
 - [ ] **37. Review the client paperwork drafts (S23).** About **30 minutes**, any time this week;
   S24 waits on your approval. The drafts are in your private repo, PR 2 at
@@ -720,6 +782,43 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     stable copy's panes and its Claude status keep working.
   - *Done when:* you tell an agent what you saw (or what differed). It ticks this with the date, and
     the status PR marks S07 done.
+- [ ] **40. S10 on your PC: one-click authority.** About **5 minutes**, after you merge the S10 PR,
+  #125. Details in docs/AUTHORITY-LEVELS.md.
+  - Pull `main` and restart Mako fully. The terminal toolbar shows **Authority** set to "Medium ·
+    accept edits".
+  - Pick **Minimum** and open a **builder** pane (a role pane, not a plain Claude pane): Claude's
+    footer shows plan mode. Pick **Medium**, open another builder pane: it shows accept edits. Pick
+    **High**, open another: it shows auto mode. A builder pane is the one that matters: its role
+    file says `permissionMode: default`, and whether Mako's flag wins over that isn't verified
+    here. If a builder pane shows the normal mode instead, or Claude says auto mode isn't available
+    on your plan, say so. A plain Claude pane at each level is an optional extra check.
+  - Pick **Maximum** and open a Claude pane: no pane opens, claude.ai/code opens in your browser, and
+    the Logs tab says why. A Codex pane at Maximum still opens on your PC as before.
+  - Restart Mako: the level you picked last is still selected.
+  - *Done when:* you tell an agent what you saw (or what differed). It ticks this with the date, and
+    the status PR marks S10 done.
+- [ ] **41. S11 on your PC: usage panel.** About **10 minutes**, after you merge the S11 PR, #126.
+  Details in docs/USAGE-PANEL.md.
+  - Pull `main` in your usual (stable) copy, not the dev copy, and restart Mako fully. The top bar
+    shows `5h –`, `Week –`, "No usage yet" and a **Set up** button. Click **Set up** (it copies one
+    line), then close Mako.
+  - Open `%USERPROFILE%\.claude\settings.json` in Notepad. If it already has a `"statusLine"`, stop
+    and tell an agent (this would replace it); likewise if the file doesn't exist or is just `{}`.
+    Otherwise paste the copied line on a new line right
+    after the first `{`, and put a comma at the end of the pasted line. Save. Check it in PowerShell:
+    `node -e "JSON.parse(require('fs').readFileSync(process.env.USERPROFILE+'/.claude/settings.json','utf8'));console.log('ok')"`
+    prints `ok` (anything else: undo the paste and tell an agent).
+  - Open Mako and a Claude pane, and send one short message. Claude's status line shows `usage 5h
+    N% · week N%`, and within 30 seconds Mako's top bar shows the same two numbers with reset
+    countdowns. Type `/usage` in that pane: the percentages match (they can differ by a point or
+    two if time has passed).
+  - The 90% warning, with a test file. In PowerShell:
+    `node -e "require('fs').writeFileSync(process.env.LOCALAPPDATA+'/Mako/usage.json',JSON.stringify({v:1,captured_at:Date.now(),five_hour:{used_percentage:95,resets_at:Math.floor(Date.now()/1000)+3600}}))"`.
+    Within 30 seconds the panel turns red and says "90%+ used: pause the runner". Send one more
+    message in the Claude pane to put the real figures back.
+  - Click **Pause runner**: claude.ai/code/routines opens in your browser.
+  - *Done when:* you tell an agent what you saw (or what differed). It ticks this with the date, and
+    the status PR marks S11 done.
 
 ## Every day, once the runner is on
 
@@ -768,7 +867,13 @@ You can start on the first one now, which saves time later.
 - **Session S17 (on hold with S14):** pick one of 2 or 3 design directions.
 - **Session S21:** pick a logo variant.
 - **Session S23:** approve the client paperwork drafts (step 37).
-- **Session S24:** authorize the GoHighLevel connector in claude.ai (read-only token).
+- **Session S29:** Google Cloud billing, Places API key and budget alert (step 33), then start S29
+  in the business environment.
+- **Session S30:** first delete the Places key from the business environment and widen its network
+  access (step 36), then start S30. Afterwards, import the CSV into a HighLevel email
+  campaign and approve each batch of about 20 before it sends.
+- **Session S24:** authorize the GoHighLevel connector in claude.ai (read-only token), then the scope
+  screenshot (step 34) before the reply/lead watcher goes live.
 
 ## Waiting on you (the runner won't ask)
 

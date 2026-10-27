@@ -39,6 +39,8 @@ const { createLauncherIpc } = require('./launcher-ipc');
 // The one canonical fail-closed sender/frame/URL trust gate (shared with clipboard/library/followup).
 // P12 adds the two launcher handlers as callers so they, too, refuse any non-trusted-window sender.
 const { createTrustedSenderGate } = require('./trusted-ipc-sender');
+const { createUsageIpc } = require('./usage-ipc');
+const { defaultUsageFilePath } = require('./usage/usage-file');
 // FENCE COMPLETION — main-owned launch authority for `pty-start`. Classification happens ONCE here
 // instead of being re-derived from renderer fields at three separate decision points; the effective
 // role definition is resolved across the documented scopes and refuses when it cannot be
@@ -46,6 +48,8 @@ const { createTrustedSenderGate } = require('./trusted-ipc-sender');
 // allowlisted tools. Admission eligibility is still derived separately (see buildAgentCommand).
 // See docs/BUILDER-HANDOFF-fence-completion.md.
 const { classifyPtyLaunch, KIND: LAUNCH_KIND } = require('./pty-launch-classify');
+// S10: the authority level Blue picks maps to a main-owned Claude permission mode (authority-level.js).
+const { applyAuthority, permissionModeArg } = require('./authority-level');
 const { createRoleDefinitionResolver } = require('./role-definition-resolver');
 const { assertFencedRoleDefinition, FORBIDDEN_TOOLS, controlledWebFetchLaunch } = require('./role-fence-policy');
 const { createPtyStartAuthority } = require('./pty-start-authority');
@@ -272,8 +276,8 @@ const VALID_MODELS = new Set(['sonnet', 'opus', 'haiku', 'fable']);
 const VALID_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 
 // Resolve a launch spec to the command run inside the PTY. Three cases:
-//   role set    -> `claude --agent <role> [--model x] [--effort y]` (roles are a Claude feature)
-//   cli only    -> bare CLI (claude/codex/gemini)
+//   role set    -> `claude --agent <role> [--model x] [--effort y] [--permission-mode m]` (roles are a Claude feature)
+//   cli only    -> bare CLI (claude/codex/gemini); `claude` may carry `--permission-mode m`
 //   neither     -> undefined => plain PowerShell shell
 function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, launch, webFetch) {
   // FENCE COMPLETION: identity comes from the MAIN-OWNED classification when one is supplied, so the
@@ -303,6 +307,9 @@ function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, l
     }
     if (VALID_MODELS.has(model)) cmd += ' --model ' + model;
     if (VALID_EFFORTS.has(effort)) cmd += ' --effort ' + effort;
+    // S10: the authority level's permission mode, a main-owned constant chosen in the classify step
+    // (authority-level.js). Never set for a fenced role; permissionModeArg re-checks both.
+    cmd += permissionModeArg(launch);
     // Optional opening prompt (e.g. the reviewer's "review this diff"). Strip shell-significant
     // characters so it stays a single safe quoted argument inside the powershell -Command string.
     // A FENCED command never carries one: the classifier already refuses a supplied fenced prompt
@@ -313,6 +320,8 @@ function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, l
     }
     return cmd;
   }
+  // S10: a bare `claude` pane carries the authority level's permission mode too.
+  if (launch && launch.kind === 'cli' && launch.cli === 'claude') return AGENT_CMD.claude + permissionModeArg(launch);
   return AGENT_CMD[cli || agent]; // undefined when unknown/falsy -> plain shell
 }
 
@@ -1398,9 +1407,21 @@ const roleDefinitionResolver = createRoleDefinitionResolver({
 
 const ptyStartAuthority = createPtyStartAuthority({
   assessSender: (e) => launcherGate.assess(e),
-  classify: (opts) => classifyPtyLaunch(opts, {
-    validRoles: VALID_ROLES, fencedRoles: FENCED_ROLES, validClis: new Set(Object.keys(AGENT_CMD)),
-  }),
+  // S10: the authority level is resolved right after classification, so a refused level (unknown, or
+  // Maximum for a Claude pane) refuses before anything else runs, and the command reads the result.
+  // Its one log line runs after the sender gate and carries only the validated level name and the
+  // main-owned mode, never a renderer string.
+  classify: (opts) => {
+    const launch = classifyPtyLaunch(opts, {
+      validRoles: VALID_ROLES, fencedRoles: FENCED_ROLES, validClis: new Set(Object.keys(AGENT_CMD)),
+    });
+    if (!launch || launch.ok !== true) return launch;
+    const withAuthority = applyAuthority(launch, opts.authority);
+    if (withAuthority.ok === true && withAuthority.authority !== null) {
+      tlog(`pty-start: authority=${withAuthority.authority} permission-mode=${withAuthority.permissionMode || 'not-applied'}`);
+    }
+    return withAuthority;
+  },
   resolveDefinition: (req) => roleDefinitionResolver.resolve(req),
   assertPolicy: (req) => assertFencedRoleDefinition({
     role: req.role,
@@ -1441,6 +1462,20 @@ const openExternalIpc = createOpenExternalIpc({
   logRefusal: (line) => { tlog(line); if (win && !win.isDestroyed()) win.webContents.send('main-error', line); },
 });
 ipcMain.handle('open-external', async (e, url) => openExternalIpc.handleOpenExternal(e, url));
+
+// S11 usage panel: plan usage saved by Claude Code's status line (usage/usage-statusline.js), read
+// back as validated numbers only. One file per Windows user, shared by stable and dev copies.
+const usageIpc = createUsageIpc({
+  assessSender: (e) => launcherGate.assess(e),
+  statFile: (p) => fs.statSync(p),
+  readFile: (p) => fs.readFileSync(p, 'utf8'),
+  filePath: defaultUsageFilePath({ env: process.env, homedir: app.getPath('home'), platform: process.platform }),
+  scriptPath: path.join(__dirname, 'usage', 'usage-statusline.js'),
+  // The dev copy never offers the statusLine setting (instance-profile.js: no Claude hooks).
+  offerSetup: instanceProfile.claudeHooks === true,
+  logRefusal: (line) => { tlog(line); if (win && !win.isDestroyed()) win.webContents.send('main-error', line); },
+});
+ipcMain.handle('usage-read', (e) => usageIpc.handleRead(e));
 
 // ---- IPC: ABlueAgent GitHub token (S06; safeStorage, same rules as the Gemini key) ---------------
 // Trusted sender only. The renderer can learn whether a token is stored and save or clear one; the
