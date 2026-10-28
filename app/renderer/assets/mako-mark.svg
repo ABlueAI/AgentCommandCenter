@@ -5,6 +5,12 @@
       <stop offset="0" stop-color="#102549"/>
       <stop offset="1" stop-color="#14275f"/>
     </linearGradient>
+    <linearGradient id="b2fade" gradientUnits="userSpaceOnUse" x1="280" y1="0" x2="658" y2="0">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/>
+      <stop offset="0.106" stop-color="#fff"/>
+      <stop offset="0.894" stop-color="#fff"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
   </defs>
   <rect width="1024" height="1024" rx="176" fill="#000"/>
   <!-- Mirrored silhouette and connected white accents; the dorsal facet is directional. -->
@@ -13,5 +19,7 @@
     <path fill="#3f65f4" d="M469 0 468 174 306 251 413 148Z"/>
     <path fill="#000" d="M306 251 383 307 426 407Z M632 251 555 307 512 407Z"/>
     <path fill="#fff" d="M469 487 312 324 322 387 55 527 289 444 367 560 367 398 469 481 571 398 571 560 649 444 883 527 616 387 626 324Z"/>
+    <!-- S21 B2 (Blue, 2026-10-28): the centre "M" drawn bolder; the white fins stay as they are. -->
+    <path fill="none" stroke="url(#b2fade)" stroke-width="22" stroke-linejoin="round" d="M280 409 322 387 312 324 469 487 626 324 616 387 658 409 M280 447.2 289 444 367 560 367 398 469 481 571 398 571 560 649 444 658 447.2"/>
   </g>
 </svg>

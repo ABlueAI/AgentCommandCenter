@@ -3,6 +3,12 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-10-28
+
+| Decision | Blue's words |
+|---|---|
+| S21: the app icon stays the Mako shark, with its white centre "M" drawn bolder and the white fins kept at today's size (mockup B2). Replaces PR #127's new "M" icon, which Blue rejected on 2026-10-27. Applies to `app/assets/mako.ico` and the top bar's `mako-mark.svg`. | 2026-10-27, on PR #127: "I referenced the white within the original logo and said it needs to be more defined ... Keep the original logo". 2026-10-28: "decrease the size of the fins and keep the M shape colored in white the same size", then, shown B2 and B3: "B2 is the one. yes use B2" |
+
 ## 2026-10-23
 
 | Decision | Blue's words |

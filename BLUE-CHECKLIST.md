@@ -829,6 +829,16 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - *Done when:* you tell an agent what you saw (or what differed), in particular whether the
     resumed builder kept its role. It ticks this with the date, and the status PR marks S09 done.
 
+- [ ] **45. S21 on your PC: the B2 shark icon on the taskbar.** About **3 minutes**, after you merge
+  the S21 PR (B2 shark, the PR that replaces #127).
+  - Pull `main` and restart Mako fully from its desktop shortcut. The taskbar button and the window
+    icon show the shark with the bolder white centre "M" (B2, your pick on 2026-10-28).
+  - If the taskbar still shows the old shark, Windows is using its cached icon: unpin and re-pin
+    Mako. If the desktop shortcut itself shows the old icon: right-click it > Properties > Change
+    Icon... > Browse..., pick `app\assets\mako.ico` in your Mako checkout, then OK twice.
+  - *Done when:* you tell an agent you can read the M on the taskbar (or what you saw). It ticks
+    this with the date, and the status PR marks S21 done.
+
 ## Every day, once the runner is on
 
 Once S04 is applied (step 27), the runner works all day and you do one sitting in the evening:

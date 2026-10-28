@@ -120,7 +120,7 @@ for (let i = 0; i < iconSizes.length; i++) {
 }
 assert(iconEnd === ico.length, 'the ICO has no trailing payload');
 assert(crypto.createHash('sha256').update(ico).digest('hex') ===
-  '6411c345aff620ce4394b26294b1d9d9a5c30d7f7054f80d65416f14d4146154',
+  '78761e80a24109371c24d71f268af968b6b6cb6769a87fd21e9e8123fd626577',
   'the approved Mako ICO bytes are unchanged (binary, identical in every checkout)');
 assert(count(main, "icon: path.join(__dirname, 'assets', 'mako.ico')") === 1,
   'the one BrowserWindow still receives the Mako ICO');
