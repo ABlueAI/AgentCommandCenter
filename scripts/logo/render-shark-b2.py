@@ -1,6 +1,10 @@
 # Renders app/assets/mako.ico from the Mako shark (app/renderer/assets/mako-mark.svg), variant B2:
 # the white centre "M" drawn bolder, the white fins left as they are. Blue picked B2 on 2026-10-28.
 # Usage (from the repo root, Python 3 with Pillow): python scripts/logo/render-shark-b2.py
+# The committed ICO was made with Python 3.12 and Pillow 13.0.0; another Pillow version may give
+# different bytes, so update the hash in app/mako-branding.test.js if you regenerate it.
+# The ICO approximates the SVG: a blurred band (x 300-640) instead of the SVG's gradient fade
+# (280-658), and a flat navy body instead of the navy gradient.
 import io
 import re
 import struct
