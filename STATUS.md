@@ -71,8 +71,8 @@ Updated 2026-10-28 by Claude (PR #134; earlier PR #122). Every PR that changes t
   accountant's review and the Hexona form are step 46. No client data or prices are in this repo.
 - **HighLevel reply/lead watcher (S24, PR #134, in progress):** docs/S24-WATCHER.md designs the
   read-only watcher (two claude.ai scheduled tasks, 7:30 AM to 7:30 PM hourly plus 8:00 PM, with
-  the GoHighLevel connector on those tasks only, a notification only when something is new, and
-  an 8:00 PM day recap to catch a missed check) and its prompt. Checked 2026-10-28: the connector
+  the GoHighLevel connector on those tasks only, a notification only when something is new, and,
+  proposed as a plan change for Blue's answer, an 8:00 PM day recap to catch a missed check) and its prompt. Checked 2026-10-28: the connector
   `GHL_MCP_X_CLAUDE` is on the account but needs reconnecting. Nothing is scheduled until Blue
   merges PR #134 and does checklist step 47. No lead data is in this repo.
 - **Codex builder lane (S26, PR #114, in progress, needs Blue):** docs/CODEX-BUILDER-LANE.md

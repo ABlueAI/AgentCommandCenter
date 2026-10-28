@@ -717,9 +717,10 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     watcher tasks only, if the session couldn't.
   - **Test (5 minutes).** Send yourself a test reply or create a test lead in HighLevel, have the
     session run the watcher once by hand, and check your phone: one notification with your test's
-    first name. A run with nothing new sends none.
+    first name. A run with nothing new sends none (the 8:00 PM day recap aside).
   - *Done when:* for one full day the watcher sends one notification per check that found
-    something new and none otherwise, your test shows up, and the session has confirmed no write
+    something new and none otherwise (apart from the 8:00 PM day recap on a day with any reply or
+    lead), your test shows up, and the session has confirmed no write
     is possible. It ticks this step with the date and how it checked, and records the read-back in
     a PR.
 
