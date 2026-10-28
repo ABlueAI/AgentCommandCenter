@@ -73,5 +73,5 @@ assert(!!step && step[0].includes('docs/S24-WATCHER.md'), 'step 47 points at doc
 assert(!!step && step[0].includes('step 34'), 'step 47 includes the scope screenshot (step 34)');
 assert(!!step && step[0].includes('read-only'), 'step 47 asks for a read-only token');
 
-console.log(`\n${passed} passed, ${failed} failed`);
+console.log(`\ns24-watcher: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
