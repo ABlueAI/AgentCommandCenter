@@ -3,6 +3,12 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-10-28
+
+| Decision | Blue's words |
+|---|---|
+| S23 client paperwork (checklist step 37, PR #122; drafts in the private repo `ABlueAI/Mako-Business`, PR 2): Blue's existing LLC is the contracting party (legal name and DBA filled in by him later; signer title Owner); Hexona and HighLevel appear only in the small print. Pricing is scope first with one fixed fee per written scope, and no hourly rate shown to clients; hour blocks are dropped. One monthly Care plan (flat fee, covers fixing breaks, small tweaks and talks about new workflows; billing starts after the 30-day post-launch defect window; month to month, 30 days' notice); without it, fixes are priced per fix. 50% deposit, the rest at launch; invoices due in 15 days. Clients own their HighLevel sub-account and numbers; no software resale; a one-time setup fee. "Plan clients first" is a placeholder for Blue to confirm. Amounts live only in the private repo. Merging PR #122 approves the revised drafts. | "scope first, one fixed fee. No hourly rate is shown to clients." · "Hour blocks: dropped." · "We don't resell software; the goal is to get them on the platform." · "Hexona/HighLevel appear only in the small print. The automation problems are the talking point." (comment on PR #122, 2026-10-28, posted from his main chat at his request) |
+
 ## 2026-10-23
 
 | Decision | Blue's words |

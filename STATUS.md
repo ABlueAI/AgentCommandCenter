@@ -1,6 +1,6 @@
 # Mako status
 
-Updated 2026-10-27 by Claude (PR #131). Every PR that changes the state updates this file.
+Updated 2026-10-28 by Claude (PR #122). Every PR that changes the state updates this file.
 
 ## Right now
 
@@ -63,6 +63,12 @@ Updated 2026-10-27 by Claude (PR #131). Every PR that changes the state updates 
   `ABlueAI/Mako-Business` (PR 1 there, commit `24ddc8e`; checklist step 32 ticked). The cloud session
   couldn't open web pages, so its facts come from search extracts of public pages and need a check
   on each source before outreach. No marina data is in this repo.
+- **Client paperwork drafts (S23, PR #122, in progress):** an intake questionnaire laid out for a
+  Hexona form, a scope-of-work template, a services agreement and its Care plan schedule, in Blue's
+  private repo `ABlueAI/Mako-Business` (PR 2 there). Blue's answers of 2026-10-28 are applied
+  (checklist step 37): scope first with one fixed fee, one Care plan, no hour blocks or hourly rate
+  shown. Merging PR #122 approves the revised drafts; amounts, the legal name, an attorney's and an
+  accountant's review and the Hexona form are step 46. No client data or prices are in this repo.
 - **Codex builder lane (S26, PR #114, in progress, needs Blue):** docs/CODEX-BUILDER-LANE.md
   records what is known (Codex's PRs are opened as `ABlueAgent`; its reviews can't approve) and
   proposes the lane: hand-off on a locked `agent-claimed` issue, Codex fixes its own PRs, Blue
