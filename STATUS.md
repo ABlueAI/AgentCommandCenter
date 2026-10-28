@@ -27,7 +27,8 @@ updates this file.
   first). Marina and lead data stay in the private repo `ABlueAI/mako-business`. S29 and S30 are
   `HOLD (Blue)` until he starts them; S29 also waits on step 33, and the watcher on step 34.
 - **Claude plan:** Blue upgrades to Max 5x on Wednesday 2026-10-28 (moved from 2026-10-21 on
-  2026-10-20; checklist step 8). Until then the runner builds one session at a time on Pro.
+  2026-10-20; checklist step 8, not ticked as of 22:10 UTC on 2026-10-28). Until it is, the runner
+  builds one session at a time on Pro (`parallel_cap: 1`).
 - **CI and dependencies (S02, done in PR #45):** every GitHub Action is pinned to a commit SHA, and both
   Windows checks were confirmed as required on `main` (ruleset `protect-main`, read 2026-10-19).
   `npm audit` is down from 11 advisories to 7: Electron 42.11.15, `undici`, `tar` and `protobufjs`
@@ -46,16 +47,16 @@ updates this file.
   turn-ended transitions. The phone setup note is [docs/NEEDS-YOU-ALERTS.md](docs/NEEDS-YOU-ALERTS.md).
   S05 is done once Blue's real-pane toast check passes (checklist step 23); no Windows toast or phone
   delivery has been verified yet.
-- **Quick Links bundle (S12, PR #86, in progress):** Quick Links' editor gets "+ Add Mako
+- **Quick Links bundle (S12, PR #86 merged 2026-10-22, in progress):** Quick Links' editor gets "+ Add Mako
   bundle", which adds seven links (Claude desktop, Codex app, Mako PRs, Project board, Obsidian
   vault, Hermes docs, Dodaios docs) without touching existing ones. The URL policy now also accepts
   exactly three app links (`claude://claude.ai/new`, `codex://threads/new`, `obsidian://open`) and
   nothing else outside http(s). Blue checks the links on his PC and confirms whether his existing
   "Starboard Platform" link is his Hexona login (checklist step 29).
-- **Plan to issues (S03, PR #54, in progress):** a workflow keeps one `Sxx: <title>` issue per plan
+- **Plan to issues (S03, PR #54 merged 2026-10-21, in progress):** a workflow keeps one `Sxx: <title>` issue per plan
   session, with status, authority, lane and sensitive labels and the "1.1 Month 1" milestone, in step
   with docs/PLAN-1.1.md on `main`. The Project board joins once Blue connects it (checklist step 25).
-- **Obsidian Skills (S13, PR #115, in progress):** `scripts/new-mako-vault.ps1` creates Blue's
+- **Obsidian Skills (S13, PR #115 merged 2026-10-23, in progress):** `scripts/new-mako-vault.ps1` creates Blue's
   private vault outside this repo, with `Mako index.md` (links to STATUS, PLAN, DECISIONS and the
   checklist on GitHub) an `AGENTS.md` and a `CLAUDE.md`; the kepano/obsidian-skills plugin is to be installed in
   Claude Code from the vault (ADOPT recorded in docs/decisions/OSS-obsidian-skills.md). Blue sets it up
@@ -64,28 +65,29 @@ updates this file.
   `ABlueAI/Mako-Business` (PR 1 there, commit `24ddc8e`; checklist step 32 ticked). The cloud session
   couldn't open web pages, so its facts come from search extracts of public pages and need a check
   on each source before outreach. No marina data is in this repo.
-- **Client paperwork drafts (S23, PR #122 merged 2026-10-28, in progress):** an intake questionnaire laid out for a
+- **Client paperwork drafts (S23, PR #122 merged 2026-10-28, done):** an intake questionnaire laid out for a
   Hexona form, a scope-of-work template, a services agreement and its Care plan schedule, in Blue's
   private repo `ABlueAI/Mako-Business` (PR 2 there). Blue's answers of 2026-10-28 are applied
   (checklist step 37): scope first with one fixed fee, one Care plan, no hour blocks or hourly rate
-  shown. Merging PR #122 approves the revised drafts; amounts, the legal name, an attorney's and an
+  shown. Blue approved the revised drafts by merging PR #122 on 2026-10-28 (the row's "Done
+  when"); amounts, the legal name, an attorney's and an
   accountant's review and the Hexona form are step 46. No client data or prices are in this repo.
 - **Codex builder lane (S26, PR #114 merged 2026-10-23, needs Blue):** docs/CODEX-BUILDER-LANE.md
   records what is known (Codex's PRs are opened as `ABlueAgent`; its reviews can't approve) and
   proposes the lane: hand-off on a locked `agent-claimed` issue, Codex fixes its own PRs, Blue
   checks the "Run by:" link of the Opus review before approving a Codex PR. Blue picks the trial
   task on PR #114 (checklist step 30).
-- **Stable and dev copies (S07, PR #123, in progress):** `npm run start:dev` starts a dev copy of
+- **Stable and dev copies (S07, PR #123 merged 2026-10-24, in progress):** `npm run start:dev` starts a dev copy of
   Mako with its own settings folder (`%APPDATA%\command-center-dev`), its own taskbar button and a
   `Mako (dev)` title, and it never installs or changes Claude Code hooks. The stable copy is
   unchanged. How to run it and what the two still share: [docs/DEV-INSTANCE.md](docs/DEV-INSTANCE.md).
   Blue checks both side by side on his PC (checklist step 38).
-- **Session memory 1 (S08, PR #124, in progress):** every Claude pane Mako starts gets a session ID
+- **Session memory 1 (S08, PR #124 merged 2026-10-27, in progress):** every Claude pane Mako starts gets a session ID
   that Mako picks and passes with `--session-id`, and `session-memory.json` in Mako's settings folder
   records it with the pane's role, worktree and start and stop times; the records survive a restart.
   Nothing is resumed yet (that's S09). How it works: [docs/SESSION-MEMORY.md](docs/SESSION-MEMORY.md).
   Blue checks it on his PC (checklist step 39).
-- **Session memory 2 (S09, PR #131, in progress):** when Mako opens after closing (or stopping
+- **Session memory 2 (S09, PR #131 merged 2026-10-27, in progress):** when Mako opens after closing (or stopping
   unexpectedly) with Claude panes open, the Terminals tab offers **Resume** (the same role in the
   same folder, with `claude --resume <id>`) or **Start fresh** for each one. Main checks every
   Resume against its own records; fenced roles are never resumed. Claude Code deletes transcripts
