@@ -6,7 +6,8 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-27 by Claude (step 44 added for S09 session resume, PR #131; step 43 added for S15, PR #130; steps 33, 34 and 36 added for the GoHighLevel lead pipeline,
+Last updated 2026-10-28 by Claude (step 37 ticked and step 46 added for S23's paperwork, PR #122;
+step 44 added for S09 session resume, PR #131; step 43 added for S15, PR #130; steps 33, 34 and 36 added for the GoHighLevel lead pipeline,
 S29 and S24, PR #119, proposed; step 35 added for S06, PR #121; step 30 added for the S26 Codex trial, PR #114; step 14 ticked on Blue's word and its token renewal reminder added under "Dated reminders", PR #118; step 31 added for the S13 Obsidian vault, PR #115; step 29 added for the S12 Quick Links bundle, PR #86; step 21
 ticked and step 26 added for the runner's claim check, PR #83; step 19 ticked with Blue's Composer verdict, PR #82; step 21 added: apply the capped review loop to the runner, PR #52;
 step 25 added for the S03 plan board, PR #54; "Do next" order added, step 20 ticked, step 22 added, PR #53;
@@ -747,6 +748,40 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - *Done when:* the S30 session finds `GOOGLE_PLACES_API_KEY` unset (without printing anything)
     and you confirm the secrets list no longer holds the key; it ticks this with the date.
 
+- [x] **37. Review the client paperwork drafts (S23).** About **30 minutes**, any time this week;
+  S24 waits on your approval. *Done 2026-10-28: Blue answered the eight choices in a comment on PR
+  #122 by `ABlueAI` (posted from his main chat at his request; checked unedited through GitHub's
+  API: `updated_at` equals `created_at`), beginning "Answers to the eight business choices
+  (checklist step 37)"; in short: "scope first, one fixed fee", "Hour blocks: dropped", one Care
+  plan. The runner applied them in Mako-Business PR 2 (`db69d9b`). What is still his before a
+  first client is step 46.* The drafts are in your private repo, PR 2 at
+  https://github.com/ABlueAI/Mako-Business/pull/2 (never in this public repo).
+  - Read `paperwork/README.md` first: it lists your eight decisions (business name, hourly rate,
+    hour blocks, monthly plans, unused hours, payment terms, who pays for software, notice period),
+    each with Claude's recommendation.
+  - Answer them on PR #122 here (prices are fine there only if you don't mind them public; otherwise
+    comment on PR 2 in the private repo and say on PR #122 that you did). The runner fills them in.
+  - Before a client signs, and building the form in Hexona: moved to step 46.
+  - *Done when:* you say on PR #122 that you approve the drafts (or what to change); the runner
+    applies your answers in PR 2, and ticks this with the date and your words.
+
+- [ ] **46. Finish the client paperwork before your first client (S23).** About **30 minutes** of
+  your own time, then the attorney's and accountant's, before any marina signs. The drafts are in
+  your private repo, `ABlueAI/Mako-Business` (`paperwork/`; PR 2 there until you merge it).
+  - Read the four drafts with your answers applied (start with `paperwork/README.md`, "Still open
+    for Blue").
+  - Fill in, in the private repo only: your LLC's legal name and address (and the DBA once it is
+    registered), and the amounts (setup fee, Care plan fee, per-fix fee and how a per-fix job's time
+    is priced).
+  - Confirm or change three marked items: "plan clients first" (Schedule A section 4), the
+    usage-billing clause (agreement 5.2) and the "outside the plan" list (Schedule A section 3).
+  - A Florida-licensed attorney reviews the services agreement and Schedule A; an accountant
+    confirms whether sales tax applies.
+  - Build the intake form in Hexona from `paperwork/01-intake-questionnaire.md` (about 30 more
+    minutes, separate sitting is fine).
+  - *Done when:* you tell an agent the drafts are final (or what to change). It ticks this with the
+    date and your words.
+
 - [ ] **38. S07 on your PC: stable and dev copies side by side.** About **12 minutes**, after you
   merge the S07 PR, #123. Steps are in docs/DEV-INSTANCE.md.
   - Pull `main` in your usual checkout and restart Mako fully: the title still reads `Mako 1.0.0 ·
@@ -901,7 +936,8 @@ You can start on the first one now, which saves time later.
 - **Session S16:** ~~your Composer verdict (step 19)~~ Done 2026-10-21: no option adopted, everything open for study, questions deferred (step 19).
 - **Session S17 (on hold with S14):** pick one of 2 or 3 design directions.
 - **Session S21:** pick a logo variant.
-- **Session S23:** approve the client paperwork drafts.
+- **Session S23:** ~~approve the client paperwork drafts (step 37)~~ Answered 2026-10-28; merging
+  PR #122 approves the revised drafts. Step 46 before your first client.
 - **Session S29:** Google Cloud billing, Places API key and budget alert (step 33), then start S29
   in the business environment.
 - **Session S30:** first delete the Places key from the business environment and widen its network
