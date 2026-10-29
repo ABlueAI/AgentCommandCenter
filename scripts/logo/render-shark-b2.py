@@ -1,62 +1,43 @@
-# Renders app/assets/mako.ico from the Mako shark (app/renderer/assets/mako-mark.svg), variant B2:
-# the white centre "M" drawn bolder, the white fins left as they are. Blue picked B2 on 2026-10-28.
+# Renders app/assets/mako.ico from the Mako shark in app/renderer/assets/mako-mark.svg, whose white
+# "M" is variant B2 (Blue's pick, 2026-10-28): drawn bolder, with sharp corners and the fin tips kept.
 # Usage (from the repo root, Python 3 with Pillow): python scripts/logo/render-shark-b2.py
 # The committed ICO was made with Python 3.12 and Pillow 13.0.0; another Pillow version may give
 # different bytes, so update the hash in app/mako-branding.test.js if you regenerate it.
-# The ICO approximates the SVG: a blurred band (x 300-640) instead of the SVG's gradient fade
-# (280-658), and a flat navy body instead of the navy gradient.
+# The SVG's polygons are drawn as they are; the only difference is a flat navy body instead of the
+# SVG's navy gradient (#102549 to #14275f).
 import io
 import re
 import struct
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[2]
-S = 1024
+K = 4  # draw at 4x and scale down, so every edge is anti-aliased
+S = 1024 * K
 SIZES = [16, 24, 32, 48, 64, 128, 256]
-BOLD = 22  # stroke width added around the white shape inside the centre band, in 1024 px units
 
 
 def polys(d):
     # The SVG's group is translated by (43, 230); every path here is straight lines only.
     out = []
     for sub in d.split('M')[1:]:
-        n = list(map(int, re.findall(r'-?\d+', sub)))
-        out.append([(n[i] + 43, n[i + 1] + 230) for i in range(0, len(n), 2)])
+        n = list(map(float, re.findall(r'-?\d+(?:\.\d+)?', sub)))
+        out.append([((n[i] + 43) * K, (n[i + 1] + 230) * K) for i in range(0, len(n), 2)])
     return out
 
 
 svg = (ROOT / 'app' / 'renderer' / 'assets' / 'mako-mark.svg').read_text(encoding='utf-8')
-paths = dict(re.findall(r'<path fill="([^"]+)" d="([^"]+)"', svg))  # the B2 stroke path has no d after fill
-body = polys(paths['url(#navy)'])
-fin = polys(paths['#3f65f4'])
-cut = polys(paths['#000'])
-white = polys(paths['#fff'])
+paths = dict(re.findall(r'<path fill="([^"]+)" d="([^"]+)"', svg))
 
-
-def white_mask(stroke):
-    m = Image.new('L', (S, S), 0)
-    d = ImageDraw.Draw(m)
-    for q in white:
-        d.polygon(q, fill=255)
-        if stroke:
-            d.line(q + [q[0]], fill=255, width=stroke, joint='curve')
-    return m
-
-
-band = Image.new('L', (S, S), 0)
-ImageDraw.Draw(band).rectangle([43 + 300, 0, 43 + 640, S], fill=255)
-band = band.filter(ImageFilter.GaussianBlur(14))
-mask = Image.composite(white_mask(BOLD), white_mask(0), band)
-
-master = Image.new('RGBA', (S, S), (0, 0, 0, 0))
-d = ImageDraw.Draw(master)
-d.rounded_rectangle([0, 0, S - 1, S - 1], 176, fill='black')
-for shapes, colour in [(body, (18, 38, 84)), (fin, (63, 101, 244)), (cut, (0, 0, 0))]:
-    for q in shapes:
+big = Image.new('RGBA', (S, S), (0, 0, 0, 0))
+d = ImageDraw.Draw(big)
+d.rounded_rectangle([0, 0, S - 1, S - 1], 176 * K, fill='black')
+for fill, colour in [('url(#navy)', (18, 38, 84)), ('#3f65f4', (63, 101, 244)), ('#000', (0, 0, 0)),
+                     ('#fff', (255, 255, 255))]:
+    for q in polys(paths[fill]):
         d.polygon(q, fill=colour)
-master.paste((255, 255, 255, 255), (0, 0), mask)
+master = big.resize((1024, 1024), Image.LANCZOS)
 
 frames = []
 for size in SIZES:
