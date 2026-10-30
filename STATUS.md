@@ -1,7 +1,8 @@
 # Mako status
 
 Updated 2026-10-30 by the all-day runner's status PR for 2026-10-30 (one PR merged since the
-2026-10-29 status PR, #136: S21, PR #133). Every PR that changes the state updates this file.
+2026-10-29 status PR, #136: S21, PR #133); PR #130. Every PR that changes the state updates this
+file.
 
 ## Right now
 
@@ -57,6 +58,11 @@ Updated 2026-10-30 by the all-day runner's status PR for 2026-10-30 (one PR merg
 - **Plan to issues (S03, PR #54 merged 2026-10-21, in progress):** a workflow keeps one `Sxx: <title>` issue per plan
   session, with status, authority, lane and sensitive labels and the "1.1 Month 1" milestone, in step
   with docs/PLAN-1.1.md on `main`. The Project board joins once Blue connects it (checklist step 25).
+- **Research capture (S15, PR #130, needs Blue):** Mako's Reviewer can't open web pages, and
+  Claude Code's WebFetch can't reach Reddit. docs/decisions/OSS-research-capture.md proposes ADOPT
+  Claude in Chrome through `claude --chrome`, behind one "Send current page to Reviewer" button that
+  starts a fenced page-reader pane that can only read the page and write its own report. Blue's verdict, a check in a separate Chrome profile and the
+  browser tool list come first (checklist step 43); nothing is built before that.
 - **Obsidian Skills (S13, PR #115 merged 2026-10-23, in progress):** `scripts/new-mako-vault.ps1` creates Blue's
   private vault outside this repo, with `Mako index.md` (links to STATUS, PLAN, DECISIONS and the
   checklist on GitHub) an `AGENTS.md` and a `CLAUDE.md`; the kepano/obsidian-skills plugin is to be installed in
