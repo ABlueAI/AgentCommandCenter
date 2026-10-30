@@ -68,6 +68,16 @@ const points = (silhouette.match(/\d+/g) || []).map(Number);
 const pairs = Array.from({length: points.length / 2}, (_, i) => [points[i * 2], points[i * 2 + 1]]);
 assert(pairs.length > 10 && pairs.every(([x, y]) => pairs.some(([mx, my]) => mx === 938 - x && my === y)),
   'the shark silhouette is exactly mirrored about its centerline');
+// S21 B2 (Blue, 2026-10-28): the white "M" itself is drawn bolder, one filled shape with sharp corners.
+const whiteShape = mark.match(/<path fill="#fff" d="([^"]+)"\/>/)?.[1] || '';
+const whitePoints = (whiteShape.match(/\d+(?:\.\d+)?/g) || []).map(Number);
+const whitePairs = Array.from({length: whitePoints.length / 2}, (_, i) => [whitePoints[i * 2], whitePoints[i * 2 + 1]]);
+assert(count(mark, 'stroke') === 0 && count(mark, '<path fill="#fff"') === 1,
+  'B2: one filled white shape, no strokes (no rounded joins or overlays)');
+assert(whitePairs.length === 14 && whitePairs.every(([x, y]) => whitePairs.some(([mx, my]) => Math.abs(mx - (938 - x)) < 1e-6 && my === y)),
+  'B2: the white M is mirrored about the centerline');
+assert(whitePairs.some(([x, y]) => x === 55 && y === 527) && whitePairs.some(([x, y]) => x === 883 && y === 527),
+  'B2: the white fin tips stay where they were');
 
 // These outlined glyphs deliberately use only absolute M/L/H/Q/Z commands.
 // Check the geometry, not merely a comment claiming that the k has no descender.
@@ -120,7 +130,7 @@ for (let i = 0; i < iconSizes.length; i++) {
 }
 assert(iconEnd === ico.length, 'the ICO has no trailing payload');
 assert(crypto.createHash('sha256').update(ico).digest('hex') ===
-  '6411c345aff620ce4394b26294b1d9d9a5c30d7f7054f80d65416f14d4146154',
+  'baa99e545ce11bc5901ad882cda250739490b66004b5a32e876ba6a9ff11baa9',
   'the approved Mako ICO bytes are unchanged (binary, identical in every checkout)');
 assert(count(main, "icon: path.join(__dirname, 'assets', 'mako.ico')") === 1,
   'the one BrowserWindow still receives the Mako ICO');
