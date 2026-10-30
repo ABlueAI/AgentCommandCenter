@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-28 by Claude (step 37 ticked and step 46 added for S23's paperwork, PR #122;
+Last updated 2026-10-28 by Claude (step 47 added for the S24 lead watcher, PR #134; step 37 ticked and step 46 added for S23's paperwork, PR #122;
 step 44 added for S09 session resume, PR #131; steps 33, 34 and 36 added for the GoHighLevel lead pipeline,
 S29 and S24, PR #119, proposed; step 35 added for S06, PR #121; step 30 added for the S26 Codex trial, PR #114; step 14 ticked on Blue's word and its token renewal reminder added under "Dated reminders", PR #118; step 31 added for the S13 Obsidian vault, PR #115; step 29 added for the S12 Quick Links bundle, PR #86; step 21
 ticked and step 26 added for the runner's claim check, PR #83; step 19 ticked with Blue's Composer verdict, PR #82; step 21 added: apply the capped review loop to the runner, PR #52;
@@ -31,7 +31,7 @@ other remaining items." Claude's order for what is left:
 5. **When you merge S04 (PR #84): step 28, then step 27**, in the same sitting.
 6. **After you merge the lead-pipeline plan change (PR #119; S22 is merged): step 33**, then
    start S29. After S29 merges, **step 36** before you start S30. **Step 34** waits until S24 is
-   ready for its watcher.
+   ready for its watcher: after you merge PR #134, **step 47** (it includes step 34).
 
 ## Today
 
@@ -706,6 +706,24 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - *Done when:* the S24 session confirms every scope is read-only and ticks this step with the
     date. Any write scope stops the watcher until you remove it.
 
+- [ ] **47. Set up the S24 lead watcher.** About **20 minutes** with an interactive session, after
+  you merge PR #134, then one day of watching. Design and go-live checks: docs/S24-WATCHER.md.
+  - **Reconnect HighLevel (5 minutes).** claude.ai > Settings > Connectors > `GHL_MCP_X_CLAUDE`
+    shows "needs reconnect" (checked 2026-10-28). Reconnect it with a **read-only** token, then do
+    step 34 (the scope screenshot, sent to that session only).
+  - **Start a session and say "S24 merged: set up the watcher".** It removes the connector from
+    **Mako evening digest** and **Mako all-day runner**, creates the two watcher tasks from the
+    doc, and reads them back. Then, at claude.ai/code/routines, attach `GHL_MCP_X_CLAUDE` to the two
+    watcher tasks only, if the session couldn't.
+  - **Test (5 minutes).** Send yourself a test reply or create a test lead in HighLevel, have the
+    session run the watcher once by hand, and check your phone: one notification with your test's
+    first name. A run with nothing new sends none (the 8:00 PM day recap aside).
+  - *Done when:* for one full day the watcher sends one notification per check that found
+    something new and none otherwise (apart from the 8:00 PM day recap on a day with any reply or
+    lead), your test shows up, and the session has confirmed no write
+    is possible. It ticks this step with the date and how it checked, and records the read-back in
+    a PR.
+
 - [ ] **35. S06 on your PC: agent token, leftover processes, links.** About **15 minutes**, after
   you merge the S06 PR, #121. Pull `main`, run `npm ci` in `app`, and restart Mako fully.
   - **Token (2 minutes).** Mako shows a 🐙 "ABlueAgent token not stored" banner. Paste step 14's
@@ -927,8 +945,8 @@ You can start on the first one now, which saves time later.
 - **Session S30:** first delete the Places key from the business environment and widen its network
   access (step 36), then start S30. Afterwards, import the CSV into a HighLevel email
   campaign and approve each batch of about 20 before it sends.
-- **Session S24:** authorize the GoHighLevel connector in claude.ai (read-only token), then the scope
-  screenshot (step 34) before the reply/lead watcher goes live.
+- **Session S24:** after you merge PR #134, step 47: reconnect the GoHighLevel connector in claude.ai
+  (read-only token), the scope screenshot (step 34), then the watcher setup and a one-day check.
 
 ## Waiting on you (the runner won't ask)
 
