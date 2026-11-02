@@ -58,6 +58,10 @@ that changes the state updates this file.
 - **Plan to issues (S03, PR #54 merged 2026-10-21, in progress):** a workflow keeps one `Sxx: <title>` issue per plan
   session, with status, authority, lane and sensitive labels and the "1.1 Month 1" milestone, in step
   with docs/PLAN-1.1.md on `main`. The Project board joins once Blue connects it (checklist step 25).
+  Blue connected it on 2026-11-02, but the first run (41501308744) crashed on a workflow bug
+  (`getOctokit is not defined`), and every hourly run since fails before the issue sync too. The
+  fix PR, "Plan sync: fix board client (getOctokit undefined)", builds the board client from
+  github-script's own Octokit class; after it merges, step 25 is re-run.
 - **Obsidian Skills (S13, PR #115 merged 2026-10-23, in progress):** `scripts/new-mako-vault.ps1` creates Blue's
   private vault outside this repo, with `Mako index.md` (links to STATUS, PLAN, DECISIONS and the
   checklist on GitHub) an `AGENTS.md` and a `CLAUDE.md`; the kepano/obsidian-skills plugin is to be installed in

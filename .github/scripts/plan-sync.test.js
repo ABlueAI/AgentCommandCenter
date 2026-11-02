@@ -233,6 +233,110 @@ function fakeBoard(columns = COLUMNS) {
     await throws(() => nofield.columns(), /no single-select "Status" field/, 'a board without a Status field throws');
   }
 
+  // The workflow's own `script:` block, run the way actions/github-script runs it: as an async
+  // function whose only parameters are the names the pinned version passes. Any other free name (as
+  // `getOctokit` was, run 41501308744) throws a ReferenceError here instead of on the hourly run.
+  process.stdout.write('\nthe workflow script, with only the names github-script passes\n');
+  {
+    const workflow = fs.readFileSync(path.join(__dirname, '..', 'workflows', 'plan-sync.yml'), 'utf8');
+    // actions/github-script v8.0.0 at this commit: src/main.ts calls callAsyncFunction with exactly
+    // these keys. Bumping the pin means re-reading that file and updating SCOPE.
+    const PIN = 'actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd';
+    const SCOPE = ['require', '__original_require__', 'github', 'octokit', 'context', 'core', 'exec', 'glob', 'io'];
+    assert(workflow.includes(`uses: ${PIN} `), 'the workflow pins the github-script commit whose script scope this test models');
+    const lines = workflow.split(/\r?\n/);
+    const at = lines.findIndex((l) => /^\s*script: \|\s*$/.test(l));
+    const indent = at < 0 ? '' : lines[at].match(/^\s*/)[0] + '  ';
+    const body = [];
+    for (const l of lines.slice(at + 1)) {
+      if (l.trim() && !l.startsWith(indent)) break;
+      body.push(l.slice(indent.length));
+    }
+    const source = body.join('\n');
+    assert(at >= 0 && /syncPlan\(/.test(source), 'the workflow\'s script block is found');
+
+    const AsyncFunction = Object.getPrototypeOf(async () => null).constructor;
+    const PLAN = plan(row('S01', 'A', 'READY'));
+    const run = async (env) => {
+      const rec = { info: [], warning: [], failed: [], summary: [], api: null, board: null, sync: null };
+      class FakeOctokit {
+        constructor(opts) { this.auth = opts.auth; this.graphql = async (query, vars) => ({ auth: this.auth, vars }); }
+      }
+      const github = new FakeOctokit({ auth: 'github-token' });
+      const planSync = {
+        githubApi: (gh, repo) => { rec.api = { gh, repo }; return { api: true }; },
+        githubBoard: (graphql, cfg) => { rec.board = { graphql, cfg }; return { board: true }; },
+        syncPlan: async (opts) => { rec.sync = opts; opts.log('S01: ok'); return [{ id: 'S01', column: 'Ready', issue: 5 }]; },
+      };
+      const modules = {
+        fs: { readFileSync: (p, enc) => { if (p !== 'docs/PLAN-1.1.md' || enc !== 'utf8') throw new Error(`unexpected read ${p}`); return PLAN; } },
+        './.github/scripts/plan-sync.js': planSync,
+      };
+      const req = (id) => { if (!(id in modules)) throw new Error(`unexpected require('${id}')`); return modules[id]; };
+      const summary = {
+        addHeading: (t) => { rec.summary.push(t); return summary; },
+        addRaw: (t) => { rec.summary.push(t); return summary; },
+        addTable: (rows) => { rec.summary.push(JSON.stringify(rows)); return summary; },
+        write: async () => summary,
+      };
+      const core = {
+        info: (m) => rec.info.push(m), warning: (m) => rec.warning.push(m), setFailed: (m) => rec.failed.push(m), summary,
+      };
+      const scope = {
+        require: req, __original_require__: req, github, octokit: github,
+        context: { repo: { owner: 'ABlueAI', repo: 'AgentCommandCenter' } }, core, exec: {}, glob: {}, io: {},
+      };
+      eq(Object.keys(scope), SCOPE, 'the stubbed scope has exactly the pinned names');
+      const saved = {};
+      for (const k of ['PLAN_BOARD_TOKEN', 'PLAN_BOARD_NUMBER', 'PLAN_BOARD_OWNER']) {
+        saved[k] = process.env[k];
+        if (env[k] === undefined) delete process.env[k]; else process.env[k] = env[k];
+      }
+      try { await new AsyncFunction(...SCOPE, source)(...Object.values(scope)); }
+      catch (e) { rec.error = e; }
+      finally {
+        for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+      }
+      rec.text = JSON.stringify([rec.info, rec.warning, rec.failed, rec.summary]);
+      return { rec, github };
+    };
+
+    const secret = 'board-token-xyz';
+    {
+      const { rec, github } = await run({ PLAN_BOARD_TOKEN: secret, PLAN_BOARD_NUMBER: '1', PLAN_BOARD_OWNER: 'ABlueAI' });
+      eq(rec.error && `${rec.error.name}: ${rec.error.message}`, undefined, 'with the board connected, the script runs without an error');
+      eq(rec.failed, [], 'with the board connected, nothing fails');
+      assert(rec.api && rec.api.gh === github, 'issues and labels go through github-script\'s own client (GITHUB_TOKEN)');
+      eq(rec.board && rec.board.cfg, { login: 'ABlueAI', number: 1 }, 'the board is the configured user project');
+      eq(rec.board && (await rec.board.graphql('q', { a: 1 })), { auth: secret, vars: { a: 1 } },
+        'the board\'s GraphQL client is a separate one carrying PLAN_BOARD_TOKEN');
+      assert(rec.sync && rec.sync.board && rec.sync.board.board, 'syncPlan gets the board');
+      eq(rec.sync && rec.sync.markdown, PLAN, 'syncPlan reads docs/PLAN-1.1.md');
+      assert(rec.summary.includes('Board: synced.'), 'the run summary says "Board: synced."');
+      assert(rec.info.includes('S01: ok'), 'syncPlan\'s log lines reach the run log');
+      assert(!rec.text.includes(secret), 'the board token appears in no log line or summary');
+    }
+    {
+      const { rec } = await run({ PLAN_BOARD_OWNER: 'ABlueAI' });
+      eq(rec.error && rec.error.message, undefined, 'with no board configured, the script runs without an error');
+      eq(rec.board, null, 'with no board configured, no board client is made');
+      assert(rec.sync && rec.sync.board === null, 'with no board configured, issues and labels still sync');
+      assert(rec.warning.length === 1 && /step 25/.test(rec.warning[0]), 'with no board configured, the run warns');
+      assert(rec.summary.some((t) => /^Board: not connected/.test(t)), 'with no board configured, the summary says so');
+    }
+    for (const env of [{ PLAN_BOARD_TOKEN: secret }, { PLAN_BOARD_NUMBER: '1' }]) {
+      const { rec } = await run({ ...env, PLAN_BOARD_OWNER: 'ABlueAI' });
+      assert(!rec.error && rec.failed.length === 1 && /Only one of/.test(rec.failed[0]) && !rec.sync,
+        `with only ${Object.keys(env)[0]} set, the run fails before syncing`);
+    }
+    {
+      const { rec } = await run({ PLAN_BOARD_TOKEN: secret, PLAN_BOARD_NUMBER: 'project/1', PLAN_BOARD_OWNER: 'ABlueAI' });
+      assert(!rec.error && rec.failed.length === 1 && /must be the project number/.test(rec.failed[0]) && !rec.sync,
+        'a PLAN_BOARD_NUMBER that is not a number fails before syncing');
+      assert(!rec.text.includes(secret), 'the failure message does not include the board token');
+    }
+  }
+
   process.stdout.write(`\nplan-sync: ${passed} passed, ${failed} failed\n`);
   process.exit(failed ? 1 : 0);
 })().catch((e) => { process.stderr.write(`  ✗ FAIL: ${e.stack}\n`); process.exit(1); });
