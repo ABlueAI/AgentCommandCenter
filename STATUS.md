@@ -1,7 +1,7 @@
 # Mako status
 
-Updated 2026-11-01 by the all-day runner's status PR for 2026-11-01 (no PR merged since the
-2026-10-30 status PR, #138; the last session PR merged was S21's, #133, on 2026-10-29). Every PR
+Updated 2026-11-02 by the all-day runner's status PR for 2026-11-02 (no PR merged since the
+2026-11-01 status PR, #141; the last session PR merged was S21's, #133, on 2026-10-29). Every PR
 that changes the state updates this file.
 
 ## Right now
@@ -29,7 +29,7 @@ that changes the state updates this file.
   first). Marina and lead data stay in the private repo `ABlueAI/mako-business`. S29 and S30 are
   `HOLD (Blue)` until he starts them; S29 also waits on step 33, and the watcher on step 34.
 - **Claude plan:** Blue upgrades to Max 5x on Wednesday 2026-10-28 (moved from 2026-10-21 on
-  2026-10-20; checklist step 8, not ticked on `main` as of 23:10 UTC on 2026-11-01). Until it is,
+  2026-10-20; checklist step 8, not ticked on `main` as of 23:10 UTC on 2026-11-02). Until it is,
   the runner builds one session at a time on Pro (`parallel_cap: 1`).
 - **CI and dependencies (S02, done in PR #45):** every GitHub Action is pinned to a commit SHA, and both
   Windows checks were confirmed as required on `main` (ruleset `protect-main`, read 2026-10-19).
