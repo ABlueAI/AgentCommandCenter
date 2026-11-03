@@ -3,6 +3,16 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-03
+
+| Decision | Blue's words |
+|---|---|
+| **Proposed, pending Blue (this PR):** four new `READY` sessions so the runner keeps working while the UI sessions wait on him: S31 PC-check fixes, S32 1.1 gap audit, S33 Plan sync guard, S34 PR reviewer research (docs/PLAN-1.1.md "S31 to S34 details"). Merging this PR approves it. | "PC checks are important, but I'd like to just get the runners moving again, if possible. If UI is the only thing holding us to keep things moving, then we need to add more stuff" |
+| Checklist step 17 (token audit and push protection) moves to the end of 1.1, about February 2027. Then every token is reset, with a 1-year expiry. | "Can we push that back until February or so of next year? ... Let's finish it at the end. I'm not worried about it right now, but I'd like to get it all freshened up and stuff for the release." Also: "I would like to maybe set a 1 year expiration." |
+| Max 5x (checklist step 8): Blue stays on Pro until the UI work runs usage up, then upgrades. | "once that gets to a point where we're really running up usage with it ... then I will upgrade to the max. But until then, I'll stick with the pro just to get things outlined properly." |
+| PR #134 (S24, reply/lead watcher) stays open as a draft until things run on their own. | "keep. I think I want to just wait a little while to focus on that. When things are running automatically, I'll have a little bit more time to clear that up." |
+| Decided 2026-10-28, recorded now: checklist step 22 becomes research (S34), not a drop, with no paid API key; whatever helps goes into the Opus reviewer. | "If there's something out there that can be beneficial to add to the Opus reviewer, then we should be looking into that" ("no paid API key" is Claude's summary of the same chat, not his words) |
+
 ## 2026-10-28
 
 | Decision | Blue's words |

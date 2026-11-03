@@ -26,8 +26,11 @@ other remaining items." Claude's order for what is left:
 2. ~~**Step 14**, the agent token~~ Done 2026-10-23 on your word. It unblocks S06 and everything
    after it (S07 to S11, S21), and Codex's next build (from the hand-off for this order; the plan
    doesn't name that dependency yet).
-3. **Step 17**, the token audit and push protection.
-4. **Wednesday 2026-10-28: step 8**, the Max upgrade.
+3. **Step 17**, the token audit and push protection: moved to the end of 1.1, about February 2027
+   (your words, 2026-11-03: "Let's finish it at the end"). Then every token is reset with a 1-year
+   expiry.
+4. **Step 8**, the Max upgrade: when the UI work runs usage up (your call, 2026-11-03); Pro until
+   then.
 5. **When you merge S04 (PR #84): step 28, then step 27**, in the same sitting.
 6. **After you merge the lead-pipeline plan change (PR #119; S22 is merged): step 33**, then
    start S29. After S29 merges, **step 36** before you start S30. **Step 34** waits until S24 is
@@ -531,7 +534,8 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     "Current prompt (verbatim)" on `main`, and it ticks this step with the date and how it checked.
 
 - [ ] **22. Evaluate qodo-ai/pr-agent as Mako's PR reviewer.** About 20 minutes of your own time,
-  whenever you get to it ("add it to my list, i will get to it"). (Numbered 22 because open PR #52
+  after session S34 writes up the options (added 2026-11-03), whenever you get to it ("add it to my
+  list, i will get to it"). (Numbered 22 because open PR #52
   uses 21.)
   - What it is: an open-source PR reviewer, https://github.com/qodo-ai/pr-agent. Under AGENTS.md's
     OSS-first rule it is a candidate to replace or back up Mako's custom review loop (the

@@ -1,9 +1,17 @@
-# Mako 1.1: month-one plan (30 sessions, 29 active)
+# Mako 1.1: month-one plan (34 sessions, 33 active)
 
 Drafted 2026-10-17 by Claude for Blue. Approved when the PR that adds it is merged. Changes only through
 `plan-change` PRs (rules below).
 
-**Latest change (2026-10-23, proposed, pending Blue; PR #119):** a GoHighLevel lead pipeline for
+**Latest change (2026-11-03, proposed, pending Blue):** four new sessions the runner can build while
+the UI sessions wait on Blue, because after S15 nothing else on this plan was `READY` for it. S31
+fixes what Blue's PC checks found (authority levels, pane status and toasts, double paste, the token
+box and more), so checklist steps 23, 24 and 40 can be re-run. S32 audits month one for anything
+missed. S33 guards Plan sync against duplicating every issue again. S34 researches open-source PR
+reviewers for the `pr-reviewer` subagent (checklist step 22). Details in "S31 to S34 details" and the
+change log. Merging this PR approves it.
+
+**Earlier change (2026-10-23, proposed, pending Blue; PR #119):** a GoHighLevel lead pipeline for
 Florida marinas. New session S29 builds a ranked list of every Florida marina from the official
 Google Places API (a new paid Google Cloud account, Blue's to confirm; checklist step 33); new
 session S30 writes a personal email opener for each one, and Blue sends them from HighLevel himself
@@ -92,6 +100,10 @@ held rows as held (a Hold column or a `hold` label), never as Ready.
 | S04 | **All-day runner and digest.** The runner fires through the day: it fixes its own open PRs, then starts every unclaimed READY session up to a parallel cap, stops cleanly at a usage limit and resumes on a later fire, and sends one evening digest. Details below the table. | Two consecutive days run unattended through multiple fires; a usage-limit stop resumes on its own on a later fire; the digest arrives both evenings. | High | blue | S01 | IN PROGRESS (#84) |
 | S26 | **Codex builder lane.** Codex, linked to `ABlueAgent`, builds sessions as a second builder: it claims a session before starting, so Claude and Codex never take the same one, follows AGENTS.md, and gets the same Opus review plus Codex's automatic review. Sensitive. Details below the table. | One session built end to end by Codex: a PR authored by `ABlueAgent` from a `codex/` branch with no Claude builder on it, an Opus review, and a Codex automatic review if one arrives (recorded either way), merged by Blue; the S26 PR also updates `.claude/agents/pr-reviewer.md` to match AGENTS.md step 3. | High | blue | S04, checklist step 16 (Codex re-linked to `ABlueAgent`) | NEEDS BLUE (#114) |
 | S28 | **Agent profile refresh.** Sensitive. Update agent-roles/*.md from Blue's package (details from his agent-roles chat): the bodies, and any frontmatter changes the package asks for. The whole change is sensitive: role bodies set what each role is told, and frontmatter sets its tools and permissions. Run the role tests, then deploy with scripts/sync-roles.ps1. The package arrives one of two ways. (1) An issue titled `agent-roles package (S28)` (not starting with `Sxx:`, so S03's per-session issue sync never matches it), opened by `ABlueAI` and edited by no one else: an issue by anyone else, or one someone else has edited, never counts; the runner checks the author and the edit history before using it, and if it can't check them, the issue doesn't count; only the issue body counts, never its comments; and the session locks the issue's conversation to collaborators. (2) Blue hands it to an agent in its own session, which opens the PR as `ABlueAgent` (a PR Blue opens himself couldn't get the code-owner approval it needs). Until then the row stays `NEEDS BLUE (package)`. Before S04 is applied, an interactive session (on Blue's request) checks the issue's author and edit history and sets the row to READY in a PR; after that, the runner's status PR does it, with the same check in S04's prompt. The runner starts S28 once Blue merges that PR. | Role tests pass in CI (app/role-frontmatter.test.js, app/role-fence-policy.test.js, scripts/sync-roles.Tests.ps1); scripts/sync-roles.ps1 deploys on Blue's PC and Blue confirms the roles launch. | High | blue | S01, Blue's agent-roles package | NEEDS BLUE (package) |
+| S31 | **PC-check fixes.** Sensitive (the PTY environment and permission modes, the agent token's input, commit identity). Fix what Blue's PC checks of 2026-10-29 to 2026-11-02 found, item by item in "S31 to S34 details": every authority level forced to default mode by the env scrub (checklist step 40), pane status stuck at "unknown" with no toast (step 23), Ctrl+V pasting twice, the token box refusing silently, routine log lines shown as errors, the agent commit author, the read-aloud speed menu dropping the selection, and step 39's wording. | Each item is fixed with a test, or the PR says why it can't be tested in CI; CI green; Blue's re-runs of checklist steps 23, 24 and 40 pass on his PC. | High | windows | S05, S06, S10 | READY |
+| S32 | **1.1 gap audit.** One page, `docs/1.1-GAP-AUDIT.md`, that checks month one against what actually landed: every row's "Done when" against its merged PRs and Blue's ticked checklist steps, every "Follow-ups" line in the TLDRs of merged 1.1 PRs, and every unticked checklist step. Each item is marked done, on the docket (naming its row, step or issue) or needs attention; each "needs attention" item gets a proposed fix (a row for a later plan-change PR, or an issue). Docs only: it changes no other file. | The page covers every month-one row and every merged 1.1 PR (listed by number), and every "needs attention" item names a proposed fix. | Minimum | cloud | S01 | READY |
+| S33 | **Plan sync guard.** Sensitive (a `.github/` workflow and its script). Find why the Plan sync run of 2026-10-22 created a new copy of every sync issue, and make the sync refuse visibly (the run fails and creates nothing) when its listing finds none of the sync issues that already exist, so a bad listing can never duplicate the issues or the board again. | The cause is written in the PR; a test where the listing comes back empty while sync issues exist shows the run failing with no issue created; CI green. | High | cloud | S03, PR #142 merged | READY |
+| S34 | **PR reviewer research (checklist step 22).** Research only: no new key, account or spending. Pattern-mine qodo-ai/pr-agent and other maintained open-source PR reviewers (prompt structure, review categories, a best-practices file, a check of the PR against its plan row or issue) for what could strengthen the `pr-reviewer` subagent, which stays Claude Opus on Blue's own plan. Writes `docs/decisions/OSS-pr-review.md` in the AGENTS.md OSS shape, with any proposed change to `.claude/agents/pr-reviewer.md` described there, not made. | The record gives each option a verdict proposal and a blank for Blue's verdict, word for word, and Blue's verdict is then recorded (checklist step 22). Any reviewer change comes in a later PR. | Minimum | blue | S01 | READY |
 | S05 | **Needs-you alerts.** Windows notification when a Mako pane needs input or a turn ends; setup note for phone alerts through Claude Remote Control. | Toast appears on a real Claude pane; phone alert documented. | Medium | windows | S01 | IN PROGRESS (#49) |
 | S06 | **Process cleanup and link hardening.** Kill the whole process tree when a pane or Mako closes (the node-pty limitation); route the old `open-external` handler through the Quick Links URL policy; move local agents on Blue's PC from his git login to the `ABlueAgent` account (today the only provider key Mako injects is the Gemini key, for Video Scout panes; it also passes a per-pane pane-status token through `buildPtyEnv`, the likely pattern to reuse). Sensitive. | No leftover claude.exe or node.exe after close; link tests pass; a PR opened by a local agent shows `ABlueAgent` as its author. Needs an `ABlueAgent` token from Blue (checklist step 14, a classic `public_repo` token). Also: decide how Mako stores the token and passes it to panes, including whether it survives the subprocess scrub; confirm `public_repo` is enough and ask Blue before widening it; name the exact Credential Manager, `gh` and authorized-app entries Blue removes afterwards (checklist "Coming up this month"), and show how panes are kept from the `ABlueAI` login if he keeps it. | High | windows | S01, checklist step 14 | IN PROGRESS (#121) |
 | S07 | **Stable and dev copies of Mako.** A dev instance uses its own settings folder and never takes over Claude hooks, so agents can change Mako while Blue keeps using it. | Both run side by side without touching each other's state. | High | windows | S06 | IN PROGRESS (#123) |
@@ -116,6 +128,48 @@ held rows as held (a Hold column or a `hold` label), never as Ready.
 | S23 | **Client paperwork drafts.** Intake questionnaire, scope-of-work template, contract template, bucket-of-hours and retainer terms. Blue builds the form in Hexona. | Blue approves the drafts. | Medium | blue | S22 | DONE (#122) |
 | S24 | **HighLevel connection and reply/lead watcher.** Sensitive. Blue authorizes the GoHighLevel connector in claude.ai with a read-only token. Its one read-only workflow is the reply/lead watcher: a separate claude.ai scheduled task (never the Mako runners, which must keep no CRM connector; S24 checks that before go-live) that checks HighLevel every 60 minutes from 7:30 AM to 7:30 PM Eastern plus a final check at 8:00 PM, and notifies Blue only when there are new replies or leads, with each lead's first name, source and a one-line summary; nothing new means no notification. Before it goes live, Blue sends a screenshot of the connector's permission scopes, never the token (checklist step 34). Details below the table. | For one full day the watcher sends one notification per check that found something new (first name, source, one-line summary) and none for checks that found nothing; Blue's own test reply or lead shows up; no writes possible. | High | blue | S23; checklist step 34 before the watcher goes live | READY |
 | S25 | **Month review.** What shipped, interruptions, fix rounds, usage against the plan; month two drafted as a plan-change PR. | Month-two plan PR open. | Medium | cloud | runs in the last week of month one, from 2026-11-14 (not before that date) | READY |
+
+### S31 to S34 details: runner work while the UI waits (proposed, pending Blue)
+
+Blue (2026-11-03): "If UI is the only thing holding us to keep things moving, then we need to add
+more stuff". The runner starts these in table order, one at a time on Pro. None needs Blue before it
+starts; S31 and S34 need him at the end (his PC re-runs, his verdict).
+
+**S31's items** (from Blue's PC checks; the PR quotes each in its TLDR as fixed, not a bug, or a
+follow-up):
+
+1. **Authority levels (step 40).** On Claude Code 2.1.316, with `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1`
+   set (AGENTS.md "Security rules"), Claude Code prints "Permission mode forced to default -
+   CLAUDE_CODE_SUBPROCESS_ENV_SCRUB is set ... Declare allowedTools explicitly", so every level opens
+   in default ("manual") mode. Keep the scrub and pass an explicit allowed-tools set for each level,
+   chosen from Claude Code's documentation and recorded in docs/AUTHORITY-LEVELS.md. Turning the
+   scrub off is Blue's call, never the session's.
+2. **Pane status and toasts (steps 23 and 24).** Every pane's badge reads "unknown" and no toast
+   appeared, although the pane-status hooks are installed in Blue's user settings and point at
+   Mako's reporter. Not diagnosed. Check first whether the scrub keeps the per-pane pane-status token
+   from reaching the hooks, then Mako's Logs and the pane registry. If the cause can't be shown in
+   CI, add the logging that tells the causes apart and say so in the PR.
+3. **Ctrl+V pastes twice** in terminal panes (right-click pastes once): the Ctrl+V branch in
+   `app/renderer/app.js` doesn't stop the browser's own paste, so xterm's paste fires as well.
+4. **The agent token box (step 35).** Three saves of a token copied straight from Blue's password
+   manager were refused as "not a GitHub token"; the fourth stored it. The reason showed only in the
+   Logs tab and the box was cleared, so the banner looked as if nothing happened. Show the reason in
+   the banner and keep the input; strip invisible characters (zero-width, non-breaking spaces) before
+   the check, or name the character that failed. Never log the token.
+5. **Log levels.** Routine info lines show as "[main error]" in the Logs tab.
+6. **Commit author.** `app/agent-git-env.js` sets `GIT_AUTHOR_*` and `GIT_COMMITTER_*` to
+   `ABlueAgent` for panes that get the token, but on 2026-11-02 a dev-copy pane still showed
+   `ABlueAI` as its git identity (likely `git config`, which those variables override without
+   changing). Confirm with a test commit's author; fix only if it is wrong, and make checklist step
+   38's wording check the commit's author rather than `git config`.
+7. **Read-aloud speed.** Changing the speed menu moves focus, so the next 🔊 click reads nothing
+   although the pane still shows the text highlighted. 🔊 uses the pane's last selection.
+8. **Checklist wording.** Step 39 says to send one short message before closing the pane (Claude Code
+   writes a transcript only after the first message). Steps 23, 24 and 40 get Blue's re-run as short
+   numbered lists.
+
+Not in S31: red `NODE_EXTRA_CA_CERTS` certificate warnings in panes, and one "Mako stopped
+unexpectedly" banner on 2026-11-02 at 05:02 UTC (follow-ups; ask Blue if it recurs).
 
 ### UI sessions: who builds (approved structure, 2026-10-21)
 
@@ -444,7 +498,7 @@ and later").
 
 ### Blue's inputs this month
 
-S01 GitHub clicks (about 20 minutes) · S06 `ABlueAgent` token for local agents (checklist step 14) · S04 time zone (given 2026-10-18: Eastern) and digest time (default 8 PM) · S12 Hexona URL · S13 install
+S01 GitHub clicks (about 20 minutes) · S31 re-run checklist steps 23, 24 and 40 · S34 PR reviewer verdict (checklist step 22) · S06 `ABlueAgent` token for local agents (checklist step 14) · S04 time zone (given 2026-10-18: Eastern) and digest time (default 8 PM) · S12 Hexona URL · S13 install
 Obsidian · say go on the UI (S14, S17–S20; checklist step 18) · S14 UI examples · S16 Composer verdict
 (checklist step 19, done 2026-10-21, PR #82) · S17 to S20 iterate on the look with Codex and ChatGPT · S17 pick a design · S21 pick a logo · S23 approve paperwork · S24 authorize
 HighLevel and send the connector's scope screenshot (checklist step 34) · S29 Google Cloud billing,
@@ -491,3 +545,4 @@ does both) · Vibe Kanban (removed in 1.0).
 - 2026-10-21 (proposed, pending Blue; PR #54): S28's row gains the word "Sensitive.", as S06, S10, S24 and S26 have, so S03's plan sync labels it sensitive (it matches the capitalised word). Wording only: S28's scope, needs and status are unchanged. S03's own row gains "Sensitive (a new `.github/` workflow)." for the same reason.
 - 2026-10-21 (proposed, pending Blue; PR #52): the UI sessions get one builder. S14: Claude Opus writes the design brief from Blue's examples and dashboard list (words and structure, not code). S17 to S20: Codex builds all of it, started by Blue, who iterates with Codex and ChatGPT directly; the runner and Claude sessions never build those rows. Every UI PR: Claude Opus reviews for bugs, security and the plan, not taste; Blue judges the look. S17's Needs gain S26, so Codex's PR attribution, claims and fix path are settled before the UI build starts. The rows stay `HOLD (Blue)`. S16 gains the Composer model-choice requirement (picks the model itself, prefers Opus 5.5, asks only before Opus 5.5 at max effort). Blue's words are in docs/DECISIONS.md, 2026-10-21.
 - 2026-10-23 (proposed, pending Blue; PR #119): GoHighLevel lead pipeline for Florida marinas. New S29 "Florida marina list" (official Google Places API only, output only in the private repo `ABlueAI/mako-business`; needs S22 merged and checklist step 33, a new paid Google Cloud billing account with a Places API key and a budget alert, Blue's spending decision to confirm) and new S30 "Personalized outreach openers" (email only, CAN-SPAM, Claude never sends; Blue approves batches of about 20 in HighLevel; needs S29 and checklist step 36, the Places key deleted first). Both are business rows, kept `HOLD (Blue)` so the runner never starts them; Blue starts them himself in a business cloud environment (S29 with the Places key, S30 after the key is deleted), and the claim PR sets the row to IN PROGRESS. S24 is reshaped: its one read-only workflow is the reply/lead watcher, a separate claude.ai scheduled task (7:30 AM to 7:30 PM Eastern hourly plus 8:00 PM) that notifies Blue only when there is something new, with checklist step 34 (connector scope screenshot) before it goes live; it is an approved CRM credential for that one scheduled task, an exception to the spirit of AGENTS.md's "fenced agent roles never get CRM credentials by default" (AGENTS.md itself is unchanged). Appointment prep and a morning lead brief are held. S22 (PR #116) is unchanged. The month now has 30 sessions, 29 active. Blue's words are in docs/DECISIONS.md, 2026-10-23.
+- 2026-11-03 (proposed, pending Blue): new sessions S31 "PC-check fixes", S32 "1.1 gap audit", S33 "Plan sync guard" and S34 "PR reviewer research (checklist step 22)", all `READY`, so the runner has work while the UI sessions wait on Blue (Blue, 2026-11-03; docs/DECISIONS.md). Details in "S31 to S34 details". No existing row changes.
