@@ -101,7 +101,7 @@ section('3. Tripwire: the same literals everywhere');
   assert(hook.indexOf('const PAGE_MAX_URL_LENGTH = ' + pr.MAX_URL_LENGTH + ';') !== -1, 'the hook uses the same URL length cap');
   assert(JSON.stringify(policy.ROLE_MCP_TOOLS['page-reader']) === JSON.stringify(pr.MCP_TOOLS), 'the fence policy grants the same two tools');
   assert(Object.keys(policy.ROLE_MCP_TOOLS).join() === 'page-reader', 'no other role has an MCP grant');
-  const role = fs.readFileSync(ROLE_SRC, 'utf8');
+  const role = fs.readFileSync(ROLE_SRC, 'utf8').replace(/\r\n/g, '\n'); // CRLF on a Windows checkout
   assert(role.indexOf('tools: Read, Write, ' + pr.MCP_TOOLS.join(', ') + '\n') !== -1, 'the role file declares exactly Read, Write and the two tools');
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
   assert(pkg.dependencies['@playwright/mcp'] === pr.PLAYWRIGHT_MCP_VERSION, 'package.json pins @playwright/mcp exactly to ' + pr.PLAYWRIGHT_MCP_VERSION);
@@ -116,7 +116,7 @@ section('4. Fence policy: the MCP grant is page-reader only');
   const hookPath = path.join(tmp, 'fence-write.js');
   fs.copyFileSync(HOOK_SRC, hookPath);
   const sha = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
-  const roleText = fs.readFileSync(ROLE_SRC, 'utf8').replace('__CC_HOOK__', hookPath.replace(/\\/g, '/'));
+  const roleText = fs.readFileSync(ROLE_SRC, 'utf8').replace(/\r\n/g, '\n').replace('__CC_HOOK__', hookPath.replace(/\\/g, '/'));
   const check = (role, text) => policy.assertFencedRoleDefinition({
     role, text, canonicalHookPath: hookPath, trackedHookSha256: sha(HOOK_SRC), fsx: fs, hashFile: sha,
   });
