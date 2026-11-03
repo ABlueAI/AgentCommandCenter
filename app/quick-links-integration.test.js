@@ -108,7 +108,13 @@ for (const forbiddenLabel of ['Starboard CRM', 'GoHighLevel', 'Hexona']) {
 process.stdout.write('\nno dependency delta and full-chain reachability\n');
 const currentPkg = JSON.parse(read('package.json'));
 const basePkg = JSON.parse(fromBase('package.json'));
-assert(JSON.stringify(currentPkg.dependencies) === JSON.stringify(basePkg.dependencies), 'runtime dependencies unchanged from base');
+// S15 (PR #130, Blue's verdict 2026-11-03: ADOPT Playwright MCP) adds exactly one runtime dependency,
+// pinned exactly; it is set aside here and pinned below. Any other change still fails.
+const S15_DEPENDENCY = ['@playwright/mcp', '0.0.84'];
+assert(currentPkg.dependencies[S15_DEPENDENCY[0]] === S15_DEPENDENCY[1], 'S15: @playwright/mcp is pinned exactly to 0.0.84');
+const depsWithoutS15 = Object.assign({}, currentPkg.dependencies);
+delete depsWithoutS15[S15_DEPENDENCY[0]];
+assert(JSON.stringify(depsWithoutS15) === JSON.stringify(basePkg.dependencies), 'runtime dependencies unchanged from base apart from S15\'s one addition');
 assert(JSON.stringify(currentPkg.devDependencies) === JSON.stringify(basePkg.devDependencies), 'devDependencies unchanged from base');
 // Compared as JSON with the app's OWN version fields set aside: the 1.0.0 release bump (2026-10-16)
 // changes those two fields and nothing else, and the point here is that no dependency changed.
@@ -123,7 +129,22 @@ const AUDIT_FIX = {
   'node_modules/tar': ['7.5.22', 'sha512-MFO/QzvtAOmJbkhOaCTvbGcFN9L9b+JunIsDwaKljSOdcLMea3NJ1k9Usz/rjdfSXTq4dfzfeS7W4p4YOAAHeA=='],
   'node_modules/undici': ['7.30.1', 'sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg=='],
 };
+// S15's three new lockfile entries (the server and the Playwright it depends on, a pinned pre-release).
+// Each must match this version, registry tarball and integrity exactly, and is then set aside.
+const S15_LOCK = {
+  'node_modules/@playwright/mcp': ['0.0.84', 'sha512-weqLrA7/D8MJzNV9/t3Hnjp100tS2sxFXKeb2gH6Nhktqmdfvx5qRA9AZ5Mhjnre1jY0wltsrRK5VZS5NBgcvw=='],
+  'node_modules/playwright': ['1.65.0-alpha-2026-10-30', 'sha512-dmAJMVHKzHvMQjn+XDcaq/pxaZ0W6n8i78rwTM+VGRtQ3WBF5ZiSdB1yL/cyoYUGUMwg3jxN65KqC9cERaCbIg=='],
+  'node_modules/playwright-core': ['1.65.0-alpha-2026-10-30', 'sha512-LPMw8B/HRQKMcJeXTqWSrkB/AfCKKmbDQMbu0p7zg8MgibOWaKMjZWR/StAtrQkOxvOmZEju1o1TnPgdoOCwrg=='],
+};
 const currentLock = JSON.parse(read('package-lock.json'));
+for (const [key, [version, integrity]] of Object.entries(S15_LOCK)) {
+  const entry = currentLock.packages[key] || {};
+  const name = key.slice('node_modules/'.length);
+  const file = name.split('/').pop();
+  assert(entry.version === version && entry.integrity === integrity
+    && entry.resolved === `https://registry.npmjs.org/${name}/-/${file}-${version}.tgz`,
+    `S15: ${name} is ${version} from registry.npmjs.org with the pinned integrity`);
+}
 for (const [key, [version, integrity]] of Object.entries(AUDIT_FIX)) {
   const entry = currentLock.packages[key] || {};
   const name = key.slice('node_modules/'.length);
@@ -137,7 +158,9 @@ const withoutOwnVersion = (lockText) => {
   if (lock.packages && lock.packages['']) {
     delete lock.packages[''].version;
     delete lock.packages[''].hasInstallScript;
+    if (lock.packages[''].dependencies) delete lock.packages[''].dependencies[S15_DEPENDENCY[0]];
   }
+  for (const key of Object.keys(S15_LOCK)) if (lock.packages) delete lock.packages[key];
   for (const key of Object.keys(AUDIT_FIX)) {
     if (lock.packages && lock.packages[key]) {
       delete lock.packages[key].version;
@@ -148,7 +171,7 @@ const withoutOwnVersion = (lockText) => {
   return JSON.stringify(lock);
 };
 assert(withoutOwnVersion(read('package-lock.json')) === withoutOwnVersion(fromBase('package-lock.json')),
-  'package-lock.json has no dependency delta from base beyond the S02 audit fix');
+  'package-lock.json has no dependency delta from base beyond the S02 audit fix and S15\'s three entries');
 const requiredTests = [
   'quick-links-policy.test.js', 'quick-links-store.test.js', 'quick-links-ipc.test.js',
   'quick-links-integration.test.js', 'renderer/quick-links-view.test.js',

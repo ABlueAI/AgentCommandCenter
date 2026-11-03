@@ -61,7 +61,7 @@ Every PR that changes the state updates this file.
 - **Research capture (S15, PR #130, in progress):** Blue's verdict (2026-11-03): ADOPT
   Playwright MCP as the page reader. Claude in Chrome was rejected: on his PC it returned "This site
   is blocked." on reddit.com, while Playwright MCP read a www.reddit.com thread with no login
-  (checklist step 43, ticked). The build in PR #130: a "Send a page to Reviewer" button that takes a
+  (checklist step 43, ticked). The build in PR #130: a "📄 Page" choice in New Agent that takes a
   URL, a fenced `page-reader` pane allowed only to navigate, snapshot and write its own report, and
   the Reviewer reading that report (docs/decisions/OSS-research-capture.md); step 48 checks it on
   his PC after the merge.

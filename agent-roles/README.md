@@ -59,7 +59,7 @@ claude --agent reviewer        # read-only roles skip worktree creation; point a
 
 ## Write-fencing (web-scout / operator / source-scout / page-reader)
 
-These two roles have the `Write` tool, which the allowlist can't scope to a directory. So
+These roles have the `Write` tool, which the allowlist can't scope to a directory. So
 they carry a **PreToolUse hook** (`scripts/hooks/fence-write.js`) that **hard-denies any
 Write/Edit outside the session cwd**. The launcher runs them in a dedicated sandbox
 (`<projectsRoot>/.command-center/outputs/<role>-<timestamp>`), so they cannot touch any

@@ -44,7 +44,9 @@
  * PAGE-READER BROWSER GATE (S15). The page-reader role may call exactly two Playwright MCP tools, and
  * its matcher routes both here: `browser_navigate` only to an https: URL with no userinfo, at most
  * PAGE_MAX_URL_LENGTH characters; `browser_snapshot` never with a `filename` (Playwright would write
- * that file itself, outside the Write fence). Any other MCP tool that reaches this hook refuses. The
+ * that file itself, outside the Write fence). Any other MCP tool that reaches this hook refuses, but
+ * the matcher routes only those two here: the other Playwright tools are kept out by the launch's
+ * main-issued --disallowedTools list (app/page-reader.js DENIED_MCP_TOOLS), not by this hook. The
  * literals equal app/page-reader.js and ROLE_MCP_TOOLS in app/role-fence-policy.js
  * (tripwire-tested in app/page-reader.test.js).
  *

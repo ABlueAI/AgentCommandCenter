@@ -314,7 +314,7 @@ function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, l
     // context and remain effective through the permission evaluation path. They are MAIN-ISSUED
     // constants — `FORBIDDEN_TOOLS` from role-fence-policy.js — and no renderer field reaches them.
     // The declaration checks are retained alongside as drift/refusal evidence, not replaced by this.
-    if (launch && launch.fenced === true) cmd += ' --disallowedTools ' + FORBIDDEN_TOOLS.join(' ');
+    if (launch && launch.fenced === true) cmd += ' --disallowedTools ' + FORBIDDEN_TOOLS.concat(pageArgs ? pageArgs.deny : []).join(' ');
     // S15: the one pinned Playwright MCP server (`--strict-mcp-config` loads no other) and its two tools.
     if (pageArgs) cmd += pageArgs.options;
     // CONTROLLED WEBFETCH GRANT. `webFetch` comes only from controlledWebFetchLaunch(), computed in
@@ -1278,6 +1278,9 @@ function pageReaderBrowserInstalled() {
 // the page-reader role in that folder through pty-start, which applies the normal fence checks.
 // Refusals are visible and name a bounded reason; the URL itself is never logged.
 const pageReaderGate = createTrustedSenderGate({ entryUrl: ENTRY_URL, getTrustedWindow: () => win });
+// The folder of the last page-reader this main process prepared. MAIN-OWNED: the renderer never names a
+// folder for the report hand-off below.
+let lastPageReaderDir = null;
 ipcMain.handle('page-reader-prepare', async (e, req) => {
   const sender = pageReaderGate.assess(e);
   if (!sender.ok) return { ok: false, error: sender.reason };
@@ -1309,8 +1312,43 @@ ipcMain.handle('page-reader-prepare', async (e, req) => {
     tlog('page-reader-prepare: request file write FAILED');
     return { ok: false, error: 'page-reader-request-write-failed' };
   }
+  lastPageReaderDir = sandbox.dir;
   tlog('page-reader-prepare: ready');
   return { ok: true, dir: sandbox.dir };
+});
+
+// S15: hand the last page report to the Reviewer. The Reviewer is unfenced, so it NEVER starts in the
+// page-reader's folder, which a page-reading agent can write (a project .claude/, .mcp.json or CLAUDE.md
+// there would change what the Reviewer runs). Main copies only report.md, a regular file of at most
+// MAX_REPORT_BYTES, into a fresh folder of its own, and returns that folder for the Reviewer's cwd.
+ipcMain.handle('page-report-to-reviewer', async (e) => {
+  const sender = pageReaderGate.assess(e);
+  if (!sender.ok) return { ok: false, error: sender.reason };
+  if (!lastPageReaderDir) return { ok: false, error: 'page-report-no-page-reader' };
+  const src = path.join(lastPageReaderDir, pageReaderMod.REPORT_FILE);
+  let text;
+  try {
+    const st = fs.lstatSync(src);
+    if (!st.isFile() || st.isSymbolicLink()) return { ok: false, error: 'page-report-not-a-file' };
+    if (st.size > pageReaderMod.MAX_REPORT_BYTES) return { ok: false, error: 'page-report-too-large' };
+    const fd = fs.openSync(src, 'r');
+    try {
+      const fst = fs.fstatSync(fd);
+      if (!fst.isFile() || fst.size > pageReaderMod.MAX_REPORT_BYTES) return { ok: false, error: 'page-report-not-a-file' };
+      text = fs.readFileSync(fd, 'utf8');
+    } finally { fs.closeSync(fd); }
+  } catch (err) {
+    return { ok: false, error: 'page-report-missing', hint: 'The Page Reader has not written report.md yet.' };
+  }
+  const sandbox = await createOutputSandbox('page-report');
+  if (!sandbox || !sandbox.ok) return { ok: false, error: 'page-report-sandbox-failed' };
+  try {
+    fs.writeFileSync(path.join(sandbox.dir, pageReaderMod.REPORT_FILE), text, { encoding: 'utf8', flag: 'wx' });
+  } catch (err) {
+    return { ok: false, error: 'page-report-copy-failed' };
+  }
+  tlog('page-report-to-reviewer: report copied');
+  return { ok: true, dir: sandbox.dir, initialPrompt: pageReaderMod.REVIEWER_PROMPT };
 });
 
 // FAIL-CLOSED fence check. The path-fence that confines web-scout/operator lives in the

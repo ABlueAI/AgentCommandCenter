@@ -92,7 +92,7 @@ plan); Electron is MIT. No new paid service.
 ## How Playwright MCP is built in (this PR)
 
 1. **A "📄 Page" choice in Mako's New Agent dialog** takes a URL from Blue (Playwright can't see
-   his own browser tabs). Main checks it: `https:` only, no user name or password in it, at most 2,048
+   his own browser tabs). Main checks it: `https:` only, no user name or password in it, at most 2,000
    characters, parsed with `new URL()`. Anything else refuses visibly.
 2. **A new fenced role, `page-reader`** (`agent-roles/page-reader.md`), launched like web-scout in
    its own outputs folder under Mako's path fence (`claude --agent page-reader`): no shell, no repo
@@ -115,7 +115,11 @@ plan); Electron is MIT. No new paid service.
    `mcp__playwright__browser_navigate` and `mcp__playwright__browser_snapshot`, and main passes the
    same two MCP tools to `--allowedTools`, which Claude Code needs when
    `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` is set (2.1.316 or later, step 40's finding). Every other
-   Playwright tool (click, type, fill, evaluate, upload, screenshot to file, tabs) is unavailable.
+   tool @playwright/mcp 0.0.84 documents (70, from click, type, fill and evaluate to tabs, cookies
+   and screenshots) is denied by name with `--disallowedTools`, a list a test holds equal to the
+   installed package's README. That is the layer relied on: whether the role's `tools:` line also
+   filters MCP tools under `--agent` isn't verified, and the fence hook only sees the two tools its
+   matcher names.
    The fence policy (`app/role-fence-policy.js`) grants these two MCP names to `page-reader` alone;
    every other fenced role still refuses MCP tools.
 5. **The fence hook also gates the two tools** (`scripts/hooks/fence-write.js`): `browser_navigate`
@@ -127,8 +131,11 @@ plan); Electron is MIT. No new paid service.
    stops. If a robot check or login wall appears, it says so and stops; Blue clicks it himself in
    the visible window and asks it to try again. A few pages per run at most.
 7. **The Reviewer reads the report.** Under the same "📄 Page" choice, "Send the last page report to
-   Reviewer" launches the existing Reviewer role in that page-reader's folder with a fixed opening
-   prompt to read `./report.md` as untrusted text, as the Reviewer launch already does for a diff. The Reviewer keeps no web or browser tool.
+   Reviewer" has main copy only `report.md` (a regular file, at most 2 MB) into a fresh folder of
+   its own and launches the existing Reviewer role there, with a fixed opening prompt to read it as
+   untrusted text. The Reviewer never starts in the page-reader's folder: that pane reads untrusted
+   pages and can write there, and a planted `.claude/`, `.mcp.json` or `CLAUDE.md` would change
+   what the unfenced Reviewer runs. The Reviewer keeps no web or browser tool.
 8. Blue installs the browser once: `npx playwright install chromium` from `app` (the version the
    lockfile pins), as in step 43. Mako refuses visibly, with that command, if the browser is
    missing.
