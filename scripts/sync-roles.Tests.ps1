@@ -185,6 +185,7 @@ Describe 'sync-roles.ps1 pure preparation (dot-sourced ConvertTo-DeployedRoleByt
         'web-scout'      = @(1773, 'AFDA5D08FE81489D702F06B80C328A09F0F9E94F6E1C5F367E117B9187B34AB4')
         'operator'       = @(1476, 'C0E1B415857A40B39CEC6A19758CF3776AC2640CCA9DFA34F1374DD72D7FEC53')
         'source-scout'   = @(1627, '549B8624B6A70E9F37F71F1B8624DB5AB06F891C1E1CB54B86F3DA4C91064EC1')
+        'page-reader'    = @(2164, '634E5A112C379C3194678FFDE0AC8A51E3236FF94CD5211B81AFD91F2FD12728')
     }
     foreach ($role in $expected.Keys) {
         It "real role $role produces its pinned identity from working-tree, LF and CRLF sources" {

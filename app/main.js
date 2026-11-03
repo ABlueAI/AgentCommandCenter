@@ -39,6 +39,7 @@ const { createLauncherIpc } = require('./launcher-ipc');
 // The one canonical fail-closed sender/frame/URL trust gate (shared with clipboard/library/followup).
 // P12 adds the two launcher handlers as callers so they, too, refuse any non-trusted-window sender.
 const { createTrustedSenderGate } = require('./trusted-ipc-sender');
+const pageReaderMod = require('./page-reader');
 const { createUsageIpc } = require('./usage-ipc');
 const { defaultUsageFilePath } = require('./usage/usage-file');
 // FENCE COMPLETION — main-owned launch authority for `pty-start`. Classification happens ONCE here
@@ -270,10 +271,10 @@ const AGENT_CMD = { claude: 'claude', codex: 'codex', gemini: 'gemini' }; // CLI
 // Blue Helm roles: launch `claude --agent <role>` with optional per-task overrides.
 // Everything is validated against allowlists before it is spliced into a shell command,
 // so the renderer can never inject arbitrary text through the IPC channel.
-const VALID_ROLES = new Set(['builder', 'reviewer', 'codebase-scout', 'web-scout', 'operator', 'source-scout']);
+const VALID_ROLES = new Set(['builder', 'reviewer', 'codebase-scout', 'web-scout', 'operator', 'source-scout', 'page-reader']);
 // Roles whose PTY cwd must resolve inside the ensure-output-dir sandbox before spawning.
 // Matches the roles that carry a PreToolUse path-fence hook.
-const FENCED_ROLES = new Set(['web-scout', 'operator', 'source-scout']);
+const FENCED_ROLES = new Set(['web-scout', 'operator', 'source-scout', 'page-reader']);
 const VALID_MODELS = new Set(['sonnet', 'opus', 'haiku', 'fable']);
 const VALID_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 
@@ -302,12 +303,20 @@ function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, l
     // `--agent` is a Claude feature, so roles always launch on the Claude CLI regardless
     // of any cli hint (the Gemini video-scout path injects its brief differently — Phase C).
     let cmd = AGENT_CMD.claude + ' --agent ' + effectiveRole;
+    // S15 PAGE READER. Its fixed opening line goes FIRST, before any option that takes several values
+    // (`--disallowedTools`, `--mcp-config`, `--allowedTools`) and would swallow it. Every piece is a
+    // main-owned constant or main-owned path from page-reader.js; no renderer field reaches it.
+    const pageArgs = (launch && launch.fenced === true && launch.kind === 'role' && launch.role === pageReaderMod.ROLE)
+      ? pageReaderMod.pageReaderCliArgs(pageReaderMcpConfigPath()) : null;
+    if (pageArgs) cmd += pageArgs.prompt;
     // P4 DIRECT ENFORCEMENT. Inspecting the role declaration proves what the file SAYS; these
     // arguments change what the launched CLI can DO. Bare-name denials remove the tools from model
     // context and remain effective through the permission evaluation path. They are MAIN-ISSUED
     // constants — `FORBIDDEN_TOOLS` from role-fence-policy.js — and no renderer field reaches them.
     // The declaration checks are retained alongside as drift/refusal evidence, not replaced by this.
     if (launch && launch.fenced === true) cmd += ' --disallowedTools ' + FORBIDDEN_TOOLS.join(' ');
+    // S15: the one pinned Playwright MCP server (`--strict-mcp-config` loads no other) and its two tools.
+    if (pageArgs) cmd += pageArgs.options;
     // CONTROLLED WEBFETCH GRANT. `webFetch` comes only from controlledWebFetchLaunch(), computed in
     // pty-start from main-owned values AFTER the admission claim; its rule is non-null for the
     // admission-controlled fenced web-scout pane alone. Single quotes keep the parentheses literal
@@ -1168,7 +1177,9 @@ ipcMain.handle('remove-agent', async (_e, { repo, task }) => {
 // Create a dedicated, fenced outputs sandbox for a research role (web-scout/operator) so it
 // runs OUTSIDE any repo. The role launches with cwd = this dir, and its PreToolUse write-fence
 // confines writes to here — it cannot touch a repo even though it has the Write tool.
-ipcMain.handle('ensure-output-dir', async (_e, { role }) => {
+ipcMain.handle('ensure-output-dir', async (_e, { role }) => createOutputSandbox(role));
+
+async function createOutputSandbox(role) {
   tlog(`ensure-output-dir: START role="${role}"`);
   const safeRole = String(role || 'output').replace(/[^a-z0-9-]/gi, '') || 'output';
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -1243,6 +1254,63 @@ ipcMain.handle('ensure-output-dir', async (_e, { role }) => {
   }
   tlog('ensure-output-dir: END ok');
   return { ok: true, dir };
+}
+
+// S15 PAGE READER: main-owned paths. The MCP config lives in Mako's own app-data folder, never in the
+// pane's writable outputs folder, and is rewritten from page-reader.js constants before every launch.
+// One persistent browser profile, so cookies carry over (Playwright serves it to one browser at a time).
+function pageReaderMcpConfigPath() { return path.join(app.getPath('userData'), 'page-reader', 'mcp.json'); }
+function pageReaderProfileDir() { return path.join(app.getPath('userData'), 'page-reader', 'browser-profile'); }
+const PAGE_READER_MCP_CLI = path.join(__dirname, 'node_modules', '@playwright', 'mcp', 'cli.js');
+
+// Playwright installs its browsers under %LOCALAPPDATA%\ms-playwright on Windows unless
+// PLAYWRIGHT_BROWSERS_PATH says otherwise. Returns true when a chromium-* folder is there.
+function pageReaderBrowserInstalled() {
+  const custom = process.env.PLAYWRIGHT_BROWSERS_PATH;
+  const root = custom && custom !== '0' ? custom
+    : (process.platform === 'win32' && process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'ms-playwright') : null);
+  if (!root) return true; // not Windows and no override: let Playwright report it in the pane
+  try { return fs.readdirSync(root).some((n) => /^chromium-\d+$/.test(n)); } catch (e) { return false; }
+}
+
+// S15: "Send a page to Reviewer". Checks the URL Blue gave, writes the MCP config, creates a fresh
+// fenced outputs folder and writes the URL into it as page-request.json. The renderer then launches
+// the page-reader role in that folder through pty-start, which applies the normal fence checks.
+// Refusals are visible and name a bounded reason; the URL itself is never logged.
+const pageReaderGate = createTrustedSenderGate({ entryUrl: ENTRY_URL, getTrustedWindow: () => win });
+ipcMain.handle('page-reader-prepare', async (e, req) => {
+  const sender = pageReaderGate.assess(e);
+  if (!sender.ok) return { ok: false, error: sender.reason };
+  const checked = pageReaderMod.validatePageUrl(req && typeof req === 'object' ? req.url : undefined);
+  if (!checked.ok) return { ok: false, error: checked.reason };
+  if (!fs.existsSync(PAGE_READER_MCP_CLI)) {
+    return { ok: false, error: 'page-reader-mcp-missing', hint: 'Playwright MCP is not installed: run npm ci in the app folder, then restart Mako.' };
+  }
+  if (!pageReaderBrowserInstalled()) {
+    return { ok: false, error: 'page-reader-browser-missing', hint: 'Playwright\'s Chromium is not installed: run npx playwright install chromium in the app folder.' };
+  }
+  try {
+    const cfgPath = pageReaderMcpConfigPath();
+    fs.mkdirSync(path.dirname(cfgPath), { recursive: true });
+    fs.mkdirSync(pageReaderProfileDir(), { recursive: true });
+    const cfg = pageReaderMod.buildMcpConfig({ cliPath: PAGE_READER_MCP_CLI, profileDir: pageReaderProfileDir() });
+    const tmp = `${cfgPath}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(cfg, null, 2), 'utf8');
+    fs.renameSync(tmp, cfgPath);
+  } catch (err) {
+    tlog('page-reader-prepare: MCP config write FAILED');
+    return { ok: false, error: 'page-reader-config-write-failed' };
+  }
+  const sandbox = await createOutputSandbox(pageReaderMod.ROLE);
+  if (!sandbox || !sandbox.ok) return { ok: false, error: 'page-reader-sandbox-failed' };
+  try {
+    fs.writeFileSync(path.join(sandbox.dir, pageReaderMod.REQUEST_FILE), pageReaderMod.buildPageRequest(checked.url), { encoding: 'utf8', flag: 'wx' });
+  } catch (err) {
+    tlog('page-reader-prepare: request file write FAILED');
+    return { ok: false, error: 'page-reader-request-write-failed' };
+  }
+  tlog('page-reader-prepare: ready');
+  return { ok: true, dir: sandbox.dir };
 });
 
 // FAIL-CLOSED fence check. The path-fence that confines web-scout/operator lives in the

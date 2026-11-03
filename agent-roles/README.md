@@ -18,6 +18,7 @@ center drives — not just this repo.
 | `codebase-scout` | sonnet | low | Read, Grep, Glob | **Yes** | cyan | Claude |
 | `web-scout` | sonnet | medium | WebSearch, WebFetch, Read, Write | Repo: yes | cyan | Claude (text) / **Gemini (video)** |
 | `operator` | sonnet | medium | Read, WebSearch, WebFetch, Write | Repo: yes | purple | Claude |
+| `page-reader` | sonnet | medium | Read, Write, and two Playwright MCP tools (`browser_navigate`, `browser_snapshot`) | Repo: yes | cyan | Claude (S15: reads one page Blue chose, writes `report.md`) |
 
 ## The read-only guarantee (what makes a role real)
 
@@ -56,7 +57,7 @@ claude --agent reviewer        # read-only roles skip worktree creation; point a
   and `mcpServers` frontmatter are ignored. As project/user-scope files (the path here),
   they work normally.
 
-## Write-fencing (web-scout / operator)
+## Write-fencing (web-scout / operator / source-scout / page-reader)
 
 These two roles have the `Write` tool, which the allowlist can't scope to a directory. So
 they carry a **PreToolUse hook** (`scripts/hooks/fence-write.js`) that **hard-denies any
@@ -65,6 +66,11 @@ Write/Edit outside the session cwd**. The launcher runs them in a dedicated sand
 repo no matter what their prompt says. The hook deploys to `~/.claude/hooks/` and its
 absolute path is injected in place of the `__CC_HOOK__` placeholder by `sync-roles.ps1` —
 so **these roles only enforce after a `sync-roles.ps1` run** (don't hand-copy the .md).
+
+`page-reader` (S15) also routes its two Playwright MCP tools through the same hook: navigation only to
+`https:` pages, and no snapshot written to a file. Mako starts it with one pinned Playwright MCP
+server (`--mcp-config`, `--strict-mcp-config`) and the URL in `page-request.json`, never on the
+command line (docs/decisions/OSS-research-capture.md).
 
 ## Open items (still to verify when building)
 

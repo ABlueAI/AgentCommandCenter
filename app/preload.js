@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('cc', {
   removeAgent: (a) => ipcRenderer.invoke('remove-agent', a),
   reviewDiff: (a) => ipcRenderer.invoke('review-diff', a),
   ensureOutputDir: (a) => ipcRenderer.invoke('ensure-output-dir', a),
+  // S15: check a page URL and prepare the fenced page-reader folder (main writes the URL into it).
+  pageReaderPrepare: (a) => ipcRenderer.invoke('page-reader-prepare', a),
   verifyFence: (a) => ipcRenderer.invoke('verify-fence', a),
   getGeminiKeyStatus: () => ipcRenderer.invoke('get-gemini-key-status'),
   setGeminiKey: (key) => ipcRenderer.invoke('set-gemini-key', key),

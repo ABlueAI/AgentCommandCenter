@@ -871,11 +871,12 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - Pull `main`, run `npm ci` in `app`, then `npx playwright install chromium` in `app` (once; it
     installs the browser version the lockfile pins), run `scripts/sync-roles.ps1`, and restart Mako
     fully.
-  - Click **Send a page to Reviewer**, paste a www.reddit.com thread URL, and start it. A Chromium
-    window opens; the page-reader pane reads the thread and writes `report.md`. If a robot check
-    appears, click it yourself in that window and tell the pane to try again.
-  - Click **Send report to Reviewer**. The Reviewer pane should summarise the thread from the
-    report, with no copy and paste.
+  - **New Agent > 📄 Page**, paste a www.reddit.com thread URL in the Page URL box, **Create &
+    Launch**. A Chromium window opens; the page-reader pane reads the thread and writes
+    `report.md` (approve its one Write if asked). If a robot check appears, click it yourself in
+    that window and tell the pane to try again.
+  - **New Agent > 📄 Page > Send the last page report to Reviewer.** The Reviewer pane should
+    summarise the thread from the report, with no copy and paste.
   - *Done when:* you tell an agent the Reviewer answered from the thread (or what went wrong). It
     ticks this with the date. This is S15's "Done when".
 

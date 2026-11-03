@@ -91,8 +91,8 @@ plan); Electron is MIT. No new paid service.
 
 ## How Playwright MCP is built in (this PR)
 
-1. **A "Send a page to Reviewer" button** in Mako takes a URL from Blue (Playwright can't see his
-   own browser tabs). Main checks it: `https:` only, no user name or password in it, at most 2,048
+1. **A "📄 Page" choice in Mako's New Agent dialog** takes a URL from Blue (Playwright can't see
+   his own browser tabs). Main checks it: `https:` only, no user name or password in it, at most 2,048
    characters, parsed with `new URL()`. Anything else refuses visibly.
 2. **A new fenced role, `page-reader`** (`agent-roles/page-reader.md`), launched like web-scout in
    its own outputs folder under Mako's path fence (`claude --agent page-reader`): no shell, no repo
@@ -105,9 +105,10 @@ plan); Electron is MIT. No new paid service.
    with Node from `app/node_modules`. This is the same server Blue tested with `npx`, minus a
    download from npm on every launch. Main writes a fixed MCP config for the pane and passes it with
    `--mcp-config` and `--strict-mcp-config`, so no other MCP server loads. Server arguments, all
-   main-owned: `--browser chromium`, `--user-data-dir` set to one persistent profile under
-   `%LOCALAPPDATA%\Mako\page-reader-profile` (cookies carry over; one page-reader pane at a time,
-   since a persistent profile serves one browser), visible (no `--headless`), stdio only (never
+   main-owned: `--browser chromium`, `--user-data-dir` set to one persistent profile in Mako's app-data folder
+   (`page-reader\browser-profile`; cookies carry over; one page-reader pane at a time, since a
+   persistent profile serves one browser). The config itself is written there too, never in the
+   pane's writable outputs folder, visible (no `--headless`), stdio only (never
    `--port` or `--host`, so no network listener), and no `--allow-unrestricted-file-access`, so
    file:// pages stay blocked and file access stays inside the outputs folder.
 4. **Only two browser tools.** The role's `tools:` line allows `Read`, `Write`,
@@ -125,9 +126,9 @@ plan); Electron is MIT. No new paid service.
    the comments it can see to `report.md` in its outputs folder, says what it couldn't see, and
    stops. If a robot check or login wall appears, it says so and stops; Blue clicks it himself in
    the visible window and asks it to try again. A few pages per run at most.
-7. **The Reviewer reads the report.** A second button, "Send report to Reviewer", launches the
-   existing Reviewer role with an opening prompt naming that report file, as the Reviewer launch
-   already does for a diff. The Reviewer keeps no web or browser tool.
+7. **The Reviewer reads the report.** Under the same "📄 Page" choice, "Send the last page report to
+   Reviewer" launches the existing Reviewer role in that page-reader's folder with a fixed opening
+   prompt to read `./report.md` as untrusted text, as the Reviewer launch already does for a diff. The Reviewer keeps no web or browser tool.
 8. Blue installs the browser once: `npx playwright install chromium` from `app` (the version the
    lockfile pins), as in step 43. Mako refuses visibly, with that command, if the browser is
    missing.

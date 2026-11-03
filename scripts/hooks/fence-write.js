@@ -41,6 +41,13 @@
  * The literals below equal CONTROLLED_WEBFETCH in app/role-fence-policy.js (tripwire-tested); this file
  * is deployed standalone and cannot require it.
  *
+ * PAGE-READER BROWSER GATE (S15). The page-reader role may call exactly two Playwright MCP tools, and
+ * its matcher routes both here: `browser_navigate` only to an https: URL with no userinfo, at most
+ * PAGE_MAX_URL_LENGTH characters; `browser_snapshot` never with a `filename` (Playwright would write
+ * that file itself, outside the Write fence). Any other MCP tool that reaches this hook refuses. The
+ * literals equal app/page-reader.js and ROLE_MCP_TOOLS in app/role-fence-policy.js
+ * (tripwire-tested in app/page-reader.test.js).
+ *
  * MALFORMED INPUT (stdin not JSON, not an object, or `tool_name` not a string) refuses unless the mode
  * is exactly `disabled`, where the historical behaviour is kept (unparseable exits 0; a parsed payload
  * continues to the path check). A missing mode never allows because the input could not be parsed.
@@ -58,6 +65,12 @@ const WEBFETCH_REFUSAL_MESSAGE =
   'Blocked by Mako web fence: this pane may not fetch that destination. [fence-webfetch-denied]';
 const INPUT_REFUSAL_MESSAGE =
   'Blocked by Mako fence: the tool request could not be verified. [fence-input-unverifiable]';
+
+const PAGE_NAVIGATE_TOOL = 'mcp__playwright__browser_navigate';
+const PAGE_SNAPSHOT_TOOL = 'mcp__playwright__browser_snapshot';
+const PAGE_MAX_URL_LENGTH = 2000;
+const PAGE_REFUSAL_MESSAGE =
+  'Blocked by Mako page fence: this pane may only open https pages and read them, with no file output. [fence-page-denied]';
 
 const REFUSAL_MESSAGE =
   'Blocked by Mako path fence: this role may only access files inside its own sandbox. [fence-outside-sandbox]';
@@ -92,6 +105,14 @@ function isAllowedWebFetchUrl(url) {
     && u.username === '' && u.password === '';
 }
 
+// https: only, no user name or password, bounded length, WHATWG parsing (as for WebFetch above).
+function isAllowedPageUrl(url) {
+  if (typeof url !== 'string' || url.length === 0 || url.length > PAGE_MAX_URL_LENGTH) return false;
+  let u;
+  try { u = new URL(url); } catch { return false; }
+  return u.protocol === 'https:' && u.username === '' && u.password === '';
+}
+
 let input = '';
 process.stdin.on('data', (d) => { input += d; });
 process.stdin.on('end', () => {
@@ -111,6 +132,15 @@ process.stdin.on('end', () => {
     const wti = data.tool_input !== null && typeof data.tool_input === 'object' ? data.tool_input : {};
     if (mode === WEBFETCH_ORIGIN && isAllowedWebFetchUrl(wti.url)) process.exit(0);
     refuse(WEBFETCH_REFUSAL_MESSAGE); // wrong destination, or a missing/unexpected mode
+  }
+
+  if (wellFormed && data.tool_name.startsWith('mcp__')) {
+    const pti = data.tool_input !== null && typeof data.tool_input === 'object' && !Array.isArray(data.tool_input)
+      ? data.tool_input : null;
+    if (pti && data.tool_name === PAGE_NAVIGATE_TOOL && isAllowedPageUrl(pti.url)) process.exit(0);
+    if (pti && data.tool_name === PAGE_SNAPSHOT_TOOL
+      && (pti.filename === undefined || pti.filename === null || pti.filename === '')) process.exit(0);
+    refuse(PAGE_REFUSAL_MESSAGE); // any other MCP tool, a non-https page, or a snapshot to a file
   }
 
   const ti = (data && data.tool_input) || {};
