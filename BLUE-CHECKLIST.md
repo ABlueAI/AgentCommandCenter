@@ -28,7 +28,7 @@ other remaining items." Claude's order for what is left:
    doesn't name that dependency yet).
 3. **Step 17**, the token audit and push protection: moved to the end of 1.1, about February 2027
    (your words, 2026-11-03: "Let's finish it at the end"). Then every token is reset with a 1-year
-   expiry.
+   expiry. The agent token's January renewal (by 2027-01-14) still comes first.
 4. **Step 8**, the Max upgrade: when the UI work runs usage up (your call, 2026-11-03); Pro until
    then.
 5. **When you merge S04 (PR #84): step 28, then step 27**, in the same sitting.
@@ -138,7 +138,7 @@ other remaining items." Claude's order for what is left:
 The runner is on since 2026-10-18 (8:01 AM Eastern). Each morning it first checks steps 1 and 7, and
 does nothing except send you a "waiting on step N" notice until they are complete (once PR #47 merges,
 it is expected to start with `NOT READY:`; not verified until S04's prompt). After that it runs
-on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
+on its own, one session at a time on Pro until you upgrade (step 8).
 
 - [x] **7. Guardrails, Part B: a separate GitHub account for agents.** About 15 minutes. *Done
   2026-10-18 with the guide session. Verified 2026-10-19 by the checker session, acting as the agent
@@ -194,8 +194,8 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - *Done when:* you say "Part B done" and the checker's PR, authored by the agent account, showed as
     blocked after CI passed until you approved it. On the next morning's run the runner starts
     building S01 instead of sending "waiting on step 7".
-- [ ] **8. Upgrade Claude to Max 5x.** About 2 minutes, on **Wednesday 2026-10-28** (moved from
-  2026-10-21 on 2026-10-20), after you have used your remaining Pro resets: in your words, "2 full
+- [ ] **8. Upgrade Claude to Max 5x.** About 2 minutes, **when the UI work runs usage up** (your call,
+  2026-11-03; it was Wednesday 2026-10-28, moved from 2026-10-21 on 2026-10-20), after you have used your remaining Pro resets: in your words, "2 full
   resets & a weekly reset", plus 3 ChatGPT resets. claude.ai > Settings > Billing. Keep ChatGPT Plus.
   No longer blocks the runner; it builds one session at a time on Pro until then.
   - The 2026-10-21 date was picked to upgrade before Pro renews on Thursday. If Pro renews on
@@ -386,7 +386,8 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
     fails, so ask an agent to post it (comment on the PR as `ABlueAI`, or tell the agent in its own
     session); an agent's request worked on PR #47 on 2026-10-21 (STATUS.md). If ChatGPT uses this same GitHub connection outside Codex (not verified), repositories
     only `ABlueAI` can reach drop out of ChatGPT and Codex; session S26 checks this.
-- [ ] **17. Token hygiene: find old tokens, and rules for any new one.** About 20 minutes, this week.
+- [ ] **17. Token hygiene: find old tokens, and rules for any new one.** About 20 minutes, at the end
+  of 1.1, about February 2027 (moved 2026-11-03; "Do next" item 3).
   - **a. Audit old tokens, on both `ABlueAI` and `ABlueAgent`** (sign in to each in turn). A lost
     token's value can't be recovered: GitHub shows a token only once, but it lists every token with
     its last-used date.
@@ -454,7 +455,8 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
       step 14's, and step 14's waits only in Bitwarden (S06 can't start until it exists).
     - A secret a repo workflow uses goes in a GitHub environment whose deployment branches are
       `main` only, and that workflow must never check out or run code from a PR.
-    - Expiry 90 days (1 year at most) where the provider lets you set one. Tell Claude the expiry
+    - Expiry 90 days (1 year at most) where the provider lets you set one. (2026-11-03: at the
+      end-of-1.1 reset you chose a 1-year expiry for every token, docs/DECISIONS.md.) Tell Claude the expiry
       date (never the token), and Claude adds a dated renewal reminder under "Dated reminders"
       below; for a key with no expiry setting, Claude adds a reminder to rotate it at 90 days.
     - For a token that goes into Mako's key setup or a GitHub environment secret, a Bitwarden copy
