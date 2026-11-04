@@ -28,17 +28,18 @@ still asks. The scrub stays on; turning it off is Blue's call. The sets live in
 |---|---|---|
 | Minimum | `Read`, `Glob`, `Grep`, `TodoWrite` | `Edit`, `Write`, `NotebookEdit` |
 | Medium | Minimum's, plus `Edit`, `Write`, `NotebookEdit` | nothing extra; every command still asks |
-| High | Medium's, plus `git status`, `diff`, `log`, `show`, `branch`, `switch`, `fetch`, `add`, `commit` | nothing extra; anything else (including `git push` and `npm test`) still asks |
+| High | Medium's, plus `git branch`, `git switch`, `git add`, `git commit` | nothing extra; anything else (including `git push`, `git fetch` and `npm test`) still asks |
 
 - **Minimum** can't use the edit tools at all. Shell commands still ask, and one you approve can change
   files. Plan mode works the same way (Claude Code's docs: in plan mode other shell commands go through
   the regular permission flow), so say no to a command at Minimum unless it only reads.
 - **High** doesn't allow `npm test` or `npm ci` without asking: the agent can edit `package.json` or
-  the lockfile without asking, and those commands would then run whatever it wrote. Writes to `.git`
-  and `.claude` are Claude Code protected paths and still ask, so the git commands can't be turned
-  into a way to run unasked code.
-- Claude Code's built-in read-only commands (`ls`, `cat`, read-only `git`, and others) run without
-  asking at every level, as they always did.
+  the lockfile without asking, and those commands would then run whatever it wrote. `git fetch` asks
+  too, because `--upload-pack=<command>` runs a command. Hooks and git config sit in Claude Code's
+  protected paths (`.git`), so editing them still asks.
+- Claude Code's built-in read-only commands (`ls`, `cat`, read-only forms of `git` such as
+  `git status`, `git diff` and `git log`, and others) run without asking at every level, as they
+  always did, so they aren't in the lists.
 
 The command is `claude [--agent <role>] --allowedTools '<set>' [--disallowedTools '<set>']
 --permission-mode <mode> ["<opening prompt>"]`: the lists come before the mode because they take

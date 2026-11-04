@@ -112,7 +112,7 @@ process.stdout.write('\nS31: EXPLICIT TOOL SETS (the env scrub forces default mo
     'Medium: edits, no commands (they still ask)');
   assert(!(LEVEL.MEDIUM in DISALLOWED_TOOLS) && !(LEVEL.HIGH in DISALLOWED_TOOLS), 'Medium and High deny nothing extra');
   assert(has('high', 'Edit') && has('high', 'Bash(git commit:*)'), 'High: edits plus routine git commands');
-  assert(!ALLOWED_TOOLS.high.some((t) => /npm|npx|node|pnpm|yarn|python|pwsh|powershell|cmd/i.test(t)),
+  assert(!ALLOWED_TOOLS.high.some((t) => /npm|npx|node|pnpm|yarn|python|pwsh|powershell|cmd|fetch|pull|clone|remote|submodule|config|-c /i.test(t)),
     'High: nothing that runs code the agent can write unasked (no npm test/ci, no interpreter)');
   const all = [].concat(...Object.values(ALLOWED_TOOLS));
   assert(!all.some((t) => /push|^Bash$|^Bash\(\*|node:|npm install|rm |curl|powershell/i.test(t)),

@@ -42,14 +42,14 @@ const LOCAL_PERMISSION_MODES = Object.freeze(new Set(Object.values(PERMISSION_MO
 // lists the same sets for Blue.
 const READ_TOOLS = Object.freeze(['Read', 'Glob', 'Grep', 'TodoWrite']);
 const EDIT_TOOLS = Object.freeze(['Edit', 'Write', 'NotebookEdit']);
-// High: edits plus routine local git commands. Never `git push`, and nothing that runs code the agent
-// can write without a prompt: no `npm test`/`npm ci` (an edited package.json script or lockfile would
-// run unasked) and no general interpreter such as `node:*`. Git's own code paths (.git/config,
-// .git/hooks) sit in Claude Code's protected paths, so writing them still asks.
+// High: edits plus local git commands that change only the repository. Never `git push` or
+// `git fetch` (`--upload-pack=<command>` runs any command), never `npm test`/`npm ci` (an edited
+// package.json script or lockfile would run unasked), never a general interpreter such as `node:*`.
+// `git status`, `diff`, `log` and `show` aren't listed: Claude Code already runs their read-only forms
+// without asking, and an explicit rule would also cover flags such as `--output=<file>`. Hooks and
+// git config sit in Claude Code's protected paths (.git), so editing them still asks.
 const HIGH_BASH = Object.freeze([
-  'Bash(git status:*)', 'Bash(git diff:*)', 'Bash(git log:*)', 'Bash(git show:*)',
-  'Bash(git branch:*)', 'Bash(git switch:*)', 'Bash(git fetch:*)', 'Bash(git add:*)',
-  'Bash(git commit:*)',
+  'Bash(git branch:*)', 'Bash(git switch:*)', 'Bash(git add:*)', 'Bash(git commit:*)',
 ]);
 const ALLOWED_TOOLS = Object.freeze({
   [LEVEL.MINIMUM]: Object.freeze(READ_TOOLS.slice()),

@@ -854,8 +854,9 @@ on its own, one session at a time on Pro until you upgrade (step 8).
        shell command that writes the file, it asks first: say no, and tell the agent it asked).
     3. **Medium**, new builder pane: ask it to create `s31-check.txt` (no prompt), then to run
        `git status` (it asks first).
-    4. **High**, new builder pane: ask it to run `git status` (no prompt), then `git push --dry-run`
-       (it asks first; answer no). Delete `s31-check.txt`.
+    4. **High**, new builder pane: ask it to commit `s31-check.txt` on a scratch branch (no prompt),
+       then to run `git push --dry-run` (it asks first; answer no). Delete the scratch branch and
+       `s31-check.txt`.
     5. Tell an agent what each step did.
 - [ ] **41. S11 on your PC: usage panel.** About **10 minutes**, after you merge the S11 PR, #126.
   Details in docs/USAGE-PANEL.md.
