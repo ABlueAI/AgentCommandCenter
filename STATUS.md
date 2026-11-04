@@ -151,8 +151,7 @@ Every PR that changes the state updates this file.
     until then they only verify and don't open PRs (docs/SETUP-GUARDRAILS.md, "What is still not
     covered"). The token exists (checklist step 14, ticked 2026-10-23 on Blue's word; expires
     2027-01-21, renew by 2027-01-14).
-  - No PR work under Blue's own login (decided 2026-11-04, guardrail PR "Guardrail: no PRs from
-    ABlueAI's login"): PRs #142 and #144, opened from Claude desktop chats as `ABlueAI`, couldn't be
+  - No PR work under Blue's own login (decided 2026-11-04, PR #153): PRs #142 and #144, opened from Claude desktop chats as `ABlueAI`, couldn't be
     approved and were re-opened as #146 and #147. Desktop chats now only plan and talk (AGENTS.md
     "No PR work under ABlueAI's login"), and the `PreToolUse` hook `.claude/hooks/account-guard.js`
     blocks `gh pr create`, `gh pr ready` and `git push` only when `gh` is logged in as `ABlueAI`.

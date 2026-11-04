@@ -7,8 +7,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
 Last updated 2026-11-04 by Claude (step 49 added from "Coming up this month", the `ABlueAI`
-command-line login's removal, with steps 35 and 49 near the top of "Do next", PR for the account
-guard; step 37 ticked and step 46 added for S23's paperwork, PR #122;
+command-line login's removal, with steps 35 and 49 near the top of "Do next", PR #153; step 37 ticked and step 46 added for S23's paperwork, PR #122;
 step 44 added for S09 session resume, PR #131; step 43 added and ticked and step 48 added for S15, PR #130; steps 33, 34 and 36 added for the GoHighLevel lead pipeline,
 S29 and S24, PR #119, proposed; step 35 added for S06, PR #121; step 30 added for the S26 Codex trial, PR #114; step 14 ticked on Blue's word and its token renewal reminder added under "Dated reminders", PR #118; step 31 added for the S13 Obsidian vault, PR #115; step 29 added for the S12 Quick Links bundle, PR #86; step 21
 ticked and step 26 added for the runner's claim check, PR #83; step 19 ticked with Blue's Composer verdict, PR #82; step 21 added: apply the capped review loop to the runner, PR #52;
