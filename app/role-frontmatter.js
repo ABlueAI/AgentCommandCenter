@@ -71,6 +71,9 @@ const HOOK_TYPE = /^ {8}- type:(.*)$/;
 const HOOK_COMMAND = /^ {10}command:(.*)$/;
 const NAME_OK = /^[a-z0-9][a-z0-9-]*$/;
 const TOOL_OK = /^[A-Za-z][A-Za-z0-9]*$/;
+// S15: an MCP tool name, `mcp__<server>__<tool>` in lowercase. Parsing it only lets the fence policy
+// see it; role-fence-policy.js still refuses every MCP name except the page-reader's two.
+const MCP_TOOL_OK = /^mcp__[a-z0-9-]+__[a-z0-9_]+$/;
 
 function refuse(reason) { return { ok: false, reason: reason }; }
 
@@ -184,7 +187,7 @@ function parseRoleFrontmatter(text) {
   const parseList = (raw) => {
     if (typeof raw !== 'string') return null;
     const items = raw.split(',').map((s) => s.trim()).filter((s) => s !== '');
-    for (const t of items) if (!TOOL_OK.test(t)) return null;
+    for (const t of items) if (!TOOL_OK.test(t) && !MCP_TOOL_OK.test(t)) return null;
     return items;
   };
 
