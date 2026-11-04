@@ -8,7 +8,7 @@ Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHE
 
 Last updated 2026-11-04 by Claude (step 26 marked dropped, "Do next" items 6 and 7 updated now that PRs #84 and
 #119 are merged, a question on step 10 added as item 8, and the "About 2026-11-17" reminder's Max date
-fixed, from the 1.1 gap audit's A7 and A8; earlier the same day: step 49 added from "Coming up this month", the `ABlueAI`
+fixed, from the 1.1 gap audit's A7 and A8, PR #160; earlier the same day: step 49 added from "Coming up this month", the `ABlueAI`
 command-line login's removal, with steps 35 and 49 near the top of "Do next", PR #153; step 37 ticked and step 46 added for S23's paperwork, PR #122;
 step 44 added for S09 session resume, PR #131; step 43 added and ticked and step 48 added for S15, PR #130; steps 33, 34 and 36 added for the GoHighLevel lead pipeline,
 S29 and S24, PR #119, proposed; step 35 added for S06, PR #121; step 30 added for the S26 Codex trial, PR #114; step 14 ticked on Blue's word and its token renewal reminder added under "Dated reminders", PR #118; step 31 added for the S13 Obsidian vault, PR #115; step 29 added for the S12 Quick Links bundle, PR #86; step 21
@@ -41,8 +41,8 @@ other remaining items." Claude's order for what is left:
    then.
 6. **Step 28, then step 27**, in one sitting: S04's runner (PR #84, merged 2026-10-23). Neither
    step is ticked yet.
-7. **Step 33** (the lead-pipeline plan change, PR #119, merged 2026-10-24; your spending decision),
-   then start S29. After S29 merges, **step 36** before you start S30. **Step 34** waits until S24 is
+7. **Step 33**, Google Cloud billing for S29 (your spending decision; the lead-pipeline plan
+   change, PR #119, merged 2026-10-24), then start S29. After S29 merges, **step 36** before you start S30. **Step 34** waits until S24 is
    ready for its watcher.
 8. **Step 10**, the app settings review, has said "this week" since 2026-10-17 with no update. Is
    it dropped, or does it get a date? Tell any agent either way.
@@ -1042,7 +1042,8 @@ You can start on the first one now, which saves time later.
 
 - **About 2026-11-17:** reassess plans. Is Max 5x enough, or move to 20x? The month review (S25)
   brings the numbers. The upgrade is step 8, when the UI work runs usage up (no longer
-  2026-10-28), so how much Max 5x use this covers depends on when step 8 happens.
+  2026-10-28), so how much Max 5x use this covers depends on when step 8 happens. If step 8
+  hasn't happened by then, reassess whether Pro is still enough, using S25's numbers.
 - **By 2027-01-14:** renew the `ABlueAgent` classic token (`public_repo` only, step 14), a week
   before it expires on 2027-01-21. Signed in as `ABlueAgent`, it is listed on
   https://github.com/settings/tokens. Make the new token by step 14's

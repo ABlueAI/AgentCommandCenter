@@ -1,8 +1,8 @@
 # Mako status
 
-Updated 2026-11-04 by the "Checklist and STATUS housekeeping" PR (1.1 gap audit A8: the "Next",
-S26, daily-runner and Claude plan lines, and S31 to S34 merged). Before that: the all-day runner's
-status PR for 2026-11-01 (#141).
+Updated 2026-11-04 by PR #160, "Checklist and STATUS housekeeping" (1.1 gap audit A8: the
+"Next", S26, daily-runner and Claude plan lines, and S31 to S34 merged). Before that, on
+2026-11-04: PRs #147 and #153; and the all-day runner's status PR for 2026-11-01 (#141).
 Every PR that changes the state updates this file.
 
 ## Right now
@@ -191,12 +191,13 @@ Every PR that changes the state updates this file.
     installation on `ABlueAI` is set to "Only select repositories", with Blue's main few repositories
     selected, not only `AgentCommandCenter`; he adds new ones as they're created. What the link
     authorizes on `ABlueAgent` (step 20's second page) wasn't reported, and Blue asked to move on.
-- **Old daily runner (replaced by S04):** "Mako daily runner" fired once a day at 8:01 AM Eastern
-  from 2026-10-18 and opened the first runner PR, #44. Its later prompts (the `pr-reviewer` step,
-  the capped review loop, PR #83's claim check, Opus 5.5) are recorded in
-  [docs/RUNNER.md](docs/RUNNER.md). S04's hourly all-day runner replaced it (S04 bullet above).
-  Turning the old task off is part of checklist step 27; as read on 2026-10-23 it was still on, and
-  no read since is recorded.
+- **Old daily runner (replaced by S04):** "Mako daily runner" fires once a day at 8:01 AM Eastern
+  from 2026-10-18; its 2026-10-19 run opened the first runner PR, #44. It ran with the
+  `pr-reviewer` step, then PR #52's capped review loop, on Opus 5.5. PR #83's claim-check prompt
+  (step 26, now dropped) was never applied to it: since 05:48 UTC on 2026-10-23 it runs PR #84's
+  runner prompt ([docs/RUNNER.md](docs/RUNNER.md) "Applied so far"). S04's hourly all-day runner
+  replaces it (S04 bullet above). Turning it off is part of checklist step 27; as read on
+  2026-10-23 it was still on, and no read since is recorded.
 - **Review loop (adopted: PR #52 merged 2026-10-21, applied to the runner the same day):** every PR gets one complete first review ranked
   high, medium and low; high and medium findings are fixed in one batch, low ones go to Follow-ups;
   later runs check only the fixes; at most 5 runs, then "needs Blue" with questions for Blue; one
