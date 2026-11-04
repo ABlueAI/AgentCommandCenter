@@ -102,20 +102,27 @@ function readHeredoc(s, i) {
   return delim ? { delim, stripTabs, end: j } : null;
 }
 
-// skipHeredocBody: `nl` is the index of the newline that ends the heredoc's command line. Returns the
-// index of the newline after the closing delimiter line (or s.length if there is none).
-function skipHeredocBody(s, nl, h) {
-  let pos = nl + 1;
-  while (pos <= s.length) {
-    const next = s.indexOf('\n', pos);
-    const lineEnd = next === -1 ? s.length : next;
-    let line = s.slice(pos, lineEnd).replace(/\r$/, '');
-    if (h.stripTabs) line = line.replace(/^\t+/, '');
-    if (line === h.delim) return lineEnd;
-    if (next === -1) return s.length;
-    pos = next + 1;
+// skipHeredocBodies: `nl` is the index of the newline that ends the heredocs' command line. Returns
+// the index of the newline after the last closing delimiter line. A delimiter that never appears
+// (or a `<<` that was really an arithmetic shift, `(( x << 3 ))`) marks ctx.unbalanced, so the
+// caller's plain text scan still sees whatever followed.
+function skipHeredocBodies(s, nl, pending, ctx) {
+  let end = nl;
+  for (const h of pending) {
+    let pos = end + 1;
+    let found = false;
+    while (pos <= s.length) {
+      const next = s.indexOf('\n', pos);
+      const lineEnd = next === -1 ? s.length : next;
+      let line = s.slice(pos, lineEnd).replace(/\r$/, '');
+      if (h.stripTabs) line = line.replace(/^\t+/, '');
+      if (line === h.delim) { end = lineEnd; found = true; break; }
+      if (next === -1) break;
+      pos = next + 1;
+    }
+    if (!found) { if (ctx) ctx.unbalanced = true; return s.length; }
   }
-  return s.length;
+  return end;
 }
 
 // Find the index of the `)` closing a `$(` that starts at `open` (the index after `$(`).
@@ -134,12 +141,12 @@ function matchParen(s, open, ctx) {
     if (c === '\\') { i++; continue; }
     if (c === '"' || c === "'") { quote = c; continue; }
     if (c === '<') {
+      if (s[i + 1] === '<' && s[i + 2] === '<') { i += 2; continue; } // here-string, not a heredoc
       const h = readHeredoc(s, i);
       if (h) { pending.push(h); i = h.end - 1; continue; }
     }
     if (c === '\n' && pending.length) {
-      let p = i;
-      for (const h of pending) p = skipHeredocBody(s, p, h);
+      const p = skipHeredocBodies(s, i, pending, ctx);
       pending = [];
       i = p - 1;
       continue;
@@ -233,8 +240,7 @@ function splitCommands(input, depth = 0, ctx = { unbalanced: false }) {
     }
     if (c === '\n' && pending.length) { // skip the heredoc bodies that start on the next line
       endCommand();
-      let p = i;
-      for (const h of pending) p = skipHeredocBody(s, p, h);
+      const p = skipHeredocBodies(s, i, pending, ctx);
       pending = [];
       i = p - 1;
       continue;
@@ -243,6 +249,7 @@ function splitCommands(input, depth = 0, ctx = { unbalanced: false }) {
     if (c === ' ' || c === '\t') { endWord(); continue; }
     if (c === '<') {
       endWord();
+      if (s[i + 1] === '<' && s[i + 2] === '<') { i += 2; continue; } // here-string, not a heredoc
       const h = readHeredoc(s, i);
       if (h) { pending.push(h); i = h.end - 1; }
       continue;
@@ -341,7 +348,8 @@ function findGuardedCommand(command, depth = 0) {
 function resolveGh(env = process.env) {
   const key = Object.keys(env).find((k) => k.toUpperCase() === 'PATH');
   const names = process.platform === 'win32' ? ['gh.exe'] : ['gh'];
-  for (const dir of String((key && env[key]) || '').split(path.delimiter)) {
+  for (const entry of String((key && env[key]) || '').split(path.delimiter)) {
+    const dir = entry.trim().replace(/^"(.*)"$/, '$1'); // Windows allows "C:\Program Files\..." entries
     if (!dir || !path.isAbsolute(dir)) continue;
     for (const name of names) {
       const full = path.join(dir, name);

@@ -69,6 +69,13 @@ const GUARDED = [
   ["git commit -F- <<'EOF'\nit's done\nEOF\ngit push", 'git push'],
   ['git commit -F- <<EOF && git push\nbody with a " quote\nEOF', 'git push'],
   ["cat <<-'EOF' > f\n\tdon't\n\tEOF\ngh pr create --fill", 'gh pr create'],
+  // A here-string or an arithmetic shift is not a heredoc, and never hides what follows.
+  ['read a b <<< "$line"\ngit push', 'git push'],
+  ["grep -q x <<< \"$out\"\ngh pr create --fill", 'gh pr create'],
+  ['cat <<< "x"\ngit push', 'git push'],
+  ['(( n <<= 1 ))\ngit push', 'git push'],
+  ['(( x = 1 << 3 ))\ngit push', 'git push'],
+  ['cat <<EOF\nno closing line\ngit push', 'git push'],
   // Unclosed quotes fall back to a text scan rather than hide what follows.
   ["echo 'unclosed && git push", 'git push'],
   ['echo "$(unclosed && gh pr ready 3', 'gh pr ready'],
@@ -240,6 +247,7 @@ const ghCalls = () => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8')
   assert(guard.resolveGh({ PATH: ['.', '', 'relative/dir'].join(path.delimiter) }) === null,
     'relative and empty PATH entries are skipped');
   assert(guard.resolveGh({ PATH: binDir }) === ghPath, 'gh is found in an absolute PATH entry');
+  assert(guard.resolveGh({ PATH: '"' + binDir + '"' }) === ghPath, 'a double-quoted PATH entry is read without its quotes');
   fs.unlinkSync(planted);
 }
 {
