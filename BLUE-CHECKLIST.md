@@ -6,7 +6,8 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-10-28 by Claude (step 37 ticked and step 46 added for S23's paperwork, PR #122;
+Last updated 2026-11-04 by Claude (step 49 added from "Coming up this month", the `ABlueAI`
+command-line login's removal, with steps 35 and 49 near the top of "Do next", PR #153; step 37 ticked and step 46 added for S23's paperwork, PR #122;
 step 44 added for S09 session resume, PR #131; step 43 added and ticked and step 48 added for S15, PR #130; steps 33, 34 and 36 added for the GoHighLevel lead pipeline,
 S29 and S24, PR #119, proposed; step 35 added for S06, PR #121; step 30 added for the S26 Codex trial, PR #114; step 14 ticked on Blue's word and its token renewal reminder added under "Dated reminders", PR #118; step 31 added for the S13 Obsidian vault, PR #115; step 29 added for the S12 Quick Links bundle, PR #86; step 21
 ticked and step 26 added for the runner's claim check, PR #83; step 19 ticked with Blue's Composer verdict, PR #82; step 21 added: apply the capped review loop to the runner, PR #52;
@@ -23,17 +24,21 @@ other remaining items." Claude's order for what is left:
 
 1. **Step 15**, the voice check on the new Electron, first: a failure means a fix or a revert of the
    Electron bump before other work.
-2. ~~**Step 14**, the agent token~~ Done 2026-10-23 on your word. It unblocks S06 and everything
+2. **Step 35**, S06 on your PC (the agent token in Mako, about 15 minutes), **then step 49**: remove
+   the `ABlueAI` command-line login from every PC Claude runs on (about 5 minutes per PC). Until
+   then, Claude desktop chats run as you and must not do PR work (your words, 2026-11-04: "lets
+   unblock this problem for good"); a guard blocks it.
+3. ~~**Step 14**, the agent token~~ Done 2026-10-23 on your word. It unblocks S06 and everything
    after it (S07 to S11, S21), and Codex's next build (from the hand-off for this order; the plan
    doesn't name that dependency yet).
-3. **Step 17**, the token audit (parts a and b): moved to the end of 1.1, about February 2027 (your
+4. **Step 17**, the token audit (parts a and b): moved to the end of 1.1, about February 2027 (your
    words, 2026-11-03: "Let's finish it at the end"). Part c, push protection, is already on (checked
    2026-11-03). Then every token is reset with a 1-year
    expiry. The agent token's January renewal (by 2027-01-14) still comes first.
-4. **Step 8**, the Max upgrade: when the UI work runs usage up (your call, 2026-11-03); Pro until
+5. **Step 8**, the Max upgrade: when the UI work runs usage up (your call, 2026-11-03); Pro until
    then.
-5. **When you merge S04 (PR #84): step 28, then step 27**, in the same sitting.
-6. **After you merge the lead-pipeline plan change (PR #119; S22 is merged): step 33**, then
+6. **When you merge S04 (PR #84): step 28, then step 27**, in the same sitting.
+7. **After you merge the lead-pipeline plan change (PR #119; S22 is merged): step 33**, then
    start S29. After S29 merges, **step 36** before you start S30. **Step 34** waits until S24 is
    ready for its watcher.
 
@@ -402,7 +407,7 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     - Keep the Git login on your PC that local agents push with today (often listed as **Git
       Credential Manager** or **GitHub CLI** under authorized apps) until session S06 merges and
       replaces it (ticking step 14 alone doesn't); revoking it breaks local pushes. Its removal
-      after S06 is under "Coming up this month".
+      after S06 is step 49.
     - On `ABlueAgent`, keep Claude's authorization: it is how cloud sessions act as the agent (step
       7c).
     - On `ABlueAI`, keep the Claude installation under Installed GitHub Apps (cloud sessions and the
@@ -433,7 +438,7 @@ on its own, one session at a time on Pro until you upgrade (step 8).
       doesn't support fine-grained tokens for an account that is only a collaborator on a personal
       account's repository: a classic token with the single narrowest scope (step 14: `public_repo`
       only), never for `ABlueAI`; (2) until S06, the PC's existing `ABlueAI` Git login and signing
-      in to it again (a). After S06, only if you keep that login under "Coming up this month",
+      in to it again (a). After S06, only if you keep that login under step 49,
       with the pane isolation the S06 PR shows. Your own `ABlueAI` sign-in in a browser or a
       separate Windows account where no agents run is also covered.
     - GitHub tokens: fine-grained, limited to one repository, with the fewest permissions that do
@@ -761,6 +766,40 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   - *Done when:* you tell an agent the results (or what failed). It checks the test PR's author on
     GitHub, ticks this with the date, and marks S06 done in the next status PR.
 
+- [ ] **49. Remove the `ABlueAI` command-line login from every PC Claude runs on (main PC, H1,
+  laptop).** About **5 minutes per PC**, right after step 35 passes (from "Coming up this month",
+  moved here on 2026-11-04). Why: a Claude desktop chat uses this login, and you can't approve a PR
+  it opens or pushes to (PRs #142 and #144 had to be re-opened as #146 and #147). Until it's gone,
+  desktop chats plan and talk, and a guard (`.claude/hooks/account-guard.js`) blocks their PR work.
+  Your browser and phone logins are unaffected; that's where you approve. The entries (from the
+  S06 PR, #121), on each PC:
+  - Windows: Control Panel > Credential Manager > **Windows Credentials** > Generic Credentials:
+    remove `git:https://github.com` (Git Credential Manager's login), and any other
+    `git:https://...github.com` entry.
+  - PowerShell: `gh auth status` lists the accounts gh stores; `gh auth logout --hostname github.com
+    --user ABlueAI` removes yours.
+  - Agent panes no longer use either (S06 resets git's credential helpers and gives them the
+    `ABlueAgent` token), but a program running as your Windows user can still read them, which is
+    why they go.
+  - If you keep them because you push as `ABlueAI` from this PC: S06 keeps agent panes from
+    *using* them (git's helpers are reset, gh takes the agent token first), but a program running
+    under your Windows account can still read them and act as you. Removing them, and pushing as
+    `ABlueAI` from a browser or a separate Windows account, is the safer choice.
+  - On GitHub, signed in as `ABlueAI`: Settings > Applications > **Authorized OAuth Apps**. The
+    PC's logins are usually listed as **Git Credential Manager** and **GitHub CLI** (usual names,
+    not read from your account). Revoke each one only if no other machine of yours uses it, since
+    revoking signs it out everywhere; if you're unsure, revoke it and sign in again where needed.
+  - Afterwards, if a Git or GitHub sign-in window pops up from a Claude chat or a plain terminal,
+    close it instead of signing in as `ABlueAI`, and tell an agent.
+  - *Done when:* you say which PCs are done (Claude can't read Credential Manager or your
+    authorized apps). For each PC, a Claude desktop chat there runs two checks and shows you the
+    output: `gh auth status` lists no `ABlueAI` account, and
+    `printf "protocol=https\nhost=github.com\n\n" | git credential fill | grep -v '^password='`
+    (step 35's check; the `grep` keeps any token out of the output) shows no `ABlueAI` username. If
+    that second check opens a GitHub sign-in window instead, the entry is gone: close the window
+    without signing in. The agent ticks this with the date and what it saw. Both checks matter:
+    the guard reads gh's login, but `git push` signs in through Git Credential Manager.
+
 - [ ] **36. Delete the Places key before S30.** About **3 minutes**, after S29 merges and before you
   start S30. S30 reads marina websites, which can carry injected instructions, so it runs without
   the key.
@@ -968,25 +1007,8 @@ You can start on the first one now, which saves time later.
 - **Session S14 (on hold until you say go, step 18):** UI examples. Screenshots or links of designs
   you like, including dashboards for different tasks (coding, research, business). **Start a folder
   now.**
-- **Session S06, after step 35 passes:** remove the `ABlueAI` Git login from your PC (about 5
-  minutes). The entries (from the S06 PR, #121):
-  - Windows: Control Panel > Credential Manager > **Windows Credentials** > Generic Credentials:
-    remove `git:https://github.com` (Git Credential Manager's login), and any other
-    `git:https://...github.com` entry.
-  - PowerShell: `gh auth status` lists the accounts gh stores; `gh auth logout --hostname github.com
-    --user ABlueAI` removes yours.
-  - Agent panes no longer use either (S06 resets git's credential helpers and gives them the
-    `ABlueAgent` token), but a program running as your Windows user can still read them, which is
-    why they go.
-  - If you keep them because you push as `ABlueAI` from this PC: S06 keeps agent panes from
-    *using* them (git's helpers are reset, gh takes the agent token first), but a program running
-    under your Windows account can still read them and act as you. Removing them, and pushing as
-    `ABlueAI` from a browser or a separate Windows account, is the safer choice.
-  - On GitHub, signed in as `ABlueAI`: Settings > Applications > **Authorized OAuth Apps**. The
-    PC's logins are usually listed as **Git Credential Manager** and **GitHub CLI** (usual names,
-    not read from your account). Revoke each one only if no other machine of yours uses it, since
-    revoking signs it out everywhere; if you're unsure, revoke it and sign in again where needed.
-  - *Done when:* you say so (Claude can't read Credential Manager or your authorized apps).
+- **Session S06, after step 35 passes:** remove the `ABlueAI` Git login from every PC Claude runs
+  on: now step 49.
 - **Session S12:** confirm your Hexona login link in Mako (step 29).
 - **Session S13:** install Obsidian, create the vault and install the skills (step 31).
 - **Session S26:** lock its claim issue and comment as `ABlueAI` to start Codex's trial build (step 30).
