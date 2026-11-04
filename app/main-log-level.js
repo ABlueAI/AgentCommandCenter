@@ -10,7 +10,7 @@
 const CHANNEL = Object.freeze({ ERROR: 'main-error', INFO: 'main-info' });
 
 // Words that mark a line as a refusal or failure wherever they appear.
-const ERROR_WORDS = /\b(refus\w*|fail\w*|error\w*|denied|blocked|cannot|could not|not started|uncaught|without)\b/i;
+const ERROR_WORDS = /\b(refus\w*|fail\w*|error\w*|denied|blocked|cannot|could not|not started|not found|not available|not installed|uncaught|without|unreadable|unavailable|missing|corrupt\w*|invalid|timeout|timed out|rejected?|recovery|unable|abort\w*|warn\w*|stale|conflict\w*|crash\w*|killed|unexpected\w*|lost)\b/i;
 
 /**
  * channelFor(line, kind)

@@ -42,20 +42,24 @@ const LOCAL_PERMISSION_MODES = Object.freeze(new Set(Object.values(PERMISSION_MO
 // lists the same sets for Blue.
 const READ_TOOLS = Object.freeze(['Read', 'Glob', 'Grep', 'TodoWrite']);
 const EDIT_TOOLS = Object.freeze(['Edit', 'Write', 'NotebookEdit']);
-// High: edits plus routine local git and test commands. Never `git push`, never a package install
-// other than `npm ci` from the lockfile, never a general interpreter such as `node:*`.
+// High: edits plus routine local git commands. Never `git push`, and nothing that runs code the agent
+// can write without a prompt: no `npm test`/`npm ci` (an edited package.json script or lockfile would
+// run unasked) and no general interpreter such as `node:*`. Git's own code paths (.git/config,
+// .git/hooks) sit in Claude Code's protected paths, so writing them still asks.
 const HIGH_BASH = Object.freeze([
   'Bash(git status:*)', 'Bash(git diff:*)', 'Bash(git log:*)', 'Bash(git show:*)',
   'Bash(git branch:*)', 'Bash(git switch:*)', 'Bash(git fetch:*)', 'Bash(git add:*)',
-  'Bash(git commit:*)', 'Bash(npm test:*)', 'Bash(npm run test:*)', 'Bash(npm ci:*)',
+  'Bash(git commit:*)',
 ]);
 const ALLOWED_TOOLS = Object.freeze({
   [LEVEL.MINIMUM]: Object.freeze(READ_TOOLS.slice()),
   [LEVEL.MEDIUM]: Object.freeze(READ_TOOLS.concat(EDIT_TOOLS)),
   [LEVEL.HIGH]: Object.freeze(READ_TOOLS.concat(EDIT_TOOLS, HIGH_BASH)),
 });
-// Minimum means "no edits" (AGENTS.md). Plan mode gave that; under the forced default mode the edit
-// tools are denied outright instead, so an edit can't be approved by a stray click.
+// Minimum means "no edits" (AGENTS.md). Under the forced default mode the edit tools are denied
+// outright, so they can't be approved by a stray click. Shell commands still ask, and an approved one
+// can change files, as in plan mode (Claude Code's docs: in plan mode other shell commands go through
+// the regular permission flow); docs/AUTHORITY-LEVELS.md says so.
 const DISALLOWED_TOOLS = Object.freeze({
   [LEVEL.MINIMUM]: EDIT_TOOLS,
 });

@@ -17,6 +17,8 @@ const routine = [
   '[admission] pane bound; remaining 5',
   '[admission] admitted 1/5; remaining 4',
   '[usage] panel refreshed',
+  '[TIMING +5ms] pty-start: authority=null permission-mode=not-applied',
+  '[TIMING +5ms] pty-start: env built — mode=unfenced; scrub=forced; pane-status=not-enrolled; agent-git=n/a',
 ];
 for (const l of routine) assert(channelFor(l, 'routine') === CHANNEL.INFO, `routine: ${l}`);
 
@@ -31,6 +33,11 @@ const failures = [
   '[TIMING +1ms] Agent pane started WITHOUT the ABlueAgent token',
   '[TIMING +1ms] git worktree add error: exit 128',
   '[TIMING +1ms] could not read settings',
+  // Real failure lines in the repo that reach tlog (review run 1 on PR #152):
+  '[TIMING +1ms] [agent-git] stored ABlueAgent token unreadable (different OS user?)',
+  '[TIMING +1ms] [pane-status] liveness resolver unavailable',
+  '[TIMING +1ms] [pane-status] descriptor is missing or corrupt; manual recovery required',
+  '[TIMING +1ms] [pane-status] connection closed: idle timeout',
 ];
 for (const l of failures) assert(channelFor(l, 'routine') === CHANNEL.ERROR, `a refusal or failure stays an error: ${l}`);
 

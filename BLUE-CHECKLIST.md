@@ -850,7 +850,8 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     level an explicit list of tools that run without asking; docs/AUTHORITY-LEVELS.md):
     1. Pull `main` and restart Mako fully. The footer may still show default mode; that is expected.
     2. **Minimum**, new builder pane: ask "Read README.md and summarise it in one line" (no prompt),
-       then "Create a file called s31-check.txt" (refused: editing is denied).
+       then "Create a file called s31-check.txt" (the edit tools are refused; if Claude then offers a
+       shell command that writes the file, it asks first: say no, and tell the agent it asked).
     3. **Medium**, new builder pane: ask it to create `s31-check.txt` (no prompt), then to run
        `git status` (it asks first).
     4. **High**, new builder pane: ask it to run `git status` (no prompt), then `git push --dry-run`
