@@ -66,7 +66,7 @@ another pane. The ID that reaches `--resume` is main's own copy from `session-me
 the value the window sent. A refused Resume starts nothing and shows `Resume refused [<reason>]` in
 the Logs tab.
 
-Fenced roles (web-scout, operator, source-scout) are never offered. They are one-shot research
+Fenced roles (web-scout, operator, source-scout, page-reader) are never offered. They are one-shot research
 panes with a new outputs folder each run, and resuming one would carry web content from an old run
 into a new one.
 

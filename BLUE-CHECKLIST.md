@@ -7,7 +7,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
 Last updated 2026-10-28 by Claude (step 37 ticked and step 46 added for S23's paperwork, PR #122;
-step 44 added for S09 session resume, PR #131; steps 33, 34 and 36 added for the GoHighLevel lead pipeline,
+step 44 added for S09 session resume, PR #131; step 43 added and ticked and step 48 added for S15, PR #130; steps 33, 34 and 36 added for the GoHighLevel lead pipeline,
 S29 and S24, PR #119, proposed; step 35 added for S06, PR #121; step 30 added for the S26 Codex trial, PR #114; step 14 ticked on Blue's word and its token renewal reminder added under "Dated reminders", PR #118; step 31 added for the S13 Obsidian vault, PR #115; step 29 added for the S12 Quick Links bundle, PR #86; step 21
 ticked and step 26 added for the runner's claim check, PR #83; step 19 ticked with Blue's Composer verdict, PR #82; step 21 added: apply the capped review loop to the runner, PR #52;
 step 25 added for the S03 plan board, PR #54; "Do next" order added, step 20 ticked, step 22 added, PR #53;
@@ -849,6 +849,36 @@ on its own, one session at a time on Pro until you upgrade (step 8, 2026-10-28).
   - In a PowerShell window in that worktree, run `claude --resume <the record's sessionId>`: the
     conversation from that pane opens. Exit it.
   - *Done when:* you tell an agent what you saw (or what differed). It ticks this with the date.
+
+- [x] **43. S15: research capture, your verdict and a page-reader check.** About **15 minutes**.
+  *Done 2026-11-03 on Blue's word: his verdict comment on PR #130 (posted as `ABlueAI`, unedited)
+  quotes "this is for personal use so i will take the risk. lets go with playwright" and reports the
+  Playwright check below as PASS. Claude in Chrome was tried first and returned "This site is
+  blocked." on reddit.com; details in docs/decisions/OSS-research-capture.md.*
+  - **Verdict:** ADOPT Playwright MCP (`@playwright/mcp`) as the page reader, given on PR #130.
+  - **Playwright check (10 minutes), as Blue ran it:** in a folder outside any repo, run
+    `npx -y playwright@1.65.0-alpha-2026-10-30 install chromium` (the version
+    `@playwright/mcp@0.0.84` uses), then
+    `claude mcp add playwright --scope local -- cmd /c npx -y @playwright/mcp@0.0.84 --browser chromium`
+    (on native Windows, npx needs `cmd /c`). Start `claude --permission-mode plan`, ask it to read
+    a **www.reddit.com** thread (old.reddit.com now asks logged-out visitors to log in), and approve
+    only `browser_navigate` and `browser_snapshot`. It should give the title and the first
+    comments with no login, click, typing or robot check.
+  - *Done when:* the verdict and what you saw are on PR #130. Done.
+
+- [ ] **48. S15 on your PC: send a Reddit thread to the Reviewer.** About **10 minutes**, after you
+  merge PR #130.
+  - Pull `main`, run `npm ci` in `app`, then `npx playwright install chromium` in `app` (once; it
+    installs the browser version the lockfile pins), run `scripts/sync-roles.ps1`, and restart Mako
+    fully.
+  - **New Agent > 📄 Page**, paste a www.reddit.com thread URL in the Page URL box, **Create &
+    Launch**. A Chromium window opens; the page-reader pane reads the thread and writes
+    `report.md` (approve its one Write if asked). If a robot check appears, click it yourself in
+    that window and tell the pane to try again.
+  - **New Agent > 📄 Page > Send the last page report to Reviewer.** The Reviewer pane should
+    summarise the thread from the report, with no copy and paste.
+  - *Done when:* you tell an agent the Reviewer answered from the thread (or what went wrong). It
+    ticks this with the date. This is S15's "Done when".
 
 - [ ] **44. S09 on your PC: Resume or Start fresh.** About **5 minutes**, after you merge the S09
   PR, #131 (and S08's step 39, which it builds on).

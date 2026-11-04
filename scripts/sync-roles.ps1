@@ -8,7 +8,7 @@
   ~/.claude/agents/ (user scope, available in EVERY project). Because the command
   center launches agents into many different repos, user scope is the right default.
 
-  Fenced roles (web-scout, operator, source-scout) reference a PreToolUse hook via the
+  Fenced roles (web-scout, operator, source-scout, page-reader) reference a PreToolUse hook via the
   placeholder __CC_HOOK__. This script deploys scripts/hooks/fence-write.js to
   ~/.claude/hooks/ and fills that placeholder with its absolute path as it deploys each
   role file. So the committed source stays portable; the deployed copies are
