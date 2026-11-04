@@ -777,8 +777,13 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   - Afterwards, if a Git or GitHub sign-in window pops up from a Claude chat or a plain terminal,
     close it instead of signing in as `ABlueAI`, and tell an agent.
   - *Done when:* you say which PCs are done (Claude can't read Credential Manager or your
-    authorized apps). For each PC, a Claude desktop chat there runs `gh auth status` and shows no
-    `ABlueAI` account; the agent ticks this with the date and what it saw.
+    authorized apps). For each PC, a Claude desktop chat there runs two checks and shows you the
+    output: `gh auth status` lists no `ABlueAI` account, and
+    `printf "protocol=https\nhost=github.com\n\n" | git credential fill | grep -v '^password='`
+    (step 35's check; the `grep` keeps any token out of the output) shows no `ABlueAI` username. If
+    that second check opens a GitHub sign-in window instead, the entry is gone: close the window
+    without signing in. The agent ticks this with the date and what it saw. Both checks matter:
+    the guard reads gh's login, but `git push` signs in through Git Credential Manager.
 
 - [ ] **36. Delete the Places key before S30.** About **3 minutes**, after S29 merges and before you
   start S30. S30 reads marina websites, which can carry injected instructions, so it runs without

@@ -64,6 +64,14 @@ const GUARDED = [
   ['sudo git push', 'git push'],
   ['if true; then git push; fi', 'git push'],
   ['git commit -m x \\\n  && git push', 'git push'],
+  // Claude Code's usual commit form: a heredoc whose body has an apostrophe, then a push.
+  ["git commit -m \"$(cat <<'EOF'\nDon't break Blue's build\nEOF\n)\" && git push", 'git push'],
+  ["git commit -F- <<'EOF'\nit's done\nEOF\ngit push", 'git push'],
+  ['git commit -F- <<EOF && git push\nbody with a " quote\nEOF', 'git push'],
+  ["cat <<-'EOF' > f\n\tdon't\n\tEOF\ngh pr create --fill", 'gh pr create'],
+  // Unclosed quotes fall back to a text scan rather than hide what follows.
+  ["echo 'unclosed && git push", 'git push'],
+  ['echo "$(unclosed && gh pr ready 3', 'gh pr ready'],
 ];
 for (const [cmd, want] of GUARDED) {
   assert(guard.findGuardedCommand(cmd) === want, `${JSON.stringify(cmd)} -> ${want}`);
@@ -90,6 +98,8 @@ const NOT_GUARDED = [
   'ls -la # git push',
   'cat .claude/hooks/account-guard.js',
   'node -e "console.log(1)"',
+  "git commit -F- <<'EOF'\ngit push and gh pr create in a commit message\nEOF",
+  "cat <<EOF > notes.md\nthen run git push\nEOF\nnpm test",
   '',
 ];
 for (const cmd of NOT_GUARDED) {
@@ -218,6 +228,21 @@ const ghCalls = () => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8')
   assert(ghCalls().length === before, 'non-matching commands never started gh');
 }
 {
+  // A gh planted in the working directory (a checkout) is never run: gh comes from PATH's absolute
+  // entries only (Windows would otherwise look in the current directory first).
+  const planted = path.join(workDir, process.platform === 'win32' ? 'gh.exe' : 'gh');
+  fs.copyFileSync(ghPath, planted);
+  fs.chmodSync(planted, 0o755);
+  const before = ghCalls().length;
+  const r = runHook('git push', { mode: 'ABlueAI', pathDir: emptyDir });
+  assert(r.status === 0 && /not installed/.test(r.stdout), 'a gh in the working directory is ignored when PATH has none');
+  assert(ghCalls().length === before, 'the planted gh never ran');
+  assert(guard.resolveGh({ PATH: ['.', '', 'relative/dir'].join(path.delimiter) }) === null,
+    'relative and empty PATH entries are skipped');
+  assert(guard.resolveGh({ PATH: binDir }) === ghPath, 'gh is found in an absolute PATH entry');
+  fs.unlinkSync(planted);
+}
+{
   const env = { ...process.env, PATH: binDir, FAKE_GH_MODE: 'ABlueAI', FAKE_GH_LOG: logFile };
   const r = spawnSync(process.execPath, [HOOK], { cwd: workDir, env, input: 'not json', encoding: 'utf8' });
   assert(r.status === 0 && /couldn't read the hook input/.test(r.stdout), 'unreadable input: exit 0 with a notice');
@@ -247,7 +272,8 @@ assert(!!hook, 'a PreToolUse hook with matcher "Bash" runs account-guard.js');
 assert(hook && hook.type === 'command' && hook.command === 'node', 'exec form: command "node"');
 assert(hook && JSON.stringify(hook.args) === JSON.stringify(['${CLAUDE_PROJECT_DIR}/.claude/hooks/account-guard.js']),
   'args point at the script through ${CLAUDE_PROJECT_DIR}');
-assert(hook && hook.onFailure === 'continue', 'onFailure "continue": a hook that fails to run never blocks');
+assert(hook && !('onFailure' in hook), 'onFailure unset: in exec form a hook that fails to run never blocks (docs default)');
+assert(hook && !('shell' in hook), 'no shell field (ignored in exec form anyway)');
 assert(hook && typeof hook.timeout === 'number' && hook.timeout * 1000 > 10000,
   'timeout is longer than the 10-second gh call');
 assert(fs.existsSync(path.join(REPO_ROOT, '.claude', 'hooks', 'account-guard.js')), 'the script exists at that path');

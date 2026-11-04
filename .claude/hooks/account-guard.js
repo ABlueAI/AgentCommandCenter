@@ -15,6 +15,9 @@
 //      straight away, without starting `gh` or touching the network.
 //   2. For a matching command only, runs `gh api user --jq .login` (same environment as the
 //      session, so a Mako agent pane's GH_TOKEN and a cloud session's login are what it sees).
+//      It checks gh's login, not the credential `git push` itself uses (Git Credential Manager or
+//      an SSH key): with gh logged out but Git Credential Manager still holding ABlueAI, a push is
+//      allowed with a notice. Removing both logins (checklist step 49) closes that gap.
 //   3. Login `ABlueAI` (GitHub logins are case-insensitive): exit 2 with a message on stderr.
 //      Claude Code blocks the tool call and shows Claude that message.
 //      Any other login (`ABlueAgent` in Mako panes and cloud sessions): exit 0, silently.
@@ -23,19 +26,26 @@
 //
 // It fails open on purpose (Blue, 2026-11-04: "i just dont want this to cause more problems"):
 // only a confirmed `ABlueAI` login blocks. A crash, bad input or an unknown shape is allowed
-// with a notice, and settings.json sets "onFailure": "continue" so a hook that can't start
-// doesn't block either.
+// with a notice. settings.json leaves `onFailure` unset, so in exec form a hook that can't start
+// (no node on PATH, a missing script) is a non-blocking error: "Without `onFailure` set, the same
+// missing script is a non-blocking error and `ls` runs" (docs, "Block the action when a hook
+// fails"). Exec form: "path placeholders ... are substituted into `command` and into each `args`
+// element as plain strings" (docs, "Exec form and shell form").
 //
 // Hook contract (official docs, https://code.claude.com/docs/en/hooks, read 2026-11-04):
 // "Exit with code 2 to block the action ... a `PreToolUse` hook blocks the tool call";
 // "The message that comes with the block is your hook's stderr"; exit 0 lets the call go ahead
 // and applies JSON on stdout, where `systemMessage` is a "Warning message shown to the user".
 //
-// Not a security boundary: it guards against an honest session using the wrong login. A process
+// Known gaps (not a security boundary; it guards against an honest session using the wrong
+// login): wrappers that take their own options (`timeout 60 git push`, `nice -n 5`, `sudo -u x`,
+// `xargs`, `cmd /c`), `pwsh -EncodedCommand`, scripts or npm scripts that push, `gh api` calls that
+// create PRs, and tools other than Bash (Claude Code's PowerShell tool, GitHub MCP tools). A process
 // running as Blue's Windows user can still use his stored logins, which is why he removes them
 // after checklist step 35 (BLUE-CHECKLIST.md step 49).
 
 const { execFileSync } = require('child_process');
+const fs = require('fs');
 const path = require('path');
 
 const BLOCKED_LOGIN = 'ABlueAI';
@@ -65,10 +75,55 @@ const GIT_VALUE_OPTS = new Set(['-C', '-c', '--git-dir', '--work-tree', '--names
 const GH_VALUE_OPTS = new Set(['-R', '--repo', '--hostname']);
 const SEPARATORS = new Set([';', '&', '|', '\n', '\r', '(', ')']);
 
+// Heredocs (`cat <<'EOF'` ... `EOF`): their bodies are data, not commands, and may hold unbalanced
+// quotes (a commit message's "don't"), so they are skipped rather than parsed.
+// readHeredoc: at `<<` (index i), returns { delim, stripTabs, end } or null. `end` is the index
+// just after the delimiter word.
+function readHeredoc(s, i) {
+  if (s[i] !== '<' || s[i + 1] !== '<' || s[i + 2] === '<') return null;
+  let j = i + 2;
+  const stripTabs = s[j] === '-';
+  if (stripTabs) j++;
+  while (s[j] === ' ' || s[j] === '\t') j++;
+  let delim = '';
+  while (j < s.length && !/[\s;&|<>()]/.test(s[j])) {
+    const c = s[j];
+    if (c === "'" || c === '"') {
+      const close = s.indexOf(c, j + 1);
+      if (close === -1) return null;
+      delim += s.slice(j + 1, close);
+      j = close + 1;
+      continue;
+    }
+    if (c === '\\') { delim += s[j + 1] || ''; j += 2; continue; }
+    delim += c;
+    j++;
+  }
+  return delim ? { delim, stripTabs, end: j } : null;
+}
+
+// skipHeredocBody: `nl` is the index of the newline that ends the heredoc's command line. Returns the
+// index of the newline after the closing delimiter line (or s.length if there is none).
+function skipHeredocBody(s, nl, h) {
+  let pos = nl + 1;
+  while (pos <= s.length) {
+    const next = s.indexOf('\n', pos);
+    const lineEnd = next === -1 ? s.length : next;
+    let line = s.slice(pos, lineEnd).replace(/\r$/, '');
+    if (h.stripTabs) line = line.replace(/^\t+/, '');
+    if (line === h.delim) return lineEnd;
+    if (next === -1) return s.length;
+    pos = next + 1;
+  }
+  return s.length;
+}
+
 // Find the index of the `)` closing a `$(` that starts at `open` (the index after `$(`).
-function matchParen(s, open) {
+// Returns s.length, and marks ctx.unbalanced, if there is none.
+function matchParen(s, open, ctx) {
   let depth = 1;
   let quote = null;
+  let pending = [];
   for (let i = open; i < s.length; i++) {
     const c = s[i];
     if (quote) {
@@ -78,23 +133,38 @@ function matchParen(s, open) {
     }
     if (c === '\\') { i++; continue; }
     if (c === '"' || c === "'") { quote = c; continue; }
+    if (c === '<') {
+      const h = readHeredoc(s, i);
+      if (h) { pending.push(h); i = h.end - 1; continue; }
+    }
+    if (c === '\n' && pending.length) {
+      let p = i;
+      for (const h of pending) p = skipHeredocBody(s, p, h);
+      pending = [];
+      i = p - 1;
+      continue;
+    }
     if (c === '(') depth++;
     else if (c === ')' && --depth === 0) return i;
   }
+  if (ctx) ctx.unbalanced = true;
   return s.length;
 }
 
 // Split a shell command line into simple commands (arrays of words). Quote-aware, so text inside
 // quotes (a commit message, an echo) is never mistaken for a command; command substitutions
 // (`$(...)`, backticks) are split out as commands of their own, since the shell runs them.
-function splitCommands(input, depth = 0) {
+// ctx.unbalanced is set when a quote, `$(` or backtick never closes; the caller then falls back to
+// a plain text scan, so a parsing gap can't hide a guarded command.
+function splitCommands(input, depth = 0, ctx = { unbalanced: false }) {
   const commands = [];
   if (typeof input !== 'string' || depth > 8) return commands;
+  let pending = []; // heredocs whose bodies start after the next newline
   let words = [];
   let word = null; // null = no word started
   const endWord = () => { if (word !== null) { words.push(word); word = null; } };
   const endCommand = () => { endWord(); if (words.length) commands.push(words); words = []; };
-  const sub = (text) => { for (const c of splitCommands(text, depth + 1)) commands.push(c); };
+  const sub = (text) => { for (const c of splitCommands(text, depth + 1, ctx)) commands.push(c); };
 
   const s = input;
   for (let i = 0; i < s.length; i++) {
@@ -107,6 +177,7 @@ function splitCommands(input, depth = 0) {
     }
     if (c === "'") {
       const end = s.indexOf("'", i + 1);
+      if (end === -1) ctx.unbalanced = true;
       const stop = end === -1 ? s.length : end;
       word = (word || '') + s.slice(i + 1, stop);
       i = stop;
@@ -120,13 +191,14 @@ function splitCommands(input, depth = 0) {
         // its backslashes, as bash does).
         if (s[j] === '\\' && j + 1 < s.length && '"\\$`\n'.includes(s[j + 1])) { text += s[j + 1]; j++; continue; }
         if (s[j] === '$' && s[j + 1] === '(') {
-          const close = matchParen(s, j + 2);
+          const close = matchParen(s, j + 2, ctx);
           sub(s.slice(j + 2, close));
           j = close;
           continue;
         }
         if (s[j] === '`') {
           const close = s.indexOf('`', j + 1);
+          if (close === -1) ctx.unbalanced = true;
           const stop = close === -1 ? s.length : close;
           sub(s.slice(j + 1, stop));
           j = stop;
@@ -134,12 +206,13 @@ function splitCommands(input, depth = 0) {
         }
         text += s[j];
       }
+      if (j >= s.length) ctx.unbalanced = true;
       word = (word || '') + text;
       i = j;
       continue;
     }
     if (c === '$' && s[i + 1] === '(') {
-      const close = matchParen(s, i + 2);
+      const close = matchParen(s, i + 2, ctx);
       sub(s.slice(i + 2, close));
       word = (word || '') + '$()';
       i = close;
@@ -147,6 +220,7 @@ function splitCommands(input, depth = 0) {
     }
     if (c === '`') {
       const close = s.indexOf('`', i + 1);
+      if (close === -1) ctx.unbalanced = true;
       const stop = close === -1 ? s.length : close;
       sub(s.slice(i + 1, stop));
       word = (word || '') + '``';
@@ -157,9 +231,23 @@ function splitCommands(input, depth = 0) {
       while (i + 1 < s.length && s[i + 1] !== '\n') i++;
       continue;
     }
+    if (c === '\n' && pending.length) { // skip the heredoc bodies that start on the next line
+      endCommand();
+      let p = i;
+      for (const h of pending) p = skipHeredocBody(s, p, h);
+      pending = [];
+      i = p - 1;
+      continue;
+    }
     if (SEPARATORS.has(c)) { endCommand(); continue; }
     if (c === ' ' || c === '\t') { endWord(); continue; }
-    if (c === '<' || c === '>') { endWord(); continue; }
+    if (c === '<') {
+      endWord();
+      const h = readHeredoc(s, i);
+      if (h) { pending.push(h); i = h.end - 1; }
+      continue;
+    }
+    if (c === '>') { endWord(); continue; }
     word = (word || '') + c;
   }
   endCommand();
@@ -221,23 +309,54 @@ function classifySimpleCommand(words, depth) {
   return null;
 }
 
+// Plain text scan, used only when the parser met an unclosed quote, `$(` or backtick: it may
+// over-match (a false hit costs one `gh` call, and blocks only under ABlueAI), but never misses
+// these spellings.
+const RAW_PATTERNS = [
+  [/\bgh(?:\.exe)?["']?\s[^\n;&|]*?\bpr\s+(?:create|new)\b/i, 'gh pr create'],
+  [/\bgh(?:\.exe)?["']?\s[^\n;&|]*?\bpr\s+ready\b/i, 'gh pr ready'],
+  [/\bgit(?:\.exe)?["']?\s[^\n;&|]*?\bpush\b/i, 'git push'],
+];
+function rawScan(command) {
+  for (const [re, name] of RAW_PATTERNS) if (re.test(command)) return name;
+  return null;
+}
+
 // The first guarded command in a Bash command line, or null. Never touches the network.
 function findGuardedCommand(command, depth = 0) {
-  if (depth > 8) return null;
-  for (const words of splitCommands(command, depth)) {
+  if (depth > 8 || typeof command !== 'string') return null;
+  const ctx = { unbalanced: false };
+  for (const words of splitCommands(command, depth, ctx)) {
     const hit = classifySimpleCommand(words, depth);
     if (hit) return hit;
   }
-  return null;
+  return ctx.unbalanced ? rawScan(command) : null;
 }
 
 // ---------------------------------------------------------------------------------------------
 // Login check
 
+// Finds gh in PATH's absolute entries only. A bare `gh` would make Windows look in the current
+// directory first, so a gh.exe planted in a checkout could run; this never looks there.
+function resolveGh(env = process.env) {
+  const key = Object.keys(env).find((k) => k.toUpperCase() === 'PATH');
+  const names = process.platform === 'win32' ? ['gh.exe'] : ['gh'];
+  for (const dir of String((key && env[key]) || '').split(path.delimiter)) {
+    if (!dir || !path.isAbsolute(dir)) continue;
+    for (const name of names) {
+      const full = path.join(dir, name);
+      try { if (fs.statSync(full).isFile()) return full; } catch { /* not here */ }
+    }
+  }
+  return null;
+}
+
 // Returns { login } or { error } (never throws). Runs gh with the session's own environment.
 function readGhLogin() {
+  const gh = resolveGh();
+  if (!gh) return { error: 'gh is not installed or not on PATH' };
   try {
-    const out = execFileSync('gh', ['api', 'user', '--jq', '.login'], {
+    const out = execFileSync(gh, ['api', 'user', '--jq', '.login'], {
       encoding: 'utf8',
       timeout: GH_TIMEOUT_MS,
       windowsHide: true,
@@ -313,4 +432,4 @@ async function main() {
 
 if (require.main === module) main();
 
-module.exports = { splitCommands, findGuardedCommand, decide, readGhLogin, BLOCKED_LOGIN, BLOCK_MESSAGE };
+module.exports = { splitCommands, findGuardedCommand, rawScan, resolveGh, decide, readGhLogin, BLOCKED_LOGIN, BLOCK_MESSAGE };

@@ -21,8 +21,7 @@
             "type": "command",
             "command": "node",
             "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/account-guard.js"],
-            "timeout": 30,
-            "onFailure": "continue"
+            "timeout": 30
           }
         ]
       }

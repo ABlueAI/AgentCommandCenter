@@ -139,7 +139,9 @@ so PRs #142 and #144 had to be re-opened as #146 and #147.
   his command-line login (BLUE-CHECKLIST.md step 49). It plans and talks, and hands the PR work to a
   cloud session or a Mako agent pane, both of which run as `ABlueAgent`.
 - The `PreToolUse` hook `.claude/hooks/account-guard.js` blocks `gh pr create`, `gh pr ready` and
-  every `git push` under that login. Never work around it; if it blocks you, hand the work over.
+  every `git push` when gh's login is `ABlueAI`. It checks gh's login, not the credential `git push`
+  uses, so the rule holds even where the hook can't see it. Never work around it; if it blocks you,
+  hand the work over.
 - Before calling any PR `READY TO MERGE`, check that its author and whoever pushed its latest commit
   (the PR's timeline shows who added each commit) aren't `ABlueAI`. If either is, it is
   `NOT READY: opened or pushed as ABlueAI` until an `ABlueAgent` session re-opens it or pushes to it.

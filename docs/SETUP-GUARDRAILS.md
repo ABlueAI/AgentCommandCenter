@@ -85,7 +85,7 @@ The merge audit workflow opens a `security-alert` issue if anything reaches main
   gh's own (app/agent-git-env.js); fenced roles, Video Scout and plain shell panes never get it.
   Without the token, Mako says so once per run. Until the token is saved and step 35 passes,
   local agents only verify; they don't open PRs. Your `ABlueAI` login stays on the PC until you
-  remove it ("Coming up this month" in the checklist), and a program running as you can still read
+  remove it (checklist step 49), and a program running as you can still read
   it. S06 covers HTTPS remotes; an SSH remote would push with your SSH key.
 - **Rulesets themselves.** Only repo admins can edit them, and agents are not admins.
 - **Codex is linked to the agent account (since 2026-10-20).** Blue re-linked Codex's GitHub to
