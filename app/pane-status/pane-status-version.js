@@ -105,7 +105,7 @@ const SUPPORTED_CLAUDE_VERSIONS = Object.freeze([
   // THE WATCH ITEM, stated plainly because it is the one that could actually bite: 2.1.232 shows
   // Anthropic actively NARROWING environment inheritance into child processes - for MCP
   // `headersHelper`, not for hooks. Pane status depends on Claude Code passing
-  // BLUE_HELM_PANE_STATUS_PIPE and BLUE_HELM_PANE_STATUS_TOKEN through to hook children. That
+  // BLUE_HELM_PANE_STATUS_PIPE and BLUE_HELM_PANE_STATUS_PANE_REF through to hook children. That
   // contract is observed, not documented, and this admission does not prove it still holds here.
   //
   // THIS IS A VERSION PROBE, NOT A LIVE ACCEPTANCE. It records the exact version the application

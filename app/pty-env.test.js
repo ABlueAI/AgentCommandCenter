@@ -13,6 +13,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const admissionConfig = require('./admission-budget-config');
 const {
+  PANE_STATUS_ENV_KEYS,
   FENCED_ENV_ALLOWLIST,
   copyAllowedWindowsEnv,
   omitReservedWindowsEnv,
@@ -29,7 +30,7 @@ const IDENTITY_POISON = Object.freeze({
 const RESERVED_CANONICAL_NAMES = Object.freeze([
   'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB',
   'BLUE_HELM_PANE_STATUS_PIPE',
-  'BLUE_HELM_PANE_STATUS_TOKEN',
+  'BLUE_HELM_PANE_STATUS_PANE_REF',
   'GEMINI_API_KEY',
 ]);
 const PLATFORM_ALIAS_CODE_POINTS = Object.freeze([
@@ -158,7 +159,7 @@ async function runIdentityProbeChild() {
     claude_code_subprocess_env_scrub: 'ambient-scrub-poison',
     gemini_api_key: 'ambient-gemini-poison',
     Blue_Helm_Pane_Status_Pipe: 'ambient-pipe-poison',
-    blue_helm_pane_status_token: 'ambient-token-poison',
+    blue_helm_pane_status_pane_ref: 'ambient-token-poison',
     ...NON_ASCII_REGRESSION_POISON,
   };
   const collisionEnv = buildPtyEnv({
@@ -168,7 +169,7 @@ async function runIdentityProbeChild() {
     geminiKey: 'sentinel-main-gemini',
     paneStatusEnv: {
       BLUE_HELM_PANE_STATUS_PIPE: 'sentinel-main-pipe',
-      BLUE_HELM_PANE_STATUS_TOKEN: 'sentinel-main-token',
+      BLUE_HELM_PANE_STATUS_PANE_REF: 'sentinel-main-token',
     },
   });
   const collisionProbe = await runNodePtyTextProbe(pty, collisionEnv, '__P1_RESERVED_ENV__', [
@@ -177,7 +178,7 @@ async function runIdentityProbeChild() {
     "[Console]::WriteLine('__P1_SCRUB__' + [Environment]::GetEnvironmentVariable('CLAUDE_CODE_SUBPROCESS_ENV_SCRUB', 'Process'))",
     "[Console]::WriteLine('__P1_GEMINI__' + [Environment]::GetEnvironmentVariable('GEMINI_API_KEY', 'Process'))",
     "[Console]::WriteLine('__P1_PIPE__' + [Environment]::GetEnvironmentVariable('BLUE_HELM_PANE_STATUS_PIPE', 'Process'))",
-    "[Console]::WriteLine('__P1_TOKEN__' + [Environment]::GetEnvironmentVariable('BLUE_HELM_PANE_STATUS_TOKEN', 'Process'))",
+    "[Console]::WriteLine('__P1_TOKEN__' + [Environment]::GetEnvironmentVariable('BLUE_HELM_PANE_STATUS_PANE_REF', 'Process'))",
   ]);
   if (collisionProbe.unavailable) {
     process.stdout.write(JSON.stringify({ skipped: true, reason: collisionProbe.reason }));
@@ -273,12 +274,12 @@ const ALL_ROLES = ['builder', 'reviewer', 'codebase-scout', 'web-scout', 'operat
 const isFenced = (opts) => Boolean(!opts.videoScout && opts.role && FENCED_ROLES.has(opts.role));
 const PANE_ENV = {
   BLUE_HELM_PANE_STATUS_PIPE: '\\\\.\\pipe\\blue-helm-pane-status-test',
-  BLUE_HELM_PANE_STATUS_TOKEN: 'main-issued-token',
+  BLUE_HELM_PANE_STATUS_PANE_REF: 'main-issued-token',
 };
 const ALWAYS_RESERVED_ENV_NAMES = [
   'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB',
   'BLUE_HELM_PANE_STATUS_PIPE',
-  'BLUE_HELM_PANE_STATUS_TOKEN',
+  'BLUE_HELM_PANE_STATUS_PANE_REF',
 ];
 const POISON = Object.freeze({
   ANTHROPIC_API_KEY: 'poison-anthropic',
@@ -296,7 +297,7 @@ const POISON = Object.freeze({
   ELECTRON_RUN_AS_NODE: 'poison-electron',
   BLUE_HELM_ADMISSION_ENABLED: 'poison-admission',
   BLUE_HELM_PANE_STATUS_PIPE: 'poison-ambient-pipe',
-  BLUE_HELM_PANE_STATUS_TOKEN: 'poison-ambient-token',
+  BLUE_HELM_PANE_STATUS_PANE_REF: 'poison-ambient-token',
 });
 const BASE_ENV = {
   Path: 'C:\\Windows\\System32;C:\\Tools',
@@ -331,7 +332,7 @@ const BASE_ENV = {
   claude_code_subprocess_env_scrub: 'ambient-scrub-poison',
   gemini_api_key: 'ambient-case-gemini-poison',
   Blue_Helm_Pane_Status_Pipe: 'ambient-case-pipe-poison',
-  blue_helm_pane_status_token: 'ambient-case-token-poison',
+  blue_helm_pane_status_pane_ref: 'ambient-case-token-poison',
   ...NON_ASCII_REGRESSION_POISON,
   ...POISON,
 };
@@ -383,7 +384,7 @@ process.stdout.write('\n-- fenced construction --\n');
     assert(!asciiFoldedKeys(env).includes(name.toUpperCase()), `fenced output omits poison ${name}`);
   }
   assert(env.BLUE_HELM_PANE_STATUS_PIPE === PANE_ENV.BLUE_HELM_PANE_STATUS_PIPE
-    && env.BLUE_HELM_PANE_STATUS_TOKEN === PANE_ENV.BLUE_HELM_PANE_STATUS_TOKEN,
+    && env.BLUE_HELM_PANE_STATUS_PANE_REF === PANE_ENV.BLUE_HELM_PANE_STATUS_PANE_REF,
   'main-issued pane-status transport survives and overrides no ambient value');
   assert(!Object.values(env).includes('poison-ambient-pipe') && !Object.values(env).includes('poison-ambient-token'),
     'ambient pane-status lookalike values never survive the fenced allowlist');
@@ -404,19 +405,19 @@ process.stdout.write('\n-- case collisions and unknown omission --\n');
     Path: 'first-path',
     PATH: 'second-path',
     claude_code_subprocess_env_scrub: 'ambient-scrub',
-    Blue_Helm_Pane_Status_Token: 'ambient-token',
+    Blue_Helm_Pane_Status_Pane_Ref: 'ambient-token',
     ...NON_ASCII_REGRESSION_POISON,
   };
   deepEqual(omitReservedWindowsEnv(reservedSource, [
     'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB', 'GEMINI_API_KEY',
-    'BLUE_HELM_PANE_STATUS_PIPE', 'BLUE_HELM_PANE_STATUS_TOKEN',
+    'BLUE_HELM_PANE_STATUS_PIPE', 'BLUE_HELM_PANE_STATUS_PANE_REF',
   ]), { Path: 'first-path', PATH: 'second-path' },
   'unfenced inheritance removes reserved ASCII-case variants and every non-ASCII name while preserving unrelated printable duplicates');
   deepEqual(reservedSource, {
     Path: 'first-path',
     PATH: 'second-path',
     claude_code_subprocess_env_scrub: 'ambient-scrub',
-    Blue_Helm_Pane_Status_Token: 'ambient-token',
+    Blue_Helm_Pane_Status_Pane_Ref: 'ambient-token',
     ...NON_ASCII_REGRESSION_POISON,
   }, 'reserved removal returns a fresh object without mutating its input');
 
@@ -497,7 +498,7 @@ process.stdout.write('\n-- main-issued reservation drift matrix --\n');
     undefined,
     {},
     PANE_ENV,
-    { BLUE_HELM_PANE_STATUS_PIPE: 7, BLUE_HELM_PANE_STATUS_TOKEN: null },
+    { BLUE_HELM_PANE_STATUS_PIPE: 7, BLUE_HELM_PANE_STATUS_PANE_REF: null },
   ];
   const failures = [];
   let calls = 0;
@@ -616,13 +617,13 @@ process.stdout.write('\n-- explicit pane-status key boundary --\n');
   assert(!Object.prototype.hasOwnProperty.call(env, 'BLUE_HELM_PANE_STATUS_EXTRA'),
     'only the two exact pane-status transport names are admitted');
   assert(env.BLUE_HELM_PANE_STATUS_PIPE === PANE_ENV.BLUE_HELM_PANE_STATUS_PIPE
-    && env.BLUE_HELM_PANE_STATUS_TOKEN === PANE_ENV.BLUE_HELM_PANE_STATUS_TOKEN,
+    && env.BLUE_HELM_PANE_STATUS_PANE_REF === PANE_ENV.BLUE_HELM_PANE_STATUS_PANE_REF,
   'the two exact pane-status transport values still survive');
   assert(Object.keys(env)[0] === '0' && env[0] === 'numeric-ambient-name',
     'integer-like ambient names follow JavaScript enumeration rules; no universal key-order claim is made');
   for (const name of [
     'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB', 'GEMINI_API_KEY',
-    'BLUE_HELM_PANE_STATUS_PIPE', 'BLUE_HELM_PANE_STATUS_TOKEN',
+    'BLUE_HELM_PANE_STATUS_PIPE', 'BLUE_HELM_PANE_STATUS_PANE_REF',
   ]) {
     assert(hasExactCanonicalReservedFamily(env, name, 1),
       `the unfenced Video Scout environment contains exactly one canonical ${name} and no ASCII-case collider`);
@@ -666,7 +667,7 @@ for (const badKey of [undefined, null, '', 0]) {
   const unenrolled = buildPtyEnv({
     baseEnv: {
       Blue_Helm_Pane_Status_Pipe: 'ambient-unenrolled-pipe',
-      blue_helm_pane_status_token: 'ambient-unenrolled-token',
+      blue_helm_pane_status_pane_ref: 'ambient-unenrolled-token',
       BLUE_HELM_PANE_STATUS_PıPE: 'ambient-unenrolled-unicode-pipe',
     },
     fencedRole: false,
@@ -674,7 +675,7 @@ for (const badKey of [undefined, null, '', 0]) {
     paneStatusEnv: {},
   });
   assert(hasExactCanonicalReservedFamily(unenrolled, 'BLUE_HELM_PANE_STATUS_PIPE', 0)
-    && hasExactCanonicalReservedFamily(unenrolled, 'BLUE_HELM_PANE_STATUS_TOKEN', 0),
+    && hasExactCanonicalReservedFamily(unenrolled, 'BLUE_HELM_PANE_STATUS_PANE_REF', 0),
   'pane-status transport names are reserved and absent when enrollment contributes no values');
 }
 
@@ -750,7 +751,7 @@ process.stdout.write('\n-- libuv proxy, production node-pty inheritance, and neg
     deepEqual(missing, [], 'the libuv proxy child observes every key in the constructed environment');
     if (process.platform !== 'win32') deepEqual(added, [], 'a non-Windows libuv child adds no key beyond the constructed environment');
     assert(!Object.values(observed.env).includes('poison-anthropic'), 'the libuv proxy child cannot observe non-required credential poison');
-    assert(observed.env.BLUE_HELM_PANE_STATUS_TOKEN === PANE_ENV.BLUE_HELM_PANE_STATUS_TOKEN,
+    assert(observed.env.BLUE_HELM_PANE_STATUS_PANE_REF === PANE_ENV.BLUE_HELM_PANE_STATUS_PANE_REF,
       'the libuv proxy child observes the explicit pane-status token');
   }
 
@@ -821,7 +822,7 @@ process.stdout.write('\n-- libuv proxy, production node-pty inheritance, and neg
         'production node-pty observes the main-issued pane-status token sentinel and not ambient case poison');
       for (const name of [
         'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB', 'GEMINI_API_KEY',
-        'BLUE_HELM_PANE_STATUS_PIPE', 'BLUE_HELM_PANE_STATUS_TOKEN',
+        'BLUE_HELM_PANE_STATUS_PIPE', 'BLUE_HELM_PANE_STATUS_PANE_REF',
       ]) {
         assert(hasExactCanonicalReservedFamily(measured.collisionBuiltNames, name, 1)
           && hasExactCanonicalReservedFamily(collision.names, name, 1),
@@ -870,6 +871,25 @@ process.stdout.write('\n-- production main-process wiring --\n');
   const envLogLines = mainSrc.split(/\r?\n/).filter((line) => line.includes('pty-start: env built'));
   assert(envLogLines.length === 1 && !envLogLines[0].includes('process.env') && !envLogLines[0].includes('ptyEnv'),
     'the environment diagnostic is one bounded metadata-only line and contains no environment value expression');
+}
+
+// S31 item 2: Claude Code's env scrub removes variables whose name looks like a credential
+// (code.claude.com/docs/en/env-vars, "What the subprocess environment scrub removes": NPM_TOKEN,
+// DB_PASSWORD), from hooks too. The pane-status reporter is a hook, so its variables must not look
+// like credentials, or every pane's badge stays "unknown".
+{
+  const CREDENTIAL_SEGMENT = /(^|_)(TOKEN|SECRET|KEY|PASSWORD|PASSWD|PASS|PWD|AUTH|CREDENTIALS?|PAT|APIKEY|PRIVATE|SESSION|COOKIE)(_|$)/i;
+  assert(Array.isArray(PANE_STATUS_ENV_KEYS) && PANE_STATUS_ENV_KEYS.length === 2, 'two pane-status variables');
+  for (const name of PANE_STATUS_ENV_KEYS) {
+    assert(!CREDENTIAL_SEGMENT.test(name), `${name} has no credential-like name segment, so the scrub keeps it`);
+  }
+  assert(PANE_STATUS_ENV_KEYS.indexOf('BLUE_HELM_PANE_STATUS_PANE_REF') !== -1, 'the pane selector is BLUE_HELM_PANE_STATUS_PANE_REF');
+  const fs2 = require('fs');
+  const reporter = fs2.readFileSync(path.join(__dirname, 'pane-status', 'pane-status-reporter.js'), 'utf8');
+  const controller = fs2.readFileSync(path.join(__dirname, 'pane-status', 'pane-status-controller.js'), 'utf8');
+  assert(/const TOKEN_ENV = 'BLUE_HELM_PANE_STATUS_PANE_REF';/.test(reporter), 'the reporter reads the same name');
+  assert(/BLUE_HELM_PANE_STATUS_PANE_REF: res\.token,/.test(controller), 'the controller sets the same name');
+  assert(!/'BLUE_HELM_PANE_STATUS_TOKEN'|BLUE_HELM_PANE_STATUS_TOKEN:/.test(reporter + controller), 'the old name is no longer read or set');
 }
 
 process.stdout.write(`\npty-env: ${passed} passed, ${failed} failed, ${skipped} skipped\n`);

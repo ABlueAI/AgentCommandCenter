@@ -45,7 +45,11 @@ const FENCED_ENV_ALLOWLIST = Object.freeze([
 
 const PANE_STATUS_ENV_KEYS = Object.freeze([
   'BLUE_HELM_PANE_STATUS_PIPE',
-  'BLUE_HELM_PANE_STATUS_TOKEN',
+  // S31 item 2: was BLUE_HELM_PANE_STATUS_TOKEN. Since Claude Code 2.1.251 the subprocess scrub
+  // (CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, always set) removes variables whose NAME looks like a
+  // credential (its docs' example: NPM_TOKEN) from Bash commands and hooks, so the reporter hook never
+  // got its pane selector and every badge stayed "unknown". The name must not look like a credential.
+  'BLUE_HELM_PANE_STATUS_PANE_REF',
 ]);
 const SUBPROCESS_SCRUB_ENV_KEY = 'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB';
 const GEMINI_ENV_KEY = 'GEMINI_API_KEY';
@@ -173,6 +177,7 @@ function buildPtyEnv({ baseEnv, fencedRole, videoScout, geminiKey, paneStatusEnv
 }
 
 const api = {
+  PANE_STATUS_ENV_KEYS,
   FENCED_ENV_ALLOWLIST,
   copyAllowedWindowsEnv,
   omitReservedWindowsEnv,

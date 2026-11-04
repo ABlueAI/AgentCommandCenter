@@ -35,7 +35,7 @@ function eq(a, b, label) { assert(a === b, a === b ? label : `${label} (got ${JS
 const SECRETS = [
   'C:\\Users\\someone\\AppData\\Roaming\\command-center\\secret-config.json',
   'sk-ant-api03-NOT-A-REAL-KEY',
-  'BLUE_HELM_PANE_STATUS_TOKEN=deadbeef',
+  'BLUE_HELM_PANE_STATUS_PANE_REF=deadbeef',
   'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6',
   'ANTHROPIC_API_KEY',
   'at Object.<anonymous> (main.js:1:1)',

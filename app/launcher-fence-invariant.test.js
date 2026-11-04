@@ -430,7 +430,7 @@ assert(src.indexOf('const paneStatusEnrollment = paneStatus.enrollPane(id);') !=
   'the pane is enrolled through the production controller');
 assert(src.indexOf('const paneStatusEnv = paneStatusEnrollment.ok ? paneStatusEnrollment.env : {};') !== -1,
   'and a refused enrolment contributes an EMPTY env rather than blocking the spawn');
-assert(!/BLUE_HELM_PANE_STATUS_TOKEN\s*:/.test(src),
+assert(!/BLUE_HELM_PANE_STATUS_PANE_REF\s*:/.test(src),
   'main.js never writes a literal pane-status token into ptyEnv (the store mints it)');
 // Revision 2 content assertions — the reason THIS re-pin happened, pinned as behaviour so the next
 // re-pin cannot quietly drop them along with the hash.
