@@ -50,7 +50,7 @@ const { defaultUsageFilePath } = require('./usage/usage-file');
 // See docs/BUILDER-HANDOFF-fence-completion.md.
 const { classifyPtyLaunch, KIND: LAUNCH_KIND } = require('./pty-launch-classify');
 // S10: the authority level Blue picks maps to a main-owned Claude permission mode (authority-level.js).
-const { applyAuthority, permissionModeArg } = require('./authority-level');
+const { applyAuthority, authorityArgs } = require('./authority-level');
 const { createRoleDefinitionResolver } = require('./role-definition-resolver');
 const { assertFencedRoleDefinition, FORBIDDEN_TOOLS, controlledWebFetchLaunch } = require('./role-fence-policy');
 const { createPtyStartAuthority } = require('./pty-start-authority');
@@ -327,8 +327,9 @@ function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, l
     if (VALID_MODELS.has(model)) cmd += ' --model ' + model;
     if (VALID_EFFORTS.has(effort)) cmd += ' --effort ' + effort;
     // S10: the authority level's permission mode, a main-owned constant chosen in the classify step
-    // (authority-level.js). Never set for a fenced role; permissionModeArg re-checks both.
-    cmd += permissionModeArg(launch);
+    // (authority-level.js). Never set for a fenced role; permissionModeArg re-checks both. S31: with
+    // the level's explicit tool lists first, because the env scrub forces the mode to default.
+    cmd += authorityArgs(launch);
     // Optional opening prompt (e.g. the reviewer's "review this diff"). Strip shell-significant
     // characters so it stays a single safe quoted argument inside the powershell -Command string.
     // A FENCED command never carries one: the classifier already refuses a supplied fenced prompt
@@ -340,7 +341,7 @@ function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, l
     return cmd + sessionArg;
   }
   // S10: a bare `claude` pane carries the authority level's permission mode too; S08's session ID goes last.
-  if (launch && launch.kind === 'cli' && launch.cli === 'claude') return AGENT_CMD.claude + permissionModeArg(launch) + sessionArg;
+  if (launch && launch.kind === 'cli' && launch.cli === 'claude') return AGENT_CMD.claude + authorityArgs(launch) + sessionArg;
   const bare = AGENT_CMD[cli || agent]; // undefined when unknown/falsy -> plain shell
   return bare === AGENT_CMD.claude ? bare + sessionArg : bare;
 }

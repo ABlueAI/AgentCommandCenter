@@ -14,6 +14,28 @@ next launches at; panes already running keep theirs. The levels are the ones in 
 Mako never launches `bypassPermissions` or `dontAsk`. Maximum is meant for sandboxes only (AGENTS.md),
 so it never runs a Claude agent on Blue's PC.
 
+## The env scrub and explicit tool sets (S31)
+
+Every Claude pane runs with `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` (AGENTS.md "Security rules"). With
+it set, Claude Code prints "Permission mode forced to default - CLAUDE_CODE_SUBPROCESS_ENV_SCRUB is set
+... Declare allowedTools explicitly" and opens every pane in default mode, whatever `--permission-mode`
+says (seen on Blue's PC with Claude Code 2.1.316, checklist step 40). `--allowedTools` is still
+honored, so each level also passes an explicit set of tools that run without asking; anything else
+still asks. The scrub stays on; turning it off is Blue's call. The sets live in
+`app/authority-level.js` (`ALLOWED_TOOLS`, `DISALLOWED_TOOLS`):
+
+| Level | Runs without asking | Denied |
+|---|---|---|
+| Minimum | `Read`, `Glob`, `Grep`, `TodoWrite` | `Edit`, `Write`, `NotebookEdit` (no edits, as plan mode intended) |
+| Medium | Minimum's, plus `Edit`, `Write`, `NotebookEdit` | nothing extra; every command still asks |
+| High | Medium's, plus `git status`, `diff`, `log`, `show`, `branch`, `switch`, `fetch`, `add`, `commit`, `npm test`, `npm run test`, `npm ci` | nothing extra; anything else (including `git push`) still asks |
+
+The command is `claude [--agent <role>] --allowedTools '<set>' [--disallowedTools '<set>']
+--permission-mode <mode> ["<opening prompt>"]`: the lists come before the mode because they take
+several values and would otherwise swallow the opening prompt. `--permission-mode` is still passed, so
+the level's mode applies again if the scrub ever stops forcing default. High no longer gets `auto`'s
+classifier while the scrub forces default; its fixed list is the stand-in.
+
 ## How it works
 
 - The renderer sends only the level's name with `pty-start` (`app/renderer/authority-choice.js`).
