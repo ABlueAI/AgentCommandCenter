@@ -1409,6 +1409,7 @@ async function boot() {
     if (t) { t.parser.flush(); t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n'); }
   });
   cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));
+  cc.onMainInfo((m) => appendLog('\n[main] ' + m + '\n'));
   // S09: after the main-error listener, so a session-memory refusal or a refused Resume is shown.
   await offerResume();
 

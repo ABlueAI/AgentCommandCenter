@@ -51,6 +51,7 @@ const { defaultUsageFilePath } = require('./usage/usage-file');
 const { classifyPtyLaunch, KIND: LAUNCH_KIND } = require('./pty-launch-classify');
 // S10: the authority level Blue picks maps to a main-owned Claude permission mode (authority-level.js).
 const { applyAuthority, authorityArgs } = require('./authority-level');
+const { channelFor } = require('./main-log-level');
 const { createRoleDefinitionResolver } = require('./role-definition-resolver');
 const { assertFencedRoleDefinition, FORBIDDEN_TOOLS, controlledWebFetchLaunch } = require('./role-fence-policy');
 const { createPtyStartAuthority } = require('./pty-start-authority');
@@ -805,7 +806,7 @@ app.whenReady().then(() => {
     hasGeminiKey: () => geminiKey !== null,
     logUsage: (line) => {
       console.log(line);
-      if (win && !win.isDestroyed()) win.webContents.send('main-error', line);
+      sendMainLog(line, 'routine');
     },
     logRefusal: (line) => {
       console.error(line);
@@ -834,7 +835,7 @@ app.whenReady().then(() => {
       // reports `write-failed-after-admission` without refunding the durable admission.
       writer: admissionPtyBoundary.writeAdmitted,
       isPaneRunning: (paneId) => ptys.has(paneId),
-      log: (line) => { tlog(line); if (win && !win.isDestroyed()) win.webContents.send('main-error', line); },
+      log: (line) => { tlog(line); sendMainLog(line, 'routine'); },
     });
     const init = admissionBudget.initialize();
     if (!init.ok) {
@@ -992,12 +993,18 @@ function launch(cmd, args, onError) {
 
 // ---- launch-pipeline timing diagnostics (remove once root cause confirmed) --
 let _t0 = null;
+// S31 item 5: a routine line goes on `main-info` (shown as "[main]"), a refusal or failure on
+// `main-error` ("[main error]"); main-log-level.js decides, and defaults to error.
+function sendMainLog(line, kind) {
+  if (win && !win.isDestroyed()) win.webContents.send(channelFor(line, kind), line);
+}
+
 function tlog(msg) {
   if (_t0 === null) _t0 = Date.now();
   const elapsed = Date.now() - _t0;
   const line = `[TIMING +${elapsed}ms] ${msg}`;
   console.log(line);
-  if (win && !win.isDestroyed()) win.webContents.send('main-error', line);
+  sendMainLog(line, 'routine');
 }
 // Call at the start of each createAgent attempt to reset the clock.
 function tlogReset() { _t0 = Date.now(); tlog('--- new createAgent sequence ---'); }
