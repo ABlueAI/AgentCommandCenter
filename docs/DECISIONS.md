@@ -3,6 +3,12 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-04
+
+| Decision | Blue's words |
+|---|---|
+| **No PR work under Blue's own GitHub login (merging this PR approves it).** Desktop chats plan and talk; PR work (opening a PR, pushing to a PR branch, marking a PR ready) goes to cloud sessions or Mako agent panes, which run as `ABlueAgent`. AGENTS.md "No PR work under ABlueAI's login" is the rule, and the `PreToolUse` hook `.claude/hooks/account-guard.js` blocks `gh pr create`, `gh pr ready` and `git push` only when `gh api user --jq .login` returns `ABlueAI`; everything else goes ahead. After checklist step 35 passes, Blue removes the `ABlueAI` command-line login from every PC Claude runs on (step 49); approvals stay in the browser and GitHub mobile as `ABlueAI`. Background: PRs #142 and #144 were opened from desktop chats as `ABlueAI`, couldn't be approved, and were re-opened as #146 and #147. | "tell me what i need to do and lets unblock this problem for good. i prefer to approve from my phone but would like to be able to do it in many different places." · On the guard: "a guard is good, i just dont want this to cause more problems currently and create problems down the line." |
+
 ## 2026-11-03
 
 | Decision | Blue's words |

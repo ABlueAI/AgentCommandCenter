@@ -12,3 +12,5 @@ Claude-specific notes:
 - In cloud sessions, stay subscribed to your own PR and fix CI failures and review findings until it
   is green, then update the TLDR and mark it ready.
 - `.claude/settings.json` denies merge and push-to-main tools. Do not work around it.
+- Under Blue's own GitHub login (`ABlueAI`, e.g. the desktop app), do no PR work: see AGENTS.md "No PR
+  work under ABlueAI's login". Its account-guard hook blocks it.
