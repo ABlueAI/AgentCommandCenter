@@ -1,9 +1,10 @@
 'use strict';
 // Run: node app/pr-template.test.js
 //
-// Pins the PR template's TLDR (.github/pull_request_template.md) to AGENTS.md "The TLDR": every
-// line AGENTS.md lists is in the template, in AGENTS.md's order, ending with "Follow-ups", then the
-// "Where I stopped / what's next" line the runner prompt keeps current (docs/RUNNER.md, step 6).
+// Pins the PR template's TLDR (.github/pull_request_template.md) to AGENTS.md "The TLDR": AGENTS.md
+// lists exactly the nine items below, in this order, and the template has one line for each, in the
+// same order, ending with "Follow-ups", then the "Where I stopped / what's next" line the runner
+// prompt keeps current (docs/RUNNER.md, step 6).
 // Gap audit A6 (docs/1.1-GAP-AUDIT.md): the template had no "Follow-ups" line.
 
 const fs = require('fs');
@@ -34,15 +35,19 @@ const order = [
   ['follow-ups', 'Follow-ups'],
 ];
 
-// The rule wraps across lines, so collapse whitespace before matching phrases.
+// The rule wraps across lines, so collapse whitespace, then take the list after "in this order:" up
+// to the first sentence end. Every item must be one of ours, in order, and none may be missing or
+// extra, so a new TLDR item in AGENTS.md fails here until the template gets it too.
 const tldrRule = ((/## The TLDR[^\n]*\n\n([\s\S]*?)\n\n/.exec(agents) || [])[1] || '').replace(/\s+/g, ' ');
 assert(tldrRule.length > 0, 'AGENTS.md has a "The TLDR" section');
-let last = -1;
-for (const [rule] of order) {
-  const at = tldrRule.indexOf(rule);
-  assert(at > last, `AGENTS.md lists "${rule}" in the expected order`);
-  if (at > last) last = at;
-}
+const listStart = tldrRule.indexOf('in this order:');
+const list = listStart < 0 ? '' : tldrRule.slice(listStart + 'in this order:'.length).split('. ')[0];
+const items = list.split(' · ').map((x) => x.trim()).filter(Boolean);
+assert(items.length === order.length,
+  `AGENTS.md's TLDR list has ${order.length} items (got ${items.length}: ${items.join(' | ')})`);
+order.forEach(([rule], i) => {
+  assert(Boolean(items[i]) && items[i].startsWith(rule), `AGENTS.md's TLDR item ${i + 1} is "${rule}" (got "${items[i] || ''}")`);
+});
 
 const tldr = (/## TLDR\n([\s\S]*?)\n## /.exec(template) || [])[1] || '';
 assert(tldr.length > 0, 'the template has a TLDR section');
@@ -51,5 +56,5 @@ const expected = order.map(([, label]) => label).concat(["Where I stopped / what
 assert(JSON.stringify(labels) === JSON.stringify(expected),
   `template TLDR lines are AGENTS.md's, in order, then "Where I stopped" (got: ${labels.join(' | ')})`);
 
-process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
+process.stdout.write(`\npr-template: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);
