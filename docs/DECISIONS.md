@@ -3,6 +3,12 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-03
+
+| Decision | Blue's words |
+|---|---|
+| S15 research capture (PR #130): **ADOPT Playwright MCP** ([microsoft/playwright-mcp](https://github.com/microsoft/playwright-mcp), Apache-2.0) as the page reader, in place of Claude in Chrome, which his step 43 check showed returns "This site is blocked." on reddit.com. The rest of the proposal stands: one fenced page-reader pane on his PC that can only read the page and write its own report, which the Reviewer then reads. Blue accepts the risk that automated reading of Reddit outside its official API goes against Reddit's terms, for personal, low-volume use; no robot-check solvers, "stealth" plugins or browser User-Agent spoofing. Recorded from his verdict comment on PR #130 (posted as `ABlueAI` from his main chat, 2026-11-03). Merging PR #130 approves the build. | 2026-10-28, on the proposal as written: "I think that's a good place to start" · 2026-11-03: "this is for personal use so i will take the risk. lets go with playwright" |
+
 ## 2026-10-28
 
 | Decision | Blue's words |

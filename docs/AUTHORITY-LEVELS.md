@@ -32,7 +32,7 @@ so it never runs a Claude agent on Blue's PC.
 ## Which panes it applies to
 
 - **Applies:** unfenced Claude panes: builder, reviewer, codebase-scout, and a plain Claude pane.
-- **Fenced roles** (web-scout, operator, source-scout) keep the launch they had: their fence (tool
+- **Fenced roles** (web-scout, operator, source-scout, page-reader) keep the launch they had: their fence (tool
   denials, the write-fence hook and the sandbox folder) is their authority, and plan mode would stop
   them writing their reports. The Logs tab shows `permission-mode=not-applied` for them. At Maximum
   they go to the cloud like every Claude launch.
