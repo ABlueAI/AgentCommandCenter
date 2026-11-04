@@ -2,7 +2,8 @@
 
 Updated 2026-11-04 by PR #160, "Checklist and STATUS housekeeping" (1.1 gap audit A8: the
 "Next", S26, daily-runner and Claude plan lines, and S31 to S34 merged). Before that, on
-2026-11-04: PRs #147 and #153; and the all-day runner's status PR for 2026-11-01 (#141).
+2026-11-04 (UTC): PRs #130, #146, #147 and #153; and the all-day runner's status PR for 2026-11-01
+(#141).
 Every PR that changes the state updates this file.
 
 ## Right now
