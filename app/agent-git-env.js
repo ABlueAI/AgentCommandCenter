@@ -62,6 +62,40 @@ const AGENT_GIT_ENV_KEYS = Object.freeze([
 
 function isAgentToken(value) { return typeof value === 'string' && TOKEN_RE.test(value); }
 
+// S31 item 4. A token copied from a password manager can carry characters nobody can see (zero-width
+// spaces, a byte-order mark, non-breaking spaces, a trailing newline), and three saves were refused as
+// "not a GitHub token" with no visible reason (Blue's PC check, step 35). A real token never contains
+// whitespace or any of these, so they are removed before the check. The reason for a refusal names
+// the problem, and for a stray character only its position and code point (U+XXXX) and only when it
+// can't be part of a token, so no token text is ever echoed.
+const INVISIBLE_RE = /[\s\u00A0\u00AD\u180E\u200B-\u200F\u2028-\u202F\u205F-\u2064\u3000\uFEFF]/g;
+const TOKEN_CHAR_RE = /[A-Za-z0-9_]/;
+
+function codePoint(ch) {
+  return 'U+' + ch.codePointAt(0).toString(16).toUpperCase().padStart(4, '0');
+}
+
+/** normalizeAgentToken(raw) -> { ok:true, token, removed } | { ok:false, reason } */
+function normalizeAgentToken(raw) {
+  if (typeof raw !== 'string') return { ok: false, reason: 'no token was entered' };
+  const token = raw.replace(INVISIBLE_RE, '');
+  const removed = raw.length - token.length;
+  if (!token) return { ok: false, reason: 'no token was entered' };
+  if (isAgentToken(token)) return { ok: true, token, removed };
+  const chars = Array.from(token);
+  const badAt = chars.findIndex((c) => !TOKEN_CHAR_RE.test(c));
+  if (badAt !== -1) {
+    return { ok: false, reason: `character ${badAt + 1} (${codePoint(chars[badAt])}) can't be in a GitHub token; copy the token again` };
+  }
+  if (token.startsWith('ghp_')) {
+    return { ok: false, reason: `a classic token (ghp_) is 40 characters; this one is ${token.length}` };
+  }
+  if (token.startsWith('github_pat_')) {
+    return { ok: false, reason: `a fine-grained token (github_pat_) is 33 to 266 characters; this one is ${token.length}` };
+  }
+  return { ok: false, reason: 'it does not start with ghp_ or github_pat_' };
+}
+
 // The pane classes that act as a local agent. `launch` is classifyPtyLaunch's result.
 function isAgentPane(launch) {
   if (!launch || launch.videoScout === true || launch.fenced !== false) return false;
@@ -91,6 +125,7 @@ module.exports = {
   AGENT_LOGIN,
   AGENT_NOREPLY_EMAIL,
   isAgentToken,
+  normalizeAgentToken,
   isAgentPane,
   buildAgentGitEnv,
 };

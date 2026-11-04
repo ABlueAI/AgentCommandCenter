@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const {
-  AGENT_GIT_ENV_KEYS, AGENT_NOREPLY_EMAIL, isAgentToken, isAgentPane, buildAgentGitEnv,
+  AGENT_GIT_ENV_KEYS, AGENT_NOREPLY_EMAIL, isAgentToken, normalizeAgentToken, isAgentPane, buildAgentGitEnv,
 } = require('./agent-git-env');
 const { buildPtyEnv } = require('./pty-env');
 
@@ -28,6 +28,41 @@ const FINE = 'github_pat_' + '11ABCDEFG0123456789abc_' + 'x'.repeat(59);
   assert(isAgentToken(FINE), 'a fine-grained github_pat_ token is accepted');
   for (const bad of ['', ' ' + TOKEN, TOKEN + '\n', 'ghp_short', 'gho_' + TOKEN.slice(4), 'AIza' + TOKEN.slice(4), null, 42]) {
     assert(!isAgentToken(bad), `refused: ${JSON.stringify(bad).slice(0, 20)}`);
+  }
+}
+
+// --- S31 item 4: invisible characters and a reason that never echoes the token ----------------------
+{
+  const pasted = [
+    ['a trailing newline', TOKEN + '\r\n', 2],
+    ['leading and trailing spaces', '  ' + TOKEN + ' ', 3],
+    ['a zero-width space inside', TOKEN.slice(0, 10) + '\u200B' + TOKEN.slice(10), 1],
+    ['a byte-order mark first', '\uFEFF' + TOKEN, 1],
+    ['a non-breaking space last', TOKEN + '\u00A0', 1],
+    ['a word joiner and a narrow no-break space', '\u2060' + FINE + '\u202F', 2],
+  ];
+  for (const [label, raw, removed] of pasted) {
+    const r = normalizeAgentToken(raw);
+    assert(r.ok === true && (r.token === TOKEN || r.token === FINE) && r.removed === removed, `${label}: stored after removing ${removed}`);
+  }
+  assert(normalizeAgentToken(TOKEN).ok === true && normalizeAgentToken(TOKEN).removed === 0, 'a clean token: nothing removed');
+  const refusals = [
+    ['empty', '', /no token was entered/],
+    ['only invisible characters', ' \u200B\n', /no token was entered/],
+    ['not a string', null, /no token was entered/],
+    ['a stray hyphen', TOKEN.slice(0, 20) + '-' + TOKEN.slice(21), /^character 21 \(U\+002D\) can't be in a GitHub token/],
+    ['a smart quote', '\u201C' + TOKEN, /^character 1 \(U\+201C\)/],
+    ['a short classic token', TOKEN.slice(0, 30), /classic token \(ghp_\) is 40 characters; this one is 30/],
+    ['a short fine-grained token', 'github_pat_abc', /fine-grained token \(github_pat_\) is 33 to 266 characters; this one is 14/],
+    ['another kind of GitHub token', 'gho_' + TOKEN.slice(4), /does not start with ghp_ or github_pat_/],
+  ];
+  for (const [label, raw, re] of refusals) {
+    const r = normalizeAgentToken(raw);
+    assert(r.ok === false && re.test(r.reason), `${label}: refused with "${r.reason}"`);
+    if (typeof raw === 'string' && raw.length > 8) {
+      const body = raw.replace(/[^A-Za-z0-9_]/g, '');
+      assert(!new RegExp(body.slice(4, 12)).test(r.reason) && r.reason.indexOf(TOKEN.slice(4, 12)) === -1, `${label}: the reason echoes no token text`);
+    }
   }
 }
 

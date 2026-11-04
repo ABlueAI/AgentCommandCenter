@@ -95,7 +95,7 @@ const admissionConfig = require('./admission-budget-config');
 // Blue's explicit Tier 1 Windows allowlist. See app/pty-env.test.js.
 const { buildPtyEnv } = require('./pty-env');
 // S06: local agent panes push as ABlueAgent with the token from Mako's key setup (agent-git-env.js).
-const { isAgentToken, isAgentPane } = require('./agent-git-env');
+const { isAgentToken, isAgentPane, normalizeAgentToken } = require('./agent-git-env');
 // S06: kill a pane's whole process tree (taskkill /T) before pty.kill(); see process-tree.js.
 const { createProcessTreeKiller } = require('./process-tree');
 const processTree = createProcessTreeKiller({
@@ -1620,14 +1620,17 @@ ipcMain.handle('get-agent-token-status', (e) => {
 ipcMain.handle('set-agent-token', (e, token) => {
   const g = launcherGate.assess(e);
   if (!g.ok) return { ok: false, error: g.reason };
-  const t = typeof token === 'string' ? token.trim() : '';
-  if (!isAgentToken(t)) return { ok: false, error: 'not a GitHub token (expected ghp_… or github_pat_…)' };
+  // S31: invisible characters are removed first, and a refusal says why without echoing the token.
+  const norm = normalizeAgentToken(token);
+  if (!norm.ok) return { ok: false, error: `not a GitHub token: ${norm.reason}` };
+  const t = norm.token;
+  if (!isAgentToken(t)) return { ok: false, error: 'not a GitHub token' };
   if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'safeStorage encryption not available on this system' };
   try {
     const enc = safeStorage.encryptString(t);
     const s = loadSecure(); s.agentGitTokenEnc = enc.toString('base64'); saveSecure(s);
     agentGitToken = t;
-    tlog('[agent-git] ABlueAgent token stored; new agent panes push as ABlueAgent');
+    tlog(`[agent-git] ABlueAgent token stored; new agent panes push as ABlueAgent${norm.removed ? ` (${norm.removed} invisible or space character(s) removed)` : ''}`);
     return { ok: true };
   } catch { return { ok: false, error: 'could not encrypt or save the token' }; }
 });

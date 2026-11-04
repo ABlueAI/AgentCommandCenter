@@ -1813,12 +1813,19 @@ function wireUi() {
 
   // ABlueAgent token banner (S06). The token is sent once to main and never read back.
   $('#agentTokenSave').onclick = async () => {
-    const token = $('#agentTokenInput').value.trim();
-    if (!token) { $('#agentTokenInput').focus(); return; }
+    // S31: main strips invisible characters and checks the shape. A refusal shows its reason in the
+    // banner and keeps the input so the token can be fixed; the input is cleared only once stored.
+    const input = $('#agentTokenInput');
+    const status = $('#agentTokenStatus');
+    const token = input.value;
+    if (!token.trim()) { status.textContent = 'Paste the token first.'; input.focus(); return; }
+    status.textContent = 'Saving…';
     const r = await cc.setAgentToken(token);
-    $('#agentTokenInput').value = '';
-    if (r && r.ok) updateAgentTokenBanner({ ok: true, hasToken: true });
-    else appendLog(`[agent token] save failed: ${(r && r.error) || 'unknown error'}\n`);
+    const msg = window.ccAgentTokenView.saveResultMessage(r);
+    status.textContent = msg.text;
+    status.classList.toggle('error', !msg.ok);
+    if (msg.ok) { input.value = ''; updateAgentTokenBanner({ ok: true, hasToken: true }); }
+    else { appendLog(`[agent token] save failed: ${msg.text}\n`); input.focus(); }
   };
   $('#agentTokenInput').onkeydown = (e) => { if (e.key === 'Enter') $('#agentTokenSave').click(); };
   $('#agentTokenChange').onclick = () => updateAgentTokenBanner({ ok: true, hasToken: false });
