@@ -22,8 +22,11 @@
 //                          labels and is removed from the board
 // Any other status, a malformed row or two sync issues for one session throws, so the workflow fails
 // visibly instead of guessing. So does a listing that finds no sync issue while the milestone already
-// holds items (S33's guard, in syncPlan), before anything is created. Limit: the guard trusts the
-// milestone listing; a run where both listings come back empty at once would still start over.
+// holds items (S33's guard, in syncPlan), before anything is created. Limits: the guard only catches
+// a listing that finds none of the sync issues; one that misses some but not all (for example a
+// dropped page) still re-creates the missed sessions. If the milestone listing also misses the
+// milestone, the run tries to create a second "1.1 Month 1", which GitHub is expected to reject
+// (not verified), after any missing labels are created.
 //
 // `api` and `board` are injected so the workflow passes GitHub's clients and tests pass fixtures:
 //   api.listLabels()                 -> [{ name }]
