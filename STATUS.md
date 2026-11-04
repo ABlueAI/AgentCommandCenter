@@ -30,8 +30,9 @@ that changes the state updates this file.
   `HOLD (Blue)` until he starts them; S29 also waits on step 33, and the watcher on step 34.
 - **Runner work added (proposed 2026-11-03, pending Blue's merge):** after S15, nothing on the
   plan was `READY` for the runner, so a plan change adds S31 (PC-check fixes), S32 (1.1 gap audit),
-  S33 (Plan sync guard) and S34 (PR reviewer research). Blue moved step 17 to the end of 1.1 and
-  stays on Pro until the UI work runs usage up (docs/DECISIONS.md, 2026-11-03).
+  S33 (Plan sync guard) and S34 (PR reviewer research). Blue moved step 17's token audit to the
+  end of 1.1 (push protection is already on) and stays on Pro until the UI work runs usage up
+  (docs/DECISIONS.md, 2026-11-03).
 - **Claude plan:** Blue upgrades to Max 5x when the UI work runs usage up (his call on 2026-11-03;
   it was 2026-10-28; checklist step 8, not ticked on `main` as of 23:10 UTC on 2026-11-01). Until it is,
   the runner builds one session at a time on Pro (`parallel_cap: 1`).

@@ -26,8 +26,9 @@ other remaining items." Claude's order for what is left:
 2. ~~**Step 14**, the agent token~~ Done 2026-10-23 on your word. It unblocks S06 and everything
    after it (S07 to S11, S21), and Codex's next build (from the hand-off for this order; the plan
    doesn't name that dependency yet).
-3. **Step 17**, the token audit and push protection: moved to the end of 1.1, about February 2027
-   (your words, 2026-11-03: "Let's finish it at the end"). Then every token is reset with a 1-year
+3. **Step 17**, the token audit (parts a and b): moved to the end of 1.1, about February 2027 (your
+   words, 2026-11-03: "Let's finish it at the end"). Part c, push protection, is already on (checked
+   2026-11-03). Then every token is reset with a 1-year
    expiry. The agent token's January renewal (by 2027-01-14) still comes first.
 4. **Step 8**, the Max upgrade: when the UI work runs usage up (your call, 2026-11-03); Pro until
    then.
@@ -387,7 +388,7 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     session); an agent's request worked on PR #47 on 2026-10-21 (STATUS.md). If ChatGPT uses this same GitHub connection outside Codex (not verified), repositories
     only `ABlueAI` can reach drop out of ChatGPT and Codex; session S26 checks this.
 - [ ] **17. Token hygiene: find old tokens, and rules for any new one.** About 20 minutes, at the end
-  of 1.1, about February 2027 (moved 2026-11-03; "Do next" item 3).
+  of 1.1, about February 2027 (moved 2026-11-03; "Do next" item 3). Part c is already done.
   - **a. Audit old tokens, on both `ABlueAI` and `ABlueAgent`** (sign in to each in turn). A lost
     token's value can't be recovered: GitHub shows a token only once, but it lists every token with
     its last-used date.
@@ -473,6 +474,8 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     deliberate pushes.
     If it already shows enabled, nothing to do. This is your click; agents never change repository
     settings.
+    *Verified 2026-11-03: already enabled. Claude read `security_and_analysis` through GitHub's API as
+    `ABlueAI` (`secret_scanning` and `secret_scanning_push_protection` both "enabled").*
   - *Done when:* you say the audit is done and push protection shows enabled. Claude then tries to
     confirm push protection through GitHub's API (`security_and_analysis` on the repository). GitHub
     shows that field only to repository admins, and agents have write access, so Claude expects not
