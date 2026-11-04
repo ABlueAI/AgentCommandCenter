@@ -16,9 +16,11 @@
 // spreads an object, or stringifies the input. A leak would have to be written on purpose.
 //
 // HOW THE TOKEN GETS HERE: Blue Helm spawns Claude Code inside a pane's PTY with
-// BLUE_HELM_PANE_STATUS_PIPE and BLUE_HELM_PANE_STATUS_TOKEN set in that PTY's environment. Claude
+// BLUE_HELM_PANE_STATUS_PIPE and BLUE_HELM_PANE_STATUS_PANE_REF set in that PTY's environment. Claude
 // Code passes its own environment through to hook children, so the reporter inherits exactly the pane
-// that spawned it. The token is the ONLY pane selector on the wire — see pane-status-registry.js.
+// that spawned it. (S31: the selector's variable was BLUE_HELM_PANE_STATUS_TOKEN; Claude Code's env
+// scrub, always on in Mako, removes credential-looking names from hook children since 2.1.251, so it
+// is now BLUE_HELM_PANE_STATUS_PANE_REF. See pty-env.js.) The token is the ONLY pane selector on the wire — see pane-status-registry.js.
 //
 // NON-BLUE-HELM SESSIONS: if those variables are absent, this exits 0 immediately having read nothing
 // and connected to nothing. Blue's ordinary Claude sessions must be unaffected while the hook entries
@@ -34,7 +36,7 @@
 // status is surfaced to the user; a status reporter must never block, fail, or editorialize a turn.
 
 const PIPE_ENV = 'BLUE_HELM_PANE_STATUS_PIPE';
-const TOKEN_ENV = 'BLUE_HELM_PANE_STATUS_TOKEN';
+const TOKEN_ENV = 'BLUE_HELM_PANE_STATUS_PANE_REF';
 
 // Hard bounds. Claude's payload can legitimately be large (a transcript path plus a big tool_response),
 // so we accept up to STDIN_LIMIT_BYTES and then stop reading — we discard all of it anyway.

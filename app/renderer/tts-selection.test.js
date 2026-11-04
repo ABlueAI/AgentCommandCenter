@@ -148,5 +148,23 @@ function assert(condition, label) {
   assert(!elementHandlers.mousedown && !documentHandlers.mouseup, 'the per-pane mouse bridge disposes both listeners');
 }
 
+// S31 item 7: 🔊 reads the pane's last selection again after the speed menu took focus.
+{
+  const memory = createSelectionMemory();
+  memory.remember('read this aloud');
+  // First click: the live selection is gone (focus moved), the memory supplies it.
+  const first = resolveSpeakAction({ selectionAtPointerDown: '', selectionAtClick: '', selectionRemembered: memory.peek(), paneId: 'p', role: 'builder' });
+  // The speed menu changes; nothing in the pane is clicked. Second click:
+  const second = resolveSpeakAction({ selectionAtPointerDown: '', selectionAtClick: '', selectionRemembered: memory.peek(), paneId: 'p', role: 'builder' });
+  assert(first.ok && second.ok && second.text === 'read this aloud', 'a second 🔊 click reads the same remembered selection');
+  const fs = require('fs');
+  const path = require('path');
+  const app = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const click = app.slice(app.indexOf('speakBtn.onclick'), app.indexOf('window.ccTTS.speak(action.text);'));
+  assert(click.length > 0 && click.indexOf('speakSelectionMemory.clear()') === -1, 'the 🔊 click no longer clears the remembered selection');
+  assert(/termBody\.addEventListener\('pointerdown', \(\) => speakSelectionMemory\.clear\(\), true\)/.test(app),
+    'a pointerdown in the terminal (a new selection) still clears it');
+}
+
 process.stdout.write(`\n${passed + failed} tests: ${passed} passed, ${failed} failed\n`);
 if (failed) process.exit(1);

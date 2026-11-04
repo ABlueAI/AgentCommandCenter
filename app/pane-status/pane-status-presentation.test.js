@@ -110,7 +110,7 @@ function makeControl(bridge) {
     eq(rig.c.getSetupState().state, 'ready', 'the fixture installs and is ready');
     const enrolled = rig.c.enrollPane('pty1');
     assert(enrolled.ok === true, 'a pane enrolls');
-    rig.c.registry.applyMessage({ e: 'UserPromptSubmit', t: enrolled.env.BLUE_HELM_PANE_STATUS_TOKEN });
+    rig.c.registry.applyMessage({ e: 'UserPromptSubmit', t: enrolled.env.BLUE_HELM_PANE_STATUS_PANE_REF });
     eq(rig.c.registry.viewFor('pty1').state, 'working', 'and is genuinely LIVE — working, not unknown');
 
     // Read the authoritative state from INSIDE the publish, which is the only moment that can tell
@@ -166,7 +166,7 @@ function makeControl(bridge) {
     const rig = makeController();
     await rig.c.install();
     const enrolled = rig.c.enrollPane('pty1');
-    const token = enrolled.env.BLUE_HELM_PANE_STATUS_TOKEN;
+    const token = enrolled.env.BLUE_HELM_PANE_STATUS_PANE_REF;
     assert(enrolled.ok === true, `[${mode}] a pane enrolls`);
 
     // Armed only now: the INSTALL published normally, so this isolates removal-time delivery failure.

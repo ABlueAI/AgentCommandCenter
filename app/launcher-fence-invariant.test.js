@@ -430,7 +430,7 @@ assert(src.indexOf('const paneStatusEnrollment = paneStatus.enrollPane(id);') !=
   'the pane is enrolled through the production controller');
 assert(src.indexOf('const paneStatusEnv = paneStatusEnrollment.ok ? paneStatusEnrollment.env : {};') !== -1,
   'and a refused enrolment contributes an EMPTY env rather than blocking the spawn');
-assert(!/BLUE_HELM_PANE_STATUS_TOKEN\s*:/.test(src),
+assert(!/BLUE_HELM_PANE_STATUS_PANE_REF\s*:/.test(src),
   'main.js never writes a literal pane-status token into ptyEnv (the store mints it)');
 // Revision 2 content assertions — the reason THIS re-pin happened, pinned as behaviour so the next
 // re-pin cannot quietly drop them along with the hash.
@@ -588,13 +588,13 @@ assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src)
   'S10: classify runs first, and the level is applied only to an accepted classification');
   const bStart = mustFind(src, 'function buildAgentCommand(', 'buildAgentCommand');
   const builder = src.slice(bStart, mustFind(src, '// Video-scout: download a video', 'buildAgentCommand end'));
-  assert((builder.match(/permissionModeArg\(launch\)/g) || []).length === 2,
-    'S10: buildAgentCommand adds the mode only through permissionModeArg (role and bare claude)');
+  assert((builder.match(/authorityArgs\(launch\)/g) || []).length === 2 && !/permissionModeArg\(launch\)/.test(builder),
+    'S10/S31: buildAgentCommand adds the mode and tool lists only through authorityArgs (role and bare claude)');
   assert(!/\.authority\b/.test(builder) && !/\.permissionMode\b/.test(builder),
     'S10: buildAgentCommand never reads the renderer level or a raw mode field');
   const promptAt = builder.indexOf('// Optional opening prompt');
-  assert(builder.indexOf('cmd += permissionModeArg(launch);') !== -1 && builder.indexOf('cmd += permissionModeArg(launch);') < promptAt,
-    'S10: in a role command the mode comes before the opening prompt');
+  assert(builder.indexOf('cmd += authorityArgs(launch);') !== -1 && builder.indexOf('cmd += authorityArgs(launch);') < promptAt,
+    'S10/S31: in a role command the mode and tool lists come before the opening prompt');
 }
 
 process.stdout.write(`\nlauncher-fence-invariant: ${passed} passed, ${failed} failed\n`);
