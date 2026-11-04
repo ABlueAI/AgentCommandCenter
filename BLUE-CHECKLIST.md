@@ -573,6 +573,17 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     Stop at 2 minutes and report which event/badge/toast failed; do not mark the box complete.
   - *Done when:* Blue reports both observed toasts and the running build label; the checking agent
     records that evidence and date here. **Pending; not verified in the Linux cloud.**
+  - **Re-run after S31 merges** (about 3 minutes; on 2026-11-02 every badge read "unknown" and no
+    toast came. S31 renamed the pane's status variable, which Claude Code's env scrub was removing):
+    1. Pull `main`, then fully close and restart Mako.
+    2. Open a **new** builder pane and send "Reply with one word: ready". Expected: the badge changes
+       from "unknown" and a **Mako — Claude turn ended** toast appears.
+    3. In the same pane, ask Claude to run this with its Bash tool and show the output (it prints
+       only true or false, never the values):
+       `node -e "console.log(!!process.env.BLUE_HELM_PANE_STATUS_PIPE, !!process.env.BLUE_HELM_PANE_STATUS_PANE_REF)"`
+    4. Tell an agent what steps 2 and 3 showed. `true true` with no toast points at Mako or the
+       hooks; `true false` means the scrub still removes the pane's value; `false false` means
+       neither reaches Claude's subprocesses.
 - [ ] **24. Optional phone alerts via Claude Remote Control (S05).** About **2 minutes** after
   step 23, if wanted. Follow [docs/NEEDS-YOU-ALERTS.md](docs/NEEDS-YOU-ALERTS.md#phone-alerts-through-claude-remote-control).
   Connect the same real pane from your phone, enable Claude's available push-notification choices
@@ -580,6 +591,10 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   existing Claude account; do not add an account, subscription, Mako hook or API key for it.
   - *Done when:* the session is visible on your phone and a push is observed; report a missing
     setting or unavailable account feature instead of assuming delivery. **Optional; unverified.**
+  - **Re-run after step 23's re-run passes** (about 2 minutes, optional):
+    1. In the pane from step 23, connect Remote Control from your phone.
+    2. Turn on Claude's push notifications on the phone and allow them in the phone's settings.
+    3. Ask Claude for a harmless test push. Tell an agent whether it arrived.
 
 - [ ] **25. Connect the plan board (S03).** About **10 minutes**, after you merge the S03 PR, #54. The
   plan sync already keeps one issue per session with labels and the "1.1 Month 1" milestone using
@@ -827,6 +842,10 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   - Open a Claude pane in each copy: both start. In the dev copy's pane, ask Claude to run
     `gh api user --jq .login` with its Bash tool: expected `ABlueAgent`. Close the dev copy; the
     stable copy's panes and its Claude status keep working.
+  - Commit author (added by S31): in the dev copy's pane, ask Claude to run `git config user.name`
+    and, in a scratch branch of its worktree, `git commit --allow-empty -m "author check"` then
+    `git log -1 --format="%an <%ae>"`. Expected: `ABlueAgent` and
+    `ABlueAgent <344505663+ABlueAgent@users.noreply.github.com>`. Don't push it.
   - *Done when:* you tell an agent what you saw (or what differed). It ticks this with the date, and
     the status PR marks S07 done.
 - [ ] **40. S10 on your PC: one-click authority.** About **5 minutes**, after you merge the S10 PR,
@@ -844,6 +863,19 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   - Restart Mako: the level you picked last is still selected.
   - *Done when:* you tell an agent what you saw (or what differed). It ticks this with the date, and
     the status PR marks S10 done.
+  - **Re-run after S31 merges** (about 5 minutes; on 2026-11-02 every level opened in default mode,
+    because Mako's env scrub makes Claude Code force default. S31 keeps the scrub and gives each
+    level an explicit list of tools that run without asking; docs/AUTHORITY-LEVELS.md):
+    1. Pull `main` and restart Mako fully. The footer may still show default mode; that is expected.
+    2. **Minimum**, new builder pane: ask "Read README.md and summarise it in one line" (no prompt),
+       then "Create a file called s31-check.txt" (the edit tools are refused; if Claude then offers a
+       shell command that writes the file, it asks first: say no, and tell the agent it asked).
+    3. **Medium**, new builder pane: ask it to create `s31-check.txt` (no prompt), then to run
+       `git add s31-check.txt` (it asks first; answer no).
+    4. **High**, new builder pane: ask it to commit `s31-check.txt` on a scratch branch (no prompt),
+       then to run `git push --dry-run` (it asks first; answer no). Delete the scratch branch and
+       `s31-check.txt`.
+    5. Tell an agent what each step did.
 - [ ] **41. S11 on your PC: usage panel.** About **10 minutes**, after you merge the S11 PR, #126.
   Details in docs/USAGE-PANEL.md.
   - Pull `main` in your usual (stable) copy, not the dev copy, and restart Mako fully. The top bar
@@ -868,8 +900,10 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     the status PR marks S11 done.
 
 - [ ] **39. S08 on your PC: session memory.** About **3 minutes**, after you merge the S08 PR, #124.
-  - Pull `main` and restart Mako fully. Open a builder pane, wait for Claude to start, then close
-    the pane.
+  - Pull `main` and restart Mako fully. Open a builder pane, wait for Claude to start, send one short
+    message (for example "Reply with one word: ready") and wait for the reply, then close the pane.
+    Claude Code writes a session's transcript only after its first message, so without one there
+    is nothing to resume.
   - Open `%APPDATA%\command-center\session-memory.json` in Notepad: the last record shows
     `"role": "builder"`, your worktree folder, a `startedAt` and a `stoppedAt` time, and
     `"stopReason": "closed"`.

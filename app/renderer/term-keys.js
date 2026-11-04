@@ -33,7 +33,23 @@
     return { handled: true, send: null };
   }
 
-  const api = { NEWLINE_SEQUENCE, resolveKey };
+  /**
+   * S31 item 3: Ctrl+V (or Ctrl+Shift+V) keydown in a terminal pane. Returns true when the event was
+   * a paste key and has been handled: `paste()` runs once and the browser's default action is
+   * cancelled. Returning false from xterm's key handler stops only xterm's own keydown handling; the
+   * browser still fires its native paste event on xterm's textarea, which xterm sends to the PTY as
+   * well, so without preventDefault the text arrived twice (Blue's PC check, 2026-11-02).
+   */
+  function handlePasteKey(event, paste) {
+    if (!event || event.type !== 'keydown' || !event.ctrlKey) return false;
+    const isV = event.code === 'KeyV' || (typeof event.key === 'string' && event.key.toLowerCase() === 'v');
+    if (!isV) return false;
+    if (typeof event.preventDefault === 'function') event.preventDefault();
+    paste();
+    return true;
+  }
+
+  const api = { NEWLINE_SEQUENCE, resolveKey, handlePasteKey };
   global.ccTermKeys = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window === 'undefined' ? globalThis : window);

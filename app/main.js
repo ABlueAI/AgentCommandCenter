@@ -50,7 +50,8 @@ const { defaultUsageFilePath } = require('./usage/usage-file');
 // See docs/BUILDER-HANDOFF-fence-completion.md.
 const { classifyPtyLaunch, KIND: LAUNCH_KIND } = require('./pty-launch-classify');
 // S10: the authority level Blue picks maps to a main-owned Claude permission mode (authority-level.js).
-const { applyAuthority, permissionModeArg } = require('./authority-level');
+const { applyAuthority, authorityArgs } = require('./authority-level');
+const { channelFor } = require('./main-log-level');
 const { createRoleDefinitionResolver } = require('./role-definition-resolver');
 const { assertFencedRoleDefinition, FORBIDDEN_TOOLS, controlledWebFetchLaunch } = require('./role-fence-policy');
 const { createPtyStartAuthority } = require('./pty-start-authority');
@@ -94,7 +95,7 @@ const admissionConfig = require('./admission-budget-config');
 // Blue's explicit Tier 1 Windows allowlist. See app/pty-env.test.js.
 const { buildPtyEnv } = require('./pty-env');
 // S06: local agent panes push as ABlueAgent with the token from Mako's key setup (agent-git-env.js).
-const { isAgentToken, isAgentPane } = require('./agent-git-env');
+const { isAgentToken, isAgentPane, normalizeAgentToken } = require('./agent-git-env');
 // S06: kill a pane's whole process tree (taskkill /T) before pty.kill(); see process-tree.js.
 const { createProcessTreeKiller } = require('./process-tree');
 const processTree = createProcessTreeKiller({
@@ -327,8 +328,9 @@ function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, l
     if (VALID_MODELS.has(model)) cmd += ' --model ' + model;
     if (VALID_EFFORTS.has(effort)) cmd += ' --effort ' + effort;
     // S10: the authority level's permission mode, a main-owned constant chosen in the classify step
-    // (authority-level.js). Never set for a fenced role; permissionModeArg re-checks both.
-    cmd += permissionModeArg(launch);
+    // (authority-level.js). Never set for a fenced role; permissionModeArg re-checks both. S31: with
+    // the level's explicit tool lists first, because the env scrub forces the mode to default.
+    cmd += authorityArgs(launch);
     // Optional opening prompt (e.g. the reviewer's "review this diff"). Strip shell-significant
     // characters so it stays a single safe quoted argument inside the powershell -Command string.
     // A FENCED command never carries one: the classifier already refuses a supplied fenced prompt
@@ -340,7 +342,7 @@ function buildAgentCommand({ cli, agent, role, model, effort, initialPrompt }, l
     return cmd + sessionArg;
   }
   // S10: a bare `claude` pane carries the authority level's permission mode too; S08's session ID goes last.
-  if (launch && launch.kind === 'cli' && launch.cli === 'claude') return AGENT_CMD.claude + permissionModeArg(launch) + sessionArg;
+  if (launch && launch.kind === 'cli' && launch.cli === 'claude') return AGENT_CMD.claude + authorityArgs(launch) + sessionArg;
   const bare = AGENT_CMD[cli || agent]; // undefined when unknown/falsy -> plain shell
   return bare === AGENT_CMD.claude ? bare + sessionArg : bare;
 }
@@ -804,7 +806,7 @@ app.whenReady().then(() => {
     hasGeminiKey: () => geminiKey !== null,
     logUsage: (line) => {
       console.log(line);
-      if (win && !win.isDestroyed()) win.webContents.send('main-error', line);
+      sendMainLog(line, 'routine');
     },
     logRefusal: (line) => {
       console.error(line);
@@ -833,7 +835,7 @@ app.whenReady().then(() => {
       // reports `write-failed-after-admission` without refunding the durable admission.
       writer: admissionPtyBoundary.writeAdmitted,
       isPaneRunning: (paneId) => ptys.has(paneId),
-      log: (line) => { tlog(line); if (win && !win.isDestroyed()) win.webContents.send('main-error', line); },
+      log: (line) => { tlog(line); sendMainLog(line, 'routine'); },
     });
     const init = admissionBudget.initialize();
     if (!init.ok) {
@@ -991,12 +993,18 @@ function launch(cmd, args, onError) {
 
 // ---- launch-pipeline timing diagnostics (remove once root cause confirmed) --
 let _t0 = null;
+// S31 item 5: a routine line goes on `main-info` (shown as "[main]"), a refusal or failure on
+// `main-error` ("[main error]"); main-log-level.js decides, and defaults to error.
+function sendMainLog(line, kind) {
+  if (win && !win.isDestroyed()) win.webContents.send(channelFor(line, kind), line);
+}
+
 function tlog(msg) {
   if (_t0 === null) _t0 = Date.now();
   const elapsed = Date.now() - _t0;
   const line = `[TIMING +${elapsed}ms] ${msg}`;
   console.log(line);
-  if (win && !win.isDestroyed()) win.webContents.send('main-error', line);
+  sendMainLog(line, 'routine');
 }
 // Call at the start of each createAgent attempt to reset the clock.
 function tlogReset() { _t0 = Date.now(); tlog('--- new createAgent sequence ---'); }
@@ -1612,14 +1620,17 @@ ipcMain.handle('get-agent-token-status', (e) => {
 ipcMain.handle('set-agent-token', (e, token) => {
   const g = launcherGate.assess(e);
   if (!g.ok) return { ok: false, error: g.reason };
-  const t = typeof token === 'string' ? token.trim() : '';
-  if (!isAgentToken(t)) return { ok: false, error: 'not a GitHub token (expected ghp_… or github_pat_…)' };
+  // S31: invisible characters are removed first, and a refusal says why without echoing the token.
+  const norm = normalizeAgentToken(token);
+  if (!norm.ok) return { ok: false, error: `not a GitHub token: ${norm.reason}` };
+  const t = norm.token;
+  if (!isAgentToken(t)) return { ok: false, error: 'not a GitHub token' };
   if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'safeStorage encryption not available on this system' };
   try {
     const enc = safeStorage.encryptString(t);
     const s = loadSecure(); s.agentGitTokenEnc = enc.toString('base64'); saveSecure(s);
     agentGitToken = t;
-    tlog('[agent-git] ABlueAgent token stored; new agent panes push as ABlueAgent');
+    tlog(`[agent-git] ABlueAgent token stored; new agent panes push as ABlueAgent${norm.removed ? ` (${norm.removed} invisible or space character(s) removed)` : ''}`);
     return { ok: true };
   } catch { return { ok: false, error: 'could not encrypt or save the token' }; }
 });

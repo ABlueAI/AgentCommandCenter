@@ -528,10 +528,10 @@ function openInAppTerminal(opts = {}) {
       if (remap.send) { e.preventDefault(); cc.ptyWrite(id, remap.send); }
       return false;
     }
+    // Ctrl+V / Ctrl+Shift+V: paste once and cancel the browser's own paste (term-keys.js, S31).
+    if (window.ccTermKeys.handlePasteKey(e, () => { clip.pasteIntoPty().catch(() => {}); })) return false;
     if (e.type !== 'keydown' || !e.ctrlKey) return true;
-    const isV = e.code === 'KeyV' || (e.key && e.key.toLowerCase() === 'v');
     const isC = e.code === 'KeyC' || (e.key && e.key.toLowerCase() === 'c');
-    if (isV) { clip.pasteIntoPty().catch(() => {}); return false; }   // Ctrl+V / Ctrl+Shift+V
     if (isC) {
       const sel = term.getSelection();
       appendLog(`[copy ${id}] Ctrl+${e.shiftKey ? 'Shift+' : ''}C: ${sel ? sel.length + ' chars selected' : 'no selection → SIGINT'}\n`);
@@ -630,7 +630,9 @@ function openInAppTerminal(opts = {}) {
       role,
     });
     selectionAtSpeakPointerDown = '';
-    speakSelectionMemory.clear();
+    // S31 item 7: the remembered selection is kept after speaking, so 🔊 reads the pane's last
+    // selection again (for example after the speed menu took focus). A pointerdown in the terminal,
+    // which starts a new selection, is what clears it.
     appendLog(action.log);
     if (!action.ok) return;
     window.ccTTS.speak(action.text);
@@ -1409,6 +1411,7 @@ async function boot() {
     if (t) { t.parser.flush(); t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n'); }
   });
   cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));
+  cc.onMainInfo((m) => appendLog('\n[main] ' + m + '\n'));
   // S09: after the main-error listener, so a session-memory refusal or a refused Resume is shown.
   await offerResume();
 
@@ -1812,12 +1815,19 @@ function wireUi() {
 
   // ABlueAgent token banner (S06). The token is sent once to main and never read back.
   $('#agentTokenSave').onclick = async () => {
-    const token = $('#agentTokenInput').value.trim();
-    if (!token) { $('#agentTokenInput').focus(); return; }
+    // S31: main strips invisible characters and checks the shape. A refusal shows its reason in the
+    // banner and keeps the input so the token can be fixed; the input is cleared only once stored.
+    const input = $('#agentTokenInput');
+    const status = $('#agentTokenStatus');
+    const token = input.value;
+    if (!token.trim()) { status.textContent = 'Paste the token first.'; input.focus(); return; }
+    status.textContent = 'Saving…';
     const r = await cc.setAgentToken(token);
-    $('#agentTokenInput').value = '';
-    if (r && r.ok) updateAgentTokenBanner({ ok: true, hasToken: true });
-    else appendLog(`[agent token] save failed: ${(r && r.error) || 'unknown error'}\n`);
+    const msg = window.ccAgentTokenView.saveResultMessage(r);
+    status.textContent = msg.text;
+    status.classList.toggle('error', !msg.ok);
+    if (msg.ok) { input.value = ''; updateAgentTokenBanner({ ok: true, hasToken: true }); }
+    else { appendLog(`[agent token] save failed: ${msg.text}\n`); input.focus(); }
   };
   $('#agentTokenInput').onkeydown = (e) => { if (e.key === 'Enter') $('#agentTokenSave').click(); };
   $('#agentTokenChange').onclick = () => updateAgentTokenBanner({ ok: true, hasToken: false });
