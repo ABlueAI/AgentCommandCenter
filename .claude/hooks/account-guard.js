@@ -76,9 +76,10 @@ const GH_VALUE_OPTS = new Set(['-R', '--repo', '--hostname']);
 const SEPARATORS = new Set([';', '&', '|', '\n', '\r', '(', ')']);
 
 // Heredocs (`cat <<'EOF'` ... `EOF`): their bodies are data, not commands, and may hold unbalanced
-// quotes (a commit message's "don't"), so they are skipped rather than parsed.
-// readHeredoc: at `<<` (index i), returns { delim, stripTabs, end } or null. `end` is the index
-// just after the delimiter word.
+// quotes (a commit message's "don't"), so their text is never parsed as commands. With an unquoted
+// delimiter (`<<EOF`), bash still runs the body's `$(...)` and backticks, so those are checked.
+// readHeredoc: at `<<` (index i), returns { delim, stripTabs, quoted, end } or null. `end` is the
+// index just after the delimiter word; `quoted` is true when any part of it was quoted or escaped.
 function readHeredoc(s, i) {
   if (s[i] !== '<' || s[i + 1] !== '<' || s[i + 2] === '<') return null;
   let j = i + 2;
@@ -86,43 +87,73 @@ function readHeredoc(s, i) {
   if (stripTabs) j++;
   while (s[j] === ' ' || s[j] === '\t') j++;
   let delim = '';
+  let quoted = false;
   while (j < s.length && !/[\s;&|<>()]/.test(s[j])) {
     const c = s[j];
     if (c === "'" || c === '"') {
       const close = s.indexOf(c, j + 1);
       if (close === -1) return null;
       delim += s.slice(j + 1, close);
+      quoted = true;
       j = close + 1;
       continue;
     }
-    if (c === '\\') { delim += s[j + 1] || ''; j += 2; continue; }
+    if (c === '\\') { delim += s[j + 1] || ''; quoted = true; j += 2; continue; }
     delim += c;
     j++;
   }
-  return delim ? { delim, stripTabs, end: j } : null;
+  return delim ? { delim, stripTabs, quoted, end: j } : null;
 }
 
 // skipHeredocBodies: `nl` is the index of the newline that ends the heredocs' command line. Returns
 // the index of the newline after the last closing delimiter line. A delimiter that never appears
 // (or a `<<` that was really an arithmetic shift, `(( x << 3 ))`) marks ctx.unbalanced, so the
-// caller's plain text scan still sees whatever followed.
-function skipHeredocBodies(s, nl, pending, ctx) {
+// caller's plain text scan still sees whatever followed. `onBody(text)` is called with the body of
+// each heredoc whose delimiter was unquoted, so its substitutions can be checked.
+function skipHeredocBodies(s, nl, pending, ctx, onBody) {
   let end = nl;
   for (const h of pending) {
-    let pos = end + 1;
+    const bodyStart = end + 1;
+    let pos = bodyStart;
     let found = false;
     while (pos <= s.length) {
       const next = s.indexOf('\n', pos);
       const lineEnd = next === -1 ? s.length : next;
       let line = s.slice(pos, lineEnd).replace(/\r$/, '');
       if (h.stripTabs) line = line.replace(/^\t+/, '');
-      if (line === h.delim) { end = lineEnd; found = true; break; }
+      if (line === h.delim) {
+        if (!h.quoted && onBody) onBody(s.slice(bodyStart, pos));
+        end = lineEnd;
+        found = true;
+        break;
+      }
       if (next === -1) break;
       pos = next + 1;
     }
     if (!found) { if (ctx) ctx.unbalanced = true; return s.length; }
   }
   return end;
+}
+
+// The command substitutions bash runs inside an unquoted heredoc body: `$(...)` and backticks.
+// Everything else in the body, quotes included, is literal text.
+function bodySubstitutions(body, ctx) {
+  const found = [];
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (c === '\\') { i++; continue; }
+    if (c === '$' && body[i + 1] === '(') {
+      const close = matchParen(body, i + 2, ctx);
+      found.push(body.slice(i + 2, close));
+      i = close;
+    } else if (c === '`') {
+      const close = body.indexOf('`', i + 1);
+      if (close === -1) { if (ctx) ctx.unbalanced = true; found.push(body.slice(i + 1)); break; }
+      found.push(body.slice(i + 1, close));
+      i = close;
+    }
+  }
+  return found;
 }
 
 // Find the index of the `)` closing a `$(` that starts at `open` (the index after `$(`).
@@ -161,8 +192,9 @@ function matchParen(s, open, ctx) {
 // Split a shell command line into simple commands (arrays of words). Quote-aware, so text inside
 // quotes (a commit message, an echo) is never mistaken for a command; command substitutions
 // (`$(...)`, backticks) are split out as commands of their own, since the shell runs them.
-// ctx.unbalanced is set when a quote, `$(` or backtick never closes; the caller then falls back to
-// a plain text scan, so a parsing gap can't hide a guarded command.
+// ctx.unbalanced is set when a quote, `$(` or backtick never closes, or a heredoc delimiter never
+// appears; the caller then falls back to a plain text scan, so a parsing gap can't hide a guarded
+// command.
 function splitCommands(input, depth = 0, ctx = { unbalanced: false }) {
   const commands = [];
   if (typeof input !== 'string' || depth > 8) return commands;
@@ -240,7 +272,9 @@ function splitCommands(input, depth = 0, ctx = { unbalanced: false }) {
     }
     if (c === '\n' && pending.length) { // skip the heredoc bodies that start on the next line
       endCommand();
-      const p = skipHeredocBodies(s, i, pending, ctx);
+      const p = skipHeredocBodies(s, i, pending, ctx, (body) => {
+        for (const text of bodySubstitutions(body, ctx)) sub(text);
+      });
       pending = [];
       i = p - 1;
       continue;
@@ -316,7 +350,8 @@ function classifySimpleCommand(words, depth) {
   return null;
 }
 
-// Plain text scan, used only when the parser met an unclosed quote, `$(` or backtick: it may
+// Plain text scan, used only when the parser met an unclosed quote, `$(` or backtick, or a heredoc
+// delimiter that never appears: it may
 // over-match (a false hit costs one `gh` call, and blocks only under ABlueAI), but never misses
 // these spellings.
 const RAW_PATTERNS = [

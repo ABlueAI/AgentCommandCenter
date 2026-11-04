@@ -69,6 +69,11 @@ const GUARDED = [
   ["git commit -F- <<'EOF'\nit's done\nEOF\ngit push", 'git push'],
   ['git commit -F- <<EOF && git push\nbody with a " quote\nEOF', 'git push'],
   ["cat <<-'EOF' > f\n\tdon't\n\tEOF\ngh pr create --fill", 'gh pr create'],
+  // An unquoted heredoc body still runs its command substitutions (Codex's finding on PR #153).
+  ['cat <<EOF\n$(git push)\nEOF', 'git push'],
+  ['cat <<EOF\nresult: `gh pr create --fill`\nEOF', 'gh pr create'],
+  ["cat <<-EOF > out.txt\n\tdon't stop: $(echo x; gh pr ready 7)\n\tEOF", 'gh pr ready'],
+  ['git commit -F- <<EOF\nmsg $(git push origin x)\nEOF', 'git push'],
   // A here-string or an arithmetic shift is not a heredoc, and never hides what follows.
   ['read a b <<< "$line"\ngit push', 'git push'],
   ["grep -q x <<< \"$out\"\ngh pr create --fill", 'gh pr create'],
@@ -107,6 +112,12 @@ const NOT_GUARDED = [
   'node -e "console.log(1)"',
   "git commit -F- <<'EOF'\ngit push and gh pr create in a commit message\nEOF",
   "cat <<EOF > notes.md\nthen run git push\nEOF\nnpm test",
+  // A quoted delimiter turns substitutions off, so these are only text.
+  "cat <<'EOF'\n$(git push)\nEOF",
+  'cat <<"EOF"\n`gh pr create`\nEOF',
+  'cat <<\\EOF\n$(git push)\nEOF',
+  // In an unquoted body, an escaped substitution is text too, and other substitutions are fine.
+  'cat <<EOF\n\\$(git push) costs $(date)\nEOF',
   '',
 ];
 for (const cmd of NOT_GUARDED) {
