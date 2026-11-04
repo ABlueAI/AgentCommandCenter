@@ -12,6 +12,8 @@
 //     1 credential.https://github.com.helper = "!gh auth git-credential"
 //                                    gh's own helper (official, not a hand-written one), which hands
 //                                    git the GH_TOKEN token as user x-access-token.
+//     2 user.name = ABlueAgent, 3 user.email = its noreply address (S31): what `git config` reports
+//                                    in the pane, and the author if GIT_AUTHOR_* were ever dropped;
 //   GIT_TERMINAL_PROMPT = 0  a failed login fails visibly instead of waiting on a hidden prompt.
 //   GIT_AUTHOR_* / GIT_COMMITTER_*   commits are attributed to ABlueAgent (its noreply address).
 // Claude Code's subprocess scrub (CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1) leaves GH_TOKEN and
@@ -47,6 +49,10 @@ const AGENT_GIT_ENV_KEYS = Object.freeze([
   'GIT_CONFIG_VALUE_0',
   'GIT_CONFIG_KEY_1',
   'GIT_CONFIG_VALUE_1',
+  'GIT_CONFIG_KEY_2',
+  'GIT_CONFIG_VALUE_2',
+  'GIT_CONFIG_KEY_3',
+  'GIT_CONFIG_VALUE_3',
   'GIT_CONFIG_PARAMETERS',
   'GIT_CONFIG_GLOBAL',
   'GIT_CONFIG_SYSTEM',
@@ -107,11 +113,18 @@ function buildAgentGitEnv(token) {
   if (!isAgentToken(token)) return {};
   return {
     GH_TOKEN: token,
-    GIT_CONFIG_COUNT: '2',
+    GIT_CONFIG_COUNT: '4',
     GIT_CONFIG_KEY_0: 'credential.helper',
     GIT_CONFIG_VALUE_0: '',
     GIT_CONFIG_KEY_1: 'credential.https://github.com.helper',
     GIT_CONFIG_VALUE_1: GH_HELPER,
+    // S31 item 6: the identity as command-scope config too, so `git config user.name` in the pane
+    // says ABlueAgent (on 2026-11-02 it showed ABlueAI), and commits stay ABlueAgent's even if
+    // Claude Code's scrub were to drop the GIT_AUTHOR_* names (it documents keeping GIT_CONFIG_*).
+    GIT_CONFIG_KEY_2: 'user.name',
+    GIT_CONFIG_VALUE_2: AGENT_LOGIN,
+    GIT_CONFIG_KEY_3: 'user.email',
+    GIT_CONFIG_VALUE_3: AGENT_NOREPLY_EMAIL,
     GIT_TERMINAL_PROMPT: '0',
     GIT_AUTHOR_NAME: AGENT_LOGIN,
     GIT_AUTHOR_EMAIL: AGENT_NOREPLY_EMAIL,

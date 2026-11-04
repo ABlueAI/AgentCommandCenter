@@ -81,7 +81,10 @@ const FINE = 'github_pat_' + '11ABCDEFG0123456789abc_' + 'x'.repeat(59);
 {
   const env = buildAgentGitEnv(TOKEN);
   assert(env.GH_TOKEN === TOKEN, 'GH_TOKEN carries the token');
-  assert(env.GIT_CONFIG_COUNT === '2', 'two command-scope git config entries');
+  assert(env.GIT_CONFIG_COUNT === '4', 'four command-scope git config entries');
+  assert(env.GIT_CONFIG_KEY_2 === 'user.name' && env.GIT_CONFIG_VALUE_2 === 'ABlueAgent'
+    && env.GIT_CONFIG_KEY_3 === 'user.email' && env.GIT_CONFIG_VALUE_3 === AGENT_NOREPLY_EMAIL,
+  'entries 2 and 3 set the git identity to ABlueAgent (S31)');
   assert(env.GIT_CONFIG_KEY_0 === 'credential.helper' && env.GIT_CONFIG_VALUE_0 === '',
     'entry 0 resets the credential helper list (no Git Credential Manager / ABlueAI login)');
   assert(env.GIT_CONFIG_KEY_1 === 'credential.https://github.com.helper' && env.GIT_CONFIG_VALUE_1 === '!gh auth git-credential',
@@ -109,7 +112,7 @@ const AMBIENT = {
   const names = Object.keys(env).map((k) => k.toUpperCase());
   assert(names.filter((k) => k === 'GH_TOKEN').length === 1 && !names.includes('GITHUB_TOKEN'),
     'agent pane: no ambient GH_TOKEN/github_token spelling survives beside the agent\'s');
-  assert(env.GIT_CONFIG_COUNT === '2' && !('Git_Config_Key_0' in env), 'agent pane: ambient GIT_CONFIG_* is replaced, any case');
+  assert(env.GIT_CONFIG_COUNT === '4' && !('Git_Config_Key_0' in env), 'agent pane: ambient GIT_CONFIG_* is replaced, any case');
   assert(!('GIT_CONFIG_PARAMETERS' in env) && !('GIT_ASKPASS' in env), 'agent pane: ambient GIT_CONFIG_PARAMETERS and GIT_ASKPASS are removed');
   assert(env.GIT_AUTHOR_NAME === 'ABlueAgent', 'agent pane: the ambient author is replaced');
 }
@@ -148,6 +151,52 @@ const AMBIENT = {
   assert(!/tlog\([^)]*agentGitToken\b(?!\s*\?)/.test(src), 'the token is never logged');
   const preload = fs.readFileSync(path.join(__dirname, 'preload.js'), 'utf8');
   assert(!/getAgentToken\b|readAgentToken/.test(preload), 'preload has no way to read the token back');
+}
+
+// --- S31 item 6: a real git commit in a repo whose own config says ABlueAI -------------------------
+{
+  const { execFileSync } = require('child_process');
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  let gitOk = true;
+  try { execFileSync('git', ['--version'], { stdio: 'ignore' }); } catch { gitOk = false; }
+  assert(gitOk, 'git is available for the commit-author check');
+  if (gitOk) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mako-s31-author-'));
+    try {
+      const base = Object.assign({}, process.env);
+      for (const k of Object.keys(base)) if (/^GIT_/i.test(k) || /^GH_/i.test(k)) delete base[k];
+      base.GIT_CONFIG_NOSYSTEM = '1';
+      base.HOME = dir; base.USERPROFILE = dir; base.XDG_CONFIG_HOME = dir;
+      const git = (args, env) => execFileSync('git', args, { cwd: dir, env, encoding: 'utf8' }).trim();
+      git(['init', '-q'], base);
+      git(['config', 'user.name', 'ABlueAI'], base);
+      git(['config', 'user.email', 'blue@example.invalid'], base);
+      fs.writeFileSync(path.join(dir, 'a.txt'), 'x');
+      git(['add', 'a.txt'], base);
+      const full = Object.assign({}, base, buildAgentGitEnv(TOKEN));
+      git(['commit', '-q', '-m', 'agent commit'], full);
+      assert(git(['log', '-1', '--format=%an <%ae> | %cn <%ce>'], base)
+        === `ABlueAgent <${AGENT_NOREPLY_EMAIL}> | ABlueAgent <${AGENT_NOREPLY_EMAIL}>`,
+      'an agent pane\'s commit is authored and committed by ABlueAgent, although the repo config says ABlueAI');
+      assert(git(['config', 'user.name'], full) === 'ABlueAgent', '`git config user.name` in an agent pane says ABlueAgent');
+      // If the GIT_AUTHOR_*/GIT_COMMITTER_* names were dropped (by a subprocess scrub), the
+      // command-scope config alone still makes the commit ABlueAgent's.
+      const noNames = Object.assign({}, full);
+      for (const k of ['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL']) delete noNames[k];
+      fs.writeFileSync(path.join(dir, 'a.txt'), 'y');
+      git(['commit', '-q', '-am', 'second'], noNames);
+      assert(git(['log', '-1', '--format=%an <%ae>'], base) === `ABlueAgent <${AGENT_NOREPLY_EMAIL}>`,
+        'without the GIT_AUTHOR_* names the commit is still ABlueAgent\'s');
+      // A plain shell (no agent env) keeps Blue's own identity.
+      fs.writeFileSync(path.join(dir, 'a.txt'), 'z');
+      git(['commit', '-q', '-am', 'blue'], base);
+      assert(git(['log', '-1', '--format=%an'], base) === 'ABlueAI', 'a plain shell still commits as Blue');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
 }
 
 process.stdout.write(`\nagent-git-env: ${passed} passed, ${failed} failed\n`);
