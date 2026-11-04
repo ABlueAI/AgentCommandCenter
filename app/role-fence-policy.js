@@ -44,6 +44,19 @@ const PATH_CAPABLE_TOOLS = Object.freeze(['Read', 'Write', 'Edit', 'MultiEdit'])
 // tool here is a policy change that needs its own review.
 const ALLOWED_TOOLS = Object.freeze(['Read', 'Write', 'Edit', 'MultiEdit', 'WebSearch', 'WebFetch']);
 
+// S15 PAGE READER (Blue's verdict 2026-11-03: ADOPT Playwright MCP). The ONLY MCP tools any fenced
+// role may declare, granted to `page-reader` by role IDENTITY and to no other role. The same role must
+// route both through the canonical fence hook entry (matcher coverage, below), because the hook is
+// what limits navigation to https: and refuses a snapshot written to a file. Literals equal
+// page-reader.js MCP_TOOLS and scripts/hooks/fence-write.js (tripwire-tested in page-reader.test.js).
+const ROLE_MCP_TOOLS = Object.freeze({
+  'page-reader': Object.freeze(['mcp__playwright__browser_navigate', 'mcp__playwright__browser_snapshot']),
+});
+
+function roleMcpTools(role) {
+  return Object.prototype.hasOwnProperty.call(ROLE_MCP_TOOLS, role) ? ROLE_MCP_TOOLS[role] : [];
+}
+
 // CONTROLLED WEBFETCH GRANT (run -d case 6). The ONE destination a controlled run may fetch without a
 // terminal permission dialog, which controlled-run admission cannot answer. MAIN-ISSUED, like
 // FORBIDDEN_TOOLS: no renderer field, role Markdown or prompt text reaches it.
@@ -140,7 +153,8 @@ const REASON = Object.freeze({
 // `node "<absolute path>"` and nothing else. A bare `node path` or an extra argument refuses.
 const COMMAND_FORM = /^node\s+"(.+)"$/;
 // Plain alternation only. Any other regex metacharacter refuses rather than being interpreted.
-const MATCHER_FORM = /^[A-Za-z]+(\|[A-Za-z]+)*$/;
+// Underscores and digits are literal in a regex; they allow the page-reader's `mcp__...` tool names.
+const MATCHER_FORM = /^[A-Za-z0-9_]+(\|[A-Za-z0-9_]+)*$/;
 
 function refuse(reason) { return { ok: false, reason: reason }; }
 
@@ -184,8 +198,9 @@ function assertFencedRoleDefinition(input) {
   }
   // Allowlist: exact, case-sensitive names only. Unknown names, lower-case variants, specifiers such
   // as `Read(./x)` and MCP tool names all refuse — none is a tool this fence was reviewed against.
+  const mcpGrant = roleMcpTools(role);
   for (const t of parsed.tools) {
-    if (ALLOWED_TOOLS.indexOf(t) === -1) return refuse(REASON.TOOL_NOT_ALLOWED);
+    if (ALLOWED_TOOLS.indexOf(t) === -1 && mcpGrant.indexOf(t) === -1) return refuse(REASON.TOOL_NOT_ALLOWED);
   }
 
   const pre = parsed.events && parsed.events.PreToolUse;
@@ -241,6 +256,11 @@ function assertFencedRoleDefinition(input) {
   // interrupted sync-roles.ps1 that installed the new hook but not the new matcher) would be accepted,
   // receive the grant, and fetch past the gate. Other roles receive no grant and are unaffected.
   if (role === CONTROLLED_WEBFETCH.role && !covered.has('WebFetch')) return refuse(REASON.MATCHER_COVERAGE);
+  // S15: the page-reader's two MCP tools always go through the same canonical hook entry, whether or
+  // not its `tools:` line declares them, since main passes them to --allowedTools on role identity.
+  for (const t of mcpGrant) {
+    if (!covered.has(t)) return refuse(REASON.MATCHER_COVERAGE);
+  }
 
   return { ok: true, hookPath: owningHookPath, tools: parsed.tools, matcher: matcher };
 }
@@ -252,6 +272,8 @@ module.exports = {
   controlledWebFetchLaunch: controlledWebFetchLaunch,
   FORBIDDEN_TOOLS: FORBIDDEN_TOOLS,
   PATH_CAPABLE_TOOLS: PATH_CAPABLE_TOOLS,
+  ROLE_MCP_TOOLS: ROLE_MCP_TOOLS,
+  roleMcpTools: roleMcpTools,
   REASON: REASON,
   assertFencedRoleDefinition: assertFencedRoleDefinition,
 };

@@ -1,8 +1,8 @@
 # Mako status
 
 Updated 2026-11-01 by the all-day runner's status PR for 2026-11-01 (no PR merged since the
-2026-10-30 status PR, #138; the last session PR merged was S21's, #133, on 2026-10-29). Every PR
-that changes the state updates this file.
+2026-10-30 status PR, #138; the last session PR merged was S21's, #133, on 2026-10-29); PR #130.
+Every PR that changes the state updates this file.
 
 ## Right now
 
@@ -63,6 +63,13 @@ that changes the state updates this file.
 - **Plan to issues (S03, PR #54 merged 2026-10-21, in progress):** a workflow keeps one `Sxx: <title>` issue per plan
   session, with status, authority, lane and sensitive labels and the "1.1 Month 1" milestone, in step
   with docs/PLAN-1.1.md on `main`. The Project board joins once Blue connects it (checklist step 25).
+- **Research capture (S15, PR #130, in progress):** Blue's verdict (2026-11-03): ADOPT
+  Playwright MCP as the page reader. Claude in Chrome was rejected: on his PC it returned "This site
+  is blocked." on reddit.com, while Playwright MCP read a www.reddit.com thread with no login
+  (checklist step 43, ticked). The build in PR #130: a "📄 Page" choice in New Agent that takes a
+  URL, a fenced `page-reader` pane allowed only to navigate, snapshot and write its own report, and
+  the Reviewer reading that report (docs/decisions/OSS-research-capture.md); step 48 checks it on
+  his PC after the merge.
 - **Obsidian Skills (S13, PR #115 merged 2026-10-23, in progress):** `scripts/new-mako-vault.ps1` creates Blue's
   private vault outside this repo, with `Mako index.md` (links to STATUS, PLAN, DECISIONS and the
   checklist on GitHub) an `AGENTS.md` and a `CLAUDE.md`; the kepano/obsidian-skills plugin is to be installed in

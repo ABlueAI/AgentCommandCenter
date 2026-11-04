@@ -272,6 +272,7 @@
         <button class="choice" data-role="source-scout">🔍 Source</button>
         <button class="choice" data-role="operator">📣 Operator</button>
         <button class="choice" data-role="video-scout">🎥 Video</button>
+        <button class="choice" data-role="page-reader">📄 Page</button>
         <button class="choice" data-role="plain">▶ Plain</button>
       </div>
       <div id="builderOpts" class="modal-opt">
@@ -327,6 +328,10 @@
         <p id="analysisFocusError" class="range-error hidden"></p>
         <p class="muted small">Steers the analysis toward what you care about while preserving the required report format and every section. Leave blank for the standard analysis.</p>
         <p class="muted small" id="analysisFocusCounter">0 / 2000</p>
+      </div>
+      <div id="pageReaderOpts" class="modal-opt hidden">
+        <p class="muted small">Opens the page in Playwright's own Chromium window (no sign-in) and writes what it says to <code>report.md</code>. Read only: it can't click or type. If a robot check appears, complete it yourself in that window.</p>
+        <button id="sendReportToReviewer" class="ghost" disabled>🔎 Send the last page report to Reviewer</button>
       </div>
       <div class="modal-actions">
         <button id="modalCancel" class="ghost">Cancel</button>

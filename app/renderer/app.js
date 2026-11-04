@@ -92,6 +92,9 @@ const ROLES = {
   // Video-scout runs on Gemini (the only model that watches video), launched via the videoScout
   // path, not claude --agent. Input is a URL, not a task name.
   'video-scout':    { label: 'Video Scout',     glyph: '🎥', cli: 'gemini', readOnly: false, needsWorktree: false, newAgent: true, video: true },
+  // S15: reads one web page in Playwright's own browser and writes report.md in a fenced folder.
+  // Input is a page URL, which MAIN checks and writes into that folder (page-reader-prepare).
+  'page-reader':    { label: 'Page Reader',     glyph: '📄', cli: 'claude', readOnly: false, needsWorktree: false, newAgent: true, page: true },
 };
 
 // ---- chat bubble renderer -----------------------------------------------
@@ -1828,6 +1831,20 @@ function wireUi() {
   $('#newAgent').onclick = openModal;
   $('#modalCancel').onclick = closeModal;
   $('#modalCreate').onclick = createAgent;
+  // S15: hand the last page-reader report to the Reviewer. MAIN copies report.md into a fresh folder
+  // (never the page-reader's own, which a page-reading agent can write) and names that folder and the
+  // Reviewer's fixed opening line; the renderer supplies neither.
+  $('#sendReportToReviewer').onclick = async () => {
+    const r = await cc.pageReportToReviewer();
+    if (!r || !r.ok) {
+      appendLog(`[reviewer] page report not sent: ${(r && r.error) || 'unknown error'}\n`);
+      alert(`Could not send the page report:\n\n${(r && (r.hint || r.error)) || 'unknown error'}`);
+      return;
+    }
+    closeModal();
+    appendLog(`\n[reviewer] reading a copy of the page report in ${r.dir}…\n`);
+    openInAppTerminal({ worktree: r.dir, role: 'reviewer', cli: 'claude', initialPrompt: r.initialPrompt, title: 'Reviewer · page report' });
+  };
   // Role picker: switches behavior + reveals builder/plain sub-options.
   document.querySelectorAll('.role-choices .choice').forEach((c) => {
     c.onclick = () => {
@@ -1839,7 +1856,8 @@ function wireUi() {
       $('#cliRow').classList.toggle('hidden', state.chosenRole !== 'plain');
       $('#targetRow').classList.toggle('hidden', !r.readOnly);
       $('#videoScoutOpts').classList.toggle('hidden', !r.video);
-      setTaskInputMode(!!r.video); // video-scout uses the same field for a URL
+      $('#pageReaderOpts').classList.toggle('hidden', !r.page);
+      setTaskInputMode(r.video ? 'video' : (r.page ? 'page' : null)); // video-scout and page-reader use the same field for a URL
       updateVideoRangeVisibility();
       updateModalHint();
     };
@@ -1915,12 +1933,16 @@ function updateAnalysisFocusCounter() {
   counter.classList.toggle('over', len > analysisFocus.MAX_ANALYSIS_FOCUS_CHARS);
 }
 
-// The task field doubles as the URL field for video-scout — relabel it accordingly.
-function setTaskInputMode(isVideo) {
+// The task field doubles as the URL field for video-scout and page-reader — relabel it accordingly.
+// `mode` is 'video', 'page' or anything else for a task name (a bare `true` still means video).
+function setTaskInputMode(mode) {
   const lbl = $('#taskNameLabel'); const inp = $('#taskName');
-  if (isVideo) {
+  if (mode === true || mode === 'video') {
     if (lbl) lbl.innerHTML = 'Video URL';
     if (inp) inp.placeholder = 'https://youtu.be/…';
+  } else if (mode === 'page') {
+    if (lbl) lbl.innerHTML = 'Page URL <span class="muted">(https)</span>';
+    if (inp) inp.placeholder = 'https://www.reddit.com/r/…/comments/…';
   } else {
     if (lbl) lbl.innerHTML = 'Task name <span class="muted">(kebab-case)</span>';
     if (inp) inp.placeholder = 'e.g. search-bar';
@@ -2059,6 +2081,8 @@ function updateModalHint() {
     hint.innerHTML = `Creates a git worktree on <code>agent/&lt;task&gt;</code> and launches <code>${state.chosenCli}</code>.`;
   } else if (ROLES[role].video) {
     hint.innerHTML = `Downloads the video (yt-dlp) and analyzes it with <code>Gemini</code> — visual + spoken. Needs <code>GEMINI_API_KEY</code>.`;
+  } else if (ROLES[role].page) {
+    hint.innerHTML = `Runs in a fenced output sandbox — launches <code>claude --agent page-reader</code> with Playwright MCP (navigate and snapshot only).`;
   } else if (ROLES[role].readOnly) {
     hint.innerHTML = `Read-only — launches <code>claude --agent ${role}</code> against the target checkout (no worktree, no edits).`;
   } else if (ROLES[role].needsWorktree) {
@@ -2233,6 +2257,33 @@ async function createAgent() {
       ...focusOpt,
       title: `Video Scout · ${new URL(url).hostname}`,
     });
+    return;
+  }
+
+  // S15 Page Reader: the input is a page URL. Main checks it and prepares the fenced folder; the
+  // check here is immediate feedback only. FAIL CLOSED on the fence exactly like the other fenced roles.
+  if (meta && meta.page) {
+    const url = $('#taskName').value.trim();
+    if (!/^https:\/\/\S+$/.test(url)) { alert('Enter a page URL starting with https://'); $('#taskName').focus(); return; }
+    const fence = await cc.verifyFence({ role });
+    if (!fence || !fence.ok) {
+      appendLog(`[agent] BLOCKED ${role}: fence not active — ${fence && fence.error}\n`);
+      alert(`Refusing to launch "${meta.label}" — its fence isn't active:\n\n${(fence && fence.error) || 'unknown error'}`);
+      return;
+    }
+    const r = await cc.pageReaderPrepare({ url });
+    if (!r || !r.ok) {
+      appendLog(`[page-reader] refused: ${(r && r.error) || 'unknown error'}\n`);
+      alert(`Could not start the Page Reader:\n\n${(r && (r.hint || r.error)) || 'unknown error'}`);
+      return;
+    }
+    closeModal();
+    const sendBtn = $('#sendReportToReviewer');
+    if (sendBtn) sendBtn.disabled = false;
+    let host = 'page';
+    try { host = new URL(url).hostname; } catch (e) { /* main already checked it */ }
+    appendLog(`\n[page-reader] reading a page on ${host} in fenced sandbox ${r.dir}…\n`);
+    openInAppTerminal({ worktree: r.dir, role, cli: 'claude', title: `${meta.label} · ${host}` });
     return;
   }
 

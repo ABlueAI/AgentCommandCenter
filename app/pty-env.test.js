@@ -268,8 +268,8 @@ function observedChildEnv(env) {
   catch { return { ok: false, env: null }; }
 }
 
-const FENCED_ROLES = new Set(['web-scout', 'operator', 'source-scout']);
-const ALL_ROLES = ['builder', 'reviewer', 'codebase-scout', 'web-scout', 'operator', 'source-scout'];
+const FENCED_ROLES = new Set(['web-scout', 'operator', 'source-scout', 'page-reader']);
+const ALL_ROLES = ['builder', 'reviewer', 'codebase-scout', 'web-scout', 'operator', 'source-scout', 'page-reader'];
 const isFenced = (opts) => Boolean(!opts.videoScout && opts.role && FENCED_ROLES.has(opts.role));
 const PANE_ENV = {
   BLUE_HELM_PANE_STATUS_PIPE: '\\\\.\\pipe\\blue-helm-pane-status-test',
