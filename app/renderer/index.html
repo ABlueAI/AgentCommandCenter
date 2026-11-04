@@ -64,6 +64,7 @@
     <span>🐙 <b>ABlueAgent token</b> not stored — agent panes push with your own git login.</span>
     <input id="agentTokenInput" type="password" placeholder="Paste the ABlueAgent token (ghp_…)" autocomplete="off" spellcheck="false" />
     <button id="agentTokenSave" class="action accent">Save encrypted</button>
+    <span id="agentTokenStatus" class="agent-token-status" role="status" aria-live="polite"></span>
   </div>
 
   <div class="layout">
@@ -357,6 +358,7 @@
   <script src="session-resume-view.js"></script>
   <script src="term-copy.js"></script>
   <script src="term-keys.js"></script>
+  <script src="agent-token-view.js"></script>
   <script src="pane-maximize.js"></script>
   <script src="clipboard-consumer.js"></script>
   <script src="library-view.js"></script>

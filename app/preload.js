@@ -79,6 +79,8 @@ contextBridge.exposeInMainWorld('cc', {
 
   // surfaced main-process errors (shown in the Logs tab instead of a fatal dialog)
   onMainError: (cb) => ipcRenderer.on('main-error', (_e, m) => cb(m)),
+  // S31: routine main-process lines (main-log-level.js), shown as "[main]" rather than "[main error]".
+  onMainInfo: (cb) => ipcRenderer.on('main-info', (_e, m) => cb(m)),
 });
 
 // ---- Dockview layout bridge --------------------------------------------------------------------

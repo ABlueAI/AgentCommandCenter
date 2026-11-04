@@ -93,7 +93,7 @@ const args = shimMod.buildHookArgs(shimPath);
 // UNENROLLED: the pane variables are deliberately absent, so the reporter exits before reading stdin.
 const env = Object.assign({}, process.env);
 delete env.BLUE_HELM_PANE_STATUS_PIPE;
-delete env.BLUE_HELM_PANE_STATUS_TOKEN;
+delete env.BLUE_HELM_PANE_STATUS_PANE_REF;
 delete env.ELECTRON_RUN_AS_NODE;   // the SHIM sets it, for its own child only
 
 // A realistic hook payload on stdin, so the measurement includes whatever the reporter does with it.

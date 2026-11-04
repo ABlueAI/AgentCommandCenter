@@ -21,12 +21,17 @@
 //   DROPPED (...)       -> no issue; an existing one is closed as not planned, loses its managed
 //                          labels and is removed from the board
 // Any other status, a malformed row or two sync issues for one session throws, so the workflow fails
-// visibly instead of guessing.
+// visibly instead of guessing. So does a listing that finds no sync issue while the milestone already
+// holds items (S33's guard, in syncPlan), before anything is created. Limits: the guard only catches
+// a listing that finds none of the sync issues; one that misses some but not all (for example a
+// dropped page) still re-creates the missed sessions. If the milestone listing also misses the
+// milestone, the run tries to create a second "1.1 Month 1", which GitHub is expected to reject
+// (not verified), after any missing labels are created.
 //
 // `api` and `board` are injected so the workflow passes GitHub's clients and tests pass fixtures:
 //   api.listLabels()                 -> [{ name }]
 //   api.createLabel({ name, color, description })
-//   api.listMilestones()             -> [{ number, title }]
+//   api.listMilestones()             -> [{ number, title, open_issues, closed_issues }]
 //   api.createMilestone(title)       -> { number }
 //   api.listIssues()                 -> [{ number, node_id, title, body, state, state_reason,
 //                                         labels: [name], milestone: number|null, user: login }]
@@ -149,28 +154,49 @@ function desiredLabels(s, col, current) {
   return [...keep, ...want].sort();
 }
 
+// Open plus closed items in a milestone, as GitHub's milestone object reports them (pull requests
+// included). NaN when either count is missing or not a whole number, which the guard treats as
+// "can't tell" and refuses.
+const milestoneCount = (m) => (Number.isInteger(m.open_issues) && Number.isInteger(m.closed_issues) ? m.open_issues + m.closed_issues : NaN);
+
 const unmanaged = (labels) => labels.filter((n) => !MANAGED(n)).sort();
 const sameSet = (a, b) => a.length === b.length && [...a].sort().every((x, i) => x === [...b].sort()[i]);
 
 async function syncPlan({ markdown, planUrl, api, board = null, log = () => {} }) {
   const sessions = parsePlan(markdown);
 
-  const haveLabels = new Set((await api.listLabels()).map((l) => l.name));
-  for (const label of LABELS) {
-    if (!haveLabels.has(label.name)) { await api.createLabel(label); log(`created label "${label.name}"`); }
-  }
-
-  let milestone = (await api.listMilestones()).find((m) => m.title === MILESTONE);
-  if (!milestone) { milestone = await api.createMilestone(MILESTONE); log(`created milestone "${MILESTONE}"`); }
-
+  // Read everything that decides what to create before creating anything (labels included), so a
+  // refused run writes nothing.
+  const listedMilestone = (await api.listMilestones()).find((m) => m.title === MILESTONE);
+  const listed = await api.listIssues();
   const mine = new Map();
-  for (const issue of await api.listIssues()) {
+  for (const issue of listed) {
     if (issue.user !== BOT) continue;
     const m = SESSION_TITLE.exec(issue.title);
     if (!m) continue;
     if (mine.has(m[1])) throw new Error(`plan sync: two sync issues for ${m[1]} (#${mine.get(m[1]).number}, #${issue.number}); close one`);
     mine.set(m[1], issue);
   }
+  const held = listedMilestone ? milestoneCount(listedMilestone) : 0;
+  log(`listed ${listed.length} issues, ${mine.size} of them sync issues; milestone "${MILESTONE}" ${listedMilestone ? `holds ${Number.isNaN(held) ? 'an unreadable number of' : held} issues and pull requests` : 'not found'}`);
+  // The guard (S33). On 2026-10-22 a run's listing came back without any of the existing sync issues,
+  // so it opened a second copy of every one (#87 to #113). Every sync issue is put in the milestone,
+  // so a milestone that already holds items while the listing shows no sync issue means the listing
+  // is wrong, not that the issues are gone: refuse, and create nothing.
+  if (mine.size === 0 && listedMilestone && held !== 0) {
+    throw new Error(`plan sync: refusing to create issues: the listing found no sync issues, but milestone "${MILESTONE}" `
+      + `${Number.isNaN(held) ? 'gave no readable issue count' : `holds ${held} issues and pull requests`}. A listing that misses `
+      + 'the existing sync issues would duplicate every one of them (the 2026-10-22 run did). Re-run the workflow; if this '
+      + 'persists, check the sync issues still exist and were opened by github-actions[bot].');
+  }
+
+  const haveLabels = new Set((await api.listLabels()).map((l) => l.name));
+  for (const label of LABELS) {
+    if (!haveLabels.has(label.name)) { await api.createLabel(label); log(`created label "${label.name}"`); }
+  }
+
+  let milestone = listedMilestone;
+  if (!milestone) { milestone = await api.createMilestone(MILESTONE); log(`created milestone "${MILESTONE}"`); }
 
   const prs = new Map();
   for (const s of sessions) {

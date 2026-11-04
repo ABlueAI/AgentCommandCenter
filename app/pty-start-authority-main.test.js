@@ -510,10 +510,11 @@ Module._load = function (request) {
       let before = record.ptySpawns;
       await ptyStart(goodEvent, { id: 'pane-auth-b-' + level, role: 'builder', cli: 'claude', cwd: FIX, authority: level });
       assert(record.ptySpawns === before + 1, `builder at ${level} spawns`);
-      assert(lastCmd().indexOf('claude --agent builder --permission-mode ' + mode) !== -1, `and launches with --permission-mode ${mode}`);
+      assert(lastCmd().indexOf('claude --agent builder --allowedTools ') !== -1 && lastCmd().indexOf('--permission-mode ' + mode) !== -1,
+        `and launches with its explicit tool set and --permission-mode ${mode}`);
       before = record.ptySpawns;
       await ptyStart(goodEvent, { id: 'pane-auth-c-' + level, role: null, cli: 'claude', cwd: FIX, authority: level });
-      assert(record.ptySpawns === before + 1 && / claude --permission-mode /.test(' ' + lastCmd()) && lastCmd().indexOf('--permission-mode ' + mode) !== -1,
+      assert(record.ptySpawns === before + 1 && / claude --allowedTools '/.test(' ' + lastCmd()) && lastCmd().indexOf('--permission-mode ' + mode) !== -1,
         `a bare claude pane at ${level} launches with --permission-mode ${mode}`);
     }
     {
@@ -523,8 +524,8 @@ Module._load = function (request) {
         initialPrompt: 'Review the change set in ./x.diff',
       });
       assert(record.ptySpawns === before + 1
-        && lastCmd().indexOf('claude --agent reviewer --permission-mode plan "Review the change set in ./x.diff"') !== -1,
-      'the mode sits before the reviewer\'s opening prompt');
+        && /claude --agent reviewer --allowedTools '[^']+' --disallowedTools 'Edit,Write,NotebookEdit' --permission-mode plan "Review the change set in \.\/x\.diff"/.test(lastCmd()),
+      'the tool lists and the mode sit before the reviewer\'s opening prompt, the mode last');
     }
     {
       const before = record.ptySpawns;

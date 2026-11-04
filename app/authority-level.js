@@ -32,6 +32,39 @@ const PERMISSION_MODE = Object.freeze({
 });
 const LOCAL_PERMISSION_MODES = Object.freeze(new Set(Object.values(PERMISSION_MODE)));
 
+// S31 item 1. Every Claude pane runs with CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1 (AGENTS.md "Security
+// rules"), and with the scrub set Claude Code forces the permission mode to `default` ("Permission
+// mode forced to default - CLAUDE_CODE_SUBPROCESS_ENV_SCRUB is set ... Declare allowedTools
+// explicitly", seen on Blue's PC with Claude Code 2.1.316, checklist step 40). `--allowedTools` is
+// still honored, so each level also carries an explicit, main-owned set of tools that run without a
+// prompt; anything not listed still asks. The scrub stays on: turning it off is Blue's call.
+// Rule syntax: Claude Code's permission rules (`Tool` or `Bash(prefix:*)`). docs/AUTHORITY-LEVELS.md
+// lists the same sets for Blue.
+const READ_TOOLS = Object.freeze(['Read', 'Glob', 'Grep', 'TodoWrite']);
+const EDIT_TOOLS = Object.freeze(['Edit', 'Write', 'NotebookEdit']);
+// High: edits plus local git commands that change only the repository. Never `git push` or
+// `git fetch` (`--upload-pack=<command>` runs any command), never `npm test`/`npm ci` (an edited
+// package.json script or lockfile would run unasked), never a general interpreter such as `node:*`.
+// `git status`, `diff`, `log` and `show` aren't listed: Claude Code already runs their read-only forms
+// without asking, and an explicit rule would also cover flags such as `--output=<file>`. Hooks and
+// git config sit in Claude Code's protected paths (.git), so editing them still asks.
+const HIGH_BASH = Object.freeze([
+  'Bash(git branch:*)', 'Bash(git switch:*)', 'Bash(git add:*)', 'Bash(git commit:*)',
+]);
+const ALLOWED_TOOLS = Object.freeze({
+  [LEVEL.MINIMUM]: Object.freeze(READ_TOOLS.slice()),
+  [LEVEL.MEDIUM]: Object.freeze(READ_TOOLS.concat(EDIT_TOOLS)),
+  [LEVEL.HIGH]: Object.freeze(READ_TOOLS.concat(EDIT_TOOLS, HIGH_BASH)),
+});
+// Minimum means "no edits" (AGENTS.md). Under the forced default mode the edit tools are denied
+// outright, so they can't be approved by a stray click. Shell commands still ask, and an approved one
+// can change files, as in plan mode (Claude Code's docs: in plan mode other shell commands go through
+// the regular permission flow); docs/AUTHORITY-LEVELS.md says so.
+const DISALLOWED_TOOLS = Object.freeze({
+  [LEVEL.MINIMUM]: EDIT_TOOLS,
+});
+const MODE_LEVEL = Object.freeze(Object.fromEntries(Object.entries(PERMISSION_MODE).map(([l, m]) => [m, l])));
+
 // Where a Maximum task goes instead of a local pane. A constant: the renderer never supplies it.
 const CLOUD_SESSION_URL = 'https://claude.ai/code';
 
@@ -77,6 +110,26 @@ function permissionModeArg(launch) {
   return ' --permission-mode ' + mode;
 }
 
+// Single-quoted PowerShell literal: the command runs inside a powershell -Command string, and the
+// rules' parentheses, colons and asterisks must stay literal. The rules are constants without quotes.
+function psList(tools) {
+  return "'" + tools.join(',') + "'";
+}
+
+// S31: the full authority text for the command builder: the tool lists, then the mode, or '' when
+// none applies. The lists go BEFORE `--permission-mode`, because `--allowedTools` and
+// `--disallowedTools` take several values and would otherwise swallow a following opening prompt.
+// The level is derived from the re-checked mode, so nothing outside the tables reaches the line.
+function authorityArgs(launch) {
+  const modeArg = permissionModeArg(launch);
+  if (!modeArg) return '';
+  const level = MODE_LEVEL[launch.permissionMode];
+  let out = ' --allowedTools ' + psList(ALLOWED_TOOLS[level]);
+  if (DISALLOWED_TOOLS[level]) out += ' --disallowedTools ' + psList(DISALLOWED_TOOLS[level]);
+  return out + modeArg;
+}
+
 module.exports = {
-  LEVEL, LEVELS, PERMISSION_MODE, CLOUD_SESSION_URL, REASON, applyAuthority, permissionModeArg,
+  LEVEL, LEVELS, PERMISSION_MODE, ALLOWED_TOOLS, DISALLOWED_TOOLS, CLOUD_SESSION_URL, REASON,
+  applyAuthority, permissionModeArg, authorityArgs,
 };
