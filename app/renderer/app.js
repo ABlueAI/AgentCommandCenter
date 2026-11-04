@@ -528,10 +528,10 @@ function openInAppTerminal(opts = {}) {
       if (remap.send) { e.preventDefault(); cc.ptyWrite(id, remap.send); }
       return false;
     }
+    // Ctrl+V / Ctrl+Shift+V: paste once and cancel the browser's own paste (term-keys.js, S31).
+    if (window.ccTermKeys.handlePasteKey(e, () => { clip.pasteIntoPty().catch(() => {}); })) return false;
     if (e.type !== 'keydown' || !e.ctrlKey) return true;
-    const isV = e.code === 'KeyV' || (e.key && e.key.toLowerCase() === 'v');
     const isC = e.code === 'KeyC' || (e.key && e.key.toLowerCase() === 'c');
-    if (isV) { clip.pasteIntoPty().catch(() => {}); return false; }   // Ctrl+V / Ctrl+Shift+V
     if (isC) {
       const sel = term.getSelection();
       appendLog(`[copy ${id}] Ctrl+${e.shiftKey ? 'Shift+' : ''}C: ${sel ? sel.length + ' chars selected' : 'no selection → SIGINT'}\n`);
