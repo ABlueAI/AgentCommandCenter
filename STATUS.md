@@ -1,7 +1,8 @@
 # Mako status
 
-Updated 2026-11-01 by the all-day runner's status PR for 2026-11-01 (no PR merged since the
-2026-10-30 status PR, #138; the last session PR merged was S21's, #133, on 2026-10-29); PR #130.
+Updated 2026-11-04 by the all-day runner's status PR for 2026-11-04, for the PRs merged since
+the 2026-11-01 status PR (#141): #130 (S15), #146, #147, #140, #155 (S33), #152 (S31), #153,
+#157 (S34) and #154 (S32).
 Every PR that changes the state updates this file.
 
 ## Right now
@@ -64,16 +65,19 @@ Every PR that changes the state updates this file.
   session, with status, authority, lane and sensitive labels and the "1.1 Month 1" milestone, in step
   with docs/PLAN-1.1.md on `main`. The Project board joins once Blue connects it (checklist step 25).
   Blue connected it on 2026-11-02, but the first run (41501308744) crashed on a workflow bug
-  (`getOctokit is not defined`), and every hourly run since fails before the issue sync too. The
-  fix PR, "Plan sync: fix board client (getOctokit undefined)", builds the board client from
-  github-script's own Octokit class; after it merges, step 25 is re-run.
-- **Research capture (S15, PR #130, in progress):** Blue's verdict (2026-11-03): ADOPT
+  (`getOctokit is not defined`), and every hourly run until 2026-11-04 failed before the issue sync too. The
+  fix, PR #146 (merged 2026-11-04 07:08 UTC), builds the board client from github-script's own
+  Octokit class; every Plan sync run since has passed (run 41790199214 first). Step 25 is still
+  unticked: its re-run checks the board on GitHub. S33 (PR #155, merged 2026-11-04, DONE) makes the
+  sync refuse and create nothing when its listing misses every existing sync issue, the cause of the
+  2026-10-22 duplicates; a listing that misses only some of them is issue #156.
+- **Research capture (S15, PR #130 merged 2026-11-04, in progress):** Blue's verdict (2026-11-03): ADOPT
   Playwright MCP as the page reader. Claude in Chrome was rejected: on his PC it returned "This site
   is blocked." on reddit.com, while Playwright MCP read a www.reddit.com thread with no login
   (checklist step 43, ticked). The build in PR #130: a "📄 Page" choice in New Agent that takes a
   URL, a fenced `page-reader` pane allowed only to navigate, snapshot and write its own report, and
   the Reviewer reading that report (docs/decisions/OSS-research-capture.md); step 48 checks it on
-  his PC after the merge.
+  his PC, and S15 is done once it passes.
 - **Obsidian Skills (S13, PR #115 merged 2026-10-23, in progress):** `scripts/new-mako-vault.ps1` creates Blue's
   private vault outside this repo, with `Mako index.md` (links to STATUS, PLAN, DECISIONS and the
   checklist on GitHub) an `AGENTS.md` and a `CLAUDE.md`; the kepano/obsidian-skills plugin is to be installed in
@@ -132,6 +136,21 @@ Every PR that changes the state updates this file.
   `app/assets/mako.ico` with `scripts/logo/render-shark-b2.py` and gave the top bar's
   `mako-mark.svg` the same bolder M. Blue checks the taskbar on his PC
   (checklist step 45).
+- **PC-check fixes (S31, PR #152 merged 2026-11-04, in progress):** fixes for what Blue's PC checks
+  of 2026-10-29 to 2026-11-02 found: each authority level passes its own allowed-tools list (the
+  env scrub forces default mode); the pane-status variable is renamed so the scrub no longer drops
+  it; Ctrl+V pastes once; the token box strips invisible characters and says why it refuses;
+  routine lines show as "[main]"; agent panes' `git config` says ABlueAgent; read-aloud keeps its
+  selection after a speed change. S31 is done once Blue's re-runs of checklist steps 23, 24 and 40
+  pass on his PC (step 38 gains a commit-author check).
+- **1.1 gap audit (S32, PR #154 merged 2026-11-04, done):** [docs/1.1-GAP-AUDIT.md](docs/1.1-GAP-AUDIT.md)
+  checks every month-one row, every merged 1.1 PR and every unticked step; 11 items need attention
+  (A1 to A11), each with a proposed fix. PRs #158, #159 and #160 (open) take A3 and A6 to A9.
+- **PR reviewer research (S34, PR #157 merged 2026-11-04, in progress):**
+  [docs/decisions/OSS-pr-review.md](docs/decisions/OSS-pr-review.md) compares qodo-ai/pr-agent,
+  claude-code-action, Anthropic's `code-review` and `pr-review-toolkit` plugins, Kodus and Mako's
+  own loop, each with a proposed verdict. Blue's verdict, word for word, is checklist step 22; any
+  reviewer change comes in a later PR.
 - **All-day runner (S04, PR #84 merged 2026-10-23, partly applied):** the hourly runner
   (`trig_01LPKxs49xvwN7mcuGLGwyN8`, :07 Eastern, no push) is on and fired at 07:09 UTC. As read
   on 2026-10-23 at about 07:40 UTC, the evening digest (`trig_0166nBynncK2BWPaarALAq8q`) is off,
