@@ -28,8 +28,13 @@ Every PR that changes the state updates this file.
   watcher (a separate scheduled task, 7:30 AM to 8:00 PM Eastern, notifying only on news; step 34
   first). Marina and lead data stay in the private repo `ABlueAI/mako-business`. S29 and S30 are
   `HOLD (Blue)` until he starts them; S29 also waits on step 33, and the watcher on step 34.
-- **Claude plan:** Blue upgrades to Max 5x on Wednesday 2026-10-28 (moved from 2026-10-21 on
-  2026-10-20; checklist step 8, not ticked on `main` as of 23:10 UTC on 2026-11-01). Until it is,
+- **Runner work added (proposed 2026-11-03, pending Blue's merge):** after S15, nothing on the
+  plan was `READY` for the runner, so a plan change adds S31 (PC-check fixes), S32 (1.1 gap audit),
+  S33 (Plan sync guard) and S34 (PR reviewer research). Blue moved step 17's token audit to the
+  end of 1.1 (push protection is already on) and stays on Pro until the UI work runs usage up
+  (docs/DECISIONS.md, 2026-11-03).
+- **Claude plan:** Blue upgrades to Max 5x when the UI work runs usage up (his call on 2026-11-03;
+  it was 2026-10-28; checklist step 8, not ticked on `main` as of 23:10 UTC on 2026-11-01). Until it is,
   the runner builds one session at a time on Pro (`parallel_cap: 1`).
 - **CI and dependencies (S02, done in PR #45):** every GitHub Action is pinned to a commit SHA, and both
   Windows checks were confirmed as required on `main` (ruleset `protect-main`, read 2026-10-19).
@@ -58,6 +63,10 @@ Every PR that changes the state updates this file.
 - **Plan to issues (S03, PR #54 merged 2026-10-21, in progress):** a workflow keeps one `Sxx: <title>` issue per plan
   session, with status, authority, lane and sensitive labels and the "1.1 Month 1" milestone, in step
   with docs/PLAN-1.1.md on `main`. The Project board joins once Blue connects it (checklist step 25).
+  Blue connected it on 2026-11-02, but the first run (41501308744) crashed on a workflow bug
+  (`getOctokit is not defined`), and every hourly run since fails before the issue sync too. The
+  fix PR, "Plan sync: fix board client (getOctokit undefined)", builds the board client from
+  github-script's own Octokit class; after it merges, step 25 is re-run.
 - **Research capture (S15, PR #130, in progress):** Blue's verdict (2026-11-03): ADOPT
   Playwright MCP as the page reader. Claude in Chrome was rejected: on his PC it returned "This site
   is blocked." on reddit.com, while Playwright MCP read a www.reddit.com thread with no login

@@ -6,7 +6,8 @@
 # as "Ready to merge", and by hand). It reads nothing from pull requests or issues opened by others
 # beyond a PR's open/draft state, and only edits issues github-actions[bot] opened with an
 # `Sxx: ` title. Decision logic: .github/scripts/plan-sync.js, tested by plan-sync.test.js
-# (scripts/plan-sync-node.Tests.ps1 runs it in CI).
+# (scripts/plan-sync-node.Tests.ps1 runs it in CI), which also runs the `script:` below with only
+# the names the pinned github-script passes it.
 #
 # The board: GITHUB_TOKEN cannot write a user-owned Project, so the board step needs the
 # PLAN_BOARD_TOKEN secret and the PLAN_BOARD_NUMBER variable (BLUE-CHECKLIST.md step 25), both in the
@@ -61,7 +62,9 @@ jobs:
             let board = null;
             if (token && number) {
               if (!/^\d+$/.test(number)) { core.setFailed('PLAN_BOARD_NUMBER must be the project number from its URL.'); return; }
-              board = githubBoard(getOctokit(token).graphql, { login: process.env.PLAN_BOARD_OWNER, number: Number(number) });
+              // github-script v8 passes no getOctokit; `github.constructor` is its Octokit class, so
+              // this is a second client that sends PLAN_BOARD_TOKEN instead of GITHUB_TOKEN.
+              board = githubBoard(new github.constructor({ auth: token }).graphql, { login: process.env.PLAN_BOARD_OWNER, number: Number(number) });
             } else if (token || number) {
               core.setFailed('Only one of the PLAN_BOARD_TOKEN secret and the PLAN_BOARD_NUMBER variable is set; set both (BLUE-CHECKLIST.md step 25).');
               return;
