@@ -853,7 +853,7 @@ on its own, one session at a time on Pro until you upgrade (step 8).
        then "Create a file called s31-check.txt" (the edit tools are refused; if Claude then offers a
        shell command that writes the file, it asks first: say no, and tell the agent it asked).
     3. **Medium**, new builder pane: ask it to create `s31-check.txt` (no prompt), then to run
-       `git status` (it asks first).
+       `git add s31-check.txt` (it asks first; answer no).
     4. **High**, new builder pane: ask it to commit `s31-check.txt` on a scratch branch (no prompt),
        then to run `git push --dry-run` (it asks first; answer no). Delete the scratch branch and
        `s31-check.txt`.
