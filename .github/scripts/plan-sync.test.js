@@ -25,17 +25,24 @@ const row = (id, title, status, extra = {}) =>
 const plan = (...rows) => `# Plan\n\n${HEAD}${rows.join('')}\nAfter the table.\n`;
 const URL = 'https://github.com/o/r/blob/main/docs/PLAN-1.1.md';
 
-// A fake repository: labels, milestones, issues (by number) and PRs. Records every write.
-function fakeRepo({ labels = [], milestones = [], issues = [], prs = {} } = {}) {
+// A fake repository: labels, milestones, issues (by number) and PRs. Records every write. Milestones
+// report open_issues and closed_issues counted from the fake's issues, as GitHub's do, plus `extra`
+// items (pull requests or other issues in the milestone that the issues listing doesn't return).
+// `listing` replaces what listIssues returns, to model a bad listing.
+function fakeRepo({ labels = [], milestones = [], issues = [], prs = {}, listing = null } = {}) {
   const state = { labels: labels.map((name) => ({ name })), milestones: [...milestones], issues: new Map(), writes: [] };
   let next = 100;
   for (const i of issues) state.issues.set(i.number, { node_id: `N${i.number}`, body: '', state: 'open', labels: [], milestone: null, ...i });
   const api = {
     listLabels: async () => state.labels,
     createLabel: async (l) => { state.labels.push(l); state.writes.push(['label', l.name]); },
-    listMilestones: async () => state.milestones,
+    listMilestones: async () => state.milestones.map((m) => {
+      const inIt = [...state.issues.values()].filter((i) => i.milestone === m.number);
+      const counts = m.counts || { open_issues: inIt.filter((i) => i.state === 'open').length + (m.extra || 0), closed_issues: inIt.filter((i) => i.state === 'closed').length };
+      return { number: m.number, title: m.title, ...counts };
+    }),
     createMilestone: async (title) => { const m = { number: 7, title }; state.milestones.push(m); state.writes.push(['milestone', title]); return m; },
-    listIssues: async () => [...state.issues.values()].map((i) => ({ ...i, labels: [...i.labels] })),
+    listIssues: async () => (listing ? listing() : [...state.issues.values()]).map((i) => ({ ...i, labels: [...i.labels] })),
     createIssue: async (f) => {
       const i = { number: next++, node_id: `N${next - 1}`, state: 'open', user: BOT, ...f };
       state.issues.set(i.number, i); state.writes.push(['create', i.number, f.title]); return i;
@@ -150,6 +157,56 @@ function fakeBoard(columns = COLUMNS) {
     const { api, state } = fakeRepo({ issues: [{ number: 8, title: 'S27: Composer', user: BOT, state: 'closed', state_reason: 'not_planned', labels: ['status: done'] }] });
     await syncPlan({ markdown: plan(row('S27', 'Composer', 'DONE (#60)')), planUrl: URL, api });
     eq([state.issues.get(8).state, state.issues.get(8).state_reason], ['closed', 'completed'], 'a row going from DROPPED to DONE re-closes its issue as completed');
+  }
+
+  process.stdout.write('\nS33 guard: a listing that misses every existing sync issue refuses and creates nothing\n');
+  {
+    // The 2026-10-22 run: sync issues exist in the milestone, but the listing came back without them.
+    const md = plan(row('S01', 'Guardrails', 'DONE (#44)'), row('S02', 'Plan', 'READY'), row('S03', 'Alerts', 'HOLD (Blue)'));
+    const first = fakeRepo();
+    await syncPlan({ markdown: md, planUrl: URL, api: first.api });
+    eq(first.state.issues.size, 3, 'a first run opens the three sync issues');
+    const existing = [...first.state.issues.values()];
+    for (const [name, listing] of [['empty', () => []], ['other issues only', () => [{ number: 1, title: 'S01: someone else', user: 'ABlueAI', labels: [], milestone: null, state: 'open' }]]]) {
+      const { api, state } = fakeRepo({ labels: LABELS.map((l) => l.name), milestones: [{ number: 7, title: MILESTONE }], issues: existing, listing });
+      const { board, placed, removed } = fakeBoard();
+      const lines = [];
+      await throws(() => syncPlan({ markdown: md, planUrl: URL, api, board, log: (l) => lines.push(l) }),
+        /refusing to create issues: the listing found no sync issues, but milestone "1\.1 Month 1" holds 3 issues/,
+        `a listing with ${name} while 3 sync issues exist throws`);
+      eq(state.writes, [], `nothing is created or edited (${name})`);
+      eq([placed.length, removed.length], [0, 0], `the board is not touched (${name})`);
+      assert(lines.some((l) => /^listed \d+ issues, 0 of them sync issues; milestone "1\.1 Month 1" holds 3 /.test(l)), `the run logs what the listing found (${name})`);
+    }
+    {
+      // Only labels are missing: still nothing is written, because the guard runs before any write.
+      const { api, state } = fakeRepo({ milestones: [{ number: 7, title: MILESTONE }], issues: existing, listing: () => [] });
+      await throws(() => syncPlan({ markdown: md, planUrl: URL, api }), /refusing to create issues/, 'the guard runs before missing labels are created');
+      eq(state.writes, [], 'no label is created by a refused run');
+    }
+    {
+      // The milestone holds only a pull request: still refused (the milestone counts pull requests too).
+      const { api, state } = fakeRepo({ labels: LABELS.map((l) => l.name), milestones: [{ number: 7, title: MILESTONE, extra: 1 }] });
+      await throws(() => syncPlan({ markdown: md, planUrl: URL, api }), /holds 1 issues/, 'a milestone holding anything blocks an empty listing');
+      eq(state.writes, [], 'and creates nothing');
+    }
+    {
+      const { api, state } = fakeRepo({ labels: LABELS.map((l) => l.name), milestones: [{ number: 7, title: MILESTONE, counts: { open_issues: 2 } }] });
+      await throws(() => syncPlan({ markdown: md, planUrl: URL, api }), /gave no readable issue count/, 'an unreadable milestone count refuses');
+      eq(state.writes, [], 'and creates nothing');
+    }
+    {
+      // An empty milestone (a first run that failed after creating it) is not evidence: issues are created.
+      const { api, state } = fakeRepo({ labels: LABELS.map((l) => l.name), milestones: [{ number: 7, title: MILESTONE }] });
+      await syncPlan({ markdown: md, planUrl: URL, api });
+      eq(state.issues.size, 3, 'an existing but empty milestone lets the first issues be created');
+    }
+    {
+      // A normal run with the real issues listed passes the guard and writes nothing.
+      const { api, state } = fakeRepo({ labels: LABELS.map((l) => l.name), milestones: [{ number: 7, title: MILESTONE }], issues: existing });
+      await syncPlan({ markdown: md, planUrl: URL, api });
+      eq(state.writes, [], 'a run whose listing finds the sync issues is not refused');
+    }
   }
 
   process.stdout.write('\nIN PROGRESS shows Ready to merge only while its PR is open and not a draft\n');

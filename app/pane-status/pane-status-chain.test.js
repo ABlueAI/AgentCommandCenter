@@ -107,7 +107,7 @@ function runChain(shimPath, extraEnv, stdinPayload, opts) {
   const env = Object.assign({}, process.env);
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.BLUE_HELM_PANE_STATUS_PIPE;
-  delete env.BLUE_HELM_PANE_STATUS_TOKEN;
+  delete env.BLUE_HELM_PANE_STATUS_PANE_REF;
   Object.assign(env, extraEnv || {});
 
   const args = shimMod.buildHookArgs(shimPath);
@@ -240,7 +240,7 @@ const settle = (ms) => new Promise((r) => setTimeout(r, ms || 400));
     const token = crypto.randomBytes(protocol.TOKEN_BYTES).toString('hex');
     const f = makeFixture('B1', { reporterSource: 'real' });
     const r = await runChain(f.shim, {
-      BLUE_HELM_PANE_STATUS_PIPE: listener.name, BLUE_HELM_PANE_STATUS_TOKEN: token,
+      BLUE_HELM_PANE_STATUS_PIPE: listener.name, BLUE_HELM_PANE_STATUS_PANE_REF: token,
     }, payload('UserPromptSubmit'), {});
     await settle();
     await listener.close();
@@ -266,7 +266,7 @@ const settle = (ms) => new Promise((r) => setTimeout(r, ms || 400));
       const token = crypto.randomBytes(protocol.TOKEN_BYTES).toString('hex');
       const f = makeFixture('BE-' + ev, { reporterSource: 'real' });
       const r = await runChain(f.shim, {
-        BLUE_HELM_PANE_STATUS_PIPE: listener.name, BLUE_HELM_PANE_STATUS_TOKEN: token,
+        BLUE_HELM_PANE_STATUS_PIPE: listener.name, BLUE_HELM_PANE_STATUS_PANE_REF: token,
       }, payload(ev), {});
       await settle(300);
       await listener.close();
@@ -279,7 +279,7 @@ const settle = (ms) => new Promise((r) => setTimeout(r, ms || 400));
     const token = crypto.randomBytes(protocol.TOKEN_BYTES).toString('hex');
     const f = makeFixture('BE-none', { reporterSource: 'real' });
     const r = await runChain(f.shim, {
-      BLUE_HELM_PANE_STATUS_PIPE: listener.name, BLUE_HELM_PANE_STATUS_TOKEN: token,
+      BLUE_HELM_PANE_STATUS_PIPE: listener.name, BLUE_HELM_PANE_STATUS_PANE_REF: token,
     }, payload('PermissionRequest'), {});
     await settle(300);
     await listener.close();
@@ -326,7 +326,7 @@ const settle = (ms) => new Promise((r) => setTimeout(r, ms || 400));
     const f = makeFixture('E-deadpipe', { reporterSource: 'real' });
     const r = await runChain(f.shim, {
       BLUE_HELM_PANE_STATUS_PIPE: '\\\\.\\pipe\\bh-chain-does-not-exist-' + crypto.randomBytes(6).toString('hex'),
-      BLUE_HELM_PANE_STATUS_TOKEN: crypto.randomBytes(32).toString('hex'),
+      BLUE_HELM_PANE_STATUS_PANE_REF: crypto.randomBytes(32).toString('hex'),
     }, payload('Stop'), {});
     assert(r.exit === 0 && r.stdout.length === 0 && r.stderr.length === 0,
       'an enrolled pane whose listener is GONE still exits 0 silently — a dead app never blocks a turn');

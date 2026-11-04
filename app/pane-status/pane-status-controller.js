@@ -205,7 +205,7 @@ function createPaneStatusController(deps) {
       ok: true,
       env: {
         BLUE_HELM_PANE_STATUS_PIPE: pipe.pipeName,
-        BLUE_HELM_PANE_STATUS_TOKEN: res.token,
+        BLUE_HELM_PANE_STATUS_PANE_REF: res.token,
       },
     };
   }

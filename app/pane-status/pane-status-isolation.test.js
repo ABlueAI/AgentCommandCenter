@@ -97,7 +97,7 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bh-isolation-'));
 
   const enrolled = controller.enrollPane('pty1');
   assert(enrolled.ok === true, 'a pane enrolled');
-  const token = enrolled.env.BLUE_HELM_PANE_STATUS_TOKEN;
+  const token = enrolled.env.BLUE_HELM_PANE_STATUS_PANE_REF;
 
   // ---- drive ALL EIGHT events straight into the registry, the way the pipe does
   const spiesBefore = JSON.stringify(spies);

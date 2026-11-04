@@ -41,5 +41,24 @@ for (const cli of [null, undefined, 'codex', 'gemini', 'powershell']) {
 assert(keys.resolveKey(Object.assign(ev('keydown', { shiftKey: true }), { key: 'a' }), 'claude').handled === false, 'other keys are untouched');
 assert(keys.resolveKey(null, 'claude').handled === false, 'a missing event is ignored');
 
+// S31 item 3: Ctrl+V pasted twice (once from Mako, once from the browser's own paste event).
+{
+  const mk = (o) => Object.assign({ type: 'keydown', key: 'v', code: 'KeyV', ctrlKey: true, shiftKey: false,
+    prevented: 0, preventDefault() { this.prevented++; } }, o);
+  for (const [label, o] of [['Ctrl+V', {}], ['Ctrl+Shift+V', { shiftKey: true, key: 'V' }],
+    ['Ctrl+V on a non-US layout (code only)', { key: 'м' }]]) {
+    const e = mk(o); let pastes = 0;
+    const r = keys.handlePasteKey(e, () => { pastes++; });
+    assert(r === true && pastes === 1 && e.prevented === 1, `${label}: one paste, and the browser's paste is cancelled`);
+  }
+  for (const [label, o] of [['plain V', { ctrlKey: false }], ['Ctrl+C', { key: 'c', code: 'KeyC' }],
+    ['the keyup', { type: 'keyup' }], ['the keypress', { type: 'keypress' }]]) {
+    const e = mk(o); let pastes = 0;
+    const r = keys.handlePasteKey(e, () => { pastes++; });
+    assert(r === false && pastes === 0 && e.prevented === 0, `${label}: not a paste, left alone`);
+  }
+  assert(keys.handlePasteKey(null, () => { throw new Error('no'); }) === false, 'a missing event is ignored');
+}
+
 process.stdout.write(`\nterm-keys: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

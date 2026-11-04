@@ -12,6 +12,8 @@
 //     1 credential.https://github.com.helper = "!gh auth git-credential"
 //                                    gh's own helper (official, not a hand-written one), which hands
 //                                    git the GH_TOKEN token as user x-access-token.
+//     2 user.name = ABlueAgent, 3 user.email = its noreply address (S31): what `git config` reports
+//                                    in the pane, and the author if GIT_AUTHOR_* were ever dropped;
 //   GIT_TERMINAL_PROMPT = 0  a failed login fails visibly instead of waiting on a hidden prompt.
 //   GIT_AUTHOR_* / GIT_COMMITTER_*   commits are attributed to ABlueAgent (its noreply address).
 // Claude Code's subprocess scrub (CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1) leaves GH_TOKEN and
@@ -47,6 +49,10 @@ const AGENT_GIT_ENV_KEYS = Object.freeze([
   'GIT_CONFIG_VALUE_0',
   'GIT_CONFIG_KEY_1',
   'GIT_CONFIG_VALUE_1',
+  'GIT_CONFIG_KEY_2',
+  'GIT_CONFIG_VALUE_2',
+  'GIT_CONFIG_KEY_3',
+  'GIT_CONFIG_VALUE_3',
   'GIT_CONFIG_PARAMETERS',
   'GIT_CONFIG_GLOBAL',
   'GIT_CONFIG_SYSTEM',
@@ -62,6 +68,40 @@ const AGENT_GIT_ENV_KEYS = Object.freeze([
 
 function isAgentToken(value) { return typeof value === 'string' && TOKEN_RE.test(value); }
 
+// S31 item 4. A token copied from a password manager can carry characters nobody can see (zero-width
+// spaces, a byte-order mark, non-breaking spaces, a trailing newline), and three saves were refused as
+// "not a GitHub token" with no visible reason (Blue's PC check, step 35). A real token never contains
+// whitespace or any of these, so they are removed before the check. The reason for a refusal names
+// the problem, and for a stray character only its position and code point (U+XXXX) and only when it
+// can't be part of a token, so no token text is ever echoed.
+const INVISIBLE_RE = /[\s\u00A0\u00AD\u180E\u200B-\u200F\u2028-\u202F\u205F-\u2064\u3000\uFEFF]/g;
+const TOKEN_CHAR_RE = /[A-Za-z0-9_]/;
+
+function codePoint(ch) {
+  return 'U+' + ch.codePointAt(0).toString(16).toUpperCase().padStart(4, '0');
+}
+
+/** normalizeAgentToken(raw) -> { ok:true, token, removed } | { ok:false, reason } */
+function normalizeAgentToken(raw) {
+  if (typeof raw !== 'string') return { ok: false, reason: 'no token was entered' };
+  const token = raw.replace(INVISIBLE_RE, '');
+  const removed = raw.length - token.length;
+  if (!token) return { ok: false, reason: 'no token was entered' };
+  if (isAgentToken(token)) return { ok: true, token, removed };
+  const chars = Array.from(token);
+  const badAt = chars.findIndex((c) => !TOKEN_CHAR_RE.test(c));
+  if (badAt !== -1) {
+    return { ok: false, reason: `character ${badAt + 1} (${codePoint(chars[badAt])}) can't be in a GitHub token; copy the token again` };
+  }
+  if (token.startsWith('ghp_')) {
+    return { ok: false, reason: `a classic token (ghp_) is 40 characters; this one is ${token.length}` };
+  }
+  if (token.startsWith('github_pat_')) {
+    return { ok: false, reason: `a fine-grained token (github_pat_) is 33 to 266 characters; this one is ${token.length}` };
+  }
+  return { ok: false, reason: 'it does not start with ghp_ or github_pat_' };
+}
+
 // The pane classes that act as a local agent. `launch` is classifyPtyLaunch's result.
 function isAgentPane(launch) {
   if (!launch || launch.videoScout === true || launch.fenced !== false) return false;
@@ -73,11 +113,18 @@ function buildAgentGitEnv(token) {
   if (!isAgentToken(token)) return {};
   return {
     GH_TOKEN: token,
-    GIT_CONFIG_COUNT: '2',
+    GIT_CONFIG_COUNT: '4',
     GIT_CONFIG_KEY_0: 'credential.helper',
     GIT_CONFIG_VALUE_0: '',
     GIT_CONFIG_KEY_1: 'credential.https://github.com.helper',
     GIT_CONFIG_VALUE_1: GH_HELPER,
+    // S31 item 6: the identity as command-scope config too, so `git config user.name` in the pane
+    // says ABlueAgent (on 2026-11-02 it showed ABlueAI), and commits stay ABlueAgent's even if
+    // Claude Code's scrub were to drop the GIT_AUTHOR_* names (it documents keeping GIT_CONFIG_*).
+    GIT_CONFIG_KEY_2: 'user.name',
+    GIT_CONFIG_VALUE_2: AGENT_LOGIN,
+    GIT_CONFIG_KEY_3: 'user.email',
+    GIT_CONFIG_VALUE_3: AGENT_NOREPLY_EMAIL,
     GIT_TERMINAL_PROMPT: '0',
     GIT_AUTHOR_NAME: AGENT_LOGIN,
     GIT_AUTHOR_EMAIL: AGENT_NOREPLY_EMAIL,
@@ -91,6 +138,7 @@ module.exports = {
   AGENT_LOGIN,
   AGENT_NOREPLY_EMAIL,
   isAgentToken,
+  normalizeAgentToken,
   isAgentPane,
   buildAgentGitEnv,
 };

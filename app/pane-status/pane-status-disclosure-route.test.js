@@ -200,7 +200,8 @@ function execFilePostFailure(file, args, opts, cb) {
 function makeElectronStub(userDataDir, sends) {
   const fakeWebContents = {
     on() {}, setWindowOpenHandler() {}, openDevTools() {},
-    // THE SINK UNDER TEST. `tlog` calls exactly this, with channel 'main-error'.
+    // THE SINK UNDER TEST. `tlog` calls exactly this, with channel 'main-error' or, since S31, 'main-info'
+    // for a routine line (main-log-level.js). Both reach the renderer's Logs tab, so both are watched.
     send(channel, payload) { sends.push({ channel, payload }); },
     session: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} },
   };
@@ -350,7 +351,7 @@ async function driveRealRoute(execFileStub, baseline) {
     bootConsole: consoleLines.slice(0, bootConsoleCount),
     probeConsole,
     probeSends,
-    probeMainErrors: probeSends.filter((s) => s.channel === 'main-error').map((s) => String(s.payload)),
+    probeMainErrors: probeSends.filter((s) => s.channel === 'main-error' || s.channel === 'main-info').map((s) => String(s.payload)),
   };
 }
 

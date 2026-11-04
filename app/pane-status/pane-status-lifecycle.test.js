@@ -95,7 +95,7 @@ function makeController(overrides) {
     eq(rig.c.getSetupState().state, 'ready', 'the fixture is ready');
     const enrolled = rig.c.enrollPane('pty1');
     assert(enrolled.ok === true, 'a pane enrolls');
-    const token = enrolled.env.BLUE_HELM_PANE_STATUS_TOKEN;
+    const token = enrolled.env.BLUE_HELM_PANE_STATUS_PANE_REF;
 
     rig.c.registry.applyMessage({ e: 'UserPromptSubmit', t: token });
     eq(rig.c.registry.viewFor('pty1').state, 'working', 'and goes to working');
@@ -197,7 +197,7 @@ function makeController(overrides) {
     await rig.c.install();
     const runIds = createRunIdRegistry();
     const enrolled = rig.c.enrollPane('scout1');
-    const token = enrolled.env.BLUE_HELM_PANE_STATUS_TOKEN;
+    const token = enrolled.env.BLUE_HELM_PANE_STATUS_PANE_REF;
     runIds.set('scout1', 'run-20260823-000000-000-11111-abcdefgh');
     rig.c.registry.applyMessage({ e: 'UserPromptSubmit', t: token });
 
