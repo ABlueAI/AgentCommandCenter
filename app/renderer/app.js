@@ -630,7 +630,9 @@ function openInAppTerminal(opts = {}) {
       role,
     });
     selectionAtSpeakPointerDown = '';
-    speakSelectionMemory.clear();
+    // S31 item 7: the remembered selection is kept after speaking, so 🔊 reads the pane's last
+    // selection again (for example after the speed menu took focus). A pointerdown in the terminal,
+    // which starts a new selection, is what clears it.
     appendLog(action.log);
     if (!action.ok) return;
     window.ccTTS.speak(action.text);
