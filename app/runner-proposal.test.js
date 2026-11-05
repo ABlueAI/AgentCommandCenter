@@ -113,6 +113,8 @@ const mustHave = [
   ['wait until every check on the new head passes (if they haven\'t finished when the fire ends, a later fire finishes it)', 'waits for CI before marking a cleared status PR ready'],
   ['Also pick, with no review run, a Codex PR carrying the waits-for-merge label whose every PR named in that comment is now merged or closed', 'clears a Codex PR\'s waits-for-merge label without a review run'],
   ['skip a PR that conflicts with main alone and note it', 'skips a PR that conflicts with main alone'],
+  ['edit that one comment to name the new blocker instead', 'renames the blocker in its one Codex comment so a failed re-check isn\'t picked every fire'],
+  ['first test-merge its head with main alone (if that conflicts, keep the label', 'never clears a Codex PR\'s label while it conflicts with main'],
   ['if a PR marked ready meanwhile conflicts with it and yours has the higher number, put yours back to draft and wait; otherwise leave the other PR as it is', 'settles two PRs marked ready at once without touching another builder\'s PR'],
   ['only add the waits-for-merge label and one comment "Waits for #X (conflicts in <files>)" without Codex\'s handle', 'only labels and comments on a waiting Codex PR'],
   ['or today\'s status PR carries the waits-for-merge label and every PR it waits for is now merged or closed', 'clears a waiting status PR'],

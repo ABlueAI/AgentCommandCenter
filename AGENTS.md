@@ -99,7 +99,8 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      needs his answer says so. A PR with the `waits-for-merge` label is `NOT READY: waits for #X`.
    - Every such message, notification or summary that lists more than one PR ends with the line
      "Merge order: #A, then #B; any order: #C, #D", computed from the test-merges in "Merge order"
-     below ("none" for an empty part, and a short note after it when a PR needs a fix first). In a
+     below ("none" for an empty part, and a short note at the end of the same line when a PR needs a
+     fix first). In a
      PR's own TLDR, it goes at the end of the "Ready to merge" line.
 6. Blue merges. Nobody and nothing else does.
 
@@ -143,7 +144,7 @@ any order.
   `git fetch origin main <heads>` and git 2.38 or later, for each other PR's head `B`:
   1. `git merge-tree --write-tree --name-only --no-messages origin/main B`. Exit status 1 means `B`
      conflicts with `main` alone: skip it (it needs its own `main` merge before it can merge at
-     all) and note "#B needs a `main` merge" after the merge-order line. Otherwise its one output
+     all) and note "#B needs a `main` merge" at the end of the merge-order line. Otherwise its one output
      line is a tree, `T`.
   2. `C=$(git -c user.name=merge-check -c user.email=merge-check@invalid commit-tree $T -p origin/main -p B -m test)`
      makes a throwaway commit that no branch points to.
@@ -166,8 +167,8 @@ any order.
   passes.
 - **The merge-order line** is a safety net, computed from the same test-merges among the PRs it
   lists: a pair that conflicts is ordered (a ready PR before the one waiting for it; between two
-  ready ones, the lower number first, followed after the line by the note "#B needs a conflict fix
-  after #A"); every other PR is "any order". More than one ordered pair is written as
+  ready ones, the lower number first, with the note "#B needs a conflict fix after #A" at the end of
+  the same line); every other PR is "any order". More than one ordered pair is written as
   "#A, then #B; #E, then #F".
 - The `waits-for-merge` label is created by the first builder that needs it, if missing.
 
