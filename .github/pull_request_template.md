@@ -8,6 +8,8 @@
 - **Sensitive:** no / yes (credentials, process control, payments, client data, network listeners, CI or repo settings)
 - **Tests:** CI (result) · local (result) · not covered (what, and why)
 - **Review:** (reviewer) (verdict) · findings fixed / open
+- **Follow-ups:** none / (low and out-of-scope review findings; real work becomes a plan row or an issue, AGENTS.md "The review loop")
+- **Where I stopped / what's next:** (last step done, and the next step for whoever picks this up)
 
 ## Details
 
