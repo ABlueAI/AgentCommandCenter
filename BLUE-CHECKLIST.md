@@ -29,8 +29,8 @@ other remaining items." Claude's order for what is left:
    applied, so the runner marks PRs ready only when they merge in any order and every summary ends
    with a "Merge order:" line. If you do step 27 in the same sitting, one session can do both.
 2. **Step 28, then step 27**, in one sitting: S04's runner (PR #84, merged 2026-10-23). Neither
-   step is ticked yet. Moved to the top on 2026-11-05 (PR #166): once step 27 is ticked, only the
-   runner's status PR edits STATUS.md, so parallel PRs conflict less often (your words, 2026-11-04:
+   step is ticked yet. Moved to the top on 2026-11-05 (PR #166): once step 27 is ticked, plan-session
+   PRs stop editing STATUS.md and leave it to the runner's status PR, so parallel PRs conflict less often (your words, 2026-11-04:
    "if i have 5 prs thrown at me and i am reviewing each then merging, there is no explicitly
    stated order to merge, it will fail repeatedly").
 3. **Step 15**, the voice check on the new Electron, first of the checks on your PC: a failure means a fix or a revert of the
@@ -265,7 +265,9 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   prompts from docs/RUNNER.md". It updates only the prompts of the scheduled tasks **Mako all-day
   runner** and **Mako evening digest** from "Proposed runner prompt (verbatim)" and "Proposed digest
   prompt (verbatim)" on `main`; their schedules, models, notifications and on/off switches stay as
-  they are, and **Mako daily runner** is left to step 27. The runner never edits itself.
+  they are, and **Mako daily runner** is left to step 27. Until step 27 turns that one off, it keeps
+  PR #84's prompt, without the merge-order check, so do step 27 in the same sitting if you can. The
+  runner never edits itself.
   - *Done when:* that session reads both tasks back, their prompts match docs/RUNNER.md on `main`
     (compared as text), and it ticks this step with the date and how it checked.
 

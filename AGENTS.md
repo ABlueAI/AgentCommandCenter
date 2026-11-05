@@ -82,11 +82,12 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
    Follow-ups), and the PR merges cleanly alongside every other ready PR ("Merge order" below), the
    builder updates the TLDR and marks the PR ready. That TLDR is Blue's merge briefing.
    - If the merge-order check finds a conflict, the PR stays a draft with the `waits-for-merge`
-     label and the TLDR line "Waits for #X (conflicts in <files>)". Once #X is merged or closed, the
-     builder (for the runner's own PRs, the runner: docs/RUNNER.md step 5a) merges `main`, resolves
-     the conflict, re-runs the reviewer on the delta only if content changed beyond the conflict
-     ("The review loop"), checks again, removes the label and marks the PR ready. If the session
-     that built it has ended, Blue tells any session "clear the wait on #N".
+     label, and its TLDR's "Ready to merge" line reads "no (waits for #X; conflicts in <files>)".
+     Once #X is merged or closed, the builder (for the runner's own PRs, the runner: docs/RUNNER.md
+     step 5a) merges `main`, resolves the conflict, re-runs the reviewer on the delta only if content
+     changed beyond the conflict ("The review loop"), and once every check on the new head passes,
+     checks again, removes the label and marks the PR ready. If the session that built it has
+     ended, Blue tells any session "clear the wait on #N".
    - After the PR is marked ready, nobody pushes to it except to fix a CI failure, resolve a merge
      conflict, or do what Blue asks. A push dismisses Blue's approval, so the TLDR says why any such
      push happened.
@@ -98,7 +99,8 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      needs his answer says so. A PR with the `waits-for-merge` label is `NOT READY: waits for #X`.
    - Every such message, notification or summary that lists more than one PR ends with the line
      "Merge order: #A, then #B; any order: #C, #D", computed from the test-merges in "Merge order"
-     below ("none" for an empty part).
+     below ("none" for an empty part, and a short note after it when a PR needs a fix first). In a
+     PR's own TLDR, it goes at the end of the "Ready to merge" line.
 6. Blue merges. Nobody and nothing else does.
 
 ### The review loop
@@ -139,26 +141,34 @@ any order.
   other open, non-draft PR from a branch in this repository (fork PRs don't count), without touching
   any branch. A PR carrying `waits-for-merge` doesn't count as ready. With
   `git fetch origin main <heads>` and git 2.38 or later, for each other PR's head `B`:
-  `T=$(git merge-tree --write-tree origin/main B)`, then
-  `C=$(git commit-tree $T -p origin/main -p B -m test)`, then
-  `git merge-tree --write-tree --name-only --no-messages $C <head>`. Exit status 1 is a conflict and
-  the lines after the first name the files. A PR that conflicts with `main` alone gets `main`
-  merged first, as usual.
+  1. `git merge-tree --write-tree --name-only --no-messages origin/main B`. Exit status 1 means `B`
+     conflicts with `main` alone: skip it (it needs its own `main` merge before it can merge at
+     all) and note "#B needs a `main` merge" after the merge-order line. Otherwise its one output
+     line is a tree, `T`.
+  2. `C=$(git -c user.name=merge-check -c user.email=merge-check@invalid commit-tree $T -p origin/main -p B -m test)`
+     makes a throwaway commit that no branch points to.
+  3. `git merge-tree --write-tree --name-only --no-messages $C <head>`. Exit status 1 is a conflict,
+     and the lines after the first name the files.
+  A PR that conflicts with `main` alone gets `main` merged first, as usual.
 - **Fallback.** If the test-merge can't run, any file both PRs change counts as a conflict (from
   each PR's file list on GitHub).
 - **Who waits.** The PR being checked waits; a PR already ready keeps its place. Right after
   marking a PR ready, the builder runs the check once more: if a PR marked ready meanwhile conflicts
-  with it, the higher-numbered of the two goes back to draft and waits. A ready PR never gets a
-  push only to make room for another.
+  with it and the builder's own PR has the higher number, the builder puts its own PR back to draft
+  and waits. Otherwise it leaves the other PR as it is (on a Codex PR, only the label and comment
+  below), and the merge-order line orders the two. No builder changes another builder's PR, and a
+  ready PR never gets a push only to make room for another.
 - **Codex PRs** (`codex/` branches) follow the same rule, but Claude never pushes to one or changes
   its draft state: it adds the `waits-for-merge` label and one comment, without Codex's handle,
   "Waits for #X (conflicts in <files>)". Once #X merges, a conflict left on the Codex PR goes to
-  NEEDS BLUE as docs/CODEX-BUILDER-LANE.md item 6 says; the label comes off when a later review of
-  the PR finds the check passing.
+  NEEDS BLUE as docs/CODEX-BUILDER-LANE.md item 6 says. Once #X is merged or closed, the runner
+  (docs/RUNNER.md step 5b) runs the check again, with no review run, and removes the label if it
+  passes.
 - **The merge-order line** is a safety net, computed from the same test-merges among the PRs it
   lists: a pair that conflicts is ordered (a ready PR before the one waiting for it; between two
-  ready ones, the lower number first, and the line says the other needs a conflict fix after it);
-  every other PR is "any order".
+  ready ones, the lower number first, followed after the line by the note "#B needs a conflict fix
+  after #A"); every other PR is "any order". More than one ordered pair is written as
+  "#A, then #B; #E, then #F".
 - The `waits-for-merge` label is created by the first builder that needs it, if missing.
 
 ### Never

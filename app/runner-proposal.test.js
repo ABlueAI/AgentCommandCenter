@@ -106,12 +106,16 @@ const mustHave = [
   ['remove the needs-blue label, set its row back from NEEDS BLUE to IN PROGRESS (#PR), and do what his reply asks', 'resumes its own PR after Blue answers'],
   ['Merge-order check (AGENTS.md "Merge order"), before marking any PR ready, the status PR too', 'test-merges every PR against the other ready PRs before marking it ready'],
   ['if you can\'t run it, any file both PRs change counts as a conflict', 'treats a test-merge it can\'t run as a conflict on any shared file'],
-  ['add the waits-for-merge label (create it if missing) and the TLDR line "Waits for #X (conflicts in <files>)"', 'keeps a conflicting PR a draft with the waits-for-merge label and line'],
+  ['add the waits-for-merge label (create it if missing), make its TLDR\'s "Ready to merge" line "no (waits for #X; conflicts in <files>)"', 'keeps a conflicting PR a draft with the waits-for-merge label and line'],
   ['it has no waits-for-merge label, and it isn\'t marked ready yet', 'never marks a waiting PR ready'],
-  ['or it carries the waits-for-merge label and every PR its "Waits for" line names is now merged or closed (merge main and resolve the conflict, run a delta review only if content changed beyond the conflict', 'clears its own waiting PR once the blocker is merged or closed'],
-  ['the higher-numbered of the two goes back to draft and waits', 'settles two PRs marked ready at once'],
+  ['or it carries the waits-for-merge label and every PR it waits for is now merged or closed (merge main and resolve the conflict, run a delta review only if content changed beyond the conflict', 'clears its own waiting PR once the blocker is merged or closed'],
+  ['then, once every check on the new head passes, do the merge-order check in step 6 again', 'waits for CI on the merge commit before marking a cleared PR ready'],
+  ['wait until every check on the new head passes (if they haven\'t finished when the fire ends, a later fire finishes it)', 'waits for CI before marking a cleared status PR ready'],
+  ['Also pick, with no review run, a Codex PR carrying the waits-for-merge label whose every PR named in that comment is now merged or closed', 'clears a Codex PR\'s waits-for-merge label without a review run'],
+  ['skip a PR that conflicts with main alone and note it', 'skips a PR that conflicts with main alone'],
+  ['if a PR marked ready meanwhile conflicts with it and yours has the higher number, put yours back to draft and wait; otherwise leave the other PR as it is', 'settles two PRs marked ready at once without touching another builder\'s PR'],
   ['only add the waits-for-merge label and one comment "Waits for #X (conflicts in <files>)" without Codex\'s handle', 'only labels and comments on a waiting Codex PR'],
-  ['or today\'s status PR carries the waits-for-merge label and every PR its "Waits for" line names is now merged or closed', 'clears a waiting status PR'],
+  ['or today\'s status PR carries the waits-for-merge label and every PR it waits for is now merged or closed', 'clears a waiting status PR'],
   ['its last line is "Merge order: #A, then #B; any order: #C, #D"', 'ends a multi-PR summary with the merge-order line'],
 ];
 for (const [text, label] of mustHave) assert(prompt.includes(text), `runner prompt ${label}`);
@@ -150,6 +154,9 @@ assert(rules.includes('### Merge order') && rules.includes('git merge-tree --wri
   'AGENTS.md has the merge-order check, with git merge-tree and the shared-file fallback');
 assert(rules.includes('and the PR merges cleanly alongside every other ready PR ("Merge order" below)'),
   'AGENTS.md step 5 marks a PR ready only when it merges alongside every other ready PR');
+assert(rules.includes('git -c user.name=merge-check -c user.email=merge-check@invalid commit-tree')
+  && rules.includes('conflicts with `main` alone: skip it'),
+  'AGENTS.md recipe needs no committer identity and skips a PR that conflicts with main alone');
 assert(rules.includes('"Merge order: #A, then #B; any order: #C, #D"'),
   'AGENTS.md step 5 requires the merge-order line');
 

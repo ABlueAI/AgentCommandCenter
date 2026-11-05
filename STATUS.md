@@ -226,7 +226,7 @@ Every PR that changes the state updates this file.
   (AGENTS.md "The review loop"). It applies to every PR; the runner's prompt carries it since
   2026-10-21 (checklist step 21). Why: PR #46 took 37 commits and 31 review runs, none with a high
   finding.
-- **Merge order (proposed in PR #166, 2026-11-05):** a PR is marked ready only when it test-merges
+- **Merge order (PR #166; adopted when Blue merges it):** a PR is marked ready only when it test-merges
   cleanly with `main` plus every other ready PR; otherwise it stays a draft labelled
   `waits-for-merge` until its blocker merges, and every summary listing several PRs ends with a
   "Merge order:" line (AGENTS.md "Merge order"). Why: on 2026-11-04 PRs #145, #154, #157 and #165
