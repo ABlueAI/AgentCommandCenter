@@ -1,7 +1,9 @@
 # Mako status
 
-Updated 2026-11-01 by the all-day runner's status PR for 2026-11-01 (no PR merged since the
-2026-10-30 status PR, #138; the last session PR merged was S21's, #133, on 2026-10-29); PR #130.
+Updated 2026-11-04 by PR #160, "Checklist and STATUS housekeeping" (1.1 gap audit A8: the
+"Next", S26, daily-runner and Claude plan lines, and S31 to S34 merged). Before that, on
+2026-11-04 (UTC): PRs #130, #146, #147 and #153; and the all-day runner's status PR for 2026-11-01
+(#141).
 Every PR that changes the state updates this file.
 
 ## Right now
@@ -28,14 +30,16 @@ Every PR that changes the state updates this file.
   watcher (a separate scheduled task, 7:30 AM to 8:00 PM Eastern, notifying only on news; step 34
   first). Marina and lead data stay in the private repo `ABlueAI/mako-business`. S29 and S30 are
   `HOLD (Blue)` until he starts them; S29 also waits on step 33, and the watcher on step 34.
-- **Runner work added (proposed 2026-11-03, pending Blue's merge):** after S15, nothing on the
+- **Runner work added (plan change merged in PR #147 on 2026-11-04):** after S15, nothing on the
   plan was `READY` for the runner, so a plan change adds S31 (PC-check fixes), S32 (1.1 gap audit),
-  S33 (Plan sync guard) and S34 (PR reviewer research). Blue moved step 17's token audit to the
+  S33 (Plan sync guard) and S34 (PR reviewer research). All four merged on 2026-11-04: S31 (#152),
+  S32 (#154), S33 (#155) and S34 (#157); PR #153 added the account guard the same day (Guardrails
+  below). Blue moved step 17's token audit to the
   end of 1.1 (push protection is already on) and stays on Pro until the UI work runs usage up
   (docs/DECISIONS.md, 2026-11-03).
-- **Claude plan:** Blue upgrades to Max 5x when the UI work runs usage up (his call on 2026-11-03;
-  it was 2026-10-28; checklist step 8, not ticked on `main` as of 23:10 UTC on 2026-11-01). Until it is,
-  the runner builds one session at a time on Pro (`parallel_cap: 1`).
+- **Claude plan:** Pro. Blue upgrades to Max 5x when the UI work runs usage up (his call on
+  2026-11-03, docs/DECISIONS.md; checklist step 8, not ticked on `main` as of 2026-11-04). Until
+  then, the runner builds one session at a time (`parallel_cap: 1`).
 - **CI and dependencies (S02, done in PR #45):** every GitHub Action is pinned to a commit SHA, and both
   Windows checks were confirmed as required on `main` (ruleset `protect-main`, read 2026-10-19).
   `npm audit` is down from 11 advisories to 7: Electron 42.11.15, `undici`, `tar` and `protobufjs`
@@ -93,8 +97,9 @@ Every PR that changes the state updates this file.
 - **Codex builder lane (S26, PR #114 merged 2026-10-23, needs Blue):** docs/CODEX-BUILDER-LANE.md
   records what is known (Codex's PRs are opened as `ABlueAgent`; its reviews can't approve) and
   proposes the lane: hand-off on a locked `agent-claimed` issue, Codex fixes its own PRs, Blue
-  checks the "Run by:" link of the Opus review before approving a Codex PR. Blue picks the trial
-  task on PR #114 (checklist step 30).
+  checks the "Run by:" link of the Opus review before approving a Codex PR. The trial ran as PR
+  #140 (issue #139), merged 2026-11-04. Whether it meets S26's "Done when", and step 30's records
+  of what Codex did, are still to be checked (docs/1.1-GAP-AUDIT.md, A4).
 - **Stable and dev copies (S07, PR #123 merged 2026-10-24, in progress):** `npm run start:dev` starts a dev copy of
   Mako with its own settings folder (`%APPDATA%\command-center-dev`), its own taskbar button and a
   `Mako (dev)` title, and it never installs or changes Claude Code hooks. The stable copy is
@@ -187,18 +192,13 @@ Every PR that changes the state updates this file.
     installation on `ABlueAI` is set to "Only select repositories", with Blue's main few repositories
     selected, not only `AgentCommandCenter`; he adds new ones as they're created. What the link
     authorizes on `ABlueAgent` (step 20's second page) wasn't reported, and Blue asked to move on.
-- **Daily runner:** scheduled for 8:01 AM Eastern from 2026-10-18 ([docs/RUNNER.md](docs/RUNNER.md)).
-  The repository was attached on 2026-10-18 (step 7e), and its gate (steps 1 and 7) now passes, so
-  the 2026-10-19 run started and opened PR #44, the first proof it can open PRs.
-  Its prompt includes the `pr-reviewer` step since 2026-10-19 (applied after PR #42 merged), and
-  the capped review loop since 2026-10-21 (PR #52's prompt, applied 21:19 UTC and read back the same
-  day; checklist step 21). PR #83 (merged 2026-10-22): every builder skips a plan session
-  that already has an open PR titled with its ID (`Sxx:`) and opens its own PR early, so two
-  builders don't start the same session. Its prompt (checklist step 26) is superseded by S04's:
-  what each live task runs now is in the S04 bullet above and docs/RUNNER.md "Superseded on the
-  live tasks" and "Applied so far".
-  It runs on Opus 5.5 since 2026-10-21, changed by an interactive session at Blue's request (read
-  back from the scheduled task the same day; docs/RUNNER.md).
+- **Old daily runner (replaced by S04):** "Mako daily runner" is set to fire once a day at 8:01 AM Eastern
+  from 2026-10-18; its 2026-10-19 run opened the first runner PR, #44. It ran with the
+  `pr-reviewer` step, then PR #52's capped review loop, on Opus 5.5. PR #83's claim-check prompt
+  (step 26, now dropped) was never applied to it: since 05:48 UTC on 2026-10-23 it runs PR #84's
+  runner prompt ([docs/RUNNER.md](docs/RUNNER.md) "Applied so far"). S04's hourly all-day runner
+  replaces it (S04 bullet above). Turning it off is part of checklist step 27; as read on
+  2026-10-23 it was still on, and no read since is recorded.
 - **Review loop (adopted: PR #52 merged 2026-10-21, applied to the runner the same day):** every PR gets one complete first review ranked
   high, medium and low; high and medium findings are fixed in one batch, low ones go to Follow-ups;
   later runs check only the fixes; at most 5 runs, then "needs Blue" with questions for Blue; one
@@ -266,7 +266,12 @@ account's repository (found by Codex on PR #46; GitHub's docs not yet read direc
 14 was ticked on 2026-10-23 on Blue's word (PR #118; see Guardrails above). S06 (PR #121) stores
 it in Mako's key setup (safeStorage) and gives it only to unfenced agent panes.
 
-1.1 session S01 (finish guardrails) is DONE: PR #44 merged 2026-10-19, with its evidence in the plan's change log. S02 (CI and dependency hygiene) is DONE (#45); S03 is next. The UI sessions (S14, S17 to S20) are on hold until Blue says go, and S16 becomes the Composer research (approved with the PR #48 merge). S06 also moves local agents off Blue's git login (plan change approved with that merge). See the plan.
+Month one's runner sessions S31 to S34 merged on 2026-11-04. The next `READY` row is S25, the
+month review, from 2026-11-14 (S24 is `READY` but held as draft PR #134 by Blue's choice of
+2026-11-03). The UI sessions (S14, S17 to S20) wait for Blue's go (checklist step 18), and S29 and
+S30 wait for Blue to start them. Most other sessions are merged and wait on a check on Blue's PC
+(BLUE-CHECKLIST.md "Do next"). The 1.1 gap audit ([docs/1.1-GAP-AUDIT.md](docs/1.1-GAP-AUDIT.md))
+lists what is still open; A1, A2, A4 and A5 (d) need Blue. See the plan.
 
 Plan change merged in PR #47 (2026-10-21): S04 becomes an all-day runner with an evening digest
 and needs only S01, so it can run right after S03; new session S26 adds Codex as a second builder

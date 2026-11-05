@@ -6,7 +6,9 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-11-04 by Claude (step 49 added from "Coming up this month", the `ABlueAI`
+Last updated 2026-11-04 by Claude (step 26 marked dropped, "Do next" items 6 and 7 updated now that PRs #84 and
+#119 are merged, a question on step 10 added as item 8, and the "About 2026-11-17" reminder's Max date
+fixed, from the 1.1 gap audit's A7 and A8, PR #160; earlier the same day: step 49 added from "Coming up this month", the `ABlueAI`
 command-line login's removal, with steps 35 and 49 near the top of "Do next", PR #153; step 37 ticked and step 46 added for S23's paperwork, PR #122;
 step 44 added for S09 session resume, PR #131; step 43 added and ticked and step 48 added for S15, PR #130; steps 33, 34 and 36 added for the GoHighLevel lead pipeline,
 S29 and S24, PR #119, proposed; step 35 added for S06, PR #121; step 30 added for the S26 Codex trial, PR #114; step 14 ticked on Blue's word and its token renewal reminder added under "Dated reminders", PR #118; step 31 added for the S13 Obsidian vault, PR #115; step 29 added for the S12 Quick Links bundle, PR #86; step 21
@@ -37,10 +39,13 @@ other remaining items." Claude's order for what is left:
    expiry. The agent token's January renewal (by 2027-01-14) still comes first.
 5. **Step 8**, the Max upgrade: when the UI work runs usage up (your call, 2026-11-03); Pro until
    then.
-6. **When you merge S04 (PR #84): step 28, then step 27**, in the same sitting.
-7. **After you merge the lead-pipeline plan change (PR #119; S22 is merged): step 33**, then
-   start S29. After S29 merges, **step 36** before you start S30. **Step 34** waits until S24 is
+6. **Step 28, then step 27**, in one sitting: S04's runner (PR #84, merged 2026-10-23). Neither
+   step is ticked yet.
+7. **Step 33**, Google Cloud billing for S29 (your spending decision; the lead-pipeline plan
+   change, PR #119, merged 2026-10-24), then start S29. After S29 merges, **step 36** before you start S30. **Step 34** waits until S24 is
    ready for its watcher.
+8. **Step 10**, the app settings review, has said "this week" since 2026-10-17 with no update. Is
+   it dropped, or does it get a date? Tell any agent either way.
 
 ## Today
 
@@ -625,8 +630,8 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     board and ticks this with the date. If the run fails, the agent reads its log; no agent ever sees
     the token. When the token expires, every hourly run fails visibly until it is replaced.
 
-- [ ] **26. Have the runner's claim-check prompt applied (after you merge PR #83).** *Superseded,
-  won't be done: S04 (PR #84) replaced this prompt, and step 27 turns "Mako daily runner" off.
+- **26. ~~Have the runner's claim-check prompt applied (after you merge PR #83).~~ Dropped.**
+  *Dropped 2026-11-04 (1.1 gap audit A7), as superseded, won't be done: S04 (PR #84) replaced this prompt, and step 27 turns "Mako daily runner" off.
   Don't apply a prompt to that task; use step 27's last bullet instead.* About 2 minutes,
   right after you merge PR #83 (the claim check: the runner skips a READY session that already has
   an open PR titled with its ID). Tell the main chat, or any Claude session, "runner prompt merged"
@@ -1036,7 +1041,9 @@ You can start on the first one now, which saves time later.
 ## Dated reminders
 
 - **About 2026-11-17:** reassess plans. Is Max 5x enough, or move to 20x? The month review (S25)
-  brings the numbers. With the upgrade on 2026-10-28, that covers about 3 weeks of Max 5x use.
+  brings the numbers. The upgrade is step 8, when the UI work runs usage up (no longer
+  2026-10-28), so how much Max 5x use this covers depends on when step 8 happens. If step 8
+  hasn't happened by then, reassess whether Pro is still enough, using S25's numbers.
 - **By 2027-01-14:** renew the `ABlueAgent` classic token (`public_repo` only, step 14), a week
   before it expires on 2027-01-21. Signed in as `ABlueAgent`, it is listed on
   https://github.com/settings/tokens. Make the new token by step 14's
