@@ -2,8 +2,8 @@
 
 Updated 2026-11-05 by the all-day runner's status PR for 2026-11-05, for the one PR merged since
 the 2026-11-04 status PR (#165): #166 (merge order). Before that, the 2026-11-04 status PR (#165)
-covered #130 (S15), #146, #147, #140, #155 (S33), #152 (S31), #153, #157 (S34), #154 (S32) and
-#158 to #160.
+covered #130 (S15), #146, #147, #140, #155 (S33), #152 (S31), #153, #157 (S34) and #154 (S32);
+#158 to #160 merged just before it (2026-11-05 00:00 to 00:02 UTC).
 Every PR that changes the state updates this file.
 
 ## Right now
