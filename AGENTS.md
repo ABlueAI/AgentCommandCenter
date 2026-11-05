@@ -163,8 +163,9 @@ any order.
   its draft state: it adds the `waits-for-merge` label and one comment, without Codex's handle,
   "Waits for #X (conflicts in <files>)". Once #X merges, a conflict left on the Codex PR goes to
   NEEDS BLUE as docs/CODEX-BUILDER-LANE.md item 6 says. Once #X is merged or closed, the runner
-  (docs/RUNNER.md step 5b) runs the check again, with no review run, and removes the label if it
-  passes.
+  (docs/RUNNER.md step 5b) runs the check again, with no review run: if the Codex PR conflicts with
+  `main` alone, the label stays and Blue is asked; if another ready PR now conflicts, it edits that
+  one comment to name the new blocker; otherwise it removes the label.
 - **The merge-order line** is a safety net, computed from the same test-merges among the PRs it
   lists: a pair that conflicts is ordered (a ready PR before the one waiting for it; between two
   ready ones, the lower number first, with the note "#B needs a conflict fix after #A" at the end of

@@ -115,6 +115,7 @@ const mustHave = [
   ['skip a PR that conflicts with main alone and note it', 'skips a PR that conflicts with main alone'],
   ['edit that one comment to name the new blocker instead', 'renames the blocker in its one Codex comment so a failed re-check isn\'t picked every fire'],
   ['first test-merge its head with main alone (if that conflicts, keep the label', 'never clears a Codex PR\'s label while it conflicts with main'],
+  ['unless you have already asked Blue on that PR, post the "@ABlueAI needs Blue:" comment and add the needs-blue label', 'asks Blue once about a Codex PR that conflicts with main, so it isn\'t picked every fire'],
   ['if a PR marked ready meanwhile conflicts with it and yours has the higher number, put yours back to draft and wait; otherwise leave the other PR as it is', 'settles two PRs marked ready at once without touching another builder\'s PR'],
   ['only add the waits-for-merge label and one comment "Waits for #X (conflicts in <files>)" without Codex\'s handle', 'only labels and comments on a waiting Codex PR'],
   ['or today\'s status PR carries the waits-for-merge label and every PR it waits for is now merged or closed', 'clears a waiting status PR'],
