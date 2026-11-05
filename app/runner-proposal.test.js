@@ -104,6 +104,22 @@ const mustHave = [
   ['it has no needs-blue label and no "@ABlueAI needs Blue:" comment from your login without a later reply', 'never marks a PR ready while Blue is asked'],
   ['it carries the needs-blue label and the latest "@ABlueAI needs Blue:" comment from your login has a later reply', 'resumes its own PR once per answered question'],
   ['remove the needs-blue label, set its row back from NEEDS BLUE to IN PROGRESS (#PR), and do what his reply asks', 'resumes its own PR after Blue answers'],
+  ['Merge-order check (AGENTS.md "Merge order"), before marking any PR ready, the status PR too', 'test-merges every PR against the other ready PRs before marking it ready'],
+  ['if you can\'t run it, any file both PRs change counts as a conflict', 'treats a test-merge it can\'t run as a conflict on any shared file'],
+  ['add the waits-for-merge label (create it if missing), make its TLDR\'s "Ready to merge" line "no (waits for #X; conflicts in <files>)"', 'keeps a conflicting PR a draft with the waits-for-merge label and line'],
+  ['it has no waits-for-merge label, and it isn\'t marked ready yet', 'never marks a waiting PR ready'],
+  ['or it carries the waits-for-merge label and every PR it waits for is now merged or closed (merge main and resolve the conflict, run a delta review only if content changed beyond the conflict', 'clears its own waiting PR once the blocker is merged or closed'],
+  ['then, once every check on the new head passes, do the merge-order check in step 6 again', 'waits for CI on the merge commit before marking a cleared PR ready'],
+  ['wait until every check on the new head passes (if they haven\'t finished when the fire ends, a later fire finishes it)', 'waits for CI before marking a cleared status PR ready'],
+  ['Also pick, with no review run, a Codex PR carrying the waits-for-merge label whose every PR named in that comment is now merged or closed', 'clears a Codex PR\'s waits-for-merge label without a review run'],
+  ['skip a PR that conflicts with main alone and note it', 'skips a PR that conflicts with main alone'],
+  ['edit that one comment to name the new blocker instead', 'renames the blocker in its one Codex comment so a failed re-check isn\'t picked every fire'],
+  ['first test-merge its head with main alone (if that conflicts, keep the label', 'never clears a Codex PR\'s label while it conflicts with main'],
+  ['unless you have already asked Blue on that PR, post the "@ABlueAI needs Blue:" comment and add the needs-blue label', 'asks Blue once about a Codex PR that conflicts with main, so it isn\'t picked every fire'],
+  ['if a PR marked ready meanwhile conflicts with it and yours has the higher number, put yours back to draft and wait; otherwise leave the other PR as it is', 'settles two PRs marked ready at once without touching another builder\'s PR'],
+  ['only add the waits-for-merge label and one comment "Waits for #X (conflicts in <files>)" without Codex\'s handle', 'only labels and comments on a waiting Codex PR'],
+  ['or today\'s status PR carries the waits-for-merge label and every PR it waits for is now merged or closed', 'clears a waiting status PR'],
+  ['its last line is "Merge order: #A, then #B; any order: #C, #D"', 'ends a multi-PR summary with the merge-order line'],
 ];
 for (const [text, label] of mustHave) assert(prompt.includes(text), `runner prompt ${label}`);
 assert(!/@codex/i.test(prompt), 'runner prompt never writes Codex\'s handle');
@@ -129,12 +145,30 @@ assert(digest.includes('posted by ABlueAgent and edited by no one else') && dige
 assert(digest.includes('"Reviewed head" line names it') && digest.includes('a comment without that line covers the head when it was posted after the first check run on the latest head commit started and the branch has had no force-push since'),
   'digest decides READY from the reviewed head, or the review time when the line is missing');
 assert(digest.includes('no runner activity since yesterday'), 'digest reports a day with no runner activity');
+assert(digest.includes('no waits-for-merge label (otherwise "NOT READY: waits for #X")'),
+  'digest never calls a waiting PR READY TO MERGE');
+assert(digest.includes('Last line, when the message lists more than one open PR: "Merge order: #A, then #B; any order: #C, #D"'),
+  'digest ends with the merge-order line');
+
+// Merge order (AGENTS.md "Merge order", adopted 2026-11-04).
+const rules = read('AGENTS.md');
+assert(rules.includes('### Merge order') && rules.includes('git merge-tree --write-tree')
+  && rules.includes('any file both PRs change counts as a conflict'),
+  'AGENTS.md has the merge-order check, with git merge-tree and the shared-file fallback');
+assert(rules.includes('and the PR merges cleanly alongside every other ready PR ("Merge order" below)'),
+  'AGENTS.md step 5 marks a PR ready only when it merges alongside every other ready PR');
+assert(rules.includes('git -c user.name=merge-check -c user.email=merge-check@invalid commit-tree')
+  && rules.includes('conflicts with `main` alone: skip it'),
+  'AGENTS.md recipe needs no committer identity and skips a PR that conflicts with main alone');
+assert(rules.includes('"Merge order: #A, then #B; any order: #C, #D"'),
+  'AGENTS.md step 5 requires the merge-order line');
 
 // Checklist numbering (AGENTS.md: a new step takes the next free number, never reused).
 const numbers = [...checklist.matchAll(/^- \[[ x]\] \*\*(\d+)\. /gm)].map((m) => Number(m[1]));
 const dupes = numbers.filter((n, i) => numbers.indexOf(n) !== i);
 assert(dupes.length === 0, `checklist step numbers are unique (duplicates: ${dupes.join(', ') || 'none'})`);
 assert(numbers.includes(27) && numbers.includes(28), 'checklist has S04 steps 27 (apply) and 28 (usage credits off)');
+assert(numbers.includes(50), 'checklist has step 50 (apply the merge-order prompts)');
 
 process.stdout.write(`\nrunner-proposal: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

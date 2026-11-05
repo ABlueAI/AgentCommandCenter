@@ -6,7 +6,8 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-11-04 by Claude (step 26 marked dropped, "Do next" items 6 and 7 updated now that PRs #84 and
+Last updated 2026-11-05 by Claude (step 50 added and steps 28 and 27 moved to the top of "Do next",
+for the merge-order rule, PR #166; earlier, on 2026-11-04: step 26 marked dropped, "Do next" items 6 and 7 updated now that PRs #84 and
 #119 are merged, a question on step 10 added as item 8, and the "About 2026-11-17" reminder's Max date
 fixed, from the 1.1 gap audit's A7 and A8, PR #160; earlier the same day: step 49 added from "Coming up this month", the `ABlueAI`
 command-line login's removal, with steps 35 and 49 near the top of "Do next", PR #153; step 37 ticked and step 46 added for S23's paperwork, PR #122;
@@ -24,27 +25,33 @@ changed to classic `public_repo` (PR #46); step 8 moved to 2026-10-28 and steps 
 Your words (2026-10-21): "we will walk through this. place it where you prioritize it in relation to
 other remaining items." Claude's order for what is left:
 
-1. **Step 15**, the voice check on the new Electron, first: a failure means a fix or a revert of the
+1. **Step 50**, right after you merge PR #166 (about 2 minutes): have the runner and digest prompts
+   applied, so the runner marks PRs ready only when they merge in any order and every summary ends
+   with a "Merge order:" line. If you do step 27 in the same sitting, one session can do both.
+2. **Step 28, then step 27**, in one sitting: S04's runner (PR #84, merged 2026-10-23). Neither
+   step is ticked yet. Moved to the top on 2026-11-05 (PR #166): once step 27 is ticked, plan-session
+   PRs stop editing STATUS.md and leave it to the runner's status PR, so parallel PRs conflict less often (your words, 2026-11-04:
+   "if i have 5 prs thrown at me and i am reviewing each then merging, there is no explicitly
+   stated order to merge, it will fail repeatedly").
+3. **Step 15**, the voice check on the new Electron, first of the checks on your PC: a failure means a fix or a revert of the
    Electron bump before other work.
-2. **Step 35**, S06 on your PC (the agent token in Mako, about 15 minutes), **then step 49**: remove
+4. **Step 35**, S06 on your PC (the agent token in Mako, about 15 minutes), **then step 49**: remove
    the `ABlueAI` command-line login from every PC Claude runs on (about 5 minutes per PC). Until
    then, Claude desktop chats run as you and must not do PR work (your words, 2026-11-04: "lets
    unblock this problem for good"); a guard blocks it.
-3. ~~**Step 14**, the agent token~~ Done 2026-10-23 on your word. It unblocks S06 and everything
+5. ~~**Step 14**, the agent token~~ Done 2026-10-23 on your word. It unblocks S06 and everything
    after it (S07 to S11, S21), and Codex's next build (from the hand-off for this order; the plan
    doesn't name that dependency yet).
-4. **Step 17**, the token audit (parts a and b): moved to the end of 1.1, about February 2027 (your
+6. **Step 17**, the token audit (parts a and b): moved to the end of 1.1, about February 2027 (your
    words, 2026-11-03: "Let's finish it at the end"). Part c, push protection, is already on (checked
    2026-11-03). Then every token is reset with a 1-year
    expiry. The agent token's January renewal (by 2027-01-14) still comes first.
-5. **Step 8**, the Max upgrade: when the UI work runs usage up (your call, 2026-11-03); Pro until
+7. **Step 8**, the Max upgrade: when the UI work runs usage up (your call, 2026-11-03); Pro until
    then.
-6. **Step 28, then step 27**, in one sitting: S04's runner (PR #84, merged 2026-10-23). Neither
-   step is ticked yet.
-7. **Step 33**, Google Cloud billing for S29 (your spending decision; the lead-pipeline plan
+8. **Step 33**, Google Cloud billing for S29 (your spending decision; the lead-pipeline plan
    change, PR #119, merged 2026-10-24), then start S29. After S29 merges, **step 36** before you start S30. **Step 34** waits until S24 is
    ready for its watcher.
-8. **Step 10**, the app settings review, has said "this week" since 2026-10-17 with no update. Is
+9. **Step 10**, the app settings review, has said "this week" since 2026-10-17 with no update. Is
    it dropped, or does it get a date? Tell any agent either way.
 
 ## Today
@@ -253,6 +260,17 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     usage-limit stop resumes on its own, and the digest arrives both evenings; then tell any agent
     "check S04".
 
+- [ ] **50. Have the runner and digest prompts applied (after you merge PR #166).** About 2 minutes,
+  right after you merge PR #166 (the merge-order rule). Tell any Claude session "apply the runner
+  prompts from docs/RUNNER.md". It updates only the prompts of the scheduled tasks **Mako all-day
+  runner** and **Mako evening digest** from "Proposed runner prompt (verbatim)" and "Proposed digest
+  prompt (verbatim)" on `main`; their schedules, models, notifications and on/off switches stay as
+  they are, and **Mako daily runner** is left to step 27. Until step 27 turns that one off, it keeps
+  PR #84's prompt, without the merge-order check, so do step 27 in the same sitting if you can. The
+  runner never edits itself.
+  - *Done when:* that session reads both tasks back, their prompts match docs/RUNNER.md on `main`
+    (compared as text), and it ticks this step with the date and how it checked.
+
 ## Any time (not blocking)
 
 - [x] **9. Password manager.** About 45 minutes, any time. *Done 2026-10-19 on Blue's word: "password
@@ -398,7 +416,7 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     session); an agent's request worked on PR #47 on 2026-10-21 (STATUS.md). If ChatGPT uses this same GitHub connection outside Codex (not verified), repositories
     only `ABlueAI` can reach drop out of ChatGPT and Codex; session S26 checks this.
 - [ ] **17. Token hygiene: find old tokens, and rules for any new one.** About 20 minutes, at the end
-  of 1.1, about February 2027 (moved 2026-11-03; "Do next" item 3). Part c is already done.
+  of 1.1, about February 2027 (moved 2026-11-03; "Do next" item 6). Part c is already done.
   - **a. Audit old tokens, on both `ABlueAI` and `ABlueAgent`** (sign in to each in turn). A lost
     token's value can't be recovered: GitHub shows a token only once, but it lists every token with
     its last-used date.
