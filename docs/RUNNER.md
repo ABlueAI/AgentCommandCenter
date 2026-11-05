@@ -179,8 +179,8 @@ status_pr_hour: 18
 ```
 
 - `parallel_cap`: how many plan sessions (and Codex PR reviews) may be worked at once, counted
-  across all overlapping fires. 1 on Pro. The PR that ticks step 8 (the Max 5x upgrade,
-  2026-10-28) changes it to 2; a later PR changes it to 3 once a week of usage shows room
+  across all overlapping fires. 1 on Pro. The PR that ticks step 8 (the Max 5x upgrade, when
+  the UI work runs usage up) changes it to 2; a later PR changes it to 3 once a week of usage shows room
   (docs/PLAN-1.1.md "Parallel work"). Changing it is a one-line PR Blue merges. One exception:
   the fire in the `status_pr_hour` hour opens and finishes that day's status PR outside the cap,
   so on Pro it can run alongside one session.
