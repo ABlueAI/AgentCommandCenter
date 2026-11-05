@@ -235,8 +235,13 @@ status_pr_hour: 18
   isn't picked again as paused.
 - **`runner` label:** marks PRs the runner opened. The runner fixes only those; PRs from
   interactive sessions (also `ABlueAgent`, from `claude/` branches) are left alone.
-- **Labels:** `runner`, `runner-status`, `agent-running`, `usage-paused` and `agent-claimed` are
-  created by the runner the first time it needs them, if missing. S03's `needs-blue` label is reused.
+- **Labels:** `runner`, `runner-status`, `agent-running`, `usage-paused`, `agent-claimed` and
+  `waits-for-merge` are created by the runner the first time it needs them, if missing. S03's
+  `needs-blue` label is reused.
+- **Waits for merge (PR #166):** a PR whose test-merge conflicts with another ready PR stays a
+  draft with the `waits-for-merge` label and a "Waits for #X" TLDR line (AGENTS.md "Merge order").
+  It adds no new lock rule: step 5a clears the runner's own PRs under the usual lock and cap, and
+  step 3 clears a waiting status PR without a lock, as it already runs step 8.
 
 ### Notifications
 
@@ -315,6 +320,9 @@ PR that records it; agents never change scheduled tasks on their own.
 - Changes since PR #84 (the S04 follow-up PR): Follow-ups 2 and 4 to 7 from PR #84's TLDR are in
   the two prompts below, and Follow-up 1 is in "Applying it" above. Once that PR merges, the live tasks run an older text until
   an interactive session pastes these prompts again.
+- Changes in PR #166 (merge order, 2026-11-05): both prompts below add the merge-order check, the
+  `waits-for-merge` label and the "Merge order:" line (runner steps 3, 5a, 5b, 6, 8 and 10; digest
+  steps 1 to 3). The live tasks keep their older text until BLUE-CHECKLIST.md step 50 applies them.
 
 ### Proposed runner prompt (verbatim)
 

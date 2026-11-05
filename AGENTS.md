@@ -85,7 +85,8 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      label and the TLDR line "Waits for #X (conflicts in <files>)". Once #X is merged or closed, the
      builder (for the runner's own PRs, the runner: docs/RUNNER.md step 5a) merges `main`, resolves
      the conflict, re-runs the reviewer on the delta only if content changed beyond the conflict
-     ("The review loop"), checks again, removes the label and marks the PR ready.
+     ("The review loop"), checks again, removes the label and marks the PR ready. If the session
+     that built it has ended, Blue tells any session "clear the wait on #N".
    - After the PR is marked ready, nobody pushes to it except to fix a CI failure, resolve a merge
      conflict, or do what Blue asks. A push dismisses Blue's approval, so the TLDR says why any such
      push happened.
