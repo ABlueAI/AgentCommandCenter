@@ -1,11 +1,9 @@
 # Mako status
 
-Updated 2026-11-04 by the all-day runner's status PR for 2026-11-04 (#165), for the PRs merged
-since the 2026-11-01 status PR (#141): #130 (S15), #146, #147, #140, #155 (S33), #152 (S31), #153,
-#157 (S34) and #154 (S32). Before that, on 2026-11-04: PR #160, "Checklist and STATUS
-housekeeping" (1.1 gap audit A8: the "Next", S26, daily-runner and Claude plan lines, and S31 to
-S34 merged); PRs #130, #146, #147 and #153 (UTC); and the all-day runner's status PR for
-2026-11-01 (#141); PR #134.
+Updated 2026-11-05 by the all-day runner's status PR for 2026-11-05, for the one PR merged since
+the 2026-11-04 status PR (#165): #166 (merge order). Before that, the 2026-11-04 status PR (#165)
+covered #130 (S15), #146, #147, #140, #155 (S33), #152 (S31), #153, #157 (S34) and #154 (S32);
+#158 to #160 merged just before it (2026-11-05 00:00 to 00:02 UTC); PR #134.
 Every PR that changes the state updates this file.
 
 ## Right now
@@ -232,12 +230,13 @@ Every PR that changes the state updates this file.
   (AGENTS.md "The review loop"). It applies to every PR; the runner's prompt carries it since
   2026-10-21 (checklist step 21). Why: PR #46 took 37 commits and 31 review runs, none with a high
   finding.
-- **Merge order (PR #166; adopted when Blue merges it):** a PR is marked ready only when it test-merges
-  cleanly with `main` plus every other ready PR; otherwise it stays a draft labelled
+- **Merge order (PR #166, merged 2026-11-05 00:51 UTC; adopted):** a PR is marked ready only when
+  it test-merges cleanly with `main` plus every other ready PR; otherwise it stays a draft labelled
   `waits-for-merge` until its blocker merges, and every summary listing several PRs ends with a
   "Merge order:" line (AGENTS.md "Merge order"). Why: on 2026-11-04 PRs #145, #154, #157 and #165
   each conflicted after another merged, and each fix push dismissed Blue's approval. The runner and
-  digest follow it once their prompts are applied (checklist step 50).
+  digest follow it once their prompts are applied (checklist step 50, not ticked on `main` as of
+  2026-11-05).
 
 ## 1.0: done
 
