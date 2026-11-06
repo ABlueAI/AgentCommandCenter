@@ -3,7 +3,7 @@
 Updated 2026-11-05 by the all-day runner's status PR for 2026-11-05, for the one PR merged since
 the 2026-11-04 status PR (#165): #166 (merge order). Before that, the 2026-11-04 status PR (#165)
 covered #130 (S15), #146, #147, #140, #155 (S33), #152 (S31), #153, #157 (S34) and #154 (S32);
-#158 to #160 merged just before it (2026-11-05 00:00 to 00:02 UTC).
+#158 to #160 merged just before it (2026-11-05 00:00 to 00:02 UTC); PR #134.
 Every PR that changes the state updates this file.
 
 ## Right now
@@ -97,6 +97,12 @@ Every PR that changes the state updates this file.
   shown. Blue approved the revised drafts by merging PR #122 on 2026-10-28 (the row's "Done
   when"); amounts, the legal name, an attorney's and an
   accountant's review and the Hexona form are step 46. No client data or prices are in this repo.
+- **HighLevel reply/lead watcher (S24, PR #134, in progress):** docs/S24-WATCHER.md designs the
+  read-only watcher (two claude.ai scheduled tasks, 7:30 AM to 7:30 PM hourly plus 8:00 PM, with
+  the GoHighLevel connector on those tasks only, a notification only when something is new, and,
+  proposed as a plan change for Blue's answer, an 8:00 PM day recap to catch a missed check) and its prompt. Checked 2026-10-28: the connector
+  `GHL_MCP_X_CLAUDE` is on the account but needs reconnecting. Nothing is scheduled until Blue
+  merges PR #134 and does checklist step 47. No lead data is in this repo.
 - **Codex builder lane (S26, PR #114 merged 2026-10-23, needs Blue):** docs/CODEX-BUILDER-LANE.md
   records what is known (Codex's PRs are opened as `ABlueAgent`; its reviews can't approve) and
   proposes the lane: hand-off on a locked `agent-claimed` issue, Codex fixes its own PRs, Blue
