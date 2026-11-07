@@ -3,6 +3,12 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-07
+
+| Decision | Blue's words |
+|---|---|
+| **The licence gap in the vendored files is fixed now, with notices only (PR #168).** `app/renderer/vendor/kokoro.web.js` contains eSpeak NG (GPL-3.0-or-later) with no notice, and the xterm.js files lacked their MIT notice. The first fix adds THIRD-PARTY-NOTICES.md, `LICENSES/` and a guard test, and changes no behaviour. Replacing or removing the GPL component, and a licence check in review or CI, come in later PRs. The scope was set by Blue's desktop session, which relayed the instruction to the cloud session that built PR #168. | "fix immediately" |
+
 ## 2026-11-04
 
 | Decision | Blue's words |
