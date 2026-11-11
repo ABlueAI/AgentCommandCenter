@@ -437,8 +437,11 @@ function classifySimpleCommand(words, depth) {
 
 // Plain text scan, used only when the parser met an unclosed quote, `$(` or backtick, or a heredoc
 // delimiter that never appears: it may
-// over-match (a false hit costs one `gh` call, and blocks only under ABlueAI), but never misses
-// these spellings.
+// over-match, but never misses these spellings. A false hit on a login-dependent spelling (`git push`,
+// `gh pr create`, `gh pr ready`) costs one `gh` call and blocks only under ABlueAI. A false hit on a
+// review or merge spelling (`gh pr review`, `gh pr merge`, a `gh api` write to /reviews or /merge) blocks
+// under EVERY login, with no `gh` call: a deliberate fail-closed trade-off for text the parser could not
+// read, for example `git push && echo 'don't use gh pr merge`.
 const RAW_PATTERNS = [
   [/\bgh(?:\.exe)?["']?\s[^\n;&|]*?\bpr\s+(?:create|new)\b/i, 'gh pr create'],
   [/\bgh(?:\.exe)?["']?\s[^\n;&|]*?\bpr\s+ready\b/i, 'gh pr ready'],
