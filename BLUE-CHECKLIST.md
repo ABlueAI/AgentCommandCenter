@@ -606,7 +606,7 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     ChatGPT/Codex app > **Configure**. It should say **Only select repositories** (step 2e); since
     2026-10-21 that is your main few repositories, not only `AgentCommandCenter`. If it says **All
     repositories**, switch it back and save.
-  - Signed in as `ABlueAgent` (separate browser profile): github.com > Settings > Applications. Check
+  - Signed in as `ABlueAgent` (private window): github.com > Settings > Applications. Check
     **Installed GitHub Apps** (should be none) and **Authorized GitHub Apps** (the ChatGPT/Codex entry
     is expected; note what else is listed).
   - *Done when:* you tell any agent what both pages show; it records that in STATUS.md with the date.
@@ -776,7 +776,7 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   - github.com > **New repository**, owner `ABlueAI`, name `mako-business` (or your choice; tell
     the agent), **Private**, add a README. No other settings.
   - Repository > Settings > Collaborators > **Add people**: `ABlueAgent`, role **Write**, and accept
-    the invite signed in as `ABlueAgent` (separate browser profile).
+    the invite signed in as `ABlueAgent` (private window).
   - Claude GitHub App: github.com > Settings > Applications > Claude > **Configure** > add the new
     repo (Only select repositories). Leave Codex's app as is unless you want Codex reviews there.
   - Reply on the S22 PR (#116) with the repo name.
