@@ -39,7 +39,11 @@ function usable(rec, nowMs) {
   if (!INSTALLATION_TOKEN_RE.test(rec.token)) return false;
   if (minted > nowMs + cfg.MAX_CLOCK_SKEW_MS) return false; // the clock went backwards: don't trust it
   if (exp - minted > MAX_LIFETIME_MS + LIFETIME_TOLERANCE_MS) return false; // longer than GitHub ever issues
-  return exp - nowMs > cfg.REFRESH_MARGIN_MS;
+  // Freshness is judged on THIS PC's clock with an upper bound: a token minted at local time m lives at most an
+  // hour of real time, so it is never treated as valid past m + 1 hour even if GitHub's expiresAt (a different
+  // clock) says later. That keeps a slow PC clock from handing out a token after it has really expired.
+  const effectiveExp = Math.min(exp, minted + MAX_LIFETIME_MS);
+  return effectiveExp - nowMs > cfg.REFRESH_MARGIN_MS;
 }
 
 /**

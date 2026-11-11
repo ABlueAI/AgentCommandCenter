@@ -157,6 +157,8 @@ function memCache() {
     }
     assert(usable({ ...good, expiresAt: new Date(T0 + 60 * MIN).toISOString() }, T0 + MIN), 'a genuine one-hour record is used');
     assert(usable({ ...good, expiresAt: new Date(T0 + 66 * MIN).toISOString() }, T0 + MIN), 'a genuine token on a PC whose clock is 6 minutes behind GitHub\'s is still cached (no silent mint on every call)');
+    const slow = { ...good, expiresAt: new Date(T0 + 68 * MIN).toISOString() }; // this PC's clock is 8 minutes behind GitHub's
+    assert(usable(slow, T0 + 54 * MIN) && !usable(slow, T0 + 56 * MIN), 'on a PC 8 minutes behind, freshness is judged on the local clock: the token is renewed 5 minutes before ITS REAL hour ends, not handed out after it has expired');
     {
       let n = 0; const c = memCache();
       c.write('writer', { ...good, token: 'ghp_' + 'a'.repeat(36), expiresAt: '2099-01-01T00:00:00Z', mintedAt: new Date(T0).toISOString() });
@@ -486,6 +488,11 @@ function memCache() {
     fs.writeFileSync(pemPath, pem2);
     const e2 = await rejects(() => importKey({ pemPath, appId: 4242, replace: true, fs: failingFs, layout, keystore, cache: createFileCache({ fs, dir: layout.cacheDir, acl: () => {} }), fetchImpl, loadAuth, out() {} }));
     assert(e2 && e2.code === 'import-failed' && keystore.load() === oldKey && !fs.existsSync(layout.keyPath + '.bak') && fs.existsSync(pemPath), 'a failed --replace puts the old working key back (and leaves no backup file behind)');
+    // restore itself fails: the only copy of the old key is kept and named, never "nothing was kept"
+    fs.writeFileSync(pemPath, pem2);
+    const noRestore = Object.assign(Object.create(failingFs), { copyFileSync(a, b) { if (b === layout.keyPath) throw new Error('EPERM'); return fs.copyFileSync(a, b); } });
+    const e3 = await rejects(() => importKey({ pemPath, appId: 4242, replace: true, fs: noRestore, layout, keystore, cache: createFileCache({ fs, dir: layout.cacheDir, acl: () => {} }), fetchImpl, loadAuth, out() {} }));
+    assert(e3 && e3.code === 'import-failed' && /old key could not be put back/.test(e3.message) && e3.message.includes(layout.keyPath + '.bak') && fs.existsSync(layout.keyPath + '.bak') && !/nothing was kept/.test(e3.message), 'if the old key cannot be put back, its backup is kept and named in the error');
   }
 
   // --- git credential helper protocol -----------------------------------------------------------

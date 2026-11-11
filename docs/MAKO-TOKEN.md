@@ -200,7 +200,7 @@ Do these in order, and don't wait to be sure:
   (`execFile('gh')`) looks for `gh.exe` only, so it skips the shim folder, runs the real `gh` against the empty
   config folder and gets "not logged in". That is a visible failure, not a fallback; run it through a shell.
 - **The "empty" gh config folder** (`%APPDATA%\Mako\gh-empty`) is shared by every App-mode pane, and `gh` may
-  write files there (for example `config.yml`). It holds no login: Mako recreates the folder if it is missing and clears it each time an App pane starts (panes already running keep what is there until then),
+  write files there (for example `config.yml`). It holds no login: Mako recreates the folder if it is missing and clears it each time an App pane starts (an entry Mako cannot delete because it is in use or locked is left in place; panes already running keep what is there until then),
   and the shim refuses the `gh` subcommands that would plant behaviour in it (`alias`, `config set`) or run
   extensions. It cannot stop a program from writing the folder directly, and extensions Blue installed before
   this live in gh's data folder (`%LOCALAPPDATA%\GitHub CLI\extensions`), not here, so they would still run

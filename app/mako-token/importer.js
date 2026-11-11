@@ -78,10 +78,17 @@ async function importKey({
   } catch (e) {
     // Never leave a key without its config (Mako refuses to start App panes in that state): undo both, and
     // put a replaced key back.
-    if (hadKey) { try { fs.copyFileSync(backup, layout.keyPath); } catch { /* the old key stays missing: the error below says nothing was kept */ } }
-    else keystore.remove();
-    try { fs.unlinkSync(backup); } catch { /* none */ }
+    let restored = true;
+    if (hadKey) {
+      try { fs.copyFileSync(backup, layout.keyPath); }
+      catch { restored = false; }
+    } else keystore.remove();
     try { fs.unlinkSync(tmp); } catch { /* not written */ }
+    if (hadKey && !restored) {
+      // Keep the only copy of the old key and say where it is; never claim "nothing was kept".
+      throw new MakoTokenError('import-failed', `the new key could not be stored and the old key could not be put back. The old key is saved at ${backup}; copy it over ${layout.keyPath} to restore it.`);
+    }
+    try { fs.unlinkSync(backup); } catch { /* none */ }
     if (e instanceof MakoTokenError) throw e;
     throw new MakoTokenError('import-failed', `could not store the key and config (${scrub(e && e.message)}); nothing was kept`);
   }
