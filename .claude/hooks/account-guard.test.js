@@ -10,13 +10,20 @@
 //   3. non-matching commands never call gh (no network);
 //   4. the same cases end to end: the real script as Claude Code runs it (JSON on stdin), with a
 //      fake `gh` on PATH (a copy of node that runs a stub `api.js`, so it works on Windows too);
-//   5. .claude/settings.json: the hook is wired as the docs say and the deny rules are untouched.
+//   5. .claude/settings.json: the hook is wired as the docs say, the deny rules are the expected
+//      list, and their syntax follows the permissions docs;
+//   6. review and merge commands (`gh pr review`, `gh pr merge`, `gh api` writes to /reviews,
+//      /merge, /merges and the cloud auto_merge route, GraphQL review and merge mutations) are
+//      blocked under ANY login without asking gh; reads are left alone;
+//   7. App identities: a `[bot]` login is accepted, and an installation token (gh api user answers
+//      403 "Resource not accessible by integration") is allowed with a notice, not an unknown error.
 
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const guard = require('./account-guard.js');
+const { AGENT_LOGINS } = require('../../.github/scripts/agent-logins.js');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -84,7 +91,62 @@ const GUARDED = [
   // Unclosed quotes fall back to a text scan rather than hide what follows.
   ["echo 'unclosed && git push", 'git push'],
   ['echo "$(unclosed && gh pr ready 3', 'gh pr ready'],
+  // Review and merge commands (blocked under any login).
+  ['gh pr review 5 --approve', 'gh pr review'],
+  ['gh pr review --comment -b "looks fine" 5', 'gh pr review'],
+  ['gh pr merge 5 --squash', 'gh pr merge'],
+  ['gh pr merge --auto 5', 'gh pr merge'],
+  ['gh -R ABlueAI/AgentCommandCenter pr merge 5', 'gh pr merge'],
+  ['gh pr --repo ABlueAI/AgentCommandCenter review 5 -a', 'gh pr review'],
+  ['gh.exe pr merge 5', 'gh pr merge'],
+  ['npm test && gh pr merge 5 --admin', 'gh pr merge'],
+  ['bash -c "gh pr review 5 --approve"', 'gh pr review'],
+  ['echo $(gh pr merge 5)', 'gh pr merge'],
+  ["echo 'unclosed && gh pr merge 5", 'gh pr merge'],
+  ["echo 'unclosed && gh pr review 5 -a", 'gh pr review'],
+  ['gh api repos/ABlueAI/AgentCommandCenter/pulls/5/reviews -f event=APPROVE', 'gh api review'],
+  ['gh api repos/o/r/pulls/5/reviews -X POST -f event=COMMENT -f body=x', 'gh api review'],
+  ['gh api -X POST /repos/o/r/pulls/5/reviews', 'gh api review'],
+  ['gh api --method POST repos/o/r/pulls/5/reviews', 'gh api review'],
+  ['gh api --method=post repos/o/r/pulls/5/reviews', 'gh api review'],
+  ['gh api -XPOST repos/o/r/pulls/5/reviews', 'gh api review'],
+  ['gh api -H "Accept: application/vnd.github+json" repos/o/r/pulls/5/reviews --input review.json', 'gh api review'],
+  ['gh api repos/o/r/pulls/5/reviews -F body=@review.md', 'gh api review'],
+  ['gh api repos/o/r/pulls/5/reviews --field event=APPROVE', 'gh api review'],
+  ['gh api repos/o/r/pulls/5/reviews/77/events -X POST -f event=APPROVE', 'gh api review'],
+  ['gh api repos/o/r/pulls/5/reviews/77 -X PUT -f body=x', 'gh api review'],
+  ['gh api repos/o/r/pulls/5/reviews/77/dismissals -X PUT -f message=x', 'gh api review'],
+  ['gh api https://api.github.com/repos/o/r/pulls/5/reviews?per_page=1 -X POST', 'gh api review'],
+  ['gh api repos/o/r/pulls/5/merge -X PUT -f merge_method=squash', 'gh api merge'],
+  ['gh api --method PUT repos/o/r/pulls/5/merge', 'gh api merge'],
+  ['gh api repos/o/r/pulls/5/merge -f merge_method=squash', 'gh api merge'],
+  ['gh api repos/o/r/pulls/$(gh pr view --json number -q .number)/merge -X PUT', 'gh api merge'],
+  ['gh api repos/o/r/merges -f base=main -f head=topic', 'gh api merge'],
+  ['gh api -X PUT repos/o/r/pulls/5/ccr/auto_merge', 'gh api merge'],
+  ['gh api -X POST repos/o/r/pulls/5/ccr/auto_merge', 'gh api merge'],
+  ["gh api graphql -f query='mutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'", 'gh api merge'],
+  ["gh api graphql -f query='mutation { enablePullRequestAutoMerge(input: {pullRequestId: \"x\"}) { clientMutationId } }'", 'gh api merge'],
+  ["gh api graphql -f query='mutation { addPullRequestReview(input: {pullRequestId: \"x\", event: APPROVE}) { clientMutationId } }'", 'gh api review'],
+  ["gh api graphql -f query='mutation { submitPullRequestReview(input: {event: APPROVE}) { clientMutationId } }'", 'gh api review'],
+  ["echo 'unclosed && gh api repos/o/r/pulls/5/reviews -f event=APPROVE", 'gh api review'],
+  ["echo 'unclosed && gh api -X PUT repos/o/r/pulls/5/merge", 'gh api merge'],
+  // A login-dependent command first must never hide a review or merge command later in the same
+  // call (review run 1 of PR #171): the review or merge command wins.
+  ['git push && gh -R ABlueAI/AgentCommandCenter pr merge 5', 'gh pr merge'],
+  ['git push; gh pr review 5 --approve', 'gh pr review'],
+  ['gh pr ready 5 && gh pr merge 5 --squash', 'gh pr merge'],
+  ['git push\ngh api -X POST repos/o/r/pulls/5/reviews -f event=APPROVE', 'gh api review'],
+  ['bash -c "git push; gh api -X PUT repos/o/r/pulls/5/merge"', 'gh api merge'],
+  ['bash -c "git push" && gh pr merge 5', 'gh pr merge'],
+  ['echo $(git push) && gh pr merge 5', 'gh pr merge'],
+  ["echo 'x && gh pr ready 5 && gh pr review 5 --approve", 'gh pr review'],
+  ["git push && echo 'unclosed && gh api repos/o/r/pulls/5/merge -X PUT", 'gh api merge'],
+  ["gh api graphql -f query='mutation { mergeBranch(input: {}) { clientMutationId } }'", 'gh api merge'],
+  ["gh api graphql -f query='mutation { enqueuePullRequest(input: {}) { clientMutationId } }'", 'gh api merge'],
 ];
+// The other direction: a review or merge command first, then a login-dependent one, is still a merge.
+assert(guard.findGuardedCommand('gh pr merge 5 && git push') === 'gh pr merge', 'a review or merge command before a push is still reported');
+assert(guard.findGuardedCommand('git push && gh pr ready 5') === 'git push', 'two login-dependent commands: the first is reported');
 for (const [cmd, want] of GUARDED) {
   assert(guard.findGuardedCommand(cmd) === want, `${JSON.stringify(cmd)} -> ${want}`);
 }
@@ -104,7 +166,29 @@ const NOT_GUARDED = [
   'gh pr list --state open',
   'gh pr checks 152',
   'gh pr comment 152 --body "gh pr ready"',
+  'gh pr comment 152 --body "gh pr merge 5 and gh pr review 5 are blocked"',
+  'gh pr diff 152',
   'gh api user --jq .login',
+  // Reads of review and merge endpoints, and writes to other endpoints, are not the guarded commands.
+  'gh api repos/o/r/pulls/5/reviews',
+  'gh api repos/o/r/pulls/5/reviews --paginate --jq ".[].state"',
+  'gh api -X GET repos/o/r/pulls/5/reviews',
+  'gh api --method GET repos/o/r/pulls/5/merge',
+  'gh api repos/o/r/pulls/5/merge',
+  'gh api repos/o/r/pulls/5/comments',
+  'gh api repos/o/r/pulls/5/reviews/77/comments',
+  'gh api -X POST repos/o/r/issues/5/comments -f body="a note about reviews and merge"',
+  'gh api repos/o/r/issues/5/comments -F body=@note.md',
+  'gh api -X POST repos/o/r/issues/5/labels -f "labels[]=runner"',
+  'gh api repos/o/r/pulls/5/files',
+  'gh api -X DELETE repos/o/r/pulls/5/ccr/auto_merge',
+  'gh api repos/o/r/pulls/5/ccr/ready_for_review -X POST',
+  "gh api graphql -f query='query { viewer { login } }'",
+  'gh api repos/o/r/branches/main',
+  'gh api repos/o/r/compare/main...topic',
+  'gh api',
+  'gh api -X PUT',
+  "echo 'unclosed && gh api repos/o/r/pulls/5/reviews",
   'gh auth status',
   'npm test',
   'ls -la # git push',
@@ -169,6 +253,50 @@ assert(calls === 0, `no gh call for any non-matching command or other tool (${ca
 assert(guard.decide(bash('git status'), counting).exitCode === 0, 'non-matching command under ABlueAI: exit 0');
 
 // ---------------------------------------------------------------------------------------------
+process.stdout.write('\ndecide(): review and merge commands are blocked under any login, without asking gh\n');
+{
+  let asked = 0;
+  const never = () => { asked++; return { login: 'ABlueAgent' }; };
+  const REVIEW_MERGE = GUARDED.filter(([, want]) => guard.ALWAYS_BLOCKED.has(want)).map(([cmd]) => cmd);
+  assert(REVIEW_MERGE.length >= 35, `the review and merge cases are all run (${REVIEW_MERGE.length})`);
+  let blocked = 0;
+  for (const cmd of REVIEW_MERGE) if (guard.decide(bash(cmd), never).exitCode === 2) blocked++;
+  assert(blocked === REVIEW_MERGE.length, `every review and merge command exits 2 under ABlueAgent (${blocked} of ${REVIEW_MERGE.length})`);
+  assert(asked === 0, 'a review or merge command is blocked without a gh call');
+  for (const login of [...AGENT_LOGINS, 'ABlueAI', 'someone-else']) {
+    const v = guard.decide(bash('gh pr review 5 --approve'), () => ({ login }));
+    assert(v.exitCode === 2, `gh pr review under ${login}: exit 2`);
+  }
+  const v = guard.decide(bash('gh pr merge 5 --squash'), () => ({ error: 'gh is not installed or not on PATH' }));
+  assert(v.exitCode === 2 && /gh pr merge/.test(v.stderr), 'gh pr merge is blocked even when gh cannot be read');
+  assert(/Agents never approve or merge/.test(v.stderr) && /PR comment/.test(v.stderr) && /web UI/.test(v.stderr),
+    'the message says agents never approve or merge, that Blue merges in the web UI, and to post a comment instead');
+  assert(!/cloud session|ABlueAI opened/.test(v.stderr), 'the message is not the ABlueAI-login message');
+  const g = guard.decide(bash('git push'), () => ({ login: 'ABlueAgent' }));
+  assert(g.exitCode === 0, 'git push under ABlueAgent is still allowed');
+  for (const cmd of ['git push && gh -R ABlueAI/AgentCommandCenter pr merge 5', 'bash -c "git push; gh api -X PUT repos/o/r/pulls/5/merge"',
+    "echo 'x && gh pr ready 5 && gh pr review 5 --approve"]) {
+    for (const login of ['ABlueAgent', 'mako-agents[bot]']) {
+      assert(guard.decide(bash(cmd), () => ({ login })).exitCode === 2, `${login}: a merge or review behind a push is blocked (${cmd})`);
+    }
+    assert(guard.decide(bash(cmd), () => ({ appToken: true })).exitCode === 2, `App token: a merge or review behind a push is blocked (${cmd})`);
+  }
+}
+
+process.stdout.write('\ndecide(): App identities (mako-agents[bot])\n');
+{
+  const v = guard.decide(bash('git push -u origin x'), () => ({ login: 'mako-agents[bot]' }));
+  assert(v.exitCode === 0 && !v.stderr && !v.systemMessage, 'mako-agents[bot] + git push: exit 0, silent');
+  assert(guard.decide(bash('gh pr create --fill'), () => ({ login: 'Some-App[BOT]' })).exitCode === 0, 'any [bot] login passes');
+  const t = guard.decide(bash('gh pr ready 5'), () => ({ appToken: true, error: 'a GitHub App installation token has no user login' }));
+  assert(t.exitCode === 0 && /installation token/.test(t.systemMessage) && /gh pr ready/.test(t.systemMessage) && !/\n/.test(t.systemMessage),
+    'an installation token: exit 0 with a one-line notice that names the token kind and the command');
+  assert(!/couldn't check/.test(t.systemMessage), 'an installation token is not reported as an unknown error');
+  const u = guard.decide(bash('git push'), () => ({ error: 'gh could not read the login (exit 1); it may not be logged in or offline' }));
+  assert(/couldn't check/.test(u.systemMessage), 'any other failure is still the unknown-error notice');
+}
+
+// ---------------------------------------------------------------------------------------------
 process.stdout.write('\nend to end: the real script with a fake gh on PATH\n');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'account-guard-'));
 const binDir = path.join(tmp, 'bin');
@@ -189,6 +317,10 @@ const mode = process.env.FAKE_GH_MODE;
 if (mode === 'notloggedin') {
   process.stderr.write('To get started with GitHub CLI, please run:  gh auth login\\n');
   process.exit(4);
+}
+if (mode === 'apptoken') {
+  process.stderr.write('gh: Resource not accessible by integration (HTTP 403)\\n');
+  process.exit(1);
 }
 process.stdout.write(mode + '\\n');
 `);
@@ -266,6 +398,32 @@ const ghCalls = () => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8')
   const r = spawnSync(process.execPath, [HOOK], { cwd: workDir, env, input: 'not json', encoding: 'utf8' });
   assert(r.status === 0 && /couldn't read the hook input/.test(r.stdout), 'unreadable input: exit 0 with a notice');
 }
+{
+  // App identities, end to end.
+  const bot = runHook('git push -u origin x', { mode: 'mako-agents[bot]' });
+  assert(bot.status === 0 && bot.stdout.trim() === '' && bot.stderr.trim() === '', 'mako-agents[bot] + git push: exit 0, nothing printed');
+  const app = runHook('git push -u origin x', { mode: 'apptoken' });
+  assert(app.status === 0, `installation token (gh api user answers 403) + git push: exit 0 (got ${app.status})`);
+  let msg = null;
+  try { msg = JSON.parse(app.stdout).systemMessage; } catch { /* asserted below */ }
+  assert(typeof msg === 'string' && /installation token/.test(msg) && !/couldn't check/.test(msg),
+    'installation token: the notice says why, and is not the unknown-error notice');
+}
+{
+  // Review and merge commands: blocked under every login and even with no gh at all.
+  const before = ghCalls().length;
+  for (const mode of ['ABlueAgent', 'ABlueAI', 'mako-agents[bot]', 'apptoken', 'notloggedin']) {
+    const r = runHook('gh pr review 7 --approve', { mode });
+    assert(r.status === 2 && /Agents never approve or merge/.test(r.stderr), `gh pr review under ${mode}: exit 2 with the never-approve message`);
+  }
+  const behind = runHook('git push -u origin x && gh pr merge 7 --squash', { mode: 'ABlueAgent' });
+  assert(behind.status === 2 && /gh pr merge/.test(behind.stderr), 'a merge behind a push under ABlueAgent: exit 2 end to end');
+  const noGh = runHook('gh api repos/o/r/pulls/7/merge -X PUT', { pathDir: emptyDir });
+  assert(noGh.status === 2 && /gh api merge/.test(noGh.stderr), 'gh api PUT .../merge with no gh on PATH: still exit 2');
+  assert(ghCalls().length === before, 'blocking a review or merge command never started gh');
+  const read = runHook('gh api repos/o/r/pulls/7/reviews --jq ".[].state"', { mode: 'ABlueAI' });
+  assert(read.status === 0 && read.stdout === '' && read.stderr === '', 'a read of /reviews is not blocked and starts no gh');
+}
 try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* temp cleanup is best effort */ }
 
 // ---------------------------------------------------------------------------------------------
@@ -281,9 +439,39 @@ const DENY = [
   'Bash(git push --force:*)',
   'Bash(git push -f:*)',
   'Bash(git push --force-with-lease origin main:*)',
+  // Review and merge variants, added 2026-11-11 (see "Verified" below).
+  'mcp__github__pull_request_review_write',
+  'Bash(gh pr review:*)',
+  'Bash(gh api repos/*/pulls/*/reviews*)',
+  'Bash(gh api /repos/*/pulls/*/reviews*)',
+  'Bash(gh api repos/*/pulls/*/merge*)',
+  'Bash(gh api /repos/*/pulls/*/merge*)',
+  'Bash(gh api repos/*/merges*)',
+  'Bash(gh api /repos/*/merges*)',
+  'Bash(gh api repos/*/pulls/*/ccr/auto_merge*)',
+  'Bash(gh api /repos/*/pulls/*/ccr/auto_merge*)',
 ];
 assert(JSON.stringify(settings.permissions && settings.permissions.deny) === JSON.stringify(DENY),
-  'the deny rules are unchanged');
+  'the deny rules are the expected list (the original ones first, then the review and merge variants)');
+// Verified 2026-11-11 against https://code.claude.com/docs/en/permissions (read that day):
+//   * a Bash rule's `*` may stand anywhere and spans any text; `Bash(cmd:*)` is the same as `Bash(cmd *)`
+//     but only at the end of a pattern; deny rules are checked first and a PreToolUse hook can't undo one;
+//   * a rule matches the command text Claude writes: not `gh -R x api ...` or other forms, and a pattern
+//     that constrains arguments is fragile (so the guard hook, which parses the command, is the stronger
+//     layer, and these patterns are best effort);
+//   * an `mcp__` rule with parentheses is skipped (its parameters can't be matched), so MCP rules are
+//     bare tool names or `mcp__server__*`.
+// Verified in a live cloud session the same day: after the entry was added to this file, the harness
+// removed `mcp__github__pull_request_review_write` from the session's tools (denied by a permission
+// rule), so that name is a real tool and the deny applies. The GitHub MCP server's merge tool names in
+// the two older entries were not listed in that session, so they are unchanged and unverified here.
+for (const rule of settings.permissions.deny) {
+  assert(!/^mcp__.*\(/.test(rule), `${rule}: an MCP rule has no parentheses (Claude Code skips it otherwise)`);
+  assert(!/^Bash\(command:/.test(rule), `${rule}: no \`command:\` form (Claude Code ignores it)`);
+  assert(!/^Bash\(.*:\*.+\)$/.test(rule), `${rule}: \`:*\` appears only at the end of a pattern`);
+}
+assert(!settings.permissions.deny.some((r) => /^Bash\(gh api \*/.test(r)),
+  'a gh api deny starts with the endpoint, so a comment body that merely says "reviews" or "merge" is not matched by a leading wildcard');
 const groups = (settings.hooks && settings.hooks.PreToolUse) || [];
 const entry = groups.find((g) => g.matcher === 'Bash');
 const hook = entry && (entry.hooks || []).find((h) => /account-guard\.js$/.test((h.args || [])[0] || ''));
@@ -296,6 +484,11 @@ assert(hook && !('shell' in hook), 'no shell field (ignored in exec form anyway)
 assert(hook && typeof hook.timeout === 'number' && hook.timeout * 1000 > 10000,
   'timeout is longer than the 10-second gh call');
 assert(fs.existsSync(path.join(REPO_ROOT, '.claude', 'hooks', 'account-guard.js')), 'the script exists at that path');
+{
+  const header = fs.readFileSync(path.join(REPO_ROOT, '.claude', 'hooks', 'account-guard.js'), 'utf8').split('\n').filter((l) => l.startsWith('//')).join('\n');
+  for (const login of AGENT_LOGINS) assert(header.includes(login), `the hook's header names the agent login ${login} (shared list: .github/scripts/agent-logins.js)`);
+  assert(/Known gaps/.test(header) && /gh api/.test(header.slice(header.indexOf('Known gaps'))), "the header's known-gaps list covers the gh api review and merge cases");
+}
 
 process.stdout.write(`\naccount-guard: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

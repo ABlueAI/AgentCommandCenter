@@ -34,6 +34,11 @@ claude
 (WSL2 / bash equivalents: `scripts/new-agent.sh`, `scripts/list-agents.sh`,
 `scripts/remove-agent.sh`.)
 
+## Third-party files
+Files listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) are not covered by this repo's MIT
+licence: they are under their own licences (texts in `LICENSES/`), including GPL-3.0-or-later for the
+eSpeak NG engine inside the read-aloud bundle `app/renderer/vendor/kokoro.web.js`.
+
 ## Full walkthrough
 See **`docs/SETUP-WINDOWS.md`** — the complete 6-phase setup, step by step.
 See **`docs/WORKTREE-CHEATSHEET.md`** for the mental model and the commands you'll reuse.

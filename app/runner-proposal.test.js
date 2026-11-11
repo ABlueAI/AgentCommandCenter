@@ -22,6 +22,8 @@ const repoRoot = path.join(__dirname, '..');
 // Windows checkouts get CRLF line endings (git autocrlf), so normalise before matching on "\n".
 const read = (...parts) => fs.readFileSync(path.join(repoRoot, ...parts), 'utf8').replace(/\r\n/g, '\n');
 const runner = read('docs', 'RUNNER.md');
+// The one list of agent logins (.github/scripts/agent-logins.js); the prompts must name each of them.
+const { AGENT_LOGINS } = require(path.join(repoRoot, '.github', 'scripts', 'agent-logins.js'));
 const checklist = read('BLUE-CHECKLIST.md');
 
 function fenced(heading) {
@@ -46,6 +48,8 @@ const expiry = Number(settings.lock_expiry_hours);
 assert(expiry > 0 && expiry <= 6, `lock_expiry_hours is between 0 and 6 (got ${settings.lock_expiry_hours})`);
 const hour = Number(settings.status_pr_hour);
 assert(Number.isInteger(hour) && hour >= 0 && hour <= 23, 'status_pr_hour is an hour of the day');
+assert(JSON.stringify((settings.agent_logins || '').split(',').map((l) => l.trim()))
+  === JSON.stringify(AGENT_LOGINS), 'agent_logins in the settings block is the shared list (.github/scripts/agent-logins.js)');
 
 function checkCron(name) {
   const value = settings[name] || '';
@@ -65,11 +69,17 @@ const prompt = fenced('### Proposed runner prompt (verbatim)');
 assert(prompt.length > 0, 'docs/RUNNER.md has a proposed runner prompt');
 const mustHave = [
   ['parallel_cap', 'reads the parallel cap from the settings'],
-  ['agent-running', 'uses the agent-running lock'],
+  ['runner-lock: ', 'uses the hidden runner-lock marker as the lock'],
+  ['the marker is the only lock; there is no lock label', 'has no lock label'],
+  ['labelled runner when you create it (gh pr create --draft --label runner where gh can create PRs', 'sets the runner label when it creates a PR'],
+  ['agent_logins in "Runner settings" of docs/RUNNER.md', 'defines an agent login from the shared list'],
+  ['ABlueAI is Blue, never an agent', 'never treats Blue as an agent'],
+  ['which includes any login ending in [bot], or is refused with "Resource not accessible by integration"', 'gate accepts a [bot] login and an App installation token'],
+  ['authored by an agent login that carry the runner label', 'fixes only runner-labelled PRs by an agent login'],
   ['runner-lock: expires=', 'lock carries an expiry'],
   ['usage-paused', 'marks a clean stop at a usage limit'],
   ['Never use paid extra usage', 'never uses paid extra usage'],
-  ['ABlueAgent or ABlueAI whose title starts with the session ID', 'claim is an open Sxx: PR by the agent or Blue'],
+  ['an agent login or ABlueAI whose title starts with the session ID', 'claim is an open Sxx: PR by an agent login or Blue'],
   ['a fork PR, or one by anyone else, never counts', 'fork and stranger PRs never count as claims'],
   ['S03\'s sync issues are not claims', 'S03 sync issues are not claims'],
   ['Leave alone every PR without the runner label', 'fixes only runner-labelled PRs'],
@@ -90,7 +100,7 @@ const mustHave = [
   ['labelled runner-status', 'keeps the daily status PR on its own label'],
   ['step 5a never picks it', 'never treats the status PR as an ordinary unit'],
   ['a comment without that line covers the head when it was posted after the first check run on the latest head commit started', 'accepts reviews posted without a Reviewed head line'],
-  ['Skip a Codex PR while a "@ABlueAI needs Blue:" comment from your login has no later reply', 'asks Blue only once about a Codex PR'],
+  ['Skip a Codex PR while a "@ABlueAI needs Blue:" comment from an agent login has no later reply', 'asks Blue only once about a Codex PR'],
   ['on a Codex PR you never change its row or push', 'never pushes to a Codex PR'],
   ['first remove the usage-paused label and the runner-paused marker', 'clears the paused state when it resumes a PR'],
   ['asking for something that no one else has edited', 'acts only on an unedited ABlueAI comment'],
@@ -101,8 +111,8 @@ const mustHave = [
   ['an "Independent review (Opus)" comment covers its latest head (as in 5b)', 'marks a PR ready only when a review covers its latest head'],
   ['from then on, work it only as his reply asks, and otherwise skip it', 'settles what happens on a Codex PR after Blue replies'],
   ['and it isn\'t marked ready yet (update its TLDR and mark it ready)', 'picks up a finished PR whose checks passed later'],
-  ['it has no needs-blue label and no "@ABlueAI needs Blue:" comment from your login without a later reply', 'never marks a PR ready while Blue is asked'],
-  ['it carries the needs-blue label and the latest "@ABlueAI needs Blue:" comment from your login has a later reply', 'resumes its own PR once per answered question'],
+  ['it has no needs-blue label and no "@ABlueAI needs Blue:" comment from an agent login without a later reply', 'never marks a PR ready while Blue is asked'],
+  ['it carries the needs-blue label and the latest "@ABlueAI needs Blue:" comment from an agent login has a later reply', 'resumes its own PR once per answered question'],
   ['remove the needs-blue label, set its row back from NEEDS BLUE to IN PROGRESS (#PR), and do what his reply asks', 'resumes its own PR after Blue answers'],
   ['Merge-order check (AGENTS.md "Merge order"), before marking any PR ready, the status PR too', 'test-merges every PR against the other ready PRs before marking it ready'],
   ['if you can\'t run it, any file both PRs change counts as a conflict', 'treats a test-merge it can\'t run as a conflict on any shared file'],
@@ -123,6 +133,9 @@ const mustHave = [
 ];
 for (const [text, label] of mustHave) assert(prompt.includes(text), `runner prompt ${label}`);
 assert(!/@codex/i.test(prompt), 'runner prompt never writes Codex\'s handle');
+assert(!prompt.includes('agent-running'), 'runner prompt no longer uses the agent-running label');
+assert(!/\byour login\b/.test(prompt), 'runner prompt never checks "your login" alone: it checks an agent login');
+for (const login of AGENT_LOGINS) assert(prompt.includes(login), `runner prompt names the agent login ${login}`);
 assert(!prompt.includes('Until session S04 is merged'), 'runner prompt drops the one-at-a-time line');
 
 // Digest prompt.
@@ -132,15 +145,27 @@ assert(digest.includes('never create, edit or comment on anything on GitHub') &&
   'digest prompt is read-only');
 assert(digest.includes('"READY TO MERGE: ') && digest.includes('"NOT READY: '), 'digest heads its first line READY TO MERGE or NOT READY');
 assert(digest.includes('at-codex') && !/@codex/i.test(digest), 'digest prompt never writes Codex\'s handle');
-assert(digest.includes('"NOT READY: runner gated on step N'), 'digest re-checks the runner gate and reports it');
+assert(digest.includes('"NOT READY: runner gated on step 1 (<step title from the checklist>)"'), 'digest re-checks the runner gate and reports it');
+assert(digest.includes('"NOT READY: AGENT ACCOUNT LOST, see runbook"') && digest.includes('If it returns 404')
+  && digest.includes('never write "lost" on anything but a 404'),
+  'digest says AGENT ACCOUNT LOST, see runbook, only when users/ABlueAgent returns 404');
+assert(digest.includes('gh api users/ABlueAgent') && !/waiting on step 7/.test(digest.replace('never write "waiting on step 7"', '').replace('you never write "waiting on step 7"', '')),
+  'digest reads users/ABlueAgent by REST and no longer says "waiting on step 7"');
+assert(digest.includes('you may run as ABlueAI, ABlueAgent or a [bot] login') && !digest.includes('get_me'),
+  'digest may run as ABlueAI or a [bot] login: its own login is not part of its gate');
+assert(digest.includes('one more read-only call, gh api "repos/ABlueAI/AgentCommandCenter/events?per_page=100" (no polling, no second page)')
+  && digest.includes('"Agent GitHub writes, last 24 hours: N (peak hour HH:00 UTC, M)"'),
+  'digest counts the agent\'s writes in the last 24 hours and the peak hour from one events call');
+for (const login of AGENT_LOGINS) assert(digest.includes(login), `digest prompt names the agent login ${login}`);
+assert(!/\bposted by ABlueAgent\b/.test(digest) && !digest.includes('authored by ABlueAgent'), 'digest checks an agent login, not ABlueAgent alone');
 assert(digest.includes('a review comment or reply whose edit history you can\'t read doesn\'t count either')
   && digest.includes('"NOT READY: needs Blue (comment couldn\'t be checked)"'),
   'digest fails closed on comments whose edit history it cannot read');
 assert(digest.includes('if you can\'t check for force-pushes it doesn\'t cover the head'),
   'digest treats an unreadable force-push history as not covered');
-assert(digest.includes('First line: the gate line from step 1 if the gate failed, even when PRs are ready'),
+assert(digest.includes('the gate line from step 1 if the gate failed, even when PRs are ready'),
   'digest puts a gate failure ahead of any READY TO MERGE headline');
-assert(digest.includes('posted by ABlueAgent and edited by no one else') && digest.includes('never quote their text'),
+assert(digest.includes('posted by an agent login and edited by no one else') && digest.includes('never quote their text'),
   'digest counts only needs-Blue comments by the agent and never relays others\' text');
 assert(digest.includes('"Reviewed head" line names it') && digest.includes('a comment without that line covers the head when it was posted after the first check run on the latest head commit started and the branch has had no force-push since'),
   'digest decides READY from the reviewed head, or the review time when the line is missing');
