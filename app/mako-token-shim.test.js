@@ -99,7 +99,7 @@ const EMPTY = path.join(path.dirname(BIN), 'gh-empty');
   }
   {
     // finding the real gh: never the shim itself
-    const d1 = path.join(tmp(), 'a'), d2 = path.join(tmp(), 'b');
+    const d1 = '/opt/mako/bin', d2 = '/usr/local/bin'; // fixed POSIX-style paths: this case runs the POSIX branch on any OS
     const exists = (p) => p === path.posix.join(d1, 'gh') || p === path.posix.join(d2, 'gh');
     const found = findRealGh({ env: { PATH: `${d1}:${d2}` }, binDir: d1, exists, platform: 'linux' });
     assert(found === path.posix.join(d2, 'gh'), 'findRealGh skips the shim folder even when it is first on PATH');
