@@ -217,18 +217,23 @@ that is not Blue's (see "No PR work under ABlueAI's login"), so losing it stops 
 identities:
 
 - **`mako-agents[bot]`**: the GitHub App `mako-agents`, owned by `ABlueAI` and installed on this
-  repository only. It is the **primary** identity for local work: Mako panes, local Claude sessions
-  and the local runner. The bot login exists once the App is created (BLUE-CHECKLIST.md step 51);
-  until then, local agents use `ABlueAgent` with its token (step 35), as before.
+  repository only. It is the **primary** identity for local work: Mako panes and local Claude
+  sessions (and a local runner, if one is ever built: none exists today, and the runner in
+  docs/RUNNER.md is a cloud scheduled task, so it stays `ABlueAgent`). The bot login exists once the
+  App is created (BLUE-CHECKLIST.md step 51). Until the App is wired (step 52 ticked), local agents
+  use `ABlueAgent` with its token (step 35), as before.
 - **`ABlueAgent`**: kept for **cloud** sessions, because a cloud session can't use the App. The
   throttle once planned for it (a one-PR-a-day cap and a staged restart) is lifted.
 
 Where these rules say "the agent account", they mean both. The runbook for losing it is
 [docs/RUNBOOK-agent-account-lost.md](docs/RUNBOOK-agent-account-lost.md); R4 is not used.
 
-- **R1. Blue never acts as the agent login.** He doesn't sign in as `ABlueAgent` except to recover
-  the account, and never approves, merges or comments with it. A change Blue wrote himself is landed
-  by an agent session opening the PR; Blue approves it as `ABlueAI`.
+- **R1. Blue never acts as the agent login.** He signs in as `ABlueAgent` only to recover the
+  account, for the look-only check in BLUE-CHECKLIST.md step 53 (nothing changed, nothing posted), or
+  to create or renew its token (step 14 and its January 2027 reminder); always in a separate browser
+  profile (R2). He never
+  approves, merges or comments with it. A change Blue wrote himself is landed by an agent session
+  opening the PR; Blue approves it as `ABlueAI`.
 - **R2. Keep `ABlueAgent` healthy.** Two-factor on, with an authenticator and a passkey or security
   key; recovery codes on paper and in the password manager; a mailbox Blue reads; the password only in
   the password manager and never in his everyday browser (if he must sign in, a separate browser
@@ -236,9 +241,10 @@ Where these rules say "the agent account", they mean both. The runbook for losin
   2FA, tokens).
 - **R3. Agents never approve and never merge.** That covers `gh pr review`, the review APIs, GitHub
   MCP review tools, merge buttons, merge APIs and auto-merge, from any identity.
-  - **Enforced by GitHub:** the `protect-main` ruleset (no direct pushes, force pushes or
-    deletions; the required Windows checks; Blue's approval as code owner of the latest push) and
-    "Allow GitHub Actions to create and approve pull requests" being off.
+  - **Enforced by GitHub:** the `protect-main` ruleset's no direct pushes, no force pushes, no
+    deletions and the required Windows checks; and "Allow GitHub Actions to create and approve pull
+    requests" being off. Also configured: required approval from the code owner (`ABlueAI`) of the
+    latest push. Not tested since PR #133 (below), so don't rely on it.
   - **Only an instruction, plus a tripwire:** the rule that an agent identity itself must not call
     the review or merge endpoints. The merge-audit workflow opens a `security-alert` issue after the
     fact; it does not prevent it. The App's token can technically call both endpoints (GitHub's
@@ -247,8 +253,9 @@ Where these rules say "the agent account", they mean both. The runbook for losin
   - **The known gap:** PR #133 (authored by `ABlueAI`) was approved by `ABlueAgent` at 23:25:41 UTC
     and merged by it at 23:25:52 UTC on 2026-10-29, 11 seconds apart (merge-audit issue #137; the
     PR's reviews and `merged_by` on GitHub, read 2026-11-11). The ruleset accepted an agent
-    approval on a Blue-authored PR. Why is not established here, so nothing in this file claims the
-    ruleset now blocks it; treat it as open until it has been tested.
+    approval on a Blue-authored PR. The cause is open (issue #137, docs/1.1-GAP-AUDIT.md A1, which
+    also asks whether Blue clicked it himself while signed in as `ABlueAgent`). Nothing in this file
+    claims the ruleset now blocks it; treat it as open until it has been tested.
 - **R5. Pacing budget.** These are Blue's side's numbers, not GitHub's. Per identity: at most 40
   GitHub writes (comments, pushes, PR and issue changes, labels) per hour and 300 per day. At most 6
   pushes per hour. At most 2 writer sessions at once across the cloud, Blue's PC and the runner.
@@ -256,18 +263,17 @@ Where these rules say "the agent account", they mean both. The runbook for losin
 - **R6. Stop at the first rate limit.** On the first secondary-rate-limit `403` or a `429`, stop all
   GitHub writes, report it, and never retry in a loop.
 - **R7. One origin family per account.** `ABlueAgent`: cloud sessions only, never Blue's PC. The
-  App: Blue's PC only, never the cloud. Mixing origins is the pattern that looks like account
-  sharing.
-- **R8. One ticket, no replacement.** One Support ticket about a lost agent account, ever. No second
-  user account, and no swapping the account's email to another mailbox, to get around a suspension.
-  Blue's words, 2026-11-11: "I'm not making another account."
+  App: Blue's PC only, never the cloud. Assumption, not established: mixing origins can look like
+  account sharing to GitHub. R7 takes effect once the App is wired (checklist step 52 ticked); until
+  then, local agents still use `ABlueAgent`'s token (step 35).
+- **R8. One ticket, no replacement.** One Support ticket per incident: reply in the open one, never
+  open a duplicate. No second user account, and no swapping the account's email to another mailbox,
+  to get around a suspension. Blue's words, 2026-11-11: "I'm not making another account."
 - **R9. The evening digest reports the account.** The digest adds: agent-account status
   (`gh api users/ABlueAgent` returns `200` or `404`), the number of agent writes in the last 24
   hours, and, on a `404`, the line "AGENT ACCOUNT LOST, see runbook". The digest prompt lives in
   docs/RUNNER.md, which this PR does not change: until a later PR changes it and Blue has it
   applied (BLUE-CHECKLIST.md step 50's route), the digest does not report this.
-
-Sensitive areas: this section changes this file, so the PR that adopts it needs the second review.
 
 ## Deciding without asking
 
@@ -343,7 +349,7 @@ listeners · CI workflows, `.github/`, `.claude/`, repository settings · this f
 ## Who does what
 
 - **Blue**: sets goals, approves plan changes, merges. Owns credentials and repository settings.
-- **Claude Code**: primary builder (Sonnet for routine work, Opus for hard problems and reviews). Local work uses the App (`mako-agents[bot]`), cloud work uses `ABlueAgent`.
+- **Claude Code**: primary builder (Sonnet for routine work, Opus for hard problems and reviews). Local work uses the App (`mako-agents[bot]`, once step 51 is done), cloud work uses `ABlueAgent`.
 - **Reviewer subagent** (`.claude/agents/pr-reviewer.md`, Claude Opus): the required independent
   review on every PR, run by the builder before it marks the PR ready (for Codex's PRs, by the
   Claude session that handed it the task, the next runner fire, or a session Blue starts; step 3).

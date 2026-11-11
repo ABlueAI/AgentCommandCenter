@@ -287,19 +287,21 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     organization or account permissions.
   - **Where can this app be installed:** only on this account.
   - Install it on **only select repositories**: `ABlueAI/AgentCommandCenter`, nothing else.
-  - Generate a private key. Save the downloaded file in `C:\Users\levij\.mako-agents\`, never in a
+  - Generate a private key. Save the downloaded file in `%USERPROFILE%\.mako-agents\`, never in a
     repository, a synced folder (OneDrive, Dropbox) or a chat. Put a copy in your password manager.
-  - Give Claude: the App ID, the installation ID, the key's fingerprint (GitHub shows it beside the
-    key) and the app's slug. No key contents, ever.
+  - Give Claude, in the session only and never in the repo: the App ID, the installation ID and the
+    key's fingerprint (GitHub shows it beside the key), plus the app's slug. No key contents, ever.
   - Why: GitHub suspended `ABlueAgent` around 2026-11-08 (cause unknown), and the App gives local work
-    an identity that can't be suspended like a user account. `ABlueAgent` stays for cloud sessions
+    an identity that is not a second user account (whether it is safer from suspension is an
+    assumption; it is owned by `ABlueAI`). `ABlueAgent` stays for cloud sessions
     only (AGENTS.md "Agent account safety"). The App's token can technically approve and merge, so the
     rule against it (R3) applies to the bot too.
   - *Done when:* an agent reads the app's public page with `gh api apps/<slug>` (it shows the
     `mako-agents` name and the owner `ABlueAI`) and the installation's repositories with the
     installation ID (only this repository, and the permissions listed above), and ticks this with the
-    date and what it saw. Wiring the key into Mako (the `mako-token` session) is a separate PR, not
-    this step; step 49 follows it.
+    date and what it saw (without the IDs). Wiring the key into Mako (the `mako-token` session, in the
+    parallel PR of this plan) is separate and not in this step; step 49 stays as written: it is the
+    follow-through, once local work runs on the App.
 
 - [ ] **52. The App approval spike.** About **8 minutes** of your time, after the `mako-token` PR is
   merged and the App's key is imported into Mako (step 51 first). It checks that a PR opened by
@@ -604,7 +606,7 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     ChatGPT/Codex app > **Configure**. It should say **Only select repositories** (step 2e); since
     2026-10-21 that is your main few repositories, not only `AgentCommandCenter`. If it says **All
     repositories**, switch it back and save.
-  - Signed in as `ABlueAgent` (private window): github.com > Settings > Applications. Check
+  - Signed in as `ABlueAgent` (separate browser profile): github.com > Settings > Applications. Check
     **Installed GitHub Apps** (should be none) and **Authorized GitHub Apps** (the ChatGPT/Codex entry
     is expected; note what else is listed).
   - *Done when:* you tell any agent what both pages show; it records that in STATUS.md with the date.
@@ -691,7 +693,7 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     `Needs Blue`, `Hold`, `Ready to merge`, `Done` (rename or delete the defaults). Note the number at
     the end of the project's URL. Project **Settings** > **Manage access** > invite `ABlueAgent`
     with **Write**.
-  - Signed in as `ABlueAgent` (private window): Settings > Developer settings > Personal access
+  - Signed in as `ABlueAgent` (separate browser profile): Settings > Developer settings > Personal access
     tokens > **Tokens (classic)** > Generate new token. Note "Mako plan board", expiry 90 days,
     tick **only** `project`. Copy it; never paste it into a chat or the repo.
   - Signed in as `ABlueAI`: the repository > Settings > **Environments** > `plan-board` (the sync
@@ -774,7 +776,7 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   - github.com > **New repository**, owner `ABlueAI`, name `mako-business` (or your choice; tell
     the agent), **Private**, add a README. No other settings.
   - Repository > Settings > Collaborators > **Add people**: `ABlueAgent`, role **Write**, and accept
-    the invite signed in as `ABlueAgent` (private window).
+    the invite signed in as `ABlueAgent` (separate browser profile).
   - Claude GitHub App: github.com > Settings > Applications > Claude > **Configure** > add the new
     repo (Only select repositories). Leave Codex's app as is unless you want Codex reviews there.
   - Reply on the S22 PR (#116) with the repo name.

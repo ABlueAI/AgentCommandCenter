@@ -379,12 +379,12 @@ and later").
    `runner` only if it can confirm today's scheduled task opened it, for example from the routine's
    run history; if it can't tell, it labels none and lists them for Blue in the S04 PR),
    then runs `pr-reviewer` on any open Codex PR that has no "Independent review (Opus)" comment for
-   its latest head by `ABlueAgent` or `ABlueAI`, unedited by anyone else (a comment by anyone else
+   its latest head by `ABlueAgent`, `mako-agents[bot]` or `ABlueAI`, unedited by anyone else (a comment by anyone else
    doesn't count; the repo is public), and posts it (AGENTS.md step 3); a Codex PR is one from a `codex/` branch in this
    repo, authored by `ABlueAgent`, with a matching `agent-claimed` issue (a fork PR, or one by
    anyone else, never counts), then starts every READY session
    whose Needs are met and that nobody has claimed, up to
-   the parallel cap. A claim is an open PR by `ABlueAgent` or `ABlueAI` titled with the session number
+   the parallel cap. A claim is an open PR by `ABlueAgent`, `mako-agents[bot]` or `ABlueAI` titled with the session number
    (`Sxx:`; a fork PR from anyone else never counts), or an open issue
    with the `agent-claimed` label (how Codex claims, S26). S03's per-session sync issues are not
    claims, whatever their titles. S04 creates the label if S03 hasn't. A builder opens its PR as a draft first; that is the claim. No two fires work on the same PR or session at once: a build can outlast

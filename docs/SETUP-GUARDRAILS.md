@@ -57,7 +57,7 @@ could still press Merge on a green PR. Part B closes that.
 3. **Point Claude at it.** Sign in to GitHub as `ablueai-agent` in a separate browser profile, never
    your everyday one, then go to claude.ai/connect-github and connect. Claude's cloud sessions now act
    as the agent account. You keep using `ABlueAI` on github.com and the GitHub app to approve and
-   merge, and you sign in as the agent account only to recover it (R1). Codex was linked to
+   merge, and you sign in as the agent account only as R1 allows (recovery, the look-only check in step 53, and token renewal). Codex was linked to
    `ABlueAI` until Blue re-linked it to the agent account on 2026-10-20 (BLUE-CHECKLIST.md step 16;
    see "Codex is linked to the agent account" below).
 4. **Require your approval.** Edit `protect-main` > Require a pull request: required approvals **1**;
@@ -70,7 +70,7 @@ could still press Merge on a green PR. Part B closes that.
 
 | Actor | Can push to main | Can merge a PR |
 |---|---|---|
-| Claude or any agent (agent account, Write role) | No | No: needs Blue's approval, and the agent cannot approve as Blue. It can still call the approve and merge endpoints: the rule against it is an instruction plus the merge audit (AGENTS.md R3), not a control; PR #133 is the example (see "What is still not covered") |
+| Claude or any agent (agent account, Write role) | No | No, by rule: it needs Blue's approval, but nothing technically stops an agent identity from calling the approve and merge endpoints; the rule is an instruction plus the merge audit (AGENTS.md R3). PR #133 is the example (see "What is still not covered") |
 | The GitHub App `mako-agents` (`mako-agents[bot]`; planned until BLUE-CHECKLIST.md step 51 is done) | No | No: same as the agent account. Its installation token has write on pull requests, which includes the review and merge endpoints, so only the rule and the merge audit hold it back (AGENTS.md R3) |
 | Codex (linked to the agent account) | No | No: its PRs are opened as the agent account, its reviews come from `chatgpt-codex-connector[bot]` as comments, and neither can give the code owner's approval (docs/CODEX-BUILDER-LANE.md) |
 | A GitHub Actions workflow | No | No: read-only token, cannot approve |
@@ -93,15 +93,14 @@ the App (planned until BLUE-CHECKLIST.md step 51 is done). Cloud PR work waits f
   issue #137). The ruleset accepted an agent approval on a Blue-authored PR; why is not established.
   Until it has been tested, treat "agents never approve and never merge" (AGENTS.md R3) as an
   instruction backed by the merge-audit tripwire, which reports after the fact. The same holds for the
-  App's token. docs/CODEX-BUILDER-LANE.md and the table above say an agent can't give the code
-  owner's approval; PR #133 shows that was not enforced.
+  App's token. docs/CODEX-BUILDER-LANE.md says an agent can't give the code owner's approval; PR #133
+  shows a merge happened without Blue's own approval, and the cause is open (issue #137, gap audit A1).
 
 - **Your own account.** Anyone who gets into ABlueAI can approve and merge. A passkey is the defense.
 - **Local agents on your PC** push with your git login until you save the `ABlueAgent` token in
-  Mako (checklist step 35). Since 2026-11-11, local work is to move to the App `mako-agents` instead
-  (AGENTS.md "Agent account safety"; planned until checklist step 51 is done), and `ABlueAgent` stays
-  for cloud sessions only. Session S06 (PR #121) stores it with safeStorage, like the Gemini key,
-  and gives it only to unfenced agent panes, as `GH_TOKEN` plus git's credential helpers reset to
+  Mako (checklist step 35); S06 (PR #121) stores that token with safeStorage, like the Gemini key. Since
+  2026-11-11, local work is to move to the App `mako-agents` instead (AGENTS.md "Agent account
+  safety"; planned until checklist step 51 is done), and `ABlueAgent` stays for cloud sessions only. S06 also gives it only to unfenced agent panes, as `GH_TOKEN` plus git's credential helpers reset to
   gh's own (app/agent-git-env.js); fenced roles, Video Scout and plain shell panes never get it.
   Without the token, Mako says so once per run. Until the token is saved and step 35 passes,
   local agents only verify; they don't open PRs. Your `ABlueAI` login stays on the PC until you

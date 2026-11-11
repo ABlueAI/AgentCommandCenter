@@ -13,8 +13,9 @@ true, not what is.
 ## The rules this runbook never bends
 
 - **Do not create a replacement user account.** Blue's words (2026-11-11): "I'm not making another
-  account." GitHub's terms allow one machine account per person; a second one is the pattern that
-  gets accounts suspended.
+  account." GitHub's terms allow one machine account per person, and a replacement is the kind of
+  thing that could be read as breaking that (an assumption; the cause of the 2026-11-08 suspension
+  is unknown).
 - **Do not open a second Support ticket.** One ticket only. A duplicate can slow or lose the first.
 - **Do not change anything on the account** (email, password, 2FA, tokens) while the ticket is open
   (AGENTS.md "Agent account safety", R2).
@@ -24,25 +25,25 @@ true, not what is.
 
 1. **Confirm it is gone.** Either of these is enough:
    - `gh api users/ABlueAgent` returns `404`, or
-   - Blue sees GitHub's suspended-account page when he opens the account's sign-in page (a private
-     browser window or a separate browser profile, never his everyday profile; R2).
+   - Blue sees GitHub's suspended-account page when he opens the account's sign-in page (a separate browser
+     profile, never his everyday profile; R2).
 
    A `200` means the account exists: the failure is something else (a token, a rate limit; see R6),
    so stop and report instead of following this runbook.
-2. **Stop what depends on it.** Pause the cloud runner and the evening digest (the scheduled tasks
-   **Mako all-day runner**, **Mako daily runner** and **Mako evening digest**; docs/RUNNER.md) and
-   stop any cloud session that acts as `ABlueAgent`. A cloud session left running keeps failing
+2. **Stop what depends on it.** Pause the cloud runner (the scheduled tasks **Mako all-day runner**
+   and **Mako daily runner**; docs/RUNNER.md) and stop any cloud session that acts as `ABlueAgent`. A cloud session left running keeps failing
    against GitHub and can trip rate limits on whatever it still reaches.
 3. **Use the one ticket.** If a Support ticket about `ABlueAgent` is already open, reply in that
-   ticket. If none exists, Blue files the single appeal from the account's sign-in page or GitHub
+   ticket and open no other. If none is open, Blue files the single appeal from the account's sign-in page or GitHub
    Support, once, and records the ticket's date in docs/DECISIONS.md (not the ticket's ID or
    contents). Blue does this, not an agent.
-4. **Local work needs no switch (planned until the App is wired).** Mako panes, local Claude sessions
-   and the local runner already use the App `mako-agents` (bot login `mako-agents[bot]`, once the
-   App is created), so nothing moves. Until the App is wired (checklist steps 51 and 52), local
-   agents only verify; they open no PRs (docs/SETUP-GUARDRAILS.md, "What is still not covered").
+4. **Local work needs no switch (planned until the App is wired).** Mako panes and local Claude
+   sessions use the App `mako-agents` (bot login `mako-agents[bot]`, once the App is created), so
+   nothing moves. Until the App is wired (checklist steps 51 and 52), local agents use
+   `ABlueAgent`'s token (step 35), so they lose it too and only verify; they open no PRs.
 5. **Re-open lost PRs.** An open PR whose author was `ABlueAgent` stays open and its branch stays,
    but the account can no longer act on it. For each, in order of plan session:
+   - before the App is wired, re-opening waits for Blue (nothing else can open a PR);
    - with the bot (planned until the App is wired), open a new PR from the existing branch, with the
      same title (starting `Sxx:` for a plan session, so the claim rule in AGENTS.md "How work flows"
      still holds), and say "replaces #N (opened by the lost agent account)" in its TLDR;
@@ -60,12 +61,12 @@ true, not what is.
 ## What stays down until the account is reinstated
 
 - **Cloud PR work:** a cloud session cannot use the App, so no cloud session opens or updates a PR.
-- **The cloud runner and its digest:** paused in step 2. (The digest reports "AGENT ACCOUNT LOST, see
-  runbook"; AGENTS.md R9.)
+- **The cloud runner:** paused in step 2. The evening digest stays on (it only reads; docs/RUNNER.md);
+  once R9 is applied, it reports "AGENT ACCOUNT LOST, see runbook".
 - **Codex builds:** Codex is linked to `ABlueAgent` (BLUE-CHECKLIST.md step 16), so it cannot open
   PRs, and its automatic reviews of agent PRs stop.
 
-Local Mako panes, local Claude sessions and the local runner keep working once the App is wired.
+Local Mako panes and local Claude sessions keep working once the App is wired.
 Plan sessions the cloud runner would have taken wait, or Blue starts them by hand in a local pane.
 
 ## When the account is reinstated
