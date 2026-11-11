@@ -156,7 +156,8 @@ not edit that file).
   repository or permission set, or one that looks minted in the future (clock set back), is not used.
   A rejected token (git's `erase`) is dropped. What is read back is checked too, because any program of Blue's
   can write that folder: the token must look like an installation token (`ghs_` and URL-safe characters), the
-  record can't claim a lifetime over an hour, and a record that fails is ignored and replaced by a real mint.
+  record can't claim a lifetime over an hour (plus 10 minutes for the difference between this PC's clock and
+  GitHub's; freshness is judged on this PC's clock), and a record that fails is ignored and replaced by a real mint.
   git's credential protocol is line-based, so a token with a line break is never written to it.
 - **Launcher paths are checked** against characters that could change what a shell runs
   (`' " % ! ^ & | < > $` and the backtick); an unsafe path is refused, not escaped.
