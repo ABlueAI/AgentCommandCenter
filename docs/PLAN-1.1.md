@@ -1,9 +1,18 @@
-# Mako 1.1: month-one plan (34 sessions, 33 active)
+# Mako 1.1: month-one plan (35 sessions, 34 active)
 
 Drafted 2026-10-17 by Claude for Blue. Approved when the PR that adds it is merged. Changes only through
 `plan-change` PRs (rules below).
 
-**Latest change (2026-11-03; PR #147, approved: Blue merged it on 2026-11-04):** four new sessions the runner can build while
+**Latest change (2026-11-11; PR #170, proposed, pending Blue):** new session S35 builds the credential
+path that makes the `mako-agents` GitHub App usable in local agent panes: `mako-token` (mints a
+1-hour installation token for this one repository, with each consumer's permissions narrowed, and
+caches it until 5 minutes before it expires), a `gh` shim and a git credential helper that ask it for
+a fresh token on every call, and an App mode in the pane environment that holds no token at all. Blue
+decided on 2026-11-10 and 2026-11-11, after the 2026-11-08 suspension of `ABlueAgent`, that the App
+becomes the primary identity for local panes, local Claude sessions and the local runner; `ABlueAgent`
+stays for cloud sessions. Details in "S35 details" and the change log. Merging PR #170 approves it.
+
+**Earlier change (2026-11-03; PR #147, approved: Blue merged it on 2026-11-04):** four new sessions the runner can build while
 the UI sessions wait on Blue, because after S15 nothing else on this plan was `READY` for it. S31
 fixes what Blue's PC checks found (authority levels, pane status and toasts, double paste, the token
 box and more), so checklist steps 23, 24 and 40 can be re-run. S32 audits month one for anything
@@ -101,6 +110,7 @@ held rows as held (a Hold column or a `hold` label), never as Ready.
 | S32 | **1.1 gap audit.** One page, `docs/1.1-GAP-AUDIT.md`, that checks month one against what actually landed: every row's "Done when" against its merged PRs and Blue's ticked checklist steps, every "Follow-ups" line in the TLDRs of merged 1.1 PRs, and every unticked checklist step. Each item is marked done, on the docket (naming its row, step or issue) or needs attention; each "needs attention" item gets a proposed fix (a row for a later plan-change PR, or an issue). Docs only: besides its own plan row, it changes no other file. | The page covers every month-one row and every merged 1.1 PR (listed by number), and every "needs attention" item names a proposed fix. | Minimum | cloud | S01 | DONE (#154) |
 | S33 | **Plan sync guard.** Sensitive (a `.github/` workflow and its script). Find why the Plan sync run of 2026-10-22 created a new copy of every sync issue, and make the sync refuse visibly (the run fails and creates nothing) when its listing finds none of the sync issues that already exist, so a bad listing can never duplicate the issues or the board again. | The cause is written in the PR; a test where the listing comes back empty while sync issues exist shows the run failing with no issue created; CI green. | High | cloud | S03, PR #146 (the Plan sync board-client fix) merged | DONE (#155) |
 | S34 | **PR reviewer research (checklist step 22).** Research only: no new key, account or spending. Evaluate qodo-ai/pr-agent, the project Blue named, to replace or back up Mako's review loop, with ADOPT, FORK, PROTOTYPE and PATTERN-MINE all open, and other maintained open-source PR reviewers alongside it (prompt structure, review categories, a best-practices file, a check of the PR against its plan row or issue). Any option that needs a new key, account or spending is a proposal for Blue, never set up. Writes `docs/decisions/OSS-pr-review.md` in the AGENTS.md OSS shape, with any proposed change to `.claude/agents/pr-reviewer.md` described there, not made. | The record gives each option a verdict proposal and a blank for Blue's verdict, word for word, and Blue's verdict is then recorded (checklist step 22). Any reviewer change comes in a later PR. | Minimum | blue | S01 | IN PROGRESS (#157) |
+| S35 | **GitHub App credentials for local agent panes.** Sensitive (credentials, process control: the PTY environment, git's credential helper, a `gh` shim on PATH). Build `mako-token` on the official MIT `@octokit/auth-app`: it opens the App key (a Windows DPAPI file) only in its own short-lived process, mints a repository-scoped, permission-narrowed installation token, caches it in a per-user ACL'd file until 5 minutes before `expires_at`, and refuses visibly, never falling back to another login, when it cannot renew. Agent panes get an App mode (no `GH_TOKEN`, a `gh` shim first on PATH, an empty `GH_CONFIG_DIR`, a git credential helper, the bot commit identity); `mako-token import <pem>` stores the key, proves it, prints its fingerprint and deletes the PEM. Details in "S35 details". | Tests pass in CI (fake-clock expiry, sleep and wake, offline and renewal failure; the shim never exposes the token in the parent environment; no fallback; import deletes the PEM). Then Blue's PC run after the key is imported: a 65-minute pane using gh REST, `gh pr list` and an HTTPS push at minute 0 and minute 65 (docs/MAKO-TOKEN.md "Blue's steps"). | High | windows | S06, S31 | IN PROGRESS (#170) |
 | S05 | **Needs-you alerts.** Windows notification when a Mako pane needs input or a turn ends; setup note for phone alerts through Claude Remote Control. | Toast appears on a real Claude pane; phone alert documented. | Medium | windows | S01 | IN PROGRESS (#49) |
 | S06 | **Process cleanup and link hardening.** Kill the whole process tree when a pane or Mako closes (the node-pty limitation); route the old `open-external` handler through the Quick Links URL policy; move local agents on Blue's PC from his git login to the `ABlueAgent` account (today the only provider key Mako injects is the Gemini key, for Video Scout panes; it also passes a per-pane pane-status token through `buildPtyEnv`, the likely pattern to reuse). Sensitive. | No leftover claude.exe or node.exe after close; link tests pass; a PR opened by a local agent shows `ABlueAgent` as its author. Needs an `ABlueAgent` token from Blue (checklist step 14, a classic `public_repo` token). Also: decide how Mako stores the token and passes it to panes, including whether it survives the subprocess scrub; confirm `public_repo` is enough and ask Blue before widening it; name the exact Credential Manager, `gh` and authorized-app entries Blue removes afterwards (checklist "Coming up this month"), and show how panes are kept from the `ABlueAI` login if he keeps it. | High | windows | S01, checklist step 14 | IN PROGRESS (#121) |
 | S07 | **Stable and dev copies of Mako.** A dev instance uses its own settings folder and never takes over Claude hooks, so agents can change Mako while Blue keeps using it. | Both run side by side without touching each other's state. | High | windows | S06 | IN PROGRESS (#123) |
@@ -167,6 +177,37 @@ follow-up):
 
 Not in S31: red `NODE_EXTRA_CA_CERTS` certificate warnings in panes, and one "Mako stopped
 unexpectedly" banner on 2026-11-02 at 05:02 UTC (follow-ups; ask Blue if it recurs).
+
+### S35 details: GitHub App credentials for local agent panes (proposed, pending Blue: PR #170)
+
+Blue (2026-11-10 and 2026-11-11), after `ABlueAgent` was suspended on 2026-11-08: a GitHub App
+`mako-agents` (owned by `ABlueAI`, installed on this repository only; permissions Metadata R, Contents
+RW, Pull requests RW, Issues RW, Actions R, Checks R, Commit statuses R) becomes the primary identity for
+local Mako panes, local Claude sessions and the local runner. `ABlueAgent` stays for cloud sessions.
+Blue creates the App on 2026-11-12 and saves its key under `C:\Users\levij\.mako-agents\`. An
+installation token lasts 1 hour and `gh` prefers `GH_TOKEN` to any stored login, so no long-lived
+process may hold one. The design came from an independent review, all agreed; the rules, the commands
+and the compromise procedure are in [docs/MAKO-TOKEN.md](MAKO-TOKEN.md).
+
+1. **`mako-token`** (`app/mako-token/`): official `@octokit/auth-app`, adopted whole; the key is opened
+   only in its own process, only when a new token is needed; per-consumer narrowing (panes: contents,
+   pull requests and issues write plus the reads; a read-only consumer: reads only); renewal failure
+   exits non-zero with a clear message.
+2. **git:** the pane's `GIT_CONFIG_COUNT/KEY/VALUE` command-scope entries reset every credential helper
+   and call `mako-token git`, so every HTTPS operation gets a fresh token; `GIT_TERMINAL_PROMPT=0`.
+3. **gh:** a shim folder first on the pane's PATH; the shim sets `GH_TOKEN` for one child process only and
+   runs the real `gh` by absolute path; `GH_CONFIG_DIR` is an empty folder; panes never get `GH_TOKEN` or
+   `GITHUB_TOKEN`. The same folder holds the interim launcher `mako-claude.cmd` for a plain terminal.
+4. **Identity:** installation tokens can't call `gh api user`, so each mint is validated against the
+   expected App and installation IDs and the one expected repository. The PAT path in
+   `app/agent-git-env.js` is unchanged and refuses an installation token; App mode is a separate, deliberate
+   mode, with the bot commit identity `<id>+<slug>[bot]@users.noreply.github.com` read from the config.
+5. **`mako-token import <pem>`:** encrypts the key, mints one token to prove it, prints the SHA-256
+   fingerprint, deletes the PEM. One key per PC, never copied.
+6. **Not in S35:** the local runner and local Claude sessions starting from a plain terminal beyond the
+   interim launcher; moving cloud sessions; the docs and guardrail changes that other PRs carry
+   (AGENTS.md, BLUE-CHECKLIST.md, docs/DECISIONS.md, docs/SETUP-GUARDRAILS.md, docs/RUNNER.md, the merge audit and the
+   account guard).
 
 ### UI sessions: who builds (approved structure, 2026-10-21)
 
@@ -547,3 +588,4 @@ does both) · Vibe Kanban (removed in 1.0).
 - 2026-10-23 (PR #119; approved: Blue merged it on 2026-10-24): GoHighLevel lead pipeline for Florida marinas. New S29 "Florida marina list" (official Google Places API only, output only in the private repo `ABlueAI/mako-business`; needs S22 merged and checklist step 33, a new paid Google Cloud billing account with a Places API key and a budget alert, Blue's spending decision to confirm) and new S30 "Personalized outreach openers" (email only, CAN-SPAM, Claude never sends; Blue approves batches of about 20 in HighLevel; needs S29 and checklist step 36, the Places key deleted first). Both are business rows, kept `HOLD (Blue)` so the runner never starts them; Blue starts them himself in a business cloud environment (S29 with the Places key, S30 after the key is deleted), and the claim PR sets the row to IN PROGRESS. S24 is reshaped: its one read-only workflow is the reply/lead watcher, a separate claude.ai scheduled task (7:30 AM to 7:30 PM Eastern hourly plus 8:00 PM) that notifies Blue only when there is something new, with checklist step 34 (connector scope screenshot) before it goes live; it is an approved CRM credential for that one scheduled task, an exception to the spirit of AGENTS.md's "fenced agent roles never get CRM credentials by default" (AGENTS.md itself is unchanged). Appointment prep and a morning lead brief are held. S22 (PR #116) is unchanged. The month now has 30 sessions, 29 active. Blue's words are in docs/DECISIONS.md, 2026-10-23.
 - 2026-11-03 (PR #147; approved: Blue merged it on 2026-11-04): new sessions S31 "PC-check fixes", S32 "1.1 gap audit", S33 "Plan sync guard" and S34 "PR reviewer research (checklist step 22)", all `READY`, so the runner has work while the UI sessions wait on Blue (Blue, 2026-11-03; docs/DECISIONS.md). Details in "S31 to S34 details". No existing row changes; the "Parallel work" line follows Blue's step 8 decision (Max when the UI work runs usage up).
 - 2026-11-04: the plan changes Blue has merged lose their "proposed, pending Blue" wording in the notes at the top, the detail headings and this change log, with merge dates read from GitHub (PRs #44, #46, #47, #48, #52, #54, #119 and #147; approval entries in docs/DECISIONS.md, 2026-11-04; gap audit A3). Row S23's text follows Blue's 2026-10-28 paperwork answers (hour blocks dropped, PRs #122 and #135; A9). S04 item 3's parallel cap follows checklist step 8, not the old 2026-10-28 date. No row's scope, needs or status changes.
+- 2026-11-11 (PR #170; proposed, pending Blue): new session S35 "GitHub App credentials for local agent panes" (`mako-token`, a `gh` shim, a git credential helper and App mode for agent panes), after `ABlueAgent`'s 2026-11-08 suspension and Blue's decisions of 2026-11-10 and 2026-11-11 that the `mako-agents` GitHub App becomes the primary local identity. IN PROGRESS (#170). It adds no new spending: the App is free and installed on this repository only. The reason is not yet in docs/DECISIONS.md, because the docs PR that runs in parallel owns that file; it records Blue's decisions.

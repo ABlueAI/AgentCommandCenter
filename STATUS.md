@@ -147,6 +147,14 @@ Every PR that changes the state updates this file.
   routine lines show as "[main]"; agent panes' `git config` says ABlueAgent; read-aloud keeps its
   selection after a speed change. S31 is done once Blue's re-runs of checklist steps 23, 24 and 40
   pass on his PC (step 38 gains a commit-author check).
+- **GitHub App credentials for local agent panes (S35, PR #170, proposed, in progress):** after `ABlueAgent`'s
+  2026-11-08 suspension, Blue decided (2026-11-10 and 2026-11-11) that the `mako-agents` GitHub App becomes the
+  primary identity for local panes, local Claude sessions and the local runner. PR #170 builds the credential
+  path: `mako-token` (a 1-hour installation token for this one repository, narrowed per consumer, cached until 5
+  minutes before it expires, never a fallback to another login), a `gh` shim and a git credential helper that ask it
+  on every call, and an App mode for agent panes that holds no token. Nothing runs until Blue creates the App
+  (planned 2026-11-12) and imports its key; his PC's 65-minute check is the "done when". Reference:
+  [docs/MAKO-TOKEN.md](docs/MAKO-TOKEN.md).
 - **1.1 gap audit (S32, PR #154 merged 2026-11-04, done):** [docs/1.1-GAP-AUDIT.md](docs/1.1-GAP-AUDIT.md)
   checks every month-one row, every merged 1.1 PR and every unticked step; 11 items need attention
   (A1 to A11), each with a proposed fix. PRs #158, #159 and #160 (merged 2026-11-05 UTC) took A3 and A6 to A9.
