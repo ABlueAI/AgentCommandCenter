@@ -19,9 +19,15 @@ function installForCurrentRuntime({ env = process.env, fs = nodefs, homedir = os
     ghShimJs: path.join(__dirname, 'gh-shim.js'), cliJs: path.join(__dirname, 'cli.js'),
     binDir: layout.binDir,
   });
-  // The shared gh config folder is meant to be empty. Clear anything a pane planted in it (best effort:
-  // a file gh holds open is left for the next start), then make sure it exists.
-  try { for (const name of fs.readdirSync(layout.ghEmptyDir)) { try { fs.rmSync(path.join(layout.ghEmptyDir, name), { recursive: true, force: true }); } catch { /* in use */ } } } catch { /* not there yet */ }
+  // The shared gh config folder is meant to be empty. Clear anything a pane planted in it, then make sure it
+  // exists. A file gh holds open (EBUSY/EPERM) is left for the next start; any other failure refuses the pane
+  // visibly rather than starting it with whatever was planted. Panes already running keep what is there.
+  let names = [];
+  try { names = fs.readdirSync(layout.ghEmptyDir); } catch (e) { if (!e || e.code !== 'ENOENT') throw new MakoTokenError('clean-failed', `could not read the gh config folder (${e && e.code})`); }
+  for (const name of names) {
+    try { fs.rmSync(path.join(layout.ghEmptyDir, name), { recursive: true, force: true }); }
+    catch (e) { if (!e || (e.code !== 'EBUSY' && e.code !== 'EPERM')) throw new MakoTokenError('clean-failed', `could not clear the gh config folder (${e && e.code})`); }
+  }
   fs.mkdirSync(layout.ghEmptyDir, { recursive: true });
   return installLaunchers({ fs, binDir: layout.binDir, files });
 }

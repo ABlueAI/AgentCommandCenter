@@ -46,7 +46,9 @@ call asks for a fresh one.
 - Only unfenced agent panes get this (a bare CLI pane or an unfenced role). Fenced roles, Video Scout
   and plain shells never do.
 - If the App config exists but the key is missing, the key exists but the config is missing (a deleted
-  config or a half-finished import), the config is invalid, or the launchers can't be written, **the pane
+  config or a half-finished import: import a newly generated key with `--replace`, since the old PEM is
+  deleted after import, or delete `%APPDATA%\Mako\mako-agents.key.dpapi` to go back to the saved-token mode on
+  purpose), the config is invalid, or the launchers can't be written, **the pane
   does not start** and Mako shows why. It never falls back to the `ABlueAgent` token
   or to Blue's own login. With no App config at all, the S06 token path works as before.
 - The `ABlueAgent` token path in `app/agent-git-env.js` still only accepts `ghp_` and `github_pat_`
@@ -198,7 +200,7 @@ Do these in order, and don't wait to be sure:
   (`execFile('gh')`) looks for `gh.exe` only, so it skips the shim folder, runs the real `gh` against the empty
   config folder and gets "not logged in". That is a visible failure, not a fallback; run it through a shell.
 - **The "empty" gh config folder** (`%APPDATA%\Mako\gh-empty`) is shared by every App-mode pane, and `gh` may
-  write files there (for example `config.yml`). It holds no login: Mako recreates the folder if it is missing,
+  write files there (for example `config.yml`). It holds no login: Mako recreates the folder if it is missing and clears it each time an App pane starts (panes already running keep what is there until then),
   and the shim refuses the `gh` subcommands that would plant behaviour in it (`alias`, `config set`) or run
   extensions. It cannot stop a program from writing the folder directly, and extensions Blue installed before
   this live in gh's data folder (`%LOCALAPPDATA%\GitHub CLI\extensions`), not here, so they would still run

@@ -216,7 +216,7 @@ const EMPTY = path.join(path.dirname(BIN), 'gh-empty');
     fs.mkdirSync(layout.dataDir, { recursive: true });
     fs.writeFileSync(layout.keyPath, 'blob');
     r = prepareAgentApp({ env, fs, install: () => { throw new Error('must not install'); } });
-    assert(r.mode === 'refused' && /config .*is missing/.test(r.reason) && /Not falling back/.test(r.reason), 'a key with no config (deleted config, half-finished import) refuses the pane: no silent downgrade to the PAT or Blue\'s own login');
+    assert(r.mode === 'refused' && /config .*is missing/.test(r.reason) && /newly generated key/.test(r.reason) && /delete .*mako-agents\.key\.dpapi/.test(r.reason) && /Not falling back/.test(r.reason), 'a key with no config (deleted config, half-finished import) refuses the pane: no silent downgrade to the PAT or Blue\'s own login');
     fs.rmSync(layout.keyPath);
     fs.writeFileSync(layout.configPath, '{not json');
     r = prepareAgentApp({ env, fs, install: () => {} });
@@ -240,6 +240,11 @@ const EMPTY = path.join(path.dirname(BIN), 'gh-empty');
     fs.writeFileSync(path.join(layout.ghEmptyDir, 'config.yml'), 'pager: sh -c evil');
     const real = prepareAgentApp({ env, fs });
     assert(!fs.existsSync(path.join(layout.ghEmptyDir, 'config.yml')), 'anything a pane planted in the shared gh config folder is cleared when the next pane starts');
+    const stuck = Object.assign(Object.create(fs), { rmSync() { throw Object.assign(new Error('x'), { code: 'EACCES' }); }, readdirSync: (d) => (d === layout.ghEmptyDir ? ['planted'] : fs.readdirSync(d)) });
+    const refusedClean = prepareAgentApp({ env, fs: stuck });
+    assert(refusedClean.mode === 'refused' && /could not clear the gh config folder/.test(refusedClean.reason), 'a planted entry that cannot be removed refuses the pane visibly (no swallowed error)');
+    const busy = Object.assign(Object.create(fs), { rmSync() { throw Object.assign(new Error('x'), { code: 'EBUSY' }); }, readdirSync: (d) => (d === layout.ghEmptyDir ? ['inuse'] : fs.readdirSync(d)) });
+    assert(prepareAgentApp({ env, fs: busy }).mode === 'app', 'a file gh holds open (EBUSY) is left for the next start');
     assert(real.mode === 'app' && fs.existsSync(path.join(layout.binDir, 'gh.cmd')) && fs.existsSync(layout.ghEmptyDir) && fs.readdirSync(layout.ghEmptyDir).length === 0, 'the real installer writes the launchers and an EMPTY gh config folder');
   }
 

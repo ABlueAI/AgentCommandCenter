@@ -25,7 +25,7 @@ function prepareAgentApp({ env = process.env, fs = nodefs, homedir = os.homedir(
     if (loaded.reason === 'not-configured') {
       // A key with no config is a half-finished import or a deleted config file, never "no App": falling
       // back to the PAT or Blue's own login there would be a silent downgrade.
-      if (fs.existsSync(layout.keyPath)) return { mode: 'refused', reason: 'the App key is imported but its config (mako-agents.json) is missing; run mako-token import --replace again. Not falling back to another login.' };
+      if (fs.existsSync(layout.keyPath)) return { mode: 'refused', reason: 'the App key is imported but its config (mako-agents.json) is missing; either import a newly generated key (mako-token import <pem> --app-id <n> --replace; the old PEM is deleted after import) or, to go back to the saved-token mode on purpose, delete %APPDATA%\\Mako\\mako-agents.key.dpapi. Not falling back to another login.' };
       return { mode: 'pat' };
     }
     return { mode: 'refused', reason: `the GitHub App config is invalid (${loaded.detail})` };

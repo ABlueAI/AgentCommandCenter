@@ -152,10 +152,11 @@ function memCache() {
       assert(!recordMatches({ ...good, [k]: v }, CONFIG, 'writer'), `a record with a different ${k} is not reused`);
     }
     // a forged cache file: a record can't make mako-token hand out an arbitrary string or a far-future expiry
-    for (const [label, patch] of [['a token that is not an installation token', { token: 'ghp_' + 'a'.repeat(36) }], ['a one-word token', { token: 'x' }], ['a token with a line break', { token: 'ghs_' + 'a'.repeat(30) + '\nhost=evil' }], ['an expiry in 2099', { expiresAt: '2099-01-01T00:00:00Z' }], ['a lifetime of 2 hours', { expiresAt: new Date(T0 + 120 * MIN).toISOString() }]]) {
+    for (const [label, patch] of [['a token that is not an installation token', { token: 'ghp_' + 'a'.repeat(36) }], ['a one-word token', { token: 'x' }], ['a token with a line break', { token: 'ghs_' + 'a'.repeat(30) + '\nhost=evil' }], ['an expiry in 2099', { expiresAt: '2099-01-01T00:00:00Z' }], ['a lifetime of 2 hours', { expiresAt: new Date(T0 + 120 * MIN).toISOString() }], ['a lifetime of 75 minutes', { expiresAt: new Date(T0 + 75 * MIN).toISOString() }]]) {
       assert(!usable({ ...good, ...patch }, T0 + MIN), `a forged cache record is not used: ${label}`);
     }
     assert(usable({ ...good, expiresAt: new Date(T0 + 60 * MIN).toISOString() }, T0 + MIN), 'a genuine one-hour record is used');
+    assert(usable({ ...good, expiresAt: new Date(T0 + 66 * MIN).toISOString() }, T0 + MIN), 'a genuine token on a PC whose clock is 6 minutes behind GitHub\'s is still cached (no silent mint on every call)');
     {
       let n = 0; const c = memCache();
       c.write('writer', { ...good, token: 'ghp_' + 'a'.repeat(36), expiresAt: '2099-01-01T00:00:00Z', mintedAt: new Date(T0).toISOString() });
@@ -477,6 +478,14 @@ function memCache() {
     const failingFs = Object.assign(Object.create(fs), { renameSync(a, b) { if (b === layout.configPath) throw new Error('EPERM'); return fs.renameSync(a, b); } });
     const e = await rejects(() => importKey({ pemPath, appId: 4242, fs: failingFs, layout, keystore, cache: createFileCache({ fs, dir: layout.cacheDir, acl: () => {} }), fetchImpl, loadAuth, out() {} }));
     assert(e && e.code === 'import-failed' && !keystore.exists() && !fs.existsSync(layout.configPath) && fs.existsSync(pemPath), 'a config write that fails rolls the key back: no key without its config, and the PEM is kept for a retry');
+    // --replace: the old working key comes back
+    const okFs = fs;
+    await importKey({ pemPath, appId: 4242, fs: okFs, layout, keystore, cache: createFileCache({ fs, dir: layout.cacheDir, acl: () => {} }), fetchImpl, loadAuth, out() {} });
+    const oldKey = keystore.load();
+    const pem2 = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs1', format: 'pem' });
+    fs.writeFileSync(pemPath, pem2);
+    const e2 = await rejects(() => importKey({ pemPath, appId: 4242, replace: true, fs: failingFs, layout, keystore, cache: createFileCache({ fs, dir: layout.cacheDir, acl: () => {} }), fetchImpl, loadAuth, out() {} }));
+    assert(e2 && e2.code === 'import-failed' && keystore.load() === oldKey && !fs.existsSync(layout.keyPath + '.bak') && fs.existsSync(pemPath), 'a failed --replace puts the old working key back (and leaves no backup file behind)');
   }
 
   // --- git credential helper protocol -----------------------------------------------------------

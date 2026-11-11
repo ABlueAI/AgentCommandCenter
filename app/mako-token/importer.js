@@ -3,7 +3,7 @@
 //
 // Proves the App key works, stores it protected, prints its fingerprint, then deletes the PEM.
 // Order matters: nothing is stored until a token has been minted and checked, so a failed import
-// leaves the PC as it was. No PEM, JWT or token is printed or logged.
+// leaves the PC as it was (a replaced key is put back). No PEM, JWT or token is printed or logged.
 //
 //   1. read and check the PEM; compute its SHA-256 fingerprint;
 //   2. with an App JWT: GET /app (right App ID, owned by the expected account, slug) and
@@ -64,6 +64,11 @@ async function importKey({
 
   fs.mkdirSync(layout.dataDir, { recursive: true });
   const tmp = `${layout.configPath}.${process.pid}.tmp`;
+  // --replace overwrites a working key: keep its (protected) blob until the new one is stored and its config
+  // is written, so a failure puts the old key back instead of leaving none.
+  const backup = `${layout.keyPath}.bak`;
+  const hadKey = keystore.exists();
+  if (hadKey) fs.copyFileSync(layout.keyPath, backup);
   try {
     keystore.save(pem);
     const back = keystore.load();
@@ -71,12 +76,16 @@ async function importKey({
     fs.writeFileSync(tmp, JSON.stringify(config, null, 2) + '\n');
     fs.renameSync(tmp, layout.configPath);
   } catch (e) {
-    // Never leave a key without its config (Mako refuses to start App panes in that state): undo both.
-    keystore.remove();
+    // Never leave a key without its config (Mako refuses to start App panes in that state): undo both, and
+    // put a replaced key back.
+    if (hadKey) { try { fs.copyFileSync(backup, layout.keyPath); } catch { /* the old key stays missing: the error below says nothing was kept */ } }
+    else keystore.remove();
+    try { fs.unlinkSync(backup); } catch { /* none */ }
     try { fs.unlinkSync(tmp); } catch { /* not written */ }
     if (e instanceof MakoTokenError) throw e;
     throw new MakoTokenError('import-failed', `could not store the key and config (${scrub(e && e.message)}); nothing was kept`);
   }
+  try { fs.unlinkSync(backup); } catch { /* none */ }
   cache.removeAll();
 
   const del = secureDelete(fs, pemPath);

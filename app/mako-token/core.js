@@ -29,13 +29,16 @@ function recordMatches(rec, config, profile) {
 // most one hour. A forged record (any string as the token, an expiry in 2099) fails and a real token is minted.
 const INSTALLATION_TOKEN_RE = /^ghs_[A-Za-z0-9_]{20,255}$/;
 const MAX_LIFETIME_MS = 60 * 60 * 1000;
+// expiresAt is GitHub's clock and mintedAt is this PC's, so a slow or fast PC clock widens the apparent lifetime.
+// The check only has to reject far-future forgeries, so it allows 10 minutes of clock difference.
+const LIFETIME_TOLERANCE_MS = 10 * 60 * 1000;
 
 function usable(rec, nowMs) {
   const exp = Date.parse(rec.expiresAt);
   const minted = Date.parse(rec.mintedAt);
   if (!INSTALLATION_TOKEN_RE.test(rec.token)) return false;
   if (minted > nowMs + cfg.MAX_CLOCK_SKEW_MS) return false; // the clock went backwards: don't trust it
-  if (exp - minted > MAX_LIFETIME_MS + cfg.MAX_CLOCK_SKEW_MS) return false; // longer than GitHub ever issues
+  if (exp - minted > MAX_LIFETIME_MS + LIFETIME_TOLERANCE_MS) return false; // longer than GitHub ever issues
   return exp - nowMs > cfg.REFRESH_MARGIN_MS;
 }
 
