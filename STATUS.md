@@ -231,6 +231,17 @@ Every PR that changes the state updates this file.
   each conflicted after another merged, and each fix push dismissed Blue's approval. The runner and
   digest follow it once their prompts are applied (checklist step 50, not ticked on `main` as of
   2026-11-05).
+- **Licence notices (found 2026-11-07, fixed by PR #168):** a GPT planning review flagged, and
+  Claude checked, that the read-aloud bundle `app/renderer/vendor/kokoro.web.js` (in the repo
+  since `d2b2eea`, PR #19) contains the eSpeak NG speech engine and its data, which are
+  GPL-3.0-or-later, while npm declares the bundle's packages Apache-2.0 only; the repo had no
+  third-party notices, and the vendored xterm.js files lacked their MIT notice. PR #168 adds
+  [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) (every vendored file with its upstream, version,
+  licence, copyright and pinned source; the bundle's components one by one), the licence texts in
+  `LICENSES/`, a README pointer and a test that fails if a tracked vendor file has no row. No
+  vendored code changed, so voice needs no new PC check. This is notice compliance, not legal
+  advice. Replacing the GPL phonemizer, a licence check in review or CI, and installer notices are
+  separate follow-ups.
 
 ## 1.0: done
 
