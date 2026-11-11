@@ -44,6 +44,7 @@ const AGENT_GIT_ENV_KEYS = Object.freeze([
   'GH_ENTERPRISE_TOKEN',
   'GITHUB_ENTERPRISE_TOKEN',
   'GH_HOST',
+  'GH_CONFIG_DIR', // S35: App mode points it at an empty folder; no pane inherits a stored login's folder
   'GIT_CONFIG_COUNT',
   'GIT_CONFIG_KEY_0',
   'GIT_CONFIG_VALUE_0',
@@ -53,6 +54,8 @@ const AGENT_GIT_ENV_KEYS = Object.freeze([
   'GIT_CONFIG_VALUE_2',
   'GIT_CONFIG_KEY_3',
   'GIT_CONFIG_VALUE_3',
+  'GIT_CONFIG_KEY_4', // S35: App mode uses five command-scope entries
+  'GIT_CONFIG_VALUE_4',
   'GIT_CONFIG_PARAMETERS',
   'GIT_CONFIG_GLOBAL',
   'GIT_CONFIG_SYSTEM',
@@ -133,7 +136,68 @@ function buildAgentGitEnv(token) {
   };
 }
 
+// ---- S35: GitHub App mode ----------------------------------------------------------------------
+// The `mako-agents` App is the primary local identity (docs/MAKO-TOKEN.md). It is a DELIBERATE second
+// mode: an installation token is never pasted into the PAT path above (isAgentToken refuses it, and
+// buildAgentGitEnv returns {} for it). In App mode an agent pane's environment holds NO token at all:
+//   no GH_TOKEN / GITHUB_TOKEN        (both reserved, never emitted: a token in a long-lived process
+//                                     goes stale after 1 hour, and gh prefers GH_TOKEN to anything else)
+//   PATH                              the launcher folder first, so `gh` is the mako-token shim, which
+//                                     sets GH_TOKEN for one child process only
+//   GH_CONFIG_DIR                     an empty folder, so a stored ABlueAI login can't be used
+//   GIT_CONFIG_* (command scope)      0 credential.helper = ""                      reset every helper
+//                                     1 credential.https://github.com.helper = ""   and any github.com one
+//                                     2 credential.https://github.com.helper = !'<bin>/git-credential-mako'
+//                                                                                   fresh token per HTTPS call
+//                                     3 user.name, 4 user.email = the bot identity
+//   GIT_TERMINAL_PROMPT = 0           a failed login fails visibly instead of prompting
+//   GIT_AUTHOR_* / GIT_COMMITTER_*    the bot identity `<id>+<slug>[bot]@users.noreply.github.com`
+// A process running as Blue's Windows user can still read his stored logins; this is not a boundary
+// against a pane (same honesty as the PAT mode above).
+const mtConfig = require('./mako-token/config');
+const { assertSafePath, gitHelperValue } = require('./mako-token/shims');
+
+/**
+ * buildAppAgentGitEnv({ config, binDir, ghConfigDir, ambientPath }) -> entries (PATH included).
+ * THROWS on an invalid config or an unsafe path: App mode never silently degrades to nothing.
+ */
+function buildAppAgentGitEnv({ config, binDir, ghConfigDir, ambientPath }) {
+  const v = mtConfig.validateConfig(config);
+  if (!v.ok) throw new Error(`GitHub App config refused: ${v.reason}`);
+  assertSafePath(binDir, 'the launcher folder');
+  assertSafePath(ghConfigDir, 'the empty gh config folder');
+  const env = buildAppLauncherEnv({ config: v.config, binDir, ghConfigDir });
+  env.PATH = ambientPath ? `${binDir};${ambientPath}` : binDir;
+  return env;
+}
+
+/** The same entries without PATH: what the interim launcher (mako-claude.cmd) sets. */
+function buildAppLauncherEnv({ config, binDir, ghConfigDir }) {
+  const bot = mtConfig.botIdentity(config);
+  return {
+    GH_CONFIG_DIR: ghConfigDir,
+    GIT_CONFIG_COUNT: '5',
+    GIT_CONFIG_KEY_0: 'credential.helper',
+    GIT_CONFIG_VALUE_0: '',
+    GIT_CONFIG_KEY_1: 'credential.https://github.com.helper',
+    GIT_CONFIG_VALUE_1: '',
+    GIT_CONFIG_KEY_2: 'credential.https://github.com.helper',
+    GIT_CONFIG_VALUE_2: gitHelperValue(binDir),
+    GIT_CONFIG_KEY_3: 'user.name',
+    GIT_CONFIG_VALUE_3: bot.name,
+    GIT_CONFIG_KEY_4: 'user.email',
+    GIT_CONFIG_VALUE_4: bot.email,
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_AUTHOR_NAME: bot.name,
+    GIT_AUTHOR_EMAIL: bot.email,
+    GIT_COMMITTER_NAME: bot.name,
+    GIT_COMMITTER_EMAIL: bot.email,
+  };
+}
+
 module.exports = {
+  buildAppAgentGitEnv,
+  buildAppLauncherEnv,
   AGENT_GIT_ENV_KEYS,
   AGENT_LOGIN,
   AGENT_NOREPLY_EMAIL,

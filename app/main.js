@@ -96,6 +96,8 @@ const admissionConfig = require('./admission-budget-config');
 const { buildPtyEnv } = require('./pty-env');
 // S06: local agent panes push as ABlueAgent with the token from Mako's key setup (agent-git-env.js).
 const { isAgentToken, isAgentPane, normalizeAgentToken } = require('./agent-git-env');
+// S35: GitHub App mode (mako-token). Takes over from the token above once the App is imported.
+const makoTokenMain = require('./mako-token/main-support');
 // S06: kill a pane's whole process tree (taskkill /T) before pty.kill(); see process-tree.js.
 const { createProcessTreeKiller } = require('./process-tree');
 const processTree = createProcessTreeKiller({
@@ -1643,6 +1645,30 @@ ipcMain.handle('clear-agent-token', (e) => {
   return { ok: true };
 });
 let agentTokenMissingNoticeSent = false;
+// S35: GitHub App mode for an agent pane. No App config -> { mode: 'pat' } (the S06 token path, as before);
+// a configured App that is broken -> { mode: 'refused' }, logged and shown, and the pane does NOT start (no
+// fallback to the token or to Blue's own login); otherwise { mode: 'app', agentApp }. The first App pane of a
+// run also starts a status check (mako-token status) that shows a dead key or suspended installation early.
+let agentAppPreflightDone = false;
+function agentAppForPane(launch) {
+  if (!isAgentPane(launch)) return { mode: 'none' };
+  const prep = makoTokenMain.prepareAgentApp({ env: process.env, fs, homedir: app.getPath('home') });
+  if (prep.mode === 'refused') {
+    const line = `Agent pane refused [github-app]: ${prep.reason}`;
+    tlog(line);
+    if (win && !win.isDestroyed()) win.webContents.send('main-error', line);
+  } else if (prep.mode === 'app' && !agentAppPreflightDone) {
+    agentAppPreflightDone = true;
+    makoTokenMain.runStatusPreflight({
+      execFile: require('child_process').execFile,
+      onFailure: (msg) => {
+        tlog(`[github-app] status check failed: ${msg}`);
+        if (win && !win.isDestroyed()) win.webContents.send('main-error', `GitHub App check failed: ${msg}`);
+      },
+    });
+  }
+  return prep;
+}
 
 // ---- S08: session memory ---------------------------------------------------------------------
 // Main-owned record of each Claude pane's session ID, role and worktree (app/session-memory.js).
@@ -1727,6 +1753,9 @@ ipcMain.handle('pty-start', (e, opts) => {
   // Bounded: kind and the fence verdict only. No cwd, no role-supplied string, no prompt.
   tlog(`pty-start: START kind=${launch.kind} fenced=${launch.fenced}`);
   const { id, cols, rows } = opts;
+  // S35: GitHub App mode for an agent pane, decided before any admission claim (helper above the handler).
+  const agentAppPrep = agentAppForPane(launch);
+  if (agentAppPrep.mode === 'refused') return { ok: false, error: 'github-app' };
   let admissionPaneClaimed = false;
   const refuseAdmissionStart = (reason) => {
     const line = `[admission] eligible Claude pane startup REFUSED [${reason}]`;
@@ -1918,13 +1947,14 @@ ipcMain.handle('pty-start', (e, opts) => {
     webFetchMode: webFetch.mode,
     agentGit: agentPane,
     agentGitToken,
+    agentApp: agentAppPrep.agentApp,
   });
   let p;
   const envMode = fencedRole ? 'fenced-tier-1' : 'unfenced-current';
-  tlog(`pty-start: env built — mode=${envMode}; scrub=forced; video-scout-key=${launch.videoScout ? 'explicit' : 'not-explicit'}; pane-status=${paneStatusEnrollment.ok ? 'enrolled' : 'not-enrolled'}; agent-git=${agentPane ? (agentGitToken ? 'ABlueAgent' : 'no-token') : 'n/a'}`);
+  tlog(`pty-start: env built — mode=${envMode}; scrub=forced; video-scout-key=${launch.videoScout ? 'explicit' : 'not-explicit'}; pane-status=${paneStatusEnrollment.ok ? 'enrolled' : 'not-enrolled'}; agent-git=${agentPane ? (agentAppPrep.mode === 'app' ? 'github-app' : (agentGitToken ? 'ABlueAgent' : 'no-token')) : 'n/a'}`);
   // S06: no silent fallback. Without the token an agent pane still pushes with Blue's own git login;
   // say so once per run on the visible error channel.
-  if (agentPane && !agentGitToken && !agentTokenMissingNoticeSent) {
+  if (agentPane && agentAppPrep.mode !== 'app' && !agentGitToken && !agentTokenMissingNoticeSent) {
     agentTokenMissingNoticeSent = true;
     if (win && !win.isDestroyed()) win.webContents.send('main-error', 'Agent pane started WITHOUT the ABlueAgent token: it pushes with your own git login. Save the token in the key setup (🐙) to fix.');
   }

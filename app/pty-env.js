@@ -14,7 +14,7 @@
 const { stripAdmissionEnv } = require('./admission-budget-config');
 const { CONTROLLED_WEBFETCH } = require('./role-fence-policy');
 // S06: the ABlueAgent GitHub identity for unfenced agent panes (agent-git-env.js).
-const { AGENT_GIT_ENV_KEYS, buildAgentGitEnv } = require('./agent-git-env');
+const { AGENT_GIT_ENV_KEYS, buildAgentGitEnv, buildAppAgentGitEnv } = require('./agent-git-env');
 
 // Blue-approved Tier 1 allowlist, 2026-08-25. Matching is ASCII-case-insensitive because every
 // approved name is ASCII and Unicode case folding would admit non-Windows-equivalent aliases. A
@@ -121,13 +121,17 @@ function omitReservedWindowsEnv(baseEnv, reservedNames) {
  * safeStorage supplies no valid key, preventing ambient fallback in both absent-value cases. The
  * controlled-WebFetch mode name is owned for EVERY pane, emitted or not.
  */
-function buildMainIssuedEnv({ videoScout, geminiKey, paneStatusEnv, fencedRole, webFetchMode, agentGit, agentGitToken }) {
+function buildMainIssuedEnv({ videoScout, geminiKey, paneStatusEnv, fencedRole, webFetchMode, agentGit, agentGitToken, agentApp, ambientPath }) {
   const mainIssued = { [SUBPROCESS_SCRUB_ENV_KEY]: '1' };
   // S06: an agent pane (main decides, from the classified launch) owns every GitHub/git identity name,
   // emitted or not, so an ambient GH_TOKEN or GIT_CONFIG_* can never stand in for the agent's own.
   // Never for a fenced role or Video Scout, whatever the caller passes.
   const agentPane = agentGit === true && fencedRole !== true && videoScout !== true;
-  if (agentPane) Object.assign(mainIssued, buildAgentGitEnv(agentGitToken));
+  // S35: GitHub App mode (agentApp = { config, binDir, ghConfigDir }, validated by main) replaces the PAT
+  // entries entirely: no token in the environment, the gh shim first on PATH. PATH is then main-owned.
+  const appMode = agentPane && agentApp && typeof agentApp === 'object';
+  if (appMode) Object.assign(mainIssued, buildAppAgentGitEnv({ ...agentApp, ambientPath }));
+  else if (agentPane) Object.assign(mainIssued, buildAgentGitEnv(agentGitToken));
   if (videoScout && typeof geminiKey === 'string' && geminiKey) {
     mainIssued[GEMINI_ENV_KEY] = geminiKey;
   }
@@ -146,6 +150,7 @@ function buildMainIssuedEnv({ videoScout, geminiKey, paneStatusEnv, fencedRole, 
     ...PANE_STATUS_ENV_KEYS,
     ...(videoScout ? [GEMINI_ENV_KEY] : []),
     ...(agentPane ? AGENT_GIT_ENV_KEYS : []),
+    ...(appMode ? ['PATH'] : []),
     WEBFETCH_MODE_ENV_KEY,
   ])];
   return { mainIssued, reservedNames };
@@ -157,14 +162,17 @@ function buildMainIssuedEnv({ videoScout, geminiKey, paneStatusEnv, fencedRole, 
  * `fencedRole` is computed in main from the standing predicate:
  *   !opts.videoScout && opts.role && FENCED_ROLES.has(opts.role)
  */
-function buildPtyEnv({ baseEnv, fencedRole, videoScout, geminiKey, paneStatusEnv, webFetchMode, agentGit, agentGitToken }) {
+function buildPtyEnv({ baseEnv, fencedRole, videoScout, geminiKey, paneStatusEnv, webFetchMode, agentGit, agentGitToken, agentApp }) {
   const source = baseEnv && typeof baseEnv === 'object' ? baseEnv : {};
-  const { mainIssued, reservedNames } = buildMainIssuedEnv({
-    videoScout, geminiKey, paneStatusEnv, fencedRole, webFetchMode, agentGit, agentGitToken,
-  });
   const ambientBase = fencedRole
     ? copyAllowedWindowsEnv(source, FENCED_ENV_ALLOWLIST)
     : stripAdmissionEnv(source);
+  // The ambient PATH, under whatever spelling Windows gave it (Path, PATH), for App mode to prepend to.
+  const pathName = Object.keys(ambientBase).find((n) => foldAsciiWindowsEnvName(n) === 'PATH');
+  const ambientPath = pathName && typeof ambientBase[pathName] === 'string' ? ambientBase[pathName] : '';
+  const { mainIssued, reservedNames } = buildMainIssuedEnv({
+    videoScout, geminiKey, paneStatusEnv, fencedRole, webFetchMode, agentGit, agentGitToken, agentApp, ambientPath,
+  });
   const ambient = omitReservedWindowsEnv(ambientBase, reservedNames);
 
   // Main-issued entries are constructed first and ambient remains last, preserving the reviewed

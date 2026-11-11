@@ -307,10 +307,18 @@ const REGIONS = [
     // itself refuses the identity for either (pty-env.test.js and agent-git-env.test.js prove it).
     // Every other argument, the scrub and P1 are byte-identical.
     // Previous pin retained: 217 / 8227036cb1ce84d0c32fd38ff4999c6db71a9625dc6beba26b9a85dd6bec5f08
+    //
+    // RE-PINNED (S35, GitHub App mode), 302 -> 339 code units. Exactly ONE added line, +37:
+    // `    agentApp: agentAppPrep.agentApp,` as a new buildPtyEnv argument. `agentAppPrep` is main's own
+    // result of `agentAppForPane(launch)` (a helper ABOVE the handler): `agentApp` is set only for an
+    // agent pane whose App config and key are in place, and buildPtyEnv applies it only to an unfenced,
+    // non-Video-Scout agent pane (agent-git-env tests prove it). Every other argument, the scrub and P1
+    // are byte-identical.
+    // Previous pin retained: 302 / fc8deeab81b2e88627956f87b871de00f210e5515ee82236214572db21b70088
     start: 'const fencedRole = launch.fenced;',
     end: 'let p;',
-    utf16Length: 302,
-    sha: 'fc8deeab81b2e88627956f87b871de00f210e5515ee82236214572db21b70088',
+    utf16Length: 339,
+    sha: '6e13698cec63c23ef1edf16d9ebaf0df36b02cbe7e1469da9e76fe5a1a56f4cc',
   },
   {
     name: 'pty-start handler',
@@ -389,8 +397,20 @@ const REGIONS = [
     // block, spawn sink and failure cleanup are unchanged. The S09 assertions at the end of this file
     // pin the new wiring.
     // Previous pin retained: 17354 / 1ed564dea4af33f5dbe7afcb47b0d0cb2178ff1fb289a60b2e37a3d078581b2d
-    utf16Length: 18861,
-    sha: '790e4fa29a245a5064c1d1da05940f73f8a7b0c250747150bb601d378ef313f6',
+    //
+    // RE-PINNED (S35, GitHub App mode), 18861 -> 19214 code units. Changes inside this region, all
+    // additions: right after `const { id, cols, rows } = opts;`, `const agentAppPrep =
+    // agentAppForPane(launch);` and a refusal `if (agentAppPrep.mode === 'refused') return { ok: false,
+    // error: 'github-app' };` (before any admission claim, enrolment or spawn, so there is nothing to
+    // undo; the logging, the visible banner and the once-per-run `mako-token status` check live in the
+    // helper above the handler); the ptyEnv block's one added argument (pinned above); the `env built`
+    // log's agent-git word becomes `github-app` for an App pane (a constant, never a token); and the
+    // once-per-run "started WITHOUT the ABlueAgent token" notice is skipped for an App pane. The sender
+    // gate, classification, fenced-role cwd gate, admission claim, WebFetch decision, spawn sink and
+    // failure cleanup are unchanged.
+    // Previous pin retained: 18861 / 790e4fa29a245a5064c1d1da05940f73f8a7b0c250747150bb601d378ef313f6
+    utf16Length: 19214,
+    sha: '574bdd2372f841803b90c77215aeea189c30d3e28db3c084ec74aa19b65ad573',
   },
 ];
 
