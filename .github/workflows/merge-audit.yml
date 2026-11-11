@@ -6,10 +6,18 @@
 #          through a stacked PR and then reached main inside another PR do not alert (issue #35).
 #   ALERT  a pull request from an agent account merged without Blue's approval
 #   ALERT  a pull request was merged by anyone other than Blue
+#   ALERT  an agent account submitted an APPROVED review on a pull request that Blue (ABlueAI)
+#          authored. This is the PR #133 pattern: ABlueAgent approved and merged it 11 seconds
+#          apart on 2026-10-29, because the ruleset accepts an agent approval on a Blue-authored
+#          PR, and only this audit noticed, after the fact (issue #137). "Agents never approve
+#          or merge" (Blue, 2026-11-11).
 #
+# The agent accounts are listed once, in .github/scripts/agent-logins.js: the machine user
+# ABlueAgent (cloud sessions) and the GitHub App mako-agents[bot] (local panes and the local
+# runner). GitHub reports an App's actions as `<slug>[bot]`, so both appear in the checks above.
 # While agents still act through Blue's own GitHub account (before docs/SETUP-GUARDRAILS.md
 # step B), GitHub cannot tell an agent from Blue, so only the first check can fire. After step B,
-# all three apply. The token can read the repo and open issues; it cannot merge or approve.
+# all of them apply. The token can read the repo and open issues; it cannot merge or approve.
 # Actions are pinned to full commit SHAs (tag in the trailing comment); app/ci-hygiene.test.js
 # fails if a `uses:` line is not.
 name: Merge audit

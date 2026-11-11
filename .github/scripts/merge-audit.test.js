@@ -5,6 +5,7 @@
 // merged by someone other than Blue or without his approval. Fixtures model GitHub's REST answers.
 
 const { auditPush, githubApi } = require('./merge-audit');
+const logins = require('./agent-logins');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -205,6 +206,84 @@ const merged = '2026-10-18T18:18:40Z';
     threw = false;
     try { await auditPush({ shas: ['abc'], human: '', api: fakeApi({}) }); } catch { threw = true; }
     assert(threw, 'a missing approver fails instead of passing');
+  }
+  {
+    // PR #133 (2026-10-29): authored by ABlueAI, approved by ABlueAgent, merged by ABlueAgent 11 seconds
+    // later. Merged-by and "approval from Blue" are both satisfied by what GitHub shows only if Blue
+    // is the merger and approver; here the agent approved, so the audit must alert on the approval.
+    const api = fakeApi({
+      associated: { p133001: [133] },
+      prs: { 133: { base: 'main', merged_at: merged, author: HUMAN, merged_by: HUMAN, commits: ['p133001'],
+        reviews: [{ user: { login: 'ABlueAgent' }, state: 'APPROVED' }] } },
+    });
+    const problems = await auditPush({ shas: ['p133001'], human: HUMAN, api });
+    eq(problems, ['PR #133 by ABlueAI was approved by the agent account ABlueAgent. Agents never approve or merge (the PR #133 pattern).'],
+      'an agent approval on a PR Blue authored alerts (PR #133)');
+  }
+  {
+    // The same pattern, with the merge itself also by the agent: both alerts fire.
+    const api = fakeApi({
+      associated: { p133002: [133] },
+      prs: { 133: { base: 'main', merged_at: merged, author: HUMAN, merged_by: 'ABlueAgent', commits: ['p133002'],
+        reviews: [{ user: { login: 'ABlueAgent' }, state: 'APPROVED' }] } },
+    });
+    const problems = await auditPush({ shas: ['p133002'], human: HUMAN, api });
+    eq(problems.length, 2, 'an agent that approved and merged its human-authored PR raises both alerts');
+    assert(problems[0] === 'PR #133 was merged by ABlueAgent, not ABlueAI.', 'the existing merged-by alert is kept');
+  }
+  {
+    const api = fakeApi({
+      associated: { appr001: [140] },
+      prs: { 140: { base: 'main', merged_at: merged, author: HUMAN, merged_by: HUMAN, commits: ['appr001'],
+        reviews: [{ user: { login: 'mako-agents[bot]' }, state: 'APPROVED' }, { user: { login: 'MAKO-AGENTS[BOT]' }, state: 'APPROVED' }] } },
+    });
+    const problems = await auditPush({ shas: ['appr001'], human: HUMAN, api });
+    eq(problems.length, 1, 'the App login counts as an agent; a login is reported once however it is cased');
+    assert(problems[0].startsWith('PR #140 by ABlueAI was approved by the agent account mako-agents[bot].'), 'the alert names the App login');
+  }
+  {
+    // Not the pattern: an agent comment or change request, a null reviewer, or a stranger's approval.
+    const api = fakeApi({
+      associated: { appr002: [141] },
+      prs: { 141: { base: 'main', merged_at: merged, author: HUMAN, merged_by: HUMAN, commits: ['appr002'],
+        reviews: [
+          { user: { login: 'ABlueAgent' }, state: 'COMMENTED' },
+          { user: { login: 'mako-agents[bot]' }, state: 'CHANGES_REQUESTED' },
+          { user: null, state: 'APPROVED' },
+          { user: { login: 'some-reviewer' }, state: 'APPROVED' },
+        ] } },
+    });
+    const problems = await auditPush({ shas: ['appr002'], human: HUMAN, api });
+    eq(problems, [], 'agent comments and change requests, a null reviewer and other approvers do not trigger the agent-approval alert');
+  }
+  {
+    // An agent PR approved by Blue alone still passes with the App login as the author.
+    const api = fakeApi({
+      associated: { appr003: [142] },
+      prs: { 142: { base: 'main', merged_at: merged, author: 'mako-agents[bot]', merged_by: HUMAN, commits: ['appr003'],
+        reviews: [{ user: { login: HUMAN }, state: 'APPROVED' }] } },
+    });
+    const problems = await auditPush({ shas: ['appr003'], human: HUMAN, api });
+    eq(problems, [], 'a PR by the App login approved and merged by Blue passes');
+  }
+  {
+    // The workflow's list can be passed in; the default is the shared list.
+    const api = fakeApi({
+      associated: { appr004: [143] },
+      prs: { 143: { base: 'main', merged_at: merged, author: HUMAN, merged_by: HUMAN, commits: ['appr004'],
+        reviews: [{ user: { login: 'new-agent[bot]' }, state: 'APPROVED' }] } },
+    });
+    eq((await auditPush({ shas: ['appr004'], human: HUMAN, api })).length, 0, 'a login outside the shared list does not alert by default');
+    eq((await auditPush({ shas: ['appr004'], human: HUMAN, agents: ['new-agent[bot]'], api })).length, 1, 'an agents list passed in is used');
+  }
+  {
+    // The shared list of agent logins.
+    eq(Array.from(logins.AGENT_LOGINS), ['ABlueAgent', 'mako-agents[bot]'], 'the shared list holds the machine account and the App');
+    assert(logins.isAgentLogin('ablueagent') && logins.isAgentLogin('Mako-Agents[bot]'), 'agent logins match case-insensitively');
+    assert(!logins.isAgentLogin('ABlueAI') && !logins.isAgentLogin(undefined) && !logins.isAgentLogin('mako-agents'), 'the human, nothing and a bare slug are not agents');
+    assert(logins.isHumanLogin('ablueai') && !logins.isHumanLogin('ABlueAgent'), 'the human login matches case-insensitively');
+    assert(logins.isBotLogin('mako-agents[bot]') && !logins.isBotLogin('ABlueAgent') && !logins.isBotLogin('x[bot]y'), 'a [bot] login is recognised by its suffix only');
+    assert(Object.isFrozen(logins.AGENT_LOGINS), 'the list cannot be changed at run time');
   }
   {
     // The adapter paginates every list and passes owner and repo through.
