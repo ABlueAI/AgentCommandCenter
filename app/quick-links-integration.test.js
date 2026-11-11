@@ -112,9 +112,16 @@ const basePkg = JSON.parse(fromBase('package.json'));
 // pinned exactly; it is set aside here and pinned below. Any other change still fails.
 const S15_DEPENDENCY = ['@playwright/mcp', '0.0.84'];
 assert(currentPkg.dependencies[S15_DEPENDENCY[0]] === S15_DEPENDENCY[1], 'S15: @playwright/mcp is pinned exactly to 0.0.84');
+// S35 (PR #170, Blue's 2026-11-10/11 decision: a GitHub App is the primary local identity, and the
+// instructions say to use the official MIT @octokit/auth-app whole) adds exactly one more runtime
+// dependency, pinned exactly, with its 16 MIT/ISC transitive packages (S35_LOCK below). Set aside the
+// same way; any other change still fails.
+const S35_DEPENDENCY = ['@octokit/auth-app', '8.3.1'];
+assert(currentPkg.dependencies[S35_DEPENDENCY[0]] === S35_DEPENDENCY[1], 'S35: @octokit/auth-app is pinned exactly to 8.3.1');
 const depsWithoutS15 = Object.assign({}, currentPkg.dependencies);
 delete depsWithoutS15[S15_DEPENDENCY[0]];
-assert(JSON.stringify(depsWithoutS15) === JSON.stringify(basePkg.dependencies), 'runtime dependencies unchanged from base apart from S15\'s one addition');
+delete depsWithoutS15[S35_DEPENDENCY[0]];
+assert(JSON.stringify(depsWithoutS15) === JSON.stringify(basePkg.dependencies), 'runtime dependencies unchanged from base apart from S15\'s and S35\'s one addition each');
 assert(JSON.stringify(currentPkg.devDependencies) === JSON.stringify(basePkg.devDependencies), 'devDependencies unchanged from base');
 // Compared as JSON with the app's OWN version fields set aside: the 1.0.0 release bump (2026-10-16)
 // changes those two fields and nothing else, and the point here is that no dependency changed.
@@ -136,7 +143,35 @@ const S15_LOCK = {
   'node_modules/playwright': ['1.65.0-alpha-2026-10-30', 'sha512-dmAJMVHKzHvMQjn+XDcaq/pxaZ0W6n8i78rwTM+VGRtQ3WBF5ZiSdB1yL/cyoYUGUMwg3jxN65KqC9cERaCbIg=='],
   'node_modules/playwright-core': ['1.65.0-alpha-2026-10-30', 'sha512-LPMw8B/HRQKMcJeXTqWSrkB/AfCKKmbDQMbu0p7zg8MgibOWaKMjZWR/StAtrQkOxvOmZEju1o1TnPgdoOCwrg=='],
 };
+// S35's new lockfile entries (@octokit/auth-app and what it depends on). Each must match this version,
+// registry tarball and integrity exactly, and is then set aside.
+const S35_LOCK = {
+  'node_modules/@octokit/auth-app': ['8.3.1', 'sha512-XHWxZsF4mvGTQCv7AOxgby9t9OjVO19FBuKq+QmyBxFrf+B2hR/P5j/MTF8g95bITf8cRtR17KIXThpFNqiKbg=='],
+  'node_modules/@octokit/auth-oauth-app': ['9.0.5', 'sha512-Hn2yAlIDjFLGjAz7t+CRu7e9VYoFW1W3LLyOLyahFoJGlCf4PtDkHKtRET8w/2CJpsrC0FxIF5g5Xtx9E4O78w=='],
+  'node_modules/@octokit/auth-oauth-device': ['8.0.5', 'sha512-kdJtjRhykMLJrMdcoC56XUBDfoUAuWEFKpkDxwYim+bNwYw1MreLolk+PLnwEYT8djm589YepeMuJ8+ECAIzVQ=='],
+  'node_modules/@octokit/auth-oauth-user': ['6.0.4', 'sha512-eya2pMJ9pCBq1jrm1Rf6J3NI+NemEpzDMLo9J/GpRoK0KgdxIVXWX4LESIfwJ+GYeoq6QFIlUJNi1lVp5FBgmw=='],
+  'node_modules/@octokit/endpoint': ['11.0.5', 'sha512-iXa654H3yFafF/ieHkukfbgWo2rmXD2ceD0ZOtrPhw1bc3FDch1d9N/TNs0FQ1/cIbwb7kspUX8jzIs8nzb9DQ=='],
+  'node_modules/@octokit/oauth-authorization-url': ['8.0.0', 'sha512-7QoLPRh/ssEA/HuHBHdVdSgF8xNLz/Bc5m9fZkArJE5bb6NmVkDm3anKxXPmN1zh6b5WKZPRr3697xKT/yM3qQ=='],
+  'node_modules/@octokit/oauth-methods': ['6.0.5', 'sha512-/mAz7taDZD7DcV4zcG6TDw3Kr6TOldmYBRpvA62C3WIxRMmcgX8XxsTvVQomqKE7VEk/BgYhUao1aR2tYGyIKg=='],
+  'node_modules/@octokit/openapi-types': ['29.0.1', 'sha512-9qWOMFNxxLokERcms42rU0PTLqQmVs7g5E41TI4mCOxmpFayD1rfC7XxOL55cG9MBZLFlC31BrR37myMKardwg=='],
+  'node_modules/@octokit/request': ['10.0.16', 'sha512-A0zWGjHzISIb+9ccG8s0dq7LKO5zVpJLRICjgUb+sJxEWqn8RUHB1rD3AE51+PECvXHIxqZ1VVvs4fHTSD9nUQ=='],
+  'node_modules/@octokit/request-error': ['7.1.2', 'sha512-XZRuT3xZ84D3gYErI1DZvhJ33dCWVV6uzBtWkaBB4TvA/L6eOeTZodxLFVB44bBEEo3vEx7y00UfX1tBLrtLRg=='],
+  'node_modules/@octokit/types': ['18.0.0', 'sha512-l6bAF43PNxkJp6g+W4PjoUSSkxHomXw2nOum5CTftJz1NlV3vu93NImgOYtLf6CbBUb5j+fiuzW0PPQ5JTSvZA=='],
+  'node_modules/content-type': ['3.1.1', 'sha512-GW4qUsfFo59d0HbUibDlWv5wPz+vAAcaTWbKIuKCf0JkC7wWkSyf8f13IpXn5JkeMlB2P8iTSSIjwXljorg2vA=='],
+  'node_modules/json-with-bigint': ['3.5.12', 'sha512-uwbF/wSSuOgC7qqlq27Xp5B6a2MHVug3t0idZdTqu0JnlFvgJuH7ju+KAk/J06C7GfhoYy2gnb9wz2INqcne7w=='],
+  'node_modules/toad-cache': ['3.7.4', 'sha512-m1TdR/rvT7kgGJZhspNtXdsdYk0fddFpJJFlG5s+UkPFo6lkLoZ3YLOaovPYjq1R75NP5JfeTlSHaOsE09peCg=='],
+  'node_modules/universal-github-app-jwt': ['2.2.2', 'sha512-dcmbeSrOdTnsjGjUfAlqNDJrhxXizjAz94ija9Qw8YkZ1uu0d+GoZzyH+Jb9tIIqvGsadUfwg+22k5aDqqwzbw=='],
+  'node_modules/universal-user-agent': ['7.0.3', 'sha512-TmnEAEAsBJVZM/AADELsK76llnwcf9vMKuPz8JflO1frO8Lchitr0fNaN9d+Ap0BjKtqWqd/J17qeDnXh8CL2A=='],
+};
 const currentLock = JSON.parse(read('package-lock.json'));
+for (const [key, [version, integrity]] of Object.entries(S35_LOCK)) {
+  const entry = currentLock.packages[key] || {};
+  const name = key.slice('node_modules/'.length);
+  const file = name.split('/').pop();
+  assert(entry.version === version && entry.integrity === integrity
+    && entry.resolved === `https://registry.npmjs.org/${name}/-/${file}-${version}.tgz`,
+  `S35: ${name} is ${version} from registry.npmjs.org with the pinned integrity`);
+}
 for (const [key, [version, integrity]] of Object.entries(S15_LOCK)) {
   const entry = currentLock.packages[key] || {};
   const name = key.slice('node_modules/'.length);
@@ -158,9 +193,13 @@ const withoutOwnVersion = (lockText) => {
   if (lock.packages && lock.packages['']) {
     delete lock.packages[''].version;
     delete lock.packages[''].hasInstallScript;
-    if (lock.packages[''].dependencies) delete lock.packages[''].dependencies[S15_DEPENDENCY[0]];
+    if (lock.packages[''].dependencies) {
+      delete lock.packages[''].dependencies[S15_DEPENDENCY[0]];
+      delete lock.packages[''].dependencies[S35_DEPENDENCY[0]];
+    }
   }
   for (const key of Object.keys(S15_LOCK)) if (lock.packages) delete lock.packages[key];
+  for (const key of Object.keys(S35_LOCK)) if (lock.packages) delete lock.packages[key];
   for (const key of Object.keys(AUDIT_FIX)) {
     if (lock.packages && lock.packages[key]) {
       delete lock.packages[key].version;
@@ -171,7 +210,7 @@ const withoutOwnVersion = (lockText) => {
   return JSON.stringify(lock);
 };
 assert(withoutOwnVersion(read('package-lock.json')) === withoutOwnVersion(fromBase('package-lock.json')),
-  'package-lock.json has no dependency delta from base beyond the S02 audit fix and S15\'s three entries');
+  'package-lock.json has no dependency delta from base beyond the S02 audit fix, S15\'s three entries and S35\'s pinned entries');
 const requiredTests = [
   'quick-links-policy.test.js', 'quick-links-store.test.js', 'quick-links-ipc.test.js',
   'quick-links-integration.test.js', 'renderer/quick-links-view.test.js',
