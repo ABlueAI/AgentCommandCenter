@@ -17,15 +17,17 @@ const { MakoTokenError, scrub } = require('./errors');
 // Names a token (or a host that would receive one) can arrive through. All removed from the child's
 // inherited environment before GH_TOKEN is set for it.
 const STRIPPED = ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN', 'GH_HOST', 'GH_CONFIG_DIR'];
-// Subcommands that print or change a login, or that persist behaviour into every later pane (the empty
-// GH_CONFIG_DIR is shared, and aliases and extensions would run with GH_TOKEN set).
+// Subcommands that print or change a login, or that plant behaviour that runs in later panes with the token
+// set: aliases and `config set` write to the shared GH_CONFIG_DIR; extensions are installed to gh's data folder.
 const REFUSED_AUTH = new Set(['token', 'login', 'logout', 'refresh', 'setup-git', 'switch']);
-const REFUSED_TOP = new Set(['alias', 'extension', 'ext']);
-const SHOWS_TOKEN = /^(?:--show-token|-[A-Za-z]*t[A-Za-z]*)$/; // gh auth status --show-token / -t (also in a cluster, -at)
+const REFUSED_TOP = new Set(['alias', 'extension', 'extensions', 'ext']);
+// gh auth status --show-token / -t, in a cluster (-at) and in pflag's `=` forms (--show-token=true, -t=true).
+const SHOWS_TOKEN = /^(?:--show-token(?:=.*)?|-[A-Za-z]*t.*)$/;
 
 /** null if allowed, else the reason. */
 function refusedReason(argv) {
-  if (REFUSED_TOP.has(argv[0])) return `"gh ${argv[0]}" is not available here: it would persist into every pane's shared gh config and run with the token set.`;
+  if (REFUSED_TOP.has(argv[0])) return `"gh ${argv[0]}" is not available here: it would plant code or behaviour that runs in every later pane with the token set.`;
+  if (argv[0] === 'config' && argv[1] === 'set') return '"gh config set" is not available here: it would persist settings (a pager, browser or editor command) into every later pane\'s shared gh config.';
   if (argv[0] === 'auth') {
     if (REFUSED_AUTH.has(argv[1])) return `"gh auth ${argv[1]}" is not available here: panes use a GitHub App token that mako-token hands to each gh call and never shows or stores.`;
     if (argv[1] === 'status' && argv.slice(2).some((a) => SHOWS_TOKEN.test(a))) return '"gh auth status --show-token" would print the token; it is not available here.';

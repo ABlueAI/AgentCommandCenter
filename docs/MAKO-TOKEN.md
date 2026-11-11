@@ -134,8 +134,9 @@ not edit that file).
   `GH_TOKEN`, `GITHUB_TOKEN`, a stored `gh` login, Git Credential Manager or the `ABlueAgent` token.
   `app/mako-token-shim.test.js` scans the code for this.
 - **The shim hides the token.** It refuses `gh auth token`, `login`, `logout`, `refresh`, `setup-git` and
-  `switch`, `gh auth status --show-token` (or `-t`, also inside a cluster like `-at`), and `gh alias` and
-  `gh extension` (they would persist into every later pane's shared gh config and run with the token set). It
+  `switch`, `gh auth status --show-token` (or `-t`, in a cluster like `-at` or with `=true`), `gh alias`, `gh
+  extension` (also `extensions`, `ext`) and `gh config set` (they would plant behaviour that runs in later
+  panes with the token set). It
   removes `GH_HOST` and the enterprise token names from the child's environment so a pane can't send the
   token to another host. `gh api` and `gh pr` and the rest work normally.
 - **A misspelt profile is refused, never widened.** `MAKO_TOKEN_PROFILE` and `--profile` accept `writer` or
@@ -143,7 +144,7 @@ not edit that file).
   set does a pane get `writer`.
 - **mako-token starts only absolute programs.** `powershell.exe` (DPAPI) and `icacls.exe` are resolved under
   `%SystemRoot%\System32` (PowerShell through the resolver in `app/pane-status/pane-status-lock.js`), and
-  `cmd.exe` for `mako-claude` likewise, never by a bare name: on Windows a program of that name in the current
+  `cmd.exe` for `mako-claude` likewise (ComSpec and PATH are not consulted), never by a bare name: on Windows a program of that name in the current
   directory would win, and git runs the credential helper in an agent's worktree. A missing one refuses.
 - **The cache** is `%LOCALAPPDATA%\Mako\token-cache\token-<profile>.json`, in a folder locked to the
   current Windows user with `icacls` (inheritance removed). If the folder can't be locked down, nothing
@@ -186,15 +187,17 @@ Do these in order, and don't wait to be sure:
 - **HTTPS remotes only.** The credential helper and the shim cover `https://github.com`. An SSH remote, or an
   `insteadOf` rewrite from HTTPS to SSH in Blue's global git config, never asks a credential helper, so a push
   would use Blue's own SSH key. "Never falls back to another login" holds for everything that goes through the
-  helper and the shim; check `git remote -v` and `git config --get-regexp insteadOf` once (step 3 below). The
+  helper and the shim; check `git remote -v` and `git config --get-regexp insteadOf` once (step 3 of Blue's steps above). The
   same assumption is in the S06 token mode (`app/agent-git-env.js`).
 - **`gh` found by a program, not a shell.** A Node or Python program in a pane that starts `gh` without a shell
   (`execFile('gh')`) looks for `gh.exe` only, so it skips the shim folder, runs the real `gh` against the empty
   config folder and gets "not logged in". That is a visible failure, not a fallback; run it through a shell.
 - **The "empty" gh config folder** (`%APPDATA%\Mako\gh-empty`) is shared by every App-mode pane, and `gh` may
   write files there (for example `config.yml`). It holds no login: Mako recreates the folder if it is missing,
-  and the shim refuses the subcommands that would plant behaviour in it (`alias`, `extension`). Delete its
-  contents any time.
+  and the shim refuses the `gh` subcommands that would plant behaviour in it (`alias`, `config set`) or run
+  extensions. It cannot stop a program from writing the folder directly, and extensions Blue installed before
+  this live in gh's data folder (`%LOCALAPPDATA%\GitHub CLI\extensions`), not here, so they would still run
+  with the token set; remove any you don't trust. Delete the folder's contents any time.
 - `gh.cmd` passes its arguments through `cmd.exe`: an argument with an embedded `"` can be mangled. From
   PowerShell the `gh.ps1` shim is used instead (Mako panes run PowerShell with `-ExecutionPolicy Bypass`),
   and from Git Bash the `gh` shell shim, neither of which has the problem. Use `--body-file` for long bodies.

@@ -314,7 +314,7 @@ function memCache() {
     assert(target === path.join(sysRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe') && path.isAbsolute(target), 'DPAPI starts PowerShell by ABSOLUTE path under the system directory, never a bare name');
     const e4 = await rejects(async () => windowsDpapi('protect', Buffer.from('x'), { platform: 'win32', env: { SystemRoot: sysRoot }, exists: () => false, spawn: () => { throw new Error('must not run'); } }));
     assert(e4 && e4.code === 'system-exe-missing', 'a missing PowerShell refuses visibly');
-    assert(!/spawn(?:Sync)?\(\s*'(?:powershell|icacls)/.test(fs.readFileSync(path.join(__dirname, 'mako-token', 'keystore.js'), 'utf8') + fs.readFileSync(path.join(__dirname, 'mako-token', 'acl.js'), 'utf8')), 'no spawn of a bare powershell or icacls name remains in the source');
+    assert(!/(?:spawn(?:Sync)?|run|execFile(?:Sync)?)\(\s*'(?:powershell|icacls|cmd)/.test(fs.readFileSync(path.join(__dirname, 'mako-token', 'keystore.js'), 'utf8') + fs.readFileSync(path.join(__dirname, 'mako-token', 'acl.js'), 'utf8')), 'no spawn or run of a bare powershell, icacls or cmd name remains in keystore.js or acl.js');
   }
 
   // --- the file cache ----------------------------------------------------------------------------

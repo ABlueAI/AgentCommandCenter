@@ -91,12 +91,12 @@ const EMPTY = path.join(path.dirname(BIN), 'gh-empty');
       const c = await runGhShim({ argv: ['auth', sub], env: { PATH: 'X' }, realGh: process.execPath, ghConfigDir: EMPTY, binDir: BIN, getToken: async () => { spawned = true; return { token: TOKEN }; }, spawn: () => { spawned = true; return { status: 0 }; }, stderr: sink, fs: { mkdirSync() {} } });
       assert(c === 2 && !spawned && /not available here/.test(errText), `gh auth ${sub} is refused (no token minted, gh not run)`);
     }
-    for (const argv of [['auth', 'status', '--show-token'], ['auth', 'status', '-t'], ['auth', 'status', '-at'], ['auth', 'status', '--hostname', 'github.com', '--show-token'], ['alias', 'set', 'x', 'y'], ['extension', 'install', 'o/r'], ['ext', 'list']]) {
+    for (const argv of [['auth', 'status', '--show-token'], ['auth', 'status', '-t'], ['auth', 'status', '-at'], ['auth', 'status', '--show-token=true'], ['auth', 'status', '-t=true'], ['auth', 'status', '-at=true'], ['config', 'set', 'pager', 'sh -c x'], ['extensions', 'install', 'o/r'], ['auth', 'status', '--hostname', 'github.com', '--show-token'], ['alias', 'set', 'x', 'y'], ['extension', 'install', 'o/r'], ['ext', 'list']]) {
       errText = ''; spawned = false;
       const c = await runGhShim({ argv, env: { PATH: 'X' }, realGh: process.execPath, ghConfigDir: EMPTY, binDir: BIN, getToken: async () => { spawned = true; return { token: TOKEN }; }, spawn: () => { spawned = true; return { status: 0 }; }, stderr: sink, fs: { mkdirSync() {} } });
       assert(c === 2 && !spawned && /not available here/.test(errText), `gh ${argv.join(' ')} is refused (no token minted, gh not run)`);
     }
-    for (const argv of [['auth', 'status'], ['auth', 'status', '--hostname', 'github.com'], ['pr', 'list']]) {
+    for (const argv of [['auth', 'status'], ['auth', 'status', '--hostname', 'github.com'], ['auth', 'status', '--hostname=github.com'], ['auth', 'status', '-h', 'github.com'], ['config', 'get', 'editor'], ['pr', 'list']]) {
       const c = await runGhShim({ argv, env: { PATH: 'X' }, realGh: process.execPath, ghConfigDir: EMPTY, binDir: BIN, getToken: async () => ({ token: TOKEN }), spawn: () => ({ status: 0 }), fs: { mkdirSync() {} } });
       assert(c === 0, `gh ${argv.join(' ')} is allowed`);
     }
@@ -312,8 +312,14 @@ const EMPTY = path.join(path.dirname(BIN), 'gh-empty');
     let err = '';
     const none = launchClaude({ args: [], env: { PATH: '' }, layout, config: CONFIG, platform: 'linux', exists: () => false, spawn: () => ({ status: 0 }), stderr: { write: (s) => { err += s; } } });
     assert(none === 4 && /not found/.test(err), 'no claude: exit 4 with a message');
+    let ncall = null;
+    launchClaude({ args: [], env: { Path: 'C:\\Tools', SystemRoot: 'C:\\Windows', ComSpec: 'C:\\evil\\cmd.exe' }, layout, config: CONFIG, platform: 'win32', exists: (p) => p === 'C:\\Tools\\claude.cmd', spawn: (c) => { ncall = c; return { status: 0 }; } });
+    assert(ncall === 'C:\\Windows\\System32\\cmd.exe', 'cmd.exe is always the one under SystemRoot\\System32: ComSpec is never consulted');
+    ncall = null;
+    launchClaude({ args: [], env: { Path: 'C:\\Tools' }, layout, config: CONFIG, platform: 'win32', exists: (p) => p === 'C:\\Tools\\claude.cmd', spawn: (c) => { ncall = c; return { status: 0 }; } });
+    assert(ncall === 'C:\\Windows\\System32\\cmd.exe', 'with no SystemRoot or ComSpec, cmd.exe is still an absolute C:\\Windows\\System32 path');
     let wcall = null;
-    launchClaude({ args: ['--resume', 'abc'], env: { Path: 'C:\\Tools', ComSpec: 'C:\\Windows\\System32\\cmd.exe' }, layout, config: CONFIG, platform: 'win32', exists: (p) => p === 'C:\\Tools\\claude.cmd', spawn: (c, a, o) => { wcall = { c, a, o }; return { status: 0 }; } });
+    launchClaude({ args: ['--resume', 'abc'], env: { Path: 'C:\\Tools', SystemRoot: 'C:\\Windows', ComSpec: 'C:\\evil\\cmd.exe' }, layout, config: CONFIG, platform: 'win32', exists: (p) => p === 'C:\\Tools\\claude.cmd', spawn: (c, a, o) => { wcall = { c, a, o }; return { status: 0 }; } });
     assert(wcall.c === 'C:\\Windows\\System32\\cmd.exe' && wcall.a.slice(0, 3).join(' ') === '/d /s /c' && wcall.a[3] === '"' + '"C:\\Tools\\claude.cmd" "--resume" "abc"' + '"' && wcall.o.windowsVerbatimArguments === true, 'a claude.cmd is run through cmd.exe /d /s /c with quoted arguments');
     err = '';
     const mangled = launchClaude({ args: ['a"b&c'], env: { Path: 'C:\\Tools' }, layout, config: CONFIG, platform: 'win32', exists: (p) => p === 'C:\\Tools\\claude.cmd', spawn: () => { throw new Error('must not run'); }, stderr: { write: (s) => { err += s; } } });
