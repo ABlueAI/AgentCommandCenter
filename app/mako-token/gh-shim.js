@@ -5,7 +5,7 @@
 // or GITHUB_TOKEN; GH_CONFIG_DIR points at an empty folder so a stored login (ABlueAI's) can't be
 // used; and `gh auth token` and the other subcommands that would print or change a login are refused.
 //
-// Exit codes: gh's own; 2 = refused subcommand; 3 = no token (message on stderr, never a fallback);
+// Exit codes: gh's own; 2 = refused subcommand or profile; 3 = no token (message on stderr, never a fallback);
 // 4 = the real gh could not be found or started.
 
 const path = require('path');
@@ -17,7 +17,21 @@ const { MakoTokenError, scrub } = require('./errors');
 // Names a token (or a host that would receive one) can arrive through. All removed from the child's
 // inherited environment before GH_TOKEN is set for it.
 const STRIPPED = ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN', 'GH_HOST', 'GH_CONFIG_DIR'];
+// Subcommands that print or change a login, or that persist behaviour into every later pane (the empty
+// GH_CONFIG_DIR is shared, and aliases and extensions would run with GH_TOKEN set).
 const REFUSED_AUTH = new Set(['token', 'login', 'logout', 'refresh', 'setup-git', 'switch']);
+const REFUSED_TOP = new Set(['alias', 'extension', 'ext']);
+const SHOWS_TOKEN = /^(?:--show-token|-[A-Za-z]*t[A-Za-z]*)$/; // gh auth status --show-token / -t (also in a cluster, -at)
+
+/** null if allowed, else the reason. */
+function refusedReason(argv) {
+  if (REFUSED_TOP.has(argv[0])) return `"gh ${argv[0]}" is not available here: it would persist into every pane's shared gh config and run with the token set.`;
+  if (argv[0] === 'auth') {
+    if (REFUSED_AUTH.has(argv[1])) return `"gh auth ${argv[1]}" is not available here: panes use a GitHub App token that mako-token hands to each gh call and never shows or stores.`;
+    if (argv[1] === 'status' && argv.slice(2).some((a) => SHOWS_TOKEN.test(a))) return '"gh auth status --show-token" would print the token; it is not available here.';
+  }
+  return null;
+}
 
 function envKeyFold(k) { return k.toUpperCase(); }
 
@@ -58,14 +72,13 @@ async function runGhShim({
   argv, env, getToken, ghConfigDir, binDir, realGh, spawn = spawnSync, stderr = process.stderr, fs = nodefs, platform = process.platform,
 }) {
   const say = (line) => stderr.write(`mako-token gh shim: ${line}\n`);
-  if (argv[0] === 'auth' && REFUSED_AUTH.has(argv[1])) {
-    say(`"gh auth ${argv[1]}" is not available here: panes use a GitHub App token that mako-token hands to each gh call and never shows or stores.`);
-    return 2;
-  }
+  const refused = refusedReason(argv);
+  if (refused) { say(refused); return 2; }
   const real = realGh || findRealGh({ env, binDir, platform });
   if (!real) { say('the real gh was not found on PATH or in C:\\Program Files\\GitHub CLI. Install GitHub CLI.'); return 4; }
-  const requested = env.MAKO_TOKEN_PROFILE;
-  const profile = cfg.isProfile(requested) ? requested : cfg.DEFAULT_PROFILE;
+  const sel = cfg.selectProfile(env.MAKO_TOKEN_PROFILE);
+  if (!sel.ok) { say(`${sel.reason}; not running gh.`); return 2; }
+  const profile = sel.profile;
   let token;
   try {
     token = (await getToken(profile)).token;
@@ -93,4 +106,4 @@ if (require.main === module) {
   })();
 }
 
-module.exports = { runGhShim, findRealGh, childEnv, STRIPPED, REFUSED_AUTH };
+module.exports = { runGhShim, findRealGh, childEnv, refusedReason, STRIPPED, REFUSED_AUTH, REFUSED_TOP };

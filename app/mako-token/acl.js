@@ -5,6 +5,7 @@
 
 const { execFileSync } = require('child_process');
 const { MakoTokenError, scrub } = require('./errors');
+const { resolveIcacls } = require('./winexe');
 
 function currentUserSpec(env) {
   const user = env.USERNAME;
@@ -15,11 +16,12 @@ function currentUserSpec(env) {
   return spec;
 }
 
-function restrictToCurrentUser(dir, { fs, env = process.env, platform = process.platform, run = execFileSync } = {}) {
+function restrictToCurrentUser(dir, { fs, env = process.env, platform = process.platform, run = execFileSync, exists } = {}) {
   if (platform !== 'win32') { fs.chmodSync(dir, 0o700); return; }
   const spec = currentUserSpec(env);
+  const icacls = resolveIcacls(env, exists); // an absolute path under System32, never a bare name
   try {
-    run('icacls.exe', [dir, '/inheritance:r', '/grant:r', `${spec}:(OI)(CI)F`], { stdio: 'pipe', windowsHide: true });
+    run(icacls, [dir, '/inheritance:r', '/grant:r', `${spec}:(OI)(CI)F`], { stdio: 'pipe', windowsHide: true });
   } catch (e) {
     throw new MakoTokenError('acl-failed', `could not restrict ${dir} to your Windows user (icacls: ${scrub(e && e.message)})`);
   }

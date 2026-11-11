@@ -43,7 +43,9 @@ function launchClaude({ args, env, layout, config, spawn = spawnSync, exists, pl
   if (/\.(cmd|bat)$/i.test(target)) {
     if (args.some((a) => !SAFE_CMD_ARG.test(a))) { say('claude here is a .cmd launcher and one of the arguments has characters cmd.exe would mangle; start claude inside a Mako pane instead'); return 2; }
     const line = `"${target}"${args.map((a) => ` "${a}"`).join('')}`;
-    r = spawn(env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${line}"`], { env: childEnv, stdio: 'inherit', windowsVerbatimArguments: true });
+    const root = env.SystemRoot || env.windir || 'C:\\Windows';
+    const cmdExe = env.ComSpec && path.win32.isAbsolute(env.ComSpec) ? env.ComSpec : path.win32.join(root, 'System32', 'cmd.exe'); // never a bare name
+    r = spawn(cmdExe, ['/d', '/s', '/c', `"${line}"`], { env: childEnv, stdio: 'inherit', windowsVerbatimArguments: true });
   } else {
     r = spawn(target, args, { env: childEnv, stdio: 'inherit' });
   }

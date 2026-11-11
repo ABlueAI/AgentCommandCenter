@@ -62,8 +62,14 @@ const EMPTY = path.join(path.dirname(BIN), 'gh-empty');
     // the reader profile through MAKO_TOKEN_PROFILE
     await runGhShim({ argv: ['-e', '0'], env: { PATH: 'X', MAKO_TOKEN_PROFILE: 'reader' }, realGh: process.execPath, ghConfigDir: EMPTY, binDir: BIN, getToken: async (p) => { asked = p; return { token: TOKEN }; }, spawn: (c, a, o) => spawnSync(c, a, { ...o, stdio: 'ignore' }), fs: { mkdirSync() {} } });
     assert(asked === 'reader', 'MAKO_TOKEN_PROFILE=reader asks for the read-only token');
-    await runGhShim({ argv: ['-e', '0'], env: { PATH: 'X', MAKO_TOKEN_PROFILE: 'root' }, realGh: process.execPath, ghConfigDir: EMPTY, binDir: BIN, getToken: async (p) => { asked = p; return { token: TOKEN }; }, spawn: (c, a, o) => spawnSync(c, a, { ...o, stdio: 'ignore' }), fs: { mkdirSync() {} } });
-    assert(asked === 'writer', 'an unknown profile name falls back to the narrowest allowed default (writer), never to anything wider');
+    for (const bad of ['root', 'Reader', 'read', 'writer ']) {
+      let ran = false; let errText2 = '';
+      const c = await runGhShim({ argv: ['pr', 'list'], env: { PATH: 'X', MAKO_TOKEN_PROFILE: bad }, realGh: process.execPath, ghConfigDir: EMPTY, binDir: BIN, getToken: async () => { ran = true; return { token: TOKEN }; }, spawn: () => { ran = true; return { status: 0 }; }, stderr: { write: (t) => { errText2 += t; } }, fs: { mkdirSync() {} } });
+      assert(c === 2 && !ran && /unknown token profile/.test(errText2), `MAKO_TOKEN_PROFILE=${JSON.stringify(bad)} is refused: no token minted, gh not run (never a silent fallback to the wider writer profile)`);
+    }
+    asked = null;
+    await runGhShim({ argv: ['-e', '0'], env: { PATH: 'X' }, realGh: process.execPath, ghConfigDir: EMPTY, binDir: BIN, getToken: async (p) => { asked = p; return { token: TOKEN }; }, spawn: (c, a, o) => spawnSync(c, a, { ...o, stdio: 'ignore' }), fs: { mkdirSync() {} } });
+    assert(asked === 'writer', 'with no profile set, the default is writer (the pane profile)');
 
     // no token: refuses, never spawns, never falls back
     let spawned = false; let errText = '';
@@ -84,6 +90,15 @@ const EMPTY = path.join(path.dirname(BIN), 'gh-empty');
       errText = '';
       const c = await runGhShim({ argv: ['auth', sub], env: { PATH: 'X' }, realGh: process.execPath, ghConfigDir: EMPTY, binDir: BIN, getToken: async () => { spawned = true; return { token: TOKEN }; }, spawn: () => { spawned = true; return { status: 0 }; }, stderr: sink, fs: { mkdirSync() {} } });
       assert(c === 2 && !spawned && /not available here/.test(errText), `gh auth ${sub} is refused (no token minted, gh not run)`);
+    }
+    for (const argv of [['auth', 'status', '--show-token'], ['auth', 'status', '-t'], ['auth', 'status', '-at'], ['auth', 'status', '--hostname', 'github.com', '--show-token'], ['alias', 'set', 'x', 'y'], ['extension', 'install', 'o/r'], ['ext', 'list']]) {
+      errText = ''; spawned = false;
+      const c = await runGhShim({ argv, env: { PATH: 'X' }, realGh: process.execPath, ghConfigDir: EMPTY, binDir: BIN, getToken: async () => { spawned = true; return { token: TOKEN }; }, spawn: () => { spawned = true; return { status: 0 }; }, stderr: sink, fs: { mkdirSync() {} } });
+      assert(c === 2 && !spawned && /not available here/.test(errText), `gh ${argv.join(' ')} is refused (no token minted, gh not run)`);
+    }
+    for (const argv of [['auth', 'status'], ['auth', 'status', '--hostname', 'github.com'], ['pr', 'list']]) {
+      const c = await runGhShim({ argv, env: { PATH: 'X' }, realGh: process.execPath, ghConfigDir: EMPTY, binDir: BIN, getToken: async () => ({ token: TOKEN }), spawn: () => ({ status: 0 }), fs: { mkdirSync() {} } });
+      assert(c === 0, `gh ${argv.join(' ')} is allowed`);
     }
     const okAuth = await runGhShim({ argv: ['auth', 'status'], env: { PATH: 'X' }, realGh: process.execPath, ghConfigDir: EMPTY, binDir: BIN, getToken: async () => ({ token: TOKEN }), spawn: () => ({ status: 0 }), fs: { mkdirSync() {} } });
     assert(okAuth === 0, 'gh auth status is allowed');
@@ -204,11 +219,13 @@ const EMPTY = path.join(path.dirname(BIN), 'gh-empty');
     assert(r.mode === 'refused' && /key is not imported/.test(r.reason) && /Not falling back/.test(r.reason), 'a config without the key refuses the pane and says it will not fall back');
     fs.writeFileSync(layout.keyPath, 'blob');
     r = prepareAgentApp({ env, fs, install: () => { throw new Error('disk full'); } });
-    assert(r.mode === 'refused' && /could not write the gh shim/.test(r.reason), 'launchers that cannot be written refuse the pane');
+    assert(r.mode === 'refused' && /could not prepare the gh shim/.test(r.reason), 'launchers that cannot be written refuse the pane');
     let installed = 0;
     r = prepareAgentApp({ env, fs, install: () => { installed++; } });
     assert(r.mode === 'app' && installed === 1 && r.agentApp.binDir === layout.binDir && r.agentApp.ghConfigDir === layout.ghEmptyDir && r.agentApp.config.slug === 'mako-agents', 'a complete setup gives App mode with the launchers installed');
     assert(!JSON.stringify(r).includes('blob'), 'App mode carries no key material');
+    const quoted = prepareAgentApp({ env: { APPDATA: path.join(tmp(), "it's"), LOCALAPPDATA: env.LOCALAPPDATA }, fs: { readFileSync: () => JSON.stringify(CONFIG), existsSync: () => true }, install: () => { throw new Error('must not install'); } });
+    assert(quoted.mode === 'refused' && /launcher path/.test(quoted.reason), 'an unsafe folder path refuses the pane before anything is claimed (buildPtyEnv can no longer throw on it)');
     // the real installer writes real files
     const real = prepareAgentApp({ env, fs });
     assert(real.mode === 'app' && fs.existsSync(path.join(layout.binDir, 'gh.cmd')) && fs.existsSync(layout.ghEmptyDir) && fs.readdirSync(layout.ghEmptyDir).length === 0, 'the real installer writes the launchers and an EMPTY gh config folder');
@@ -246,6 +263,13 @@ const EMPTY = path.join(path.dirname(BIN), 'gh-empty');
     fs.rmSync(layout.configPath);
     r = run(['git', 'get'], 'protocol=https\nhost=github.com\n\n');
     assert(r.status !== 0 && r.stdout === '' && /not set up on this PC/.test(r.stderr), 'no App config: git get refuses and prints no credential');
+    seed(rec(40 * 60 * 1000, 20 * 60 * 1000));
+    for (const bad of ['Reader', 'read']) {
+      r = run(['status', '--profile', bad], '');
+      assert(r.status === 2 && /unknown token profile/.test(r.stderr) && r.stdout === '', `status --profile ${bad} is refused, not treated as writer`);
+    }
+    r = spawnSync(process.execPath, [cli, 'git', 'get'], { env: { ...env, MAKO_TOKEN_PROFILE: 'wrter' }, input: 'protocol=https\nhost=github.com\n\n', encoding: 'utf8' });
+    assert(r.status === 2 && r.stdout === '', 'MAKO_TOKEN_PROFILE misspelt: git get gives no credential');
     r = run(['bogus'], '');
     assert(r.status === 2 && /usage/.test(r.stderr), 'an unknown command is a usage error');
     r = run(['import'], '');

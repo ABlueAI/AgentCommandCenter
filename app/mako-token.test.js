@@ -61,6 +61,8 @@ function memCache() {
     const l = cfg.layout({ APPDATA: 'C:\\Users\\b\\AppData\\Roaming', LOCALAPPDATA: 'C:\\Users\\b\\AppData\\Local' }, 'C:\\Users\\b');
     assert(l.dataDir.endsWith('Mako') && l.cacheDir.includes('Local') && l.cacheDir.endsWith('token-cache'), 'data lives under APPDATA\\Mako, the cache under LOCALAPPDATA\\Mako');
     assert(cfg.REFRESH_MARGIN_MS === 5 * MIN, 'refresh margin is 5 minutes');
+    assert(cfg.selectProfile().profile === 'writer' && cfg.selectProfile(undefined, '').profile === 'writer' && cfg.selectProfile('reader', 'writer').profile === 'reader' && cfg.selectProfile(undefined, 'reader').profile === 'reader', 'selectProfile: the first thing set wins; nothing set means writer');
+    for (const bad of ['Reader', 'read', 'admin', 'writer ', '__proto__']) assert(cfg.selectProfile(bad).ok === false && cfg.selectProfile(undefined, bad).ok === false, `selectProfile refuses ${JSON.stringify(bad)} instead of falling back`);
   }
 
   // --- the token service with a fake clock -----------------------------------------------------
@@ -305,6 +307,14 @@ function memCache() {
     // non-Windows platforms refuse real DPAPI visibly
     const e3 = await rejects(async () => windowsDpapi('protect', Buffer.from('x'), { platform: 'linux' }));
     assert(e3 && e3.code === 'unsupported-platform', 'DPAPI on a non-Windows platform is refused, not faked');
+    // PowerShell is started by absolute path under the system directory, never by a bare name
+    const sysRoot = process.platform === 'win32' ? 'C:\\Windows' : '/win';
+    let target = null;
+    windowsDpapi('protect', Buffer.from('x'), { platform: 'win32', env: { SystemRoot: sysRoot }, exists: () => true, spawn: (c) => { target = c; return { status: 0, stdout: 'AA==' }; } });
+    assert(target === path.join(sysRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe') && path.isAbsolute(target), 'DPAPI starts PowerShell by ABSOLUTE path under the system directory, never a bare name');
+    const e4 = await rejects(async () => windowsDpapi('protect', Buffer.from('x'), { platform: 'win32', env: { SystemRoot: sysRoot }, exists: () => false, spawn: () => { throw new Error('must not run'); } }));
+    assert(e4 && e4.code === 'system-exe-missing', 'a missing PowerShell refuses visibly');
+    assert(!/spawn(?:Sync)?\(\s*'(?:powershell|icacls)/.test(fs.readFileSync(path.join(__dirname, 'mako-token', 'keystore.js'), 'utf8') + fs.readFileSync(path.join(__dirname, 'mako-token', 'acl.js'), 'utf8')), 'no spawn of a bare powershell or icacls name remains in the source');
   }
 
   // --- the file cache ----------------------------------------------------------------------------
@@ -342,11 +352,16 @@ function memCache() {
     assert((fs.statSync(dir).mode & 0o077) === 0, 'non-Windows: the folder is mode 0700');
     const e = await rejects(async () => restrictToCurrentUser(dir, { fs, platform: 'win32', env: {} }));
     assert(e && e.code === 'acl-failed', 'Windows without a USERNAME refuses');
-    const e2 = await rejects(async () => restrictToCurrentUser(dir, { fs, platform: 'win32', env: { USERNAME: 'b' }, run: () => { throw new Error('Access is denied'); } }));
+    const root = '/win'; // an absolute path on this OS; only the shape matters for these fakes
+    const exe = path.join(root, 'System32', 'icacls.exe');
+    const e2 = await rejects(async () => restrictToCurrentUser(dir, { fs, platform: 'win32', env: { USERNAME: 'b', SystemRoot: root }, exists: () => true, run: () => { throw new Error('Access is denied'); } }));
     assert(e2 && e2.code === 'acl-failed', 'an icacls failure refuses');
-    let argv = null;
-    restrictToCurrentUser(dir, { fs, platform: 'win32', env: { USERNAME: 'blue', USERDOMAIN: 'PC1' }, run: (_c, a) => { argv = a; } });
+    let argv = null; let called = null;
+    restrictToCurrentUser(dir, { fs, platform: 'win32', env: { USERNAME: 'blue', USERDOMAIN: 'PC1', SystemRoot: root }, exists: () => true, run: (c, a) => { called = c; argv = a; } });
     assert(argv && argv.includes('/inheritance:r') && argv.includes('PC1\\blue:(OI)(CI)F'), 'icacls is called to drop inheritance and grant only this user');
+    assert(called === exe && path.isAbsolute(called), 'icacls is started by ABSOLUTE path under System32, never a bare name (a worktree could hold an icacls.exe)');
+    const e3 = await rejects(async () => restrictToCurrentUser(dir, { fs, platform: 'win32', env: { USERNAME: 'blue', SystemRoot: root }, exists: () => false, run: () => { throw new Error('must not run'); } }));
+    assert(e3 && e3.code === 'system-exe-missing', 'a missing icacls.exe refuses visibly');
   }
   if (process.platform === 'win32') {
     const blob = windowsDpapi('protect', Buffer.from('hello key'));

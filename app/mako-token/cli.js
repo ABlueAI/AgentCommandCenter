@@ -60,8 +60,10 @@ async function main(argv, io = {}) {
     return e instanceof MakoTokenError && e.code === 'bad-args' ? 2 : 3;
   };
   const [cmd, ...rest] = argv;
-  const profile = cfg.isProfile(flag(rest, '--profile')) ? flag(rest, '--profile') : (cfg.isProfile(env.MAKO_TOKEN_PROFILE) ? env.MAKO_TOKEN_PROFILE : cfg.DEFAULT_PROFILE);
   try {
+    const sel = cfg.selectProfile(flag(rest, '--profile'), env.MAKO_TOKEN_PROFILE);
+    if (!sel.ok && (cmd === 'git' || cmd === 'status')) throw new MakoTokenError('bad-args', sel.reason);
+    const profile = sel.profile;
     if (cmd === 'git') {
       const { createDefaultService } = require('./service');
       const ctx = createDefaultService({ env, fs: io.fs || nodefs, warn: (l) => stderr.write(l + '\n'), ...(io.serviceOptions || {}) });

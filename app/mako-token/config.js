@@ -33,6 +33,20 @@ const DEFAULT_PROFILE = 'writer';
 
 function isProfile(name) { return typeof name === 'string' && Object.prototype.hasOwnProperty.call(PROFILES, name); }
 
+/**
+ * Which profile a caller asked for. Nothing set -> the default (writer). Anything SET that is not a
+ * known profile is a refusal, never a silent fallback to the wider profile: a consumer that asked for
+ * read-only must not get write access because of a typo.
+ */
+function selectProfile(...requests) {
+  for (const r of requests) {
+    if (r === undefined || r === null || r === '') continue;
+    if (!isProfile(r)) return { ok: false, reason: `unknown token profile "${String(r).slice(0, 20)}" (use writer or reader)` };
+    return { ok: true, profile: r };
+  }
+  return { ok: true, profile: DEFAULT_PROFILE };
+}
+
 function profileKey(name) {
   const p = PROFILES[name];
   return Object.keys(p).sort().map((k) => `${k}:${p[k]}`).join(',');
@@ -87,5 +101,5 @@ function botIdentity(config) {
 
 module.exports = {
   APP_OWNER, APP_REPO, CONFIG_FILE, KEY_FILE, REFRESH_MARGIN_MS, MAX_CLOCK_SKEW_MS,
-  PROFILES, DEFAULT_PROFILE, isProfile, profileKey, layout, validateConfig, botIdentity,
+  PROFILES, DEFAULT_PROFILE, isProfile, selectProfile, profileKey, layout, validateConfig, botIdentity,
 };

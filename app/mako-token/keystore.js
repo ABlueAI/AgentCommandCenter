@@ -16,13 +16,15 @@ const crypto = require('crypto');
 const { spawnSync } = require('child_process');
 const { MakoTokenError, scrub } = require('./errors');
 const { restrictToCurrentUser } = require('./acl');
+const { resolvePowerShell } = require('./winexe');
 
 const DPAPI_SCRIPT = path.join(__dirname, 'dpapi.ps1');
 
 /** Real DPAPI through Windows PowerShell 5.1. Data moves only over stdin and stdout, as base64. */
-function windowsDpapi(mode, buffer, { platform = process.platform, spawn = spawnSync } = {}) {
+function windowsDpapi(mode, buffer, { platform = process.platform, spawn = spawnSync, env = process.env, exists } = {}) {
   if (platform !== 'win32') throw new MakoTokenError('unsupported-platform', 'the App key is protected with Windows DPAPI; this works on Windows only');
-  const r = spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', DPAPI_SCRIPT, mode], {
+  const powershell = resolvePowerShell(env, exists); // absolute path, never a bare name (winexe.js)
+  const r = spawn(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', DPAPI_SCRIPT, mode], {
     input: buffer.toString('base64'), encoding: 'utf8', windowsHide: true, maxBuffer: 1 << 20,
   });
   if (r.error || r.status !== 0) {
@@ -48,8 +50,8 @@ function checkPem(pem) {
 }
 
 function createKeyStore({ fs, keyPath, protect, unprotect, env = process.env, platform = process.platform, acl = restrictToCurrentUser }) {
-  const p = protect || ((b) => windowsDpapi('protect', b, { platform }));
-  const u = unprotect || ((b) => windowsDpapi('unprotect', b, { platform }));
+  const p = protect || ((b) => windowsDpapi('protect', b, { platform, env }));
+  const u = unprotect || ((b) => windowsDpapi('unprotect', b, { platform, env }));
   const dir = path.dirname(keyPath);
   return {
     exists() { return fs.existsSync(keyPath); },

@@ -152,6 +152,7 @@ function buildAgentGitEnv(token) {
 //                                     3 user.name, 4 user.email = the bot identity
 //   GIT_TERMINAL_PROMPT = 0           a failed login fails visibly instead of prompting
 //   GIT_AUTHOR_* / GIT_COMMITTER_*    the bot identity `<id>+<slug>[bot]@users.noreply.github.com`
+// Assumes HTTPS remotes: an SSH remote (or an insteadOf rewrite to SSH) never asks the helper.
 // A process running as Blue's Windows user can still read his stored logins; this is not a boundary
 // against a pane (same honesty as the PAT mode above).
 const mtConfig = require('./mako-token/config');
