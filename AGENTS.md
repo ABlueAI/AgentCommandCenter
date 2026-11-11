@@ -59,7 +59,7 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
    - If the builder can't run `pr-reviewer` itself (Codex), the Claude session that handed it the
      task runs it on the builder's PR the same way and posts it, and says so in the comment; if that
      session has ended, the next runner fire (or a session Blue starts) does it. The PR
-     isn't marked ready until that review is posted (by `ABlueAgent` or `ABlueAI`, unedited by anyone
+     isn't marked ready until that review is posted (by `ABlueAgent`, `mako-agents[bot]` or `ABlueAI`, unedited by anyone
      else; a comment by anyone else doesn't count; on a Codex PR, because Codex may be able to comment as
      `ABlueAgent`, one by `ABlueAgent` must carry a "Run by:" line linking the Claude session or
      runner fire that ran it, and Blue opens that link before approving, since the line alone can be
@@ -190,14 +190,16 @@ so PRs #142 and #144 had to be re-opened as #146 and #147.
 - A session whose GitHub CLI login (`gh api user --jq .login`) is `ABlueAI` never opens a PR, pushes
   to a PR branch or marks a PR ready. That is the Claude desktop app on Blue's PCs until he removes
   his command-line login (BLUE-CHECKLIST.md step 49). It plans and talks, and hands the PR work to a
-  cloud session or a Mako agent pane, both of which run as `ABlueAgent`.
+  cloud session (which runs as `ABlueAgent`) or a Mako agent pane (which runs as `mako-agents[bot]`
+  once the App is created; until then, as `ABlueAgent` with its token: BLUE-CHECKLIST.md step 35).
 - The `PreToolUse` hook `.claude/hooks/account-guard.js` blocks `gh pr create`, `gh pr ready` and
   every `git push` when gh's login is `ABlueAI`. It checks gh's login, not the credential `git push`
   uses, so the rule holds even where the hook can't see it. Never work around it; if it blocks you,
   hand the work over.
 - Before calling any PR `READY TO MERGE`, check that its author and whoever pushed its latest commit
   (the PR's timeline shows who added each commit) aren't `ABlueAI`. If either is, it is
-  `NOT READY: opened or pushed as ABlueAI` until an `ABlueAgent` session re-opens it or pushes to it.
+  `NOT READY: opened or pushed as ABlueAI` until an `ABlueAgent` or `mako-agents[bot]` session
+  re-opens it or pushes to it.
 
 ### The TLDR (top of every PR)
 
@@ -206,6 +208,72 @@ recommendation) · uncertainty and how to check it in under 2 minutes · plan ch
 touched · test results (CI, local, not covered) · review verdict and open findings · follow-ups
 (low and out-of-scope findings, see "The review loop"). Say "none" rather
 than leaving a line out. Never present an assumption as a fact.
+
+## Agent account safety
+
+Adopted 2026-11-10 and 2026-11-11 (docs/DECISIONS.md, Blue's words there). GitHub suspended `ABlueAgent`
+around 2026-11-08 (cause unknown) and restored it after one appeal. Every PR needs an agent identity
+that is not Blue's (see "No PR work under ABlueAI's login"), so losing it stops the plan. The
+identities:
+
+- **`mako-agents[bot]`**: the GitHub App `mako-agents`, owned by `ABlueAI` and installed on this
+  repository only. It is the **primary** identity for local work: Mako panes and local Claude
+  sessions (and a local runner, if one is ever built: none exists today, and the runner in
+  docs/RUNNER.md is a cloud scheduled task, so it stays `ABlueAgent`). The bot login exists once the
+  App is created (BLUE-CHECKLIST.md step 51). Until the App is wired (step 52 ticked), local agents
+  use `ABlueAgent` with its token (step 35), as before.
+- **`ABlueAgent`**: kept for **cloud** sessions, because a cloud session can't use the App. The
+  throttle once planned for it (a one-PR-a-day cap and a staged restart) is lifted.
+
+Where these rules say "the agent account", they mean both. The runbook for losing it is
+[docs/RUNBOOK-agent-account-lost.md](docs/RUNBOOK-agent-account-lost.md); R4 is not used.
+
+- **R1. Blue never acts as the agent login.** He signs in as `ABlueAgent` only to recover the
+  account, for the look-only check in BLUE-CHECKLIST.md step 53 (nothing changed, nothing posted), or
+  to create or renew its tokens (steps 14 and 25 and their reminders); always in a separate browser
+  profile (R2). R7 covers agent tokens and sessions, not these browser sign-ins. He never
+  approves, merges or comments with it. A change Blue wrote himself is landed by an agent session
+  opening the PR; Blue approves it as `ABlueAI`.
+- **R2. Keep `ABlueAgent` healthy.** Two-factor on, with an authenticator and a passkey or security
+  key; recovery codes on paper and in the password manager; a mailbox Blue reads; the password only in
+  the password manager and never in his everyday browser (if he must sign in, a separate browser
+  profile). While a Support ticket about it is open, change nothing on the account (email, password,
+  2FA, tokens).
+- **R3. Agents never approve and never merge.** That covers `gh pr review`, the review APIs, GitHub
+  MCP review tools, merge buttons, merge APIs and auto-merge, from any identity.
+  - **Enforced by GitHub:** the `protect-main` ruleset's no direct pushes, no force pushes, no
+    deletions and the required Windows checks; and "Allow GitHub Actions to create and approve pull
+    requests" being off. Also configured: required approval from the code owner (`ABlueAI`) of the
+    latest push. Not tested since PR #133 (below), so don't rely on it.
+  - **Only an instruction, plus a tripwire:** the rule that an agent identity itself must not call
+    the review or merge endpoints. The merge-audit workflow opens a `security-alert` issue after the
+    fact; it does not prevent it. The App's token can technically call both endpoints (GitHub's
+    permission table gives installation tokens write on pull requests), so the rule binds the bot
+    exactly as it binds `ABlueAgent`.
+  - **The known gap:** PR #133 (authored by `ABlueAI`) was approved by `ABlueAgent` at 23:25:41 UTC
+    and merged by it at 23:25:52 UTC on 2026-10-29, 11 seconds apart (merge-audit issue #137; the
+    PR's reviews and `merged_by` on GitHub, read 2026-11-11). The ruleset accepted an agent
+    approval on a Blue-authored PR. The cause is open (issue #137, docs/1.1-GAP-AUDIT.md A1, which
+    also asks whether Blue clicked it himself while signed in as `ABlueAgent`). Nothing in this file
+    claims the ruleset now blocks it; treat it as open until it has been tested.
+- **R5. Pacing budget.** These are Blue's side's numbers, not GitHub's. Per identity: at most 40
+  GitHub writes (comments, pushes, PR and issue changes, labels) per hour and 300 per day. At most 6
+  pushes per hour. At most 2 writer sessions at once across the cloud, Blue's PC and the runner.
+  No polling loops: check CI once per push, then wait 5 minutes before the next check.
+- **R6. Stop at the first rate limit.** On the first secondary-rate-limit `403` or a `429`, stop all
+  GitHub writes, report it, and never retry in a loop.
+- **R7. One origin family per account.** `ABlueAgent`: cloud sessions only, never Blue's PC. The
+  App: Blue's PC only, never the cloud. Assumption, not established: mixing origins can look like
+  account sharing to GitHub. R7 takes effect once the App is wired (checklist step 52 ticked); until
+  then, local agents still use `ABlueAgent`'s token (step 35).
+- **R8. One ticket, no replacement.** One Support ticket per incident: reply in the open one, never
+  open a duplicate. No second user account, and no swapping the account's email to another mailbox,
+  to get around a suspension. Blue's words, 2026-11-11: "I'm not making another account."
+- **R9. The evening digest reports the account.** The digest adds: agent-account status
+  (`gh api users/ABlueAgent` returns `200` or `404`), the number of agent writes in the last 24
+  hours, and, on a `404`, the line "AGENT ACCOUNT LOST, see runbook". The digest prompt lives in
+  docs/RUNNER.md, which this PR does not change: until a later PR changes it and Blue has it
+  applied (BLUE-CHECKLIST.md step 50's route), the digest does not report this.
 
 ## Deciding without asking
 
@@ -281,7 +349,7 @@ listeners · CI workflows, `.github/`, `.claude/`, repository settings · this f
 ## Who does what
 
 - **Blue**: sets goals, approves plan changes, merges. Owns credentials and repository settings.
-- **Claude Code**: primary builder (Sonnet for routine work, Opus for hard problems and reviews).
+- **Claude Code**: primary builder (Sonnet for routine work, Opus for hard problems and reviews). Local work uses the App (`mako-agents[bot]`, once step 52 is ticked), cloud work uses `ABlueAgent`.
 - **Reviewer subagent** (`.claude/agents/pr-reviewer.md`, Claude Opus): the required independent
   review on every PR, run by the builder before it marks the PR ready (for Codex's PRs, by the
   Claude session that handed it the task, the next runner fire, or a session Blue starts; step 3).

@@ -6,7 +6,8 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-11-05 by Claude (step 50 added and steps 28 and 27 moved to the top of "Do next",
+Last updated 2026-11-11 by Claude (steps 51 to 53 added for the agent-account safety rules and the GitHub App
+`mako-agents`, PR #169, proposed; earlier, on 2026-11-05: step 50 added and steps 28 and 27 moved to the top of "Do next",
 for the merge-order rule, PR #166; earlier, on 2026-11-04: step 26 marked dropped, "Do next" items 6 and 7 updated now that PRs #84 and
 #119 are merged, a question on step 10 added as item 8, and the "About 2026-11-17" reminder's Max date
 fixed, from the 1.1 gap audit's A7 and A8, PR #160; earlier the same day: step 49 added from "Coming up this month", the `ABlueAI`
@@ -21,6 +22,11 @@ changed to classic `public_repo` (PR #46); step 8 moved to 2026-10-28 and steps 
 #48); step 16 added and ticked, with the 2026-10-21 Codex agent-request result (PR #47).
 
 ## Do next, in this order
+
+**Dated 2026-11-12 (before the list):** **Step 51**, creating the GitHub App `mako-agents` (about 15
+minutes; your decision of 2026-11-11). It's the primary agent identity for local work, and steps 52
+and 53 follow it. Step 49's removal of the `ABlueAI` command-line login is its follow-through (not
+repeated here).
 
 Your words (2026-10-21): "we will walk through this. place it where you prioritize it in relation to
 other remaining items." Claude's order for what is left:
@@ -270,6 +276,59 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   runner never edits itself.
   - *Done when:* that session reads both tasks back, their prompts match docs/RUNNER.md on `main`
     (compared as text), and it ticks this step with the date and how it checked.
+
+- [ ] **51. Create the GitHub App `mako-agents` (the primary agent identity).** About **15 minutes**, on
+  **2026-11-12** (your decision of 2026-11-11, docs/DECISIONS.md: "make the GitHub app the main, you
+  know, primary"). Signed in as `ABlueAI` in your everyday browser (this is your own account, not the
+  agent account): GitHub > Settings > Developer settings > GitHub Apps > New GitHub App.
+  - Name `mako-agents`. Webhook **off**. Repository permissions: **Metadata** read, **Contents** read
+    and write, **Pull requests** read and write, **Issues** read and write, **Actions** read,
+    **Checks** read, **Commit statuses** read. Nothing else: no Administration, no Workflows, no
+    organization or account permissions.
+  - **Where can this app be installed:** only on this account.
+  - Install it on **only select repositories**: `ABlueAI/AgentCommandCenter`, nothing else.
+  - Generate a private key. Save the downloaded file in `%USERPROFILE%\.mako-agents\`, never in a
+    repository, a synced folder (OneDrive, Dropbox) or a chat. Put a copy in your password manager.
+  - Give Claude, in the session only and never in the repo: the App ID, the installation ID and the
+    key's fingerprint (GitHub shows it beside the key), plus the app's slug. No key contents, ever.
+  - Why: GitHub suspended `ABlueAgent` around 2026-11-08 (cause unknown), and the App gives local work
+    an identity that is not a second user account (whether it is safer from suspension is an
+    assumption; it is owned by `ABlueAI`). `ABlueAgent` stays for cloud sessions
+    only (AGENTS.md "Agent account safety"). The App's token can technically approve and merge, so the
+    rule against it (R3) applies to the bot too.
+  - *Done when:* an agent reads the app's public page with `gh api apps/<slug>` (it shows the
+    `mako-agents` name and the owner `ABlueAI`) and the installation's repositories with the
+    installation ID (only this repository, and the permissions listed above), and ticks this with the
+    date and what it saw (without the IDs). Wiring the key into Mako (the `mako-token` session, in the
+    parallel PR of this plan) is separate and not in this step; step 49 stays as written: it is the
+    follow-through, once local work runs on the App.
+
+- [ ] **52. The App approval spike.** About **8 minutes** of your time, after the `mako-token` PR is
+  merged and the App's key is imported into Mako (step 51 first). It checks that a PR opened by
+  `mako-agents[bot]` can be approved and made mergeable the same way an `ABlueAgent` PR is: `main`
+  needs your approval as code owner of the latest push, and the bot is the pusher.
+  - An agent opens a throwaway PR as `mako-agents[bot]` (a one-line change to a scratch file) and
+    waits for the two Windows checks to pass.
+  - You click **Approve** once, as `ABlueAI`, on that PR. **Nothing is merged**, by you or anyone.
+  - The agent reads the PR's state and records whether your approval counted and whether GitHub
+    shows the PR as mergeable, then closes the PR and deletes its branch.
+  - *Done when:* the agent ticks this with the date and the PR number, and says whether the approval
+    counted and the PR showed as mergeable. If it did not, the App can't be the primary identity
+    yet: the agent stops and asks you (a ruleset change would be yours to make). The agent never
+    approves or merges this PR itself (AGENTS.md R3).
+
+- [ ] **53. Optional: a look-only visit to `ABlueAgent`.** About **12 minutes**, any time after step 51
+  and **only if no Support ticket about the account is open** (AGENTS.md R2: change nothing on the
+  account while one is). In a separate browser profile, never your everyday one, sign in as
+  `ABlueAgent` and only look: Settings > Password and authentication confirms two-factor is on with
+  an authenticator and a passkey or security key; the recovery codes exist on paper and in Bitwarden
+  (check that they are there, don't regenerate them); the account's email is a mailbox you read; the
+  password is only in your password manager. Change nothing, approve nothing, merge nothing, comment
+  nothing (R1). Sign out.
+  - *Done when:* you tell an agent what you saw (for example "2FA on, passkey on, codes on paper and
+    in Bitwarden, email OK" or what is missing). It ticks this with the date and your words. A
+    missing item is a new step with its own time estimate. This step is optional: skipping it is
+    fine and nothing waits on it.
 
 ## Any time (not blocking)
 
@@ -634,7 +693,7 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     `Needs Blue`, `Hold`, `Ready to merge`, `Done` (rename or delete the defaults). Note the number at
     the end of the project's URL. Project **Settings** > **Manage access** > invite `ABlueAgent`
     with **Write**.
-  - Signed in as `ABlueAgent` (private window): Settings > Developer settings > Personal access
+  - Signed in as `ABlueAgent` (separate browser profile): Settings > Developer settings > Personal access
     tokens > **Tokens (classic)** > Generate new token. Note "Mako plan board", expiry 90 days,
     tick **only** `project`. Copy it; never paste it into a chat or the repo.
   - Signed in as `ABlueAI`: the repository > Settings > **Environments** > `plan-board` (the sync

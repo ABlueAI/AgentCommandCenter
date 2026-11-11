@@ -174,6 +174,10 @@ Every PR that changes the state updates this file.
     until then they only verify and don't open PRs (docs/SETUP-GUARDRAILS.md, "What is still not
     covered"). The token exists (checklist step 14, ticked 2026-10-23 on Blue's word; expires
     2027-01-21, renew by 2027-01-14).
+  - Agent account safety (decided 2026-11-10 and 2026-11-11, PR #169, proposed): GitHub suspended `ABlueAgent` around
+    2026-11-08 and restored it after one appeal. Rules R1 to R9 (AGENTS.md "Agent account safety") and a runbook
+    (docs/RUNBOOK-agent-account-lost.md) are proposed; the GitHub App `mako-agents` becomes the primary identity for local
+    work once Blue creates it (checklist step 51; not created yet), and `ABlueAgent` stays for cloud sessions.
   - No PR work under Blue's own login (decided 2026-11-04, PR #153): PRs #142 and #144, opened from Claude desktop chats as `ABlueAI`, couldn't be
     approved and were re-opened as #146 and #147. Desktop chats now only plan and talk (AGENTS.md
     "No PR work under ABlueAI's login"), and the `PreToolUse` hook `.claude/hooks/account-guard.js`

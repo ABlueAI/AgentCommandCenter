@@ -3,6 +3,19 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-11
+
+| Decision | Blue's words |
+|---|---|
+| **The GitHub App `mako-agents` is the primary agent identity; `ABlueAgent` stays for cloud sessions (the "Agent account safety" PR; merging it approves this).** The App (owned by `ABlueAI`, installed on this repository only; bot login `mako-agents[bot]` once it is created) is used by local Mako panes, local Claude sessions and the local runner. `ABlueAgent` is kept for cloud sessions, because cloud sessions can't use the App. This is the permanent fix after GitHub suspended `ABlueAgent` around 2026-11-08 (cause unknown; restored after one appeal). Blue creates the App in BLUE-CHECKLIST.md step 51; until it exists, local agents work as before. Adds to the 2026-11-10 entry below. | "Fuck it, let's just do the permanent fix." · "make the GitHub app the main, you know, primary, but we do need to hold on to the agent account and remove that throttle so that we can use it for cloud sessions." |
+| **No one-PR-a-day cap and no staged restart for `ABlueAgent`; no replacement user account; one Support ticket only.** The throttle once planned for the agent account is lifted (AGENTS.md "Agent account safety" has no R4 because of this). Instead, the pacing budget R5 applies to every agent identity. If the account is lost, docs/RUNBOOK-agent-account-lost.md says what to do: no second account, no second ticket. | "you can go ahead and shut that shit down. Let's reverse that. That's not happening." · "I'm not making another account." |
+
+## 2026-11-10
+
+| Decision | Blue's words |
+|---|---|
+| **Both: safety rules R1 to R9 for the agent accounts, and a GitHub App as backup (the "Agent account safety" PR; merging it approves this).** The rules go into AGENTS.md "Agent account safety", and the loss procedure into docs/RUNBOOK-agent-account-lost.md. Replaced in part by the 2026-11-11 entries above: the App became the primary identity instead of a backup, and R4 (the throttle) was lifted. | "Go on both" |
+
 ## 2026-11-04
 
 | Decision | Blue's words |
