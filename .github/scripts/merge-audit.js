@@ -19,10 +19,17 @@
 //   getPr(number)        -> { user: { login }, merged_by: { login } | null }
 //   prReviews(number)    -> [{ user: { login } | null, state }]
 // Any error from `api` propagates, so the workflow fails instead of passing quietly.
+//
+// `agents` is the list of agent logins (./agent-logins.js: ABlueAgent and the mako-agents[bot] App).
+// It drives the "agents never approve" alert below: PR #133 (authored by ABlueAI) was approved and
+// merged by ABlueAgent 11 seconds apart on 2026-10-29, because the ruleset accepts an agent approval
+// on a PR the human authored. Only this audit caught it, after the fact (issue #137).
+
+const { AGENT_LOGINS, sameLogin } = require('./agent-logins');
 
 const BASE = 'main';
 
-async function auditPush({ shas, human, api }) {
+async function auditPush({ shas, human, agents = AGENT_LOGINS, api }) {
   if (!Array.isArray(shas) || shas.length === 0) throw new Error('merge audit: no commits to check');
   if (!human) throw new Error('merge audit: no human approver configured');
 
@@ -61,10 +68,21 @@ async function auditPush({ shas, human, api }) {
     const full = await api.getPr(number);
     const mergedBy = full.merged_by && full.merged_by.login;
     if (mergedBy !== human) problems.push(`PR #${number} was merged by ${mergedBy || 'unknown'}, not ${human}.`);
+    const reviews = await api.prReviews(number);
     if (full.user.login !== human) {
-      const reviews = await api.prReviews(number);
       const approved = reviews.some((r) => r.user && r.user.login === human && r.state === 'APPROVED');
       if (!approved) problems.push(`PR #${number} by ${full.user.login} merged without an approval from ${human}.`);
+    } else {
+      // The PR #133 pattern: an agent account approved a PR that the human authored.
+      const approvers = new Map(); // lower-cased login -> login as GitHub spelled it
+      for (const r of reviews) {
+        if (r.state === 'APPROVED' && r.user && agents.some((a) => sameLogin(a, r.user.login))) {
+          if (!approvers.has(r.user.login.toLowerCase())) approvers.set(r.user.login.toLowerCase(), r.user.login);
+        }
+      }
+      for (const login of approvers.values()) {
+        problems.push(`PR #${number} by ${human} was approved by the agent account ${login}. Agents never approve or merge (the PR #133 pattern).`);
+      }
     }
   }
 
