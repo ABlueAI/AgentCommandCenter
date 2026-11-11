@@ -54,8 +54,10 @@ const AGENT_GIT_ENV_KEYS = Object.freeze([
   'GIT_CONFIG_VALUE_2',
   'GIT_CONFIG_KEY_3',
   'GIT_CONFIG_VALUE_3',
-  'GIT_CONFIG_KEY_4', // S35: App mode uses five command-scope entries
+  'GIT_CONFIG_KEY_4', // S35: App mode uses six command-scope entries
   'GIT_CONFIG_VALUE_4',
+  'GIT_CONFIG_KEY_5',
+  'GIT_CONFIG_VALUE_5',
   'GIT_CONFIG_PARAMETERS',
   'GIT_CONFIG_GLOBAL',
   'GIT_CONFIG_SYSTEM',
@@ -150,6 +152,7 @@ function buildAgentGitEnv(token) {
 //                                     2 credential.https://github.com.helper = !'<bin>/git-credential-mako'
 //                                                                                   fresh token per HTTPS call
 //                                     3 user.name, 4 user.email = the bot identity
+//                                     5 core.askPass = ""                           no GUI askpass fallback
 //   GIT_TERMINAL_PROMPT = 0           a failed login fails visibly instead of prompting
 //   GIT_AUTHOR_* / GIT_COMMITTER_*    the bot identity `<id>+<slug>[bot]@users.noreply.github.com`
 // Assumes HTTPS remotes: an SSH remote (or an insteadOf rewrite to SSH) never asks the helper.
@@ -177,7 +180,7 @@ function buildAppLauncherEnv({ config, binDir, ghConfigDir }) {
   const bot = mtConfig.botIdentity(config);
   return {
     GH_CONFIG_DIR: ghConfigDir,
-    GIT_CONFIG_COUNT: '5',
+    GIT_CONFIG_COUNT: '6',
     GIT_CONFIG_KEY_0: 'credential.helper',
     GIT_CONFIG_VALUE_0: '',
     GIT_CONFIG_KEY_1: 'credential.https://github.com.helper',
@@ -188,6 +191,10 @@ function buildAppLauncherEnv({ config, binDir, ghConfigDir }) {
     GIT_CONFIG_VALUE_3: bot.name,
     GIT_CONFIG_KEY_4: 'user.email',
     GIT_CONFIG_VALUE_4: bot.email,
+    // If the helper fails (offline, key problem), git must not fall back to a GUI askpass program from
+    // Blue's own config, where an answer would push as him. An empty value is "no askpass program".
+    GIT_CONFIG_KEY_5: 'core.askPass',
+    GIT_CONFIG_VALUE_5: '',
     GIT_TERMINAL_PROMPT: '0',
     GIT_AUTHOR_NAME: bot.name,
     GIT_AUTHOR_EMAIL: bot.email,

@@ -22,7 +22,12 @@ function prepareAgentApp({ env = process.env, fs = nodefs, homedir = os.homedir(
   const layout = cfg.layout(env, homedir);
   const loaded = loadConfig({ fs, configPath: layout.configPath });
   if (!loaded.ok) {
-    if (loaded.reason === 'not-configured') return { mode: 'pat' };
+    if (loaded.reason === 'not-configured') {
+      // A key with no config is a half-finished import or a deleted config file, never "no App": falling
+      // back to the PAT or Blue's own login there would be a silent downgrade.
+      if (fs.existsSync(layout.keyPath)) return { mode: 'refused', reason: 'the App key is imported but its config (mako-agents.json) is missing; run mako-token import --replace again. Not falling back to another login.' };
+      return { mode: 'pat' };
+    }
     return { mode: 'refused', reason: `the GitHub App config is invalid (${loaded.detail})` };
   }
   if (!fs.existsSync(layout.keyPath)) {

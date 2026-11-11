@@ -47,6 +47,9 @@ async function gitHelper({ action, stdinText, getToken, forget, profile, stdout 
   if (action === 'erase') { await forget(profile); return 0; }
   if (action !== 'get') return 0; // `store`: nothing to remember, the next call mints or reuses
   const { token } = await getToken(profile);
+  // The credential protocol is line-based: a token with a line break would add lines (username=, host=,
+  // quit=) to what git reads. A real token never has one; refuse anything that does.
+  if (/[\x00-\x1f\x7f]/.test(token)) throw new MakoTokenError('renewal-failed', 'the token has control characters and is not handed to git');
   stdout.write(`username=x-access-token\npassword=${token}\n`);
   return 0;
 }

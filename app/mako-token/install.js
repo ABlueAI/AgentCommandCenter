@@ -19,6 +19,9 @@ function installForCurrentRuntime({ env = process.env, fs = nodefs, homedir = os
     ghShimJs: path.join(__dirname, 'gh-shim.js'), cliJs: path.join(__dirname, 'cli.js'),
     binDir: layout.binDir,
   });
+  // The shared gh config folder is meant to be empty. Clear anything a pane planted in it (best effort:
+  // a file gh holds open is left for the next start), then make sure it exists.
+  try { for (const name of fs.readdirSync(layout.ghEmptyDir)) { try { fs.rmSync(path.join(layout.ghEmptyDir, name), { recursive: true, force: true }); } catch { /* in use */ } } } catch { /* not there yet */ }
   fs.mkdirSync(layout.ghEmptyDir, { recursive: true });
   return installLaunchers({ fs, binDir: layout.binDir, files });
 }

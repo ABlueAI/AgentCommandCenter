@@ -19,7 +19,7 @@ const { MakoTokenError, scrub } = require('./errors');
 const STRIPPED = ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN', 'GH_HOST', 'GH_CONFIG_DIR'];
 // Subcommands that print or change a login, or that plant behaviour that runs in later panes with the token
 // set: aliases and `config set` write to the shared GH_CONFIG_DIR; extensions are installed to gh's data folder.
-const REFUSED_AUTH = new Set(['token', 'login', 'logout', 'refresh', 'setup-git', 'switch']);
+const REFUSED_AUTH = new Set(['token', 'login', 'logout', 'refresh', 'setup-git', 'switch', 'git-credential']);
 const REFUSED_TOP = new Set(['alias', 'extension', 'extensions', 'ext']);
 // gh auth status --show-token / -t, in a cluster (-at) and in pflag's `=` forms (--show-token=true, -t=true).
 const SHOWS_TOKEN = /^(?:--show-token(?:=.*)?|-[A-Za-z]*t.*)$/;
@@ -44,8 +44,10 @@ function findRealGh({ env, binDir, exists = (p) => nodefs.existsSync(p), platfor
   const entries = String(pathVar ? env[pathVar] : '').split(win ? ';' : ':').filter(Boolean);
   const skip = pathMod.resolve(binDir).toLowerCase();
   const candidates = entries
+    .map((d) => d.replace(/^"|"$/g, ''))
+    .filter((d) => pathMod.isAbsolute(d)) // a relative entry (., node_modules\\.bin) would resolve against the worktree
     .filter((d) => pathMod.resolve(d).toLowerCase() !== skip)
-    .map((d) => pathMod.join(d.replace(/^"|"$/g, ''), win ? 'gh.exe' : 'gh'));
+    .map((d) => pathMod.join(d, win ? 'gh.exe' : 'gh'));
   if (win) {
     const pf = env.ProgramFiles || 'C:\\Program Files';
     candidates.push(path.win32.join(pf, 'GitHub CLI', 'gh.exe'));

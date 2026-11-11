@@ -39,13 +39,15 @@ call asks for a fresh one.
   used even if the shim were bypassed: plain `gh.exe` then says "not logged in".
 - git: command-scope entries (`GIT_CONFIG_COUNT/KEY/VALUE`, read after every config file) reset every
   credential helper, global and `github.com`-specific, then set `!'<bin>/git-credential-mako'` for
-  `https://github.com`, plus `user.name` and `user.email`. `GIT_TERMINAL_PROMPT=0`.
+  `https://github.com`, plus `user.name`, `user.email` and an empty `core.askPass` (so a failed helper can't
+  fall back to a GUI askpass prompt whose answer would push as Blue). `GIT_TERMINAL_PROMPT=0`.
 - Commits are authored as the bot: `mako-agents[bot] <ID+mako-agents[bot]@users.noreply.github.com>`,
   where `ID` is the bot user's ID, read from `%APPDATA%\Mako\mako-agents.json` (import writes it).
 - Only unfenced agent panes get this (a bare CLI pane or an unfenced role). Fenced roles, Video Scout
   and plain shells never do.
-- If the App config exists but the key is missing, the config is invalid, or the launchers can't be
-  written, **the pane does not start** and Mako shows why. It never falls back to the `ABlueAgent` token
+- If the App config exists but the key is missing, the key exists but the config is missing (a deleted
+  config or a half-finished import), the config is invalid, or the launchers can't be written, **the pane
+  does not start** and Mako shows why. It never falls back to the `ABlueAgent` token
   or to Blue's own login. With no App config at all, the S06 token path works as before.
 - The `ABlueAgent` token path in `app/agent-git-env.js` still only accepts `ghp_` and `github_pat_`
   tokens. An installation token (`ghs_`) is refused there; App mode is a separate, deliberate mode.
@@ -150,7 +152,10 @@ not edit that file).
   current Windows user with `icacls` (inheritance removed). If the folder can't be locked down, nothing
   is written and each call mints a fresh token (with a warning). A cache for another App, installation,
   repository or permission set, or one that looks minted in the future (clock set back), is not used.
-  A rejected token (git's `erase`) is dropped.
+  A rejected token (git's `erase`) is dropped. What is read back is checked too, because any program of Blue's
+  can write that folder: the token must look like an installation token (`ghs_` and URL-safe characters), the
+  record can't claim a lifetime over an hour, and a record that fails is ignored and replaced by a real mint.
+  git's credential protocol is line-based, so a token with a line break is never written to it.
 - **Launcher paths are checked** against characters that could change what a shell runs
   (`' " % ! ^ & | < > $` and the backtick); an unsafe path is refused, not escaped.
 
@@ -198,6 +203,12 @@ Do these in order, and don't wait to be sure:
   extensions. It cannot stop a program from writing the folder directly, and extensions Blue installed before
   this live in gh's data folder (`%LOCALAPPDATA%\GitHub CLI\extensions`), not here, so they would still run
   with the token set; remove any you don't trust. Delete the folder's contents any time.
+- **Programs that look up `gh` through PATHEXT** (Go's `exec.Command("gh")`, Python's `shutil.which`) find
+  `gh.cmd` ahead of the real `gh.exe`, and `cmd.exe` re-parses its arguments: `&`, `|` and `^` outside cmd-style
+  quotes (a PR title taken from untrusted text, say) can be mangled or run. From a shell use the `gh.ps1` or
+  `gh` sh shim; a program that builds `gh` arguments from untrusted text should not start `gh` by bare name.
+  Only absolute PATH entries are searched for the real `gh` and for `claude`; a relative one (`.`,
+  `node_modules\.bin`) is ignored.
 - `gh.cmd` passes its arguments through `cmd.exe`: an argument with an embedded `"` can be mangled. From
   PowerShell the `gh.ps1` shim is used instead (Mako panes run PowerShell with `-ExecutionPolicy Bypass`),
   and from Git Bash the `gh` shell shim, neither of which has the problem. Use `--body-file` for long bodies.

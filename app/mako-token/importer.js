@@ -63,12 +63,20 @@ async function importKey({
   if (!minted.token) throw new MakoTokenError('renewal-failed', 'no token was minted');
 
   fs.mkdirSync(layout.dataDir, { recursive: true });
-  keystore.save(pem);
-  const back = keystore.load();
-  if (back !== pem) { keystore.remove(); throw new MakoTokenError('dpapi-failed', 'the stored key did not read back the same; nothing was kept'); }
   const tmp = `${layout.configPath}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(config, null, 2) + '\n');
-  fs.renameSync(tmp, layout.configPath);
+  try {
+    keystore.save(pem);
+    const back = keystore.load();
+    if (back !== pem) throw new MakoTokenError('dpapi-failed', 'the stored key did not read back the same; nothing was kept');
+    fs.writeFileSync(tmp, JSON.stringify(config, null, 2) + '\n');
+    fs.renameSync(tmp, layout.configPath);
+  } catch (e) {
+    // Never leave a key without its config (Mako refuses to start App panes in that state): undo both.
+    keystore.remove();
+    try { fs.unlinkSync(tmp); } catch { /* not written */ }
+    if (e instanceof MakoTokenError) throw e;
+    throw new MakoTokenError('import-failed', `could not store the key and config (${scrub(e && e.message)}); nothing was kept`);
+  }
   cache.removeAll();
 
   const del = secureDelete(fs, pemPath);

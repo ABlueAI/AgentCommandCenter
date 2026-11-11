@@ -146,10 +146,22 @@ function memCache() {
   }
   {
     // a record for another App, installation, repository or permission set is not reused
-    const good = { v: 1, appId: 4242, installationId: 777, owner: 'ABlueAI', repo: 'AgentCommandCenter', profile: 'writer', permissionsKey: cfg.profileKey('writer'), token: 't', expiresAt: new Date(T0 + 50 * MIN).toISOString(), mintedAt: new Date(T0).toISOString() };
+    const good = { v: 1, appId: 4242, installationId: 777, owner: 'ABlueAI', repo: 'AgentCommandCenter', profile: 'writer', permissionsKey: cfg.profileKey('writer'), token: FAKE_TOKEN(1), expiresAt: new Date(T0 + 50 * MIN).toISOString(), mintedAt: new Date(T0).toISOString() };
     assert(recordMatches(good, CONFIG, 'writer'), 'a matching record is accepted');
     for (const [k, v] of [['appId', 1], ['installationId', 1], ['repo', 'Other'], ['owner', 'Someone'], ['profile', 'reader'], ['permissionsKey', 'contents:write'], ['v', 2], ['token', ''], ['expiresAt', 'soon']]) {
       assert(!recordMatches({ ...good, [k]: v }, CONFIG, 'writer'), `a record with a different ${k} is not reused`);
+    }
+    // a forged cache file: a record can't make mako-token hand out an arbitrary string or a far-future expiry
+    for (const [label, patch] of [['a token that is not an installation token', { token: 'ghp_' + 'a'.repeat(36) }], ['a one-word token', { token: 'x' }], ['a token with a line break', { token: 'ghs_' + 'a'.repeat(30) + '\nhost=evil' }], ['an expiry in 2099', { expiresAt: '2099-01-01T00:00:00Z' }], ['a lifetime of 2 hours', { expiresAt: new Date(T0 + 120 * MIN).toISOString() }]]) {
+      assert(!usable({ ...good, ...patch }, T0 + MIN), `a forged cache record is not used: ${label}`);
+    }
+    assert(usable({ ...good, expiresAt: new Date(T0 + 60 * MIN).toISOString() }, T0 + MIN), 'a genuine one-hour record is used');
+    {
+      let n = 0; const c = memCache();
+      c.write('writer', { ...good, token: 'ghp_' + 'a'.repeat(36), expiresAt: '2099-01-01T00:00:00Z', mintedAt: new Date(T0).toISOString() });
+      const svc2 = createTokenService({ config: CONFIG, cache: c, now: () => T0 + MIN, warn() {}, mint: async () => { n++; return { token: FAKE_TOKEN('real'), expiresAt: new Date(T0 + 61 * MIN).toISOString() }; } });
+      const r2 = await svc2.getToken('writer');
+      assert(n === 1 && r2.token === FAKE_TOKEN('real') && r2.fromCache === false, 'a forged cache file (any token, expiry 2099) is ignored: a real token is minted and replaces it');
     }
     assert(!recordMatches(null, CONFIG, 'writer') && !recordMatches('x', CONFIG, 'writer'), 'no record, no match');
     assert(usable(good, T0 + 44 * MIN) && !usable(good, T0 + 45 * MIN + 1), 'usable() ends 5 minutes before expiry');
@@ -452,6 +464,21 @@ function memCache() {
     assert(e && e.code === 'dpapi-failed' && fs.existsSync(w.pemPath), 'a key that does not read back the same is refused and the PEM is kept');
   }
 
+  {
+    // a failed config write rolls the key back: never a key without its config
+    const dir = tmp();
+    const layout = { dataDir: path.join(dir, 'Mako'), configPath: path.join(dir, 'Mako', 'mako-agents.json'), keyPath: path.join(dir, 'Mako', 'k.dpapi'), cacheDir: path.join(dir, 'cache') };
+    const pemPath = path.join(dir, 'k.pem');
+    fs.writeFileSync(pemPath, PEM_PKCS1);
+    const keystore = createKeyStore({ fs, keyPath: layout.keyPath, protect: (b) => Buffer.from(Buffer.from(b).toString('hex')), unprotect: (b) => Buffer.from(b.toString('utf8'), 'hex'), acl: () => {} });
+    const ok = (body) => ({ ok: true, status: 200, json: async () => body });
+    const fetchImpl = async (url) => (/\/app$/.test(url) ? ok({ id: 4242, slug: 'mako-agents', owner: { login: 'ABlueAI' } }) : /\/app\/installations$/.test(url) ? ok([{ id: 777, account: { login: 'ABlueAI' } }]) : /users/.test(url) ? ok({ id: 99001 }) : /installations\/777$/.test(url) ? ok({ id: 777, app_id: 4242, account: { login: 'ABlueAI' }, repository_selection: 'selected' }) : ok({ total_count: 1, repositories: [{ full_name: 'ABlueAI/AgentCommandCenter' }] }));
+    const loadAuth = async () => ({ createAppAuth: () => async (req) => (req.type === 'app' ? { token: 'jwt' } : { token: FAKE_TOKEN('i'), expiresAt: new Date(T0 + 60 * MIN).toISOString(), installationId: 777, permissions: { ...req.permissions } }) });
+    const failingFs = Object.assign(Object.create(fs), { renameSync(a, b) { if (b === layout.configPath) throw new Error('EPERM'); return fs.renameSync(a, b); } });
+    const e = await rejects(() => importKey({ pemPath, appId: 4242, fs: failingFs, layout, keystore, cache: createFileCache({ fs, dir: layout.cacheDir, acl: () => {} }), fetchImpl, loadAuth, out() {} }));
+    assert(e && e.code === 'import-failed' && !keystore.exists() && !fs.existsSync(layout.configPath) && fs.existsSync(pemPath), 'a config write that fails rolls the key back: no key without its config, and the PEM is kept for a retry');
+  }
+
   // --- git credential helper protocol -----------------------------------------------------------
   {
     const input = 'protocol=https\nhost=github.com\npath=ABlueAI/AgentCommandCenter.git\n';
@@ -471,6 +498,8 @@ function memCache() {
     assert(r.code === 0 && r.out === '', 'store: nothing is remembered');
     r = await run('erase', input, async () => { throw new Error('must not mint'); });
     assert(r.forgets.join() === 'writer' && r.out === '', 'erase: the cached token is dropped');
+    const evil = await rejects(() => run('get', input, async () => ({ token: 'ghs_abc\nusername=evil\nquit=1' })));
+    assert(evil && evil.code === 'renewal-failed' && !/evil/.test(evil.message), 'a token with a line break is never written into git\'s line-based protocol');
     const e = await rejects(() => run('get', input, async () => { throw new MakoTokenError('renewal-failed', 'offline'); }));
     assert(e && e.code === 'renewal-failed', 'get with a renewal failure throws (the CLI then exits non-zero with no output)');
   }

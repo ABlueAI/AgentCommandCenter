@@ -24,10 +24,18 @@ function recordMatches(rec, config, profile) {
     && isIso(rec.expiresAt) && isIso(rec.mintedAt);
 }
 
+// A cache file is only as trustworthy as the user account that can write it, so what is read back is checked
+// against what a real installation token looks like: `ghs_` plus URL-safe characters, and a lifetime of at
+// most one hour. A forged record (any string as the token, an expiry in 2099) fails and a real token is minted.
+const INSTALLATION_TOKEN_RE = /^ghs_[A-Za-z0-9_]{20,255}$/;
+const MAX_LIFETIME_MS = 60 * 60 * 1000;
+
 function usable(rec, nowMs) {
   const exp = Date.parse(rec.expiresAt);
   const minted = Date.parse(rec.mintedAt);
+  if (!INSTALLATION_TOKEN_RE.test(rec.token)) return false;
   if (minted > nowMs + cfg.MAX_CLOCK_SKEW_MS) return false; // the clock went backwards: don't trust it
+  if (exp - minted > MAX_LIFETIME_MS + cfg.MAX_CLOCK_SKEW_MS) return false; // longer than GitHub ever issues
   return exp - nowMs > cfg.REFRESH_MARGIN_MS;
 }
 
@@ -87,4 +95,4 @@ function createTokenService({ config, cache, mint, now, warn }) {
   return { getToken, forget };
 }
 
-module.exports = { createTokenService, recordMatches, usable };
+module.exports = { createTokenService, recordMatches, usable, INSTALLATION_TOKEN_RE };

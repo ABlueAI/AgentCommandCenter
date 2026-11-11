@@ -86,7 +86,7 @@ const EMPTY = path.join(path.dirname(BIN), 'gh-empty');
     assert(other === 3 && !spawned && !errText.includes(TOKEN), 'an unexpected error also refuses, and a token in its text is scrubbed');
 
     // refused subcommands
-    for (const sub of ['token', 'login', 'logout', 'refresh', 'setup-git', 'switch']) {
+    for (const sub of ['token', 'login', 'logout', 'refresh', 'setup-git', 'switch', 'git-credential']) {
       errText = '';
       const c = await runGhShim({ argv: ['auth', sub], env: { PATH: 'X' }, realGh: process.execPath, ghConfigDir: EMPTY, binDir: BIN, getToken: async () => { spawned = true; return { token: TOKEN }; }, spawn: () => { spawned = true; return { status: 0 }; }, stderr: sink, fs: { mkdirSync() {} } });
       assert(c === 2 && !spawned && /not available here/.test(errText), `gh auth ${sub} is refused (no token minted, gh not run)`);
@@ -122,6 +122,10 @@ const EMPTY = path.join(path.dirname(BIN), 'gh-empty');
     const w = findRealGh({ env: { Path: 'C:\\Mako\\bin;C:\\Tools', ProgramFiles: 'C:\\Program Files' }, binDir: 'C:\\Mako\\bin', exists: (p) => p === 'C:\\Program Files\\GitHub CLI\\gh.exe', platform: 'win32' });
     assert(w === 'C:\\Program Files\\GitHub CLI\\gh.exe', 'on Windows it falls back to the GitHub CLI install folder');
     assert(findRealGh({ env: { PATH: '' }, binDir: d1, exists: () => false, platform: 'linux' }) === null, 'no gh: null');
+    const rel = findRealGh({ env: { PATH: `.:node_modules/.bin:bin:${d2}` }, binDir: d1, exists: (p) => p === 'gh' || p === path.posix.join('node_modules/.bin', 'gh') || p === path.posix.join('bin', 'gh') || p === path.posix.join(d2, 'gh'), platform: 'linux' });
+    assert(rel === path.posix.join(d2, 'gh'), 'a relative PATH entry (., node_modules/.bin) is ignored: a gh planted in the worktree never runs with the token');
+    const wrel = findRealGh({ env: { Path: '.;C:\\repo\\node_modules\\.bin;..\\x;C:\\Tools', ProgramFiles: 'C:\\Program Files' }, binDir: 'C:\\Mako\\bin', exists: (p) => p === 'C:\\Tools\\gh.exe' || p === 'gh.exe', platform: 'win32' });
+    assert(wrel === 'C:\\Tools\\gh.exe', 'Windows: relative PATH entries are ignored too');
   }
 
   // --- launchers ------------------------------------------------------------------------------------
@@ -163,7 +167,8 @@ const EMPTY = path.join(path.dirname(BIN), 'gh-empty');
     assert(!names.includes('GH_TOKEN') && !names.includes('GITHUB_TOKEN') && !names.includes('GH_ENTERPRISE_TOKEN') && !names.includes('GH_HOST'), 'App mode: the pane has no GH_TOKEN, GITHUB_TOKEN, enterprise token or GH_HOST, in any spelling');
     assert(env.PATH === `${BIN};C:\\Windows;C:\\Tools` && names.filter((n) => n === 'PATH').length === 1, 'App mode: the launcher folder is first on PATH, the ambient PATH follows, and only one spelling remains');
     assert(env.GH_CONFIG_DIR === EMPTY, 'App mode: GH_CONFIG_DIR is the empty folder');
-    assert(env.GIT_CONFIG_COUNT === '5' && !('Git_Config_Key_4' in env) && env.GIT_CONFIG_KEY_4 === 'user.email', 'App mode: five command-scope entries replace any ambient ones');
+    assert(env.GIT_CONFIG_COUNT === '6' && !('Git_Config_Key_4' in env) && env.GIT_CONFIG_KEY_4 === 'user.email', 'App mode: six command-scope entries replace any ambient ones');
+    assert(env.GIT_CONFIG_KEY_5 === 'core.askPass' && env.GIT_CONFIG_VALUE_5 === '', 'App mode: core.askPass is reset, so a failed helper never falls back to a GUI askpass prompt');
     assert(!('GIT_CONFIG_PARAMETERS' in env) && !('GIT_ASKPASS' in env), 'App mode: ambient GIT_CONFIG_PARAMETERS and GIT_ASKPASS are removed');
     assert(env.GIT_CONFIG_KEY_0 === 'credential.helper' && env.GIT_CONFIG_VALUE_0 === '' && env.GIT_CONFIG_KEY_1 === 'credential.https://github.com.helper' && env.GIT_CONFIG_VALUE_1 === '', 'App mode: entries 0 and 1 reset every credential helper, global and github.com-specific');
     assert(env.GIT_CONFIG_KEY_2 === 'credential.https://github.com.helper' && env.GIT_CONFIG_VALUE_2 === gitHelperValue(BIN), 'App mode: entry 2 is the mako-token helper for github.com');
@@ -209,6 +214,10 @@ const EMPTY = path.join(path.dirname(BIN), 'gh-empty');
     let r = prepareAgentApp({ env, fs, install: () => { throw new Error('must not install'); } });
     assert(r.mode === 'pat', 'no App config: the PAT path (S06) as before');
     fs.mkdirSync(layout.dataDir, { recursive: true });
+    fs.writeFileSync(layout.keyPath, 'blob');
+    r = prepareAgentApp({ env, fs, install: () => { throw new Error('must not install'); } });
+    assert(r.mode === 'refused' && /config .*is missing/.test(r.reason) && /Not falling back/.test(r.reason), 'a key with no config (deleted config, half-finished import) refuses the pane: no silent downgrade to the PAT or Blue\'s own login');
+    fs.rmSync(layout.keyPath);
     fs.writeFileSync(layout.configPath, '{not json');
     r = prepareAgentApp({ env, fs, install: () => {} });
     assert(r.mode === 'refused' && /config is invalid/.test(r.reason), 'a corrupt App config refuses the pane (no fallback)');
@@ -227,7 +236,10 @@ const EMPTY = path.join(path.dirname(BIN), 'gh-empty');
     const quoted = prepareAgentApp({ env: { APPDATA: path.join(tmp(), "it's"), LOCALAPPDATA: env.LOCALAPPDATA }, fs: { readFileSync: () => JSON.stringify(CONFIG), existsSync: () => true }, install: () => { throw new Error('must not install'); } });
     assert(quoted.mode === 'refused' && /launcher path/.test(quoted.reason), 'an unsafe folder path refuses the pane before anything is claimed (buildPtyEnv can no longer throw on it)');
     // the real installer writes real files
+    fs.mkdirSync(layout.ghEmptyDir, { recursive: true });
+    fs.writeFileSync(path.join(layout.ghEmptyDir, 'config.yml'), 'pager: sh -c evil');
     const real = prepareAgentApp({ env, fs });
+    assert(!fs.existsSync(path.join(layout.ghEmptyDir, 'config.yml')), 'anything a pane planted in the shared gh config folder is cleared when the next pane starts');
     assert(real.mode === 'app' && fs.existsSync(path.join(layout.binDir, 'gh.cmd')) && fs.existsSync(layout.ghEmptyDir) && fs.readdirSync(layout.ghEmptyDir).length === 0, 'the real installer writes the launchers and an EMPTY gh config folder');
   }
 
@@ -308,6 +320,7 @@ const EMPTY = path.join(path.dirname(BIN), 'gh-empty');
     assert(code === 7 && call.c === '/usr/bin/claude' && call.a.join() === '--model,x', 'mako-claude runs the real claude (not the shim folder) with its arguments and exit code');
     const names = Object.keys(call.o.env).map((k) => k.toUpperCase());
     assert(!names.includes('GH_TOKEN') && !names.includes('ELECTRON_RUN_AS_NODE') && call.o.env.GH_CONFIG_DIR === EMPTY && call.o.env.PATH.startsWith(BIN), 'it gets the pane\'s App-mode environment: no token, the empty gh folder, the shim first');
+    assert(resolveClaude({ env: { PATH: `.:/usr/bin` }, binDir: BIN, exists: (p) => p === 'claude' || p === '/usr/bin/claude', platform: 'linux' }) === '/usr/bin/claude', 'a relative PATH entry never supplies claude');
     assert(resolveClaude({ env: { PATH: `${BIN}:/x` }, binDir: BIN, exists: (p) => p === path.posix.join(BIN, 'claude'), platform: 'linux' }) === null, 'a `claude` inside the shim folder is never run');
     let err = '';
     const none = launchClaude({ args: [], env: { PATH: '' }, layout, config: CONFIG, platform: 'linux', exists: () => false, spawn: () => ({ status: 0 }), stderr: { write: (s) => { err += s; } } });

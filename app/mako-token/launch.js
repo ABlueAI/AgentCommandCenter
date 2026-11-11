@@ -19,10 +19,12 @@ function resolveClaude({ env, binDir, exists = (p) => nodefs.existsSync(p), plat
   const pathVar = Object.keys(env).find((k) => k.toUpperCase() === 'PATH');
   const skip = pathMod.resolve(binDir).toLowerCase();
   const dirs = String(pathVar ? env[pathVar] : '').split(win ? ';' : ':').filter(Boolean)
+    .map((d) => d.replace(/^"|"$/g, ''))
+    .filter((d) => pathMod.isAbsolute(d)) // a relative entry would resolve against the worktree
     .filter((d) => pathMod.resolve(d).toLowerCase() !== skip);
   for (const d of dirs) {
     for (const name of win ? ['claude.exe', 'claude.cmd'] : ['claude']) {
-      const p = pathMod.join(d.replace(/^"|"$/g, ''), name);
+      const p = pathMod.join(d, name);
       if (exists(p)) return p;
     }
   }
