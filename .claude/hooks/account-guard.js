@@ -8,21 +8,41 @@
 // his `gh` login and had to be re-opened from a cloud session as #146 and #147. AGENTS.md
 // ("No PR work under ABlueAI's login") is the rule; this hook enforces it.
 //
+// Second rule, added 2026-11-11 ("Agents never approve or merge", Blue): PR #133, authored by ABlueAI,
+// was approved and merged by ABlueAgent 11 seconds apart on 2026-10-29, because the `main` ruleset
+// accepts an agent approval on a PR Blue authored; the merge audit caught it only afterwards (issue
+// #137). So review and merge calls are blocked under ANY login, not only ABlueAI's.
+//
 // What it does, in order:
-//   1. Reads the hook input (JSON on stdin) and looks for `gh pr create` (and its alias
-//      `gh pr new`), `gh pr ready` or `git push` anywhere in the Bash command, including chained
-//      commands, subshells, command substitution and `bash -c "..."`. Anything else exits 0
-//      straight away, without starting `gh` or touching the network.
-//   2. For a matching command only, runs `gh api user --jq .login` (same environment as the
+//   1. Reads the hook input (JSON on stdin) and looks, anywhere in the Bash command (chained
+//      commands, subshells, command substitution and `bash -c "..."` included), for
+//        login-dependent commands (blocked only under ABlueAI): `gh pr create` (and its alias
+//          `gh pr new`), `gh pr ready` and `git push`;
+//        review and merge commands (blocked under any login, without asking gh who you are):
+//          `gh pr review`, `gh pr merge`, and a `gh api` call that writes (an explicit
+//          `-X`/`--method` POST or PUT, or any body flag `-f -F --field --raw-field --input`, which
+//          make gh POST) to a `.../reviews` endpoint, to `.../pulls/N/merge`, to `.../merges` (the
+//          branch-merge API) or to the cloud sessions' `.../ccr/auto_merge` route (auto-merge), or
+//          a `gh api graphql` call that names mergePullRequest, enablePullRequestAutoMerge,
+//          addPullRequestReview or submitPullRequestReview. A read (a GET with no body) of those
+//          endpoints is not matched here (.claude/settings.json denies `gh api` to them whatever
+//          the method, which is stricter).
+//      Anything else exits 0 straight away, without starting `gh` or touching the network.
+//   2. For a login-dependent command only, runs `gh api user --jq .login` (same environment as the
 //      session, so a Mako agent pane's GH_TOKEN and a cloud session's login are what it sees).
 //      It checks gh's login, not the credential `git push` itself uses (Git Credential Manager or
 //      an SSH key): with gh logged out but Git Credential Manager still holding ABlueAI, a push is
 //      allowed with a notice. Removing both logins (checklist step 49) closes that gap.
 //   3. Login `ABlueAI` (GitHub logins are case-insensitive): exit 2 with a message on stderr.
 //      Claude Code blocks the tool call and shows Claude that message.
-//      Any other login (`ABlueAgent` in Mako panes and cloud sessions): exit 0, silently.
+//      Any other login (`ABlueAgent` in cloud sessions, `mako-agents[bot]`, the GitHub App, in
+//      local panes; any login ending in `[bot]` is accepted): exit 0, silently.
+//      An App installation token has no user, so `gh api user` answers 403 "Resource not
+//      accessible by integration" for it: that is not an unknown error. The token can't be
+//      ABlueAI's, so the command is allowed, with a one-line notice that says why.
 //      `gh` missing, not logged in, offline or slow: exit 0, with a one-line notice to the user
 //      (`systemMessage` in JSON on stdout) that the account couldn't be checked.
+//   4. A review or merge command (above) exits 2 with its own message, whatever the login.
 //
 // It fails open on purpose (Blue, 2026-11-04: "i just dont want this to cause more problems"):
 // only a confirmed `ABlueAI` login blocks. A crash, bad input or an unknown shape is allowed
@@ -39,10 +59,16 @@
 //
 // Known gaps (not a security boundary; it guards against an honest session using the wrong
 // login): wrappers that take their own options (`timeout 60 git push`, `nice -n 5`, `sudo -u x`,
-// `xargs`, `cmd /c`), `pwsh -EncodedCommand`, scripts or npm scripts that push, `gh api` calls that
-// create PRs, and tools other than Bash (Claude Code's PowerShell tool, GitHub MCP tools). A process
-// running as Blue's Windows user can still use his stored logins, which is why he removes them
-// after checklist step 35 (BLUE-CHECKLIST.md step 49).
+// `xargs`, `cmd /c`), `pwsh -EncodedCommand`, scripts or npm scripts that push, merge or review,
+// `gh api` calls that create PRs, `gh api` whose endpoint or method comes from a shell variable or a
+// file (`gh api "$URL"`, `--input` bodies are matched by the flag, not their content), `gh api`
+// reached through an alias or `gh -R x api` with other global options, `curl` or SDK calls to
+// api.github.com with a token, and tools other than Bash (Claude Code's PowerShell tool, GitHub MCP
+// tools: .claude/settings.json denies the ones whose names were checked). A process running as
+// Blue's Windows user can still use his stored logins, which is why he removes them after
+// checklist step 35 (BLUE-CHECKLIST.md step 49). Review and merge calls are guarded only as far as
+// this hook sees them: the real gate is that `main` needs Blue's approval, and the merge audit
+// (.github/workflows/merge-audit.yml) alerts when an agent approved a PR that Blue authored.
 
 const { execFileSync } = require('child_process');
 const fs = require('fs');
@@ -58,6 +84,17 @@ const BLOCK_MESSAGE = [
   'Do not retry or work around this. Hand the work to a cloud session (claude.ai/code) or a Mako agent pane,',
   'both of which run as ABlueAgent, and tell Blue which one to start and what to give it.',
 ].join('\n');
+
+// Printed for a review or merge command, whatever the login (no `gh` call is made).
+const NEVER_MESSAGE = [
+  "Blocked by Mako's account guard (.claude/hooks/account-guard.js): agent sessions never approve, review through the API or merge.",
+  'Agents never approve or merge (Blue, 2026-11-11): Blue approves and merges every PR himself, in the GitHub web UI.',
+  'To report on a PR, post a PR comment (a plain comment, not a review). Do not retry or work around this;',
+  'if the PR is ready, say READY TO MERGE in your summary and stop.',
+].join('\n');
+
+// Commands blocked under any login. Everything else the guard finds is blocked only under ABlueAI.
+const ALWAYS_BLOCKED = new Set(['gh pr review', 'gh pr merge', 'gh api review', 'gh api merge']);
 
 // ---------------------------------------------------------------------------------------------
 // Command matching
@@ -307,7 +344,51 @@ function skipOptions(words, start, valueOpts) {
   return i;
 }
 
-// What a simple command does, if it's one we guard: 'git push', 'gh pr create', 'gh pr ready'.
+// gh api: flags that take a separate value, and the ones that attach a request body (which makes
+// gh POST when no method is given).
+const API_VALUE_OPTS = new Set(['-X', '--method', '-H', '--header', '-f', '--raw-field', '-F', '--field', '-q', '--jq', '-t', '--template', '--hostname', '--cache', '-p', '--preview', '--input']);
+const API_BODY_OPTS = new Set(['-f', '--raw-field', '-F', '--field', '--input']);
+const GRAPHQL_REVIEW_MERGE = /\b(?:mergePullRequest|enablePullRequestAutoMerge|addPullRequestReview|submitPullRequestReview)\b/;
+
+// The arguments after `gh api`: 'gh api review' or 'gh api merge' for a write to a review or merge
+// endpoint, else null. A GET with no body, and any other endpoint, is left alone.
+function classifyGhApi(args) {
+  let method = null;
+  let body = false;
+  let endpoint = null;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a.startsWith('--')) {
+      const eq = a.indexOf('=');
+      const name = eq === -1 ? a : a.slice(0, eq);
+      if (name === '--method') method = eq === -1 ? args[i + 1] : a.slice(eq + 1);
+      if (API_BODY_OPTS.has(name)) body = true;
+      if (eq === -1 && API_VALUE_OPTS.has(name)) i++;
+    } else if (a.startsWith('-') && a.length > 1) {
+      const flag = a.slice(0, 2);
+      const attached = a.length > 2 ? a.slice(2) : null;
+      if (flag === '-X') method = attached !== null ? attached.replace(/^=/, '') : args[i + 1];
+      if (API_BODY_OPTS.has(flag)) body = true;
+      if (attached === null && API_VALUE_OPTS.has(flag)) i++;
+    } else if (endpoint === null) {
+      endpoint = a;
+    }
+  }
+  if (endpoint === null) return null;
+  const verb = (method ? String(method) : body ? 'POST' : 'GET').toUpperCase();
+  if (verb !== 'POST' && verb !== 'PUT') return null;
+  const route = endpoint.replace(/^https?:\/\/[^/]+\//i, '').replace(/^\/+/, '').split(/[?#]/)[0].replace(/\/+$/, '').toLowerCase();
+  if (route === 'graphql') {
+    const m = GRAPHQL_REVIEW_MERGE.exec(args.join(' '));
+    return m ? (/review/i.test(m[0]) ? 'gh api review' : 'gh api merge') : null;
+  }
+  if (/(^|\/)reviews(\/|$)/.test(route)) return 'gh api review';
+  if (/(^|\/)pulls\/[^/]+\/merge$/.test(route) || /(^|\/)merges$/.test(route) || /(^|\/)ccr\/auto_merge$/.test(route)) return 'gh api merge';
+  return null;
+}
+
+// What a simple command does, if it's one we guard: 'git push', 'gh pr create', 'gh pr ready',
+// 'gh pr review', 'gh pr merge', 'gh api review', 'gh api merge'.
 function classifySimpleCommand(words, depth) {
   let i = 0;
   // Leading `VAR=value` assignments, wrappers like sudo, and `env [-opts] [VAR=value]`.
@@ -331,10 +412,13 @@ function classifySimpleCommand(words, depth) {
   }
   if (prog === 'gh') {
     let j = skipOptions(rest, 0, GH_VALUE_OPTS);
+    if (rest[j] === 'api') return classifyGhApi(rest.slice(j + 1));
     if (rest[j] !== 'pr') return null;
     j = skipOptions(rest, j + 1, GH_VALUE_OPTS);
     if (rest[j] === 'create' || rest[j] === 'new') return 'gh pr create';
     if (rest[j] === 'ready') return 'gh pr ready';
+    if (rest[j] === 'review') return 'gh pr review';
+    if (rest[j] === 'merge') return 'gh pr merge';
     return null;
   }
   // `bash -c "git push"`, `pwsh -Command "gh pr create"`: check the script they run.
@@ -357,10 +441,22 @@ function classifySimpleCommand(words, depth) {
 const RAW_PATTERNS = [
   [/\bgh(?:\.exe)?["']?\s[^\n;&|]*?\bpr\s+(?:create|new)\b/i, 'gh pr create'],
   [/\bgh(?:\.exe)?["']?\s[^\n;&|]*?\bpr\s+ready\b/i, 'gh pr ready'],
+  [/\bgh(?:\.exe)?["']?\s[^\n;&|]*?\bpr\s+review\b/i, 'gh pr review'],
+  [/\bgh(?:\.exe)?["']?\s[^\n;&|]*?\bpr\s+merge\b/i, 'gh pr merge'],
   [/\bgit(?:\.exe)?["']?\s[^\n;&|]*?\bpush\b/i, 'git push'],
 ];
+// `gh api` writes in the raw scan: only when the same command line also shows a write (a POST or
+// PUT method, or a body flag), so a read of /reviews is never blocked by a parsing gap.
+const RAW_API = /\bgh(?:\.exe)?["']?\s[^\n;&|]*?\bapi\b[^\n;&|]*/gi;
+const RAW_API_WRITE = /(?:-X|--method)[\s=]*["']?(?:POST|PUT)\b|\s(?:-f|-F|--field|--raw-field|--input)(?:[\s=]|\S)/i;
 function rawScan(command) {
   for (const [re, name] of RAW_PATTERNS) if (re.test(command)) return name;
+  for (const m of command.matchAll(RAW_API)) {
+    const text = m[0];
+    if (!RAW_API_WRITE.test(text)) continue;
+    if (/\/reviews\b/i.test(text)) return 'gh api review';
+    if (/\/(?:merge|merges|auto_merge)\b/i.test(text)) return 'gh api merge';
+  }
   return null;
 }
 
@@ -406,12 +502,18 @@ function readGhLogin() {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     const login = String(out).trim();
-    if (!/^[A-Za-z0-9-]{1,39}$/.test(login)) return { error: 'gh returned no login' };
+    if (!/^[A-Za-z0-9-]{1,39}(?:\[bot\])?$/.test(login)) return { error: 'gh returned no login' };
     return { login };
   } catch (err) {
     if (err && err.code === 'ENOENT') return { error: 'gh is not installed or not on PATH' };
     if (err && (err.code === 'ETIMEDOUT' || err.signal === 'SIGTERM')) {
       return { error: `gh did not answer within ${GH_TIMEOUT_MS / 1000} seconds` };
+    }
+    // An App installation token has no user: GET /user answers 403 "Resource not accessible by
+    // integration". That is a known case (the token can't be ABlueAI's), not an unknown error.
+    const detail = err && err.stderr ? String(err.stderr) : '';
+    if (/resource not accessible by integration/i.test(detail)) {
+      return { appToken: true, error: 'a GitHub App installation token has no user login' };
     }
     const status = err && typeof err.status === 'number' ? ` (exit ${err.status})` : '';
     return { error: `gh could not read the login${status}; it may not be logged in or offline` };
@@ -428,7 +530,19 @@ function decide(input, getLogin = readGhLogin) {
   const hit = findGuardedCommand(command);
   if (!hit) return { exitCode: 0, checked: false };
 
+  // Review and merge commands are blocked under any login: no `gh` call, nothing to fail open on.
+  if (ALWAYS_BLOCKED.has(hit)) {
+    return { exitCode: 2, checked: false, stderr: `${NEVER_MESSAGE}\n(Command matched: ${hit}.)` };
+  }
+
   const result = getLogin();
+  if (result && result.appToken === true) {
+    return {
+      exitCode: 0,
+      checked: true,
+      systemMessage: `Account guard: this session uses a GitHub App installation token (no user login, so not ${BLOCKED_LOGIN}); \`${hit}\` allowed.`,
+    };
+  }
   if (result && typeof result.login === 'string') {
     if (result.login.toLowerCase() === BLOCKED_LOGIN.toLowerCase()) {
       return { exitCode: 2, checked: true, stderr: `${BLOCK_MESSAGE}\n(Command matched: ${hit}.)` };
@@ -475,4 +589,7 @@ async function main() {
 
 if (require.main === module) main();
 
-module.exports = { splitCommands, findGuardedCommand, rawScan, resolveGh, decide, readGhLogin, BLOCKED_LOGIN, BLOCK_MESSAGE };
+module.exports = {
+  splitCommands, findGuardedCommand, rawScan, resolveGh, decide, readGhLogin,
+  BLOCKED_LOGIN, BLOCK_MESSAGE, NEVER_MESSAGE, ALWAYS_BLOCKED,
+};
