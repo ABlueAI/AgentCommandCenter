@@ -62,7 +62,8 @@
 // `xargs`, `cmd /c`), `pwsh -EncodedCommand`, scripts or npm scripts that push, merge or review,
 // `gh api` calls that create PRs, `gh api` whose endpoint or method comes from a shell variable or a
 // file (`gh api "$URL"`, `--input` bodies are matched by the flag, not their content), `gh api`
-// reached through an alias or `gh -R x api` with other global options, `curl` or SDK calls to
+// reached through an alias or `gh -R x api` with other global options, a GraphQL mutation read from
+// a file (`-F query=@mutation.graphql`), `curl` or SDK calls to
 // api.github.com with a token, and tools other than Bash (Claude Code's PowerShell tool, GitHub MCP
 // tools: .claude/settings.json denies the ones whose names were checked). A process running as
 // Blue's Windows user can still use his stored logins, which is why he removes them after
@@ -81,8 +82,8 @@ const BLOCK_MESSAGE = [
   `Blocked by Mako's account guard (.claude/hooks/account-guard.js): this session's GitHub CLI login is ${BLOCKED_LOGIN}.`,
   `Blue can't approve a PR that ${BLOCKED_LOGIN} opened or last pushed to, so a session under his login never opens a PR,`,
   'pushes to a PR branch or marks a PR ready (AGENTS.md, "No PR work under ABlueAI\'s login").',
-  'Do not retry or work around this. Hand the work to a cloud session (claude.ai/code) or a Mako agent pane,',
-  'both of which run as ABlueAgent, and tell Blue which one to start and what to give it.',
+  'Do not retry or work around this. Hand the work to a cloud session (claude.ai/code, which runs as ABlueAgent) or a',
+  'Mako agent pane (which runs as the GitHub App, mako-agents[bot], or as ABlueAgent), and tell Blue which one to start and what to give it.',
 ].join('\n');
 
 // Printed for a review or merge command, whatever the login (no `gh` call is made).
@@ -348,7 +349,7 @@ function skipOptions(words, start, valueOpts) {
 // gh POST when no method is given).
 const API_VALUE_OPTS = new Set(['-X', '--method', '-H', '--header', '-f', '--raw-field', '-F', '--field', '-q', '--jq', '-t', '--template', '--hostname', '--cache', '-p', '--preview', '--input']);
 const API_BODY_OPTS = new Set(['-f', '--raw-field', '-F', '--field', '--input']);
-const GRAPHQL_REVIEW_MERGE = /\b(?:mergePullRequest|enablePullRequestAutoMerge|addPullRequestReview|submitPullRequestReview)\b/;
+const GRAPHQL_REVIEW_MERGE = /\b(?:mergePullRequest|mergeBranch|enqueuePullRequest|enablePullRequestAutoMerge|addPullRequestReview|submitPullRequestReview)\b/;
 
 // The arguments after `gh api`: 'gh api review' or 'gh api merge' for a write to a review or merge
 // endpoint, else null. A GET with no body, and any other endpoint, is left alone.
@@ -449,26 +450,42 @@ const RAW_PATTERNS = [
 // PUT method, or a body flag), so a read of /reviews is never blocked by a parsing gap.
 const RAW_API = /\bgh(?:\.exe)?["']?\s[^\n;&|]*?\bapi\b[^\n;&|]*/gi;
 const RAW_API_WRITE = /(?:-X|--method)[\s=]*["']?(?:POST|PUT)\b|\s(?:-f|-F|--field|--raw-field|--input)(?:[\s=]|\S)/i;
-function rawScan(command) {
-  for (const [re, name] of RAW_PATTERNS) if (re.test(command)) return name;
+// Every guarded spelling the raw scan finds, in no particular order.
+function rawScanAll(command) {
+  const hits = [];
+  for (const [re, name] of RAW_PATTERNS) if (re.test(command)) hits.push(name);
   for (const m of command.matchAll(RAW_API)) {
     const text = m[0];
     if (!RAW_API_WRITE.test(text)) continue;
-    if (/\/reviews\b/i.test(text)) return 'gh api review';
-    if (/\/(?:merge|merges|auto_merge)\b/i.test(text)) return 'gh api merge';
+    if (/\/reviews\b/i.test(text)) hits.push('gh api review');
+    if (/\/(?:merge|merges|auto_merge)\b/i.test(text)) hits.push('gh api merge');
   }
-  return null;
+  return hits;
+}
+// Several guarded commands can share one Bash call (`git push && gh pr merge 5`). A review or merge
+// command wins over a login-dependent one, so an allowed `git push` under an agent login can never
+// let a merge or review in the same call through; otherwise the first hit is returned.
+function pickHit(hits) {
+  return hits.find((h) => ALWAYS_BLOCKED.has(h)) || hits[0] || null;
+}
+function rawScan(command) {
+  return pickHit(rawScanAll(command));
 }
 
-// The first guarded command in a Bash command line, or null. Never touches the network.
+// The guarded command in a Bash command line (a review or merge command first, else the first
+// login-dependent one), or null. Never touches the network.
 function findGuardedCommand(command, depth = 0) {
   if (depth > 8 || typeof command !== 'string') return null;
   const ctx = { unbalanced: false };
+  const hits = [];
   for (const words of splitCommands(command, depth, ctx)) {
     const hit = classifySimpleCommand(words, depth);
-    if (hit) return hit;
+    if (hit) hits.push(hit);
   }
-  return ctx.unbalanced ? rawScan(command) : null;
+  // When the parser met an unclosed quote the text scan also runs, even if the parse found a
+  // login-dependent command, because a review or merge command may be hiding behind the quote.
+  if (ctx.unbalanced) hits.push(...rawScanAll(command));
+  return pickHit(hits);
 }
 
 // ---------------------------------------------------------------------------------------------

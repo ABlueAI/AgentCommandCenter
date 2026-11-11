@@ -281,8 +281,8 @@ const merged = '2026-10-18T18:18:40Z';
     eq(Array.from(logins.AGENT_LOGINS), ['ABlueAgent', 'mako-agents[bot]'], 'the shared list holds the machine account and the App');
     assert(logins.isAgentLogin('ablueagent') && logins.isAgentLogin('Mako-Agents[bot]'), 'agent logins match case-insensitively');
     assert(!logins.isAgentLogin('ABlueAI') && !logins.isAgentLogin(undefined) && !logins.isAgentLogin('mako-agents'), 'the human, nothing and a bare slug are not agents');
-    assert(logins.isHumanLogin('ablueai') && !logins.isHumanLogin('ABlueAgent'), 'the human login matches case-insensitively');
-    assert(logins.isBotLogin('mako-agents[bot]') && !logins.isBotLogin('ABlueAgent') && !logins.isBotLogin('x[bot]y'), 'a [bot] login is recognised by its suffix only');
+    assert(logins.sameLogin('ABlueAI', 'ablueai') && !logins.sameLogin('ABlueAI', 'ABlueAgent') && !logins.sameLogin('x', undefined), 'sameLogin compares case-insensitively and rejects non-strings');
+    assert(!logins.AGENT_LOGINS.some((l) => logins.sameLogin(l, 'ABlueAI')), 'the human is not an agent login');
     assert(Object.isFrozen(logins.AGENT_LOGINS), 'the list cannot be changed at run time');
   }
   {

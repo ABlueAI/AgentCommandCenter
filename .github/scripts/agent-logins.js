@@ -11,14 +11,11 @@
 //                     (`user.login`, `merged_by.login`, a review's `user.login`).
 //
 // Never a replacement user account (Blue, 2026-11-11). GitHub logins are case-insensitive.
-// The human is ABlueAI: he opens no PRs and approves and merges every one.
-const HUMAN_LOGIN = 'ABlueAI';
+// The human, ABlueAI, is not in this list: he opens no PRs and approves and merges every one
+// (the merge-audit workflow's HUMAN_APPROVER).
 const AGENT_LOGINS = Object.freeze(['ABlueAgent', 'mako-agents[bot]']);
 
-const same = (a, b) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
-const isAgentLogin = (login) => AGENT_LOGINS.some((a) => same(a, login));
-const isHumanLogin = (login) => same(HUMAN_LOGIN, login);
-// A GitHub App's actor login ends in `[bot]`; a token for an App installation is not a user login.
-const isBotLogin = (login) => typeof login === 'string' && /^[A-Za-z0-9-]{1,39}\[bot\]$/i.test(login);
+const sameLogin = (a, b) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
+const isAgentLogin = (login) => AGENT_LOGINS.some((a) => sameLogin(a, login));
 
-module.exports = { HUMAN_LOGIN, AGENT_LOGINS, isAgentLogin, isHumanLogin, isBotLogin };
+module.exports = { AGENT_LOGINS, sameLogin, isAgentLogin };

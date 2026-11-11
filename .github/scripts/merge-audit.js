@@ -25,10 +25,9 @@
 // merged by ABlueAgent 11 seconds apart on 2026-10-29, because the ruleset accepts an agent approval
 // on a PR the human authored. Only this audit caught it, after the fact (issue #137).
 
-const { AGENT_LOGINS } = require('./agent-logins');
+const { AGENT_LOGINS, sameLogin } = require('./agent-logins');
 
 const BASE = 'main';
-const sameLogin = (a, b) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
 
 async function auditPush({ shas, human, agents = AGENT_LOGINS, api }) {
   if (!Array.isArray(shas) || shas.length === 0) throw new Error('merge audit: no commits to check');

@@ -146,7 +146,7 @@ assert(digest.includes('never create, edit or comment on anything on GitHub') &&
 assert(digest.includes('"READY TO MERGE: ') && digest.includes('"NOT READY: '), 'digest heads its first line READY TO MERGE or NOT READY');
 assert(digest.includes('at-codex') && !/@codex/i.test(digest), 'digest prompt never writes Codex\'s handle');
 assert(digest.includes('"NOT READY: runner gated on step 1 (<step title from the checklist>)"'), 'digest re-checks the runner gate and reports it');
-assert(digest.includes('"AGENT ACCOUNT LOST, see runbook"') && digest.includes('If it returns 404')
+assert(digest.includes('"NOT READY: AGENT ACCOUNT LOST, see runbook"') && digest.includes('If it returns 404')
   && digest.includes('never write "lost" on anything but a 404'),
   'digest says AGENT ACCOUNT LOST, see runbook, only when users/ABlueAgent returns 404');
 assert(digest.includes('gh api users/ABlueAgent') && !/waiting on step 7/.test(digest.replace('never write "waiting on step 7"', '').replace('you never write "waiting on step 7"', '')),
