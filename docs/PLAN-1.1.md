@@ -374,23 +374,26 @@ and later").
    resumes soon after any usage reset, overnight too. A fire with nothing to do ends after a quick
    check. If day one shows idle fires costing real usage, drop to every 2 hours.
 2. **Each fire.** It runs today's gate, then fixes the open PRs the runner itself opened (marked
-   with a `runner` label; interactive sessions also open PRs as `ABlueAgent` from `claude/` branches,
+   with a `runner` label, set when the PR is created; interactive sessions also open PRs as an agent login (`ABlueAgent`, or the GitHub App `mako-agents[bot]` from local panes) from `claude/` branches,
    and the runner leaves those alone; when S04 is applied, the session applying it labels a PR
    `runner` only if it can confirm today's scheduled task opened it, for example from the routine's
    run history; if it can't tell, it labels none and lists them for Blue in the S04 PR),
    then runs `pr-reviewer` on any open Codex PR that has no "Independent review (Opus)" comment for
-   its latest head by `ABlueAgent` or `ABlueAI`, unedited by anyone else (a comment by anyone else
+   its latest head by an agent login or `ABlueAI`, unedited by anyone else (a comment by anyone else
    doesn't count; the repo is public), and posts it (AGENTS.md step 3); a Codex PR is one from a `codex/` branch in this
-   repo, authored by `ABlueAgent`, with a matching `agent-claimed` issue (a fork PR, or one by
+   repo, authored by an agent login, with a matching `agent-claimed` issue (a fork PR, or one by
    anyone else, never counts), then starts every READY session
    whose Needs are met and that nobody has claimed, up to
-   the parallel cap. A claim is an open PR by `ABlueAgent` or `ABlueAI` titled with the session number
+   the parallel cap. A claim is an open PR by an agent login or `ABlueAI` titled with the session number
    (`Sxx:`; a fork PR from anyone else never counts), or an open issue
    with the `agent-claimed` label (how Codex claims, S26). S03's per-session sync issues are not
    claims, whatever their titles. S04 creates the label if S03 hasn't. A builder opens its PR as a draft first; that is the claim. No two fires work on the same PR or session at once: a build can outlast
-   the hour, so S04 defines a lock a later fire can see (for example an `agent-running` label with a
-   start time that expires after a set number of hours) and a separate marker for "paused at a usage
-   limit", since draft alone can't tell the two apart.
+   the hour, so S04 defines a lock a later fire can see (a hidden marker in the PR body with an expiry
+   time, no label: the `agent-running` label was dropped on 2026-11-11 because the marker was already
+   authoritative and the label cost 48 of 299 agent events in 14 days) and a separate marker for
+   "paused at a usage limit", since draft alone can't tell the two apart. The agent logins are one
+   list, `agent_logins` in docs/RUNNER.md "Runner settings" (`ABlueAgent` for cloud sessions,
+   `mako-agents[bot]` for local panes and the local runner, Blue 2026-11-10).
 3. **Parallel cap.** One setting in docs/RUNNER.md, read each fire: 1 on Pro; 2 after Blue's Max 5x
    upgrade (BLUE-CHECKLIST.md step 8); 3 once a week of usage shows there is room. It counts every session being
    built across overlapping fires, not sessions per fire.

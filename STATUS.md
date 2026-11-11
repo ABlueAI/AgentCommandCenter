@@ -179,6 +179,14 @@ Every PR that changes the state updates this file.
     "No PR work under ABlueAI's login"), and the `PreToolUse` hook `.claude/hooks/account-guard.js`
     blocks `gh pr create`, `gh pr ready` and `git push` only when `gh` is logged in as `ABlueAI`.
     Blue removes that login from every PC Claude runs on after step 35 (checklist step 49).
+  - Agent identity (PR #171, a plan change; Blue's decisions of 2026-11-10 and 2026-11-11): the GitHub App
+    `mako-agents[bot]` becomes the primary agent identity for local panes and the local runner, `ABlueAgent`
+    stays for cloud sessions, and agents never approve or merge. The merge audit and the runner and
+    digest prompts read one list of agent logins (`.github/scripts/agent-logins.js`, `agent_logins` in
+    docs/RUNNER.md); the audit alerts when an agent approved a PR that `ABlueAI` authored (the PR #133 pattern,
+    issue #137); `.claude/settings.json` and the account guard block review and merge calls, and the guard
+    does so under any login. The `agent-running` label is gone from the runner design. The live scheduled
+    tasks keep their older prompt text until a checklist step applies the new prompts (docs/RUNNER.md).
   - The merge audit raised a false alert on 2026-10-18 (issue #35): PR #33 was stacked on #32's
     branch, and its commits reached `main` through PR #34. The audit now counts every commit of a PR
     merged into `main`, and AGENTS.md forbids stacked PRs. Fixed in PR #37, merged 2026-10-18;
