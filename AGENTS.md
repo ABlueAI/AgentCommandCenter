@@ -248,8 +248,7 @@ Where these rules say "the agent account", they mean both. The runbook for losin
     and merged by it at 23:25:52 UTC on 2026-10-29, 11 seconds apart (merge-audit issue #137; the
     PR's reviews and `merged_by` on GitHub, read 2026-11-11). The ruleset accepted an agent
     approval on a Blue-authored PR. Why is not established here, so nothing in this file claims the
-    ruleset now blocks it; treat it as open until Blue and an agent have tested it
-    (BLUE-CHECKLIST.md step 52 is a related check for the App).
+    ruleset now blocks it; treat it as open until it has been tested.
 - **R5. Pacing budget.** These are Blue's side's numbers, not GitHub's. Per identity: at most 40
   GitHub writes (comments, pushes, PR and issue changes, labels) per hour and 300 per day. At most 6
   pushes per hour. At most 2 writer sessions at once across the cloud, Blue's PC and the runner.
