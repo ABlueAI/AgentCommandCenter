@@ -57,7 +57,7 @@ could still press Merge on a green PR. Part B closes that.
 3. **Point Claude at it.** Sign in to GitHub as `ablueai-agent` in a separate browser profile, never
    your everyday one, then go to claude.ai/connect-github and connect. Claude's cloud sessions now act
    as the agent account. You keep using `ABlueAI` on github.com and the GitHub app to approve and
-   merge, and you sign in as the agent account only as R1 allows (recovery, the look-only check in step 53, and token renewal). Codex was linked to
+   merge, and you sign in as the agent account only as R1 allows (recovery, the look-only check in step 53, and creating or renewing its tokens). Codex was linked to
    `ABlueAI` until Blue re-linked it to the agent account on 2026-10-20 (BLUE-CHECKLIST.md step 16;
    see "Codex is linked to the agent account" below).
 4. **Require your approval.** Edit `protect-main` > Require a pull request: required approvals **1**;

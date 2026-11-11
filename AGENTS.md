@@ -230,8 +230,8 @@ Where these rules say "the agent account", they mean both. The runbook for losin
 
 - **R1. Blue never acts as the agent login.** He signs in as `ABlueAgent` only to recover the
   account, for the look-only check in BLUE-CHECKLIST.md step 53 (nothing changed, nothing posted), or
-  to create or renew its token (step 14 and its January 2027 reminder); always in a separate browser
-  profile (R2). He never
+  to create or renew its tokens (steps 14 and 25 and their reminders); always in a separate browser
+  profile (R2). R7 covers agent tokens and sessions, not these browser sign-ins. He never
   approves, merges or comments with it. A change Blue wrote himself is landed by an agent session
   opening the PR; Blue approves it as `ABlueAI`.
 - **R2. Keep `ABlueAgent` healthy.** Two-factor on, with an authenticator and a passkey or security
@@ -349,7 +349,7 @@ listeners · CI workflows, `.github/`, `.claude/`, repository settings · this f
 ## Who does what
 
 - **Blue**: sets goals, approves plan changes, merges. Owns credentials and repository settings.
-- **Claude Code**: primary builder (Sonnet for routine work, Opus for hard problems and reviews). Local work uses the App (`mako-agents[bot]`, once step 51 is done), cloud work uses `ABlueAgent`.
+- **Claude Code**: primary builder (Sonnet for routine work, Opus for hard problems and reviews). Local work uses the App (`mako-agents[bot]`, once step 52 is ticked), cloud work uses `ABlueAgent`.
 - **Reviewer subagent** (`.claude/agents/pr-reviewer.md`, Claude Opus): the required independent
   review on every PR, run by the builder before it marks the PR ready (for Codex's PRs, by the
   Claude session that handed it the task, the next runner fire, or a session Blue starts; step 3).

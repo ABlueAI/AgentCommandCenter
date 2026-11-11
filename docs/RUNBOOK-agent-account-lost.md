@@ -43,7 +43,9 @@ true, not what is.
    `ABlueAgent`'s token (step 35), so they lose it too and only verify; they open no PRs.
 5. **Re-open lost PRs.** An open PR whose author was `ABlueAgent` stays open and its branch stays,
    but the account can no longer act on it. For each, in order of plan session:
-   - before the App is wired, re-opening waits for Blue (nothing else can open a PR);
+   - before the App is wired, lost PRs stay as they are until the account is reinstated or the App is
+     wired (checklist steps 51 and 52); Blue does not re-open them as `ABlueAI` (AGENTS.md "No PR
+     work under ABlueAI's login");
    - with the bot (planned until the App is wired), open a new PR from the existing branch, with the
      same title (starting `Sxx:` for a plan session, so the claim rule in AGENTS.md "How work flows"
      still holds), and say "replaces #N (opened by the lost agent account)" in its TLDR;
@@ -61,7 +63,7 @@ true, not what is.
 ## What stays down until the account is reinstated
 
 - **Cloud PR work:** a cloud session cannot use the App, so no cloud session opens or updates a PR.
-- **The cloud runner:** paused in step 2. The evening digest stays on (it only reads; docs/RUNNER.md);
+- **The cloud runner:** paused in step 2. Leave the evening digest as it is (it only reads; docs/RUNNER.md);
   once R9 is applied, it reports "AGENT ACCOUNT LOST, see runbook".
 - **Codex builds:** Codex is linked to `ABlueAgent` (BLUE-CHECKLIST.md step 16), so it cannot open
   PRs, and its automatic reviews of agent PRs stop.
