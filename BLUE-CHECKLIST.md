@@ -1097,7 +1097,8 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
   the command himself (his statement, relayed in a comment on PR #173; Claude can't see his PC, so
   this rests on his word).* Nothing more to do.
 - [ ] **63. The Codex check-in.** **About 5 minutes**, on **2026-11-30**. Until then Codex builds
-  non-sensitive early tasks (S36, S52, S53, S56) and reviews Claude's PRs, with Sonnet as the backup
+  non-sensitive early tasks (S36 and S56 through the lane; S52 and S53 you start on Codex yourself,
+  as they are `blue`-lane rows) and reviews Claude's PRs, with Sonnet as the backup
   reviewer if Codex is out of usage; after 2026-11-30 Claude reviews it all "unless my mind
   changes" (your words, 2026-11-16). Tell any agent whether the Codex lane stays open, and whether
   your resets are used. S26 closes when they are.

@@ -133,8 +133,8 @@ Every PR that changes the state updates this file.
   of what Codex did, are still to be checked (docs/1.1-GAP-AUDIT.md, A4). **2026-11-16:** Blue
   made the trial S26's result ("until we burn through codex usage ... not necessarily a permanent
   change"), keeps ChatGPT and will "use heavily over the next 3 weeks ... use claude as backup
-  reviewer". The lane stays open to about 2026-11-30 for non-sensitive early tasks (S36, S52, S53,
-  S56), Codex reviews Claude's PRs with Sonnet as backup, and he checks in on 2026-11-30 (checklist
+  reviewer". The lane stays open to about 2026-11-30 for non-sensitive early tasks (S36 and S56
+  in the lane; S52 and S53, `blue`-lane rows, started by Blue himself), Codex reviews Claude's PRs with Sonnet as backup, and he checks in on 2026-11-30 (checklist
   step 63); S26 closes when his resets are used. The lane's rules and the required Opus review are
   unchanged.
 - **Stable and dev copies (S07, PR #123 merged 2026-10-24, in progress):** `npm run start:dev` starts a dev copy of
