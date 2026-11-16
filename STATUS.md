@@ -1,6 +1,8 @@
 # Mako status
 
-Updated 2026-11-05 by the all-day runner's status PR for 2026-11-05, for the one PR merged since
+Updated 2026-11-16 by the Mako 1.1 decision-sheet plan change (PR #173), which changed the "Right
+now" and "Next" sections where the sheet touches them and nothing else. Before that: updated
+2026-11-05 by the all-day runner's status PR for 2026-11-05, for the one PR merged since
 the 2026-11-04 status PR (#165): #166 (merge order). Before that, the 2026-11-04 status PR (#165)
 covered #130 (S15), #146, #147, #140, #155 (S33), #152 (S31), #153, #157 (S34) and #154 (S32);
 #158 to #160 merged just before it (2026-11-05 00:00 to 00:02 UTC).
@@ -16,8 +18,32 @@ Every PR that changes the state updates this file.
   - Before tagging, on Blue's PC: `npm ci` restored Electron's binary by itself, and Mako opened from
     the desktop shortcut showing `Mako 1.0.0 · main@37009eb`.
   - The GitHub release is "Mako 1.0.0", from docs/RELEASE-NOTES-1.0.md.
+- **Mako 1.1 scope is signed (PR #173, a plan change):** Blue signed his Mako 1.1 decision sheet on
+  2026-11-16 ("Go: record everything ticked in docs/DECISIONS.md and the plan-change PR. Open items
+  stay open."). His decisions are in [docs/DECISIONS.md](docs/DECISIONS.md), 2026-11-16, and the plan
+  follows them in [docs/PLAN-1.1.md](docs/PLAN-1.1.md) "Mako 1.1 scope".
+  - **What 1.1 is:** an item is in when the UI overhaul needs it, or it lets sessions run unattended
+    for about 5 hours, or it is a known fix or security gap. The scope is frozen: new ideas go to the
+    1.2 queue. 1.1 is done when every 1.1 item is done and the token audit and the sanitizer test
+    pass. The date is soft (about 2026-12-13 to 2027-01-13) and nothing is cut for it.
+  - **Main focus: the Composer.** Mako, the shark, is the conductor, in a Claude Code pane. Its v1
+    scope is being written in a separate chat and isn't signed, so its build row (S51) waits; the
+    pre-build studies (S49) and a one-day prototype (S50) come first.
+  - **Three tabs:** the brain (S18), the control room (S19) and the aquarium MVP (S20). Claude
+    builds and Codex reviews; S17 is done (Shark A). The rows are still `HOLD (Blue)`: his go on the
+    UI (checklist step 18) isn't recorded yet.
+  - **New rows S36 to S59**, among them three small security items first (Electron 42.11.16, the
+    account guard's PowerShell gap, one full security check), ECC in 3 PRs (S39 to S41), a rulebook
+    update for AGENTS.md (S42), and the release row (S59). Nothing in AGENTS.md, `CLAUDE.md` or
+    `.claude/` changed in PR #173: until S39, S40 and S42 merge, the current rules hold (reviews
+    ranked high, medium, low; a cap of 5 runs; the Opus review required).
+  - **Blue's new steps:** checklist steps 54 to 61 (the H1 setup day first). Step 28 is closed and
+    step 10 is dropped.
+  - **Still open, on Blue's follow-up sheet:** listed at the end of "Mako 1.1 scope" in the plan.
+    They decide nothing yet.
 - **Plan:** 1.1 month-one plan approved with that merge: [docs/PLAN-1.1.md](docs/PLAN-1.1.md).
-  - **UI sessions on hold, Composer research planned (approved with the PR #48 merge):** S14
+  - **UI sessions on hold, Composer research planned (approved with the PR #48 merge; updated by
+    the 2026-11-16 bullet above):** S14
     and S17 to S20 are `HOLD (Blue)` until Blue says go (checklist step 18). S16 becomes "Composer
     research (includes the Dodaios trial)", ending in `docs/decisions/OSS-composer.md` and Blue's
     verdict (step 19); Composer build sessions and workflow automations come in a later plan change.
@@ -37,8 +63,9 @@ Every PR that changes the state updates this file.
   below). Blue moved step 17's token audit to the
   end of 1.1 (push protection is already on) and stays on Pro until the UI work runs usage up
   (docs/DECISIONS.md, 2026-11-03).
-- **Claude plan:** Pro. Blue upgrades to Max 5x when the UI work runs usage up (his call on
-  2026-11-03, docs/DECISIONS.md; checklist step 8, not ticked on `main` as of 2026-11-04). Until
+- **Claude plan:** Pro. The Max 5x upgrade is pushed back "until 11/19 or until usage begins
+  flowing" (Blue, 2026-11-15, docs/DECISIONS.md 2026-11-16; before that, when the UI work runs
+  usage up; checklist step 8, not ticked on `main` as of 2026-11-16). Until
   then, the runner builds one session at a time (`parallel_cap: 1`).
 - **CI and dependencies (S02, done in PR #45):** every GitHub Action is pinned to a commit SHA, and both
   Windows checks were confirmed as required on `main` (ruleset `protect-main`, read 2026-10-19).
@@ -102,7 +129,11 @@ Every PR that changes the state updates this file.
   proposes the lane: hand-off on a locked `agent-claimed` issue, Codex fixes its own PRs, Blue
   checks the "Run by:" link of the Opus review before approving a Codex PR. The trial ran as PR
   #140 (issue #139), merged 2026-11-04. Whether it meets S26's "Done when", and step 30's records
-  of what Codex did, are still to be checked (docs/1.1-GAP-AUDIT.md, A4).
+  of what Codex did, are still to be checked (docs/1.1-GAP-AUDIT.md, A4). **2026-11-16:** Blue
+  closed S26 with the trial as its result ("until we burn through codex usage ... not necessarily a
+  permanent change"), keeps ChatGPT and will "use heavily over the next 3 weeks ... use claude as
+  backup reviewer". Whether the lane stays open until about 2026-11-30 is open; the lane's rules are
+  unchanged.
 - **Stable and dev copies (S07, PR #123 merged 2026-10-24, in progress):** `npm run start:dev` starts a dev copy of
   Mako with its own settings folder (`%APPDATA%\command-center-dev`), its own taskbar button and a
   `Mako (dev)` title, and it never installs or changes Claude Code hooks. The stable copy is
@@ -160,7 +191,8 @@ Every PR that changes the state updates this file.
   on 2026-10-23 at about 07:40 UTC, the evening digest (`trig_0166nBynncK2BWPaarALAq8q`) is off,
   the old daily runner is still on with the new prompt, and both new tasks have connectors the plan
   didn't call for (the digest has the GoHighLevel CRM). Blue's clicks are in checklist step 27;
-  steps 27 and 28 aren't ticked. The S04 follow-up fixed the prompts' open follow-ups and
+  step 27 isn't ticked; step 28 was closed on 2026-11-16 (usage credits off, Blue's word of
+  2026-11-04). The S04 follow-up fixed the prompts' open follow-ups and
   recorded this read-back (PR #117, merged 2026-10-24; docs/RUNNER.md "Applied so far").
 - **Guardrails:**
   - The repo-side files are live on `main`, and the merge audit has passed on every merge.
@@ -309,6 +341,13 @@ GitHub doesn't support fine-grained tokens for an account that is only a collabo
 account's repository (found by Codex on PR #46; GitHub's docs not yet read directly, step 14). Step
 14 was ticked on 2026-10-23 on Blue's word (PR #118; see Guardrails above). S06 (PR #121) stores
 it in Mako's key setup (safeStorage) and gives it only to unfenced agent panes.
+
+**2026-11-16:** the Mako 1.1 decision sheet (PR #173) sets what comes next. `READY` for a builder
+once it merges: S36 (Electron 42.11.16), S37 (the account guard's PowerShell gap), S41 (the sanitizer
+test), S42 (the rulebook update), S43, S45, S52 to S54, S57 and S58; S46 and S47 wait for S14's brief.
+Waiting on Blue: his go on the UI (step 18), the H1 setup day (step 54), his Composer scope sign-off
+(S51), his definition of CRITICAL (S40), and the questions in PR #173's TLDR. The paragraphs below
+are from before the sheet.
 
 Month one's runner sessions S31 to S34 merged on 2026-11-04. The next `READY` row is S25, the
 month review, from 2026-11-14 (S24 is `READY` but held as draft PR #134 by Blue's choice of
