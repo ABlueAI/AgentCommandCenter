@@ -33,19 +33,19 @@ Re-ordered on 2026-11-16 from your signed Mako 1.1 decision sheet (docs/DECISION
    closed (usage credits are off, your word of 2026-11-04). Once step 27 is ticked, plan-session PRs
    stop editing STATUS.md and leave it to the runner's status PR.
 2. **Step 59**, re-link Codex reviews to `ABlueAgent` (about 5 minutes; your yes, 2026-11-16).
-3. **Step 54**, the H1 setup day (1.5 to 3 hours). It takes in the step 43 re-run and the step 25
-   tick, and S44, S48 and the nightly tidy wait on it.
+3. **Step 54**, the H1 setup day (1.5 to 3 hours). H1 is the PC Mako is to run on unattended. It
+   takes in the step 43 re-run and the step 25 tick, and S44, S48 and the nightly tidy wait on it.
 4. **Step 15**, the voice check on the new Electron. S36 moves Electron to 42.11.16, so if that has
    merged, check on that version.
 5. **Step 35, then step 49**, after PR #170 (the account fix follows it): the agent token in Mako,
    then removing the `ABlueAI` command-line login from every PC Claude runs on.
-6. **Step 56**, memory setup (about 45 minutes over 2 days), then **step 55**, H1 trial part 2, the
-   aquarium (15 to 20 minutes), when S20 asks for it.
+6. **Step 56**, memory setup (about 45 minutes over 2 days), when S48's PR asks for it, and
+   **step 55**, H1 trial part 2, the aquarium (15 to 20 minutes), when S20's PR asks for it.
 7. **Step 60**, the Composer prototype day, after S49's test sheet is ready. Your Composer scope
    sign-off unblocks S51.
 8. **Step 57** (Firefox profile 2's preset URLs, 10 minutes), **step 58** (the lessons-learned
-   draft, 15 minutes) and **step 61** (an agent deletes the StarNet clone and the OpenCode
-   leftovers; you say when).
+   draft, 15 minutes) and **step 61** (an agent deletes the StarNet clone, a leftover local copy on
+   your PC, and the OpenCode leftovers; you say when).
 9. **PC checks**, batched on Tuesday and Friday evenings until H1 automates them: steps 23, 24
    (optional, kept), 29, 31, 38, 39, 40, 41, 44, 45 and 48.
 10. **Step 18**, your go on the UI (S14, S18 to S20 are still on hold until it is recorded).
@@ -229,7 +229,9 @@ on its own, one session at a time on Pro until you upgrade (step 8).
 
 - [x] **28. Confirm usage credits are off (S04).** *Closed 2026-11-16 on Blue's word of 2026-11-04
   that usage credits are off, as recorded on his signed decision sheet (docs/DECISIONS.md,
-  2026-11-16). Claude can't read that page, so this rests on his statement.* 1 minute, before step 27. Open
+  2026-11-16). His own wording wasn't relayed and Claude can't read that page, so the sheet he
+  signed is the only evidence. If credits are on, runs go into paid overage: say so and this is
+  unticked.* 1 minute, before step 27. Open
   https://claude.ai/settings/usage and check that **Usage credits** are off. With them on, scheduled
   runs keep going past your usage limit on paid, metered overage; with them off, new runs are
   rejected until the usage window resets, which is what the all-day runner expects (docs/RUNNER.md,
@@ -1052,7 +1054,8 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
     colour within about 2 seconds, and a click on a creature opens its pane.
   - *Done when:* you tell an agent what you saw (or what differed). It ticks this with the date in
     S20's PR.
-- [ ] **56. Memory setup.** **About 45 minutes over 2 days**, after step 54; S48 waits on it.
+- [ ] **56. Memory setup.** **About 45 minutes over 2 days**, after step 54, when S48's PR asks
+  for it (S48 builds the nightly tidy this step turns on).
   - Day 1 (about 30 minutes): with an agent, point Mako's memory at your private vault and turn on
     the nightly tidy as a local scheduled task on H1.
   - Day 2 (about 15 minutes): read the first nightly note and tell the agent whether it tidied what
@@ -1141,15 +1144,15 @@ You can start on the first one now, which saves time later.
 
 ## Dated reminders
 
+- **About 2026-11-17:** reassess plans. Is Max 5x enough, or move to 20x? The month review (S25)
+  brings the numbers. The upgrade is step 8, pushed back "until 11/19 or until usage begins
+  flowing" (2026-11-15; no longer "when the UI work runs usage up"), so on this date you are
+  still on Pro: reassess whether Pro is still enough, using S25's numbers if it has run.
 - **2026-11-19:** the Max upgrade (step 8), "or until usage begins flowing" (your words,
   2026-11-15).
 - **2026-12-03:** the Composer re-scout (S49). Again about 30 days after 1.1 ships.
 - **About 2026-12-13 to 2027-01-13:** the soft window for Mako 1.1. Nothing is cut for it; step 17
   (the token audit) is the last step before the release.
-- **About 2026-11-17:** reassess plans. Is Max 5x enough, or move to 20x? The month review (S25)
-  brings the numbers. The upgrade is step 8, when the UI work runs usage up (no longer
-  2026-10-28), so how much Max 5x use this covers depends on when step 8 happens. If step 8
-  hasn't happened by then, reassess whether Pro is still enough, using S25's numbers.
 - **By 2027-01-14:** renew the `ABlueAgent` classic token (`public_repo` only, step 14), a week
   before it expires on 2027-01-21. Signed in as `ABlueAgent`, it is listed on
   https://github.com/settings/tokens. Make the new token by step 14's

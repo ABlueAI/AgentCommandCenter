@@ -11,8 +11,10 @@ words where the hand-off for this PR quoted them. "Ticked" means he ticked the i
 no words of his were relayed. Items he left open are not here: they are listed in docs/PLAN-1.1.md
 "Open, on Blue's follow-up sheet" and decide nothing. Where an entry needs a rule change in
 AGENTS.md, `CLAUDE.md` or `.claude/`, the rule itself changes in the later PR its plan row names;
-until that PR merges, the current rule holds. Merging the PR that adds this section approves the
-matching plan rows (docs/PLAN-1.1.md "When the plan changes").
+until that PR merges, the current rule holds. The decisions below are Blue's; how the plan follows
+them (the rows, their order and statuses in docs/PLAN-1.1.md) is **proposed, pending Blue (PR #173)**,
+and merging that PR approves it (docs/PLAN-1.1.md "When the plan changes"). "H1" in this section is
+one of Blue's PCs, the one Mako is to run on unattended.
 
 | Decision | Blue's words |
 |---|---|
@@ -54,7 +56,7 @@ matching plan rows (docs/PLAN-1.1.md "When the plan changes").
 | **UI done-when.** Brain tab: live task nodes from real panes, a card answer reaches the pane, Ctrl+F finds a node, 2 working days without a blocker. Control room: every pane's status is correct after a restart. Aquarium: one creature per live pane with the right colour within about 2 seconds, a click opens the pane, the agentId is stored. Tree, history and memory: each merge is recorded once and survives a restart, each finished task writes a vault note, a cloud agent can read the vault, and the nightly tidy runs unattended for 3 nights. | Ticked. |
 | **Codex (2026-11-16).** Blue keeps ChatGPT and uses Codex heavily for the next 3 weeks, with Claude as the backup reviewer. S26 is closed with the trial (PR #140) as its result. Whether the Codex builder lane stays open until about 2026-11-30 is an open question: this entry neither closes nor reopens the lane (docs/CODEX-BUILDER-LANE.md is unchanged). Adds to the 2026-10-19 entry "less reliant on gpt so i can drop that subscription if need be". | "use heavily over the next 3 weeks ... use claude as backup reviewer" · On S26: "until we burn through codex usage ... not necessarily a permanent change" |
 | **1.2 or later.** The full aquarium (connected tanks, a catalogue, realistic art), a queue tracker, persistent agents as creatures, a bare preset, Apache-2.0 (maybe at Mako 2.0; MIT for now), ghost mode, a quiet-hours schedule, Agent Reach, TokenEconomizer, Laya as a 1.2 trial, phone updates, daily security upkeep. | Ticked. |
-| **Checklist.** Step 28 is closed: usage credits are off (Blue's word of 2026-11-04). Step 10 (app settings review) is dropped, replaced by the new Settings page. Step 24 stays. The StarNet screenshots step is dropped for now (it was never on `main`'s checklist). The Max upgrade (step 8) is pushed back; this replaces "when the UI work runs usage up" in the 2026-11-03 entry. | On the StarNet screenshots (2026-11-16): "drop for now" · On Max (2026-11-15): "pushed back until 11/19 or until usage begins flowing" |
+| **Checklist.** Step 28 is closed: usage credits are off (Blue's word of 2026-11-04, as the sheet records it; his own wording wasn't relayed, so the sheet is the only evidence). Step 10 (app settings review) is dropped, replaced by the new Settings page. Step 24 stays. The StarNet screenshots step is dropped for now (it was never on `main`'s checklist). The Max upgrade (step 8) is pushed back; this replaces "when the UI work runs usage up" in the 2026-11-03 entry. | On the StarNet screenshots (2026-11-16): "drop for now" · On Max (2026-11-15): "pushed back until 11/19 or until usage begins flowing" |
 
 ## 2026-11-07
 
