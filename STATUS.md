@@ -32,15 +32,16 @@ Every PR that changes the state updates this file.
   - **Three tabs:** the brain (S18), the control room (S19) and the aquarium MVP (S20). Claude
     builds and Codex reviews; S17 is done (Shark A). The rows are still `HOLD (Blue)`: his go on the
     UI (checklist step 18) isn't recorded yet.
-  - **New rows S36 to S59**, among them three small security items first (Electron 42.11.16, the
+  - **New rows S36 to S60**, among them three small security items first (Electron 42.11.16, the
     account guard's PowerShell gap, one full security check), ECC in 3 PRs (S39 to S41), a rulebook
-    update for AGENTS.md (S42), and the release row (S59). Nothing in AGENTS.md, `CLAUDE.md` or
+    update for AGENTS.md (S42), the release row (S59) and the role-file rewrite (S60). Nothing in AGENTS.md, `CLAUDE.md` or
     `.claude/` changed in PR #173: until S39, S40 and S42 merge, the current rules hold (reviews
     ranked high, medium, low; a cap of 5 runs; the Opus review required).
-  - **Blue's new steps:** checklist steps 54 to 61 (the H1 setup day first). Step 28 is closed and
-    step 10 is dropped.
-  - **Still open, on Blue's follow-up sheet:** listed at the end of "Mako 1.1 scope" in the plan.
-    They decide nothing yet.
+  - **Blue's new steps:** checklist steps 54 to 63 (the H1 setup day first; step 62 is done).
+    Step 28 is closed and step 10 is dropped.
+  - **Nothing from Blue's sheets is open:** he answered the 14 items the sheet left open the same
+    day (docs/DECISIONS.md, 2026-11-16, "Follow-up answers"), among them the definition of
+    CRITICAL, subagents on by default with a cap of 3, and a "pause all" button.
 - **Plan:** 1.1 month-one plan approved with that merge: [docs/PLAN-1.1.md](docs/PLAN-1.1.md).
   - **UI sessions on hold, Composer research planned (approved with the PR #48 merge; updated by
     the 2026-11-16 bullet above):** S14
@@ -130,9 +131,11 @@ Every PR that changes the state updates this file.
   checks the "Run by:" link of the Opus review before approving a Codex PR. The trial ran as PR
   #140 (issue #139), merged 2026-11-04. Whether it meets S26's "Done when", and step 30's records
   of what Codex did, are still to be checked (docs/1.1-GAP-AUDIT.md, A4). **2026-11-16:** Blue
-  closed S26 with the trial as its result ("until we burn through codex usage ... not necessarily a
-  permanent change"), keeps ChatGPT and will "use heavily over the next 3 weeks ... use claude as
-  backup reviewer". Whether the lane stays open until about 2026-11-30 is open; the lane's rules are
+  made the trial S26's result ("until we burn through codex usage ... not necessarily a permanent
+  change"), keeps ChatGPT and will "use heavily over the next 3 weeks ... use claude as backup
+  reviewer". The lane stays open to about 2026-11-30 for non-sensitive early tasks (S36, S52, S53,
+  S56), Codex reviews Claude's PRs with Sonnet as backup, and he checks in on 2026-11-30 (checklist
+  step 63); S26 closes when his resets are used. The lane's rules and the required Opus review are
   unchanged.
 - **Stable and dev copies (S07, PR #123 merged 2026-10-24, in progress):** `npm run start:dev` starts a dev copy of
   Mako with its own settings folder (`%APPDATA%\command-center-dev`), its own taskbar button and a
@@ -347,7 +350,8 @@ once it merges: S36 (Electron 42.11.16), S37 (the account guard's PowerShell gap
 test), S42 (the rulebook update), S43, S52 to S54, S57 and S58. S46 and S47 are held with S14's
 brief, and S45 waits for S39.
 Waiting on Blue: his go on the UI (step 18), the H1 setup day (step 54), his Composer scope sign-off
-(S51), his definition of CRITICAL (S40), and the questions in PR #173's TLDR. The paragraphs below
+(S51), the briefs for S39 and S60, the Codex check-in on 2026-11-30 (step 63), and the questions in
+PR #173's TLDR. The paragraphs below
 are from before the sheet.
 
 Month one's runner sessions S31 to S34 merged on 2026-11-04. The next `READY` row is S25, the

@@ -7,7 +7,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
 Last updated 2026-11-16 by Claude (the Mako 1.1 decision sheet, PR #173: step 28 ticked, step 10
-dropped, steps 8 and 17 re-timed, steps 54 to 61 added and "Do next" re-ordered; earlier, on
+dropped, steps 8 and 17 re-timed, steps 54 to 63 added (62 ticked) and "Do next" re-ordered; earlier, on
 2026-11-05: step 50 added and steps 28 and 27 moved to the top of "Do next",
 for the merge-order rule, PR #166; earlier, on 2026-11-04: step 26 marked dropped, "Do next" items 6 and 7 updated now that PRs #84 and
 #119 are merged, a question on step 10 added as item 8, and the "About 2026-11-17" reminder's Max date
@@ -33,6 +33,7 @@ Re-ordered on 2026-11-16 from your signed Mako 1.1 decision sheet (docs/DECISION
    closed (usage credits are off, your word of 2026-11-04). Once step 27 is ticked, plan-session PRs
    stop editing STATUS.md and leave it to the runner's status PR.
 2. **Step 59**, re-link Codex reviews to `ABlueAgent` (about 5 minutes; your yes, 2026-11-16).
+   **Step 63** on 2026-11-30: the Codex check-in.
 3. **Step 54**, the H1 setup day (1.5 to 3 hours). H1 is the PC Mako is to run on unattended. It
    takes in the step 43 re-run and the step 25 tick, and S44, S48 and the nightly tidy wait on it.
 4. **Step 15**, the voice check on the new Electron. S36 moves Electron to 42.11.16, so if that has
@@ -1030,7 +1031,8 @@ on its own, one session at a time on Pro until you upgrade (step 8).
 
 ## From the Mako 1.1 decision sheet (2026-11-16)
 
-Steps 54 to 61 come from the sheet you signed on 2026-11-16 (docs/DECISIONS.md, 2026-11-16;
+Steps 54 to 61 come from the sheet you signed on 2026-11-16, and steps 62 and 63 from your
+follow-up answers the same day (docs/DECISIONS.md, 2026-11-16;
 docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open PRs (#134 and #169).
 
 - [ ] **54. H1 setup day.** **1.5 to 3 hours**, in one sitting at H1, as soon as you can give it an
@@ -1060,9 +1062,10 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
     the nightly tidy as a local scheduled task on H1.
   - Day 2 (about 15 minutes): read the first nightly note and tell the agent whether it tidied what
     it should.
-  - **The vault's private repo (5 minutes):** creating it is part of this step, but whether the
-    vault gets a private repo is still open on your follow-up sheet. Skip this part until you
-    decide; S48's "a cloud agent can read the vault" waits on it.
+  - **The vault's private repo:** *created by you on 2026-11-16 (your statement, relayed in a
+    comment on PR #173; Claude can't see a private repo it isn't given).* Still to do, on Day 1:
+    the sync setup between the vault and that repo, which S48's "a cloud agent can read the vault"
+    needs.
   - *Done when:* you tell an agent the tidy ran and what the note showed. It ticks this with the
     date; the 3 unattended nights are S48's own done-when.
 - [ ] **57. Firefox profile 2: the preset URLs.** **10 minutes**, any time; S55 waits on it. Give an
@@ -1090,6 +1093,16 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
   2026-11-16). Tell a local agent "do step 61". It lists what it will delete first (folders only,
   nothing from this repo), deletes after you say go, and shows you they are gone.
   - *Done when:* that agent reports both are gone and ticks this with the date and how it checked.
+- [x] **62. Block the Codex sandbox from the Claude login file.** *Done 2026-11-16 by Blue, who ran
+  the command himself (his statement, relayed in a comment on PR #173; Claude can't see his PC, so
+  this rests on his word).* Nothing more to do.
+- [ ] **63. The Codex check-in.** **About 5 minutes**, on **2026-11-30**. Until then Codex builds
+  non-sensitive early tasks (S36, S52, S53, S56) and reviews Claude's PRs, with Sonnet as the backup
+  reviewer if Codex is out of usage; after 2026-11-30 Claude reviews it all "unless my mind
+  changes" (your words, 2026-11-16). Tell any agent whether the Codex lane stays open, and whether
+  your resets are used. S26 closes when they are.
+  - *Done when:* your answer is recorded in docs/DECISIONS.md in your words, S26's row in
+    docs/PLAN-1.1.md follows it, and the agent ticks this with the date.
 
 ## Every day, once the runner is on
 
@@ -1118,8 +1131,9 @@ You can start on the first one now, which saves time later.
   on: now step 49.
 - **Session S12:** confirm your Hexona login link in Mako (step 29).
 - **Session S13:** install Obsidian, create the vault and install the skills (step 31).
-- **Session S26:** closed 2026-11-16 with the trial (PR #140) as its result. Step 30's records of
-  what Codex did are still unticked.
+- **Session S26:** the trial (PR #140) is its result; the lane stays open to about 2026-11-30 and
+  closes when your Codex resets are used (step 63). Step 30's records of what Codex did are still
+  unticked.
 - **Session S16:** ~~your Composer verdict (step 19)~~ Done 2026-10-21: no option adopted, everything open for study, questions deferred (step 19).
 - **Session S17:** ~~pick one of 2 or 3 design directions~~ Done: you picked Shark A (recorded
   2026-11-16).
@@ -1150,6 +1164,7 @@ You can start on the first one now, which saves time later.
   still on Pro: reassess whether Pro is still enough, using S25's numbers if it has run.
 - **2026-11-19:** the Max upgrade (step 8), "or until usage begins flowing" (your words,
   2026-11-15).
+- **2026-11-30:** the Codex check-in (step 63).
 - **2026-12-03:** the Composer re-scout (S49). Again about 30 days after 1.1 ships.
 - **About 2026-12-13 to 2027-01-13:** the soft window for Mako 1.1. Nothing is cut for it; step 17
   (the token audit) is the last step before the release.
