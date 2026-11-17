@@ -1,7 +1,8 @@
 # Mako status
 
-Updated 2026-11-16 by the Mako 1.1 decision-sheet plan change (PR #173), which changed the "Right
-now" and "Next" sections where the sheet touches them and nothing else. Before that: updated
+Updated 2026-11-17 by PR #195 (Blue's answers to PR #173's five questions), and before that on
+2026-11-16 by the Mako 1.1 decision-sheet plan change (PR #173, merged 2026-11-17), which changed the
+"Right now" and "Next" sections where the sheet touches them and nothing else. Before that: updated
 2026-11-05 by the all-day runner's status PR for 2026-11-05, for the one PR merged since
 the 2026-11-04 status PR (#165): #166 (merge order). Before that, the 2026-11-04 status PR (#165)
 covered #130 (S15), #146, #147, #140, #155 (S33), #152 (S31), #153, #157 (S34) and #154 (S32);
@@ -30,8 +31,9 @@ Every PR that changes the state updates this file.
     scope is being written in a separate chat and isn't signed, so its build row (S51) waits; the
     pre-build studies (S49) and a one-day prototype (S50) come first.
   - **Three tabs:** the brain (S18), the control room (S19) and the aquarium MVP (S20). Claude
-    builds and Codex reviews; S17 is done (Shark A). The rows are still `HOLD (Blue)`: his go on the
-    UI (checklist step 18) isn't recorded yet.
+    builds and Codex reviews; S17 is done (Shark A). The rows are still `HOLD (Blue)`: no UI building
+    before the 1.1 schedule is adopted with its independent review (S61, Blue 2026-11-17), then his go
+    on the UI (checklist step 18).
   - **New rows S36 to S60**, among them three small security items first (Electron 42.11.16, the
     account guard's PowerShell gap, one full security check), ECC in 3 PRs (S39 to S41), a rulebook
     update for AGENTS.md (S42), the release row (S59) and the role-file rewrite (S60). Nothing in AGENTS.md, `CLAUDE.md` or
@@ -350,9 +352,10 @@ once it merges: S36 (Electron 42.11.16), S37 (the account guard's PowerShell gap
 test), S42 (the rulebook update), S43, S52 to S54, S57 and S58. S46 and S47 are held with S14's
 brief, and S45 waits for S39. S39 (ECC PR 1, the four pre-ready reviewers) is IN PROGRESS in PR
 #174, built by a cloud session from the brief Blue confirmed on 2026-11-17.
-Waiting on Blue: his go on the UI (step 18), the H1 setup day (step 54), his Composer scope sign-off
-(S51), the brief for S60, the Codex check-in on 2026-11-30 (step 63), and the questions in
-PR #173's TLDR. The paragraphs below
+**2026-11-17 (PR #195):** S25 is dropped, the business rows don't count toward the 1.1 release,
+the runner's `parallel_cap` is unchanged, and the plan sync keeps opening session issues. Waiting on
+Blue: the 1.1 schedule (S61, step 64), then his go on the UI (step 18), the H1 setup day (step 54), his Composer scope sign-off
+(S51), the brief for S60, the Codex check-in on 2026-11-30 (step 63). The paragraphs below
 are from before the sheet.
 
 Month one's runner sessions S31 to S34 merged on 2026-11-04. The next `READY` row is S25, the
