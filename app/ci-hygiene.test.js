@@ -57,7 +57,7 @@ function atLeast(version, floor) {
   return true;
 }
 const FLOORS = {
-  electron: '42.10.0',  // GHSA-qmv3-fv6v-rmhq and five others: fixed in 42.10.0
+  electron: '42.11.16', // GHSA-jr5w-w6x2-84p9: compromised eMudhra intermediate certificates
   undici: '7.29.1',     // fifteen advisories in 7.x: fixed in 7.29.1
   tar: '7.5.21',        // GHSA-r292-9mhp-454m: affects <= 7.5.20
   protobufjs: '7.6.5',  // GHSA-j3f2-48v5-ccww: affects 7.5.0 to 7.6.4

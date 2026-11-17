@@ -1,6 +1,8 @@
 # Mako status
 
-Updated 2026-11-17 by PR #195 (Blue's answers to PR #173's five questions), and before that on
+Updated 2026-11-17 by S36: Electron pinned to 42.11.16, audit re-read;
+Blue's voice check (step 15) remains pending. Before that: updated
+2026-11-17 by PR #195 (Blue's answers to PR #173's five questions), and before that on
 2026-11-16 by the Mako 1.1 decision-sheet plan change (PR #173, merged 2026-11-17), which changed the
 "Right now" and "Next" sections where the sheet touches them and nothing else. Before that: updated
 2026-11-05 by the all-day runner's status PR for 2026-11-05, for the one PR merged since
@@ -72,9 +74,12 @@ Every PR that changes the state updates this file.
   then, the runner builds one session at a time (`parallel_cap: 1`).
 - **CI and dependencies (S02, done in PR #45):** every GitHub Action is pinned to a commit SHA, and both
   Windows checks were confirmed as required on `main` (ruleset `protect-main`, read 2026-10-19).
-  `npm audit` is down from 11 advisories to 7: Electron 42.11.15, `undici`, `tar` and `protobufjs`
-  are patched. The 7 left are in the speech stack's Node-side packages, which Mako's renderer never
-  loads; each is explained in [docs/DEPENDENCY-ADVISORIES.md](docs/DEPENDENCY-ADVISORIES.md).
+  S36 pins Electron to exactly 42.11.16, fixing GHSA-jr5w-w6x2-84p9. The 2026-11-17 audit drops
+  from 4 high findings before the bump to 3 high after it: `sharp` and its dependents
+  `@huggingface/transformers` and `kokoro-js`. S02's four moderate findings are no longer reported
+  by the registry, with no changes to those dependencies. The remaining exposure is in the speech
+  stack's Node-side packages, which Mako's renderer never loads; details and the historical S02
+  result are in [docs/DEPENDENCY-ADVISORIES.md](docs/DEPENDENCY-ADVISORIES.md).
   Dictation and TTS on the new Electron still need a check on Blue's PC (checklist step 15).
 - **Composer research (S16, PR #82):** [docs/decisions/OSS-composer.md](docs/decisions/OSS-composer.md)
   covers Dodaios (sandboxed trial without any model or key), Claude Code's parallel-agent features

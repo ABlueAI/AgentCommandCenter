@@ -115,7 +115,10 @@ assert(currentPkg.dependencies[S15_DEPENDENCY[0]] === S15_DEPENDENCY[1], 'S15: @
 const depsWithoutS15 = Object.assign({}, currentPkg.dependencies);
 delete depsWithoutS15[S15_DEPENDENCY[0]];
 assert(JSON.stringify(depsWithoutS15) === JSON.stringify(basePkg.dependencies), 'runtime dependencies unchanged from base apart from S15\'s one addition');
-assert(JSON.stringify(currentPkg.devDependencies) === JSON.stringify(basePkg.devDependencies), 'devDependencies unchanged from base');
+// S36 pins Electron's certificate-advisory fix; every other dev dependency stays unchanged.
+assert(currentPkg.devDependencies.electron === '42.11.16', 'S36: electron is pinned exactly to 42.11.16');
+assert(JSON.stringify(currentPkg.devDependencies) === JSON.stringify({ ...basePkg.devDependencies, electron: '42.11.16' }),
+  'devDependencies unchanged from base apart from S36\'s Electron pin');
 // Compared as JSON with the app's OWN version fields set aside: the 1.0.0 release bump (2026-10-16)
 // changes those two fields and nothing else, and the point here is that no dependency changed.
 // Also set aside: the 1.1 S02 `npm audit fix` (docs/DEPENDENCY-ADVISORIES.md), which moved exactly
@@ -123,8 +126,9 @@ assert(JSON.stringify(currentPkg.devDependencies) === JSON.stringify(basePkg.dev
 // hasInstallScript flag npm writes for the app's postinstall. Those four entries must match the
 // audited version, registry tarball and integrity below exactly; any other lockfile change still
 // fails here, and so does any later move of these four until this list is updated with it.
+// S36 advances Electron to 42.11.16 and pins its root manifest entry exactly.
 const AUDIT_FIX = {
-  'node_modules/electron': ['42.11.15', 'sha512-pZOe/Qga4o3t6q9WdL6hV0hYjjlcagJsSCFp3Zc4rxyqTYsIQr6macePGoQefXkdKFnsA4VvwqHjYxTUSiE3qA=='],
+  'node_modules/electron': ['42.11.16', 'sha512-CHCEsZbWm9zspEnYsro+g8FFllh0e82A1Jtofi/XqPs/XqlrpDPdLP0OhzfhG/IkxNXQ8iHEoYms+wVepZNzZA=='],
   'node_modules/protobufjs': ['7.6.6', 'sha512-dYDWdjSl5RNb7SgPxGQcRU+GtvP7s2fpkrY0r432PcOIaZ0/rBcxEZnQN67iJhFuQiVw754JDoPruPCNdGsbjg=='],
   'node_modules/tar': ['7.5.22', 'sha512-MFO/QzvtAOmJbkhOaCTvbGcFN9L9b+JunIsDwaKljSOdcLMea3NJ1k9Usz/rjdfSXTq4dfzfeS7W4p4YOAAHeA=='],
   'node_modules/undici': ['7.30.1', 'sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg=='],
@@ -137,6 +141,8 @@ const S15_LOCK = {
   'node_modules/playwright-core': ['1.65.0-alpha-2026-10-30', 'sha512-LPMw8B/HRQKMcJeXTqWSrkB/AfCKKmbDQMbu0p7zg8MgibOWaKMjZWR/StAtrQkOxvOmZEju1o1TnPgdoOCwrg=='],
 };
 const currentLock = JSON.parse(read('package-lock.json'));
+assert(currentLock.packages[''].devDependencies.electron === currentPkg.devDependencies.electron,
+  'S36: lockfile root and manifest agree on the exact Electron pin');
 for (const [key, [version, integrity]] of Object.entries(S15_LOCK)) {
   const entry = currentLock.packages[key] || {};
   const name = key.slice('node_modules/'.length);
@@ -159,6 +165,7 @@ const withoutOwnVersion = (lockText) => {
     delete lock.packages[''].version;
     delete lock.packages[''].hasInstallScript;
     if (lock.packages[''].dependencies) delete lock.packages[''].dependencies[S15_DEPENDENCY[0]];
+    if (lock.packages[''].devDependencies) lock.packages[''].devDependencies.electron = basePkg.devDependencies.electron;
   }
   for (const key of Object.keys(S15_LOCK)) if (lock.packages) delete lock.packages[key];
   for (const key of Object.keys(AUDIT_FIX)) {
@@ -171,7 +178,7 @@ const withoutOwnVersion = (lockText) => {
   return JSON.stringify(lock);
 };
 assert(withoutOwnVersion(read('package-lock.json')) === withoutOwnVersion(fromBase('package-lock.json')),
-  'package-lock.json has no dependency delta from base beyond the S02 audit fix and S15\'s three entries');
+  'package-lock.json has no dependency delta from base beyond the S02 audit fix, S15\'s three entries and S36\'s Electron pin');
 const requiredTests = [
   'quick-links-policy.test.js', 'quick-links-store.test.js', 'quick-links-ipc.test.js',
   'quick-links-integration.test.js', 'renderer/quick-links-view.test.js',
