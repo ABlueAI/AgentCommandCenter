@@ -355,11 +355,12 @@ it in Mako's key setup (safeStorage) and gives it only to unfenced agent panes.
 **2026-11-16:** the Mako 1.1 decision sheet (PR #173) sets what comes next. `READY` for a builder
 once it merges: S36 (Electron 42.11.16), S37 (the account guard's PowerShell gap), S41 (the sanitizer
 test), S42 (the rulebook update), S43, S52 to S54, S57 and S58. S46 and S47 are held with S14's
-brief, and S45 waits for S39.
+brief, and S45 waits for S39. S39 (ECC PR 1, the four pre-ready reviewers) is IN PROGRESS in PR
+#174, built by a cloud session from the brief Blue confirmed on 2026-11-17.
 **2026-11-17 (PR #195):** S25 is dropped, the business rows don't count toward the 1.1 release,
 the runner's `parallel_cap` is unchanged, and the plan sync keeps opening session issues. Waiting on
 Blue: the 1.1 schedule (S61, step 64), then his go on the UI (step 18), the H1 setup day (step 54), his Composer scope sign-off
-(S51), the briefs for S39 and S60, the Codex check-in on 2026-11-30 (step 63). The paragraphs below
+(S51), the brief for S60, the Codex check-in on 2026-11-30 (step 63). The paragraphs below
 are from before the sheet.
 
 Month one's runner sessions S31 to S34 merged on 2026-11-04. The next `READY` row is S25, the

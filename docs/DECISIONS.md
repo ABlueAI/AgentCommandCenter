@@ -3,6 +3,18 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-17: S39 (ECC PR 1)
+
+Blue's answers to the S39 session (PR #174), given in that session on 2026-11-17.
+
+| Decision | Blue's words |
+|---|---|
+| **S39 is built by a cloud session (PR #174), not a Mako pane.** The task Blue handed that session is S39's brief, so the row's "the brief from the agent-roles chat" is met. Replaces "a Mako pane builds it" in the 2026-11-16 "ECC comes in as 3 PRs" entry, for S39 only. | 2026-11-16: "cloud". 2026-11-17: "Yes: your task is the S39 brief, and this cloud session builds it." |
+| **Proof rule for S39: drop any of the four reviewers that finds nothing real** in the 3-PR replay, and name it in the TLDR. Confirms the 2026-11-16 entry; replaces the brief's "report it so Blue decides". | "drop any of the four that finds nothing real in the 3-PR replay, and name it in the TLDR. This replaces the brief's \"report it so Blue decides\"." |
+| **Pin-and-scan for S39 uses SkillSpector 2.12.0 in static mode only** (`--no-llm`), on the four upstream files at both pinned commits, recorded in docs/decisions/OSS-ecc.md. Its default analyzer model is China-origin (`z-ai/glm-5.2`), so no LLM stage runs. Making "scans stay static" part of the China-origin rule belongs to S42's rulebook update. | "run SkillSpector 2.12.0 in static mode only (no LLM; its default analyzer model is China-origin)" |
+| **Proposed, pending Blue (PR #174):** AGENTS.md "How work flows" step 3 gains the four pre-ready reviewers: on review run 1 only, alongside `pr-reviewer`; `security-reviewer` only when a sensitive area is touched, `typescript-reviewer` only when JS or TS changes; on a Codex PR, the Claude session or runner fire that runs `pr-reviewer` runs them; their high and medium findings join the one fix batch and low ones go to Follow-ups; they never re-run, never replace `pr-reviewer` and don't count toward the 5-run cap. Severities stay high, medium and low until S40. Merging PR #174 approves it. | "Yes, 3 PRs" (2026-11-12); "Yes, take it" (2026-11-15); 2026-11-17: "AGENTS.md step 3: say who runs the four on a Codex PR (the same Claude session or runner fire that runs pr-reviewer)." |
+| **Proposed, pending Blue (PR #174):** AGENTS.md "Deciding without asking" gains "Depth check before plans and new builds", the paragraph from the S39 brief, dated to Blue's 2026-11-12 decision. Merging PR #174 approves it. | The paragraph's wording came from the S39 brief Blue confirmed on 2026-11-17; no other words of his were relayed. |
+
 ## 2026-11-17
 
 Blue's answers to the five questions PR #173 left him. His words are quoted in full; anything else

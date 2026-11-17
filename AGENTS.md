@@ -70,6 +70,18 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      "Independent review (Opus)", followed by the builder's response to each finding.
    - Fix findings and re-run the reviewer as "The review loop" below says, and post each run. The
      TLDR's review line cites the latest such comment.
+   - **Pre-ready reviewers** (S39, docs/decisions/OSS-ecc.md): on review run 1 only, alongside
+     `pr-reviewer` and given the same inputs, the builder also runs `silent-failure-hunter` and
+     `pr-test-analyzer` on every PR, `security-reviewer` when the PR touches a sensitive area
+     ("Sensitive areas" below), and `typescript-reviewer` when it changes JS or TS files (all in
+     `.claude/agents/`, Claude Opus, read-only, no shell). On a Codex PR, the Claude session or
+     runner fire that runs `pr-reviewer` runs them too. Their reports go in the run 1 comment, each
+     under its own heading, with the same edits before posting. Their high and medium findings join
+     the one fix batch, and the builder passes them to `pr-reviewer`'s run 2 with its own as the
+     previous findings, so it says whether each is fixed; their low findings go to Follow-ups. They
+     never re-run on later runs, never
+     replace `pr-reviewer`, and don't count toward the 5-run cap. If one isn't loaded, the fallback
+     above applies with its file's body.
    - Codex review is optional. Since Codex was linked to the agent account (BLUE-CHECKLIST.md step
      16, 2026-10-20), it reviews agent PRs automatically; builders rank its findings high, medium or
      low and handle them like the Opus review's (high and medium in the next fix batch, low ones to
@@ -220,6 +232,14 @@ official docs, and record each assumption in the PR. Stop and ask Blue only for:
 
 When the plan has to change, change `docs/PLAN-1.1.md` in the same PR, add the `plan-change` label and
 put the change first in the TLDR. Unmerged plan changes steer nothing.
+
+**Depth check before plans and new builds** (Blue, 2026-11-12). Before writing a plan or starting a
+new build (a new feature, subsystem or tool adoption, or anything that becomes code or a rule; not
+fixes, reviews, research or small edits), answer in a few lines: what a top professional in the field
+would add; what raw material they would start from; which methods and tools they would use; and what
+outside evidence (a test, a measurement, a primary source, an independent reviewer) would prove the
+result right. Put the answers and every question for Blue at the top of the draft PR, rewrite the
+task at the same scope, and flag anything that would grow it instead of doing it.
 
 ## Authority levels
 
