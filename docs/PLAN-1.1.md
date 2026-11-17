@@ -1,9 +1,20 @@
-# Mako 1.1: month-one plan (34 sessions, 33 active)
+# Mako 1.1: plan (59 sessions, 58 active)
 
 Drafted 2026-10-17 by Claude for Blue. Approved when the PR that adds it is merged. Changes only through
 `plan-change` PRs (rules below).
 
-**Latest change (2026-11-03; PR #147, approved: Blue merged it on 2026-11-04):** four new sessions the runner can build while
+**Latest change (2026-11-16; PR #173, proposed, pending Blue):** Blue signed the Mako 1.1 decision
+sheet on 2026-11-16 ("Go: record everything ticked in docs/DECISIONS.md and the plan-change PR. Open
+items stay open."). This plan now covers all of 1.1, not only month one. It sets the test for what is
+in 1.1 and freezes the scope; makes the Composer the main focus (build rows wait for his scope
+sign-off); turns the UI sessions into three tabs (S18 brain tab, S19 control room, S20 aquarium),
+built by Claude and reviewed by Codex, with S17 done (Shark A); keeps the Codex builder lane (S26)
+open to about 2026-11-30; and adds sessions S36 to S60 (S35 is proposed in PR #170). The same day Blue
+answered every item the sheet had left open (his follow-up answers, added to this PR at his request),
+so nothing from his sheets is open. Details in "Mako 1.1 scope" below the table and the change log;
+his words are in docs/DECISIONS.md, 2026-11-16. Merging PR #173 approves it.
+
+**Earlier change (2026-11-03; PR #147, approved: Blue merged it on 2026-11-04):** four new sessions the runner can build while
 the UI sessions wait on Blue, because after S15 nothing else on this plan was `READY` for it. S31
 fixes what Blue's PC checks found (authority levels, pane status and toasts, double paste, the token
 box and more), so checklist steps 23, 24 and 40 can be re-run. S32 audits month one for anything
@@ -45,9 +56,9 @@ this by merging PR #47. The "Confirm merged plan changes" PR (2026-11-04, gap au
   lane and its dependencies.
 - **Lanes:** `cloud` runs without Blue's PC; `windows` needs a Windows check (CI, Blue's PC or the
   Codex Windows sandbox); `blue` needs Blue's input before it can finish.
-- **Codex-built rows** (S17 to S20, marked "Codex builds" in the table): Blue starts Codex on them
-  himself. The runner and Claude sessions never build them, even when READY; a Claude session only
-  reviews their PRs ("UI sessions: who builds" below).
+- **UI rows** (S14, S18 to S20): Claude builds and Codex reviews (Blue, 2026-11-16; this replaces
+  "Codex builds" of 2026-10-21). They stay `HOLD (Blue)` until his go is recorded ("UI sessions: who
+  builds" below).
 - **Business rows** (S29 and S30): Blue starts them himself, in a business cloud environment with
   the private repo `ABlueAI/mako-business` ("S29 and S30 details"). The rows stay `HOLD (Blue)`,
   which the runner skips (it only starts `READY` rows), so it never builds them in its own
@@ -62,10 +73,12 @@ this by merging PR #47. The "Confirm merged plan changes" PR (2026-11-04, gap au
   and whether this line holds it to one is not verified, so the safeguard is applying S04's prompt in
   the same sitting as its merge (S04 item 8).
 - **Parallel work:** the cap is one setting (S04 puts it in docs/RUNNER.md): 1 on Claude Pro, until Blue
-  upgrades to Max 5x when the UI work runs usage up (Blue, 2026-11-03; BLUE-CHECKLIST.md step 8); then 2, and 3 once a week of
+  upgrades to Max 5x (pushed back "until 11/19 or until usage begins flowing", Blue, 2026-11-15; BLUE-CHECKLIST.md step 8); then 2, and 3 once a week of
   usage shows room, to stay under the weekly cap; 3 or 4 on Max 20x.
-- **Blue's day:** once S04 is merged and applied, one sitting in the evening, 10 to 20 minutes: read the digest,
-  answer anything marked "needs Blue", then approve and merge every PR that is ready.
+- **Blue's day:** once S04 is merged and applied, one merge sitting every evening, about 10 minutes
+  (Blue, 2026-11-16; it was 10 to 20): read the digest, answer anything marked "needs Blue", then
+  approve and merge every PR that is ready. PC checks are batched on Tuesday and Friday evenings
+  until H1 automates them.
 
 ### Status values
 
@@ -95,8 +108,8 @@ held rows as held (a Hold column or a `hold` label), never as Ready.
 | S02 | **CI and dependency hygiene.** Pin GitHub Actions to commit SHAs; make CI a required check; `npm audit fix` for the 11 advisories with dictation and TTS regression checks. | CI green and required; advisories fixed or each one explained. | High | windows | S01 | DONE (#45) |
 | S03 | **Plan to issues.** Sensitive (a new `.github/` workflow). Labels (authority, lane, plan-change, needs-blue, sensitive, security-alert), task issue template, "1.1 Month 1" milestone, a GitHub Project board (Ready, Running, Needs Blue, Hold, Ready to merge, Done), and a workflow that keeps one issue per session in sync with this file. Sync issues are titled `Sxx: <title>`, and the sync matches only that prefix on issues it created itself. | Board mirrors this table automatically. | Max | cloud | S01 | IN PROGRESS (#54) |
 | S04 | **All-day runner and digest.** The runner fires through the day: it fixes its own open PRs, then starts every unclaimed READY session up to a parallel cap, stops cleanly at a usage limit and resumes on a later fire, and sends one evening digest. Details below the table. | Two consecutive days run unattended through multiple fires; a usage-limit stop resumes on its own on a later fire; the digest arrives both evenings. | High | blue | S01 | IN PROGRESS (#84) |
-| S26 | **Codex builder lane.** Codex, linked to `ABlueAgent`, builds sessions as a second builder: it claims a session before starting, so Claude and Codex never take the same one, follows AGENTS.md, and gets the same Opus review plus Codex's automatic review. Sensitive. Details below the table. | One session built end to end by Codex: a PR authored by `ABlueAgent` from a `codex/` branch with no Claude builder on it, an Opus review, and a Codex automatic review if one arrives (recorded either way), merged by Blue; the S26 PR also updates `.claude/agents/pr-reviewer.md` to match AGENTS.md step 3. | High | blue | S04, checklist step 16 (Codex re-linked to `ABlueAgent`) | NEEDS BLUE (#114) |
-| S28 | **Agent profile refresh.** Sensitive. Update agent-roles/*.md from Blue's package (details from his agent-roles chat): the bodies, and any frontmatter changes the package asks for. The whole change is sensitive: role bodies set what each role is told, and frontmatter sets its tools and permissions. Run the role tests, then deploy with scripts/sync-roles.ps1. The package arrives one of two ways. (1) An issue titled `agent-roles package (S28)` (not starting with `Sxx:`, so S03's per-session issue sync never matches it), opened by `ABlueAI` and edited by no one else: an issue by anyone else, or one someone else has edited, never counts; the runner checks the author and the edit history before using it, and if it can't check them, the issue doesn't count; only the issue body counts, never its comments; and the session locks the issue's conversation to collaborators. (2) Blue hands it to an agent in its own session, which opens the PR as `ABlueAgent` (a PR Blue opens himself couldn't get the code-owner approval it needs). Until then the row stays `NEEDS BLUE (package)`. Before S04 is applied, an interactive session (on Blue's request) checks the issue's author and edit history and sets the row to READY in a PR; after that, the runner's status PR does it, with the same check in S04's prompt. The runner starts S28 once Blue merges that PR. | Role tests pass in CI (app/role-frontmatter.test.js, app/role-fence-policy.test.js, scripts/sync-roles.Tests.ps1); scripts/sync-roles.ps1 deploys on Blue's PC and Blue confirms the roles launch. | High | blue | S01, Blue's agent-roles package | NEEDS BLUE (package) |
+| S26 | **Codex builder lane.** Codex, linked to `ABlueAgent`, builds sessions as a second builder: it claims a session before starting, so Claude and Codex never take the same one, follows AGENTS.md, and gets the same Opus review plus Codex's automatic review. Sensitive. Details below the table. Blue, 2026-11-16: the trial (PR #140) is its result, "until we burn through codex usage ... not necessarily a permanent change"; the lane stays open while his Codex resets last, to about 2026-11-30, for non-sensitive early tasks (S36, S52, S53, S56), and Codex reviews Claude's PRs. S26 closes when the resets are used; Blue checks in on 2026-11-30 (checklist step 63). docs/CODEX-BUILDER-LANE.md is unchanged. | One session built end to end by Codex: a PR authored by `ABlueAgent` from a `codex/` branch with no Claude builder on it, an Opus review, and a Codex automatic review if one arrives (recorded either way), merged by Blue; the S26 PR also updates `.claude/agents/pr-reviewer.md` to match AGENTS.md step 3. Blue accepted the trial as the result (2026-11-16); what the trial left unchecked is in docs/1.1-GAP-AUDIT.md, A4. | High | blue | S04, checklist step 16 (Codex re-linked to `ABlueAgent`) | NEEDS BLUE (Codex check-in 2026-11-30) |
+| S28 | **Agent profile refresh.** Sensitive. The agent tune-up: update agent-roles/*.md from Blue's package (details from his agent-roles chat), including the harness-engineering nuggets (Blue, 2026-11-16): the bodies, and any frontmatter changes the package asks for. The whole change is sensitive: role bodies set what each role is told, and frontmatter sets its tools and permissions. Run the role tests, then deploy with scripts/sync-roles.ps1. The package arrives one of two ways. (1) An issue titled `agent-roles package (S28)` (not starting with `Sxx:`, so S03's per-session issue sync never matches it), opened by `ABlueAI` and edited by no one else: an issue by anyone else, or one someone else has edited, never counts; the runner checks the author and the edit history before using it, and if it can't check them, the issue doesn't count; only the issue body counts, never its comments; and the session locks the issue's conversation to collaborators. (2) Blue hands it to an agent in its own session, which opens the PR as `ABlueAgent` (a PR Blue opens himself couldn't get the code-owner approval it needs). Until then the row stays `NEEDS BLUE (package)`. Before S04 is applied, an interactive session (on Blue's request) checks the issue's author and edit history and sets the row to READY in a PR; after that, the runner's status PR does it, with the same check in S04's prompt. The runner starts S28 once Blue merges that PR. | Role tests pass in CI (app/role-frontmatter.test.js, app/role-fence-policy.test.js, scripts/sync-roles.Tests.ps1); scripts/sync-roles.ps1 deploys on Blue's PC and Blue confirms the roles launch. | High | blue | S01, Blue's agent-roles package | NEEDS BLUE (package) |
 | S31 | **PC-check fixes.** Sensitive (the PTY environment and permission modes, the agent token's input, commit identity). Fix what Blue's PC checks of 2026-10-29 to 2026-11-02 found, item by item in "S31 to S34 details": every authority level forced to default mode by the env scrub (checklist step 40), pane status stuck at "unknown" with no toast (step 23), Ctrl+V pasting twice, the token box refusing silently, routine log lines shown as errors, the agent commit author, the read-aloud speed menu dropping the selection, and checklist wording (step 39, a commit-author check in step 38, and Blue's re-runs of steps 23, 24 and 40). | Each item is fixed with a test, or the PR says why it can't be tested in CI; CI green; Blue's re-runs of checklist steps 23, 24 and 40 pass on his PC. | High | windows | S05, S06, S10 | IN PROGRESS (#152) |
 | S32 | **1.1 gap audit.** One page, `docs/1.1-GAP-AUDIT.md`, that checks month one against what actually landed: every row's "Done when" against its merged PRs and Blue's ticked checklist steps, every "Follow-ups" line in the TLDRs of merged 1.1 PRs, and every unticked checklist step. Each item is marked done, on the docket (naming its row, step or issue) or needs attention; each "needs attention" item gets a proposed fix (a row for a later plan-change PR, or an issue). Docs only: besides its own plan row, it changes no other file. | The page covers every month-one row and every merged 1.1 PR (listed by number), and every "needs attention" item names a proposed fix. | Minimum | cloud | S01 | DONE (#154) |
 | S33 | **Plan sync guard.** Sensitive (a `.github/` workflow and its script). Find why the Plan sync run of 2026-10-22 created a new copy of every sync issue, and make the sync refuse visibly (the run fails and creates nothing) when its listing finds none of the sync issues that already exist, so a bad listing can never duplicate the issues or the board again. | The cause is written in the PR; a test where the listing comes back empty while sync issues exist shows the run failing with no issue created; CI green. | High | cloud | S03, PR #146 (the Plan sync board-client fix) merged | DONE (#155) |
@@ -110,14 +123,14 @@ held rows as held (a Hold column or a `hold` label), never as Ready.
 | S11 | **Usage panel.** 5-hour and weekly usage with reset countdown (Claude's `/usage` data or ccusage). Claude Code's built-in auto-continue does the resuming. A warning at about 90% of either limit, and Pause and Resume buttons that turn the runner routine off and on, if that can be done safely (no claude.ai login stored in Mako without its own sensitive review); otherwise the button opens claude.ai/code/routines. Sensitive if it stores or uses a claude.ai login or token. | Panel matches `/usage` on Blue's account; the 90% warning shows; Pause stops the runner, or opens the routines page. | Medium | windows | S07 | IN PROGRESS (#126) |
 | S12 | **Quick Links bundle.** Claude desktop, Codex app, GitHub PRs and Project board, Obsidian vault, Hexona, Hermes and Dodaios docs. | Links open; Blue confirms the Hexona URL. | Medium | blue | S01 | IN PROGRESS (#86) |
 | S13 | **Obsidian Skills.** One-page OSS note quoting Blue's ADOPT; install kepano/obsidian-skills; private vault outside this public repo with an index that links to STATUS, PLAN and DECISIONS. | Agents can read and update the vault index. Blue installs the Obsidian app (2 minutes). | Medium | blue | S01 | IN PROGRESS (#115) |
-| S14 | **Design tools and brief.** Claude Opus writes the design brief from Blue's UI examples and his dashboard list: words and structure, not code. It covers a main dashboard plus task-specific layouts Blue can switch between (for example coding, research and business; Blue chooses the final set). Also: install UI UX Pro Max; collect Blue's UI examples. | Brief plus Blue's examples in the repo. | Medium | blue | S01 | HOLD (Blue) |
+| S14 | **Design brief.** Claude Opus writes the brief from prototype A (Shark A, S17) and Blue's decision sheet of 2026-11-16: words and structure, not code. It covers the three tabs (brain, control room, aquarium), the look, each tab's done-when and the UI test plan ("Mako 1.1 scope" below the table), and may move an item between S18, S19 and S20. Also: install UI UX Pro Max, the core skill folder only, pinned at `4f2dbb6`. Prototype A and the sheet are in Blue's private vault, so Blue hands them to the session. | The brief is in the repo, with nothing private in it. | Medium | blue | S01, S17 | HOLD (Blue) |
 | S15 | **Research capture.** "Send this page to Reviewer" flow; evaluate Claude in Chrome on Windows; research agents stay read-only. | Blue sends a Reddit thread to a reviewer without copy and paste. | Medium | windows | S10 | IN PROGRESS (#130) |
 | S16 | **Composer research (includes the Dodaios trial).** Research for the Composer (one Mako pane that takes a large task, fans it out to several agents, and lets Blue compose and split sessions from it) and for workflow automation. Any hands-on trial, including the one-day Dodaios trial, runs only in a sandbox with no real credentials. Scope and what it must cover: "S16 details" below the table. | `docs/decisions/OSS-composer.md` exists in the AGENTS.md OSS shape: each option has a verdict proposal (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD FRESH) and a blank for Blue's verdict, word for word, and it ends with an open-questions list for Blue. Blue's verdict is then recorded. | Minimum | blue | S01 | DONE (#82) |
-| S17 | **Design directions.** Codex builds (Blue starts it): two or three clickable concepts from S14's brief and Blue's examples. Blue iterates with Codex and ChatGPT directly. | Blue picks one. | Medium | blue | S14, S26 | HOLD (Blue) |
-| S18 | **New layout, part 1.** Codex builds (Blue starts it): navigation, pane area and toolbar in the chosen design, behind a setting so the old layout stays available. | Daily use works in the new layout. | High | windows | S17 | HOLD (Blue) |
+| S17 | **Design directions.** Two or three clickable concepts for Blue to pick from. Done outside this plan's PRs: Blue picked prototype A, Shark A (recorded 2026-11-16, PR #173). | Blue picks one. | Medium | blue | — | DONE (#173) |
+| S18 | **Brain tab.** Tab 1, the Composer's stage (dark blue), in the new three-tab layout, behind a setting so the old layout stays available. Claude builds, Codex reviews. Scope in "Mako 1.1 scope" below the table. | Live task nodes from real panes; a card answer reaches the pane; Ctrl+F finds a node; 2 working days without a blocker. Automated end-to-end tests for the tab pass, and one batched PC-check session. | High | windows | S14, S43 | HOLD (Blue) |
 | S27 | **Composer.** Dropped: PR #48 (merged 2026-10-20) folded the Composer into S16, "Composer research (includes the Dodaios trial)", with Composer build sessions in a later plan change after Blue's S16 verdict. | — | — | — | — | DROPPED (folded into S16 by PR #48) |
-| S19 | **New layout, part 2.** Codex builds (Blue starts it): pane and status visuals; "needs you" stands out. | Blue accepts the look. | High | windows | S18 | HOLD (Blue) |
-| S20 | **New layout, part 3.** Codex builds (Blue starts it): Library, Logs and settings restyled; old layout removed after Blue accepts. | One consistent design. | High | windows | S19 | HOLD (Blue) |
+| S19 | **Control room.** Tab 2 (black): the "calm, clean control room". Pane header, "needs you", the usage reset time always visible, one Settings page, the manual quiet-hours switch, a "pause all" button with a matching spoken phrase, the Ctrl K command palette, and a cheat sheet of the non-sensitive phrases and key bindings (sensitive phrases stay in Blue's password manager). Dockview stays the pane engine underneath. Pop-out windows only if cheap: Blue, 2026-11-16, "not a high priority but would be useful for 1.1 if it makes sense to add now"; the session sizes it and leaves it out if it isn't cheap. Claude builds, Codex reviews. Scope in "Mako 1.1 scope" below the table. | Every pane's status is correct after a restart. Automated end-to-end tests for the tab pass, and one batched PC-check session. | High | windows | S18 | HOLD (Blue) |
+| S20 | **Aquarium tab and removing the old layout.** Tab 3 (green-ish), the aquarium MVP: one tank, about 3 species, a crew list, a click opens the pane; Pixel Agents as the base, one creature per pane, the agentId stored. Then the old layout is removed, after 2 full working days on the new one with no blocker. Claude builds, Codex reviews. | One creature per live pane with the right colour within about 2 seconds; a click opens the pane; the agentId is stored. Automated end-to-end tests for the tab pass, one batched PC-check session, and Blue's 2-working-day acceptance before the old layout goes. Blue's look at it on H1 is checklist step 55, asked for by this row's PR. | High | windows | S19 | HOLD (Blue) |
 | S21 | **Logo readability.** "M" variants at 16 to 48 px; Blue picks; taskbar and shortcut icons updated. Blue picked B2 on 2026-10-28: the shark, with a bolder white centre "M". | Blue can read the M on the taskbar (checklist step 45). | Medium | blue | S07 | IN PROGRESS (#133) |
 | S22 | **Marina research brief.** Charlotte County independent marinas from public sources (no Google Maps scraping): basics, likely pain points, outreach angles. Output goes in a private repo. | Brief delivered privately. | Minimum | cloud | S01 | IN PROGRESS (#116) |
 | S29 | **Florida marina list.** Blue starts it (business rows, above). Every marina in Florida, ranked by Google rating and review count, from the official Google Places API; no Google Maps scraping, ever. Before any call it reads Google's current Maps Platform terms and Places API policies, and it stays within the free monthly usage. Output (a CSV and a short summary) goes only in the private repo `ABlueAI/mako-business`, never this public repo. Details below the table. | The CSV and summary are in `ABlueAI/mako-business`; this repo's PR records only the row count, the number of Places requests and their cost, with no marina data. | Minimum | cloud | S22 merged, checklist step 33 (Google Cloud billing, Places API key, budget alert) | HOLD (Blue) |
@@ -125,6 +138,156 @@ held rows as held (a Hold column or a `hold` label), never as Ready.
 | S23 | **Client paperwork drafts.** Intake questionnaire, scope-of-work template, contract template and Care plan terms (scope first with one fixed fee; hour blocks dropped by Blue on 2026-10-28). Blue builds the form in Hexona. | Blue approves the drafts. | Medium | blue | S22 | DONE (#122) |
 | S24 | **HighLevel connection and reply/lead watcher.** Sensitive. Blue authorizes the GoHighLevel connector in claude.ai with a read-only token. Its one read-only workflow is the reply/lead watcher: a separate claude.ai scheduled task (never the Mako runners, which must keep no CRM connector; S24 checks that before go-live) that checks HighLevel every 60 minutes from 7:30 AM to 7:30 PM Eastern plus a final check at 8:00 PM, and notifies Blue only when there are new replies or leads, with each lead's first name, source and a one-line summary; nothing new means no notification. Before it goes live, Blue sends a screenshot of the connector's permission scopes, never the token (checklist step 34). Details below the table. | For one full day the watcher sends one notification per check that found something new (first name, source, one-line summary) and none for checks that found nothing; Blue's own test reply or lead shows up; no writes possible. | High | blue | S23; checklist step 34 before the watcher goes live | READY |
 | S25 | **Month review.** What shipped, interruptions, fix rounds, usage against the plan; month two drafted as a plan-change PR. | Month-two plan PR open. | Medium | cloud | runs in the last week of month one, from 2026-11-14 (not before that date) | READY |
+| S36 | **Electron 42.11.16.** One small PR, now (Blue, 2026-11-16): bump Electron from 42.11.15 to 42.11.16 and update docs/DEPENDENCY-ADVISORIES.md. Codex may build it until about 2026-11-30, through the Codex builder lane (Blue, 2026-11-16: a non-sensitive early task; docs/CODEX-BUILDER-LANE.md); the claim rule keeps Claude and Codex off the same row. | CI green; `npm audit` re-read and recorded; Blue's voice check (checklist step 15) covers the new version. | High | windows | S02 | READY |
+| S37 | **Account guard: the PowerShell gap.** Sensitive (`.claude/`). An issue, then one small PR that closes the PowerShell gap in `.claude/hooks/account-guard.js`, with tests. | The issue is open and linked; a test shows the guard blocking the same PR work through PowerShell; CI green. | High | cloud | PR #171 merged | READY |
+| S38 | **Full security check.** One read-only check of the whole project, once (Blue, 2026-11-16: no daily check, "maybe in the near future"). This repository is public, so the PR lists each finding's title and severity only; anything that would help an attacker goes to Blue in the session, and each real finding becomes an issue or a plan row worded the same careful way. Blue starts it, so he is there to take the private detail. | The report covers every sensitive area in AGENTS.md; each finding is fixed, has an issue or plan row, or is answered. | Minimum | blue | S01 | NEEDS BLUE (start it) |
+| S39 | **ECC PR 1: four read-only reviewers.** Sensitive (`.claude/`, AGENTS.md). security-reviewer, silent-failure-hunter, typescript-reviewer and pr-test-analyzer, the AGENTS.md step, the depth-check text and the OSS record (`docs/decisions/OSS-ecc.md`). First compare pr-test-analyzer and silent-failure-hunter with Anthropic's pr-review-toolkit versions and take the better. The agent-roles chat writes the brief and a Mako pane builds it. Proof rule: run the new reviewers on 3 recently merged PRs and drop any that finds nothing real. | The four reviewers (less any the proof rule dropped) are in `.claude/agents/`, read-only; the proof run's results are in the PR; the pin-and-scan check passed, including the China-origin rule. | High | blue | S01, the brief from the agent-roles chat | NEEDS BLUE (brief) |
+| S40 | **ECC PR 2: planner and a stronger pr-reviewer.** Sensitive (`.claude/`, AGENTS.md). planner; code-reviewer folded into `pr-reviewer`; agent-evaluator on demand; harness-optimizer's method as text; a rule-compliance check; a "what the diff should have touched" check; `effort: high`. It also changes the review rule's severity scale to CRITICAL, HIGH, MEDIUM, LOW (Blue, 2026-11-16), with his definition of CRITICAL (docs/DECISIONS.md, 2026-11-16 follow-up answers): a CRITICAL finding stops the PR and notifies Blue at once; HIGH and MEDIUM are fixed in the next batch; LOW goes to follow-ups. | The changed `pr-reviewer` passes the same 3-PR proof run; AGENTS.md "The review loop" and `.claude/agents/pr-reviewer.md` use the four-level scale with Blue's CRITICAL definition, word for word. | High | blue | S39 | NEEDS BLUE (S39 first) |
+| S41 | **ECC PR 3: the sanitizer CI test.** Sensitive (CI). Issue #172: fail CI on new home-folder paths, emails and secrets in tracked files; the existing hits are allowlisted (Blue, 2026-11-15: "Allowlist them"). 1.1 isn't done until it passes. | The test fails on a planted path, email and secret, passes on `main` with the allowlist, and runs in CI; issue #172 closed by the PR. | High | cloud | S01 | READY |
+| S42 | **Rulebook update from the decision sheet.** Sensitive (AGENTS.md, `CLAUDE.md`). The rule changes Blue ticked on 2026-11-16 that need AGENTS.md: certainty labels; a review cap of 2 runs on docs-only PRs (5 stays for code); the model rule; the China-origin rule at the pin-and-scan step; the scope freeze; Claude builds the UI and Codex reviews; the merge sitting and PC-check evenings. The PR proposes each wording and merging approves it; anything Blue hasn't decided stays out. Not in it: the severity scale (S40) and the reviewers' AGENTS.md step (S39). | AGENTS.md carries each rule; the PR's TLDR quotes every changed rule next to the docs/DECISIONS.md entry it comes from. | High | cloud | PR #173 merged | READY |
+| S43 | **Spec-miner trial on the dockview layout.** A one-off, read-only trial before S18: run ECC's spec-miner on Mako's current dockview layout and write up what it finds. No install into `.claude/`; the tool is pinned and scanned first. | A one-page write-up in `docs/research/` says what the spec covers, what it missed, and whether it is worth using again. | Minimum | cloud | S01 | READY |
+| S44 | **GateGuard edit-gate trial.** Sensitive (`.claude/` hooks on builder panes). Trial GateGuard's edit gate on H1 builder panes; drop it if it finds nothing. | The trial ran on H1 for the agreed span; the write-up lists what the gate caught, and Blue's keep-or-drop is recorded. | Medium | blue | checklist step 54 (H1 setup day) | NEEDS BLUE (H1 setup day) |
+| S45 | **Mine the other ECC skills.** Research only: read the rest of ECC's skills and list, in the OSS record, which are worth taking in 1.2 and why. Nothing installed. | The list is in `docs/decisions/OSS-ecc.md` with a proposed verdict per skill and a blank for Blue's. | Minimum | cloud | S39 | NEEDS BLUE (S39 first) |
+| S46 | **Session hygiene.** Every session has an owner, a state and a "done when"; finished sessions archive themselves; a daily list shows sessions idle 3 days or more. | Covered by tests; the daily list shows on Blue's PC. | High | windows | S14 | HOLD (Blue) |
+| S47 | **Symvibe's three pieces.** A launch-crew preset, goal-stopping loops and branch status per agent. OSS first: an OSS record with Blue's verdict before any code (`docs/decisions/OSS-symvibe.md`); agentplay is a design reference only. | The record carries Blue's verdict; then each piece works on a real pane and is covered by tests. | High | windows | S14 | HOLD (Blue) |
+| S48 | **Tree, history and memory.** The tree and merged-work history (data); memory in Blue's private vault with an automatic nightly tidy that runs as a local scheduled task on H1; each finished task writes one vault note. Meaning-based search only when the nightly note shows real misses. Nothing from the vault goes in this public repo. | Each merge is recorded once and survives a restart; each finished task writes a vault note; a cloud agent can read the vault; the nightly tidy runs unattended for 3 nights. Blue's memory setup is checklist step 56, asked for by this row's PR. | High | blue | S14, checklist step 54 (H1 setup day) | NEEDS BLUE (H1 setup day) |
+| S49 | **Composer pre-build studies.** Read-only first: one sheet that lays out all pre-build testing; a code study of T3 Code's dispatch core (no install), then, after the study, a hands-on T3 Code trial on Blue's VM with telemetry off (Blue, 2026-11-16); an independent audit of the Composer scout report; a re-scout on 2026-12-03 and again about 30 days after 1.1 ships. The scout report is in Blue's vault, so he hands it over. | The test sheet, the code study and the audit are written up with nothing private in the repo; the hands-on trial is written up; the 2026-12-03 re-scout is recorded. | Minimum | blue | S16 | NEEDS BLUE (scout report) |
+| S50 | **Composer prototype day.** One real working day with a Composer prototype before any Composer code, scored against S49's test sheet. | Blue's scores and what they change are recorded (checklist step 60). | Medium | blue | S49 | NEEDS BLUE (checklist step 60) |
+| S51 | **Composer v1 build.** Sensitive (it starts panes, reads their output and checks the safe phrase). Scope pending Blue's sign-off: the v1 scope is being written in a separate Composer chat, and this row is split into build sessions by a plan change once he signs it. What is already decided is in "Mako 1.1 scope" below the table. | Set by the signed scope. | High | blue | S50, Blue's signed Composer scope | NEEDS BLUE (scope pending sign-off) |
+| S52 | **HyperFrames.** A must-have (Blue, 2026-11-16): vet it (pin and scan, including the China-origin rule), write the OSS record (`docs/decisions/OSS-hyperframes.md`) with a blank for Blue's verdict, and make one trial video. If the project can't be identified for certain, the session asks Blue instead of guessing. Blue named it for Codex until about 2026-11-30 (2026-11-16). It is a `blue`-lane row, outside the Codex builder lane's rules (docs/CODEX-BUILDER-LANE.md item 1, `windows` lane only), so Blue starts Codex on it himself; S42 or a lane-doc PR records the exception. The claim rule keeps Claude and Codex off the same row. | The record and the trial video's result are in the PR; Blue's verdict is then recorded word for word. | Medium | blue | S01 | READY |
+| S53 | **AgentPlayback.** Vet it (pin and scan, including the China-origin rule) and write the OSS record (`docs/decisions/OSS-agentplayback.md`) with a blank for Blue's verdict; build only what his verdict allows. If the project can't be identified for certain, the session asks Blue instead of guessing. Blue named it for Codex until about 2026-11-30 (2026-11-16). It is a `blue`-lane row, outside the Codex builder lane's rules (docs/CODEX-BUILDER-LANE.md item 1, `windows` lane only), so Blue starts Codex on it himself; S42 or a lane-doc PR records the exception. The claim rule keeps Claude and Codex off the same row. | The record carries Blue's verdict word for word; anything built is covered by tests. | Medium | blue | S01 | READY |
+| S54 | **Claude video analysis in Video Scout.** An option other than Gemini: 1 fps video plus audio, analysed by Claude on Blue's own plan (no API credits, ever). How the audio reaches Claude is open for the session (for example a transcript from Mako's existing speech-to-text); the PR says which it chose. Blue, 2026-11-16: it "should be 1.1 as well if it fits well", then confirmed for 1.1 the same day. | A Video Scout run with the Claude option produces a report from a real video on Blue's PC, with no API key; covered by tests. | High | windows | S01 | READY |
+| S55 | **Firefox presets.** Presets that open Blue's Firefox profiles on their set of URLs from Mako, through the Quick Links URL policy. | A preset opens profile 2 on its URLs on Blue's PC. | Medium | blue | checklist step 57 (the preset URLs) | NEEDS BLUE (preset URLs) |
+| S56 | **Codex's 9 audit bugs.** Fix the 9 bugs from Codex's audit, each with a test. The list isn't in this repo yet: Blue or the session that holds it opens one issue per bug first, worded carefully where a bug is a security gap. Codex may build it until about 2026-11-30, through the Codex builder lane (Blue, 2026-11-16; docs/CODEX-BUILDER-LANE.md); a bug that is a security gap is Sensitive, outside that lane, and stays with Claude. The claim rule keeps Claude and Codex off the same row. | Each of the 9 is fixed with a test, or the PR says why not; CI green. | High | windows | the bug list as issues | NEEDS BLUE (bug list) |
+| S57 | **Licence guardrail.** Sensitive (CI). A licence check in CI or review, so a new dependency or vendored file with a licence Mako can't ship under MIT fails visibly (follow-up to PR #168). | The check fails on a planted GPL-only dependency and passes on `main`; THIRD-PARTY-NOTICES.md stays in step. | High | cloud | S01 | READY |
+| S58 | **Fenced web-reading agents.** Sensitive (`.claude/` hooks, agent roles). Every agent that reads the open web runs fenced: a tool allowlist plus a guard hook, as S15's page reader does. | A web-reading role can't call a tool outside its allowlist, shown by a test; the guard hook refuses visibly. | High | windows | S15 | READY |
+| S59 | **Mako 1.1 release.** Sensitive (credentials: the token audit). The last steps: Blue's token audit (checklist step 17) as the last step before release, the sanitizer test (S41) passing, release notes, and the tag. The date is soft, about 2026-12-13 to 2027-01-13, and nothing is cut for it. Whether the business rows (S24, S29, S30) and S25 count as 1.1 items is Blue's to say; until he does, this row doesn't assume either way. | Every 1.1 row is DONE or DROPPED; step 17 is ticked; the sanitizer test passes on `main`; Blue OKs the tag. | High | blue | every other 1.1 row | NEEDS BLUE (every 1.1 item done) |
+| S60 | **Role-file rewrite.** Sensitive (role bodies set what each role is told). Its own one-scope PR (Blue, 2026-11-16): rewrite the builder, reviewer and source-scout role files, the README's role count and a shared voice for the roles. It changes no tools: frontmatter tool lists and permissions stay exactly as they are. S28 also edits role bodies, so S60 builds after S28 merges, on top of it; if Blue's S28 package already carries this rewrite, S60 is dropped as folded into S28. | Role tests pass in CI (app/role-frontmatter.test.js, app/role-fence-policy.test.js, scripts/sync-roles.Tests.ps1); the diff changes no `tools`, `disallowedTools` or permission line; Blue confirms the roles read right after scripts/sync-roles.ps1. | High | blue | S28, the brief from the agent-roles chat | NEEDS BLUE (brief) |
+
+### Mako 1.1 scope: the decision sheet (proposed, pending Blue: PR #173)
+
+Blue signed a private "Mako 1.1 decision sheet" (105 items) on 2026-11-16: "Go: record everything
+ticked in docs/DECISIONS.md and the plan-change PR. Open items stay open." The sheet stays in his
+vault; his decisions and words are in docs/DECISIONS.md, 2026-11-16, and this section is how the plan
+follows them.
+
+**What is in 1.1.**
+
+- **The test:** an item is in 1.1 when the UI overhaul needs it, or it lets sessions run unattended
+  for about 5 hours, or it is a known fix or security gap.
+- **Scope freeze:** after the sign-off, a new idea goes to the 1.2 queue ("Month two and later")
+  unless it passes the test and Blue says so.
+- **Done:** every 1.1 item is done, and the token audit (checklist step 17) and the sanitizer test
+  (S41) pass. S59 is the release row.
+- **Date:** soft, about 2026-12-13 to 2027-01-13. Nothing is cut for it.
+
+**Three tabs** (decided 2026-11-10 and 2026-11-11). Tab 1 is the brain, the Composer's stage (dark
+blue; S18). Tab 2 is the "calm, clean control room" (black; S19). Tab 3 is the aquarium (green-ish;
+S20). The shark is the conductor, named Mako. The brain stage shows task nodes, no memory nodes.
+Voice is push-to-talk, with no wake word.
+
+**The Composer is the main focus of 1.1** (Blue, 2026-11-16: "this needs a good v1 in 1.1"; "for 1.1
+we are building the skeleton [of the aquarium]. the composer is the main focus for 1.1."). Its v1
+scope is being written in a separate Composer chat. Until Blue signs it, S51 is one row marked "scope
+pending Blue's sign-off", and nothing here invents that scope. Already decided:
+
+- Mako runs in a Claude Code pane. The Agent SDK chat route is ruled out for 1.1.
+- One persistent conductor with its memory in the vault; conductor and chief of staff are one role
+  ("composer translated to conductor / the chief of staff - sets up builders and reviewers in the
+  correct repos/projects").
+- Manner: blunt, priorities first, protects Blue's time, pushes back.
+- The dispatch tools (start pane, send brief, status, wait, stop) and the safe-phrase check are
+  built into Mako's own code.
+- Targets are local Mako panes only, never `claude --bg`. Codex panes as targets are in 1.1 if
+  they cost one build day or less, as a reviewer first; otherwise 1.2 (Blue, 2026-11-16).
+- Fanning out to subagents is on by default, with a cap of 3; Mako asks Blue for more ("default
+  with a cap of 3 sub agents. request for more.").
+- Updates show in the app and are spoken once only when Mako is blocked on Blue. Phone updates are
+  1.2.
+- Workflow automations stay a separate feature.
+- Before any Composer code: all pre-build testing laid out in one sheet, a read-only code study of
+  T3 Code's dispatch core (no install), an independent audit of the Composer scout report (S49),
+  and a one-real-day prototype (S50). A re-scout on 2026-12-03, and again about 30 days after 1.1
+  ships. After the code study, a hands-on T3 Code trial on Blue's VM with telemetry off (S49).
+
+These answer some of "S16 details" open questions: local panes (2), the approval tiers below (3), no
+usage cap (4), push to talk (5), in the app and spoken once when blocked (6), one persistent chief of
+staff (7), a separate feature (8). Question 1 isn't answered beyond "only Blue merges".
+
+**Approval rule A2** (Blue, 2026-11-13: "Yes, A2"). Blue's word is the approval, in three tiers:
+
+1. **Tier 1 starts by itself:** read-only work, and builds in their own worktree that open a draft
+   PR.
+2. **Tier 2 needs "start" or "start all".**
+3. **Tier 3 needs Blue's safe phrase:** credentials, killing processes, network listeners, CI,
+   `.claude/`, payments, client data. Mako's code checks the phrase against a stored hash. The model
+   never checks it, and the phrase is never written anywhere.
+
+Merging stays Blue's.
+
+**Usage** (Blue, 2026-11-16). No automatic usage stops: no pace check ("if there is a pause button i
+can just pause it ... not needed") and no cap on worker panes ("maximize output. i will just pause
+manually when needed until further notice"). The usage reset time is always visible in the control
+room (S19). The cloud runner's `parallel_cap` in docs/RUNNER.md is not changed by this plan change.
+
+**Models.** Opus 5.5 for building and planning; Sonnet 5.5 for triage, chores and summaries; never
+Haiku unless Blue asks. Mako passes the effort level on every launch and asks only before Opus 5.5
+at max effort. No Fable ("Never fable while it is so expensive and requiring API until this is
+resolved"). No API credits, ever. No third-party model routing. No models or hosted AI from
+companies based in China, including local ones such as Qwen, GLM, DeepSeek, Kimi and Doubao; this is
+checked at the pin-and-scan step for every tool, and only Blue makes an exception.
+
+**Control room (S19, with S46 and S47).** Session hygiene (S46). The pane header shows status, task,
+branch, authority, maximize and close. "Needs you" is a Windows toast, a taskbar badge and a jump
+key, with sound off. Symvibe's three pieces are S47. agentplay is a design reference only.
+
+**Aquarium (S20).** The MVP only: one tank, about 3 species, a crew list, a click opens the pane;
+Pixel Agents as the base, one creature per pane, the agentId stored. Blue: "Aquarium is done in 1.1
+when this occurs. 1.2 will revamp aquarium."
+
+**Look** (S14's brief carries it). Dark only. Compact in the control room, roomier on the brain tab.
+Inter for the UI, Cascadia Code for terminals. One Settings page with sections. Ctrl K to jump, Ctrl
+Space to talk. Quiet hours: nothing speaks or pops up, and red nodes still show silently; 1.1 has the
+manual switch, and a schedule is 1.2. The brain stage shows 8 nodes by default; extras group per
+repo, and clicking a repo group fans its tasks out. Line styles on the brain stage and the "What Mako
+knows" panel are a yes, pending a visual.
+
+**UI test plan and done-when.** Automated end-to-end tests per tab, one batched PC-check session per
+tab, and Blue's 2-working-day acceptance; each tab's done-when is in its row. The old layout is
+removed after 2 full working days on the new one with no blocker (S20).
+
+**Security and accounts.** Electron 42.11.16 (S36), the account guard's PowerShell gap (S37) and one
+full security check (S38) come first. PR #171's alert is accepted as the 1.1 fix for "only the main
+account may approve". The GitHub App is the primary identity for local panes and `ABlueAgent` for
+cloud sessions (PR #171); Blue says the App exists (2026-11-15). The account fix (checklist steps 35,
+then 49) follows PR #170. The plan board is paused until after 1.1. The PR-reviewer research verdict
+stands (keep `pr-reviewer`; pattern-mine pr-agent and Anthropic's review plugins; no key, no
+spending). The token audit (step 17) is the last step before release (S59).
+
+**Running.** The all-day runner checks (checklist steps 27 and 50). The H1 setup day (step 54); H1
+is one of Blue's PCs (checklist step 49 names the main PC, H1 and the laptop), the one Mako is to run
+on unattended, not the "H1" gate of the 1.0 records.
+Web-reading agents run fenced (S58). Certainty labels and the docs-only review cap of 2 runs go into
+AGENTS.md in S42; until then the cap is 5 for every PR. One merge sitting every evening, about 10
+minutes. PC checks on Tuesday and Friday evenings until H1 automates them.
+
+**Codex** (Blue, 2026-11-16). He keeps ChatGPT: "use heavily over the next 3 weeks ... use claude as
+backup reviewer". The trial is S26's result, "until we burn through codex usage ... not necessarily a
+permanent change". The builder lane stays open while his Codex resets last, to about 2026-11-30, for
+non-sensitive early tasks (S36, S52, S53, S56), and Codex reviews Claude's PRs: "yes, but if it is out
+of usage, use sonnet as the reviewer backup until 11-30 then claude reviews it all unless my mind
+changes. check in on 11-30" (checklist step 63). S26 closes when the resets are used. S36 and S56
+fit the lane's rules (`windows` lane, not sensitive; a bug in S56 that is a security gap stays with
+Claude). S52 and S53 are `blue`-lane rows, outside the lane as docs/CODEX-BUILDER-LANE.md writes it,
+so Blue starts Codex on them himself, and S42 or a lane-doc PR records that exception. The required
+independent Opus review on every PR (AGENTS.md step 3) is unchanged; Codex's review, or Sonnet's
+when Codex is out of usage, is the second one.
+
+**Settled by Blue's follow-up answers (2026-11-16):** the Codex sandbox is blocked from the Claude
+login file (checklist step 62) · the vault's private repo exists (step 56; its sync setup is still
+to do) · the memory tools not chosen, claude-mem included, are signed off as dropped · Dockview stays
+· the role-file rewrite is its own PR (S60) · the definition of CRITICAL (S40) · nothing else from
+"Month two" joins 1.1 beyond the command palette and the Composer. Nothing from his sheets is open.
 
 ### S31 to S34 details: runner work while the UI waits (approved: PR #147, merged 2026-11-04)
 
@@ -168,9 +331,15 @@ follow-up):
 Not in S31: red `NODE_EXTRA_CA_CERTS` certificate warnings in panes, and one "Mako stopped
 unexpectedly" banner on 2026-11-02 at 05:02 UTC (follow-ups; ask Blue if it recurs).
 
-### UI sessions: who builds (approved structure, 2026-10-21)
+### UI sessions: who builds (2026-10-21 structure, replaced in part on 2026-11-16)
 
-Blue: "this structure is fine by me, please proceed in updating this item". The rows stay
+**Replaced on 2026-11-16 (decision sheet):** Claude builds the UI sessions and Codex reviews; S17 is
+done (Shark A); S14 is the written brief from prototype A and the sheet. The bullets below are the
+2026-10-21 structure, kept as history: where they say Codex builds S17 to S20, Claude does now.
+AGENTS.md still carries the older wording until S42 changes it, and the Opus review stays the
+required one until then.
+
+Blue (2026-10-21): "this structure is fine by me, please proceed in updating this item". The rows stay
 `HOLD (Blue)` until he says go (checklist step 18).
 
 - **S14, the brief:** Claude Opus writes it from Blue's examples and dashboard list. Words and
@@ -494,7 +663,7 @@ and later").
 4. **Default split.** Codex takes windows-lane sessions it can verify on the Windows CI checks (path
    b), or in its Windows sandbox (path a, only after S06). Claude takes the rest.
 5. **No dependency on it.** Codex usage stays within ChatGPT Plus, with no credits bought. Nothing
-   waits on Codex: if Blue drops ChatGPT, Claude takes every session (for the UI sessions S17 to S20, which Codex builds, after a plan change; "UI sessions: who builds").
+   waits on Codex: if Blue drops ChatGPT, Claude takes every session (for the UI sessions S17 to S20, which Codex builds, after a plan change; "UI sessions: who builds"). Replaced 2026-11-16: Claude builds the UI sessions.
 
 ### Blue's inputs this month
 
@@ -508,21 +677,37 @@ into HighLevel and approve each batch of about 20 · S26 Codex re-link to `ABlue
 hand-off comment on the claim issue for its trial · S28 agent-roles
 package · every merge.
 
+Replaced 2026-11-16: "S14 UI examples", "S17 to S20 iterate on the look with Codex and ChatGPT" and
+"S17 pick a design" above no longer apply (S17 is done, and Claude builds S18 to S20).
+
+From the 2026-11-16 decision sheet (BLUE-CHECKLIST.md steps 54 to 63): the H1 setup day · H1 trial
+part 2, the aquarium · memory setup · Firefox profile 2's preset URLs · a review of the
+lessons-learned draft · re-linking Codex reviews to `ABlueAgent` · the Composer prototype day · his
+Composer scope sign-off · starting S38 · the brief for S39 · the bug list for S56 · the brief for
+S60 · the Codex check-in on 2026-11-30.
+
 ## Month two and later (not scheduled yet)
 
 Brother's separate Windows install and packaging (target April 2027; Smart App Control and code-signing
 decision) · cost reporting beyond the usage panel · command palette · per-task setup scripts and ports ·
 voice-addressed panes · Microsoft 365 through Claude's connector instead of a built-in mail panel ·
-Hermes trial · Composer build sessions, added by a later plan change after Blue's verdict on S16 (target:
-alongside or after S18–S20) · workflow automations (after S16) · any other work orders from the S16
-verdict.
+Hermes trial · workflow automations (a separate feature from the Composer, Blue 2026-11-16; not
+scheduled) · any other work orders from the S16 verdict. The Composer is now S49 to S51, and the
+command palette is in 1.1 (S19). Nothing else from this list joins 1.1 (Blue, 2026-11-16).
+
+**1.2 or later (Blue, 2026-11-16):** the full aquarium (connected tanks, a catalogue, realistic art) ·
+a queue tracker · persistent agents as creatures · a bare preset · Apache-2.0 (maybe at Mako 2.0; MIT
+for now) · ghost mode · a quiet-hours schedule · Agent Reach · TokenEconomizer · Laya as a 1.2 trial ·
+phone updates from Mako · daily security upkeep. After the scope freeze, new ideas join this queue
+unless they pass the 1.1 test and Blue says so.
 
 Held (Blue's choice, 2026-10-23; docs/DECISIONS.md): appointment prep and a morning lead brief, for
 the HighLevel pipeline. Not scheduled; a later plan change adds them when Blue says go.
 
-Dropped, with reasons in docs/DECISIONS.md once Blue confirms: Jev (paid classifier, nothing to
-solve) · claude-mem (telemetry on by default, reads Claude credentials, overlaps built-in memory and
-Obsidian) · Quick Check (replaced by PR review and CI) · in-app diff viewer and PR watcher (GitHub
+Dropped and signed off by Blue on 2026-11-16 (docs/DECISIONS.md): claude-mem (telemetry on by
+default, reads Claude credentials, overlaps built-in memory and Obsidian) and the other memory tools
+not chosen. Dropped, with reasons in docs/DECISIONS.md once Blue confirms: Jev (paid classifier,
+nothing to solve) · Quick Check (replaced by PR review and CI) · in-app diff viewer and PR watcher (GitHub
 does both) · Vibe Kanban (removed in 1.0).
 
 ## Change log
@@ -547,3 +732,4 @@ does both) · Vibe Kanban (removed in 1.0).
 - 2026-10-23 (PR #119; approved: Blue merged it on 2026-10-24): GoHighLevel lead pipeline for Florida marinas. New S29 "Florida marina list" (official Google Places API only, output only in the private repo `ABlueAI/mako-business`; needs S22 merged and checklist step 33, a new paid Google Cloud billing account with a Places API key and a budget alert, Blue's spending decision to confirm) and new S30 "Personalized outreach openers" (email only, CAN-SPAM, Claude never sends; Blue approves batches of about 20 in HighLevel; needs S29 and checklist step 36, the Places key deleted first). Both are business rows, kept `HOLD (Blue)` so the runner never starts them; Blue starts them himself in a business cloud environment (S29 with the Places key, S30 after the key is deleted), and the claim PR sets the row to IN PROGRESS. S24 is reshaped: its one read-only workflow is the reply/lead watcher, a separate claude.ai scheduled task (7:30 AM to 7:30 PM Eastern hourly plus 8:00 PM) that notifies Blue only when there is something new, with checklist step 34 (connector scope screenshot) before it goes live; it is an approved CRM credential for that one scheduled task, an exception to the spirit of AGENTS.md's "fenced agent roles never get CRM credentials by default" (AGENTS.md itself is unchanged). Appointment prep and a morning lead brief are held. S22 (PR #116) is unchanged. The month now has 30 sessions, 29 active. Blue's words are in docs/DECISIONS.md, 2026-10-23.
 - 2026-11-03 (PR #147; approved: Blue merged it on 2026-11-04): new sessions S31 "PC-check fixes", S32 "1.1 gap audit", S33 "Plan sync guard" and S34 "PR reviewer research (checklist step 22)", all `READY`, so the runner has work while the UI sessions wait on Blue (Blue, 2026-11-03; docs/DECISIONS.md). Details in "S31 to S34 details". No existing row changes; the "Parallel work" line follows Blue's step 8 decision (Max when the UI work runs usage up).
 - 2026-11-04: the plan changes Blue has merged lose their "proposed, pending Blue" wording in the notes at the top, the detail headings and this change log, with merge dates read from GitHub (PRs #44, #46, #47, #48, #52, #54, #119 and #147; approval entries in docs/DECISIONS.md, 2026-11-04; gap audit A3). Row S23's text follows Blue's 2026-10-28 paperwork answers (hour blocks dropped, PRs #122 and #135; A9). S04 item 3's parallel cap follows checklist step 8, not the old 2026-10-28 date. No row's scope, needs or status changes.
+- 2026-11-16 (PR #173; proposed, pending Blue): the Mako 1.1 decision sheet, signed by Blue on 2026-11-16 (docs/DECISIONS.md, 2026-11-16). This file becomes the plan for all of 1.1 (59 sessions, 58 active; S35 is proposed in PR #170 and not counted). New section "Mako 1.1 scope": the test for what is in 1.1, the scope freeze, when 1.1 is done, the soft date, and what he decided for the tabs, the Composer, approvals (A2), usage, models, the look and running. Existing rows: S14 becomes the brief from prototype A and the sheet, with UI UX Pro Max's core skill folder pinned at `4f2dbb6`; S17 is DONE (Shark A; #173 is this PR, which records it); S18, S19 and S20 become the brain tab, the control room, and the aquarium tab with the old layout's removal, built by Claude and reviewed by Codex, with his done-when and test plan (S18 also needs S43), still `HOLD (Blue)`; S26 stays open as `NEEDS BLUE (Codex check-in 2026-11-30)`, with the lane open to about 2026-11-30; S28 gains the harness-engineering nuggets. New rows S36 to S59: Electron 42.11.16, the account guard's PowerShell gap, a full security check, ECC PRs 1 to 3 (S39 to S41), the rulebook update, the spec-miner and GateGuard trials, ECC skill mining, session hygiene, Symvibe's three pieces, tree, history and memory, the Composer (pre-build studies, prototype day, v1 build with scope pending Blue's sign-off), HyperFrames, AgentPlayback, Claude video analysis in Video Scout, Firefox presets, Codex's 9 audit bugs, the licence guardrail, fenced web-reading agents, and the 1.1 release. "Month two and later" gains the 1.2 queue; the Composer and workflow-automation lines there follow his decisions. "Blue's day" is one merge sitting of about 10 minutes, and the Max upgrade is pushed back (2026-11-15). Not changed here: AGENTS.md, `CLAUDE.md`, `.claude/`, docs/RUNNER.md and docs/CODEX-BUILDER-LANE.md; rule changes come in S39, S40 and S42. Then, the same day and at Blue's request in a comment on PR #173, his answers to the 14 items the sheet had left open: S19 gains a "pause all" button and phrase, the Ctrl K command palette, a cheat sheet and pop-out windows if cheap; S36, S52, S53 and S56 may be built by Codex until about 2026-11-30; S40 gets his definition of CRITICAL and waits only for S39; S49 adds a hands-on T3 Code trial on his VM; S54 is confirmed; new row S60 (role-file rewrite); the Composer scope gains Codex panes as targets (one build day or less) and subagents on by default with a cap of 3.

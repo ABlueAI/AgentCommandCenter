@@ -6,7 +6,9 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-11-05 by Claude (step 50 added and steps 28 and 27 moved to the top of "Do next",
+Last updated 2026-11-16 by Claude (the Mako 1.1 decision sheet, PR #173: step 28 ticked, step 10
+dropped, steps 8 and 17 re-timed, steps 54 to 63 added (62 ticked) and "Do next" re-ordered; earlier, on
+2026-11-05: step 50 added and steps 28 and 27 moved to the top of "Do next",
 for the merge-order rule, PR #166; earlier, on 2026-11-04: step 26 marked dropped, "Do next" items 6 and 7 updated now that PRs #84 and
 #119 are merged, a question on step 10 added as item 8, and the "About 2026-11-17" reminder's Max date
 fixed, from the 1.1 gap audit's A7 and A8, PR #160; earlier the same day: step 49 added from "Coming up this month", the `ABlueAI`
@@ -25,34 +27,37 @@ changed to classic `public_repo` (PR #46); step 8 moved to 2026-10-28 and steps 
 Your words (2026-10-21): "we will walk through this. place it where you prioritize it in relation to
 other remaining items." Claude's order for what is left:
 
-1. **Step 50**, right after you merge PR #166 (about 2 minutes): have the runner and digest prompts
-   applied, so the runner marks PRs ready only when they merge in any order and every summary ends
-   with a "Merge order:" line. If you do step 27 in the same sitting, one session can do both.
-2. **Step 28, then step 27**, in one sitting: S04's runner (PR #84, merged 2026-10-23). Neither
-   step is ticked yet. Moved to the top on 2026-11-05 (PR #166): once step 27 is ticked, plan-session
-   PRs stop editing STATUS.md and leave it to the runner's status PR, so parallel PRs conflict less often (your words, 2026-11-04:
-   "if i have 5 prs thrown at me and i am reviewing each then merging, there is no explicitly
-   stated order to merge, it will fail repeatedly").
-3. **Step 15**, the voice check on the new Electron, first of the checks on your PC: a failure means a fix or a revert of the
-   Electron bump before other work.
-4. **Step 35**, S06 on your PC (the agent token in Mako, about 15 minutes), **then step 49**: remove
-   the `ABlueAI` command-line login from every PC Claude runs on (about 5 minutes per PC). Until
-   then, Claude desktop chats run as you and must not do PR work (your words, 2026-11-04: "lets
-   unblock this problem for good"); a guard blocks it.
-5. ~~**Step 14**, the agent token~~ Done 2026-10-23 on your word. It unblocks S06 and everything
-   after it (S07 to S11, S21), and Codex's next build (from the hand-off for this order; the plan
-   doesn't name that dependency yet).
-6. **Step 17**, the token audit (parts a and b): moved to the end of 1.1, about February 2027 (your
-   words, 2026-11-03: "Let's finish it at the end"). Part c, push protection, is already on (checked
-   2026-11-03). Then every token is reset with a 1-year
-   expiry. The agent token's January renewal (by 2027-01-14) still comes first.
-7. **Step 8**, the Max upgrade: when the UI work runs usage up (your call, 2026-11-03); Pro until
-   then.
-8. **Step 33**, Google Cloud billing for S29 (your spending decision; the lead-pipeline plan
-   change, PR #119, merged 2026-10-24), then start S29. After S29 merges, **step 36** before you start S30. **Step 34** waits until S24 is
-   ready for its watcher.
-9. **Step 10**, the app settings review, has said "this week" since 2026-10-17 with no update. Is
-   it dropped, or does it get a date? Tell any agent either way.
+Re-ordered on 2026-11-16 from your signed Mako 1.1 decision sheet (docs/DECISIONS.md, 2026-11-16).
+
+1. **Steps 27 and 50**, in one sitting (about 12 minutes): the all-day runner checks. Step 28 is
+   closed (usage credits are off, your word of 2026-11-04). Once step 27 is ticked, plan-session PRs
+   stop editing STATUS.md and leave it to the runner's status PR.
+2. **Step 59**, re-link Codex reviews to `ABlueAgent` (about 5 minutes; your yes, 2026-11-16).
+   **Step 63** on 2026-11-30: the Codex check-in.
+3. **Step 54**, the H1 setup day (1.5 to 3 hours). H1 is the PC Mako is to run on unattended. It
+   takes in the step 43 re-run and the step 25 tick, and S44, S48 and the nightly tidy wait on it.
+4. **Step 15**, the voice check on the new Electron. S36 moves Electron to 42.11.16, so if that has
+   merged, check on that version.
+5. **Step 35, then step 49**, after PR #170 (the account fix follows it): the agent token in Mako,
+   then removing the `ABlueAI` command-line login from every PC Claude runs on.
+6. **Step 56**, memory setup (about 45 minutes over 2 days), when S48's PR asks for it, and
+   **step 55**, H1 trial part 2, the aquarium (15 to 20 minutes), when S20's PR asks for it.
+7. **Step 60**, the Composer prototype day, after S49's test sheet is ready. Your Composer scope
+   sign-off unblocks S51.
+8. **Step 57** (Firefox profile 2's preset URLs, 10 minutes), **step 58** (the lessons-learned
+   draft, 15 minutes) and **step 61** (an agent deletes the StarNet clone, a leftover local copy on
+   your PC, and the OpenCode leftovers; you say when).
+9. **PC checks**, batched on Tuesday and Friday evenings until H1 automates them: steps 23, 24
+   (optional, kept), 29, 31, 38, 39, 40, 41, 44, 45 and 48.
+10. **Step 18**, your go on the UI (S14, S18 to S20 are still on hold until it is recorded).
+11. **Step 8**, the Max upgrade: pushed back "until 11/19 or until usage begins flowing" (your
+    words, 2026-11-15).
+12. **Step 33**, Google Cloud billing for S29, then start S29; **step 36** before S30; **step 34**
+    when S24 is ready for its watcher.
+13. **Step 17**, the token audit: inside 1.1, as the last step before release (S59). The agent
+    token's renewal (by 2027-01-14) may come first.
+14. ~~**Step 14**, the agent token~~ Done 2026-10-23 on your word. ~~**Step 10**, the app settings
+    review~~ Dropped 2026-11-16: the new Settings page replaces it.
 
 ## Today
 
@@ -212,8 +217,9 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   - *Done when:* you say "Part B done" and the checker's PR, authored by the agent account, showed as
     blocked after CI passed until you approved it. On the next morning's run the runner starts
     building S01 instead of sending "waiting on step 7".
-- [ ] **8. Upgrade Claude to Max 5x.** About 2 minutes, **when the UI work runs usage up** (your call,
-  2026-11-03; it was Wednesday 2026-10-28, moved from 2026-10-21 on 2026-10-20), after you have used your remaining Pro resets: in your words, "2 full
+- [ ] **8. Upgrade Claude to Max 5x.** About 2 minutes, **pushed back until 11/19 or until usage
+  begins flowing** (your words, 2026-11-15, from the decision sheet; before that "when the UI work
+  runs usage up", 2026-11-03; it was Wednesday 2026-10-28, moved from 2026-10-21 on 2026-10-20), after you have used your remaining Pro resets: in your words, "2 full
   resets & a weekly reset", plus 3 ChatGPT resets. claude.ai > Settings > Billing. Keep ChatGPT Plus.
   No longer blocks the runner; it builds one session at a time on Pro until then.
   - The 2026-10-21 date was picked to upgrade before Pro renews on Thursday. If Pro renews on
@@ -222,7 +228,11 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   - *Done when:* you say so. After S04, the runner then allows 2 sessions in parallel, later 3 (one
     setting in docs/RUNNER.md).
 
-- [ ] **28. Confirm usage credits are off (S04).** 1 minute, before step 27. Open
+- [x] **28. Confirm usage credits are off (S04).** *Closed 2026-11-16 on Blue's word of 2026-11-04
+  that usage credits are off, as recorded on his signed decision sheet (docs/DECISIONS.md,
+  2026-11-16). His own wording wasn't relayed and Claude can't read that page, so the sheet he
+  signed is the only evidence. If credits are on, runs go into paid overage: say so and this is
+  unticked.* 1 minute, before step 27. Open
   https://claude.ai/settings/usage and check that **Usage credits** are off. With them on, scheduled
   runs keep going past your usage limit on paid, metered overage; with them off, new runs are
   rejected until the usage window resets, which is what the all-day runner expects (docs/RUNNER.md,
@@ -294,7 +304,10 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   - Once moved, turn off password saving in Chrome and Edge so there is one place.
   - Don't connect it to ChatGPT's **Passwords** setting or let any AI agent drive it.
   - *Done when:* you say so. It's yours, so Claude doesn't verify anything.
-- [ ] **10. App settings review.** About 20 minutes, this week, after step 2.
+- **10. ~~App settings review.~~ Dropped.** *Dropped 2026-11-16 by Blue on his decision sheet: the
+  new Settings page (S19) replaces it (docs/DECISIONS.md, 2026-11-16). Nothing to do; the number
+  stays so no other step is renumbered. `docs/SETUP-APP-SETTINGS.md` was never written.* About 20
+  minutes, this week, after step 2.
   - Screenshot every page of: ChatGPT desktop app > Settings; claude.ai > Settings and the Claude
     desktop app's settings; github.com > Settings > Applications (Installed GitHub Apps and
     Authorized OAuth Apps). Send them to Claude in one message.
@@ -415,8 +428,9 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     fails, so ask an agent to post it (comment on the PR as `ABlueAI`, or tell the agent in its own
     session); an agent's request worked on PR #47 on 2026-10-21 (STATUS.md). If ChatGPT uses this same GitHub connection outside Codex (not verified), repositories
     only `ABlueAI` can reach drop out of ChatGPT and Codex; session S26 checks this.
-- [ ] **17. Token hygiene: find old tokens, and rules for any new one.** About 20 minutes, at the end
-  of 1.1, about February 2027 (moved 2026-11-03; "Do next" item 6). Part c is already done.
+- [ ] **17. Token hygiene: find old tokens, and rules for any new one.** About 20 minutes, inside
+  1.1, as the last step before the release (S59; decision sheet, 2026-11-16; it was "about February
+  2027", moved 2026-11-03). 1.1 isn't done until this passes. Part c is already done.
   - **a. Audit old tokens, on both `ABlueAI` and `ABlueAgent`** (sign in to each in turn). A lost
     token's value can't be recovered: GitHub shows a token only once, but it lists every token with
     its last-used date.
@@ -515,6 +529,10 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   docs/DECISIONS.md and sets those rows back to READY in a PR. Merging that PR starts S14 (Claude
   writes the brief). S17 to S20 are built by Codex, which you start yourself once S14 and S26 are
   done; the runner never builds them (docs/PLAN-1.1.md "UI sessions: who builds").
+  - *Updated 2026-11-16:* Claude builds S18 to S20 and Codex reviews; S17 is done (Shark A); S14 is
+    the brief from prototype A and your decision sheet (docs/PLAN-1.1.md "Mako 1.1 scope"). The rows
+    are still on hold: your sheet set the scope, and your "go on the UI" hasn't been recorded in
+    your words yet.
   - *Done when:* that DECISIONS.md entry is on `main`. Claude checks.
 - [x] **19. Give your Composer verdict after S16.** About 15 minutes, after the S16 PR opens. Read
   `docs/decisions/OSS-composer.md`, answer its open questions, and give a verdict on each option
@@ -624,7 +642,9 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     2. Turn on Claude's push notifications on the phone and allow them in the phone's settings.
     3. Ask Claude for a harmless test push. Tell an agent whether it arrived.
 
-- [ ] **25. Connect the plan board (S03).** About **10 minutes**, after you merge the S03 PR, #54. The
+- [ ] **25. Connect the plan board (S03).** *2026-11-16: the tick is folded into the H1 setup day
+  (step 54), and the plan board is paused until after 1.1 (decision sheet), so nothing new is asked
+  of you here.* About **10 minutes**, after you merge the S03 PR, #54. The
   plan sync already keeps one issue per session with labels and the "1.1 Month 1" milestone using
   GitHub's own token; only the Project board needs a token of its own, because GitHub's built-in
   token can't write a project on your account. Recommended: a token on `ABlueAgent` that can touch
@@ -1009,16 +1029,95 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   - *Done when:* you tell an agent you can read the M on the taskbar (or what you saw). It ticks
     this with the date, and the status PR marks S21 done.
 
+## From the Mako 1.1 decision sheet (2026-11-16)
+
+Steps 54 to 61 come from the sheet you signed on 2026-11-16, and steps 62 and 63 from your
+follow-up answers the same day (docs/DECISIONS.md, 2026-11-16;
+docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open PRs (#134 and #169).
+
+- [ ] **54. H1 setup day.** **1.5 to 3 hours**, in one sitting at H1, as soon as you can give it an
+  afternoon; S44 (the GateGuard trial), S48 (the nightly tidy) and the automated PC checks wait on
+  it. An agent walks you through it and keeps the list of what was set up, without machine paths or
+  account details in this repo.
+  - Set H1 up as the machine that runs Mako unattended: the repo on `main`, `npm ci`, Mako starting
+    from its shortcut, the `ABlueAgent` token saved in Mako's key setup (as in step 35, never in a
+    chat), and no `ABlueAI` command-line login (step 49 covers H1).
+  - **Folded in, the step 43 re-run:** repeat step 43's Playwright page-reader check on H1.
+  - **Folded in, the step 25 tick:** open Actions > **Plan sync** > the latest run, and tell the
+    agent whether its summary says "Board: synced" and the board shows each session in its column.
+    The agent ticks step 25 with the date. The board itself is paused until after 1.1.
+  - *Done when:* you tell an agent H1 is set up and what the two folded-in checks showed. It checks
+    what it can from a pane on H1 (`gh api user --jq .login` gives an agent login, Mako's build
+    label matches `main`), ticks this with the date, and ticks step 25 if the run and board check
+    out.
+- [ ] **55. H1 trial part 2: the aquarium.** **15 to 20 minutes**, on H1, when S20's PR asks for it
+  (after step 54).
+  - With a few live panes open, look at the aquarium tab: one creature per live pane, in the right
+    colour within about 2 seconds, and a click on a creature opens its pane.
+  - *Done when:* you tell an agent what you saw (or what differed). It ticks this with the date in
+    S20's PR.
+- [ ] **56. Memory setup.** **About 45 minutes over 2 days**, after step 54, when S48's PR asks
+  for it (S48 builds the nightly tidy this step turns on).
+  - Day 1 (about 30 minutes): with an agent, point Mako's memory at your private vault and turn on
+    the nightly tidy as a local scheduled task on H1.
+  - Day 2 (about 15 minutes): read the first nightly note and tell the agent whether it tidied what
+    it should.
+  - **The vault's private repo:** *created by you on 2026-11-16 (your statement, relayed in a
+    comment on PR #173; Claude can't see a private repo it isn't given).* Still to do, on Day 1:
+    the sync setup between the vault and that repo, which S48's "a cloud agent can read the vault"
+    needs.
+  - *Done when:* you tell an agent the tidy ran and what the note showed. It ticks this with the
+    date; the 3 unattended nights are S48's own done-when.
+- [ ] **57. Firefox profile 2: the preset URLs.** **10 minutes**, any time; S55 waits on it. Give an
+  agent, in its own session, the list of URLs profile 2 should open (never a login or password; a
+  private URL stays out of this repo).
+  - *Done when:* the agent has the list and S55's row moves from `NEEDS BLUE`. It ticks this with
+    the date.
+- [ ] **58. Review the lessons-learned draft.** **15 minutes**, when the agent that wrote it sends
+  it to you. Read it and say what to change or drop.
+  - *Done when:* you tell an agent it is approved (or what to change). It ticks this with the date
+    and your words.
+- [ ] **59. Re-link Codex reviews to `ABlueAgent`.** **About 5 minutes**, any time this week (your
+  yes, 2026-11-16; you do this one yourself). In ChatGPT's Codex settings, connect GitHub as
+  `ABlueAgent` (a private browser window signed in to GitHub as `ABlueAgent`, as in step 16) and
+  keep automatic reviews on for `ABlueAI/AgentCommandCenter`.
+  - *Done when:* you say it is done. Claude checks on GitHub that Codex reviews the next PR
+    `ABlueAgent` opens without being asked, and ticks this with the date and that PR's number.
+- [ ] **60. The Composer prototype day.** **A normal working day plus 30 minutes of scoring**, after
+  S49's test sheet is ready and before any Composer code. Work your usual day with the Composer
+  prototype, then score it against the sheet.
+  - *Done when:* you give an agent your scores. S50's PR records them and what they change, and
+    ticks this with the date.
+- [ ] **61. Delete the StarNet clone and the OpenCode leftovers.** **About 2 minutes of your time**:
+  an agent does it in a local pane on your PC, and you have already approved it (decision sheet,
+  2026-11-16). Tell a local agent "do step 61". It lists what it will delete first (folders only,
+  nothing from this repo), deletes after you say go, and shows you they are gone.
+  - *Done when:* that agent reports both are gone and ticks this with the date and how it checked.
+- [x] **62. Block the Codex sandbox from the Claude login file.** *Done 2026-11-16 by Blue, who ran
+  the command himself (his statement, relayed in a comment on PR #173; Claude can't see his PC, so
+  this rests on his word).* Nothing more to do.
+- [ ] **63. The Codex check-in.** **About 5 minutes**, on **2026-11-30**. Until then Codex builds
+  non-sensitive early tasks (S36 and S56 through the lane; S52 and S53 you start on Codex yourself,
+  as they are `blue`-lane rows) and reviews Claude's PRs, with Sonnet as the backup
+  reviewer if Codex is out of usage; after 2026-11-30 Claude reviews it all "unless my mind
+  changes" (your words, 2026-11-16). Tell any agent whether the Codex lane stays open, and whether
+  your resets are used. S26 closes when they are.
+  - *Done when:* your answer is recorded in docs/DECISIONS.md in your words, S26's row in
+    docs/PLAN-1.1.md follows it, and the agent ticks this with the date.
+
 ## Every day, once the runner is on
 
 Once S04 is applied (step 27), the runner works all day and you do one sitting in the evening:
 
-- **Evening, after the 8:03 PM digest (10 to 20 minutes):** read the digest on your phone. Answer
+- **Evening, after the 8:03 PM digest (the merge sitting, about 10 minutes; decision sheet,
+  2026-11-16):** read the digest on your phone. Answer
   each "needs Blue" question in its PR. For each PR the digest marks `READY TO MERGE`, read its
   TLDR, then Files changed > Review changes > Approve > Submit review, then Merge pull request >
   Confirm merge. Merge only on `READY TO MERGE`.
 - **During the day: nothing.** A question for you also arrives as a GitHub notification (a PR
   comment starting "@ABlueAI needs Blue:"); it can wait for the evening.
+- **Tuesday and Friday evenings:** the PC checks, batched, until H1 automates them ("Do next" item
+  9).
 - **To pause or resume:** the switch on the routines page (step 27).
 - **Until step 27 is done:** the old runner fires once, at 8:01 AM. Check your phone in the
   morning for "needs Blue", and approve and merge ready PRs in the evening as above.
@@ -1027,16 +1126,18 @@ Once S04 is applied (step 27), the runner works all day and you do one sitting i
 
 You can start on the first one now, which saves time later.
 
-- **Session S14 (on hold until you say go, step 18):** UI examples. Screenshots or links of designs
-  you like, including dashboards for different tasks (coding, research, business). **Start a folder
-  now.**
+- **Session S14 (on hold until you say go, step 18):** the design brief, from prototype A (Shark A)
+  and your decision sheet. Hand both to the session that writes it.
 - **Session S06, after step 35 passes:** remove the `ABlueAI` Git login from every PC Claude runs
   on: now step 49.
 - **Session S12:** confirm your Hexona login link in Mako (step 29).
 - **Session S13:** install Obsidian, create the vault and install the skills (step 31).
-- **Session S26:** lock its claim issue and comment as `ABlueAI` to start Codex's trial build (step 30).
+- **Session S26:** the trial (PR #140) is its result; the lane stays open to about 2026-11-30 and
+  closes when your Codex resets are used (step 63). Step 30's records of what Codex did are still
+  unticked.
 - **Session S16:** ~~your Composer verdict (step 19)~~ Done 2026-10-21: no option adopted, everything open for study, questions deferred (step 19).
-- **Session S17 (on hold with S14):** pick one of 2 or 3 design directions.
+- **Session S17:** ~~pick one of 2 or 3 design directions~~ Done: you picked Shark A (recorded
+  2026-11-16).
 - **Session S21:** pick a logo variant.
 - **Session S23:** ~~approve the client paperwork drafts (step 37)~~ Answered 2026-10-28; merging
   PR #122 approves the revised drafts. Step 46 before your first client.
@@ -1059,9 +1160,15 @@ You can start on the first one now, which saves time later.
 ## Dated reminders
 
 - **About 2026-11-17:** reassess plans. Is Max 5x enough, or move to 20x? The month review (S25)
-  brings the numbers. The upgrade is step 8, when the UI work runs usage up (no longer
-  2026-10-28), so how much Max 5x use this covers depends on when step 8 happens. If step 8
-  hasn't happened by then, reassess whether Pro is still enough, using S25's numbers.
+  brings the numbers. The upgrade is step 8, pushed back "until 11/19 or until usage begins
+  flowing" (2026-11-15; no longer "when the UI work runs usage up"), so on this date you are
+  still on Pro: reassess whether Pro is still enough, using S25's numbers if it has run.
+- **2026-11-19:** the Max upgrade (step 8), "or until usage begins flowing" (your words,
+  2026-11-15).
+- **2026-11-30:** the Codex check-in (step 63).
+- **2026-12-03:** the Composer re-scout (S49). Again about 30 days after 1.1 ships.
+- **About 2026-12-13 to 2027-01-13:** the soft window for Mako 1.1. Nothing is cut for it; step 17
+  (the token audit) is the last step before the release.
 - **By 2027-01-14:** renew the `ABlueAgent` classic token (`public_repo` only, step 14), a week
   before it expires on 2027-01-21. Signed in as `ABlueAgent`, it is listed on
   https://github.com/settings/tokens. Make the new token by step 14's
