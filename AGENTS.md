@@ -77,7 +77,9 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      `.claude/agents/`, Claude Opus, read-only, no shell). On a Codex PR, the Claude session or
      runner fire that runs `pr-reviewer` runs them too. Their reports go in the run 1 comment, each
      under its own heading, with the same edits before posting. Their high and medium findings join
-     the one fix batch; their low findings go to Follow-ups. They never re-run on later runs, never
+     the one fix batch, and the builder passes them to `pr-reviewer`'s run 2 with its own as the
+     previous findings, so it says whether each is fixed; their low findings go to Follow-ups. They
+     never re-run on later runs, never
      replace `pr-reviewer`, and don't count toward the 5-run cap. If one isn't loaded, the fallback
      above applies with its file's body.
    - Codex review is optional. Since Codex was linked to the agent account (BLUE-CHECKLIST.md step

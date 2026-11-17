@@ -90,6 +90,9 @@ for (const [name, licence] of Object.entries(PRE_READY)) {
   assert(parsed.disallowedTools.length === 0 && Object.keys(parsed.events).length === 0,
     `${name} declares no hooks or disallowedTools`);
   assert(parsed.scalars.model === 'opus', `${name} runs on opus (got ${parsed.scalars.model})`);
+  const keys = Object.keys(parsed.scalars).sort();
+  assert(JSON.stringify(keys) === '["description","model","name","tools"]',
+    `${name} declares only name, description, tools and model (got ${JSON.stringify(keys)}), so no permissionMode, mcpServers or skills`);
   const desc = parsed.scalars.description || '';
   assert(desc.includes('Run by the builder before marking a PR ready') && desc.includes('Not for automatic use.')
     && !/proactively|must be used/i.test(desc),
@@ -116,6 +119,8 @@ if (sharedBlocks.length > 0) {
   const rules = fs.readFileSync(path.join(repoRoot, 'AGENTS.md'), 'utf8');
   assert(Object.keys(PRE_READY).every((n) => rules.includes('`' + n + '`')) && rules.includes('on review run 1 only'),
     'AGENTS.md step 3 names the four pre-ready reviewers and runs them on review run 1 only');
+  assert(rules.includes("passes them to `pr-reviewer`'s run 2"),
+    "AGENTS.md hands the four's high and medium findings to pr-reviewer's run 2 as previous findings");
   assert(rules.includes('**Depth check before plans and new builds**'), 'AGENTS.md has the depth check');
 }
 
