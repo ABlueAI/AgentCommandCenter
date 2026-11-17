@@ -6,7 +6,7 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-11-17 by Claude (your answers to PR #173's questions, PR #174: step 64 added,
+Last updated 2026-11-17 by Claude (your answers to PR #173's questions, PR #195: step 64 added,
 step 18 waits on the schedule; earlier, on 2026-11-16, the Mako 1.1 decision sheet, PR #173: step 28 ticked, step 10
 dropped, steps 8 and 17 re-timed, steps 54 to 63 added (62 ticked) and "Do next" re-ordered; earlier, on
 2026-11-05: step 50 added and steps 28 and 27 moved to the top of "Do next",

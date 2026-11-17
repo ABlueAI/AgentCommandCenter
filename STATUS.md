@@ -1,6 +1,6 @@
 # Mako status
 
-Updated 2026-11-17 by PR #174 (Blue's answers to PR #173's five questions), and before that on
+Updated 2026-11-17 by PR #195 (Blue's answers to PR #173's five questions), and before that on
 2026-11-16 by the Mako 1.1 decision-sheet plan change (PR #173, merged 2026-11-17), which changed the
 "Right now" and "Next" sections where the sheet touches them and nothing else. Before that: updated
 2026-11-05 by the all-day runner's status PR for 2026-11-05, for the one PR merged since
@@ -351,7 +351,7 @@ it in Mako's key setup (safeStorage) and gives it only to unfenced agent panes.
 once it merges: S36 (Electron 42.11.16), S37 (the account guard's PowerShell gap), S41 (the sanitizer
 test), S42 (the rulebook update), S43, S52 to S54, S57 and S58. S46 and S47 are held with S14's
 brief, and S45 waits for S39.
-**2026-11-17 (PR #174):** S25 is dropped, the business rows don't count toward the 1.1 release,
+**2026-11-17 (PR #195):** S25 is dropped, the business rows don't count toward the 1.1 release,
 the runner's `parallel_cap` is unchanged, and the plan sync keeps opening session issues. Waiting on
 Blue: the 1.1 schedule (S61, step 64), then his go on the UI (step 18), the H1 setup day (step 54), his Composer scope sign-off
 (S51), the briefs for S39 and S60, the Codex check-in on 2026-11-30 (step 63), and the questions in
