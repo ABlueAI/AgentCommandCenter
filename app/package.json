@@ -15,7 +15,7 @@
   "author": "ABlueAI",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^42.5.0"
+    "electron": "42.11.16"
   },
   "dependencies": {
     "@huggingface/transformers": "3.8.1",

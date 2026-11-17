@@ -5,6 +5,33 @@ What `npm audit` reports for `app/package-lock.json`, and what was done about ea
 
 ## Result
 
+### S36: Electron 42.11.16 (2026-11-17)
+
+Electron is pinned to exactly `42.11.16` in both the manifest and lockfile, up from the
+previously locked `42.11.15` (the manifest allowed `^42.5.0`). No other dependency changed.
+
+| | Before S36 | After S36 |
+|---|---|---|
+| Audit findings (vulnerable packages) | 4 high | 3 high |
+| Electron | GHSA-jr5w-w6x2-84p9 (high) | Fixed in 42.11.16 |
+| Remaining | `sharp`, `@huggingface/transformers`, `kokoro-js` | Same three packages |
+
+Measured against the public registry on 2026-11-17: `npm audit --package-lock-only --json`
+before the bump and `npm audit --json` after it. Both audits exited 1 because findings remain.
+GHSA-jr5w-w6x2-84p9 concerns compromised eMudhra intermediate certificates and affects Electron
+versions below 42.11.16. The three `sharp` advisories listed below are unchanged; transformers
+and kokoro inherit those findings. No additional dependency fixes were applied.
+
+Compared with S02's historical result, the current registry no longer reports
+GHSA-hp3w-g68c-fv3c for `sprintf-js`, or its inherited findings in `roarr`, `global-agent` and
+`onnxruntime-node`. Those four moderate findings were already absent in the pre-bump audit;
+their disappearance is not caused by this Electron update. Their installed versions are unchanged.
+
+The regression floor in `app/ci-hygiene.test.js` now requires Electron 42.11.16 or newer.
+The Windows voice check remains BLUE-CHECKLIST.md step 15, on 42.11.16; it is still pending.
+
+### S02 historical result (2026-10-19)
+
 | | Before S02 | After S02 |
 |---|---|---|
 | `npm audit` | 11 (5 moderate, 6 high) | 7 (4 moderate, 3 high) |
@@ -33,7 +60,10 @@ only the lockfile moved. `app/ci-hygiene.test.js` fails if any of them drops bel
 | `tar` (high) | 7.5.19 | 7.5.22 | GHSA-r292-9mhp-454m (stack-overflow DoS on a crafted archive) | `onnxruntime-node`'s install script. Mako never unpacks archives at runtime. |
 | `protobufjs` (moderate) | 7.6.4 | 7.6.6 | GHSA-j3f2-48v5-ccww (DoS parsing `.proto` options) | Installed under `onnxruntime-web`; Mako's renderer loads prebuilt browser bundles instead (below). |
 
-## Left as they are, and why
+## S02 remaining findings and exposure
+
+This section records S02's findings. For the current audit result, see S36 above: only `sharp`
+and its two dependents remain reported; the four moderate findings below are historical.
 
 `npm audit` offers no fix for these. Its only route is `@huggingface/transformers` 4.x. That is a
 major upgrade of the dictation engine, and `kokoro-js` 1.2.1 (the latest) still requires
@@ -72,9 +102,9 @@ and TTS checked on Blue's PC, since the models run on his GPU.
   the unchanged `@huggingface/transformers` 3.8.1 and vendored `kokoro-js` 1.2.1 bundles. They do
   not run inside Electron, so they can't see a runtime change.
 - **Only on Blue's PC:** real microphone capture, WebGPU inference and audio playback on Electron
-  42.11.15. In particular, `app/media-permission-policy.js` grants the microphone only when the
+  42.11.16. In particular, `app/media-permission-policy.js` grants the microphone only when the
   request matches facts probed on Electron 42.5.0 (`securityOrigin` `file:///` and the exact
-  requesting URL). If 42.11.15 reports them differently, the policy refuses the microphone and CI
+  requesting URL). If 42.11.16 reports them differently, the policy refuses the microphone and CI
   stays green. Dictation working in BLUE-CHECKLIST.md step 15 is what confirms they still hold.
   Likewise `app/renderer/tts.js` relies on two facts probed on 42.5.0: unprefixed `preservesPitch`
   works, and a `play()` that starts after synthesis (well after the click) still resolves. Step
