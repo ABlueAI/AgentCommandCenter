@@ -1,7 +1,7 @@
 # Mako status
 
-Updated 2026-11-17 by S36: Electron pinned to 42.11.16, audit re-read; Windows CI, independent
-Claude Opus review and Blue's voice check (step 15) remain pending. Before that: updated
+Updated 2026-11-17 by S36: Electron pinned to 42.11.16, audit re-read;
+Blue's voice check (step 15) remains pending. Before that: updated
 2026-11-16 by the Mako 1.1 decision-sheet plan change (PR #173), which changed the "Right
 now" and "Next" sections where the sheet touches them and nothing else. Before that: updated
 2026-11-05 by the all-day runner's status PR for 2026-11-05, for the one PR merged since
