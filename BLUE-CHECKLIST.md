@@ -6,7 +6,8 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-11-16 by Claude (the Mako 1.1 decision sheet, PR #173: step 28 ticked, step 10
+Last updated 2026-11-17 by Claude (your answers to PR #173's questions, PR #174: step 64 added,
+step 18 waits on the schedule; earlier, on 2026-11-16, the Mako 1.1 decision sheet, PR #173: step 28 ticked, step 10
 dropped, steps 8 and 17 re-timed, steps 54 to 63 added (62 ticked) and "Do next" re-ordered; earlier, on
 2026-11-05: step 50 added and steps 28 and 27 moved to the top of "Do next",
 for the merge-order rule, PR #166; earlier, on 2026-11-04: step 26 marked dropped, "Do next" items 6 and 7 updated now that PRs #84 and
@@ -49,7 +50,9 @@ Re-ordered on 2026-11-16 from your signed Mako 1.1 decision sheet (docs/DECISION
    your PC, and the OpenCode leftovers; you say when).
 9. **PC checks**, batched on Tuesday and Friday evenings until H1 automates them: steps 23, 24
    (optional, kept), 29, 31, 38, 39, 40, 41, 44, 45 and 48.
-10. **Step 18**, your go on the UI (S14, S18 to S20 are still on hold until it is recorded).
+10. **Step 64**, hand over the 1.1 schedule (about 5 minutes), then **step 18**, your go on the
+    UI, once S61 has adopted and reviewed it (your words, 2026-11-17: "the schedule and its
+    independent review before any UI building").
 11. **Step 8**, the Max upgrade: pushed back "until 11/19 or until usage begins flowing" (your
     words, 2026-11-15).
 12. **Step 33**, Google Cloud billing for S29, then start S29; **step 36** before S30; **step 34**
@@ -533,6 +536,9 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     the brief from prototype A and your decision sheet (docs/PLAN-1.1.md "Mako 1.1 scope"). The rows
     are still on hold: your sheet set the scope, and your "go on the UI" hasn't been recorded in
     your words yet.
+  - *Updated 2026-11-17:* not before the 1.1 schedule is adopted with its independent review and a
+    re-review of its fixes (plan row S61, step 64; your words: "the schedule and its independent
+    review before any UI building"). Your go comes after S61 merges.
   - *Done when:* that DECISIONS.md entry is on `main`. Claude checks.
 - [x] **19. Give your Composer verdict after S16.** About 15 minutes, after the S16 PR opens. Read
   `docs/decisions/OSS-composer.md`, answer its open questions, and give a verdict on each option
@@ -1105,6 +1111,13 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
   - *Done when:* your answer is recorded in docs/DECISIONS.md in your words, S26's row in
     docs/PLAN-1.1.md follows it, and the agent ticks this with the date.
 
+- [ ] **64. Hand over the 1.1 schedule (S61).** **About 5 minutes**, when you're ready; every UI
+  row waits on it. Give the schedule to an agent in its own session (not as a GitHub comment if it
+  holds anything private). It opens S61's PR with the schedule as `docs/SCHEDULE-1.1.md`, nothing
+  private in it, runs the independent review, fixes the findings and re-reviews the fixes.
+  - *Done when:* S61's PR is open with the schedule in it. The agent ticks this with the date; you
+    adopt the schedule by merging that PR, and then say go on the UI (step 18).
+
 ## Every day, once the runner is on
 
 Once S04 is applied (step 27), the runner works all day and you do one sitting in the evening:
@@ -1162,7 +1175,8 @@ You can start on the first one now, which saves time later.
 - **About 2026-11-17:** reassess plans. Is Max 5x enough, or move to 20x? The month review (S25)
   brings the numbers. The upgrade is step 8, pushed back "until 11/19 or until usage begins
   flowing" (2026-11-15; no longer "when the UI work runs usage up"), so on this date you are
-  still on Pro: reassess whether Pro is still enough, using S25's numbers if it has run.
+  still on Pro: reassess whether Pro is still enough, from the usage panel (S25 was dropped on
+  2026-11-17, so no month-review numbers come).
 - **2026-11-19:** the Max upgrade (step 8), "or until usage begins flowing" (your words,
   2026-11-15).
 - **2026-11-30:** the Codex check-in (step 63).
