@@ -1172,8 +1172,7 @@ You can start on the first one now, which saves time later.
 
 ## Dated reminders
 
-- **About 2026-11-17:** reassess plans. Is Max 5x enough, or move to 20x? The month review (S25)
-  brings the numbers. The upgrade is step 8, pushed back "until 11/19 or until usage begins
+- **About 2026-11-17:** reassess plans. Is Max 5x enough, or move to 20x? The upgrade is step 8, pushed back "until 11/19 or until usage begins
   flowing" (2026-11-15; no longer "when the UI work runs usage up"), so on this date you are
   still on Pro: reassess whether Pro is still enough, from the usage panel (S25 was dropped on
   2026-11-17, so no month-review numbers come).
