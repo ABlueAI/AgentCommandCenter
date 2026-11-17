@@ -3,6 +3,22 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-17
+
+Blue's answers to the five questions PR #173 left him. His words are quoted in full; anything else
+in a row is the builder's reading, marked as such. How the plan follows these answers (S61, S25,
+S59 and the notes in docs/PLAN-1.1.md) is **proposed, pending Blue (PR #195)**; merging that PR
+approves it.
+
+| Decision | Blue's words |
+|---|---|
+| **No UI building before the 1.1 schedule is adopted and independently reviewed.** Answers "is the sheet your go on the UI?" (PR #173): not yet. The schedule isn't in this repo; new plan row S61 adds it, runs the independent review, and re-reviews its fixes. S14 needs S61, so S18 to S20, S46 and S47 wait too. Checklist step 18 stays unticked. | "the schedule and its independent review before any UI building. The schedule isn't adopted yet and its fixes were never re-reviewed" |
+| **"No cap on worker panes" (2026-11-16) doesn't lift the cloud runner's `parallel_cap`.** (Builder's reading, not his words: "no cap" covers Mako's local panes.) The runner's cap in docs/RUNNER.md stays 1 on Pro and follows the Max upgrade (checklist step 8). | "no" |
+| **The plan sync keeps opening and updating session issues** while the board is paused; no other board work until after 1.1. | "let them sync" |
+| **S25 (month review) is dropped.** (Builder's reading, not his words: the 1.1 plan replaces its "month two" draft.) The 1.1 gap audit had placed A10 (Dependabot, the speech-stack upgrade for the last 7 npm advisories, Nimbalyst) and A11 (the month-one low follow-ups, issue #164) on S25; where they go now is a question for Blue in PR #195's TLDR. | "drop S25" |
+| **The business rows S24, S29 and S30 don't count toward the 1.1 release.** S59 no longer waits on them. | "no" |
+| Approved: Blue merged PR #173 on 2026-11-17 at 02:45 UTC (`b50cdb3`), which approves the 2026-11-16 section "the Mako 1.1 decision sheet" (marked "proposed, pending Blue (PR #173)"). The wording stays below as history; agents follow this entry. | Merging is approval (docs/PLAN-1.1.md "When the plan changes"); no new words. |
+
 ## 2026-11-16: the Mako 1.1 decision sheet
 
 Blue signed a private "Mako 1.1 decision sheet" (105 items) on 2026-11-16. The sheet itself stays in
