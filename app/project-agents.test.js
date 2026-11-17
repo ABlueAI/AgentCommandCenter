@@ -10,6 +10,9 @@
 // and the runner prompt each state it, so one can't drift back to unlimited re-runs alone.
 // And it pins the claim check (AGENTS.md "How work flows" step 1) in the rulebook and inside the
 // runner's verbatim prompt, so two builders don't take the same plan session.
+// S39 adds the four pre-ready reviewers (security-reviewer, typescript-reviewer,
+// silent-failure-hunter, pr-test-analyzer): read-only, opus, builder-run only, one identical Mako
+// block, a licence notice, and their AGENTS.md step.
 
 const fs = require('fs');
 const path = require('path');
@@ -60,6 +63,60 @@ for (const file of agents) {
   assert(parsed.ok && parsed.name === 'pr-reviewer', 'pr-reviewer.md declares name pr-reviewer');
   assert(parsed.ok && tools.length > 0 && tools.every((t) => ['Read', 'Grep', 'Glob'].includes(t)),
     `pr-reviewer has only read tools (got ${JSON.stringify(tools)})`);
+}
+
+// S39 (ECC PR 1): the four pre-ready reviewers. They read untrusted PR content, so they must stay
+// read-only, run only when the builder calls them, and carry the same Mako block and a licence notice.
+const PRE_READY = {
+  'security-reviewer': 'LICENSES/MIT-ECC.txt',
+  'typescript-reviewer': 'LICENSES/MIT-ECC.txt',
+  'silent-failure-hunter': 'LICENSES/Apache-2.0.txt',
+  'pr-test-analyzer': 'LICENSES/Apache-2.0.txt',
+};
+const sharedBlocks = [];
+for (const [name, licence] of Object.entries(PRE_READY)) {
+  const file = path.join(agentsDir, name + '.md');
+  const exists = fs.existsSync(file);
+  assert(exists, `.claude/agents/${name}.md is tracked`);
+  if (!exists) continue;
+  const text = fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+  const parsed = parseRoleFrontmatter(text);
+  assert(parsed.ok && parsed.name === name, `${name}.md parses and declares name ${name}`);
+  if (!parsed.ok) continue;
+  assert(!roleNames.has(parsed.name), `${name} does not shadow a Mako role`);
+  const tools = parsed.tools.slice().sort();
+  assert(parsed.toolsDeclared && JSON.stringify(tools) === JSON.stringify(['Glob', 'Grep', 'Read']),
+    `${name} has exactly Read, Grep and Glob (got ${JSON.stringify(parsed.tools)})`);
+  assert(parsed.disallowedTools.length === 0 && Object.keys(parsed.events).length === 0,
+    `${name} declares no hooks or disallowedTools`);
+  assert(parsed.scalars.model === 'opus', `${name} runs on opus (got ${parsed.scalars.model})`);
+  const desc = parsed.scalars.description || '';
+  assert(desc.includes('Run by the builder before marking a PR ready') && desc.includes('Not for automatic use.')
+    && !/proactively|must be used/i.test(desc),
+    `${name}'s description says the builder runs it and never asks to be started automatically`);
+  assert(!/```(bash|sh|shell|powershell|pwsh)?\n\s*(npm|npx|tsc|eslint|prettier|vitest|jest|gh|git)\b/m.test(text),
+    `${name} has no command blocks`);
+  assert(text.includes(licence) && fs.existsSync(path.join(repoRoot, ...licence.split('/'))),
+    `${name} names its licence text ${licence}, which exists`);
+  assert(!/[A-Za-z]:\\(Users|Windows)\\/i.test(text), `${name} contains no local Windows paths`);
+  const m = text.match(/\n## Mako rules for this review[^\n]*\n[\s\S]*?(?=\n## )/);
+  assert(m !== null, `${name} has the shared Mako block`);
+  if (m) sharedBlocks.push(m[0]);
+}
+if (sharedBlocks.length > 0) {
+  assert(sharedBlocks.length === Object.keys(PRE_READY).length && sharedBlocks.every((b) => b === sharedBlocks[0]),
+    'the shared Mako block is identical in all four pre-ready reviewers');
+  const b = sharedBlocks[0];
+  assert(b.includes('review run 1 only') && b.includes('**Report only, never act.**')
+    && b.includes('**Review whatever the CI state is.**') && b.includes('**No file-size or length rule.**')
+    && b.includes('**high:**') && b.includes('**medium:**') && b.includes('**low:**') && b.includes('never `setx`'),
+    'the shared block keeps run 1 only, report only, any CI state, no size rule, high/medium/low and the key rule');
+}
+{
+  const rules = fs.readFileSync(path.join(repoRoot, 'AGENTS.md'), 'utf8');
+  assert(Object.keys(PRE_READY).every((n) => rules.includes('`' + n + '`')) && rules.includes('on review run 1 only'),
+    'AGENTS.md step 3 names the four pre-ready reviewers and runs them on review run 1 only');
+  assert(rules.includes('**Depth check before plans and new builds**'), 'AGENTS.md has the depth check');
 }
 
 {
