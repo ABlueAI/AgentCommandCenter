@@ -6,7 +6,8 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-11-17 by Claude (your answers to PR #173's questions, PR #195: step 64 added,
+Last updated 2026-11-18 by Claude (your answers to PR #195's questions, PR #204: step 65 added,
+S48 split; earlier, on 2026-11-17, your answers to PR #173's questions, PR #195: step 64 added,
 step 18 waits on the schedule; earlier, on 2026-11-16, the Mako 1.1 decision sheet, PR #173: step 28 ticked, step 10
 dropped, steps 8 and 17 re-timed, steps 54 to 63 added (62 ticked) and "Do next" re-ordered; earlier, on
 2026-11-05: step 50 added and steps 28 and 27 moved to the top of "Do next",
@@ -33,10 +34,12 @@ Re-ordered on 2026-11-16 from your signed Mako 1.1 decision sheet (docs/DECISION
 1. **Steps 27 and 50**, in one sitting (about 12 minutes): the all-day runner checks. Step 28 is
    closed (usage credits are off, your word of 2026-11-04). Once step 27 is ticked, plan-session PRs
    stop editing STATUS.md and leave it to the runner's status PR.
-2. **Step 59**, re-link Codex reviews to `ABlueAgent` (about 5 minutes; your yes, 2026-11-16).
+2. **Step 59**, re-link Codex reviews to `ABlueAgent` (about 5 minutes; your yes, 2026-11-16), and
+   **step 65**, Dependabot alerts and security updates on (about 3 minutes; your words, 2026-11-18).
    **Step 63** on 2026-11-30: the Codex check-in.
 3. **Step 54**, the H1 setup day (1.5 to 3 hours). H1 is the PC Mako is to run on unattended. It
-   takes in the step 43 re-run and the step 25 tick, and S44, S48 and the nightly tidy wait on it.
+   takes in the step 43 re-run and the step 25 tick, and S44 and S48 (the vault memory and its
+   nightly tidy) wait on it; S48 no longer waits on the schedule (2026-11-18).
 4. **Step 15**, the voice check on the new Electron. S36 moves Electron to 42.11.16, so if that has
    merged, check on that version.
 5. **Step 35, then step 49**, after PR #170 (the account fix follows it): the agent token in Mako,
@@ -1117,6 +1120,28 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
   private in it, runs the independent review, fixes the findings and re-reviews the fixes.
   - *Done when:* S61's PR is open with the schedule in it. The agent ticks this with the date; you
     adopt the schedule by merging that PR, and then say go on the UI (step 18).
+- [ ] **65. Turn on Dependabot alerts and security updates.** **About 3 minutes**, now (your words,
+  2026-11-18: "turn on Dependabot alerts and security updates in the repo settings now"). Repository
+  settings are yours; agents never change them. Signed in as `ABlueAI`: the repository > Settings >
+  Code security (it may be labelled Advanced Security) > **Dependabot alerts** > Enable, then
+  **Dependabot security updates** > Enable. Leave **Dependabot version updates** off: its routine
+  version-update PRs are 1.2. (Version updates have no switch: they start when a
+  `.github/dependabot.yml` file exists, which the **Configure** button next to them creates. Don't
+  click it.)
+  - What to expect: alerts list known advisories in the repository's dependencies, among them the
+    remaining `sharp` advisories and their two dependents (docs/DEPENDENCY-ADVISORIES.md, S36).
+    Security updates open PRs by `dependabot[bot]` that bump a vulnerable package. Those PRs have no
+    Claude builder, so a Dependabot PR is `NOT READY` until an agent has posted "Independent review
+    (Opus)" on it (AGENTS.md "How work flows" step 3) and CI is green; ask any agent to do that
+    before you merge one. How the merge-order check and the runner treat them is issue #205.
+  - *Done when:* you say both are on. Claude can't read these settings (they show only to admins),
+    so it ticks this on your word, and notes the first Dependabot alert or PR it sees as a check.
+
+- [ ] **66. Give the HyperFrames verdict (S52).** **About 5 minutes**, after reading the
+  [S52 vetting and trial](docs/decisions/OSS-hyperframes.md) and the independent review on PR #206.
+  Give your verdict in your own words on PR #206 or to an agent in its own session.
+  - *Done when:* the agent records your words in `docs/decisions/OSS-hyperframes.md` and
+    `docs/DECISIONS.md`, updates S52, and ticks this step with the date.
 
 ## Every day, once the runner is on
 
