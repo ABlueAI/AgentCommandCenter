@@ -6,7 +6,7 @@ of editing an old one, and say which entry it replaces. Agents follow the newest
 ## 2026-11-18
 
 Blue's answers to the two questions PR #195 left him. How the plan follows them (S48, S62, the 1.2
-queue and checklist step 65) is **proposed, pending Blue (PR #NNN)**; merging that PR approves it.
+queue and checklist step 65) is **proposed, pending Blue (PR #204)**; merging that PR approves it.
 
 | Decision | Blue's words |
 |---|---|
