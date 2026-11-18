@@ -6,7 +6,8 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-11-18 by Claude (your answers to PR #195's questions, PR #204: step 65 added,
+Last updated 2026-11-18 by S53 (AgentPlayback verdict, step 67, PR #208). Earlier,
+2026-11-18 by Claude (your answers to PR #195's questions, PR #204: step 65 added,
 S48 split; earlier, on 2026-11-17, your answers to PR #173's questions, PR #195: step 64 added,
 step 18 waits on the schedule; earlier, on 2026-11-16, the Mako 1.1 decision sheet, PR #173: step 28 ticked, step 10
 dropped, steps 8 and 17 re-timed, steps 54 to 63 added (62 ticked) and "Do next" re-ordered; earlier, on
@@ -64,6 +65,8 @@ Re-ordered on 2026-11-16 from your signed Mako 1.1 decision sheet (docs/DECISION
     token's renewal (by 2027-01-14) may come first.
 14. ~~**Step 14**, the agent token~~ Done 2026-10-23 on your word. ~~**Step 10**, the app settings
     review~~ Dropped 2026-11-16: the new Settings page replaces it.
+15. **Step 67**, the AgentPlayback verdict (about 2 minutes), after reading the S53 record and
+    before any S53 build.
 
 ## Today
 
@@ -1136,6 +1139,13 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
     before you merge one. How the merge-order check and the runner treat them is issue #205.
   - *Done when:* you say both are on. Claude can't read these settings (they show only to admins),
     so it ticks this on your word, and notes the first Dependabot alert or PR it sees as a check.
+
+- [ ] **67. Give the AgentPlayback verdict (S53).** **About 2 minutes**, after reading
+  [the OSS record](docs/decisions/OSS-agentplayback.md) and before any S53 build. Tell an agent
+  your verdict in your own words. BUILD FRESH is the recommendation because the upstream pin
+  fails the China-origin rule.
+  - *Done when:* an agent verifies your reply, records it word for word in the OSS record and
+    decisions log, and ticks this step with the date.
 
 ## Every day, once the runner is on
 
