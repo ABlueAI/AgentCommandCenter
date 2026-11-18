@@ -1114,24 +1114,28 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
   - *Done when:* your answer is recorded in docs/DECISIONS.md in your words, S26's row in
     docs/PLAN-1.1.md follows it, and the agent ticks this with the date.
 
-- [ ] **65. Turn on Dependabot alerts and security updates.** **About 3 minutes**, now (your words,
-  2026-11-18: "turn on Dependabot alerts and security updates in the repo settings now"). Repository
-  settings are yours; agents never change them. Signed in as `ABlueAI`: the repository > Settings >
-  Code security (it may be labelled Advanced Security) > **Dependabot alerts** > Enable, then
-  **Dependabot security updates** > Enable. Leave **Dependabot version updates** off: its routine
-  version-update PRs are 1.2.
-  - What to expect: alerts list known advisories in the repository's dependencies, including the 7
-    explained in docs/DEPENDENCY-ADVISORIES.md. Security updates open PRs by `dependabot[bot]` that
-    bump a vulnerable package. Those PRs have no Claude builder, so no "Independent review (Opus)"
-    is posted on them by itself: ask any agent to review one before you merge it, as for any PR.
-  - *Done when:* you say both are on. Claude can't read these settings (they show only to admins),
-    so it ticks this on your word, and notes the first Dependabot alert or PR it sees as a check.
 - [ ] **64. Hand over the 1.1 schedule (S61).** **About 5 minutes**, when you're ready; every UI
   row waits on it. Give the schedule to an agent in its own session (not as a GitHub comment if it
   holds anything private). It opens S61's PR with the schedule as `docs/SCHEDULE-1.1.md`, nothing
   private in it, runs the independent review, fixes the findings and re-reviews the fixes.
   - *Done when:* S61's PR is open with the schedule in it. The agent ticks this with the date; you
     adopt the schedule by merging that PR, and then say go on the UI (step 18).
+- [ ] **65. Turn on Dependabot alerts and security updates.** **About 3 minutes**, now (your words,
+  2026-11-18: "turn on Dependabot alerts and security updates in the repo settings now"). Repository
+  settings are yours; agents never change them. Signed in as `ABlueAI`: the repository > Settings >
+  Code security (it may be labelled Advanced Security) > **Dependabot alerts** > Enable, then
+  **Dependabot security updates** > Enable. Leave **Dependabot version updates** off: its routine
+  version-update PRs are 1.2. (Version updates have no switch: they start when a
+  `.github/dependabot.yml` file exists, which the **Configure** button next to them creates. Don't
+  click it.)
+  - What to expect: alerts list known advisories in the repository's dependencies, among them the
+    remaining `sharp` advisories and their two dependents (docs/DEPENDENCY-ADVISORIES.md, S36).
+    Security updates open PRs by `dependabot[bot]` that bump a vulnerable package. Those PRs have no
+    Claude builder, so a Dependabot PR is `NOT READY` until an agent has posted "Independent review
+    (Opus)" on it (AGENTS.md "How work flows" step 3) and CI is green; ask any agent to do that
+    before you merge one. How the merge-order check and the runner treat them is issue #205.
+  - *Done when:* you say both are on. Claude can't read these settings (they show only to admins),
+    so it ticks this on your word, and notes the first Dependabot alert or PR it sees as a check.
 
 ## Every day, once the runner is on
 

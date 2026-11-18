@@ -179,7 +179,7 @@ held rows as held (a Hold column or a `hold` label), never as Ready.
 | S59 | **Mako 1.1 release.** Sensitive (credentials: the token audit). The last steps: Blue's token audit (checklist step 17) as the last step before release, the sanitizer test (S41) passing, release notes, and the tag. The date is soft, about 2026-12-13 to 2027-01-13, and nothing is cut for it. The business rows (S24, S29, S30) are not 1.1 items, and S25 is dropped (Blue, 2026-11-17). | Every 1.1 row is DONE or DROPPED; step 17 is ticked; the sanitizer test passes on `main`; Blue OKs the tag. | High | blue | every other 1.1 row (not S24, S29, S30) | NEEDS BLUE (every 1.1 item done) |
 | S60 | **Role-file rewrite.** Sensitive (role bodies set what each role is told). Its own one-scope PR (Blue, 2026-11-16): rewrite the builder, reviewer and source-scout role files, the README's role count and a shared voice for the roles. It changes no tools: frontmatter tool lists and permissions stay exactly as they are. S28 also edits role bodies, so S60 builds after S28 merges, on top of it; if Blue's S28 package already carries this rewrite, S60 is dropped as folded into S28. | Role tests pass in CI (app/role-frontmatter.test.js, app/role-fence-policy.test.js, scripts/sync-roles.Tests.ps1); the diff changes no `tools`, `disallowedTools` or permission line; Blue confirms the roles read right after scripts/sync-roles.ps1. | High | blue | S28, the brief from the agent-roles chat | NEEDS BLUE (brief) |
 | S61 | **1.1 schedule and its independent review.** Before any UI building (Blue, 2026-11-17), the 1.1 schedule is adopted: Blue hands it to the session (it isn't in this repo yet), the session adds it as `docs/SCHEDULE-1.1.md` with nothing private in it, runs the independent review on it, fixes the findings, and runs the review again on those fixes, which the schedule has never had. It changes no other row; any row change it needs is listed for a plan-change PR. | The schedule is in the repo; an independent review of it and a re-review of its fixes are posted on the PR, with no high or medium finding open; Blue adopts it by merging. | Minimum | blue | S01, the schedule from Blue | NEEDS BLUE (schedule) |
-| S62 | **Tree and merged-work history.** The tree and merged-work history (data) that the brain tab shows. Split from S48 on 2026-11-18; it keeps S48's old wait on S14, so it starts after the schedule (S61) and the brief. | Each merge is recorded once and survives a restart. | High | windows | S14 | HOLD (Blue) |
+| S62 | **Tree and merged-work history.** The tree and merged-work history (data). Split from S48 on 2026-11-18; it keeps S48's old wait on S14, so it starts after the schedule (S61) and the brief. | Each merge is recorded once and survives a restart. | High | blue | S14 | HOLD (Blue) |
 
 ### Mako 1.1 scope: the decision sheet (approved: Blue merged PR #173 on 2026-11-17)
 
@@ -723,7 +723,8 @@ command palette is in 1.1 (S19). Nothing else from this list joins 1.1 (Blue, 20
 a queue tracker · persistent agents as creatures · a bare preset · Apache-2.0 (maybe at Mako 2.0; MIT
 for now) · ghost mode · a quiet-hours schedule · Agent Reach · TokenEconomizer · Laya as a 1.2 trial ·
 phone updates from Mako · daily security upkeep · Dependabot's routine version-update PRs and the
-speech-stack upgrade for the last 7 npm advisories (Blue, 2026-11-18; gap audit A10). Issue #164 stays
+speech-stack upgrade that clears the remaining npm advisories (Blue, 2026-11-18; gap audit A10;
+docs/DEPENDENCY-ADVISORIES.md). Issue #164 stays
 open as the list of small month-one follow-ups that any session can pick up (gap audit A11). After the scope freeze, new ideas join this queue
 unless they pass the 1.1 test and Blue says so.
 
