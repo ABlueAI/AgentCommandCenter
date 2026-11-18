@@ -1,6 +1,8 @@
 # Mako status
 
-Updated 2026-11-17 by S36: Electron pinned to 42.11.16, audit re-read;
+Updated 2026-11-18 by PR #NNN (Blue's answers to PR #195's questions: S48 split, A10 and A11
+placed, Dependabot alerts and security updates for Blue to turn on, step 65). Before that: updated
+2026-11-17 by S36: Electron pinned to 42.11.16, audit re-read;
 Blue's voice check (step 15) remains pending. Before that: updated
 2026-11-17 by PR #195 (Blue's answers to PR #173's five questions), and before that on
 2026-11-16 by the Mako 1.1 decision-sheet plan change (PR #173, merged 2026-11-17), which changed the
@@ -360,8 +362,11 @@ brief, and S45 waits for S39. S39 (ECC PR 1, the four pre-ready reviewers) is IN
 **2026-11-17 (PR #195):** S25 is dropped, the business rows don't count toward the 1.1 release,
 the runner's `parallel_cap` is unchanged, and the plan sync keeps opening session issues. Waiting on
 Blue: the 1.1 schedule (S61, step 64), then his go on the UI (step 18), the H1 setup day (step 54), his Composer scope sign-off
-(S51), the brief for S60, the Codex check-in on 2026-11-30 (step 63). The paragraphs below
-are from before the sheet.
+(S51), the brief for S60, the Codex check-in on 2026-11-30 (step 63).
+**2026-11-18 (PR #NNN):** the vault memory (S48) now starts after the H1 setup day, not the
+schedule; the tree and merged-work history (new S62) still wait on S14. Dependabot's version updates
+and the speech-stack upgrade are in the 1.2 queue, Nimbalyst is dropped, and Blue turns on
+Dependabot alerts and security updates (step 65). The paragraphs below are from before the sheet.
 
 Month one's runner sessions S31 to S34 merged on 2026-11-04. The next `READY` row is S25, the
 month review, from 2026-11-14 (S24 is `READY` but held as draft PR #134 by Blue's choice of
