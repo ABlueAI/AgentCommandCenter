@@ -1,6 +1,7 @@
 # Mako status
 
-Updated 2026-11-18 by PR #204 (Blue's answers to PR #195's questions: S48 split, A10 and A11
+Updated 2026-11-18 by S53 (AgentPlayback vetting, PR #208). Before that: updated
+2026-11-18 by PR #204 (Blue's answers to PR #195's questions: S48 split, A10 and A11
 placed, Dependabot alerts and security updates for Blue to turn on, step 65). Before that: updated
 2026-11-17 by S36: Electron pinned to 42.11.16, audit re-read;
 Blue's voice check (step 15) remains pending. Before that: updated
@@ -16,6 +17,10 @@ Every PR that changes the state updates this file.
 ## Right now
 
 - **Your next steps:** [BLUE-CHECKLIST.md](BLUE-CHECKLIST.md), starting with its "Do next" box.
+
+- **AgentPlayback (S53, PR #208):** [the OSS record](docs/decisions/OSS-agentplayback.md) pins v1.2.1.
+  The source pin fails the China-origin rule. The recommendation is BUILD FRESH, pending Blue's
+  verdict (checklist step 67).
 
 - **Release: Mako 1.0.0 is released.**
   - Tag `v1.0.0` was created on 2026-10-18 at `main` commit `37009eb`, which includes the
