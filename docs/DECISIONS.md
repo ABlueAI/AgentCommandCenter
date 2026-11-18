@@ -3,6 +3,17 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-18
+
+Blue's answers to the two questions PR #195 left him. How the plan follows them (S48, S62, the 1.2
+queue and checklist step 65) is **proposed, pending Blue (PR #204)**; merging that PR approves it.
+
+| Decision | Blue's words |
+|---|---|
+| **Gap audit A10 and A11 (homeless since S25 was dropped):** Dependabot's routine version-update PRs and the speech-stack upgrade that clears the remaining npm advisories (7 in the gap audit's count of 2026-10-19; 3 `sharp` findings after S36, docs/DEPENDENCY-ADVISORIES.md) go to the 1.2 queue; Nimbalyst is dropped; issue #164 stays open as the pick-up list of small month-one follow-ups. Also now: Blue turns on Dependabot alerts and Dependabot security updates in the repository's settings (checklist step 65; repository settings are his, agents never change them). How Dependabot's PRs are reviewed and ordered is issue #205. | "I agree with what the chat recommends. I'd add one thing: turn on Dependabot alerts and security updates in the repo settings now  Dependabot's routine version-update PRs go to 1.2" |
+| **The vault memory doesn't wait on the schedule; S48 is split.** S48 needed S14, which needs S61, so it waited on the schedule anyway. The vault memory keeps S48 and needs only the H1 setup day; the tree and merged-work history become S62, which still needs S14. Answers the question PR #195 left on whether S48 waits on S61. | "S48 waits on the schedule? No. But "no" only helps if S48 is also split. Today S48 needs S14, which needs S61, so it waits on the schedule anyway. Splitting it lets the vault memory start after H1 day (schedule fix 5)." |
+| Approved: Blue merged PR #195 on 2026-11-17, which approves the 2026-11-17 entry "Blue's answers to the five questions PR #173 left him" (marked "proposed, pending Blue (PR #195)"). The wording stays below as history; agents follow this entry. | Merging is approval (docs/PLAN-1.1.md "When the plan changes"); no new words. |
+
 ## 2026-11-17: S39 (ECC PR 1)
 
 Blue's answers to the S39 session (PR #174), given in that session on 2026-11-17.
