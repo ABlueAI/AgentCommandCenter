@@ -1,6 +1,7 @@
 # Mako status
 
-Updated 2026-11-18 by PR #204 (Blue's answers to PR #195's questions: S48 split, A10 and A11
+S52 (PR #206) records the HyperFrames vetting and sandbox render. Blue's verdict is pending.
+Before that: updated 2026-11-18 by PR #204 (Blue's answers to PR #195's questions: S48 split, A10 and A11
 placed, Dependabot alerts and security updates for Blue to turn on, step 65). Before that: updated
 2026-11-17 by S36: Electron pinned to 42.11.16, audit re-read;
 Blue's voice check (step 15) remains pending. Before that: updated
@@ -356,7 +357,7 @@ it in Mako's key setup (safeStorage) and gives it only to unfenced agent panes.
 
 **2026-11-16:** the Mako 1.1 decision sheet (PR #173) sets what comes next. `READY` for a builder
 once it merges: S36 (Electron 42.11.16), S37 (the account guard's PowerShell gap), S41 (the sanitizer
-test), S42 (the rulebook update), S43, S52 to S54, S57 and S58. S46 and S47 are held with S14's
+test), S42 (the rulebook update), S43, S53, S54, S57 and S58. S46 and S47 are held with S14's
 brief, and S45 waits for S39. S39 (ECC PR 1, the four pre-ready reviewers) is IN PROGRESS in PR
 #174, built by a cloud session from the brief Blue confirmed on 2026-11-17.
 **2026-11-17 (PR #195):** S25 is dropped, the business rows don't count toward the 1.1 release,
@@ -366,7 +367,12 @@ Blue: the 1.1 schedule (S61, step 64), then his go on the UI (step 18), the H1 s
 **2026-11-18 (PR #204):** the vault memory (S48) now starts after the H1 setup day, not the
 schedule; the tree and merged-work history (new S62) still wait on S14. Dependabot's version updates
 and the speech-stack upgrade are in the 1.2 queue, Nimbalyst is dropped, and Blue turns on
-Dependabot alerts and security updates (step 65). The paragraphs below are from before the sheet.
+Dependabot alerts and security updates (step 65).
+
+**S52 (PR #206):** [HyperFrames vetting and trial](docs/decisions/OSS-hyperframes.md) are recorded.
+The pinned upstream package names China-origin models. Blue's verdict is pending (step 66).
+
+The paragraphs below are from before the sheet.
 
 Month one's runner sessions S31 to S34 merged on 2026-11-04. The next `READY` row is S25, the
 month review, from 2026-11-14 (S24 is `READY` but held as draft PR #134 by Blue's choice of
