@@ -1,6 +1,8 @@
 # Mako status
 
-Updated 2026-11-18 by PR #204 (Blue's answers to PR #195's questions: S48 split, A10 and A11
+Updated 2026-11-21 by PR #212 (Blue's decisions of 2026-11-16 to 2026-11-21: the scope freezes on
+2026-12-01, a Codex pane in 1.1, the Composer prototype dates, new rows S63 to S65). Before that:
+updated 2026-11-18 by PR #204 (Blue's answers to PR #195's questions: S48 split, A10 and A11
 placed, Dependabot alerts and security updates for Blue to turn on, step 65). Before that: updated
 2026-11-17 by S36: Electron pinned to 42.11.16, audit re-read;
 Blue's voice check (step 15) remains pending. Before that: updated
@@ -33,7 +35,10 @@ Every PR that changes the state updates this file.
     pass. The date is soft (about 2026-12-13 to 2027-01-13) and nothing is cut for it.
   - **Main focus: the Composer.** Mako, the shark, is the conductor, in a Claude Code pane. Its v1
     scope is being written in a separate chat and isn't signed, so its build row (S51) waits; the
-    pre-build studies (S49) and a one-day prototype (S50) come first.
+    pre-build studies (S49) and a one-day prototype (S50) come first. **2026-11-21:** the practice
+    test is on 2026-11-22 and prototype day (3 to 5 real tasks) on 2026-11-23, either a day later if
+    Claude Max isn't active yet; the re-scout's agreed scope changes are in S49 and S51, and the
+    scope freezes on 2026-12-01 (docs/DECISIONS.md, 2026-11-21).
   - **Three tabs:** the brain (S18), the control room (S19) and the aquarium MVP (S20). Claude
     builds and Codex reviews; S17 is done (Shark A). The rows are still `HOLD (Blue)`: no UI building
     before the 1.1 schedule is adopted with its independent review (S61, Blue 2026-11-17), then his go
@@ -83,6 +88,9 @@ Every PR that changes the state updates this file.
   stack's Node-side packages, which Mako's renderer never loads; details and the historical S02
   result are in [docs/DEPENDENCY-ADVISORIES.md](docs/DEPENDENCY-ADVISORIES.md).
   Dictation and TTS on the new Electron still need a check on Blue's PC (checklist step 15).
+  Both of Blue's PCs run Node.js 26.13.1 (updated 2026-11-19 to 2026-11-20, Blue's word); CI stays
+  on Node 22 to test the oldest supported version. Two issues from his PCs are open: #210 (npm's
+  allowScripts) and #211 (`app/page-reader.test.js` on a PC with the page-reader agent installed).
 - **Composer research (S16, PR #82):** [docs/decisions/OSS-composer.md](docs/decisions/OSS-composer.md)
   covers Dodaios (sandboxed trial without any model or key), Claude Code's parallel-agent features
   and Projects, Microsoft Conductor, the R15 pattern mine, Cloudroom (no Windows build) and workflow
@@ -145,7 +153,10 @@ Every PR that changes the state updates this file.
   reviewer". The lane stays open to about 2026-11-30 for non-sensitive early tasks (S36 and S56
   in the lane; S52 and S53, `blue`-lane rows, started by Blue himself), Codex reviews Claude's PRs with Sonnet as backup, and he checks in on 2026-11-30 (checklist
   step 63); S26 closes when his resets are used. The lane's rules and the required Opus review are
-  unchanged.
+  unchanged. **2026-11-21:** ChatGPT Plus stays through the 1.1 release and Codex's heavy use runs
+  to about 2026-12-29, checked weekly; Codex does the smaller tasks and reviews, 2 at a time
+  (docs/CODEX-BUILDER-LANE.md item 8), and builds S54 and S63; its PRs' reviews are run and posted
+  by a Claude cloud session under the agent account (docs/DECISIONS.md, 2026-11-21).
 - **Stable and dev copies (S07, PR #123 merged 2026-10-24, in progress):** `npm run start:dev` starts a dev copy of
   Mako with its own settings folder (`%APPDATA%\command-center-dev`), its own taskbar button and a
   `Mako (dev)` title, and it never installs or changes Claude Code hooks. The stable copy is
@@ -205,7 +216,9 @@ Every PR that changes the state updates this file.
   didn't call for (the digest has the GoHighLevel CRM). Blue's clicks are in checklist step 27;
   step 27 isn't ticked; step 28 was closed on 2026-11-16 (usage credits off, Blue's word of
   2026-11-04). The S04 follow-up fixed the prompts' open follow-ups and
-  recorded this read-back (PR #117, merged 2026-10-24; docs/RUNNER.md "Applied so far").
+  recorded this read-back (PR #117, merged 2026-10-24; docs/RUNNER.md "Applied so far"). The
+  runner has been off since 2026-11-04 (Blue, 2026-11-21), so steps 27 and 50 wait until he turns
+  it back on.
 - **Guardrails:**
   - The repo-side files are live on `main`, and the merge audit has passed on every merge.
   - Part A (checklist step 2) is done and verified on 2026-10-18. `main` now requires a pull request
@@ -366,7 +379,14 @@ Blue: the 1.1 schedule (S61, step 64), then his go on the UI (step 18), the H1 s
 **2026-11-18 (PR #204):** the vault memory (S48) now starts after the H1 setup day, not the
 schedule; the tree and merged-work history (new S62) still wait on S14. Dependabot's version updates
 and the speech-stack upgrade are in the 1.2 queue, Nimbalyst is dropped, and Blue turns on
-Dependabot alerts and security updates (step 65). The paragraphs below are from before the sheet.
+Dependabot alerts and security updates (step 65).
+**2026-11-21 (PR #212):** Blue's decisions of 2026-11-16 to 2026-11-21 (docs/DECISIONS.md,
+2026-11-21). The scope freezes on 2026-12-01. New rows: S63 (Codex's UI-library sweep, before
+2026-11-25), S64 (the guidebook, near the release) and S65 (a fuller security audit before S59).
+Security findings stay private: public text gives titles and severity only. S55 becomes Quick Links
+presets in the "Mako" Firefox profile, and agents never drive that profile. 1.2's headline is the
+Private pane. Blue's next steps: step 60 (practice test and prototype day) and step 68 (his verdict
+on PR #209's OSS record for S48). The paragraphs below are from before the sheet.
 
 Month one's runner sessions S31 to S34 merged on 2026-11-04. The next `READY` row is S25, the
 month review, from 2026-11-14 (S24 is `READY` but held as draft PR #134 by Blue's choice of
