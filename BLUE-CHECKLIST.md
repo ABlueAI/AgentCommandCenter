@@ -318,7 +318,7 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   - Don't connect it to ChatGPT's **Passwords** setting or let any AI agent drive it.
   - *Done when:* you say so. It's yours, so Claude doesn't verify anything.
 - **10. ~~App settings review.~~ Dropped.** *Dropped 2026-11-16 by Blue on his decision sheet: the
-  new Settings page (S19) replaces it (docs/DECISIONS.md, 2026-11-16). Nothing to do; the number
+  new Settings page (S19; S66 since 2026-11-22) replaces it (docs/DECISIONS.md, 2026-11-16). Nothing to do; the number
   stays so no other step is renumbered. `docs/SETUP-APP-SETTINGS.md` was never written.* About 20
   minutes, this week, after step 2.
   - Screenshot every page of: ChatGPT desktop app > Settings; claude.ai > Settings and the Claude
@@ -546,6 +546,8 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     the brief from prototype A and your decision sheet (docs/PLAN-1.1.md "Mako 1.1 scope"). The rows
     are still on hold: your sheet set the scope, and your "go on the UI" hasn't been recorded in
     your words yet.
+  - *Updated 2026-11-22:* S18 is split: the shared navigation (S66) comes first, and S18, S19 and
+    S20 build on it in parallel. Your go on the UI releases S66 with S14 and S18 to S20.
   - *Updated 2026-11-17:* not before the 1.1 schedule is adopted with its independent review and a
     re-review of its fixes (plan row S61, step 64; your words: "the schedule and its independent
     review before any UI building"). Your go comes after S61 merges.
@@ -1093,7 +1095,8 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
   - *Done when:* the URL file exists on your PC, git ignores it, and S55's row moves from
     `NEEDS BLUE`. The agent ticks this with the date and how it checked that git ignores the file.
 - [ ] **58. Review the lessons-learned draft.** **15 minutes**, when the agent that wrote it sends
-  it to you. Read it and say what to change or drop.
+  it to you. Read it and say what to change or drop. If this isn't done when the agent tune-up
+  (S28, S60) starts, the tune-up runs from the draft as it is (your decision, 2026-11-22).
   - *Done when:* you tell an agent it is approved (or what to change). It ticks this with the date
     and your words.
 - [ ] **59. Re-link Codex reviews to `ABlueAgent`.** **About 5 minutes**, any time this week (your
@@ -1234,7 +1237,10 @@ You can start on the first one now, which saves time later.
   2026-12-29.
 - **2026-12-01:** the scope freeze: after it, anything new that isn't vital to security goes to 1.2.
 - **2026-12-03:** the Composer re-scout (S49). Again about 30 days after 1.1 ships.
-- **About 2026-12-13 to 2027-01-13:** the soft window for Mako 1.1. Nothing is cut for it; step 17
+- **2026-12-20:** the 1.1 pace checkpoint (your decision, 2026-11-22): is 1.1 on track for its
+  target? Nothing is cut for the date.
+- **2027-01-15:** the target for Mako 1.1, with all of 1.1 within 60 days of 2026-11-17 (your
+  decision, 2026-11-22; it was "about 2026-12-13 to 2027-01-13"). Nothing is cut for it; step 17
   (the token audit) is the last step before the release.
 - **By 2027-01-14:** renew the `ABlueAgent` classic token (`public_repo` only, step 14), a week
   before it expires on 2027-01-21. Signed in as `ABlueAgent`, it is listed on

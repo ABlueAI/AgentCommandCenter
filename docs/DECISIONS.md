@@ -5,7 +5,7 @@ of editing an old one, and say which entry it replaces. Agents follow the newest
 
 ## 2026-11-21: Blue's decisions of 2026-11-16 to 2026-11-21
 
-Blue approved these in his main chat between 2026-11-16 and 2026-11-21, and item 26 on 2026-11-22. The details stay in his
+Blue approved these in his main chat between 2026-11-16 and 2026-11-21, and items 26 to 29 on 2026-11-22. The details stay in his
 private notes; this entry carries only what the hand-off for PR #212 gave, with his words in quotes
 where it quoted them (a row without a quote had no words relayed). Numbers match PR #212's TLDR.
 Composer scope items named S1 to S8 and V2b to V13 are items of Blue's private Composer scope draft,
@@ -42,6 +42,9 @@ rule holds. "Builder's reading" marks a line that is the builder's, not Blue's.
 | **24. For S42's rulebook update:** Claude Code 2.1.329 removed the `/agents` screen, so an instruction that says "run /agents" becomes "ask Claude to list its subagents". | — |
 | **25. Two open issues, worded neutrally:** npm's allowScripts doesn't list the 3 packages whose install scripts Mako needs (issue #210); `app/page-reader.test.js` fails on a PC that has the page-reader agent installed and stops `npm test` early (issue #211). | — |
 | **26. S18 is split (2026-11-22).** New row S66, "Shared navigation" (the three tabs, Ctrl K, Settings), and S18, "Brain tab". S19 (control room) and S20 (aquarium) depend only on the shared navigation, not the whole brain tab, so they can build in parallel. Builder's reading: S20's removal of the old layout still waits until S18 and S19 are done. | "We need to maximize the amount of times we are building in parallel while maintaining efficient usage. ideally we would run in parallel as often as we can, then complete tasks individually that cannot be run in parallel towards the end of the week when usage is high in order to conserve usage and complete tasks in order" |
+| **27. S59's date: target 2027-01-15,** with all of 1.1 within 60 days of 2026-11-17, a pace checkpoint on 2026-12-20, and nothing cut for the date. Replaces "about 2026-12-13 to 2027-01-13" (2026-11-16 entry "When 1.1 is done"), which stays below as history. | "Yes to 2, 3, 4" (items 27 to 29) |
+| **28. S50 (prototype day) depends only on S49's pre-prototype deliverables:** the Composer role prompt, the 10 test tasks and the test sheet, not all of S49, which runs until the 2026-12-03 re-scout. | "Yes to 2, 3, 4" |
+| **29. If checklist step 58 (the lessons-learned review) isn't done, the agent tune-up (S28, S60) runs from the lessons draft as it is.** | "Yes to 2, 3, 4" |
 
 ## 2026-11-18
 

@@ -32,7 +32,9 @@ Every PR that changes the state updates this file.
   - **What 1.1 is:** an item is in when the UI overhaul needs it, or it lets sessions run unattended
     for about 5 hours, or it is a known fix or security gap. The scope is frozen: new ideas go to the
     1.2 queue. 1.1 is done when every 1.1 item is done and the token audit and the sanitizer test
-    pass. The date is soft (about 2026-12-13 to 2027-01-13) and nothing is cut for it.
+    pass. The target is 2027-01-15, with all of 1.1 within 60 days of 2026-11-17 and a pace
+    checkpoint on 2026-12-20; nothing is cut for it (Blue, 2026-11-22; it was about 2026-12-13 to
+    2027-01-13).
   - **Main focus: the Composer.** Mako, the shark, is the conductor, in a Claude Code pane. Its v1
     scope is being written in a separate chat and isn't signed, so its build row (S51) waits; the
     pre-build studies (S49) and a one-day prototype (S50) come first. **2026-11-21:** the practice
