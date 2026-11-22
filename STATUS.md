@@ -39,7 +39,8 @@ Every PR that changes the state updates this file.
     test is on 2026-11-22 and prototype day (3 to 5 real tasks) on 2026-11-23, either a day later if
     Claude Max isn't active yet; the re-scout's agreed scope changes are in S49 and S51, and the
     scope freezes on 2026-12-01 (docs/DECISIONS.md, 2026-11-21).
-  - **Three tabs:** the brain (S18), the control room (S19) and the aquarium MVP (S20). Claude
+  - **Three tabs:** the shared navigation first (S66, split from S18 on 2026-11-22), then the
+    brain (S18), the control room (S19) and the aquarium MVP (S20) in parallel on top of it. Claude
     builds and Codex reviews; S17 is done (Shark A). The rows are still `HOLD (Blue)`: no UI building
     before the 1.1 schedule is adopted with its independent review (S61, Blue 2026-11-17), then his go
     on the UI (checklist step 18).
@@ -384,7 +385,8 @@ Dependabot alerts and security updates (step 65).
 2026-11-21). The scope freezes on 2026-12-01. New rows: S63 (Codex's UI-library sweep, before
 2026-11-25), S64 (the guidebook, near the release) and S65 (a fuller security audit before S59).
 Security findings stay private: public text gives titles and severity only. S55 becomes Quick Links
-presets in the "Mako" Firefox profile, and agents never drive that profile. 1.2's headline is the
+presets in the "Mako" Firefox profile, and agents never drive that profile. S18 is split
+(2026-11-22): the shared navigation (new S66) comes first, then S18 to S20 can build in parallel. 1.2's headline is the
 Private pane. Blue's next steps: step 60 (practice test and prototype day) and step 68 (his verdict
 on PR #209's OSS record for S48). The paragraphs below are from before the sheet.
 
