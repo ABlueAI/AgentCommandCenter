@@ -654,7 +654,8 @@ and later").
    - the runner's status PR marks merged sessions DONE, replacing today's "update the row in your
      next PR" (S04's new prompt drops that line);
    - STATUS.md is updated by one status PR that the runner keeps open and refreshes, and by PRs that
-     change the state outside a session (plan changes, guardrails, releases);
+     change the state outside a session (plan changes, guardrails, releases); replaced on 2026-11-23:
+     only the PR sweeper's status PR edits it (docs/SWEEPER.md Job D, PR #225);
    - a new checklist step takes the next number not used on `main` or by an open PR. If two PRs still
      end up with the same number, the one that merges second renumbers by merging `main`, never by
      force-pushing;

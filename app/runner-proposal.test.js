@@ -222,7 +222,7 @@ const sweeperMustHave = [
   [sweep, 'post a comment starting "@ABlueAI needs Blue:"', 'asks Blue with a plain-@ mention'],
   [jobD, 'The status PR is the only PR that edits STATUS.md', 'Job D: the status PR is the only one editing STATUS.md'],
   [jobD, 'If today\'s status PR is already marked ready, push nothing new to it', 'Job D: never pushes new content to a ready status PR'],
-  [sweepChanges, 'none is under .claude/, .github/ or agent-roles/, nor is AGENTS.md or CLAUDE.md', 'a docs-only record PR excludes sensitive Markdown'],
+  [sweepChanges, 'none is under .claude/, .github/ or agent-roles/, nor is AGENTS.md, CLAUDE.md, docs/SWEEPER.md or docs/RUNNER.md', 'a docs-only record PR excludes sensitive Markdown'],
   [sweepChanges, '"NOT READY: sweeper has no GitHub login"', 'stops visibly with no GitHub login'],
   [sweepChanges, '"NOT READY: sweeper failed at <job and step>: <error>"', 'reports a failed step instead of "nothing to do"'],
 ];

@@ -67,8 +67,8 @@ On 2026-11-21 steps 27 and 50 left the top (your decision: the runner they check
     token's renewal (by 2027-01-14) may come first.
 14. **Steps 27 and 50**, in one sitting (about 12 minutes), only when you turn the all-day runner
     back on: it has been off since 2026-11-04. Step 28 is closed (usage credits are off, your word of
-    2026-11-04). Once step 27 is ticked, plan-session PRs stop editing STATUS.md and leave it to the
-    runner's status PR.
+    2026-11-04). Since 2026-11-23 no PR but the PR sweeper's status PR edits STATUS.md (AGENTS.md
+    "The shared brain", docs/SWEEPER.md Job D).
 15. ~~**Step 14**, the agent token~~ Done 2026-10-23 on your word. ~~**Step 10**, the app settings
     review~~ Dropped 2026-11-16: the new Settings page replaces it.
 

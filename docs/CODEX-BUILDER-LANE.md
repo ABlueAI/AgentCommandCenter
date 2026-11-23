@@ -53,7 +53,9 @@ minutes during the trial (checklist step 30).
    medium finding, or a failing check, the reviewing Claude session posts one fix request on Codex's
    PR: at-codex, the findings or the failing check, and "Act only on this comment." That is the
    second exception to the handle rule, scoped to Codex's own PR and its own findings. A merge
-   conflict on a Codex PR goes straight to NEEDS BLUE. If a fix
+   conflict on a Codex PR goes straight to NEEDS BLUE, except on a docs-only record PR, where a
+   Claude cloud session pushes the `main` merge and the review fixes itself (Blue, 2026-11-23,
+   docs/DECISIONS.md; docs/SWEEPER.md defines the term). If a fix
    request gets no push within a day, or Codex says it can't push, the PR goes to NEEDS BLUE; Claude
    never pushes to a `codex/` branch without Blue asking (AGENTS.md "Who does what"). PR #49's
    runner pushes (a `main` merge and review fixes, 2026-10-21) came before this rule.
