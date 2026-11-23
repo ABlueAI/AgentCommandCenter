@@ -112,7 +112,7 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      green, independent review done and every high and medium finding fixed or answered, low ones
      listed as follow-ups, PR marked ready) or `NOT READY: <reason>`. A summary covering
      several PRs starts each PR's line that way; a session-end message or phone notification about no
-     PR (such as the runner's gate notice) starts with `NOT READY: <reason>`. Blue merges only on `READY TO MERGE`; a reason that
+     PR (such as the runner's gate notice) starts with `NOT READY: <reason>`, except the PR sweeper's idle line "Sweeper: nothing to do" (docs/SWEEPER.md). Blue merges only on `READY TO MERGE`; a reason that
      needs his answer says so. A PR with the `waits-for-merge` label is `NOT READY: waits for #X`.
    - Every such message, notification or summary that lists more than one PR ends with the line
      "Merge order: #A, then #B; any order: #C, #D", computed from the test-merges in "Merge order"

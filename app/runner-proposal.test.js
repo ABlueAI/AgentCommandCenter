@@ -236,6 +236,9 @@ assert(rulesFlat.includes('Every PR leaves `STATUS.md` to the PR sweeper\'s stat
   'AGENTS.md leaves STATUS.md to the sweeper\'s status PR');
 assert(rulesFlat.includes('The PR sweeper (docs/SWEEPER.md, approved 2026-11-23) merges `main` into PR branches; it never merges a PR, so it is not a merge loop.'),
   'AGENTS.md says the sweeper never merges a PR');
+assert(rulesFlat.includes('except the PR sweeper\'s idle line "Sweeper: nothing to do" (docs/SWEEPER.md)')
+  && sweepChanges.includes('end with the single line "Sweeper: nothing to do" only when every job ran and nothing needed action'),
+  'AGENTS.md step 5 names the sweeper\'s idle line as its one exception, and SWEEPER.md limits it to clean idle fires');
 assert(!/[@＠]codex/i.test(sweeper), 'docs/SWEEPER.md never writes Codex\'s handle');
 
 process.stdout.write(`\nrunner-proposal: ${passed} passed, ${failed} failed\n`);
