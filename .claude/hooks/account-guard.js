@@ -72,8 +72,8 @@
 // reached through an alias or `gh -R x api` with other global options, a GraphQL mutation read from
 // a file (`-F query=@mutation.graphql`), `curl` or SDK calls to
 // api.github.com with a token, and tools other than Bash and PowerShell (GitHub MCP tools:
-// .claude/settings.json denies the ones whose names were checked; its `Bash(...)` deny rules don't
-// apply to the PowerShell tool, where this hook's review and merge block is the layer that holds). A process running as
+// .claude/settings.json denies the ones whose names were checked; its deny rules are written for
+// the Bash tool, issue #219). A process running as
 // Blue's Windows user can still use his stored logins, which is why he removes them after
 // checklist step 35 (BLUE-CHECKLIST.md step 49). Review and merge calls are guarded only as far as
 // this hook sees them: the real gate is that `main` needs Blue's approval, and the merge audit
@@ -388,8 +388,9 @@ function psStringEnd(s, i, ctx, onSub) {
 
 // At `@` followed by a quote and the end of the line (index i), returns { body, end, expandable }
 // for a here-string, where `end` is the index of the closing `@`; null if this is not a here-string.
-// The closing quote and `@` start a line (leading spaces are allowed here, which can only make the
-// guard see more commands, never fewer). A here-string that never closes marks ctx.unbalanced.
+// The closing quote and `@` must start a line, as in PowerShell (about_Quoting_Rules): an indented
+// one is body text. An indented one still marks ctx.unbalanced, so the text scan also runs in case
+// a PowerShell version reads it differently. A here-string that never closes marks ctx.unbalanced.
 function psHereString(s, i, ctx) {
   if (s[i] !== '@' || !isOneOf(PS_SINGLE + PS_DOUBLE, s[i + 1])) return null;
   const m = /^[ \t]*\r?\n/.exec(s.slice(i + 2));
@@ -400,12 +401,13 @@ function psHereString(s, i, ctx) {
   let pos = bodyStart;
   for (;;) {
     const lineStart = pos;
+    if (isOneOf(quotes, s[lineStart]) && s[lineStart + 1] === '@') {
+      const body = s.slice(bodyStart, Math.max(bodyStart, lineStart - 1)).replace(/\r$/, '');
+      return { body, end: lineStart + 1, expandable };
+    }
     let k = lineStart;
     while (s[k] === ' ' || s[k] === '\t') k++;
-    if (isOneOf(quotes, s[k]) && s[k + 1] === '@') {
-      const body = s.slice(bodyStart, Math.max(bodyStart, lineStart - 1)).replace(/\r$/, '');
-      return { body, end: k + 1, expandable };
-    }
+    if (k > lineStart && isOneOf(quotes, s[k]) && s[k + 1] === '@') ctx.unbalanced = true;
     const next = s.indexOf('\n', pos);
     if (next === -1) break;
     pos = next + 1;
@@ -543,6 +545,15 @@ function splitPowerShell(input, depth = 0, ctx = { unbalanced: false }) {
     }
     if (c === '#' && word === null) { // comment to end of line
       while (i + 1 < s.length && s[i + 1] !== '\n') i++;
+      continue;
+    }
+    if (c === ',') { // `'pr', 'merge', '5'` is one array argument, even across spaces and lines
+      word = (word !== null ? word : (words.length ? words.pop() : '')) + ',';
+      for (;;) { // skip spaces, line breaks and backtick line continuations after the comma
+        const m = /^(?:\s+|`\r?\n)/.exec(s.slice(i + 1, i + 3 + 64));
+        if (!m) break;
+        i += m[0].length;
+      }
       continue;
     }
     if (PS_SEPARATORS.has(c)) { endCommand(); continue; }
@@ -731,7 +742,8 @@ function classifySimpleCommand(words, depth, mode = 'bash') {
     if (rest[j] === 'merge') return 'gh pr merge';
     return null;
   }
-  // `bash -c "git push"`, `pwsh -Command "gh pr create"`: check the script they run. A PowerShell
+  // `bash -c "git push"`, `pwsh -Command "gh pr create"`: check the script they run. PowerShell's
+  // -Command takes every argument after it as the command (`pwsh -c git push origin x`), and the
   // script is read as PowerShell and, as before this parser existed, as Bash too: either finding counts.
   if (SHELLS.has(prog) || POWERSHELLS.has(prog)) {
     for (let k = 0; k < rest.length - 1; k++) {
@@ -741,7 +753,8 @@ function classifySimpleCommand(words, depth, mode = 'bash') {
         : /^-(c|command|com|comm|comma|comman)$/i.test(flag);
       if (!isCmdFlag) continue;
       if (SHELLS.has(prog)) return findGuardedCommand(rest[k + 1], depth + 1, 'bash');
-      const both = [findGuardedCommand(rest[k + 1], depth + 1, 'ps'), findGuardedCommand(rest[k + 1], depth + 1, 'bash')];
+      const script = rest.slice(k + 1).join(' ');
+      const both = [findGuardedCommand(script, depth + 1, 'ps'), findGuardedCommand(script, depth + 1, 'bash')];
       return pickHit(both.filter(Boolean));
     }
   }
@@ -866,7 +879,14 @@ function decide(input, getLogin = readGhLogin) {
   const toolName = input && input.tool_name;
   const command = input && input.tool_input && input.tool_input.command;
   const mode = TOOL_MODES[toolName];
-  if (!mode || typeof command !== 'string') return { exitCode: 0, checked: false };
+  if (!mode) return { exitCode: 0, checked: false };
+  if (typeof command !== 'string') {
+    // The PowerShell tool's input shape comes from the docs, not from a live call: if it ever
+    // carries no `command`, say so instead of allowing in silence. (Bash keeps its silent exit.)
+    return mode === 'ps'
+      ? { exitCode: 0, checked: false, systemMessage: `Account guard: couldn't read the ${toolName} tool's command (no tool_input.command); allowed.` }
+      : { exitCode: 0, checked: false };
+  }
 
   const hit = findGuardedCommand(command, 0, mode);
   if (!hit) return { exitCode: 0, checked: false };

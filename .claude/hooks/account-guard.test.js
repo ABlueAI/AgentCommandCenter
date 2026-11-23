@@ -398,6 +398,19 @@ const GUARDED_PS = [
   ['cmd /c "gh pr merge 5"', 'gh pr merge'],
   ['Write-Host "unclosed; gh pr merge 5', 'gh pr merge'],
   ['git `\n  push; Write-Host "unclosed', 'git push'],
+  // Review run 1 (S37): an array argument written with spaces or across lines after the commas.
+  ["Start-Process gh -ArgumentList 'pr', 'merge', '5'", 'gh pr merge'],
+  ["Start-Process gh 'pr', 'create', '--fill'", 'gh pr create'],
+  ["Start-Process gh -ArgumentList 'pr' , 'ready' ,'5'", 'gh pr ready'],
+  ["Start-Process gh -ArgumentList 'pr',\n  'merge', '5' -Wait", 'gh pr merge'],
+  ["Start-Process gh -ArgumentList 'pr', `\n   'review', '5', '-a'", 'gh pr review'],
+  // Review run 1: a here-string ends only at a closing marker that starts its line; an indented one
+  // is body text, and the commands after the real end are still seen.
+  ["git commit -m @'\nDocs:\n    @'\n    x\n    '@\n'@\ngit push\ngh pr comment 5 --body @'\nPushed; don't merge yet.\n'@", 'git push'],
+  ["$m = @'\n  '@ <#\n'@\ngh pr merge 5\n#>", 'gh pr merge'],
+  // Review run 1: PowerShell's -Command takes every argument after it as the command.
+  ['pwsh -NoProfile -Command git push origin x', 'git push'],
+  ['powershell -c gh pr merge 5', 'gh pr merge'],
 ];
 // Nesting deeper than the splitter follows falls back to the text scan, never to "allowed", and
 // nesting in strings deep enough to exhaust the stack is caught the same way, without throwing.
@@ -450,6 +463,9 @@ for (const cmd of ['gh pr create --fill', 'gh pr new', 'gh pr ready 5', 'git pus
 // script as PowerShell.
 assert(guard.findGuardedCommand("pwsh -Command 'git `\n push'") === 'git push', 'Bash running pwsh -Command: the script is read as PowerShell too');
 assert(guard.findGuardedCommand('pwsh -Command "Start-Process gh \'pr merge 5\'"') === 'gh pr merge', 'Bash running pwsh -Command: Start-Process inside it is found');
+assert(guard.findGuardedCommand('pwsh -NoProfile -Command git push origin x') === 'git push', 'Bash running pwsh -Command with an unquoted script: every word after -Command is the script');
+assert(guard.findGuardedCommand('pwsh -Command "gh pr comment 5 --body \'never gh pr merge 5\'"') === null,
+  'Bash running pwsh -Command: guarded text inside the script\'s quotes is still only text');
 
 process.stdout.write('\ndecide(): the PowerShell tool\n');
 const pwsh = (command) => ({ hook_event_name: 'PreToolUse', tool_name: 'PowerShell', tool_input: { command } });
@@ -474,6 +490,12 @@ const pwsh = (command) => ({ hook_event_name: 'PreToolUse', tool_name: 'PowerShe
   let psCalls = 0;
   for (const cmd of NOT_GUARDED_PS) guard.decide(pwsh(cmd), () => { psCalls++; return { login: 'ABlueAI' }; });
   assert(psCalls === 0, `no gh call for any non-matching PowerShell command (${psCalls} calls)`);
+  // Review run 1: a PowerShell call with no command says so instead of allowing in silence.
+  const missing = guard.decide({ tool_name: 'PowerShell', tool_input: {} }, () => ({ login: 'ABlueAI' }));
+  assert(missing.exitCode === 0 && /couldn't read the PowerShell tool's command/.test(missing.systemMessage) && !/\n/.test(missing.systemMessage),
+    'PowerShell with no tool_input.command: exit 0 with a one-line notice');
+  const bashMissing = guard.decide({ tool_name: 'Bash', tool_input: {} }, () => ({ login: 'ABlueAI' }));
+  assert(bashMissing.exitCode === 0 && !bashMissing.systemMessage, 'Bash with no command: unchanged (exit 0, silent)');
   // Only the two tools' exact names are checked (the names hooks see: docs, tools reference).
   assert(guard.decide({ tool_name: 'Read', tool_input: { command: 'git push' } }, () => ({ login: 'ABlueAI' })).exitCode === 0,
     'a tool other than Bash or PowerShell is not checked');
@@ -609,10 +631,12 @@ const ghCalls = () => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8')
 }
 {
   // The PowerShell tool, end to end: the same input Claude Code sends, with tool_name "PowerShell".
+  const callsBefore = ghCalls().length;
   const r = runHook('& gh.exe pr create --fill', { mode: 'ABlueAI', toolName: 'PowerShell' });
   assert(r.status === 2 && /Blocked by Mako's account guard/.test(r.stderr) && /gh pr create/.test(r.stderr),
     `ABlueAI + PowerShell & gh.exe pr create: exit 2 end to end (got ${r.status})`);
-  assert(ghCalls().pop() === 'user --jq .login', 'PowerShell: the fake gh was asked `api user --jq .login`');
+  const newCalls = ghCalls().slice(callsBefore);
+  assert(newCalls.length === 1 && newCalls[0] === 'user --jq .login', 'PowerShell: this run asked the fake gh `api user --jq .login` once');
   const push = runHook('git -C ..\\wt push `\n  origin x', { mode: 'ABlueAI', toolName: 'PowerShell' });
   assert(push.status === 2 && /git push/.test(push.stderr), `ABlueAI + PowerShell git -C <dir> push with a line continuation: exit 2 (got ${push.status})`);
   const agent = runHook('git push -u origin x', { mode: 'ABlueAgent', toolName: 'PowerShell' });

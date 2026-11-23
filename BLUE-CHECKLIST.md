@@ -6,7 +6,8 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-11-21 by Claude (your decisions of 2026-11-16 to 2026-11-21, PR #212: steps 27
+Last updated 2026-11-23 by Claude (S37, PR #218: step 69 added, a 3-minute live check of the
+account guard on the PowerShell tool); earlier, on 2026-11-21 (your decisions of 2026-11-16 to 2026-11-21, PR #212: steps 27
 and 50 leave the top of "Do next", steps 57, 60 and 63 follow your answers, step 68 added, dated
 reminders added; earlier, on 2026-11-18, your answers to PR #195's questions, PR #204: step 65 added,
 S48 split; earlier, on 2026-11-17, your answers to PR #173's questions, PR #195: step 64 added,
@@ -1169,6 +1170,19 @@ open PRs (#206 and #208).
   your verdict (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD FRESH) in your own words to any agent.
   - *Done when:* your verdict is in the record, word for word, and the agent ticks this with the
     date.
+- [ ] **69. Check that the account guard stops PR work through the PowerShell tool (S37, PR #218).**
+  **About 3 minutes**, on your PC after merging PR #218 and before step 49 removes your command-line
+  login (the check needs `gh` logged in as `ABlueAI`). CI tests the guard with the input Claude Code's
+  docs describe, but only a real session shows that Claude Code starts it for its PowerShell tool.
+  - Pull `main`, then start a **new** Claude Code chat in the Mako repo folder (hooks load when a
+    session starts). Tell it: "Use your PowerShell tool, not Bash, to run `gh pr ready 999999`."
+  - Expected: the command doesn't run, and Claude shows "Blocked by Mako's account guard ... this
+    session's GitHub CLI login is ABlueAI". If gh answers instead (for example "no pull requests
+    found"), the guard didn't run: tell any agent "step 69 failed" with what you saw. Nothing is
+    changed either way, since PR 999999 doesn't exist. If Claude says it has no PowerShell tool,
+    say so; the check is then not applicable on that PC.
+  - *Done when:* you've told an agent what Claude showed, and it ticks this with the date and your
+    words.
 
 ## Every day, once the runner is on
 
