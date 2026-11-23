@@ -6,7 +6,8 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-11-21 by Claude (your decisions of 2026-11-16 to 2026-11-21, PR #212: steps 27
+Last updated 2026-11-24 by Claude (the 1.1 schedule, S61, PR #223: step 64 ticked, step 58
+dated 2026-11-27; earlier, on 2026-11-21, your decisions of 2026-11-16 to 2026-11-21, PR #212: steps 27
 and 50 leave the top of "Do next", steps 57, 60 and 63 follow your answers, step 68 added, dated
 reminders added; earlier, on 2026-11-18, your answers to PR #195's questions, PR #204: step 65 added,
 S48 split; earlier, on 2026-11-17, your answers to PR #173's questions, PR #195: step 64 added,
@@ -1097,6 +1098,8 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
 - [ ] **58. Review the lessons-learned draft.** **15 minutes**, when the agent that wrote it sends
   it to you. Read it and say what to change or drop. If this isn't done when the agent tune-up
   (S28, S60) starts, the tune-up runs from the draft as it is (your decision, 2026-11-22).
+  By **2026-11-27**, earlier if the work runs ahead (your answer, 2026-11-24: "Sure, but if we're
+  running ahead of schedule, can this just be completed prior to Friday?"; docs/SCHEDULE-1.1.md).
   - *Done when:* you tell an agent it is approved (or what to change). It ticks this with the date
     and your words.
 - [ ] **59. Re-link Codex reviews to `ABlueAgent`.** **About 5 minutes**, any time this week (your
@@ -1135,7 +1138,10 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
   - *Done when:* your answer is recorded in docs/DECISIONS.md in your words, S26's row in
     docs/PLAN-1.1.md follows it, and the agent ticks this with the date.
 
-- [ ] **64. Hand over the 1.1 schedule (S61).** **About 5 minutes**, when you're ready; every UI
+- [x] **64. Hand over the 1.1 schedule (S61).** *Done 2026-11-24 (the date the hand-off gives;
+  GitHub dates PR #223's opening 2026-11-23 UTC): you approved the text ("Yes. Do as written."),
+  and PR #223 adds it as `docs/SCHEDULE-1.1.md`; checked on GitHub that the PR is open with the
+  file in it. Next: merge PR #223 to adopt it, then step 18.* About 5 minutes, when you're ready; every UI
   row waits on it. Give the schedule to an agent in its own session (not as a GitHub comment if it
   holds anything private). It opens S61's PR with the schedule as `docs/SCHEDULE-1.1.md`, nothing
   private in it, runs the independent review, fixes the findings and re-reviews the fixes.

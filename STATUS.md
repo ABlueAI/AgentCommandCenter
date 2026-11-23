@@ -51,6 +51,12 @@ Every PR that changes the state updates this file.
     update for AGENTS.md (S42), the release row (S59) and the role-file rewrite (S60). Nothing in AGENTS.md, `CLAUDE.md` or
     `.claude/` changed in PR #173: until S39, S40 and S42 merge, the current rules hold (reviews
     ranked high, medium, low; a cap of 5 runs; the Opus review required).
+  - **The 1.1 schedule (S61, PR #223):** [docs/SCHEDULE-1.1.md](docs/SCHEDULE-1.1.md), adopted when
+    Blue merges that PR: the UI gate (about 2026-11-28 to 2026-12-02), the Composer and tab chains,
+    a main-case release of about 2026-12-18 to 2027-01-05 against the 2027-01-15 target, and the
+    2026-12-20 checkpoint. Blue's answers of 2026-11-24 (docs/DECISIONS.md): step 58 by 2026-11-27,
+    Mako's main chat keeps the Claude lanes full, and if the checkpoint says behind, the date slips
+    and only pop-out windows may move to 1.2. Then his go on the UI (step 18) releases the UI rows.
   - **Blue's new steps:** checklist steps 54 to 63 (the H1 setup day first; step 62 is done).
     Step 28 is closed and step 10 is dropped.
   - **Nothing from Blue's sheets is open:** he answered the 14 items the sheet left open the same
