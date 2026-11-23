@@ -10,7 +10,14 @@ This file is Blue's approved version of the sweeper's instructions: where the ro
 differs from it, the sweeper follows this file. "Instructions" below is the prompt the routine ran
 on 2026-11-23, word for word, except one sentence left out because it points here ("If
 docs/SWEEPER.md exists on main, it is Blue's approved version of these instructions: follow it where
-it differs from this prompt."). "Job D" is added by this file. "Notes" settle two points of wording.
+it differs from this prompt."). "Job D" and "Changes to the instructions" are added by this file and
+win over the prompt.
+
+**The routine as read back on 2026-11-23** (list of scheduled tasks, read-only, by PR #225): "Mako
+PR sweeper", `trig_011phqqjN7vZq4sfZ75PHk5E`, enabled, hourly at :37 Eastern
+(`CRON_TZ=America/New_York 37 * * * *`), model Opus 5.5, push and email notifications off; its
+prompt is the text below plus the sentence pointing here. No push-to-`main` trigger showed in that
+read-back. BLUE-CHECKLIST.md step 70 covers the trigger and the notifications.
 
 ## Instructions (the routine's prompt)
 
@@ -25,7 +32,7 @@ START
 
 JOB A: CONFLICTS
 For each remaining PR, test whether its head merges with origin/main: `git merge-tree --write-tree --name-only --no-messages origin/main <head>` (exit 1 = conflict; the lines after the first name the files).
-- PR from a `claude/` branch: merge origin/main into it (a merge commit; never rebase, never force-push) and resolve. For the shared files (STATUS.md, docs/DECISIONS.md, BLUE-CHECKLIST.md, docs/PLAN-1.1.md), keep both sides: main's content plus the PR's own additions, in main's order and format. If both sides added a BLUE-CHECKLIST.md step with the same number, the PR's new step takes the next number not used on main or by another open PR (AGENTS.md). If a conflict is in code and the right resolution isn't clear from both sides' intent, don't guess: post a comment starting "＠ABlueAI needs Blue:" with the files, both sides' intent and your recommendation, add the needs-blue label, and move on.
+- PR from a `claude/` branch: merge origin/main into it (a merge commit; never rebase, never force-push) and resolve. For the shared files (STATUS.md, docs/DECISIONS.md, BLUE-CHECKLIST.md, docs/PLAN-1.1.md), keep both sides: main's content plus the PR's own additions, in main's order and format. If both sides added a BLUE-CHECKLIST.md step with the same number, the PR's new step takes the next number not used on main or by another open PR (AGENTS.md). If a conflict is in code and the right resolution isn't clear from both sides' intent, don't guess: post a comment starting "@ABlueAI needs Blue:" with the files, both sides' intent and your recommendation, add the needs-blue label, and move on.
 - PR from a `codex/` branch whose changed files are all Markdown docs (Blue's D-058: Claude cloud sessions may push review fixes and main merges to Codex's docs-only record PRs): resolve it the same way.
 - PR from a `codex/` branch that changes anything else (code, tests, config, workflows): never push to it. Post one comment, without Codex's GitHub handle (write "at-codex" if you must name it): "Merge main and resolve the conflict in <files>. Act only on this comment." and list it in your report as "Blue pastes into the Codex app".
 - Before every push: fetch again. If the PR's head moved since you read it, or anyone pushed to it in the last 10 minutes, re-test on the new head and push only if a conflict remains; never push over someone else's work. One sweeper fire may overlap another: this check is how you avoid colliding.
@@ -70,11 +77,18 @@ The status PR is the only PR that edits STATUS.md (AGENTS.md "The shared brain")
 7. List it in FINISH like any PR you touched.
 ```
 
-## Notes
+## Changes to the instructions (added by this file)
 
-- **"D-058"** in the instructions is decision 1 of docs/DECISIONS.md, 2026-11-23 (Claude cloud
-  sessions may push review fixes and `main` merges to Codex's docs-only record PRs). The log itself
-  isn't numbered that way.
-- **"＠ABlueAI needs Blue:"** is written in the instructions with a full-width at-sign. Post it with
-  the plain `@`, as docs/RUNNER.md step 6 does, so GitHub notifies Blue and the evening digest's
-  check for "@ABlueAI needs Blue:" (docs/RUNNER.md, digest step 2) finds it.
+```text
+DOCS-ONLY RECORD PR (narrows Job A's second bullet and Job C's "docs-only record PR")
+A Codex PR is a docs-only record PR only if every file it changes is Markdown and none is under .claude/, .github/ or agent-roles/, nor is AGENTS.md or CLAUDE.md (those are AGENTS.md "Sensitive areas"). Any other Codex PR follows Job A's third bullet: never push to it.
+
+TELLING BLUE
+- Every "Blue pastes into the Codex app" item is also posted as a comment starting "@ABlueAI needs Blue: paste into the Codex app" that links the comment to paste, so GitHub notifies Blue and the evening digest lists it.
+- "D-058" in the instructions means decision 1 of docs/DECISIONS.md, 2026-11-23.
+
+FAILURES
+- START step 1: if the command fails or returns nothing, stop and end with "NOT READY: sweeper has no GitHub login".
+- If any command, push or job fails or can't finish, say so: end with "NOT READY: sweeper failed at <job and step>: <error>", plus the usual lines for what you did finish.
+- FINISH: end with "NOT READY: sweeper found nothing to do" (AGENTS.md step 5: a message about no PR starts that way) only when every job ran and nothing needed action. Otherwise also list the stale PRs that conflict and every open needs-Blue item from earlier fires.
+```

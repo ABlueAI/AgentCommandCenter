@@ -9,13 +9,13 @@ Blue decided these in his main chat on 2026-11-23, after each merge to `main` le
 conflict, nothing watched for it (the hourly runner has been off since 2026-11-07, and its rules
 skipped Codex and non-runner PRs anyway), and Codex couldn't open its own PRs (GitHub answers
 "Forbidden"). His words are quoted as the hand-off for this PR relayed them. How the rules follow
-them (AGENTS.md, docs/SWEEPER.md, docs/CODEX-BUILDER-LANE.md and a pointer in docs/RUNNER.md) is
+them (AGENTS.md, docs/SWEEPER.md, docs/CODEX-BUILDER-LANE.md and a pointer in docs/RUNNER.md, and BLUE-CHECKLIST.md step 70) is
 **proposed, pending Blue (PR #225)**; merging that PR approves it. "Builder's reading" marks a line
 that is the builder's, not Blue's.
 
 | Decision | Blue's words |
 |---|---|
-| **1. Claude cloud sessions, as `ABlueAgent`, may push review fixes and `main` merges to Codex's docs-only record PRs,** one fixer per PR at a time. A docs-only record PR is a `codex/` PR whose changed files are all Markdown docs. This is the "unless Blue asks" in AGENTS.md "Who does what"; Codex's other PRs keep the old rule (fix requests, never pushes). Builder's reading: the sweeper prompt in docs/SWEEPER.md calls this decision "D-058". | "Let Claude cloud sessions push review fixes to Codex's record PRs - id love to do that". And: "Please merge main into 206 and 208, then run review 3 or 4" |
+| **1. Claude cloud sessions, as `ABlueAgent`, may push review fixes and `main` merges to Codex's docs-only record PRs,** one fixer per PR at a time. Builder's reading: a docs-only record PR is a `codex/` PR whose changed files are all Markdown, none under `.claude/`, `.github/` or `agent-roles/` and neither `AGENTS.md` nor `CLAUDE.md` (sensitive areas, which Blue's "record PRs" doesn't cover). This is the "unless Blue asks" in AGENTS.md "Who does what"; Codex's other PRs keep the old rule (fix requests, never pushes). Builder's reading: the sweeper prompt in docs/SWEEPER.md calls this decision "D-058". | "Let Claude cloud sessions push review fixes to Codex's record PRs - id love to do that". And: "Please merge main into 206 and 208, then run review 3 or 4" |
 | **2. The PR sweeper.** (a) A Claude routine, the "Mako PR sweeper", fires on every push to `main` plus hourly; merges `main` into any open agent PR or Codex docs-only record PR that conflicts; opens draft PRs for pushed `codex/` branches that have none and runs their review run 1; and never merges into `main`. (b) PRs stop editing `STATUS.md`; the sweeper keeps it current (docs/SWEEPER.md, Job D). Its instructions are docs/SWEEPER.md. | "slow and manual. this should not happen this way. conflicts should be immediately resolved." Then, asked "Set up the merge-triggered sweeper and stop PRs editing STATUS.md?": "Yes to both" |
 
 ## 2026-11-21: Blue's decisions of 2026-11-16 to 2026-11-21

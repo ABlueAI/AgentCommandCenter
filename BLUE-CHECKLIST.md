@@ -1170,6 +1170,13 @@ open PRs (#206 and #208).
   - *Done when:* your verdict is in the record, word for word, and the agent ticks this with the
     date.
 
+- [ ] **70. Finish the PR sweeper's set-up.** **About 5 minutes**, after PR #225 merges. At
+  claude.ai/code/routines, open "Mako PR sweeper": (a) check it has a push-to-`main` trigger besides
+  the hourly schedule (on 2026-11-23 only the hourly schedule showed), and add one if the page
+  offers it; (b) turn on its push notifications, so a "NOT READY" fire reaches your phone (they were
+  off). Or tell any agent "set up the sweeper's trigger and notifications".
+  - *Done when:* an agent reads the routine back and finds both, and ticks this with the date.
+
 ## Every day, once the runner is on
 
 Once S04 is applied (step 27), the runner works all day and you do one sitting in the evening:
