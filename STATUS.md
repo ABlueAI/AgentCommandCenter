@@ -390,7 +390,14 @@ Security findings stay private: public text gives titles and severity only. S55 
 presets in the "Mako" Firefox profile, and agents never drive that profile. S18 is split
 (2026-11-22): the shared navigation (new S66) comes first, then S18 to S20 can build in parallel. 1.2's headline is the
 Private pane. Blue's next steps: step 60 (practice test and prototype day) and step 68 (his verdict
-on PR #209's OSS record for S48). The paragraphs below are from before the sheet.
+on PR #209's OSS record for S48).
+**2026-11-23 (S43, PR #222):** the one-off spec-miner trial ran read-only on the dockview layout;
+its write-up is [docs/research/S43-spec-miner-trial.md](docs/research/S43-spec-miner-trial.md).
+The spec was accurate (35 of 40 blocks, none wrong) but missed what S66 most needs (the engine
+flag pinned as not a setting, no restore at startup, the four top-level tabs, the markup tests,
+Ctrl K reaching the PTY); verdict: an occasional one-off, never installed. Once it merges, S66
+waits only on S14 and Blue's go on the UI (step 18).
+The paragraphs below are from before the sheet.
 
 Month one's runner sessions S31 to S34 merged on 2026-11-04. The next `READY` row is S25, the
 month review, from 2026-11-14 (S24 is `READY` but held as draft PR #134 by Blue's choice of
