@@ -16,9 +16,10 @@ queue and checklist step 65) is **proposed, pending Blue (PR #204)**; merging th
 
 ### HyperFrames (S52, PR #206)
 
-Blue's conditional FORK verdict (2026-11-18) is recorded word for word in the
-[S52 OSS record](decisions/OSS-hyperframes.md#blues-verdict-word-for-word). The Windows VM trial
-must come first.
+Blue adopted the conditional FORK recommendation in his main chat on 2026-11-18 and reconfirmed
+it on 2026-11-24. The Windows VM trial must come first. The S52 OSS record quotes Blue's
+acceptance and reconfirmation and gives the conditions of the recommendation he adopted.
+[S52 OSS record](decisions/OSS-hyperframes.md#blues-verdict)
 
 ## 2026-11-17: S39 (ECC PR 1)
 

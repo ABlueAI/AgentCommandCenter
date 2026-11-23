@@ -1137,10 +1137,11 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
   - *Done when:* you say both are on. Claude can't read these settings (they show only to admins),
     so it ticks this on your word, and notes the first Dependabot alert or PR it sees as a check.
 
-- [x] **66. Give the HyperFrames verdict (S52).** Blue gave the verdict on 2026-11-18.
-  Codex recorded it word for word in this PR (#206) in the
-  [S52 vetting and trial record](docs/decisions/OSS-hyperframes.md#blues-verdict-word-for-word),
-  logged it in [the decisions log](docs/DECISIONS.md#hyperframes-s52-pr-206), and updated S52.
+- [x] **66. Give the HyperFrames verdict (S52).**
+  Verdict: FORK, conditional. Blue (2026-11-18, in his main chat), adopting Mako main's recommendation: 'I think your recommendation verdicts are very good. So, yes to both of those recommendations.' Reconfirmed by Blue on 2026-11-24 ('yes i do recall now', 'agree'). The recommendation he adopted: first a Windows trial on the VM, with the browser sandbox on, outside connections blocked and logged, and the media commands that call China-origin models removed. Fork only if that trial shows no outside connections and no sandbox downgrade.
+  - *Verification:* Blue supplied the main-chat quote and reconfirmation in the follow-up request
+    for PR #206. This PR records them in the [S52 vetting and trial record](docs/decisions/OSS-hyperframes.md#blues-verdict)
+    and links to the verdict from [the decisions log](docs/DECISIONS.md#hyperframes-s52-pr-206).
 
 ## Every day, once the runner is on
 
