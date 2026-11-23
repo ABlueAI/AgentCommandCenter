@@ -1137,11 +1137,10 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
   - *Done when:* you say both are on. Claude can't read these settings (they show only to admins),
     so it ticks this on your word, and notes the first Dependabot alert or PR it sees as a check.
 
-- [ ] **66. Give the HyperFrames verdict (S52).** **About 5 minutes**, after reading the
-  [S52 vetting and trial](docs/decisions/OSS-hyperframes.md) and the independent review on PR #206.
-  Give your verdict in your own words on PR #206 or to an agent in its own session.
-  - *Done when:* the agent records your words in `docs/decisions/OSS-hyperframes.md` and
-    `docs/DECISIONS.md`, updates S52, and ticks this step with the date.
+- [x] **66. Give the HyperFrames verdict (S52).** Blue gave the verdict on 2026-11-18.
+  Codex recorded it word for word in this PR (#206) in the
+  [S52 vetting and trial record](docs/decisions/OSS-hyperframes.md#blues-verdict-word-for-word),
+  logged it in [the decisions log](docs/DECISIONS.md#hyperframes-s52-pr-206), and updated S52.
 
 ## Every day, once the runner is on
 

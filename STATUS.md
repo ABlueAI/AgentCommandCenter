@@ -1,6 +1,6 @@
 # Mako status
 
-S52 (PR #206) records the HyperFrames vetting and sandbox render. Blue's verdict is pending.
+Updated 2026-11-18 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK verdict).
 Before that: updated 2026-11-18 by PR #204 (Blue's answers to PR #195's questions: S48 split, A10 and A11
 placed, Dependabot alerts and security updates for Blue to turn on, step 65). Before that: updated
 2026-11-17 by S36: Electron pinned to 42.11.16, audit re-read;
@@ -357,7 +357,7 @@ it in Mako's key setup (safeStorage) and gives it only to unfenced agent panes.
 
 **2026-11-16:** the Mako 1.1 decision sheet (PR #173) sets what comes next. `READY` for a builder
 once it merges: S36 (Electron 42.11.16), S37 (the account guard's PowerShell gap), S41 (the sanitizer
-test), S42 (the rulebook update), S43, S53, S54, S57 and S58. S46 and S47 are held with S14's
+test), S42 (the rulebook update), S43, S52 to S54, S57 and S58. S46 and S47 are held with S14's
 brief, and S45 waits for S39. S39 (ECC PR 1, the four pre-ready reviewers) is IN PROGRESS in PR
 #174, built by a cloud session from the brief Blue confirmed on 2026-11-17.
 **2026-11-17 (PR #195):** S25 is dropped, the business rows don't count toward the 1.1 release,
@@ -370,7 +370,8 @@ and the speech-stack upgrade are in the 1.2 queue, Nimbalyst is dropped, and Blu
 Dependabot alerts and security updates (step 65).
 
 **S52 (PR #206):** [HyperFrames vetting and trial](docs/decisions/OSS-hyperframes.md) are recorded.
-The pinned upstream package names China-origin models. Blue's verdict is pending (step 66).
+The pinned upstream package offers MiniMax/Qwen models through its media commands. Blue's
+conditional FORK verdict is recorded in PR #206 (step 66). The Windows VM trial is still pending.
 
 The paragraphs below are from before the sheet.
 
