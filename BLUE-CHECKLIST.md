@@ -66,7 +66,7 @@ Re-ordered on 2026-11-16 from your signed Mako 1.1 decision sheet (docs/DECISION
 14. ~~**Step 14**, the agent token~~ Done 2026-10-23 on your word. ~~**Step 10**, the app settings
     review~~ Dropped 2026-11-16: the new Settings page replaces it.
 15. **Step 67**, the AgentPlayback verdict (about 2 minutes), after reading the S53 record and
-    before any S53 build.
+    before any implementation under the verdict.
 
 ## Today
 
@@ -1141,9 +1141,13 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
     so it ticks this on your word, and notes the first Dependabot alert or PR it sees as a check.
 
 - [ ] **67. Give the AgentPlayback verdict (S53).** **About 2 minutes**, after reading
-  [the OSS record](docs/decisions/OSS-agentplayback.md) and before any S53 build. Tell an agent
-  your verdict in your own words. BUILD FRESH is the recommendation because the upstream pin
-  fails the China-origin rule.
+  [the OSS record](docs/decisions/OSS-agentplayback.md) and before any implementation under the
+  verdict. Does the China-origin rule cover the tracked Kimi config for this source pin, given that
+  the npm package omits it? That was the builder's original reading. Tell an agent your verdict in
+  your own words. BUILD FRESH is recommended because the upstream reads broad transcript roots and
+  can use signed-in `gh`. A verdict that builds nothing in S53 closes S53, including BUILD FRESH.
+  The builder sees replay fitting S19 (pane activity) or S62 (merged-work history). Any approved
+  replay work goes to those rows under their existing waits.
   - *Done when:* an agent verifies your reply, records it word for word in the OSS record and
     decisions log, and ticks this step with the date.
 

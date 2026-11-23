@@ -19,8 +19,9 @@ Every PR that changes the state updates this file.
 - **Your next steps:** [BLUE-CHECKLIST.md](BLUE-CHECKLIST.md), starting with its "Do next" box.
 
 - **AgentPlayback (S53, PR #208):** [the OSS record](docs/decisions/OSS-agentplayback.md) pins v1.2.1.
-  The source pin fails the China-origin rule. The recommendation is BUILD FRESH, pending Blue's
-  verdict (checklist step 67).
+  The builder originally read the China-origin rule as covering the tracked Kimi config, which the
+  npm package omits. Blue can confirm how the rule applies to this pin in checklist step 67.
+  BUILD FRESH is recommended because the upstream reads broad transcript roots and can use signed-in `gh`.
 
 - **Release: Mako 1.0.0 is released.**
   - Tag `v1.0.0` was created on 2026-10-18 at `main` commit `37009eb`, which includes the
