@@ -10,7 +10,7 @@ conflict, nothing watched for it (the hourly runner has been off since 2026-11-0
 skipped Codex and non-runner PRs anyway), and Codex couldn't open its own PRs (GitHub answers
 "Forbidden"). His words are quoted as the hand-off for this PR relayed them. How the rules follow
 them (AGENTS.md, docs/SWEEPER.md, docs/CODEX-BUILDER-LANE.md and a pointer in docs/RUNNER.md) is
-**proposed, pending Blue (PR #NNN)**; merging that PR approves it. "Builder's reading" marks a line
+**proposed, pending Blue (PR #225)**; merging that PR approves it. "Builder's reading" marks a line
 that is the builder's, not Blue's.
 
 | Decision | Blue's words |
