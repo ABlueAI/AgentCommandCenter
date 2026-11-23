@@ -50,8 +50,9 @@ It mined only what the layout code guarantees, and read no tests and none of the
 dock. For S66 (three tabs, Ctrl K palette, Settings page, old layout behind a setting), these
 matter more than anything it found, most important first:
 
-1. **The engine choice is pinned as not a setting.** `main.js:184-190` reads `--classic-layout`
-   once from argv; `dockview-default-path.test.js:152` fails if settings mention dockview. S66's
+1. **The engine choice is pinned as not a setting.** `main.js:195` reads `--classic-layout` once
+   from argv, and the comment above it says "It is not a setting"; `dockview-default-path.test.js:152`
+   fails if main's `get-settings` code is followed by "dockview". S66's
    "old layout behind a setting" must be a different switch (the tab shell), not the engine flag.
 2. **Nothing is saved or restored at startup.** `dockview-app-integration.test.js:128` requires zero
    layout IPC calls; new panes get no position, so they land where dockview puts them.
@@ -61,7 +62,7 @@ matter more than anything it found, most important first:
    `#terminalDock` element, the toolbar order and no `position:fixed` in the dock CSS.
 5. **The layout controls bar** (four buttons, labels and status text) is pinned by the integration
    test but described only by its element IDs.
-6. **Keyboard:** xterm's key handler passes unhandled Ctrl chords to the PTY (`app.js:533`), so a
+6. **Keyboard:** xterm's key handler passes unhandled Ctrl chords to the PTY (`app.js:542`), so a
    Ctrl K palette must catch the key before xterm. The only app-level shortcut is Escape.
 7. Smaller: two headers per docked pane (Mako's `.term-head` plus dockview's tab), the empty-state
    message hidden in the grid, pane IDs that only go up, a PTY exit that leaves the pane open, and the
@@ -78,7 +79,8 @@ Mako's plain node tests have no `TestClass.method` names. Mako does not use Open
 and the spec is a useful checklist of guarantees a rewrite must keep. But it answers "what does this
 code promise", not "what does someone changing this need to know": it skipped the tests that pin the
 behaviour and the UI shell around the module, which is where S66's risks are. Its upstream form also
-needs `Bash` and `Write`, which Mako's read-only agent rule doesn't allow. Use it again only before a
+needs `Bash` and `Write`, which Mako's review agents don't get (read-only, docs/decisions/OSS-ecc.md) and
+S43's read-only scope ruled out. Use it again only before a
 rewrite that must keep a module's behaviour, scoped to include that module's tests and callers, with
 its output checked by a second agent as here. Not worth adopting as a standing agent.
 
