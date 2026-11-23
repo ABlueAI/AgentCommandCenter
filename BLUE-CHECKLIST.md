@@ -6,7 +6,9 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-11-18 by Claude (your answers to PR #195's questions, PR #204: step 65 added,
+Last updated 2026-11-21 by Claude (your decisions of 2026-11-16 to 2026-11-21, PR #212: steps 27
+and 50 leave the top of "Do next", steps 57, 60 and 63 follow your answers, step 68 added, dated
+reminders added; earlier, on 2026-11-18, your answers to PR #195's questions, PR #204: step 65 added,
 S48 split; earlier, on 2026-11-17, your answers to PR #173's questions, PR #195: step 64 added,
 step 18 waits on the schedule; earlier, on 2026-11-16, the Mako 1.1 decision sheet, PR #173: step 28 ticked, step 10
 dropped, steps 8 and 17 re-timed, steps 54 to 63 added (62 ticked) and "Do next" re-ordered; earlier, on
@@ -30,13 +32,15 @@ Your words (2026-10-21): "we will walk through this. place it where you prioriti
 other remaining items." Claude's order for what is left:
 
 Re-ordered on 2026-11-16 from your signed Mako 1.1 decision sheet (docs/DECISIONS.md, 2026-11-16).
+On 2026-11-21 steps 27 and 50 left the top (your decision: the runner they check has been off since
+2026-11-04) and step 60 moved up for its dates (docs/DECISIONS.md, 2026-11-21).
 
-1. **Steps 27 and 50**, in one sitting (about 12 minutes): the all-day runner checks. Step 28 is
-   closed (usage credits are off, your word of 2026-11-04). Once step 27 is ticked, plan-session PRs
-   stop editing STATUS.md and leave it to the runner's status PR.
+1. **Step 60**, the Composer practice test on **2026-11-22**, then prototype day on **2026-11-23**
+   (3 to 5 real tasks). Either may slip a day if Claude Max isn't active yet.
 2. **Step 59**, re-link Codex reviews to `ABlueAgent` (about 5 minutes; your yes, 2026-11-16), and
    **step 65**, Dependabot alerts and security updates on (about 3 minutes; your words, 2026-11-18).
-   **Step 63** on 2026-11-30: the Codex check-in.
+   **Step 63** on 2026-11-30: the Codex check-in, the first of the weekly checks. **Step 68**,
+   your verdict on PR #209's OSS record for S48 (about 15 minutes).
 3. **Step 54**, the H1 setup day (1.5 to 3 hours). H1 is the PC Mako is to run on unattended. It
    takes in the step 43 re-run and the step 25 tick, and S44 and S48 (the vault memory and its
    nightly tidy) wait on it; S48 no longer waits on the schedule (2026-11-18).
@@ -46,9 +50,8 @@ Re-ordered on 2026-11-16 from your signed Mako 1.1 decision sheet (docs/DECISION
    then removing the `ABlueAI` command-line login from every PC Claude runs on.
 6. **Step 56**, memory setup (about 45 minutes over 2 days), when S48's PR asks for it, and
    **step 55**, H1 trial part 2, the aquarium (15 to 20 minutes), when S20's PR asks for it.
-7. **Step 60**, the Composer prototype day, after S49's test sheet is ready. Your Composer scope
-   sign-off unblocks S51.
-8. **Step 57** (Firefox profile 2's preset URLs, 10 minutes), **step 58** (the lessons-learned
+7. Your Composer scope sign-off unblocks S51.
+8. **Step 57** (the "Mako" Firefox profile's preset URLs, 10 minutes), **step 58** (the lessons-learned
    draft, 15 minutes) and **step 61** (an agent deletes the StarNet clone, a leftover local copy on
    your PC, and the OpenCode leftovers; you say when).
 9. **PC checks**, batched on Tuesday and Friday evenings until H1 automates them: steps 23, 24
@@ -62,7 +65,11 @@ Re-ordered on 2026-11-16 from your signed Mako 1.1 decision sheet (docs/DECISION
     when S24 is ready for its watcher.
 13. **Step 17**, the token audit: inside 1.1, as the last step before release (S59). The agent
     token's renewal (by 2027-01-14) may come first.
-14. ~~**Step 14**, the agent token~~ Done 2026-10-23 on your word. ~~**Step 10**, the app settings
+14. **Steps 27 and 50**, in one sitting (about 12 minutes), only when you turn the all-day runner
+    back on: it has been off since 2026-11-04. Step 28 is closed (usage credits are off, your word of
+    2026-11-04). Once step 27 is ticked, plan-session PRs stop editing STATUS.md and leave it to the
+    runner's status PR.
+15. ~~**Step 14**, the agent token~~ Done 2026-10-23 on your word. ~~**Step 10**, the app settings
     review~~ Dropped 2026-11-16: the new Settings page replaces it.
 
 ## Today
@@ -311,7 +318,7 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   - Don't connect it to ChatGPT's **Passwords** setting or let any AI agent drive it.
   - *Done when:* you say so. It's yours, so Claude doesn't verify anything.
 - **10. ~~App settings review.~~ Dropped.** *Dropped 2026-11-16 by Blue on his decision sheet: the
-  new Settings page (S19) replaces it (docs/DECISIONS.md, 2026-11-16). Nothing to do; the number
+  new Settings page (S19; S66 since 2026-11-22) replaces it (docs/DECISIONS.md, 2026-11-16). Nothing to do; the number
   stays so no other step is renumbered. `docs/SETUP-APP-SETTINGS.md` was never written.* About 20
   minutes, this week, after step 2.
   - Screenshot every page of: ChatGPT desktop app > Settings; claude.ai > Settings and the Claude
@@ -539,6 +546,8 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     the brief from prototype A and your decision sheet (docs/PLAN-1.1.md "Mako 1.1 scope"). The rows
     are still on hold: your sheet set the scope, and your "go on the UI" hasn't been recorded in
     your words yet.
+  - *Updated 2026-11-22:* S18 is split: the shared navigation (S66) comes first, and S18, S19 and
+    S20 build on it in parallel. Your go on the UI releases S66 with S14 and S18 to S20.
   - *Updated 2026-11-17:* not before the 1.1 schedule is adopted with its independent review and a
     re-review of its fixes (plan row S61, step 64; your words: "the schedule and its independent
     review before any UI building"). Your go comes after S61 merges.
@@ -1077,13 +1086,17 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
     needs.
   - *Done when:* you tell an agent the tidy ran and what the note showed. It ticks this with the
     date; the 3 unattended nights are S48's own done-when.
-- [ ] **57. Firefox profile 2: the preset URLs.** **10 minutes**, any time; S55 waits on it. Give an
-  agent, in its own session, the list of URLs profile 2 should open (never a login or password; a
-  private URL stays out of this repo).
-  - *Done when:* the agent has the list and S55's row moves from `NEEDS BLUE`. It ticks this with
-    the date.
+- [ ] **57. The "Mako" Firefox profile: the preset URLs.** **10 minutes**, any time; S55 waits on
+  it. S55's presets ("work research", "Buydeas") open several links at once in the "Mako" Firefox
+  profile (your decision, 2026-11-21; it was "profile 2"). The URLs go in a local, git-excluded file
+  on your PC, never in this repo, so give them to an agent in a local pane on your PC, not on GitHub
+  (never a login or password). Agents never drive the Mako profile; agents that browse use their own
+  browser.
+  - *Done when:* the URL file exists on your PC, git ignores it, and S55's row moves from
+    `NEEDS BLUE`. The agent ticks this with the date and how it checked that git ignores the file.
 - [ ] **58. Review the lessons-learned draft.** **15 minutes**, when the agent that wrote it sends
-  it to you. Read it and say what to change or drop.
+  it to you. Read it and say what to change or drop. If this isn't done when the agent tune-up
+  (S28, S60) starts, the tune-up runs from the draft as it is (your decision, 2026-11-22).
   - *Done when:* you tell an agent it is approved (or what to change). It ticks this with the date
     and your words.
 - [ ] **59. Re-link Codex reviews to `ABlueAgent`.** **About 5 minutes**, any time this week (your
@@ -1092,11 +1105,16 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
   keep automatic reviews on for `ABlueAI/AgentCommandCenter`.
   - *Done when:* you say it is done. Claude checks on GitHub that Codex reviews the next PR
     `ABlueAgent` opens without being asked, and ticks this with the date and that PR's number.
-- [ ] **60. The Composer prototype day.** **A normal working day plus 30 minutes of scoring**, after
-  S49's test sheet is ready and before any Composer code. Work your usual day with the Composer
-  prototype, then score it against the sheet.
-  - *Done when:* you give an agent your scores. S50's PR records them and what they change, and
-    ticks this with the date.
+- [ ] **60. The Composer prototype day.** **A normal working day plus 30 minutes of scoring**, on
+  **2026-11-23**, after S49's test sheet is ready and before any Composer code (your decision,
+  2026-11-21). Either date may slip a day if Claude Max isn't active yet.
+  - **First, 2026-11-22: the practice test (S49).** Mako's role prompt plans the 10 test tasks
+    offline, 3 times each, and Codex grades the plans blind against the answer key. If the 10 tasks
+    and the answer key are only in your private notes, hand them to the session that runs it.
+  - **Then, 2026-11-23:** work 3 to 5 real tasks with the Composer prototype, then score it against
+    the sheet.
+  - *Done when:* you give an agent your scores. S50's PR records them, the practice test's grades
+    and what they change, and ticks this with the date.
 - [ ] **61. Delete the StarNet clone and the OpenCode leftovers.** **About 2 minutes of your time**:
   an agent does it in a local pane on your PC, and you have already approved it (decision sheet,
   2026-11-16). Tell a local agent "do step 61". It lists what it will delete first (folders only,
@@ -1110,7 +1128,10 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
   as they are `blue`-lane rows) and reviews Claude's PRs, with Sonnet as the backup
   reviewer if Codex is out of usage; after 2026-11-30 Claude reviews it all "unless my mind
   changes" (your words, 2026-11-16). Tell any agent whether the Codex lane stays open, and whether
-  your resets are used. S26 closes when they are.
+  your resets are used. S26 closes when they are. From 2026-11-21: you keep ChatGPT Plus through the
+  1.1 release, and Codex's heavy use runs to about 2026-12-29, checked weekly, so this check-in is
+  the first of the weekly checks (the agent's reading of "checked weekly"; docs/DECISIONS.md,
+  2026-11-21).
   - *Done when:* your answer is recorded in docs/DECISIONS.md in your words, S26's row in
     docs/PLAN-1.1.md follows it, and the agent ticks this with the date.
 
@@ -1136,12 +1157,24 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
     before you merge one. How the merge-order check and the runner treat them is issue #205.
   - *Done when:* you say both are on. Claude can't read these settings (they show only to admins),
     so it ticks this on your word, and notes the first Dependabot alert or PR it sees as a check.
-
 - [x] **66. Give the HyperFrames verdict (S52).**
   Verdict: FORK, conditional. Blue (2026-11-18, in his main chat), adopting Mako main's recommendation: 'I think your recommendation verdicts are very good. So, yes to both of those recommendations.' Reconfirmed by Blue on 2026-11-24 ('yes i do recall now', 'agree'). The recommendation he adopted: first a Windows trial on the VM, with the browser sandbox on, outside connections blocked and logged, and the media commands that call China-origin models removed. Fork only if that trial shows no outside connections and no sandbox downgrade.
-  - *Verification:* Blue supplied the main-chat quote and reconfirmation in the follow-up request
-    for PR #206. This PR records them in the [S52 vetting and trial record](docs/decisions/OSS-hyperframes.md#blues-verdict)
-    and links to the verdict from [the decisions log](docs/DECISIONS.md#hyperframes-s52-pr-206).
+  - *Verification:* checked 2026-11-23 (UTC) by a Claude cloud session against Blue's words as
+    quoted in the Mako main session's hand-off to it
+    ([session](https://claude.ai/code/session_01UWhuMF5YrgU1ojPL6DN1Q1)). Recorded in the [S52 vetting and trial record](docs/decisions/OSS-hyperframes.md#blues-verdict)
+    and [the decisions log](docs/DECISIONS.md#2026-11-18-s52-hyperframes-verdict-pr-206).
+
+## From your decisions of 2026-11-16 to 2026-11-21
+
+Step 68 comes from those decisions (docs/DECISIONS.md, 2026-11-21). Step numbers 66 and 67 belong to
+open PRs (#206 and #208).
+
+- [ ] **68. Your verdict on S48's OSS record (PR #209).** **About 15 minutes**, any time before S48
+  starts. S48 (the vault memory) takes PR #209's open-source record, `docs/decisions/OSS-memory.md`,
+  as its OSS record once you give your verdict (your decision, 2026-11-21). Read the record and give
+  your verdict (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD FRESH) in your own words to any agent.
+  - *Done when:* your verdict is in the record, word for word, and the agent ticks this with the
+    date.
 
 ## Every day, once the runner is on
 
@@ -1203,9 +1236,17 @@ You can start on the first one now, which saves time later.
   2026-11-17, so no month-review numbers come).
 - **2026-11-19:** the Max upgrade (step 8), "or until usage begins flowing" (your words,
   2026-11-15).
-- **2026-11-30:** the Codex check-in (step 63).
+- **2026-11-22:** the Composer practice test (S49, step 60); may slip a day if Max isn't active.
+- **2026-11-23:** the Composer prototype day (S50, step 60); may slip a day too.
+- **By 2026-11-25:** Codex's 1 to 2 hour UI-library sweep (S63).
+- **2026-11-30:** the Codex check-in (step 63), then weekly until Codex's heavy use ends, about
+  2026-12-29.
+- **2026-12-01:** the scope freeze: after it, anything new that isn't vital to security goes to 1.2.
 - **2026-12-03:** the Composer re-scout (S49). Again about 30 days after 1.1 ships.
-- **About 2026-12-13 to 2027-01-13:** the soft window for Mako 1.1. Nothing is cut for it; step 17
+- **2026-12-20:** the 1.1 pace checkpoint (your decision, 2026-11-22): is 1.1 on track for its
+  target? Nothing is cut for the date.
+- **2027-01-15:** the target for Mako 1.1, with all of 1.1 within 60 days of 2026-11-17 (your
+  decision, 2026-11-22; it was "about 2026-12-13 to 2027-01-13"). Nothing is cut for it; step 17
   (the token audit) is the last step before the release.
 - **By 2027-01-14:** renew the `ABlueAgent` classic token (`public_repo` only, step 14), a week
   before it expires on 2027-01-21. Signed in as `ABlueAgent`, it is listed on

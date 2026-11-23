@@ -9,6 +9,13 @@ vetting before any Mako integration. This session covers research and the sandbo
 
 Verdict: FORK, conditional. Blue (2026-11-18, in his main chat), adopting Mako main's recommendation: 'I think your recommendation verdicts are very good. So, yes to both of those recommendations.' Reconfirmed by Blue on 2026-11-24 ('yes i do recall now', 'agree'). The recommendation he adopted: first a Windows trial on the VM, with the browser sandbox on, outside connections blocked and logged, and the media commands that call China-origin models removed. Fork only if that trial shows no outside connections and no sandbox downgrade.
 
+Source: Blue's words as quoted in the Mako main session's hand-off to the Claude cloud session that
+pushed the review fixes ([session](https://claude.ai/code/session_01UWhuMF5YrgU1ojPL6DN1Q1)). The
+quoted parts are Blue's words; the rest describes the recommendation he adopted. This replaces the
+third-person summary that the [2026-11-22 fix
+request](https://github.com/ABlueAI/AgentCommandCenter/pull/206#issuecomment-7075022787) gave, which
+did not quote him.
+
 ## Identity, licence and maintenance
 
 | Check | Evidence |
@@ -35,7 +42,7 @@ commands. The npm payload offers `minimax-h3-image` and `minimax-h3-image-4k` fr
 (Shanghai), and its local model catalogue offers `Qwen/Qwen-Image` from Alibaba Cloud. The
 repository also names Qwen, DeepSeek, Kimi and GLM in its agent guide and Seedance in its Studio
 docs. The claim that “the rule covers names as well as use” was the builder’s interpretation of the
-task brief. Blue clarified on 2026-11-18 that the rule covers what Mako runs, installs or calls.
+task brief. Blue later [clarified][clarified] that the rule covers what Mako runs, installs or calls.
 A model named only in an upstream file Mako doesn’t ship is not a fail. The trial invoked no model.
 [Mako decision][rule] · [CLI model options][model-options] ·
 [local model catalogue][models] · [MiniMax contacts][minimax] · [Qwen publisher][qwen] ·
@@ -96,7 +103,7 @@ time env -i PATH="$PATH" HOME="$PWD/run-home" TMPDIR="$PWD/run-tmp" \
   own sandbox could not start in the cloud host, so HyperFrames automatically retried without the
   browser’s sandbox, still within the Codex sandbox. It used software GPU and screenshot capture.
   The browser logged one non-blocking resource 404 without identifying the resource. The trace
-  showed loopback traffic, off-host DNS activity, and failed off-host IPv6 port-443 attempts with all
+  showed loopback traffic, DNS activity, and failed off-host IPv6 port-443 attempts with all
   four opt-outs set. The off-host destination, initiating process, and DNS lookups were not identified.
   No successful off-host HTTP connection was observed in that trace. Windows was outside this
   trial. [Browser launch fallback][browser-fallback] · [Render troubleshooting][rendering]
@@ -106,7 +113,7 @@ time env -i PATH="$PATH" HOME="$PWD/run-home" TMPDIR="$PWD/run-tmp" \
 | Verdict | Fit |
 |---|---|
 | ADOPT | The upstream CLI works for a simple local scene. Its media commands offer MiniMax/Qwen models, so adopting it unchanged would require Blue’s exception to the China-origin rule. |
-| **FORK (conditional)** | Preserve the Apache-licensed HTML/CSS capture and encode path. Remove the media commands that call China-origin models and disallowed model and service references from the candidate’s shipped code and docs. Exclude hosted media and remote skills. The fork must refuse to render with a visible error if Chromium’s sandbox can’t start. Remove the automatic unsandboxed retry. The fork must block or explain this egress. First run a Windows VM trial with Chromium’s sandbox on and outside connections blocked and logged. Fork only if the trial shows no outside connections and no sandbox downgrade. Pin and scan the resulting distribution before considering integration. This carries an ongoing upstream maintenance cost. |
+| **FORK (conditional)** | Preserve the Apache-licensed HTML/CSS capture and encode path. Remove the media commands that call China-origin models and disallowed model and service references from the candidate’s shipped code and docs. Exclude hosted media and remote skills. The fork must refuse to render with a visible error if Chromium’s sandbox can’t start. Remove the automatic unsandboxed retry. The fork must block or explain the off-host DNS and IPv6 port-443 attempts seen in the Linux trial (Sandbox render section). First run a Windows VM trial with Chromium’s sandbox on and outside connections blocked and logged. Fork only if the trial shows no outside connections and no sandbox downgrade. Pin and scan the resulting distribution before considering integration. This carries an ongoing upstream maintenance cost. |
 | PROTOTYPE | The Linux trial already establishes basic render feasibility. A separate Windows-only prototype of a compliant candidate can answer packaging, sandbox and performance questions. |
 | PATTERN-MINE | Study deterministic frame seeking, Chromium capture and FFmpeg assembly without taking a dependency. This trades upstream maintenance for Mako implementation work. |
 | BUILD FRESH | Own the full pipeline if a compliant fork proves impractical. This carries the largest delivery and testing cost. |
@@ -151,6 +158,7 @@ time env -i PATH="$PATH" HOME="$PWD/run-home" TMPDIR="$PWD/run-tmp" \
 [agent-guide]: https://github.com/heygen-com/hyperframes/blob/32ff8b332323cfcff29be3ede278fc7810b6f5a5/docs/guides/free-agents.mdx#L12-L25
 [studio-guide]: https://github.com/heygen-com/hyperframes/blob/32ff8b332323cfcff29be3ede278fc7810b6f5a5/docs/studio-app/video-clips.mdx#L40-L45
 [rule]: ../DECISIONS.md#2026-11-16-the-mako-11-decision-sheet
+[clarified]: ../DECISIONS.md#2026-11-21-blues-decisions-of-2026-11-16-to-2026-11-21
 [scanner]: https://github.com/NVIDIA/SkillSpector/tree/c7958a3268d9498644b22edb75d0f051bbc8cbfc
 [scanner-default]: https://github.com/NVIDIA/SkillSpector/blob/c7958a3268d9498644b22edb75d0f051bbc8cbfc/src/skillspector/providers/nv_build/provider.py#L52
 [scanner-osv]: https://github.com/NVIDIA/SkillSpector/blob/c7958a3268d9498644b22edb75d0f051bbc8cbfc/README.md#L824-L825
