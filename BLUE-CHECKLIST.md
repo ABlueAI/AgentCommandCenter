@@ -1098,7 +1098,7 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
   it to you. Read it and say what to change or drop. If this isn't done when the agent tune-up
   (S28, S60) starts, the tune-up runs from the draft as it is (your decision, 2026-11-22).
   By **2026-11-27** (the date the schedule proposed), and before that Friday if the work runs ahead
-  (your answer, dated 2026-11-24 in the hand-off: "Sure, but if we're running ahead of schedule, can
+  (your answer, 2026-11-23: "Sure, but if we're running ahead of schedule, can
   this just be completed prior to Friday?"; docs/SCHEDULE-1.1.md).
   - *Done when:* you tell an agent it is approved (or what to change). It ticks this with the date
     and your words.
@@ -1140,8 +1140,7 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
 
 - [x] **64. Hand over the 1.1 schedule (S61).** *Done; checked 2026-11-23 (UTC) on GitHub that
   PR #223 is open with the schedule in it as `docs/SCHEDULE-1.1.md`. You approved the text ("Yes.
-  Do as written."), dated 2026-11-24 in the hand-off; GitHub's clock still read 2026-11-23, so that
-  date is to confirm with you. Next: merge PR #223 to adopt it, then step 18.* About 5 minutes, when you're ready; every UI
+  Do as written.") on 2026-11-23. Next: merge PR #223 to adopt it, then step 18.* About 5 minutes, when you're ready; every UI
   row waits on it. Give the schedule to an agent in its own session (not as a GitHub comment if it
   holds anything private). It opens S61's PR with the schedule as `docs/SCHEDULE-1.1.md`, nothing
   private in it, runs the independent review, fixes the findings and re-reviews the fixes.

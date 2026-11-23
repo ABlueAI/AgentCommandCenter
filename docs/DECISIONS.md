@@ -3,11 +3,10 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
-## 2026-11-24: Blue's answers on the 1.1 schedule (S61)
+## 2026-11-23: Blue's answers on the 1.1 schedule (S61)
 
 Blue answered the 1.1 schedule's open decisions in his main chat, and approved its text to go
-public ("Yes. Do as written.", checklist step 64). The hand-off dates both 2026-11-24; GitHub
-shows PR #223 opened on 2026-11-23 (UTC), so the date is to confirm with Blue. The schedule is
+public ("Yes. Do as written.", checklist step 64). The dates were corrected on Blue's ask. The schedule is
 docs/SCHEDULE-1.1.md, added by PR #223; merging that PR adopts it. Numbers match the schedule's
 "Decisions" table. Decisions 1 to 3 were settled by PR #212 (2026-11-21 entry, items 26 to 28);
 decisions 6 and 7 stay open. A row without a quote had no words relayed.
