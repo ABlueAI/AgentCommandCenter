@@ -144,7 +144,7 @@ Decided (Blue's words are in docs/DECISIONS.md, 2026-11-21 and 2026-11-24):
 | 1 | Split S18 into the shared navigation (S66) and the brain tab (S18); S18, S19 and S20 each wait only for S66 | Yes (2026-11-22); in the plan since PR #212 |
 | 2 | S59's date wording: goal 2027-01-15, all of 1.1 within 60 days of 2026-11-17, checkpoint 2026-12-20 | Yes (2026-11-22); in S59 since PR #212 |
 | 3 | Merge the 2026-11-22 plan-change PR (it also narrows S50's needs to S49's pre-prototype pieces) | Done: PR #212 merged 2026-11-22 |
-| 4 | Step 58 by 2026-11-27, before that Friday if the work runs ahead; if it isn't done, the agent tune-up (S28, S60) runs from the lessons draft as it is | Yes (2026-11-24) |
+| 4 | Step 58 by 2026-11-27, before that Friday if the work runs ahead; if it isn't done, the agent tune-up (S28, S60) runs from the lessons draft as it is | Yes (dated 2026-11-24; the "before that Friday" wording is the builder's reading of his words, to confirm) |
 | 5 | Mako's main chat keeps the Claude lanes full, starting the next row as each finishes; Blue doesn't open lanes daily | Yes, as revised (2026-11-24) |
 | 8 | If 12-20 says behind, the date slips instead of moving S54, S47 or the replay work to 1.2; only pop-out windows may move | No to moving them (2026-11-24) |
 
