@@ -473,9 +473,9 @@ for (const rule of settings.permissions.deny) {
 assert(!settings.permissions.deny.some((r) => /^Bash\(gh api \*/.test(r)),
   'a gh api deny starts with the endpoint, so a comment body that merely says "reviews" or "merge" is not matched by a leading wildcard');
 const groups = (settings.hooks && settings.hooks.PreToolUse) || [];
-const entry = groups.find((g) => g.matcher === 'Bash');
+const entry = groups.find((g) => g.matcher === 'Bash|PowerShell');
 const hook = entry && (entry.hooks || []).find((h) => /account-guard\.js$/.test((h.args || [])[0] || ''));
-assert(!!hook, 'a PreToolUse hook with matcher "Bash" runs account-guard.js');
+assert(!!hook, 'a PreToolUse hook with matcher "Bash|PowerShell" runs account-guard.js (the docs: "The matcher `Bash|PowerShell` covers the PowerShell tool as well as Bash")');
 assert(hook && hook.type === 'command' && hook.command === 'node', 'exec form: command "node"');
 assert(hook && JSON.stringify(hook.args) === JSON.stringify(['${CLAUDE_PROJECT_DIR}/.claude/hooks/account-guard.js']),
   'args point at the script through ${CLAUDE_PROJECT_DIR}');
