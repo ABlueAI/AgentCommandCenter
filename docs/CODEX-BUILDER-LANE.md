@@ -66,6 +66,8 @@ minutes during the trial (checklist step 30).
    docs/DECISIONS.md; it was 1, a choice to stay within ChatGPT
    Plus; its real limits are not verified), not the runner's `parallel_cap`, which counts Claude's
    usage.
+9. **Sweeper.** When Codex can't open its PR (GitHub answers "Forbidden"), the PR sweeper
+   (docs/SWEEPER.md, Job C) opens it as a draft and runs review run 1.
 
 ## The trial
 
