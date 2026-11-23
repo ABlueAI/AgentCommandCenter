@@ -393,6 +393,12 @@ presets in the "Mako" Firefox profile, and agents never drive that profile. S18 
 (2026-11-22): the shared navigation (new S66) comes first, then S18 to S20 can build in parallel. 1.2's headline is the
 Private pane. Blue's next steps: step 60 (practice test and prototype day) and step 68 (his verdict
 on PR #209's OSS record for S48).
+**2026-11-23 (S43, PR #222):** the one-off spec-miner trial ran read-only on the dockview layout;
+its write-up is [docs/research/S43-spec-miner-trial.md](docs/research/S43-spec-miner-trial.md).
+The spec was accurate (35 of 40 blocks, none wrong) but missed what S66 most needs (the engine
+flag pinned as not a setting, no restore at startup, the four top-level tabs, the markup tests,
+Ctrl K reaching the PTY); verdict: an occasional one-off, never installed. Once it merges, S66
+waits only on S14 and Blue's go on the UI (step 18).
 
 **S52 (PR #206):** [HyperFrames vetting and trial](docs/decisions/OSS-hyperframes.md) are recorded.
 The pinned upstream package offers MiniMax/Qwen models through its media commands. Blue's verdict
