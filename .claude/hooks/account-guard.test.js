@@ -411,6 +411,15 @@ const GUARDED_PS = [
   // Review run 1: PowerShell's -Command takes every argument after it as the command.
   ['pwsh -NoProfile -Command git push origin x', 'git push'],
   ['powershell -c gh pr merge 5', 'gh pr merge'],
+  // Review run 2: a comma after a parameter name, or before a word, starts an array argument, and a
+  // native program gets an array's elements as separate arguments; comments may follow a comma.
+  ["Start-Process gh -ArgumentList ,'pr merge 5'", 'gh pr merge'],
+  ['git push ,origin', 'git push'],
+  ['gh pr merge ,5', 'gh pr merge'],
+  ["Start-Process gh -ArgumentList 'pr', # why\n'merge', '5'", 'gh pr merge'],
+  ["Start-Process gh -ArgumentList 'pr', <# why #> 'merge', '5'", 'gh pr merge'],
+  ['$a, $b = gh pr create --fill', 'gh pr create'],
+  ["git -c 'x=a,b' push", 'git push'],
 ];
 // Nesting deeper than the splitter follows falls back to the text scan, never to "allowed", and
 // nesting in strings deep enough to exhaust the stack is caught the same way, without throwing.
@@ -443,6 +452,8 @@ const NOT_GUARDED_PS = [
   "Get-Content notes.md | Select-String 'git push'",
   'Where-Object { $_ -match "git push" }',
   "Start-Process notepad -ArgumentList 'git push'",
+  "Write-Host 'gh', 'pr', 'merge'",
+  'Write-Output a, b, c # git push',
   'gh api repos/o/r/pulls/5/reviews',
   '',
 ];

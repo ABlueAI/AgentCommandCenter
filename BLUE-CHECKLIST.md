@@ -48,7 +48,8 @@ On 2026-11-21 steps 27 and 50 left the top (your decision: the runner they check
 4. **Step 15**, the voice check on the new Electron. S36 moves Electron to 42.11.16, so if that has
    merged, check on that version.
 5. **Step 35, then step 49**, after PR #170 (the account fix follows it): the agent token in Mako,
-   then removing the `ABlueAI` command-line login from every PC Claude runs on.
+   then removing the `ABlueAI` command-line login from every PC Claude runs on. If PR #218 is
+   merged by then, do step 69 (3 minutes) before step 49.
 6. **Step 56**, memory setup (about 45 minutes over 2 days), when S48's PR asks for it, and
    **step 55**, H1 trial part 2, the aquarium (15 to 20 minutes), when S20's PR asks for it.
 7. Your Composer scope sign-off unblocks S51.
@@ -1170,6 +1171,10 @@ open PRs (#206 and #208).
   your verdict (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD FRESH) in your own words to any agent.
   - *Done when:* your verdict is in the record, word for word, and the agent ticks this with the
     date.
+## From S37 (the account guard and the PowerShell tool)
+
+Step 69 comes from S37 (PR #218, issue #217), not from the decisions above.
+
 - [ ] **69. Check that the account guard stops PR work through the PowerShell tool (S37, PR #218).**
   **About 3 minutes**, on your PC after merging PR #218 and before step 49 removes your command-line
   login (the check needs `gh` logged in as `ABlueAI`). CI tests the guard with the input Claude Code's
@@ -1181,6 +1186,9 @@ open PRs (#206 and #208).
     found"), the guard didn't run: tell any agent "step 69 failed" with what you saw. Nothing is
     changed either way, since PR 999999 doesn't exist. If Claude says it has no PowerShell tool,
     say so; the check is then not applicable on that PC.
+  - If you've already removed your command-line login (step 49), the guard instead shows "couldn't
+    check the GitHub login before `gh pr ready` ... allowed". That also passes: it shows the guard
+    ran for the PowerShell tool.
   - *Done when:* you've told an agent what Claude showed, and it ticks this with the date and your
     words.
 

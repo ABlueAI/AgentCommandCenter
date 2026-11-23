@@ -359,6 +359,10 @@ function splitCommands(input, depth = 0, ctx = { unbalanced: false }) {
 const PS_SINGLE = "'‘’‚‛";
 const PS_DOUBLE = '"“”„';
 const PS_SEPARATORS = new Set([';', '&', '|', '\n', '\r', '{', '}', ')']);
+// Separates the elements of an array argument (`'pr', 'merge'`) inside one word. PowerShell passes
+// each element to a native program as an argument of its own, so classifySimpleCommand splits on it.
+const PS_ARRAY_SEP = '\u001F';
+const flattenArrays = (words) => words.flatMap((w) => (w.includes(PS_ARRAY_SEP) ? w.split(PS_ARRAY_SEP).filter(Boolean) : [w]));
 // True when `ch` is one character of `chars` (a bare `includes` would also accept '' or undefined).
 const isOneOf = (chars, ch) => typeof ch === 'string' && ch.length === 1 && chars.includes(ch);
 
@@ -547,12 +551,25 @@ function splitPowerShell(input, depth = 0, ctx = { unbalanced: false }) {
       while (i + 1 < s.length && s[i + 1] !== '\n') i++;
       continue;
     }
-    if (c === ',') { // `'pr', 'merge', '5'` is one array argument, even across spaces and lines
-      word = (word !== null ? word : (words.length ? words.pop() : '')) + ',';
-      for (;;) { // skip spaces, line breaks and backtick line continuations after the comma
-        const m = /^(?:\s+|`\r?\n)/.exec(s.slice(i + 1, i + 3 + 64));
-        if (!m) break;
-        i += m[0].length;
+    if (c === ',') {
+      // `'pr', 'merge', '5'` is one array argument, even across spaces, lines and comments; its
+      // elements are kept apart by PS_ARRAY_SEP. After a parameter name (`-ArgumentList ,'x'`) or
+      // with nothing before it, the comma is the unary array operator and starts a new argument.
+      if (word !== null) word += PS_ARRAY_SEP;
+      else if (words.length && !/^-[A-Za-z]/.test(words[words.length - 1])) word = words.pop() + PS_ARRAY_SEP;
+      else word = PS_ARRAY_SEP;
+      for (;;) { // skip spaces, line breaks, backtick line continuations and comments after it
+        const j = i + 1;
+        const ws = /^(?:\s+|`\r?\n)/.exec(s.slice(j, j + 66));
+        if (ws) { i += ws[0].length; continue; }
+        if (s[j] === '#') { const nl = s.indexOf('\n', j); i = (nl === -1 ? s.length : nl) - 1; continue; }
+        if (s[j] === '<' && s[j + 1] === '#') {
+          const close = s.indexOf('#>', j + 2);
+          if (close === -1) { ctx.unbalanced = true; i = s.length - 1; break; }
+          i = close + 1;
+          continue;
+        }
+        break;
       }
       continue;
     }
@@ -604,7 +621,7 @@ function startProcessWords(args) {
   if (file == null) file = positional.shift();
   if (list == null) list = positional.shift();
   if (file == null) return null;
-  const argWords = String(list == null ? '' : list).split(/[\s,]+/)
+  const argWords = String(list == null ? '' : list).split(/[\s,\u001F]+/)
     .map((w) => w.replace(/^['"‘’“”]+|['"‘’“”]+$/g, ''))
     .filter(Boolean);
   return [file, ...argWords];
@@ -633,7 +650,7 @@ function powerShellForms(words, depth) {
       const attached = args[0].replace(/^-[a-z]+:?/i, '');
       args = attached ? [attached, ...args.slice(1)] : args.slice(1);
     }
-    return { hit: findGuardedCommand(args.join(' '), depth + 1, 'ps') };
+    return { hit: findGuardedCommand(flattenArrays(args).join(' '), depth + 1, 'ps') };
   }
   if (prog === 'start-process' || prog === 'saps' || prog === 'start') {
     const sp = startProcessWords(rest);
@@ -641,7 +658,7 @@ function powerShellForms(words, depth) {
   }
   if (prog === 'cmd') {
     const k = rest.findIndex((a) => /^\/[ck]$/i.test(a));
-    return { hit: k === -1 ? null : findGuardedCommand(rest.slice(k + 1).join(' '), depth + 1, 'bash') };
+    return { hit: k === -1 ? null : findGuardedCommand(flattenArrays(rest.slice(k + 1)).join(' '), depth + 1, 'bash') };
   }
   return { words: w };
 }
@@ -709,7 +726,7 @@ function classifySimpleCommand(words, depth, mode = 'bash') {
   if (mode === 'ps') {
     const f = powerShellForms(words, depth);
     if (!f.words) return f.hit;
-    words = f.words;
+    words = flattenArrays(f.words);
   }
   let i = 0;
   // Leading `VAR=value` assignments, wrappers like sudo, and `env [-opts] [VAR=value]`.
