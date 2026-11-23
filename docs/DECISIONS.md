@@ -67,7 +67,7 @@ those recommendations" are the S52 and S53 recommendations; S53's verdict is rec
 
 | Decision | Blue's words |
 |---|---|
-| **S52 HyperFrames: FORK, conditional.** Blue adopted Mako main's recommendation: first a Windows trial on the VM, with the browser sandbox on, outside connections blocked and logged, and the media commands that call China-origin models removed. Fork only if that trial shows no outside connections and no sandbox downgrade. The fork also blocks or explains the egress seen in the Linux trial, and refuses visibly when Chromium's sandbox can't start (the record's FORK row). | 2026-11-18: "I think your recommendation verdicts are very good. So, yes to both of those recommendations." Reconfirmed 2026-11-24: "yes i do recall now", "agree". |
+| **S52 HyperFrames: FORK, conditional.** Blue adopted Mako main's recommendation: first a Windows trial on the VM, with the browser sandbox on, outside connections blocked and logged, and the media commands that call China-origin models removed. Fork only if that trial shows no outside connections and no sandbox downgrade. The fork also blocks or explains the egress seen in the Linux trial, and refuses visibly when Chromium's sandbox can't start (the record's FORK row). | 2026-11-18: "I think your recommendation verdicts are very good. So, yes to both of those recommendations." Reconfirmed 2026-11-23: "yes i do recall now", "agree". |
 
 ## 2026-11-17: S39 (ECC PR 1)
 

@@ -7,7 +7,7 @@ vetting before any Mako integration. This session covers research and the sandbo
 
 ## Blue’s verdict
 
-Verdict: FORK, conditional. Blue (2026-11-18, in his main chat), adopting Mako main's recommendation: 'I think your recommendation verdicts are very good. So, yes to both of those recommendations.' Reconfirmed by Blue on 2026-11-24 ('yes i do recall now', 'agree'). The recommendation he adopted: first a Windows trial on the VM, with the browser sandbox on, outside connections blocked and logged, and the media commands that call China-origin models removed. Fork only if that trial shows no outside connections and no sandbox downgrade.
+Verdict: FORK, conditional. Blue (2026-11-18, in his main chat), adopting Mako main's recommendation: 'I think your recommendation verdicts are very good. So, yes to both of those recommendations.' Reconfirmed by Blue on 2026-11-23 ('yes i do recall now', 'agree'). The recommendation he adopted: first a Windows trial on the VM, with the browser sandbox on, outside connections blocked and logged, and the media commands that call China-origin models removed. Fork only if that trial shows no outside connections and no sandbox downgrade.
 
 Source: Blue's words as quoted in the Mako main session's hand-off to the Claude cloud session that
 pushed the review fixes ([session](https://claude.ai/code/session_01UWhuMF5YrgU1ojPL6DN1Q1)). The
