@@ -10,9 +10,16 @@ After the H1 setup day (checklist step 54), S48 needs one Markdown note per fini
 access for a cloud agent, and a nightly tidy that runs as a local H1 scheduled task for three
 unattended nights. Meaning-based search waits for actual misses reported by the nightly note. Vault
 notes, their indexes, and their contents stay private. S13's vault is local. Checklist step 56
-already calls for syncing it to the private repository and verifying cloud-agent read access through
-that path. [S48](../PLAN-1.1.md#month-one), [H1 and memory setup](../../BLUE-CHECKLIST.md), [S13
+sets up the sync to the private repository. Verifying cloud-agent read access through that path is
+part of S48's done-when. [S48](../PLAN-1.1.md#month-one), [H1 and memory setup](../../BLUE-CHECKLIST.md), [S13
 record](OSS-obsidian-skills.md), [main's decision log](../DECISIONS.md#2026-11-18).
+
+The 2026-11-18 research evaluates Open Second Brain, ai-memory and GBrain. Who picked the shortlist,
+when they picked it, and whether any candidate fell under Blue's 2026-11-16 sign-off dropping
+"the memory tools not chosen" remain unconfirmed. That sign-off still applies. S48 takes this as
+its OSS record once Blue gives his verdict, per the 2026-11-21 entry, item 21, on `main` (PR #212).
+[2026-11-16 sign-off](../DECISIONS.md#2026-11-16-the-mako-11-decision-sheet), [2026-11-21 decision on
+main](https://github.com/ABlueAI/AgentCommandCenter/blob/main/docs/DECISIONS.md#2026-11-21-blues-decisions-of-2026-11-16-to-2026-11-21).
 
 ## Sources and maintenance
 
@@ -39,9 +46,10 @@ channels](https://github.com/garrytan/gbrain/blob/5c48d799803d815b6fca730fd8e8f1
 
 SkillSpector [2.12.0](https://github.com/NVIDIA/SkillSpector/releases/tag/v2.12.0) at
 [`c7958a3268d9498644b22edb75d0f051bbc8cbfc`](https://github.com/NVIDIA/SkillSpector/tree/c7958a3268d9498644b22edb75d0f051bbc8cbfc)
-was installed in a throwaway environment using its locked dependencies. Each pinned checkout was the
-input to `skillspector scan <checkout> --no-llm --format json --output <report>`, with no upstream
-baseline enabled. The default analyzer `z-ai/glm-5.2` (Zhipu) was disabled. The static supply-chain
+was installed in a throwaway environment using its locked dependencies. The table lists the input
+for each reported directory scan. The command was
+`skillspector scan <input> --no-llm --format json --output <report>`, with no upstream baseline
+enabled. The default analyzer `z-ai/glm-5.2` (Zhipu) was disabled. The static supply-chain
 check can send public dependency names and versions to OSV.dev. Upstream installers, hooks, and
 products were inspected as text. Static coverage is bounded and cannot establish what dependencies
 or runtime paths do on H1. [Scanner flags and data
@@ -49,11 +57,11 @@ handling](https://github.com/NVIDIA/SkillSpector/blob/c7958a3268d9498644b22edb75
 [analyzer
 default](https://github.com/NVIDIA/SkillSpector/blob/c7958a3268d9498644b22edb75d0f051bbc8cbfc/src/skillspector/providers/nv_build/provider.py#L52).
 
-| Pinned checkout | Repository scan | Targeted skill-file reports |
+| Project and repository scan input | Repository scan | Targeted skill-file reports |
 |---|---|---|
-| Open Second Brain | 100/100, DO_NOT_INSTALL. 319 flags (172 high, 139 medium, 8 low). 4,196 components partially inspected. Artifact-integrity flags include hidden development playbook scripts. | [Open Second Brain](https://github.com/itechmeat/open-second-brain/blob/d21cdb75f27799c9d7666054070213c782049d6f/skills/open-second-brain/SKILL.md) and [Brain Memory](https://github.com/itechmeat/open-second-brain/blob/d21cdb75f27799c9d7666054070213c782049d6f/skills/brain-memory/SKILL.md) both scored 0 with zero findings. Partial coverage due to unresolved references and a manifest parse error on Brain Memory. |
-| ai-memory | 100/100, DO_NOT_INSTALL. 325 flags (2 critical, 63 high, 259 medium, 1 low). 1,459 components partially inspected. | [Codex handoff](https://github.com/akitaonrails/ai-memory/blob/bc7faa7d847dd387e634ba8420d115b9dd4ecebe/plugins/codex/skills/ai-memory-handoff/SKILL.md) and [Claude Code retrieval](https://github.com/akitaonrails/ai-memory/blob/bc7faa7d847dd387e634ba8420d115b9dd4ecebe/plugins/claude-code/skills/ai-memory-retrieval/SKILL.md) both scored 0 with zero findings. Partial coverage due to unresolved references. |
-| GBrain | 100/100, DO_NOT_INSTALL. 4,193 surfaced flags (3,931 high, 261 medium, 1 low). 7,332 components partially inspected and 53 uninspected out of 7,385 discovered. | [Company Brainify](https://github.com/garrytan/gbrain/blob/5c48d799803d815b6fca730fd8e8f12324abb8f2/skills/company-brainify/SKILL.md) scored 100/100 with nine high flags (AR2, MP3 and TM1) and four medium flags (PE2 and AS3), with missing references and static parse limits. The skill covers sensitive source handling, local context inspection and history rewriting, well outside S48. [Citation Graph Ingest](https://github.com/garrytan/gbrain/blob/5c48d799803d815b6fca730fd8e8f12324abb8f2/skills/citation-graph-ingest/SKILL.md) scored 0 with zero findings and unresolved references. |
+| Open Second Brain (pinned checkout) | 100/100, DO_NOT_INSTALL. 319 flags (172 high, 139 medium, 8 low). 4,196 components partially inspected. Artifact-integrity flags include hidden development playbook scripts. | [Open Second Brain](https://github.com/itechmeat/open-second-brain/blob/d21cdb75f27799c9d7666054070213c782049d6f/skills/open-second-brain/SKILL.md) and [Brain Memory](https://github.com/itechmeat/open-second-brain/blob/d21cdb75f27799c9d7666054070213c782049d6f/skills/brain-memory/SKILL.md) both scored 0 with zero findings. Partial coverage due to unresolved references and a manifest parse error on Brain Memory. |
+| ai-memory (pinned checkout) | 100/100, DO_NOT_INSTALL. 325 flags (2 critical, 63 high, 259 medium, 1 low). 1,459 components partially inspected. | [Codex handoff](https://github.com/akitaonrails/ai-memory/blob/bc7faa7d847dd387e634ba8420d115b9dd4ecebe/plugins/codex/skills/ai-memory-handoff/SKILL.md) and [Claude Code retrieval](https://github.com/akitaonrails/ai-memory/blob/bc7faa7d847dd387e634ba8420d115b9dd4ecebe/plugins/claude-code/skills/ai-memory-retrieval/SKILL.md) both scored 0 with zero findings. Partial coverage due to unresolved references. |
+| GBrain (`git archive` export of the pin) | 100/100, DO_NOT_INSTALL. 4,193 surfaced flags (3,931 high, 261 medium, 1 low). 7,332 components partially inspected and 53 uninspected out of 7,385 discovered. | [Company Brainify](https://github.com/garrytan/gbrain/blob/5c48d799803d815b6fca730fd8e8f12324abb8f2/skills/company-brainify/SKILL.md) scored 100/100 with nine high flags (AR2, MP3 and TM1) and four medium flags (PE2 and AS3), with missing references and static parse limits. The skill covers sensitive source handling, local context inspection and history rewriting, well outside S48. [Citation Graph Ingest](https://github.com/garrytan/gbrain/blob/5c48d799803d815b6fca730fd8e8f12324abb8f2/skills/citation-graph-ingest/SKILL.md) scored 0 with zero findings and unresolved references. |
 
 All repository and targeted reports recorded `llm_requested: false` and an empty inference-usage
 list. Zero findings on a single file with partial coverage gives no clearance for the package. These
@@ -64,10 +72,9 @@ which forwards requests to configured endpoints and binds to loopback by default
 excludes that example, GBrain’s company-brain skill, and Open Second Brain’s flagged development
 playbooks. The repository runs returned exit code 1 and wrote reports with successful execution and
 partial coverage. Each reached static analysis limits and reported zero fully inspected components.
-GBrain also reached discovery limits. Its row reports a `git archive` export of the same pin,
-excluding the local Git metadata picked up in the first checkout scan. Most GBrain flags were
-artifact-integrity classifications (SC9). Scan an actual adoption subset and resolve its findings
-before any trial.
+GBrain also reached discovery limits. Its `git archive` export excluded the local Git metadata
+picked up in the first checkout scan. Most GBrain flags were artifact-integrity classifications
+(SC9). Scan an actual adoption subset and resolve its findings before any trial.
 
 ## 1. Open Second Brain
 
@@ -176,7 +183,7 @@ deletes its local stores. Default raw-observation retention is indefinite. Erasu
 store must account for wiki Git history, backups and any forwarded data. [Storage
 layout](https://github.com/akitaonrails/ai-memory/blob/bc7faa7d847dd387e634ba8420d115b9dd4ecebe/docs/ARCHITECTURE.md),
 [Windows data
-directory](https://github.com/akitaonrails/ai-memory/blob/bc7faa7d847dd387e634ba8420d115b9dd4ecebe/docs/windows.md#L253),
+directory](https://github.com/akitaonrails/ai-memory/blob/bc7faa7d847dd387e634ba8420d115b9dd4ecebe/docs/windows.md?plain=1#L253),
 [retention and
 purge](https://github.com/akitaonrails/ai-memory/blob/bc7faa7d847dd387e634ba8420d115b9dd4ecebe/DATA_HANDLING.md),
 [wiki
@@ -276,7 +283,7 @@ matrix](https://github.com/garrytan/gbrain/blob/5c48d799803d815b6fca730fd8e8f123
 job](https://github.com/garrytan/gbrain/actions/runs/44262515611), [Windows
 probes](https://github.com/garrytan/gbrain/blob/5c48d799803d815b6fca730fd8e8f12324abb8f2/.github/workflows/native-locks.yml#L265),
 [scheduler
-behavior](https://github.com/garrytan/gbrain/blob/5c48d799803d815b6fca730fd8e8f12324abb8f2/docs/guides/error-codes.md#L4951).
+behavior](https://github.com/garrytan/gbrain/blob/5c48d799803d815b6fca730fd8e8f12324abb8f2/docs/guides/error-codes.md?plain=1#L4951).
 
 | Piece to take | Upstream size and S48 fit |
 |---|---|
@@ -286,12 +293,15 @@ behavior](https://github.com/garrytan/gbrain/blob/5c48d799803d815b6fca730fd8e8f1
 
 ## China-origin inventory
 
-Apply Blue's 2026-11-18 clarification from the research brief to whatever Mako would run, install or
-call, including local models and models reached through a gateway. The inventory covers named
-choices plus fixtures or comments that could travel with copied files. An upstream-only reference in
-a file Mako does not ship is outside the adoption check. Remove such references from any code Mako
+Apply Blue's clarification to whatever Mako would run, install or call, including local models and
+models reached through a gateway. PR #212 recorded the clarification on `main` in the 2026-11-21
+entry, item 13, of `docs/DECISIONS.md`. The inventory covers named choices plus fixtures or comments
+that could travel with copied files. An upstream-only reference in a file Mako does not ship is
+outside the adoption check. Remove such references from any code Mako
 takes. All examples and tested adapters below are findings about the upstream pins. The proposed
-record ships zero upstream files. [Main's underlying model rule](../DECISIONS.md#2026-11-16), [S39
+record ships zero upstream files. [2026-11-21 clarification on
+main](https://github.com/ABlueAI/AgentCommandCenter/blob/main/docs/DECISIONS.md#2026-11-21-blues-decisions-of-2026-11-16-to-2026-11-21),
+[Main's underlying model rule](../DECISIONS.md#2026-11-16-the-mako-11-decision-sheet), [S39
 static-scan precedent](OSS-ecc.md#pin-and-scan).
 
 - **Open Second Brain.** The runtime embedding preset catalogue offers BAAI `bge-m3` and
@@ -401,6 +411,9 @@ static-scan precedent](OSS-ecc.md#pin-and-scan).
 
 ## Options considered
 
+These options are research proposals for Blue's step 68 verdict. If a candidate was previously
+dropped, the S48 builder must wait for Blue to explicitly revisit that decision before pursuing it.
+
 | Option | Open Second Brain | ai-memory | GBrain |
 |---|---|---|---|
 | ADOPT | Closest fit. Existing vault, native Windows, deterministic dream and keyword search justify testing a subset before taking the whole plugin and hook surface. Cloud read path still needs proof. | Native daemon, hook capture and default model download exceed the first vault build. | Markdown import is useful, but a database plus sharing and provider machinery adds a second store to govern. |
@@ -412,8 +425,10 @@ static-scan precedent](OSS-ecc.md#pin-and-scan).
 A prototype is a decision for the S48 builder after H1 setup and Blue's verdict. If code is later
 taken, preserve the applicable MIT notice and pin and scan the actual files after removing the
 China-origin references. The proof is one note per finished task, a cloud agent reading only the
-permitted private material, and three unattended tidy runs with reported retrieval misses. Source
-sizes above count entire upstream files unless a section or file set is specified. [S48 and
+permitted private material, and three unattended tidy runs whose nightly note reports any retrieval
+misses. Blue must be visibly notified of every failed, skipped or missing nightly run and every
+failed per-task note write, and a missing nightly report also counts as a failure. Source sizes
+above count entire upstream files unless a section or file set is specified. [S48 and
 acceptance criteria](../PLAN-1.1.md#month-one).
 
 ## Blue's verdict (word for word)
