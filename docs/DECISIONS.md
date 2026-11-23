@@ -3,7 +3,7 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
-## 2026-11-24: AgentPlayback verdict (S53)
+## 2026-11-23: AgentPlayback verdict (S53)
 
 Blue's verdict on the S53 OSS record (PR #208), recorded in [the
 record](decisions/OSS-agentplayback.md#blues-verdict-word-for-word) and checklist step 67. His words
@@ -13,7 +13,7 @@ of those recommendations" are the S52 and S53 recommendations; S52's verdict is 
 
 | Decision | Blue's words |
 |---|---|
-| **S53 AgentPlayback: PATTERN-MINE.** Take the idea of a local, read-only replay of what each agent did; use none of its code. S53 closes with no build. Any replay work goes to S19 or S62, under their existing waits. Blue adopted Mako main's recommendation; the builder's original recommendation was BUILD FRESH. | 2026-11-18, in his main chat: "I think your recommendation verdicts are very good. So, yes to both of those recommendations." Reconfirmed 2026-11-24: "pattern mine". |
+| **S53 AgentPlayback: PATTERN-MINE.** Take the idea of a local, read-only replay of what each agent did; use none of its code. S53 closes with no build. Any replay work goes to S19 or S62, under their existing waits. Blue adopted Mako main's recommendation; the builder's original recommendation was BUILD FRESH. | 2026-11-18, in his main chat: "I think your recommendation verdicts are very good. So, yes to both of those recommendations." Reconfirmed 2026-11-23: "pattern mine". |
 
 ## 2026-11-21: Blue's decisions of 2026-11-16 to 2026-11-21
 

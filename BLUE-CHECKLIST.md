@@ -1161,13 +1161,13 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
 
 - [x] **67. AgentPlayback verdict recorded (S53).** Verdict: PATTERN-MINE. Blue (2026-11-18, in his
   main chat), adopting Mako main's recommendation: 'I think your recommendation verdicts are very
-  good. So, yes to both of those recommendations.' Reconfirmed by Blue on 2026-11-24: 'pattern
+  good. So, yes to both of those recommendations.' Reconfirmed by Blue on 2026-11-23: 'pattern
   mine'. Take the idea of a local, read-only replay of what each agent did; use none of its code.
   S53 closes with no build. Any replay work goes to S19 or S62, under their existing waits.
   - *Verification:* checked 2026-11-23 (UTC) by a Claude cloud session against Blue's words as
     quoted in the Mako main session's hand-off to it ([session](https://claude.ai/code/session_01UWhuMF5YrgU1ojPL6DN1Q1)). Recorded in
     [the OSS record](docs/decisions/OSS-agentplayback.md#blues-verdict-word-for-word) and
-    [the decisions log](docs/DECISIONS.md#2026-11-24-agentplayback-verdict-s53).
+    [the decisions log](docs/DECISIONS.md#2026-11-23-agentplayback-verdict-s53).
   - The builder originally read the China-origin rule as covering the tracked Kimi config, which the
     npm package omits. The builder sees replay fitting S19 (pane activity) or S62 (merged-work
     history).
