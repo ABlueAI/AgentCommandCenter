@@ -5,8 +5,9 @@ of editing an old one, and say which entry it replaces. Agents follow the newest
 
 ## 2026-11-24: Blue's answers on the 1.1 schedule (S61)
 
-Blue answered the 1.1 schedule's open decisions in his main chat on 2026-11-24, and approved its
-text to go public ("Yes. Do as written.", checklist step 64). The schedule is
+Blue answered the 1.1 schedule's open decisions in his main chat, and approved its text to go
+public ("Yes. Do as written.", checklist step 64). The hand-off dates both 2026-11-24; GitHub
+shows PR #223 opened on 2026-11-23 (UTC), so the date is to confirm with Blue. The schedule is
 docs/SCHEDULE-1.1.md, added by PR #223; merging that PR adopts it. Numbers match the schedule's
 "Decisions" table. Decisions 1 to 3 were settled by PR #212 (2026-11-21 entry, items 26 to 28);
 decisions 6 and 7 stay open. A row without a quote had no words relayed.
@@ -14,9 +15,9 @@ decisions 6 and 7 stay open. A row without a quote had no words relayed.
 | Decision | Blue's words |
 |---|---|
 | **The schedule goes public as written,** after the public-safety edits and the re-sync with `main` that S61's PR lists. | "Yes. Do as written." |
-| **4. Step 58 (the lessons-learned review) by 2026-11-27, earlier if the work runs ahead.** If it isn't done, the agent tune-up (S28, S60) runs from the lessons draft as it is (2026-11-21 entry, item 29). | "Sure, but if we're running ahead of schedule, can this just be completed prior to Friday?" |
+| **4. Step 58 (the lessons-learned review) by 2026-11-27, the date the schedule proposed; before that Friday if the work runs ahead** (builder's reading of his words, from the hand-off). If it isn't done, the agent tune-up (S28, S60) runs from the lessons draft as it is (2026-11-21 entry, item 29). | "Sure, but if we're running ahead of schedule, can this just be completed prior to Friday?" |
 | **5. Mako's main chat keeps the Claude lanes full,** starting the next row as each one finishes; Blue doesn't open lanes himself each day. | — (yes to the revised wording) |
-| **8. If the 2026-12-20 checkpoint says behind, the release date slips instead of the scope.** S54, S47 and any replay work stay in 1.1; only pop-out windows (S19) may move to 1.2. Replaces the schedule's proposed "hold the date by moving S54, then S47, then the build half of S53, then pop-outs to 1.2". Builder's reading: S53's verdict is PATTERN-MINE (2026-11-18, recorded in PR #208, not yet merged), so S53 builds nothing and any replay work belongs to S19 or S62. | "No. I'd rather hold on to these items then. I'm expecting the date to get pushed back, but I don't want it to get pushed back too far." On pop-outs: "pop-outs ... can move" |
+| **8. If the 2026-12-20 checkpoint says behind, the release date slips instead of the scope.** S54, S47 and any replay work stay in 1.1; only pop-out windows (S19) may move to 1.2. Replaces the schedule's proposed "hold the date by moving S54, then S47, then the build half of S53, then pop-outs to 1.2", and amends item 27 of the 2026-11-21 entry ("nothing cut for the date"): pop-out windows may move. Builder's reading: S53's verdict is PATTERN-MINE (2026-11-18, recorded in PR #208, not yet merged), so S53 builds nothing and any replay work belongs to S19 or S62. | "No. I'd rather hold on to these items then. I'm expecting the date to get pushed back, but I don't want it to get pushed back too far." On pop-outs: "pop-outs ... can move" |
 | **Dates moved:** prototype day (step 60) is 2026-11-24; the aquarium trial (step 55) and the design visuals move to 2026-11-27, earlier if ahead. | — |
 
 ## 2026-11-21: Blue's decisions of 2026-11-16 to 2026-11-21

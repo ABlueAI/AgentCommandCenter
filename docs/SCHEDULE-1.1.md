@@ -2,7 +2,7 @@
 
 Adopted when Blue merges the PR that adds this file (plan row S61). Written from the plan as of
 2026-11-22, then re-synced with `main` after the plan change in PR #212 merged and with Blue's
-answers of 2026-11-24. Row numbers are docs/PLAN-1.1.md's; step numbers are BLUE-CHECKLIST.md's.
+answers dated 2026-11-24. Row numbers are docs/PLAN-1.1.md's; step numbers are BLUE-CHECKLIST.md's.
 Estimates are planning guesses unless marked measured.
 
 ## Units
@@ -62,7 +62,7 @@ anything in a sensitive area (AGENTS.md "Sensitive areas").
   aquarium) build in parallel on top of it, as each needs only S66. S20's removal of the old layout
   also waits for S18 and S19.
 - About 8.5 to 17 days if the three tabs get their own lanes (S66 and S18's 2 to 4, then S20's 6.5
-  to 13 as the longest tab), up to 13 to 27 days if they run one at a time. Worked out from the
+  to 13 as the longest tab), up to 13.5 to 27 days if they run one at a time. Worked out from the
   ranges above, not re-estimated.
 - Then the aquarium's acceptance days.
 
@@ -125,8 +125,8 @@ checklist stays the source of truth for each step's instructions.
 | 2026-11-24 | answer this file's open decisions; 64: hand over the schedule | done (decisions 6 and 7 still open) |
 | 2026-11-24 | 60: Composer prototype day | a working day + 45 to 90 |
 | 2026-11-25 | finish the Composer v1 scope | 60 to 150 |
-| 2026-11-27, earlier if ahead | 55: aquarium trial part 2; the design visuals | 35 to 80 |
-| 2026-11-27, earlier if ahead | 58: lessons review; 68: verdict on S48's OSS record | 45 to 55 |
+| 2026-11-27, earlier if ahead | 55: aquarium trial part 2; the design visuals (step 55 as written needs S20's PR, which the lane plan puts after 12-06; which trial this date is for is to confirm) | 35 to 80 |
+| 2026-11-27, before it if ahead | 58: lessons review; 68: verdict on S48's OSS record | 45 to 55 |
 | 2026-11-30, then weekly to 12-28 | 63: Codex check-in | 5 to 10 each |
 | 2026-12-01 | scope freeze; 56: memory setup | 50 to 70 |
 | 2026-12-03 | Composer re-scout | 15 |
@@ -144,7 +144,7 @@ Decided (Blue's words are in docs/DECISIONS.md, 2026-11-21 and 2026-11-24):
 | 1 | Split S18 into the shared navigation (S66) and the brain tab (S18); S18, S19 and S20 each wait only for S66 | Yes (2026-11-22); in the plan since PR #212 |
 | 2 | S59's date wording: goal 2027-01-15, all of 1.1 within 60 days of 2026-11-17, checkpoint 2026-12-20 | Yes (2026-11-22); in S59 since PR #212 |
 | 3 | Merge the 2026-11-22 plan-change PR (it also narrows S50's needs to S49's pre-prototype pieces) | Done: PR #212 merged 2026-11-22 |
-| 4 | Step 58 by 2026-11-27, earlier if ahead; if it isn't done, the agent tune-up (S28, S60) runs from the lessons draft as it is | Yes (2026-11-24) |
+| 4 | Step 58 by 2026-11-27, before that Friday if the work runs ahead; if it isn't done, the agent tune-up (S28, S60) runs from the lessons draft as it is | Yes (2026-11-24) |
 | 5 | Mako's main chat keeps the Claude lanes full, starting the next row as each finishes; Blue doesn't open lanes daily | Yes, as revised (2026-11-24) |
 | 8 | If 12-20 says behind, the date slips instead of moving S54, S47 or the replay work to 1.2; only pop-out windows may move | No to moving them (2026-11-24) |
 
