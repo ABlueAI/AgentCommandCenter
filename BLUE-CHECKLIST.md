@@ -1186,9 +1186,11 @@ Step 69 comes from S37 (PR #218, issue #217), not from the decisions above.
     found"), the guard didn't run: tell any agent "step 69 failed" with what you saw. Nothing is
     changed either way, since PR 999999 doesn't exist. If Claude says it has no PowerShell tool,
     say so; the check is then not applicable on that PC.
-  - If you've already removed your command-line login (step 49), the guard instead shows "couldn't
-    check the GitHub login before `gh pr ready` ... allowed". That also passes: it shows the guard
-    ran for the PowerShell tool.
+  - If you've already removed your command-line login (step 49) and `gh auth status` shows no
+    account at all, the guard instead shows "couldn't check the GitHub login before `gh pr ready`
+    ... allowed". That also passes: it shows the guard ran for the PowerShell tool. If gh is still
+    logged in to another account, the guard rightly lets the command through, so the check can't
+    show anything: tell an agent "step 69 not applicable" instead.
   - *Done when:* you've told an agent what Claude showed, and it ticks this with the date and your
     words.
 

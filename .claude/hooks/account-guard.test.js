@@ -420,6 +420,9 @@ const GUARDED_PS = [
   ["Start-Process gh -ArgumentList 'pr', <# why #> 'merge', '5'", 'gh pr merge'],
   ['$a, $b = gh pr create --fill', 'gh pr create'],
   ["git -c 'x=a,b' push", 'git push'],
+  // Review run 3: an attached parameter value (`-Name:value`) keeps the array that follows it.
+  ["Start-Process gh -ArgumentList:'pr' , 'merge', '5'", 'gh pr merge'],
+  ["Start-Process -FilePath:gh -ArgumentList:'pr', 'create'", 'gh pr create'],
 ];
 // Nesting deeper than the splitter follows falls back to the text scan, never to "allowed", and
 // nesting in strings deep enough to exhaust the stack is caught the same way, without throwing.

@@ -553,10 +553,11 @@ function splitPowerShell(input, depth = 0, ctx = { unbalanced: false }) {
     }
     if (c === ',') {
       // `'pr', 'merge', '5'` is one array argument, even across spaces, lines and comments; its
-      // elements are kept apart by PS_ARRAY_SEP. After a parameter name (`-ArgumentList ,'x'`) or
-      // with nothing before it, the comma is the unary array operator and starts a new argument.
+      // elements are kept apart by PS_ARRAY_SEP. After a bare parameter name (`-ArgumentList ,'x'`,
+      // not `-ArgumentList:'x' , 'y'`, whose value is attached) or with nothing before it, the comma
+      // is the unary array operator and starts a new argument.
       if (word !== null) word += PS_ARRAY_SEP;
-      else if (words.length && !/^-[A-Za-z]/.test(words[words.length - 1])) word = words.pop() + PS_ARRAY_SEP;
+      else if (words.length && !/^-[A-Za-z][^:]*$/.test(words[words.length - 1])) word = words.pop() + PS_ARRAY_SEP;
       else word = PS_ARRAY_SEP;
       for (;;) { // skip spaces, line breaks, backtick line continuations and comments after it
         const j = i + 1;
