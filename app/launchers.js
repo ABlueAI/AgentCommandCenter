@@ -100,6 +100,18 @@ function resolveTerminalExe(deps) {
 // for, a shell string — and every caller spawns with shell:false, so the path reaches the child as a
 // literal argument. `Code.exe <dir>` opens that folder as a VS Code workspace; `wt -w 0 nt -d <dir>`
 // opens a new tab in window 0 at that directory.
+function resolveFirefoxExe({ env, isFile }) {
+  const roots = [env.ProgramFiles, env['ProgramFiles(x86)'], env.LOCALAPPDATA];
+  for (const root of roots) {
+    if (!root || !path.isAbsolute(root)) continue;
+    const exe = path.join(root, 'Mozilla Firefox', 'firefox.exe');
+    try {
+      if (isFile(exe)) return { ok: true, exe };
+    } catch { return { ok: false, reason: 'firefox-executable-unreadable' }; }
+  }
+  return { ok: false, reason: 'firefox-not-found' };
+}
+
 function openVscodeSpec(exe, dir) { return { cmd: exe, args: [dir] }; }
 function openTerminalSpec(exe, dir) { return { cmd: exe, args: ['-w', '0', 'nt', '-d', dir] }; }
 
@@ -108,6 +120,7 @@ module.exports = {
   FORBIDDEN_DIR_CHARS,
   normalizeLauncherDir,
   resolveVscodeExe,
+  resolveFirefoxExe,
   resolveTerminalExe,
   openVscodeSpec,
   openTerminalSpec,

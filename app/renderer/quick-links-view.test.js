@@ -36,6 +36,7 @@ class Element {
 function makeDocument() {
   const ids = {};
   for (const [id, tag] of Object.entries({
+    quickLinksPresets: 'div', quickLinksPresetsStatus: 'div',
     quickLinksStatus: 'div', quickLinksList: 'div', quickLinksManage: 'button', quickLinksEditor: 'div',
     quickLinksRows: 'div', quickLinksAdd: 'button', quickLinksAddBundle: 'button', quickLinksSave: 'button', quickLinksCancel: 'button',
   })) ids[id] = new Element(tag, id);
@@ -87,6 +88,22 @@ function harness(overrides = {}) {
     buttons[0].onclick();
     await new Promise((resolve) => setImmediate(resolve));
     eq(h.calls.open.join(','), 'ql-seed-a', 'only explicit button click requests open by ID');
+  }
+
+  {
+    const requests = [];
+    const h = harness({ api: {
+      listPresets: async () => ({ ok: true, presets: [{ id: 'preset-one', label: 'Example preset' }] }),
+      openPreset: async (id) => { requests.push(id); return { ok: false, error: 'firefox-profile-missing' }; },
+    } });
+    await h.view.load();
+    eq(requests.length, 0, 'listing presets does not launch Firefox');
+    const [button] = h.document.ids.quickLinksPresets.children;
+    eq(button.textContent, 'Example preset', 'the local label renders as button text');
+    await button.onclick();
+    eq(requests.join(','), 'preset-one', 'clicking the preset requests launch by ID');
+    assert(h.document.ids.quickLinksPresetsStatus.textContent.includes('firefox-profile-missing'),
+      'the preset refusal is visible');
   }
 
   process.stdout.write('\nadd/edit/remove with Save and Cancel\n');

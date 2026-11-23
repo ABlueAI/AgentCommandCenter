@@ -93,7 +93,21 @@ function createQuickLinksIpc(deps) {
     return { ok: true };
   }
 
-  return { handleList, handleSave, handleOpen };
+  function handleListPresets(event) {
+    const denied = assess(event, 'presets-list');
+    if (denied) return denied;
+    const result = deps.presets.list();
+    return result.ok ? result : { ok: false, error: result.reason };
+  }
+
+  async function handleOpenPreset(event, id) {
+    const denied = assess(event, 'preset-open');
+    if (denied) return denied;
+    const result = await deps.presets.open(id);
+    return result.ok ? result : { ok: false, error: result.reason };
+  }
+
+  return { handleList, handleSave, handleOpen, handleListPresets, handleOpenPreset };
 }
 
 module.exports = { createQuickLinksIpc, IPC_REASON, ALLOWED_REASONS };

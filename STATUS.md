@@ -1,5 +1,8 @@
 # Mako status
 
+S55 is implemented on its review branch. Independent review and the Windows Firefox profile check
+(checklist step 57) are pending.
+
 Updated 2026-11-21 by PR #212 (Blue's decisions of 2026-11-16 to 2026-11-21: the scope freezes on
 2026-12-01, a Codex pane in 1.1, the Composer prototype dates, new rows S63 to S65). Before that:
 updated 2026-11-18 by PR #204 (Blue's answers to PR #195's questions: S48 split, A10 and A11

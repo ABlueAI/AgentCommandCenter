@@ -207,7 +207,36 @@
       return true;
     }
 
+    async function loadPresets() {
+      const host = byId('quickLinksPresets');
+      const status = byId('quickLinksPresetsStatus');
+      host.textContent = '';
+      status.textContent = '';
+      let result;
+      try { result = await api.listPresets(); }
+      catch { result = { error: 'ipc-failed' }; }
+      if (!result?.ok) {
+        status.textContent = `Firefox presets unavailable — ${boundedReason(result?.error)}.`;
+        return;
+      }
+      for (const preset of result.presets) {
+        const button = makeButton(preset.label, 'action ql-open');
+        button.onclick = async () => {
+          button.disabled = true;
+          let opened;
+          try { opened = await api.openPreset(preset.id); }
+          catch { opened = { error: 'ipc-failed' }; }
+          button.disabled = false;
+          status.textContent = opened?.ok
+            ? 'Firefox launch requested.'
+            : `Firefox preset refused — ${boundedReason(opened?.error)}.`;
+        };
+        host.appendChild(button);
+      }
+    }
+
     async function load() {
+      if (typeof api.listPresets === 'function') await loadPresets();
       setStatus('Loading Quick Links…', false);
       let result;
       try { result = await api.list(); }

@@ -88,6 +88,21 @@ function harness(overrides = {}) {
       'not-main-frame', 'torn-down mainFrame getter refuses without throw');
   }
 
+  {
+    let accesses = 0;
+    const h = harness({ presets: {
+      list: () => { accesses++; return { ok: true, presets: [] }; },
+      open: async () => { accesses++; return { ok: false, reason: 'firefox-profile-missing' }; },
+    } });
+    const wrong = { sender: {}, senderFrame: h.mainFrame };
+    eq(h.ipc.handleListPresets(wrong).error, 'untrusted-sender', 'preset listing checks the sender');
+    eq((await h.ipc.handleOpenPreset(wrong, 'preset-one')).error, 'untrusted-sender', 'preset launch checks the sender');
+    eq(accesses, 0, 'a rejected sender cannot access the preset service');
+    assert(h.ipc.handleListPresets(h.trustedEvent).ok, 'trusted sender can list presets');
+    eq((await h.ipc.handleOpenPreset(h.trustedEvent, 'preset-one')).error,
+      'firefox-profile-missing', 'trusted sender gets the preset refusal reason');
+  }
+
   process.stdout.write('\nlist/save boundary\n');
   {
     const h = harness();
