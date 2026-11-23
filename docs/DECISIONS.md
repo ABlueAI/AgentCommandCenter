@@ -3,6 +3,60 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-21: Blue's decisions of 2026-11-16 to 2026-11-21
+
+Blue approved these in his main chat between 2026-11-16 and 2026-11-21, and items 26 to 29 on 2026-11-22. The details stay in his
+private notes; this entry carries only what the hand-off for PR #212 gave, with his words in quotes
+where it quoted them (a row without a quote had no words relayed). Numbers match PR #212's TLDR.
+Composer scope items named S1 to S8 and V2b to V13 are items of Blue's private Composer scope draft,
+not plan rows. How the plan follows these (docs/PLAN-1.1.md, BLUE-CHECKLIST.md and the Codex cap in
+docs/CODEX-BUILDER-LANE.md) is **proposed, pending Blue (PR #212)**; merging that PR approves it.
+Where a decision needs a rule change in AGENTS.md, the rule changes in S42; until then the current
+rule holds. "Builder's reading" marks a line that is the builder's, not Blue's.
+
+| Decision | Blue's words |
+|---|---|
+| **1. OpenAI and ChatGPT in 1.1 as option (a): a Codex pane next to the Claude panes.** The Composer's memory and interfaces stay provider-neutral, so option (b) is a swap in 1.2. Builder's reading: this replaces the 2026-11-16 follow-up answer "Codex panes as Composer targets are in 1.1 if they cost one build day or less, as a reviewer first"; the Codex pane is in 1.1 without that condition, and Codex as a builder target is 1.2 (item 10). | "integrated from the start" |
+| **2. ChatGPT Plus is kept through the 1.1 release.** Codex's heavy use runs to about 2026-12-29, checked weekly. Builder's reading: the 2026-11-30 Codex check-in (checklist step 63) is the first weekly check. Adds to the 2026-11-16 "Codex" entry. | — |
+| **3. Other users sign in to Codex through Codex's own login, or with an OpenAI key in Mako's key setup.** | — |
+| **4. Scope freeze on 2026-12-01.** After it, anything new that isn't vital to security goes to 1.2. Replaces the 2026-11-16 freeze's exception ("unless it passes the test above and Blue says so") from 2026-12-01. | "frozen by 12/1" |
+| **5. Codex does the smaller tasks and the reviews; Claude builds the UI.** Codex runs 2 tasks at a time: the cap of 1 in docs/CODEX-BUILDER-LANE.md item 8 becomes 2. | — |
+| **6. S54 (Claude video analysis in Video Scout) is built by Codex.** | — |
+| **7. Security findings stay private.** Their full details go only to Blue's private notes. Public text (PRs, issues, plan rows, these files) gives a finding's title and severity only, and a fix PR carries a neutral title. | — |
+| **8. A fuller security audit before the 1.1 release.** A new row, S65, before the release row S59. | — |
+| **9. The Composer re-scout's agreed scope changes go into S49 and S51.** S51: an event log and a six-call provider adapter, so Claude and Codex plug into the same slots; worker reports read from the `Stop` hook's last message, so scope item V2b shrinks to the "ask" tool only; a restricted launch line for the Composer pane (`--restricted`, a `--tools` allowlist, `--strict-mcp-config`, `--settings`, `--add-dir` for the vault); one checked send path (never into a pane waiting on Blue; paste, then confirm the submit; refusal codes; an MCP SDK tool server with a per-pane token); the injection guard (text from a worker or a web page can never start anything above Tier 1); Three.js as the shark's engine (scope item S8), installed only after a version pin, a scan and Blue's OK. S49: the practice test before prototype day (Mako's role prompt plans the 10 test tasks offline, 3 times each, and Codex grades the plans blind against the answer key). | — |
+| **10. The guidebook is a 1.1 row (S64), written near the release:** the set-up and getting-started reference for people using Mako, fed by the H1 setup day and the prototype trials. 1.2's headline is the Private pane (Local, Redacted and Normal modes, with local AI on the RTX 5080). Codex as a builder target and racing lanes move to 1.2. No Codex CLI update: it stays pinned at 0.142.3. The safe phrase is reset through Windows Hello. | — |
+| **11. Prototype day (S50): 3 to 5 real tasks, with the practice test first.** The practice test is on 2026-11-22 and prototype day on 2026-11-23; either may slip a day if Claude Max isn't active yet. | — |
+| **12. Codex PR reviews are run and posted by a Claude cloud session under the agent account.** That covers `pr-reviewer` and the pre-ready reviewers. Blue's desktop login is read-only and never posts. The AGENTS.md wording changes in S42. | — |
+| **13. The China-origin rule, clarified. Replaces the wording of the 2026-11-16 entry "No models or hosted AI from companies based in China", which stays below as history.** The rule now reads: no models or hosted AI from companies based in China in anything Mako runs, installs or calls, local models such as Qwen, GLM, DeepSeek, Kimi and Doubao included. A China-origin model named only in an upstream file Mako doesn't ship is not a fail. Code Mako takes in has such references removed. It is checked at the pin-and-scan step for every tool, and only Blue makes an exception. The AGENTS.md wording comes in S42. | — |
+| **14. The Composer's V13 rule:** a new, unrelated item gets its own topic pane, never a message into the conversation Blue is in. | — |
+| **15. Codex does a 1 to 2 hour UI-library sweep before 2026-11-25** (deep-chat, Cytoscape.js, sigma.js, MiniSearch, Obsidian itself). A new row, S63. | — |
+| **16. "Incognito" folds into the 1.2 Private pane.** | — |
+| **17. Issue #205 (how Dependabot PRs are reviewed) is handled inside S42.** | — |
+| **18. The shark design is final:** the B3 Heavy shape, Dusk colour by default, deep water. Scope items S1, S2 and S8 are signed off. Blue's idea for the next pass on the node web (scope item V8): clicking a star inside the shark zooms into a nebula. | "sky and sea" |
+| **19. Composer scope answers.** Scope items V3, V4, V9, V10, V11 (the evening summary, at 22:00), V13 and S3 are yes. The stall watch fires at 20 minutes of silence or 5 failed tries. Claude Code session records are kept 90 days (which records this covers is a question in PR #212's TLDR). | — |
+| **20. S55: Quick Links presets that open several links at once** ("work research", "Buydeas") in the "Mako" Firefox profile. The URLs live in a local, git-excluded file, never in this repo. Rule: **agents never drive the Mako Firefox profile**; agents that browse use their own separate browser (the page reader's Playwright Chromium). Replaces "Firefox profile 2" in S55 and checklist step 57. | — |
+| **21. S48 (vault memory) takes PR #209's open-source record as its OSS record once Blue gives his verdict** (checklist step 68). | — |
+| **22. Both PCs run Node.js 26.13.1** (updated 2026-11-19 to 2026-11-20). CI stays on Node 22 to test the oldest supported version. | — |
+| **23. Checklist steps 27 and 50 leave the top of "Do next":** the runner they check has been off since 2026-11-04. | — |
+| **24. For S42's rulebook update:** Claude Code 2.1.329 removed the `/agents` screen, so an instruction that says "run /agents" becomes "ask Claude to list its subagents". | — |
+| **25. Two open issues, worded neutrally:** npm's allowScripts doesn't list the 3 packages whose install scripts Mako needs (issue #210); `app/page-reader.test.js` fails on a PC that has the page-reader agent installed and stops `npm test` early (issue #211). | — |
+| **26. S18 is split (2026-11-22).** New row S66, "Shared navigation" (the three tabs, Ctrl K, Settings), and S18, "Brain tab". S19 (control room) and S20 (aquarium) depend only on the shared navigation, not the whole brain tab, so they can build in parallel. Builder's reading: S20's removal of the old layout still waits until S18 and S19 are done. | "We need to maximize the amount of times we are building in parallel while maintaining efficient usage. ideally we would run in parallel as often as we can, then complete tasks individually that cannot be run in parallel towards the end of the week when usage is high in order to conserve usage and complete tasks in order" |
+| **27. S59's date: target 2027-01-15,** with all of 1.1 within 60 days of 2026-11-17, a pace checkpoint on 2026-12-20, and nothing cut for the date. Replaces "about 2026-12-13 to 2027-01-13" (2026-11-16 entry "When 1.1 is done"), which stays below as history. | "Yes to 2, 3, 4" (items 27 to 29) |
+| **28. S50 (prototype day) depends only on S49's pre-prototype deliverables:** the Composer role prompt, the 10 test tasks and the test sheet, not all of S49, which runs until the 2026-12-03 re-scout. | "Yes to 2, 3, 4" |
+| **29. If checklist step 58 (the lessons-learned review) isn't done, the agent tune-up (S28, S60) runs from the lessons draft as it is.** | "Yes to 2, 3, 4" |
+
+## 2026-11-18
+
+Blue's answers to the two questions PR #195 left him. How the plan follows them (S48, S62, the 1.2
+queue and checklist step 65) is **proposed, pending Blue (PR #204)**; merging that PR approves it.
+
+| Decision | Blue's words |
+|---|---|
+| **Gap audit A10 and A11 (homeless since S25 was dropped):** Dependabot's routine version-update PRs and the speech-stack upgrade that clears the remaining npm advisories (7 in the gap audit's count of 2026-10-19; 3 `sharp` findings after S36, docs/DEPENDENCY-ADVISORIES.md) go to the 1.2 queue; Nimbalyst is dropped; issue #164 stays open as the pick-up list of small month-one follow-ups. Also now: Blue turns on Dependabot alerts and Dependabot security updates in the repository's settings (checklist step 65; repository settings are his, agents never change them). How Dependabot's PRs are reviewed and ordered is issue #205. | "I agree with what the chat recommends. I'd add one thing: turn on Dependabot alerts and security updates in the repo settings now  Dependabot's routine version-update PRs go to 1.2" |
+| **The vault memory doesn't wait on the schedule; S48 is split.** S48 needed S14, which needs S61, so it waited on the schedule anyway. The vault memory keeps S48 and needs only the H1 setup day; the tree and merged-work history become S62, which still needs S14. Answers the question PR #195 left on whether S48 waits on S61. | "S48 waits on the schedule? No. But "no" only helps if S48 is also split. Today S48 needs S14, which needs S61, so it waits on the schedule anyway. Splitting it lets the vault memory start after H1 day (schedule fix 5)." |
+| Approved: Blue merged PR #195 on 2026-11-17, which approves the 2026-11-17 entry "Blue's answers to the five questions PR #173 left him" (marked "proposed, pending Blue (PR #195)"). The wording stays below as history; agents follow this entry. | Merging is approval (docs/PLAN-1.1.md "When the plan changes"); no new words. |
+
 ## 2026-11-17: S39 (ECC PR 1)
 
 Blue's answers to the S39 session (PR #174), given in that session on 2026-11-17.
