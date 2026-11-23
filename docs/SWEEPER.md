@@ -4,7 +4,7 @@ The "Mako PR sweeper" is a Claude routine (a scheduled cloud session, meant to r
 its login isn't shown in the read-back below, and its START step 1 checks it) that
 keeps every open PR mergeable after each merge, gets Codex's pushed branches into PRs and review,
 and keeps `STATUS.md` current. Blue approved it on 2026-11-23 (docs/DECISIONS.md, 2026-11-23). It
-fires on every push to `main` and hourly as a backup. It merges `main` into PR branches; it never
+is meant to fire on every push to `main` and hourly as a backup (see the read-back below). It merges `main` into PR branches; it never
 merges a PR (AGENTS.md "Out of scope unless Blue explicitly approves the guardrails first").
 
 This file is Blue's approved version of the sweeper's instructions: where the routine's own prompt
@@ -17,8 +17,10 @@ win over the prompt.
 **The routine as read back on 2026-11-23** (list of scheduled tasks, read-only, by PR #225): "Mako
 PR sweeper", `trig_011phqqjN7vZq4sfZ75PHk5E`, enabled, hourly at :37 Eastern
 (`CRON_TZ=America/New_York 37 * * * *`), model Opus 5.5, push and email notifications off; its
-prompt is the text below plus the sentence pointing here. No push-to-`main` trigger showed in that
-read-back. BLUE-CHECKLIST.md step 70 covers the trigger and the notifications.
+prompt is the text below plus the sentence pointing here (it writes "@ABlueAI needs Blue:" with a
+plain `@`; the copy in this PR's hand-off had a full-width one, a copying artifact). No push-to-`main`
+trigger showed in that read-back, so until one is added the sweeper fires hourly only.
+BLUE-CHECKLIST.md step 70 covers the trigger and the notifications.
 
 ## Instructions (the routine's prompt)
 
@@ -91,5 +93,5 @@ TELLING BLUE
 FAILURES
 - START step 1: if the command fails or returns nothing, stop and end with "NOT READY: sweeper has no GitHub login".
 - If any command, push or job fails or can't finish, say so: end with "NOT READY: sweeper failed at <job and step>: <error>", plus the usual lines for what you did finish.
-- FINISH: end with "NOT READY: sweeper found nothing to do" (AGENTS.md step 5: a message about no PR starts that way) only when every job ran and nothing needed action. Otherwise also list the stale PRs that conflict and every open needs-Blue item from earlier fires.
+- FINISH: end with the single line "Sweeper: nothing to do" only when every job ran and nothing needed action (an idle hourly fire; it is not a READY or NOT READY line, so it isn't worth a phone notice). Otherwise also list the stale PRs that conflict and every open needs-Blue item from earlier fires.
 ```

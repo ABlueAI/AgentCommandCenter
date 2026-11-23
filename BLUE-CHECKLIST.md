@@ -1174,7 +1174,9 @@ open PRs (#206 and #208).
   claude.ai/code/routines, open "Mako PR sweeper": (a) check it has a push-to-`main` trigger besides
   the hourly schedule (on 2026-11-23 only the hourly schedule showed), and add one if the page
   offers it; (b) turn on its push notifications, so a "NOT READY" fire reaches your phone (they were
-  off). Or tell any agent "set up the sweeper's trigger and notifications".
+  off). A push is sent when a run ends with something noteworthy (the scheduled-task tool's own
+  description; not tested here); an idle fire ends "Sweeper: nothing to do", so expect few. If you
+  get one every hour, tell any agent and it will narrow the sweeper's idle line. Or tell any agent "set up the sweeper's trigger and notifications".
   - *Done when:* an agent reads the routine back and finds both, and ticks this with the date.
 
 ## Every day, once the runner is on
