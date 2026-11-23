@@ -19,9 +19,12 @@ Every PR that changes the state updates this file.
 - **Your next steps:** [BLUE-CHECKLIST.md](BLUE-CHECKLIST.md), starting with its "Do next" box.
 
 - **AgentPlayback (S53, PR #208):** [the OSS record](docs/decisions/OSS-agentplayback.md) pins v1.2.1.
+  Blue's verdict is PATTERN-MINE (checklist step 67). Use the idea of a local, read-only replay
+  without importing upstream code. S53 closes with no build. In the builder's reading, replay fits
+  S19 or S62, where any replay work follows their existing waits.
   The builder originally read the China-origin rule as covering the tracked Kimi config, which the
-  npm package omits. Blue can confirm how the rule applies to this pin in checklist step 67.
-  BUILD FRESH is recommended because the upstream reads broad transcript roots and can use signed-in `gh`.
+  npm package omits. Blue later clarified that the rule excludes names that appear only in upstream
+  files Mako doesn't ship.
 
 - **Release: Mako 1.0.0 is released.**
   - Tag `v1.0.0` was created on 2026-10-18 at `main` commit `37009eb`, which includes the
