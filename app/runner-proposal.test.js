@@ -46,8 +46,10 @@ const step8Ticked = /^- \[x\] \*\*8\. /m.test(checklist);
 // Blue's capacity plan of 2026-11-23 (docs/DECISIONS.md): 2 Claude lanes now, 3 from about 2026-11-29.
 // Without that entry the cap stays 1 until step 8 (Max 5x) is ticked; 3 needs step 8 ticked.
 const decisionsLog = read('docs', 'DECISIONS.md');
-const twoLanes = decisionsLog.includes('## 2026-11-23: the all-day runner back on')
-  && decisionsLog.includes('2 Claude lanes now, 3 from about 2026-11-29');
+const laneEntry = (decisionsLog.split('## 2026-11-23: the all-day runner back on')[1] || '').split('\n## ')[0];
+const laneRow = laneEntry.split('\n').find((l) => l.includes('Capacity: 2 Claude lanes now, 3 from about 2026-11-29')) || '';
+// The row must carry Blue's words, not "—": the cap can't be raised on a builder's assumption alone.
+const twoLanes = /\| "[^"]+"[^|]*\|\s*$/.test(laneRow);
 const maxCap = step8Ticked ? 3 : (twoLanes ? 2 : 1);
 assert(cap <= maxCap, `parallel_cap is at most ${maxCap} (1 on Pro, 2 on Blue's 2026-11-23 word, 3 once step 8 is ticked; got ${cap})`);
 const expiry = Number(settings.lock_expiry_hours);
@@ -147,6 +149,14 @@ const mustHave = [
   ['pushes_per_hour pushes and writes_per_hour GitHub writes an hour, across all its sessions together', 'paces pushes and writes across all sessions'],
   ['If a count can\'t be read, treat it as at the limit and say so', 'fails closed when it can\'t count'],
   ['Stop at once, with no retry and no further writes, at the first 403 or 429 whose message mentions a rate limit', 'stops at the first rate-limit refusal'],
+  ['Before every push and every other GitHub write (a PR, comment, label, body edit or draft change), count the events by an agent login in the last 60 minutes from gh api "repos/ABlueAI/AgentCommandCenter/events?per_page=100"', 'counts the agent\'s writes before every write'],
+  ['add the writes this fire has made that it doesn\'t show', 'adds its own writes the events list doesn\'t show'],
+  ['if you can\'t reach one, treat that count as at the limit', 'fails closed when a page holds only the last hour'],
+  ['for at most 30 minutes in all this fire', 'waits at most 30 minutes for the pacing limit'],
+  ['"NOT READY: pacing limit (N pushes, M writes in the last hour)"', 'reports a pacing stop'],
+  ['"NOT READY: docs/SWEEPER.md is not on main; the runner waits for the PR sweeper."', 'never runs without the sweeper on main'],
+  ['gh api user failed: <status and error>', 'reports the real error when the login call fails'],
+  ['post one "@ABlueAI needs Blue: couldn\'t change the draft state (<reason>)" comment on it and add the needs-blue label', 'shows a failed draft change on GitHub and stops retrying it'],
 ];
 for (const [text, label] of mustHave) assert(prompt.includes(text), `runner prompt ${label}`);
 assert(!/@codex/i.test(prompt), 'runner prompt never writes Codex\'s handle');
@@ -156,6 +166,14 @@ for (const login of AGENT_LOGINS) assert(prompt.includes(login), `runner prompt 
 assert(!prompt.includes('Until session S04 is merged'), 'runner prompt drops the one-at-a-time line');
 assert(!prompt.includes('add_repo') && !prompt.includes('get_me'), 'runner prompt uses gh REST calls, not the GitHub MCP add_repo or get_me');
 assert(!prompt.includes('status_pr_hour') && !prompt.includes('Runner status <'), 'runner prompt no longer opens a status PR');
+// The runner hands conflicts, waits, Codex PRs and STATUS.md to the sweeper; once docs/SWEEPER.md is on
+// this branch, it must really own them (before that, the prompt's step 3 stops every fire).
+if (fs.existsSync(path.join(repoRoot, 'docs', 'SWEEPER.md'))) {
+  const sw = read('docs', 'SWEEPER.md');
+  assert(sw.includes('JOB A: CONFLICTS') && sw.includes('JOB B: WAITS-FOR-MERGE') && sw.includes('JOB D: STATUS')
+    && sw.includes('The status PR is the only PR that edits STATUS.md'),
+  'docs/SWEEPER.md owns the jobs the runner hands it (conflicts, waits, the status PR)');
+}
 
 // Digest prompt.
 const digest = fenced('### Proposed digest prompt (verbatim)');

@@ -42,7 +42,8 @@ minutes during the trial (checklist step 30).
    2026-10-23), so until it does, Blue locks each claim issue (one click) before the hand-off. That
    also means each hand-off has Blue's eye on it.
 5. **Independent review.** Unchanged from AGENTS.md step 3: the Claude session that handed Codex the
-   task, or the next runner fire, runs `pr-reviewer` and posts "Independent review (Opus)". Because
+   task, or the PR sweeper (docs/SWEEPER.md; the next runner fire before the 2026-11-23 runner
+   refresh), runs `pr-reviewer` and posts "Independent review (Opus)". Because
    Codex may be able to comment as `ABlueAgent`, a review on a Codex PR counts only when it is posted
    by `ABlueAI`, or by `ABlueAgent` with a "Run by:" line linking the Claude session or runner fire
    that ran it. That line is free text Codex could forge, so before approving a Codex PR Blue opens
@@ -57,7 +58,8 @@ minutes during the trial (checklist step 30).
    request gets no push within a day, or Codex says it can't push, the PR goes to NEEDS BLUE; Claude
    never pushes to a `codex/` branch without Blue asking (AGENTS.md "Who does what"). PR #49's
    runner pushes (a `main` merge and review fixes, 2026-10-21) came before this rule.
-7. **Runner prompt.** docs/RUNNER.md's prompt gets the hand-off (for lane sessions in step 5c), the
+7. **Runner prompt.** (Before the 2026-11-23 refresh, which moved Codex PR reviews to the PR
+   sweeper, docs/SWEEPER.md.) docs/RUNNER.md's prompt gets the hand-off (for lane sessions in step 5c), the
    "Run by:" check (step 5b), the "Run by:" line in every review it posts (step 6), the same check in
    the digest prompt's `READY TO MERGE` test (its step 2), and fix requests after the trial confirms the mechanics, in this PR;
    an interactive session then applies it (a new checklist step). Until then only a Claude session

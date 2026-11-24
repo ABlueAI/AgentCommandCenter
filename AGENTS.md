@@ -58,7 +58,7 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      the comment and the TLDR. If neither is possible, mark the PR "needs Blue". Never skip it.
    - If the builder can't run `pr-reviewer` itself (Codex), the Claude session that handed it the
      task runs it on the builder's PR the same way and posts it, and says so in the comment; if that
-     session has ended, the next runner fire (or a session Blue starts) does it. The PR
+     session has ended, the PR sweeper (docs/SWEEPER.md) or a session Blue starts does it. The PR
      isn't marked ready until that review is posted (by `ABlueAgent` or `ABlueAI`, unedited by anyone
      else; a comment by anyone else doesn't count; on a Codex PR, because Codex may be able to comment as
      `ABlueAgent`, one by `ABlueAgent` must carry a "Run by:" line linking the Claude session or

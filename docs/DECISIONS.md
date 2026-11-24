@@ -17,7 +17,7 @@ approves it, and Mako main then turns the scheduled task back on with the merged
 | **2. The all-day runner is turned back on after a refresh PR,** so new plan rows start without Blue starting each one. It was turned off automatically on 2026-11-07 when it lost repository access. Builder's reading: in the refresh the runner only builds plan rows and its own PRs, and the PR sweeper (docs/SWEEPER.md) keeps PRs moving. | "yes" (to "Turn the all-day runner back on, so new plan rows start without me starting each one") |
 | **3. Pacing: the agent account makes at most 24 pushes an hour,** across all its sessions. Builder's reading: the earlier figure wasn't relayed. | "this rule needs to change to 24 per hour" |
 | **4. Pacing: at most 120 GitHub writes an hour** for the agent account, across all its sessions. | "writes 120 is fine" |
-| **5. Capacity: 2 Claude lanes now, 3 from about 2026-11-29,** so the runner's `parallel_cap` is 2, and a one-line PR makes it 3 then. Builder's reading: relayed by the hand-off as Blue's plan, without his words; docs/SCHEDULE-1.1.md (PR #223) assumes the same lanes. | — |
+| **5. Capacity: 2 Claude lanes now, 3 from about 2026-11-29,** so the runner's `parallel_cap` is 2, and a one-line PR makes it 3 then. Builder's reading: the hand-off relayed this as Blue's plan; his words are his approval of the 1.1 schedule (docs/SCHEDULE-1.1.md, PR #223, whose 2026-11-23 entry records it), whose calendar "assumes 2 Claude lanes from 2026-11-23, a third from about 2026-11-29". Merging the runner refresh PR confirms it for the runner; BLUE-CHECKLIST.md step 8 (Max 5x) is still unticked. | "Yes. Do as written." (on the schedule) |
 
 ## 2026-11-21: Blue's decisions of 2026-11-16 to 2026-11-21
 
