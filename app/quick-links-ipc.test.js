@@ -109,8 +109,8 @@ function harness(overrides = {}) {
   }
   {
     const h = harness({ presets: {
-      list: () => ({ ok: false, reason: 'C:\\Users\\secret\\path' }),
-      open: async () => { throw new Error('boom C:\\Users\\secret'); },
+      list: () => ({ ok: false, reason: 'C:\\Users\\example\\secret-path' }),
+      open: async () => { throw new Error('boom C:\\Users\\example\\secret'); },
     } });
     eq(h.ipc.handleListPresets(h.trustedEvent).error, 'store-failure', 'an unlisted preset reason is bounded to store-failure');
     eq((await h.ipc.handleOpenPreset(h.trustedEvent, 'preset-one')).error, 'firefox-launch-failed',
