@@ -257,7 +257,7 @@ process.stdout.write('\nno paths, URLs, or credential-shaped content may survive
 {
   for (const title of [
     'D:\\Workspace\\agent-command-center',
-    '/home/levi/secret',
+    '/home/sampleuser/secret',
     'https://example.com/report',
     'file:///D:/x',
     '../../etc/passwd',
