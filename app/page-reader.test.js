@@ -162,7 +162,13 @@ section('5. Fence hook gates (the real hook)');
 }
 
 section('6. End to end through the real main.js');
-const FIX = fs.mkdtempSync(path.join(os.tmpdir(), 'mako-page-reader-main-'));
+// Model a Windows temp directory under a home with a page-reader agent already installed.
+const INSTALLED_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'mako-page-reader-main-'));
+process.once('exit', () => fs.rmSync(INSTALLED_HOME, { recursive: true, force: true }));
+const installedAgents = path.join(INSTALLED_HOME, '.claude', 'agents');
+fs.mkdirSync(installedAgents, { recursive: true });
+fs.writeFileSync(path.join(installedAgents, 'page-reader.md'), '---\nname: page-reader\n---\n');
+const FIX = path.join(INSTALLED_HOME, 'temp');
 const USER_DATA = path.join(FIX, 'userData');
 const HOME = path.join(FIX, 'home');
 const PROJECTS = path.join(FIX, 'projects');
@@ -241,8 +247,8 @@ Module._load = function (request) {
     assert(cfg.mcpServers.playwright.args[0] === path.join(__dirname, 'node_modules', '@playwright', 'mcp', 'cli.js'), 'the MCP config starts the locked app dependency');
     assert(!fs.existsSync(path.join(r.dir, 'mcp.json')), 'the MCP config is not in the pane\'s writable folder');
 
-    // pty-start with the deployed role and hook: the real command for the page-reader pane.
-    const agents = path.join(HOME, '.claude', 'agents');
+    // The project-scoped copies are closer to the launch folder than any installed agents.
+    const agents = path.join(PROJECTS, '.claude', 'agents');
     const hooks = path.join(HOME, '.claude', 'hooks');
     fs.mkdirSync(agents, { recursive: true }); fs.mkdirSync(hooks, { recursive: true });
     fs.copyFileSync(HOOK_SRC, path.join(hooks, 'fence-write.js'));
@@ -251,7 +257,7 @@ Module._load = function (request) {
     const ptyStart = record.handled.get('pty-start');
     const started = await ptyStart(good, { id: 'page-1', role: 'page-reader', cli: 'claude', cwd: r.dir, cols: 80, rows: 24 });
     if (started.ok !== true) process.stdout.write('  (pty-start refused: ' + started.error + ')\n');
-    assert(started.ok === true, 'pty-start launches the page-reader pane in its folder');
+    assert(started.ok === true, 'pty-start launches with the temporary page-reader copy despite an installed agent above it');
     const spawn = record.spawnArgs[record.spawnArgs.length - 1];
     const cmd = spawn && spawn.args[spawn.args.indexOf('-Command') + 1];
     process.stdout.write('  command: ' + cmd + '\n');
