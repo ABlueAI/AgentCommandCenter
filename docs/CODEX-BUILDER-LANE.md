@@ -26,8 +26,11 @@ minutes during the trial (checklist step 30).
 ## The lane
 
 1. **Who gets which session.** Codex takes `windows`-lane sessions that are not marked Sensitive
-   and that Windows CI can verify (S26 details item 4). Claude takes the rest. Rows marked "Codex
-   builds" (S17 to S20) stay with Blue starting Codex himself.
+   and that Windows CI can verify (S26 details item 4). Claude takes the rest, the UI sessions (S66
+   and S18 to S20) included: Claude builds the UI and Codex does the smaller tasks and the reviews
+   (Blue, 2026-11-21). Exceptions Blue starts in Codex himself, outside the `windows`-only rule:
+   the `blue`-lane rows S52 and S53 (Blue, 2026-11-16), S63 (2026-11-21), and S54, which Codex
+   builds (2026-11-21).
 2. **Claim.** The hand-off is an open issue titled `Sxx: <session title>`, labelled `agent-claimed`,
    opened by `ABlueAgent`, with its conversation locked to collaborators. Codex's PR, titled `Sxx:`,
    is the second claim. The S04 runner prompt's claim check (docs/RUNNER.md step 5c) honours both,
@@ -42,10 +45,12 @@ minutes during the trial (checklist step 30).
    2026-10-23), so until it does, Blue locks each claim issue (one click) before the hand-off. That
    also means each hand-off has Blue's eye on it.
 5. **Independent review.** Unchanged from AGENTS.md step 3: the Claude session that handed Codex the
-   task, or the next runner fire, runs `pr-reviewer` and posts "Independent review (Opus)". Because
-   Codex may be able to comment as `ABlueAgent`, a review on a Codex PR counts only when it is posted
-   by `ABlueAI`, or by `ABlueAgent` with a "Run by:" line linking the Claude session or runner fire
-   that ran it. That line is free text Codex could forge, so before approving a Codex PR Blue opens
+   task, or the next runner fire, runs `pr-reviewer` and the pre-ready reviewers and posts
+   "Independent review (Opus)". Codex PR reviews are run and posted by a Claude cloud session under
+   the agent account; Blue's desktop login (`ABlueAI`) is read-only and never posts one (Blue,
+   2026-11-21). Because Codex may be able to comment as `ABlueAgent`, a review on a Codex PR counts
+   only when it is posted by `ABlueAgent` with a "Run by:" line linking the Claude cloud session or
+   runner fire that ran it. That line is free text Codex could forge, so before approving a Codex PR Blue opens
    the link and checks it is a Claude session that reviewed this PR (step 30 includes it). Nothing
    an agent records on GitHub as `ABlueAgent` is safe from Codex while it may act as that account,
    so Blue's check stays until the trial shows Codex can't comment as `ABlueAgent`.
@@ -63,7 +68,8 @@ minutes during the trial (checklist step 30).
    "Run by:" check (step 5b), the "Run by:" line in every review it posts (step 6), the same check in
    the digest prompt's `READY TO MERGE` test (its step 2), and fix requests after the trial confirms the mechanics, in this PR;
    an interactive session then applies it (a new checklist step). Until then only a Claude session
-   Blue asks in an `ABlueAI` comment hands Codex a task.
+   Blue asks in an `ABlueAI` comment hands Codex a task. Whichever prompt runs, the reviews in item 5
+   come from a Claude cloud session under the agent account, never from Blue's desktop login.
 8. **Cap.** Codex builds count against a separate Codex cap of 2 at a time (Blue, 2026-11-21,
    docs/DECISIONS.md; it was 1, a choice to stay within ChatGPT
    Plus; its real limits are not verified), not the runner's `parallel_cap`, which counts Claude's
