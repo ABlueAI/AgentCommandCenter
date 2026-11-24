@@ -9,8 +9,7 @@
 // a shell that can't start refuses visibly and leaves the old layout usable; and no PTY starts and
 // nothing is fetched from the network along the way.
 //
-// Not covered yet (later steps of S66): Pause all and quiet-hours banners, the usage chip, the
-// emblem upload and focus-ring rendering.
+// Not covered yet (later steps of S66): the emblem upload and focus-ring rendering.
 
 const { spawnSync } = require('child_process');
 const path = require('path');
@@ -111,6 +110,23 @@ eq(r.root && r.root.layout, 'old', 'the old layout comes back');
 assert(r.headerShown === false && r.controlShown === true && r.brainShown === false && r.terminalsTabShown === true, 'today\'s app, unchanged, with no tab bar');
 assert(r.paletteShown === true && r.offersTabs === true, 'Ctrl K still works and offers the three-tab layout');
 assert(r.settingsFromTopbar === true && r.boxChecked === true, 'the top bar\'s Settings button opens the page, with the switch on');
+
+process.stdout.write('\ntop bar: usage chip, quiet hours and Pause all\n');
+const b = S.topBar || {};
+assert(b.pausedRestored === true && /^Paused since .+\.Resume all$/.test(b.pausedText || ''), 'a saved Pause all comes back after a restart, with Resume all');
+assert(b.quietBadStoredOff === true && b.quietBadLogged === true, 'an unreadable saved quiet state is off and reported');
+eq(b.usageOnTab, { brain: true, control: true, aquarium: true }, 'the usage chip shows in the shell\'s top bar on every tab');
+eq(b.pausedOnTab, { brain: true, control: true, aquarium: true }, 'the paused banner shows on every tab');
+assert(b.quietDisabled === true && b.pauseDisabled === true, 'the quiet-hours and Pause all switches stay disabled until S18 and S19 give them their effect');
+eq(b.quietOnTab, { brain: true, control: true, aquarium: true }, 'the quiet-hours banner shows on every tab');
+assert(/^Quiet hours since .+\. Agents keep working\.End now$/.test(b.quietText || ''), 'the quiet banner has End now');
+eq(b.rootQuiet, 'on', 'the one quiet state is on the app root for every alert and voice path to read');
+assert(b.enableUnknown === false && b.enableQuiet === true, 'only known switches can be enabled');
+assert(b.quietAfterToggle === null && b.quietPressed === 'true', 'an enabled switch toggles by click (on to off, then on again)');
+assert(b.pausedInOld === true && b.quietInOld === true, 'both banners show in the old layout too');
+assert(b.usageInOldTopbar === true && b.usageBeforeTheme === 'theme-picker', 'the usage chip goes back to its old place in the old top bar');
+assert(b.quietAfterEnd === false && b.pausedAfterResume === false, 'End now and Resume all clear the banners');
+assert((b.saves || []).some((x) => x.uiQuietSince === null) && (b.saves || []).some((x) => x.uiPausedSince === null), 'both states are saved with the settings');
 
 process.stdout.write('\na shell that can\'t start refuses visibly\n');
 const x = S.refusal || {};

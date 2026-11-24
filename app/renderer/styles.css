@@ -439,6 +439,19 @@ input:focus { outline: none; border-color: var(--accent); }
 .mk-palette-option { display: flex; justify-content: space-between; gap: 12px; padding: 6px 12px; border-radius: 7px; cursor: pointer; font: 500 13.5px/20px var(--sans); }
 .mk-palette-option[aria-selected="true"] { background: var(--mk-surface-hover, var(--panel-2)); box-shadow: inset 2px 0 0 var(--mk-accent, var(--accent)); }
 .mk-palette-empty { padding: 8px 16px; }
+/* Top-bar status pieces and the banners. The usage chip is today's S11 panel, moved into the shell. */
+.mk-status { display: flex; align-items: center; gap: 8px; }
+.mk-status .usage-panel { margin-right: 4px; color: var(--mk-ink-muted); }
+.mk-status .usage-panel.usage-warn { color: var(--mk-status-needs); }
+.mk-status .usage-window { font: 600 12.5px/18px var(--mono); font-variant-numeric: tabular-nums; }
+.mk-btn[aria-pressed="true"] { border-color: var(--mk-accent, var(--accent)); }
+.mk-banners { flex: 0 0 auto; }
+.mk-banner[hidden] { display: none !important; }
+.mk-banner { display: flex; align-items: center; gap: 12px; padding: 4px 16px; font: 500 12.5px/18px var(--sans); border-bottom: 1px solid var(--mk-line, var(--border)); }
+.mk-banner-quiet { background: var(--mk-surface-raised, var(--panel)); color: var(--mk-ink, var(--text)); }
+.mk-banner-paused { background: var(--mk-composer, #22190b); color: var(--mk-composer-ink, #f0c060); }
+.mk-banner-btn { padding: 2px 8px; font-size: 12.5px; }
+.mk-banner-btn:focus-visible { outline: 2px solid var(--mk-focus, var(--accent-2)); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .mk-tab, .mk-btn { transition: none; } }
 
 /* The embedded production surface: a sibling of `.term-grid` in the same tab, taking the same

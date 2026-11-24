@@ -53,11 +53,33 @@
     Object.freeze({ id: 'layout', title: 'Layout' }),
     Object.freeze({ id: 'shortcuts', title: 'Shortcuts' }),
     Object.freeze({ id: 'shark', title: 'Shark', pending: 'The shark\'s look, colours and frame rate come with the brain tab (S18).' }),
-    Object.freeze({ id: 'quiet', title: 'Quiet hours', pending: 'The quiet-hours switch comes with the top bar, in a later step of S66.' }),
+    Object.freeze({ id: 'quiet', title: 'Quiet hours', pending: 'A manual switch in the top bar. It is turned on once the brain tab (S18) and the control room (S19) make alerts and voice honour it; a schedule is for 1.2.' }),
     Object.freeze({ id: 'repos', title: 'Repos and emblems', pending: 'Repo emblems and their image upload come in a later step of S66.' }),
     Object.freeze({ id: 'voice', title: 'Voice', pending: 'Voice and speed are set in the control room\'s terminal bar for now.' }),
     Object.freeze({ id: 'keys', title: 'Keys', pending: 'Keys are stored from the banners at the top of the window for now.' }),
   ]);
+
+  // Quiet hours and Pause all are stored as the ISO time they started, or null when off. Anything
+  // else in the stored settings is treated as off and reported.
+  function normalizeSince(value) {
+    if (value === undefined || value === null) return { since: null, fellBack: false };
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?Z$/.test(value) && !Number.isNaN(Date.parse(value))) {
+      return { since: value, fellBack: false };
+    }
+    return { since: null, fellBack: true };
+  }
+  // "2:05 PM" in the user's own clock format.
+  function clockTime(iso) {
+    const d = new Date(iso);
+    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+  // The banners' words (brief 4.1). Each piece says plainly what it does not do yet.
+  function quietBannerText(since) {
+    return `Quiet hours since ${clockTime(since)}. Agents keep working.`;
+  }
+  function pausedBannerText(since) {
+    return `Paused since ${clockTime(since)}.`;
+  }
 
   function normalizeLayout(value) {
     return LAYOUTS.includes(value) ? { layout: value, fellBack: false } : { layout: DEFAULT_LAYOUT, fellBack: value !== undefined && value !== null };
@@ -152,7 +174,16 @@
     const tabChoice = normalizeTab(stored.uiTab);
     if (tabChoice.fellBack) log('[shell] stored tab not recognised; opening the control room\n');
 
-    const state = { layout: layoutChoice.layout, tab: tabChoice.tab, view: 'tab', paletteOpen: false, returnFocus: null, activeIndex: 0, shown: [] };
+    const quietChoice = normalizeSince(stored.uiQuietSince);
+    if (quietChoice.fellBack) log('[shell] stored quiet-hours state not recognised; quiet hours off\n');
+    const pausedChoice = normalizeSince(stored.uiPausedSince);
+    if (pausedChoice.fellBack) log('[shell] stored Pause all state not recognised; not paused\n');
+    const now = typeof deps.now === 'function' ? deps.now : () => Date.now();
+
+    const state = {
+      layout: layoutChoice.layout, tab: tabChoice.tab, view: 'tab', paletteOpen: false, returnFocus: null, activeIndex: 0, shown: [],
+      quietSince: quietChoice.since, pausedSince: pausedChoice.since,
+    };
 
     // -- header: scope stripe and tab bar ---------------------------------------------------------
     const header = doc.getElementById('makoShell');
@@ -177,7 +208,39 @@
     paletteButton.appendChild(h(doc, 'kbd', { className: 'mk-kbd', text: 'Ctrl K' }));
     const settingsButton = h(doc, 'button', { className: 'mk-btn', text: 'Settings', attrs: { type: 'button', id: 'makoSettingsOpen' } });
 
-    const bar = h(doc, 'div', { className: 'mk-tabbar' }, [tablist, h(doc, 'span', { className: 'mk-spacer' }), paletteButton, settingsButton]);
+    // Top-bar status pieces (brief 8): the usage chip (today's S11 usage panel, moved here in the
+    // three-tab layout so it shows on every tab), the quiet-hours switch and Pause all. The two
+    // switches are shown but stay disabled until the rows that give them their effect turn them on
+    // (S18 and S19 honour quiet hours; S19 wires what Pause all does to panes, a process-control
+    // change with its own second review): a switch that changed nothing would read as a promise.
+    const statusSlot = h(doc, 'div', { className: 'mk-status', attrs: { id: 'makoStatusSlot' } });
+    const quietButton = h(doc, 'button', {
+      className: 'mk-btn mk-quiet', text: 'Quiet hours',
+      attrs: { type: 'button', id: 'makoQuiet', 'aria-pressed': 'false', disabled: '', title: 'Quiet hours: S18 and S19 make alerts and voice honour this switch, and enable it' },
+    });
+    const pauseButton = h(doc, 'button', {
+      className: 'mk-btn mk-pause', text: 'Pause all',
+      attrs: { type: 'button', id: 'makoPauseAll', 'aria-pressed': 'false', disabled: '', title: 'Pause all: S19 wires what pausing does to panes, and enables it' },
+    });
+    const usagePanel = deps.usagePanel || null;
+    const usageHome = usagePanel ? { parent: usagePanel.parentNode, next: usagePanel.nextSibling } : null;
+    statusSlot.appendChild(quietButton);
+    statusSlot.appendChild(pauseButton);
+    const bar = h(doc, 'div', { className: 'mk-tabbar' }, [tablist, h(doc, 'span', { className: 'mk-spacer' }), statusSlot, paletteButton, settingsButton]);
+
+    // Banners show in both layouts, on every tab (index.html places #makoBanners outside the shell).
+    const banners = doc.getElementById('makoBanners');
+    if (!banners) throw refusal('banners-missing');
+    const quietBanner = h(doc, 'div', { className: 'mk-banner mk-banner-quiet', attrs: { id: 'makoQuietBanner', role: 'status', hidden: '' } });
+    const quietText = h(doc, 'span', { className: 'mk-banner-text' });
+    const quietEnd = h(doc, 'button', { className: 'mk-btn mk-banner-btn', text: 'End now', attrs: { type: 'button', id: 'makoQuietEnd' } });
+    quietBanner.appendChild(quietText); quietBanner.appendChild(quietEnd);
+    const pausedBanner = h(doc, 'div', { className: 'mk-banner mk-banner-paused', attrs: { id: 'makoPausedBanner', role: 'status', hidden: '' } });
+    const pausedText = h(doc, 'span', { className: 'mk-banner-text' });
+    const pausedResume = h(doc, 'button', { className: 'mk-btn mk-banner-btn', text: 'Resume all', attrs: { type: 'button', id: 'makoResumeAll' } });
+    pausedBanner.appendChild(pausedText); pausedBanner.appendChild(pausedResume);
+    banners.appendChild(quietBanner);
+    banners.appendChild(pausedBanner);
     header.appendChild(stripe);
     header.appendChild(bar);
 
@@ -267,11 +330,28 @@
       const tabInfo = TABS.find((t) => t.id === state.tab);
       stripeText.textContent = state.view === 'settings' ? 'Settings' : `${tabInfo.label} · ${tabInfo.hint}`;
       oldLayoutBox.checked = state.layout === 'old';
+      // The usage chip lives in the shell's top bar in the three-tab layout, and goes back to its
+      // own place in the old top bar otherwise. Moving the node keeps usage-view.js's wiring.
+      if (usagePanel) {
+        if (tabsLayout && usagePanel.parentNode !== statusSlot) statusSlot.insertBefore(usagePanel, statusSlot.firstChild);
+        else if (!tabsLayout && usagePanel.parentNode !== usageHome.parent) {
+          if (usageHome.next && usageHome.next.parentNode === usageHome.parent) usageHome.parent.insertBefore(usagePanel, usageHome.next);
+          else usageHome.parent.appendChild(usagePanel);
+        }
+      }
+      quietButton.setAttribute('aria-pressed', state.quietSince ? 'true' : 'false');
+      pauseButton.setAttribute('aria-pressed', state.pausedSince ? 'true' : 'false');
+      quietBanner.hidden = !state.quietSince;
+      if (state.quietSince) quietText.textContent = quietBannerText(state.quietSince);
+      pausedBanner.hidden = !state.pausedSince;
+      if (state.pausedSince) pausedText.textContent = pausedBannerText(state.pausedSince);
+      root.setAttribute('data-mako-quiet', state.quietSince ? 'on' : 'off');
+      root.setAttribute('data-mako-paused', state.pausedSince ? 'on' : 'off');
     }
 
     function emitChange() {
       try {
-        win.dispatchEvent(new win.CustomEvent('mako-shell-change', { detail: { layout: state.layout, tab: state.tab, view: state.view } }));
+        win.dispatchEvent(new win.CustomEvent('mako-shell-change', { detail: { layout: state.layout, tab: state.tab, view: state.view, quietSince: state.quietSince, pausedSince: state.pausedSince } }));
       } catch { log('[shell] a change listener failed: listener-failed\n'); }
     }
 
@@ -295,6 +375,31 @@
       layoutStatus.textContent = n.layout === 'old' ? 'Old layout on. Saved; it stays after a restart.' : 'Three-tab layout on. Saved; it stays after a restart.';
       save({ uiLayout: n.layout });
       emitChange();
+      return true;
+    }
+
+    // The one quiet state and the one paused state. S18 and S19 read them (getState, and the
+    // 'mako-shell-change' event) and give them their effect.
+    function setQuiet(on) {
+      state.quietSince = on ? (state.quietSince || new Date(now()).toISOString()) : null;
+      render();
+      save({ uiQuietSince: state.quietSince });
+      emitChange();
+      return state.quietSince;
+    }
+    function setPaused(on) {
+      state.pausedSince = on ? (state.pausedSince || new Date(now()).toISOString()) : null;
+      render();
+      save({ uiPausedSince: state.pausedSince });
+      emitChange();
+      return state.pausedSince;
+    }
+    // A row that gives a switch its effect turns it on here (S18 and S19).
+    function enableSwitch(name) {
+      const btn = name === 'quiet' ? quietButton : name === 'pause' ? pauseButton : null;
+      if (!btn) { log(`[shell] refused to enable unknown switch "${String(name).slice(0, 40)}"\n`); return false; }
+      btn.disabled = false;
+      btn.removeAttribute('title');
       return true;
     }
 
@@ -386,6 +491,10 @@
     settingsButton.addEventListener('click', openSettings);
     settingsClose.addEventListener('click', closeSettings);
     oldLayoutBox.addEventListener('change', () => setLayout(oldLayoutBox.checked ? 'old' : 'tabs'));
+    quietButton.addEventListener('click', () => setQuiet(!state.quietSince));
+    pauseButton.addEventListener('click', () => setPaused(!state.pausedSince));
+    quietEnd.addEventListener('click', () => setQuiet(false));
+    pausedResume.addEventListener('click', () => setPaused(false));
     paletteBackdrop.addEventListener('mousedown', (e) => { if (e.target === paletteBackdrop) closePalette(); });
 
     paletteInput.addEventListener('input', () => { state.activeIndex = 0; renderList(); });
@@ -425,7 +534,8 @@
 
     return {
       setTab, setLayout, openPalette, closePalette, openSettings, closeSettings,
-      getState: () => ({ layout: state.layout, tab: state.tab, view: state.view, paletteOpen: state.paletteOpen }),
+      setQuiet, setPaused, enableSwitch,
+      getState: () => ({ layout: state.layout, tab: state.tab, view: state.view, paletteOpen: state.paletteOpen, quietSince: state.quietSince, pausedSince: state.pausedSince }),
       visibleCommands: () => state.shown.map((c) => c.label),
     };
   }
@@ -442,6 +552,6 @@
 
   return {
     TABS, TAB_IDS, LAYOUTS, DEFAULT_LAYOUT, DEFAULT_TAB, SHORTCUTS, SETTINGS_SECTIONS,
-    normalizeLayout, normalizeTab, nextTabIndex, isPaletteChord, rankCommands, createShell, reasonOf,
+    normalizeLayout, normalizeTab, normalizeSince, quietBannerText, pausedBannerText, nextTabIndex, isPaletteChord, rankCommands, createShell, reasonOf,
   };
 });

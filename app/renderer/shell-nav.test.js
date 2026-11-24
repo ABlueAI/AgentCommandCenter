@@ -23,6 +23,16 @@ eq(N.normalizeTab('aquarium'), { tab: 'aquarium', fellBack: false }, 'a remember
 eq(N.normalizeTab(undefined), { tab: 'control', fellBack: false }, 'first run opens the control room');
 eq(N.normalizeTab('board'), { tab: 'control', fellBack: true }, 'an unknown stored tab falls back and says so');
 
+process.stdout.write('\nquiet hours and Pause all state\n');
+eq(N.normalizeSince(null), { since: null, fellBack: false }, 'off is null');
+eq(N.normalizeSince(undefined), { since: null, fellBack: false }, 'never set is off, silently');
+eq(N.normalizeSince('2026-11-24T19:05:00.000Z'), { since: '2026-11-24T19:05:00.000Z', fellBack: false }, 'an ISO time is kept');
+eq(N.normalizeSince('yesterday'), { since: null, fellBack: true }, 'anything else is off and reported');
+eq(N.normalizeSince('2026-13-45T99:99Z'), { since: null, fellBack: true }, 'an impossible time is off and reported');
+eq(N.normalizeSince(1732475100000), { since: null, fellBack: true }, 'a number is off and reported');
+assert(/^Quiet hours since .+\. Agents keep working\.$/.test(N.quietBannerText('2026-11-24T19:05:00.000Z')), 'the quiet banner says since when, and that agents keep working');
+assert(/^Paused since .+\.$/.test(N.pausedBannerText('2026-11-24T19:05:00.000Z')), 'the paused banner says since when');
+
 process.stdout.write('\ntab keyboard (WAI-ARIA tabs pattern)\n');
 eq(N.nextTabIndex('ArrowRight', 0, 3), 1, 'Right moves on');
 eq(N.nextTabIndex('ArrowRight', 2, 3), 0, 'Right wraps to the first');

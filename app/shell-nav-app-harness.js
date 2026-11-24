@@ -232,6 +232,62 @@ async function scenarioRestartOld() {
   return r;
 }
 
+async function scenarioTopBar() {
+  // The usage chip on every tab, the two switches (shown, disabled until S18 and S19), and the
+  // banners on every tab and in the old layout, restored after a restart.
+  await open('topBar', { theme: 'obsidian', projectsRoot: 'D:\\Workspace', uiTab: 'brain', uiPausedSince: '2026-11-24T19:05:00.000Z', uiQuietSince: 'not-a-time' });
+  await run(`window.__t.waitFor(() => document.documentElement.getAttribute('data-mako-layout') === 'tabs')`);
+  const r = await run(`(async () => {
+    const t = window.__t;
+    const out = {};
+    out.pausedRestored = t.shown('#makoPausedBanner');
+    out.pausedText = document.getElementById('makoPausedBanner').textContent;
+    out.quietBadStoredOff = !t.shown('#makoQuietBanner');
+    out.quietBadLogged = t.log().includes('stored quiet-hours state not recognised');
+    out.usageOnTab = {};
+    out.pausedOnTab = {};
+    for (const tab of ['brain', 'control', 'aquarium']) {
+      document.getElementById('makoTab-' + tab).click();
+      out.usageOnTab[tab] = t.shown('#usagePanel') && document.getElementById('usagePanel').parentNode.id === 'makoStatusSlot';
+      out.pausedOnTab[tab] = t.shown('#makoPausedBanner');
+    }
+    out.quietDisabled = document.getElementById('makoQuiet').disabled;
+    out.pauseDisabled = document.getElementById('makoPauseAll').disabled;
+    // Quiet hours on (as S18 and S19 will do), on every tab.
+    shell.setQuiet(true);
+    out.quietOnTab = {};
+    for (const tab of ['brain', 'control', 'aquarium']) {
+      document.getElementById('makoTab-' + tab).click();
+      out.quietOnTab[tab] = t.shown('#makoQuietBanner');
+    }
+    out.quietText = document.getElementById('makoQuietBanner').textContent;
+    out.rootQuiet = document.documentElement.getAttribute('data-mako-quiet');
+    // A switch turned on by its row works by click.
+    out.enableUnknown = shell.enableSwitch('everything');
+    out.enableQuiet = shell.enableSwitch('quiet');
+    document.getElementById('makoQuiet').click();
+    out.quietAfterToggle = shell.getState().quietSince;
+    document.getElementById('makoQuiet').click();
+    out.quietPressed = document.getElementById('makoQuiet').getAttribute('aria-pressed');
+    // In the old layout the banners still show and the usage chip goes back to the old top bar.
+    shell.setLayout('old');
+    out.pausedInOld = t.shown('#makoPausedBanner');
+    out.quietInOld = t.shown('#makoQuietBanner');
+    out.usageInOldTopbar = t.shown('#usagePanel') && document.getElementById('usagePanel').parentNode.classList.contains('topbar');
+    out.usageBeforeTheme = document.getElementById('usagePanel').nextElementSibling && document.getElementById('usagePanel').nextElementSibling.className;
+    // End now and Resume all clear them.
+    document.getElementById('makoQuietEnd').click();
+    document.getElementById('makoResumeAll').click();
+    out.quietAfterEnd = t.shown('#makoQuietBanner');
+    out.pausedAfterResume = t.shown('#makoPausedBanner');
+    await t.sleep(50);
+    return out;
+  })()`);
+  r.saves = ipc.saves.slice();
+  await park();
+  return r;
+}
+
 async function scenarioRefusal() {
   // The shell's mount point is missing: the shell refuses visibly and the old layout stays usable.
   await open('refusal', { theme: 'obsidian', projectsRoot: 'D:\\Workspace' }, `document.getElementById('makoViews').remove();`);
@@ -292,7 +348,7 @@ app.whenReady().then(async () => {
     process.stdout.write(JSON.stringify({ ok: false, fatal: { scenario: 'watchdog', error: 'over budget' }, scenarios }) + '\n');
     app.exit(1);
   }, 4 * 60 * 1000);
-  for (const [name, fn] of [['firstRun', scenarioFirstRun], ['palette', scenarioPalette], ['settings', scenarioSettingsAndOldLayout], ['restartOld', scenarioRestartOld], ['refusal', scenarioRefusal]]) {
+  for (const [name, fn] of [['firstRun', scenarioFirstRun], ['palette', scenarioPalette], ['settings', scenarioSettingsAndOldLayout], ['restartOld', scenarioRestartOld], ['topBar', scenarioTopBar], ['refusal', scenarioRefusal]]) {
     try { scenarios[name] = await fn(); progress(`${name}: done`); }
     catch (e) { fatal = { scenario: name, error: String((e && e.message) || e) }; progress(`${name}: FAILED ${fatal.error}`); break; }
   }

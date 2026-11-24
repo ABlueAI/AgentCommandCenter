@@ -1417,6 +1417,7 @@ function startShell(settings) {
       saveSettings: (partial) => cc.saveSettings(partial),
       log: (line) => appendLog(line),
       controlPanel: $('#makoPanel-control'),
+      usagePanel: $('#usagePanel'),
       extraCommands: shellCommands,
     });
   } catch (e) {
