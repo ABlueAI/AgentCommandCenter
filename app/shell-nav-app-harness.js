@@ -87,6 +87,12 @@ async function scenarioFirstRun() {
 
     // Keyboard: Right, End, Home from the focused tab.
     document.getElementById('makoTab-brain').focus();
+    // Ctrl Space presses the Dictate control (here it refuses visibly: no pane, or no engine).
+    out.micWired = await t.waitFor(() => typeof document.getElementById('sttMic').onclick === 'function');
+    const logBefore = t.log().length;
+    out.pttPrevented = t.key(' ', { ctrlKey: true, code: 'Space' });
+    out.pttLogged = ['[stt] dictation engine unavailable', '[stt] click into an agent pane first'].some((x) => t.log().slice(logBefore).includes(x));
+    document.getElementById('makoTab-brain').focus();
     out.rightPrevented = t.key('ArrowRight');
     out.afterRight = t.selectedTab();
     out.focusAfterRight = document.activeElement && document.activeElement.id;

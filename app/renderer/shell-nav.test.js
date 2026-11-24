@@ -49,6 +49,13 @@ assert(!N.isPaletteChord({ ctrlKey: true, altKey: true, key: 'k' }), 'Ctrl+Alt+K
 assert(!N.isPaletteChord({ ctrlKey: false, key: 'k' }), 'plain k is typing');
 assert(!N.isPaletteChord(null), 'no event is not a chord');
 
+process.stdout.write('\nCtrl Space is exactly Ctrl+Space\n');
+assert(N.isPushToTalkChord({ ctrlKey: true, code: 'Space', key: ' ' }), 'Ctrl+Space is push to talk');
+assert(!N.isPushToTalkChord({ ctrlKey: true, shiftKey: true, code: 'Space', key: ' ' }), 'Ctrl+Shift+Space is not');
+assert(!N.isPushToTalkChord({ ctrlKey: false, code: 'Space', key: ' ' }), 'plain Space is typing');
+assert(!N.isPushToTalkChord({ ctrlKey: true, code: 'KeyK', key: 'k' }), 'Ctrl+K is not');
+assert(N.SHORTCUTS.some((x) => x.keys.startsWith('Ctrl Space')), 'Ctrl Space is in the one shortcut list');
+
 process.stdout.write('\npalette ranking\n');
 const cmds = [
   { label: 'Open Settings', group: 'Mako' },

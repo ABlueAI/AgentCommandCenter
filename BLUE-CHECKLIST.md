@@ -1271,6 +1271,27 @@ Step 77 comes from PR #253.
   - *Done when:* PR #253 is merged, or you have answered the questions you want changed; the agent
     ticks this with the date.
 
+## From S66 (the shared navigation)
+
+Step 81 comes from PR #283.
+
+- [ ] **81. PC check of the three-tab shell (S66).** **About 10 minutes**, at the first Tuesday or
+  Friday PC-check evening after PR #283 merges. Pull `main` and fully restart Mako, then:
+  1. Mako opens on the **Control room** tab with your panes as before, under a thin blue scope stripe
+     naming the repo, with Brain and Aquarium tabs beside it and a rail of round repo emblems on the
+     left. Click each tab: the colours change (dark blue, black, green-ish); Brain and Aquarium say
+     which session builds them.
+  2. Press **Ctrl K**: the palette opens. Type "logs" and press Enter: you land on the Logs view.
+     Press Ctrl K, then Esc: it closes.
+  3. Click an emblem: the repo switches (the stripe and the repo picker follow).
+  4. Click **Settings**, tick **Use the old layout**: today's single screen comes back. Restart Mako:
+     it is still the old layout. Untick it to go back.
+  5. Hold **Ctrl Space** in a pane and speak, then let go: the words are typed into that pane.
+  6. Look: does anything read wrong or feel cramped? Note the usage chip (top right) and the two
+     greyed-out switches, **Quiet hours** and **Pause all**, which S18 and S19 turn on.
+  - *Done when:* you tell any agent "S66 PC check: OK" or what looked wrong; the agent ticks this
+    with the date and your words, and anything wrong becomes a fix PR.
+
 ## Every day, once the runner is on
 
 Once S04 is applied (step 27), the runner works all day and you do one sitting in the evening:

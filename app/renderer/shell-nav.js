@@ -38,9 +38,10 @@
   const DEFAULT_TAB = 'control';
 
   // The one shortcut list (brief 8: "one shortcut list"). Only keys that work today are listed;
-  // later rows (S18's Ctrl Space push-to-talk, S19's needs-you jump key) add their own entries here.
+  // later rows (S19's needs-you jump key) add their own entries here.
   const SHORTCUTS = Object.freeze([
     Object.freeze({ keys: 'Ctrl K', action: 'Open the command palette', scope: 'Every tab, both layouts' }),
+    Object.freeze({ keys: 'Ctrl Space (hold)', action: 'Push to talk: dictate into the last pane you used, typed when you let go (S18 points it at the message box)', scope: 'Every tab, both layouts' }),
     Object.freeze({ keys: 'Esc', action: 'Close the palette or the Settings page', scope: 'While one is open' }),
     Object.freeze({ keys: 'Left / Right', action: 'Move between tabs', scope: 'Tab bar focused' }),
     Object.freeze({ keys: 'Home / End', action: 'First or last tab', scope: 'Tab bar focused' }),
@@ -102,6 +103,11 @@
   function isPaletteChord(e) {
     return !!e && e.ctrlKey === true && !e.shiftKey && !e.altKey && !e.metaKey
       && (e.key === 'k' || e.key === 'K' || e.code === 'KeyK');
+  }
+
+  // Exactly Ctrl+Space (push to talk), no Shift, Alt or Meta.
+  function isPushToTalkChord(e) {
+    return !!e && e.ctrlKey === true && !e.shiftKey && !e.altKey && !e.metaKey && (e.code === 'Space' || e.key === ' ');
   }
 
   // Rank palette commands against a query: label prefix, then a word in the label starting with
@@ -557,6 +563,6 @@
 
   return {
     TABS, TAB_IDS, LAYOUTS, DEFAULT_LAYOUT, DEFAULT_TAB, SHORTCUTS, SETTINGS_SECTIONS,
-    normalizeLayout, normalizeTab, normalizeSince, quietBannerText, pausedBannerText, nextTabIndex, isPaletteChord, rankCommands, createShell, reasonOf,
+    normalizeLayout, normalizeTab, normalizeSince, quietBannerText, pausedBannerText, nextTabIndex, isPaletteChord, isPushToTalkChord, rankCommands, createShell, reasonOf,
   };
 });

@@ -1464,6 +1464,7 @@ async function boot() {
   const s = await cc.getSettings();
   applyTheme((s && s.theme) || 'obsidian');
   startShell(s);
+  bindPushToTalk();
   if (s && s.ttsVoice) state.ttsVoice = s.ttsVoice;
   if (s && s.ttsSpeed) state.ttsSpeed = s.ttsSpeed;
   {
@@ -1593,6 +1594,37 @@ if (paneStatusSetup) {
       reportAudioModuleFailure(kind, 'module did not initialize; required browser bundle may be missing');
     }
   }, 2500);
+}
+
+// S66: Ctrl Space push to talk, on every tab and in both layouts. Holding it presses today's
+// Dictate control (which locks the destination pane and refuses visibly when it can't start);
+// letting go of Space or Ctrl, or leaving the window, presses it again to stop and type the one
+// finalized transcript. The key is consumed so it doesn't also reach the terminal.
+function bindPushToTalk() {
+  let held = false;
+  const mic = () => $('#sttMic');
+  const recording = () => !!(window.ccSTT && window.ccSTT.isRecording());
+  const release = () => {
+    if (!held) return;
+    held = false;
+    if (recording() && mic()) mic().click();
+  };
+  window.addEventListener('keydown', (e) => {
+    if (!window.ccShellNav.isPushToTalkChord(e)) return;
+    e.preventDefault(); e.stopPropagation();
+    if (e.repeat || held) return;
+    held = true;
+    const btn = mic();
+    if (recording()) return;
+    if (!btn || typeof btn.onclick !== 'function') { appendLog('[stt] push to talk: dictation is still starting; try again in a moment\n'); return; }
+    btn.click();
+  }, true);
+  window.addEventListener('keyup', (e) => {
+    if (!held || !(e.code === 'Space' || e.key === ' ' || e.key === 'Control')) return;
+    e.preventDefault(); e.stopPropagation();
+    release();
+  }, true);
+  window.addEventListener('blur', release);
 }
 
 function installSTTUnavailableControl() {

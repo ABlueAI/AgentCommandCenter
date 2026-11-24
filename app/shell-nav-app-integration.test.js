@@ -59,6 +59,7 @@ process.stdout.write('\ntabs switch by click and keyboard, and each sets its col
 eq(f.afterClickSelected, 'brain', 'clicking Brain selects it');
 eq(f.afterClick && f.afterClick.surface, '#0a1530', 'the brain tab\'s surface colour is applied');
 assert(f.afterClickBrainShown === true && f.afterClickControlShown === false && f.afterClickTopbarShown === false, 'the brain frame shows; today\'s layout and its top bar hide');
+assert(f.pttPrevented === true && f.pttLogged === true, 'Ctrl Space presses Dictate (consumed, and it refuses visibly here with no pane)');
 assert(f.rightPrevented === true, 'Right arrow is handled by the tablist');
 eq(f.afterRight, 'control', 'Right moves to the control room');
 eq(f.focusAfterRight, 'makoTab-control', 'focus follows the selected tab');
@@ -108,7 +109,7 @@ const s = S.settings || {};
 assert(s.view === 'settings' && s.settingsShown === true && s.controlShownInSettings === false, 'the Settings page opens in place of the tab');
 eq(s.focusInSettings, 'makoSettingsTitle', 'focus moves to the Settings title');
 eq(s.sections, ['Layout', 'Shortcuts', 'Shark', 'Quiet hours', 'Repos and emblems', 'Voice', 'Keys'], 'the Settings page has its sections');
-eq(s.shortcutRows, 5, 'the Shortcuts section shows the one shortcut list');
+eq(s.shortcutRows, 6, 'the Shortcuts section shows the one shortcut list');
 assert(s.escPrevented === true && s.viewAfterEsc === 'tab', 'Esc closes the Settings page');
 eq(s.focusAfterEsc, 'makoTab-control', 'focus goes back to the selected tab');
 eq(s.layoutAfterSwitch, 'old', '"Use the old layout" switches at once');
