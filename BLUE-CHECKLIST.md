@@ -1174,6 +1174,20 @@ open PRs (#206 and #208).
   - *Done when:* your verdict is in the record, word for word, and the agent ticks this with the
     date.
 
+## From your decisions of 2026-11-23
+
+Step 72 comes from PR #227 (docs/DECISIONS.md, 2026-11-23). Step numbers 69 to 71 belong to open PRs
+(#218, #225 and #224).
+
+- [ ] **72. Codex's review on the `codex/` PRs (PR #227's question).** **About 2 minutes to answer**,
+  once PR #227 is merged. Your rule says a PR is `READY TO MERGE` only with Codex's pass, but on the
+  three `codex/` PRs (#206, #208, #209) Codex answered "create an environment for this repo" instead
+  of reviewing. Answer PR #227's question: create that Codex environment (the agent's
+  recommendation), or tell an agent how those PRs should get Codex's pass. Until then they are
+  `NOT READY: no Codex pass`.
+  - *Done when:* your answer is in docs/DECISIONS.md, and an agent has checked on GitHub that one
+    of those PRs has Codex's pass (or that your answer says otherwise) and ticks this with the date.
+
 ## Every day, once the runner is on
 
 Once S04 is applied (step 27), the runner works all day and you do one sitting in the evening:

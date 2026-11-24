@@ -150,7 +150,7 @@ section('REFUSAL LOGGING IS BOUNDED');
 {
   const win = makeWindow();
   const { authority, calls } = build(win);
-  const secret = 'D:\\Users\\levij\\.ssh\\id_rsa';
+  const secret = 'D:\\Users\\sampleuser\\.ssh\\id_rsa';
   authority.assess(goodEvent(win), { role: secret, cwd: secret, initialPrompt: secret });
   assert(calls.refusals.length === 1, 'exactly one refusal line was emitted');
   assert(calls.refusals[0].indexOf(secret) === -1, 'and it contains no renderer-supplied payload');
