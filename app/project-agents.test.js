@@ -363,7 +363,10 @@ if (sharedBlocks.length > 0) {
     const rel = path.relative(repoRoot, f).split(path.sep).join('/');
     const t = fs.readFileSync(f, 'utf8').replace(/^\uFEFF/, '');
     assert(!/[\p{Cf}\p{Co}]/u.test(t), `${rel} has no invisible (format) or private-use characters`);
-    assert(!/harness-audit|run-all\.js|evaluate\.py/.test(t.replace(/<!--[\s\S]*?-->/, '')),
+    // The header comment may name the upstream scripts; check only the text after it.
+    const end = t.indexOf('-->');
+    const body = end === -1 ? t : t.slice(end + 3);
+    assert(!/harness-audit|run-all\.js|evaluate\.py/.test(body),
       `${rel} runs none of ECC's scripts`);
   }
 
