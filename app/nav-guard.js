@@ -72,4 +72,51 @@ function refusalLine(guard, url, forwarded, reason) {
   return `[nav-guard] denied ${guard}: ${disp} -- ${sanitizeForLog(url)}`;
 }
 
-module.exports = { isHttpUrl, externalTarget, decideWindowOpen, decideNavigation, sanitizeForLog, refusalLine, MAX_LOG_URL };
+// createNavGuards({ entryUrl, openExternal, send }) -> { onWindowOpen, onNavigate(label) }
+//
+// The two Electron handlers main.js installs, built here so they can run in plain node tests with
+// stub dependencies. `openExternal` is shell.openExternal; `send` puts one line on the main-error
+// channel. Every denial sends exactly one refusal line (with the policy's reason). A link handed to
+// the OS browser is the decision's normalized externalUrl and nothing else; if the OS browser throws
+// or rejects, one more line says so, naming the link (sanitized), never dropped.
+function createNavGuards(deps) {
+  const d0 = deps || {};
+  const entryUrl = d0.entryUrl;
+  const openExternal = d0.openExternal;
+  const send = d0.send;
+  if (typeof entryUrl !== 'string' || entryUrl.length === 0) throw new Error('nav-guard: entryUrl must be a non-empty string.');
+  if (typeof openExternal !== 'function') throw new Error('nav-guard: openExternal must be a function.');
+  if (typeof send !== 'function') throw new Error('nav-guard: send must be a function.');
+
+  function handOff(guard, d, url) {
+    if (d.externalUrl) {
+      const target = d.externalUrl;
+      Promise.resolve()
+        .then(() => openExternal(target))
+        .catch(() => send(`[nav-guard] ${guard}: the external browser could not open the link (os-open-failed) -- ${sanitizeForLog(target)}`));
+    }
+    send(refusalLine(guard, url, !!d.externalUrl, d.reason));
+  }
+
+  // setWindowOpenHandler(({ url }) => ...): always { action: 'deny' }.
+  function onWindowOpen(details) {
+    const url = details ? details.url : undefined;
+    const d = decideWindowOpen(url);
+    handOff('window.open', d, url);
+    return { action: d.action };
+  }
+
+  // webContents.on('will-navigate' | 'will-redirect', (e, url) => ...).
+  function onNavigate(label) {
+    return (e, url) => {
+      const d = decideNavigation(url, entryUrl);
+      if (d.allow) return;
+      e.preventDefault();
+      handOff(label, d, url);
+    };
+  }
+
+  return { onWindowOpen, onNavigate };
+}
+
+module.exports = { isHttpUrl, externalTarget, decideWindowOpen, decideNavigation, sanitizeForLog, refusalLine, createNavGuards, MAX_LOG_URL };

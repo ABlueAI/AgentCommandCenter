@@ -4,7 +4,7 @@
 // decisions so a link or injected navigation can neither open an uncontrolled child window nor
 // repoint the app window (AUDIT #3).
 
-const { isHttpUrl, decideWindowOpen, decideNavigation, sanitizeForLog, refusalLine, MAX_LOG_URL } = require('./nav-guard');
+const { isHttpUrl, decideWindowOpen, decideNavigation, sanitizeForLog, refusalLine, createNavGuards, MAX_LOG_URL } = require('./nav-guard');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -151,25 +151,113 @@ assert(sanitizeForLog(undefined) === 'undefined' && sanitizeForLog(null) === 'nu
     assert(externalTarget(input).url === viaIpc && decideWindowOpen(input).externalUrl === viaIpc && decideNavigation(input, ENTRY).externalUrl === viaIpc,
       `parity with open-external for ${JSON.stringify(String(input).slice(0, 40))}`);
   }
-  // main.js wiring: every OS hand-off from the guards uses the decision's externalUrl, nothing raw.
+  // main.js wiring: the guards come from createNavGuards; every shell.openExternal is an injected opener.
   const src = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
   const calls = src.match(/shell\.openExternal\(([^)]*)\)/g) || [];
-  assert(calls.length === 3 && calls.filter((c) => c === 'shell.openExternal(d.externalUrl)').length === 1 &&
-    calls.filter((c) => c === 'shell.openExternal(url)').length === 2,
-    'main.js calls shell.openExternal only with a guard decision\'s externalUrl or inside the two policy-checked IPC openers');
-  for (const factory of ['createOpenExternalIpc({', 'createQuickLinksIpc({']) {
+  assert(calls.length === 3 && calls.every((c) => c === 'shell.openExternal(url)'),
+    'main.js calls shell.openExternal only as the injected opener of three policy-checked factories');
+  for (const factory of ['createNavGuards({', 'createOpenExternalIpc({', 'createQuickLinksIpc({']) {
     const oi = src.indexOf(factory);
-    const end = oi < 0 ? -1 : src.indexOf('\n  });', oi) >= 0 && src.indexOf('\n  });', oi) < src.indexOf('\n});', oi) ? src.indexOf('\n  });', oi) : src.indexOf('\n});', oi);
-    assert(oi >= 0 && /openExternal: \(url\) => shell\.openExternal\(url\)/.test(src.slice(oi, end)),
-      `the raw-url call in ${factory.slice(0, -2)} is its injected opener, which runs only after the policy`);
+    const block = oi < 0 ? '' : src.slice(oi, src.indexOf('});', oi));
+    assert(/openExternal: \(url\) => shell\.openExternal\(url\)/.test(block), `${factory.slice(0, -2)} gets the only openers`);
   }
-  const gi = src.indexOf('const openOutside = (guard, d, url) => {');
-  const guards = gi < 0 ? '' : src.slice(gi, src.indexOf("win.webContents.on('will-redirect'", gi));
-  assert(guards.includes('decideWindowOpen(url)') && guards.includes('decideNavigation(url, ENTRY_URL)') &&
-    (guards.match(/openOutside\(/g) || []).length === 2 && /\.catch\(\(\) => sendRefusal\(/.test(guards) &&
-    guards.includes('refusalLine(guard, url, !!d.externalUrl, d.reason)'),
-    'main.js: both guards hand off only through openOutside, which reports a failed open and the refusal reason');
+  assert(/win\.webContents\.setWindowOpenHandler\(navGuards\.onWindowOpen\);/.test(src) &&
+    /win\.webContents\.on\('will-navigate', navGuards\.onNavigate\('will-navigate'\)\);/.test(src) &&
+    /win\.webContents\.on\('will-redirect', navGuards\.onNavigate\('will-redirect'\)\);/.test(src) &&
+    (src.match(/setWindowOpenHandler\(/g) || []).length === 1 &&
+    (src.match(/'will-navigate'/g) || []).length === 2 && (src.match(/'will-redirect'/g) || []).length === 2,
+    'main.js installs exactly the createNavGuards handlers on the window, and no other navigation handler');
+  assert(/entryUrl: ENTRY_URL,/.test(src.slice(src.indexOf('createNavGuards({'))) && /send: sendRefusal,/.test(src),
+    'main.js gives the guards the canonical entry URL and the main-error sender');
 }
 
-process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
-process.exit(failed ? 1 : 0);
+// --- createNavGuards: the real handlers, run with stub Electron functions -------------------------
+{
+  let threw = 0;
+  for (const bad of [{}, { entryUrl: ENTRY, send() {} }, { entryUrl: ENTRY, openExternal() {} }, { entryUrl: '', openExternal() {}, send() {} }]) {
+    try { createNavGuards(bad); } catch { threw++; }
+  }
+  assert(threw === 4, 'createNavGuards throws when entryUrl, openExternal or send is missing');
+}
+function makeGuards(opener) {
+  const opened = [];
+  const lines = [];
+  const g = createNavGuards({
+    entryUrl: ENTRY,
+    openExternal: (u) => { opened.push(u); return opener ? opener(u) : Promise.resolve(); },
+    send: (line) => lines.push(line),
+  });
+  return { g, opened, lines };
+}
+const settle = () => new Promise((r) => setImmediate(r));
+(async () => {
+  {
+    const { g, opened, lines } = makeGuards();
+    const r = g.onWindowOpen({ url: 'https://user@github.com/' });
+    await settle();
+    assert(r.action === 'deny' && opened.length === 0, 'window.open of a policy-refused URL: denied, the OS browser is never called');
+    assert(lines.length === 1 && lines[0].includes('blocked (not forwarded: url-userinfo-not-allowed)'), 'window.open of a policy-refused URL: one line with the reason');
+  }
+  {
+    const { g, opened, lines } = makeGuards();
+    const r = g.onWindowOpen({ url: 'HTTPS://Example.COM' });
+    await settle();
+    assert(r.action === 'deny' && opened.length === 1 && opened[0] === 'https://example.com/', 'window.open of a good link: the OS browser gets the normalized URL once');
+    assert(lines.length === 1 && /forwarded to external browser/.test(lines[0]), 'window.open of a good link: one forwarded line');
+  }
+  {
+    const { g, opened, lines } = makeGuards();
+    const r = g.onWindowOpen(undefined);
+    assert(r.action === 'deny' && opened.length === 0 && lines.length === 1, 'window.open with no details: denied, one line, nothing opened');
+  }
+  for (const label of ['will-navigate', 'will-redirect']) {
+    const nav = (url) => { const ev = { prevented: 0, preventDefault() { this.prevented++; } }; return ev; };
+    {
+      const { g, opened, lines } = makeGuards();
+      const ev = nav(); g.onNavigate(label)(ev, `https://example.com/%0a${'x'}`);
+      await settle();
+      assert(ev.prevented === 1 && opened.length === 0 && lines.length === 1 && lines[0].includes(`denied ${label}: blocked (not forwarded: url-encoded-control)`),
+        `${label} to a policy-refused URL: prevented, nothing opened, one line with the reason`);
+    }
+    {
+      const { g, opened, lines } = makeGuards();
+      const ev = nav(); g.onNavigate(label)(ev, 'https://github.com/ABlueAI');
+      await settle();
+      assert(ev.prevented === 1 && opened.length === 1 && opened[0] === 'https://github.com/ABlueAI' && lines.length === 1,
+        `${label} to a web page: prevented (the window is never repointed) and handed to the OS browser once`);
+    }
+    {
+      const { g, opened, lines } = makeGuards();
+      const ev = nav(); g.onNavigate(label)(ev, ENTRY);
+      assert(ev.prevented === 0 && opened.length === 0 && lines.length === 0, `${label} to the entry document: allowed, silent`);
+    }
+    {
+      const { g, opened, lines } = makeGuards();
+      const ev = nav(); g.onNavigate(label)(ev, 'file:///C:/Windows/x');
+      await settle();
+      assert(ev.prevented === 1 && opened.length === 0 && lines.length === 1 && /blocked \(not forwarded\) -- /.test(lines[0]), `${label} to a local file: prevented, blocked`);
+    }
+  }
+  for (const [label, opener] of [
+    ['rejects', () => Promise.reject(new Error('no handler'))],
+    ['throws synchronously', () => { throw new Error('no handler'); }],
+  ]) {
+    const { g, opened, lines } = makeGuards(opener);
+    const r = g.onWindowOpen({ url: 'https://example.com/a' });
+    await settle(); await settle();
+    const failed = lines.filter((l) => l.includes('(os-open-failed)'));
+    assert(r.action === 'deny' && opened.length === 1 && failed.length === 1 && failed[0].endsWith('-- https://example.com/a') &&
+      lines.some((l) => /forwarded to external browser/.test(l)),
+      `an OS browser that ${label}: reported once, naming the link, after the forwarded line`);
+  }
+  {
+    // A known side effect, recorded on purpose: the policy refuses %80 to %9F escapes, which also
+    // occur in ordinary percent-encoded UTF-8 (here an en dash). Such links stay in the app now.
+    const { g, opened, lines } = makeGuards();
+    g.onWindowOpen({ url: 'https://en.wikipedia.org/wiki/1990%E2%80%93present' });
+    await settle();
+    assert(opened.length === 0 && lines[0].includes('url-encoded-control'), 'a UTF-8 link with a %80-%9F byte is refused by the policy (a known policy low, docs/1.1-GAP-AUDIT.md)');
+  }
+  process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
+  process.exit(failed ? 1 : 0);
+})().catch((e) => { process.stderr.write('nav-guard: crashed: ' + (e && e.stack || e) + '\n'); process.exit(1); });

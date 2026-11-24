@@ -25,7 +25,7 @@ const { validateTask } = require('./task-name');
 const { readBuildInfo } = require('./build-info');
 // Navigation-lockdown decisions (deny window.open / off-app navigation) and the shell-free launcher
 // arg builders. Both dependency-free + unit-tested (nav-guard.test.js / launchers.test.js).
-const { decideWindowOpen, decideNavigation, refusalLine } = require('./nav-guard');
+const { createNavGuards } = require('./nav-guard');
 // P12 launcher hardening: shell-free launcher arg builders + deterministic Code.exe / wt.exe
 // resolution (no cmd.exe intermediary), and the main-owned directory AUTHORIZER (a launcher may open
 // only the current repo root or one of its live git worktrees). Both dependency-free + unit-tested
@@ -536,31 +536,17 @@ function createWindow() {
   // uses (refuse-visibly rule): a blocked navigation/popup must never be a silent no-op. refusalLine
   // strips control chars + truncates the (attacker-influenced) URL so this can't become a log sink.
   const sendRefusal = (line) => { if (win && !win.isDestroyed()) win.webContents.send('main-error', line); };
-  // Issue #163: externalUrl is set only for an http(s) URL the Quick Links URL policy accepts, and it
-  // is the policy's normalized URL (nav-guard.js externalTarget, the same rule as open-external). An
-  // OS browser that fails to open it is reported on the same channel, never dropped.
-  const openOutside = (guard, d, url) => {
-    if (d.externalUrl) {
-      Promise.resolve()
-        .then(() => shell.openExternal(d.externalUrl))
-        .catch(() => sendRefusal(`[nav-guard] ${guard}: the external browser could not open the link (os-open-failed)`));
-    }
-    sendRefusal(refusalLine(guard, url, !!d.externalUrl, d.reason));
-  };
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    const d = decideWindowOpen(url);
-    openOutside('window.open', d, url);
-    return { action: d.action };
+  // Issue #163: the handlers come from nav-guard.js createNavGuards. A link reaches the OS browser
+  // only as the decision's externalUrl (the Quick Links URL policy, then http(s) only, normalized:
+  // the same rule as open-external), and a failed OS open is reported, never dropped.
+  const navGuards = createNavGuards({
+    entryUrl: ENTRY_URL,
+    openExternal: (url) => shell.openExternal(url),
+    send: sendRefusal,
   });
-  const guardNav = (label) => (e, url) => {
-    const d = decideNavigation(url, ENTRY_URL);
-    if (!d.allow) {
-      e.preventDefault();
-      openOutside(label, d, url);
-    }
-  };
-  win.webContents.on('will-navigate', guardNav('will-navigate'));
-  win.webContents.on('will-redirect', guardNav('will-redirect'));
+  win.webContents.setWindowOpenHandler(navGuards.onWindowOpen);
+  win.webContents.on('will-navigate', navGuards.onNavigate('will-navigate'));
+  win.webContents.on('will-redirect', navGuards.onNavigate('will-redirect'));
 }
 
 app.whenReady().then(() => {
