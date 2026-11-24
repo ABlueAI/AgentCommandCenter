@@ -8,9 +8,19 @@
 // JSON file in the fresh outputs folder; the pane reads that file. Renderer-supplied opening prompts
 // stay refused for every fenced role (pty-launch-classify.js).
 //
-// Pure apart from the `path` module: no Electron, filesystem, process or spawning.
+// Pure apart from the `path` module and ipaddr.js: no Electron, filesystem, network, process or
+// spawning.
 
 const path = require('path');
+// Issue #162: IP range classification from ipaddr.js (MIT, pinned in package.json; the choice is in
+// docs/decisions/OSS-ip-ranges.md), rather than a hand-written list of CIDR ranges. Loaded on first
+// use, not at startup: main.js requires this file when Mako starts, and a checkout that hasn't run
+// `npm ci` yet must refuse the Page Reader visibly (REASON.CHECK_UNAVAILABLE), not stop Mako opening.
+let ipaddrModule = null;
+function loadIpaddr() {
+  if (!ipaddrModule) ipaddrModule = require('ipaddr.js');
+  return ipaddrModule;
+}
 
 const ROLE = 'page-reader';
 
@@ -129,13 +139,66 @@ const REASON = Object.freeze({
   NOT_HTTPS: 'page-url-not-https',
   CREDENTIALS: 'page-url-has-credentials',
   WHITESPACE: 'page-url-has-whitespace-or-control',
+  NOT_PUBLIC_ADDRESS: 'page-url-not-public-address',
+  LOCAL_NAME: 'page-url-local-name',
+  CHECK_UNAVAILABLE: 'page-url-check-unavailable',
 });
+
+// Names that only ever mean this machine or the local network: `localhost` (RFC 6761), mDNS `.local`
+// (RFC 6762), `.home.arpa` (RFC 8375), `.internal` (ICANN, 2024), and the common private suffixes
+// ICANN will never delegate (`.lan`, `.home`, `.corp`). A name with no dot is refused too: Windows
+// resolves a single label through LLMNR or NetBIOS on the local network, never on the public web.
+const GLOBAL_UNICAST_V6_CIDR = '2000::/3';
+const LOCAL_SUFFIXES = Object.freeze(['localhost', 'local', 'home.arpa', 'internal', 'lan', 'home', 'corp']);
+
+/**
+ * hostRefusal(hostname) -> null when the host may be read, else a REASON.
+ *
+ * An IP literal must be a public unicast address: ipaddr.js `range()` must be exactly 'unicast',
+ * after `process()` turns an IPv4-mapped IPv6 address into its IPv4 address. Everything else is
+ * refused, among them loopback, private (10/8, 172.16/12, 192.168/16), link-local (169.254/16,
+ * fe80::/10), unique local (fc00::/7), unspecified (0.0.0.0, ::), carrier-grade NAT, multicast,
+ * broadcast, reserved, the ranges that embed an IPv4 address (6to4, Teredo, NAT64), and any IPv6
+ * address outside 2000::/3.
+ *
+ * This checks the URL Blue gives, before the pane starts. Host NAMES are not resolved: a check here
+ * and Chromium's own lookup later can get different answers, so resolving would only look safe.
+ * What the pane's browser does after that first page is outside this check (see the PR for #162).
+ */
+function hostRefusal(hostname) {
+  let ipaddr;
+  try { ipaddr = loadIpaddr(); } catch (e) { return REASON.CHECK_UNAVAILABLE; }
+  let host = String(hostname).toLowerCase();
+  if (host.startsWith('[') && host.endsWith(']')) host = host.slice(1, -1);
+  if (host === '') return REASON.LOCAL_NAME;
+  if (ipaddr.isValid(host)) {
+    let addr;
+    // Fail closed. isValid() has just passed, so process() should never throw here.
+    try { addr = ipaddr.process(host); } catch (e) { return REASON.NOT_PUBLIC_ADDRESS; }
+    if (addr.range() !== 'unicast') return REASON.NOT_PUBLIC_ADDRESS;
+    // Public IPv6 unicast lives only in 2000::/3 (RFC 4291 global unicast). This also refuses
+    // the deprecated IPv4-compatible form (::a.b.c.d), which ipaddr.js labels 'unicast'.
+    if (addr.kind() === 'ipv6' && !addr.match(ipaddr.parseCIDR(GLOBAL_UNICAST_V6_CIDR))) return REASON.NOT_PUBLIC_ADDRESS;
+    return null;
+  }
+  // A name with an empty label (`a..b`, or more than one trailing dot) is never a public site's
+  // name; refusing it keeps the dot-count and suffix rules below from being read on a stray dot.
+  const name = host.endsWith('.') ? host.slice(0, -1) : host;
+  if (name.split('.').includes('')) return REASON.LOCAL_NAME;
+  if (!name.includes('.')) return REASON.LOCAL_NAME;
+  for (const suffix of LOCAL_SUFFIXES) {
+    if (name === suffix || name.endsWith('.' + suffix)) return REASON.LOCAL_NAME;
+  }
+  return null;
+}
 
 /**
  * validatePageUrl(raw) -> { ok:true, url } | { ok:false, reason }
  *
  * `https:` only, no user name or password, no whitespace or control characters, at most
- * MAX_URL_LENGTH characters, parsed by WHATWG `URL`. Returns the parser's normalized href.
+ * MAX_URL_LENGTH characters, parsed by WHATWG `URL`, and a public host (hostRefusal: no local
+ * names, no loopback, private, link-local or other non-public IP literal). Returns the parser's
+ * normalized href.
  */
 function validatePageUrl(raw) {
   if (typeof raw !== 'string') return { ok: false, reason: REASON.NOT_STRING };
@@ -148,6 +211,8 @@ function validatePageUrl(raw) {
   try { u = new URL(s); } catch (e) { return { ok: false, reason: REASON.UNPARSEABLE }; }
   if (u.protocol !== 'https:') return { ok: false, reason: REASON.NOT_HTTPS };
   if (u.username !== '' || u.password !== '') return { ok: false, reason: REASON.CREDENTIALS };
+  const hostReason = hostRefusal(u.hostname);
+  if (hostReason) return { ok: false, reason: hostReason };
   if (u.href.length > MAX_URL_LENGTH) return { ok: false, reason: REASON.TOO_LONG };
   return { ok: true, url: u.href };
 }
