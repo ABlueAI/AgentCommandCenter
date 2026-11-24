@@ -427,7 +427,7 @@ still starts after the H1 setup day (step 54).
 [docs/decisions/OSS-ecc.md](docs/decisions/OSS-ecc.md) "ECC's other skills (S45)", each with a
 proposed verdict (1 FORK, 4 PROTOTYPE, 22 PATTERN-MINE, 286 SKIP; `gateguard` left to S44) and a
 blank for Blue's. Nothing installed. Once it merges S45 is DONE; Blue's per-skill verdicts are
-pending, and a pick becomes a 1.2 plan row only after his verdict.
+pending (BLUE-CHECKLIST.md step 82), and a pick becomes a 1.2 plan row only after his verdict.
 
 **S52 (PR #206):** [HyperFrames vetting and trial](docs/decisions/OSS-hyperframes.md) are recorded.
 The pinned upstream package offers MiniMax/Qwen models through its media commands. Blue's verdict

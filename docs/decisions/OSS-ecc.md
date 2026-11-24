@@ -169,7 +169,7 @@ Written 2026-11-24 by the Claude cloud session building S45 (PR #255). Research 
 installed, run or copied into Mako. Each row is a proposal; Blue's verdict goes in the last column,
 and a skill joins Mako only through a later plan row (1.2, or 1.1 only if it passes the 1.1 test
 and Blue says so). Merging PR #255 records the list, not Blue's verdicts: each row needs his
-verdict in its last column, quoted as he gives it.
+verdict in its last column, quoted as he gives it (BLUE-CHECKLIST.md step 82).
 
 **Source.** The same ECC pin as above: commit `d2ef2680594f9a17526a6e1a2e18b3d242c5d17b`, whose
 `skills/` folder (git tree `e82cd2aff4e5df1e9871416275ffcb345c594ebb`) holds 314 skills, each a

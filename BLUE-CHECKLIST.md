@@ -1329,6 +1329,14 @@ You can start on the first one now, which saves time later.
   FRESH) in your own words to any agent.
   - *Done when:* your verdict is in the record's "Blue's verdict" line, word for word, and the agent
     ticks this with the date.
+- [ ] **82. Your verdicts on S45's ECC skill list (PR #255).** **About 15 minutes** for the nine top
+  picks, longer if you go through all 314 rows; any time after PR #255 merges, before a plan row
+  takes any of them up. Read `docs/decisions/OSS-ecc.md`, "ECC's other skills (S45)": each skill
+  has a proposed verdict and a blank last column. Give your verdict per skill (ADOPT, FORK,
+  PROTOTYPE, PATTERN-MINE, BUILD FRESH or SKIP, or "as proposed" for a group) in your own words to
+  any agent. Merging PR #255 records the list, not your verdicts.
+  - *Done when:* each row you decided has your verdict in its last column, word for word, and the
+    agent ticks this with the date and the rows it filled.
 
 ## Dated reminders
 
