@@ -1293,7 +1293,13 @@ ipcMain.handle('page-reader-prepare', async (e, req) => {
   const sender = pageReaderGate.assess(e);
   if (!sender.ok) return { ok: false, error: sender.reason };
   const checked = pageReaderMod.validatePageUrl(req && typeof req === 'object' ? req.url : undefined);
-  if (!checked.ok) return { ok: false, error: checked.reason };
+  if (!checked.ok) {
+    // Issue #162: say plainly why a local or private address is refused.
+    const local = checked.reason === pageReaderMod.REASON.NOT_PUBLIC_ADDRESS || checked.reason === pageReaderMod.REASON.LOCAL_NAME;
+    return local
+      ? { ok: false, error: checked.reason, hint: 'The Page Reader reads public web pages only, never this PC or your local network.' }
+      : { ok: false, error: checked.reason };
+  }
   if (!fs.existsSync(PAGE_READER_MCP_CLI)) {
     return { ok: false, error: 'page-reader-mcp-missing', hint: 'Playwright MCP is not installed: run npm ci in the app folder, then restart Mako.' };
   }
