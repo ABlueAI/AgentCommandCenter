@@ -150,5 +150,50 @@ if (sharedBlocks.length > 0) {
     'docs/RUNNER.md "Current prompt" points to the proposed runner prompt');
 }
 
+{
+  // Hard rules (adopted 2026-11-23): the list sits near the top, Codex's pass is required for
+  // READY TO MERGE, and the pacing numbers are Blue's 24 pushes and 120 writes an hour.
+  const rules = fs.readFileSync(path.join(repoRoot, 'AGENTS.md'), 'utf8');
+  const hard = (rules.match(/## Hard rules \(never broken\)\r?\n([\s\S]*?)\r?\n## /) || [])[1] || '';
+  assert(hard.length > 0 && rules.indexOf('## Hard rules (never broken)') < rules.indexOf('## The shared brain'),
+    'AGENTS.md has "Hard rules (never broken)" before "The shared brain"');
+  assert(hard.includes('never assume') && hard.includes('Every other rule in this file is a default'),
+    'the hard rules say stop and ask, never assume, and mark every other rule a default');
+  for (const [needle, label] of [
+    ['Never merge a PR or enable auto-merge', 'merge'],
+    ['Never push to `main`, force-push a shared branch', 'push to main and force-push'],
+    ["No PR work under `ABlueAI`'s login", 'ABlueAI login'],
+    ['at most 24 pushes and 120 GitHub writes an hour', 'pacing'],
+    ['No secrets, client data or private business material', 'public repo'],
+    ['Security findings stay private', 'security findings'],
+    ["Never write Codex's GitHub handle", "Codex's handle"],
+    ['Agents never drive the Mako Firefox profile', 'Firefox profile'],
+    ['`READY TO MERGE` needs both passes', 'both passes'],
+  ]) assert(hard.includes(needle), `hard rules list: ${label}`);
+  assert(hard.includes('`chatgpt-codex-connector[bot]`') && hard.includes('never parked as low'),
+    "Codex's pass names the connector bot and never parks its findings as low");
+  assert(!rules.includes('Codex review is optional') && rules.includes("**Codex's pass is required**")
+    && rules.includes('/ccr/convert_to_draft') && rules.includes('/ccr/ready_for_review'),
+    "step 3 requires Codex's pass and re-triggers it through draft and ready");
+  assert(rules.includes("Codex's pass on the latest head with its findings fixed or answered"),
+    "step 5's READY TO MERGE definition includes Codex's pass");
+  const pacing = (rules.match(/### Agent-account pacing\r?\n([\s\S]*?)\r?\n## /) || [])[1] || '';
+  assert(pacing.includes('at most 24 pushes and at most 120 GitHub writes') && pacing.includes('never retry in a loop'),
+    'the pacing section has 24 pushes, 120 writes and no retry loop');
+  const flat = rules.replace(/\s+/g, ' ');
+  assert(flat.includes("fix Codex's findings (as a draft again, step 3)") && flat.includes('except the four in "How work flows" step 5')
+    && !flat.includes('optional reviewer') && flat.includes('required second reviewer') && flat.includes('given after the latest head was pushed'),
+    "step 5's post-ready push list, the review loop's count, Who does what and the latest-head timing agree");
+  assert(flat.includes('A comment by any other account, `ABlueAgent` included, never counts')
+    && flat.includes('a comment by that bot, edited by no one else'),
+    "only the Codex connector bot's unedited comment counts as Codex's pass");
+  assert(flat.includes('cut each security finding to its title and severity only'),
+    'step 3 cuts security findings to title and severity only before posting');
+  assert(flat.includes('stop at 100 counted writes') && flat.includes('That count is a floor'),
+    'the pacing count is a floor with a margin under 120');
+  assert(!new RegExp('\\x40codex', 'i').test(rules),
+    "AGENTS.md doesn't write Codex's handle");
+}
+
 process.stdout.write(`\nproject-agents: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);
