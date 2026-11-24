@@ -119,12 +119,14 @@ count (AGENTS.md, "The review loop").
      do;
    - for adopted third-party code or text: the OSS record, the pinned commit and hashes,
      LICENSES/ and THIRD-PARTY-NOTICES.md;
-   - for a change to `.claude/settings.json`, a hook or an agent file: the guard's tests and
-     docs/HARNESS-CHANGES.md's before-and-after eval.
+   - for a change to `.claude/settings.json`, a hook or an agent file: the tests that pin it,
+     and, when the plan row or Blue asked for a proof run, its results (docs/HARNESS-CHANGES.md).
 
 ## Before you report a finding
 
-Answer all four. If any answer is "no" or "unsure", lower the severity or drop the finding.
+Answer all four. If any answer is "no", drop the finding: it is a pattern with no trigger. If an
+answer is "unsure", report it one level lower and mark it "not verified", with what would settle
+it.
 
 1. **Can I cite the exact line?** Name the file and line. "Somewhere in the IPC layer" is not a
    finding.
@@ -137,7 +139,7 @@ Answer all four. If any answer is "no" or "unsure", lower the severity or drop t
 
 **CRITICAL and HIGH need proof.** For each, give the exact line, the failure (input, state,
 outcome), and why the existing guards (a validator, a deny rule, a hook, a test) don't stop it. If
-you can't give all three, make it MEDIUM or drop it.
+you can't give all three, report it as MEDIUM marked "not verified".
 
 **Zero findings is a valid review.** Don't invent findings to justify the run. Filler, speculative
 "consider using X", and edge cases with no trigger are the main way an AI reviewer fails. Ask of
@@ -150,13 +152,16 @@ not, drop it.
   outer handler. Trace one caller first. (A catch that swallows an error is still a finding:
   AGENTS.md "Failures refuse visibly".)
 - "Validate this input" on an internal function whose callers already validate. Trace one caller.
+  An `ipcMain` handler or a preload function is never internal: renderer input is untrusted, so a
+  missing check there is always a finding.
 - "Magic number" for obvious constants (HTTP codes, `1000` ms, `60`, `24`, index `0` or `-1`) or
   a single-use constant whose name explains it.
 - "Function or file too long". Length is not a finding in Mako.
 - "Should use TypeScript" or "add types" in Mako's plain JavaScript.
 - "Hardcoded value" in a test fixture or an example. Tests should hard-code what they expect.
 - "Missing await" on a call that is deliberately not awaited (logging, a fire-and-forget write)
-  when a comment or `void` says so.
+  when a comment or `void` says so and its rejection is caught and reported (a `.catch` to
+  `main-error`, or an `{ ok: false, error }` result).
 
 ## Severities
 

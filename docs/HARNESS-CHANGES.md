@@ -10,7 +10,9 @@ automatically.
 
 ## When it applies
 
-Any PR that changes how agents behave rather than what Mako does: a file in `.claude/agents/`, a
+The method is available, not required: a builder uses it when Blue or the plan row asks for a
+proof run (as S39 and S40 did), and may use it for any other PR that changes how agents behave
+rather than what Mako does. This is the one list of those files: a file in `.claude/agents/`, a
 hook in `.claude/hooks/`, `.claude/settings.json`, a role file in `agent-roles/`, the runner
 prompt (docs/RUNNER.md), or the review rules in AGENTS.md. A PR touching `.claude/` or AGENTS.md
 is also in a sensitive area, so it gets the second review AGENTS.md asks for.

@@ -119,7 +119,7 @@ from them was run.
 **Pin-and-scan.** SkillSpector was **not run** for S40: installing it was refused by the cloud
 session's permission check (2026-11-24), and the session didn't work around that (not verified by a
 scanner; how to check: run SkillSpector 2.12.0 with `--no-llm` on the four upstream files and
-Mako's six changed agent files, as S39 did). Instead, a manual static check (verified, 2026-11-24,
+the seven agent files in `.claude/agents/`, as S39 did). Instead, a manual static check (verified, 2026-11-24,
 by searching the files):
 
 - the upstream files grant `Bash` (code-reviewer, agent-evaluator) and `Bash, Edit`

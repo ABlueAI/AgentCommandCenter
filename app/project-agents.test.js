@@ -288,6 +288,8 @@ if (sharedBlocks.length > 0) {
   // (docs/DECISIONS.md, 2026-11-16 follow-up answers), a stronger pr-reviewer at effort high, and
   // two on-demand helpers (planner, agent-evaluator) that stay read-only.
   const flat = (t) => t.replace(/\s+/g, ' ');
+  // Any fence language, so a ```text or ```ps1 block with commands in it is caught too.
+  const CMD_BLOCK = /```[A-Za-z0-9-]*\r?\n\s*(npm|npx|tsc|eslint|prettier|vitest|jest|gh|git|node|python|pip|curl|wget)\b/m;
   const decisions = flat(fs.readFileSync(path.join(repoRoot, 'docs', 'DECISIONS.md'), 'utf8'));
   const def = (decisions.match(/\*\*CRITICAL is defined\*\* as (a finding that would: .*? LOW goes to follow-ups\.)/) || [])[1] || '';
   assert(def.length > 200 && def.includes('stop Mako from starting on `main`'),
@@ -306,10 +308,15 @@ if (sharedBlocks.length > 0) {
     ['A security finding is cut to its title and severity in all three', 'security findings stay private'],
     ["work resumes only on Blue's answer", "resumes only on Blue's answer"],
     ['holds for a CRITICAL one too', 'lower-case rules cover CRITICAL'],
+    ['keeps it a draft (converting it back if it was ready)', 'a ready PR goes back to draft'],
+    ['`@ABlueAI needs Blue: CRITICAL finding on main`', 'a CRITICAL already on main is reported'],
+    ['posts no fix request for it', 'no Codex fix request until Blue answers'],
+    ['on a Dependabot PR it leaves the draft state alone', 'Dependabot draft state left alone'],
   ]) assert(loop.includes(needle), `AGENTS.md CRITICAL handling: ${label}`);
   assert(rules.includes('`planner`') && rules.includes('`agent-evaluator`') && rules.includes('docs/HARNESS-CHANGES.md')
     && fs.existsSync(path.join(repoRoot, 'docs', 'HARNESS-CHANGES.md')),
     'AGENTS.md names the on-demand helpers and docs/HARNESS-CHANGES.md, which exists');
+  assert(rules.includes('it is not a required gate'), "AGENTS.md keeps the harness eval method optional (Blue's \"method as text\")");
   const harness = fs.readFileSync(path.join(repoRoot, 'docs', 'HARNESS-CHANGES.md'), 'utf8');
   assert(harness.includes('harness-optimizer') && harness.includes('LICENSES/MIT-ECC.txt') && harness.includes('pass^k')
     && harness.includes('Regression evals'),
@@ -319,6 +326,8 @@ if (sharedBlocks.length > 0) {
   const rp = parseRoleFrontmatter(reviewerText);
   assert(rp.ok && rp.scalars.model === 'opus' && rp.scalars.effort === 'high',
     `pr-reviewer runs on opus at effort high (got ${rp.ok ? rp.scalars.model + '/' + rp.scalars.effort : 'unparsed'})`);
+  assert(rp.ok && JSON.stringify(Object.keys(rp.scalars).sort()) === '["description","effort","model","name","tools"]',
+    'pr-reviewer declares only name, description, tools, model and effort, so no permissionMode, mcpServers or skills');
   assert(rp.ok && JSON.stringify(rp.tools.slice().sort()) === JSON.stringify(['Glob', 'Grep', 'Read'])
     && rp.disallowedTools.length === 0 && Object.keys(rp.events).length === 0,
     'pr-reviewer has exactly Read, Grep and Glob and no hooks');
@@ -333,12 +342,26 @@ if (sharedBlocks.length > 0) {
     "pr-reviewer.md keeps code-reviewer's proof rule and zero-findings rule");
   assert(reviewerText.includes('LICENSES/MIT-ECC.txt') && reviewerText.includes('d2ef2680594f9a17526a6e1a2e18b3d242c5d17b'),
     'pr-reviewer.md names the ECC source commit and licence text it folds in');
-  assert(!/```(bash|sh|shell|powershell|pwsh)?\n\s*(npm|npx|tsc|eslint|prettier|vitest|jest|gh|git)\b/m.test(reviewerText),
+  assert(!CMD_BLOCK.test(reviewerText),
     'pr-reviewer has no command blocks');
   for (const n of Object.keys(PRE_READY)) {
     const t = flat(fs.readFileSync(path.join(agentsDir, n + '.md'), 'utf8'));
     assert(t.includes('**CRITICAL:** ' + def) && t.includes('ranked CRITICAL, HIGH, MEDIUM or LOW'),
       `${n} uses the four-level scale with Blue's CRITICAL definition word for word`);
+  }
+
+  const notices = fs.readFileSync(path.join(repoRoot, 'THIRD-PARTY-NOTICES.md'), 'utf8').split(/\r?\n/);
+  for (const f of ['.claude/agents/pr-reviewer.md', '.claude/agents/planner.md', '.claude/agents/agent-evaluator.md', 'docs/HARNESS-CHANGES.md']) {
+    const row = notices.find((l) => l.startsWith('| `' + f + '` |')) || '';
+    assert(row.includes('LICENSES/MIT-ECC.txt') && row.includes('d2ef2680594f9a17526a6e1a2e18b3d242c5d17b'),
+      `THIRD-PARTY-NOTICES.md has the ECC row for ${f}`);
+  }
+  for (const f of agents.concat([path.join(repoRoot, 'docs', 'HARNESS-CHANGES.md')])) {
+    const rel = path.relative(repoRoot, f).split(path.sep).join('/');
+    const t = fs.readFileSync(f, 'utf8').replace(/^\uFEFF/, '');
+    assert(!/[\p{Cf}\p{Co}]/u.test(t), `${rel} has no invisible (format) or private-use characters`);
+    assert(!/harness-audit|run-all\.js|evaluate\.py/.test(t.replace(/<!--[\s\S]*?-->/, '')),
+      `${rel} runs none of ECC's scripts`);
   }
 
   for (const name of ['planner', 'agent-evaluator']) {
@@ -358,7 +381,7 @@ if (sharedBlocks.length > 0) {
     const desc = parsed.scalars.description || '';
     assert(desc.includes('On demand only') && desc.includes('Not for automatic use.') && !/proactively|must be used|automatically activated/i.test(desc),
       `${name}'s description says it runs on demand and never starts itself`);
-    assert(!/```(bash|sh|shell|powershell|pwsh)?\n\s*(npm|npx|tsc|eslint|prettier|vitest|jest|gh|git|node|python)\b/m.test(text),
+    assert(!CMD_BLOCK.test(text),
       `${name} has no command blocks`);
     assert(text.includes('LICENSES/MIT-ECC.txt') && text.includes('d2ef2680594f9a17526a6e1a2e18b3d242c5d17b')
       && text.includes('Copyright (c) 2026 Affaan Mustafa'),

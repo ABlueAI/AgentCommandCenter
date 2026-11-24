@@ -208,7 +208,9 @@ mostly low, findings. Every PR follows it, including the builder's own fixes.
     details go to Blue privately. The builder may say there how it would fix it, or why it thinks
     the finding is wrong; work resumes only on Blue's answer. The Claude session that reviews a
     Codex or Dependabot PR does the same, without pushing, and posts no fix request for it
-    (docs/CODEX-BUILDER-LANE.md item 6) until Blue answers. A CRITICAL `[out of scope]` finding (one
+    (docs/CODEX-BUILDER-LANE.md item 6) until Blue answers; on a Dependabot PR it leaves the draft
+    state alone ("No agent pushes to a Dependabot branch or changes its draft state"), and the
+    `needs-blue` label and the comment stop it. A CRITICAL `[out of scope]` finding (one
     already on `main`) doesn't stop the PR, but Blue is told at once (a PR comment starting
     `@ABlueAI needs Blue: CRITICAL finding on main`, and a line in the session-end message) and it
     becomes an issue, worded as "Hard rules" item 6 says.
@@ -466,9 +468,10 @@ account stays clear of GitHub's abuse detection.
 - **On-demand helpers** (S40; `.claude/agents/`, Claude Opus, read-only, never started on their
   own): `planner` drafts a plan or a plan row's build steps when a builder or Blue asks, as input
   to the depth check, never instead of it; `agent-evaluator` scores an agent's finished output (a
-  report, a plan, a review) when Blue or a builder asks. A change to an agent, hook, role file or
-  the review rules follows docs/HARNESS-CHANGES.md (harness-optimizer's method as text): a fixed
-  eval set run before and after, with the results in the PR.
+  report, a plan, a review) when Blue or a builder asks. docs/HARNESS-CHANGES.md holds
+  harness-optimizer's method as text: a fixed eval set run before and after a change to the agent
+  harness (its own list says which files). A builder uses it when Blue or the plan row asks for a
+  proof run, and may use it for any other harness change; it is not a required gate.
 - **Codex / GPT**: does the smaller tasks and the reviews (Blue, 2026-11-21): the required
   second reviewer (its pass is needed for `READY TO MERGE`, "Hard rules" item 9; since it was linked to
   `ABlueAgent`, BLUE-CHECKLIST.md step 16, 2026-10-20, it reviews agent PRs automatically; a
