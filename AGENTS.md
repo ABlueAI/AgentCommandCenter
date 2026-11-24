@@ -84,17 +84,32 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
    run it gives the reviewer only the PR number, the TLDR and the diff saved to a file; on a later
    run, the delta since the last run and the previous findings instead of the whole diff ("The
    review loop" below). Never its own reasoning.
-   - If the subagent isn't loaded (agent files load only when a session starts), run a fresh Opus
-     agent with read tools only and the body of `pr-reviewer.md` as its instructions, and say so in
+   - If the subagent isn't loaded (agent files load only when a session starts; to see which are
+     loaded, ask Claude to list its subagents, since Claude Code 2.1.329 removed the `/agents`
+     screen), run a fresh Opus agent with read tools only and the body of `pr-reviewer.md` as its instructions, and say so in
      the comment and the TLDR. If neither is possible, mark the PR "needs Blue". Never skip it.
-   - If the builder can't run `pr-reviewer` itself (Codex), the Claude session that handed it the
-     task runs it on the builder's PR the same way and posts it, and says so in the comment; if that
-     session has ended, the next runner fire (or a session Blue starts) does it. The PR
-     isn't marked ready until that review is posted (by `ABlueAgent` or `ABlueAI`, unedited by anyone
-     else; a comment by anyone else doesn't count; on a Codex PR, because Codex may be able to comment as
-     `ABlueAgent`, one by `ABlueAgent` must carry a "Run by:" line linking the Claude session or
-     runner fire that ran it, and Blue opens that link before approving, since the line alone can be
-     forged; docs/CODEX-BUILDER-LANE.md) and its findings are fixed or answered.
+   - If the builder can't run `pr-reviewer` itself (Codex), a Claude cloud session runs it (and the
+     pre-ready reviewers below) on the builder's PR the same way and posts it under the agent account
+     (`ABlueAgent`), and says so in the comment: the cloud session that handed it the task, or, if
+     that session has ended, the next runner fire or a cloud session Blue starts. Blue's desktop
+     login (`ABlueAI`) is read-only here: it never runs or posts a Codex PR's review (Blue,
+     2026-11-21, docs/DECISIONS.md item 12). The PR isn't marked ready until that review is posted
+     (by `ABlueAgent`, unedited by anyone else; a comment by anyone else doesn't count; because Codex
+     may be able to comment as `ABlueAgent`, it must carry a "Run by:" line linking the Claude cloud
+     session or runner fire that ran it, and Blue opens that link before approving, since the line
+     alone can be forged; docs/CODEX-BUILDER-LANE.md) and its findings are fixed or answered.
+   - **Dependabot PRs** (issue #205) have no builder, so they are reviewed like a Codex PR: a Claude
+     cloud session runs `pr-reviewer` and the pre-ready reviewers on one, `security-reviewer`
+     always (a dependency change is the supply-chain path it exists for), and posts the review under
+     the agent account with a "Run by:" line. Each bumped package also goes through the pin-and-scan
+     step, the China-origin check included ("Engineering rules"), and the review says what it found.
+     A Dependabot PR is `NOT READY` until that review is posted, CI is green, every high and
+     medium finding is answered and it has Codex's pass ("Hard rules" item 9); if Codex doesn't
+     review it, it is `NOT READY: no Codex pass` and Blue decides. No agent pushes to a
+     Dependabot branch or changes its draft state: a finding that needs a change goes in a comment
+     and becomes an issue, and Blue decides whether to merge or close the PR. The runner never
+     builds on one; the routine that does PR upkeep (docs/RUNNER.md) reviews it. In the merge-order
+     check it never makes another PR wait ("Merge order").
    - Before posting, check the report for secrets or anything quoted from outside the repo, and
      remove it with a note, cut each security finding to its title and severity only (its details
      go to Blue privately; "Hard rules" item 6), and replace Codex's handle with "at-codex"
@@ -113,7 +128,7 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      the one fix batch, and the builder passes them to `pr-reviewer`'s run 2 with its own as the
      previous findings, so it says whether each is fixed; their low findings go to Follow-ups. They
      never re-run on later runs, never
-     replace `pr-reviewer`, and don't count toward the 5-run cap. If one isn't loaded, the fallback
+     replace `pr-reviewer`, and don't count toward the run cap. If one isn't loaded, the fallback
      above applies with its file's body.
    - **Codex's pass is required** (Blue, 2026-11-22; "Hard rules" item 9). Since Codex was linked to
      the agent account (BLUE-CHECKLIST.md step 16, 2026-10-20), it reviews agent PRs automatically
@@ -186,9 +201,11 @@ mostly low, findings. Every PR follows it, including the builder's own fixes.
   high or medium finding still open, apart from ones the builder has answered in the PR.
 - **Later runs check only the fixes.** Each later run gets the PR number, the TLDR, the delta since
   the last run and the previous findings, and checks only those, not the whole PR again.
-- **At most 5 runs per PR**, for any reason, including re-runs after merging `main`. If high or
-  medium findings are still open after run 5, the builder stops: no more fix rounds and no sixth
-  run. It marks the PR "needs Blue" and asks Blue how to proceed, in the PR and in its session-end
+- **At most 5 runs per PR, 2 on a docs-only PR** (Blue, 2026-11-16), for any reason, including
+  re-runs after merging `main`. A docs-only PR changes only Markdown (`.md`) files and touches no
+  sensitive area ("Sensitive areas" below), so a change to this file, `CLAUDE.md`, `.claude/` or
+  `.github/` gets 5. If high or medium findings are still open after the last run allowed (run 2 or
+  run 5), the builder stops: no more fix rounds and no further run. It marks the PR "needs Blue" and asks Blue how to proceed, in the PR and in its session-end
   message, with its diagnosis and the solutions it sees, so the PR doesn't spiral.
 - **Merging `main`** to resolve a conflict needs no new review unless the merge changed content
   beyond the conflict.
@@ -214,6 +231,9 @@ any order.
   3. `git merge-tree --write-tree --name-only --no-messages $C <head>`. Exit status 1 is a conflict,
      and the lines after the first name the files.
   A PR that conflicts with `main` alone gets `main` merged first, as usual.
+- **Dependabot PRs** never make another PR wait: a builder's PR that conflicts only with a
+  Dependabot PR is marked ready as if that PR weren't there, and the merge-order line puts the
+  builder's PR first. Dependabot rebases its own PR after the other merges.
 - **Fallback.** If the test-merge can't run, any file both PRs change counts as a conflict (from
   each PR's file list on GitHub).
 - **Who waits.** The PR being checked waits; a PR already ready keeps its place. Right after
@@ -270,6 +290,12 @@ touched · test results (CI, local, not covered) · review verdict and open find
 (low and out-of-scope findings, see "The review loop"). Say "none" rather
 than leaving a line out. Never present an assumption as a fact.
 
+**Certainty labels** (Blue, 2026-11-16). In a TLDR, a reply to a review finding, docs/DECISIONS.md
+and STATUS.md, a claim that a reader can't check from the diff itself carries one of three labels:
+**verified** (and how: a test, a command's output, a primary source, or Blue's words with their
+date), **builder's reading** (inferred from Blue's words or the repo, not said by him), or **not
+verified** (and how to check it). Blue's own quoted words need no label.
+
 ## Deciding without asking
 
 Resolve routine questions yourself from the goal, this repo, the plan, the decisions log, tests and
@@ -280,6 +306,12 @@ official docs, and record each assumption in the PR. Stop and ask Blue only for:
 - anything sensitive (below) that the task did not already authorize;
 - a genuine personal preference (look and feel, naming, business choices);
 - a blocker you cannot resolve after 3 attempts.
+
+**Scope freeze** (Blue, 2026-11-16; "frozen by 12/1", 2026-11-21). Mako 1.1's scope is what
+`docs/PLAN-1.1.md` "Mako 1.1 scope" lists. Until 2026-12-01, a new idea joins 1.1 only if it passes
+the test for 1.1 (the UI overhaul needs it, it lets sessions run unattended for about 5 hours, or it
+is a known fix or security gap) and Blue says so. From 2026-12-01, anything new that isn't vital to
+security goes to the 1.2 queue. An agent never adds to 1.1 on its own: it proposes a plan change.
 
 When the plan has to change, change `docs/PLAN-1.1.md` in the same PR, add the `plan-change` label and
 put the change first in the TLDR. Unmerged plan changes steer nothing.
@@ -368,24 +400,39 @@ account stays clear of GitHub's abuse detection.
   `docs/decisions/OSS-<subsystem>.md` (verdicts: ADOPT, FORK, PROTOTYPE, PATTERN-MINE, BUILD FRESH).
   If Blue named an OSS project, adopting or forking it is the default; never quietly narrow that to
   "study it and rebuild". Existing records in `docs/OSS-PROCUREMENT-*.md` stay valid.
+- No China-origin AI (Blue, 2026-11-16, wording clarified 2026-11-21): no models or hosted AI from
+  companies based in China in anything Mako runs, installs or calls, local models such as Qwen, GLM,
+  DeepSeek, Kimi and Doubao included. It is checked at the pin-and-scan step for every tool. A
+  China-origin model named only in an upstream file Mako doesn't ship is not a fail; code Mako takes
+  in has such references removed. A scanner whose analysis stage would call such a model runs in
+  static mode only (as SkillSpector did for S39, 2026-11-17). Only Blue makes an exception.
 - Never paste loose code fragments into security-sensitive paths (IPC, PTY, credentials, validators);
   adopt whole, vetted libraries instead.
 
 ## Who does what
 
 - **Blue**: sets goals, approves plan changes, merges. Owns credentials and repository settings.
-- **Claude Code**: primary builder (Sonnet for routine work, Opus for hard problems and reviews).
+  He merges in one sitting each evening, about 10 minutes, after the 8:03 PM digest, and does PC
+  checks on Tuesday and Friday evenings until H1 automates them (Blue, 2026-11-16), so anything an
+  agent needs him to check on a PC goes in BLUE-CHECKLIST.md for the next of those evenings.
+- **Claude Code**: primary builder, and the builder of the UI sessions (S66 and S18 to S20; Blue,
+  2026-11-16 and 2026-11-21). Model rule (Blue, 2026-11-16): Opus 5.5 for building and planning,
+  and for the reviewer subagents; Sonnet 5.5 for triage, chores and summaries; never Haiku unless
+  Blue asks; never Fable ("Never fable while it is so expensive and requiring API until this is
+  resolved"). Mako passes the effort level on every launch and asks Blue only before Opus 5.5 at max
+  effort. No API credits, ever, and no third-party model routing.
 - **Reviewer subagent** (`.claude/agents/pr-reviewer.md`, Claude Opus): the required independent
-  review on every PR, run by the builder before it marks the PR ready (for Codex's PRs, by the
-  Claude session that handed it the task, the next runner fire, or a session Blue starts; step 3).
-- **Codex / GPT**: required second reviewer (its pass is needed for `READY TO MERGE`, "Hard rules"
-  item 9, so dropping Codex would need that rule changed too; since it was linked to `ABlueAgent`, BLUE-CHECKLIST.md step 16,
-  2026-10-20, it reviews agent PRs automatically; a re-review goes through draft and ready, step 3), second
-  builder for `windows`-lane sessions that aren't sensitive (docs/CODEX-BUILDER-LANE.md), the builder of the UI sessions S17 to S20 (started by Blue, reviewed by Claude
-  Opus; docs/PLAN-1.1.md "UI sessions: who builds"), and planning partner. Works in its own `codex/`
-  branch, never Claude's, and fixes its own PRs; Claude never pushes to a `codex/` branch unless Blue
-  asks. Nothing else in the workflow depends on it: if Blue drops it, the UI sessions need
-  a plan change.
+  review on every PR, run by the builder before it marks the PR ready (for Codex's and Dependabot's
+  PRs, by a Claude cloud session under the agent account; step 3).
+- **Codex / GPT**: does the smaller tasks and the reviews (Blue, 2026-11-21): the required
+  second reviewer (its pass is needed for `READY TO MERGE`, "Hard rules" item 9; since it was linked to
+  `ABlueAgent`, BLUE-CHECKLIST.md step 16, 2026-10-20, it reviews agent PRs automatically; a
+  re-review goes through draft and ready, step 3), reviewer of the UI sessions Claude
+  builds, second builder for `windows`-lane sessions that aren't sensitive and for the rows the plan
+  gives it (docs/CODEX-BUILDER-LANE.md), and planning partner. Works in its own `codex/` branch,
+  never Claude's, and fixes its own PRs; Claude never pushes to a `codex/` branch unless Blue asks.
+  If Blue drops it, Claude takes its rows after a plan change, and "Hard rules" item 9 would need
+  changing too.
 - Plans and reviews happen in the repo (PRs, issues, these files), never by copying text between apps.
 
 ## Out of scope unless Blue explicitly approves the guardrails first
