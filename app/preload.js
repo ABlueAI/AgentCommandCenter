@@ -49,6 +49,7 @@ contextBridge.exposeInMainWorld('cc', {
   ptyStart: (o) => ipcRenderer.invoke('pty-start', o),
   claudeVideoScoutRun: (req) => ipcRenderer.invoke('claude-video-scout-run', req),
   claudeVideoScoutTranscript: (req) => ipcRenderer.invoke('claude-video-scout-transcript', req),
+  claudeVideoScoutConfirm: (req) => ipcRenderer.invoke('claude-video-scout-confirm', req),
   claudeVideoScoutCancel: (id) => ipcRenderer.send('claude-video-scout-cancel', id),
   onClaudeVideoScoutEvent: (cb) => ipcRenderer.on('claude-video-scout-event', (_e, p) => cb(p)),
   // S09 Resume or Start fresh: what main offers to resume, and "don't offer this one again".

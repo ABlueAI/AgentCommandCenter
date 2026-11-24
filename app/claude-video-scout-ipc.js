@@ -1,36 +1,52 @@
 'use strict';
 
 const { randomUUID } = require('node:crypto');
-const { analyzeVideo, ScoutError, MAX_TRANSCRIPT_CHARS } = require('./claude-video-scout');
+const { analyzeVideo, ScoutError, MAX_TRANSCRIPT_CHARS, CONFIRM_TIMEOUT_MS } = require('./claude-video-scout');
 const { normalizeAnalysisFocus, analysisFocusRejectionMessage } = require('./renderer/analysis-focus');
+const { normalizeClaudeVideoSettings } = require('./renderer/claude-video-settings');
 
-const TRANSCRIPTION_TIMEOUT_MS = 15 * 60 * 1000;
+const MIN_TRANSCRIPTION_TIMEOUT_MS = 15 * 60 * 1000;
 const PANE_ID = /^pty[1-9]\d{0,11}$/;
 
-function requestTranscript(job, pcm, send) {
+// Ask the renderer for something (a local Whisper transcript, or the user's answer to the
+// estimate) and wait. Only one request is pending at a time; cancelling the run rejects it.
+function askRenderer(job, kind, payload, timeoutMs, timeoutMessage, send) {
   return new Promise((resolve, reject) => {
     const signal = job.controller.signal;
     if (signal.aborted) {
       reject(new ScoutError('Claude Video Scout was cancelled.'));
       return;
     }
-    const finish = (err, text) => {
+    const finish = (err, value) => {
       clearTimeout(timer);
       signal.removeEventListener('abort', abort);
-      job.finishTranscript = null;
+      job.pending = null;
       if (err) reject(err);
-      else resolve(text);
+      else resolve(value);
     };
     const abort = () => finish(new ScoutError('Claude Video Scout was cancelled.'));
-    const timer = setTimeout(() => finish(new ScoutError('Local Whisper transcription timed out.')), TRANSCRIPTION_TIMEOUT_MS);
-    job.finishTranscript = finish;
+    const timer = setTimeout(() => finish(new ScoutError(timeoutMessage)), timeoutMs);
+    job.pending = { kind, finish };
     signal.addEventListener('abort', abort, { once: true });
     try {
-      send({ pcm: new Uint8Array(pcm) });
+      send(payload);
     } catch {
-      finish(new ScoutError('Mako could not send the audio to local Whisper.'));
+      finish(new ScoutError(kind === 'transcript'
+        ? 'Mako could not send the audio to local Whisper.'
+        : 'Mako could not show the estimate in the Video Scout pane.'));
     }
   });
+}
+
+function requestTranscript(job, pcm, durationSeconds, send) {
+  // Whisper in the renderer can run slower than real time on the WASM backend.
+  const timeoutMs = Math.max(MIN_TRANSCRIPTION_TIMEOUT_MS, Math.ceil(durationSeconds * 3000));
+  return askRenderer(job, 'transcript', { pcm: new Uint8Array(pcm) }, timeoutMs, 'Local Whisper transcription timed out.', send);
+}
+
+function requestConfirm(job, estimate, send) {
+  return askRenderer(job, 'confirm', { estimate }, CONFIRM_TIMEOUT_MS,
+    'No answer to the estimate within 30 minutes. Nothing was sent to Claude.', send);
 }
 
 function createClaudeVideoScoutIpc({ trustedSenderGate, validateVideoUrl, baseEnv, killTree, verifyPolicy, log, analyze = analyzeVideo }) {
@@ -48,16 +64,20 @@ function createClaudeVideoScoutIpc({ trustedSenderGate, validateVideoUrl, baseEn
     }
     const focus = normalizeAnalysisFocus(req.focus);
     if (!focus.ok) return { ok: false, error: analysisFocusRejectionMessage(focus.reason) };
+    const settings = normalizeClaudeVideoSettings(req.settings);
+    if (!settings.ok) return { ok: false, error: settings.error };
 
-    const job = { id: req.id, token: randomUUID(), controller: new AbortController(), finishTranscript: null };
+    const job = { id: req.id, token: randomUUID(), controller: new AbortController(), pending: null };
     active = job;
     const send = (data) => {
       event.sender.send('claude-video-scout-event', { id: job.id, token: job.token, ...data });
     };
     job.done = Promise.resolve().then(() => analyze({
-      url: parsed.href, focus: focus.provided ? focus.value : '', baseEnv, killTree, verifyPolicy, signal: job.controller.signal,
+      url: parsed.href, focus: focus.provided ? focus.value : '', settings: settings.settings,
+      baseEnv, killTree, verifyPolicy, signal: job.controller.signal,
       progress: (status) => send({ status }),
-      transcribe: (pcm) => requestTranscript(job, pcm, send),
+      transcribe: (pcm, { durationSeconds }) => requestTranscript(job, pcm, durationSeconds, send),
+      confirm: (estimate) => requestConfirm(job, estimate, send),
     })).then(
       (report) => ({ ok: true, report }),
       (error) => {
@@ -69,9 +89,13 @@ function createClaudeVideoScoutIpc({ trustedSenderGate, validateVideoUrl, baseEn
     return job.done;
   }
 
+  function pendingFor(event, req, kind) {
+    return trustedSenderGate.assess(event).ok && active?.pending?.kind === kind &&
+      req?.id === active.id && req.token === active.token;
+  }
+
   function transcript(event, req) {
-    if (!trustedSenderGate.assess(event).ok || !active?.finishTranscript ||
-        req?.id !== active.id || req.token !== active.token) {
+    if (!pendingFor(event, req, 'transcript')) {
       return { ok: false, error: 'The Claude Video Scout transcription request is no longer active.' };
     }
     const error = req.error === 'unavailable'
@@ -80,10 +104,18 @@ function createClaudeVideoScoutIpc({ trustedSenderGate, validateVideoUrl, baseEn
         ? 'Local Whisper is busy. Finish dictation or wait for the previous transcription, then retry.'
         : 'Local Whisper could not transcribe the video audio.';
     if (req.error || typeof req.text !== 'string' || req.text.length > MAX_TRANSCRIPT_CHARS) {
-      active.finishTranscript(new ScoutError(error));
+      active.pending.finish(new ScoutError(error));
       return { ok: false, error };
     }
-    active.finishTranscript(null, req.text);
+    active.pending.finish(null, req.text);
+    return { ok: true };
+  }
+
+  function confirm(event, req) {
+    if (!pendingFor(event, req, 'confirm') || typeof req.proceed !== 'boolean') {
+      return { ok: false, error: 'The Claude Video Scout estimate is no longer waiting for an answer.' };
+    }
+    active.pending.finish(null, req.proceed);
     return { ok: true };
   }
 
@@ -98,7 +130,7 @@ function createClaudeVideoScoutIpc({ trustedSenderGate, validateVideoUrl, baseEn
     return active.done;
   }
 
-  return { run, transcript, cancel, shutdown };
+  return { run, transcript, confirm, cancel, shutdown };
 }
 
 module.exports = { createClaudeVideoScoutIpc };

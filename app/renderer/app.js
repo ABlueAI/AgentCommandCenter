@@ -812,7 +812,7 @@ function openInAppTerminal(opts = {}) {
   }
 
   if (claudeVideoScout) {
-    runClaudeVideoInPane(id, opts.videoUrl, opts.analysisFocus);
+    runClaudeVideoInPane(id, opts.videoUrl, opts.analysisFocus, opts.claudeVideoSettings);
     return;
   }
 
@@ -1892,6 +1892,10 @@ function wireUi() {
   });
   $('#hardTask').onchange = (e) => { state.hardTask = e.target.checked; };
   $('#videoProviderSelect').onchange = syncVideoProvider;
+  $('#claudeVideoSettingsReset').onclick = () => {
+    fillClaudeVideoSettings(claudeVideoSettings.defaultClaudeVideoSettings());
+    showClaudeVideoSettingsError('');
+  };
   // Video-scout's Gemini options (model / media-resolution). Server-side allowlists in main.js
   // (VALID_VIDEO_MODELS / VALID_MEDIA_RESOLUTIONS) are the actual enforcement — these dropdowns
   // only offer known-good values, they are not the security boundary.
@@ -2107,7 +2111,7 @@ function updateModalHint() {
   if (role === 'plain') {
     hint.innerHTML = `Creates a git worktree on <code>agent/&lt;task&gt;</code> and launches <code>${state.chosenCli}</code>.`;
   } else if (ROLES[role].video && $('#videoProviderSelect').value === 'claude') {
-    hint.textContent = 'Uses your Claude Code subscription. The report appears in this Video Scout pane.';
+    hint.textContent = 'Uses your Claude Code subscription (no API key). You see the frame count and estimated tokens before anything is sent. The report appears in the Video Scout pane.';
   } else if (ROLES[role].video) {
     hint.innerHTML = `Downloads the video (yt-dlp) and analyzes it with <code>Gemini</code> — visual + spoken. Needs <code>GEMINI_API_KEY</code>.`;
   } else if (ROLES[role].page) {
@@ -2153,6 +2157,9 @@ function openModal() {
   modelPolicy = videoModelPolicy.resetPolicyState();
   $('#videoProviderSelect').value = 'gemini';
   syncVideoProvider();
+  buildClaudeVideoSettings();
+  showClaudeVideoSettingsError('');
+  fillClaudeVideoSettings(loadClaudeVideoSettings());
   state.mediaResolution = 'MEDIUM';
   $('#mediaResolutionSelect').value = state.mediaResolution;
   syncVideoModelControls();
@@ -2219,19 +2226,128 @@ function writeClaudeVideoPane(id, text) {
   pane.parser.feed(data + '\r\n');
 }
 
-async function runClaudeVideoInPane(id, url, focus) {
+// S54 settings (D-065). Each default is a setting the user can change; the values are remembered
+// in this window's localStorage as a convenience, and MAIN re-validates them on every run.
+const CLAUDE_VIDEO_SETTINGS_KEY = 'mako.claudeVideoScout.settings';
+
+function claudeSettingInput(key) { return document.getElementById(`claudeSetting-${key}`); }
+
+function buildClaudeVideoSettings() {
+  const host = $('#claudeVideoSettingsHost');
+  if (host.childElementCount) return;
+  for (const [key, spec] of Object.entries(claudeVideoSettings.CLAUDE_VIDEO_SETTINGS)) {
+    const label = document.createElement('label');
+    label.htmlFor = `claudeSetting-${key}`;
+    label.textContent = `${spec.label} (${spec.min}–${spec.max}; default ${spec.default})`;
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.id = `claudeSetting-${key}`;
+    input.min = String(spec.min);
+    input.max = String(spec.max);
+    input.step = spec.integer ? '1' : '0.05';
+    host.append(label, input);
+  }
+}
+
+function fillClaudeVideoSettings(settings) {
+  $('#claudeDetailMode').checked = settings.detailMode;
+  for (const key of Object.keys(claudeVideoSettings.CLAUDE_VIDEO_SETTINGS)) {
+    claudeSettingInput(key).value = String(settings[key]);
+  }
+}
+
+function showClaudeVideoSettingsError(message) {
+  const el = $('#claudeVideoSettingsError');
+  el.textContent = message;
+  el.classList.toggle('hidden', !message);
+}
+
+function loadClaudeVideoSettings() {
+  let stored = null;
+  try {
+    const raw = localStorage.getItem(CLAUDE_VIDEO_SETTINGS_KEY);
+    stored = raw === null ? null : JSON.parse(raw);
+  } catch {
+    showClaudeVideoSettingsError('Your saved Claude Video Scout settings could not be read, so the defaults are shown.');
+    return claudeVideoSettings.defaultClaudeVideoSettings();
+  }
+  const checked = claudeVideoSettings.normalizeClaudeVideoSettings(stored);
+  if (!checked.ok) {
+    showClaudeVideoSettingsError(`Your saved Claude Video Scout settings were refused (${checked.error}), so the defaults are shown.`);
+    return claudeVideoSettings.defaultClaudeVideoSettings();
+  }
+  return checked.settings;
+}
+
+// Returns the validated settings, or null with a visible error (the modal stays open).
+function readClaudeVideoSettings() {
+  const raw = { detailMode: $('#claudeDetailMode').checked };
+  for (const key of Object.keys(claudeVideoSettings.CLAUDE_VIDEO_SETTINGS)) {
+    const text = claudeSettingInput(key).value.trim();
+    raw[key] = text === '' ? NaN : Number(text);
+  }
+  const checked = claudeVideoSettings.normalizeClaudeVideoSettings(raw);
+  if (!checked.ok) {
+    showClaudeVideoSettingsError(checked.error);
+    $('#claudeVideoSettings').open = true;
+    appendLog('[video-scout] launch blocked: Claude Video Scout setting out of range\n');
+    return null;
+  }
+  showClaudeVideoSettingsError('');
+  try {
+    localStorage.setItem(CLAUDE_VIDEO_SETTINGS_KEY, JSON.stringify(checked.settings));
+  } catch {
+    appendLog('[video-scout] Claude Video Scout settings could not be saved; they apply to this run only\n');
+  }
+  return checked.settings;
+}
+
+function showClaudeVideoEstimate(id, token, estimate) {
+  const paneData = terms.get(id);
+  if (!paneData) return;
+  writeClaudeVideoPane(id, '\n' + estimate);
+  paneData.pane.querySelector('.claude-video-confirm')?.remove();
+  const bar = document.createElement('div');
+  bar.className = 'claude-video-confirm';
+  const send = document.createElement('button');
+  send.type = 'button';
+  send.className = 'small-btn';
+  send.textContent = 'Send to Claude';
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'ghost small-btn';
+  cancel.textContent = 'Cancel';
+  const answer = async (proceed) => {
+    bar.remove();
+    writeClaudeVideoPane(id, proceed ? 'Sending to Claude…' : 'Cancelling at the estimate…');
+    try {
+      const result = await cc.claudeVideoScoutConfirm({ id, token, proceed });
+      if (!result.ok) writeClaudeVideoPane(id, result.error);
+    } catch {
+      writeClaudeVideoPane(id, 'Could not return your answer to Mako. The run is cancelled.');
+      cc.claudeVideoScoutCancel(id);
+    }
+  };
+  send.onclick = () => answer(true);
+  cancel.onclick = () => answer(false);
+  bar.append(send, cancel);
+  paneData.pane.querySelector('.term-head').after(bar);
+}
+
+async function runClaudeVideoInPane(id, url, focus, settings) {
   writeClaudeVideoPane(id, 'Starting Claude Video Scout…');
   try {
-    const result = await cc.claudeVideoScoutRun({ id, url, focus });
+    const result = await cc.claudeVideoScoutRun({ id, url, focus, settings });
     writeClaudeVideoPane(id, result.ok ? '\n' + result.report : `Claude Video Scout refused: ${result.error}`);
   } catch {
     writeClaudeVideoPane(id, 'Claude Video Scout could not communicate with Mako.');
   }
 }
 
-async function handleClaudeVideoEvent({ id, token, status, pcm }) {
+async function handleClaudeVideoEvent({ id, token, status, estimate, pcm }) {
   if (!terms.has(id)) return;
   if (status) { writeClaudeVideoPane(id, status); return; }
+  if (estimate) { showClaudeVideoEstimate(id, token, estimate); return; }
   let result;
   try {
     result = window.ccSTT
@@ -2270,9 +2386,11 @@ async function createAgent() {
     if (provider === 'claude') {
       const focusOpt = readVideoAnalysisFocus();
       if (!focusOpt) return;
+      const claudeSettings = readClaudeVideoSettings();
+      if (!claudeSettings) return;
       closeModal();
       openInAppTerminal({
-        role, claudeVideoScout: true, videoUrl: url, ...focusOpt,
+        role, claudeVideoScout: true, videoUrl: url, ...focusOpt, claudeVideoSettings: claudeSettings,
         title: `Video Scout · Claude · ${new URL(url).hostname}`,
       });
       return;

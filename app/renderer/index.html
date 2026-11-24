@@ -297,7 +297,16 @@
           <option value="gemini" selected>Gemini</option>
           <option value="claude">Claude Code (subscription)</option>
         </select>
-        <p id="claudeVideoOptions" class="muted small hidden">Analyzes the whole video, up to 90 seconds, using one frame per second and a local speech transcript.</p>
+        <div id="claudeVideoOptions" class="hidden">
+          <p class="muted small">Analyzes the whole video from frames kept at scene changes (plus at least one every few seconds), with near-duplicates dropped, and a local Whisper transcript. Before anything is sent to Claude, this pane shows the frames kept and the estimated tokens, and you choose to send or cancel.</p>
+          <label class="check"><input type="checkbox" id="claudeDetailMode" /> Detail mode: send frames at 1280 px instead of 640 px (about 4× the tokens a frame), for screen recordings and tutorials where small on-screen text matters</label>
+          <details id="claudeVideoSettings">
+            <summary class="muted small">Frame sampling settings</summary>
+            <div id="claudeVideoSettingsHost"></div>
+            <button type="button" id="claudeVideoSettingsReset" class="ghost small-btn">Reset to defaults</button>
+          </details>
+          <p id="claudeVideoSettingsError" class="range-error hidden"></p>
+        </div>
         <div id="geminiVideoOptions">
           <label>Analysis mode</label>
           <select id="analysisModeSelect">
@@ -361,6 +370,7 @@
        to seed the per-modal-session policy, so a later <script> would leave it undefined. -->
   <script src="video-model-policy.js"></script>
   <script src="analysis-focus.js"></script>
+  <script src="claude-video-settings.js"></script>
   <script src="agent-dom.js"></script>
   <script src="authority-choice.js"></script>
   <script src="session-resume-view.js"></script>

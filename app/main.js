@@ -804,6 +804,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('claude-video-scout-run', (e, req) => claudeScout.run(e, req));
   ipcMain.handle('claude-video-scout-transcript', (e, req) => claudeScout.transcript(e, req));
+  ipcMain.handle('claude-video-scout-confirm', (e, req) => claudeScout.confirm(e, req));
   ipcMain.on('claude-video-scout-cancel', (e, id) => claudeScout.cancel(e, id));
   let waitingForClaudeScout = false;
   app.on('before-quit', (e) => {

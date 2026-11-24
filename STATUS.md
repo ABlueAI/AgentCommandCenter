@@ -1,6 +1,6 @@
 # Mako status
 
-Updated 2026-11-23 by PR #230 (S54: Claude Code option in Video Scout, pending review and PC check).
+Updated 2026-11-24 by PR #230 (S54: Claude Code option in Video Scout, rebuilt to Blue's approved design, pending review and PC check).
 Before that, updated 2026-11-23 by PR #223 (S61: the 1.1 schedule and Blue's answers on it). Before that:
 updated 2026-11-21 by PR #212 (Blue's decisions of 2026-11-16 to 2026-11-21: the scope freezes on
 2026-12-01, a Codex pane in 1.1, the Composer prototype dates, new rows S63 to S65). Before that:
@@ -21,9 +21,11 @@ Every PR that changes the state updates this file.
 
 - **Your next steps:** [BLUE-CHECKLIST.md](BLUE-CHECKLIST.md), starting with its "Do next" box.
 
-- **Video Scout (S54, draft PR #230):** Claude Code analyzes a short YouTube or Vimeo clip from
-  one frame per second and an on-device Whisper transcript, using Claude.ai subscription sign-in.
-  The independent review and the real-video PC check (step 73) are pending.
+- **Video Scout (S54, draft PR #230):** Claude Code analyzes a YouTube or Vimeo video from frames
+  sampled at scene changes (at least one every 10 seconds, near-duplicates dropped, 640 px or 1280 px
+  in detail mode, at most 120 frames with batching) and an on-device Whisper transcript, using
+  Claude.ai subscription sign-in, after an estimate the user can cancel (Blue's design, D-065).
+  The independent review, Codex's pass and the real-video PC check (step 73) are pending.
 
 - **Release: Mako 1.0.0 is released.**
   - Tag `v1.0.0` was created on 2026-10-18 at `main` commit `37009eb`, which includes the
