@@ -424,6 +424,15 @@ input:focus { outline: none; border-color: var(--accent); }
 .mk-views { display: contents; }
 .mk-panel { flex: 1; min-height: 0; overflow: auto; padding: 32px; background: var(--mk-surface); color: var(--mk-ink); }
 .mk-overline { margin: 0 0 8px; font: 600 11px/14px var(--mk-sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--mk-ink-faint, var(--muted)); }
+.mk-frame { display: flex; gap: 0; padding: 0; }
+.mk-frame-main { flex: 1; min-width: 0; padding: 32px; overflow: auto; }
+.mk-sidebar { flex: 0 0 238px; padding: 16px 8px; border-right: 1px solid var(--mk-line); background: var(--mk-surface); overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+.mk-sidebar-section { display: flex; flex-direction: column; gap: 2px; }
+.mk-sidebar-section .mk-overline { padding: 0 8px; }
+.mk-side-item { text-align: left; font: 500 13.5px/20px var(--mk-sans); color: var(--mk-ink-muted); background: transparent; border: 0; border-radius: 7px; padding: 6px 8px; transition-property: background-color, color; }
+.mk-side-item:hover { background: var(--mk-surface-hover); color: var(--mk-ink); }
+.mk-side-item:focus-visible { outline: 2px solid var(--mk-focus); outline-offset: 2px; }
+@media (max-width: 1100px) { .mk-sidebar { flex-basis: 196px; } }
 .mk-frame-note { max-width: 760px; font: 400 14.5px/23px var(--mk-sans); color: var(--mk-ink-muted); }
 .mk-meta { font: 400 12.5px/18px var(--mk-sans); color: var(--mk-ink-muted, var(--muted)); margin: 4px 0; }
 .mk-title { margin: 0; font: 600 22px/28px var(--mk-sans); color: var(--mk-ink, var(--text)); }

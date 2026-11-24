@@ -18,7 +18,7 @@ const PRELOAD_FILE = path.join(__dirname, 'preload.js');
 const STEP_TIMEOUT_MS = 30000;
 
 const ipc = { saves: [], ptyStart: 0 };
-const control = { settings: {}, gate: null, release: () => {}, repos: [], saveFail: false };
+const control = { settings: {}, gate: null, release: () => {}, repos: [], saveFail: false, worktrees: [] };
 const remote = [];
 const consoleErrors = [];
 let win = null;
@@ -48,6 +48,7 @@ async function open(name, settings, beforeBoot, repos) {
   progress(`${name}: loading`);
   control.settings = settings;
   control.repos = repos || [];
+  control.worktrees = control.repos.length ? [{ path: 'D:\\Workspace\\AgentCommandCenter-search-bar', branch: 'agent/search-bar' }] : [];
   control.gate = new Promise((r) => { control.release = r; });
   ipc.saves = []; ipc.ptyStart = 0;
   await withTimeout(win.loadFile(INDEX_FILE), STEP_TIMEOUT_MS, `${name}: loadFile`);
@@ -214,7 +215,38 @@ async function scenarioPalette() {
     out.stripeAfterEmblem = document.getElementById('makoScopeStripe').textContent;
     out.emblemCurrentAfter = emblems().map((b) => b.getAttribute('aria-current'));
     out.railNoMarkup = document.querySelectorAll('#makoRail img').length === 0;
+    // Agents are palette commands too.
+    await t.waitFor(() => document.querySelectorAll('#agentGrid button').length > 0);
+    t.key('k', { ctrlKey: true });
+    input.value = 'agent:';
+    input.dispatchEvent(new Event('input'));
+    out.agentOptions = Array.from(document.querySelectorAll('#makoPaletteList .mk-palette-label')).map((n) => n.textContent);
+    t.key('Enter');
+    out.agentsViewActive = document.querySelector('.tabpane[data-pane=agents]').classList.contains('active');
+    out.agentCardFocused = !!(document.activeElement && document.activeElement.closest('#agentGrid'));
+    // The sidebar frame on the brain tab, with "Everything else".
+    document.getElementById('makoTab-brain').click();
+    out.sidebarInBrain = t.shown('#makoPanel-brain #makoSidebar');
+    out.sidebarItems = Array.from(document.querySelectorAll('#makoSidebar [data-section=everything] .mk-side-item')).map((b) => b.textContent);
+    document.getElementById('makoTab-aquarium').click();
+    out.sidebarInAquarium = t.shown('#makoPanel-aquarium #makoSidebar');
+    Array.from(document.querySelectorAll('#makoSidebar .mk-side-item')).find((b) => b.textContent === 'Logs').click();
+    out.sidebarLogs = t.selectedTab() === 'control' && document.querySelector('.tabpane[data-pane=logs]').classList.contains('active');
+    out.sidebarHiddenOnControl = !t.shown('#makoSidebar');
+    // Today's settings on the Settings page; a palette command leaves Settings first.
+    document.getElementById('makoSettingsOpen').click();
+    out.themeOnSettings = !!document.getElementById('makoThemeSelect') && document.getElementById('makoThemeSelect').options.length === document.getElementById('themeSelect').options.length;
+    out.folderOnSettings = t.shown('#makoChangeRoot');
+    const themeSel = document.getElementById('makoThemeSelect');
+    themeSel.value = 'nord'; themeSel.dispatchEvent(new Event('change'));
+    out.themeApplied = document.documentElement.getAttribute('data-theme');
     shell.setLayout('old');
+    shell.openSettings();
+    t.key('k', { ctrlKey: true });
+    input.value = 'open logs';
+    input.dispatchEvent(new Event('input'));
+    t.key('Enter');
+    out.oldLayoutLogsLeavesSettings = t.root().view === 'tab' && t.shown('.tabpane[data-pane=logs]');
     out.railShownOld = t.shown('#makoRail');
     shell.setLayout('tabs');
     await t.sleep(50);
@@ -420,7 +452,7 @@ app.whenReady().then(async () => {
     return { ok: true };
   });
   ipcMain.handle('list-repos', () => ({ repos: control.repos.slice(), selectedRepo: control.repos[0] || '' }));
-  ipcMain.handle('list-worktrees', () => []);
+  ipcMain.handle('list-worktrees', () => control.worktrees.slice());
   ipcMain.handle('repo-github-url', () => '');
   ipcMain.handle('get-gemini-key-status', () => ({ ok: true, hasKey: true, available: true }));
   ipcMain.handle('get-agent-token-status', () => ({ ok: true, hasToken: true }));

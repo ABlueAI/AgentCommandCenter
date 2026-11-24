@@ -52,10 +52,11 @@
   // visibly instead of showing an empty box.
   const SETTINGS_SECTIONS = Object.freeze([
     Object.freeze({ id: 'layout', title: 'Layout' }),
+    Object.freeze({ id: 'general', title: 'Today\'s settings' }),
     Object.freeze({ id: 'shortcuts', title: 'Shortcuts' }),
     Object.freeze({ id: 'shark', title: 'Shark', pending: 'The shark\'s look, colours and frame rate come with the brain tab (S18).' }),
     Object.freeze({ id: 'quiet', title: 'Quiet hours', pending: 'A manual switch in the top bar. It is turned on once the brain tab (S18) and the control room (S19) make alerts and voice honour it; a schedule is for 1.2.' }),
-    Object.freeze({ id: 'repos', title: 'Repos and emblems', pending: 'Repo emblems and their image upload come in a later step of S66.' }),
+    Object.freeze({ id: 'repos', title: 'Repos and emblems', pending: 'The emblem rail on the left switches repos. Uploading your own emblem image waits for Blue\'s go (design brief question 10).' }),
     Object.freeze({ id: 'voice', title: 'Voice', pending: 'Voice and speed are set in the control room\'s terminal bar for now.' }),
     Object.freeze({ id: 'keys', title: 'Keys', pending: 'Keys are stored from the banners at the top of the window for now.' }),
   ]);
@@ -327,10 +328,37 @@
     header.appendChild(bar);
 
     // -- panels: brain and aquarium frames, the control room is today's layout ----------------------
+    // Each frame is the shared sidebar's slot plus the tab's own content (S18 and S20 build there).
     function framePanel(id, title, body) {
+      const main = h(doc, 'div', { className: 'mk-frame-main' }, [h(doc, 'p', { className: 'mk-overline', text: title }), h(doc, 'p', { className: 'mk-frame-note', text: body })]);
       return h(doc, 'section', {
         className: 'mk-panel mk-frame', attrs: { id: `makoPanel-${id}`, role: 'tabpanel', 'aria-labelledby': `makoTab-${id}`, tabindex: '0' },
-      }, [h(doc, 'p', { className: 'mk-overline', text: title }), h(doc, 'p', { className: 'mk-frame-note', text: body })]);
+      }, [main]);
+    }
+    // The sidebar frame (brief 8): small-caps sections of icon-and-word items. "Everything else"
+    // is always there; tabs add their own sections with setSidebarSection. The control room keeps
+    // today's sidebar, so this one shows on the brain and aquarium tabs.
+    const sidebar = h(doc, 'aside', { className: 'mk-sidebar', attrs: { id: 'makoSidebar', 'aria-label': 'Sidebar' } });
+    const sidebarSections = new Map();
+    function setSidebarSection(id, title, items) {
+      let sec = sidebarSections.get(id);
+      if (!sec) {
+        sec = h(doc, 'nav', { className: 'mk-sidebar-section', attrs: { 'aria-label': String(title).slice(0, 60), 'data-section': id } });
+        sidebarSections.set(id, sec);
+        // "Everything else" stays last.
+        const last = sidebarSections.get('everything');
+        if (last && id !== 'everything') sidebar.insertBefore(sec, last); else sidebar.appendChild(sec);
+      }
+      while (sec.firstChild) sec.removeChild(sec.firstChild);
+      sec.appendChild(h(doc, 'p', { className: 'mk-overline', text: String(title).slice(0, 60) }));
+      for (const it of Array.isArray(items) ? items.slice(0, 20) : []) {
+        if (!it || typeof it.label !== 'string' || typeof it.run !== 'function') continue;
+        const b = h(doc, 'button', { className: 'mk-side-item', text: it.label.slice(0, 60), attrs: { type: 'button' } });
+        b.addEventListener('click', () => {
+          try { it.run(); } catch (e) { log(`[shell] sidebar item "${it.label.slice(0, 60)}" failed: command-failed (${errorKind(e)})\n`); }
+        });
+        sec.appendChild(b);
+      }
     }
     const brainPanel = framePanel('brain', 'Brain', 'The Composer\'s stage (the shark, live task nodes and the conversation) is built by S18 on this frame. Your agents are in the control room tab.');
     const aquariumPanel = framePanel('aquarium', 'Aquarium', 'The aquarium (one creature per live pane) is built by S20 on this frame. Your agents are in the control room tab.');
@@ -364,6 +392,11 @@
         sec.appendChild(label);
         sec.appendChild(h(doc, 'p', { className: 'mk-meta', text: 'The old single-screen layout, with no tabs. It stays until the aquarium tab (S20) is done. Ctrl K and this page still work there.' }));
         sec.appendChild(layoutStatus);
+      } else if (section.id === 'general') {
+        // app.js fills this with today's settings (theme, projects root); until it does, it says where they are.
+        sec.appendChild(h(doc, 'div', { className: 'mk-settings-body', attrs: { id: 'makoSettings-general-body' } }, [
+          h(doc, 'p', { className: 'mk-meta mk-pending', text: 'Theme and the projects folder are in the control room\'s top bar.' }),
+        ]));
       } else if (section.id === 'shortcuts') {
         sec.appendChild(buildShortcutTable(doc));
       } else {
@@ -406,6 +439,9 @@
       const onTab = state.view === 'tab';
       brainPanel.hidden = !(tabsLayout && onTab && state.tab === 'brain');
       aquariumPanel.hidden = !(tabsLayout && onTab && state.tab === 'aquarium');
+      // The shared sidebar moves into whichever frame is showing.
+      const framed = !brainPanel.hidden ? brainPanel : !aquariumPanel.hidden ? aquariumPanel : null;
+      if (framed && sidebar.parentNode !== framed) framed.insertBefore(sidebar, framed.firstChild);
       // Today's layout is the control room in the tab layout, and the whole app in the old one.
       controlPanel.hidden = !(onTab && (!tabsLayout || state.tab === 'control'));
       settingsPage.hidden = state.view !== 'settings';
@@ -618,6 +654,11 @@
       }
     });
 
+    let everything = [];
+    try { everything = typeof deps.sidebarItems === 'function' ? deps.sidebarItems() || [] : []; }
+    catch (e) { log(`[shell] could not list the sidebar items: commands-failed (${errorKind(e)})\n`); }
+    setSidebarSection('everything', 'Everything else', everything.concat([{ label: 'Settings', run: () => openSettings() }]));
+
     // First render. If it fails, take back everything this shell put on the page and refuse.
     try {
       render();
@@ -657,7 +698,7 @@
 
     return {
       setTab, setLayout, openPalette, closePalette, openSettings, closeSettings,
-      setQuiet, setPaused, enableSwitch, refreshScope: render, showNotice,
+      setQuiet, setPaused, enableSwitch, refreshScope: render, showNotice, setSidebarSection,
       getState: () => ({ layout: state.layout, tab: state.tab, view: state.view, paletteOpen: state.paletteOpen, quietSince: state.quietSince, pausedSince: state.pausedSince }),
       visibleCommands: () => state.shown.map((c) => c.label),
     };

@@ -16,7 +16,8 @@
 })(typeof window !== 'undefined' ? window : globalThis, function factory() {
   const STATES = Object.freeze(['question', 'permission', 'working', 'finished']);
 
-  // The status chip for each state: colour token, icon name and the word, so colour is never alone.
+  // The status chip for each state: colour token and the word, so colour is never alone (the icons
+  // come with S18's icon set).
   const CHIP = Object.freeze({
     question: Object.freeze({ token: 'status-needs', word: 'Needs you' }),
     permission: Object.freeze({ token: 'status-needs', word: 'Permission' }),
@@ -100,7 +101,10 @@
     };
     if (t.state === 'question') {
       for (const a of Array.isArray(t.answers) ? t.answers.slice(0, 6) : []) {
-        actions.appendChild(button('answer', text(a.label, 60), !!a.recommended, text(a.id, 60)));
+        // The id goes back to the caller exactly as given (never cut); only the label is shortened.
+        // An id that isn't a short plain string is refused, not altered.
+        if (typeof a.id !== 'string' || !/^[A-Za-z0-9_.:-]{1,120}$/.test(a.id)) continue;
+        actions.appendChild(button('answer', text(a.label, 60), !!a.recommended, a.id));
       }
     }
     ACTIONS[t.state].forEach(([id, label], i) => actions.appendChild(button(id, label, t.state === 'permission' && i === 0)));

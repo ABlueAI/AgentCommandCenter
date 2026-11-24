@@ -16,9 +16,12 @@
 // found by hand).
 
 // SPDX identifiers (https://spdx.org/licenses/) that need only a notice.
-// OFL-1.1 (SIL Open Font License) joined on 2026-11-24 for S66's two fonts: it lets fonts be
-// bundled and shipped with any software, needing only its notice and licence text alongside; its
-// one restriction is that the font may not be sold by itself, which Mako never does.
+// OFL-1.1 (SIL Open Font License) joined on 2026-11-24 for S66's two fonts. It lets fonts be
+// bundled and shipped with any software, with the copyright notice and licence text alongside.
+// Its conditions: the font may not be sold by itself; a modified font may not use a Reserved Font
+// Name; and a modified font stays under OFL. Mako ships the fonts unmodified and never sells them.
+// It is on this list rather than FILE_EXCEPTIONS because checkNoticeRows only accepts an excepted
+// row that also names a permissive licence, which a font row has no reason to.
 const PERMISSIVE = new Set([
   '0BSD', 'Apache-2.0', 'BlueOak-1.0.0', 'BSD-2-Clause', 'BSD-3-Clause', 'CC0-1.0', 'ISC',
   'MIT', 'MIT-0', 'OFL-1.1', 'Unlicense', 'Zlib',

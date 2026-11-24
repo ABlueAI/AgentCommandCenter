@@ -1388,38 +1388,88 @@ function refreshEmblemRail() {
   const repos = Array.from(sel.options).filter((o) => o.value).map((o) => ({ value: o.value, name: o.textContent }));
   emblemRail.render(repos, sel.value);
 }
+// Go to a view of today's app: leave the Settings page, bring the control room forward, and press
+// the view's own tab button (so the Library keeps its Dockview routing). Refuses visibly before
+// boot has wired the button.
+function goToView(tab, label) {
+  if (shell) {
+    shell.closeSettings();
+    if (shell.getState().layout === 'tabs') shell.setTab('control');
+  }
+  const btn = document.querySelector(`.tab[data-tab="${tab}"]`);
+  if (!btn) { appendLog(`[shell] the ${label} view is missing\n`); return false; }
+  if (typeof btn.onclick !== 'function') { appendLog(`[shell] the ${label} view is still starting\n`); if (shell) shell.showNotice(`${label} is still starting. Try again in a moment.`, 6000); return false; }
+  btn.click();
+  return true;
+}
+const VIEWS = [['agents', 'Agents'], ['terminals', 'Terminals'], ['library', 'Library and Video Scout'], ['logs', 'Logs']];
 function shellCommands() {
   const cmds = [];
-  // Today's views inside the control room, through their own tab buttons (so the Library keeps its
-  // Dockview routing).
-  for (const [tab, label] of [['agents', 'Agents'], ['terminals', 'Terminals'], ['library', 'Library and Video Scout'], ['logs', 'Logs']]) {
-    cmds.push({ id: `view:${tab}`, label: `Open ${label}`, group: 'Control room', run: () => {
-      if (shell && shell.getState().layout === 'tabs') shell.setTab('control');
-      const btn = document.querySelector(`.tab[data-tab="${tab}"]`);
-      if (!btn) { appendLog(`[shell] the ${label} view is missing\n`); return; }
-      if (typeof btn.onclick !== 'function') { appendLog(`[shell] the ${label} view is still starting\n`); shell.showNotice(`${label} is still starting. Try again in a moment.`, 6000); return; }
-      btn.click();
-    } });
-  }
+  for (const [tab, label] of VIEWS) cmds.push({ id: `view:${tab}`, label: `Open ${label}`, group: 'Control room', run: () => goToView(tab, label) });
   cmds.push({ id: 'agent:new', label: 'New agent', group: 'Control room', run: () => {
-    if (shell && shell.getState().layout === 'tabs') shell.setTab('control');
+    if (shell) { shell.closeSettings(); if (shell.getState().layout === 'tabs') shell.setTab('control'); }
     const btn = $('#newAgent');
-    if (typeof btn.onclick !== 'function') { appendLog('[shell] New agent is still starting\n'); shell.showNotice('New agent is still starting. Try again in a moment.', 6000); return; }
+    if (typeof btn.onclick !== 'function') { appendLog('[shell] New agent is still starting\n'); if (shell) shell.showNotice('New agent is still starting. Try again in a moment.', 6000); return; }
     btn.click();
   } });
+  // Agents (worktrees) of the repo in use: the Agents view, with that agent's card focused.
+  state.worktrees.forEach((wt, i) => {
+    cmds.push({ id: `agent:${i}`, label: `Agent: ${displayNameOf(wt)}`, group: 'Agents', run: () => {
+      if (!goToView('agents', 'Agents')) return;
+      const card = $('#agentGrid').children[i];
+      const target = card && card.querySelector('button');
+      if (target) target.focus(); else appendLog('[shell] that agent is no longer listed\n');
+    } });
+  });
   // Repos, from the repo picker's own options (text only; the picker's change handler switches).
   const sel = $('#repoSelect');
   if (sel) {
     for (const opt of Array.from(sel.options)) {
       if (!opt.value) continue;
       cmds.push({ id: `repo:${opt.value}`, label: `Repo: ${opt.textContent}`, group: 'Repos', run: () => {
-        if (shell && shell.getState().layout === 'tabs') shell.setTab('control');
+        if (shell) { shell.closeSettings(); if (shell.getState().layout === 'tabs') shell.setTab('control'); }
         sel.value = opt.value;
         sel.dispatchEvent(new Event('change'));
       } });
     }
   }
   return cmds;
+}
+// The sidebar's "Everything else" section (brief 8); the shell adds Settings itself.
+function shellSidebarItems() {
+  return [
+    { label: 'Library and Video Scout', run: () => goToView('library', 'Library and Video Scout') },
+    { label: 'Quick Links', run: () => { if (goToView('agents', 'Agents')) { const q = $('#quickLinksTitle'); if (q) q.scrollIntoView({ block: 'nearest' }); } } },
+    { label: 'Logs', run: () => goToView('logs', 'Logs') },
+  ];
+}
+// Today's settings on the Settings page: the theme (the same select's options and handler) and the
+// projects folder (today's 📁 button).
+function fillGeneralSettings() {
+  const body = $('#makoSettings-general-body');
+  const theme = $('#themeSelect');
+  const root = $('#changeRoot');
+  if (!body || !theme || !root) { appendLog('[shell] today\'s settings could not be placed on the Settings page; they stay in the top bar\n'); return; }
+  while (body.firstChild) body.removeChild(body.firstChild);
+  const label = document.createElement('label');
+  label.className = 'mk-check';
+  label.htmlFor = 'makoThemeSelect';
+  label.textContent = 'Theme (the old layout and the control room\'s panes) ';
+  const pick = document.createElement('select');
+  pick.id = 'makoThemeSelect';
+  for (const o of Array.from(theme.options)) { const c = document.createElement('option'); c.value = o.value; c.textContent = o.textContent; pick.appendChild(c); }
+  pick.value = theme.value;
+  pick.onchange = () => { applyTheme(pick.value); };
+  label.appendChild(pick);
+  const folder = document.createElement('button');
+  folder.type = 'button';
+  folder.className = 'mk-btn';
+  folder.id = 'makoChangeRoot';
+  folder.textContent = 'Change projects folder';
+  folder.onclick = () => root.click();
+  body.appendChild(label);
+  body.appendChild(folder);
+  window.addEventListener('mako-shell-change', () => { pick.value = theme.value; });
 }
 function startShell(settings) {
   try {
@@ -1432,6 +1482,7 @@ function startShell(settings) {
       usagePanel: $('#usagePanel'),
       currentScope: () => { const sel = $('#repoSelect'); const o = sel && sel.selectedOptions && sel.selectedOptions[0]; return o && o.value ? o.textContent : ''; },
       extraCommands: shellCommands,
+      sidebarItems: shellSidebarItems,
     });
   } catch (e) {
     shell = null;
@@ -1447,6 +1498,7 @@ function startShell(settings) {
   }
   const settingsBtn = $('#makoSettingsTopbar');
   if (settingsBtn) settingsBtn.onclick = () => shell.openSettings();
+  fillGeneralSettings();
   try {
     emblemRail = window.ccEmblemRail.createEmblemRail({
       doc: document, host: $('#makoRail'), log: (line) => appendLog(line),

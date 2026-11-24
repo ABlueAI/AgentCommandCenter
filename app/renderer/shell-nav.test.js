@@ -139,8 +139,8 @@ eq(N.rankCommands(cmds, '  BRAIN ').map((c) => c.label), ['Go to Brain'], 'case 
 process.stdout.write('\nthe one shortcut list and the Settings sections\n');
 assert(N.SHORTCUTS.some((s) => s.keys === 'Ctrl K'), 'Ctrl K is in the shortcut list');
 assert(N.SHORTCUTS.every((s) => s.keys && s.action && s.scope), 'every shortcut says its keys, what it does and where');
-eq(N.SETTINGS_SECTIONS.map((s) => s.id), ['layout', 'shortcuts', 'shark', 'quiet', 'repos', 'voice', 'keys'], 'the Settings page has the brief\'s sections');
-assert(N.SETTINGS_SECTIONS.filter((s) => !['layout', 'shortcuts'].includes(s.id)).every((s) => typeof s.pending === 'string' && s.pending.length > 10), 'every section without controls yet says what comes and when');
+eq(N.SETTINGS_SECTIONS.map((s) => s.id), ['layout', 'general', 'shortcuts', 'shark', 'quiet', 'repos', 'voice', 'keys'], 'the Settings page has the brief\'s sections');
+assert(N.SETTINGS_SECTIONS.filter((s) => !['layout', 'general', 'shortcuts'].includes(s.id)).every((s) => typeof s.pending === 'string' && s.pending.length > 10), 'every section without controls yet says what comes and when');
 
 process.stdout.write(`\nshell-nav: ${passed} passed, ${failed} failed\n`);
 if (failed) process.exit(1);
