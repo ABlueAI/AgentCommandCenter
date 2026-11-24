@@ -113,18 +113,19 @@
 
   /**
    * Push to talk (hold Ctrl Space). Pure state machine, so every edge is unit-tested.
-   * deps: { isRecording(), press() (clicks Dictate), notify(text, ms), now(), pendingMs }
+   * deps: { isRecording(), press() (clicks Dictate), notify(text, ms) }
    * The microphone opens only after the OS grants it, so a quick tap can come up before
    * isRecording() turns true. Then the stop is remembered and sent the moment recording starts
-   * (onSttStatus('recording')), never dropped. A remembered stop expires after pendingMs, so a
-   * refused start can't stop a later recording Blue starts with the mouse.
+   * (onSttStatus('recording')), never dropped, however long the permission prompt takes: an
+   * accepted start always settles as 'recording' or 'error' (stt.js start()). It never times
+   * out, because a timeout would leave the microphone recording after the keys were let go.
+   * A refused start (press() returns false) leaves nothing pending, and 'error' or 'idle' clears
+   * it, so neither can stop a later recording Blue starts with the mouse.
    */
   function createPushToTalk(deps) {
-    const now = typeof deps.now === 'function' ? deps.now : () => Date.now();
-    const pendingMs = deps.pendingMs > 0 ? deps.pendingMs : 15000;
     const notify = typeof deps.notify === 'function' ? deps.notify : () => {};
-    const st = { held: false, pendingAt: null, stopWhenStarted: false };
-    const pendingLive = () => st.pendingAt !== null && now() - st.pendingAt < pendingMs;
+    // starting: a start was sent and the microphone request hasn't settled yet.
+    const st = { held: false, starting: false, stopWhenStarted: false };
 
     function keydown(e) {
       if (!isPushToTalkChord(e)) return false;
@@ -132,14 +133,14 @@
       st.held = true;
       if (deps.isRecording()) return true;          // already recording (started with the mouse)
       st.stopWhenStarted = false;
-      if (deps.press() !== false) st.pendingAt = now();
+      if (deps.press() !== false) st.starting = true;
       return true;
     }
     function release() {
       if (!st.held) return false;
       st.held = false;
-      if (deps.isRecording()) { st.pendingAt = null; st.stopWhenStarted = false; deps.press(); return true; }
-      if (pendingLive()) {
+      if (deps.isRecording()) { st.starting = false; st.stopWhenStarted = false; deps.press(); return true; }
+      if (st.starting) {
         st.stopWhenStarted = true;
         notify('You let go before the microphone opened. It stops as soon as it opens.', 6000);
       }
@@ -151,12 +152,12 @@
     }
     function onSttStatus(state) {
       if (state === 'recording') {
-        const stop = st.stopWhenStarted && pendingLive();
-        st.pendingAt = null;
+        const stop = st.stopWhenStarted && st.starting;
+        st.starting = false;
         st.stopWhenStarted = false;
         if (stop) deps.press();
       } else if (state === 'error' || state === 'idle') {
-        st.pendingAt = null;
+        st.starting = false;
         st.stopWhenStarted = false;
       }
     }

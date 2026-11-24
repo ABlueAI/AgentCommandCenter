@@ -60,14 +60,12 @@ process.stdout.write('\npush to talk: hold, release, and a release before the mi
 function ptt(opts) {
   const o = Object.assign({ recording: false, pressResult: true }, opts || {});
   const log = { presses: 0, notices: [] };
-  let t = 1000;
   const m = N.createPushToTalk({
     isRecording: () => o.recording,
     press: () => { log.presses += 1; return o.pressResult; },
     notify: (text) => log.notices.push(text),
-    now: () => t, pendingMs: 15000,
   });
-  return { m, o, log, tick: (ms) => { t += ms; } };
+  return { m, o, log };
 }
 const DOWN = { ctrlKey: true, code: 'Space', key: ' ' };
 const UP = { code: 'Space', key: ' ' };
@@ -89,17 +87,21 @@ const UP = { code: 'Space', key: ' ' };
   assert(log.presses === 2 && m.state().stopWhenStarted === false, 'the stop is sent as soon as recording starts');
 }
 {
-  const { m, o, log, tick } = ptt();
+  // A slow permission prompt: the stop is kept until the microphone request settles, with no
+  // timeout, so the microphone never keeps recording after the keys were let go.
+  const { m, o, log } = ptt();
   m.keydown(DOWN); m.keyup(UP);
-  tick(20000);
+  assert(m.state().starting === true && m.state().stopWhenStarted === true, 'released during a slow prompt: the stop waits');
   o.recording = true; m.onSttStatus('recording');
-  assert(log.presses === 1, 'a remembered stop older than 15 s is dropped (a later mouse start is not stopped)');
+  assert(log.presses === 2 && m.state().starting === false, 'and is sent when the microphone finally opens');
+  m.onSttStatus('recording');
+  assert(log.presses === 2, 'a later recording (a mouse start) is not stopped');
 }
 {
   const { m, log } = ptt();
   m.keydown(DOWN); m.keyup(UP);
   m.onSttStatus('error');
-  assert(m.state().stopWhenStarted === false && m.state().pendingAt === null, 'an error clears the pending start');
+  assert(m.state().stopWhenStarted === false && m.state().starting === false, 'an error clears the pending start');
   m.onSttStatus('recording');
   assert(log.presses === 1, 'and a later recording is not stopped');
 }
