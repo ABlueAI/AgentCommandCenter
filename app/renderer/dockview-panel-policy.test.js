@@ -92,7 +92,7 @@ process.stdout.write('\npanel descriptor: refusals\n');
 
   for (const title of [
     'D:\\Workspace\\agent-command-center',
-    '/home/levi/worktrees/secret',
+    '/home/sampleuser/worktrees/secret',
     'https://example.com/report',
     'file:///D:/x',
     '../../etc/passwd',

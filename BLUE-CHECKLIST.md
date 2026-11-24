@@ -1024,6 +1024,13 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   - *Done when:* you tell an agent the Reviewer answered from the thread (or what went wrong). It
     ticks this with the date. This is S15's "Done when".
 
+- [ ] **74. Issue #211 on your PC: run the app tests with page-reader installed.** About **5 minutes**
+  with dependencies already installed, at the next PC check after the draft fix is available.
+  - Check out the fix branch on a Windows PC where the page-reader agent is already installed.
+    From the `app` folder, run `npm test`.
+  - *Done when:* the page-reader test and the final suite, `renderer/admission-view.test.js`, both
+    pass and `npm test` exits successfully. Tell an agent the result so it can tick this with the date.
+
 - [ ] **44. S09 on your PC: Resume or Start fresh.** About **5 minutes**, after you merge the S09
   PR, #131 (and S08's step 39, which it builds on).
   - Pull `main` and restart Mako fully. Open a builder pane on a worktree and a bare `claude` pane,
