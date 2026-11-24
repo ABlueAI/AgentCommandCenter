@@ -25,9 +25,10 @@ const row = (id, title, status, extra = {}) =>
 const plan = (...rows) => `# Plan\n\n${HEAD}${rows.join('')}\nAfter the table.\n`;
 const URL = 'https://github.com/o/r/blob/main/docs/PLAN-1.1.md';
 
-// A fake repository: labels, milestones, issues (by number) and PRs. Records every write. Milestones
-// report open_issues and closed_issues counted from the fake's issues, as GitHub's do, plus `extra`
-// items (pull requests or other issues in the milestone that the issues listing doesn't return).
+// A fake repository: labels, milestones, issues and pull requests (by number) and PRs for getPr.
+// Records every write. Milestones report open_issues and closed_issues counted from the fake's issues
+// and pull requests, as GitHub's do, plus `extra` items: milestone items the listing misses (the
+// partial-listing guard refuses on them), or `counts` to set GitHub's numbers outright.
 // `listing` replaces what listIssues returns, to model a bad listing.
 function fakeRepo({ labels = [], milestones = [], issues = [], prs = {}, listing = null } = {}) {
   const state = { labels: labels.map((name) => ({ name })), milestones: [...milestones], issues: new Map(), writes: [] };
@@ -227,6 +228,7 @@ function fakeBoard(columns = COLUMNS) {
       ['some sync issues missing (one of three, as a dropped page would)', without(s02), 3],
       ['only the pull request missing (the listing still dropped a milestone item)', without(50), 3],
       ['none of the sync issues, the pull request still listed', without(...syncIssues.map((i) => i.number)), 1],
+      ['one sync issue missing and the pull request listed twice (a shifted page boundary)', () => [...without(s02)(), pr], 3],
     ]) {
       const { api, state } = repo(listing);
       const { board, placed, removed } = fakeBoard();
@@ -273,6 +275,22 @@ function fakeBoard(columns = COLUMNS) {
       eq(state.issues.get(60).title, 'A note from Blue', 'an issue outside the milestone is untouched');
     }
     {
+      // The bot's PR titled for a row that has no sync issue yet: a new issue is opened, the PR is left alone.
+      const pr4 = { number: 51, title: 'S04: the PR for S04', user: BOT, pull_request: true, milestone: 7, state: 'open', labels: [] };
+      const { api, state } = fakeRepo({ labels: LABELS.map((l) => l.name), milestones: [{ number: 7, title: MILESTONE }], issues: [...syncIssues, blues, pr4] });
+      const md4 = plan(row('S01', 'Guardrails', 'DONE (#44)'), row('S02', 'Plan', 'READY'), row('S03', 'Alerts', 'HOLD (Blue)'), row('S04', 'New', 'READY'));
+      await syncPlan({ markdown: md4, planUrl: URL, api });
+      eq(state.writes.filter((w) => w[0] === 'create').map((w) => w[2]), ['S04: New'], 'a bot PR titled for a new row does not stop its issue being opened');
+      eq(state.writes.filter((w) => w[1] === 51), [], 'and the PR gets no write');
+    }
+    {
+      // GitHub's open/closed split differs from the listing's (3 open, 1 closed) but the total matches:
+      // only the total is compared (see plan-sync.js), so the run goes ahead.
+      const { api, state } = repo(null, { counts: { open_issues: 4, closed_issues: 0 } });
+      await syncPlan({ markdown: md, planUrl: URL, api });
+      eq(state.writes, [], 'a listing whose total matches but whose open/closed split differs is not refused');
+    }
+    {
       // An issue outside the milestone missing from the listing misses no sync issue: not refused.
       const { api, state } = repo(without(60));
       await syncPlan({ markdown: md, planUrl: URL, api });
@@ -281,8 +299,10 @@ function fakeBoard(columns = COLUMNS) {
     {
       // More found than GitHub counts (an item added to the milestone while the run listed): no item is missed.
       const { api, state } = repo(null, { counts: { open_issues: 2, closed_issues: 1 } });
-      await syncPlan({ markdown: md, planUrl: URL, api });
+      const lines = [];
+      await syncPlan({ markdown: md, planUrl: URL, api, log: (l) => lines.push(l) });
       eq(state.writes, [], 'a listing that finds more milestone items than the count is not refused');
+      assert(lines.some((l) => /^the listing found 1 more items in milestone "1\.1 Month 1" than GitHub counts there/.test(l)), 'and the surplus is logged');
     }
   }
 

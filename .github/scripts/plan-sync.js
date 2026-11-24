@@ -27,7 +27,8 @@
 // GitHub's own count for it (issue #156; for example a dropped page). Limits: the count covers only
 // items in the milestone, so a sync issue someone took out of it by hand is not covered until a run
 // puts it back; an item taken out of the milestone while a run lists can refuse that run (re-run
-// it). If the milestone listing misses the milestone, both guards are skipped and the run tries to
+// it); a count GitHub keeps wrong blocks every run until it is right again (the error says what to
+// check; an agent never bypasses the guard). If the milestone listing misses the milestone, both guards are skipped and the run tries to
 // create a second "1.1 Month 1", which GitHub is expected to reject (not verified), after any missing
 // labels are created.
 //
@@ -183,7 +184,9 @@ async function syncPlan({ markdown, planUrl, api, board = null, log = () => {} }
     mine.set(m[1], issue);
   }
   const held = listedMilestone ? milestoneCount(listedMilestone) : 0;
-  const inMilestone = listedMilestone ? listed.filter((i) => i.milestone === listedMilestone.number).length : 0;
+  // Distinct numbers: a page boundary that shifts while the run lists can return one item twice,
+  // which must not cover for an item the same listing missed.
+  const inMilestone = listedMilestone ? new Set(listed.filter((i) => i.milestone === listedMilestone.number).map((i) => i.number)).size : 0;
   log(`listed ${listed.length} issues and pull requests, ${mine.size} of them sync issues; milestone "${MILESTONE}" `
     + `${listedMilestone ? `holds ${Number.isNaN(held) ? 'an unreadable number of' : held} issues and pull requests, of which the listing found ${inMilestone}` : 'not found'}`);
   // The guard (S33). On 2026-10-22 a run's listing came back without any of the existing sync issues,
@@ -201,13 +204,16 @@ async function syncPlan({ markdown, planUrl, api, board = null, log = () => {} }
   // count has missed some (a dropped page would), and any sync issue among them would be opened a
   // second time: refuse, and create nothing. Only the total is compared: on 2026-11-24 GitHub's
   // open/closed split for this milestone differed from the listing's by 2 while the totals matched.
-  // A listing that finds more (an item added to the milestone while the run listed) misses nothing.
+  // A listing that finds more is accepted (an item added to the milestone while the run listed does
+  // that), but it is logged: it can't prove that nothing else was missed in the same listing.
   if (listedMilestone && !(inMilestone >= held)) {
     throw new Error(`plan sync: refusing to create issues: milestone "${MILESTONE}" `
       + `${Number.isNaN(held) ? 'gave no readable issue count' : `holds ${held} issues and pull requests`}, but the listing found `
       + `${inMilestone} of them, so it may be partial and would open a second copy of any sync issue it missed. Re-run the `
-      + `workflow; if this persists, compare the milestone's page with Issues filtered by milestone:"${MILESTONE}".`);
+      + `workflow. If this persists, compare the milestone's page with Issues filtered by milestone:"${MILESTONE}" to find the `
+      + 'item the listing misses; if nothing is missing and the counts stay apart, tell Blue: never bypass this check.');
   }
+  if (listedMilestone && inMilestone > held) log(`the listing found ${inMilestone - held} more items in milestone "${MILESTONE}" than GitHub counts there (an item added while the run listed?); continuing`);
 
   const haveLabels = new Set((await api.listLabels()).map((l) => l.name));
   for (const label of LABELS) {
