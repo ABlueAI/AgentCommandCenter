@@ -146,7 +146,7 @@ section('M2 \u2014 fenced roles take no opening prompt; unfenced prompt behaviou
 
 section('REFUSAL REASONS ARE BOUNDED CONSTANTS');
 {
-  const secret = 'D:\\Users\\levij\\.ssh\\id_rsa';
+  const secret = 'D:\\Users\\sampleuser\\.ssh\\id_rsa';
   const r = go({ role: secret, cwd: secret, initialPrompt: secret });
   assert(r.ok === false, 'hostile payload refuses');
   assert(r.reason.indexOf(secret) === -1 && r.reason.indexOf('\\') === -1,
