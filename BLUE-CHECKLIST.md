@@ -40,7 +40,7 @@ On 2026-11-21 steps 27 and 50 left the top (your decision: the runner they check
 2. **Step 59**, re-link Codex reviews to `ABlueAgent` (about 5 minutes; your yes, 2026-11-16), and
    **step 65**, Dependabot alerts and security updates on (about 3 minutes; your words, 2026-11-18).
    **Step 63** on 2026-11-30: the Codex check-in, the first of the weekly checks. **Step 68**,
-   your verdict on PR #209's OSS record for S48 (about 15 minutes).
+   your verdict on PR #209's OSS record for S48, is done (2026-11-24); merge PR #209 to adopt it.
 3. **Step 54**, the H1 setup day (1.5 to 3 hours). H1 is the PC Mako is to run on unattended. It
    takes in the step 43 re-run and the step 25 tick, and S44 and S48 (the vault memory and its
    nightly tidy) wait on it; S48 no longer waits on the schedule (2026-11-18).
@@ -1030,6 +1030,15 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   - *Done when:* the page-reader test and the final suite, `renderer/admission-view.test.js`, both
     pass and `npm test` exits successfully. Tell an agent the result so it can tick this with the date.
 
+- [ ] **76. Issue #162 on your PC: the Page Reader refuses local addresses.** About **3 minutes**,
+  after you merge PR #250 (it adds the `ipaddr.js` package).
+  - Pull `main`, run `npm ci` in `app`, and restart Mako fully. Until `npm ci` has run, Mako starts
+    as usual and only the Page Reader refuses, with "run npm ci in the app folder, then restart Mako".
+  - **New Agent > 📄 Page**, enter `https://localhost/`, **Create & Launch**: it should refuse with
+    "The Page Reader reads public web pages only, never this PC or your local network." Then enter a
+    www.reddit.com thread URL: the page-reader pane should start as before.
+  - *Done when:* you tell an agent both results. It ticks this with the date.
+
 - [ ] **44. S09 on your PC: Resume or Start fresh.** About **5 minutes**, after you merge the S09
   PR, #131 (and S08's step 39, which it builds on).
   - Pull `main` and restart Mako fully. Open a builder pane on a worktree and a bare `claude` pane,
@@ -1175,7 +1184,11 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
 Step 68 comes from those decisions (docs/DECISIONS.md, 2026-11-21). Step numbers 66 and 67 belong to
 open PRs (#206 and #208).
 
-- [ ] **68. Your verdict on S48's OSS record (PR #209).** **About 15 minutes**, any time before S48
+- [x] **68. Your verdict on S48's OSS record (PR #209).** *Done 2026-11-24: you answered in Mako
+  main's chat, "sounds correct, go with that", accepting PROTOTYPE for an isolated Open Second Brain
+  subset and PATTERN-MINE for ai-memory and GBrain. Checked from your answer as relayed word for word
+  by the Mako main session that heard it to the cloud session that recorded it in PR #209 (Claude
+  can't see that chat itself). Next: merge PR #209 to adopt it.* **About 15 minutes**, any time before S48
   starts. S48 (the vault memory) takes PR #209's open-source record, `docs/decisions/OSS-memory.md`,
   as its OSS record once you give your verdict (your decision, 2026-11-21). Read the record and give
   your verdict (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD FRESH) in your own words to any agent.
@@ -1195,6 +1208,20 @@ Step 72 comes from PR #227 (docs/DECISIONS.md, 2026-11-23). Step numbers 69 to 7
   `NOT READY: no Codex pass`.
   - *Done when:* your answer is in docs/DECISIONS.md, and an agent has checked on GitHub that one
     of those PRs has Codex's pass (or that your answer says otherwise) and ticks this with the date.
+
+## From S58 (fenced web-reading agents)
+
+Step 75 comes from PR #245. Step numbers 73 and 74 belong to open PRs (#230 and #231).
+
+- [ ] **75. Re-deploy the fence hook after PR #245 merges.** **About 3 minutes**, the next time you
+  open Mako after merging PR #245. The PR changes the fence hook, and Mako refuses to launch the
+  fenced roles (Web Scout, Source Scout, Operator and Page panes) until the deployed copy matches the new one.
+  - Pull `main`, run `scripts/sync-roles.ps1`, and restart Mako fully.
+  - **New Agent > 🌐 Web Scout**, **Create & Launch**. The pane should start (before the sync, Mako
+    refuses to start it). Then ask it
+    to read `C:\Windows\win.ini`: it should show "Blocked by Mako path fence" and not the file.
+  - *Done when:* a Web Scout pane launches after the sync, and you tell any agent "step 75 done"; it ticks
+    this with the date.
 
 ## Every day, once the runner is on
 
