@@ -20,8 +20,9 @@
 //      tool, PowerShell's own syntax: `&` and `.` calls, backtick line continuations, script
 //      blocks, `$(...)` groups, here-strings, `$x = ...` assignments, Invoke-Expression,
 //      Start-Process and `cmd /c`; an array of quoted strings is a value, not a command, only where
-//      it is plainly printed: alone as a top-level statement, or as the one argument of Write-Output,
-//      Write-Host or echo, as in `Write-Output @('gh', 'pr', 'merge')`; see splitPowerShell), for
+//      it is plainly printed (alone as a top-level statement, or as the one argument of Write-Output,
+//      Write-Host or echo, as in `Write-Output @('gh', 'pr', 'merge')`), in a script that does
+//      nothing but print; see splitPowerShell and findGuardedCommand), for
 //        login-dependent commands (blocked only under ABlueAI): `gh pr create` (and its alias
 //          `gh pr new`), `gh pr ready` and `git push`;
 //        review and merge commands (blocked under any login, without asking gh who you are):
@@ -496,7 +497,7 @@ function psParenEndInner(s, open, ctx) {
 // or the end of the script (no pipe, `&` or redirect), and either alone (`'gh', 'pr', 'merge'`) or the
 // whole content of a group that is the one argument of Write-Output, Write-Host, echo or write
 // (`Write-Output @('gh', 'pr', 'merge')`). Statements in strings and here-strings are never
-// `outputOnly`.
+// `outputOnly`. findGuardedCommand skips them only in a script that does nothing but print.
 function splitPowerShell(input, depth = 0, ctx = { unbalanced: false }) {
   const commands = [];
   if (typeof input !== 'string') return commands;
@@ -631,8 +632,6 @@ function splitPowerShell(input, depth = 0, ctx = { unbalanced: false }) {
     }
     if (c === '{') braces++;
     else if (c === '}') braces--;
-    // PowerShell 7 continues a pipeline on the next line when that line starts with `|`.
-    if ((c === '\n' || c === '\r') && PS_NEXT_LINE_PIPE.test(s.slice(i + 1))) { endCommand('|'); continue; }
     if (PS_SEPARATORS.has(c)) { endCommand(c); continue; }
     if (c === ' ' || c === '\t') {
       if (word === '--%') { // stop-parsing token: the rest of the line goes to the program as is
@@ -653,8 +652,6 @@ function splitPowerShell(input, depth = 0, ctx = { unbalanced: false }) {
   return commands;
 }
 
-// The next line continues the statement with a pipe (or `&`), after blank lines and comments.
-const PS_NEXT_LINE_PIPE = /^(?:\s|#[^\n]*|<#[^]*?#>)*[|&]/;
 // The commands that only print their argument (Write-Output and its aliases, Write-Host).
 const PS_PRINT = new Set(['write-output', 'write', 'echo', 'write-host']);
 
@@ -883,7 +880,7 @@ function rawScan(command) {
   return pickHit(rawScanAll(command));
 }
 
-// A second check on top of the allowlist in splitPowerShell: a script that could redefine what
+// A second check on top of the allowlist in splitPowerShell and findGuardedCommand: a script that could redefine what
 // Write-Output or echo does (aliases, functions, default parameter values) or run text it builds
 // (the call or dot-source operator on a variable or expression, Invoke-Expression, Start-Process,
 // Invoke-Command, jobs, script blocks, `-join`) never has an array value skipped. Matched anywhere in
@@ -899,10 +896,17 @@ function findGuardedCommand(command, depth = 0, mode = 'bash') {
   const hits = [];
   const split = mode === 'ps' ? splitPowerShell : splitCommands;
   // A printed PowerShell array value (`Write-Output @('gh', 'pr', 'merge')`; splitPowerShell) is not
-  // a command, unless the script could redefine the printing or run built text (PS_INDIRECT).
-  const skipValues = mode === 'ps' && depth === 0 && !PS_INDIRECT.test(command.replace(/`/g, ''));
-  for (const words of split(command, depth, ctx)) {
-    if (skipValues && words.outputOnly === true) continue;
+  // a command, but only in a script that does nothing except print: every statement in it, nested ones
+  // included, is such a value or a Write-Output, Write-Host, echo or write command, and its text has
+  // no `$`, `{`, `}` or `=` anywhere (no variable, script block, assignment or line-continued
+  // assignment that could keep the value and hand it to something else). PS_INDIRECT is a second check
+  // on top. Any other script has every array value classified as a command (fails closed).
+  const commands = split(command, depth, ctx);
+  const onlyPrints = mode === 'ps' && depth === 0 && !/[${}=]/.test(command)
+    && !PS_INDIRECT.test(command.replace(/`/g, ''))
+    && commands.every((w) => w.outputOnly === true || PS_PRINT.has(String(w[0]).toLowerCase()));
+  for (const words of commands) {
+    if (onlyPrints && words.outputOnly === true) continue;
     const hit = classifySimpleCommand(words, depth, mode);
     if (hit) hits.push(hit);
   }
