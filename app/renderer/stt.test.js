@@ -72,6 +72,9 @@ assert(readyFired, 'cc-stt-ready fires once the module has loaded');
 assert(typeof window.ccSTT === 'object' && window.ccSTT !== null,
   'window.ccSTT is assigned (the original bug left this permanently undefined)');
 assert(typeof window.ccSTT.toggle === 'function', 'ccSTT.toggle is exposed');
+assert(typeof window.ccSTT.transcribeVideoPcm === 'function', 'the Video Scout PCM entry point is exposed');
+const invalidAudio = await window.ccSTT.transcribeVideoPcm(new Uint8Array(1), () => {});
+assert(invalidAudio.ok === false, 'the Video Scout PCM entry point refuses a partial sample before model load');
 assert(typeof window.ccSTT.isRecording === 'function' && window.ccSTT.isRecording() === false,
   'ccSTT.isRecording is exposed and starts false');
 assert(typeof window.ccSTT.isBusy === 'function' && window.ccSTT.isBusy() === false,

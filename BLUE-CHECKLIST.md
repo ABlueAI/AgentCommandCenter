@@ -1175,6 +1175,23 @@ open PRs (#206 and #208).
   - *Done when:* your verdict is in the record, word for word, and the agent ticks this with the
     date.
 
+## Video Scout (S54)
+
+- [ ] **73. Run one real video through Video Scout with Claude Code (PR #230).** About **5 minutes**
+  with Whisper cached. On first use, allow extra time for the 1.1–1.6 GB Whisper model download.
+  After installing the S54 build, fully restart Mako.
+  - In PowerShell, check that `claude auth status` shows your Claude.ai subscription and that
+    `yt-dlp --version`, `ffmpeg -version` and `ffprobe -version` work. Check that Usage credits
+    are off in Claude's usage settings (see step 26). Use the Claude subscription sign-in and leave
+    API keys out of the run.
+  - In Mako, open **Agents → + New → Video**, choose **Claude Code (subscription)**, and paste one real
+    public YouTube or Vimeo clip, ideally 15–30 seconds, with an identifiable visual change and spoken
+    narration. Click **Create & Launch** and wait for the report in the Video Scout pane.
+  - *Done when:* the pane returns a report with a timecoded visual observation and a concrete
+    detail from the narration. Tell an agent whether both matched the clip and how long the run
+    took so it can tick the step with the date and result. Keep the transcript and account details
+    out of GitHub.
+
 ## Every day, once the runner is on
 
 Once S04 is applied (step 27), the runner works all day and you do one sitting in the evening:

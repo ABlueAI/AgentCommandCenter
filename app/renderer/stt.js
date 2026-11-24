@@ -45,6 +45,7 @@ let asr = null;         // resolved pipeline (only ever set from a RESOLVED boot
 let loading = null;     // in-flight load promise
 let activeDevice = '';  // backend that actually initialized ('' until proven)
 let recording = false;
+let videoBusy = false;
 let busy = false;       // transcribing
 let statusCb = null;
 let resultCb = null;
@@ -56,20 +57,20 @@ let chunks = [];
 function setStatus(state, detail) { if (statusCb) try { statusCb({ state, detail }); } catch {} }
 
 // --- model load (lazy; webgpu -> wasm via the tested bootstrap contract) --------
-async function ensureModel() {
+async function ensureModel(reportStatus = setStatus) {
   if (asr) return asr;
   if (loading) return loading;
   loading = (async () => {
-    setStatus('loading', `first use downloads the speech model (WebGPU ${WHISPER_DOWNLOADS.webgpu}; WASM ${WHISPER_DOWNLOADS.wasm})…`);
+    reportStatus('loading', `first use downloads the speech model (WebGPU ${WHISPER_DOWNLOADS.webgpu}; WASM ${WHISPER_DOWNLOADS.wasm})…`);
     // createWhisperLoader: webgpu-then-wasm with a VISIBLE fallback status, throttled
     // download progress on both attempts, falsy-result-is-failure, and a combined
     // both-backends error. activeDevice is set only after a pipeline actually resolves.
     const model = await loadWhisper({
-      onStatus: setStatus,
+      onStatus: reportStatus,
       onSelected: (device) => { activeDevice = device; },
     });
     asr = model;
-    setStatus('loading', `model ready — Whisper large-v3-turbo · ${activeDevice}/${describeWhisperDtype(activeDevice)}`);
+    reportStatus('loading', `model ready — Whisper large-v3-turbo · ${activeDevice}/${describeWhisperDtype(activeDevice)}`);
     return asr;
   })();
   try { return await loading; } finally { loading = null; }
@@ -95,10 +96,20 @@ async function toPcm16k(blob) {
 // --- record / transcribe ------------------------------------------------------
 async function start() {
   if (recording || busy) return;
+  if (videoBusy) {
+    setStatus('error', 'Whisper is transcribing a Video Scout clip. Try again when it finishes.');
+    return;
+  }
   try {
     stream = await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
   } catch (e) {
     setStatus('error', 'microphone unavailable: ' + (e && e.message));
+    return;
+  }
+  if (videoBusy) {
+    stream.getTracks().forEach((track) => track.stop());
+    stream = null;
+    setStatus('error', 'Whisper is transcribing a Video Scout clip. Try again when it finishes.');
     return;
   }
   chunks = [];
@@ -153,7 +164,32 @@ async function toggle() {
   return start();
 }
 
+// Video Scout supplies PCM decoded by FFmpeg. It shares the same downloaded Whisper
+// model as Dictate, without opening the microphone or posting to its locked target pane.
+async function transcribeVideoPcm(bytes, onProgress) {
+  if (videoBusy || recording || busy) return { ok: false, error: 'busy' };
+  if (!(bytes instanceof Uint8Array) || bytes.length === 0 || bytes.length % 2 !== 0) {
+    return { ok: false, error: 'failed' };
+  }
+  videoBusy = true;
+  try {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const pcm = new Float32Array(bytes.length / 2);
+    for (let i = 0; i < pcm.length; i++) pcm[i] = view.getInt16(i * 2, true) / 32768;
+    const model = await ensureModel((_state, detail) => onProgress(detail));
+    onProgress(`Whisper large-v3-turbo · ${activeDevice}/${describeWhisperDtype(activeDevice)}`);
+    const options = getWhisperTranscriptionOptions();
+    delete options.language; // The source video can be in a different language.
+    const output = await model(pcm, options);
+    if (typeof output?.text !== 'string') return { ok: false, error: 'failed' };
+    return { ok: true, text: output.text.trim() };
+  } finally {
+    videoBusy = false;
+  }
+}
+
 window.ccSTT = {
+  transcribeVideoPcm,
   toggle,
   isRecording: () => recording,
   isBusy: () => busy,

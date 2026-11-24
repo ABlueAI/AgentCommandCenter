@@ -89,7 +89,7 @@ const ROLES = {
   'web-scout':      { label: 'Web Scout',       glyph: '🌐', cli: 'claude', readOnly: false, needsWorktree: false, newAgent: true },
   'source-scout':   { label: 'Source Scout',    glyph: '🔍', cli: 'claude', readOnly: false, needsWorktree: false, newAgent: true },
   operator:         { label: 'Operator',        glyph: '📣', cli: 'claude', readOnly: false, needsWorktree: false, newAgent: true },
-  // Video-scout runs on Gemini (the only model that watches video), launched via the videoScout
+  // Gemini uses the videoScout
   // path, not claude --agent. Input is a URL, not a task name.
   'video-scout':    { label: 'Video Scout',     glyph: '🎥', cli: 'gemini', readOnly: false, needsWorktree: false, newAgent: true, video: true },
   // S15: reads one web page in Playwright's own browser and writes report.md in a fenced folder.
@@ -462,7 +462,7 @@ function openInAppTerminal(opts = {}) {
       .catch(() => appendLog('[authority] could not open claude.ai/code: open-failed\n'));
     return;
   }
-  const { worktree, title } = opts;
+  const { worktree, title, claudeVideoScout } = opts;
   const cli = opts.cli || opts.agent || null;
   const role = (opts.role && ROLES[opts.role]) ? opts.role : null;
   switchTab('terminals');
@@ -476,7 +476,7 @@ function openInAppTerminal(opts = {}) {
     : { kind: 'cli', cli: cli || 'codex' };
   // Build the pane with safe DOM APIs (agent-dom.js): `label` and `worktree` derive from git
   // worktree metadata and must never be interpolated into innerHTML (AUDIT-REPORT.md finding #1).
-  const pane = agentDom.buildTermPane(document, { badge, label, worktreeTitle: worktree || '', openReport: role === 'video-scout' });
+  const pane = agentDom.buildTermPane(document, { badge, label, worktreeTitle: worktree || '', openReport: role === 'video-scout' && !claudeVideoScout });
   $('#terminalGrid').appendChild(pane);
   const term = new Terminal({ theme: xtermTheme(), fontFamily: "'Cascadia Code','Consolas',monospace", fontSize: 13, cursorBlink: true, allowProposedApi: true, scrollback: 5000 });
   const fit = new FitAddon.FitAddon();
@@ -495,7 +495,8 @@ function openInAppTerminal(opts = {}) {
     term.loadAddon(webgl);
   } catch { /* no WebGL here — xterm keeps its DOM renderer */ }
   fit.fit();
-  term.onData((d) => cc.ptyWrite(id, d));
+  if (!claudeVideoScout) term.onData((d) => cc.ptyWrite(id, d));
+  else term.options.disableStdin = true;
   term.onResize(({ cols, rows }) => cc.ptyResize(id, cols, rows));
   // Clipboard, mirroring Windows Terminal / VS Code (not the purist xterm convention):
   //   Ctrl+V (or Ctrl+Shift+V)  -> paste
@@ -721,7 +722,7 @@ function openInAppTerminal(opts = {}) {
     // Video-scout SDK runs print one machine-readable token-usage line; surface it in the Logs
     // tab so every run's real cost is recorded outside the (closable) pane. The parser is already
     // line-buffered and ANSI-stripped, so chunk boundaries can't split the marker.
-    if (role === 'video-scout' && !ev.partial && ev.text && ev.text.includes('[video-scout usage]')) {
+    if (role === 'video-scout' && !claudeVideoScout && !ev.partial && ev.text && ev.text.includes('[video-scout usage]')) {
       appendLog(ev.text.trim() + '\n');
     }
     paneData.pendingEvents.push(ev);
@@ -754,7 +755,9 @@ function openInAppTerminal(opts = {}) {
     try { mouseSelectionFallback.dispose(); } catch {}
     if (copyFlashTimer) { clearTimeout(copyFlashTimer); copyFlashTimer = null; }
     if (paneData.rafId !== null) { cancelAnimationFrame(paneData.rafId); paneData.rafId = null; }
-    cc.ptyKill(id); term.dispose(); pane.remove(); terms.delete(id);
+    if (claudeVideoScout) cc.claudeVideoScoutCancel(id);
+    else cc.ptyKill(id);
+    term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
   };
   // ---- LOCAL ROLLBACK (pre-PTY only) ----------------------------------------------------------
@@ -808,7 +811,12 @@ function openInAppTerminal(opts = {}) {
     }
   }
 
-  // EXACTLY ONE ptyStart, on every path, and only after the pane is visible and owned.
+  if (claudeVideoScout) {
+    runClaudeVideoInPane(id, opts.videoUrl, opts.analysisFocus);
+    return;
+  }
+
+  // Exactly one ptyStart for shell or agent launches, after the pane is visible and owned.
   // S09: `resumeSessionId` comes only from main's own offer (offerResume, above boot); main checks it again.
   const startResult = cc.ptyStart({ id, cwd: worktree, cli, role, authority: state.authority, resumeSessionId: opts.resumeSessionId, model: opts.model, effort: opts.effort, initialPrompt: opts.initialPrompt, videoScout: opts.videoScout, videoUrl: opts.videoUrl, videoModel: opts.videoModel, mediaResolution: opts.mediaResolution, analysisMode: opts.analysisMode, startOffset: opts.startOffset, endOffset: opts.endOffset, sliceRanges: opts.sliceRanges, analysisFocus: opts.analysisFocus, cols: term.cols, rows: term.rows });
   // A refused or rejected start must not leave a Dockview panel behind: the panel would be a ghost
@@ -1410,6 +1418,7 @@ async function boot() {
     const t = terms.get(id);
     if (t) { t.parser.flush(); t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n'); }
   });
+  cc.onClaudeVideoScoutEvent(handleClaudeVideoEvent);
   cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));
   cc.onMainInfo((m) => appendLog('\n[main] ' + m + '\n'));
   // S09: after the main-error listener, so a session-memory refusal or a refused Resume is shown.
@@ -1882,6 +1891,7 @@ function wireUi() {
     };
   });
   $('#hardTask').onchange = (e) => { state.hardTask = e.target.checked; };
+  $('#videoProviderSelect').onchange = syncVideoProvider;
   // Video-scout's Gemini options (model / media-resolution). Server-side allowlists in main.js
   // (VALID_VIDEO_MODELS / VALID_MEDIA_RESOLUTIONS) are the actual enforcement — these dropdowns
   // only offer known-good values, they are not the security boundary.
@@ -2082,6 +2092,13 @@ function isYouTubeUrl(url) {
   } catch { return false; }
 }
 
+function syncVideoProvider() {
+  const claude = $('#videoProviderSelect').value === 'claude';
+  $('#geminiVideoOptions').classList.toggle('hidden', claude);
+  $('#claudeVideoOptions').classList.toggle('hidden', !claude);
+  updateModalHint();
+}
+
 // Reflect what the modal will actually launch.
 function updateModalHint() {
   const hint = $('#modalHint');
@@ -2089,6 +2106,8 @@ function updateModalHint() {
   const role = state.chosenRole;
   if (role === 'plain') {
     hint.innerHTML = `Creates a git worktree on <code>agent/&lt;task&gt;</code> and launches <code>${state.chosenCli}</code>.`;
+  } else if (ROLES[role].video && $('#videoProviderSelect').value === 'claude') {
+    hint.textContent = 'Uses your Claude Code subscription. The report appears in this Video Scout pane.';
   } else if (ROLES[role].video) {
     hint.innerHTML = `Downloads the video (yt-dlp) and analyzes it with <code>Gemini</code> — visual + spoken. Needs <code>GEMINI_API_KEY</code>.`;
   } else if (ROLES[role].page) {
@@ -2132,6 +2151,8 @@ function openModal() {
   // the only reset path, so a manual model choice can never survive a close/reopen: the new session
   // starts unpinned, in transcript mode, on the economy model.
   modelPolicy = videoModelPolicy.resetPolicyState();
+  $('#videoProviderSelect').value = 'gemini';
+  syncVideoProvider();
   state.mediaResolution = 'MEDIUM';
   $('#mediaResolutionSelect').value = state.mediaResolution;
   syncVideoModelControls();
@@ -2172,16 +2193,90 @@ function worktreeOk(res, task) {
   return false;
 }
 
+function readVideoAnalysisFocus() {
+  const focusEl = $('#analysisFocusInput');
+  const focusErrEl = $('#analysisFocusError');
+  if (focusErrEl) { focusErrEl.classList.add('hidden'); focusErrEl.textContent = ''; }
+  if (focusEl) focusEl.classList.remove('invalid');
+  const focusRes = analysisFocus.normalizeAnalysisFocus(focusEl ? focusEl.value : undefined);
+  if (!focusRes.ok) {
+    const message = analysisFocus.analysisFocusRejectionMessage(focusRes.reason);
+    if (focusErrEl) { focusErrEl.textContent = message; focusErrEl.classList.remove('hidden'); }
+    if (focusEl) focusEl.classList.add('invalid');
+    appendLog(`[video-scout] launch blocked: analysis focus ${focusRes.reason}\n`);
+    return null;
+  }
+  return focusRes.provided ? { analysisFocus: focusRes.value } : {};
+}
+
+function writeClaudeVideoPane(id, text) {
+  const pane = terms.get(id);
+  if (!pane) return;
+  // The report may quote untrusted video or transcript text. Pass only printable
+  // characters, tabs, and newlines to xterm so the report can't emit controls.
+  const data = text.replace(/\r\n/g, '\n').replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '').replace(/\n/g, '\r\n');
+  pane.term.write(data + '\r\n');
+  pane.parser.feed(data + '\r\n');
+}
+
+async function runClaudeVideoInPane(id, url, focus) {
+  writeClaudeVideoPane(id, 'Starting Claude Video Scout…');
+  try {
+    const result = await cc.claudeVideoScoutRun({ id, url, focus });
+    writeClaudeVideoPane(id, result.ok ? '\n' + result.report : `Claude Video Scout refused: ${result.error}`);
+  } catch {
+    writeClaudeVideoPane(id, 'Claude Video Scout could not communicate with Mako.');
+  }
+}
+
+async function handleClaudeVideoEvent({ id, token, status, pcm }) {
+  if (!terms.has(id)) return;
+  if (status) { writeClaudeVideoPane(id, status); return; }
+  let result;
+  try {
+    result = window.ccSTT
+      ? await window.ccSTT.transcribeVideoPcm(pcm, (detail) => writeClaudeVideoPane(id, detail))
+      : { ok: false, error: 'unavailable' };
+  } catch {
+    result = { ok: false, error: 'failed' };
+  }
+  if (!terms.has(id)) return;
+  try {
+    const submission = await cc.claudeVideoScoutTranscript({
+      id, token, ...(result.ok ? { text: result.text } : { error: result.error }),
+    });
+    if (!submission.ok) writeClaudeVideoPane(id, submission.error);
+  } catch {
+    writeClaudeVideoPane(id, 'Could not return the local transcription result to Mako.');
+    cc.claudeVideoScoutCancel(id);
+  }
+}
+
 async function createAgent() {
   await cc.tlogReset();
   appendLog('[TIMING] createAgent: START\n');
   const role = state.chosenRole;
   const meta = role !== 'plain' ? ROLES[role] : null;
 
-  // Video-scout: the input is a video URL, not a task. Download + analyze with Gemini.
+  // Video Scout uses the selected provider for this URL.
   if (meta && meta.video) {
     const url = $('#taskName').value.trim();
     if (!/^https?:\/\/\S+$/.test(url)) { alert('Enter a video URL (starting with http:// or https://).'); $('#taskName').focus(); return; }
+    const provider = $('#videoProviderSelect').value;
+    if (provider !== 'claude' && provider !== 'gemini') {
+      alert('Choose Gemini or Claude Code for Video Scout.');
+      return;
+    }
+    if (provider === 'claude') {
+      const focusOpt = readVideoAnalysisFocus();
+      if (!focusOpt) return;
+      closeModal();
+      openInAppTerminal({
+        role, claudeVideoScout: true, videoUrl: url, ...focusOpt,
+        title: `Video Scout · Claude · ${new URL(url).hostname}`,
+      });
+      return;
+    }
     const ks = await cc.getGeminiKeyStatus();
     if (!ks || !ks.hasKey) {
       closeModal();
@@ -2239,25 +2334,9 @@ async function createAgent() {
         rangeLogSuffix = `, slices: ${cls.ranges.length} (aggregate ${cls.aggregateSeconds}s)`;
       }
     }
-    // V3a pre-analysis focus: immediate-feedback validation (main.js + feed-gemini.ps1 re-validate
-    // independently — this block is UX only, never the security boundary). On any failure BLOCK the
-    // submission with a visible inline error and keep the modal open. A valid nonblank focus is passed
-    // as opts.analysisFocus; a blank one is omitted so the default brief is unchanged. We never log the
-    // focus text — only the bounded reason on failure, and a char count in the launch note below.
-    const focusEl = $('#analysisFocusInput');
-    const focusErrEl = $('#analysisFocusError');
-    if (focusErrEl) { focusErrEl.classList.add('hidden'); focusErrEl.textContent = ''; }
-    if (focusEl) focusEl.classList.remove('invalid');
-    const focusRes = analysisFocus.normalizeAnalysisFocus(focusEl ? focusEl.value : undefined);
-    if (!focusRes.ok) {
-      const fmsg = analysisFocus.analysisFocusRejectionMessage(focusRes.reason);
-      if (focusErrEl) { focusErrEl.textContent = fmsg; focusErrEl.classList.remove('hidden'); }
-      if (focusEl) focusEl.classList.add('invalid');
-      appendLog(`[video-scout] launch blocked: analysis focus ${focusRes.reason}\n`);
-      return; // modal stays open, error visible — do not launch, no pane, no provider request
-    }
-    const focusOpt = focusRes.provided ? { analysisFocus: focusRes.value } : {};
-    const focusLogSuffix = focusRes.provided ? `, focus: ${focusRes.chars} chars` : '';
+    const focusOpt = readVideoAnalysisFocus();
+    if (!focusOpt) return;
+    const focusLogSuffix = focusOpt.analysisFocus ? `, focus: ${focusOpt.analysisFocus.length} chars` : '';
     closeModal();
     appendLog(`\n[video-scout] downloading + analyzing ${url}… (mode: ${state.analysisMode}, model: ${state.videoModel}, media resolution: ${state.mediaResolution}${rangeLogSuffix}${focusLogSuffix})\n`);
     openInAppTerminal({

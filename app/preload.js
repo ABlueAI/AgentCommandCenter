@@ -47,6 +47,10 @@ contextBridge.exposeInMainWorld('cc', {
   // in-app terminals (node-pty)
   tlogReset: () => ipcRenderer.invoke('tlog-reset'),
   ptyStart: (o) => ipcRenderer.invoke('pty-start', o),
+  claudeVideoScoutRun: (req) => ipcRenderer.invoke('claude-video-scout-run', req),
+  claudeVideoScoutTranscript: (req) => ipcRenderer.invoke('claude-video-scout-transcript', req),
+  claudeVideoScoutCancel: (id) => ipcRenderer.send('claude-video-scout-cancel', id),
+  onClaudeVideoScoutEvent: (cb) => ipcRenderer.on('claude-video-scout-event', (_e, p) => cb(p)),
   // S09 Resume or Start fresh: what main offers to resume, and "don't offer this one again".
   sessionResumeOffer: () => ipcRenderer.invoke('session-resume-offer'),
   sessionResumeDismiss: (sessionId) => ipcRenderer.invoke('session-resume-dismiss', sessionId),
