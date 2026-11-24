@@ -841,8 +841,8 @@ function rawScan(command) {
 // ---------------------------------------------------------------------------------------------
 // The PowerShell word scan (Blue, 2026-11-24: "Yes, run 8 fail-closed")
 //
-// PowerShell can run a command from more places than a splitter can follow (after `return`, `throw`
-// or another keyword, from an array, a variable or a string handed to Invoke-Expression, past a line
+// PowerShell can run a command from more places than a splitter can follow (after a keyword other
+// than `return`, `throw` or `exit`, from an array, a variable or a string handed to Invoke-Expression, past a line
 // ending the splitter reads differently). So a PowerShell script that names a guarded command's words
 // anywhere, in any order and any case, gets the login check: quoted or not, in an array, a comment, a
 // here-string or a script block, across lines or behind backticks. The scan doesn't try to work out

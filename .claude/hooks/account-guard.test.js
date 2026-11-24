@@ -502,6 +502,7 @@ for (const [cmd, want] of GUARDED_PS) {
 // classified (review run 9: once, not by a second pass from a later word), so a review or merge there
 // is still blocked under every login. An array of strings is a command even when it is only printed
 // (Codex's review of 004b8cd; this over-blocks on purpose, failing closed).
+const runEightStart = GUARDED_PS.length; // the loop below checks every case pushed here (review run 9)
 GUARDED_PS.push(
   ['& { return git push origin HEAD }', 'git push'], // Codex's case on b047805
   ['return git push', 'git push'],
@@ -529,7 +530,10 @@ GUARDED_PS.push(
   ["Write-Host @('gh', 'pr', 'merge')", 'gh pr merge'],
   ["echo @('gh', 'pr', 'merge')", 'gh pr merge'],
 );
-for (const [cmd, want] of GUARDED_PS.slice(-22)) {
+const runEightCases = GUARDED_PS.slice(runEightStart);
+assert(runEightCases.length === 25 && runEightCases[0][0] === '& { return git push origin HEAD }',
+  `every review run 8 case is checked, Codex's b047805 case first (${runEightCases.length})`);
+for (const [cmd, want] of runEightCases) {
   assert(ps(cmd) === want, `PowerShell ${JSON.stringify(cmd)} -> ${want} (review run 8)`);
 }
 // The word scan: wherever the words of a guarded command appear in a PowerShell script, the login is

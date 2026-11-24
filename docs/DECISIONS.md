@@ -5,8 +5,8 @@ of editing an old one, and say which entry it replaces. Agents follow the newest
 
 ## 2026-11-23 to 2026-11-24: PR #218 (S37), review runs past the cap and the fail-closed word scan
 
-Blue gave these in the sessions that worked on PR #218. The quotes for the first four rows are as
-those sessions relayed them in PR #218's TLDR and review comments; the last is his words in the
+Blue gave these in the sessions that worked on PR #218. The quotes in the first three rows are as
+those sessions relayed them in PR #218's TLDR and review comments; the last row's is his words in the
 session that ran review run 9. Each run past 5 is a one-time exception to AGENTS.md "The review
 loop" ("At most 5 runs per PR") for PR #218 only; the rule itself is unchanged.
 
