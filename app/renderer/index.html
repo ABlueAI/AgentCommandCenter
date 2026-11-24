@@ -9,6 +9,9 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <!-- S66 shared navigation (shell-nav.js builds into these). Hidden in markup: if the shell fails to
+       start, the old layout below stays the whole app, unchanged. -->
+  <div id="makoShell" class="mk-shell" hidden></div>
   <!-- Top bar: brand + active repo selector + global refresh -->
   <header class="topbar">
     <div class="brand" role="img" aria-label="Mako">
@@ -21,6 +24,8 @@
       <button id="changeRoot" class="ghost" title="Change projects root folder">📁</button>
       <button id="refresh" class="ghost" title="Refresh">⟳</button>
     </div>
+    <!-- S66: the one Settings page (layout switch, shortcuts); Ctrl K opens the command palette. -->
+    <button id="makoSettingsTopbar" class="ghost tiny" type="button" title="Settings (layout, shortcuts). Ctrl K opens the command palette.">Settings</button>
     <div class="spacer"></div>
     <!-- S11 usage panel (usage-view.js): plan usage saved by Claude Code's status line. -->
     <div id="usagePanel" class="usage-panel" title="Claude plan usage, from Claude Code's status line (docs/USAGE-PANEL.md)">
@@ -67,7 +72,7 @@
     <span id="agentTokenStatus" class="agent-token-status" role="status" aria-live="polite"></span>
   </div>
 
-  <div class="layout">
+  <div class="layout" id="makoPanel-control">
     <!-- Sidebar: quick launchers + live agent list -->
     <aside class="sidebar">
       <div class="group">
@@ -260,6 +265,9 @@
     </main>
   </div>
 
+  <!-- S66: the brain and aquarium frames and the Settings page (built by shell-nav.js). -->
+  <div id="makoViews" class="mk-views"></div>
+
   <!-- New Agent modal -->
   <div id="modal" class="modal-backdrop hidden">
     <div class="modal">
@@ -379,6 +387,10 @@
        pane-status-prototype channel unless the gate env var is set, so with the gate off no badge
        is ever created and no listener ever fires. -->
   <script src="pane-status-badge.js"></script>
+  <!-- S66: the 1.1 colour tokens and the shared navigation shell. Inert until app.js's boot()
+       creates the shell with the stored settings. -->
+  <script src="ui-tokens.js"></script>
+  <script src="shell-nav.js"></script>
   <script src="app.js"></script>
   <script type="module" src="tts.js"></script>
   <script type="module" src="stt.js"></script>

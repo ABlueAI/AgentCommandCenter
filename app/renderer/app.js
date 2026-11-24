@@ -1375,9 +1375,71 @@ async function offerResume() {
   resumeView.render(offer.rows);
 }
 
+// ---- S66 shared navigation ------------------------------------------------------------------
+// The three-tab shell (shell-nav.js) wraps today's layout as the control room tab. If it can't
+// start, it says so in the Logs tab and the old layout stays the whole app (index.html keeps the
+// shell hidden in markup), never a blank window.
+let shell = null;
+function shellCommands() {
+  const cmds = [];
+  // Today's views inside the control room, through their own tab buttons (so the Library keeps its
+  // Dockview routing).
+  for (const [tab, label] of [['agents', 'Agents'], ['terminals', 'Terminals'], ['library', 'Library and Video Scout'], ['logs', 'Logs']]) {
+    cmds.push({ id: `view:${tab}`, label: `Open ${label}`, group: 'Control room', run: () => {
+      if (shell && shell.getState().layout === 'tabs') shell.setTab('control');
+      const btn = document.querySelector(`.tab[data-tab="${tab}"]`);
+      if (btn) btn.click(); else appendLog(`[shell] the ${label} view is missing\n`);
+    } });
+  }
+  cmds.push({ id: 'agent:new', label: 'New agent', group: 'Control room', run: () => {
+    if (shell && shell.getState().layout === 'tabs') shell.setTab('control');
+    $('#newAgent').click();
+  } });
+  // Repos, from the repo picker's own options (text only; the picker's change handler switches).
+  const sel = $('#repoSelect');
+  if (sel) {
+    for (const opt of Array.from(sel.options)) {
+      if (!opt.value) continue;
+      cmds.push({ id: `repo:${opt.value}`, label: `Repo: ${opt.textContent}`, group: 'Repos', run: () => {
+        if (shell && shell.getState().layout === 'tabs') shell.setTab('control');
+        sel.value = opt.value;
+        sel.dispatchEvent(new Event('change'));
+      } });
+    }
+  }
+  return cmds;
+}
+function startShell(settings) {
+  try {
+    shell = window.ccShellNav.createShell({
+      doc: document, win: window, tokens: window.ccUiTokens,
+      settings: settings || {},
+      saveSettings: (partial) => cc.saveSettings(partial),
+      log: (line) => appendLog(line),
+      controlPanel: $('#makoPanel-control'),
+      extraCommands: shellCommands,
+    });
+  } catch (e) {
+    shell = null;
+    appendLog(`[shell] REFUSED: the three-tab shell did not start (${window.ccShellNav ? window.ccShellNav.reasonOf(e) : 'shell-module-missing'}); the old layout stays\n`);
+    const btn = $('#makoSettingsTopbar');
+    if (btn) btn.onclick = () => { appendLog('[shell] Settings is unavailable: the shell did not start (see the line above)\n'); document.querySelector('.tab[data-tab="logs"]').click(); };
+    return;
+  }
+  const settingsBtn = $('#makoSettingsTopbar');
+  if (settingsBtn) settingsBtn.onclick = () => shell.openSettings();
+  // Coming back to the control room: its terminals were display:none, so refit the classic grid
+  // (docked panes refit through their own observers).
+  window.addEventListener('mako-shell-change', (e) => {
+    const d = e.detail || {};
+    if (d.view === 'tab' && (d.layout === 'old' || d.tab === 'control')) setTimeout(fitAllTerms, 0);
+  });
+}
+
 async function boot() {
   const s = await cc.getSettings();
   applyTheme((s && s.theme) || 'obsidian');
+  startShell(s);
   if (s && s.ttsVoice) state.ttsVoice = s.ttsVoice;
   if (s && s.ttsSpeed) state.ttsSpeed = s.ttsSpeed;
   {

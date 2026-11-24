@@ -380,6 +380,67 @@ input:focus { outline: none; border-color: var(--accent); }
    ordinary in-flow block inside the Terminals tab, so the toolbar above it — including the
    `.tts-controls` element, which no longer moves anywhere — is never covered. */
 
+/* ---- S66 shared navigation (shell-nav.js; tokens from ui-tokens.js, docs/DESIGN-BRIEF-1.1.md 3) ----
+   Components use only --mk-* tokens. The fallbacks after each token are today's theme variables, so
+   the Settings page and the palette still read correctly in the old layout, where no tab colour set
+   is applied. */
+#makoShell[hidden], .layout[hidden], .mk-panel[hidden], .mk-settings[hidden],
+.mk-palette-backdrop[hidden], .mk-palette-empty[hidden] { display: none !important; }
+:root[data-mako-layout="tabs"] body { background: var(--mk-surface); color: var(--mk-ink); }
+/* The old top bar belongs to the control room until S66's later steps move its pieces into the shell. */
+:root[data-mako-layout="tabs"]:not([data-mako-tab="control"]) .topbar,
+:root[data-mako-view="settings"] .topbar { display: none; }
+.mk-shell { flex: 0 0 auto; background: var(--mk-surface-sunken); border-bottom: 1px solid var(--mk-line); }
+.mk-stripe { height: 22px; display: flex; align-items: center; padding: 0 16px; background: var(--mk-accent); color: var(--mk-on-accent); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; }
+.mk-tabbar { height: 50px; display: flex; align-items: center; gap: 8px; padding: 0 16px; }
+.mk-tablist { display: flex; gap: 4px; }
+.mk-spacer { flex: 1; }
+.mk-tab {
+  font: 500 13.5px/20px var(--sans); color: var(--mk-ink-muted); background: transparent;
+  border: 1px solid transparent; border-radius: 7px; padding: 6px 12px; cursor: pointer;
+}
+.mk-tab:hover { background: var(--mk-surface-hover); color: var(--mk-ink); }
+.mk-tab[aria-selected="true"] { color: var(--mk-ink); background: var(--mk-surface-raised); border-color: var(--mk-line); box-shadow: inset 0 -2px 0 var(--mk-accent); }
+.mk-btn {
+  font: 500 13.5px/20px var(--sans); color: var(--mk-ink, var(--text)); background: var(--mk-surface-raised, var(--panel));
+  border: 1px solid var(--mk-line-strong, var(--border)); border-radius: 7px; padding: 5px 10px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.mk-btn:hover { background: var(--mk-surface-hover, var(--panel-2)); }
+.mk-btn:disabled { opacity: 0.5; cursor: default; }
+.mk-tab:focus-visible, .mk-btn:focus-visible, .mk-palette-input:focus-visible, .mk-check input:focus-visible,
+.mk-panel:focus-visible, .mk-title:focus-visible, #makoSettingsTopbar:focus-visible {
+  outline: 2px solid var(--mk-focus, var(--accent-2)); outline-offset: 2px;
+}
+.mk-kbd { font: 500 11px/14px var(--mono); padding: 1px 5px; border-radius: 4px; border: 1px solid var(--mk-line-strong, var(--border)); color: var(--mk-ink-muted, var(--muted)); }
+.mk-views { display: contents; }
+.mk-panel { flex: 1; min-height: 0; overflow: auto; padding: 32px; background: var(--mk-surface); color: var(--mk-ink); }
+.mk-overline { margin: 0 0 8px; font: 600 11px/14px var(--sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--mk-ink-faint, var(--muted)); }
+.mk-frame-note { max-width: 760px; font: 400 14.5px/23px var(--sans); color: var(--mk-ink-muted); }
+.mk-meta { font: 400 12.5px/18px var(--sans); color: var(--mk-ink-muted, var(--muted)); margin: 4px 0; }
+.mk-title { margin: 0; font: 600 22px/28px var(--sans); color: var(--mk-ink, var(--text)); }
+.mk-settings { flex: 1; min-height: 0; overflow: auto; padding: 24px 32px; background: var(--mk-surface, var(--bg)); color: var(--mk-ink, var(--text)); }
+.mk-settings-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; max-width: 760px; }
+.mk-settings-section { max-width: 760px; padding: 16px 0; border-top: 1px solid var(--mk-line, var(--border)); }
+.mk-check { display: inline-flex; align-items: center; gap: 8px; font: 500 13.5px/20px var(--sans); cursor: pointer; }
+.mk-shortcuts { border-collapse: collapse; font: 400 13.5px/20px var(--sans); }
+.mk-shortcuts th, .mk-shortcuts td { text-align: left; padding: 4px 16px 4px 0; border-bottom: 1px solid var(--mk-line, var(--border)); }
+.mk-shortcuts th { font: 600 11px/14px var(--sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--mk-ink-faint, var(--muted)); }
+.mk-palette-backdrop { position: fixed; inset: 0; z-index: 1000; display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; background: rgba(0,0,0,0.45); }
+.mk-palette {
+  width: min(560px, calc(100vw - 32px)); background: var(--mk-surface-raised, var(--panel)); color: var(--mk-ink, var(--text));
+  border: 1px solid var(--mk-line-strong, var(--border)); border-radius: 12px; box-shadow: var(--mk-shadow-float, 0 14px 36px rgba(0,0,0,0.5)); overflow: hidden;
+}
+.mk-palette-input {
+  width: 100%; padding: 12px 16px; border: 0; border-bottom: 1px solid var(--mk-line, var(--border)); background: transparent;
+  color: inherit; font: 400 14.5px/23px var(--sans);
+}
+.mk-palette-list { list-style: none; margin: 0; padding: 4px; max-height: 50vh; overflow: auto; }
+.mk-palette-option { display: flex; justify-content: space-between; gap: 12px; padding: 6px 12px; border-radius: 7px; cursor: pointer; font: 500 13.5px/20px var(--sans); }
+.mk-palette-option[aria-selected="true"] { background: var(--mk-surface-hover, var(--panel-2)); box-shadow: inset 2px 0 0 var(--mk-accent, var(--accent)); }
+.mk-palette-empty { padding: 8px 16px; }
+@media (prefers-reduced-motion: reduce) { .mk-tab, .mk-btn { transition: none; } }
+
 /* The embedded production surface: a sibling of `.term-grid` in the same tab, taking the same
    remaining space the grid would. Exactly one of the two is visible at a time.
    `[hidden]` needs an explicit rule because an author `display` value beats the UA stylesheet's
@@ -427,3 +488,4 @@ input:focus { outline: none; border-color: var(--accent); }
 .pane-status-badge.ps-failed    .pane-status-dot { background:#ef4444; }
 .pane-status-badge.ps-exited    .pane-status-dot { background:#4b5563; }
 .pane-status-badge.ps-unknown   .pane-status-dot { background:transparent; border:1px solid #6b7280; }
+
