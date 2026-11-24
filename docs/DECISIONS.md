@@ -22,8 +22,8 @@ that is the builder's, not Blue's.
 
 Blue decided these in his main chat on 2026-11-24, after the build stalled for about 5 hours that
 day (lanes stopped at a usage limit, and plan rows waited on his go). His words are quoted as the
-hand-off for PR #N relayed them. How AGENTS.md, `.github/pull_request_template.md`,
-docs/PLAN-1.1.md and BLUE-CHECKLIST.md word them is proposed, pending Blue (PR #N); merging
+hand-off for PR #282 relayed them. How AGENTS.md, `.github/pull_request_template.md`,
+docs/PLAN-1.1.md and BLUE-CHECKLIST.md word them is proposed, pending Blue (PR #282); merging
 approves it. D-084 to D-086 are the labels the hand-off gave them. "Builder's reading" marks a line
 that is the builder's, not Blue's; the two "Claude decided" rows are choices the builder made itself,
 for Blue to check.

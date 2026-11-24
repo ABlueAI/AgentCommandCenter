@@ -207,6 +207,14 @@ mostly low, findings. Every PR follows it, including the builder's own fixes.
   `.github/` gets 5. If high or medium findings are still open after the last run allowed (run 2 or
   run 5), the builder stops: no more fix rounds and no further run. It marks the PR "needs Blue" and asks Blue how to proceed, in the PR and in its session-end
   message, with its diagnosis and the solutions it sees, so the PR doesn't spiral.
+  - **One small last fix** (Claude's proposal of 2026-11-24, for Blue to check; docs/DECISIONS.md,
+    2026-11-24, D-084 to D-086): if, after the last run allowed, only one high or medium finding is
+    still open and its fix is small (a few lines, in files the PR already changes, needing no
+    decision from Blue), the builder may make that fix in one push and run one extra delta run on
+    it without asking Blue, instead of stopping. If that run shows no high or medium finding open,
+    the PR goes on to step 5; if it shows any, the builder stops as above. Once per PR. It never
+    applies to a CRITICAL finding and changes nothing about how one stops a PR. The TLDR marks the
+    extra run `🤖 Claude decided:`.
 - **Merging `main`** to resolve a conflict needs no new review unless the merge changed content
   beyond the conflict.
 - **No formatting-only commits** (rewraps, reflowed lines) after the first review.
@@ -302,7 +310,23 @@ so PRs #142 and #144 had to be re-opened as #146 and #147.
 
 ### The TLDR (top of every PR)
 
-Facts only, in this order: what and why · ready to merge or not · decisions Blue must make (with a
+Blue reads only the top block before he merges (Blue, 2026-11-24; docs/DECISIONS.md, D-086), so it
+must make him aware of everything that matters, briefly. Every PR's TLDR starts with it:
+
+1. **Summary:** one or two lines, what the PR does and why.
+2. **Most impactful changes:** bullets, the most important first.
+3. **Decisions made:** each decision in the PR, Blue's and the builder's. Each one the builder made
+   itself is marked `🤖 Claude decided:` (on a Codex PR, `🤖 Codex decided:`) with its reason in a
+   few words, so Blue checks it at once; "none" if there are none.
+4. **Before you merge:** the implications Blue should know (what changes for him, what it starts or
+   stops, anything hard to undo), or "nothing unusual".
+
+Each bullet starts with a colour marker: 🔴 must know or decide before merging, 🟡 worth a look,
+🟢 routine. A 🔴 item also appears in the "Ready to merge" or "Decisions Blue must make" line
+below. Keep the block to about 10 lines, in plain words.
+
+Below it, under the heading "Full TLDR (for the reviewers)", come the full lines, facts only, in
+this order: what and why · ready to merge or not · decisions Blue must make (with a
 recommendation) · uncertainty and how to check it in under 2 minutes · plan changes · sensitive areas
 touched · test results (CI, local, not covered) · review verdict and open findings · follow-ups
 (low and out-of-scope findings, see "The review loop"). Say "none" rather
@@ -316,14 +340,32 @@ verified** (and how to check it). Blue's own quoted words need no label.
 
 ## Deciding without asking
 
-Resolve routine questions yourself from the goal, this repo, the plan, the decisions log, tests and
-official docs, and record each assumption in the PR. Stop and ask Blue only for:
+**Default go** (Blue, 2026-11-24; docs/DECISIONS.md, D-085): "Nothing moves until go" was a
+pre-build rule and no longer applies. Resolve questions yourself from the goal, this repo, the
+plan, the decisions log, tests and official docs; build on the recommended default; and write each
+open question and assumption in the PR, with the default you took. Blue's merge approves them. A
+plan row needs no separate go from Blue: a row whose only blocker is his go is `READY`
+(docs/PLAN-1.1.md "Status values").
 
-- a material change to scope, the plan, or the goal;
+Only these stop for Blue:
+
 - new spending, a new paid service, or a new account;
-- anything sensitive (below) that the task did not already authorize;
-- a genuine personal preference (look and feel, naming, business choices);
-- a blocker you cannot resolve after 3 attempts.
+- credentials: creating, changing, revoking or handing over a key, token or login;
+- deleting something outside the PR's own diff, or that git can't bring back (branches others use,
+  issues, releases, data, files on Blue's PCs, accounts); a file the PR removes is approved by the
+  merge like any other change;
+- a real taste call: look and feel, naming.
+
+They stop only the item in question, never the session: put the question and your recommended
+default in the PR (a comment starting `@ABlueAI needs Blue:`, and the `needs-blue` label), and go
+on with other work. Work as a whole pauses only when Blue tells the commander to stop ("Who does
+what") or pauses the routines (the runner and the PR sweeper, on the claude.ai routines page).
+
+Default go loosens nothing else in this file: the hard rules (with their stop-and-ask when one
+seems to conflict with a task), the review loop's stops, the stop after 3 failed fix rounds ("How
+work flows" step 4), the scope freeze, the plan-change rule below (a material change to scope, the
+plan or the goal is a `plan-change` PR, which Blue's merge approves) and the sensitive-area flags
+all still apply.
 
 **Scope freeze** (Blue, 2026-11-16; "frozen by 12/1", 2026-11-21). Mako 1.1's scope is what
 `docs/PLAN-1.1.md` "Mako 1.1 scope" lists. Until 2026-12-01, a new idea joins 1.1 only if it passes
@@ -433,6 +475,16 @@ account stays clear of GitHub's abuse detection.
   He merges in one sitting each evening, about 10 minutes, after the 8:03 PM digest, and does PC
   checks on Tuesday and Friday evenings until H1 automates them (Blue, 2026-11-16), so anything an
   agent needs him to check on a PC goes in BLUE-CHECKLIST.md for the next of those evenings.
+- **The commander and the watcher** (Blue, 2026-11-24; docs/DECISIONS.md, D-084): "Mako command",
+  a local Claude chat on Blue's always-on H1 PC (plan row S67, which Blue sets up there,
+  BLUE-CHECKLIST.md step 80), runs the build. On a 30-minute heartbeat it starts and resumes cloud
+  work sessions on `READY` work, paces usage to about 95% of each 5-hour window, and stops only
+  when Blue tells it to or pauses the routines. Each evening it sends Blue one colour-coded merge
+  list, every PR with its `READY TO MERGE` or `NOT READY` line, in the order "Merge order" computes,
+  so the commander is who gives Blue the merge order. Mako main, Blue's laptop chat, is the
+  watcher: it plans, answers Blue and watches, and doesn't run the daily build sessions. Until S67
+  is set up, every message that lists more than one PR still ends with the merge-order line ("How
+  work flows" step 5).
 - **Claude Code**: primary builder, and the builder of the UI sessions (S66 and S18 to S20; Blue,
   2026-11-16 and 2026-11-21). Model rule (Blue, 2026-11-16): Opus 5.5 for building and planning,
   and for the reviewer subagents; Sonnet 5.5 for triage, chores and summaries; never Haiku unless
