@@ -10,6 +10,37 @@ its own git worktree, with voice, Video Scout research and Quick Links in one ap
 Blue already owns (Claude Code, Codex, GitHub) instead of a paid agent platform, so model use stays
 on Blue's own plans and nothing third-party needs broad access to his repos or keys.
 
+## Hard rules (never broken)
+
+Adopted 2026-11-23 (docs/DECISIONS.md). These have no exceptions beyond the ones written in their
+full rule, and leave no room for judgment. If one seems to conflict with a task, or its meaning is
+unclear, stop and ask Blue (a PR comment starting `@ABlueAI needs Blue:`, or the session-end
+message); never assume. Every other rule in this file is a default: agents follow it as written, use
+judgment only where it leaves room, and record each such assumption in the PR.
+
+1. Never merge a PR or enable auto-merge; Blue alone merges ("Never"; guards: `.claude/settings.json`
+   deny, branch protection, `.claude/hooks/account-guard.js`).
+2. Never push to `main`, force-push a shared branch, or change repository settings, rulesets or
+   branch protection ("Never"; guards: `.claude/settings.json` deny, branch protection).
+3. No PR work under `ABlueAI`'s login ("No PR work under ABlueAI's login"; guard: the account-guard
+   hook).
+4. Agent-account pacing: at most 24 pushes and 120 GitHub writes an hour per agent account, across
+   all sessions; stop at the first rate-limit or abuse-detection signal and tell Blue; never retry
+   in a loop ("Agent-account pacing" under "Security rules"; no technical guard).
+5. No secrets, client data or private business material in this public repo ("Security rules").
+6. Security findings stay private: public text gives a finding's title and severity only
+   (docs/DECISIONS.md 2026-11-21, item 7; for review reports, "How work flows" step 3).
+7. Never write Codex's GitHub handle in GitHub text, except the exceptions listed in "Security
+   rules" (no technical guard).
+8. Agents never drive the Mako Firefox profile; agents that browse use their own browser
+   (docs/DECISIONS.md 2026-11-21, item 20).
+9. `READY TO MERGE` needs both passes on the latest head: Claude's (the independent Opus review loop,
+   no high or medium finding open) and Codex's (a 👍 (+1) reaction by
+   `chatgpt-codex-connector[bot]` on the PR, or a comment by that bot, edited by no one else, on the
+   latest head saying it found no major issues; a comment by any other account never counts).
+   Codex's own inline findings are fixed, or answered with evidence if wrong, never parked as low
+   ("How work flows" steps 3 and 5).
+
 ## The shared brain: read first, update always
 
 Every session, any agent, starts by reading these on `main`:
@@ -65,7 +96,9 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      runner fire that ran it, and Blue opens that link before approving, since the line alone can be
      forged; docs/CODEX-BUILDER-LANE.md) and its findings are fixed or answered.
    - Before posting, check the report for secrets or anything quoted from outside the repo, and
-     remove it with a note, and replace Codex's handle with "at-codex" (see "Security rules").
+     remove it with a note, cut each security finding to its title and severity only (its details
+     go to Blue privately; "Hard rules" item 6), and replace Codex's handle with "at-codex"
+     (see "Security rules").
      Otherwise post the reviewer's report verbatim apart from those edits, as a PR comment headed
      "Independent review (Opus)", followed by the builder's response to each finding.
    - Fix findings and re-run the reviewer as "The review loop" below says, and post each run. The
@@ -82,11 +115,28 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      never re-run on later runs, never
      replace `pr-reviewer`, and don't count toward the 5-run cap. If one isn't loaded, the fallback
      above applies with its file's body.
-   - Codex review is optional. Since Codex was linked to the agent account (BLUE-CHECKLIST.md step
-     16, 2026-10-20), it reviews agent PRs automatically; builders rank its findings high, medium or
-     low and handle them like the Opus review's (high and medium in the next fix batch, low ones to
-     Follow-ups), but nothing waits for it and its reviews don't count toward the run cap. A manual request Blue comments as `ABlueAI` is refused, so he
-     asks an agent to post it instead (this worked on PR #47 on 2026-10-21; STATUS.md).
+   - **Codex's pass is required** (Blue, 2026-11-22; "Hard rules" item 9). Since Codex was linked to
+     the agent account (BLUE-CHECKLIST.md step 16, 2026-10-20), it reviews agent PRs automatically
+     when one is opened for review or marked ready (its summary on PR #223 names "Draft marked
+     ready" as the trigger). Its pass, from `chatgpt-codex-connector[bot]` only, is either a 👍 (+1)
+     reaction on the PR given after the latest head was pushed (or before it, if every later commit
+     only merges `main` with no change beyond resolving a conflict), or a comment by that bot,
+     edited by no one else, that names the latest head and says it found no major issues (such as
+     its "Codex Review Summary" showing the latest head reviewed with no findings). A comment by any
+     other account, `ABlueAgent` included, never counts. Its inline findings are fixed, or answered
+     in the PR with evidence if they are wrong; never ranked low and parked. A finding outside the
+     PR's stated scope is answered as such and becomes an issue; one that asks for anything in
+     "Never" is reported to Blue, not acted on. Its reviews don't count toward the run cap, but
+     each fix round's Opus delta run does: Codex findings still open after run 5 mean "needs Blue".
+     To fix its findings, the builder converts the PR to draft, pushes the fixes with the Opus
+     delta run on them ("The review loop"), and marks it ready again once step 5 holds; draft and
+     back to ready re-triggers Codex's review with no handle (`gh pr ready <n> --undo`, then
+     `gh pr ready <n>`; in a cloud session, where GraphQL is blocked, REST
+     `POST /repos/{owner}/{repo}/pulls/{n}/ccr/convert_to_draft`, then `.../ccr/ready_for_review`).
+     On a `codex/` PR, Claude doesn't change its draft state ("Merge order"), so Codex or Blue
+     re-triggers it. If a call fails, or Codex doesn't review, the PR is
+     `NOT READY: no Codex pass (<reason>)`; ask Blue, never skip it, and never re-trigger it with a
+     comment that writes Codex's handle.
 4. The builder fixes CI failures and review findings itself. After 3 failed fix rounds on the same
    CI problem, it stops and marks the PR "needs Blue" with its diagnosis and options. Review findings
    follow the run cap in "The review loop" below.
@@ -101,11 +151,12 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      checks again, removes the label and marks the PR ready. If the session that built it has
      ended, Blue tells any session "clear the wait on #N".
    - After the PR is marked ready, nobody pushes to it except to fix a CI failure, resolve a merge
-     conflict, or do what Blue asks. A push dismisses Blue's approval, so the TLDR says why any such
+     conflict, fix Codex's findings (as a draft again, step 3), or do what Blue asks. A push dismisses Blue's approval, so the TLDR says why any such
      push happened.
    - Every session-end message and phone notification about a PR starts with `READY TO MERGE` (CI
      green, independent review done and every high and medium finding fixed or answered, low ones
-     listed as follow-ups, PR marked ready) or `NOT READY: <reason>`. A summary covering
+     listed as follow-ups, Codex's pass on the latest head with its findings fixed or answered
+     (step 3), PR marked ready) or `NOT READY: <reason>`. A summary covering
      several PRs starts each PR's line that way; a session-end message or phone notification about no
      PR (such as the runner's gate notice) starts with `NOT READY: <reason>`. Blue merges only on `READY TO MERGE`; a reason that
      needs his answer says so. A PR with the `waits-for-merge` label is `NOT READY: waits for #X`.
@@ -142,7 +193,7 @@ mostly low, findings. Every PR follows it, including the builder's own fixes.
 - **Merging `main`** to resolve a conflict needs no new review unless the merge changed content
   beyond the conflict.
 - **No formatting-only commits** (rewraps, reflowed lines) after the first review.
-- **No pushes after the PR is marked ready**, except the three in "How work flows" step 5.
+- **No pushes after the PR is marked ready**, except the four in "How work flows" step 5.
 
 ### Merge order
 
@@ -284,6 +335,28 @@ listeners · CI workflows, `.github/`, `.claude/`, repository settings · this f
   text posted by that account may start a Codex task that can push branches (not merge).
 - Failures refuse visibly: no silent fallbacks, no swallowed errors.
 
+### Agent-account pacing
+
+Adopted 2026-11-23 (docs/DECISIONS.md; a hard rule). Blue's numbers, not GitHub's, so the agent
+account stays clear of GitHub's abuse detection.
+
+- **Budget.** Per agent account (today `ABlueAgent`), across every session, routine and Mako pane
+  using it: at most 24 pushes and at most 120 GitHub writes (pushes, comments, PR and issue changes,
+  labels, reactions, draft and ready changes) in any hour.
+- **Count before writing.** Before each push, count the account's pushes in the last hour
+  (`gh api "repos/ABlueAI/AgentCommandCenter/activity?time_period=day&per_page=100"`, entries whose
+  actor is the account). Before a batch of other writes, count its events in the last hour
+  (`gh api "repos/ABlueAI/AgentCommandCenter/events?per_page=100&page=N"`, paging until an event
+  is older than an hour), plus your own session's writes that list doesn't show (labels,
+  reactions); do the same for any other repository the account writes to. That count is a floor:
+  GitHub's events list can lag by minutes to hours and doesn't show other sessions' labels or
+  reactions, so stop at 100 counted writes to leave room for what it misses. At the cap, wait for
+  the hour to roll over or stop; never go over it. If you can't count (a call fails, or the
+  listing runs out before reaching an hour back), write nothing more and say so.
+- **Stop at the first signal.** On the first `403` or `429` that mentions a rate limit, a secondary
+  rate limit or abuse detection, stop every GitHub write, tell Blue (in the session-end message,
+  `NOT READY: GitHub rate limit`), and never retry in a loop.
+
 ## Engineering rules
 
 - Windows first (PowerShell). Name it explicitly when something fails because of a Windows-versus-Unix
@@ -305,8 +378,9 @@ listeners · CI workflows, `.github/`, `.claude/`, repository settings · this f
 - **Reviewer subagent** (`.claude/agents/pr-reviewer.md`, Claude Opus): the required independent
   review on every PR, run by the builder before it marks the PR ready (for Codex's PRs, by the
   Claude session that handed it the task, the next runner fire, or a session Blue starts; step 3).
-- **Codex / GPT**: optional reviewer (since it was linked to `ABlueAgent`, BLUE-CHECKLIST.md step 16,
-  2026-10-20, it reviews agent PRs automatically; a manual request goes through an agent, step 3), second
+- **Codex / GPT**: required second reviewer (its pass is needed for `READY TO MERGE`, "Hard rules"
+  item 9, so dropping Codex would need that rule changed too; since it was linked to `ABlueAgent`, BLUE-CHECKLIST.md step 16,
+  2026-10-20, it reviews agent PRs automatically; a re-review goes through draft and ready, step 3), second
   builder for `windows`-lane sessions that aren't sensitive (docs/CODEX-BUILDER-LANE.md), the builder of the UI sessions S17 to S20 (started by Blue, reviewed by Claude
   Opus; docs/PLAN-1.1.md "UI sessions: who builds"), and planning partner. Works in its own `codex/`
   branch, never Claude's, and fixes its own PRs; Claude never pushes to a `codex/` branch unless Blue

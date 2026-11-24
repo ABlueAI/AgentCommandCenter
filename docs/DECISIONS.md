@@ -3,6 +3,22 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-23: hard rules, Codex's pass before ready, agent-account pacing
+
+On 2026-11-23 two of Blue's rules were broken because they lived only in his private notes and an
+unmerged draft (PR #169), not in AGENTS.md: the pacing cap, and the rule that a PR is ready only with
+a pass from Claude and a pass from Codex. Blue decided these in his main chat; the quotes are as the
+hand-off for this PR relayed them. How AGENTS.md words them ("Hard rules (never broken)", "How work
+flows" steps 3 and 5, "Agent-account pacing") is proposed, pending Blue (this PR); merging approves
+it. "Builder's reading" marks a line that is the builder's, not Blue's.
+
+| Decision | Blue's words |
+|---|---|
+| **1. `READY TO MERGE` needs a pass from Claude and a pass from Codex** (2026-11-22). Claude's is the independent Opus review loop; Codex's is its 👍 (+1) reaction on the PR or a comment saying it found no major issues (as relayed in the hand-off). Replaces "Codex review is optional ... nothing waits for it" (AGENTS.md step 3, 2026-10-20). Builder's reading: both passes must cover the latest head; only `chatgpt-codex-connector[bot]`'s reaction or unedited comment counts; Codex's findings are fixed or answered (never parked as low; out of scope becomes an issue); and a `codex/` PR is re-triggered by Codex or Blue, since Claude never changes its draft state. Open question for Blue in PR #227: Codex answered "create an environment for this repo" instead of reviewing on the `codex/` PRs #206, #208 and #209 (BLUE-CHECKLIST.md step 72). | "knowing that there is a pass from Claude and a pass from Codex makes me a lot more comfortable with a merge" |
+| **2. Agent-account pacing: at most 24 pushes and 120 GitHub writes an hour** per agent account, across all sessions; stop at the first rate-limit or abuse-detection signal. Builder's reading: 24 is the push cap and 120 the write cap. Supersedes the numbers in PR #169's draft rule R5 (6 pushes and 40 writes an hour); its other rules stay in that PR. | "this rule needs to change to 24 per hour" · "writes 120 is fine" |
+| **3. Some rules are hard rules: never broken, no judgment.** If one is unclear or seems to conflict with a task, the agent stops and asks Blue. Builder's reading (from the hand-off, not Blue's words): every other rule is a default, followed as written, with judgment only where it leaves room and each assumption recorded in the PR; which rules are hard is the list the hand-off gave. | "some rules should never be broken, ever. like the merge rule." · "do we need to clarify rules that can be overruled to prevent an agent from going rogue based on assumptions" |
+| **4. These rules go into AGENTS.md now.** Asked "Write your vault-only rules (Codex 👍, pacing) into AGENTS.md now?" | "Yes, write them in" |
+
 ## 2026-11-23: AgentPlayback verdict (S53)
 
 Blue's verdict on the S53 OSS record (PR #208), recorded in [the
