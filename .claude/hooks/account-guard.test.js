@@ -426,9 +426,9 @@ const GUARDED_PS = [
   // Review run 3: an attached parameter value (`-Name:value`) keeps the array that follows it.
   ["Start-Process gh -ArgumentList:'pr' , 'merge', '5'", 'gh pr merge'],
   ["Start-Process -FilePath:gh -ArgumentList:'pr', 'create'", 'gh pr create'],
-  // Codex review on 004b8cd: an array value is not a command (NOT_GUARDED_PS below), but an array
-  // given to the call operator or to a program is its arguments, and an array value stays a command
-  // wherever the script could still run it as one (assigned for later, `-join`, iex, `& $x`, `& (...)`).
+  // Codex review on 004b8cd: an array given to the call operator or to a program is its arguments, and
+  // an array of strings is a command wherever it appears (assigned for later, `-join`, iex, `& $x`,
+  // `& (...)`, and since review run 8 also when only printed, which fails closed).
   ["& 'gh' @('pr','merge')", 'gh pr merge'],
   ['& "gh" @("pr", "merge", "5")', 'gh pr merge'],
   ["& 'gh' 'pr','merge'", 'gh pr merge'],
@@ -447,8 +447,8 @@ const GUARDED_PS = [
   ["Write-Output @('gh', 'pr', 'merge'); gh pr merge 5", 'gh pr merge'],
   ["iex ('gh pr merge 5')", 'gh pr merge'],
   ["Start-Process gh -ArgumentList ('pr merge 5')", 'gh pr merge'],
-  // Review run 5 (6901edc): an array value is skipped only where it is plainly printed (an allowlist).
-  // Joined into a string and handed to a shell, piped, in a script block or nested, it stays a command.
+  // Cases from review run 5 (6901edc, whose printed-array skip was later removed): an array joined into
+  // a string and handed to a shell, piped, in a script block or nested is a command.
   ["cmd /c \"$('gh','pr','merge','5')\"", 'gh pr merge'],
   ["pwsh -c \"$('gh','pr','merge')\"", 'gh pr merge'],
   ["bash -c \"$('git','push')\"", 'git push'],
@@ -475,9 +475,9 @@ const GUARDED_PS = [
   ["iex \"Write-Output @('gh','pr','merge')\"", 'gh pr merge'],
   ["Write-Output @('gh','pr','merge','5')\n| Join-String -Separator ' ' | cmd", 'gh pr merge'],
   ["'gh','pr','merge','5'\r\n  # joined\n  | Join-String -Separator ' ' | cmd", 'gh pr merge'],
-  // Review run 6 (e863784): an array value is skipped only in a script that does nothing but print,
-  // with no `$`, `{`, `}` or `=` in it. A script block's argument, a line-continued assignment, a brace
-  // inside `${...}` and an alias loaded from a file all keep it a command.
+  // Cases from review run 6 (e863784, whose print-only skip was later removed): a script block's
+  // argument, a line-continued assignment, a brace inside `${...}` and an alias loaded from a file are
+  // all commands.
   ["& { cmd /c \"$($args[0])\" } 'gh','pr','merge','5'", 'gh pr merge'],
   [". { cmd /c \"$args\" } 'gh','pr','merge'", 'gh pr merge'],
   ["& { cmd /c \"$($args[0])\" } Write-Output @('gh','pr','merge','5')", 'gh pr merge'],
@@ -498,10 +498,10 @@ for (const [cmd, want] of GUARDED_PS) {
   assert(ps(cmd) === want, `PowerShell ${JSON.stringify(cmd)} -> ${want}`);
 }
 // Review run 8 (Blue, 2026-11-24: "Yes, run 8 fail-closed"). Codex's review of b047805: a command after
-// `return` (or `throw`, `exit` or another keyword) wasn't checked. The splitter now reads the first
-// command word after a keyword as the start of a command, so a review or merge there is still blocked
-// under every login, and an array of strings is a command even when it is only printed (Codex's review
-// of 004b8cd; this over-blocks on purpose, failing closed).
+// `return`, `throw` or `exit` wasn't checked. Those keywords are now dropped before the statement is
+// classified (review run 9: once, not by a second pass from a later word), so a review or merge there
+// is still blocked under every login. An array of strings is a command even when it is only printed
+// (Codex's review of 004b8cd; this over-blocks on purpose, failing closed).
 GUARDED_PS.push(
   ['& { return git push origin HEAD }', 'git push'], // Codex's case on b047805
   ['return git push', 'git push'],
@@ -511,6 +511,9 @@ GUARDED_PS.push(
   ['& { return gh pr merge 5 }', 'gh pr merge'],
   ['throw gh pr merge 5', 'gh pr merge'],
   ['return gh.exe pr review 5 -a', 'gh pr review'],
+  ['RETURN gh pr merge 5', 'gh pr merge'], // keywords are case-insensitive
+  ['exit gh pr ready 5', 'gh pr ready'],
+  ['return return git push', 'git push'],
   ['if ($ok) { return gh pr create --fill } else { throw "no" }', 'gh pr create'],
   ['function F { return gh pr ready 5 }; F', 'gh pr ready'],
   ['return iex "gh pr merge 5"', 'gh pr merge'],
@@ -698,6 +701,27 @@ const pwsh = (command) => ({ hook_event_name: 'PreToolUse', tool_name: 'PowerShe
   // A review or merge command the splitter finds still wins over the word scan's login check.
   assert(ps("Write-Host 'git push'; gh pr merge 5") === 'gh pr merge', 'a parsed merge wins over a word-scan push');
   assert(ps("git push; Write-Host 'gh pr merge'") === 'git push', 'a parsed push comes before a word-scan merge (both get the login check)');
+  // Review run 9: only `return`, `throw` and `exit` start a command later in the statement. Any other
+  // first word (Write-Host, echo, cmd without /c) isn't read as running what follows, so the words of a
+  // guarded command there get the word scan's login check, not the every-login block.
+  for (const cmd of ['Write-Host gh pr merge 5', 'Write-Output return git push', 'cmd /c echo git push']) {
+    const hit = ps(cmd);
+    assert(typeof hit === 'string' && hit.endsWith(guard.PS_WORDS_NOTE) && !guard.ALWAYS_BLOCKED.has(hit),
+      `PowerShell ${JSON.stringify(cmd)}: the word scan's login check only (${hit})`);
+  }
+  // Review run 9: a guarded statement next to a long nested chain that holds no guarded command is
+  // classified in about the same time as on b047805. The second pass from a later word (review run 8)
+  // doubled the work at every nesting level and ran past the hook's 30-second timeout (fails open).
+  for (const [label, cmd, limit] of [
+    ['git push; 10 nested pwsh -c, 10 KB', 'git push; ' + 'pwsh -c '.repeat(10) + 'x '.repeat(5000), 4000],
+    ['git push; 10 nested iex, 100 KB', 'git push; ' + 'iex '.repeat(10) + 'x '.repeat(50000), 4000],
+    ['git push; return and 10 nested pwsh -c, 10 KB', 'git push; return ' + 'pwsh -c '.repeat(10) + 'x '.repeat(5000), 4000],
+    ['git push; 10 x (return pwsh -c), 10 KB', 'git push; ' + 'return pwsh -c '.repeat(10) + 'x '.repeat(5000), 4000]]) {
+    const t0 = Date.now();
+    const hit = guard.findGuardedCommand(cmd, 0, 'ps');
+    const ms = Date.now() - t0;
+    assert(hit === 'git push' && ms < limit, `PowerShell ${label}: git push found in ${ms} ms (under ${limit})`);
+  }
   // Review run 6: no input makes the splitter backtrack. Long comment lines and many block comments
   // after line breaks finish quickly (a pattern that backtracked took seconds at about 30 characters).
   for (const [label, cmd] of [['a line of 200 #', 'Write-Output a\n' + '#'.repeat(200) + '\nGet-Thing'],

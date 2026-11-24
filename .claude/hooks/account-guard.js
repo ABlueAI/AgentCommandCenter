@@ -19,7 +19,7 @@
 //      commands, subshells, command substitution and `bash -c "..."` included; for the PowerShell
 //      tool, PowerShell's own syntax: `&` and `.` calls, backtick line continuations, script
 //      blocks, `$(...)` groups, here-strings, `$x = ...` assignments, Invoke-Expression,
-//      Start-Process and `cmd /c`; a command after a keyword such as `return` or `throw`; and, on
+//      Start-Process and `cmd /c`; a command after `return`, `throw` or `exit`; and, on
 //      top, the PowerShell word scan: a PowerShell script that names a guarded command's words
 //      anywhere, in any order or case, gets the login check, fail-closed; see psWordScan), for
 //        login-dependent commands (blocked only under ABlueAI): `gh pr create` (and its alias
@@ -606,6 +606,8 @@ function splitPowerShell(input, depth = 0, ctx = { unbalanced: false }) {
   return commands;
 }
 
+// PowerShell statement keywords that take a pipeline: the command is what follows them.
+const PS_STATEMENT_KEYWORDS = new Set(['return', 'throw', 'exit']);
 // PowerShell assignment operators (`$x = gh pr create`): the command is what comes after.
 const PS_ASSIGN = /^(?:[-+*/%]|\?\?)?=$/;
 // Start-Process's switch parameters (no value); every other named parameter takes one.
@@ -647,6 +649,11 @@ function powerShellForms(words, depth) {
   let w = words;
   for (;;) {
     if (w[0] === '.') { w = w.slice(1); continue; }
+    // `return git push`, `throw gh pr merge 5`, `exit git push`: these keywords take a pipeline, so
+    // the command starts after them. They are dropped here, like `.`, so each statement is still
+    // classified once: classifying it a second time from a later word (review run 8) doubled the
+    // nested work at every level of `pwsh -c` or iex and could run the hook past its timeout.
+    if (PS_STATEMENT_KEYWORDS.has(String(w[0]).toLowerCase())) { w = w.slice(1); continue; }
     if (/^(?:\[[^\]]*\])*\$/.test(w[0] || '')) { // `$x = ...`, `[string]$x = ...`, `$x=...`
       const m = /^[^=]*?=(?!=)([^]*)$/.exec(w[0]);
       if (m) { w = m[1] ? [m[1], ...w.slice(1)] : w.slice(1); continue; }
@@ -896,10 +903,6 @@ function psWordScan(text) {
   return hits.map((h) => h + PS_WORDS_NOTE);
 }
 
-// Where a PowerShell statement doesn't start with its command (`return git push`, `throw gh pr merge 5`,
-// `exit git push`), the first of these words after the start is read as the command too.
-const PS_COMMAND_WORDS = new Set(['gh', 'git', 'iex', 'invoke-expression', 'start-process', 'saps', 'start', 'cmd', ...SHELLS, ...POWERSHELLS]);
-
 // The guarded command in a command line (a review or merge command first, else the first
 // login-dependent one), or null. `mode` is 'bash' (the Bash tool) or 'ps' (the PowerShell tool).
 // Never touches the network.
@@ -909,11 +912,7 @@ function findGuardedCommand(command, depth = 0, mode = 'bash') {
   const hits = [];
   const split = mode === 'ps' ? splitPowerShell : splitCommands;
   for (const words of split(command, depth, ctx)) {
-    let hit = classifySimpleCommand(words, depth, mode);
-    if (!hit && mode === 'ps') { // `return git push`: the command after a keyword (PS_COMMAND_WORDS)
-      const k = words.findIndex((w, n) => n > 0 && PS_COMMAND_WORDS.has(programName(w)));
-      if (k > 0) hit = classifySimpleCommand(words.slice(k), depth, mode);
-    }
+    const hit = classifySimpleCommand(words, depth, mode);
     if (hit) hits.push(hit);
   }
   // When the parser met an unclosed quote the text scan also runs, even if the parse found a
