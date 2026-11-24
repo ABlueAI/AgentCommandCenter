@@ -715,8 +715,15 @@ test('findTool ignores relative PATH entries and folders, strips quotes, and on 
   await fs.mkdir(spaced);
   await fs.mkdir(path.join(folderOnly, exe('sometool')), { recursive: true });
   await fs.writeFile(path.join(spaced, exe('sometool')), 'fake', { mode: 0o755 });
-  const relative = path.relative(process.cwd(), spaced);
-  assert.equal(await findTool('sometool', { PATH: relative }), null, 'a relative PATH entry is never searched');
+  // Run from the temp folder so 'with space' is a real relative entry that would resolve to the tool.
+  // (path.relative would return an absolute path when the temp folder is on another drive, as on CI.)
+  const previous = process.cwd();
+  process.chdir(root);
+  try {
+    assert.equal(await findTool('sometool', { PATH: 'with space' }), null, 'a relative PATH entry is never searched');
+  } finally {
+    process.chdir(previous);
+  }
   assert.equal(await findTool('sometool', { PATH: folderOnly }), null, 'a folder with the tool’s name is not the tool');
   assert.equal(await findTool('sometool', { Path: [folderOnly, `"${spaced}"`].join(path.delimiter) }), path.join(spaced, exe('sometool')));
   if (process.platform === 'win32') {
