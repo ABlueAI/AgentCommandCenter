@@ -1023,6 +1023,13 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   - *Done when:* you tell an agent the Reviewer answered from the thread (or what went wrong). It
     ticks this with the date. This is S15's "Done when".
 
+- [ ] **74. Issue #211 on your PC: run the app tests with page-reader installed.** About **5 minutes**
+  with dependencies already installed, at the next PC check after the draft fix is available.
+  - Check out the fix branch on a Windows PC where the page-reader agent is already installed.
+    From the `app` folder, run `npm test`.
+  - *Done when:* the page-reader test and the final suite, `renderer/admission-view.test.js`, both
+    pass and `npm test` exits successfully. Tell an agent the result so it can tick this with the date.
+
 - [ ] **44. S09 on your PC: Resume or Start fresh.** About **5 minutes**, after you merge the S09
   PR, #131 (and S08's step 39, which it builds on).
   - Pull `main` and restart Mako fully. Open a builder pane on a worktree and a bare `claude` pane,
@@ -1180,6 +1187,20 @@ open PRs (#206 and #208).
   your verdict (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD FRESH) in your own words to any agent.
   - *Done when:* your verdict is in the record, word for word, and the agent ticks this with the
     date.
+
+## From your decisions of 2026-11-23
+
+Step 72 comes from PR #227 (docs/DECISIONS.md, 2026-11-23). Step numbers 69 to 71 belong to open PRs
+(#218, #225 and #224).
+
+- [ ] **72. Codex's review on the `codex/` PRs (PR #227's question).** **About 2 minutes to answer**,
+  once PR #227 is merged. Your rule says a PR is `READY TO MERGE` only with Codex's pass, but on the
+  three `codex/` PRs (#206, #208, #209) Codex answered "create an environment for this repo" instead
+  of reviewing. Answer PR #227's question: create that Codex environment (the agent's
+  recommendation), or tell an agent how those PRs should get Codex's pass. Until then they are
+  `NOT READY: no Codex pass`.
+  - *Done when:* your answer is in docs/DECISIONS.md, and an agent has checked on GitHub that one
+    of those PRs has Codex's pass (or that your answer says otherwise) and ticks this with the date.
 
 ## Every day, once the runner is on
 

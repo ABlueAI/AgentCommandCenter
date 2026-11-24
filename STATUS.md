@@ -2,8 +2,10 @@
 
 Updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
 verdict; review fixes pushed by a Claude cloud session on Blue's ask). Before that: updated
-2026-11-23 by PR #223 (S61: the 1.1 schedule and Blue's answers on it). Before that: updated
-2026-11-21 by PR #212 (Blue's decisions of 2026-11-16 to 2026-11-21: the scope freezes on
+2026-11-24 by PR #241 (S56 no longer marked Sensitive in the plan; its 9 bug issues, #232
+to #240, were opened the same day). Before that: updated 2026-11-23 by PR #223 (S61: the 1.1
+schedule and Blue's answers on it). Before that:
+updated 2026-11-21 by PR #212 (Blue's decisions of 2026-11-16 to 2026-11-21: the scope freezes on
 2026-12-01, a Codex pane in 1.1, the Composer prototype dates, new rows S63 to S65). Before that:
 updated 2026-11-18 by PR #204 (Blue's answers to PR #195's questions: S48 split, A10 and A11
 placed, Dependabot alerts and security updates for Blue to turn on, step 65). Before that: updated
@@ -163,7 +165,7 @@ Every PR that changes the state updates this file.
   made the trial S26's result ("until we burn through codex usage ... not necessarily a permanent
   change"), keeps ChatGPT and will "use heavily over the next 3 weeks ... use claude as backup
   reviewer". The lane stays open to about 2026-11-30 for non-sensitive early tasks (S36 and S56
-  in the lane; S52 and S53, `blue`-lane rows, started by Blue himself), Codex reviews Claude's PRs with Sonnet as backup, and he checks in on 2026-11-30 (checklist
+  in the lane; S56's 9 bug issues are #232 to #240, and from PR #241 its row is no longer tagged Sensitive; S52 and S53, `blue`-lane rows, started by Blue himself), Codex reviews Claude's PRs with Sonnet as backup, and he checks in on 2026-11-30 (checklist
   step 63); S26 closes when his resets are used. The lane's rules and the required Opus review are
   unchanged. **2026-11-21:** ChatGPT Plus stays through the 1.1 release and Codex's heavy use runs
   to about 2026-12-29, checked weekly; Codex does the smaller tasks and reviews, 2 at a time
