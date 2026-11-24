@@ -1,5 +1,8 @@
 # Mako status
 
+S55 is implemented on its review branch. Independent review and the Windows Firefox profile check
+(checklist step 57) are pending.
+
 Updated 2026-11-24 by PR #257 (status: plan rows and this file after the merges of 2026-11-23 and
 2026-11-24; "2026-11-24 (status PR #257)" under Next). Before that: updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
 verdict; review fixes pushed by a Claude cloud session on Blue's ask). Before that: updated 2026-11-24 by PR #209 (S48's OSS record, docs/decisions/OSS-memory.md, with Blue's
