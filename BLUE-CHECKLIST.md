@@ -1030,6 +1030,15 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   - *Done when:* the page-reader test and the final suite, `renderer/admission-view.test.js`, both
     pass and `npm test` exits successfully. Tell an agent the result so it can tick this with the date.
 
+- [ ] **76. Issue #162 on your PC: the Page Reader refuses local addresses.** About **3 minutes**,
+  after you merge PR #250 (it adds the `ipaddr.js` package).
+  - Pull `main`, run `npm ci` in `app`, and restart Mako fully. Until `npm ci` has run, Mako starts
+    as usual and only the Page Reader refuses, with "run npm ci in the app folder, then restart Mako".
+  - **New Agent > 📄 Page**, enter `https://localhost/`, **Create & Launch**: it should refuse with
+    "The Page Reader reads public web pages only, never this PC or your local network." Then enter a
+    www.reddit.com thread URL: the page-reader pane should start as before.
+  - *Done when:* you tell an agent both results. It ticks this with the date.
+
 - [ ] **44. S09 on your PC: Resume or Start fresh.** About **5 minutes**, after you merge the S09
   PR, #131 (and S08's step 39, which it builds on).
   - Pull `main` and restart Mako fully. Open a builder pane on a worktree and a bare `claude` pane,
