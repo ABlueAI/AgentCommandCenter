@@ -98,6 +98,27 @@ const UP = { code: 'Space', key: ' ' };
   assert(log.presses === 2, 'a later recording (a mouse start) is not stopped');
 }
 {
+  // Two taps before the microphone opens: the second reuses the pending start (one press, one
+  // microphone request), and the stop is still sent when recording starts.
+  const { m, o, log } = ptt();
+  m.keydown(DOWN); m.keyup(UP);
+  m.keydown(DOWN);
+  assert(log.presses === 1 && m.state().starting === true && m.state().stopWhenStarted === false, 'second tap while starting: no second start, held again');
+  m.keyup(UP);
+  assert(log.presses === 1 && m.state().stopWhenStarted === true, 'released again: the stop waits');
+  o.recording = true; m.onSttStatus('recording');
+  assert(log.presses === 2 && m.state().starting === false && m.state().stopWhenStarted === false, 'one stop is sent when the microphone opens');
+}
+{
+  // Second press held while the microphone opens: it keeps recording until that release.
+  const { m, o, log } = ptt();
+  m.keydown(DOWN); m.keyup(UP); m.keydown(DOWN);
+  o.recording = true; m.onSttStatus('recording');
+  assert(log.presses === 1, 'still held when it opens: not stopped');
+  m.keyup(UP);
+  assert(log.presses === 2, 'stopped on the release');
+}
+{
   const { m, log } = ptt();
   m.keydown(DOWN); m.keyup(UP);
   m.onSttStatus('error');

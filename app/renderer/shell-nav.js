@@ -120,7 +120,8 @@
    * accepted start always settles as 'recording' or 'error' (stt.js start()). It never times
    * out, because a timeout would leave the microphone recording after the keys were let go.
    * A refused start (press() returns false) leaves nothing pending, and 'error' or 'idle' clears
-   * it, so neither can stop a later recording Blue starts with the mouse.
+   * it, so neither can stop a later recording Blue starts with the mouse. A second press while a
+   * start is still pending reuses that start instead of sending another.
    */
   function createPushToTalk(deps) {
     const notify = typeof deps.notify === 'function' ? deps.notify : () => {};
@@ -133,6 +134,10 @@
       st.held = true;
       if (deps.isRecording()) return true;          // already recording (started with the mouse)
       st.stopWhenStarted = false;
+      // A start is already waiting on the microphone (a second tap during the permission prompt):
+      // reuse it. A second press() would open a second microphone request, and the stop would
+      // only reach the first, leaving the second recording after both releases.
+      if (st.starting) return true;
       if (deps.press() !== false) st.starting = true;
       return true;
     }
