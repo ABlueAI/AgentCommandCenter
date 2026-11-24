@@ -27,7 +27,7 @@ $script:SrUtf8 = New-Object System.Text.UTF8Encoding($false)
 $script:SrStrict = New-Object System.Text.UTF8Encoding($false, $true)
 # The installed hook path the qualified identities were produced with (an INPUT to the pure function,
 # so these pins hold on any machine).
-$script:SrQualifiedHookPath = 'C:/Users/levij/.claude/hooks/fence-write.js'
+$script:SrQualifiedHookPath = 'C:/Users/sampleuser/.claude/hooks/fence-write.js'
 
 # --------------------------------------------------------------------------------------------
 # Helpers
@@ -182,10 +182,10 @@ Describe 'sync-roles.ps1 pure preparation (dot-sourced ConvertTo-DeployedRoleByt
         'builder'        = @(1495, 'F1961DE06C43F3A47FE04E82551B31DB479D7C9F9907436CFD9DE14BD75D2BC7')
         'reviewer'       = @(1221, '0BAF2B5391D9AD9E828A76CE92375118210A8ECE803EE9B8C7CC369938212580')
         'codebase-scout' = @(755,  '2A15AD0BD8C8BAD38767FA51E27BB3C44FDE76645C4FF1B35CC480427913FD12')
-        'web-scout'      = @(1773, 'AFDA5D08FE81489D702F06B80C328A09F0F9E94F6E1C5F367E117B9187B34AB4')
-        'operator'       = @(1476, 'C0E1B415857A40B39CEC6A19758CF3776AC2640CCA9DFA34F1374DD72D7FEC53')
-        'source-scout'   = @(1627, '549B8624B6A70E9F37F71F1B8624DB5AB06F891C1E1CB54B86F3DA4C91064EC1')
-        'page-reader'    = @(2164, '634E5A112C379C3194678FFDE0AC8A51E3236FF94CD5211B81AFD91F2FD12728')
+        'web-scout'      = @(1778, '903F108F2EC81B3F6FA5E65774DF6910EB694B567302474967198CEF9225D410')
+        'operator'       = @(1481, '1F1D106340B70C36206B09C5AD0B5AB67A2F2FEEF25D4F3DE56E46BB394C1693')
+        'source-scout'   = @(1632, '3F696E003C5852BEB851A11152E9B9EE20CA67684A2A6BBAA9A2BC02EF956386')
+        'page-reader'    = @(2169, '66204F80F4C0CC856CEB8FC958A0995C329CDFEDFD9716A914ED2CD20CD1F675')
     }
     foreach ($role in $expected.Keys) {
         It "real role $role produces its pinned identity from working-tree, LF and CRLF sources" {

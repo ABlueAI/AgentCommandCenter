@@ -18,6 +18,16 @@ that is the builder's, not Blue's.
 |---|---|
 | **A Claude session may mark a Codex PR ready under the same rule as Claude's own PRs** (and, builder's reading below, convert it to draft and back to re-trigger Codex's review). He was asked: "Let the sweeper mark Codex PRs ready once Claude's review passes?" The recommendation he approved: Codex PRs go ready under the same rules as Claude's (CI green, Claude's review clean, the merge-order check passes, no `needs-blue` or `waits-for-merge` label, no draft hold or pending verdict of Blue's). Marking a PR ready also starts Codex's automatic review, which gives Codex's pass (2026-11-23 entry, item 1). Why: the old rule made sense while Codex fixed its own PRs; since Blue's 2026-11-23 decisions that Claude fixes Codex's PRs and merges `main` into them ("id love to", "yes, thats fine", "for the last time yes", as relayed; PR #225 proposes their rule), it only blocked: PR #231 was reviewed clean on 2026-11-24 but stayed a draft, and #206, #208 and #209 stalled the same way. Builder's reading (from the hand-off): it covers any Claude session working the PR (the PR sweeper, the runner, or the session that reviewed it), and the draft-and-back re-trigger, which follows from "the same rules as Claude's" (AGENTS.md step 3), happens at most once per head and never under a hold or label that bars marking ready. The PR sweeper's prompt calls this decision "D-076". | "Yes, sweeper marks ready" |
 
+## 2026-11-24: S56's bug issues, and S56 no longer marked Sensitive
+
+Blue gave both in the sessions that did the work. How the plan follows the second is **proposed,
+pending Blue (PR #241)**; merging that PR approves it.
+
+| Decision | Blue's words |
+|---|---|
+| A cloud session opens S56's 9 bug issues from Codex's renderer audit so Codex can build S56 next. Done 2026-11-24 as #232 to #240, listed on #197; the cloud session that opened them judged none to be a security gap (builder's reading, not Blue's). | "Yes, open them" |
+| S56's row stops being tagged Sensitive: its clause about a bug that is a security gap no longer uses the word the plan sync reads as the tag, so #197 loses the `sensitive` label and the row fits the Codex builder lane. A bug that turns out to be a security gap still stays with Claude. | "Fix the Sensitive tag on S56 in the plan" |
+
 ## 2026-11-23: hard rules, Codex's pass before ready, agent-account pacing
 
 On 2026-11-23 two of Blue's rules were broken because they lived only in his private notes and an
@@ -211,6 +221,17 @@ his words as that comment relays them.
 | **Nothing else from "Month two" joins 1.1** beyond the command palette and the Composer. | Yes (no words relayed). |
 | **CRITICAL is defined** as a finding that would: expose a secret, a token or client data; let an agent merge, push to `main`, change repository settings or get past a guard; destroy work or data that can't be recovered; let outside text run commands (unsafe input to the terminal, IPC or a validator); or stop Mako from starting on `main`. A CRITICAL finding stops the PR and notifies Blue at once; HIGH and MEDIUM are fixed in the next batch; LOW goes to follow-ups. The rule text itself changes in ECC PR 2 (S40), not here. | Defined by Blue (no words relayed beyond the definition). |
 | **Claude video analysis in Video Scout is 1.1,** confirmed: 1 frame per second plus audio, an option other than Gemini (S54). | Confirmed (no words relayed). |
+
+## 2026-11-15: the sanitizer test (S41, issue #172)
+
+Recorded on 2026-11-24 by PR #228, placed by its decision date. Blue answered issue #172's questions on 2026-11-15. Recorded from the issue's "Decisions" section,
+which quotes him.
+
+| Decision | Blue's words |
+|---|---|
+| The home-folder paths already in tracked files are allowlisted per file with exact counts; any new mention fails CI. | "Allowlist them" |
+| The recommended answers: built from the issue by a cloud session as `ABlueAgent`; the test values switch to a made-up user name in the same PR; an email address is flagged when its domain isn't on a short safe list; a small secret backstop stays even though push protection is on. | "yes, Go on the sanitizer test with my recommended answers" |
+| The build includes the "top professional" additions (issue #172 rules 1 to 7: placeholder list, safe domains, ratchet allowlist, masked output, self-tests). | "lets add What a top professional would add." |
 
 ## 2026-11-07
 
