@@ -304,7 +304,8 @@ listeners · CI workflows, `.github/`, `.claude/`, repository settings · this f
 - **Claude Code**: primary builder (Sonnet for routine work, Opus for hard problems and reviews).
 - **Reviewer subagent** (`.claude/agents/pr-reviewer.md`, Claude Opus): the required independent
   review on every PR, run by the builder before it marks the PR ready (for Codex's PRs, by the
-  Claude session that handed it the task, the next runner fire, or a session Blue starts; step 3).
+  Claude session that handed it the task, the PR sweeper (docs/SWEEPER.md), or a session Blue
+  starts; step 3).
 - **Codex / GPT**: optional reviewer (since it was linked to `ABlueAgent`, BLUE-CHECKLIST.md step 16,
   2026-10-20, it reviews agent PRs automatically; a manual request goes through an agent, step 3), second
   builder for `windows`-lane sessions that aren't sensitive (docs/CODEX-BUILDER-LANE.md), the builder of the UI sessions S17 to S20 (started by Blue, reviewed by Claude
