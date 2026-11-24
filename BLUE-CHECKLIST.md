@@ -1221,6 +1221,13 @@ You can start on the first one now, which saves time later.
   edited, by anyone else), or hand it to an agent in its own session to open the PR. Not as a PR of your
   own: you can't approve your own PR, so it couldn't merge. S28 stays `NEEDS BLUE (package)` until
   it arrives.
+- [ ] **71. Your verdict on S63's UI-library record (PR #224).** **About 15 minutes**, any time
+  before S49 or S51 picks its chat and graph libraries. S63 delivered an OSS record,
+  `docs/decisions/OSS-ui-libraries.md`, in place of the `docs/research/` write-up its plan row
+  names. Read it and give your verdict on each option (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD
+  FRESH) in your own words to any agent.
+  - *Done when:* your verdict is in the record's "Blue's verdict" line, word for word, and the agent
+    ticks this with the date.
 
 ## Dated reminders
 
