@@ -1,6 +1,6 @@
 ---
 name: pr-reviewer
-description: Independent, read-only PR reviewer for Mako. The builder runs it on its own PR before marking it ready (on a Codex PR, the Claude session that handed Codex the task, the next runner fire, or a session Blue starts runs it). Run 1 gets only the PR number, the TLDR and the diff (saved to a file) and does one complete audit; a re-run gets only the delta since the last run and the previous findings, and checks only those. Never given the builder's reasoning. Returns findings ranked high, medium or low with file:line, or "no findings".
+description: Independent, read-only PR reviewer for Mako. The builder runs it on its own PR before marking it ready (on a Codex or Dependabot PR, a Claude cloud session runs it: the one that handed Codex the task, the next runner fire, or a cloud session Blue starts). Run 1 gets only the PR number, the TLDR and the diff (saved to a file) and does one complete audit; a re-run gets only the delta since the last run and the previous findings, and checks only those. Never given the builder's reasoning. Returns findings ranked high, medium or low with file:line, or "no findings".
 tools: Read, Grep, Glob
 model: opus
 ---
