@@ -1,6 +1,8 @@
 # Mako status
 
-Updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
+Updated 2026-11-24 by PR #253 (S14: the 1.1 design brief, `docs/DESIGN-BRIEF-1.1.md`, and Blue's
+go on the UI; S66, S18, S19 and S20 set to READY, a plan change pending his merge). Before that:
+updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
 verdict; review fixes pushed by a Claude cloud session on Blue's ask). Before that: updated 2026-11-24 by PR #209 (S48's OSS record, docs/decisions/OSS-memory.md, with Blue's
 verdict: PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain; step 68
 ticked). Before that: updated 2026-11-24 by PR #241 (S56 no longer marked Sensitive in the plan; its 9 bug issues, #232
@@ -49,9 +51,11 @@ Every PR that changes the state updates this file.
     scope freezes on 2026-12-01 (docs/DECISIONS.md, 2026-11-21).
   - **Three tabs:** the shared navigation first (S66, split from S18 on 2026-11-22), then the
     brain (S18), the control room (S19) and the aquarium MVP (S20) in parallel on top of it. Claude
-    builds and Codex reviews; S17 is done (Shark A). The rows are still `HOLD (Blue)`: no UI building
-    before the 1.1 schedule is adopted with its independent review (S61, Blue 2026-11-17), then his go
-    on the UI (checklist step 18).
+    builds and Codex reviews; S17 is done (Shark A). **2026-11-24:** S61 merged (PR #223) and Blue
+    said go on the UI (checklist step 18). PR #253 adds S14's brief, `docs/DESIGN-BRIEF-1.1.md` (the
+    three tabs, the look, the shark, the test plan, and 18 questions for Blue, each with a default),
+    and sets S66, S18, S19 and S20 to `READY`; merging it releases them (S66 first). The brief moves
+    the pieces every tab shows (top bar, emblem rail, the shared In-focus card) into S66.
   - **New rows S36 to S60**, among them three small security items first (Electron 42.11.16, the
     account guard's PowerShell gap, one full security check), ECC in 3 PRs (S39 to S41), a rulebook
     update for AGENTS.md (S42), the release row (S59) and the role-file rewrite (S60). Nothing in AGENTS.md, `CLAUDE.md` or

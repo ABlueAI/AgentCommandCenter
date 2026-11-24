@@ -6,7 +6,8 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-11-23 by Claude (S37, PR #218: step 69 added, a 3-minute live check of the
+Last updated 2026-11-24 by Claude (S14, PR #253: step 18 ticked with your go on the UI, step 77
+added to read the brief's questions); earlier, on 2026-11-23 (S37, PR #218: step 69 added, a 3-minute live check of the
 account guard on the PowerShell tool); earlier, on 2026-11-21 (your decisions of 2026-11-16 to 2026-11-21, PR #212: steps 27
 and 50 leave the top of "Do next", steps 57, 60 and 63 follow your answers, step 68 added, dated
 reminders added; earlier, on 2026-11-18, your answers to PR #195's questions, PR #204: step 65 added,
@@ -58,9 +59,9 @@ On 2026-11-21 steps 27 and 50 left the top (your decision: the runner they check
    your PC, and the OpenCode leftovers; you say when).
 9. **PC checks**, batched on Tuesday and Friday evenings until H1 automates them: steps 23, 24
    (optional, kept), 29, 31, 38, 39, 40, 41, 44, 45 and 48.
-10. ~~**Step 64**, hand over the 1.1 schedule~~ Done (PR #223): merge PR #223, then **step 18**, your go on the
-    UI, once S61 has adopted and reviewed it (your words, 2026-11-17: "the schedule and its
-    independent review before any UI building").
+10. ~~**Step 64**, hand over the 1.1 schedule~~ Done (PR #223). ~~**Step 18**, your go on the UI~~
+    Done 2026-11-24 (PR #253). Next: **step 77**, read the S14 brief's questions and merge PR #253,
+    which releases S66, then S18, S19 and S20.
 11. **Step 8**, the Max upgrade: pushed back "until 11/19 or until usage begins flowing" (your
     words, 2026-11-15).
 12. **Step 33**, Google Cloud billing for S29, then start S29; **step 36** before S30; **step 34**
@@ -538,7 +539,10 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     shows that field only to repository admins, and agents have write access, so Claude expects not
     to be able to read it; it says so and ticks this on your word.
 
-- [ ] **18. Say go on the UI when your examples are ready.** About 1 minute, any time. The UI sessions
+- [x] **18. Say go on the UI when your examples are ready.** *Done 2026-11-24: Blue's go in Mako main's
+  chat, 2026-11-24 ("go, we need to run through this session ..."), recorded in docs/DECISIONS.md
+  by PR #253, which sets S66, S18, S19 and S20 to READY; checked against the hand-off for that PR.
+  Merging PR #253 puts the entry on `main`.* About 1 minute, any time. The UI sessions
   (S14 and S17 to S20) are on `HOLD (Blue)` in docs/PLAN-1.1.md (PR #48), so the runner skips them.
   When your UI examples folder is ready, tell any agent "go on the UI". It records your words in
   docs/DECISIONS.md and sets those rows back to READY in a PR. Merging that PR starts S14 (Claude
@@ -1253,6 +1257,21 @@ Step 75 comes from PR #245. Step numbers 73 and 74 belong to open PRs (#230 and 
   - *Done when:* a Web Scout pane launches after the sync, and you tell any agent "step 75 done"; it ticks
     this with the date.
 
+## From S14 (the 1.1 design brief)
+
+Step 77 comes from PR #253.
+
+- [ ] **77. Read the S14 brief's 18 questions, then merge PR #253.** **About 10 minutes**, at your
+  next merge sitting. Open `docs/DESIGN-BRIEF-1.1.md` on the PR's branch and read only its "Questions
+  for Blue" table: each question has a default, and merging the PR approves every default you don't
+  change. To change one, tell any agent "S14 question N: <your answer>" (before or after the merge).
+  Two of them want your eyes later, not now: the control-room layout (question 6), from a screenshot
+  in S19's draft PR, and the task-node stage, lines and "What Mako knows" (questions 3 and 4), at
+  S18's first PC check. Merging also adds the shark's shape file (question 8); say no and the agent
+  drops that commit.
+  - *Done when:* PR #253 is merged, or you have answered the questions you want changed; the agent
+    ticks this with the date.
+
 ## Every day, once the runner is on
 
 Once S04 is applied (step 27), the runner works all day and you do one sitting in the evening:
@@ -1274,8 +1293,8 @@ Once S04 is applied (step 27), the runner works all day and you do one sitting i
 
 You can start on the first one now, which saves time later.
 
-- **Session S14 (on hold until you say go, step 18):** the design brief, from prototype A (Shark A)
-  and your decision sheet. Hand both to the session that writes it.
+- **Session S14:** ~~on hold until you say go (step 18)~~ Your go came on 2026-11-24; the brief is
+  in PR #253 (step 77).
 - **Session S06, after step 35 passes:** remove the `ABlueAI` Git login from every PC Claude runs
   on: now step 49.
 - **Session S12:** confirm your Hexona login link in Mako (step 29).
