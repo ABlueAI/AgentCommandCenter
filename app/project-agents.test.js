@@ -267,7 +267,7 @@ if (sharedBlocks.length > 0) {
   const fix = (/\*\*One small last fix\*\*([\s\S]*?)\n- \*\*/.exec(rules) || [])[1] || '';
   const flatFix = fix.replace(/\s+/g, ' ');
   for (const bound of [
-    'the only finding still open is one medium finding',
+    "the only high or medium finding still open is one medium finding (open low findings don't count)",
     'Once per PR.',
     'if it shows any, the builder stops as above',
     'never applies to a high finding, a security finding or any finding from `security-reviewer`',

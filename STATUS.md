@@ -30,8 +30,8 @@ Every PR that changes the state updates this file.
 - **Default go, short TLDRs and the H1 commander (PR #282, a plan change; Blue, 2026-11-24,
   docs/DECISIONS.md D-084 to D-086):** once Blue merges it, build work no longer waits for his go:
   builders take the recommended default, put open questions in the PR, and stop for him only on
-  spending or new accounts, credentials, deleting things and taste calls (AGENTS.md "Deciding
-  without asking"). S46, S47 and S62 move from `HOLD (Blue)` to `READY` (they still wait for S14);
+  spending or new accounts, credentials, deleting things, taste calls, sensitive work the task
+  didn't cover and blockers after 3 tries (AGENTS.md "Deciding without asking"). S46, S47 and S62 move from `HOLD (Blue)` to `READY` (they still wait for S14);
   PR #253 (open; not verified until it merges) records Blue's go on the UI and sets S14 in
   progress and S66 and S18 to S20 `READY`. Every PR's TLDR starts with a short
   colour-coded block for Blue (🔴 🟡 🟢, Claude's own decisions marked 🤖). A local "Mako command"

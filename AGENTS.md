@@ -209,9 +209,9 @@ mostly low, findings. Every PR follows it, including the builder's own fixes.
   run 5), the builder stops: no more fix rounds and no further run. It marks the PR "needs Blue" and asks Blue how to proceed, in the PR and in its session-end
   message, with its diagnosis and the solutions it sees, so the PR doesn't spiral.
   - **One small last fix** (Claude's proposal of 2026-11-24, for Blue to check; docs/DECISIONS.md,
-    2026-11-24, D-084 to D-086): if, after the last run allowed, the only finding still open is one
-    medium finding and its fix is small (a few lines, in files the PR already changes, needing no
-    decision from Blue), the builder may make that fix in one push and run one extra delta run on
+    2026-11-24, D-084 to D-086): if, after the last run allowed, the only high or medium finding
+    still open is one medium finding (open low findings don't count) and its fix is small (a few
+    lines, in files the PR already changes, needing no decision from Blue), the builder may make that fix in one push and run one extra delta run on
     it without asking Blue, instead of stopping. If that run shows no high or medium finding open,
     the PR goes on to step 5; if it shows any, the builder stops as above. Once per PR. It never
     applies to a high finding, a security finding or any finding from `security-reviewer`, and,

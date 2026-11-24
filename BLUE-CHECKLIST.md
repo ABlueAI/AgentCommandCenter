@@ -37,8 +37,9 @@ On 2026-11-21 steps 27 and 50 left the top (your decision: the runner they check
 2026-11-04) and step 60 moved up for its dates (docs/DECISIONS.md, 2026-11-21).
 
 **New on 2026-11-24 (PR #282, your decisions D-084 to D-086):** build work no longer waits for
-your go (only spending, new accounts, credentials, deleting things and taste calls still come to
-you, with a default); **step 80**, setting up the commander on H1, once S67's PR is merged: it is what
+your go (only spending, new accounts, credentials, deleting things, taste calls, sensitive work the
+task didn't cover and blockers after 3 tries still come to you, with a default; AGENTS.md
+"Deciding without asking"); **step 80**, setting up the commander on H1, once S67's PR is merged: it is what
 starts the build sessions and sends you the merge order each evening.
 
 1. **Step 60**, the Composer practice test on **2026-11-22**, then prototype day on **2026-11-23**
