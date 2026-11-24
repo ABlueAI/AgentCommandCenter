@@ -3,6 +3,29 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-24: S48's OSS verdict (vault memory)
+
+Blue gave it in Mako main's chat, answering checklist step 68 with the recommendation in
+`docs/decisions/OSS-memory.md` (PR #209) in front of him. Recorded word for word in that record's
+"Blue's verdict" section.
+
+| Decision | Blue's words |
+|---|---|
+| S48's OSS verdicts: **PROTOTYPE** for an isolated Open Second Brain subset; **PATTERN-MINE** for ai-memory and GBrain. The record's recommendation, accepted unchanged. Whether any of the three was among the memory tools dropped on 2026-11-16 is not answered; that sign-off still applies if one was. | "sounds correct, go with that" |
+
+## 2026-11-24: S42's rulebook wording (proposed, pending Blue (PR #242))
+
+S42 moves the rule changes Blue decided on 2026-11-16 and 2026-11-21 into AGENTS.md and
+docs/CODEX-BUILDER-LANE.md. Where his decision left the wording open, the PR proposes it, and
+merging PR #242 approves it. Each line below is the builder's reading, not Blue's words.
+
+| Proposal | Source |
+|---|---|
+| **Certainty labels** are three: verified (with how), builder's reading, not verified (with how to check). They apply in TLDRs, replies to review findings, this file and STATUS.md. | 2026-11-16 "Running": "Certainty labels go into AGENTS.md" (no definition relayed). |
+| **A docs-only PR** (review cap 2) changes only Markdown and touches no sensitive area, so a change to AGENTS.md, `CLAUDE.md`, `.claude/` or `.github/` keeps the cap of 5. | 2026-11-16 "Running": "Review cap of 2 runs on docs-only PRs (5 stays for code)". |
+| **Dependabot PRs (issue #205):** reviewed like a Codex PR by a Claude cloud session; no agent pushes to them; they never make another PR wait in the merge-order check. | 2026-11-21 item 17: issue #205 "is handled inside S42". |
+| **Scans stay static** when a scanner's analysis stage would call a China-origin model, as part of the China-origin rule. | 2026-11-17 (S39): "Making 'scans stay static' part of the China-origin rule belongs to S42's rulebook update." |
+
 ## 2026-11-24: S56's bug issues, and S56 no longer marked Sensitive
 
 Blue gave both in the sessions that did the work. How the plan follows the second is **proposed,
