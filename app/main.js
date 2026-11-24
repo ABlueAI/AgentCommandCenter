@@ -536,18 +536,27 @@ function createWindow() {
   // uses (refuse-visibly rule): a blocked navigation/popup must never be a silent no-op. refusalLine
   // strips control chars + truncates the (attacker-influenced) URL so this can't become a log sink.
   const sendRefusal = (line) => { if (win && !win.isDestroyed()) win.webContents.send('main-error', line); };
+  // Issue #163: externalUrl is set only for an http(s) URL the Quick Links URL policy accepts, and it
+  // is the policy's normalized URL (nav-guard.js externalTarget, the same rule as open-external). An
+  // OS browser that fails to open it is reported on the same channel, never dropped.
+  const openOutside = (guard, d, url) => {
+    if (d.externalUrl) {
+      Promise.resolve()
+        .then(() => shell.openExternal(d.externalUrl))
+        .catch(() => sendRefusal(`[nav-guard] ${guard}: the external browser could not open the link (os-open-failed)`));
+    }
+    sendRefusal(refusalLine(guard, url, !!d.externalUrl, d.reason));
+  };
   win.webContents.setWindowOpenHandler(({ url }) => {
     const d = decideWindowOpen(url);
-    if (d.externalUrl) shell.openExternal(d.externalUrl);
-    sendRefusal(refusalLine('window.open', url, !!d.externalUrl));
+    openOutside('window.open', d, url);
     return { action: d.action };
   });
   const guardNav = (label) => (e, url) => {
     const d = decideNavigation(url, ENTRY_URL);
     if (!d.allow) {
       e.preventDefault();
-      if (d.externalUrl) shell.openExternal(d.externalUrl);
-      sendRefusal(refusalLine(label, url, !!d.externalUrl));
+      openOutside(label, d, url);
     }
   };
   win.webContents.on('will-navigate', guardNav('will-navigate'));
