@@ -6,14 +6,14 @@ words. Start each bullet with 🔴 must know or decide before merging, 🟡 wort
 **Summary:** (one or two lines: what this PR does and why)
 
 **Most impactful changes**
-- 🟢 (the most important first)
+- 🔴/🟡/🟢 (pick one) (the most important first)
 
 **Decisions made**
-- 🟡 🤖 Claude decided: (a decision the builder made itself, with its reason in a few words; "Codex decided" on a Codex PR)
-- 🟢 (a decision of Blue's this PR records, or "none")
+- 🔴/🟡/🟢 🤖 Claude decided: (a decision the builder made itself, with its reason in a few words; "Codex decided" on a Codex PR)
+- 🔴/🟡/🟢 (a decision of Blue's this PR records, or "none")
 
 **Before you merge**
-- 🟢 (the implications: what changes for Blue, what it starts or stops, anything hard to undo; or "nothing unusual")
+- 🔴/🟡/🟢 (pick one) (the implications: what changes for Blue, what it starts or stops, anything hard to undo; or "nothing unusual")
 
 ### Full TLDR (for the reviewers)
 

@@ -1269,7 +1269,8 @@ Once S04 is applied (step 27), the runner works all day and you do one sitting i
   Confirm merge. Merge only on `READY TO MERGE`.
 - **Once the commander runs on H1 (step 80):** its colour-coded evening merge list is what you read
   at the sitting. Merge the `READY TO MERGE` PRs in the order it gives. To pause the build, tell the
-  commander "stop", or pause the routines on the routines page.
+  commander "stop" and pause the routines on the routines page (until S67 links them, each stops
+  only its own part).
 - **During the day: nothing.** A question for you also arrives as a GitHub notification (a PR
   comment starting "@ABlueAI needs Blue:"); it can wait for the evening.
 - **Tuesday and Friday evenings:** the PC checks, batched, until H1 automates them ("Do next" item
@@ -1290,7 +1291,8 @@ open PRs (#253 and #254).
   - From then on it starts and resumes the cloud build sessions, keeps usage to about 95% of each
     5-hour window, and sends you one colour-coded merge list each evening, in merge order. Your
     laptop chat (Mako main) becomes the watcher.
-  - To stop everything: tell that chat "stop", or pause the routines on the claude.ai routines page.
+  - To stop everything: tell that chat "stop" and pause the routines on the claude.ai routines
+    page. Until S67's PR links the two, each stops only its own part, so do both.
   - *Done when:* the commander has run on H1 for one full day and its evening merge list reached
     you; tell any agent "step 80 done" and it ticks this with the date.
 

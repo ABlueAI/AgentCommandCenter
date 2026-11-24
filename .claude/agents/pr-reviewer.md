@@ -14,7 +14,8 @@ diff (or, on a re-run, the delta), the PR's TLDR, any previous findings, and the
 ## What you get
 
 You run at most 5 times on a PR, or 2 times on a docs-only PR, for any reason, so each run has to
-count (AGENTS.md, "The review loop").
+count (AGENTS.md, "The review loop"). The one exception is a single extra delta run on one small
+last fix ("One small last fix" there).
 
 - **Run 1 (complete audit):** the PR number, the PR's TLDR, and the path of a file holding the
   whole diff.

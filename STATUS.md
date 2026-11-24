@@ -32,12 +32,13 @@ Every PR that changes the state updates this file.
   builders take the recommended default, put open questions in the PR, and stop for him only on
   spending or new accounts, credentials, deleting things and taste calls (AGENTS.md "Deciding
   without asking"). S46, S47 and S62 move from `HOLD (Blue)` to `READY` (they still wait for S14);
-  PR #253 releases S66 and S18 to S20 with Blue's go on the UI. Every PR's TLDR starts with a short
+  PR #253 (open; not verified until it merges) records Blue's go on the UI and sets S14 in
+  progress and S66 and S18 to S20 `READY`. Every PR's TLDR starts with a short
   colour-coded block for Blue (🔴 🟡 🟢, Claude's own decisions marked 🤖). A local "Mako command"
   chat on H1 is to run the build and send Blue the evening merge list in merge order (new row S67,
   `READY`; Blue sets it up, checklist step 80); Mako main, the laptop chat, becomes the watcher. A
-  proposal of Claude's, for Blue to check: one small last fix and one extra review run past the run
-  cap, instead of stopping as "needs Blue".
+  proposal of Claude's, for Blue to check: one small last fix of one medium finding and one extra
+  review run past the run cap, instead of stopping as "needs Blue".
 
 - **Release: Mako 1.0.0 is released.**
   - Tag `v1.0.0` was created on 2026-10-18 at `main` commit `37009eb`, which includes the
