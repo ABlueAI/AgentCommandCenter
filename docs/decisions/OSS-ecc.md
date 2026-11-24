@@ -119,7 +119,8 @@ The rest of ECC, as Blue's split set it:
 Written 2026-11-24 by the Claude cloud session building S45 (PR #255). Research only: nothing was
 installed, run or copied into Mako. Each row is a proposal; Blue's verdict goes in the last column,
 and a skill joins Mako only through a later plan row (1.2, or 1.1 only if it passes the 1.1 test
-and Blue says so).
+and Blue says so). Merging PR #255 records the list, not Blue's verdicts: each row needs his
+verdict in its last column, quoted as he gives it.
 
 **Source.** The same ECC pin as above: commit `d2ef2680594f9a17526a6e1a2e18b3d242c5d17b`, whose
 `skills/` folder (git tree `e82cd2aff4e5df1e9871416275ffcb345c594ebb`) holds 314 skills, each a
@@ -133,7 +134,7 @@ patterns), not skills, so every skill is listed here. The one skill another row 
 **How each was judged** (builder's reading unless marked). Each verdict rests on the skill's
 frontmatter (name, description, licence, origin), its file list, and searches of every skill
 folder for China-origin model names, upstream attributions and licence lines (verified: the
-searches ran on all 314). For the eight top picks, the headings and the passages that decide the
+searches ran on all 314). For the nine top picks, the headings and the passages that decide the
 verdict were read too, and their `SKILL.md` sha256 is below. The other bodies were not read in
 full, so their rows are the builder's reading from the description; a later plan row re-reads the
 skill before it builds anything. The fit test is Mako's: a Windows Electron app in plain
@@ -141,7 +142,7 @@ JavaScript (no React, Vue or Vite; verified from `app/package.json`) that runs C
 Codex panes on Blue's plans, with no API credits, no new paid service without Blue, and the 1.2
 queue in docs/PLAN-1.1.md "Month two and later".
 
-**Verdicts proposed:** 1 FORK, 4 PROTOTYPE, 22 PATTERN-MINE, 286 SKIP, and `gateguard` left to
+**Proposed:** 1 FORK, 4 PROTOTYPE, 22 PATTERN-MINE, 286 SKIP, and `gateguard` left to
 S44. Most SKIPs are language or framework packs Mako doesn't use (94) and business or other
 domains (51).
 
@@ -150,7 +151,9 @@ FORK or PROTOTYPE that installs is a sensitive PR with a second review. The Sens
 what a skill would touch beyond that: credentials, process control, payments, client data, network
 listeners, CI, or `.claude/` hooks and settings.
 
-**China-origin rule** (verified by search). Skills that would call a China-origin model:
+**China-origin rule** (verified by search: every file in every skill folder, case-insensitive, for
+DeepSeek, Qwen, GLM followed by a number, Kimi, Doubao, Zhipu, Moonshot, MiniMax, Hunyuan, Baichuan,
+ERNIE Bot, Seedance, Kling, ByteDance and `z-ai/`). Skills that would call a China-origin model:
 `deepseek-harness-setup` (DeepSeek), `fal-ai-media`, `taste-application` and `taste-distillation`
 (ByteDance's Seedance and Kuaishou's Kling through fal.ai); all four are SKIP. Skills that only
 name one: `configure-ecc` and `ito-inference` (Kimi), `dmux-workflows` and `ecc-guide` (Qwen's
@@ -160,8 +163,9 @@ pick. No top pick names one.
 **Licence.** ECC's repository licence is MIT (Copyright (c) 2026 Affaan Mustafa, already in
 [LICENSES/MIT-ECC.txt](../../LICENSES/MIT-ECC.txt)). The Licence column gives that unless the
 skill says otherwise: 8 supply-chain skills say Apache-2.0 in their header, 10 others say MIT,
-`context-and-decisions` has its own MIT file under another holder, and `osint-investigation` is
-CC-BY-SA-4.0 (share-alike). Many skills name an origin other than ECC ("community", a person or
+`context-and-decisions` has its own MIT file under another holder, `taste-application` has an MIT
+file in `scripts/` under ECC's own holder, and `osint-investigation` is CC-BY-SA-4.0
+(share-alike). Many skills name an origin other than ECC ("community", a person or
 another project); the column shows it. Builder's reading: contributions to an MIT repository come
 under its licence unless they say otherwise; a FORK or PROTOTYPE re-checks its skill's origin
 before copying any text.
@@ -184,7 +188,8 @@ before it is used.
 4. **`skill-comply`, PROTOTYPE.** Measures whether agents follow skills and rules by running
    scenarios through `claude -p` on Blue's plan. It could measure AGENTS.md compliance. Its usage
    example uses Haiku to generate scenarios (verified in its `SKILL.md`), so Mako would pass Opus
-   or Sonnet; run in a cloud session.
+   or Sonnet, and the prototype checks which model actually ran and refuses visibly if it isn't
+   one of them; run in a cloud session.
 5. **`team-agent-orchestration`, PATTERN-MINE.** Its control-pane list (owner, branch, worktree,
    heartbeat, blockers, merge readiness by gate) matches what the control room and 1.2's queue
    tracker show.
@@ -194,6 +199,11 @@ before it is used.
    content, for 1.2's daily security upkeep and the fenced web readers.
 8. **`operator-approval-loop`, PATTERN-MINE.** The draft, decide and receipt shape fits approvals
    (A2); its time-boxed auto-approval stays out, because Blue approves.
+9. **`security-scan`, PROTOTYPE (the riskiest proposal).** Scans `.claude/` (CLAUDE.md, settings,
+   hooks, MCP servers, agents) with the AgentShield npm tool, for 1.2's daily security upkeep. Its
+   `SKILL.md` runs that tool through an unpinned `npx` package (`ecc-agentshield`), which it
+   links to the GitHub account that owns ECC, so the prototype pins a version, runs the
+   pin-and-scan step on it first, and runs only in a cloud session. Touches `.claude/`.
 
 sha256 of the top picks' `SKILL.md` at the pin:
 
@@ -207,11 +217,13 @@ sha256 of the top picks' `SKILL.md` at the pin:
 | `loop-design-check` | `d48c239c8b9ff253d103d7de7b9839c5bf9dbd3c90eddef7c4ac612b28d71bbd` |
 | `agent-security-hardening` | `0e0895ada90aa8fa085e4257961ebe15f2dff43b843785b1533d4c731186ad81` |
 | `operator-approval-loop` | `6f79952c1498c2748ea13d74ca665c7508ae72068e014e848dee0754e3d650e5` |
+| `security-scan` | `74bc3006fb15eef9cea6bf70a4e9cc45ec118ef00733d1c8226c9dc428f8d658` |
 
 ### Every skill, by group
 
 Blue's verdict: write ADOPT, FORK, PROTOTYPE, PATTERN-MINE, BUILD FRESH or SKIP in the last
-column (or "as proposed").
+column (or "as proposed"). SKIP here is a per-skill disposition ("not taken"), not one of the
+verdicts AGENTS.md's OSS-first rule lists for a subsystem.
 
 #### Agents, orchestration and loops (40)
 
@@ -271,13 +283,13 @@ column (or "as proposed").
 | `click-path-audit` | Traces each button through its state changes to find flows that cancel each other out | Yes: a read-only trial on the renderer, as S43 did with spec-miner, would test the new tabs | **PROTOTYPE** | MIT (ECC repo); origin: community | no |  |
 | `codehealth-mcp` | Code-health scores through CodeScene's MCP | No: a paid outside service | SKIP | MIT (ECC repo); origin: community | credentials |  |
 | `conventional-commit-review` | Drafts Conventional Commits messages | No: Mako doesn't use that format | SKIP | MIT (ECC repo); origin: personal | no |  |
-| `e2e-testing` | Playwright end-to-end tests: page objects, config, flaky-test handling, artifacts | Yes: Mako has no end-to-end tests; Playwright can drive Electron, which would move some PC checks into CI | **PROTOTYPE** | MIT (ECC repo) | CI workflows |  |
+| `e2e-testing` | Playwright end-to-end tests: page objects, config, flaky-test handling, artifacts | Yes: Mako has no end-to-end tests; Playwright has an Electron API (not verified on Mako), which could move some PC checks into CI | **PROTOTYPE** | MIT (ECC repo) | CI workflows |  |
 | `issue-review` | Reviews a GitHub issue against the code, finds duplicates, scores it | Partly: a shape for triaging issue #164's pick-up list; any gh writes would follow agent-account pacing | **PATTERN-MINE** | MIT (ECC repo) | no |  |
 | `module-regression` | A REGRESSION.md ledger of each module's consumers and acceptance command | Low: Mako's single test script runs everything | SKIP | MIT (ECC repo) | no |  |
 | `plankton-code-quality` | Formats, lints and has Claude auto-fix on every edit through hooks | No: hooks on every edit, and auto-fix spends usage | SKIP | MIT (ECC repo); origin: community | .claude/ hooks |  |
 | `production-audit` | Local-evidence production-readiness audit | Low: S59 and S65 cover the release | SKIP | MIT (ECC repo); origin: community | no |  |
 | `santa-method` | Two independent reviewers must both pass before output ships | No: Mako already needs Claude's and Codex's passes | SKIP | MIT (ECC repo); origin: Ronald Skelton - Founder, RapportScore.ai | no |  |
-| `skill-comply` | Measures whether skills and rules are followed by running scenarios through `claude -p` (ships Python) | Yes: could measure how well agents follow AGENTS.md. Its default generator model is Haiku, so Mako would set Opus or Sonnet; cloud only | **PROTOTYPE** | MIT (ECC repo) | no |  |
+| `skill-comply` | Measures whether skills and rules are followed by running scenarios through `claude -p` (ships Python) | Yes: could measure how well agents follow AGENTS.md. Its usage example uses Haiku to generate scenarios (verified in its SKILL.md), so Mako would pass Opus or Sonnet, and the prototype checks which model actually ran and refuses visibly if it isn't one of them; cloud only | **PROTOTYPE** | MIT (ECC repo) | no |  |
 | `tdd-workflow` | Test-first workflow with an 80% coverage target | No: Mako has no coverage tool and its own test gate | SKIP | MIT (ECC repo) | no |  |
 | `test-collaboration` | Links requirements and risks to stable test IDs | Low: heavier than Mako's plain test files need | SKIP | MIT (ECC repo) | no |  |
 | `verification-loop` | Build, types, lint, tests, security grep and diff review, then PASS or FAIL | No: CI and pr-reviewer cover it | SKIP | MIT (skill's own header) | no |  |
@@ -594,4 +606,8 @@ column (or "as proposed").
 - "Yes, take it" (2026-11-15): he took an independent review's split, which adopts these four
   reviewers now (plus planner in ECC PR 2).
 
-Blue's verdict on this record is his merge of the PR that adds it.
+- "Yes, start all 4" (2026-11-24): S45 starts (relayed in the task that started the S45 cloud
+  session).
+
+Blue's verdict on S39's part of this record is his merge of PR #174. His verdicts on S45's list are
+the last column of each row in "ECC's other skills (S45)"; merging PR #255 is not one.
