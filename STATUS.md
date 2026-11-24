@@ -1,7 +1,6 @@
 # Mako status
 
-Updated 2026-11-24 by PR #282 (Blue's decisions D-084 to D-086: default go, short colour-coded
-TLDRs, and the commander on H1; a plan change). Before that: updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
+Updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
 verdict; review fixes pushed by a Claude cloud session on Blue's ask). Before that: updated 2026-11-24 by PR #209 (S48's OSS record, docs/decisions/OSS-memory.md, with Blue's
 verdict: PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain; step 68
 ticked). Before that: updated 2026-11-24 by PR #241 (S56 no longer marked Sensitive in the plan; its 9 bug issues, #232
@@ -20,6 +19,8 @@ Blue's voice check (step 15) remains pending. Before that: updated
 the 2026-11-04 status PR (#165): #166 (merge order). Before that, the 2026-11-04 status PR (#165)
 covered #130 (S15), #146, #147, #140, #155 (S33), #152 (S31), #153, #157 (S34) and #154 (S32);
 #158 to #160 merged just before it (2026-11-05 00:00 to 00:02 UTC).
+Also updated 2026-11-24 by PR #282 (Blue's decisions D-084 to D-086: default go, short
+colour-coded TLDRs, and the commander on H1; a plan change; "Right now" below).
 Every PR that changes the state updates this file.
 
 ## Right now
