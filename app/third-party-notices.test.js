@@ -184,6 +184,12 @@ assert(/row vendor\/ex-changed\.js.*LGPL-2\.1-only/.test(np) && /stale file exce
 assert(/stale file exception: no row for vendor\/gone\.js/.test(np), 'notices: a stale file exception fails');
 assert(/notices row "\[link\]\(x\)": the first cell must be one backticked file path/.test(np),
   'notices: a file-table row without a backticked path fails instead of being skipped');
+for (const licence of ['MIT AND JSON', 'JSON OR MIT', 'MIT and WTFPL', '(MIT AND JSON)']) {
+  assert(/not on the permissive list/.test(policy.checkNoticeRows([{ file: 'vendor/sample.js', first: '`vendor/sample.js`', licence }], []).join('\n')),
+    `notices: a bare unlisted SPDX id next to an operator fails ("${licence}")`);
+}
+assert(policy.checkNoticeRows([{ file: 'x', first: '`x`', licence: 'Apache-2.0 (text) and MIT (text) for the rest' }], []).length === 0,
+  'notices: a prose "and" between permissive ids and lower-case words passes');
 assert(policy.checkNoticeRows([{ file: 'x', first: '`x`', licence: 'MIT; Replacing nothing' }], []).length === 0,
   'notices: words that merely contain "epl" or "gpl" letters don\'t trip the check');
 assert(policy.noticeFileRows('| File | License (SPDX) |\n|---|---|\n| `a.js` | GPL-2.0-only |\n').length === 1,

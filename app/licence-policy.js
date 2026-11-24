@@ -200,11 +200,17 @@ function splitRow(line) {
 }
 
 // Licence ids in a cell: SPDX-shaped tokens (an upper-case letter or digit, then at least one
-// hyphenated part, such as GPL-3.0-only, MS-RL, CC-BY-ND-4.0, Commons-Clause) plus bare ids on
-// PERMISSIVE (MIT, ISC, ...). Every one must be on PERMISSIVE: deny by default.
+// hyphenated part, such as GPL-3.0-only, MS-RL, CC-BY-ND-4.0, Commons-Clause), bare ids on
+// PERMISSIVE (MIT, ISC, ...), and any other bare token starting with an upper-case letter or
+// digit that sits next to an SPDX operator (AND, OR, WITH, in any case), so the JSON in
+// "MIT AND JSON" counts as an id. Every one must be on PERMISSIVE: deny by default.
+const SPDX_OPERATOR = /^(?:and|or|with)$/i;
 function licenceIds(text) {
   const tokens = text.match(/[A-Za-z0-9][A-Za-z0-9.+-]*/g) || [];
-  return tokens.filter((t) => PERMISSIVE.has(t) || /^[A-Z0-9][A-Za-z0-9.+]*(?:-[A-Za-z0-9.+]+)+$/.test(t))
+  const nextToOperator = (i) => SPDX_OPERATOR.test(tokens[i - 1] || '') || SPDX_OPERATOR.test(tokens[i + 1] || '');
+  return tokens.filter((t, i) => !SPDX_OPERATOR.test(t) && (PERMISSIVE.has(t)
+    || /^[A-Z0-9][A-Za-z0-9.+]*(?:-[A-Za-z0-9.+]+)+$/.test(t)
+    || (/^[A-Z0-9]/.test(t) && nextToOperator(i))))
     .map((t) => t.replace(/[.]+$/, ''));
 }
 
