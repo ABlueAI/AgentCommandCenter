@@ -62,8 +62,10 @@ minutes during the trial (checklist step 30).
    the digest prompt's `READY TO MERGE` test (its step 2), and fix requests after the trial confirms the mechanics, in this PR;
    an interactive session then applies it (a new checklist step). Until then only a Claude session
    Blue asks in an `ABlueAI` comment hands Codex a task.
-8. **Cap.** Codex builds count against a separate Codex cap of 1 at a time (a choice to stay within ChatGPT Plus; its real limits are not verified), not the
-   runner's `parallel_cap`, which counts Claude's usage.
+8. **Cap.** Codex builds count against a separate Codex cap of 2 at a time (Blue, 2026-11-21,
+   docs/DECISIONS.md; it was 1, a choice to stay within ChatGPT
+   Plus; its real limits are not verified), not the runner's `parallel_cap`, which counts Claude's
+   usage.
 
 ## The trial
 

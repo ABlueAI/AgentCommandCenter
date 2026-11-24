@@ -3,6 +3,91 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-24: S56's bug issues, and S56 no longer marked Sensitive
+
+Blue gave both in the sessions that did the work. How the plan follows the second is **proposed,
+pending Blue (PR #241)**; merging that PR approves it.
+
+| Decision | Blue's words |
+|---|---|
+| A cloud session opens S56's 9 bug issues from Codex's renderer audit so Codex can build S56 next. Done 2026-11-24 as #232 to #240, listed on #197; the cloud session that opened them judged none to be a security gap (builder's reading, not Blue's). | "Yes, open them" |
+| S56's row stops being tagged Sensitive: its clause about a bug that is a security gap no longer uses the word the plan sync reads as the tag, so #197 loses the `sensitive` label and the row fits the Codex builder lane. A bug that turns out to be a security gap still stays with Claude. | "Fix the Sensitive tag on S56 in the plan" |
+
+## 2026-11-23: hard rules, Codex's pass before ready, agent-account pacing
+
+On 2026-11-23 two of Blue's rules were broken because they lived only in his private notes and an
+unmerged draft (PR #169), not in AGENTS.md: the pacing cap, and the rule that a PR is ready only with
+a pass from Claude and a pass from Codex. Blue decided these in his main chat; the quotes are as the
+hand-off for this PR relayed them. How AGENTS.md words them ("Hard rules (never broken)", "How work
+flows" steps 3 and 5, "Agent-account pacing") is proposed, pending Blue (this PR); merging approves
+it. "Builder's reading" marks a line that is the builder's, not Blue's.
+
+| Decision | Blue's words |
+|---|---|
+| **1. `READY TO MERGE` needs a pass from Claude and a pass from Codex** (2026-11-22). Claude's is the independent Opus review loop; Codex's is its 👍 (+1) reaction on the PR or a comment saying it found no major issues (as relayed in the hand-off). Replaces "Codex review is optional ... nothing waits for it" (AGENTS.md step 3, 2026-10-20). Builder's reading: both passes must cover the latest head; only `chatgpt-codex-connector[bot]`'s reaction or unedited comment counts; Codex's findings are fixed or answered (never parked as low; out of scope becomes an issue); and a `codex/` PR is re-triggered by Codex or Blue, since Claude never changes its draft state. Open question for Blue in PR #227: Codex answered "create an environment for this repo" instead of reviewing on the `codex/` PRs #206, #208 and #209 (BLUE-CHECKLIST.md step 72). | "knowing that there is a pass from Claude and a pass from Codex makes me a lot more comfortable with a merge" |
+| **2. Agent-account pacing: at most 24 pushes and 120 GitHub writes an hour** per agent account, across all sessions; stop at the first rate-limit or abuse-detection signal. Builder's reading: 24 is the push cap and 120 the write cap. Supersedes the numbers in PR #169's draft rule R5 (6 pushes and 40 writes an hour); its other rules stay in that PR. | "this rule needs to change to 24 per hour" · "writes 120 is fine" |
+| **3. Some rules are hard rules: never broken, no judgment.** If one is unclear or seems to conflict with a task, the agent stops and asks Blue. Builder's reading (from the hand-off, not Blue's words): every other rule is a default, followed as written, with judgment only where it leaves room and each assumption recorded in the PR; which rules are hard is the list the hand-off gave. | "some rules should never be broken, ever. like the merge rule." · "do we need to clarify rules that can be overruled to prevent an agent from going rogue based on assumptions" |
+| **4. These rules go into AGENTS.md now.** Asked "Write your vault-only rules (Codex 👍, pacing) into AGENTS.md now?" | "Yes, write them in" |
+
+## 2026-11-23: Blue's answers on the 1.1 schedule (S61)
+
+Blue answered the 1.1 schedule's open decisions in his main chat, and approved its text to go
+public ("Yes. Do as written.", checklist step 64). The dates were corrected on Blue's ask. The schedule is
+docs/SCHEDULE-1.1.md, added by PR #223; merging that PR adopts it. Numbers match the schedule's
+"Decisions" table. Decisions 1 to 3 were settled by PR #212 (2026-11-21 entry, items 26 to 28);
+decisions 6 and 7 stay open. A row without a quote had no words relayed.
+
+| Decision | Blue's words |
+|---|---|
+| **The schedule goes public as written,** after the public-safety edits and the re-sync with `main` that S61's PR lists. | "Yes. Do as written." |
+| **4. Step 58 (the lessons-learned review) by 2026-11-27, the date the schedule proposed; before that Friday if the work runs ahead** (builder's reading of his words, from the hand-off). If it isn't done, the agent tune-up (S28, S60) runs from the lessons draft as it is (2026-11-21 entry, item 29). | "Sure, but if we're running ahead of schedule, can this just be completed prior to Friday?" |
+| **5. Mako's main chat keeps the Claude lanes full,** starting the next row as each one finishes; Blue doesn't open lanes himself each day. | — (yes to the revised wording) |
+| **8. If the 2026-12-20 checkpoint says behind, the release date slips instead of the scope.** S54, S47 and any replay work stay in 1.1; only pop-out windows (S19) may move to 1.2. Replaces the schedule's proposed "hold the date by moving S54, then S47, then the build half of S53, then pop-outs to 1.2", and amends item 27 of the 2026-11-21 entry ("nothing cut for the date"): pop-out windows may move. Builder's reading: S53's verdict is PATTERN-MINE (2026-11-18, recorded in PR #208, not yet merged), so S53 builds nothing and any replay work belongs to S19 or S62. | "No. I'd rather hold on to these items then. I'm expecting the date to get pushed back, but I don't want it to get pushed back too far." On pop-outs: "pop-outs ... can move" |
+| **Dates moved:** prototype day (step 60) is 2026-11-24; the aquarium trial (step 55) and the design visuals move to 2026-11-27, earlier if ahead. | — |
+
+## 2026-11-21: Blue's decisions of 2026-11-16 to 2026-11-21
+
+Blue approved these in his main chat between 2026-11-16 and 2026-11-21, and items 26 to 29 on 2026-11-22. The details stay in his
+private notes; this entry carries only what the hand-off for PR #212 gave, with his words in quotes
+where it quoted them (a row without a quote had no words relayed). Numbers match PR #212's TLDR.
+Composer scope items named S1 to S8 and V2b to V13 are items of Blue's private Composer scope draft,
+not plan rows. How the plan follows these (docs/PLAN-1.1.md, BLUE-CHECKLIST.md and the Codex cap in
+docs/CODEX-BUILDER-LANE.md) is **proposed, pending Blue (PR #212)**; merging that PR approves it.
+Where a decision needs a rule change in AGENTS.md, the rule changes in S42; until then the current
+rule holds. "Builder's reading" marks a line that is the builder's, not Blue's.
+
+| Decision | Blue's words |
+|---|---|
+| **1. OpenAI and ChatGPT in 1.1 as option (a): a Codex pane next to the Claude panes.** The Composer's memory and interfaces stay provider-neutral, so option (b) is a swap in 1.2. Builder's reading: this replaces the 2026-11-16 follow-up answer "Codex panes as Composer targets are in 1.1 if they cost one build day or less, as a reviewer first"; the Codex pane is in 1.1 without that condition, and Codex as a builder target is 1.2 (item 10). | "integrated from the start" |
+| **2. ChatGPT Plus is kept through the 1.1 release.** Codex's heavy use runs to about 2026-12-29, checked weekly. Builder's reading: the 2026-11-30 Codex check-in (checklist step 63) is the first weekly check. Adds to the 2026-11-16 "Codex" entry. | — |
+| **3. Other users sign in to Codex through Codex's own login, or with an OpenAI key in Mako's key setup.** | — |
+| **4. Scope freeze on 2026-12-01.** After it, anything new that isn't vital to security goes to 1.2. Replaces the 2026-11-16 freeze's exception ("unless it passes the test above and Blue says so") from 2026-12-01. | "frozen by 12/1" |
+| **5. Codex does the smaller tasks and the reviews; Claude builds the UI.** Codex runs 2 tasks at a time: the cap of 1 in docs/CODEX-BUILDER-LANE.md item 8 becomes 2. | — |
+| **6. S54 (Claude video analysis in Video Scout) is built by Codex.** | — |
+| **7. Security findings stay private.** Their full details go only to Blue's private notes. Public text (PRs, issues, plan rows, these files) gives a finding's title and severity only, and a fix PR carries a neutral title. | — |
+| **8. A fuller security audit before the 1.1 release.** A new row, S65, before the release row S59. | — |
+| **9. The Composer re-scout's agreed scope changes go into S49 and S51.** S51: an event log and a six-call provider adapter, so Claude and Codex plug into the same slots; worker reports read from the `Stop` hook's last message, so scope item V2b shrinks to the "ask" tool only; a restricted launch line for the Composer pane (`--restricted`, a `--tools` allowlist, `--strict-mcp-config`, `--settings`, `--add-dir` for the vault); one checked send path (never into a pane waiting on Blue; paste, then confirm the submit; refusal codes; an MCP SDK tool server with a per-pane token); the injection guard (text from a worker or a web page can never start anything above Tier 1); Three.js as the shark's engine (scope item S8), installed only after a version pin, a scan and Blue's OK. S49: the practice test before prototype day (Mako's role prompt plans the 10 test tasks offline, 3 times each, and Codex grades the plans blind against the answer key). | — |
+| **10. The guidebook is a 1.1 row (S64), written near the release:** the set-up and getting-started reference for people using Mako, fed by the H1 setup day and the prototype trials. 1.2's headline is the Private pane (Local, Redacted and Normal modes, with local AI on the RTX 5080). Codex as a builder target and racing lanes move to 1.2. No Codex CLI update: it stays pinned at 0.142.3. The safe phrase is reset through Windows Hello. | — |
+| **11. Prototype day (S50): 3 to 5 real tasks, with the practice test first.** The practice test is on 2026-11-22 and prototype day on 2026-11-23; either may slip a day if Claude Max isn't active yet. | — |
+| **12. Codex PR reviews are run and posted by a Claude cloud session under the agent account.** That covers `pr-reviewer` and the pre-ready reviewers. Blue's desktop login is read-only and never posts. The AGENTS.md wording changes in S42. | — |
+| **13. The China-origin rule, clarified. Replaces the wording of the 2026-11-16 entry "No models or hosted AI from companies based in China", which stays below as history.** The rule now reads: no models or hosted AI from companies based in China in anything Mako runs, installs or calls, local models such as Qwen, GLM, DeepSeek, Kimi and Doubao included. A China-origin model named only in an upstream file Mako doesn't ship is not a fail. Code Mako takes in has such references removed. It is checked at the pin-and-scan step for every tool, and only Blue makes an exception. The AGENTS.md wording comes in S42. | — |
+| **14. The Composer's V13 rule:** a new, unrelated item gets its own topic pane, never a message into the conversation Blue is in. | — |
+| **15. Codex does a 1 to 2 hour UI-library sweep before 2026-11-25** (deep-chat, Cytoscape.js, sigma.js, MiniSearch, Obsidian itself). A new row, S63. | — |
+| **16. "Incognito" folds into the 1.2 Private pane.** | — |
+| **17. Issue #205 (how Dependabot PRs are reviewed) is handled inside S42.** | — |
+| **18. The shark design is final:** the B3 Heavy shape, Dusk colour by default, deep water. Scope items S1, S2 and S8 are signed off. Blue's idea for the next pass on the node web (scope item V8): clicking a star inside the shark zooms into a nebula. | "sky and sea" |
+| **19. Composer scope answers.** Scope items V3, V4, V9, V10, V11 (the evening summary, at 22:00), V13 and S3 are yes. The stall watch fires at 20 minutes of silence or 5 failed tries. Claude Code session records are kept 90 days (which records this covers is a question in PR #212's TLDR). | — |
+| **20. S55: Quick Links presets that open several links at once** ("work research", "Buydeas") in the "Mako" Firefox profile. The URLs live in a local, git-excluded file, never in this repo. Rule: **agents never drive the Mako Firefox profile**; agents that browse use their own separate browser (the page reader's Playwright Chromium). Replaces "Firefox profile 2" in S55 and checklist step 57. | — |
+| **21. S48 (vault memory) takes PR #209's open-source record as its OSS record once Blue gives his verdict** (checklist step 68). | — |
+| **22. Both PCs run Node.js 26.13.1** (updated 2026-11-19 to 2026-11-20). CI stays on Node 22 to test the oldest supported version. | — |
+| **23. Checklist steps 27 and 50 leave the top of "Do next":** the runner they check has been off since 2026-11-04. | — |
+| **24. For S42's rulebook update:** Claude Code 2.1.329 removed the `/agents` screen, so an instruction that says "run /agents" becomes "ask Claude to list its subagents". | — |
+| **25. Two open issues, worded neutrally:** npm's allowScripts doesn't list the 3 packages whose install scripts Mako needs (issue #210); `app/page-reader.test.js` fails on a PC that has the page-reader agent installed and stops `npm test` early (issue #211). | — |
+| **26. S18 is split (2026-11-22).** New row S66, "Shared navigation" (the three tabs, Ctrl K, Settings), and S18, "Brain tab". S19 (control room) and S20 (aquarium) depend only on the shared navigation, not the whole brain tab, so they can build in parallel. Builder's reading: S20's removal of the old layout still waits until S18 and S19 are done. | "We need to maximize the amount of times we are building in parallel while maintaining efficient usage. ideally we would run in parallel as often as we can, then complete tasks individually that cannot be run in parallel towards the end of the week when usage is high in order to conserve usage and complete tasks in order" |
+| **27. S59's date: target 2027-01-15,** with all of 1.1 within 60 days of 2026-11-17, a pace checkpoint on 2026-12-20, and nothing cut for the date. Replaces "about 2026-12-13 to 2027-01-13" (2026-11-16 entry "When 1.1 is done"), which stays below as history. | "Yes to 2, 3, 4" (items 27 to 29) |
+| **28. S50 (prototype day) depends only on S49's pre-prototype deliverables:** the Composer role prompt, the 10 test tasks and the test sheet, not all of S49, which runs until the 2026-12-03 re-scout. | "Yes to 2, 3, 4" |
+| **29. If checklist step 58 (the lessons-learned review) isn't done, the agent tune-up (S28, S60) runs from the lessons draft as it is.** | "Yes to 2, 3, 4" |
+
 ## 2026-11-18
 
 Blue's answers to the two questions PR #195 left him. How the plan follows them (S48, S62, the 1.2
@@ -121,6 +206,17 @@ his words as that comment relays them.
 | **Nothing else from "Month two" joins 1.1** beyond the command palette and the Composer. | Yes (no words relayed). |
 | **CRITICAL is defined** as a finding that would: expose a secret, a token or client data; let an agent merge, push to `main`, change repository settings or get past a guard; destroy work or data that can't be recovered; let outside text run commands (unsafe input to the terminal, IPC or a validator); or stop Mako from starting on `main`. A CRITICAL finding stops the PR and notifies Blue at once; HIGH and MEDIUM are fixed in the next batch; LOW goes to follow-ups. The rule text itself changes in ECC PR 2 (S40), not here. | Defined by Blue (no words relayed beyond the definition). |
 | **Claude video analysis in Video Scout is 1.1,** confirmed: 1 frame per second plus audio, an option other than Gemini (S54). | Confirmed (no words relayed). |
+
+## 2026-11-15: the sanitizer test (S41, issue #172)
+
+Recorded on 2026-11-24 by PR #228, placed by its decision date. Blue answered issue #172's questions on 2026-11-15. Recorded from the issue's "Decisions" section,
+which quotes him.
+
+| Decision | Blue's words |
+|---|---|
+| The home-folder paths already in tracked files are allowlisted per file with exact counts; any new mention fails CI. | "Allowlist them" |
+| The recommended answers: built from the issue by a cloud session as `ABlueAgent`; the test values switch to a made-up user name in the same PR; an email address is flagged when its domain isn't on a short safe list; a small secret backstop stays even though push protection is on. | "yes, Go on the sanitizer test with my recommended answers" |
+| The build includes the "top professional" additions (issue #172 rules 1 to 7: placeholder list, safe domains, ratchet allowlist, masked output, self-tests). | "lets add What a top professional would add." |
 
 ## 2026-11-07
 
