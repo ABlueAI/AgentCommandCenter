@@ -31,14 +31,16 @@ function section(t) { process.stdout.write('\n' + t + '\n'); }
 
 // Forms matched, case-insensitive: X:\Users\<user>, X:/Users/<user>, X:\\Users\\<user> (inside
 // JS or JSON strings), \Users\<user> (a HOMEPATH value), /c/Users/<user> (Git Bash),
-// file:///C:/Users/<user>, /home/<user> and /Users/<user> (macOS). The prefix must not come
+// /mnt/c/Users/<user> (WSL), file:///C:/Users/<user>, /home/<user> and /Users/<user> (macOS).
+// A separator may be any run of backslashes, so a path escaped twice (a regex inside a JS
+// string) is caught too. The prefix must not come
 // right after a host name or another path segment, so an API URL ending in users/<login> is not a
 // home path.
-const SEP = '(?:\\\\\\\\|\\\\|/)';
+const SEP = '(?:\\\\+|/)';
 const HOME_PATH = new RegExp(
   '(' +
     '(?<![A-Za-z0-9])[A-Za-z]:' + // a drive letter
-    '|(?<![A-Za-z0-9._~%/:\\\\-])/[A-Za-z](?=/users/)' + // Git Bash: /c/Users
+    '|(?<![A-Za-z0-9._~%/:\\\\-])(?:/mnt)?/[A-Za-z](?=/users/)' + // Git Bash /c/Users, WSL /mnt/c/Users
     '|(?<![A-Za-z0-9._~%/:\\\\-])' + // nothing: \Users\<user>, /home/<user>, /Users/<user>
   ')' +
   '(' + SEP + '(?:users|home)' + SEP + ')' +
@@ -175,6 +177,19 @@ const SKIPPED = [
 ];
 function isBinary(buf) { return buf.subarray(0, 8192).includes(0); }
 
+// Windows PowerShell 5.1 writes UTF-16 by default (`>` and Out-File), and UTF-16 text is full of
+// NUL bytes, so a file with a UTF-16 byte-order mark is decoded and scanned instead of being
+// skipped as binary. Returns the text, or null for a binary file.
+function decodeText(buf) {
+  if (buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe) return buf.subarray(2).toString('utf16le');
+  if (buf.length >= 2 && buf[0] === 0xfe && buf[1] === 0xff) {
+    // Copy (swap16 works in place) and drop a stray odd byte, which swap16 refuses.
+    const body = Buffer.from(buf.subarray(2, buf.length - (buf.length % 2)));
+    return body.swap16().toString('utf16le');
+  }
+  return isBinary(buf) ? null : buf.toString('utf8');
+}
+
 // ---- Self-tests on in-memory text (nothing fake is ever written to the repository) ----------
 
 const J = (...parts) => parts.join('');
@@ -193,6 +208,8 @@ section('home-folder paths: each form is caught');
     ['Linux home', J('ls /home/', FAKE, '/x')],
     ['macOS home', J('"/Users/', FAKE, '/Library"')],
     ['lower-case users', J('c:', BS, 'users', BS, FAKE)],
+    ['WSL', J('cd /mnt/c/Users/', FAKE, '/repo')],
+    ['escaped twice (a regex inside a JS string)', J("'C:", BS.repeat(4), 'Users', BS.repeat(4), FAKE, "'")],
   ];
   for (const [label, text] of cases) {
     const r = scanText(text);
@@ -248,6 +265,18 @@ section('secret backstop');
   assert(scanText(J(DASH5, 'BEGIN PUBLIC KEY', DASH5)).secret.length === 0, 'a public-key header is not a secret');
 }
 
+section('UTF-16 text is decoded and scanned, not skipped as binary');
+{
+  const text = J('C:', BS, 'Users', BS, FAKE, BS, 'x');
+  const le = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]);
+  const be = Buffer.from(le.subarray(2)).swap16();
+  const beBom = Buffer.concat([Buffer.from([0xfe, 0xff]), be]);
+  assert(isBinary(le), 'a UTF-16LE buffer holds NUL bytes (the case the decoder exists for)');
+  assert(decodeText(le) !== null && scanText(decodeText(le)).home.length === 1, 'a home path in UTF-16LE text is caught');
+  assert(decodeText(beBom) !== null && scanText(decodeText(beBom)).home.length === 1, 'a home path in UTF-16BE text is caught');
+  assert(decodeText(Buffer.from([0x89, 0x50, 0x00, 0x01])) === null, 'a real binary file is still skipped');
+}
+
 section('allowlist ratchet');
 {
   const allow = { 'docs/a.md': [2, 'test'] };
@@ -287,9 +316,10 @@ section('real scan of every tracked file');
       problems.push(`${file}: could not be read (${e.code || e.message})`);
       continue;
     }
-    if (isBinary(buf)) { skipped++; continue; }
+    const text = decodeText(buf);
+    if (text === null) { skipped++; continue; }
     scanned++;
-    const r = scanText(buf.toString('utf8'));
+    const r = scanText(text);
     counts[file] = r.home.length;
     if (!HOME_PATH_ALLOWLIST[file]) {
       for (const h of r.home) problems.push(`${file}:${h.line}: home-folder path ${h.masked}`);
@@ -303,8 +333,9 @@ section('real scan of every tracked file');
     `no new home paths, emails or secrets in ${scanned} files (${skipped} skipped: vendor, lockfiles, binaries)`);
   const allowed = Object.keys(HOME_PATH_ALLOWLIST).length;
   const total = Object.values(HOME_PATH_ALLOWLIST).reduce((a, [n]) => a + n, 0);
+  // Lower this together with each entry removed as a historical file is cleaned.
   assert(allowed === 18, `the allowlist holds the expected 18 files (${allowed}, ${total} mentions)`);
 }
 
-process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
+process.stdout.write(`\nrepo-sanitizer: ${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exit(1);

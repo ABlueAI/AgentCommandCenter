@@ -3,9 +3,9 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
-## 2026-11-15: the sanitizer test (S41, issue #172; recorded 2026-11-24 by PR #228)
+## 2026-11-24: the sanitizer test (S41, issue #172), decided 2026-11-15
 
-Blue answered issue #172's questions on 2026-11-15. Recorded from the issue's "Decisions" section,
+Recorded by PR #228. Blue answered issue #172's questions on 2026-11-15. Recorded from the issue's "Decisions" section,
 which quotes him.
 
 | Decision | Blue's words |
