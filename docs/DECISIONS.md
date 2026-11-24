@@ -10,7 +10,7 @@ pending Blue (PR #241)**; merging that PR approves it.
 
 | Decision | Blue's words |
 |---|---|
-| A cloud session opens S56's 9 bug issues from Codex's renderer audit so Codex can build S56 next. Done 2026-11-24 as #232 to #240, listed on #197; none was judged a security gap. | "Yes, open them" |
+| A cloud session opens S56's 9 bug issues from Codex's renderer audit so Codex can build S56 next. Done 2026-11-24 as #232 to #240, listed on #197; the cloud session that opened them judged none to be a security gap (builder's reading, not Blue's). | "Yes, open them" |
 | S56's row stops being tagged Sensitive: its clause about a bug that is a security gap no longer uses the word the plan sync reads as the tag, so #197 loses the `sensitive` label and the row fits the Codex builder lane. A bug that turns out to be a security gap still stays with Claude. | "Fix the Sensitive tag on S56 in the plan" |
 
 ## 2026-11-23: Blue's answers on the 1.1 schedule (S61)
