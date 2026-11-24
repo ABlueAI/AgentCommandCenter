@@ -3,6 +3,16 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-24: S48's OSS verdict (vault memory)
+
+Blue gave it in Mako main's chat, answering checklist step 68 with the recommendation in
+`docs/decisions/OSS-memory.md` (PR #209) in front of him. Recorded word for word in that record's
+"Blue's verdict" section.
+
+| Decision | Blue's words |
+|---|---|
+| S48's OSS verdicts: **PROTOTYPE** for an isolated Open Second Brain subset; **PATTERN-MINE** for ai-memory and GBrain. The record's recommendation, accepted unchanged. Whether any of the three was among the memory tools dropped on 2026-11-16 is not answered; that sign-off still applies if one was. | "sounds correct, go with that" |
+
 ## 2026-11-24: S42's rulebook wording (proposed, pending Blue (PR #242))
 
 S42 moves the rule changes Blue decided on 2026-11-16 and 2026-11-21 into AGENTS.md and
