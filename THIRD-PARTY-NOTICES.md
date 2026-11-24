@@ -28,8 +28,9 @@ The five xterm.js npm packages above were all published from the same xterm.js c
 
 ## Adapted agent files (`.claude/agents/`)
 
-These four project agents (S39) are edited copies of other projects' agent prompts. Each file's
-header comment names its source, its licence and what Mako changed. Details and file hashes:
+These project agents (S39 and S40) are edited copies of other projects' agent prompts, or, for
+`pr-reviewer`, Mako's own reviewer with parts of one folded in. Each file's header comment names its
+source, its licence and what Mako changed. Details and file hashes:
 [docs/decisions/OSS-ecc.md](docs/decisions/OSS-ecc.md).
 
 | File | Upstream file | Licence | Copyright | Source (pinned) |
@@ -38,6 +39,10 @@ header comment names its source, its licence and what Mako changed. Details and 
 | `.claude/agents/typescript-reviewer.md` | ECC `agents/typescript-reviewer.md` (v2.2.3) | MIT ([text](LICENSES/MIT-ECC.txt)) | Copyright (c) 2026 Affaan Mustafa | [affaan-m/ECC@d2ef268](https://github.com/affaan-m/ECC/tree/d2ef2680594f9a17526a6e1a2e18b3d242c5d17b) |
 | `.claude/agents/silent-failure-hunter.md` | Anthropic `pr-review-toolkit` plugin, `agents/silent-failure-hunter.md` (1.0.1) | Apache-2.0 ([text](LICENSES/Apache-2.0.txt)) | No copyright line or NOTICE file upstream; author: Anthropic (`plugin.json`) | [anthropics/claude-plugins-official@b5b01ac, `plugins/pr-review-toolkit`](https://github.com/anthropics/claude-plugins-official/tree/b5b01ac4f889fec0c4c6bb89f27ca7c8574473f6/plugins/pr-review-toolkit) |
 | `.claude/agents/pr-test-analyzer.md` | Anthropic `pr-review-toolkit` plugin, `agents/pr-test-analyzer.md` (1.0.1) | Apache-2.0 ([text](LICENSES/Apache-2.0.txt)) | No copyright line or NOTICE file upstream; author: Anthropic (`plugin.json`) | [anthropics/claude-plugins-official@b5b01ac, `plugins/pr-review-toolkit`](https://github.com/anthropics/claude-plugins-official/tree/b5b01ac4f889fec0c4c6bb89f27ca7c8574473f6/plugins/pr-review-toolkit) |
+| `.claude/agents/pr-reviewer.md` | Parts of ECC `agents/code-reviewer.md` (v2.2.3), folded into Mako's own reviewer | MIT ([text](LICENSES/MIT-ECC.txt)) | Copyright (c) 2026 Affaan Mustafa | [affaan-m/ECC@d2ef268](https://github.com/affaan-m/ECC/tree/d2ef2680594f9a17526a6e1a2e18b3d242c5d17b) |
+| `.claude/agents/planner.md` | ECC `agents/planner.md` (v2.2.3) | MIT ([text](LICENSES/MIT-ECC.txt)) | Copyright (c) 2026 Affaan Mustafa | [affaan-m/ECC@d2ef268](https://github.com/affaan-m/ECC/tree/d2ef2680594f9a17526a6e1a2e18b3d242c5d17b) |
+| `.claude/agents/agent-evaluator.md` | ECC `agents/agent-evaluator.md` (v2.2.3) | MIT ([text](LICENSES/MIT-ECC.txt)) | Copyright (c) 2026 Affaan Mustafa | [affaan-m/ECC@d2ef268](https://github.com/affaan-m/ECC/tree/d2ef2680594f9a17526a6e1a2e18b3d242c5d17b) |
+| `docs/HARNESS-CHANGES.md` | The method of ECC `agents/harness-optimizer.md` (v2.2.3), rewritten as text | MIT ([text](LICENSES/MIT-ECC.txt)) | Copyright (c) 2026 Affaan Mustafa | [affaan-m/ECC@d2ef268](https://github.com/affaan-m/ECC/tree/d2ef2680594f9a17526a6e1a2e18b3d242c5d17b) |
 
 ## What is inside `kokoro.web.js`
 
