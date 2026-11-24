@@ -10,6 +10,8 @@ const quickLinksView = window.ccQuickLinksView.createQuickLinksView({
     list: () => cc.quickLinksList(),
     save: (text) => cc.quickLinksSave(text),
     open: (id) => cc.quickLinksOpen(id),
+    listPresets: () => cc.quickLinksPresetsList(),
+    openPreset: (id) => cc.quickLinksPresetOpen(id),
   },
   log: (line) => appendLog(line),
 });

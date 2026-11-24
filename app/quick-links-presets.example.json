@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "presets": [
+    {
+      "id": "preset-one",
+      "label": "Example preset one",
+      "urls": ["https://example.com/one", "https://example.com/two"]
+    },
+    {
+      "id": "preset-two",
+      "label": "Example preset two",
+      "urls": ["https://example.com/three", "https://example.com/four"]
+    }
+  ]
+}

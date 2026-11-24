@@ -146,6 +146,7 @@ const { createFollowupChildRunner } = require('./followup-child');
 const { createLayoutStore } = require('./dockview-layout-store');
 // Quick Links: a separate pure URL/config policy, fixed userData store, and trusted open-by-ID IPC.
 // This boundary intentionally does not reuse or modify the legacy open-external handler below.
+const { createQuickLinksPresets } = require('./quick-links-presets');
 const { createQuickLinksStore } = require('./quick-links-store');
 const sessionMemoryMod = require('./session-memory');
 const sessionResume = require('./session-resume');
@@ -628,6 +629,10 @@ app.whenReady().then(() => {
     entryUrl: ENTRY_URL,
     getTrustedWindow: () => win,
     store: quickLinksStore,
+    presets: createQuickLinksPresets({
+      settingsDir: path.join(app.getPath('appData'), 'command-center'),
+      appData: app.getPath('appData'),
+    }),
     openExternal: (url) => shell.openExternal(url),
     log: (line) => {
       const refused = line.includes(' result=refused');
@@ -638,6 +643,8 @@ app.whenReady().then(() => {
   ipcMain.handle('quick-links-list', (e) => quickLinksIpc.handleList(e));
   ipcMain.handle('quick-links-save', (e, text) => quickLinksIpc.handleSave(e, text));
   ipcMain.handle('quick-links-open', (e, id) => quickLinksIpc.handleOpen(e, id));
+  ipcMain.handle('quick-links-presets-list', (e) => quickLinksIpc.handleListPresets(e));
+  ipcMain.handle('quick-links-preset-open', (e, id) => quickLinksIpc.handleOpenPreset(e, id));
 
   // PRODUCTION PANE STATUS — docs/OSS-PROCUREMENT-pane-status.md,
   // "BLUE SUBSYSTEM VERDICT: BUILD FRESH". Advisory, pane-ID-bound Claude Code lifecycle status.

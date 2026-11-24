@@ -238,5 +238,43 @@ if (sharedBlocks.length > 0) {
     "AGENTS.md doesn't write Codex's handle");
 }
 
+{
+  // Codex PRs' draft state (Blue, 2026-11-24): a Claude session marks a Codex PR ready under the
+  // same rule as its own PRs, never over Blue's draft hold or pending verdict, and may toggle draft
+  // and ready once per head to re-trigger Codex's review.
+  const rules = fs.readFileSync(path.join(repoRoot, 'AGENTS.md'), 'utf8');
+  const flat = rules.replace(/\s+/g, ' ');
+  const codexBullet = (flat.match(/- \*\*Codex PRs\*\* \(`codex\/` branches\)(.*?) - \*\*The merge-order line\*\*/) || [])[1] || '';
+  assert(codexBullet.length > 0, 'AGENTS.md "Merge order" has the "Codex PRs" bullet');
+  assert(!flat.includes("Claude doesn't change its draft state") && !flat.includes('Claude never pushes to one or changes its draft state')
+    && !flat.includes('so Codex or Blue re-triggers it'),
+    'AGENTS.md no longer bars Claude from changing a Codex PR\'s draft state');
+  for (const [needle, label] of [
+    ['under the same rule as its own PRs (Blue, 2026-11-24', 'same rule as its own PRs'],
+    ['from a branch in this repository, authored by an agent login', 'own-repository, agent-authored PRs only'],
+    ["only when step 5's conditions all hold on its latest head", "step 5's conditions on the latest head"],
+    ['CI green', 'CI green'],
+    ['no high or medium finding open in its latest run', 'Claude review clean'],
+    ['this check passed', 'merge-order check passed'],
+    ['no `needs-blue` or `waits-for-merge` label', 'no needs-blue or waits-for-merge label'],
+    ['while Blue has asked for the PR to stay a draft', "Blue's draft hold"],
+    ['while a verdict of his on it is pending', "Blue's pending verdict"],
+    ['Once CI is green and Claude\'s pass holds on the latest head', 're-trigger precondition'],
+    ['at most once per head and never while any hold, pending verdict or label above applies', 're-trigger cap and holds'],
+    ['Claude pushes to a Codex PR only as "Who does what" allows', 'push pointer to "Who does what"'],
+    ['one Codex already marked ready gets only that label and comment', 'ready Codex PR on a conflict'],
+    ["The runner prompt (docs/RUNNER.md) doesn't mark Codex PRs ready yet", 'runner prompt not yet updated'],
+  ]) assert(codexBullet.includes(needle), `Codex PRs bullet: ${label}`);
+  assert(flat.includes("No builder changes another builder's PR (a Claude session's draft and ready changes on a Codex PR, below, excepted)"),
+    '"Who waits" excepts a Claude session\'s draft and ready changes on a Codex PR');
+  assert(flat.includes('Claude never pushes to a `codex/` branch unless Blue asks'),
+    '"Who does what" keeps the codex/ push ban the Codex PRs bullet points to');
+  assert(flat.includes('On a `codex/` PR, a Claude session re-triggers it the same way'),
+    'step 3 lets a Claude session re-trigger Codex\'s review on a Codex PR');
+  const decisions = fs.readFileSync(path.join(repoRoot, 'docs', 'DECISIONS.md'), 'utf8');
+  assert(decisions.includes('## 2026-11-24: Claude sessions mark Codex PRs ready') && decisions.includes('"Yes, sweeper marks ready"'),
+    'docs/DECISIONS.md records the 2026-11-24 decision in Blue\'s words');
+}
+
 process.stdout.write(`\nproject-agents: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);
