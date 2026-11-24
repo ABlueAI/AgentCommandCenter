@@ -132,6 +132,73 @@ function controlledWebFetchLaunch(input) {
   return { allowedToolsRule: null, mode: CONTROLLED_WEBFETCH.disabledMode };
 }
 
+// S58 FENCED WEB-READING AGENTS. Every agent that reads the open web runs fenced: this tool
+// allowlist plus the fence hook, as S15's page reader does. Decided by ALLOWLIST, not by naming the
+// web tools: a tool counts as able to reach the web unless it is in NON_WEB_TOOLS. So `WebSearch`,
+// `WebFetch`, every MCP tool (an MCP server can fetch anything), the delegation tools `Agent` and
+// `Task` (a subagent they start has WebFetch and WebSearch by default and runs outside this fence)
+// and any tool name a future Claude Code adds all count, and a role declaring one must be fenced.
+// `Bash` can reach the network too; it is in NON_WEB_TOOLS only because it is the builder's ordinary
+// shell, and it is FORBIDDEN_TOOLS for every fenced role. That boundary is S58's stated scope: the
+// builder and bare `claude` panes are unfenced by design (docs/PLAN-1.1.md S58, PR #245).
+const WEB_READING_TOOLS = Object.freeze(['WebSearch', 'WebFetch']);
+const NON_WEB_TOOLS = Object.freeze(['Read', 'Grep', 'Glob', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'TodoWrite', 'Bash']);
+
+function isWebReadingTool(t) {
+  return typeof t !== 'string' || NON_WEB_TOOLS.indexOf(t) === -1;
+}
+
+const WEB_FENCE_PROBLEM = Object.freeze({
+  UNPARSEABLE: 'web-fence-definition-unparseable',
+  TOOLS_NOT_DECLARED: 'web-fence-tools-not-declared',
+  NOT_FENCED: 'web-fence-web-reader-not-fenced',
+  FENCE_REFUSED: 'web-fence-fenced-role-refused',
+  DUPLICATE_NAME: 'web-fence-duplicate-name',
+});
+
+/**
+ * webReadingFenceProblems({ definitions, fencedRoles, checkFenced }) -> [{ file, problem, detail }]
+ *
+ * The S58 drift check, pure. `definitions` is every agent definition of one kind ([{ file, text }]),
+ * for example every tracked agent-roles/*.md, or every .claude/agents/*.md. `fencedRoles` is the set
+ * the launcher fences (main.js FENCED_ROLES; empty for definitions Mako never fences).
+ * `checkFenced(name, text)` runs assertFencedRoleDefinition for a fenced role. An empty result means:
+ *   - every definition parses and declares its tools (an omitted `tools:` inherits every tool,
+ *     WebFetch and WebSearch included, so it counts as web-reading and must be fenced or refused);
+ *   - every definition that declares a tool outside NON_WEB_TOOLS (isWebReadingTool) is fenced;
+ *   - every fenced definition passes the fence policy (allowlist, hook entry, matcher coverage).
+ * Problems are bounded constants plus the definition's file name and, for FENCE_REFUSED, the
+ * policy's own reason constant.
+ */
+function webReadingFenceProblems(input) {
+  const inp = input || {};
+  const fenced = inp.fencedRoles instanceof Set ? inp.fencedRoles : new Set(inp.fencedRoles || []);
+  const defs = Array.isArray(inp.definitions) ? inp.definitions : [];
+  const problems = [];
+  const seen = new Set();
+  for (const d of defs) {
+    const file = d && d.file;
+    const parsed = parseRoleFrontmatter(d && d.text);
+    if (!parsed.ok) { problems.push({ file, problem: WEB_FENCE_PROBLEM.UNPARSEABLE, detail: parsed.reason }); continue; }
+    if (seen.has(parsed.name)) problems.push({ file, problem: WEB_FENCE_PROBLEM.DUPLICATE_NAME, detail: null });
+    seen.add(parsed.name);
+    const isFenced = fenced.has(parsed.name);
+    if (!parsed.toolsDeclared || parsed.tools.length === 0) {
+      problems.push({ file, problem: WEB_FENCE_PROBLEM.TOOLS_NOT_DECLARED, detail: null });
+      continue;
+    }
+    if (!isFenced && parsed.tools.some(isWebReadingTool)) {
+      problems.push({ file, problem: WEB_FENCE_PROBLEM.NOT_FENCED, detail: null });
+    }
+    if (isFenced) {
+      let r;
+      try { r = inp.checkFenced(parsed.name, d.text); } catch (e) { r = { ok: false, reason: 'check-threw:' + String((e && (e.code || e.name)) || 'error') }; }
+      if (!r || r.ok !== true) problems.push({ file, problem: WEB_FENCE_PROBLEM.FENCE_REFUSED, detail: r ? r.reason : null });
+    }
+  }
+  return problems;
+}
+
 const REASON = Object.freeze({
   PLACEHOLDER: 'fence-policy-unsubstituted-hook-placeholder',
   PARSE: 'fence-policy-declaration-unparseable',
@@ -273,6 +340,11 @@ module.exports = {
   FORBIDDEN_TOOLS: FORBIDDEN_TOOLS,
   PATH_CAPABLE_TOOLS: PATH_CAPABLE_TOOLS,
   ROLE_MCP_TOOLS: ROLE_MCP_TOOLS,
+  WEB_READING_TOOLS: WEB_READING_TOOLS,
+  NON_WEB_TOOLS: NON_WEB_TOOLS,
+  WEB_FENCE_PROBLEM: WEB_FENCE_PROBLEM,
+  isWebReadingTool: isWebReadingTool,
+  webReadingFenceProblems: webReadingFenceProblems,
   roleMcpTools: roleMcpTools,
   REASON: REASON,
   assertFencedRoleDefinition: assertFencedRoleDefinition,
