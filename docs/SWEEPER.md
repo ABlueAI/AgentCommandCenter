@@ -75,7 +75,7 @@ The status PR is the only PR that edits STATUS.md (AGENTS.md "The shared brain")
 2. Keep exactly one open PR titled "Sweeper status <YYYY-MM-DD>: STATUS.md" (today's date, Eastern), from branch claude/sweeper-status-<YYYY-MM-DD> (if that branch already exists from a merged or closed PR, add -2, -3 and so on; never reset a branch), labelled runner-status (create the label if it's missing). List open PRs again just before you open one: if today's exists, use it. If none is open, open it from main as a draft. If an older status PR (a sweeper or runner status PR from an earlier date) is still open, close it with a one-line comment "Replaced by #N." once today's covers its merges.
 3. If today's status PR is already marked ready, push nothing new to it (a push would dismiss Blue's approval); merges after its head wait for the first fire after it merges or closes, or for tomorrow's PR. Job A still resolves a conflict on it.
 4. In it, update STATUS.md for those merges: its "Updated" line (with the "covers main up to <short SHA>" mark, step 1) and the parts the merges change, nothing else. Its first edit also replaces STATUS.md's line "Every PR that changes the state updates this file." with a pointer to docs/SWEEPER.md, Job D. In docs/PLAN-1.1.md, mark a session DONE (#PR) only when its PR is merged and its "Done when" is met on evidence you cite in the PR, as docs/RUNNER.md step 8 says; a merged session whose "Done when" still needs a check stays IN PROGRESS, and you list it in the PR. Change nothing else.
-5. Review it as docs/RUNNER.md step 6 says, plus the pre-ready reviewers AGENTS.md step 3 requires on run 1, each given only the PR number, the TLDR and the diff saved to a file; post the reports as "Independent review (Opus)" with "Reviewed head:" and "Run by:" lines. Fix high and medium findings in one push, re-run on the delta, at most 5 runs (then "needs Blue", and tomorrow's PR replaces it).
+5. Review it as docs/RUNNER.md step 6 says, plus the pre-ready reviewers AGENTS.md step 3 requires on run 1, each given only the PR number, the TLDR and the diff saved to a file; post the reports as "Independent review (Opus)" with "Reviewed head:" and "Run by:" lines. Fix high and medium findings in one push, re-run on the delta, at most 2 runs, the docs-only cap in AGENTS.md "The review loop" (then "needs Blue", and tomorrow's PR replaces it).
 6. Run the merge-order check (AGENTS.md "Merge order"). Mark it ready only when AGENTS.md "How work flows" step 5 is met; if it conflicts with a ready PR, it waits with the waits-for-merge label, and Job B clears it.
 7. List it in FINISH like any PR you touched.
 ```
@@ -85,6 +85,9 @@ The status PR is the only PR that edits STATUS.md (AGENTS.md "The shared brain")
 ```text
 DOCS-ONLY RECORD PR (narrows Job A's second bullet and Job C's "docs-only record PR")
 A Codex PR is a docs-only record PR only if every file it changes is Markdown and none is under .claude/, .github/ or agent-roles/, nor is AGENTS.md, CLAUDE.md, docs/SWEEPER.md or docs/RUNNER.md (AGENTS.md "Sensitive areas" and the routines' own instructions). Any other Codex PR follows Job A's third bullet: never push to it.
+
+CODEX DRAFT STATE (replaces Job A's "Never change a PR's draft state on a Codex PR" and Job C's "Leave every Codex PR in draft")
+Mark a Codex PR ready, or re-trigger Codex's review, only as AGENTS.md "Merge order", "Codex PRs" says (Blue, 2026-11-24); never lift a draft hold Blue asked for.
 
 TELLING BLUE
 - Every "Blue pastes into the Codex app" item is also posted as a comment starting "@ABlueAI needs Blue: paste into the Codex app" that links the comment to paste, so GitHub notifies Blue and the evening digest lists it.

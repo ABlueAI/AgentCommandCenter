@@ -224,6 +224,8 @@ const sweeperMustHave = [
   [jobD, 'If today\'s status PR is already marked ready, push nothing new to it', 'Job D: never pushes new content to a ready status PR'],
   [jobD, 'start right after that commit, not from when the status PR merged, so a PR that merged while a status PR waited is never skipped', 'Job D: resumes from the last main commit STATUS.md covers, so no merge is skipped'],
   [jobD, 'If there are none, skip steps 2 to 4 (no new content), but still do steps 5 and 6 for any open status PR that isn\'t marked ready yet.', 'Job D: an idle fire still finishes an open status PR'],
+  [jobD, 'at most 2 runs, the docs-only cap in AGENTS.md "The review loop"', 'Job D: the status PR keeps the docs-only 2-run cap'],
+  [sweepChanges, 'Mark a Codex PR ready, or re-trigger Codex\'s review, only as AGENTS.md "Merge order", "Codex PRs" says (Blue, 2026-11-24); never lift a draft hold Blue asked for.', 'Codex draft state follows AGENTS.md "Codex PRs"'],
   [sweepChanges, 'none is under .claude/, .github/ or agent-roles/, nor is AGENTS.md, CLAUDE.md, docs/SWEEPER.md or docs/RUNNER.md', 'a docs-only record PR excludes sensitive Markdown'],
   [sweepChanges, '"NOT READY: sweeper has no GitHub login"', 'stops visibly with no GitHub login'],
   [sweepChanges, '"NOT READY: sweeper failed at <job and step>: <error>"', 'reports a failed step instead of "nothing to do"'],
