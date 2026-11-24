@@ -148,6 +148,18 @@ queue and checklist step 65) is **proposed, pending Blue (PR #204)**; merging th
 | **The vault memory doesn't wait on the schedule; S48 is split.** S48 needed S14, which needs S61, so it waited on the schedule anyway. The vault memory keeps S48 and needs only the H1 setup day; the tree and merged-work history become S62, which still needs S14. Answers the question PR #195 left on whether S48 waits on S61. | "S48 waits on the schedule? No. But "no" only helps if S48 is also split. Today S48 needs S14, which needs S61, so it waits on the schedule anyway. Splitting it lets the vault memory start after H1 day (schedule fix 5)." |
 | Approved: Blue merged PR #195 on 2026-11-17, which approves the 2026-11-17 entry "Blue's answers to the five questions PR #173 left him" (marked "proposed, pending Blue (PR #195)"). The wording stays below as history; agents follow this entry. | Merging is approval (docs/PLAN-1.1.md "When the plan changes"); no new words. |
 
+## 2026-11-18: S52 HyperFrames verdict (PR #206)
+
+Blue's verdict on the S52 OSS record, given in his main chat and recorded in [the
+record](decisions/OSS-hyperframes.md#blues-verdict) and checklist step 66. His words are as quoted
+in the Mako main session's hand-off to the Claude cloud session that pushed the review fixes
+([session](https://claude.ai/code/session_01UWhuMF5YrgU1ojPL6DN1Q1)). Builder's reading: "both of
+those recommendations" are the S52 and S53 recommendations; S53's verdict is recorded in PR #208.
+
+| Decision | Blue's words |
+|---|---|
+| **S52 HyperFrames: FORK, conditional.** Blue adopted Mako main's recommendation: first a Windows trial on the VM, with the browser sandbox on, outside connections blocked and logged, and the media commands that call China-origin models removed. Fork only if that trial shows no outside connections and no sandbox downgrade. The fork also blocks or explains the egress seen in the Linux trial, and refuses visibly when Chromium's sandbox can't start (the record's FORK row). | 2026-11-18: "I think your recommendation verdicts are very good. So, yes to both of those recommendations." Reconfirmed 2026-11-23: "yes i do recall now", "agree". |
+
 ## 2026-11-17: S39 (ECC PR 1)
 
 Blue's answers to the S39 session (PR #174), given in that session on 2026-11-17.
