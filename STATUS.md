@@ -128,7 +128,8 @@ Every PR that changes the state updates this file.
   Octokit class; every Plan sync run since has passed (run 41790199214 first). Step 25 is still
   unticked: its re-run checks the board on GitHub. S33 (PR #155, merged 2026-11-04, DONE) makes the
   sync refuse and create nothing when its listing misses every existing sync issue, the cause of the
-  2026-10-22 duplicates; a listing that misses only some of them is issue #156.
+  2026-10-22 duplicates. PR #247 (issue #156) makes it refuse too when its listing
+  finds fewer items in the "1.1 Month 1" milestone than GitHub counts there (a partial listing).
 - **Research capture (S15, PR #130 merged 2026-11-04, in progress):** Blue's verdict (2026-11-03): ADOPT
   Playwright MCP as the page reader. Claude in Chrome was rejected: on his PC it returned "This site
   is blocked." on reddit.com, while Playwright MCP read a www.reddit.com thread with no login
