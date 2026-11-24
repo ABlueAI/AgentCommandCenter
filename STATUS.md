@@ -1,6 +1,9 @@
 # Mako status
 
-Updated 2026-11-21 by PR #212 (Blue's decisions of 2026-11-16 to 2026-11-21: the scope freezes on
+Updated 2026-11-24 by PR #241 (S56 no longer marked Sensitive in the plan; its 9 bug issues, #232
+to #240, were opened the same day). Before that: updated 2026-11-23 by PR #223 (S61: the 1.1
+schedule and Blue's answers on it). Before that:
+updated 2026-11-21 by PR #212 (Blue's decisions of 2026-11-16 to 2026-11-21: the scope freezes on
 2026-12-01, a Codex pane in 1.1, the Composer prototype dates, new rows S63 to S65). Before that:
 updated 2026-11-18 by PR #204 (Blue's answers to PR #195's questions: S48 split, A10 and A11
 placed, Dependabot alerts and security updates for Blue to turn on, step 65). Before that: updated
@@ -51,6 +54,12 @@ Every PR that changes the state updates this file.
     update for AGENTS.md (S42), the release row (S59) and the role-file rewrite (S60). Nothing in AGENTS.md, `CLAUDE.md` or
     `.claude/` changed in PR #173: until S39, S40 and S42 merge, the current rules hold (reviews
     ranked high, medium, low; a cap of 5 runs; the Opus review required).
+  - **The 1.1 schedule (S61, PR #223):** [docs/SCHEDULE-1.1.md](docs/SCHEDULE-1.1.md), adopted when
+    Blue merges that PR: the UI gate (about 2026-11-28 to 2026-12-02), the Composer and tab chains,
+    a main-case release of about 2026-12-18 to 2027-01-05 against the 2027-01-15 target, and the
+    2026-12-20 checkpoint. Blue's answers of 2026-11-23 (docs/DECISIONS.md): step 58 by 2026-11-27 (before it if ahead),
+    Mako's main chat keeps the Claude lanes full, and if the checkpoint says behind, the date slips
+    and only pop-out windows may move to 1.2. Then his go on the UI (step 18) releases the UI rows.
   - **Blue's new steps:** checklist steps 54 to 63 (the H1 setup day first; step 62 is done).
     Step 28 is closed and step 10 is dropped.
   - **Nothing from Blue's sheets is open:** he answered the 14 items the sheet left open the same
@@ -154,7 +163,7 @@ Every PR that changes the state updates this file.
   made the trial S26's result ("until we burn through codex usage ... not necessarily a permanent
   change"), keeps ChatGPT and will "use heavily over the next 3 weeks ... use claude as backup
   reviewer". The lane stays open to about 2026-11-30 for non-sensitive early tasks (S36 and S56
-  in the lane; S52 and S53, `blue`-lane rows, started by Blue himself), Codex reviews Claude's PRs with Sonnet as backup, and he checks in on 2026-11-30 (checklist
+  in the lane; S56's 9 bug issues are #232 to #240, and from PR #241 its row is no longer tagged Sensitive; S52 and S53, `blue`-lane rows, started by Blue himself), Codex reviews Claude's PRs with Sonnet as backup, and he checks in on 2026-11-30 (checklist
   step 63); S26 closes when his resets are used. The lane's rules and the required Opus review are
   unchanged. **2026-11-21:** ChatGPT Plus stays through the 1.1 release and Codex's heavy use runs
   to about 2026-12-29, checked weekly; Codex does the smaller tasks and reviews, 2 at a time
@@ -391,7 +400,14 @@ Security findings stay private: public text gives titles and severity only. S55 
 presets in the "Mako" Firefox profile, and agents never drive that profile. S18 is split
 (2026-11-22): the shared navigation (new S66) comes first, then S18 to S20 can build in parallel. 1.2's headline is the
 Private pane. Blue's next steps: step 60 (practice test and prototype day) and step 68 (his verdict
-on PR #209's OSS record for S48). The paragraphs below are from before the sheet.
+on PR #209's OSS record for S48).
+**2026-11-23 (S43, PR #222):** the one-off spec-miner trial ran read-only on the dockview layout;
+its write-up is [docs/research/S43-spec-miner-trial.md](docs/research/S43-spec-miner-trial.md).
+The spec was accurate (35 of 40 blocks, none wrong) but missed what S66 most needs (the engine
+flag pinned as not a setting, no restore at startup, the four top-level tabs, the markup tests,
+Ctrl K reaching the PTY); verdict: an occasional one-off, never installed. Once it merges, S66
+waits only on S14 and Blue's go on the UI (step 18).
+The paragraphs below are from before the sheet.
 
 Month one's runner sessions S31 to S34 merged on 2026-11-04. The next `READY` row is S25, the
 month review, from 2026-11-14 (S24 is `READY` but held as draft PR #134 by Blue's choice of

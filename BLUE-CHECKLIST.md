@@ -54,11 +54,11 @@ On 2026-11-21 steps 27 and 50 left the top (your decision: the runner they check
    **step 55**, H1 trial part 2, the aquarium (15 to 20 minutes), when S20's PR asks for it.
 7. Your Composer scope sign-off unblocks S51.
 8. **Step 57** (the "Mako" Firefox profile's preset URLs, 10 minutes), **step 58** (the lessons-learned
-   draft, 15 minutes) and **step 61** (an agent deletes the StarNet clone, a leftover local copy on
+   draft, 15 minutes; by 2026-11-27, before it if the work runs ahead) and **step 61** (an agent deletes the StarNet clone, a leftover local copy on
    your PC, and the OpenCode leftovers; you say when).
 9. **PC checks**, batched on Tuesday and Friday evenings until H1 automates them: steps 23, 24
    (optional, kept), 29, 31, 38, 39, 40, 41, 44, 45 and 48.
-10. **Step 64**, hand over the 1.1 schedule (about 5 minutes), then **step 18**, your go on the
+10. ~~**Step 64**, hand over the 1.1 schedule~~ Done (PR #223): merge PR #223, then **step 18**, your go on the
     UI, once S61 has adopted and reviewed it (your words, 2026-11-17: "the schedule and its
     independent review before any UI building").
 11. **Step 8**, the Max upgrade: pushed back "until 11/19 or until usage begins flowing" (your
@@ -1025,6 +1025,13 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   - *Done when:* you tell an agent the Reviewer answered from the thread (or what went wrong). It
     ticks this with the date. This is S15's "Done when".
 
+- [ ] **74. Issue #211 on your PC: run the app tests with page-reader installed.** About **5 minutes**
+  with dependencies already installed, at the next PC check after the draft fix is available.
+  - Check out the fix branch on a Windows PC where the page-reader agent is already installed.
+    From the `app` folder, run `npm test`.
+  - *Done when:* the page-reader test and the final suite, `renderer/admission-view.test.js`, both
+    pass and `npm test` exits successfully. Tell an agent the result so it can tick this with the date.
+
 - [ ] **44. S09 on your PC: Resume or Start fresh.** About **5 minutes**, after you merge the S09
   PR, #131 (and S08's step 39, which it builds on).
   - Pull `main` and restart Mako fully. Open a builder pane on a worktree and a bare `claude` pane,
@@ -1099,6 +1106,9 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
 - [ ] **58. Review the lessons-learned draft.** **15 minutes**, when the agent that wrote it sends
   it to you. Read it and say what to change or drop. If this isn't done when the agent tune-up
   (S28, S60) starts, the tune-up runs from the draft as it is (your decision, 2026-11-22).
+  By **2026-11-27** (the date the schedule proposed), and before that Friday if the work runs ahead
+  (your answer, 2026-11-23: "Sure, but if we're running ahead of schedule, can
+  this just be completed prior to Friday?"; docs/SCHEDULE-1.1.md).
   - *Done when:* you tell an agent it is approved (or what to change). It ticks this with the date
     and your words.
 - [ ] **59. Re-link Codex reviews to `ABlueAgent`.** **About 5 minutes**, any time this week (your
@@ -1137,7 +1147,9 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
   - *Done when:* your answer is recorded in docs/DECISIONS.md in your words, S26's row in
     docs/PLAN-1.1.md follows it, and the agent ticks this with the date.
 
-- [ ] **64. Hand over the 1.1 schedule (S61).** **About 5 minutes**, when you're ready; every UI
+- [x] **64. Hand over the 1.1 schedule (S61).** *Done; checked 2026-11-23 (UTC) on GitHub that
+  PR #223 is open with the schedule in it as `docs/SCHEDULE-1.1.md`. You approved the text ("Yes.
+  Do as written.") on 2026-11-23. Next: merge PR #223 to adopt it, then step 18.* About 5 minutes, when you're ready; every UI
   row waits on it. Give the schedule to an agent in its own session (not as a GitHub comment if it
   holds anything private). It opens S61's PR with the schedule as `docs/SCHEDULE-1.1.md`, nothing
   private in it, runs the independent review, fixes the findings and re-reviews the fixes.
@@ -1193,6 +1205,20 @@ Step 69 comes from S37 (PR #218, issue #217), not from the decisions above.
     show anything: tell an agent "step 69 not applicable" instead.
   - *Done when:* you've told an agent what Claude showed, and it ticks this with the date and your
     words.
+
+## From your decisions of 2026-11-23
+
+Step 72 comes from PR #227 (docs/DECISIONS.md, 2026-11-23). Step numbers 69 to 71 belong to open PRs
+(#218, #225 and #224).
+
+- [ ] **72. Codex's review on the `codex/` PRs (PR #227's question).** **About 2 minutes to answer**,
+  once PR #227 is merged. Your rule says a PR is `READY TO MERGE` only with Codex's pass, but on the
+  three `codex/` PRs (#206, #208, #209) Codex answered "create an environment for this repo" instead
+  of reviewing. Answer PR #227's question: create that Codex environment (the agent's
+  recommendation), or tell an agent how those PRs should get Codex's pass. Until then they are
+  `NOT READY: no Codex pass`.
+  - *Done when:* your answer is in docs/DECISIONS.md, and an agent has checked on GitHub that one
+    of those PRs has Codex's pass (or that your answer says otherwise) and ticks this with the date.
 
 ## Every day, once the runner is on
 

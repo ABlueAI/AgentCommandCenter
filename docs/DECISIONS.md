@@ -3,6 +3,48 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-24: S56's bug issues, and S56 no longer marked Sensitive
+
+Blue gave both in the sessions that did the work. How the plan follows the second is **proposed,
+pending Blue (PR #241)**; merging that PR approves it.
+
+| Decision | Blue's words |
+|---|---|
+| A cloud session opens S56's 9 bug issues from Codex's renderer audit so Codex can build S56 next. Done 2026-11-24 as #232 to #240, listed on #197; the cloud session that opened them judged none to be a security gap (builder's reading, not Blue's). | "Yes, open them" |
+| S56's row stops being tagged Sensitive: its clause about a bug that is a security gap no longer uses the word the plan sync reads as the tag, so #197 loses the `sensitive` label and the row fits the Codex builder lane. A bug that turns out to be a security gap still stays with Claude. | "Fix the Sensitive tag on S56 in the plan" |
+
+## 2026-11-23: hard rules, Codex's pass before ready, agent-account pacing
+
+On 2026-11-23 two of Blue's rules were broken because they lived only in his private notes and an
+unmerged draft (PR #169), not in AGENTS.md: the pacing cap, and the rule that a PR is ready only with
+a pass from Claude and a pass from Codex. Blue decided these in his main chat; the quotes are as the
+hand-off for this PR relayed them. How AGENTS.md words them ("Hard rules (never broken)", "How work
+flows" steps 3 and 5, "Agent-account pacing") is proposed, pending Blue (this PR); merging approves
+it. "Builder's reading" marks a line that is the builder's, not Blue's.
+
+| Decision | Blue's words |
+|---|---|
+| **1. `READY TO MERGE` needs a pass from Claude and a pass from Codex** (2026-11-22). Claude's is the independent Opus review loop; Codex's is its 👍 (+1) reaction on the PR or a comment saying it found no major issues (as relayed in the hand-off). Replaces "Codex review is optional ... nothing waits for it" (AGENTS.md step 3, 2026-10-20). Builder's reading: both passes must cover the latest head; only `chatgpt-codex-connector[bot]`'s reaction or unedited comment counts; Codex's findings are fixed or answered (never parked as low; out of scope becomes an issue); and a `codex/` PR is re-triggered by Codex or Blue, since Claude never changes its draft state. Open question for Blue in PR #227: Codex answered "create an environment for this repo" instead of reviewing on the `codex/` PRs #206, #208 and #209 (BLUE-CHECKLIST.md step 72). | "knowing that there is a pass from Claude and a pass from Codex makes me a lot more comfortable with a merge" |
+| **2. Agent-account pacing: at most 24 pushes and 120 GitHub writes an hour** per agent account, across all sessions; stop at the first rate-limit or abuse-detection signal. Builder's reading: 24 is the push cap and 120 the write cap. Supersedes the numbers in PR #169's draft rule R5 (6 pushes and 40 writes an hour); its other rules stay in that PR. | "this rule needs to change to 24 per hour" · "writes 120 is fine" |
+| **3. Some rules are hard rules: never broken, no judgment.** If one is unclear or seems to conflict with a task, the agent stops and asks Blue. Builder's reading (from the hand-off, not Blue's words): every other rule is a default, followed as written, with judgment only where it leaves room and each assumption recorded in the PR; which rules are hard is the list the hand-off gave. | "some rules should never be broken, ever. like the merge rule." · "do we need to clarify rules that can be overruled to prevent an agent from going rogue based on assumptions" |
+| **4. These rules go into AGENTS.md now.** Asked "Write your vault-only rules (Codex 👍, pacing) into AGENTS.md now?" | "Yes, write them in" |
+
+## 2026-11-23: Blue's answers on the 1.1 schedule (S61)
+
+Blue answered the 1.1 schedule's open decisions in his main chat, and approved its text to go
+public ("Yes. Do as written.", checklist step 64). The dates were corrected on Blue's ask. The schedule is
+docs/SCHEDULE-1.1.md, added by PR #223; merging that PR adopts it. Numbers match the schedule's
+"Decisions" table. Decisions 1 to 3 were settled by PR #212 (2026-11-21 entry, items 26 to 28);
+decisions 6 and 7 stay open. A row without a quote had no words relayed.
+
+| Decision | Blue's words |
+|---|---|
+| **The schedule goes public as written,** after the public-safety edits and the re-sync with `main` that S61's PR lists. | "Yes. Do as written." |
+| **4. Step 58 (the lessons-learned review) by 2026-11-27, the date the schedule proposed; before that Friday if the work runs ahead** (builder's reading of his words, from the hand-off). If it isn't done, the agent tune-up (S28, S60) runs from the lessons draft as it is (2026-11-21 entry, item 29). | "Sure, but if we're running ahead of schedule, can this just be completed prior to Friday?" |
+| **5. Mako's main chat keeps the Claude lanes full,** starting the next row as each one finishes; Blue doesn't open lanes himself each day. | — (yes to the revised wording) |
+| **8. If the 2026-12-20 checkpoint says behind, the release date slips instead of the scope.** S54, S47 and any replay work stay in 1.1; only pop-out windows (S19) may move to 1.2. Replaces the schedule's proposed "hold the date by moving S54, then S47, then the build half of S53, then pop-outs to 1.2", and amends item 27 of the 2026-11-21 entry ("nothing cut for the date"): pop-out windows may move. Builder's reading: S53's verdict is PATTERN-MINE (2026-11-18, recorded in PR #208, not yet merged), so S53 builds nothing and any replay work belongs to S19 or S62. | "No. I'd rather hold on to these items then. I'm expecting the date to get pushed back, but I don't want it to get pushed back too far." On pop-outs: "pop-outs ... can move" |
+| **Dates moved:** prototype day (step 60) is 2026-11-24; the aquarium trial (step 55) and the design visuals move to 2026-11-27, earlier if ahead. | — |
+
 ## 2026-11-21: Blue's decisions of 2026-11-16 to 2026-11-21
 
 Blue approved these in his main chat between 2026-11-16 and 2026-11-21, and items 26 to 29 on 2026-11-22. The details stay in his
@@ -164,6 +206,17 @@ his words as that comment relays them.
 | **Nothing else from "Month two" joins 1.1** beyond the command palette and the Composer. | Yes (no words relayed). |
 | **CRITICAL is defined** as a finding that would: expose a secret, a token or client data; let an agent merge, push to `main`, change repository settings or get past a guard; destroy work or data that can't be recovered; let outside text run commands (unsafe input to the terminal, IPC or a validator); or stop Mako from starting on `main`. A CRITICAL finding stops the PR and notifies Blue at once; HIGH and MEDIUM are fixed in the next batch; LOW goes to follow-ups. The rule text itself changes in ECC PR 2 (S40), not here. | Defined by Blue (no words relayed beyond the definition). |
 | **Claude video analysis in Video Scout is 1.1,** confirmed: 1 frame per second plus audio, an option other than Gemini (S54). | Confirmed (no words relayed). |
+
+## 2026-11-15: the sanitizer test (S41, issue #172)
+
+Recorded on 2026-11-24 by PR #228, placed by its decision date. Blue answered issue #172's questions on 2026-11-15. Recorded from the issue's "Decisions" section,
+which quotes him.
+
+| Decision | Blue's words |
+|---|---|
+| The home-folder paths already in tracked files are allowlisted per file with exact counts; any new mention fails CI. | "Allowlist them" |
+| The recommended answers: built from the issue by a cloud session as `ABlueAgent`; the test values switch to a made-up user name in the same PR; an email address is flagged when its domain isn't on a short safe list; a small secret backstop stays even though push protection is on. | "yes, Go on the sanitizer test with my recommended answers" |
+| The build includes the "top professional" additions (issue #172 rules 1 to 7: placeholder list, safe domains, ratchet allowlist, masked output, self-tests). | "lets add What a top professional would add." |
 
 ## 2026-11-07
 
