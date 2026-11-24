@@ -50,6 +50,12 @@
  * literals equal app/page-reader.js and ROLE_MCP_TOOLS in app/role-fence-policy.js
  * (tripwire-tested in app/page-reader.test.js).
  *
+ * RUNTIME TOOL ALLOWLIST (S58). A well-formed call for any tool other than HOOK_ALLOWED_TOOLS (and the
+ * page-reader's two MCP tools above) refuses with a constant `[fence-tool-not-allowed]` reason, so a
+ * matcher that routes more tools here (or a Claude Code version whose matcher reaches a tool it didn't
+ * before) fails closed instead of reaching the path check, which allows any call with no path. The list
+ * equals ALLOWED_TOOLS in app/role-fence-policy.js (tripwire-tested in app/web-reading-fence.test.js).
+ *
  * MALFORMED INPUT (stdin not JSON, not an object, or `tool_name` not a string) refuses unless the mode
  * is exactly `disabled`, where the historical behaviour is kept (unparseable exits 0; a parsed payload
  * continues to the path check). A missing mode never allows because the input could not be parsed.
@@ -73,6 +79,10 @@ const PAGE_SNAPSHOT_TOOL = 'mcp__playwright__browser_snapshot';
 const PAGE_MAX_URL_LENGTH = 2000;
 const PAGE_REFUSAL_MESSAGE =
   'Blocked by Mako page fence: this pane may only open https pages and read them, with no file output. [fence-page-denied]';
+
+const HOOK_ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'MultiEdit', 'WebSearch', 'WebFetch'];
+const TOOL_REFUSAL_MESSAGE =
+  'Blocked by Mako tool fence: this role may not use that tool. [fence-tool-not-allowed]';
 
 const REFUSAL_MESSAGE =
   'Blocked by Mako path fence: this role may only access files inside its own sandbox. [fence-outside-sandbox]';
@@ -144,6 +154,9 @@ process.stdin.on('end', () => {
       && (pti.filename === undefined || pti.filename === null || pti.filename === '')) process.exit(0);
     refuse(PAGE_REFUSAL_MESSAGE); // any other MCP tool, a non-https page, or a snapshot to a file
   }
+
+  // Any other tool: only the reviewed allowlist reaches the path check below.
+  if (wellFormed && HOOK_ALLOWED_TOOLS.indexOf(data.tool_name) === -1) refuse(TOOL_REFUSAL_MESSAGE);
 
   const ti = (data && data.tool_input) || {};
   const target = ti.file_path || ti.notebook_path || ti.path;

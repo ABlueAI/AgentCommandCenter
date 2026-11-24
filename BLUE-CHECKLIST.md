@@ -1189,6 +1189,19 @@ Step 72 comes from PR #227 (docs/DECISIONS.md, 2026-11-23). Step numbers 69 to 7
   - *Done when:* your answer is in docs/DECISIONS.md, and an agent has checked on GitHub that one
     of those PRs has Codex's pass (or that your answer says otherwise) and ticks this with the date.
 
+## From S58 (fenced web-reading agents)
+
+Step 75 comes from PR #245. Step numbers 73 and 74 belong to open PRs (#230 and #231).
+
+- [ ] **75. Re-deploy the fence hook after PR #245 merges.** **About 3 minutes**, the next time you
+  open Mako after merging PR #245. The PR changes the fence hook, and Mako refuses to launch the
+  fenced roles (Web Scout, Source Scout, Operator and Page panes) until the deployed copy matches the new one.
+  - Pull `main`, run `scripts/sync-roles.ps1`, and restart Mako fully.
+  - **New Agent > 🌐 Web Scout**, **Create & Launch**, and ask it to run `dir` with any tool it has. It should say it can't, or
+    show "Blocked by Mako" in the pane; it must not list a folder.
+  - *Done when:* a Web Scout pane launches after the sync, and you tell any agent "step 75 done"; it ticks
+    this with the date.
+
 ## Every day, once the runner is on
 
 Once S04 is applied (step 27), the runner works all day and you do one sitting in the evening:
