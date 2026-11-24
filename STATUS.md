@@ -254,7 +254,8 @@ Every PR that changes the state updates this file.
     approved and were re-opened as #146 and #147. Desktop chats now only plan and talk (AGENTS.md
     "No PR work under ABlueAI's login"), and the `PreToolUse` hook `.claude/hooks/account-guard.js`
     blocks `gh pr create`, `gh pr ready` and `git push` only when `gh` is logged in as `ABlueAI`.
-    Blue removes that login from every PC Claude runs on after step 35 (checklist step 49).
+    Since S37 (PR #218, issue #217) it checks Claude Code's PowerShell tool too, which it didn't see
+    before. Blue removes that login from every PC Claude runs on after step 35 (checklist step 49).
   - Agent identity (PR #171, a plan change; Blue's decisions of 2026-11-10 and 2026-11-11): the GitHub App
     `mako-agents[bot]` becomes the primary agent identity for local panes and the local runner, `ABlueAgent`
     stays for cloud sessions, and agents never approve or merge. The merge audit and the runner and
