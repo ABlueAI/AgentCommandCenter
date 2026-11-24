@@ -53,6 +53,7 @@ assert(f.headerShown === true && f.controlShown === true && f.topbarShown === tr
 assert(f.brainShown === false, 'the brain frame is hidden while on the control room');
 eq(f.tabCount, 3, 'three tabs');
 eq(f.tabIndexes, ['-1', '0', '-1'], 'only the selected tab is in the Tab order (roving tabindex)');
+assert(/^No repo selected · Control room · /.test(f.stripeNoRepo || ''), 'with no repo, the scope stripe says so');
 
 process.stdout.write('\ntabs switch by click and keyboard, and each sets its colours\n');
 eq(f.afterClickSelected, 'brain', 'clicking Brain selects it');
@@ -67,6 +68,8 @@ assert(f.aquariumShown === true, 'the aquarium frame shows');
 eq(f.afterHome, 'brain', 'Home selects the first tab');
 eq(f.afterLeftWrap, 'aquarium', 'Left from the first tab wraps to the last');
 assert((f.saves || []).some((s) => s.uiTab === 'aquarium'), 'the selected tab is saved with the settings');
+assert(f.permissionBorder === true, 'the shared In-focus card renders a permission prompt as a red card');
+assert(f.permissionAllowDisabled === true, 'an unwired card action is disabled in the real page');
 eq(f.ptyStart, 0, 'no PTY started');
 
 process.stdout.write('\nCtrl K palette\n');
@@ -88,6 +91,10 @@ eq(p.activeAfterDown, 'makoPaletteOpt-1', 'Down moves the active option');
 eq(p.activeAfterUpWrap, 'makoPaletteOpt-2', 'Up wraps from the first option to the last');
 assert(p.tabTrapped === true, 'Tab stays inside the palette dialog');
 assert(p.tabsWired === true && p.afterLogsTab === 'control' && p.logsPaneActive === true, '"Open Logs" goes to the control room and opens its Logs view');
+assert(/^AgentCommandCenter · Control room · /.test(p.stripeRepo || ''), 'the scope stripe names the repo in use and the tab');
+eq(p.repoOption, ['Repo: <img src=x onerror=window.__pwned=1>'], 'repos are palette commands, their names shown as text');
+assert(p.repoOptionNoMarkup === true, 'a repo name is never parsed as markup in the palette');
+assert(/^<img src=x onerror=window.__pwned=1> · Control room · /.test(p.stripeAfterRepo || '') && p.stripeNoMarkup === true, 'a palette repo command switches the repo and the stripe, as text');
 eq(p.ptyStart, 0, 'no PTY started');
 
 process.stdout.write('\nSettings page and the old layout\n');

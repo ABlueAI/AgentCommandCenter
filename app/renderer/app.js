@@ -1418,6 +1418,7 @@ function startShell(settings) {
       log: (line) => appendLog(line),
       controlPanel: $('#makoPanel-control'),
       usagePanel: $('#usagePanel'),
+      currentScope: () => { const sel = $('#repoSelect'); const o = sel && sel.selectedOptions && sel.selectedOptions[0]; return o && o.value ? o.textContent : ''; },
       extraCommands: shellCommands,
     });
   } catch (e) {
@@ -1672,6 +1673,7 @@ async function refreshRepos() {
 }
 
 async function onRepoChange() {
+  if (shell) shell.refreshScope();   // S66: the scope stripe names the repo in use
   await cc.saveSettings({ selectedRepo: state.repo });
   state.githubUrl = state.repo ? await cc.repoGithubUrl(state.repo) : '';
   await refreshAgents();

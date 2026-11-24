@@ -361,10 +361,11 @@ process.stdout.write('\nindex.html ships the EMBEDDED dock and loads no Dockview
   // S11 adds the usage panel view: 26 -> 27 (after S10's authority choice).
   // S09 adds the Resume or Start fresh view: 27 -> 28. `session-resume-view.js` publishes
   // `window.ccSessionResumeView` and builds into #resumeHost only when app.js asks it to.
-  // S66 adds the 1.1 colour tokens and the shared navigation shell: 29 -> 31. `ui-tokens.js`
-  // publishes `window.ccUiTokens` and touches no DOM; `shell-nav.js` publishes `window.ccShellNav`
-  // and builds nothing until app.js's boot() calls createShell().
-  assert(scriptTags === 31, `index.html loads exactly 31 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view, the terminal key mapping, the authority choice, the usage panel view, the resume view, the agent token view (S31), and S66's colour tokens and navigation shell (found ${scriptTags})`);
+  // S66 adds the 1.1 colour tokens, the shared navigation shell and the In-focus card: 29 -> 32.
+  // `ui-tokens.js` publishes `window.ccUiTokens` and touches no DOM; `shell-nav.js` publishes
+  // `window.ccShellNav` and builds nothing until app.js's boot() calls createShell();
+  // `in-focus-card.js` publishes `window.ccInFocusCard` and builds only when a caller asks.
+  assert(scriptTags === 32, `index.html loads exactly 32 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view, the terminal key mapping, the authority choice, the usage panel view, the resume view, the agent token view (S31), and S66's colour tokens, navigation shell and In-focus card (found ${scriptTags})`);
   assert(/<script src="session-resume-view\.js"><\/script>/.test(indexSrc),
     'the S09 resume view is loaded');
   assert(/<script src="usage-view\.js"><\/script>/.test(indexSrc),

@@ -669,6 +669,8 @@ async function scenarioAdoptionRollback() {
       dockChildren: dock.children.length,
       engineActive: !!window.ccDockviewDiagnostics,
       panesVisible: panes.every((p) => window.__cc.reachable(p.querySelector('.term-body'))),
+      // Diagnostic only: the window's real content size (a CI screen can clamp the window).
+      viewport: { w: window.innerWidth, h: window.innerHeight },
       logs: window.__cc.logs().slice(-3000),
     };
   })()`);

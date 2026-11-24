@@ -18,7 +18,7 @@ const PRELOAD_FILE = path.join(__dirname, 'preload.js');
 const STEP_TIMEOUT_MS = 30000;
 
 const ipc = { saves: [], ptyStart: 0 };
-const control = { settings: {}, gate: null, release: () => {} };
+const control = { settings: {}, gate: null, release: () => {}, repos: [] };
 const remote = [];
 const consoleErrors = [];
 let win = null;
@@ -44,9 +44,10 @@ const PRELUDE = `(() => {
   };
 })();`;
 
-async function open(name, settings, beforeBoot) {
+async function open(name, settings, beforeBoot, repos) {
   progress(`${name}: loading`);
   control.settings = settings;
+  control.repos = repos || [];
   control.gate = new Promise((r) => { control.release = r; });
   ipc.saves = []; ipc.ptyStart = 0;
   await withTimeout(win.loadFile(INDEX_FILE), STEP_TIMEOUT_MS, `${name}: loadFile`);
@@ -73,6 +74,8 @@ async function scenarioFirstRun() {
     out.tabCount = document.querySelectorAll('#makoShell [role=tab]').length;
     out.tablistLabel = document.querySelector('[role=tablist]').getAttribute('aria-label');
     out.tabIndexes = Array.from(document.querySelectorAll('[role=tab]')).map((b) => b.getAttribute('tabindex'));
+    await t.waitFor(() => document.getElementById('makoScopeStripe').textContent.startsWith('No repo selected'));
+    out.stripeNoRepo = document.getElementById('makoScopeStripe').textContent;
 
     // Click the brain tab.
     document.getElementById('makoTab-brain').click();
@@ -95,6 +98,12 @@ async function scenarioFirstRun() {
     out.afterHome = t.selectedTab();
     t.key('ArrowLeft');
     out.afterLeftWrap = t.selectedTab();
+    // The shared In-focus card renders with the tab's tokens: a permission card is always red.
+    const card = window.ccInFocusCard.buildInFocusCard(document, { state: 'permission', title: 'Allow git push?' }, {});
+    document.getElementById('makoPanel-aquarium').appendChild(card);
+    const toRgb = (hex) => 'rgb(' + [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ') + ')';
+    out.permissionBorder = getComputedStyle(card).borderTopColor === toRgb('#f2606b');
+    out.permissionAllowDisabled = card.querySelector('[data-action=allowOnce]').disabled;
     await t.sleep(50);
     return out;
   })()`);
@@ -106,7 +115,7 @@ async function scenarioFirstRun() {
 }
 
 async function scenarioPalette() {
-  await open('palette', { theme: 'obsidian', projectsRoot: 'D:\\Workspace', uiLayout: 'tabs', uiTab: 'brain' });
+  await open('palette', { theme: 'obsidian', projectsRoot: 'D:\\Workspace', uiLayout: 'tabs', uiTab: 'brain' }, null, ['D:\\Workspace\\AgentCommandCenter', 'D:\\Workspace\\<img src=x onerror=window.__pwned=1>']);
   await run(`window.__t.waitFor(() => document.documentElement.getAttribute('data-mako-layout') === 'tabs')`);
   const r = await run(`(async () => {
     const t = window.__t;
@@ -160,6 +169,17 @@ async function scenarioPalette() {
     t.key('Enter');
     out.afterLogsTab = t.selectedTab();
     out.logsPaneActive = document.querySelector('.tabpane[data-pane=logs]').classList.contains('active');
+    // The scope stripe names the repo in use, and a palette repo command switches it.
+    await t.waitFor(() => document.getElementById('makoScopeStripe').textContent.startsWith('AgentCommandCenter · '));
+    out.stripeRepo = document.getElementById('makoScopeStripe').textContent;
+    t.key('k', { ctrlKey: true });
+    input.value = 'repo: <img';
+    input.dispatchEvent(new Event('input'));
+    out.repoOption = Array.from(document.querySelectorAll('#makoPaletteList .mk-palette-label')).map((n) => n.textContent);
+    out.repoOptionNoMarkup = document.querySelectorAll('#makoPaletteList img').length === 0;
+    t.key('Enter');
+    out.stripeAfterRepo = document.getElementById('makoScopeStripe').textContent;
+    out.stripeNoMarkup = document.querySelectorAll('#makoScopeStripe img').length === 0 && window.__pwned === undefined;
     await t.sleep(50);
     return out;
   })()`);
@@ -318,7 +338,7 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('get-settings', async () => { await control.gate; return Object.assign({}, control.settings); });
   ipcMain.handle('save-settings', (_e, partial) => { ipc.saves.push(partial); return { ok: true }; });
-  ipcMain.handle('list-repos', () => ({ repos: [], selectedRepo: '' }));
+  ipcMain.handle('list-repos', () => ({ repos: control.repos.slice(), selectedRepo: control.repos[0] || '' }));
   ipcMain.handle('list-worktrees', () => []);
   ipcMain.handle('repo-github-url', () => '');
   ipcMain.handle('get-gemini-key-status', () => ({ ok: true, hasKey: true, available: true }));

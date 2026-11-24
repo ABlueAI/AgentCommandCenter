@@ -328,7 +328,12 @@
       controlPanel.hidden = !(onTab && (!tabsLayout || state.tab === 'control'));
       settingsPage.hidden = state.view !== 'settings';
       const tabInfo = TABS.find((t) => t.id === state.tab);
-      stripeText.textContent = state.view === 'settings' ? 'Settings' : `${tabInfo.label} · ${tabInfo.hint}`;
+      // The stripe names the current scope: the repo in use, then where you are.
+      let scope = '';
+      try { scope = typeof deps.currentScope === 'function' ? String(deps.currentScope() || '') : ''; }
+      catch { log('[shell] could not read the current repo for the scope stripe: scope-failed\n'); }
+      const where = state.view === 'settings' ? 'Settings' : `${tabInfo.label} · ${tabInfo.hint}`;
+      stripeText.textContent = scope ? `${scope.slice(0, 80)} · ${where}` : `No repo selected · ${where}`;
       oldLayoutBox.checked = state.layout === 'old';
       // The usage chip lives in the shell's top bar in the three-tab layout, and goes back to its
       // own place in the old top bar otherwise. Moving the node keeps usage-view.js's wiring.
@@ -534,7 +539,7 @@
 
     return {
       setTab, setLayout, openPalette, closePalette, openSettings, closeSettings,
-      setQuiet, setPaused, enableSwitch,
+      setQuiet, setPaused, enableSwitch, refreshScope: render,
       getState: () => ({ layout: state.layout, tab: state.tab, view: state.view, paletteOpen: state.paletteOpen, quietSince: state.quietSince, pausedSince: state.pausedSince }),
       visibleCommands: () => state.shown.map((c) => c.label),
     };

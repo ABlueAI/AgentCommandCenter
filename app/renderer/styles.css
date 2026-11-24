@@ -439,6 +439,26 @@ input:focus { outline: none; border-color: var(--accent); }
 .mk-palette-option { display: flex; justify-content: space-between; gap: 12px; padding: 6px 12px; border-radius: 7px; cursor: pointer; font: 500 13.5px/20px var(--sans); }
 .mk-palette-option[aria-selected="true"] { background: var(--mk-surface-hover, var(--panel-2)); box-shadow: inset 2px 0 0 var(--mk-accent, var(--accent)); }
 .mk-palette-empty { padding: 8px 16px; }
+/* Shared components (brief 3.5): card, status chip, properties list, primary button. */
+.mk-card { background: var(--mk-surface-raised); color: var(--mk-ink); border: 1px solid var(--mk-line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.mk-card-permission { border-color: var(--mk-status-needs); }
+.mk-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mk-card-head .mk-overline { margin: 0; }
+.mk-card-title { margin: 0; font: 600 15px/20px var(--sans); }
+.mk-chip { font: 600 12px/16px var(--sans); padding: 1px 6px; border-radius: 4px; border: 1px solid currentColor; }
+.mk-chip-question, .mk-chip-permission { color: var(--mk-status-needs); }
+.mk-chip-working { color: var(--mk-status-working); }
+.mk-chip-finished { color: var(--mk-status-ended); }
+.mk-props { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; font: 400 12.5px/18px var(--sans); }
+.mk-prop-name { color: var(--mk-ink-muted); }
+.mk-prop-value { margin: 0; color: var(--mk-ink); overflow-wrap: anywhere; }
+.mk-mono { font-family: var(--mono); }
+.mk-verdict { margin: 0; font: 600 12.5px/18px var(--sans); color: var(--mk-ink); }
+.mk-verdict-ready { color: var(--mk-status-ended); }
+.mk-card-actions, .mk-card-footer { display: flex; flex-wrap: wrap; gap: 8px; }
+.mk-card-footer { border-top: 1px solid var(--mk-line); padding-top: 8px; }
+.mk-btn-primary { background: var(--mk-accent); color: var(--mk-on-accent); border-color: var(--mk-accent); }
+.mk-btn-primary:hover { background: var(--mk-accent); filter: brightness(1.1); }
 /* Top-bar status pieces and the banners. The usage chip is today's S11 panel, moved into the shell. */
 .mk-status { display: flex; align-items: center; gap: 8px; }
 .mk-status .usage-panel { margin-right: 4px; color: var(--mk-ink-muted); }
