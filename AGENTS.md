@@ -96,8 +96,8 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      runner fire that ran it, and Blue opens that link before approving, since the line alone can be
      forged; docs/CODEX-BUILDER-LANE.md) and its findings are fixed or answered.
    - Before posting, check the report for secrets or anything quoted from outside the repo, and
-     remove it with a note, cut each security finding to its title, severity and location (its
-     details go to Blue privately; "Hard rules" item 6), and replace Codex's handle with "at-codex"
+     remove it with a note, cut each security finding to its title and severity only (its details
+     go to Blue privately; "Hard rules" item 6), and replace Codex's handle with "at-codex"
      (see "Security rules").
      Otherwise post the reviewer's report verbatim apart from those edits, as a PR comment headed
      "Independent review (Opus)", followed by the builder's response to each finding.

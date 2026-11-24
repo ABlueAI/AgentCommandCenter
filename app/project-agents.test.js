@@ -184,8 +184,8 @@ if (sharedBlocks.length > 0) {
   assert(flat.includes('A comment by any other account, `ABlueAgent` included, never counts')
     && flat.includes('a comment by that bot, edited by no one else'),
     "only the Codex connector bot's unedited comment counts as Codex's pass");
-  assert(flat.includes('cut each security finding to its title, severity and location'),
-    'step 3 cuts security findings to title, severity and location before posting');
+  assert(flat.includes('cut each security finding to its title and severity only'),
+    'step 3 cuts security findings to title and severity only before posting');
   assert(flat.includes('stop at 100 counted writes') && flat.includes('That count is a floor'),
     'the pacing count is a floor with a margin under 120');
   assert(!new RegExp('\\x40codex', 'i').test(rules),
