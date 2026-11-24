@@ -12,9 +12,15 @@
 // spawning.
 
 const path = require('path');
-// Issue #162: IP range classification from ipaddr.js (MIT, pinned in package.json), the library
-// Express's proxy-addr uses, rather than a hand-written list of CIDR ranges.
-const ipaddr = require('ipaddr.js');
+// Issue #162: IP range classification from ipaddr.js (MIT, pinned in package.json; the choice is in
+// docs/decisions/OSS-ip-ranges.md), rather than a hand-written list of CIDR ranges. Loaded on first
+// use, not at startup: main.js requires this file when Mako starts, and a checkout that hasn't run
+// `npm ci` yet must refuse the Page Reader visibly (REASON.CHECK_UNAVAILABLE), not stop Mako opening.
+let ipaddrModule = null;
+function loadIpaddr() {
+  if (!ipaddrModule) ipaddrModule = require('ipaddr.js');
+  return ipaddrModule;
+}
 
 const ROLE = 'page-reader';
 
@@ -135,13 +141,14 @@ const REASON = Object.freeze({
   WHITESPACE: 'page-url-has-whitespace-or-control',
   NOT_PUBLIC_ADDRESS: 'page-url-not-public-address',
   LOCAL_NAME: 'page-url-local-name',
+  CHECK_UNAVAILABLE: 'page-url-check-unavailable',
 });
 
 // Names that only ever mean this machine or the local network: `localhost` (RFC 6761), mDNS `.local`
 // (RFC 6762), `.home.arpa` (RFC 8375), `.internal` (ICANN, 2024), and the common private suffixes
 // ICANN will never delegate (`.lan`, `.home`, `.corp`). A name with no dot is refused too: Windows
 // resolves a single label through LLMNR or NetBIOS on the local network, never on the public web.
-const GLOBAL_UNICAST_V6 = ipaddr.parseCIDR('2000::/3');
+const GLOBAL_UNICAST_V6_CIDR = '2000::/3';
 const LOCAL_SUFFIXES = Object.freeze(['localhost', 'local', 'home.arpa', 'internal', 'lan', 'home', 'corp']);
 
 /**
@@ -154,24 +161,30 @@ const LOCAL_SUFFIXES = Object.freeze(['localhost', 'local', 'home.arpa', 'intern
  * broadcast, reserved, the ranges that embed an IPv4 address (6to4, Teredo, NAT64), and any IPv6
  * address outside 2000::/3.
  *
- * Host NAMES are not resolved: a check here and Chromium's own lookup later can get different
- * answers, so resolving would only look safe. A public name that points at a private address is
- * therefore not caught here (see the PR for #162).
+ * This checks the URL Blue gives, before the pane starts. Host NAMES are not resolved: a check here
+ * and Chromium's own lookup later can get different answers, so resolving would only look safe.
+ * What the pane's browser does after that first page is outside this check (see the PR for #162).
  */
 function hostRefusal(hostname) {
+  let ipaddr;
+  try { ipaddr = loadIpaddr(); } catch (e) { return REASON.CHECK_UNAVAILABLE; }
   let host = String(hostname).toLowerCase();
   if (host.startsWith('[') && host.endsWith(']')) host = host.slice(1, -1);
   if (host === '') return REASON.LOCAL_NAME;
   if (ipaddr.isValid(host)) {
     let addr;
+    // Fail closed. isValid() has just passed, so process() should never throw here.
     try { addr = ipaddr.process(host); } catch (e) { return REASON.NOT_PUBLIC_ADDRESS; }
     if (addr.range() !== 'unicast') return REASON.NOT_PUBLIC_ADDRESS;
     // Public IPv6 unicast lives only in 2000::/3 (RFC 4291 global unicast). This also refuses
     // the deprecated IPv4-compatible form (::a.b.c.d), which ipaddr.js labels 'unicast'.
-    if (addr.kind() === 'ipv6' && !addr.match(GLOBAL_UNICAST_V6)) return REASON.NOT_PUBLIC_ADDRESS;
+    if (addr.kind() === 'ipv6' && !addr.match(ipaddr.parseCIDR(GLOBAL_UNICAST_V6_CIDR))) return REASON.NOT_PUBLIC_ADDRESS;
     return null;
   }
+  // A name with an empty label (`a..b`, or more than one trailing dot) is never a public site's
+  // name; refusing it keeps the dot-count and suffix rules below from being read on a stray dot.
   const name = host.endsWith('.') ? host.slice(0, -1) : host;
+  if (name.split('.').includes('')) return REASON.LOCAL_NAME;
   if (!name.includes('.')) return REASON.LOCAL_NAME;
   for (const suffix of LOCAL_SUFFIXES) {
     if (name === suffix || name.endsWith('.' + suffix)) return REASON.LOCAL_NAME;

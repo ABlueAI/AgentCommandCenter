@@ -65,6 +65,11 @@ section('1b. Host check (issue #162): only public hosts');
     ['https://printer.local/', pr.REASON.LOCAL_NAME], ['https://nas.home.arpa/', pr.REASON.LOCAL_NAME],
     ['https://svc.internal/', pr.REASON.LOCAL_NAME], ['https://router.lan/', pr.REASON.LOCAL_NAME],
     ['https://box.home/', pr.REASON.LOCAL_NAME], ['https://wiki.corp/', pr.REASON.LOCAL_NAME],
+    // spellings WHATWG URL normalizes into those names, and names with an empty label
+    ['https://\uff4c\uff4f\uff43\uff41\uff4c\uff48\uff4f\uff53\uff54/', pr.REASON.LOCAL_NAME], ['https://%6Cocalhost/', pr.REASON.LOCAL_NAME],
+    ['https://printer.local./', pr.REASON.LOCAL_NAME], ['https://intranet../', pr.REASON.LOCAL_NAME],
+    ['https://localhost../', pr.REASON.LOCAL_NAME], ['https://nas.local../', pr.REASON.LOCAL_NAME],
+    ['https://a..example.com/', pr.REASON.LOCAL_NAME],
     // IPv4 loopback, also in the short, hex, decimal and trailing-dot forms WHATWG URL normalizes
     ['https://127.0.0.1/', pr.REASON.NOT_PUBLIC_ADDRESS], ['https://127.8.9.10:8443/x', pr.REASON.NOT_PUBLIC_ADDRESS],
     ['https://127.1/', pr.REASON.NOT_PUBLIC_ADDRESS], ['https://0x7f000001/', pr.REASON.NOT_PUBLIC_ADDRESS],
@@ -86,6 +91,8 @@ section('1b. Host check (issue #162): only public hosts');
     ['https://[::127.0.0.1]/', pr.REASON.NOT_PUBLIC_ADDRESS], ['https://[64:ff9b::a00:1]/', pr.REASON.NOT_PUBLIC_ADDRESS],
     ['https://[2002:7f00:1::]/', pr.REASON.NOT_PUBLIC_ADDRESS], ['https://[2001::1]/', pr.REASON.NOT_PUBLIC_ADDRESS],
     ['https://[2001:db8::1]/', pr.REASON.NOT_PUBLIC_ADDRESS], ['https://[100::1]/', pr.REASON.NOT_PUBLIC_ADDRESS],
+    // labelled unicast by ipaddr.js but outside 2000::/3, so only the global-unicast check refuses it
+    ['https://[4000::1]/', pr.REASON.NOT_PUBLIC_ADDRESS],
   ];
   for (const [input, reason] of refused) {
     const r = pr.validatePageUrl(input);
@@ -102,6 +109,26 @@ section('1b. Host check (issue #162): only public hosts');
   // The refusal reasons are distinct constants, so main and the renderer can tell them apart.
   assert(pr.REASON.NOT_PUBLIC_ADDRESS === 'page-url-not-public-address' && pr.REASON.LOCAL_NAME === 'page-url-local-name',
     'the two host refusals have their own reason constants');
+  // A checkout without ipaddr.js installed (git pull, no npm ci yet): Mako still loads page-reader.js,
+  // and the Page Reader refuses with its own reason instead of letting a URL through. Run in a child
+  // process that hides the module, so this process's loaded copy can't mask the result.
+  {
+    const { execFileSync } = require('child_process');
+    const script = [
+      "const Module = require('module'); const load = Module._load;",
+      "Module._load = function (r) { if (r === 'ipaddr.js') { const e = new Error('Cannot find module'); e.code = 'MODULE_NOT_FOUND'; throw e; } return load.apply(this, arguments); };",
+      'const pr = require(process.argv[1]);',
+      "process.stdout.write(JSON.stringify([pr.validatePageUrl('https://example.org/'), pr.validatePageUrl('https://127.0.0.1/')]));",
+    ].join('\n');
+    const out = JSON.parse(execFileSync(process.execPath, ['-e', script, path.join(__dirname, 'page-reader.js')], { encoding: 'utf8' }));
+    assert(out.every((r) => r.ok === false && r.reason === pr.REASON.CHECK_UNAVAILABLE),
+      'without ipaddr.js installed: page-reader.js still loads, and every URL refuses as check-unavailable');
+    const src = fs.readFileSync(path.join(__dirname, 'page-reader.js'), 'utf8');
+    const requires = src.match(/require\(['"]ipaddr\.js['"]\)/g) || [];
+    const li = src.indexOf('function loadIpaddr()');
+    assert(requires.length === 1 && li >= 0 && src.slice(li, src.indexOf('\n}', li)).includes("require('ipaddr.js')"),
+      'ipaddr.js is required only inside loadIpaddr, never when main.js loads page-reader.js');
+  }
   // ipaddr.js is pinned exactly, so the range table can't change under a caret upgrade.
   const appPkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
   assert(/^\d+\.\d+\.\d+$/.test(appPkg.dependencies['ipaddr.js'] || ''), 'ipaddr.js is pinned to an exact version');
@@ -276,7 +303,8 @@ Module._load = function (request) {
   const untrusted = await prepare({ sender: {}, senderFrame: {} }, { url: URL_OK });
   assert(untrusted.ok === false && untrusted.error === 'untrusted-sender', 'an untrusted sender is refused');
   const badUrl = await prepare(good, { url: 'http://www.reddit.com/' });
-  assert(badUrl.ok === false && badUrl.error === pr.REASON.NOT_HTTPS, 'a non-https URL is refused before anything is written');
+  assert(badUrl.ok === false && badUrl.error === pr.REASON.NOT_HTTPS && badUrl.hint === undefined,
+    'a non-https URL is refused before anything is written, without the local-network hint');
   assert(!fs.existsSync(path.join(USER_DATA, 'page-reader')), 'nothing was written for a refused URL');
   for (const local of ['https://localhost/', 'https://192.168.1.10/', 'https://[::1]/', 'https://[fe80::1]/']) {
     const r = await prepare(good, { url: local });
