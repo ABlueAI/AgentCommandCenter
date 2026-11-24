@@ -8,7 +8,7 @@
 // PURE (no Electron import): main.js injects the gate, safeStorage and the secure-store functions,
 // so this is unit-testable in plain node (gemini-key-ipc.test.js). The plaintext key never travels
 // back across IPC, and no refusal or error ever carries the key: a refusal is a bounded reason
-// constant, logged once on the visible main-error channel.
+// (at most a short error code is added), logged on the visible main-error channel.
 
 function createGeminiKeyIpc(deps) {
   const d = deps || {};
@@ -34,6 +34,13 @@ function createGeminiKeyIpc(deps) {
     return { ok: false, error: reason };
   }
 
+  // Only a short upper-case error code (EPERM, EBUSY, ENOSPC...) is ever reported from a caught
+  // error: never its message, which could carry the key.
+  function codeOf(err) {
+    const c = err && err.code;
+    return typeof c === 'string' && /^[A-Z][A-Z0-9_]{0,31}$/.test(c) ? c : 'no code';
+  }
+
   function handleStatus(event) {
     const g = assessSender(event);
     if (!g.ok) return refuse('status', g.reason);
@@ -46,12 +53,13 @@ function createGeminiKeyIpc(deps) {
     if (typeof key !== 'string' || !key.trim()) return refuse('save', 'key is empty');
     if (!isEncryptionAvailable()) return refuse('save', 'safeStorage encryption not available on this system');
     const k = key.trim();
+    let enc;
+    try { enc = encryptString(k); }
+    catch (err) { return refuse('save', `could not encrypt the key (safeStorage) [${codeOf(err)}]`); }
     try {
-      const enc = encryptString(k);
       const s = loadSecure(); s.geminiKeyEnc = enc.toString('base64'); saveSecure(s);
-    } catch {
-      // No error text: an encryption or write error must never be able to carry the key.
-      return refuse('save', 'could not encrypt or save the key');
+    } catch (err) {
+      return refuse('save', `could not save secure.json [${codeOf(err)}]`);
     }
     setKey(k);
     return { ok: true };
@@ -62,9 +70,9 @@ function createGeminiKeyIpc(deps) {
     if (!g.ok) return refuse('clear', g.reason);
     try {
       const s = loadSecure(); delete s.geminiKeyEnc; saveSecure(s);
-    } catch {
+    } catch (err) {
       // The stored key is still on disk, so the in-memory key stays too: say so, never pretend.
-      return refuse('clear', 'could not save the secure store; the key is still stored');
+      return refuse('clear', `could not save secure.json; the key is still stored [${codeOf(err)}]`);
     }
     setKey(null);
     return { ok: true };
