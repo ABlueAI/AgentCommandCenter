@@ -154,7 +154,7 @@ Every PR that changes the state updates this file.
   checklist on GitHub) an `AGENTS.md` and a `CLAUDE.md`; the kepano/obsidian-skills plugin is to be installed in
   Claude Code from the vault (ADOPT recorded in docs/decisions/OSS-obsidian-skills.md). Blue sets it up
   on his PC (checklist step 31). Only local agents can reach the vault.
-- **Marina research brief (S22, PR #116 merged 2026-10-23, in progress):** the brief is in Blue's private repo
+- **Marina research brief (S22, PR #116 merged 2026-10-23, done; builder's reading, from step 32's verification):** the brief is in Blue's private repo
   `ABlueAI/Mako-Business` (PR 1 there, commit `24ddc8e`; checklist step 32 ticked). The cloud session
   couldn't open web pages, so its facts come from search extracts of public pages and need a check
   on each source before outreach. No marina data is in this repo.
