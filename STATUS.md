@@ -1,9 +1,6 @@
 # Mako status
 
-Updated 2026-11-24 by PR #254 (S38, the one-time full security check: 1 high and 11 medium
-findings, issues #258 to #269, and 16 low ones, 15 hardening items and 1 question for Blue, in
-checklist issue #270; checklist steps 78 and 79).
-Before that: updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
+Updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
 verdict; review fixes pushed by a Claude cloud session on Blue's ask). Before that: updated 2026-11-24 by PR #209 (S48's OSS record, docs/decisions/OSS-memory.md, with Blue's
 verdict: PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain; step 68
 ticked). Before that: updated 2026-11-24 by PR #241 (S56 no longer marked Sensitive in the plan; its 9 bug issues, #232

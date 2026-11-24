@@ -1253,6 +1253,23 @@ Step 75 comes from PR #245. Step numbers 73 and 74 belong to open PRs (#230 and 
   - *Done when:* a Web Scout pane launches after the sync, and you tell any agent "step 75 done"; it ticks
     this with the date.
 
+## Every day, once the runner is on
+
+Once S04 is applied (step 27), the runner works all day and you do one sitting in the evening:
+
+- **Evening, after the 8:03 PM digest (the merge sitting, about 10 minutes; decision sheet,
+  2026-11-16):** read the digest on your phone. Answer
+  each "needs Blue" question in its PR. For each PR the digest marks `READY TO MERGE`, read its
+  TLDR, then Files changed > Review changes > Approve > Submit review, then Merge pull request >
+  Confirm merge. Merge only on `READY TO MERGE`.
+- **During the day: nothing.** A question for you also arrives as a GitHub notification (a PR
+  comment starting "@ABlueAI needs Blue:"); it can wait for the evening.
+- **Tuesday and Friday evenings:** the PC checks, batched, until H1 automates them ("Do next" item
+  9).
+- **To pause or resume:** the switch on the routines page (step 27).
+- **Until step 27 is done:** the old runner fires once, at 8:01 AM. Check your phone in the
+  morning for "needs Blue", and approve and merge ready PRs in the evening as above.
+
 ## From S38 (the full security check)
 
 Steps 78 and 79 come from PR #254 (S38). Step number 77 belongs to an open PR (#253). The details
@@ -1275,23 +1292,6 @@ behind both steps are in the private report from the S38 session, not in this pu
   - *Done when:* you've told any agent the result of each check in a session (not on GitHub). The
     results stay private: a public issue gets at most "checked on Blue's PC, <date>" or a severity
     change. The agent ticks this with the date.
-
-## Every day, once the runner is on
-
-Once S04 is applied (step 27), the runner works all day and you do one sitting in the evening:
-
-- **Evening, after the 8:03 PM digest (the merge sitting, about 10 minutes; decision sheet,
-  2026-11-16):** read the digest on your phone. Answer
-  each "needs Blue" question in its PR. For each PR the digest marks `READY TO MERGE`, read its
-  TLDR, then Files changed > Review changes > Approve > Submit review, then Merge pull request >
-  Confirm merge. Merge only on `READY TO MERGE`.
-- **During the day: nothing.** A question for you also arrives as a GitHub notification (a PR
-  comment starting "@ABlueAI needs Blue:"); it can wait for the evening.
-- **Tuesday and Friday evenings:** the PC checks, batched, until H1 automates them ("Do next" item
-  9).
-- **To pause or resume:** the switch on the routines page (step 27).
-- **Until step 27 is done:** the old runner fires once, at 8:01 AM. Check your phone in the
-  morning for "needs Blue", and approve and merge ready PRs in the evening as above.
 
 ## Coming up this month (the runner will ask when it gets there)
 
