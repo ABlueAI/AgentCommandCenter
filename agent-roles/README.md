@@ -72,6 +72,27 @@ so **these roles only enforce after a `sync-roles.ps1` run** (don't hand-copy th
 server (`--mcp-config`, `--strict-mcp-config`) and the URL in `page-request.json`, never on the
 command line (docs/decisions/OSS-research-capture.md).
 
+## Fenced web-reading agents (S58)
+
+Every role that reads the open web (these four) runs fenced: a **tool allowlist** plus the **guard
+hook**, checked at every tool call.
+
+- **The allowlist** is the role's `tools:` line, and nothing else. Mako refuses to launch a fenced
+  role that declares a tool outside its own list (`ROLE_TOOL_ALLOWLIST` in
+  `app/role-fence-policy.js`), and a role that reads the web has to be added there, and to
+  `FENCED_ROLES` in `app/main.js`, before it can launch.
+- **The guard hook** sees every tool call: each role's one PreToolUse entry has `matcher: "*"` and
+  starts the hook with the role's own name (`node "__CC_HOOK__" <role>`). The hook carries the same
+  allowlists (`ROLE_TOOLS` in `scripts/hooks/fence-write.js`) and refuses any tool outside the role's
+  list before its other gates, with exit 2 and one constant message:
+  `Blocked by Mako tool fence: this role may not use that tool. [fence-tool-not-allowed]`. A missing
+  or unknown role name refuses every call (`[fence-role-unknown]`).
+- `app/fenced-web-roles.test.js` holds the three lists equal (role file, policy, hook), checks that
+  every role declaring a web tool is fenced, and runs the real hook with every role against tools
+  outside its list (the shells, Grep, Glob, Agent, Task, Edit, other MCP tools, near-miss names).
+- After pulling a change to the roles or the hook, run `sync-roles.ps1` again: until then Mako
+  refuses to launch the fenced roles (the deployed hook no longer matches the tracked one).
+
 ## Open items (still to verify when building)
 
 - Precedence when both frontmatter `effort` and a launch-time `--effort` flag are set

@@ -495,8 +495,10 @@ const LEDGER = 'admission-ledger.json';
       // any claim or spawn, so no pane ever carries the CLI grant.
       const wsFile = path.join(AGENTS, 'web-scout.md');
       const wsClean = fs.readFileSync(wsFile, 'utf8');
-      const wsOld = wsClean.replace('matcher: "Read|Write|Edit|MultiEdit|WebFetch"', 'matcher: "Read|Write|Edit|MultiEdit"');
-      assert(wsOld !== wsClean, 'W5: fixture: only WebFetch removed from the deployed web-scout matcher');
+      // MOVED (S58): the tracked matcher is `*`; the drifted deployment carries the pre-S58 one, which
+      // names neither WebFetch nor the tools the hook's allowlist must see.
+      const wsOld = wsClean.replace('matcher: "*"', 'matcher: "Read|Write|Edit|MultiEdit"');
+      assert(wsOld !== wsClean, 'W5: fixture: the deployed web-scout matcher no longer routes WebFetch');
       fs.writeFileSync(wsFile, wsOld, 'utf8');
       try {
         const r5 = await boot(Object.assign({}, ENV, { BLUE_HELM_ADMISSION_RUN_ID: 'webfetch-probe-drift' }));

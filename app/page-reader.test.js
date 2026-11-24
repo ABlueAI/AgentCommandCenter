@@ -126,7 +126,8 @@ section('4. Fence policy: the MCP grant is page-reader only');
   assert(asScout.ok === false && asScout.reason === policy.REASON.TOOL_NOT_ALLOWED, 'the same MCP tools on web-scout refuse');
   const extra = check('page-reader', roleText.replace('mcp__playwright__browser_snapshot\n', 'mcp__playwright__browser_snapshot, mcp__playwright__browser_click\n'));
   assert(extra.ok === false && extra.reason === policy.REASON.TOOL_NOT_ALLOWED, 'a third Playwright tool (click) refuses');
-  const uncovered = check('page-reader', roleText.replace('|mcp__playwright__browser_snapshot"', '"'));
+  // MOVED (S58): the tracked matcher is `*`; one that names the tools but skips the snapshot still refuses.
+  const uncovered = check('page-reader', roleText.replace('matcher: "*"', 'matcher: "Read|Write|Edit|MultiEdit|mcp__playwright__browser_navigate"'));
   assert(uncovered.ok === false && uncovered.reason === policy.REASON.MATCHER_COVERAGE, 'a matcher that skips the snapshot tool refuses');
   const bash = check('page-reader', roleText.replace('tools: Read, Write,', 'tools: Read, Write, Bash,'));
   assert(bash.ok === false && bash.reason === policy.REASON.FORBIDDEN_TOOL, 'Bash still refuses');
@@ -137,7 +138,8 @@ section('5. Fence hook gates (the real hook)');
   const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'mako-page-reader-hook-'));
   const env = Object.assign({}, process.env);
   delete env.BLUE_HELM_CONTROLLED_WEBFETCH_MODE; // a page-reader pane is issued no WebFetch mode
-  const run = (tool, input) => spawnSync(process.execPath, [HOOK_SRC], {
+  // S58: the hook runs with the role's own name, as the deployed page-reader role starts it.
+  const run = (tool, input) => spawnSync(process.execPath, [HOOK_SRC, 'page-reader'], {
     input: JSON.stringify({ cwd: sandbox, tool_name: tool, tool_input: input }), env, encoding: 'utf8',
   });
   const nav = 'mcp__playwright__browser_navigate';

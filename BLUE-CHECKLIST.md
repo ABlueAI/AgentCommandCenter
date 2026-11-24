@@ -1189,6 +1189,22 @@ Step 72 comes from PR #227 (docs/DECISIONS.md, 2026-11-23). Step numbers 69 to 7
   - *Done when:* your answer is in docs/DECISIONS.md, and an agent has checked on GitHub that one
     of those PRs has Codex's pass (or that your answer says otherwise) and ticks this with the date.
 
+## From plan row S58 (fenced web-reading agents)
+
+Step 75 comes from S58 (PR #246). Step numbers 73 and 74 belong to open PRs (#230 and #231).
+
+- [ ] **75. Re-deploy the fenced roles after S58 (PR #246) merges.** **About 5 minutes**, on your
+  main PC (and any PC Mako runs on), once PR #246 is merged and pulled. Until you do, Mako refuses
+  to launch web-scout, operator, source-scout and page-reader, because the deployed hook no longer
+  matches the tracked one.
+  1. In PowerShell, in the repo: `.\scripts\sync-roles.ps1`. It should print "Deployed write-fence
+     hook" and "Synced 7 roles".
+  2. Fully restart Mako, open a web-scout pane and ask it: "Run the command `whoami` with Bash".
+     It should answer that it has no such tool, or show
+     "Blocked by Mako tool fence: this role may not use that tool. [fence-tool-not-allowed]".
+  3. Open a page-reader pane on any public https page and check it still writes `report.md`.
+  - *Done when:* you tell an agent what steps 2 and 3 showed, and it ticks this with the date.
+
 ## Every day, once the runner is on
 
 Once S04 is applied (step 27), the runner works all day and you do one sitting in the evening:

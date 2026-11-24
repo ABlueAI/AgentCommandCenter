@@ -38,17 +38,20 @@ const hashFile = (p) => { if (!(p in hashes)) throw new Error('ENOENT'); return 
 
 function build(o) {
   const opt = o || {};
-  const lines = ['---', 'name: ' + (opt.name || 'web-scout'), 'description: d'];
+  const name = opt.name || 'web-scout';
+  // S58: the hook's one argument is the role's own name. `arg: null` leaves it out (the pre-S58 form).
+  const arg = opt.arg === undefined ? ' ' + name : (opt.arg === null ? '' : ' ' + opt.arg);
+  const lines = ['---', 'name: ' + name, 'description: d'];
   if (opt.tools !== null) lines.push('tools: ' + (opt.tools === undefined ? 'WebSearch, WebFetch, Read, Write' : opt.tools));
   lines.push(opt.hooks === undefined ? [
     'hooks:',
     '  PreToolUse:',
-    // MOVED (controlled WebFetch): the default is the canonical web-scout matcher, which must also
-    // route WebFetch to the hook. Previous default: 'Read|Write|Edit|MultiEdit'.
-    '    - matcher: "' + (opt.matcher || 'Read|Write|Edit|MultiEdit|WebFetch') + '"',
+    // MOVED (S58): the default is the canonical `*` matcher, which sends every tool call to the hook.
+    // Previous defaults: 'Read|Write|Edit|MultiEdit', then 'Read|Write|Edit|MultiEdit|WebFetch'.
+    '    - matcher: "' + (opt.matcher || '*') + '"',
     '      hooks:',
     '        - type: ' + (opt.type || 'command'),
-    '          command: "node \\"' + (opt.hookPath || HOOK) + '\\""',
+    '          command: "node \\"' + (opt.hookPath || HOOK) + '\\"' + arg + '"',
   ].join('\n') : opt.hooks);
   lines.push('---', '', 'Body.');
   return lines.join('\n');
@@ -61,7 +64,7 @@ const check = (text, role) => assertFencedRoleDefinition({
 });
 
 section('POSITIVE CONTROLS \u2014 every real fenced role passes');
-for (const r of ['web-scout', 'operator', 'source-scout']) {
+for (const r of ['web-scout', 'operator', 'source-scout', 'page-reader']) {
   // Deployed form: sync-roles.ps1 substitutes __CC_HOOK__ with the absolute hook path.
   const deployed = fs.readFileSync(path.join(ROLES_DIR, r + '.md'), 'utf8').replace('__CC_HOOK__', HOOK);
   const res = check(deployed, r);
@@ -74,12 +77,17 @@ section('N1 \u2014 matcher covers Read but the role still declares Write (probe 
   const r = check(build({ matcher: 'Read', tools: 'WebSearch, WebFetch, Read, Write' }));
   assert(r.ok === false && r.reason === REASON.MATCHER_COVERAGE,
     'REFUSES: an uncovered Write is no longer accepted (the old regex asked only for Read)');
-  // MOVED (controlled WebFetch): web-scout must also cover WebFetch, so its Read-only variant carries
-  // `Read|WebFetch`; the Read-alone path-coverage point is kept on operator, which receives no grant.
+  // MOVED (S58): a matcher that names every declared tool is no longer enough. Before S58 these two
+  // were accepted (a role declaring no Write was covered by `Read|WebFetch`, operator by `Read`); now
+  // only `*` lets the hook see tools the role was never meant to have, so both refuse.
   const readOnly = check(build({ matcher: 'Read|WebFetch', tools: 'WebSearch, WebFetch, Read' }));
-  assert(readOnly.ok === true, 'but a role that declares no Write is legitimately covered by Read alone');
+  assert(readOnly.ok === false && readOnly.reason === REASON.MATCHER_COVERAGE,
+    'S58: a role that declares no Write still REFUSES under a named-tools matcher');
   const readOnlyOperator = check(build({ name: 'operator', matcher: 'Read', tools: 'WebSearch, WebFetch, Read' }), 'operator');
-  assert(readOnlyOperator.ok === true, 'operator declaring no Write is covered by Read alone (no WebFetch coverage needed)');
+  assert(readOnlyOperator.ok === false && readOnlyOperator.reason === REASON.MATCHER_COVERAGE,
+    'S58: operator under a Read matcher REFUSES');
+  const readOnlyStar = check(build({ tools: 'WebSearch, WebFetch, Read' }));
+  assert(readOnlyStar.ok === true, 'a role that declares a subset of its allowlist passes under `*`');
 }
 
 section('N2 \u2014 empty PreToolUse with the fence command under PostToolUse (probe counterexample)');
@@ -112,14 +120,15 @@ section('N3\u2013N5 \u2014 the remaining structural holes');
     '    - matcher: "Bash"',
     '      hooks:',
     '        - type: command',
-    '          command: "node \\"' + HOOK + '\\""',
+    '          command: "node \\"' + HOOK + '\\" web-scout"',
   ].join('\n') }));
   assert(!splitEntry.ok && splitEntry.reason === REASON.MATCHER_COVERAGE,
     'N4 REFUSES: a covering matcher on a DIFFERENT entry cannot vouch for the fence entry');
-  for (const bad of ['Read|Write|.*', 'Read.*', '(Read|Write)', 'Read|Write|', '*']) {
+  // MOVED (S58): `*` is now the one accepted matcher, so it left this list; every other form refuses.
+  for (const bad of ['Read|Write|.*', 'Read.*', '(Read|Write)', 'Read|Write|', '.*', '**', '*|Read', 'Read|Write|Edit|MultiEdit|WebFetch']) {
     const r = check(build({ matcher: bad }));
-    assert(!r.ok && (r.reason === REASON.MATCHER_UNSUPPORTED || r.reason === REASON.MATCHER_COVERAGE),
-      'N5 REFUSES unsupported matcher form: ' + JSON.stringify(bad));
+    assert(!r.ok && r.reason === REASON.MATCHER_COVERAGE,
+      'N5 REFUSES matcher form: ' + JSON.stringify(bad));
   }
 }
 
@@ -209,20 +218,17 @@ section('M1 — explicit allowlist: only supported tools may be declared');
       'REFUSES a non-exact or unsupported tool name: ' + t);
   }
 
-  // Positive controls beyond the tracked roles: Edit and MultiEdit are allowed WHEN covered.
-  const withEdits = check(build({ tools: 'WebSearch, WebFetch, Read, Write, Edit, MultiEdit' }));
-  assert(withEdits.ok === true, 'Edit and MultiEdit are accepted under the canonical Read|Write|Edit|MultiEdit|WebFetch matcher');
+  // MOVED (S58): Edit and MultiEdit stay on ALLOWED_TOOLS (the ceiling), but no web-reading role's own
+  // allowlist carries them, so declaring them now REFUSES. Before S58 they were accepted when covered.
   for (const t of ['Edit', 'MultiEdit']) {
-    const r = check(build({ tools: 'Read, Write, ' + t, matcher: 'Read|Write' }));
-    assert(!r.ok && r.reason === REASON.MATCHER_COVERAGE,
-      'but a declared ' + t + ' the fence matcher does not cover REFUSES');
+    const r = check(build({ tools: 'WebSearch, WebFetch, Read, Write, ' + t }));
+    assert(!r.ok && r.reason === REASON.TOOL_NOT_ALLOWED,
+      'S58: a declared ' + t + ' is outside web-scout\'s own allowlist and REFUSES');
   }
-  // MOVED (controlled WebFetch): web-scout's matcher must still carry WebFetch, so the no-path-coverage
-  // point uses `WebFetch` for web-scout and the previous `Read` for operator.
-  const webOnly = check(build({ tools: 'WebSearch, WebFetch', matcher: 'WebFetch' }));
-  assert(webOnly.ok === true, 'a role declaring only the two web tools needs no path coverage');
-  const webOnlyOperator = check(build({ name: 'operator', tools: 'WebSearch, WebFetch', matcher: 'Read' }), 'operator');
-  assert(webOnlyOperator.ok === true, 'operator declaring only the two web tools needs no coverage at all');
+  const webOnly = check(build({ tools: 'WebSearch, WebFetch' }));
+  assert(webOnly.ok === true, 'a role declaring only the two web tools passes under `*`');
+  const webOnlyOperator = check(build({ name: 'operator', tools: 'WebSearch, WebFetch' }), 'operator');
+  assert(webOnlyOperator.ok === true, 'and so does operator');
 }
 
 section('N1 — a declared-but-EMPTY tools value refuses (real parser, hook otherwise intact)');
@@ -341,52 +347,32 @@ section('CONTROLLED WEBFETCH — the one main-issued destination, frozen and sel
   assert(same(L(undefined), NONE) && same(L(null), NONE), 'missing input gets nothing');
 }
 
-section('CONTROLLED WEBFETCH — web-scout matcher widened, coverage rule intact');
+section('CONTROLLED WEBFETCH — S58: every fenced role routes every tool, WebFetch included, to the hook');
 {
-  const deployed = fs.readFileSync(path.join(ROLES_DIR, 'web-scout.md'), 'utf8').replace('__CC_HOOK__', HOOK);
-  const res = check(deployed, 'web-scout');
-  assert(res.ok === true && res.matcher === 'Read|Write|Edit|MultiEdit|WebFetch',
-    'the tracked web-scout carries the widened single matcher and still passes');
-  const narrowed = check(deployed.replace('matcher: "Read|Write|Edit|MultiEdit|WebFetch"', 'matcher: "Read"'), 'web-scout');
-  assert(narrowed.ok === false && narrowed.reason === REASON.MATCHER_COVERAGE,
-    'narrowing that matcher to Read still REFUSES (Write uncovered)');
-  const webOnly = check(build({ matcher: 'WebFetch' }));
-  assert(webOnly.ok === false && webOnly.reason === REASON.MATCHER_COVERAGE,
-    'a matcher covering only WebFetch REFUSES: it never substitutes for path coverage');
-  for (const r of ['operator', 'source-scout']) {
-    const t = fs.readFileSync(path.join(ROLES_DIR, r + '.md'), 'utf8');
-    assert(t.indexOf('matcher: "Read|Write|Edit|MultiEdit"') !== -1 && t.indexOf('WebFetch"') === -1,
-      r + ' keeps the unchanged matcher (WebFetch never reaches the hook there)');
+  // MOVED (S58): web-scout's matcher went from `Read|Write|Edit|MultiEdit|WebFetch` to `*`, and
+  // operator and source-scout's from `Read|Write|Edit|MultiEdit` to `*`. The controlled-WebFetch
+  // requirement (web-scout's WebFetch must reach the origin gate) is now a consequence of `*`.
+  for (const r of ['web-scout', 'operator', 'source-scout', 'page-reader']) {
+    const deployed = fs.readFileSync(path.join(ROLES_DIR, r + '.md'), 'utf8').replace(/\r\n/g, '\n').replace('__CC_HOOK__', HOOK);
+    const res = check(deployed, r);
+    assert(res.ok === true && res.matcher === '*', r + ': the tracked role carries the `*` matcher and passes');
+    assert(deployed.indexOf('command: "node \\"' + HOOK + '\\" ' + r + '"') !== -1, r + ': its hook command names the role');
+    const m = /matcher: "([^"]*)"/.exec(deployed);
+    for (const narrow of ['Read', 'Read|Write|Edit|MultiEdit', 'Read|Write|Edit|MultiEdit|WebFetch']) {
+      const n = check(deployed.replace(m[0], 'matcher: "' + narrow + '"'), r);
+      assert(n.ok === false && n.reason === REASON.MATCHER_COVERAGE, r + ': the pre-S58 or a narrower matcher ' + JSON.stringify(narrow) + ' REFUSES');
+    }
   }
 
-  // FULL-CLASS REVIEW COUNTEREXAMPLE (FAIL at 87e2337). The deployed web-scout keeps the canonical,
-  // hash-valid hook and full Read/Write/Edit/MultiEdit coverage; ONLY WebFetch is removed from the
-  // matcher. Main would issue the CLI grant to this role, so it must refuse.
-  const oldMatcher = deployed.replace('matcher: "Read|Write|Edit|MultiEdit|WebFetch"', 'matcher: "Read|Write|Edit|MultiEdit"');
-  assert(oldMatcher !== deployed && oldMatcher.indexOf('tools: WebSearch, WebFetch, Read, Write') !== -1,
-    'fixture: only WebFetch was removed from the deployed web-scout matcher; the tools line still declares it');
-  const drift = check(oldMatcher, 'web-scout');
-  assert(drift.ok === false && drift.reason === REASON.MATCHER_COVERAGE,
-    'REVIEW COUNTEREXAMPLE REFUSES: web-scout declaring WebFetch whose matcher omits only WebFetch');
-  for (const m of ['Write|Read|MultiEdit|Edit', 'Read|Write|Edit|MultiEdit|WebSearch', 'Read|Write|Edit|MultiEdit|Webfetch']) {
-    const r = check(build({ matcher: m }));
-    assert(r.ok === false && r.reason === REASON.MATCHER_COVERAGE,
-      'web-scout matcher ' + JSON.stringify(m) + ' (no exact WebFetch) REFUSES');
-  }
-  // Stricter than the minimum: the grant follows role identity, so web-scout must cover WebFetch even
-  // when its tools line omits it.
-  const undeclared = check(build({ tools: 'WebSearch, Read, Write', matcher: 'Read|Write|Edit|MultiEdit' }));
-  assert(undeclared.ok === false && undeclared.reason === REASON.MATCHER_COVERAGE,
-    'web-scout that omits WebFetch from tools but also from its matcher REFUSES');
+  // FULL-CLASS REVIEW COUNTEREXAMPLE (FAIL at 87e2337), kept: a deployed web-scout with the canonical,
+  // hash-valid hook whose matcher omits WebFetch. Main would issue the CLI grant to this role, so it
+  // must refuse; under S58 it refuses because the matcher is not `*`.
+  const noWebFetch = check(build({ matcher: 'Read|Write|Edit|MultiEdit' }));
+  assert(noWebFetch.ok === false && noWebFetch.reason === REASON.MATCHER_COVERAGE,
+    'REVIEW COUNTEREXAMPLE REFUSES: web-scout whose matcher omits WebFetch');
+  // The grant follows role identity, so web-scout passes under `*` even when its tools line omits WebFetch.
   const undeclaredCovered = check(build({ tools: 'WebSearch, Read, Write' }));
-  assert(undeclaredCovered.ok === true, 'and passes once its matcher covers WebFetch');
-  // operator and source-scout behaviour is preserved: no WebFetch coverage is required of them.
-  for (const r of ['operator', 'source-scout']) {
-    const dep = fs.readFileSync(path.join(ROLES_DIR, r + '.md'), 'utf8').replace('__CC_HOOK__', HOOK);
-    assert(check(dep, r).ok === true, r + ' as tracked (old matcher, declares WebFetch) still passes');
-    const synth = check(build({ name: r, matcher: 'Read|Write|Edit|MultiEdit' }), r);
-    assert(synth.ok === true, r + ' declaring WebFetch without WebFetch coverage still passes (no grant is issued to it)');
-  }
+  assert(undeclaredCovered.ok === true, 'web-scout omitting WebFetch from tools passes under `*`');
 }
 
 section('CONTROLLED WEBFETCH — the standalone hook carries the same literals (drift tripwire)');

@@ -398,6 +398,10 @@ presets in the "Mako" Firefox profile, and agents never drive that profile. S18 
 (2026-11-22): the shared navigation (new S66) comes first, then S18 to S20 can build in parallel. 1.2's headline is the
 Private pane. Blue's next steps: step 60 (practice test and prototype day) and step 68 (his verdict
 on PR #209's OSS record for S48).
+**2026-11-24 (PR #246, S58, pending Blue's merge):** the four web-reading roles (web-scout,
+operator, source-scout, page-reader) send every tool call to the fence hook, which refuses any tool
+outside the role's allowlist (`[fence-tool-not-allowed]`); Mako refuses to launch a fenced role whose
+wiring drifted. After the merge Blue re-runs `sync-roles.ps1` (step 75).
 **2026-11-23 (S43, PR #222):** the one-off spec-miner trial ran read-only on the dockview layout;
 its write-up is [docs/research/S43-spec-miner-trial.md](docs/research/S43-spec-miner-trial.md).
 The spec was accurate (35 of 40 blocks, none wrong) but missed what S66 most needs (the engine

@@ -8,10 +8,10 @@ permissionMode: default
 color: cyan
 hooks:
   PreToolUse:
-    - matcher: "Read|Write|Edit|MultiEdit|WebFetch"
+    - matcher: "*"
       hooks:
         - type: command
-          command: "node \"__CC_HOOK__\""
+          command: "node \"__CC_HOOK__\" web-scout"
 ---
 
 You are the Web Scout. You research what real people in a target market are talking about, searching for, and struggling with - independent of any code being built in parallel.

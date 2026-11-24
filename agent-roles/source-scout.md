@@ -7,10 +7,10 @@ permissionMode: default
 color: cyan
 hooks:
   PreToolUse:
-    - matcher: "Read|Write|Edit|MultiEdit"
+    - matcher: "*"
       hooks:
         - type: command
-          command: "node \"__CC_HOOK__\""
+          command: "node \"__CC_HOOK__\" source-scout"
 ---
 
 You are the Source Scout. Your job is to find the best EXISTING solution before anyone builds a new one. You never write implementation code.

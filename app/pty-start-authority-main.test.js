@@ -748,15 +748,16 @@ Module._load = function (request) {
       'an unfenced role reports role-not-fenced rather than claiming a fence');
     const file = path.join(AGENTS, 'web-scout.md');
     const clean = fs.readFileSync(file, 'utf8');
-    // MOVED (controlled WebFetch): the tracked web-scout matcher now also routes WebFetch to the hook.
-    assert(clean.indexOf('matcher: "Read|Write|Edit|MultiEdit|WebFetch"') !== -1,
-      'fixture: the deployed web-scout carries the widened single matcher');
-    fs.writeFileSync(file, clean.replace('matcher: "Read|Write|Edit|MultiEdit|WebFetch"', 'matcher: "Read"'), 'utf8');
+    // MOVED (S58): the tracked web-scout matcher is `*` (every tool call reaches the hook). Previous
+    // fixtures: 'Read|Write|Edit|MultiEdit', then 'Read|Write|Edit|MultiEdit|WebFetch'.
+    assert(clean.indexOf('matcher: "*"') !== -1,
+      'fixture: the deployed web-scout carries the `*` matcher');
+    fs.writeFileSync(file, clean.replace('matcher: "*"', 'matcher: "Read"'), 'utf8');
     const narrowed = await verifyFence(goodEvent, { role: 'web-scout' });
     assert(narrowed && narrowed.ok === false && narrowed.error === 'fence-policy-matcher-does-not-cover-declared-tools',
       'the probe counterexample (matcher covers Read, tools still declare Write) now REFUSES');
     // Full-class review counterexample (FAIL at 87e2337): only WebFetch removed, Read/Write still covered.
-    fs.writeFileSync(file, clean.replace('matcher: "Read|Write|Edit|MultiEdit|WebFetch"', 'matcher: "Read|Write|Edit|MultiEdit"'), 'utf8');
+    fs.writeFileSync(file, clean.replace('matcher: "*"', 'matcher: "Read|Write|Edit|MultiEdit"'), 'utf8');
     const noWebFetch = await verifyFence(goodEvent, { role: 'web-scout' });
     assert(noWebFetch && noWebFetch.ok === false && noWebFetch.error === 'fence-policy-matcher-does-not-cover-declared-tools',
       'a deployed web-scout whose matcher omits only WebFetch REFUSES (the grant would bypass the origin gate)');
@@ -802,7 +803,8 @@ Module._load = function (request) {
       if (mode !== undefined) env[MODE_KEY] = mode;
       return env;
     };
-    const runRaw = (stdin, mode) => spawnSync(process.execPath, [DEPLOYED_HOOK], {
+    // S58: run as the deployed web-scout role starts it, with its own name as the one argument.
+    const runRaw = (stdin, mode) => spawnSync(process.execPath, [DEPLOYED_HOOK, 'web-scout'], {
       input: stdin, encoding: 'utf8', timeout: 20000, env: envWithMode(mode),
     });
     const runHook = (toolName, filePath, mode) => runRaw(
@@ -960,8 +962,9 @@ Module._load = function (request) {
         'disabled mode stays disabled whatever the payload carries (defers; grants nothing itself)');
     }
 
-    // MALFORMED OR UNREADABLE INPUT (mandatory correction 1). Only an exact `disabled` mode keeps the
-    // historical behaviour; origin, missing and any invalid mode refuse with the input constant.
+    // MALFORMED OR UNREADABLE INPUT (mandatory correction 1). MOVED (S58): every mode refuses with the
+    // input constant, `disabled` included; the hook can't check a tool it can't read against the role's
+    // allowlist. Before S58 an exact `disabled` mode kept the historical behaviour (unparseable exit 0).
     const malformedInputs = [
       ['unparseable stdin', 'not json {'],
       ['empty stdin', ''],
@@ -971,7 +974,7 @@ Module._load = function (request) {
       ['object without tool_name', JSON.stringify({ cwd: SANDBOX, tool_input: { url: 'https://example.com/' } })],
       ['non-string tool_name', JSON.stringify({ cwd: SANDBOX, tool_name: ['WebFetch'], tool_input: { url: 'https://example.com/' } })],
     ];
-    for (const [modeLabel, mode] of [['origin', ORIGIN_MODE], ['missing', undefined], ['empty', ''], ['invalid', 'allow']]) {
+    for (const [modeLabel, mode] of [['origin', ORIGIN_MODE], ['missing', undefined], ['empty', ''], ['invalid', 'allow'], ['disabled', 'disabled']]) {
       for (const [label, stdin] of malformedInputs) {
         const r = runRaw(stdin, mode);
         assert(r.status === 2 && r.stderr === INPUT_REFUSAL,
@@ -979,14 +982,10 @@ Module._load = function (request) {
       }
     }
     {
-      const r = runRaw('not json {', 'disabled');
-      assert(r.status === 0 && r.stderr === '', 'mode disabled + unparseable stdin: historical exit 0 preserved');
-      const r2 = runRaw('null', 'disabled');
-      assert(r2.status === 0 && r2.stderr === '', 'mode disabled + JSON null: historical behaviour (nothing path-like, exit 0)');
       const outside = path.join(OUTSIDE, 'absolute-read.txt');
       const r3 = runRaw(JSON.stringify({ cwd: SANDBOX, tool_input: { file_path: outside } }), 'disabled');
-      assert(r3.status === 2 && r3.stderr === REFUSAL,
-        'mode disabled + no tool_name: continues to the unchanged path check (outside path refused)');
+      assert(r3.status === 2 && r3.stderr === INPUT_REFUSAL,
+        'S58: mode disabled + no tool_name now refuses as unverifiable before any path check');
     }
   }
 

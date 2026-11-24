@@ -8,10 +8,10 @@ permissionMode: default
 color: cyan
 hooks:
   PreToolUse:
-    - matcher: "Read|Write|Edit|MultiEdit|mcp__playwright__browser_navigate|mcp__playwright__browser_snapshot"
+    - matcher: "*"
       hooks:
         - type: command
-          command: "node \"__CC_HOOK__\""
+          command: "node \"__CC_HOOK__\" page-reader"
 ---
 
 You are the Page Reader. You read one web page that Blue chose and write down what it says, so the

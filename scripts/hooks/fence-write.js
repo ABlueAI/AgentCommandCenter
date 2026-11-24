@@ -18,12 +18,11 @@
  * up to the nearest existing ancestor when the target itself doesn't exist yet (true for
  * most writes, and harmless for reads of paths that were never there).
  *
- * Wired from a role's frontmatter:
+ * Wired from a role's frontmatter (S58: every tool call, and the role's own name as the one argument):
  *   hooks:
  *     PreToolUse:
- *       - matcher: "Read|Write|Edit|MultiEdit"
- *         hooks: [ { type: command, command: "node \"<abs path to this file>\"" } ]
- * (web-scout's matcher also carries `WebFetch`, for the controlled-WebFetch gate below.)
+ *       - matcher: "*"
+ *         hooks: [ { type: command, command: "node \"<abs path to this file>\" <role>" } ]
  *
  * Contract (verified against Claude Code docs): reads a JSON object on stdin with
  * `cwd`, `tool_name` and `tool_input`; exit 2 (with a stderr reason) blocks the call,
@@ -44,15 +43,28 @@
  * PAGE-READER BROWSER GATE (S15). The page-reader role may call exactly two Playwright MCP tools, and
  * its matcher routes both here: `browser_navigate` only to an https: URL with no userinfo, at most
  * PAGE_MAX_URL_LENGTH characters; `browser_snapshot` never with a `filename` (Playwright would write
- * that file itself, outside the Write fence). Any other MCP tool that reaches this hook refuses, but
- * the matcher routes only those two here: the other Playwright tools are kept out by the launch's
- * main-issued --disallowedTools list (app/page-reader.js DENIED_MCP_TOOLS), not by this hook. The
+ * that file itself, outside the Write fence). Since S58 every other MCP tool reaches this hook too and
+ * refuses at the allowlist; the launch's main-issued --disallowedTools list (app/page-reader.js
+ * DENIED_MCP_TOOLS) stays as the layer in front of it. The
  * literals equal app/page-reader.js and ROLE_MCP_TOOLS in app/role-fence-policy.js
  * (tripwire-tested in app/page-reader.test.js).
  *
- * MALFORMED INPUT (stdin not JSON, not an object, or `tool_name` not a string) refuses unless the mode
- * is exactly `disabled`, where the historical behaviour is kept (unparseable exits 0; a parsed payload
- * continues to the path check). A missing mode never allows because the input could not be parsed.
+ * S58 TOOL ALLOWLIST (fenced web-reading agents). Every web-reading role routes EVERY tool call here
+ * (`matcher: "*"`) and names itself as the hook's one argument (`node "<hook>" <role>`). Before any other
+ * gate, the call's tool must be on that role's allowlist (ROLE_TOOLS below, exact and case-sensitive);
+ * anything else refuses with one constant message, so a tool the CLI adds later, a `tools:` line that
+ * drifted, or a tool the model is talked into asking for is stopped here, not only by the role's
+ * `tools:` line and main's --disallowedTools. A missing, unknown or extra argument refuses every call.
+ * ROLE_TOOLS equals ROLE_TOOL_ALLOWLIST in app/role-fence-policy.js (tripwire-tested in
+ * app/fenced-web-roles.test.js); the launch policy refuses a deployed role whose entry is not `*` or
+ * whose argument is not its own name. WebFetch is origin-gated for web-scout only (above); operator and
+ * source-scout keep Claude Code's ordinary WebFetch permission flow, as before S58.
+ *
+ * MALFORMED INPUT (stdin not JSON, not an object, or `tool_name` not a string) always refuses: the hook
+ * can't check a tool it can't read against the allowlist. (Before S58 the `disabled` WebFetch mode let
+ * unparseable input through; that exception is gone.)
+ *
+ * Required as a module (tests), it exports its constants and runs nothing.
  */
 const fs = require('fs');
 const path = require('path');
@@ -76,6 +88,29 @@ const PAGE_REFUSAL_MESSAGE =
 
 const REFUSAL_MESSAGE =
   'Blocked by Mako path fence: this role may only access files inside its own sandbox. [fence-outside-sandbox]';
+
+// S58: each web-reading role's whole tool allowlist. Equal to ROLE_TOOL_ALLOWLIST in
+// app/role-fence-policy.js and to each tracked role's `tools:` line (app/fenced-web-roles.test.js).
+const ROLE_TOOLS = Object.freeze({
+  'web-scout': Object.freeze(['WebSearch', 'WebFetch', 'Read', 'Write']),
+  'operator': Object.freeze(['Read', 'WebSearch', 'WebFetch', 'Write']),
+  'source-scout': Object.freeze(['WebSearch', 'WebFetch', 'Read', 'Write']),
+  'page-reader': Object.freeze(['Read', 'Write', PAGE_NAVIGATE_TOOL, PAGE_SNAPSHOT_TOOL]),
+});
+// The one role whose WebFetch goes through the origin gate (CONTROLLED_WEBFETCH.role in the policy).
+const WEBFETCH_GATED_ROLE = 'web-scout';
+
+const TOOL_REFUSAL_MESSAGE =
+  'Blocked by Mako tool fence: this role may not use that tool. [fence-tool-not-allowed]';
+const ROLE_REFUSAL_MESSAGE =
+  'Blocked by Mako tool fence: the fence was started without a known role, so every tool is refused. [fence-role-unknown]';
+
+// The role named by the hook's one argument, or null when it is missing, unknown or not alone.
+function roleFromArgv(argv) {
+  if (!Array.isArray(argv) || argv.length !== 3) return null;
+  const r = argv[2];
+  return typeof r === 'string' && Object.prototype.hasOwnProperty.call(ROLE_TOOLS, r) ? r : null;
+}
 
 // Resolve the real (symlink-free) path. Walks up to the nearest existing ancestor if the
 // target doesn't exist yet, then re-appends the unresolved tail, so a brand-new file inside
@@ -115,28 +150,30 @@ function isAllowedPageUrl(url) {
   return u.protocol === 'https:' && u.username === '' && u.password === '';
 }
 
-let input = '';
-process.stdin.on('data', (d) => { input += d; });
-process.stdin.on('end', () => {
+function decide(input, role) {
   const mode = process.env[WEBFETCH_MODE_ENV];
   let data;
   let parsed = true;
   try { data = JSON.parse(input.replace(/^﻿/, '')); } catch { parsed = false; }
   const wellFormed = parsed && data !== null && typeof data === 'object' && !Array.isArray(data)
     && typeof data.tool_name === 'string';
-  if (!wellFormed) {
-    if (mode !== WEBFETCH_DISABLED) refuse(INPUT_REFUSAL_MESSAGE);
-    if (!parsed) process.exit(0); // `disabled` only: unparseable -> don't block (historical behaviour)
-  }
+  if (!wellFormed) refuse(INPUT_REFUSAL_MESSAGE);
 
-  if (wellFormed && data.tool_name === 'WebFetch') {
+  // S58: the role's allowlist comes first, before any tool-specific gate.
+  if (role === null) refuse(ROLE_REFUSAL_MESSAGE);
+  if (ROLE_TOOLS[role].indexOf(data.tool_name) === -1) refuse(TOOL_REFUSAL_MESSAGE);
+
+  if (data.tool_name === 'WebFetch') {
+    // operator and source-scout: Claude Code's ordinary permission flow, as before S58 (no grant is
+    // issued to them, and exit 0 without output approves nothing by itself).
+    if (role !== WEBFETCH_GATED_ROLE) process.exit(0);
     if (mode === WEBFETCH_DISABLED) process.exit(0); // ordinary permission flow; grants nothing itself
     const wti = data.tool_input !== null && typeof data.tool_input === 'object' ? data.tool_input : {};
     if (mode === WEBFETCH_ORIGIN && isAllowedWebFetchUrl(wti.url)) process.exit(0);
     refuse(WEBFETCH_REFUSAL_MESSAGE); // wrong destination, or a missing/unexpected mode
   }
 
-  if (wellFormed && data.tool_name.startsWith('mcp__')) {
+  if (data.tool_name.startsWith('mcp__')) {
     const pti = data.tool_input !== null && typeof data.tool_input === 'object' && !Array.isArray(data.tool_input)
       ? data.tool_input : null;
     if (pti && data.tool_name === PAGE_NAVIGATE_TOOL && isAllowedPageUrl(pti.url)) process.exit(0);
@@ -145,11 +182,11 @@ process.stdin.on('end', () => {
     refuse(PAGE_REFUSAL_MESSAGE); // any other MCP tool, a non-https page, or a snapshot to a file
   }
 
-  const ti = (data && data.tool_input) || {};
+  const ti = data.tool_input || {};
   const target = ti.file_path || ti.notebook_path || ti.path;
   if (!target) process.exit(0); // nothing path-like to check
 
-  const root = realOrNearest(path.resolve((data && data.cwd) || process.cwd()));
+  const root = realOrNearest(path.resolve(data.cwd || process.cwd()));
   const resolved = realOrNearest(path.resolve(root, target));
 
   // Windows paths are case-insensitive; compare case-folded there.
@@ -161,4 +198,21 @@ process.stdin.on('end', () => {
   // One CONSTANT refusal. It never names the requested path, the resolved path, the cwd or the sandbox
   // root: the refusal is shown to the model and in the pane, and a path is itself disclosure.
   refuse(REFUSAL_MESSAGE);
-});
+}
+
+if (require.main === module) {
+  // The role is read before stdin, but decided on only after the whole request has been read.
+  const role = roleFromArgv(process.argv);
+  let input = '';
+  process.stdin.on('data', (d) => { input += d; });
+  process.stdin.on('end', () => decide(input, role));
+}
+
+module.exports = {
+  ROLE_TOOLS,
+  WEBFETCH_GATED_ROLE,
+  TOOL_REFUSAL_MESSAGE,
+  ROLE_REFUSAL_MESSAGE,
+  INPUT_REFUSAL_MESSAGE,
+  roleFromArgv,
+};

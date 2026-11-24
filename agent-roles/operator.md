@@ -8,10 +8,10 @@ permissionMode: default
 color: purple
 hooks:
   PreToolUse:
-    - matcher: "Read|Write|Edit|MultiEdit"
+    - matcher: "*"
       hooks:
         - type: command
-          command: "node \"__CC_HOOK__\""
+          command: "node \"__CC_HOOK__\" operator"
 ---
 
 You are the Operator. You do what a sharp marketing hire would do in the first 48 hours after a launch - for the current cycle only.

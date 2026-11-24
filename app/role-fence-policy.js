@@ -27,8 +27,8 @@ const { parseRoleFrontmatter } = require('./role-frontmatter');
 // depth at the CLI), and it keeps its specific refusal reason. ALLOWED_TOOLS below already excludes it.
 const FORBIDDEN_TOOLS = Object.freeze(['Bash', 'Glob', 'NotebookEdit']);
 
-// Tools whose invocation carries a filesystem path and therefore MUST be covered by the fence
-// matcher when the role declares them.
+// Tools whose invocation carries a filesystem path, which the fence hook's path gate checks. Before
+// S58 the matcher had to name each one the role declares; the `*` matcher now covers them all.
 const PATH_CAPABLE_TOOLS = Object.freeze(['Read', 'Write', 'Edit', 'MultiEdit']);
 
 // THE EXPLICIT ALLOWLIST. A fenced role may declare ONLY these tools; anything else refuses. It
@@ -38,10 +38,10 @@ const PATH_CAPABLE_TOOLS = Object.freeze(['Read', 'Write', 'Edit', 'MultiEdit'])
 // name a future CLI adds.
 //
 // Derived, not guessed: the three tracked fenced roles declare exactly `WebSearch, WebFetch, Read,
-// Write`; the canonical matcher is `Read|Write|Edit|MultiEdit` (web-scout's adds `WebFetch` for the
-// controlled-WebFetch gate below), and fence-write.js gates the path of those four. So every allowed filesystem tool is a PATH_CAPABLE_TOOLS member the matcher check
-// below requires coverage for, and the only non-filesystem entries are the two web tools. Adding a
-// tool here is a policy change that needs its own review.
+// Write`, and fence-write.js gates the path of the four path-capable tools. So every allowed
+// filesystem tool is a PATH_CAPABLE_TOOLS member, and the only non-filesystem entries are the two web
+// tools. Adding a tool here is a policy change that needs its own review. Since S58 this is the
+// CEILING: each fenced role may declare only its own ROLE_TOOL_ALLOWLIST entry, which stays inside it.
 const ALLOWED_TOOLS = Object.freeze(['Read', 'Write', 'Edit', 'MultiEdit', 'WebSearch', 'WebFetch']);
 
 // S15 PAGE READER (Blue's verdict 2026-11-03: ADOPT Playwright MCP). The ONLY MCP tools any fenced
@@ -56,6 +56,37 @@ const ROLE_MCP_TOOLS = Object.freeze({
 function roleMcpTools(role) {
   return Object.prototype.hasOwnProperty.call(ROLE_MCP_TOOLS, role) ? ROLE_MCP_TOOLS[role] : [];
 }
+
+// S58 FENCED WEB-READING AGENTS. Each fenced role's WHOLE tool allowlist, by role identity: its
+// `tools:` line may declare only these, and the fence hook refuses every other tool at every call
+// (scripts/hooks/fence-write.js ROLE_TOOLS carries the same lists; app/fenced-web-roles.test.js holds
+// them equal and equal to each tracked role file). Every fenced role reads the open web (WebSearch and
+// WebFetch, or the page-reader's browser), so every fenced role is in this map; a fenced role missing
+// from it refuses to launch. Each list stays inside ALLOWED_TOOLS plus that role's MCP grant (checked
+// when this module loads).
+const ROLE_TOOL_ALLOWLIST = Object.freeze({
+  'web-scout': Object.freeze(['WebSearch', 'WebFetch', 'Read', 'Write']),
+  'operator': Object.freeze(['Read', 'WebSearch', 'WebFetch', 'Write']),
+  'source-scout': Object.freeze(['WebSearch', 'WebFetch', 'Read', 'Write']),
+  'page-reader': Object.freeze(['Read', 'Write'].concat(ROLE_MCP_TOOLS['page-reader'])),
+});
+
+function roleToolAllowlist(role) {
+  return Object.prototype.hasOwnProperty.call(ROLE_TOOL_ALLOWLIST, role) ? ROLE_TOOL_ALLOWLIST[role] : null;
+}
+
+{
+  for (const r of Object.keys(ROLE_TOOL_ALLOWLIST)) {
+    const ceiling = ALLOWED_TOOLS.concat(roleMcpTools(r));
+    for (const t of ROLE_TOOL_ALLOWLIST[r]) {
+      if (ceiling.indexOf(t) === -1) throw new Error('role-fence-policy: ROLE_TOOL_ALLOWLIST widens the ceiling for ' + r);
+    }
+  }
+}
+
+// S58: the canonical fence entry's matcher. `*` sends every tool call to the hook, so the hook's
+// allowlist sees tools the role was never meant to have, not only the ones a matcher names.
+const FENCE_MATCHER = '*';
 
 // CONTROLLED WEBFETCH GRANT (run -d case 6). The ONE destination a controlled run may fetch without a
 // terminal permission dialog, which controlled-run admission cannot answer. MAIN-ISSUED, like
@@ -146,15 +177,16 @@ const REASON = Object.freeze({
   HOOK_PATH_NOT_CANONICAL: 'fence-policy-hook-path-not-canonical',
   HOOK_FILE_MISSING: 'fence-policy-hook-file-missing',
   HOOK_CONTENT_MISMATCH: 'fence-policy-hook-content-not-tracked-identity',
-  MATCHER_UNSUPPORTED: 'fence-policy-matcher-form-unsupported',
   MATCHER_COVERAGE: 'fence-policy-matcher-does-not-cover-declared-tools',
+  ROLE_NO_ALLOWLIST: 'fence-policy-role-has-no-tool-allowlist',
+  HOOK_ROLE_ARGUMENT: 'fence-policy-hook-role-argument-mismatch',
 });
 
-// `node "<absolute path>"` and nothing else. A bare `node path` or an extra argument refuses.
-const COMMAND_FORM = /^node\s+"(.+)"$/;
-// Plain alternation only. Any other regex metacharacter refuses rather than being interpreted.
-// Underscores and digits are literal in a regex; they allow the page-reader's `mcp__...` tool names.
-const MATCHER_FORM = /^[A-Za-z0-9_]+(\|[A-Za-z0-9_]+)*$/;
+// `node "<absolute path>"`, optionally followed by ONE bare argument. A bare `node path` refuses. The
+// argument is captured so the owning entry can be checked for the role's own name (S58): the old form
+// without it is still recognised as the fence command, so a stale deployment refuses with
+// HOOK_ROLE_ARGUMENT rather than looking as if no fence were wired at all.
+const COMMAND_FORM = /^node\s+"([^"]+)"(?:\s+([^\s"]+))?$/;
 
 function refuse(reason) { return { ok: false, reason: reason }; }
 
@@ -198,9 +230,12 @@ function assertFencedRoleDefinition(input) {
   }
   // Allowlist: exact, case-sensitive names only. Unknown names, lower-case variants, specifiers such
   // as `Read(./x)` and MCP tool names all refuse — none is a tool this fence was reviewed against.
-  const mcpGrant = roleMcpTools(role);
+  // S58: the ceiling is the role's OWN allowlist (ROLE_TOOL_ALLOWLIST), which the hook also enforces
+  // at every call; ALLOWED_TOOLS bounds every such list.
+  const roleTools = roleToolAllowlist(role);
+  if (roleTools === null) return refuse(REASON.ROLE_NO_ALLOWLIST);
   for (const t of parsed.tools) {
-    if (ALLOWED_TOOLS.indexOf(t) === -1 && mcpGrant.indexOf(t) === -1) return refuse(REASON.TOOL_NOT_ALLOWED);
+    if (roleTools.indexOf(t) === -1) return refuse(REASON.TOOL_NOT_ALLOWED);
   }
 
   const pre = parsed.events && parsed.events.PreToolUse;
@@ -214,6 +249,7 @@ function assertFencedRoleDefinition(input) {
   // command anywhere else in the file (PostToolUse, a comment, another event) counts for nothing.
   let owning = null;
   let owningHookPath = null;
+  let owningArg = null;
   let sawCommandShaped = false;
   for (const entry of pre) {
     for (const h of entry.hooks) {
@@ -225,7 +261,7 @@ function assertFencedRoleDefinition(input) {
       try { real = fsx.realpathSync(cm[1]); } catch (e) { /* not resolvable: compare literally */ }
       // The EXACT canonical deployed path. A different file that merely happens to be named
       // fence-write.js is NOT accepted — basename proves nothing about content or provenance.
-      if (fold(real) === fold(canonicalReal)) { owning = entry; owningHookPath = real; break; }
+      if (fold(real) === fold(canonicalReal)) { owning = entry; owningHookPath = real; owningArg = cm[2]; break; }
     }
     if (owning) break;
   }
@@ -241,32 +277,27 @@ function assertFencedRoleDefinition(input) {
   try { actualSha = inp.hashFile(owningHookPath); } catch (e) { actualSha = null; }
   if (!actualSha || actualSha !== inp.trackedHookSha256) return refuse(REASON.HOOK_CONTENT_MISMATCH);
 
-  // The matcher on THAT SAME entry must cover every path-capable tool the role declares.
+  // S58: THAT SAME entry must name this role as the hook's one argument, so the hook applies this
+  // role's allowlist (and refuses everything when it has none). Checked case-sensitively: the hook's
+  // ROLE_TOOLS lookup is exact.
+  if (owningArg !== role) return refuse(REASON.HOOK_ROLE_ARGUMENT);
+
+  // S58: and its matcher must be exactly `*`, so every tool call reaches the hook. This subsumes the
+  // earlier coverage rules, which it keeps as consequences: every path-capable tool the role declares
+  // (P4), WebFetch for the controlled web-scout grant, and the page-reader's two MCP tools (S15) all
+  // reach the hook, and so do tools no matcher would have named. Any other matcher, including an
+  // alternation that names every declared tool, refuses.
   const matcher = String(owning.matcher).trim();
-  if (!MATCHER_FORM.test(matcher)) return refuse(REASON.MATCHER_UNSUPPORTED);
-  const covered = new Set(matcher.split('|'));
-  const required = parsed.tools.filter((t) => PATH_CAPABLE_TOOLS.indexOf(t) !== -1);
-  for (const t of required) {
-    if (!covered.has(t)) return refuse(REASON.MATCHER_COVERAGE);
-  }
-  // CONTROLLED WEBFETCH. Main issues the WebFetch CLI grant on role IDENTITY (the controlled fenced
-  // web-scout pane), not on the declared tool list, and that grant is only as narrow as the hook's origin
-  // gate. So the role main grants to must route WebFetch through this same canonical hook entry, whether
-  // or not its `tools:` line declares WebFetch. Without this, a drifted deployed role (for example an
-  // interrupted sync-roles.ps1 that installed the new hook but not the new matcher) would be accepted,
-  // receive the grant, and fetch past the gate. Other roles receive no grant and are unaffected.
-  if (role === CONTROLLED_WEBFETCH.role && !covered.has('WebFetch')) return refuse(REASON.MATCHER_COVERAGE);
-  // S15: the page-reader's two MCP tools always go through the same canonical hook entry, whether or
-  // not its `tools:` line declares them, since main passes them to --allowedTools on role identity.
-  for (const t of mcpGrant) {
-    if (!covered.has(t)) return refuse(REASON.MATCHER_COVERAGE);
-  }
+  if (matcher !== FENCE_MATCHER) return refuse(REASON.MATCHER_COVERAGE);
 
   return { ok: true, hookPath: owningHookPath, tools: parsed.tools, matcher: matcher };
 }
 
 module.exports = {
   ALLOWED_TOOLS: ALLOWED_TOOLS,
+  FENCE_MATCHER: FENCE_MATCHER,
+  ROLE_TOOL_ALLOWLIST: ROLE_TOOL_ALLOWLIST,
+  roleToolAllowlist: roleToolAllowlist,
   CONTROLLED_WEBFETCH: CONTROLLED_WEBFETCH,
   controlledWebFetchProblems: controlledWebFetchProblems,
   controlledWebFetchLaunch: controlledWebFetchLaunch,
