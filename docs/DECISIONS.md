@@ -18,6 +18,19 @@ that is the builder's, not Blue's.
 |---|---|
 | **A Claude session may mark a Codex PR ready under the same rule as Claude's own PRs** (and, builder's reading below, convert it to draft and back to re-trigger Codex's review). He was asked: "Let the sweeper mark Codex PRs ready once Claude's review passes?" The recommendation he approved: Codex PRs go ready under the same rules as Claude's (CI green, Claude's review clean, the merge-order check passes, no `needs-blue` or `waits-for-merge` label, no draft hold or pending verdict of Blue's). Marking a PR ready also starts Codex's automatic review, which gives Codex's pass (2026-11-23 entry, item 1). Why: the old rule made sense while Codex fixed its own PRs; since Blue's 2026-11-23 decisions that Claude fixes Codex's PRs and merges `main` into them ("id love to", "yes, thats fine", "for the last time yes", as relayed; PR #225 proposes their rule), it only blocked: PR #231 was reviewed clean on 2026-11-24 but stayed a draft, and #206, #208 and #209 stalled the same way. Builder's reading (from the hand-off): it covers any Claude session working the PR (the PR sweeper, the runner, or the session that reviewed it), and the draft-and-back re-trigger, which follows from "the same rules as Claude's" (AGENTS.md step 3), happens at most once per head and never under a hold or label that bars marking ready. The PR sweeper's prompt calls this decision "D-076". | "Yes, sweeper marks ready" |
 
+## 2026-11-24: S42's rulebook wording (proposed, pending Blue (PR #242))
+
+S42 moves the rule changes Blue decided on 2026-11-16 and 2026-11-21 into AGENTS.md and
+docs/CODEX-BUILDER-LANE.md. Where his decision left the wording open, the PR proposes it, and
+merging PR #242 approves it. Each line below is the builder's reading, not Blue's words.
+
+| Proposal | Source |
+|---|---|
+| **Certainty labels** are three: verified (with how), builder's reading, not verified (with how to check). They apply in TLDRs, replies to review findings, this file and STATUS.md. | 2026-11-16 "Running": "Certainty labels go into AGENTS.md" (no definition relayed). |
+| **A docs-only PR** (review cap 2) changes only Markdown and touches no sensitive area, so a change to AGENTS.md, `CLAUDE.md`, `.claude/` or `.github/` keeps the cap of 5. | 2026-11-16 "Running": "Review cap of 2 runs on docs-only PRs (5 stays for code)". |
+| **Dependabot PRs (issue #205):** reviewed like a Codex PR by a Claude cloud session; no agent pushes to them; they never make another PR wait in the merge-order check. | 2026-11-21 item 17: issue #205 "is handled inside S42". |
+| **Scans stay static** when a scanner's analysis stage would call a China-origin model, as part of the China-origin rule. | 2026-11-17 (S39): "Making 'scans stay static' part of the China-origin rule belongs to S42's rulebook update." |
+
 ## 2026-11-24: S56's bug issues, and S56 no longer marked Sensitive
 
 Blue gave both in the sessions that did the work. How the plan follows the second is **proposed,
