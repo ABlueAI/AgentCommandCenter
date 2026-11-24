@@ -62,7 +62,8 @@ eq(f.afterClickSelected, 'brain', 'clicking Brain selects it');
 eq(f.afterClick && f.afterClick.surface, '#0a1530', 'the brain tab\'s surface colour is applied');
 assert(f.afterClickBrainShown === true && f.afterClickControlShown === false && f.afterClickTopbarShown === false, 'the brain frame shows; today\'s layout and its top bar hide');
 assert(f.pttPrevented === true && f.pttLogged === true, 'Ctrl Space presses Dictate (consumed, and it refuses visibly here with no pane)');
-assert(typeof f.pttNotice === 'string' && f.pttNotice.length > 0, 'the refusal shows in the notice line on the tab Blue is on, not only in the hidden Logs');
+assert(/^(Dictation needs a pane|Dictation is unavailable)/.test(f.pttNotice || ''), 'the refusal shows in the notice line on the tab Blue is on, not only in the hidden Logs');
+eq(f.pttNoticeAfterRelease, f.pttNotice, 'letting go keeps the refusal (no false "microphone" notice)');
 assert(f.rightPrevented === true, 'Right arrow is handled by the tablist');
 eq(f.afterRight, 'control', 'Right moves to the control room');
 eq(f.focusAfterRight, 'makoTab-control', 'focus follows the selected tab');
@@ -159,9 +160,9 @@ assert((b.saves || []).some((x) => x.uiQuietSince === null) && (b.saves || []).s
 
 process.stdout.write('\na shell that can\'t start refuses visibly and leaves the old layout untouched\n');
 const X = S.refusal || {};
-for (const [k, why] of [['mount', 'mount-missing'], ['tokens', 'tokens-missing'], ['control', 'control-panel-missing']]) {
+for (const [k, why] of [['mount', 'mount-missing'], ['tokens', 'tokens-missing'], ['control', 'control-panel-missing'], ['render', 'render-failed']]) {
   const x = X[k] || {};
-  assert((x.line || '').includes(`(${why})`) && /the old layout stays$/.test(x.line || ''), `${k}: the Logs tab says "${why}" and that the old layout stays`);
+  assert((x.line || '').includes(`(${why}`) && /the old layout stays$/.test(x.line || ''), `${k}: the Logs tab says "${why}" and that the old layout stays`);
   assert(x.headerShown === false && x.controlShown === true && x.topbarShown === true && x.railShown === false, `${k}: today's app with its top bar; no tab bar, no rail`);
   eq(x.framesInPage, 0, `${k}: no brain or aquarium frame was left in the page`);
   eq(x.rootAttrs, [], `${k}: no tab-layout marker on the root`);

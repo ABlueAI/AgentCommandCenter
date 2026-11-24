@@ -1681,8 +1681,8 @@ function bindPushToTalk() {
         sttNotice('Push to talk: dictation is still starting. Try again in a moment.', 6000);
         return false;
       }
-      btn.click();
-      return true;
+      // Call the handler directly so its answer (started or refused) is known.
+      return btn.onclick() === true;
     },
     notify: (text, ms) => { appendLog(`[stt] push to talk: ${text}\n`); sttNotice(text, ms); },
   });
@@ -1703,6 +1703,7 @@ function installSTTUnavailableControl() {
     const detail = moduleState.phase === 'failed' ? moduleState.detail : 'module is still starting';
     appendLog(`[stt] dictation engine unavailable: ${detail}\n`);
     sttNotice('Dictation is unavailable right now. Details in Logs.', 8000);
+    return false;   // refused: push to talk must not wait for a recording (shell-nav createPushToTalk)
   };
 }
 
@@ -1716,19 +1717,21 @@ function setupSTTControls() {
   if (micBtn && !micBtn.dataset.sttWired) {
     micBtn.dataset.sttWired = '1';
     micBtn.onclick = () => {
-      if (stt.isRecording()) { stt.toggle(); return; } // second click: stop + one finalized transcript
-      if (stt.isBusy()) { appendLog('[stt] still transcribing the previous dictation…\n'); sttNotice('Still typing the last dictation. Try again in a moment.', 6000); return; }
-      if (!activeTermId || !terms.has(activeTermId)) { appendLog('[stt] click into an agent pane first, then 🎤.\n'); sttNotice('Dictation needs a pane: click into an agent pane in the control room first.', 8000); return; }
+      // Returns true when it sent a start or stop to the engine, false when it refused (push to
+      // talk reads this, so a refused start is never waited on).
+      if (stt.isRecording()) { stt.toggle(); return true; } // second click: stop + one finalized transcript
+      if (stt.isBusy()) { appendLog('[stt] still transcribing the previous dictation…\n'); sttNotice('Still typing the last dictation. Try again in a moment.', 6000); return false; }
+      if (!activeTermId || !terms.has(activeTermId)) { appendLog('[stt] click into an agent pane first, then 🎤.\n'); sttNotice('Dictation needs a pane: click into an agent pane in the control room first.', 8000); return false; }
       // Lock the destination NOW: however long the model load takes, and whatever pane
       // is clicked meanwhile, the finished transcript goes here or is refused visibly.
       sttDictationTargetId = activeTermId;
       const paneRole = (terms.get(sttDictationTargetId) || {}).role || 'shell';
       appendLog(`[stt] dictation started — locked to pane ${sttDictationTargetId} (${paneRole})\n`);
       stt.toggle(); // first click: recording starts immediately (model loads at stop time)
+      return true;
     };
   }
   stt.onStatus(({ state: st, detail }) => {
-    if (pushToTalk) pushToTalk.onSttStatus(st);
     if (st === 'recording') sttNotice(`Recording for pane ${sttDictationTargetId || '?'}. Let go of Ctrl Space (or press Stop) to type it.`, 0);
     else if (st === 'transcribing') sttNotice('Transcribing…', 0);
     else if (st === 'error') sttNotice('Dictation failed. Details in Logs.', 8000);
@@ -1736,6 +1739,9 @@ function setupSTTControls() {
     const el = $('#sttStatus'); if (el) el.textContent = (st && st !== 'idle') ? (st + (detail ? ' — ' + detail : '')) : '';
     if (micBtn) { micBtn.textContent = st === 'recording' ? '⏺ Stop' : '🎤 Dictate'; micBtn.classList.toggle('rec', st === 'recording'); }
     if (st === 'error' && detail) appendLog('[stt] ' + detail + '\n');
+    // Last, and after this handler returns: a pending push-to-talk stop calls the engine, which
+    // reports 'transcribing' at once; doing it here would let this 'recording' update overwrite it.
+    if (pushToTalk) setTimeout(() => pushToTalk.onSttStatus(st), 0);
   });
   stt.onResult((text) => {
     const targetId = sttDictationTargetId;

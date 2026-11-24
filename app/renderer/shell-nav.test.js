@@ -109,6 +109,14 @@ const UP = { code: 'Space', key: ' ' };
   assert(m.state().stopWhenStarted === false && log.notices.length === 0, 'a refused press leaves nothing pending');
 }
 {
+  // Dictate refuses (no pane): no pending start, no false "microphone" notice, and a recording
+  // Blue then starts with the mouse is not stopped.
+  const { m, o, log } = ptt({ pressResult: false });
+  m.keydown(DOWN); m.keyup(UP);
+  o.recording = true; m.onSttStatus('recording');
+  assert(log.presses === 1 && log.notices.length === 0, 'after a refused press, a later mouse start is left alone');
+}
+{
   const { m, o, log } = ptt({ recording: true });
   m.keydown(DOWN);
   assert(log.presses === 0, 'already recording (mouse): the press does not toggle it off');

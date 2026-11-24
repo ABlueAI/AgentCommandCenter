@@ -232,7 +232,8 @@
       try { p = Promise.resolve(deps.saveSettings(partial)); }
       catch (e) { p = Promise.reject(e); }
       return p.then((r) => {
-        // main's save-settings answers { ok: true }; anything else is a refusal.
+        // main answers with the saved settings, or rejects when the write fails; an explicit
+        // { ok: false } is treated as a refusal too.
         if (r && r.ok === false) throw r;
         return true;
       }).catch((e) => {
@@ -567,7 +568,7 @@
         : { id: 'layout:tabs', label: 'Use the three-tab layout', group: 'Mako', run: () => setLayout('tabs') });
       let extra = [];
       try { extra = typeof deps.extraCommands === 'function' ? deps.extraCommands() || [] : []; }
-      catch { log('[shell] could not list app commands: commands-failed\n'); }
+      catch (e) { log(`[shell] could not list app commands: commands-failed (${errorKind(e)})\n`); }
       return own.concat(extra.filter((c) => c && typeof c.label === 'string' && typeof c.run === 'function'));
     }
 
@@ -615,7 +616,7 @@
       if (!c) return;
       closePalette();
       try { c.run(); }
-      catch { log(`[shell] command "${c.label}" failed: command-failed\n`); }
+      catch (e) { log(`[shell] command "${c.label}" failed: command-failed (${errorKind(e)})\n`); }
     }
 
     // Tablist keyboard (automatic activation).

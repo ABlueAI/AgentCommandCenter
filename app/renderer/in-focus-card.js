@@ -102,8 +102,9 @@
     if (t.state === 'question') {
       for (const a of Array.isArray(t.answers) ? t.answers.slice(0, 6) : []) {
         // The id goes back to the caller exactly as given (never cut); only the label is shortened.
-        // An id that isn't a short plain string is refused, not altered.
-        if (typeof a.id !== 'string' || !/^[A-Za-z0-9_.:-]{1,120}$/.test(a.id)) continue;
+        // An id that isn't a short plain string is refused, like an unknown state: the caller (S18)
+        // sees the error instead of a card quietly missing an answer.
+        if (typeof a.id !== 'string' || !/^[A-Za-z0-9_.:-]{1,120}$/.test(a.id)) throw new Error('in-focus-card: an answer id must be 1 to 120 letters, digits or _ . : -');
         actions.appendChild(button('answer', text(a.label, 60), !!a.recommended, a.id));
       }
     }

@@ -93,6 +93,8 @@ async function scenarioFirstRun() {
     const logBefore = t.log().length;
     out.pttPrevented = t.key(' ', { ctrlKey: true, code: 'Space' });
     out.pttNotice = t.shown('#makoNotice') ? document.getElementById('makoNotice').textContent : null;
+    document.activeElement.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', code: 'Space', bubbles: true, cancelable: true }));
+    out.pttNoticeAfterRelease = t.shown('#makoNotice') ? document.getElementById('makoNotice').textContent : null;
     out.pttLogged = ['[stt] dictation engine unavailable', '[stt] click into an agent pane first'].some((x) => t.log().slice(logBefore).includes(x));
     document.getElementById('makoTab-brain').focus();
     out.rightPrevented = t.key('ArrowRight');
@@ -410,6 +412,7 @@ async function scenarioRefusal() {
     mount: await refusalCase('refusalMount', `document.getElementById('makoViews').remove();`),
     tokens: await refusalCase('refusalTokens', `delete window.ccUiTokens;`),
     control: await refusalCase('refusalControl', `document.getElementById('makoPanel-control').removeAttribute('id');`),
+    render: await refusalCase('refusalRender', `window.ccUiTokens = Object.assign({}, window.ccUiTokens, { applyTabTokens: () => { throw new TypeError('planted'); } }); true;`),
   };
 }
 

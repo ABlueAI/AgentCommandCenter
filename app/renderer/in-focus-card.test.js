@@ -79,11 +79,14 @@ const many = C.buildInFocusCard(doc, { state: 'question', answers: Array.from({ 
 eq(buttons(many).filter((b) => b.getAttribute('data-action') === 'answer').length, 6, 'at most 6 answer buttons');
 const ids = [];
 const longId = 'a'.repeat(100);
-const idCard = C.buildInFocusCard(doc, { state: 'question', answers: [{ id: longId, label: 'Long' }, { id: '<bad id>', label: 'Bad' }, { id: 7, label: 'Number' }] }, { answer: (_t, id) => ids.push(id) });
-const answerBtns = buttons(idCard).filter((b) => b.getAttribute('data-action') === 'answer');
-eq(answerBtns.map((b) => b.textContent), ['Long'], 'an answer with an unusable id is left out, not altered');
-answerBtns[0].click();
+const idCard = C.buildInFocusCard(doc, { state: 'question', answers: [{ id: longId, label: 'Long' }] }, { answer: (_t, id) => ids.push(id) });
+buttons(idCard).filter((b) => b.getAttribute('data-action') === 'answer')[0].click();
 eq(ids, [longId], 'an answer id reaches the handler exactly as given, never cut');
+for (const bad of ['<bad id>', 7, '']) {
+  let refused = false;
+  try { C.buildInFocusCard(doc, { state: 'question', answers: [{ id: bad, label: 'Bad' }] }, {}); } catch { refused = true; }
+  assert(refused, `an unusable answer id (${JSON.stringify(bad)}) is refused, not dropped quietly`);
+}
 
 process.stdout.write(`\nin-focus-card: ${passed} passed, ${failed} failed\n`);
 if (failed) process.exit(1);
