@@ -1,6 +1,8 @@
 # Mako status
 
-Updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
+Updated 2026-11-24 by PR #254 (S38, the one-time full security check: 1 high and 11 medium
+findings, issues #258 to #269, and 15 low ones in checklist issue #270; checklist steps 78 and 79).
+Before that: updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
 verdict; review fixes pushed by a Claude cloud session on Blue's ask). Before that: updated 2026-11-24 by PR #209 (S48's OSS record, docs/decisions/OSS-memory.md, with Blue's
 verdict: PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain; step 68
 ticked). Before that: updated 2026-11-24 by PR #241 (S56 no longer marked Sensitive in the plan; its 9 bug issues, #232
@@ -72,6 +74,13 @@ Every PR that changes the state updates this file.
   - **Nothing from Blue's sheets is open:** he answered the 14 items the sheet left open the same
     day (docs/DECISIONS.md, 2026-11-16, "Follow-up answers"), among them the definition of
     CRITICAL, subagents on by default with a cap of 3, and a "pause all" button.
+- **Full security check (S38, PR #254, 2026-11-24, done):** one read-only check of every sensitive
+  area in AGENTS.md on `main` at `b99e377`. Public text gives titles and severities only
+  (docs/DECISIONS.md 2026-11-21, item 7); Blue has the details from the S38 session. New findings:
+  1 high (#258), 11 medium (#259 to #269) and 15 low (checklist issue #270); known issues #85, #249
+  and #252 still hold. Nothing was fixed in that PR: each fix comes in its own PR with a neutral
+  title. #265 needs a repository-settings change only Blue makes (BLUE-CHECKLIST.md step 78), and
+  some findings need a check on his PC (step 79).
 - **Plan:** 1.1 month-one plan approved with that merge: [docs/PLAN-1.1.md](docs/PLAN-1.1.md).
   - **UI sessions on hold, Composer research planned (approved with the PR #48 merge; updated by
     the 2026-11-16 bullet above):** S14
