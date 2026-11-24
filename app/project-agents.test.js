@@ -178,6 +178,11 @@ if (sharedBlocks.length > 0) {
     flat.includes('No agent pushes to a Dependabot branch') && flat.includes('`security-reviewer` always') &&
     flat.includes('Each bumped package also goes through the pin-and-scan step'),
     'AGENTS.md settles how Dependabot PRs are reviewed and ordered (issue #205)');
+  assert(flat.includes('it has Codex\'s pass ("Hard rules" item 9); if Codex doesn\'t review it, it is `NOT READY: no Codex pass`'),
+    "AGENTS.md: a Dependabot PR needs Codex's pass too (hard rule 9)");
+  const collab = fs.readFileSync(path.join(repoRoot, 'docs', 'AI-COLLABORATION.md'), 'utf8').replace(/\s+/g, ' ');
+  assert(!/optional reviewer/i.test(collab) && collab.includes('The required second reviewer'),
+    "docs/AI-COLLABORATION.md: Codex is the required second reviewer, as in AGENTS.md");
   assert(flat.includes('one sitting each evening, about 10 minutes') && flat.includes('PC checks on Tuesday and Friday evenings'),
     'AGENTS.md records the merge sitting and the PC-check evenings');
   assert(flat.includes('ask Claude to list its subagents') && !/run `?\/agents/.test(flat),

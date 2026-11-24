@@ -103,8 +103,9 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      always (a dependency change is the supply-chain path it exists for), and posts the review under
      the agent account with a "Run by:" line. Each bumped package also goes through the pin-and-scan
      step, the China-origin check included ("Engineering rules"), and the review says what it found.
-     A Dependabot PR is `NOT READY` until that review is posted, CI is green and every high and
-     medium finding is answered. No agent pushes to a
+     A Dependabot PR is `NOT READY` until that review is posted, CI is green, every high and
+     medium finding is answered and it has Codex's pass ("Hard rules" item 9); if Codex doesn't
+     review it, it is `NOT READY: no Codex pass` and Blue decides. No agent pushes to a
      Dependabot branch or changes its draft state: a finding that needs a change goes in a comment
      and becomes an issue, and Blue decides whether to merge or close the PR. The runner never
      builds on one; the routine that does PR upkeep (docs/RUNNER.md) reviews it. In the merge-order

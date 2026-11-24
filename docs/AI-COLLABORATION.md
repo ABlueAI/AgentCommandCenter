@@ -22,10 +22,11 @@ Rules for all agents are in [AGENTS.md](../AGENTS.md). This page is the short ve
 
 ## Codex / GPT
 
-- Does the smaller tasks and the reviews; Claude builds the UI (Blue, 2026-11-21). Optional reviewer (since it was linked to `ABlueAgent`, BLUE-CHECKLIST.md step 16, 2026-10-20, it
-  reviews agent PRs automatically; a manual request goes through an agent, AGENTS.md step 3),
+- Does the smaller tasks and the reviews; Claude builds the UI (Blue, 2026-11-21). The required second reviewer (its pass is needed for `READY TO MERGE`, AGENTS.md "Hard rules"
+  item 9; since it was linked to `ABlueAgent`, BLUE-CHECKLIST.md step 16, 2026-10-20, it reviews
+  agent PRs automatically; a re-review goes through draft and ready, AGENTS.md step 3),
   second builder for `windows`-lane sessions that aren't sensitive and the rows the plan gives it
-  (docs/CODEX-BUILDER-LANE.md), reviewer of the UI sessions Claude builds, planning partner. Nothing else in the workflow depends on it. AGENTS.md "Who does what" is the full version.
+  (docs/CODEX-BUILDER-LANE.md), reviewer of the UI sessions Claude builds, planning partner. AGENTS.md "Who does what" is the full version.
 - Reads the same files Claude reads (`AGENTS.md`, `STATUS.md`, `docs/PLAN-1.1.md`,
   `docs/DECISIONS.md`). Proposes plan changes as PRs, not as chat to be copied.
 - Never shares a worktree or branch with Claude: Codex fixes its own PRs, and Claude pushes to a
