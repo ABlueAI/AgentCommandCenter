@@ -1105,14 +1105,13 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
     needs.
   - *Done when:* you tell an agent the tidy ran and what the note showed. It ticks this with the
     date; the 3 unattended nights are S48's own done-when.
-- [ ] **57. The "Mako" Firefox profile: the preset URLs.** **10 minutes**, any time; S55 waits on
-  it. S55's presets ("work research", "Buydeas") open several links at once in the "Mako" Firefox
-  profile (your decision, 2026-11-21; it was "profile 2"). The URLs go in a local, git-excluded file
-  on your PC, never in this repo, so give them to an agent in a local pane on your PC, not on GitHub
-  (never a login or password). Agents never drive the Mako profile; agents that browse use their own
-  browser.
-  - *Done when:* the URL file exists on your PC, git ignores it, and S55's row moves from
-    `NEEDS BLUE`. The agent ticks this with the date and how it checked that git ignores the file.
+- [ ] **57. The "Mako" Firefox profile: the preset URLs.** **10 minutes**, after installing the
+  S55 build. Copy `app/quick-links-presets.example.json` to
+  `%APPDATA%\command-center\quick-links-presets.json`. Set the local labels to your preset names
+  and replace each placeholder with an HTTPS link. Keep this file on your PC.
+  Create a Firefox profile named `Mako` if needed.
+  - *Done when:* after restarting Mako, you click each preset yourself and verify that all of its
+    tabs open in the Mako Firefox profile. Agents never drive that profile.
 - [ ] **58. Review the lessons-learned draft.** **15 minutes**, when the agent that wrote it sends
   it to you. Read it and say what to change or drop. If this isn't done when the agent tune-up
   (S28, S60) starts, the tune-up runs from the draft as it is (your decision, 2026-11-22).

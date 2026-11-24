@@ -49,7 +49,8 @@ assert(currentMain.includes("validateUrl: validateQuickLinkUrl } = require('./qu
   'validateQuickLinkUrl is the Quick Links policy export');
 
 const featureSources = [
-  'quick-links-policy.js', 'quick-links-store.js', 'quick-links-ipc.js', 'renderer/quick-links-view.js',
+  'quick-links-policy.js', 'quick-links-store.js', 'quick-links-ipc.js', 'quick-links-presets.js',
+  'renderer/quick-links-view.js',
 ].map((rel) => `${rel}\n${read(rel)}`).join('\n');
 for (const forbidden of [
   "ipcRenderer.invoke('open-external'", 'cc.openExternal(', '.handleOpenExternal(',
@@ -62,10 +63,29 @@ for (const line of [
   "quickLinksList: () => ipcRenderer.invoke('quick-links-list')",
   "quickLinksSave: (text) => ipcRenderer.invoke('quick-links-save', text)",
   "quickLinksOpen: (id) => ipcRenderer.invoke('quick-links-open', id)",
+  "quickLinksPresetsList: () => ipcRenderer.invoke('quick-links-presets-list')",
+  "quickLinksPresetOpen: (id) => ipcRenderer.invoke('quick-links-preset-open', id)",
 ]) assert(preload.includes(line), `preload exposes exact narrow method: ${line.split(':')[0]}`);
 assert(!/quickLinks\w+:[^\n]*ipcRenderer\.send\(/.test(preload), 'Quick Links preload exposes no generic/send channel');
 for (const channel of ['quick-links-list', 'quick-links-save', 'quick-links-open']) {
   assert(currentMain.includes(`ipcMain.handle('${channel}'`), `main registers dedicated ${channel} handler`);
+}
+assert(currentMain.includes("ipcMain.handle('quick-links-presets-list', (e) => quickLinksIpc.handleListPresets(e));"),
+  'main registers the quick-links-presets-list handler');
+assert(currentMain.includes("ipcMain.handle('quick-links-preset-open', (e, id) => quickLinksIpc.handleOpenPreset(e, id));"),
+  'main registers the quick-links-preset-open handler');
+assert(currentMain.includes('presets: createQuickLinksPresets({'),
+  'main injects the Firefox preset service into the Quick Links IPC boundary');
+{
+  // Every refusal reason the preset service or resolveFirefoxExe can return must be in the IPC
+  // allowlist, or it would reach the renderer bounded to store-failure.
+  const { ALLOWED_REASONS } = require('./quick-links-ipc');
+  const firefoxResolver = (read('launchers.js').split('function resolveFirefoxExe')[1] || '').split('\nfunction ')[0];
+  const reasons = [...(read('quick-links-presets.js') + firefoxResolver).matchAll(/(?:refuse\(|reason: )'([a-z0-9-]+)'/g)]
+    .map((m) => m[1]);
+  assert(reasons.length >= 15, `preset reason scan found the refusal literals (${reasons.length})`);
+  const missing = reasons.filter((r) => !ALLOWED_REASONS.has(r));
+  assert(missing.length === 0, `every preset and Firefox refusal reason is allowlisted (missing: ${missing.join(',') || 'none'})`);
 }
 assert(currentMain.includes('createQuickLinksIpc({') && currentMain.includes('getTrustedWindow: () => win'),
   'main constructs Quick Links IPC with the canonical late-bound trusted window');
