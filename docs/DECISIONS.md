@@ -18,6 +18,16 @@ that is the builder's, not Blue's.
 |---|---|
 | **A Claude session may mark a Codex PR ready under the same rule as Claude's own PRs** (and, builder's reading below, convert it to draft and back to re-trigger Codex's review). He was asked: "Let the sweeper mark Codex PRs ready once Claude's review passes?" The recommendation he approved: Codex PRs go ready under the same rules as Claude's (CI green, Claude's review clean, the merge-order check passes, no `needs-blue` or `waits-for-merge` label, no draft hold or pending verdict of Blue's). Marking a PR ready also starts Codex's automatic review, which gives Codex's pass (2026-11-23 entry, item 1). Why: the old rule made sense while Codex fixed its own PRs; since Blue's 2026-11-23 decisions that Claude fixes Codex's PRs and merges `main` into them ("id love to", "yes, thats fine", "for the last time yes", as relayed; PR #225 proposes their rule), it only blocked: PR #231 was reviewed clean on 2026-11-24 but stayed a draft, and #206, #208 and #209 stalled the same way. Builder's reading (from the hand-off): it covers any Claude session working the PR (the PR sweeper, the runner, or the session that reviewed it), and the draft-and-back re-trigger, which follows from "the same rules as Claude's" (AGENTS.md step 3), happens at most once per head and never under a hold or label that bars marking ready. The PR sweeper's prompt calls this decision "D-076". | "Yes, sweeper marks ready" |
 
+## 2026-11-24: S48's OSS verdict (vault memory)
+
+Blue gave it in Mako main's chat, answering checklist step 68 with the recommendation in
+`docs/decisions/OSS-memory.md` (PR #209) in front of him. Recorded word for word in that record's
+"Blue's verdict" section.
+
+| Decision | Blue's words |
+|---|---|
+| S48's OSS verdicts: **PROTOTYPE** for an isolated Open Second Brain subset; **PATTERN-MINE** for ai-memory and GBrain. The record's recommendation, accepted unchanged. Whether any of the three was among the memory tools dropped on 2026-11-16 is not answered; that sign-off still applies if one was. | "sounds correct, go with that" |
+
 ## 2026-11-24: S42's rulebook wording (proposed, pending Blue (PR #242))
 
 S42 moves the rule changes Blue decided on 2026-11-16 and 2026-11-21 into AGENTS.md and
