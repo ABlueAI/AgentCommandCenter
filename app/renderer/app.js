@@ -1809,8 +1809,10 @@ function wireUi() {
   $('#geminiKeyInput').onkeydown = (e) => { if (e.key === 'Enter') $('#geminiKeySave').click(); };
   $('#geminiKeyChange').onclick = () => updateKeyBanner({ hasKey: false });
   $('#geminiKeyClear').onclick = async () => {
-    await cc.clearGeminiKey();
-    updateKeyBanner({ hasKey: false });
+    // Issue #161: a refused or failed clear leaves the banner as it was and says why.
+    const r = await cc.clearGeminiKey();
+    if (r && r.ok) updateKeyBanner({ hasKey: false });
+    else appendLog(`[key] clear failed: ${(r && r.error) || 'unknown error'}\n`);
   };
 
   // ABlueAgent token banner (S06). The token is sent once to main and never read back.
