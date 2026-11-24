@@ -151,7 +151,7 @@ if (sharedBlocks.length > 0) {
   // Hard rules (adopted 2026-11-23): the list sits near the top, Codex's pass is required for
   // READY TO MERGE, and the pacing numbers are Blue's 24 pushes and 120 writes an hour.
   const rules = fs.readFileSync(path.join(repoRoot, 'AGENTS.md'), 'utf8');
-  const hard = (rules.match(/## Hard rules \(never broken\)\n([\s\S]*?)\n## /) || [])[1] || '';
+  const hard = (rules.match(/## Hard rules \(never broken\)\r?\n([\s\S]*?)\r?\n## /) || [])[1] || '';
   assert(hard.length > 0 && rules.indexOf('## Hard rules (never broken)') < rules.indexOf('## The shared brain'),
     'AGENTS.md has "Hard rules (never broken)" before "The shared brain"');
   assert(hard.includes('never assume') && hard.includes('Every other rule in this file is a default'),
@@ -174,7 +174,7 @@ if (sharedBlocks.length > 0) {
     "step 3 requires Codex's pass and re-triggers it through draft and ready");
   assert(rules.includes("Codex's pass on the latest head with its findings fixed or answered"),
     "step 5's READY TO MERGE definition includes Codex's pass");
-  const pacing = (rules.match(/### Agent-account pacing\n([\s\S]*?)\n## /) || [])[1] || '';
+  const pacing = (rules.match(/### Agent-account pacing\r?\n([\s\S]*?)\r?\n## /) || [])[1] || '';
   assert(pacing.includes('at most 24 pushes and at most 120 GitHub writes') && pacing.includes('never retry in a loop'),
     'the pacing section has 24 pushes, 120 writes and no retry loop');
   assert(!new RegExp('\\x40codex', 'i').test(rules.replace(/the at-sign followed by `codex`/g, '')),
