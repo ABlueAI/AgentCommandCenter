@@ -72,6 +72,21 @@ so **these roles only enforce after a `sync-roles.ps1` run** (don't hand-copy th
 server (`--mcp-config`, `--strict-mcp-config`) and the URL in `page-request.json`, never on the
 command line (docs/decisions/OSS-research-capture.md).
 
+**Every role that reads the web is fenced (S58).** A role counts as reading the web when its
+`tools:` line has any tool outside a short reviewed list (`NON_WEB_TOOLS` in
+`app/role-fence-policy.js`: Read, Grep, Glob, Edit, Write, MultiEdit, NotebookEdit, TodoWrite and the
+builder's Bash). That covers `WebSearch`, `WebFetch`, every MCP tool, `Agent` and `Task` (a subagent
+has the web tools by default) and any new tool name; a role with no `tools:` line inherits all of
+them. Such a role must be in `FENCED_ROLES` in `app/main.js` and pass the fence policy
+(`app/role-fence-policy.js`: the tool allowlist, the hook entry and its matcher), and no subagent in
+`.claude/agents/` may read the web at all. `app/web-reading-fence.test.js` checks every tracked role
+and subagent in CI, so a new web-reading role that skips the fence fails CI. The hook also keeps its
+own copy of the allowlist, as a second layer: a well-formed call for any other tool that reaches it
+refuses with `[fence-tool-not-allowed]` instead of passing. The first layer is the role's `tools:`
+line and Mako's `--disallowedTools`; only the tools a role's matcher names reach the hook at all. After a change to the
+hook, run `sync-roles.ps1` again: until the deployed hook matches the tracked one, Mako refuses to
+launch the fenced roles (`fence-policy-hook-content-not-tracked-identity`), visibly.
+
 ## Open items (still to verify when building)
 
 - Precedence when both frontmatter `effort` and a launch-time `--effort` flag are set
