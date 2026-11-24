@@ -516,7 +516,7 @@ test('Video Scout offers both providers and Claude bypasses the Gemini key and l
   const context = vm.createContext({
     $: (id) => controls[id], URL, ROLES: { 'video-scout': { video: true } },
     state: { chosenRole: 'video-scout', repo: '/synthetic', analysisMode: 'transcript', videoModel: 'gemini-2.5-flash-lite', mediaResolution: 'MEDIUM' },
-    cc: { tlogReset: async () => {}, getGeminiKeyStatus: async () => { geminiChecks++; return { hasKey: true }; } },
+    cc: { tlogReset: async () => {}, getGeminiKeyStatus: async () => { geminiChecks++; return { ok: true, hasKey: true }; } },
     updateModalHint: () => {}, closeModal: () => {}, openInAppTerminal: (launch) => launches.push(launch),
     appendLog: () => {}, clearSliceRowErrors: () => {}, collectSliceRowValues: () => [],
     videoRangeUi: { detectStaleSliceRows: () => null }, readVideoAnalysisFocus: () => ({}),
@@ -525,7 +525,9 @@ test('Video Scout offers both providers and Claude bypasses the Gemini key and l
   const sync = js.slice(js.indexOf('function syncVideoProvider()'), js.indexOf('// Reflect what the modal'));
   const start = js.indexOf('async function createAgent()');
   const upToVideoScout = js.slice(start, js.indexOf('  // S15 Page Reader:', start));
-  vm.runInContext(sync + upToVideoScout + '\n}', context);
+  // main's #161 helper: the Gemini key status call goes through geminiKeyStatusOrLog.
+  const keyStatus = js.slice(js.indexOf('async function geminiKeyStatusOrLog()'), js.indexOf('function updateKeyBanner('));
+  vm.runInContext(keyStatus + sync + upToVideoScout + '\n}', context);
   await vm.runInContext('syncVideoProvider(); createAgent()', context);
   assert(controls.geminiHidden && !controls.claudeHidden);
   assert.equal(geminiChecks, 0);
