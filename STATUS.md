@@ -1,8 +1,6 @@
 # Mako status
 
-Updated 2026-11-24 by PR #253 (S14: the 1.1 design brief, `docs/DESIGN-BRIEF-1.1.md`, and Blue's
-go on the UI; S66, S18, S19 and S20 set to READY, a plan change pending his merge). Before that:
-updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
+Updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
 verdict; review fixes pushed by a Claude cloud session on Blue's ask). Before that: updated 2026-11-24 by PR #209 (S48's OSS record, docs/decisions/OSS-memory.md, with Blue's
 verdict: PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain; step 68
 ticked). Before that: updated 2026-11-24 by PR #241 (S56 no longer marked Sensitive in the plan; its 9 bug issues, #232
