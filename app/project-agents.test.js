@@ -132,7 +132,8 @@ if (sharedBlocks.length > 0) {
   const rules = fs.readFileSync(path.join(repoRoot, 'AGENTS.md'), 'utf8');
   assert(rules.includes('### The review loop') && rules.includes('**At most 5 runs per PR, 2 on a docs-only PR**') && !rules.includes('At most 3 runs'),
     'AGENTS.md caps review runs at 5 (2 on a docs-only PR), then asks Blue');
-  assert(rules.includes('touches no\n  sensitive area') && rules.includes('or\n  `.github/` gets 5.'),
+  const flatRules = rules.replace(/\s+/g, ' ');
+  assert(flatRules.includes('touches no sensitive area') && flatRules.includes('or `.github/` gets 5.'),
     'AGENTS.md gives a rulebook, `.claude/` or `.github/` change the full cap of 5');
   assert(reviewer.includes('or 2 times on a docs-only PR'), 'pr-reviewer.md states the docs-only cap of 2');
   const runner = fs.readFileSync(path.join(repoRoot, 'docs', 'RUNNER.md'), 'utf8');
