@@ -32,6 +32,7 @@ function harness(overrides = {}) {
     getTrustedWindow: () => win,
     store,
     openExternal: async (url) => { opens.push(url); },
+    presets: { list: () => ({ ok: true, presets: [] }), open: async () => ({ ok: true }) },
     log: (line) => logs.push(line),
     ...overrides,
   };
@@ -86,6 +87,48 @@ function harness(overrides = {}) {
     const h = harness({ getTrustedWindow: () => win });
     eq(h.ipc.handleList({ sender: webContents, senderFrame: {} }).error,
       'not-main-frame', 'torn-down mainFrame getter refuses without throw');
+  }
+
+  {
+    let accesses = 0;
+    const h = harness({ presets: {
+      list: () => { accesses++; return { ok: true, presets: [] }; },
+      open: async () => { accesses++; return { ok: false, reason: 'firefox-profile-missing' }; },
+    } });
+    const wrong = { sender: {}, senderFrame: h.mainFrame };
+    eq(h.ipc.handleListPresets(wrong).error, 'untrusted-sender', 'preset listing checks the sender');
+    eq((await h.ipc.handleOpenPreset(wrong, 'preset-one')).error, 'untrusted-sender', 'preset launch checks the sender');
+    eq(accesses, 0, 'a rejected sender cannot access the preset service');
+    assert(h.ipc.handleListPresets(h.trustedEvent).ok, 'trusted sender can list presets');
+    eq((await h.ipc.handleOpenPreset(h.trustedEvent, 'preset-one')).error,
+      'firefox-profile-missing', 'trusted sender gets the preset refusal reason');
+    assert(h.logs.some((l) => l === '[quick-links] operation=preset-open result=refused reason=firefox-profile-missing'),
+      'a preset refusal is logged through emit()');
+    assert(h.logs.some((l) => l === '[quick-links] operation=presets-list result=ok count=0'),
+      'a preset listing is logged through emit()');
+  }
+  {
+    const h = harness({ presets: {
+      list: () => ({ ok: false, reason: 'C:\\Users\\example\\secret-path' }),
+      open: async () => { throw new Error('boom C:\\Users\\example\\secret'); },
+    } });
+    eq(h.ipc.handleListPresets(h.trustedEvent).error, 'store-failure', 'an unlisted preset reason is bounded to store-failure');
+    eq((await h.ipc.handleOpenPreset(h.trustedEvent, 'preset-one')).error, 'firefox-launch-failed',
+      'a throwing preset open becomes firefox-launch-failed');
+    assert(!h.logs.some((l) => l.includes('secret')), 'no unbounded reason or exception text reaches the log');
+  }
+  {
+    const h = harness({ presets: { list: () => ({ ok: true, presets: [{ id: 'preset-one', label: 'L' }] }),
+      open: async () => ({ ok: true }) } });
+    eq((await h.ipc.handleOpenPreset(h.trustedEvent, 'preset-one')).ok, true, 'a successful preset launch returns ok');
+    assert(h.logs.includes('[quick-links] operation=preset-open result=ok'), 'a successful preset launch is logged');
+    const { PRESET_REASONS, ALLOWED_REASONS } = require('./quick-links-ipc');
+    assert(PRESET_REASONS.every((r) => ALLOWED_REASONS.has(r)), 'every preset reason is in the IPC allowlist');
+  }
+  for (const presets of [undefined, {}, { list: () => {} }, { open: async () => {} }]) {
+    let threw = false;
+    try { harness({ presets }); } catch { threw = true; }
+    assert(threw, `construction refuses presets=${JSON.stringify(presets && Object.keys(presets))}`);
   }
 
   process.stdout.write('\nlist/save boundary\n');

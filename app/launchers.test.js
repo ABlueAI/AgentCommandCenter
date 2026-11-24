@@ -17,6 +17,7 @@ const {
   IS_WIN,
   normalizeLauncherDir,
   resolveVscodeExe,
+  resolveFirefoxExe,
   resolveTerminalExe,
   openVscodeSpec,
   openTerminalSpec,
@@ -52,6 +53,29 @@ for (const ch of ['%', '&', '|', '^', '<', '>', '(', ')', '"', "'", '`']) {
   assert(normalizeLauncherDir('relative\\path').reason === 'not-absolute', 'refuses a relative path');
   assert(normalizeLauncherDir('C:\\Workspace\\..\\Windows').reason === 'traversal', 'refuses a `..` traversal segment');
   assert(normalizeLauncherDir('C:\\' + 'x'.repeat(5000)).reason === 'too-long', 'refuses an over-length path');
+}
+
+// --- resolveFirefoxExe (S55): absolute roots only, fixed order, visible refusals ---------------
+{
+  const pf = path.resolve('/pf'), pf86 = path.resolve('/pf86'), local = path.resolve('/local');
+  const exe = (root) => path.join(root, 'Mozilla Firefox', 'firefox.exe');
+  const env = { ProgramFiles: pf, 'ProgramFiles(x86)': pf86, LOCALAPPDATA: local };
+  let r = resolveFirefoxExe({ env, isFile: () => true });
+  assert(r.ok && r.exe === exe(pf), 'resolves Program Files first');
+  r = resolveFirefoxExe({ env, isFile: (p) => p === exe(pf86) || p === exe(local) });
+  assert(r.ok && r.exe === exe(pf86), 'then Program Files (x86)');
+  r = resolveFirefoxExe({ env, isFile: (p) => p === exe(local) });
+  assert(r.ok && r.exe === exe(local), 'then LOCALAPPDATA');
+  const seen = [];
+  r = resolveFirefoxExe({ env: { ProgramFiles: 'relative', 'ProgramFiles(x86)': '', LOCALAPPDATA: local },
+    isFile: (p) => { seen.push(p); return true; } });
+  assert(r.ok && r.exe === exe(local) && seen.length === 1, 'skips a relative or empty root without probing it');
+  r = resolveFirefoxExe({ env, isFile: () => { throw new Error('EACCES'); } });
+  assert(r.ok === false && r.reason === 'firefox-executable-unreadable', 'a throwing isFile refuses (firefox-executable-unreadable)');
+  r = resolveFirefoxExe({ env, isFile: () => false });
+  assert(r.ok === false && r.reason === 'firefox-not-found', 'refuses (firefox-not-found) when no firefox.exe exists');
+  r = resolveFirefoxExe({ env: {}, isFile: () => true });
+  assert(r.ok === false && r.reason === 'firefox-not-found', 'refuses with no roots set');
 }
 
 // --- resolveVscodeExe: deterministic, first existing candidate, main-owned env only -------------
