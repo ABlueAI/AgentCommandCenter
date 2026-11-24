@@ -73,13 +73,16 @@ Every PR that changes the state updates this file.
     day (docs/DECISIONS.md, 2026-11-16, "Follow-up answers"), among them the definition of
     CRITICAL, subagents on by default with a cap of 3, and a "pause all" button.
 - **Full security check (S38, PR #254, 2026-11-24, done):** one read-only check of every sensitive
-  area in AGENTS.md on `main` at `b99e377`. Public text gives titles and severities only
-  (docs/DECISIONS.md 2026-11-21, item 7); Blue has the details from the S38 session. New findings:
-  1 high (#258), 11 medium (#259 to #269) and 16 low (15 hardening items and 1 question for Blue;
-  checklist issue #270); known issues #85, #249
-  and #252 still hold. Nothing was fixed in that PR: each fix comes in its own PR with a neutral
-  title. #265 needs a repository-settings change only Blue makes (BLUE-CHECKLIST.md step 78), and
-  some findings need a check on his PC (step 79).
+  area in AGENTS.md on `main` at `b99e377` (builder's reading: one `security-reviewer` pass per
+  area plus the builder's own checks; PR #254 lists the areas covered). Public text gives titles and
+  severities only (docs/DECISIONS.md 2026-11-21, item 7). The details went to Blue in the S38
+  session's final message (not verified: Blue confirms he has them when he does step 78). New
+  findings: 1 high (#258), 11 medium (#259 to #269) and 16 low (15 hardening items and 1 question
+  for Blue; checklist issue #270) (verified: the issues on GitHub, 2026-11-24). Known issues #85,
+  #249 and #252 still hold (builder's reading: the code they name is unchanged on `b99e377`; not
+  re-tested). Nothing was fixed in that PR: each fix comes in its own PR with a neutral title. #265
+  needs a repository-settings change only Blue makes (BLUE-CHECKLIST.md step 78), and some findings
+  need a check on his PC (step 79).
 - **Plan:** 1.1 month-one plan approved with that merge: [docs/PLAN-1.1.md](docs/PLAN-1.1.md).
   - **UI sessions on hold, Composer research planned (approved with the PR #48 merge; updated by
     the 2026-11-16 bullet above):** S14
