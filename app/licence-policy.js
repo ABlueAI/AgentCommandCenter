@@ -45,17 +45,19 @@ const PACKAGE_EXCEPTIONS = [
 ].map(([name, licence]) => ({ name, licence, why: LGPL_SHARP }));
 
 // Files in THIRD-PARTY-NOTICES.md's file tables allowed despite a non-permissive licence. Each
-// names a word that must stay in its Licence cell, so the row keeps saying what it is.
+// lists the exact non-permissive licence ids its Licence cell may name: the cell must name all of
+// them and nothing else outside PERMISSIVE, so a new or changed licence in that cell fails again.
 const FILE_EXCEPTIONS = [
   {
     file: 'app/renderer/vendor/kokoro.web.js',
-    mustName: 'GPL-3.0-or-later',
+    licences: ['GPL-3.0-or-later'],
     why: 'Carries the eSpeak NG engine (GPL-3.0-or-later), recorded with its source in '
       + 'THIRD-PARTY-NOTICES.md by PR #168. Replacing it is a separate follow-up (STATUS.md).',
   },
 ];
 
-// Words that mark a Licence cell in THIRD-PARTY-NOTICES.md as not (only) permissive.
+// Words that mark a Licence cell in THIRD-PARTY-NOTICES.md as not (only) permissive, on top of
+// the licence-id rule in checkNoticeRows (a net for licences written without an SPDX id).
 const NON_PERMISSIVE_WORDS = /\b(?:A|L)?GPL|\b(?:MPL|EPL|CDDL|EUPL|SSPL|BUSL|OSL|CPAL|CC-BY-NC|CC-BY-SA)\b|copyleft|commons clause|proprietary|commercial|unknown|unlicensed|see licen[cs]e/i;
 
 // --- SPDX expressions -------------------------------------------------------------------------
@@ -65,7 +67,12 @@ const NON_PERMISSIVE_WORDS = /\b(?:A|L)?GPL|\b(?:MPL|EPL|CDDL|EUPL|SSPL|BUSL|OSL
 //   atom := '(' or ')' | id ['+'] ['WITH' exception-id]
 // Returns { ok: true, permissive: bool } or { ok: false, error }. An expression is permissive
 // when, after choosing the best side of each OR, every licence it needs is on PERMISSIVE. A
-// `WITH` exception only adds permissions, so it never changes the verdict of its licence.
+// `WITH` exception on SPDX_EXCEPTIONS only adds permissions, so it keeps its licence's verdict;
+// any other WITH id (for example "Commons-Clause", which restricts) fails.
+const SPDX_EXCEPTIONS = new Set([
+  'LLVM-exception', 'Classpath-exception-2.0', 'GCC-exception-3.1', 'Autoconf-exception-3.0',
+  'Bison-exception-2.2', 'Font-exception-2.0', 'OpenJDK-assembly-exception-1.0',
+]);
 function parseSpdx(expr) {
   if (typeof expr !== 'string' || !expr.trim()) return { ok: false, error: 'no licence declared' };
   const tokens = expr.match(/\(|\)|[^\s()]+/g) || [];
@@ -96,7 +103,7 @@ function parseSpdx(expr) {
     if (peek() === 'WITH') {
       i++;
       const ex = tokens[i++];
-      if (!ex || !/^[A-Za-z0-9][A-Za-z0-9.-]*$/.test(ex)) fail('WITH needs an exception id');
+      if (!ex || !SPDX_EXCEPTIONS.has(ex)) fail(`WITH "${ex === undefined ? '' : ex}" is not a known SPDX exception`);
     }
     return PERMISSIVE.has(t.replace(/\+$/, ''));
   }
@@ -127,13 +134,16 @@ function checkLockfile(lock, exceptions = PACKAGE_EXCEPTIONS) {
     }
     if (entry.link) continue; // a symlink to a workspace folder; its own entry is checked
     checked++;
-    const name = entry.name || key.slice(key.lastIndexOf('node_modules/') + 'node_modules/'.length);
+    // The install path names the package; `name` can differ for an npm: alias, so exceptions
+    // match on the path only.
+    const at = key.lastIndexOf('node_modules/');
+    const name = at < 0 ? key : key.slice(at + 'node_modules/'.length);
     const licence = entry.license;
     const parsed = parseSpdx(licence);
     if (parsed.ok && parsed.permissive) continue;
     const ex = exceptions.find((x) => x.name === name);
     if (ex && ex.licence === licence) { used.add(name); continue; }
-    const what = parsed.ok ? `"${licence}" is not on the permissive list` : `licence "${licence === undefined ? '' : licence}" can't be read (${parsed.error})`;
+    const what = parsed.ok ? `"${licence}" is not on the permissive list` : `licence ${JSON.stringify(licence === undefined ? '' : licence)} can't be read (${parsed.error})`;
     const exNote = ex ? ` (its exception is for "${ex.licence}")` : '';
     problems.push(`npm package ${name}@${entry.version || '?'} (${key}): ${what}${exNote}`);
   }
@@ -144,49 +154,111 @@ function checkLockfile(lock, exceptions = PACKAGE_EXCEPTIONS) {
 }
 
 // --- THIRD-PARTY-NOTICES.md file tables -------------------------------------------------------
-// Finds every markdown table whose header has a "Licence" column and whose rows start with a
-// backticked path, and returns [{ file, licence }].
-function noticeFileRows(md) {
+// Finds every markdown table whose header has a Licence column (a cell starting "Licence" or
+// "License"), other than the npm-package table, and returns [{ file, licence }] for its rows.
+// A row whose first cell isn't exactly one backticked path is returned with file: null, so the
+// check can fail it instead of skipping it.
+function noticeTables(md) {
   const lines = md.replace(/\r\n/g, '\n').split('\n');
-  const rows = [];
+  const tables = [];
   for (let n = 0; n < lines.length; n++) {
     if (!lines[n].startsWith('|') || !/^\|[\s|:-]+\|$/.test((lines[n + 1] || '').trim())) continue;
     const header = splitRow(lines[n]);
-    const col = header.findIndex((h) => h === 'Licence');
-    if (col < 0) continue;
-    for (let m = n + 2; m < lines.length && lines[m].startsWith('|'); m++) {
-      const cells = splitRow(lines[m]);
+    const rows = [];
+    let m = n + 2;
+    for (; m < lines.length && lines[m].startsWith('|'); m++) rows.push(splitRow(lines[m]));
+    tables.push({ header, rows });
+    n = m - 1;
+  }
+  return tables;
+}
+function noticeFileRows(md) {
+  const out = [];
+  for (const { header, rows } of noticeTables(md)) {
+    const col = header.findIndex((h) => /^licen[cs]e\b/i.test(h));
+    if (col < 0 || header[0] === 'npm package') continue;
+    // The kokoro component table names bundle parts, not files; its first header says so.
+    if (/^Component/.test(header[0])) continue;
+    for (const cells of rows) {
       const file = /^`([^`]+)`$/.exec(cells[0] || '');
-      if (file) rows.push({ file: file[1], licence: cells[col] || '' });
+      out.push({ file: file ? file[1] : null, first: cells[0] || '', licence: cells[col] || '' });
     }
   }
-  return rows;
+  return out;
+}
+// The npm-package table: [{ name, version, licence }] (header "npm package | Version | Licence...").
+function noticeNpmRows(md) {
+  const t = noticeTables(md).find(({ header }) => header[0] === 'npm package');
+  if (!t) return null;
+  const vcol = t.header.indexOf('Version');
+  const lcol = t.header.findIndex((h) => /^licen[cs]e\b/i.test(h));
+  return t.rows.map((c) => ({ name: (/^`([^`]+)`$/.exec(c[0] || '') || [])[1] || c[0], version: c[vcol], licence: c[lcol] }));
 }
 function splitRow(line) {
   // Cells never contain a literal "|" in this file; links use (...) and code uses backticks.
   return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
 }
 
+// Licence ids in a cell: SPDX-shaped tokens (an upper-case letter or digit, then at least one
+// hyphenated part, such as GPL-3.0-only, MS-RL, CC-BY-ND-4.0, Commons-Clause) plus bare ids on
+// PERMISSIVE (MIT, ISC, ...). Every one must be on PERMISSIVE: deny by default.
+function licenceIds(text) {
+  const tokens = text.match(/[A-Za-z0-9][A-Za-z0-9.+-]*/g) || [];
+  return tokens.filter((t) => PERMISSIVE.has(t) || /^[A-Z0-9][A-Za-z0-9.+]*(?:-[A-Za-z0-9.+]+)+$/.test(t))
+    .map((t) => t.replace(/[.]+$/, ''));
+}
+
 function checkNoticeRows(rows, exceptions = FILE_EXCEPTIONS) {
   const problems = [];
   const used = new Set();
-  for (const { file, licence } of rows) {
-    const text = licence.replace(/\[[^\]]*\]\([^)]*\)/g, ''); // drop "[text](LICENSES/...)" links
-    const ids = (text.match(/[A-Za-z0-9][A-Za-z0-9.+-]*/g) || []).filter((t) => PERMISSIVE.has(t));
-    const nonPermissive = NON_PERMISSIVE_WORDS.test(text);
-    if (ids.length && !nonPermissive) continue;
+  for (const { file, first, licence } of rows) {
+    if (!file) { problems.push(`notices row "${first}": the first cell must be one backticked file path`); continue; }
+    const text = licence.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1'); // keep link text, drop the target
+    const ids = licenceIds(text);
+    const bad = [...new Set(ids.filter((t) => !PERMISSIVE.has(t)))].sort();
+    const hasPermissive = ids.some((t) => PERMISSIVE.has(t));
     const ex = exceptions.find((x) => x.file === file);
-    if (ex && text.includes(ex.mustName)) { used.add(file); continue; }
-    problems.push(`notices row ${file}: licence "${text.trim()}" ${ids.length ? 'names a licence that is not permissive' : 'names no permissive SPDX licence'}`
-      + (ex ? ` (its exception needs the cell to name ${ex.mustName})` : ''));
+    const allowed = ex ? [...ex.licences].sort() : [];
+    // Words outside the id rule, checked with the exception's own ids taken out.
+    let rest = text;
+    for (const a of allowed) rest = rest.split(a).join('');
+    const badWord = NON_PERMISSIVE_WORDS.test(rest);
+    if (hasPermissive && !bad.length && !badWord) continue;
+    if (ex && hasPermissive && !badWord && JSON.stringify(bad) === JSON.stringify(allowed)) { used.add(file); continue; }
+    const why = bad.length ? `names ${bad.join(', ')}, not on the permissive list`
+      : badWord ? 'has a word that marks a non-permissive licence' : 'names no permissive SPDX licence';
+    problems.push(`notices row ${file}: licence "${text.trim()}" ${why}`
+      + (ex ? ` (its exception allows exactly ${allowed.join(', ')})` : ''));
   }
   for (const ex of exceptions) {
-    if (!used.has(ex.file)) problems.push(`stale file exception: ${ex.file} has no non-permissive row naming ${ex.mustName}`);
+    if (!used.has(ex.file)) problems.push(`stale file exception: no row for ${ex.file} naming exactly ${ex.licences.join(', ')} outside the permissive list`);
   }
+  return problems;
+}
+
+// The npm-package table must list exactly the package exceptions, each with its pinned licence
+// and the version the lockfile installs.
+function checkNoticeNpmTable(npmRows, lock, exceptions = PACKAGE_EXCEPTIONS) {
+  if (!npmRows) return ['THIRD-PARTY-NOTICES.md has no "npm package" table'];
+  const problems = [];
+  const versionOf = (name) => {
+    const e = lock && lock.packages && lock.packages['node_modules/' + name];
+    return e ? e.version : undefined;
+  };
+  for (const ex of exceptions) {
+    const r = npmRows.find((x) => x.name === ex.name);
+    if (!r) { problems.push(`npm exception ${ex.name} has no row in THIRD-PARTY-NOTICES.md`); continue; }
+    if (r.licence !== ex.licence) problems.push(`notices npm row ${ex.name}: licence "${r.licence}", exception pins "${ex.licence}"`);
+    if (r.version !== versionOf(ex.name)) problems.push(`notices npm row ${ex.name}: version ${r.version}, lockfile has ${versionOf(ex.name)}`);
+  }
+  for (const r of npmRows) {
+    if (!exceptions.some((ex) => ex.name === r.name)) problems.push(`notices npm row ${r.name} is not a package exception (stale row)`);
+  }
+  if (new Set(npmRows.map((r) => r.name)).size !== npmRows.length) problems.push('a package has two rows in the notices npm table');
   return problems;
 }
 
 module.exports = {
   PERMISSIVE, PACKAGE_EXCEPTIONS, FILE_EXCEPTIONS,
-  parseSpdx, checkLockfile, noticeFileRows, checkNoticeRows,
+  parseSpdx, checkLockfile, noticeFileRows, checkNoticeRows, noticeNpmRows, checkNoticeNpmTable,
 };

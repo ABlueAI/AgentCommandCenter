@@ -133,4 +133,5 @@ adds any new licence text to `LICENSES/`. The test `app/third-party-notices.test
 every row names a tracked file, and that every licence file linked here exists. Since S57 it also
 fails if an npm package in `app/package-lock.json` or a row in this file's file tables carries a
 licence that isn't on the permissive list in `app/licence-policy.js` and isn't one of that file's
-named exceptions; each npm exception must be listed in the table above.
+named exceptions, and if the npm table above doesn't list exactly those exceptions with the
+licence and version the lockfile has.
