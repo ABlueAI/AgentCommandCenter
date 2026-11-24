@@ -19,8 +19,9 @@
 //      403 "Resource not accessible by integration") is allowed with a notice, not an unknown error;
 //   8. the PowerShell tool (S37, issue #217): the same PR work run through Claude Code's PowerShell
 //      tool is found and blocked the same way (PowerShell syntax: `&`, `.`, backtick continuations,
-//      script blocks, here-strings, assignments, Invoke-Expression, Start-Process, `cmd /c`), and
-//      text inside PowerShell quotes, here-strings and comments is left alone.
+//      script blocks, here-strings, assignments, Invoke-Expression, Start-Process, `cmd /c`, arrays
+//      given to a program), and text inside PowerShell quotes, here-strings and comments, and an
+//      array of strings used only as a value (`Write-Output @('gh', 'pr', 'merge')`), are left alone.
 
 const fs = require('fs');
 const os = require('os');
@@ -423,6 +424,55 @@ const GUARDED_PS = [
   // Review run 3: an attached parameter value (`-Name:value`) keeps the array that follows it.
   ["Start-Process gh -ArgumentList:'pr' , 'merge', '5'", 'gh pr merge'],
   ["Start-Process -FilePath:gh -ArgumentList:'pr', 'create'", 'gh pr create'],
+  // Codex review on 004b8cd: an array value is not a command (NOT_GUARDED_PS below), but an array
+  // given to the call operator or to a program is its arguments, and an array value stays a command
+  // wherever the script could still run it as one (assigned for later, `-join`, iex, `& $x`, `& (...)`).
+  ["& 'gh' @('pr','merge')", 'gh pr merge'],
+  ['& "gh" @("pr", "merge", "5")', 'gh pr merge'],
+  ["& 'gh' 'pr','merge'", 'gh pr merge'],
+  ["& gh 'pr', 'merge'", 'gh pr merge'],
+  ["gh @('pr','create','--fill')", 'gh pr create'],
+  ["gh.exe pr @('ready', '5')", 'gh pr ready'],
+  ["git @('push','origin','x')", 'git push'],
+  ["& 'gh','pr','merge'", 'gh pr merge'],
+  ["& ('gh','pr','merge')", 'gh pr merge'],
+  ["$c = 'gh','pr','merge'; & $c[0] $c[1..2]", 'gh pr merge'],
+  ["$c = @('git', 'push')", 'git push'],
+  ["('gh','pr','merge' -join ' ') | iex", 'gh pr merge'],
+  ["Write-Output @('gh','pr','merge') -join ' '", 'gh pr merge'],
+  ["'gh','pr','merge' | Invoke-Expression", 'gh pr merge'],
+  ["Write-Output @(gh, 'pr', 'merge')", 'gh pr merge'], // a bare first element: kept as a command
+  ["Write-Output @('gh', 'pr', 'merge'); gh pr merge 5", 'gh pr merge'],
+  ["iex ('gh pr merge 5')", 'gh pr merge'],
+  ["Start-Process gh -ArgumentList ('pr merge 5')", 'gh pr merge'],
+  // Review run 5 (6901edc): an array value is skipped only where it is plainly printed (an allowlist).
+  // Joined into a string and handed to a shell, piped, in a script block or nested, it stays a command.
+  ["cmd /c \"$('gh','pr','merge','5')\"", 'gh pr merge'],
+  ["pwsh -c \"$('gh','pr','merge')\"", 'gh pr merge'],
+  ["bash -c \"$('git','push')\"", 'git push'],
+  ["cmd /c ([string]('gh','pr','merge','5'))", 'gh pr merge'],
+  ["cmd /c \"$(Write-Output @('gh','pr','merge','5'))\"", 'gh pr merge'],
+  ["'gh','pr','merge','5' | Join-String -Separator ' ' | cmd", 'gh pr merge'],
+  ["[string]::Join(' ', ('gh','pr','merge','5')) | cmd", 'gh pr merge'],
+  ["Write-Output @('gh','pr','merge','5') | Join-String -Separator ' ' | cmd", 'gh pr merge'],
+  ["Invoke-Ex`pression \"$('gh','pr','merge','5')\"", 'gh pr merge'],
+  ["Microsoft.PowerShell.Utility\\Invoke-Expression \"$('gh','pr','merge','5')\"", 'gh pr merge'],
+  ["@\"\n$('gh','pr','merge','5')\n\"@ | cmd", 'gh pr merge'],
+  ["$r = & 'gh','pr','merge'", 'gh pr merge'],
+  ["return & 'gh','pr','merge'", 'gh pr merge'],
+  ["Write-Output @('gh','pr','merge') -OutVariable a", 'gh pr merge'],
+  ["Write-Output @('gh','pr','merge') > cmd.txt", 'gh pr merge'],
+  ["Set-Alias echo iex; echo @('gh','pr','merge')", 'gh pr merge'],
+  ["function Write-Output { cmd /c \"$args\" }; Write-Output @('gh','pr','merge')", 'gh pr merge'],
+  ["Write-Output @('gh','pr','merge') && git push", 'gh pr merge'],
+  ["@('gh','pr','merge') | ForEach-Object { $_ }", 'gh pr merge'],
+  ["& { 'gh', 'pr', 'merge' } | Join-String -Separator ' ' | cmd", 'gh pr merge'],
+  ["& { 'gh', 'pr', 'merge' }", 'gh pr merge'],
+  ["Write-Output @('gh', 'pr', 'merge') | Out-File start.txt", 'gh pr merge'],
+  ["if ($true) { Write-Output @('gh','pr','merge') }", 'gh pr merge'],
+  ["iex \"Write-Output @('gh','pr','merge')\"", 'gh pr merge'],
+  ["Write-Output @('gh','pr','merge','5')\n| Join-String -Separator ' ' | cmd", 'gh pr merge'],
+  ["'gh','pr','merge','5'\r\n  # joined\n  | Join-String -Separator ' ' | cmd", 'gh pr merge'],
 ];
 // Nesting deeper than the splitter follows falls back to the text scan, never to "allowed", and
 // nesting in strings deep enough to exhaust the stack is caught the same way, without throwing.
@@ -457,6 +507,19 @@ const NOT_GUARDED_PS = [
   "Start-Process notepad -ArgumentList 'git push'",
   "Write-Host 'gh', 'pr', 'merge'",
   'Write-Output a, b, c # git push',
+  // Codex review on 004b8cd: a statement that starts with a quoted string is an expression in
+  // PowerShell (about_Parsing), so an array of strings is a value, also inside a group.
+  "Write-Output @('gh', 'pr', 'merge')",
+  'Write-Output @("gh", "pr", "merge", "5")',
+  "Write-Output ('gh','pr','merge')",
+  "Write-Output $('gh', 'pr', 'merge')",
+  "Write-Output @(\n  'gh',\n  'pr',\n  'merge'\n)",
+  "Write-Output @('git', 'push')",
+  "'gh', 'pr', 'merge'",
+  "Write-Output @('gh', 'pr', 'merge'); git status",
+  "git status\nWrite-Output @('gh', 'pr', 'merge') # the array\nWrite-Output done",
+  "Write-Host @('gh', 'pr', 'merge')",
+  "echo @('gh', 'pr', 'merge')",
   'gh api repos/o/r/pulls/5/reviews',
   '',
 ];
@@ -508,6 +571,18 @@ const pwsh = (command) => ({ hook_event_name: 'PreToolUse', tool_name: 'PowerShe
   const missing = guard.decide({ tool_name: 'PowerShell', tool_input: {} }, () => ({ login: 'ABlueAI' }));
   assert(missing.exitCode === 0 && /couldn't read the PowerShell tool's command/.test(missing.systemMessage) && !/\n/.test(missing.systemMessage),
     'PowerShell with no tool_input.command: exit 0 with a one-line notice');
+  // Codex review on 004b8cd: printing an array that spells a merge is allowed under any login, with no
+  // gh call; giving one to the call operator is blocked under any login.
+  let arrayAsked = 0;
+  const arrayLogin = () => { arrayAsked++; return { login: 'ABlueAI' }; };
+  const printed = guard.decide(pwsh("Write-Output @('gh', 'pr', 'merge')"), arrayLogin);
+  assert(printed.exitCode === 0 && !printed.stderr && !printed.systemMessage && arrayAsked === 0,
+    "PowerShell Write-Output @('gh', 'pr', 'merge'): exit 0, silent, no gh call (even under ABlueAI)");
+  const called = guard.decide(pwsh("& 'gh' @('pr','merge')"), arrayLogin);
+  assert(called.exitCode === 2 && /Agents never approve or merge/.test(called.stderr) && arrayAsked === 0,
+    "PowerShell & 'gh' @('pr','merge'): exit 2 under any login, no gh call");
+  assert(guard.findGuardedCommand("pwsh -Command \"Write-Output @('gh','pr','merge')\"") === 'gh pr merge',
+    'Bash running pwsh -Command that prints an array: still guarded (a nested script is never skipped; fails closed)');
   const bashMissing = guard.decide({ tool_name: 'Bash', tool_input: {} }, () => ({ login: 'ABlueAI' }));
   assert(bashMissing.exitCode === 0 && !bashMissing.systemMessage, 'Bash with no command: unchanged (exit 0, silent)');
   // Only the two tools' exact names are checked (the names hooks see: docs, tools reference).

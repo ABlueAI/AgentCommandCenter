@@ -19,7 +19,9 @@
 //      commands, subshells, command substitution and `bash -c "..."` included; for the PowerShell
 //      tool, PowerShell's own syntax: `&` and `.` calls, backtick line continuations, script
 //      blocks, `$(...)` groups, here-strings, `$x = ...` assignments, Invoke-Expression,
-//      Start-Process and `cmd /c`), for
+//      Start-Process and `cmd /c`; an array of quoted strings is a value, not a command, only where
+//      it is plainly printed: alone as a top-level statement, or as the one argument of Write-Output,
+//      Write-Host or echo, as in `Write-Output @('gh', 'pr', 'merge')`; see splitPowerShell), for
 //        login-dependent commands (blocked only under ABlueAI): `gh pr create` (and its alias
 //          `gh pr new`), `gh pr ready` and `git push`;
 //        review and merge commands (blocked under any login, without asking gh who you are):
@@ -478,21 +480,59 @@ function psParenEndInner(s, open, ctx) {
 }
 
 // Split a PowerShell script into simple commands (arrays of words), like splitCommands does for Bash.
-// A group in argument position (`-ArgumentList @('pr','create')`) also stays in its word as raw text,
-// so Start-Process and Invoke-Expression can read it; its commands are checked either way.
+// A group in argument position (`-ArgumentList @('pr','create')`, `& 'gh' @('pr','merge')`) also stays
+// in its word, so Start-Process, Invoke-Expression and the program it is passed to can read it: as the
+// group's one word when it holds a single value (an array's elements kept apart by PS_ARRAY_SEP, so a
+// native program gets them as separate arguments), else as raw text. Its commands are checked either way.
+//
+// Array values (an allowlist; anything not on it stays a command, failing closed). A statement whose
+// first word is an array of quoted strings (`'gh', 'pr', 'merge'`) is marked `arrayValue`: PowerShell
+// parses a statement that starts with a quoted string in expression mode, not as a command
+// (about_Parsing). Not after `&` (the call operator, or a background `&` before it), and not when the
+// first element is a bare word, a variable or anything else. Such a value can still become a command
+// once it is joined into a string (`"$(...)"`, `[string](...)`, Join-String) and handed to a shell,
+// so a marked statement is only marked `outputOnly`, which findGuardedCommand skips, when it is
+// plainly printed: in the tool's own script (depth 0), outside any `{ }`, ended by `;`, a line break
+// or the end of the script (no pipe, `&` or redirect), and either alone (`'gh', 'pr', 'merge'`) or the
+// whole content of a group that is the one argument of Write-Output, Write-Host, echo or write
+// (`Write-Output @('gh', 'pr', 'merge')`). Statements in strings and here-strings are never
+// `outputOnly`.
 function splitPowerShell(input, depth = 0, ctx = { unbalanced: false }) {
   const commands = [];
   if (typeof input !== 'string') return commands;
   if (depth > 8) { ctx.unbalanced = true; return commands; } // too deep to split: the text scan runs
   let words = [];
+  let starts = []; // index in `s` of the character that began each word
   let word = null;
-  const endWord = () => { if (word !== null) { words.push(word); word = null; } };
-  const endCommand = () => { endWord(); if (words.length) commands.push(words); words = []; };
-  const sub = (text) => { for (const c of splitPowerShell(text, depth + 1, ctx)) commands.push(c); };
+  let wordStart = -1;
+  let callOp = false; // this statement follows an `&` (the call operator, or a background `&`)
+  let braces = 0; // `{ }` nesting at this level
+  let valueGroup = null; // { cmd, index }: a group holding one array value, the word at `index`
+  const endWord = () => { if (word !== null) { words.push(word); starts.push(wordStart); word = null; } };
+  // `term` is the character that ended the statement (undefined at the end of the script).
+  const endCommand = (term) => {
+    endWord();
+    if (words.length) {
+      if (!callOp && words[0].includes(PS_ARRAY_SEP) && isOneOf(PS_SINGLE + PS_DOUBLE, s[starts[0]])) words.arrayValue = true;
+      const printed = depth === 0 && braces === 0 && !callOp && (term === undefined || term === ';' || term === '\n' || term === '\r');
+      if (printed && words.length === 1 && words.arrayValue) words.outputOnly = true;
+      if (printed && words.length === 2 && valueGroup && valueGroup.index === 1 && PS_PRINT.has(words[0].toLowerCase())) {
+        valueGroup.cmd.outputOnly = true;
+      }
+      commands.push(words);
+    }
+    words = [];
+    starts = [];
+    callOp = false;
+    valueGroup = null;
+  };
+  const split = (text) => splitPowerShell(text, depth + 1, ctx);
+  const sub = (text) => { for (const c of split(text)) commands.push(c); };
 
   const s = input;
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
+    if (word === null) wordStart = i; // if this character starts a word, the word starts here
     if (c === '`') { // escape; a backtick at the end of a line continues the command
       if (s[i + 1] === '\n') { i++; continue; }
       if (s[i + 1] === '\r' && s[i + 2] === '\n') { i += 2; continue; }
@@ -528,8 +568,13 @@ function splitPowerShell(input, depth = 0, ctx = { unbalanced: false }) {
       const open = c === '(' ? i + 1 : i + 2;
       const close = psParenEnd(s, open, ctx);
       const inner = s.slice(open, close);
-      sub(inner);
-      if (word !== null || words.length) word = (word || '') + inner; // an argument: keep its text
+      const innerCommands = split(inner);
+      for (const cmd of innerCommands) commands.push(cmd);
+      if (word !== null || words.length) { // an argument: keep its value, or else its text
+        const single = innerCommands.length === 1 && innerCommands[0].length === 1;
+        if (single && word === null && innerCommands[0].arrayValue) valueGroup = { cmd: innerCommands[0], index: words.length };
+        word = (word || '') + (single ? innerCommands[0][0] : inner);
+      }
       i = close;
       continue;
     }
@@ -557,8 +602,10 @@ function splitPowerShell(input, depth = 0, ctx = { unbalanced: false }) {
       // not `-ArgumentList:'x' , 'y'`, whose value is attached) or with nothing before it, the comma
       // is the unary array operator and starts a new argument.
       if (word !== null) word += PS_ARRAY_SEP;
-      else if (words.length && !/^-[A-Za-z][^:]*$/.test(words[words.length - 1])) word = words.pop() + PS_ARRAY_SEP;
-      else word = PS_ARRAY_SEP;
+      else if (words.length && !/^-[A-Za-z][^:]*$/.test(words[words.length - 1])) {
+        word = words.pop() + PS_ARRAY_SEP;
+        wordStart = starts.pop();
+      } else word = PS_ARRAY_SEP;
       for (;;) { // skip spaces, line breaks, backtick line continuations and comments after it
         const j = i + 1;
         const ws = /^(?:\s+|`\r?\n)/.exec(s.slice(j, j + 66));
@@ -574,13 +621,25 @@ function splitPowerShell(input, depth = 0, ctx = { unbalanced: false }) {
       }
       continue;
     }
-    if (PS_SEPARATORS.has(c)) { endCommand(); continue; }
+    if (c === '&') {
+      if (s[i + 1] === '&') { endCommand(c); i++; continue; } // `a && b` (PowerShell 7)
+      // With nothing before it, `&` is the call operator; after a command, it runs that command in
+      // the background (PowerShell 7) and ends it. Either way the next statement is never a value.
+      endCommand(c);
+      callOp = true;
+      continue;
+    }
+    if (c === '{') braces++;
+    else if (c === '}') braces--;
+    // PowerShell 7 continues a pipeline on the next line when that line starts with `|`.
+    if ((c === '\n' || c === '\r') && PS_NEXT_LINE_PIPE.test(s.slice(i + 1))) { endCommand('|'); continue; }
+    if (PS_SEPARATORS.has(c)) { endCommand(c); continue; }
     if (c === ' ' || c === '\t') {
       if (word === '--%') { // stop-parsing token: the rest of the line goes to the program as is
         endWord();
         let end = i;
         while (end < s.length && s[end] !== '\n' && s[end] !== '|') end++;
-        for (const w of s.slice(i, end).split(/\s+/)) if (w) words.push(w.replace(/"/g, ''));
+        for (const w of s.slice(i, end).split(/\s+/)) if (w) { words.push(w.replace(/"/g, '')); starts.push(i); }
         i = end - 1;
         continue;
       }
@@ -593,6 +652,11 @@ function splitPowerShell(input, depth = 0, ctx = { unbalanced: false }) {
   endCommand();
   return commands;
 }
+
+// The next line continues the statement with a pipe (or `&`), after blank lines and comments.
+const PS_NEXT_LINE_PIPE = /^(?:\s|#[^\n]*|<#[^]*?#>)*[|&]/;
+// The commands that only print their argument (Write-Output and its aliases, Write-Host).
+const PS_PRINT = new Set(['write-output', 'write', 'echo', 'write-host']);
 
 // PowerShell assignment operators (`$x = gh pr create`): the command is what comes after.
 const PS_ASSIGN = /^(?:[-+*/%]|\?\?)?=$/;
@@ -819,6 +883,13 @@ function rawScan(command) {
   return pickHit(rawScanAll(command));
 }
 
+// A second check on top of the allowlist in splitPowerShell: a script that could redefine what
+// Write-Output or echo does (aliases, functions, default parameter values) or run text it builds
+// (the call or dot-source operator on a variable or expression, Invoke-Expression, Start-Process,
+// Invoke-Command, jobs, script blocks, `-join`) never has an array value skipped. Matched anywhere in
+// the text, strings included, with backticks removed (``Invoke-Ex`pression``).
+const PS_INDIRECT = /(?:^|[\s;|&(){}=,\\:])(?:iex|invoke-expression|invoke-command|icm|start-process|saps|start|start-job|sajb|set-alias|new-alias|sal|nal|set-item|si|new-item|ni|function|filter)(?=$|[\s;|&(){}'"])|(?:^|[\s;|(){}=,])[&.]\s*[$(@]|-join\b|\[scriptblock\]|invokecommand|\.invoke(?:returnasis)?\s*\(|alias:|function:|psdefaultparametervalues/i;
+
 // The guarded command in a command line (a review or merge command first, else the first
 // login-dependent one), or null. `mode` is 'bash' (the Bash tool) or 'ps' (the PowerShell tool).
 // Never touches the network.
@@ -827,7 +898,11 @@ function findGuardedCommand(command, depth = 0, mode = 'bash') {
   const ctx = { unbalanced: false };
   const hits = [];
   const split = mode === 'ps' ? splitPowerShell : splitCommands;
+  // A printed PowerShell array value (`Write-Output @('gh', 'pr', 'merge')`; splitPowerShell) is not
+  // a command, unless the script could redefine the printing or run built text (PS_INDIRECT).
+  const skipValues = mode === 'ps' && depth === 0 && !PS_INDIRECT.test(command.replace(/`/g, ''));
   for (const words of split(command, depth, ctx)) {
+    if (skipValues && words.outputOnly === true) continue;
     const hit = classifySimpleCommand(words, depth, mode);
     if (hit) hits.push(hit);
   }
