@@ -6,7 +6,7 @@ of editing an old one, and say which entry it replaces. Agents follow the newest
 ## 2026-11-24: S56's bug issues, and S56 no longer marked Sensitive
 
 Blue gave both in the sessions that did the work. How the plan follows the second is **proposed,
-pending Blue (PR #TBD)**; merging that PR approves it.
+pending Blue (PR #241)**; merging that PR approves it.
 
 | Decision | Blue's words |
 |---|---|
