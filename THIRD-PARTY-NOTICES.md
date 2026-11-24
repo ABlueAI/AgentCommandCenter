@@ -78,6 +78,34 @@ source: [huggingface/transformers.js@2ec882e (tag 3.8.1)](https://github.com/hug
 Commit `efa5207` removed it the same day and `.gitignore` keeps it out, so only the history holds it.
 It does not contain eSpeak NG.
 
+## npm packages outside the permissive list
+
+`npm ci` in `app/` installs these from the npm registry; none of them is stored in this repository.
+They are the only packages in `app/package-lock.json` whose declared licence isn't one of the
+permissive licences listed in `app/licence-policy.js` (S57). Each is an optional platform package
+of sharp, which `@huggingface/transformers` depends on; npm installs only the one for the machine it
+runs on. The libvips image library in them is LGPL-3.0-or-later and stays a separate prebuilt
+library that sharp loads at run time.
+
+| npm package | Version | Licence (as declared) | Source |
+|---|---|---|---|
+| `@img/sharp-libvips-darwin-arm64` | 1.2.4 | LGPL-3.0-or-later | [lovell/sharp-libvips](https://github.com/lovell/sharp-libvips) |
+| `@img/sharp-libvips-darwin-x64` | 1.2.4 | LGPL-3.0-or-later | [lovell/sharp-libvips](https://github.com/lovell/sharp-libvips) |
+| `@img/sharp-libvips-linux-arm` | 1.2.4 | LGPL-3.0-or-later | [lovell/sharp-libvips](https://github.com/lovell/sharp-libvips) |
+| `@img/sharp-libvips-linux-arm64` | 1.2.4 | LGPL-3.0-or-later | [lovell/sharp-libvips](https://github.com/lovell/sharp-libvips) |
+| `@img/sharp-libvips-linux-ppc64` | 1.2.4 | LGPL-3.0-or-later | [lovell/sharp-libvips](https://github.com/lovell/sharp-libvips) |
+| `@img/sharp-libvips-linux-riscv64` | 1.2.4 | LGPL-3.0-or-later | [lovell/sharp-libvips](https://github.com/lovell/sharp-libvips) |
+| `@img/sharp-libvips-linux-s390x` | 1.2.4 | LGPL-3.0-or-later | [lovell/sharp-libvips](https://github.com/lovell/sharp-libvips) |
+| `@img/sharp-libvips-linux-x64` | 1.2.4 | LGPL-3.0-or-later | [lovell/sharp-libvips](https://github.com/lovell/sharp-libvips) |
+| `@img/sharp-libvips-linuxmusl-arm64` | 1.2.4 | LGPL-3.0-or-later | [lovell/sharp-libvips](https://github.com/lovell/sharp-libvips) |
+| `@img/sharp-libvips-linuxmusl-x64` | 1.2.4 | LGPL-3.0-or-later | [lovell/sharp-libvips](https://github.com/lovell/sharp-libvips) |
+| `@img/sharp-wasm32` | 0.34.5 | Apache-2.0 AND LGPL-3.0-or-later AND MIT | [lovell/sharp](https://github.com/lovell/sharp) |
+| `@img/sharp-win32-arm64` | 0.34.5 | Apache-2.0 AND LGPL-3.0-or-later | [lovell/sharp](https://github.com/lovell/sharp) |
+| `@img/sharp-win32-ia32` | 0.34.5 | Apache-2.0 AND LGPL-3.0-or-later | [lovell/sharp](https://github.com/lovell/sharp) |
+| `@img/sharp-win32-x64` | 0.34.5 | Apache-2.0 AND LGPL-3.0-or-later | [lovell/sharp](https://github.com/lovell/sharp) |
+
+The full LGPL-3.0 text isn't in `LICENSES/` yet; each package ships its own licence files.
+
 ## Downloaded at runtime, not in this repository
 
 Read-aloud downloads these when it first runs; none of them is stored in the repository:
@@ -102,4 +130,8 @@ commit, except espeak-ng (version unverified, above) and `@huggingface/jinja` (n
 Anyone who adds, replaces or updates a file under `app/renderer/vendor/` updates its row here, and
 adds any new licence text to `LICENSES/`. The test `app/third-party-notices.test.js` (run by
 `npm test` in `app/`) checks that every tracked file under `app/renderer/vendor/` has a row, that
-every row names a tracked file, and that every licence file linked here exists.
+every row names a tracked file, and that every licence file linked here exists. Since S57 it also
+fails if an npm package in `app/package-lock.json` or a row in this file's file tables carries a
+licence that isn't on the permissive list in `app/licence-policy.js` and isn't one of that file's
+named exceptions, and if the npm table above doesn't list exactly those exceptions with the
+licence and version the lockfile has.
