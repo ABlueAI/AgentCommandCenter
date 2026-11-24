@@ -3,6 +3,22 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-23: the all-day runner back on; agent pacing limits
+
+Blue decided these in his main chat on 2026-11-23; the hand-off for the runner refresh PR relayed
+his words. How the repo follows them (docs/RUNNER.md "Runner refresh (2026-11-23)", the runner
+prompt and its settings) is **proposed, pending Blue (the runner refresh PR)**; merging that PR
+approves it, and Mako main then turns the scheduled task back on with the merged prompt.
+"Builder's reading" marks a line that is the builder's, not Blue's.
+
+| Decision | Blue's words |
+|---|---|
+| **1. The build moves itself.** Routine steps become automatic; Blue is asked only when he is needed. | "no more manual bs unless i am NEEDED. most of these are not needs and should be automatic processes entirely" |
+| **2. The all-day runner is turned back on after a refresh PR,** so new plan rows start without Blue starting each one. It was turned off automatically on 2026-11-07 when it lost repository access. Builder's reading: in the refresh the runner only builds plan rows and its own PRs, and the PR sweeper (docs/SWEEPER.md) keeps PRs moving. | "yes" (to "Turn the all-day runner back on, so new plan rows start without me starting each one") |
+| **3. Pacing: the agent account makes at most 24 pushes an hour,** across all its sessions. Builder's reading: the earlier figure wasn't relayed. | "this rule needs to change to 24 per hour" |
+| **4. Pacing: at most 120 GitHub writes an hour** for the agent account, across all its sessions. | "writes 120 is fine" |
+| **5. Capacity: 2 Claude lanes now, 3 from about 2026-11-29,** so the runner's `parallel_cap` is 2, and a one-line PR makes it 3 then. Builder's reading: relayed by the hand-off as Blue's plan, without his words; docs/SCHEDULE-1.1.md (PR #223) assumes the same lanes. | — |
+
 ## 2026-11-21: Blue's decisions of 2026-11-16 to 2026-11-21
 
 Blue approved these in his main chat between 2026-11-16 and 2026-11-21, and items 26 to 29 on 2026-11-22. The details stay in his

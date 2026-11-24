@@ -30,7 +30,7 @@ minutes during the trial (checklist step 30).
    builds" (S17 to S20) stay with Blue starting Codex himself.
 2. **Claim.** The hand-off is an open issue titled `Sxx: <session title>`, labelled `agent-claimed`,
    opened by `ABlueAgent`, with its conversation locked to collaborators. Codex's PR, titled `Sxx:`,
-   is the second claim. The S04 runner prompt's claim check (docs/RUNNER.md step 5c) honours both,
+   is the second claim. The S04 runner prompt's claim check (docs/RUNNER.md step 5b since the 2026-11-23 refresh; 5c before it) honours both,
    but only once that prompt is applied (checklist step 27); the older prompt counts only `Sxx:`
    PRs. So a hand-off for a plan session waits until step 27 is ticked. Option B's trial issue,
    titled `S26 trial:`, is a hand-off point, not a session claim.
