@@ -1,8 +1,9 @@
 # OSS record for vault memory (S48)
 
-Research dated 2026-11-18. **Proposed verdicts:** PROTOTYPE a narrow Open Second Brain trial,
-PATTERN-MINE ai-memory and GBrain. Keep the existing plan's Markdown-first scope and use fresh,
-small local glue where a vetted upstream piece does not fit. Blue's verdict is pending.
+Research dated 2026-11-18. **Verdicts (Blue, 2026-11-24):** PROTOTYPE a narrow Open Second Brain
+trial, PATTERN-MINE ai-memory and GBrain, as proposed. Keep the existing plan's Markdown-first scope
+and use fresh, small local glue where a vetted upstream piece does not fit. His words are in
+[Blue's verdict](#blues-verdict-word-for-word).
 
 ## Need
 
@@ -297,7 +298,7 @@ Apply Blue's clarification to whatever Mako would run, install or call, includin
 models reached through a gateway. PR #212 recorded the clarification on `main` in the 2026-11-21
 entry, item 13, of `docs/DECISIONS.md`. The inventory covers named choices plus fixtures or comments
 that could travel with copied files. An upstream-only reference in a file Mako does not ship is
-outside the adoption check. Remove such references from any code Mako
+not a fail (item 13). Remove such references from any code Mako
 takes. All examples and tested adapters below are findings about the upstream pins. The proposed
 record ships zero upstream files. [2026-11-21 clarification on
 main](https://github.com/ABlueAI/AgentCommandCenter/blob/main/docs/DECISIONS.md#2026-11-21-blues-decisions-of-2026-11-16-to-2026-11-21),
@@ -433,4 +434,18 @@ acceptance criteria](../PLAN-1.1.md#month-one).
 
 ## Blue's verdict (word for word)
 
->
+2026-11-24, in Mako main's chat, answering checklist step 68 with this record's recommendation in
+front of him:
+
+> "sounds correct, go with that"
+
+The recommendation he accepted:
+
+- **PROTOTYPE** for an isolated Open Second Brain subset;
+- **PATTERN-MINE** for ai-memory and GBrain.
+
+Whether any of the three candidates was among the memory tools dropped on 2026-11-16: not answered.
+His verdict doesn't address it, and nothing on `main` names any of the three as dropped
+([2026-11-16 sign-off](../DECISIONS.md#2026-11-16-the-mako-11-decision-sheet)). The rule under
+"Options considered" still applies: if one turns out to have been dropped, the S48 builder waits
+for Blue to revisit it.

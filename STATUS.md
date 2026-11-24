@@ -1,6 +1,8 @@
 # Mako status
 
-Updated 2026-11-24 by PR #241 (S56 no longer marked Sensitive in the plan; its 9 bug issues, #232
+Updated 2026-11-24 by PR #209 (S48's OSS record, docs/decisions/OSS-memory.md, with Blue's
+verdict: PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain; step 68
+ticked). Before that: updated 2026-11-24 by PR #241 (S56 no longer marked Sensitive in the plan; its 9 bug issues, #232
 to #240, were opened the same day). Before that: updated 2026-11-23 by PR #223 (S61: the 1.1
 schedule and Blue's answers on it). Before that:
 updated 2026-11-21 by PR #212 (Blue's decisions of 2026-11-16 to 2026-11-21: the scope freezes on
@@ -406,6 +408,9 @@ The spec was accurate (35 of 40 blocks, none wrong) but missed what S66 most nee
 flag pinned as not a setting, no restore at startup, the four top-level tabs, the markup tests,
 Ctrl K reaching the PTY); verdict: an occasional one-off, never installed. Once it merges, S66
 waits only on S14 and Blue's go on the UI (step 18).
+**2026-11-24 (PR #209):** S48's OSS record, `docs/decisions/OSS-memory.md`, carries Blue's verdict
+(step 68): PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain. S48
+still starts after the H1 setup day (step 54).
 The paragraphs below are from before the sheet.
 
 Month one's runner sessions S31 to S34 merged on 2026-11-04. The next `READY` row is S25, the
