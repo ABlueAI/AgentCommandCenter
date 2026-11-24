@@ -1340,7 +1340,9 @@ app.whenReady().then(async () => {
   ipcMain.handle('list-repos', () => ({ repos: [], selectedRepo: '' }));
   ipcMain.handle('list-worktrees', () => []);
   ipcMain.handle('repo-github-url', () => '');
-  ipcMain.handle('get-gemini-key-status', () => ({ hasKey: true }));
+  // Issue #161: the real handler (gemini-key-ipc.js handleStatus) answers { ok, hasKey, available }; the
+  // renderer treats a reply without ok: true as a refusal and shows the key banner over the panes.
+  ipcMain.handle('get-gemini-key-status', () => ({ ok: true, hasKey: true, available: true }));
   ipcMain.handle('get-agent-token-status', () => ({ ok: true, hasToken: true })); // S06
   ipcMain.handle('tlog-reset', () => ({ ok: true }));
   ipcMain.handle('pty-start', async (_e, o) => {

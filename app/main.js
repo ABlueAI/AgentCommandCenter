@@ -153,6 +153,7 @@ const { createQuickLinksIpc } = require('./quick-links-ipc');
 const { buildDefaultConfig: buildQuickLinksDefaultConfig, validateUrl: validateQuickLinkUrl } = require('./quick-links-policy');
 // S06: the legacy open-external channel goes through the same URL policy (open-external-ipc.js).
 const { createOpenExternalIpc } = require('./open-external-ipc');
+const { createGeminiKeyIpc } = require('./gemini-key-ipc');
 // S07: which copy this process is (stable or dev), decided once from argv (instance-profile.js).
 const { resolveInstanceProfile, createDevPaneStatusController } = require('./instance-profile');
 
@@ -1090,25 +1091,22 @@ ipcMain.handle('save-settings', async (_e, partial) => {
 // plaintext never travels back across the IPC boundary — it stays in main memory.
 ipcMain.handle('tlog-reset', () => { tlogReset(); });
 
-ipcMain.handle('get-gemini-key-status', () => ({
-  hasKey: geminiKey !== null,
-  available: safeStorage.isEncryptionAvailable(),
-}));
-ipcMain.handle('set-gemini-key', (_e, key) => {
-  if (typeof key !== 'string' || !key.trim()) return { ok: false, error: 'key is empty' };
-  if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'safeStorage encryption not available on this system' };
-  try {
-    const enc = safeStorage.encryptString(key.trim());
-    const s = loadSecure(); s.geminiKeyEnc = enc.toString('base64'); saveSecure(s);
-    geminiKey = key.trim();
-    return { ok: true };
-  } catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
+// Issue #161: trusted sender first (the same gate as the ABlueAgent token channels), then the
+// store; every refusal shows on the main-error channel (gemini-key-ipc.js). `launcherGate` is
+// defined further down and is only read when a call arrives, after startup has finished.
+const geminiKeyIpc = createGeminiKeyIpc({
+  assessSender: (e) => launcherGate.assess(e),
+  isEncryptionAvailable: () => safeStorage.isEncryptionAvailable(),
+  encryptString: (plain) => safeStorage.encryptString(plain),
+  loadSecure,
+  saveSecure,
+  getKey: () => geminiKey,
+  setKey: (k) => { geminiKey = k; },
+  logRefusal: (line) => { tlog(line); if (win && !win.isDestroyed()) win.webContents.send('main-error', line); },
 });
-ipcMain.handle('clear-gemini-key', () => {
-  const s = loadSecure(); delete s.geminiKeyEnc; saveSecure(s);
-  geminiKey = null;
-  return { ok: true };
-});
+ipcMain.handle('get-gemini-key-status', (e) => geminiKeyIpc.handleStatus(e));
+ipcMain.handle('set-gemini-key', (e, key) => geminiKeyIpc.handleSet(e, key));
+ipcMain.handle('clear-gemini-key', (e) => geminiKeyIpc.handleClear(e));
 
 ipcMain.handle('pick-folder', async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });

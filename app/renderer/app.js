@@ -1392,7 +1392,9 @@ async function boot() {
     state.authority = a.level;
     if (a.fellBack) appendLog(`[authority] stored level not recognised; using ${a.level}\n`);
   }
-  updateKeyBanner(await cc.getGeminiKeyStatus());
+  // Issue #161: a refused status check says why (main's own main-error line can arrive before the
+  // listener below exists) and shows the key banner, never a silent "no key".
+  updateKeyBanner(await geminiKeyStatusOrLog());
   // S06: not awaited, so the token check adds no IPC round trip to the boot path (pane startup is
   // timing-sensitive); a failed check leaves the banner showing and says so in the Logs tab.
   cc.getAgentTokenStatus().then(updateAgentTokenBanner)
@@ -1735,6 +1737,15 @@ async function launchReviewer(worktree) {
 }
 
 // ---- Gemini key banner ------------------------------------------------------
+// Issue #161: the status call can be refused (trusted-sender gate). A refusal is logged with its
+// reason and returned as null, so no caller mistakes it for "no key stored".
+async function geminiKeyStatusOrLog() {
+  const ks = await cc.getGeminiKeyStatus();
+  if (ks && ks.ok) return ks;
+  appendLog(`[key] status check refused: ${(ks && ks.error) || 'unknown error'}\n`);
+  return null;
+}
+
 function updateKeyBanner(status) {
   const hasKey = status && status.hasKey;
   $('#keyBanner').classList.toggle('hidden', !!hasKey);
@@ -1818,8 +1829,10 @@ function wireUi() {
   $('#geminiKeyInput').onkeydown = (e) => { if (e.key === 'Enter') $('#geminiKeySave').click(); };
   $('#geminiKeyChange').onclick = () => updateKeyBanner({ hasKey: false });
   $('#geminiKeyClear').onclick = async () => {
-    await cc.clearGeminiKey();
-    updateKeyBanner({ hasKey: false });
+    // Issue #161: a refused or failed clear leaves the banner as it was and says why.
+    const r = await cc.clearGeminiKey();
+    if (r && r.ok) updateKeyBanner({ hasKey: false });
+    else appendLog(`[key] clear failed: ${(r && r.error) || 'unknown error'}\n`);
   };
 
   // ABlueAgent token banner (S06). The token is sent once to main and never read back.
@@ -2398,10 +2411,10 @@ async function createAgent() {
       });
       return;
     }
-    const ks = await cc.getGeminiKeyStatus();
+    const ks = await geminiKeyStatusOrLog();
     if (!ks || !ks.hasKey) {
       closeModal();
-      appendLog('[video-scout] GEMINI_API_KEY not stored — enter it in the key setup banner.\n');
+      if (ks) appendLog('[video-scout] GEMINI_API_KEY not stored — enter it in the key setup banner.\n');
       updateKeyBanner({ hasKey: false });
       $('#geminiKeyInput').focus();
       return;
