@@ -1,7 +1,8 @@
 # Mako status
 
 Updated 2026-11-24 by PR #254 (S38, the one-time full security check: 1 high and 11 medium
-findings, issues #258 to #269, and 15 low ones in checklist issue #270; checklist steps 78 and 79).
+findings, issues #258 to #269, and 16 low ones, 15 hardening items and 1 question for Blue, in
+checklist issue #270; checklist steps 78 and 79).
 Before that: updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
 verdict; review fixes pushed by a Claude cloud session on Blue's ask). Before that: updated 2026-11-24 by PR #209 (S48's OSS record, docs/decisions/OSS-memory.md, with Blue's
 verdict: PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain; step 68
@@ -77,7 +78,8 @@ Every PR that changes the state updates this file.
 - **Full security check (S38, PR #254, 2026-11-24, done):** one read-only check of every sensitive
   area in AGENTS.md on `main` at `b99e377`. Public text gives titles and severities only
   (docs/DECISIONS.md 2026-11-21, item 7); Blue has the details from the S38 session. New findings:
-  1 high (#258), 11 medium (#259 to #269) and 15 low (checklist issue #270); known issues #85, #249
+  1 high (#258), 11 medium (#259 to #269) and 16 low (15 hardening items and 1 question for Blue;
+  checklist issue #270); known issues #85, #249
   and #252 still hold. Nothing was fixed in that PR: each fix comes in its own PR with a neutral
   title. #265 needs a repository-settings change only Blue makes (BLUE-CHECKLIST.md step 78), and
   some findings need a check on his PC (step 79).

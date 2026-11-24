@@ -1272,8 +1272,9 @@ behind both steps are in the private report from the S38 session, not in this pu
   Windows behaviour a cloud session can't run; the report lists each one with a check of under 2
   minutes.
   - Run each check as the report says, and note what you saw.
-  - *Done when:* you've told any agent the result of each check; it adds each one to its issue
-    (worded as neutrally as the issue) and ticks this with the date.
+  - *Done when:* you've told any agent the result of each check in a session (not on GitHub). The
+    results stay private: a public issue gets at most "checked on Blue's PC, <date>" or a severity
+    change. The agent ticks this with the date.
 
 ## Every day, once the runner is on
 
