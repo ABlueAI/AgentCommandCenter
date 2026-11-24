@@ -6,7 +6,8 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-11-21 by Claude (your decisions of 2026-11-16 to 2026-11-21, PR #212: steps 27
+Last updated 2026-11-23 by Claude (S37, PR #218: step 69 added, a 3-minute live check of the
+account guard on the PowerShell tool); earlier, on 2026-11-21 (your decisions of 2026-11-16 to 2026-11-21, PR #212: steps 27
 and 50 leave the top of "Do next", steps 57, 60 and 63 follow your answers, step 68 added, dated
 reminders added; earlier, on 2026-11-18, your answers to PR #195's questions, PR #204: step 65 added,
 S48 split; earlier, on 2026-11-17, your answers to PR #173's questions, PR #195: step 64 added,
@@ -47,7 +48,8 @@ On 2026-11-21 steps 27 and 50 left the top (your decision: the runner they check
 4. **Step 15**, the voice check on the new Electron. S36 moves Electron to 42.11.16, so if that has
    merged, check on that version.
 5. **Step 35, then step 49**, after PR #170 (the account fix follows it): the agent token in Mako,
-   then removing the `ABlueAI` command-line login from every PC Claude runs on.
+   then removing the `ABlueAI` command-line login from every PC Claude runs on. If PR #218 is
+   merged by then, do step 69 (3 minutes) before step 49.
 6. **Step 56**, memory setup (about 45 minutes over 2 days), when S48's PR asks for it, and
    **step 55**, H1 trial part 2, the aquarium (15 to 20 minutes), when S20's PR asks for it.
 7. Your Composer scope sign-off unblocks S51.
@@ -1030,6 +1032,15 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   - *Done when:* the page-reader test and the final suite, `renderer/admission-view.test.js`, both
     pass and `npm test` exits successfully. Tell an agent the result so it can tick this with the date.
 
+- [ ] **76. Issue #162 on your PC: the Page Reader refuses local addresses.** About **3 minutes**,
+  after you merge PR #250 (it adds the `ipaddr.js` package).
+  - Pull `main`, run `npm ci` in `app`, and restart Mako fully. Until `npm ci` has run, Mako starts
+    as usual and only the Page Reader refuses, with "run npm ci in the app folder, then restart Mako".
+  - **New Agent > 📄 Page**, enter `https://localhost/`, **Create & Launch**: it should refuse with
+    "The Page Reader reads public web pages only, never this PC or your local network." Then enter a
+    www.reddit.com thread URL: the page-reader pane should start as before.
+  - *Done when:* you tell an agent both results. It ticks this with the date.
+
 - [ ] **44. S09 on your PC: Resume or Start fresh.** About **5 minutes**, after you merge the S09
   PR, #131 (and S08's step 39, which it builds on).
   - Pull `main` and restart Mako fully. Open a builder pane on a worktree and a bare `claude` pane,
@@ -1185,6 +1196,28 @@ open PRs (#206 and #208).
   your verdict (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD FRESH) in your own words to any agent.
   - *Done when:* your verdict is in the record, word for word, and the agent ticks this with the
     date.
+## From S37 (the account guard and the PowerShell tool)
+
+Step 69 comes from S37 (PR #218, issue #217), not from the decisions above.
+
+- [ ] **69. Check that the account guard stops PR work through the PowerShell tool (S37, PR #218).**
+  **About 3 minutes**, on your PC after merging PR #218 and before step 49 removes your command-line
+  login (the check needs `gh` logged in as `ABlueAI`). CI tests the guard with the input Claude Code's
+  docs describe, but only a real session shows that Claude Code starts it for its PowerShell tool.
+  - Pull `main`, then start a **new** Claude Code chat in the Mako repo folder (hooks load when a
+    session starts). Tell it: "Use your PowerShell tool, not Bash, to run `gh pr ready 999999`."
+  - Expected: the command doesn't run, and Claude shows "Blocked by Mako's account guard ... this
+    session's GitHub CLI login is ABlueAI". If gh answers instead (for example "no pull requests
+    found"), the guard didn't run: tell any agent "step 69 failed" with what you saw. Nothing is
+    changed either way, since PR 999999 doesn't exist. If Claude says it has no PowerShell tool,
+    say so; the check is then not applicable on that PC.
+  - If you've already removed your command-line login (step 49) and `gh auth status` shows no
+    account at all, the guard instead shows "couldn't check the GitHub login before `gh pr ready`
+    ... allowed". That also passes: it shows the guard ran for the PowerShell tool. If gh is still
+    logged in to another account, the guard rightly lets the command through, so the check can't
+    show anything: tell an agent "step 69 not applicable" instead.
+  - *Done when:* you've told an agent what Claude showed, and it ticks this with the date and your
+    words.
 
 ## From your decisions of 2026-11-23
 

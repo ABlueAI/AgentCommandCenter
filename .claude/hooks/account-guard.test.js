@@ -16,7 +16,14 @@
 //      /merge, /merges and the cloud auto_merge route, GraphQL review and merge mutations) are
 //      blocked under ANY login without asking gh; reads are left alone;
 //   7. App identities: a `[bot]` login is accepted, and an installation token (gh api user answers
-//      403 "Resource not accessible by integration") is allowed with a notice, not an unknown error.
+//      403 "Resource not accessible by integration") is allowed with a notice, not an unknown error;
+//   8. the PowerShell tool (S37, issue #217): the same PR work run through Claude Code's PowerShell
+//      tool is found and blocked the same way (PowerShell syntax: `&`, `.`, backtick continuations,
+//      script blocks, here-strings, assignments, Invoke-Expression, Start-Process, `cmd /c`, arrays
+//      given to a program, a command after `return` or `throw`), and, fail-closed (Blue, 2026-11-24,
+//      "Yes, run 8 fail-closed"), a PowerShell script that names a guarded command's words anywhere
+//      (quoted, in an array, a comment or a here-string, after any keyword, across lines or behind
+//      backticks) gets the login check; an array of strings is read as a command even when printed.
 
 const fs = require('fs');
 const os = require('os');
@@ -246,7 +253,8 @@ let calls = 0;
 const counting = () => { calls++; return { login: 'ABlueAI' }; };
 for (const cmd of NOT_GUARDED) guard.decide(bash(cmd), counting);
 guard.decide({ tool_name: 'Read', tool_input: { file_path: 'x' } }, counting);
-guard.decide({ tool_name: 'PowerShell', tool_input: { command: 'git push' } }, counting);
+guard.decide({ tool_name: 'PowerShell', tool_input: { command: "Write-Host 'git status'" } }, counting);
+guard.decide({ tool_name: 'PowerShell', tool_input: {} }, counting);
 guard.decide({ tool_name: 'Bash', tool_input: {} }, counting);
 guard.decide(null, counting);
 assert(calls === 0, `no gh call for any non-matching command or other tool (${calls} calls)`);
@@ -294,6 +302,487 @@ process.stdout.write('\ndecide(): App identities (mako-agents[bot])\n');
   assert(!/couldn't check/.test(t.systemMessage), 'an installation token is not reported as an unknown error');
   const u = guard.decide(bash('git push'), () => ({ error: 'gh could not read the login (exit 1); it may not be logged in or offline' }));
   assert(/couldn't check/.test(u.systemMessage), 'any other failure is still the unknown-error notice');
+}
+
+// ---------------------------------------------------------------------------------------------
+// The PowerShell tool (S37, issue #217). Before S37 the hook ran only for the Bash tool and decide()
+// allowed every other tool, so all of these ran unchecked through Claude Code's PowerShell tool.
+process.stdout.write('\ncommand matching: the PowerShell tool\n');
+const ps = (cmd) => guard.findGuardedCommand(cmd, 0, 'ps');
+const GUARDED_PS = [
+  // The program, however it is named or called.
+  ['gh pr create --fill', 'gh pr create'],
+  ['gh pr new --title x', 'gh pr create'],
+  ['gh pr ready 5', 'gh pr ready'],
+  ['gh.exe pr create --fill', 'gh pr create'],
+  ['GH.EXE pr new', 'gh pr create'],
+  ['& gh pr create --fill', 'gh pr create'],
+  ['& gh.exe pr ready 5', 'gh pr ready'],
+  ['&gh pr ready 5', 'gh pr ready'],
+  ["& 'C:\\Program Files\\GitHub CLI\\gh.exe' pr create", 'gh pr create'],
+  ['& "$env:ProgramFiles\\GitHub CLI\\gh.exe" pr ready 5', 'gh pr ready'],
+  ['& "C:\\Program Files\\Git\\cmd\\git.exe" push', 'git push'],
+  ['. gh pr create', 'gh pr create'],
+  ['.\\gh.exe pr create', 'gh pr create'],
+  ['gh -R ABlueAI/AgentCommandCenter pr create', 'gh pr create'],
+  ['git push', 'git push'],
+  ['git.exe push -u origin x', 'git push'],
+  ['git -C ..\\wt push', 'git push'],
+  ['git -C "C:\\work\\wt" push origin HEAD', 'git push'],
+  ['git -c credential.helper= push', 'git push'],
+  // Chains, pipelines, line continuations (the backtick) and CRLF line ends.
+  ['git add -A; git commit -m "wip"; git push', 'git push'],
+  ['npm test && git push', 'git push'],
+  ['npm test || git push', 'git push'],
+  ['git push | Out-Null', 'git push'],
+  ['git push 2>&1 | Out-String', 'git push'],
+  ['git `\n  push origin x', 'git push'],
+  ['gh pr create `\r\n  --title x', 'gh pr create'],
+  ['gh `\n pr `\n ready 5', 'gh pr ready'],
+  ['git commit -m "x" `\n; git push', 'git push'],
+  ['cd app\r\ngit push origin x', 'git push'],
+  // Script blocks, groups and subexpressions run their contents.
+  ['if ($LASTEXITCODE -eq 0) { git push }', 'git push'],
+  ['& { gh pr create --fill }', 'gh pr create'],
+  ['Invoke-Command -ScriptBlock { git push }', 'git push'],
+  ['1..2 | ForEach-Object { git push }', 'git push'],
+  ['try { git push } catch { Write-Host $_ }', 'git push'],
+  ['[void](git push)', 'git push'],
+  ['$x = $(gh pr create)', 'gh pr create'],
+  ['Write-Output "url: $(gh pr create --fill)"', 'gh pr create'],
+  ['"$(gh pr create --fill)"', 'gh pr create'],
+  ['@"\n$(git push)\n"@', 'git push'],
+  ['Write-Output ("x" + (git push))', 'git push'],
+  ['gh pr create --title "a (b)" --body "c)"', 'gh pr create'],
+  ['git commit -m (Get-Content msg.txt -Raw); git push', 'git push'],
+  // Assignments: the command is what comes after the `=`.
+  ['$out = gh pr create --fill', 'gh pr create'],
+  ['$out=git push', 'git push'],
+  ['$r = & gh.exe pr ready 5', 'gh pr ready'],
+  ['$null = git push 2>&1', 'git push'],
+  ['[string]$u = gh pr create --fill', 'gh pr create'],
+  ['$env:GH_DEBUG = 1; gh pr create', 'gh pr create'],
+  // Commands that run another command.
+  ['Invoke-Expression "git push"', 'git push'],
+  ["iex 'gh pr create --fill'", 'gh pr create'],
+  ["Invoke-Expression -Command 'gh pr ready 5'", 'gh pr ready'],
+  ["Invoke-Expression -Command:'git push'", 'git push'],
+  ["Start-Process gh -ArgumentList 'pr create --fill' -Wait", 'gh pr create'],
+  ['Start-Process -FilePath git -ArgumentList push -NoNewWindow -Wait', 'git push'],
+  ["Start-Process gh 'pr','ready','5'", 'gh pr ready'],
+  ["Start-Process -FilePath 'C:\\Program Files\\GitHub CLI\\gh.exe' -ArgumentList @('pr', 'create', '--fill')", 'gh pr create'],
+  ['saps git push', 'git push'],
+  ['cmd /c "git push"', 'git push'],
+  ['cmd.exe /c gh pr create --fill', 'gh pr create'],
+  ['pwsh -Command "gh pr create --fill"', 'gh pr create'],
+  ['powershell -NoProfile -Command { git push }', 'git push'],
+  ["bash -c 'git push'", 'git push'],
+  ['gh --% pr create --fill', 'gh pr create'],
+  // Claude's usual PowerShell commit: a here-string message (with an apostrophe), then a push.
+  ["git add -A\ngit commit -m @'\nFix: don't break it\n\ngh pr merge 5 is never run here\n'@\ngit push -u origin x", 'git push'],
+  ["$m = @'\ndon't\n'@\ngit commit -m $m; git push", 'git push'],
+  ["gh pr create --draft --title 'S37: x' --body @'\n## TLDR\nnever gh pr merge 5; git push later\n'@", 'gh pr create'],
+  ["git commit -m 'it''s'; git push", 'git push'],
+  ['gh pr create --title \u201cFix\u201d --body x', 'gh pr create'],
+  // Unclosed quotes fall back to the text scan, as for Bash.
+  ["Write-Host 'unclosed; git push", 'git push'],
+  // Review and merge commands (blocked under any login).
+  ['gh pr merge 5 --squash', 'gh pr merge'],
+  ['& gh.exe pr review 5 --approve', 'gh pr review'],
+  ['git push; gh pr merge 5', 'gh pr merge'],
+  ['gh pr ready 5 && gh pr merge 5 --squash', 'gh pr merge'],
+  ['gh api repos/o/r/pulls/5/reviews -f event=APPROVE', 'gh api review'],
+  ['gh api -X PUT repos/o/r/pulls/5/merge', 'gh api merge'],
+  ["gh api graphql -f query=@'\nmutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }\n'@", 'gh api merge'],
+  ['gh api graphql -f query="mutation { addPullRequestReview(input: {pullRequestId: `"x`"}) { clientMutationId } }"', 'gh api review'],
+  ["Start-Process gh 'pr merge 5'", 'gh pr merge'],
+  ["Start-Process -Wait -FilePath gh -ArgumentList 'pr','merge','5'", 'gh pr merge'],
+  ["iex 'gh pr review 5 -a'", 'gh pr review'],
+  ['cmd /c "gh pr merge 5"', 'gh pr merge'],
+  ['Write-Host "unclosed; gh pr merge 5', 'gh pr merge'],
+  ['git `\n  push; Write-Host "unclosed', 'git push'],
+  // Review run 1 (S37): an array argument written with spaces or across lines after the commas.
+  ["Start-Process gh -ArgumentList 'pr', 'merge', '5'", 'gh pr merge'],
+  ["Start-Process gh 'pr', 'create', '--fill'", 'gh pr create'],
+  ["Start-Process gh -ArgumentList 'pr' , 'ready' ,'5'", 'gh pr ready'],
+  ["Start-Process gh -ArgumentList 'pr',\n  'merge', '5' -Wait", 'gh pr merge'],
+  ["Start-Process gh -ArgumentList 'pr', `\n   'review', '5', '-a'", 'gh pr review'],
+  // Review run 1: a here-string ends only at a closing marker that starts its line; an indented one
+  // is body text, and the commands after the real end are still seen.
+  ["git commit -m @'\nDocs:\n    @'\n    x\n    '@\n'@\ngit push\ngh pr comment 5 --body @'\nPushed; don't merge yet.\n'@", 'git push'],
+  ["$m = @'\n  '@ <#\n'@\ngh pr merge 5\n#>", 'gh pr merge'],
+  // Review run 1: PowerShell's -Command takes every argument after it as the command.
+  ['pwsh -NoProfile -Command git push origin x', 'git push'],
+  ['powershell -c gh pr merge 5', 'gh pr merge'],
+  // Review run 2: a comma after a parameter name, or before a word, starts an array argument, and a
+  // native program gets an array's elements as separate arguments; comments may follow a comma.
+  ["Start-Process gh -ArgumentList ,'pr merge 5'", 'gh pr merge'],
+  ['git push ,origin', 'git push'],
+  ['gh pr merge ,5', 'gh pr merge'],
+  ["Start-Process gh -ArgumentList 'pr', # why\n'merge', '5'", 'gh pr merge'],
+  ["Start-Process gh -ArgumentList 'pr', <# why #> 'merge', '5'", 'gh pr merge'],
+  ['$a, $b = gh pr create --fill', 'gh pr create'],
+  ["git -c 'x=a,b' push", 'git push'],
+  // Review run 3: an attached parameter value (`-Name:value`) keeps the array that follows it.
+  ["Start-Process gh -ArgumentList:'pr' , 'merge', '5'", 'gh pr merge'],
+  ["Start-Process -FilePath:gh -ArgumentList:'pr', 'create'", 'gh pr create'],
+  // Codex review on 004b8cd: an array given to the call operator or to a program is its arguments, and
+  // an array of strings is a command wherever it appears (assigned for later, `-join`, iex, `& $x`,
+  // `& (...)`, and since review run 8 also when only printed, which fails closed).
+  ["& 'gh' @('pr','merge')", 'gh pr merge'],
+  ['& "gh" @("pr", "merge", "5")', 'gh pr merge'],
+  ["& 'gh' 'pr','merge'", 'gh pr merge'],
+  ["& gh 'pr', 'merge'", 'gh pr merge'],
+  ["gh @('pr','create','--fill')", 'gh pr create'],
+  ["gh.exe pr @('ready', '5')", 'gh pr ready'],
+  ["git @('push','origin','x')", 'git push'],
+  ["& 'gh','pr','merge'", 'gh pr merge'],
+  ["& ('gh','pr','merge')", 'gh pr merge'],
+  ["$c = 'gh','pr','merge'; & $c[0] $c[1..2]", 'gh pr merge'],
+  ["$c = @('git', 'push')", 'git push'],
+  ["('gh','pr','merge' -join ' ') | iex", 'gh pr merge'],
+  ["Write-Output @('gh','pr','merge') -join ' '", 'gh pr merge'],
+  ["'gh','pr','merge' | Invoke-Expression", 'gh pr merge'],
+  ["Write-Output @(gh, 'pr', 'merge')", 'gh pr merge'], // a bare first element: kept as a command
+  ["Write-Output @('gh', 'pr', 'merge'); gh pr merge 5", 'gh pr merge'],
+  ["iex ('gh pr merge 5')", 'gh pr merge'],
+  ["Start-Process gh -ArgumentList ('pr merge 5')", 'gh pr merge'],
+  // Cases from review run 5 (6901edc, whose printed-array skip was later removed): an array joined into
+  // a string and handed to a shell, piped, in a script block or nested is a command.
+  ["cmd /c \"$('gh','pr','merge','5')\"", 'gh pr merge'],
+  ["pwsh -c \"$('gh','pr','merge')\"", 'gh pr merge'],
+  ["bash -c \"$('git','push')\"", 'git push'],
+  ["cmd /c ([string]('gh','pr','merge','5'))", 'gh pr merge'],
+  ["cmd /c \"$(Write-Output @('gh','pr','merge','5'))\"", 'gh pr merge'],
+  ["'gh','pr','merge','5' | Join-String -Separator ' ' | cmd", 'gh pr merge'],
+  ["[string]::Join(' ', ('gh','pr','merge','5')) | cmd", 'gh pr merge'],
+  ["Write-Output @('gh','pr','merge','5') | Join-String -Separator ' ' | cmd", 'gh pr merge'],
+  ["Invoke-Ex`pression \"$('gh','pr','merge','5')\"", 'gh pr merge'],
+  ["Microsoft.PowerShell.Utility\\Invoke-Expression \"$('gh','pr','merge','5')\"", 'gh pr merge'],
+  ["@\"\n$('gh','pr','merge','5')\n\"@ | cmd", 'gh pr merge'],
+  ["$r = & 'gh','pr','merge'", 'gh pr merge'],
+  ["return & 'gh','pr','merge'", 'gh pr merge'],
+  ["Write-Output @('gh','pr','merge') -OutVariable a", 'gh pr merge'],
+  ["Write-Output @('gh','pr','merge') > cmd.txt", 'gh pr merge'],
+  ["Set-Alias echo iex; echo @('gh','pr','merge')", 'gh pr merge'],
+  ["function Write-Output { cmd /c \"$args\" }; Write-Output @('gh','pr','merge')", 'gh pr merge'],
+  ["Write-Output @('gh','pr','merge') && git push", 'gh pr merge'],
+  ["@('gh','pr','merge') | ForEach-Object { $_ }", 'gh pr merge'],
+  ["& { 'gh', 'pr', 'merge' } | Join-String -Separator ' ' | cmd", 'gh pr merge'],
+  ["& { 'gh', 'pr', 'merge' }", 'gh pr merge'],
+  ["Write-Output @('gh', 'pr', 'merge') | Out-File start.txt", 'gh pr merge'],
+  ["if ($true) { Write-Output @('gh','pr','merge') }", 'gh pr merge'],
+  ["iex \"Write-Output @('gh','pr','merge')\"", 'gh pr merge'],
+  ["Write-Output @('gh','pr','merge','5')\n| Join-String -Separator ' ' | cmd", 'gh pr merge'],
+  ["'gh','pr','merge','5'\r\n  # joined\n  | Join-String -Separator ' ' | cmd", 'gh pr merge'],
+  // Cases from review run 6 (e863784, whose print-only skip was later removed): a script block's
+  // argument, a line-continued assignment, a brace inside `${...}` and an alias loaded from a file are
+  // all commands.
+  ["& { cmd /c \"$($args[0])\" } 'gh','pr','merge','5'", 'gh pr merge'],
+  [". { cmd /c \"$args\" } 'gh','pr','merge'", 'gh pr merge'],
+  ["& { cmd /c \"$($args[0])\" } Write-Output @('gh','pr','merge','5')", 'gh pr merge'],
+  ["$c =\n'gh','pr','merge','5'\ncmd /c \"$c\"", 'gh pr merge'],
+  ["$env:X =\n'gh','pr','merge'\ncmd /c \"%X%\"", 'gh pr merge'],
+  ["$c = '{0} {1} {2} {3}' -f\n'gh','pr','merge','5'\ncmd /c \"$c\"", 'gh pr merge'],
+  ["${a`}b} = 1\n$c = & {\n'gh','pr','merge','5'\n}\ncmd /c \"$c\"", 'gh pr merge'],
+  ["Set-Content a.csv '\"echo\",\"iex\",\"\",\"AllScope\"'; Import-Alias ./a.csv -Force; echo @('gh','pr','merge','5')", 'gh pr merge'],
+  ["Write-Output @('gh', 'pr', 'merge'); git status", 'gh pr merge'],
+  ["git status\nWrite-Output @('gh', 'pr', 'merge') # the array\nWrite-Output done", 'gh pr merge'],
+  ["Write-Output $('gh', 'pr', 'merge')", 'gh pr merge'],
+];
+// Nesting deeper than the splitter follows falls back to the text scan, never to "allowed", and
+// nesting in strings deep enough to exhaust the stack is caught the same way, without throwing.
+GUARDED_PS.push(['('.repeat(12) + 'git push' + ')'.repeat(12), 'git push']);
+GUARDED_PS.push(['"$('.repeat(5000) + 'git push', 'git push']);
+for (const [cmd, want] of GUARDED_PS) {
+  assert(ps(cmd) === want, `PowerShell ${JSON.stringify(cmd)} -> ${want}`);
+}
+// Review run 8 (Blue, 2026-11-24: "Yes, run 8 fail-closed"). Codex's review of b047805: a command after
+// `return`, `throw` or `exit` wasn't checked. Those keywords are now dropped before the statement is
+// classified (review run 9: once, not by a second pass from a later word), so a review or merge there
+// is still blocked under every login. An array of strings is a command even when it is only printed
+// (Codex's review of 004b8cd; this over-blocks on purpose, failing closed).
+const runEightStart = GUARDED_PS.length; // the loop below checks every case pushed here (review run 9)
+GUARDED_PS.push(
+  ['& { return git push origin HEAD }', 'git push'], // Codex's case on b047805
+  ['return git push', 'git push'],
+  ['throw git push', 'git push'],
+  ['exit git push', 'git push'],
+  ['return `\n  git push', 'git push'],
+  ['& { return gh pr merge 5 }', 'gh pr merge'],
+  ['throw gh pr merge 5', 'gh pr merge'],
+  ['return gh.exe pr review 5 -a', 'gh pr review'],
+  ['RETURN gh pr merge 5', 'gh pr merge'], // keywords are case-insensitive
+  ['exit gh pr ready 5', 'gh pr ready'],
+  ['return return git push', 'git push'],
+  ['if ($ok) { return gh pr create --fill } else { throw "no" }', 'gh pr create'],
+  ['function F { return gh pr ready 5 }; F', 'gh pr ready'],
+  ['return iex "gh pr merge 5"', 'gh pr merge'],
+  ['return Start-Process gh -ArgumentList "pr merge 5"', 'gh pr merge'],
+  ['throw `\n  gh api -X PUT repos/o/r/pulls/5/merge', 'gh api merge'],
+  ["Write-Output @('gh', 'pr', 'merge')", 'gh pr merge'], // Codex's case on 004b8cd: checked again
+  ['Write-Output @("gh", "pr", "merge", "5")', 'gh pr merge'],
+  ["Write-Output ('gh','pr','merge')", 'gh pr merge'],
+  ["Write-Output @(\n  'gh',\n  'pr',\n  'merge'\n)", 'gh pr merge'],
+  ["Write-Output @('git', 'push')", 'git push'],
+  ["'gh', 'pr', 'merge'", 'gh pr merge'],
+  ["Write-Output 'Merging with:'; Write-Output @('gh', 'pr', 'merge')\nWrite-Host done", 'gh pr merge'],
+  ["Write-Host @('gh', 'pr', 'merge')", 'gh pr merge'],
+  ["echo @('gh', 'pr', 'merge')", 'gh pr merge'],
+);
+const runEightCases = GUARDED_PS.slice(runEightStart);
+assert(runEightCases.length === 25 && runEightCases[0][0] === '& { return git push origin HEAD }',
+  `every review run 8 case is checked, Codex's b047805 case first (${runEightCases.length})`);
+for (const [cmd, want] of runEightCases) {
+  assert(ps(cmd) === want, `PowerShell ${JSON.stringify(cmd)} -> ${want} (review run 8)`);
+}
+// The word scan: wherever the words of a guarded command appear in a PowerShell script, the login is
+// checked (blocked only under ABlueAI). Text that only mentions them, a variable or an array that
+// holds them, an escape or a line ending the splitter reads differently: all get the same check.
+const W = (name) => name + guard.PS_WORDS_NOTE;
+const WORDS_PS = [
+  // Text that was left alone before review run 8.
+  ['git stash push -m wip', W('git push')],
+  ['git log --grep=push', W('git push')],
+  ['git commit -m "then git push later"', W('git push')],
+  ["Write-Host 'gh pr create'", W('gh pr create')],
+  ['"git push"', W('git push')],
+  ['$msg = "gh pr ready"', W('gh pr ready')],
+  ['gh pr comment 5 --body "gh pr merge 5 is blocked"', W('gh pr merge')],
+  ["gh pr comment 5 --body @'\nnever gh pr merge 5\n'@", W('gh pr merge')],
+  ["gh pr comment 5 --body 'Independent review (Opus)'", W('gh pr review')],
+  ["git commit -m @'\ngit push and gh pr merge 5 in a message\n'@", W('git push')],
+  ["$body = @'\nRun gh pr create, then git push.\n'@", W('git push')],
+  ['@"\n$(Get-Date) git push\n"@', W('git push')],
+  ['Write-Host "$(Get-Date): git push done"', W('git push')],
+  ['Write-Host "use `$(git push) later"', W('git push')],
+  ['Write-Output "a `"quoted`" git push"', W('git push')],
+  ["Write-Output 'it''s git push'", W('git push')],
+  ['# git push', W('git push')],
+  ['<# gh pr merge 5 #> git status', W('gh pr merge')],
+  ["Get-Content notes.md | Select-String 'git push'", W('git push')],
+  ['Where-Object { $_ -match "git push" }', W('git push')],
+  ["Start-Process notepad -ArgumentList 'git push'", W('git push')],
+  ["Write-Host 'gh', 'pr', 'merge'", W('gh pr merge')],
+  ['Write-Output a, b, c # git push', W('git push')],
+  ['GIT.EXE log; Write-Host PUSH', W('git push')],
+  ['& git.exe... log; Write-Host push', W('git push')],
+  // Commands the splitter can't follow (the header's Known gaps before run 8).
+  ["$p = 'push'; git $p", W('git push')],
+  ["$a = 'pr','merge'; gh @a", W('gh pr merge')],
+  ["$c = 'gh pr create --fill'; iex $c", W('gh pr create')],
+  ["& $gh pr create # $gh = 'gh'", W('gh pr create')],
+  ['"x`ngh pr create" | iex', W('gh pr create')],
+  ['"`u{67}h pr ready 5" | iex', W('gh pr ready')],
+  ['"g`u{0069}t push" | iex', W('git push')],
+  ['cmd /c "g^it pu^sh"', W('git push')],
+  ['"g\\it push" | bash', W('git push')],
+  ["& 'C:\\Program Files\\Git\\mingw64\\libexec\\git-core\\git-push.exe' origin x", W('git push')],
+  ["$m = 'PUT'; gh api repos/o/r/pulls/5/merge -X $m", W('gh api merge')],
+  ["$e = 'repos/o/r/pulls/5/reviews'; gh api $e -f event=APPROVE", W('gh api review')],
+  ['gh api graphql -F query=@q.graphql # mergePullRequest', W('gh api merge')],
+  ["gh api -XPOST ('repos/o/r/pulls/5/' + 'reviews')", W('gh api review')],
+  // Line endings the splitter reads differently from PowerShell (issue #229's area): a comment ended by
+  // a lone CR, a NEL (U+0085) or a line separator (U+2028) can't hide the words.
+  ['Write-Host x # note\rgit push origin x', W('git push')],
+  ['Write-Host x # note\u0085git push origin x', W('git push')],
+  ['Write-Host x # note\u2028git push origin x', W('git push')],
+  ['Write-Host x # note\u2029gh pr ready 5', W('gh pr ready')],
+  ['Write-Host x # note\rgh pr merge 5', W('gh pr merge')],
+];
+for (const [cmd, want] of WORDS_PS) {
+  assert(ps(cmd) === want, `PowerShell ${JSON.stringify(cmd)} -> ${want}`);
+}
+const NOT_GUARDED_PS = [
+  'git status',
+  'npm test',
+  'gh pr view 5',
+  'gh pr checks 5',
+  'gh pr view 5 --json mergeable,mergeStateStatus',
+  'gh pr list --search "review-requested:@me"',
+  "gh pr comment 5 --body 'LGTM, CI is green'",
+  'git log --oneline -5; git fetch origin',
+  'Write-Host "pushed"; git status',
+  'gh api repos/o/r/pulls/5/reviews',
+  'gh api repos/o/r/pulls/5/merge',
+  "gh api graphql -f query='{ viewer { login } }'",
+  '',
+];
+for (const cmd of NOT_GUARDED_PS) {
+  assert(ps(cmd) === null, `PowerShell ${JSON.stringify(cmd)} -> not guarded`);
+}
+
+process.stdout.write('\nthe same PR work through the Bash tool and the PowerShell tool\n');
+// Every command that is the same text in both shells gives the same answer in both.
+for (const cmd of ['gh pr create --fill', 'gh pr new', 'gh pr ready 5', 'git push -u origin x', 'git -C ../wt push',
+  'gh.exe pr create', 'git.exe push', 'npm test && git push', 'gh pr review 5 --approve', 'gh pr merge 5 --squash',
+  'gh api repos/o/r/pulls/5/reviews -f event=APPROVE', 'gh api --method PUT repos/o/r/pulls/5/merge',
+  'git status', 'gh pr view 5']) {
+  assert(ps(cmd) === guard.findGuardedCommand(cmd), `${JSON.stringify(cmd)}: Bash and PowerShell agree (${guard.findGuardedCommand(cmd)})`);
+}
+// Review run 8: where the words appear only as text, PowerShell is stricter (the login check); Bash isn't.
+assert(guard.findGuardedCommand('git commit -m "then git push later"') === null && ps('git commit -m "then git push later"') === W('git push'),
+  'git commit -m "then git push later": Bash leaves it alone, PowerShell checks the login (fail-closed)');
+// The Bash tool's answers don't change: the default mode is Bash, and a PowerShell-only form means
+// nothing new to it, except where Bash runs PowerShell (`pwsh -Command`), which now also reads the
+// script as PowerShell.
+assert(guard.findGuardedCommand("pwsh -Command 'git `\n push'") === 'git push', 'Bash running pwsh -Command: the script is read as PowerShell too');
+assert(guard.findGuardedCommand('pwsh -Command "Start-Process gh \'pr merge 5\'"') === 'gh pr merge', 'Bash running pwsh -Command: Start-Process inside it is found');
+assert(guard.findGuardedCommand('pwsh -NoProfile -Command git push origin x') === 'git push', 'Bash running pwsh -Command with an unquoted script: every word after -Command is the script');
+assert(guard.findGuardedCommand('pwsh -Command "gh pr comment 5 --body \'never gh pr merge 5\'"') === W('gh pr merge'),
+  'Bash running pwsh -Command: guarded words inside the script\'s quotes get the login check (the word scan; review run 8)');
+assert(guard.findGuardedCommand('pwsh -c "& { return git push }"') === 'git push', 'Bash running pwsh -c with a return before git push: found');
+assert(guard.findGuardedCommand('powershell -Command "& { return gh pr merge 5 }"') === 'gh pr merge', 'Bash running powershell -Command with a return before gh pr merge: found');
+
+process.stdout.write('\ndecide(): the PowerShell tool\n');
+const pwsh = (command) => ({ hook_event_name: 'PreToolUse', tool_name: 'PowerShell', tool_input: { command } });
+{
+  const v = guard.decide(pwsh('& gh.exe pr create --fill'), () => ({ login: 'ABlueAI' }));
+  assert(v.exitCode === 2 && /ABlueAI/.test(v.stderr) && /gh pr create/.test(v.stderr), 'ABlueAI + PowerShell & gh.exe pr create: exit 2 with the block message');
+  for (const cmd of ['git push', 'gh pr ready 5', 'git -C ..\\wt push', "git commit -m @'\nmsg\n'@\ngit push"]) {
+    assert(guard.decide(pwsh(cmd), () => ({ login: 'ABlueAI' })).exitCode === 2, `ABlueAI + PowerShell ${JSON.stringify(cmd)}: exit 2`);
+  }
+  const ok = guard.decide(pwsh('git push -u origin x'), () => ({ login: 'ABlueAgent' }));
+  assert(ok.exitCode === 0 && !ok.stderr && !ok.systemMessage, 'ABlueAgent + PowerShell git push: exit 0, silent');
+  const off = guard.decide(pwsh('gh pr create'), () => ({ error: 'gh is not installed or not on PATH' }));
+  assert(off.exitCode === 0 && /couldn't check/.test(off.systemMessage), 'PowerShell, gh not installed: exit 0 with the notice (fails open, as for Bash)');
+  let asked = 0;
+  const never = () => { asked++; return { login: 'ABlueAgent' }; };
+  const REVIEW_MERGE_PS = GUARDED_PS.filter(([, want]) => guard.ALWAYS_BLOCKED.has(want)).map(([cmd]) => cmd);
+  let blocked = 0;
+  for (const cmd of REVIEW_MERGE_PS) if (guard.decide(pwsh(cmd), never).exitCode === 2) blocked++;
+  assert(REVIEW_MERGE_PS.length >= 12 && blocked === REVIEW_MERGE_PS.length,
+    `every PowerShell review and merge command exits 2 under ABlueAgent (${blocked} of ${REVIEW_MERGE_PS.length})`);
+  assert(asked === 0, 'a PowerShell review or merge command is blocked without a gh call');
+  let psCalls = 0;
+  for (const cmd of NOT_GUARDED_PS) guard.decide(pwsh(cmd), () => { psCalls++; return { login: 'ABlueAI' }; });
+  assert(psCalls === 0, `no gh call for any non-matching PowerShell command (${psCalls} calls)`);
+  // Review run 1: a PowerShell call with no command says so instead of allowing in silence.
+  const missing = guard.decide({ tool_name: 'PowerShell', tool_input: {} }, () => ({ login: 'ABlueAI' }));
+  assert(missing.exitCode === 0 && /couldn't read the PowerShell tool's command/.test(missing.systemMessage) && !/\n/.test(missing.systemMessage),
+    'PowerShell with no tool_input.command: exit 0 with a one-line notice');
+  // Codex's review of 004b8cd: printing an array that spells a merge is checked again and, as a merge
+  // command, blocked under any login without a gh call (fails closed; Blue, 2026-11-24). Giving one to
+  // the call operator is blocked the same way.
+  let arrayAsked = 0;
+  const arrayLogin = () => { arrayAsked++; return { login: 'ABlueAgent' }; };
+  const printed = guard.decide(pwsh("Write-Output @('gh', 'pr', 'merge')"), arrayLogin);
+  assert(printed.exitCode === 2 && /Agents never approve or merge/.test(printed.stderr) && arrayAsked === 0,
+    "PowerShell Write-Output @('gh', 'pr', 'merge'): exit 2 under any login, no gh call (fails closed)");
+  const called = guard.decide(pwsh("& 'gh' @('pr','merge')"), arrayLogin);
+  assert(called.exitCode === 2 && /Agents never approve or merge/.test(called.stderr) && arrayAsked === 0,
+    "PowerShell & 'gh' @('pr','merge'): exit 2 under any login, no gh call");
+  assert(guard.findGuardedCommand("pwsh -Command \"Write-Output @('gh','pr','merge')\"") === 'gh pr merge',
+    'Bash running pwsh -Command that prints an array: guarded');
+  // Codex's review of b047805: a command after `return` is checked. A push gets the login check; a
+  // review or merge is blocked under any login without a gh call.
+  for (const cmd of ['& { return git push origin HEAD }', 'throw git push']) {
+    let n = 0;
+    const blue = guard.decide(pwsh(cmd), () => { n++; return { login: 'ABlueAI' }; });
+    assert(blue.exitCode === 2 && blue.checked === true && /git push/.test(blue.stderr) && n === 1, `ABlueAI + PowerShell ${JSON.stringify(cmd)}: exit 2 after one login check`);
+    const agentOk = guard.decide(pwsh(cmd), () => ({ login: 'ABlueAgent' }));
+    assert(agentOk.exitCode === 0 && !agentOk.stderr && !agentOk.systemMessage, `ABlueAgent + PowerShell ${JSON.stringify(cmd)}: exit 0, silent`);
+  }
+  for (const cmd of ['& { return gh pr merge 5 }', 'throw gh pr merge 5', 'return gh pr review 5 -a']) {
+    let n = 0;
+    const v = guard.decide(pwsh(cmd), () => { n++; return { login: 'ABlueAgent' }; });
+    assert(v.exitCode === 2 && /Agents never approve or merge/.test(v.stderr) && n === 0, `ABlueAgent + PowerShell ${JSON.stringify(cmd)}: exit 2, no gh call`);
+  }
+  // The word scan: one login check; blocked under ABlueAI with the block message, allowed silently under
+  // ABlueAgent, and the "couldn't check" notice when gh can't answer, as for any login-dependent command.
+  let wordsBlue = 0, wordsAgent = 0, wordsAsked = 0;
+  for (const [cmd] of WORDS_PS) {
+    const blue = guard.decide(pwsh(cmd), () => { wordsAsked++; return { login: 'ABlueAI' }; });
+    if (blue.exitCode === 2 && blue.checked === true && /Blocked by Mako's account guard/.test(blue.stderr) && blue.stderr.includes(guard.PS_WORDS_NOTE)) wordsBlue++;
+    const agentV = guard.decide(pwsh(cmd), () => { wordsAsked++; return { login: 'ABlueAgent' }; });
+    if (agentV.exitCode === 0 && !agentV.stderr && !agentV.systemMessage) wordsAgent++;
+  }
+  assert(wordsBlue === WORDS_PS.length, `every word-scan case exits 2 under ABlueAI with the block message (${wordsBlue} of ${WORDS_PS.length})`);
+  assert(wordsAgent === WORDS_PS.length, `every word-scan case exits 0, silent, under ABlueAgent (${wordsAgent} of ${WORDS_PS.length})`);
+  assert(wordsAsked === 2 * WORDS_PS.length, `one gh login check per word-scan decision (${wordsAsked} for ${2 * WORDS_PS.length})`);
+  const wordsOff = guard.decide(pwsh("Write-Host 'git push'"), () => ({ error: 'gh is not installed or not on PATH' }));
+  assert(wordsOff.exitCode === 0 && /couldn't check/.test(wordsOff.systemMessage), 'word scan, gh not installed: exit 0 with the notice (fails open, as before)');
+  // A review or merge command the splitter finds still wins over the word scan's login check.
+  assert(ps("Write-Host 'git push'; gh pr merge 5") === 'gh pr merge', 'a parsed merge wins over a word-scan push');
+  assert(ps("git push; Write-Host 'gh pr merge'") === 'git push', 'a parsed push comes before a word-scan merge (both get the login check)');
+  // Review run 9: only `return`, `throw` and `exit` start a command later in the statement. Any other
+  // first word (Write-Host, echo, cmd without /c) isn't read as running what follows, so the words of a
+  // guarded command there get the word scan's login check, not the every-login block.
+  for (const cmd of ['Write-Host gh pr merge 5', 'Write-Output return git push', 'cmd /c echo git push']) {
+    const hit = ps(cmd);
+    assert(typeof hit === 'string' && hit.endsWith(guard.PS_WORDS_NOTE) && !guard.ALWAYS_BLOCKED.has(hit),
+      `PowerShell ${JSON.stringify(cmd)}: the word scan's login check only (${hit})`);
+  }
+  // Review run 9: a guarded statement next to a long nested chain that holds no guarded command is
+  // classified in about the same time as on b047805. The second pass from a later word (review run 8)
+  // doubled the work at every nesting level and ran past the hook's 30-second timeout (fails open).
+  for (const [label, cmd, limit] of [
+    ['git push; 10 nested pwsh -c, 10 KB', 'git push; ' + 'pwsh -c '.repeat(10) + 'x '.repeat(5000), 4000],
+    ['git push; 10 nested iex, 100 KB', 'git push; ' + 'iex '.repeat(10) + 'x '.repeat(50000), 4000],
+    ['git push; return and 10 nested pwsh -c, 10 KB', 'git push; return ' + 'pwsh -c '.repeat(10) + 'x '.repeat(5000), 4000],
+    ['git push; 10 x (return pwsh -c), 10 KB', 'git push; ' + 'return pwsh -c '.repeat(10) + 'x '.repeat(5000), 4000]]) {
+    const t0 = Date.now();
+    const hit = guard.findGuardedCommand(cmd, 0, 'ps');
+    const ms = Date.now() - t0;
+    assert(hit === 'git push' && ms < limit, `PowerShell ${label}: git push found in ${ms} ms (under ${limit})`);
+  }
+  // Review run 6: no input makes the splitter backtrack. Long comment lines and many block comments
+  // after line breaks finish quickly (a pattern that backtracked took seconds at about 30 characters).
+  for (const [label, cmd] of [['a line of 200 #', 'Write-Output a\n' + '#'.repeat(200) + '\nGet-Thing'],
+    ['200 block comments', 'Write-Output a\n' + '<#x#>'.repeat(200) + '\nGet-Thing'],
+    ['2,000 lines of #', ('Write-Output a\n' + '#'.repeat(40) + '\n').repeat(2000)]]) {
+    const t0 = Date.now();
+    guard.findGuardedCommand(cmd, 0, 'ps');
+    const ms = Date.now() - t0;
+    assert(ms < 2000, `PowerShell ${label}: classified in ${ms} ms (under 2,000)`);
+  }
+  // Review run 8: the word scan and the after-a-keyword check stay linear on long and odd inputs.
+  for (const [label, cmd] of [['50,000 gh pr merge', 'gh pr merge 5 '.repeat(50000)],
+    ['100,000 backticks', '`'.repeat(100000) + 'git push'],
+    ['50,000 unfinished `u{', '`u{'.repeat(50000) + '67'],
+    ['50,000 `u{67}', '`u{67}'.repeat(50000)],
+    ['100,000 quotes', "'".repeat(100000)],
+    ['20,000 returns', 'return '.repeat(20000) + 'git push'],
+    ['20,000 gits on one line', 'Write-Host ' + 'git '.repeat(20000)],
+    ['20,000 iex', 'iex '.repeat(20000) + 'git push'],
+    ['30,000 short statements', 'return gh pr view 5; '.repeat(30000)],
+    ['100,000 dots', '.'.repeat(100000) + 'a'],
+    ['100,000 a.', 'a.'.repeat(100000)],
+    ['100,000 dashes', '-'.repeat(100000) + 'x']]) {
+    const t0 = Date.now();
+    const threw = (() => { try { guard.findGuardedCommand(cmd, 0, 'ps'); return false; } catch { return true; } })();
+    const ms = Date.now() - t0;
+    assert(!threw && ms < 2000, `PowerShell ${label}: classified in ${ms} ms (under 2,000), no throw`);
+  }
+  // A seeded fuzz: random PowerShell-ish scripts never throw, finish quickly, and any script that holds
+  // `git` and `push` as words (with random text between, after and around them) is always guarded.
+  let seed = 218;
+  const rand = (n) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
+  const PIECES = ['git', 'push', 'gh', 'pr', 'merge', 'return', 'throw', '&', '.', '|', ';', '{', '}', '(', ')', '@(', '$(', '$x', '=', ',',
+    "'", '"', '`', '`n', '`u{67}', '#', '<#', '#>', '@\'\n', '\n\'@', '\n', '\r', '\r\n', ' ', '\t', 'iex', 'cmd /c', 'Start-Process', '--%', '^', '\\', '\u2028', '\u0085'];
+  let fuzzThrew = 0, fuzzSlow = 0, fuzzMissed = 0, fuzzWorst = 0;
+  for (let n = 0; n < 3000; n++) {
+    let text = '';
+    for (let k = rand(40); k > 0; k--) text += PIECES[rand(PIECES.length)];
+    const sep = [' ', '\n', ';', ',', "' '", '`\n', ' # ', '\r'][rand(8)];
+    const guardedText = text + ' git' + sep + 'push ' + text;
+    for (const t of [text, guardedText]) {
+      const t0 = Date.now();
+      let r;
+      try { r = guard.findGuardedCommand(t, 0, 'ps'); } catch { fuzzThrew++; }
+      const ms = Date.now() - t0;
+      fuzzWorst = Math.max(fuzzWorst, ms);
+      if (ms > 500) fuzzSlow++;
+      if (t === guardedText && !r) fuzzMissed++;
+    }
+  }
+  assert(fuzzThrew === 0 && fuzzSlow === 0, `fuzz: 6,000 PowerShell inputs, no throw, none over 500 ms (slowest ${fuzzWorst} ms)`);
+  assert(fuzzMissed === 0, `fuzz: every input holding the words git and push is guarded (${fuzzMissed} missed)`);
+  const bashMissing = guard.decide({ tool_name: 'Bash', tool_input: {} }, () => ({ login: 'ABlueAI' }));
+  assert(bashMissing.exitCode === 0 && !bashMissing.systemMessage, 'Bash with no command: unchanged (exit 0, silent)');
+  // Only the two tools' exact names are checked (the names hooks see: docs, tools reference).
+  assert(guard.decide({ tool_name: 'Read', tool_input: { command: 'git push' } }, () => ({ login: 'ABlueAI' })).exitCode === 0,
+    'a tool other than Bash or PowerShell is not checked');
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -424,6 +913,32 @@ const ghCalls = () => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8')
   const read = runHook('gh api repos/o/r/pulls/7/reviews --jq ".[].state"', { mode: 'ABlueAI' });
   assert(read.status === 0 && read.stdout === '' && read.stderr === '', 'a read of /reviews is not blocked and starts no gh');
 }
+{
+  // The PowerShell tool, end to end: the same input Claude Code sends, with tool_name "PowerShell".
+  const callsBefore = ghCalls().length;
+  const r = runHook('& gh.exe pr create --fill', { mode: 'ABlueAI', toolName: 'PowerShell' });
+  assert(r.status === 2 && /Blocked by Mako's account guard/.test(r.stderr) && /gh pr create/.test(r.stderr),
+    `ABlueAI + PowerShell & gh.exe pr create: exit 2 end to end (got ${r.status})`);
+  const newCalls = ghCalls().slice(callsBefore);
+  assert(newCalls.length === 1 && newCalls[0] === 'user --jq .login', 'PowerShell: this run asked the fake gh `api user --jq .login` once');
+  const push = runHook('git -C ..\\wt push `\n  origin x', { mode: 'ABlueAI', toolName: 'PowerShell' });
+  assert(push.status === 2 && /git push/.test(push.stderr), `ABlueAI + PowerShell git -C <dir> push with a line continuation: exit 2 (got ${push.status})`);
+  const agent = runHook('git push -u origin x', { mode: 'ABlueAgent', toolName: 'PowerShell' });
+  assert(agent.status === 0 && agent.stdout.trim() === '' && agent.stderr.trim() === '', 'ABlueAgent + PowerShell git push: exit 0, nothing printed');
+  const before = ghCalls().length;
+  const merge = runHook("Start-Process gh 'pr merge 5'", { mode: 'ABlueAgent', toolName: 'PowerShell' });
+  assert(merge.status === 2 && /Agents never approve or merge/.test(merge.stderr), 'ABlueAgent + PowerShell Start-Process gh pr merge: exit 2 end to end');
+  const quiet = runHook('git status', { mode: 'ABlueAI', toolName: 'PowerShell' });
+  assert(quiet.status === 0 && quiet.stdout === '' && quiet.stderr === '', 'ABlueAI + PowerShell git status: exit 0, silent');
+  assert(ghCalls().length === before, 'PowerShell: a review or merge block and a non-matching command never started gh');
+  // Review run 8: words in a here-string now get the login check, end to end.
+  const words = runHook("git commit -m @'\ngit push later\n'@", { mode: 'ABlueAI', toolName: 'PowerShell' });
+  assert(words.status === 2 && words.stderr.includes(guard.PS_WORDS_NOTE), `ABlueAI + PowerShell commit with "git push" in its here-string: exit 2 (got ${words.status})`);
+  const wordsAgentRun = runHook("git commit -m @'\ngit push later\n'@", { mode: 'ABlueAgent', toolName: 'PowerShell' });
+  assert(wordsAgentRun.status === 0 && wordsAgentRun.stdout.trim() === '' && wordsAgentRun.stderr.trim() === '', 'ABlueAgent + the same commit: exit 0, nothing printed');
+  const returned = runHook('& { return git push origin HEAD }', { mode: 'ABlueAI', toolName: 'PowerShell' });
+  assert(returned.status === 2 && /git push/.test(returned.stderr), `ABlueAI + PowerShell & { return git push origin HEAD }: exit 2 end to end (got ${returned.status})`);
+}
 try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* temp cleanup is best effort */ }
 
 // ---------------------------------------------------------------------------------------------
@@ -473,9 +988,9 @@ for (const rule of settings.permissions.deny) {
 assert(!settings.permissions.deny.some((r) => /^Bash\(gh api \*/.test(r)),
   'a gh api deny starts with the endpoint, so a comment body that merely says "reviews" or "merge" is not matched by a leading wildcard');
 const groups = (settings.hooks && settings.hooks.PreToolUse) || [];
-const entry = groups.find((g) => g.matcher === 'Bash');
+const entry = groups.find((g) => g.matcher === 'Bash|PowerShell');
 const hook = entry && (entry.hooks || []).find((h) => /account-guard\.js$/.test((h.args || [])[0] || ''));
-assert(!!hook, 'a PreToolUse hook with matcher "Bash" runs account-guard.js');
+assert(!!hook, 'a PreToolUse hook with matcher "Bash|PowerShell" runs account-guard.js (the docs: "The matcher `Bash|PowerShell` covers the PowerShell tool as well as Bash")');
 assert(hook && hook.type === 'command' && hook.command === 'node', 'exec form: command "node"');
 assert(hook && JSON.stringify(hook.args) === JSON.stringify(['${CLAUDE_PROJECT_DIR}/.claude/hooks/account-guard.js']),
   'args point at the script through ${CLAUDE_PROJECT_DIR}');
@@ -488,6 +1003,8 @@ assert(fs.existsSync(path.join(REPO_ROOT, '.claude', 'hooks', 'account-guard.js'
   const header = fs.readFileSync(path.join(REPO_ROOT, '.claude', 'hooks', 'account-guard.js'), 'utf8').split('\n').filter((l) => l.startsWith('//')).join('\n');
   for (const login of AGENT_LOGINS) assert(header.includes(login), `the hook's header names the agent login ${login} (shared list: .github/scripts/agent-logins.js)`);
   assert(/Known gaps/.test(header) && /gh api/.test(header.slice(header.indexOf('Known gaps'))), "the header's known-gaps list covers the gh api review and merge cases");
+  assert(/Bash\|PowerShell/.test(header) && !/tools other than Bash \(Claude Code's PowerShell tool/.test(header),
+    "the header says the hook runs for the PowerShell tool and no longer lists it as a gap (S37)");
 }
 
 process.stdout.write(`\naccount-guard: ${passed} passed, ${failed} failed\n`);

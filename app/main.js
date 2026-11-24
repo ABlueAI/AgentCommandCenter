@@ -26,7 +26,7 @@ const { validateTask } = require('./task-name');
 const { readBuildInfo } = require('./build-info');
 // Navigation-lockdown decisions (deny window.open / off-app navigation) and the shell-free launcher
 // arg builders. Both dependency-free + unit-tested (nav-guard.test.js / launchers.test.js).
-const { decideWindowOpen, decideNavigation, refusalLine } = require('./nav-guard');
+const { createNavGuards } = require('./nav-guard');
 // P12 launcher hardening: shell-free launcher arg builders + deterministic Code.exe / wt.exe
 // resolution (no cmd.exe intermediary), and the main-owned directory AUTHORIZER (a launcher may open
 // only the current repo root or one of its live git worktrees). Both dependency-free + unit-tested
@@ -557,22 +557,17 @@ function createWindow() {
   // uses (refuse-visibly rule): a blocked navigation/popup must never be a silent no-op. refusalLine
   // strips control chars + truncates the (attacker-influenced) URL so this can't become a log sink.
   const sendRefusal = (line) => { if (win && !win.isDestroyed()) win.webContents.send('main-error', line); };
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    const d = decideWindowOpen(url);
-    if (d.externalUrl) shell.openExternal(d.externalUrl);
-    sendRefusal(refusalLine('window.open', url, !!d.externalUrl));
-    return { action: d.action };
+  // Issue #163: the handlers come from nav-guard.js createNavGuards. A link reaches the OS browser
+  // only as the decision's externalUrl (the Quick Links URL policy, then http(s) only, normalized:
+  // the same rule as open-external), and a failed OS open is reported, never dropped.
+  const navGuards = createNavGuards({
+    entryUrl: ENTRY_URL,
+    openExternal: (url) => shell.openExternal(url),
+    send: sendRefusal,
   });
-  const guardNav = (label) => (e, url) => {
-    const d = decideNavigation(url, ENTRY_URL);
-    if (!d.allow) {
-      e.preventDefault();
-      if (d.externalUrl) shell.openExternal(d.externalUrl);
-      sendRefusal(refusalLine(label, url, !!d.externalUrl));
-    }
-  };
-  win.webContents.on('will-navigate', guardNav('will-navigate'));
-  win.webContents.on('will-redirect', guardNav('will-redirect'));
+  win.webContents.setWindowOpenHandler(navGuards.onWindowOpen);
+  win.webContents.on('will-navigate', navGuards.onNavigate('will-navigate'));
+  win.webContents.on('will-redirect', navGuards.onNavigate('will-redirect'));
 }
 
 app.whenReady().then(() => {
@@ -1332,7 +1327,15 @@ ipcMain.handle('page-reader-prepare', async (e, req) => {
   const sender = pageReaderGate.assess(e);
   if (!sender.ok) return { ok: false, error: sender.reason };
   const checked = pageReaderMod.validatePageUrl(req && typeof req === 'object' ? req.url : undefined);
-  if (!checked.ok) return { ok: false, error: checked.reason };
+  if (!checked.ok) {
+    // Issue #162: say plainly why a local or private address is refused.
+    const local = checked.reason === pageReaderMod.REASON.NOT_PUBLIC_ADDRESS || checked.reason === pageReaderMod.REASON.LOCAL_NAME;
+    if (local) return { ok: false, error: checked.reason, hint: 'The Page Reader reads public web pages only, never this PC or your local network.' };
+    if (checked.reason === pageReaderMod.REASON.CHECK_UNAVAILABLE) {
+      return { ok: false, error: checked.reason, hint: 'The Page Reader\'s address check is not installed: run npm ci in the app folder, then restart Mako.' };
+    }
+    return { ok: false, error: checked.reason };
+  }
   if (!fs.existsSync(PAGE_READER_MCP_CLI)) {
     return { ok: false, error: 'page-reader-mcp-missing', hint: 'Playwright MCP is not installed: run npm ci in the app folder, then restart Mako.' };
   }

@@ -36,6 +36,20 @@ pending Blue (PR #241)**; merging that PR approves it.
 | A cloud session opens S56's 9 bug issues from Codex's renderer audit so Codex can build S56 next. Done 2026-11-24 as #232 to #240, listed on #197; the cloud session that opened them judged none to be a security gap (builder's reading, not Blue's). | "Yes, open them" |
 | S56's row stops being tagged Sensitive: its clause about a bug that is a security gap no longer uses the word the plan sync reads as the tag, so #197 loses the `sensitive` label and the row fits the Codex builder lane. A bug that turns out to be a security gap still stays with Claude. | "Fix the Sensitive tag on S56 in the plan" |
 
+## 2026-11-23 to 2026-11-24: PR #218 (S37), review runs past the cap and the fail-closed word scan
+
+Blue gave these in the sessions that worked on PR #218. The quotes in the first three rows are as
+those sessions relayed them in PR #218's TLDR and review comments; the last row's is his words in the
+session that ran review run 9. Each run past 5 is a one-time exception to AGENTS.md "The review
+loop" ("At most 5 runs per PR") for PR #218 only; the rule itself is unchanged.
+
+| Decision | Blue's words |
+|---|---|
+| Codex's finding on PR #218 (head `004b8cd`) is handled on the PR, so the PR was pushed to after it was marked ready, which dismissed his approval of `004b8cd` (2026-11-23). | "yes to both" |
+| Review run 6 on PR #218, then run 7, one at a time (2026-11-24). | "run 6 on #218" · "run 7 on #218" |
+| Review run 8 on PR #218, with the PowerShell check failing closed: a PowerShell script that names a guarded command's words anywhere gets the login check, instead of more parsing to tell a printed value from a run command (2026-11-24). | "Yes, run 8 fail-closed" |
+| Review run 9 on PR #218, for run 8's open medium and its three lows (2026-11-24). | "run review 9" |
+
 ## 2026-11-23: S54's design (Claude video analysis)
 
 Blue decided this in his main chat; the hand-off to the Claude session that rebuilt PR #230 relayed
