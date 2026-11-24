@@ -53,7 +53,10 @@
  * RUNTIME TOOL ALLOWLIST (S58). A well-formed call for any tool other than HOOK_ALLOWED_TOOLS (and the
  * page-reader's two MCP tools above) refuses with a constant `[fence-tool-not-allowed]` reason, so a
  * matcher that routes more tools here (or a Claude Code version whose matcher reaches a tool it didn't
- * before) fails closed instead of reaching the path check, which allows any call with no path. The list
+ * before) is refused instead of reaching the path check, which allows any call with no path. This is a
+ * second layer: what keeps other tools away from a fenced role is its `tools:` line and main's
+ * --disallowedTools, and only tools its matcher names reach this hook at all. NotebookEdit is refused
+ * here outright; `notebook_path` below is read only for malformed input in `disabled` mode. The list
  * equals ALLOWED_TOOLS in app/role-fence-policy.js (tripwire-tested in app/web-reading-fence.test.js).
  *
  * MALFORMED INPUT (stdin not JSON, not an object, or `tool_name` not a string) refuses unless the mode

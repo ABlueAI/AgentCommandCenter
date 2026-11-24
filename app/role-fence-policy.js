@@ -133,15 +133,19 @@ function controlledWebFetchLaunch(input) {
 }
 
 // S58 FENCED WEB-READING AGENTS. Every agent that reads the open web runs fenced: this tool
-// allowlist plus the fence hook, as S15's page reader does. A tool READS THE WEB when it is one of
-// WEB_READING_TOOLS or any MCP tool (`mcp__` prefix): an MCP server can fetch anything, so an MCP
-// tool counts as web-reading unless a reviewed grant above says exactly what it may do. `Bash` can
-// reach the network too, but it is FORBIDDEN_TOOLS for every fenced role and it is the builder's
-// ordinary shell, so it is not in this list (docs/PLAN-1.1.md S58 names the boundary).
+// allowlist plus the fence hook, as S15's page reader does. Decided by ALLOWLIST, not by naming the
+// web tools: a tool counts as able to reach the web unless it is in NON_WEB_TOOLS. So `WebSearch`,
+// `WebFetch`, every MCP tool (an MCP server can fetch anything), the delegation tools `Agent` and
+// `Task` (a subagent they start has WebFetch and WebSearch by default and runs outside this fence)
+// and any tool name a future Claude Code adds all count, and a role declaring one must be fenced.
+// `Bash` can reach the network too; it is in NON_WEB_TOOLS only because it is the builder's ordinary
+// shell, and it is FORBIDDEN_TOOLS for every fenced role. That boundary is S58's stated scope: the
+// builder and bare `claude` panes are unfenced by design (docs/PLAN-1.1.md S58, PR #245).
 const WEB_READING_TOOLS = Object.freeze(['WebSearch', 'WebFetch']);
+const NON_WEB_TOOLS = Object.freeze(['Read', 'Grep', 'Glob', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'TodoWrite', 'Bash']);
 
 function isWebReadingTool(t) {
-  return typeof t === 'string' && (WEB_READING_TOOLS.indexOf(t) !== -1 || t.indexOf('mcp__') === 0);
+  return typeof t !== 'string' || NON_WEB_TOOLS.indexOf(t) === -1;
 }
 
 const WEB_FENCE_PROBLEM = Object.freeze({
@@ -161,7 +165,7 @@ const WEB_FENCE_PROBLEM = Object.freeze({
  * `checkFenced(name, text)` runs assertFencedRoleDefinition for a fenced role. An empty result means:
  *   - every definition parses and declares its tools (an omitted `tools:` inherits every tool,
  *     WebFetch and WebSearch included, so it counts as web-reading and must be fenced or refused);
- *   - every definition that declares a web-reading tool is fenced;
+ *   - every definition that declares a tool outside NON_WEB_TOOLS (isWebReadingTool) is fenced;
  *   - every fenced definition passes the fence policy (allowlist, hook entry, matcher coverage).
  * Problems are bounded constants plus the definition's file name and, for FENCE_REFUSED, the
  * policy's own reason constant.
@@ -188,7 +192,7 @@ function webReadingFenceProblems(input) {
     }
     if (isFenced) {
       let r;
-      try { r = inp.checkFenced(parsed.name, d.text); } catch (e) { r = { ok: false, reason: 'check-threw' }; }
+      try { r = inp.checkFenced(parsed.name, d.text); } catch (e) { r = { ok: false, reason: 'check-threw:' + String((e && (e.code || e.name)) || 'error') }; }
       if (!r || r.ok !== true) problems.push({ file, problem: WEB_FENCE_PROBLEM.FENCE_REFUSED, detail: r ? r.reason : null });
     }
   }
@@ -337,6 +341,7 @@ module.exports = {
   PATH_CAPABLE_TOOLS: PATH_CAPABLE_TOOLS,
   ROLE_MCP_TOOLS: ROLE_MCP_TOOLS,
   WEB_READING_TOOLS: WEB_READING_TOOLS,
+  NON_WEB_TOOLS: NON_WEB_TOOLS,
   WEB_FENCE_PROBLEM: WEB_FENCE_PROBLEM,
   isWebReadingTool: isWebReadingTool,
   webReadingFenceProblems: webReadingFenceProblems,

@@ -71,14 +71,22 @@ section('1. The drift check catches each way out of the fence');
   const one = (text, fenced) => problemsOf([{ file: 'x.md', text }], fenced || []);
   assert(policy.isWebReadingTool('WebFetch') && policy.isWebReadingTool('WebSearch') && policy.isWebReadingTool('mcp__any__tool'),
     'WebFetch, WebSearch and every MCP tool count as web-reading');
-  assert(!policy.isWebReadingTool('Read') && !policy.isWebReadingTool('Grep') && !policy.isWebReadingTool(undefined),
-    'Read, Grep and a non-string do not');
+  assert(policy.isWebReadingTool('Agent') && policy.isWebReadingTool('Task') && policy.isWebReadingTool('SomeFutureTool') && policy.isWebReadingTool(undefined),
+    'the delegation tools, an unknown tool name and a non-string also count (allowlist, not a list of web tools)');
+  assert(policy.NON_WEB_TOOLS.every((t) => !policy.isWebReadingTool(t)) && policy.WEB_READING_TOOLS.every((t) => policy.NON_WEB_TOOLS.indexOf(t) === -1),
+    'only the reviewed NON_WEB_TOOLS do not, and neither web tool is among them');
   const unfencedFetch = one(reviewerText.replace('tools: Read, Grep, Glob', 'tools: Read, Grep, Glob, WebFetch'));
   assert(unfencedFetch.length === 1 && unfencedFetch[0].problem === P.NOT_FENCED, 'an unfenced role that declares WebFetch is caught');
   const unfencedSearch = one(reviewerText.replace('tools: Read, Grep, Glob', 'tools: Read, WebSearch'));
   assert(unfencedSearch.length === 1 && unfencedSearch[0].problem === P.NOT_FENCED, 'an unfenced role that declares WebSearch is caught');
   const unfencedMcp = one(reviewerText.replace('tools: Read, Grep, Glob', 'tools: Read, mcp__fetch__fetch'));
   assert(unfencedMcp.length === 1 && unfencedMcp[0].problem === P.NOT_FENCED, 'an unfenced role that declares an MCP tool is caught');
+  for (const t of ['Agent', 'Task', 'SomeFutureTool']) {
+    const r = one(reviewerText.replace('tools: Read, Grep, Glob', 'tools: Read, Grep, Glob, ' + t));
+    assert(r.length === 1 && r[0].problem === P.NOT_FENCED, 'an unfenced role that declares ' + t + ' is caught');
+  }
+  const spec = one(reviewerText.replace('tools: Read, Grep, Glob', 'tools: Read, WebFetch(domain:example.org)'));
+  assert(spec.length === 1 && (spec[0].problem === P.UNPARSEABLE || spec[0].problem === P.NOT_FENCED), 'a tool with a permission specifier such as WebFetch(domain:x) is caught');
   const noTools = one(reviewerText.replace('tools: Read, Grep, Glob\n', ''));
   assert(noTools.length === 1 && noTools[0].problem === P.TOOLS_NOT_DECLARED, 'a role with no tools line (inherits every tool, the web ones too) is caught');
   const emptyTools = one(reviewerText.replace('tools: Read, Grep, Glob', 'tools:'));
@@ -95,7 +103,7 @@ section('1. The drift check catches each way out of the fence');
   const dup = problemsOf([{ file: 'a.md', text: reviewerText }, { file: 'b.md', text: reviewerText }], []);
   assert(dup.length === 1 && dup[0].problem === P.DUPLICATE_NAME && dup[0].file === 'b.md', 'two definitions with the same name are caught');
   const threw = policy.webReadingFenceProblems({ definitions: [{ file: 'w.md', text: scoutText }], fencedRoles: ['web-scout'], checkFenced: () => { throw new Error('x'); } });
-  assert(threw.length === 1 && threw[0].problem === P.FENCE_REFUSED, 'a fence check that throws counts as refused');
+  assert(threw.length === 1 && threw[0].problem === P.FENCE_REFUSED && threw[0].detail === 'check-threw:Error', 'a fence check that throws counts as refused, with the error class');
   assert(one(reviewerText).length === 0 && one(scoutText, ['web-scout']).length === 0, 'the tracked reviewer (unfenced) and web-scout (fenced) pass');
 }
 
@@ -156,9 +164,12 @@ section('4. The real guard hook refuses every tool outside the allowlist, visibl
 
   // Every fenced role's deployed matcher routes only allowlisted tools (or its own MCP grant) to the
   // hook, so the hook never refuses a tool the role was granted.
+  let rolesChecked = 0;
+  let toolsRun = 0;
   for (const d of roles) {
     const parsed = parseRoleFrontmatter(deploy(d.text));
     if (!FENCED_ROLES || !FENCED_ROLES.has(parsed.name)) continue;
+    rolesChecked++;
     const matcher = parsed.events.PreToolUse.map((e) => String(e.matcher)).join('|');
     const routed = matcher.split('|');
     const grant = policy.roleMcpTools(parsed.name);
@@ -167,8 +178,11 @@ section('4. The real guard hook refuses every tool outside the allowlist, visibl
     for (const t of parsed.tools.filter((x) => routed.indexOf(x) !== -1 && grant.indexOf(x) === -1 && x !== 'WebFetch')) {
       const r = run(t, t === 'Read' || t === 'Write' ? { file_path: path.join(sandbox, 'report.md'), content: 'x' } : { query: 'x' });
       assert(r.status === 0, parsed.name + ': its declared tool ' + t + ' still passes the hook');
+      toolsRun++;
     }
   }
+  assert(FENCED_ROLES && rolesChecked === FENCED_ROLES.size && toolsRun > 0,
+    'every fenced role\'s matcher was checked (' + rolesChecked + ') and its declared tools were run through the hook (' + toolsRun + ')');
 }
 
 section('5. The hook carries the policy allowlist (drift tripwire)');

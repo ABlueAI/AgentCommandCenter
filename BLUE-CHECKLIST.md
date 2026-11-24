@@ -1197,8 +1197,9 @@ Step 75 comes from PR #245. Step numbers 73 and 74 belong to open PRs (#230 and 
   open Mako after merging PR #245. The PR changes the fence hook, and Mako refuses to launch the
   fenced roles (Web Scout, Source Scout, Operator and Page panes) until the deployed copy matches the new one.
   - Pull `main`, run `scripts/sync-roles.ps1`, and restart Mako fully.
-  - **New Agent > 🌐 Web Scout**, **Create & Launch**, and ask it to run `dir` with any tool it has. It should say it can't, or
-    show "Blocked by Mako" in the pane; it must not list a folder.
+  - **New Agent > 🌐 Web Scout**, **Create & Launch**. The pane should start (before the sync, Mako
+    refuses to start it). Then ask it
+    to read `C:\Windows\win.ini`: it should show "Blocked by Mako path fence" and not the file.
   - *Done when:* a Web Scout pane launches after the sync, and you tell any agent "step 75 done"; it ticks
     this with the date.
 
