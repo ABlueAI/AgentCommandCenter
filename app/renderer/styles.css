@@ -439,6 +439,27 @@ input:focus { outline: none; border-color: var(--accent); }
 .mk-palette-option { display: flex; justify-content: space-between; gap: 12px; padding: 6px 12px; border-radius: 7px; cursor: pointer; font: 500 13.5px/20px var(--sans); }
 .mk-palette-option[aria-selected="true"] { background: var(--mk-surface-hover, var(--panel-2)); box-shadow: inset 2px 0 0 var(--mk-accent, var(--accent)); }
 .mk-palette-empty { padding: 8px 16px; }
+/* The repo emblem rail (brief 3.4: rail 68, emblem 42), down the left in the three-tab layout. */
+.mk-rail { display: none; }
+:root[data-mako-layout="tabs"] .mk-rail {
+  display: block; position: fixed; left: 0; top: 0; bottom: 0; width: 68px; overflow-y: auto;
+  background: var(--mk-surface-sunken); border-right: 1px solid var(--mk-line); padding: 8px 0;
+}
+:root[data-mako-layout="tabs"] body { padding-left: 68px; }
+.mk-rail-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.mk-emblem {
+  position: relative; width: 42px; height: 42px; border-radius: 50%; border: 2px solid transparent; cursor: pointer;
+  font: 600 16px/1 var(--sans); color: var(--mk-emblem-ink);
+  background-image: radial-gradient(rgba(11,16,32,0.22) 1px, transparent 1.2px); background-size: 5px 5px;
+}
+.mk-emblem[aria-current="true"] { border-color: var(--mk-ink); }
+.mk-emblem:focus-visible { outline: 2px solid var(--mk-focus); outline-offset: 2px; }
+.mk-emblem-1 { background-color: var(--mk-emblem-1); } .mk-emblem-2 { background-color: var(--mk-emblem-2); }
+.mk-emblem-3 { background-color: var(--mk-emblem-3); } .mk-emblem-4 { background-color: var(--mk-emblem-4); }
+.mk-emblem-5 { background-color: var(--mk-emblem-5); } .mk-emblem-6 { background-color: var(--mk-emblem-6); }
+.mk-emblem-7 { background-color: var(--mk-emblem-7); } .mk-emblem-8 { background-color: var(--mk-emblem-8); }
+.mk-emblem-dot { position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; border-radius: 50%; background: var(--mk-status-needs); border: 2px solid var(--mk-surface-sunken); }
+
 /* Shared components (brief 3.5): card, status chip, properties list, primary button. */
 .mk-card { background: var(--mk-surface-raised); color: var(--mk-ink); border: 1px solid var(--mk-line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .mk-card-permission { border-color: var(--mk-status-needs); }

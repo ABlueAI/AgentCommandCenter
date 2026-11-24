@@ -180,6 +180,19 @@ async function scenarioPalette() {
     t.key('Enter');
     out.stripeAfterRepo = document.getElementById('makoScopeStripe').textContent;
     out.stripeNoMarkup = document.querySelectorAll('#makoScopeStripe img').length === 0 && window.__pwned === undefined;
+    // The emblem rail: one emblem per repo, the one in use current, a click switches repo.
+    out.railShown = t.shown('#makoRail');
+    const emblems = () => Array.from(document.querySelectorAll('#makoRail .mk-emblem'));
+    out.emblemLetters = emblems().map((b) => b.textContent);
+    out.emblemCurrent = emblems().map((b) => b.getAttribute('aria-current'));
+    emblems()[0].click();
+    await t.waitFor(() => document.getElementById('makoScopeStripe').textContent.startsWith('AgentCommandCenter · '));
+    out.stripeAfterEmblem = document.getElementById('makoScopeStripe').textContent;
+    out.emblemCurrentAfter = emblems().map((b) => b.getAttribute('aria-current'));
+    out.railNoMarkup = document.querySelectorAll('#makoRail img').length === 0;
+    shell.setLayout('old');
+    out.railShownOld = t.shown('#makoRail');
+    shell.setLayout('tabs');
     await t.sleep(50);
     return out;
   })()`);

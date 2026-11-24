@@ -1380,6 +1380,14 @@ async function offerResume() {
 // start, it says so in the Logs tab and the old layout stays the whole app (index.html keeps the
 // shell hidden in markup), never a blank window.
 let shell = null;
+let emblemRail = null;
+// The emblem rail mirrors the repo picker's options (S66).
+function refreshEmblemRail() {
+  if (!emblemRail) return;
+  const sel = $('#repoSelect');
+  const repos = Array.from(sel.options).filter((o) => o.value).map((o) => ({ value: o.value, name: o.textContent }));
+  emblemRail.render(repos, sel.value);
+}
 function shellCommands() {
   const cmds = [];
   // Today's views inside the control room, through their own tab buttons (so the Library keeps its
@@ -1430,6 +1438,20 @@ function startShell(settings) {
   }
   const settingsBtn = $('#makoSettingsTopbar');
   if (settingsBtn) settingsBtn.onclick = () => shell.openSettings();
+  try {
+    emblemRail = window.ccEmblemRail.createEmblemRail({
+      doc: document, host: $('#makoRail'), log: (line) => appendLog(line),
+      onSelect: (value) => {
+        const sel = $('#repoSelect');
+        if (shell.getState().layout === 'tabs' && shell.getState().view !== 'tab') shell.closeSettings();
+        sel.value = value;
+        sel.dispatchEvent(new Event('change'));
+      },
+    });
+  } catch {
+    emblemRail = null;
+    appendLog('[shell] REFUSED: the repo emblem rail did not start (rail-start-failed); use the repo picker\n');
+  }
   // Coming back to the control room: its terminals were display:none, so refit the classic grid
   // (docked panes refit through their own observers).
   window.addEventListener('mako-shell-change', (e) => {
@@ -1674,6 +1696,7 @@ async function refreshRepos() {
 
 async function onRepoChange() {
   if (shell) shell.refreshScope();   // S66: the scope stripe names the repo in use
+  refreshEmblemRail();
   await cc.saveSettings({ selectedRepo: state.repo });
   state.githubUrl = state.repo ? await cc.repoGithubUrl(state.repo) : '';
   await refreshAgents();

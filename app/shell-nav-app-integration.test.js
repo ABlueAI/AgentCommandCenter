@@ -95,6 +95,12 @@ assert(/^AgentCommandCenter · Control room · /.test(p.stripeRepo || ''), 'the 
 eq(p.repoOption, ['Repo: <img src=x onerror=window.__pwned=1>'], 'repos are palette commands, their names shown as text');
 assert(p.repoOptionNoMarkup === true, 'a repo name is never parsed as markup in the palette');
 assert(/^<img src=x onerror=window.__pwned=1> · Control room · /.test(p.stripeAfterRepo || '') && p.stripeNoMarkup === true, 'a palette repo command switches the repo and the stripe, as text');
+assert(p.railShown === true, 'the emblem rail shows in the three-tab layout');
+eq(p.emblemLetters, ['A', 'I'], 'one emblem per repo, with its letter');
+eq(p.emblemCurrent, ['false', 'true'], 'the repo in use is marked current');
+assert(/^AgentCommandCenter · /.test(p.stripeAfterEmblem || '') && JSON.stringify(p.emblemCurrentAfter) === '["true","false"]', 'clicking an emblem switches the repo');
+assert(p.railNoMarkup === true, 'a hostile repo name never becomes markup in the rail');
+assert(p.railShownOld === false, 'the old layout has no rail');
 eq(p.ptyStart, 0, 'no PTY started');
 
 process.stdout.write('\nSettings page and the old layout\n');
