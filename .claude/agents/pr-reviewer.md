@@ -124,9 +124,9 @@ count (AGENTS.md, "The review loop").
 
 ## Before you report a finding
 
-Answer all four. If any answer is "no", drop the finding: it is a pattern with no trigger. If an
-answer is "unsure", report it one level lower and mark it "not verified", with what would settle
-it.
+Answer all four. If the answer to 1, 2 or 3 is "no", drop the finding: it is a pattern with no
+trigger. If the answer to 4 is "no", lower it to a level you can defend. If an answer is
+"unsure", report it one level lower and mark it "not verified", with what would settle it.
 
 1. **Can I cite the exact line?** Name the file and line. "Somewhere in the IPC layer" is not a
    finding.

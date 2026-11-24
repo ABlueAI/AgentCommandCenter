@@ -338,6 +338,9 @@ if (sharedBlocks.length > 0) {
     'pr-reviewer.md returns four-level verdicts');
   assert(fr.includes('5. **Rule compliance.**') && fr.includes('6. **What the diff should have touched.**'),
     'pr-reviewer.md has the rule-compliance and "should have touched" checks');
+  assert(fr.includes('If the answer to 4 is "no", lower it to a level you can defend.')
+    && fr.includes('report it one level lower and mark it "not verified"'),
+    'pr-reviewer.md lowers, never drops, a real finding whose severity is wrong, and marks unsure ones not verified');
   assert(fr.includes('**CRITICAL and HIGH need proof.**') && fr.includes('**Zero findings is a valid review.**'),
     "pr-reviewer.md keeps code-reviewer's proof rule and zero-findings rule");
   assert(reviewerText.includes('LICENSES/MIT-ECC.txt') && reviewerText.includes('d2ef2680594f9a17526a6e1a2e18b3d242c5d17b'),
