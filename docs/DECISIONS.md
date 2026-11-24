@@ -3,6 +3,17 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-15: the sanitizer test (S41, issue #172; recorded 2026-11-24 by PR #228)
+
+Blue answered issue #172's questions on 2026-11-15. Recorded from the issue's "Decisions" section,
+which quotes him.
+
+| Decision | Blue's words |
+|---|---|
+| The home-folder paths already in tracked files are allowlisted per file with exact counts; any new mention fails CI. | "Allowlist them" |
+| The recommended answers: built from the issue by a cloud session as `ABlueAgent`; the test values switch to a made-up user name in the same PR; an email address is flagged when its domain isn't on a short safe list; a small secret backstop stays even though push protection is on. | "yes, Go on the sanitizer test with my recommended answers" |
+| The build includes the "top professional" additions (issue #172 rules 1 to 7: placeholder list, safe domains, ratchet allowlist, masked output, self-tests). | "lets add What a top professional would add." |
+
 ## 2026-11-23: Blue's answers on the 1.1 schedule (S61)
 
 Blue answered the 1.1 schedule's open decisions in his main chat, and approved its text to go
