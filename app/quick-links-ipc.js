@@ -16,9 +16,17 @@ const IPC_REASON = Object.freeze({
 const TRUST_REASONS = Object.freeze([
   'no-trusted-window', 'untrusted-sender', 'not-main-frame', 'untrusted-document',
 ]);
+// S55 Firefox preset refusals (quick-links-presets.js and launchers.js resolveFirefoxExe).
+const PRESET_REASONS = Object.freeze([
+  'presets-file-missing', 'presets-file-not-regular', 'presets-file-unreadable', 'presets-invalid-utf8',
+  'presets-invalid', 'preset-urls-invalid', 'preset-https-required',
+  'firefox-platform-unsupported', 'firefox-profile-missing', 'firefox-profiles-unreadable',
+  'firefox-profiles-invalid', 'firefox-profile-ambiguous', 'firefox-profile-path-invalid',
+  'firefox-profile-unreadable', 'firefox-not-found', 'firefox-executable-unreadable', 'firefox-launch-failed',
+]);
 const ALLOWED_REASONS = new Set([
   ...Object.values(policy.REASON), ...Object.values(STORE_REASON), ...Object.values(IPC_REASON),
-  ...TRUST_REASONS,
+  ...TRUST_REASONS, ...PRESET_REASONS,
 ]);
 
 function createQuickLinksIpc(deps) {
@@ -29,6 +37,10 @@ function createQuickLinksIpc(deps) {
     throw new Error('quick-links-ipc: store with load/saveText is required');
   }
   if (typeof openExternal !== 'function') throw new Error('quick-links-ipc: openExternal is required');
+  const presets = deps && deps.presets;
+  if (!presets || typeof presets.list !== 'function' || typeof presets.open !== 'function') {
+    throw new Error('quick-links-ipc: presets with list/open is required');
+  }
   const gate = createTrustedSenderGate({
     entryUrl: deps && deps.entryUrl,
     getTrustedWindow: deps && deps.getTrustedWindow,
@@ -96,18 +108,26 @@ function createQuickLinksIpc(deps) {
   function handleListPresets(event) {
     const denied = assess(event, 'presets-list');
     if (denied) return denied;
-    const result = deps.presets.list();
-    return result.ok ? result : { ok: false, error: result.reason };
+    let result;
+    try { result = presets.list(); }
+    catch { return refuse('presets-list', IPC_REASON.STORE_FAILURE); }
+    if (!result || !result.ok) return refuse('presets-list', (result && result.reason) || IPC_REASON.STORE_FAILURE);
+    emit('presets-list', 'ok', null, result.presets.length);
+    return { ok: true, presets: result.presets };
   }
 
   async function handleOpenPreset(event, id) {
     const denied = assess(event, 'preset-open');
     if (denied) return denied;
-    const result = await deps.presets.open(id);
-    return result.ok ? result : { ok: false, error: result.reason };
+    let result;
+    try { result = await presets.open(id); }
+    catch { return refuse('preset-open', 'firefox-launch-failed'); }
+    if (!result || !result.ok) return refuse('preset-open', (result && result.reason) || IPC_REASON.STORE_FAILURE);
+    emit('preset-open', 'ok');
+    return { ok: true };
   }
 
   return { handleList, handleSave, handleOpen, handleListPresets, handleOpenPreset };
 }
 
-module.exports = { createQuickLinksIpc, IPC_REASON, ALLOWED_REASONS };
+module.exports = { createQuickLinksIpc, IPC_REASON, ALLOWED_REASONS, PRESET_REASONS };

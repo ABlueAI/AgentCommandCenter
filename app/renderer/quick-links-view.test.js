@@ -104,6 +104,18 @@ function harness(overrides = {}) {
     eq(requests.join(','), 'preset-one', 'clicking the preset requests launch by ID');
     assert(h.document.ids.quickLinksPresetsStatus.textContent.includes('firefox-profile-missing'),
       'the preset refusal is visible');
+    assert(h.logs.includes('[quick-links-ui] operation=preset-open result=refused reason=firefox-profile-missing\n'),
+      'the preset refusal is logged');
+  }
+  {
+    const h = harness({ api: { listPresets: async () => ({ ok: false, error: 'presets-file-missing' }) } });
+    await h.view.load();
+    assert(h.logs.includes('[quick-links-ui] operation=presets-list result=refused reason=presets-file-missing\n'),
+      'a preset listing refusal is logged');
+    const raw = harness({ api: { listPresets: async () => ({ ok: false, error: 'C:\\raw path' }) } });
+    await raw.view.load();
+    assert(raw.logs.includes('[quick-links-ui] operation=presets-list result=refused reason=unknown-error\n'),
+      'an unbounded preset reason is logged as unknown-error');
   }
 
   process.stdout.write('\nadd/edit/remove with Save and Cancel\n');
