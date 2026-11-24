@@ -76,6 +76,7 @@ async function fixture(t, opts = {}) {
     signal: new AbortController().signal, progress: () => {},
     locate: async (name) => name === opts.missing ? null : name,
     run,
+    verifyPolicy: () => ({ ok: !opts.managed }),
     transcribe: async (pcm) => {
       assert(!opts.noAudio, 'A silent video should not invoke Whisper');
       assert.deepEqual([...pcm], [0, 0, 4, 0]);
@@ -132,6 +133,7 @@ test('sends exact shell-free CLI arguments, one image per second and the local s
 test('refuses missing CLI, missing sign-in, and key-backed sign-in before touching video', async (t) => {
   for (const [opts, message, callCount] of [
     [{ missing: 'claude' }, /Claude Code CLI is missing/, 0],
+    [{ managed: true }, /managed settings/, 0],
     [{ auth: { loggedIn: false } }, /not signed in/, 1],
     [{ auth: { ...auth, authMethod: 'api_key' } }, /Claude.ai subscription/, 1],
     [{ auth: { ...auth, apiKeySource: 'user' } }, /Claude.ai subscription/, 1],

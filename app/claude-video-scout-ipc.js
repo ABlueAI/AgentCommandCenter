@@ -33,7 +33,7 @@ function requestTranscript(job, pcm, send) {
   });
 }
 
-function createClaudeVideoScoutIpc({ trustedSenderGate, validateVideoUrl, baseEnv, killTree, log, analyze = analyzeVideo }) {
+function createClaudeVideoScoutIpc({ trustedSenderGate, validateVideoUrl, baseEnv, killTree, verifyPolicy, log, analyze = analyzeVideo }) {
   let active = null;
 
   function run(event, req) {
@@ -55,7 +55,7 @@ function createClaudeVideoScoutIpc({ trustedSenderGate, validateVideoUrl, baseEn
       event.sender.send('claude-video-scout-event', { id: job.id, token: job.token, ...data });
     };
     job.done = Promise.resolve().then(() => analyze({
-      url: parsed.href, focus: focus.provided ? focus.value : '', baseEnv, killTree, signal: job.controller.signal,
+      url: parsed.href, focus: focus.provided ? focus.value : '', baseEnv, killTree, verifyPolicy, signal: job.controller.signal,
       progress: (status) => send({ status }),
       transcribe: (pcm) => requestTranscript(job, pcm, send),
     })).then(

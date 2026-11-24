@@ -238,11 +238,16 @@ async function readArtifact(file, maxBytes, reason) {
   }
 }
 
-async function analyzeVideo({ url, focus, signal, progress, transcribe, baseEnv, killTree,
+async function analyzeVideo({ url, focus, signal, progress, transcribe, baseEnv, killTree, verifyPolicy,
   locate = findTool, run = runProcess, tempRoot = os.tmpdir() }) {
   const env = toolEnvironment(baseEnv);
   const claude = await locate('claude', env);
   if (!claude) throw new ScoutError('Claude Code CLI is missing. Put its executable on PATH and restart Mako.');
+  // Claude safe mode still honors managed settings, which can configure credential
+  // helpers and hooks. Reuse Mako's established check before starting even the auth probe.
+  if (!verifyPolicy()?.ok) {
+    throw new ScoutError('Claude Code managed settings are present or could not be checked. Subscription-only analysis was refused.');
+  }
   const dir = await fs.mkdtemp(path.join(tempRoot, 'mako-claude-video-'));
   const mediaEnv = { ...env, TEMP: dir, TMP: dir, TMPDIR: dir };
   const claudeEnv = { ...mediaEnv, CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' };

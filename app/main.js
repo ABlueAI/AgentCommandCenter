@@ -498,6 +498,7 @@ process.on('uncaughtException', (err) => {
 const claudeScout = createClaudeVideoScoutIpc({
   trustedSenderGate: createTrustedSenderGate({ entryUrl: ENTRY_URL, getTrustedWindow: () => win }),
   validateVideoUrl, baseEnv: process.env, killTree: processTree.killTree,
+  verifyPolicy: () => roleDefinitionResolver.assertNoManagedScope(),
   log: (reason) => {
     const contents = win && !win.isDestroyed() ? win.webContents : null;
     if (contents && !contents.isDestroyed()) contents.send('main-error', reason);
