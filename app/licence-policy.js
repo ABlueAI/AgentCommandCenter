@@ -16,9 +16,12 @@
 // found by hand).
 
 // SPDX identifiers (https://spdx.org/licenses/) that need only a notice.
+// OFL-1.1 (SIL Open Font License) joined on 2026-11-24 for S66's two fonts: it lets fonts be
+// bundled and shipped with any software, needing only its notice and licence text alongside; its
+// one restriction is that the font may not be sold by itself, which Mako never does.
 const PERMISSIVE = new Set([
   '0BSD', 'Apache-2.0', 'BlueOak-1.0.0', 'BSD-2-Clause', 'BSD-3-Clause', 'CC0-1.0', 'ISC',
-  'MIT', 'MIT-0', 'Unlicense', 'Zlib',
+  'MIT', 'MIT-0', 'OFL-1.1', 'Unlicense', 'Zlib',
 ]);
 
 // npm packages allowed despite a licence outside PERMISSIVE. Matched on the package name and the

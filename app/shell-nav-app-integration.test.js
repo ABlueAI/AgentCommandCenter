@@ -69,8 +69,11 @@ assert(f.aquariumShown === true, 'the aquarium frame shows');
 eq(f.afterHome, 'brain', 'Home selects the first tab');
 eq(f.afterLeftWrap, 'aquarium', 'Left from the first tab wraps to the last');
 assert((f.saves || []).some((s) => s.uiTab === 'aquarium'), 'the selected tab is saved with the settings');
+eq(f.fontsLoaded, [1, 1], 'Inter and Cascadia Code load from the app (shipped, not fetched)');
+assert(/^"?Mako Inter"?/.test(f.bodyFont || ''), 'the three-tab layout uses Inter');
 assert(f.permissionBorder === true, 'the shared In-focus card renders a permission prompt as a red card');
 assert(f.permissionAllowDisabled === true, 'an unwired card action is disabled in the real page');
+eq(f.focusRing, { id: 'makoTab-aquarium', style: 'solid', width: '2px', color: 'rgb(159, 230, 255)' }, 'a real arrow key moves to the next tab, which shows the 2 px focus ring in its tab\'s focus colour');
 eq(f.ptyStart, 0, 'no PTY started');
 
 process.stdout.write('\nCtrl K palette\n');

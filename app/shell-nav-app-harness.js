@@ -104,6 +104,12 @@ async function scenarioFirstRun() {
     out.afterHome = t.selectedTab();
     t.key('ArrowLeft');
     out.afterLeftWrap = t.selectedTab();
+    // The two shipped fonts load from the app itself, and the tab layout uses Inter.
+    try {
+      const loaded = await Promise.all([document.fonts.load('14px "Mako Inter"'), document.fonts.load('14px "Mako Cascadia Code"')]);
+      out.fontsLoaded = loaded.map((l) => l.length);
+    } catch (e) { out.fontsLoaded = 'error'; }
+    out.bodyFont = getComputedStyle(document.body).fontFamily;
     // The shared In-focus card renders with the tab's tokens: a permission card is always red.
     const card = window.ccInFocusCard.buildInFocusCard(document, { state: 'permission', title: 'Allow git push?' }, {});
     document.getElementById('makoPanel-aquarium').appendChild(card);
@@ -112,6 +118,17 @@ async function scenarioFirstRun() {
     out.permissionAllowDisabled = card.querySelector('[data-action=allowOnce]').disabled;
     await t.sleep(50);
     return out;
+  })()`);
+  // Focus rings: synthetic key events don't set :focus-visible, so a REAL key goes in from main.
+  await run(`(() => { document.getElementById('makoTab-control').click(); document.getElementById('makoTab-control').focus(); return true; })()`);
+  win.webContents.focus();
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Right' });
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Right' });
+  r.focusRing = await run(`(async () => {
+    await window.__t.waitFor(() => document.activeElement && document.activeElement.id === 'makoTab-aquarium', 3000);
+    const el = document.activeElement;
+    const cs = getComputedStyle(el);
+    return { id: el.id, style: cs.outlineStyle, width: cs.outlineWidth, color: cs.outlineColor };
   })()`);
   r.booted = booted;
   r.saves = ipc.saves.slice();
