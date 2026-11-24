@@ -191,8 +191,29 @@ mostly low, findings. Every PR follows it, including the builder's own fixes.
 - **One scope per PR.** The PR's stated scope is what its TLDR's "What and why" says it does.
   Problems outside it become follow-ups, never more commits in that PR.
 - **Run 1 is a complete audit.** The reviewer reads the whole diff once, finds every problem at
-  once, judges each against the PR's stated scope, and ranks each high, medium or low
+  once, judges each against the PR's stated scope, and ranks each CRITICAL, HIGH, MEDIUM or LOW
   (`.claude/agents/pr-reviewer.md`).
+- **Severity scale: CRITICAL, HIGH, MEDIUM, LOW** (Blue, 2026-11-16; docs/DECISIONS.md, 2026-11-16
+  follow-up answers). `pr-reviewer` and the pre-ready reviewers rank every finding on it.
+  **CRITICAL** is a finding that would: expose a secret, a token or client data; let an agent merge,
+  push to `main`, change repository settings or get past a guard; destroy work or data that can't
+  be recovered; let outside text run commands (unsafe input to the terminal, IPC or a validator);
+  or stop Mako from starting on `main`. A CRITICAL finding stops the PR and notifies Blue at once;
+  HIGH and MEDIUM are fixed in the next batch; LOW goes to follow-ups.
+  - **How a CRITICAL stops the PR.** The builder pushes nothing more to it and runs no further
+    review on it, keeps it a draft (converting it back if it was ready), adds the `needs-blue`
+    label, and tells Blue at once: a PR comment starting `@ABlueAI needs Blue: CRITICAL finding`,
+    and a session-end message and phone notification starting `NOT READY: CRITICAL finding`. A
+    security finding is cut to its title and severity in all three ("Hard rules" item 6); the
+    details go to Blue privately. The builder may say there how it would fix it, or why it thinks
+    the finding is wrong; work resumes only on Blue's answer. The Claude session that reviews a
+    Codex or Dependabot PR does the same, without pushing, and posts no fix request for it
+    (docs/CODEX-BUILDER-LANE.md item 6) until Blue answers. A CRITICAL `[out of scope]` finding (one
+    already on `main`) doesn't stop the PR, but Blue is told at once (a PR comment starting
+    `@ABlueAI needs Blue: CRITICAL finding on main`, and a line in the session-end message) and it
+    becomes an issue, worded as "Hard rules" item 6 says.
+  - Elsewhere in this file, lower-case "high", "medium" and "low" name the same levels, and a rule
+    that a high or medium finding blocks or must be fixed holds for a CRITICAL one too.
 - **Fix in one batch.** The builder fixes or answers all high and medium findings together, in one
   push. Low findings never block: they go in the "Follow-ups" list at the end of the TLDR, and
   become a plan row or an issue if they are real work. Out-of-scope findings go there too, whatever
@@ -441,7 +462,13 @@ account stays clear of GitHub's abuse detection.
   effort. No API credits, ever, and no third-party model routing.
 - **Reviewer subagent** (`.claude/agents/pr-reviewer.md`, Claude Opus): the required independent
   review on every PR, run by the builder before it marks the PR ready (for Codex's and Dependabot's
-  PRs, by a Claude cloud session under the agent account; step 3).
+  PRs, by a Claude cloud session under the agent account; step 3). Opus at `effort: high`.
+- **On-demand helpers** (S40; `.claude/agents/`, Claude Opus, read-only, never started on their
+  own): `planner` drafts a plan or a plan row's build steps when a builder or Blue asks, as input
+  to the depth check, never instead of it; `agent-evaluator` scores an agent's finished output (a
+  report, a plan, a review) when Blue or a builder asks. A change to an agent, hook, role file or
+  the review rules follows docs/HARNESS-CHANGES.md (harness-optimizer's method as text): a fixed
+  eval set run before and after, with the results in the PR.
 - **Codex / GPT**: does the smaller tasks and the reviews (Blue, 2026-11-21): the required
   second reviewer (its pass is needed for `READY TO MERGE`, "Hard rules" item 9; since it was linked to
   `ABlueAgent`, BLUE-CHECKLIST.md step 16, 2026-10-20, it reviews agent PRs automatically; a
