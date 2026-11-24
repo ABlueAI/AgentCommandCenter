@@ -1180,6 +1180,12 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
     before you merge one. How the merge-order check and the runner treat them is issue #205.
   - *Done when:* you say both are on. Claude can't read these settings (they show only to admins),
     so it ticks this on your word, and notes the first Dependabot alert or PR it sees as a check.
+- [x] **66. Give the HyperFrames verdict (S52).**
+  Verdict: FORK, conditional. Blue (2026-11-18, in his main chat), adopting Mako main's recommendation: 'I think your recommendation verdicts are very good. So, yes to both of those recommendations.' Reconfirmed by Blue on 2026-11-23 ('yes i do recall now', 'agree'). The recommendation he adopted: first a Windows trial on the VM, with the browser sandbox on, outside connections blocked and logged, and the media commands that call China-origin models removed. Fork only if that trial shows no outside connections and no sandbox downgrade.
+  - *Verification:* checked 2026-11-23 (UTC) by a Claude cloud session against Blue's words as
+    quoted in the Mako main session's hand-off to it
+    ([session](https://claude.ai/code/session_01UWhuMF5YrgU1ojPL6DN1Q1)). Recorded in the [S52 vetting and trial record](docs/decisions/OSS-hyperframes.md#blues-verdict)
+    and [the decisions log](docs/DECISIONS.md#2026-11-18-s52-hyperframes-verdict-pr-206).
 
 ## From your decisions of 2026-11-16 to 2026-11-21
 

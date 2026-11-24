@@ -1,6 +1,7 @@
 # Mako status
 
-Updated 2026-11-24 by PR #209 (S48's OSS record, docs/decisions/OSS-memory.md, with Blue's
+Updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
+verdict; review fixes pushed by a Claude cloud session on Blue's ask). Before that: updated 2026-11-24 by PR #209 (S48's OSS record, docs/decisions/OSS-memory.md, with Blue's
 verdict: PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain; step 68
 ticked). Before that: updated 2026-11-24 by PR #241 (S56 no longer marked Sensitive in the plan; its 9 bug issues, #232
 to #240, were opened the same day). Before that: updated 2026-11-23 by PR #223 (S61: the 1.1
@@ -417,6 +418,14 @@ waits only on S14 and Blue's go on the UI (step 18).
 **2026-11-24 (PR #209):** S48's OSS record, `docs/decisions/OSS-memory.md`, carries Blue's verdict
 (step 68): PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain. S48
 still starts after the H1 setup day (step 54).
+
+**S52 (PR #206):** [HyperFrames vetting and trial](docs/decisions/OSS-hyperframes.md) are recorded.
+The pinned upstream package offers MiniMax/Qwen models through its media commands. Blue's verdict
+is FORK, conditional (step 66): first a Windows trial on the VM, with the browser sandbox on,
+outside connections blocked and logged, and the media commands that call China-origin models
+removed; fork only if that trial shows no outside connections and no sandbox downgrade. Neither the
+trial nor the fork has a plan row or issue yet.
+
 The paragraphs below are from before the sheet.
 
 Month one's runner sessions S31 to S34 merged on 2026-11-04. The next `READY` row is S25, the
