@@ -60,5 +60,11 @@ try { T.applyTabTokens(fakeRoot, 'board'); } catch { threw = true; }
 assert(threw, 'unknown tab throws instead of falling back');
 assert(attrs['data-mako-tab'] === 'aquarium', 'a refused tab leaves the previous marker alone');
 
+const removed = [];
+const fakeRoot2 = { style: { removeProperty: (k) => removed.push(k) }, removeAttribute: (k) => { delete attrs[k]; } };
+T.clearTabTokens(fakeRoot2);
+assert(removed.includes('--mk-surface') && removed.includes('--mk-accent') && removed.length === Object.keys(T.tokensFor('brain')).length, 'clearTabTokens takes every token off the root');
+assert(!('data-mako-tab' in attrs), 'and the tab marker');
+
 process.stdout.write(`\nui-tokens: ${passed} passed, ${failed} failed\n`);
 if (failed) process.exit(1);

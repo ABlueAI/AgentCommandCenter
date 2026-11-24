@@ -110,6 +110,58 @@
     return !!e && e.ctrlKey === true && !e.shiftKey && !e.altKey && !e.metaKey && (e.code === 'Space' || e.key === ' ');
   }
 
+  /**
+   * Push to talk (hold Ctrl Space). Pure state machine, so every edge is unit-tested.
+   * deps: { isRecording(), press() (clicks Dictate), notify(text, ms), now(), pendingMs }
+   * The microphone opens only after the OS grants it, so a quick tap can come up before
+   * isRecording() turns true. Then the stop is remembered and sent the moment recording starts
+   * (onSttStatus('recording')), never dropped. A remembered stop expires after pendingMs, so a
+   * refused start can't stop a later recording Blue starts with the mouse.
+   */
+  function createPushToTalk(deps) {
+    const now = typeof deps.now === 'function' ? deps.now : () => Date.now();
+    const pendingMs = deps.pendingMs > 0 ? deps.pendingMs : 15000;
+    const notify = typeof deps.notify === 'function' ? deps.notify : () => {};
+    const st = { held: false, pendingAt: null, stopWhenStarted: false };
+    const pendingLive = () => st.pendingAt !== null && now() - st.pendingAt < pendingMs;
+
+    function keydown(e) {
+      if (!isPushToTalkChord(e)) return false;
+      if (e.repeat || st.held) return true;
+      st.held = true;
+      if (deps.isRecording()) return true;          // already recording (started with the mouse)
+      st.stopWhenStarted = false;
+      if (deps.press() !== false) st.pendingAt = now();
+      return true;
+    }
+    function release() {
+      if (!st.held) return false;
+      st.held = false;
+      if (deps.isRecording()) { st.pendingAt = null; st.stopWhenStarted = false; deps.press(); return true; }
+      if (pendingLive()) {
+        st.stopWhenStarted = true;
+        notify('You let go before the microphone opened. It stops as soon as it opens.', 6000);
+      }
+      return true;
+    }
+    function keyup(e) {
+      if (!st.held || !e || !(e.code === 'Space' || e.key === ' ' || e.key === 'Control')) return false;
+      return release();
+    }
+    function onSttStatus(state) {
+      if (state === 'recording') {
+        const stop = st.stopWhenStarted && pendingLive();
+        st.pendingAt = null;
+        st.stopWhenStarted = false;
+        if (stop) deps.press();
+      } else if (state === 'error' || state === 'idle') {
+        st.pendingAt = null;
+        st.stopWhenStarted = false;
+      }
+    }
+    return { keydown, keyup, blur: release, onSttStatus, state: () => Object.assign({}, st) };
+  }
+
   // Rank palette commands against a query: label prefix, then a word in the label starting with
   // the query, then the query anywhere in the label or its group. Ties keep the given order.
   function rankCommands(commands, query) {
@@ -140,7 +192,14 @@
     return e;
   }
   function reasonOf(e) {
-    return e && typeof e.code === 'string' && /^[a-z0-9-]{1,64}$/.test(e.code) ? e.code : 'unknown-error';
+    return e && typeof e.code === 'string' && /^[a-z0-9-]{1,64}$/.test(e.code) ? e.code : `unknown-error, ${errorKind(e)}`;
+  }
+  // A bounded, path-free word for an error: its class name (TypeError) and an errno code (EPERM),
+  // never its message.
+  function errorKind(e) {
+    const name = e && typeof e.name === 'string' && /^[A-Za-z]{1,40}$/.test(e.name) ? e.name : 'Error';
+    const code = e && typeof e.code === 'string' && /^E[A-Z]{2,20}$/.test(e.code) ? ` ${e.code}` : '';
+    return name + code;
   }
 
   function h(doc, tag, opts, children) {
@@ -171,7 +230,14 @@
       let p;
       try { p = Promise.resolve(deps.saveSettings(partial)); }
       catch (e) { p = Promise.reject(e); }
-      return p.catch(() => { log(`[shell] could not save settings (${Object.keys(partial).join(', ')}): save-failed\n`); });
+      return p.then((r) => {
+        // main's save-settings answers { ok: true }; anything else is a refusal.
+        if (r && r.ok === false) throw r;
+        return true;
+      }).catch((e) => {
+        log(`[shell] could not save settings (${Object.keys(partial).join(', ')}): save-failed (${errorKind(e)})\n`);
+        return false;
+      });
     };
 
     const stored = deps.settings || {};
@@ -185,6 +251,12 @@
     const pausedChoice = normalizeSince(stored.uiPausedSince);
     if (pausedChoice.fellBack) log('[shell] stored Pause all state not recognised; not paused\n');
     const now = typeof deps.now === 'function' ? deps.now : () => Date.now();
+
+    // Every dependency is checked before the page is touched, so a refusal leaves nothing behind.
+    if (!tokens || typeof tokens.applyTabTokens !== 'function' || typeof tokens.clearTabTokens !== 'function') throw refusal('tokens-missing');
+    if (!doc.getElementById('makoShell') || !doc.getElementById('makoViews')) throw refusal('mount-missing');
+    if (!doc.getElementById('makoBanners')) throw refusal('banners-missing');
+    if (!deps.controlPanel) throw refusal('control-panel-missing');
 
     const state = {
       layout: layoutChoice.layout, tab: tabChoice.tab, view: 'tab', paletteOpen: false, returnFocus: null, activeIndex: 0, shown: [],
@@ -245,8 +317,12 @@
     const pausedText = h(doc, 'span', { className: 'mk-banner-text' });
     const pausedResume = h(doc, 'button', { className: 'mk-btn mk-banner-btn', text: 'Resume all', attrs: { type: 'button', id: 'makoResumeAll' } });
     pausedBanner.appendChild(pausedText); pausedBanner.appendChild(pausedResume);
+    // One short-notice line on every tab and in both layouts (push to talk says here what it is
+    // doing, or why it refused, since the Logs tab and the Dictate control may be hidden).
+    const noticeBanner = h(doc, 'div', { className: 'mk-banner mk-banner-notice', attrs: { id: 'makoNotice', role: 'status', 'aria-live': 'polite', hidden: '' } });
     banners.appendChild(quietBanner);
     banners.appendChild(pausedBanner);
+    banners.appendChild(noticeBanner);
     header.appendChild(stripe);
     header.appendChild(bar);
 
@@ -319,7 +395,7 @@
       root.setAttribute('data-mako-view', state.view);
       // The tab's colour set applies in the three-tab layout only; the old layout keeps its themes.
       if (state.layout === 'tabs') tokens.applyTabTokens(root, state.tab);
-      else root.removeAttribute('data-mako-tab');
+      else { root.removeAttribute('data-mako-tab'); tokens.clearTabTokens(root); }
       header.hidden = state.layout !== 'tabs';
       tabButtons.forEach((b, i) => {
         const selected = TABS[i].id === state.tab;
@@ -363,7 +439,7 @@
     function emitChange() {
       try {
         win.dispatchEvent(new win.CustomEvent('mako-shell-change', { detail: { layout: state.layout, tab: state.tab, view: state.view, quietSince: state.quietSince, pausedSince: state.pausedSince } }));
-      } catch { log('[shell] a change listener failed: listener-failed\n'); }
+      } catch { log('[shell] could not send the shell change event: event-failed\n'); }
     }
 
     function setTab(tab, opts) {
@@ -383,10 +459,27 @@
       if (n.fellBack) { log(`[shell] refused unknown layout "${String(layout).slice(0, 40)}"\n`); return false; }
       state.layout = n.layout;
       render();
-      layoutStatus.textContent = n.layout === 'old' ? 'Old layout on. Saved; it stays after a restart.' : 'Three-tab layout on. Saved; it stays after a restart.';
-      save({ uiLayout: n.layout });
+      const label = n.layout === 'old' ? 'Old layout on.' : 'Three-tab layout on.';
+      layoutStatus.textContent = `${label} Saving…`;
+      const token = {};
+      state.layoutSave = token;
+      save({ uiLayout: n.layout }).then((ok) => {
+        if (state.layoutSave !== token) return;   // a later switch owns the line now
+        layoutStatus.textContent = ok ? `${label} Saved; it stays after a restart.`
+          : `${label} Not saved (save-failed): Mako will open in the other layout after a restart. Details in Logs.`;
+      });
       emitChange();
       return true;
+    }
+
+    // showNotice(text, ms): ms > 0 hides it after that long; 0 keeps it until replaced or cleared.
+    let noticeTimer = null;
+    function showNotice(text, ms) {
+      if (noticeTimer) { clearTimeout(noticeTimer); noticeTimer = null; }
+      const t = String(text || '').slice(0, 240);
+      noticeBanner.textContent = t;
+      noticeBanner.hidden = !t;
+      if (t && ms > 0) noticeTimer = setTimeout(() => { noticeBanner.hidden = true; noticeBanner.textContent = ''; noticeTimer = null; }, ms);
     }
 
     // The one quiet state and the one paused state. S18 and S19 read them (getState, and the
@@ -525,6 +618,26 @@
       }
     });
 
+    // First render. If it fails, take back everything this shell put on the page and refuse.
+    try {
+      render();
+    } catch (e) {
+      for (const n of [stripe, bar, brainPanel, aquariumPanel, settingsPage, quietBanner, pausedBanner, noticeBanner, paletteBackdrop]) {
+        if (n.parentNode) n.parentNode.removeChild(n);
+      }
+      if (usagePanel && usageHome && usagePanel.parentNode !== usageHome.parent) {
+        if (usageHome.next && usageHome.next.parentNode === usageHome.parent) usageHome.parent.insertBefore(usagePanel, usageHome.next);
+        else usageHome.parent.appendChild(usagePanel);
+      }
+      for (const a of ['data-mako-layout', 'data-mako-view', 'data-mako-tab', 'data-mako-quiet', 'data-mako-paused']) root.removeAttribute(a);
+      try { tokens.clearTabTokens(root); } catch { /* nothing more to take back */ }
+      header.hidden = true;
+      controlPanel.hidden = false;
+      const r = refusal('render-failed');
+      r.kind = errorKind(e);
+      throw r;
+    }
+
     // Global keys, on window in the capture phase so they run before the terminal sees the key and
     // before the app's own capture listener on document. Ctrl K opens or closes the palette; Esc
     // closes the palette, then the Settings page. Both are consumed so they don't reach a PTY.
@@ -540,12 +653,11 @@
       }
     }, true);
 
-    render();
     emitChange();
 
     return {
       setTab, setLayout, openPalette, closePalette, openSettings, closeSettings,
-      setQuiet, setPaused, enableSwitch, refreshScope: render,
+      setQuiet, setPaused, enableSwitch, refreshScope: render, showNotice,
       getState: () => ({ layout: state.layout, tab: state.tab, view: state.view, paletteOpen: state.paletteOpen, quietSince: state.quietSince, pausedSince: state.pausedSince }),
       visibleCommands: () => state.shown.map((c) => c.label),
     };
@@ -563,6 +675,6 @@
 
   return {
     TABS, TAB_IDS, LAYOUTS, DEFAULT_LAYOUT, DEFAULT_TAB, SHORTCUTS, SETTINGS_SECTIONS,
-    normalizeLayout, normalizeTab, normalizeSince, quietBannerText, pausedBannerText, nextTabIndex, isPaletteChord, isPushToTalkChord, rankCommands, createShell, reasonOf,
+    normalizeLayout, normalizeTab, normalizeSince, quietBannerText, pausedBannerText, nextTabIndex, isPaletteChord, isPushToTalkChord, createPushToTalk, errorKind, rankCommands, createShell, reasonOf,
   };
 });

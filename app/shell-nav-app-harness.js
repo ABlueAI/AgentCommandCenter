@@ -18,7 +18,7 @@ const PRELOAD_FILE = path.join(__dirname, 'preload.js');
 const STEP_TIMEOUT_MS = 30000;
 
 const ipc = { saves: [], ptyStart: 0 };
-const control = { settings: {}, gate: null, release: () => {}, repos: [] };
+const control = { settings: {}, gate: null, release: () => {}, repos: [], saveFail: false };
 const remote = [];
 const consoleErrors = [];
 let win = null;
@@ -91,6 +91,7 @@ async function scenarioFirstRun() {
     out.micWired = await t.waitFor(() => typeof document.getElementById('sttMic').onclick === 'function');
     const logBefore = t.log().length;
     out.pttPrevented = t.key(' ', { ctrlKey: true, code: 'Space' });
+    out.pttNotice = t.shown('#makoNotice') ? document.getElementById('makoNotice').textContent : null;
     out.pttLogged = ['[stt] dictation engine unavailable', '[stt] click into an agent pane first'].some((x) => t.log().slice(logBefore).includes(x));
     document.getElementById('makoTab-brain').focus();
     out.rightPrevented = t.key('ArrowRight');
@@ -344,19 +345,59 @@ async function scenarioTopBar() {
   return r;
 }
 
-async function scenarioRefusal() {
-  // The shell's mount point is missing: the shell refuses visibly and the old layout stays usable.
-  await open('refusal', { theme: 'obsidian', projectsRoot: 'D:\\Workspace' }, `document.getElementById('makoViews').remove();`);
+async function refusalCase(name, beforeBoot) {
+  await open(name, { theme: 'obsidian', projectsRoot: 'D:\\Workspace', uiTab: 'brain' }, beforeBoot);
   await run(`window.__t.waitFor(() => window.__t.log().includes('[shell] REFUSED'))`);
+  await run(`window.__t.waitFor(() => typeof document.getElementById('makoSettingsTopbar').onclick === 'function')`);
+  await run(`window.__t.waitFor(() => typeof document.querySelector('.tab[data-tab=logs]').onclick === 'function')`);
   const r = await run(`(async () => {
     const t = window.__t;
-    return {
-      logged: t.log().includes('[shell] REFUSED'),
+    const out = {
+      line: (t.log().match(/\\[shell\\] REFUSED[^\\n]*/) || [''])[0],
       headerShown: t.shown('#makoShell'),
-      controlShown: t.shown('#makoPanel-control'),
-      layoutAttr: t.root().layout,
+      controlShown: t.shown('.layout'),
+      topbarShown: t.shown('.topbar'),
+      railShown: t.shown('#makoRail'),
+      framesInPage: document.querySelectorAll('.mk-frame').length,
+      rootAttrs: ['data-mako-layout', 'data-mako-tab', 'data-mako-view'].filter((a) => document.documentElement.hasAttribute(a)),
     };
+    out.ctrlKPrevented = t.key('k', { ctrlKey: true });
+    out.paletteInPage = !!document.getElementById('makoPalette');
+    // The top bar's Settings button says why there is no Settings page, and opens Logs.
+    document.getElementById('makoSettingsTopbar').click();
+    out.settingsRefusalLogged = t.log().includes('Settings is unavailable');
+    out.logsOpened = document.querySelector('.tabpane[data-pane=logs]').classList.contains('active');
+    return out;
   })()`);
+  await park();
+  return r;
+}
+async function scenarioRefusal() {
+  // Three ways the shell can't start. Each refuses visibly and leaves the old layout untouched.
+  return {
+    mount: await refusalCase('refusalMount', `document.getElementById('makoViews').remove();`),
+    tokens: await refusalCase('refusalTokens', `delete window.ccUiTokens;`),
+    control: await refusalCase('refusalControl', `document.getElementById('makoPanel-control').removeAttribute('id');`),
+  };
+}
+
+async function scenarioSaveFails() {
+  // main can't write the settings file: the layout line must not claim "Saved".
+  control.saveFail = true;
+  await open('saveFails', { theme: 'obsidian', projectsRoot: 'D:\\Workspace' });
+  await run(`window.__t.waitFor(() => document.documentElement.getAttribute('data-mako-layout') === 'tabs')`);
+  const r = await run(`(async () => {
+    const t = window.__t;
+    document.getElementById('makoSettingsOpen').click();
+    const box = document.getElementById('makoOldLayout');
+    box.checked = true;
+    box.dispatchEvent(new Event('change'));
+    const status = document.getElementById('makoLayoutStatus');
+    const first = status.textContent;
+    await t.waitFor(() => !status.textContent.includes('Saving'));
+    return { first, final: status.textContent, logged: t.log().includes('could not save settings (uiLayout): save-failed') };
+  })()`);
+  control.saveFail = false;
   await park();
   return r;
 }
@@ -373,7 +414,11 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle('get-settings', async () => { await control.gate; return Object.assign({}, control.settings); });
-  ipcMain.handle('save-settings', (_e, partial) => { ipc.saves.push(partial); return { ok: true }; });
+  ipcMain.handle('save-settings', (_e, partial) => {
+    ipc.saves.push(partial);
+    if (control.saveFail && partial && 'uiLayout' in partial) throw new Error('EPERM: harness write refused');
+    return { ok: true };
+  });
   ipcMain.handle('list-repos', () => ({ repos: control.repos.slice(), selectedRepo: control.repos[0] || '' }));
   ipcMain.handle('list-worktrees', () => []);
   ipcMain.handle('repo-github-url', () => '');
@@ -404,7 +449,7 @@ app.whenReady().then(async () => {
     process.stdout.write(JSON.stringify({ ok: false, fatal: { scenario: 'watchdog', error: 'over budget' }, scenarios }) + '\n');
     app.exit(1);
   }, 4 * 60 * 1000);
-  for (const [name, fn] of [['firstRun', scenarioFirstRun], ['palette', scenarioPalette], ['settings', scenarioSettingsAndOldLayout], ['restartOld', scenarioRestartOld], ['topBar', scenarioTopBar], ['refusal', scenarioRefusal]]) {
+  for (const [name, fn] of [['firstRun', scenarioFirstRun], ['palette', scenarioPalette], ['settings', scenarioSettingsAndOldLayout], ['restartOld', scenarioRestartOld], ['topBar', scenarioTopBar], ['refusal', scenarioRefusal], ['saveFails', scenarioSaveFails]]) {
     try { scenarios[name] = await fn(); progress(`${name}: done`); }
     catch (e) { fatal = { scenario: name, error: String((e && e.message) || e) }; progress(`${name}: FAILED ${fatal.error}`); break; }
   }

@@ -98,6 +98,9 @@ const policy = require('./licence-policy');
 const spdx = (e) => policy.parseSpdx(e);
 assert(spdx('MIT').ok && spdx('MIT').permissive, 'spdx: MIT is permissive');
 assert(spdx('GPL-3.0-only').ok && !spdx('GPL-3.0-only').permissive, 'spdx: a planted GPL-3.0-only fails');
+assert(spdx('OFL-1.1').ok && spdx('OFL-1.1').permissive, 'spdx: OFL-1.1 (the two fonts, S66) is permissive');
+assert(!spdx('OFL-1.0').permissive && !spdx('OFL-1.1-RFN').permissive && !spdx('OFL-1.1-no-RFN').permissive,
+  'spdx: only OFL-1.1 itself joined; look-alike OFL ids stay off the list');
 assert(!spdx('GPL-3.0-or-later').permissive && !spdx('AGPL-3.0').permissive && !spdx('LGPL-2.1+').permissive,
   'spdx: GPL-3.0-or-later, AGPL-3.0 and LGPL-2.1+ fail');
 assert(spdx('(MIT OR CC0-1.0)').permissive && spdx('MIT OR GPL-3.0-only').permissive,

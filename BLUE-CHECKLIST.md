@@ -1286,7 +1286,8 @@ Step 81 comes from PR #283.
   3. Click an emblem: the repo switches (the stripe and the repo picker follow).
   4. Click **Settings**, tick **Use the old layout**: today's single screen comes back. Restart Mako:
      it is still the old layout. Untick it to go back.
-  5. Hold **Ctrl Space** in a pane and speak, then let go: the words are typed into that pane.
+  5. Hold **Ctrl Space** in a pane and speak, then let go: the words are typed into that pane. Then
+     click into a pane and press **Ctrl K**: the palette opens and nothing is typed into the pane.
   6. Look: does anything read wrong or feel cramped? Note the usage chip (top right) and the two
      greyed-out switches, **Quiet hours** and **Pause all**, which S18 and S19 turn on.
   - *Done when:* you tell any agent "S66 PC check: OK" or what looked wrong; the agent ticks this

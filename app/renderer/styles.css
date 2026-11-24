@@ -500,6 +500,7 @@ input:focus { outline: none; border-color: var(--accent); }
 .mk-banner-quiet { background: var(--mk-surface-raised, var(--panel)); color: var(--mk-ink, var(--text)); }
 .mk-banner-paused { background: var(--mk-composer, #22190b); color: var(--mk-composer-ink, #f0c060); }
 .mk-banner-btn { padding: 2px 8px; font-size: 12.5px; }
+.mk-banner-notice { background: var(--mk-surface-raised, var(--panel)); color: var(--mk-ink, var(--text)); }
 .mk-banner-btn:focus-visible { outline: 2px solid var(--mk-focus, var(--accent-2)); outline-offset: 2px; }
 /* The old global `button { transition: .12s }` would also animate the focus ring and sizes; S66's
    controls fade only their colours, so the focus ring appears at once (brief 3.6). */

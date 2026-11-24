@@ -1396,12 +1396,16 @@ function shellCommands() {
     cmds.push({ id: `view:${tab}`, label: `Open ${label}`, group: 'Control room', run: () => {
       if (shell && shell.getState().layout === 'tabs') shell.setTab('control');
       const btn = document.querySelector(`.tab[data-tab="${tab}"]`);
-      if (btn) btn.click(); else appendLog(`[shell] the ${label} view is missing\n`);
+      if (!btn) { appendLog(`[shell] the ${label} view is missing\n`); return; }
+      if (typeof btn.onclick !== 'function') { appendLog(`[shell] the ${label} view is still starting\n`); shell.showNotice(`${label} is still starting. Try again in a moment.`, 6000); return; }
+      btn.click();
     } });
   }
   cmds.push({ id: 'agent:new', label: 'New agent', group: 'Control room', run: () => {
     if (shell && shell.getState().layout === 'tabs') shell.setTab('control');
-    $('#newAgent').click();
+    const btn = $('#newAgent');
+    if (typeof btn.onclick !== 'function') { appendLog('[shell] New agent is still starting\n'); shell.showNotice('New agent is still starting. Try again in a moment.', 6000); return; }
+    btn.click();
   } });
   // Repos, from the repo picker's own options (text only; the picker's change handler switches).
   const sel = $('#repoSelect');
@@ -1431,7 +1435,12 @@ function startShell(settings) {
     });
   } catch (e) {
     shell = null;
-    appendLog(`[shell] REFUSED: the three-tab shell did not start (${window.ccShellNav ? window.ccShellNav.reasonOf(e) : 'shell-module-missing'}); the old layout stays\n`);
+    // createShell checks its dependencies before touching the page and takes back what it built
+    // if its first render fails; these lines make sure no tab-layout marker is left either way.
+    for (const a of ['data-mako-layout', 'data-mako-view', 'data-mako-tab', 'data-mako-quiet', 'data-mako-paused']) document.documentElement.removeAttribute(a);
+    const shellHost = $('#makoShell'); if (shellHost) shellHost.hidden = true;
+    const controlHost = $('#makoPanel-control'); if (controlHost) controlHost.hidden = false;
+    appendLog(`[shell] REFUSED: the three-tab shell did not start (${window.ccShellNav ? window.ccShellNav.reasonOf(e) : 'shell-module-missing'}${e && e.kind ? `, ${e.kind}` : ''}); the old layout stays\n`);
     const btn = $('#makoSettingsTopbar');
     if (btn) btn.onclick = () => { appendLog('[shell] Settings is unavailable: the shell did not start (see the line above)\n'); document.querySelector('.tab[data-tab="logs"]').click(); };
     return;
@@ -1597,34 +1606,41 @@ if (paneStatusSetup) {
 }
 
 // S66: Ctrl Space push to talk, on every tab and in both layouts. Holding it presses today's
-// Dictate control (which locks the destination pane and refuses visibly when it can't start);
-// letting go of Space or Ctrl, or leaving the window, presses it again to stop and type the one
-// finalized transcript. The key is consumed so it doesn't also reach the terminal.
+// Dictate control (which locks the destination pane and refuses visibly); letting go of Space or
+// Ctrl, or leaving the window, presses it again to stop and type the one finalized transcript.
+// The hold/release logic is shell-nav.js createPushToTalk (unit-tested), including a release that
+// comes before the microphone has opened. The key is consumed so it doesn't reach the terminal.
+// What it is doing, or why it refused, shows in the notice line on every tab (sttNotice).
+let pushToTalk = null;
+function sttNotice(text, ms) {
+  if (shell) shell.showNotice(text, ms);
+}
 function bindPushToTalk() {
-  let held = false;
-  const mic = () => $('#sttMic');
-  const recording = () => !!(window.ccSTT && window.ccSTT.isRecording());
-  const release = () => {
-    if (!held) return;
-    held = false;
-    if (recording() && mic()) mic().click();
-  };
+  if (!window.ccShellNav || typeof window.ccShellNav.createPushToTalk !== 'function') {
+    appendLog('[stt] push to talk unavailable: shell-module-missing\n');
+    return;
+  }
+  pushToTalk = window.ccShellNav.createPushToTalk({
+    isRecording: () => !!(window.ccSTT && window.ccSTT.isRecording()),
+    press: () => {
+      const btn = $('#sttMic');
+      if (!btn || typeof btn.onclick !== 'function') {
+        appendLog('[stt] push to talk: dictation is still starting; try again in a moment\n');
+        sttNotice('Push to talk: dictation is still starting. Try again in a moment.', 6000);
+        return false;
+      }
+      btn.click();
+      return true;
+    },
+    notify: (text, ms) => { appendLog(`[stt] push to talk: ${text}\n`); sttNotice(text, ms); },
+  });
   window.addEventListener('keydown', (e) => {
-    if (!window.ccShellNav.isPushToTalkChord(e)) return;
-    e.preventDefault(); e.stopPropagation();
-    if (e.repeat || held) return;
-    held = true;
-    const btn = mic();
-    if (recording()) return;
-    if (!btn || typeof btn.onclick !== 'function') { appendLog('[stt] push to talk: dictation is still starting; try again in a moment\n'); return; }
-    btn.click();
+    if (pushToTalk.keydown(e)) { e.preventDefault(); e.stopPropagation(); }
   }, true);
   window.addEventListener('keyup', (e) => {
-    if (!held || !(e.code === 'Space' || e.key === ' ' || e.key === 'Control')) return;
-    e.preventDefault(); e.stopPropagation();
-    release();
+    if (pushToTalk.keyup(e)) { e.preventDefault(); e.stopPropagation(); }
   }, true);
-  window.addEventListener('blur', release);
+  window.addEventListener('blur', () => { pushToTalk.blur(); });
 }
 
 function installSTTUnavailableControl() {
@@ -1634,6 +1650,7 @@ function installSTTUnavailableControl() {
     const moduleState = audioModules.get('stt');
     const detail = moduleState.phase === 'failed' ? moduleState.detail : 'module is still starting';
     appendLog(`[stt] dictation engine unavailable: ${detail}\n`);
+    sttNotice('Dictation is unavailable right now. Details in Logs.', 8000);
   };
 }
 
@@ -1648,8 +1665,8 @@ function setupSTTControls() {
     micBtn.dataset.sttWired = '1';
     micBtn.onclick = () => {
       if (stt.isRecording()) { stt.toggle(); return; } // second click: stop + one finalized transcript
-      if (stt.isBusy()) { appendLog('[stt] still transcribing the previous dictation…\n'); return; }
-      if (!activeTermId || !terms.has(activeTermId)) { appendLog('[stt] click into an agent pane first, then 🎤.\n'); return; }
+      if (stt.isBusy()) { appendLog('[stt] still transcribing the previous dictation…\n'); sttNotice('Still typing the last dictation. Try again in a moment.', 6000); return; }
+      if (!activeTermId || !terms.has(activeTermId)) { appendLog('[stt] click into an agent pane first, then 🎤.\n'); sttNotice('Dictation needs a pane: click into an agent pane in the control room first.', 8000); return; }
       // Lock the destination NOW: however long the model load takes, and whatever pane
       // is clicked meanwhile, the finished transcript goes here or is refused visibly.
       sttDictationTargetId = activeTermId;
@@ -1659,6 +1676,11 @@ function setupSTTControls() {
     };
   }
   stt.onStatus(({ state: st, detail }) => {
+    if (pushToTalk) pushToTalk.onSttStatus(st);
+    if (st === 'recording') sttNotice(`Recording for pane ${sttDictationTargetId || '?'}. Let go of Ctrl Space (or press Stop) to type it.`, 0);
+    else if (st === 'transcribing') sttNotice('Transcribing…', 0);
+    else if (st === 'error') sttNotice('Dictation failed. Details in Logs.', 8000);
+    else if (st === 'idle') sttNotice('', 0);
     const el = $('#sttStatus'); if (el) el.textContent = (st && st !== 'idle') ? (st + (detail ? ' — ' + detail : '')) : '';
     if (micBtn) { micBtn.textContent = st === 'recording' ? '⏺ Stop' : '🎤 Dictate'; micBtn.classList.toggle('rec', st === 'recording'); }
     if (st === 'error' && detail) appendLog('[stt] ' + detail + '\n');

@@ -56,6 +56,71 @@ assert(!N.isPushToTalkChord({ ctrlKey: false, code: 'Space', key: ' ' }), 'plain
 assert(!N.isPushToTalkChord({ ctrlKey: true, code: 'KeyK', key: 'k' }), 'Ctrl+K is not');
 assert(N.SHORTCUTS.some((x) => x.keys.startsWith('Ctrl Space')), 'Ctrl Space is in the one shortcut list');
 
+process.stdout.write('\npush to talk: hold, release, and a release before the microphone opens\n');
+function ptt(opts) {
+  const o = Object.assign({ recording: false, pressResult: true }, opts || {});
+  const log = { presses: 0, notices: [] };
+  let t = 1000;
+  const m = N.createPushToTalk({
+    isRecording: () => o.recording,
+    press: () => { log.presses += 1; return o.pressResult; },
+    notify: (text) => log.notices.push(text),
+    now: () => t, pendingMs: 15000,
+  });
+  return { m, o, log, tick: (ms) => { t += ms; } };
+}
+const DOWN = { ctrlKey: true, code: 'Space', key: ' ' };
+const UP = { code: 'Space', key: ' ' };
+{
+  const { m, o, log } = ptt();
+  assert(m.keydown(DOWN) === true && log.presses === 1, 'press: Dictate pressed once, key consumed');
+  assert(m.keydown(Object.assign({ repeat: true }, DOWN)) === true && log.presses === 1, 'key repeat: consumed, not pressed again');
+  o.recording = true; m.onSttStatus('recording');
+  assert(m.keyup(UP) === true && log.presses === 2, 'release while recording: pressed again to stop');
+  assert(m.keyup(UP) === false, 'a second keyup is not ours');
+}
+{
+  const { m, o, log } = ptt();
+  m.keydown(DOWN);
+  m.keyup({ key: 'Control' });
+  assert(log.presses === 1 && m.state().stopWhenStarted === true, 'quick tap: the stop is remembered, not dropped');
+  assert(log.notices.length === 1 && /before the microphone opened/.test(log.notices[0]), 'and it says so');
+  o.recording = true; m.onSttStatus('recording');
+  assert(log.presses === 2 && m.state().stopWhenStarted === false, 'the stop is sent as soon as recording starts');
+}
+{
+  const { m, o, log, tick } = ptt();
+  m.keydown(DOWN); m.keyup(UP);
+  tick(20000);
+  o.recording = true; m.onSttStatus('recording');
+  assert(log.presses === 1, 'a remembered stop older than 15 s is dropped (a later mouse start is not stopped)');
+}
+{
+  const { m, log } = ptt();
+  m.keydown(DOWN); m.keyup(UP);
+  m.onSttStatus('error');
+  assert(m.state().stopWhenStarted === false && m.state().pendingAt === null, 'an error clears the pending start');
+  m.onSttStatus('recording');
+  assert(log.presses === 1, 'and a later recording is not stopped');
+}
+{
+  const { m, log } = ptt({ pressResult: false });
+  m.keydown(DOWN); m.keyup(UP);
+  assert(m.state().stopWhenStarted === false && log.notices.length === 0, 'a refused press leaves nothing pending');
+}
+{
+  const { m, o, log } = ptt({ recording: true });
+  m.keydown(DOWN);
+  assert(log.presses === 0, 'already recording (mouse): the press does not toggle it off');
+  m.blur();
+  assert(log.presses === 1, 'leaving the window releases and stops');
+  assert(m.keydown({ ctrlKey: true, code: 'KeyK', key: 'k' }) === false, 'other keys are not ours');
+}
+eq(N.errorKind(Object.assign(new TypeError('secret path C:\\x'), {})), 'TypeError', 'errorKind gives the class, never the message');
+eq(N.errorKind(Object.assign(new Error('x'), { code: 'EPERM' })), 'Error EPERM', 'errorKind adds an errno code');
+eq(N.errorKind({ name: 'bad name with spaces', code: 'not-errno' }), 'Error', 'errorKind refuses unbounded values');
+eq(N.reasonOf(new RangeError('x')), 'unknown-error, RangeError', 'reasonOf keeps the class of an unexpected error');
+
 process.stdout.write('\npalette ranking\n');
 const cmds = [
   { label: 'Open Settings', group: 'Mako' },

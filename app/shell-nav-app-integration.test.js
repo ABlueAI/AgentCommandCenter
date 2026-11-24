@@ -9,7 +9,9 @@
 // a shell that can't start refuses visibly and leaves the old layout usable; and no PTY starts and
 // nothing is fetched from the network along the way.
 //
-// Not covered yet (later steps of S66): the emblem upload and focus-ring rendering.
+// Not covered here: the emblem image upload (not built; Blue's question 10), push to talk with a
+// real microphone, and Ctrl K / Ctrl Space against a focused live terminal (no PTY runs in this
+// harness); BLUE-CHECKLIST.md step 81 covers the last two on Blue's PC.
 
 const { spawnSync } = require('child_process');
 const path = require('path');
@@ -60,6 +62,7 @@ eq(f.afterClickSelected, 'brain', 'clicking Brain selects it');
 eq(f.afterClick && f.afterClick.surface, '#0a1530', 'the brain tab\'s surface colour is applied');
 assert(f.afterClickBrainShown === true && f.afterClickControlShown === false && f.afterClickTopbarShown === false, 'the brain frame shows; today\'s layout and its top bar hide');
 assert(f.pttPrevented === true && f.pttLogged === true, 'Ctrl Space presses Dictate (consumed, and it refuses visibly here with no pane)');
+assert(typeof f.pttNotice === 'string' && f.pttNotice.length > 0, 'the refusal shows in the notice line on the tab Blue is on, not only in the hidden Logs');
 assert(f.rightPrevented === true, 'Right arrow is handled by the tablist');
 eq(f.afterRight, 'control', 'Right moves to the control room');
 eq(f.focusAfterRight, 'makoTab-control', 'focus follows the selected tab');
@@ -116,7 +119,7 @@ eq(s.shortcutRows, 6, 'the Shortcuts section shows the one shortcut list');
 assert(s.escPrevented === true && s.viewAfterEsc === 'tab', 'Esc closes the Settings page');
 eq(s.focusAfterEsc, 'makoTab-control', 'focus goes back to the selected tab');
 eq(s.layoutAfterSwitch, 'old', '"Use the old layout" switches at once');
-assert(/stays after a restart/.test(s.statusText || ''), 'the switch says it is saved');
+assert(/Saving…$/.test(s.statusText || ''), 'the switch says "Saving…" until main answers');
 assert(s.headerShownOld === false && s.controlShownOld === true && s.topbarShownOld === true, 'the old layout shows today\'s app with no tab bar');
 eq(s.tabAttrOld, null, 'the old layout keeps its own themes (no tab colour set)');
 assert((s.saves || []).some((x) => x.uiLayout === 'old'), 'the layout choice is saved with the settings');
@@ -145,11 +148,23 @@ assert(b.usageInOldTopbar === true && b.usageBeforeTheme === 'theme-picker', 'th
 assert(b.quietAfterEnd === false && b.pausedAfterResume === false, 'End now and Resume all clear the banners');
 assert((b.saves || []).some((x) => x.uiQuietSince === null) && (b.saves || []).some((x) => x.uiPausedSince === null), 'both states are saved with the settings');
 
-process.stdout.write('\na shell that can\'t start refuses visibly\n');
-const x = S.refusal || {};
-assert(x.logged === true, 'the Logs tab says the shell was refused');
-assert(x.headerShown === false && x.controlShown === true, 'the old layout stays the whole app');
-eq(x.layoutAttr, null, 'no half-applied layout on the root');
+process.stdout.write('\na shell that can\'t start refuses visibly and leaves the old layout untouched\n');
+const X = S.refusal || {};
+for (const [k, why] of [['mount', 'mount-missing'], ['tokens', 'tokens-missing'], ['control', 'control-panel-missing']]) {
+  const x = X[k] || {};
+  assert((x.line || '').includes(`(${why})`) && /the old layout stays$/.test(x.line || ''), `${k}: the Logs tab says "${why}" and that the old layout stays`);
+  assert(x.headerShown === false && x.controlShown === true && x.topbarShown === true && x.railShown === false, `${k}: today's app with its top bar; no tab bar, no rail`);
+  eq(x.framesInPage, 0, `${k}: no brain or aquarium frame was left in the page`);
+  eq(x.rootAttrs, [], `${k}: no tab-layout marker on the root`);
+  assert(x.ctrlKPrevented === false && x.paletteInPage === false, `${k}: Ctrl K is left alone and no palette exists`);
+  assert(x.settingsRefusalLogged === true && x.logsOpened === true, `${k}: the Settings button says Settings is unavailable and opens Logs`);
+}
+
+process.stdout.write('\na layout switch that can\'t be saved says so\n');
+const sf = S.saveFails || {};
+assert(/Saving…$/.test(sf.first || ''), 'the line says "Saving…" until main answers');
+assert(/Not saved \(save-failed\)/.test(sf.final || '') && !/Saved;/.test(sf.final || ''), 'a failed save says "Not saved", never "Saved"');
+assert(sf.logged === true, 'and the Logs tab says which setting failed');
 
 process.stdout.write('\nnothing reached the network, and no renderer errors\n');
 eq(report.remote, [], 'no remote request');

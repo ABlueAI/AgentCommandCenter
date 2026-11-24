@@ -73,6 +73,12 @@
     return tokens;
   }
 
+  // Take every --mk-* token off the root again (the old layout keeps its own themes).
+  function clearTabTokens(rootEl) {
+    for (const name of Object.keys(Object.assign({}, TAB_TOKENS.brain, SHARED_TOKENS))) rootEl.style.removeProperty(`--mk-${name}`);
+    rootEl.removeAttribute('data-mako-tab');
+  }
+
   // WCAG 2 relative luminance and contrast ratio (https://www.w3.org/TR/WCAG21/#dfn-relative-luminance).
   function luminance(hex) {
     const m = /^#([0-9a-f]{6})$/i.exec(hex);
@@ -86,5 +92,5 @@
     return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
   }
 
-  return { TAB_IDS, TAB_TOKENS, SHARED_TOKENS, STATUS_TOKENS, isTab, tokensFor, applyTabTokens, luminance, contrast };
+  return { TAB_IDS, TAB_TOKENS, SHARED_TOKENS, STATUS_TOKENS, isTab, tokensFor, applyTabTokens, clearTabTokens, luminance, contrast };
 });
