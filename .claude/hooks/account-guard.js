@@ -19,9 +19,7 @@
 //      commands, subshells, command substitution and `bash -c "..."` included; for the PowerShell
 //      tool, PowerShell's own syntax: `&` and `.` calls, backtick line continuations, script
 //      blocks, `$(...)` groups, here-strings, `$x = ...` assignments, Invoke-Expression,
-//      Start-Process and `cmd /c`; an array of quoted strings that starts a statement, as in
-//      `Write-Output @('gh', 'pr', 'merge')`, is a value, not a command, unless the script could
-//      still run it as one: splitPowerShell and PS_INDIRECT), for
+//      Start-Process and `cmd /c`), for
 //        login-dependent commands (blocked only under ABlueAI): `gh pr create` (and its alias
 //          `gh pr new`), `gh pr ready` and `git push`;
 //        review and merge commands (blocked under any login, without asking gh who you are):
@@ -480,44 +478,21 @@ function psParenEndInner(s, open, ctx) {
 }
 
 // Split a PowerShell script into simple commands (arrays of words), like splitCommands does for Bash.
-// A group in argument position (`-ArgumentList @('pr','create')`, `& 'gh' @('pr','merge')`) also stays
-// in its word, so Start-Process, Invoke-Expression and the program it is passed to can read it: as the
-// group's one word when it holds a single value (an array's elements kept apart by PS_ARRAY_SEP, so a
-// native program gets them as separate arguments), else as raw text. Its commands are checked either way.
-//
-// A statement whose first word is an array of quoted strings (`'gh', 'pr', 'merge'`, also inside a
-// group, as in `Write-Output @('gh', 'pr', 'merge')`) is marked `arrayValue`: PowerShell parses a
-// statement that starts with a quoted string in expression mode, not as a command (about_Parsing), so
-// it is a value. Not after the call operator (`& 'gh','pr','merge'`), and not when the first element
-// is a bare word, a variable or anything else: those stay commands. findGuardedCommand decides
-// whether a marked statement is skipped (PS_INDIRECT).
+// A group in argument position (`-ArgumentList @('pr','create')`) also stays in its word as raw text,
+// so Start-Process and Invoke-Expression can read it; its commands are checked either way.
 function splitPowerShell(input, depth = 0, ctx = { unbalanced: false }) {
   const commands = [];
   if (typeof input !== 'string') return commands;
   if (depth > 8) { ctx.unbalanced = true; return commands; } // too deep to split: the text scan runs
   let words = [];
-  let starts = []; // index in `s` of the character that began each word
   let word = null;
-  let wordStart = -1;
-  let callOp = false; // this statement follows the call operator `&`
-  const endWord = () => { if (word !== null) { words.push(word); starts.push(wordStart); word = null; } };
-  const endCommand = () => {
-    endWord();
-    if (words.length) {
-      if (!callOp && words[0].includes(PS_ARRAY_SEP) && isOneOf(PS_SINGLE + PS_DOUBLE, s[starts[0]])) words.arrayValue = true;
-      commands.push(words);
-    }
-    words = [];
-    starts = [];
-    callOp = false;
-  };
-  const split = (text) => splitPowerShell(text, depth + 1, ctx);
-  const sub = (text) => { for (const c of split(text)) commands.push(c); };
+  const endWord = () => { if (word !== null) { words.push(word); word = null; } };
+  const endCommand = () => { endWord(); if (words.length) commands.push(words); words = []; };
+  const sub = (text) => { for (const c of splitPowerShell(text, depth + 1, ctx)) commands.push(c); };
 
   const s = input;
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
-    if (word === null) wordStart = i; // if this character starts a word, the word starts here
     if (c === '`') { // escape; a backtick at the end of a line continues the command
       if (s[i + 1] === '\n') { i++; continue; }
       if (s[i + 1] === '\r' && s[i + 2] === '\n') { i += 2; continue; }
@@ -553,12 +528,8 @@ function splitPowerShell(input, depth = 0, ctx = { unbalanced: false }) {
       const open = c === '(' ? i + 1 : i + 2;
       const close = psParenEnd(s, open, ctx);
       const inner = s.slice(open, close);
-      const innerCommands = split(inner);
-      for (const cmd of innerCommands) commands.push(cmd);
-      if (word !== null || words.length) { // an argument: keep its value, or else its text
-        const single = innerCommands.length === 1 && innerCommands[0].length === 1;
-        word = (word || '') + (single ? innerCommands[0][0] : inner);
-      }
+      sub(inner);
+      if (word !== null || words.length) word = (word || '') + inner; // an argument: keep its text
       i = close;
       continue;
     }
@@ -586,10 +557,8 @@ function splitPowerShell(input, depth = 0, ctx = { unbalanced: false }) {
       // not `-ArgumentList:'x' , 'y'`, whose value is attached) or with nothing before it, the comma
       // is the unary array operator and starts a new argument.
       if (word !== null) word += PS_ARRAY_SEP;
-      else if (words.length && !/^-[A-Za-z][^:]*$/.test(words[words.length - 1])) {
-        word = words.pop() + PS_ARRAY_SEP;
-        wordStart = starts.pop();
-      } else word = PS_ARRAY_SEP;
+      else if (words.length && !/^-[A-Za-z][^:]*$/.test(words[words.length - 1])) word = words.pop() + PS_ARRAY_SEP;
+      else word = PS_ARRAY_SEP;
       for (;;) { // skip spaces, line breaks, backtick line continuations and comments after it
         const j = i + 1;
         const ws = /^(?:\s+|`\r?\n)/.exec(s.slice(j, j + 66));
@@ -605,22 +574,13 @@ function splitPowerShell(input, depth = 0, ctx = { unbalanced: false }) {
       }
       continue;
     }
-    if (c === '&') {
-      if (s[i + 1] === '&') { endCommand(); i++; continue; } // `a && b` (PowerShell 7)
-      // With nothing before it in the statement, `&` is the call operator; after a command, it runs
-      // that command in the background (PowerShell 7) and ends it.
-      const call = word === null && !words.length;
-      endCommand();
-      callOp = call;
-      continue;
-    }
     if (PS_SEPARATORS.has(c)) { endCommand(); continue; }
     if (c === ' ' || c === '\t') {
       if (word === '--%') { // stop-parsing token: the rest of the line goes to the program as is
         endWord();
         let end = i;
         while (end < s.length && s[end] !== '\n' && s[end] !== '|') end++;
-        for (const w of s.slice(i, end).split(/\s+/)) if (w) { words.push(w.replace(/"/g, '')); starts.push(i); }
+        for (const w of s.slice(i, end).split(/\s+/)) if (w) words.push(w.replace(/"/g, ''));
         i = end - 1;
         continue;
       }
@@ -859,14 +819,6 @@ function rawScan(command) {
   return pickHit(rawScanAll(command));
 }
 
-// A PowerShell script that can turn a value into a command the splitter can't follow: the call or
-// dot-source operator on a variable or expression (`& $c`, `& (...)`, `. $c`), Invoke-Expression,
-// Start-Process, Invoke-Command, jobs, script blocks built from text or invoked by method, or `-join`
-// (which makes a command line out of an array). In such a script an array value that spells a
-// guarded command (`'gh', 'pr', 'merge'`) is still treated as that command: fail closed, since the
-// guard can't tell whether the value is only output. Matched anywhere in the text, strings included.
-const PS_INDIRECT = /(?:^|[\s;|&(){}=,])(?:iex|invoke-expression|invoke-command|icm|start-process|saps|start|start-job|sajb)(?=$|[\s;|&(){}'"])|(?:^|[\s;|(){}=,])[&.]\s*[$(@]|-join\b|\[scriptblock\]|invokecommand|\.invoke(?:returnasis)?\s*\(/i;
-
 // The guarded command in a command line (a review or merge command first, else the first
 // login-dependent one), or null. `mode` is 'bash' (the Bash tool) or 'ps' (the PowerShell tool).
 // Never touches the network.
@@ -875,11 +827,7 @@ function findGuardedCommand(command, depth = 0, mode = 'bash') {
   const ctx = { unbalanced: false };
   const hits = [];
   const split = mode === 'ps' ? splitPowerShell : splitCommands;
-  // A PowerShell array value (`Write-Output @('gh', 'pr', 'merge')`; splitPowerShell) is not a
-  // command, unless the script could still run it as one (PS_INDIRECT).
-  const skipValues = mode === 'ps' && !PS_INDIRECT.test(command);
   for (const words of split(command, depth, ctx)) {
-    if (skipValues && words.arrayValue === true) continue;
     const hit = classifySimpleCommand(words, depth, mode);
     if (hit) hits.push(hit);
   }
