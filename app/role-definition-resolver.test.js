@@ -20,7 +20,7 @@ function assert(cond, label) {
 }
 function section(t) { process.stdout.write('\n' + t + '\n'); }
 
-const HOME = 'C:\\Users\\levij';
+const HOME = 'C:\\Users\\sampleuser';
 const SANDBOX = 'D:\\Workspace\\.command-center\\outputs\\web-scout-2026-08-28T00-00-00-abc123';
 
 function roleDoc(name, extra) {
