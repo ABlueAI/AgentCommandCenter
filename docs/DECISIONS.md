@@ -209,6 +209,17 @@ his words as that comment relays them.
 | **CRITICAL is defined** as a finding that would: expose a secret, a token or client data; let an agent merge, push to `main`, change repository settings or get past a guard; destroy work or data that can't be recovered; let outside text run commands (unsafe input to the terminal, IPC or a validator); or stop Mako from starting on `main`. A CRITICAL finding stops the PR and notifies Blue at once; HIGH and MEDIUM are fixed in the next batch; LOW goes to follow-ups. The rule text itself changes in ECC PR 2 (S40), not here. | Defined by Blue (no words relayed beyond the definition). |
 | **Claude video analysis in Video Scout is 1.1,** confirmed: 1 frame per second plus audio, an option other than Gemini (S54). | Confirmed (no words relayed). |
 
+## 2026-11-15: the sanitizer test (S41, issue #172)
+
+Recorded on 2026-11-24 by PR #228, placed by its decision date. Blue answered issue #172's questions on 2026-11-15. Recorded from the issue's "Decisions" section,
+which quotes him.
+
+| Decision | Blue's words |
+|---|---|
+| The home-folder paths already in tracked files are allowlisted per file with exact counts; any new mention fails CI. | "Allowlist them" |
+| The recommended answers: built from the issue by a cloud session as `ABlueAgent`; the test values switch to a made-up user name in the same PR; an email address is flagged when its domain isn't on a short safe list; a small secret backstop stays even though push protection is on. | "yes, Go on the sanitizer test with my recommended answers" |
+| The build includes the "top professional" additions (issue #172 rules 1 to 7: placeholder list, safe domains, ratchet allowlist, masked output, self-tests). | "lets add What a top professional would add." |
+
 ## 2026-11-07
 
 | Decision | Blue's words |

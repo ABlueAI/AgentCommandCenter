@@ -651,10 +651,10 @@ process.stdout.write('\nMALFORMED saved state never reaches fromJSON in the real
       `${entry.label}: fromJSON was NEVER called — the live workspace is unchanged`);
     assert(entry.killsDuring === 0, `${entry.label}: no PTY was killed`);
     // The status carries a bounded code, never a fragment of the refused state.
-    assert(!/D:\\|C:\\|levij|secret|iframe|floatingGroups|params/.test(entry.status),
+    assert(!/D:\\|C:\\|sampleuser|secret|iframe|floatingGroups|params/.test(entry.status),
       `${entry.label}: the refusal echoes no fragment of the corrupted state`);
   }
-  assert(!/D:\\Workspace\\secret|C:\\Users\\levij|iframe/.test(M.logs),
+  assert(!/D:\\Workspace\\secret|C:\\Users\\sampleuser|iframe/.test(M.logs),
     'and neither does the Logs tab');
   assert(M.ptyKill.length === 0, 'no PTY was killed across every corruption');
   assert(JSON.stringify(M.owned.sort()) === JSON.stringify(['pty1', 'pty2']),
