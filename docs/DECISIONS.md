@@ -3,6 +3,31 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-24: Claude sessions mark Codex PRs ready
+
+Blue decided this in his main chat on 2026-11-24; his words are quoted as the hand-off for this PR
+relayed them. How AGENTS.md words it ("Merge order", "Codex PRs", and the re-trigger in "How work
+flows" step 3) is proposed, pending Blue (this PR); merging approves it. It replaces, for draft
+state only, the AGENTS.md rule that Claude never changes a Codex PR's draft state ("Merge order"),
+and the builder's reading in item 1 of the first 2026-11-23 entry below that a `codex/` PR is
+re-triggered by Codex or Blue. Which Codex PRs Claude may push to is unchanged here (AGENTS.md "Who
+does what"; PR #225 proposes Blue's 2026-11-23 decisions on that). "Builder's reading" marks a line
+that is the builder's, not Blue's.
+
+| Decision | Blue's words |
+|---|---|
+| **A Claude session may mark a Codex PR ready under the same rule as Claude's own PRs** (and, builder's reading below, convert it to draft and back to re-trigger Codex's review). He was asked: "Let the sweeper mark Codex PRs ready once Claude's review passes?" The recommendation he approved: Codex PRs go ready under the same rules as Claude's (CI green, Claude's review clean, the merge-order check passes, no `needs-blue` or `waits-for-merge` label, no draft hold or pending verdict of Blue's). Marking a PR ready also starts Codex's automatic review, which gives Codex's pass (2026-11-23 entry, item 1). Why: the old rule made sense while Codex fixed its own PRs; since Blue's 2026-11-23 decisions that Claude fixes Codex's PRs and merges `main` into them ("id love to", "yes, thats fine", "for the last time yes", as relayed; PR #225 proposes their rule), it only blocked: PR #231 was reviewed clean on 2026-11-24 but stayed a draft, and #206, #208 and #209 stalled the same way. Builder's reading (from the hand-off): it covers any Claude session working the PR (the PR sweeper, the runner, or the session that reviewed it), and the draft-and-back re-trigger, which follows from "the same rules as Claude's" (AGENTS.md step 3), happens at most once per head and never under a hold or label that bars marking ready. The PR sweeper's prompt calls this decision "D-076". | "Yes, sweeper marks ready" |
+
+## 2026-11-24: S48's OSS verdict (vault memory)
+
+Blue gave it in Mako main's chat, answering checklist step 68 with the recommendation in
+`docs/decisions/OSS-memory.md` (PR #209) in front of him. Recorded word for word in that record's
+"Blue's verdict" section.
+
+| Decision | Blue's words |
+|---|---|
+| S48's OSS verdicts: **PROTOTYPE** for an isolated Open Second Brain subset; **PATTERN-MINE** for ai-memory and GBrain. The record's recommendation, accepted unchanged. Whether any of the three was among the memory tools dropped on 2026-11-16 is not answered; that sign-off still applies if one was. | "sounds correct, go with that" |
+
 ## 2026-11-24: S42's rulebook wording (proposed, pending Blue (PR #242))
 
 S42 moves the rule changes Blue decided on 2026-11-16 and 2026-11-21 into AGENTS.md and
@@ -25,6 +50,20 @@ pending Blue (PR #241)**; merging that PR approves it.
 |---|---|
 | A cloud session opens S56's 9 bug issues from Codex's renderer audit so Codex can build S56 next. Done 2026-11-24 as #232 to #240, listed on #197; the cloud session that opened them judged none to be a security gap (builder's reading, not Blue's). | "Yes, open them" |
 | S56's row stops being tagged Sensitive: its clause about a bug that is a security gap no longer uses the word the plan sync reads as the tag, so #197 loses the `sensitive` label and the row fits the Codex builder lane. A bug that turns out to be a security gap still stays with Claude. | "Fix the Sensitive tag on S56 in the plan" |
+
+## 2026-11-23 to 2026-11-24: PR #218 (S37), review runs past the cap and the fail-closed word scan
+
+Blue gave these in the sessions that worked on PR #218. The quotes in the first three rows are as
+those sessions relayed them in PR #218's TLDR and review comments; the last row's is his words in the
+session that ran review run 9. Each run past 5 is a one-time exception to AGENTS.md "The review
+loop" ("At most 5 runs per PR") for PR #218 only; the rule itself is unchanged.
+
+| Decision | Blue's words |
+|---|---|
+| Codex's finding on PR #218 (head `004b8cd`) is handled on the PR, so the PR was pushed to after it was marked ready, which dismissed his approval of `004b8cd` (2026-11-23). | "yes to both" |
+| Review run 6 on PR #218, then run 7, one at a time (2026-11-24). | "run 6 on #218" · "run 7 on #218" |
+| Review run 8 on PR #218, with the PowerShell check failing closed: a PowerShell script that names a guarded command's words anywhere gets the login check, instead of more parsing to tell a printed value from a run command (2026-11-24). | "Yes, run 8 fail-closed" |
+| Review run 9 on PR #218, for run 8's open medium and its three lows (2026-11-24). | "run review 9" |
 
 ## 2026-11-23: hard rules, Codex's pass before ready, agent-account pacing
 
@@ -129,6 +168,18 @@ queue and checklist step 65) is **proposed, pending Blue (PR #204)**; merging th
 | **Gap audit A10 and A11 (homeless since S25 was dropped):** Dependabot's routine version-update PRs and the speech-stack upgrade that clears the remaining npm advisories (7 in the gap audit's count of 2026-10-19; 3 `sharp` findings after S36, docs/DEPENDENCY-ADVISORIES.md) go to the 1.2 queue; Nimbalyst is dropped; issue #164 stays open as the pick-up list of small month-one follow-ups. Also now: Blue turns on Dependabot alerts and Dependabot security updates in the repository's settings (checklist step 65; repository settings are his, agents never change them). How Dependabot's PRs are reviewed and ordered is issue #205. | "I agree with what the chat recommends. I'd add one thing: turn on Dependabot alerts and security updates in the repo settings now  Dependabot's routine version-update PRs go to 1.2" |
 | **The vault memory doesn't wait on the schedule; S48 is split.** S48 needed S14, which needs S61, so it waited on the schedule anyway. The vault memory keeps S48 and needs only the H1 setup day; the tree and merged-work history become S62, which still needs S14. Answers the question PR #195 left on whether S48 waits on S61. | "S48 waits on the schedule? No. But "no" only helps if S48 is also split. Today S48 needs S14, which needs S61, so it waits on the schedule anyway. Splitting it lets the vault memory start after H1 day (schedule fix 5)." |
 | Approved: Blue merged PR #195 on 2026-11-17, which approves the 2026-11-17 entry "Blue's answers to the five questions PR #173 left him" (marked "proposed, pending Blue (PR #195)"). The wording stays below as history; agents follow this entry. | Merging is approval (docs/PLAN-1.1.md "When the plan changes"); no new words. |
+
+## 2026-11-18: S52 HyperFrames verdict (PR #206)
+
+Blue's verdict on the S52 OSS record, given in his main chat and recorded in [the
+record](decisions/OSS-hyperframes.md#blues-verdict) and checklist step 66. His words are as quoted
+in the Mako main session's hand-off to the Claude cloud session that pushed the review fixes
+([session](https://claude.ai/code/session_01UWhuMF5YrgU1ojPL6DN1Q1)). Builder's reading: "both of
+those recommendations" are the S52 and S53 recommendations; S53's verdict is recorded in PR #208.
+
+| Decision | Blue's words |
+|---|---|
+| **S52 HyperFrames: FORK, conditional.** Blue adopted Mako main's recommendation: first a Windows trial on the VM, with the browser sandbox on, outside connections blocked and logged, and the media commands that call China-origin models removed. Fork only if that trial shows no outside connections and no sandbox downgrade. The fork also blocks or explains the egress seen in the Linux trial, and refuses visibly when Chromium's sandbox can't start (the record's FORK row). | 2026-11-18: "I think your recommendation verdicts are very good. So, yes to both of those recommendations." Reconfirmed 2026-11-23: "yes i do recall now", "agree". |
 
 ## 2026-11-17: S39 (ECC PR 1)
 

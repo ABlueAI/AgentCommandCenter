@@ -6,7 +6,8 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
-Last updated 2026-11-21 by Claude (your decisions of 2026-11-16 to 2026-11-21, PR #212: steps 27
+Last updated 2026-11-23 by Claude (S37, PR #218: step 69 added, a 3-minute live check of the
+account guard on the PowerShell tool); earlier, on 2026-11-21 (your decisions of 2026-11-16 to 2026-11-21, PR #212: steps 27
 and 50 leave the top of "Do next", steps 57, 60 and 63 follow your answers, step 68 added, dated
 reminders added; earlier, on 2026-11-18, your answers to PR #195's questions, PR #204: step 65 added,
 S48 split; earlier, on 2026-11-17, your answers to PR #173's questions, PR #195: step 64 added,
@@ -40,14 +41,15 @@ On 2026-11-21 steps 27 and 50 left the top (your decision: the runner they check
 2. **Step 59**, re-link Codex reviews to `ABlueAgent` (about 5 minutes; your yes, 2026-11-16), and
    **step 65**, Dependabot alerts and security updates on (about 3 minutes; your words, 2026-11-18).
    **Step 63** on 2026-11-30: the Codex check-in, the first of the weekly checks. **Step 68**,
-   your verdict on PR #209's OSS record for S48 (about 15 minutes).
+   your verdict on PR #209's OSS record for S48, is done (2026-11-24); merge PR #209 to adopt it.
 3. **Step 54**, the H1 setup day (1.5 to 3 hours). H1 is the PC Mako is to run on unattended. It
    takes in the step 43 re-run and the step 25 tick, and S44 and S48 (the vault memory and its
    nightly tidy) wait on it; S48 no longer waits on the schedule (2026-11-18).
 4. **Step 15**, the voice check on the new Electron. S36 moves Electron to 42.11.16, so if that has
    merged, check on that version.
 5. **Step 35, then step 49**, after PR #170 (the account fix follows it): the agent token in Mako,
-   then removing the `ABlueAI` command-line login from every PC Claude runs on.
+   then removing the `ABlueAI` command-line login from every PC Claude runs on. If PR #218 is
+   merged by then, do step 69 (3 minutes) before step 49.
 6. **Step 56**, memory setup (about 45 minutes over 2 days), when S48's PR asks for it, and
    **step 55**, H1 trial part 2, the aquarium (15 to 20 minutes), when S20's PR asks for it.
 7. Your Composer scope sign-off unblocks S51.
@@ -1030,6 +1032,15 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   - *Done when:* the page-reader test and the final suite, `renderer/admission-view.test.js`, both
     pass and `npm test` exits successfully. Tell an agent the result so it can tick this with the date.
 
+- [ ] **76. Issue #162 on your PC: the Page Reader refuses local addresses.** About **3 minutes**,
+  after you merge PR #250 (it adds the `ipaddr.js` package).
+  - Pull `main`, run `npm ci` in `app`, and restart Mako fully. Until `npm ci` has run, Mako starts
+    as usual and only the Page Reader refuses, with "run npm ci in the app folder, then restart Mako".
+  - **New Agent > 📄 Page**, enter `https://localhost/`, **Create & Launch**: it should refuse with
+    "The Page Reader reads public web pages only, never this PC or your local network." Then enter a
+    www.reddit.com thread URL: the page-reader pane should start as before.
+  - *Done when:* you tell an agent both results. It ticks this with the date.
+
 - [ ] **44. S09 on your PC: Resume or Start fresh.** About **5 minutes**, after you merge the S09
   PR, #131 (and S08's step 39, which it builds on).
   - Pull `main` and restart Mako fully. Open a builder pane on a worktree and a bare `claude` pane,
@@ -1169,18 +1180,50 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
     before you merge one. How the merge-order check and the runner treat them is issue #205.
   - *Done when:* you say both are on. Claude can't read these settings (they show only to admins),
     so it ticks this on your word, and notes the first Dependabot alert or PR it sees as a check.
+- [x] **66. Give the HyperFrames verdict (S52).**
+  Verdict: FORK, conditional. Blue (2026-11-18, in his main chat), adopting Mako main's recommendation: 'I think your recommendation verdicts are very good. So, yes to both of those recommendations.' Reconfirmed by Blue on 2026-11-23 ('yes i do recall now', 'agree'). The recommendation he adopted: first a Windows trial on the VM, with the browser sandbox on, outside connections blocked and logged, and the media commands that call China-origin models removed. Fork only if that trial shows no outside connections and no sandbox downgrade.
+  - *Verification:* checked 2026-11-23 (UTC) by a Claude cloud session against Blue's words as
+    quoted in the Mako main session's hand-off to it
+    ([session](https://claude.ai/code/session_01UWhuMF5YrgU1ojPL6DN1Q1)). Recorded in the [S52 vetting and trial record](docs/decisions/OSS-hyperframes.md#blues-verdict)
+    and [the decisions log](docs/DECISIONS.md#2026-11-18-s52-hyperframes-verdict-pr-206).
 
 ## From your decisions of 2026-11-16 to 2026-11-21
 
 Step 68 comes from those decisions (docs/DECISIONS.md, 2026-11-21). Step numbers 66 and 67 belong to
 open PRs (#206 and #208).
 
-- [ ] **68. Your verdict on S48's OSS record (PR #209).** **About 15 minutes**, any time before S48
+- [x] **68. Your verdict on S48's OSS record (PR #209).** *Done 2026-11-24: you answered in Mako
+  main's chat, "sounds correct, go with that", accepting PROTOTYPE for an isolated Open Second Brain
+  subset and PATTERN-MINE for ai-memory and GBrain. Checked from your answer as relayed word for word
+  by the Mako main session that heard it to the cloud session that recorded it in PR #209 (Claude
+  can't see that chat itself). Next: merge PR #209 to adopt it.* **About 15 minutes**, any time before S48
   starts. S48 (the vault memory) takes PR #209's open-source record, `docs/decisions/OSS-memory.md`,
   as its OSS record once you give your verdict (your decision, 2026-11-21). Read the record and give
   your verdict (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD FRESH) in your own words to any agent.
   - *Done when:* your verdict is in the record, word for word, and the agent ticks this with the
     date.
+## From S37 (the account guard and the PowerShell tool)
+
+Step 69 comes from S37 (PR #218, issue #217), not from the decisions above.
+
+- [ ] **69. Check that the account guard stops PR work through the PowerShell tool (S37, PR #218).**
+  **About 3 minutes**, on your PC after merging PR #218 and before step 49 removes your command-line
+  login (the check needs `gh` logged in as `ABlueAI`). CI tests the guard with the input Claude Code's
+  docs describe, but only a real session shows that Claude Code starts it for its PowerShell tool.
+  - Pull `main`, then start a **new** Claude Code chat in the Mako repo folder (hooks load when a
+    session starts). Tell it: "Use your PowerShell tool, not Bash, to run `gh pr ready 999999`."
+  - Expected: the command doesn't run, and Claude shows "Blocked by Mako's account guard ... this
+    session's GitHub CLI login is ABlueAI". If gh answers instead (for example "no pull requests
+    found"), the guard didn't run: tell any agent "step 69 failed" with what you saw. Nothing is
+    changed either way, since PR 999999 doesn't exist. If Claude says it has no PowerShell tool,
+    say so; the check is then not applicable on that PC.
+  - If you've already removed your command-line login (step 49) and `gh auth status` shows no
+    account at all, the guard instead shows "couldn't check the GitHub login before `gh pr ready`
+    ... allowed". That also passes: it shows the guard ran for the PowerShell tool. If gh is still
+    logged in to another account, the guard rightly lets the command through, so the check can't
+    show anything: tell an agent "step 69 not applicable" instead.
+  - *Done when:* you've told an agent what Claude showed, and it ticks this with the date and your
+    words.
 
 - [ ] **70. Finish the PR sweeper's set-up.** **About 5 minutes**, after PR #225 merges. At
   claude.ai/code/routines, open "Mako PR sweeper": (a) check it has a push-to-`main` trigger besides
@@ -1204,6 +1247,20 @@ Step 72 comes from PR #227 (docs/DECISIONS.md, 2026-11-23). Step numbers 69 to 7
   `NOT READY: no Codex pass`.
   - *Done when:* your answer is in docs/DECISIONS.md, and an agent has checked on GitHub that one
     of those PRs has Codex's pass (or that your answer says otherwise) and ticks this with the date.
+
+## From S58 (fenced web-reading agents)
+
+Step 75 comes from PR #245. Step numbers 73 and 74 belong to open PRs (#230 and #231).
+
+- [ ] **75. Re-deploy the fence hook after PR #245 merges.** **About 3 minutes**, the next time you
+  open Mako after merging PR #245. The PR changes the fence hook, and Mako refuses to launch the
+  fenced roles (Web Scout, Source Scout, Operator and Page panes) until the deployed copy matches the new one.
+  - Pull `main`, run `scripts/sync-roles.ps1`, and restart Mako fully.
+  - **New Agent > 🌐 Web Scout**, **Create & Launch**. The pane should start (before the sync, Mako
+    refuses to start it). Then ask it
+    to read `C:\Windows\win.ini`: it should show "Blocked by Mako path fence" and not the file.
+  - *Done when:* a Web Scout pane launches after the sync, and you tell any agent "step 75 done"; it ticks
+    this with the date.
 
 ## Every day, once the runner is on
 
@@ -1256,6 +1313,13 @@ You can start on the first one now, which saves time later.
   edited, by anyone else), or hand it to an agent in its own session to open the PR. Not as a PR of your
   own: you can't approve your own PR, so it couldn't merge. S28 stays `NEEDS BLUE (package)` until
   it arrives.
+- [ ] **71. Your verdict on S63's UI-library record (PR #224).** **About 15 minutes**, any time
+  before S49 or S51 picks its chat and graph libraries. S63 delivered an OSS record,
+  `docs/decisions/OSS-ui-libraries.md`, in place of the `docs/research/` write-up its plan row
+  names. Read it and give your verdict on each option (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD
+  FRESH) in your own words to any agent.
+  - *Done when:* your verdict is in the record's "Blue's verdict" line, word for word, and the agent
+    ticks this with the date.
 
 ## Dated reminders
 

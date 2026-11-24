@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 'use strict';
-// Account guard: a Claude Code PreToolUse hook on the Bash tool (.claude/settings.json).
+// Account guard: a Claude Code PreToolUse hook on the Bash and PowerShell tools (.claude/settings.json,
+// matcher `Bash|PowerShell`; the PowerShell tool was a known gap until S37, issue #217).
 //
 // Why: Blue can't approve a PR that his own GitHub login (`ABlueAI`) opened or last pushed to,
 // because `main`'s ruleset needs a code owner's approval of the latest push and he is the only
@@ -14,8 +15,13 @@
 // #137). So review and merge calls are blocked under ANY login, not only ABlueAI's.
 //
 // What it does, in order:
-//   1. Reads the hook input (JSON on stdin) and looks, anywhere in the Bash command (chained
-//      commands, subshells, command substitution and `bash -c "..."` included), for
+//   1. Reads the hook input (JSON on stdin) and looks, anywhere in the command (chained
+//      commands, subshells, command substitution and `bash -c "..."` included; for the PowerShell
+//      tool, PowerShell's own syntax: `&` and `.` calls, backtick line continuations, script
+//      blocks, `$(...)` groups, here-strings, `$x = ...` assignments, Invoke-Expression,
+//      Start-Process and `cmd /c`; a command after `return`, `throw` or `exit`; and, on
+//      top, the PowerShell word scan: a PowerShell script that names a guarded command's words
+//      anywhere, in any order or case, gets the login check, fail-closed; see psWordScan), for
 //        login-dependent commands (blocked only under ABlueAI): `gh pr create` (and its alias
 //          `gh pr new`), `gh pr ready` and `git push`;
 //        review and merge commands (blocked under any login, without asking gh who you are):
@@ -59,13 +65,18 @@
 //
 // Known gaps (not a security boundary; it guards against an honest session using the wrong
 // login): wrappers that take their own options (`timeout 60 git push`, `nice -n 5`, `sudo -u x`,
-// `xargs`, `cmd /c`), `pwsh -EncodedCommand`, scripts or npm scripts that push, merge or review,
+// `xargs`, and `cmd /c` from Bash), `pwsh -EncodedCommand`, `pwsh -File` and a script piped into
+// pwsh's standard input, in PowerShell a guarded command whose words appear only as fragments
+// (`'g' + 'it'`, `[char]103`, base64; whole words held in a variable or an array, as in `gh @a`,
+// are found by the word scan, but get only the login check, so a review or merge command found
+// that way alone is not blocked under an agent login), scripts or npm scripts that push, merge or review,
 // `gh api` calls that create PRs, `gh api` whose endpoint or method comes from a shell variable or a
 // file (`gh api "$URL"`, `--input` bodies are matched by the flag, not their content), `gh api`
 // reached through an alias or `gh -R x api` with other global options, a GraphQL mutation read from
 // a file (`-F query=@mutation.graphql`), `curl` or SDK calls to
-// api.github.com with a token, and tools other than Bash (Claude Code's PowerShell tool, GitHub MCP
-// tools: .claude/settings.json denies the ones whose names were checked). A process running as
+// api.github.com with a token, and tools other than Bash and PowerShell (GitHub MCP tools:
+// .claude/settings.json denies the ones whose names were checked; its deny rules are written for
+// the Bash tool, issue #219). A process running as
 // Blue's Windows user can still use his stored logins, which is why he removes them after
 // checklist step 35 (BLUE-CHECKLIST.md step 49). Review and merge calls are guarded only as far as
 // this hook sees them: the real gate is that `main` needs Blue's approval, and the merge audit
@@ -333,6 +344,345 @@ function splitCommands(input, depth = 0, ctx = { unbalanced: false }) {
   return commands;
 }
 
+// ---------------------------------------------------------------------------------------------
+// PowerShell (Claude Code's PowerShell tool, and `pwsh -Command` scripts)
+//
+// PowerShell's syntax is not Bash's, so its commands get their own splitter, with the same output:
+// simple commands as arrays of words, with every nested command (a `$(...)`, `@(...)` or `(...)`
+// group, a `{ ... }` script block) split out as a command of its own. The differences that matter:
+// the backtick is the escape and line-continuation character (not command substitution); `'...'`
+// doubles a quote to escape it; `"..."` runs its `$(...)` groups; `@'...'@` and `@"..."@` are
+// here-strings (data; the `@"` kind still runs its `$(...)`); `#` and `<# ... #>` are comments; `&`
+// is also the call operator (`& gh pr create`), which splitting on `&` handles; `{ }` script blocks
+// run their contents (`if (...) { git push }`, `& { ... }`, `ForEach-Object { ... }`), so their
+// contents are always checked; and PowerShell takes the typographic quotes as quotes too.
+// Language reference: about_Quoting_Rules, about_Special_Characters, about_Parsing, about_Comments
+// (learn.microsoft.com, PowerShell 7). Anything it can't close falls back to the text scan below.
+
+const PS_SINGLE = "'‘’‚‛";
+const PS_DOUBLE = '"“”„';
+const PS_SEPARATORS = new Set([';', '&', '|', '\n', '\r', '{', '}', ')']);
+// Separates the elements of an array argument (`'pr', 'merge'`) inside one word. PowerShell passes
+// each element to a native program as an argument of its own, so classifySimpleCommand splits on it.
+const PS_ARRAY_SEP = '\u001F';
+const flattenArrays = (words) => words.flatMap((w) => (w.includes(PS_ARRAY_SEP) ? w.split(PS_ARRAY_SEP).filter(Boolean) : [w]));
+// True when `ch` is one character of `chars` (a bare `includes` would also accept '' or undefined).
+const isOneOf = (chars, ch) => typeof ch === 'string' && ch.length === 1 && chars.includes(ch);
+
+// At a quote (index i), returns the index of its closing quote; a doubled quote is an escaped one.
+// In a double-quoted string the backtick escapes the next character and `$(...)` runs (onSub gets
+// its text). Returns s.length, and marks ctx.unbalanced, if the string never closes.
+function psStringEnd(s, i, ctx, onSub) {
+  const single = isOneOf(PS_SINGLE, s[i]);
+  const quotes = single ? PS_SINGLE : PS_DOUBLE;
+  for (let j = i + 1; j < s.length; j++) {
+    const c = s[j];
+    if (!single && c === '`') { j++; continue; }
+    if (!single && c === '$' && s[j + 1] === '(') {
+      const close = psParenEnd(s, j + 2, ctx);
+      if (onSub) onSub(s.slice(j + 2, close));
+      j = close;
+      continue;
+    }
+    if (isOneOf(quotes, c)) {
+      if (isOneOf(quotes, s[j + 1])) { j++; continue; }
+      return j;
+    }
+  }
+  ctx.unbalanced = true;
+  return s.length;
+}
+
+// At `@` followed by a quote and the end of the line (index i), returns { body, end, expandable }
+// for a here-string, where `end` is the index of the closing `@`; null if this is not a here-string.
+// The closing quote and `@` must start a line, as in PowerShell (about_Quoting_Rules): an indented
+// one is body text. An indented one still marks ctx.unbalanced, so the text scan also runs in case
+// a PowerShell version reads it differently. A here-string that never closes marks ctx.unbalanced.
+function psHereString(s, i, ctx) {
+  if (s[i] !== '@' || !isOneOf(PS_SINGLE + PS_DOUBLE, s[i + 1])) return null;
+  const m = /^[ \t]*\r?\n/.exec(s.slice(i + 2));
+  if (!m) return null;
+  const expandable = isOneOf(PS_DOUBLE, s[i + 1]);
+  const quotes = expandable ? PS_DOUBLE : PS_SINGLE;
+  const bodyStart = i + 2 + m[0].length;
+  let pos = bodyStart;
+  for (;;) {
+    const lineStart = pos;
+    if (isOneOf(quotes, s[lineStart]) && s[lineStart + 1] === '@') {
+      const body = s.slice(bodyStart, Math.max(bodyStart, lineStart - 1)).replace(/\r$/, '');
+      return { body, end: lineStart + 1, expandable };
+    }
+    let k = lineStart;
+    while (s[k] === ' ' || s[k] === '\t') k++;
+    if (k > lineStart && isOneOf(quotes, s[k]) && s[k + 1] === '@') ctx.unbalanced = true;
+    const next = s.indexOf('\n', pos);
+    if (next === -1) break;
+    pos = next + 1;
+  }
+  ctx.unbalanced = true;
+  return { body: s.slice(bodyStart), end: s.length, expandable };
+}
+
+// The `$(...)` groups an expandable here-string body runs (a backtick escapes the `$`).
+function psBodySubstitutions(body, ctx) {
+  const found = [];
+  for (let i = 0; i < body.length; i++) {
+    if (body[i] === '`') { i++; continue; }
+    if (body[i] === '$' && body[i + 1] === '(') {
+      const close = psParenEnd(body, i + 2, ctx);
+      found.push(body.slice(i + 2, close));
+      i = close;
+    }
+  }
+  return found;
+}
+
+// Index of the `)` that closes a group whose text starts at `open` (just after the `(`), skipping
+// strings, here-strings, comments and escapes. Returns s.length, and marks ctx.unbalanced, if none.
+// Groups nested in strings recurse (`"$("$(...)")"`), so past PS_MAX_NEST levels it gives up the same
+// way (the text scan then runs) instead of running out of stack, which would fail open.
+const PS_MAX_NEST = 64;
+function psParenEnd(s, open, ctx) {
+  ctx.nest = (ctx.nest || 0) + 1;
+  try {
+    if (ctx.nest > PS_MAX_NEST) { ctx.unbalanced = true; return s.length; }
+    return psParenEndInner(s, open, ctx);
+  } finally {
+    ctx.nest--;
+  }
+}
+function psParenEndInner(s, open, ctx) {
+  let depth = 1;
+  for (let i = open; i < s.length; i++) {
+    const c = s[i];
+    if (c === '`') { i++; continue; }
+    if (isOneOf(PS_SINGLE + PS_DOUBLE, c)) { i = psStringEnd(s, i, ctx); continue; }
+    if (c === '@') {
+      const h = psHereString(s, i, ctx);
+      if (h) { i = h.end; continue; }
+    }
+    if (c === '<' && s[i + 1] === '#') {
+      const close = s.indexOf('#>', i + 2);
+      if (close === -1) break;
+      i = close + 1;
+      continue;
+    }
+    if (c === '#' && (i === open || /[\s;(|&{]/.test(s[i - 1]))) {
+      const nl = s.indexOf('\n', i);
+      if (nl === -1) break;
+      i = nl;
+      continue;
+    }
+    if (c === '(') depth++;
+    else if (c === ')' && --depth === 0) return i;
+  }
+  ctx.unbalanced = true;
+  return s.length;
+}
+
+// Split a PowerShell script into simple commands (arrays of words), like splitCommands does for Bash.
+// A group in argument position (`-ArgumentList @('pr','create')`, `& 'gh' @('pr','merge')`) also stays
+// in its word, so Start-Process, Invoke-Expression and the program it is passed to can read it: as the
+// group's one word when it holds a single value (an array's elements kept apart by PS_ARRAY_SEP, so a
+// native program gets them as separate arguments), else as raw text. Its commands are checked either way.
+// An array of strings is read as a command wherever it appears (`Write-Output @('gh', 'pr', 'merge')`
+// included): the splitter doesn't try to tell a printed value from a run one (fails closed).
+function splitPowerShell(input, depth = 0, ctx = { unbalanced: false }) {
+  const commands = [];
+  if (typeof input !== 'string') return commands;
+  if (depth > 8) { ctx.unbalanced = true; return commands; } // too deep to split: the text scan runs
+  let words = [];
+  let word = null;
+  const endWord = () => { if (word !== null) { words.push(word); word = null; } };
+  const endCommand = () => { endWord(); if (words.length) commands.push(words); words = []; };
+  const split = (text) => splitPowerShell(text, depth + 1, ctx);
+  const sub = (text) => { for (const c of split(text)) commands.push(c); };
+
+  const s = input;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === '`') { // escape; a backtick at the end of a line continues the command
+      if (s[i + 1] === '\n') { i++; continue; }
+      if (s[i + 1] === '\r' && s[i + 2] === '\n') { i += 2; continue; }
+      word = (word || '') + (s[i + 1] || '');
+      i++;
+      continue;
+    }
+    if (isOneOf(PS_SINGLE, c)) {
+      const end = psStringEnd(s, i, ctx);
+      word = (word || '') + s.slice(i + 1, end).replace(/['‘’‚‛]{2}/g, "'");
+      i = end;
+      continue;
+    }
+    if (isOneOf(PS_DOUBLE, c)) {
+      const end = psStringEnd(s, i, ctx, sub);
+      word = (word || '') + s.slice(i + 1, end)
+        .replace(/\$\([^]*\)/g, '$()')
+        .replace(/`([^])/g, '$1')
+        .replace(/["“”„]{2}/g, '"');
+      i = end;
+      continue;
+    }
+    if (c === '@') {
+      const h = psHereString(s, i, ctx);
+      if (h) {
+        if (h.expandable) for (const text of psBodySubstitutions(h.body, ctx)) sub(text);
+        word = (word || '') + h.body;
+        i = h.end;
+        continue;
+      }
+    }
+    if (c === '(' || ((c === '$' || c === '@') && s[i + 1] === '(')) {
+      const open = c === '(' ? i + 1 : i + 2;
+      const close = psParenEnd(s, open, ctx);
+      const inner = s.slice(open, close);
+      const innerCommands = split(inner);
+      for (const cmd of innerCommands) commands.push(cmd);
+      if (word !== null || words.length) { // an argument: keep its value, or else its text
+        const single = innerCommands.length === 1 && innerCommands[0].length === 1;
+        word = (word || '') + (single ? innerCommands[0][0] : inner);
+      }
+      i = close;
+      continue;
+    }
+    if (c === '$' && s[i + 1] === '{') { // ${name} is a variable, not a script block
+      const close = s.indexOf('}', i + 2);
+      if (close === -1) { ctx.unbalanced = true; break; }
+      word = (word || '') + s.slice(i, close + 1);
+      i = close;
+      continue;
+    }
+    if (c === '<' && s[i + 1] === '#') { // block comment
+      endWord();
+      const close = s.indexOf('#>', i + 2);
+      if (close === -1) { ctx.unbalanced = true; break; }
+      i = close + 1;
+      continue;
+    }
+    if (c === '#' && word === null) { // comment to end of line
+      while (i + 1 < s.length && s[i + 1] !== '\n') i++;
+      continue;
+    }
+    if (c === ',') {
+      // `'pr', 'merge', '5'` is one array argument, even across spaces, lines and comments; its
+      // elements are kept apart by PS_ARRAY_SEP. After a bare parameter name (`-ArgumentList ,'x'`,
+      // not `-ArgumentList:'x' , 'y'`, whose value is attached) or with nothing before it, the comma
+      // is the unary array operator and starts a new argument.
+      if (word !== null) word += PS_ARRAY_SEP;
+      else if (words.length && !/^-[A-Za-z][^:]*$/.test(words[words.length - 1])) word = words.pop() + PS_ARRAY_SEP;
+      else word = PS_ARRAY_SEP;
+      for (;;) { // skip spaces, line breaks, backtick line continuations and comments after it
+        const j = i + 1;
+        const ws = /^(?:\s+|`\r?\n)/.exec(s.slice(j, j + 66));
+        if (ws) { i += ws[0].length; continue; }
+        if (s[j] === '#') { const nl = s.indexOf('\n', j); i = (nl === -1 ? s.length : nl) - 1; continue; }
+        if (s[j] === '<' && s[j + 1] === '#') {
+          const close = s.indexOf('#>', j + 2);
+          if (close === -1) { ctx.unbalanced = true; i = s.length - 1; break; }
+          i = close + 1;
+          continue;
+        }
+        break;
+      }
+      continue;
+    }
+    if (PS_SEPARATORS.has(c)) { endCommand(); continue; }
+    if (c === ' ' || c === '\t') {
+      if (word === '--%') { // stop-parsing token: the rest of the line goes to the program as is
+        endWord();
+        let end = i;
+        while (end < s.length && s[end] !== '\n' && s[end] !== '|') end++;
+        for (const w of s.slice(i, end).split(/\s+/)) if (w) words.push(w.replace(/"/g, ''));
+        i = end - 1;
+        continue;
+      }
+      endWord();
+      continue;
+    }
+    if (c === '>' || c === '<') { endWord(); continue; }
+    word = (word || '') + c;
+  }
+  endCommand();
+  return commands;
+}
+
+// PowerShell statement keywords that take a pipeline: the command is what follows them.
+const PS_STATEMENT_KEYWORDS = new Set(['return', 'throw', 'exit']);
+// PowerShell assignment operators (`$x = gh pr create`): the command is what comes after.
+const PS_ASSIGN = /^(?:[-+*/%]|\?\?)?=$/;
+// Start-Process's switch parameters (no value); every other named parameter takes one.
+const START_SWITCHES = ['wait', 'nonewwindow', 'passthru', 'usenewenvironment', 'loaduserprofile', 'whatif', 'confirm'];
+
+// `Start-Process gh -ArgumentList 'pr create'` (or `-FilePath`, positional, `-Args`, `'pr','create'`,
+// `@('pr', 'create')`): the program and its arguments as one simple command's words, or null.
+function startProcessWords(args) {
+  let file = null;
+  let list = null;
+  const positional = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (/^-[A-Za-z]/.test(a)) {
+      const colon = a.indexOf(':');
+      const name = (colon === -1 ? a.slice(1) : a.slice(1, colon)).toLowerCase();
+      const isSwitch = START_SWITCHES.some((sw) => sw.startsWith(name));
+      let value = colon === -1 ? undefined : a.slice(colon + 1);
+      if (value === undefined && !isSwitch) value = args[++i];
+      if (['filepath', 'path', 'pspath'].some((p) => p.startsWith(name))) file = value;
+      else if (['argumentlist', 'args'].some((p) => p.startsWith(name))) list = value;
+      continue;
+    }
+    positional.push(a);
+  }
+  if (file == null) file = positional.shift();
+  if (list == null) list = positional.shift();
+  if (file == null) return null;
+  const argWords = String(list == null ? '' : list).split(/[\s,\u001F]+/)
+    .map((w) => w.replace(/^['"‘’“”]+|['"‘’“”]+$/g, ''))
+    .filter(Boolean);
+  return [file, ...argWords];
+}
+
+// The PowerShell-only forms of a simple command: drops a leading `.` (dot-source) and assignments,
+// and reads Invoke-Expression, Start-Process and `cmd /c`. Returns { words } to classify as usual,
+// or { hit } when the command was one of the forms that run another command.
+function powerShellForms(words, depth) {
+  let w = words;
+  for (;;) {
+    if (w[0] === '.') { w = w.slice(1); continue; }
+    // `return git push`, `throw gh pr merge 5`, `exit git push`: these keywords take a pipeline, so
+    // the command starts after them. They are dropped here, like `.`, so each statement is still
+    // classified once: classifying it a second time from a later word (review run 8) doubled the
+    // nested work at every level of `pwsh -c` or iex and could run the hook past its timeout.
+    if (PS_STATEMENT_KEYWORDS.has(String(w[0]).toLowerCase())) { w = w.slice(1); continue; }
+    if (/^(?:\[[^\]]*\])*\$/.test(w[0] || '')) { // `$x = ...`, `[string]$x = ...`, `$x=...`
+      const m = /^[^=]*?=(?!=)([^]*)$/.exec(w[0]);
+      if (m) { w = m[1] ? [m[1], ...w.slice(1)] : w.slice(1); continue; }
+      if (PS_ASSIGN.test(w[1] || '')) { w = w.slice(2); continue; }
+    }
+    break;
+  }
+  if (!w.length) return { words: w };
+  const prog = programName(w[0]);
+  const rest = w.slice(1);
+  if (prog === 'invoke-expression' || prog === 'iex') {
+    let args = rest;
+    if (args.length && /^-c(?:o(?:m(?:m(?:a(?:n(?:d)?)?)?)?)?)?(?::|$)/i.test(args[0])) { // -Command
+      const attached = args[0].replace(/^-[a-z]+:?/i, '');
+      args = attached ? [attached, ...args.slice(1)] : args.slice(1);
+    }
+    return { hit: findGuardedCommand(flattenArrays(args).join(' '), depth + 1, 'ps') };
+  }
+  if (prog === 'start-process' || prog === 'saps' || prog === 'start') {
+    const sp = startProcessWords(rest);
+    return { hit: sp ? classifySimpleCommand(sp, depth + 1, 'ps') : null };
+  }
+  if (prog === 'cmd') {
+    const k = rest.findIndex((a) => /^\/[ck]$/i.test(a));
+    return { hit: k === -1 ? null : findGuardedCommand(flattenArrays(rest.slice(k + 1)).join(' '), depth + 1, 'bash') };
+  }
+  return { words: w };
+}
+
 function programName(word) {
   return path.basename(String(word).replace(/\\/g, '/')).toLowerCase().replace(/\.exe$/, '');
 }
@@ -389,8 +739,15 @@ function classifyGhApi(args) {
 }
 
 // What a simple command does, if it's one we guard: 'git push', 'gh pr create', 'gh pr ready',
-// 'gh pr review', 'gh pr merge', 'gh api review', 'gh api merge'.
-function classifySimpleCommand(words, depth) {
+// 'gh pr review', 'gh pr merge', 'gh api review', 'gh api merge'. `mode` is the shell that runs it:
+// 'bash' (the Bash tool) or 'ps' (the PowerShell tool).
+function classifySimpleCommand(words, depth, mode = 'bash') {
+  if (depth > 8) return null;
+  if (mode === 'ps') {
+    const f = powerShellForms(words, depth);
+    if (!f.words) return f.hit;
+    words = flattenArrays(f.words);
+  }
   let i = 0;
   // Leading `VAR=value` assignments, wrappers like sudo, and `env [-opts] [VAR=value]`.
   for (;;) {
@@ -422,14 +779,20 @@ function classifySimpleCommand(words, depth) {
     if (rest[j] === 'merge') return 'gh pr merge';
     return null;
   }
-  // `bash -c "git push"`, `pwsh -Command "gh pr create"`: check the script they run.
+  // `bash -c "git push"`, `pwsh -Command "gh pr create"`: check the script they run. PowerShell's
+  // -Command takes every argument after it as the command (`pwsh -c git push origin x`), and the
+  // script is read as PowerShell and, as before this parser existed, as Bash too: either finding counts.
   if (SHELLS.has(prog) || POWERSHELLS.has(prog)) {
     for (let k = 0; k < rest.length - 1; k++) {
       const flag = rest[k];
       const isCmdFlag = SHELLS.has(prog)
         ? /^-[a-z]*c[a-z]*$/.test(flag)
         : /^-(c|command|com|comm|comma|comman)$/i.test(flag);
-      if (isCmdFlag) return findGuardedCommand(rest[k + 1], depth + 1);
+      if (!isCmdFlag) continue;
+      if (SHELLS.has(prog)) return findGuardedCommand(rest[k + 1], depth + 1, 'bash');
+      const script = rest.slice(k + 1).join(' ');
+      const both = [findGuardedCommand(script, depth + 1, 'ps'), findGuardedCommand(script, depth + 1, 'bash')];
+      return pickHit(both.filter(Boolean));
     }
   }
   return null;
@@ -475,19 +838,90 @@ function rawScan(command) {
   return pickHit(rawScanAll(command));
 }
 
-// The guarded command in a Bash command line (a review or merge command first, else the first
-// login-dependent one), or null. Never touches the network.
-function findGuardedCommand(command, depth = 0) {
+// ---------------------------------------------------------------------------------------------
+// The PowerShell word scan (Blue, 2026-11-24: "Yes, run 8 fail-closed")
+//
+// PowerShell can run a command from more places than a splitter can follow (after a keyword other
+// than `return`, `throw` or `exit`, from an array, a variable or a string handed to Invoke-Expression, past a line
+// ending the splitter reads differently). So a PowerShell script that names a guarded command's words
+// anywhere, in any order and any case, gets the login check: quoted or not, in an array, a comment, a
+// here-string or a script block, across lines or behind backticks. The scan doesn't try to work out
+// what the script runs. Under ABlueAI that blocks; under any other login gh answers and the script
+// runs. Its hits are named apart (PS_WORDS_NOTE), so even a review or merge command's words only get
+// the login check; a review or merge command the splitter itself finds is still blocked under every
+// login without asking gh.
+//
+// A word is a run of letters, digits, `_`, `.` and `-`, lower-cased, with trailing dots and `.exe`
+// dropped (paths split at `\`, `/` and `:`, so `C:\x\gh.exe` holds `gh`). The text is read twice, so
+// that neither escapes nor quotes can split or join a word unseen: (1) every backtick escape (and
+// `` `u{...} ``) is a break, so `"x`ngh"` holds `gh`; (2) `` `u{...} `` is decoded and backticks,
+// quotes, `^` and `\` are removed, so ``g`it``, `g''it`, `g^it` (cmd) and `g\it` (bash) are `git`.
+// Every pattern is a single character class or a fixed escape, so the scan is linear in the text.
+const PS_WORDS_NOTE = ' (its words appear in the PowerShell script)';
+const PS_WORD = /[A-Za-z0-9_.-]+/g;
+const PS_ESCAPE = /`(?:u\{[0-9A-Fa-f]{1,6}\}|[^])/g;
+const PS_UNICODE_ESCAPE = /`u\{([0-9A-Fa-f]{1,6})\}/g;
+const PS_JOINERS = /[`'"‘’‚‛“”„^\\]/g;
+const GRAPHQL_REVIEW_MERGE_WORDS = ['mergepullrequest', 'mergebranch', 'enqueuepullrequest', 'enablepullrequestautomerge', 'addpullrequestreview', 'submitpullrequestreview'];
+// Lower-cased, trailing dots and then `.exe` dropped. The dots are dropped by a loop, not a regex: an
+// anchored `\.+$` retries from every dot and took seconds on a long run of them (review run 8).
+function psWordName(token) {
+  let end = token.length;
+  while (end > 0 && token[end - 1] === '.') end--;
+  return token.slice(0, end).toLowerCase().replace(/\.exe$/, '');
+}
+function psWords(text) {
+  const words = new Set();
+  const add = (t) => { for (const m of t.matchAll(PS_WORD)) words.add(psWordName(m[0])); };
+  add(text.replace(PS_ESCAPE, ' '));
+  add(text.replace(PS_UNICODE_ESCAPE, (m, hex) => {
+    const n = parseInt(hex, 16);
+    return n <= 0x10ffff ? String.fromCodePoint(n) : ' ';
+  }).replace(PS_JOINERS, ''));
+  return words;
+}
+// The guarded commands whose words a PowerShell script names, each with PS_WORDS_NOTE.
+function psWordScan(text) {
+  const w = psWords(text);
+  const hits = [];
+  // `git-push` is git's own push program (Git for Windows ships it under libexec\git-core).
+  if ((w.has('git') && w.has('push')) || w.has('git-push')) hits.push('git push');
+  if (w.has('gh') && w.has('pr')) {
+    if (w.has('create') || w.has('new')) hits.push('gh pr create');
+    if (w.has('ready')) hits.push('gh pr ready');
+    if (w.has('review')) hits.push('gh pr review');
+    if (w.has('merge')) hits.push('gh pr merge');
+  }
+  // `gh api` writes (a POST or PUT, or a body flag, including attached forms such as `-XPOST` and
+  // `-fevent=x`) to a review or merge endpoint or with a review or merge mutation; a plain read is left alone.
+  if (w.has('gh') && w.has('api')) {
+    const write = [...w].some((x) => x === 'post' || x === 'put' || /^-(?:f|xpost$|xput$)|^--(?:field|raw-field|input)$/.test(x));
+    const mutation = GRAPHQL_REVIEW_MERGE_WORDS.filter((m) => w.has(m));
+    if (write && (w.has('reviews') || mutation.some((m) => m.includes('review')))) hits.push('gh api review');
+    if (write && (w.has('merge') || w.has('merges') || w.has('auto_merge') || mutation.some((m) => !m.includes('review')))) hits.push('gh api merge');
+  }
+  return hits.map((h) => h + PS_WORDS_NOTE);
+}
+
+// The guarded command in a command line (a review or merge command first, else the first
+// login-dependent one), or null. `mode` is 'bash' (the Bash tool) or 'ps' (the PowerShell tool).
+// Never touches the network.
+function findGuardedCommand(command, depth = 0, mode = 'bash') {
   if (depth > 8 || typeof command !== 'string') return null;
   const ctx = { unbalanced: false };
   const hits = [];
-  for (const words of splitCommands(command, depth, ctx)) {
-    const hit = classifySimpleCommand(words, depth);
+  const split = mode === 'ps' ? splitPowerShell : splitCommands;
+  for (const words of split(command, depth, ctx)) {
+    const hit = classifySimpleCommand(words, depth, mode);
     if (hit) hits.push(hit);
   }
   // When the parser met an unclosed quote the text scan also runs, even if the parse found a
   // login-dependent command, because a review or merge command may be hiding behind the quote.
-  if (ctx.unbalanced) hits.push(...rawScanAll(command));
+  // For PowerShell, a backtick line continuation is joined first (`git `<newline>`push`).
+  if (ctx.unbalanced) hits.push(...rawScanAll(mode === 'ps' ? command.replace(/`\r?\n/g, ' ') : command));
+  // PowerShell, fail-closed: the words of a guarded command anywhere in the script (psWordScan) get the
+  // login check, after every hit above, so a review or merge command found above still wins.
+  if (mode === 'ps') hits.push(...psWordScan(command));
   return pickHit(hits);
 }
 
@@ -540,14 +974,26 @@ function readGhLogin() {
   }
 }
 
+// The tools whose commands are checked, and the shell each one runs them in. Both tools carry the
+// script in tool_input.command (https://code.claude.com/docs/en/hooks, read 2026-11-23).
+const TOOL_MODES = { Bash: 'bash', PowerShell: 'ps' };
+
 // The verdict for one hook input. `getLogin` is injectable for tests.
 // Returns { exitCode: 0 | 2, stderr?: string, systemMessage?: string, checked: boolean }.
 function decide(input, getLogin = readGhLogin) {
   const toolName = input && input.tool_name;
   const command = input && input.tool_input && input.tool_input.command;
-  if (toolName !== 'Bash' || typeof command !== 'string') return { exitCode: 0, checked: false };
+  const mode = TOOL_MODES[toolName];
+  if (!mode) return { exitCode: 0, checked: false };
+  if (typeof command !== 'string') {
+    // The PowerShell tool's input shape comes from the docs, not from a live call: if it ever
+    // carries no `command`, say so instead of allowing in silence. (Bash keeps its silent exit.)
+    return mode === 'ps'
+      ? { exitCode: 0, checked: false, systemMessage: `Account guard: couldn't read the ${toolName} tool's command (no tool_input.command); allowed.` }
+      : { exitCode: 0, checked: false };
+  }
 
-  const hit = findGuardedCommand(command);
+  const hit = findGuardedCommand(command, 0, mode);
   if (!hit) return { exitCode: 0, checked: false };
 
   // Review and merge commands are blocked under any login: no `gh` call, nothing to fail open on.
@@ -610,6 +1056,6 @@ async function main() {
 if (require.main === module) main();
 
 module.exports = {
-  splitCommands, findGuardedCommand, rawScan, resolveGh, decide, readGhLogin,
-  BLOCKED_LOGIN, BLOCK_MESSAGE, NEVER_MESSAGE, ALWAYS_BLOCKED,
+  splitCommands, splitPowerShell, findGuardedCommand, rawScan, psWordScan, resolveGh, decide, readGhLogin,
+  BLOCKED_LOGIN, BLOCK_MESSAGE, NEVER_MESSAGE, ALWAYS_BLOCKED, PS_WORDS_NOTE,
 };

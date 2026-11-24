@@ -25,7 +25,7 @@ const { validateTask } = require('./task-name');
 const { readBuildInfo } = require('./build-info');
 // Navigation-lockdown decisions (deny window.open / off-app navigation) and the shell-free launcher
 // arg builders. Both dependency-free + unit-tested (nav-guard.test.js / launchers.test.js).
-const { decideWindowOpen, decideNavigation, refusalLine } = require('./nav-guard');
+const { createNavGuards } = require('./nav-guard');
 // P12 launcher hardening: shell-free launcher arg builders + deterministic Code.exe / wt.exe
 // resolution (no cmd.exe intermediary), and the main-owned directory AUTHORIZER (a launcher may open
 // only the current repo root or one of its live git worktrees). Both dependency-free + unit-tested
@@ -152,6 +152,7 @@ const { createQuickLinksIpc } = require('./quick-links-ipc');
 const { buildDefaultConfig: buildQuickLinksDefaultConfig, validateUrl: validateQuickLinkUrl } = require('./quick-links-policy');
 // S06: the legacy open-external channel goes through the same URL policy (open-external-ipc.js).
 const { createOpenExternalIpc } = require('./open-external-ipc');
+const { createGeminiKeyIpc } = require('./gemini-key-ipc');
 // S07: which copy this process is (stable or dev), decided once from argv (instance-profile.js).
 const { resolveInstanceProfile, createDevPaneStatusController } = require('./instance-profile');
 
@@ -536,22 +537,17 @@ function createWindow() {
   // uses (refuse-visibly rule): a blocked navigation/popup must never be a silent no-op. refusalLine
   // strips control chars + truncates the (attacker-influenced) URL so this can't become a log sink.
   const sendRefusal = (line) => { if (win && !win.isDestroyed()) win.webContents.send('main-error', line); };
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    const d = decideWindowOpen(url);
-    if (d.externalUrl) shell.openExternal(d.externalUrl);
-    sendRefusal(refusalLine('window.open', url, !!d.externalUrl));
-    return { action: d.action };
+  // Issue #163: the handlers come from nav-guard.js createNavGuards. A link reaches the OS browser
+  // only as the decision's externalUrl (the Quick Links URL policy, then http(s) only, normalized:
+  // the same rule as open-external), and a failed OS open is reported, never dropped.
+  const navGuards = createNavGuards({
+    entryUrl: ENTRY_URL,
+    openExternal: (url) => shell.openExternal(url),
+    send: sendRefusal,
   });
-  const guardNav = (label) => (e, url) => {
-    const d = decideNavigation(url, ENTRY_URL);
-    if (!d.allow) {
-      e.preventDefault();
-      if (d.externalUrl) shell.openExternal(d.externalUrl);
-      sendRefusal(refusalLine(label, url, !!d.externalUrl));
-    }
-  };
-  win.webContents.on('will-navigate', guardNav('will-navigate'));
-  win.webContents.on('will-redirect', guardNav('will-redirect'));
+  win.webContents.setWindowOpenHandler(navGuards.onWindowOpen);
+  win.webContents.on('will-navigate', navGuards.onNavigate('will-navigate'));
+  win.webContents.on('will-redirect', navGuards.onNavigate('will-redirect'));
 }
 
 app.whenReady().then(() => {
@@ -1056,25 +1052,22 @@ ipcMain.handle('save-settings', async (_e, partial) => {
 // plaintext never travels back across the IPC boundary — it stays in main memory.
 ipcMain.handle('tlog-reset', () => { tlogReset(); });
 
-ipcMain.handle('get-gemini-key-status', () => ({
-  hasKey: geminiKey !== null,
-  available: safeStorage.isEncryptionAvailable(),
-}));
-ipcMain.handle('set-gemini-key', (_e, key) => {
-  if (typeof key !== 'string' || !key.trim()) return { ok: false, error: 'key is empty' };
-  if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'safeStorage encryption not available on this system' };
-  try {
-    const enc = safeStorage.encryptString(key.trim());
-    const s = loadSecure(); s.geminiKeyEnc = enc.toString('base64'); saveSecure(s);
-    geminiKey = key.trim();
-    return { ok: true };
-  } catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
+// Issue #161: trusted sender first (the same gate as the ABlueAgent token channels), then the
+// store; every refusal shows on the main-error channel (gemini-key-ipc.js). `launcherGate` is
+// defined further down and is only read when a call arrives, after startup has finished.
+const geminiKeyIpc = createGeminiKeyIpc({
+  assessSender: (e) => launcherGate.assess(e),
+  isEncryptionAvailable: () => safeStorage.isEncryptionAvailable(),
+  encryptString: (plain) => safeStorage.encryptString(plain),
+  loadSecure,
+  saveSecure,
+  getKey: () => geminiKey,
+  setKey: (k) => { geminiKey = k; },
+  logRefusal: (line) => { tlog(line); if (win && !win.isDestroyed()) win.webContents.send('main-error', line); },
 });
-ipcMain.handle('clear-gemini-key', () => {
-  const s = loadSecure(); delete s.geminiKeyEnc; saveSecure(s);
-  geminiKey = null;
-  return { ok: true };
-});
+ipcMain.handle('get-gemini-key-status', (e) => geminiKeyIpc.handleStatus(e));
+ipcMain.handle('set-gemini-key', (e, key) => geminiKeyIpc.handleSet(e, key));
+ipcMain.handle('clear-gemini-key', (e) => geminiKeyIpc.handleClear(e));
 
 ipcMain.handle('pick-folder', async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
@@ -1293,7 +1286,15 @@ ipcMain.handle('page-reader-prepare', async (e, req) => {
   const sender = pageReaderGate.assess(e);
   if (!sender.ok) return { ok: false, error: sender.reason };
   const checked = pageReaderMod.validatePageUrl(req && typeof req === 'object' ? req.url : undefined);
-  if (!checked.ok) return { ok: false, error: checked.reason };
+  if (!checked.ok) {
+    // Issue #162: say plainly why a local or private address is refused.
+    const local = checked.reason === pageReaderMod.REASON.NOT_PUBLIC_ADDRESS || checked.reason === pageReaderMod.REASON.LOCAL_NAME;
+    if (local) return { ok: false, error: checked.reason, hint: 'The Page Reader reads public web pages only, never this PC or your local network.' };
+    if (checked.reason === pageReaderMod.REASON.CHECK_UNAVAILABLE) {
+      return { ok: false, error: checked.reason, hint: 'The Page Reader\'s address check is not installed: run npm ci in the app folder, then restart Mako.' };
+    }
+    return { ok: false, error: checked.reason };
+  }
   if (!fs.existsSync(PAGE_READER_MCP_CLI)) {
     return { ok: false, error: 'page-reader-mcp-missing', hint: 'Playwright MCP is not installed: run npm ci in the app folder, then restart Mako.' };
   }

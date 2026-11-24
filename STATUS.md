@@ -1,6 +1,9 @@
 # Mako status
 
-Updated 2026-11-24 by PR #241 (S56 no longer marked Sensitive in the plan; its 9 bug issues, #232
+Updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
+verdict; review fixes pushed by a Claude cloud session on Blue's ask). Before that: updated 2026-11-24 by PR #209 (S48's OSS record, docs/decisions/OSS-memory.md, with Blue's
+verdict: PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain; step 68
+ticked). Before that: updated 2026-11-24 by PR #241 (S56 no longer marked Sensitive in the plan; its 9 bug issues, #232
 to #240, were opened the same day). Before that: updated 2026-11-23 by PR #223 (S61: the 1.1
 schedule and Blue's answers on it). Before that:
 updated 2026-11-21 by PR #212 (Blue's decisions of 2026-11-16 to 2026-11-21: the scope freezes on
@@ -134,7 +137,8 @@ Every PR that changes the state updates this file.
   Octokit class; every Plan sync run since has passed (run 41790199214 first). Step 25 is still
   unticked: its re-run checks the board on GitHub. S33 (PR #155, merged 2026-11-04, DONE) makes the
   sync refuse and create nothing when its listing misses every existing sync issue, the cause of the
-  2026-10-22 duplicates; a listing that misses only some of them is issue #156.
+  2026-10-22 duplicates. PR #247 (issue #156) makes it refuse too when its listing
+  finds fewer items in the "1.1 Month 1" milestone than GitHub counts there (a partial listing).
 - **Research capture (S15, PR #130 merged 2026-11-04, in progress):** Blue's verdict (2026-11-03): ADOPT
   Playwright MCP as the page reader. Claude in Chrome was rejected: on his PC it returned "This site
   is blocked." on reddit.com, while Playwright MCP read a www.reddit.com thread with no login
@@ -251,7 +255,8 @@ Every PR that changes the state updates this file.
     approved and were re-opened as #146 and #147. Desktop chats now only plan and talk (AGENTS.md
     "No PR work under ABlueAI's login"), and the `PreToolUse` hook `.claude/hooks/account-guard.js`
     blocks `gh pr create`, `gh pr ready` and `git push` only when `gh` is logged in as `ABlueAI`.
-    Blue removes that login from every PC Claude runs on after step 35 (checklist step 49).
+    Since S37 (PR #218, issue #217) it checks Claude Code's PowerShell tool too, which it didn't see
+    before. Blue removes that login from every PC Claude runs on after step 35 (checklist step 49).
   - Agent identity (PR #171, a plan change; Blue's decisions of 2026-11-10 and 2026-11-11): the GitHub App
     `mako-agents[bot]` becomes the primary agent identity for local panes and the local runner, `ABlueAgent`
     stays for cloud sessions, and agents never approve or merge. The merge audit and the runner and
@@ -410,6 +415,17 @@ The spec was accurate (35 of 40 blocks, none wrong) but missed what S66 most nee
 flag pinned as not a setting, no restore at startup, the four top-level tabs, the markup tests,
 Ctrl K reaching the PTY); verdict: an occasional one-off, never installed. Once it merges, S66
 waits only on S14 and Blue's go on the UI (step 18).
+**2026-11-24 (PR #209):** S48's OSS record, `docs/decisions/OSS-memory.md`, carries Blue's verdict
+(step 68): PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain. S48
+still starts after the H1 setup day (step 54).
+
+**S52 (PR #206):** [HyperFrames vetting and trial](docs/decisions/OSS-hyperframes.md) are recorded.
+The pinned upstream package offers MiniMax/Qwen models through its media commands. Blue's verdict
+is FORK, conditional (step 66): first a Windows trial on the VM, with the browser sandbox on,
+outside connections blocked and logged, and the media commands that call China-origin models
+removed; fork only if that trial shows no outside connections and no sandbox downgrade. Neither the
+trial nor the fork has a plan row or issue yet.
+
 The paragraphs below are from before the sheet.
 
 Month one's runner sessions S31 to S34 merged on 2026-11-04. The next `READY` row is S25, the

@@ -25,9 +25,10 @@ const row = (id, title, status, extra = {}) =>
 const plan = (...rows) => `# Plan\n\n${HEAD}${rows.join('')}\nAfter the table.\n`;
 const URL = 'https://github.com/o/r/blob/main/docs/PLAN-1.1.md';
 
-// A fake repository: labels, milestones, issues (by number) and PRs. Records every write. Milestones
-// report open_issues and closed_issues counted from the fake's issues, as GitHub's do, plus `extra`
-// items (pull requests or other issues in the milestone that the issues listing doesn't return).
+// A fake repository: labels, milestones, issues and pull requests (by number) and PRs for getPr.
+// Records every write. Milestones report open_issues and closed_issues counted from the fake's issues
+// and pull requests, as GitHub's do, plus `extra` items: milestone items the listing misses (the
+// partial-listing guard refuses on them), or `counts` to set GitHub's numbers outright.
 // `listing` replaces what listIssues returns, to model a bad listing.
 function fakeRepo({ labels = [], milestones = [], issues = [], prs = {}, listing = null } = {}) {
   const state = { labels: labels.map((name) => ({ name })), milestones: [...milestones], issues: new Map(), writes: [] };
@@ -176,7 +177,7 @@ function fakeBoard(columns = COLUMNS) {
         `a listing with ${name} while 3 sync issues exist throws`);
       eq(state.writes, [], `nothing is created or edited (${name})`);
       eq([placed.length, removed.length], [0, 0], `the board is not touched (${name})`);
-      assert(lines.some((l) => /^listed \d+ issues, 0 of them sync issues; milestone "1\.1 Month 1" holds 3 /.test(l)), `the run logs what the listing found (${name})`);
+      assert(lines.some((l) => /^listed \d+ issues and pull requests, 0 of them sync issues; milestone "1\.1 Month 1" holds 3 issues and pull requests, of which the listing found 0$/.test(l)), `the run logs what the listing found (${name})`);
     }
     {
       // Only labels are missing: still nothing is written, because the guard runs before any write.
@@ -206,6 +207,102 @@ function fakeBoard(columns = COLUMNS) {
       const { api, state } = fakeRepo({ labels: LABELS.map((l) => l.name), milestones: [{ number: 7, title: MILESTONE }], issues: existing });
       await syncPlan({ markdown: md, planUrl: URL, api });
       eq(state.writes, [], 'a run whose listing finds the sync issues is not refused');
+    }
+  }
+
+  process.stdout.write('\nissue #156 guard: a listing that finds fewer milestone items than GitHub counts refuses and creates nothing\n');
+  {
+    // Three sync issues and one merged pull request in the milestone, plus Blue's own issue outside it.
+    const md = plan(row('S01', 'Guardrails', 'DONE (#44)'), row('S02', 'Plan', 'READY'), row('S03', 'Alerts', 'HOLD (Blue)'));
+    const first = fakeRepo();
+    await syncPlan({ markdown: md, planUrl: URL, api: first.api });
+    const syncIssues = [...first.state.issues.values()];
+    const pr = { number: 50, title: 'S02: the plan PR', user: BOT, pull_request: true, milestone: 7, state: 'closed', labels: [] };
+    const blues = { number: 60, title: 'A note from Blue', user: 'ABlueAI', milestone: null, state: 'open', labels: [] };
+    const existing = [...syncIssues, pr, blues];
+    const repo = (listing, extra = {}) => fakeRepo({ labels: LABELS.map((l) => l.name), milestones: [{ number: 7, title: MILESTONE, ...extra }], issues: existing, listing });
+    const without = (...numbers) => () => existing.filter((i) => !numbers.includes(i.number));
+    const s02 = syncIssues.find((i) => i.title.startsWith('S02: ')).number;
+
+    for (const [name, listing, found] of [
+      ['some sync issues missing (one of three, as a dropped page would)', without(s02), 3],
+      ['only the pull request missing (the listing still dropped a milestone item)', without(50), 3],
+      ['none of the sync issues, the pull request still listed', without(...syncIssues.map((i) => i.number)), 1],
+      ['one sync issue missing and the pull request listed twice (a shifted page boundary)', () => [...without(s02)(), pr], 3],
+    ]) {
+      const { api, state } = repo(listing);
+      const { board, placed, removed } = fakeBoard();
+      const lines = [];
+      const pattern = found === 1
+        ? /refusing to create issues: the listing found no sync issues, but milestone "1\.1 Month 1" holds 4 issues/
+        : new RegExp(`refusing to create issues: milestone "1\\.1 Month 1" holds 4 issues and pull requests, but the listing found ${found} of them`);
+      await throws(() => syncPlan({ markdown: md, planUrl: URL, api, board, log: (l) => lines.push(l) }), pattern, `${name}: the run throws`);
+      eq(state.writes, [], `${name}: nothing is created or edited`);
+      eq([placed.length, removed.length], [0, 0], `${name}: the board is not touched`);
+      assert(lines.some((l) => l.endsWith(`holds 4 issues and pull requests, of which the listing found ${found}`)), `${name}: the run logs both counts`);
+    }
+    {
+      // Labels missing too: the partial-listing guard still runs before any write.
+      const { api, state } = fakeRepo({ milestones: [{ number: 7, title: MILESTONE }], issues: existing, listing: without(s02) });
+      await throws(() => syncPlan({ markdown: md, planUrl: URL, api }), /but the listing found 3 of them/, 'the partial-listing guard runs before missing labels are created');
+      eq(state.writes, [], 'no label is created by a run the partial-listing guard refused');
+    }
+    {
+      const { api, state } = repo(null, { counts: { open_issues: 3, closed_issues: null } });
+      await throws(() => syncPlan({ markdown: md, planUrl: URL, api }), /milestone "1\.1 Month 1" gave no readable issue count, but the listing found 4/,
+        'an unreadable milestone count refuses even when the listing finds sync issues');
+      eq(state.writes, [], 'and creates nothing');
+    }
+    {
+      // The complete listing, pull request included: not refused, and an unchanged plan writes nothing.
+      const { api, state } = repo(null);
+      const { board, placed } = fakeBoard();
+      const lines = [];
+      await syncPlan({ markdown: md, planUrl: URL, api, board, log: (l) => lines.push(l) });
+      eq(state.writes, [], 'a complete listing is not refused and an unchanged plan writes nothing');
+      eq(placed.length, 3, 'and each sync issue is placed on the board');
+      assert(lines.some((l) => /^listed 5 issues and pull requests, 3 of them sync issues; milestone "1\.1 Month 1" holds 4 issues and pull requests, of which the listing found 4$/.test(l)),
+        'the run logs the complete counts');
+    }
+    {
+      // A complete listing with a new plan row: exactly one issue is created, and the bot's PR titled
+      // `S02: ` is never taken for S02's sync issue.
+      const { api, state } = repo(null);
+      const md4 = plan(row('S01', 'Guardrails', 'DONE (#44)'), row('S02', 'Plan', 'READY'), row('S03', 'Alerts', 'HOLD (Blue)'), row('S04', 'New', 'READY'));
+      await syncPlan({ markdown: md4, planUrl: URL, api });
+      eq(state.writes.filter((w) => w[0] === 'create').map((w) => w[2]), ['S04: New'], 'a new plan row on a complete listing opens exactly one issue');
+      eq(state.issues.get(50).title, 'S02: the plan PR', 'a pull request is never adopted as a sync issue');
+      eq(state.issues.get(60).title, 'A note from Blue', 'an issue outside the milestone is untouched');
+    }
+    {
+      // The bot's PR titled for a row that has no sync issue yet: a new issue is opened, the PR is left alone.
+      const pr4 = { number: 51, title: 'S04: the PR for S04', user: BOT, pull_request: true, milestone: 7, state: 'open', labels: [] };
+      const { api, state } = fakeRepo({ labels: LABELS.map((l) => l.name), milestones: [{ number: 7, title: MILESTONE }], issues: [...syncIssues, blues, pr4] });
+      const md4 = plan(row('S01', 'Guardrails', 'DONE (#44)'), row('S02', 'Plan', 'READY'), row('S03', 'Alerts', 'HOLD (Blue)'), row('S04', 'New', 'READY'));
+      await syncPlan({ markdown: md4, planUrl: URL, api });
+      eq(state.writes.filter((w) => w[0] === 'create').map((w) => w[2]), ['S04: New'], 'a bot PR titled for a new row does not stop its issue being opened');
+      eq(state.writes.filter((w) => w[1] === 51), [], 'and the PR gets no write');
+    }
+    {
+      // GitHub's open/closed split differs from the listing's (3 open, 1 closed) but the total matches:
+      // only the total is compared (see plan-sync.js), so the run goes ahead.
+      const { api, state } = repo(null, { counts: { open_issues: 4, closed_issues: 0 } });
+      await syncPlan({ markdown: md, planUrl: URL, api });
+      eq(state.writes, [], 'a listing whose total matches but whose open/closed split differs is not refused');
+    }
+    {
+      // An issue outside the milestone missing from the listing misses no sync issue: not refused.
+      const { api, state } = repo(without(60));
+      await syncPlan({ markdown: md, planUrl: URL, api });
+      eq(state.writes, [], 'a listing that misses only an item outside the milestone is not refused');
+    }
+    {
+      // More found than GitHub counts (an item added to the milestone while the run listed): no item is missed.
+      const { api, state } = repo(null, { counts: { open_issues: 2, closed_issues: 1 } });
+      const lines = [];
+      await syncPlan({ markdown: md, planUrl: URL, api, log: (l) => lines.push(l) });
+      eq(state.writes, [], 'a listing that finds more milestone items than the count is not refused');
+      assert(lines.some((l) => /^the listing found 1 more items in milestone "1\.1 Month 1" than GitHub counts there/.test(l)), 'and the surplus is logged');
     }
   }
 
@@ -255,8 +352,10 @@ function fakeBoard(columns = COLUMNS) {
         { number: 2, title: 'S02: pr', labels: [], user: { login: BOT }, pull_request: {} }]; } } },
     };
     const issues = await githubApi(github, { owner: 'o', repo: 'r' }).listIssues();
-    eq(issues, [{ number: 1, node_id: 'A', title: 'S01: x', body: '', state: 'open', state_reason: null, labels: ['hold', 'plain'], milestone: 3, user: BOT }],
-      'issues are normalised and pull requests filtered out');
+    eq(issues, [
+      { number: 1, node_id: 'A', title: 'S01: x', body: '', state: 'open', state_reason: null, labels: ['hold', 'plain'], milestone: 3, user: BOT, pull_request: false },
+      { number: 2, node_id: undefined, title: 'S02: pr', body: '', state: undefined, state_reason: null, labels: [], milestone: null, user: BOT, pull_request: true }],
+      'issues are normalised, and pull requests are kept and marked (the partial-listing guard counts them)');
     eq(calls[0].state, 'all', 'closed issues are listed too, so a reopened plan row never opens a duplicate');
   }
 
