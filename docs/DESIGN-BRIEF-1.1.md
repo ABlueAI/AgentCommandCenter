@@ -135,9 +135,15 @@ changes); components only ever use the token names below, never raw values.
 
 **Contrast, verified by computation** (WCAG 2 relative-luminance formula, run in this session on the
 values above): `status-held` `#9466ff` is 4.82:1 on the brain `surface`, 4.39:1 on its
-`surface-raised`, 5.28:1 on the control room and 4.83:1 on the aquarium; its luminance (0.230) is below
+`surface-raised`, 5.28:1 on the control room `surface` (4.91:1 on its `surface-raised`) and 4.83:1 on
+the aquarium `surface` (4.33:1 on its `surface-raised`); its luminance (0.230) is below
 `status-needs` (0.283), `status-idle` (0.305) and `status-working` (0.386), so it reads darker than
-all three. Every status colour is at least 5.2:1 on every `surface` and `surface-raised`. Text on
+all three. Every other status colour is at least 5.15:1 on every `surface` and `surface-raised` (the
+lowest is `status-needs` on the aquarium `surface-raised`). So `status-held` as text on a card on the
+brain or aquarium tab (4.39:1, 4.33:1) falls below WCAG AA's 4.5:1 for normal text. Default: every
+status colour used as text must reach 4.5:1 on every `surface` and `surface-raised`, so S66 lightens
+`#9466ff` just enough to pass, keeping its hue; open to Blue's eye at question 5 and the S66 look
+review. (Numbers recomputed by the PR sweeper in review run 1's fix, 2026-11-24.) Text on
 `accent` is 4.80:1. `emblem-ink` on the eight emblem colours is 5.39:1 to 13.55:1. The message box's
 placeholder is 8.16:1 on `composer`.
 
@@ -468,8 +474,9 @@ Blue's standing ask: state his own time up front and keep manual testing short.
     usage stop.
   - **S20:** one creature per live pane with the right colour within about 2 seconds; a click opens
     the pane; the agentId is stored.
-- **Colour checks** as a unit test: every status colour and `line-strong` meets the contrast numbers in
-  3.1 on its tab's grounds, so a token change can't quietly break them.
+- **Colour checks** as a unit test: every status colour reaches at least 4.5:1, and `line-strong` at
+  least 3:1, on every `surface` and `surface-raised` of its tab (section 3.1), so a token change can't
+  quietly break them.
 - **One batched PC-check session per tab** on Blue's PC (Tuesday or Friday evening), each listed in
   `BLUE-CHECKLIST.md` with its minutes up front (about 10 to 15 minutes each, builder's estimate). The
   S18 session includes the 30 fps frame-time check full screen, and Blue's look at the task-node stage
