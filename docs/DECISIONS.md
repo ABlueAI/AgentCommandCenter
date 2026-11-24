@@ -3,6 +3,17 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-24: Blue's go on the UI (checklist step 18)
+
+Blue gave it in Mako main's chat on 2026-11-24; his words are quoted as the hand-off for PR #253
+relayed them. How the plan follows it is **proposed, pending Blue (PR #253)**; merging that PR
+approves it. "Builder's reading" marks a line that is the builder's, not Blue's.
+
+| Decision | Blue's words |
+|---|---|
+| **Go on the UI.** S14 (the design brief) starts, and S66, S18, S19 and S20 move from `HOLD (Blue)` to `READY`, after S61 (the 1.1 schedule, PR #223) merged. Builder's reading: S46, S47 and S62, which also wait on S14, were not named in the hand-off, so they stay `HOLD (Blue)` until Blue says otherwise. | "go, we need to run through this session, itll reset at 12:30 ... we need to prioritize maxing out here." |
+| **The brief's defaults** (`docs/DESIGN-BRIEF-1.1.md`, "Questions for Blue", 18 questions, each with a default) are what the UI rows build on until Blue changes one. Builder's reading: among them, S66 takes the pieces every tab shows (the top bar's Pause all, quiet-hours switch and usage chip, the emblem rail and scope stripe, the shared In-focus card, global shortcuts and per-tab colours), the shark's shape file is added to the repo (question 8), and UI UX Pro Max is installed in a follow-up PR, not in PR #253. | — (the hand-off asked for the brief to proceed on the defaults) |
+
 ## 2026-11-24: Claude sessions mark Codex PRs ready
 
 Blue decided this in his main chat on 2026-11-24; his words are quoted as the hand-off for this PR
