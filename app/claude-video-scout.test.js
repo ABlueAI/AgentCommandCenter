@@ -8,7 +8,7 @@ const path = require('node:path');
 const { after, test: runTest } = require('node:test');
 const vm = require('node:vm');
 const {
-  analyzeVideo, frameArgs, sampleArgs, runProcess, ScoutError, parseFrameLog, differenceHash, hammingDistance,
+  analyzeVideo, findTool, MAX_CANDIDATES, MAX_TRANSCRIPT_CHARS, frameArgs, sampleArgs, runProcess, ScoutError, parseFrameLog, differenceHash, hammingDistance,
   chooseFrames, planBatches, scaledSize, estimateRun, formatEstimate, formatTime, HASH_BYTES,
 } = require('./claude-video-scout');
 const { createClaudeVideoScoutIpc } = require('./claude-video-scout-ipc');
@@ -70,7 +70,7 @@ async function fixture(t, opts = {}) {
   const run = async (exe, args, options) => {
     calls.push({ exe, args, ...options });
     if (exe === 'claude') {
-      if (args.includes('auth')) return stdout(opts.auth ?? auth);
+      if (args.includes('auth')) return opts.authResult ?? stdout(opts.auth ?? auth);
       assert.equal(await fs.readFile(path.join(options.cwd, 'transcript.txt'), 'utf8'), opts.noAudio
         ? '[The video has no audio track.]' : 'Synthetic narration.');
       claudeCalls++;
@@ -79,6 +79,7 @@ async function fixture(t, opts = {}) {
     }
     if (exe === 'yt-dlp') {
       if (args.includes('--simulate')) return opts.metadata ?? stdout({ duration: 3.2, live_status: 'not_live' });
+      if (opts.download) return opts.download(options);
       await fs.writeFile(path.join(options.cwd, 'video.mp4'), 'fake video');
       return stdout(null);
     }
@@ -86,13 +87,15 @@ async function fixture(t, opts = {}) {
       if (opts.unreadable) return { code: 1, stdout: '', stderr: 'Decoder error' };
       const streams = [{ codec_type: 'video', width: 1280, height: 720, disposition: { attached_pic: 0 } }];
       if (!opts.noAudio) streams.push({ codec_type: 'audio' });
-      return stdout({ format: { duration: String(opts.duration ?? 3.2) }, streams });
+      return stdout({ format: { duration: String(opts.probeDuration ?? opts.duration ?? 3.2) }, streams });
     }
     if (args.includes('-fps_mode')) {
       // Pass 1: the frame-time log and the 9x8 thumbnails, as FFmpeg's metadata and rawvideo outputs write them.
       const log = candidates.map(({ time }, i) => `frame:${i}    pts:${Math.round(time * 1000)}   pts_time:${time}\nlavfi.scene_score=0.500000`);
       await fs.writeFile(path.join(options.cwd, 'frames.txt'), log.join('\n') + '\n');
-      await fs.writeFile(path.join(options.cwd, 'hashes.gray'), Buffer.concat(candidates.map(({ pixels }) => pixels)));
+      await fs.writeFile(path.join(options.cwd, 'hashes.gray'), Buffer.concat([
+        ...candidates.map(({ pixels }) => pixels), ...(opts.extraHash ? [thumbnail(99)] : []),
+      ]));
       return stdout(null);
     }
     if (args.includes('-frames:v')) {
@@ -100,11 +103,12 @@ async function fixture(t, opts = {}) {
       await fs.writeFile(args.at(-1), Buffer.from(`fake image at ${seek}`));
       return stdout(null);
     }
-    await fs.writeFile(args.at(-1), Buffer.from([0, 0, 4, 0]));
+    await fs.writeFile(args.at(-1), Buffer.from(opts.oddPcm ? [0, 0, 4] : [0, 0, 4, 0]));
     return stdout(null);
   };
   const analyze = () => analyzeVideo({
     url, focus: 'Describe the color changes.', baseEnv: isolateEnv, tempRoot: root, settings: opts.settings,
+    ...(opts.removeDir ? { removeDir: opts.removeDir } : {}),
     signal: new AbortController().signal, progress: () => {},
     locate: async (name) => name === opts.missing ? null : name,
     run,
@@ -114,6 +118,7 @@ async function fixture(t, opts = {}) {
       assert.deepEqual([...pcm], [0, 0, 4, 0]);
       assert.equal(durationSeconds, opts.duration ?? 3.2);
       if (opts.failTranscript) throw opts.failTranscript;
+      if ('transcript' in opts) return opts.transcript;
       return 'Synthetic narration.';
     },
     confirm: async (text, estimate) => {
@@ -334,6 +339,8 @@ test('refuses missing CLI, missing sign-in, and key-backed sign-in before touchi
     [{ auth: { ...auth, authMethod: 'api_key' } }, /Claude.ai subscription/, 1],
     [{ auth: { ...auth, apiKeySource: 'user' } }, /Claude.ai subscription/, 1],
     [{ auth: { ...auth, subscriptionType: null } }, /Claude.ai subscription/, 1],
+    [{ auth: { ...auth, apiProvider: 'bedrock' } }, /Claude.ai subscription/, 1],
+    [{ authResult: { code: 1, stdout: JSON.stringify(auth), stderr: '' } }, /could not verify sign-in/, 1],
   ]) {
     const f = await fixture(t, opts);
     await assert.rejects(f.analyze(), message);
@@ -611,4 +618,224 @@ test('the modal loads, validates and remembers Claude settings, and the estimate
   await cancel.onclick();
   assert.deepEqual(JSON.parse(JSON.stringify(answers)), [{ id: 'pty1', token: 'token-1', proceed: false }]);
   assert.equal(paneHead.next.removed, true);
+});
+
+test('refuses live streams, bad downloads, over-limit probes, bad sampling data and bad audio, removing temp media', async (t) => {
+  const bigCandidates = Array.from({ length: MAX_CANDIDATES + 1 }, (_, i) => ({ time: i * 0.1, pixels: thumbnail(i % 7) }));
+  for (const [opts, message, callCount] of [
+    [{ metadata: stdout({ duration: 30, is_live: true }) }, /use an uploaded video or a finished livestream/, 2],
+    [{ metadata: { code: 1, stdout: '', stderr: "ERROR: [youtube] x: Sign in to confirm you're not a bot" } }, /yt-dlp -U/, 2],
+    [{ metadata: { code: 1, stdout: '', stderr: 'ERROR: [youtube] x: Private video' } }, /private, age-restricted or unavailable/, 2],
+    [{ download: async () => stdout(null) }, /the downloader produced no MP4/, 3],
+    [{ download: async () => ({ code: 1, stdout: '', stderr: 'ERROR: Requested format is not available' }) }, /no MP4 format at or below 1280 px/, 3],
+    [{ download: async () => ({ code: 1, stdout: '', stderr: 'ERROR: something new' }) }, /yt-dlp could not download an MP4\.$/, 3],
+    [{ probeDuration: 3601 }, /longest-video setting is 60 minutes/, 4],
+    [{ candidates: bigCandidates }, new RegExp(`more than ${MAX_CANDIDATES} scene changes`), 5],
+    [{ extraHash: true }, /mismatched frame data/, 5],
+    [{ oddPcm: true }, /not decoded as 16-bit PCM/, 10],
+    [{ transcript: 42 }, /invalid or oversized transcript/, 10],
+    [{ transcript: 'x'.repeat(MAX_TRANSCRIPT_CHARS + 1) }, /invalid or oversized transcript/, 10],
+  ]) {
+    const f = await fixture(t, opts);
+    await assert.rejects(f.analyze(), message);
+    assert.equal(f.calls.length, callCount, String(message));
+    assert.equal(f.analysisCalls().length, 0);
+    assert.deepEqual(await fs.readdir(f.root), []);
+  }
+});
+
+test('Claude failures are refused with fixed messages that never repeat the CLI output', async (t) => {
+  const secret = 'synthetic-private-diagnostic';
+  for (const [claudeResult, message] of [
+    [{ code: 1, stdout: '', stderr: `Authentication failed: ${secret}` }, /sign-in failed during analysis/],
+    [{ code: 1, stdout: '', stderr: `You hit your usage limit ${secret}` }, /subscription usage or rate limit/],
+    [{ code: 2, stdout: '', stderr: secret }, /did not return an analysis report \(exit 2\)\.$/],
+    [stdout({ type: 'result', subtype: 'error_max_turns', is_error: true, result: secret }), /\(exit 0, error_max_turns\)/],
+    [stdout({ type: 'result', subtype: 'success', is_error: true, result: secret }), /\(exit 0, success\)/],
+    [stdout({ type: 'result', subtype: 'Not An Enum!', is_error: true, result: secret }), /\(exit 0\)\.$/],
+  ]) {
+    const f = await fixture(t, { claudeResult });
+    const error = await f.analyze().then(() => null, (err) => err);
+    assert(error instanceof ScoutError);
+    assert.match(error.message, message);
+    assert(!error.message.includes(secret), 'CLI output must not reach the message');
+    assert.deepEqual(await fs.readdir(f.root), []);
+  }
+});
+
+test('cancelling during the download stops the run, sends nothing to Claude and removes temp media', async (t) => {
+  const f = await fixture(t, { download: async () => ({ stopped: 'cancelled' }) });
+  await assert.rejects(f.analyze(), /^ScoutError: Claude Video Scout was cancelled\.$|Claude Video Scout was cancelled\./);
+  assert.equal(f.analysisCalls().length, 0);
+  assert.deepEqual(await fs.readdir(f.root), []);
+});
+
+test('an unexpected error says what kind it was and keeps the original as its cause', async (t) => {
+  const bug = new TypeError('synthetic bug');
+  const f = await fixture(t, { failTranscript: bug });
+  const error = await f.analyze().then(() => null, (err) => err);
+  assert.match(error.message, /unexpected error \(TypeError\) while preparing or sending the video/);
+  assert.equal(error.cause, bug);
+  assert.deepEqual(await fs.readdir(f.root), []);
+});
+
+test('a temp clean-up failure keeps the report with a visible warning, or joins the run error', async (t) => {
+  const busy = Object.assign(new Error('busy'), { code: 'EBUSY' });
+  const ok = await fixture(t, { removeDir: async () => { throw busy; } });
+  const result = await ok.analyze();
+  assert.match(result, /^> Warning: Could not remove Claude Video Scout’s temporary folder .*mako-claude-video-.* \(EBUSY\)\. Delete it by hand\.\n\n## Summary/);
+  const failed = await fixture(t, { proceed: false, removeDir: async () => { throw busy; } });
+  await assert.rejects(failed.analyze(), /Cancelled at the estimate\. Nothing was sent to Claude\. Could not remove .* \(EBUSY\)/);
+});
+
+test('detail mode can not be set smaller than standard mode, and the longest video is at most 120 minutes', () => {
+  assert.match(normalizeClaudeVideoSettings({ longEdge: 960, detailLongEdge: 800 }).error, /cannot be smaller than the standard/);
+  assert.equal(normalizeClaudeVideoSettings({ longEdge: 1280, detailLongEdge: 1280 }).ok, true);
+  assert.match(normalizeClaudeVideoSettings({ maxMinutes: 121 }).error, /Longest video \(minutes\) must be a whole number from 1 to 120/);
+  assert.equal(formatTime(2.3), '0:02.3');
+  assert.equal(formatTime(0.7), '0:00.7');
+});
+
+test('the real process runner times out, caps output and reports a missing executable', async () => {
+  const opts = { env: process.env, cwd: os.tmpdir(), signal: new AbortController().signal, killTree: (_pid, done) => done() };
+  const slow = await runProcess(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { ...opts, timeoutMs: 200 });
+  assert.equal(slow.stopped, 'timed out');
+  const loud = await runProcess(process.execPath, ['-e', "process.stdout.write('x'.repeat(3 * 1024 * 1024)); setInterval(() => {}, 1000)"], { ...opts, timeoutMs: 10000 });
+  assert.equal(loud.stopped, 'produced too much output');
+  const missing = await runProcess(path.join(os.tmpdir(), 'mako-no-such-tool-' + process.pid), [], { ...opts, timeoutMs: 5000 });
+  assert.equal(missing.error?.code, 'ENOENT');
+});
+
+test('findTool ignores relative PATH entries and folders, strips quotes, and on Windows finds the npm claude.exe', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'test-s54-path-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const exe = (name) => (process.platform === 'win32' ? name + '.exe' : name);
+  const spaced = path.join(root, 'with space');
+  const folderOnly = path.join(root, 'folder-only');
+  await fs.mkdir(spaced);
+  await fs.mkdir(path.join(folderOnly, exe('sometool')), { recursive: true });
+  await fs.writeFile(path.join(spaced, exe('sometool')), 'fake', { mode: 0o755 });
+  const relative = path.relative(process.cwd(), spaced);
+  assert.equal(await findTool('sometool', { PATH: relative }), null, 'a relative PATH entry is never searched');
+  assert.equal(await findTool('sometool', { PATH: folderOnly }), null, 'a folder with the tool’s name is not the tool');
+  assert.equal(await findTool('sometool', { Path: [folderOnly, `"${spaced}"`].join(path.delimiter) }), path.join(spaced, exe('sometool')));
+  if (process.platform === 'win32') {
+    const npm = path.join(root, 'npm');
+    const native = path.join(npm, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe');
+    await fs.mkdir(path.dirname(native), { recursive: true });
+    await fs.writeFile(path.join(npm, 'claude.cmd'), 'fake shim');
+    await fs.writeFile(native, 'fake');
+    assert.equal(await findTool('claude', { PATH: npm }), native, 'the native claude.exe is used, never the .cmd shim');
+  }
+});
+
+test('IPC refuses credentials, ports, bad pane IDs and over-long focus before any work', async () => {
+  const analyzed = [];
+  const good = { sender: { send: () => {} } };
+  const scout = createClaudeVideoScoutIpc({
+    trustedSenderGate: { assess: (e) => ({ ok: e === good }) },
+    validateVideoUrl: (candidate) => (typeof candidate === 'string' && candidate.startsWith('https://') ? candidate : null),
+    log: () => {}, analyze: async () => { analyzed.push(1); return 'report'; },
+  });
+  for (const [req, message] of [
+    [{ id: 'pty1', url: 'https://u:p@example.com/watch?v=x' }, /YouTube or Vimeo/],
+    [{ id: 'pty1', url: 'https://www.youtube.com:8443/watch?v=x' }, /YouTube or Vimeo/],
+    [{ id: 'pty0', url }, /refused this window or pane/],
+    [{ id: '../x', url }, /refused this window or pane/],
+    [{ id: 'pty1', url, focus: 'x'.repeat(2001) }, /too long/],
+  ]) {
+    assert.match(scout.run(good, req).error, message);
+  }
+  assert.equal(analyzed.length, 0);
+});
+
+test('IPC maps Whisper replies, cancels only its own run, and logs real errors but not the user’s cancel', async () => {
+  const events = [];
+  const logged = [];
+  const causes = [];
+  const good = { sender: { send: (_channel, data) => events.push(data) } };
+  let behaviour = 'transcribe';
+  const scout = createClaudeVideoScoutIpc({
+    trustedSenderGate: { assess: (e) => ({ ok: e === good }) },
+    validateVideoUrl: (candidate) => candidate,
+    log: (reason) => logged.push(reason), logCause: (_label, cause) => causes.push(cause),
+    analyze: async ({ transcribe, signal }) => {
+      if (behaviour === 'crash') throw new RangeError('synthetic');
+      if (behaviour === 'wait') {
+        await new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new ScoutError('Claude Video Scout was cancelled.'))));
+      }
+      return 'Report from ' + await transcribe(Buffer.from([0, 0]), { durationSeconds: 3 });
+    },
+  });
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
+  for (const [reply, message] of [
+    [{ error: 'busy' }, /Local Whisper is busy/],
+    [{ error: 'unavailable' }, /local Whisper module is unavailable/],
+    [{ text: 'x'.repeat(MAX_TRANSCRIPT_CHARS + 1) }, /transcript is longer than 200,000 characters/],
+    [{ text: 7 }, /could not transcribe the video audio/],
+  ]) {
+    const run = scout.run(good, { id: 'pty1', url });
+    await settle();
+    assert.match(scout.transcript(good, { ...events.at(-1), ...reply }).error, message);
+    assert.match((await run).error, message);
+  }
+
+  behaviour = 'wait';
+  const waiting = scout.run(good, { id: 'pty1', url });
+  await settle();
+  scout.cancel({}, 'pty1');
+  scout.cancel(good, 'pty9');
+  await settle();
+  assert.match(scout.run(good, { id: 'pty2', url }).error, /already in progress/, 'neither an untrusted window nor another pane cancels it');
+  scout.cancel(good, 'pty1');
+  assert.equal((await waiting).error, 'Claude Video Scout was cancelled.');
+  assert(!logged.includes('Claude Video Scout was cancelled.'), 'the user’s own cancel is not logged as an error');
+
+  behaviour = 'crash';
+  assert.equal((await scout.run(good, { id: 'pty2', url })).error, 'Claude Video Scout failed to start (RangeError).');
+  assert.equal(logged.at(-1), 'Claude Video Scout failed to start (RangeError).');
+  assert(causes.at(-1) instanceof RangeError, 'the original error goes to the developer console');
+});
+
+test('main cancels the run when the window reloads, and the renderer shows Whisper failures and cleans terminal text', async () => {
+  const main = await fs.readFile(path.join(__dirname, 'main.js'), 'utf8');
+  assert.match(main, /win\.webContents\.on\('did-start-navigation', \(details, _url, isInPlace, isMainFrame\) => \{\s*const mainFrame = details\?\.isMainFrame \?\? isMainFrame;\s*const sameDocument = details\?\.isSameDocument \?\? isInPlace;\s*if \(mainFrame && !sameDocument\) claudeScout\.shutdown\(\);/);
+
+  const js = await fs.readFile(path.join(__dirname, 'renderer/app.js'), 'utf8');
+  const writes = [];
+  const fed = [];
+  const submitted = [];
+  const cancelled = [];
+  let failSubmit = false;
+  const context = vm.createContext({
+    window: {},
+    terms: new Map([['pty1', { term: { write: (data) => writes.push(data) }, parser: { feed: (data) => fed.push(data) } }]]),
+    cc: {
+      claudeVideoScoutTranscript: async (req) => { if (failSubmit) throw new Error('ipc gone'); submitted.push(req); return { ok: true }; },
+      claudeVideoScoutCancel: (id) => cancelled.push(id),
+    },
+    showClaudeVideoEstimate: () => {},
+  });
+  const write = js.slice(js.indexOf('function writeClaudeVideoPane('), js.indexOf('// S54 settings (D-065)'));
+  const handle = js.slice(js.indexOf('async function handleClaudeVideoEvent('), js.indexOf('async function createAgent()'));
+  vm.runInContext(write + handle, context);
+
+  vm.runInContext("writeClaudeVideoPane('pty1', 'a\\x1b[31mred\\x07\\x9b2J\\r\\nnext\\nline')", context);
+  assert.equal(writes.at(-1), 'a[31mred2J\r\nnext\r\nline\r\n');
+  assert.equal(fed.at(-1), writes.at(-1));
+
+  await vm.runInContext("handleClaudeVideoEvent({ id: 'pty1', token: 't1', pcm: new Uint8Array(2) })", context);
+  assert.deepEqual(JSON.parse(JSON.stringify(submitted.at(-1))), { id: 'pty1', token: 't1', error: 'unavailable' });
+
+  context.window.ccSTT = { transcribeVideoPcm: async () => ({ ok: false, error: 'failed', detail: 'speech model failed: webgpu: no adapter; wasm: download refused' }) };
+  await vm.runInContext("handleClaudeVideoEvent({ id: 'pty1', token: 't2', pcm: new Uint8Array(2) })", context);
+  assert(writes.some((line) => line.includes('Local Whisper: speech model failed: webgpu: no adapter; wasm: download refused')));
+  assert.equal(submitted.at(-1).error, 'failed');
+
+  context.window.ccSTT = { transcribeVideoPcm: async () => { throw new Error('out of memory'); } };
+  failSubmit = true;
+  await vm.runInContext("handleClaudeVideoEvent({ id: 'pty1', token: 't3', pcm: new Uint8Array(2) })", context);
+  assert(writes.some((line) => line.includes('Local Whisper: transcription failed unexpectedly in Mako’s Whisper module.')));
+  assert(writes.some((line) => line.includes('Could not return the local transcription result to Mako.')));
+  assert.deepEqual(cancelled, ['pty1'], 'a reply that can not reach main cancels the run instead of leaving it waiting');
 });

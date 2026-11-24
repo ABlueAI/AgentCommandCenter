@@ -9,6 +9,7 @@
 import {
   WHISPER_MODEL_ID, WHISPER_DOWNLOADS, getWhisperLoadOptions, describeWhisperDtype,
   getWhisperTranscriptionOptions, boundedFileName, createProgressReporter, createWhisperLoader,
+  pcm16leToFloat32, describeTranscriptionError,
 } from './stt-bootstrap.js';
 
 let passed = 0;
@@ -218,6 +219,27 @@ section('createWhisperLoader: honest selection, visible fallback, both-fail refu
   const progressLines = statuses.filter((s) => /encoder_model\.onnx/.test(s.detail));
   assert(progressLines.length === 2 && /40%/.test(progressLines[0].detail) && /complete/.test(progressLines[1].detail),
     'download progress reaches the status stream bounded and throttled (41% inside the window is dropped, done passes)');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+section('S54 Video Scout: 16-bit PCM conversion and the shared failure wording');
+// ══════════════════════════════════════════════════════════════════════════════
+{
+  // Little-endian samples: 0x0000 = 0, 0x7fff = just under 1, 0x8000 = -1, 0x4000 = 0.5.
+  const pcm = pcm16leToFloat32(new Uint8Array([0x00, 0x00, 0xff, 0x7f, 0x00, 0x80, 0x00, 0x40]));
+  assert(pcm instanceof Float32Array && pcm.length === 4, 'four 16-bit samples become four floats');
+  assert(pcm[0] === 0 && Math.abs(pcm[1] - 32767 / 32768) < 1e-7 && pcm[2] === -1 && pcm[3] === 0.5,
+    'samples are read little-endian and scaled by 1/32768 (big-endian would give 0x00ff and 0xff7f)');
+  const offset = new Uint8Array([9, 0x00, 0x40]).subarray(1);
+  assert(pcm16leToFloat32(offset)[0] === 0.5, 'a view at a byte offset reads from its own start');
+  assert(pcm16leToFloat32(new Uint8Array(3)) === null && pcm16leToFloat32(new Uint8Array(0)) === null &&
+    pcm16leToFloat32([0, 0]) === null, 'an odd-length, empty or non-Uint8Array buffer is refused');
+  assert(describeTranscriptionError(new Error('speech model failed: webgpu: x; wasm: y')) === 'speech model failed: webgpu: x; wasm: y',
+    'a model-load failure keeps the bootstrap wording that names both backends');
+  assert(describeTranscriptionError(new Error('out of memory')) === 'transcription failed: out of memory',
+    'any other failure says transcription failed and why');
+  assert(describeTranscriptionError(new Error('x'.repeat(500))).length === 'transcription failed: '.length + 300,
+    'the reason is bounded to 300 characters');
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

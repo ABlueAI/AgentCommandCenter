@@ -1,7 +1,9 @@
 'use strict';
 
 const { randomUUID } = require('node:crypto');
-const { analyzeVideo, ScoutError, MAX_TRANSCRIPT_CHARS, CONFIRM_TIMEOUT_MS } = require('./claude-video-scout');
+const {
+  analyzeVideo, ScoutError, MAX_TRANSCRIPT_CHARS, CONFIRM_TIMEOUT_MS, CANCELLED, ESTIMATE_CANCELLED, errorLabel,
+} = require('./claude-video-scout');
 const { normalizeAnalysisFocus, analysisFocusRejectionMessage } = require('./renderer/analysis-focus');
 const { normalizeClaudeVideoSettings } = require('./renderer/claude-video-settings');
 
@@ -14,7 +16,7 @@ function askRenderer(job, kind, payload, timeoutMs, timeoutMessage, send) {
   return new Promise((resolve, reject) => {
     const signal = job.controller.signal;
     if (signal.aborted) {
-      reject(new ScoutError('Claude Video Scout was cancelled.'));
+      reject(new ScoutError(CANCELLED));
       return;
     }
     const finish = (err, value) => {
@@ -24,7 +26,7 @@ function askRenderer(job, kind, payload, timeoutMs, timeoutMessage, send) {
       if (err) reject(err);
       else resolve(value);
     };
-    const abort = () => finish(new ScoutError('Claude Video Scout was cancelled.'));
+    const abort = () => finish(new ScoutError(CANCELLED));
     const timer = setTimeout(() => finish(new ScoutError(timeoutMessage)), timeoutMs);
     job.pending = { kind, finish };
     signal.addEventListener('abort', abort, { once: true });
@@ -49,7 +51,9 @@ function requestConfirm(job, estimate, send) {
     'No answer to the estimate within 30 minutes. Nothing was sent to Claude.', send);
 }
 
-function createClaudeVideoScoutIpc({ trustedSenderGate, validateVideoUrl, baseEnv, killTree, verifyPolicy, log, analyze = analyzeVideo }) {
+function createClaudeVideoScoutIpc({
+  trustedSenderGate, validateVideoUrl, baseEnv, killTree, verifyPolicy, log, analyze = analyzeVideo, logCause = console.error,
+}) {
   let active = null;
 
   function run(event, req) {
@@ -81,8 +85,13 @@ function createClaudeVideoScoutIpc({ trustedSenderGate, validateVideoUrl, baseEn
     })).then(
       (report) => ({ ok: true, report }),
       (error) => {
-        const reason = error instanceof ScoutError ? error.message : 'Claude Video Scout failed to start or prepare its temporary media.';
-        log(reason);
+        const reason = error instanceof ScoutError ? error.message
+          : `Claude Video Scout failed to start (${errorLabel(error)}).`;
+        // The user's own cancel is not an error; everything else goes to the Logs tab.
+        if (reason !== CANCELLED && reason !== ESTIMATE_CANCELLED) log(reason);
+        // An unexpected error keeps its original for the developer console, never for the UI.
+        const cause = error instanceof ScoutError ? error.cause : error;
+        if (cause) logCause('[claude-video-scout] unexpected error:', cause);
         return { ok: false, error: reason };
       },
     ).finally(() => { active = null; });
@@ -102,7 +111,9 @@ function createClaudeVideoScoutIpc({ trustedSenderGate, validateVideoUrl, baseEn
       ? 'Mako’s local Whisper module is unavailable. Restart Mako and check that Dictate loads.'
       : req.error === 'busy'
         ? 'Local Whisper is busy. Finish dictation or wait for the previous transcription, then retry.'
-        : 'Local Whisper could not transcribe the video audio.';
+        : !req.error && typeof req.text === 'string' && req.text.length > MAX_TRANSCRIPT_CHARS
+          ? `Local Whisper's transcript is longer than ${MAX_TRANSCRIPT_CHARS.toLocaleString('en-US')} characters. Lower the longest-video setting or analyse a shorter video.`
+          : 'Local Whisper could not transcribe the video audio.';
     if (req.error || typeof req.text !== 'string' || req.text.length > MAX_TRANSCRIPT_CHARS) {
       active.pending.finish(new ScoutError(error));
       return { ok: false, error };

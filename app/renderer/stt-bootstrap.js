@@ -39,6 +39,23 @@ export function getWhisperTranscriptionOptions() {
   };
 }
 
+// S54 Video Scout: FFmpeg's 16-bit little-endian mono PCM -> the Float32 samples Whisper takes.
+// Refuses an empty or odd-length buffer rather than guessing at the last byte.
+export function pcm16leToFloat32(bytes) {
+  if (!(bytes instanceof Uint8Array) || bytes.length === 0 || bytes.length % 2 !== 0) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const pcm = new Float32Array(bytes.length / 2);
+  for (let i = 0; i < pcm.length; i++) pcm[i] = view.getInt16(i * 2, true) / 32768;
+  return pcm;
+}
+
+// The one bounded wording Dictate and Video Scout both show for a failed load or transcription:
+// the bootstrap's combined error already names both backends with their reasons.
+export function describeTranscriptionError(e) {
+  const msg = String((e && e.message) || e).slice(0, 300);
+  return msg.startsWith('speech model failed') ? msg : 'transcription failed: ' + msg;
+}
+
 // Status lines may name WHICH file is downloading, but bounded: base name only (no
 // paths), control characters stripped, hard length cap. Never file contents.
 const FILE_NAME_MAX = 60;

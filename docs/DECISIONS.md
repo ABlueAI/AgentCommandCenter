@@ -3,17 +3,16 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
-## 2026-11-23: S54's design (Claude video analysis), and Claude fixing Codex's PRs
+## 2026-11-23: S54's design (Claude video analysis)
 
-Blue decided these in his main chat; the hand-off to the Claude session that rebuilt PR #230 relayed
-them as D-065 and D-070, with the quotes below. Neither was in this file before PR #230, which
-records them because its design depends on them; merging PR #230 records them here. "Builder's
-reading" marks a line that is the builder's, not Blue's.
+Blue decided this in his main chat; the hand-off to the Claude session that rebuilt PR #230 relayed
+it as D-065, with the quote below. It was not in this file before PR #230, which records it because
+its design depends on it; merging PR #230 records it here. "Builder's reading" marks a line that is
+the builder's, not Blue's.
 
 | Decision | Blue's words |
 |---|---|
-| **D-065. S54's design limits tokens.** Sample frames by scene change plus at least one frame every N seconds (default 10), not by the clock; downscale to 640 px on the long edge by default, with a "detail mode" switch, off by default, that sends 1280 px frames for screen recordings and tutorials (same frame cap; the estimate shows which mode is on); drop near-duplicate frames; cap frames per video (default 120) and per request, batching when needed; the audio goes in as a transcript from Mako's existing speech-to-text; before running, show an estimate (frames kept, approximate tokens) and let the user cancel. Every default is a setting. No API key or API credits, ever, and no silent fallback. S54 stays in 1.1 (2026-11-23 entry above, item 8). Replaces the "1 fps video plus audio" of the 2026-11-16 entries for S54. Builder's reading: the 90-second limit goes, and long videos are handled by the cap and batching; a later refinement may send only the frames that contain text at full size. | "add detail mode" |
-| **D-070. A Claude session may fix Codex's code PRs** (push to a `codex/` branch), as the exception AGENTS.md "Who does what" allows when Blue asks ("Claude never pushes to a `codex/` branch unless Blue asks"). Builder's reading: AGENTS.md is unchanged; Claude still doesn't change a `codex/` PR's draft state ("Merge order"). | "yes, thats fine" · "for the last time yes" |
+| **D-065. S54's design limits tokens.** Sample frames by scene change plus at least one frame every N seconds (default 10), not by the clock; downscale to 640 px on the long edge by default, with a "detail mode" switch, off by default, that sends 1280 px frames for screen recordings and tutorials (same frame cap; the estimate shows which mode is on); drop near-duplicate frames; cap frames per video (default 120) and per request, batching when needed; the audio goes in as a transcript from Mako's existing speech-to-text; before running, show an estimate (frames kept, approximate tokens) and let the user cancel. Every default is a setting. No API key or API credits, ever, and no silent fallback. S54 stays in 1.1 (the S61 entry below, item 8). Replaces the "1 fps video plus audio" of the 2026-11-16 entries for S54. Builder's reading: long videos are handled by the cap and batching, not refused at a fixed length (PR #230's first build had a 90-second limit, which never reached `main`); a later refinement may send only the frames that contain text at full size. | "add detail mode" |
 
 ## 2026-11-23: hard rules, Codex's pass before ready, agent-account pacing
 

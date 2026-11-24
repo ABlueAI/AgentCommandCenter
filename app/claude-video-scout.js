@@ -144,13 +144,41 @@ function runProcess(exe, args, { cwd, env, signal, input, timeoutMs, killTree })
   });
 }
 
+const CANCELLED = 'Claude Video Scout was cancelled.';
+const ESTIMATE_CANCELLED = 'Cancelled at the estimate. Nothing was sent to Claude.';
+
+// A bounded, non-private label for an unexpected error: its code (EBUSY, EPERM, ...) or its class.
+function errorLabel(err) {
+  const label = String(err?.code || err?.name || 'unknown error');
+  return /^[A-Za-z_][\w-]{0,39}$/.test(label) ? label : 'unknown error';
+}
+
 function processRefusal(result, label) {
-  if (result.stopped === 'cancelled') throw new ScoutError('Claude Video Scout was cancelled.');
+  if (result.stopped === 'cancelled') throw new ScoutError(CANCELLED);
   if (result.stopped) throw new ScoutError(`${label} ${result.stopped}.`);
   if (result.error) {
     if (result.error.code === 'ENOENT') throw new ScoutError(`${label} executable is missing. Check PATH and restart Mako.`);
-    throw new ScoutError(`${label} could not start or communicate with Mako.`);
+    throw new ScoutError(`${label} could not start or communicate with Mako (${errorLabel(result.error)}).`);
   }
+}
+
+// yt-dlp's stderr on a public URL is safe to read locally. Map the failures with a next step Blue
+// can take to a fixed message; anything else keeps the generic one. The text itself is never shown.
+function ytDlpRefusal(result, fallback) {
+  const text = result.stderr || '';
+  if (/confirm you.?re not a bot|nsig|signature extraction|HTTP Error 403/i.test(text)) {
+    return new ScoutError('yt-dlp was refused by the video site, which usually means yt-dlp needs updating. Run yt-dlp -U, then retry.');
+  }
+  if (/Requested format is not available/i.test(text)) {
+    return new ScoutError('Video could not be read: it has no MP4 format at or below 1280 px.');
+  }
+  if (/Private video|Video unavailable|This video is not available|members-only|Sign in to confirm your age/i.test(text)) {
+    return new ScoutError('Video could not be read: it is private, age-restricted or unavailable.');
+  }
+  if (/does not pass filter/i.test(text)) {
+    return new ScoutError('Video could not be read: it is a livestream or longer than the longest-video setting.');
+  }
+  return new ScoutError(fallback);
 }
 
 function readJson(text) {
@@ -337,8 +365,10 @@ function estimateRun({ settings, durationSeconds, source, sampling, batches, tra
 }
 
 function formatTime(seconds) {
-  const whole = Math.floor(seconds);
-  const tenths = Math.floor((seconds - whole) * 10);
+  // Work in whole tenths, so a pts_time of 2.3 reads 0:02.3, not 0:02.2 through float error.
+  const allTenths = Math.floor(seconds * 10 + 1e-6);
+  const whole = Math.floor(allTenths / 10);
+  const tenths = allTenths % 10;
   const h = Math.floor(whole / 3600);
   const m = Math.floor((whole % 3600) / 60);
   const s = String(whole % 60).padStart(2, '0');
@@ -424,7 +454,8 @@ function readReport(result) {
   if (/rate limit|usage limit|hit your limit|out of usage/i.test(diagnostic)) {
     throw new ScoutError('Claude Code reported a subscription usage or rate limit.');
   }
-  throw new ScoutError(`Claude Code did not return an analysis report (exit ${result.code ?? 'unknown'}).`);
+  const subtype = typeof final?.subtype === 'string' && /^[a-z_]{1,40}$/.test(final.subtype) ? `, ${final.subtype}` : '';
+  throw new ScoutError(`Claude Code did not return an analysis report (exit ${result.code ?? 'unknown'}${subtype}).`);
 }
 
 function validateDuration(duration, maxSeconds) {
@@ -446,7 +477,8 @@ async function readArtifact(file, maxBytes, reason) {
 }
 
 async function analyzeVideo({ url, focus, settings: rawSettings, signal, progress, transcribe, confirm, baseEnv, killTree,
-  verifyPolicy, locate = findTool, run = runProcess, tempRoot = os.tmpdir() }) {
+  verifyPolicy, locate = findTool, run = runProcess, tempRoot = os.tmpdir(),
+  removeDir = (dir) => fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }) }) {
   const checked = normalizeClaudeVideoSettings(rawSettings);
   if (!checked.ok) throw new ScoutError(checked.error);
   const settings = checked.settings;
@@ -467,8 +499,7 @@ async function analyzeVideo({ url, focus, settings: rawSettings, signal, progres
     run(exe, args, { cwd: dir, env: childEnv, signal, input, timeoutMs, killTree });
   const askClaude = async (input) =>
     readReport(await invoke(claude, ANALYSIS_ARGS, { input, childEnv: claudeEnv, timeoutMs: 600000 }));
-  let failure;
-  try {
+  const work = async () => {
     progress('Checking Claude Code subscription sign-in…');
     requireSubscription(await invoke(claude, AUTH_ARGS, { childEnv: claudeEnv, timeoutMs: 15000 }));
 
@@ -482,7 +513,7 @@ async function analyzeVideo({ url, focus, settings: rawSettings, signal, progres
     const metadata = await invoke(tools['yt-dlp'], metadataArgs(url));
     processRefusal(metadata, 'Video lookup with yt-dlp');
     const source = readJson(metadata.stdout);
-    if (metadata.code !== 0 || !source) throw new ScoutError('Video could not be read: yt-dlp could not load the source.');
+    if (metadata.code !== 0 || !source) throw ytDlpRefusal(metadata, 'Video could not be read: yt-dlp could not load the source.');
     if (source.is_live === true || source.is_upcoming === true ||
         (source.live_status && !['not_live', 'was_live'].includes(source.live_status))) {
       throw new ScoutError('Video could not be read: use an uploaded video or a finished livestream.');
@@ -490,9 +521,10 @@ async function analyzeVideo({ url, focus, settings: rawSettings, signal, progres
     validateDuration(source.duration, maxSeconds);
 
     progress('Downloading video…');
-    const downloaded = await invoke(tools['yt-dlp'], downloadArgs(url, tools.ffmpeg, video, maxSeconds), { timeoutMs: 30 * 60000 });
+    const downloaded = await invoke(tools['yt-dlp'], downloadArgs(url, tools.ffmpeg, video, maxSeconds),
+      { timeoutMs: Math.max(30 * 60000, source.duration * 1000) });
     processRefusal(downloaded, 'Video download with yt-dlp');
-    if (downloaded.code !== 0) throw new ScoutError('Video could not be read: yt-dlp could not download an MP4.');
+    if (downloaded.code !== 0) throw ytDlpRefusal(downloaded, 'Video could not be read: yt-dlp could not download an MP4.');
     const videoStat = await fs.stat(video).catch((err) => {
       if (err.code === 'ENOENT') throw new ScoutError('Video could not be read: the downloader produced no MP4.');
       throw err;
@@ -568,7 +600,7 @@ async function analyzeVideo({ url, focus, settings: rawSettings, signal, progres
     const batches = planBatches(frames, settings.framesPerRequest);
     const estimate = estimateRun({ settings, durationSeconds, source: videoStream, sampling, batches, transcript, focus });
     if (await confirm(formatEstimate(estimate), estimate) !== true) {
-      throw new ScoutError('Cancelled at the estimate. Nothing was sent to Claude.');
+      throw new ScoutError(ESTIMATE_CANCELLED);
     }
 
     if (batches.length === 1) {
@@ -582,20 +614,39 @@ async function analyzeVideo({ url, focus, settings: rawSettings, signal, progres
     }
     progress(`Merging ${batches.length} parts into one report with Claude Code…`);
     return await askClaude(buildMergeMessage(notes, transcript, focus));
+  };
+  let report;
+  let failure;
+  try {
+    report = await work();
   } catch (err) {
-    failure = err instanceof ScoutError ? err : new ScoutError('Claude Video Scout could not prepare or read its temporary media.');
-    throw failure;
-  } finally {
-    try {
-      await fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
-    } catch {
-      throw new ScoutError(`${failure ? failure.message + ' ' : ''}Could not remove Claude Video Scout’s temporary media.`);
+    if (err instanceof ScoutError) failure = err;
+    else {
+      // Not one of the expected refusals (a file locked on Windows, a bug): say what kind it was,
+      // keep the original as the cause for main's log, and never claim it was something else.
+      failure = new ScoutError(`Claude Video Scout hit an unexpected error (${errorLabel(err)}) while preparing or sending the video.`);
+      failure.cause = err;
     }
   }
+  try {
+    await removeDir(dir);
+  } catch (err) {
+    const note = `Could not remove Claude Video Scout’s temporary folder ${dir} (${errorLabel(err)}). Delete it by hand.`;
+    if (failure) {
+      const combined = new ScoutError(`${failure.message} ${note}`);
+      combined.cause = failure.cause;
+      throw combined;
+    }
+    // The report already cost subscription usage, so keep it and put the warning in front of it.
+    progress(note);
+    return `> Warning: ${note}\n\n${report}`;
+  }
+  if (failure) throw failure;
+  return report;
 }
 
 module.exports = {
-  analyzeVideo, ScoutError, runProcess, MAX_TRANSCRIPT_CHARS, CONFIRM_TIMEOUT_MS,
+  analyzeVideo, ScoutError, CANCELLED, ESTIMATE_CANCELLED, errorLabel, runProcess, findTool, MAX_TRANSCRIPT_CHARS, CONFIRM_TIMEOUT_MS, MAX_CANDIDATES,
   sampleArgs, frameArgs, parseFrameLog, differenceHash, hammingDistance, chooseFrames, planBatches,
   scaledSize, estimateRun, formatEstimate, formatTime, HASH_BYTES,
 };

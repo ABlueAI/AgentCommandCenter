@@ -23,7 +23,7 @@ const CLAUDE_VIDEO_SETTINGS = Object.freeze({
   maxFrames: Object.freeze({ default: 120, min: 1, max: 500, integer: true, label: 'Frame cap per video' }),
   framesPerRequest: Object.freeze({ default: 60, min: 1, max: 100, integer: true, label: 'Frames per Claude request' }),
   // Longest video accepted, a resource bound for the download and local Whisper (not a token cap).
-  maxMinutes: Object.freeze({ default: 60, min: 1, max: 240, integer: true, label: 'Longest video (minutes)' }),
+  maxMinutes: Object.freeze({ default: 60, min: 1, max: 120, integer: true, label: 'Longest video (minutes)' }),
 });
 
 function defaultClaudeVideoSettings() {
@@ -59,6 +59,9 @@ function normalizeClaudeVideoSettings(raw) {
       };
     }
     settings[key] = value;
+  }
+  if (settings.detailLongEdge < settings.longEdge) {
+    return { ok: false, error: 'Detail mode frame size cannot be smaller than the standard frame size.' };
   }
   return { ok: true, settings };
 }

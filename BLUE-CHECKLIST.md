@@ -1197,7 +1197,7 @@ Step 72 comes from PR #227 (docs/DECISIONS.md, 2026-11-23). Step numbers 69 to 7
   fully restart Mako.
   - In PowerShell, check that `claude auth status` shows your Claude.ai subscription and that
     `yt-dlp --version`, `ffmpeg -version` and `ffprobe -version` work. Check that Usage credits
-    are off in Claude's usage settings (see step 26). Use the Claude subscription sign-in and leave
+    are off in Claude's usage settings (see step 28). Use the Claude subscription sign-in and leave
     API keys out of the run.
   - In Mako, open **Agents → + New → Video**, choose **Claude Code (subscription)**, and paste one real
     public YouTube or Vimeo clip, ideally 15–30 seconds, with an identifiable visual change and spoken
@@ -1207,6 +1207,8 @@ Step 72 comes from PR #227 (docs/DECISIONS.md, 2026-11-23). Step numbers 69 to 7
     once with it on (the checkbox under the provider). Each time, note the estimate's frames kept,
     Claude requests and approximate tokens, and which mode it shows, then click **Send to Claude**.
     A screen recording or tutorial with small on-screen text shows detail mode best.
+  - Start one more run and close its pane while it is downloading. Check that no
+    `mako-claude-video-` folder is left in `%TEMP%` (in PowerShell: `Get-ChildItem $env:TEMP -Filter mako-claude-video-*`).
   - *Done when:* the short clip's report has a timecoded visual observation and a concrete detail
     from the narration, and for the 10-minute video you tell an agent, for each mode, the frames kept,
     the requests, the approximate tokens and whether the report matched the video, and how long each

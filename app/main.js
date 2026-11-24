@@ -538,6 +538,13 @@ function createWindow() {
   });
   win.webContents.on('render-process-gone', () => { claudeScout.shutdown(); });
   win.webContents.on('destroyed', () => { claudeScout.shutdown(); });
+  // A reload (Ctrl+R in the default menu) restarts the renderer's pane numbering, so a run left
+  // going could send its estimate or audio request to a new pane with the same ID. Cancel it.
+  win.webContents.on('did-start-navigation', (details, _url, isInPlace, isMainFrame) => {
+    const mainFrame = details?.isMainFrame ?? isMainFrame;
+    const sameDocument = details?.isSameDocument ?? isInPlace;
+    if (mainFrame && !sameDocument) claudeScout.shutdown();
+  });
   win.loadFile(ENTRY_PATH);
 
   // --- Navigation lockdown (AUDIT #3 / electronegativity LIMIT_NAVIGATION HIGH) -----------------

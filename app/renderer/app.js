@@ -2354,9 +2354,12 @@ async function handleClaudeVideoEvent({ id, token, status, estimate, pcm }) {
       ? await window.ccSTT.transcribeVideoPcm(pcm, (detail) => writeClaudeVideoPane(id, detail))
       : { ok: false, error: 'unavailable' };
   } catch {
-    result = { ok: false, error: 'failed' };
+    // stt.js catches and words its own failures (detail), so a throw here is unexpected.
+    result = { ok: false, error: 'failed', detail: 'transcription failed unexpectedly in Mako’s Whisper module.' };
   }
   if (!terms.has(id)) return;
+  // Show why Whisper failed (a model download or backend error), as Dictate does.
+  if (!result.ok && result.detail) writeClaudeVideoPane(id, 'Local Whisper: ' + result.detail);
   try {
     const submission = await cc.claudeVideoScoutTranscript({
       id, token, ...(result.ok ? { text: result.text } : { error: result.error }),

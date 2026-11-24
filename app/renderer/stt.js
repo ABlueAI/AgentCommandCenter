@@ -22,7 +22,9 @@ import { pipeline, env } from '../node_modules/@huggingface/transformers/dist/tr
 import { configureSttEnv } from './stt-env-config.js';
 import {
   createWhisperLoader,
+  describeTranscriptionError,
   describeWhisperDtype,
+  pcm16leToFloat32,
   getWhisperTranscriptionOptions,
   WHISPER_DOWNLOADS,
   WHISPER_MODEL_ID,
@@ -145,8 +147,7 @@ async function stopAndTranscribe() {
   } catch (e) {
     // Bounded, honest failure. The bootstrap's combined error already names BOTH
     // attempted backends with their reasons; anything else is a transcription failure.
-    const msg = String((e && e.message) || e).slice(0, 300);
-    setStatus('error', msg.startsWith('speech model failed') ? msg : 'transcription failed: ' + msg);
+    setStatus('error', describeTranscriptionError(e));
     busy = false;
     return '';
   }
@@ -168,21 +169,20 @@ async function toggle() {
 // model as Dictate, without opening the microphone or posting to its locked target pane.
 async function transcribeVideoPcm(bytes, onProgress) {
   if (videoBusy || recording || busy) return { ok: false, error: 'busy' };
-  if (!(bytes instanceof Uint8Array) || bytes.length === 0 || bytes.length % 2 !== 0) {
-    return { ok: false, error: 'failed' };
-  }
+  const pcm = pcm16leToFloat32(bytes);
+  if (!pcm) return { ok: false, error: 'failed', detail: 'the audio was not whole 16-bit samples' };
   videoBusy = true;
   try {
-    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    const pcm = new Float32Array(bytes.length / 2);
-    for (let i = 0; i < pcm.length; i++) pcm[i] = view.getInt16(i * 2, true) / 32768;
     const model = await ensureModel((_state, detail) => onProgress(detail));
     onProgress(`Whisper large-v3-turbo · ${activeDevice}/${describeWhisperDtype(activeDevice)}`);
     const options = getWhisperTranscriptionOptions();
     delete options.language; // The source video can be in a different language.
     const output = await model(pcm, options);
-    if (typeof output?.text !== 'string') return { ok: false, error: 'failed' };
+    if (typeof output?.text !== 'string') return { ok: false, error: 'failed', detail: 'Whisper returned no text' };
     return { ok: true, text: output.text.trim() };
+  } catch (e) {
+    // Same bounded wording Dictate shows, so a model that fails to load says why.
+    return { ok: false, error: 'failed', detail: describeTranscriptionError(e) };
   } finally {
     videoBusy = false;
   }
