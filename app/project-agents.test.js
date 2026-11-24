@@ -175,7 +175,8 @@ if (sharedBlocks.length > 0) {
     !flat.includes('(by `ABlueAgent` or `ABlueAI`, unedited'),
     "AGENTS.md: a Claude cloud session posts Codex PR reviews; Blue's desktop login never does");
   assert(flat.includes('**Dependabot PRs** (issue #205)') && flat.includes('**Dependabot PRs** never make another PR wait') &&
-    flat.includes('No agent pushes to a Dependabot branch'),
+    flat.includes('No agent pushes to a Dependabot branch') && flat.includes('`security-reviewer` always') &&
+    flat.includes('Each bumped package also goes through the pin-and-scan step'),
     'AGENTS.md settles how Dependabot PRs are reviewed and ordered (issue #205)');
   assert(flat.includes('one sitting each evening, about 10 minutes') && flat.includes('PC checks on Tuesday and Friday evenings'),
     'AGENTS.md records the merge sitting and the PC-check evenings');
