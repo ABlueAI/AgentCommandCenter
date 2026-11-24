@@ -27,7 +27,7 @@ $script:SrUtf8 = New-Object System.Text.UTF8Encoding($false)
 $script:SrStrict = New-Object System.Text.UTF8Encoding($false, $true)
 # The installed hook path the qualified identities were produced with (an INPUT to the pure function,
 # so these pins hold on any machine).
-$script:SrQualifiedHookPath = 'C:/Users/levij/.claude/hooks/fence-write.js'
+$script:SrQualifiedHookPath = 'C:/Users/sampleuser/.claude/hooks/fence-write.js'
 
 # --------------------------------------------------------------------------------------------
 # Helpers

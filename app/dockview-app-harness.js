@@ -1196,7 +1196,7 @@ async function scenarioMalformedAndConcurrency() {
   const malformed = [];
   const CORRUPTIONS = [
     ['populated-params', (e) => { e.layout.panels.pty1.params = { cwd: 'D:\\Workspace\\secret' }; }],
-    ['path-in-title', (e) => { e.layout.panels.pty1.title = 'C:\\Users\\levij\\key'; }],
+    ['path-in-title', (e) => { e.layout.panels.pty1.title = 'C:\\Users\\sampleuser\\key'; }],
     ['unknown-component', (e) => { e.layout.panels.pty1.contentComponent = 'iframe'; }],
     ['floating-groups', (e) => { e.layout.floatingGroups = [{}]; }],
     ['hidden-pane-group', (e) => { e.layout.grid.root.data[0].visible = false; }],
