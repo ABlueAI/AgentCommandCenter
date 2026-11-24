@@ -473,6 +473,20 @@ const GUARDED_PS = [
   ["iex \"Write-Output @('gh','pr','merge')\"", 'gh pr merge'],
   ["Write-Output @('gh','pr','merge','5')\n| Join-String -Separator ' ' | cmd", 'gh pr merge'],
   ["'gh','pr','merge','5'\r\n  # joined\n  | Join-String -Separator ' ' | cmd", 'gh pr merge'],
+  // Review run 6 (e863784): an array value is skipped only in a script that does nothing but print,
+  // with no `$`, `{`, `}` or `=` in it. A script block's argument, a line-continued assignment, a brace
+  // inside `${...}` and an alias loaded from a file all keep it a command.
+  ["& { cmd /c \"$($args[0])\" } 'gh','pr','merge','5'", 'gh pr merge'],
+  [". { cmd /c \"$args\" } 'gh','pr','merge'", 'gh pr merge'],
+  ["& { cmd /c \"$($args[0])\" } Write-Output @('gh','pr','merge','5')", 'gh pr merge'],
+  ["$c =\n'gh','pr','merge','5'\ncmd /c \"$c\"", 'gh pr merge'],
+  ["$env:X =\n'gh','pr','merge'\ncmd /c \"%X%\"", 'gh pr merge'],
+  ["$c = '{0} {1} {2} {3}' -f\n'gh','pr','merge','5'\ncmd /c \"$c\"", 'gh pr merge'],
+  ["${a`}b} = 1\n$c = & {\n'gh','pr','merge','5'\n}\ncmd /c \"$c\"", 'gh pr merge'],
+  ["Set-Content a.csv '\"echo\",\"iex\",\"\",\"AllScope\"'; Import-Alias ./a.csv -Force; echo @('gh','pr','merge','5')", 'gh pr merge'],
+  ["Write-Output @('gh', 'pr', 'merge'); git status", 'gh pr merge'],
+  ["git status\nWrite-Output @('gh', 'pr', 'merge') # the array\nWrite-Output done", 'gh pr merge'],
+  ["Write-Output $('gh', 'pr', 'merge')", 'gh pr merge'],
 ];
 // Nesting deeper than the splitter follows falls back to the text scan, never to "allowed", and
 // nesting in strings deep enough to exhaust the stack is caught the same way, without throwing.
@@ -512,12 +526,10 @@ const NOT_GUARDED_PS = [
   "Write-Output @('gh', 'pr', 'merge')",
   'Write-Output @("gh", "pr", "merge", "5")',
   "Write-Output ('gh','pr','merge')",
-  "Write-Output $('gh', 'pr', 'merge')",
   "Write-Output @(\n  'gh',\n  'pr',\n  'merge'\n)",
   "Write-Output @('git', 'push')",
   "'gh', 'pr', 'merge'",
-  "Write-Output @('gh', 'pr', 'merge'); git status",
-  "git status\nWrite-Output @('gh', 'pr', 'merge') # the array\nWrite-Output done",
+  "Write-Output 'Merging with:'; Write-Output @('gh', 'pr', 'merge')\nWrite-Host done # printed only",
   "Write-Host @('gh', 'pr', 'merge')",
   "echo @('gh', 'pr', 'merge')",
   'gh api repos/o/r/pulls/5/reviews',
@@ -583,6 +595,16 @@ const pwsh = (command) => ({ hook_event_name: 'PreToolUse', tool_name: 'PowerShe
     "PowerShell & 'gh' @('pr','merge'): exit 2 under any login, no gh call");
   assert(guard.findGuardedCommand("pwsh -Command \"Write-Output @('gh','pr','merge')\"") === 'gh pr merge',
     'Bash running pwsh -Command that prints an array: still guarded (a nested script is never skipped; fails closed)');
+  // Review run 6: no input makes the splitter backtrack. Long comment lines and many block comments
+  // after line breaks finish quickly (a pattern that backtracked took seconds at about 30 characters).
+  for (const [label, cmd] of [['a line of 200 #', 'Write-Output a\n' + '#'.repeat(200) + '\nGet-Thing'],
+    ['200 block comments', 'Write-Output a\n' + '<#x#>'.repeat(200) + '\nGet-Thing'],
+    ['2,000 lines of #', ('Write-Output a\n' + '#'.repeat(40) + '\n').repeat(2000)]]) {
+    const t0 = Date.now();
+    guard.findGuardedCommand(cmd, 0, 'ps');
+    const ms = Date.now() - t0;
+    assert(ms < 2000, `PowerShell ${label}: classified in ${ms} ms (under 2,000)`);
+  }
   const bashMissing = guard.decide({ tool_name: 'Bash', tool_input: {} }, () => ({ login: 'ABlueAI' }));
   assert(bashMissing.exitCode === 0 && !bashMissing.systemMessage, 'Bash with no command: unchanged (exit 0, silent)');
   // Only the two tools' exact names are checked (the names hooks see: docs, tools reference).
