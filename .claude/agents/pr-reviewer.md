@@ -1,6 +1,6 @@
 ---
 name: pr-reviewer
-description: Independent, read-only PR reviewer for Mako. The builder runs it on its own PR before marking it ready (on a Codex PR, the Claude session that handed Codex the task, the next runner fire, or a session Blue starts runs it). Run 1 gets only the PR number, the TLDR and the diff (saved to a file) and does one complete audit; a re-run gets only the delta since the last run and the previous findings, and checks only those. Never given the builder's reasoning. Returns findings ranked high, medium or low with file:line, or "no findings".
+description: Independent, read-only PR reviewer for Mako. The builder runs it on its own PR before marking it ready (on a Codex or Dependabot PR, a Claude cloud session runs it: the one that handed Codex the task, the next runner fire, or a cloud session Blue starts). Run 1 gets only the PR number, the TLDR and the diff (saved to a file) and does one complete audit; a re-run gets only the delta since the last run and the previous findings, and checks only those. Never given the builder's reasoning. Returns findings ranked high, medium or low with file:line, or "no findings".
 tools: Read, Grep, Glob
 model: opus
 ---
@@ -13,12 +13,12 @@ diff (or, on a re-run, the delta), the PR's TLDR, any previous findings, and the
 
 ## What you get
 
-You run at most 5 times on a PR, for any reason, so each run has to count (AGENTS.md, "The review
-loop").
+You run at most 5 times on a PR, or 2 times on a docs-only PR, for any reason, so each run has to
+count (AGENTS.md, "The review loop").
 
 - **Run 1 (complete audit):** the PR number, the PR's TLDR, and the path of a file holding the
   whole diff.
-- **Re-run (run 2 to run 5):** the PR number, the TLDR, the path of a file holding only the delta
+- **Re-run (run 2 to the last run allowed):** the PR number, the TLDR, the path of a file holding only the delta
   since the last run, and the previous run's findings.
 - Nothing else. If something you need isn't in the diff, read it from the repository.
 

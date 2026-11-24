@@ -1,8 +1,9 @@
 # Mako status
 
 Updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
-verdict; review fixes pushed by a Claude cloud session on Blue's ask). Before that: updated
-2026-11-24 by PR #241 (S56 no longer marked Sensitive in the plan; its 9 bug issues, #232
+verdict; review fixes pushed by a Claude cloud session on Blue's ask). Before that: updated 2026-11-24 by PR #209 (S48's OSS record, docs/decisions/OSS-memory.md, with Blue's
+verdict: PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain; step 68
+ticked). Before that: updated 2026-11-24 by PR #241 (S56 no longer marked Sensitive in the plan; its 9 bug issues, #232
 to #240, were opened the same day). Before that: updated 2026-11-23 by PR #223 (S61: the 1.1
 schedule and Blue's answers on it). Before that:
 updated 2026-11-21 by PR #212 (Blue's decisions of 2026-11-16 to 2026-11-21: the scope freezes on
@@ -55,7 +56,11 @@ Every PR that changes the state updates this file.
     account guard's PowerShell gap, one full security check), ECC in 3 PRs (S39 to S41), a rulebook
     update for AGENTS.md (S42), the release row (S59) and the role-file rewrite (S60). Nothing in AGENTS.md, `CLAUDE.md` or
     `.claude/` changed in PR #173: until S39, S40 and S42 merge, the current rules hold (reviews
-    ranked high, medium, low; a cap of 5 runs; the Opus review required).
+    ranked high, medium, low; a cap of 5 runs; the Opus review required). **S42 (PR #242, open):**
+    once Blue merges it, AGENTS.md carries the decision sheet's rules: certainty labels, a cap of 2
+    runs on docs-only PRs (5 otherwise), the model rule, the clarified China-origin rule, the scope
+    freeze on 2026-12-01, Claude builds the UI, Codex PR reviews only from a Claude cloud session,
+    the merge sitting and PC-check evenings, and Dependabot PRs' review (issue #205).
   - **The 1.1 schedule (S61, PR #223):** [docs/SCHEDULE-1.1.md](docs/SCHEDULE-1.1.md), adopted when
     Blue merges that PR: the UI gate (about 2026-11-28 to 2026-12-02), the Composer and tab chains,
     a main-case release of about 2026-12-18 to 2027-01-05 against the 2027-01-15 target, and the
@@ -408,6 +413,9 @@ The spec was accurate (35 of 40 blocks, none wrong) but missed what S66 most nee
 flag pinned as not a setting, no restore at startup, the four top-level tabs, the markup tests,
 Ctrl K reaching the PTY); verdict: an occasional one-off, never installed. Once it merges, S66
 waits only on S14 and Blue's go on the UI (step 18).
+**2026-11-24 (PR #209):** S48's OSS record, `docs/decisions/OSS-memory.md`, carries Blue's verdict
+(step 68): PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain. S48
+still starts after the H1 setup day (step 54).
 
 **S52 (PR #206):** [HyperFrames vetting and trial](docs/decisions/OSS-hyperframes.md) are recorded.
 The pinned upstream package offers MiniMax/Qwen models through its media commands. Blue's verdict

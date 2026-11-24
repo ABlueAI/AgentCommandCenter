@@ -40,7 +40,7 @@ On 2026-11-21 steps 27 and 50 left the top (your decision: the runner they check
 2. **Step 59**, re-link Codex reviews to `ABlueAgent` (about 5 minutes; your yes, 2026-11-16), and
    **step 65**, Dependabot alerts and security updates on (about 3 minutes; your words, 2026-11-18).
    **Step 63** on 2026-11-30: the Codex check-in, the first of the weekly checks. **Step 68**,
-   your verdict on PR #209's OSS record for S48 (about 15 minutes).
+   your verdict on PR #209's OSS record for S48, is done (2026-11-24); merge PR #209 to adopt it.
 3. **Step 54**, the H1 setup day (1.5 to 3 hours). H1 is the PC Mako is to run on unattended. It
    takes in the step 43 re-run and the step 25 tick, and S44 and S48 (the vault memory and its
    nightly tidy) wait on it; S48 no longer waits on the schedule (2026-11-18).
@@ -1181,7 +1181,11 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
 Step 68 comes from those decisions (docs/DECISIONS.md, 2026-11-21). Step numbers 66 and 67 belong to
 open PRs (#206 and #208).
 
-- [ ] **68. Your verdict on S48's OSS record (PR #209).** **About 15 minutes**, any time before S48
+- [x] **68. Your verdict on S48's OSS record (PR #209).** *Done 2026-11-24: you answered in Mako
+  main's chat, "sounds correct, go with that", accepting PROTOTYPE for an isolated Open Second Brain
+  subset and PATTERN-MINE for ai-memory and GBrain. Checked from your answer as relayed word for word
+  by the Mako main session that heard it to the cloud session that recorded it in PR #209 (Claude
+  can't see that chat itself). Next: merge PR #209 to adopt it.* **About 15 minutes**, any time before S48
   starts. S48 (the vault memory) takes PR #209's open-source record, `docs/decisions/OSS-memory.md`,
   as its OSS record once you give your verdict (your decision, 2026-11-21). Read the record and give
   your verdict (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD FRESH) in your own words to any agent.
