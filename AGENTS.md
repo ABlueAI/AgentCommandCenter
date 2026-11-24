@@ -133,8 +133,8 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      back to ready re-triggers Codex's review with no handle (`gh pr ready <n> --undo`, then
      `gh pr ready <n>`; in a cloud session, where GraphQL is blocked, REST
      `POST /repos/{owner}/{repo}/pulls/{n}/ccr/convert_to_draft`, then `.../ccr/ready_for_review`).
-     On a `codex/` PR, Claude doesn't change its draft state ("Merge order"), so Codex or Blue
-     re-triggers it. If a call fails, or Codex doesn't review, the PR is
+     On a `codex/` PR, a Claude session re-triggers it the same way, as "Merge order" ("Codex
+     PRs") allows. If a call fails, or Codex doesn't review, the PR is
      `NOT READY: no Codex pass (<reason>)`; ask Blue, never skip it, and never re-trigger it with a
      comment that writes Codex's handle.
 4. The builder fixes CI failures and review findings itself. After 3 failed fix rounds on the same
@@ -220,15 +220,27 @@ any order.
   marking a PR ready, the builder runs the check once more: if a PR marked ready meanwhile conflicts
   with it and the builder's own PR has the higher number, the builder puts its own PR back to draft
   and waits. Otherwise it leaves the other PR as it is (on a Codex PR, only the label and comment
-  below), and the merge-order line orders the two. No builder changes another builder's PR, and a
-  ready PR never gets a push only to make room for another.
-- **Codex PRs** (`codex/` branches) follow the same rule, but Claude never pushes to one or changes
-  its draft state: it adds the `waits-for-merge` label and one comment, without Codex's handle,
-  "Waits for #X (conflicts in <files>)". Once #X merges, a conflict left on the Codex PR goes to
-  NEEDS BLUE as docs/CODEX-BUILDER-LANE.md item 6 says. Once #X is merged or closed, the runner
-  (docs/RUNNER.md step 5b) runs the check again, with no review run: if the Codex PR conflicts with
-  `main` alone, the label stays and Blue is asked; if another ready PR now conflicts, it edits that
-  one comment to name the new blocker; otherwise it removes the label.
+  below), and the merge-order line orders the two. No builder changes another builder's PR (a
+  Claude session's draft and ready changes on a Codex PR, below, excepted), and a ready PR never
+  gets a push only to make room for another.
+- **Codex PRs** (`codex/` branches) follow the same rule, and a Claude session (the PR sweeper, the
+  runner, or the session that reviewed the PR) changes their draft state under the same rule as its
+  own PRs (Blue, 2026-11-24, docs/DECISIONS.md). It marks a Codex PR ready only when step 5's
+  conditions all hold on its latest head: CI green, Claude's review posted as step 3 says with no
+  high or medium finding open in its latest run (unless answered in the PR), this check passed, and
+  no `needs-blue` or `waits-for-merge` label. It never does so while Blue has asked for the PR to
+  stay a draft, or while a verdict of his on it is pending (a "@ABlueAI needs Blue:" comment with no
+  reply from `ABlueAI` yet). Marking it ready starts Codex's review, which gives its pass (step 3).
+  Once CI is green and Claude's pass holds on the latest head, it may also convert the PR to draft
+  and back to ready to re-trigger Codex's review (step 3), at most once per head. Claude pushes to a
+  Codex PR only as "Who does what" allows. A Codex PR that must wait isn't marked ready, and gets
+  the `waits-for-merge` label and one comment, without Codex's handle, "Waits for #X (conflicts in
+  <files>)". Once #X merges, a conflict left on the Codex PR goes to NEEDS BLUE as
+  docs/CODEX-BUILDER-LANE.md item 6 says. Once #X is merged or closed, the runner (docs/RUNNER.md
+  step 5b) runs the check again, with no review run: if the Codex PR conflicts with `main` alone,
+  the label stays and Blue is asked; if another ready PR now conflicts, it edits that one comment to
+  name the new blocker; otherwise it removes the label, and marks the PR ready if the conditions
+  above hold.
 - **The merge-order line** is a safety net, computed from the same test-merges among the PRs it
   lists: a pair that conflicts is ordered (a ready PR before the one waiting for it; between two
   ready ones, the lower number first, with the note "#B needs a conflict fix after #A" at the end of

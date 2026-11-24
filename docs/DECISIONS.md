@@ -3,6 +3,21 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-24: Claude sessions mark Codex PRs ready
+
+Blue decided this in his main chat on 2026-11-24; his words are quoted as the hand-off for this PR
+relayed them. How AGENTS.md words it ("Merge order", "Codex PRs", and the re-trigger in "How work
+flows" step 3) is proposed, pending Blue (this PR); merging approves it. It replaces, for draft
+state only, the AGENTS.md rule that Claude never changes a Codex PR's draft state ("Merge order"),
+and the builder's reading in item 1 of the first 2026-11-23 entry below that a `codex/` PR is
+re-triggered by Codex or Blue. Which Codex PRs Claude may push to is unchanged here (AGENTS.md "Who
+does what"; PR #225 proposes Blue's 2026-11-23 decisions on that). "Builder's reading" marks a line
+that is the builder's, not Blue's.
+
+| Decision | Blue's words |
+|---|---|
+| **A Claude session may mark a Codex PR ready, and convert it to draft and back to re-trigger Codex's review, under the same rule as Claude's own PRs.** He was asked: "Let the sweeper mark Codex PRs ready once Claude's review passes?" The recommendation he approved: Codex PRs go ready under the same rules as Claude's (CI green, Claude's review clean, the merge-order check passes, no `needs-blue` or `waits-for-merge` label, no draft hold or pending verdict of Blue's). Marking a PR ready also starts Codex's automatic review, which gives Codex's pass (2026-11-23 entry, item 1). Why: the old rule made sense while Codex fixed its own PRs; since Blue's 2026-11-23 decisions that Claude fixes Codex's PRs and merges `main` into them ("id love to", "yes, thats fine", "for the last time yes", as relayed; PR #225 proposes their rule), it only blocked: PR #231 was reviewed clean on 2026-11-24 but stayed a draft, and #206, #208 and #209 stalled the same way. Builder's reading (from the hand-off): it covers any Claude session working the PR (the PR sweeper, the runner, or the session that reviewed it), and the draft-and-back re-trigger happens at most once per head. The PR sweeper's prompt calls this decision "D-076". | "Yes, sweeper marks ready" |
+
 ## 2026-11-23: hard rules, Codex's pass before ready, agent-account pacing
 
 On 2026-11-23 two of Blue's rules were broken because they lived only in his private notes and an

@@ -192,5 +192,30 @@ if (sharedBlocks.length > 0) {
     "AGENTS.md doesn't write Codex's handle");
 }
 
+{
+  // Codex PRs' draft state (Blue, 2026-11-24): a Claude session marks a Codex PR ready under the
+  // same rule as its own PRs, never over Blue's draft hold or pending verdict, and may toggle draft
+  // and ready once per head to re-trigger Codex's review.
+  const rules = fs.readFileSync(path.join(repoRoot, 'AGENTS.md'), 'utf8');
+  const flat = rules.replace(/\s+/g, ' ');
+  const codexBullet = (flat.match(/- \*\*Codex PRs\*\* \(`codex\/` branches\)(.*?) - \*\*The merge-order line\*\*/) || [])[1] || '';
+  assert(codexBullet.length > 0, 'AGENTS.md "Merge order" has the "Codex PRs" bullet');
+  assert(!flat.includes("Claude doesn't change its draft state") && !flat.includes('Claude never pushes to one or changes its draft state')
+    && !flat.includes('so Codex or Blue re-triggers it'),
+    'AGENTS.md no longer bars Claude from changing a Codex PR\'s draft state');
+  assert(codexBullet.includes("changes their draft state under the same rule as its own PRs (Blue, 2026-11-24")
+    && codexBullet.includes("only when step 5's conditions all hold on its latest head")
+    && codexBullet.includes('no `needs-blue` or `waits-for-merge` label')
+    && codexBullet.includes('while Blue has asked for the PR to stay a draft')
+    && codexBullet.includes('while a verdict of his on it is pending')
+    && codexBullet.includes('at most once per head'),
+    'the Codex PRs bullet gives the ready conditions, the draft hold, the pending verdict and the re-trigger cap');
+  assert(flat.includes('On a `codex/` PR, a Claude session re-triggers it the same way'),
+    'step 3 lets a Claude session re-trigger Codex\'s review on a Codex PR');
+  const decisions = fs.readFileSync(path.join(repoRoot, 'docs', 'DECISIONS.md'), 'utf8');
+  assert(decisions.includes('## 2026-11-24: Claude sessions mark Codex PRs ready') && decisions.includes('"Yes, sweeper marks ready"'),
+    'docs/DECISIONS.md records the 2026-11-24 decision in Blue\'s words');
+}
+
 process.stdout.write(`\nproject-agents: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);
