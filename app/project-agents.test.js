@@ -130,8 +130,11 @@ if (sharedBlocks.length > 0) {
     'pr-reviewer.md does one complete first audit and checks only the delta on a re-run');
   assert(reviewer.includes('**Non-blocking:**'), 'pr-reviewer.md labels low findings non-blocking');
   const rules = fs.readFileSync(path.join(repoRoot, 'AGENTS.md'), 'utf8');
-  assert(rules.includes('### The review loop') && rules.includes('**At most 5 runs per PR**') && !rules.includes('At most 3 runs'),
-    'AGENTS.md caps review runs at 5, then asks Blue');
+  assert(rules.includes('### The review loop') && rules.includes('**At most 5 runs per PR, 2 on a docs-only PR**') && !rules.includes('At most 3 runs'),
+    'AGENTS.md caps review runs at 5 (2 on a docs-only PR), then asks Blue');
+  assert(rules.includes('touches no\n  sensitive area') && rules.includes('or\n  `.github/` gets 5.'),
+    'AGENTS.md gives a rulebook, `.claude/` or `.github/` change the full cap of 5');
+  assert(reviewer.includes('or 2 times on a docs-only PR'), 'pr-reviewer.md states the docs-only cap of 2');
   const runner = fs.readFileSync(path.join(repoRoot, 'docs', 'RUNNER.md'), 'utf8');
   assert(runner.includes('AGENTS.md "The review loop"') && runner.includes('At most 5 runs on a PR') && !runner.includes('At most 3 runs') && !runner.includes('re-run it after fixes, and cite'),
     'docs/RUNNER.md prompt uses the capped review loop');
@@ -145,6 +148,42 @@ if (sharedBlocks.length > 0) {
   const prompt = (runner.match(/## Current prompt \(verbatim\)\s*```text\r?\n([\s\S]*?)\r?\n```/) || [])[1] || '';
   assert(prompt.includes('Also skip any READY session that is already claimed') && prompt.includes('open its PR early'),
     'docs/RUNNER.md prompt skips claimed sessions and claims its own early');
+}
+
+// S42: the rulebook update from Blue's 1.1 decision sheet (docs/DECISIONS.md 2026-11-16 and
+// 2026-11-21). Pins each rule in AGENTS.md (and the Codex lane's matching lines) so none drifts
+// out unnoticed.
+{
+  const rules = fs.readFileSync(path.join(repoRoot, 'AGENTS.md'), 'utf8');
+  const flat = rules.replace(/\s+/g, ' ');
+  assert(flat.includes('**Certainty labels**') && flat.includes('**verified**') && flat.includes("**builder's reading**") && flat.includes('**not verified**'),
+    'AGENTS.md defines the three certainty labels');
+  assert(flat.includes('**Scope freeze**') && flat.includes('From 2026-12-01, anything new that isn\'t vital to security goes to the 1.2 queue'),
+    'AGENTS.md freezes the 1.1 scope from 2026-12-01');
+  assert(flat.includes('Opus 5.5 for building and planning') && flat.includes('Sonnet 5.5 for triage, chores and summaries') &&
+    flat.includes('never Haiku unless Blue asks') && flat.includes('never Fable') && flat.includes('No API credits, ever') &&
+    !flat.includes('Sonnet for routine work, Opus for hard problems'),
+    'AGENTS.md carries the model rule and drops the old Sonnet/Opus split');
+  assert(flat.includes('No China-origin AI') && flat.includes('anything Mako runs, installs or calls') &&
+    flat.includes("named only in an upstream file Mako doesn't ship is not a fail") && flat.includes('static mode only'),
+    'AGENTS.md carries the clarified China-origin rule');
+  assert(flat.includes('the builder of the UI sessions (S66 and S18 to S20') && flat.includes('does the smaller tasks and the reviews') &&
+    !flat.includes('the builder of the UI sessions S17 to S20'),
+    'AGENTS.md: Claude builds the UI, Codex does the smaller tasks and the reviews');
+  assert(flat.includes("Blue's desktop login (`ABlueAI`) is read-only here: it never runs or posts a Codex PR's review") &&
+    !flat.includes('(by `ABlueAgent` or `ABlueAI`, unedited'),
+    "AGENTS.md: a Claude cloud session posts Codex PR reviews; Blue's desktop login never does");
+  assert(flat.includes('**Dependabot PRs** (issue #205)') && flat.includes('**Dependabot PRs** never make another PR wait') &&
+    flat.includes('No agent pushes to a Dependabot branch'),
+    'AGENTS.md settles how Dependabot PRs are reviewed and ordered (issue #205)');
+  assert(flat.includes('one sitting each evening, about 10 minutes') && flat.includes('PC checks on Tuesday and Friday evenings'),
+    'AGENTS.md records the merge sitting and the PC-check evenings');
+  assert(flat.includes('ask Claude to list its subagents') && !/run `?\/agents/.test(flat),
+    'AGENTS.md says to ask Claude to list its subagents, not to run /agents');
+  const lane = fs.readFileSync(path.join(repoRoot, 'docs', 'CODEX-BUILDER-LANE.md'), 'utf8').replace(/\s+/g, ' ');
+  assert(lane.includes("Blue's desktop login (`ABlueAI`) is read-only and never posts one") &&
+    lane.includes("never from Blue's desktop login") && !lane.includes('by `ABlueAI`, or by `ABlueAgent` with a "Run by:" line'),
+    'docs/CODEX-BUILDER-LANE.md items 5 and 7 match: reviews come from a Claude cloud session only');
 }
 
 process.stdout.write(`\nproject-agents: ${passed} passed, ${failed} failed\n`);

@@ -13,12 +13,12 @@ diff (or, on a re-run, the delta), the PR's TLDR, any previous findings, and the
 
 ## What you get
 
-You run at most 5 times on a PR, for any reason, so each run has to count (AGENTS.md, "The review
-loop").
+You run at most 5 times on a PR, or 2 times on a docs-only PR, for any reason, so each run has to
+count (AGENTS.md, "The review loop").
 
 - **Run 1 (complete audit):** the PR number, the PR's TLDR, and the path of a file holding the
   whole diff.
-- **Re-run (run 2 to run 5):** the PR number, the TLDR, the path of a file holding only the delta
+- **Re-run (run 2 to the last run allowed):** the PR number, the TLDR, the path of a file holding only the delta
   since the last run, and the previous run's findings.
 - Nothing else. If something you need isn't in the diff, read it from the repository.
 
