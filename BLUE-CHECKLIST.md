@@ -1312,17 +1312,26 @@ Once S04 is applied (step 27), the runner works all day and you do one sitting i
 Step 80 comes from PR #282 (docs/DECISIONS.md, 2026-11-24, D-084). Step numbers 77 to 79 belong to
 open PRs (#253 and #254).
 
-- [ ] **80. Set up the commander on H1.** **About 15 to 30 minutes** (an estimate; S67's PR gives
-  the real figure), at H1, once S67's PR is merged. S67 is `READY`, so an agent can build it now.
-  - Open a new local Claude chat on H1 named "Mako command", give it the standing prompt from S67's
-    PR, and start its 30-minute heartbeat the way the PR says.
-  - From then on it starts and resumes the cloud build sessions, keeps usage to about 95% of each
-    5-hour window, and sends you one colour-coded merge list each evening, in merge order. Your
-    laptop chat (Mako main) becomes the watcher.
-  - To stop everything: tell that chat "stop" and pause the routines on the claude.ai routines
-    page. Until S67's PR links the two, each stops only its own part, so do both.
-  - *Done when:* the commander has run on H1 for one full day and its evening merge list reached
-    you; tell any agent "step 80 done" and it ticks this with the date.
+- [ ] **80. Set up the commander on H1.** **About 30 minutes** (builder's estimate), at H1, once
+  S67's PR is merged. docs/COMMANDER.md has the standing prompt and why each step is there.
+  - Clone the repository to `D:\Mako\command` and stay on `main`. In it, sign `gh` in as
+    `ABlueAgent` (`gh auth login`, then `gh api user --jq .login` must print `ABlueAgent`).
+  - Set Mako's usage status line on H1, as step 41 did on your PC: in
+    `%USERPROFILE%\.claude\settings.json`, `"statusLine": { "type": "command", "command": "node
+    \"D:/Mako/command/app/usage/usage-statusline.js\"" }`.
+  - In Windows power settings, set H1 never to sleep while plugged in.
+  - In `D:\Mako\command`, run `claude --remote-control --model sonnet`, rename the session "Mako
+    command" with `/rename Mako command` (not verified on your version; skip it if the command is missing), paste the standing prompt from docs/COMMANDER.md, then type
+    `/loop 30m Run one commander beat as your standing prompt says.` Leave the window open.
+  - Once a month (the loop expires after 30 days): close the session and repeat the last bullet.
+  - To stop everything, do both: tell the commander "stop" from the Claude app, and pause the
+    routines on the claude.ai routines page. Neither can switch off the other (docs/COMMANDER.md).
+  - *Verify (2 minutes, after the first beat):* the session shows a beat line ("started …",
+    "at cap …" or "nothing READY"), its status line shows `usage 5h …%`, and
+    `%LOCALAPPDATA%\Mako\commander-log.md` exists once it has started a session.
+  - *Done when:* the commander has run on H1 for one full day, a cloud session it started shows in
+    claude.ai/code, and its evening merge list reached your phone in merge order; tell any agent
+    "step 80 done" and it ticks this with the date.
 
 ## Coming up this month (the runner will ask when it gets there)
 
