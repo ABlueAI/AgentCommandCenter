@@ -8,7 +8,11 @@ on and a CSP that loads scripts only from the app itself.
 
 ## Blue's verdict (word for word)
 
-> **Date and verdict:** ____________________
+> **Date and verdict:** 2026-11-25, BUILD FRESH: "Build fresh on the comobox pattern as built"
+
+Blue's reply on PR #283 (comment by `ABlueAI`, 2026-11-25T08:55Z, not edited), answering the
+request in that PR to choose ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD FRESH. His words are
+quoted as written ("comobox" means the WAI-ARIA combobox pattern the proposal names).
 
 ## Options
 
@@ -24,11 +28,10 @@ read): latest version, licence, publish date of that version, runtime dependenci
 | **UI5 Web Components** | 2.29.0, Apache-2.0, 2026-11-18 | Six UI5 packages (base, theming, icons, localization) | No: a whole design system for one widget. |
 | **Build fresh on the WAI-ARIA combobox pattern** | n/a | none | About 200 lines in `app/renderer/shell-nav.js`: a dialog holding a combobox, `aria-activedescendant`, arrows, Enter, Esc, a focus trap. Pattern source: the W3C WAI-ARIA Authoring Practices (combobox and dialog). |
 
-## Proposed verdict
+## Proposed verdict (accepted by Blue, 2026-11-25)
 
 **BUILD FRESH** on the combobox pattern (builder's reading of the brief's own fallback): every
 maintained option needs React, and the framework-free ones are unmaintained and bring three runtime
 packages each. If the palette later needs fuzzy ranking across many items, **MiniSearch** (already
 proposed for ADOPT in [OSS-ui-libraries.md](OSS-ui-libraries.md)) can rank its list without changing
-the widget. Blue's verdict goes in the blank above; until then the PR builds on the proposal and says
-so in its TLDR.
+the widget. Blue's verdict, recorded above, accepts it.

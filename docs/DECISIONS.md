@@ -3,6 +3,15 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-25: the command palette's OSS verdict (S66)
+
+Blue replied on PR #283 (comment by `ABlueAI`, 2026-11-25, not edited) to that PR's request for the
+palette's OSS verdict. Recorded word for word in `docs/decisions/OSS-command-palette.md`.
+
+| Decision | Blue's words |
+|---|---|
+| **BUILD FRESH** for the Ctrl K palette, on the WAI-ARIA combobox pattern, as PR #283 builds it (no new dependency). | "Build fresh on the comobox pattern as built" |
+
 ## 2026-11-24: Blue's go on the UI (checklist step 18)
 
 Blue gave it in Mako main's chat on 2026-11-24; his words are quoted as the hand-off for PR #253
