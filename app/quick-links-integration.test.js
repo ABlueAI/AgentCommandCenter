@@ -49,7 +49,8 @@ assert(currentMain.includes("validateUrl: validateQuickLinkUrl } = require('./qu
   'validateQuickLinkUrl is the Quick Links policy export');
 
 const featureSources = [
-  'quick-links-policy.js', 'quick-links-store.js', 'quick-links-ipc.js', 'renderer/quick-links-view.js',
+  'quick-links-policy.js', 'quick-links-store.js', 'quick-links-ipc.js', 'quick-links-presets.js',
+  'renderer/quick-links-view.js',
 ].map((rel) => `${rel}\n${read(rel)}`).join('\n');
 for (const forbidden of [
   "ipcRenderer.invoke('open-external'", 'cc.openExternal(', '.handleOpenExternal(',
@@ -62,10 +63,29 @@ for (const line of [
   "quickLinksList: () => ipcRenderer.invoke('quick-links-list')",
   "quickLinksSave: (text) => ipcRenderer.invoke('quick-links-save', text)",
   "quickLinksOpen: (id) => ipcRenderer.invoke('quick-links-open', id)",
+  "quickLinksPresetsList: () => ipcRenderer.invoke('quick-links-presets-list')",
+  "quickLinksPresetOpen: (id) => ipcRenderer.invoke('quick-links-preset-open', id)",
 ]) assert(preload.includes(line), `preload exposes exact narrow method: ${line.split(':')[0]}`);
 assert(!/quickLinks\w+:[^\n]*ipcRenderer\.send\(/.test(preload), 'Quick Links preload exposes no generic/send channel');
 for (const channel of ['quick-links-list', 'quick-links-save', 'quick-links-open']) {
   assert(currentMain.includes(`ipcMain.handle('${channel}'`), `main registers dedicated ${channel} handler`);
+}
+assert(currentMain.includes("ipcMain.handle('quick-links-presets-list', (e) => quickLinksIpc.handleListPresets(e));"),
+  'main registers the quick-links-presets-list handler');
+assert(currentMain.includes("ipcMain.handle('quick-links-preset-open', (e, id) => quickLinksIpc.handleOpenPreset(e, id));"),
+  'main registers the quick-links-preset-open handler');
+assert(currentMain.includes('presets: createQuickLinksPresets({'),
+  'main injects the Firefox preset service into the Quick Links IPC boundary');
+{
+  // Every refusal reason the preset service or resolveFirefoxExe can return must be in the IPC
+  // allowlist, or it would reach the renderer bounded to store-failure.
+  const { ALLOWED_REASONS } = require('./quick-links-ipc');
+  const firefoxResolver = (read('launchers.js').split('function resolveFirefoxExe')[1] || '').split('\nfunction ')[0];
+  const reasons = [...(read('quick-links-presets.js') + firefoxResolver).matchAll(/(?:refuse\(|reason: )'([a-z0-9-]+)'/g)]
+    .map((m) => m[1]);
+  assert(reasons.length >= 15, `preset reason scan found the refusal literals (${reasons.length})`);
+  const missing = reasons.filter((r) => !ALLOWED_REASONS.has(r));
+  assert(missing.length === 0, `every preset and Firefox refusal reason is allowlisted (missing: ${missing.join(',') || 'none'})`);
 }
 assert(currentMain.includes('createQuickLinksIpc({') && currentMain.includes('getTrustedWindow: () => win'),
   'main constructs Quick Links IPC with the canonical late-bound trusted window');
@@ -112,9 +132,13 @@ const basePkg = JSON.parse(fromBase('package.json'));
 // pinned exactly; it is set aside here and pinned below. Any other change still fails.
 const S15_DEPENDENCY = ['@playwright/mcp', '0.0.84'];
 assert(currentPkg.dependencies[S15_DEPENDENCY[0]] === S15_DEPENDENCY[1], 'S15: @playwright/mcp is pinned exactly to 0.0.84');
+// Issue #162 adds ipaddr.js (MIT), pinned exactly, for the page reader's host check.
+const IP_DEPENDENCY = ['ipaddr.js', '2.5.0'];
+assert(currentPkg.dependencies[IP_DEPENDENCY[0]] === IP_DEPENDENCY[1], '#162: ipaddr.js is pinned exactly to 2.5.0');
 const depsWithoutS15 = Object.assign({}, currentPkg.dependencies);
 delete depsWithoutS15[S15_DEPENDENCY[0]];
-assert(JSON.stringify(depsWithoutS15) === JSON.stringify(basePkg.dependencies), 'runtime dependencies unchanged from base apart from S15\'s one addition');
+delete depsWithoutS15[IP_DEPENDENCY[0]];
+assert(JSON.stringify(depsWithoutS15) === JSON.stringify(basePkg.dependencies), 'runtime dependencies unchanged from base apart from S15\'s and #162\'s one addition each');
 // S36 pins Electron's certificate-advisory fix; every other dev dependency stays unchanged.
 assert(currentPkg.devDependencies.electron === '42.11.16', 'S36: electron is pinned exactly to 42.11.16');
 assert(JSON.stringify(currentPkg.devDependencies) === JSON.stringify({ ...basePkg.devDependencies, electron: '42.11.16' }),
@@ -140,9 +164,20 @@ const S15_LOCK = {
   'node_modules/playwright': ['1.65.0-alpha-2026-10-30', 'sha512-dmAJMVHKzHvMQjn+XDcaq/pxaZ0W6n8i78rwTM+VGRtQ3WBF5ZiSdB1yL/cyoYUGUMwg3jxN65KqC9cERaCbIg=='],
   'node_modules/playwright-core': ['1.65.0-alpha-2026-10-30', 'sha512-LPMw8B/HRQKMcJeXTqWSrkB/AfCKKmbDQMbu0p7zg8MgibOWaKMjZWR/StAtrQkOxvOmZEju1o1TnPgdoOCwrg=='],
 };
+// #162's one new lockfile entry, pinned the same way and then set aside.
+const IP_LOCK = {
+  'node_modules/ipaddr.js': ['2.5.0', 'sha512-aq+t5NAc+cS6rZQQVWC2x98CPqGtKKTMDd4Gaodv0wShnItdKg/51djkGJ1hqH+Oy0ivDftCbSLCQob8zso01w=='],
+};
 const currentLock = JSON.parse(read('package-lock.json'));
 assert(currentLock.packages[''].devDependencies.electron === currentPkg.devDependencies.electron,
   'S36: lockfile root and manifest agree on the exact Electron pin');
+for (const [key, [version, integrity]] of Object.entries(IP_LOCK)) {
+  const entry = currentLock.packages[key] || {};
+  const name = key.slice('node_modules/'.length);
+  assert(entry.version === version && entry.integrity === integrity && entry.license === 'MIT'
+    && entry.resolved === `https://registry.npmjs.org/${name}/-/${name}-${version}.tgz` && !entry.hasInstallScript,
+    `#162: ${name} is ${version} (MIT, no install script) from registry.npmjs.org with the pinned integrity`);
+}
 for (const [key, [version, integrity]] of Object.entries(S15_LOCK)) {
   const entry = currentLock.packages[key] || {};
   const name = key.slice('node_modules/'.length);
@@ -165,9 +200,11 @@ const withoutOwnVersion = (lockText) => {
     delete lock.packages[''].version;
     delete lock.packages[''].hasInstallScript;
     if (lock.packages[''].dependencies) delete lock.packages[''].dependencies[S15_DEPENDENCY[0]];
+    if (lock.packages[''].dependencies) delete lock.packages[''].dependencies[IP_DEPENDENCY[0]];
     if (lock.packages[''].devDependencies) lock.packages[''].devDependencies.electron = basePkg.devDependencies.electron;
   }
   for (const key of Object.keys(S15_LOCK)) if (lock.packages) delete lock.packages[key];
+  for (const key of Object.keys(IP_LOCK)) if (lock.packages) delete lock.packages[key];
   for (const key of Object.keys(AUDIT_FIX)) {
     if (lock.packages && lock.packages[key]) {
       delete lock.packages[key].version;
@@ -178,7 +215,7 @@ const withoutOwnVersion = (lockText) => {
   return JSON.stringify(lock);
 };
 assert(withoutOwnVersion(read('package-lock.json')) === withoutOwnVersion(fromBase('package-lock.json')),
-  'package-lock.json has no dependency delta from base beyond the S02 audit fix, S15\'s three entries and S36\'s Electron pin');
+  'package-lock.json has no dependency delta from base beyond the S02 audit fix, S15\'s three entries, S36\'s Electron pin and #162\'s ipaddr.js');
 const requiredTests = [
   'quick-links-policy.test.js', 'quick-links-store.test.js', 'quick-links-ipc.test.js',
   'quick-links-integration.test.js', 'renderer/quick-links-view.test.js',

@@ -21,12 +21,16 @@
 //   DROPPED (...)       -> no issue; an existing one is closed as not planned, loses its managed
 //                          labels and is removed from the board
 // Any other status, a malformed row or two sync issues for one session throws, so the workflow fails
-// visibly instead of guessing. So does a listing that finds no sync issue while the milestone already
-// holds items (S33's guard, in syncPlan), before anything is created. Limits: the guard only catches
-// a listing that finds none of the sync issues; one that misses some but not all (for example a
-// dropped page) still re-creates the missed sessions. If the milestone listing also misses the
-// milestone, the run tries to create a second "1.1 Month 1", which GitHub is expected to reject
-// (not verified), after any missing labels are created.
+// visibly instead of guessing. So does a listing that may be partial, before anything is created
+// (the guards in syncPlan): one that finds no sync issue while the milestone already holds items
+// (S33), and one that finds fewer items in the milestone, issues and pull requests together, than
+// GitHub's own count for it (issue #156; for example a dropped page). Limits: the count covers only
+// items in the milestone, so a sync issue someone took out of it by hand is not covered until a run
+// puts it back; an item taken out of the milestone while a run lists can refuse that run (re-run
+// it); a count GitHub keeps wrong blocks every run until it is right again (the error says what to
+// check; an agent never bypasses the guard). If the milestone listing misses the milestone, both guards are skipped and the run tries to
+// create a second "1.1 Month 1", which GitHub is expected to reject (not verified), after any missing
+// labels are created.
 //
 // `api` and `board` are injected so the workflow passes GitHub's clients and tests pass fixtures:
 //   api.listLabels()                 -> [{ name }]
@@ -34,7 +38,9 @@
 //   api.listMilestones()             -> [{ number, title, open_issues, closed_issues }]
 //   api.createMilestone(title)       -> { number }
 //   api.listIssues()                 -> [{ number, node_id, title, body, state, state_reason,
-//                                         labels: [name], milestone: number|null, user: login }]
+//                                         labels: [name], milestone: number|null, user: login,
+//                                         pull_request: boolean }]
+//                                       (every issue and pull request: the guard counts both)
 //   api.createIssue({ title, body, labels, milestone }) -> { number, node_id }
 //   api.updateIssue(number, fields)
 //   api.getPr(number)                -> { state, draft }
@@ -171,14 +177,18 @@ async function syncPlan({ markdown, planUrl, api, board = null, log = () => {} }
   const listed = await api.listIssues();
   const mine = new Map();
   for (const issue of listed) {
-    if (issue.user !== BOT) continue;
+    if (issue.pull_request || issue.user !== BOT) continue;
     const m = SESSION_TITLE.exec(issue.title);
     if (!m) continue;
     if (mine.has(m[1])) throw new Error(`plan sync: two sync issues for ${m[1]} (#${mine.get(m[1]).number}, #${issue.number}); close one`);
     mine.set(m[1], issue);
   }
   const held = listedMilestone ? milestoneCount(listedMilestone) : 0;
-  log(`listed ${listed.length} issues, ${mine.size} of them sync issues; milestone "${MILESTONE}" ${listedMilestone ? `holds ${Number.isNaN(held) ? 'an unreadable number of' : held} issues and pull requests` : 'not found'}`);
+  // Distinct numbers: a page boundary that shifts while the run lists can return one item twice,
+  // which must not cover for an item the same listing missed.
+  const inMilestone = listedMilestone ? new Set(listed.filter((i) => i.milestone === listedMilestone.number).map((i) => i.number)).size : 0;
+  log(`listed ${listed.length} issues and pull requests, ${mine.size} of them sync issues; milestone "${MILESTONE}" `
+    + `${listedMilestone ? `holds ${Number.isNaN(held) ? 'an unreadable number of' : held} issues and pull requests, of which the listing found ${inMilestone}` : 'not found'}`);
   // The guard (S33). On 2026-10-22 a run's listing came back without any of the existing sync issues,
   // so it opened a second copy of every one (#87 to #113). Every sync issue is put in the milestone,
   // so a milestone that already holds items while the listing shows no sync issue means the listing
@@ -189,6 +199,21 @@ async function syncPlan({ markdown, planUrl, api, board = null, log = () => {} }
       + 'the existing sync issues would duplicate every one of them (the 2026-10-22 run did). Re-run the workflow; if this '
       + 'persists, check the sync issues still exist and were opened by github-actions[bot].');
   }
+  // The partial-listing guard (issue #156). Every sync issue is put in the milestone, and GitHub counts
+  // the milestone's issues and pull requests itself, so a listing that finds fewer of them than that
+  // count has missed some (a dropped page would), and any sync issue among them would be opened a
+  // second time: refuse, and create nothing. Only the total is compared: on 2026-11-24 GitHub's
+  // open/closed split for this milestone differed from the listing's by 2 while the totals matched.
+  // A listing that finds more is accepted (an item added to the milestone while the run listed does
+  // that), but it is logged: it can't prove that nothing else was missed in the same listing.
+  if (listedMilestone && !(inMilestone >= held)) {
+    throw new Error(`plan sync: refusing to create issues: milestone "${MILESTONE}" `
+      + `${Number.isNaN(held) ? 'gave no readable issue count' : `holds ${held} issues and pull requests`}, but the listing found `
+      + `${inMilestone} of them, so it may be partial and would open a second copy of any sync issue it missed. Re-run the `
+      + `workflow. If this persists, compare the milestone's page with Issues filtered by milestone:"${MILESTONE}" to find the `
+      + 'item the listing misses; if nothing is missing and the counts stay apart, tell Blue: never bypass this check.');
+  }
+  if (listedMilestone && inMilestone > held) log(`the listing found ${inMilestone - held} more items in milestone "${MILESTONE}" than GitHub counts there (an item added while the run listed?); continuing`);
 
   const haveLabels = new Set((await api.listLabels()).map((l) => l.name));
   for (const label of LABELS) {
@@ -263,8 +288,8 @@ async function syncPlan({ markdown, planUrl, api, board = null, log = () => {} }
   return summary;
 }
 
-// Adapter from actions/github-script's `github` client. Lists are paginated; pull requests are
-// filtered out of the issues list.
+// Adapter from actions/github-script's `github` client. Lists are paginated; the issues list keeps
+// pull requests, marked `pull_request: true`, because the partial-listing guard counts them.
 function githubApi(github, { owner, repo }) {
   return {
     listLabels: () => github.paginate(github.rest.issues.listLabelsForRepo, { owner, repo, per_page: 100 }),
@@ -272,12 +297,12 @@ function githubApi(github, { owner, repo }) {
     listMilestones: () => github.paginate(github.rest.issues.listMilestones, { owner, repo, state: 'all', per_page: 100 }),
     createMilestone: async (title) => (await github.rest.issues.createMilestone({ owner, repo, title })).data,
     listIssues: async () => (await github.paginate(github.rest.issues.listForRepo, { owner, repo, state: 'all', per_page: 100 }))
-      .filter((i) => !i.pull_request)
       .map((i) => ({
         number: i.number, node_id: i.node_id, title: i.title, body: i.body || '', state: i.state,
         state_reason: i.state_reason || null,
         labels: i.labels.map((l) => (typeof l === 'string' ? l : l.name)),
         milestone: i.milestone ? i.milestone.number : null, user: i.user && i.user.login,
+        pull_request: Boolean(i.pull_request),
       })),
     createIssue: async (fields) => (await github.rest.issues.create({ owner, repo, ...fields })).data,
     updateIssue: (issue_number, fields) => github.rest.issues.update({ owner, repo, issue_number, ...fields }),

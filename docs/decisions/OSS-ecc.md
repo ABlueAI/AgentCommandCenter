@@ -91,7 +91,7 @@ proof rule drops (below). The edits common to all four:
 - `model: opus`, and a description that says the builder runs it before marking a PR ready and
   never on its own;
 - one shared Mako block, identical in all four: run 1 only, read-only, report only, Mako's high,
-  medium and low (S40 changes the scale later), review whatever CI says, no file-size rule, and key
+  medium and low (S40 changed it to CRITICAL, HIGH, MEDIUM and LOW, below), review whatever CI says, no file-size rule, and key
   advice pointed at Mako's key setup.
 
 When they run (AGENTS.md "How work flows" step 3): on review run 1 only, alongside `pr-reviewer`;
@@ -101,6 +101,55 @@ runner prompt's review step (docs/RUNNER.md) is not changed here; that is a foll
 
 **Proof rule** (Blue, 2026-11-16 and 2026-11-17): run the four on 3 recently merged PRs and drop any
 that finds nothing real. Results: in PR #174's TLDR.
+
+## S40 (ECC PR 2): planner, a stronger pr-reviewer, agent-evaluator, harness-optimizer's method
+
+Written 2026-11-24 by the Claude cloud session building S40 (PR #256). Same ECC pin as above
+(`d2ef268`, v2.2.3, MIT, the same LICENSE file, sha256 unchanged). Files read as data only; nothing
+from them was run.
+
+| Upstream file | sha256 |
+|---|---|
+| ECC `agents/planner.md` | `63aba865206bac9cb5887542fb01b97656e7701faff98e091aa77057ba9860bc` |
+| ECC `agents/code-reviewer.md` | `9dd23be23d65f18126e10f7680fc1eb2576ec54a427d076ff2f870bd0bafd5d2` |
+| ECC `agents/agent-evaluator.md` | `7ef0739152e7bbc837e9bab4fbae7164f29719a4d1dbdaa1e3b62b4f34358e3c` |
+| ECC `agents/harness-optimizer.md` | `54444fd46afdfacb87a885bef4dcef129915740d35b5fe6f07a5a7e804f2b053` |
+| ECC `LICENSE` | `326146379f01bb137c0a5d3c54770c1aa31076705c8b88a7f6b26a460f6221b2` |
+
+**Pin-and-scan.** SkillSpector was **not run** for S40: installing it was refused by the cloud
+session's permission check (2026-11-24), and the session didn't work around that (not verified by a
+scanner; how to check: run SkillSpector 2.12.0 with `--no-llm` on the four upstream files and
+the seven agent files in `.claude/agents/`, as S39 did). Instead, a manual static check (verified, 2026-11-24,
+by searching the files):
+
+- the upstream files grant `Bash` (code-reviewer, agent-evaluator) and `Bash, Edit`
+  (harness-optimizer); harness-optimizer runs `node scripts/harness-audit.js` and
+  `node tests/run-all.js`, and agent-evaluator allows "read-only" shell commands. **Removed:**
+  Mako's files have only Read, Grep and Glob, no command blocks, and harness-optimizer is not
+  adopted as an agent at all;
+- no unpinned package runs, downloads or URLs other than ECC's own repository link in each header;
+- no invisible, zero-width or private-use characters (Unicode format and private-use categories)
+  in the upstream or Mako files;
+- the "PROACTIVELY", "MUST BE USED" and "Automatically activated" self-start lines are removed.
+
+**China-origin rule.** The four upstream files name only `model: opus` (planner) and
+`model: sonnet` (the others); a search for GLM, Qwen, DeepSeek, Kimi, Doubao, Moonshot, Zhipu,
+ERNIE, MiniMax, Hunyuan and Baichuan in them and in Mako's files finds nothing. Mako's run on
+`model: opus` inside Claude Code on Blue's plan.
+
+| ECC piece | Verdict (S40) | Where it is in Mako |
+|---|---|---|
+| `planner` | FORK (an edited copy) | `.claude/agents/planner.md`, read-only, on demand |
+| `code-reviewer` | FORK, folded in ("Yes, fold it", 2026-11-12) | Parts of it in `.claude/agents/pr-reviewer.md`: the pre-report gate, proof for CRITICAL and HIGH, zero findings is valid, the false positives that fit plain JavaScript and Electron, the AI-written-code checks |
+| `agent-evaluator` | FORK (an edited copy) | `.claude/agents/agent-evaluator.md`, read-only, on demand |
+| `harness-optimizer` | PATTERN-MINE (its method as text) | docs/HARNESS-CHANGES.md; no agent, no Bash or Edit, no ECC scripts |
+
+Also in S40: `pr-reviewer` gains `effort: high` (a documented subagent field: Claude Code's
+subagents page, code.claude.com/docs/en/sub-agents, checked 2026-11-24), a rule-compliance check and
+a "what the diff should have touched" check; and the review scale becomes CRITICAL, HIGH, MEDIUM,
+LOW in AGENTS.md "The review loop", `pr-reviewer` and the four pre-ready reviewers' shared block,
+with Blue's CRITICAL definition (docs/DECISIONS.md, 2026-11-16 follow-up answers) word for word.
+Proof: PR #256's TLDR. Blue's verdict on these rows is his merge of PR #256.
 
 The rest of ECC, as Blue's split set it:
 
