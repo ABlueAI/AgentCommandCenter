@@ -203,8 +203,8 @@ if (sharedBlocks.length > 0) {
   // checks that judge Codex's own PRs; security findings on a Codex PR are fixed by Claude.
   const schedule = fs.readFileSync(path.join(repoRoot, 'docs', 'SCHEDULE-1.1.md'), 'utf8').replace(/\s+/g, ' ');
   const keep = "the rules and checks that judge its own PRs";
-  assert(flat.includes('second builder for any plan row or issue, sensitive ones included, except the UI sessions') &&
-    flat.includes(keep + ' (AGENTS.md, CLAUDE.md, `.claude/agents/`, docs/RUNNER.md, docs/SWEEPER.md, docs/CODEX-BUILDER-LANE.md and `.github/`)') &&
+  assert(flat.includes("second builder for any plan row or issue, sensitive ones included, except the UI sessions, the Composer's dispatch tools and " + keep) &&
+    flat.includes(keep + ' (AGENTS.md, CLAUDE.md, `.claude/agents/`, docs/RUNNER.md, docs/SWEEPER.md, docs/CODEX-BUILDER-LANE.md, `.github/`, the tests that check the rules and CI, and docs/DECISIONS.md entries on the rules; the full list is docs/CODEX-BUILDER-LANE.md item 1)') &&
     !flat.includes("second builder for `windows`-lane sessions that aren't sensitive"),
     "AGENTS.md: Codex builds any row, sensitive included; Claude keeps the UI, the dispatch tools and the rulebook");
   assert(flat.includes('for work the lane gives Codex (docs/CODEX-BUILDER-LANE.md item 1;') &&
@@ -212,21 +212,29 @@ if (sharedBlocks.length > 0) {
     'AGENTS.md: the hand-off exception follows the lane, not a sensitivity limit');
   assert(lane.includes('Codex builds any plan row or issue Claude could, sensitive ones included') &&
     lane.includes('no builder rewrites the rules or the checks that grade its own work') &&
-    ['AGENTS.md', 'CLAUDE.md', '`.claude/agents/`', 'docs/RUNNER.md', 'docs/SWEEPER.md', 'this file', '`.github/`'].every((f) => lane.includes(f)) &&
+    lane.includes("Claude keeps three things: the UI sessions (S66 and S18 to S20), the Composer's dispatch tools, and the rules and checks that judge Codex's own PRs: " +
+      'AGENTS.md, CLAUDE.md, `.claude/agents/` (the reviewers), docs/RUNNER.md, docs/SWEEPER.md, this file, `.github/` (CI, CODEOWNERS, the PR template), ' +
+      'the tests and scripts that check the rules and CI (app/project-agents.test.js, app/ci-hygiene.test.js, app/repo-sanitizer.test.js, app/pr-template.test.js, scripts/run-pester.ps1), ' +
+      'and docs/DECISIONS.md entries that change the rules or this lane. A Codex PR may add tests, and add them to `app/package.json`\'s `test` script, but never removes one.') &&
+    lane.includes('says so in a 🔴 line of its TLDR') &&
     !lane.includes('sessions that are not marked Sensitive') && !lane.includes('The comment hand-off (item 3) is not widened'),
     'docs/CODEX-BUILDER-LANE.md item 1: Codex builds any row; Claude keeps the UI, the dispatch tools and the rulebook');
   assert(!schedule.includes('Codex builds only non-sensitive rows') && schedule.includes('Codex builds any row Claude could, sensitive ones included') &&
-    schedule.includes(keep),
+    schedule.includes("except the UI, the Composer's dispatch tools and " + keep),
     'docs/SCHEDULE-1.1.md matches the lane');
   assert(!collab.includes("second builder for `windows`-lane sessions that aren't sensitive") &&
-    collab.includes('second builder for any plan row or issue, sensitive ones included') && collab.includes(keep),
+    collab.includes("second builder for any plan row or issue, sensitive ones included, except the UI sessions, the Composer's dispatch tools and " + keep),
     'docs/AI-COLLABORATION.md matches the lane');
   // The safeguards: security-reviewer on run 1 for a sensitive PR, and security findings never in a
   // public fix request; the reviewing Claude session fixes them.
   assert(flat.includes('`security-reviewer` when the PR touches a sensitive area') &&
     lane.includes('gets `security-reviewer` on review run 1') &&
-    lane.includes('A security finding never goes in a fix request: the reviewing Claude session fixes it itself') &&
-    flat.includes('to fix security findings on Codex\'s PRs itself') &&
+    lane.includes('A security finding never goes in a fix request. When a review run has one, the reviewing Claude session fixes all of that run\'s high and medium findings itself') &&
+    lane.includes('so only one fixer works on the PR at a time') &&
+    lane.includes('nobody pushes until Blue answers, when the finding is CRITICAL (AGENTS.md "How a CRITICAL stops the PR")') &&
+    lane.includes('when the PR changes anything under `.claude/`') &&
+    lane.includes('or when the reviewing session\'s own prompt forbids pushing to a `codex/` branch') &&
+    flat.includes('to fix security findings on Codex\'s PRs itself, except a CRITICAL one') &&
     !lane.includes('Blue gives Codex the details privately'),
     'a sensitive Codex PR gets security-reviewer on run 1, and Claude fixes its security findings');
   const decisions = fs.readFileSync(path.join(repoRoot, 'docs', 'DECISIONS.md'), 'utf8').replace(/\s+/g, ' ');

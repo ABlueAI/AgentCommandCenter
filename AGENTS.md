@@ -550,14 +550,16 @@ account stays clear of GitHub's abuse detection.
   re-review goes through draft and ready, step 3), reviewer of the UI sessions Claude
   builds, second builder for any plan row or issue, sensitive ones included, except the UI
   sessions, the Composer's dispatch tools and the rules and checks that judge its own PRs (AGENTS.md,
-  CLAUDE.md, `.claude/agents/`, docs/RUNNER.md, docs/SWEEPER.md, docs/CODEX-BUILDER-LANE.md and `.github/`),
-  which stay Claude's (Blue, docs/DECISIONS.md 2026-11-25, "Codex's lane, reworded";
+  CLAUDE.md, `.claude/agents/`, docs/RUNNER.md, docs/SWEEPER.md, docs/CODEX-BUILDER-LANE.md,
+  `.github/`, the tests that check the rules and CI, and docs/DECISIONS.md entries on the rules; the
+  full list is docs/CODEX-BUILDER-LANE.md item 1), which stay Claude's (Blue, docs/DECISIONS.md 2026-11-25, "Codex's lane, reworded";
   docs/CODEX-BUILDER-LANE.md item 1), and planning partner. Works in its own `codex/` branch,
   never Claude's, and fixes its own PRs; Claude never pushes to a `codex/` branch unless Blue asks.
   He has asked it for Claude cloud sessions to push review fixes and `main` merges to Codex's
   docs-only record PRs (as docs/SWEEPER.md defines them), one fixer per PR at a time, and for the
   PR sweeper (docs/DECISIONS.md, 2026-11-23; docs/SWEEPER.md), and for the reviewing Claude
-  session to fix security findings on Codex's PRs itself (docs/CODEX-BUILDER-LANE.md item 6).
+  session to fix security findings on Codex's PRs itself, except a CRITICAL one
+  (docs/CODEX-BUILDER-LANE.md item 6).
   If Blue drops it, Claude takes its rows after a plan change, and "Hard rules" item 9 would need
   changing too.
 - Plans and reviews happen in the repo (PRs, issues, these files), never by copying text between apps.
