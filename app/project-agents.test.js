@@ -198,6 +198,32 @@ if (sharedBlocks.length > 0) {
   assert(lane.includes("Blue's desktop login (`ABlueAI`) is read-only and never posts one") &&
     lane.includes("never from Blue's desktop login") && !lane.includes('by `ABlueAI`, or by `ABlueAgent` with a "Run by:" line'),
     'docs/CODEX-BUILDER-LANE.md items 5 and 7 match: reviews come from a Claude cloud session only');
+  // Codex may build sensitive work too (Blue, docs/DECISIONS.md 2026-11-25); the UI and the
+  // Composer's dispatch tools stay Claude's, and the comment hand-off (lane item 3) isn't widened.
+  const schedule = fs.readFileSync(path.join(repoRoot, 'docs', 'SCHEDULE-1.1.md'), 'utf8').replace(/\s+/g, ' ');
+  assert(flat.includes('for sensitive work too') && flat.includes('docs/DECISIONS.md 2026-11-25') &&
+    flat.includes("never the UI sessions or the Composer's dispatch tools") &&
+    !flat.includes("second builder for `windows`-lane sessions that aren't sensitive"),
+    'AGENTS.md: Codex may build sensitive work, never the UI or the dispatch tools');
+  assert(lane.includes('since 2026-11-25 sensitive work too') && !lane.includes('sessions that are not marked Sensitive') &&
+    lane.includes('The comment hand-off (item 3) is not widened') &&
+    flat.includes("for a `windows`-lane session that isn't sensitive"),
+    'docs/CODEX-BUILDER-LANE.md: item 1 lets Codex build sensitive work; item 3 hand-off unchanged');
+  assert(!schedule.includes('Codex builds only non-sensitive rows') && schedule.includes('Codex builds rows in sensitive areas too, for example security fixes'),
+    'docs/SCHEDULE-1.1.md matches the 2026-11-25 decision');
+  assert(!collab.includes("second builder for `windows`-lane sessions that aren't sensitive") &&
+    collab.includes('for sensitive work too (docs/DECISIONS.md 2026-11-25)'),
+    'docs/AI-COLLABORATION.md matches the 2026-11-25 decision');
+  // The safeguards Codex's sensitive builds rely on: security-reviewer on run 1 for a sensitive PR,
+  // and security findings cut to title and severity in fix requests.
+  assert(flat.includes('`security-reviewer` when the PR touches a sensitive area') &&
+    lane.includes('also gets `security-reviewer` on review run 1') &&
+    lane.includes('A fix request (item 6) for a security finding gives its title and severity only'),
+    'a sensitive Codex PR gets security-reviewer on run 1, and its security fix requests stay title and severity');
+  const decisions = fs.readFileSync(path.join(repoRoot, 'docs', 'DECISIONS.md'), 'utf8').replace(/\s+/g, ' ');
+  assert(decisions.includes('## 2026-11-25: Codex may build sensitive items too') &&
+    decisions.includes('"ignore the sensitivity rules if need be, we need to cook through usage over there"'),
+    'docs/DECISIONS.md has the 2026-11-25 entry the rules cite, with Blue\'s words');
 }
 
 {

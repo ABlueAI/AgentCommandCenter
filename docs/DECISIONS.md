@@ -3,6 +3,20 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-25: Codex may build sensitive items too
+
+Blue decided this in his main chat on 2026-11-25, with unused Codex usage (several ChatGPT Plus
+resets) and too little work queued for it; his words are quoted as the hand-off for this PR relayed
+them. How AGENTS.md "Who does what", docs/CODEX-BUILDER-LANE.md "The lane" item 1 and
+docs/SCHEDULE-1.1.md word it is proposed, pending Blue (this PR); merging approves it. It replaces
+the limit that Codex builds only work that isn't sensitive (the Codex builder lane of 2026-10-23,
+PR #114, and the 2026-11-16 and 2026-11-24 entries' "non-sensitive" and "stays with Claude" wording
+for S26 and S56). "Builder's reading" marks a line that is the builder's, not Blue's.
+
+| Decision | Blue's words |
+|---|---|
+| **Codex may build sensitive work** (for example security fixes, the account guard, the credentials store, IPC, PTY, launchers, the fence hook, `.claude/` settings; the examples are the hand-off's, not Blue's words) as well as `windows`-lane work that isn't sensitive, to use Codex's usage and free Claude's lanes. Unchanged: Claude builds the UI rows (S66, S18 to S20) and the Composer's dispatch tools; every Codex PR still gets Claude's independent Opus review; a Codex PR that touches a sensitive area also gets `security-reviewer` on review run 1 (builder's reading: that is the second review AGENTS.md "Sensitive areas" asks for); the review loop, its run caps, the merge-order rule and Blue's merge are unchanged. Builder's reading: the sensitive-area flag in the TLDR, the "Default go" stop for sensitive work the task didn't authorize, and every hard rule still apply to Codex's PRs; this widens which work Codex may build, not how it gets it: the comment hand-off in docs/CODEX-BUILDER-LANE.md item 3 still covers only `windows`-lane sessions that aren't sensitive, so a sensitive item reaches Codex as Blue starts it there himself, and a fix request for a security finding on a Codex PR gives its title and severity only, with Blue passing Codex the details privately. | "i need more work to push through codex and free up claude." · "ignore the sensitivity rules if need be, we need to cook through usage over there" |
+
 ## 2026-11-24: Blue's go on the UI (checklist step 18)
 
 Blue gave it in Mako main's chat on 2026-11-24; his words are quoted as the hand-off for PR #253
