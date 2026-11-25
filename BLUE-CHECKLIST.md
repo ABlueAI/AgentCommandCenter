@@ -1295,8 +1295,8 @@ Once S04 is applied (step 27), the runner works all day and you do one sitting i
   each "needs Blue" question in its PR. For each PR the digest marks `READY TO MERGE`, read its
   TLDR, then Files changed > Review changes > Approve > Submit review, then Merge pull request >
   Confirm merge. Merge only on `READY TO MERGE`.
-- **Once the commander runs on H1 (step 80):** it starts the evening digest each evening, and that
-  digest is the list you read at the sitting. Merge the `READY TO MERGE` PRs in the order it gives,
+- **Once the commander runs on H1 (step 80):** the "Mako evening digest" routine (switched on in
+  step 80) sends the list at 8:03 PM; it is the list you read at the sitting. Merge the `READY TO MERGE` PRs in the order it gives,
   and until the digest prompt checks Codex's pass (a follow-up to S67), check each one's 👍 from
   Codex too. To pause the build, pause
   the routines on the routines page; the commander sees the runner routine is off and starts
