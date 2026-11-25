@@ -1293,9 +1293,10 @@ Step 83 comes from PR #286.
 - [ ] **83. Check the daily idle-sessions list on your PC.** **About 5 minutes**, at the next Tuesday
   or Friday PC check after PR #286 merges, on the dev copy (`npm run start:dev` in `app`).
   - Close Mako with one Claude pane open, then in Mako's settings folder for the dev copy open
-    `session-memory.json` and change that record's `stoppedAt` to a date 4 days ago (or simply wait 3
-    days). Start the dev copy again and leave the Resume offer unanswered (answering it archives the
-    session, so it leaves the idle list).
+    `session-memory.json` and, in that record, set `startedAt`, `stoppedAt` and (if it is there)
+    `lastActiveAt` all to the same time 4 days ago, for example `2026-11-21T09:00:00.000Z` (idle time
+    counts from the latest of the three). Or simply wait 3 days. Start the dev copy again and leave
+    the Resume offer unanswered (answering it archives the session, so it leaves the idle list).
   - The Terminals tab shows "One Claude session has been idle 3 days or more", with the pane's role,
     folder, idle days, "waiting for Resume or Start fresh" and "owner Blue". Type a done-when, Save,
     and restart: the row shows it.
