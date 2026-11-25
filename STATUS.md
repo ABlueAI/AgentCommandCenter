@@ -3,7 +3,8 @@
 S55 is implemented on its review branch. Independent review and the Windows Firefox profile check
 (checklist step 57) are pending.
 
-Updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
+Updated 2026-11-24 by PR #257 (status: plan rows and this file after the merges of 2026-11-23 and
+2026-11-24; "2026-11-24 (status PR #257)" under Next). Before that: updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
 verdict; review fixes pushed by a Claude cloud session on Blue's ask). Before that: updated 2026-11-24 by PR #209 (S48's OSS record, docs/decisions/OSS-memory.md, with Blue's
 verdict: PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain; step 68
 ticked). Before that: updated 2026-11-24 by PR #241 (S56 no longer marked Sensitive in the plan; its 9 bug issues, #232
@@ -75,14 +76,14 @@ Every PR that changes the state updates this file.
   - **New rows S36 to S60**, among them three small security items first (Electron 42.11.16, the
     account guard's PowerShell gap, one full security check), ECC in 3 PRs (S39 to S41), a rulebook
     update for AGENTS.md (S42), the release row (S59) and the role-file rewrite (S60). Nothing in AGENTS.md, `CLAUDE.md` or
-    `.claude/` changed in PR #173: until S39, S40 and S42 merge, the current rules hold (reviews
-    ranked high, medium, low; a cap of 5 runs; the Opus review required). **S42 (PR #242, open):**
-    once Blue merges it, AGENTS.md carries the decision sheet's rules: certainty labels, a cap of 2
-    runs on docs-only PRs (5 otherwise), the model rule, the clarified China-origin rule, the scope
-    freeze on 2026-12-01, Claude builds the UI, Codex PR reviews only from a Claude cloud session,
-    the merge sitting and PC-check evenings, and Dependabot PRs' review (issue #205).
-  - **The 1.1 schedule (S61, PR #223):** [docs/SCHEDULE-1.1.md](docs/SCHEDULE-1.1.md), adopted when
-    Blue merges that PR: the UI gate (about 2026-11-28 to 2026-12-02), the Composer and tab chains,
+    `.claude/` changed in PR #173. S39 (PR #174, merged 2026-11-17) added the four pre-ready
+    reviewers. **S42 (PR #242, merged 2026-11-24):** AGENTS.md carries the decision sheet's rules:
+    certainty labels, a cap of 2 runs on docs-only PRs (5 otherwise), the model rule, the clarified
+    China-origin rule, the scope freeze on 2026-12-01, Claude builds the UI, Codex PR reviews only
+    from a Claude cloud session, the merge sitting and PC-check evenings, and Dependabot PRs' review
+    (issue #205). S40 (draft PR #256) is not merged, so reviews stay ranked high, medium, low.
+  - **The 1.1 schedule (S61, PR #223):** [docs/SCHEDULE-1.1.md](docs/SCHEDULE-1.1.md), adopted:
+    Blue merged that PR on 2026-11-24: the UI gate (about 2026-11-28 to 2026-12-02), the Composer and tab chains,
     a main-case release of about 2026-12-18 to 2027-01-05 against the 2027-01-15 target, and the
     2026-12-20 checkpoint. Blue's answers of 2026-11-23 (docs/DECISIONS.md): step 58 by 2026-11-27 (before it if ahead),
     Mako's main chat keeps the Claude lanes full, and if the checkpoint says behind, the date slips
@@ -141,6 +142,8 @@ Every PR that changes the state updates this file.
   Both of Blue's PCs run Node.js 26.13.1 (updated 2026-11-19 to 2026-11-20, Blue's word); CI stays
   on Node 22 to test the oldest supported version. Two issues from his PCs are open: #210 (npm's
   allowScripts) and #211 (`app/page-reader.test.js` on a PC with the page-reader agent installed).
+  #211 was closed by PR #231 (merged 2026-11-24; checklist step 74 re-runs the tests on his PC);
+  #210 is still open.
 - **Composer research (S16, PR #82):** [docs/decisions/OSS-composer.md](docs/decisions/OSS-composer.md)
   covers Dodaios (sandboxed trial without any model or key), Claude Code's parallel-agent features
   and Projects, Microsoft Conductor, the R15 pattern mine, Cloudroom (no Windows build) and workflow
@@ -168,7 +171,7 @@ Every PR that changes the state updates this file.
   Octokit class; every Plan sync run since has passed (run 41790199214 first). Step 25 is still
   unticked: its re-run checks the board on GitHub. S33 (PR #155, merged 2026-11-04, DONE) makes the
   sync refuse and create nothing when its listing misses every existing sync issue, the cause of the
-  2026-10-22 duplicates. PR #247 (issue #156) makes it refuse too when its listing
+  2026-10-22 duplicates. PR #247 (issue #156, merged 2026-11-24) makes it refuse too when its listing
   finds fewer items in the "1.1 Month 1" milestone than GitHub counts there (a partial listing).
 - **Research capture (S15, PR #130 merged 2026-11-04, in progress):** Blue's verdict (2026-11-03): ADOPT
   Playwright MCP as the page reader. Claude in Chrome was rejected: on his PC it returned "This site
@@ -182,7 +185,7 @@ Every PR that changes the state updates this file.
   checklist on GitHub) an `AGENTS.md` and a `CLAUDE.md`; the kepano/obsidian-skills plugin is to be installed in
   Claude Code from the vault (ADOPT recorded in docs/decisions/OSS-obsidian-skills.md). Blue sets it up
   on his PC (checklist step 31). Only local agents can reach the vault.
-- **Marina research brief (S22, PR #116 merged 2026-10-23, in progress):** the brief is in Blue's private repo
+- **Marina research brief (S22, PR #116 merged 2026-10-23, done; builder's reading, from step 32's verification):** the brief is in Blue's private repo
   `ABlueAI/Mako-Business` (PR 1 there, commit `24ddc8e`; checklist step 32 ticked). The cloud session
   couldn't open web pages, so its facts come from search extracts of public pages and need a check
   on each source before outreach. No marina data is in this repo.
@@ -286,8 +289,9 @@ Every PR that changes the state updates this file.
     approved and were re-opened as #146 and #147. Desktop chats now only plan and talk (AGENTS.md
     "No PR work under ABlueAI's login"), and the `PreToolUse` hook `.claude/hooks/account-guard.js`
     blocks `gh pr create`, `gh pr ready` and `git push` only when `gh` is logged in as `ABlueAI`.
-    Since S37 (PR #218, issue #217) it checks Claude Code's PowerShell tool too, which it didn't see
-    before. Blue removes that login from every PC Claude runs on after step 35 (checklist step 49).
+    Since S37 (PR #218, issue #217, merged 2026-11-24) it checks Claude Code's PowerShell tool too,
+    which it didn't see before; Blue's live check is checklist step 69. Blue removes that login
+    from every PC Claude runs on after step 35 (checklist step 49).
   - Agent identity (PR #171, a plan change; Blue's decisions of 2026-11-10 and 2026-11-11): the GitHub App
     `mako-agents[bot]` becomes the primary agent identity for local panes and the local runner, `ABlueAgent`
     stays for cloud sessions, and agents never approve or merge. The merge audit and the runner and
@@ -296,6 +300,10 @@ Every PR that changes the state updates this file.
     issue #137); `.claude/settings.json` and the account guard block review and merge calls, and the guard
     does so under any login. The `agent-running` label is gone from the runner design. The live scheduled
     tasks keep their older prompt text until a checklist step applies the new prompts (docs/RUNNER.md).
+  - Hard rules (PR #227, merged 2026-11-24; docs/DECISIONS.md 2026-11-23): AGENTS.md opens with
+    its hard rules; `READY TO MERGE` needs both Claude's review pass and Codex's pass on the latest
+    head; the agent account keeps to 24 pushes and 120 GitHub writes an hour. PR #244 (merged
+    2026-11-24) lets a Claude session mark a Codex PR ready under the same rule as its own.
   - The merge audit raised a false alert on 2026-10-18 (issue #35): PR #33 was stacked on #32's
     branch, and its commits reached `main` through PR #34. The audit now counts every commit of a PR
     merged into `main`, and AGENTS.md forbids stacked PRs. Fixed in PR #37, merged 2026-10-18;
@@ -456,6 +464,39 @@ is FORK, conditional (step 66): first a Windows trial on the VM, with the browse
 outside connections blocked and logged, and the media commands that call China-origin models
 removed; fork only if that trial shows no outside connections and no sandbox downgrade. Neither the
 trial nor the fork has a plan row or issue yet.
+
+**2026-11-24 (status PR #257):** what merged on 2026-11-23 and 2026-11-24 (UTC), and where the
+plan stands. No status PR had run since 2026-11-05. PR states and merge dates are verified (GitHub's
+REST API, read 2026-11-24 about 10:00 UTC); S22's `DONE` is the builder's reading of step 32's
+verification, and the brief's PR in the private repo was not opened.
+
+- **Sessions merged:** S43 (#222, 2026-11-23), S61 (#223), S41 (#228), S57 (#243), S42 (#242),
+  S58 (#245), S37 (#218), S52 (#206) and S63 (#224). Each row is now `DONE`, as is S22 (#116,
+  merged 2026-10-23: its brief was delivered to the private repo, checklist step 32). S39 (#174,
+  merged 2026-11-17) is `DONE` too. S63 delivered an OSS record,
+  `docs/decisions/OSS-ui-libraries.md`, in place of the `docs/research/` write-up its row names;
+  Blue's verdict on it is checklist step 71. PR #246, a first S58 attempt, was closed unmerged and
+  replaced by #245.
+- **Fixes and rules merged:** #231 (issue #211), #247 (#156), and #248, #250 and #251 (issues
+  #161 to #163, gap audit A5a to A5c); #227 (hard rules, Codex's pass, pacing), #241
+  (S56 not tagged Sensitive), #209 (S48's OSS record) and #244 (Claude sessions mark Codex PRs
+  ready).
+- **S56 is `READY`:** its 9 bug issues (#232 to #240) exist, opened on Blue's "Yes, open them"
+  (docs/DECISIONS.md, 2026-11-24) so Codex can build it next.
+- **Merged but still `IN PROGRESS`,** because each "Done when" needs a check or a verdict: S03
+  (step 25), S04 (steps 27 and 50; the runner is off), S05 (steps 23 and 24), S06 (35), S07 (38),
+  S08 (39), S09 (44), S10 (40), S11 (41), S12 (29), S13 (31), S15 (48), S21 (45), S31 (re-runs of
+  23, 24 and 40), S34 (Blue's verdict, step 22) and S36 (the voice check, step 15).
+- **Open PRs:** #221 (S55) and #225 (PR sweeper) are marked ready and wait for Codex's pass; #208
+  (S53) and #230 (S54) wait for #221; #226 (runner refresh) waits for #225; #253 (S14), #254 (S38),
+  #255 (S45) and #256 (S40) are drafts being built (on `main`, S14 still reads `HOLD (Blue)` and
+  S38, S40 and S45 `NEEDS BLUE`; this PR leaves those rows to their own PRs); #170 (S35) and #134 (S24) need Blue; #169 (agent account
+  safety) is a draft labelled `waits-for-merge`.
+- **Waits on Blue:** the merges above; step 18, his go on the UI (S66, S18 to S20, S46, S47 and
+  S62 stay held); step 54, the H1 setup day (S44, S48); step 60 (S50); his Composer scope sign-off
+  (S51); the S28 package and S60's brief; S49's scout report; step 71 (S63's verdict); step 72
+  (PR #227's Codex question); the PC checks in steps 69, 74, 75 and 76; and the Codex check-in on
+  2026-11-30 (step 63).
 
 The paragraphs below are from before the sheet.
 
