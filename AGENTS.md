@@ -548,8 +548,10 @@ account stays clear of GitHub's abuse detection.
   second reviewer (its pass is needed for `READY TO MERGE`, "Hard rules" item 9; since it was linked to
   `ABlueAgent`, BLUE-CHECKLIST.md step 16, 2026-10-20, it reviews agent PRs automatically; a
   re-review goes through draft and ready, step 3), reviewer of the UI sessions Claude
-  builds, second builder for `windows`-lane sessions that aren't sensitive and for the rows the plan
-  gives it (docs/CODEX-BUILDER-LANE.md), and planning partner. Works in its own `codex/` branch,
+  builds, second builder for `windows`-lane sessions, for sensitive work too (for example security fixes,
+  the account guard, the credentials store, IPC, PTY, launchers, the fence hook, `.claude/` settings;
+  Blue, docs/DECISIONS.md 2026-11-25) though never the UI sessions or the Composer's dispatch
+  tools, and for the rows the plan gives it (docs/CODEX-BUILDER-LANE.md), and planning partner. Works in its own `codex/` branch,
   never Claude's, and fixes its own PRs; Claude never pushes to a `codex/` branch unless Blue asks.
   He has asked it for Claude cloud sessions to push review fixes and `main` merges to Codex's
   docs-only record PRs (as docs/SWEEPER.md defines them), one fixer per PR at a time, and for the
