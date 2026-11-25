@@ -52,13 +52,14 @@ Every session, any agent, starts by reading these on `main`:
 
 Anything Blue must do goes into `BLUE-CHECKLIST.md` in order, with when, how long and how you will
 verify it, never only in a chat message or a PR. Tick a box only after verifying it, with the date
-and how you checked. Every PR updates `STATUS.md` if the state changed. Once session S04's all-day
+and how you checked. Every PR leaves `STATUS.md` to the PR sweeper's status PR, the only PR that
+edits it (docs/SWEEPER.md, Job D; Blue, 2026-11-23); a session that finds a merge more than a day
+old missing from both `STATUS.md` and every open "Sweeper status" PR adds "NOT READY: PR sweeper not running" to its session-end message. Once session S04's all-day
 runner is merged and applied to the scheduled task (recorded as the ticked BLUE-CHECKLIST.md step
 that S04 adds), plan-session PRs change only their own row in
-`docs/PLAN-1.1.md` (unless the PR carries a plan change with the `plan-change` label), add to
-`BLUE-CHECKLIST.md` and `docs/DECISIONS.md` only the steps and decisions they need, and leave
-`STATUS.md` to the runner's status PR, to reduce conflicts between parallel PRs; PRs that change the state
-outside a session (plan changes, guardrails, releases) still update it. A new checklist step takes
+`docs/PLAN-1.1.md` (unless the PR carries a plan change with the `plan-change` label), and add to
+`BLUE-CHECKLIST.md` and `docs/DECISIONS.md` only the steps and decisions they need, to reduce
+conflicts between parallel PRs. A new checklist step takes
 the next number not used on `main` or by an open PR when the PR opens, and keeps it through review.
 Steps already on `main` are never renumbered by a PR after its first review. If two PRs still end
 up with the same number, the one that merges second renumbers only its own new step by merging
@@ -165,7 +166,11 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      step 5a) merges `main`, resolves the conflict, re-runs the reviewer on the delta only if content
      changed beyond the conflict ("The review loop"), and once every check on the new head passes,
      checks again, removes the label and marks the PR ready. If the session that built it has
-     ended, Blue tells any session "clear the wait on #N".
+     ended, the PR sweeper (docs/SWEEPER.md, Job B) clears the wait after the next merge to `main`,
+     so nobody needs Blue to say "clear the wait on #N"; a wait still there an hour after #X merged
+     may mean the sweeper isn't running: a session that sees one checks the sweeper's last fire
+     (its report, or a push or comment by it) and, if there was none since #X merged, says
+     "NOT READY: PR sweeper not running", and Blue tells a session "clear the wait on #N".
    - After the PR is marked ready, nobody pushes to it except to fix a CI failure, resolve a merge
      conflict, fix Codex's findings (as a draft again, step 3), or do what Blue asks. A push dismisses Blue's approval, so the TLDR says why any such
      push happened.
@@ -174,7 +179,7 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      listed as follow-ups, Codex's pass on the latest head with its findings fixed or answered
      (step 3), PR marked ready) or `NOT READY: <reason>`. A summary covering
      several PRs starts each PR's line that way; a session-end message or phone notification about no
-     PR (such as the runner's gate notice) starts with `NOT READY: <reason>`. Blue merges only on `READY TO MERGE`; a reason that
+     PR (such as the runner's gate notice) starts with `NOT READY: <reason>`, except the PR sweeper's idle line "Sweeper: nothing to do" (docs/SWEEPER.md). Blue merges only on `READY TO MERGE`; a reason that
      needs his answer says so. A PR with the `waits-for-merge` label is `NOT READY: waits for #X`.
    - Every such message, notification or summary that lists more than one PR ends with the line
      "Merge order: #A, then #B; any order: #C, #D", computed from the test-merges in "Merge order"
@@ -275,9 +280,10 @@ any order.
   and waits. Otherwise it leaves the other PR as it is (on a Codex PR, only the label and comment
   below), and the merge-order line orders the two. No builder changes another builder's PR (a
   Claude session's draft and ready changes on a Codex PR, below, excepted), and a ready PR never
-  gets a push only to make room for another.
+  gets a push only to make room for another. The PR sweeper's Jobs A and B (docs/SWEEPER.md) may
+  also change another builder's PR.
 - **Codex PRs** (`codex/` branches) follow the same rule. A Claude session (the PR sweeper, a
-  scheduled Claude routine that PR #225 proposes to describe in docs/SWEEPER.md; the runner; or the
+  scheduled Claude routine described in docs/SWEEPER.md; the runner; or the
   session that reviewed the PR) changes the draft state of a Codex PR from a branch in this
   repository, authored by an agent login, under the same rule as its own PRs (Blue, 2026-11-24,
   docs/DECISIONS.md). It marks a Codex PR ready only when step 5's conditions all hold on its latest
@@ -306,6 +312,11 @@ any order.
   the same line); every other PR is "any order". More than one ordered pair is written as
   "#A, then #B; #E, then #F".
 - The `waits-for-merge` label is created by the first builder that needs it, if missing.
+- **The sweeper.** After every merge to `main` (once its push trigger is set up, BLUE-CHECKLIST.md
+  step 70), and hourly, the PR sweeper (docs/SWEEPER.md) merges
+  `main` into each conflicting `claude/` PR and Codex docs-only record PR (docs/SWEEPER.md defines
+  it; Codex's other PRs keep the rule above) and clears every `waits-for-merge` wait whose blocker is merged or closed, so
+  builders don't need Blue to say "clear the wait on #N".
 
 ### Never
 
@@ -540,6 +551,9 @@ account stays clear of GitHub's abuse detection.
   builds, second builder for `windows`-lane sessions that aren't sensitive and for the rows the plan
   gives it (docs/CODEX-BUILDER-LANE.md), and planning partner. Works in its own `codex/` branch,
   never Claude's, and fixes its own PRs; Claude never pushes to a `codex/` branch unless Blue asks.
+  He has asked it for Claude cloud sessions to push review fixes and `main` merges to Codex's
+  docs-only record PRs (as docs/SWEEPER.md defines them), one fixer per PR at a time, and for the
+  PR sweeper (docs/DECISIONS.md, 2026-11-23; docs/SWEEPER.md).
   If Blue drops it, Claude takes its rows after a plan change, and "Hard rules" item 9 would need
   changing too.
 - Plans and reviews happen in the repo (PRs, issues, these files), never by copying text between apps.
@@ -548,6 +562,8 @@ account stays clear of GitHub's abuse detection.
 
 Autonomous merge loops of any kind; production error-to-PR automation; full observability (Sentry,
 PostHog).
+The PR sweeper (docs/SWEEPER.md, approved 2026-11-23) merges `main` into PR branches; it never
+merges a PR, so it is not a merge loop.
 
 ## History
 

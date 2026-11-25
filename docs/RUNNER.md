@@ -4,6 +4,8 @@ The scheduled cloud session that works the 1.1 plan each morning. Created 2026-1
 Blue gave his time zone (BLUE-CHECKLIST.md step 3). Session S04 replaces this first version with the
 full runner (parallel sessions, evening digest).
 
+Since 2026-11-23 the PR sweeper (docs/SWEEPER.md) clears conflicts and `waits-for-merge` waits and owns the `STATUS.md` status PR; where a prompt below differs, docs/SWEEPER.md and AGENTS.md win.
+
 ## Schedule
 
 - **When:** every day at 8:01 AM Eastern (`CRON_TZ=America/New_York 1 8 * * *`), one minute after
