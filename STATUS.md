@@ -3,7 +3,8 @@
 S55 is implemented on its review branch. Independent review and the Windows Firefox profile check
 (checklist step 57) are pending.
 
-Updated 2026-11-24 by PR #257 (status: plan rows and this file after the merges of 2026-11-23 and
+Updated 2026-11-25 by the PR sweeper's status PR (covers main up to 28c7e18: PR #225, the PR
+sweeper and its rules; PR #255, S45, updated this file itself). Before that: updated 2026-11-24 by PR #257 (status: plan rows and this file after the merges of 2026-11-23 and
 2026-11-24; "2026-11-24 (status PR #257)" under Next). Before that: updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
 verdict; review fixes pushed by a Claude cloud session on Blue's ask). Before that: updated 2026-11-24 by PR #209 (S48's OSS record, docs/decisions/OSS-memory.md, with Blue's
 verdict: PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain; step 68
@@ -25,7 +26,8 @@ covered #130 (S15), #146, #147, #140, #155 (S33), #152 (S31), #153, #157 (S34) a
 #158 to #160 merged just before it (2026-11-05 00:00 to 00:02 UTC).
 Also updated 2026-11-24 by PR #282 (Blue's decisions D-084 to D-086: default go, short
 colour-coded TLDRs, and the commander on H1; a plan change; "Right now" below).
-Every PR that changes the state updates this file.
+Only the PR sweeper's status PR edits this file (AGENTS.md "The shared brain";
+[docs/SWEEPER.md](docs/SWEEPER.md), Job D).
 
 ## Right now
 
@@ -43,6 +45,15 @@ Every PR that changes the state updates this file.
   `READY`; Blue sets it up, checklist step 80); Mako main, the laptop chat, becomes the watcher. A
   proposal of Claude's, for Blue to check: one small last fix of one medium finding and one extra
   review run past the run cap, instead of stopping as "needs Blue".
+
+- **The PR sweeper (PR #225, merged 2026-11-25; Blue approved it on 2026-11-23, docs/DECISIONS.md
+  2026-11-23):** a Claude routine, "Mako PR sweeper", fires hourly (and on every push to `main` once
+  that trigger is added). It merges `main` into conflicting `claude/` PRs and Codex PRs, clears
+  `waits-for-merge` waits, opens PRs for Codex branches that have none and reviews them, and keeps
+  this file current through one status PR a day. Its instructions are
+  [docs/SWEEPER.md](docs/SWEEPER.md). Blue's part: checklist step 70 (about 5 minutes: add the
+  push-to-`main` trigger and turn on its notifications). Not verified: whether the push trigger is
+  set; an agent reading the routine back checks it (step 70).
 
 - **Release: Mako 1.0.0 is released.**
   - Tag `v1.0.0` was created on 2026-10-18 at `main` commit `37009eb`, which includes the
