@@ -76,7 +76,7 @@ function fakeBoard(columns = COLUMNS) {
   assert(real.some((s) => s.status.kind === 'dropped'), 'the real plan has a DROPPED row and it parses');
   assert(real.find((s) => s.id === 'S06').sensitive, 'S06 ("Sensitive.") is marked sensitive');
   assert(!real.find((s) => s.id === 'S08').sensitive, 'S08 is not marked sensitive');
-  for (const id of ['S06', 'S10', 'S24', 'S26', 'S28']) assert(real.find((s) => s.id === id).sensitive, `${id} is marked sensitive`);
+  for (const id of ['S06', 'S10', 'S24', 'S26', 'S28', 'S67']) assert(real.find((s) => s.id === id).sensitive, `${id} is marked sensitive`);
   assert(s03.sensitive, 'S03 (a new .github/ workflow) is marked sensitive');
   assert(!parsePlan(plan(row('S09', 'Labels', 'READY', { text: 'Labels (needs-blue, sensitive, security-alert).' })))[0].sensitive,
     'a lowercase label list ("sensitive, security-alert") does not mark a row sensitive');
