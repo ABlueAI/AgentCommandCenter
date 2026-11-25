@@ -77,8 +77,8 @@ starts the build sessions and sends you the merge order each evening.
     token's renewal (by 2027-01-14) may come first.
 14. **Steps 27 and 50**, in one sitting (about 12 minutes), only when you turn the all-day runner
     back on: it has been off since 2026-11-04. Step 28 is closed (usage credits are off, your word of
-    2026-11-04). Once step 27 is ticked, plan-session PRs stop editing STATUS.md and leave it to the
-    runner's status PR.
+    2026-11-04). Since 2026-11-23 no PR but the PR sweeper's status PR edits STATUS.md (AGENTS.md
+    "The shared brain", docs/SWEEPER.md Job D).
 15. ~~**Step 14**, the agent token~~ Done 2026-10-23 on your word. ~~**Step 10**, the app settings
     review~~ Dropped 2026-11-16: the new Settings page replaces it.
 
@@ -1248,6 +1248,15 @@ Step 69 comes from S37 (PR #218, issue #217), not from the decisions above.
   - *Done when:* you've told an agent what Claude showed, and it ticks this with the date and your
     words.
 
+- [ ] **70. Finish the PR sweeper's set-up.** **About 5 minutes**, after PR #225 merges. At
+  claude.ai/code/routines, open "Mako PR sweeper": (a) check it has a push-to-`main` trigger besides
+  the hourly schedule (on 2026-11-23 only the hourly schedule showed), and add one if the page
+  offers it; (b) turn on its push notifications, so a "NOT READY" fire reaches your phone (they were
+  off). A push is sent when a run ends with something noteworthy (the scheduled-task tool's own
+  description; not tested here); an idle fire ends "Sweeper: nothing to do", so expect few. If you
+  get one every hour, tell any agent and it will narrow the sweeper's idle line. Or tell any agent "set up the sweeper's trigger and notifications".
+  - *Done when:* an agent reads the routine back and finds both, and ticks this with the date.
+
 ## From your decisions of 2026-11-23
 
 Step 72 comes from PR #227 (docs/DECISIONS.md, 2026-11-23). Step numbers 69 to 71 belong to open PRs
@@ -1370,6 +1379,14 @@ You can start on the first one now, which saves time later.
   FRESH) in your own words to any agent.
   - *Done when:* your verdict is in the record's "Blue's verdict" line, word for word, and the agent
     ticks this with the date.
+- [ ] **82. Your verdicts on S45's ECC skill list (PR #255).** **About 15 minutes** for the nine top
+  picks, longer if you go through all 314 rows; any time after PR #255 merges, before a plan row
+  takes any of them up. Read `docs/decisions/OSS-ecc.md`, "ECC's other skills (S45)": each skill
+  has a proposed verdict and a blank last column. Give your verdict per skill (ADOPT, FORK,
+  PROTOTYPE, PATTERN-MINE, BUILD FRESH or SKIP, or "as proposed" for a group) in your own words to
+  any agent. Merging PR #255 records the list, not your verdicts.
+  - *Done when:* each row you decided has your verdict in its last column, word for word, and the
+    agent ticks this with the date and the rows it filled.
 
 ## Dated reminders
 

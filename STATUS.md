@@ -455,6 +455,11 @@ waits only on S14 and Blue's go on the UI (step 18).
 **2026-11-24 (PR #209):** S48's OSS record, `docs/decisions/OSS-memory.md`, carries Blue's verdict
 (step 68): PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain. S48
 still starts after the H1 setup day (step 54).
+**2026-11-24 (S45, PR #255):** ECC's 314 skills are listed in
+[docs/decisions/OSS-ecc.md](docs/decisions/OSS-ecc.md) "ECC's other skills (S45)", each with a
+proposed verdict (1 FORK, 4 PROTOTYPE, 22 PATTERN-MINE, 286 SKIP; `gateguard` left to S44) and a
+blank for Blue's. Nothing installed. Once it merges S45 is DONE; Blue's per-skill verdicts are
+pending (BLUE-CHECKLIST.md step 82), and a pick becomes a 1.2 plan row only after his verdict.
 
 **S52 (PR #206):** [HyperFrames vetting and trial](docs/decisions/OSS-hyperframes.md) are recorded.
 The pinned upstream package offers MiniMax/Qwen models through its media commands. Blue's verdict
