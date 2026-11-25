@@ -37,3 +37,6 @@ media/
 
 # Vendored minified ML bundles — too large for git and trigger false-positive secret scans
 app/renderer/vendor/transformers.web.min.js
+
+# Local Firefox preset names and URLs
+quick-links-presets.json

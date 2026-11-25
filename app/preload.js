@@ -40,6 +40,8 @@ contextBridge.exposeInMainWorld('cc', {
   quickLinksList: () => ipcRenderer.invoke('quick-links-list'),
   quickLinksSave: (text) => ipcRenderer.invoke('quick-links-save', text),
   quickLinksOpen: (id) => ipcRenderer.invoke('quick-links-open', id),
+  quickLinksPresetsList: () => ipcRenderer.invoke('quick-links-presets-list'),
+  quickLinksPresetOpen: (id) => ipcRenderer.invoke('quick-links-preset-open', id),
 
   // S11 usage panel (invoke-only): validated plan-usage numbers from the status-line snapshot.
   usageRead: () => ipcRenderer.invoke('usage-read'),
