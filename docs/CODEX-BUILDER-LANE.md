@@ -31,11 +31,12 @@ minutes during the trial (checklist step 30).
    (items 2 and 3). Claude keeps three things: the UI sessions (S66 and S18 to S20), the Composer's
    dispatch tools, and the rules and checks that judge Codex's own PRs: AGENTS.md, CLAUDE.md,
    `.claude/agents/` (the reviewers), docs/RUNNER.md, docs/SWEEPER.md, this file, `.github/`
-   (CI, CODEOWNERS, the PR template), the tests and scripts that check the rules and CI
-   (app/project-agents.test.js, app/ci-hygiene.test.js, app/repo-sanitizer.test.js,
-   app/pr-template.test.js, scripts/run-pester.ps1), and docs/DECISIONS.md entries that change the
-   rules or this lane. A Codex PR may add tests, and add them to `app/package.json`'s `test`
-   script, but never removes one. The last is not about skill: no builder rewrites the rules or
+   (CI, CODEOWNERS, the PR template), the scripts that make CI run every suite
+   (scripts/run-pester.ps1, app/test-reachability.test.js, scripts/test-reachability.Tests.ps1),
+   and docs/DECISIONS.md entries that change the rules or this lane. In any test that reads those
+   files (app/project-agents.test.js, app/runner-proposal.test.js and app/ci-hygiene.test.js among
+   them), a Codex PR may add asserts but never removes or loosens one, and it never removes a test
+   from `app/package.json`'s `test` script. The last is not about skill: no builder rewrites the rules or
    the checks that grade its own work (Blue, docs/DECISIONS.md 2026-11-25, "Codex's lane,
    reworded"). A Codex PR that changes `.claude/settings.json` or `.claude/hooks/` (the guards
    behind hard rules 1 to 3) says so in a 🔴 line of its TLDR. A Codex PR that touches a sensitive area gets `security-reviewer` on review run 1

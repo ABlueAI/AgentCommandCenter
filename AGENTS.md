@@ -551,8 +551,8 @@ account stays clear of GitHub's abuse detection.
   builds, second builder for any plan row or issue, sensitive ones included, except the UI
   sessions, the Composer's dispatch tools and the rules and checks that judge its own PRs (AGENTS.md,
   CLAUDE.md, `.claude/agents/`, docs/RUNNER.md, docs/SWEEPER.md, docs/CODEX-BUILDER-LANE.md,
-  `.github/`, the tests that check the rules and CI, and docs/DECISIONS.md entries on the rules; the
-  full list is docs/CODEX-BUILDER-LANE.md item 1), which stay Claude's (Blue, docs/DECISIONS.md 2026-11-25, "Codex's lane, reworded";
+  `.github/`, the checks that CI runs every suite, and docs/DECISIONS.md entries on the rules; it
+  never loosens a test that reads them; the full list is docs/CODEX-BUILDER-LANE.md item 1), which stay Claude's (Blue, docs/DECISIONS.md 2026-11-25, "Codex's lane, reworded";
   docs/CODEX-BUILDER-LANE.md item 1), and planning partner. Works in its own `codex/` branch,
   never Claude's, and fixes its own PRs; Claude never pushes to a `codex/` branch unless Blue asks.
   He has asked it for Claude cloud sessions to push review fixes and `main` merges to Codex's
