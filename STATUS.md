@@ -1,5 +1,8 @@
 # Mako status
 
+S55 is implemented on its review branch. Independent review and the Windows Firefox profile check
+(checklist step 57) are pending.
+
 Updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
 verdict; review fixes pushed by a Claude cloud session on Blue's ask). Before that: updated 2026-11-24 by PR #209 (S48's OSS record, docs/decisions/OSS-memory.md, with Blue's
 verdict: PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain; step 68
@@ -19,11 +22,26 @@ Blue's voice check (step 15) remains pending. Before that: updated
 the 2026-11-04 status PR (#165): #166 (merge order). Before that, the 2026-11-04 status PR (#165)
 covered #130 (S15), #146, #147, #140, #155 (S33), #152 (S31), #153, #157 (S34) and #154 (S32);
 #158 to #160 merged just before it (2026-11-05 00:00 to 00:02 UTC).
+Also updated 2026-11-24 by PR #282 (Blue's decisions D-084 to D-086: default go, short
+colour-coded TLDRs, and the commander on H1; a plan change; "Right now" below).
 Every PR that changes the state updates this file.
 
 ## Right now
 
 - **Your next steps:** [BLUE-CHECKLIST.md](BLUE-CHECKLIST.md), starting with its "Do next" box.
+
+- **Default go, short TLDRs and the H1 commander (PR #282, a plan change; Blue, 2026-11-24,
+  docs/DECISIONS.md D-084 to D-086):** once Blue merges it, build work no longer waits for his go:
+  builders take the recommended default, put open questions in the PR, and stop for him only on
+  spending or new accounts, credentials, deleting things, taste calls, sensitive work the task
+  didn't cover and blockers after 3 tries (AGENTS.md "Deciding without asking"). S46, S47 and S62 move from `HOLD (Blue)` to `READY` (they still wait for S14);
+  PR #253 (open; not verified until it merges) records Blue's go on the UI and sets S14 in
+  progress and S66 and S18 to S20 `READY`. Every PR's TLDR starts with a short
+  colour-coded block for Blue (🔴 🟡 🟢, Claude's own decisions marked 🤖). A local "Mako command"
+  chat on H1 is to run the build and send Blue the evening merge list in merge order (new row S67,
+  `READY`; Blue sets it up, checklist step 80); Mako main, the laptop chat, becomes the watcher. A
+  proposal of Claude's, for Blue to check: one small last fix of one medium finding and one extra
+  review run past the run cap, instead of stopping as "needs Blue".
 
 - **Release: Mako 1.0.0 is released.**
   - Tag `v1.0.0` was created on 2026-10-18 at `main` commit `37009eb`, which includes the
@@ -49,9 +67,11 @@ Every PR that changes the state updates this file.
     scope freezes on 2026-12-01 (docs/DECISIONS.md, 2026-11-21).
   - **Three tabs:** the shared navigation first (S66, split from S18 on 2026-11-22), then the
     brain (S18), the control room (S19) and the aquarium MVP (S20) in parallel on top of it. Claude
-    builds and Codex reviews; S17 is done (Shark A). The rows are still `HOLD (Blue)`: no UI building
-    before the 1.1 schedule is adopted with its independent review (S61, Blue 2026-11-17), then his go
-    on the UI (checklist step 18).
+    builds and Codex reviews; S17 is done (Shark A). **2026-11-24:** S61 merged (PR #223) and Blue
+    said go on the UI (checklist step 18). PR #253 adds S14's brief, `docs/DESIGN-BRIEF-1.1.md` (the
+    three tabs, the look, the shark, the test plan, and 18 questions for Blue, each with a default),
+    and sets S66, S18, S19 and S20 to `READY`; merging it releases them (S66 first). The brief moves
+    the pieces every tab shows (top bar, emblem rail, the shared In-focus card) into S66.
   - **New rows S36 to S60**, among them three small security items first (Electron 42.11.16, the
     account guard's PowerShell gap, one full security check), ECC in 3 PRs (S39 to S41), a rulebook
     update for AGENTS.md (S42), the release row (S59) and the role-file rewrite (S60). Nothing in AGENTS.md, `CLAUDE.md` or
