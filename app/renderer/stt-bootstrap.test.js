@@ -9,7 +9,7 @@
 import {
   WHISPER_MODEL_ID, WHISPER_DOWNLOADS, getWhisperLoadOptions, describeWhisperDtype,
   getWhisperTranscriptionOptions, boundedFileName, createProgressReporter, createWhisperLoader,
-  pcm16leToFloat32, describeTranscriptionError, transcribeInWindows, VIDEO_WINDOW_SAMPLES,
+  pcm16leToFloat32, describeTranscriptionError, transcribeInWindows, VIDEO_WINDOW_SAMPLES, ownsVideoTranscription,
 } from './stt-bootstrap.js';
 
 let passed = 0;
@@ -261,6 +261,11 @@ section('S54 Video Scout: windowed transcription stops between windows when canc
   assert(silent.text === '', 'windows with no speech give an empty transcript, not a refusal');
   const broken = await transcribeInWindows(pcm, async () => undefined, () => false, 4);
   assert(broken.text === null, 'a window with no text makes the whole transcript invalid');
+  assert(ownsVideoTranscription(true, 'pty3', 'pty3') === true, 'the pane that owns the transcription can cancel it');
+  assert(ownsVideoTranscription(true, 'pty3', 'pty4') === false, 'closing another Video Scout pane does not cancel it');
+  assert(ownsVideoTranscription(false, 'pty3', 'pty3') === false, 'nothing to cancel when no transcription runs');
+  assert(ownsVideoTranscription(true, null, null) === false && ownsVideoTranscription(true, 'pty3', undefined) === false,
+    'a missing owner or requester never matches');
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -553,7 +553,7 @@ test('Video Scout offers both providers and Claude bypasses the Gemini key and l
     analysisMode: 'transcript', title: 'Video Scout · www.youtube.com',
   });
   // Closing the pane stops local Whisper as well as the run in main (Codex finding on 8ad4b6d).
-  assert.match(js, /if \(claudeVideoScout\) \{\s*\/\/[^\n]*\n\s*if \(window\.ccSTT && window\.ccSTT\.cancelVideoTranscription\) window\.ccSTT\.cancelVideoTranscription\(\);\s*cc\.claudeVideoScoutCancel\(id\);/);
+  assert.match(js, /if \(claudeVideoScout\) \{\s*\/\/[^\n]*\n\s*if \(window\.ccSTT && window\.ccSTT\.cancelVideoTranscription\) window\.ccSTT\.cancelVideoTranscription\(id\);\s*cc\.claudeVideoScoutCancel\(id\);/);
   assert.match(js, /if \(claudeVideoScout\) \{\s*runClaudeVideoInPane\(id, opts.videoUrl, opts.analysisFocus, opts.claudeVideoSettings\);\s*return;/);
 });
 
@@ -841,9 +841,11 @@ test('main cancels the run when the window reloads, and the renderer shows Whisp
   await vm.runInContext("handleClaudeVideoEvent({ id: 'pty1', token: 't1', pcm: new Uint8Array(2) })", context);
   assert.deepEqual(JSON.parse(JSON.stringify(submitted.at(-1))), { id: 'pty1', token: 't1', error: 'unavailable' });
 
-  context.window.ccSTT = { transcribeVideoPcm: async () => ({ ok: false, error: 'failed', detail: 'speech model failed: webgpu: no adapter; wasm: download refused' }) };
+  const owners = [];
+  context.window.ccSTT = { transcribeVideoPcm: async (_pcm, _progress, owner) => { owners.push(owner); return { ok: false, error: 'failed', detail: 'speech model failed: webgpu: no adapter; wasm: download refused' }; } };
   await vm.runInContext("handleClaudeVideoEvent({ id: 'pty1', token: 't2', pcm: new Uint8Array(2) })", context);
   assert(writes.some((line) => line.includes('Local Whisper: speech model failed: webgpu: no adapter; wasm: download refused')));
+  assert.deepEqual(owners, ['pty1'], 'the transcription is started with its pane as the owner, so only that pane can cancel it');
   assert.equal(submitted.at(-1).error, 'failed');
 
   context.window.ccSTT = { transcribeVideoPcm: async () => { throw new Error('out of memory'); } };

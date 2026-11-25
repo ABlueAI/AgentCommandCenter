@@ -759,7 +759,7 @@ function openInAppTerminal(opts = {}) {
     if (paneData.rafId !== null) { cancelAnimationFrame(paneData.rafId); paneData.rafId = null; }
     if (claudeVideoScout) {
       // Stop local Whisper too (Codex finding), so Dictate and the next run aren't left busy.
-      if (window.ccSTT && window.ccSTT.cancelVideoTranscription) window.ccSTT.cancelVideoTranscription();
+      if (window.ccSTT && window.ccSTT.cancelVideoTranscription) window.ccSTT.cancelVideoTranscription(id);
       cc.claudeVideoScoutCancel(id);
     }
     else cc.ptyKill(id);
@@ -2370,7 +2370,7 @@ async function handleClaudeVideoEvent({ id, token, status, estimate, pcm }) {
   let result;
   try {
     result = window.ccSTT
-      ? await window.ccSTT.transcribeVideoPcm(pcm, (detail) => writeClaudeVideoPane(id, detail))
+      ? await window.ccSTT.transcribeVideoPcm(pcm, (detail) => writeClaudeVideoPane(id, detail), id)
       : { ok: false, error: 'unavailable' };
   } catch {
     // stt.js catches and words its own failures (detail), so a throw here is unexpected.

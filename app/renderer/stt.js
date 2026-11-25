@@ -24,6 +24,7 @@ import {
   createWhisperLoader,
   describeTranscriptionError,
   describeWhisperDtype,
+  ownsVideoTranscription,
   pcm16leToFloat32,
   transcribeInWindows,
   getWhisperTranscriptionOptions,
@@ -50,6 +51,7 @@ let activeDevice = '';  // backend that actually initialized ('' until proven)
 let recording = false;
 let videoBusy = false;
 let videoCancelled = false; // set when the Video Scout pane is closed mid-transcription
+let videoOwner = null;      // the Video Scout pane whose audio is being transcribed
 let busy = false;       // transcribing
 let statusCb = null;
 let resultCb = null;
@@ -169,12 +171,13 @@ async function toggle() {
 
 // Video Scout supplies PCM decoded by FFmpeg. It shares the same downloaded Whisper
 // model as Dictate, without opening the microphone or posting to its locked target pane.
-async function transcribeVideoPcm(bytes, onProgress) {
+async function transcribeVideoPcm(bytes, onProgress, owner = null) {
   if (videoBusy || recording || busy) return { ok: false, error: 'busy' };
   const pcm = pcm16leToFloat32(bytes);
   if (!pcm) return { ok: false, error: 'failed', detail: 'the audio was not whole 16-bit samples' };
   videoBusy = true;
   videoCancelled = false;
+  videoOwner = owner;
   try {
     const model = await ensureModel((_state, detail) => onProgress(detail));
     onProgress(`Whisper large-v3-turbo · ${activeDevice}/${describeWhisperDtype(activeDevice)}`);
@@ -190,12 +193,19 @@ async function transcribeVideoPcm(bytes, onProgress) {
     return { ok: false, error: 'failed', detail: describeTranscriptionError(e) };
   } finally {
     videoBusy = false;
+    videoOwner = null;
   }
+}
+
+// Only the pane that owns the running transcription can cancel it (review of ebb0988): closing
+// another Video Scout pane must not stop someone else's run.
+function cancelVideoTranscription(owner) {
+  if (ownsVideoTranscription(videoBusy, videoOwner, owner)) videoCancelled = true;
 }
 
 window.ccSTT = {
   transcribeVideoPcm,
-  cancelVideoTranscription: () => { if (videoBusy) videoCancelled = true; },
+  cancelVideoTranscription,
   toggle,
   isRecording: () => recording,
   isBusy: () => busy,

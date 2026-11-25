@@ -64,6 +64,12 @@ export async function transcribeInWindows(pcm, runWindow, isCancelled, windowSam
   return isCancelled() ? { cancelled: true } : { text: texts.join(' ') };
 }
 
+// Only the pane that owns a running Video Scout transcription may cancel it: closing any other
+// pane leaves it running. No owner (or no request) never matches.
+export function ownsVideoTranscription(busy, owner, requester) {
+  return busy === true && owner != null && requester != null && owner === requester;
+}
+
 // The one bounded wording Dictate and Video Scout both show for a failed load or transcription:
 // the bootstrap's combined error already names both backends with their reasons.
 export function describeTranscriptionError(e) {
