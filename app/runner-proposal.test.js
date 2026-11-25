@@ -111,7 +111,8 @@ const mustHave = [
   ['a comment without that line covers the head when it was posted after the first check run on the latest head commit started', 'accepts reviews posted without a Reviewed head line'],
   ['first remove the usage-paused label and the runner-paused marker', 'clears the paused state when it resumes a PR'],
   ['asking for something that no one else has edited', 'acts only on an unedited ABlueAI comment'],
-  ['rank all live locks by expiry, earliest first, and on the same minute by PR number, lowest first: if yours ranks past parallel_cap', 're-counts the global cap after placing a lock and backs off only past the cap'],
+  ['rank all live locks by expiry, earliest first, and on the same minute by PR number, lowest first: if yours ranks past parallel_cap minus the busy lanes that hold no live lock', 're-counts the global cap after placing a lock, hand-started lanes included, and backs off only past the cap'],
+  ['the write limit is writes_per_hour minus 20 (100 counted writes when this was written)', 'stops at 100 counted writes, leaving room for what the events list misses'],
   ['and the branch has had no force-push since', 'does not count a review across a force-push'],
   ['if you can\'t check for force-pushes, the comment doesn\'t cover the head', 'treats an unreadable force-push history as not covered'],
   ['an "Independent review (Opus)" comment posted by an agent login or ABlueAI and edited by no one else covers its latest head', 'marks a PR ready only when an unedited agent or Blue review covers its latest head'],
@@ -264,6 +265,7 @@ const sweeperMustHave = [
   [jobD, 'at most 2 runs, the docs-only cap in AGENTS.md "The review loop"', 'Job D: the status PR keeps the docs-only 2-run cap'],
   [sweepChanges, 'Mark a Codex PR ready, or re-trigger Codex\'s review, only as AGENTS.md "Merge order", "Codex PRs" says (Blue, 2026-11-24); never lift a draft hold Blue asked for.', 'Codex draft state follows AGENTS.md "Codex PRs"'],
   [sweepChanges, 'none is under .claude/, .github/ or agent-roles/, nor is AGENTS.md, CLAUDE.md, docs/SWEEPER.md or docs/RUNNER.md', 'a docs-only record PR excludes sensitive Markdown'],
+  [sweepChanges, 'EXISTING CODEX PRS (AGENTS.md "How work flows" step 3: once the session that handed Codex a task has ended, the sweeper runs that PR\'s reviews)', 'reviews existing Codex PRs once their hand-off session has ended'],
   [sweepChanges, '"NOT READY: sweeper has no GitHub login"', 'stops visibly with no GitHub login'],
   [sweepChanges, '"NOT READY: sweeper failed at <job and step>: <error>"', 'reports a failed step instead of "nothing to do"'],
 ];
