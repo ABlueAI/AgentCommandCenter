@@ -4,7 +4,9 @@ S55 is implemented on its review branch. Independent review and the Windows Fire
 (checklist step 57) are pending.
 
 Updated 2026-11-25 by the PR sweeper's status PR (covers main up to 28c7e18: PR #225, the PR
-sweeper and its rules; PR #255, S45, updated this file itself). Before that: updated 2026-11-24 by PR #257 (status: plan rows and this file after the merges of 2026-11-23 and
+sweeper and its rules; PR #255, S45, updated this file itself; verified: GitHub's REST API,
+read 2026-11-25 about 06:50 UTC, shows #257, #255 and #225 merged in that order at 06:29 to 06:31
+UTC, and #282 before them at 06:13 UTC). Before that: updated 2026-11-24 by PR #257 (status: plan rows and this file after the merges of 2026-11-23 and
 2026-11-24; "2026-11-24 (status PR #257)" under Next). Before that: updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
 verdict; review fixes pushed by a Claude cloud session on Blue's ask). Before that: updated 2026-11-24 by PR #209 (S48's OSS record, docs/decisions/OSS-memory.md, with Blue's
 verdict: PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain; step 68
@@ -46,9 +48,10 @@ Only the PR sweeper's status PR edits this file (AGENTS.md "The shared brain";
   proposal of Claude's, for Blue to check: one small last fix of one medium finding and one extra
   review run past the run cap, instead of stopping as "needs Blue".
 
-- **The PR sweeper (PR #225, merged 2026-11-25; Blue approved it on 2026-11-23, docs/DECISIONS.md
+- **The PR sweeper (PR #225, merged 2026-11-25, verified as above; Blue approved it on 2026-11-23, docs/DECISIONS.md
   2026-11-23):** a Claude routine, "Mako PR sweeper", fires hourly (and on every push to `main` once
-  that trigger is added). It merges `main` into conflicting `claude/` PRs and Codex PRs, clears
+  that trigger is added). It merges `main` into conflicting `claude/` PRs and Codex's docs-only record PRs (on Codex's
+  other PRs it asks Codex in a comment), clears
   `waits-for-merge` waits, opens PRs for Codex branches that have none and reviews them, and keeps
   this file current through one status PR a day. Its instructions are
   [docs/SWEEPER.md](docs/SWEEPER.md). Blue's part: checklist step 70 (about 5 minutes: add the
@@ -460,7 +463,7 @@ still starts after the H1 setup day (step 54).
 **2026-11-24 (S45, PR #255):** ECC's 314 skills are listed in
 [docs/decisions/OSS-ecc.md](docs/decisions/OSS-ecc.md) "ECC's other skills (S45)", each with a
 proposed verdict (1 FORK, 4 PROTOTYPE, 22 PATTERN-MINE, 286 SKIP; `gateguard` left to S44) and a
-blank for Blue's. Nothing installed. Once it merges S45 is DONE; Blue's per-skill verdicts are
+blank for Blue's. Nothing installed. S45 is DONE (merged 2026-11-25); Blue's per-skill verdicts are
 pending (BLUE-CHECKLIST.md step 82), and a pick becomes a 1.2 plan row only after his verdict.
 
 **S52 (PR #206):** [HyperFrames vetting and trial](docs/decisions/OSS-hyperframes.md) are recorded.
