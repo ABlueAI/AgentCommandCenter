@@ -149,6 +149,7 @@ const { createQuickLinksPresets } = require('./quick-links-presets');
 const { createQuickLinksStore } = require('./quick-links-store');
 const sessionMemoryMod = require('./session-memory');
 const sessionResume = require('./session-resume');
+const sessionHygiene = require('./session-hygiene');
 const { createQuickLinksIpc } = require('./quick-links-ipc');
 const { buildDefaultConfig: buildQuickLinksDefaultConfig, validateUrl: validateQuickLinkUrl } = require('./quick-links-policy');
 // S06: the legacy open-external channel goes through the same URL policy (open-external-ipc.js).
@@ -556,6 +557,8 @@ app.whenReady().then(() => {
   loadAgentGitToken(); // S06: the ABlueAgent token, likewise before any PTY can launch
   // S08: a record still open now was never closed (a crash or a forced kill): close it as `unknown`.
   sessionMemoryCall(() => sessionMemory().closeOpen(sessionMemoryMod.STOP_REASON.UNKNOWN));
+  // S46: finished sessions archive themselves.
+  sessionMemoryCall(() => sessionMemory().archiveFinished());
   // K8 media-permission hardening: grant ONLY a microphone-only request ('media' with
   // mediaTypes exactly ['audio']) coming from this window's main frame at the exact
   // entry document with the trusted file: origin — the in-app Whisper dictation path.
@@ -1686,6 +1689,7 @@ function stopPaneSession(id, reason, expected) {
   const sid = paneSessions.get(id);
   if (!sid || (expected !== undefined && sid !== expected)) return;
   paneSessions.delete(id);
+  sessionTouchedAt.delete(sid);
   sessionMemoryCall(() => sessionMemory().recordStop(sid, reason));
 }
 
@@ -1718,6 +1722,40 @@ ipcMain.handle('session-resume-dismiss', (e, sessionId) => {
   const res = sessionMemoryCall(() => sessionMemory().markOffered(sessionId));
   return res && res.ok ? { ok: true } : { ok: false, error: (res && res.reason) || 'session-memory-failed' };
 });
+
+// ---- S46: session hygiene ----------------------------------------------------------------------
+// Each recorded Claude session's owner, state, done-when and idle time (app/session-hygiene.js).
+// Finished sessions archive themselves here too, so a Mako left running for days still archives
+// them. Trusted sender only. `day` is the local calendar day, so the renderer shows the idle list
+// once a day.
+ipcMain.handle('session-hygiene-list', (e) => {
+  const g = launcherGate.assess(e);
+  if (!g.ok) return { ok: false, error: g.reason };
+  const archived = sessionMemoryCall(() => sessionMemory().archiveFinished());
+  if (!archived || archived.ok !== true) return { ok: false, error: (archived && archived.reason) || 'session-memory-failed' };
+  if (archived.archived) tlog(`[session-hygiene] archived ${archived.archived} finished session(s)`);
+  const rows = sessionHygiene.view(archived.records);
+  const idle = sessionHygiene.idleRows(rows);
+  return { ok: true, rows, idle, idleDays: sessionHygiene.IDLE_DAYS, day: sessionHygiene.dayKey(new Date()) };
+});
+ipcMain.handle('session-hygiene-done-when', (e, sessionId, text) => {
+  const g = launcherGate.assess(e);
+  if (!g.ok) return { ok: false, error: g.reason };
+  const res = sessionMemoryCall(() => sessionMemory().setDoneWhen(sessionId, text));
+  return res && res.ok ? { ok: true } : { ok: false, error: (res && res.reason) || 'session-memory-failed' };
+});
+// S46: a session's last activity, from its pane's output, written at most once an hour per session.
+const SESSION_TOUCH_MS = 60 * 60 * 1000;
+const sessionTouchedAt = new Map();
+function touchPaneSession(id) {
+  const sid = paneSessions.get(id);
+  if (!sid) return;
+  const t = Date.now();
+  const last = sessionTouchedAt.get(sid);
+  if (last !== undefined && t - last < SESSION_TOUCH_MS) return;
+  sessionTouchedAt.set(sid, t);
+  sessionMemoryCall(() => sessionMemory().touch(sid));
+}
 
 // ---- IPC: in-app terminals (node-pty + xterm.js) ---------------------------
 // Each renderer terminal pane gets a real ConPTY here: PowerShell spawned in the
@@ -1968,6 +2006,7 @@ ipcMain.handle('pty-start', (e, opts) => {
       ? sessionMemoryCall(() => sessionMemory().recordResume({ sessionId: claudeSessionId, paneId: id }))
       : sessionMemoryCall(() => sessionMemory().recordStart({
         sessionId: claudeSessionId, paneId: id, role: launch.role, cli: 'claude', worktree: cwd,
+        owner: sessionMemoryMod.DEFAULT_OWNER,
       }));
     if (resumeSessionId) tlog(`pty-start: resumed a recorded Claude session (record ${rec.ok ? 'reopened' : 'not reopened'})`);
     // A resumed session is running even if its record couldn't be reopened, so it stays in
@@ -1978,7 +2017,10 @@ ipcMain.handle('pty-start', (e, opts) => {
   // returned to the renderer). It intentionally OUTLIVES p.onExit below -- a finished run's report
   // stays openable until the pane is explicitly closed (pty-kill) or the window shuts down.
   if (acceptedRunId) { videoScoutRunIds.set(id, acceptedRunId); tlog(`pty-start: registered video-scout runId for pane ${id}`); }
-  p.onData((data) => { if (win && !win.isDestroyed()) win.webContents.send('pty-data', { id, data }); });
+  p.onData((data) => {
+    if (claudeSessionId) touchPaneSession(id);
+    if (win && !win.isDestroyed()) win.webContents.send('pty-data', { id, data });
+  });
   // NOTE: onExit removes the PTY handle but deliberately does NOT remove the run-ID mapping (V5b1).
   //
   // TWO REGISTRIES, TWO DELIBERATELY DIFFERENT LIFETIMES — and the difference is the point.

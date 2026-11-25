@@ -1375,6 +1375,36 @@ async function offerResume() {
   resumeView.render(offer.rows);
 }
 
+// ---- S46: the daily idle-sessions list -------------------------------------------------------------
+// Main lists every recorded Claude session with its owner, state, done-when and idle time, and
+// archives finished ones (app/session-hygiene.js). Checked at startup and every hour; the sessions
+// idle 3 days or more show once per local day. A failed read is logged, never hidden.
+const HYGIENE_CHECK_MS = 60 * 60 * 1000;
+let hygieneShownDay = null;
+let hygieneView = null;
+async function checkSessionHygiene() {
+  const host = $('#hygieneHost');
+  if (!host || !window.ccSessionHygieneView) return;
+  if (!hygieneView) {
+    hygieneView = window.ccSessionHygieneView.create({
+      document,
+      host,
+      roleLabel: (r) => (ROLES[r] ? ROLES[r].label : r),
+      onSaveDoneWhen: (row, text) => cc.sessionHygieneDoneWhen(row.sessionId, text),
+    });
+  }
+  let answer = null;
+  try { answer = await cc.sessionHygieneList(); } catch { answer = null; }
+  if (!answer || answer.ok !== true) {
+    appendLog(`[hygiene] could not read the session list: ${(answer && answer.error) || 'ipc-rejected'}\n`);
+    return;
+  }
+  if (!window.ccSessionHygieneView.shouldShow(hygieneShownDay, answer)) return;
+  hygieneShownDay = answer.day;
+  appendLog(`[hygiene] ${answer.idle.length} Claude session(s) idle ${answer.idleDays} days or more\n`);
+  hygieneView.render(answer.idle, answer.idleDays);
+}
+
 async function boot() {
   const s = await cc.getSettings();
   applyTheme((s && s.theme) || 'obsidian');
@@ -1418,6 +1448,8 @@ async function boot() {
   cc.onMainInfo((m) => appendLog('\n[main] ' + m + '\n'));
   // S09: after the main-error listener, so a session-memory refusal or a refused Resume is shown.
   await offerResume();
+  await checkSessionHygiene();
+  setInterval(() => { checkSessionHygiene(); }, HYGIENE_CHECK_MS);
 
 // EXPERIMENT A — PROTOTYPE pane status (Claude only, one pane).
 // docs/OSS-PROCUREMENT-pane-status.md — "BLUE SUBSYSTEM VERDICT: PROTOTYPE".

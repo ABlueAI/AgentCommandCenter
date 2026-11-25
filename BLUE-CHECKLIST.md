@@ -1286,6 +1286,22 @@ Step 77 comes from PR #253.
   - *Done when:* PR #253 is merged, or you have answered the questions you want changed; the agent
     ticks this with the date.
 
+## From S46 (session hygiene)
+
+Step 83 comes from PR #286.
+
+- [ ] **83. Check the daily idle-sessions list on your PC.** **About 5 minutes**, at the next Tuesday
+  or Friday PC check after PR #286 merges, on the dev copy (`npm run start:dev` in `app`).
+  - Close Mako with one Claude pane open, then in Mako's settings folder for the dev copy open
+    `session-memory.json` and change that record's `stoppedAt` to a date 4 days ago (or simply wait 3
+    days). Start the dev copy again and leave the Resume offer unanswered (answering it archives the
+    session, so it leaves the idle list).
+  - The Terminals tab shows "One Claude session has been idle 3 days or more", with the pane's role,
+    folder, idle days, "waiting for Resume or Start fresh" and "owner Blue". Type a done-when, Save,
+    and restart: the row shows it.
+  - *Done when:* the list shows and the done-when survives a restart; tell any agent "step 83 done"
+    (or what went wrong) and it ticks this with the date.
+
 ## Every day, once the runner is on
 
 Once S04 is applied (step 27), the runner works all day and you do one sitting in the evening:
