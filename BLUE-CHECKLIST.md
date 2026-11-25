@@ -1336,7 +1336,8 @@ open PRs (#253 and #254).
   - To stop everything, do both: tell the commander "stop" from the Claude app, and pause the
     routines on the claude.ai routines page. Neither reliably switches off the other
     (docs/COMMANDER.md).
-  - *Verify (5 minutes, after the first beat):* the beat ran with no permission prompt; the session shows a beat line ("started …",
+  - *Verify (5 minutes, after the first beat):* the beat ran with no permission prompt (apart from
+    the one-time routines-tool prompt docs/COMMANDER.md "Permissions" describes, if it appears); the session shows a beat line ("started …",
     "at cap …" or "nothing READY"), its status line shows `usage 5h …%`, and
     `D:\Mako\command-state\log.md` has that line. A missing evening list later means the commander
     is down; that file's last line shows when it last beat.

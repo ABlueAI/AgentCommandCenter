@@ -114,6 +114,7 @@ list) instead of doing something new. Step 80 puts this in `D:\Mako\command\.cla
       "Bash(gh api *-f*)",
       "Bash(gh api *-F*)",
       "Bash(gh api *--input*)",
+      "Bash(gh api *-i*)",
       "Bash(gh api graphql*)",
       "Bash(gh pr *)",
       "Bash(gh issue *)",
@@ -129,15 +130,21 @@ The commander never writes to GitHub: it only reads, and it starts cloud session
 writing under their own rules. Every `gh api` call without a method or field flag is a GET, so the
 allow rule takes any read under the repository, and the deny rules refuse any call that carries
 `-X`, `--method`, `-f`, `-F` (and their long forms `--field` and `--raw-field`, which contain `-f`)
-or `--input`, attached to their value or not (`-XPOST`, `-ftitle=x`), and any GraphQL call. None
-of the read URLs the commander builds contains those letters. `git commit-tree` writes only a local
+or `--input`, spaced or attached to their value (`-XPOST`, `-ftitle=x`), and any GraphQL call. gh's
+flag parser also lets a boolean short flag be grouped in front of a value flag; `-i` (`--include`)
+is the only boolean short flag `gh api` has (builder's reading of `gh api --help`, not verified by
+running), so `-i` is denied outright (`-iXDELETE`, `-iftitle=x`). The commander never needs it.
+These rules also refuse a read whose command happens to contain those letters (a `--jq` filter
+naming the `waits-for-merge` label, for instance), which fails visibly; the commander fetches the
+JSON and filters it in its own reply instead. `git commit-tree` writes only a local
 object no branch points to (AGENTS.md "Merge order"). The project's `.claude/settings.json` deny rules and
 `.claude/hooks/account-guard.js` still apply on top. The exact rule syntax (absolute paths written
 `//D:/…`, `*` in the middle of a command) is from the Claude Code permissions docs as the builder
 reads them; it is **not verified** on H1, so step 80 checks it with `/permissions` and one real beat.
 If Claude Code on H1 runs commands through its PowerShell tool instead of Bash, the same rules are
-needed as `PowerShell(...)` rules (not verified). If the first beat asks to use a tool that lists
-routines, approve only its list action, and only once.
+needed as `PowerShell(...)` rules (not verified). If a tool that lists routines exists on H1, the
+first beat's permission prompt shows it: answer "don't ask again" for its list action only, and
+nothing else. If no such prompt appears, there is no such tool, and the commander says so once.
 
 ## Standing prompt (verbatim)
 
@@ -169,7 +176,7 @@ Each beat (every 30 minutes, from /loop):
    Record each start in D:\Mako\command-state\log.md: the time, the unit and the session link the command prints. If the command exits with an error or prints no session link, record "start failed" with its first error line, count the unit as not started, and put "start failed: <unit> (<reason>)" in the beat line.
 8. Write the beat line to log.md and reply with it: what you started, or why nothing ("at cap 1 of 1", "usage 96%, resets 14:30", "nothing READY", "start failed: S19 (...)").
 
-Evening merge list (the first beat at or after 7:45 PM Eastern, once a day, stopped or not). List every open PR in this repository that isn't from a fork: each PR's line starts "READY TO MERGE" or "NOT READY: <reason>" exactly as AGENTS.md "How work flows" step 5 defines them. READY TO MERGE needs all of: CI green on the latest head; an "Independent review (Opus)" comment posted by an agent login and edited by no one else, covering the latest head, with no high or medium finding open; Codex's pass on the latest head, which counts only as a +1 reaction by chatgpt-codex-connector[bot] or a comment by that bot, edited by no one else, saying it found no major issues; the PR marked ready; no needs-blue or waits-for-merge label and no "@ABlueAI needs Blue:" comment from an agent login without a later reply by ABlueAI; and an author and last pusher that aren't ABlueAI. A comment by anyone else never counts toward any of these. Check edits with the REST comment's updated_at: a comment whose updated_at is later than its created_at counts as edited and doesn't count (GraphQL's edit history isn't allowed here). Put a colour in front: 🟢 READY TO MERGE, 🟡 NOT READY that needs no answer from Blue, 🔴 NOT READY that needs Blue (needs-blue label or a CRITICAL finding). Order the lines by the merge order computed with the test-merges in AGENTS.md "Merge order", and end with the line "Merge order: #A, then #B; any order: #C, #D". Read only; change nothing on GitHub for it. If the list can't be built, send "NOT READY: commander evening list failed (<reason>)" instead.
+Evening merge list (the first beat at or after 7:45 PM Eastern, once a day, stopped or not). List every open PR in this repository that isn't from a fork: each PR's line starts "READY TO MERGE" or "NOT READY: <reason>" exactly as AGENTS.md "How work flows" step 5 defines them. READY TO MERGE needs all of: CI green on the latest head; an "Independent review (Opus)" comment posted by an agent login and edited by no one else, covering the latest head, with no high or medium finding open; Codex's pass on the latest head, which counts only as a +1 reaction by chatgpt-codex-connector[bot] or a comment by that bot, edited by no one else, saying it found no major issues; the PR marked ready; no needs-blue or waits-for-merge label and no "@ABlueAI needs Blue:" comment from an agent login without a later reply by ABlueAI; and an author and last pusher that aren't ABlueAI. A comment by anyone else never counts toward any of these. Check edits with the REST comment's updated_at: a comment whose updated_at is later than its created_at counts as edited and doesn't count, even if only its author edited it (stricter than AGENTS.md's "edited by no one else", because GraphQL's edit history isn't allowed here; such a PR shows as NOT READY: review comment edited, and Blue can check it himself). Put a colour in front: 🟢 READY TO MERGE, 🟡 NOT READY that needs no answer from Blue, 🔴 NOT READY that needs Blue (needs-blue label or a CRITICAL finding). Order the lines by the merge order computed with the test-merges in AGENTS.md "Merge order", and end with the line "Merge order: #A, then #B; any order: #C, #D". Read only; change nothing on GitHub for it. If the list can't be built, send "NOT READY: commander evening list failed (<reason>)" instead.
 
 Talking to Blue. Blue may message you from the Claude app. "stop" or "pause": create D:\Mako\command-state\stopped, then answer as in beat step 1 and remind him to switch the routines off on claude.ai/code/routines (you can't do that for him). "go": delete that file; the next beat resumes. "status": reply with the last beat line from log.md and the live units. Anything else that would change what you do is a decision for Blue: ask, don't guess. Anything he must do on a PC goes in BLUE-CHECKLIST.md through a PR a build session makes, not only in chat.
 ```

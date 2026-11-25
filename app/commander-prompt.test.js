@@ -105,12 +105,13 @@ const allow = p.allow || [];
 const deny = p.deny || [];
 assert(allow.length > 0 && !allow.some((r) => r === 'Bash' || r === 'Bash(*)' || /^Bash\((gh|git|claude) ?\*\)$/.test(r)), 'no blanket shell allow');
 assert(!allow.some((r) => /git push|gh pr|gh issue|-X|--method|-f |-F /.test(r)), 'nothing in the allow list writes to GitHub');
-for (const d of ['Bash(gh api *-X*)', 'Bash(gh api *--method*)', 'Bash(gh api *-f*)', 'Bash(gh api *-F*)', 'Bash(gh api *--input*)',
+for (const d of ['Bash(gh api *-i*)', 'Bash(gh api *-X*)', 'Bash(gh api *--method*)', 'Bash(gh api *-f*)', 'Bash(gh api *-F*)', 'Bash(gh api *--input*)',
   'Bash(gh api graphql*)', 'Bash(git push*)', 'Bash(gh pr *)', 'Bash(gh issue *)']) {
   assert(deny.includes(d), 'deny list has ' + d);
 }
 
-// Every write form gh accepts, attached or spaced, hits a deny rule (simple glob: * is any text).
+// gh's write flags, spaced, attached and grouped behind -i (its only boolean short flag), hit a deny
+// rule (simple glob: * is any text).
 const globRe = (rule) => new RegExp('^' + rule.replace(/^Bash\(|\)$/g, '').split('*')
   .map((x) => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$');
 const denied = (cmd) => deny.some((r) => r.startsWith('Bash(') && globRe(r).test(cmd));
@@ -124,6 +125,9 @@ for (const cmd of [
   'gh api repos/ABlueAI/AgentCommandCenter/issues -F title=x',
   'gh api repos/ABlueAI/AgentCommandCenter/issues --input=file.json',
   'gh api graphql -f query=x',
+  'gh api repos/ABlueAI/AgentCommandCenter/issues -iftitle=x',
+  'gh api repos/ABlueAI/AgentCommandCenter/issues -iFtitle=x',
+  'gh api repos/ABlueAI/AgentCommandCenter/git/refs/heads/x -iXDELETE',
 ]) assert(denied(cmd), 'denied: ' + cmd);
 for (const cmd of [
   'gh api user --jq .login',
