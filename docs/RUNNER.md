@@ -181,7 +181,7 @@ limits, and the API surface may change"). Each fact below is from that page unle
 ### Runner settings (read on every fire)
 
 ```text
-parallel_cap: 2
+parallel_cap: 4
 lock_expiry_hours: 2
 runner_schedule: CRON_TZ=America/New_York 7 * * * *
 digest_schedule: CRON_TZ=America/New_York 3 20 * * *
@@ -192,9 +192,10 @@ writes_per_hour: 120
 
 - `parallel_cap`: how many Claude lanes may be busy building at once, counted across all
   overlapping fires: PRs holding a live runner lock, plus draft `Sxx:` PRs from `claude/` branches
-  that a session started by hand is still building (runner prompt step 3). 2 since the runner
-  refresh of 2026-11-23: Blue's capacity plan is 2 Claude lanes now and 3 from about 2026-11-29
-  (docs/DECISIONS.md, 2026-11-23); a one-line PR Blue merges changes it to 3 then. It was 1 on Pro
+  that a session started by hand is still building (runner prompt step 3). 4 on Blue's word of
+  2026-11-25 ("set parallel_cap to 4 in docs/RUNNER.md", his reply on the runner refresh PR; the
+  runner prompt already says 4; docs/DECISIONS.md, 2026-11-23, item 6). Before that, the runner
+  refresh of 2026-11-23 planned 2 Claude lanes now and 3 from about 2026-11-29. It was 1 on Pro
   (BLUE-CHECKLIST.md step 8, the Max 5x upgrade, is still unticked on `main`). Codex PR reviews no
   longer count: the sweeper runs them.
 - `lock_expiry_hours`: a lock not refreshed for this long is stale and a later fire may take over.

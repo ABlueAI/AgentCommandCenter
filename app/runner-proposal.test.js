@@ -50,8 +50,12 @@ const laneEntry = (decisionsLog.split('## 2026-11-23: the all-day runner back on
 const laneRow = laneEntry.split('\n').find((l) => l.includes('Capacity: 2 Claude lanes now, 3 from about 2026-11-29')) || '';
 // The row must carry Blue's words, not "—": the cap can't be raised on a builder's assumption alone.
 const twoLanes = /\| "[^"]+"[^|]*\|\s*$/.test(laneRow);
-const maxCap = step8Ticked ? 3 : (twoLanes ? 2 : 1);
-assert(cap <= maxCap, `parallel_cap is at most ${maxCap} (1 on Pro, 2 on Blue's 2026-11-23 word, 3 once step 8 is ticked; got ${cap})`);
+// Blue's reply of 2026-11-25 on the runner refresh PR (docs/DECISIONS.md, 2026-11-23, item 6): parallel_cap 4.
+const fourRow = laneEntry.split('\n').find((l) => l.includes('**6. `parallel_cap` is 4**')) || '';
+const fourLanes = fourRow.includes('"In the same push, set parallel_cap to 4 in docs/RUNNER.md (Blue, 2026-11-25');
+const maxCap = fourLanes ? 4 : (step8Ticked ? 3 : (twoLanes ? 2 : 1));
+assert(cap <= maxCap, `parallel_cap is at most ${maxCap} (1 on Pro, 2 on Blue's 2026-11-23 word, 3 once step 8 is ticked, 4 on Blue's 2026-11-25 word; got ${cap})`);
+assert(cap === 4, `parallel_cap is 4, Blue's 2026-11-25 word (got ${cap})`);
 const expiry = Number(settings.lock_expiry_hours);
 assert(expiry > 0 && expiry <= 6, `lock_expiry_hours is between 0 and 6 (got ${settings.lock_expiry_hours})`);
 assert(!('status_pr_hour' in settings), 'status_pr_hour is gone: the sweeper owns the status PR (docs/SWEEPER.md)');
@@ -266,6 +270,7 @@ const sweeperMustHave = [
   [sweepChanges, 'Mark a Codex PR ready, or re-trigger Codex\'s review, only as AGENTS.md "Merge order", "Codex PRs" says (Blue, 2026-11-24); never lift a draft hold Blue asked for.', 'Codex draft state follows AGENTS.md "Codex PRs"'],
   [sweepChanges, 'none is under .claude/, .github/ or agent-roles/, nor is AGENTS.md, CLAUDE.md, docs/SWEEPER.md or docs/RUNNER.md', 'a docs-only record PR excludes sensitive Markdown'],
   [sweepChanges, 'EXISTING CODEX PRS (AGENTS.md "How work flows" step 3: once the session that handed Codex a task has ended, the sweeper runs that PR\'s reviews)', 'reviews existing Codex PRs once their hand-off session has ended'],
+  [sweepChanges, 'on a Codex PR only if it was posted by an agent login, edited by no one else, and carries a "Run by:" line linking a Claude cloud session or runner fire (AGENTS.md "How work flows" step 3); the same holds for the review comment whose head starts a delta run.', 'counts a review on a Codex PR only with an unedited agent post and a Run by: line'],
   [sweepChanges, '"NOT READY: sweeper has no GitHub login"', 'stops visibly with no GitHub login'],
   [sweepChanges, '"NOT READY: sweeper failed at <job and step>: <error>"', 'reports a failed step instead of "nothing to do"'],
 ];
