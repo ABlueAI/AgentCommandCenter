@@ -1,5 +1,22 @@
 ## TLDR
 
+<!-- Blue reads only this block before he merges (AGENTS.md "The TLDR"). About 10 lines, plain
+words. Start each bullet with 🔴 must know or decide before merging, 🟡 worth a look, or 🟢 routine. -->
+
+**Summary:** (one or two lines: what this PR does and why)
+
+**Most impactful changes**
+- 🔴/🟡/🟢 (pick one) (the most important first)
+
+**Decisions made**
+- 🔴/🟡/🟢 🤖 Claude decided: (a decision the builder made itself, with its reason in a few words; "Codex decided" on a Codex PR)
+- 🔴/🟡/🟢 (a decision of Blue's this PR records, or "none")
+
+**Before you merge**
+- 🔴/🟡/🟢 (pick one) (the implications: what changes for Blue, what it starts or stops, anything hard to undo; or "nothing unusual")
+
+### Full TLDR (for the reviewers)
+
 - **What and why:**
 - **Ready to merge:** yes / no (why)
 - **Needs your decision:** none / (the question, with a recommendation)

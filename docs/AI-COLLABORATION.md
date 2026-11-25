@@ -25,7 +25,8 @@ Rules for all agents are in [AGENTS.md](../AGENTS.md). This page is the short ve
 - Does the smaller tasks and the reviews; Claude builds the UI (Blue, 2026-11-21). The required second reviewer (its pass is needed for `READY TO MERGE`, AGENTS.md "Hard rules"
   item 9; since it was linked to `ABlueAgent`, BLUE-CHECKLIST.md step 16, 2026-10-20, it reviews
   agent PRs automatically; a re-review goes through draft and ready, AGENTS.md step 3),
-  second builder for `windows`-lane sessions that aren't sensitive and the rows the plan gives it
+  second builder for `windows`-lane sessions, for sensitive work too (docs/DECISIONS.md 2026-11-25)
+  though never the UI sessions or the Composer's dispatch tools, and for the rows the plan gives it
   (docs/CODEX-BUILDER-LANE.md), reviewer of the UI sessions Claude builds, planning partner. AGENTS.md "Who does what" is the full version.
 - Reads the same files Claude reads (`AGENTS.md`, `STATUS.md`, `docs/PLAN-1.1.md`,
   `docs/DECISIONS.md`). Proposes plan changes as PRs, not as chat to be copied.

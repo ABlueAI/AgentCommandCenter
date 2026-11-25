@@ -12,6 +12,20 @@ palette's OSS verdict. Recorded word for word in `docs/decisions/OSS-command-pal
 |---|---|
 | **BUILD FRESH** for the Ctrl K palette, on the WAI-ARIA combobox pattern, as PR #283 builds it (no new dependency). | "Build fresh on the comobox pattern as built" |
 
+## 2026-11-25: Codex may build sensitive items too
+
+Blue decided this in his main chat on 2026-11-25, with unused Codex usage (several ChatGPT Plus
+resets) and too little work queued for it; his words are quoted as the hand-off for this PR relayed
+them. How AGENTS.md "Who does what", docs/CODEX-BUILDER-LANE.md "The lane" item 1 and
+docs/SCHEDULE-1.1.md word it is proposed, pending Blue (this PR); merging approves it. It replaces
+the limit that Codex builds only work that isn't sensitive (the Codex builder lane of 2026-10-23,
+PR #114, and the 2026-11-16 and 2026-11-24 entries' "non-sensitive" and "stays with Claude" wording
+for S26 and S56). "Builder's reading" marks a line that is the builder's, not Blue's.
+
+| Decision | Blue's words |
+|---|---|
+| **Codex may build sensitive work** (for example security fixes, the account guard, the credentials store, IPC, PTY, launchers, the fence hook, `.claude/` settings; the examples are the hand-off's, not Blue's words) as well as `windows`-lane work that isn't sensitive, to use Codex's usage and free Claude's lanes. Unchanged: Claude builds the UI rows (S66, S18 to S20) and the Composer's dispatch tools; every Codex PR still gets Claude's independent Opus review; a Codex PR that touches a sensitive area also gets `security-reviewer` on review run 1 (builder's reading: that is the second review AGENTS.md "Sensitive areas" asks for); the review loop, its run caps, the merge-order rule and Blue's merge are unchanged. Builder's reading: the sensitive-area flag in the TLDR, the "Default go" stop for sensitive work the task didn't authorize, and every hard rule still apply to Codex's PRs; this widens which work Codex may build, not how it gets it: the comment hand-off in docs/CODEX-BUILDER-LANE.md item 3 still covers only `windows`-lane sessions that aren't sensitive, so a sensitive item reaches Codex as Blue starts it there himself, and a fix request for a security finding on a Codex PR gives its title and severity only, with Blue passing Codex the details privately. | "i need more work to push through codex and free up claude." · "ignore the sensitivity rules if need be, we need to cook through usage over there" |
+
 ## 2026-11-24: Blue's go on the UI (checklist step 18)
 
 Blue gave it in Mako main's chat on 2026-11-24; his words are quoted as the hand-off for PR #253
@@ -37,6 +51,24 @@ that is the builder's, not Blue's.
 | Decision | Blue's words |
 |---|---|
 | **A Claude session may mark a Codex PR ready under the same rule as Claude's own PRs** (and, builder's reading below, convert it to draft and back to re-trigger Codex's review). He was asked: "Let the sweeper mark Codex PRs ready once Claude's review passes?" The recommendation he approved: Codex PRs go ready under the same rules as Claude's (CI green, Claude's review clean, the merge-order check passes, no `needs-blue` or `waits-for-merge` label, no draft hold or pending verdict of Blue's). Marking a PR ready also starts Codex's automatic review, which gives Codex's pass (2026-11-23 entry, item 1). Why: the old rule made sense while Codex fixed its own PRs; since Blue's 2026-11-23 decisions that Claude fixes Codex's PRs and merges `main` into them ("id love to", "yes, thats fine", "for the last time yes", as relayed; PR #225 proposes their rule), it only blocked: PR #231 was reviewed clean on 2026-11-24 but stayed a draft, and #206, #208 and #209 stalled the same way. Builder's reading (from the hand-off): it covers any Claude session working the PR (the PR sweeper, the runner, or the session that reviewed it), and the draft-and-back re-trigger, which follows from "the same rules as Claude's" (AGENTS.md step 3), happens at most once per head and never under a hold or label that bars marking ready. The PR sweeper's prompt calls this decision "D-076". | "Yes, sweeper marks ready" |
+
+## 2026-11-24: watcher and commander, default go, short colour-coded TLDRs (D-084 to D-086)
+
+Blue decided these in his main chat on 2026-11-24, after the build stalled for about 5 hours that
+day (lanes stopped at a usage limit, and plan rows waited on his go). His words are quoted as the
+hand-off for PR #282 relayed them. How AGENTS.md, `.github/pull_request_template.md`,
+docs/PLAN-1.1.md and BLUE-CHECKLIST.md word them is proposed, pending Blue (PR #282); merging
+approves it. D-084 to D-086 are the labels the hand-off gave them. "Builder's reading" marks a line
+that is the builder's, not Blue's; the two "Claude decided" rows are choices the builder made itself,
+for Blue to check.
+
+| Decision | Blue's words |
+|---|---|
+| **D-084, watcher and commander.** Blue's main chat (Mako main, on his laptop) becomes the watcher: it plans, answers him and watches, and no longer runs the daily build sessions. A separate local chat, "Mako command", on his always-on H1 PC, runs the build: a 30-minute heartbeat that starts and resumes cloud work sessions, paces usage to about 95% of each 5-hour window, and sends Blue one colour-coded evening merge list in merge order, so the commander is who tells him the merge order. Blue's day stays at about 10 minutes of review and merging in the evening. New plan row S67 "Commander on H1"; Blue sets it up on H1 (checklist step 80); S19's control room and S51's Composer take it over inside Mako later. Builder's reading: the heartbeat, the 95% pacing, the evening list and the takeover by S19 and S51 came in the hand-off, not in the words quoted here. | "we need a main chat running local and cloud sessions when they make the most sense we need to separate our main chat from running these daily sessions. i need you as my watcher not my commander." · "what happened to 10 minutes per day to check review and merge at the end of the day, nothing else unless we are testing." |
+| **D-085, default go.** "Nothing moves until go" is retired. Builders build on the recommended default and write any open question in the PR with that default; Blue's merge approves it. They stop for Blue only for new spending or a new account, credentials, deleting things, and real taste calls (look and feel, naming), and even then the default goes in the PR and other work continues. Work pauses only when Blue says stop to the commander or pauses the routines. Plan rows whose only blocker is his go become `READY` (AGENTS.md "Deciding without asking"; docs/PLAN-1.1.md). Builder's reading: the four stop cases came in the hand-off, not in the words quoted here. | "\"Nothing moves until go\" was a prebuild phase rule. yes, Default go - this was the point of prebuild documents to answer questions before we build to prevent the non-stop questions and automatically start the next job only pausing when i press pause on the runners or tell the command chat to stop." |
+| **D-086, TLDRs and merge order.** Every PR's TLDR starts with a short block for Blue: a 1 to 2 line summary, the most impactful changes as bullets, the decisions made (Claude's own marked "🤖 Claude decided:"), and what to know before merging, each bullet marked 🔴 must know or decide, 🟡 worth a look, or 🟢 routine. The full TLDR lines follow under a heading for the reviewers (AGENTS.md "The TLDR"; `.github/pull_request_template.md`). The merge order comes to Blue in the commander's evening list (D-084). | "i need better TLDRs. what are the most impactful changes, bullet pointed at the top. what are the decisions that were made. i expect claude will have to make its own conclusions and decisions at times and i would like to review those immediately to ensure they are sound. right now the tldr and full summaries are way too long. if those need to be included for the codex reviewer, that is fine, but i dont have time to read all of it. in order to prevent merging something i wasnt fully aware of regarding the implications, please make me as aware as possible. use collor coordination if possible, a brief summary, bullet points of anything important." · "who will be instructing me of merge order? ... i would appreciate it if we could set that up today." |
+| **Claude decided: one small last fix past the review cap.** When the run cap is used (AGENTS.md "The review loop") and the only high or medium finding still open is one medium finding with a small fix (open low findings don't count), the builder makes that fix and runs one extra delta run without asking Blue, instead of stopping as "needs Blue"; if anything high or medium is open after that run, it stops as before. Once per PR. It never applies to a high finding, a security finding or any finding from `security-reviewer`, or (once AGENTS.md ranks findings CRITICAL) a CRITICAL one. docs/RUNNER.md's runner prompt keeps the plain cap until it is updated, which only makes the runner stop sooner. Why: on 2026-11-24 the cap stopped PRs #225, #254 and #255 as needs Blue (builder's reading, from the hand-off; all three carry the `needs-blue` label, verified in the open-PR list on 2026-11-24). | None: the hand-off asked for this as Claude's own decision, for Blue to check. |
+| **Claude decided: what the stop list under default go covers.** "Deleting things" stops for Blue when the thing is outside a PR's diff or can't be brought back from git (branches others use, issues, releases, data, files on Blue's PCs, accounts); a file a PR removes is approved by its merge like any other change. Two stops stay that D-085's list doesn't name: anything in a sensitive area the task didn't already authorize (a workflow or `.claude/` change acts before any merge, and process control or a network listener on Blue's PCs is never reviewed by a merge), and a blocker not resolved after 3 attempts. "Business choices" leaves the list; Blue still starts the business rows S29 and S30 himself. Each stop holds only its own item: the default goes in the PR and other work continues. | None: the builder's reading of the hand-off. |
 
 ## 2026-11-24: S48's OSS verdict (vault memory)
 
@@ -100,6 +132,24 @@ it. "Builder's reading" marks a line that is the builder's, not Blue's.
 | **2. Agent-account pacing: at most 24 pushes and 120 GitHub writes an hour** per agent account, across all sessions; stop at the first rate-limit or abuse-detection signal. Builder's reading: 24 is the push cap and 120 the write cap. Supersedes the numbers in PR #169's draft rule R5 (6 pushes and 40 writes an hour); its other rules stay in that PR. | "this rule needs to change to 24 per hour" · "writes 120 is fine" |
 | **3. Some rules are hard rules: never broken, no judgment.** If one is unclear or seems to conflict with a task, the agent stops and asks Blue. Builder's reading (from the hand-off, not Blue's words): every other rule is a default, followed as written, with judgment only where it leaves room and each assumption recorded in the PR; which rules are hard is the list the hand-off gave. | "some rules should never be broken, ever. like the merge rule." · "do we need to clarify rules that can be overruled to prevent an agent from going rogue based on assumptions" |
 | **4. These rules go into AGENTS.md now.** Asked "Write your vault-only rules (Codex 👍, pacing) into AGENTS.md now?" | "Yes, write them in" |
+
+## 2026-11-23: Codex record PRs and the PR sweeper
+
+Blue decided these in his main chat on 2026-11-23, after each merge to `main` left the next PR in
+conflict, nothing watched for it (the all-day runner's scheduled task was auto-disabled on
+2026-11-07 for lost repository access, as read back on 2026-11-23; it last built on 2026-11-04; and its rules
+skipped Codex and non-runner PRs anyway), and Codex couldn't open its own PRs (GitHub answers
+"Forbidden"). His words are quoted as the hand-off for this PR relayed them. How the rules follow
+them (AGENTS.md, docs/SWEEPER.md, docs/CODEX-BUILDER-LANE.md and a pointer in docs/RUNNER.md, and BLUE-CHECKLIST.md step 70) is
+**proposed, pending Blue (PR #225)**; merging that PR approves it. "Builder's reading" marks a line
+that is the builder's, not Blue's. Decision 2(b) replaces, for `STATUS.md`, the 2026-10-19 rule
+(PR #47) that session PRs leave it to the runner's status PR once S04 is applied; decision 1 is
+the "unless Blue asks" the 2026-10-23 Codex builder lane (PR #114) left open.
+
+| Decision | Blue's words |
+|---|---|
+| **1. Claude cloud sessions, as `ABlueAgent`, may push review fixes and `main` merges to Codex's docs-only record PRs,** one fixer per PR at a time. Builder's reading: a docs-only record PR is a `codex/` PR whose changed files are all Markdown, none under `.claude/`, `.github/` or `agent-roles/` and none of `AGENTS.md`, `CLAUDE.md`, docs/SWEEPER.md or docs/RUNNER.md (sensitive areas and routine instructions, which Blue's "record PRs" doesn't cover). This is the "unless Blue asks" in AGENTS.md "Who does what"; Codex's other PRs keep the old rule (fix requests, never pushes). Builder's reading: the sweeper prompt in docs/SWEEPER.md calls this decision "D-058". | "Let Claude cloud sessions push review fixes to Codex's record PRs - id love to do that". And: "Please merge main into 206 and 208, then run review 3 or 4" |
+| **2. The PR sweeper.** (a) A Claude routine, the "Mako PR sweeper", fires on every push to `main` plus hourly; merges `main` into any open agent PR or Codex docs-only record PR that conflicts; opens draft PRs for pushed `codex/` branches that have none and runs their review run 1; and never merges into `main`. (b) PRs stop editing `STATUS.md`; the sweeper keeps it current (docs/SWEEPER.md, Job D). Its instructions are docs/SWEEPER.md. | "slow and manual. this should not happen this way. conflicts should be immediately resolved." Then, asked "Set up the merge-triggered sweeper and stop PRs editing STATUS.md?": "Yes to both" |
 
 ## 2026-11-23: Blue's answers on the 1.1 schedule (S61)
 

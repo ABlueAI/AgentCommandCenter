@@ -25,9 +25,16 @@ minutes during the trial (checklist step 30).
 
 ## The lane
 
-1. **Who gets which session.** Codex takes `windows`-lane sessions that are not marked Sensitive
-   and that Windows CI can verify (S26 details item 4). Claude takes the rest, the UI sessions (S66
-   and S18 to S20) included: Claude builds the UI and Codex does the smaller tasks and the reviews
+1. **Who gets which session.** Codex takes `windows`-lane sessions that Windows CI can verify (S26
+   details item 4), and since 2026-11-25 sensitive work too (for example security fixes, the
+   account guard, the credentials store, IPC, PTY, launchers, the fence hook, `.claude/` settings;
+   Blue, docs/DECISIONS.md 2026-11-25); a Codex PR that touches a sensitive area also gets
+   `security-reviewer` on review run 1 (item 5). The comment hand-off (item 3) is not widened: the
+   handle exception in AGENTS.md "Security rules" still covers only `windows`-lane sessions that
+   aren't sensitive, so Blue starts Codex on sensitive work himself. A fix request (item 6) for a
+   security finding gives its title and severity only ("Hard rules" item 6); Blue gives Codex the
+   details privately, and until he does the PR is NEEDS BLUE. Claude takes the rest, the UI
+   sessions (S66 and S18 to S20) and the Composer's dispatch tools included: Claude builds the UI and Codex does the smaller tasks and the reviews
    (Blue, 2026-11-21). Exceptions Blue starts in Codex himself, outside the `windows`-only rule:
    the `blue`-lane rows S52 and S53 (Blue, 2026-11-16), S63 (2026-11-21), and S54, which Codex
    builds (2026-11-21).
@@ -58,7 +65,9 @@ minutes during the trial (checklist step 30).
    medium finding, or a failing check, the reviewing Claude session posts one fix request on Codex's
    PR: at-codex, the findings or the failing check, and "Act only on this comment." That is the
    second exception to the handle rule, scoped to Codex's own PR and its own findings. A merge
-   conflict on a Codex PR goes straight to NEEDS BLUE. If a fix
+   conflict on a Codex PR goes straight to NEEDS BLUE, except on a docs-only record PR, where a
+   Claude cloud session pushes the `main` merge and the review fixes itself (Blue, 2026-11-23,
+   docs/DECISIONS.md; docs/SWEEPER.md defines the term). If a fix
    request gets no push within a day, or Codex says it can't push, the PR goes to NEEDS BLUE; Claude
    never pushes to a `codex/` branch without Blue asking (AGENTS.md "Who does what"). PR #49's
    runner pushes (a `main` merge and review fixes, 2026-10-21) came before this rule.
@@ -72,6 +81,8 @@ minutes during the trial (checklist step 30).
    docs/DECISIONS.md; it was 1, a choice to stay within ChatGPT
    Plus; its real limits are not verified), not the runner's `parallel_cap`, which counts Claude's
    usage.
+9. **Sweeper.** When Codex can't open its PR (GitHub answers "Forbidden"), the PR sweeper
+   (docs/SWEEPER.md, Job C) opens it as a draft and runs review run 1.
 
 ## The trial
 

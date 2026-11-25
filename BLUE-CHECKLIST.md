@@ -37,6 +37,12 @@ Re-ordered on 2026-11-16 from your signed Mako 1.1 decision sheet (docs/DECISION
 On 2026-11-21 steps 27 and 50 left the top (your decision: the runner they check has been off since
 2026-11-04) and step 60 moved up for its dates (docs/DECISIONS.md, 2026-11-21).
 
+**New on 2026-11-24 (PR #282, your decisions D-084 to D-086):** build work no longer waits for
+your go (only spending, new accounts, credentials, deleting things, taste calls, sensitive work the
+task didn't cover and blockers after 3 tries still come to you, with a default; AGENTS.md
+"Deciding without asking"); **step 80**, setting up the commander on H1, once S67's PR is merged: it is what
+starts the build sessions and sends you the merge order each evening.
+
 1. **Step 60**, the Composer practice test on **2026-11-22**, then prototype day on **2026-11-23**
    (3 to 5 real tasks). Either may slip a day if Claude Max isn't active yet.
 2. **Step 59**, re-link Codex reviews to `ABlueAgent` (about 5 minutes; your yes, 2026-11-16), and
@@ -70,8 +76,8 @@ On 2026-11-21 steps 27 and 50 left the top (your decision: the runner they check
     token's renewal (by 2027-01-14) may come first.
 14. **Steps 27 and 50**, in one sitting (about 12 minutes), only when you turn the all-day runner
     back on: it has been off since 2026-11-04. Step 28 is closed (usage credits are off, your word of
-    2026-11-04). Once step 27 is ticked, plan-session PRs stop editing STATUS.md and leave it to the
-    runner's status PR.
+    2026-11-04). Since 2026-11-23 no PR but the PR sweeper's status PR edits STATUS.md (AGENTS.md
+    "The shared brain", docs/SWEEPER.md Job D).
 15. ~~**Step 14**, the agent token~~ Done 2026-10-23 on your word. ~~**Step 10**, the app settings
     review~~ Dropped 2026-11-16: the new Settings page replaces it.
 
@@ -1228,6 +1234,15 @@ Step 69 comes from S37 (PR #218, issue #217), not from the decisions above.
   - *Done when:* you've told an agent what Claude showed, and it ticks this with the date and your
     words.
 
+- [ ] **70. Finish the PR sweeper's set-up.** **About 5 minutes**, after PR #225 merges. At
+  claude.ai/code/routines, open "Mako PR sweeper": (a) check it has a push-to-`main` trigger besides
+  the hourly schedule (on 2026-11-23 only the hourly schedule showed), and add one if the page
+  offers it; (b) turn on its push notifications, so a "NOT READY" fire reaches your phone (they were
+  off). A push is sent when a run ends with something noteworthy (the scheduled-task tool's own
+  description; not tested here); an idle fire ends "Sweeper: nothing to do", so expect few. If you
+  get one every hour, tell any agent and it will narrow the sweeper's idle line. Or tell any agent "set up the sweeper's trigger and notifications".
+  - *Done when:* an agent reads the routine back and finds both, and ticks this with the date.
+
 ## From your decisions of 2026-11-23
 
 Step 72 comes from PR #227 (docs/DECISIONS.md, 2026-11-23). Step numbers 69 to 71 belong to open PRs
@@ -1302,6 +1317,10 @@ Once S04 is applied (step 27), the runner works all day and you do one sitting i
   each "needs Blue" question in its PR. For each PR the digest marks `READY TO MERGE`, read its
   TLDR, then Files changed > Review changes > Approve > Submit review, then Merge pull request >
   Confirm merge. Merge only on `READY TO MERGE`.
+- **Once the commander runs on H1 (step 80):** its colour-coded evening merge list is what you read
+  at the sitting. Merge the `READY TO MERGE` PRs in the order it gives. To pause the build, tell the
+  commander "stop" and pause the routines on the routines page (until S67 links them, each stops
+  only its own part).
 - **During the day: nothing.** A question for you also arrives as a GitHub notification (a PR
   comment starting "@ABlueAI needs Blue:"); it can wait for the evening.
 - **Tuesday and Friday evenings:** the PC checks, batched, until H1 automates them ("Do next" item
@@ -1309,6 +1328,46 @@ Once S04 is applied (step 27), the runner works all day and you do one sitting i
 - **To pause or resume:** the switch on the routines page (step 27).
 - **Until step 27 is done:** the old runner fires once, at 8:01 AM. Check your phone in the
   morning for "needs Blue", and approve and merge ready PRs in the evening as above.
+
+## From S38 (the full security check)
+
+Steps 78 and 79 come from PR #254 (S38). Step number 77 belongs to an open PR (#253). The details
+behind both steps are in the private report from the S38 session, not in this public file
+(docs/DECISIONS.md 2026-11-21, item 7).
+
+- [ ] **78. Two security decisions from S38 (PR #254).** **About 10 minutes**, after merging PR #254,
+  with the S38 private report open.
+  - Issue #265: decide whether to make the repository-settings change the private report describes
+    (only you change repository settings), or tell an agent another way to close it.
+  - Issue #270's last item: decide whether two kinds of material named in the private report stay in
+    this public repository.
+  - *Done when:* you've told any agent your answer on each; it records them in docs/DECISIONS.md and
+    ticks this with the date and your words.
+- [ ] **79. S38's checks on your PC (PR #254).** **About 10 minutes**, on the next Tuesday or Friday
+  PC-check evening after merging PR #254, with the S38 private report open. Some findings rest on
+  Windows behaviour a cloud session can't run; the report lists each one with a check of under 2
+  minutes.
+  - Run each check as the report says, and note what you saw.
+  - *Done when:* you've told any agent the result of each check in a session (not on GitHub). The
+    results stay private: a public issue gets at most "checked on Blue's PC, <date>" or a severity
+    change. The agent ticks this with the date.
+
+## From the H1 commander (PR #282)
+
+Step 80 comes from PR #282 (docs/DECISIONS.md, 2026-11-24, D-084). Step numbers 77 to 79 belong to
+open PRs (#253 and #254).
+
+- [ ] **80. Set up the commander on H1.** **About 15 to 30 minutes** (an estimate; S67's PR gives
+  the real figure), at H1, once S67's PR is merged. S67 is `READY`, so an agent can build it now.
+  - Open a new local Claude chat on H1 named "Mako command", give it the standing prompt from S67's
+    PR, and start its 30-minute heartbeat the way the PR says.
+  - From then on it starts and resumes the cloud build sessions, keeps usage to about 95% of each
+    5-hour window, and sends you one colour-coded merge list each evening, in merge order. Your
+    laptop chat (Mako main) becomes the watcher.
+  - To stop everything: tell that chat "stop" and pause the routines on the claude.ai routines
+    page. Until S67's PR links the two, each stops only its own part, so do both.
+  - *Done when:* the commander has run on H1 for one full day and its evening merge list reached
+    you; tell any agent "step 80 done" and it ticks this with the date.
 
 ## Coming up this month (the runner will ask when it gets there)
 
@@ -1351,6 +1410,14 @@ You can start on the first one now, which saves time later.
   FRESH) in your own words to any agent.
   - *Done when:* your verdict is in the record's "Blue's verdict" line, word for word, and the agent
     ticks this with the date.
+- [ ] **82. Your verdicts on S45's ECC skill list (PR #255).** **About 15 minutes** for the nine top
+  picks, longer if you go through all 314 rows; any time after PR #255 merges, before a plan row
+  takes any of them up. Read `docs/decisions/OSS-ecc.md`, "ECC's other skills (S45)": each skill
+  has a proposed verdict and a blank last column. Give your verdict per skill (ADOPT, FORK,
+  PROTOTYPE, PATTERN-MINE, BUILD FRESH or SKIP, or "as proposed" for a group) in your own words to
+  any agent. Merging PR #255 records the list, not your verdicts.
+  - *Done when:* each row you decided has your verdict in its last column, word for word, and the
+    agent ticks this with the date and the rows it filled.
 
 ## Dated reminders
 
