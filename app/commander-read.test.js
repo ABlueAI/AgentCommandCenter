@@ -32,7 +32,7 @@ assert(lockExpiries(null).length === 0, 'a missing body has no markers');
 const pulls = [
   pr({ number: 10, body: '<!-- runner-lock: expires=2026-11-25T21:00Z -->', draft: false }), // live lock
   pr({ number: 11, body: '<!-- runner-lock: expires=2026-11-25T19:00Z -->', labels: L('runner') }), // stale lock, old -> stalled
-  pr({ number: 12, updated_at: iso(30 * MIN) }), // recent claude draft -> live
+  pr({ number: 12, updated_at: iso(30 * MIN) }), // recent claude draft, no lock: not live (docs/RUNNER.md counts locks only)
   pr({ number: 13, updated_at: iso(30 * MIN), labels: L('needs-blue') }), // held, not live
   pr({ number: 14, labels: L('runner', 'waits-for-merge') }), // held, not stalled
   pr({ number: 15, labels: L('runner-status'), body: '<!-- runner-lock: expires=2026-11-25T21:00Z -->' }), // status PR never counts
@@ -56,8 +56,8 @@ const events = [
   { type: 'PushEvent', actor: { login: 'ABlueAgent' }, created_at: iso(2 * HOUR) },
 ];
 const s = summarize({ pulls, claimIssues, events, eventsReachedHourBack: true, now });
-assert(JSON.stringify(s.livePRs) === '[10,12]', 'live units: a live lock and a recent unheld claude draft (got ' + JSON.stringify(s.livePRs) + ')');
-assert(s.liveUnits === 2, 'liveUnits is their count');
+assert(JSON.stringify(s.livePRs) === '[10]', 'live units: only PRs holding a live lock, as docs/RUNNER.md counts (got ' + JSON.stringify(s.livePRs) + ')');
+assert(s.liveUnits === 1, 'liveUnits is their count');
 assert(JSON.stringify(s.stalledRunnerPRs) === '[11,17]', 'stalled runner PRs: agent, runner label, draft, unheld, no live lock (got ' + JSON.stringify(s.stalledRunnerPRs) + ')');
 assert(JSON.stringify(s.claimedSessions) === '["S26","S54","S66","S72"]', 'claims: agent or Blue PRs and agent-claimed issues, never forks or others (got ' + JSON.stringify(s.claimedSessions) + ')');
 assert(s.pushesLastHour === 2 && s.writesLastHour === 3, 'counts the agent logins\' pushes and writes in the last hour only');
@@ -87,7 +87,7 @@ async function run() {
     return ok(events);
   };
   const r = await read(fake, now);
-  assert(r.ok === true && r.liveUnits === 2, 'read() returns the summary');
+  assert(r.ok === true && r.liveUnits === 1, 'read() returns the summary');
   assert(seen.every((c) => !Object.keys(c.opts.headers).some((k) => k.toLowerCase() === 'authorization')), 'no request carries an Authorization header');
   assert(seen.every((c) => c.url.startsWith('https://api.github.com/repos/ABlueAI/AgentCommandCenter/')), 'every request goes to this repository on the public API');
   assert(seen.filter((c) => c.url.includes('/events')).length === 1, 'one events page when it reaches an hour back and is short');
@@ -102,7 +102,8 @@ async function run() {
   await read(broken, now).then(() => assert(false, 'a non-list throws'), (e) => assert(e.code === 'bad-response', 'a non-list answer is a bad response'));
   const down = async () => { throw new Error('offline'); };
   await read(down, now).then(() => assert(false, 'offline throws'), (e) => assert(e.code === 'network-error', 'a network failure is reported'));
-  assert(ERRORS.includes('rate-limited') && ERRORS.length === 4, 'the error codes are a fixed list');
+  assert(ERRORS.includes('rate-limited') && ERRORS.includes('internal-error') && ERRORS.length === 5, 'the error codes are a fixed list');
+  await read(undefined, now).then(() => assert(false, 'no fetch throws'), (e) => assert(e.code === 'internal-error', 'a missing fetch (old Node) is an internal error, not a network one'));
 
   process.stdout.write('\ncommander-read: ' + passed + ' passed, ' + failed + ' failed\n');
   process.exit(failed ? 1 : 0);

@@ -1340,8 +1340,10 @@ open PRs (#253 and #254).
 - [ ] **80. Set up the commander on H1.** **About 20 minutes** (builder's estimate), at H1, once
   S67's PR is merged. docs/COMMANDER.md has the tick prompt and why each step is there (your
   design of 2026-11-25: a desktop scheduled task, RemoteTrigger, no GitHub login on H1).
-  - Clone the repository to `D:\Mako\command` and stay on `main`; make an empty folder
-    `D:\Mako\command-state`.
+  - Clone the repository to `D:\Mako\command` and stay on `main`; in it, run
+    `cmd /c git config --local credential.helper ""` (so a failed fetch can never ask you to
+    sign in to GitHub; `git config --local --get credential.helper` then prints an empty line);
+    make an empty folder `D:\Mako\command-state`.
   - Check H1 has no GitHub login: in PowerShell, `gh auth status` must say you are not logged in
     (or `gh` isn't installed), and Windows Credential Manager > Windows Credentials must list no
     `git:https://github.com` entry. If either has one, stop and ask an agent; don't remove a login
@@ -1354,12 +1356,13 @@ open PRs (#253 and #254).
     then check the file still parses: `node -e "JSON.parse(require('fs').readFileSync(process.env.USERPROFILE+'/.claude/settings.json','utf8'));console.log('ok')"`
     must print `ok`.
   - On claude.ai/code/routines, open "Mako evening digest" and remove its connectors (it only reads
-    GitHub; docs/RUNNER.md "Applied so far" found a CRM connector on it). Leave it switched off: the
-    commander runs it each evening.
+    GitHub; docs/RUNNER.md "Applied so far" found a CRM connector on it), and switch it **on**, as
+    step 27 already says, so the evening list doesn't depend on H1.
   - In Windows power settings, set H1 never to sleep while plugged in, and keep the Claude desktop
     app open.
   - In the Claude desktop app, add a scheduled task named "Mako command tick": every 30 minutes,
-    folder `D:\Mako\command`, model Sonnet 5.5, permission mode default, with the one-line prompt
+    created or started at about :10 past the hour (or set to :10 and :40 if the app asks for a
+    time), so one tick an hour lands between :07 and :25, folder `D:\Mako\command`, model Sonnet 5.5, permission mode default, with the one-line prompt
     in docs/COMMANDER.md "Set-up".
   - To stop everything: pause the routines on claude.ai/code/routines; the next tick sees the runner
     routine is off and starts nothing. Turning the "Mako command tick" task off stops only the
@@ -1367,9 +1370,16 @@ open PRs (#253 and #254).
   - *Verify (5 minutes, after the first tick between :07 and :25):* the tick ran with no permission
     prompt; `D:\Mako\command-state\log.md` has its line ("started …", "at cap …", "nothing READY"
     or "usage not readable …"); a tick outside the window logged "outside window". If the log
-    says "stopped: runner routine off" while the routine is on, or "read failed", tell an agent.
+    says "stopped: runner routine off" while the routine is on, "read failed", or, after an hour,
+    only "outside window", tell an agent.
+  - *Verify the one guard left to the prompt (2 minutes):* in a Claude Code session in
+    `D:\Mako\command`, run `/permissions` and try adding a rule that allows RemoteTrigger only for
+    running a routine. If Claude Code accepts such a rule, tell an agent, which will narrow the
+    permission file to it. If not, nothing technical stops the commander from changing a routine;
+    only its prompt does (docs/COMMANDER.md "What is verified and what isn't"). Going on with this
+    step means you accept that.
   - *Done when:* the commander has run on H1 for one full day, a runner fire it started shows in
-    claude.ai/code, and the evening digest it started reached your phone; tell any agent "step 80
+    claude.ai/code, and the evening digest reached your phone; tell any agent "step 80
     done" and it ticks this with the date.
 
 ## Coming up this month (the runner will ask when it gets there)

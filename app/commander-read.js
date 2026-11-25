@@ -15,10 +15,8 @@ const { isAgentLogin } = require('../.github/scripts/agent-logins.js');
 const REPO = 'ABlueAI/AgentCommandCenter';
 const API = 'https://api.github.com/repos/' + REPO;
 const HOUR = 60 * 60 * 1000;
-// A claude/ draft pushed to within this long counts as a live unit (the runner's own count).
-const LIVE_DRAFT_MS = 3 * HOUR;
 const MAX_EVENT_PAGES = 3; // GitHub keeps at most 300 public events.
-const ERRORS = Object.freeze(['rate-limited', 'http-error', 'bad-response', 'network-error']);
+const ERRORS = Object.freeze(['rate-limited', 'http-error', 'bad-response', 'network-error', 'internal-error']);
 
 const labelsOf = (pr) => (Array.isArray(pr.labels) ? pr.labels : []).map((l) => String((l && l.name) || ''));
 const loginOf = (x) => (x && x.user && typeof x.user.login === 'string' ? x.user.login : '');
@@ -60,9 +58,8 @@ function summarize({ pulls, claimIssues, events, eventsReachedHourBack, now }) {
     const hasLiveLock = lockExpiries(pr.body).some((t) => t > now);
     const updated = time(pr.updated_at);
     const held = labels.includes('needs-blue') || labels.includes('waits-for-merge');
-    const recentDraft = pr.draft === true && ref.startsWith('claude/') && !held
-      && Number.isFinite(updated) && now - updated < LIVE_DRAFT_MS;
-    if (hasLiveLock || recentDraft) { livePRs.push(n); continue; }
+    // Live units as docs/RUNNER.md counts them: open PRs holding a live runner-lock marker.
+    if (hasLiveLock) { livePRs.push(n); continue; }
     if (pr.draft === true && ref.startsWith('claude/') && labels.includes('runner') && !held
       && isAgentLogin(author) && Number.isFinite(updated)) stalledRunnerPRs.push(n);
   }
@@ -95,6 +92,7 @@ class ReadError extends Error {
 }
 
 async function getJson(fetchImpl, url) {
+  if (typeof fetchImpl !== 'function') throw new ReadError('internal-error', 0); // Node older than 18
   let res;
   try {
     // No Authorization header, ever: the public API only (Blue, 2026-11-25).
@@ -135,7 +133,7 @@ async function main() {
   try {
     out = await read(globalThis.fetch, Date.now());
   } catch (e) {
-    const code = e instanceof ReadError && ERRORS.includes(e.code) ? e.code : 'network-error';
+    const code = e instanceof ReadError && ERRORS.includes(e.code) ? e.code : 'internal-error';
     out = { ok: false, error: code, status: e instanceof ReadError ? e.status : 0 };
   }
   process.stdout.write(JSON.stringify(out) + '\n');

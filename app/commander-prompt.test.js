@@ -68,7 +68,12 @@ has('docs/SCHEDULE-1.1.md gives Codex', 'it skips rows Codex builds');
 has('Never start more than 2 in a tick', 'at most two runner fires per tick');
 has('log "start failed: <first error line>" and start no more this tick', 'a failed start is logged, not dropped');
 has('if it is on, its own 8:03 PM schedule sends it', 'the digest runs once, never twice');
-has('never when step 3 found the runner routine off', 'a paused runner stops the digest start too');
+has('Then go on to step 5', 'the evening step comes before the steps that end the tick');
+assert(prompt.indexOf('Evening.') < prompt.indexOf('Usage.') && prompt.indexOf('Routines.') < prompt.indexOf('Evening.'),
+  'the digest start runs after the routines check and before any step that can end the tick');
+has('git merge --ff-only --quiet origin/main', 'each tick fast-forwards its clone, so the reader follows main');
+has('git fetch --quiet origin main', 'the fetch prints nothing, so no branch names reach the tick');
+has('starting with the date and time', 'log lines carry the date');
 
 // The permission file: default mode, no bypass, no GitHub tool, no shell beyond the reader.
 const perm = /## Permissions[\s\S]*?```json\n([\s\S]*?)\n```/.exec(doc);
@@ -80,11 +85,12 @@ assert(p.defaultMode === 'default', 'the commander runs in default permission mo
 assert(p.disableBypassPermissionsMode === 'disable', 'bypass mode is disabled');
 const allow = p.allow || [];
 const deny = p.deny || [];
-assert(allow.length > 0 && !allow.some((r) => r === 'Bash' || /^Bash\([^)]*\*\)$/.test(r) && !/^Bash\((git show origin\/main:|date )\*\)$/.test(r)),
-  'no blanket shell allow (only git show of main and date take arguments)');
+assert(allow.length > 0 && !allow.some((r) => r === 'Bash' || (r.startsWith('Bash(') && r.includes('*'))),
+  'every shell allow rule is an exact command, with no wildcard');
 assert(!allow.some((r) => /gh |curl|git push|git commit|WebFetch/.test(r)), 'nothing in the allow list can reach GitHub except the reader and git fetch');
 assert(allow.includes('Bash(node app/commander-read.js)'), 'the reader is allowed, with no arguments');
-for (const d of ['Bash(gh *)', 'Bash(curl *)', 'Bash(git push*)', 'Bash(git commit*)', 'WebFetch']) {
+assert(!deny.some((r) => /git merge/.test(r)) && allow.includes('Bash(git merge --ff-only --quiet origin/main)'), 'the one fast-forward is allowed and not denied');
+for (const d of ['Bash(gh *)', 'Bash(curl *)', 'Bash(git push*)', 'Bash(git commit*)', 'Bash(git config*)', 'WebFetch']) {
   assert(deny.includes(d), 'deny list has ' + d);
 }
 
@@ -97,6 +103,10 @@ assert(s80.includes('"Mako command tick"') && s80.includes('every 30 minutes'), 
 assert(s80.includes('`gh auth status` must say you are not logged in'), 'step 80 checks H1 has no GitHub login');
 assert(!/token|GH_CONFIG_DIR|\/loop|--remote-control/.test(s80), 'step 80 makes no GitHub token and drops the CLI design');
 assert(/pause the routines/.test(s80), 'step 80 says how to stop everything');
+assert(s80.includes('credential.helper ""'), 'step 80 empties the clone\'s credential helper');
+assert(s80.includes('switch it **on**'), 'step 80 switches the evening digest on');
+assert(s80.includes('/permissions') && s80.includes('allows RemoteTrigger only for'), 'step 80 checks whether RemoteTrigger can be narrowed');
+assert(/:10/.test(s80), 'step 80 places the ticks inside the window');
 const setupLine = /`(Run one Mako command tick:[^`]*)`/.exec(doc);
 assert(Boolean(setupLine) && setupLine[1].includes('Tick prompt (verbatim)') && setupLine[1].includes('git show origin/main:docs/COMMANDER.md'),
   'the task prompt in "Set-up" points at the tick prompt on main');

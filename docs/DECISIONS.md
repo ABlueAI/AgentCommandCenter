@@ -3,6 +3,17 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-25: the commander's design (S67)
+
+Blue answered S67's needs-Blue question on PR #289 (his comment of 2026-11-25). It replaces D-084's
+"a local Claude chat" with a 30-minute heartbeat wherever they differ (the 2026-11-24 entry below);
+the rest of D-084 stands. How docs/COMMANDER.md and BLUE-CHECKLIST.md step 80 word it is proposed,
+pending Blue (PR #289); merging approves it. "Builder's reading" marks a line that is the builder's.
+
+| Decision | Blue's words |
+|---|---|
+| **The commander is a desktop scheduled task on H1** that starts the routines; there is no long-running chat, and no GitHub login or token on H1. Builder's reading: the list Blue reads each evening is the "Mako evening digest" routine's, and pausing the routines is the stop. | "Use the tested design instead: H1's desktop scheduled task "Mako command tick" every 30 minutes, firing only between :07 and :25, starting the routines with RemoteTrigger. No GitHub login or token on H1: it reads with git fetch and the public API only (the repo is public). Drop the CLI /loop design and the read-only token, which closes both open findings. Rewrite docs/COMMANDER.md and step 80 to match." |
+
 ## 2026-11-25: Codex's lane, reworded
 
 Blue said this in the session that built PR #291, after it merged, reading its review's security
