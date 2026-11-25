@@ -109,14 +109,14 @@ for (const r of ['web-scout', 'operator', 'source-scout', 'builder']) {
 }
 const SANDBOX = fs.mkdtempSync(path.join(OUTPUTS, 'web-scout-fixture-'));
 
-const record = { handled: new Map(), on: new Map(), windowsCreated: 0, ptySpawns: 0, spawnArgs: [], exitHandlers: [], dataHandlers: [], mainErrors: [], webContents: null };
+const record = { handled: new Map(), on: new Map(), windowsCreated: 0, ptySpawns: 0, spawnArgs: [], exitHandlers: [], mainErrors: [], webContents: null };
 const ptyStub = {
   spawn(file, args, opts) {
     record.ptySpawns += 1;
     record.spawnArgs.push({ file, args, cwd: opts && opts.cwd, env: opts && opts.env });
     // onExit handlers are kept so the S08 section can simulate a process exit without pty-kill (which
     // would run a real tree kill on the stub's pid).
-    return new Proxy({ onData(cb) { record.dataHandlers.push(cb); }, onExit(cb) { record.exitHandlers.push(cb); }, write() {}, resize() {}, kill() {}, pid: 1234 },
+    return new Proxy({ onData() {}, onExit(cb) { record.exitHandlers.push(cb); }, write() {}, resize() {}, kill() {}, pid: 1234 },
       { get(t, k) { return k in t ? t[k] : () => {}; } });
   },
 };
@@ -399,16 +399,20 @@ Module._load = function (request) {
     let rec = readMem().records.find((r) => r.sessionId === sid);
     assert(rec && rec.owner === 'blue', 'its record is owned by Blue');
 
-    const onData = record.dataHandlers[record.dataHandlers.length - 1];
+    const ptyWrite = record.on.get('pty-write');
+    const onData = (data) => ptyWrite({ sender: wc }, { id: 'pane-s46', data });
     onData('hello');
     rec = readMem().records.find((r) => r.sessionId === sid);
-    assert(rec && typeof rec.lastActiveAt === 'string', 'its first output records last activity');
+    assert(rec && typeof rec.lastActiveAt === 'string', 'its first input records last activity');
+    ptyWrite({ sender: wc }, { id: 'pane-resume', data: 'x' });
+    const resumed = readMem().records.find((r) => r.sessionId === '5e55a0b1-0000-4000-8000-000000000009');
+    assert(resumed && typeof resumed.lastActiveAt === 'string', 'input to a resumed pane records its activity too');
     const mem = readMem();
     Object.assign(mem.records.find((r) => r.sessionId === sid), { startedAt: '2026-09-30T00:00:00.000Z', lastActiveAt: '2026-10-01T00:00:00.000Z' });
     fs.writeFileSync(memPath, JSON.stringify(mem));
     onData('more');
     rec = readMem().records.find((r) => r.sessionId === sid);
-    assert(rec && rec.lastActiveAt === '2026-10-01T00:00:00.000Z', 'more output within the hour writes nothing (at most once an hour)');
+    assert(rec && rec.lastActiveAt === '2026-10-01T00:00:00.000Z', 'more input within the hour writes nothing (at most once an hour)');
 
     const list = await listIpc(goodEvent);
     assert(list.ok === true && list.idleDays === 3 && /^\d{4}-\d{2}-\d{2}$/.test(list.day), 'the list answers with the idle threshold and the local day');
@@ -424,10 +428,14 @@ Module._load = function (request) {
     assert(rec && rec.doneWhen === 'PR opened and CI green', 'trimmed, as one line');
     const after = await listIpc(goodEvent);
     assert(after.ok && after.rows.find((r) => r.sessionId === sid).doneWhen === 'PR opened and CI green', 'and the list shows it');
+    const errsBefore = record.mainErrors.length;
     const bad = await doneIpc(goodEvent, sid, 'line one\nline two');
     assert(bad.ok === false && bad.error === 'session-memory-bad-done-when', 'a done-when with a line break is refused, visibly');
+    assert((await doneIpc(goodEvent, sid, 'tab\there')).ok === false, 'so is one with a tab');
     assert((await doneIpc(goodEvent, sid, 'x'.repeat(201))).ok === false, 'one over 200 characters is refused');
     assert((await doneIpc(goodEvent, '5e55a0b1-0000-4000-8000-0000000000ee', 'x')).error === 'session-memory-unknown-session', 'an unknown session is refused');
+    assert(record.mainErrors.slice(errsBefore).every((l) => !/Session memory refused/.test(l)),
+      'and none of those input refusals raises the "session IDs are not being recorded" notice');
     assert((await doneIpc(goodEvent, sid, '')).ok === true && readMem().records.find((r) => r.sessionId === sid).doneWhen === undefined,
       'an empty done-when clears it');
   }

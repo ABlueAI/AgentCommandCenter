@@ -33,7 +33,7 @@ function stateOf(r) {
   return STATE.FINISHED;
 }
 
-// The last time anything happened to the session: its last output, its stop, or its start.
+// The last time anything happened to the session: its last input, its stop, or its start.
 function lastActivity(r) {
   const ts = [time(r.lastActiveAt), time(r.stoppedAt), time(r.startedAt)].filter((t) => t !== null);
   return ts.length ? Math.max(...ts) : null;

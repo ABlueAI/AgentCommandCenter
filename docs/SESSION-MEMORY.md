@@ -95,12 +95,13 @@ Each record now also carries, all optional so older files stay valid:
   "assumed".
 - `doneWhen`: one line of plain text, at most 200 characters, set from the idle list's field. A line
   break or other control character is refused, never stripped.
-- `lastActiveAt`: the last time the pane printed anything, written at most once an hour per session.
+- `lastActiveAt`: the last time input reached the pane (typing, a pasted or spoken prompt), written
+  at most once an hour per session.
 - `archivedAt`: when the session archived itself.
 
 A session's **state** is `running` (open in a pane), `waiting` (open when Mako went away, Resume or
 Start fresh not answered yet), `finished` (the shell exited, Blue closed the pane, or the offer was
 answered) or `archived`. Finished sessions archive themselves at startup and on each hourly check;
 archived records stay in the file until the 200-record limit drops them. Once a local day, the
-Terminals tab lists the sessions idle 3 days or more (no output, stop or start for 3 days), with
+Terminals tab lists the sessions idle 3 days or more (no input, stop or start for 3 days), with
 their owner, state and done-when. S19's control room takes the list over in its right panel.

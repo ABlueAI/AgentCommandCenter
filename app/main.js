@@ -1741,11 +1741,25 @@ ipcMain.handle('session-hygiene-list', (e) => {
 ipcMain.handle('session-hygiene-done-when', (e, sessionId, text) => {
   const g = launcherGate.assess(e);
   if (!g.ok) return { ok: false, error: g.reason };
-  const res = sessionMemoryCall(() => sessionMemory().setDoneWhen(sessionId, text));
-  return res && res.ok ? { ok: true } : { ok: false, error: (res && res.reason) || 'session-memory-failed' };
+  // Not through sessionMemoryCall: a refused done-when (bad text, an unknown session) is Blue's input,
+  // shown on the row, not a session-memory failure, so it must not raise the "IDs are not being
+  // recorded" notice. A real store failure (read or write) still does.
+  const INPUT_REFUSALS = [sessionMemoryMod.REASON.BAD_DONE_WHEN, sessionMemoryMod.REASON.UNKNOWN_SESSION, sessionMemoryMod.REASON.BAD_SESSION_ID];
+  let res;
+  try { res = sessionMemory().setDoneWhen(sessionId, text); }
+  catch (err) { tlog(`[session-hygiene] done-when failed: ${(err && err.message) || err}`); return { ok: false, error: 'session-memory-failed' }; }
+  if (res && res.ok) return { ok: true };
+  const reason = (res && res.reason) || 'session-memory-failed';
+  if (INPUT_REFUSALS.includes(reason)) tlog(`[session-hygiene] done-when refused [${reason}]`);
+  else noteSessionMemory(res);
+  return { ok: false, error: reason };
 });
-// S46: a session's last activity, from its pane's output, written at most once an hour per session.
+// S46: a session's last activity: the last input that reached its pane (typing, a pasted or spoken
+// prompt; every ordinary input route converges on pty-write). Recorded here rather than from the
+// pane's output so the pinned pty-start handler (launcher-fence-invariant.test.js) stays unchanged.
+// Written at most once an hour per session.
 const SESSION_TOUCH_MS = 60 * 60 * 1000;
+const SESSION_TOUCH_RETRY_MS = 5 * 60 * 1000;
 const sessionTouchedAt = new Map();
 function touchPaneSession(id) {
   const sid = paneSessions.get(id);
@@ -1753,8 +1767,9 @@ function touchPaneSession(id) {
   const t = Date.now();
   const last = sessionTouchedAt.get(sid);
   if (last !== undefined && t - last < SESSION_TOUCH_MS) return;
-  sessionTouchedAt.set(sid, t);
-  sessionMemoryCall(() => sessionMemory().touch(sid));
+  const res = sessionMemoryCall(() => sessionMemory().touch(sid));
+  // A failed write is tried again after 5 minutes, not an hour, and not on every keystroke.
+  sessionTouchedAt.set(sid, res && res.ok ? t : t - SESSION_TOUCH_MS + SESSION_TOUCH_RETRY_MS);
 }
 
 // ---- IPC: in-app terminals (node-pty + xterm.js) ---------------------------
@@ -2006,7 +2021,6 @@ ipcMain.handle('pty-start', (e, opts) => {
       ? sessionMemoryCall(() => sessionMemory().recordResume({ sessionId: claudeSessionId, paneId: id }))
       : sessionMemoryCall(() => sessionMemory().recordStart({
         sessionId: claudeSessionId, paneId: id, role: launch.role, cli: 'claude', worktree: cwd,
-        owner: sessionMemoryMod.DEFAULT_OWNER,
       }));
     if (resumeSessionId) tlog(`pty-start: resumed a recorded Claude session (record ${rec.ok ? 'reopened' : 'not reopened'})`);
     // A resumed session is running even if its record couldn't be reopened, so it stays in
@@ -2017,10 +2031,7 @@ ipcMain.handle('pty-start', (e, opts) => {
   // returned to the renderer). It intentionally OUTLIVES p.onExit below -- a finished run's report
   // stays openable until the pane is explicitly closed (pty-kill) or the window shuts down.
   if (acceptedRunId) { videoScoutRunIds.set(id, acceptedRunId); tlog(`pty-start: registered video-scout runId for pane ${id}`); }
-  p.onData((data) => {
-    if (claudeSessionId) touchPaneSession(id);
-    if (win && !win.isDestroyed()) win.webContents.send('pty-data', { id, data });
-  });
+  p.onData((data) => { if (win && !win.isDestroyed()) win.webContents.send('pty-data', { id, data }); });
   // NOTE: onExit removes the PTY handle but deliberately does NOT remove the run-ID mapping (V5b1).
   //
   // TWO REGISTRIES, TWO DELIBERATELY DIFFERENT LIFETIMES — and the difference is the point.
@@ -2059,6 +2070,8 @@ ipcMain.handle('pty-start', (e, opts) => {
 // The refusal is visible (bounded reason on the Logs channel, throttled so a held key cannot flood it)
 // and it never echoes the bytes. Uncontrolled panes take the original path, byte-for-byte.
 ipcMain.on('pty-write', (_e, { id, data }) => {
+  // S46: input reaching a Claude pane is the session's activity (at most one write an hour).
+  touchPaneSession(id);
   admissionPtyBoundary.writeDirect(id, data);
 });
 ipcMain.on('pty-resize', (_e, { id, cols, rows }) => { const p = ptys.get(id); if (p) { try { p.resize(cols, rows); } catch (err) { tlog(`pty-resize ${id} failed (process likely exiting): ${(err && err.message) || err}`); } } });
