@@ -3,6 +3,21 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-25: Codex's lane, reworded
+
+Blue said this in the session that built PR #291, after it merged, reading its review's security
+findings. It replaces the entry below ("Codex may build sensitive items too") wherever they differ;
+how AGENTS.md, docs/CODEX-BUILDER-LANE.md items 1 and 6, docs/SCHEDULE-1.1.md and
+docs/AI-COLLABORATION.md word it is proposed, pending Blue (this PR); merging approves it. "Builder's
+reading" marks a line that is the builder's, not Blue's.
+
+| Decision | Blue's words |
+|---|---|
+| **Codex builds any plan row or issue Claude could, sensitive ones included,** and gets it the same way as other lane work (a claim issue and one hand-off comment), no longer only when Blue starts it. Why: Codex has the same capabilities, and Blue has Codex usage to spend; the entry below routed each sensitive item through Blue, which cost his time and sent Codex less work. | "help me to word it to prevent misuse but also grant more projects to codex. it has the same capabilities and the amount of usage i have to use was never a secret" |
+| **Claude keeps the rulebook as before,** plus the UI rows (S66, S18 to S20) and the Composer's dispatch tools. Builder's reading of "the rulebook": the rules and checks that judge Codex's own PRs, namely AGENTS.md, CLAUDE.md, `.claude/agents/` (the reviewers), docs/RUNNER.md, docs/SWEEPER.md, docs/CODEX-BUILDER-LANE.md and `.github/` (CI, CODEOWNERS, the PR template). The line is drawn so no builder rewrites what grades its own work, not by skill. `.claude/` settings and hooks (the account guard, the fence hook) stay Codex's to build, as the entry below lists them. | "keep rulebook as before, this isnt a good rule and i know it" |
+| **Security findings on a Codex PR are fixed by the reviewing Claude session,** on Codex's branch, in one push with its own Opus delta run; public text gives only the title and severity (hard rule 6), and if that push doesn't clear it the PR is NEEDS BLUE. This is Blue's ask under AGENTS.md "Claude never pushes to a `codex/` branch unless Blue asks". Replaces the entry below's "Blue gives Codex the details privately". Builder's reading: it keeps security details out of public text without making Blue a relay. | — (builder's proposal for "prevent misuse"; merging approves it) |
+| **Unchanged:** every Codex PR gets Claude's Opus review, `security-reviewer` on run 1 when it touches a sensitive area, and Codex's pass; the review loop, run caps, merge order, every hard rule and Blue's merge (CODEOWNERS) still apply. | — |
+
 ## 2026-11-25: Codex may build sensitive items too
 
 Blue decided this in his main chat on 2026-11-25, with unused Codex usage (several ChatGPT Plus

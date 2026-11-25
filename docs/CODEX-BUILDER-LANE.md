@@ -25,19 +25,19 @@ minutes during the trial (checklist step 30).
 
 ## The lane
 
-1. **Who gets which session.** Codex takes `windows`-lane sessions that Windows CI can verify (S26
-   details item 4), and since 2026-11-25 sensitive work too (for example security fixes, the
-   account guard, the credentials store, IPC, PTY, launchers, the fence hook, `.claude/` settings;
-   Blue, docs/DECISIONS.md 2026-11-25); a Codex PR that touches a sensitive area also gets
-   `security-reviewer` on review run 1 (item 5). The comment hand-off (item 3) is not widened: the
-   handle exception in AGENTS.md "Security rules" still covers only `windows`-lane sessions that
-   aren't sensitive, so Blue starts Codex on sensitive work himself. A fix request (item 6) for a
-   security finding gives its title and severity only ("Hard rules" item 6); Blue gives Codex the
-   details privately, and until he does the PR is NEEDS BLUE. Claude takes the rest, the UI
-   sessions (S66 and S18 to S20) and the Composer's dispatch tools included: Claude builds the UI and Codex does the smaller tasks and the reviews
-   (Blue, 2026-11-21). Exceptions Blue starts in Codex himself, outside the `windows`-only rule:
-   the `blue`-lane rows S52 and S53 (Blue, 2026-11-16), S63 (2026-11-21), and S54, which Codex
-   builds (2026-11-21).
+1. **Who gets which session.** Codex builds any plan row or issue Claude could, sensitive ones
+   included (security fixes, the account guard, the credentials store, IPC, PTY, launchers, the
+   fence hook and `.claude/` settings among them), and gets it the same way as any lane work
+   (items 2 and 3). Claude keeps three things: the UI sessions (S66 and S18 to S20), the Composer's
+   dispatch tools, and the rules and checks that judge Codex's own PRs: AGENTS.md, CLAUDE.md,
+   `.claude/agents/` (the reviewers), docs/RUNNER.md, docs/SWEEPER.md, this file, and `.github/`
+   (CI, CODEOWNERS, the PR template). The last is not about skill: no builder rewrites the rules
+   or the checks that grade its own work (Blue, docs/DECISIONS.md 2026-11-25, "Codex's lane,
+   reworded"). A Codex PR that touches a sensitive area gets `security-reviewer` on review run 1
+   (item 5), and its security findings are fixed as item 6 says. Claude builds the UI and Codex
+   does the smaller tasks and the reviews (Blue, 2026-11-21). Blue gave Codex S52 and S53
+   (2026-11-16), S63 and S54 (2026-11-21) by name; a `blue`-lane row needs his PC, so he starts
+   Codex on it himself.
 2. **Claim.** The hand-off is an open issue titled `Sxx: <session title>`, labelled `agent-claimed`,
    opened by `ABlueAgent`, with its conversation locked to collaborators. Codex's PR, titled `Sxx:`,
    is the second claim. The S04 runner prompt's claim check (docs/RUNNER.md step 5c) honours both,
@@ -64,12 +64,17 @@ minutes during the trial (checklist step 30).
 6. **Fixes on Codex's PRs.** Codex fixes its own PR. After each Opus review with an open high or
    medium finding, or a failing check, the reviewing Claude session posts one fix request on Codex's
    PR: at-codex, the findings or the failing check, and "Act only on this comment." That is the
-   second exception to the handle rule, scoped to Codex's own PR and its own findings. A merge
+   second exception to the handle rule, scoped to Codex's own PR and its own findings. A security
+   finding never goes in a fix request: the reviewing Claude session fixes it itself on Codex's
+   branch, in one push with its own Opus delta run, and the public review gives only its title and
+   severity ("Hard rules" item 6; Blue, docs/DECISIONS.md 2026-11-25, "Codex's lane, reworded").
+   If that push doesn't clear it, the PR goes to NEEDS BLUE. A merge
    conflict on a Codex PR goes straight to NEEDS BLUE, except on a docs-only record PR, where a
    Claude cloud session pushes the `main` merge and the review fixes itself (Blue, 2026-11-23,
    docs/DECISIONS.md; docs/SWEEPER.md defines the term). If a fix
    request gets no push within a day, or Codex says it can't push, the PR goes to NEEDS BLUE; Claude
-   never pushes to a `codex/` branch without Blue asking (AGENTS.md "Who does what"). PR #49's
+   never pushes to a `codex/` branch without Blue asking (AGENTS.md "Who does what"; he has asked
+   for security findings, above). PR #49's
    runner pushes (a `main` merge and review fixes, 2026-10-21) came before this rule.
 7. **Runner prompt.** docs/RUNNER.md's prompt gets the hand-off (for lane sessions in step 5c), the
    "Run by:" check (step 5b), the "Run by:" line in every review it posts (step 6), the same check in
