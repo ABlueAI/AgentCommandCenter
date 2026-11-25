@@ -9,6 +9,7 @@ const os = require('os');
 const path = require('path');
 const {
   createMergeHistoryStore, parseGitMergeLog, buildTree, sessionOf, REASON, FILENAME, MAX_RECORDS, NO_SESSION,
+  GIT_LOG_FORMAT,
 } = require('./merge-history');
 
 let passed = 0, failed = 0;
@@ -46,8 +47,9 @@ section('each merge is recorded once and survives a restart');
   assert(a.ok && a.added === 1 && a.duplicates === 0, 'the first record is added');
   const again = s1.recordMerge(merge(253, 'a', '2026-11-24T19:48:48Z', { title: 'S14: design brief', branch: 'claude/s14' }));
   assert(again.ok && again.added === 0 && again.duplicates === 1, 'the same merge again is a duplicate, not a second record');
-  const mtimeBefore = fs.statSync(path.join(dir, FILENAME)).mtimeMs;
-  const s2 = createMergeHistoryStore({ userDataDir: dir });   // a restart: a new store on the same folder
+  let renames = 0;
+  const spy = Object.assign({}, fs, { renameSync: (...a) => { renames++; return fs.renameSync(...a); } });
+  const s2 = createMergeHistoryStore({ userDataDir: dir, fsImpl: spy });   // a restart: a new store on the same folder
   const l = s2.list();
   assert(l.ok && l.records.length === 1, 'after a restart there is exactly one record');
   const r = l.records[0];
@@ -57,7 +59,7 @@ section('each merge is recorded once and survives a restart');
     'and its merge time (normalised to UTC) and the time it was recorded');
   const third = s2.recordMerges([merge(253, 'a', '2026-11-24T14:48:48-05:00')]);
   assert(third.ok && third.duplicates === 1 && third.added === 0, 'after the restart, the same merge is still a duplicate');
-  assert(fs.statSync(path.join(dir, FILENAME)).mtimeMs === mtimeBefore, 'and a batch of only duplicates writes nothing');
+  assert(renames === 0, 'and a batch of only duplicates writes nothing');
 }
 
 section('a conflicting merge is refused, never overwritten');
@@ -73,6 +75,17 @@ section('a conflicting merge is refused, never overwritten');
   assert(other.ok && other.added === 1, 'the same PR number in another repository is its own merge');
   const caseOnly = s.recordMerge(Object.assign(merge(10, 'a', '2026-11-20T10:00:00Z'), { repo: 'ablueai/agentcommandcenter' }));
   assert(caseOnly.ok && caseOnly.duplicates === 1, 'a repository name in other letter case is the same repository');
+}
+
+section('the same merge twice in one batch');
+{
+  const dir = freshDir();
+  const s = createMergeHistoryStore({ userDataDir: dir });
+  const same = s.recordMerges([merge(7, 'a', '2026-11-20T10:00:00Z'), merge(7, 'a', '2026-11-20T10:00:00Z')]);
+  assert(same.ok && same.added === 1 && same.duplicates === 1, 'the same commit twice is one record and one duplicate');
+  const clash = s.recordMerges([merge(8, 'a', '2026-11-20T10:00:00Z'), merge(8, 'b', '2026-11-20T10:00:00Z')]);
+  assert(!clash.ok && clash.reason === REASON.CONFLICTING_MERGE, 'two commits for one PR in a batch are refused');
+  assert(s.list().records.length === 1, 'and nothing from that batch is written');
 }
 
 section('a title given later is filled in once');
@@ -103,6 +116,10 @@ section('bad input is refused, and nothing is written');
     Object.assign({}, good, { mergeSha: 'abc' }),
     Object.assign({}, good, { mergeSha: 'A'.repeat(40) }),
     Object.assign({}, good, { mergedAt: 'yesterday' }),
+    Object.assign({}, good, { mergedAt: '1' }),
+    Object.assign({}, good, { mergedAt: '2026' }),
+    Object.assign({}, good, { mergedAt: 'Nov 25 2026' }),
+    Object.assign({}, good, { mergedAt: '2026-11-25T10:00:00' }),
     Object.assign({}, good, { title: '' }),
     Object.assign({}, good, { title: 'x'.repeat(513) }),
     Object.assign({}, good, { branch: 7 }),
@@ -160,11 +177,29 @@ section('a bad file is refused and left exactly as it was');
   }
   {
     const dir = freshDir();
+    let reads = 0;
     const fake = Object.assign({}, fs, {
       lstatSync: () => ({ isSymbolicLink: () => false, isFile: () => true, size: 5 * 1024 * 1024 }),
+      readFileSync: () => { reads++; return ''; },
     });
     const r = createMergeHistoryStore({ userDataDir: dir, fsImpl: fake }).list();
-    assert(!r.ok && r.reason === REASON.TOO_LARGE, 'a file over the size cap is refused before it is read');
+    assert(!r.ok && r.reason === REASON.TOO_LARGE && reads === 0, 'a file over the size cap is refused before it is read');
+  }
+  for (const [label, override] of [
+    ['lstat fails with EPERM', { lstatSync: () => { const e = new Error('locked'); e.code = 'EPERM'; throw e; } }],
+    ['the read fails', { readFileSync: () => { const e = new Error('busy'); e.code = 'EBUSY'; throw e; } }],
+  ]) {
+    const dir = freshDir();
+    fs.writeFileSync(path.join(dir, FILENAME), JSON.stringify({ version: 1, records: [] }));
+    let writes = 0;
+    const fake = Object.assign({}, fs, override, {
+      openSync: (...a) => { writes++; return fs.openSync(...a); },
+      renameSync: (...a) => { writes++; return fs.renameSync(...a); },
+    });
+    const s = createMergeHistoryStore({ userDataDir: dir, fsImpl: fake });
+    const results = [s.list(), s.tree(), s.recordMerge(merge(9, 'a', '2026-11-21T10:00:00Z'))];
+    assert(results.every((x) => !x.ok && x.reason === REASON.READ_FAILED), label + ': list, tree and record refuse as read-failed');
+    assert(writes === 0, label + ': and nothing is written over the file it could not read');
   }
   {
     const dir = freshDir();
@@ -176,43 +211,51 @@ section('a bad file is refused and left exactly as it was');
   }
 }
 
-section('the cap drops the oldest merges first');
+section('a full store refuses, and never drops a merge');
 {
   const dir = freshDir();
   const s = createMergeHistoryStore({ userDataDir: dir });
   const start = Date.parse('2020-01-01T00:00:00Z');
+  const mk = (i) => ({ repo: REPO, number: i, mergeSha: i.toString(16).padStart(40, '0'),
+    mergedAt: new Date(start + i * 60000).toISOString(), title: null, branch: null });
   const batch = [];
-  for (let i = 1; i <= MAX_RECORDS + 3; i++) {
-    batch.push({ repo: REPO, number: i, mergeSha: i.toString(16).padStart(40, '0'),
-      mergedAt: new Date(start + i * 60000).toISOString(), title: null, branch: null });
-  }
+  for (let i = 1; i <= MAX_RECORDS; i++) batch.push(mk(i));
   const r = s.recordMerges(batch);
-  const l = s.list();
-  assert(r.ok && r.added === MAX_RECORDS + 3 && r.dropped === 3, 'the batch reports what it added and dropped');
-  assert(l.ok && l.records.length === MAX_RECORDS && l.records[0].number === 4, 'the three oldest are the ones dropped');
+  assert(r.ok && r.added === MAX_RECORDS, 'a store can hold exactly MAX_RECORDS');
+  const before = fs.readFileSync(path.join(dir, FILENAME), 'utf8');
+  const over = s.recordMerges([mk(MAX_RECORDS + 1)]);
+  assert(!over.ok && over.reason === REASON.FULL && over.max === MAX_RECORDS, 'one more merge is refused as full');
+  assert(fs.readFileSync(path.join(dir, FILENAME), 'utf8') === before, 'and the file is left exactly as it was');
+  const again = s.recordMerges(batch);
+  assert(again.ok && again.added === 0 && again.duplicates === MAX_RECORDS, 'reading the whole history again when full adds nothing');
+  assert(s.list().records[0].number === 1, 'the oldest merge is still there');
 }
 
 section('parseGitMergeLog');
 {
+  assert(GIT_LOG_FORMAT === '%H%x09%cI%x09%s%x09%b%x1e', 'the documented git format');
+  const RS = '\x1e';
   const text = [
-    `${sha('1')}\t2026-11-25T01:30:57-05:00\tMerge pull request #225 from ABlueAI/claude/nice-wright-ipkymq`,
-    `${sha('2')}\t2026-11-25T01:30:15-05:00\tMerge branch 'main' into claude/x`,
-    `${sha('3')}\t2026-11-25T01:29:40-05:00\tMerge pull request #257 from ABlueAI/codex/s53-agentplayback`,
-    '',
-  ].join('\r\n');
+    `${sha('1')}\t2026-11-25T01:30:57-05:00\tMerge pull request #225 from ABlueAI/claude/nice-wright-ipkymq\tS62: tree and merged-work history\r\n\r\nmore body\tline\r\n${RS}\r\n`,
+    `${sha('2')}\t2026-11-25T01:30:15-05:00\tMerge branch 'main' into claude/x\t${RS}\n`,
+    `${sha('3')}\t2026-11-25T01:29:40-05:00\tMerge pull request #257 from ABlueAI/codex/s53-agentplayback\t${RS}\n`,
+  ].join('');
   const p = parseGitMergeLog(REPO, text);
   assert(p.ok && p.merges.length === 2 && p.skipped === 1, 'two PR merges, one other merge skipped and counted (CRLF too)');
   assert(p.merges[0].number === 225 && p.merges[0].mergeSha === sha('1') && p.merges[0].branch === 'claude/nice-wright-ipkymq',
-    'number, commit and branch come from the line');
-  assert(p.merges[1].branch === 'codex/s53-agentplayback' && p.merges[1].title === null, 'a Codex branch too, with no title');
-  const bad = parseGitMergeLog(REPO, `${sha('1')} 2026-11-25 Merge pull request #1 from a/b`);
-  assert(!bad.ok && bad.reason === REASON.BAD_MERGE, 'a line not in the expected format is refused, not skipped');
-  assert(!parseGitMergeLog(REPO, `nothex\t2026-11-25T01:30:57-05:00\tMerge pull request #1 from a/b`).ok, 'a bad commit id is refused');
+    'number, commit and branch come from the entry');
+  assert(p.merges[0].title === 'S62: tree and merged-work history', 'the title is the first line of the body, the rest ignored');
+  assert(p.merges[1].branch === 'codex/s53-agentplayback' && p.merges[1].title === null, 'an empty body gives no title');
+  const bad = parseGitMergeLog(REPO, `${sha('1')} 2026-11-25 Merge pull request #1 from a/b${RS}`);
+  assert(!bad.ok && bad.reason === REASON.BAD_MERGE, 'an entry not in the expected format is refused, not skipped');
+  assert(!parseGitMergeLog(REPO, `nothex\t2026-11-25T01:30:57-05:00\tMerge pull request #1 from a/b\t${RS}`).ok, 'a bad commit id is refused');
+  assert(!parseGitMergeLog(REPO, `${sha('1')}\tNov 25 2026\tMerge pull request #1 from a/b\t${RS}`).ok, 'a time that is not ISO is refused');
   assert(!parseGitMergeLog('bad', '').ok && !parseGitMergeLog(REPO, null).ok, 'a bad repository or text is refused');
-  assert(parseGitMergeLog(REPO, '').ok && parseGitMergeLog(REPO, '').merges.length === 0, 'empty output is no merges');
+  assert(parseGitMergeLog(REPO, '').ok && parseGitMergeLog(REPO, '\n').merges.length === 0, 'empty output is no merges');
   const dir = freshDir();
   const s = createMergeHistoryStore({ userDataDir: dir });
   assert(s.recordMerges(p.merges).added === 2, 'parsed merges record');
+  assert(s.list().records.find((r) => r.number === 225).session === 'S62', 'with the session from the title');
   assert(s.recordMerges(parseGitMergeLog(REPO, text).merges).duplicates === 2, 'and reading the same log again records nothing new');
 }
 
@@ -235,7 +278,16 @@ section('the tree');
   const s14 = top.sessions[1];
   assert(s14.count === 2 && s14.merges.map((m) => m.number).join(',') === '260,253', 'merges newest first inside a session');
   assert(JSON.stringify(buildTree([])) === '[]', 'no merges is an empty tree');
-  assert(JSON.stringify(buildTree(s.list().records)) === JSON.stringify(t.tree), 'buildTree is the same tree from the same records');
+  s.recordMerge(Object.assign(merge(300, 'e', '2026-11-22T10:00:00Z', { title: 'S14: late' }), { repo: 'ablueai/agentcommandcenter' }));
+  const t2 = s.tree();
+  assert(t2.ok && t2.tree.length === 2 && t2.tree[0].id === REPO && t2.tree[0].count === 4,
+    'a repository name in other letter case joins the same node, under the stored spelling');
+  const mixed = buildTree([
+    { repo: 'A/b', number: 1, mergeSha: sha('a'), mergedAt: '2026-11-20T10:00:00.000Z', title: null, branch: null, session: null },
+    { repo: 'a/B', number: 2, mergeSha: sha('b'), mergedAt: '2026-11-21T10:00:00.000Z', title: null, branch: null, session: null },
+  ]);
+  assert(mixed.length === 1 && mixed[0].count === 2 && mixed[0].id === 'A/b', 'buildTree groups mixed-case names under the first spelling');
+  assert(JSON.stringify(buildTree(s.list().records)) === JSON.stringify(t2.tree), 'buildTree is the same tree from the same records');
 }
 
 section('a store needs its folder');

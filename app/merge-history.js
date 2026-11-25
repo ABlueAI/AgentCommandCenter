@@ -20,7 +20,7 @@ const path = require('path');
 
 const FILENAME = 'merge-history.json';
 const VERSION = 1;
-const MAX_RECORDS = 5000;          // a year of merges at about a dozen a day; oldest drop off first
+const MAX_RECORDS = 5000;          // over a year of merges at about a dozen a day; full means refuse
 const MAX_FILE_BYTES = 4194304;    // 4 MiB; 5000 records are well under it
 const MAX_TEXT_LENGTH = 512;       // title and branch
 const MAX_REPO_LENGTH = 140;       // owner/name: GitHub caps owner at 39 and name at 100
@@ -40,11 +40,15 @@ const REASON = Object.freeze({
   WRITE_FAILED: 'merge-history-write-failed',
   BAD_MERGE: 'merge-history-bad-merge',
   CONFLICTING_MERGE: 'merge-history-conflicting-merge',
+  FULL: 'merge-history-full',
 });
 
 function refuse(reason, extra) { return Object.assign({ ok: false, reason }, extra || {}); }
 
-function isIsoTime(v) { return typeof v === 'string' && v.length <= 40 && !Number.isNaN(Date.parse(v)); }
+// Strict ISO 8601 with a time zone (what `git log %cI` and toISOString write). Date.parse alone would
+// accept text such as '1' or 'Nov 25 2026' and guess a time.
+const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;
+function isIsoTime(v) { return typeof v === 'string' && v.length <= 40 && ISO_RE.test(v) && !Number.isNaN(Date.parse(v)); }
 function isRepo(v) { return typeof v === 'string' && v.length <= MAX_REPO_LENGTH && REPO_RE.test(v); }
 function isPrNumber(v) { return Number.isInteger(v) && v > 0 && v < 10000000; }
 function isSha(v) { return typeof v === 'string' && SHA_RE.test(v); }
@@ -91,26 +95,32 @@ function normaliseMerge(m) {
   return { repo, number, mergeSha, mergedAt: new Date(mergedAt).toISOString(), title, branch, session: sessionOf(title) };
 }
 
-// Parses `git log --first-parent --merges --format=%H%x09%cI%x09%s` output into merges for `repo`.
-// Lines that aren't a GitHub PR merge (a local merge, a squash, a revert) are skipped and counted, so
-// the caller can show how many it ignored instead of hiding them. A malformed line is refused.
-// The PR title is not in the subject (GitHub puts it in the merge commit body); a caller that reads
-// it can pass it to recordMerges later, which fills it in once.
+// The git command whose output parseGitMergeLog reads. Each commit ends with the record separator
+// (0x1e), so a merge commit's body, which can span lines, stays with its commit.
+const GIT_LOG_FORMAT = '%H%x09%cI%x09%s%x09%b%x1e';
+
+// Parses `git log --first-parent --merges --format=<GIT_LOG_FORMAT> <ref>` output into merges for
+// `repo`. GitHub writes a PR merge's subject as "Merge pull request #N from owner/branch" and puts the
+// PR title on the first line of the body, which gives the merge its title and plan session.
+// Commits that aren't a GitHub PR merge (a local merge, for instance) are skipped and counted, so the
+// caller can show how many it ignored instead of hiding them. A malformed entry is refused.
 function parseGitMergeLog(repo, text) {
   if (!isRepo(repo)) return refuse(REASON.BAD_MERGE);
   if (typeof text !== 'string') return refuse(REASON.BAD_MERGE);
   const merges = [];
   let skipped = 0;
-  const lines = text.split(/\r?\n/).filter((l) => l.length > 0);
-  for (const line of lines) {
-    const parts = line.split('\t');
-    if (parts.length < 3) return refuse(REASON.BAD_MERGE, { line });
-    const [sha, when] = parts;
-    const subject = parts.slice(2).join('\t');
-    if (!isSha(sha) || !isIsoTime(when)) return refuse(REASON.BAD_MERGE, { line });
+  const entries = text.split('\x1e').map((e) => e.replace(/^[\r\n]+/, '')).filter((e) => e.trim().length > 0);
+  for (const entry of entries) {
+    const parts = entry.split('\t');
+    if (parts.length < 4) return refuse(REASON.BAD_MERGE, { entry: entry.slice(0, 200) });
+    const [sha, when, subject] = parts;
+    const body = parts.slice(3).join('\t');
+    if (!isSha(sha) || !isIsoTime(when)) return refuse(REASON.BAD_MERGE, { entry: entry.slice(0, 200) });
     const m = MERGE_SUBJECT_RE.exec(subject);
     if (!m) { skipped++; continue; }
-    merges.push({ repo, number: Number(m[1]), mergeSha: sha, mergedAt: when, title: null, branch: m[3] });
+    const first = body.split(/\r?\n/)[0].trim();
+    const title = first.length > 0 && first.length <= MAX_TEXT_LENGTH ? first : null;
+    merges.push({ repo, number: Number(m[1]), mergeSha: sha, mergedAt: when, title, branch: m[3] });
   }
   return { ok: true, merges, skipped };
 }
@@ -162,6 +172,10 @@ function createMergeHistoryStore({ userDataDir, fsImpl = fs, now = () => new Dat
   // written: one bad or conflicting merge refuses the whole batch, so a half-recorded batch can't
   // happen. A merge already recorded with the same commit is counted as a duplicate and left alone.
   // A title given later for a merge recorded without one is filled in (the only field ever changed).
+  // Nothing is ever dropped (Blue, 2026-11-11: "nothing really ever disappears unless it's
+  // explicitly deleted or told to be deleted"):
+  // a batch that would take the store past MAX_RECORDS is refused whole, and the file is left as it is.
+  // A new merge takes the spelling of its repository already stored, so letter case never splits one.
   function recordMerges(merges) {
     if (!Array.isArray(merges)) return refuse(REASON.BAD_MERGE);
     const incoming = [];
@@ -174,6 +188,7 @@ function createMergeHistoryStore({ userDataDir, fsImpl = fs, now = () => new Dat
     if (!cur.ok) return cur;
     const records = cur.records.map((r) => Object.assign({}, r));
     const byKey = new Map(records.map((r) => [keyOf(r), r]));
+    const repoSpelling = new Map(records.map((r) => [r.repo.toLowerCase(), r.repo]));
     const at = now().toISOString();
     let added = 0;
     let duplicates = 0;
@@ -194,18 +209,19 @@ function createMergeHistoryStore({ userDataDir, fsImpl = fs, now = () => new Dat
         }
         continue;
       }
-      const rec = Object.assign({}, n, { recordedAt: at });
+      const repoKey = n.repo.toLowerCase();
+      if (!repoSpelling.has(repoKey)) repoSpelling.set(repoKey, n.repo);
+      const rec = Object.assign({}, n, { repo: repoSpelling.get(repoKey), recordedAt: at });
       records.push(rec);
       byKey.set(k, rec);
       added++;
     }
-    if (added === 0 && titled === 0) return { ok: true, added, duplicates, titled, dropped: 0 };
+    if (added === 0 && titled === 0) return { ok: true, added, duplicates, titled };
+    if (records.length > MAX_RECORDS) return refuse(REASON.FULL, { max: MAX_RECORDS });
     records.sort((a, b) => Date.parse(a.mergedAt) - Date.parse(b.mergedAt) || a.number - b.number);
-    const dropped = Math.max(0, records.length - MAX_RECORDS);
-    const kept = dropped ? records.slice(dropped) : records;
-    const w = write(kept);
+    const w = write(records);
     if (!w.ok) return w;
-    return { ok: true, added, duplicates, titled, dropped };
+    return { ok: true, added, duplicates, titled };
   }
 
   function recordMerge(merge) { return recordMerges([merge]); }
@@ -227,8 +243,10 @@ function createMergeHistoryStore({ userDataDir, fsImpl = fs, now = () => new Dat
 function buildTree(records) {
   const repos = new Map();
   for (const r of records) {
-    if (!repos.has(r.repo)) repos.set(r.repo, new Map());
-    const sessions = repos.get(r.repo);
+    // Grouped by the name in lower case, shown with the first spelling seen.
+    const key = r.repo.toLowerCase();
+    if (!repos.has(key)) repos.set(key, { name: r.repo, sessions: new Map() });
+    const sessions = repos.get(key).sessions;
     const s = r.session || NO_SESSION;
     if (!sessions.has(s)) sessions.set(s, []);
     sessions.get(s).push(r);
@@ -236,7 +254,7 @@ function buildTree(records) {
   const newestFirst = (a, b) => Date.parse(b.mergedAt) - Date.parse(a.mergedAt) || b.number - a.number;
   const byNewest = (a, b) => Date.parse(b.lastMergedAt) - Date.parse(a.lastMergedAt) || a.id.localeCompare(b.id);
   const out = [];
-  for (const [repo, sessions] of repos) {
+  for (const { name: repo, sessions } of repos.values()) {
     const sessionNodes = [];
     for (const [id, merges] of sessions) {
       const sorted = merges.slice().sort(newestFirst);
@@ -263,6 +281,7 @@ function buildTree(records) {
 module.exports = {
   createMergeHistoryStore,
   parseGitMergeLog,
+  GIT_LOG_FORMAT,
   buildTree,
   sessionOf,
   REASON,
