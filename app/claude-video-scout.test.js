@@ -140,7 +140,8 @@ test('sends shell-free CLI arguments, scene-sampled 640 px frames and the local 
   assert.deepEqual(calls[0].args, authArgs);
   const analysis = calls.at(-1);
   assert.deepEqual(analysis.args, [
-    ...authArgs.slice(0, -3), '--print', '--input-format', 'stream-json', '--output-format', 'stream-json',
+    ...authArgs.slice(0, -3), '--effort', 'medium',
+    '--print', '--input-format', 'stream-json', '--output-format', 'stream-json',
     '--verbose', '--no-session-persistence', '--tools', '', '--strict-mcp-config',
     '--mcp-config', '{"mcpServers":{}}', '--permission-mode', 'dontAsk', '--disable-slash-commands',
     '--no-chrome', '--system-prompt', systemPrompt,
@@ -274,6 +275,8 @@ test('more frames than one request holds go out in batches, then one merge reque
   assert.equal(await analyze(), report);
   const requests = analysisCalls();
   assert.equal(requests.length, 3);
+  // Every batch and the merge pass the same explicit effort level (AGENTS.md: effort on every launch).
+  for (const { args } of requests) assert.equal(args[args.indexOf('--effort') + 1], 'medium');
   assert.deepEqual(requests.slice(0, 2).map(({ input }) => imageMessages(input).length), [60, 60]);
   assert.match(JSON.parse(requests[0].input).message.content[0].text, /part 1 of 2 of one video, from 0:00\.0 to 2:08\.0/);
   const merge = JSON.parse(requests[2].input).message.content;

@@ -42,8 +42,12 @@ const CLAUDE_SETTINGS_ARGS = [
   '--settings', '{"disableAllHooks":true,"forceLoginMethod":"claudeai"}',
 ];
 const AUTH_ARGS = [...CLAUDE_SETTINGS_ARGS, 'auth', 'status', '--json'];
+// AGENTS.md: Mako passes the effort level on every launch. Medium keeps each analysis request
+// (every batch and the merge) cheap on the subscription while still reasoning over the frames.
+const ANALYSIS_EFFORT = 'medium';
 const ANALYSIS_ARGS = [
-  ...CLAUDE_SETTINGS_ARGS, '--print', '--input-format', 'stream-json', '--output-format', 'stream-json',
+  ...CLAUDE_SETTINGS_ARGS, '--effort', ANALYSIS_EFFORT,
+  '--print', '--input-format', 'stream-json', '--output-format', 'stream-json',
   '--verbose', '--no-session-persistence', '--tools', '', '--strict-mcp-config',
   '--mcp-config', '{"mcpServers":{}}', '--permission-mode', 'dontAsk', '--disable-slash-commands',
   '--no-chrome', '--system-prompt',
