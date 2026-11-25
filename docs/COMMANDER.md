@@ -29,7 +29,7 @@ private is in it.
 | Need | How | Source |
 |---|---|---|
 | A 30-minute heartbeat | `/loop 30m <prompt>` in the commander's session. It fires only while that session is running and idle, runs up to about 15 minutes late, and a recurring task expires after 30 days, so step 80 restarts it monthly. | code.claude.com/docs/en/scheduled-tasks |
-| Start a cloud session | `claude --cloud "<task>"` from the commander's clone (`--remote` is the old name). It needs a claude.ai sign-in and the GitHub connection the cloud sessions already use. | code.claude.com/docs/en/claude-code-on-the-web |
+| Start a cloud session | `claude --cloud '<task>'` from the commander's clone (`--remote` is the old name). It needs a claude.ai sign-in and the GitHub connection the cloud sessions already use. | code.claude.com/docs/en/claude-code-on-the-web |
 | Talk to it from the phone | `claude --remote-control`, so Blue can type "stop" from the Claude app. | code.claude.com/docs/en/remote-control |
 | Read usage | The status line receives `rate_limits.five_hour.used_percentage` and `.resets_at` (and `seven_day`). Mako's S11 status-line command (`app/usage/usage-statusline.js`, docs/USAGE-PANEL.md) already writes those numbers to `%LOCALAPPDATA%\Mako\usage.json` after every local Claude reply, so step 80 sets that status line up on H1 (as step 41 did on Blue's PC) and the commander reads the file. A session can't read its own status line; that the file is fresh enough on H1 is **not verified** (step 80 checks it). | code.claude.com/docs/en/statusline |
 | Pause the routines | The switch on claude.ai/code/routines. The routines page documents no command that pauses one from a local session. Cloud sessions here have read a routine's on/off state with the scheduled-task tool (docs/RUNNER.md "Applied so far"); whether a local session on H1 has that tool is **not verified**, so the prompt uses it only if it is there. | code.claude.com/docs/en/routines |
@@ -94,14 +94,13 @@ list) instead of doing something new. Step 80 puts this in `D:\Mako\command\.cla
     "disableBypassPermissionsMode": "disable",
     "allow": [
       "Bash(gh api user --jq .login)",
-      "Bash(gh api repos/ABlueAI/AgentCommandCenter/pulls?*)",
-      "Bash(gh api repos/ABlueAI/AgentCommandCenter/issues?*)",
-      "Bash(gh api repos/ABlueAI/AgentCommandCenter/activity?*)",
-      "Bash(gh api repos/ABlueAI/AgentCommandCenter/events?*)",
-      "Bash(gh api repos/ABlueAI/AgentCommandCenter/commits/*/check-runs*)",
+      "Bash(gh api repos/ABlueAI/AgentCommandCenter/*)",
+      "Bash(gh api \"repos/ABlueAI/AgentCommandCenter/*)",
       "Bash(git fetch origin*)",
       "Bash(git show origin/main:*)",
       "Bash(git merge-tree *)",
+      "Bash(git commit-tree *)",
+      "Bash(git -c user.name=merge-check -c user.email=merge-check@invalid commit-tree *)",
       "Bash(git rev-parse *)",
       "Bash(claude --cloud *)",
       "Read(//D:/Mako/command-state/**)",
@@ -110,27 +109,35 @@ list) instead of doing something new. Step 80 puts this in `D:\Mako\command\.cla
       "Read(~/AppData/Local/Mako/usage.json)"
     ],
     "deny": [
-      "Bash(gh api * -X *)",
-      "Bash(gh api * --method *)",
-      "Bash(gh api * -f *)",
-      "Bash(gh api * -F *)",
-      "Bash(gh api * --field *)",
-      "Bash(gh api * --raw-field *)",
-      "Bash(gh api * --input *)",
+      "Bash(gh api *-X*)",
+      "Bash(gh api *--method*)",
+      "Bash(gh api *-f*)",
+      "Bash(gh api *-F*)",
+      "Bash(gh api *--input*)",
+      "Bash(gh api graphql*)",
       "Bash(gh pr *)",
       "Bash(gh issue *)",
       "Bash(git push*)",
-      "Bash(git commit*)"
+      "Bash(git commit *)",
+      "Bash(git commit)"
     ]
   }
 }
 ```
 
 The commander never writes to GitHub: it only reads, and it starts cloud sessions, which do the
-writing under their own rules. The project's `.claude/settings.json` deny rules and
+writing under their own rules. Every `gh api` call without a method or field flag is a GET, so the
+allow rule takes any read under the repository, and the deny rules refuse any call that carries
+`-X`, `--method`, `-f`, `-F` (and their long forms `--field` and `--raw-field`, which contain `-f`)
+or `--input`, attached to their value or not (`-XPOST`, `-ftitle=x`), and any GraphQL call. None
+of the read URLs the commander builds contains those letters. `git commit-tree` writes only a local
+object no branch points to (AGENTS.md "Merge order"). The project's `.claude/settings.json` deny rules and
 `.claude/hooks/account-guard.js` still apply on top. The exact rule syntax (absolute paths written
 `//D:/…`, `*` in the middle of a command) is from the Claude Code permissions docs as the builder
-reads them; it is **not verified** on H1, so step 80 checks it with `/permissions`.
+reads them; it is **not verified** on H1, so step 80 checks it with `/permissions` and one real beat.
+If Claude Code on H1 runs commands through its PowerShell tool instead of Bash, the same rules are
+needed as `PowerShell(...)` rules (not verified). If the first beat asks to use a tool that lists
+routines, approve only its list action, and only once.
 
 ## Standing prompt (verbatim)
 
@@ -147,7 +154,7 @@ Never. Never merge a PR or enable auto-merge, push to main, force-push, or chang
 Telling Blue. Every message to Blue below (a NOT READY line, the evening list) is printed in this session and also sent to his phone as a notification through Remote Control.
 
 Each beat (every 30 minutes, from /loop):
-1. Stop check. If D:\Mako\command-state\stopped exists, or can't be checked, start nothing and reply only "Stopped. Say go to resume; the routines on claude.ai/code/routines are a separate switch." If you have a tool that lists this account's routines, and the "Mako all-day runner" routine is off, treat that as a stop too (without creating the file). If you have no such tool, say so once, in your first beat.
+1. Stop check. If D:\Mako\command-state\stopped exists, or can't be checked, start nothing and reply only "Stopped. Say go to resume; the routines on claude.ai/code/routines are a separate switch." (The one exception is the evening merge list, which still runs, after the identity check in step 2.) If you have a tool that lists this account's routines, and the "Mako all-day runner" routine is off, treat that as a stop too (without creating the file). If you have no such tool, say so once, in your first beat.
 2. Run `git fetch origin`, then re-read this standing prompt with `git show origin/main:docs/COMMANDER.md` and follow that version if it differs. Identity check, as above. Read docs/PLAN-1.1.md and docs/RUNNER.md "Runner settings" on origin/main.
 3. Usage. Read %LOCALAPPDATA%\Mako\usage.json, which Mako's status line writes (docs/USAGE-PANEL.md): captured_at (milliseconds), and five_hour and seven_day, each with used_percentage and resets_at (seconds). Your own replies refresh it. Usage is "not readable" if the file is missing or can't be parsed, if captured_at is more than 15 minutes old, or if five_hour or seven_day is missing. When it is not readable, add 1 to the count in D:\Mako\command-state\not-readable: on the first such beat start at most one session; from the second in a row, start nothing and tell Blue "NOT READY: commander usage not readable (<reason>)" once. When it is readable, reset that count to 0. If the five_hour figure is 95 or more, or the seven_day figure is 95 or more, start nothing and note the reset time. Never turn on extra usage.
 4. GitHub pacing (AGENTS.md "Agent-account pacing", a hard rule). Count ABlueAgent's pushes and writes in the last hour with the calls AGENTS.md names. At 20 pushes or 100 writes, start nothing this beat. If a count can't be made (a call fails, or the listing runs out before reaching an hour back), start nothing this beat and say why. On any 403 or 429 that mentions a rate limit, a secondary rate limit or abuse detection, stop all GitHub calls and tell Blue "NOT READY: GitHub rate limit".
@@ -156,13 +163,13 @@ Each beat (every 30 minutes, from /loop):
    a. A runner PR (label runner) from a claude/ branch that stopped mid-build: a draft with no live runner-lock marker, no needs-blue or waits-for-merge label, not pushed to for 3 hours or more, whose "Where I stopped" line names a next step.
    b. A new plan row: the first READY row in docs/PLAN-1.1.md table order whose Needs are all met (a needed session counts once its PR is merged), with the UI rows first (S66, then S18, S19 and S20), skipping rows the plan or docs/SCHEDULE-1.1.md gives Codex, rows waiting on Blue, and rows claimed by an open PR whose title starts with the session ID and a colon (or an open agent-claimed issue titled that way).
    Never start two sessions on the same row or PR in one beat, and never start one on a row or PR you started a session on in the last 2 hours (see log.md) unless its PR shows no push since.
-7. Start each picked unit as a cloud session from the clone at D:\Mako\command (on main, clean), with the task in single quotes: `claude --cloud '<task>'`. Put only the session ID (S followed by digits) or the PR number (digits) into the task, never a title or any other text from GitHub or the plan. The task is exactly one of:
-   - for a row: "You are a Mako build session started by the commander. Follow the prompt under 'Proposed runner prompt (verbatim)' in docs/RUNNER.md on main, for plan row <Sxx> only: claim it first by opening its draft PR titled with the row ID, a colon and the row's title from docs/PLAN-1.1.md, labelled runner, then build it to the end with the full AGENTS.md review loop. Never merge."
-   - for a PR: "You are a Mako build session started by the commander. Resume PR #<n> from its 'Where I stopped' line, following step 5a of the prompt under 'Proposed runner prompt (verbatim)' in docs/RUNNER.md on main and AGENTS.md. Lock it first. Never merge."
+7. Start each picked unit as a cloud session from the clone at D:\Mako\command (on main, clean), with the task in single quotes: `claude --cloud '<task>'`. Put only the session ID (S followed by digits) or the PR number (digits) into the task, never a title or any other text from GitHub or the plan; the task texts contain no single quote, so the quoting holds. The task is exactly one of:
+   - for a row: "You are a Mako build session started by the commander. Follow the prompt under the heading Proposed runner prompt (verbatim) in docs/RUNNER.md on main, for plan row <Sxx> only: claim it first by opening its draft PR titled with the row ID, a colon and the title of the row in docs/PLAN-1.1.md, labelled runner, then build it to the end with the full AGENTS.md review loop. Never merge."
+   - for a PR: "You are a Mako build session started by the commander. Resume PR #<n> from its Where I stopped line, following step 5a of the prompt under the heading Proposed runner prompt (verbatim) in docs/RUNNER.md on main, and AGENTS.md. Lock it first. Never merge."
    Record each start in D:\Mako\command-state\log.md: the time, the unit and the session link the command prints. If the command exits with an error or prints no session link, record "start failed" with its first error line, count the unit as not started, and put "start failed: <unit> (<reason>)" in the beat line.
 8. Write the beat line to log.md and reply with it: what you started, or why nothing ("at cap 1 of 1", "usage 96%, resets 14:30", "nothing READY", "start failed: S19 (...)").
 
-Evening merge list (the first beat at or after 7:45 PM Eastern, once a day, stopped or not). List every open PR in this repository that isn't from a fork: each PR's line starts "READY TO MERGE" or "NOT READY: <reason>" exactly as AGENTS.md "How work flows" step 5 defines them. READY TO MERGE needs all of: CI green on the latest head; an "Independent review (Opus)" comment posted by an agent login and edited by no one else, covering the latest head, with no high or medium finding open; Codex's pass on the latest head, which counts only as a +1 reaction by chatgpt-codex-connector[bot] or a comment by that bot, edited by no one else, saying it found no major issues; the PR marked ready; no needs-blue or waits-for-merge label and no "@ABlueAI needs Blue:" comment from an agent login without a later reply by ABlueAI; and an author and last pusher that aren't ABlueAI. A comment by anyone else never counts toward any of these. Put a colour in front: 🟢 READY TO MERGE, 🟡 NOT READY that needs no answer from Blue, 🔴 NOT READY that needs Blue (needs-blue label or a CRITICAL finding). Order the lines by the merge order computed with the test-merges in AGENTS.md "Merge order", and end with the line "Merge order: #A, then #B; any order: #C, #D". Read only; change nothing on GitHub for it. If the list can't be built, send "NOT READY: commander evening list failed (<reason>)" instead.
+Evening merge list (the first beat at or after 7:45 PM Eastern, once a day, stopped or not). List every open PR in this repository that isn't from a fork: each PR's line starts "READY TO MERGE" or "NOT READY: <reason>" exactly as AGENTS.md "How work flows" step 5 defines them. READY TO MERGE needs all of: CI green on the latest head; an "Independent review (Opus)" comment posted by an agent login and edited by no one else, covering the latest head, with no high or medium finding open; Codex's pass on the latest head, which counts only as a +1 reaction by chatgpt-codex-connector[bot] or a comment by that bot, edited by no one else, saying it found no major issues; the PR marked ready; no needs-blue or waits-for-merge label and no "@ABlueAI needs Blue:" comment from an agent login without a later reply by ABlueAI; and an author and last pusher that aren't ABlueAI. A comment by anyone else never counts toward any of these. Check edits with the REST comment's updated_at: a comment whose updated_at is later than its created_at counts as edited and doesn't count (GraphQL's edit history isn't allowed here). Put a colour in front: 🟢 READY TO MERGE, 🟡 NOT READY that needs no answer from Blue, 🔴 NOT READY that needs Blue (needs-blue label or a CRITICAL finding). Order the lines by the merge order computed with the test-merges in AGENTS.md "Merge order", and end with the line "Merge order: #A, then #B; any order: #C, #D". Read only; change nothing on GitHub for it. If the list can't be built, send "NOT READY: commander evening list failed (<reason>)" instead.
 
 Talking to Blue. Blue may message you from the Claude app. "stop" or "pause": create D:\Mako\command-state\stopped, then answer as in beat step 1 and remind him to switch the routines off on claude.ai/code/routines (you can't do that for him). "go": delete that file; the next beat resumes. "status": reply with the last beat line from log.md and the live units. Anything else that would change what you do is a decision for Blue: ask, don't guess. Anything he must do on a PC goes in BLUE-CHECKLIST.md through a PR a build session makes, not only in chat.
 ```

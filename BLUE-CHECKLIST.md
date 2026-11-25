@@ -1321,8 +1321,11 @@ open PRs (#253 and #254).
   - Copy the permission file from docs/COMMANDER.md "Permissions" to
     `D:\Mako\command\.claude\settings.local.json`. Never start the commander in `auto` or bypass
     mode, and never answer a prompt with "always allow" for every command.
-  - Set Mako's usage status line on H1 exactly as step 41 does on your PC (its checks included), with
-    the path `D:/Mako/command/app/usage/usage-statusline.js`.
+  - Set Mako's usage status line on H1. Open `%USERPROFILE%\.claude\settings.json` (create it with
+    `{}` if missing). If it already has a `statusLine`, stop and ask an agent. Otherwise add
+    `"statusLine": { "type": "command", "command": "node \"D:/Mako/command/app/usage/usage-statusline.js\"" }`,
+    then check the file still parses: `node -e "JSON.parse(require('fs').readFileSync(process.env.USERPROFILE+'/.claude/settings.json','utf8'));console.log('ok')"`
+    must print `ok`.
   - In Windows power settings, set H1 never to sleep while plugged in.
   - In `D:\Mako\command`, run `claude --remote-control --model sonnet`, run `/permissions` and check
     the allow and deny lists show, name the session "Mako command" with `/rename Mako command` (not
@@ -1333,7 +1336,7 @@ open PRs (#253 and #254).
   - To stop everything, do both: tell the commander "stop" from the Claude app, and pause the
     routines on the claude.ai routines page. Neither reliably switches off the other
     (docs/COMMANDER.md).
-  - *Verify (2 minutes, after the first beat):* the session shows a beat line ("started …",
+  - *Verify (5 minutes, after the first beat):* the beat ran with no permission prompt; the session shows a beat line ("started …",
     "at cap …" or "nothing READY"), its status line shows `usage 5h …%`, and
     `D:\Mako\command-state\log.md` has that line. A missing evening list later means the commander
     is down; that file's last line shows when it last beat.
