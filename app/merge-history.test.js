@@ -9,7 +9,7 @@ const os = require('os');
 const path = require('path');
 const {
   createMergeHistoryStore, parseGitMergeLog, buildTree, sessionOf, REASON, FILENAME, MAX_RECORDS, NO_SESSION,
-  GIT_LOG_FORMAT,
+  GIT_LOG_FORMAT, sessionOfBranch,
 } = require('./merge-history');
 
 let passed = 0, failed = 0;
@@ -37,6 +37,23 @@ assert(sessionOf('S62: tree and merged-work history') === 'S62', 'a "Sxx:" title
 assert(sessionOf('S4: x') === 'S4', 'a one-digit session counts');
 for (const t of ['Runner refresh: x', 'S62 tree', ' S62: x', 's62: x', 'S1234: x', null, undefined, 42]) {
   assert(sessionOf(t) === null, 'no session for ' + JSON.stringify(t));
+}
+
+section('sessionOfBranch');
+assert(sessionOfBranch('claude/s62-merge-history') === 'S62', 'a claude/sNN- branch gives its session');
+assert(sessionOfBranch('codex/S53-agentplayback') === 'S53', 'a codex branch too, in either case');
+for (const b of ['claude/nice-wright-ipkymq', 'claude/s62', 's62-x', 'claude/x/s62-y', null, 7]) {
+  assert(sessionOfBranch(b) === null, 'no session for ' + JSON.stringify(b));
+}
+{
+  const dir = freshDir();
+  const s = createMergeHistoryStore({ userDataDir: dir });
+  s.recordMerge(merge(40, 'a', '2026-11-20T10:00:00Z', { branch: 'claude/s46-session-hygiene' }));
+  assert(s.list().records[0].session === 'S46', 'an untitled merge takes its session from the branch');
+  s.recordMerge(merge(40, 'a', '2026-11-20T10:00:00Z', { title: 'Session hygiene' }));
+  assert(s.list().records[0].session === 'S46', 'a later title with no "Sxx:" keeps the branch session');
+  s.recordMerge(merge(41, 'b', '2026-11-20T11:00:00Z', { branch: 'claude/s46-x', title: 'S47: y' }));
+  assert(s.list().records[1].session === 'S47', 'a title\'s "Sxx:" wins over the branch');
 }
 
 section('each merge is recorded once and survives a restart');

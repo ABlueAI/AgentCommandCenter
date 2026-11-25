@@ -28,6 +28,7 @@ const MAX_REPO_LENGTH = 140;       // owner/name: GitHub caps owner at 39 and na
 const SHA_RE = /^[0-9a-f]{40}$/;
 const REPO_RE = /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/;
 const SESSION_RE = /^(S\d{1,3}):/;
+const BRANCH_SESSION_RE = /^[A-Za-z0-9._-]+\/s(\d{1,3})-/i;
 const MERGE_SUBJECT_RE = /^Merge pull request #(\d{1,7}) from ([A-Za-z0-9-]{1,39})\/(\S{1,255})$/;
 const NO_SESSION = 'other';
 
@@ -58,6 +59,13 @@ function optionalText(v) { return v === null || (typeof v === 'string' && v.leng
 function sessionOf(title) {
   const m = typeof title === 'string' ? SESSION_RE.exec(title) : null;
   return m ? m[1] : null;
+}
+
+// The plan session from a head branch named like `claude/s62-merge-history` or `codex/s53-x`, for
+// merges whose title isn't known. A title's "Sxx:" wins over the branch.
+function sessionOfBranch(branch) {
+  const m = typeof branch === 'string' ? BRANCH_SESSION_RE.exec(branch) : null;
+  return m ? `S${m[1]}` : null;
 }
 
 function validRecord(r) {
@@ -92,7 +100,8 @@ function normaliseMerge(m) {
   const branch = m.branch === undefined ? null : m.branch;
   if (!isRepo(repo) || !isPrNumber(number) || !isSha(mergeSha) || !isIsoTime(mergedAt)) return null;
   if (!optionalText(title) || !optionalText(branch)) return null;
-  return { repo, number, mergeSha, mergedAt: new Date(mergedAt).toISOString(), title, branch, session: sessionOf(title) };
+  return { repo, number, mergeSha, mergedAt: new Date(mergedAt).toISOString(), title, branch,
+    session: sessionOf(title) || sessionOfBranch(branch) };
 }
 
 // The git command whose output parseGitMergeLog reads. Each commit ends with the record separator
@@ -202,7 +211,7 @@ function createMergeHistoryStore({ userDataDir, fsImpl = fs, now = () => new Dat
         }
         if (existing.title === null && n.title !== null) {
           existing.title = n.title;
-          existing.session = n.session;
+          existing.session = sessionOf(n.title) || existing.session;
           titled++;
         } else {
           duplicates++;
@@ -284,6 +293,7 @@ module.exports = {
   GIT_LOG_FORMAT,
   buildTree,
   sessionOf,
+  sessionOfBranch,
   REASON,
   FILENAME,
   MAX_RECORDS,

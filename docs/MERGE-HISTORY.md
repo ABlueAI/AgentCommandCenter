@@ -20,7 +20,7 @@ crash leaves the old file or the new one, never half of either.
 | `mergedAt` | when it merged (UTC) |
 | `title` | the PR title, or `null` until a caller supplies it |
 | `branch` | the PR's head branch, or `null` |
-| `session` | the plan session (`S62`) from a title that starts `Sxx:`, or `null` |
+| `session` | the plan session (`S62`) from a title that starts `Sxx:`, else from a branch named like `claude/s62-…`, or `null` |
 | `recordedAt` | when Mako recorded it |
 
 ## The rules
@@ -50,7 +50,10 @@ git log --first-parent --merges --format=%H%x09%cI%x09%s%x09%b%x1e origin/main
 
 (`GIT_LOG_FORMAT` in the module) from a local clone and keeps the commits GitHub writes as "Merge
 pull request #N from owner/branch". GitHub puts the PR title on the first line of the merge commit's
-body, so each merge gets its title and, from a `Sxx:` title, its plan session. Other merges (a local
+body when its merge message includes it, so such a merge gets its title and, from a `Sxx:` title, its
+plan session. This repository's merge commits carry no body (checked 2026-11-25 on #225 and #282), so
+here the session comes from a branch named like `claude/s62-…`, and the rest go under `other` until a
+caller supplies their titles (for example from GitHub, which S18 would wire). Other merges (a local
 `main` merge, for instance) are skipped and counted; an entry in another format is refused. Squash
 and rebase merges have no merge commit and aren't seen; this repository uses merge commits. No GitHub token or network call is needed. Running git, and when to do it, is left to the
 caller: the brain tab's history (S18) wires it.
