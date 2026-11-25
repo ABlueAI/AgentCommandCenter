@@ -1307,6 +1307,29 @@ Once S04 is applied (step 27), the runner works all day and you do one sitting i
 - **Until step 27 is done:** the old runner fires once, at 8:01 AM. Check your phone in the
   morning for "needs Blue", and approve and merge ready PRs in the evening as above.
 
+## From S38 (the full security check)
+
+Steps 78 and 79 come from PR #254 (S38). Step number 77 belongs to an open PR (#253). The details
+behind both steps are in the private report from the S38 session, not in this public file
+(docs/DECISIONS.md 2026-11-21, item 7).
+
+- [ ] **78. Two security decisions from S38 (PR #254).** **About 10 minutes**, after merging PR #254,
+  with the S38 private report open.
+  - Issue #265: decide whether to make the repository-settings change the private report describes
+    (only you change repository settings), or tell an agent another way to close it.
+  - Issue #270's last item: decide whether two kinds of material named in the private report stay in
+    this public repository.
+  - *Done when:* you've told any agent your answer on each; it records them in docs/DECISIONS.md and
+    ticks this with the date and your words.
+- [ ] **79. S38's checks on your PC (PR #254).** **About 10 minutes**, on the next Tuesday or Friday
+  PC-check evening after merging PR #254, with the S38 private report open. Some findings rest on
+  Windows behaviour a cloud session can't run; the report lists each one with a check of under 2
+  minutes.
+  - Run each check as the report says, and note what you saw.
+  - *Done when:* you've told any agent the result of each check in a session (not on GitHub). The
+    results stay private: a public issue gets at most "checked on Blue's PC, <date>" or a severity
+    change. The agent ticks this with the date.
+
 ## From the H1 commander (PR #282)
 
 Step 80 comes from PR #282 (docs/DECISIONS.md, 2026-11-24, D-084). Step numbers 77 to 79 belong to
