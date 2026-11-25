@@ -73,6 +73,8 @@ assert(typeof window.ccSTT === 'object' && window.ccSTT !== null,
   'window.ccSTT is assigned (the original bug left this permanently undefined)');
 assert(typeof window.ccSTT.toggle === 'function', 'ccSTT.toggle is exposed');
 assert(typeof window.ccSTT.transcribeVideoPcm === 'function', 'the Video Scout PCM entry point is exposed');
+assert(typeof window.ccSTT.cancelVideoTranscription === 'function', 'Video Scout can cancel a running transcription');
+window.ccSTT.cancelVideoTranscription(); // no transcription running: a no-op that leaves no stale cancel behind
 const invalidAudio = await window.ccSTT.transcribeVideoPcm(new Uint8Array(1), () => {});
 assert(invalidAudio.ok === false && invalidAudio.error === 'failed' && /16-bit/.test(invalidAudio.detail),
   'the Video Scout PCM entry point refuses a partial sample before model load, saying why');

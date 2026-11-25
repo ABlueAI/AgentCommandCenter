@@ -757,7 +757,11 @@ function openInAppTerminal(opts = {}) {
     try { mouseSelectionFallback.dispose(); } catch {}
     if (copyFlashTimer) { clearTimeout(copyFlashTimer); copyFlashTimer = null; }
     if (paneData.rafId !== null) { cancelAnimationFrame(paneData.rafId); paneData.rafId = null; }
-    if (claudeVideoScout) cc.claudeVideoScoutCancel(id);
+    if (claudeVideoScout) {
+      // Stop local Whisper too (Codex finding), so Dictate and the next run aren't left busy.
+      if (window.ccSTT && window.ccSTT.cancelVideoTranscription) window.ccSTT.cancelVideoTranscription();
+      cc.claudeVideoScoutCancel(id);
+    }
     else cc.ptyKill(id);
     term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();

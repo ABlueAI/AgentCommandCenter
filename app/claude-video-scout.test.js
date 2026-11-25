@@ -552,6 +552,8 @@ test('Video Scout offers both providers and Claude bypasses the Gemini key and l
     videoModel: 'gemini-2.5-flash-lite', mediaResolution: 'MEDIUM',
     analysisMode: 'transcript', title: 'Video Scout · www.youtube.com',
   });
+  // Closing the pane stops local Whisper as well as the run in main (Codex finding on 8ad4b6d).
+  assert.match(js, /if \(claudeVideoScout\) \{\s*\/\/[^\n]*\n\s*if \(window\.ccSTT && window\.ccSTT\.cancelVideoTranscription\) window\.ccSTT\.cancelVideoTranscription\(\);\s*cc\.claudeVideoScoutCancel\(id\);/);
   assert.match(js, /if \(claudeVideoScout\) \{\s*runClaudeVideoInPane\(id, opts.videoUrl, opts.analysisFocus, opts.claudeVideoSettings\);\s*return;/);
 });
 

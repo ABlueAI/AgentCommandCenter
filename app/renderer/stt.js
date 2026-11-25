@@ -25,6 +25,7 @@ import {
   describeTranscriptionError,
   describeWhisperDtype,
   pcm16leToFloat32,
+  transcribeInWindows,
   getWhisperTranscriptionOptions,
   WHISPER_DOWNLOADS,
   WHISPER_MODEL_ID,
@@ -48,6 +49,7 @@ let loading = null;     // in-flight load promise
 let activeDevice = '';  // backend that actually initialized ('' until proven)
 let recording = false;
 let videoBusy = false;
+let videoCancelled = false; // set when the Video Scout pane is closed mid-transcription
 let busy = false;       // transcribing
 let statusCb = null;
 let resultCb = null;
@@ -172,14 +174,17 @@ async function transcribeVideoPcm(bytes, onProgress) {
   const pcm = pcm16leToFloat32(bytes);
   if (!pcm) return { ok: false, error: 'failed', detail: 'the audio was not whole 16-bit samples' };
   videoBusy = true;
+  videoCancelled = false;
   try {
     const model = await ensureModel((_state, detail) => onProgress(detail));
     onProgress(`Whisper large-v3-turbo · ${activeDevice}/${describeWhisperDtype(activeDevice)}`);
     const options = getWhisperTranscriptionOptions();
     delete options.language; // The source video can be in a different language.
-    const output = await model(pcm, options);
-    if (typeof output?.text !== 'string') return { ok: false, error: 'failed', detail: 'Whisper returned no text' };
-    return { ok: true, text: output.text.trim() };
+    const result = await transcribeInWindows(pcm, async (window) => (await model(window, options))?.text,
+      () => videoCancelled);
+    if (result.cancelled) return { ok: false, error: 'cancelled', detail: 'transcription stopped: the run was cancelled' };
+    if (typeof result.text !== 'string') return { ok: false, error: 'failed', detail: 'Whisper returned no text' };
+    return { ok: true, text: result.text };
   } catch (e) {
     // Same bounded wording Dictate shows, so a model that fails to load says why.
     return { ok: false, error: 'failed', detail: describeTranscriptionError(e) };
@@ -190,6 +195,7 @@ async function transcribeVideoPcm(bytes, onProgress) {
 
 window.ccSTT = {
   transcribeVideoPcm,
+  cancelVideoTranscription: () => { if (videoBusy) videoCancelled = true; },
   toggle,
   isRecording: () => recording,
   isBusy: () => busy,

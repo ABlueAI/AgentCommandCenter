@@ -9,7 +9,7 @@
 import {
   WHISPER_MODEL_ID, WHISPER_DOWNLOADS, getWhisperLoadOptions, describeWhisperDtype,
   getWhisperTranscriptionOptions, boundedFileName, createProgressReporter, createWhisperLoader,
-  pcm16leToFloat32, describeTranscriptionError,
+  pcm16leToFloat32, describeTranscriptionError, transcribeInWindows, VIDEO_WINDOW_SAMPLES,
 } from './stt-bootstrap.js';
 
 let passed = 0;
@@ -240,6 +240,27 @@ section('S54 Video Scout: 16-bit PCM conversion and the shared failure wording')
     'any other failure says transcription failed and why');
   assert(describeTranscriptionError(new Error('x'.repeat(500))).length === 'transcription failed: '.length + 300,
     'the reason is bounded to 300 characters');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+section('S54 Video Scout: windowed transcription stops between windows when cancelled');
+// ══════════════════════════════════════════════════════════════════════════════
+{
+  assert(VIDEO_WINDOW_SAMPLES === 16000 * 120, 'the default window is 2 minutes of 16 kHz audio');
+  const pcm = new Float32Array(10);
+  const seen = [];
+  const all = await transcribeInWindows(pcm, async (w) => { seen.push(w.length); return ` part${seen.length} `; }, () => false, 4);
+  assert(seen.join(',') === '4,4,2' && all.text === 'part1 part2 part3', 'every window is transcribed in order and the texts are joined');
+  let cancelled = false;
+  const calls = [];
+  const stopped = await transcribeInWindows(pcm, async () => { calls.push(1); cancelled = true; return 'x'; }, () => cancelled, 4);
+  assert(stopped.cancelled === true && calls.length === 1, 'a cancel during a window stops before the next window starts');
+  const before = await transcribeInWindows(pcm, async () => { throw new Error('never runs'); }, () => true, 4);
+  assert(before.cancelled === true, 'a cancel before the first window runs nothing');
+  const silent = await transcribeInWindows(pcm, async () => '  ', () => false, 4);
+  assert(silent.text === '', 'windows with no speech give an empty transcript, not a refusal');
+  const broken = await transcribeInWindows(pcm, async () => undefined, () => false, 4);
+  assert(broken.text === null, 'a window with no text makes the whole transcript invalid');
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

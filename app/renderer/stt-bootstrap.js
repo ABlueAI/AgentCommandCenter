@@ -49,6 +49,21 @@ export function pcm16leToFloat32(bytes) {
   return pcm;
 }
 
+// S54 Video Scout: transcribe long audio in windows (2 minutes at 16 kHz by default) and check
+// for a cancel between them, so closing the pane stops inference within one window instead of
+// running the whole recording. Returns { cancelled: true } or { text } (window texts joined).
+export const VIDEO_WINDOW_SAMPLES = 16000 * 120;
+export async function transcribeInWindows(pcm, runWindow, isCancelled, windowSamples = VIDEO_WINDOW_SAMPLES) {
+  const texts = [];
+  for (let start = 0; start < pcm.length; start += windowSamples) {
+    if (isCancelled()) return { cancelled: true };
+    const text = await runWindow(pcm.subarray(start, start + windowSamples));
+    if (typeof text !== 'string') return { text: null };
+    if (text.trim()) texts.push(text.trim());
+  }
+  return isCancelled() ? { cancelled: true } : { text: texts.join(' ') };
+}
+
 // The one bounded wording Dictate and Video Scout both show for a failed load or transcription:
 // the bootstrap's combined error already names both backends with their reasons.
 export function describeTranscriptionError(e) {
