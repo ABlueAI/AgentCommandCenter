@@ -1315,9 +1315,14 @@ open PRs (#253 and #254).
 - [ ] **80. Set up the commander on H1.** **About 30 minutes** (builder's estimate), at H1, once
   S67's PR is merged. docs/COMMANDER.md has the standing prompt and why each step is there.
   - Clone the repository to `D:\Mako\command` and stay on `main`; make an empty folder
-    `D:\Mako\command-state`. Sign `gh` in as `ABlueAgent` (`gh auth login`, then
-    `gh api user --jq .login` must print `ABlueAgent`). `gh`'s login is per Windows user, so every
-    other session under that H1 account uses `ABlueAgent` from then on.
+    `D:\Mako\command-state`.
+  - Make the commander's read-only GitHub token (a new credential, so yours to make): signed in to
+    GitHub as `ABlueAgent`, Settings > Developer settings > Fine-grained tokens > Generate, expiry
+    90 days, Repository access "Public repositories (read-only)", no permissions added. Copy it once.
+  - In a PowerShell window on H1: `$env:GH_CONFIG_DIR='D:\Mako\command-state\gh'`, then
+    `gh auth login --with-token` and paste the token, then `gh api user --jq .login` must print
+    `ABlueAgent`. This login is only for windows where `GH_CONFIG_DIR` is set; H1's other `gh` login
+    is untouched. Never store the token with `setx`. Set a reminder to renew it before it expires.
   - Copy the permission file from docs/COMMANDER.md "Permissions" to
     `D:\Mako\command\.claude\settings.local.json`. Never start the commander in `auto` or bypass
     mode, and never answer a prompt with "always allow" for every command.
@@ -1327,7 +1332,7 @@ open PRs (#253 and #254).
     then check the file still parses: `node -e "JSON.parse(require('fs').readFileSync(process.env.USERPROFILE+'/.claude/settings.json','utf8'));console.log('ok')"`
     must print `ok`.
   - In Windows power settings, set H1 never to sleep while plugged in.
-  - In `D:\Mako\command`, run `claude --remote-control --model sonnet`, run `/permissions` and check
+  - In that same PowerShell window (so `GH_CONFIG_DIR` is set), in `D:\Mako\command`, run `claude --remote-control --model sonnet`, run `/permissions` and check
     the allow and deny lists show, name the session "Mako command" with `/rename Mako command` (not
     verified on your version; skip it if the command is missing), paste the standing prompt from
     docs/COMMANDER.md, then type the `/loop 30m` line docs/COMMANDER.md "Set-up" gives. Leave the

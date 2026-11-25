@@ -20,7 +20,8 @@ private is in it.
   count), the PR sweeper (docs/SWEEPER.md), AGENTS.md's merge-order check, and Claude Code's own
   documented tools: `/loop`, `claude --cloud`, Remote Control and the status line's `rate_limits`.
 - **Methods and tools:** only documented Claude Code features on Blue's own plan (no API credits);
-  `gh` as `ABlueAgent` with the account-guard hook; the same REST calls the runner uses.
+  `gh` as `ABlueAgent` on a read-only token of its own, with the account-guard hook; the same REST
+  calls the runner uses.
 - **Outside evidence:** step 80's done-when, a full day on H1 with a session it started and an
   evening list in merge order; `app/commander-prompt.test.js` pins the prompt's guardrails.
 
@@ -127,16 +128,17 @@ list) instead of doing something new. Step 80 puts this in `D:\Mako\command\.cla
 ```
 
 The commander never writes to GitHub: it only reads, and it starts cloud sessions, which do the
-writing under their own rules. Every `gh api` call without a method or field flag is a GET, so the
-allow rule takes any read under the repository, and the deny rules refuse any call that carries
-`-X`, `--method`, `-f`, `-F` (and their long forms `--field` and `--raw-field`, which contain `-f`)
-or `--input`, spaced or attached to their value (`-XPOST`, `-ftitle=x`), and any GraphQL call. gh's
-flag parser also lets a boolean short flag be grouped in front of a value flag; `-i` (`--include`)
-is the only boolean short flag `gh api` has (builder's reading of `gh api --help`, not verified by
-running), so `-i` is denied outright (`-iXDELETE`, `-iftitle=x`). The commander never needs it.
-These rules also refuse a read whose command happens to contain those letters (a `--jq` filter
-naming the `waits-for-merge` label, for instance), which fails visibly; the commander fetches the
-JSON and filters it in its own reply instead. `git commit-tree` writes only a local
+writing under their own rules (`claude --cloud` uses the cloud's GitHub connection, not the local
+`gh`). **The guard is the token, not the rules:** the commander's `gh` signs in with an `ABlueAgent`
+fine-grained token whose only access is "Public repositories (read-only)", kept in a `gh` config of
+its own (`GH_CONFIG_DIR=D:\Mako\command-state\gh`). This repository is public, so every read works,
+and GitHub refuses every write with that token, however a command is spelled. Blue creates that
+token himself in step 80 (credentials are his). The deny rules are a second layer that refuses the
+plain spellings of gh's write flags (`-X`, `--method`, `-f`, `-F` with their long forms, `--input`,
+`-i` grouped in front of them, and GraphQL); they can't catch every shell spelling (quotes inside a
+flag, for instance), which is why the token is the guard. They also refuse a read whose command
+happens to contain those letters (a `--jq` filter naming the `waits-for-merge` label), which fails
+visibly; the commander fetches the JSON and filters it in its own reply instead. `git commit-tree` writes only a local
 object no branch points to (AGENTS.md "Merge order"). The project's `.claude/settings.json` deny rules and
 `.claude/hooks/account-guard.js` still apply on top. The exact rule syntax (absolute paths written
 `//D:/…`, `*` in the middle of a command) is from the Claude Code permissions docs as the builder
@@ -188,8 +190,9 @@ Step 80 holds the steps; this is what they do and why.
 - **A clone of its own** (`D:\Mako\command`) on `main`, so the cloud sessions it starts clone a clean
   `main` (the cloud copy starts from the local branch's remote), and a state folder beside it,
   `D:\Mako\command-state\`.
-- **`gh` as `ABlueAgent`**. `gh`'s login is per Windows user, so every other session under that H1
-  account also uses `ABlueAgent` from then on. The repository's account-guard hook stays in force,
+- **`gh` as `ABlueAgent`, read-only, for the commander only.** A fine-grained token with only
+  "Public repositories (read-only)" access, signed in under `GH_CONFIG_DIR=D:\Mako\command-state\gh`,
+  so it can't write to GitHub and no other session on H1 uses it. The repository's account-guard hook stays in force,
   and the commander checks the login every beat.
 - **The permission file** from "Permissions" above, in the clone's `.claude\settings.local.json`.
 - **The status-line command** is S11's (`app/usage/usage-statusline.js`), set the way step 41 did on

@@ -110,8 +110,8 @@ for (const d of ['Bash(gh api *-i*)', 'Bash(gh api *-X*)', 'Bash(gh api *--metho
   assert(deny.includes(d), 'deny list has ' + d);
 }
 
-// gh's write flags, spaced, attached and grouped behind -i (its only boolean short flag), hit a deny
-// rule (simple glob: * is any text).
+// The deny rules are the second layer (the read-only token is the guard): the plain spellings of
+// gh's write flags, spaced, attached and grouped behind -i, hit one (simple glob: * is any text).
 const globRe = (rule) => new RegExp('^' + rule.replace(/^Bash\(|\)$/g, '').split('*')
   .map((x) => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$');
 const denied = (cmd) => deny.some((r) => r.startsWith('Bash(') && globRe(r).test(cmd));
@@ -138,10 +138,16 @@ for (const cmd of [
   'git -c user.name=merge-check -c user.email=merge-check@invalid commit-tree abc -p origin/main -p def -m test',
 ]) assert(allowed(cmd) && !denied(cmd), 'allowed: ' + cmd);
 
+// The guard: a read-only token for the commander's gh only.
+assert(doc.includes('"Public repositories (read-only)"') && doc.includes('GH_CONFIG_DIR=D:\\Mako\\command-state\\gh'),
+  'docs/COMMANDER.md gives the commander a read-only token in a gh config of its own');
+
 // The checklist step that sets it up points here.
 const checklist = read('BLUE-CHECKLIST.md');
 const step80 = /- \[[ x]\] \*\*80\. [\s\S]*?(?=\n- \[[ x]\] \*\*\d+\.|\n## )/.exec(checklist);
 assert(Boolean(step80) && step80[0].includes('docs/COMMANDER.md'), 'checklist step 80 points at docs/COMMANDER.md');
+assert(Boolean(step80) && step80[0].includes('"Public repositories (read-only)"') && step80[0].includes("GH_CONFIG_DIR='D:\\Mako\\command-state\\gh'")
+  && step80[0].includes('Never store the token with `setx`'), 'step 80 makes the read-only token, scoped to the commander, never setx');
 assert(Boolean(step80) && /pause the routines|routines page/.test(step80[0]) && /"stop"/.test(step80[0]),
   'step 80 says to do both: tell the commander "stop" and pause the routines');
 
