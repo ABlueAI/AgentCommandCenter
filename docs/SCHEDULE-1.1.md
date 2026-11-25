@@ -38,8 +38,9 @@ estimate still holds a build half for S53. Blue's verdict on S53 is PATTERN-MINE
 recorded in PR #208, not yet merged), so S53 itself builds nothing, and any replay work belongs to
 S19 or S62. The totals are left as they were.
 
-Codex builds rows in sensitive areas too (AGENTS.md "Sensitive areas"; Blue, docs/DECISIONS.md
-2026-11-25). It never builds the UI or the Composer's dispatch tools.
+Codex builds rows in sensitive areas too, for example security fixes, the account guard, the
+credentials store, IPC, PTY, launchers, the fence hook and `.claude/` settings (Blue,
+docs/DECISIONS.md 2026-11-25). It never builds the UI or the Composer's dispatch tools.
 
 ## The UI gate and the two chains
 

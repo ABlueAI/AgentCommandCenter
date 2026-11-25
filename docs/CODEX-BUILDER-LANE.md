@@ -26,13 +26,15 @@ minutes during the trial (checklist step 30).
 ## The lane
 
 1. **Who gets which session.** Codex takes `windows`-lane sessions that Windows CI can verify (S26
-   details item 4), and since 2026-11-25 sensitive work too (security fixes, the account guard, the
-   credentials store, IPC, PTY, launchers, the fence hook, `.claude/` settings; Blue,
-   docs/DECISIONS.md 2026-11-25); a Codex PR that touches a sensitive area also gets
+   details item 4), and since 2026-11-25 sensitive work too (for example security fixes, the
+   account guard, the credentials store, IPC, PTY, launchers, the fence hook, `.claude/` settings;
+   Blue, docs/DECISIONS.md 2026-11-25); a Codex PR that touches a sensitive area also gets
    `security-reviewer` on review run 1 (item 5). The comment hand-off (item 3) is not widened: the
    handle exception in AGENTS.md "Security rules" still covers only `windows`-lane sessions that
-   aren't sensitive, so Blue starts Codex on sensitive work himself. Claude takes the rest, the UI sessions (S66 and
-   S18 to S20) and the Composer's dispatch tools included: Claude builds the UI and Codex does the smaller tasks and the reviews
+   aren't sensitive, so Blue starts Codex on sensitive work himself. A fix request (item 6) for a
+   security finding gives its title and severity only ("Hard rules" item 6); Blue gives Codex the
+   details privately, and until he does the PR is NEEDS BLUE. Claude takes the rest, the UI
+   sessions (S66 and S18 to S20) and the Composer's dispatch tools included: Claude builds the UI and Codex does the smaller tasks and the reviews
    (Blue, 2026-11-21). Exceptions Blue starts in Codex himself, outside the `windows`-only rule:
    the `blue`-lane rows S52 and S53 (Blue, 2026-11-16), S63 (2026-11-21), and S54, which Codex
    builds (2026-11-21).
