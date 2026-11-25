@@ -38,6 +38,12 @@ Re-ordered on 2026-11-16 from your signed Mako 1.1 decision sheet (docs/DECISION
 On 2026-11-21 steps 27 and 50 left the top (your decision: the runner they check has been off since
 2026-11-04) and step 60 moved up for its dates (docs/DECISIONS.md, 2026-11-21).
 
+**New on 2026-11-24 (PR #282, your decisions D-084 to D-086):** build work no longer waits for
+your go (only spending, new accounts, credentials, deleting things, taste calls, sensitive work the
+task didn't cover and blockers after 3 tries still come to you, with a default; AGENTS.md
+"Deciding without asking"); **step 80**, setting up the commander on H1, once S67's PR is merged: it is what
+starts the build sessions and sends you the merge order each evening.
+
 1. **Step 60**, the Composer practice test on **2026-11-22**, then prototype day on **2026-11-23**
    (3 to 5 real tasks). Either may slip a day if Claude Max isn't active yet.
 2. **Step 59**, re-link Codex reviews to `ABlueAgent` (about 5 minutes; your yes, 2026-11-16), and
@@ -1294,6 +1300,10 @@ Once S04 is applied (step 27), the runner works all day and you do one sitting i
   each "needs Blue" question in its PR. For each PR the digest marks `READY TO MERGE`, read its
   TLDR, then Files changed > Review changes > Approve > Submit review, then Merge pull request >
   Confirm merge. Merge only on `READY TO MERGE`.
+- **Once the commander runs on H1 (step 80):** its colour-coded evening merge list is what you read
+  at the sitting. Merge the `READY TO MERGE` PRs in the order it gives. To pause the build, tell the
+  commander "stop" and pause the routines on the routines page (until S67 links them, each stops
+  only its own part).
 - **During the day: nothing.** A question for you also arrives as a GitHub notification (a PR
   comment starting "@ABlueAI needs Blue:"); it can wait for the evening.
 - **Tuesday and Friday evenings:** the PC checks, batched, until H1 automates them ("Do next" item
@@ -1301,6 +1311,23 @@ Once S04 is applied (step 27), the runner works all day and you do one sitting i
 - **To pause or resume:** the switch on the routines page (step 27).
 - **Until step 27 is done:** the old runner fires once, at 8:01 AM. Check your phone in the
   morning for "needs Blue", and approve and merge ready PRs in the evening as above.
+
+## From the H1 commander (PR #282)
+
+Step 80 comes from PR #282 (docs/DECISIONS.md, 2026-11-24, D-084). Step numbers 77 to 79 belong to
+open PRs (#253 and #254).
+
+- [ ] **80. Set up the commander on H1.** **About 15 to 30 minutes** (an estimate; S67's PR gives
+  the real figure), at H1, once S67's PR is merged. S67 is `READY`, so an agent can build it now.
+  - Open a new local Claude chat on H1 named "Mako command", give it the standing prompt from S67's
+    PR, and start its 30-minute heartbeat the way the PR says.
+  - From then on it starts and resumes the cloud build sessions, keeps usage to about 95% of each
+    5-hour window, and sends you one colour-coded merge list each evening, in merge order. Your
+    laptop chat (Mako main) becomes the watcher.
+  - To stop everything: tell that chat "stop" and pause the routines on the claude.ai routines
+    page. Until S67's PR links the two, each stops only its own part, so do both.
+  - *Done when:* the commander has run on H1 for one full day and its evening merge list reached
+    you; tell any agent "step 80 done" and it ticks this with the date.
 
 ## Coming up this month (the runner will ask when it gets there)
 

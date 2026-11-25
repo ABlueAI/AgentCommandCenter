@@ -23,11 +23,26 @@ Blue's voice check (step 15) remains pending. Before that: updated
 the 2026-11-04 status PR (#165): #166 (merge order). Before that, the 2026-11-04 status PR (#165)
 covered #130 (S15), #146, #147, #140, #155 (S33), #152 (S31), #153, #157 (S34) and #154 (S32);
 #158 to #160 merged just before it (2026-11-05 00:00 to 00:02 UTC).
+Also updated 2026-11-24 by PR #282 (Blue's decisions D-084 to D-086: default go, short
+colour-coded TLDRs, and the commander on H1; a plan change; "Right now" below).
 Every PR that changes the state updates this file.
 
 ## Right now
 
 - **Your next steps:** [BLUE-CHECKLIST.md](BLUE-CHECKLIST.md), starting with its "Do next" box.
+
+- **Default go, short TLDRs and the H1 commander (PR #282, a plan change; Blue, 2026-11-24,
+  docs/DECISIONS.md D-084 to D-086):** once Blue merges it, build work no longer waits for his go:
+  builders take the recommended default, put open questions in the PR, and stop for him only on
+  spending or new accounts, credentials, deleting things, taste calls, sensitive work the task
+  didn't cover and blockers after 3 tries (AGENTS.md "Deciding without asking"). S46, S47 and S62 move from `HOLD (Blue)` to `READY` (they still wait for S14);
+  PR #253 (open; not verified until it merges) records Blue's go on the UI and sets S14 in
+  progress and S66 and S18 to S20 `READY`. Every PR's TLDR starts with a short
+  colour-coded block for Blue (🔴 🟡 🟢, Claude's own decisions marked 🤖). A local "Mako command"
+  chat on H1 is to run the build and send Blue the evening merge list in merge order (new row S67,
+  `READY`; Blue sets it up, checklist step 80); Mako main, the laptop chat, becomes the watcher. A
+  proposal of Claude's, for Blue to check: one small last fix of one medium finding and one extra
+  review run past the run cap, instead of stopping as "needs Blue".
 
 - **AgentPlayback (S53, PR #208):** [the OSS record](docs/decisions/OSS-agentplayback.md) pins v1.2.1.
   Blue's verdict is PATTERN-MINE (checklist step 67). Use the idea of a local, read-only replay
