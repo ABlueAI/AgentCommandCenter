@@ -120,8 +120,8 @@ process.stdout.write('\nthe comment stripper this file relies on is itself sound
 
   // Load-bearing: the real app.js must not shrink by more than its comment volume, and the specific
   // line the old stripper destroyed must still be present after stripping.
-  assert(appCode.includes('cc.openExternal(uri)'),
-    'the WebLinks regex line survives stripping of the real app.js source');
+  assert(appCode.includes('cc.openTerminalLink(uri)'),
+    'the terminal link opener survives stripping of the real app.js source');
 }
 
 // ---------------------------------------------------------------------------

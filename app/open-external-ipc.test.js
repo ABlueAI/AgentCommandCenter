@@ -33,7 +33,10 @@ async function testTerminalLinks() {
   const prompts = [];
   let answer;
   const { ipc, opened, logs } = makeIpc({
-    confirmTerminalLink: (url) => { prompts.push(url); return new Promise((resolve) => { answer = resolve; }); },
+    confirmTerminalLink: (url) => {
+      prompts.push(url);
+      return url === target ? new Promise((resolve) => { answer = resolve; }) : Promise.resolve(false);
+    },
   });
   assert(typeof ipc.handleOpenTerminalLink === 'function', 'the terminal link route is available');
   if (typeof ipc.handleOpenTerminalLink !== 'function') return;
@@ -67,10 +70,21 @@ async function testTerminalLinks() {
   assert((await approved).ok === true && opened.length === 1 && opened[0] === prompts[1],
     'opens exactly the destination shown for the approved link');
 
+  let trusted = true;
+  const stale = makeIpc({
+    assessSender: () => trusted ? { ok: true } : { ok: false, reason: 'untrusted-sender' },
+    confirmTerminalLink: async () => { trusted = false; return true; },
+  });
+  assert((await stale.ipc.handleOpenTerminalLink({}, raw)).reason === 'untrusted-sender' && stale.opened.length === 0,
+    'the sender must still be trusted when confirmation returns');
+
+  const noPrompt = makeIpc();
+  assert((await noPrompt.ipc.handleOpenTerminalLink({}, raw)).reason === 'confirmation-unavailable'
+    && noPrompt.opened.length === 0 && noPrompt.logs.length === 1, 'missing confirmation visibly refuses a terminal link');
   const promptFailure = makeIpc({ confirmTerminalLink: async () => { throw new Error(raw); } });
   assert((await promptFailure.ipc.handleOpenTerminalLink({}, raw)).reason === 'confirmation-failed'
     && promptFailure.opened.length === 0 && promptFailure.logs.at(-1) === 'Open link refused: confirmation-failed',
-  'a failed link prompt visibly refuses the request without logging the URL');
+    'a failed link prompt visibly refuses the request without logging the URL');
   const openFailure = makeIpc({ confirmTerminalLink: async () => true, openExternal: async () => { throw new Error(raw); } });
   assert((await openFailure.ipc.handleOpenTerminalLink({}, raw)).reason === 'os-open-failed'
     && openFailure.logs.at(-1) === 'Open link refused: os-open-failed', 'a failed terminal link open is reported as a refusal');
@@ -79,13 +93,16 @@ async function testTerminalLinks() {
 {
   const read = (name) => readFileSync(join(__dirname, name), 'utf8');
   const renderer = read('renderer/app.js');
+  const main = read('main.js');
   assert(/linkHandler:\s*\{[^}]*activate: openTerminalLink/.test(renderer)
     && renderer.includes('new WebLinksAddon.WebLinksAddon(openTerminalLink)'),
-  'both xterm OSC 8 and detected text links share the terminal link handler');
+    'both xterm OSC 8 and detected text links share the terminal link handler');
   assert(renderer.includes('cc.openTerminalLink(uri)')
     && read('preload.js').includes("ipcRenderer.invoke('open-terminal-link', u)")
-    && read('main.js').includes("ipcMain.handle('open-terminal-link', (e, url) => openExternalIpc.handleOpenTerminalLink(e, url));"),
-  'terminal links reach the dedicated validated IPC handler');
+    && main.includes("ipcMain.handle('open-terminal-link', (e, url) => openExternalIpc.handleOpenTerminalLink(e, url));"),
+    'terminal links reach the dedicated validated IPC handler');
+  assert(/confirmTerminalLink: async \(url\) => \{\s*const result = await dialog\.showMessageBox\(win, \{[^}]*detail: url,[^}]*defaultId: 0,[^}]*cancelId: 0,/.test(main),
+    'main shows the URL in a native dialog with Cancel selected by default');
 }
 
 {
