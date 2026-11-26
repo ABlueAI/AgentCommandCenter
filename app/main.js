@@ -547,7 +547,7 @@ function createWindow() {
     const sameDocument = details?.isSameDocument ?? isInPlace;
     if (mainFrame && !sameDocument) claudeScout.shutdown();
   });
-  win.loadFile(path.join(__dirname, "renderer", "s72-planted-break-missing.html")); // S72 PLANTED BREAK: reverted in the next commit
+  win.loadFile(ENTRY_PATH);
 
   // --- Navigation lockdown (AUDIT #3 / electronegativity LIMIT_NAVIGATION HIGH) -----------------
   // The renderer holds the preload bridge (window.cc), so a stray anchor, an injected navigation, a
