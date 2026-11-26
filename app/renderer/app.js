@@ -1273,6 +1273,8 @@ let needsYouStrip = null;
 // S19: what Pause all does to the panes (pause-all.js). Same reason: the close paths and
 // openInAppTerminal reach it.
 let pauseAll = null;
+// S19: the cheat sheet (cheat-sheet.js); the palette command reaches it.
+let cheatSheet = null;
 
 // The controlled surface the adapter is allowed to use. Everything privileged stays on this side:
 // the adapter never sees cc.*, a path, a role, a prompt, or report content.
@@ -1429,6 +1431,10 @@ const VIEWS = [['agents', 'Agents'], ['terminals', 'Terminals'], ['library', 'Li
 function shellCommands() {
   const cmds = [];
   for (const [tab, label] of VIEWS) cmds.push({ id: `view:${tab}`, label: `Open ${label}`, group: 'Control room', run: () => goToView(tab, label) });
+  cmds.push({ id: 'cheat-sheet', label: 'Show the cheat sheet (keys and phrases)', group: 'Control room', run: () => {
+    if (!cheatSheet) { appendLog('[cheat-sheet] not available (see the line above)\n'); if (shell) shell.showNotice('The cheat sheet is not available. The keys are on the Settings page.', 6000); return; }
+    cheatSheet.open();
+  } });
   cmds.push({ id: 'agent:new', label: 'New agent', group: 'Control room', run: () => {
     if (shell) { shell.closeSettings(); if (shell.getState().layout === 'tabs') shell.setTab('control'); }
     const btn = $('#newAgent');
@@ -1695,6 +1701,17 @@ pauseAll = window.ccPauseAll
 if (!pauseAll) appendLog('[pause-all] pause-all.js is missing; the Pause all button stays off\n');
 // This part of boot() runs after startShell(), so the shell (if it started) is there to connect to.
 connectPauseAll();
+// S19: the cheat sheet, read from S66's one shortcut list each time it opens.
+try {
+  cheatSheet = window.ccCheatSheet.createCheatSheet({
+    doc: document, buttonHost: $('#cheatSheetHost'), dialogHost: document.body,
+    getShortcuts: () => (window.ccShellNav ? window.ccShellNav.SHORTCUTS : null),
+    log: appendLog,
+  });
+} catch {
+  cheatSheet = null;
+  appendLog('[cheat-sheet] REFUSED: the cheat sheet did not start (start-failed); the keys are on the Settings page\n');
+}
 if (!needsYouStrip) appendLog('[needs-you] the strip is missing (needs-you-strip.js or #needsYouStrip); panes that need you show only on their badges\n');
 if (needsYouStrip) {
   // F8 on window in the capture phase, so the terminal never sees it.

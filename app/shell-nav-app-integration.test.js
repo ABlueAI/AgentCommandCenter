@@ -191,6 +191,12 @@ assert(ny.f8Logged === true, 'a pane that cannot be focused is logged, never sil
 eq(ny.afterWorking, ['pty2'], 'a pane working again leaves the strip');
 assert(ny.hiddenAtEnd === true, 'an exited pane leaves it too, and the strip hides');
 eq(ny.ptyStart, 0, 'no PTY started');
+assert(ny.cheatButton === true, 'S19: the cheat sheet\'s "?" button is in the control room');
+assert(ny.cheatOpen === true, 'it opens the cheat sheet');
+eq(ny.cheatRows, 7, 'which lists S66\'s one shortcut list');
+assert(ny.cheatHasF8 === true, 'including F8');
+eq(ny.cheatFocus, 'makoCheatSheetClose', 'focus moves into the sheet');
+assert(ny.cheatClosed === true && ny.cheatFocusBack === true, 'closing it gives focus back to the "?" button');
 
 process.stdout.write('\nS19: what Pause all does to the panes (counted at the IPC boundary)\n');
 const pa = S.pauseAll || {};

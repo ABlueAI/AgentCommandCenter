@@ -430,6 +430,23 @@ async function scenarioNeedsYou() {
   win.webContents.send('pane-status-view', { paneId: 'pty2', state: 'exited', reason: null });
   await run(`window.__t.waitFor(() => document.getElementById('needsYouStrip').hidden === true)`);
   out.hiddenAtEnd = await run(`window.__t.shown('#needsYouStrip') === false`);
+  // S19: the cheat sheet opens from its "?" button, lists S66's shortcut list, and Esc closes it.
+  Object.assign(out, await run(`(async () => {
+    const t = window.__t;
+    const btn = document.getElementById('makoCheatSheetOpen');
+    if (!btn) return { cheatButton: false };
+    btn.focus();
+    btn.click();
+    await t.sleep(30);
+    const dlg = document.getElementById('makoCheatSheet');
+    const r = { cheatButton: true, cheatOpen: dlg.open, cheatRows: dlg.querySelectorAll('tbody tr').length, cheatHasF8: dlg.textContent.includes('F8'), cheatFocus: document.activeElement && document.activeElement.id };
+    dlg.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    dlg.close();
+    await t.sleep(30);
+    r.cheatClosed = !dlg.open;
+    r.cheatFocusBack = document.activeElement === btn;
+    return r;
+  })()`));
   out.ptyStart = ipc.ptyStart;
   await park();
   return out;

@@ -527,6 +527,15 @@ input:focus { outline: none; border-color: var(--accent); }
 .mk-needs-time { font: 600 12px/18px var(--mk-mono, monospace); font-variant-numeric: tabular-nums; color: var(--mk-ink-muted, var(--muted)); }
 .mk-needs-hint { margin-left: auto; }
 
+/* S19: the cheat sheet. */
+.cheat-sheet-host { display: inline-flex; }
+.mk-cheat-open { min-width: 28px; padding: 2px 8px; font-weight: 600; }
+.mk-cheat { max-width: min(720px, 92vw); max-height: 80vh; overflow: auto; padding: 16px 20px; border: 1px solid var(--mk-line, var(--border)); border-radius: 8px; background: var(--mk-surface-raised, var(--panel)); color: var(--mk-ink, var(--text)); }
+.mk-cheat::backdrop { background: rgba(0, 0, 0, 0.55); }
+.mk-cheat-title { margin: 0 0 12px; font: 600 16px/22px var(--mk-sans, inherit); }
+.mk-cheat-phrases { margin: 12px 0; }
+.mk-cheat-open:focus-visible, .mk-cheat .mk-btn:focus-visible { outline: 2px solid var(--mk-focus, var(--accent-2)); outline-offset: 2px; }
+
 /* The embedded production surface: a sibling of `.term-grid` in the same tab, taking the same
    remaining space the grid would. Exactly one of the two is visible at a time.
    `[hidden]` needs an explicit rule because an author `display` value beats the UA stylesheet's
