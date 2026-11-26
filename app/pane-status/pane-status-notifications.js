@@ -81,7 +81,8 @@ function createPaneStatusNotifications({ Notification, platform, getWindow, log,
         unsupportedReported = true;
         return;
       }
-      const notification = new Notification({ ...MESSAGES[state] });
+      // S19: sound off (docs/DESIGN-BRIEF-1.1.md 5.2): the toast is silent; the badge and strip show it.
+      const notification = new Notification({ ...MESSAGES[state], silent: true });
       active.set(paneId, notification);
       const forget = () => { if (active.get(paneId) === notification) active.delete(paneId); };
       notification.on('failed', () => {

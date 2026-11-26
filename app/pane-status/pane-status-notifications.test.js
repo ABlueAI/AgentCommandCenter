@@ -115,7 +115,9 @@ test('dismissal errors are visible; Linux/macOS do not invoke a native notificat
 });
 test('notification payloads contain no pane names, paths, tokens or arbitrary view fields', () => {
   const r=rig(); r.notifier.observe({paneId:'PRIVATE',state:'attention',reason:null,token:'PRIVATE',transcript:'PRIVATE'});
-  assert.deepEqual(Object.keys(r.shown[0].message).sort(),['body','title']);
+  // S19: `silent` is a fixed boolean (sound off), not view data.
+  assert.deepEqual(Object.keys(r.shown[0].message).sort(),['body','silent','title']);
+  assert.equal(r.shown[0].message.silent, true);
   assert(!JSON.stringify(r.shown[0].message).includes('PRIVATE'));
 });
 test('real pane registry and transport validation gate alerts; malformed/foreign/refresh-only events cannot alert', () => {
