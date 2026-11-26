@@ -105,8 +105,18 @@ not yet on `main`) agents decide procedural PR questions themselves, such as "on
   [step 46](#any-time-not-blocking) before your first client.
 - [Step 17](#any-time-not-blocking), the token audit: the last step before the 1.1 release (target
   2027-01-15). The agent token's renewal is due by 2027-01-14 ([Dated reminders](#dated-reminders)).
-- The S28 agent-roles package ([Waiting on you](#waiting-on-you-the-runner-wont-ask); no step
-  number).
+
+**Inputs only you can hand over (no step number; their plan rows wait on them):**
+
+- **The Composer v1 scope sign-off** (S51, `NEEDS BLUE (scope pending sign-off)` in
+  docs/PLAN-1.1.md; "Do next" item 7). The scope is being written in your separate Composer chat;
+  once you sign it, the spec goes into the repo and a plan change splits S51 into build sessions.
+  S71 (the elephant-goldfish trial) also waits on that spec. The 1.1 scope freezes on 2026-12-01.
+- **The Composer scout report** (S49, `NEEDS BLUE (scout report)`): it is in your vault, so hand it
+  to the session that runs S49's independent audit, in that session, never on GitHub.
+- **The agent-roles package and brief** from your agent-roles chat: S28's package
+  ([Waiting on you](#waiting-on-you-the-runner-wont-ask): an issue you open as `ABlueAI`, or a
+  hand-off to an agent in its own session), and S60's brief from the same chat.
 
 **Yours until PR #301 (D-090) merges, then an agent decides:**
 [step 71](#waiting-on-you-the-runner-wont-ask) (the UI-library OSS verdict) and step 84 (S47's
