@@ -134,6 +134,7 @@ async function scenarioStage() {
   await run(`document.getElementById('makoTab-brain').click(); window.__t.waitFor(() => window.__t.nodes().length === 3 && document.querySelectorAll('#makoConvoCards article').length === 2)`);
   out.nodes = await run(`window.__t.nodes()`);
   out.counts = await run(`document.getElementById('makoStageCounts').textContent`);
+  out.lines = await run(`Array.from(document.querySelectorAll('#makoStageLines line')).map((l) => ({ state: l.getAttribute('data-line'), dash: getComputedStyle(l).strokeDasharray }))`);
   out.cards = await run(`Array.from(document.querySelectorAll('#makoConvoCards article')).map((a) => ({ kind: a.getAttribute('data-kind'), cls: a.className, text: a.textContent.slice(0, 300) }))`);
   out.permissionBorder = await run(`(() => { const a = document.querySelector('#makoConvoCards article[data-kind=permission]'); return a ? getComputedStyle(a).borderTopColor : null; })()`);
   out.needsToken = await run(`getComputedStyle(document.documentElement).getPropertyValue('--mk-status-needs').trim()`);

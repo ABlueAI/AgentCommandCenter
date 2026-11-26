@@ -1922,6 +1922,10 @@ function setupSTTControls() {
     // Last, and after this handler returns: a pending push-to-talk stop calls the engine, which
     // reports 'transcribing' at once; doing it here would let this 'recording' update overwrite it.
     if (pushToTalk) setTimeout(() => pushToTalk.onSttStatus(st), 0);
+    // S18: the shark listens while Blue holds Ctrl Space (Mako's own state, never a task's).
+    // Thinking and speaking come with the conductor (S51), through the same setState call.
+    if (sharkClock) sharkClock.setState(st === 'recording' ? 'listening' : 'idle');
+    if (brainStage) brainStage.setShark({ state: st === 'recording' ? 'Listening' : 'Idle' });
   });
   stt.onResult((text) => {
     const targetId = sttDictationTargetId;

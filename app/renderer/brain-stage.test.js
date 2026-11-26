@@ -175,7 +175,7 @@ class Node {
   querySelectorAll(sel) { const m = /^\.([\w-]+)$/.exec(sel); return m ? this.all((n) => n.className.split(' ').includes(m[1])) : []; }
   querySelector(sel) { const m = /^\[data-task="([^"]*)"\]$/.exec(sel); return m ? (this.all((n) => n.attrs['data-task'] === m[1])[0] || null) : null; }
 }
-const doc = { createElement: (tag) => new Node(tag) };
+const doc = { createElement: (tag) => new Node(tag), createElementNS: (_ns, tag) => new Node(tag) };
 const byId = (root, id) => root.all((n) => n.attrs.id === id)[0] || null;
 const byAttr = (root, k, v) => root.all((n) => n.attrs[k] === v);
 
@@ -203,6 +203,9 @@ process.stdout.write('\nDOM: mount, nodes, cards, In focus, keys reach the pane\
   ]);
   eq(byAttr(host, 'data-task', 'pty3').filter((n) => n.className.includes('mk-node')).length, 1, 'one node per live pane');
   eq(byId(host, 'makoStageCounts').textContent, 'Waiting on you 2 · On agents 1 · Ready 0', 'the counts line');
+  const lineKinds = byId(host, 'makoStageLines').children.map((l) => l.attrs['data-line']).sort();
+  eq(lineKinds, ['needs', 'needs', 'working'], 'a line from the shark to every node that isn\'t queued');
+  assert(byId(host, 'makoStageLines').children.filter((l) => l.attrs['data-line'] === 'needs').every((l) => /mk-line-waiting/.test(l.attrs.class)), 'waiting on Blue: the dashed red line');
   const permCard = host.all((n) => n.tagName === 'ARTICLE' && n.attrs['data-kind'] === 'permission')[0];
   assert(permCard && permCard.className.includes('mk-card-permission'), 'a permission prompt always shows as a red card');
   assert(permCard && permCard.textContent.includes(F.PERMISSION_LINE), 'with "Mako never answers this for you"');

@@ -61,6 +61,8 @@ const [p1, p2, p3] = S.paneIds || [];
 assert(y(p1) === y(p2) && y(p1) < y(p3), 'the two waiting panes share the top row, above the working one');
 eq(nodes.map((n) => n.state), ['needs', 'needs', 'working'], 'node states come from pane status');
 eq(S.counts, 'Waiting on you 2 · On agents 1 · Ready 0', 'the counts line');
+eq((S.lines || []).map((l) => l.state).sort(), ['needs', 'needs', 'working'], 'a line from the shark to each node');
+assert((S.lines || []).every((l) => (l.state === 'needs') === (l.dash !== 'none')), 'dashed only where the task waits on Blue');
 
 process.stdout.write('\ncards: a permission prompt is always red; answers reach the pane\n');
 const cards = S.cards || [];

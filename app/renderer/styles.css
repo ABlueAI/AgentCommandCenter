@@ -610,3 +610,7 @@ input:focus { outline: none; border-color: var(--accent); }
 .mk-shark-note { max-width: 260px; text-align: center; font-size: 11px; line-height: 14px; }
 .mk-shark-error { color: var(--mk-status-needs); }
 .mk-message-box .mk-btn-primary { align-self: flex-end; }
+.mk-stage-lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.mk-line { stroke-width: 1; vector-effect: non-scaling-stroke; }
+.mk-line-tracking { stroke: var(--mk-status-working); stroke-opacity: 0.3; }
+.mk-line-waiting { stroke: var(--mk-status-needs); stroke-dasharray: 3 7; }

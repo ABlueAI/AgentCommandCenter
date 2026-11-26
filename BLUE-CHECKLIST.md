@@ -1508,6 +1508,25 @@ Step 81 comes from PR #283.
      greyed-out switches, **Quiet hours** and **Pause all**, which S18 and S19 turn on.
   - *Done when:* you tell any agent "S66 PC check: OK" or what looked wrong; the agent ticks this
     with the date and your words, and anything wrong becomes a fix PR.
+- [ ] **86. PC check of the brain tab (S18).** **About 15 minutes**, at the first Tuesday or Friday
+  PC-check evening after the S18 PR (#311) merges (step 81 first if it is still open). Pull `main`
+  and fully restart Mako, then:
+  1. Start two Claude panes in the control room. In one, ask for something that needs a permission
+     (for example "run npm test"). Click the **Brain** tab: a node per pane, the waiting one on top
+     with a red dot and a dashed red line to the shark, and a **red Permission card** below.
+  2. Click **Allow once** on the card: the pane goes on (the card picked its "1. Yes"). Next time,
+     click **Deny**: the pane stops that step (the card sent Esc). Neither ever picks "don't ask
+     again".
+  3. Click a node: the In-focus card opens on the right with its buttons. **Open pane** takes you to
+     that pane in the control room.
+  4. Press **Ctrl F** on the brain tab and type a word from a task: the node is found and focused.
+  5. **The shark** (your look check, questions 3 and 4 of the design brief): the B3 shape in Dusk
+     colours swims in the middle; hold **Ctrl Space**: it shows "Listening". Click the stage's
+     **Pause**: the shark and the nodes freeze; click again to resume. Is the look, the node layout
+     and the lines right? With Task Manager's GPU tab open, full screen, does it stay smooth at
+     30 fps?
+  - *Done when:* you tell any agent "S18 PC check: OK" or what looked wrong; the agent ticks this
+    with the date and your words, and anything wrong becomes a fix PR.
 
 ## Every day, once the runner is on
 

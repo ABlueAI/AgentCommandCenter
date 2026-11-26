@@ -377,6 +377,15 @@
     stageTop.appendChild(groupSel);
     stageTop.appendChild(pauseBtn);
     const field = h(doc, 'div', 'mk-stage-field', null, { id: 'makoStageField', role: 'group', 'aria-label': 'Task nodes, most urgent at the top' });
+    // The lines from the shark to the nodes, in the stage's own 0..100 coordinates.
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const svg = (tag, attrs) => {
+      const n = typeof doc.createElementNS === 'function' ? doc.createElementNS(SVG_NS, tag) : doc.createElement(tag);
+      for (const k of Object.keys(attrs || {})) n.setAttribute(k, attrs[k]);
+      return n;
+    };
+    const lines = svg('svg', { class: 'mk-stage-lines', viewBox: '0 0 100 100', preserveAspectRatio: 'none', 'aria-hidden': 'true', id: 'makoStageLines' });
+    field.appendChild(lines);
     // The shark renderer (shark-renderer.js) draws into this box, behind the nodes.
     const sharkHost = h(doc, 'div', 'mk-shark-host', null, { id: 'makoSharkHost' });
     field.appendChild(sharkHost);
@@ -570,14 +579,21 @@
       flow.running.textContent = String(c.onAgents + c.waiting);
       flow.output.textContent = String(c.ready);
 
-      // Nodes
+      // Nodes, and the lines from the shark to them (brief 4.2; pending Blue's visual check,
+      // question 3): solid faint blue = tracking, dashed red = waiting on Blue, none = queued.
       for (const n of Array.from(field.querySelectorAll('.mk-node'))) n.remove();
+      while (lines.firstChild) lines.removeChild(lines.firstChild);
       const items = stageItems(st.tasks, st.mode, st.expanded);
       if (items.length === 0) {
         const empty = h(doc, 'p', 'mk-node mk-node-empty mk-meta', 'No live tasks. Start an agent from the control room.');
         field.appendChild(empty);
       }
       for (const placed of layoutItems(items)) {
+        const lineState = placed.item.type === 'task' ? placed.item.task.state : placed.item.state;
+        if (lineState !== 'idle') {
+          const l = svg('line', { x1: '50', y1: '45', x2: (placed.x * 100).toFixed(2), y2: (placed.y * 100).toFixed(2), class: lineState === 'needs' ? 'mk-line mk-line-waiting' : 'mk-line mk-line-tracking', 'data-line': lineState });
+          lines.appendChild(l);
+        }
         const b = nodeButton(placed.item);
         b.style.left = `${(placed.x * 100).toFixed(2)}%`;
         b.style.top = `${(placed.y * 100).toFixed(2)}%`;
