@@ -54,14 +54,19 @@ process.stdout.write('\nprompt reader: permission and question menus\n');
   const widened = { kind: 'permission', question: 'Do you want to proceed?', options: [{ n: 1, label: 'Yes, and don\'t ask again' }, { n: 2, label: 'No' }] };
   eq(B.allowOnceOption(widened), null, 'no plain Yes: Allow once has no option and refuses');
   eq(B.allowOnceOption(B.readPrompt(QUESTION_LINES)), null, 'a question has no Allow once');
-  eq(p && p.detail, ['● Bash(npm test)', 'Bash command', 'npm test'], 'the command block above the question is kept');
-  const perm = (opts, detail) => ({ kind: 'permission', question: 'Do you want to proceed?', detail: detail === undefined ? ['Bash command', 'npm test'] : detail, options: opts.map((label, i) => ({ n: i + 1, label })) });
+  eq(p && [p.detail, p.complete], [['Bash command', 'npm test'], true], 'the command block above the question is kept, back to the tool header');
+  const longCmd = ['Bash command'].concat(Array.from({ length: 14 }, (_, i) => `  line ${i + 1} \\`), ['Do you want to proceed?', '❯ 1. Yes', '  2. No']);
+  const lp = B.readPrompt(longCmd);
+  eq([lp.complete, B.allowOnceOption(lp)], [false, null], 'a command longer than the window: marked incomplete, no Allow once');
+  const perm = (opts, detail) => ({ kind: 'permission', question: 'Do you want to proceed?', detail: detail === undefined ? ['Bash command', 'npm test'] : detail, complete: true, options: opts.map((label, i) => ({ n: i + 1, label })) });
   for (const w of ['Yes, allow all edits during this session', 'Yes, always allow', 'Yes, and don\'t ask again for this session', 'Yes, and auto-accept edits', 'Yes, bypass permissions']) {
     eq(B.allowOnceOption(perm([w, 'No'])), null, `a widening first "Yes" is never Allow once: "${w}"`);
   }
   eq(B.allowOnceOption(perm(['Yes, allow all edits during this session', 'Yes', 'No'])), 2, 'the plain "Yes" further down is picked');
   eq(B.allowOnceOption(perm(['Yes', 'No'], [])), null, 'no command shown above the question: no Allow once (Open pane only)');
   const a = B.readPrompt(['Bash command', 'npm test', 'Do you want to proceed?', '❯ 1. Yes', '2. No']);
+  const eight = B.readPrompt(['Bash command'].concat(Array.from({ length: 8 }, (_, i) => `step ${i + 1}`), ['Do you want to proceed?', '❯ 1. Yes', '2. No']));
+  eq([eight.complete, eight.detail.length, B.allowOnceOption(eight)], [true, 9, 1], 'an 8-line command with its header: shown whole, Allow once offered');
   const b2 = B.readPrompt(['Bash command', 'rm -rf build', 'Do you want to proceed?', '❯ 1. Yes', '2. No']);
   eq(B.allowOnceOption(perm(['Yes, and remember', 'No'])), null, 'only a plain "Yes" is Allow once ("Yes, and remember" is not)');
   assert(B.promptSignature(a) !== B.promptSignature(b2), 'two requests that differ only in their command have different signatures');

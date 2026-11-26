@@ -1514,9 +1514,11 @@ Step 81 comes from PR #283.
   1. Start two Claude panes in the control room. In one, ask for something that needs a permission
      (for example "run npm test"). Click the **Brain** tab: a node per pane, the waiting one on top
      with a red dot and a dashed red line to the shark, and a **red Permission card** below.
-  2. Click **Allow once** on the card: the pane goes on (the card picked its "1. Yes"). Next time,
-     click **Deny**: the pane stops that step (the card sent Esc). Neither ever picks "don't ask
-     again".
+  2. Check the card shows the whole command it will allow (try a short one, and one that takes
+     several lines, such as a long chained command); if a card has no **Allow once** or says it
+     can't show the whole request, say so. Click **Allow once**: the pane goes on (the card picked
+     its "1. Yes"). Next time, click **Deny**: the pane stops that step (the card sent Esc).
+     Neither ever picks "don't ask again".
   3. Click a node: the In-focus card opens on the right with its buttons. **Open pane** takes you to
      that pane in the control room.
   4. Press **Ctrl F** on the brain tab and type a word from a task: the node is found and focused.

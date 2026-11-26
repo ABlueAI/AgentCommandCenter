@@ -105,36 +105,43 @@
       const t = clean(recent[i]);
       if (t) { question = str(t, 200); qAt = i; break; }
     }
-    // What the request is about: the lines above the question (Claude Code draws the tool and its
-    // command there, "Bash command / npm test"), up to a blank line or 8 lines. It is shown on the
-    // card and is part of the signature, so two requests that differ only in their command differ.
+    // What the request is about: the lines above the question, back to the tool's header (Claude
+    // Code draws "Bash command" or "● Bash(...)" and then the command), at most 12 lines. All of it
+    // is shown on the card and is part of the signature, so two requests that differ only in their
+    // command differ. `complete` says the header was found, so the whole command is on the card;
+    // without it (a longer command, another layout) Allow once is not offered.
     const detail = [];
-    for (let i = qAt - 1; i >= 0 && i >= qAt - 8; i--) {
+    let complete = false;
+    for (let i = qAt - 1; i >= 0 && i >= qAt - 12; i--) {
       const t = clean(recent[i]);
       if (!t) break;
       detail.unshift(str(t, 200));
+      if (TOOL_HEADER.test(t)) { complete = true; break; }
     }
     const permission = /^Do you want to\b/i.test(question) && /^Yes\b/i.test(options[0].label);
-    return { kind: permission ? 'permission' : 'question', question, detail, options };
+    return { kind: permission ? 'permission' : 'question', question, detail, complete, options };
   }
 
   // A stable signature of a prompt, so a click is checked against the prompt still on screen.
   function promptSignature(prompt) {
     if (!prompt) return '';
-    return JSON.stringify([prompt.kind, prompt.detail || [], prompt.question, prompt.options.map((o) => [o.n, o.label])]);
+    return JSON.stringify([prompt.kind, prompt.detail || [], prompt.complete === true, prompt.question, prompt.options.map((o) => [o.n, o.label])]);
   }
 
   // The one option "Allow once" picks: the first "Yes" that doesn't widen the permission
   // ("don't ask again", "always", "all"). Null if the menu has none, so the button refuses.
+  // The first line of a tool request in Claude Code's permission prompt.
+  const TOOL_HEADER = /^(●\s*[A-Za-z][\w-]*\(|(Bash command|Edit file|Create file|Write file|Read file|Fetch|Web ?search|Tool use|MCP tool)\b)/i;
+
   // An option that widens what the agent may do beyond this one request. The brain tab never
   // offers one as a button; Blue picks it in the pane if he wants it.
   const WIDENING = /don'?t ask|always|\ball\b|session|auto-?accept|bypass/i;
   function widens(label) { return WIDENING.test(String(label || '')); }
-  // A permission card offers "Allow once" only when it can show what is being allowed (the
-  // command above the question) and the menu has a "Yes" that doesn't widen the permission.
+  // A permission card offers "Allow once" only when it shows the whole request (from the tool's
+  // header down to the question) and the menu has a plain "Yes".
   function allowOnceOption(prompt) {
     if (!prompt || prompt.kind !== 'permission') return null;
-    if (!Array.isArray(prompt.detail) || prompt.detail.length === 0) return null;
+    if (!Array.isArray(prompt.detail) || prompt.detail.length === 0 || prompt.complete !== true) return null;
     // Only a plain "Yes" (with at most a bracketed hint), never "Yes, and ...".
     const o = prompt.options.find((x) => /^Yes\.?(\s*\([^)]*\))?$/i.test(x.label) && !widens(x.label));
     return o ? o.n : null;
@@ -519,12 +526,12 @@
       return Promise.resolve()
         .then(() => d.onKeys(id, res.keys))
         .then((r) => {
-          if (!r || r.ok !== true) { notice(`Not sent: ${(r && r.reason) || 'write-failed'}.`); return { ok: false, reason: (r && r.reason) || 'write-failed' }; }
+          if (!r || r.ok !== true) { st.spent.delete(id); notice(`Not sent: ${(r && r.reason) || 'write-failed'}.`); return { ok: false, reason: (r && r.reason) || 'write-failed' }; }
           // ptyWrite is one-way: main can still refuse it (a protected pane, an exited process),
           // so this says what happened, not that the pane moved on.
           notice(`Key sent to ${task.title}; check that it moved on.`);
           return { ok: true };
-        }, () => { notice('Not sent: write-failed.'); return { ok: false, reason: 'write-failed' }; });
+        }, () => { st.spent.delete(id); notice('Not sent: write-failed.'); return { ok: false, reason: 'write-failed' }; });
     }
 
     function openPane(id) {
@@ -560,7 +567,8 @@
       head.appendChild(h(doc, 'span', 'mk-meta', `${t.repo || 'No repo'} · waiting ${t.waitingMin} min`));
       card.appendChild(head);
       card.appendChild(h(doc, 'h3', 'mk-card-title', t.title));
-      for (const line of (t.prompt.detail || []).slice(-6)) card.appendChild(h(doc, 'p', 'mk-mono mk-prompt-detail', line));
+      for (const line of t.prompt.detail || []) card.appendChild(h(doc, 'p', 'mk-mono mk-prompt-detail', line));
+      if (permission && t.prompt.complete !== true) card.appendChild(h(doc, 'p', 'mk-meta mk-shark-error', 'Mako can\'t show this whole request here (it may be cut off); open the pane to read it.', { 'data-incomplete': 'true' }));
       card.appendChild(h(doc, 'p', 'mk-question', t.prompt.question || 'The pane is asking you to choose.'));
       if (permission) card.appendChild(h(doc, 'p', 'mk-meta mk-permission-line', d.inFocus.PERMISSION_LINE));
       const actions = h(doc, 'div', 'mk-card-actions');
