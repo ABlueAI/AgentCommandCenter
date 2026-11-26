@@ -362,9 +362,15 @@ process.stdout.write('\nindex.html ships the EMBEDDED dock and loads no Dockview
   // S09 adds the Resume or Start fresh view: 27 -> 28. `session-resume-view.js` publishes
   // `window.ccSessionResumeView` and builds into #resumeHost only when app.js asks it to.
   // S54 adds the Claude Video Scout settings (`claude-video-settings.js`): 29 -> 30.
-  // S46 adds the daily idle-sessions view: 30 -> 31. `session-hygiene-view.js` publishes
+  // S66 adds the 1.1 colour tokens, the shared navigation shell, the In-focus card and the repo
+  // emblem rail: 30 -> 34.
+  // `ui-tokens.js` publishes `window.ccUiTokens` and touches no DOM; `shell-nav.js` publishes
+  // `window.ccShellNav` and builds nothing until app.js's boot() calls createShell();
+  // `in-focus-card.js` publishes `window.ccInFocusCard` and builds only when a caller asks;
+  // `emblem-rail.js` publishes `window.ccEmblemRail` and builds only when app.js creates it.
+  // S46 adds the daily idle-sessions view: 34 -> 35. `session-hygiene-view.js` publishes
   // `window.ccSessionHygieneView` and builds into #hygieneHost only when app.js asks it to.
-  assert(scriptTags === 31, `index.html loads exactly 31 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view, the terminal key mapping, the authority choice, the usage panel view, the resume view, the agent token view (S31), the Claude Video Scout settings (S54) and the idle-sessions view (S46) (found ${scriptTags})`);
+  assert(scriptTags === 35, `index.html loads exactly 35 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view, the terminal key mapping, the authority choice, the usage panel view, the resume view, the agent token view (S31), the Claude Video Scout settings (S54), S66's colour tokens, navigation shell, In-focus card and emblem rail, and the idle-sessions view (S46) (found ${scriptTags})`);
   assert(/<script src="session-resume-view\.js"><\/script>/.test(indexSrc),
     'the S09 resume view is loaded');
   assert(/<script src="session-hygiene-view\.js"><\/script>/.test(indexSrc),
