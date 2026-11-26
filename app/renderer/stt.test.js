@@ -8,9 +8,12 @@
 // control: stt.js used to import ./vendor/transformers.web.min.js, which does not exist,
 // so the module died at import time and window.ccSTT was never assigned.
 //
-// NO network access and NO model download: nothing here calls toggle()/pipeline(), so
-// the model is never fetched — only module loading and the environment contract run.
+// NO network access or model download: the dictation cases stub browser audio and
+// stop before the Whisper pipeline is needed.
 // NO recorded audio or transcript text appears anywhere in this file's assertions.
+
+import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
 
 let passed = 0;
 let failed = 0;
@@ -101,6 +104,132 @@ assert(bundle.env.backends.onnx.wasm.wasmPaths === STT_WASM_PATHS,
   'env.backends.onnx.wasm.wasmPaths = the pinned 3.8.1 jsdelivr dist');
 assert(bundle.env.backends.onnx.wasm.numThreads === 1, 'env.backends.onnx.wasm.numThreads = 1');
 assert(bundle.env.backends.onnx.wasm.proxy === false, 'env.backends.onnx.wasm.proxy = false');
+
+// Run the actual Dictate wiring with two terminal panes and stub browser audio APIs.
+const stt = win.ccSTT;
+const appSource = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
+const setupControls = appSource.slice(appSource.indexOf('function setupSTTControls()'),
+  appSource.indexOf('function setupTTSControls()'));
+const mic = { dataset: {}, classList: { toggle() {} }, textContent: '🎤 Dictate' };
+const status = { textContent: '' };
+const toggles = [];
+const uiStt = {
+  ...stt,
+  toggle() {
+    const result = stt.toggle();
+    toggles.push(result);
+    return result;
+  },
+};
+const ui = {
+  window: { ccSTT: uiStt },
+  $: (selector) => ({ '#sttMic': mic, '#sttStatus': status })[selector],
+  terms: new Map([['first', {}], ['second', {}]]),
+  activeTermId: 'first',
+  sttDictationTargetId: null,
+  appendLog() {},
+};
+runInNewContext(`${setupControls}\nsetupSTTControls();`, ui);
+
+const streams = [];
+const pendingMic = [];
+Object.defineProperty(navigator, 'mediaDevices', { value: {
+  getUserMedia() {
+    const tracks = Array.from({ length: 2 }, () => ({ stops: 0, stop() { this.stops++; } }));
+    const stream = { getTracks: () => tracks };
+    streams.push(tracks);
+    return new Promise((resolve) => { pendingMic.push(() => resolve(stream)); });
+  },
+} });
+let recorderFailure;
+let recordedData;
+let starts = 0;
+global.MediaRecorder = class {
+  constructor() {
+    if (recorderFailure === 'constructor') throw new Error('recorder constructor refused');
+  }
+  start() {
+    if (recorderFailure === 'start') throw new Error('recorder start refused');
+    starts++;
+  }
+  stop() {
+    queueMicrotask(() => {
+      if (recordedData) this.ondataavailable({ data: recordedData });
+      this.onstop();
+    });
+  }
+};
+
+async function grantMicrophone() {
+  pendingMic.splice(0).forEach((grant) => grant());
+  await Promise.allSettled(toggles.splice(0));
+}
+
+section('#232: overlapping Dictate clicks keep one microphone and the original pane');
+mic.onclick();
+ui.activeTermId = 'second';
+mic.onclick();
+assert(pendingMic.length === 1, 'two clicks while permission is pending request one microphone stream');
+assert(ui.sttDictationTargetId === 'first', 'a pending Dictate click cannot change the locked pane');
+assert(status.textContent.includes('requesting the microphone'), 'Dictate shows that the microphone request is pending');
+toggles.push(stt.toggle()); // A caller that bypasses the button still cannot start a second capture.
+assert(pendingMic.length === 1, 'the STT module also guards a pending microphone request');
+await grantMicrophone();
+assert(starts === 1 && mic.textContent.includes('Stop'), 'the microphone grant starts one recorder and displays Stop');
+mic.onclick();
+await Promise.all(toggles.splice(0));
+assert(streams.flat().every((track) => track.stops === 1), 'one Stop releases every acquired track exactly once');
+
+section('#233: recorder startup failures release the microphone and refuse visibly');
+for (const stage of ['constructor', 'start']) {
+  recorderFailure = stage;
+  const click = mic.onclick();
+  await grantMicrophone();
+  await click;
+  assert(streams.at(-1).every((track) => track.stops === 1), `a ${stage} failure releases every track`);
+  assert(!stt.isStarting?.() && !stt.isRecording() && !stt.isBusy() && ui.sttDictationTargetId === null,
+    `a ${stage} failure clears dictation state and the pane lock`);
+  assert(/^error\b/.test(status.textContent) && status.textContent.includes(`recorder ${stage} refused`),
+    `a ${stage} failure is visible in the Dictate status`);
+}
+recorderFailure = undefined;
+const rejection = Promise.reject(new Error('unexpected toggle failure'));
+rejection.catch(() => {}); // Keep the broken baseline runnable so the UI assertion shows the failure.
+const realToggle = uiStt.toggle;
+uiStt.toggle = () => rejection;
+status.textContent = '';
+await mic.onclick();
+assert(/^error\b/.test(status.textContent) && ui.sttDictationTargetId === null,
+  'the Dictate click handler reports a rejected toggle and clears the pane lock');
+uiStt.toggle = realToggle;
+
+section('#240: decoding closes its AudioContext on both paths');
+const contexts = [];
+let decoderFails = true;
+win.AudioContext = class {
+  constructor() { this.closes = 0; contexts.push(this); }
+  async decodeAudioData() {
+    if (decoderFails) throw new Error('undecodable capture');
+    return { duration: 1 };
+  }
+  async close() { this.closes++; }
+};
+global.OfflineAudioContext = class {
+  createBufferSource() { return { connect() {}, start() {} }; }
+  // Silence is refused before the model can load.
+  async startRendering() { return { getChannelData: () => new Float32Array(16000) }; }
+};
+recordedData = new Blob([new Uint8Array([1])]);
+for (decoderFails of [true, false]) {
+  mic.onclick();
+  await grantMicrophone();
+  assert(stt.isRecording(), 'a new recording can start after an earlier failure');
+  mic.onclick();
+  await Promise.all(toggles.splice(0));
+  const outcome = decoderFails ? 'rejected' : 'successful';
+  assert(contexts.at(-1)?.closes === 1, `a ${outcome} decode closes its AudioContext once`);
+  if (decoderFails) assert(status.textContent.includes('undecodable capture'), 'the decode failure remains visible');
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 process.stdout.write(`\n${passed + failed} tests: ${passed} passed, ${failed} failed\n`);

@@ -1539,25 +1539,34 @@ function installSTTUnavailableControl() {
 function setupSTTControls() {
   const stt = window.ccSTT; if (!stt) return;
   const micBtn = $('#sttMic');
-  if (micBtn && !micBtn.dataset.sttWired) {
-    micBtn.dataset.sttWired = '1';
-    micBtn.onclick = () => {
-      if (stt.isRecording()) { stt.toggle(); return; } // second click: stop + one finalized transcript
-      if (stt.isBusy()) { appendLog('[stt] still transcribing the previous dictation…\n'); return; }
-      if (!activeTermId || !terms.has(activeTermId)) { appendLog('[stt] click into an agent pane first, then 🎤.\n'); return; }
-      // Lock the destination NOW: however long the model load takes, and whatever pane
-      // is clicked meanwhile, the finished transcript goes here or is refused visibly.
-      sttDictationTargetId = activeTermId;
-      const paneRole = (terms.get(sttDictationTargetId) || {}).role || 'shell';
-      appendLog(`[stt] dictation started — locked to pane ${sttDictationTargetId} (${paneRole})\n`);
-      stt.toggle(); // first click: recording starts immediately (model loads at stop time)
-    };
-  }
-  stt.onStatus(({ state: st, detail }) => {
+  const showStatus = ({ state: st, detail }) => {
     const el = $('#sttStatus'); if (el) el.textContent = (st && st !== 'idle') ? (st + (detail ? ' — ' + detail : '')) : '';
     if (micBtn) { micBtn.textContent = st === 'recording' ? '⏺ Stop' : '🎤 Dictate'; micBtn.classList.toggle('rec', st === 'recording'); }
-    if (st === 'error' && detail) appendLog('[stt] ' + detail + '\n');
-  });
+    if (st === 'error') {
+      sttDictationTargetId = null;
+      if (detail) appendLog('[stt] ' + detail + '\n');
+    }
+  };
+  if (micBtn && !micBtn.dataset.sttWired) {
+    micBtn.dataset.sttWired = '1';
+    micBtn.onclick = async () => {
+      if (stt.isStarting()) return;
+      if (stt.isBusy()) { appendLog('[stt] still transcribing the previous dictation…\n'); return; }
+      if (!stt.isRecording()) {
+        if (!activeTermId || !terms.has(activeTermId)) { appendLog('[stt] click into an agent pane first, then 🎤.\n'); return; }
+        // Lock the destination before requesting the microphone, even if focus moves.
+        sttDictationTargetId = activeTermId;
+        const paneRole = (terms.get(sttDictationTargetId) || {}).role || 'shell';
+        appendLog(`[stt] dictation requested — locked to pane ${sttDictationTargetId} (${paneRole})\n`);
+      }
+      try {
+        await stt.toggle();
+      } catch {
+        showStatus({ state: 'error', detail: 'Dictation could not complete. Try again.' });
+      }
+    };
+  }
+  stt.onStatus(showStatus);
   stt.onResult((text) => {
     const targetId = sttDictationTargetId;
     sttDictationTargetId = null;
