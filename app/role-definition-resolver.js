@@ -211,7 +211,7 @@ function createRoleDefinitionResolver(deps) {
     return refuse(REASON.ROLE_NOT_DEPLOYED);
   }
 
-  return { resolve: resolve };
+  return { resolve, assertNoManagedScope };
 }
 
 module.exports = {
