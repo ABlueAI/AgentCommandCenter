@@ -25,6 +25,7 @@
 #>
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $feedGemini = Join-Path $here 'feed-gemini.ps1'
+. (Join-Path $here 'test-fixtures\video-scout-native-stub.ps1')
 $YT = 'https://youtu.be/aqz-KE-bpKQ'
 $SENTINEL = 'ZZSENTINELFOCUS9F3A'   # distinctive, single-token, survives normalization verbatim
 
@@ -42,6 +43,7 @@ $cue = "1`r`n00:00:01,000 --> 00:00:03,500`r`nHello from the fake captions.`r`n"
 Set-Content -LiteralPath $srt -Value $cue -Encoding ASCII
 "[yt-dlp-stub] wrote $srt"
 '@ | Set-Content -LiteralPath (Join-Path $stubRoot 'yt-dlp.ps1') -Encoding ASCII
+Install-VideoScoutNativeStub (Join-Path $stubRoot 'yt-dlp.ps1')
 
 # Run the transcript path with -NoFeed (returns after the deferred-command print, before any gemini).
 function Invoke-FocusNoFeed {

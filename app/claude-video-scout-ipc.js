@@ -52,7 +52,8 @@ function requestConfirm(job, estimate, send) {
 }
 
 function createClaudeVideoScoutIpc({
-  trustedSenderGate, validateVideoUrl, baseEnv, killTree, verifyPolicy, log, analyze = analyzeVideo, logCause = console.error,
+  trustedSenderGate, validateVideoUrl, baseEnv, killTree, outputRoot, verifyPolicy, log,
+  analyze = analyzeVideo, logCause = console.error,
 }) {
   let active = null;
 
@@ -78,7 +79,7 @@ function createClaudeVideoScoutIpc({
     };
     job.done = Promise.resolve().then(() => analyze({
       url: parsed.href, focus: focus.provided ? focus.value : '', settings: settings.settings,
-      baseEnv, killTree, verifyPolicy, signal: job.controller.signal,
+      baseEnv, killTree, outputRoot, verifyPolicy, signal: job.controller.signal,
       progress: (status) => send({ status }),
       transcribe: (pcm, { durationSeconds }) => requestTranscript(job, pcm, durationSeconds, send),
       confirm: (estimate) => requestConfirm(job, estimate, send),

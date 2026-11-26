@@ -26,32 +26,43 @@ Describe 'Get-VideoScoutGeminiPolicyPath — fixed, repository-owned path (not c
         $repoScripts = [System.IO.Path]::GetFullPath((Join-Path $here '..'))   # scripts\
         $path.StartsWith($repoScripts, [System.StringComparison]::OrdinalIgnoreCase) | Should Be $true
     }
-    It 'throws visibly if the tracked policy file is missing (no silent proceed)' {
-        # Prove the fail-closed behavior by pointing $PSScriptRoot's sibling check at a moved file:
-        # simplest deterministic check — the function body asserts existence, so a temp rename is
-        # unnecessary; instead confirm the guard message is present in the source.
-        $src = Get-Content -LiteralPath (Join-Path $here 'get-video-scout-gemini-policy.ps1') -Raw
-        $src | Should Match "must not proceed without the update_topic deny policy"
+    It 'refuses a missing policy at runtime' {
+        $lib = Join-Path $TestDrive 'lib'
+        New-Item -ItemType Directory -Path $lib | Out-Null
+        Copy-Item (Join-Path $here 'get-video-scout-gemini-policy.ps1') $lib
+        & {
+            . (Join-Path $lib 'get-video-scout-gemini-policy.ps1')
+            { Get-VideoScoutGeminiPolicyPath } | Should Throw 'policy'
+        }
+    }
+
+    It 'refuses a policy that exists but cannot be opened for reading' {
+        $root = Join-Path $TestDrive 'unreadable'
+        $lib = Join-Path $root 'lib'
+        $config = Join-Path $root 'config'
+        New-Item -ItemType Directory -Path $lib, $config -Force | Out-Null
+        Copy-Item (Join-Path $here 'get-video-scout-gemini-policy.ps1') $lib
+        $copy = Join-Path $config 'video-scout-gemini-policy.toml'
+        Copy-Item $path $copy
+        $locked = [System.IO.File]::Open($copy, 'Open', 'ReadWrite', 'None')
+        try {
+            & {
+                . (Join-Path $lib 'get-video-scout-gemini-policy.ps1')
+                { Get-VideoScoutGeminiPolicyPath } | Should Throw 'policy'
+            }
+        }
+        finally { $locked.Dispose() }
     }
 }
 
-Describe 'Video Scout Gemini policy file — exactly one headless deny for update_topic' {
-    $path = Get-VideoScoutGeminiPolicyPath
-    $content = Get-Content -LiteralPath $path -Raw
+Describe 'Video Scout Gemini policy file denies all model tools' {
+    $content = Get-Content -LiteralPath (Get-VideoScoutGeminiPolicyPath) -Raw
 
-    It 'declares exactly one [[rule]]' {
+    It 'has a headless deny rule covering every tool with no argument exceptions' {
         ([regex]::Matches($content, '(?m)^\[\[rule\]\]')).Count | Should Be 1
-    }
-    It 'names exactly one tool, update_topic' {
-        ([regex]::Matches($content, '(?m)^toolName\s*=')).Count | Should Be 1
-        $content | Should Match '(?m)^toolName\s*=\s*"update_topic"'
-    }
-    It 'denies it in headless mode' {
         $content | Should Match '(?m)^decision\s*=\s*"deny"'
         $content | Should Match '(?m)^interactive\s*=\s*false'
-    }
-    It 'is a GLOBAL deny — no active argsPattern key (so the tool is removed entirely)' {
-        ($content -match '(?m)^\s*argsPattern\s*=') | Should Be $false
+        ($content -match '(?m)^\s*(toolName|mcpName|argsPattern)\s*=') | Should Be $false
     }
 }
 

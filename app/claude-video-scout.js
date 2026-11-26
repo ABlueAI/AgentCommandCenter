@@ -3,7 +3,6 @@
 const { spawn } = require('node:child_process');
 const fs = require('node:fs/promises');
 const { constants } = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const { copyAllowedWindowsEnv } = require('./pty-env');
 const { normalizeClaudeVideoSettings } = require('./renderer/claude-video-settings');
@@ -481,7 +480,7 @@ async function readArtifact(file, maxBytes, reason) {
 }
 
 async function analyzeVideo({ url, focus, settings: rawSettings, signal, progress, transcribe, confirm, baseEnv, killTree,
-  verifyPolicy, locate = findTool, run = runProcess, tempRoot = os.tmpdir(),
+  verifyPolicy, locate = findTool, run = runProcess, outputRoot,
   removeDir = (dir) => fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }) }) {
   const checked = normalizeClaudeVideoSettings(rawSettings);
   if (!checked.ok) throw new ScoutError(checked.error);
@@ -496,7 +495,8 @@ async function analyzeVideo({ url, focus, settings: rawSettings, signal, progres
   if (!verifyPolicy()?.ok) {
     throw new ScoutError('Claude Code managed settings are present or could not be checked. Subscription-only analysis was refused.');
   }
-  const dir = await fs.mkdtemp(path.join(tempRoot, 'mako-claude-video-'));
+  await fs.mkdir(outputRoot, { recursive: true });
+  const dir = await fs.mkdtemp(path.join(outputRoot, 'mako-claude-video-'));
   const mediaEnv = { ...env, TEMP: dir, TMP: dir, TMPDIR: dir };
   const claudeEnv = { ...mediaEnv, CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' };
   const invoke = (exe, args, { input, timeoutMs = 60000, childEnv = mediaEnv } = {}) =>
@@ -512,9 +512,19 @@ async function analyzeVideo({ url, focus, settings: rawSettings, signal, progres
       tools[name] = await locate(name, env);
       if (!tools[name]) throw new ScoutError(`${name} is missing. Put its executable on PATH and restart Mako.`);
     }
-    const video = path.join(dir, 'video.mp4');
+    const downloadDir = path.join(dir, 'download');
+    await fs.mkdir(downloadDir);
+    const downloadEnv = {
+      ...copyAllowedWindowsEnv(baseEnv, ['SystemRoot']),
+      TEMP: downloadDir, TMP: downloadDir, TMPDIR: downloadDir,
+    };
+    const deno = await locate('deno', env);
+    const invokeDownloader = (args, timeoutMs = 60000) => run(tools['yt-dlp'],
+      path.isAbsolute(deno ?? '') ? ['--js-runtimes', `deno:${deno}`, ...args] : args,
+      { cwd: downloadDir, env: downloadEnv, signal, timeoutMs, killTree });
+    const video = path.join(downloadDir, 'video.mp4');
     progress('Checking video availability…');
-    const metadata = await invoke(tools['yt-dlp'], metadataArgs(url));
+    const metadata = await invokeDownloader(metadataArgs(url));
     processRefusal(metadata, 'Video lookup with yt-dlp');
     const source = readJson(metadata.stdout);
     if (metadata.code !== 0 || !source) throw ytDlpRefusal(metadata, 'Video could not be read: yt-dlp could not load the source.');
@@ -525,8 +535,8 @@ async function analyzeVideo({ url, focus, settings: rawSettings, signal, progres
     validateDuration(source.duration, maxSeconds);
 
     progress('Downloading video…');
-    const downloaded = await invoke(tools['yt-dlp'], downloadArgs(url, tools.ffmpeg, video, maxSeconds),
-      { timeoutMs: Math.max(30 * 60000, source.duration * 1000) });
+    const downloaded = await invokeDownloader(downloadArgs(url, tools.ffmpeg, video, maxSeconds),
+      Math.max(30 * 60000, source.duration * 1000));
     processRefusal(downloaded, 'Video download with yt-dlp');
     if (downloaded.code !== 0) throw ytDlpRefusal(downloaded, 'Video could not be read: yt-dlp could not download an MP4.');
     const videoStat = await fs.stat(video).catch((err) => {

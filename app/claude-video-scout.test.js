@@ -65,6 +65,7 @@ async function fixture(t, opts = {}) {
     PATH: 'fake-path', HOME: 'fake-home', ANTHROPIC_API_KEY: 'discard-me', anthropic_auth_token: 'discard-me',
     ANTHROPIC_BASE_URL: 'discard-me', CLAUDE_CODE_OAUTH_TOKEN: 'discard-me',
     CLAUDE_CODE_USE_BEDROCK: 'discard-me', NODE_OPTIONS: 'discard-me', GEMINI_API_KEY: 'discard-me',
+    GH_TOKEN: 'discard-me', GITHUB_TOKEN: 'discard-me', HTTPS_PROXY: 'discard-me',
   };
   let claudeCalls = 0;
   const run = async (exe, args, options) => {
@@ -80,7 +81,7 @@ async function fixture(t, opts = {}) {
     if (exe === 'yt-dlp') {
       if (args.includes('--simulate')) return opts.metadata ?? stdout({ duration: 3.2, live_status: 'not_live' });
       if (opts.download) return opts.download(options);
-      await fs.writeFile(path.join(options.cwd, 'video.mp4'), 'fake video');
+      await fs.writeFile(args[args.indexOf('-o') + 1], 'fake video');
       return stdout(null);
     }
     if (exe === 'ffprobe') {
@@ -107,7 +108,7 @@ async function fixture(t, opts = {}) {
     return stdout(null);
   };
   const analyze = () => analyzeVideo({
-    url, focus: 'Describe the color changes.', baseEnv: isolateEnv, tempRoot: root, settings: opts.settings,
+    url, focus: 'Describe the color changes.', baseEnv: isolateEnv, outputRoot: root, settings: opts.settings,
     ...(opts.removeDir ? { removeDir: opts.removeDir } : {}),
     signal: new AbortController().signal, progress: () => {},
     locate: async (name) => name === opts.missing ? null : name,
@@ -131,6 +132,18 @@ async function fixture(t, opts = {}) {
   return { analyze, calls, root, estimates, analysisCalls, extractions };
 }
 
+test('runs both downloader calls with a minimal environment and a dedicated output folder', async (t) => {
+  const { analyze, calls, root } = await fixture(t);
+  await analyze();
+  const [lookup, download] = calls.filter(({ exe }) => exe === 'yt-dlp');
+  assert.equal(path.dirname(path.dirname(download.cwd)), root);
+  assert.equal(path.basename(download.cwd), 'download');
+  assert.equal(lookup.cwd, download.cwd);
+  assert.deepEqual(lookup.env, download.env);
+  assert.deepEqual(download.env, { TEMP: download.cwd, TMP: download.cwd, TMPDIR: download.cwd });
+  assert.equal(download.args[download.args.indexOf('-o') + 1], path.join(download.cwd, 'video.mp4'));
+});
+
 test('sends shell-free CLI arguments, scene-sampled 640 px frames and the local transcript after the estimate', async (t) => {
   const { analyze, calls, root, estimates, analysisCalls, extractions } = await fixture(t);
   assert.equal(await analyze(), report);
@@ -152,21 +165,22 @@ test('sends shell-free CLI arguments, scene-sampled 640 px frames and the local 
   assert.deepEqual(analysis.env, calls[0].env);
   assert.equal(calls[0].cwd, analysis.cwd);
   assert.deepEqual(calls[1].args.slice(-2), ['--', url]);
+  const video = path.join(calls[2].cwd, 'video.mp4');
   assert.deepEqual(calls[2].args, [
     '--ignore-config', '--no-plugin-dirs', '--no-cache-dir', '--no-playlist', '--use-extractors',
     'youtube,vimeo', '--no-progress', '--no-warnings', '--ffmpeg-location', 'ffmpeg',
     '--max-filesize', '4G', '--match-filter', 'duration <= 3600 & !is_live & !is_upcoming',
     '-f', 'bv[ext=mp4][width<=1280][height<=1280]+ba[ext=m4a]/b[ext=mp4][width<=1280][height<=1280]',
-    '--merge-output-format', 'mp4', '-o', path.join(analysis.cwd, 'video.mp4'), '--', url,
+    '--merge-output-format', 'mp4', '-o', video, '--', url,
   ]);
   // Pass 1 samples by scene change plus the 10-second gap, writing no full frames.
-  assert.deepEqual(calls[4].args, sampleArgs(path.join(analysis.cwd, 'video.mp4'), defaults, 'frames.txt', 'hashes.gray'));
+  assert.deepEqual(calls[4].args, sampleArgs(video, defaults, 'frames.txt', 'hashes.gray'));
   assert.match(calls[4].args[calls[4].args.indexOf('-vf') + 1],
     /select='eq\(n,0\)\+gt\(scene,0\.3\)\+gte\(t-prev_selected_t,10\)',metadata=mode=print:file=frames\.txt,scale=9:8/);
   // Pass 2 extracts each kept moment at 640 px on the long edge.
   assert.equal(extractions().length, 4);
   for (const [i, call] of extractions().entries()) {
-    assert.deepEqual(call.args, frameArgs(path.join(analysis.cwd, 'video.mp4'), i, 640, path.join(analysis.cwd, `frame-000${i}.jpg`)));
+    assert.deepEqual(call.args, frameArgs(video, i, 640, path.join(analysis.cwd, `frame-000${i}.jpg`)));
     assert.match(call.args[call.args.indexOf('-vf') + 1], /^scale=w='min\(640,iw\)':h='min\(640,ih\)'/);
   }
   assert.deepEqual(calls[9].args.slice(-10), ['-vn', '-ac', '1', '-ar', '16000', '-t', '3601', '-f', 's16le', path.join(analysis.cwd, 'speech.pcm')]);

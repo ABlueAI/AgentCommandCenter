@@ -10,7 +10,7 @@
     - node.ps1  : one smart stub. When invoked for gemini-video-sdk.js it plays the SDK route; when
                   invoked for the bundle gemini.js it plays the CLI-direct route. Output/exit are
                   controlled by VS_STUB_* env vars.
-    - gemini.ps1: the CLI FALLBACK shim (used when no bundle gemini.js sits beside it).
+    - gemini.ps1: the CLI fallback executable (used when no bundle gemini.js sits beside it).
     - yt-dlp.ps1: writes a fake .srt into the run dir (CLI route); can also drop a blocking
                   analysis-output.txt DIRECTORY to force a report-persistence failure.
     - the duration probe's Start-Job/Receive-Job layer is shadowed with globals feeding a
@@ -20,6 +20,7 @@
 #>
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $feedGemini = Join-Path $here 'feed-gemini.ps1'
+. (Join-Path $here 'test-fixtures\video-scout-native-stub.ps1')
 $YT = 'https://youtu.be/aqz-KE-bpKQ'
 
 # --- stub roots -------------------------------------------------------------------------------------
@@ -68,8 +69,9 @@ if ($env:VS_STUB_BLOCK_REPORT -eq '1') {
 }
 "[yt-dlp-stub] wrote srt into $runDir"
 '@ | Set-Content -LiteralPath (Join-Path $commonBin 'yt-dlp.ps1') -Encoding ASCII
+Install-VideoScoutNativeStub (Join-Path $commonBin 'yt-dlp.ps1')
 
-# gemini.ps1: the CLI FALLBACK shim.
+# gemini.ps1: the CLI fallback executable.
 $geminiShim = @'
 $mode = $env:VS_STUB_MODE
 $code = if ($env:VS_STUB_EXIT) { [int]$env:VS_STUB_EXIT } else { 0 }
@@ -81,9 +83,13 @@ exit $code
 '@
 $geminiShim | Set-Content -LiteralPath (Join-Path $directBin 'gemini.ps1') -Encoding ASCII
 $geminiShim | Set-Content -LiteralPath (Join-Path $fallbackBin 'gemini.ps1') -Encoding ASCII
+Install-VideoScoutNativeStub (Join-Path $fallbackBin 'gemini.ps1')
 # A real (non-empty) bundle gemini.js beside the DIRECT shim so feed-gemini takes the node path.
 '// stub bundle gemini.js (never executed directly; node.ps1 stub intercepts)' |
     Set-Content -LiteralPath (Join-Path $directBin 'node_modules\@google\gemini-cli\bundle\gemini.js') -Encoding ASCII
+Install-VideoScoutNativeStub (Join-Path $directBin 'gemini.ps1')
+Copy-Item (Join-Path $commonBin 'node.ps1') $directBin
+Install-VideoScoutNativeStub (Join-Path $directBin 'node.ps1')
 
 # --- run helpers ------------------------------------------------------------------------------------
 function New-RunId {
@@ -117,6 +123,7 @@ function Invoke-Feed {
     if ($BlockReport) { $env:VS_STUB_BLOCK_REPORT = '1' } else { Remove-Item Env:\VS_STUB_BLOCK_REPORT -ErrorAction SilentlyContinue }
     $env:PATH = (($ExtraPathBins + $commonBin) -join ';') + ';' + $savedPath
     try {
+        Write-VideoScoutFixtureEnvironment -OutputRoot $outDir -Names 'VS_STUB_MODE', 'VS_STUB_EXIT', 'VS_STUB_BLOCK_REPORT'
         $p = @{ OutDir = $outDir } + $Params
         # feed-gemini's terminal-truth backstop finalizes the manifest (refused/error) and then
         # RETHROWS the original failure. That is correct production behavior; catch it here so the

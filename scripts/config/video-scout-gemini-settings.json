@@ -1,0 +1,21 @@
+{
+  "general": {
+    "enableAutoUpdate": false,
+    "enableAutoUpdateNotification": false
+  },
+  "hooksConfig": {
+    "enabled": false
+  },
+  "privacy": {
+    "usageStatisticsEnabled": false
+  },
+  "security": {
+    "auth": {
+      "selectedType": "gemini-api-key",
+      "enforcedType": "gemini-api-key"
+    }
+  },
+  "telemetry": {
+    "enabled": false
+  }
+}

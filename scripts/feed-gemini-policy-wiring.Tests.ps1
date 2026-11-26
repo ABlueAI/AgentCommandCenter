@@ -1,8 +1,8 @@
 <#
 .SYNOPSIS
   Behavioral Pester tests for the V5 stack content-acceptance correction: the fixed, repository-owned
-  Gemini CLI policy (denying the built-in `update_topic` tool) is passed with `--policy` on EVERY
-  Video Scout Gemini CLI invocation — the direct-node path AND the fallback shim path, for transcript,
+  Gemini CLI policy (denying model tools) is passed with `--policy` on EVERY
+  Video Scout Gemini CLI invocation — the direct-node path AND the native fallback path, for transcript,
   audio, and CLI-video modes, and with a custom -Prompt.
 .DESCRIPTION
   Run with: Invoke-Pester -Path scripts\feed-gemini-policy-wiring.Tests.ps1
@@ -14,6 +14,7 @@
 #>
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $feedGemini = Join-Path $here 'feed-gemini.ps1'
+. (Join-Path $here 'test-fixtures\video-scout-native-stub.ps1')
 . (Join-Path $here 'lib\get-video-scout-gemini-policy.ps1')
 $policyPath = Get-VideoScoutGeminiPolicyPath
 $policyLeaf = 'video-scout-gemini-policy.toml'
@@ -22,7 +23,7 @@ $NONYT = 'https://vimeo.com/76979871'
 
 $stubRoot   = Join-Path ([System.IO.Path]::GetTempPath()) ("policy-wire-" + [Guid]::NewGuid().ToString('N'))
 $directBin  = Join-Path $stubRoot 'direct'     # gemini.ps1 + bundle gemini.js -> CLI-direct (node) path
-$fallbackBin= Join-Path $stubRoot 'fallback'   # gemini.ps1 only -> CLI-fallback (shim) path
+$fallbackBin= Join-Path $stubRoot 'fallback'   # gemini.ps1 only -> CLI-fallback (native) path
 $commonBin  = Join-Path $stubRoot 'common'
 foreach ($d in @($commonBin, $directBin, (Join-Path $directBin 'node_modules\@google\gemini-cli\bundle'), $fallbackBin)) {
     New-Item -ItemType Directory -Path $d -Force | Out-Null
@@ -47,6 +48,14 @@ $template = $null
 for ($i = 0; $i -lt $args.Count; $i++) { if ($args[$i] -eq '-o') { $template = $args[$i + 1] } }
 if (-not $template) { throw 'yt-dlp stub: no -o template argument found' }
 $runDir = Split-Path -Parent $template
+$runtime = [PSCustomObject]@{
+    Cwd = (Get-Location).ProviderPath
+    Temp = $env:TEMP
+    UnexpectedEnv = @('GH_TOKEN', 'GITHUB_TOKEN', 'GEMINI_API_KEY', 'ANTHROPIC_API_KEY', 'HTTPS_PROXY', 'PYTHONPATH',
+        'APPDATA', 'USERPROFILE' | Where-Object { [Environment]::GetEnvironmentVariable($_) })
+    Argv = $args
+}
+$runtime | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $runDir 'download-launch.json')
 $argline = $args -join ' '
 $name = if ($argline -match 'audio-format mp3') { 'Fake_Audio.mp3' }
         elseif ($argline -match 'merge-output-format mp4') { 'Fake_Video.mp4' }
@@ -54,8 +63,9 @@ $name = if ($argline -match 'audio-format mp3') { 'Fake_Audio.mp3' }
 Set-Content -LiteralPath (Join-Path $runDir $name) -Value ("fake media for " + $name) -Encoding ASCII
 "[yt-dlp-stub] wrote $name"
 '@ | Set-Content -LiteralPath (Join-Path $commonBin 'yt-dlp.ps1') -Encoding ASCII
+Install-VideoScoutNativeStub (Join-Path $commonBin 'yt-dlp.ps1')
 
-# gemini.ps1: the CLI FALLBACK shim. Capture argv, emit a fake report.
+# gemini.ps1: the CLI fallback executable. Capture argv, emit a fake report.
 $geminiShim = @'
 $argsFile = $env:VS_POLICY_ARGS_FILE
 if ($argsFile) { Add-Content -LiteralPath $argsFile -Value ("FALLBACK`t" + ($args -join "`t")) }
@@ -66,9 +76,13 @@ exit 0
 # The DIRECT bin also needs a gemini.ps1 (feed-gemini resolves the shim to locate the bundle beside it).
 $geminiShim | Set-Content -LiteralPath (Join-Path $directBin 'gemini.ps1') -Encoding ASCII
 $geminiShim | Set-Content -LiteralPath (Join-Path $fallbackBin 'gemini.ps1') -Encoding ASCII
+Install-VideoScoutNativeStub (Join-Path $fallbackBin 'gemini.ps1')
 # A real (non-empty) bundle gemini.js beside the DIRECT shim so feed-gemini takes the node path.
 '// stub bundle gemini.js (never executed; node.ps1 intercepts)' |
     Set-Content -LiteralPath (Join-Path $directBin 'node_modules\@google\gemini-cli\bundle\gemini.js') -Encoding ASCII
+Install-VideoScoutNativeStub (Join-Path $directBin 'gemini.ps1')
+Copy-Item (Join-Path $commonBin 'node.ps1') $directBin
+Install-VideoScoutNativeStub (Join-Path $directBin 'node.ps1')
 
 function New-RunId {
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
@@ -90,16 +104,48 @@ function Invoke-FeedCapture {
     $env:VS_POLICY_ARGS_FILE = $argsFile
     $env:PATH = "$RouteBin;$commonBin;$savedPath"
     try {
+        Write-VideoScoutFixtureEnvironment -OutputRoot $outDir -Names 'VS_POLICY_ARGS_FILE'
         $p = @{ OutDir = $outDir } + $Params
-        try { & $feedGemini @p 6>&1 2>&1 | Out-Null } catch { }
+        $failure = $null
+        try { & $feedGemini @p 6>&1 2>&1 | Out-Null } catch { $failure = $_.Exception.Message }
         $captured = if (Test-Path -LiteralPath $argsFile) { Get-Content -LiteralPath $argsFile -Raw } else { '' }
-        [PSCustomObject]@{ Args = $captured }
+        $run = Join-Path $outDir $Params.RunId
+        $launchFile = Join-Path $run 'download-launch.json'
+        $download = if (Test-Path -LiteralPath $launchFile) { Get-Content -LiteralPath $launchFile -Raw | ConvertFrom-Json }
+        [PSCustomObject]@{ Args = $captured; Error = $failure; Download = $download; Run = $run }
     }
     finally {
         $env:PATH = $savedPath
         Remove-Item Env:\VS_POLICY_ARGS_FILE -ErrorAction SilentlyContinue
         'Start-Job', 'Wait-Job', 'Receive-Job', 'Stop-Job', 'Remove-Job' |
             ForEach-Object { Remove-Item "function:global:$_" -ErrorAction SilentlyContinue }
+    }
+}
+
+Describe 'Video Scout downloader process boundary' {
+    It 'uses the run directory, clean environment, and an option terminator before the URL' {
+        $values = @('GH_TOKEN', 'GITHUB_TOKEN', 'GEMINI_API_KEY', 'ANTHROPIC_API_KEY', 'HTTPS_PROXY', 'PYTHONPATH')
+        $saved = @{}
+        foreach ($name in $values) {
+            $saved[$name] = [Environment]::GetEnvironmentVariable($name)
+            [Environment]::SetEnvironmentVariable($name, 'fixture-only')
+        }
+        try {
+            $r = Invoke-FeedCapture -RouteBin $fallbackBin -Params @{
+                Url = $YT; VideoScout = $true; Mode = 'transcript'; NoFeed = $true; RunId = (New-RunId)
+            }
+            $r.Error | Should BeNullOrEmpty
+            $r.Download.Cwd | Should Be $r.Run
+            $r.Download.Temp | Should Be $r.Run
+            @($r.Download.UnexpectedEnv).Count | Should Be 0
+            ($r.Download.Argv -contains '--ignore-config') | Should Be $true
+            ($r.Download.Argv -contains '--no-plugin-dirs') | Should Be $true
+            $r.Download.Argv[-2] | Should Be '--'
+            $r.Download.Argv[-1] | Should Be $YT
+        }
+        finally {
+            foreach ($name in $values) { [Environment]::SetEnvironmentVariable($name, $saved[$name]) }
+        }
     }
 }
 
@@ -128,7 +174,7 @@ Describe 'V5 policy wiring — --policy passed on the DIRECT (node bundle) CLI r
     }
 }
 
-Describe 'V5 policy wiring — --policy passed on the FALLBACK (shim) CLI route' {
+Describe 'V5 policy wiring — --policy passed on the FALLBACK (native) CLI route' {
     It 'transcript: passes --policy <repo policy path> on the fallback route' {
         $r = Invoke-FeedCapture -RouteBin $fallbackBin -Params @{ Url = $YT; VideoScout = $true; Mode = 'transcript'; RunId = (New-RunId) }
         $r.Args | Should Match 'FALLBACK'
@@ -136,6 +182,33 @@ Describe 'V5 policy wiring — --policy passed on the FALLBACK (shim) CLI route'
         ($r.Args -match [regex]::Escape($policyPath)) | Should Be $true
         ($r.Args -match [regex]::Escape($policyLeaf)) | Should Be $true
     }
+    It 'passes a quoted prompt as one fallback argument' {
+        $r = Invoke-FeedCapture -RouteBin $fallbackBin -Params @{
+            Url = $YT; VideoScout = $true; Mode = 'transcript'
+            Prompt = 'Explain "one example" in plain language.'
+            RunId = (New-RunId)
+        }
+        $fields = $r.Args.TrimEnd() -split "`t"
+        $promptIndex = [Array]::IndexOf($fields, '-p') + 1
+        $promptIndex | Should Be ($fields.Length - 1)
+        $fields[$promptIndex] | Should Be 'Explain "one example" in plain language. @Fake_Video.en.srt'
+    }
+
+    It 'refuses a leading dash in a model or prompt value without invoking Gemini' {
+        foreach ($field in @('Model', 'Prompt')) {
+            $params = @{ Url = $YT; VideoScout = $true; Mode = 'transcript'; RunId = (New-RunId) }
+            $params[$field] = '-example'
+            $r = Invoke-FeedCapture -RouteBin $fallbackBin -Params $params
+            $r.Args | Should BeNullOrEmpty
+            $r.Error | Should Match 'must not start with a dash'
+        }
+    }
+
+    It 'disables extensions on the fallback route' {
+        $r = Invoke-FeedCapture -RouteBin $fallbackBin -Params @{ Url = $YT; VideoScout = $true; Mode = 'transcript'; RunId = (New-RunId) }
+        $r.Args | Should Match "--extensions`tnone"
+    }
+
     It 'audio: passes --policy on the fallback route' {
         $r = Invoke-FeedCapture -RouteBin $fallbackBin -Params @{ Url = $YT; VideoScout = $true; Mode = 'audio'; RunId = (New-RunId) }
         $r.Args | Should Match '--policy'

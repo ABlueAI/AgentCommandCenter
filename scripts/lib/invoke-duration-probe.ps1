@@ -17,11 +17,25 @@
 #>
 
 . (Join-Path $PSScriptRoot 'get-duration-guard.ps1')
+. (Join-Path $PSScriptRoot 'invoke-video-scout-process.ps1')
 
 function Get-YtDlpPath {
-    $p = (Get-Command yt-dlp -ErrorAction SilentlyContinue).Source
+    $p = (Get-Command yt-dlp -CommandType Application -ErrorAction SilentlyContinue).Source
     if (-not $p) { throw "yt-dlp not found on PATH. Restart your terminal after install, or run: winget install yt-dlp.yt-dlp" }
     return $p
+}
+
+# Match the normal download environment for the metadata-only child as well.
+function Invoke-VideoScoutDownload {
+    param([string]$Executable, [string]$WorkingDirectory, [string[]]$Arguments, [ref]$ExitCode,
+        [datetime]$Deadline = [datetime]::MaxValue)
+    $flags = @('--ignore-config', '--no-plugin-dirs', '--no-cache-dir')
+    $deno = (Get-Command deno.exe -CommandType Application -ErrorAction SilentlyContinue).Source
+    if ($deno) { $flags += @('--js-runtimes', "deno:$deno") }
+    $ffmpeg = (Get-Command ffmpeg.exe -CommandType Application -ErrorAction SilentlyContinue).Source
+    if ($ffmpeg) { $flags += @('--ffmpeg-location', $ffmpeg) }
+    Invoke-VideoScoutProcess -Executable $Executable -WorkingDirectory $WorkingDirectory `
+        -Arguments ($flags + $Arguments) -Environment (Get-VideoScoutProcessEnvironment $WorkingDirectory) -ExitCode $ExitCode -Deadline $Deadline
 }
 
 # Metadata-only probe (NO download): returns duration (int or $null) + is_live, bounded by a hard
@@ -32,20 +46,27 @@ function Get-YtDlpPath {
 #   - a non-positive/garbage   -> Duration=$null i.e. UNKNOWN, so a "0" can never pass the size gate
 # `--` precedes the URL so a URL beginning with '-' can't be parsed as a yt-dlp flag (finding 7).
 function Invoke-DurationProbe {
-    param([string]$YtDlp, [string]$Url, [int]$TimeoutSec)
+    param([string]$YtDlp, [string]$Url, [int]$TimeoutSec, [string]$WorkingDirectory)
     try {
+        $probeLibrary = Join-Path $PSScriptRoot 'invoke-duration-probe.ps1'
+        $deadline = [datetime]::UtcNow.AddSeconds($TimeoutSec)
         $job = Start-Job -ScriptBlock {
-            param($exe, $u)
-            & $exe --no-playlist --simulate --no-warnings --print '%(duration)s|%(is_live)s' -- $u 2>$null
-        } -ArgumentList $YtDlp, $Url
+            param($library, $exe, $u, $cwd, $deadline)
+            $ErrorActionPreference = 'Stop'
+            . $library
+            $code = 0
+            $probeArgs = @('--no-playlist', '--simulate', '--no-warnings', '--print', '%(duration)s|%(is_live)s', '--', $u)
+            Invoke-VideoScoutDownload -Executable $exe -WorkingDirectory $cwd -Arguments $probeArgs -ExitCode ([ref]$code) -Deadline $deadline
+            if ($code -ne 0) { throw "yt-dlp metadata lookup exited with code $code." }
+        } -ArgumentList $probeLibrary, $YtDlp, $Url, $WorkingDirectory, $deadline
         $finished = Wait-Job $job -Timeout $TimeoutSec
         if (-not $finished) {
-            Stop-Job $job -ErrorAction SilentlyContinue
-            Remove-Job $job -Force -ErrorAction SilentlyContinue
+            try { Stop-Job $job -ErrorAction Stop }
+            finally { Remove-Job $job -Force -ErrorAction Stop }
             return [PSCustomObject]@{ TimedOut = $true; Duration = $null; IsLive = $false }
         }
-        $out = Receive-Job $job 2>$null
-        Remove-Job $job -Force -ErrorAction SilentlyContinue
+        try { $out = Receive-Job $job -ErrorAction Stop }
+        finally { Remove-Job $job -Force }
         $line = ($out | Where-Object { $_ -match '\|' } | Select-Object -First 1)
         $dur = $null; $isLive = $false
         if ($line) {
@@ -82,7 +103,7 @@ function Invoke-DurationProbe {
 # declared locals mean dynamic scoping can never silently pick up caller variables of the same name.
 function Assert-DurationGuard {
     param([Parameter(Mandatory)][string]$Url, [Parameter(Mandatory)][string]$GuardMode,
-        [int]$ProbeTimeoutSec = 60, [int]$MaxDurationSeconds = 0,
+        [int]$ProbeTimeoutSec = 60, [int]$MaxDurationSeconds = 0, [string]$WorkingDirectory,
         [switch]$HasRange, [int]$RangeStart = 0, [int]$RangeEnd = 0,
         # V4: a multi-slice run gates on the AGGREGATE of its already-validated slice set against a
         # FIXED cap. Passed through to the pure decision layer, which owns the cost decision (and
@@ -90,7 +111,7 @@ function Assert-DurationGuard {
         [switch]$HasMultiSlice, [int]$SliceCount = 0, [int]$AggregateSeconds = 0)
     $ytdlpProbe = Get-YtDlpPath
     Write-Host "Duration guard: probing metadata (timeout ${ProbeTimeoutSec}s)..." -ForegroundColor DarkCyan
-    $probe = Invoke-DurationProbe -YtDlp $ytdlpProbe -Url $Url -TimeoutSec $ProbeTimeoutSec
+    $probe = Invoke-DurationProbe -YtDlp $ytdlpProbe -Url $Url -TimeoutSec $ProbeTimeoutSec -WorkingDirectory $WorkingDirectory
     $override = if ($MaxDurationSeconds -gt 0) { [Nullable[int]]$MaxDurationSeconds } else { $null }
     $guard = Resolve-DurationGuard -Mode $GuardMode -HasRange:$HasRange -StartOffset $RangeStart -EndOffset $RangeEnd `
         -DurationSeconds $probe.Duration -IsLive:$probe.IsLive -ProbeTimedOut:$probe.TimedOut -MaxDurationOverride $override `
