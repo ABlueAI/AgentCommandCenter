@@ -294,10 +294,15 @@ const merged = '2026-10-18T18:18:40Z';
         repos: { listPullRequestsAssociatedWithCommit: fn('assoc') },
         pulls: {
           listCommits: fn('commits'), listReviews: fn('reviews'), get: async (p) => ({ data: { number: p.pull_number } }),
-          list: async (p) => { seen.push(['list', p]); return { data: [{ number: 39 }] }; },
+          list: Object.assign(async (p) => { seen.push(['list', p]); return { data: [{ number: 39 }] }; }, { endpoint: 'list' }),
         },
       },
-      paginate: async (f, params) => { seen.push([f.endpoint, params]); return f.endpoint === 'commits' ? [{ sha: 's1' }, { sha: 's2' }] : []; },
+      paginate: async (f, params) => {
+        seen.push([f.endpoint, params]);
+        if (f.endpoint === 'commits') return [{ sha: 's1' }, { sha: 's2' }];
+        if (f.endpoint === 'list') return [{ number: 39 }, { number: 38 }];
+        return [];
+      },
     };
     const api = githubApi(github, { owner: 'o', repo: 'r' });
     await api.prsForCommit('abc');
@@ -306,7 +311,7 @@ const merged = '2026-10-18T18:18:40Z';
     eq((await api.getPr(7)).number, 7, 'getPr returns the PR data');
     eq(seen.map(([e]) => e), ['assoc', 'commits', 'reviews'], 'associated PRs, commits and reviews are all paginated');
     eq(seen[1][1], { owner: 'o', repo: 'r', pull_number: 7, per_page: 100 }, 'listCommits gets owner, repo and the PR number');
-    eq(await api.recentPrsIntoMain(), [{ number: 39 }], 'recentPrsIntoMain returns the PR list');
+    eq(await api.recentPrsIntoMain(), [{ number: 39 }, { number: 38 }], 'recentPrsIntoMain returns PRs from every page');
     eq(seen[3][1], { owner: 'o', repo: 'r', state: 'closed', base: 'main', sort: 'updated', direction: 'desc', per_page: 100 },
       'recentPrsIntoMain asks for the newest closed PRs into main');
   }
