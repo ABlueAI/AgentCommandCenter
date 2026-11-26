@@ -434,3 +434,7 @@ input:focus { outline: none; border-color: var(--accent); }
 .pane-status-badge.ps-failed    .pane-status-dot { background:#ef4444; }
 .pane-status-badge.ps-exited    .pane-status-dot { background:#4b5563; }
 .pane-status-badge.ps-unknown   .pane-status-dot { background:transparent; border:1px solid #6b7280; }
+
+/* S54: the estimate's Send / Cancel bar in a Claude Video Scout pane. */
+.claude-video-confirm { display: flex; gap: 8px; padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--border); }
+#claudeVideoSettingsHost { display: grid; grid-template-columns: 1fr 110px; gap: 4px 10px; align-items: center; margin: 6px 0; }
