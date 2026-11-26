@@ -149,6 +149,10 @@ assert(CLIPBOARD_CHAR_LIMIT === 1000000, 'the main-process hard limit is exactly
   const readBoom = build(t1.win, makeClipboard({ readThrows: true }));
   const rr = readBoom.handleClipboardRead(makeEvent(t1.wc, t1.mainFrame));
   assert(rr.ok === false && rr.error === 'clipboard-unavailable', 'a throwing readText fails closed (clipboard-unavailable)');
+  const unexpectedRead = build(t1.win, makeClipboard({ readValue: null }))
+    .handleClipboardRead(makeEvent(t1.wc, t1.mainFrame));
+  assert(unexpectedRead.ok === false && unexpectedRead.error === 'clipboard-unavailable' && !('text' in unexpectedRead),
+    'a non-string clipboard read returns a visible refusal without text');
   const t2 = makeWindow();
   const writeBoom = build(t2.win, makeClipboard({ writeThrows: true }));
   const wr = writeBoom.handleClipboardWrite(makeEvent(t2.wc, t2.mainFrame), 'x');
