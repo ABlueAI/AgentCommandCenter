@@ -13,7 +13,7 @@ wants it stronger on the kinds of mistake Trail of Bits' skills look for.
 
 **Trail of Bits' public security skills** for Claude Code. Five of them are the ones Blue named:
 
-| Skill | What it looks for (builder's reading from its name and the hand-off; S69 reads each at the pin) |
+| Skill | What it looks for (read at the pin by S69, 2026-11-26) |
 |---|---|
 | `insecure-defaults` | settings and code paths that are unsafe unless someone changes them |
 | `supply-chain-risk-auditor` | risky dependencies, unpinned sources and install-time scripts |
@@ -89,10 +89,13 @@ sharp-edges) would strengthen security-reviewer".
   | D. Dependencies and other outside code | `supply-chain-risk-auditor` | pins, install scripts and the real source; never state registry facts from memory; an unrun check is neither a finding nor a pass |
   | E. Test each finding before you report it | `fp-check` | restate the claim, find the guard, separate the main control from a second layer, and argue against the finding before keeping it |
 
-- **How S69 checked that no text was copied** (verified 2026-11-26): the new section was split into
-  every run of 5 and of 6 consecutive words (lower-cased, punctuation dropped) and compared with every
-  Markdown, JSON, JavaScript, Python, YAML and TOML file under `plugins/` at the pin, all 47
-  plugins, not only the five. Result: 0 shared 6-word runs and 0 shared 5-word runs (one shared
-  5-word run, a quoted piece of workflow syntax, was reworded before the final count).
+- **How S69 checked that no text was copied** (verified 2026-11-26, rerun after the review fixes):
+  the new section was split into every run of 5 and of 6 consecutive words (lower-cased,
+  punctuation dropped) and compared with every Markdown, JSON, JavaScript, Python, YAML and TOML
+  file under `plugins/` at the pin. Against the five skills' plugins: 0 shared 5-word runs and 0
+  shared 6-word runs (one shared 5-word run, a quoted piece of workflow syntax, was reworded before
+  the count). Against all 47 plugins: 0 shared 6-word runs, and 3 everyday 5-word phrases ("the
+  agent is told to", "agent is told to run", "only when it is clearly") that also appear in two
+  unrelated plugins Mako didn't read (`c-review`, `dimensional-analysis`).
 - A before-and-after run on a fixed set of past PR diffs (docs/HARNESS-CHANGES.md) shows the
   reviewer still finds what it found before.

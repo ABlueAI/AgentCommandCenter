@@ -508,10 +508,15 @@ if (sharedBlocks.length > 0) {
   for (const h of CHECKS) assert(section.includes('\n' + h + '\n'), `security-reviewer keeps check "${h.slice(4)}"`);
   assert(section.includes('docs/decisions/OSS-trail-of-bits-skills.md') && section.includes('CC-BY-SA-4.0'),
     'the section names its record and the licence it must not copy from');
-  assert(section.includes('never drop a possible security gap without saying so') && section.includes('"not verified"'),
+  const checkE = (section.match(/\n### E\.[\s\S]*$/) || [''])[0];
+  assert(checkE.includes('never drop a possible security gap without saying so') && checkE.includes('mark it "not verified"'),
     'check E keeps an unsettled finding as "not verified" instead of dropping it');
+  assert(checkE.includes('None of these steps lowers a finding that meets the CRITICAL definition'),
+    'check E never lowers a CRITICAL finding');
   assert(section.includes('You have no network.'), 'check D never states registry or advisory facts from memory');
-  const rec = fs.readFileSync(path.join(repoRoot, 'docs', 'decisions', 'OSS-trail-of-bits-skills.md'), 'utf8');
+  const recPath = path.join(repoRoot, 'docs', 'decisions', 'OSS-trail-of-bits-skills.md');
+  const rec = fs.existsSync(recPath) ? fs.readFileSync(recPath, 'utf8') : '';
+  assert(rec !== '', 'docs/decisions/OSS-trail-of-bits-skills.md exists');
   for (const [check, skill] of [['A', 'insecure-defaults'], ['B', 'sharp-edges'], ['C', 'agentic-actions-auditor'],
     ['D', 'supply-chain-risk-auditor'], ['E', 'fp-check']]) {
     assert(new RegExp('\\|\\s*' + check + '\\.[^|\\n]*\\|\\s*`' + skill + '`').test(rec),

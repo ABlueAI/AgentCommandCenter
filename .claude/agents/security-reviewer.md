@@ -221,14 +221,16 @@ For each package, GitHub action, plugin, MCP server, model or tool the diff adds
 
 You have no network. Don't state maintainer counts, download numbers, advisories or whether a
 project is abandoned from memory: write "not verified" and name what the builder should check.
-A check you couldn't run is neither a finding nor a pass; list it under what you couldn't check.
+A check you couldn't run is neither a finding nor a pass: after your findings, add a line
+`Not checked: <check>: <why>` for it, in a `Verdict: no findings` report too.
 
 ### E. Test each finding before you report it
 
 Models tend to see bugs that aren't there and to rank them too high. Before a finding goes in your
 report (every high and CRITICAL one, and any medium you are unsure of):
 
-1. Put it in one sentence: this input, by this path, gives this outcome. If you can't, drop it.
+1. Put it in one sentence: this input, by this path, gives this outcome. If you can't, drop it
+   only when it is clearly not a security gap; otherwise keep it under step 5.
 2. Name who controls the input (the renderer, agent output, a web page, PR or issue text, a repo
    file only an agent can change, or Blue only) and find any guard that already stops it: the
    trusted-sender gate, the URL policy, a closed schema, the account guard, a `settings.json` deny
@@ -238,8 +240,11 @@ report (every high and CRITICAL one, and any medium you are unsure of):
 4. A risky-looking line is not a finding until you have traced what reaches it: code that only
    ever gets checked or constant input is not a bug.
 5. Argue the best case that it is not real. Keep it only if your evidence still stands. If the
-   repository can't settle it, keep it, at most one level lower, and mark it "not verified" with
-   what would settle it; never drop a possible security gap without saying so.
+   repository can't settle it, keep it one level lower and mark it "not verified" with what would
+   settle it; never drop a possible security gap without saying so.
+
+None of these steps lowers a finding that meets the CRITICAL definition in the Mako block above: if
+you can't settle one, keep it CRITICAL and mark it "not verified".
 
 ## General checks (from ECC, kept where they apply to Mako)
 
