@@ -1,5 +1,7 @@
 # The control room (S19)
 
+![The control room in the Electron test harness: the Needs you strip, a working pane's In-focus card in the right panel, and Pause all in the top bar](assets/s19-control-room.png)
+
 Tab 2 of the three-tab layout (`docs/DESIGN-BRIEF-1.1.md` section 5), built on S66's shell. What
 each piece does, and the signals it reads:
 
