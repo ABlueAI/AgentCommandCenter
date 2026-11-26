@@ -1387,9 +1387,157 @@ async function offerResume() {
   resumeView.render(offer.rows);
 }
 
+// ---- S66 shared navigation ------------------------------------------------------------------
+// The three-tab shell (shell-nav.js) wraps today's layout as the control room tab. If it can't
+// start, it says so in the Logs tab and the old layout stays the whole app (index.html keeps the
+// shell hidden in markup), never a blank window.
+let shell = null;
+let emblemRail = null;
+// The emblem rail mirrors the repo picker's options (S66).
+function refreshEmblemRail() {
+  if (!emblemRail) return;
+  const sel = $('#repoSelect');
+  const repos = Array.from(sel.options).filter((o) => o.value).map((o) => ({ value: o.value, name: o.textContent }));
+  emblemRail.render(repos, sel.value);
+}
+// Go to a view of today's app: leave the Settings page, bring the control room forward, and press
+// the view's own tab button (so the Library keeps its Dockview routing). Refuses visibly before
+// boot has wired the button.
+function goToView(tab, label) {
+  if (shell) {
+    shell.closeSettings();
+    if (shell.getState().layout === 'tabs') shell.setTab('control');
+  }
+  const btn = document.querySelector(`.tab[data-tab="${tab}"]`);
+  if (!btn) { appendLog(`[shell] the ${label} view is missing\n`); return false; }
+  if (typeof btn.onclick !== 'function') { appendLog(`[shell] the ${label} view is still starting\n`); if (shell) shell.showNotice(`${label} is still starting. Try again in a moment.`, 6000); return false; }
+  btn.click();
+  return true;
+}
+const VIEWS = [['agents', 'Agents'], ['terminals', 'Terminals'], ['library', 'Library and Video Scout'], ['logs', 'Logs']];
+function shellCommands() {
+  const cmds = [];
+  for (const [tab, label] of VIEWS) cmds.push({ id: `view:${tab}`, label: `Open ${label}`, group: 'Control room', run: () => goToView(tab, label) });
+  cmds.push({ id: 'agent:new', label: 'New agent', group: 'Control room', run: () => {
+    if (shell) { shell.closeSettings(); if (shell.getState().layout === 'tabs') shell.setTab('control'); }
+    const btn = $('#newAgent');
+    if (typeof btn.onclick !== 'function') { appendLog('[shell] New agent is still starting\n'); if (shell) shell.showNotice('New agent is still starting. Try again in a moment.', 6000); return; }
+    btn.click();
+  } });
+  // Agents (worktrees) of the repo in use: the Agents view, with that agent's card focused.
+  state.worktrees.forEach((wt, i) => {
+    cmds.push({ id: `agent:${i}`, label: `Agent: ${displayNameOf(wt)}`, group: 'Agents', run: () => {
+      if (!goToView('agents', 'Agents')) return;
+      const card = $('#agentGrid').children[i];
+      const target = card && card.querySelector('button');
+      if (target) target.focus(); else appendLog('[shell] that agent is no longer listed\n');
+    } });
+  });
+  // Repos, from the repo picker's own options (text only; the picker's change handler switches).
+  const sel = $('#repoSelect');
+  if (sel) {
+    for (const opt of Array.from(sel.options)) {
+      if (!opt.value) continue;
+      cmds.push({ id: `repo:${opt.value}`, label: `Repo: ${opt.textContent}`, group: 'Repos', run: () => {
+        if (shell) { shell.closeSettings(); if (shell.getState().layout === 'tabs') shell.setTab('control'); }
+        sel.value = opt.value;
+        sel.dispatchEvent(new Event('change'));
+      } });
+    }
+  }
+  return cmds;
+}
+// The sidebar's "Everything else" section (brief 8); the shell adds Settings itself.
+function shellSidebarItems() {
+  return [
+    { label: 'Library and Video Scout', run: () => goToView('library', 'Library and Video Scout') },
+    { label: 'Quick Links', run: () => { if (goToView('agents', 'Agents')) { const q = $('#quickLinksTitle'); if (q) q.scrollIntoView({ block: 'nearest' }); } } },
+    { label: 'Logs', run: () => goToView('logs', 'Logs') },
+  ];
+}
+// Today's settings on the Settings page: the theme (the same select's options and handler) and the
+// projects folder (today's 📁 button).
+function fillGeneralSettings() {
+  const body = $('#makoSettings-general-body');
+  const theme = $('#themeSelect');
+  const root = $('#changeRoot');
+  if (!body || !theme || !root) { appendLog('[shell] today\'s settings could not be placed on the Settings page; they stay in the top bar\n'); return; }
+  while (body.firstChild) body.removeChild(body.firstChild);
+  const label = document.createElement('label');
+  label.className = 'mk-check';
+  label.htmlFor = 'makoThemeSelect';
+  label.textContent = 'Theme (the old layout and the control room\'s panes) ';
+  const pick = document.createElement('select');
+  pick.id = 'makoThemeSelect';
+  for (const o of Array.from(theme.options)) { const c = document.createElement('option'); c.value = o.value; c.textContent = o.textContent; pick.appendChild(c); }
+  pick.value = theme.value;
+  pick.onchange = () => { applyTheme(pick.value); };
+  label.appendChild(pick);
+  const folder = document.createElement('button');
+  folder.type = 'button';
+  folder.className = 'mk-btn';
+  folder.id = 'makoChangeRoot';
+  folder.textContent = 'Change projects folder';
+  folder.onclick = () => root.click();
+  body.appendChild(label);
+  body.appendChild(folder);
+  window.addEventListener('mako-shell-change', () => { pick.value = theme.value; });
+}
+function startShell(settings) {
+  try {
+    shell = window.ccShellNav.createShell({
+      doc: document, win: window, tokens: window.ccUiTokens,
+      settings: settings || {},
+      saveSettings: (partial) => cc.saveSettings(partial),
+      log: (line) => appendLog(line),
+      controlPanel: $('#makoPanel-control'),
+      usagePanel: $('#usagePanel'),
+      currentScope: () => { const sel = $('#repoSelect'); const o = sel && sel.selectedOptions && sel.selectedOptions[0]; return o && o.value ? o.textContent : ''; },
+      extraCommands: shellCommands,
+      sidebarItems: shellSidebarItems,
+    });
+  } catch (e) {
+    shell = null;
+    // createShell checks its dependencies before touching the page and takes back what it built
+    // if its first render fails; these lines make sure no tab-layout marker is left either way.
+    for (const a of ['data-mako-layout', 'data-mako-view', 'data-mako-tab', 'data-mako-quiet', 'data-mako-paused']) document.documentElement.removeAttribute(a);
+    const shellHost = $('#makoShell'); if (shellHost) shellHost.hidden = true;
+    const controlHost = $('#makoPanel-control'); if (controlHost) controlHost.hidden = false;
+    appendLog(`[shell] REFUSED: the three-tab shell did not start (${window.ccShellNav ? window.ccShellNav.reasonOf(e) : 'shell-module-missing'}${e && e.kind ? `, ${e.kind}` : ''}); the old layout stays\n`);
+    const btn = $('#makoSettingsTopbar');
+    if (btn) btn.onclick = () => { appendLog('[shell] Settings is unavailable: the shell did not start (see the line above)\n'); document.querySelector('.tab[data-tab="logs"]').click(); };
+    return;
+  }
+  const settingsBtn = $('#makoSettingsTopbar');
+  if (settingsBtn) settingsBtn.onclick = () => shell.openSettings();
+  fillGeneralSettings();
+  try {
+    emblemRail = window.ccEmblemRail.createEmblemRail({
+      doc: document, host: $('#makoRail'), log: (line) => appendLog(line),
+      onSelect: (value) => {
+        const sel = $('#repoSelect');
+        if (shell.getState().layout === 'tabs' && shell.getState().view !== 'tab') shell.closeSettings();
+        sel.value = value;
+        sel.dispatchEvent(new Event('change'));
+      },
+    });
+  } catch {
+    emblemRail = null;
+    appendLog('[shell] REFUSED: the repo emblem rail did not start (rail-start-failed); use the repo picker\n');
+  }
+  // Coming back to the control room: its terminals were display:none, so refit the classic grid
+  // (docked panes refit through their own observers).
+  window.addEventListener('mako-shell-change', (e) => {
+    const d = e.detail || {};
+    if (d.view === 'tab' && (d.layout === 'old' || d.tab === 'control')) setTimeout(fitAllTerms, 0);
+  });
+}
+
 async function boot() {
   const s = await cc.getSettings();
   applyTheme((s && s.theme) || 'obsidian');
+  startShell(s);
+  bindPushToTalk();
   if (s && s.ttsVoice) state.ttsVoice = s.ttsVoice;
   if (s && s.ttsSpeed) state.ttsSpeed = s.ttsSpeed;
   {
@@ -1522,6 +1670,44 @@ if (paneStatusSetup) {
   }, 2500);
 }
 
+// S66: Ctrl Space push to talk, on every tab and in both layouts. Holding it presses today's
+// Dictate control (which locks the destination pane and refuses visibly); letting go of Space or
+// Ctrl, or leaving the window, presses it again to stop and type the one finalized transcript.
+// The hold/release logic is shell-nav.js createPushToTalk (unit-tested), including a release that
+// comes before the microphone has opened. The key is consumed so it doesn't reach the terminal.
+// What it is doing, or why it refused, shows in the notice line on every tab (sttNotice).
+let pushToTalk = null;
+function sttNotice(text, ms) {
+  if (shell) shell.showNotice(text, ms);
+}
+function bindPushToTalk() {
+  if (!window.ccShellNav || typeof window.ccShellNav.createPushToTalk !== 'function') {
+    appendLog('[stt] push to talk unavailable: shell-module-missing\n');
+    return;
+  }
+  pushToTalk = window.ccShellNav.createPushToTalk({
+    isRecording: () => !!(window.ccSTT && window.ccSTT.isRecording()),
+    press: () => {
+      const btn = $('#sttMic');
+      if (!btn || typeof btn.onclick !== 'function') {
+        appendLog('[stt] push to talk: dictation is still starting; try again in a moment\n');
+        sttNotice('Push to talk: dictation is still starting. Try again in a moment.', 6000);
+        return false;
+      }
+      // Call the handler directly so its answer (started or refused) is known.
+      return btn.onclick() === true;
+    },
+    notify: (text, ms) => { appendLog(`[stt] push to talk: ${text}\n`); sttNotice(text, ms); },
+  });
+  window.addEventListener('keydown', (e) => {
+    if (pushToTalk.keydown(e)) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+  window.addEventListener('keyup', (e) => {
+    if (pushToTalk.keyup(e)) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+  window.addEventListener('blur', () => { pushToTalk.blur(); });
+}
+
 function installSTTUnavailableControl() {
   const micBtn = $('#sttMic');
   if (!micBtn) return;
@@ -1529,6 +1715,8 @@ function installSTTUnavailableControl() {
     const moduleState = audioModules.get('stt');
     const detail = moduleState.phase === 'failed' ? moduleState.detail : 'module is still starting';
     appendLog(`[stt] dictation engine unavailable: ${detail}\n`);
+    sttNotice('Dictation is unavailable right now. Details in Logs.', 8000);
+    return false;   // refused: push to talk must not wait for a recording (shell-nav createPushToTalk)
   };
 }
 
@@ -1542,21 +1730,31 @@ function setupSTTControls() {
   if (micBtn && !micBtn.dataset.sttWired) {
     micBtn.dataset.sttWired = '1';
     micBtn.onclick = () => {
-      if (stt.isRecording()) { stt.toggle(); return; } // second click: stop + one finalized transcript
-      if (stt.isBusy()) { appendLog('[stt] still transcribing the previous dictation…\n'); return; }
-      if (!activeTermId || !terms.has(activeTermId)) { appendLog('[stt] click into an agent pane first, then 🎤.\n'); return; }
+      // Returns true when it sent a start or stop to the engine, false when it refused (push to
+      // talk reads this, so a refused start is never waited on).
+      if (stt.isRecording()) { stt.toggle(); return true; } // second click: stop + one finalized transcript
+      if (stt.isBusy()) { appendLog('[stt] still transcribing the previous dictation…\n'); sttNotice('Still typing the last dictation. Try again in a moment.', 6000); return false; }
+      if (!activeTermId || !terms.has(activeTermId)) { appendLog('[stt] click into an agent pane first, then 🎤.\n'); sttNotice('Dictation needs a pane: click into an agent pane in the control room first.', 8000); return false; }
       // Lock the destination NOW: however long the model load takes, and whatever pane
       // is clicked meanwhile, the finished transcript goes here or is refused visibly.
       sttDictationTargetId = activeTermId;
       const paneRole = (terms.get(sttDictationTargetId) || {}).role || 'shell';
       appendLog(`[stt] dictation started — locked to pane ${sttDictationTargetId} (${paneRole})\n`);
       stt.toggle(); // first click: recording starts immediately (model loads at stop time)
+      return true;
     };
   }
   stt.onStatus(({ state: st, detail }) => {
+    if (st === 'recording') sttNotice(`Recording for pane ${sttDictationTargetId || '?'}. Let go of Ctrl Space (or press Stop) to type it.`, 0);
+    else if (st === 'transcribing') sttNotice('Transcribing…', 0);
+    else if (st === 'error') sttNotice('Dictation failed. Details in Logs.', 8000);
+    else if (st === 'idle') sttNotice('', 0);
     const el = $('#sttStatus'); if (el) el.textContent = (st && st !== 'idle') ? (st + (detail ? ' — ' + detail : '')) : '';
     if (micBtn) { micBtn.textContent = st === 'recording' ? '⏺ Stop' : '🎤 Dictate'; micBtn.classList.toggle('rec', st === 'recording'); }
     if (st === 'error' && detail) appendLog('[stt] ' + detail + '\n');
+    // Last, and after this handler returns: a pending push-to-talk stop calls the engine, which
+    // reports 'transcribing' at once; doing it here would let this 'recording' update overwrite it.
+    if (pushToTalk) setTimeout(() => pushToTalk.onSttStatus(st), 0);
   });
   stt.onResult((text) => {
     const targetId = sttDictationTargetId;
@@ -1622,6 +1820,8 @@ async function refreshRepos() {
 }
 
 async function onRepoChange() {
+  if (shell) shell.refreshScope();   // S66: the scope stripe names the repo in use
+  refreshEmblemRail();
   await cc.saveSettings({ selectedRepo: state.repo });
   state.githubUrl = state.repo ? await cc.repoGithubUrl(state.repo) : '';
   await refreshAgents();
