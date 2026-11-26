@@ -51,6 +51,7 @@ assert(CHANNEL.ERROR === 'main-error' && CHANNEL.INFO === 'main-info' && Object.
 // channel; the renderer labels it "[main]".
 const fs = require('fs');
 const path = require('path');
+const vm = require('node:vm');
 const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
 const preload = fs.readFileSync(path.join(__dirname, 'preload.js'), 'utf8');
 const app = fs.readFileSync(path.join(__dirname, 'renderer', 'app.js'), 'utf8');
@@ -62,6 +63,33 @@ assert(/log: \(line\) => \{ tlog\(line\); sendMainLog\(line, 'routine'\); \}/.te
 assert(/onMainInfo: \(cb\) => ipcRenderer\.on\('main-info', \(_e, m\) => cb\(m\)\)/.test(preload), 'preload exposes main-info (receive only)');
 assert(/cc\.onMainInfo\(\(m\) => appendLog\('\\n\[main\] ' \+ m \+ '\\n'\)\)/.test(app), 'the renderer labels it [main]');
 assert(/cc\.onMainError\(\(m\) => appendLog\('\\n\[main error\] ' \+ m \+ '\\n'\)\)/.test(app), 'errors keep [main error]');
+
+// Exercise the renderer's actual log appender with a stand-in for the Logs panel.
+const logView = { textContent: '', scrollTop: 0, scrollHeight: 42 };
+const logSection = app.slice(app.indexOf('// ---- logs '), app.indexOf('// ---- wiring '));
+const appendLog = vm.runInNewContext(logSection + '\nappendLog;', {
+  $(selector) {
+    if (selector !== '#logView') throw new Error(`Unexpected selector: ${selector}`);
+    return logView;
+  },
+});
+const maxLogChars = 128 * 1024;
+const trimNotice = '[Earlier log output truncated]\n';
+appendLog('[main] starting\n');
+appendLog('[main] ready\n');
+assert(logView.textContent === '[main] starting\n[main] ready\n', 'short log entries retain their text and order');
+assert(logView.scrollTop === logView.scrollHeight, 'appending follows the latest log entry');
+
+const latest = '\n[main error] startup failed\n';
+const oversized = 'x'.repeat(maxLogChars + 100) + latest;
+appendLog(oversized);
+assert(logView.textContent === trimNotice + oversized.slice(-(maxLogChars - trimNotice.length)),
+  'an oversized append keeps the newest output within the cap and marks truncation');
+appendLog('[main] retried\n');
+assert(logView.textContent.length === maxLogChars &&
+  logView.textContent.indexOf(trimNotice) === 0 && logView.textContent.lastIndexOf(trimNotice) === 0 &&
+  logView.textContent.endsWith(latest + '[main] retried\n'),
+  'continued appends stay bounded with one notice and retain the latest lines');
 
 process.stdout.write(`\nmain-log-level: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

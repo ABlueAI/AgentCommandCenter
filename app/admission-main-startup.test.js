@@ -56,7 +56,11 @@ function makeElectronStub(userDataDir, record) {
     return new Proxy(w, { get(t, k) { return k in t ? t[k] : () => {}; } });
   }
   class BrowserWindow {
-    constructor() { record.windowsCreated += 1; return fakeWindow(); }
+    constructor(options) {
+      record.windowsCreated += 1;
+      record.windowPreferences = options.webPreferences;
+      return fakeWindow();
+    }
     static getAllWindows() { return []; }
   }
   return {
@@ -181,6 +185,11 @@ const LEDGER = 'admission-ledger.json';
     assert(r.loadError === null,
       'main.js evaluates without throwing' + (r.loadError ? ' (threw: ' + r.loadError.message + ')' : ''));
     assert(r.record.windowsCreated === 1, 'main reaches readiness and creates its window');
+    const preferences = r.record.windowPreferences;
+    assert(preferences?.sandbox === true, 'the main window explicitly enables the renderer sandbox');
+    assert(preferences?.contextIsolation === true, 'the main window explicitly isolates the preload context');
+    assert(preferences?.nodeIntegration === false, 'the main window explicitly disables Node integration');
+    assert(preferences?.webviewTag === false, 'the main window explicitly disables the webview tag');
     assert(!r.record.handled.has(CH_SUBMIT) && !r.record.handled.has(CH_STATE),
       'neither admission channel is registered -- the surface is ABSENT, not inert');
     assert(r.record.on.has('pty-write'), 'the ordinary pty-write channel is still wired');

@@ -1967,8 +1967,13 @@ function updateAgentTokenBanner(status) {
 
 // ---- logs -------------------------------------------------------------------
 function appendLog(text) {
+  const maxLogChars = 128 * 1024;
+  const trimNotice = '[Earlier log output truncated]\n';
   const log = $('#logView');
-  log.textContent += text;
+  const contents = log.textContent + text;
+  log.textContent = contents.length <= maxLogChars
+    ? contents
+    : trimNotice + contents.slice(-(maxLogChars - trimNotice.length));
   log.scrollTop = log.scrollHeight;
 }
 

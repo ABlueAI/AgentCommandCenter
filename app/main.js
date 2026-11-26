@@ -517,8 +517,10 @@ function createWindow() {
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,   // renderer is sandboxed; only `window.cc` (preload) is exposed
+      sandbox: true,
+      contextIsolation: true,
       nodeIntegration: false,
+      webviewTag: false,
       // Forwards MAIN's already-made layout decision into the preload's process.argv.
       // additionalArguments is set at window construction by the main process, so renderer script
       // cannot add, remove, or forge it. Empty array = production Dockview; the token is present
