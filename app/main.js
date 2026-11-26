@@ -1944,9 +1944,9 @@ ipcMain.handle('pty-start', (e, opts) => {
   //
   // buildPtyEnv constructs CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, Video Scout's safeStorage
   // GEMINI_API_KEY when applicable, at most the two exact string-valued pane-status transport
-  // entries, and, for a fenced web-scout pane only, the controlled-WebFetch mode chosen above, before
-  // spreading the filtered ambient base. The reserved set is derived from the emitted main-issued map
-  // plus absent-but-owned pane-status names, Video Scout's Gemini name and the WebFetch mode name; every
+  // entries, the web-scout's controlled-WebFetch mode and the page reader's validator path, before
+  // spreading the filtered ambient base. The reserved set includes the emitted main-issued map and
+  // absent-but-owned names for pane status, Gemini, WebFetch mode and the page-reader policy. Every
   // ASCII-case ambient variant is removed first, so correctness does not depend on key ordering. Neither
   // pane-status entry is recovered from process.env, and no environment value is logged. For
   // unfenced panes, stripAdmissionEnv removes admission keys from the inherited PTY
@@ -1963,6 +1963,7 @@ ipcMain.handle('pty-start', (e, opts) => {
     geminiKey,
     paneStatusEnv,
     webFetchMode: webFetch.mode,
+    pageReaderPolicy: fencedRole && launch.role === pageReaderMod.ROLE ? require.resolve('./page-reader') : undefined,
     agentGit: agentPane,
     agentGitToken,
   });

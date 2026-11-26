@@ -17,6 +17,7 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const { spawnSync } = require('child_process');
+const { runInNewContext } = require('vm');
 const policy = require('./role-fence-policy');
 const { parseRoleFrontmatter } = require('./role-frontmatter');
 
@@ -193,6 +194,105 @@ section('5. The hook carries the policy allowlist (drift tripwire)');
   assert(list && JSON.stringify(list) === JSON.stringify(policy.ALLOWED_TOOLS), 'hook HOOK_ALLOWED_TOOLS === policy ALLOWED_TOOLS');
   assert(policy.FORBIDDEN_TOOLS.every((t) => list && list.indexOf(t) === -1), 'no forbidden tool is on the hook allowlist');
   assert(/\[fence-tool-not-allowed\]'/.test(hook), 'the hook carries the constant tool refusal');
+}
+
+section('6. Path containment uses the filesystem and refuses unverifiable paths');
+{
+  const root = path.join(sandboxDir, 'allowed');
+  const outside = path.join(sandboxDir, 'outside');
+  const destination = path.join(outside, 'folder');
+  fs.mkdirSync(root);
+  fs.mkdirSync(destination, { recursive: true });
+  const alias = path.join(root, 'alias');
+  const dangling = path.join(root, 'dangling');
+  fs.symlinkSync(destination, alias, 'junction');
+  fs.symlinkSync(path.join(outside, 'missing'), dangling, 'junction');
+  const run = (filePath, cwd = root) => spawnSync(process.execPath, [hookPath], {
+    input: JSON.stringify({ cwd, tool_name: 'Write', tool_input: { file_path: filePath } }),
+    encoding: 'utf8',
+  });
+  const denied = (r) => r.status === 2 && r.stderr.includes('[fence-outside-sandbox]');
+  assert(run('new/report.md').status === 0, 'a new file under new in-sandbox directories is allowed');
+  assert(denied(run(path.join(alias, 'new.md'))), 'a directory alias resolving outside is refused');
+  assert(denied(run(path.join(dangling, 'new.md'))), 'a dangling directory alias is refused');
+  assert(denied(run('new.md', path.join(root, 'missing'))), 'an unresolved sandbox root is refused');
+  assert(denied(run(42)), 'a non-string path is refused visibly');
+  if (process.platform !== 'win32') {
+    const file = path.join(outside, 'file.md');
+    const fileLink = path.join(root, 'file-link');
+    fs.writeFileSync(file, 'test fixture');
+    fs.symlinkSync(file, fileLink);
+    assert(denied(run(fileLink)), 'a file symlink resolving outside is refused');
+    const traversal = ['alias', '..', 'file.md'].join(path.sep);
+    assert(denied(run(traversal)), 'parent segments are checked with filesystem resolution');
+  }
+}
+
+section('7. Windows path spellings use Windows filesystem identity');
+{
+  // The native resolver on Windows expands 8.3 aliases. Model the native results so this
+  // check still runs when the volume or the test runner does not provide short names.
+  const win = path.win32;
+  const root = String.raw`X:\fixture\Allowed`;
+  const outside = win.join(win.dirname(root), 'Other Directory');
+  const shortName = 'OTHERD~1';
+  const outsideFile = win.join(outside, 'file.md');
+  const existing = [root, win.dirname(root), outside, outsideFile, win.join(root, 'file.md')];
+  const realpath = (raw) => {
+    const expanded = win.normalize(raw).replace(shortName, 'Other Directory');
+    const found = existing.find((p) => p.toLowerCase() === expanded.toLowerCase());
+    if (!found) throw Object.assign(new Error('Fixture path missing'), { code: 'ENOENT' });
+    return found;
+  };
+  const run = (filePath) => {
+    const callbacks = new Map();
+    let stderr = '';
+    const exit = {};
+    const stat = (p) => {
+      const canonical = realpath(p);
+      return { isDirectory: () => !canonical.endsWith('.md'), dev: 1n, ino: BigInt(existing.indexOf(canonical) + 1) };
+    };
+    const fsFixture = { realpathSync: { native: realpath }, lstatSync: stat, statSync: stat };
+    const processFixture = {
+      platform: 'win32', env: {}, stdin: { on: (event, fn) => callbacks.set(event, fn) },
+      stderr: { write: (message) => { stderr += message; } },
+      exit: (status) => { exit.status = status; throw exit; },
+    };
+    try {
+      runInNewContext(fs.readFileSync(hookPath, 'utf8'), {
+        require: (name) => {
+          if (name === 'fs') return fsFixture;
+          if (name === 'path') return win;
+          throw new Error('Unexpected fixture dependency ' + name);
+        },
+        process: processFixture,
+      });
+      callbacks.get('data')(JSON.stringify({ cwd: root, tool_name: 'Read', tool_input: { file_path: filePath } }));
+      callbacks.get('end')();
+    } catch (e) {
+      if (e !== exit) throw e;
+    }
+    return { status: exit.status, stderr };
+  };
+  assert(run(win.join(root, 'file.md').toUpperCase().replace(/\\/g, '/')).status === 0,
+    'an in-root path with alternate case and slashes is allowed');
+  const refusals = [
+    ['alternate case', outsideFile.toUpperCase()],
+    ['mixed slashes', outsideFile.replace(/\\/g, '/')],
+    ['parent segments', root + String.raw`\..\Other Directory\file.md`],
+    ['trailing dot', root + String.raw`\file.md.`],
+    ['trailing space', root + '\\file.md '],
+    ['short name', win.join(win.dirname(root), shortName, 'file.md')],
+    ['UNC', String.raw`\\fixture.invalid\share\file.md`],
+    ['extended device namespace', '\\\\?\\' + outsideFile],
+    ['Win32 device namespace', '\\\\.\\' + outsideFile],
+    ['drive-relative', 'X:file.md'],
+  ];
+  for (const [label, filePath] of refusals) {
+    const result = run(filePath);
+    assert(result.status === 2 && result.stderr.includes('[fence-outside-sandbox]'),
+      'Windows path check refuses ' + label);
+  }
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });
