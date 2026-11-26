@@ -212,6 +212,9 @@ eq(pa.startedWhilePaused, 0, 'no new pane starts while paused');
 assert(pa.refusalLogged === true, 'and the refusal is in Logs');
 eq(pa.writesOnResume, 0, 'Resume all sends nothing');
 assert(pa.bannerAfterResume === false, 'and the banner goes');
+eq(pa.panel, { state: 'working', shown: true, hasInterrupt: true }, 'S19: selecting a working pane shows its In-focus card in the right panel');
+eq(pa.interruptWrites, [[pa.working, '\u001b']], 'Interrupt sends exactly one Esc, to that pane');
+eq(pa.interruptKills, [], 'and kills nothing');
 eq(pa.stallTag, ['stalled · 5 failed tries|status'], 'S19: five failed turns put "stalled" in that pane\'s real header');
 
 process.stdout.write('\nnothing reached the network, and no renderer errors\n');

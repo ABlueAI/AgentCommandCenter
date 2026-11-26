@@ -779,6 +779,7 @@ function openInAppTerminal(opts = {}) {
     if (needsYouStrip) needsYouStrip.remove(id);
     if (pauseAll) pauseAll.forget(id);
     if (stallWatch) stallWatch.forget(id);
+    if (controlFocus) controlFocus.forget(id);
     if (terms.size === 0) showTermEmpty();
   };
   // ---- LOCAL ROLLBACK (pre-PTY only) ----------------------------------------------------------
@@ -799,6 +800,7 @@ function openInAppTerminal(opts = {}) {
     if (needsYouStrip) needsYouStrip.remove(id);
     if (pauseAll) pauseAll.forget(id);
     if (stallWatch) stallWatch.forget(id);
+    if (controlFocus) controlFocus.forget(id);
     if (terms.size === 0) showTermEmpty();
   };
   paneData.closePane = closeThisPane;
@@ -806,8 +808,9 @@ function openInAppTerminal(opts = {}) {
   pane.addEventListener('mousedown', (event) => {
     if (event.target.closest('.spk, .copy-out, .max')) return;
     activeTermId = id; term.focus();
+    if (controlFocus) controlFocus.select(id);
   });
-  term.textarea && term.textarea.addEventListener('focus', () => { activeTermId = id; });
+  term.textarea && term.textarea.addEventListener('focus', () => { activeTermId = id; if (controlFocus) controlFocus.select(id); });
   terms.set(id, paneData);
 
   // ---- TERMINAL LAUNCH TRANSACTION -------------------------------------------------------------
@@ -1289,6 +1292,8 @@ let pauseAll = null;
 let cheatSheet = null;
 // S19: the stall watch in the pane headers (stall-watch.js); the PTY data and close paths reach it.
 let stallWatch = null;
+// S19: the control room's right panel (control-focus.js); pane focus, views and closes reach it.
+let controlFocus = null;
 
 // The controlled surface the adapter is allowed to use. Everything privileged stays on this side:
 // the adapter never sees cc.*, a path, a role, a prompt, or report content.
@@ -1331,6 +1336,7 @@ function buildDockviewHost(container) {
     focusPane: (paneId) => {
       const t = terms.get(paneId);
       if (t) { activeTermId = paneId; try { t.term.focus(); } catch {} }
+      if (t && controlFocus) controlFocus.select(paneId);
     },
     // PANE STATUS re-attachment after a Dockview layout change. Dockview reparents pane elements,
     // which can drop the badge NODE; the STATE lives in the badge module keyed by pane id and is
@@ -1742,6 +1748,25 @@ if (stallWatch) {
     } finally { stallBusy = false; }
   }, 30000);
 }
+// S19: the right panel: S66's In-focus card for the selected pane. Open pane and Terminal focus it;
+// Interrupt sends one Esc to that pane through cc.ptyWrite (process control); nothing is killed.
+try {
+  controlFocus = window.ccControlFocus.createControlFocus({
+    doc: document, host: $('#controlFocus'), log: appendLog,
+    buildCard: (d, task, hs) => window.ccInFocusCard.buildInFocusCard(d, task, hs),
+    getPane: (paneId) => {
+      const t = terms.get(paneId);
+      if (!t || !t.pane) return null;
+      const text = (sel) => { const n = t.pane.querySelector(sel); return n ? n.textContent : ''; };
+      return { title: text('.term-head .name'), branch: text('.term-head .branch-tag'), authority: text('.term-head .auth-tag'), role: t.role && ROLES[t.role] ? ROLES[t.role].label : '' };
+    },
+    focusPane: focusPaneFromStrip,
+    write: (paneId, data) => cc.ptyWrite(paneId, data),
+  });
+} catch {
+  controlFocus = null;
+  appendLog('[control-focus] REFUSED: the right panel did not start (start-failed); panes work as before\n');
+}
 // S19: the cheat sheet, read from S66's one shortcut list each time it opens.
 try {
   cheatSheet = window.ccCheatSheet.createCheatSheet({
@@ -1769,6 +1794,7 @@ if (paneStatusBadge) {
     if (needsYouStrip) needsYouStrip.update(view);
     if (pauseAll) pauseAll.noteView(view);
     if (stallWatch) stallWatch.noteView(view);
+    if (controlFocus) controlFocus.noteView(view);
     const shown = paneStatusBadge.update(view);
     if (shown && view && view.paneId) {
       appendLog(`[pane-status] ${view.paneId} -> ${shown.label}${view.reason ? ` (${view.reason})` : ''}\n`);

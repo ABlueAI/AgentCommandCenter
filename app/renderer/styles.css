@@ -537,6 +537,14 @@ input:focus { outline: none; border-color: var(--accent); }
 .auth-high { color: var(--mk-composer-ink, #f0c060); }
 .auth-unknown { color: var(--mk-status-needs, #ff6b6b); }
 
+/* S19: the panes and the right panel. The panel shows only in the three-tab layout's control room;
+   the old layout is unchanged. */
+.term-split { flex: 1; min-height: 0; display: flex; }
+.term-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.mk-focus-panel { flex: 0 0 272px; min-height: 0; overflow: auto; padding: 12px; border-left: 1px solid var(--mk-line, var(--border)); background: var(--mk-surface-raised, var(--panel)); }
+:root:not([data-mako-layout="tabs"]) .mk-focus-panel { display: none; }
+.mk-focus-empty { margin: 4px 0; }
+
 /* S19: the cheat sheet. */
 .cheat-sheet-host { display: inline-flex; }
 .mk-cheat-open { min-width: 28px; padding: 2px 8px; font-weight: 600; }

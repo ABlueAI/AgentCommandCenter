@@ -501,6 +501,21 @@ async function scenarioPauseAll() {
     await run(`window.__t.waitFor(() => window.__t.log().split(${JSON.stringify(working + ' -> failed')}).length >= 6, 5000)`);
     // Read through the pane's own header (the element the app holds for it, as the badge does).
     out.stallTag = await run(`(() => { stallWatch.tick(); const h = terms.get(${JSON.stringify(working)}).pane.querySelector('.term-head'); return Array.from(h.querySelectorAll('.stall-tag')).map((n) => n.textContent + '|' + n.getAttribute('role')); })()`);
+    // S19: the right panel. Selecting the working pane (a mousedown on it, as a click does) shows
+    // its In-focus card; Interrupt sends exactly one Esc to that pane, counted at the boundary.
+    await run(`terms.get(${JSON.stringify(working)}).pane.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))`);
+    out.panel = await run(`(() => { const p = document.getElementById('controlFocus'); const c = p.querySelector('[data-state]'); return { state: c ? c.getAttribute('data-state') : null, shown: window.__t.shown('#controlFocus'), hasInterrupt: !!p.querySelector('[data-action="interrupt"]') }; })()`);
+    ipc.writes = [];
+    await run(`(() => { const b = document.querySelector('#controlFocus [data-action="interrupt"]'); if (b) b.click(); })()`);
+    await run(`window.__t.sleep(100)`);
+    out.interruptWrites = ipc.writes.slice();
+    out.interruptKills = ipc.kills.slice();
+    if (process.env.MAKO_SCREENSHOT_DIR) {
+      try {
+        const img = await win.webContents.capturePage();
+        require('fs').writeFileSync(path.join(process.env.MAKO_SCREENSHOT_DIR, 's19-control-room.png'), img.toPNG());
+      } catch { /* a screenshot is for people, never a gate */ }
+    }
   } finally {
     control.ptyOk = false;
   }
