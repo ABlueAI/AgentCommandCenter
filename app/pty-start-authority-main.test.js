@@ -220,6 +220,35 @@ Module._load = function (request) {
     assert(present.length === 0, 'no managed ClaudeCode scope is deployed on this machine');
   }
 
+  section('LAUNCH INPUTS AND ROLE SOURCE');
+  {
+    const before = record.ptySpawns;
+    const errors = record.mainErrors.length;
+    const builderFile = path.join(AGENTS, 'builder.md');
+    const deployed = fs.readFileSync(builderFile);
+    fs.unlinkSync(builderFile);
+    try {
+      const result = await ptyStart(goodEvent, { id: 'pane-missing-role', role: 'builder', cwd: FIX });
+      assert(result?.ok === false, 'a missing deployed role refuses a builder launch');
+      assert(record.ptySpawns === before && record.mainErrors.length > errors,
+        'a missing definition is visible and spawns nothing');
+    } finally {
+      fs.writeFileSync(builderFile, deployed);
+    }
+
+    const badFolder = await ptyStart(goodEvent, { id: 'pane-invalid-cwd', cli: 'codex', cwd: 42 });
+    assert(badFolder?.ok === false, 'a non-string launcher folder refuses instead of using the profile');
+    const output = await ensureOutputDir(goodEvent, { role: 'other-role' });
+    assert(output?.ok === false, 'sandbox preparation refuses unknown roles');
+    try {
+      const newAgent = record.handled.get('new-agent');
+      const malformed = await newAgent(goodEvent, null);
+      assert(malformed?.ok === false, 'new-agent refuses a malformed request');
+    } catch {
+      assert(false, 'new-agent refuses a malformed request without throwing');
+    }
+  }
+
   section('POSITIVE CONTROL — a fenced role launches and carries the main-issued denials');
   {
     const before = record.ptySpawns;
