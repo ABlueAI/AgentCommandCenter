@@ -26,17 +26,19 @@ sections 7 and 10, docs/decisions/OSS-ui-libraries.md (S63), and the npm registr
   mrdoob and mugen87; tarball integrity
   `sha512-DLU8lc0zNIPkM7rH5/e1Ks1Z8tWCGRq6g8mPowdDJpw1CFBJMU7UoJjC6PefXW7z//SSl0b2+GCw14LB+uDhng==`,
   matched by hashing the downloaded tarball.
-- **What is vendored:** `build/three.module.js` unmodified, and the ten addon files the bloom needs
-  (`EffectComposer`, `MaskPass`, `ShaderPass`, `Pass`, `RenderPass`, `UnrealBloomPass`,
+- **What is vendored:** `build/three.module.min.js` unmodified (upstream's own minified build; the
+  readable `build/three.module.js` made CodeQL flag `Math.random()` in Three.js's object-id helper
+  as insecure randomness, a false positive here: those ids are not secrets), and the ten addon
+  files the bloom needs (`EffectComposer`, `MaskPass`, `ShaderPass`, `Pass`, `RenderPass`, `UnrealBloomPass`,
   `OutputPass`, `CopyShader`, `LuminosityHighPassShader`, `OutputShader`), under
   `app/renderer/vendor/three/`. The only change is the addons' bare `'three'` import, rewritten to
-  `../../three.module.js` because the renderer's CSP allows no inline import map.
+  `../../three.module.min.js` because the renderer's CSP allows no inline import map.
   `app/vendor-three.test.js` pins every file by hash and proves that is the only change.
   `BufferGeometryUtils` (listed in the brief) is not vendored: the renderer doesn't need it.
 - **Licence:** MIT, text in `LICENSES/MIT-three.js.txt`, one row per file in THIRD-PARTY-NOTICES.md.
 - **Network and code-loading scan (verified, grep over the vendored files):** no `eval`, `new
-  Function`, `WebSocket` or `importScripts`. `three.module.js` has three `fetch(` calls, all in its
-  file and image loaders (`FileLoader`, `ImageBitmapLoader`), which the renderer never calls; the
+  Function`, `WebSocket` or `importScripts`. The core's `fetch(` calls are all in its file and image
+  loaders (`FileLoader`, `ImageBitmapLoader`), which the renderer never calls; the
   renderer's CSP limits connections to `'self'` and `https:` either way.
 - **China-origin check:** pass. Three.js is a rendering library with no models and no hosted AI.
 - **`npm audit`:** not run: nothing was added to `app/package.json` or the lockfile (the files are

@@ -11,7 +11,7 @@
 // It publishes `window.ccSharkRenderer.create(...)` and fires `mako-shark-renderer-ready`. If WebGL
 // can't start, create() throws `webgl-unavailable` and the brain tab shows that, never a blank box.
 
-import * as THREE from './vendor/three/three.module.js';
+import * as THREE from './vendor/three/three.module.min.js';
 import { EffectComposer } from './vendor/three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from './vendor/three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from './vendor/three/addons/postprocessing/UnrealBloomPass.js';
