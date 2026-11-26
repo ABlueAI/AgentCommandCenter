@@ -425,6 +425,8 @@ let win = null;
 const paneStatusNotifications = createPaneStatusNotifications({
   Notification, platform: process.platform, getWindow: () => win,
   log: (line) => tlog(line),
+  // S19: quiet hours (S66's switch, saved as uiQuietSince) hold the toast; the badge still shows.
+  isQuiet: () => { const q = loadSettings().uiQuietSince; return typeof q === 'string' && q.length > 0; },
 });
 // Canonical trusted entry document — the ONE definition shared by win.loadFile(), the
 // navigation lockdown, and the media-permission policy, so the three trust anchors can
@@ -1088,8 +1090,13 @@ ipcMain.handle('build-info', () => {
   return buildInfoPromise;
 });
 ipcMain.handle('save-settings', async (_e, partial) => {
-  const s = { ...loadSettings(), ...partial };
+  const before = loadSettings();
+  const s = { ...before, ...partial };
   saveSettings(s);
+  // S19: quiet hours just ended, so show the toasts they held (each only if its pane still waits).
+  if (partial && Object.hasOwn(partial, 'uiQuietSince') && !partial.uiQuietSince && before.uiQuietSince) {
+    paneStatusNotifications.releaseHeld();
+  }
   return s;
 });
 
