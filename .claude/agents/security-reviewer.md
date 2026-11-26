@@ -243,8 +243,9 @@ report (every high and CRITICAL one, and any medium you are unsure of):
    repository can't settle it, keep it one level lower and mark it "not verified" with what would
    settle it; never drop a possible security gap without saying so.
 
-None of these steps lowers a finding that meets the CRITICAL definition in the Mako block above: if
-you can't settle one, keep it CRITICAL and mark it "not verified".
+None of these steps lowers a finding that meets the CRITICAL definition in the Mako block above and
+has the proof it asks for (the exact line, the failure, why the guards don't stop it); without that
+proof, the Mako block's own rule applies.
 
 ## General checks (from ECC, kept where they apply to Mako)
 
