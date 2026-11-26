@@ -179,6 +179,9 @@
              controlled-run token to `additionalArguments`. With no run configured there is no field,
              no button and no status text — the surface is ABSENT, not merely disabled. -->
         <div id="admissionHost" class="admission-host"></div>
+        <!-- S19: the "Needs you" strip (needs-you-strip.js): one chip per pane waiting on you, oldest
+             first, above the panes; a click or F8 focuses the pane. Empty and hidden while nothing waits. -->
+        <div id="needsYouStrip" class="mk-needs" hidden></div>
         <!-- S09: the Resume or Start fresh offer (session-resume-view.js). Empty and hidden unless Mako
              last closed with Claude panes open. -->
         <div id="resumeHost" class="resume-host hidden"></div>
@@ -417,6 +420,8 @@
   <script src="in-focus-card.js"></script>
   <!-- S66: the repo emblem rail; builds only when app.js creates it. -->
   <script src="emblem-rail.js"></script>
+  <!-- S19: the control room's "Needs you" strip and jump key; app.js creates it. -->
+  <script src="needs-you-strip.js"></script>
   <script src="app.js"></script>
   <script type="module" src="tts.js"></script>
   <script type="module" src="stt.js"></script>

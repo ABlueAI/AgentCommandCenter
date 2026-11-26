@@ -764,6 +764,7 @@ function openInAppTerminal(opts = {}) {
     }
     else cc.ptyKill(id);
     term.dispose(); pane.remove(); terms.delete(id);
+    if (needsYouStrip) needsYouStrip.remove(id);
     if (terms.size === 0) showTermEmpty();
   };
   // ---- LOCAL ROLLBACK (pre-PTY only) ----------------------------------------------------------
@@ -781,6 +782,7 @@ function openInAppTerminal(opts = {}) {
     if (copyFlashTimer) { clearTimeout(copyFlashTimer); copyFlashTimer = null; }
     if (paneData.rafId !== null) { cancelAnimationFrame(paneData.rafId); paneData.rafId = null; }
     term.dispose(); pane.remove(); terms.delete(id);
+    if (needsYouStrip) needsYouStrip.remove(id);
     if (terms.size === 0) showTermEmpty();
   };
   paneData.closePane = closeThisPane;
@@ -1262,6 +1264,8 @@ async function startLayoutEngine() {
 // its own scope — has to reach it to re-attach badges after a Dockview layout change. It stays `null`
 // until boot() runs, and every call site tolerates null rather than assuming construction succeeded.
 let paneStatusBadge = null;
+// S19: the "Needs you" strip, at module scope for the same reason: the pane close paths reach it.
+let needsYouStrip = null;
 
 // The controlled surface the adapter is allowed to use. Everything privileged stays on this side:
 // the adapter never sees cc.*, a path, a role, a prompt, or report content.
@@ -1625,8 +1629,53 @@ const paneStatusSetup = (window.ccPaneStatus && window.ccPaneStatusBadge)
       // integration work by supplying an element the real page does not have.
     })
   : null;
+// S19: the control room's "Needs you" strip (needs-you-strip.js). It reads the same token-free
+// pane-status views as the badge, keyed by pane id, and its chips and the F8 jump key only focus a
+// pane: nothing here sends anything to a PTY.
+function focusPaneFromStrip(paneId) {
+  const t = terms.get(paneId);
+  if (!t) return false;
+  if (!goToView('terminals', 'Terminals')) return false;
+  if (layoutInstance) {
+    try {
+      const panel = layoutInstance.api().getPanel(paneId);
+      if (panel && panel.api && typeof panel.api.setActive === 'function') panel.api.setActive();
+    } catch {
+      appendLog(`[needs-you] could not bring ${paneId} to the front (activate-failed)\n`);
+    }
+  }
+  activeTermId = paneId;
+  try { t.term.focus(); } catch { return false; }
+  return true;
+}
+const needsYouHost = document.getElementById('needsYouStrip');
+needsYouStrip = (window.ccNeedsYouStrip && needsYouHost)
+  ? window.ccNeedsYouStrip.createNeedsYouStrip({
+      doc: document,
+      host: needsYouHost,
+      log: appendLog,
+      getLabel: (paneId) => {
+        const t = terms.get(paneId);
+        const name = t && t.pane ? t.pane.querySelector('.name') : null;
+        return name ? name.textContent : paneId;
+      },
+      onFocus: focusPaneFromStrip,
+    })
+  : null;
+if (!needsYouStrip) appendLog('[needs-you] the strip is missing (needs-you-strip.js or #needsYouStrip); panes that need you show only on their badges\n');
+if (needsYouStrip) {
+  // F8 on window in the capture phase, so the terminal never sees it.
+  window.addEventListener('keydown', (e) => {
+    if (!window.ccNeedsYouStrip.isJumpKey(e)) return;
+    e.preventDefault(); e.stopPropagation();
+    needsYouStrip.jumpNext();
+  }, true);
+  // Keep the waiting minutes current.
+  setInterval(() => needsYouStrip.render(), 30000);
+}
 if (paneStatusBadge) {
   window.ccPaneStatus.onView((view) => {
+    if (needsYouStrip) needsYouStrip.update(view);
     const shown = paneStatusBadge.update(view);
     if (shown && view && view.paneId) {
       appendLog(`[pane-status] ${view.paneId} -> ${shown.label}${view.reason ? ` (${view.reason})` : ''}\n`);

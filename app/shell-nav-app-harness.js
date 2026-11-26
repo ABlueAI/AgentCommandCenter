@@ -379,6 +379,60 @@ async function scenarioTopBar() {
   return r;
 }
 
+async function scenarioNeedsYou() {
+  // S19: the "Needs you" strip. Main sends token-free pane-status views; the strip shows one chip
+  // per waiting pane, oldest first, F8 is consumed and jumps, and a pane that can't be focused (none
+  // runs in this harness) is logged, never silent.
+  await open('needsYou', { theme: 'obsidian', projectsRoot: 'D:\\Workspace', uiTab: 'control' });
+  await run(`window.__t.waitFor(() => document.documentElement.getAttribute('data-mako-layout') === 'tabs')`);
+  // Wait until boot has bound the Terminals tab, then open it.
+  await run(`(async () => { const b = document.querySelector('.tab[data-tab="terminals"]'); await window.__t.waitFor(() => typeof b.onclick === 'function'); b.click(); })()`);
+  const out = {};
+  out.hiddenAtStart = await run(`window.__t.shown('#needsYouStrip') === false`);
+  // The renderer may still be wiring its listeners: resend the first view until it lands (a repeat
+  // changes nothing, which the unit test checks).
+  let landed = false;
+  for (let i = 0; i < 40 && !landed; i += 1) {
+    win.webContents.send('pane-status-view', { paneId: 'pty1', state: 'attention', reason: null });
+    landed = await run(`window.__t.waitFor(() => window.__t.log().includes('pty1 -> needs you'), 250)`);
+  }
+  out.firstLanded = landed;
+  await run(`window.__t.sleep(30)`);
+  win.webContents.send('pane-status-view', { paneId: 'pty2', state: 'attention', reason: null });
+  win.webContents.send('pane-status-view', { paneId: 'pty3', state: 'working', reason: null });
+  await run(`window.__t.waitFor(() => document.querySelectorAll('#needsYouStrip .mk-needs-chip').length === 2)`);
+  Object.assign(out, await run(`(async () => {
+    const t = window.__t;
+    const strip = document.getElementById('needsYouStrip');
+    return {
+      shown: t.shown('#needsYouStrip'),
+      chips: Array.from(strip.querySelectorAll('.mk-needs-chip')).map((b) => b.getAttribute('data-pane-id')),
+      title: strip.querySelector('.mk-needs-title').textContent,
+      region: strip.getAttribute('role') + '|' + strip.getAttribute('aria-label'),
+      f8Consumed: t.key('F8'),
+      ctrlF8Consumed: t.key('F8', { ctrlKey: true }),
+    };
+  })()`));
+  await run(`window.__t.sleep(30)`);
+  out.f8Logged = await run(`window.__t.log().includes('[needs-you] could not focus pty1 (focus-failed)')`);
+  if (process.env.MAKO_SCREENSHOT_DIR) {
+    try {
+      const img = await win.webContents.capturePage();
+      require('fs').writeFileSync(path.join(process.env.MAKO_SCREENSHOT_DIR, 's19-needs-you.png'), img.toPNG());
+      out.screenshot = true;
+    } catch (e) { out.screenshot = String((e && e.message) || e).slice(0, 200); }
+  }
+  win.webContents.send('pane-status-view', { paneId: 'pty1', state: 'working', reason: null });
+  await run(`window.__t.waitFor(() => document.querySelectorAll('#needsYouStrip .mk-needs-chip').length === 1)`);
+  out.afterWorking = await run(`Array.from(document.querySelectorAll('#needsYouStrip .mk-needs-chip')).map((b) => b.getAttribute('data-pane-id'))`);
+  win.webContents.send('pane-status-view', { paneId: 'pty2', state: 'exited', reason: null });
+  await run(`window.__t.waitFor(() => document.getElementById('needsYouStrip').hidden === true)`);
+  out.hiddenAtEnd = await run(`window.__t.shown('#needsYouStrip') === false`);
+  out.ptyStart = ipc.ptyStart;
+  await park();
+  return out;
+}
+
 async function refusalCase(name, beforeBoot) {
   await open(name, { theme: 'obsidian', projectsRoot: 'D:\\Workspace', uiTab: 'brain' }, beforeBoot);
   await run(`window.__t.waitFor(() => window.__t.log().includes('[shell] REFUSED'))`);
@@ -484,7 +538,7 @@ app.whenReady().then(async () => {
     process.stdout.write(JSON.stringify({ ok: false, fatal: { scenario: 'watchdog', error: 'over budget' }, scenarios }) + '\n');
     app.exit(1);
   }, 4 * 60 * 1000);
-  for (const [name, fn] of [['firstRun', scenarioFirstRun], ['palette', scenarioPalette], ['settings', scenarioSettingsAndOldLayout], ['restartOld', scenarioRestartOld], ['topBar', scenarioTopBar], ['refusal', scenarioRefusal], ['saveFails', scenarioSaveFails]]) {
+  for (const [name, fn] of [['firstRun', scenarioFirstRun], ['palette', scenarioPalette], ['settings', scenarioSettingsAndOldLayout], ['restartOld', scenarioRestartOld], ['topBar', scenarioTopBar], ['needsYou', scenarioNeedsYou], ['refusal', scenarioRefusal], ['saveFails', scenarioSaveFails]]) {
     try { scenarios[name] = await fn(); progress(`${name}: done`); }
     catch (e) { fatal = { scenario: name, error: String((e && e.message) || e) }; progress(`${name}: FAILED ${fatal.error}`); break; }
   }

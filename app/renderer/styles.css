@@ -516,6 +516,17 @@ input:focus { outline: none; border-color: var(--accent); }
 .mk-tab, .mk-btn, .mk-emblem { transition-property: background-color, color, border-color; }
 @media (prefers-reduced-motion: reduce) { .mk-tab, .mk-btn, .mk-emblem { transition: none; } }
 
+/* S19: the control room's "Needs you" strip, above the panes. One chip per waiting pane. */
+.mk-needs[hidden] { display: none !important; }
+.mk-needs { flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--mk-line, var(--border)); background: var(--mk-surface-raised, var(--panel)); font: 500 12.5px/18px var(--mk-sans, inherit); }
+.mk-needs-title { font-weight: 600; color: var(--mk-status-needs, #ff6b6b); }
+.mk-needs-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; }
+.mk-needs-chip:focus-visible { outline: 2px solid var(--mk-focus, var(--accent-2)); outline-offset: 2px; }
+.mk-needs-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--mk-status-needs, #ff6b6b); }
+.mk-needs-label { max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mk-needs-time { font: 600 12px/18px var(--mk-mono, monospace); font-variant-numeric: tabular-nums; color: var(--mk-ink-muted, var(--muted)); }
+.mk-needs-hint { margin-left: auto; }
+
 /* The embedded production surface: a sibling of `.term-grid` in the same tab, taking the same
    remaining space the grid would. Exactly one of the two is visible at a time.
    `[hidden]` needs an explicit rule because an author `display` value beats the UA stylesheet's

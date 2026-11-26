@@ -46,6 +46,7 @@
     Object.freeze({ keys: 'Left / Right', action: 'Move between tabs', scope: 'Tab bar focused' }),
     Object.freeze({ keys: 'Home / End', action: 'First or last tab', scope: 'Tab bar focused' }),
     Object.freeze({ keys: 'Up / Down, Enter', action: 'Pick and run a palette command', scope: 'Palette open' }),
+    Object.freeze({ keys: 'F8', action: 'Jump to the next pane that needs you, oldest first', scope: 'Every tab, both layouts' }),
   ]);
 
   // The Settings page's sections (brief 8). Sections whose controls come with a later step say so

@@ -55,6 +55,7 @@ assert(!N.isPushToTalkChord({ ctrlKey: true, shiftKey: true, code: 'Space', key:
 assert(!N.isPushToTalkChord({ ctrlKey: false, code: 'Space', key: ' ' }), 'plain Space is typing');
 assert(!N.isPushToTalkChord({ ctrlKey: true, code: 'KeyK', key: 'k' }), 'Ctrl+K is not');
 assert(N.SHORTCUTS.some((x) => x.keys.startsWith('Ctrl Space')), 'Ctrl Space is in the one shortcut list');
+assert(N.SHORTCUTS.some((x) => x.keys === 'F8' && /needs you/.test(x.action)), 'S19: F8, the needs-you jump key, is in the one shortcut list');
 
 process.stdout.write('\npush to talk: hold, release, and a release before the microphone opens\n');
 function ptt(opts) {
