@@ -508,7 +508,7 @@ async function scenarioPauseAll() {
     // S19: the right panel. Selecting the working pane (a mousedown on it, as a click does) shows
     // its In-focus card; Interrupt sends exactly one Esc to that pane, counted at the boundary.
     await run(`terms.get(${JSON.stringify(working)}).pane.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))`);
-    out.panel = await run(`(() => { const p = document.getElementById('controlFocus'); const c = p.querySelector('[data-state]'); return { state: c ? c.getAttribute('data-state') : null, shown: window.__t.shown('#controlFocus'), hasInterrupt: !!p.querySelector('[data-action="interrupt"]') }; })()`);
+    out.panel = await run(`(() => { const p = document.getElementById('controlFocus'); const c = p.querySelector('[data-state]'); return { state: c ? c.getAttribute('data-state') : null, shown: window.__t.shown('#controlFocus'), wide: window.innerWidth >= 1280, hasInterrupt: !!p.querySelector('[data-action="interrupt"]') }; })()`);
     ipc.writes = [];
     await run(`(() => { const b = document.querySelector('#controlFocus [data-action="interrupt"]'); if (b) b.click(); })()`);
     await run(`window.__t.sleep(100)`);
