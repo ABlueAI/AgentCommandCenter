@@ -614,3 +614,4 @@ input:focus { outline: none; border-color: var(--accent); }
 .mk-line { stroke-width: 1; vector-effect: non-scaling-stroke; }
 .mk-line-tracking { stroke: var(--mk-status-working); stroke-opacity: 0.3; }
 .mk-line-waiting { stroke: var(--mk-status-needs); stroke-dasharray: 3 7; }
+.mk-prompt-detail { margin: 0; font: 400 12.5px/19px var(--mk-mono); color: var(--mk-ink-muted); white-space: pre-wrap; overflow-wrap: anywhere; }

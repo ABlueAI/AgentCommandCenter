@@ -5,11 +5,11 @@ sections 7 and 10, docs/decisions/OSS-ui-libraries.md (S63), and the npm registr
 
 ## Blue's verdict (word for word)
 
-> Three.js: "Three.js is fine, that has my okay" (design brief section 7). The pin was left to the
-> pin-and-scan step below.
->
-> The task-node web, Ctrl+F and the conversation widgets: no verdict yet (OSS-ui-libraries.md,
-> "Date and verdict" still blank).
+> "Three.js is fine, that has my okay"
+
+That is Blue's word on Three.js (design brief section 7); the pin was left to the pin-and-scan step
+below. On the task-node web, Ctrl+F and the conversation widgets there is no verdict yet
+(OSS-ui-libraries.md, "Date and verdict" still blank).
 
 ## Verdicts
 

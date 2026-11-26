@@ -722,7 +722,8 @@ function openInAppTerminal(opts = {}) {
   const paneData = { term, fit, pane, ro, roConnected: true, chatBody, role, pendingEvents: [], rafId: null, tailBubble: null, parser: null };
   // S18: what the brain tab's task node shows for this pane. Text only; brain-stage.js never
   // writes any of it back into a pane.
-  paneData.brain = { label, repo: currentRepoLabel(), branch: worktree ? wtName : '', openedAt: Date.now(), lastOutputAt: Date.now(), lines: [], tail: '' };
+  // The authority this pane was started at (the selector applies only to panes started after it).
+  paneData.brain = { label, repo: currentRepoLabel(), branch: worktree ? wtName : '', authority: state.authority || '', openedAt: Date.now(), lastOutputAt: Date.now(), lines: [], tail: '' };
   paneData.parser = new PtyParser((ev) => {
     if (ev && typeof ev.text === 'string' && ev.type !== 'ui_chrome') brainRecordLine(paneData.brain, ev);
     // Video-scout SDK runs print one machine-readable token-usage line; surface it in the Logs
@@ -768,7 +769,8 @@ function openInAppTerminal(opts = {}) {
     }
     else cc.ptyKill(id);
     term.dispose(); pane.remove(); terms.delete(id);
-    if (terms.size === 0) showTermEmpty();    brainRefresh();
+    if (terms.size === 0) showTermEmpty();
+    brainRefresh();
   };
   // ---- LOCAL ROLLBACK (pre-PTY only) ----------------------------------------------------------
   // Undo everything this function built in the RENDERER, for the window in which no PTY exists yet.
@@ -786,6 +788,7 @@ function openInAppTerminal(opts = {}) {
     if (paneData.rafId !== null) { cancelAnimationFrame(paneData.rafId); paneData.rafId = null; }
     term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
+    brainRefresh();
   };
   paneData.closePane = closeThisPane;
   pane.querySelector('.x').onclick = closeThisPane;
@@ -1562,20 +1565,28 @@ function brainNoteStatus(view) {
   if (!view || typeof view.paneId !== 'string' || !view.paneId) return;
   const state = typeof view.state === 'string' ? view.state : 'unknown';
   const prev = brainStatus.get(view.paneId);
-  if (!prev || prev.state !== state) brainStatus.set(view.paneId, { state, since: Date.now() });
+  if (!prev || prev.state !== state) {
+    brainStatus.set(view.paneId, { state, since: Date.now() });
+    // Working again means any menu on screen was answered: forget the old lines, so a later
+    // "needs you" never shows a card for a menu that is gone.
+    const t = terms.get(view.paneId);
+    if (state === 'working' && t && t.brain) { t.brain.lines = []; t.brain.tail = ''; }
+  }
   brainRefresh();
+}
+function brainInput(id) {
+  const t = terms.get(id);
+  if (!t || !t.brain) return null;
+  const s = brainStatus.get(id);
+  return {
+    id, title: t.brain.label, repo: t.brain.repo, branch: t.brain.branch, role: t.role || '', authority: t.brain.authority,
+    status: s ? s.state : 'unknown', statusSince: s ? s.since : t.brain.openedAt, lastOutputAt: t.brain.lastOutputAt,
+    lines: t.brain.tail ? t.brain.lines.concat([t.brain.tail]) : t.brain.lines.slice(),
+  };
 }
 function brainInputs() {
   const out = [];
-  for (const [id, t] of terms) {
-    if (!t.brain) continue;
-    const s = brainStatus.get(id);
-    out.push({
-      id, title: t.brain.label, repo: t.brain.repo, branch: t.brain.branch, role: t.role || '', authority: state.authority || '',
-      status: s ? s.state : 'unknown', statusSince: s ? s.since : t.brain.openedAt, lastOutputAt: t.brain.lastOutputAt,
-      lines: t.brain.tail ? t.brain.lines.concat([t.brain.tail]) : t.brain.lines.slice(),
-    });
-  }
+  for (const id of terms.keys()) { const p = brainInput(id); if (p) out.push(p); }
   return out;
 }
 function brainRefresh() {
@@ -1600,8 +1611,12 @@ let sharkRenderer = null;
 function startShark(shape) {
   const begin = () => {
     if (sharkRenderer || !brainStage) return;
+    const sharkFailed = (kind) => {
+      brainStage.setShark({ note: `The shark stopped (${kind})`, error: true });
+      appendLog(`[shark] REFUSED: the shark stopped drawing (${kind})\n`);
+    };
     try {
-      sharkRenderer = window.ccSharkRenderer.create({ host: brainStage.sharkHost, shape, geo: window.ccSharkShape });
+      sharkRenderer = window.ccSharkRenderer.create({ host: brainStage.sharkHost, shape, geo: window.ccSharkShape, onError: (kind) => { if (sharkClock) sharkClock.fail(kind); else sharkFailed(kind); } });
     } catch (e) {
       const reason = refusalKind(e, 'renderer-failed');
       brainStage.setShark({ note: `The shark can't draw here (${reason})`, error: true });
@@ -1617,6 +1632,7 @@ function startShark(shape) {
       isHidden: () => document.hidden || !brainTabShowing(),
       prefersReducedMotion: () => !!(reduced && reduced.matches),
       log: (line) => appendLog(line),
+      onError: sharkFailed,
     });
     const wake = () => { sharkClock.visibilityChanged(); };
     document.addEventListener('visibilitychange', wake);
@@ -1657,17 +1673,19 @@ function startBrainStage() {
       doc: document, host, inFocus: window.ccInFocusCard,
       onViewPaused: (paused) => { if (sharkClock) { if (paused) sharkClock.pause(); else sharkClock.resume(); } },
       log: (line) => appendLog(line),
+      readPane: (id) => brainInput(id),
       onKeys: (id, keys) => {
         if (!terms.has(id)) return { ok: false, reason: 'pane-closed' };
         cc.ptyWrite(id, keys);
         return { ok: true };
       },
       onOpenPane: (id) => {
-        if (!terms.has(id)) { appendLog('[brain] that pane is closed\n'); return; }
+        if (!terms.has(id)) { const e = new Error('pane-closed'); e.kind = 'pane-closed'; throw e; }
         shell.setTab('control');
         const t = terms.get(id);
         activeTermId = id;
-        setTimeout(() => { try { t.term.focus(); } catch {} }, 0);
+        // Focus is a convenience: a pane disposed in between simply isn't focused.
+        setTimeout(() => { try { t.term.focus(); } catch { /* pane gone: nothing to focus */ } }, 0);
       },
     });
   } catch (e) {
@@ -1676,7 +1694,7 @@ function startBrainStage() {
     return;
   }
   // The shark's shape file (brief 7): checked strictly; a bad or missing file is shown and logged,
-  // and the last good shape stays. The Three.js renderer that draws it is a later step of S18.
+  // and the last good shape stays. shark-renderer.js draws it (startShark).
   if (window.ccSharkShape) {
     const loader = window.ccSharkShape.createShapeLoader({ log: (line) => appendLog(line) });
     loader.load(() => fetch('../assets/shark/shark-shape-B3.json').then((r) => { if (!r.ok) throw new Error('missing'); return r.text(); }))
@@ -1684,6 +1702,10 @@ function startBrainStage() {
         if (res.ok) brainStage.setShark({ note: `Shape ${res.shape.id} (${res.shape.name}) loaded` });
         else brainStage.setShark({ note: `Shark shape refused (${res.reason})${res.fellBack ? '; using the last good shape' : ''}`, error: true });
         if (res.shape) startShark(res.shape);
+      })
+      .catch(() => {
+        brainStage.setShark({ note: 'The shark can\'t draw here (start-failed)', error: true });
+        appendLog('[shark] REFUSED: the shark did not start (start-failed)\n');
       });
   } else {
     brainStage.setShark({ note: 'Shark shape refused (shape-module-missing)', error: true });

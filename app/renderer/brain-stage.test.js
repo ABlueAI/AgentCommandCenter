@@ -46,12 +46,25 @@ process.stdout.write('\nprompt reader: permission and question menus\n');
   eq(q && q.kind, 'question', 'any other numbered menu is a question');
   eq(q && q.options.map((o) => o.label), ['Adapter', 'Port', 'Something else'], 'question options');
   eq(B.readPrompt(['no menu here', 'just output']), null, 'no menu: no prompt');
-  eq(B.readPrompt(['Pick one', '  2. B', '  3. C']), null, 'a menu that doesn\'t count from 1 is refused');
-  eq(B.readPrompt(['Pick one', '  1. A']), null, 'a single option is not a menu');
-  eq(B.readPrompt(['Do you want to proceed?', '1. Yes', '   wrapped continuation', '2. No']), null, 'a menu split by a wrapped line is refused, never guessed');
+  eq(B.readPrompt(['Pick one', '❯ 2. B', '  3. C']), null, 'a menu that doesn\'t count from 1 is refused');
+  eq(B.readPrompt(['Pick one', '❯ 1. A']), null, 'a single option is not a menu');
+  eq(B.readPrompt(['Do you want to proceed?', '❯ 1. Yes', '   wrapped continuation', '2. No']), null, 'a menu split by a wrapped line is refused, never guessed');
+  eq(B.readPrompt(['Options:', '1. Adapter', '2. Port']), null, 'a numbered list with no cursor is not a menu');
+  eq(B.readPrompt(QUESTION_LINES.concat(['Then I went on to say more', 'and more', 'and more', 'and more'])), null, 'a menu with other output after it is not live');
   const widened = { kind: 'permission', question: 'Do you want to proceed?', options: [{ n: 1, label: 'Yes, and don\'t ask again' }, { n: 2, label: 'No' }] };
   eq(B.allowOnceOption(widened), null, 'no plain Yes: Allow once has no option and refuses');
   eq(B.allowOnceOption(B.readPrompt(QUESTION_LINES)), null, 'a question has no Allow once');
+  eq(p && p.detail, ['● Bash(npm test)', 'Bash command', 'npm test'], 'the command block above the question is kept');
+  const perm = (opts, detail) => ({ kind: 'permission', question: 'Do you want to proceed?', detail: detail === undefined ? ['Bash command', 'npm test'] : detail, options: opts.map((label, i) => ({ n: i + 1, label })) });
+  for (const w of ['Yes, allow all edits during this session', 'Yes, always allow', 'Yes, and don\'t ask again for this session', 'Yes, and auto-accept edits', 'Yes, bypass permissions']) {
+    eq(B.allowOnceOption(perm([w, 'No'])), null, `a widening first "Yes" is never Allow once: "${w}"`);
+  }
+  eq(B.allowOnceOption(perm(['Yes, allow all edits during this session', 'Yes', 'No'])), 2, 'the plain "Yes" further down is picked');
+  eq(B.allowOnceOption(perm(['Yes', 'No'], [])), null, 'no command shown above the question: no Allow once (Open pane only)');
+  const a = B.readPrompt(['Bash command', 'npm test', 'Do you want to proceed?', '❯ 1. Yes', '2. No']);
+  const b2 = B.readPrompt(['Bash command', 'rm -rf build', 'Do you want to proceed?', '❯ 1. Yes', '2. No']);
+  eq(B.allowOnceOption(perm(['Yes, and remember', 'No'])), null, 'only a plain "Yes" is Allow once ("Yes, and remember" is not)');
+  assert(B.promptSignature(a) !== B.promptSignature(b2), 'two requests that differ only in their command have different signatures');
 }
 
 process.stdout.write('\ntasks: states, stall watch, usage stop\n');
@@ -135,11 +148,17 @@ process.stdout.write('\ncard keys: only a digit the menu offered, or Esc\n');
   eq(B.keysForAction('answer', q, qs, 'opt-2'), { ok: true, keys: '2' }, 'an answer sends its digit');
   eq(B.keysForAction('answer', q, qs, 'opt-7'), { ok: false, reason: 'bad-answer' }, 'a digit the menu didn\'t offer: refused');
   eq(B.keysForAction('answer', q, qs, '2\r rm -rf'), { ok: false, reason: 'bad-answer' }, 'anything but opt-<digit>: refused');
+  const wide = B.buildTask(pane('q2', 'attention', { lines: ['Would you like to proceed?', '❯ 1. Yes, and auto-accept edits', '2. No'] }), NOW);
+  eq(B.keysForAction('answer', wide, B.promptSignature(wide.prompt), 'opt-1'), { ok: false, reason: 'widening-option' }, 'a widening choice is never sent from a card');
   eq(B.keysForAction('deny', q, qs), { ok: false, reason: 'not-permission' }, 'Deny only on a permission');
   eq(B.keysForAction('allowOnce', q, qs), { ok: false, reason: 'no-allow-once-option' }, 'Allow once only on a permission');
   const w = B.buildTask(pane('w1', 'working'), NOW);
   eq(B.keysForAction('interrupt', w, ''), { ok: true, keys: '\u001b' }, 'Interrupt sends Esc to a working pane');
   eq(B.keysForAction('interrupt', perm, ''), { ok: false, reason: 'not-working' }, 'Interrupt never on a waiting pane');
+  const stalledT = B.buildTask(pane('st1', 'working', { lastOutputAt: NOW - 25 * MIN }), NOW);
+  eq(B.keysForAction('interrupt', stalledT, ''), { ok: true, keys: '\u001b' }, 'Interrupt works on a stalled task');
+  eq(B.focusState(stalledT), 'working', 'a stalled task keeps the working layout (with Interrupt)');
+  eq(B.buildTask(pane('x9', 'weird-state'), NOW).word, 'Status unknown', 'an unrecognised pane status is shown as unknown, not as queued');
   eq(B.keysForAction('allowOnce', w, ''), { ok: false, reason: 'no-prompt' }, 'no prompt: nothing is sent');
   eq(B.keysForAction('allowOnce', null, sig), { ok: false, reason: 'task-gone' }, 'a gone task: refused');
   eq(B.keysForAction('rm', perm, sig), { ok: false, reason: 'unknown-action' }, 'an unknown action: refused');
@@ -186,42 +205,61 @@ process.stdout.write('\nDOM: mount, nodes, cards, In focus, keys reach the pane\
   const opened = [];
   const logs = [];
   let clock = NOW;
+  // The panes as they are "now": readPane reads this at every click, update() only when pushed.
+  const live = {
+    pty1: pane('pty1', 'attention', { title: 'Run tests', lines: PERMISSION_LINES, statusSince: NOW - 7 * MIN }),
+    pty2: pane('pty2', 'attention', { title: 'Pick a store', lines: QUESTION_LINES }),
+    pty3: pane('pty3', 'working', { title: 'Build the stage' }),
+  };
   const stage = B.createBrainStage({
     doc, host, log: (l) => logs.push(l), now: () => clock, inFocus: F,
+    readPane: (id) => live[id] || null,
     onKeys: (id, keys) => { sent.push([id, keys]); return Promise.resolve({ ok: true }); },
     onOpenPane: (id) => opened.push(id),
   });
+  const push = () => stage.update(Object.values(live));
+  const status = () => byId(host, 'makoStageFindStatus').textContent;
+  const cardOf = (kind) => host.all((n) => n.tagName === 'ARTICLE' && n.attrs['data-kind'] === kind)[0];
   assert(byId(host, 'makoStage') && byId(host, 'makoConvo') && byId(host, 'makoBrainRight') && byId(host, 'makoFlowStrip'), 'stage, conversation, right panel and work-flow strip are mounted');
   assert(host.textContent.includes('No live tasks'), 'no panes: the stage says so, never an empty box');
   const send = byId(host, 'makoMessageSend');
   assert(send.disabled === true && /S51/.test(send.getAttribute('title')), 'Send is disabled with its reason until the conductor (S51)');
 
-  stage.update([
-    pane('pty1', 'attention', { title: 'Run tests', lines: PERMISSION_LINES, statusSince: NOW - 7 * MIN }),
-    pane('pty2', 'attention', { title: 'Pick a store', lines: QUESTION_LINES }),
-    pane('pty3', 'working', { title: 'Build the stage' }),
-  ]);
+  push();
   eq(byAttr(host, 'data-task', 'pty3').filter((n) => n.className.includes('mk-node')).length, 1, 'one node per live pane');
   eq(byId(host, 'makoStageCounts').textContent, 'Waiting on you 2 · On agents 1 · Ready 0', 'the counts line');
   const lineKinds = byId(host, 'makoStageLines').children.map((l) => l.attrs['data-line']).sort();
   eq(lineKinds, ['needs', 'needs', 'working'], 'a line from the shark to every node that isn\'t queued');
   assert(byId(host, 'makoStageLines').children.filter((l) => l.attrs['data-line'] === 'needs').every((l) => /mk-line-waiting/.test(l.attrs.class)), 'waiting on Blue: the dashed red line');
-  const permCard = host.all((n) => n.tagName === 'ARTICLE' && n.attrs['data-kind'] === 'permission')[0];
+  const permCard = cardOf('permission');
   assert(permCard && permCard.className.includes('mk-card-permission'), 'a permission prompt always shows as a red card');
   assert(permCard && permCard.textContent.includes(F.PERMISSION_LINE), 'with "Mako never answers this for you"');
+  assert(permCard && permCard.textContent.includes('npm test'), 'and the command it would allow, as plain text');
   const allow = permCard.all((n) => n.attrs['data-action'] === 'allowOnce')[0];
   allow.click();
   await_(() => {
     eq(sent, [['pty1', '1']], 'Allow once on the card reaches the pane as "1"');
-    const qCard = host.all((n) => n.tagName === 'ARTICLE' && n.attrs['data-kind'] === 'question')[0];
+    assert(/^Key sent to Run tests; check that it moved on/.test(status()), 'the notice says the key was sent, not that the pane moved on');
+    allow.click();
+  }, () => {
+    eq(sent.length, 1, 'a second click on the same prompt sends nothing');
+    assert(/^Not sent: already-answered/.test(status()), 'and says it was already answered');
+    const qCard = cardOf('question');
+    assert(qCard.all((n) => n.attrs['data-answer']).every((b) => !/mk-btn-primary/.test(b.className)), 'no question answer is styled as Mako\'s recommendation');
     qCard.all((n) => n.attrs['data-answer'] === 'opt-2')[0].click();
   }, () => {
     eq(sent[1], ['pty2', '2'], 'a question card answer reaches the pane as its digit');
-    // Open pane
-    const qCard = host.all((n) => n.tagName === 'ARTICLE' && n.attrs['data-kind'] === 'question')[0];
-    qCard.all((n) => n.attrs['data-action'] === 'openPane')[0].click();
+    cardOf('question').all((n) => n.attrs['data-action'] === 'openPane')[0].click();
     eq(opened, ['pty2'], 'Open pane opens that pane');
 
+    // The pane moves on to another permission request; the stage hasn't refreshed yet.
+    live.pty1 = pane('pty1', 'attention', { title: 'Run tests', statusSince: NOW - 2 * MIN, lines: PERMISSION_LINES.map((l) => l.replace(/npm test/g, 'rm -rf build')) });
+    cardOf('permission').all((n) => n.attrs['data-action'] === 'allowOnce')[0].click();
+  }, () => {
+    eq(sent.length, 2, 'a stale card\'s Allow once sends nothing: the click is checked against the pane now');
+    assert(/^Not sent: prompt-changed/.test(status()), 'and says the prompt changed');
+    push();
+    assert(cardOf('permission').textContent.includes('rm -rf build'), 'after the refresh the card shows the new command');
     // Node click opens In focus with the permission layout and wired buttons.
     host.all((n) => n.className.includes('mk-node') && n.attrs['data-task'] === 'pty1')[0].click();
     const card = byId(host, 'makoBrainRight').children[0];
@@ -231,16 +269,6 @@ process.stdout.write('\nDOM: mount, nodes, cards, In focus, keys reach the pane\
     deny.click();
   }, () => {
     eq(sent[2], ['pty1', '\u001b'], 'Deny on the In-focus card reaches the pane as Esc');
-    // The prompt changes under the card: the click is refused, nothing is sent.
-    const before = sent.length;
-    stage.update([
-      pane('pty1', 'attention', { title: 'Run tests', lines: ['Do you want to proceed?', '1. Yes', '2. No, delete it'], statusSince: NOW - 7 * MIN }),
-      pane('pty2', 'attention', { title: 'Pick a store', lines: QUESTION_LINES }),
-      pane('pty3', 'working', { title: 'Build the stage' }),
-    ]);
-    const stale = B.keysForAction('allowOnce', stage.state().tasks.find((t) => t.id === 'pty1'), B.promptSignature(B.readPrompt(PERMISSION_LINES)));
-    eq(stale.reason, 'prompt-changed', 'an old card\'s click is refused once the prompt on screen changed');
-    eq(sent.length, before, 'nothing was sent by the update');
 
     // Back to Right now
     const card = byId(host, 'makoBrainRight').children[0];
@@ -248,24 +276,42 @@ process.stdout.write('\nDOM: mount, nodes, cards, In focus, keys reach the pane\
     assert(byId(host, 'makoRightNow') !== null, 'Back to Right now shows the counts');
 
     // Ctrl+F finds a node and focuses it.
-    const hits = stage.find('store');
-    eq(hits, ['pty2'], 'Ctrl+F finds a node by title');
+    eq(stage.find('store'), ['pty2'], 'Ctrl+F finds a node by title');
     eq(stage.state().focusId, 'pty2', 'and puts it in focus');
     eq(stage.find('proceed'), ['pty1'], 'and by content (the question on screen)');
-    assert(/^No task matches/.test((stage.find('zzz'), byId(host, 'makoStageFindStatus').textContent)), 'no match says so');
+    assert(/^No task matches/.test((stage.find('zzz'), status())), 'no match says so');
 
-    // Pause freezes the view, not the agents.
+    // Pause freezes the view, not the agents, and its cards send nothing.
     byId(host, 'makoStagePause').click();
+    live.pty2 = pane('pty2', 'attention', { title: 'Pick a store', lines: QUESTION_LINES, statusSince: NOW - MIN });
+    cardOf('question').all((n) => n.attrs['data-answer'] === 'opt-1')[0].click();
+  }, () => {
+    eq(sent.length, 3, 'paused: a card click sends nothing');
+    assert(/^Not sent: view-paused/.test(status()), 'and says the view is paused');
     clock = NOW + 5 * 60000;
-    const applied = stage.update([pane('pty3', 'working', { title: 'Build the stage' })]);
+    const applied = stage.update([live.pty3]);
     eq(applied, false, 'paused: the view does not take updates');
     assert(/^Paused · last updated /.test(byId(host, 'makoStageLive').textContent), 'the live line says Paused with the last update time');
     eq(stage.state().tasks.length, 3, 'the frozen view keeps its nodes');
     byId(host, 'makoStagePause').click();
-    stage.update([pane('pty3', 'working', { title: 'Build the stage' })]);
+    stage.update([live.pty3]);
     eq(stage.state().tasks.length, 1, 'resumed: the closed panes leave the stage');
     eq(stage.find('store'), ['pty2'], 'a closed pane is still found by Ctrl+F (nothing disappears)');
     assert(/finished: /.test(byId(host, 'makoConvoCards').textContent), 'finished work is batched into one line');
+
+    // Waiting on Blue with no menu Mako can read: a card that says so, with only Open pane.
+    stage.update([pane('u1', 'attention', { title: 'Odd menu', lines: ['Pick one', '❯ 2. B', '  3. C'] })]);
+    const odd = cardOf('unreadable');
+    assert(odd && /prompt-unreadable/.test(odd.textContent), 'an unreadable menu gets a card that says so');
+    eq(odd && odd.all((n) => n.tagName === 'BUTTON').map((b) => b.attrs['data-action']), ['openPane'], 'with Open pane only');
+    // Pane status not reporting: the stage says why nobody shows as waiting.
+    stage.update([pane('k1', 'unknown'), pane('k2', 'unknown')]);
+    assert(byId(host, 'makoStatusNote') !== null, 'every pane unknown: a note says pane status isn\'t reporting');
+    // A menu with a widening choice: shown as text, never a button.
+    stage.update([pane('w1', 'attention', { title: 'Plan', lines: ['Would you like to proceed?', '❯ 1. Yes, and auto-accept edits', '  2. Yes, and manually approve edits', '  3. No, keep planning'] })]);
+    const wq = cardOf('question');
+    eq(wq.all((n) => n.attrs['data-answer']).map((b) => b.attrs['data-answer']), ['opt-2', 'opt-3'], 'the widening choice has no button');
+    assert(wq.all((n) => n.attrs['data-widening'] === 'opt-1').length === 1, 'it is shown as text, to pick in the pane');
 
     // A failed write is visible.
     host2 = new Node('div');

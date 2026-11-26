@@ -148,6 +148,25 @@ process.stdout.write('\nloader: a bad or missing file falls back to the last goo
     assert(Math.abs(S.swimOffset(1.0, 0.3, 1, 1) - S.swimOffset(1.0, 0.3 + period, 1, 1)) < 1e-9, 'one tail beat every 1 / 0.45 s at speed 1.0');
   }
 
+  process.stdout.write('\na frame that throws stops the clock and is reported\n');
+  {
+    let q = [];
+    const errs = [];
+    const C2 = S.createSharkClock({
+      draw: () => { throw new Error('shader'); }, now: () => 0,
+      requestFrame: (cb) => { q.push(cb); return q.length; }, cancelFrame: () => {}, onError: (k) => errs.push(k),
+    });
+    C2.start();
+    const f = q.shift(); f();
+    eq(errs, ['draw-failed'], 'onError gets draw-failed');
+    eq([C2.state().running, C2.state().failed, q.length], [false, true, 0], 'and the clock stops, with no frame waiting');
+    C2.resume();
+    eq(q.length, 0, 'it stays stopped (no silent retry loop)');
+    const C3 = S.createSharkClock({ draw: () => {}, requestFrame: () => 1, cancelFrame: () => {}, onError: (k) => errs.push(k) });
+    C3.fail('webgl-context-lost');
+    eq(errs[1], 'webgl-context-lost', 'a lost GPU context is reported the same way');
+  }
+
   let threw = '';
   try { S.createSharkClock({}); } catch (e) { threw = e.message; }
   eq(threw, 'shark-clock: deps-missing', 'no renderer hooks: refuses to start');

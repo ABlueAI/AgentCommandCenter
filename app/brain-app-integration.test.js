@@ -14,7 +14,7 @@
 // The shark runs on software WebGL here (SwiftShader, harness only). Its state timing, reduced
 // motion and the 30 fps rule are unit-tested in renderer/shark-shape.test.js; the 30 fps frame
 // time full screen and a real Claude Code permission prompt are Blue's batched PC check
-// (BLUE-CHECKLIST.md). Not built yet (later steps of S18): the lines and "What Mako knows".
+// (BLUE-CHECKLIST.md). Not built yet: "What Mako knows".
 
 const { spawnSync } = require('child_process');
 const path = require('path');
@@ -73,6 +73,8 @@ eq(S.needsToken, '#f2606b', 'which is the status-needs token');
 assert(perm && /Mako never answers this for you/.test(perm.text), 'with "Mako never answers this for you"');
 assert(cards.some((c) => c.kind === 'question' && /Which store/.test(c.text)), 'the question shows as a question card');
 eq(S.writes, [{ id: p1, data: '1' }, { id: p2, data: '2' }], 'Allow once and an answer reached their panes as the menu digit, at the IPC boundary');
+eq(S.duplicateWrites, [], 'a second Allow once on the same prompt sends nothing');
+eq(S.newPermissionShown, true, 'when the pane asks again, the new card shows the new command');
 eq(S.focusState, 'permission', 'a click on a node opens the In-focus card in its state');
 eq(S.denyWrites, [{ id: p1, data: '\u001b' }], 'Deny on the In-focus card reached the pane as Esc');
 assert(S.rightNow === true, 'Back to Right now shows the counts');
@@ -89,11 +91,20 @@ eq(S.afterOpenTab, 'control', 'Open pane goes to the control room');
 
 process.stdout.write('\nthe shark: draws on the brain tab, stops when hidden, pauses with the view\n');
 assert(S.sharkStarted === true, `the real Three.js renderer started (note: ${JSON.stringify(S.sharkNoteAfter)})`);
-assert(S.sharkFramesPerSecond > 0 && S.sharkFramesPerSecond <= 31, `it draws, at no more than 30 fps by default (${S.sharkFramesPerSecond} frames in 1 s)`);
+eq(S.directDraw, 'ok', 'the real renderer draws a frame (thinking state) without an error');
 assert(S.sharkCanvas && S.sharkCanvas.w > 0 && S.sharkCanvas.h > 0, 'into a canvas on the stage');
+const windowLive = S.docHidden === false;
+if (windowLive) {
+  assert(S.sharkFramesPerSecond > 0 && S.sharkFramesPerSecond <= 31, `the clock draws, at no more than 30 fps by default (${S.sharkFramesPerSecond} frames in 1 s)`);
+  eq(S.sharkRunningShown, true, 'back on the brain tab it runs again');
+} else {
+  // This runner reports the window hidden (Windows CI can), so the clock rightly draws nothing and
+  // its draw rate can't be observed here; its rules are unit-tested in shark-shape.test.js.
+  process.stdout.write(`  (window hidden on this runner, animation frames in 0.5 s=${S.rafTicks}; the clock draw rate is not checked here)\n`);
+  eq(S.sharkFramesPerSecond, 0, 'with the window hidden the clock draws nothing (hidden means stopped)');
+}
 eq(S.sharkFramesHidden, 0, 'on another tab it draws nothing');
 eq(S.sharkRunningHidden, false, 'and its clock is stopped');
-eq(S.sharkRunningShown, true, 'back on the brain tab it runs again');
 eq(S.sharkPausedWithView, true, 'the stage\'s Pause freezes the shark too');
 
 process.stdout.write('\nnothing reached the network, and no renderer errors\n');

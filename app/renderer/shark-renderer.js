@@ -145,6 +145,11 @@ function create(deps) {
   } catch {
     throw refusal('webgl-unavailable');
   }
+  // A lost GPU context (driver reset, sleep and wake) is reported, not left as a dead canvas.
+  canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    if (typeof d.onError === 'function') d.onError('webgl-context-lost');
+  });
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
   // Opaque black, drawn with \`mix-blend-mode: screen\` (styles.css): black adds nothing over the
   // stage's glow, and the glass and bloom add light, so no box shows around the shark.

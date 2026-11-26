@@ -16,9 +16,8 @@
 //   * the DOM: the stage, the work-flow strip, the conversation column with question and
 //     permission cards, the message box shell and the right panel (Right now or In focus).
 //
-// Not here yet (later steps of S18, see the PR's "Where I stopped"): the Three.js shark (pin and
-// scan first), the lines from the shark to the nodes and "What Mako knows" (question 3: built last).
-// The conductor's own content (replies, plan cards, briefs) is S51's.
+// The shark itself is drawn by shark-renderer.js into this stage's `sharkHost`. Not here yet:
+// "What Mako knows" (question 3). The conductor's own content (replies, plan cards, briefs) is S51's.
 //
 // Every value shown (titles, repos, branches, pane output) is untrusted text, so it reaches the DOM
 // only through textContent and setAttribute on fixed attribute names, never as HTML.
@@ -44,7 +43,7 @@
   const STALL_FAILED_TRIES = 5;
   const GROUP_MODES = Object.freeze(['repo', 'kind', 'none']);
   const MAX_PROMPT_LINES = 40;
-  const MAX_OPTIONS = 9;
+  const MAX_OPTIONS = 6; // the In-focus card shows 6 answers; a longer menu is answered in the pane
 
   // Pane status (pane-status-protocol.js STATES) -> node state. `exited` leaves the stage (it stays
   // in the history and in Ctrl+F); `unknown` is shown as queued with its own word, never as working.
@@ -80,6 +79,9 @@
     let end = -1;
     for (let i = recent.length - 1; i >= 0; i--) { if (OPTION.test(recent[i])) { end = i; break; } }
     if (end < 0) return null;
+    // A live menu is at the bottom of the screen: at most 3 lines after its last option, none of
+    // them another reply (a numbered list further up in the agent's answer is not a menu).
+    if (recent.length - 1 - end > 3) return null;
     // Only consecutive option lines count. A menu split by a wrapped line no longer counts up from
     // 1 and is refused below: the card then offers only "Open pane", never a guessed key.
     let start = end;
@@ -91,27 +93,50 @@
     }
     // The menu must count 1, 2, 3 ... with no gaps, or it isn't a menu we can answer.
     if (options.length < 2 || options.length > MAX_OPTIONS) return null;
+    // ... and it has a cursor (❯) on one of its options, which a plain list never has.
+    let cursor = false;
+    for (let i = start; i <= end; i++) if (/^[\s│|]*[❯›]/.test(recent[i])) cursor = true;
+    if (!cursor) return null;
     for (let i = 0; i < options.length; i++) if (options[i].n !== i + 1) return null;
+    const clean = (l) => l.replace(/^[\s│|╭╰─]+|[\s│|╮╯─]+$/g, '');
     let question = '';
+    let qAt = -1;
     for (let i = start - 1; i >= 0 && i >= start - 6; i--) {
-      const t = recent[i].replace(/^[\s│|╭╰─]+|[\s│|╮╯─]+$/g, '');
-      if (t) { question = str(t, 200); break; }
+      const t = clean(recent[i]);
+      if (t) { question = str(t, 200); qAt = i; break; }
+    }
+    // What the request is about: the lines above the question (Claude Code draws the tool and its
+    // command there, "Bash command / npm test"), up to a blank line or 8 lines. It is shown on the
+    // card and is part of the signature, so two requests that differ only in their command differ.
+    const detail = [];
+    for (let i = qAt - 1; i >= 0 && i >= qAt - 8; i--) {
+      const t = clean(recent[i]);
+      if (!t) break;
+      detail.unshift(str(t, 200));
     }
     const permission = /^Do you want to\b/i.test(question) && /^Yes\b/i.test(options[0].label);
-    return { kind: permission ? 'permission' : 'question', question, options };
+    return { kind: permission ? 'permission' : 'question', question, detail, options };
   }
 
   // A stable signature of a prompt, so a click is checked against the prompt still on screen.
   function promptSignature(prompt) {
     if (!prompt) return '';
-    return JSON.stringify([prompt.kind, prompt.question, prompt.options.map((o) => [o.n, o.label])]);
+    return JSON.stringify([prompt.kind, prompt.detail || [], prompt.question, prompt.options.map((o) => [o.n, o.label])]);
   }
 
   // The one option "Allow once" picks: the first "Yes" that doesn't widen the permission
   // ("don't ask again", "always", "all"). Null if the menu has none, so the button refuses.
+  // An option that widens what the agent may do beyond this one request. The brain tab never
+  // offers one as a button; Blue picks it in the pane if he wants it.
+  const WIDENING = /don'?t ask|always|\ball\b|session|auto-?accept|bypass/i;
+  function widens(label) { return WIDENING.test(String(label || '')); }
+  // A permission card offers "Allow once" only when it can show what is being allowed (the
+  // command above the question) and the menu has a "Yes" that doesn't widen the permission.
   function allowOnceOption(prompt) {
     if (!prompt || prompt.kind !== 'permission') return null;
-    const o = prompt.options.find((x) => /^Yes\b/i.test(x.label) && !/don'?t ask|always|\ball\b|session/i.test(x.label));
+    if (!Array.isArray(prompt.detail) || prompt.detail.length === 0) return null;
+    // Only a plain "Yes" (with at most a bracketed hint), never "Yes, and ...".
+    const o = prompt.options.find((x) => /^Yes\.?(\s*\([^)]*\))?$/i.test(x.label) && !widens(x.label));
     return o ? o.n : null;
   }
 
@@ -124,7 +149,7 @@
   function keysForAction(action, task, clickedSignature, answerId) {
     if (!task) return { ok: false, reason: 'task-gone' };
     if (action === 'interrupt') {
-      return task.state === 'working' ? { ok: true, keys: '\u001b' } : { ok: false, reason: 'not-working' };
+      return task.state === 'working' || task.stalled ? { ok: true, keys: '\u001b' } : { ok: false, reason: 'not-working' };
     }
     if (task.state !== 'needs' || !task.prompt) return { ok: false, reason: 'no-prompt' };
     if (promptSignature(task.prompt) !== clickedSignature) return { ok: false, reason: 'prompt-changed' };
@@ -137,7 +162,9 @@
       const m = /^opt-([1-9])$/.exec(String(answerId || ''));
       if (!m) return { ok: false, reason: 'bad-answer' };
       const n = Number(m[1]);
-      if (!task.prompt.options.some((o) => o.n === n)) return { ok: false, reason: 'bad-answer' };
+      const opt = task.prompt.options.find((o) => o.n === n);
+      if (!opt) return { ok: false, reason: 'bad-answer' };
+      if (widens(opt.label)) return { ok: false, reason: 'widening-option' };
       return { ok: true, keys: String(n) };
     }
     return { ok: false, reason: 'unknown-action' };
@@ -175,7 +202,7 @@
       latest: '',
     };
     if (mapped === 'exited') { task.word = 'Exited'; return task; }
-    if (p.status === 'unknown') task.word = 'Status unknown';
+    if (p.status === 'unknown' || !Object.prototype.hasOwnProperty.call(FROM_PANE_STATUS, p.status)) task.word = 'Status unknown';
     if (p.status === 'failed') task.word = 'Failed';
     if (p.held === true && mapped !== 'needs') { task.state = 'held'; task.word = STATE_INFO.held.word; }
     const lines = Array.isArray(p.lines) ? p.lines : [];
@@ -300,6 +327,7 @@
   // The In-focus card's state for a task (in-focus-card.js STATES).
   function focusState(task) {
     if (!task) return null;
+    if (task.stalled) return 'working'; // a stalled task keeps Interrupt (Esc), the thing Blue wants then
     if (task.state === 'needs') return task.prompt && task.prompt.kind === 'permission' ? 'permission' : 'question';
     if (task.state === 'ended' || task.state === 'exited') return 'finished';
     return 'working';
@@ -311,10 +339,11 @@
     return {
       state: focusState(task),
       title: task.title,
-      answers: task.prompt && task.prompt.kind === 'question' ? task.prompt.options.map((o, i) => ({ id: `opt-${o.n}`, label: o.label, recommended: i === 0 })) : [],
+      // No answer is marked recommended: the pane's own order is not Mako's advice.
+      answers: task.prompt && task.prompt.kind === 'question' ? task.prompt.options.filter((o) => !widens(o.label)).map((o) => ({ id: `opt-${o.n}`, label: o.label })) : [],
       heldBy: task.holder, repo: task.repo, role: task.role, model: task.model, authority: task.authority, branch: task.branch,
       elapsed: task.since === null ? '' : `${minutes(t - task.since)} min`,
-      latest: task.latest,
+      latest: task.prompt && task.prompt.detail && task.prompt.detail.length ? task.prompt.detail.join(' · ') : task.latest,
     };
   }
 
@@ -339,10 +368,25 @@
    * Mount the brain tab into S66's frame.
    * deps: { doc, host (the frame's main area), log(line), now(), inFocus (ccInFocusCard),
    *         onKeys(paneId, keys) -> Promise<{ok, reason?}> (the only path to a pane),
-   *         onOpenPane(paneId), isTabVisible() }
+   *         readPane(paneId) -> the pane's input for buildTask now (checked at every click),
+   *         onOpenPane(paneId), onViewPaused(paused) }
    * Returns { update(inputs), find(query), focusFind(), focusTask(id), state() }.
    */
   function refusal(kind) { const e = new Error(`brain-stage: ${kind}`); e.kind = kind; return e; }
+
+  // What each refusal means, in words.
+  const REFUSAL_TEXT = Object.freeze({
+    'prompt-changed': 'The pane\'s prompt is not what the card showed; open the pane.',
+    'no-prompt': 'The pane is no longer showing that prompt; open the pane.',
+    'task-gone': 'That pane is closed.',
+    'already-answered': 'This prompt was already answered from here; open the pane to check it.',
+    'not-working': 'That pane isn\'t working, so there is nothing to interrupt.',
+    'not-permission': 'That is a question, not a permission request.',
+    'no-allow-once-option': 'Mako can\'t show what this allows, or there is no plain "Yes"; open the pane.',
+    'widening-option': 'That choice widens what the agent may do; pick it in the pane if you want it.',
+    'bad-answer': 'That isn\'t one of the choices on screen.',
+    'unknown-action': 'Open the pane.',
+  });
 
   function createBrainStage(deps) {
     const d = deps || {};
@@ -355,7 +399,7 @@
 
     const st = {
       tasks: [], history: new Map(), mode: 'repo', expanded: null, focusId: null, paused: false,
-      updatedAt: null, frozenAt: null, findQuery: '', findHits: [], notice: '',
+      updatedAt: null, frozenAt: null, findQuery: '', findHits: [], notice: '', spent: new Map(),
     };
 
     const root = h(doc, 'div', 'mk-brain', null, { id: 'makoBrain' });
@@ -455,21 +499,36 @@
 
     // The one path from a card to a pane: checked against the prompt on screen at click time,
     // and only a digit the menu offered or Esc goes out.
+    // The check is against the pane as it is now (deps.readPane), not the stage's last snapshot,
+    // and nothing is sent while the view is paused (its cards may be out of date).
     function act(action, id, signature, answerId) {
-      const task = taskById(id);
-      const res = keysForAction(action, task, signature, answerId);
-      if (!res.ok) { notice(`Not sent: ${res.reason}. The pane's prompt is not what the card showed; open the pane.`); render(); return Promise.resolve(res); }
+      if (st.paused) { notice('Not sent: view-paused. Resume the view, then answer.'); return Promise.resolve({ ok: false, reason: 'view-paused' }); }
+      let task = taskById(id);
+      if (typeof d.readPane === 'function') {
+        let fresh = null;
+        try { fresh = d.readPane(id); } catch { fresh = null; }
+        task = fresh ? buildTask(fresh, now()) : null;
+      }
+      let res = keysForAction(action, task, signature, answerId);
+      // One answer per prompt: a second click on the same prompt, before the pane's status moves
+      // on, is refused (it would answer a prompt Blue hasn't seen yet).
+      const spent = st.spent.get(id);
+      if (res.ok && action !== 'interrupt' && spent && task && spent.sig === signature && spent.since === task.since) res = { ok: false, reason: 'already-answered' };
+      if (!res.ok) { notice(`Not sent: ${res.reason}. ${REFUSAL_TEXT[res.reason] || 'Open the pane.'}`); render(); return Promise.resolve(res); }
+      if (action !== 'interrupt') st.spent.set(id, { sig: signature, since: task.since });
       return Promise.resolve()
         .then(() => d.onKeys(id, res.keys))
         .then((r) => {
           if (!r || r.ok !== true) { notice(`Not sent: ${(r && r.reason) || 'write-failed'}.`); return { ok: false, reason: (r && r.reason) || 'write-failed' }; }
-          notice(`Sent to ${task.title}.`);
+          // ptyWrite is one-way: main can still refuse it (a protected pane, an exited process),
+          // so this says what happened, not that the pane moved on.
+          notice(`Key sent to ${task.title}; check that it moved on.`);
           return { ok: true };
         }, () => { notice('Not sent: write-failed.'); return { ok: false, reason: 'write-failed' }; });
     }
 
     function openPane(id) {
-      try { d.onOpenPane(id); } catch { notice('Could not open the pane: open-failed.'); }
+      try { d.onOpenPane(id); } catch (e) { notice(`Could not open the pane: ${e && e.kind === 'pane-closed' ? 'pane-closed' : 'open-failed'}.`); }
     }
 
     function nodeButton(item) {
@@ -501,6 +560,7 @@
       head.appendChild(h(doc, 'span', 'mk-meta', `${t.repo || 'No repo'} · waiting ${t.waitingMin} min`));
       card.appendChild(head);
       card.appendChild(h(doc, 'h3', 'mk-card-title', t.title));
+      for (const line of (t.prompt.detail || []).slice(-6)) card.appendChild(h(doc, 'p', 'mk-mono mk-prompt-detail', line));
       card.appendChild(h(doc, 'p', 'mk-question', t.prompt.question || 'The pane is asking you to choose.'));
       if (permission) card.appendChild(h(doc, 'p', 'mk-meta mk-permission-line', d.inFocus.PERMISSION_LINE));
       const actions = h(doc, 'div', 'mk-card-actions');
@@ -512,10 +572,13 @@
       };
       if (permission) {
         const allow = btn('Allow once', true, () => act('allowOnce', t.id, sig), { 'data-action': 'allowOnce' });
-        if (!allowOnceOption(t.prompt)) { allow.disabled = true; allow.setAttribute('title', 'This menu has no plain "Yes"; open the pane.'); }
+        if (!allowOnceOption(t.prompt)) { allow.disabled = true; allow.setAttribute('title', 'Mako can\'t show what this allows, or the menu has no plain "Yes"; open the pane.'); }
         btn('Deny', false, () => act('deny', t.id, sig), { 'data-action': 'deny' });
       } else {
-        t.prompt.options.forEach((o, i) => btn(o.label, i === 0, () => act('answer', t.id, sig, `opt-${o.n}`), { 'data-action': 'answer', 'data-answer': `opt-${o.n}` }));
+        for (const o of t.prompt.options) {
+          if (widens(o.label)) { actions.appendChild(h(doc, 'span', 'mk-meta', `${o.n}. ${o.label} (in the pane only)`, { 'data-widening': `opt-${o.n}` })); continue; }
+          btn(o.label, false, () => act('answer', t.id, sig, `opt-${o.n}`), { 'data-action': 'answer', 'data-answer': `opt-${o.n}` });
+        }
       }
       btn('Open pane', false, () => openPane(t.id), { 'data-action': 'openPane' });
       card.appendChild(actions);
@@ -602,7 +665,22 @@
 
       // Cards: one per pane waiting on a prompt, most urgent first.
       while (cards.firstChild) cards.removeChild(cards.firstChild);
-      for (const task of orderTasks(st.tasks)) if (task.state === 'needs' && task.prompt) cards.appendChild(promptCard(task));
+      for (const task of orderTasks(st.tasks)) {
+        if (task.state !== 'needs') continue;
+        if (task.prompt) { cards.appendChild(promptCard(task)); continue; }
+        if (task.status !== 'attention') continue;
+        // Waiting on Blue, but no menu Mako can read: say so, and offer only the pane.
+        const c = h(doc, 'article', 'mk-card', null, { 'data-task': task.id, 'data-kind': 'unreadable' });
+        c.appendChild(h(doc, 'h3', 'mk-card-title', task.title));
+        c.appendChild(h(doc, 'p', 'mk-meta', 'This pane is waiting on you, but Mako couldn\'t read a menu it can answer (prompt-unreadable). Open the pane.'));
+        const b = h(doc, 'button', 'mk-btn mk-btn-primary', 'Open pane', { type: 'button', 'data-action': 'openPane' });
+        b.addEventListener('click', () => openPane(task.id));
+        c.appendChild(b);
+        cards.appendChild(c);
+      }
+      if (st.tasks.length && st.tasks.every((x) => x.status === 'unknown')) {
+        cards.appendChild(h(doc, 'p', 'mk-meta mk-status-note', 'Pane status isn\'t reporting, so the stage can\'t show who needs you. Check "Claude status" in the control room\'s terminal bar.', { id: 'makoStatusNote' }));
+      }
       const finished = Array.from(st.history.values()).filter((x) => x.state === 'exited');
       if (finished.length) cards.appendChild(h(doc, 'p', 'mk-meta mk-finished-line', `${finished.length} finished: ${finished.slice(-4).map((x) => x.title).join(', ')}`));
       renderRight();
@@ -681,7 +759,7 @@
 
   return {
     STATE_ORDER, STATE_INFO, MAX_NODES, STALL_SILENCE_MS, STALL_FAILED_TRIES, GROUP_MODES, FROM_PANE_STATUS,
-    readPrompt, promptSignature, allowOnceOption, keysForAction, buildTask, orderTasks, mostUrgent, stageItems, layoutItems,
+    readPrompt, promptSignature, allowOnceOption, widens, keysForAction, buildTask, orderTasks, mostUrgent, stageItems, layoutItems,
     findTasks, counts, focusState, focusTask, hoverLine, createBrainStage, isFindChord,
   };
 });

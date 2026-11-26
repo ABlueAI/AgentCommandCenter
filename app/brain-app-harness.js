@@ -101,6 +101,13 @@ async function scenarioStage() {
   out.sharkStarted = await run(`!!(typeof sharkClock !== 'undefined' && sharkClock)`);
   out.sharkNoteAfter = await run(`document.getElementById('makoSharkNote').textContent`);
   if (out.sharkStarted) {
+    // What this machine's window allows: a CI desktop can report the page hidden, or never run
+    // requestAnimationFrame, and then the clock rightly draws nothing. Recorded so the test can say
+    // which case it checked.
+    out.docHidden = await run(`document.hidden`);
+    out.rafTicks = await run(`new Promise((r) => { let n = 0; const end = performance.now() + 500; const f = () => { n++; if (performance.now() < end) requestAnimationFrame(f); else r(n); }; requestAnimationFrame(f); setTimeout(() => r(n), 1500); })`);
+    // One frame drawn directly through the real renderer, whatever the window allows.
+    out.directDraw = await run(`(() => { try { sharkRenderer.draw({ state: 'thinking', t: 500, dt: 33, voice: 0, motion: true }); return 'ok'; } catch (e) { return 'threw'; } })()`);
     const f0 = await run(`sharkClock.state().frames`);
     await sleep(1000);
     const f1 = await run(`sharkClock.state().frames`);
@@ -147,6 +154,18 @@ async function scenarioStage() {
   await sleep(150);
   out.writes = ipc.ptyWrite.slice(w0);
 
+  // A second Allow once on the same prompt sends nothing (one answer per prompt).
+  const wDup = ipc.ptyWrite.length;
+  await run(`(() => { const b = document.querySelector('#makoConvoCards article[data-kind=permission] [data-action=allowOnce]'); if (b) b.click(); return true; })()`);
+  await sleep(150);
+  out.duplicateWrites = ipc.ptyWrite.slice(wDup);
+  // The pane moves on: it works, then asks a new permission for another command.
+  send('pane-status-view', { paneId: ids[0], state: 'working' });
+  await sleep(50);
+  send('pty-data', { id: ids[0], data: PERMISSION.replace(/npm test/g, 'npm run build') });
+  send('pane-status-view', { paneId: ids[0], state: 'attention' });
+  await run(`window.__t.waitFor(() => /npm run build/.test((document.querySelector('#makoConvoCards article[data-kind=permission]') || {}).textContent || ''))`);
+  out.newPermissionShown = await run(`/npm run build/.test((document.querySelector('#makoConvoCards article[data-kind=permission]') || {}).textContent || '')`);
   // A click on a node opens In focus; Deny there reaches the pane as Esc.
   await run(`document.querySelector('#makoStageField .mk-node[data-task="${ids[0]}"]').click(); true`);
   out.focusState = await run(`(() => { const c = document.querySelector('#makoBrainRight .mk-infocus'); return c ? c.getAttribute('data-state') : null; })()`);

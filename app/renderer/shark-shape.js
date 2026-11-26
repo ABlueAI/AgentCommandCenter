@@ -7,7 +7,7 @@
 //
 // It also holds the shark's clock: the four states and no others (idle, listening, thinking,
 // speaking), the frame-rate modes (30 fps by default), pause and resume, "hidden means stopped"
-// and reduced motion. The renderer (Three.js, a later step of S18) is handed to it as `draw`, so
+// and reduced motion. The renderer (shark-renderer.js, Three.js) is handed to it as `draw`, so
 // every rule here is tested in plain node without a GPU.
 //
 // Dual browser-<script> / CommonJS module; tested in plain node (shark-shape.test.js).
@@ -218,15 +218,27 @@
     const hidden = typeof d.isHidden === 'function' ? d.isHidden : () => false;
     const reduced = typeof d.prefersReducedMotion === 'function' ? d.prefersReducedMotion : () => false;
     const log = typeof d.log === 'function' ? d.log : () => {};
-    const st = { state: 'idle', mode: DEFAULT_FRAME_RATE, paused: false, frameId: null, last: null, t: 0, voice: 0, frames: 0, stateSince: now() };
+    const st = { state: 'idle', mode: DEFAULT_FRAME_RATE, paused: false, failed: false, frameId: null, last: null, t: 0, voice: 0, frames: 0, stateSince: now() };
 
+    // A frame that throws (a shader that won't compile, a lost GPU context) stops the clock and is
+    // reported once through onError, never left as a silently frozen shark.
     function drawOnce(dt) {
       st.frames += 1;
-      d.draw({ state: st.state, t: st.t, dt, voice: st.voice, motion: !reduced(), stateFor: now() - st.stateSince });
+      try {
+        d.draw({ state: st.state, t: st.t, dt, voice: st.voice, motion: !reduced(), stateFor: now() - st.stateSince });
+        return true;
+      } catch {
+        st.failed = true;
+        stop();
+        if (typeof d.onError === 'function') d.onError('draw-failed');
+        return false;
+      }
     }
+    function fail(kind) { st.failed = true; stop(); if (typeof d.onError === 'function') d.onError(kind); }
     function tick() {
       st.frameId = null;
       if (st.paused || hidden()) { st.last = null; return; }
+      if (st.failed) return;
       if (reduced()) { st.last = null; drawOnce(0); return; }
       const t = now();
       const gap = frameInterval(st.mode);
@@ -234,11 +246,11 @@
         const dt = st.last === null ? 0 : Math.min(t - st.last, 250);
         st.last = t;
         st.t += dt;
-        drawOnce(dt);
+        if (!drawOnce(dt)) return;
       }
       schedule();
     }
-    function schedule() { if (st.frameId === null && !st.paused && !hidden()) st.frameId = d.requestFrame(tick); }
+    function schedule() { if (st.frameId === null && !st.paused && !st.failed && !hidden()) st.frameId = d.requestFrame(tick); }
     function stop() { if (st.frameId !== null) { d.cancelFrame(st.frameId); st.frameId = null; } st.last = null; }
 
     function setState(next) {
@@ -258,8 +270,8 @@
     function visibilityChanged() { if (hidden()) stop(); else schedule(); }
 
     return {
-      setState, setVoiceLevel, setFrameRate, pause, resume, visibilityChanged, start: schedule,
-      state: () => ({ state: st.state, mode: st.mode, paused: st.paused, running: st.frameId !== null, frames: st.frames, voice: st.voice }),
+      setState, setVoiceLevel, setFrameRate, pause, resume, visibilityChanged, start: schedule, fail,
+      state: () => ({ state: st.state, mode: st.mode, paused: st.paused, running: st.frameId !== null, frames: st.frames, voice: st.voice, failed: !!st.failed }),
     };
   }
 
