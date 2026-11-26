@@ -108,6 +108,8 @@ for (const r of ['web-scout', 'operator', 'source-scout', 'builder']) {
   fs.writeFileSync(path.join(AGENTS, r + '.md'), src.replace('__CC_HOOK__', HOOK_FWD), 'utf8');
 }
 const SANDBOX = fs.mkdtempSync(path.join(OUTPUTS, 'web-scout-fixture-'));
+const REPO = path.join(PROJECTS, 'repo');
+fs.mkdirSync(path.join(REPO, '.git'), { recursive: true });
 
 const record = { handled: new Map(), on: new Map(), windowsCreated: 0, ptySpawns: 0, spawnArgs: [], exitHandlers: [], mainErrors: [], webContents: null };
 const ptyStub = {
@@ -208,6 +210,31 @@ Module._load = function (request) {
   const ensureOutputDir = record.handled.get('ensure-output-dir');
   const wc = record.webContents;
   const goodEvent = { sender: wc, senderFrame: wc.mainFrame };
+
+  section('PTY start-up options, pane IDs and input checks');
+  const reserve = () => record.handled.get('pty-reserve')?.(goodEvent);
+  const startShell = async (fields = {}) => {
+    const reservation = await reserve();
+    return ptyStart(goodEvent, { cwd: REPO, cols: 80, rows: 24, ...fields }, reservation?.id);
+  };
+  const shell = await startShell();
+  assert(shell.ok && JSON.stringify(record.spawnArgs.at(-1).args) === JSON.stringify(['-NoLogo', '-NoProfile']),
+    '#262: PowerShell receives only the fixed default start-up options');
+  const foreign = await startShell({ cwd: HOME });
+  assert(!foreign.ok, '#262: an existing but unauthorized directory is refused');
+  assert(typeof shell.id === 'string' && shell.id !== (await startShell()).id,
+    '#263: main issues distinct pane IDs');
+  const logsBeforeKill = record.mainErrors.length;
+  record.on.get('pty-kill')(goodEvent, 'unknown-pane');
+  assert(record.mainErrors.length > logsBeforeKill, '#263: closing an unknown pane is refused visibly');
+  assert(!(await startShell({ id: 'renderer-pane' })).ok, '#263: a renderer ID in launch options is refused');
+  assert(!(await startShell({ cols: 100000 })).ok, '#268: excessive dimensions are refused at start');
+  assert(!(await startShell({ extra: true })).ok, '#268: unknown launch fields are refused');
+  const logsBeforeInput = record.mainErrors.length;
+  record.on.get('pty-write')(goodEvent, { id: shell.id, data: 'x'.repeat(65537) });
+  record.on.get('pty-resize')(goodEvent, { id: shell.id, cols: 80, rows: -1 });
+  assert(record.mainErrors.length >= logsBeforeInput + 2, '#268: oversized writes and invalid resizes are refused visibly');
+  record.ptySpawns = 0;
 
   section('PRECONDITIONS');
   assert(typeof ptyStart === 'function', 'the real main.js registered a pty-start handler');
