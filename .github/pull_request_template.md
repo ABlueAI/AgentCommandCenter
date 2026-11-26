@@ -19,7 +19,7 @@ words. Start each bullet with 🔴 must know or decide before merging, 🟡 wort
 
 - **What and why:**
 - **Ready to merge:** yes / no (why)
-- **Needs your decision:** none / (the question, with a recommendation)
+- **Needs your decision:** none / (only what AGENTS.md "Deciding without asking" keeps for Blue: the question, with a recommendation; anything else is a 🤖 decision above)
 - **Uncertainty to check:** none / (what is not certain, and how to check it in under 2 minutes)
 - **Plan change:** none / (what changed; PLAN-1.1.md and DECISIONS.md updated in this PR)
 - **Sensitive:** no / yes (credentials, process control, payments, client data, network listeners, CI or repo settings)
