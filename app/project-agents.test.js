@@ -355,7 +355,7 @@ if (sharedBlocks.length > 0) {
     'step 4: the builder takes the best option after 3 failed CI rounds');
   assert(flat.includes('The option never skips, loosens or removes a test, a check or a workflow step') && flat.includes('`NOT READY: CI failing after 4 rounds (<diagnosis>)`'),
     'step 4: the chosen option never weakens a test, and one more failed round ends visibly');
-  assert(flat.includes('the PR stays a draft as `NOT READY: review not run (<reason>)` until a later session (or the PR sweeper) runs it. Never skip it.'),
+  assert(flat.includes('the PR stays a draft as `NOT READY: review not run (<reason>)` until a later session runs it (for a runner PR, the runner\'s next fire, docs/RUNNER.md step 5a). Never skip it.'),
     'step 3: a review that can\'t run keeps the PR a draft and is never skipped');
   assert(flat.includes('"NOT READY: PR sweeper not running", clears the wait itself as docs/SWEEPER.md Job B says if the PR is its own') && !flat.includes('and Blue tells a session "clear the wait on #N"'),
     'step 5: a session clears a stale wait itself');

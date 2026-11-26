@@ -89,7 +89,8 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      loaded, ask Claude to list its subagents, since Claude Code 2.1.329 removed the `/agents`
      screen), run a fresh Opus agent with read tools only and the body of `pr-reviewer.md` as its instructions, and say so in
      the comment and the TLDR. If neither is possible, the PR stays a draft as
-     `NOT READY: review not run (<reason>)` until a later session (or the PR sweeper) runs it.
+     `NOT READY: review not run (<reason>)` until a later session runs it (for a runner PR, the
+     runner's next fire, docs/RUNNER.md step 5a).
      Never skip it.
    - If the builder can't run `pr-reviewer` itself (Codex), a Claude cloud session runs it (and the
      pre-ready reviewers below) on the builder's PR the same way and posts it under the agent account

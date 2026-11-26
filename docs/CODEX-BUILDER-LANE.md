@@ -89,8 +89,8 @@ minutes during the trial (checklist step 30).
    itself instead; Blue, 2026-11-23, docs/DECISIONS.md; docs/SWEEPER.md defines the term). If that
    comment or a fix request gets no push within a day, or Codex says it can't push, a Claude cloud
    session whose own prompt allows pushing to a `codex/` branch merges `main` or makes the fix
-   itself, in one push with an Opus delta run, and says so in the PR, instead of asking Blue (Blue,
-   2026-11-25, D-090); while no such session has done so (the runner and the PR sweeper may not,
+   itself, in one push with an Opus delta run, and says so in the PR, instead of asking Blue (builder's
+   reading of D-090; docs/DECISIONS.md, 2026-11-25); while no such session has done so (the runner and the PR sweeper may not,
    until their files say so), the PR goes to NEEDS BLUE. Claude otherwise never pushes to a
    `codex/` branch without Blue asking (AGENTS.md "Who does what"; he has asked for security
    findings, above). PR #49's
