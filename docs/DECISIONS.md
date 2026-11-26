@@ -61,6 +61,15 @@ reading" marks a line that is the builder's, not Blue's.
 | **Security findings on a Codex PR are fixed by the reviewing Claude session:** when a run has one, that session fixes all the run's high and medium findings on Codex's branch in one push with its own Opus delta run, and posts no fix request for that run; its commits, comments and the review give a security finding's title and severity only (hard rule 6). It goes to NEEDS BLUE instead for a CRITICAL finding (nobody pushes until Blue answers), a PR that changes `.claude/`, or a reviewing session whose prompt forbids pushing to `codex/` (the runner and the PR sweeper, until their prompts carry this), and when the push doesn't clear the finding. Builder's proposal, which merging approves as Blue's ask under AGENTS.md "Claude never pushes to a `codex/` branch unless Blue asks". Replaces the entry below's "Blue gives Codex the details privately". Builder's reading: it keeps security details out of public text without making Blue a relay. | — (builder's proposal for "prevent misuse"; merging approves it) |
 | **Unchanged:** every Codex PR gets Claude's Opus review, `security-reviewer` on run 1 when it touches a sensitive area, and Codex's pass; the review loop, run caps, merge order, every hard rule and Blue's merge (CODEOWNERS) still apply. | — |
 
+## 2026-11-25: the command palette's OSS verdict (S66)
+
+Blue replied on PR #283 (comment by `ABlueAI`, 2026-11-25, not edited) to that PR's request for the
+palette's OSS verdict. Recorded word for word in `docs/decisions/OSS-command-palette.md`.
+
+| Decision | Blue's words |
+|---|---|
+| **BUILD FRESH** for the Ctrl K palette, on the WAI-ARIA combobox pattern, as PR #283 builds it (no new dependency). | "Build fresh on the comobox pattern as built" |
+
 ## 2026-11-25: Codex may build sensitive items too
 
 Blue decided this in his main chat on 2026-11-25, with unused Codex usage (several ChatGPT Plus
