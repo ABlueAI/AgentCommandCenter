@@ -1347,6 +1347,24 @@ open PRs (#253 and #254).
   - *Done when:* the commander has run on H1 for one full day and its evening merge list reached
     you; tell any agent "step 80 done" and it ticks this with the date.
 
+## From your open-source verdicts (2026-11-25)
+
+Step 85 comes from PR #PRNUM (docs/DECISIONS.md, 2026-11-25). Step numbers 81, 83 and 84 belong to
+open PRs (#283, #286 and #287).
+
+- [ ] **85. Start the claude-security trial scan (S70).** **About an afternoon** of the session's
+  time (your words, 2026-11-25: "an afternoon is fin"), with you there at the start and the end;
+  any day once S68 (the SkillSpector re-pin) is merged.
+  - Start a Claude cloud session on this repository and ask it to run S70 by the setup checklist
+    in docs/PLAN-1.1.md, "S68 to S72 details". Say in that request that you accept the cost up
+    front (checklist item 7).
+  - Stay for the report: the session hands you the report and the SARIF file in the session. Save
+    both in your private vault, never in this repository. A CRITICAL finding is told to you at
+    once.
+  - *Done when:* the session's PR records the plugin pin, usage and wall time, and whether the
+    plugin was uninstalled or left disabled, with each finding's title and severity only; you
+    tell any agent "step 85 done" and it ticks this with the date and how it checked.
+
 ## Coming up this month (the runner will ask when it gets there)
 
 You can start on the first one now, which saves time later.
@@ -1388,7 +1406,13 @@ You can start on the first one now, which saves time later.
   FRESH) in your own words to any agent.
   - *Done when:* your verdict is in the record's "Blue's verdict" line, word for word, and the agent
     ticks this with the date.
-- [ ] **82. Your verdicts on S45's ECC skill list (PR #255).** **About 15 minutes** for the nine top
+- [x] **82. Your verdicts on S45's ECC skill list (PR #255).** *Done 2026-11-25: Blue's verdicts
+  given in a desktop session; recorded here (PR #PRNUM), in every row's last column of
+  `docs/decisions/OSS-ecc.md` (all 314: 5 yes and 4 no among the nine top picks, and the other 305
+  as proposed). Your words: "Step 82: ECC skills - proceed with all of your recommendations. i
+  agree, thanks", and "yes" to the other 305. Checked from your words as the desktop session's
+  hand-off relayed them (the recording session can't see that chat); docs/DECISIONS.md,
+  2026-11-25.* **About 15 minutes** for the nine top
   picks, longer if you go through all 314 rows; any time after PR #255 merges, before a plan row
   takes any of them up. Read `docs/decisions/OSS-ecc.md`, "ECC's other skills (S45)": each skill
   has a proposed verdict and a blank last column. Give your verdict per skill (ADOPT, FORK,

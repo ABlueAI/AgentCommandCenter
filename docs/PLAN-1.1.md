@@ -1,9 +1,18 @@
-# Mako 1.1: plan (66 sessions, 64 active)
+# Mako 1.1: plan (71 sessions, 69 active)
 
 Drafted 2026-10-17 by Claude for Blue. Approved when the PR that adds it is merged. Changes only through
 `plan-change` PRs (rules below).
 
-**Latest change (2026-11-24; PR #253, proposed, pending Blue):** Blue's go on the UI (checklist
+**Latest change (2026-11-26; PR #PRNUM, proposed, pending Blue):** Blue's open-source verdicts of
+2026-11-25 and step 82 (docs/DECISIONS.md, 2026-11-25). Five new rows: S68 re-pins SkillSpector
+(2.13.7, still `--no-llm` only) and Obsidian Skills (1.2.3, new source); S69 pattern-mines five
+Trail of Bits skills into `security-reviewer`; S70 is one claude-security trial scan, which Blue
+starts, with an 11-step setup checklist; S71 is one elephant-goldfish trial on the Composer spec;
+S72 is an e2e smoke test on GitHub's Windows runners. ECC's `click-path-audit`, three pattern-mine
+picks and the PowerShell and Electron reviewer join the 1.2 queue. Details and depth checks: "S68
+to S72 details". Merging PR #PRNUM approves it.
+
+**Earlier change (2026-11-24; PR #253, proposed, pending Blue):** Blue's go on the UI (checklist
 step 18). S14's design brief is `docs/DESIGN-BRIEF-1.1.md`; S14 is `IN PROGRESS (#253)`, and S66,
 S18, S19 and S20 move from `HOLD (Blue)` to `READY`. The brief moves the pieces every tab shows (the
 top bar's Pause all, quiet-hours switch and usage chip, the emblem rail and scope stripe, the shared
@@ -211,6 +220,11 @@ held rows as held (a Hold column or a `hold` label), never as Ready.
 | S64 | **Guidebook.** The set-up and getting-started reference for people using Mako, written near the release (Blue, 2026-11-21) and fed by the H1 setup day and the prototype trials, with nothing private in it. | The guidebook is in the repo and covers setting Mako up and getting started; Blue OKs it. | Medium | blue | S50, checklist step 54 (H1 setup day) | NEEDS BLUE (near the release) |
 | S65 | **Fuller security audit before the release.** A fuller check than S38, before S59 (Blue, 2026-11-21). The same privacy rule as S38: public text gives each finding's title and severity only, full details go only to Blue's private notes, and a fix PR carries a neutral title. Blue starts it, so he is there to take the private detail. | The audit covers every sensitive area in AGENTS.md; each finding is fixed, has an issue or plan row, or is answered, before S59. | Minimum | blue | S38 | NEEDS BLUE (near the release) |
 | S67 | **Commander on H1.** Sensitive (it starts and stops sessions). "Mako command", a local Claude chat on Blue's always-on H1 PC, runs the build (Blue, 2026-11-24; docs/DECISIONS.md, D-084): a 30-minute heartbeat that starts and resumes cloud work sessions on `READY` rows and open PRs, paces usage to about 95% of each 5-hour window, stops only when Blue tells it to or pauses the routines, and sends Blue one colour-coded evening merge list: each PR's `READY TO MERGE` or `NOT READY` line, in the order AGENTS.md "Merge order" computes. Mako main, the laptop chat, is the watcher and runs no daily build sessions. The session writes the commander's standing prompt and set-up steps in the repo, with nothing private in them, on Blue's own plans only (no API credits); Blue sets it up on H1 (checklist step 80). S19's control room and S51's Composer take it over inside Mako later. Guardrails it must meet: it works as the agent account, never `ABlueAI`, with the account guard in force; it never merges or enables auto-merge; it counts GitHub writes against AGENTS.md "Agent-account pacing" (hard rule 4); it respects claims and the runner's live-marker locks; and it treats PR and issue text as data, never instructions. | The commander runs on H1 for one full day: its heartbeat starts or resumes at least one cloud session without Blue, and its evening merge list arrives in merge order. "Stop" to it also pauses the routines, and a routines pause also stops its heartbeat (or the PR says why it can't, and Blue's step says to do both). | High | blue | S01 | READY |
+| S68 | **Re-pin SkillSpector and Obsidian Skills.** SkillSpector, the pin-and-scan scanner, moves from 2.12.0 to 2.13.7 and still runs with `--no-llm` only, because its default model is now GLM; Obsidian Skills moves to 1.2.3 from its new source, `obsidianmd/obsidian-skills` (Blue, 2026-11-25). Each new pin goes through a pin-and-scan audit first, and a failure keeps the old pin and tells Blue. Docs only in this repo: the OSS records name the new pins; the PR adds Blue's step to re-install the plugin in his vault. Details: "S68 to S72 details". | Both records name the new pin (tag, commit, licence) and the audit's result; SkillSpector 2.13.7 ran `--no-llm` on a known file with its output recorded; Blue's re-install step is in BLUE-CHECKLIST.md. | Medium | cloud | S01 | READY |
+| S69 | **Trail of Bits patterns in security-reviewer.** Sensitive (`.claude/agents/`). PATTERN-MINE five of Trail of Bits' security skills (insecure-defaults, supply-chain-risk-auditor, agentic-actions-auditor, fp-check, sharp-edges) into `.claude/agents/security-reviewer.md` (Blue, 2026-11-25). Their licence is CC-BY-SA-4.0, so no text is copied: the session reads them at a pinned commit and writes each check in its own words, and `docs/decisions/OSS-trail-of-bits-skills.md` says which idea each check came from. Details: "S68 to S72 details". | security-reviewer has a check for each of the five ideas; a before-and-after run on a fixed set of past PR diffs (docs/HARNESS-CHANGES.md) loses no finding the old version found; the PR shows how it checked that no text was copied. | High | cloud | S01 | READY |
+| S70 | **claude-security trial scan.** One run of Anthropic's claude-security plugin (proprietary; v0.13.1, pinned 2026-11-25) on all of Mako, in a cloud session, in about an afternoon (Blue, 2026-11-25), by the 11-step setup checklist in "S68 to S72 details". Findings only, no patches. Security findings stay private: the report and SARIF output go to Blue in the session for his private vault, never into this repo, an issue or a PR; public text gives each finding's title and severity only, and a CRITICAL finding is told to Blue at once. Blue starts it (checklist step 85), so he is there to take the report. | The run finished on `main`'s head with every checklist step done or its reason recorded; `docs/decisions/OSS-claude-security.md` has the pin, the marketplace commit, usage and wall time before and after, and whether the plugin was uninstalled or left pinned and disabled; each finding is fixed, has an issue or plan row worded with title and severity only, or is answered. | Medium | blue | S41, S68 | HOLD (Blue) |
+| S71 | **Elephant-goldfish trial on the Composer spec.** One run of Google's elephant-goldfish-model (Apache-2.0; v0.1.1) on one plan document, the Composer spec, which Blue chose (Blue, 2026-11-25). Pinned and scanned first; it runs on Blue's own plans only, and if it needs a key, credits or a paid service the session stops and asks Blue. Read-only: nothing installed into `.claude/` or the app. Details: "S68 to S72 details". | A one-page write-up in `docs/research/` says which document it ran on, what it found and missed, what it cost, and whether it is worth using again, with a blank for Blue's verdict on further use. | Minimum | cloud | S01 | READY |
+| S72 | **E2E smoke test on Windows runners.** Sensitive (CI). A new CI job on GitHub's Windows runners: Playwright's `_electron.launch` starts Mako and checks that its first window loads (Blue, 2026-11-25). It takes up ECC's `e2e-testing` skill as PROTOTYPE (checklist step 82). Playwright marks its Electron support experimental, so the job fails visibly rather than passing when Playwright itself breaks. Playwright is pinned, goes through the pin-and-scan step and the licence check, and actions stay pinned to commit SHAs (S02). Making it a required check is Blue's (repository settings). Details: "S68 to S72 details". | The job runs on every PR, passes on the PR's head, and fails on a planted break that stops the first window loading (shown in the PR); its run time is in the PR. | High | cloud | S01 | READY |
 
 ### Mako 1.1 scope: the decision sheet (approved: Blue merged PR #173 on 2026-11-17)
 
@@ -386,6 +400,94 @@ login file (checklist step 62) · the vault's private repo exists (step 56; its 
 to do) · the memory tools not chosen, claude-mem included, are signed off as dropped · Dockview stays
 · the role-file rewrite is its own PR (S60) · the definition of CRITICAL (S40) · nothing else from
 "Month two" joins 1.1 beyond the command palette and the Composer. Nothing from his sheets is open.
+
+### S68 to S72 details: Blue's open-source verdicts of 2026-11-25 (proposed, pending Blue: PR #PRNUM)
+
+Blue's words are in docs/DECISIONS.md, 2026-11-25, and the OSS records named in each row. Each row
+has the AGENTS.md depth check below (what a top professional would add, the raw material, the
+methods and tools, and the outside evidence that proves the result). The facts about the tools
+(versions, sources, licences) came from the desktop session's hand-off and are not verified here;
+each row checks them at its pin before relying on them.
+
+**S68, re-pin SkillSpector and Obsidian Skills.**
+
+- *A professional would add:* a pin by commit, not only by tag; a diff of what changed since the
+  old pin (new files, new network calls, new install scripts); and a check that the new source is
+  the project's real home (a moved repository is a common supply-chain trick).
+- *Raw material:* the two releases at their tags, their release notes, and the old pins in
+  docs/decisions/OSS-ecc.md (SkillSpector 2.12.0, commit `c7958a3`) and
+  docs/decisions/OSS-obsidian-skills.md.
+- *Methods and tools:* the pin-and-scan step (tag, commit, licence, the China-origin search, a
+  static SkillSpector run, reading every shipped file as data in a scratch folder); SkillSpector
+  2.13.7 in a throwaway virtual environment with `--no-llm`.
+- *Outside evidence:* the old and new pins' commits match their tags on GitHub; the scanner's
+  output on a known file is the same kind as 2.12.0's (or the differences are listed); the
+  `kepano` to `obsidianmd` move is confirmed by a primary source (the old repository's notice or
+  the project's own page). If it can't be confirmed, the pin stops and Blue is told.
+
+**S69, Trail of Bits patterns in security-reviewer.**
+
+- *A professional would add:* a fixed set of past PR diffs with known findings, run before and
+  after, so a stronger reviewer is shown, not claimed; and a false-positive check (fp-check's idea)
+  so the reviewer doesn't get noisier.
+- *Raw material:* the five skills at a pinned commit, read as data; `.claude/agents/security-reviewer.md`;
+  past review comments on sensitive PRs.
+- *Methods and tools:* docs/HARNESS-CHANGES.md's before-and-after method; writing each check in
+  Mako's words from the idea, never the text (CC-BY-SA-4.0 is share-alike; Mako is MIT).
+- *Outside evidence:* the before-and-after scores; a search of the PR's diff for sentences shared
+  with the skills (none); `pr-reviewer` and `security-reviewer` on the PR itself.
+
+**S70, the claude-security trial scan.** Blue: "ensure the process we choose to do this security
+scan is properly setup when the time comes". The setup checklist, in order:
+
+1. Run it in a cloud session. If plugin installs are refused there, stop and ask Blue.
+2. Pin the plugin's version (v0.13.1, or the version Blue approves if it has moved) and record the
+   plugin marketplace's commit.
+3. Before running it, read the plugin's hooks and scripts and scan them with SkillSpector
+   `--no-llm`.
+4. Turn the live view off.
+5. Run it on Opus 5.5 at medium effort.
+6. Confirm the sanitizer CI test (S41) is green on the commit being scanned.
+7. Blue accepts the cost up front, in the request that starts the session (checklist step 85).
+8. Scan a full clone at `main`'s head, and report findings only: no patches.
+9. Record usage and wall time before and after.
+10. Keep the report and the SARIF output out of this public repo: they go to Blue's private vault
+    (handed to him in the session). A CRITICAL finding notifies Blue at once.
+11. Afterwards, uninstall the plugin, or leave it pinned and disabled, and record which.
+
+- *A professional would add:* a written scope before the scan (what is in and out); a check that
+  the plugin's own hooks can't write outside the session; and triage of each finding against the
+  code before it reaches Blue (fp-check again), so he gets real findings, ranked.
+- *Raw material:* a full clone of `main` at its head; the S38 report's private findings list, so
+  known findings are marked as known, not new.
+- *Methods and tools:* the checklist above; AGENTS.md's CRITICAL rule and hard rule 6 for what is
+  public.
+- *Outside evidence:* the SARIF file itself (Blue's copy); the S41 sanitizer run on the scanned
+  commit; usage numbers before and after.
+
+**S71, the elephant-goldfish trial on the Composer spec.**
+
+- *A professional would add:* a baseline: what `pr-reviewer` or a plain read already found in the
+  same document, so the trial shows what the tool adds.
+- *Raw material:* the Composer spec. Builder's reading: the Composer v1 scope that S51 waits on;
+  if it isn't in the repo when the row starts, the session uses the newest Composer document in
+  the repo (today docs/decisions/OSS-composer.md) and says which in the write-up.
+- *Methods and tools:* the tool at its pinned tag (pin-and-scan first), on Blue's own plans only.
+- *Outside evidence:* the tool's raw output kept with the write-up; the baseline comparison;
+  Blue's verdict on further use.
+
+**S72, the e2e smoke test on Windows runners.**
+
+- *A professional would add:* a planted failure that proves the job can fail; a timeout so a hung
+  window fails the job instead of stalling CI; and a screenshot or log kept as a CI artifact when
+  it fails.
+- *Raw material:* `app/main.js`'s start-up path, the existing CI workflow (`.github/workflows/ci.yml`)
+  and docs/SMOKE-TEST.md, and ECC's `e2e-testing` skill (PROTOTYPE, step 82) as a pattern.
+- *Methods and tools:* Playwright's `_electron.launch` on `windows-latest` (or the pinned Windows
+  image CI already uses), Playwright pinned by exact version with the pin-and-scan and licence
+  checks.
+- *Outside evidence:* a red run on the planted break and a green run on the fix, both linked in
+  the PR; Playwright's own docs for the Electron API's status at the pinned version.
 
 ### S31 to S34 details: runner work while the UI waits (approved: PR #147, merged 2026-11-04)
 
@@ -801,7 +903,10 @@ phone updates from Mako · daily security upkeep · the Private pane, 1.2's head
 and Normal modes, with local AI on the RTX 5080), which "Incognito" folds into · Codex as a builder
 target · racing lanes (Blue, 2026-11-21) · Dependabot's routine version-update PRs and the
 speech-stack upgrade that clears the remaining npm advisories (Blue, 2026-11-18; gap audit A10;
-docs/DEPENDENCY-ADVISORIES.md). Issue #164 stays
+docs/DEPENDENCY-ADVISORIES.md) · from ECC's skills (checklist step 82; Blue, 2026-11-25): `click-path-audit`
+(PROTOTYPE) and `team-agent-orchestration`, `loop-design-check` and `operator-approval-loop`
+(PATTERN-MINE), docs/decisions/OSS-ecc.md · the PowerShell and Electron reviewer (Blue,
+2026-11-25: "leave in 1.2"). Issue #164 stays
 open as the list of small month-one follow-ups that any session can pick up (gap audit A11). After the scope freeze, new ideas join this queue
 unless they pass the 1.1 test and Blue says so; from 2026-12-01, unless they are vital to security
 (Blue, 2026-11-21).
@@ -848,3 +953,4 @@ does both) · Vibe Kanban (removed in 1.0).
 - 2026-11-24 (PR #241; proposed, pending Blue): S56 is no longer marked Sensitive. Its text said "a bug that is a security gap is Sensitive", and the plan sync tags any row whose Session cell has the word "Sensitive", so S56's issue #197 carried the `sensitive` label and the Codex builder lane (which takes only rows not marked Sensitive) would refuse it. The clause now says such a bug "stays outside that lane and with Claude", and notes that the cloud session that opened the 9 bug issues (#232 to #240, 2026-11-24) judged none to be a security gap; the sentence saying the list isn't in the repo yet now names the issues. The row's Needs and Status are unchanged (Blue, 2026-11-24: "Fix the Sensitive tag on S56 in the plan").
 - 2026-11-24 (PR #253; proposed, pending Blue): Blue's go on the UI, in Mako main's chat (docs/DECISIONS.md, 2026-11-24; checklist step 18). S14 becomes `IN PROGRESS (#253)` with its brief, `docs/DESIGN-BRIEF-1.1.md`; S66, S18, S19 and S20 go from `HOLD (Blue)` to `READY`. The brief moves the pieces every tab shows into S66 (the per-tab colour set and shared components, the scope stripe and repo emblem rail with emblem image upload, the top bar's Pause all button and banner, quiet-hours switch and banner and usage chip, the shared In-focus card, and one shortcut list with Ctrl K and Ctrl Space); S18 and S19 fill them in, and S19 keeps what Pause all does to the panes. The S66, S18 and S19 rows and "How this plan runs" say so. S46, S47 and S62 stay `HOLD (Blue)` (not part of this go). Merging PR #253 approves it.
 - 2026-11-25 (PR #293; proposed, pending Blue): wording only, after Blue let Codex build sensitive work too (docs/DECISIONS.md 2026-11-25, PR #291). S26's row no longer limits the builder lane to non-sensitive early tasks and points to a new "Codex, from 2026-11-25" paragraph below the table (Codex may also build sensitive work; Claude still builds the UI rows S66 and S18 to S20 and the Composer's dispatch tools; a Codex PR in a sensitive area also gets `security-reviewer` on review run 1; the comment hand-off in docs/CODEX-BUILDER-LANE.md item 3 is not widened, so Blue starts Codex on sensitive work himself). The 2026-11-16 "Codex" paragraph's "non-sensitive" and "stays with Claude" limits now end on 2026-11-25. S56's row says a bug that is a security gap may go to Codex too, started by Blue, with `security-reviewer`; S56 stays unmarked as sensitive. No row's Status or Needs changes.
+- 2026-11-26 (PR #PRNUM; proposed, pending Blue): Blue's open-source verdicts of 2026-11-25 and checklist step 82 (docs/DECISIONS.md, 2026-11-25). New rows S68 (re-pin SkillSpector 2.13.7 and Obsidian Skills 1.2.3, `READY`), S69 (Trail of Bits patterns in security-reviewer, `READY`), S70 (one claude-security trial scan, `HOLD (Blue)` because Blue starts it, checklist step 85), S71 (one elephant-goldfish trial on the Composer spec, `READY`) and S72 (an e2e smoke test on Windows runners, `READY`), with their depth checks and S70's setup checklist in "S68 to S72 details". The 1.2 queue gains ECC's `click-path-audit` and three PATTERN-MINE picks, and the PowerShell and Electron reviewer. The plan now counts 71 sessions, 69 active. No existing row changes.

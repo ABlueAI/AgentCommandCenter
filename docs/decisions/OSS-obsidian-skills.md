@@ -41,3 +41,20 @@ option was searched for.
 - Not covered: cloud sessions can't reach a folder on Blue's PC, so only local agents read and
   update the vault. A private GitHub repository for the vault would change that; it isn't part of
   S13.
+
+## Update: version 1.2.3 and the new source (2026-11-25)
+
+Blue, word for word (2026-11-25, in a desktop research session; quoted as that session's hand-off
+relayed it): "Update Obsidian Skills to 1.2.3".
+
+- **Version:** 1.2.3.
+- **Source:** the project moved from `kepano/obsidian-skills` to `obsidianmd/obsidian-skills`
+  (from the hand-off; not verified here). The install path above
+  (`/plugin marketplace add kepano/obsidian-skills`) becomes the new source's once S68 confirms it.
+- **The ADOPT verdict stands;** only the version and source change (docs/DECISIONS.md,
+  2026-11-25).
+- **Before it is installed:** S68 (docs/PLAN-1.1.md) runs the pin-and-scan step on 1.2.3: tag,
+  commit, licence (still MIT?), the China-origin check, a static SkillSpector run (`--no-llm`), and
+  a read of every file the plugin ships. It records the result here. If anything fails, the old
+  install stays and Blue is told. Blue then re-installs the plugin in his vault from the new source
+  (the checklist step S68 adds).
