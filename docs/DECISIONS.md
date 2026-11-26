@@ -220,6 +220,18 @@ the "unless Blue asks" the 2026-10-23 Codex builder lane (PR #114) left open.
 | **1. Claude cloud sessions, as `ABlueAgent`, may push review fixes and `main` merges to Codex's docs-only record PRs,** one fixer per PR at a time. Builder's reading: a docs-only record PR is a `codex/` PR whose changed files are all Markdown, none under `.claude/`, `.github/` or `agent-roles/` and none of `AGENTS.md`, `CLAUDE.md`, docs/SWEEPER.md or docs/RUNNER.md (sensitive areas and routine instructions, which Blue's "record PRs" doesn't cover). This is the "unless Blue asks" in AGENTS.md "Who does what"; Codex's other PRs keep the old rule (fix requests, never pushes). Builder's reading: the sweeper prompt in docs/SWEEPER.md calls this decision "D-058". | "Let Claude cloud sessions push review fixes to Codex's record PRs - id love to do that". And: "Please merge main into 206 and 208, then run review 3 or 4" |
 | **2. The PR sweeper.** (a) A Claude routine, the "Mako PR sweeper", fires on every push to `main` plus hourly; merges `main` into any open agent PR or Codex docs-only record PR that conflicts; opens draft PRs for pushed `codex/` branches that have none and runs their review run 1; and never merges into `main`. (b) PRs stop editing `STATUS.md`; the sweeper keeps it current (docs/SWEEPER.md, Job D). Its instructions are docs/SWEEPER.md. | "slow and manual. this should not happen this way. conflicts should be immediately resolved." Then, asked "Set up the merge-triggered sweeper and stop PRs editing STATUS.md?": "Yes to both" |
 
+## 2026-11-23: AgentPlayback verdict (S53)
+
+Blue's verdict on the S53 OSS record (PR #208), recorded in [the
+record](decisions/OSS-agentplayback.md#blues-verdict-word-for-word) and checklist step 67. His words
+are as quoted in the Mako main session's hand-off to the Claude cloud session that pushed the review
+fixes ([session](https://claude.ai/code/session_01UWhuMF5YrgU1ojPL6DN1Q1)). Builder's reading: "both
+of those recommendations" are the S52 and S53 recommendations; S52's verdict is recorded in PR #206.
+
+| Decision | Blue's words |
+|---|---|
+| **S53 AgentPlayback: PATTERN-MINE.** Take the idea of a local, read-only replay of what each agent did; use none of its code. S53 closes with no build. Any replay work goes to S19 or S62, under their existing waits. Blue adopted Mako main's recommendation; the builder's original recommendation was BUILD FRESH. | 2026-11-18, in his main chat: "I think your recommendation verdicts are very good. So, yes to both of those recommendations." Reconfirmed 2026-11-23: "pattern mine". |
+
 ## 2026-11-23: Blue's answers on the 1.1 schedule (S61)
 
 Blue answered the 1.1 schedule's open decisions in his main chat, and approved its text to go
