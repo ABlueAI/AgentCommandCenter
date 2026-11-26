@@ -481,6 +481,16 @@ function openInAppTerminal(opts = {}) {
   // Build the pane with safe DOM APIs (agent-dom.js): `label` and `worktree` derive from git
   // worktree metadata and must never be interpolated into innerHTML (AUDIT-REPORT.md finding #1).
   const pane = agentDom.buildTermPane(document, { badge, label, worktreeTitle: worktree || '', openReport: role === 'video-scout' && !claudeVideoScout });
+  // S19: the header's branch and authority tags (pane-header.js). The authority is the level this
+  // launch sends to pty-start below; the branch is from the worktree list (text only).
+  if (window.ccPaneHeader) {
+    const wt = worktree ? state.worktrees.find((w) => w.path === worktree) : null;
+    window.ccPaneHeader.mountTags(document, pane.querySelector('.term-head'), window.ccPaneHeader.describeTags({
+      cli, readOnly: role ? ROLES[role].readOnly === true : false, authority: state.authority, branch: wt && wt.branch ? wt.branch : '',
+    }));
+  } else {
+    appendLog('[pane-header] pane-header.js is missing; the header shows no branch or authority\n');
+  }
   $('#terminalGrid').appendChild(pane);
   const term = new Terminal({ theme: xtermTheme(), fontFamily: "'Cascadia Code','Consolas',monospace", fontSize: 13, cursorBlink: true, allowProposedApi: true, scrollback: 5000 });
   const fit = new FitAddon.FitAddon();

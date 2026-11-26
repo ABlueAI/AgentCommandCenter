@@ -202,6 +202,7 @@ process.stdout.write('\nS19: what Pause all does to the panes (counted at the IP
 const pa = S.pauseAll || {};
 assert(pa.pauseEnabled === true, 'the Pause all button is enabled');
 eq(pa.started, 2, 'two panes started');
+eq(pa.headerTags, [], 'S19: a plain shell pane carries no branch or authority tag');
 eq(pa.escWrites, [[pa.working, '\u001b']], 'Pause all sends exactly one Esc, to the working pane only');
 eq(pa.otherWrites, 0, 'and writes nothing else');
 eq(pa.kills, [], 'nothing is killed');

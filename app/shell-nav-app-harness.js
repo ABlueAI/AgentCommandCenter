@@ -467,6 +467,7 @@ async function scenarioPauseAll() {
     const end = Date.now() + 10000;
     while (ipc.ptyIds.length < 2 && Date.now() < end) await new Promise((r) => setTimeout(r, 50));
     out.started = ipc.ptyIds.length;
+    out.headerTags = await run(`Array.from(terms.get(${JSON.stringify('pty1')}) ? terms.get('pty1').pane.querySelectorAll('.term-head .pane-tag') : []).map((n) => n.textContent)`);
     const [working, waiting] = ipc.ptyIds;
     // Resend until the renderer has the views (it may still be wiring listeners).
     for (let i = 0; i < 40; i += 1) {

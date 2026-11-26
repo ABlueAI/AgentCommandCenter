@@ -532,6 +532,11 @@ input:focus { outline: none; border-color: var(--accent); }
 .stall-stalled { color: var(--mk-status-needs, #ff6b6b); border: 1px solid currentColor; }
 .stall-usage-wait { color: var(--mk-composer-ink, #f0c060); border: 1px solid currentColor; }
 
+/* S19: the pane header's branch and authority tags. */
+.pane-tag { padding: 0 6px; border-radius: 4px; border: 1px solid var(--mk-line, var(--border)); color: var(--mk-ink-muted, var(--muted)); font: 500 11px/16px var(--mk-mono, monospace); white-space: nowrap; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; }
+.auth-high { color: var(--mk-composer-ink, #f0c060); }
+.auth-unknown { color: var(--mk-status-needs, #ff6b6b); }
+
 /* S19: the cheat sheet. */
 .cheat-sheet-host { display: inline-flex; }
 .mk-cheat-open { min-width: 28px; padding: 2px 8px; font-weight: 600; }
