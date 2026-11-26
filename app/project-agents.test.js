@@ -491,5 +491,35 @@ if (sharedBlocks.length > 0) {
   }
 }
 
+// S69: security-reviewer's five deeper checks, written fresh from five Trail of Bits skill ideas
+// (PATTERN-MINE; CC-BY-SA-4.0 text is never copied). Pins each check, check E's "never drop a
+// possible security gap silently", and the record that says which idea each check came from.
+{
+  const text = fs.readFileSync(path.join(agentsDir, 'security-reviewer.md'), 'utf8').replace(/\r\n/g, '\n');
+  const section = (text.match(/\n## Five deeper checks \(S69\)\n[\s\S]*?(?=\n## )/) || [''])[0];
+  assert(section !== '', 'security-reviewer has the "Five deeper checks (S69)" section');
+  const CHECKS = [
+    '### A. What happens when a value is missing',
+    '### B. How easy it is to use wrongly',
+    '### C. Agents steered by text they read',
+    '### D. Dependencies and other outside code',
+    '### E. Test each finding before you report it',
+  ];
+  for (const h of CHECKS) assert(section.includes('\n' + h + '\n'), `security-reviewer keeps check "${h.slice(4)}"`);
+  assert(section.includes('docs/decisions/OSS-trail-of-bits-skills.md') && section.includes('CC-BY-SA-4.0'),
+    'the section names its record and the licence it must not copy from');
+  assert(section.includes('never drop a possible security gap without saying so') && section.includes('"not verified"'),
+    'check E keeps an unsettled finding as "not verified" instead of dropping it');
+  assert(section.includes('You have no network.'), 'check D never states registry or advisory facts from memory');
+  const rec = fs.readFileSync(path.join(repoRoot, 'docs', 'decisions', 'OSS-trail-of-bits-skills.md'), 'utf8');
+  for (const [check, skill] of [['A', 'insecure-defaults'], ['B', 'sharp-edges'], ['C', 'agentic-actions-auditor'],
+    ['D', 'supply-chain-risk-auditor'], ['E', 'fp-check']]) {
+    assert(new RegExp('\\|\\s*' + check + '\\.[^|\\n]*\\|\\s*`' + skill + '`').test(rec),
+      `the record maps check ${check} to \`${skill}\``);
+  }
+  assert(/\*\*PATTERN-MINE\*\*/.test(rec) && /149d7b21f4067765b82e67029730b42d228ef4b4/.test(rec),
+    'the record keeps the PATTERN-MINE verdict and the commit the skills were read at');
+}
+
 process.stdout.write(`\nproject-agents: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);
