@@ -147,7 +147,8 @@ assert(b.pausedRestored === true && /^Paused since .+\.Resume all$/.test(b.pause
 assert(b.quietBadStoredOff === true && b.quietBadLogged === true, 'an unreadable saved quiet state is off and reported');
 eq(b.usageOnTab, { brain: true, control: true, aquarium: true }, 'the usage chip shows in the shell\'s top bar on every tab');
 eq(b.pausedOnTab, { brain: true, control: true, aquarium: true }, 'the paused banner shows on every tab');
-assert(b.quietDisabled === true && b.pauseDisabled === true, 'the quiet-hours and Pause all switches stay disabled until S18 and S19 give them their effect');
+assert(b.quietDisabled === true, 'the quiet-hours switch stays disabled until S18 and S19 give it its effect');
+assert(b.pauseDisabled === false, 'S19: the Pause all switch is on, now that it has its effect');
 eq(b.quietOnTab, { brain: true, control: true, aquarium: true }, 'the quiet-hours banner shows on every tab');
 assert(/^Quiet hours since .+\. Agents keep working\.End now$/.test(b.quietText || ''), 'the quiet banner has End now');
 eq(b.rootQuiet, 'on', 'the one quiet state is on the app root for every alert and voice path to read');
@@ -190,6 +191,20 @@ assert(ny.f8Logged === true, 'a pane that cannot be focused is logged, never sil
 eq(ny.afterWorking, ['pty2'], 'a pane working again leaves the strip');
 assert(ny.hiddenAtEnd === true, 'an exited pane leaves it too, and the strip hides');
 eq(ny.ptyStart, 0, 'no PTY started');
+
+process.stdout.write('\nS19: what Pause all does to the panes (counted at the IPC boundary)\n');
+const pa = S.pauseAll || {};
+assert(pa.pauseEnabled === true, 'the Pause all button is enabled');
+eq(pa.started, 2, 'two panes started');
+eq(pa.escWrites, [[pa.working, '\u001b']], 'Pause all sends exactly one Esc, to the working pane only');
+eq(pa.otherWrites, 0, 'and writes nothing else');
+eq(pa.kills, [], 'nothing is killed');
+assert(pa.banner === true, 'the "Paused since" banner shows');
+assert(pa.logged === true, 'Logs says what was sent and that nothing was killed');
+eq(pa.startedWhilePaused, 0, 'no new pane starts while paused');
+assert(pa.refusalLogged === true, 'and the refusal is in Logs');
+eq(pa.writesOnResume, 0, 'Resume all sends nothing');
+assert(pa.bannerAfterResume === false, 'and the banner goes');
 
 process.stdout.write('\nnothing reached the network, and no renderer errors\n');
 eq(report.remote, [], 'no remote request');

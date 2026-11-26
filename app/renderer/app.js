@@ -454,6 +454,8 @@ function showTermEmpty() {
   }
 }
 function openInAppTerminal(opts = {}) {
+  // S19: nothing new starts while Pause all is on (pause-all.js says so in Logs and the banner).
+  if (pauseAll && pauseAll.refuseStart(opts.role ? (ROLES[opts.role] ? ROLES[opts.role].label : 'an agent') : 'a shell')) return;
   // S10: Maximum never runs a Claude agent on this PC (authority-choice.js). No pane is created and
   // no PTY is requested: the task goes to a cloud session instead, through the vetted open-external
   // path. Main refuses a Claude pane at Maximum as well (app/authority-level.js).
@@ -765,6 +767,7 @@ function openInAppTerminal(opts = {}) {
     else cc.ptyKill(id);
     term.dispose(); pane.remove(); terms.delete(id);
     if (needsYouStrip) needsYouStrip.remove(id);
+    if (pauseAll) pauseAll.forget(id);
     if (terms.size === 0) showTermEmpty();
   };
   // ---- LOCAL ROLLBACK (pre-PTY only) ----------------------------------------------------------
@@ -783,6 +786,7 @@ function openInAppTerminal(opts = {}) {
     if (paneData.rafId !== null) { cancelAnimationFrame(paneData.rafId); paneData.rafId = null; }
     term.dispose(); pane.remove(); terms.delete(id);
     if (needsYouStrip) needsYouStrip.remove(id);
+    if (pauseAll) pauseAll.forget(id);
     if (terms.size === 0) showTermEmpty();
   };
   paneData.closePane = closeThisPane;
@@ -1266,6 +1270,9 @@ async function startLayoutEngine() {
 let paneStatusBadge = null;
 // S19: the "Needs you" strip, at module scope for the same reason: the pane close paths reach it.
 let needsYouStrip = null;
+// S19: what Pause all does to the panes (pause-all.js). Same reason: the close paths and
+// openInAppTerminal reach it.
+let pauseAll = null;
 
 // The controlled surface the adapter is allowed to use. Everything privileged stays on this side:
 // the adapter never sees cc.*, a path, a role, a prompt, or report content.
@@ -1537,6 +1544,18 @@ function startShell(settings) {
   });
 }
 
+// S19: give the shell's Pause all button its effect. A pause restored from the last run sends no
+// Esc (the panes are new) but still holds new panes back; later changes come from the shell's event.
+function connectPauseAll() {
+  if (!pauseAll || !shell) return;
+  pauseAll.setPaused(shell.getState().pausedSince, { restored: true });
+  window.addEventListener('mako-shell-change', (e) => {
+    const d = e.detail || {};
+    pauseAll.setPaused(d.pausedSince || null);
+  });
+  shell.enableSwitch('pause');
+}
+
 async function boot() {
   const s = await cc.getSettings();
   applyTheme((s && s.theme) || 'obsidian');
@@ -1662,6 +1681,20 @@ needsYouStrip = (window.ccNeedsYouStrip && needsYouHost)
       onFocus: focusPaneFromStrip,
     })
   : null;
+// S19: Pause all. Process control (a sensitive area): one Esc to each WORKING pane when Pause all
+// turns on, through the same cc.ptyWrite every keystroke uses; nothing is killed, and nothing new
+// starts while paused. The shell's button turns on only once this exists (connectPauseAll).
+pauseAll = window.ccPauseAll
+  ? window.ccPauseAll.createPauseAll({
+      write: (paneId, data) => cc.ptyWrite(paneId, data),
+      livePanes: () => [...terms.keys()],
+      log: appendLog,
+      notify: (text, ms) => { if (shell) shell.showNotice(text, ms); },
+    })
+  : null;
+if (!pauseAll) appendLog('[pause-all] pause-all.js is missing; the Pause all button stays off\n');
+// This part of boot() runs after startShell(), so the shell (if it started) is there to connect to.
+connectPauseAll();
 if (!needsYouStrip) appendLog('[needs-you] the strip is missing (needs-you-strip.js or #needsYouStrip); panes that need you show only on their badges\n');
 if (needsYouStrip) {
   // F8 on window in the capture phase, so the terminal never sees it.
@@ -1676,6 +1709,7 @@ if (needsYouStrip) {
 if (paneStatusBadge) {
   window.ccPaneStatus.onView((view) => {
     if (needsYouStrip) needsYouStrip.update(view);
+    if (pauseAll) pauseAll.noteView(view);
     const shown = paneStatusBadge.update(view);
     if (shown && view && view.paneId) {
       appendLog(`[pane-status] ${view.paneId} -> ${shown.label}${view.reason ? ` (${view.reason})` : ''}\n`);
