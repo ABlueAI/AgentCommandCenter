@@ -90,6 +90,8 @@ async function scenarioStage() {
   const out = {};
   out.mounted = await run(`!!document.getElementById('makoStage') && !!document.getElementById('makoConvo') && !!document.getElementById('makoBrainRight')`);
   out.emptyText = await run(`document.getElementById('makoStageField').textContent`);
+  await run(`window.__t.waitFor(() => !/Loading/.test(document.getElementById('makoSharkNote').textContent))`);
+  out.sharkNote = await run(`document.getElementById('makoSharkNote').textContent`);
   const ids = await openPanes(3);
   out.paneIds = ids;
   // Pane 1 asks for permission, pane 2 asks a question, pane 3 works.

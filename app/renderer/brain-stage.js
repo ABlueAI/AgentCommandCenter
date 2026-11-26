@@ -377,7 +377,10 @@
     const field = h(doc, 'div', 'mk-stage-field', null, { id: 'makoStageField', role: 'group', 'aria-label': 'Task nodes, most urgent at the top' });
     const shark = h(doc, 'button', 'mk-shark-slot', null, { type: 'button', id: 'makoShark', 'aria-label': 'Mako, the conductor', title: 'The shark comes in a later step of S18; "What Mako knows" opens here.' });
     shark.appendChild(h(doc, 'span', 'mk-shark-mark', 'Mako'));
-    shark.appendChild(h(doc, 'span', 'mk-meta', 'Idle'));
+    const sharkState = h(doc, 'span', 'mk-meta', 'Idle', { id: 'makoSharkState' });
+    shark.appendChild(sharkState);
+    const sharkNote = h(doc, 'span', 'mk-meta mk-shark-note', 'Loading the shark\'s shape', { id: 'makoSharkNote', role: 'status' });
+    shark.appendChild(sharkNote);
     shark.disabled = true;
     field.appendChild(shark);
     const countsLine = h(doc, 'p', 'mk-meta mk-stage-counts', '', { id: 'makoStageCounts' });
@@ -634,6 +637,14 @@
       update, find,
       focusFind: () => { findBox.focus(); if (typeof findBox.select === 'function') findBox.select(); },
       focusTask: (id) => { st.focusId = id; render(); },
+      // The shark slot's words: Mako's own state (never a task's) and the shape file's load
+      // result; an error is shown in the needs-you colour, with its reason.
+      setShark: (info) => {
+        const i = info || {};
+        if (typeof i.state === 'string') sharkState.textContent = str(i.state, 20);
+        if (typeof i.note === 'string') sharkNote.textContent = str(i.note, 160);
+        sharkNote.className = i.error ? 'mk-meta mk-shark-note mk-shark-error' : 'mk-meta mk-shark-note';
+      },
       state: () => ({ tasks: st.tasks.slice(), mode: st.mode, expanded: st.expanded, focusId: st.focusId, paused: st.paused, findHits: st.findHits.slice(), notice: st.notice }),
       root,
     };

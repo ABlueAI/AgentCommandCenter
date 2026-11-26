@@ -1617,6 +1617,19 @@ function startBrainStage() {
     appendLog(`[brain] REFUSED: the brain tab did not start (${(e && e.message) || 'start-failed'}); your agents are in the control room\n`);
     return;
   }
+  // The shark's shape file (brief 7): checked strictly; a bad or missing file is shown and logged,
+  // and the last good shape stays. The Three.js renderer that draws it is a later step of S18.
+  if (window.ccSharkShape) {
+    const loader = window.ccSharkShape.createShapeLoader({ log: (line) => appendLog(line) });
+    loader.load(() => fetch('../assets/shark/shark-shape-B3.json').then((r) => { if (!r.ok) throw new Error('missing'); return r.text(); }))
+      .then((res) => {
+        if (res.ok) brainStage.setShark({ note: `Shape ${res.shape.id} (${res.shape.name}) loaded; the shark is drawn in a later step of S18` });
+        else brainStage.setShark({ note: `Shark shape refused (${res.reason})${res.fellBack ? '; using the last good shape' : ''}`, error: true });
+      });
+  } else {
+    brainStage.setShark({ note: 'Shark shape refused (shape-module-missing)', error: true });
+    appendLog('[shark] REFUSED: the shape module did not load\n');
+  }
   // Ctrl+F on the brain tab finds a node; elsewhere it is left alone (terminals keep their own).
   window.addEventListener('keydown', (e) => {
     if (brainStage && brainTabShowing() && window.ccBrainStage.isFindChord(e)) { e.preventDefault(); e.stopPropagation(); brainStage.focusFind(); }

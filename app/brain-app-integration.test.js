@@ -50,6 +50,7 @@ const S = (report.scenarios || {}).stage || {};
 process.stdout.write('\nthe stage: nodes from live panes, more urgent higher\n');
 assert(S.mounted === true, 'stage, conversation and right panel are mounted in the brain frame');
 assert(/No live tasks/.test(S.emptyText || ''), 'with no panes the stage says so');
+assert(/^Shape B3 \(Heavy\) loaded/.test(S.sharkNote || ''), `the shark's shape file loads in the real app (got ${JSON.stringify(S.sharkNote)})`);
 eq((S.paneIds || []).length, 3, 'three panes started');
 const nodes = S.nodes || [];
 eq(nodes.length, 3, 'one node per live pane');

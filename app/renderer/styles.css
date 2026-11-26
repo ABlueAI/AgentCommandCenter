@@ -605,3 +605,5 @@ input:focus { outline: none; border-color: var(--accent); }
 .mk-message-input::placeholder { color: var(--mk-composer-placeholder); }
 .mk-chips { display: flex; gap: 8px; flex-wrap: wrap; }
 .mk-chip-mode { border: 1px solid var(--mk-composer-line); color: var(--mk-composer-ink); border-radius: 4px; padding: 0 6px; font: 500 12.5px/18px var(--mk-sans); }
+.mk-shark-note { max-width: 110px; text-align: center; font-size: 11px; line-height: 14px; }
+.mk-shark-error { color: var(--mk-status-needs); }
