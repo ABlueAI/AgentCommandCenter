@@ -93,13 +93,13 @@ Only the PR sweeper's status PR edits this file (AGENTS.md "The shared brain";
   ticked, struck or re-labelled there.
 - **Shared navigation (S66, PR #283, merged 2026-11-26):** the three-tab layout (brain, control
   room, aquarium) behind a setting, the Ctrl K palette and the one Settings page are on `main`. Its
-  "Done when" still needs the batched PC-check session, so S66 stays IN PROGRESS (#283). S18 (#311),
-  S19 (#321) and S20 (#322) build on it; each now waits for #286 (S46).
+  "Done when" still needs the batched PC-check session, so S66 stays IN PROGRESS (#283).
 - **S68 done (PR #300, merged 2026-11-26):** the pin-and-scan scanner is SkillSpector 2.13.7
   (commit `c323ad4`, Apache-2.0, `--no-llm` only) and Obsidian Skills is 1.2.3 from
   `obsidianmd/obsidian-skills` (commit `a53f591`, MIT); verified: docs/decisions/OSS-ecc.md and
   docs/decisions/OSS-obsidian-skills.md on `main` record both pins and audits, and BLUE-CHECKLIST.md
-  step 31 names the new source and pin. Blue's re-install in his vault is that step.
+  step 31 names the new source and pin. The Obsidian Skills scan was partial, so its result is
+  not a pass, and the plugin install from the new source waits for Blue's word on PR #300 (step 31).
 - **S53 done (PR #208, merged 2026-11-26):** AgentPlayback is vetted and recorded in
   docs/decisions/OSS-agentplayback.md with Blue's verdict, PATTERN-MINE; no build.
 
