@@ -36,11 +36,13 @@ const broken = {
   'wrong page': { url: 'file:///C:/other.html' },
   'no bridge': { bridge: false },
   'boot stopped (plain title)': { title: 'Mako' },
-  'boot fallback title': { title: 'Mako (dev) · build unknown' },
+  'app.js\'s build-info fallback title': { title: 'Mako · build unknown' },
+  'a dev-tagged fallback title': { title: 'Mako (dev) · build unknown' },
   'stable copy title (not the dev profile)': { title: 'Mako 1.0.0 · main@abc1234' },
   'no repo picker': { repoPicker: false },
   'an uncaught page error': { pageErrors: ['TypeError: x is undefined'] },
   'the hard timeout': { hardTimeout: true },
+  'a step that threw (with every check otherwise passing)': { stepErrors: [{ step: 'checking window.cc', error: 'Target page closed' }] },
 };
 for (const [name, change] of Object.entries(broken)) {
   const v = smoke.verdict(Object.assign({}, good, change));
@@ -48,6 +50,11 @@ for (const [name, change] of Object.entries(broken)) {
 }
 assert(smoke.titleShowsBoot('Mako (dev) · abc1234') && smoke.titleShowsBoot('Mako (dev) 1.0.0 · commit unknown'),
   'the boot title matches build-info.js labels with or without a version');
+{
+  const v = smoke.verdict(Object.assign({}, good, { bridge: undefined, stepErrors: [{ step: 'checking window.cc', error: 'Target page closed' }] }));
+  assert(v.failures.some((f) => f === 'checking window.cc threw: Target page closed'),
+    'a step that threw is reported with its own error, not only as the check it broke');
+}
 assert(!smoke.titleShowsBoot(undefined) && !smoke.titleShowsBoot(''), 'a missing title is not booted');
 assert(url.startsWith('file://') && url.endsWith('/renderer/index.html'), `the entry URL is the renderer page (${url})`);
 

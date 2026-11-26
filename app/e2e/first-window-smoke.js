@@ -14,12 +14,15 @@
 //
 // It runs as the dev copy (`--dev-instance`, app/instance-profile.js): its own userData folder and
 // no Claude Code hooks, so running it on Blue's PC never touches the stable copy's settings, keys
-// or admission ledger.
+// or admission ledger. While it runs, Playwright opens two loopback-only debug ports on that dev copy
+// (the Node inspector and Chromium's remote debugging, `--inspect=0 --remote-debugging-port=0`), so
+// on a PC, run it only when no untrusted local process is running.
 //
 // Playwright marks its Electron support experimental. So every failure, Playwright's own included,
 // fails the run visibly with the step that failed; nothing is retried or skipped. A hard timer
-// kills Electron and fails the run if anything hangs. A screenshot (when a window exists) and a
-// JSON report go to the artifacts folder, which CI uploads.
+// kills Electron and fails the run if anything hangs. With --artifacts, a screenshot (when a window
+// exists) and a JSON report are written to that folder on the machine that ran it; CI doesn't upload
+// them yet (an S72 follow-up), so in CI the log's failure lines are the record.
 //
 // `--expect-fail` inverts the exit code (0 only when the smoke check FAILED). CI uses it on the
 // broken fixture apps in app/e2e/fixtures/ on every run, so the job keeps proving it can fail.
@@ -49,8 +52,9 @@ function parseArgs(argv) {
   return out;
 }
 
-// The boot-complete title, as build-info.js formatBuildLabel writes it for the dev copy. A title
-// of "Mako (dev) · build unknown" (app.js's fallback when build info fails) does not count.
+// The boot-complete title, as build-info.js formatBuildLabel writes it for the dev copy. app.js's
+// fallback when build info fails ("Mako · build unknown") has no "(dev)", so it does not count, and
+// neither would a "(dev)" variant of it.
 const BOOTED_TITLE = /^Mako \(dev\)( \S+)? · (?!build unknown)\S/;
 function titleShowsBoot(title) { return typeof title === 'string' && BOOTED_TITLE.test(title); }
 
@@ -70,6 +74,8 @@ function verdict(obs) {
     if (obs.repoPicker !== true) failures.push('repo picker: #repoSelect not visible');
     for (const e of obs.pageErrors || []) failures.push(`uncaught page error: ${e}`);
   }
+  // A step that threw says so itself, so a crash isn't reported only as the check it broke.
+  for (const s of obs.stepErrors || []) failures.push(`${s.step} threw: ${s.error}`);
   if (obs.hardTimeout) failures.push(`hard timeout: the run passed ${HARD_TIMEOUT_MS} ms`);
   return { ok: failures.length === 0, failures };
 }
@@ -82,7 +88,8 @@ function oneLine(e) {
 async function run(opts) {
   const started = Date.now();
   const expectedUrl = entryUrlFor(opts.appDir);
-  const obs = { expectedUrl, pageErrors: [] };
+  const obs = { expectedUrl, pageErrors: [], stepErrors: [] };
+  const stepError = (step, e) => obs.stepErrors.push({ step, error: oneLine(e) });
   let electronApp = null;
   let page = null;
   let hardTimer = null;
@@ -124,22 +131,25 @@ async function run(opts) {
     page.on('pageerror', (err) => obs.pageErrors.push(oneLine(err)));
 
     try { await page.waitForLoadState('load', { timeout: BOOT_TIMEOUT_MS }); }
-    catch (e) { obs.bootError = `load: ${oneLine(e)}`; }
+    catch (e) { stepError('waiting for the page load', e); }
     obs.url = page.url();
     try {
       await page.waitForFunction(
         (src) => new RegExp(src).test(document.title), BOOTED_TITLE.source, { timeout: BOOT_TIMEOUT_MS });
     } catch (e) { obs.bootError = obs.bootError || oneLine(e); }
-    try {
-      obs.title = await page.title();
-      obs.bridge = await page.evaluate(() => typeof window.cc === 'object' && window.cc !== null);
-      obs.repoPicker = await page.locator('#repoSelect').isVisible();
-    } catch (e) { obs.bootError = obs.bootError || oneLine(e); }
+    try { obs.title = await page.title(); } catch (e) { stepError('reading the title', e); }
+    try { obs.bridge = await page.evaluate(() => typeof window.cc === 'object' && window.cc !== null); }
+    catch (e) { stepError('checking window.cc', e); }
+    try { obs.repoPicker = await page.locator('#repoSelect').isVisible(); }
+    catch (e) { stepError('checking #repoSelect', e); }
     await new Promise((r) => setTimeout(r, SETTLE_MS));
   })();
 
   await Promise.race([body, hard]);
   clearTimeout(hardTimer);
+  if (obs.hardTimeout && !electronApp) {
+    process.stderr.write('  ! the hard timeout fired before Electron finished launching; a dev copy may still be running\n');
+  }
   const result = verdict(obs);
 
   if (opts.artifactsDir) {
