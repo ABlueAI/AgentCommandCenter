@@ -125,7 +125,12 @@ const mustHave = [
   ['skip a PR that conflicts with main alone and note it', 'skips a PR that conflicts with main alone'],
   ['edit that one comment to name the new blocker instead', 'renames the blocker in its one Codex comment so a failed re-check isn\'t picked every fire'],
   ['first test-merge its head with main alone (if that conflicts, keep the label', 'never clears a Codex PR\'s label while it conflicts with main'],
-  ['unless you have already posted one on that PR, post the conflict fix request docs/CODEX-BUILDER-LANE.md item 6 describes', 'posts one fix request for a Codex PR that conflicts with main, so it isn\'t picked every fire (D-090)'],
+  ['unless you have already posted one on that PR, post the conflict comment docs/CODEX-BUILDER-LANE.md item 6 describes, without Codex\'s handle', 'posts one handle-free conflict comment on a Codex PR, so it isn\'t picked every fire (D-090)'],
+  ['if that comment has had no push for a day, post the "@ABlueAI needs Blue:" comment and add the needs-blue label instead, once', 'asks Blue once when a Codex conflict gets no push'],
+  ['edited by no one else (check its edit history; if you can\'t, it doesn\'t count), with no reply from ABlueAI, recommends a default', 'settles only an unedited ask that recommends a default'],
+  ['if neither is possible, leave the PR a draft as "NOT READY: review not run (<reason>)" for a later fire', 'never marks a PR ready without the review'],
+  ['don\'t review again beyond the one extra run AGENTS.md "One small last fix" allows', 'caps Codex PR reviews at the run cap plus the one extra run'],
+  ['Never skip, loosen or remove a test, check or workflow step to get green', 'never weakens a test to get green'],
   ['asks something AGENTS.md "Deciding without asking" no longer keeps for Blue (D-090', 'settles its own open procedural asks (D-090)'],
   ['edit the comment\'s opening "@ABlueAI needs Blue:" to "Decided under D-090:", remove the needs-blue label), set its row back from NEEDS BLUE to IN PROGRESS (#PR)', 'clears a settled ask from the digest and the plan row'],
   ['unless that comment asks something D-090 no longer keeps for Blue: settle that one as in 5a (without changing the row or pushing)', 'settles a Codex PR\'s procedural ask without pushing'],
@@ -138,6 +143,8 @@ const mustHave = [
   ['its last line is "Merge order: #A, then #B; any order: #C, #D"', 'ends a multi-PR summary with the merge-order line'],
 ];
 for (const [text, label] of mustHave) assert(prompt.includes(text), `runner prompt ${label}`);
+for (const gone of ['ask Blue in the PR how to proceed', 'mark the PR "needs Blue" with your diagnosis', 'you haven\'t asked Blue on that PR yet', 'if neither is possible, mark the PR "needs Blue"'])
+  assert(!prompt.includes(gone), `runner prompt no longer stops for Blue with "${gone}" (D-090)`);
 assert(!/@codex/i.test(prompt), 'runner prompt never writes Codex\'s handle');
 assert(!prompt.includes('agent-running'), 'runner prompt no longer uses the agent-running label');
 assert(!/\byour login\b/.test(prompt), 'runner prompt never checks "your login" alone: it checks an agent login');
@@ -238,11 +245,16 @@ const sweeperMustHave = [
   [sweepChanges, 'Ask Blue on a PR only for what AGENTS.md "Deciding without asking" keeps for him', 'asks Blue only for kept items'],
   [sweepChanges, 'that carries the needs-blue label, even one not updated for 7 days', 'reaches every open needs-blue PR'],
   [sweepChanges, 'If ABlueAI replied after it (a reply no one else has edited), do what the reply asks and remove the label.', 'acts on an unedited ABlueAI reply'],
-  [sweepChanges, 'edit the comment\'s opening "@ABlueAI needs Blue:", if it has one, to "Decided under D-090:", remove the label', 'clears a settled ask from the digest'],
+  [sweepChanges, 'edit the comment\'s opening "@ABlueAI needs Blue:" to "Decided under D-090:", remove the label', 'clears a settled ask from the digest'],
+  [sweepChanges, 'act on it only if no one else has edited it (check its edit history; if you can\'t, or there is no such comment, leave the PR and list it in FINISH)', 'settles only an unedited agent ask'],
+  [sweepChanges, 'ask as Job A says instead when the conflict is in a sensitive area', 'still asks Blue on a sensitive conflict'],
+  [sweepChanges, 'never skipping, loosening or removing a test, check or workflow step', 'never weakens a test to get green'],
+  [jobD, 'then finish it as AGENTS.md "One small last fix" says, without asking Blue', 'Job D: finishes after the docs-only cap without asking Blue'],
   [sweepChanges, 'If it asks something Blue keeps, or you can\'t tell, leave it and list it in FINISH.', 'leaves kept and unclear asks to Blue'],
   [sweepChanges, '"NOT READY: sweeper failed at <job and step>: <error>"', 'reports a failed step instead of "nothing to do"'],
 ];
 for (const [block, text, label] of sweeperMustHave) assert(block.includes(text), `sweeper ${label}`);
+assert(!sweepChanges.includes('or else the latest one saying why the label is there'), 'sweeper never acts on a comment that is not an unedited needs-Blue ask');
 for (const [name, block] of [['instructions', sweep], ['Job D', jobD], ['changes', sweepChanges]]) {
   assert(!/[@＠]codex/i.test(block), `sweeper ${name} never write Codex's handle`);
   assert(!block.includes('＠'), `sweeper ${name} use a plain @, so a needs-Blue mention notifies Blue`);

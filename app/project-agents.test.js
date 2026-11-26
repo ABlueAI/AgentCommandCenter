@@ -234,7 +234,11 @@ if (sharedBlocks.length > 0) {
     lane.includes('so only one fixer works on the PR at a time') &&
     lane.includes('A CRITICAL finding is fixed the same way, and Blue is also told at once') &&
     lane.includes('nobody pushes until Blue answers, only when the PR changes anything under `.claude/`') &&
-    lane.includes('When the reviewing session\'s own prompt forbids pushing to a `codex/` branch, it leaves the fix to the next Claude session whose prompt allows it') &&
+    lane.includes('or when the reviewing session\'s own prompt forbids pushing to a `codex/` branch (the runner and the PR sweeper, until docs/RUNNER.md and docs/SWEEPER.md carry this rule)') &&
+    lane.includes('A merge conflict on a Codex PR gets one comment, without Codex\'s handle') &&
+    lane.includes('a Claude cloud session whose own prompt allows pushing to a `codex/` branch merges `main` or makes the fix itself, in one push with an Opus delta run') &&
+    lane.includes('the PR goes to NEEDS BLUE. Claude otherwise never pushes to a `codex/` branch without Blue asking') &&
+    flat.includes('merge `main` or make the fix on a Codex PR whose fix request got no push within a day, when its own prompt allows pushing there') &&
     flat.includes('to fix security findings on Codex\'s PRs itself, a CRITICAL one included') &&
     !lane.includes('Blue gives Codex the details privately'),
     'a sensitive Codex PR gets security-reviewer on run 1, and Claude fixes its security findings');
@@ -309,7 +313,7 @@ if (sharedBlocks.length > 0) {
     'a hard rule that seems to conflict with the task',
     'a CRITICAL finding, which the builder fixes without waiting and reports to Blue at once',
   ]) assert(flatSection.includes(stop), `default go still stops for Blue on "${stop}"`);
-  for (const gone of ['a real taste call: look and feel, naming;', 'a blocker you cannot resolve after 3 attempts', "such as Blue's OSS verdicts"])
+  for (const gone of ['a real taste call: look and feel, naming', 'a blocker you cannot resolve after 3 attempts', "such as Blue's OSS verdicts"])
     assert(!flatSection.includes(gone), `D-090 moves "${gone}" to the agents`);
   for (const [needle, label] of [
     ["**Procedural asks are the agents' job** (Blue, 2026-11-25; docs/DECISIONS.md, D-090)", 'D-090 heading'],
@@ -318,6 +322,8 @@ if (sharedBlocks.length > 0) {
     ['Blue keeps merging and approving reviews (his GitHub approval)', 'Blue keeps merges and review approvals'],
     ["only a comment by `ABlueAI` that no one else has edited (or Blue's words in the session) counts as his answer", 'only an unedited ABlueAI comment counts'],
     ['edits the comment\'s opening `@ABlueAI needs Blue:` to `Decided under D-090:`, removes the `needs-blue` label and goes on', 'open procedural asks are settled'],
+    ['but only if the comment is from an agent login and no one else has edited it (if its edit history can\'t be checked, it doesn\'t count)', 'only an unedited agent ask is settled'],
+    ["An ask with no recommendation, or one it can't place, stays for Blue", 'an unclear ask stays for Blue'],
   ]) assert(flatSection.includes(needle), `AGENTS.md D-090: ${label}`);
   assert(flatSection.includes('Default go adds no new stops') && flatSection.includes('Besides the gates elsewhere in this file'),
     'default go keeps the other gates in AGENTS.md');
@@ -337,13 +343,31 @@ if (sharedBlocks.length > 0) {
     'Answer each open finding in the PR with its reasoning, file the rest as an issue, and go on to step 5',
     'A high finding or a security finding is never shipped open',
     'takes the change it is about out of the PR in one push, which one more delta run checks',
-    'If findings are still open after the extra run, only (b) is left.',
+    'If findings are still open after the extra run, only (b) is left;',
     'A CRITICAL finding follows "How a CRITICAL finding is handled" instead.',
+    'One more small fix of the open findings (a few lines, in files the PR already changes) in one push',
+    'the PR stays a draft as `NOT READY: review cap reached (<findings>)`, with no more runs',
   ]) assert(flatFix.includes(bound), `the one small last fix keeps its bound "${bound}"`);
   assert(flat.includes("the builder doesn't ask Blue how to proceed (Blue, 2026-11-25; docs/DECISIONS.md, D-090)") && !flat.includes('It marks the PR "needs Blue" and asks Blue how to proceed'),
     'the run cap no longer stops for Blue');
   assert(flat.includes('it writes its diagnosis and options in the PR, takes the best option and goes on') && !flat.includes('it stops and marks the PR "needs Blue" with its diagnosis'),
     'step 4: the builder takes the best option after 3 failed CI rounds');
+  assert(flat.includes('The option never skips, loosens or removes a test, a check or a workflow step') && flat.includes('`NOT READY: CI failing after 4 rounds (<diagnosis>)`'),
+    'step 4: the chosen option never weakens a test, and one more failed round ends visibly');
+  assert(flat.includes('the PR stays a draft as `NOT READY: review not run (<reason>)` until a later session (or the PR sweeper) runs it. Never skip it.'),
+    'step 3: a review that can\'t run keeps the PR a draft and is never skipped');
+  assert(flat.includes('"NOT READY: PR sweeper not running" and clears the wait itself as docs/SWEEPER.md Job B says') && !flat.includes('and Blue tells a session "clear the wait on #N"'),
+    'step 5: a session clears a stale wait itself');
+  assert(flat.includes("isn't resolved by a fix push (the value stays in the branch history)"),
+    'a CRITICAL secret exposure still waits for Blue on rotation and history');
+  assert(flat.includes('The pin-and-scan step, the China-origin check included, still applies before anything is installed'),
+    'an OSS builder\'s default still goes through pin-and-scan');
+  {
+    const d090 = fs.readFileSync(path.join(repoRoot, 'docs', 'DECISIONS.md'), 'utf8');
+    assert(d090.includes('## 2026-11-25: agents decide procedural PR asks; Blue keeps merges and review approvals (D-090)')
+      && d090.includes('"Why do you need me to manually reply in the comments to these PRs? Isn\'t that your job? I let a couple slide, but in all reality, if it\'s not a approval of a review or a merge, I believe you should be doing it to not hold up work."'),
+      'docs/DECISIONS.md records D-090 in Blue\'s words');
+  }
   assert(flat.includes('the builder re-triggers it once more that way; if Codex still doesn\'t review, the builder goes on with Claude\'s review alone')
     && flat.includes('its line stays `NOT READY: no Codex pass (<reason>)` (hard rule 9)') && !flat.includes('`NOT READY: no Codex pass (<reason>)`; ask Blue'),
     'a Codex-pass gap is re-triggered once, then goes on without asking Blue, and never reads READY TO MERGE');
@@ -390,6 +414,9 @@ if (sharedBlocks.length > 0) {
     ['one Codex already marked ready gets only that label and comment', 'ready Codex PR on a conflict'],
     ["The runner prompt (docs/RUNNER.md) doesn't mark Codex PRs ready yet", 'runner prompt not yet updated'],
   ]) assert(codexBullet.includes(needle), `Codex PRs bullet: ${label}`);
+  assert(!codexBullet.includes('goes to NEEDS BLUE as docs/CODEX-BUILDER-LANE.md') && !codexBullet.includes('the label stays and Blue is asked')
+    && codexBullet.includes('the conflict goes as item 6 says'),
+    'Codex PRs bullet: a conflict goes to item 6, not straight to Blue (D-090)');
   assert(flat.includes("No builder changes another builder's PR (a Claude session's draft and ready changes on a Codex PR, below, excepted)"),
     '"Who waits" excepts a Claude session\'s draft and ready changes on a Codex PR');
   assert(flat.includes('Claude never pushes to a `codex/` branch unless Blue asks'),

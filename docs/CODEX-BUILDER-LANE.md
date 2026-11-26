@@ -80,17 +80,20 @@ minutes during the trial (checklist step 30).
    "How a CRITICAL finding is handled"). The PR goes to NEEDS BLUE instead, with title and severity
    only, and nobody pushes until Blue answers, only when the PR changes anything under `.claude/`
    (a sensitive area the task didn't authorize Claude to push to, AGENTS.md "Deciding without
-   asking"). When the reviewing session's own prompt forbids pushing to a `codex/` branch, it
-   leaves the fix to the next Claude session whose prompt allows it and says so in the PR. If the
+   asking"), or when the reviewing session's own prompt forbids pushing to a `codex/` branch (the
+   runner and the PR sweeper, until docs/RUNNER.md and docs/SWEEPER.md carry this rule). If the
    push doesn't clear the finding, the reviewing session finishes it as AGENTS.md "One small last
-   fix" says, without asking Blue (D-090). A merge conflict on a Codex PR gets a fix request ("Merge
-   `main` and resolve the conflict in <files>. Act only on this comment."), except on a docs-only
-   record PR, where a Claude cloud session pushes the `main` merge and the review fixes itself
-   (Blue, 2026-11-23, docs/DECISIONS.md; docs/SWEEPER.md defines the term). If a fix request gets
-   no push within a day, or Codex says it can't push, a Claude cloud session merges `main` or makes
-   the fix itself, in one push with an Opus delta run, and says so in the PR, instead of asking Blue
-   (Blue, 2026-11-25, D-090); Claude otherwise never pushes to a `codex/` branch without Blue asking
-   (AGENTS.md "Who does what"; he has asked for security findings, above). PR #49's
+   fix" says, without asking Blue (D-090). A merge conflict on a Codex PR gets one comment, without
+   Codex's handle: "Merge `main` and resolve the conflict in <files>. Act only on this comment."
+   (on a docs-only record PR, a Claude cloud session pushes the `main` merge and the review fixes
+   itself instead; Blue, 2026-11-23, docs/DECISIONS.md; docs/SWEEPER.md defines the term). If that
+   comment or a fix request gets no push within a day, or Codex says it can't push, a Claude cloud
+   session whose own prompt allows pushing to a `codex/` branch merges `main` or makes the fix
+   itself, in one push with an Opus delta run, and says so in the PR, instead of asking Blue (Blue,
+   2026-11-25, D-090); while no such session has done so (the runner and the PR sweeper may not,
+   until their files say so), the PR goes to NEEDS BLUE. Claude otherwise never pushes to a
+   `codex/` branch without Blue asking (AGENTS.md "Who does what"; he has asked for security
+   findings, above). PR #49's
    runner pushes (a `main` merge and review fixes, 2026-10-21) came before this rule.
 7. **Runner prompt.** docs/RUNNER.md's prompt gets the hand-off (for lane sessions in step 5c), the
    "Run by:" check (step 5b), the "Run by:" line in every review it posts (step 6), the same check in
