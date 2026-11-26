@@ -720,7 +720,11 @@ function openInAppTerminal(opts = {}) {
   }
   const chatBody = pane.querySelector('.chat-body');
   const paneData = { term, fit, pane, ro, roConnected: true, chatBody, role, pendingEvents: [], rafId: null, tailBubble: null, parser: null };
+  // S18: what the brain tab's task node shows for this pane. Text only; brain-stage.js never
+  // writes any of it back into a pane.
+  paneData.brain = { label, repo: currentRepoLabel(), branch: worktree ? wtName : '', openedAt: Date.now(), lastOutputAt: Date.now(), lines: [], tail: '' };
   paneData.parser = new PtyParser((ev) => {
+    if (ev && typeof ev.text === 'string' && ev.type !== 'ui_chrome') brainRecordLine(paneData.brain, ev);
     // Video-scout SDK runs print one machine-readable token-usage line; surface it in the Logs
     // tab so every run's real cost is recorded outside the (closable) pane. The parser is already
     // line-buffered and ANSI-stripped, so chunk boundaries can't split the marker.
@@ -764,7 +768,7 @@ function openInAppTerminal(opts = {}) {
     }
     else cc.ptyKill(id);
     term.dispose(); pane.remove(); terms.delete(id);
-    if (terms.size === 0) showTermEmpty();
+    if (terms.size === 0) showTermEmpty();    brainRefresh();
   };
   // ---- LOCAL ROLLBACK (pre-PTY only) ----------------------------------------------------------
   // Undo everything this function built in the RENDERER, for the window in which no PTY exists yet.
@@ -791,6 +795,7 @@ function openInAppTerminal(opts = {}) {
   });
   term.textarea && term.textarea.addEventListener('focus', () => { activeTermId = id; });
   terms.set(id, paneData);
+  brainRefresh();
 
   // ---- TERMINAL LAUNCH TRANSACTION -------------------------------------------------------------
   // ORDER IS LOAD-BEARING: dock FIRST, start the PTY only once the dock has succeeded.
@@ -1525,12 +1530,101 @@ function startShell(settings) {
     emblemRail = null;
     appendLog('[shell] REFUSED: the repo emblem rail did not start (rail-start-failed); use the repo picker\n');
   }
+  startBrainStage();
   // Coming back to the control room: its terminals were display:none, so refit the classic grid
   // (docked panes refit through their own observers).
   window.addEventListener('mako-shell-change', (e) => {
     const d = e.detail || {};
     if (d.view === 'tab' && (d.layout === 'old' || d.tab === 'control')) setTimeout(fitAllTerms, 0);
   });
+}
+
+// ---- S18: the brain tab (brain-stage.js) ----------------------------------------------------------
+// The stage reads three things per pane: its pane-status state (S06/S07's hook view), when its PTY
+// last printed, and its last output lines (for the permission or question menu on screen). A card
+// answer goes back through `cc.ptyWrite`, main's one `pty-write` chokepoint, and brain-stage.js only
+// ever produces a digit the menu offered or Esc.
+let brainStage = null;
+const brainStatus = new Map(); // paneId -> { state, since }
+const BRAIN_MAX_LINES = 40;
+function currentRepoLabel() {
+  const sel = $('#repoSelect');
+  const o = sel && sel.selectedOptions && sel.selectedOptions[0];
+  return o && o.value ? o.textContent : '';
+}
+function brainRecordLine(b, ev) {
+  if (ev.partial) { b.tail = ev.text; return; }
+  b.tail = '';
+  b.lines.push(ev.text);
+  if (b.lines.length > BRAIN_MAX_LINES) b.lines.splice(0, b.lines.length - BRAIN_MAX_LINES);
+}
+function brainNoteStatus(view) {
+  if (!view || typeof view.paneId !== 'string' || !view.paneId) return;
+  const state = typeof view.state === 'string' ? view.state : 'unknown';
+  const prev = brainStatus.get(view.paneId);
+  if (!prev || prev.state !== state) brainStatus.set(view.paneId, { state, since: Date.now() });
+  brainRefresh();
+}
+function brainInputs() {
+  const out = [];
+  for (const [id, t] of terms) {
+    if (!t.brain) continue;
+    const s = brainStatus.get(id);
+    out.push({
+      id, title: t.brain.label, repo: t.brain.repo, branch: t.brain.branch, role: t.role || '', authority: state.authority || '',
+      status: s ? s.state : 'unknown', statusSince: s ? s.since : t.brain.openedAt, lastOutputAt: t.brain.lastOutputAt,
+      lines: t.brain.tail ? t.brain.lines.concat([t.brain.tail]) : t.brain.lines.slice(),
+    });
+  }
+  return out;
+}
+function brainRefresh() {
+  if (!brainStage) return;
+  try { brainStage.update(brainInputs()); }
+  catch (e) { appendLog(`[brain] REFUSED: the stage could not update (${(e && e.message) || 'update-failed'})\n`); }
+}
+function brainTabShowing() {
+  return !!(shell && shell.getState().layout === 'tabs' && shell.getState().view === 'tab' && shell.getState().tab === 'brain');
+}
+function startBrainStage() {
+  const frame = $('#makoPanel-brain');
+  const host = frame && frame.querySelector('.mk-frame-main');
+  if (!host || !window.ccBrainStage || !window.ccInFocusCard) {
+    appendLog('[brain] REFUSED: the brain tab did not start (brain-module-missing); your agents are in the control room\n');
+    return;
+  }
+  try {
+    const note = host.querySelector('.mk-frame-note');
+    if (note) note.remove();
+    brainStage = window.ccBrainStage.createBrainStage({
+      doc: document, host, inFocus: window.ccInFocusCard,
+      log: (line) => appendLog(line),
+      onKeys: (id, keys) => {
+        if (!terms.has(id)) return { ok: false, reason: 'pane-closed' };
+        cc.ptyWrite(id, keys);
+        return { ok: true };
+      },
+      onOpenPane: (id) => {
+        if (!terms.has(id)) { appendLog('[brain] that pane is closed\n'); return; }
+        shell.setTab('control');
+        const t = terms.get(id);
+        activeTermId = id;
+        setTimeout(() => { try { t.term.focus(); } catch {} }, 0);
+      },
+    });
+  } catch (e) {
+    brainStage = null;
+    appendLog(`[brain] REFUSED: the brain tab did not start (${(e && e.message) || 'start-failed'}); your agents are in the control room\n`);
+    return;
+  }
+  // Ctrl+F on the brain tab finds a node; elsewhere it is left alone (terminals keep their own).
+  window.addEventListener('keydown', (e) => {
+    if (brainStage && brainTabShowing() && window.ccBrainStage.isFindChord(e)) { e.preventDefault(); e.stopPropagation(); brainStage.focusFind(); }
+  }, true);
+  // Waiting minutes, the stall watch and "updated n seconds ago" move with time, not only events.
+  setInterval(() => { if (!document.hidden && brainTabShowing()) brainRefresh(); }, 5000);
+  window.addEventListener('mako-shell-change', () => { if (brainTabShowing()) brainRefresh(); });
+  brainRefresh();
 }
 
 async function boot() {
@@ -1568,7 +1662,7 @@ async function boot() {
   appendLog(`[build] ${buildLabel}\n`);
   cc.onPtyData(({ id, data }) => {
     const t = terms.get(id);
-    if (t) { t.term.write(data); t.parser.feed(data); }
+    if (t) { t.term.write(data); t.parser.feed(data); if (t.brain) t.brain.lastOutputAt = Date.now(); }
   });
   cc.onPtyExit(({ id }) => {
     const t = terms.get(id);
@@ -1627,6 +1721,7 @@ const paneStatusSetup = (window.ccPaneStatus && window.ccPaneStatusBadge)
   : null;
 if (paneStatusBadge) {
   window.ccPaneStatus.onView((view) => {
+    brainNoteStatus(view);
     const shown = paneStatusBadge.update(view);
     if (shown && view && view.paneId) {
       appendLog(`[pane-status] ${view.paneId} -> ${shown.label}${view.reason ? ` (${view.reason})` : ''}\n`);
