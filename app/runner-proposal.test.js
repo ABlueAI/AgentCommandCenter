@@ -7,7 +7,8 @@
 // (BLUE-CHECKLIST.md step 8) is ticked, schedules respect the documented one-hour minimum and avoid
 // the on-the-hour late start, the runner prompt keeps the claim, lock, usage-limit, review-loop and
 // READY TO MERGE rules, the digest stays read-only, neither writes Codex's handle, and checklist
-// step numbers stay unique.
+// step numbers stay unique. It also pins the guardrails of the all-day runner's stored prompt as
+// recorded in docs/RUNNER.md "Read back 2026-11-26 (issue #304)".
 
 const fs = require('fs');
 const path = require('path');
@@ -272,6 +273,24 @@ assert(rulesFlat.includes('except the PR sweeper\'s idle line "Sweeper: nothing 
   && sweepChanges.includes('end with the single line "Sweeper: nothing to do" only when every job ran and nothing needed action'),
   'AGENTS.md step 5 names the sweeper\'s idle line as its one exception, and SWEEPER.md limits it to clean idle fires');
 assert(!/[@＠]codex/i.test(sweeper), 'docs/SWEEPER.md never writes Codex\'s handle');
+
+// The all-day runner's stored prompt, as recorded from the live task (issue #304). A change to the
+// stored text goes through this block, so it must keep the stored prompt's own guardrails.
+const stored = fenced('### Read back 2026-11-26 (issue #304)');
+assert(stored.startsWith('You are the Mako all-day runner'), 'docs/RUNNER.md records the all-day runner\'s stored prompt (issue #304)');
+const storedFlat = stored.replace(/\s+/g, ' ');
+for (const [text, label] of [
+  ['if it returns ABlueAI or fails, do nothing else and end "NOT READY: runner identity check failed"', 'fails closed on the ABlueAI login'],
+  ['Never merge, enable auto-merge, push to main, force-push, or change repository settings, rulesets or any scheduled task, including this one.', 'never merges, pushes to main, force-pushes or changes settings or tasks'],
+  ['at most 24 pushes an hour', 'keeps the 24-pushes-an-hour cap'],
+  ['120 GitHub writes an hour', 'keeps the 120-writes-an-hour cap'],
+  ['On any 403 or 429 mentioning a rate limit, secondary rate limit or abuse detection: stop at once, write nothing more', 'stops at the first rate-limit signal'],
+  ['Never use paid extra usage.', 'never uses paid extra usage'],
+  ['write "at-codex"', 'replaces Codex\'s handle'],
+  ['The rules in that repository\'s AGENTS.md govern everything you do.', 'puts AGENTS.md over everything'],
+]) assert(storedFlat.includes(text), `recorded runner prompt ${label}`);
+for (const login of AGENT_LOGINS) assert(stored.includes(login), `recorded runner prompt names the agent login ${login}`);
+assert(!/[@＠]codex/i.test(stored), 'recorded runner prompt never writes Codex\'s handle');
 
 process.stdout.write(`\nrunner-proposal: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);
