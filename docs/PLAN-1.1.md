@@ -3,14 +3,14 @@
 Drafted 2026-10-17 by Claude for Blue. Approved when the PR that adds it is merged. Changes only through
 `plan-change` PRs (rules below).
 
-**Latest change (2026-11-26; PR #PRNUM, proposed, pending Blue):** Blue's open-source verdicts of
+**Latest change (2026-11-26; PR #294, proposed, pending Blue):** Blue's open-source verdicts of
 2026-11-25 and step 82 (docs/DECISIONS.md, 2026-11-25). Five new rows: S68 re-pins SkillSpector
 (2.13.7, still `--no-llm` only) and Obsidian Skills (1.2.3, new source); S69 pattern-mines five
 Trail of Bits skills into `security-reviewer`; S70 is one claude-security trial scan, which Blue
 starts, with an 11-step setup checklist; S71 is one elephant-goldfish trial on the Composer spec;
 S72 is an e2e smoke test on GitHub's Windows runners. ECC's `click-path-audit`, three pattern-mine
 picks and the PowerShell and Electron reviewer join the 1.2 queue. Details and depth checks: "S68
-to S72 details". Merging PR #PRNUM approves it.
+to S72 details". Merging PR #294 approves it.
 
 **Earlier change (2026-11-24; PR #253, proposed, pending Blue):** Blue's go on the UI (checklist
 step 18). S14's design brief is `docs/DESIGN-BRIEF-1.1.md`; S14 is `IN PROGRESS (#253)`, and S66,
@@ -401,7 +401,7 @@ to do) · the memory tools not chosen, claude-mem included, are signed off as dr
 · the role-file rewrite is its own PR (S60) · the definition of CRITICAL (S40) · nothing else from
 "Month two" joins 1.1 beyond the command palette and the Composer. Nothing from his sheets is open.
 
-### S68 to S72 details: Blue's open-source verdicts of 2026-11-25 (proposed, pending Blue: PR #PRNUM)
+### S68 to S72 details: Blue's open-source verdicts of 2026-11-25 (proposed, pending Blue: PR #294)
 
 Blue's words are in docs/DECISIONS.md, 2026-11-25, and the OSS records named in each row. Each row
 has the AGENTS.md depth check below (what a top professional would add, the raw material, the
@@ -953,4 +953,4 @@ does both) · Vibe Kanban (removed in 1.0).
 - 2026-11-24 (PR #241; proposed, pending Blue): S56 is no longer marked Sensitive. Its text said "a bug that is a security gap is Sensitive", and the plan sync tags any row whose Session cell has the word "Sensitive", so S56's issue #197 carried the `sensitive` label and the Codex builder lane (which takes only rows not marked Sensitive) would refuse it. The clause now says such a bug "stays outside that lane and with Claude", and notes that the cloud session that opened the 9 bug issues (#232 to #240, 2026-11-24) judged none to be a security gap; the sentence saying the list isn't in the repo yet now names the issues. The row's Needs and Status are unchanged (Blue, 2026-11-24: "Fix the Sensitive tag on S56 in the plan").
 - 2026-11-24 (PR #253; proposed, pending Blue): Blue's go on the UI, in Mako main's chat (docs/DECISIONS.md, 2026-11-24; checklist step 18). S14 becomes `IN PROGRESS (#253)` with its brief, `docs/DESIGN-BRIEF-1.1.md`; S66, S18, S19 and S20 go from `HOLD (Blue)` to `READY`. The brief moves the pieces every tab shows into S66 (the per-tab colour set and shared components, the scope stripe and repo emblem rail with emblem image upload, the top bar's Pause all button and banner, quiet-hours switch and banner and usage chip, the shared In-focus card, and one shortcut list with Ctrl K and Ctrl Space); S18 and S19 fill them in, and S19 keeps what Pause all does to the panes. The S66, S18 and S19 rows and "How this plan runs" say so. S46, S47 and S62 stay `HOLD (Blue)` (not part of this go). Merging PR #253 approves it.
 - 2026-11-25 (PR #293; proposed, pending Blue): wording only, after Blue let Codex build sensitive work too (docs/DECISIONS.md 2026-11-25, PR #291). S26's row no longer limits the builder lane to non-sensitive early tasks and points to a new "Codex, from 2026-11-25" paragraph below the table (Codex may also build sensitive work; Claude still builds the UI rows S66 and S18 to S20 and the Composer's dispatch tools; a Codex PR in a sensitive area also gets `security-reviewer` on review run 1; the comment hand-off in docs/CODEX-BUILDER-LANE.md item 3 is not widened, so Blue starts Codex on sensitive work himself). The 2026-11-16 "Codex" paragraph's "non-sensitive" and "stays with Claude" limits now end on 2026-11-25. S56's row says a bug that is a security gap may go to Codex too, started by Blue, with `security-reviewer`; S56 stays unmarked as sensitive. No row's Status or Needs changes.
-- 2026-11-26 (PR #PRNUM; proposed, pending Blue): Blue's open-source verdicts of 2026-11-25 and checklist step 82 (docs/DECISIONS.md, 2026-11-25). New rows S68 (re-pin SkillSpector 2.13.7 and Obsidian Skills 1.2.3, `READY`), S69 (Trail of Bits patterns in security-reviewer, `READY`), S70 (one claude-security trial scan, `HOLD (Blue)` because Blue starts it, checklist step 85), S71 (one elephant-goldfish trial on the Composer spec, `READY`) and S72 (an e2e smoke test on Windows runners, `READY`), with their depth checks and S70's setup checklist in "S68 to S72 details". The 1.2 queue gains ECC's `click-path-audit` and three PATTERN-MINE picks, and the PowerShell and Electron reviewer. The plan now counts 71 sessions, 69 active. No existing row changes.
+- 2026-11-26 (PR #294; proposed, pending Blue): Blue's open-source verdicts of 2026-11-25 and checklist step 82 (docs/DECISIONS.md, 2026-11-25). New rows S68 (re-pin SkillSpector 2.13.7 and Obsidian Skills 1.2.3, `READY`), S69 (Trail of Bits patterns in security-reviewer, `READY`), S70 (one claude-security trial scan, `HOLD (Blue)` because Blue starts it, checklist step 85), S71 (one elephant-goldfish trial on the Composer spec, `READY`) and S72 (an e2e smoke test on Windows runners, `READY`), with their depth checks and S70's setup checklist in "S68 to S72 details". The 1.2 queue gains ECC's `click-path-audit` and three PATTERN-MINE picks, and the PowerShell and Electron reviewer. The plan now counts 71 sessions, 69 active. No existing row changes.

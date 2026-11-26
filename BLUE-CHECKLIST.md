@@ -1349,7 +1349,7 @@ open PRs (#253 and #254).
 
 ## From your open-source verdicts (2026-11-25)
 
-Step 85 comes from PR #PRNUM (docs/DECISIONS.md, 2026-11-25). Step numbers 81, 83 and 84 belong to
+Step 85 comes from PR #294 (docs/DECISIONS.md, 2026-11-25). Step numbers 81, 83 and 84 belong to
 open PRs (#283, #286 and #287).
 
 - [ ] **85. Start the claude-security trial scan (S70).** **About an afternoon** of the session's
@@ -1407,7 +1407,7 @@ You can start on the first one now, which saves time later.
   - *Done when:* your verdict is in the record's "Blue's verdict" line, word for word, and the agent
     ticks this with the date.
 - [x] **82. Your verdicts on S45's ECC skill list (PR #255).** *Done 2026-11-25: Blue's verdicts
-  given in a desktop session; recorded here (PR #PRNUM), in every row's last column of
+  given in a desktop session; recorded here (PR #294), in every row's last column of
   `docs/decisions/OSS-ecc.md` (all 314: 5 yes and 4 no among the nine top picks, and the other 305
   as proposed). Your words: "Step 82: ECC skills - proceed with all of your recommendations. i
   agree, thanks", and "yes" to the other 305. Checked from your words as the desktop session's

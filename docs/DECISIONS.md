@@ -10,7 +10,7 @@ agents and S45's ECC skill list (PR #255, merged 2026-11-25). Desktop sessions r
 and do no PR work, so a cloud session running as `ABlueAgent` records them; his words are quoted as
 that session's hand-off relayed them (not verified: the recording session can't see the desktop
 chat). How the plan follows them (new rows S68 to S72, docs/PLAN-1.1.md "S68 to S72 details") is
-proposed, pending Blue (PR #PRNUM); merging approves it. "Builder's reading" marks a line that is
+proposed, pending Blue (PR #294); merging approves it. "Builder's reading" marks a line that is
 the builder's, not Blue's. Facts about the tools (versions, sources, licences) are from the
 hand-off and not verified here; each row checks them at its pin.
 
