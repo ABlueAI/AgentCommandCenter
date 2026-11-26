@@ -28,7 +28,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { execFileSync, spawnSync } = require('child_process');
 const guard = require('./account-guard.js');
 const { AGENT_LOGINS } = require('../../.github/scripts/agent-logins.js');
 
@@ -219,6 +219,16 @@ for (const cmd of NOT_GUARDED) {
 process.stdout.write('\ndecide(): the three login cases\n');
 const bash = (command) => ({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command } });
 
+const withPushSources = {
+  git: (args) => {
+    if (args.includes('config')) return 'push.default\ncurrent\0';
+    if (args.includes('symbolic-ref')) return 'topic\n';
+    if (args.includes('get-url')) return 'https://github.com/o/r.git\n';
+    throw new Error('unexpected Git call');
+  },
+  openPulls: () => [],
+};
+
 {
   const v = guard.decide(bash('gh pr create --fill'), () => ({ login: 'ABlueAI' }));
   assert(v.exitCode === 2, 'ABlueAI + gh pr create: exit 2 (blocked)');
@@ -231,7 +241,7 @@ assert(guard.decide(bash('git push'), () => ({ login: 'ablueai' })).exitCode ===
 assert(guard.decide(bash('gh pr ready 1'), () => ({ login: 'ABlueAI' })).exitCode === 2,
   'ABlueAI + gh pr ready: exit 2');
 {
-  const v = guard.decide(bash('git push -u origin x'), () => ({ login: 'ABlueAgent' }));
+  const v = guard.decide(bash('git push -u origin x'), () => ({ login: 'ABlueAgent' }), withPushSources);
   assert(v.exitCode === 0 && !v.stderr && !v.systemMessage, 'ABlueAgent + git push: exit 0, silent');
 }
 assert(guard.decide(bash('gh pr create'), () => ({ login: 'someone-else' })).exitCode === 0,
@@ -243,10 +253,10 @@ assert(guard.decide(bash('gh pr create'), () => ({ login: 'someone-else' })).exi
     'gh not installed: a one-line notice that the account could not be checked');
 }
 {
-  const v = guard.decide(bash('git push'), () => ({ error: 'gh could not read the login (exit 4)' }));
+  const v = guard.decide(bash('git push'), () => ({ error: 'gh could not read the login (exit 4)' }), withPushSources);
   assert(v.exitCode === 0 && /couldn't check/.test(v.systemMessage), 'gh not logged in: exit 0 with the notice');
 }
-assert(guard.decide(bash('git push'), () => undefined).exitCode === 0, 'a login reader that returns nothing: exit 0');
+assert(guard.decide(bash('git push'), () => undefined, withPushSources).exitCode === 0, 'a login reader that returns nothing: exit 0');
 
 process.stdout.write('\ndecide(): non-matching input never calls gh\n');
 let calls = 0;
@@ -280,7 +290,7 @@ process.stdout.write('\ndecide(): review and merge commands are blocked under an
   assert(/Agents never approve or merge/.test(v.stderr) && /PR comment/.test(v.stderr) && /web UI/.test(v.stderr),
     'the message says agents never approve or merge, that Blue merges in the web UI, and to post a comment instead');
   assert(!/cloud session|ABlueAI opened/.test(v.stderr), 'the message is not the ABlueAI-login message');
-  const g = guard.decide(bash('git push'), () => ({ login: 'ABlueAgent' }));
+  const g = guard.decide(bash('git push'), () => ({ login: 'ABlueAgent' }), withPushSources);
   assert(g.exitCode === 0, 'git push under ABlueAgent is still allowed');
   for (const cmd of ['git push && gh -R ABlueAI/AgentCommandCenter pr merge 5', 'bash -c "git push; gh api -X PUT repos/o/r/pulls/5/merge"',
     "echo 'x && gh pr ready 5 && gh pr review 5 --approve"]) {
@@ -293,14 +303,14 @@ process.stdout.write('\ndecide(): review and merge commands are blocked under an
 
 process.stdout.write('\ndecide(): App identities (mako-agents[bot])\n');
 {
-  const v = guard.decide(bash('git push -u origin x'), () => ({ login: 'mako-agents[bot]' }));
+  const v = guard.decide(bash('git push -u origin x'), () => ({ login: 'mako-agents[bot]' }), withPushSources);
   assert(v.exitCode === 0 && !v.stderr && !v.systemMessage, 'mako-agents[bot] + git push: exit 0, silent');
   assert(guard.decide(bash('gh pr create --fill'), () => ({ login: 'Some-App[BOT]' })).exitCode === 0, 'any [bot] login passes');
   const t = guard.decide(bash('gh pr ready 5'), () => ({ appToken: true, error: 'a GitHub App installation token has no user login' }));
   assert(t.exitCode === 0 && /installation token/.test(t.systemMessage) && /gh pr ready/.test(t.systemMessage) && !/\n/.test(t.systemMessage),
     'an installation token: exit 0 with a one-line notice that names the token kind and the command');
   assert(!/couldn't check/.test(t.systemMessage), 'an installation token is not reported as an unknown error');
-  const u = guard.decide(bash('git push'), () => ({ error: 'gh could not read the login (exit 1); it may not be logged in or offline' }));
+  const u = guard.decide(bash('git push'), () => ({ error: 'gh could not read the login (exit 1); it may not be logged in or offline' }), withPushSources);
   assert(/couldn't check/.test(u.systemMessage), 'any other failure is still the unknown-error notice');
 }
 
@@ -636,13 +646,113 @@ assert(guard.findGuardedCommand('powershell -Command "& { return gh pr merge 5 }
 
 process.stdout.write('\ndecide(): the PowerShell tool\n');
 const pwsh = (command) => ({ hook_event_name: 'PreToolUse', tool_name: 'PowerShell', tool_input: { command } });
+
+process.stdout.write('\nremaining account guard regressions\n');
+{
+  const merge = 'gh pr merge 5';
+  const mutation = "gh api graphql -f query='mutation { mergePullRequest(input: {}) { clientMutationId } }'";
+  const dismissal = "gh api graphql -f query='mutation { dismissPullRequestReview(input: {}) { clientMutationId } }'";
+  for (const [label, command, want] of [
+    ['GraphQL after a parse gap', '(( x = 1 << 3 ))\n' + mutation, 'gh api merge'],
+    ['grouped short method flag', 'gh api -iX PUT repos/o/r/pulls/5/merge', 'gh api merge'],
+    ['grouped attached method flag', 'gh api -iXPUT repos/o/r/pulls/5/merge', 'gh api merge'],
+    ['GraphQL review dismissal', dismissal, 'gh api review'],
+    ['eval', `eval 'gh 'pr' merge 5'`, 'gh pr merge'],
+    ['sh command with concatenated words', `sh -c 'g'"h pr m"'erge 5'`, 'gh pr merge'],
+    ['Bash grouped command flag', `bash -lc 'g'"h pr m"'erge 5'`, 'gh pr merge'],
+    ['xargs with options', `printf '5' | xargs -n 1 gh pr merge`, 'gh pr merge'],
+    ['env with a value-taking option', 'env -u GH_DEBUG command -- gh pr merge 5', 'gh pr merge'],
+    ['env with a literal argument string', `env -S 'gh pr merge 5'`, 'gh pr merge'],
+    ['command prefix option', 'command -p gh pr merge 5', 'gh pr merge'],
+    ['backticks around a wrapper', 'echo `eval "gh pr merge 5"`', 'gh pr merge'],
+    ['substitution around a wrapper', 'echo "$(env -u GH_DEBUG gh pr merge 5)"', 'gh pr merge'],
+    ['literal empty substitution', 'echo $( )', null],
+    ['WSL through Bash', 'wsl gh pr merge 5', 'gh pr merge'],
+  ]) assert(guard.findGuardedCommand(command) === want, label);
+
+  for (const [label, command] of [
+    ['Start-Process launches a shell', `Start-Process bash -ArgumentList '-c "${merge}"'`],
+    ['Start-Process trailing colon', `Start-Process -FilePath: gh -ArgumentList: 'pr merge 5'`],
+    ['PowerShell start alias', "start gh 'pr merge 5'"],
+    ['cmd keep-open switch', `cmd /k "${merge}"`],
+    ['Start-Process Args alias', "Start-Process -FilePath gh -Args 'pr merge 5'"],
+    ['Start-Process attached FilePath', "Start-Process -FilePath:gh -ArgumentList 'pr merge 5'"],
+    ['CRLF here-string', `iex @'\r\n${merge}\r\n'@`],
+    ['Invoke-Expression with a common switch', `iex -Verbose -Command '${merge}'`],
+    ['Invoke-Expression pipeline literal', `'${merge}' | Invoke-Expression`],
+    ['PowerShell assignment to a member', `$result.Value+=gh pr merge 5`],
+    ['PowerShell assignment with a preceding space', `$result =gh pr merge 5`],
+    ['native PowerShell launch form', `pwsh -CommandWithArgs '${merge}' value`],
+    ['native CMD joined command switch', `cmd /d /k"${merge}"`],
+    ['PowerShell statement trap', `trap { ${merge} }`],
+    ['PowerShell clean block', `function Run-Check { clean { ${merge} } }`],
+    ['WSL through PowerShell', 'wsl.exe gh pr merge 5'],
+  ]) assert(ps(command) === 'gh pr merge', label);
+
+  assert(guard.findGuardedCommand('command -v gh pr merge') === null, 'command lookup stays read-only');
+  assert(guard.findGuardedCommand('(( x = 1 << 3 ))\n' + mutation.replace('-f', '-iX GET -f')) === null,
+    'an explicit GraphQL GET stays read-only after a parse gap');
+  assert(guard.findGuardedCommand('echo "literal: $(echo gh pr merge)"') === null,
+    'substitution output that only mentions a command stays unguarded');
+  assert(guard.decide({ ...bash(merge), tool_name: 'constructor' }, counting).exitCode === 0,
+    'an inherited tool name is not routed to Bash');
+  const depth = guard.decide(pwsh('pwsh -c '.repeat(10) + merge), counting);
+  assert(depth.exitCode === 2 && !depth.checked && /nesting/.test(depth.stderr || ''),
+    'command-running depth exhaustion blocks visibly before checking login');
+  const slowCommand = 'pwsh -c '.repeat(8) + 'Write-Output ' + 'a'.repeat(100000);
+  const slow = guard.decide(pwsh(slowCommand), counting);
+  assert(slow.exitCode === 2 && !slow.checked && /work budget/.test(slow.stderr || ''),
+    'sibling PowerShell and Bash parses share one work budget');
+}
+
+{
+  const git = (args) => {
+    if (args.includes('config')) {
+      const override = args.find((arg) => arg.startsWith('push.default='));
+      return 'push.default\n' + (override?.split('=')[1] || 'current') + '\0branch.topic.merge\nrefs/heads/upstream\0branch.topic.remote\norigin\0';
+    }
+    if (args.includes('symbolic-ref')) return 'topic\n';
+    if (args.includes('get-url')) return 'https://github.com/o/r.git\n';
+    throw new Error('unexpected Git call');
+  };
+  const repo = { full_name: 'o/r' };
+  const pull = (login, head, base = 'main', headRepo = repo) => ({ user: { login }, head: { ref: head, repo: headRepo }, base: { ref: base, repo } });
+  const pulls = [pull('other', 'shared'), pull('Other', 'another', 'shared-base'), pull('ABlueAgent', 'mine'), pull('other', 'topic', 'main', { full_name: 'fork/r' })];
+  const sources = { git, openPulls: () => pulls };
+  const agent = () => ({ login: 'ABlueAgent' });
+  const verdict = (cmd, deps = sources) => guard.decide(bash(cmd), agent, deps);
+  for (const cmd of [
+    'git push origin HEAD:main', 'git push origin HEAD:refs/heads/main', 'git push origin +branch', 'git push origin :branch',
+    'git push origin -f topic', 'git push -uf origin topic', 'git push origin --force topic',
+    'git push --force-with-lease=topic origin topic', 'git push --force-if-includes origin topic',
+    'git push --mirror', 'git push --all', 'git push --branches', 'git push origin --delete topic',
+    'git push --repo=origin HEAD:main', 'git -c push.default=matching push',
+    'git push origin topic:shared', 'git push origin refs/heads/shared', 'git push origin shared-base',
+    'git push origin mine shared', 'git push origin mine; git push origin shared',
+    '(( x = 1 << 3 ))\ngit push origin HEAD:main',
+  ]) {
+    const v = verdict(cmd);
+    assert(v.exitCode === 2 && /push/.test(v.stderr || ''), `refuse ${cmd}`);
+  }
+  assert(verdict('git push origin mine').exitCode === 0, 'an agent can update its own PR branch');
+  assert(verdict('git push').exitCode === 0, 'push.default=current uses the current branch and ignores a fork PR with the same name');
+  assert(verdict('git -c push.default=upstream push', { ...sources, openPulls: () => [pull('other', 'upstream')] }).exitCode === 2,
+    'push.default=upstream checks the configured upstream branch');
+  assert(verdict('git push origin HEAD', { ...sources, openPulls: () => [pull('other', 'topic')] }).exitCode === 2,
+    'a HEAD refspec checks the current branch');
+  assert(verdict('git push origin topic', { ...sources, openPulls: () => { throw new Error('offline'); } }).exitCode === 2,
+    'a failed PR lookup visibly refuses a push');
+  const broken = guard.decide(bash('gh pr ready 5'), () => { throw new Error('internal fixture error'); });
+  assert(broken.exitCode === 2 && /internal error/.test(broken.stderr || ''), 'an internal hook error refuses visibly');
+}
+
 {
   const v = guard.decide(pwsh('& gh.exe pr create --fill'), () => ({ login: 'ABlueAI' }));
   assert(v.exitCode === 2 && /ABlueAI/.test(v.stderr) && /gh pr create/.test(v.stderr), 'ABlueAI + PowerShell & gh.exe pr create: exit 2 with the block message');
   for (const cmd of ['git push', 'gh pr ready 5', 'git -C ..\\wt push', "git commit -m @'\nmsg\n'@\ngit push"]) {
     assert(guard.decide(pwsh(cmd), () => ({ login: 'ABlueAI' })).exitCode === 2, `ABlueAI + PowerShell ${JSON.stringify(cmd)}: exit 2`);
   }
-  const ok = guard.decide(pwsh('git push -u origin x'), () => ({ login: 'ABlueAgent' }));
+  const ok = guard.decide(pwsh('git push -u origin x'), () => ({ login: 'ABlueAgent' }), withPushSources);
   assert(ok.exitCode === 0 && !ok.stderr && !ok.systemMessage, 'ABlueAgent + PowerShell git push: exit 0, silent');
   const off = guard.decide(pwsh('gh pr create'), () => ({ error: 'gh is not installed or not on PATH' }));
   assert(off.exitCode === 0 && /couldn't check/.test(off.systemMessage), 'PowerShell, gh not installed: exit 0 with the notice (fails open, as for Bash)');
@@ -680,7 +790,7 @@ const pwsh = (command) => ({ hook_event_name: 'PreToolUse', tool_name: 'PowerShe
     let n = 0;
     const blue = guard.decide(pwsh(cmd), () => { n++; return { login: 'ABlueAI' }; });
     assert(blue.exitCode === 2 && blue.checked === true && /git push/.test(blue.stderr) && n === 1, `ABlueAI + PowerShell ${JSON.stringify(cmd)}: exit 2 after one login check`);
-    const agentOk = guard.decide(pwsh(cmd), () => ({ login: 'ABlueAgent' }));
+    const agentOk = guard.decide(pwsh(cmd), () => ({ login: 'ABlueAgent' }), withPushSources);
     assert(agentOk.exitCode === 0 && !agentOk.stderr && !agentOk.systemMessage, `ABlueAgent + PowerShell ${JSON.stringify(cmd)}: exit 0, silent`);
   }
   for (const cmd of ['& { return gh pr merge 5 }', 'throw gh pr merge 5', 'return gh pr review 5 -a']) {
@@ -722,9 +832,10 @@ const pwsh = (command) => ({ hook_event_name: 'PreToolUse', tool_name: 'PowerShe
     ['git push; return and 10 nested pwsh -c, 10 KB', 'git push; return ' + 'pwsh -c '.repeat(10) + 'x '.repeat(5000), 4000],
     ['git push; 10 x (return pwsh -c), 10 KB', 'git push; ' + 'return pwsh -c '.repeat(10) + 'x '.repeat(5000), 4000]]) {
     const t0 = Date.now();
-    const hit = guard.findGuardedCommand(cmd, 0, 'ps');
+    const verdict = guard.decide(pwsh(cmd), counting);
     const ms = Date.now() - t0;
-    assert(hit === 'git push' && ms < limit, `PowerShell ${label}: git push found in ${ms} ms (under ${limit})`);
+    assert(verdict.exitCode === 2 && /nesting|work budget/.test(verdict.stderr || '') && ms < limit,
+      `PowerShell ${label}: scan limit blocked in ${ms} ms (under ${limit})`);
   }
   // Review run 6: no input makes the splitter backtrack. Long comment lines and many block comments
   // after line breaks finish quickly (a pattern that backtracked took seconds at about 30 characters).
@@ -793,6 +904,9 @@ const emptyDir = path.join(tmp, 'empty');
 const workDir = path.join(tmp, 'work');
 const logFile = path.join(tmp, 'gh-calls.log');
 for (const d of [binDir, emptyDir, workDir]) fs.mkdirSync(d);
+const testGit = (args) => execFileSync('git', ['-C', workDir, ...args], { stdio: 'pipe' });
+testGit(['init', '--initial-branch=topic']);
+testGit(['remote', 'add', 'origin', 'https://github.com/o/r.git']);
 
 // A fake `gh`: a copy of node. `gh api user --jq .login` then runs `node api user --jq .login`,
 // which loads ./api.js from the hook's working directory: the stub below.
@@ -803,6 +917,11 @@ fs.writeFileSync(path.join(workDir, 'api.js'), `
 const fs = require('fs');
 fs.appendFileSync(process.env.FAKE_GH_LOG, process.argv.slice(2).join(' ') + '\\n');
 const mode = process.env.FAKE_GH_MODE;
+if (process.argv.slice(2).some((arg) => arg.startsWith('repos/o/r/pulls?'))) {
+  if (mode === 'pulls-offline') process.exit(1);
+  process.stdout.write(JSON.stringify([{ user: { login: 'AnotherAgent' }, head: { ref: 'shared', repo: { full_name: 'o/r' } }, base: { ref: 'main', repo: { full_name: 'o/r' } } }]) + '\\n');
+  process.exit(0);
+}
 if (mode === 'notloggedin') {
   process.stderr.write('To get started with GitHub CLI, please run:  gh auth login\\n');
   process.exit(4);
@@ -819,7 +938,8 @@ function runHook(command, { mode, pathDir = binDir, toolName = 'Bash' } = {}) {
   for (const [k, v] of Object.entries(process.env)) {
     if (!/^path$/i.test(k) && !/^(GH_|GITHUB_)/i.test(k)) env[k] = v;
   }
-  env.PATH = pathDir;
+  const systemPath = Object.entries(process.env).find(([key]) => /^path$/i.test(key))?.[1];
+  env.PATH = pathDir === binDir && systemPath ? binDir + path.delimiter + systemPath : pathDir;
   env.FAKE_GH_MODE = mode || 'ABlueAgent';
   env.FAKE_GH_LOG = logFile;
   const input = JSON.stringify({
@@ -850,8 +970,8 @@ const ghCalls = () => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8')
   assert(typeof msg === 'string' && /couldn't check/.test(msg), 'not logged in: systemMessage notice in JSON on stdout');
 }
 {
-  const r = runHook('git push', { pathDir: emptyDir });
-  assert(r.status === 0, `gh not installed + git push: exit 0 (got ${r.status})`);
+  const r = runHook('gh pr create', { pathDir: emptyDir });
+  assert(r.status === 0, `gh not installed + gh pr create: exit 0 (got ${r.status})`);
   let msg = null;
   try { msg = JSON.parse(r.stdout).systemMessage; } catch { /* asserted below */ }
   assert(typeof msg === 'string' && /not installed/.test(msg), 'gh not installed: the notice says gh is missing');
@@ -873,7 +993,7 @@ const ghCalls = () => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8')
   fs.copyFileSync(ghPath, planted);
   fs.chmodSync(planted, 0o755);
   const before = ghCalls().length;
-  const r = runHook('git push', { mode: 'ABlueAI', pathDir: emptyDir });
+  const r = runHook('gh pr create', { mode: 'ABlueAI', pathDir: emptyDir });
   assert(r.status === 0 && /not installed/.test(r.stdout), 'a gh in the working directory is ignored when PATH has none');
   assert(ghCalls().length === before, 'the planted gh never ran');
   assert(guard.resolveGh({ PATH: ['.', '', 'relative/dir'].join(path.delimiter) }) === null,
@@ -897,6 +1017,26 @@ const ghCalls = () => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8')
   try { msg = JSON.parse(app.stdout).systemMessage; } catch { /* asserted below */ }
   assert(typeof msg === 'string' && /installation token/.test(msg) && !/couldn't check/.test(msg),
     'installation token: the notice says why, and is not the unknown-error notice');
+}
+{
+  const before = ghCalls().length;
+  const budget = runHook('pwsh -c '.repeat(8) + 'Write-Output ' + 'a'.repeat(100000), { toolName: 'PowerShell' });
+  assert(budget.status === 2 && /work budget/.test(budget.stderr) && ghCalls().length === before,
+    'nested shell work is visibly refused by the hook process without a gh call');
+  const shared = runHook('git push origin HEAD:shared');
+  assert(shared.status === 2 && /in use by another open pull request/.test(shared.stderr),
+    'shared push destination is refused by the hook process');
+  testGit(['config', 'remote.origin.push', 'refs/heads/topic:refs/heads/shared']);
+  const configured = runHook('git push');
+  assert(configured.status === 2 && /in use by another open pull request/.test(configured.stderr),
+    'a configured remote push refspec is resolved and checked by the hook process');
+  testGit(['config', '--unset', 'remote.origin.push']);
+  const unavailable = runHook('git push origin topic', { mode: 'pulls-offline' });
+  assert(unavailable.status === 2 && /GitHub could not verify/.test(unavailable.stderr),
+    'an unavailable PR check refuses visibly in the hook process');
+  const missing = runHook('git push origin topic', { pathDir: emptyDir });
+  assert(missing.status === 2 && /could not verify|not installed/.test(missing.stderr),
+    'missing push verification tools visibly refuse the push');
 }
 {
   // Review and merge commands: blocked under every login and even with no gh at all.

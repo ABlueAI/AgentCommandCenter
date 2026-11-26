@@ -12,7 +12,8 @@
 // Second rule, added 2026-11-11 ("Agents never approve or merge", Blue): PR #133, authored by ABlueAI,
 // was approved and merged by ABlueAgent 11 seconds apart on 2026-10-29, because the `main` ruleset
 // accepts an agent approval on a PR Blue authored; the merge audit caught it only afterwards (issue
-// #137). So review and merge calls are blocked under ANY login, not only ABlueAI's.
+// #137). Review and merge calls are blocked under every login. Git pushes also check the
+// destination and whether another author's open pull request uses the branch.
 //
 // What it does, in order:
 //   1. Reads the hook input (JSON on stdin) and looks, anywhere in the command (chained
@@ -22,37 +23,38 @@
 //      Start-Process and `cmd /c`; a command after `return`, `throw` or `exit`; and, on
 //      top, the PowerShell word scan: a PowerShell script that names a guarded command's words
 //      anywhere, in any order or case, gets the login check, fail-closed; see psWordScan), for
-//        login-dependent commands (blocked only under ABlueAI): `gh pr create` (and its alias
+//        commands that require the login check: `gh pr create` (and its alias
 //          `gh pr new`), `gh pr ready` and `git push`;
 //        review and merge commands (blocked under any login, without asking gh who you are):
 //          `gh pr review`, `gh pr merge`, and a `gh api` call that writes (an explicit
 //          `-X`/`--method` POST or PUT, or any body flag `-f -F --field --raw-field --input`, which
 //          make gh POST) to a `.../reviews` endpoint, to `.../pulls/N/merge`, to `.../merges` (the
 //          branch-merge API) or to the cloud sessions' `.../ccr/auto_merge` route (auto-merge), or
-//          a `gh api graphql` call that names mergePullRequest, enablePullRequestAutoMerge,
-//          addPullRequestReview or submitPullRequestReview. A read (a GET with no body) of those
+//          a `gh api graphql` call that names a review or merge mutation. A read of those
 //          endpoints is not matched here (.claude/settings.json denies `gh api` to them whatever
 //          the method, which is stricter).
 //      Anything else exits 0 straight away, without starting `gh` or touching the network.
 //   2. For a login-dependent command only, runs `gh api user --jq .login` (same environment as the
 //      session, so a Mako agent pane's GH_TOKEN and a cloud session's login are what it sees).
-//      It checks gh's login, not the credential `git push` itself uses (Git Credential Manager or
-//      an SSH key): with gh logged out but Git Credential Manager still holding ABlueAI, a push is
-//      allowed with a notice. Removing both logins (checklist step 49) closes that gap.
+//      The login check uses gh's identity. Git can use a separate credential, so both logins
+//      must be removed from Blue's PCs (checklist step 49).
 //   3. Login `ABlueAI` (GitHub logins are case-insensitive): exit 2 with a message on stderr.
 //      Claude Code blocks the tool call and shows Claude that message.
 //      Any other login (`ABlueAgent` in cloud sessions, `mako-agents[bot]`, the GitHub App, in
-//      local panes; any login ending in `[bot]` is accepted): exit 0, silently.
+//      local panes; any login ending in `[bot]` is accepted) passes the login check.
 //      An App installation token has no user, so `gh api user` answers 403 "Resource not
 //      accessible by integration" for it: that is not an unknown error. The token can't be
-//      ABlueAI's, so the command is allowed, with a one-line notice that says why.
-//      `gh` missing, not logged in, offline or slow: exit 0, with a one-line notice to the user
-//      (`systemMessage` in JSON on stdout) that the account couldn't be checked.
+//      ABlueAI's, so it passes the login check with a one-line notice.
+//      `gh` missing, not logged in, offline or slow: the existing login-only checks allow with a
+//      one-line notice (`systemMessage` in JSON on stdout).
 //   4. A review or merge command (above) exits 2 with its own message, whatever the login.
 //
-// It fails open on purpose (Blue, 2026-11-04: "i just dont want this to cause more problems"):
-// only a confirmed `ABlueAI` login blocks. A crash, bad input or an unknown shape is allowed
-// with a notice. settings.json leaves `onFailure` unset, so in exec form a hook that can't start
+//   5. Pushes to main, force, deletion and bulk pushes, and pushes to branches used by another
+//      author's open PR in the destination repository exit 2. Unverifiable push checks also exit 2.
+//   6. One work budget covers input, nested parsing and subprocess checks. Exhaustion or an internal
+//      error exits 2 with a reason on stderr.
+//
+// settings.json leaves `onFailure` unset, so in exec form a hook that can't start
 // (no node on PATH, a missing script) is a non-blocking error: "Without `onFailure` set, the same
 // missing script is a non-blocking error and `ls` runs" (docs, "Block the action when a hook
 // fails"). Exec form: "path placeholders ... are substituted into `command` and into each `args`
@@ -64,8 +66,8 @@
 // and applies JSON on stdout, where `systemMessage` is a "Warning message shown to the user".
 //
 // Known gaps (not a security boundary; it guards against an honest session using the wrong
-// login): wrappers that take their own options (`timeout 60 git push`, `nice -n 5`, `sudo -u x`,
-// `xargs`, and `cmd /c` from Bash), `pwsh -EncodedCommand`, `pwsh -File` and a script piped into
+// login): scripts that build commands from output, wrappers that take unrecognized options,
+// `pwsh -EncodedCommand`, `pwsh -File` and a script piped into
 // pwsh's standard input, in PowerShell a guarded command whose words appear only as fragments
 // (`'g' + 'it'`, `[char]103`, base64; whole words held in a variable or an array, as in `gh @a`,
 // are found by the word scan, but get only the login check, so a review or merge command found
@@ -85,9 +87,35 @@
 const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { checkPushes, PushRefusal } = require('./account-guard-push.js');
 
 const BLOCKED_LOGIN = 'ABlueAI';
 const GH_TIMEOUT_MS = 10000;
+const HOOK_WORK_MS = 20000;
+const MAX_INPUT_BYTES = 2 * 1024 * 1024;
+const MAX_DEPTH = 8;
+const MAX_WORK = 1500000;
+const BLOCK_PREFIX = "Blocked by Mako's account guard (.claude/hooks/account-guard.js):";
+
+class ScanLimit extends Error {}
+
+function scanWork() {
+  return {
+    remaining: MAX_WORK, deadline: performance.now() + HOOK_WORK_MS,
+    depths: new WeakMap(), pipelineInputs: new WeakMap(), pushes: [],
+  };
+}
+
+function charge(work, size = 1) {
+  work.remaining -= size;
+  if (work.remaining < 0 || performance.now() >= work.deadline) {
+    throw new ScanLimit('the hook reached its work budget');
+  }
+}
+
+function scanContext(work = scanWork()) {
+  return { work, unbalanced: false };
+}
 
 const BLOCK_MESSAGE = [
   `Blocked by Mako's account guard (.claude/hooks/account-guard.js): this session's GitHub CLI login is ${BLOCKED_LOGIN}.`,
@@ -115,7 +143,7 @@ const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh']);
 const POWERSHELLS = new Set(['pwsh', 'powershell']);
 // Words that run the next word as a command; skipped before looking at the program name.
 const PREFIX_WORDS = new Set([
-  'sudo', 'command', 'builtin', 'exec', 'nohup', 'time', 'nice', 'then', 'do', 'else', 'elif',
+  'sudo', 'builtin', 'nohup', 'time', 'nice', 'then', 'do', 'else', 'elif',
   'if', 'while', 'until', '!', '{', '}',
 ]);
 // git's global options that take a separate value (`git -C dir push`).
@@ -168,6 +196,7 @@ function skipHeredocBodies(s, nl, pending, ctx, onBody) {
     while (pos <= s.length) {
       const next = s.indexOf('\n', pos);
       const lineEnd = next === -1 ? s.length : next;
+      charge(ctx.work, lineEnd - pos + 1);
       let line = s.slice(pos, lineEnd).replace(/\r$/, '');
       if (h.stripTabs) line = line.replace(/^\t+/, '');
       if (line === h.delim) {
@@ -187,6 +216,7 @@ function skipHeredocBodies(s, nl, pending, ctx, onBody) {
 // The command substitutions bash runs inside an unquoted heredoc body: `$(...)` and backticks.
 // Everything else in the body, quotes included, is literal text.
 function bodySubstitutions(body, ctx) {
+  charge(ctx.work, body.length);
   const found = [];
   for (let i = 0; i < body.length; i++) {
     const c = body[i];
@@ -211,7 +241,9 @@ function matchParen(s, open, ctx) {
   let depth = 1;
   let quote = null;
   let pending = [];
+  let nextCharge = open;
   for (let i = open; i < s.length; i++) {
+    if (i >= nextCharge) { charge(ctx.work, 256); nextCharge = i + 256; }
     const c = s[i];
     if (quote) {
       if (c === '\\' && quote === '"') { i++; continue; }
@@ -244,14 +276,20 @@ function matchParen(s, open, ctx) {
 // ctx.unbalanced is set when a quote, `$(` or backtick never closes, or a heredoc delimiter never
 // appears; the caller then falls back to a plain text scan, so a parsing gap can't hide a guarded
 // command.
-function splitCommands(input, depth = 0, ctx = { unbalanced: false }) {
+function splitCommands(input, depth = 0, ctx = scanContext()) {
   const commands = [];
-  if (typeof input !== 'string' || depth > 8) return commands;
+  if (typeof input !== 'string') return commands;
+  if (depth > MAX_DEPTH) { ctx.unbalanced = true; return commands; }
+  charge(ctx.work, input.length + 1);
   let pending = []; // heredocs whose bodies start after the next newline
   let words = [];
   let word = null; // null = no word started
   const endWord = () => { if (word !== null) { words.push(word); word = null; } };
-  const endCommand = () => { endWord(); if (words.length) commands.push(words); words = []; };
+  const endCommand = () => {
+    endWord();
+    if (words.length) { ctx.work.depths.set(words, depth); commands.push(words); }
+    words = [];
+  };
   const sub = (text) => { for (const c of splitCommands(text, depth + 1, ctx)) commands.push(c); };
 
   const s = input;
@@ -416,6 +454,7 @@ function psHereString(s, i, ctx) {
     while (s[k] === ' ' || s[k] === '\t') k++;
     if (k > lineStart && isOneOf(quotes, s[k]) && s[k + 1] === '@') ctx.unbalanced = true;
     const next = s.indexOf('\n', pos);
+    charge(ctx.work, (next === -1 ? s.length : next + 1) - pos);
     if (next === -1) break;
     pos = next + 1;
   }
@@ -425,6 +464,7 @@ function psHereString(s, i, ctx) {
 
 // The `$(...)` groups an expandable here-string body runs (a backtick escapes the `$`).
 function psBodySubstitutions(body, ctx) {
+  charge(ctx.work, body.length);
   const found = [];
   for (let i = 0; i < body.length; i++) {
     if (body[i] === '`') { i++; continue; }
@@ -453,7 +493,9 @@ function psParenEnd(s, open, ctx) {
 }
 function psParenEndInner(s, open, ctx) {
   let depth = 1;
+  let nextCharge = open;
   for (let i = open; i < s.length; i++) {
+    if (i >= nextCharge) { charge(ctx.work, 256); nextCharge = i + 256; }
     const c = s[i];
     if (c === '`') { i++; continue; }
     if (isOneOf(PS_SINGLE + PS_DOUBLE, c)) { i = psStringEnd(s, i, ctx); continue; }
@@ -487,14 +529,29 @@ function psParenEndInner(s, open, ctx) {
 // native program gets them as separate arguments), else as raw text. Its commands are checked either way.
 // An array of strings is read as a command wherever it appears (`Write-Output @('gh', 'pr', 'merge')`
 // included): the splitter doesn't try to tell a printed value from a run one (fails closed).
-function splitPowerShell(input, depth = 0, ctx = { unbalanced: false }) {
+function splitPowerShell(input, depth = 0, ctx = scanContext()) {
   const commands = [];
   if (typeof input !== 'string') return commands;
-  if (depth > 8) { ctx.unbalanced = true; return commands; } // too deep to split: the text scan runs
+  if (depth > MAX_DEPTH) { ctx.unbalanced = true; return commands; }
+  charge(ctx.work, input.length + 1);
   let words = [];
   let word = null;
+  let pipeInput = null;
+  let startsWithLiteral = false;
   const endWord = () => { if (word !== null) { words.push(word); word = null; } };
-  const endCommand = () => { endWord(); if (words.length) commands.push(words); words = []; };
+  const endCommand = (separator) => {
+    endWord();
+    if (words.length) {
+      ctx.work.depths.set(words, depth);
+      if (pipeInput !== null) ctx.work.pipelineInputs.set(words, pipeInput);
+      commands.push(words);
+    }
+    if (separator === '|' && words.length === 1 && startsWithLiteral) pipeInput = words[0];
+    else if (separator === '|' && words.length === 2 && /^write-output$/i.test(words[0])) pipeInput = words[1];
+    else if (words.length || (separator !== '\n' && separator !== '\r')) pipeInput = null;
+    startsWithLiteral = false;
+    words = [];
+  };
   const split = (text) => splitPowerShell(text, depth + 1, ctx);
   const sub = (text) => { for (const c of split(text)) commands.push(c); };
 
@@ -509,15 +566,20 @@ function splitPowerShell(input, depth = 0, ctx = { unbalanced: false }) {
       continue;
     }
     if (isOneOf(PS_SINGLE, c)) {
+      if (!words.length && word === null) startsWithLiteral = true;
       const end = psStringEnd(s, i, ctx);
       word = (word || '') + s.slice(i + 1, end).replace(/['‘’‚‛]{2}/g, "'");
       i = end;
       continue;
     }
     if (isOneOf(PS_DOUBLE, c)) {
+      if (!words.length && word === null) startsWithLiteral = true;
       const end = psStringEnd(s, i, ctx, sub);
-      word = (word || '') + s.slice(i + 1, end)
-        .replace(/\$\([^]*\)/g, '$()')
+      let value = s.slice(i + 1, end);
+      const firstSub = value.indexOf('$(');
+      const lastClose = value.lastIndexOf(')');
+      if (firstSub !== -1 && lastClose > firstSub) value = value.slice(0, firstSub) + '$()' + value.slice(lastClose + 1);
+      word = (word || '') + value
         .replace(/`([^])/g, '$1')
         .replace(/["“”„]{2}/g, '"');
       i = end;
@@ -526,6 +588,7 @@ function splitPowerShell(input, depth = 0, ctx = { unbalanced: false }) {
     if (c === '@') {
       const h = psHereString(s, i, ctx);
       if (h) {
+        if (!words.length && word === null) startsWithLiteral = true;
         if (h.expandable) for (const text of psBodySubstitutions(h.body, ctx)) sub(text);
         word = (word || '') + h.body;
         i = h.end;
@@ -586,7 +649,7 @@ function splitPowerShell(input, depth = 0, ctx = { unbalanced: false }) {
       }
       continue;
     }
-    if (PS_SEPARATORS.has(c)) { endCommand(); continue; }
+    if (PS_SEPARATORS.has(c)) { endCommand(c); continue; }
     if (c === ' ' || c === '\t') {
       if (word === '--%') { // stop-parsing token: the rest of the line goes to the program as is
         endWord();
@@ -609,7 +672,12 @@ function splitPowerShell(input, depth = 0, ctx = { unbalanced: false }) {
 // PowerShell statement keywords that take a pipeline: the command is what follows them.
 const PS_STATEMENT_KEYWORDS = new Set(['return', 'throw', 'exit']);
 // PowerShell assignment operators (`$x = gh pr create`): the command is what comes after.
-const PS_ASSIGN = /^(?:[-+*/%]|\?\?)?=$/;
+const PS_VARIABLE = /^(?:\[[^\]]*\])*\$/;
+const PS_ASSIGN = /^(?:[-+*/%]|\?\?)?=(?!=)([^]*)$/;
+// Common parameters accepted by Invoke-Expression in addition to its Command parameter.
+const IEX_VALUE_OPTS = new Set(['erroraction', 'ea', 'warningaction', 'wa', 'informationaction', 'infa',
+  'progressaction', 'proga', 'errorvariable', 'ev', 'warningvariable', 'wv', 'informationvariable',
+  'iv', 'outvariable', 'ov', 'outbuffer', 'ob', 'pipelinevariable', 'pv']);
 // Start-Process's switch parameters (no value); every other named parameter takes one.
 const START_SWITCHES = ['wait', 'nonewwindow', 'passthru', 'usenewenvironment', 'loaduserprofile', 'whatif', 'confirm'];
 
@@ -626,7 +694,7 @@ function startProcessWords(args) {
       const name = (colon === -1 ? a.slice(1) : a.slice(1, colon)).toLowerCase();
       const isSwitch = START_SWITCHES.some((sw) => sw.startsWith(name));
       let value = colon === -1 ? undefined : a.slice(colon + 1);
-      if (value === undefined && !isSwitch) value = args[++i];
+      if (!value && !isSwitch) value = args[++i];
       if (['filepath', 'path', 'pspath'].some((p) => p.startsWith(name))) file = value;
       else if (['argumentlist', 'args'].some((p) => p.startsWith(name))) list = value;
       continue;
@@ -636,49 +704,92 @@ function startProcessWords(args) {
   if (file == null) file = positional.shift();
   if (list == null) list = positional.shift();
   if (file == null) return null;
-  const argWords = String(list == null ? '' : list).split(/[\s,\u001F]+/)
-    .map((w) => w.replace(/^['"‘’“”]+|['"‘’“”]+$/g, ''))
-    .filter(Boolean);
-  return [file, ...argWords];
+  // Start-Process joins its argument list into a native argument string. Double quotes in that
+  // string keep a shell's script together as one argument. PowerShell array elements join with spaces.
+  return [file, ...nativeArguments(list || '')];
+}
+
+function nativeArguments(line) {
+  const words = [];
+  let value = null;
+  let quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (!quoted && /[\s\u001F]/.test(c)) {
+      if (value !== null) words.push(value);
+      value = null;
+      continue;
+    }
+    value ??= '';
+    if (c === '\\') {
+      let end = i + 1;
+      while (line[end] === '\\') end++;
+      const count = end - i;
+      if (line[end] === '"') {
+        value += '\\'.repeat(Math.floor(count / 2));
+        if (count % 2) { value += '"'; end++; }
+      } else value += '\\'.repeat(count);
+      i = end - 1;
+    } else if (c === '"') quoted = !quoted;
+    else value += c === PS_ARRAY_SEP ? ' ' : c;
+  }
+  if (value !== null) words.push(value);
+  return words;
+}
+
+function expressionScript(args, pipeline) {
+  for (let i = 0; i < args.length; i++) {
+    const m = /^-([a-z]+)(?::([^]*))?$/i.exec(args[i]);
+    if (!m) return flattenArrays(args.slice(i)).join(' ');
+    const name = m[1].toLowerCase();
+    if ('command'.startsWith(name)) return m[2] || flattenArrays(args.slice(i + 1)).join(' ');
+    if (m[2] === undefined && IEX_VALUE_OPTS.has(name)) i++;
+  }
+  return pipeline || '';
 }
 
 // The PowerShell-only forms of a simple command: drops a leading `.` (dot-source) and assignments,
 // and reads Invoke-Expression, Start-Process and `cmd /c`. Returns { words } to classify as usual,
 // or { hit } when the command was one of the forms that run another command.
-function powerShellForms(words, depth) {
-  let w = words;
-  for (;;) {
-    if (w[0] === '.') { w = w.slice(1); continue; }
+function powerShellForms(words, depth, work) {
+  let i = 0;
+  let attached = '';
+  for (; i < words.length; i++) {
+    if (words[i] === '.') continue;
     // `return git push`, `throw gh pr merge 5`, `exit git push`: these keywords take a pipeline, so
     // the command starts after them. They are dropped here, like `.`, so each statement is still
     // classified once: classifying it a second time from a later word (review run 8) doubled the
     // nested work at every level of `pwsh -c` or iex and could run the hook past its timeout.
-    if (PS_STATEMENT_KEYWORDS.has(String(w[0]).toLowerCase())) { w = w.slice(1); continue; }
-    if (/^(?:\[[^\]]*\])*\$/.test(w[0] || '')) { // `$x = ...`, `[string]$x = ...`, `$x=...`
-      const m = /^[^=]*?=(?!=)([^]*)$/.exec(w[0]);
-      if (m) { w = m[1] ? [m[1], ...w.slice(1)] : w.slice(1); continue; }
-      if (PS_ASSIGN.test(w[1] || '')) { w = w.slice(2); continue; }
+    if (PS_STATEMENT_KEYWORDS.has(words[i].toLowerCase())) continue;
+    if (PS_VARIABLE.test(words[i])) {
+      const assignment = /^[^=]*=(?!=)([^]*)$/.exec(words[i]);
+      const separate = assignment ? null : PS_ASSIGN.exec(words[i + 1] || '');
+      if (assignment || separate) {
+        if (separate) i++;
+        attached = (assignment || separate)[1];
+        if (!attached) continue;
+        i++;
+      }
     }
     break;
   }
+  const w = attached ? [attached, ...words.slice(i)] : words.slice(i);
   if (!w.length) return { words: w };
   const prog = programName(w[0]);
   const rest = w.slice(1);
   if (prog === 'invoke-expression' || prog === 'iex') {
-    let args = rest;
-    if (args.length && /^-c(?:o(?:m(?:m(?:a(?:n(?:d)?)?)?)?)?)?(?::|$)/i.test(args[0])) { // -Command
-      const attached = args[0].replace(/^-[a-z]+:?/i, '');
-      args = attached ? [attached, ...args.slice(1)] : args.slice(1);
-    }
-    return { hit: findGuardedCommand(flattenArrays(args).join(' '), depth + 1, 'ps') };
+    const script = expressionScript(rest, work.pipelineInputs.get(words));
+    return { hit: script ? scanCommand(script, depth + 1, 'ps', work) : null };
   }
   if (prog === 'start-process' || prog === 'saps' || prog === 'start') {
     const sp = startProcessWords(rest);
-    return { hit: sp ? classifySimpleCommand(sp, depth + 1, 'ps') : null };
+    return { hit: sp ? classifySimpleCommand(sp, depth + 1, 'ps', work) : null };
   }
   if (prog === 'cmd') {
-    const k = rest.findIndex((a) => /^\/[ck]$/i.test(a));
-    return { hit: k === -1 ? null : findGuardedCommand(flattenArrays(rest.slice(k + 1)).join(' '), depth + 1, 'bash') };
+    const k = rest.findIndex((a) => /^\/[ck]/i.test(a));
+    if (k === -1) return { hit: null };
+    const script = [rest[k].slice(2), ...flattenArrays(rest.slice(k + 1))].join(' ').trimStart();
+    return { hit: script ? scanCommand(script, depth + 1, 'bash', work) : null };
   }
   return { words: w };
 }
@@ -699,7 +810,9 @@ function skipOptions(words, start, valueOpts) {
 // gh POST when no method is given).
 const API_VALUE_OPTS = new Set(['-X', '--method', '-H', '--header', '-f', '--raw-field', '-F', '--field', '-q', '--jq', '-t', '--template', '--hostname', '--cache', '-p', '--preview', '--input']);
 const API_BODY_OPTS = new Set(['-f', '--raw-field', '-F', '--field', '--input']);
-const GRAPHQL_REVIEW_MERGE = /\b(?:mergePullRequest|mergeBranch|enqueuePullRequest|enablePullRequestAutoMerge|addPullRequestReview|submitPullRequestReview)\b/;
+const GRAPHQL_MUTATIONS = ['mergePullRequest', 'mergeBranch', 'enqueuePullRequest', 'enablePullRequestAutoMerge',
+  'addPullRequestReview', 'submitPullRequestReview', 'dismissPullRequestReview'];
+const GRAPHQL_REVIEW_MERGE = new RegExp(`\\b(?:${GRAPHQL_MUTATIONS.join('|')})\\b`);
 
 // The arguments after `gh api`: 'gh api review' or 'gh api merge' for a write to a review or merge
 // endpoint, else null. A GET with no body, and any other endpoint, is left alone.
@@ -716,11 +829,14 @@ function classifyGhApi(args) {
       if (API_BODY_OPTS.has(name)) body = true;
       if (eq === -1 && API_VALUE_OPTS.has(name)) i++;
     } else if (a.startsWith('-') && a.length > 1) {
-      const flag = a.slice(0, 2);
-      const attached = a.length > 2 ? a.slice(2) : null;
-      if (flag === '-X') method = attached !== null ? attached.replace(/^=/, '') : args[i + 1];
-      if (API_BODY_OPTS.has(flag)) body = true;
-      if (attached === null && API_VALUE_OPTS.has(flag)) i++;
+      for (let j = 1; j < a.length; j++) {
+        const flag = `-${a[j]}`;
+        if (!API_VALUE_OPTS.has(flag)) continue;
+        const value = j + 1 === a.length ? args[++i] : a.slice(j + 1).replace(/^=/, '');
+        if (flag === '-X') method = value;
+        if (API_BODY_OPTS.has(flag)) body = true;
+        break; // the first value-taking short flag consumes the rest of the group
+      }
     } else if (endpoint === null) {
       endpoint = a;
     }
@@ -741,10 +857,44 @@ function classifyGhApi(args) {
 // What a simple command does, if it's one we guard: 'git push', 'gh pr create', 'gh pr ready',
 // 'gh pr review', 'gh pr merge', 'gh api review', 'gh api merge'. `mode` is the shell that runs it:
 // 'bash' (the Bash tool) or 'ps' (the PowerShell tool).
-function classifySimpleCommand(words, depth, mode = 'bash') {
-  if (depth > 8) return null;
+const ENV_VALUE_OPTS = new Set(['-u', '--unset', '-C', '--chdir', '-a', '--argv0', '-S', '--split-string']);
+const XARGS_VALUE_OPTS = new Set(['-a', '-d', '-E', '-I', '-L', '-n', '-P', '-s', '--arg-file', '--delimiter',
+  '--eof', '--replace', '--max-lines', '--max-args', '--max-procs', '--max-chars', '--process-slot-var']);
+const WSL_VALUE_OPTS = new Set(['-d', '--distribution', '-u', '--user', '--cd']);
+
+function wrappedCommand(words, start, valueOptions, onValue) {
+  let i = start;
+  for (; i < words.length; i++) {
+    const word = words[i];
+    if (word === '--') return i + 1;
+    if (word === '-' && valueOptions === ENV_VALUE_OPTS) continue;
+    if (!word.startsWith('-') || word === '-') break;
+    if (word.startsWith('--')) {
+      const eq = word.indexOf('=');
+      const flag = eq < 0 ? word : word.slice(0, eq);
+      if (valueOptions.has(flag)) {
+        const value = eq < 0 ? words[++i] : word.slice(eq + 1);
+        onValue?.(flag, value);
+      }
+    } else {
+      // A value-taking flag can also appear last in a short option group.
+      for (let j = 1; j < word.length; j++) {
+        const flag = `-${word[j]}`;
+        if (!valueOptions.has(flag)) continue;
+        const value = j === word.length - 1 ? words[++i] : word.slice(j + 1);
+        onValue?.(flag, value);
+        break;
+      }
+    }
+  }
+  return i;
+}
+
+function classifySimpleCommand(words, depth, mode, work) {
+  if (depth > MAX_DEPTH) throw new ScanLimit('the command exceeded the supported shell nesting depth');
+  charge(work, words.length + 1);
   if (mode === 'ps') {
-    const f = powerShellForms(words, depth);
+    const f = powerShellForms(words, depth, work);
     if (!f.words) return f.hit;
     words = flattenArrays(f.words);
   }
@@ -754,9 +904,26 @@ function classifySimpleCommand(words, depth, mode = 'bash') {
     if (i >= words.length) return null;
     const w = words[i];
     if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(w) || PREFIX_WORDS.has(w)) { i++; continue; }
-    if (programName(w) === 'env') {
+    const prog = programName(w);
+    if (prog === 'env' || prog === 'xargs') {
+      let splitString;
+      i = wrappedCommand(words, i + 1, prog === 'env' ? ENV_VALUE_OPTS : XARGS_VALUE_OPTS, (flag, value) => {
+        if (flag === '-S' || flag === '--split-string') splitString = value;
+      });
+      if (splitString) {
+        const ctx = scanContext(work);
+        const [args] = splitCommands(splitString, depth + 1, ctx);
+        if (args) return classifySimpleCommand([...args, ...words.slice(i)], depth + 1, 'bash', work);
+      }
+      continue;
+    }
+    if (prog === 'command' || prog === 'exec') {
       i++;
-      while (i < words.length && (words[i].startsWith('-') || /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i]))) i++;
+      for (; i < words.length && words[i].startsWith('-'); i++) {
+        if (words[i] === '--') { i++; break; }
+        if (prog === 'command' && /^-[pvV]*[vV]/.test(words[i])) return null;
+        if (prog === 'exec' && /^-[cl]*a$/.test(words[i])) i++;
+      }
       continue;
     }
     break;
@@ -764,9 +931,30 @@ function classifySimpleCommand(words, depth, mode = 'bash') {
   const prog = programName(words[i]);
   const rest = words.slice(i + 1);
 
+  if (prog === 'wsl') {
+    let j = 0;
+    while (j < rest.length && rest[j].startsWith('-')) {
+      if (['--', '-e', '--exec'].includes(rest[j])) { j++; break; }
+      const flag = rest[j];
+      if (!WSL_VALUE_OPTS.has(flag.split('=')[0])) return null;
+      j += flag.includes('=') ? 1 : 2;
+    }
+    return classifySimpleCommand(rest.slice(j), depth + 1, 'bash', work);
+  }
+  if (prog === 'eval' && mode === 'bash') {
+    const script = rest.slice(rest[0] === '--' ? 1 : 0).join(' ');
+    return scanCommand(script, depth + 1, 'bash', work);
+  }
+  if (prog === 'cmd' && mode === 'bash') {
+    const k = rest.findIndex((arg) => /^\/[ck]/i.test(arg));
+    if (k === -1) return null;
+    return scanCommand([rest[k].slice(2), ...rest.slice(k + 1)].join(' ').trimStart(), depth + 1, 'bash', work);
+  }
   if (prog === 'git') {
     const j = skipOptions(rest, 0, GIT_VALUE_OPTS);
-    return rest[j] === 'push' ? 'git push' : null;
+    if (rest[j] !== 'push') return null;
+    work.pushes.push({ globalArgs: rest.slice(0, j), args: rest.slice(j + 1) });
+    return 'git push';
   }
   if (prog === 'gh') {
     let j = skipOptions(rest, 0, GH_VALUE_OPTS);
@@ -785,14 +973,16 @@ function classifySimpleCommand(words, depth, mode = 'bash') {
   if (SHELLS.has(prog) || POWERSHELLS.has(prog)) {
     for (let k = 0; k < rest.length - 1; k++) {
       const flag = rest[k];
+      const withArgs = POWERSHELLS.has(prog) && /^-(?:cwa|commandwithargs)$/i.test(flag);
       const isCmdFlag = SHELLS.has(prog)
         ? /^-[a-z]*c[a-z]*$/.test(flag)
-        : /^-(c|command|com|comm|comma|comman)$/i.test(flag);
+        : withArgs || /^-(c|command|co|com|comm|comma|comman)$/i.test(flag);
       if (!isCmdFlag) continue;
-      if (SHELLS.has(prog)) return findGuardedCommand(rest[k + 1], depth + 1, 'bash');
-      const script = rest.slice(k + 1).join(' ');
-      const both = [findGuardedCommand(script, depth + 1, 'ps'), findGuardedCommand(script, depth + 1, 'bash')];
-      return pickHit(both.filter(Boolean));
+      if (SHELLS.has(prog)) return scanCommand(rest[k + 1], depth + 1, 'bash', work);
+      const script = withArgs ? rest[k + 1] : rest.slice(k + 1).join(' ');
+      const psHit = scanCommand(script, depth + 1, 'ps', work);
+      if (ALWAYS_BLOCKED.has(psHit)) return psHit;
+      return pickHit([psHit, scanCommand(script, depth + 1, 'bash', work)].filter(Boolean));
     }
   }
   return null;
@@ -805,26 +995,34 @@ function classifySimpleCommand(words, depth, mode = 'bash') {
 // review or merge spelling (`gh pr review`, `gh pr merge`, a `gh api` write to /reviews or /merge) blocks
 // under EVERY login, with no `gh` call: a deliberate fail-closed trade-off for text the parser could not
 // read, for example `git push && echo 'don't use gh pr merge`.
-const RAW_PATTERNS = [
-  [/\bgh(?:\.exe)?["']?\s[^\n;&|]*?\bpr\s+(?:create|new)\b/i, 'gh pr create'],
-  [/\bgh(?:\.exe)?["']?\s[^\n;&|]*?\bpr\s+ready\b/i, 'gh pr ready'],
-  [/\bgh(?:\.exe)?["']?\s[^\n;&|]*?\bpr\s+review\b/i, 'gh pr review'],
-  [/\bgh(?:\.exe)?["']?\s[^\n;&|]*?\bpr\s+merge\b/i, 'gh pr merge'],
-  [/\bgit(?:\.exe)?["']?\s[^\n;&|]*?\bpush\b/i, 'git push'],
-];
-// `gh api` writes in the raw scan: only when the same command line also shows a write (a POST or
-// PUT method, or a body flag), so a read of /reviews is never blocked by a parsing gap.
-const RAW_API = /\bgh(?:\.exe)?["']?\s[^\n;&|]*?\bapi\b[^\n;&|]*/gi;
-const RAW_API_WRITE = /(?:-X|--method)[\s=]*["']?(?:POST|PUT)\b|\s(?:-f|-F|--field|--raw-field|--input)(?:[\s=]|\S)/i;
 // Every guarded spelling the raw scan finds, in no particular order.
-function rawScanAll(command) {
+function rawScanAll(command, work) {
+  charge(work, command.length);
   const hits = [];
-  for (const [re, name] of RAW_PATTERNS) if (re.test(command)) hits.push(name);
-  for (const m of command.matchAll(RAW_API)) {
-    const text = m[0];
-    if (!RAW_API_WRITE.test(text)) continue;
-    if (/\/reviews\b/i.test(text)) hits.push('gh api review');
-    if (/\/(?:merge|merges|auto_merge)\b/i.test(text)) hits.push('gh api merge');
+  for (const segment of command.split(/[\r\n;&|]/)) {
+    for (const match of segment.matchAll(/\b(gh|git)(?:\.exe)?["']?[ \t]+/gi)) {
+      const start = match.index + match[0].length;
+      charge(work, segment.length - start + 1);
+      const args = segment.slice(start);
+      if (match[1].toLowerCase() === 'git') {
+        if (/\bpush\b/i.test(args)) {
+          const [rawWords] = splitCommands(args, 0, scanContext(work));
+          if (rawWords) classifySimpleCommand(['git', ...rawWords], 0, 'bash', work);
+          hits.push('git push');
+        }
+        continue;
+      }
+      for (const pr of args.matchAll(/\bpr\s+(create|new|ready|review|merge)\b/gi)) {
+        const sub = pr[1].toLowerCase();
+        hits.push(`gh pr ${sub === 'new' ? 'create' : sub}`);
+      }
+      const api = /\bapi\s+/i.exec(args);
+      if (api) {
+        const [apiArgs] = splitCommands(args.slice(api.index + api[0].length), 0, scanContext(work));
+        const hit = apiArgs && classifyGhApi(apiArgs);
+        if (hit) hits.push(hit);
+      }
+    }
   }
   return hits;
 }
@@ -835,7 +1033,7 @@ function pickHit(hits) {
   return hits.find((h) => ALWAYS_BLOCKED.has(h)) || hits[0] || null;
 }
 function rawScan(command) {
-  return pickHit(rawScanAll(command));
+  return pickHit(rawScanAll(command, scanWork()));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -862,7 +1060,7 @@ const PS_WORD = /[A-Za-z0-9_.-]+/g;
 const PS_ESCAPE = /`(?:u\{[0-9A-Fa-f]{1,6}\}|[^])/g;
 const PS_UNICODE_ESCAPE = /`u\{([0-9A-Fa-f]{1,6})\}/g;
 const PS_JOINERS = /[`'"‘’‚‛“”„^\\]/g;
-const GRAPHQL_REVIEW_MERGE_WORDS = ['mergepullrequest', 'mergebranch', 'enqueuepullrequest', 'enablepullrequestautomerge', 'addpullrequestreview', 'submitpullrequestreview'];
+const GRAPHQL_REVIEW_MERGE_WORDS = GRAPHQL_MUTATIONS.map((name) => name.toLowerCase());
 // Lower-cased, trailing dots and then `.exe` dropped. The dots are dropped by a loop, not a regex: an
 // anchored `\.+$` retries from every dot and took seconds on a long run of them (review run 8).
 function psWordName(token) {
@@ -906,23 +1104,39 @@ function psWordScan(text) {
 // The guarded command in a command line (a review or merge command first, else the first
 // login-dependent one), or null. `mode` is 'bash' (the Bash tool) or 'ps' (the PowerShell tool).
 // Never touches the network.
-function findGuardedCommand(command, depth = 0, mode = 'bash') {
-  if (depth > 8 || typeof command !== 'string') return null;
-  const ctx = { unbalanced: false };
+function scanCommand(command, depth, mode, work) {
+  if (typeof command !== 'string') return null;
+  if (depth > MAX_DEPTH) throw new ScanLimit('the command exceeded the supported shell nesting depth');
+  const ctx = scanContext(work);
   const hits = [];
   const split = mode === 'ps' ? splitPowerShell : splitCommands;
   for (const words of split(command, depth, ctx)) {
-    const hit = classifySimpleCommand(words, depth, mode);
+    const hit = classifySimpleCommand(words, work.depths.get(words), mode, work);
     if (hit) hits.push(hit);
+    if (ALWAYS_BLOCKED.has(hit)) return hit;
   }
   // When the parser met an unclosed quote the text scan also runs, even if the parse found a
   // login-dependent command, because a review or merge command may be hiding behind the quote.
   // For PowerShell, a backtick line continuation is joined first (`git `<newline>`push`).
-  if (ctx.unbalanced) hits.push(...rawScanAll(mode === 'ps' ? command.replace(/`\r?\n/g, ' ') : command));
+  if (ctx.unbalanced) {
+    for (const hit of rawScanAll(mode === 'ps' ? command.replace(/`\r?\n/g, ' ') : command, work)) hits.push(hit);
+  }
   // PowerShell, fail-closed: the words of a guarded command anywhere in the script (psWordScan) get the
   // login check, after every hit above, so a review or merge command found above still wins.
-  if (mode === 'ps') hits.push(...psWordScan(command));
+  if (mode === 'ps') {
+    charge(work, 2 * command.length);
+    hits.push(...psWordScan(command));
+  }
   return pickHit(hits);
+}
+
+function findGuardedCommand(command, depth = 0, mode = 'bash') {
+  try {
+    return scanCommand(command, depth, mode, scanWork());
+  } catch (err) {
+    if (err instanceof ScanLimit) return 'command scan limit';
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -930,37 +1144,49 @@ function findGuardedCommand(command, depth = 0, mode = 'bash') {
 
 // Finds gh in PATH's absolute entries only. A bare `gh` would make Windows look in the current
 // directory first, so a gh.exe planted in a checkout could run; this never looks there.
-function resolveGh(env = process.env) {
+function resolveProgram(program, env) {
   const key = Object.keys(env).find((k) => k.toUpperCase() === 'PATH');
-  const names = process.platform === 'win32' ? ['gh.exe'] : ['gh'];
+  const name = process.platform === 'win32' ? `${program}.exe` : program;
   for (const entry of String((key && env[key]) || '').split(path.delimiter)) {
     const dir = entry.trim().replace(/^"(.*)"$/, '$1'); // Windows allows "C:\Program Files\..." entries
     if (!dir || !path.isAbsolute(dir)) continue;
-    for (const name of names) {
-      const full = path.join(dir, name);
-      try { if (fs.statSync(full).isFile()) return full; } catch { /* not here */ }
+    const full = path.join(dir, name);
+    try {
+      if (fs.statSync(full).isFile()) return full;
+    } catch (err) {
+      if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') throw err;
     }
   }
   return null;
 }
 
+function resolveGh(env = process.env) {
+  return resolveProgram('gh', env);
+}
+
+function runCheck(executable, args, work, cwd) {
+  charge(work);
+  return execFileSync(executable, args, {
+    cwd, encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: Math.max(1, Math.min(GH_TIMEOUT_MS, Math.floor(work.deadline - performance.now()))),
+    killSignal: 'SIGKILL', maxBuffer: MAX_INPUT_BYTES,
+  });
+}
+
 // Returns { login } or { error } (never throws). Runs gh with the session's own environment.
-function readGhLogin() {
-  const gh = resolveGh();
-  if (!gh) return { error: 'gh is not installed or not on PATH' };
+function readGhLogin(work = scanWork()) {
   try {
-    const out = execFileSync(gh, ['api', 'user', '--jq', '.login'], {
-      encoding: 'utf8',
-      timeout: GH_TIMEOUT_MS,
-      windowsHide: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const gh = resolveGh();
+    if (!gh) return { error: 'gh is not installed or not on PATH' };
+    const out = runCheck(gh, ['api', 'user', '--jq', '.login'], work);
     const login = String(out).trim();
     if (!/^[A-Za-z0-9-]{1,39}(?:\[bot\])?$/.test(login)) return { error: 'gh returned no login' };
     return { login };
   } catch (err) {
     if (err && err.code === 'ENOENT') return { error: 'gh is not installed or not on PATH' };
-    if (err && (err.code === 'ETIMEDOUT' || err.signal === 'SIGTERM')) {
+    if (err instanceof ScanLimit) throw err;
+    if (err && (err.code === 'ETIMEDOUT' || err.signal === 'SIGKILL')) {
+      charge(work);
       return { error: `gh did not answer within ${GH_TIMEOUT_MS / 1000} seconds` };
     }
     // An App installation token has no user: GET /user answers 403 "Resource not accessible by
@@ -974,17 +1200,45 @@ function readGhLogin() {
   }
 }
 
+function readOpenPulls(repo, work, cwd) {
+  const gh = resolveGh();
+  if (!gh) throw new PushRefusal('gh is not installed or not on PATH');
+  try {
+    const raw = runCheck(gh, ['api', '--hostname', 'github.com', '--paginate',
+      `repos/${repo}/pulls?state=open&per_page=100`, '--jq',
+      'map({user: {login: .user.login}, head: {ref: .head.ref, repo: {full_name: .head.repo.full_name}}, base: {ref: .base.ref, repo: {full_name: .base.repo.full_name}}}) | @json'], work, cwd);
+    charge(work, raw.length);
+    const pages = raw.trim().split(/\r?\n/).map((line) => JSON.parse(line));
+    if (pages.some((page) => !Array.isArray(page))) throw new PushRefusal('GitHub returned an unreadable pull request list');
+    return pages.flat();
+  } catch (err) {
+    if (err instanceof ScanLimit) throw err;
+    throw new PushRefusal('GitHub could not verify the open pull requests for the destination repository');
+  }
+}
+
+function readGit(args, work, cwd) {
+  const git = resolveProgram('git', process.env);
+  if (!git) throw new PushRefusal('git is not installed or not on PATH');
+  try {
+    return runCheck(git, args, work, cwd);
+  } catch (err) {
+    if (err instanceof ScanLimit) throw err;
+    throw new PushRefusal('Git could not verify the push destination');
+  }
+}
+
 // The tools whose commands are checked, and the shell each one runs them in. Both tools carry the
 // script in tool_input.command (https://code.claude.com/docs/en/hooks, read 2026-11-23).
 const TOOL_MODES = { Bash: 'bash', PowerShell: 'ps' };
 
 // The verdict for one hook input. `getLogin` is injectable for tests.
 // Returns { exitCode: 0 | 2, stderr?: string, systemMessage?: string, checked: boolean }.
-function decide(input, getLogin = readGhLogin) {
+function decide(input, getLogin = readGhLogin, sources = {}, work = scanWork()) {
   const toolName = input && input.tool_name;
   const command = input && input.tool_input && input.tool_input.command;
+  if (typeof toolName !== 'string' || !Object.hasOwn(TOOL_MODES, toolName)) return { exitCode: 0, checked: false };
   const mode = TOOL_MODES[toolName];
-  if (!mode) return { exitCode: 0, checked: false };
   if (typeof command !== 'string') {
     // The PowerShell tool's input shape comes from the docs, not from a live call: if it ever
     // carries no `command`, say so instead of allowing in silence. (Bash keeps its silent exit.)
@@ -993,57 +1247,88 @@ function decide(input, getLogin = readGhLogin) {
       : { exitCode: 0, checked: false };
   }
 
-  const hit = findGuardedCommand(command, 0, mode);
-  if (!hit) return { exitCode: 0, checked: false };
+  let checked = false;
+  try {
+    const hit = scanCommand(command, 0, mode, work);
+    if (!hit) return { exitCode: 0, checked: false };
 
-  // Review and merge commands are blocked under any login: no `gh` call, nothing to fail open on.
-  if (ALWAYS_BLOCKED.has(hit)) {
-    return { exitCode: 2, checked: false, stderr: `${NEVER_MESSAGE}\n(Command matched: ${hit}.)` };
-  }
-
-  const result = getLogin();
-  if (result && result.appToken === true) {
-    return {
-      exitCode: 0,
-      checked: true,
-      systemMessage: `Account guard: this session uses a GitHub App installation token (no user login, so not ${BLOCKED_LOGIN}); \`${hit}\` allowed.`,
-    };
-  }
-  if (result && typeof result.login === 'string') {
-    if (result.login.toLowerCase() === BLOCKED_LOGIN.toLowerCase()) {
-      return { exitCode: 2, checked: true, stderr: `${BLOCK_MESSAGE}\n(Command matched: ${hit}.)` };
+    // Review and merge commands are blocked under any login, without calling gh.
+    if (ALWAYS_BLOCKED.has(hit)) {
+      return { exitCode: 2, checked: false, stderr: `${NEVER_MESSAGE}\n(Command matched: ${hit}.)` };
     }
-    return { exitCode: 0, checked: true };
+
+    checked = true;
+    const result = getLogin(work);
+    charge(work);
+    const login = typeof result?.login === 'string' ? result.login : null;
+    if (login?.toLowerCase() === BLOCKED_LOGIN.toLowerCase()) {
+      return { exitCode: 2, checked, stderr: `${BLOCK_MESSAGE}\n(Command matched: ${hit}.)` };
+    }
+    if (work.pushes.length) {
+      const cwd = typeof input.cwd === 'string' && path.isAbsolute(input.cwd) ? input.cwd : undefined;
+      checkPushes(work.pushes, {
+        login,
+        git: sources.git ?? ((args) => readGit(args, work, cwd)),
+        openPulls: sources.openPulls ?? ((repo) => readOpenPulls(repo, work, cwd)),
+        charge: (size) => charge(work, size),
+      });
+      charge(work);
+    }
+    if (result?.appToken === true) {
+      return {
+        exitCode: 0, checked,
+        systemMessage: `Account guard: this session uses a GitHub App installation token (no user login, so not ${BLOCKED_LOGIN}); \`${hit}\` allowed.`,
+      };
+    }
+    if (login) return { exitCode: 0, checked };
+    const why = result?.error || 'unknown error';
+    return {
+      exitCode: 0, checked,
+      systemMessage: `Account guard: couldn't check the GitHub login before \`${hit}\` (${why}); allowed.`,
+    };
+  } catch (err) {
+    if (err instanceof ScanLimit) return { exitCode: 2, checked, stderr: `${BLOCK_PREFIX} ${err.message}. Use a shorter or simpler command.` };
+    if (err instanceof PushRefusal) return { exitCode: 2, checked, stderr: `${BLOCK_PREFIX} git push refused because ${err.message}.` };
+    return { exitCode: 2, checked, stderr: `${BLOCK_PREFIX} internal error while checking the tool command.` };
   }
-  const why = (result && result.error) || 'unknown error';
-  return {
-    exitCode: 0,
-    checked: true,
-    systemMessage: `Account guard: couldn't check the GitHub login before \`${hit}\` (${why}); allowed.`,
-  };
 }
 
-function readStdin() {
-  return new Promise((resolve) => {
+function readStdin(work) {
+  return new Promise((resolve, reject) => {
     let data = '';
+    let bytes = 0;
+    const finish = (error) => {
+      clearTimeout(timer);
+      if (error) process.stdin.destroy();
+      if (error) reject(error);
+      else resolve(data);
+    };
+    const timer = setTimeout(() => finish(new ScanLimit('the hook reached its work budget while reading input')),
+      Math.max(1, work.deadline - performance.now()));
     process.stdin.setEncoding('utf8');
-    process.stdin.on('data', (chunk) => { data += chunk; });
-    process.stdin.on('end', () => resolve(data));
-    process.stdin.on('error', () => resolve(data));
+    process.stdin.on('data', (chunk) => {
+      bytes += Buffer.byteLength(chunk);
+      if (bytes > MAX_INPUT_BYTES) finish(new ScanLimit('the hook input exceeded its size budget'));
+      else data += chunk;
+    });
+    process.stdin.on('end', () => finish());
+    process.stdin.on('error', finish);
   });
 }
 
 async function main() {
   let verdict;
+  const work = scanWork();
   try {
-    const raw = await readStdin();
+    const raw = await readStdin(work);
     let input;
     try { input = JSON.parse(raw); } catch {
       verdict = { exitCode: 0, systemMessage: "Account guard: couldn't read the hook input; allowed." };
     }
-    if (!verdict) verdict = decide(input);
+    if (!verdict) verdict = decide(input, readGhLogin, {}, work);
   } catch (err) {
-    verdict = { exitCode: 0, systemMessage: `Account guard: internal error (${err && err.message}); allowed.` };
+    const reason = err instanceof ScanLimit ? err.message : 'the hook could not read its input';
+    verdict = { exitCode: 2, stderr: `${BLOCK_PREFIX} ${reason}.` };
   }
   if (verdict.systemMessage) {
     process.stdout.write(JSON.stringify({ systemMessage: verdict.systemMessage }) + '\n');
