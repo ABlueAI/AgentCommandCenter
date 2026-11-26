@@ -768,6 +768,7 @@ function openInAppTerminal(opts = {}) {
     term.dispose(); pane.remove(); terms.delete(id);
     if (needsYouStrip) needsYouStrip.remove(id);
     if (pauseAll) pauseAll.forget(id);
+    if (stallWatch) stallWatch.forget(id);
     if (terms.size === 0) showTermEmpty();
   };
   // ---- LOCAL ROLLBACK (pre-PTY only) ----------------------------------------------------------
@@ -787,6 +788,7 @@ function openInAppTerminal(opts = {}) {
     term.dispose(); pane.remove(); terms.delete(id);
     if (needsYouStrip) needsYouStrip.remove(id);
     if (pauseAll) pauseAll.forget(id);
+    if (stallWatch) stallWatch.forget(id);
     if (terms.size === 0) showTermEmpty();
   };
   paneData.closePane = closeThisPane;
@@ -1275,6 +1277,8 @@ let needsYouStrip = null;
 let pauseAll = null;
 // S19: the cheat sheet (cheat-sheet.js); the palette command reaches it.
 let cheatSheet = null;
+// S19: the stall watch in the pane headers (stall-watch.js); the PTY data and close paths reach it.
+let stallWatch = null;
 
 // The controlled surface the adapter is allowed to use. Everything privileged stays on this side:
 // the adapter never sees cc.*, a path, a role, a prompt, or report content.
@@ -1598,6 +1602,7 @@ async function boot() {
   cc.onPtyData(({ id, data }) => {
     const t = terms.get(id);
     if (t) { t.term.write(data); t.parser.feed(data); }
+    if (stallWatch) stallWatch.noteOutput(id);
   });
   cc.onPtyExit(({ id }) => {
     const t = terms.get(id);
@@ -1701,6 +1706,32 @@ pauseAll = window.ccPauseAll
 if (!pauseAll) appendLog('[pause-all] pause-all.js is missing; the Pause all button stays off\n');
 // This part of boot() runs after startShell(), so the shell (if it started) is there to connect to.
 connectPauseAll();
+// S19: the stall watch. Every 30 seconds it reads S11's usage figures (a usage stop is never
+// "stalled") and repaints the pane headers.
+try {
+  stallWatch = window.ccStallWatch.createStallWatch({
+    doc: document, log: appendLog,
+    getHead: (paneId) => { const t = terms.get(paneId); return t && t.pane ? t.pane.querySelector('.term-head') : null; },
+  });
+} catch {
+  stallWatch = null;
+  appendLog('[stall-watch] REFUSED: the stall watch did not start (start-failed); pane headers show no stall\n');
+}
+if (stallWatch) {
+  let stallBusy = false;
+  let usageFailLogged = false;
+  setInterval(async () => {
+    if (stallBusy) return;
+    stallBusy = true;
+    try {
+      let usage = null;
+      try { usage = await cc.usageRead(); }
+      catch { if (!usageFailLogged) { usageFailLogged = true; appendLog('[stall-watch] usage figures unreadable (usage-read-failed); a usage stop may show as stalled\n'); } }
+      stallWatch.setUsage(usage);
+      stallWatch.tick();
+    } finally { stallBusy = false; }
+  }, 30000);
+}
 // S19: the cheat sheet, read from S66's one shortcut list each time it opens.
 try {
   cheatSheet = window.ccCheatSheet.createCheatSheet({
@@ -1727,6 +1758,7 @@ if (paneStatusBadge) {
   window.ccPaneStatus.onView((view) => {
     if (needsYouStrip) needsYouStrip.update(view);
     if (pauseAll) pauseAll.noteView(view);
+    if (stallWatch) stallWatch.noteView(view);
     const shown = paneStatusBadge.update(view);
     if (shown && view && view.paneId) {
       appendLog(`[pane-status] ${view.paneId} -> ${shown.label}${view.reason ? ` (${view.reason})` : ''}\n`);

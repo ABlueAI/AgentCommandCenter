@@ -492,6 +492,14 @@ async function scenarioPauseAll() {
     await run(`window.__t.sleep(100)`);
     out.writesOnResume = ipc.writes.length;
     out.bannerAfterResume = await run(`window.__t.shown('#makoPausedBanner')`);
+    // S19: the stall watch paints the real pane header: five failed turns in a row read "stalled".
+    for (let i = 0; i < 5; i += 1) {
+      win.webContents.send('pane-status-view', { paneId: working, state: 'failed', reason: null });
+      win.webContents.send('pane-status-view', { paneId: working, state: 'working', reason: null });
+    }
+    await run(`window.__t.waitFor(() => window.__t.log().split(${JSON.stringify(working + ' -> failed')}).length >= 6, 5000)`);
+    // Read through the pane's own header (the element the app holds for it, as the badge does).
+    out.stallTag = await run(`(() => { stallWatch.tick(); const h = terms.get(${JSON.stringify(working)}).pane.querySelector('.term-head'); return Array.from(h.querySelectorAll('.stall-tag')).map((n) => n.textContent + '|' + n.getAttribute('role')); })()`);
   } finally {
     control.ptyOk = false;
   }

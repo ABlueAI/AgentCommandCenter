@@ -211,6 +211,7 @@ eq(pa.startedWhilePaused, 0, 'no new pane starts while paused');
 assert(pa.refusalLogged === true, 'and the refusal is in Logs');
 eq(pa.writesOnResume, 0, 'Resume all sends nothing');
 assert(pa.bannerAfterResume === false, 'and the banner goes');
+eq(pa.stallTag, ['stalled · 5 failed tries|status'], 'S19: five failed turns put "stalled" in that pane\'s real header');
 
 process.stdout.write('\nnothing reached the network, and no renderer errors\n');
 eq(report.remote, [], 'no remote request');

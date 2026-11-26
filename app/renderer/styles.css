@@ -527,6 +527,11 @@ input:focus { outline: none; border-color: var(--accent); }
 .mk-needs-time { font: 600 12px/18px var(--mk-mono, monospace); font-variant-numeric: tabular-nums; color: var(--mk-ink-muted, var(--muted)); }
 .mk-needs-hint { margin-left: auto; }
 
+/* S19: the stall watch in the pane header. Red for stalled, the composer amber for a usage wait. */
+.stall-tag { margin-left: 8px; padding: 0 6px; border-radius: 4px; font: 600 11.5px/16px var(--mk-sans, inherit); white-space: nowrap; }
+.stall-stalled { color: var(--mk-status-needs, #ff6b6b); border: 1px solid currentColor; }
+.stall-usage-wait { color: var(--mk-composer-ink, #f0c060); border: 1px solid currentColor; }
+
 /* S19: the cheat sheet. */
 .cheat-sheet-host { display: inline-flex; }
 .mk-cheat-open { min-width: 28px; padding: 2px 8px; font-weight: 600; }
