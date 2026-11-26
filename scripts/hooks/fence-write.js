@@ -79,7 +79,7 @@ const PAGE_NAVIGATE_TOOL = 'mcp__playwright__browser_navigate';
 const PAGE_SNAPSHOT_TOOL = 'mcp__playwright__browser_snapshot';
 const PAGE_POLICY_ENV_KEY = 'BLUE_HELM_PAGE_READER_POLICY';
 const PAGE_REFUSAL_MESSAGE =
-  'Blocked by Mako page fence: this pane may only open https pages and read them, with no file output. [fence-page-denied]';
+  'Blocked by Mako page fence: this pane may only open public HTTPS pages and read them, with no file output. [fence-page-denied]';
 const PAGE_POLICY_REFUSAL_MESSAGE =
   'Blocked by Mako page fence: the page URL check is unavailable. [fence-page-check-unavailable]';
 
@@ -163,6 +163,25 @@ function isWithin(root, target) {
   return expected.ino !== 0n && expected.dev === actual.dev && expected.ino === actual.ino;
 }
 
+function realWithWindowsParents(absolute) {
+  const volume = path.parse(absolute).root;
+  let directory = volume;
+  let parts = [];
+  for (const part of absolute.slice(volume.length).split(path.sep)) {
+    if (part === '..') {
+      // Give native realpath the prefix before Win32 normalization can remove the parent
+      // segment and the directory or junction it acts on.
+      const real = ordinaryPath(fs.realpathSync.native(path.join(directory, ...parts)));
+      if (!fs.statSync(real).isDirectory()) throw new Error('Parent segment must follow a directory');
+      directory = path.dirname(real);
+      parts = [];
+    } else if (part && part !== '.') {
+      parts.push(part);
+    }
+  }
+  return realOrNearest(path.join(directory, ...parts));
+}
+
 function isAllowedPath(cwd, target) {
   const base = ordinaryPath(cwd);
   const requested = ordinaryPath(target);
@@ -172,12 +191,14 @@ function isAllowedPath(cwd, target) {
 
   const lexical = path.resolve(root, requested);
   if (!isWithin(root, realOrNearest(lexical))) return false;
-  if (process.platform === 'win32') return true;
 
-  // POSIX resolves a symlink before applying the following parent segment. Check both
-  // forms when lexical normalization removed information a caller can pass to the OS.
-  const physical = path.isAbsolute(requested) ? requested : root + path.sep + requested;
-  return physical === lexical || isWithin(root, realOrNearest(physical));
+  // Check physical resolution as well when normalization could discard a directory alias
+  // before a parent segment.
+  const absolute = path.isAbsolute(requested) ? requested : root + path.sep + requested;
+  if (process.platform === 'win32') {
+    return !requested.split(path.sep).includes('..') || isWithin(root, realWithWindowsParents(absolute));
+  }
+  return absolute === lexical || isWithin(root, realOrNearest(absolute));
 }
 
 // Constant refusals only: none names a path, URL, host or port.

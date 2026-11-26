@@ -307,10 +307,13 @@ const REGIONS = [
     // itself refuses the identity for either (pty-env.test.js and agent-git-env.test.js prove it).
     // Every other argument, the scrub and P1 are byte-identical.
     // Previous pin retained: 217 / 8227036cb1ce84d0c32fd38ff4999c6db71a9625dc6beba26b9a85dd6bec5f08
+    // Page-reader navigation adds one buildPtyEnv argument with the app validator's path for the
+    // classified fenced page-reader role. page-reader.test.js checks the deployed hook and its launch.
+    // Previous pin: 302 / fc8deeab81b2e88627956f87b871de00f210e5515ee82236214572db21b70088
     start: 'const fencedRole = launch.fenced;',
     end: 'let p;',
-    utf16Length: 302,
-    sha: 'fc8deeab81b2e88627956f87b871de00f210e5515ee82236214572db21b70088',
+    utf16Length: 421,
+    sha: '0341bc5cc23ed5060a8d25e459c9415dcd3c36343896f45c21609f1f3fdc7ea2',
   },
   {
     name: 'pty-start handler',
@@ -389,8 +392,11 @@ const REGIONS = [
     // block, spawn sink and failure cleanup are unchanged. The S09 assertions at the end of this file
     // pin the new wiring.
     // Previous pin retained: 17354 / 1ed564dea4af33f5dbe7afcb47b0d0cb2178ff1fb289a60b2e37a3d078581b2d
-    utf16Length: 18861,
-    sha: '790e4fa29a245a5064c1d1da05940f73f8a7b0c250747150bb601d378ef313f6',
+    // Page-reader navigation adds the argument pinned above. Comments describe its environment
+    // scope and the separate responsibilities of the launcher's cwd check and the tool hook.
+    // Previous pin: 18861 / 790e4fa29a245a5064c1d1da05940f73f8a7b0c250747150bb601d378ef313f6
+    utf16Length: 18721,
+    sha: '3376aed51170cb667c3030155985b52c949d3af3e9d6fc88396270cde0677121',
   },
 ];
 

@@ -1051,9 +1051,8 @@ function tlog(msg) {
 // Call at the start of each createAgent attempt to reset the clock.
 function tlogReset() { _t0 = Date.now(); tlog('--- new createAgent sequence ---'); }
 
-// Resolve the real (symlink-free) path. Walks up to the nearest existing ancestor when the
-// target doesn't exist yet — mirrors scripts/hooks/fence-write.js so the main-process cwd
-// guard and the hook use identical resolution logic and cannot be diverged by path tricks.
+// Resolve paths for the launcher's working-directory checks. The tool hook independently
+// validates file paths at the point of use.
 function realOrNearest(p) {
   try { return fs.realpathSync.native(p); }
   catch {
@@ -1786,11 +1785,8 @@ ipcMain.handle('pty-start', (e, opts) => {
   // a successful spawn (below), so a refused/failed launch leaves no mapping.
   let acceptedRunId = null;
 
-  // Hard gate: fenced roles (web-scout, operator, source-scout) must run inside the
-  // ensure-output-dir sandbox. Enforce here rather than relying on renderer discipline —
-  // same "tool-enforced-not-convention" principle the hook itself is built on. Uses the
-  // same realpath + case-fold logic as fence-write.js so both layers agree on what "inside"
-  // means and can't be split by a symlink or a Unicode/case path trick.
+  // The main process requires fenced roles to launch inside the ensure-output-dir sandbox.
+  // That working directory is the sandbox root for the tool hook's separate file checks.
   let fencedCwd = null;
   if (launch.fenced) {
     // Reason CONSTANTS only. The pre-existing messages interpolated `declaredCwd`, `resolvedCwd`

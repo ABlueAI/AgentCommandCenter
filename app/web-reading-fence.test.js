@@ -205,6 +205,10 @@ section('6. Path containment uses the filesystem and refuses unverifiable paths'
   fs.mkdirSync(destination, { recursive: true });
   const alias = path.join(root, 'alias');
   const dangling = path.join(root, 'dangling');
+  const outsideFile = path.join(outside, 'file.md');
+  fs.writeFileSync(outsideFile, 'test fixture');
+  fs.writeFileSync(path.join(root, 'Sample.md'), 'test fixture');
+  fs.mkdirSync(path.join(root, 'subdirectory'));
   fs.symlinkSync(destination, alias, 'junction');
   fs.symlinkSync(path.join(outside, 'missing'), dangling, 'junction');
   const run = (filePath, cwd = root) => spawnSync(process.execPath, [hookPath], {
@@ -217,14 +221,18 @@ section('6. Path containment uses the filesystem and refuses unverifiable paths'
   assert(denied(run(path.join(dangling, 'new.md'))), 'a dangling directory alias is refused');
   assert(denied(run('new.md', path.join(root, 'missing'))), 'an unresolved sandbox root is refused');
   assert(denied(run(42)), 'a non-string path is refused visibly');
+  assert(denied(run(['alias', '..', 'file.md'].join(path.sep))),
+    'parent segments are checked with filesystem resolution');
+  assert(run(['subdirectory', '..', 'Sample.md'].join(path.sep)).status === 0,
+    'a parent segment resolving inside the sandbox is allowed');
+  if (process.platform === 'win32') {
+    assert(run(path.join(root, 'SAMPLE.MD').replace(/\\/g, '/')).status === 0,
+      'native Windows resolution accepts alternate case and slashes inside the sandbox');
+  }
   if (process.platform !== 'win32') {
-    const file = path.join(outside, 'file.md');
     const fileLink = path.join(root, 'file-link');
-    fs.writeFileSync(file, 'test fixture');
-    fs.symlinkSync(file, fileLink);
+    fs.symlinkSync(outsideFile, fileLink);
     assert(denied(run(fileLink)), 'a file symlink resolving outside is refused');
-    const traversal = ['alias', '..', 'file.md'].join(path.sep);
-    assert(denied(run(traversal)), 'parent segments are checked with filesystem resolution');
   }
 }
 
@@ -235,12 +243,20 @@ section('7. Windows path spellings use Windows filesystem identity');
   const win = path.win32;
   const root = String.raw`X:\fixture\Allowed`;
   const outside = win.join(win.dirname(root), 'Other Directory');
-  const shortName = 'OTHERD~1';
+  const outsideShortName = 'OTHERD~1';
+  const rootShortName = 'ALLOWE~1';
   const outsideFile = win.join(outside, 'file.md');
-  const existing = [root, win.dirname(root), outside, outsideFile, win.join(root, 'file.md')];
+  const otherCase = win.join(win.dirname(root), win.basename(root).toLowerCase());
+  const existing = [root, win.dirname(root), outside, outsideFile, win.join(root, 'file.md'),
+    otherCase, win.join(otherCase, 'file.md')];
   const realpath = (raw) => {
-    const expanded = win.normalize(raw).replace(shortName, 'Other Directory');
-    const found = existing.find((p) => p.toLowerCase() === expanded.toLowerCase());
+    const expanded = win.normalize(raw).replace(outsideShortName, 'Other Directory')
+      .replace(rootShortName, win.basename(root));
+    if (win.basename(expanded) === 'inaccessible.md') {
+      throw Object.assign(new Error('Fixture permission denied'), { code: 'EACCES' });
+    }
+    const found = existing.find((p) => p === expanded)
+      || existing.find((p) => p.toLowerCase() === expanded.toLowerCase());
     if (!found) throw Object.assign(new Error('Fixture path missing'), { code: 'ENOENT' });
     return found;
   };
@@ -276,13 +292,17 @@ section('7. Windows path spellings use Windows filesystem identity');
   };
   assert(run(win.join(root, 'file.md').toUpperCase().replace(/\\/g, '/')).status === 0,
     'an in-root path with alternate case and slashes is allowed');
+  assert(run(win.join(win.dirname(root), rootShortName, 'file.md')).status === 0,
+    'a short name expanding to a path inside the root is allowed');
   const refusals = [
     ['alternate case', outsideFile.toUpperCase()],
     ['mixed slashes', outsideFile.replace(/\\/g, '/')],
     ['parent segments', root + String.raw`\..\Other Directory\file.md`],
     ['trailing dot', root + String.raw`\file.md.`],
     ['trailing space', root + '\\file.md '],
-    ['short name', win.join(win.dirname(root), shortName, 'file.md')],
+    ['short name', win.join(win.dirname(root), outsideShortName, 'file.md')],
+    ['a differently cased directory with its own filesystem identity', win.join(otherCase, 'file.md')],
+    ['a filesystem permission error', win.join(root, 'inaccessible.md')],
     ['UNC', String.raw`\\fixture.invalid\share\file.md`],
     ['extended device namespace', '\\\\?\\' + outsideFile],
     ['Win32 device namespace', '\\\\.\\' + outsideFile],
