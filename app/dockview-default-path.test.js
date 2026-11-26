@@ -368,7 +368,13 @@ process.stdout.write('\nindex.html ships the EMBEDDED dock and loads no Dockview
   // `window.ccShellNav` and builds nothing until app.js's boot() calls createShell();
   // `in-focus-card.js` publishes `window.ccInFocusCard` and builds only when a caller asks;
   // `emblem-rail.js` publishes `window.ccEmblemRail` and builds only when app.js creates it.
-  assert(scriptTags === 34, `index.html loads exactly 34 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view, the terminal key mapping, the authority choice, the usage panel view, the resume view, the agent token view (S31), the Claude Video Scout settings (S54), and S66's colour tokens, navigation shell, In-focus card and emblem rail (found ${scriptTags})`);
+  // S18 adds the brain stage, the shark shape and the shark renderer: 34 -> 37. `brain-stage.js`
+  // and `shark-shape.js` publish `window.ccBrainStage` and `window.ccSharkShape` and build only
+  // when app.js asks; `shark-renderer.js` is an ES module (it imports the vendored Three.js) that
+  // publishes `window.ccSharkRenderer` and draws only once app.js creates it on the brain tab.
+  assert(scriptTags === 37, `index.html loads exactly 37 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view, the terminal key mapping, the authority choice, the usage panel view, the resume view, the agent token view (S31), the Claude Video Scout settings (S54), S66's colour tokens, navigation shell, In-focus card and emblem rail, and S18's brain stage, shark shape and shark renderer module (found ${scriptTags})`);
+  assert(/<script src="brain-stage\.js"><\/script>/.test(indexSrc) && /<script src="shark-shape\.js"><\/script>/.test(indexSrc)
+    && /<script type="module" src="shark-renderer\.js"><\/script>/.test(indexSrc), 'S18: the three added scripts are exactly the brain stage, the shark shape and the shark renderer module');
   assert(/<script src="session-resume-view\.js"><\/script>/.test(indexSrc),
     'the S09 resume view is loaded');
   assert(/<script src="usage-view\.js"><\/script>/.test(indexSrc),

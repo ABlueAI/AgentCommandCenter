@@ -342,14 +342,16 @@
    *         onOpenPane(paneId), isTabVisible() }
    * Returns { update(inputs), find(query), focusFind(), focusTask(id), state() }.
    */
+  function refusal(kind) { const e = new Error(`brain-stage: ${kind}`); e.kind = kind; return e; }
+
   function createBrainStage(deps) {
     const d = deps || {};
     const doc = d.doc;
     const log = typeof d.log === 'function' ? d.log : () => {};
     const now = typeof d.now === 'function' ? d.now : () => Date.now();
-    if (!doc || !d.host) throw new Error('brain-stage: mount-missing');
-    if (!d.inFocus || typeof d.inFocus.buildInFocusCard !== 'function') throw new Error('brain-stage: in-focus-card-missing');
-    if (typeof d.onKeys !== 'function' || typeof d.onOpenPane !== 'function') throw new Error('brain-stage: pane-bridge-missing');
+    if (!doc || !d.host) throw refusal('mount-missing');
+    if (!d.inFocus || typeof d.inFocus.buildInFocusCard !== 'function') throw refusal('in-focus-card-missing');
+    if (typeof d.onKeys !== 'function' || typeof d.onOpenPane !== 'function') throw refusal('pane-bridge-missing');
 
     const st = {
       tasks: [], history: new Map(), mode: 'repo', expanded: null, focusId: null, paused: false,
@@ -527,8 +529,9 @@
             terminal: () => openPane(task.id),
             backToRightNow: () => { st.focusId = null; render(); },
           });
-        } catch (e) {
-          card = h(doc, 'p', 'mk-meta', `The In-focus card could not be drawn (${str(e && e.message, 120)}).`);
+        } catch {
+          card = h(doc, 'p', 'mk-meta', 'The In-focus card could not be drawn (card-refused). Open the pane from its node.');
+          log('[brain] REFUSED: the In-focus card could not be drawn (card-refused)\n');
         }
         right.appendChild(card);
         return;

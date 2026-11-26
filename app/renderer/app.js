@@ -1581,7 +1581,7 @@ function brainInputs() {
 function brainRefresh() {
   if (!brainStage) return;
   try { brainStage.update(brainInputs()); }
-  catch (e) { appendLog(`[brain] REFUSED: the stage could not update (${(e && e.message) || 'update-failed'})\n`); }
+  catch { appendLog('[brain] REFUSED: the stage could not update (update-failed)\n'); }
 }
 function brainTabShowing() {
   return !!(shell && shell.getState().layout === 'tabs' && shell.getState().view === 'tab' && shell.getState().tab === 'brain');
@@ -1590,6 +1590,11 @@ function brainTabShowing() {
 // shark-shape.js's clock decides when. It draws only while the brain tab is showing and the window
 // is visible, at 30 fps by default, and holds still under reduced motion. A renderer that can't
 // start (no WebGL, the module failed to load) is shown on the stage with its reason.
+// A refusal's fixed kind (brain-stage.js and shark-renderer.js set `kind` on what they throw);
+// anything else becomes the fallback. An exception's own text is never echoed.
+function refusalKind(e, fallback) {
+  return e && typeof e.kind === 'string' && /^[a-z0-9-]{1,40}$/.test(e.kind) ? e.kind : fallback;
+}
 let sharkClock = null;
 let sharkRenderer = null;
 function startShark(shape) {
@@ -1598,7 +1603,7 @@ function startShark(shape) {
     try {
       sharkRenderer = window.ccSharkRenderer.create({ host: brainStage.sharkHost, shape, geo: window.ccSharkShape });
     } catch (e) {
-      const reason = (e && e.message) || 'renderer-failed';
+      const reason = refusalKind(e, 'renderer-failed');
       brainStage.setShark({ note: `The shark can't draw here (${reason})`, error: true });
       appendLog(`[shark] REFUSED: the renderer did not start (${reason})\n`);
       return;
@@ -1667,7 +1672,7 @@ function startBrainStage() {
     });
   } catch (e) {
     brainStage = null;
-    appendLog(`[brain] REFUSED: the brain tab did not start (${(e && e.message) || 'start-failed'}); your agents are in the control room\n`);
+    appendLog(`[brain] REFUSED: the brain tab did not start (${refusalKind(e, 'start-failed')}); your agents are in the control room\n`);
     return;
   }
   // The shark's shape file (brief 7): checked strictly; a bad or missing file is shown and logged,

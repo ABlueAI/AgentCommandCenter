@@ -124,9 +124,11 @@ function geometry(positions, sAt, indices) {
  * deps: { host, shape (from shark-shape.js), geo (window.ccSharkShape), look, reducedMotion() }
  * Returns { draw(frame), resize(), setLook(look), dispose(), canvas }.
  */
+function refusal(kind) { const e = new Error(`shark-renderer: ${kind}`); e.kind = kind; return e; }
+
 function create(deps) {
   const d = deps || {};
-  if (!d.host || !d.shape || !d.geo) throw new Error('shark-renderer: deps-missing');
+  if (!d.host || !d.shape || !d.geo) throw refusal('deps-missing');
   const look = Object.assign({}, d.geo.DEFAULT_LOOK, d.look || {});
   const canvas = document.createElement('canvas');
   canvas.className = 'mk-shark-canvas';
@@ -136,12 +138,12 @@ function create(deps) {
   const ctxOptions = { alpha: true, antialias: true, powerPreference: 'high-performance' };
   let context = null;
   try { context = canvas.getContext('webgl2', ctxOptions); } catch { context = null; }
-  if (!context) throw new Error('webgl-unavailable');
+  if (!context) throw refusal('webgl-unavailable');
   let renderer;
   try {
     renderer = new THREE.WebGLRenderer(Object.assign({ canvas, context }, ctxOptions));
   } catch {
-    throw new Error('webgl-unavailable');
+    throw refusal('webgl-unavailable');
   }
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
   // Opaque black, drawn with \`mix-blend-mode: screen\` (styles.css): black adds nothing over the
