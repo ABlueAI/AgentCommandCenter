@@ -4,7 +4,7 @@ S55 is implemented on its review branch. Independent review and the Windows Fire
 (checklist step 57) are pending.
 
 Updated 2026-11-23 by PR #208 (S53 AgentPlayback vetting and Blue's PATTERN-MINE verdict; review
-fixes pushed by a Claude cloud session on Blue's ask). Before that: updated 2026-11-24 by PR #257 (status: plan rows and this file after the merges of 2026-11-23 and
+fixes pushed by a Claude cloud session on Blue's ask). Before that: updated 2026-11-24 by PR #230 (S54: Claude Code option in Video Scout, rebuilt to Blue's approved design, pending review and PC check). Before that, updated 2026-11-24 by PR #257 (status: plan rows and this file after the merges of 2026-11-23 and
 2026-11-24; "2026-11-24 (status PR #257)" under Next). Before that: updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
 verdict; review fixes pushed by a Claude cloud session on Blue's ask). Before that: updated 2026-11-24 by PR #209 (S48's OSS record, docs/decisions/OSS-memory.md, with Blue's
 verdict: PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain; step 68
@@ -52,6 +52,11 @@ Every PR that changes the state updates this file.
   The builder originally read the China-origin rule as covering the tracked Kimi config, which the
   npm package omits. Blue later clarified that the rule excludes names that appear only in upstream
   files Mako doesn't ship.
+- **Video Scout (S54, draft PR #230):** Claude Code analyzes a YouTube or Vimeo video from frames
+  sampled at scene changes (at least one every 10 seconds, near-duplicates dropped, 640 px or 1280 px
+  in detail mode, at most 120 frames with batching) and an on-device Whisper transcript, using
+  Claude.ai subscription sign-in, after an estimate the user can cancel (Blue's design, D-065).
+  The independent review, Codex's pass and the real-video PC check (step 73) are pending.
 
 - **Release: Mako 1.0.0 is released.**
   - Tag `v1.0.0` was created on 2026-10-18 at `main` commit `37009eb`, which includes the
@@ -102,6 +107,17 @@ Every PR that changes the state updates this file.
   - **Nothing from Blue's sheets is open:** he answered the 14 items the sheet left open the same
     day (docs/DECISIONS.md, 2026-11-16, "Follow-up answers"), among them the definition of
     CRITICAL, subagents on by default with a cap of 3, and a "pause all" button.
+- **Full security check (S38, PR #254, 2026-11-24, done):** one read-only check of every sensitive
+  area in AGENTS.md on `main` at `b99e377` (builder's reading: one `security-reviewer` pass per
+  area plus the builder's own checks; PR #254 lists the areas covered). Public text gives titles and
+  severities only (docs/DECISIONS.md 2026-11-21, item 7). The details went to Blue in the S38
+  session's final message (not verified: Blue confirms he has them when he does step 78). New
+  findings: 1 high (#258), 11 medium (#259 to #269) and 16 low (15 hardening items and 1 question
+  for Blue; checklist issue #270) (verified: the issues on GitHub, 2026-11-24). Known issues #85,
+  #249 and #252 still hold (builder's reading: the code they name is unchanged on `b99e377`; not
+  re-tested). Nothing was fixed in that PR: each fix comes in its own PR with a neutral title. #265
+  needs a repository-settings change only Blue makes (BLUE-CHECKLIST.md step 78), and some findings
+  need a check on his PC (step 79).
 - **Plan:** 1.1 month-one plan approved with that merge: [docs/PLAN-1.1.md](docs/PLAN-1.1.md).
   - **UI sessions on hold, Composer research planned (approved with the PR #48 merge; updated by
     the 2026-11-16 bullet above):** S14

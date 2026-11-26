@@ -3,6 +3,35 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-25: Codex's lane, reworded
+
+Blue said this in the session that built PR #291, after it merged, reading its review's security
+findings. It replaces the entry below ("Codex may build sensitive items too") wherever they differ;
+how AGENTS.md, docs/CODEX-BUILDER-LANE.md items 1 and 6, docs/SCHEDULE-1.1.md and
+docs/AI-COLLABORATION.md word it is proposed, pending Blue (this PR); merging approves it. "Builder's
+reading" marks a line that is the builder's, not Blue's.
+
+| Decision | Blue's words |
+|---|---|
+| **Codex builds any plan row or issue Claude could, sensitive ones included,** and gets it the same way as other lane work (a claim issue and one hand-off comment), no longer only when Blue starts it. Why: Codex has the same capabilities, and Blue has Codex usage to spend; the entry below routed each sensitive item through Blue, which cost his time and sent Codex less work. | "help me to word it to prevent misuse but also grant more projects to codex. it has the same capabilities and the amount of usage i have to use was never a secret" |
+| **Claude keeps the rulebook as before,** plus the UI rows (S66, S18 to S20) and the Composer's dispatch tools. Builder's reading of "the rulebook": the rules and checks that judge Codex's own PRs, namely AGENTS.md, CLAUDE.md, `.claude/agents/` (the reviewers), docs/RUNNER.md, docs/SWEEPER.md, docs/CODEX-BUILDER-LANE.md, `.github/` (CI, CODEOWNERS, the PR template), the scripts that make CI run every suite, and DECISIONS.md entries that change the rules or the lane (the full list is docs/CODEX-BUILDER-LANE.md item 1); in any test that reads those files, a Codex PR may add asserts but never removes or loosens one, and it never removes a test from the `test` script. The line is drawn so no builder rewrites what grades its own work, not by skill. `.claude/` settings and hooks (the account guard, the fence hook) stay Codex's to build, as the entry below lists them, with a 🔴 line in the PR's TLDR. This line is enforced by review and Blue's merge, not by CI (verified 2026-11-25: no workflow in `.github/workflows/` reads a PR's branch or author). | "keep rulebook as before, this isnt a good rule and i know it" |
+| **Security findings on a Codex PR are fixed by the reviewing Claude session:** when a run has one, that session fixes all the run's high and medium findings on Codex's branch in one push with its own Opus delta run, and posts no fix request for that run; its commits, comments and the review give a security finding's title and severity only (hard rule 6). It goes to NEEDS BLUE instead for a CRITICAL finding (nobody pushes until Blue answers), a PR that changes `.claude/`, or a reviewing session whose prompt forbids pushing to `codex/` (the runner and the PR sweeper, until their prompts carry this), and when the push doesn't clear the finding. Builder's proposal, which merging approves as Blue's ask under AGENTS.md "Claude never pushes to a `codex/` branch unless Blue asks". Replaces the entry below's "Blue gives Codex the details privately". Builder's reading: it keeps security details out of public text without making Blue a relay. | — (builder's proposal for "prevent misuse"; merging approves it) |
+| **Unchanged:** every Codex PR gets Claude's Opus review, `security-reviewer` on run 1 when it touches a sensitive area, and Codex's pass; the review loop, run caps, merge order, every hard rule and Blue's merge (CODEOWNERS) still apply. | — |
+
+## 2026-11-25: Codex may build sensitive items too
+
+Blue decided this in his main chat on 2026-11-25, with unused Codex usage (several ChatGPT Plus
+resets) and too little work queued for it; his words are quoted as the hand-off for this PR relayed
+them. How AGENTS.md "Who does what", docs/CODEX-BUILDER-LANE.md "The lane" item 1 and
+docs/SCHEDULE-1.1.md word it is proposed, pending Blue (this PR); merging approves it. It replaces
+the limit that Codex builds only work that isn't sensitive (the Codex builder lane of 2026-10-23,
+PR #114, and the 2026-11-16 and 2026-11-24 entries' "non-sensitive" and "stays with Claude" wording
+for S26 and S56). "Builder's reading" marks a line that is the builder's, not Blue's.
+
+| Decision | Blue's words |
+|---|---|
+| **Codex may build sensitive work** (for example security fixes, the account guard, the credentials store, IPC, PTY, launchers, the fence hook, `.claude/` settings; the examples are the hand-off's, not Blue's words) as well as `windows`-lane work that isn't sensitive, to use Codex's usage and free Claude's lanes. Unchanged: Claude builds the UI rows (S66, S18 to S20) and the Composer's dispatch tools; every Codex PR still gets Claude's independent Opus review; a Codex PR that touches a sensitive area also gets `security-reviewer` on review run 1 (builder's reading: that is the second review AGENTS.md "Sensitive areas" asks for); the review loop, its run caps, the merge-order rule and Blue's merge are unchanged. Builder's reading: the sensitive-area flag in the TLDR, the "Default go" stop for sensitive work the task didn't authorize, and every hard rule still apply to Codex's PRs; this widens which work Codex may build, not how it gets it: the comment hand-off in docs/CODEX-BUILDER-LANE.md item 3 still covers only `windows`-lane sessions that aren't sensitive, so a sensitive item reaches Codex as Blue starts it there himself, and a fix request for a security finding on a Codex PR gives its title and severity only, with Blue passing Codex the details privately. | "i need more work to push through codex and free up claude." · "ignore the sensitivity rules if need be, we need to cook through usage over there" |
+
 ## 2026-11-24: Blue's go on the UI (checklist step 18)
 
 Blue gave it in Mako main's chat on 2026-11-24; his words are quoted as the hand-off for PR #253
@@ -93,6 +122,17 @@ loop" ("At most 5 runs per PR") for PR #218 only; the rule itself is unchanged.
 | Review run 6 on PR #218, then run 7, one at a time (2026-11-24). | "run 6 on #218" · "run 7 on #218" |
 | Review run 8 on PR #218, with the PowerShell check failing closed: a PowerShell script that names a guarded command's words anywhere gets the login check, instead of more parsing to tell a printed value from a run command (2026-11-24). | "Yes, run 8 fail-closed" |
 | Review run 9 on PR #218, for run 8's open medium and its three lows (2026-11-24). | "run review 9" |
+
+## 2026-11-23: S54's design (Claude video analysis)
+
+Blue decided this in his main chat; the hand-off to the Claude session that rebuilt PR #230 relayed
+it as D-065, with the quote below. It was not in this file before PR #230, which records it because
+its design depends on it; merging PR #230 records it here. "Builder's reading" marks a line that is
+the builder's, not Blue's.
+
+| Decision | Blue's words |
+|---|---|
+| **D-065. S54's design limits tokens.** Sample frames by scene change plus at least one frame every N seconds (default 10), not by the clock; downscale to 640 px on the long edge by default, with a "detail mode" switch, off by default, that sends 1280 px frames for screen recordings and tutorials (same frame cap; the estimate shows which mode is on); drop near-duplicate frames; cap frames per video (default 120) and per request, batching when needed; the audio goes in as a transcript from Mako's existing speech-to-text; before running, show an estimate (frames kept, approximate tokens) and let the user cancel. Every default is a setting. No API key or API credits, ever, and no silent fallback. S54 stays in 1.1 (the S61 entry below, item 8). Replaces the "1 fps video plus audio" of the 2026-11-16 entries for S54. Builder's reading: long videos are handled by the cap and batching, not refused at a fixed length (PR #230's first build had a 90-second limit, which never reached `main`); a later refinement may send only the frames that contain text at full size. | "add detail mode" |
 
 ## 2026-11-23: hard rules, Codex's pass before ready, agent-account pacing
 

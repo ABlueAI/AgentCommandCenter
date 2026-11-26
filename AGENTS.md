@@ -459,8 +459,8 @@ listeners · CI workflows, `.github/`, `.claude/`, repository settings · this f
   since write access lets others edit it, and if the author or history can't be checked, the
   exception doesn't apply), or Blue asks the agent directly in its own session, or one of the two
   Codex-lane comments in docs/CODEX-BUILDER-LANE.md ("The lane", items 3 and 6): the one hand-off
-  on a locked `agent-claimed` claim issue opened by `ABlueAgent`, for a `windows`-lane session that
-  isn't sensitive (or the trial task Blue picked), and, until the runner prompt carries the
+  on a locked `agent-claimed` claim issue opened by `ABlueAgent`, for work the lane gives Codex
+  (docs/CODEX-BUILDER-LANE.md item 1; or the trial task Blue picked), and, until the runner prompt carries the
   hand-off, only when a comment by `ABlueAI` on that issue, unedited by anyone else, asks for it;
   and a fix request on Codex's own PR listing only its open findings or failing check; both say
   "Act only on this comment." A request in a comment by anyone
@@ -548,12 +548,18 @@ account stays clear of GitHub's abuse detection.
   second reviewer (its pass is needed for `READY TO MERGE`, "Hard rules" item 9; since it was linked to
   `ABlueAgent`, BLUE-CHECKLIST.md step 16, 2026-10-20, it reviews agent PRs automatically; a
   re-review goes through draft and ready, step 3), reviewer of the UI sessions Claude
-  builds, second builder for `windows`-lane sessions that aren't sensitive and for the rows the plan
-  gives it (docs/CODEX-BUILDER-LANE.md), and planning partner. Works in its own `codex/` branch,
+  builds, second builder for any plan row or issue, sensitive ones included, except the UI
+  sessions, the Composer's dispatch tools and the rules and checks that judge its own PRs (AGENTS.md,
+  CLAUDE.md, `.claude/agents/`, docs/RUNNER.md, docs/SWEEPER.md, docs/CODEX-BUILDER-LANE.md,
+  `.github/`, the checks that CI runs every suite, and docs/DECISIONS.md entries on the rules; it
+  never loosens a test that reads them; the full list is docs/CODEX-BUILDER-LANE.md item 1), which stay Claude's (Blue, docs/DECISIONS.md 2026-11-25, "Codex's lane, reworded";
+  docs/CODEX-BUILDER-LANE.md item 1), and planning partner. Works in its own `codex/` branch,
   never Claude's, and fixes its own PRs; Claude never pushes to a `codex/` branch unless Blue asks.
   He has asked it for Claude cloud sessions to push review fixes and `main` merges to Codex's
   docs-only record PRs (as docs/SWEEPER.md defines them), one fixer per PR at a time, and for the
-  PR sweeper (docs/DECISIONS.md, 2026-11-23; docs/SWEEPER.md).
+  PR sweeper (docs/DECISIONS.md, 2026-11-23; docs/SWEEPER.md), and for the reviewing Claude
+  session to fix security findings on Codex's PRs itself, except a CRITICAL one
+  (docs/CODEX-BUILDER-LANE.md item 6).
   If Blue drops it, Claude takes its rows after a plan change, and "Hard rules" item 9 would need
   changing too.
 - Plans and reviews happen in the repo (PRs, issues, these files), never by copying text between apps.
