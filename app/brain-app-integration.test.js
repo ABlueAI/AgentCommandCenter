@@ -5,7 +5,8 @@
 // renderer running the real index.html, preload.js, app.js, shell-nav.js, in-focus-card.js and
 // brain-stage.js (brain-app-harness.js; only main is stubbed). It checks: nodes appear for live
 // panes and sit higher when more urgent; a permission prompt always shows as a red card; a card
-// answer reaches the pane (counted at the `pty-write` IPC boundary) as the menu's digit or Esc;
+// answer reaches the pane (counted at the `pty-write` IPC boundary) as the menu's digit or Esc, and
+// the permission card has no Allow once;
 // a click on a node opens the In-focus card in its state; Ctrl+F (a real key event) opens find,
 // which finds a node by content; more than 8 tasks group by repo and a click fans them out; Open
 // pane goes to the control room; the shark draws, stops on another tab and pauses with the view;
@@ -72,8 +73,9 @@ eq(S.permissionBorder, 'rgb(242, 96, 107)', 'its border is the needs-you red');
 eq(S.needsToken, '#f2606b', 'which is the status-needs token');
 assert(perm && /Mako never answers this for you/.test(perm.text), 'with "Mako never answers this for you"');
 assert(cards.some((c) => c.kind === 'question' && /Which store/.test(c.text)), 'the question shows as a question card');
-eq(S.writes, [{ id: p1, data: '1' }, { id: p2, data: '2' }], 'Allow once and an answer reached their panes as the menu digit, at the IPC boundary');
-eq(S.duplicateWrites, [], 'a second Allow once on the same prompt sends nothing');
+eq(S.allowOnceButtons, 0, 'the permission card has no Allow once: approving happens in the pane');
+eq(S.writes, [{ id: p1, data: '\u001b' }, { id: p2, data: '2' }], 'Deny reached its pane as Esc and an answer as its digit, at the IPC boundary');
+eq(S.duplicateWrites, [], 'a second Deny on the same prompt sends nothing');
 eq(S.newPermissionShown, true, 'when the pane asks again, the new card shows the new command');
 eq(S.focusState, 'permission', 'a click on a node opens the In-focus card in its state');
 eq(S.denyWrites, [{ id: p1, data: '\u001b' }], 'Deny on the In-focus card reached the pane as Esc');

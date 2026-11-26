@@ -109,10 +109,9 @@
       if (t) { question = str(t, 200); qAt = i; break; }
     }
     // What the request is about: the lines above the question, back to the tool's header (Claude
-    // Code draws "Bash command" or "● Bash(...)" and then the command), at most 12 lines. All of it
-    // is shown on the card and is part of the signature, so two requests that differ only in their
-    // command differ. `complete` says the header was found, so the whole command is on the card;
-    // without it (a longer command, another layout) Allow once is not offered.
+    // Code draws "Bash command" or "● Bash(...)" and then the command). All of it is shown on the
+    // card and is part of the signature, so two requests that differ only in their command differ.
+    // `complete` says the header was found and nothing older was dropped.
     // Every line above the question is read, back to the start of what the app holds for this
     // pane (it forgets a pane's lines each time the pane starts working again), with no stop at a
     // blank line. The TOPMOST header wins, so a command or description line that looks like a
@@ -167,10 +166,11 @@
     if (task.state !== 'needs' || !task.prompt) return { ok: false, reason: 'no-prompt' };
     if (promptSignature(task.prompt) !== clickedSignature) return { ok: false, reason: 'prompt-changed' };
     if (action === 'deny') return task.prompt.kind === 'permission' ? { ok: true, keys: '\u001b' } : { ok: false, reason: 'not-permission' };
-    if (action === 'allowOnce') {
-      const n = allowOnceOption(task.prompt);
-      return n ? { ok: true, keys: String(n) } : { ok: false, reason: 'no-allow-once-option' };
-    }
+    // Allow once is answered in the pane for now: the pane output Mako reads can miss a line of
+    // the command (the terminal parser drops some lines as screen noise), so the brain tab never
+    // approves a command. allowOnceOption stays for the follow-up that brings it back once the
+    // real prompt layout is checked (BLUE-CHECKLIST.md step 86).
+    if (action === 'allowOnce') return { ok: false, reason: 'allow-in-pane' };
     if (action === 'answer') {
       const m = /^opt-([1-9])$/.exec(String(answerId || ''));
       if (!m) return { ok: false, reason: 'bad-answer' };
@@ -395,7 +395,7 @@
     'already-answered': 'This prompt was already answered from here; open the pane to check it.',
     'not-working': 'That pane isn\'t working, so there is nothing to interrupt.',
     'not-permission': 'That is a question, not a permission request.',
-    'no-allow-once-option': 'Mako can\'t show what this allows, or there is no plain "Yes"; open the pane.',
+    'allow-in-pane': 'Approve it in the pane: the brain tab only denies or opens it.',
     'widening-option': 'That choice widens what the agent may do; pick it in the pane if you want it.',
     'bad-answer': 'That isn\'t one of the choices on screen.',
     'unknown-action': 'Open the pane.',
@@ -585,9 +585,9 @@
         return b;
       };
       if (permission) {
-        const allow = btn('Allow once', true, () => act('allowOnce', t.id, sig), { 'data-action': 'allowOnce' });
-        if (!allowOnceOption(t.prompt)) { allow.disabled = true; allow.setAttribute('title', 'Mako can\'t show what this allows, or the menu has no plain "Yes"; open the pane.'); }
+        // No Allow once here (see keysForAction): approving happens in the pane.
         btn('Deny', false, () => act('deny', t.id, sig), { 'data-action': 'deny' });
+        actions.appendChild(h(doc, 'span', 'mk-meta', 'To allow it, open the pane.', { 'data-allow': 'in-pane' }));
       } else {
         for (const o of t.prompt.options) {
           if (widens(o.label)) { actions.appendChild(h(doc, 'span', 'mk-meta', `${o.n}. ${o.label} (in the pane only)`, { 'data-widening': `opt-${o.n}` })); continue; }
@@ -607,7 +607,6 @@
         let card;
         try {
           card = d.inFocus.buildInFocusCard(doc, focusTask(task, now()), {
-            allowOnce: () => act('allowOnce', task.id, sig),
             deny: () => act('deny', task.id, sig),
             answer: (_t, answerId) => act('answer', task.id, sig, answerId),
             interrupt: () => act('interrupt', task.id, ''),

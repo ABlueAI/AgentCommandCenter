@@ -160,9 +160,9 @@ process.stdout.write('\ncard keys: only a digit the menu offered, or Esc\n');
 {
   const perm = B.buildTask(pane('p1', 'attention', { lines: PERMISSION_LINES }), NOW);
   const sig = B.promptSignature(perm.prompt);
-  eq(B.keysForAction('allowOnce', perm, sig), { ok: true, keys: '1' }, 'Allow once sends 1');
+  eq(B.keysForAction('allowOnce', perm, sig), { ok: false, reason: 'allow-in-pane' }, 'Allow once is never sent from the brain tab (approve in the pane)');
   eq(B.keysForAction('deny', perm, sig), { ok: true, keys: '\u001b' }, 'Deny sends Esc');
-  eq(B.keysForAction('allowOnce', perm, 'stale'), { ok: false, reason: 'prompt-changed' }, 'a prompt that changed since the card was drawn: refused');
+  eq(B.keysForAction('deny', perm, 'stale'), { ok: false, reason: 'prompt-changed' }, 'a prompt that changed since the card was drawn: refused');
   const q = B.buildTask(pane('q1', 'attention', { lines: QUESTION_LINES }), NOW);
   const qs = B.promptSignature(q.prompt);
   eq(B.keysForAction('answer', q, qs, 'opt-2'), { ok: true, keys: '2' }, 'an answer sends its digit');
@@ -171,7 +171,7 @@ process.stdout.write('\ncard keys: only a digit the menu offered, or Esc\n');
   const wide = B.buildTask(pane('q2', 'attention', { lines: ['Would you like to proceed?', '❯ 1. Yes, and auto-accept edits', '2. No'] }), NOW);
   eq(B.keysForAction('answer', wide, B.promptSignature(wide.prompt), 'opt-1'), { ok: false, reason: 'widening-option' }, 'a widening choice is never sent from a card');
   eq(B.keysForAction('deny', q, qs), { ok: false, reason: 'not-permission' }, 'Deny only on a permission');
-  eq(B.keysForAction('allowOnce', q, qs), { ok: false, reason: 'no-allow-once-option' }, 'Allow once only on a permission');
+  eq(B.keysForAction('allowOnce', q, qs), { ok: false, reason: 'allow-in-pane' }, 'Allow once is refused on a question too');
   const w = B.buildTask(pane('w1', 'working'), NOW);
   eq(B.keysForAction('interrupt', w, ''), { ok: true, keys: '\u001b' }, 'Interrupt sends Esc to a working pane');
   eq(B.keysForAction('interrupt', perm, ''), { ok: false, reason: 'not-working' }, 'Interrupt never on a waiting pane');
@@ -255,12 +255,14 @@ process.stdout.write('\nDOM: mount, nodes, cards, In focus, keys reach the pane\
   assert(permCard && permCard.className.includes('mk-card-permission'), 'a permission prompt always shows as a red card');
   assert(permCard && permCard.textContent.includes(F.PERMISSION_LINE), 'with "Mako never answers this for you"');
   assert(permCard && permCard.textContent.includes('npm test'), 'and the command it would allow, as plain text');
-  const allow = permCard.all((n) => n.attrs['data-action'] === 'allowOnce')[0];
-  allow.click();
+  eq(permCard.all((n) => n.attrs['data-action'] === 'allowOnce').length, 0, 'the permission card has no Allow once (approve in the pane)');
+  assert(permCard.all((n) => n.attrs['data-allow'] === 'in-pane').length === 1, 'it says to open the pane to allow it');
+  const denyBtn = permCard.all((n) => n.attrs['data-action'] === 'deny')[0];
+  denyBtn.click();
   await_(() => {
-    eq(sent, [['pty1', '1']], 'Allow once on the card reaches the pane as "1"');
+    eq(sent, [['pty1', '\u001b']], 'Deny on the card reaches the pane as Esc');
     assert(/^Key sent to Run tests; check that it moved on/.test(status()), 'the notice says the key was sent, not that the pane moved on');
-    allow.click();
+    denyBtn.click();
   }, () => {
     eq(sent.length, 1, 'a second click on the same prompt sends nothing');
     assert(/^Not sent: already-answered/.test(status()), 'and says it was already answered');
@@ -274,9 +276,9 @@ process.stdout.write('\nDOM: mount, nodes, cards, In focus, keys reach the pane\
 
     // The pane moves on to another permission request; the stage hasn't refreshed yet.
     live.pty1 = pane('pty1', 'attention', { title: 'Run tests', statusSince: NOW - 2 * MIN, lines: PERMISSION_LINES.map((l) => l.replace(/npm test/g, 'rm -rf build')) });
-    cardOf('permission').all((n) => n.attrs['data-action'] === 'allowOnce')[0].click();
+    cardOf('permission').all((n) => n.attrs['data-action'] === 'deny')[0].click();
   }, () => {
-    eq(sent.length, 2, 'a stale card\'s Allow once sends nothing: the click is checked against the pane now');
+    eq(sent.length, 2, 'a stale card\'s Deny sends nothing: the click is checked against the pane now');
     assert(/^Not sent: prompt-changed/.test(status()), 'and says the prompt changed');
     push();
     assert(cardOf('permission').textContent.includes('rm -rf build'), 'after the refresh the card shows the new command');
@@ -337,13 +339,13 @@ process.stdout.write('\nDOM: mount, nodes, cards, In focus, keys reach the pane\
     stage.update([pane('l1', 'attention', { title: 'Long', linesTruncated: true, lines: ['  step 9', '  step 10', 'Do you want to proceed?', '❯ 1. Yes', '  2. No'] })]);
     const lc = cardOf('permission');
     assert(lc && lc.all((n) => n.attrs['data-incomplete'] === 'true').length === 1, 'a cut-off request: the card says it can\'t show the whole request');
-    assert(lc && lc.all((n) => n.attrs['data-action'] === 'allowOnce')[0].disabled === true, 'and Allow once is disabled');
+    assert(lc && lc.all((n) => n.attrs['data-action'] === 'allowOnce').length === 0, 'and has no Allow once');
 
     // A failed write is visible.
     host2 = new Node('div');
     const s2 = B.createBrainStage({ doc, host: host2, now: () => NOW, inFocus: F, onKeys: () => Promise.resolve({ ok: false, reason: 'pty-gone' }), onOpenPane: () => {} });
     s2.update([pane('z', 'attention', { lines: PERMISSION_LINES })]);
-    host2.all((n) => n.attrs['data-action'] === 'allowOnce')[0].click();
+    host2.all((n) => n.attrs['data-action'] === 'deny')[0].click();
   }, () => {
     assert(/^Not sent: pty-gone/.test(byId(host2, 'makoStageFindStatus').textContent), 'a write the pane refused is shown, never silent');
   });

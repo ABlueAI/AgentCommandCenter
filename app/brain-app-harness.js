@@ -150,15 +150,16 @@ async function scenarioStage() {
 
   // A card answer reaches the pane.
   const w0 = ipc.ptyWrite.length;
-  await run(`document.querySelector('#makoConvoCards article[data-kind=permission] [data-action=allowOnce]').click(); true`);
+  out.allowOnceButtons = await run(`document.querySelectorAll('#makoConvoCards article[data-kind=permission] [data-action=allowOnce]').length`);
+  await run(`document.querySelector('#makoConvoCards article[data-kind=permission] [data-action=deny]').click(); true`);
   await sleep(150);
   await run(`document.querySelector('#makoConvoCards article[data-kind=question] [data-answer="opt-2"]').click(); true`);
   await sleep(150);
   out.writes = ipc.ptyWrite.slice(w0);
 
-  // A second Allow once on the same prompt sends nothing (one answer per prompt).
+  // A second Deny on the same prompt sends nothing (one answer per prompt).
   const wDup = ipc.ptyWrite.length;
-  await run(`(() => { const b = document.querySelector('#makoConvoCards article[data-kind=permission] [data-action=allowOnce]'); if (b) b.click(); return true; })()`);
+  await run(`(() => { const b = document.querySelector('#makoConvoCards article[data-kind=permission] [data-action=deny]'); if (b) b.click(); return true; })()`);
   await sleep(150);
   out.duplicateWrites = ipc.ptyWrite.slice(wDup);
   // The pane moves on: it works, then asks a new permission for another command.
