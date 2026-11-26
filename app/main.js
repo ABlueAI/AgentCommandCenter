@@ -15,6 +15,7 @@ const pty = require('@lydell/node-pty'); // prebuilt ConPTY — powers in-app te
 // dependency-free, unit-tested module (see app/video-scout-args.test.js) so they don't have to be
 // re-verified by hand every time this file changes.
 const { buildVideoScoutArgs } = require('./video-scout-args');
+const { createClaudeVideoScoutIpc } = require('./claude-video-scout-ipc');
 // V5b1: MAIN-issued video-scout run identity. main generates the run ID (never the renderer, never
 // from a path, never parsed from terminal output), passes it to feed-gemini.ps1 as -RunId, and keeps
 // a pane->runId registry so a finished pane can open its report in V5b2. See app/video-scout-run-id.js.
@@ -496,6 +497,17 @@ process.on('uncaughtException', (err) => {
   if (win && !win.isDestroyed()) win.webContents.send('main-error', String((err && err.message) || err));
 });
 
+const claudeScout = createClaudeVideoScoutIpc({
+  trustedSenderGate: createTrustedSenderGate({ entryUrl: ENTRY_URL, getTrustedWindow: () => win }),
+  validateVideoUrl, baseEnv: process.env, killTree: processTree.killTree,
+  verifyPolicy: () => roleDefinitionResolver.assertNoManagedScope(),
+  log: (reason) => {
+    const contents = win && !win.isDestroyed() ? win.webContents : null;
+    if (contents && !contents.isDestroyed()) contents.send('main-error', reason);
+    else console.error(reason);
+  },
+});
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1320, height: 860, minWidth: 980, minHeight: 640,
@@ -525,6 +537,15 @@ function createWindow() {
         ...(admissionEnabled ? [ADMISSION_RENDERER_ARG] : []),
       ],
     },
+  });
+  win.webContents.on('render-process-gone', () => { claudeScout.shutdown(); });
+  win.webContents.on('destroyed', () => { claudeScout.shutdown(); });
+  // A reload (Ctrl+R in the default menu) restarts the renderer's pane numbering, so a run left
+  // going could send its estimate or audio request to a new pane with the same ID. Cancel it.
+  win.webContents.on('did-start-navigation', (details, _url, isInPlace, isMainFrame) => {
+    const mainFrame = details?.isMainFrame ?? isMainFrame;
+    const sameDocument = details?.isSameDocument ?? isInPlace;
+    if (mainFrame && !sameDocument) claudeScout.shutdown();
   });
   win.loadFile(ENTRY_PATH);
 
@@ -790,6 +811,24 @@ app.whenReady().then(() => {
   ipcMain.handle('library-list', (e) => libraryIpc.handleList(e));
   ipcMain.handle('library-read', (e, handle) => libraryIpc.handleRead(e, handle));
   ipcMain.handle('library-open-report', (e, paneId) => libraryIpc.handleOpenReport(e, paneId));
+
+  ipcMain.handle('claude-video-scout-run', (e, req) => claudeScout.run(e, req));
+  ipcMain.handle('claude-video-scout-transcript', (e, req) => claudeScout.transcript(e, req));
+  ipcMain.handle('claude-video-scout-confirm', (e, req) => claudeScout.confirm(e, req));
+  ipcMain.on('claude-video-scout-cancel', (e, id) => claudeScout.cancel(e, id));
+  let waitingForClaudeScout = false;
+  app.on('before-quit', (e) => {
+    const pending = claudeScout.shutdown();
+    if (!pending) return;
+    e.preventDefault();
+    if (!waitingForClaudeScout) {
+      waitingForClaudeScout = true;
+      pending.finally(() => {
+        waitingForClaudeScout = false;
+        app.quit();
+      });
+    }
+  });
 
   // V3b stored-report follow-up boundary — same trust anchors, same identity routes (CURRENT
   // library handle via libraryIpc.resolveHandle — lifetime unchanged — or pane ID via the V5b1
