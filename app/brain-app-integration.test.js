@@ -94,7 +94,14 @@ assert(S.sharkStarted === true, `the real Three.js renderer started (note: ${JSO
 eq(S.directDraw, 'ok', 'the real renderer draws a frame (thinking state) without an error');
 assert(S.sharkCanvas && S.sharkCanvas.w > 0 && S.sharkCanvas.h > 0, 'into a canvas on the stage');
 const windowLive = S.docHidden === false;
-if (windowLive) {
+if (windowLive && S.reducedMotion === true) {
+  // This machine asks for less motion (Windows CI runners do): the shark draws one still frame
+  // and its clock stops (brief 3.6, "it holds still and keeps its glow").
+  process.stdout.write('  (this machine asks for reduced motion: checking the still frame)\n');
+  assert(S.framesAtStart >= 1, `reduced motion: a still frame was drawn (${S.framesAtStart})`);
+  eq(S.sharkFramesPerSecond, 0, 'reduced motion: no further frames while nothing changes');
+  eq(S.sharkRunningShown, false, 'reduced motion: the clock stays stopped');
+} else if (windowLive) {
   assert(S.sharkFramesPerSecond > 0 && S.sharkFramesPerSecond <= 31, `the clock draws, at no more than 30 fps by default (${S.sharkFramesPerSecond} frames in 1 s)`);
   eq(S.sharkRunningShown, true, 'back on the brain tab it runs again');
 } else {

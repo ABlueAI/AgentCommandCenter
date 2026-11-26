@@ -105,6 +105,8 @@ async function scenarioStage() {
     // requestAnimationFrame, and then the clock rightly draws nothing. Recorded so the test can say
     // which case it checked.
     out.docHidden = await run(`document.hidden`);
+    out.reducedMotion = await run(`window.matchMedia('(prefers-reduced-motion: reduce)').matches`);
+    out.framesAtStart = await run(`sharkClock.state().frames`);
     out.rafTicks = await run(`new Promise((r) => { let n = 0; const end = performance.now() + 500; const f = () => { n++; if (performance.now() < end) requestAnimationFrame(f); else r(n); }; requestAnimationFrame(f); setTimeout(() => r(n), 1500); })`);
     // One frame drawn directly through the real renderer, whatever the window allows.
     out.directDraw = await run(`(() => { try { sharkRenderer.draw({ state: 'thinking', t: 500, dt: 33, voice: 0, motion: true }); return 'ok'; } catch (e) { return 'threw'; } })()`);
