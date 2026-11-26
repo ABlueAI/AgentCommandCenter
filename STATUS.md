@@ -7,11 +7,11 @@ Updated 2026-11-26 by the PR sweeper's status PR (covers main up to 0a5702c: PR 
 security check; PRs #291, #293 and #292, Codex's lane widened to sensitive work; PR #230, S54's
 Claude video analysis; PR #294, Blue's open-source verdicts and rows S68 to S72; verified: GitHub's
 REST API, read 2026-11-26 about 05:45 UTC, shows them merged 2026-11-25 08:51 UTC to 2026-11-26
-03:45 UTC in that order). Before that: updated 2026-11-25 by the PR sweeper's status PR #285, never
-merged and replaced by this one (covers main up to 28c7e18: PR #225, the PR
+03:45 UTC in that order). Before that: PR #285 (status 2026-11-25, never merged; its edits are
+carried here) covered main up to 28c7e18: PR #225, the PR
 sweeper and its rules; PR #255, S45, updated this file itself; verified: GitHub's REST API,
 read 2026-11-25 about 06:50 UTC, shows #257, #255 and #225 merged in that order at 06:29 to 06:31
-UTC, and #282 before them at 06:13 UTC). Before that: updated 2026-11-24 by PR #230 (S54: Claude Code option in Video Scout, rebuilt to Blue's approved design, pending review and PC check). Before that, updated 2026-11-24 by PR #257 (status: plan rows and this file after the merges of 2026-11-23 and
+UTC, and #282 before them at 06:13 UTC. Before that: updated 2026-11-24 by PR #230 (S54: Claude Code option in Video Scout, rebuilt to Blue's approved design, pending review and PC check). Before that, updated 2026-11-24 by PR #257 (status: plan rows and this file after the merges of 2026-11-23 and
 2026-11-24; "2026-11-24 (status PR #257)" under Next). Before that: updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
 verdict; review fixes pushed by a Claude cloud session on Blue's ask). Before that: updated 2026-11-24 by PR #209 (S48's OSS record, docs/decisions/OSS-memory.md, with Blue's
 verdict: PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain; step 68
@@ -115,7 +115,7 @@ Only the PR sweeper's status PR edits this file (AGENTS.md "The shared brain";
     certainty labels, a cap of 2 runs on docs-only PRs (5 otherwise), the model rule, the clarified
     China-origin rule, the scope freeze on 2026-12-01, Claude builds the UI, Codex PR reviews only
     from a Claude cloud session, the merge sitting and PC-check evenings, and Dependabot PRs' review
-    (issue #205). S40 (draft PR #256) is not merged, so reviews stay ranked high, medium, low.
+    (issue #205). S40 (PR #256, merged 2026-11-24, verified: GitHub's REST API, read 2026-11-26) ranks reviews CRITICAL, HIGH, MEDIUM, LOW.
   - **The 1.1 schedule (S61, PR #223):** [docs/SCHEDULE-1.1.md](docs/SCHEDULE-1.1.md), adopted:
     Blue merged that PR on 2026-11-24: the UI gate (about 2026-11-28 to 2026-12-02), the Composer and tab chains,
     a main-case release of about 2026-12-18 to 2027-01-05 against the 2027-01-15 target, and the
@@ -238,7 +238,7 @@ Only the PR sweeper's status PR edits this file (AGENTS.md "The shared brain";
   of what Codex did, are still to be checked (docs/1.1-GAP-AUDIT.md, A4). **2026-11-16:** Blue
   made the trial S26's result ("until we burn through codex usage ... not necessarily a permanent
   change"), keeps ChatGPT and will "use heavily over the next 3 weeks ... use claude as backup
-  reviewer". The lane stays open to about 2026-11-30 for non-sensitive early tasks (S36 and S56
+  reviewer". The lane stays open to about 2026-11-30 for non-sensitive early tasks (widened on 2026-11-25 by PRs #291 to #293 to sensitive work too; see above) (S36 and S56
   in the lane; S56's 9 bug issues are #232 to #240, and from PR #241 its row is no longer tagged Sensitive; S52 and S53, `blue`-lane rows, started by Blue himself), Codex reviews Claude's PRs with Sonnet as backup, and he checks in on 2026-11-30 (checklist
   step 63); S26 closes when his resets are used. The lane's rules and the required Opus review are
   unchanged. **2026-11-21:** ChatGPT Plus stays through the 1.1 release and Codex's heavy use runs
