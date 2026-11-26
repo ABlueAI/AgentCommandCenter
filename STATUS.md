@@ -3,7 +3,11 @@
 S55 is implemented on its review branch. Independent review and the Windows Firefox profile check
 (checklist step 57) are pending.
 
-Updated 2026-11-26 by the PR sweeper's status PR (covers main up to 0a5702c: PR #254, S38's full
+Updated 2026-11-26 by the PR sweeper's second status PR of the day (covers main up to 1136f88:
+PR #303, the checklist cleanup; PR #301, D-090 in the rules; PR #300, S68's re-pins; PR #283, S66's
+shared navigation; PR #208, S53's AgentPlayback record; verified: GitHub's REST API, read
+2026-11-26 about 18:45 UTC, shows them merged 2026-11-26 06:59 to 07:05 UTC in that order). Before
+that: updated 2026-11-26 by the PR sweeper's status PR #309 (covers main up to 0a5702c: PR #254, S38's full
 security check; PRs #291, #293 and #292, Codex's lane widened to sensitive work; PR #230, S54's
 Claude video analysis; PR #294, Blue's open-source verdicts and rows S68 to S72; verified: GitHub's
 REST API, read 2026-11-26 about 05:45 UTC, shows them merged 2026-11-25 08:51 UTC to 2026-11-26
@@ -77,6 +81,27 @@ Only the PR sweeper's status PR edits this file (AGENTS.md "The shared brain";
   SkillSpector and Obsidian Skills, S69 pattern-mines Trail of Bits skills into `security-reviewer`,
   S70 one claude-security trial scan (Blue starts it, checklist step 85), S71 one elephant-goldfish
   trial on the Composer spec, S72 an E2E smoke test on Windows runners.
+
+- **Procedural asks go to agents (PR #301, merged 2026-11-26; Blue, 2026-11-25, D-090):** agents
+  no longer ask Blue procedural questions on PRs (one more push or run, finishing after the review
+  cap, OSS verdicts and taste calls with a recommendation, Codex-pass gaps, failed CI rounds); they
+  take the recommended default, mark it 🤖 in the TLDR, and his merge approves it. Merges, review
+  approvals, credentials, spending, deletes and his PC steps stay his (AGENTS.md "Deciding without
+  asking").
+- **Checklist cleanup (PR #303, merged 2026-11-26):** BLUE-CHECKLIST.md opens with "Open for Blue,
+  by when", one short list of what is still his; steps done, superseded or moved to agents are
+  ticked, struck or re-labelled there.
+- **Shared navigation (S66, PR #283, merged 2026-11-26):** the three-tab layout (brain, control
+  room, aquarium) behind a setting, the Ctrl K palette and the one Settings page are on `main`. Its
+  "Done when" still needs the batched PC-check session, so S66 stays IN PROGRESS (#283). S18 (#311),
+  S19 (#321) and S20 (#322) build on it; each now waits for #286 (S46).
+- **S68 done (PR #300, merged 2026-11-26):** the pin-and-scan scanner is SkillSpector 2.13.7
+  (commit `c323ad4`, Apache-2.0, `--no-llm` only) and Obsidian Skills is 1.2.3 from
+  `obsidianmd/obsidian-skills` (commit `a53f591`, MIT); verified: docs/decisions/OSS-ecc.md and
+  docs/decisions/OSS-obsidian-skills.md on `main` record both pins and audits, and BLUE-CHECKLIST.md
+  step 31 names the new source and pin. Blue's re-install in his vault is that step.
+- **S53 done (PR #208, merged 2026-11-26):** AgentPlayback is vetted and recorded in
+  docs/decisions/OSS-agentplayback.md with Blue's verdict, PATTERN-MINE; no build.
 
 - **Release: Mako 1.0.0 is released.**
   - Tag `v1.0.0` was created on 2026-10-18 at `main` commit `37009eb`, which includes the
