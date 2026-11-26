@@ -17,8 +17,8 @@
 //   * blinkGap, startBlink and tickBlink: each character blinks on its own skewed random clock
 //     (webview-ui/src/office/engine/blink.ts, BLINK_* from constants.ts).
 // What Mako changed: the caches take a `doc` (so tests can pass a fake one) instead of the global
-// document; the game loop takes injectable frame functions, reports a failed frame through
-// `onError` instead of throwing out of requestAnimationFrame, and can be paused and resumed; the
+// document; the game loop takes injectable frame functions, reports a failed frame or redraw
+// through `onError` instead of throwing out of requestAnimationFrame, and can be paused and resumed; the
 // outline colour is a parameter. Nothing else from Pixel Agents is in Mako: no server, no hooks, no
 // office, no React UI, no character art.
 //
@@ -117,6 +117,13 @@
     let stopped = false;
     let paused = false;
     let drawn = 0;
+    // A failed update or draw stops the loop and is reported once, from a frame or a redraw alike.
+    const failed = (e) => {
+      stopped = true;
+      if (rafId) cancel(rafId);
+      rafId = 0;
+      if (typeof callbacks.onError === 'function') callbacks.onError(e && typeof e.kind === 'string' ? e.kind : 'frame-failed');
+    };
     const frame = (time) => {
       rafId = 0;
       if (stopped || paused) return;
@@ -128,8 +135,7 @@
         callbacks.render(ctx);
         drawn++;
       } catch (e) {
-        stopped = true;
-        if (typeof callbacks.onError === 'function') callbacks.onError(e && typeof e.kind === 'string' ? e.kind : 'frame-failed');
+        failed(e);
         return;
       }
       rafId = request(frame);
@@ -146,8 +152,12 @@
       },
       redraw: () => {
         if (stopped) return;
-        ctx.imageSmoothingEnabled = false;
-        callbacks.render(ctx);
+        try {
+          ctx.imageSmoothingEnabled = false;
+          callbacks.render(ctx);
+        } catch (e) {
+          failed(e);
+        }
       },
       state: () => ({ stopped, paused, frames: drawn }),
     };

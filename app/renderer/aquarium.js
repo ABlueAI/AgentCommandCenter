@@ -1,7 +1,7 @@
 'use strict';
 // S20: the aquarium tab (docs/DESIGN-BRIEF-1.1.md section 6). The MVP only: one tank, three
 // species, a crew list, one creature per live pane in the pane's state colour, and a click (or Enter
-// on a crew row) opens the pane in the control room. Each creature stores its pane's id (the
+// on a crew row's button) opens the pane in the control room. Each creature stores its pane's id (the
 // agentId), and that id is the only thing a click hands back to app.js.
 //
 // Drawn on a canvas with the small engine forked from Pixel Agents 1.6.0 (aquarium-engine.js; record:
@@ -200,6 +200,9 @@
     return n;
   }
 
+  // At most this many creatures; more panes than that are named in the tank's note and the log.
+  const MAX_CREATURES = 64;
+
   // ---- the view ----------------------------------------------------------------------------------
   function createAquarium(deps) {
     const d = deps || {};
@@ -239,6 +242,8 @@
     let broken = null;
     let hoverId = null;
     let t = 0;
+    let overCap = 0; // live panes past MAX_CREATURES, shown in the note
+    let cappedLogged = false;
     const spriteCache = new Map();
 
     function sprite(c, shut) {
@@ -280,7 +285,15 @@
       const list = Array.isArray(panes) ? panes : [];
       const seen = new Set();
       const changes = [];
-      for (const p of list.slice(0, 64)) {
+      const valid = list.filter((p) => p && typeof p.id === 'string' && p.id);
+      overCap = Math.max(0, new Set(valid.map((p) => p.id)).size - MAX_CREATURES);
+      if (overCap && !cappedLogged) {
+        cappedLogged = true;
+        log(`[aquarium] REFUSED: ${overCap} pane${overCap === 1 ? '' : 's'} past the first ${MAX_CREATURES} get no creature (too-many-panes)\n`);
+      }
+      if (!overCap) cappedLogged = false;
+      for (const p of valid) {
+        if (seen.size >= MAX_CREATURES && !seen.has(p.id)) continue;
         if (!p || typeof p.id !== 'string' || !p.id || seen.has(p.id)) continue;
         seen.add(p.id);
         const state = normalizeState(p.status);
@@ -326,6 +339,11 @@
     }
 
     function renderCrew() {
+      // A keyboard user on a crew row keeps focus on that row when the list is rebuilt.
+      const active = doc.activeElement;
+      const focusedId = active && typeof active.getAttribute === 'function' && crewList.contains && crewList.contains(active)
+        ? active.getAttribute('data-agent-id') : null;
+      let refocus = null;
       while (crewList.firstChild) crewList.removeChild(crewList.firstChild);
       const list = sortedCreatures();
       crewEmpty.hidden = list.length > 0;
@@ -344,12 +362,17 @@
         ]);
         btn.addEventListener('click', () => open(c.agentId));
         crewList.appendChild(h(doc, 'li', {}, [btn]));
+        if (focusedId && c.agentId === focusedId) refocus = btn;
       }
+      if (refocus) refocus.focus();
       const n = list.length;
       const needs = list.filter((c) => c.state === 'attention' || c.state === 'failed').length;
       canvas.setAttribute('aria-label', n === 0 ? 'The tank is empty: no live panes.'
         : `The tank: ${n} creature${n === 1 ? '' : 's'}, one per live pane${needs ? `; ${needs} need${needs === 1 ? 's' : ''} you` : ''}. The crew list below names each one.`);
-      if (!broken) setNote(n === 0 ? 'No live panes.' : '', false);
+      if (!broken) {
+        if (overCap) setNote(`${overCap} more pane${overCap === 1 ? '' : 's'} than the tank holds (${MAX_CREATURES}) have no creature; they are in the control room.`, true);
+        else setNote(n === 0 ? 'No live panes.' : '', false);
+      }
     }
 
     function open(agentId) {
@@ -493,7 +516,7 @@
   }
 
   return {
-    SPECIES, SPECIES_IDS, STATE_STYLE, FISH, BUBBLE_ROWS,
+    SPECIES, SPECIES_IDS, STATE_STYLE, FISH, BUBBLE_ROWS, MAX_CREATURES,
     speciesForRole, speciesLabel, normalizeState, stateStyle, mix, fishSprite, bubbleSprite, fishSize,
     bandFor, targetY, zoomFor, speedFactor, createAquarium,
   };

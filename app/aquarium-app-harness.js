@@ -3,8 +3,9 @@
 // Loads `app/renderer/index.html` through the REAL `preload.js` and drives the REAL `app.js`,
 // `shell-nav.js`, `aquarium.js` and `aquarium-engine.js`, the way `shell-nav-app-harness.js` does:
 // only main is replaced. `pty-start` succeeds without a process, and pane-status views are sent on
-// the channel main uses (`pane-status-view`), so a creature's colour is measured from the moment
-// main would report a state to the moment the canvas shows it.
+// the channel main uses (`pane-status-view`). A creature's colour is timed in the renderer from just
+// after main sends the view (the clock starts when the next page step runs) to the moment the canvas
+// shows it; main-to-renderer delivery, a few milliseconds here, is not in the figure.
 //
 // Output is one JSON document on stdout; `aquarium-app-integration.test.js` reads it.
 
@@ -90,6 +91,8 @@ async function scenarioTank() {
   out.tabSelected = await run(`document.documentElement.getAttribute('data-mako-tab')`);
   out.emptyText = await run(`document.getElementById('makoCrewEmpty').hidden ? null : document.getElementById('makoCrewEmpty').textContent`);
   out.canvasLabelEmpty = await run(`document.getElementById('makoTank').getAttribute('aria-label')`);
+  out.tankTitle = await run(`document.getElementById('makoTankTitle').textContent`);
+  out.placeholderGone = await run(`!document.querySelector('#makoPanel-aquarium .mk-frame-note')`);
   out.startState = await run(`aquarium.state()`);
 
   // Three panes: a plain shell (a builder), a reviewer and a codebase scout.
@@ -125,6 +128,19 @@ async function scenarioTank() {
   out.after = await run(`aquarium.creatures().map((c) => ({ id: c.agentId, y: c.box.y, state: c.state }))`);
   out.canvasLabel = await run(`document.getElementById('makoTank').getAttribute('aria-label')`);
 
+  // Keyboard focus on a crew row survives the list being rebuilt by a status update.
+  await run(`document.querySelector('#makoCrewList .mk-aq-row[data-agent-id=${JSON.stringify(ids[2])}]').focus(); true`);
+  send('pane-status-view', { paneId: ids[1], state: 'working' });
+  await run(`window.__t.waitFor(() => window.__t.rows().some((r) => r.id === ${JSON.stringify(ids[1])} && r.state === 'working'))`);
+  out.focusAfterUpdate = await run(`document.activeElement && document.activeElement.getAttribute('data-agent-id')`);
+  send('pane-status-view', { paneId: ids[1], state: 'attention' });
+  await run(`window.__t.waitFor(() => window.__t.rows().some((r) => r.id === ${JSON.stringify(ids[1])} && r.state === 'attention'))`);
+
+  // Without reduced motion a working fish swims (so the reduced-motion check below can fail).
+  const m0 = await run(`aquarium.creatures().find((c) => c.agentId === ${JSON.stringify(ids[0])}).box.x`);
+  await sleep(800);
+  out.workingMoved = (await run(`aquarium.creatures().find((c) => c.agentId === ${JSON.stringify(ids[0])}).box.x`)) !== m0;
+
   // Hidden means stopped: no frames on another tab, frames again back on the aquarium.
   const f0 = await run(`aquarium.state().loop.frames`);
   await sleep(500);
@@ -145,12 +161,46 @@ async function scenarioTank() {
   await run(`window.__t.clickCreature(${JSON.stringify(ids[1])}); true`);
   await sleep(100);
   out.afterCreatureClick = await run(`({ tab: document.documentElement.getAttribute('data-mako-tab'), active: activeTermId })`);
-  // Enter on a crew row (a real keyboard path) opens its pane too.
+  // A click on a crew row's button opens its pane too.
   await run(`document.getElementById('makoTab-aquarium').click(); true`);
   await sleep(100);
   await run(`document.querySelector('#makoCrewList .mk-aq-row[data-agent-id=${JSON.stringify(ids[2])}]').click(); true`);
   await sleep(100);
   out.afterRowClick = await run(`({ tab: document.documentElement.getAttribute('data-mako-tab'), active: activeTermId })`);
+
+  const paneShown = (id) => `(() => { const r = terms.get(${JSON.stringify(id)}).pane.getBoundingClientRect(); return r.width > 0 && r.height > 0; })()`;
+  // From the control room's Agents view: a click on a creature switches it to Terminals and shows the pane.
+  await run(`document.getElementById('makoTab-control').click(); document.querySelector('.tab[data-tab="agents"]').click(); true`);
+  await sleep(100);
+  out.shownOnAgentsView = await run(paneShown(ids[1]));
+  await run(`document.getElementById('makoTab-aquarium').click(); true`);
+  await sleep(100);
+  await run(`window.__t.clickCreature(${JSON.stringify(ids[1])}); true`);
+  await sleep(150);
+  out.afterAgentsViewClick = await run(`({ tab: document.documentElement.getAttribute('data-mako-tab'), active: activeTermId, shown: ${paneShown(ids[1])} })`);
+
+  // When another pane fills the control room: a maximized pane in the classic grid is restored, a
+  // docked pane's tab is brought forward.
+  out.docked = await run(`paneIsDocked(${JSON.stringify(ids[0])})`);
+  if (!out.docked) {
+    await run(`document.getElementById('makoTab-control').click(); true`);
+    await sleep(100);
+    await run(`terms.get(${JSON.stringify(ids[2])}).pane.querySelector('.max').click(); true`);
+    await sleep(100);
+    out.maximizedBefore = await run(`paneMaximizer.maximizedId`);
+    out.targetShownBefore = await run(paneShown(ids[0]));
+    await run(`document.getElementById('makoTab-aquarium').click(); true`);
+    await sleep(100);
+    await run(`window.__t.clickCreature(${JSON.stringify(ids[0])}); true`);
+    await sleep(150);
+    out.afterMaximizedClick = await run(`({ tab: document.documentElement.getAttribute('data-mako-tab'), active: activeTermId, maximized: paneMaximizer.maximizedId, shown: ${paneShown(ids[0])} })`);
+  } else {
+    await run(`document.getElementById('makoTab-aquarium').click(); true`);
+    await sleep(100);
+    await run(`window.__t.clickCreature(${JSON.stringify(ids[0])}); true`);
+    await sleep(150);
+    out.afterDockedClick = await run(`(() => { const p = layoutInstance.api().getPanel(${JSON.stringify(ids[0])}); return { tab: document.documentElement.getAttribute('data-mako-tab'), active: activeTermId, panelActive: !!(p && p.api && p.api.isActive), shown: ${paneShown(ids[0])} }; })()`);
+  }
 
   // A click on empty water opens nothing.
   await run(`document.getElementById('makoTab-aquarium').click(); true`);
@@ -192,11 +242,13 @@ async function scenarioReducedMotion() {
     await run(`document.getElementById('makoTab-aquarium').click(); window.__t.waitFor(() => window.__t.rows().length === 1)`);
     const want = await run(`window.ccUiTokens.SHARED_TOKENS['status-working']`);
     out.colourMs = await run(`window.__t.colourTime(${JSON.stringify(id)}, ${JSON.stringify(want)})`);
+    const f0 = await run(`aquarium.state().loop.frames`);
     const a = await run(`aquarium.creatures()[0].box`);
     await sleep(800);
     const b = await run(`aquarium.creatures()[0].box`);
     out.moved = a.x !== b.x || a.y !== b.y;
-    out.framesRunning = await run(`aquarium.state().loop.frames`);
+    // Frames drawn in that same window, so "held still" is measured while the tank was drawing.
+    out.framesInWindow = (await run(`aquarium.state().loop.frames`)) - f0;
     await park();
     return out;
   } finally {

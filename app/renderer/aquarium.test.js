@@ -159,5 +159,114 @@ let open = false;
 for (let i = 0; i < 40 && !open; i++) open = !E.tickBlink(b, 0.01, false, rand);
 eq(open, true, 'and open again after a short shut');
 
+process.stdout.write('\nthe aquarium knows every pane-status state (pane-status-protocol.js)\n');
+const { STATES } = require('../pane-status/pane-status-protocol.js');
+for (const st of STATES) assert(Object.prototype.hasOwnProperty.call(A.STATE_STYLE, st), `the protocol's state "${st}" has its own colour and word`);
+for (const st of Object.keys(A.STATE_STYLE)) assert(STATES.includes(st), `"${st}" is a state the protocol sends`);
+
+// ---- createAquarium with a small fake DOM: refusals, the broken-canvas path, guards ----
+function fakeEl(tag) {
+  const el = {
+    tagName: tag, children: [], attrs: {}, listeners: {}, style: {}, hidden: false, className: '', _text: '',
+    parentNode: null, width: 0, height: 0, clientWidth: 800,
+    get firstChild() { return this.children[0] || null; },
+    get textContent() { return this._text + this.children.map((c) => c.textContent).join(''); },
+    set textContent(v) { this._text = String(v); this.children = []; },
+    appendChild(c) { c.parentNode = this; this.children.push(c); return c; },
+    removeChild(c) { this.children = this.children.filter((x) => x !== c); c.parentNode = null; return c; },
+    setAttribute(k, v) { this.attrs[k] = String(v); },
+    getAttribute(k) { return Object.prototype.hasOwnProperty.call(this.attrs, k) ? this.attrs[k] : null; },
+    addEventListener(type, fn) { (this.listeners[type] = this.listeners[type] || []).push(fn); },
+    classList: { _s: new Set(), toggle(c, on) { if (on) this._s.add(c); else this._s.delete(c); }, contains(c) { return this._s.has(c); } },
+    getContext: () => fakeCtx(),
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 360 }),
+  };
+  return el;
+}
+const domDoc = { createElement: (tag) => fakeEl(tag) };
+function find(el, pred) { if (pred(el)) return el; for (const c of el.children) { const f = find(c, pred); if (f) return f; } return null; }
+function findAll(el, pred, out = []) { if (pred(el)) out.push(el); for (const c of el.children) findAll(c, pred, out); return out; }
+const byId = (root, id) => find(root, (e) => e.attrs.id === id);
+const noFrames = { request: () => 1, cancel: () => {} };
+function make(overrides) {
+  const host = fakeEl('div');
+  const logs = [];
+  const opened = [];
+  const deps = Object.assign({
+    doc: domDoc, host, engine: E, tokens: T, log: (l) => logs.push(l), onOpenPane: (id) => opened.push(id), frames: noFrames, rand: () => 0.5,
+  }, overrides || {});
+  return { aq: A.createAquarium(deps), host, logs, opened };
+}
+
+process.stdout.write('\ncreateAquarium refuses what it needs\n');
+throwsKind(() => A.createAquarium({ engine: E, tokens: T, onOpenPane() {} }), 'host-missing', 'no host is refused');
+throwsKind(() => A.createAquarium({ doc: domDoc, host: fakeEl('div'), tokens: T, onOpenPane() {} }), 'engine-missing', 'no engine is refused');
+throwsKind(() => A.createAquarium({ doc: domDoc, host: fakeEl('div'), engine: E, onOpenPane() {} }), 'tokens-missing', 'no tokens are refused');
+throwsKind(() => A.createAquarium({ doc: domDoc, host: fakeEl('div'), engine: E, tokens: T }), 'open-pane-missing', 'no open-pane handler is refused');
+
+process.stdout.write('\na tank that cannot draw still lists and opens the crew\n');
+{
+  const badEngine = Object.assign({}, E, { startGameLoop: () => { const e = new Error('x'); e.kind = 'no-2d-context'; throw e; } });
+  const { aq, host, logs, opened } = make({ engine: badEngine });
+  eq(aq.state().broken, 'no-2d-context', 'the refusal is kept with its kind');
+  assert(/can't draw here \(no-2d-context\)/.test(byId(host, 'makoTankNote').textContent), 'the tank says it can\'t draw, with the reason');
+  assert(logs.some((l) => /REFUSED: the tank stopped drawing \(no-2d-context\)/.test(l)), 'and the log says so');
+  aq.update([{ id: 'pty1', title: 'One', role: 'reviewer', status: 'working' }]);
+  const rows = findAll(host, (e) => e.className === 'mk-aq-row');
+  eq(rows.length, 1, 'the crew list is still built');
+  rows[0].listeners.click[0]();
+  eq(opened, ['pty1'], 'and a row still opens its pane');
+  aq.setShown(true); aq.setShown(false);
+  assert(true, 'showing and hiding a broken tank does not throw');
+}
+
+process.stdout.write('\na frame or redraw that fails is shown, not thrown\n');
+{
+  const { aq, host, logs } = make();
+  aq.update([{ id: 'pty1', title: 'One', status: 'working' }]);
+  // Break drawing: a sprite cache that throws.
+  E.getCachedSprite = ((orig) => { const f = () => { const e = new Error('x'); e.kind = 'no-2d-context'; throw e; }; f.orig = orig; return f; })(E.getCachedSprite);
+  try { aq.setShown(true); assert(true, 'setShown does not throw when the draw fails'); }
+  catch { assert(false, 'setShown does not throw when the draw fails'); }
+  E.getCachedSprite = E.getCachedSprite.orig;
+  eq(aq.state().broken, 'no-2d-context', 'the redraw failure is kept');
+  assert(/can't draw here/.test(byId(host, 'makoTankNote').textContent), 'and shown in the tank\'s note');
+  assert(logs.some((l) => /REFUSED/.test(l)), 'and logged');
+}
+
+process.stdout.write('\nopening a pane that is gone says so\n');
+{
+  const { aq, host, logs } = make({ onOpenPane: () => { const e = new Error('x'); e.kind = 'pane-closed'; throw e; } });
+  aq.update([{ id: 'pty1', title: 'One', status: 'idle' }]);
+  findAll(host, (e) => e.className === 'mk-aq-row')[0].listeners.click[0]();
+  assert(/could not be opened \(pane-closed\)/.test(byId(host, 'makoTankNote').textContent), 'the tank\'s note names the reason');
+  assert(logs.some((l) => /REFUSED: could not open pane pty1 \(pane-closed\)/.test(l)), 'and the log says so');
+}
+
+process.stdout.write('\nupdate guards\n');
+{
+  const { aq, host, logs } = make();
+  aq.update([null, { id: '' }, { id: 7 }, { id: 'a', title: 'x'.repeat(200), repo: 'r'.repeat(200), status: 'working' }, { id: 'a', title: 'dup' }]);
+  const cs = aq.creatures();
+  eq(cs.length, 1, 'bad and duplicate ids get no creature');
+  eq(aq.creatureFor('a').agentId, 'a', 'the agentId is stored');
+  const row = find(host, (e) => e.className === 'mk-aq-row');
+  eq(find(row, (e) => e.className === 'mk-aq-task').textContent.length, 80, 'a long title is cut to 80 characters');
+  eq(find(row, (e) => e.className === 'mk-aq-repo mk-meta').textContent.length, 60, 'a long repo is cut to 60 characters');
+  const many = Array.from({ length: A.MAX_CREATURES + 3 }, (_, i) => ({ id: `p${i}`, status: 'idle' }));
+  aq.update(many);
+  eq(aq.state().count, A.MAX_CREATURES, `at most ${A.MAX_CREATURES} creatures`);
+  assert(/3 more panes than the tank holds/.test(byId(host, 'makoTankNote').textContent), 'the panes past the cap are named in the tank\'s note');
+  eq(logs.filter((l) => /too-many-panes/.test(l)).length, 1, 'and logged once');
+  aq.update(many);
+  eq(logs.filter((l) => /too-many-panes/.test(l)).length, 1, 'not again on the next update');
+  aq.update(many.slice(0, 2));
+  eq(byId(host, 'makoTankNote').textContent, '', 'the note clears once the panes fit');
+  aq.setTankName('Repo');
+  eq(byId(host, 'makoTankTitle').textContent, 'Tank · Repo', 'the tank is named after the repo');
+  aq.setTankName('');
+  eq(byId(host, 'makoTankTitle').textContent, 'Tank', 'and just "Tank" with no repo');
+}
+
 process.stdout.write(`\naquarium: ${passed} passed, ${failed} failed\n`);
 if (failed) process.exit(1);

@@ -6,7 +6,8 @@
 // aquarium-engine.js (aquarium-app-harness.js; only main is stubbed). It checks: one creature per
 // live pane, of the species its role gives; each creature shows the right colour on the canvas
 // within about 2 seconds of main reporting the pane's state (read from the canvas pixels); a click
-// on a creature, and a click on its crew row, opens that pane in the control room; the agentId is
+// on a creature, and a click on its crew row, opens that pane in the control room (switching to its
+// Terminals view and un-maximizing another pane); the agentId is
 // stored on each creature and its crew row; a closed pane's creature goes; the tank draws nothing
 // while its tab is hidden and catches up when it shows; under reduced motion the fish hold still but
 // keep their colours; nothing is written to a pane; and nothing is fetched from the network.
@@ -54,6 +55,8 @@ eq(S.tabSelected, 'aquarium', 'the app opened on the aquarium tab');
 assert(/No live panes/.test(S.emptyText || ''), 'with no panes the crew list says so');
 assert(/empty/.test(S.canvasLabelEmpty || ''), 'the tank\'s text alternative says it is empty');
 eq(S.startState && S.startState.broken, null, 'the tank started drawing (no refusal)');
+eq(S.tankTitle, 'Tank · AgentCommandCenter', 'the one tank is named after the current repo');
+eq(S.placeholderGone, true, 'S66\'s placeholder note is gone once the tank starts');
 eq(ids.length, 3, 'three panes started');
 
 process.stdout.write('\none creature per live pane, its species from its role, its agentId stored\n');
@@ -81,6 +84,9 @@ const y = Object.fromEntries((S.after || []).map((c) => [c.id, c.y]));
 assert(y[ids[1]] < y[ids[0]] && y[ids[1]] < y[ids[2]], `the needs-you fish swims highest (y ${JSON.stringify(y)})`);
 assert(/1 needs you/.test(S.canvasLabel || ''), `the tank's text alternative counts who needs you (got ${JSON.stringify(S.canvasLabel)})`);
 
+eq(S.focusAfterUpdate, ids[2], 'keyboard focus on a crew row survives a status update');
+assert(S.workingMoved === true, 'without reduced motion a working fish swims');
+
 process.stdout.write('\nhidden means stopped\n');
 assert(S.framesShowing > 0, `the tank draws while its tab shows (${S.framesShowing} frames in 0.5 s)`);
 eq(S.framesHidden, 0, 'the tank draws nothing while another tab shows');
@@ -90,6 +96,14 @@ assert(typeof T.idleAfterShow === 'number' && T.idleAfterShow >= 0 && T.idleAfte
 process.stdout.write('\na click opens the pane\n');
 eq(S.afterCreatureClick, { tab: 'control', active: ids[1] }, 'a click on a creature opens its pane in the control room');
 eq(S.afterRowClick, { tab: 'control', active: ids[2] }, 'a click on a crew row opens its pane in the control room');
+eq(S.shownOnAgentsView, false, 'set-up: on the control room\'s Agents view the pane is hidden');
+eq(S.afterAgentsViewClick, { tab: 'control', active: ids[1], shown: true }, 'a click on its creature switches to Terminals and shows the pane');
+if (S.docked) {
+  eq(S.afterDockedClick, { tab: 'control', active: ids[0], panelActive: true, shown: true }, 'a click on a docked pane\'s creature brings its tab forward');
+} else {
+  eq([S.maximizedBefore, S.targetShownBefore], [ids[2], false], 'set-up: another pane is maximized and the target is hidden');
+  eq(S.afterMaximizedClick, { tab: 'control', active: ids[0], maximized: null, shown: true }, 'a click on its creature restores the grid and shows the pane');
+}
 eq(S.emptyClick, { hit: null, tab: 'aquarium' }, 'a click on empty water opens nothing');
 
 process.stdout.write('\na closed pane\'s creature goes\n');
@@ -103,7 +117,7 @@ process.stdout.write('\nreduced motion\n');
 eq(R.matches, true, 'the page sees prefers-reduced-motion');
 assert(typeof R.colourMs === 'number' && R.colourMs >= 0 && R.colourMs <= 2000, `the colour still shows within 2 s (took ${R.colourMs} ms)`);
 eq(R.moved, false, 'the fish holds still');
-assert(R.framesRunning > 0, 'the tank still draws');
+assert(R.framesInWindow > 0, `the tank kept drawing while the fish held still (${R.framesInWindow} frames in 0.8 s)`);
 
 process.stdout.write('\nnothing reached the network, and no renderer errors\n');
 eq(report.remote, [], 'no remote request');
