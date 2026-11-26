@@ -71,8 +71,11 @@
    * kind is 'permission' only for a "Do you want to ..." question whose first option is "Yes";
    * anything else with a menu is a 'question'.
    */
-  function readPrompt(lines) {
+  function readPrompt(lines, opts) {
     if (!Array.isArray(lines) || lines.length === 0) return null;
+    // Older lines were dropped (by the app's buffer or by this window): a header above them can't
+    // be seen, so the request can't be shown whole (see `complete` below).
+    const truncated = !!(opts && opts.truncated) || lines.length > MAX_PROMPT_LINES;
     const recent = lines.slice(-MAX_PROMPT_LINES).map((l) => String(l == null ? '' : l));
     const OPTION = /^[\s│|]*(?:[❯›>]\s*)?([1-9])[.)]\s+(.+?)[\s│|]*$/;
     // Walk up from the bottom: collect the last block of consecutive option lines.
@@ -110,18 +113,17 @@
     // is shown on the card and is part of the signature, so two requests that differ only in their
     // command differ. `complete` says the header was found, so the whole command is on the card;
     // without it (a longer command, another layout) Allow once is not offered.
-    // The whole window is scanned and the TOPMOST header wins, so a command or description line
-    // that happens to look like a header can only add lines to the card, never hide any.
+    // Every line above the question is read, back to the start of what the app holds for this
+    // pane (it forgets a pane's lines each time the pane starts working again), with no stop at a
+    // blank line. The TOPMOST header wins, so a command or description line that looks like a
+    // header can only add lines to the card, never hide any. If older lines were dropped, a real
+    // header may be among them, so the request is marked incomplete (no Allow once).
     const block = [];
-    for (let i = qAt - 1; i >= 0 && i >= qAt - 12; i--) {
-      const t = clean(recent[i]);
-      if (!t) break;
-      block.unshift(t);
-    }
+    for (let i = 0; i < qAt; i++) { const t = clean(recent[i]); if (t) block.push(t); }
     let top = -1;
     for (let k = 0; k < block.length; k++) if (TOOL_HEADER.test(block[k])) { top = k; break; }
-    const complete = top >= 0;
-    const detail = (complete ? block.slice(top) : block).map((t) => str(t, 200));
+    const complete = top >= 0 && !truncated;
+    const detail = (top >= 0 ? block.slice(top) : block.slice(-12)).map((t) => str(t, 200));
     const permission = /^Do you want to\b/i.test(question) && /^Yes\b/i.test(options[0].label);
     return { kind: permission ? 'permission' : 'question', question, detail, complete, options };
   }
@@ -218,7 +220,7 @@
     if (p.held === true && mapped !== 'needs') { task.state = 'held'; task.word = STATE_INFO.held.word; }
     const lines = Array.isArray(p.lines) ? p.lines : [];
     for (let i = lines.length - 1; i >= 0; i--) { const l = str(lines[i], 200).trim(); if (l) { task.latest = l; break; } }
-    if (task.state === 'needs' && p.status === 'attention') task.prompt = readPrompt(lines);
+    if (task.state === 'needs' && p.status === 'attention') task.prompt = readPrompt(lines, { truncated: p.linesTruncated === true });
     // Stall watch (V7): a usage stop is never stalled; otherwise 20 minutes of silence or 5 failed tries.
     const reset = num(p.usageResetAt);
     if (reset !== null && reset > t) {

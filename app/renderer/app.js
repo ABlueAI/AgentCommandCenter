@@ -1559,7 +1559,7 @@ function brainRecordLine(b, ev) {
   if (ev.partial) { b.tail = ev.text; return; }
   b.tail = '';
   b.lines.push(ev.text);
-  if (b.lines.length > BRAIN_MAX_LINES) b.lines.splice(0, b.lines.length - BRAIN_MAX_LINES);
+  if (b.lines.length > BRAIN_MAX_LINES) { b.lines.splice(0, b.lines.length - BRAIN_MAX_LINES); b.dropped = true; }
 }
 function brainNoteStatus(view) {
   if (!view || typeof view.paneId !== 'string' || !view.paneId) return;
@@ -1570,7 +1570,7 @@ function brainNoteStatus(view) {
     // Working again means any menu on screen was answered: forget the old lines, so a later
     // "needs you" never shows a card for a menu that is gone.
     const t = terms.get(view.paneId);
-    if (state === 'working' && t && t.brain) { t.brain.lines = []; t.brain.tail = ''; }
+    if (state === 'working' && t && t.brain) { t.brain.lines = []; t.brain.tail = ''; t.brain.dropped = false; }
   }
   brainRefresh();
 }
@@ -1582,6 +1582,7 @@ function brainInput(id) {
     id, title: t.brain.label, repo: t.brain.repo, branch: t.brain.branch, role: t.role || '', authority: t.brain.authority,
     status: s ? s.state : 'unknown', statusSince: s ? s.since : t.brain.openedAt, lastOutputAt: t.brain.lastOutputAt,
     lines: t.brain.tail ? t.brain.lines.concat([t.brain.tail]) : t.brain.lines.slice(),
+    linesTruncated: t.brain.dropped === true,
   };
 }
 function brainInputs() {

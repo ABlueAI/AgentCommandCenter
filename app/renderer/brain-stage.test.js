@@ -57,7 +57,7 @@ process.stdout.write('\nprompt reader: permission and question menus\n');
   eq(p && [p.detail, p.complete], [['● Bash(npm test)', 'Bash command', 'npm test'], true], 'the command block above the question is kept, back to the topmost tool header');
   const longCmd = ['Bash command'].concat(Array.from({ length: 14 }, (_, i) => `  line ${i + 1} \\`), ['Do you want to proceed?', '❯ 1. Yes', '  2. No']);
   const lp = B.readPrompt(longCmd);
-  eq([lp.complete, B.allowOnceOption(lp)], [false, null], 'a command longer than the window: marked incomplete, no Allow once');
+  eq([lp.complete, lp.detail.length, B.allowOnceOption(lp)], [true, 15, 1], 'a 14-line command with its header: every line is on the card');
   const perm = (opts, detail) => ({ kind: 'permission', question: 'Do you want to proceed?', detail: detail === undefined ? ['Bash command', 'npm test'] : detail, complete: true, options: opts.map((label, i) => ({ n: i + 1, label })) });
   for (const w of ['Yes, allow all edits during this session', 'Yes, always allow', 'Yes, and don\'t ask again for this session', 'Yes, and auto-accept edits', 'Yes, bypass permissions']) {
     eq(B.allowOnceOption(perm([w, 'No'])), null, `a widening first "Yes" is never Allow once: "${w}"`);
@@ -73,6 +73,15 @@ process.stdout.write('\nprompt reader: permission and question menus\n');
   eq([t1.complete, t1.detail[0], t1.detail.length], [true, 'Bash command', 4], 'the topmost header wins: every command line stays on the card');
   assert(B.promptSignature(t1) !== B.promptSignature(t2), 'the signature changes when only the command above a look-alike line changes');
   eq(B.readPrompt(['  Fetch latest changes', 'Do you want to proceed?', '❯ 1. Yes', '  2. No']).complete, false, 'a line that only starts with a header word is not a header');
+  // A blank line or a long command can't hide the real header any more.
+  const blank = B.readPrompt(['Bash command', '  rm -rf ~/work', '', '  Fetch', '  echo done', 'Do you want to proceed?', '❯ 1. Yes', '  2. No']);
+  eq([blank.complete, blank.detail[0], blank.detail.includes('rm -rf ~/work')], [true, 'Bash command', true], 'a blank line inside the request: the scan goes on, and the real header and command are on the card');
+  const window = B.readPrompt(['Bash command', 'rm -rf ~', 'Fetch'].concat(Array.from({ length: 10 }, (_, i) => `x${i}`), ['Do you want to proceed?', '❯ 1. Yes', '  2. No']));
+  eq([window.complete, window.detail[0], window.detail[1]], [true, 'Bash command', 'rm -rf ~'], 'a long request: every line back to the real header is on the card');
+  const dropped = B.readPrompt(['Fetch', 'echo done', 'Do you want to proceed?', '❯ 1. Yes', '  2. No'], { truncated: true });
+  eq([dropped.complete, B.allowOnceOption(dropped)], [false, null], 'older lines were dropped: the request is incomplete, no Allow once');
+  const tooMany = B.readPrompt(Array.from({ length: 41 }, (_, i) => `l${i}`).concat(['Bash command', 'ls', 'Do you want to proceed?', '❯ 1. Yes', '  2. No']));
+  eq(tooMany.complete, false, 'more lines than the reader keeps: incomplete');
   const b2 = B.readPrompt(['Bash command', 'rm -rf build', 'Do you want to proceed?', '❯ 1. Yes', '2. No']);
   eq(B.allowOnceOption(perm(['Yes, and remember', 'No'])), null, 'only a plain "Yes" is Allow once ("Yes, and remember" is not)');
   assert(B.promptSignature(a) !== B.promptSignature(b2), 'two requests that differ only in their command have different signatures');
@@ -325,7 +334,7 @@ process.stdout.write('\nDOM: mount, nodes, cards, In focus, keys reach the pane\
     assert(wq.all((n) => n.attrs['data-widening'] === 'opt-1').length === 1, 'it is shown as text, to pick in the pane');
 
     // A request too long to show whole: the card says so and has no Allow once.
-    stage.update([pane('l1', 'attention', { title: 'Long', lines: ['Bash command'].concat(Array.from({ length: 14 }, (_, i) => `  step ${i + 1}`), ['Do you want to proceed?', '❯ 1. Yes', '  2. No']) })]);
+    stage.update([pane('l1', 'attention', { title: 'Long', linesTruncated: true, lines: ['  step 9', '  step 10', 'Do you want to proceed?', '❯ 1. Yes', '  2. No'] })]);
     const lc = cardOf('permission');
     assert(lc && lc.all((n) => n.attrs['data-incomplete'] === 'true').length === 1, 'a cut-off request: the card says it can\'t show the whole request');
     assert(lc && lc.all((n) => n.attrs['data-action'] === 'allowOnce')[0].disabled === true, 'and Allow once is disabled');
