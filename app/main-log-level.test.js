@@ -60,7 +60,7 @@ assert(/function tlog\(msg, kind = 'routine'\)/.test(main) &&
   'timing lines default to routine and forward an explicit kind');
 assert(/const processTree = createProcessTreeKiller\(\{[^}]*\blog: tlog,/.test(main),
   'process-tree logging reaches tlog with its kind');
-assert(/const paneStatus = createPaneStatusController\(\{[\s\S]*?commandName: AGENT_CMD\.claude,\s*log: tlog,[\s\S]*?publishSetupState: paneStatusPublishers\.publishSetupState,\s*log: tlog,/.test(main),
+assert(/: createPaneStatusController\(\{[\s\S]*?commandName: AGENT_CMD\.claude,\s*log: tlog,[\s\S]*?publishSetupState: paneStatusPublishers\.publishSetupState,\s*log: tlog,/.test(main),
   'pane-status version, lock and pipe logging reach tlog with their kind');
 assert(/logUsage: \(line\) => \{\s*console\.log\(line\);\s*sendMainLog\(line, 'routine'\);/.test(main), 'usage lines go through it as routine');
 assert(/log: \(line\) => \{ tlog\(line\); sendMainLog\(line, 'routine'\); \}/.test(main), 'admission budget lines go through it as routine');

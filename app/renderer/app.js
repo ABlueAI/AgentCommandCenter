@@ -2047,15 +2047,32 @@ function wireUi() {
     // banner and keeps the input so the token can be fixed; the input is cleared only once stored.
     const input = $('#agentTokenInput');
     const status = $('#agentTokenStatus');
+    const button = $('#agentTokenSave');
     const token = input.value;
     if (!token.trim()) { status.textContent = 'Paste the token first.'; input.focus(); return; }
+    button.disabled = true;
     status.textContent = 'Saving…';
-    const r = await cc.setAgentToken(token);
+    status.classList.toggle('error', false);
+    let r;
+    let invokeFailure;
+    try {
+      r = await cc.setAgentToken(token);
+    } catch (error) {
+      invokeFailure = 'token save request failed';
+      const reason = typeof error === 'string' ? error : error?.message;
+      r = { ok: false, error: typeof reason === 'string' && reason ? reason.replaceAll(token, '[redacted]') : invokeFailure };
+    } finally {
+      button.disabled = false;
+    }
     const msg = window.ccAgentTokenView.saveResultMessage(r);
     status.textContent = msg.text;
     status.classList.toggle('error', !msg.ok);
     if (msg.ok) { input.value = ''; updateAgentTokenBanner({ ok: true, hasToken: true }); }
-    else { appendLog(`[agent token] save failed: ${msg.text}\n`); input.focus(); }
+    else {
+      // An unexpected rejection can carry arbitrary text. Only log the known IPC failure.
+      appendLog(`[agent token] save failed: ${invokeFailure || msg.text}\n`);
+      input.focus();
+    }
   };
   $('#agentTokenInput').onkeydown = (e) => { if (e.key === 'Enter') $('#agentTokenSave').click(); };
   $('#agentTokenChange').onclick = () => updateAgentTokenBanner({ ok: true, hasToken: false });
