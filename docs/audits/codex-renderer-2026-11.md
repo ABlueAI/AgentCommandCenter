@@ -2,6 +2,8 @@
 
 Reviewed `app/renderer/` on `main` at `1136f88a8f470a45c5065f1eeacde25bfd62243e`. Findings were checked against the renderer and the IPC contracts it calls. Isolated Node probes confirmed nine of the observed behaviors.
 
+The row with only a severity and a title ("Video Scout log handling") is a security finding, cut to title and severity because this repository is public (AGENTS.md hard rule 6). Its details are not in this repository. Whether they have reached Blue privately is not verified; until that is confirmed, triage files a title-and-severity-only issue for it and asks Blue privately for the details.
+
 | Severity | Finding | File and line | User impact | Fix idea |
 | --- | --- | --- | --- | --- |
 | high | Quick Links can overwrite saved links before loading them | `app/renderer/quick-links-view.js:140` | Manage is active while the initial load is pending. Saving the empty draft or adding a link from that draft can replace the entire saved list. | Enable editing and saving only after a successful list response has supplied the initial draft. |
