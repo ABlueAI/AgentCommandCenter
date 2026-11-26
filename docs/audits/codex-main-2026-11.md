@@ -2,6 +2,8 @@
 
 Reviewed `main` at `1136f88a8f470a45c5065f1eeacde25bfd62243e`. Source locations refer to that commit. Findings were checked against the source and its callers. Selected behavior was also checked with isolated Node and Git fixtures. Windows Electron and PowerShell behavior was reviewed statically.
 
+Rows with only a severity and a title ("Credential store startup validation", "Terminal process ownership across window reloads", "Worktree reuse validation") are security findings, cut to title and severity because this repository is public (AGENTS.md hard rule 6). Their details are not in this repository. Whether they have reached Blue privately is not verified; until that is confirmed, triage files a title-and-severity-only issue for each and asks Blue privately for the details.
+
 | Severity | File and line | Finding | User impact | Fix idea |
 | --- | --- | --- | --- | --- |
 | high | `app/main.js:1218` | Removing a worktree can discard unsaved work | A single click on Remove forces Git to delete the worktree, permanently discarding uncommitted edits and untracked files. | Use ordinary removal by default and require explicit confirmation before forcing removal of a dirty worktree. |
