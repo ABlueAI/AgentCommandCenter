@@ -749,6 +749,9 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     It prints `created` for `Mako index.md`, `AGENTS.md` and `CLAUDE.md`.
   - In Obsidian: **Open folder as vault** > pick that folder. Open `Mako index.md` and click the
     STATUS link once.
+  - **Wait for S68 before this bullet** (PR #294, 2026-11-25): the plugin moved to
+    `obsidianmd/obsidian-skills` and is to be installed at 1.2.3 only after S68's pin-and-scan
+    audit; S68 updates the command below.
   - In PowerShell: `cd D:\Workspace\Mako-Vault`, start `claude`, run
     `/plugin marketplace add kepano/obsidian-skills`, then `/plugin`, install the Obsidian skills
     plugin it lists, and choose the project scope if it asks. (These names come from search
@@ -1357,7 +1360,9 @@ open PRs (#283, #286 and #287).
   any day once S68 (the SkillSpector re-pin) is merged.
   - Start a Claude cloud session on this repository and ask it to run S70 by the setup checklist
     in docs/PLAN-1.1.md, "S68 to S72 details". Say in that request that you accept the cost up
-    front (checklist item 7).
+    front (checklist item 7). Starting it is your go; its claim PR sets S70 in progress.
+  - If a check before the scan fails (the plugin's scan flags something, or the sanitizer test is
+    red), the session stops before running the plugin and asks you.
   - Stay for the report: the session hands you the report and the SARIF file in the session. Save
     both in your private vault, never in this repository. A CRITICAL finding is told to you at
     once.

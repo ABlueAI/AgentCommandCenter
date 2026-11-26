@@ -228,7 +228,9 @@ before it is used.
 Blue gave it in a desktop research session on 2026-11-25; his words are quoted as that session's
 hand-off relayed them (Claude in the recording session can't see that chat). Word for word:
 "Step 82: ECC skills - proceed with all of your recommendations. i agree, thanks", and "yes" to the
-proposed verdicts for the other 305 skills.
+proposed verdicts for the other 305 skills. The yes and no list below is the desktop session's
+recommendation for the nine top picks, as its hand-off relayed it; four of its answers differ from
+the proposals in this record, and Blue's words accept that list.
 
 - **Yes:** `click-path-audit` (PROTOTYPE), `e2e-testing` (PROTOTYPE), `team-agent-orchestration`,
   `loop-design-check` and `operator-approval-loop` (all three PATTERN-MINE).
@@ -239,8 +241,8 @@ proposed verdicts for the other 305 skills.
 
 In the tables below, the last column says "(Blue: yes)" or "(Blue: no ...)" for a top pick and "as
 proposed (Blue: yes)" for the rest. Where the work goes (docs/PLAN-1.1.md, builder's reading):
-`e2e-testing` is taken up by S72, the e2e smoke test on Windows runners; `click-path-audit` and the
-three PATTERN-MINE picks wait for a 1.2 plan row ("Month two and later"); every other PATTERN-MINE
+`e2e-testing` is taken up by S72, the e2e smoke test on Windows runners; `click-path-audit`, the
+three PATTERN-MINE picks and `skill-comply` wait for a 1.2 plan row ("Month two and later"); every other PATTERN-MINE
 row is input a later row may read, never an install.
 
 ### Top picks

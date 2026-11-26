@@ -55,6 +55,7 @@ relayed it): "Update Obsidian Skills to 1.2.3".
   2026-11-25).
 - **Before it is installed:** S68 (docs/PLAN-1.1.md) runs the pin-and-scan step on 1.2.3: tag,
   commit, licence (still MIT?), the China-origin check, a static SkillSpector run (`--no-llm`), and
-  a read of every file the plugin ships. It records the result here. If anything fails, the old
-  install stays and Blue is told. Blue then re-installs the plugin in his vault from the new source
-  (the checklist step S68 adds).
+  a read of every file the plugin ships. It records the result here. If anything fails, nothing is
+  installed from the new source (an existing install stays) and Blue is told. Blue then installs
+  or re-installs the plugin in his vault from the new source at the new pin (checklist step 31,
+  which S68 updates, or a new step it adds).

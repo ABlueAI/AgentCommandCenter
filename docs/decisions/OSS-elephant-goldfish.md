@@ -33,7 +33,8 @@ relayed.
 
 ## How Mako uses it
 
-- S71 (docs/PLAN-1.1.md) runs it once on the Composer spec and writes a one-page result in
+- S71 (docs/PLAN-1.1.md) runs it once on the Composer spec, once that spec is in the repo (never on
+  another document), and writes a one-page result in
   `docs/research/`: what it found, what it missed, what it cost, and whether it is worth using
   again. Nothing is installed into `.claude/` or the app.
 - Any further use needs a new verdict from Blue.
