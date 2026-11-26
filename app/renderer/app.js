@@ -1597,6 +1597,8 @@ function aquariumRevealPane(id) {
     try { panel = layoutInstance.api().getPanel(id); } catch { panel = null; }
     if (!panel || !panel.api || typeof panel.api.setActive !== 'function') { const e = new Error('panel-missing'); e.kind = 'panel-missing'; throw e; }
     panel.api.setActive();
+    // Dockview leaves a maximized group when another becomes active: keep the ⛶/🗗 buttons true.
+    refreshDockedMaximizeGlyphs();
   } else if (paneMaximizer.maximizedId && paneMaximizer.maximizedId !== id) {
     paneMaximizer.restore('aquarium-open');
   }

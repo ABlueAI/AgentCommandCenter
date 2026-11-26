@@ -85,8 +85,22 @@ async function waitStarts(n) {
 }
 
 async function scenarioTank() {
+  // Motion on, whatever the machine says: a CI desktop can report reduced motion (Windows runners
+  // with animations off), and this scenario checks that fish swim. The next scenario turns it off.
+  await park(); // the debugger attaches to a loaded page, never to a window that has shown nothing yet
+  const dbg = win.webContents.debugger;
+  dbg.attach('1.3');
+  await dbg.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
+  try {
+    return await tankSteps();
+  } finally {
+    try { await dbg.sendCommand('Emulation.setEmulatedMedia', { features: [] }); dbg.detach(); } catch { /* the next scenario loads fresh */ }
+  }
+}
+async function tankSteps() {
   await open('tank', { theme: 'obsidian', projectsRoot: 'D:\\Workspace', uiLayout: 'tabs', uiTab: 'aquarium' });
   const out = {};
+  out.reducedMotion = await run(`window.matchMedia('(prefers-reduced-motion: reduce)').matches`);
   out.mounted = await run(`!!document.getElementById('makoTank') && !!document.getElementById('makoCrewList')`);
   out.tabSelected = await run(`document.documentElement.getAttribute('data-mako-tab')`);
   out.emptyText = await run(`document.getElementById('makoCrewEmpty').hidden ? null : document.getElementById('makoCrewEmpty').textContent`);
@@ -195,6 +209,9 @@ async function scenarioTank() {
     await sleep(150);
     out.afterMaximizedClick = await run(`({ tab: document.documentElement.getAttribute('data-mako-tab'), active: activeTermId, maximized: paneMaximizer.maximizedId, shown: ${paneShown(ids[0])} })`);
   } else {
+    await run(`document.getElementById('makoTab-control').click(); true`);
+    await sleep(100);
+    out.targetShownBefore = await run(paneShown(ids[0]));
     await run(`document.getElementById('makoTab-aquarium').click(); true`);
     await sleep(100);
     await run(`window.__t.clickCreature(${JSON.stringify(ids[0])}); true`);

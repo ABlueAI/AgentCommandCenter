@@ -85,6 +85,7 @@ assert(y[ids[1]] < y[ids[0]] && y[ids[1]] < y[ids[2]], `the needs-you fish swims
 assert(/1 needs you/.test(S.canvasLabel || ''), `the tank's text alternative counts who needs you (got ${JSON.stringify(S.canvasLabel)})`);
 
 eq(S.focusAfterUpdate, ids[2], 'keyboard focus on a crew row survives a status update');
+eq(S.reducedMotion, false, 'set-up: motion is on in the tank scenario');
 assert(S.workingMoved === true, 'without reduced motion a working fish swims');
 
 process.stdout.write('\nhidden means stopped\n');
@@ -99,6 +100,7 @@ eq(S.afterRowClick, { tab: 'control', active: ids[2] }, 'a click on a crew row o
 eq(S.shownOnAgentsView, false, 'set-up: on the control room\'s Agents view the pane is hidden');
 eq(S.afterAgentsViewClick, { tab: 'control', active: ids[1], shown: true }, 'a click on its creature switches to Terminals and shows the pane');
 if (S.docked) {
+  eq(S.targetShownBefore, false, 'set-up: the target is a background tab, hidden behind another pane');
   eq(S.afterDockedClick, { tab: 'control', active: ids[0], panelActive: true, shown: true }, 'a click on a docked pane\'s creature brings its tab forward');
 } else {
   eq([S.maximizedBefore, S.targetShownBefore], [ids[2], false], 'set-up: another pane is maximized and the target is hidden');
