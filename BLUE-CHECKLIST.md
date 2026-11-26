@@ -372,10 +372,13 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   at :07 Eastern, Opus 5.5, notifications off, no connectors, its fires succeed, and its PRs open as
   `ABlueAgent` (PR #300, S68, labelled `runner`); **Mako evening digest** is on, 8:03 PM Eastern,
   Opus 5.5, push on, no connectors; **Mako daily runner** is off (last fire 2026-11-04). So the
-  "Left to do, as read on 2026-10-23" list below is done. The runner's stored prompt, a short
-  wrapper set on 2026-11-24 that follows the runner prompt docs/RUNNER.md marks as current with its
-  own overrides, is recorded there verbatim, so it is on `main`. The digest's stored prompt is
-  older than `main`'s: that is step 50. S04's own two-day check is separate.* About 10 minutes, in the
+  "Left to do, as read on 2026-10-23" list below is done, apart from its last bullet (applying the
+  prompts), which is step 50. The runner's stored prompt, a short wrapper set on 2026-11-24 that
+  follows the runner prompt docs/RUNNER.md marks as current with its own overrides, is recorded
+  there as read, so it is on `main`. The "prompt matching `main`" part of this step's done-when
+  has been step 50's since PR #166 (step 50 applies the prompts), so it doesn't hold this tick: the
+  digest's stored prompt is older than `main`'s, and that is step 50. S04's own two-day check is
+  separate.* About 10 minutes, in the
   same sitting as the merge, after step 28. Merging S04 ends the old runner's one-at-a-time rule,
   so don't leave this for the morning. Tell the main chat "S04 merged".
   - That session follows docs/RUNNER.md "Applying it": it creates **Mako all-day runner** (every
@@ -412,7 +415,13 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   top (recorded verbatim in docs/RUNNER.md, "Read back 2026-11-26 (issue #304)"), and the digest's
   stored prompt (last changed 2026-11-05) is PR
   #166's text, without the later "agent login" and "Agent writes" lines of "Proposed digest prompt
-  (verbatim)". Your part: tell any Claude session "apply the digest prompt from docs/RUNNER.md".* About 2 minutes,
+  (verbatim)". **As of 2026-11-26 this step covers the digest only:** leave the all-day runner's
+  stored text as it is (it already reads "Proposed runner prompt (verbatim)" every fire, and
+  replacing it would drop its overrides; aligning those is issue #313). Your part: tell any Claude
+  session "apply the digest prompt from docs/RUNNER.md". Done when, as of 2026-11-26: the session
+  reads both tasks back, the digest's prompt matches "Proposed digest prompt (verbatim)" on `main`
+  as text, and the runner's still matches the read-back recorded in docs/RUNNER.md. Where the text
+  below says otherwise, this note wins.* About 2 minutes,
   right after you merge PR #166 (the merge-order rule). Tell any Claude session "apply the runner
   prompts from docs/RUNNER.md". It updates only the prompts of the scheduled tasks **Mako all-day
   runner** and **Mako evening digest** from "Proposed runner prompt (verbatim)" and "Proposed digest
@@ -1626,11 +1635,11 @@ You can start on the first one now, which saves time later.
   it arrives.
 - [ ] **71. Your verdict on S63's UI-library record (PR #224).** **Yours until PR #301 (D-090)
   merges, then an agent decides.** *Marked 2026-11-26: D-090 (your words, 2026-11-25) is recorded
-  in PR #301, not yet on `main`. Once it is, the agent that next needs these libraries (S49 or S51)
+  in PR #301, which merged on 2026-11-26, so this is now an agent's. The agent that next needs these libraries (S49 or S51)
   records the record's "Recommended direction" (prototype Cytoscape.js and a UI-only Deep Chat
   build; adopt MiniSearch if ranked search across task fields is in scope; adopt the Obsidian URI)
-  as its 🤖 verdict in the record, ticks this, and your merge approves it. Until then this step
-  stands as written. PR #224 merged on 2026-11-24.* **About 15 minutes**, any time
+  as its 🤖 verdict in the record, ticks this, and your merge approves it. PR #224 merged on
+  2026-11-24.* **About 15 minutes**, any time
   before S49 or S51 picks its chat and graph libraries. S63 delivered an OSS record,
   `docs/decisions/OSS-ui-libraries.md`, in place of the `docs/research/` write-up its plan row
   names. Read it and give your verdict on each option (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD
