@@ -1508,6 +1508,26 @@ Step 81 comes from PR #283.
      greyed-out switches, **Quiet hours** and **Pause all**, which S18 and S19 turn on.
   - *Done when:* you tell any agent "S66 PC check: OK" or what looked wrong; the agent ticks this
     with the date and your words, and anything wrong becomes a fix PR.
+- [ ] **87. PC check of the control room (S19).** **About 15 minutes**, at the first Tuesday or
+  Friday PC-check evening after PR #321 merges. Pull `main`, fully restart Mako, and make sure
+  Claude status is on (the Terminals toolbar says "Claude status: on"). Open two Claude panes, then:
+  1. Give pane A a task that takes a while. Ask pane B something that needs an answer from you. A red
+     **Needs you** chip for pane B appears above the panes, Mako's taskbar button gets a red dot, and
+     the toast makes **no sound**.
+  2. Click into pane A and press **F8**: pane B gets the focus, and no character is typed into
+     either pane. Click the chip: the same.
+  3. Click pane A while it works: the right panel shows its **In focus** card. Click
+     **Interrupt (Esc)**: pane A stops its turn, as Esc does, and is not closed.
+  4. Give pane A another long task and click **Pause all** in the top bar: pane A stops its turn,
+     pane B (waiting on you) is untouched, and **+ Shell** now refuses with a note. Click
+     **Resume all**: nothing is sent; **+ Shell** works again.
+  5. Click **?** next to **+ Shell**: the cheat sheet lists the keys, F8 included. Esc closes it.
+  6. Close Mako with a pane open, start it again and choose Resume: once the pane has started, its
+     badge shows its real status (idle until you type), not a stale one.
+  7. Look: does anything read wrong or feel cramped? The branch and authority tags sit after each
+     pane's name.
+  - *Done when:* you tell any agent "S19 PC check: OK" or what looked wrong; the agent ticks this
+    with the date and your words, and anything wrong becomes a fix PR.
 
 ## Every day, once the runner is on
 
