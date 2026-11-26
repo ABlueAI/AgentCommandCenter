@@ -122,6 +122,32 @@ process.stdout.write('\nloader: a bad or missing file falls back to the last goo
   eq(drawn.length - before, 2, 'reduced motion: a state change draws one new still frame');
   assert(clockLogs.length === 2, 'refused states and frame rates are logged');
 
+  process.stdout.write('\ngeometry and swim (pure math)\n');
+  {
+    const shape = S.parseShape(TEXT).shape;
+    const m = S.bodyMesh(shape, 48, 24);
+    eq([m.positions.length, m.sAt.length, m.indices.length], [48 * 24 * 3, 48 * 24, 47 * 24 * 6], 'body mesh: rings x sides vertices, two triangles per quad');
+    assert(m.positions.every(Number.isFinite), 'every body coordinate is a finite number');
+    assert(m.indices.every((i) => i >= 0 && i < 48 * 24), 'every index points at a vertex');
+    const xs = m.positions.filter((_, i) => i % 3 === 0);
+    assert(Math.abs(Math.min(...xs) + S.LB / 2) < 1e-9 && Math.abs(Math.max(...xs) - S.LB / 2) < 1e-9, 'the body runs from the snout to the caudal-fin base, LB = 3.2 units');
+    const fins = S.finMeshes(shape);
+    eq(fins.map((f) => f.name), ['dorsal', 'upper', 'lower', 'pelvic', 'd2', 'anal', 'pectoralRight', 'pectoralLeft'], 'every fin, both pectorals');
+    assert(fins.every((f) => f.positions.every(Number.isFinite) && f.indices.length >= 3), 'every fin is a finite, non-empty mesh');
+    const upper = fins.find((f) => f.name === 'upper');
+    const tipX = Math.max(...upper.positions.filter((_, i) => i % 3 === 0));
+    assert(Math.abs(tipX - (1.21 - 0.5) * S.LB) < 0.05, 'the upper tail lobe reaches s 1.21');
+    const pr = fins.find((f) => f.name === 'pectoralRight'), pl = fins.find((f) => f.name === 'pectoralLeft');
+    assert(pr.positions[8] > 0 && pl.positions[8] < 0, 'the pectorals are mirrored across the body');
+    eq(S.swimOffset(0.2, 1.3, 1, 1), 0, 'the front is stiff: no sway ahead of s 0.32');
+    eq(S.swimOffset(1.0, 1.3, 0, 1), 0, 'speed 0 (reduced motion): it holds still');
+    const tailMax = Math.max(...Array.from({ length: 100 }, (_, i) => Math.abs(S.swimOffset(1.0, i / 45, 1, 1))));
+    const midMax = Math.max(...Array.from({ length: 100 }, (_, i) => Math.abs(S.swimOffset(0.6, i / 45, 1, 1))));
+    assert(tailMax > midMax && midMax > 0, 'the sway grows towards the tail');
+    const period = 1 / S.SWIM_HZ;
+    assert(Math.abs(S.swimOffset(1.0, 0.3, 1, 1) - S.swimOffset(1.0, 0.3 + period, 1, 1)) < 1e-9, 'one tail beat every 1 / 0.45 s at speed 1.0');
+  }
+
   let threw = '';
   try { S.createSharkClock({}); } catch (e) { threw = e.message; }
   eq(threw, 'shark-clock: deps-missing', 'no renderer hooks: refuses to start');

@@ -1586,6 +1586,58 @@ function brainRefresh() {
 function brainTabShowing() {
   return !!(shell && shell.getState().layout === 'tabs' && shell.getState().view === 'tab' && shell.getState().tab === 'brain');
 }
+// The shark (brief 7): shark-renderer.js (an ES module, loaded after the classic scripts) draws it;
+// shark-shape.js's clock decides when. It draws only while the brain tab is showing and the window
+// is visible, at 30 fps by default, and holds still under reduced motion. A renderer that can't
+// start (no WebGL, the module failed to load) is shown on the stage with its reason.
+let sharkClock = null;
+let sharkRenderer = null;
+function startShark(shape) {
+  const begin = () => {
+    if (sharkRenderer || !brainStage) return;
+    try {
+      sharkRenderer = window.ccSharkRenderer.create({ host: brainStage.sharkHost, shape, geo: window.ccSharkShape });
+    } catch (e) {
+      const reason = (e && e.message) || 'renderer-failed';
+      brainStage.setShark({ note: `The shark can't draw here (${reason})`, error: true });
+      appendLog(`[shark] REFUSED: the renderer did not start (${reason})\n`);
+      return;
+    }
+    const reduced = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+    sharkClock = window.ccSharkShape.createSharkClock({
+      draw: (frame) => sharkRenderer.draw(frame),
+      requestFrame: (cb) => requestAnimationFrame(cb),
+      cancelFrame: (id) => cancelAnimationFrame(id),
+      now: () => performance.now(),
+      isHidden: () => document.hidden || !brainTabShowing(),
+      prefersReducedMotion: () => !!(reduced && reduced.matches),
+      log: (line) => appendLog(line),
+    });
+    const wake = () => { sharkClock.visibilityChanged(); };
+    document.addEventListener('visibilitychange', wake);
+    window.addEventListener('mako-shell-change', () => { if (brainTabShowing()) sharkRenderer.resize(); wake(); });
+    window.addEventListener('resize', () => { if (brainTabShowing()) sharkRenderer.resize(); });
+    if (reduced && typeof reduced.addEventListener === 'function') reduced.addEventListener('change', wake);
+    sharkClock.start();
+  };
+  // The renderer starts the first time the brain tab shows, so a session spent in the control room
+  // never creates a WebGL context.
+  const whenShown = (fn) => {
+    if (brainTabShowing()) { fn(); return; }
+    const onChange = () => { if (brainTabShowing()) { window.removeEventListener('mako-shell-change', onChange); fn(); } };
+    window.addEventListener('mako-shell-change', onChange);
+  };
+  if (window.ccSharkRenderer) { whenShown(begin); return; }
+  let done = false;
+  window.addEventListener('mako-shark-renderer-ready', () => { if (!done) { done = true; whenShown(begin); } }, { once: true });
+  setTimeout(() => {
+    if (done) return;
+    done = true;
+    if (window.ccSharkRenderer) { whenShown(begin); return; }
+    brainStage.setShark({ note: 'The shark can\'t draw here (renderer-module-missing)', error: true });
+    appendLog('[shark] REFUSED: the renderer module did not load (renderer-module-missing)\n');
+  }, 10000);
+}
 function startBrainStage() {
   const frame = $('#makoPanel-brain');
   const host = frame && frame.querySelector('.mk-frame-main');
@@ -1598,6 +1650,7 @@ function startBrainStage() {
     if (note) note.remove();
     brainStage = window.ccBrainStage.createBrainStage({
       doc: document, host, inFocus: window.ccInFocusCard,
+      onViewPaused: (paused) => { if (sharkClock) { if (paused) sharkClock.pause(); else sharkClock.resume(); } },
       log: (line) => appendLog(line),
       onKeys: (id, keys) => {
         if (!terms.has(id)) return { ok: false, reason: 'pane-closed' };
@@ -1623,8 +1676,9 @@ function startBrainStage() {
     const loader = window.ccSharkShape.createShapeLoader({ log: (line) => appendLog(line) });
     loader.load(() => fetch('../assets/shark/shark-shape-B3.json').then((r) => { if (!r.ok) throw new Error('missing'); return r.text(); }))
       .then((res) => {
-        if (res.ok) brainStage.setShark({ note: `Shape ${res.shape.id} (${res.shape.name}) loaded; the shark is drawn in a later step of S18` });
+        if (res.ok) brainStage.setShark({ note: `Shape ${res.shape.id} (${res.shape.name}) loaded` });
         else brainStage.setShark({ note: `Shark shape refused (${res.reason})${res.fellBack ? '; using the last good shape' : ''}`, error: true });
+        if (res.shape) startShark(res.shape);
       });
   } else {
     brainStage.setShark({ note: 'Shark shape refused (shape-module-missing)', error: true });

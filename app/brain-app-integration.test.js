@@ -8,11 +8,13 @@
 // answer reaches the pane (counted at the `pty-write` IPC boundary) as the menu's digit or Esc;
 // a click on a node opens the In-focus card in its state; Ctrl+F (a real key event) opens find,
 // which finds a node by content; more than 8 tasks group by repo and a click fans them out; Open
-// pane goes to the control room; and nothing is fetched from the network.
+// pane goes to the control room; the shark draws, stops on another tab and pauses with the view;
+// and nothing is fetched from the network.
 //
-// Not covered here yet (later steps of S18): the shark (shape file, state timing, hidden-tab and
-// reduced-motion checks) and the lines; a real Claude Code permission prompt on Blue's PC is the
-// batched PC check in BLUE-CHECKLIST.md.
+// The shark runs on software WebGL here (SwiftShader, harness only). Its state timing, reduced
+// motion and the 30 fps rule are unit-tested in renderer/shark-shape.test.js; the 30 fps frame
+// time full screen and a real Claude Code permission prompt are Blue's batched PC check
+// (BLUE-CHECKLIST.md). Not built yet (later steps of S18): the lines and "What Mako knows".
 
 const { spawnSync } = require('child_process');
 const path = require('path');
@@ -82,6 +84,15 @@ assert(/· 9/.test(((S.groups || [])[0] || {}).text || ''), 'the group shows its
 eq(S.nodesWhenGrouped, 0, 'no single nodes while grouped');
 eq(S.nodesFanned, 9, 'a click on the group fans its tasks out');
 eq(S.afterOpenTab, 'control', 'Open pane goes to the control room');
+
+process.stdout.write('\nthe shark: draws on the brain tab, stops when hidden, pauses with the view\n');
+assert(S.sharkStarted === true, `the real Three.js renderer started (note: ${JSON.stringify(S.sharkNoteAfter)})`);
+assert(S.sharkFramesPerSecond > 0 && S.sharkFramesPerSecond <= 31, `it draws, at no more than 30 fps by default (${S.sharkFramesPerSecond} frames in 1 s)`);
+assert(S.sharkCanvas && S.sharkCanvas.w > 0 && S.sharkCanvas.h > 0, 'into a canvas on the stage');
+eq(S.sharkFramesHidden, 0, 'on another tab it draws nothing');
+eq(S.sharkRunningHidden, false, 'and its clock is stopped');
+eq(S.sharkRunningShown, true, 'back on the brain tab it runs again');
+eq(S.sharkPausedWithView, true, 'the stage\'s Pause freezes the shark too');
 
 process.stdout.write('\nnothing reached the network, and no renderer errors\n');
 eq(report.remote, [], 'no remote request');

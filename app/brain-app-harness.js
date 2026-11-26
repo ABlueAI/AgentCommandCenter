@@ -14,6 +14,10 @@ const path = require('path');
 
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
+// Software WebGL (SwiftShader), so the shark's real renderer draws on CI machines and containers
+// with no GPU. Harness only: the app itself asks for the high-performance GPU.
+app.commandLine.appendSwitch('use-angle', 'swiftshader');
+app.commandLine.appendSwitch('enable-unsafe-swiftshader');
 
 const INDEX_FILE = path.join(__dirname, 'renderer', 'index.html');
 const PRELOAD_FILE = path.join(__dirname, 'preload.js');
@@ -92,6 +96,30 @@ async function scenarioStage() {
   out.emptyText = await run(`document.getElementById('makoStageField').textContent`);
   await run(`window.__t.waitFor(() => !/Loading/.test(document.getElementById('makoSharkNote').textContent))`);
   out.sharkNote = await run(`document.getElementById('makoSharkNote').textContent`);
+  // The shark: it draws on the brain tab (or refuses visibly, with its reason), and stops on another tab.
+  await run(`window.__t.waitFor(() => (typeof sharkClock !== 'undefined' && sharkClock) || /can't draw/.test(document.getElementById('makoSharkNote').textContent), 12000)`);
+  out.sharkStarted = await run(`!!(typeof sharkClock !== 'undefined' && sharkClock)`);
+  out.sharkNoteAfter = await run(`document.getElementById('makoSharkNote').textContent`);
+  if (out.sharkStarted) {
+    const f0 = await run(`sharkClock.state().frames`);
+    await sleep(1000);
+    const f1 = await run(`sharkClock.state().frames`);
+    out.sharkFramesPerSecond = f1 - f0;
+    out.sharkCanvas = await run(`(() => { const c = document.querySelector('#makoSharkHost canvas'); return c ? { w: c.width, h: c.height } : null; })()`);
+    await run(`document.getElementById('makoTab-control').click(); true`);
+    await sleep(300);
+    const h0 = await run(`sharkClock.state().frames`);
+    await sleep(700);
+    out.sharkFramesHidden = (await run(`sharkClock.state().frames`)) - h0;
+    out.sharkRunningHidden = await run(`sharkClock.state().running`);
+    await run(`document.getElementById('makoTab-brain').click(); true`);
+    await sleep(300);
+    out.sharkRunningShown = await run(`sharkClock.state().running`);
+    // The stage's Pause freezes the shark too.
+    await run(`document.getElementById('makoStagePause').click(); true`);
+    out.sharkPausedWithView = await run(`sharkClock.state().paused`);
+    await run(`document.getElementById('makoStagePause').click(); true`);
+  }
   const ids = await openPanes(3);
   out.paneIds = ids;
   // Pane 1 asks for permission, pane 2 asks a question, pane 3 works.

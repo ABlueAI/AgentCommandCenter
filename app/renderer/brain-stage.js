@@ -375,7 +375,10 @@
     stageTop.appendChild(groupSel);
     stageTop.appendChild(pauseBtn);
     const field = h(doc, 'div', 'mk-stage-field', null, { id: 'makoStageField', role: 'group', 'aria-label': 'Task nodes, most urgent at the top' });
-    const shark = h(doc, 'button', 'mk-shark-slot', null, { type: 'button', id: 'makoShark', 'aria-label': 'Mako, the conductor', title: 'The shark comes in a later step of S18; "What Mako knows" opens here.' });
+    // The shark renderer (shark-renderer.js) draws into this box, behind the nodes.
+    const sharkHost = h(doc, 'div', 'mk-shark-host', null, { id: 'makoSharkHost' });
+    field.appendChild(sharkHost);
+    const shark = h(doc, 'button', 'mk-shark-slot', null, { type: 'button', id: 'makoShark', 'aria-label': 'Mako, the conductor', title: '"What Mako knows" opens here in a later step of S18 (pending Blue\'s visual check).' });
     shark.appendChild(h(doc, 'span', 'mk-shark-mark', 'Mako'));
     const sharkState = h(doc, 'span', 'mk-meta', 'Idle', { id: 'makoSharkState' });
     shark.appendChild(sharkState);
@@ -629,6 +632,8 @@
     pauseBtn.addEventListener('click', () => {
       st.paused = !st.paused;
       if (st.paused) st.frozenAt = st.updatedAt; else st.frozenAt = null;
+      // Pause freezes this view's motion too (the shark), never the agents.
+      if (typeof d.onViewPaused === 'function') { try { d.onViewPaused(st.paused); } catch { log('[brain] the shark did not take the view\'s pause\n'); } }
       render();
     });
 
@@ -646,7 +651,7 @@
         sharkNote.className = i.error ? 'mk-meta mk-shark-note mk-shark-error' : 'mk-meta mk-shark-note';
       },
       state: () => ({ tasks: st.tasks.slice(), mode: st.mode, expanded: st.expanded, focusId: st.focusId, paused: st.paused, findHits: st.findHits.slice(), notice: st.notice }),
-      root,
+      root, sharkHost,
     };
   }
 

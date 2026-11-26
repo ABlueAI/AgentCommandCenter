@@ -97,6 +97,104 @@
     return { load, lastGood: () => lastGood };
   }
 
+  // ---- geometry (pure: arrays of numbers; the renderer turns them into Three.js buffers) ----------
+  // Coordinates: x runs along the body (s * LB, snout at -LB/2), y up, z across. LB = 3.2 units.
+  const LB = 3.2;
+  const SWIM_FROM = 0.32;      // the tail-beat wave starts at about s 0.32 (stiff front)
+  const SWIM_WAVELENGTH = 1.6; // about 1.6 body lengths
+  const SWIM_HZ = 0.45;        // the tail beats at about 0.45 Hz at speed 1.0
+  const SWIM_AMPLITUDE = 0.09; // lateral sway at the tail tip, in LB
+
+  function lerp(a, b, f) { return a + (b - a) * f; }
+  // Interpolate the body profile at s (clamped to 0..1).
+  function profileAt(shape, s) {
+    const b = shape.body;
+    const x = Math.max(0, Math.min(1, s));
+    let i = 1;
+    while (i < b.s.length - 1 && b.s[i] < x) i++;
+    const f = (x - b.s[i - 1]) / (b.s[i] - b.s[i - 1]);
+    return { top: lerp(b.top[i - 1], b.top[i], f), bot: lerp(b.bot[i - 1], b.bot[i], f), wr: lerp(b.wr[i - 1], b.wr[i], f) };
+  }
+  // One body point at s and angle th (0 = flank, +pi/2 = back), in scene units.
+  function bodyPoint(shape, s, th, side, inflate) {
+    const p = profileAt(shape, s);
+    const k = inflate || 1;
+    const centre = (p.top - p.bot) / 2;
+    const half = ((p.top + p.bot) / 2) * k;
+    const width = half * p.wr;
+    return [(s - 0.5) * LB, (centre + half * Math.sin(th)) * LB, side * width * Math.cos(th) * LB];
+  }
+
+  /**
+   * The body as rings of points along s: positions (x, y, z per vertex), the s of each vertex (the
+   * swim reads it), and triangle indices. rings x sides vertices.
+   */
+  function bodyMesh(shape, rings, sides) {
+    const R = Math.max(3, rings | 0), N = Math.max(6, sides | 0);
+    const positions = [], sAt = [], indices = [];
+    for (let i = 0; i < R; i++) {
+      const s = i / (R - 1);
+      for (let j = 0; j < N; j++) {
+        const th = (j / N) * Math.PI * 2;
+        const p = bodyPoint(shape, s, th, 1);
+        positions.push(p[0], p[1], p[2]);
+        sAt.push(s);
+      }
+    }
+    for (let i = 0; i < R - 1; i++) {
+      for (let j = 0; j < N; j++) {
+        const a = i * N + j, b = i * N + ((j + 1) % N), c = (i + 1) * N + j, d = (i + 1) * N + ((j + 1) % N);
+        indices.push(a, c, b, b, c, d);
+      }
+    }
+    return { positions, sAt, indices };
+  }
+
+  // A fin from its leading and trailing edges ([s, h] points): one flat fan of triangles at z 0.
+  const FIN_PAIRS = Object.freeze([['dorsalLead', 'dorsalTrail'], ['upperLead', 'upperTrail'], ['lowerLead', 'lowerTrail'], ['pelvicLead', 'pelvicTrail'], ['d2Lead', 'd2Trail'], ['analLead', 'analTrail']]);
+  function finMeshes(shape) {
+    const out = [];
+    for (const [leadKey, trailKey] of FIN_PAIRS) {
+      const outline = shape.fins[leadKey].concat(shape.fins[trailKey].slice().reverse());
+      const positions = [], sAt = [], indices = [];
+      for (const [s, hgt] of outline) { positions.push((s - 0.5) * LB, hgt * LB, 0); sAt.push(s); }
+      for (let i = 1; i < outline.length - 1; i++) indices.push(0, i, i + 1);
+      out.push({ name: leadKey.replace(/Lead$/, ''), positions, sAt, indices, outline: positions.slice() });
+    }
+    // Pectorals: base along the body at height h, tip along dir, mirrored on both sides.
+    const p = shape.pectoral;
+    for (const side of [1, -1]) {
+      const sm = (p.s0 + p.s1) / 2;
+      const base0 = bodyPoint(shape, p.s0, Math.asin(Math.max(-1, Math.min(1, p.h / Math.max(1e-6, profileAt(shape, p.s0).bot)))), side);
+      const base1 = bodyPoint(shape, p.s1, Math.asin(Math.max(-1, Math.min(1, p.h / Math.max(1e-6, profileAt(shape, p.s1).bot)))), side);
+      const len = Math.hypot(p.dir[0], p.dir[1], p.dir[2]) || 1;
+      const mid = [(base0[0] + base1[0]) / 2, (base0[1] + base1[1]) / 2, (base0[2] + base1[2]) / 2];
+      const tip = [mid[0] + (p.dir[0] / len) * p.length * LB, mid[1] + (p.dir[1] / len) * p.length * LB, mid[2] + side * Math.abs(p.dir[2] / len) * p.length * LB];
+      const positions = base0.concat(base1, tip);
+      out.push({ name: side > 0 ? 'pectoralRight' : 'pectoralLeft', positions, sAt: [p.s0, p.s1, sm], indices: [0, 1, 2], outline: positions.slice() });
+    }
+    return out;
+  }
+
+  /**
+   * The swim: lateral (z) offset at body position s and time t (seconds). Zero ahead of s 0.32
+   * (stiff front); a travelling wave behind it, growing to the tail. Under reduced motion the
+   * renderer passes speed 0, and the shark holds still.
+   */
+  function swimOffset(s, t, speed, tail) {
+    if (!(speed > 0) || s <= SWIM_FROM) return 0;
+    const f = (s - SWIM_FROM) / (1.2 - SWIM_FROM);
+    const amp = SWIM_AMPLITUDE * (tail > 0 ? tail : 1) * f * f * LB;
+    return amp * Math.sin(2 * Math.PI * (SWIM_HZ * speed * t - (s - SWIM_FROM) / SWIM_WAVELENGTH));
+  }
+
+  // The default look (brief 7, Dusk). Settings comes later; these are the values the renderer uses.
+  const DEFAULT_LOOK = Object.freeze({
+    shell: '#2a66ff', edge: '#9a82ff', edgeGlow: 1.65, glassFill: 0.2, veins: 0.5, bloom: 1.0, threads: 0.95, sparkles: 0.5,
+    core: 0.75, hot: '#ffb04a', deep: '#ff5a6a', flow: 0.75, nebulaGas: '#ff5a6a', nebulaTint: 0,
+    speed: 1.0, tail: 1.0, pectoral: 1.0, eye: 1.0, frameRate: '30',
+  });
+
   // ---- the shark's clock ----------------------------------------------------------------------
 
   function frameInterval(mode) {
@@ -165,5 +263,8 @@
     };
   }
 
-  return { FORMAT, MAX_BYTES, FIN_KEYS, STATES, FRAME_RATES, DEFAULT_FRAME_RATE, validateShape, parseShape, createShapeLoader, frameInterval, createSharkClock };
+  return {
+    FORMAT, MAX_BYTES, FIN_KEYS, STATES, FRAME_RATES, DEFAULT_FRAME_RATE, LB, SWIM_FROM, SWIM_HZ, DEFAULT_LOOK,
+    validateShape, parseShape, createShapeLoader, profileAt, bodyPoint, bodyMesh, finMeshes, swimOffset, frameInterval, createSharkClock,
+  };
 });
