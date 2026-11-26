@@ -10,7 +10,9 @@
 
 const fs = require('fs');
 const path = require('path');
+const vm = require('node:vm');
 const { createClipboardConsumer } = require('./clipboard-consumer');
+const { Terminal } = require('./vendor/xterm');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -30,6 +32,8 @@ function harness(opts) {
     invokeRead: o.invokeRead || (() => Promise.resolve({ ok: true, text: '' })),
     invokeWrite: o.invokeWrite || (() => Promise.resolve({ ok: true })),
     ptyWrite: (text) => pastes.push(text),
+    paste: o.paste || ((text) => pastes.push(text)),
+    confirmMultiline: o.confirmMultiline,
     log: (line) => logs.push(line),
     paneId: 'pty9',
   });
@@ -48,6 +52,52 @@ function harness(opts) {
     const rejected = createClipboardConsumer({ invokeWrite: () => Promise.reject(new Error('IPC channel closed')) });
     const r = await rejected.writeText('x');
     assert(r.ok === false && /IPC channel closed/.test(r.error), 'writeText turns an IPC REJECTION into { ok:false }, never throws');
+  }
+
+  // Shell pastes prompt on any line break, including a trailing newline copied with a command.
+  {
+    const unsafe = harness({ invokeRead: async () => ({ ok: true, text: 'sample\u0000\u001b\u007f\u0085text' }) });
+    assert(await unsafe.consumer.pasteIntoPty() === false && unsafe.pastes.length === 0
+      && unsafe.logs.some((line) => /control characters/i.test(line) && !line.includes('sample')),
+    'paste refuses control characters visibly without printing clipboard text');
+    const prompts = [];
+    const accepted = harness({
+      invokeRead: async () => ({ ok: true, text: 'one\titem\r\ntwo\rthree\n' }),
+      confirmMultiline: () => { prompts.push('confirm'); return true; },
+    });
+    assert(await accepted.consumer.pasteIntoPty() === true && prompts.length === 1
+      && accepted.pastes[0] === 'one\titem\ntwo\nthree\n', 'confirmed paste preserves tabs and normalizes line endings');
+    const cancelled = harness({
+      invokeRead: async () => ({ ok: true, text: 'one\n' }),
+      confirmMultiline: () => false,
+    });
+    assert(await cancelled.consumer.pasteIntoPty() === false && cancelled.pastes.length === 0,
+      'cancelling a shell paste with a trailing newline sends nothing');
+    const single = harness({
+      invokeRead: async () => ({ ok: true, text: 'one\titem' }),
+      confirmMultiline: () => { throw new Error('unexpected confirmation'); },
+    });
+    assert(await single.consumer.pasteIntoPty() === true && single.pastes[0] === 'one\titem',
+      'one-line text with a tab pastes without confirmation');
+  }
+
+  // Exercise the shipped xterm's paste framing and mode negotiation without a browser.
+  {
+    const term = new Terminal();
+    term._core.textarea = { value: '' }; // The clipboard helper clears the textarea after pasting.
+    const data = [];
+    term.onData((text) => data.push(text));
+    const { consumer } = harness({
+      invokeRead: async () => ({ ok: true, text: 'one\ntwo' }),
+      paste: (text) => term.paste(text),
+    });
+    await new Promise((resolve) => term.write('\x1b[?2004h', resolve));
+    await consumer.pasteIntoPty();
+    await new Promise((resolve) => term.write('\x1b[?2004l', resolve));
+    await consumer.pasteIntoPty();
+    assert(data.length === 2 && data[0] === '\x1b[200~one\rtwo\x1b[201~' && data[1] === 'one\rtwo',
+      'the active xterm mode determines whether paste is bracketed');
+    term.dispose();
   }
 
   // --- writeClip: metadata-only Logs, empty is a no-op -------------------------------------------
@@ -127,9 +177,27 @@ function harness(opts) {
     assert(block.includes('.catch(() => {})'), 'the Copy Output write has a trailing .catch (no unhandled rejection)');
     assert(!/cc\.clipboardWrite\(/.test(block), 'Copy Output no longer calls cc.clipboardWrite directly — it routes through the consumer');
     // The terminal shortcut paths are async with .catch.
-    assert(/clip\.pasteIntoPty\(\)\.catch\(\(\) => \{\}\)/.test(appSrc), 'Ctrl+V / right-click paste is fire-and-forget WITH a .catch');
-    assert(/clip\.writeClip\(sel\)\.catch\(\(\) => \{\}\)/.test(appSrc), 'Ctrl+C copy is fire-and-forget WITH a .catch');
-    assert(/clip\.writeClip\(decoded, `osc52 \$\{id\}`\)\.catch\(\(\) => \{\}\)/.test(appSrc), 'OSC 52 write is fire-and-forget WITH a .catch');
+    assert(/handlePasteKey\(e, pasteFromClipboard\)/.test(appSrc), 'Ctrl+V retains the double-paste guard');
+    assert(/clip\.writeClip\(sel\)\.catch\(/.test(appSrc), 'Ctrl+C copy handles an unexpected rejection');
+    assert(/addEventListener\('paste',[\s\S]*?clip\.pasteText\([\s\S]*?\}, true\);/.test(appSrc),
+      'native paste events pass through the same paste policy before reaching xterm');
+    const oscBlock = /(?:if \(term\.parser[^\n]*\n[ ]*)?(term\.parser\.registerOscHandler\(52,[\s\S]*?^\s*\}\);)/m.exec(appSrc);
+    const logs = [];
+    const writes = [];
+    let onOsc52;
+    assert(Boolean(oscBlock), 'the terminal explicitly handles OSC 52');
+    if (oscBlock) {
+      vm.runInNewContext(oscBlock[1], {
+        id: 'pty9', appendLog: (line) => logs.push(line),
+        term: { parser: { registerOscHandler: (_id, handler) => { onOsc52 = handler; } } },
+        clip: { writeClip: (text) => { writes.push(text); return Promise.resolve(); } },
+        atob,
+      });
+      const payload = 'sample clipboard text';
+      assert(onOsc52(`c;${btoa(payload)}`) === true && writes.length === 0
+        && logs.some((line) => /clipboard.*(blocked|refused)/i.test(line) && !line.includes(payload)),
+      'OSC 52 is consumed and visibly refused without writing or logging the payload');
+    }
     assert(!/cc\.clipboardRead\(\) \|\|/.test(appSrc) && !/return \(cc\.clipboardRead/.test(appSrc),
       'the old synchronous readClip/writeClip helpers are gone');
   }
