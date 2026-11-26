@@ -758,17 +758,24 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     If you say wait, skip the next bullet; the vault works without the plugin.
   - In PowerShell: `cd D:\Workspace\Mako-Vault`, start `claude`, run
     `/plugin marketplace add https://github.com/obsidianmd/obsidian-skills.git#1.2.3`, then
-    `/plugin install obsidian@obsidian-skills`, and choose the project scope if it asks. (The
-    `#1.2.3` suffix, which pins the marketplace to that tag, is not verified; if Claude Code
-    refuses it, run `/plugin marketplace add obsidianmd/obsidian-skills` instead.) Then open
-    `/plugin` and check the Obsidian plugin shows version **1.2.3**; if it shows another, tell the
-    agent and don't use it. The plugin names come from the plugin's own README at 1.2.3.
+    `/plugin install obsidian@obsidian-skills`, and choose the project scope if it asks. The
+    `#1.2.3` suffix pins the marketplace to the scanned tag (that Claude Code accepts it is not
+    verified). **If Claude Code refuses it, stop there and tell the agent; install nothing.**
+    Never add the marketplace without the suffix: that installs whatever is newest, which nobody
+    scanned. The plugin names come from the plugin's own README at 1.2.3.
+  - Still in that session, before using the plugin, ask: "Find the installed Obsidian plugin's
+    files and check each one's sha256 against the table 'Shipped files at 1.2.3' in
+    docs/decisions/OSS-obsidian-skills.md on GitHub (ABlueAI/AgentCommandCenter). If any file is
+    missing, extra or different, uninstall the plugin and tell me." The version shown in
+    `/plugin` (1.2.3) is only a first look: a later, unscanned commit can keep that number, and a
+    tag can be moved, so the file check is what proves it is the scanned copy.
   - If a skill offers to install a missing tool (`npm install -g defuddle`, `knap` or
     `obsidian-headless`), say no for now: those aren't pinned or scanned yet.
   - Still in that session, ask: "Read Mako index.md and add a note called Test with a link to it
     under Notes." Check the note and the link appear in Obsidian.
-  - *Done when:* you tell an agent the vault opened, the plugin installed and the test note and
-    link appeared (or what failed); it ticks this with the date and S13 is marked done.
+  - *Done when:* you tell an agent the vault opened, the plugin installed and its files matched
+    the table, and the test note and link appeared (or what failed); it ticks this with the date
+    and S13 is marked done.
 
 - [x] **32. A private repo for S22's marina brief.** *Verified 2026-10-23 by the all-day runner:
   Blue replied on PR #116 that the brief goes in `mako-business`; GitHub reports
