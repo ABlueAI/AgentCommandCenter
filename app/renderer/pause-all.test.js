@@ -35,10 +35,12 @@ process.stdout.write('\npausing\n');
   // pty6 has no status at all (a shell pane)
   const r = p.setPaused('2026-11-26T08:30:00.000Z');
   eq(writes, [['pty1', '\u001b'], ['pty5', '\u001b']], 'only working panes get Esc, once each, and only live ones');
-  eq(r.untouched, 4, 'waiting, idle and status-less panes are left as they are');
+  eq(r.untouched, 3, 'waiting and idle panes are left as they are');
+  eq(r.noStatus, ['pty6'], 'a pane with no Claude status is not interrupted, and is counted');
   assert(p.isPaused(), 'paused');
-  assert(logs.some((l) => l.includes('Esc sent to 2 working pane(s)') && l.includes('nothing killed')), 'the log says what was sent and that nothing was killed');
-  assert(notes.some((n) => n.includes('Esc sent to 2')), 'and Blue sees it');
+  assert(logs.some((l) => l.includes('Esc requested for 2 working pane(s)') && l.includes('delivery not confirmed') && l.includes('nothing killed')), 'the log says what was requested, that delivery isn\'t confirmed, and that nothing was killed');
+  assert(logs.some((l) => l.includes('1 with no Claude status, not interrupted (pty6)')), 'and names the pane with no status');
+  assert(notes.some((n) => n.includes('Esc requested for 2') && n.includes('1 pane(s) have no Claude status')), 'Blue sees both');
   p.setPaused('2026-11-26T08:30:00.000Z');
   eq(writes.length, 2, 'a repeated "on" sends nothing more');
   assert(p.refuseStart('Builder'), 'nothing new starts while paused');
@@ -76,6 +78,16 @@ process.stdout.write('\na restored pause and failures\n');
   eq(writes, [], 'no pane list: no Esc');
   assert(notes.some((n) => n.includes('could not list the panes')), 'and Blue is told none were interrupted');
   assert(p.isPaused(), 'the pause itself still holds');
+}
+
+process.stdout.write('\nClaude status off\n');
+{
+  const { p, writes, notes } = setup();
+  p.noteView({ paneId: 'pty1', state: 'unknown' });
+  const r = p.setPaused('t');
+  eq(writes, [], 'with no trusted status anywhere, nothing is interrupted');
+  eq(r.noStatus.length, 6, 'and every live pane is counted as having no status');
+  assert(notes.some((n) => n.includes('6 pane(s) have no Claude status')), 'so Blue knows why none were interrupted');
 }
 
 process.stdout.write('\nstatus tracking\n');

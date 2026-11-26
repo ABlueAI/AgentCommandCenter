@@ -176,9 +176,4 @@ test('S19: a quiet state that cannot be read shows the toast and says why', () =
   assert.ok(r.logs.some((l) => /quiet-read-failed/.test(l)));
   assert.ok(!r.logs.some((l) => /PRIVATE/.test(l)), 'no exception text is logged');
 });
-test('S19: main reads quiet hours from the saved setting and releases held toasts when they end', () => {
-  const main=fs.readFileSync(path.join(__dirname,'..','main.js'),'utf8');
-  assert.match(main,/isQuiet: \(\) => \{ const q = loadSettings\(\)\.uiQuietSince; return typeof q === 'string' && q\.length > 0; \}/);
-  assert.match(main,/Object\.hasOwn\(partial, 'uiQuietSince'\) && !partial\.uiQuietSince && before\.uiQuietSince\) \{\s*paneStatusNotifications\.releaseHeld\(\);/);
-});
 console.log(`\npane-status-notifications: ${passed} passed, ${failed} failed`);

@@ -518,6 +518,7 @@ test('Video Scout offers both providers and Claude bypasses the Gemini key and l
   let settingsResult = { ...defaults, detailMode: true };
   const context = vm.createContext({
     $: (id) => controls[id], URL, ROLES: { 'video-scout': { video: true } },
+    pauseAll: null, // S19: createAgent's Pause all gate; off here, as when nothing is paused
     state: { chosenRole: 'video-scout', repo: '/synthetic', analysisMode: 'transcript', videoModel: 'gemini-2.5-flash-lite', mediaResolution: 'MEDIUM' },
     cc: { tlogReset: async () => {}, getGeminiKeyStatus: async () => { geminiChecks++; return { ok: true, hasKey: true }; } },
     updateModalHint: () => {}, closeModal: () => {}, openInAppTerminal: (launch) => launches.push(launch),

@@ -55,7 +55,7 @@
         terminal: open,
         interrupt: () => {
           if (status.get(paneId) !== 'working') { log(`[control-focus] refused to interrupt ${paneId}: it is not working (not-working)\n`); render(); return; }
-          try { deps.write(paneId, ESC); log(`[control-focus] Esc sent to ${paneId} (Interrupt); nothing killed\n`); }
+          try { deps.write(paneId, ESC); log(`[control-focus] Esc requested for ${paneId} (Interrupt; delivery not confirmed); nothing killed\n`); }
           catch { log(`[control-focus] Esc could not be sent to ${paneId} (write-failed)\n`); }
         },
       };

@@ -17,8 +17,8 @@ const INDEX_FILE = path.join(__dirname, 'renderer', 'index.html');
 const PRELOAD_FILE = path.join(__dirname, 'preload.js');
 const STEP_TIMEOUT_MS = 30000;
 
-const ipc = { saves: [], ptyStart: 0, ptyIds: [], writes: [], kills: [] };
-const control = { settings: {}, gate: null, release: () => {}, repos: [], saveFail: false, worktrees: [], ptyOk: false };
+const ipc = { saves: [], ptyStart: 0, ptyIds: [], writes: [], kills: [], dismissed: [] };
+const control = { settings: {}, gate: null, release: () => {}, repos: [], saveFail: false, worktrees: [], ptyOk: false, resumeRows: null };
 const remote = [];
 const consoleErrors = [];
 let win = null;
@@ -50,7 +50,7 @@ async function open(name, settings, beforeBoot, repos) {
   control.repos = repos || [];
   control.worktrees = control.repos.length ? [{ path: 'D:\\Workspace\\AgentCommandCenter-search-bar', branch: 'agent/search-bar' }] : [];
   control.gate = new Promise((r) => { control.release = r; });
-  ipc.saves = []; ipc.ptyStart = 0; ipc.ptyIds = []; ipc.writes = []; ipc.kills = [];
+  ipc.saves = []; ipc.ptyStart = 0; ipc.ptyIds = []; ipc.writes = []; ipc.kills = []; ipc.dismissed = [];
   await withTimeout(win.loadFile(INDEX_FILE), STEP_TIMEOUT_MS, `${name}: loadFile`);
   await run(PRELUDE);
   if (beforeBoot) await run(beforeBoot);
@@ -483,7 +483,7 @@ async function scenarioPauseAll() {
     out.working = working;
     out.kills = ipc.kills.slice();
     out.banner = await run(`window.__t.shown('#makoPausedBanner')`);
-    out.logged = await run(`window.__t.log().includes('Esc sent to 1 working pane(s)') && window.__t.log().includes('nothing killed')`);
+    out.logged = await run(`window.__t.log().includes('Esc requested for 1 working pane(s)') && window.__t.log().includes('nothing killed')`);
     const before = ipc.ptyStart;
     await run(`(async () => { document.getElementById('newTermShell').click(); await window.__t.sleep(200); })()`);
     out.startedWhilePaused = ipc.ptyStart - before;
@@ -518,6 +518,40 @@ async function scenarioPauseAll() {
     }
   } finally {
     control.ptyOk = false;
+  }
+  await park();
+  return out;
+}
+
+async function scenarioPausedResume() {
+  // S19: a pause restored at startup meets the Resume offer. Resume and Start fresh start nothing,
+  // dismiss nothing, and the row stays on offer for after Resume all.
+  control.ptyOk = true;
+  control.resumeRows = [{ sessionId: 'sess-1', role: 'builder', worktree: 'D:\\Workspace\\AgentCommandCenter-search-bar', startedAt: '2026-11-25T10:00:00.000Z', stoppedAt: '2026-11-25T18:00:00.000Z', stopReason: 'closed', worktreeMissing: false, mayBeExpired: false }];
+  const out = {};
+  try {
+    await open('pausedResume', { theme: 'obsidian', projectsRoot: 'D:\\Workspace', uiTab: 'control', uiPausedSince: '2026-11-25T19:05:00.000Z' });
+    await run(`window.__t.waitFor(() => document.querySelectorAll('.resume-row').length === 1 && document.getElementById('makoPauseAll').disabled === false)`);
+    Object.assign(out, await run(`(async () => {
+      const t = window.__t;
+      const buttons = () => Array.from(document.querySelectorAll('.resume-row button'));
+      const byText = (txt) => buttons().find((b) => b.textContent === txt);
+      byText('Resume').click();
+      await t.sleep(50);
+      byText('Start fresh').click();
+      await t.sleep(100);
+      return {
+        rowsLeft: document.querySelectorAll('.resume-row').length,
+        refusedResume: t.log().includes('refused to start a resumed pane: Pause all is on'),
+        refusedFresh: t.log().includes('refused to start a fresh pane: Pause all is on'),
+        restoredLogged: t.log().includes('paused state restored at startup; nothing sent'),
+      };
+    })()`));
+    out.ptyStart = ipc.ptyStart;
+    out.dismissed = ipc.dismissed.slice();
+  } finally {
+    control.ptyOk = false;
+    control.resumeRows = null;
   }
   await park();
   return out;
@@ -606,6 +640,9 @@ app.whenReady().then(async () => {
   ipcMain.handle('tlog-reset', () => ({ ok: true }));
   ipcMain.handle('pty-start', (_e, o) => { ipc.ptyStart += 1; ipc.ptyIds.push(o && o.id); return control.ptyOk ? { ok: true } : { ok: false, error: 'harness' }; });
   ipcMain.on('pty-kill', (_e, id) => { ipc.kills.push(id); });
+  // S19: a Resume offer only for the scenario that sets one; otherwise the invoke is unhandled, as before.
+  ipcMain.handle('session-resume-offer', () => (control.resumeRows ? { ok: true, rows: control.resumeRows.slice(), retentionDays: 14 } : Promise.reject(new Error('harness: no offer'))));
+  ipcMain.handle('session-resume-dismiss', (_e, id) => { ipc.dismissed.push(id); return { ok: true }; });
   ipcMain.on('pty-write', (_e, m) => { ipc.writes.push([m && m.id, m && m.data]); });
   ipcMain.on('pty-resize', () => {});
   ipcMain.handle('library-list', () => ({ ok: true, entries: [], total: 0, invalidCount: 0, invalid: [], capExceeded: false }));
@@ -628,7 +665,7 @@ app.whenReady().then(async () => {
     process.stdout.write(JSON.stringify({ ok: false, fatal: { scenario: 'watchdog', error: 'over budget' }, scenarios }) + '\n');
     app.exit(1);
   }, 4 * 60 * 1000);
-  for (const [name, fn] of [['firstRun', scenarioFirstRun], ['palette', scenarioPalette], ['settings', scenarioSettingsAndOldLayout], ['restartOld', scenarioRestartOld], ['topBar', scenarioTopBar], ['needsYou', scenarioNeedsYou], ['pauseAll', scenarioPauseAll], ['refusal', scenarioRefusal], ['saveFails', scenarioSaveFails]]) {
+  for (const [name, fn] of [['firstRun', scenarioFirstRun], ['palette', scenarioPalette], ['settings', scenarioSettingsAndOldLayout], ['restartOld', scenarioRestartOld], ['topBar', scenarioTopBar], ['needsYou', scenarioNeedsYou], ['pauseAll', scenarioPauseAll], ['pausedResume', scenarioPausedResume], ['refusal', scenarioRefusal], ['saveFails', scenarioSaveFails]]) {
     try { scenarios[name] = await fn(); progress(`${name}: done`); }
     catch (e) { fatal = { scenario: name, error: String((e && e.message) || e) }; progress(`${name}: FAILED ${fatal.error}`); break; }
   }

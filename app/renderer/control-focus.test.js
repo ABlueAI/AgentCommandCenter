@@ -55,7 +55,7 @@ eq(card && card.getAttribute('data-state'), 'working', 'working: the In-focus ca
 assert(host.textContent.includes('Builder · s19') && host.textContent.includes('agent/s19'), 'with the pane\'s title and branch');
 btn('interrupt').click();
 eq(writes, [['pty1', '\u001b']], 'Interrupt sends one Esc to that pane only');
-assert(logs.some((l) => l.includes('Esc sent to pty1') && l.includes('nothing killed')), 'and logs it');
+assert(logs.some((l) => l.includes('Esc requested for pty1') && l.includes('delivery not confirmed') && l.includes('nothing killed')), 'and logs it, without claiming delivery');
 btn('openPane').click();
 eq(focused, ['pty1'], 'Open pane focuses it');
 assert(btn('peek').disabled === true && btn('pause').disabled === true, 'actions S19 does not wire stay disabled');

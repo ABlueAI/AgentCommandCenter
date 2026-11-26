@@ -455,7 +455,8 @@ function showTermEmpty() {
 }
 function openInAppTerminal(opts = {}) {
   // S19: nothing new starts while Pause all is on (pause-all.js says so in Logs and the banner).
-  if (pauseAll && pauseAll.refuseStart(opts.role ? (ROLES[opts.role] ? ROLES[opts.role].label : 'an agent') : 'a shell')) return;
+  // Returns false when refused, so callers that do something first can tell (Resume, Start fresh).
+  if (pauseAll && pauseAll.refuseStart(opts.role ? (ROLES[opts.role] ? ROLES[opts.role].label : 'an agent') : 'a shell')) return false;
   // S10: Maximum never runs a Claude agent on this PC (authority-choice.js). No pane is created and
   // no PTY is requested: the task goes to a cloud session instead, through the vetted open-external
   // path. Main refuses a Claude pane at Maximum as well (app/authority-level.js).
@@ -1394,6 +1395,8 @@ async function offerResume() {
         appendLog('[resume] Maximum starts no local Claude pane, so nothing can be resumed here. Pick another authority level, then Resume.\n');
         return false;
       }
+      // S19: while Pause all is on nothing starts, and the row stays on offer.
+      if (pauseAll && pauseAll.refuseStart('a resumed pane')) return false;
       appendLog(`[resume] resuming a ${row.role || 'claude'} pane with claude --resume\n`);
       openInAppTerminal(Object.assign(paneOpts(row), { resumeSessionId: row.sessionId }));
       return true;
@@ -1404,6 +1407,8 @@ async function offerResume() {
         appendLog('[resume] Maximum starts no local Claude pane. Pick another authority level, then Start fresh.\n');
         return false;
       }
+      // S19: refused while paused, before the session is dismissed, so it is still offered later.
+      if (pauseAll && pauseAll.refuseStart('a fresh pane')) return false;
       dismiss(row);
       openInAppTerminal(paneOpts(row));
       return true;
@@ -2759,6 +2764,8 @@ async function handleClaudeVideoEvent({ id, token, status, estimate, pcm }) {
 }
 
 async function createAgent() {
+  // S19: while Pause all is on, refuse before any worktree or branch is made (the dialog stays open).
+  if (pauseAll && pauseAll.refuseStart('a new agent')) return;
   await cc.tlogReset();
   appendLog('[TIMING] createAgent: START\n');
   const role = state.chosenRole;

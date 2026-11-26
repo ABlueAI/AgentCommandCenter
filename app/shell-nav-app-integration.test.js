@@ -217,6 +217,14 @@ eq(pa.interruptWrites, [[pa.working, '\u001b']], 'Interrupt sends exactly one Es
 eq(pa.interruptKills, [], 'and kills nothing');
 eq(pa.stallTag, ['stalled · 5 failed tries|status'], 'S19: five failed turns put "stalled" in that pane\'s real header');
 
+process.stdout.write('\nS19: a restored pause and the Resume offer\n');
+const pr = S.pausedResume || {};
+assert(pr.restoredLogged === true, 'a pause restored at startup sends nothing, and says so');
+assert(pr.refusedResume === true && pr.refusedFresh === true, 'Resume and Start fresh are refused while paused, visibly');
+eq(pr.ptyStart, 0, 'no pane starts');
+eq(pr.dismissed, [], 'and the session is not dismissed');
+eq(pr.rowsLeft, 1, 'so it stays on offer for after Resume all');
+
 process.stdout.write('\nnothing reached the network, and no renderer errors\n');
 eq(report.remote, [], 'no remote request');
 eq(report.consoleErrors, [], 'no console errors');

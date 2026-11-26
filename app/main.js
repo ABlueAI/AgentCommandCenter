@@ -69,6 +69,7 @@ const { createPaneStatusController } = require('./pane-status/pane-status-contro
 const { registerPaneStatusIpc, createPublishers } = require('./pane-status/pane-status-ipc');
 const { createPaneStatusNotifications } = require('./pane-status/pane-status-notifications');
 const { createNeedsYouTaskbar } = require('./needs-you-taskbar');
+const { isQuietSince } = require('./quiet-hours');
 const paneStatusDoc = require('./pane-status/pane-status-settings-doc');
 const paneStatusShim = require('./pane-status/pane-status-runtime-shim');
 // The pane-equivalent version resolver (dependency A) and the bounded absolute PowerShell used by the
@@ -427,7 +428,8 @@ const paneStatusNotifications = createPaneStatusNotifications({
   Notification, platform: process.platform, getWindow: () => win,
   log: (line) => tlog(line),
   // S19: quiet hours (S66's switch, saved as uiQuietSince) hold the toast; the badge still shows.
-  isQuiet: () => { const q = loadSettings().uiQuietSince; return typeof q === 'string' && q.length > 0; },
+  // The same reading as the renderer's (quiet-hours.js), so main never holds toasts the UI shows as on.
+  isQuiet: () => isQuietSince(loadSettings().uiQuietSince),
 });
 // S19: the taskbar badge (a red overlay dot while any pane needs you). Quiet hours never hold it.
 const needsYouTaskbar = createNeedsYouTaskbar({
@@ -1100,7 +1102,7 @@ ipcMain.handle('save-settings', async (_e, partial) => {
   const s = { ...before, ...partial };
   saveSettings(s);
   // S19: quiet hours just ended, so show the toasts they held (each only if its pane still waits).
-  if (partial && Object.hasOwn(partial, 'uiQuietSince') && !partial.uiQuietSince && before.uiQuietSince) {
+  if (partial && Object.hasOwn(partial, 'uiQuietSince') && !isQuietSince(partial.uiQuietSince) && isQuietSince(before.uiQuietSince)) {
     paneStatusNotifications.releaseHeld();
   }
   return s;

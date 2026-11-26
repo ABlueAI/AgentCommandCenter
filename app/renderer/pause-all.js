@@ -7,7 +7,10 @@
   //     all turns on;
   //   * nothing is killed: this module has no path to pty-kill, only the one write;
   //   * panes waiting on Blue (`attention`, `turn ended`), idle ones, and panes with no trusted status
-  //     (shells, Gemini panes, `unknown`) get nothing;
+  //     (shells, Gemini panes, `unknown`, Claude status off) get nothing, and the ones with no status
+  //     are named in Logs and the notice, so Blue knows they weren't interrupted;
+  //   * the Esc is requested through a one-way message (cc.ptyWrite); main doesn't confirm delivery,
+  //     so the notice says "requested", never "delivered";
   //   * nothing new starts while paused: `refuseStart()` says so, and the app refuses the pane;
   //   * Resume all sends nothing: panes stay where Pause left them until Blue types.
   //
@@ -51,7 +54,7 @@
       const on = typeof pausedSince === 'string' && pausedSince.length > 0;
       const was = paused !== null;
       paused = on ? pausedSince : null;
-      const report = { changed: on !== was, escaped: [], failed: [], untouched: 0 };
+      const report = { changed: on !== was, escaped: [], failed: [], untouched: 0, noStatus: [] };
       if (!report.changed) return report;
       if (!on) { log('[pause-all] resumed: nothing sent; panes go on when you type\n'); notify('Resumed. New panes can start again.', 5000); return report; }
       if (opts && opts.restored) { log('[pause-all] paused state restored at startup; nothing sent\n'); return report; }
@@ -63,14 +66,18 @@
         return report;
       }
       for (const id of live) {
-        if (states.get(id) !== WORKING) { report.untouched += 1; continue; }
+        const st = states.get(id);
+        if (st === undefined || st === 'unknown') { report.noStatus.push(id); continue; }
+        if (st !== WORKING) { report.untouched += 1; continue; }
         try { deps.write(id, ESC); report.escaped.push(id); }
         catch { report.failed.push(id); }
       }
-      log(`[pause-all] paused: Esc sent to ${report.escaped.length} working pane(s)${report.escaped.length ? ` (${report.escaped.join(', ')})` : ''}; ${report.untouched} not working, left as they are; nothing killed\n`);
+      // cc.ptyWrite is a one-way message: main doesn't confirm delivery, so this says "requested".
+      log(`[pause-all] paused: Esc requested for ${report.escaped.length} working pane(s)${report.escaped.length ? ` (${report.escaped.join(', ')})` : ''}, delivery not confirmed; ${report.untouched} not working, left as they are; ${report.noStatus.length} with no Claude status, not interrupted${report.noStatus.length ? ` (${report.noStatus.join(', ')})` : ''}; nothing killed\n`);
       if (report.failed.length) log(`[pause-all] Esc could not be sent to ${report.failed.join(', ')} (write-failed)\n`);
+      const noStatusText = report.noStatus.length ? ` ${report.noStatus.length} pane(s) have no Claude status, so they were not interrupted.` : '';
       const failedText = report.failed.length ? ` ${report.failed.length} could not be interrupted (see Logs).` : '';
-      notify(`Paused. Esc sent to ${report.escaped.length} working pane(s); nothing was killed.${failedText}`, report.failed.length ? 10000 : 6000);
+      notify(`Paused. Esc requested for ${report.escaped.length} working pane(s); nothing was killed.${noStatusText}${failedText}`, (report.failed.length || report.noStatus.length) ? 10000 : 6000);
       return report;
     }
 
