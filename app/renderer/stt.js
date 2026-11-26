@@ -22,7 +22,11 @@ import { pipeline, env } from '../node_modules/@huggingface/transformers/dist/tr
 import { configureSttEnv } from './stt-env-config.js';
 import {
   createWhisperLoader,
+  describeTranscriptionError,
   describeWhisperDtype,
+  ownsVideoTranscription,
+  pcm16leToFloat32,
+  transcribeInWindows,
   getWhisperTranscriptionOptions,
   WHISPER_DOWNLOADS,
   WHISPER_MODEL_ID,
@@ -45,6 +49,9 @@ let asr = null;         // resolved pipeline (only ever set from a RESOLVED boot
 let loading = null;     // in-flight load promise
 let activeDevice = '';  // backend that actually initialized ('' until proven)
 let recording = false;
+let videoBusy = false;
+let videoCancelled = false; // set when the Video Scout pane is closed mid-transcription
+let videoOwner = null;      // the Video Scout pane whose audio is being transcribed
 let busy = false;       // transcribing
 let statusCb = null;
 let resultCb = null;
@@ -56,20 +63,20 @@ let chunks = [];
 function setStatus(state, detail) { if (statusCb) try { statusCb({ state, detail }); } catch {} }
 
 // --- model load (lazy; webgpu -> wasm via the tested bootstrap contract) --------
-async function ensureModel() {
+async function ensureModel(reportStatus = setStatus) {
   if (asr) return asr;
   if (loading) return loading;
   loading = (async () => {
-    setStatus('loading', `first use downloads the speech model (WebGPU ${WHISPER_DOWNLOADS.webgpu}; WASM ${WHISPER_DOWNLOADS.wasm})…`);
+    reportStatus('loading', `first use downloads the speech model (WebGPU ${WHISPER_DOWNLOADS.webgpu}; WASM ${WHISPER_DOWNLOADS.wasm})…`);
     // createWhisperLoader: webgpu-then-wasm with a VISIBLE fallback status, throttled
     // download progress on both attempts, falsy-result-is-failure, and a combined
     // both-backends error. activeDevice is set only after a pipeline actually resolves.
     const model = await loadWhisper({
-      onStatus: setStatus,
+      onStatus: reportStatus,
       onSelected: (device) => { activeDevice = device; },
     });
     asr = model;
-    setStatus('loading', `model ready — Whisper large-v3-turbo · ${activeDevice}/${describeWhisperDtype(activeDevice)}`);
+    reportStatus('loading', `model ready — Whisper large-v3-turbo · ${activeDevice}/${describeWhisperDtype(activeDevice)}`);
     return asr;
   })();
   try { return await loading; } finally { loading = null; }
@@ -95,10 +102,20 @@ async function toPcm16k(blob) {
 // --- record / transcribe ------------------------------------------------------
 async function start() {
   if (recording || busy) return;
+  if (videoBusy) {
+    setStatus('error', 'Whisper is transcribing a Video Scout clip. Try again when it finishes.');
+    return;
+  }
   try {
     stream = await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
   } catch (e) {
     setStatus('error', 'microphone unavailable: ' + (e && e.message));
+    return;
+  }
+  if (videoBusy) {
+    stream.getTracks().forEach((track) => track.stop());
+    stream = null;
+    setStatus('error', 'Whisper is transcribing a Video Scout clip. Try again when it finishes.');
     return;
   }
   chunks = [];
@@ -134,8 +151,7 @@ async function stopAndTranscribe() {
   } catch (e) {
     // Bounded, honest failure. The bootstrap's combined error already names BOTH
     // attempted backends with their reasons; anything else is a transcription failure.
-    const msg = String((e && e.message) || e).slice(0, 300);
-    setStatus('error', msg.startsWith('speech model failed') ? msg : 'transcription failed: ' + msg);
+    setStatus('error', describeTranscriptionError(e));
     busy = false;
     return '';
   }
@@ -153,7 +169,43 @@ async function toggle() {
   return start();
 }
 
+// Video Scout supplies PCM decoded by FFmpeg. It shares the same downloaded Whisper
+// model as Dictate, without opening the microphone or posting to its locked target pane.
+async function transcribeVideoPcm(bytes, onProgress, owner = null) {
+  if (videoBusy || recording || busy) return { ok: false, error: 'busy' };
+  const pcm = pcm16leToFloat32(bytes);
+  if (!pcm) return { ok: false, error: 'failed', detail: 'the audio was not whole 16-bit samples' };
+  videoBusy = true;
+  videoCancelled = false;
+  videoOwner = owner;
+  try {
+    const model = await ensureModel((_state, detail) => onProgress(detail));
+    onProgress(`Whisper large-v3-turbo · ${activeDevice}/${describeWhisperDtype(activeDevice)}`);
+    const options = getWhisperTranscriptionOptions();
+    delete options.language; // The source video can be in a different language.
+    const result = await transcribeInWindows(pcm, async (window) => (await model(window, options))?.text,
+      () => videoCancelled);
+    if (result.cancelled) return { ok: false, error: 'cancelled', detail: 'transcription stopped: the run was cancelled' };
+    if (typeof result.text !== 'string') return { ok: false, error: 'failed', detail: 'Whisper returned no text' };
+    return { ok: true, text: result.text };
+  } catch (e) {
+    // Same bounded wording Dictate shows, so a model that fails to load says why.
+    return { ok: false, error: 'failed', detail: describeTranscriptionError(e) };
+  } finally {
+    videoBusy = false;
+    videoOwner = null;
+  }
+}
+
+// Only the pane that owns the running transcription can cancel it (review of ebb0988): closing
+// another Video Scout pane must not stop someone else's run.
+function cancelVideoTranscription(owner) {
+  if (ownsVideoTranscription(videoBusy, videoOwner, owner)) videoCancelled = true;
+}
+
 window.ccSTT = {
+  transcribeVideoPcm,
+  cancelVideoTranscription,
   toggle,
   isRecording: () => recording,
   isBusy: () => busy,
