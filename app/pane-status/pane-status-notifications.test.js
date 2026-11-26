@@ -142,7 +142,7 @@ test('real pane registry and transport validation gate alerts; malformed/foreign
 });
 test('main composes the observer with the existing controller publisher and preserves delivery result', () => {
   const main=fs.readFileSync(path.join(__dirname,'..','main.js'),'utf8');
-  assert.match(main,/publishView: \(view\) => \{\s*const delivered = paneStatusPublishers\.publishView\(view\);\s*paneStatusNotifications\.observe\(view\);\s*return delivered;/);
+  assert.match(main,/publishView: \(view\) => \{\s*const delivered = paneStatusPublishers\.publishView\(view\);\s*paneStatusNotifications\.observe\(view\);\s*needsYouTaskbar\.observe\(view\);\s*return delivered;/);
   assert.match(main,/app\.on\('will-quit', \(\) => \{\s*paneStatusNotifications\.dispose\(\);/);
   assert.match(main,/app\.on\('window-all-closed', \(\) => \{\s*paneStatusNotifications\.dispose\(\);/);
 });
