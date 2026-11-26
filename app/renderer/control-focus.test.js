@@ -66,6 +66,10 @@ assert(!btn('interrupt'), 'which has no Interrupt');
 f.noteView({ paneId: 'pty1', state: 'turn ended' });
 eq(host.all((n) => n.getAttribute('data-state') !== null)[0].getAttribute('data-state'), 'finished', 'turn ended: the finished card');
 
+f.noteView({ paneId: 'pty1', state: 'attention' });
+f.noteView({ paneId: 'pty1', state: 'unknown', reason: 'stale' });
+eq(host.all((n) => n.getAttribute('data-state') !== null)[0].getAttribute('data-state'), 'question', 'a status that only aged out keeps the question card');
+
 process.stdout.write('\nrefusals\n');
 f.noteView({ paneId: 'pty1', state: 'working' });
 const staleInterrupt = btn('interrupt');

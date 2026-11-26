@@ -49,6 +49,10 @@ function createNeedsYouTaskbar({ platform, getWindow, nativeImage, log }) {
 
   function observe(view) {
     if (disposed || !view || typeof view.paneId !== 'string' || !view.paneId) return;
+    // A status that only aged out (no new hook event for 2 minutes; pane-status-freshness.js) is not
+    // a change: keep the last trusted state, as S05's toasts do. `attention` is never refreshed while
+    // Blue is away, so without this a waiting pane would drop out after 2 minutes.
+    if (view.state === 'unknown' && view.reason === 'stale') return;
     if (view.state === 'attention') waiting.add(view.paneId);
     else waiting.delete(view.paneId);
     apply();

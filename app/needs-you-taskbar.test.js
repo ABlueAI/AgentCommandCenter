@@ -60,6 +60,14 @@ test('dispose clears the badge', () => {
   r.view('pty2', 'attention');
   assert.deepEqual(r.calls.at(-1), [null, ''], 'nothing after dispose');
 });
+test('a status that only aged out (stale) keeps the dot; another unknown clears it', () => {
+  const r = rig();
+  r.view('pty1', 'attention');
+  r.t.observe({ paneId: 'pty1', state: 'unknown', reason: 'stale' });
+  assert.equal(r.t.waiting(), 1);
+  r.t.observe({ paneId: 'pty1', state: 'unknown', reason: 'hook-removed' });
+  assert.equal(r.t.waiting(), 0);
+});
 test('words', () => { assert.equal(describe(1), '1 pane needs you'); assert.equal(describe(3), '3 panes need you'); });
 test('main feeds it every published view and clears it on quit', () => {
   const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');

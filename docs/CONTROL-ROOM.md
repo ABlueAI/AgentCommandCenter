@@ -25,6 +25,17 @@ Builder's reading of the signals (no Blue decision behind them):
 - A "failed try" is a `failed` status (Claude Code's `StopFailure` hook). The count goes back to 0
   when a turn ends normally or the pane is idle.
 - A usage stop is a 5-hour or weekly window at 100% or more with its reset still ahead.
+- A status that only aged out (`unknown`, reason `stale`: no new hook event for 2 minutes,
+  `app/pane-status/pane-status-freshness.js`) is not a change. Every piece above keeps the pane's last
+  trusted state, as S05's toasts do. So a pane waiting on Blue stays in the strip and keeps the
+  taskbar dot, and a pane working through a long tool call still gets Pause all's Esc. Any other
+  `unknown` (no signal, hooks removed) ends it.
+- Pause all and Interrupt request the Esc through `cc.ptyWrite`, a one-way message: main doesn't
+  confirm delivery, so Logs and the notice say "requested". Panes with no Claude status are named,
+  not interrupted.
+- The 20-minute silence stall counts any PTY output as activity. Claude Code redraws its spinner
+  while a turn runs, so a hung turn may never be 20 minutes silent (not verified; step 87 can't wait
+  20 minutes). The 5-failed-turns stall doesn't depend on output.
 
 ## Pop-out windows: sized, left out of 1.1
 

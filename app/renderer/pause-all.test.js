@@ -80,6 +80,15 @@ process.stdout.write('\na restored pause and failures\n');
   assert(p.isPaused(), 'the pause itself still holds');
 }
 
+process.stdout.write('\na status that aged out\n');
+{
+  const { p, writes } = setup();
+  p.noteView({ paneId: 'pty1', state: 'working' });
+  assert(p.noteView({ paneId: 'pty1', state: 'unknown', reason: 'stale' }) === false, 'a stale view is not a change');
+  p.setPaused('t');
+  eq(writes, [['pty1', '\u001b']], 'a working pane whose status aged out during a long tool call still gets Esc');
+}
+
 process.stdout.write('\nClaude status off\n');
 {
   const { p, writes, notes } = setup();

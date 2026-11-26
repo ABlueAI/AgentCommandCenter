@@ -81,8 +81,10 @@ strip.render();
 assert(chips()[0].textContent.includes('8 min'), 'a repeat keeps the first time');
 strip.update({ paneId: 'pty1', state: 'working' });
 eq(strip.waiting(), ['pty2'], 'a pane that is working again leaves the strip');
-strip.update({ paneId: 'pty2', state: 'unknown', reason: 'stale' });
-eq(strip.waiting(), [], 'an unknown state ends the wait too (the badge says why)');
+assert(strip.update({ paneId: 'pty2', state: 'unknown', reason: 'stale' }) === false, 'a status that only aged out (stale) is not a change');
+eq(strip.waiting(), ['pty2'], 'so a pane still waiting after 2 minutes stays in the strip');
+strip.update({ paneId: 'pty2', state: 'unknown', reason: 'no-signal' });
+eq(strip.waiting(), [], 'any other unknown ends the wait (the badge says why)');
 assert(host.hidden === true, 'the strip hides again');
 assert(strip.update({}) === false && strip.update(null) === false && strip.update({ paneId: 7, state: 'attention' }) === false, 'a malformed view is ignored');
 

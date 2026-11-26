@@ -1505,7 +1505,8 @@ Step 81 comes from PR #283.
   5. Hold **Ctrl Space** in a pane and speak, then let go: the words are typed into that pane. Then
      click into a pane and press **Ctrl K**: the palette opens and nothing is typed into the pane.
   6. Look: does anything read wrong or feel cramped? Note the usage chip (top right) and the two
-     greyed-out switches, **Quiet hours** and **Pause all**, which S18 and S19 turn on.
+     greyed-out switches, **Quiet hours** and **Pause all**, which S18 and S19 turn on (Pause all
+     is already on once S19's PR #321 merges).
   - *Done when:* you tell any agent "S66 PC check: OK" or what looked wrong; the agent ticks this
     with the date and your words, and anything wrong becomes a fix PR.
 - [ ] **87. PC check of the control room (S19).** **About 15 minutes**, at the first Tuesday or
@@ -1513,7 +1514,8 @@ Step 81 comes from PR #283.
   Claude status is on (the Terminals toolbar says "Claude status: on"). Open two Claude panes, then:
   1. Give pane A a task that takes a while. Ask pane B something that needs an answer from you. A red
      **Needs you** chip for pane B appears above the panes, Mako's taskbar button gets a red dot, and
-     the toast makes **no sound**.
+     the toast makes **no sound**. Wait 3 minutes without answering: the chip and the dot are still
+     there.
   2. Click into pane A and press **F8**: pane B gets the focus, and no character is typed into
      either pane. Click the chip: the same.
   3. Click pane A while it works: the right panel shows its **In focus** card. Click

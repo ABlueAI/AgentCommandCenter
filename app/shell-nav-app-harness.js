@@ -403,6 +403,10 @@ async function scenarioNeedsYou() {
   win.webContents.send('pane-status-view', { paneId: 'pty2', state: 'attention', reason: null });
   win.webContents.send('pane-status-view', { paneId: 'pty3', state: 'working', reason: null });
   await run(`window.__t.waitFor(() => document.querySelectorAll('#needsYouStrip .mk-needs-chip').length === 2)`);
+  // A waiting pane's status ages to unknown/stale after 2 minutes with no new hook event: still waiting.
+  win.webContents.send('pane-status-view', { paneId: 'pty1', state: 'unknown', reason: 'stale' });
+  await run(`window.__t.waitFor(() => window.__t.log().includes('pty1 -> unknown'), 3000)`);
+  out.chipsAfterStale = await run(`document.querySelectorAll('#needsYouStrip .mk-needs-chip').length`);
   Object.assign(out, await run(`(async () => {
     const t = window.__t;
     const strip = document.getElementById('needsYouStrip');

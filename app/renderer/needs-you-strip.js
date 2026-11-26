@@ -115,6 +115,10 @@
     // unknown one included, ends the wait (the badge shows why). Repeats keep the first time.
     function update(view) {
       if (!view || typeof view.paneId !== 'string' || !view.paneId) return false;
+    // A status that only aged out (no new hook event for 2 minutes; pane-status-freshness.js) is not
+    // a change: keep the last trusted state, as S05's toasts do. `attention` is never refreshed while
+    // Blue is away, so without this a waiting pane would drop out after 2 minutes.
+      if (view.state === 'unknown' && view.reason === 'stale') return false;
       const waits = view.state === NEEDS_YOU_STATE;
       const had = since.has(view.paneId);
       if (waits && !had) since.set(view.paneId, now());

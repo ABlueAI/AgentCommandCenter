@@ -78,6 +78,10 @@
 
     function noteView(view) {
       if (!view || typeof view.paneId !== 'string' || !view.paneId || typeof view.state !== 'string') return false;
+      // A status that only aged out (no new hook event for 2 minutes; pane-status-freshness.js) is not
+      // a change: keep the last trusted state, as S05's toasts do. `attention` is never refreshed while
+      // Blue is away, so without this a waiting pane would drop out after 2 minutes.
+      if (view.state === 'unknown' && view.reason === 'stale') return false;
       const p = entry(view.paneId);
       if (view.state === p.state) return false;
       if (view.state === 'failed') p.failedTries += 1;

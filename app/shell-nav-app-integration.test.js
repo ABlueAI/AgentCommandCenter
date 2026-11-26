@@ -182,6 +182,7 @@ const ny = S.needsYou || {};
 assert(ny.hiddenAtStart === true, 'hidden while nothing waits');
 assert(ny.firstLanded === true, 'the first pane-status view reached the renderer');
 assert(ny.shown === true, 'shown once a pane needs you');
+eq(ny.chipsAfterStale, 2, 'a waiting pane whose status only aged out (stale) keeps its chip');
 eq(ny.chips, ['pty1', 'pty2'], 'one chip per waiting pane, oldest first; a working pane gets none');
 eq(ny.title, 'Needs you (2)', 'the title counts them');
 eq(ny.region, 'region|Needs you', 'the strip is a labelled region');
