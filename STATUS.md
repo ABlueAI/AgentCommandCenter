@@ -3,8 +3,9 @@
 S55 is implemented on its review branch. Independent review and the Windows Firefox profile check
 (checklist step 57) are pending.
 
-Updated 2026-11-26 by the PR sweeper's second status PR of the day (covers main up to 1136f88:
-PR #303, the checklist cleanup; PR #301, D-090 in the rules; PR #300, S68's re-pins; PR #283, S66's
+Updated 2026-11-26 by the PR sweeper's second status PR of the day (covers main up to 0baa0cd:
+PR #312, the runner record for issue #304, merged 2026-11-26 18:42 UTC (verified: GitHub's REST
+API, read 2026-11-26 about 23:40 UTC); before it, up to 1136f88: PR #303, the checklist cleanup; PR #301, D-090 in the rules; PR #300, S68's re-pins; PR #283, S66's
 shared navigation; PR #208, S53's AgentPlayback record; verified: GitHub's REST API, read
 2026-11-26 about 18:45 UTC, shows them merged 2026-11-26 06:59 to 07:05 UTC in that order). Before
 that: updated 2026-11-26 by the PR sweeper's status PR #309 (covers main up to 0a5702c: PR #254, S38's full
@@ -326,12 +327,15 @@ Only the PR sweeper's status PR edits this file (AGENTS.md "The shared brain";
   (`trig_01LPKxs49xvwN7mcuGLGwyN8`, :07 Eastern, no push) is on and fired at 07:09 UTC. As read
   on 2026-10-23 at about 07:40 UTC, the evening digest (`trig_0166nBynncK2BWPaarALAq8q`) is off,
   the old daily runner is still on with the new prompt, and both new tasks have connectors the plan
-  didn't call for (the digest has the GoHighLevel CRM). Blue's clicks are in checklist step 27;
-  step 27 isn't ticked; step 28 was closed on 2026-11-16 (usage credits off, Blue's word of
-  2026-11-04). The S04 follow-up fixed the prompts' open follow-ups and
-  recorded this read-back (PR #117, merged 2026-10-24; docs/RUNNER.md "Applied so far"). The
-  runner has been off since 2026-11-04 (Blue, 2026-11-21), so steps 27 and 50 wait until he turns
-  it back on.
+  didn't call for (the digest has the GoHighLevel CRM). Step 28 was closed on 2026-11-16 (usage
+  credits off, Blue's word of 2026-11-04). The S04 follow-up fixed the prompts' open follow-ups and
+  recorded this read-back (PR #117, merged 2026-10-24; docs/RUNNER.md "Applied so far"). Read back
+  again on 2026-11-26 (PR #312, issue #304; docs/RUNNER.md "Read back 2026-11-26 (issue #304)"):
+  the all-day runner is on (:07 Eastern, Opus 5.5, no connectors, fires succeed, PRs open as
+  `ABlueAgent`), the evening digest is on (8:03 PM Eastern, push on, no connectors), and the old
+  daily runner is off; checklist step 27 is ticked against that read. The runner's stored prompt,
+  a short wrapper set on 2026-11-24 outside a PR, is now recorded there; changing it is issue
+  #313. Applying the current digest prompt is still step 50.
 - **Guardrails:**
   - The repo-side files are live on `main`, and the merge audit has passed on every merge.
   - Part A (checklist step 2) is done and verified on 2026-10-18. `main` now requires a pull request
@@ -399,8 +403,9 @@ Only the PR sweeper's status PR edits this file (AGENTS.md "The shared brain";
   `pr-reviewer` step, then PR #52's capped review loop, on Opus 5.5. PR #83's claim-check prompt
   (step 26, now dropped) was never applied to it: since 05:48 UTC on 2026-10-23 it runs PR #84's
   runner prompt ([docs/RUNNER.md](docs/RUNNER.md) "Applied so far"). S04's hourly all-day runner
-  replaces it (S04 bullet above). Turning it off is part of checklist step 27; as read on
-  2026-10-23 it was still on, and no read since is recorded.
+  replaces it (S04 bullet above). It is off since 2026-11-05 (last fire 2026-11-04), as read on
+  2026-11-26 (PR #312, docs/RUNNER.md "Read back 2026-11-26 (issue #304)"); checklist step 27 is
+  ticked.
 - **Review loop (adopted: PR #52 merged 2026-10-21, applied to the runner the same day):** every PR gets one complete first review ranked
   high, medium and low; high and medium findings are fixed in one batch, low ones go to Follow-ups;
   later runs check only the fixes; at most 5 runs, then "needs Blue" with questions for Blue; one
