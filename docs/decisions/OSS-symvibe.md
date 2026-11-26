@@ -4,7 +4,10 @@
 status per agent, from Symvibe, in the control room (docs/DESIGN-BRIEF-1.1.md 5.2). The row says
 "OSS first: an OSS record with Blue's verdict before any code". agentplay is a design reference only.
 
-Blue's verdict, word for word: _pending (asked in PR #287)._
+Blue's verdict, word for word: none given. Verdicts: 🤖 builder's default (D-090), which Blue's merge
+of PR #287 approves: launch-crew preset **BUILD FRESH** (pattern-mining Claude Squad's profiles),
+goal-stopping loops **ADOPT** (the official mechanisms, a cap always set), branch status **BUILD
+FRESH** on porcelain v2 (simple-git the fallback ADOPT). Settled under D-090 on 2026-11-26.
 
 Research was done by a cloud session on 2026-11-25. Each fact is **verified** (V, from the linked
 source, read that day) or **not verified** (NV, with how to check it). Some hosts were outside the
@@ -77,5 +80,5 @@ Kimi Code preset is the one item never to mine.
 
 ## What this PR does not do
 
-No code. The three pieces are built after Blue's verdict, each covered by tests and checked on a real
-pane (the row's "Done when").
+No code. The three pieces are built after this record merges, each covered by tests and checked on a
+real pane (the row's "Done when").

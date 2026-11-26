@@ -1373,13 +1373,13 @@ You can start on the first one now, which saves time later.
   any agent. Merging PR #255 records the list, not your verdicts.
   - *Done when:* each row you decided has your verdict in its last column, word for word, and the
     agent ticks this with the date and the rows it filled.
-- [ ] **84. Your verdicts on S47's Symvibe record (PR #287).** **About 10 minutes**, any time; S47
-  builds nothing until you answer. Read `docs/decisions/OSS-symvibe.md`: three pieces (launch-crew
-  preset, goal-stopping loops, branch status per agent), each with options and a recommended verdict.
-  Give your verdict per piece (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD FRESH, or "as
-  recommended") in PR #287 or in your own words to any agent.
-  - *Done when:* your verdict is in the record's "Blue's verdict" line, word for word, S47's row is
-    back to `READY`, and the agent ticks this with the date.
+- [ ] **84. Optional: your verdicts on S47's Symvibe record (PR #287).** **About 10 minutes**, before
+  you merge PR #287. The ask was settled under D-090 on 2026-11-26: the record carries the builder's
+  defaults (crew presets BUILD FRESH, goal-stopping loops ADOPT, branch status BUILD FRESH), and
+  merging PR #287 approves them. To choose otherwise, say so in PR #287 before merging; an agent then
+  records your words in `docs/decisions/OSS-symvibe.md`.
+  - *Done when:* PR #287 is merged (the defaults stand) or your own verdict is in the record word for
+    word; the agent ticks this with the date and which.
 
 ## Dated reminders
 
