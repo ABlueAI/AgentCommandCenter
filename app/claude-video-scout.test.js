@@ -556,6 +556,21 @@ test('Video Scout offers both providers and Claude bypasses the Gemini key and l
   // Closing the pane stops local Whisper as well as the run in main (Codex finding on 8ad4b6d).
   assert.match(js, /if \(claudeVideoScout\) \{\s*\/\/[^\n]*\n\s*if \(window\.ccSTT && window\.ccSTT\.cancelVideoTranscription\) window\.ccSTT\.cancelVideoTranscription\(id\);\s*cc\.claudeVideoScoutCancel\(id\);/);
   assert.match(js, /if \(claudeVideoScout\) \{\s*runClaudeVideoInPane\(id, opts.videoUrl, opts.analysisFocus, opts.claudeVideoSettings\);\s*return;/);
+  // S19: while Pause all is on, createAgent refuses before anything runs (no log reset, no launch).
+  let tlogResets = 0;
+  const refused = [];
+  context.cc.tlogReset = async () => { tlogResets++; };
+  context.pauseAll = { refuseStart: (what) => { refused.push(what); return true; } };
+  const launchesBefore = launches.length;
+  await vm.runInContext('createAgent()', context);
+  assert.deepEqual(refused, ['a new agent']);
+  assert.equal(tlogResets, 0);
+  assert.equal(launches.length, launchesBefore);
+  context.pauseAll = null;
+  // And the gate stays above the worktree call in the real source, so no worktree is made first.
+  const body = js.slice(start, js.indexOf('\nasync function ', start + 10));
+  assert.ok(body.indexOf("pauseAll.refuseStart('a new agent')") > -1);
+  assert.ok(body.indexOf("pauseAll.refuseStart('a new agent')") < body.indexOf('cc.newAgent('), 'the Pause all gate comes before cc.newAgent');
 });
 
 test('the modal loads, validates and remembers Claude settings, and the estimate bar sends the answer', async () => {

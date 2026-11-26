@@ -112,7 +112,8 @@
     }
 
     // A pane-status view: { paneId, state, reason }. Only `attention` waits; any other state, an
-    // unknown one included, ends the wait (the badge shows why). Repeats keep the first time.
+    // unknown one included (except a stale one, below), ends the wait (the badge shows why). Repeats
+    // keep the first time.
     function update(view) {
       if (!view || typeof view.paneId !== 'string' || !view.paneId) return false;
     // A status that only aged out (no new hook event for 2 minutes; pane-status-freshness.js) is not
