@@ -8,6 +8,7 @@ const path = require('node:path');
 const { createNeedsYouTaskbar, describe, DOT_PNG_BASE64 } = require('./needs-you-taskbar');
 
 let passed = 0;
+const failed = 0; // an assertion that fails throws and exits non-zero before the summary
 function test(label, run) { run(); passed++; console.log(`  ✓ ${label}`); }
 function rig(options = {}) {
   const calls = [], logs = [];
@@ -69,4 +70,4 @@ test('toasts are silent (sound off)', () => {
   const src = fs.readFileSync(path.join(__dirname, 'pane-status', 'pane-status-notifications.js'), 'utf8');
   assert.match(src, /new Notification\(\{ \.\.\.MESSAGES\[state\], silent: true \}\)/);
 });
-console.log(`\nneeds-you-taskbar: ${passed} passed, 0 failed`);
+console.log(`\nneeds-you-taskbar: ${passed} passed, ${failed} failed`);
