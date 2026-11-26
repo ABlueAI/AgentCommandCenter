@@ -110,14 +110,18 @@
     // is shown on the card and is part of the signature, so two requests that differ only in their
     // command differ. `complete` says the header was found, so the whole command is on the card;
     // without it (a longer command, another layout) Allow once is not offered.
-    const detail = [];
-    let complete = false;
+    // The whole window is scanned and the TOPMOST header wins, so a command or description line
+    // that happens to look like a header can only add lines to the card, never hide any.
+    const block = [];
     for (let i = qAt - 1; i >= 0 && i >= qAt - 12; i--) {
       const t = clean(recent[i]);
       if (!t) break;
-      detail.unshift(str(t, 200));
-      if (TOOL_HEADER.test(t)) { complete = true; break; }
+      block.unshift(t);
     }
+    let top = -1;
+    for (let k = 0; k < block.length; k++) if (TOOL_HEADER.test(block[k])) { top = k; break; }
+    const complete = top >= 0;
+    const detail = (complete ? block.slice(top) : block).map((t) => str(t, 200));
     const permission = /^Do you want to\b/i.test(question) && /^Yes\b/i.test(options[0].label);
     return { kind: permission ? 'permission' : 'question', question, detail, complete, options };
   }
@@ -128,10 +132,10 @@
     return JSON.stringify([prompt.kind, prompt.detail || [], prompt.complete === true, prompt.question, prompt.options.map((o) => [o.n, o.label])]);
   }
 
-  // The one option "Allow once" picks: the first "Yes" that doesn't widen the permission
-  // ("don't ask again", "always", "all"). Null if the menu has none, so the button refuses.
   // The first line of a tool request in Claude Code's permission prompt.
-  const TOOL_HEADER = /^(●\s*[A-Za-z][\w-]*\(|(Bash command|Edit file|Create file|Write file|Read file|Fetch|Web ?search|Tool use|MCP tool)\b)/i;
+  // A whole line, case-sensitive, so a command or description line that merely starts with one
+  // of these words doesn't count.
+  const TOOL_HEADER = /^(● [A-Z][\w-]*\(.*|Bash command|Edit file|Create file|Write file|Read file|Fetch|Web search|Tool use|MCP tool)$/;
 
   // An option that widens what the agent may do beyond this one request. The brain tab never
   // offers one as a button; Blue picks it in the pane if he wants it.
