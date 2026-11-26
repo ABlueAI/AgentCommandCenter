@@ -116,14 +116,16 @@
     // pane (it forgets a pane's lines each time the pane starts working again), with no stop at a
     // blank line. The TOPMOST header wins, so a command or description line that looks like a
     // header can only add lines to the card, never hide any. If older lines were dropped, a real
-    // header may be among them, so the request is marked incomplete (no Allow once).
+    // header may be among them, so the request is marked incomplete.
     const block = [];
     for (let i = 0; i < qAt; i++) { const t = clean(recent[i]); if (t) block.push(t); }
     let top = -1;
     for (let k = 0; k < block.length; k++) if (TOOL_HEADER.test(block[k])) { top = k; break; }
     const complete = top >= 0 && !truncated;
     const detail = (top >= 0 ? block.slice(top) : block.slice(-12)).map((t) => str(t, 200));
-    const permission = /^Do you want to\b/i.test(question) && /^Yes\b/i.test(options[0].label);
+    // Any menu that opens with "Yes" is treated as a permission request, whatever the line above it
+    // says (a wrapped question can hide "Do you want to"), so the brain tab never answers it "Yes".
+    const permission = /^Yes\b/i.test(options[0].label);
     return { kind: permission ? 'permission' : 'question', question, detail, complete, options };
   }
 
@@ -142,8 +144,8 @@
   // offers one as a button; Blue picks it in the pane if he wants it.
   const WIDENING = /don'?t ask|always|\ball\b|session|auto-?accept|bypass/i;
   function widens(label) { return WIDENING.test(String(label || '')); }
-  // A permission card offers "Allow once" only when it shows the whole request (from the tool's
-  // header down to the question) and the menu has a plain "Yes".
+  // Kept for the follow-up that brings Allow once back (nothing calls it in this PR): it allows
+  // only when the whole request is shown (header to question) and the menu has a plain "Yes".
   function allowOnceOption(prompt) {
     if (!prompt || prompt.kind !== 'permission') return null;
     if (!Array.isArray(prompt.detail) || prompt.detail.length === 0 || prompt.complete !== true) return null;
@@ -177,6 +179,7 @@
       const n = Number(m[1]);
       const opt = task.prompt.options.find((o) => o.n === n);
       if (!opt) return { ok: false, reason: 'bad-answer' };
+      if (task.prompt.kind === 'permission' || /^Yes\b/i.test(opt.label)) return { ok: false, reason: 'allow-in-pane' };
       if (widens(opt.label)) return { ok: false, reason: 'widening-option' };
       return { ok: true, keys: String(n) };
     }
@@ -353,7 +356,7 @@
       state: focusState(task),
       title: task.title,
       // No answer is marked recommended: the pane's own order is not Mako's advice.
-      answers: task.prompt && task.prompt.kind === 'question' ? task.prompt.options.filter((o) => !widens(o.label)).map((o) => ({ id: `opt-${o.n}`, label: o.label })) : [],
+      answers: task.prompt && task.prompt.kind === 'question' ? task.prompt.options.filter((o) => !widens(o.label) && !/^Yes\b/i.test(o.label)).map((o) => ({ id: `opt-${o.n}`, label: o.label })) : [],
       heldBy: task.holder, repo: task.repo, role: task.role, model: task.model, authority: task.authority, branch: task.branch,
       elapsed: task.since === null ? '' : `${minutes(t - task.since)} min`,
       latest: task.prompt && task.prompt.detail && task.prompt.detail.length ? task.prompt.detail.join(' · ') : task.latest,
@@ -590,7 +593,7 @@
         actions.appendChild(h(doc, 'span', 'mk-meta', 'To allow it, open the pane.', { 'data-allow': 'in-pane' }));
       } else {
         for (const o of t.prompt.options) {
-          if (widens(o.label)) { actions.appendChild(h(doc, 'span', 'mk-meta', `${o.n}. ${o.label} (in the pane only)`, { 'data-widening': `opt-${o.n}` })); continue; }
+          if (widens(o.label) || /^Yes\b/i.test(o.label)) { actions.appendChild(h(doc, 'span', 'mk-meta', `${o.n}. ${o.label} (in the pane only)`, { 'data-widening': `opt-${o.n}` })); continue; }
           btn(o.label, false, () => act('answer', t.id, sig, `opt-${o.n}`), { 'data-action': 'answer', 'data-answer': `opt-${o.n}` });
         }
       }

@@ -169,9 +169,14 @@ process.stdout.write('\ncard keys: only a digit the menu offered, or Esc\n');
   eq(B.keysForAction('answer', q, qs, 'opt-7'), { ok: false, reason: 'bad-answer' }, 'a digit the menu didn\'t offer: refused');
   eq(B.keysForAction('answer', q, qs, '2\r rm -rf'), { ok: false, reason: 'bad-answer' }, 'anything but opt-<digit>: refused');
   const wide = B.buildTask(pane('q2', 'attention', { lines: ['Would you like to proceed?', '❯ 1. Yes, and auto-accept edits', '2. No'] }), NOW);
-  eq(B.keysForAction('answer', wide, B.promptSignature(wide.prompt), 'opt-1'), { ok: false, reason: 'widening-option' }, 'a widening choice is never sent from a card');
+  eq(B.keysForAction('answer', wide, B.promptSignature(wide.prompt), 'opt-1'), { ok: false, reason: 'allow-in-pane' }, 'a widening "Yes" choice is never sent from a card');
+  const wideQ = B.buildTask(pane('q3', 'attention', { lines: ['Pick a mode', '❯ 1. Plan', '  2. Always use plan mode'] }), NOW);
+  eq(B.keysForAction('answer', wideQ, B.promptSignature(wideQ.prompt), 'opt-2'), { ok: false, reason: 'widening-option' }, 'a widening choice on a question is never sent');
   eq(B.keysForAction('deny', q, qs), { ok: false, reason: 'not-permission' }, 'Deny only on a permission');
   eq(B.keysForAction('allowOnce', q, qs), { ok: false, reason: 'allow-in-pane' }, 'Allow once is refused on a question too');
+  const wrapped = B.buildTask(pane('wr', 'attention', { lines: ['Edit file', 'Do you want to make this edit to', 'src/some/very/long/path.js?', '❯ 1. Yes', '  2. Yes, allow all edits during this session', '  3. No, and tell Claude what to do differently'] }), NOW);
+  eq(wrapped.prompt.kind, 'permission', 'a menu that opens with "Yes" is a permission even when its question line wrapped');
+  eq(B.keysForAction('answer', wrapped, B.promptSignature(wrapped.prompt), 'opt-1'), { ok: false, reason: 'allow-in-pane' }, 'and its "Yes" is never sent as an answer');
   const w = B.buildTask(pane('w1', 'working'), NOW);
   eq(B.keysForAction('interrupt', w, ''), { ok: true, keys: '\u001b' }, 'Interrupt sends Esc to a working pane');
   eq(B.keysForAction('interrupt', perm, ''), { ok: false, reason: 'not-working' }, 'Interrupt never on a waiting pane');
@@ -330,10 +335,14 @@ process.stdout.write('\nDOM: mount, nodes, cards, In focus, keys reach the pane\
     stage.update([pane('k1', 'unknown'), pane('k2', 'unknown')]);
     assert(byId(host, 'makoStatusNote') !== null, 'every pane unknown: a note says pane status isn\'t reporting');
     // A menu with a widening choice: shown as text, never a button.
-    stage.update([pane('w1', 'attention', { title: 'Plan', lines: ['Would you like to proceed?', '❯ 1. Yes, and auto-accept edits', '  2. Yes, and manually approve edits', '  3. No, keep planning'] })]);
+    stage.update([pane('w1', 'attention', { title: 'Mode', lines: ['Pick a mode', '❯ 1. Plan', '  2. Always use plan mode', '  3. Build'] })]);
     const wq = cardOf('question');
-    eq(wq.all((n) => n.attrs['data-answer']).map((b) => b.attrs['data-answer']), ['opt-2', 'opt-3'], 'the widening choice has no button');
-    assert(wq.all((n) => n.attrs['data-widening'] === 'opt-1').length === 1, 'it is shown as text, to pick in the pane');
+    eq(wq.all((n) => n.attrs['data-answer']).map((b) => b.attrs['data-answer']), ['opt-1', 'opt-3'], 'the widening choice has no button');
+    assert(wq.all((n) => n.attrs['data-widening'] === 'opt-2').length === 1, 'it is shown as text, to pick in the pane');
+    // A menu that opens with "Yes" (here the plan-mode exit) is a permission card: no Yes button.
+    stage.update([pane('w2', 'attention', { title: 'Plan', lines: ['Would you like to proceed?', '❯ 1. Yes, and auto-accept edits', '  2. Yes, and manually approve edits', '  3. No, keep planning'] })]);
+    const pc = cardOf('permission');
+    eq(pc && pc.all((n) => n.attrs['data-answer']).length, 0, 'a "Yes" menu gets no answer buttons, only Deny and Open pane');
 
     // A request too long to show whole: the card says so and has no Allow once.
     stage.update([pane('l1', 'attention', { title: 'Long', linesTruncated: true, lines: ['  step 9', '  step 10', 'Do you want to proceed?', '❯ 1. Yes', '  2. No'] })]);
