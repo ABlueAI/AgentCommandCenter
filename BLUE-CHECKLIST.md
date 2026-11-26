@@ -1257,6 +1257,32 @@ Step 72 comes from PR #227 (docs/DECISIONS.md, 2026-11-23). Step numbers 69 to 7
   - *Done when:* your answer is in docs/DECISIONS.md, and an agent has checked on GitHub that one
     of those PRs has Codex's pass (or that your answer says otherwise) and ticks this with the date.
 
+## Video Scout (S54)
+
+- [ ] **73. Run real videos through Video Scout with Claude Code (PR #230).** About **20 minutes**
+  with Whisper cached (most of it is the 10-minute video's download and transcription). On first
+  use, allow extra time for the 1.1–1.6 GB Whisper model download. After installing the S54 build,
+  fully restart Mako.
+  - In PowerShell, check that `claude auth status` shows your Claude.ai subscription and that
+    `yt-dlp --version`, `ffmpeg -version` and `ffprobe -version` work. Check that Usage credits
+    are off in Claude's usage settings (see step 28). Use the Claude subscription sign-in and leave
+    API keys out of the run.
+  - In Mako, open **Agents → + New → Video**, choose **Claude Code (subscription)**, and paste one real
+    public YouTube or Vimeo clip, ideally 15–30 seconds, with an identifiable visual change and spoken
+    narration. Click **Create & Launch**. When the pane shows the estimate (frames kept and
+    approximate tokens), click **Send to Claude** and wait for the report.
+  - Then run one real **10-minute** video twice, with the same URL: once with **Detail mode** off and
+    once with it on (the checkbox under the provider). Each time, note the estimate's frames kept,
+    Claude requests and approximate tokens, and which mode it shows, then click **Send to Claude**.
+    A screen recording or tutorial with small on-screen text shows detail mode best.
+  - Start one more run and close its pane while it is downloading. Check that no
+    `mako-claude-video-` folder is left in `%TEMP%` (in PowerShell: `Get-ChildItem $env:TEMP -Filter mako-claude-video-*`).
+  - *Done when:* the short clip's report has a timecoded visual observation and a concrete detail
+    from the narration, and for the 10-minute video you tell an agent, for each mode, the frames kept,
+    the requests, the approximate tokens and whether the report matched the video, and how long each
+    run took, so it can tick the step with the date and those numbers. Keep the transcripts and
+    account details out of GitHub.
+
 ## From S58 (fenced web-reading agents)
 
 Step 75 comes from PR #245. Step numbers 73 and 74 belong to open PRs (#230 and #231).

@@ -3,7 +3,8 @@
 S55 is implemented on its review branch. Independent review and the Windows Firefox profile check
 (checklist step 57) are pending.
 
-Updated 2026-11-24 by PR #257 (status: plan rows and this file after the merges of 2026-11-23 and
+Updated 2026-11-24 by PR #230 (S54: Claude Code option in Video Scout, rebuilt to Blue's approved design, pending review and PC check).
+Before that, updated 2026-11-24 by PR #257 (status: plan rows and this file after the merges of 2026-11-23 and
 2026-11-24; "2026-11-24 (status PR #257)" under Next). Before that: updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
 verdict; review fixes pushed by a Claude cloud session on Blue's ask). Before that: updated 2026-11-24 by PR #209 (S48's OSS record, docs/decisions/OSS-memory.md, with Blue's
 verdict: PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain; step 68
@@ -43,6 +44,12 @@ Every PR that changes the state updates this file.
   `READY`; Blue sets it up, checklist step 80); Mako main, the laptop chat, becomes the watcher. A
   proposal of Claude's, for Blue to check: one small last fix of one medium finding and one extra
   review run past the run cap, instead of stopping as "needs Blue".
+
+- **Video Scout (S54, draft PR #230):** Claude Code analyzes a YouTube or Vimeo video from frames
+  sampled at scene changes (at least one every 10 seconds, near-duplicates dropped, 640 px or 1280 px
+  in detail mode, at most 120 frames with batching) and an on-device Whisper transcript, using
+  Claude.ai subscription sign-in, after an estimate the user can cancel (Blue's design, D-065).
+  The independent review, Codex's pass and the real-video PC check (step 73) are pending.
 
 - **Release: Mako 1.0.0 is released.**
   - Tag `v1.0.0` was created on 2026-10-18 at `main` commit `37009eb`, which includes the
