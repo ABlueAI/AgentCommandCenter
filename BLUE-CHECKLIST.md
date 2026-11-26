@@ -1518,7 +1518,8 @@ Step 81 comes from PR #283.
      there.
   2. Click into pane A and press **F8**: pane B gets the focus, and no character is typed into
      either pane. Click the chip: the same.
-  3. Click pane A while it works: the right panel shows its **In focus** card. Click
+  3. Maximize Mako (the right panel shows only on a window at least 1280 px wide). Click pane A
+     while it works: the right panel shows its **In focus** card. Click
      **Interrupt (Esc)**: pane A stops its turn, as Esc does, and is not closed.
   4. Give pane A another long task and click **Pause all** in the top bar: pane A stops its turn,
      pane B (waiting on you) is untouched, and **+ Shell** now refuses with a note. Click

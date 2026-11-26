@@ -14,7 +14,7 @@ each piece does, and the signals it reads:
 | Pause all | One Esc to each working pane, once; nothing killed; waiting, idle and status-less panes untouched; new panes refused until Resume all, which sends nothing | pane status, S66's paused state | `app/renderer/pause-all.js` |
 | Stall watch | "stalled" in the pane header after 20 minutes of silence while working, or 5 failed turns in a row; "waiting for reset at hh:mm" when a usage window is full | PTY output, pane status, S11's usage figures | `app/renderer/stall-watch.js` |
 | Pane header tags | The branch, and for Claude panes the authority it started at (read-only for fenced roles) | the worktree list, the launch | `app/renderer/pane-header.js` |
-| Right panel | S66's In-focus card for the selected pane; Open pane, Terminal and Interrupt (one Esc) are wired, the rest stay disabled with their reason | pane status | `app/renderer/control-focus.js` |
+| Right panel | In the three-tab layout, on a window at least 1280 px wide (hidden below, so the panes keep the room): S66's In-focus card for the selected pane; Open pane, Terminal and Interrupt (one Esc) are wired, the rest stay disabled with their reason | pane status | `app/renderer/control-focus.js` |
 | Cheat sheet | The "?" button and a palette command list S66's one shortcut list; spoken phrases come with the Composer; sensitive phrases never appear | `SHORTCUTS` in `shell-nav.js` | `app/renderer/cheat-sheet.js` |
 
 Builder's reading of the signals (no Blue decision behind them):
