@@ -7,7 +7,8 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
 Last updated 2026-11-24 by Claude (S14, PR #253: step 18 ticked with your go on the UI, step 77
-added to read the brief's questions); earlier, on 2026-11-23 (S37, PR #218: step 69 added, a 3-minute live check of the
+added to read the brief's questions); earlier, on 2026-11-23, by Claude (S53's AgentPlayback verdict recorded and step 67 ticked, PR
+#208); earlier, on 2026-11-23 (S37, PR #218: step 69 added, a 3-minute live check of the
 account guard on the PowerShell tool); earlier, on 2026-11-21 (your decisions of 2026-11-16 to 2026-11-21, PR #212: steps 27
 and 50 leave the top of "Do next", steps 57, 60 and 63 follow your answers, step 68 added, dated
 reminders added; earlier, on 2026-11-18, your answers to PR #195's questions, PR #204: step 65 added,
@@ -880,17 +881,33 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     It prints `created` for `Mako index.md`, `AGENTS.md` and `CLAUDE.md`.
   - In Obsidian: **Open folder as vault** > pick that folder. Open `Mako index.md` and click the
     STATUS link once.
-  - **Wait for S68 before this bullet** (PR #294, 2026-11-25): the plugin moved to
-    `obsidianmd/obsidian-skills` and is to be installed at 1.2.3 only after S68's pin-and-scan
-    audit; S68 updates the command below.
+  - **First, your word on S68's scan** (PR #300, 2026-11-26; 1 minute): S68 pinned the plugin at
+    1.2.3 from its new home, `obsidianmd/obsidian-skills` (commit `a53f591`, MIT). The scanner's
+    run was partial: 2 of its 19 files were only partly inspected by one check, and a partial scan
+    never counts as a pass (docs/decisions/OSS-obsidian-skills.md, "Pin-and-scan of 1.2.3"). The
+    agent read both spans by hand and found only reference text. Reply on PR #300 (or to any
+    agent) "install Obsidian Skills 1.2.3" to go ahead, or "wait" to hold it. Recommended: install.
+    If you say wait, skip the next bullet; the vault works without the plugin.
   - In PowerShell: `cd D:\Workspace\Mako-Vault`, start `claude`, run
-    `/plugin marketplace add kepano/obsidian-skills`, then `/plugin`, install the Obsidian skills
-    plugin it lists, and choose the project scope if it asks. (These names come from search
-    extracts, not the plugin's own page; if they differ, tell the agent what you saw.)
+    `/plugin marketplace add https://github.com/obsidianmd/obsidian-skills.git#1.2.3`, then
+    `/plugin install obsidian@obsidian-skills`, and choose the project scope if it asks. The
+    `#1.2.3` suffix pins the marketplace to the scanned tag (that Claude Code accepts it is not
+    verified). **If Claude Code refuses it, stop there and tell the agent; install nothing.**
+    Never add the marketplace without the suffix: that installs whatever is newest, which nobody
+    scanned. The plugin names come from the plugin's own README at 1.2.3.
+  - Still in that session, before using the plugin, ask: "Find the installed Obsidian plugin's
+    files and check each one's sha256 against the table 'Shipped files at 1.2.3' in
+    docs/decisions/OSS-obsidian-skills.md on GitHub (ABlueAI/AgentCommandCenter). If any file is
+    missing, extra or different, uninstall the plugin and tell me." The version shown in
+    `/plugin` (1.2.3) is only a first look: a later, unscanned commit can keep that number, and a
+    tag can be moved, so the file check is what proves it is the scanned copy.
+  - If a skill offers to install a missing tool (`npm install -g defuddle`, `knap` or
+    `obsidian-headless`), say no for now: those aren't pinned or scanned yet.
   - Still in that session, ask: "Read Mako index.md and add a note called Test with a link to it
     under Notes." Check the note and the link appear in Obsidian.
-  - *Done when:* you tell an agent the vault opened, the plugin installed and the test note and
-    link appeared (or what failed); it ticks this with the date and S13 is marked done.
+  - *Done when:* you tell an agent the vault opened, the plugin installed and its files matched
+    the table, and the test note and link appeared (or what failed); it ticks this with the date
+    and S13 is marked done.
 
 - [x] **32. A private repo for S22's marina brief.** *Verified 2026-10-23 by the all-day runner:
   Blue replied on PR #116 that the brief goes in `mako-business`; GitHub reports
@@ -1334,6 +1351,19 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
     ([session](https://claude.ai/code/session_01UWhuMF5YrgU1ojPL6DN1Q1)). Recorded in the [S52 vetting and trial record](docs/decisions/OSS-hyperframes.md#blues-verdict)
     and [the decisions log](docs/DECISIONS.md#2026-11-18-s52-hyperframes-verdict-pr-206).
 
+- [x] **67. AgentPlayback verdict recorded (S53).** Verdict: PATTERN-MINE. Blue (2026-11-18, in his
+  main chat), adopting Mako main's recommendation: 'I think your recommendation verdicts are very
+  good. So, yes to both of those recommendations.' Reconfirmed by Blue on 2026-11-23: 'pattern
+  mine'. Take the idea of a local, read-only replay of what each agent did; use none of its code.
+  S53 closes with no build. Any replay work goes to S19 or S62, under their existing waits.
+  - *Verification:* checked 2026-11-23 (UTC) by a Claude cloud session against Blue's words as
+    quoted in the Mako main session's hand-off to it ([session](https://claude.ai/code/session_01UWhuMF5YrgU1ojPL6DN1Q1)). Recorded in
+    [the OSS record](docs/decisions/OSS-agentplayback.md#blues-verdict-word-for-word) and
+    [the decisions log](docs/DECISIONS.md#2026-11-23-agentplayback-verdict-s53).
+  - The builder originally read the China-origin rule as covering the tracked Kimi config, which the
+    npm package omits. The builder sees replay fitting S19 (pane activity) or S62 (merged-work
+    history).
+
 ## From your decisions of 2026-11-16 to 2026-11-21
 
 Step 68 comes from those decisions (docs/DECISIONS.md, 2026-11-21). Step numbers 66 and 67 belong to
@@ -1456,6 +1486,28 @@ Step 77 comes from PR #253.
   drops that commit.
   - *Done when:* PR #253 is merged, or you have answered the questions you want changed; the agent
     ticks this with the date.
+
+## From S66 (the shared navigation)
+
+Step 81 comes from PR #283.
+
+- [ ] **81. PC check of the three-tab shell (S66).** **About 10 minutes**, at the first Tuesday or
+  Friday PC-check evening after PR #283 merges. Pull `main` and fully restart Mako, then:
+  1. Mako opens on the **Control room** tab with your panes as before, under a thin blue scope stripe
+     naming the repo, with Brain and Aquarium tabs beside it and a rail of round repo emblems on the
+     left. Click each tab: the colours change (dark blue, black, green-ish); Brain and Aquarium say
+     which session builds them.
+  2. Press **Ctrl K**: the palette opens. Type "logs" and press Enter: you land on the Logs view.
+     Press Ctrl K, then Esc: it closes.
+  3. Click an emblem: the repo switches (the stripe and the repo picker follow).
+  4. Click **Settings**, tick **Use the old layout**: today's single screen comes back. Restart Mako:
+     it is still the old layout. Untick it to go back.
+  5. Hold **Ctrl Space** in a pane and speak, then let go: the words are typed into that pane. Then
+     click into a pane and press **Ctrl K**: the palette opens and nothing is typed into the pane.
+  6. Look: does anything read wrong or feel cramped? Note the usage chip (top right) and the two
+     greyed-out switches, **Quiet hours** and **Pause all**, which S18 and S19 turn on.
+  - *Done when:* you tell any agent "S66 PC check: OK" or what looked wrong; the agent ticks this
+    with the date and your words, and anything wrong becomes a fix PR.
 
 ## Every day, once the runner is on
 
