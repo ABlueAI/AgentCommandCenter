@@ -3,8 +3,8 @@
 S55 is implemented on its review branch. Independent review and the Windows Firefox profile check
 (checklist step 57) are pending.
 
-Updated 2026-11-23 by PR #208 (S53 AgentPlayback vetting and Blue's PATTERN-MINE verdict; review
-fixes pushed by a Claude cloud session on Blue's ask). Before that: updated 2026-11-24 by PR #230 (S54: Claude Code option in Video Scout, rebuilt to Blue's approved design, pending review and PC check). Before that, updated 2026-11-24 by PR #257 (status: plan rows and this file after the merges of 2026-11-23 and
+Updated 2026-11-24 by PR #230 (S54: Claude Code option in Video Scout, rebuilt to Blue's approved design, pending review and PC check).
+Before that, updated 2026-11-24 by PR #257 (status: plan rows and this file after the merges of 2026-11-23 and
 2026-11-24; "2026-11-24 (status PR #257)" under Next). Before that: updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
 verdict; review fixes pushed by a Claude cloud session on Blue's ask). Before that: updated 2026-11-24 by PR #209 (S48's OSS record, docs/decisions/OSS-memory.md, with Blue's
 verdict: PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain; step 68
@@ -45,13 +45,6 @@ Every PR that changes the state updates this file.
   proposal of Claude's, for Blue to check: one small last fix of one medium finding and one extra
   review run past the run cap, instead of stopping as "needs Blue".
 
-- **AgentPlayback (S53, PR #208):** [the OSS record](docs/decisions/OSS-agentplayback.md) pins v1.2.1.
-  Blue's verdict is PATTERN-MINE (checklist step 67). Use the idea of a local, read-only replay
-  without importing upstream code. S53 closes with no build. In the builder's reading, replay fits
-  S19 or S62, where any replay work follows their existing waits.
-  The builder originally read the China-origin rule as covering the tracked Kimi config, which the
-  npm package omits. Blue later clarified that the rule excludes names that appear only in upstream
-  files Mako doesn't ship.
 - **Video Scout (S54, draft PR #230):** Claude Code analyzes a YouTube or Vimeo video from frames
   sampled at scene changes (at least one every 10 seconds, near-duplicates dropped, 640 px or 1280 px
   in detail mode, at most 120 frames with batching) and an on-device Whisper transcript, using
