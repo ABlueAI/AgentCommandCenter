@@ -749,13 +749,22 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     It prints `created` for `Mako index.md`, `AGENTS.md` and `CLAUDE.md`.
   - In Obsidian: **Open folder as vault** > pick that folder. Open `Mako index.md` and click the
     STATUS link once.
-  - **Wait for S68 before this bullet** (PR #294, 2026-11-25): the plugin moved to
-    `obsidianmd/obsidian-skills` and is to be installed at 1.2.3 only after S68's pin-and-scan
-    audit; S68 updates the command below.
+  - **First, your word on S68's scan** (PR #300, 2026-11-26; 1 minute): S68 pinned the plugin at
+    1.2.3 from its new home, `obsidianmd/obsidian-skills` (commit `a53f591`, MIT). The scanner's
+    run was partial: 2 of its 19 files were only partly inspected by one check, and a partial scan
+    never counts as a pass (docs/decisions/OSS-obsidian-skills.md, "Pin-and-scan of 1.2.3"). The
+    agent read both spans by hand and found only reference text. Reply on PR #300 (or to any
+    agent) "install Obsidian Skills 1.2.3" to go ahead, or "wait" to hold it. Recommended: install.
+    If you say wait, skip the next bullet; the vault works without the plugin.
   - In PowerShell: `cd D:\Workspace\Mako-Vault`, start `claude`, run
-    `/plugin marketplace add kepano/obsidian-skills`, then `/plugin`, install the Obsidian skills
-    plugin it lists, and choose the project scope if it asks. (These names come from search
-    extracts, not the plugin's own page; if they differ, tell the agent what you saw.)
+    `/plugin marketplace add https://github.com/obsidianmd/obsidian-skills.git#1.2.3`, then
+    `/plugin install obsidian@obsidian-skills`, and choose the project scope if it asks. (The
+    `#1.2.3` suffix, which pins the marketplace to that tag, is not verified; if Claude Code
+    refuses it, run `/plugin marketplace add obsidianmd/obsidian-skills` instead.) Then open
+    `/plugin` and check the Obsidian plugin shows version **1.2.3**; if it shows another, tell the
+    agent and don't use it. The plugin names come from the plugin's own README at 1.2.3.
+  - If a skill offers to install a missing tool (`npm install -g defuddle`, `knap` or
+    `obsidian-headless`), say no for now: those aren't pinned or scanned yet.
   - Still in that session, ask: "Read Mako index.md and add a note called Test with a link to it
     under Notes." Check the note and the link appear in Obsidian.
   - *Done when:* you tell an agent the vault opened, the plugin installed and the test note and
