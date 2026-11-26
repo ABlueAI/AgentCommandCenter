@@ -3,6 +3,29 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-25: open-source agents verdicts, and step 82 (ECC skills)
+
+Blue gave these in a desktop research session on 2026-11-25 that surveyed recent open-source
+agents and S45's ECC skill list (PR #255, merged 2026-11-25). Desktop sessions run as `ABlueAI`
+and do no PR work, so a cloud session running as `ABlueAgent` records them; his words are quoted as
+that session's hand-off relayed them (not verified: the recording session can't see the desktop
+chat). How the plan follows them (new rows S68 to S72, docs/PLAN-1.1.md "S68 to S72 details") is
+proposed, pending Blue (PR #294); merging approves it. "Builder's reading" marks a line that is
+the builder's, not Blue's. Facts about the tools (versions, sources, licences) are from the
+hand-off and not verified here; each row checks them at its pin.
+
+| Decision | Blue's words |
+|---|---|
+| **Obsidian Skills moves to 1.2.3.** Its source moved from `kepano/obsidian-skills` to `obsidianmd/obsidian-skills`. S68 re-pins it after a pin-and-scan audit. Amends the 2026-10-16 entry "Adopt Obsidian Skills (kepano/obsidian-skills) in 1.1." for the version and source only; the ADOPT stands. Record: docs/decisions/OSS-obsidian-skills.md. | "Update Obsidian Skills to 1.2.3" |
+| **SkillSpector, the pin-and-scan scanner, moves from 2.12.0 to 2.13.7.** It still runs with `--no-llm` only, because its default model is GLM, a China-origin model, as it was in 2.12.0 (AGENTS.md "Engineering rules"). S68 re-pins it after a pin-and-scan audit. Amends the 2026-11-17 S39 entry's 2.12.0 pin; its static-only rule stands. | "Yes: move SkillSpector, our scanner, from 2.12.0 to 2.13.7." |
+| **PATTERN-MINE five of Trail of Bits' security skills into `security-reviewer`** (S69). Pattern-mine only: their licence is CC-BY-SA-4.0 (share-alike), so no text is copied; the checks are written fresh. Record: docs/decisions/OSS-trail-of-bits-skills.md. | "Yes: borrow ideas from Trail of Bits' security skills. Five of them (insecure-defaults, supply-chain-risk-auditor, agentic-actions-auditor, fp-check, sharp-edges) would strengthen security-reviewer" |
+| **One trial run of Anthropic's claude-security plugin on all of Mako, in a cloud session** (S70; proprietary, v0.13.1 pinned 2026-11-25), set up by the 11-step checklist in docs/PLAN-1.1.md "S68 to S72 details". About an afternoon. Model: Opus 5.5 at medium effort (builder's reading of "the best model for the task between opus and sonnet", as the hand-off's setup list gave it). Its report and findings stay out of this public repo (hard rule 6). Blue starts it (BLUE-CHECKLIST.md step 85). Record: docs/decisions/OSS-claude-security.md. | "Yes, as one trial: run Anthropic's claude-security plugin once on all of Mako, in a cloud session." · "an afternoon is fin ... use the best model for the task between opus and sonnet ... its necessary, nothing more to say" · "ensure the process we choose to do this security scan is properly setup when the time comes" |
+| **One trial of Google's elephant-goldfish-model on one plan document, the Composer spec** (S71; Apache-2.0, v0.1.1). Blue chose the Composer spec. Record: docs/decisions/OSS-elephant-goldfish.md. | "Yes, as one trial: Google's elephant-goldfish-model on one plan document" (his words choosing the Composer spec were not relayed) |
+| **Step 82, the ECC skills (S45).** Yes: `click-path-audit` (PROTOTYPE), `e2e-testing` (PROTOTYPE), `team-agent-orchestration`, `loop-design-check` and `operator-approval-loop` (all three PATTERN-MINE). No (SKIP): `mcp-dependency-review` (SkillSpector 2.13 covers it), `skill-comply` ("1.2", as the hand-off put it), `agent-security-hardening` (Trail of Bits' skills cover it) and `security-scan`. The other 305 skills take their proposed verdicts. The yes and no list for the nine top picks is the desktop session's recommendation, as the hand-off relayed it, which Blue accepted with the words quoted; four of its answers differ from S45's proposals. Recorded in the last column of docs/decisions/OSS-ecc.md; BLUE-CHECKLIST.md step 82 ticked. Builder's reading: `e2e-testing` is taken up by S72; `click-path-audit`, the three PATTERN-MINE picks and `skill-comply` wait for a 1.2 plan row (docs/PLAN-1.1.md "Month two and later"). | "Step 82: ECC skills - proceed with all of your recommendations. i agree, thanks" · "yes" (to the proposed verdicts for the other 305 skills) |
+| **A PowerShell and Electron reviewer agent joins the 1.2 queue** (docs/PLAN-1.1.md "Month two and later"). It was proposed in the desktop session's 2026-11-25 survey (builder's reading of the hand-off, which named it only as "the PowerShell and Electron reviewer"); it was not on the 1.2 list before. | "leave in 1.2" |
+| **The e2e smoke test runs on GitHub's Windows runners** (S72): Playwright's `_electron.launch` starts Mako and checks that its first window loads. Playwright marks its Electron support experimental. | (relayed by the hand-off with no words of his) |
+| **🤖 Claude decided: S68 to S72 are 1.1 rows.** Blue said yes to each before the 2026-12-01 scope freeze, and each passes the 1.1 test (builder's reading): S68 to S70 close security gaps (the scanner's pin, a skill update vetted before install, a stronger reviewer, a whole-project scan); S71 checks the Composer spec the UI overhaul builds on (it waits for that spec to be in the repo); S72 catches a Mako that no longer starts before Blue does. If he wants any of them in 1.2, he says so. | — |
+
 ## 2026-11-25: Codex's lane, reworded
 
 Blue said this in the session that built PR #291, after it merged, reading its review's security
