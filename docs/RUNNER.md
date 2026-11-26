@@ -435,8 +435,10 @@ Where this stored text differs from rules on `main` (recorded, not approved, by 
 issue #313 tracks aligning them):
 
 - **Override 3** sets `parallel_cap` to 4 "whatever Runner settings says", while "Runner settings"
-  above says 1 and changing it is a one-line PR Blue merges. The words it cites (D-077, Blue,
-  2026-11-24) aren't in docs/DECISIONS.md.
+  above says 1 and changing it is a one-line PR Blue merges. The words it cites ("we need to
+  prioritize maxing out here", Blue, 2026-11-24) are in docs/DECISIONS.md's 2026-11-24 entry
+  "Blue's go on the UI", which records a go on the UI rows, not a `parallel_cap` change; no entry
+  is numbered D-077, and no recorded decision raises the cap.
 - **Override 6** states Codex's pass more loosely than AGENTS.md "Hard rules" item 9: it doesn't
   say the +1 must come after the latest head was pushed, or that a comment must be by
   `chatgpt-codex-connector[bot]` and edited by no one else. The wrapper's first paragraph puts
