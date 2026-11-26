@@ -92,7 +92,7 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
    - If the builder can't run `pr-reviewer` itself (Codex), a Claude cloud session runs it (and the
      pre-ready reviewers below) on the builder's PR the same way and posts it under the agent account
      (`ABlueAgent`), and says so in the comment: the cloud session that handed it the task, or, if
-     that session has ended, the next runner fire or a cloud session Blue starts. Blue's desktop
+     that session has ended, the PR sweeper (docs/SWEEPER.md) or a cloud session Blue starts. Blue's desktop
      login (`ABlueAI`) is read-only here: it never runs or posts a Codex PR's review (Blue,
      2026-11-21, docs/DECISIONS.md item 12). The PR isn't marked ready until that review is posted
      (by `ABlueAgent`, unedited by anyone else; a comment by anyone else doesn't count; because Codex

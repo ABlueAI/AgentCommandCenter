@@ -43,11 +43,24 @@ for (const line of settingsText.split('\n')) {
 const cap = Number(settings.parallel_cap);
 assert(Number.isInteger(cap) && cap >= 1, `parallel_cap is a whole number >= 1 (got ${settings.parallel_cap})`);
 const step8Ticked = /^- \[x\] \*\*8\. /m.test(checklist);
-assert(step8Ticked || cap === 1, 'parallel_cap stays 1 until checklist step 8 (Max 5x) is ticked');
+// Blue's capacity plan of 2026-11-23 (docs/DECISIONS.md): 2 Claude lanes now, 3 from about 2026-11-29.
+// Without that entry the cap stays 1 until step 8 (Max 5x) is ticked; 3 needs step 8 ticked.
+const decisionsLog = read('docs', 'DECISIONS.md');
+const laneEntry = (decisionsLog.split('## 2026-11-23: the all-day runner back on')[1] || '').split('\n## ')[0];
+const laneRow = laneEntry.split('\n').find((l) => l.includes('Capacity: 2 Claude lanes now, 3 from about 2026-11-29')) || '';
+// The row must carry Blue's words, not "—": the cap can't be raised on a builder's assumption alone.
+const twoLanes = /\| "[^"]+"[^|]*\|\s*$/.test(laneRow);
+// Blue's reply of 2026-11-25 on the runner refresh PR (docs/DECISIONS.md, 2026-11-23, item 6): parallel_cap 4.
+const fourRow = laneEntry.split('\n').find((l) => l.includes('**6. `parallel_cap` is 4**')) || '';
+const fourLanes = fourRow.includes('"In the same push, set parallel_cap to 4 in docs/RUNNER.md (Blue, 2026-11-25');
+const maxCap = fourLanes ? 4 : (step8Ticked ? 3 : (twoLanes ? 2 : 1));
+assert(cap <= maxCap, `parallel_cap is at most ${maxCap} (1 on Pro, 2 on Blue's 2026-11-23 word, 3 once step 8 is ticked, 4 on Blue's 2026-11-25 word; got ${cap})`);
+assert(cap === 4, `parallel_cap is 4, Blue's 2026-11-25 word (got ${cap})`);
 const expiry = Number(settings.lock_expiry_hours);
 assert(expiry > 0 && expiry <= 6, `lock_expiry_hours is between 0 and 6 (got ${settings.lock_expiry_hours})`);
-const hour = Number(settings.status_pr_hour);
-assert(Number.isInteger(hour) && hour >= 0 && hour <= 23, 'status_pr_hour is an hour of the day');
+assert(!('status_pr_hour' in settings), 'status_pr_hour is gone: the sweeper owns the status PR (docs/SWEEPER.md)');
+assert(settings.pushes_per_hour === '24' && settings.writes_per_hour === '120',
+  'pacing limits are Blue\'s 2026-11-23 numbers: 24 pushes and 120 writes an hour');
 assert(JSON.stringify((settings.agent_logins || '').split(',').map((l) => l.trim()))
   === JSON.stringify(AGENT_LOGINS), 'agent_logins in the settings block is the shared list (.github/scripts/agent-logins.js)');
 
@@ -71,10 +84,12 @@ const mustHave = [
   ['parallel_cap', 'reads the parallel cap from the settings'],
   ['runner-lock: ', 'uses the hidden runner-lock marker as the lock'],
   ['the marker is the only lock; there is no lock label', 'has no lock label'],
-  ['labelled runner when you create it (gh pr create --draft --label runner where gh can create PRs', 'sets the runner label when it creates a PR'],
+  ['labelled runner when you create it (with the REST call above, then the one labels call right after it', 'sets the runner label when it creates a PR'],
   ['agent_logins in "Runner settings" of docs/RUNNER.md', 'defines an agent login from the shared list'],
   ['ABlueAI is Blue, never an agent', 'never treats Blue as an agent'],
+  ['Run gh api user --jq .login', 'checks its login with a gh REST call'],
   ['which includes any login ending in [bot], or is refused with "Resource not accessible by integration"', 'gate accepts a [bot] login and an App installation token'],
+  ['If it returns ABlueAI, returns nothing, or fails any other way, step 7 is not done', 'gate fails closed'],
   ['authored by an agent login that carry the runner label', 'fixes only runner-labelled PRs by an agent login'],
   ['runner-lock: expires=', 'lock carries an expiry'],
   ['usage-paused', 'marks a clean stop at a usage limit'],
@@ -86,50 +101,67 @@ const mustHave = [
   ['AGENTS.md "The review loop"', 'follows the capped review loop'],
   ['At most 5 runs on a PR', 'caps review runs at 5'],
   ['"Independent review (Opus)"', 'posts the Opus review'],
+  ['on review run 1 only, also run the pre-ready reviewers AGENTS.md step 3 names', 'runs the pre-ready reviewers on review run 1'],
   ['at-codex', 'replaces Codex\'s handle'],
   ['READY TO MERGE', 'heads its summary READY TO MERGE or NOT READY'],
   ['Never merge', 'never merges'],
   ['or any scheduled task, including this one', 'never edits any scheduled task'],
   ['never stack PRs', 'never stacks PRs'],
-  ['Before taking any lock, count live locks again', 're-checks the cap before every new lock'],
+  ['Before taking any lock, count the busy lanes again', 're-checks the cap before every new lock'],
+  ['plus the open draft PRs by an agent login from a claude/ branch whose title starts with a session ID and a colon', 'counts sessions started by hand toward the cap'],
   ['remove only your own marker', 'backs off a lock race without dropping the other fire\'s lock'],
-  ['lock a PR again (step 5, which re-checks the cap) before any later push to it', 're-locks a PR before a later push'],
+  ['lock a PR again (step 5, which re-checks the busy lanes) before any later push to it', 're-locks a PR before a later push'],
   ['"Reviewed head: <full commit SHA>"', 'names the reviewed head in each posted review'],
-  ['that is not a draft and whose latest head isn\'t covered', 'reviews only non-draft Codex PRs'],
-  ['If 5 such reviews are already posted', 'caps Codex PR reviews at 5'],
-  ['labelled runner-status', 'keeps the daily status PR on its own label'],
-  ['step 5a never picks it', 'never treats the status PR as an ordinary unit'],
   ['a comment without that line covers the head when it was posted after the first check run on the latest head commit started', 'accepts reviews posted without a Reviewed head line'],
-  ['Skip a Codex PR while a "@ABlueAI needs Blue:" comment from an agent login has no later reply', 'asks Blue only once about a Codex PR'],
-  ['on a Codex PR you never change its row or push', 'never pushes to a Codex PR'],
   ['first remove the usage-paused label and the runner-paused marker', 'clears the paused state when it resumes a PR'],
   ['asking for something that no one else has edited', 'acts only on an unedited ABlueAI comment'],
-  ['never post another needs-Blue comment on that PR', 'asks Blue only once and resumes after his reply'],
-  ['rank all live locks by expiry, earliest first, and on the same minute by PR number, lowest first: if yours ranks past parallel_cap', 're-counts the global cap after placing a lock and backs off only past the cap'],
+  ['rank all live locks by expiry, earliest first, and on the same minute by PR number, lowest first: if yours ranks past parallel_cap minus the busy lanes that hold no live lock', 're-counts the global cap after placing a lock, hand-started lanes included, and backs off only past the cap'],
+  ['the write limit is writes_per_hour minus 20 (100 counted writes when this was written)', 'stops at 100 counted writes, leaving room for what the events list misses'],
   ['and the branch has had no force-push since', 'does not count a review across a force-push'],
   ['if you can\'t check for force-pushes, the comment doesn\'t cover the head', 'treats an unreadable force-push history as not covered'],
-  ['an "Independent review (Opus)" comment covers its latest head (as in 5b)', 'marks a PR ready only when a review covers its latest head'],
-  ['from then on, work it only as his reply asks, and otherwise skip it', 'settles what happens on a Codex PR after Blue replies'],
-  ['and it isn\'t marked ready yet (update its TLDR and mark it ready)', 'picks up a finished PR whose checks passed later'],
+  ['an "Independent review (Opus)" comment posted by an agent login or ABlueAI and edited by no one else covers its latest head', 'marks a PR ready only when an unedited agent or Blue review covers its latest head'],
+  ['and it isn\'t marked ready yet (update its TLDR and mark it ready as in step 6)', 'picks up a finished PR whose checks passed later'],
   ['it has no needs-blue label and no "@ABlueAI needs Blue:" comment from an agent login without a later reply', 'never marks a PR ready while Blue is asked'],
-  ['it carries the needs-blue label and the latest "@ABlueAI needs Blue:" comment from an agent login has a later reply', 'resumes its own PR once per answered question'],
+  ['the needs-blue label, where the latest "@ABlueAI needs Blue:" comment from an agent login has a later reply', 'resumes its own PR once per answered question'],
   ['remove the needs-blue label, set its row back from NEEDS BLUE to IN PROGRESS (#PR), and do what his reply asks', 'resumes its own PR after Blue answers'],
-  ['Merge-order check (AGENTS.md "Merge order"), before marking any PR ready, the status PR too', 'test-merges every PR against the other ready PRs before marking it ready'],
+  ['Merge-order check (AGENTS.md "Merge order"), before marking any PR ready:', 'test-merges every PR against the other ready PRs before marking it ready'],
   ['if you can\'t run it, any file both PRs change counts as a conflict', 'treats a test-merge it can\'t run as a conflict on any shared file'],
   ['add the waits-for-merge label (create it if missing), make its TLDR\'s "Ready to merge" line "no (waits for #X; conflicts in <files>)"', 'keeps a conflicting PR a draft with the waits-for-merge label and line'],
-  ['it has no waits-for-merge label, and it isn\'t marked ready yet', 'never marks a waiting PR ready'],
-  ['or it carries the waits-for-merge label and every PR it waits for is now merged or closed (merge main and resolve the conflict, run a delta review only if content changed beyond the conflict', 'clears its own waiting PR once the blocker is merged or closed'],
-  ['then, once every check on the new head passes, do the merge-order check in step 6 again', 'waits for CI on the merge commit before marking a cleared PR ready'],
-  ['wait until every check on the new head passes (if they haven\'t finished when the fire ends, a later fire finishes it)', 'waits for CI before marking a cleared status PR ready'],
-  ['Also pick, with no review run, a Codex PR carrying the waits-for-merge label whose every PR named in that comment is now merged or closed', 'clears a Codex PR\'s waits-for-merge label without a review run'],
+  ['carry no waits-for-merge label', 'never picks a waiting PR'],
   ['skip a PR that conflicts with main alone and note it', 'skips a PR that conflicts with main alone'],
-  ['edit that one comment to name the new blocker instead', 'renames the blocker in its one Codex comment so a failed re-check isn\'t picked every fire'],
-  ['first test-merge its head with main alone (if that conflicts, keep the label', 'never clears a Codex PR\'s label while it conflicts with main'],
-  ['unless you have already asked Blue on that PR, post the "@ABlueAI needs Blue:" comment and add the needs-blue label', 'asks Blue once about a Codex PR that conflicts with main, so it isn\'t picked every fire'],
   ['if a PR marked ready meanwhile conflicts with it and yours has the higher number, put yours back to draft and wait; otherwise leave the other PR as it is', 'settles two PRs marked ready at once without touching another builder\'s PR'],
-  ['only add the waits-for-merge label and one comment "Waits for #X (conflicts in <files>)" without Codex\'s handle', 'only labels and comments on a waiting Codex PR'],
-  ['or today\'s status PR carries the waits-for-merge label and every PR it waits for is now merged or closed', 'clears a waiting status PR'],
   ['its last line is "Merge order: #A, then #B; any order: #C, #D"', 'ends a multi-PR summary with the merge-order line'],
+  // The 2026-11-23 refresh: the runner only builds, the sweeper keeps PRs moving.
+  ['Your job is to BUILD. Each fire works at most one unit', 'only builds, one unit per fire'],
+  ['the PR sweeper (docs/SWEEPER.md) clears merge conflicts and waits-for-merge waits after every merge', 'leaves conflicts and waits to the sweeper'],
+  ['Never do those jobs, so the two routines never do the same work', 'never does the sweeper\'s jobs'],
+  ['A merge conflict or a waits-for-merge label is the sweeper\'s to clear, not yours', 'never clears a conflict or a wait itself'],
+  ['the sweeper clears it once #X is merged or closed (docs/SWEEPER.md)', 'hands a waiting PR to the sweeper'],
+  ['never edit STATUS.md (the sweeper\'s status PR is the only PR that edits it)', 'never edits STATUS.md'],
+  ['Open no status PR', 'opens no status PR'],
+  ['marks a session DONE (#PR) only when its PR is merged and its "Done when" is met on evidence it can cite', 'keeps the rule the sweeper\'s Job D cites for DONE rows'],
+  ['Its status is READY (never HOLD (Blue), NEEDS BLUE, IN PROGRESS, DONE or DROPPED)', 'starts only READY rows'],
+  ['skip any row that docs/PLAN-1.1.md, docs/DECISIONS.md or docs/CODEX-BUILDER-LANE.md gives to Codex', 'skips rows the plan gives Codex'],
+  ['It waits on no answer from Blue', 'skips rows waiting on Blue'],
+  ['docs/SCHEDULE-1.1.md\'s lane plan', 'takes rows in the schedule\'s order'],
+  ['Never push to a codex/ branch', 'never pushes to a Codex branch'],
+  ['merge it into your work with a merge commit; never rebase or force-push', 'never pushes over the sweeper\'s main merges'],
+  ['use the GitHub MCP update_pull_request tool (draft false or true)', 'changes draft state without GraphQL'],
+  ['"NOT READY: couldn\'t change the draft state (<reason>)"', 'reports a draft change it couldn\'t make'],
+  ['GraphQL is rejected here, so use REST through gh api', 'uses REST in cloud sessions'],
+  ['0. Pacing, a step that always applies', 'has the pacing step'],
+  ['repos/ABlueAI/AgentCommandCenter/activity?time_period=day&per_page=100', 'counts the agent\'s pushes from the activity API'],
+  ['pushes_per_hour pushes and writes_per_hour GitHub writes an hour, across all its sessions together', 'paces pushes and writes across all sessions'],
+  ['If a count can\'t be read, treat it as at the limit and say so', 'fails closed when it can\'t count'],
+  ['Stop at once, with no retry and no further writes, at the first 403 or 429 whose message mentions a rate limit', 'stops at the first rate-limit refusal'],
+  ['Before every push and every other GitHub write (a PR, comment, label, body edit or draft change), count the events by an agent login in the last 60 minutes from gh api "repos/ABlueAI/AgentCommandCenter/events?per_page=100"', 'counts the agent\'s writes before every write'],
+  ['add the writes this fire has made that it doesn\'t show', 'adds its own writes the events list doesn\'t show'],
+  ['if you can\'t reach one, treat that count as at the limit', 'fails closed when a page holds only the last hour'],
+  ['for at most 30 minutes in all this fire', 'waits at most 30 minutes for the pacing limit'],
+  ['"NOT READY: pacing limit (N pushes, M writes in the last hour)"', 'reports a pacing stop'],
+  ['"NOT READY: docs/SWEEPER.md is not on main; the runner waits for the PR sweeper."', 'never runs without the sweeper on main'],
+  ['gh api user failed: <status and error>', 'reports the real error when the login call fails'],
+  ['post one "@ABlueAI needs Blue: couldn\'t change the draft state (<reason>)" comment on it and add the needs-blue label', 'shows a failed draft change on GitHub and stops retrying it'],
 ];
 for (const [text, label] of mustHave) assert(prompt.includes(text), `runner prompt ${label}`);
 assert(!/@codex/i.test(prompt), 'runner prompt never writes Codex\'s handle');
@@ -137,6 +169,16 @@ assert(!prompt.includes('agent-running'), 'runner prompt no longer uses the agen
 assert(!/\byour login\b/.test(prompt), 'runner prompt never checks "your login" alone: it checks an agent login');
 for (const login of AGENT_LOGINS) assert(prompt.includes(login), `runner prompt names the agent login ${login}`);
 assert(!prompt.includes('Until session S04 is merged'), 'runner prompt drops the one-at-a-time line');
+assert(!prompt.includes('add_repo') && !prompt.includes('get_me'), 'runner prompt uses gh REST calls, not the GitHub MCP add_repo or get_me');
+assert(!prompt.includes('status_pr_hour') && !prompt.includes('Runner status <'), 'runner prompt no longer opens a status PR');
+// The runner hands conflicts, waits, Codex PRs and STATUS.md to the sweeper; once docs/SWEEPER.md is on
+// this branch, it must really own them (before that, the prompt's step 3 stops every fire).
+if (fs.existsSync(path.join(repoRoot, 'docs', 'SWEEPER.md'))) {
+  const sw = read('docs', 'SWEEPER.md');
+  assert(sw.includes('JOB A: CONFLICTS') && sw.includes('JOB B: WAITS-FOR-MERGE') && sw.includes('JOB D: STATUS')
+    && sw.includes('The status PR is the only PR that edits STATUS.md'),
+  'docs/SWEEPER.md owns the jobs the runner hands it (conflicts, waits, the status PR)');
+}
 
 // Digest prompt.
 const digest = fenced('### Proposed digest prompt (verbatim)');
@@ -227,6 +269,8 @@ const sweeperMustHave = [
   [jobD, 'at most 2 runs, the docs-only cap in AGENTS.md "The review loop"', 'Job D: the status PR keeps the docs-only 2-run cap'],
   [sweepChanges, 'Mark a Codex PR ready, or re-trigger Codex\'s review, only as AGENTS.md "Merge order", "Codex PRs" says (Blue, 2026-11-24); never lift a draft hold Blue asked for.', 'Codex draft state follows AGENTS.md "Codex PRs"'],
   [sweepChanges, 'none is under .claude/, .github/ or agent-roles/, nor is AGENTS.md, CLAUDE.md, docs/SWEEPER.md or docs/RUNNER.md', 'a docs-only record PR excludes sensitive Markdown'],
+  [sweepChanges, 'EXISTING CODEX PRS (AGENTS.md "How work flows" step 3: once the session that handed Codex a task has ended, the sweeper runs that PR\'s reviews)', 'reviews existing Codex PRs once their hand-off session has ended'],
+  [sweepChanges, 'on a Codex PR only if it was posted by an agent login, edited by no one else, and carries a "Run by:" line linking a Claude cloud session or runner fire (AGENTS.md "How work flows" step 3); the same holds for the review comment whose head starts a delta run.', 'counts a review on a Codex PR only with an unedited agent post and a Run by: line'],
   [sweepChanges, '"NOT READY: sweeper has no GitHub login"', 'stops visibly with no GitHub login'],
   [sweepChanges, '"NOT READY: sweeper failed at <job and step>: <error>"', 'reports a failed step instead of "nothing to do"'],
 ];

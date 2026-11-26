@@ -153,9 +153,12 @@ if (sharedBlocks.length > 0) {
   assert(rules.includes('**Claim a plan session before building it.**') && rules.includes('whoever opened it'),
     'AGENTS.md has every builder check for an open Sxx: PR before starting a session');
   const runner = fs.readFileSync(path.join(repoRoot, 'docs', 'RUNNER.md'), 'utf8');
-  const prompt = (runner.match(/## Current prompt \(verbatim\)\s*```text\r?\n([\s\S]*?)\r?\n```/) || [])[1] || '';
-  assert(prompt.includes('Also skip any READY session that is already claimed') && prompt.includes('open its PR early'),
+  // The prompt to load is "Proposed runner prompt (verbatim)"; "Current prompt" only points to it (2026-11-23).
+  const prompt = (runner.match(/### Proposed runner prompt \(verbatim\)\s*```text\r?\n([\s\S]*?)\r?\n```/) || [])[1] || '';
+  assert(prompt.includes('And nobody has claimed it') && prompt.includes('before any other work, open its PR as a draft titled "Sxx: <session title>"'),
     'docs/RUNNER.md prompt skips claimed sessions and claims its own early');
+  assert(/## Current prompt\r?\n[\s\S]*?"Proposed runner prompt \(verbatim\)"/.test(runner),
+    'docs/RUNNER.md "Current prompt" points to the proposed runner prompt');
 }
 
 // S42: the rulebook update from Blue's 1.1 decision sheet (docs/DECISIONS.md 2026-11-16 and

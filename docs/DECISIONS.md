@@ -191,6 +191,23 @@ the "unless Blue asks" the 2026-10-23 Codex builder lane (PR #114) left open.
 | **1. Claude cloud sessions, as `ABlueAgent`, may push review fixes and `main` merges to Codex's docs-only record PRs,** one fixer per PR at a time. Builder's reading: a docs-only record PR is a `codex/` PR whose changed files are all Markdown, none under `.claude/`, `.github/` or `agent-roles/` and none of `AGENTS.md`, `CLAUDE.md`, docs/SWEEPER.md or docs/RUNNER.md (sensitive areas and routine instructions, which Blue's "record PRs" doesn't cover). This is the "unless Blue asks" in AGENTS.md "Who does what"; Codex's other PRs keep the old rule (fix requests, never pushes). Builder's reading: the sweeper prompt in docs/SWEEPER.md calls this decision "D-058". | "Let Claude cloud sessions push review fixes to Codex's record PRs - id love to do that". And: "Please merge main into 206 and 208, then run review 3 or 4" |
 | **2. The PR sweeper.** (a) A Claude routine, the "Mako PR sweeper", fires on every push to `main` plus hourly; merges `main` into any open agent PR or Codex docs-only record PR that conflicts; opens draft PRs for pushed `codex/` branches that have none and runs their review run 1; and never merges into `main`. (b) PRs stop editing `STATUS.md`; the sweeper keeps it current (docs/SWEEPER.md, Job D). Its instructions are docs/SWEEPER.md. | "slow and manual. this should not happen this way. conflicts should be immediately resolved." Then, asked "Set up the merge-triggered sweeper and stop PRs editing STATUS.md?": "Yes to both" |
 
+## 2026-11-23: the all-day runner back on; agent pacing limits
+
+Blue decided these in his main chat on 2026-11-23; the hand-off for the runner refresh PR relayed
+his words. How the repo follows them (docs/RUNNER.md "Runner refresh (2026-11-23)", the runner
+prompt and its settings) is **proposed, pending Blue (the runner refresh PR)**; merging that PR
+approves it, and Mako main then turns the scheduled task back on with the merged prompt.
+"Builder's reading" marks a line that is the builder's, not Blue's.
+
+| Decision | Blue's words |
+|---|---|
+| **1. The build moves itself.** Routine steps become automatic; Blue is asked only when he is needed. | "no more manual bs unless i am NEEDED. most of these are not needs and should be automatic processes entirely" |
+| **2. The all-day runner is turned back on after a refresh PR,** so new plan rows start without Blue starting each one. It was turned off automatically on 2026-11-07 when it lost repository access. Builder's reading: in the refresh the runner only builds plan rows and its own PRs, and the PR sweeper (docs/SWEEPER.md) keeps PRs moving. | "yes" (to "Turn the all-day runner back on, so new plan rows start without me starting each one") |
+| **3. Pacing: the agent account makes at most 24 pushes an hour,** across all its sessions. Builder's reading: the earlier figure wasn't relayed. | "this rule needs to change to 24 per hour" |
+| **4. Pacing: at most 120 GitHub writes an hour** for the agent account, across all its sessions. | "writes 120 is fine" |
+| **5. Capacity: 2 Claude lanes now, 3 from about 2026-11-29,** so the runner's `parallel_cap` is 2, and a one-line PR makes it 3 then. Builder's reading: the hand-off relayed this as Blue's plan; his words are his approval of the 1.1 schedule (docs/SCHEDULE-1.1.md, PR #223, whose 2026-11-23 entry records it), whose calendar "assumes 2 Claude lanes from 2026-11-23, a third from about 2026-11-29". Merging the runner refresh PR confirms it for the runner; BLUE-CHECKLIST.md step 8 (Max 5x) is still unticked. | "Yes. Do as written." (on the schedule) |
+| **6. `parallel_cap` is 4** (2026-11-25, Blue's reply on the runner refresh PR, #226), replacing item 5's 2 for the runner. Builder's reading: 4 also replaces item 5's "3 from about 2026-11-29". | "In the same push, set parallel_cap to 4 in docs/RUNNER.md (Blue, 2026-11-25; the runner prompt already says 4), with the test pin to match." |
+
 ## 2026-11-23: Blue's answers on the 1.1 schedule (S61)
 
 Blue answered the 1.1 schedule's open decisions in his main chat, and approved its text to go

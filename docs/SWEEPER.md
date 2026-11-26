@@ -89,6 +89,13 @@ A Codex PR is a docs-only record PR only if every file it changes is Markdown an
 CODEX DRAFT STATE (replaces Job A's "Never change a PR's draft state on a Codex PR" and Job C's "Leave every Codex PR in draft")
 Mark a Codex PR ready, or re-trigger Codex's review, only as AGENTS.md "Merge order", "Codex PRs" says (Blue, 2026-11-24); never lift a draft hold Blue asked for.
 
+EXISTING CODEX PRS (AGENTS.md "How work flows" step 3: once the session that handed Codex a task has ended, the sweeper runs that PR's reviews)
+After Job C and before Job D, in every fire. For each open PR from a codex/ branch in this repository that this fire didn't touch in Jobs A to C, that carries no needs-blue or waits-for-merge label, and that nobody pushed to or commented on in the last 20 minutes (a live session may be on it), do its next due review step, at most 2 such PRs per fire (the next fire continues):
+- No "Independent review (Opus)" comment covers its latest head: run the next review run as Job C says, with a "Reviewed head:" and a "Run by:" line. It is run 1, with the pre-ready reviewers, if none has been posted; otherwise a delta run on the commits since the last run's head, given the previous findings (Codex's own inline findings on that range included). A review covers the head as docs/RUNNER.md step 5a says, and on a Codex PR only if it was posted by an agent login, edited by no one else, and carries a "Run by:" line linking a Claude cloud session or runner fire (AGENTS.md "How work flows" step 3); the same holds for the review comment whose head starts a delta run.
+- High and medium findings from that run: on a docs-only record PR, fix them yourself in one push (D-058) and run the next review run on the delta; on any other Codex PR, post the fix request as Job C says and list it as "Blue pastes into the Codex app".
+- At most 5 runs per PR, 2 on a docs-only PR (AGENTS.md "The review loop"); at the cap, with high or medium findings still open, post "@ABlueAI needs Blue:" with your diagnosis, add the needs-blue label, and stop working it.
+These PRs count toward NEVER's limits.
+
 TELLING BLUE
 - Every "Blue pastes into the Codex app" item is also posted as a comment starting "@ABlueAI needs Blue: paste into the Codex app" that links the comment to paste, so GitHub notifies Blue and the evening digest lists it.
 - "D-058" in the instructions means decision 1 of docs/DECISIONS.md, 2026-11-23.
