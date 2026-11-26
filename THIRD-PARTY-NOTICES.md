@@ -28,6 +28,17 @@ file under `app/renderer/vendor/` is missing from the table below.
 The five xterm.js npm packages above were all published from the same xterm.js commit, `f447274`
 (each package's `gitHead`).
 
+## Adapted code (`app/renderer/`)
+
+Code ported from another project into one of Mako's own files, not copied as a vendored file. The
+file's header comment names what was taken and what Mako changed. Record:
+[docs/decisions/OSS-pixel-agents.md](docs/decisions/OSS-pixel-agents.md).
+
+| File | Upstream files | Licence | Copyright | Source (pinned) |
+|---|---|---|---|---|
+| `app/renderer/aquarium-engine.js` | Pixel Agents 1.6.0: `webview-ui/src/office/sprites/spriteCache.ts`, `webview-ui/src/office/engine/gameLoop.ts`, `webview-ui/src/office/engine/blink.ts` and their constants, ported to JavaScript (S20) | MIT ([text](LICENSES/MIT-pixel-agents.txt)) | Copyright (c) 2026 Pablo De Lucca | [pixel-agents-hq/pixel-agents@4dd14d6 (tag v1.6.0)](https://github.com/pixel-agents-hq/pixel-agents/tree/4dd14d612fd37d89ffbbc977959f572395c4eec8) |
+| `app/renderer/aquarium.js` | The permission bubble only: Pixel Agents 1.6.0 `webview-ui/src/office/sprites/bubble-permission.json`, recoloured (S20); the fish and the rest of the file are Mako's own | MIT ([text](LICENSES/MIT-pixel-agents.txt)) | Copyright (c) 2026 Pablo De Lucca | [pixel-agents-hq/pixel-agents@4dd14d6 (tag v1.6.0)](https://github.com/pixel-agents-hq/pixel-agents/tree/4dd14d612fd37d89ffbbc977959f572395c4eec8) |
+
 ## Adapted agent files (`.claude/agents/`)
 
 These project agents (S39 and S40) are edited copies of other projects' agent prompts, or, for

@@ -720,6 +720,8 @@ function openInAppTerminal(opts = {}) {
   }
   const chatBody = pane.querySelector('.chat-body');
   const paneData = { term, fit, pane, ro, roConnected: true, chatBody, role, pendingEvents: [], rafId: null, tailBubble: null, parser: null };
+  // S20: what the aquarium's creature and crew row show for this pane (text only).
+  paneData.aquarium = { label, repo: aquariumRepoLabel() };
   paneData.parser = new PtyParser((ev) => {
     // Video-scout SDK runs print one machine-readable token-usage line; surface it in the Logs
     // tab so every run's real cost is recorded outside the (closable) pane. The parser is already
@@ -765,6 +767,7 @@ function openInAppTerminal(opts = {}) {
     else cc.ptyKill(id);
     term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
+    aquariumRefresh();
   };
   // ---- LOCAL ROLLBACK (pre-PTY only) ----------------------------------------------------------
   // Undo everything this function built in the RENDERER, for the window in which no PTY exists yet.
@@ -782,6 +785,7 @@ function openInAppTerminal(opts = {}) {
     if (paneData.rafId !== null) { cancelAnimationFrame(paneData.rafId); paneData.rafId = null; }
     term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
+    aquariumRefresh();
   };
   paneData.closePane = closeThisPane;
   pane.querySelector('.x').onclick = closeThisPane;
@@ -791,6 +795,7 @@ function openInAppTerminal(opts = {}) {
   });
   term.textarea && term.textarea.addEventListener('focus', () => { activeTermId = id; });
   terms.set(id, paneData);
+  aquariumRefresh();
 
   // ---- TERMINAL LAUNCH TRANSACTION -------------------------------------------------------------
   // ORDER IS LOAD-BEARING: dock FIRST, start the PTY only once the dock has succeeded.
@@ -1525,12 +1530,93 @@ function startShell(settings) {
     emblemRail = null;
     appendLog('[shell] REFUSED: the repo emblem rail did not start (rail-start-failed); use the repo picker\n');
   }
+  startAquarium();
   // Coming back to the control room: its terminals were display:none, so refit the classic grid
   // (docked panes refit through their own observers).
   window.addEventListener('mako-shell-change', (e) => {
     const d = e.detail || {};
     if (d.view === 'tab' && (d.layout === 'old' || d.tab === 'control')) setTimeout(fitAllTerms, 0);
   });
+}
+
+// ---- S20: the aquarium tab (aquarium.js, on aquarium-engine.js) -----------------------------------
+// One creature per live pane, in its pane-status colour; a click on a creature or its crew row opens
+// that pane in the control room. The aquarium reads each pane's id, title, repo, role and
+// pane-status state, and never writes to a pane. The tank draws only while the aquarium tab shows
+// and the window is visible.
+let aquarium = null;
+const aquariumStatus = new Map(); // paneId -> pane-status state word
+function aquariumRepoLabel() {
+  const sel = $('#repoSelect');
+  const o = sel && sel.selectedOptions && sel.selectedOptions[0];
+  return o && o.value ? o.textContent : '';
+}
+function aquariumPanes() {
+  const out = [];
+  for (const [id, t] of terms) {
+    const a = t.aquarium || {};
+    out.push({ id, title: a.label || id, repo: a.repo || '', role: t.role || '', status: aquariumStatus.get(id) || 'unknown' });
+  }
+  return out;
+}
+function aquariumRefresh() {
+  if (!aquarium) return;
+  for (const id of Array.from(aquariumStatus.keys())) if (!terms.has(id)) aquariumStatus.delete(id);
+  try { aquarium.update(aquariumPanes()); }
+  catch { appendLog('[aquarium] REFUSED: the tank could not update (update-failed)\n'); }
+}
+function aquariumNoteStatus(view) {
+  if (!view || typeof view.paneId !== 'string' || !view.paneId) return;
+  aquariumStatus.set(view.paneId, typeof view.state === 'string' ? view.state : 'unknown');
+  aquariumRefresh();
+}
+function aquariumShowing() {
+  if (!shell || document.hidden) return false;
+  const st = shell.getState();
+  return st.layout === 'tabs' && st.view === 'tab' && st.tab === 'aquarium';
+}
+function startAquarium() {
+  const frame = $('#makoPanel-aquarium');
+  const host = frame && frame.querySelector('.mk-frame-main');
+  if (!host || !window.ccAquarium || !window.ccAquariumEngine || !window.ccUiTokens) {
+    appendLog('[aquarium] REFUSED: the aquarium tab did not start (aquarium-module-missing); your agents are in the control room\n');
+    return;
+  }
+  const reduced = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  try {
+    const frameNote = host.querySelector('.mk-frame-note');
+    if (frameNote) frameNote.remove();
+    aquarium = window.ccAquarium.createAquarium({
+      doc: document, host, engine: window.ccAquariumEngine, tokens: window.ccUiTokens,
+      log: (line) => appendLog(line),
+      prefersReducedMotion: () => !!(reduced && reduced.matches),
+      onOpenPane: (id) => {
+        if (!terms.has(id)) { const e = new Error('pane-closed'); e.kind = 'pane-closed'; throw e; }
+        shell.setTab('control');
+        const t = terms.get(id);
+        activeTermId = id;
+        // Focus is a convenience: a pane closed in between simply isn't focused.
+        setTimeout(() => { try { t.term.focus(); } catch { /* pane gone: nothing to focus */ } }, 0);
+      },
+    });
+  } catch (e) {
+    aquarium = null;
+    const kind = e && typeof e.kind === 'string' && /^[a-z0-9-]{1,40}$/.test(e.kind) ? e.kind : 'start-failed';
+    appendLog(`[aquarium] REFUSED: the aquarium tab did not start (${kind}); your agents are in the control room\n`);
+    return;
+  }
+  const sync = () => {
+    if (!aquarium) return;
+    aquarium.setTankName(aquariumRepoLabel());
+    aquarium.setShown(aquariumShowing());
+  };
+  window.addEventListener('mako-shell-change', sync);
+  document.addEventListener('visibilitychange', sync);
+  window.addEventListener('resize', () => { if (aquarium && aquariumShowing()) aquarium.resize(); });
+  const repoSel = $('#repoSelect');
+  if (repoSel) repoSel.addEventListener('change', sync);
+  aquariumRefresh();
+  sync();
 }
 
 async function boot() {
@@ -1627,6 +1713,7 @@ const paneStatusSetup = (window.ccPaneStatus && window.ccPaneStatusBadge)
   : null;
 if (paneStatusBadge) {
   window.ccPaneStatus.onView((view) => {
+    aquariumNoteStatus(view);
     const shown = paneStatusBadge.update(view);
     if (shown && view && view.paneId) {
       appendLog(`[pane-status] ${view.paneId} -> ${shown.label}${view.reason ? ` (${view.reason})` : ''}\n`);

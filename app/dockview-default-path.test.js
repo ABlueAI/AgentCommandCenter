@@ -368,7 +368,10 @@ process.stdout.write('\nindex.html ships the EMBEDDED dock and loads no Dockview
   // `window.ccShellNav` and builds nothing until app.js's boot() calls createShell();
   // `in-focus-card.js` publishes `window.ccInFocusCard` and builds only when a caller asks;
   // `emblem-rail.js` publishes `window.ccEmblemRail` and builds only when app.js creates it.
-  assert(scriptTags === 34, `index.html loads exactly 34 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view, the terminal key mapping, the authority choice, the usage panel view, the resume view, the agent token view (S31), the Claude Video Scout settings (S54), and S66's colour tokens, navigation shell, In-focus card and emblem rail (found ${scriptTags})`);
+  // S20 adds the aquarium engine and the aquarium view: 34 -> 36. Both publish a window global
+  // (`ccAquariumEngine`, `ccAquarium`) and build nothing until app.js creates the aquarium.
+  assert(scriptTags === 36, `index.html loads exactly 36 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view, the terminal key mapping, the authority choice, the usage panel view, the resume view, the agent token view (S31), the Claude Video Scout settings (S54), S66's colour tokens, navigation shell, In-focus card and emblem rail, and S20's aquarium engine and view (found ${scriptTags})`);
+  assert(/<script src="aquarium-engine\.js"><\/script>/.test(indexSrc) && /<script src="aquarium\.js"><\/script>/.test(indexSrc), 'S20: the two added scripts are exactly the aquarium engine and the aquarium view');
   assert(/<script src="session-resume-view\.js"><\/script>/.test(indexSrc),
     'the S09 resume view is loaded');
   assert(/<script src="usage-view\.js"><\/script>/.test(indexSrc),
