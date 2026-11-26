@@ -339,14 +339,15 @@ if (sharedBlocks.length > 0) {
   const flatFix = fix.replace(/\s+/g, ' ');
   for (const bound of [
     'the builder chooses, without asking Blue, and marks its choice `🤖 Claude decided:` in the TLDR',
-    'with one extra delta run on it. Once per PR.',
+    'with one extra delta run on it.',
+    'The extra run is once per PR, for (a) or for that removal.',
+    'a Codex finding is only fixed or answered with evidence that it is wrong, never filed to ship (hard rule 9)',
     'Answer each open finding in the PR with its reasoning, file the rest as an issue, and go on to step 5',
     'A high finding or a security finding is never shipped open',
-    'takes the change it is about out of the PR in one push, which one more delta run checks',
-    'If findings are still open after the extra run, only (b) is left;',
+    'taking the change the finding is about out of the PR in one push, which the extra delta run checks',
     'A CRITICAL finding follows "How a CRITICAL finding is handled" instead.',
     'One more small fix of the open findings (a few lines, in files the PR already changes) in one push',
-    'the PR stays a draft as `NOT READY: review cap reached (<findings>)`, with no more runs',
+    'If a high or medium finding is still open once it is used, the PR stays a draft as `NOT READY: review cap reached (<findings>)`, with no more runs',
   ]) assert(flatFix.includes(bound), `the one small last fix keeps its bound "${bound}"`);
   assert(flat.includes("the builder doesn't ask Blue how to proceed (Blue, 2026-11-25; docs/DECISIONS.md, D-090)") && !flat.includes('It marks the PR "needs Blue" and asks Blue how to proceed'),
     'the run cap no longer stops for Blue');
@@ -356,7 +357,7 @@ if (sharedBlocks.length > 0) {
     'step 4: the chosen option never weakens a test, and one more failed round ends visibly');
   assert(flat.includes('the PR stays a draft as `NOT READY: review not run (<reason>)` until a later session (or the PR sweeper) runs it. Never skip it.'),
     'step 3: a review that can\'t run keeps the PR a draft and is never skipped');
-  assert(flat.includes('"NOT READY: PR sweeper not running" and clears the wait itself as docs/SWEEPER.md Job B says') && !flat.includes('and Blue tells a session "clear the wait on #N"'),
+  assert(flat.includes('"NOT READY: PR sweeper not running", clears the wait itself as docs/SWEEPER.md Job B says if the PR is its own') && !flat.includes('and Blue tells a session "clear the wait on #N"'),
     'step 5: a session clears a stale wait itself');
   assert(flat.includes("isn't resolved by a fix push (the value stays in the branch history)"),
     'a CRITICAL secret exposure still waits for Blue on rotation and history');

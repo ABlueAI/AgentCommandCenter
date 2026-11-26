@@ -157,7 +157,7 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      that way; if Codex still doesn't review, the builder goes on with Claude's review alone, without
      asking Blue: the PR is marked ready once step 5's other conditions hold, its line stays
      `NOT READY: no Codex pass (<reason>)` (hard rule 9), and a 🔴 line in its TLDR says so, so Blue
-     decides at the merge (Blue, 2026-11-25; docs/DECISIONS.md, D-090). Never re-trigger it with a
+     decides at the merge (builder's reading of D-090; docs/DECISIONS.md, 2026-11-25). Never re-trigger it with a
      comment that writes Codex's handle.
 4. The builder fixes CI failures and review findings itself. After 3 failed fix rounds on the same
    CI problem, it writes its diagnosis and options in the PR, takes the best option and goes on,
@@ -179,7 +179,8 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      so nobody needs Blue to say "clear the wait on #N"; a wait still there an hour after #X merged
      may mean the sweeper isn't running: a session that sees one checks the sweeper's last fire
      (its report, or a push or comment by it) and, if there was none since #X merged, says
-     "NOT READY: PR sweeper not running" and clears the wait itself as docs/SWEEPER.md Job B says.
+     "NOT READY: PR sweeper not running", clears the wait itself as docs/SWEEPER.md Job B says if
+     the PR is its own, and lists any other such PR in its session-end message.
    - After the PR is marked ready, nobody pushes to it except to fix a CI failure, resolve a merge
      conflict, fix Codex's findings (as a draft again, step 3), or do what Blue asks. A push dismisses Blue's approval, so the TLDR says why any such
      push happened.
@@ -215,7 +216,7 @@ mostly low, findings. Every PR follows it, including the builder's own fixes.
   be recovered; let outside text run commands (unsafe input to the terminal, IPC or a validator);
   or stop Mako from starting on `main`. A CRITICAL finding stops the PR and notifies Blue at once;
   HIGH and MEDIUM are fixed in the next batch; LOW goes to follow-ups.
-  - **How a CRITICAL finding is handled** (Blue, 2026-11-25; docs/DECISIONS.md, D-090). The builder
+  - **How a CRITICAL finding is handled** (builder's reading of D-090; docs/DECISIONS.md, 2026-11-25). The builder
     doesn't wait for Blue to fix it: it fixes it in the next batch (or answers it with evidence if
     it thinks the finding is wrong) and re-runs the reviewer on that delta. It also tells Blue at
     once: it keeps it a draft (converting it back if it was ready), adds the `needs-blue`
@@ -254,13 +255,14 @@ mostly low, findings. Every PR follows it, including the builder's own fixes.
   - **One small last fix** (D-090; it replaces the 2026-11-24 proposal, D-084 to D-086): after the
     last run allowed, the builder chooses, without asking Blue, and marks its choice
     `🤖 Claude decided:` in the TLDR. (a) One more small fix of the open findings (a few lines, in
-    files the PR already changes) in one push, with one extra delta run on it. Once per PR. (b)
-    Answer each open finding in the PR with its reasoning, file the rest as an issue, and go on to
-    step 5. A high finding or a security finding is never shipped open: under (b) the builder
-    takes the change it is about out of the PR in one push, which one more delta run checks, and
-    files that change as an issue. If findings are still open after the extra run, only (b) is
-    left; if the delta run on that removal still shows a high or medium finding, the PR stays a
-    draft as `NOT READY: review cap reached (<findings>)`, with no more runs, and Blue sees it in the
+    files the PR already changes) in one push, with one extra delta run on it. (b) Answer each open
+    finding in the PR with its reasoning, file the rest as an issue, and go on to step 5. A high
+    finding or a security finding is never shipped open, and a Codex finding is only fixed or
+    answered with evidence that it is wrong, never filed to ship (hard rule 9): for those, (b)
+    means taking the change the finding is about out of the PR in one push, which the extra delta
+    run checks, and filing that change as an issue. The extra run is once per PR, for (a) or for
+    that removal. If a high or medium finding is still open once it is used, the PR stays a draft
+    as `NOT READY: review cap reached (<findings>)`, with no more runs, and Blue sees it in the
     evening list. A CRITICAL finding follows "How a CRITICAL finding is handled" instead.
 - **Merging `main`** to resolve a conflict needs no new review unless the merge changed content
   beyond the conflict.
@@ -594,7 +596,8 @@ account stays clear of GitHub's abuse detection.
   He has asked it for Claude cloud sessions to push review fixes and `main` merges to Codex's
   docs-only record PRs (as docs/SWEEPER.md defines them), one fixer per PR at a time, and for the
   PR sweeper (docs/DECISIONS.md, 2026-11-23; docs/SWEEPER.md), and for the reviewing Claude
-  session to fix security findings on Codex's PRs itself, a CRITICAL one included, and (D-090) to
+  session to fix security findings on Codex's PRs itself, a CRITICAL one included (builder's
+  reading of D-090), and, by D-090 as the builder reads it, to
   merge `main` or make the fix on a Codex PR whose fix request got no push within a day, when its
   own prompt allows pushing there
   (docs/CODEX-BUILDER-LANE.md item 6).
