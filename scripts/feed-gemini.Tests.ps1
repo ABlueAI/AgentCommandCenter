@@ -169,11 +169,28 @@ function Invoke-FeedGeminiTestChild {
     try {
         $p.StartInfo = $psi
         [void]$p.Start()
-        $p.WaitForExit()
+        $timer = [System.Diagnostics.Stopwatch]::StartNew()
+        $stdout = $p.StandardOutput.ReadToEndAsync()
+        $stderr = $p.StandardError.ReadToEndAsync()
+        if (-not $p.WaitForExit($TimeoutMilliseconds)) {
+            if (-not $p.HasExited) {
+                $p.Kill()
+                if (-not $p.WaitForExit(5000)) {
+                    throw "PowerShell test child timed out after $TimeoutMilliseconds ms and did not exit after termination."
+                }
+            }
+            throw "PowerShell test child timed out after $TimeoutMilliseconds ms."
+        }
+
+        # Stream handles can outlive the process, so capture shares its deadline.
+        $remaining = [int][Math]::Max(0, $TimeoutMilliseconds - $timer.ElapsedMilliseconds)
+        if (-not [System.Threading.Tasks.Task]::WaitAll(@($stdout, $stderr), $remaining)) {
+            throw "PowerShell test child output did not close within $TimeoutMilliseconds ms."
+        }
         [pscustomobject]@{
             ExitCode = $p.ExitCode
-            Stdout = $p.StandardOutput.ReadToEnd()
-            Stderr = $p.StandardError.ReadToEnd()
+            Stdout = $stdout.Result
+            Stderr = $stderr.Result
         }
     }
     finally { $p.Dispose() }

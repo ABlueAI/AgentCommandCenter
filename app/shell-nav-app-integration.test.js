@@ -25,8 +25,27 @@ function assert(cond, label) {
 const eq = (a, b, label) => assert(JSON.stringify(a) === JSON.stringify(b), `${label} (got ${JSON.stringify(a)})`);
 
 function readHarnessReport(run) {
+  const diagnostic = () => [
+    `harness exit ${run.status} signal ${run.signal}`,
+    run.error?.message,
+    `stderr tail:\n${String(run.stderr || '').split('\n').slice(-25).join('\n')}`,
+  ].filter(Boolean).join('\n');
+
   const line = String(run.stdout || '').split('\n').find((l) => l.startsWith('{"ok"'));
-  return line === undefined ? null : JSON.parse(line);
+  if (line === undefined) {
+    throw new Error(`The harness did not produce a JSON report\n${diagnostic()}`, { cause: run.error });
+  }
+  let report;
+  try {
+    report = JSON.parse(line);
+  } catch (error) {
+    throw new Error(`The harness produced an invalid JSON report\n${diagnostic()}`, { cause: error });
+  }
+  if (run.error || run.status !== 0 || run.signal) {
+    const fatal = report.fatal ? `\nfatal: ${JSON.stringify(report.fatal)}` : '';
+    throw new Error(`${diagnostic()}${fatal}`, { cause: run.error });
+  }
+  return report;
 }
 
 // A report can be flushed before the process fails during shutdown.
@@ -35,9 +54,23 @@ strictAssert.throws(
   () => readHarnessReport({ stdout: successfulReport, stderr: 'shutdown failed', status: 7, signal: null }),
   /harness exit 7[\s\S]*shutdown failed/,
 );
+strictAssert.throws(
+  () => readHarnessReport({ stdout: successfulReport, status: null, signal: 'SIGTERM' }),
+  /signal SIGTERM/,
+);
+strictAssert.throws(
+  () => readHarnessReport({ stdout: '{"ok":false,"fatal":{"scenario":"watchdog"}}', status: 1, signal: null }),
+  /harness exit 1[\s\S]*fatal: {"scenario":"watchdog"}/,
+);
+for (const code of ['ENOENT', 'ETIMEDOUT']) {
+  const error = new Error(`spawnSync electron ${code}`);
+  strictAssert.throws(
+    () => readHarnessReport({ stdout: successfulReport, status: null, signal: null, error }),
+    new RegExp(code),
+  );
+}
 
-let electronPath = null;
-try { electronPath = require('electron'); } catch { electronPath = null; }
+const electronPath = require('electron');
 assert(typeof electronPath === 'string' && electronPath.length > 0, 'the existing Electron dependency provides the executable');
 
 const childEnv = Object.assign({}, process.env);
@@ -47,14 +80,8 @@ const args = [path.join(__dirname, 'shell-nav-app-harness.js')];
 if (process.platform === 'linux') args.unshift('--no-sandbox');
 const run = spawnSync(electronPath, args, { cwd: __dirname, env: childEnv, encoding: 'utf8', timeout: 300000 });
 
-let report = null;
-try { report = readHarnessReport(run); } catch { report = null; }
+const report = readHarnessReport(run);
 assert(report !== null, 'the harness produced a JSON report');
-if (!report) {
-  process.stderr.write(`harness exit ${run.status} signal ${run.signal}\nstderr tail:\n${String(run.stderr || '').split('\n').slice(-25).join('\n')}\n`);
-  process.stdout.write(`\nshell-nav-app-integration: ${passed} passed, ${failed} failed\n`);
-  process.exit(1);
-}
 assert(report.ok === true, `every scenario ran (fatal: ${JSON.stringify(report.fatal)})`);
 const S = report.scenarios || {};
 

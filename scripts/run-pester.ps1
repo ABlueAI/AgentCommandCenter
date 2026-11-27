@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Run EVERY PowerShell (Pester) suite under scripts/ and exit non-zero if any assertion fails.
+  Run EVERY PowerShell (Pester) suite under scripts/ and exit non-zero if the run is incomplete or fails.
 .DESCRIPTION
   The PowerShell-side equivalent of `npm test` in app/. Orphaned-test rot has bitten this repo twice
   (a suite existed but nothing ran it, so a regression shipped green); this is the single gate that
@@ -32,10 +32,17 @@ foreach ($s in $suites) { Write-Host "  - $($s.FullName.Substring($root.Length +
 # Run every suite in ONE Invoke-Pester pass over the directory (Pester discovers *.Tests.ps1).
 $result = Invoke-Pester -Path $root -PassThru
 
-Write-Host ""
-Write-Host ("run-pester: {0} passed, {1} failed, {2} skipped (of {3})" -f `
-    $result.PassedCount, $result.FailedCount, $result.SkippedCount, $result.TotalCount) `
-    -ForegroundColor $(if ($result.FailedCount -gt 0) { 'Red' } else { 'Green' })
+# Pester 3.4's PassThru object omits InconclusiveCount, but retains the individual results.
+$inconclusive = @($result.TestResult | Where-Object { $_.Result -eq 'Inconclusive' }).Count
+$executed = $result.PassedCount + $result.FailedCount + $inconclusive
+$runFailed = $executed -eq 0 -or $result.FailedCount -gt 0 -or $result.SkippedCount -gt 0 -or
+    $result.PendingCount -gt 0 -or $inconclusive -gt 0
 
-if ($result.FailedCount -gt 0) { exit 1 }
+Write-Host ""
+Write-Host ("run-pester: {0} passed, {1} failed, {2} skipped, {3} pending, {4} inconclusive (of {5})" -f `
+    $result.PassedCount, $result.FailedCount, $result.SkippedCount, $result.PendingCount, $inconclusive, $result.TotalCount) `
+    -ForegroundColor $(if ($runFailed) { 'Red' } else { 'Green' })
+
+if ($executed -eq 0) { Write-Host 'run-pester: no test cases ran' -ForegroundColor Red }
+if ($runFailed) { exit 1 }
 exit 0
