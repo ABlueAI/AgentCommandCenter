@@ -1119,15 +1119,19 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     the status PR marks S10 done.
   - **Re-run after S31 merges** (about 5 minutes; on 2026-11-02 every level opened in default mode,
     because Mako's env scrub makes Claude Code force default. S31 keeps the scrub and gives each
-    level an explicit list of tools that run without asking; docs/AUTHORITY-LEVELS.md):
+    level an explicit list of allowed and denied tools; whether Claude Code honours the allowed list
+    under the scrub is not verified, and this re-run is how it gets checked; docs/AUTHORITY-LEVELS.md):
     1. Pull `main` and restart Mako fully. The footer may still show default mode; that is expected.
     2. **Minimum**, new builder pane: ask "Read README.md and summarise it in one line" (no prompt),
        then "Create a file called s31-check.txt" (the edit tools are refused; if Claude then offers a
        shell command that writes the file, it asks first: say no, and tell the agent it asked).
-    3. **Medium**, new builder pane: ask it to create `s31-check.txt` (no prompt), then to run
-       `git add s31-check.txt` (it asks first; answer no).
-    4. **High**, new builder pane: ask it to commit `s31-check.txt` on a scratch branch (no prompt),
-       then to run `git push --dry-run` (it asks first; answer no). Delete the scratch branch and
+    3. **Medium**, new builder pane: ask it to create `s31-check.txt`, then to run
+       `git add s31-check.txt` (it asks first; answer no). This is the check of the open question:
+       if creating the file runs with no prompt, the allowed list works under the scrub; if it asks,
+       answer no and tell the agent it asked.
+    4. **High**, new builder pane: ask it to create `s31-check.txt` (no prompt, if step 3 had none),
+       then to commit it on a scratch branch and to run `git push --dry-run` (both ask first; answer
+       no). High now sends the same tool lists as Medium, so every git command asks. Delete
        `s31-check.txt`.
     5. Tell an agent what each step did.
 - [ ] **41. S11 on your PC: usage panel.** About **10 minutes**, after you merge the S11 PR, #126.
