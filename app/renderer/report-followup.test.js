@@ -10,6 +10,10 @@
 
 const RF = require('./report-followup');
 const { el } = require('./agent-dom');
+const { readFileSync } = require('node:fs');
+const { join } = require('node:path');
+const { webcrypto } = require('node:crypto');
+const { Script, createContext } = require('node:vm');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -63,7 +67,89 @@ function makeCtl(opts) {
 }
 const clickAsk = (n) => n.btn.onclick({ preventDefault() { } });
 
+// Run the actual Library click, render, and report functions with controlled IPC replies.
+const appSource = readFileSync(join(__dirname, 'app.js'), 'utf8');
+const libraryScript = new Script(appSource.slice(
+  appSource.indexOf('const LV = window.ccLibraryView;'),
+  appSource.indexOf('function showTermEmpty()'),
+) + '\nsetupLibrary();', { filename: 'app.js (Library)' });
+
+function makeLibrary() {
+  const scans = [];
+  const logs = [];
+  const elements = new Map();
+  const $ = (id) => {
+    if (!elements.has(id)) elements.set(id, new StubEl(doc, 'div'));
+    return elements.get(id);
+  };
+  const ctx = createContext({
+    window: {
+      ccLibraryView: require('./library-view'),
+      ccClipboardConsumer: { createClipboardConsumer() {} },
+      ccReportFollowup: RF,
+    },
+    cc: {
+      libraryList: () => {
+        const scan = Promise.withResolvers();
+        scans.push(scan);
+        return scan.promise;
+      },
+      libraryRead: async () => ({ ok: true, status: 'available', text: 'Stored report' }),
+    },
+    crypto: webcrypto,
+    document: doc,
+    agentDom: { el },
+    appendLog: (line) => logs.push(line),
+    $,
+  });
+  StubEl.prototype.addEventListener = function () {};
+  libraryScript.runInContext(ctx);
+  const nodes = new Script('libFollowup._nodes()').runInContext(ctx);
+  return { $, nodes, scans, logs, refresh: () => $('#libRefresh').onclick() };
+}
+
+function listResult(title) {
+  return { ok: true, total: 1, invalidCount: 0, entries: [
+    { handle: 'lib_' + title, title, reportStatus: 'available' },
+  ] };
+}
+
 (async () => {
+  // The renderer also checks request order, including IPC errors that never arrive as a main reply.
+  for (const olderFails of [false, true]) {
+    const { $, scans, logs, refresh } = makeLibrary();
+    const older = refresh();
+    const newer = refresh();
+    scans[1].resolve(listResult('Newer report'));
+    await newer;
+    const latestStatus = $('#libStatus').textContent;
+    if (olderFails) scans[0].reject(new Error('IPC unavailable'));
+    else scans[0].resolve(listResult('Older report'));
+    await older;
+    assert($('#libList').textContent.includes('Newer report') &&
+      $('#libStatus').textContent === latestStatus,
+    `a late scan ${olderFails ? 'error' : 'success'} leaves the newest list and status visible`);
+    if (olderFails) assert(logs.some((line) => line.includes('list failed')), 'the late IPC error is logged');
+  }
+
+  // The report, question and Ask identity stay together if the newest refresh fails.
+  {
+    const { $, nodes, scans, refresh } = makeLibrary();
+    const initial = refresh();
+    scans[0].resolve(listResult('Selected report'));
+    await initial;
+    await $('#libList').childNodes[0].onclick();
+    nodes.question.value = 'My unsent question';
+    nodes.question.oninput();
+    const failedRefresh = refresh();
+    scans[1].resolve({ ok: false, error: 'library-subprocess-failed' });
+    await failedRefresh;
+    assert($('#libStatus').textContent === 'Scan refused.' &&
+      $('#libReportText').textContent === 'Stored report', 'the refresh refusal is visible alongside the old report');
+    assert(nodes.question.value === 'My unsent question' && !nodes.btn.disabled &&
+      !nodes.wrap.classList.contains('hidden'), 'a failed refresh preserves the draft question and Ask control');
+  }
+
   // ── mount + visibility/enable rules; nothing auto-submits ──────────────────────────────────
   {
     const { ctl, calls, n } = makeCtl();

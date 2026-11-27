@@ -7,6 +7,7 @@
 // tests the real boundary logic without touching disk.
 
 const { createLibraryIpc } = require('./library-ipc');
+const { randomUUID } = require('node:crypto');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -121,6 +122,24 @@ function trustedIpc(overrides) {
     await ipc.handleList(ev);
     const stale = await ipc.handleRead(ev, handle);
     assert(stale.ok === false && stale.error === 'unknown-handle', 'a handle from a previous list refresh is invalidated');
+  }
+
+  // --- Overlapping scans cannot replace the newest scan's handles ---
+  {
+    const olderScan = Promise.withResolvers();
+    const newerScan = Promise.withResolvers();
+    const scans = [olderScan, newerScan];
+    const { ipc, ev } = trustedIpc({ runLibraryAction: () => scans.shift().promise });
+    const older = ipc.handleList(ev, randomUUID());
+    const newer = ipc.handleList(ev, randomUUID());
+    newerScan.resolve(listPayload());
+    const latest = await newer;
+    olderScan.resolve(listPayload());
+    const stale = await older;
+    assert(stale.ok === false && stale.error === 'refresh-superseded',
+      'an older scan completing last refuses without publishing handles');
+    assert(ipc.resolveHandle(latest.entries[0].handle) === listPayload().entries[0].runId,
+      'the newest scan keeps its handle after the older scan finishes');
   }
 
   // --- Read passthrough shapes: not-persisted / incomplete / PS refusal ---
