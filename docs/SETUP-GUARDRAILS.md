@@ -79,9 +79,10 @@ The merge audit workflow opens a `security-alert` issue if anything reaches main
 
 ## Part C: restrict who can merge (issue #85)
 
-The Claude Code deny rules and shell hook enforce the agent merge policy in sessions that load
-them. GitHub controls merge permission for every client. Approval and status checks alone do not
-identify who may merge an approved PR.
+The Claude Code deny rules and shell hook block the merge calls they match in sessions that load
+them. Claude Code 2.1.295 or later also blocks a shell call if the hook cannot run. GitHub controls
+merge permission for every client. Approval and status checks alone do not identify who may merge
+an approved PR.
 
 Blue's decision, before merging the issue #85 fix (see [checklist step 95](../BLUE-CHECKLIST.md#from-issue-85-merge-permissions)):
 
@@ -96,6 +97,7 @@ Blue's decision, before merging the issue #85 fix (see [checklist step 95](../BL
 GitHub documents [Restrict updates](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#restrict-updates),
 [pull-request-only bypass](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository#granting-bypass-permissions-for-your-branch-or-tag-ruleset)
 and [rule layering](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets#about-rule-layering).
+Claude Code documents [blocking the action when a hook fails](https://code.claude.com/docs/en/hooks#block-the-action-when-a-hook-fails).
 
 ## What is still not covered
 
