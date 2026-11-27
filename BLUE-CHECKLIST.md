@@ -1616,6 +1616,22 @@ behind both steps are in the private report from the S38 session, not in this pu
     results stay private: a public issue gets at most "checked on Blue's PC, <date>" or a severity
     change. The agent ticks this with the date.
 
+## From PR #334 (terminal clipboard, paste and links)
+
+Step 93 comes from PR #334 (issue #273). Step numbers 86, 87 and 90 to 92 belong to open PRs.
+
+- [ ] **93. Check terminal paste and clipboard on Windows (PR #334).** **About 10 minutes**, on the
+  next Tuesday or Friday PC-check evening after merging PR #334, after fully restarting Mako.
+  - Paste one line, then two lines, into a Gemini Video Scout pane and a Claude pane (Ctrl+V and
+    right-click): the text arrives whole in both, with no confirmation prompt.
+  - In a plain PowerShell pane, paste two lines: Mako asks before pasting; Cancel pastes nothing.
+    Press Shift+Insert with one line copied: it pastes once.
+  - In a Claude pane, use something that copies through the terminal (Claude Code's "Copied!"):
+    the Logs tab shows one line saying the clipboard was not changed and to use Ctrl+C instead,
+    and your clipboard still holds what it held before.
+  - *Done when:* you've told any agent what you saw (each check as above, or what differed); it
+    ticks this with the date and how it checked.
+
 ## From the H1 commander (PR #282)
 
 Step 80 comes from PR #282 (docs/DECISIONS.md, 2026-11-24, D-084). Step numbers 77 to 79 belong to

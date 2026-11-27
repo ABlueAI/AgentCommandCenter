@@ -1736,9 +1736,23 @@ const openExternalIpc = createOpenExternalIpc({
   assessSender: (e) => launcherGate.assess(e),
   validateUrl: validateQuickLinkUrl,
   openExternal: (url) => shell.openExternal(url),
+  confirmTerminalLink: async (url) => {
+    const result = await dialog.showMessageBox(win, {
+      type: 'question',
+      title: 'Open terminal link',
+      message: 'Open this terminal link in your browser?',
+      detail: url,
+      buttons: ['Cancel', 'Open Link'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    return result.response === 1;
+  },
   logRefusal: (line) => { tlog(line); if (win && !win.isDestroyed()) win.webContents.send('main-error', line); },
 });
 ipcMain.handle('open-external', async (e, url) => openExternalIpc.handleOpenExternal(e, url));
+ipcMain.handle('open-terminal-link', (e, url) => openExternalIpc.handleOpenTerminalLink(e, url));
 
 // S11 usage panel: plan usage saved by Claude Code's status line (usage/usage-statusline.js), read
 // back as validated numbers only. One file per Windows user, shared by stable and dev copies.
