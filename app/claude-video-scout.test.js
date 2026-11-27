@@ -108,10 +108,14 @@ async function fixture(t, opts = {}) {
     return stdout(null);
   };
   const analyze = () => analyzeVideo({
-    url, focus: 'Describe the color changes.', baseEnv: isolateEnv, outputRoot: root, settings: opts.settings,
+    url, focus: 'Describe the color changes.', baseEnv: isolateEnv, settings: opts.settings,
+    ...(opts.defaultTempRoot ? {} : { tempRoot: root }),
     ...(opts.removeDir ? { removeDir: opts.removeDir } : {}),
     signal: new AbortController().signal, progress: () => {},
-    locate: async (name) => name === opts.missing ? null : name,
+    locate: async (name) => {
+      if (name === opts.missing) return null;
+      return opts.locations?.[name] ?? name;
+    },
     run,
     verifyPolicy: () => ({ ok: !opts.managed }),
     transcribe: async (pcm, { durationSeconds }) => {
@@ -142,6 +146,40 @@ test('runs both downloader calls with a minimal environment and a dedicated outp
   assert.deepEqual(lookup.env, download.env);
   assert.deepEqual(download.env, { TEMP: download.cwd, TMP: download.cwd, TMPDIR: download.cwd });
   assert.equal(download.args[download.args.indexOf('-o') + 1], path.join(download.cwd, 'video.mp4'));
+});
+
+test('keeps its work folder under the OS temp folder by default, not the Video Scout Library', async (t) => {
+  const { analyze, calls } = await fixture(t, { defaultTempRoot: true });
+  await analyze();
+  const download = calls.find(({ exe, args }) => exe === 'yt-dlp' && !args.includes('--simulate'));
+  const runDir = path.dirname(download.cwd);
+  assert.equal(path.dirname(runDir), os.tmpdir());
+  assert.match(path.basename(runDir), /^mako-claude-video-/);
+});
+
+test('uses the work-folder root it is given', async (t) => {
+  const { analyze, calls, root } = await fixture(t);
+  await analyze();
+  const download = calls.find(({ exe, args }) => exe === 'yt-dlp' && !args.includes('--simulate'));
+  assert.equal(path.dirname(path.dirname(download.cwd)), root);
+});
+
+test('passes an absolute deno path to both downloader calls before the yt-dlp arguments', async (t) => {
+  const deno = path.join(os.tmpdir(), 'tools', 'deno.exe');
+  const { analyze, calls } = await fixture(t, { locations: { deno } });
+  await analyze();
+  const downloader = calls.filter(({ exe }) => exe === 'yt-dlp');
+  assert.equal(downloader.length, 2);
+  for (const call of downloader) {
+    assert.deepEqual(call.args.slice(0, 2), ['--js-runtimes', `deno:${deno}`]);
+    assert.deepEqual(call.args.slice(-2), ['--', url]);
+  }
+});
+
+test('leaves out --js-runtimes when deno is not found as an absolute path', async (t) => {
+  const { analyze, calls } = await fixture(t);
+  await analyze();
+  for (const call of calls.filter(({ exe }) => exe === 'yt-dlp')) assert(!call.args.includes('--js-runtimes'));
 });
 
 test('sends shell-free CLI arguments, scene-sampled 640 px frames and the local transcript after the estimate', async (t) => {

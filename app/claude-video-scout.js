@@ -3,6 +3,7 @@
 const { spawn } = require('node:child_process');
 const fs = require('node:fs/promises');
 const { constants } = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { copyAllowedWindowsEnv } = require('./pty-env');
 const { normalizeClaudeVideoSettings } = require('./renderer/claude-video-settings');
@@ -480,7 +481,7 @@ async function readArtifact(file, maxBytes, reason) {
 }
 
 async function analyzeVideo({ url, focus, settings: rawSettings, signal, progress, transcribe, confirm, baseEnv, killTree,
-  verifyPolicy, locate = findTool, run = runProcess, outputRoot,
+  verifyPolicy, locate = findTool, run = runProcess, tempRoot = os.tmpdir(),
   removeDir = (dir) => fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }) }) {
   const checked = normalizeClaudeVideoSettings(rawSettings);
   if (!checked.ok) throw new ScoutError(checked.error);
@@ -495,8 +496,7 @@ async function analyzeVideo({ url, focus, settings: rawSettings, signal, progres
   if (!verifyPolicy()?.ok) {
     throw new ScoutError('Claude Code managed settings are present or could not be checked. Subscription-only analysis was refused.');
   }
-  await fs.mkdir(outputRoot, { recursive: true });
-  const dir = await fs.mkdtemp(path.join(outputRoot, 'mako-claude-video-'));
+  const dir = await fs.mkdtemp(path.join(tempRoot, 'mako-claude-video-'));
   const mediaEnv = { ...env, TEMP: dir, TMP: dir, TMPDIR: dir };
   const claudeEnv = { ...mediaEnv, CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' };
   const invoke = (exe, args, { input, timeoutMs = 60000, childEnv = mediaEnv } = {}) =>

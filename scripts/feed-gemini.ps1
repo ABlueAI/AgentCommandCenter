@@ -479,7 +479,10 @@ if ($VideoScout) {
 # --- locate tools (PATH may be stale right after install / inside the app) -----
 $ytdlp = Get-YtDlpPath
 
-$gemini = (Get-Command gemini -CommandType Application,ExternalScript -ErrorAction SilentlyContinue).Source
+# One path only: a folder holding both gemini.exe and gemini.ps1 (npm's layout) would otherwise
+# return both, and every later path operation would act on the pair.
+$gemini = Get-Command gemini -CommandType Application,ExternalScript -ErrorAction SilentlyContinue |
+    Select-Object -First 1 -ExpandProperty Source
 if (-not $gemini -and $env:APPDATA) {
     $fallback = Join-Path $env:APPDATA "npm\gemini.cmd"
     if (Test-Path $fallback) { $gemini = $fallback }
@@ -647,13 +650,13 @@ try {
 
     if (-not $gemini) {
         Write-Host ""
-        Write-Host "Gemini CLI not found. File is saved above. Install/login, then run from $($file.DirectoryName):" -ForegroundColor Yellow
+        Write-Host "Gemini CLI not found. File is saved above. Install the Gemini CLI and set GEMINI_API_KEY (Mako key setup), then run from $($file.DirectoryName):" -ForegroundColor Yellow
         # V3a privacy: same rule as the -NoFeed branch — with a focus present the deferred `gemini -p`
         # command contains the user's -AnalysisFocus text, so OMIT it and print a metadata-safe
         # instruction. This branch is reachable from an app-launched run when the Gemini CLI is missing.
         # With no focus the prior deferred-command output is preserved byte-for-byte.
         if ($normalizedFocus) {
-            Write-Host "  [deferred 'gemini' command omitted: it embeds your -AnalysisFocus text, which is never printed. Install/login to the Gemini CLI, then re-run this feed-gemini command with the SAME -AnalysisFocus.]" -ForegroundColor DarkYellow
+            Write-Host "  [deferred 'gemini' command omitted: it embeds your -AnalysisFocus text, which is never printed. Install the Gemini CLI and set GEMINI_API_KEY (Mako key setup), then re-run this feed-gemini command with the SAME -AnalysisFocus.]" -ForegroundColor DarkYellow
         }
         else {
             Write-Host "  gemini -m $Model -p `"$Prompt @$($file.Name)`""
@@ -663,6 +666,12 @@ try {
         Complete-VideoScoutRunManifest -RunDir $runDir -Manifest $cliManifest -Outcome 'error' `
             -Reason 'Gemini CLI not found: the downloaded file was saved but never analyzed.' -VideoTitle $videoTitle
         return
+    }
+
+    # The isolated Gemini profile below can't reach a cached Google sign-in, and the tracked settings
+    # enforce API-key auth, so refuse here, visibly, rather than let the CLI fail on auth.
+    if (-not $env:GEMINI_API_KEY) {
+        throw 'Video Scout Gemini CLI needs GEMINI_API_KEY (set it in Mako key setup). CLI launch refused.'
     }
 
     # Use the npm bundle with native Node when available. The fallback must itself
@@ -701,6 +710,9 @@ try {
     }
     $geminiEnv.GEMINI_CLI_SYSTEM_SETTINGS_PATH = $settingsPath
     $geminiEnv.GEMINI_CLI_SYSTEM_DEFAULTS_PATH = $settingsPath
+    # The isolated profile has no trustedFolders.json, and headless Gemini refuses an untrusted folder.
+    # Trust only this run's own folder, which holds just this run's manifest and downloaded media.
+    $geminiEnv.GEMINI_CLI_TRUST_WORKSPACE = 'true'
     if ($env:GEMINI_API_KEY) { $geminiEnv.GEMINI_API_KEY = $env:GEMINI_API_KEY }
 
     Write-Host 'Feeding to Gemini...' -ForegroundColor Cyan

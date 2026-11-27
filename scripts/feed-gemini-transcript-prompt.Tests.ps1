@@ -142,8 +142,9 @@ Describe 'adjacent defaults untouched (source-scope guards)' {
     }
 
     It 'keeps the SRT download flags unchanged' {
-        $src | Should Match '--write-auto-subs --write-subs'
-        $src | Should Match '--convert-subs srt'
+        # The flags are now one argv array per mode (no shell line), so pin them as array elements.
+        $src | Should Match "'--write-auto-subs',\s*'--write-subs'"
+        $src | Should Match "'--convert-subs',\s*'srt'"
     }
 
     It 'wires the transcript helper only inside the no-custom-prompt default switch' {

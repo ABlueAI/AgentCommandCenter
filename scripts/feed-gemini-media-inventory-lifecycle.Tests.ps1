@@ -91,6 +91,9 @@ function Invoke-Feed {
     function global:Stop-Job    { }
     function global:Remove-Job  { }
     $savedPath = $env:PATH
+    # The CLI route refuses to launch Gemini without a key; a fixture value stands in for it.
+    $savedKey = $env:GEMINI_API_KEY
+    $env:GEMINI_API_KEY = 'fixture-gemini-key'
     $env:VS_PROBE_LINE = $ProbeLine
     $env:VS_STUB_MODE = $StubMode
     $env:VS_STUB_EXIT = "$StubExit"
@@ -123,6 +126,8 @@ function Invoke-Feed {
     }
     finally {
         $env:PATH = $savedPath
+        if ($null -eq $savedKey) { Remove-Item Env:\GEMINI_API_KEY -ErrorAction SilentlyContinue }
+        else { $env:GEMINI_API_KEY = $savedKey }
         Remove-Item Env:\VS_STUB_MODE, Env:\VS_STUB_EXIT, Env:\VS_STUB_NO_OUTPUT, Env:\VS_STUB_READONLY_MANIFEST, Env:\VS_STUB_EXTRA, Env:\VS_PROBE_LINE -ErrorAction SilentlyContinue
         'Start-Job', 'Wait-Job', 'Receive-Job', 'Stop-Job', 'Remove-Job' |
             ForEach-Object { Remove-Item "function:global:$_" -ErrorAction SilentlyContinue }

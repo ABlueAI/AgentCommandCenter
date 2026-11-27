@@ -62,7 +62,35 @@ Describe 'Video Scout Gemini policy file denies all model tools' {
         ([regex]::Matches($content, '(?m)^\[\[rule\]\]')).Count | Should Be 1
         $content | Should Match '(?m)^decision\s*=\s*"deny"'
         $content | Should Match '(?m)^interactive\s*=\s*false'
-        ($content -match '(?m)^\s*(toolName|mcpName|argsPattern)\s*=') | Should Be $false
+        # Gemini CLI 0.49.0 rejects a rule with no toolName; "*" is its match-every-tool wildcard.
+        ([regex]::Matches($content, '(?m)^\s*toolName\s*=')).Count | Should Be 1
+        $content | Should Match '(?m)^toolName\s*=\s*"\*"\s*$'
+        ($content -match '(?m)^\s*(mcpName|argsPattern|commandPrefix|commandRegex|subagent|modes|toolAnnotations)\s*=') | Should Be $false
+    }
+    It 'has only the keys toolName, decision, priority and interactive in its rule' {
+        $keys = @([regex]::Matches($content, '(?m)^\s*([A-Za-z_]+)\s*=') | ForEach-Object { $_.Groups[1].Value } | Sort-Object)
+        ($keys -join ',') | Should Be 'decision,interactive,priority,toolName'
+    }
+}
+
+Describe 'Video Scout Gemini settings file (tracked; loaded as the CLI system settings)' {
+    $settingsPath = Join-Path (Split-Path -Parent $here) 'config\video-scout-gemini-settings.json'
+    $settings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
+
+    It 'pins exactly the top-level sections it sets' {
+        (@($settings.PSObject.Properties.Name | Sort-Object) -join ',') |
+            Should Be 'general,hooksConfig,privacy,security,telemetry'
+    }
+    It 'turns off auto-update, hooks, usage statistics and telemetry' {
+        $settings.general.enableAutoUpdate | Should Be $false
+        $settings.general.enableAutoUpdateNotification | Should Be $false
+        $settings.hooksConfig.enabled | Should Be $false
+        $settings.privacy.usageStatisticsEnabled | Should Be $false
+        $settings.telemetry.enabled | Should Be $false
+    }
+    It 'selects and enforces API-key auth (the isolated profile cannot reach a Google sign-in)' {
+        $settings.security.auth.selectedType | Should Be 'gemini-api-key'
+        $settings.security.auth.enforcedType | Should Be 'gemini-api-key'
     }
 }
 

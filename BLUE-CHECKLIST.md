@@ -1643,6 +1643,29 @@ Step 88 comes from PR #315 (issue #219). Step numbers 86 and 87 belong to open P
   - *Done when:* you've told any agent what you saw (no warning, rules listed, or what differed);
     it ticks this with the date and how it checked.
 
+## From PR #319 (Video Scout hardening)
+
+Step 93 comes from PR #319. Step numbers 90 to 92 belong to open PRs.
+
+- [ ] **93. Run Video Scout's Gemini CLI route and one Claude Video Scout run on Windows (PR #319).**
+  **About 15 minutes**, on the next Tuesday or Friday PC-check evening after merging PR #319. CI
+  can't run the real Gemini CLI, yt-dlp or Claude Code, so this is the only check that they still
+  work under PR #319's isolated launch (a fresh Gemini profile per run, API-key sign-in only, a
+  minimal environment for yt-dlp).
+  - Fully restart Mako. Check that your Gemini key is set in Mako's key setup: the Gemini CLI route
+    now signs in with that key only, and refuses to start without it, even if the Gemini CLI on your
+    PC is signed in with your Google account.
+  - In Mako, open **Agents → + New → Video**, keep the Gemini provider, choose the mode
+    **transcript**, paste one short public YouTube video with speech and click **Create & Launch**.
+    Wait for the report.
+  - Run the same video again with the mode **audio** and wait for the report.
+  - Run one short public clip with **Claude Code (subscription)** as in step 73, then check that no
+    `mako-claude-video-` folder is left in `%TEMP%` (in PowerShell:
+    `Get-ChildItem $env:TEMP -Filter mako-claude-video-*`).
+  - *Done when:* all three runs ended with a report (or you've told an agent the exact error line a
+    run showed), and you've told any agent what you saw; it ticks this with the date and how it
+    checked. Keep the reports and account details out of GitHub.
+
 ## Coming up this month (the runner will ask when it gets there)
 
 You can start on the first one now, which saves time later.

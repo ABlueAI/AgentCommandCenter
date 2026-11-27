@@ -1,6 +1,9 @@
 # Video Scout sends one prompt and attaches its downloaded media before inference.
-# Omit toolName to deny all model-initiated tools, including shell, writes, web and MCP.
+# toolName = "*" denies every model-initiated tool, including shell, writes, web and MCP. Gemini CLI
+# 0.49.0 requires toolName on every rule and rejects a rule without one, and it reads the @file
+# attachment itself before the request, outside the policy check.
 [[rule]]
+toolName = "*"
 decision = "deny"
 priority = 999
 interactive = false
