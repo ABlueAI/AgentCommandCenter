@@ -1845,10 +1845,10 @@ ipcMain.handle('pty-start', (e, opts) => {
     return refuse('invalid-opening-prompt');
   }
 
-  // The profile is the explicit default for a shell or a Video Scout with no repo selected.
+  // The profile is the explicit default when a non-role pane has no repo selected.
   // An explicitly supplied folder must resolve and be authorized for this kind of launch.
   let cwd;
-  if (opts.cwd === undefined && (launch.kind === LAUNCH_KIND.SHELL || launch.videoScout)) {
+  if (opts.cwd === undefined && launch.kind !== LAUNCH_KIND.ROLE) {
     cwd = process.env.USERPROFILE || app.getPath('home');
     try {
       if (!fs.statSync(cwd).isDirectory()) return refuse('missing-home-directory');

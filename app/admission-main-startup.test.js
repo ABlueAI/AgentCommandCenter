@@ -380,30 +380,22 @@ const LEDGER = 'admission-ledger.json';
   // ---- (7) controlled WebFetch grant: only the admission-controlled fenced web-scout pane ----------
   section('(7) the WebFetch grant reaches only the admission-controlled fenced web-scout pane');
   {
-    // A disposable fixture home: the tracked roles deployed as sync-roles.ps1 does, the tracked hook at
-    // the canonical path main checks byte-for-byte, and a sandbox under the configured outputs root.
-    // Nothing here touches the real ~/.claude, launches Claude, or runs the hook. The fixture sits at
-    // the drive root (as in pty-start-authority-main.test.js): role resolution walks the sandbox's
-    // ancestors, and a fixture under the user profile would find the REAL ~/.claude/agents there.
-    const FIX = (() => {
-      for (const base of [path.parse(__dirname).root, os.tmpdir()]) {
-        try { return fs.mkdtempSync(path.join(base, 'bh-webfetch-grant-')); } catch (e) { /* try next */ }
-      }
-      throw new Error('no writable fixture root');
-    })();
+    // Deploy the roles and fence into a disposable profile. All launches use
+    // either a registered repository or a sandbox allocated by main.
+    const FIX = fs.mkdtempSync(path.join(os.tmpdir(), 'bh-webfetch-grant-'));
     const HOME = path.join(FIX, 'home');
     const PROJECTS = path.join(FIX, 'projects');
     const AGENTS = path.join(HOME, '.claude', 'agents');
     const HOOKS = path.join(HOME, '.claude', 'hooks');
-    const OUTPUTS = path.join(PROJECTS, '.command-center', 'outputs');
-    for (const d of [AGENTS, HOOKS, OUTPUTS]) fs.mkdirSync(d, { recursive: true });
+    const repo = path.join(PROJECTS, 'checkout');
+    for (const d of [AGENTS, HOOKS, repo]) fs.mkdirSync(d, { recursive: true });
+    require('child_process').execFileSync('git', ['init', '-q'], { cwd: repo });
     const deployedHook = path.join(HOOKS, 'fence-write.js');
     fs.copyFileSync(path.join(__dirname, '..', 'scripts', 'hooks', 'fence-write.js'), deployedHook);
     for (const r of ['web-scout', 'operator', 'source-scout', 'builder']) {
       const src = fs.readFileSync(path.join(__dirname, '..', 'agent-roles', r + '.md'), 'utf8');
       fs.writeFileSync(path.join(AGENTS, r + '.md'), src.replace('__CC_HOOK__', deployedHook.replace(/\\/g, '/')), 'utf8');
     }
-    const SANDBOX = fs.mkdtempSync(path.join(OUTPUTS, 'web-scout-fixture-'));
     const MODE_KEY = 'BLUE_HELM_CONTROLLED_WEBFETCH_MODE';
     const GRANT = "--allowedTools 'WebFetch(domain:example.com)'";
     const DENIALS = '--disallowedTools Bash Glob NotebookEdit';
@@ -418,7 +410,13 @@ const LEDGER = 'admission-ledger.json';
     async function start(r, opts) {
       const ev = { sender: r.record.webContents, senderFrame: r.record.webContents.mainFrame };
       const before = r.record.spawns.length;
-      const res = await r.record.handled.get('pty-start')(ev, Object.assign({ cols: 80, rows: 24 }, opts));
+      const launch = { cols: 80, rows: 24, ...opts };
+      if (opts.role === 'web-scout' || opts.role === 'operator') {
+        const sandbox = await r.record.handled.get('ensure-output-dir')(ev, { role: opts.role });
+        if (!sandbox.ok) throw new Error('fixture sandbox was not prepared: ' + sandbox.error);
+        launch.cwd = sandbox.dir;
+      }
+      const res = await r.record.handled.get('pty-start')(ev, launch);
       const spawned = r.record.spawns.length === before + 1 ? r.record.spawns[r.record.spawns.length - 1] : null;
       return { res, spawned, cmd: spawned ? spawned.args.join(' ') : '', env: spawned ? spawned.env : {} };
     }
@@ -437,7 +435,7 @@ const LEDGER = 'admission-ledger.json';
       // W1 — the controlled pane, then a non-target web-scout and a non-target operator in the same run.
       const r1 = await boot(ENV);
       assert(r1.loadError === null, 'W1: main.js evaluates under a valid controlled run');
-      const c = await start(r1, Object.assign({ id: 'pty1', role: 'web-scout', cli: 'claude', cwd: SANDBOX }, SPOOF));
+      const c = await start(r1, Object.assign({ id: 'pty1', role: 'web-scout', cli: 'claude' }, SPOOF));
       assert(!!c.spawned && (!c.res || c.res.ok !== false), 'W1: the controlled fenced web-scout pane spawns');
       assert(c.cmd.split(GRANT).length === 2, 'W1: its command carries the CLI grant exactly once');
       assert(c.cmd.indexOf(DENIALS + ' ' + GRANT) !== -1, 'W1: directly after the main-issued denials');
@@ -448,13 +446,13 @@ const LEDGER = 'admission-ledger.json';
       const ledger = JSON.parse(fs.readFileSync(path.join(r1.userDataDir, LEDGER), 'utf8'));
       assert(ledger.runs['webfetch-probe-run'].paneId === 'pty1', 'W1: the ledger binds the run to that pane');
 
-      const nt = await start(r1, Object.assign({ id: 'pty2', role: 'web-scout', cli: 'claude', cwd: SANDBOX }, SPOOF));
+      const nt = await start(r1, Object.assign({ id: 'pty2', role: 'web-scout', cli: 'claude' }, SPOOF));
       assert(!!nt.spawned, 'W1: a second web-scout in the same run launches as a non-target pane');
       assert(nt.cmd.indexOf('--allowedTools') === -1 && nt.cmd.indexOf('WebFetch(') === -1,
         'W1: the non-target web-scout gets NO CLI grant');
       assert(nt.env[MODE_KEY] === 'disabled' && modeNames(nt.env).length === 1,
         'W1: and exactly the `disabled` mode');
-      const op = await start(r1, { id: 'pty3', role: 'operator', cli: 'claude', cwd: SANDBOX });
+      const op = await start(r1, { id: 'pty3', role: 'operator', cli: 'claude' });
       assert(!!op.spawned && noWebFetch(op), 'W1: a non-target operator gets no grant and no mode');
 
       // W2 — admission absent: an ordinary web-scout, with an ambient mode variant in process.env.
@@ -462,12 +460,12 @@ const LEDGER = 'admission-ledger.json';
       let r2;
       try {
         r2 = await boot({});
-        const ws = await start(r2, Object.assign({ id: 'pty1', role: 'web-scout', cli: 'claude', cwd: SANDBOX }, SPOOF));
+        const ws = await start(r2, Object.assign({ id: 'pty1', role: 'web-scout', cli: 'claude' }, SPOOF));
         assert(!!ws.spawned && ws.cmd.indexOf('--allowedTools') === -1 && ws.cmd.indexOf('WebFetch(') === -1,
           'W2: with no admission run, web-scout gets NO CLI grant');
         assert(ws.env[MODE_KEY] === 'disabled' && modeNames(ws.env).length === 1,
           'W2: and exactly the `disabled` mode, whatever the ambient environment says');
-        const b = await start(r2, { id: 'pty2', role: 'builder', cli: 'claude', cwd: FIX });
+        const b = await start(r2, { id: 'pty2', role: 'builder', cli: 'claude', cwd: repo });
         assert(!!b.spawned && noWebFetch(b), 'W2: an unfenced builder receives neither grant nor any mode variant');
         const bare = await start(r2, { id: 'pty3', cli: 'claude' });
         assert(!!bare.spawned && noWebFetch(bare), 'W2: a bare Claude pane receives neither grant nor any mode variant');
@@ -478,13 +476,13 @@ const LEDGER = 'admission-ledger.json';
 
       // W3 / W4 — a CONTROLLED pane of another role never gets the WebFetch grant.
       const r3 = await boot(Object.assign({}, ENV, { BLUE_HELM_ADMISSION_RUN_ID: 'webfetch-probe-operator' }));
-      const cop = await start(r3, { id: 'pty1', role: 'operator', cli: 'claude', cwd: SANDBOX });
+      const cop = await start(r3, { id: 'pty1', role: 'operator', cli: 'claude' });
       const l3 = JSON.parse(fs.readFileSync(path.join(r3.userDataDir, LEDGER), 'utf8'));
       assert(!!cop.spawned && l3.runs['webfetch-probe-operator'].paneId === 'pty1',
         'W3: a fenced operator can be the controlled pane');
       assert(cop.cmd.indexOf(DENIALS) !== -1 && noWebFetch(cop), 'W3: and it gets its denials but no WebFetch grant or mode');
       const r4 = await boot(Object.assign({}, ENV, { BLUE_HELM_ADMISSION_RUN_ID: 'webfetch-probe-builder' }));
-      const cb = await start(r4, Object.assign({ id: 'pty1', role: 'builder', cli: 'claude', cwd: FIX }, SPOOF));
+      const cb = await start(r4, Object.assign({ id: 'pty1', role: 'builder', cli: 'claude', cwd: repo }, SPOOF));
       const l4 = JSON.parse(fs.readFileSync(path.join(r4.userDataDir, LEDGER), 'utf8'));
       assert(!!cb.spawned && l4.runs['webfetch-probe-builder'].paneId === 'pty1' && noWebFetch(cb),
         'W4: a controlled unfenced builder gets no WebFetch grant or mode');
@@ -501,7 +499,7 @@ const LEDGER = 'admission-ledger.json';
       try {
         const r5 = await boot(Object.assign({}, ENV, { BLUE_HELM_ADMISSION_RUN_ID: 'webfetch-probe-drift' }));
         const before5 = r5.record.ptySpawns;
-        const d = await start(r5, { id: 'pty1', role: 'web-scout', cli: 'claude', cwd: SANDBOX });
+        const d = await start(r5, { id: 'pty1', role: 'web-scout', cli: 'claude' });
         assert(!!d.res && d.res.ok === false && d.res.error === 'fence-policy-matcher-does-not-cover-declared-tools',
           'W5: the controlled web-scout start is REFUSED for missing WebFetch matcher coverage');
         assert(r5.record.ptySpawns === before5 && d.spawned === null,

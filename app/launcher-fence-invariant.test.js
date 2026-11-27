@@ -286,8 +286,8 @@ const REGIONS = [
     // Previous pin retained: 2183 / 080893bcf88208575975d6cea67703c646b944e9495e625cf82d71520d7b93dc
     start: "const refuse = (reason) => refuseLaunch('Pane launch', reason);",
     end: '// S09: a resume request',
-    utf16Length: 1867,
-    sha: '2fabcb8cf340f9d18bea4897c1f0701651c553d2b28bcd552e55e20dd7586998',
+    utf16Length: 1834,
+    sha: 'bb0ce88804b1b7ef0aa1aed3057a54fc347020663d5da58b9ef8efcaabb52110',
   },
   {
     name: 'ptyEnv block',
@@ -395,8 +395,8 @@ const REGIONS = [
     // Previous pin retained: 17354 / 1ed564dea4af33f5dbe7afcb47b0d0cb2178ff1fb289a60b2e37a3d078581b2d
     // Launcher input and role source checks run before the admission claim and spawn.
     // Previous pin retained: 18861 / 790e4fa29a245a5064c1d1da05940f73f8a7b0c250747150bb601d378ef313f6
-    utf16Length: 17208,
-    sha: '891082caf28682af8bc23d42deac49f2c6e6443460c3c4b2c5bd0348197c35a8',
+    utf16Length: 17175,
+    sha: '2c771018455b90c167b62c509a5913a48ea69289e6887246bdb8fa5760c30279',
   },
 ];
 
