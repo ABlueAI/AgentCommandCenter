@@ -149,5 +149,5 @@ console.log('app.js routes Video Scout lines through the gate');
   assert(at > 0 && at < html.indexOf('<script src="app.js"></script>'), 'index.html loads the module before app.js');
 }
 
-console.log(`\n${passed} passed, ${failed} failed`);
+process.stdout.write(`\nvideo-scout-usage-line.test.js: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);
