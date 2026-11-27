@@ -1616,6 +1616,18 @@ open PRs (#283, #286 and #287).
     plugin was uninstalled or left disabled, with each finding's title and severity only; you
     tell any agent "step 85 done" and it ticks this with the date and how it checked.
 
+## From PR #315 (the account guard's PowerShell deny rules)
+
+Step 88 comes from PR #315 (issue #219). Step numbers 86 and 87 belong to open PRs.
+
+- [ ] **88. Check the PowerShell deny rules on Windows (PR #315).** **About 5 minutes**, on the next
+  Tuesday or Friday PC-check evening after merging PR #315.
+  - On your PC, pull `main` in your Mako checkout, start Claude Code there and run `/permissions`.
+  - Check that Claude Code showed no settings warning at start-up, and that the "Deny" list shows
+    the `PowerShell(...)` rules next to the `Bash(...)` ones (for example `PowerShell(gh pr merge:*)`).
+  - *Done when:* you've told any agent what you saw (no warning, rules listed, or what differed);
+    it ticks this with the date and how it checked.
+
 ## Coming up this month (the runner will ask when it gets there)
 
 You can start on the first one now, which saves time later.
