@@ -3,6 +3,31 @@
 Blue's decisions, newest first, with his words where available. Append only: add a new entry instead
 of editing an old one, and say which entry it replaces. Agents follow the newest entry.
 
+## 2026-11-27: Claude's review alone while Codex's quota is out (D-091); Claude fixes every Codex PR (D-092)
+
+Blue said these on 2026-11-27 in his watcher chat (Mako main, on his laptop), which recorded them as
+D-091 and D-092 in his vault; his words are quoted as the hand-off for this PR relayed them (not
+verified here: this cloud session can't see that chat, and Blue didn't post them on GitHub). How
+AGENTS.md, docs/SWEEPER.md, docs/RUNNER.md and docs/CODEX-BUILDER-LANE.md word them is proposed,
+pending Blue (this PR); merging approves it. "Builder's reading" marks a line that is the
+builder's, not Blue's.
+
+| Decision | Blue's words |
+|---|---|
+| **D-091: READY TO MERGE on Claude's review alone while Codex's review quota is exhausted.** Codex's automatic code reviews hit their usage limit (its bot answered "You have reached your Codex usage limits for code reviews" on #286, #287, #302 and #315). While that holds, a PR is `READY TO MERGE` with CI green, the Opus review loop done with no high or medium finding open, author and latest pusher not `ABlueAI`, the merge-order check clean and step 5's other conditions met; Codex's pass is required again once its quota returns. Amends AGENTS.md "Hard rules" item 9 (docs/DECISIONS.md, 2026-11-23, "hard rules, Codex's pass before ready") with this one exception, and the builder's reading in the 2026-11-25 entry that "a Codex-pass gap doesn't change hard rule 9" for this case. | "yes continue to ready to merge with claude review alone." (about 02:20 ET) |
+| **🤖 Claude decided: how "exhausted" and "returns" are checked.** Exhausted, for a PR: `chatgpt-codex-connector[bot]` answered that PR's latest review trigger with its usage-limit notice, unedited by anyone else, and has posted no review, finding, pass or 👍 reaction on any PR since; if the bot posted nothing on the PR, the 2026-11-25 Codex-pass gap rule applies instead. Returned: that bot posts any review, pass, finding or 👍 reaction after its newest notice. From then on, every unmerged PR needs Codex's pass again, including one marked ready under D-091: a Claude session re-triggers Codex on it through draft and ready, once per head. Builder's reading: a repo-wide check anyone can do in under 2 minutes, and "required again" covers every PR not yet merged. | — |
+| **D-092: Claude fixes every Codex PR.** Claude (the PR sweeper, or a Claude cloud session) fixes every Codex PR's review findings and merge conflicts itself on its `codex/` branch, one fixer per branch at a time, each fix push followed by the usual Opus delta run. Blue no longer pastes fix requests into the Codex app and no longer comments "Claude fixes #N"; Codex keeps building new tasks. Replaces, for Codex PRs, AGENTS.md "Claude never pushes to a `codex/` branch unless Blue asks" and "fixes its own PRs", the 2026-11-23 docs-only record PR limit (D-058), and the 2026-11-25 entry's fix after a day with no push (D-090). The stops D-090 kept still hold, widened by the builder (🤖 Claude decided, after review run 1: the sweeper's earlier docs-only definition kept it off these files): a Codex PR that changes `.claude/`, `.github/`, `agent-roles/`, AGENTS.md, CLAUDE.md, docs/SWEEPER.md, docs/RUNNER.md or docs/CODEX-BUILDER-LANE.md goes to Blue instead of getting a fix push, a security finding is public by title and severity only, and a CRITICAL finding is reported to Blue at once. | "Yes, Claude fixes all" (about 05:20 ET), answering "Let Claude fix every Codex PR's findings and conflicts, so you stop pasting fixes?" |
+
+## 2026-11-26: no cap on Codex lanes
+
+Relayed the same way as the 2026-11-27 entry above (not verified here). How
+docs/CODEX-BUILDER-LANE.md item 8 words it is proposed, pending Blue (the same PR); merging approves
+it.
+
+| Decision | Blue's words |
+|---|---|
+| **No limit on how many Codex builds run at a time.** Blue starts as many Codex lanes as he likes and refreshes them after Codex's usage resets. Replaces the 2-at-a-time Codex cap (2026-11-21). Codex builds still don't count toward the runner's `parallel_cap`. | "why shouldnt i just paster more lanes over at codex and refresh them after resets. that seems like itd be fine" |
+
 ## 2026-11-25: the commander's design (S67)
 
 Blue answered S67's needs-Blue question on PR #289 (his comment of 2026-11-25). It replaces D-084's

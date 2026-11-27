@@ -400,11 +400,11 @@ Module._load = function (request) {
     assert(rec && rec.owner === 'blue', 'its record is owned by Blue');
 
     const ptyWrite = record.on.get('pty-write');
-    const onData = (data) => ptyWrite({ sender: wc }, { id: 'pane-s46', data });
+    const onData = (data) => ptyWrite(goodEvent, { id: 'pane-s46', data });
     onData('hello');
     rec = readMem().records.find((r) => r.sessionId === sid);
     assert(rec && typeof rec.lastActiveAt === 'string', 'its first input records last activity');
-    ptyWrite({ sender: wc }, { id: 'pane-resume', data: 'x' });
+    ptyWrite(goodEvent, { id: 'pane-resume', data: 'x' });
     const resumed = readMem().records.find((r) => r.sessionId === '5e55a0b1-0000-4000-8000-000000000009');
     assert(resumed && typeof resumed.lastActiveAt === 'string', 'input to a resumed pane records its activity too');
     const mem = readMem();
