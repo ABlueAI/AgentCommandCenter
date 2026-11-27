@@ -1579,6 +1579,23 @@ open PRs (#253 and #254).
   - *Done when:* the commander has run on H1 for one full day and its evening merge list reached
     you; tell any agent "step 80 done" and it ticks this with the date.
 
+## From PR #335 (low-severity hardening from S38)
+
+Step 97 comes from PR #335. Step numbers 92 and 94 to 96 belong to open PRs.
+
+- [ ] **97. Check the Mako window and voice after PR #335's window settings (PR #335).** **About 5
+  minutes**, on the next Tuesday or Friday PC-check evening after merging PR #335. The PR states the
+  main window's `sandbox: true` and `webviewTag: false` explicitly, which a cloud session can't check
+  in a real Electron window.
+  - Pull `main`, close Mako completely (every window), and open it again from its shortcut.
+  - Check that the main window loads with its tabs and panes as usual.
+  - Click into an agent pane, click 🎤 Dictate, say a few words, click ⏺ Stop: the words appear in
+    that pane (Windows may ask for the microphone first).
+  - Open the Logs tab: it shows its usual start-up lines, and no `[main error]` line appeared when
+    you used Dictate (for example a microphone refusal).
+  - *Done when:* you've told any agent what you saw (window, Dictate and Logs as above, or what
+    differed); it ticks this with the date and how it checked.
+
 ## From your open-source verdicts (2026-11-25)
 
 Step 85 comes from PR #294 (docs/DECISIONS.md, 2026-11-25). Step numbers 81, 83 and 84 belong to
