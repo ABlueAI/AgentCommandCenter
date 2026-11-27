@@ -29,11 +29,12 @@ function getTestFiles() {
   walk(__dirname, '');
 
   const stale = Object.keys(SKIPPED_TESTS).filter((file) => !found.delete(file));
-  if (stale.length) throw new Error(`Stale skip-list entry: ${stale.join(', ')}`);
-
   const first = RUN_FIRST.filter((file) => found.delete(file));
   const files = [...first, ...[...found].sort()];
-  if (!files.length) throw new Error('No test files to run.');
+  const errors = [];
+  if (!files.length) errors.push('No test files to run.');
+  if (stale.length) errors.push(`Stale skip-list entry: ${stale.join(', ')}`);
+  if (errors.length) throw new Error(errors.join(' '));
   return files;
 }
 

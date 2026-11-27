@@ -85,6 +85,10 @@ const empty = runFixture({
 assert(empty.status === 1 && /no test files to run/i.test(empty.stderr),
   'runner refuses a tree with only skipped files and files in excluded directories');
 
+const completelyEmpty = runFixture({});
+assert(completelyEmpty.status === 1 && /no test files to run/i.test(completelyEmpty.stderr),
+  'runner reports zero files even when the skip list is also stale');
+
 const stale = runFixture({ 'pass.test.js': "console.log('MUST NOT RUN');" });
 assert(stale.status === 1 && /stale skip-list entry: renderer\/video-model-policy\.test\.js/i.test(stale.stderr)
   && !stale.stdout.includes('MUST NOT RUN'), 'runner refuses a stale skip-list entry before launching suites');
