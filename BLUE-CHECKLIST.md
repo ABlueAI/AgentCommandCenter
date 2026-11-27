@@ -1643,6 +1643,20 @@ Step 88 comes from PR #315 (issue #219). Step numbers 86 and 87 belong to open P
   - *Done when:* you've told any agent what you saw (no warning, rules listed, or what differed);
     it ticks this with the date and how it checked.
 
+## From PR #310 (npm install-script approvals, issue #210)
+
+Step 90 comes from PR #310.
+
+- [ ] **90. Check a clean install on Node 26.13.1 (PR #310).** **About 5 minutes**, on the next
+  Tuesday or Friday PC-check evening after merging PR #310.
+  - On a PC with Node 26.13.1, pull `main` in your Mako checkout, open PowerShell in `app\` and
+    run `npm ci`.
+  - Check that it exits without an error and reports no blocked install scripts for
+    `onnxruntime-node`, `protobufjs` or `sharp`.
+  - Open Mako from its shortcut and check that it starts.
+  - *Done when:* you've told any agent what you saw (clean install and Mako started, or the message
+    you got); it ticks this with the date and how it checked.
+
 ## Coming up this month (the runner will ask when it gets there)
 
 You can start on the first one now, which saves time later.
