@@ -198,6 +198,7 @@ function execFilePostFailure(file, args, opts, cb) {
 // ---- the real-route harness ---------------------------------------------------------------------
 
 function makeElectronStub(userDataDir, sends) {
+  const appHandlers = new Map();
   const fakeWebContents = {
     on() {}, setWindowOpenHandler() {}, openDevTools() {},
     // THE SINK UNDER TEST. `tlog` calls exactly this, with channel 'main-error' or, since S31, 'main-info'
@@ -223,9 +224,11 @@ function makeElectronStub(userDataDir, sends) {
       whenReady: () => Promise.resolve(),
       getPath: (name) => (name === 'userData' ? userDataDir : os.tmpdir()),
       setAppUserModelId() {},
-      on() {}, quit() {},
+      on(ev, fn) { if (!appHandlers.has(ev)) appHandlers.set(ev, []); appHandlers.get(ev).push(fn); },
+      quit() {},
       requestSingleInstanceLock() { throw new Error('main.js must not request the single-instance lock'); },
     },
+    appHandlers,
     BrowserWindow,
     ipcMain: { handle() {}, on() {} },
     shell: { openExternal: async () => {}, openPath: async () => {} },
@@ -331,6 +334,9 @@ async function driveRealRoute(execFileStub, baseline) {
     for (const k of Object.keys(require.cache)) if (!cacheBefore.has(k)) delete require.cache[k];
     for (const k of Object.keys(process.env)) if (!(k in envBefore)) delete process.env[k];
     for (const k of Object.keys(envBefore)) if (process.env[k] !== envBefore[k]) process.env[k] = envBefore[k];
+    // Quit as the app does: will-quit closes the session-memory profile lease, whose open lock
+    // file would otherwise keep userDataDir from being removed on Windows (EBUSY).
+    for (const fn of electronStub.appHandlers.get('will-quit') || []) fn();
     try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch { /* best effort */ }
   }
 
