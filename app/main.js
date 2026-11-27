@@ -1487,8 +1487,8 @@ function listGitWorktrees(repo) {
 }
 
 function outputSandboxRoot(root, create) {
-  const controlDir = path.join(root, '.command-center');
-  const outputs = path.join(controlDir, 'outputs');
+  const outputs = path.join(root, '.command-center', 'outputs');
+  const controlDir = path.dirname(outputs);
   if (create) fs.mkdirSync(root, { recursive: true });
   for (const dir of [controlDir, outputs]) {
     if (create) {

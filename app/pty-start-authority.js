@@ -9,12 +9,10 @@
 //   assess()              — sender trust, then main-owned classification. Runs as the FIRST
 //                           statement of the handler, before any log, filesystem read, pane-status
 //                           enrolment, admission claim, command construction, or spawn.
-//   authorizeFencedRole() — effective-definition resolution and fence policy. Runs ONLY after the
-//                           fenced cwd containment gate has passed, so no role directory is ever
-//                           scanned for a launch whose cwd was not established first.
+//   authorizeRole()       — read the deployed role and, for fenced panes, check its fence policy.
+//                           Main calls it after authorizing the launch directory.
 //
-// Splitting them is deliberate: containment must precede scanning, and a single call could not
-// express that without pulling main's settings/filesystem access into this module.
+// Main owns the directory checks. This module owns role resolution and the resulting refusal.
 //
 // Pure: every dependency is injected. No Electron, filesystem, process, or spawning.
 
