@@ -213,6 +213,45 @@ let currentGenerate = null;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+section('#238: a synthesis failure stops live audio and discards queued speech before reporting');
+
+{
+  const played = playedElements.length;
+  const created = createdUrls.length;
+  let generated = 0;
+  currentGenerate = async () => {
+    if (++generated === 3) throw new Error('simulated synthesis failure');
+    return { audio: new Float32Array([0.1]), sampling_rate: 24000 };
+  };
+  playImpl = () => Promise.resolve(); // Keep the first chunk playing until stopped.
+  let errorReport;
+  window.ccTTS.onStatus(({ state, detail }) => {
+    if (state !== 'error') return;
+    errorReport = {
+      detail,
+      speaking: window.ccTTS.isSpeaking(),
+      pauses: playedElements[played]?.pauseCalls,
+      newUrls: createdUrls.slice(created),
+      released: createdUrls.slice(created).every((url) => revokedUrls.includes(url)),
+    };
+  });
+  try {
+    await window.ccTTS.speak('first chunk. queued chunk. failing chunk.');
+    assert(playedElements.length === played + 1 && errorReport?.newUrls.length === 2,
+      'synthesis fails with one chunk playing and a second queued');
+    assert(errorReport?.pauses === 1 && errorReport.released,
+      'the active chunk is paused and both URLs released by the time the error is shown');
+    assert(errorReport?.detail.includes('simulated synthesis failure') && !errorReport.speaking,
+      'the synthesis error is visible and the engine reports playback has stopped');
+    playedElements[played].fire('ended');
+    assert(playedElements.length === played + 1, 'a late ended event cannot start the discarded chunk');
+  } finally {
+    window.ccTTS.stop();
+    playImpl = null;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 section('A rejected play() is visible and is not overwritten by idle');
 // ══════════════════════════════════════════════════════════════════════════════
 
