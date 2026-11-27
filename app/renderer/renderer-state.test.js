@@ -53,8 +53,12 @@ class Element {
 }
 
 class Terminal {
+  // xterm keeps its options on `term.options`; main's paste policy (#334) sets one there.
+  constructor(options = {}) { this.options = { ...options }; }
   selection = '';
   writes = [];
+  // xterm's parser: main's OSC 52 clipboard refusal (#334) registers a handler on it.
+  parser = { registerOscHandler: (ident, handler) => { this.oscHandlers = { ...this.oscHandlers, [ident]: handler }; return { dispose: noop }; } };
   buffer = { active: {
     length: 1,
     getLine: () => ({ isWrapped: false, translateToString: () => 'current buffer output' }),
