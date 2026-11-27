@@ -28,14 +28,15 @@ function Get-YtDlpPath {
 # Match the normal download environment for the metadata-only child as well.
 function Invoke-VideoScoutDownload {
     param([string]$Executable, [string]$WorkingDirectory, [string[]]$Arguments, [ref]$ExitCode,
-        [datetime]$Deadline = [datetime]::MaxValue)
+        [datetime]$Deadline = [datetime]::MaxValue, [switch]$DiscardStandardError)
     $flags = @('--ignore-config', '--no-plugin-dirs', '--no-cache-dir')
     $deno = (Get-Command deno.exe -CommandType Application -ErrorAction SilentlyContinue).Source
     if ($deno) { $flags += @('--js-runtimes', "deno:$deno") }
     $ffmpeg = (Get-Command ffmpeg.exe -CommandType Application -ErrorAction SilentlyContinue).Source
     if ($ffmpeg) { $flags += @('--ffmpeg-location', $ffmpeg) }
     Invoke-VideoScoutProcess -Executable $Executable -WorkingDirectory $WorkingDirectory `
-        -Arguments ($flags + $Arguments) -Environment (Get-VideoScoutProcessEnvironment $WorkingDirectory) -ExitCode $ExitCode -Deadline $Deadline
+        -Arguments ($flags + $Arguments) -Environment (Get-VideoScoutProcessEnvironment $WorkingDirectory) -ExitCode $ExitCode -Deadline $Deadline `
+        -DiscardStandardError:$DiscardStandardError
 }
 
 # Metadata-only probe (NO download): returns duration (int or $null) + is_live, bounded by a hard
@@ -56,7 +57,7 @@ function Invoke-DurationProbe {
             . $library
             $code = 0
             $probeArgs = @('--no-playlist', '--simulate', '--no-warnings', '--print', '%(duration)s|%(is_live)s', '--', $u)
-            Invoke-VideoScoutDownload -Executable $exe -WorkingDirectory $cwd -Arguments $probeArgs -ExitCode ([ref]$code) -Deadline $deadline
+            Invoke-VideoScoutDownload -Executable $exe -WorkingDirectory $cwd -Arguments $probeArgs -ExitCode ([ref]$code) -Deadline $deadline -DiscardStandardError
             if ($code -ne 0) { throw "yt-dlp metadata lookup exited with code $code." }
         } -ArgumentList $probeLibrary, $YtDlp, $Url, $WorkingDirectory, $deadline
         $finished = Wait-Job $job -Timeout $TimeoutSec

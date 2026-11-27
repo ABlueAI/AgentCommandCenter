@@ -15,7 +15,11 @@ function Invoke-VideoScoutProcess {
         [string]$WorkingDirectory,
         [hashtable]$Environment,
         [ref]$ExitCode,
-        [datetime]$Deadline = [datetime]::MaxValue
+        [datetime]$Deadline = [datetime]::MaxValue,
+        # Drain and drop the child's stderr instead of inheriting it. The metadata probe needs this:
+        # inside a Windows PowerShell 5.1 background job, any stderr the child writes fails the
+        # whole job ("The background process reported an error"), as `2>$null` used to prevent.
+        [switch]$DiscardStandardError
     )
     if (-not [System.IO.Path]::IsPathRooted($Executable) -or [IO.Path]::GetExtension($Executable) -ne '.exe') {
         throw 'Video Scout requires a native executable for this step. Launch refused.'
@@ -26,6 +30,7 @@ function Invoke-VideoScoutProcess {
     $start.UseShellExecute = $false
     $start.RedirectStandardOutput = $true
     $start.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+    if ($DiscardStandardError) { $start.RedirectStandardError = $true }
     $start.EnvironmentVariables.Clear()
     foreach ($entry in $Environment.GetEnumerator()) { $start.EnvironmentVariables[$entry.Key] = $entry.Value }
 
@@ -43,6 +48,8 @@ function Invoke-VideoScoutProcess {
     try {
         $started = $process.Start()
         if (-not $started) { throw 'Video Scout could not start its child process.' }
+        # Read stderr asynchronously so a full stderr pipe can never block the child.
+        if ($DiscardStandardError) { $null = $process.StandardError.ReadToEndAsync() }
         if ($Deadline -eq [datetime]::MaxValue) {
             while ($null -ne ($line = $process.StandardOutput.ReadLine())) { Write-Output $line }
             $process.WaitForExit()
