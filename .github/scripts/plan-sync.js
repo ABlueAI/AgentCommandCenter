@@ -44,7 +44,7 @@
 //   api.createIssue({ title, body, labels, milestone }) -> { number, node_id }
 //   api.updateIssue(number, fields)
 //   api.getPr(number)                -> { state, draft }
-//   board.columns()                  -> { [column name]: optionId }
+//   board.columns()                  -> { [column name]: optionId } (also reads current board items)
 //   board.place(issueNodeId, optionId)
 //   board.remove(issueNodeId)        (no-op when the issue isn't on the board)
 // Any error from `api` or `board` propagates.
@@ -95,8 +95,13 @@ function parsePlan(markdown) {
   const lines = markdown.split(/\r?\n/);
   const header = lines.findIndex((l) => /^\| # \| Session \| Done when \| Auth \| Lane \| Needs \| Status \|\s*$/.test(l));
   if (header < 0) throw new Error('plan sync: session table header not found in docs/PLAN-1.1.md');
+  const separator = lines[header + 1]?.trim().replace(/^\|/, '').replace(/\|$/, '').split('|');
+  if (separator?.length !== 7 || separator.some((cell) => !/^:?-+:?$/.test(cell.trim()))) {
+    throw new Error('plan sync: invalid session table separator in docs/PLAN-1.1.md');
+  }
   const sessions = [];
-  for (let i = header + 2; i < lines.length && lines[i].startsWith('|'); i++) {
+  let i = header + 2;
+  for (; i < lines.length && lines[i].startsWith('|'); i++) {
     const [id, session, doneWhen, auth, lane, needs, status] = cells(lines[i]);
     if (!/^S\d{2}$/.test(id)) throw new Error(`plan sync: bad session id "${id}"`);
     const t = /^\*\*(.+?)\*\*/.exec(session);
@@ -106,6 +111,21 @@ function parsePlan(markdown) {
       status: parseStatus(status), sensitive: /\bSensitive\b/.test(session),
     });
   }
+
+  // A blank line or other interruption ends the Markdown table. Refuse if more session rows
+  // appear before the enclosing section ends, including under any subheadings.
+  const heading = /^ {0,3}(#{1,6})(?:[ \t]|$)/;
+  const section = lines.slice(0, header).reverse().find((line) => heading.test(line));
+  const sectionDepth = section ? heading.exec(section)[1].length : 6;
+  for (; i < lines.length; i++) {
+    const nextHeading = heading.exec(lines[i]);
+    if (nextHeading && nextHeading[1].length <= sectionDepth) break;
+    const nextSession = /^\s*\|?\s*(S\d{2})\s*\|/.exec(lines[i]);
+    if (nextSession) {
+      throw new Error(`plan sync: interrupted session table before ${nextSession[1]} on line ${i + 1} in docs/PLAN-1.1.md`);
+    }
+  }
+
   if (sessions.length === 0) throw new Error('plan sync: the session table is empty');
   const seen = new Set();
   for (const s of sessions) {
@@ -216,23 +236,23 @@ async function syncPlan({ markdown, planUrl, api, board = null, log = () => {} }
   if (listedMilestone && inMilestone > held) log(`the listing found ${inMilestone - held} more items in milestone "${MILESTONE}" than GitHub counts there (an item added while the run listed?); continuing`);
 
   const haveLabels = new Set((await api.listLabels()).map((l) => l.name));
-  for (const label of LABELS) {
-    if (!haveLabels.has(label.name)) { await api.createLabel(label); log(`created label "${label.name}"`); }
-  }
-
-  let milestone = listedMilestone;
-  if (!milestone) { milestone = await api.createMilestone(MILESTONE); log(`created milestone "${MILESTONE}"`); }
-
   const prs = new Map();
   for (const s of sessions) {
     if (s.status.kind === 'running' && !prs.has(s.status.pr)) prs.set(s.status.pr, await api.getPr(s.status.pr));
   }
 
   const columns = board ? await board.columns() : null;
-  if (columns) {
-    const missing = COLUMNS.filter((c) => !(c in columns));
+  if (board) {
+    const missing = COLUMNS.filter((c) => !columns?.[c]);
     if (missing.length) throw new Error(`plan sync: the board's Status field is missing: ${missing.join(', ')}`);
   }
+
+  for (const label of LABELS) {
+    if (!haveLabels.has(label.name)) { await api.createLabel(label); log(`created label "${label.name}"`); }
+  }
+
+  let milestone = listedMilestone;
+  if (!milestone) { milestone = await api.createMilestone(MILESTONE); log(`created milestone "${MILESTONE}"`); }
 
   const summary = [];
   for (const s of sessions) {
@@ -319,6 +339,7 @@ function githubBoard(graphql, { login, number }) {
   let project = null;
   return {
     columns: async () => {
+      project = null;
       const res = await graphql(
         `query($login: String!, $number: Int!) { user(login: $login) { projectV2(number: $number) {
           id field(name: "Status") { ... on ProjectV2SingleSelectField { id options { id name } } } } } }`,
@@ -326,30 +347,67 @@ function githubBoard(graphql, { login, number }) {
       const p = res.user && res.user.projectV2;
       if (!p) throw new Error(`plan sync: project ${login}/${number} not found or not readable`);
       if (!p.field || !p.field.options) throw new Error('plan sync: the board has no single-select "Status" field');
-      project = { id: p.id, fieldId: p.field.id };
+
+      // Both placement and removal use the same snapshot, including archived cards.
+      const items = new Map();
+      const cursors = new Set();
+      let cursor = null;
+      do {
+        const page = await graphql(
+          `query($project: ID!, $cursor: String) { node(id: $project) { ... on ProjectV2 {
+            items(first: 100, after: $cursor, archivedStates: [ARCHIVED, NOT_ARCHIVED]) {
+              nodes {
+                id
+                content { ... on Issue { id } }
+                fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { optionId } }
+              }
+              pageInfo { hasNextPage endCursor }
+            }
+          } } }`, { project: p.id, cursor });
+        const connection = page.node?.items;
+        if (!Array.isArray(connection?.nodes) || typeof connection.pageInfo?.hasNextPage !== 'boolean') {
+          throw new Error('plan sync: the board item listing is unreadable');
+        }
+        for (const item of connection.nodes) {
+          const contentId = item?.content?.id;
+          if (contentId) items.set(contentId, { id: item.id, optionId: item.fieldValueByName?.optionId });
+        }
+        cursor = null;
+        if (connection.pageInfo.hasNextPage) {
+          cursor = connection.pageInfo.endCursor;
+          if (!cursor || cursors.has(cursor)) throw new Error('plan sync: the board item listing did not advance');
+          cursors.add(cursor);
+        }
+      } while (cursor !== null);
+
+      project = { id: p.id, fieldId: p.field.id, items };
       return Object.fromEntries(p.field.options.map((o) => [o.name, o.id]));
     },
     place: async (contentId, optionId) => {
       if (!project) throw new Error('plan sync: board.columns() must run before place()');
-      const added = await graphql(
-        `mutation($project: ID!, $content: ID!) { addProjectV2ItemById(input: { projectId: $project, contentId: $content }) { item { id } } }`,
-        { project: project.id, content: contentId });
+      let item = project.items.get(contentId);
+      if (!item) {
+        const added = await graphql(
+          `mutation($project: ID!, $content: ID!) { addProjectV2ItemById(input: { projectId: $project, contentId: $content }) { item { id } } }`,
+          { project: project.id, content: contentId });
+        item = { id: added.addProjectV2ItemById.item.id };
+        project.items.set(contentId, item);
+      }
+      if (item.optionId === optionId) return;
       await graphql(
         `mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) { updateProjectV2ItemFieldValue(input: {
           projectId: $project, itemId: $item, fieldId: $field, value: { singleSelectOptionId: $option } }) { projectV2Item { id } } }`,
-        { project: project.id, item: added.addProjectV2ItemById.item.id, field: project.fieldId, option: optionId });
+        { project: project.id, item: item.id, field: project.fieldId, option: optionId });
+      item.optionId = optionId;
     },
     remove: async (contentId) => {
       if (!project) throw new Error('plan sync: board.columns() must run before remove()');
-      const res = await graphql(
-        `query($content: ID!) { node(id: $content) { ... on Issue { projectItems(first: 50) { nodes { id project { id } } } } } }`,
-        { content: contentId });
-      const items = ((res.node && res.node.projectItems && res.node.projectItems.nodes) || []).filter((n) => n.project && n.project.id === project.id);
-      for (const item of items) {
-        await graphql(
-          `mutation($project: ID!, $item: ID!) { deleteProjectV2Item(input: { projectId: $project, itemId: $item }) { deletedItemId } }`,
-          { project: project.id, item: item.id });
-      }
+      const item = project.items.get(contentId);
+      if (!item) return;
+      await graphql(
+        `mutation($project: ID!, $item: ID!) { deleteProjectV2Item(input: { projectId: $project, itemId: $item }) { deletedItemId } }`,
+        { project: project.id, item: item.id });
+      project.items.delete(contentId);
     },
   };
 }
