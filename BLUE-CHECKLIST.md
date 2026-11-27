@@ -1718,9 +1718,9 @@ Step 88 comes from PR #315 (issue #219). Step numbers 86 and 87 belong to open P
 
 ## From PR #310 (npm install-script approvals, issue #210)
 
-Step 90 comes from PR #310.
+Step 96 comes from PR #310 (numbered 90 there; renumbered because PR #307's step 90 merged first).
 
-- [ ] **90. Check a clean install on Node 26.13.1 (PR #310).** **About 5 minutes**, on the next
+- [ ] **96. Check a clean install on Node 26.13.1 (PR #310).** **About 5 minutes**, on the next
   Tuesday or Friday PC-check evening after merging PR #310.
   - On a PC with Node 26.13.1, pull `main` in your Mako checkout, open PowerShell in `app\` and
     run `npm ci`.
