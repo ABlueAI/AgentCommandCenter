@@ -1020,6 +1020,14 @@ function formatUsageLine(usage, model, mediaResolution, sliced, sliceCount) {
     `model=${model} mediaRes=${mediaResolution}${sliceTag}`;
 }
 
+// The analysis is model output and prints to the same stream as the usage and quality lines, which
+// the renderer and feed-gemini.ps1 pick out by their bracketed markers (any letter case in
+// PowerShell's -match). Rewrite those markers in the analysis so only the SDK's own lines carry them.
+const LOG_MARKER_RE = /\[(\s*video-scout\s+(?:usage|quality)\s*)\]/gi;
+function neutralizeLogMarkers(text) {
+  return String(text == null ? '' : text).replace(LOG_MARKER_RE, '($1)');
+}
+
 // Upstream error text is attacker-adjacent (it renders provider/network strings into our logs):
 // collapse control chars/newlines so it cannot forge extra log lines, and cap it to one bounded
 // line. Never carries the API key (the key only ever enters the request header).
@@ -1257,7 +1265,7 @@ async function runVideoScout(rawArgs, deps = {}) {
 
     // The analysis text and the usage line print exactly ONCE, only here, only on the
     // accepted success response — a failed attempt has no path to either line.
-    log(`\n${text}\n`);
+    log(`\n${neutralizeLogMarkers(text)}\n`);
     log(usageLine);
     return 0;
   }
@@ -1289,7 +1297,7 @@ function runCliEntry(deps = {}) {
 }
 
 module.exports = {
-  buildRequestBody, formatUsageLine, parseArgs, resolveSliceOffsets,
+  buildRequestBody, formatUsageLine, neutralizeLogMarkers, parseArgs, resolveSliceOffsets,
   resolveSliceRanges, buildAuthorizedScopeInstruction,
   // V4Q generation policy (SDK-owned; scripts/ never imports the renderer copy)
   buildGenerationConfig, resolveEffectiveModel,

@@ -44,8 +44,8 @@ console.log('matchUsageLine: anything else is refused');
 const base = real[0];
 const refused = [
   ['the marker inside other text', `Summary of the video: ${base}`],
-  ['text after the usage fields', `${base} [main] ABlueAgent token stored`],
-  ['a forged log line carrying the marker', '[main error] something [video-scout usage]'],
+  ['text after the usage fields', `${base} trailing words`],
+  ['the marker after other text', 'prefix text [video-scout usage]'],
   ['the marker alone', USAGE_MARKER],
   ['a control character', base.replace('model=', 'model=\u0008')],
   ['a bidirectional override', base.replace('model=gemini', 'model=\u202egemini')],

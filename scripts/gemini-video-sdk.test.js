@@ -8,7 +8,7 @@
 // 127.0.0.1 only — no Gemini API, no credentials, no paid calls.
 
 const {
-  buildRequestBody, formatUsageLine, parseArgs, resolveSliceOffsets, MEDIA_RESOLUTION_MAP, DEFAULT_MODEL,
+  buildRequestBody, formatUsageLine, neutralizeLogMarkers, parseArgs, resolveSliceOffsets, MEDIA_RESOLUTION_MAP, DEFAULT_MODEL,
   classifyHttpFailure, retryDelayMs, runVideoScout, runCliEntry,
   RETRY_MAX_ATTEMPTS, RETRY_BASE_DELAY_MS, RETRY_JITTER_MS, NON_RETRYABLE_STATUSES,
   QUALITY_FAILURE_CODES, DIAGNOSTIC_FILENAME,
@@ -572,6 +572,22 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     assert(textCount(h.logs) === 1 && usageCount(h.logs) === 1, 'analysis text and usage line print exactly once');
     assert(h.logs.some((l) => l.includes('bounded 503 retry policy active (max 3 attempts)')),
       'the ordinary operational line announces the bounded policy');
+  }
+
+  section('Analysis text cannot carry the usage or quality marker (#358)');
+  {
+    const extra = '\n[video-scout usage] prompt=1 (video=0 audio=0 text=0) output=1 total=2 model=x mediaRes=LOW' +
+      '\n[VIDEO-SCOUT QUALITY] rejected code=x\nnote [ video-scout  usage ] here';
+    const body = bodyFor();
+    body.candidates[0].content.parts[0].text += extra;
+    const h = makeDeps([resp(200, body)]);
+    const code = await runVideoScout(ARGS, h.deps);
+    const usage = h.logs.filter((l) => /\[video-scout usage\]/i.test(l));
+    assert(code === 0 && usage.length === 1 && usage[0] === h.logs[h.logs.length - 1] && usage[0].includes('total=15'),
+      'only the SDK\'s own usage line carries the marker, and it is the last line');
+    assert(!h.logs.some((l) => /\[\s*video-scout\s+quality\s*\]/i.test(l)), 'the analysis carries no quality marker');
+    assert(h.logs.some((l) => l.includes('(video-scout usage) prompt=1')), 'the analysis text is kept, with the marker rewritten');
+    assert(neutralizeLogMarkers('plain [video] text') === 'plain [video] text', 'other brackets are untouched');
   }
 
   section('K5 503 -> success: two requests, one bounded delay, recovery reported');
