@@ -451,6 +451,17 @@ withSecureStore(({ file, startup, logs, dialogs, getKey, getToken, flushNotices 
   assert(/if \(r && r\.ok\) updateAgentTokenBanner/.test(tokenClear) &&
     /else appendLog\(.*clear failed: .*r\.error/.test(tokenClear),
     'renderer: token Clear displays the refusal and keeps the stored banner');
+  // Startup credential notices go out on main-error as soon as the page has loaded, so boot() must
+  // listen before its first await (ipcRenderer drops a message that arrives with no listener).
+  const bootAt = app.indexOf('async function boot() {');
+  const bootBody = (bootAt < 0 ? '' : app.slice(bootAt, app.indexOf('\n}\n', bootAt)))
+    .replace(/^\s*\/\/.*$/gm, ''); // comments may say "await"; only code counts
+  const firstAwait = bootBody.search(/\bawait\b/);
+  const errorAt = bootBody.indexOf("cc.onMainError(");
+  const infoAt = bootBody.indexOf("cc.onMainInfo(");
+  assert(errorAt > 0 && infoAt > 0 && firstAwait > 0 && errorAt < firstAwait && infoAt < firstAwait &&
+    (bootBody.match(/cc\.onMainError\(/g) || []).length === 1,
+  'renderer: boot() registers the main-error and main-info listeners once, before its first await');
   const preload = fs.readFileSync(path.join(__dirname, 'preload.js'), 'utf8');
   assert(!/getGeminiKey\s*:|readGeminiKey/.test(preload), 'preload has no way to read the key back');
 }
