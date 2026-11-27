@@ -11,8 +11,8 @@ What this guide is **not**:
 
 - It is **not** a packaged-installer, MSIX, or portable-distribution procedure.
   There is no build, package, or installer script in this repository —
-  `app/package.json` defines only `start`, `start:classic`, `dockview:tripwire`,
-  and `test`. Packaging is deferred; see
+  `app/package.json` defines only `postinstall`, `start`, `start:classic`,
+  `start:dev`, `dockview:tripwire`, and `test`. Packaging is deferred; see
   [RELEASE-1.0-FOUR-DAY-PLAN.md](RELEASE-1.0-FOUR-DAY-PLAN.md) § 6.4 and § 6.5.
 - It is **not** a clean-machine acceptance result. The clean-machine/VM exercise
   is release item 6 and has **not** run. This document is preparation for that
