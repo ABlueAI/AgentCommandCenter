@@ -128,6 +128,8 @@ const ui = {
   activeTermId: 'first',
   sttDictationTargetId: null,
   appendLog() {},
+  sttNotice() {},
+  pushToTalk: null,
 };
 runInNewContext(`${setupControls}\nsetupSTTControls();`, ui);
 
@@ -198,9 +200,18 @@ rejection.catch(() => {}); // Keep the broken baseline runnable so the UI assert
 const realToggle = uiStt.toggle;
 uiStt.toggle = () => rejection;
 status.textContent = '';
-await mic.onclick();
+assert(mic.onclick() === true, 'a click that reaches the engine answers true synchronously (push to talk reads it)');
+await new Promise((resolve) => setTimeout(resolve, 0));
 assert(/^error\b/.test(status.textContent) && ui.sttDictationTargetId === null,
   'the Dictate click handler reports a rejected toggle and clears the pane lock');
+assert(status.textContent.includes('unexpected toggle failure'),
+  'the rejected toggle shows its reason, not only a generic message');
+uiStt.toggle = () => { throw new Error('synchronous toggle failure'); };
+ui.activeTermId = 'first';
+status.textContent = '';
+assert(mic.onclick() === false, 'a toggle that throws at once is reported as refused');
+assert(status.textContent.includes('synchronous toggle failure') && ui.sttDictationTargetId === null,
+  'a synchronous toggle throw shows its reason and clears the pane lock');
 uiStt.toggle = realToggle;
 
 section('#240: decoding closes its AudioContext on both paths');

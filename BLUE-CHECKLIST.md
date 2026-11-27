@@ -1493,6 +1493,24 @@ Step 89 comes from PR #327.
   - *Done when:* both checks behave as above, and you tell any agent "step 89 done"; it ticks this
     with the date.
 
+Step 90 comes from PR #307.
+
+- [ ] **90. Check Dictate and read-aloud failures on your PC (S56, PR #307).** **About 3 minutes**,
+  on the next Tuesday or Friday PC check after you merge PR #307. PR #307 makes Dictate and
+  read-aloud let go of the microphone and speakers when something fails; CI checks it only with
+  stand-ins, so only your PC can show the real microphone and speakers behave.
+  - Pull `main` and restart Mako fully (close every window).
+  - Click into a pane, then double-click 🎤 Dictate quickly while the microphone permission prompt
+    is open (if Windows shows one): there should be one prompt, and the text should land in the
+    first pane you clicked.
+  - Start Dictate and click Stop: the Windows microphone indicator (system tray) should go off.
+  - Block Mako's microphone (Windows Settings > Privacy & security > Microphone), click Dictate: a
+    visible error should show. Allow it again; Dictate should work on the next click.
+  - Read some pane text aloud and, if you can, make it fail (for example, disconnect from the
+    network on a first run of a new voice): the audio should stop when the error shows.
+  - *Done when:* each check behaves as above, and you tell any agent "step 90 done"; it ticks this
+    with the date.
+
 ## From S14 (the 1.1 design brief)
 
 Step 77 comes from PR #253.
