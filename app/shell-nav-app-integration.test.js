@@ -176,6 +176,30 @@ assert(/Saving…$/.test(sf.first || ''), 'the line says "Saving…" until main 
 assert(/Not saved \(save-failed\)/.test(sf.final || '') && !/Saved;/.test(sf.final || ''), 'a failed save says "Not saved", never "Saved"');
 assert(sf.logged === true, 'and the Logs tab says which setting failed');
 
+process.stdout.write('\na selected repository write failure leaves launch controls usable\n');
+const startup = S.startupSaveFails || {};
+assert(startup.wiredWhileSaving === true, 'launch controls are wired while the startup write is pending');
+assert(startup.visible === true && startup.persistsAcrossTabs === true, 'the selected repository write failure stays visible across tabs');
+eq(startup.terminals, ['/projects/startup'], 'Open Terminal still invokes main with the selected repository');
+
+process.stdout.write('\nfailed theme and speech preference writes are visible\n');
+const preferences = S.preferenceSaves || {};
+assert(/theme/i.test(preferences.settingsError || ''), 'the theme write failure is visible from Settings');
+assert(['theme', 'voice', 'speed'].every((word) => (preferences.failures || '').toLowerCase().includes(word)),
+  'each failed preference is named and stays visible alongside the others');
+eq(preferences.applied, { theme: 'nord', voice: 'test-voice', speed: 1.25 }, 'the preferences still take effect for this session');
+assert(preferences.toolbarTheme === 'dracula' && (preferences.saves || []).some((p) => p.theme === 'dracula'),
+  'the toolbar theme change also persists through main');
+assert(!/theme/i.test(preferences.afterThemeRetry || '') && /voice/i.test(preferences.afterThemeRetry || '') &&
+  /speed/i.test(preferences.afterThemeRetry || ''), 'a successful save clears only its own failure');
+
+process.stdout.write('\nagent surfaces show linked worktrees regardless of branch\n');
+const checkout = S.primaryCheckout || {};
+for (const [surface, rows] of [['list', checkout.list], ['grid', checkout.grid]]) {
+  assert(rows && rows.length === 2 && rows[0].includes('/projects/selected-agent') && rows[1].includes('/projects/selected-detached'),
+    surface + ' excludes the primary checkout on master and includes the main and detached linked worktrees');
+}
+
 process.stdout.write('\nnothing reached the network, and no renderer errors\n');
 eq(report.remote, [], 'no remote request');
 eq(report.consoleErrors, [], 'no console errors');
