@@ -368,7 +368,11 @@ process.stdout.write('\nindex.html ships the EMBEDDED dock and loads no Dockview
   // `window.ccShellNav` and builds nothing until app.js's boot() calls createShell();
   // `in-focus-card.js` publishes `window.ccInFocusCard` and builds only when a caller asks;
   // `emblem-rail.js` publishes `window.ccEmblemRail` and builds only when app.js creates it.
-  assert(scriptTags === 34, `index.html loads exactly 34 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view, the terminal key mapping, the authority choice, the usage panel view, the resume view, the agent token view (S31), the Claude Video Scout settings (S54), and S66's colour tokens, navigation shell, In-focus card and emblem rail (found ${scriptTags})`);
+  assert(scriptTags === 35, `index.html loads exactly 35 <script src> tags, including the shared task-name validator (found ${scriptTags})`);
+  const taskValidator = '<script src="../task-name.js"></script>';
+  assert(indexSrc.split(taskValidator).length === 2
+    && indexSrc.indexOf(taskValidator) < indexSrc.indexOf('<script src="app.js"></script>'),
+    'the shared task-name validator loads once before the launcher');
   assert(/<script src="session-resume-view\.js"><\/script>/.test(indexSrc),
     'the S09 resume view is loaded');
   assert(/<script src="usage-view\.js"><\/script>/.test(indexSrc),
