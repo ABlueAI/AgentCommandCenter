@@ -7,6 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const { bootRenderer } = require('./test-fixtures/renderer-boot');
 
 const BASE = 'a2121ca36727bbb3294fd61a057f13730b8a1d17';
 const APP = __dirname;
@@ -100,8 +101,6 @@ const appJs = read('renderer/app.js');
 assert(html.includes('id="quickLinksList"') && html.includes('id="quickLinksSave"') && html.includes('id="quickLinksCancel"'),
   'visible Quick Links list and Save/Cancel controls are in shipped markup');
 assert(html.includes('<script src="quick-links-view.js"></script>'), 'renderer controller is loaded before app wiring');
-assert(appJs.includes('quickLinksView.mount()') && appJs.includes('await quickLinksView.load()'),
-  'Quick Links UI is mounted and explicitly loaded during boot');
 assert(!/\.openById\([^)]*\)/.test(appJs), 'app boot/wiring never auto-opens a Quick Link');
 assert(view.includes("button.onclick = () => { openById(entry.id); }"),
   'the only renderer open trigger is an explicit rendered button click by stored ID');
@@ -226,5 +225,33 @@ for (const suite of requiredTests) {
     `${suite} is reachable exactly once from npm test`);
 }
 
-process.stdout.write(`\nquick-links-integration: ${passed} passed, ${failed} failed\n`);
-process.exit(failed ? 1 : 0);
+async function verifyQuickLinksBoot() {
+  process.stdout.write('\nQuick Links loads saved links on renderer boot\n');
+  const entries = [
+    { id: 'saved-docs', label: 'Saved documentation', url: 'https://docs.example.org/' },
+    { id: 'saved-board', label: 'Saved project board', url: 'https://board.example.org/' },
+  ];
+  let listCalls = 0;
+  const document = await bootRenderer({
+    cc: {
+      quickLinksList: async () => {
+        listCalls += 1;
+        return { ok: true, config: { schemaVersion: 1, entries } };
+      },
+    },
+  });
+  assert(typeof document.getElementById('quickLinksManage').onclick === 'function', 'boot wires the Quick Links Manage button');
+  assert(listCalls === 1, `boot requests the saved Quick Links once (got ${listCalls})`);
+  const buttons = document.getElementById('quickLinksList').children.filter((node) => node.tagName === 'BUTTON');
+  const labels = buttons.map((button) => button.textContent);
+  assert(JSON.stringify(labels) === JSON.stringify(entries.map((entry) => entry.label)),
+    `boot renders the saved Quick Link buttons in order (got ${JSON.stringify(labels)})`);
+}
+
+verifyQuickLinksBoot().then(() => {
+  process.stdout.write(`\nquick-links-integration: ${passed} passed, ${failed} failed\n`);
+  process.exitCode = failed ? 1 : 0;
+}, (error) => {
+  process.stderr.write(`quick-links-integration harness failed: ${error.stack}\n`);
+  process.exitCode = 1;
+});
