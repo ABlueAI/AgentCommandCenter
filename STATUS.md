@@ -3,7 +3,18 @@
 S55 is implemented on its review branch. Independent review and the Windows Firefox profile check
 (checklist step 57) are pending.
 
-Updated 2026-11-27 by the PR sweeper's status PR (covers main up to d664229: PR #317, Codex's
+Updated 2026-11-27 by the PR sweeper's second status PR of the day (covers main up to c50b569:
+PR #302, S69's Trail of Bits patterns in security-reviewer; PR #315, account guard line endings
+and PowerShell deny rules; PR #288, S62's tree and merged-work history data; PR #327, the fence
+hook's page-reader host rule; PR #339, D-091 and D-092 in the rules (Claude's review alone while
+Codex's quota is out; Claude fixes every Codex PR); PR #307, S56's audio bugs; PR #310, fix #210
+(the 3 install scripts); PR #314, fix #249 (secure.json refuses instead of overwriting); PR #316,
+one trusted-sender check on every IPC handler; PR #324, the account guard's remaining command
+forms and work budget; PR #326, authority levels match the docs; PR #334, terminal clipboard,
+paste and links; PR #360, Quick Links refuses every Unicode bidi control (#340); PR #343, renderer
+module tests; PR #362, checklist step 90's duplicate renumbered to 96; verified: GitHub's REST
+API, read 2026-11-27 about 15:50 UTC, shows them merged 2026-11-27 05:11 to 15:37 UTC in that
+order). Before that: updated 2026-11-27 by the PR sweeper's status PR #338 (covers main up to d664229: PR #317, Codex's
 main-process and scripts audit; PR #318, Codex's renderer audit; PR #286, S46's session hygiene;
 PR #287, S47's Symvibe OSS record; verified: GitHub's REST API, read 2026-11-27 about 05:15 UTC,
 shows them merged 2026-11-26 23:42 UTC to 2026-11-27 05:10 UTC in that order). Before that:
@@ -65,8 +76,8 @@ Only the PR sweeper's status PR edits this file (AGENTS.md "The shared brain";
 
 - **The PR sweeper (PR #225, merged 2026-11-25, verified as above; Blue approved it on 2026-11-23, docs/DECISIONS.md
   2026-11-23):** a Claude routine, "Mako PR sweeper", fires hourly (and on every push to `main` once
-  that trigger is added). It merges `main` into conflicting `claude/` PRs and Codex's docs-only record PRs (on Codex's
-  other PRs it asks Codex in a comment), clears
+  that trigger is added). It merges `main` into conflicting `claude/` PRs and, since PR #339 (D-092, merged 2026-11-27),
+  every conflicting `codex/` PR too, fixing Codex's PRs itself instead of asking Codex, clears
   `waits-for-merge` waits, opens PRs for Codex branches that have none and reviews them, and keeps
   this file current through one status PR a day. Its instructions are
   [docs/SWEEPER.md](docs/SWEEPER.md). Blue's part: checklist step 70 (about 5 minutes: add the
@@ -180,7 +191,7 @@ Only the PR sweeper's status PR edits this file (AGENTS.md "The shared brain";
   session's final message (not verified: Blue confirms he has them when he does step 78). New
   findings: 1 high (#258), 11 medium (#259 to #269) and 16 low (15 hardening items and 1 question
   for Blue; checklist issue #270) (verified: the issues on GitHub, 2026-11-24). Known issues #85,
-  #249 and #252 still hold (builder's reading: the code they name is unchanged on `b99e377`; not
+  #249 (since fixed by PR #314, merged 2026-11-27) and #252 still hold (builder's reading: the code they name is unchanged on `b99e377`; not
   re-tested). Nothing was fixed in that PR: each fix comes in its own PR with a neutral title. #265
   needs a repository-settings change only Blue makes (BLUE-CHECKLIST.md step 78), and some findings
   need a check on his PC (step 79).
@@ -223,7 +234,7 @@ Only the PR sweeper's status PR edits this file (AGENTS.md "The shared brain";
   on Node 22 to test the oldest supported version. Two issues from his PCs are open: #210 (npm's
   allowScripts) and #211 (`app/page-reader.test.js` on a PC with the page-reader agent installed).
   #211 was closed by PR #231 (merged 2026-11-24; checklist step 74 re-runs the tests on his PC);
-  #210 is still open.
+  #210 was fixed by PR #310 (merged 2026-11-27).
 - **Composer research (S16, PR #82):** [docs/decisions/OSS-composer.md](docs/decisions/OSS-composer.md)
   covers Dodaios (sandboxed trial without any model or key), Claude Code's parallel-agent features
   and Projects, Microsoft Conductor, the R15 pattern mine, Cloudroom (no Windows build) and workflow
@@ -385,7 +396,8 @@ Only the PR sweeper's status PR edits this file (AGENTS.md "The shared brain";
     tasks keep their older prompt text until a checklist step applies the new prompts (docs/RUNNER.md).
   - Hard rules (PR #227, merged 2026-11-24; docs/DECISIONS.md 2026-11-23): AGENTS.md opens with
     its hard rules; `READY TO MERGE` needs both Claude's review pass and Codex's pass on the latest
-    head; the agent account keeps to 24 pushes and 120 GitHub writes an hour. PR #244 (merged
+    head (since PR #339, D-091, merged 2026-11-27: Claude's pass alone while Codex's review quota is
+    exhausted); the agent account keeps to 24 pushes and 120 GitHub writes an hour. PR #244 (merged
     2026-11-24) lets a Claude session mark a Codex PR ready under the same rule as its own.
   - The merge audit raised a false alert on 2026-10-18 (issue #35): PR #33 was stacked on #32's
     branch, and its commits reached `main` through PR #34. The audit now counts every commit of a PR
