@@ -231,6 +231,64 @@ section('S09: `offered` keeps S08 files valid and refuses a bad value');
   assert(JSON.parse(fs.readFileSync(path.join(dir, FILENAME), 'utf8')).records[0].offered === 'yes', 'and the file is left exactly as it was');
 }
 
+section('S46: owner, done-when, last activity and auto-archive');
+{
+  const dir = freshDir();
+  const s = createSessionMemoryStore({ userDataDir: dir, now: clock('2026-11-25T10:00:00Z') });
+  const a = id(), b = id(), c = id(), d = id();
+  assert(s.recordStart({ sessionId: a, cli: 'claude' }).ok && s.list().records[0].owner === 'blue', 'a new record is owned by Blue by default');
+  assert(s.recordStart({ sessionId: b, cli: 'claude', owner: 'composer' }).ok, 'a known owner is accepted');
+  const badOwner = s.recordStart({ sessionId: id(), cli: 'claude', owner: 'mallory' });
+  assert(!badOwner.ok && badOwner.reason === REASON.BAD_OWNER, 'an unknown owner is refused');
+
+  assert(s.touch(a).ok && typeof s.list().records.find((r) => r.sessionId === a).lastActiveAt === 'string', 'touch records last activity on an open record');
+  assert(s.setDoneWhen(a, '  tests pass  ').ok && s.list().records.find((r) => r.sessionId === a).doneWhen === 'tests pass', 'setDoneWhen saves one trimmed line');
+  for (const bad of ['two\nlines', 'tab\there', 'x'.repeat(201), 42, null, 'a\u2028b']) {
+    const r = s.setDoneWhen(a, bad);
+    assert(!r.ok && r.reason === REASON.BAD_DONE_WHEN, 'setDoneWhen refuses ' + JSON.stringify(bad).slice(0, 30));
+  }
+  assert(s.list().records.find((r) => r.sessionId === a).doneWhen === 'tests pass', 'and a refused value changes nothing');
+  assert(s.setDoneWhen(id(), 'x').reason === REASON.UNKNOWN_SESSION, 'setDoneWhen refuses an unknown session');
+  assert(s.setDoneWhen(a, '').ok && !('doneWhen' in s.list().records.find((r) => r.sessionId === a)), "'' clears it");
+
+  s.recordStart({ sessionId: c, cli: 'claude' });
+  s.recordStart({ sessionId: d, cli: 'claude' });
+  s.recordStop(a, STOP_REASON.EXITED);   // finished
+  s.recordStop(b, STOP_REASON.CLOSED);   // finished
+  s.recordStop(c, STOP_REASON.MAKO_CLOSED); // waiting for Resume or Start fresh
+  const lastA = s.list().records.find((r) => r.sessionId === a).lastActiveAt;
+  assert(s.touch(a).ok && s.list().records.find((r) => r.sessionId === a).lastActiveAt === lastA, 'touch on a stopped record changes nothing');
+  const arch = s.archiveFinished();
+  assert(arch.ok && arch.archived === 2, 'archiveFinished archives the exited and the closed session');
+  const recs = s.list().records;
+  assert(recs.find((r) => r.sessionId === c).archivedAt === undefined && recs.find((r) => r.sessionId === d).archivedAt === undefined,
+    'a session waiting for Resume, and a running one, stay');
+  assert(s.archiveFinished().archived === 0, 'a second sweep archives nothing new');
+  s.markOffered(c);
+  assert(s.archiveFinished().archived === 1, 'once Blue answers the offer, that session archives too');
+}
+
+section('S46: files written before S46 stay valid; bad S46 fields make the file invalid');
+{
+  const dir = freshDir();
+  const base = { sessionId: id(), paneId: 'p1', role: null, cli: 'claude', worktree: 'D:\\w',
+    startedAt: '2026-10-27T09:00:00.000Z', stoppedAt: null, stopReason: null };
+  const s = createSessionMemoryStore({ userDataDir: dir });
+  fs.writeFileSync(path.join(dir, FILENAME), JSON.stringify({ version: 1, records: [base] }));
+  assert(s.list().ok, 'a record with no owner, done-when, last activity or archive time reads');
+  for (const [label, extra] of [
+    ['an unknown owner', { owner: 'x' }],
+    ['a done-when with a line break', { doneWhen: 'a\nb' }],
+    ['an untrimmed done-when', { doneWhen: ' a' }],
+    ['a bad lastActiveAt', { lastActiveAt: 'yesterday' }],
+    ['a bad archivedAt', { archivedAt: 5 }],
+  ]) {
+    fs.writeFileSync(path.join(dir, FILENAME), JSON.stringify({ version: 1, records: [Object.assign({}, base, extra)] }));
+    const r = s.list();
+    assert(!r.ok && r.reason === REASON.INVALID, label + ' makes the file invalid (refused, never repaired)');
+  }
+}
+
 try { fs.rmSync(ROOT, { recursive: true, force: true }); } catch { /* best effort */ }
 {
   const store = createSessionMemoryStore({

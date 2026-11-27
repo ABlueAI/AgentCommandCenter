@@ -4,6 +4,8 @@
 // launches a Claude pane locally, that fenced roles and non-Claude panes get no permission mode, and
 // that no renderer value other than a known level name is accepted or reaches the command text.
 
+const fs = require('node:fs');
+const path = require('node:path');
 const {
   LEVEL, LEVELS, PERMISSION_MODE, ALLOWED_TOOLS, DISALLOWED_TOOLS, CLOUD_SESSION_URL, REASON,
   applyAuthority, permissionModeArg, authorityArgs,
@@ -99,32 +101,28 @@ assert(permissionModeArg(Object.assign({}, roleWebScout, { permissionMode: 'auto
   'a fenced launch yields no flag even if a mode is present');
 assert(permissionModeArg(null) === '' && permissionModeArg(undefined) === '', 'no launch, no flag');
 
-process.stdout.write('\nS31: EXPLICIT TOOL SETS (the env scrub forces default mode)\n');
+process.stdout.write('\nS31: EXPLICIT TOOL SETS\n');
 {
-  const has = (level, t) => ALLOWED_TOOLS[level].includes(t);
-  assert(LEVELS.filter((l) => l !== LEVEL.MAXIMUM).every((l) => Array.isArray(ALLOWED_TOOLS[l]) && ALLOWED_TOOLS[l].length > 0),
-    'every local level has an explicit allowed-tools set');
+  const readTools = 'Read,Glob,Grep,TodoWrite';
+  const editingTools = readTools + ',Edit,Write,NotebookEdit';
+  const expectedAllows = { minimum: readTools, medium: editingTools, high: editingTools };
   assert(!(LEVEL.MAXIMUM in ALLOWED_TOOLS), 'Maximum has none (it never runs locally)');
-  assert(['Read', 'Glob', 'Grep'].every((t) => has('minimum', t)) && !has('minimum', 'Edit') && !has('minimum', 'Write'),
-    'Minimum: read tools only');
   assert(DISALLOWED_TOOLS.minimum.join(',') === 'Edit,Write,NotebookEdit', 'Minimum denies the edit tools');
-  assert(has('medium', 'Edit') && has('medium', 'Write') && !ALLOWED_TOOLS.medium.some((t) => /^Bash/.test(t)),
-    'Medium: edits, no commands (they still ask)');
   assert(!(LEVEL.MEDIUM in DISALLOWED_TOOLS) && !(LEVEL.HIGH in DISALLOWED_TOOLS), 'Medium and High deny nothing extra');
-  assert(has('high', 'Edit') && has('high', 'Bash(git commit:*)'), 'High: edits plus routine git commands');
-  assert(!ALLOWED_TOOLS.high.some((t) => /npm|npx|node|pnpm|yarn|python|pwsh|powershell|cmd|fetch|pull|clone|remote|submodule|config|-c /i.test(t)),
-    'High: nothing that runs code the agent can write unasked (no npm test/ci, no interpreter)');
+  assert(!ALLOWED_TOOLS.high.some((rule) => /^Bash\(git (commit|switch)(?:[: )]|$)/.test(rule)),
+    'High: commit and switch have no automatic grant, including in repositories with configured hooks');
+  assert(!ALLOWED_TOOLS.high.some((rule) => /^Bash/.test(rule)), 'High: no blanket allowances for Git or other Bash commands');
   const all = [].concat(...Object.values(ALLOWED_TOOLS));
   assert(!all.some((t) => /push|^Bash$|^Bash\(\*|node:|npm install|rm |curl|powershell/i.test(t)),
     'no level allows git push, all of Bash, a general interpreter, installs, deletes or downloads');
   assert(all.every((t) => /^[A-Za-z]+(\([a-z ]+:\*\))?$/.test(t)), 'every rule is a plain constant (no quotes or shell characters)');
   assert(Object.isFrozen(ALLOWED_TOOLS) && Object.values(ALLOWED_TOOLS).every(Object.isFrozen), 'the sets are frozen');
-  for (const level of ['minimum', 'medium', 'high']) {
+  for (const [level, allowed] of Object.entries(expectedAllows)) {
     const r = applyAuthority(roleBuilder, level);
     const a = authorityArgs(r);
-    assert(a.startsWith(" --allowedTools '" + ALLOWED_TOOLS[level].join(',') + "'"), `${level}: the allowed set comes first, single-quoted`);
-    assert(a.endsWith(' --permission-mode ' + PERMISSION_MODE[level]), `${level}: the mode comes last, so no list swallows an opening prompt`);
-    assert((level === 'minimum') === (a.indexOf(" --disallowedTools 'Edit,Write,NotebookEdit'") !== -1), `${level}: edit denial only at Minimum`);
+    const denial = level === 'minimum' ? " --disallowedTools 'Edit,Write,NotebookEdit'" : '';
+    const expected = ` --allowedTools '${allowed}'${denial} --permission-mode ${PERMISSION_MODE[level]}`;
+    assert(a === expected, `${level}: the command has the exact rules in order, before the permission mode`);
     assert(authorityArgs(applyAuthority(cliClaude, level)) === a, `${level}: a bare claude pane gets the same text`);
   }
   for (const level of ['minimum', 'medium', 'high']) {
@@ -142,6 +140,15 @@ process.stdout.write('\nS31: EXPLICIT TOOL SETS (the env scrub forces default mo
   const local = applyAuthority(cliCodex, LEVEL.MAXIMUM);
   assert(local.ok && local.authority === LEVEL.MAXIMUM && local.permissionMode === null && !local.authorityApplied,
     'Maximum does not attach Claude permission flags to another CLI');
+}
+
+process.stdout.write('\nDOCUMENTED PERMISSION BEHAVIOR\n');
+{
+  const docs = fs.readFileSync(path.join(__dirname, '..', 'docs', 'AUTHORITY-LEVELS.md'), 'utf8');
+  assert(docs.includes('| High | Same as Medium | None |'), 'the docs match High\'s explicit tool sets');
+  assert(/tracked hooks or `core\.hooksPath`/.test(docs), 'the docs cover repositories with configured hooks');
+  assert(/Whether Claude Code applies `--allowedTools` under the scrub is\s+\*\*unverified\*\*/.test(docs),
+    'the docs mark allow-rule behavior under the scrub as unverified');
 }
 
 process.stdout.write(`\nauthority-level: ${passed} passed, ${failed} failed\n`);

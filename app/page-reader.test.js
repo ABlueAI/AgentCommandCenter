@@ -176,7 +176,8 @@ section('3. Tripwire: the same literals everywhere');
   const hook = fs.readFileSync(HOOK_SRC, 'utf8');
   assert(hook.indexOf("const PAGE_NAVIGATE_TOOL = '" + pr.MCP_TOOLS[0] + "';") !== -1, 'the hook names the same navigate tool');
   assert(hook.indexOf("const PAGE_SNAPSHOT_TOOL = '" + pr.MCP_TOOLS[1] + "';") !== -1, 'the hook names the same snapshot tool');
-  assert(hook.indexOf('const PAGE_MAX_URL_LENGTH = ' + pr.MAX_URL_LENGTH + ';') !== -1, 'the hook uses the same URL length cap');
+  assert(hook.includes("const PAGE_POLICY_ENV_KEY = '" + pr.POLICY_ENV_KEY + "';"),
+    'the hook reads the validator from the app-owned environment key');
   assert(JSON.stringify(policy.ROLE_MCP_TOOLS['page-reader']) === JSON.stringify(pr.MCP_TOOLS), 'the fence policy grants the same two tools');
   assert(Object.keys(policy.ROLE_MCP_TOOLS).join() === 'page-reader', 'no other role has an MCP grant');
   const role = fs.readFileSync(ROLE_SRC, 'utf8').replace(/\r\n/g, '\n'); // CRLF on a Windows checkout
@@ -213,14 +214,49 @@ section('4. Fence policy: the MCP grant is page-reader only');
 section('5. Fence hook gates (the real hook)');
 {
   const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'mako-page-reader-hook-'));
+  process.once('exit', () => fs.rmSync(sandbox, { recursive: true, force: true }));
+  const deployedHook = path.join(sandbox, 'fence-write.js');
+  fs.copyFileSync(HOOK_SRC, deployedHook);
   const env = Object.assign({}, process.env);
   delete env.BLUE_HELM_CONTROLLED_WEBFETCH_MODE; // a page-reader pane is issued no WebFetch mode
-  const run = (tool, input) => spawnSync(process.execPath, [HOOK_SRC], {
-    input: JSON.stringify({ cwd: sandbox, tool_name: tool, tool_input: input }), env, encoding: 'utf8',
+  const policyKey = pr.POLICY_ENV_KEY;
+  env[policyKey] = require.resolve('./page-reader');
+  const run = (tool, input, hookEnv = env) => spawnSync(process.execPath, [deployedHook], {
+    input: JSON.stringify({ cwd: sandbox, tool_name: tool, tool_input: input }), env: hookEnv, encoding: 'utf8',
   });
   const nav = 'mcp__playwright__browser_navigate';
   const snap = 'mcp__playwright__browser_snapshot';
   assert(run(nav, { url: 'https://www.reddit.com/r/x/comments/y/z/' }).status === 0, 'navigate to an https page is allowed');
+  for (const [label, hostname] of [
+    ['localhost', 'localhost'], ['local hostname', 'printer.local'],
+    ['IPv4 loopback', '127.0.0.1'], ['IPv4 private', '10.0.0.1'],
+    ['IPv4 link-local', '169.254.1.1'], ['IPv4 unspecified', '0.0.0.0'],
+    ['IPv4 carrier-grade NAT', '100.64.0.1'], ['IPv4 multicast', '224.0.0.1'],
+    ['IPv4 reserved', '240.0.0.1'], ['IPv4 broadcast', '255.255.255.255'],
+    ['IPv6 loopback', '[::1]'], ['IPv6 link-local', '[fe80::1]'],
+    ['IPv6 unique local', '[fd00::1]'], ['IPv6 unspecified', '[::]'],
+    ['IPv6 multicast', '[ff02::1]'], ['IPv6 reserved', '[2001:db8::1]'],
+    ['IPv6 outside global unicast', '[4000::1]'], ['IPv4-mapped private', '[::ffff:10.0.0.1]'],
+  ]) {
+    const result = run(nav, { url: 'https://' + hostname + '/' });
+    assert(result.status === 2 && result.stderr.includes('[fence-page-denied]')
+      && !result.stderr.includes(hostname), 'navigation visibly refuses ' + label);
+  }
+  for (const hostname of ['example.org', '8.8.8.8', '[2606:4700:4700::1111]']) {
+    assert(run(nav, { url: 'https://' + hostname + '/' }).status === 0, 'navigation accepts a public host');
+  }
+  for (const u of [' https://example.org/', 'https://example.org/ ', '\thttps://example.org/', 'https://example.org/\n']) {
+    const r = run(nav, { url: u });
+    assert(r.status === 2 && r.stderr.includes('[fence-page-denied]'),
+      'navigation refuses a URL the browser would get with surrounding whitespace ' + JSON.stringify(u));
+  }
+  const missingPolicy = { ...env, [policyKey]: '' };
+  const badPolicy = { ...env, [policyKey]: path.join(sandbox, 'missing.js') };
+  for (const hookEnv of [missingPolicy, badPolicy]) {
+    const result = run(nav, { url: 'https://example.org/' }, hookEnv);
+    assert(result.status === 2 && result.stderr.includes('[fence-page-check-unavailable]')
+      && !result.stderr.includes(sandbox), 'navigation visibly refuses when the shared check is unavailable');
+  }
   for (const u of ['http://www.reddit.com/', 'file:///etc/passwd', 'https://u:p@example.org/', 'chrome://settings', 'javascript:alert(1)', '', 'https://example.org/' + 'a'.repeat(2000)]) {
     const r = run(nav, { url: u });
     assert(r.status === 2 && r.stderr.indexOf('[fence-page-denied]') !== -1, 'navigate refuses ' + JSON.stringify(u.slice(0, 30)));
@@ -282,7 +318,7 @@ function electronStub() {
 }
 const ptyStub = {
   spawn(file, args, opts) {
-    record.spawnArgs.push({ file, args, cwd: opts && opts.cwd });
+    record.spawnArgs.push({ file, args, cwd: opts && opts.cwd, env: opts && opts.env });
     return new Proxy({ onData() {}, onExit() {}, write() {}, resize() {}, kill() {}, pid: 4321 }, { get(t, k) { return k in t ? t[k] : () => {}; } });
   },
 };
@@ -353,6 +389,13 @@ Module._load = function (request) {
     if (started.ok !== true) process.stdout.write('  (pty-start refused: ' + started.error + ')\n');
     assert(started.ok === true, 'pty-start launches with the temporary page-reader copy despite an installed agent above it');
     const spawn = record.spawnArgs[record.spawnArgs.length - 1];
+    assert(spawn && spawn.env[pr.POLICY_ENV_KEY] === require.resolve('./page-reader'),
+      'the real launch gives the page-reader hook the app-owned validator');
+    const navigation = spawnSync(process.execPath, [path.join(hooks, 'fence-write.js')], {
+      input: JSON.stringify({ cwd: r.dir, tool_name: pr.MCP_TOOLS[0], tool_input: { url: URL_OK } }),
+      env: spawn && spawn.env, encoding: 'utf8',
+    });
+    assert(navigation.status === 0, 'the deployed hook can check navigation using the actual pane environment');
     const cmd = spawn && spawn.args[spawn.args.indexOf('-Command') + 1];
     process.stdout.write('  command: ' + cmd + '\n');
     const expectPrefix = 'claude --agent page-reader "' + pr.OPENING_PROMPT + '" --disallowedTools Bash Glob NotebookEdit ' + pr.DENIED_MCP_TOOLS.join(' ') + ' --mcp-config ' + pr.psQuote(cfgPath) + ' --strict-mcp-config --allowedTools ' + pr.psQuote(pr.MCP_TOOLS.join(','));
@@ -366,6 +409,8 @@ Module._load = function (request) {
     const scout = await ptyStart(good, { id: 'scout-1', role: 'web-scout', cli: 'claude', cwd: r.dir, cols: 80, rows: 24 });
     assert(scout.ok === true, 'a web-scout pane still launches');
     const scoutSpawn = record.spawnArgs[record.spawnArgs.length - 1];
+    assert(scout.ok && scoutSpawn.env[pr.POLICY_ENV_KEY] === undefined,
+      'the web-scout launch receives no page-reader policy');
     const scoutCmd = scout.ok ? scoutSpawn.args[scoutSpawn.args.indexOf('-Command') + 1] : '';
     assert(scoutCmd.indexOf('--mcp-config') === -1 && scoutCmd.indexOf('mcp__') === -1, 'other roles get no MCP config or MCP tools');
 

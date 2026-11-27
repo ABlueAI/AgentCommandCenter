@@ -48,17 +48,14 @@ const loadWhisper = createWhisperLoader(pipeline);
 let asr = null;         // resolved pipeline (only ever set from a RESOLVED bootstrap)
 let loading = null;     // in-flight load promise
 let activeDevice = '';  // backend that actually initialized ('' until proven)
-let recording = false;
+let starting = false;   // waiting for the microphone and starting the recorder
+let recording = null;   // active capture: stream, recorder and its chunks
 let videoBusy = false;
 let videoCancelled = false; // set when the Video Scout pane is closed mid-transcription
 let videoOwner = null;      // the Video Scout pane whose audio is being transcribed
 let busy = false;       // transcribing
 let statusCb = null;
 let resultCb = null;
-
-let stream = null;      // MediaStream
-let recorder = null;    // MediaRecorder
-let chunks = [];
 
 function setStatus(state, detail) { if (statusCb) try { statusCb({ state, detail }); } catch {} }
 
@@ -87,8 +84,12 @@ async function ensureModel(reportStatus = setStatus) {
 async function toPcm16k(blob) {
   const buf = await blob.arrayBuffer();
   const ac = new (window.AudioContext || window.webkitAudioContext)();
-  const decoded = await ac.decodeAudioData(buf);
-  try { await ac.close(); } catch {}
+  let decoded;
+  try {
+    decoded = await ac.decodeAudioData(buf);
+  } finally {
+    await ac.close();
+  }
   const frames = Math.max(1, Math.ceil(decoded.duration * 16000));
   const off = new OfflineAudioContext(1, frames, 16000);
   const src = off.createBufferSource();
@@ -100,43 +101,59 @@ async function toPcm16k(blob) {
 }
 
 // --- record / transcribe ------------------------------------------------------
+const VIDEO_BUSY_STATUS = 'Whisper is transcribing a Video Scout clip. Try again when it finishes.';
+
 async function start() {
-  if (recording || busy) return;
+  if (starting || recording || busy) return;
   if (videoBusy) {
-    setStatus('error', 'Whisper is transcribing a Video Scout clip. Try again when it finishes.');
+    setStatus('error', VIDEO_BUSY_STATUS);
     return;
   }
+  starting = true;
+  setStatus('starting', 'requesting the microphone…');
+
+  let stream;
+  let failure;
   try {
     stream = await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
+    if (videoBusy) {
+      failure = VIDEO_BUSY_STATUS;
+    } else {
+      const chunks = [];
+      const recorder = new MediaRecorder(stream, getRecorderOptions(MediaRecorder));
+      recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+      recorder.start();
+      recording = { stream, recorder, chunks };
+    }
   } catch (e) {
-    setStatus('error', 'microphone unavailable: ' + (e && e.message));
-    return;
+    const reason = String((e && e.message) || e).slice(0, 160);
+    failure = (stream ? 'could not start recording: ' : 'microphone unavailable: ') + reason;
+  } finally {
+    starting = false;
+    if (stream && !recording) stream.getTracks().forEach((track) => track.stop());
   }
-  if (videoBusy) {
-    stream.getTracks().forEach((track) => track.stop());
-    stream = null;
-    setStatus('error', 'Whisper is transcribing a Video Scout clip. Try again when it finishes.');
-    return;
-  }
-  chunks = [];
-  recorder = new MediaRecorder(stream, getRecorderOptions(MediaRecorder));
-  recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-  recorder.start();
-  recording = true;
-  setStatus('recording');
+  if (failure) setStatus('error', failure);
+  else setStatus('recording');
 }
 
 async function stopAndTranscribe() {
   if (!recording) return '';
-  recording = false;
+  const { stream, recorder, chunks } = recording;
+  recording = null;
   busy = true;
   setStatus('transcribing', 'finalizing recording…');
-  await new Promise((res) => { recorder.onstop = res; try { recorder.stop(); } catch { res(); } });
-  try { stream.getTracks().forEach((t) => t.stop()); } catch {}
 
   let text = '';
   try {
-    const blob = new Blob(chunks, { type: (recorder && recorder.mimeType) || 'audio/webm' });
+    try {
+      await new Promise((resolve) => {
+        recorder.onstop = resolve;
+        recorder.stop();
+      });
+    } finally {
+      stream.getTracks().forEach((track) => track.stop());
+    }
+    const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
     if (blob.size > 0) {
       const pcm = await toPcm16k(blob);
       const capture = assertUsableCapture(analyzePcm(pcm, 16000));
@@ -151,8 +168,8 @@ async function stopAndTranscribe() {
   } catch (e) {
     // Bounded, honest failure. The bootstrap's combined error already names BOTH
     // attempted backends with their reasons; anything else is a transcription failure.
-    setStatus('error', describeTranscriptionError(e));
     busy = false;
+    setStatus('error', describeTranscriptionError(e));
     return '';
   }
   busy = false;
@@ -163,7 +180,7 @@ async function stopAndTranscribe() {
   return text;
 }
 
-// Toggle: first press records immediately, second press stops + transcribes + emits the text.
+// Once recording starts, the next press stops, transcribes and emits the text.
 async function toggle() {
   if (recording) return stopAndTranscribe();
   return start();
@@ -203,11 +220,20 @@ function cancelVideoTranscription(owner) {
   if (ownsVideoTranscription(videoBusy, videoOwner, owner)) videoCancelled = true;
 }
 
+// The bounded reason app.js shows when a Dictate click fails in a way start() and
+// stopAndTranscribe() don't already report (an unexpected throw or rejection). Like the other
+// reasons this module writes, it is the error's message cut to 160 characters, never the transcript.
+function describeUnexpectedFailure(e) {
+  return 'Dictation could not complete: ' + String((e && e.message) || e).slice(0, 160);
+}
+
 window.ccSTT = {
+  describeUnexpectedFailure,
   transcribeVideoPcm,
   cancelVideoTranscription,
   toggle,
-  isRecording: () => recording,
+  isStarting: () => starting,
+  isRecording: () => recording !== null,
   isBusy: () => busy,
   getModel: () => WHISPER_MODEL_ID,
   getBackend: () => activeDevice,
