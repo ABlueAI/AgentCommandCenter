@@ -9,7 +9,9 @@ const path = require('path');
 const crypto = require('crypto');
 const {
   createSessionMemoryStore, isSessionId, FILENAME, MAX_RECORDS, STOP_REASON, REASON,
+  acquireProfileLease, errorCause,
 } = require('./session-memory');
+const childProcess = require('child_process');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -171,7 +173,7 @@ section('retention keeps running sessions and prunes the oldest closed record fi
   const before = fs.readFileSync(s.filePath(), 'utf8');
   const overflowId = id();
   const full = s.recordStart({ sessionId: overflowId });
-  assert(!full.ok && typeof full.reason === 'string', 'a full store of open records visibly refuses a new record');
+  assert(!full.ok && full.reason === REASON.FULL, 'a full store of open records visibly refuses a new record');
   assert(fs.readFileSync(s.filePath(), 'utf8') === before, 'the refusal leaves every open record intact');
   s.recordStop(JSON.parse(before).records[0].sessionId, STOP_REASON.EXITED);
   assert(s.recordStart({ sessionId: overflowId }).ok && s.list().records.at(-1).sessionId === overflowId,
@@ -310,6 +312,44 @@ section('S46: files written before S46 stay valid; bad S46 fields make the file 
     const r = s.list();
     assert(!r.ok && r.reason === REASON.INVALID, label + ' makes the file invalid (refused, never repaired)');
   }
+}
+
+section('Profile lease: one owner per profile across OS processes');
+{
+  const dir = freshDir();
+  const modulePath = path.join(__dirname, 'session-memory.js');
+  // A separate OS process holds the lease until its stdin closes, as a second Mako copy would.
+  const holder = childProcess.spawnSync(process.execPath, ['-e', `
+    const m = require(${JSON.stringify(modulePath)});
+    const l = m.acquireProfileLease(${JSON.stringify(dir)});
+    const own = l.ok;
+    const { spawnSync } = require('child_process');
+    const probe = spawnSync(process.execPath, ['-e', 'const m = require(' + JSON.stringify(${JSON.stringify(modulePath)}) + '); const r = m.acquireProfileLease(' + JSON.stringify(${JSON.stringify(dir)}) + '); process.stdout.write(JSON.stringify(r)); if (r.ok) r.release();'], { encoding: 'utf8' });
+    if (own) l.release();
+    process.stdout.write(JSON.stringify({ own, other: JSON.parse(probe.stdout || 'null') }));
+  `], { encoding: 'utf8' });
+  let out = null;
+  try { out = JSON.parse(holder.stdout); } catch { out = null; }
+  assert(out && out.own === true, 'a process acquires the free profile lease');
+  assert(out && out.other && out.other.ok === false && out.other.reason === REASON.PROFILE_BUSY,
+    'another OS process on the same profile is refused as profile-busy');
+  const after = acquireProfileLease(dir);
+  assert(after.ok === true, 'the lease is free again once the holder released it and exited');
+  if (after.ok) after.release();
+  const again = acquireProfileLease(dir);
+  assert(again.ok === true, 'release then re-acquire works in one process');
+  if (again.ok) again.release();
+
+  const notADir = path.join(dir, 'regular-file');
+  fs.writeFileSync(notADir, 'x');
+  const broken = acquireProfileLease(notADir);
+  assert(broken.ok === false && broken.reason === REASON.PROFILE_LOCK_FAILED,
+    'a lock that cannot be created is refused as profile-lock-failed, not as busy');
+  assert(typeof broken.cause === 'string' && /^[A-Za-z0-9_-]{1,48}$/.test(broken.cause) && !broken.cause.includes(dir),
+    'the lock failure carries a bounded, path-free cause');
+  assert(errorCause(Object.assign(new Error('C:\\Users\\secret\\path'), { code: 'EACCES' })) === 'EACCES'
+    && errorCause(new TypeError('x')) === 'TypeError' && errorCause(null) === 'unknown',
+    'errorCause keeps only the code or name, never the message');
 }
 
 try { fs.rmSync(ROOT, { recursive: true, force: true }); } catch { /* best effort */ }

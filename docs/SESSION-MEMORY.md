@@ -25,8 +25,17 @@ Each record has:
 ## Where it lives
 
 `session-memory.json` in Mako's settings folder: `%APPDATA%\command-center` for the stable copy,
-`%APPDATA%\command-center-dev` for the dev copy (S07), so each copy has its own. It keeps the newest
-200 records. It holds folder paths and session IDs, never prompts, output or keys.
+`%APPDATA%\command-center-dev` for the dev copy (S07), so each copy has its own. It keeps at most
+200 records: when it is full, the oldest closed record makes room, and a still-running session is
+never dropped; if all 200 are open, a new session isn't recorded and Mako says so
+(`session-memory-open-record-limit`). It holds folder paths and session IDs, never prompts, output
+or keys.
+
+**One copy per profile.** Only one running Mako process owns a profile's session records. It holds
+a lock on `session-memory-lock.sqlite` in the same folder, which the system releases even after a
+crash. A second copy started on the same profile records nothing, offers no Resume, can't edit
+done-when and never marks the first copy's running sessions as interrupted; it says so once
+(`session-memory-profile-in-use`). Close the other copy and reopen to use session history there.
 
 If the file can't be read (for example it was edited by hand and is no longer valid), Mako leaves it
 exactly as it is, records nothing, and says so once in the Logs tab and the error banner. Panes still
@@ -102,6 +111,6 @@ Each record now also carries, all optional so older files stay valid:
 A session's **state** is `running` (open in a pane), `waiting` (open when Mako went away, Resume or
 Start fresh not answered yet), `finished` (the shell exited, Blue closed the pane, or the offer was
 answered) or `archived`. Finished sessions archive themselves at startup and on each hourly check;
-archived records stay in the file until the 200-record limit drops them. Once a local day, the
+archived records stay in the file until the 200-record limit drops them (closed records go first). Once a local day, the
 Terminals tab lists the sessions idle 3 days or more (no input, stop or start for 3 days), with
 their owner, state and done-when. S19's control room takes the list over in its right panel.

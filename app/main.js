@@ -403,12 +403,15 @@ function readSettings(file) {
   let settings;
   try { settings = JSON.parse(text); }
   catch { throw settingsError('Invalid settings.json. Recover the file and try again.'); }
-  if (!settings || typeof settings !== 'object' || Array.isArray(settings)
-      || typeof settings.projectsRoot !== 'string' || !settings.projectsRoot
-      || (settings.selectedRepo !== undefined && typeof settings.selectedRepo !== 'string')) {
-    throw settingsError('Invalid settings.json. Recover the file and try again.');
-  }
+  if (!validSettingsShape(settings)) throw settingsError('Invalid settings.json. Recover the file and try again.');
   return settings;
+}
+// One shape check for what is read and what is written, so a save can never produce a file that
+// the next read refuses.
+function validSettingsShape(settings) {
+  return !!settings && typeof settings === 'object' && !Array.isArray(settings)
+    && typeof settings.projectsRoot === 'string' && !!settings.projectsRoot
+    && (settings.selectedRepo === undefined || typeof settings.selectedRepo === 'string');
 }
 function loadSettings() { return readSettings(settingsPath()) ?? defaultSettings(); }
 
@@ -1213,6 +1216,7 @@ handleTrustedIpc('save-settings', async (partial) => {
   const file = settingsPath();
   const current = readSettings(file);
   const settings = { ...(current ?? defaultSettings()), ...partial };
+  if (!validSettingsShape(settings)) throw new Error(reportIpcRefusal('save-settings', 'invalid-setting-value'));
   // A concurrent first save must not replace a file that appeared after our missing-file check.
   try { fs.writeFileSync(file, JSON.stringify(settings, null, 2), { flag: current ? 'w' : 'wx' }); }
   catch { throw settingsError('Cannot save settings.json. Check access to the file and try again.'); }
@@ -1857,19 +1861,26 @@ const sessionMemoryNoticesSent = new Set();
 function noteSessionMemory(res) {
   if (res && res.ok) return;
   const reason = (res && res.reason) || 'session-memory-failed';
-  tlog(`[session-memory] refused [${reason}]`);
+  const cause = res && res.cause ? ` (cause: ${res.cause})` : '';
+  tlog(`[session-memory] refused [${reason}]${cause}`);
   // Counted as sent only once it reaches a window, so a refusal at startup shows on the next one.
   if (sessionMemoryNoticesSent.has(reason) || !win || win.isDestroyed()) return;
   sessionMemoryNoticesSent.add(reason);
-  const detail = reason === sessionMemoryMod.REASON.PROFILE_BUSY
+  const R = sessionMemoryMod.REASON;
+  const detail = reason === R.PROFILE_BUSY
     ? 'Another Mako process owns this profile’s session records. Close it, then reopen this window to use session history and Resume.'
-    : `Claude session IDs are not being recorded (${sessionMemoryMod.FILENAME} in Mako's settings folder).`;
-  win.webContents.send('main-error', `Session memory refused [${reason}]: ${detail}`);
+    : reason === R.PROFILE_LOCK_FAILED
+      ? 'Mako could not lock session-memory-lock.sqlite in its settings folder, so session history and Resume are off for this run. Check that the folder is writable, then restart Mako.'
+      : reason === R.FULL
+        ? `The session store holds ${sessionMemoryMod.MAX_RECORDS} open sessions. Close finished panes so recording can resume.`
+        : `Claude session IDs are not being recorded (${sessionMemoryMod.FILENAME} in Mako's settings folder).`;
+  win.webContents.send('main-error', `Session memory refused [${reason}]${cause}: ${detail}`);
 }
 function sessionMemoryResult(fn) {
   return sessionMemoryLease?.ok
     ? fn()
-    : { ok: false, reason: sessionMemoryLease?.reason ?? sessionMemoryMod.REASON.PROFILE_LOCK_FAILED };
+    : { ok: false, reason: sessionMemoryLease?.reason ?? sessionMemoryMod.REASON.PROFILE_LOCK_FAILED,
+      ...(sessionMemoryLease?.cause ? { cause: sessionMemoryLease.cause } : {}) };
 }
 // Refusals are visible while PTY launch and cleanup can still finish.
 function sessionMemoryCall(fn) {
@@ -1878,8 +1889,10 @@ function sessionMemoryCall(fn) {
     noteSessionMemory(res);
     return res;
   } catch (e) {
-    tlog('[session-memory] failed [session-memory-failed]');
-    return { ok: false, reason: 'session-memory-failed' };
+    // An unexpected throw is a refusal like any other: logged with a bounded cause and shown once.
+    const res = { ok: false, reason: 'session-memory-failed', cause: sessionMemoryMod.errorCause(e) };
+    noteSessionMemory(res);
+    return res;
   }
 }
 // paneId -> the main-minted session ID of the Claude pane running in it.
@@ -1946,7 +1959,7 @@ ipcMain.handle('session-hygiene-done-when', (e, sessionId, text) => {
   const INPUT_REFUSALS = [sessionMemoryMod.REASON.BAD_DONE_WHEN, sessionMemoryMod.REASON.UNKNOWN_SESSION, sessionMemoryMod.REASON.BAD_SESSION_ID];
   let res;
   try { res = sessionMemoryResult(() => sessionMemory().setDoneWhen(sessionId, text)); }
-  catch { res = { ok: false, reason: 'session-memory-failed' }; }
+  catch (err) { res = { ok: false, reason: 'session-memory-failed', cause: sessionMemoryMod.errorCause(err) }; }
   if (res.ok) return { ok: true };
   if (INPUT_REFUSALS.includes(res.reason)) tlog(`[session-hygiene] done-when refused [${res.reason}]`);
   else noteSessionMemory(res);

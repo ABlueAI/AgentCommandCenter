@@ -608,6 +608,15 @@ const LEDGER = 'admission-ledger.json';
       }
       unreadable = false;
       fs.writeFileSync(file, saved);
+      for (const [label, patch] of [
+        ['empty project root', { projectsRoot: '' }], ['numeric project root', { projectsRoot: 42 }],
+        ['non-string selected repo', { selectedRepo: null }],
+      ]) {
+        let refusal;
+        try { await save(trusted, patch); } catch (e) { refusal = e; }
+        assert(refusal && /invalid-setting-value/.test(refusal.message) && fs.readFileSync(file, 'utf8') === saved,
+          `${label}: save-settings refuses a value the reader would reject and leaves the file untouched`);
+      }
       const recovered = await save(trusted, { theme: 'nord' });
       assert(recovered.projectsRoot === prefs.projectsRoot && recovered.selectedRepo === prefs.selectedRepo
         && recovered.theme === 'nord', 'saving works after recovery and preserves the other preferences');

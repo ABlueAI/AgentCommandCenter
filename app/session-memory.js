@@ -63,6 +63,14 @@ const REASON = Object.freeze({
 
 function refuse(reason) { return { ok: false, reason }; }
 
+// A bounded, path-free label for an unexpected error (its code, else its name), for logs and
+// notices. Error messages can carry paths, so they are never passed on.
+function errorCause(error) {
+  const raw = error && (error.code || (error.errcode !== undefined && `sqlite-${error.errcode}`) || error.name);
+  const cause = typeof raw === 'string' ? raw.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 48) : '';
+  return cause || 'unknown';
+}
+
 // The database is only a lock. Session records stay in the existing JSON file. A reserved SQLite
 // lock excludes other writers across processes and the OS releases it even after a forced quit.
 function acquireProfileLease(userDataDir) {
@@ -75,7 +83,8 @@ function acquireProfileLease(userDataDir) {
     db.exec('PRAGMA busy_timeout = 0; BEGIN IMMEDIATE');
   } catch (error) {
     db?.close();
-    return refuse(error.errcode === SQLITE_BUSY ? REASON.PROFILE_BUSY : REASON.PROFILE_LOCK_FAILED);
+    if (error.errcode === SQLITE_BUSY) return refuse(REASON.PROFILE_BUSY);
+    return { ...refuse(REASON.PROFILE_LOCK_FAILED), cause: errorCause(error) };
   }
   return { ok: true, release: () => db.close() };
 }
@@ -346,6 +355,6 @@ function createSessionMemoryStore({ userDataDir, fsImpl = fs, now = () => new Da
 }
 
 module.exports = {
-  acquireProfileLease, createSessionMemoryStore, isSessionId, FILENAME, VERSION, MAX_RECORDS, STOP_REASON, RESUMABLE_STOPS, REASON,
+  acquireProfileLease, errorCause, createSessionMemoryStore, isSessionId, FILENAME, VERSION, MAX_RECORDS, STOP_REASON, RESUMABLE_STOPS, REASON,
   OWNERS, DEFAULT_OWNER, MAX_DONE_WHEN_LENGTH, checkDoneWhen, isFinished,
 };
