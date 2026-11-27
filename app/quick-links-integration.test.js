@@ -130,8 +130,9 @@ const currentPkg = JSON.parse(read('package.json'));
 const basePkg = JSON.parse(fromBase('package.json'));
 // S15 (PR #130, Blue's verdict 2026-11-03: ADOPT Playwright MCP) adds exactly one runtime dependency,
 // pinned exactly; it is set aside here and pinned below. Any other change still fails.
-const S15_DEPENDENCY = ['@playwright/mcp', '0.0.84'];
-assert(currentPkg.dependencies[S15_DEPENDENCY[0]] === S15_DEPENDENCY[1], 'S15: @playwright/mcp is pinned exactly to 0.0.84');
+const S15_DEPENDENCY = ['@playwright/mcp', '0.0.86'];
+assert(currentPkg.dependencies[S15_DEPENDENCY[0]] === S15_DEPENDENCY[1],
+  `S15: ${S15_DEPENDENCY[0]} is pinned exactly to ${S15_DEPENDENCY[1]}`);
 // Issue #162 adds ipaddr.js (MIT), pinned exactly, for the page reader's host check.
 const IP_DEPENDENCY = ['ipaddr.js', '2.5.0'];
 assert(currentPkg.dependencies[IP_DEPENDENCY[0]] === IP_DEPENDENCY[1], '#162: ipaddr.js is pinned exactly to 2.5.0');
@@ -160,9 +161,9 @@ const AUDIT_FIX = {
 // S15's three new lockfile entries (the server and the Playwright it depends on, a pinned pre-release).
 // Each must match this version, registry tarball and integrity exactly, and is then set aside.
 const S15_LOCK = {
-  'node_modules/@playwright/mcp': ['0.0.84', 'sha512-weqLrA7/D8MJzNV9/t3Hnjp100tS2sxFXKeb2gH6Nhktqmdfvx5qRA9AZ5Mhjnre1jY0wltsrRK5VZS5NBgcvw=='],
-  'node_modules/playwright': ['1.65.0-alpha-2026-10-30', 'sha512-dmAJMVHKzHvMQjn+XDcaq/pxaZ0W6n8i78rwTM+VGRtQ3WBF5ZiSdB1yL/cyoYUGUMwg3jxN65KqC9cERaCbIg=='],
-  'node_modules/playwright-core': ['1.65.0-alpha-2026-10-30', 'sha512-LPMw8B/HRQKMcJeXTqWSrkB/AfCKKmbDQMbu0p7zg8MgibOWaKMjZWR/StAtrQkOxvOmZEju1o1TnPgdoOCwrg=='],
+  'node_modules/@playwright/mcp': ['0.0.86', 'sha512-4SL9OSINmik3+EObCYJIxH8BkhcqqGU6CM8XIgztW015iBVR9WR6Q0xF180Ery+xuEVyyK5r6nC2bOg3zjgCoA=='],
+  'node_modules/playwright': ['1.66.0-alpha-2026-11-18', 'sha512-otQ+PFujQwUSpcLjoZ1zocwpEEF/5WhsBKaOuZeRhJ3ifjyRJJskKeosaw55WYdJzwlmfugK7OMX/tey1ExhWQ=='],
+  'node_modules/playwright-core': ['1.66.0-alpha-2026-11-18', 'sha512-VQ60tKPjqhf/3tHJGKuQ8Qn6e28Ziorhpmh4DGBZThgQp5geZeyKmuoJF2o/OwQBs5K7LNkhxNbOclBoAicqPg=='],
 };
 // #162's one new lockfile entry, pinned the same way and then set aside.
 const IP_LOCK = {
@@ -183,8 +184,9 @@ for (const [key, [version, integrity]] of Object.entries(S15_LOCK)) {
   const name = key.slice('node_modules/'.length);
   const file = name.split('/').pop();
   assert(entry.version === version && entry.integrity === integrity
-    && entry.resolved === `https://registry.npmjs.org/${name}/-/${file}-${version}.tgz`,
-    `S15: ${name} is ${version} from registry.npmjs.org with the pinned integrity`);
+    && entry.resolved === `https://registry.npmjs.org/${name}/-/${file}-${version}.tgz`
+    && !entry.hasInstallScript,
+    `S15: ${name} is ${version} from registry.npmjs.org with the pinned integrity and no install script`);
 }
 for (const [key, [version, integrity]] of Object.entries(AUDIT_FIX)) {
   const entry = currentLock.packages[key] || {};

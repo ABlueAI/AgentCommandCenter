@@ -37,7 +37,7 @@ const MCP_TOOLS = Object.freeze([
   'mcp__playwright__browser_snapshot',
 ]);
 
-// EVERY OTHER TOOL @playwright/mcp 0.0.84 documents (its README's tool list, all capabilities), denied
+// EVERY OTHER TOOL the pinned @playwright/mcp documents (its README's tool list, all capabilities), denied
 // by name with --disallowedTools. The role's `tools:` line should already keep them out, but that
 // filtering of MCP tools under `--agent` is not verified on Blue's PC, and the fence hook only sees the
 // tools its matcher names, so this list is the layer that does not depend on either. page-reader.test.js
@@ -117,7 +117,7 @@ const DENIED_MCP_TOOLS = Object.freeze([
 ]);
 
 // Pinned exactly in app/package.json and package-lock.json; page-reader.test.js holds them equal.
-const PLAYWRIGHT_MCP_VERSION = '0.0.84';
+const PLAYWRIGHT_MCP_VERSION = '0.0.86';
 
 const MAX_URL_LENGTH = 2000;
 const REQUEST_FILE = 'page-request.json';
