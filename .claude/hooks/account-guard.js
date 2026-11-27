@@ -52,7 +52,9 @@
 //   5. Pushes to main, force, deletion and bulk pushes, and pushes to branches used by another
 //      author's open PR in the destination repository exit 2. Unverifiable push checks also exit 2,
 //      under every login (account-guard-push.js), and so does a push the hook can't read: one found
-//      only by the text scan or the PowerShell word scan, or a git call whose subcommand is a variable;
+//      only by the text scan, a git call whose subcommand is a variable, or a PowerShell word-scan push
+//      next to a form that runs text or a program (iex, Start-Process, a nested shell, the call
+//      operator on a string or variable); a word-scan push with none of those is allowed with a notice;
 //      a push after a directory change other than a leading `cd <dir> &&` (or `Set-Location <dir>;`),
 //      which the hook follows; and a push whose command sets environment variables that change what
 //      git reads (GIT_DIR, GIT_CONFIG_*, HOME and so on). A destination is checked under every name
@@ -917,7 +919,9 @@ const XARGS_VALUE_OPTS = new Set(['-a', '-d', '-E', '-I', '-L', '-n', '-P', '-s'
   '--eof', '--replace', '--max-lines', '--max-args', '--max-procs', '--max-chars', '--process-slot-var']);
 const WSL_VALUE_OPTS = new Set(['-d', '--distribution', '-u', '--user', '--cd']);
 // Commands that change the working directory (Bash, cmd and PowerShell, aliases included).
-const DIR_COMMANDS = new Set(['cd', 'chdir', 'pushd', 'popd', 'set-location', 'sl', 'push-location', 'pop-location']);
+// `cd..`, `cd\` and `cd~` are PowerShell's built-in shortcut functions for a directory change.
+const DIR_COMMANDS = new Set(['cd', 'cd..', 'cd\\', 'cd~', 'chdir', 'pushd', 'popd', 'set-location', 'sl',
+  'push-location', 'pop-location']);
 // Environment assignments on a push's own command that can't change which repository, config or
 // remote git reads. Any other one (GIT_DIR, GIT_CONFIG_*, HOME and so on) makes decide refuse.
 const SAFE_PUSH_ENV = /^(?:GIT_TRACE\w*|GIT_TERMINAL_PROMPT|GIT_PROGRESS_DELAY|GIT_REDACT_COOKIES|GIT_CURL_VERBOSE|GIT_SSH_COMMAND|GIT_SSH|GIT_ASKPASS|GH_\w+|LANG|LC_\w+)$/;
@@ -1394,8 +1398,25 @@ const TOOL_MODES = { Bash: 'bash', PowerShell: 'ps' };
 // and its aliases, Invoke-Command, Start-Process, a nested shell, the call or dot-source operator on a
 // string, variable or expression, a script block, an encoded command, or git's own git-push program. A
 // word-scan push next to any of them stays refused.
-const PS_DYNAMIC_RUN =
-  /\b(?:iex|invoke-expression|invoke-command|icm|start-process|saps|start|pwsh|powershell|cmd|bash|sh|wsl|start-job|sajb)\b|(?:^|[\s;|{(])[&.]\s*["'$({@]|\[scriptblock\]|-enc(?:odedcommand)?\b|git-push/i;
+const PS_DYNAMIC_NAMES =
+  /(?<![\w.\-\/\\$])(?:iex|invoke-expression|invoke-command|icm|start-process|saps|start|start-job|sajb|pwsh|powershell|cmd|bash|sh|wsl)(?:\.exe)?(?![\w.\-\/\\])/i;
+// The call or dot-source operator on a string, variable, expression or array: the program it runs is
+// whatever that text names.
+// (A script block, `& { ... }`, is left out: the parser reads its commands.)
+const PS_CALL_OPERATOR = /(?:^|[\s;|{(])[&.]\s*["'$(@]/;
+const PS_OTHER_DYNAMIC = /\[scriptblock\]|(?<![\w-])-enc(?:odedcommand)?(?![\w-])/i;
+
+// Quoted strings (here-strings included) and comments are blanked first, so a word inside a commit
+// message, a file name or a comment never counts; a quote becomes '' so the call operator's target
+// still shows.
+function runsTextOrProgram(command) {
+  const bare = command
+    .replace(/@'[\s\S]*?'@|@"[\s\S]*?"@/g, "''")
+    .replace(/'(?:[^']|'')*'|"(?:[^"`]|`[\s\S])*"/g, "''")
+    .replace(/<#[\s\S]*?#>/g, ' ')
+    .replace(/(^|\s)#[^\n]*/g, '$1');
+  return PS_DYNAMIC_NAMES.test(bare) || PS_CALL_OPERATOR.test(bare) || PS_OTHER_DYNAMIC.test(bare);
+}
 
 const WORD_SCAN_PUSH_NOTICE =
   'Account guard: this PowerShell command contains the words "git" and "push" but no push the guard could ' +
@@ -1440,10 +1461,11 @@ function decide(input, getLogin = readGhLogin, sources = {}, work = scanWork()) 
     // The PowerShell word scan alone (the words "git" and "push" anywhere, with no push the parser could
     // read) also matches honest commands such as `git stash push` or a commit message that mentions a
     // push, so under a login other than the blocked one it allows with a visible notice rather than
-    // refusing every such command (the login block above is
-    // unchanged).
+    // refusing every such command (the login block above is unchanged).
+    // Next to a form that runs text or a program, the words may be a push the parser can't read, so the
+    // command is refused even when it also holds a readable push.
+    if (work.wordScanPush && runsTextOrProgram(command)) throw new PushRefusal(UNREAD_PUSH);
     if (work.wordScanPush && !work.pushes.length) {
-      if (PS_DYNAMIC_RUN.test(command)) throw new PushRefusal(UNREAD_PUSH);
       return { exitCode: 0, checked, systemMessage: WORD_SCAN_PUSH_NOTICE };
     }
     if (work.pushes.length) {

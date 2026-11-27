@@ -1074,6 +1074,25 @@ process.stdout.write('\npush destinations (review run 1 on #324)\n');
       assert(v.exitCode === 2 && /Blocked by Mako's account guard/.test(v.stderr || '') && !v.systemMessage,
         `ABlueAgent + PowerShell ${JSON.stringify(cmd)}: a push to main run as text is refused visibly`);
     }
+    // Review run 2 on #324: trigger words inside strings, file names or other cmdlets don't count.
+    for (const cmd of ['git stash push -- scripts/check.sh', 'git stash push; Start-Sleep 2; git stash pop',
+      'git commit -m "Refuse git push from PowerShell"', "git commit -m 'run git push in bash or cmd' # start"]) {
+      const v = guard.decide(pwsh(cmd), agentLogin);
+      assert(v.exitCode === 0 && !v.stderr, `ABlueAgent + PowerShell ${JSON.stringify(cmd)}: not refused (exit ${v.exitCode})`);
+    }
+    // Review run 2 on #324: a push run as text is refused even next to a readable push.
+    for (const cmd of ["git push origin topic; $c = 'git push origin shared'; iex $c",
+      "git push origin topic; Start-Process git 'push origin shared'",
+      "git push origin topic; & 'C:\\Git\\libexec\\git-core\\git-push.exe' origin shared"]) {
+      const v = guard.decide(pwsh(cmd), agentLogin);
+      assert(v.exitCode === 2 && /form the guard cannot read/.test(v.stderr || ''),
+        `ABlueAgent + PowerShell ${JSON.stringify(cmd)}: refused although a readable push is also present`);
+    }
+    for (const cmd of ['cd..; git push origin topic', 'cd sub; cd..; git push origin topic']) {
+      const v = guard.decide(pwsh(cmd), agentLogin);
+      assert(v.exitCode === 2 && /directory change/.test(v.stderr || ''),
+        `ABlueAgent + PowerShell ${JSON.stringify(cmd)}: a push after cd.. is refused`);
+    }
     const unread = guard.decide(pwsh("$c = 'git push origin x'; iex $c"), agentLogin);
     assert(unread.exitCode === 2 && /form the guard cannot read/.test(unread.stderr || ''),
       'ABlueAgent + PowerShell iex of a variable holding a push: refused as unreadable');
