@@ -1470,9 +1470,9 @@ Step 72 comes from PR #227 (docs/DECISIONS.md, 2026-11-23). Step numbers 69 to 7
 
 ### From PR #319 (Video Scout hardening)
 
-Step 93 comes from PR #319. Step numbers 90 to 92 belong to open PRs.
+Step 96 comes from PR #319. Step numbers 92, 94 and 95 belong to open PRs.
 
-- [ ] **93. Run Video Scout's Gemini CLI route and one Claude Video Scout run on Windows (PR #319).**
+- [ ] **96. Run Video Scout's Gemini CLI route and one Claude Video Scout run on Windows (PR #319).**
   **About 15 minutes**, on the next Tuesday or Friday PC-check evening after merging PR #319. CI
   can't run the real Gemini CLI, yt-dlp or Claude Code, so this is the only check that they still
   work under PR #319's isolated launch (a fresh Gemini profile per run, API-key sign-in only, a
