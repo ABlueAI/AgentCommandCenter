@@ -28,4 +28,50 @@ Describe 'run-pester entry point' {
             $global:LASTEXITCODE = $previousExitCode
         }
     }
+
+    It 'refuses with a visible error when it finds no suites' {
+        # A runner whose folder holds no *.Tests.ps1 must not report a green run of zero suites.
+        $empty = New-Item -ItemType Directory -Path (Join-Path $TestDrive 'empty') -ErrorAction Stop
+        $copy = Join-Path $empty.FullName 'run-pester.ps1'
+        Copy-Item -LiteralPath $runner -Destination $copy -ErrorAction Stop
+        $invocations = New-Object 'System.Collections.Generic.List[string]'
+        $previousExitCode = $global:LASTEXITCODE
+        function Invoke-Pester {
+            param([string]$Path, [switch]$PassThru)
+            $invocations.Add("$Path|$PassThru")
+            [pscustomobject]@{ PassedCount = 0; FailedCount = 0; SkippedCount = 0; TotalCount = 0 }
+        }
+
+        try {
+            { & $copy 6>&1 | Out-Null } | Should Throw 'No *.Tests.ps1 suites found'
+            $invocations.Count | Should Be 0
+        }
+        finally {
+            $global:LASTEXITCODE = $previousExitCode
+        }
+    }
+
+    It 'exits 0 when every suite passes' {
+        $passing = New-Item -ItemType Directory -Path (Join-Path $TestDrive 'passing') -ErrorAction Stop
+        $copy = Join-Path $passing.FullName 'run-pester.ps1'
+        Copy-Item -LiteralPath $runner -Destination $copy -ErrorAction Stop
+        Set-Content -LiteralPath (Join-Path $passing.FullName 'fixture.Tests.ps1') -Value '# fixture' -ErrorAction Stop
+        $invocations = New-Object 'System.Collections.Generic.List[string]'
+        $previousExitCode = $global:LASTEXITCODE
+        function Invoke-Pester {
+            param([string]$Path, [switch]$PassThru)
+            $invocations.Add("$Path|$PassThru")
+            [pscustomobject]@{ PassedCount = 3; FailedCount = 0; SkippedCount = 0; TotalCount = 3 }
+        }
+
+        try {
+            $output = & $copy 6>&1
+            $LASTEXITCODE | Should Be 0
+            ($invocations -join ', ') | Should Be "$($passing.FullName)|True"
+            ($output -join "`n") | Should Match '3 passed, 0 failed'
+        }
+        finally {
+            $global:LASTEXITCODE = $previousExitCode
+        }
+    }
 }
