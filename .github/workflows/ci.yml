@@ -1,6 +1,6 @@
 # CI: the same two gates a contributor runs locally, on GitHub's Windows machines.
 #   app tests   -> `npm test` in app/ (the full node + Electron chain)
-#   PowerShell  -> scripts/run-pester.ps1 (every *.Tests.ps1, Pester 3.x/4.x)
+#   PowerShell  -> scripts/run-pester.ps1 (every *.Tests.ps1, Pester 3.4.0)
 # Read-only token. This workflow never merges, approves, labels or pushes anything.
 # Actions are pinned to full commit SHAs (tag in the trailing comment); app/ci-hygiene.test.js
 # fails if a `uses:` line is not. The two job names are required checks on main: don't rename them.
@@ -27,7 +27,13 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          fetch-depth: 0 # quick-links-integration compares against an older commit with `git show`
+          fetch-depth: 1
+      - name: Fetch the Quick Links test baseline
+        shell: pwsh
+        run: |
+          # Keep this commit aligned with BASE in app/quick-links-integration.test.js.
+          git fetch --no-tags --depth=1 origin a2121ca36727bbb3294fd61a057f13730b8a1d17
+          if ($LASTEXITCODE -ne 0) { throw 'Could not fetch the fixed Quick Links test baseline.' }
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
@@ -36,19 +42,60 @@ jobs:
       - name: Install app dependencies
         working-directory: app
         run: npm ci --no-audit --no-fund
+      - name: Install pinned FFmpeg
+        shell: pwsh
+        run: |
+          $version = '8.1.1'
+          $build = "ffmpeg-$version-essentials_build"
+          # SHA-256 published in the WinGet manifest for Gyan.FFmpeg.Essentials 8.1.1.
+          $sha256 = '6F58CE889F59C311410F7D2B18895B33C03456463486F3B1EBC93D97A0F54541'
+          $archive = Join-Path $env:RUNNER_TEMP "$build.zip"
+          Invoke-WebRequest -Uri "https://github.com/GyanD/codexffmpeg/releases/download/$version/$build.zip" -OutFile $archive
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $sha256) {
+            throw "FFmpeg $version archive failed SHA-256 verification."
+          }
+          Expand-Archive -LiteralPath $archive -DestinationPath $env:RUNNER_TEMP
+          $bin = Join-Path $env:RUNNER_TEMP "$build/bin"
+          foreach ($tool in 'ffmpeg.exe', 'ffprobe.exe') {
+            $executable = Join-Path $bin $tool
+            if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) { throw "$tool is missing from the pinned FFmpeg build." }
+            & $executable -version
+            if ($LASTEXITCODE -ne 0) { throw "$tool failed its version check." }
+          }
+          Add-Content -LiteralPath $env:GITHUB_PATH -Value $bin -Encoding utf8
       - name: npm test
         working-directory: app
+        env:
+          MAKO_REQUIRE_FFMPEG: '1'
         run: npm test
 
   pester:
     name: PowerShell tests (Windows)
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
-      - name: run-pester.ps1 (Windows PowerShell 5.1, built-in Pester 3.4)
+      - name: Install pinned Pester
+        shell: pwsh
+        run: |
+          # Upstream Pester 3.4.0 tag, resolved to its commit.
+          $commit = 'd656dc7a5f737f9e217161f9d0c6fcfab4ab3f2e'
+          $sha256 = '54B89DBA621B3E72697629A5CB47C117D7528CB8F23BA68676E7D5180983F5AF'
+          $archive = Join-Path $env:RUNNER_TEMP 'pester-3.4.0.zip'
+          Invoke-WebRequest -Uri "https://codeload.github.com/pester/Pester/zip/$commit" -OutFile $archive
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $sha256) {
+            throw 'Pester 3.4.0 archive failed SHA-256 verification.'
+          }
+          Expand-Archive -LiteralPath $archive -DestinationPath $env:RUNNER_TEMP
+          $manifest = Join-Path $env:RUNNER_TEMP "Pester-$commit/Pester.psd1"
+          if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) { throw 'The pinned Pester manifest is missing.' }
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "MAKO_CI_PESTER_MODULE=$manifest" -Encoding utf8
+      - name: run-pester.ps1 (Windows PowerShell 5.1, Pester 3.4.0)
         shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-pester.ps1
+        run: |
+          if (-not $env:MAKO_CI_PESTER_MODULE) { throw 'The pinned Pester manifest was not provisioned.' }
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-pester.ps1 -PesterModulePath $env:MAKO_CI_PESTER_MODULE
+          exit $LASTEXITCODE
