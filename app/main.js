@@ -156,7 +156,7 @@ const { buildDefaultConfig: buildQuickLinksDefaultConfig, validateUrl: validateQ
 const { createOpenExternalIpc } = require('./open-external-ipc');
 const { createGeminiKeyIpc } = require('./gemini-key-ipc');
 // S07: which copy this process is (stable or dev), decided once from argv (instance-profile.js).
-const { resolveInstanceProfile, createDevPaneStatusController } = require('./instance-profile');
+const { resolveInstanceProfile, createDevPaneStatusController, DEV_REFUSAL } = require('./instance-profile');
 
 // ---- Windows taskbar identity (branding) --------------------------------------------------------
 // One stable, explicit AppUserModelID, so Windows attributes this process's windows to Mako rather
@@ -409,6 +409,7 @@ function loadAgentGitToken() {
   try {
     const t = safeStorage.decryptString(Buffer.from(s.agentGitTokenEnc, 'base64'));
     agentGitToken = isAgentToken(t) ? t : null;
+    if (agentGitToken === null) tlog('[agent-git] stored ABlueAgent token refused: invalid shape');
   } catch { tlog('[agent-git] stored ABlueAgent token unreadable (different OS user?); agent panes use your own git login'); }
 }
 
@@ -432,6 +433,7 @@ const paneStatusNotifications = createPaneStatusNotifications({
 const ENTRY_PATH = path.join(__dirname, 'renderer', 'index.html');
 const ENTRY_URL = pathToFileURL(ENTRY_PATH).toString();
 const ptys = new Map(); // terminal id -> pty process (in-app terminals)
+const pendingPaneKills = new Set(); // closed panes whose process-tree cleanup has yet to finish
 // The only production PTY write primitive. Its admitted closure holds a module-private capability;
 // generic IPC can never manufacture that capability from renderer-controlled data.
 const admissionPtyBoundary = createAdmissionPtyBoundary({
@@ -752,6 +754,7 @@ app.whenReady().then(() => {
     ipcMain,
     trustedSenderGate: createTrustedSenderGate({ entryUrl: ENTRY_URL, getTrustedWindow: () => win }),
     controller: paneStatus,
+    clearStaleLockRefusal: instanceProfile.claudeHooks ? null : DEV_REFUSAL,
     // NATIVE main-process confirmation. A renderer-drawn dialog is content the renderer controls;
     // deleting another process's lock file is the one action here that reaches outside this app, so it
     // gets a real human at a real OS dialog.
@@ -985,7 +988,8 @@ let paneTreesKilledOnShutdown = false;
 function killPaneTreesOnShutdown() {
   if (paneTreesKilledOnShutdown) return;
   paneTreesKilledOnShutdown = true;
-  processTree.killTreesSync([...ptys.values()].map((p) => p && p.pid));
+  processTree.killTreesSync([...ptys.values(), ...pendingPaneKills].map((p) => p.pid));
+  for (const p of pendingPaneKills) finishPendingPaneKill(p);
   // S08: after the kill, so recording can never block it. The panes' exits arrive later, through the
   // event loop, so the open records still read `mako-closed` rather than `exited`.
   sessionMemoryCall(() => sessionMemory().closeOpen(sessionMemoryMod.STOP_REASON.MAKO_CLOSED));
@@ -2034,6 +2038,7 @@ ipcMain.handle('pty-start', (e, opts) => {
   // not wait for a SessionEnd hook that may never fire), while the run-ID mapping is deliberately not.
   p.onExit(() => {
     ptys.delete(id);
+    pendingPaneKills.delete(p);
     if (claudeSessionId) stopPaneSession(id, sessionMemoryMod.STOP_REASON.EXITED, claudeSessionId);
     // PANE STATUS: publish `exited` first, while the pane is still addressable, then revoke its token.
     paneStatus.notePaneExit(id);
@@ -2059,9 +2064,20 @@ ipcMain.on('pty-write', (_e, { id, data }) => {
   admissionPtyBoundary.writeDirect(id, data);
 });
 ipcMain.on('pty-resize', (_e, { id, cols, rows }) => { const p = ptys.get(id); if (p) { try { p.resize(cols, rows); } catch (err) { tlog(`pty-resize ${id} failed (process likely exiting): ${(err && err.message) || err}`); } } });
+function finishPendingPaneKill(pane) {
+  if (!pendingPaneKills.delete(pane)) return;
+  try { pane.kill(); }
+  catch { tlog('[process-tree] could not close PTY after tree cleanup'); }
+}
+
 // S06: pty-kill kills the pane's process tree first (taskkill /T needs the live shell), then pty.kill().
 ipcMain.on('pty-kill', (_e, id) => {
-  const p = ptys.get(id); if (p) { ptys.delete(id); processTree.killTree(p.pid, () => { try { p.kill(); } catch {} }); }
+  const p = ptys.get(id);
+  if (p) {
+    ptys.delete(id);
+    pendingPaneKills.add(p);
+    processTree.killTree(p.pid, () => finishPendingPaneKill(p));
+  }
   // Explicit pane close: the run's report is no longer reachable from the UI, so drop the mapping.
   videoScoutRunIds.remove(id);
   // EXPERIMENT A: the pane is gone, so its token must die with it. Releasing here (not on pty-exit)

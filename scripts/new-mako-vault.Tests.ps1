@@ -27,7 +27,8 @@ Describe 'new-mako-vault' {
             @($r | Where-Object { $_.Action -eq 'created' }).Count | Should Be 3
             [System.IO.File]::ReadAllText((Join-Path $vault 'CLAUDE.md')).Trim() | Should Be '@AGENTS.md'
             Test-Path -LiteralPath (Join-Path $vault 'Mako index.md') | Should Be $true
-            Test-Path -LiteralPath (Join-Path $vault 'AGENTS.md') | Should Be $true
+            $rules = [System.IO.File]::ReadAllText((Join-Path $vault 'AGENTS.md'))
+            $rules.Contains('(https://github.com/ABlueAI/AgentCommandCenter/blob/main/AGENTS.md)') | Should Be $true
         }
         finally { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
     }
@@ -59,6 +60,28 @@ Describe 'new-mako-vault' {
         { New-MakoVault -Path (Join-Path $script:MvRepoRoot 'vault') -RepoRoot $script:MvRepoRoot } | Should Throw 'inside the public repository'
         { New-MakoVault -Path ($script:MvRepoRoot.ToUpperInvariant() + '\vault') -RepoRoot $script:MvRepoRoot } | Should Throw 'inside the public repository'
         Test-Path -LiteralPath (Join-Path $script:MvRepoRoot 'vault') | Should Be $false
+    }
+
+    It 'preserves the drive-root separator' {
+        $driveRoot = [System.IO.Path]::GetPathRoot($script:MvRepoRoot)
+        (Get-MakoVaultFullPath $driveRoot) | Should Be $driveRoot
+        (Test-MakoVaultInsideRepo -VaultPath $script:MvRepoRoot -RepoRoot $driveRoot) | Should Be $true
+    }
+
+    It 'refuses a junction ancestor before it creates the vault' {
+        $root = New-MvTempRoot
+        $junction = Join-Path $root 'alias'
+        try {
+            $repo = Join-Path $root 'repo'
+            New-Item -ItemType Directory -Path $repo -ErrorAction Stop | Out-Null
+            New-Item -ItemType Junction -Path $junction -Target $repo -ErrorAction Stop | Out-Null
+            { New-MakoVault -Path (Join-Path $junction 'vault') -RepoRoot $repo } | Should Throw 'reparse point'
+            Test-Path -LiteralPath (Join-Path $repo 'vault') | Should Be $false
+        }
+        finally {
+            if (Test-Path -LiteralPath $junction) { [System.IO.Directory]::Delete($junction) }
+            Remove-Item -LiteralPath $root -Recurse -Force
+        }
     }
 
     It 'allows a sibling folder whose name starts with the repository name' {

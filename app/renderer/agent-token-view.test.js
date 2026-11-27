@@ -4,7 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { saveResultMessage } = require('./agent-token-view');
+const { saveResultMessage, createStatusCheck } = require('./agent-token-view');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -39,5 +39,24 @@ assert(/<span id="agentTokenStatus"[^>]*role="status"/.test(html), 'the banner h
 assert(html.indexOf('<script src="agent-token-view.js"></script>') !== -1
   && html.indexOf('agent-token-view.js') < html.indexOf('<script src="app.js"></script>'), 'the view loads before app.js');
 
-process.stdout.write(`\nagent-token-view: ${passed} passed, ${failed} failed\n`);
-process.exit(failed ? 1 : 0);
+(async () => {
+  assert(typeof createStatusCheck === 'function', 'the status check handles delayed boot replies');
+  if (createStatusCheck) {
+    const statuses = [];
+    const logs = [];
+    const check = createStatusCheck((result) => statuses.push(result), (line) => logs.push(line));
+    await check.read(async () => ({ ok: false, error: 'untrusted-sender' }));
+    assert(statuses[0]?.ok === false && logs[0]?.includes('untrusted-sender'), 'a refused status read shows the banner and logs its reason');
+    await check.read(async () => { throw new Error('fixture'); });
+    assert(statuses[1] === null && logs[1]?.includes('status check failed'), 'a rejected status read shows the banner and logs failure');
+    let respond;
+    const pending = check.read(() => new Promise((resolve) => { respond = resolve; }));
+    const changed = { ok: true, hasToken: false };
+    check.update(changed);
+    respond({ ok: true, hasToken: true });
+    await pending;
+    assert(statuses.length === 3 && statuses[2] === changed, 'a late boot response cannot overwrite an interactive change');
+  }
+  process.stdout.write(`\nagent-token-view: ${passed} passed, ${failed} failed\n`);
+  process.exitCode = failed ? 1 : 0;
+})().catch((err) => { console.error(err); process.exitCode = 1; });

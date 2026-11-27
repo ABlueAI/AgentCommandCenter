@@ -149,6 +149,19 @@ const AMBIENT = {
       `${ch}: never returns the token`);
   }
   assert(!/tlog\([^)]*agentGitToken\b(?!\s*\?)/.test(src), 'the token is never logged');
+  {
+    const load = src.match(/function loadAgentGitToken\(\) \{[\s\S]*?\n\}/)[0];
+    const lines = [];
+    const decrypted = 'fixture-invalid-token';
+    const token = require('node:vm').runInNewContext('let agentGitToken = null;\n' + load + '\nloadAgentGitToken(); agentGitToken;', {
+      Buffer, isAgentToken,
+      safeStorage: { isEncryptionAvailable: () => true, decryptString: () => decrypted },
+      loadSecure: () => ({ agentGitTokenEnc: 'YQ==' }),
+      tlog: (line) => lines.push(line),
+    });
+    assert(token === null && lines.length === 1 && /invalid shape/.test(lines[0]) && !lines[0].includes(decrypted),
+      'a decrypted token of the wrong shape is refused and logged without its value');
+  }
   const preload = fs.readFileSync(path.join(__dirname, 'preload.js'), 'utf8');
   assert(!/getAgentToken\b|readAgentToken/.test(preload), 'preload has no way to read the token back');
 }

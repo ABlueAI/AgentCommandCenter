@@ -389,8 +389,11 @@ const REGIONS = [
     // block, spawn sink and failure cleanup are unchanged. The S09 assertions at the end of this file
     // pin the new wiring.
     // Previous pin retained: 17354 / 1ed564dea4af33f5dbe7afcb47b0d0cb2178ff1fb289a60b2e37a3d078581b2d
-    utf16Length: 18861,
-    sha: '790e4fa29a245a5064c1d1da05940f73f8a7b0c250747150bb601d378ef313f6',
+    // Re-pinned for #164. PTY exit removes its handle from pending tree cleanup.
+    // This keeps shutdown from targeting a PID whose process has already exited.
+    // Previous pin: 18861 / 790e4fa29a245a5064c1d1da05940f73f8a7b0c250747150bb601d378ef313f6
+    utf16Length: 18893,
+    sha: 'eb3ba8305a4fa43283e6631f5ba9be427e70eda43a9b920fbdc671ae558193f6',
   },
 ];
 

@@ -44,7 +44,7 @@ const row = (o) => Object.assign({
 }
 
 // create / render / choices
-{
+async function testChoices() {
   const host = new Stub('div');
   const calls = [];
   const v = view.create({
@@ -67,18 +67,18 @@ const row = (o) => Object.assign({
   assert(host.all('BUTTON').every((b) => b.type === 'button' && typeof b.onclick === 'function'), 'every button is a plain button with a click handler');
 
   const btn = (text, i) => host.all('BUTTON').filter((b) => b.textContent === text)[i || 0];
-  btn('Resume', 1).onclick();
+  await btn('Resume', 1).onclick();
   assert(calls.pop().join() === 'resume,b' && v.rows().length === 3, 'when Resume is declined (returns false) the row stays');
-  btn('Resume', 0).onclick();
+  await btn('Resume', 0).onclick();
   assert(calls.pop().join() === 'resume,a' && v.rows().map((r) => r.sessionId).join() === 'b,c', 'Resume reports the row and removes it');
-  btn('Start fresh').onclick();
+  await btn('Start fresh').onclick();
   assert(calls.pop().join() === 'fresh,b' && v.rows().map((r) => r.sessionId).join() === 'c', 'Start fresh reports the row and removes it');
   assert(/One Claude pane was open/.test(host.textContent), 'the heading follows the count');
   btn('Dismiss').onclick();
   assert(calls.pop().join() === 'dismiss,c' && host.className === 'resume-host hidden', 'Dismiss removes the last row and hides the offer');
 
   v.render([row({ sessionId: 'keep' })]);
-  btn('Start fresh').onclick();
+  await btn('Start fresh').onclick();
   assert(calls.pop().join() === 'fresh,keep' && v.rows().length === 1, 'when Start fresh is declined (returns false) the row stays');
 
   v.render([A, B]);
@@ -88,5 +88,33 @@ const row = (o) => Object.assign({
     'Not now dismisses every row and hides the offer');
 }
 
-process.stdout.write(`\nsession-resume-view: ${passed} passed, ${failed} failed\n`);
-process.exit(failed ? 1 : 0);
+(async () => {
+  await testChoices();
+  const host = new Stub('div');
+  const offered = row();
+  let answer;
+  let attempts = 0;
+  const v = view.create({
+    document: doc, host, roleLabel,
+    onResume: () => { attempts++; return new Promise((resolve) => { answer = resolve; }); },
+    onFresh: async () => true,
+    onDismiss: () => {},
+  });
+  v.render([offered]);
+  const btn = (label) => host.all('BUTTON').find((b) => b.textContent === label);
+  const resume = btn('Resume');
+  const pending = resume.onclick();
+  assert(btn('Resume')?.disabled && btn('Start fresh')?.disabled, 'both launch actions wait for main');
+  assert(v.rows()[0] === offered, 'the row stays while main considers the launch');
+  await resume.onclick();
+  assert(attempts === 1, 'a repeated click does not start another pane while main is answering');
+  answer(false);
+  await pending;
+  assert(v.rows()[0] === offered && btn('Resume').disabled !== true, 'a refusal keeps Resume available');
+  assert(host.textContent.includes('Could not start the pane'), 'the row shows the launch refusal');
+  if (btn('Start fresh')) await btn('Start fresh').onclick();
+  assert(v.rows().length === 0, 'Start fresh can replace a refused Resume in the same run');
+
+  process.stdout.write(`\nsession-resume-view: ${passed} passed, ${failed} failed\n`);
+  process.exitCode = failed ? 1 : 0;
+})().catch((err) => { console.error(err); process.exitCode = 1; });

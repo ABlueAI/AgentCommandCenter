@@ -681,10 +681,18 @@ process.stdout.write('\nthe audio seam is GONE, not disabled\n');
 process.stdout.write('\nterminal IDs stay monotonic and are never reused\n');
 // ---------------------------------------------------------------------------
 {
-  assert(/let termSeq = 0;/.test(appCode), 'the terminal sequence starts at zero');
-  assert(/'pty' \+ \(\+\+termSeq\)/.test(appCode), 'every terminal takes the NEXT sequence value');
-  assert((appCode.match(/termSeq\s*=\s*0/g) || []).length === 1,
-    'termSeq is initialised exactly once and never reset — "Terminal 17" means 17 created, not 17 live');
+  assert(/id = allocateTerminalId\(\)/.test(appCode), 'new panes get the next ID from the window sequence');
+  const allocate = appCode.match(/function allocateTerminalId\(\) \{[\s\S]*?\n\}/)?.[0];
+  const storage = new Map();
+  const loadAllocator = () => allocate && require('node:vm').runInNewContext(allocate + '; allocateTerminalId', {
+    sessionStorage: { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) },
+  });
+  const firstRenderer = loadAllocator();
+  assert(firstRenderer && firstRenderer() === 'pty1' && firstRenderer() === 'pty2' && loadAllocator()() === 'pty3',
+    'a reloaded renderer continues allocating IDs after the old renderer');
+  const installLog = appCode.indexOf('cc.onMainError(');
+  const askForResume = appCode.indexOf('await offerResume();');
+  assert(installLog !== -1 && installLog < askForResume, 'boot installs the main-error listener before asking for Resume offers');
   assert(/liveTerminalCount: \(\) => terms\.size/.test(appCode),
     'a separate live counter exists so a monotonic label cannot be mistaken for a live count');
 }

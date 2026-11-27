@@ -97,14 +97,15 @@ function validateUrl(input) {
   // Even an empty-userinfo spelling (`https://@host`) is deceptive. A literal/encoded non-empty
   // userinfo is also caught after parsing through username/password below.
   if (absolute[1].includes('@')) return refuse(REASON.URL_USERINFO);
-  // URL accepts stray '%' in paths. Reject malformed escapes, and reject encoded C0/C1 controls,
-  // before parsing so decoding cannot produce a control character at a later layer.
-  for (let i = 0; i < input.length; i += 1) {
-    if (input[i] === '%' && !/^[0-9a-f]{2}$/i.test(input.slice(i + 1, i + 3))) {
-      return refuse(REASON.URL_INVALID_PERCENT_ENCODING);
-    }
+  // Check characters after percent-decoding, so UTF-8 continuation bytes in ordinary text
+  // are not mistaken for C1 controls. Parse the original input to preserve escaped delimiters.
+  let decoded;
+  try { decoded = decodeURIComponent(input); }
+  catch {
+    return refuse(ENCODED_CONTROL_RE.test(input) ? REASON.URL_ENCODED_CONTROL : REASON.URL_INVALID_PERCENT_ENCODING);
   }
-  if (ENCODED_CONTROL_RE.test(input)) return refuse(REASON.URL_ENCODED_CONTROL);
+  if (CONTROL_RE.test(decoded)) return refuse(REASON.URL_ENCODED_CONTROL);
+  if (BIDI_RE.test(decoded)) return refuse(REASON.URL_BIDI_CHARACTER);
 
   let parsed;
   try { parsed = new URL(input); }

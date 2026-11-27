@@ -83,6 +83,8 @@ const count = (s, needle) => s.split(needle).length - 1;
   eq(count(main, 'createPaneStatusController({'), 1, 'one real pane-status controller is built');
   eq(count(main, 'paneStatus = !instanceProfile.claudeHooks ? createDevPaneStatusController() : createPaneStatusController({'), 1,
     'and only when the profile allows Claude Code hooks; the dev copy gets the inert one');
+  assert(main.includes('clearStaleLockRefusal: instanceProfile.claudeHooks ? null : DEV_REFUSAL,'),
+    'main passes the dev refusal to the IPC boundary before native confirmation');
   assert(main.includes('instanceTag: instanceProfile.buildLabelTag,'), 'the build label carries the instance tag');
 
   process.stdout.write(`\ninstance-profile: ${passed} passed, ${failed} failed\n`);

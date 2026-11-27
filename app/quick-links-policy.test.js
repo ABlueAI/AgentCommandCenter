@@ -75,7 +75,12 @@ refused('https://fixture.example/line\nbreak', REASON.URL_CONTROL_CHARACTER, 're
 refused('https://fixture.example/line\rbreak', REASON.URL_CONTROL_CHARACTER, 'rejects literal CR control');
 refused('https://fixture.example/%0d%0aInjected', REASON.URL_ENCODED_CONTROL, 'rejects encoded CRLF ambiguity');
 refused('https://fixture.example/%7f', REASON.URL_ENCODED_CONTROL, 'rejects encoded DEL');
-refused('https://fixture.example/%8f', REASON.URL_ENCODED_CONTROL, 'rejects encoded C1 control');
+refused('https://fixture.example/%8f', REASON.URL_ENCODED_CONTROL, 'rejects a standalone encoded C1 byte');
+refused('https://fixture.example/%C2%9F', REASON.URL_ENCODED_CONTROL, 'rejects a UTF-8 encoded C1 control');
+refused('https://fixture.example/%E2%80%AE', REASON.URL_BIDI_CHARACTER, 'rejects a UTF-8 encoded bidi override');
+refused('https://fixture.example/%C3', REASON.URL_INVALID_PERCENT_ENCODING, 'rejects truncated percent-encoded UTF-8');
+assert(validateUrl('https://fixture.example/%E2%80%93?q=%F0%9F%98%80').ok,
+  'accepts UTF-8 continuation bytes in an en dash and emoji');
 refused('https://fixture.example/%GG', REASON.URL_INVALID_PERCENT_ENCODING, 'rejects malformed percent escape');
 refused('https://fixture.example/%', REASON.URL_INVALID_PERCENT_ENCODING, 'rejects truncated percent escape');
 refused('https://fixture.example/\u202eevil', REASON.URL_BIDI_CHARACTER, 'rejects bidi override');

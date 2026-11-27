@@ -176,6 +176,21 @@ function harness(overrides = {}) {
     eq(h.opens.length, 1, 'shell is not called for revalidation refusal');
   }
 
+  {
+    const h = harness();
+    const appLink = 'claude://claude.ai/new';
+    h.setStored(config(appLink));
+    assert((await h.ipc.handleOpen(h.trustedEvent, 'ql-fixture')).ok, 'an exact app link opens by stored ID');
+    eq(h.opens[0], appLink, 'the app link reaches the shell unchanged');
+  }
+  {
+    const h = harness();
+    h.setStored(config('claude://claude.ai/new?q=x'));
+    eq((await h.ipc.handleOpen(h.trustedEvent, 'ql-fixture')).error, REASON.URL_PROTOCOL,
+      'an app link with a query is refused at open time');
+    eq(h.opens.length, 0, 'the refused app link never reaches the shell');
+  }
+
   process.stdout.write('\nshell failure is bounded and visible\n');
   {
     const h = harness({ openExternal: () => { throw new Error('https://THROW-SENTINEL.invalid/?secret=1'); } });

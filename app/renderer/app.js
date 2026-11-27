@@ -137,7 +137,16 @@ function drainChatEvents(t) {
 
 // ---- in-app terminals (xterm.js front-end; real ConPTY lives in main) -------
 const terms = new Map(); // id -> { term, fit, pane, ro, parser, chatBody, pendingEvents, rafId, tailBubble }
-let termSeq = 0;
+// A renderer reload leaves the main-process PTYs alive. The window's session storage survives
+// the reload, so new panes continue the same sequence without reusing an old pane's IPC ID.
+function allocateTerminalId() {
+  const key = 'mako-terminal-sequence';
+  const previous = Number(sessionStorage.getItem(key));
+  const next = previous + 1;
+  if (previous < 0 || !Number.isSafeInteger(next)) throw new Error('invalid terminal sequence');
+  sessionStorage.setItem(key, String(next));
+  return 'pty' + next;
+}
 let activeTermId = null;  // last-focused pane (dictation LOCKS its target from this at record start)
 let sttDictationTargetId = null; // pane locked when recording started; transcript goes ONLY here
 const THEMES_XTERM = {
@@ -467,9 +476,14 @@ function openInAppTerminal(opts = {}) {
   const { worktree, title, claudeVideoScout } = opts;
   const cli = opts.cli || opts.agent || null;
   const role = (opts.role && ROLES[opts.role]) ? opts.role : null;
+  let id;
+  try { id = allocateTerminalId(); }
+  catch {
+    appendLog('[pty] start refused: could not allocate a terminal ID\n');
+    return false;
+  }
   switchTab('terminals');
   const empty = $('#termEmpty'); if (empty) empty.remove();
-  const id = 'pty' + (++termSeq);
   const wtName = worktree ? worktree.split(/[\\/]/).pop() : 'shell';
   const label = title || (role ? `${ROLES[role].label} · ${wtName}` : `${cli ? cli + ' · ' : ''}${wtName}`);
   // Role badge (tinted + lock for read-only) replaces the plain CLI dot when a role is set.
@@ -840,15 +854,19 @@ function openInAppTerminal(opts = {}) {
       + (layoutInstance ? ' — removing the pane and its layout panel\n' : '\n'));
     if (layoutInstance) closeThisPane();
   };
-  Promise.resolve(startResult).then(
+  const started = Promise.resolve(startResult).then(
     async (res) => {
-      if (!res || res.ok !== true) { onStartFailed((res && res.error) || 'refused'); return; }
+      if (!res || res.ok !== true) {
+        onStartFailed((res && res.error) || 'refused');
+        return false;
+      }
       // `ptyStart` is the operation that lets main bind an eligible pane. Boot's earlier snapshot can
       // therefore be legitimately unbound; pull main's post-start truth before Blue uses the bar.
       // With no controlled run `admissionView` is null, so ordinary launches add no IPC call.
       if (admissionView) await admissionView.refresh();
+      return true;
     },
-    () => onStartFailed('ipc-rejected'),
+    () => { onStartFailed('ipc-rejected'); return false; },
   );
   // The settle-in refit. Guarded on the pane still being live, because a start failure can close it
   // inside this window and fitting a disposed xterm would throw out of a timer callback.
@@ -856,6 +874,7 @@ function openInAppTerminal(opts = {}) {
     if (!terms.has(id)) return;
     fit.fit(); cc.ptyResize(id, term.cols, term.rows); activeTermId = id; term.focus();
   }, 40);
+  return started;
 }
 
 // ---- Dockview layout engine scripts ------------------------------------------------------------
@@ -1362,20 +1381,20 @@ async function offerResume() {
         return false;
       }
       appendLog(`[resume] resuming a ${row.role || 'claude'} pane with claude --resume\n`);
-      openInAppTerminal(Object.assign(paneOpts(row), { resumeSessionId: row.sessionId }));
-      return true;
+      return openInAppTerminal({ ...paneOpts(row), resumeSessionId: row.sessionId });
     },
-    onFresh: (row) => {
+    onFresh: async (row) => {
       // Same rule as Resume: at Maximum nothing starts here, so the session isn't dismissed either.
       if (state.authority === 'maximum') {
         appendLog('[resume] Maximum starts no local Claude pane. Pick another authority level, then Start fresh.\n');
         return false;
       }
-      dismiss(row);
-      openInAppTerminal(paneOpts(row));
-      return true;
+      const started = await openInAppTerminal(paneOpts(row));
+      if (started === true) await dismiss(row);
+      return started;
     },
     onDismiss: dismiss,
+    onLaunchError: () => appendLog('[resume] could not start the pane\n'),
   });
   let offer = null;
   try { offer = await cc.sessionResumeOffer(); } catch { offer = null; }
@@ -1551,8 +1570,7 @@ async function boot() {
   updateKeyBanner(await geminiKeyStatusOrLog());
   // S06: not awaited, so the token check adds no IPC round trip to the boot path (pane startup is
   // timing-sensitive); a failed check leaves the banner showing and says so in the Logs tab.
-  cc.getAgentTokenStatus().then(updateAgentTokenBanner)
-    .catch(() => { updateAgentTokenBanner(null); appendLog('[agent token] status check failed\n'); });
+  agentTokenStatusCheck.read(cc.getAgentTokenStatus);
   await refreshRepos();
   wireUi();
   await quickLinksView.load();
@@ -1959,6 +1977,7 @@ function updateKeyBanner(status) {
 }
 
 // ---- ABlueAgent token banner (S06) ------------------------------------------
+const agentTokenStatusCheck = window.ccAgentTokenView.createStatusCheck(updateAgentTokenBanner, appendLog);
 function updateAgentTokenBanner(status) {
   const hasToken = !!(status && status.ok && status.hasToken);
   $('#agentTokenBanner').classList.toggle('hidden', hasToken);
@@ -2054,14 +2073,14 @@ function wireUi() {
     const msg = window.ccAgentTokenView.saveResultMessage(r);
     status.textContent = msg.text;
     status.classList.toggle('error', !msg.ok);
-    if (msg.ok) { input.value = ''; updateAgentTokenBanner({ ok: true, hasToken: true }); }
+    if (msg.ok) { input.value = ''; agentTokenStatusCheck.update({ ok: true, hasToken: true }); }
     else { appendLog(`[agent token] save failed: ${msg.text}\n`); input.focus(); }
   };
   $('#agentTokenInput').onkeydown = (e) => { if (e.key === 'Enter') $('#agentTokenSave').click(); };
-  $('#agentTokenChange').onclick = () => updateAgentTokenBanner({ ok: true, hasToken: false });
+  $('#agentTokenChange').onclick = () => agentTokenStatusCheck.update({ ok: true, hasToken: false });
   $('#agentTokenClear').onclick = async () => {
     const r = await cc.clearAgentToken();
-    if (r && r.ok) updateAgentTokenBanner({ ok: true, hasToken: false });
+    if (r && r.ok) agentTokenStatusCheck.update({ ok: true, hasToken: false });
     else appendLog(`[agent token] clear failed: ${(r && r.error) || 'unknown error'}\n`);
   };
 

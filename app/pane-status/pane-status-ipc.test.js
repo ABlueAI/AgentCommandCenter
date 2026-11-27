@@ -119,6 +119,23 @@ function makeController(over) {
       'even a view that WRONGLY carried a token is stripped on the way out');
   }
 
+  {
+    const ipcMain = makeIpcMain();
+    const { createDevPaneStatusController, DEV_REFUSAL } = require('../instance-profile');
+    const logs = [];
+    let dialogs = 0;
+    ipcMod.registerPaneStatusIpc({
+      ipcMain, trustedSenderGate: makeGate(), controller: createDevPaneStatusController(),
+      clearStaleLockRefusal: DEV_REFUSAL,
+      confirmNatively: async () => { dialogs++; return true; },
+      log: (line) => logs.push(line),
+    });
+    const result = await ipcMain.invoke(ipcMod.CHANNELS.CLEAR_STALE_LOCK, TRUSTED);
+    assert(result.ok === false && result.reason === DEV_REFUSAL && dialogs === 0,
+      'the dev instance refuses before creating a confirmation dialog');
+    assert(logs.some((line) => line.includes(DEV_REFUSAL)), 'the dev refusal is logged');
+  }
+
   // ---------------------------------------------------------------- clearStaleLock needs native confirmation
   {
     const ipcMain = makeIpcMain();
