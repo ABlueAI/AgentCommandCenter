@@ -28,6 +28,7 @@ const budgetModule = require('./admission-budget');
 const storeModule = require('./admission-budget-store');
 const ipcModule = require('./admission-ipc');
 const { createAdmissionView } = require('./renderer/admission-view');
+const { bootRenderer } = require('./test-fixtures/renderer-boot');
 
 let passed = 0, failed = 0;
 function assert(condition, label) {
@@ -414,29 +415,62 @@ async function settle() { for (let i = 0; i < 4; i += 1) await new Promise((r) =
   // ---- (12b) production pty-start settlement refreshes the mounted admission view ---------------
   section('(12b) production wiring refreshes admission state only after a successful pane start');
   {
-    const appJs = fs.readFileSync(path.join(__dirname, 'renderer', 'app.js'), 'utf8');
-    const openStart = appJs.indexOf('function openInAppTerminal(opts = {}) {');
-    const openEnd = appJs.indexOf('// ---- Dockview layout engine scripts', openStart);
-    assert(openStart >= 0 && openEnd > openStart, 'the real openInAppTerminal production function is pinned');
-    const productionOpen = appJs.slice(openStart, openEnd);
-    const ptyStartAt = productionOpen.indexOf('const startResult = cc.ptyStart(');
-    const settlementAt = productionOpen.indexOf('Promise.resolve(startResult).then(');
-    const successGate = "if (!res || res.ok !== true) { onStartFailed((res && res.error) || 'refused'); return; }";
-    const successGateAt = productionOpen.indexOf(successGate, settlementAt);
-    const refreshLine = 'if (admissionView) await admissionView.refresh();';
-    const refreshAt = productionOpen.indexOf(refreshLine, settlementAt);
-    const rejectAt = productionOpen.indexOf("() => onStartFailed('ipc-rejected')", settlementAt);
-    assert(ptyStartAt >= 0, 'the proof starts at the real cc.ptyStart call');
-    assert(settlementAt > ptyStartAt, 'settlement remains downstream of the real ptyStart promise');
-    assert(successGateAt > settlementAt, 'a refused start returns through the existing failure cleanup');
-    assert(refreshAt > successGateAt, 'the admission refresh is reachable only after the success gate');
-    assert(rejectAt > refreshAt, 'an IPC rejection still takes the failure handler instead of refreshing');
-    eq((productionOpen.match(/admissionView\.refresh\(\)/g) || []).length, 1,
-      'openInAppTerminal has exactly one post-start admission refresh');
-    eq((productionOpen.match(/cc\.ptyStart\(/g) || []).length, 1,
-      'the production launch transaction still issues exactly one ptyStart');
-    assert(productionOpen.includes('if (admissionView) await admissionView.refresh();'),
-      'no admission bridge means ordinary launches make no refresh IPC call');
+    let stateReads = 0;
+    let paneId = null;
+    const starts = [];
+    const document = await bootRenderer({
+      cc: {
+        ptyStart: ({ id }) => new Promise((resolve, reject) => starts.push({ id, resolve, reject })),
+      },
+      admission: {
+        enabled: true,
+        submitPrompt: () => { throw new Error('Starting a pane must not submit a prompt'); },
+        getState: async () => {
+          stateReads += 1;
+          return { ok: true, state: { ok: true, paneId, paneBound: paneId !== null, allowance: 3, remaining: 3, admitted: 0 } };
+        },
+      },
+    });
+    const shell = document.getElementById('newTermShell');
+    const host = document.getElementById('admissionHost');
+    const logs = document.getElementById('logView');
+    eq(stateReads, 1, 'boot reads admission state once');
+    assert(host.textContent.includes('pane: unbound'), 'the mounted bar initially shows no binding');
+
+    shell.onclick();
+    eq(starts.length, 1, 'the shell click requests one PTY start');
+    await settle();
+    eq(stateReads, 1, 'the pending start has not refreshed admission state');
+    paneId = starts[0].id;
+    starts[0].resolve({ ok: true });
+    await settle();
+    eq(stateReads, 2, 'a successful pane start refreshes admission state once');
+    assert(host.textContent.includes(`pane: ${paneId}`), 'the admission bar renders the new binding');
+
+    const readsAfterSuccess = stateReads;
+    shell.onclick();
+    eq(starts.length, 2, 'the second click requests one PTY start');
+    starts[1].resolve({ ok: false, error: 'fixture-refusal' });
+    await settle();
+    eq(stateReads, readsAfterSuccess, 'a refused pane start does not refresh admission state');
+    assert(logs.textContent.includes(`start FAILED for ${starts[1].id}: fixture-refusal`), 'the refusal is visible in Logs');
+
+    shell.onclick();
+    eq(starts.length, 3, 'the third click requests one PTY start');
+    starts[2].reject(new Error('fixture IPC rejection'));
+    await settle();
+    eq(stateReads, readsAfterSuccess, 'a rejected pane start does not refresh admission state');
+    assert(logs.textContent.includes(`start FAILED for ${starts[2].id}: ipc-rejected`), 'the rejection is visible in Logs');
+  }
+  {
+    let starts = 0;
+    const document = await bootRenderer({
+      cc: { ptyStart: async () => { starts += 1; return { ok: true }; } },
+    });
+    document.getElementById('newTermShell').onclick();
+    await settle();
+    eq(starts, 1, 'a pane starts with no admission bridge');
+    eq(document.getElementById('admissionHost').children.length, 0, 'the ordinary launch leaves the admission host empty');
   }
 
   // ---- (13) live ledger access failure writes NOTHING -------------------------------------------
