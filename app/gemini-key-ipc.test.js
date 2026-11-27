@@ -6,7 +6,11 @@
 // REAL gate (trusted-ipc-sender.js) with stub windows, plus source tripwires on main.js's wiring.
 
 const fs = require('fs');
+const crypto = require('crypto');
+const os = require('os');
 const path = require('path');
+const { runInNewContext } = require('vm');
+const { isAgentToken, normalizeAgentToken } = require('./agent-git-env');
 const { createGeminiKeyIpc } = require('./gemini-key-ipc');
 const { createTrustedSenderGate } = require('./trusted-ipc-sender');
 
@@ -192,9 +196,212 @@ for (const [label, err] of [
   assert(r.ok === false && t.calls.save === 0 && t.getKey() === 'EXISTING', 'clear read failure: refused, nothing written');
 }
 
+// Exercise the main-process store and handler bodies in Node, with real files and stubbed OS/IPC
+// boundaries. Fault injection works on Windows even when the test account can read every fixture.
+// Windows checks main.js out CRLF (core.autocrlf), so normalise before matching on '\n'.
+const mainSource = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8').replace(/\r\n/g, '\n');
+function withSecureStore(run, { fileOps, decryptString } = {}) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mako-secure-test-'));
+  try {
+    const file = path.join(dir, 'secure.json');
+    const logs = [];
+    const dialogs = [];
+    const handlers = new Map();
+    const safeStorage = {
+      isEncryptionAvailable: () => true,
+      encryptString: (value) => Buffer.from(value),
+      decryptString: decryptString || ((value) => value.toString()),
+    };
+    const storeSource = mainSource.slice(mainSource.indexOf('const securePath ='), mainSource.indexOf('\nlet win = null;'));
+    const tokenSource = mainSource.slice(mainSource.indexOf("ipcMain.handle('get-agent-token-status'"),
+      mainSource.indexOf('let agentTokenMissingNoticeSent'));
+    const startupMatch = mainSource.match(/app\.whenReady\(\)\.then\(\(\) => \{\n((?:  load\w+\(\);[^\n]*\n)+)/);
+    assert(!!startupMatch, 'main.js: app.whenReady() starts with the credential loader call(s)');
+    if (!startupMatch) return;
+    const startupCall = startupMatch[1];
+    const store = runInNewContext(`${storeSource}\n${tokenSource}
+      ({ loadSecure, saveSecure, startup: () => { ${startupCall} },
+        flushNotices: (send) => flushCredentialNotices(send),
+        getKey: () => geminiKey, getToken: () => agentGitToken })`, {
+      app: { getPath: () => dir },
+      fs: { ...fs, ...fileOps },
+      path, crypto, Buffer, safeStorage, isAgentToken, normalizeAgentToken,
+      dialog: { showErrorBox: (_title, message) => dialogs.push(message) },
+      tlog: (line) => logs.push(line),
+      launcherGate: { assess: () => ({ ok: true }) },
+      ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
+    });
+    run({ ...store, dir, file, handlers, logs, dialogs });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function thrownBy(action) {
+  try { action(); } catch (err) { return err; }
+}
+
+withSecureStore(({ loadSecure, file }) => {
+  assert(JSON.stringify(loadSecure()) === '{}' && !fs.existsSync(file), 'secure store: only a missing file starts empty');
+  for (const content of ['{"other":', 'null', '[]', '"not a store"']) {
+    fs.writeFileSync(file, content);
+    assert(!!thrownBy(loadSecure), `secure store: rejects invalid store ${content}`);
+  }
+});
+
+const readError = fsError('EACCES');
+withSecureStore(({ loadSecure }) => {
+  assert(thrownBy(loadSecure) === readError, 'secure store: propagates a non-ENOENT read error');
+}, { fileOps: { readFileSync: () => { throw readError; } } });
+
+const previousStore = JSON.stringify({ other: 'kept' });
+{
+  let staged = false;
+  withSecureStore(({ saveSecure, file, dir }) => {
+    fs.writeFileSync(file, previousStore);
+    saveSecure({ other: 'kept', added: true });
+    assert(staged && fs.readFileSync(file, 'utf8') === '{"other":"kept","added":true}' &&
+      fs.readdirSync(dir).join() === 'secure.json', 'secure save: stages in the same folder and replaces the original in one rename');
+  }, { fileOps: { renameSync(from, to) {
+    staged = from !== to && path.dirname(from) === path.dirname(to) &&
+      fs.readFileSync(from, 'utf8') === '{"other":"kept","added":true}' &&
+      fs.readFileSync(to, 'utf8') === previousStore;
+    fs.renameSync(from, to);
+  } } });
+}
+
+for (const step of ['writeFileSync', 'renameSync']) {
+  const error = fsError('EIO');
+  withSecureStore(({ saveSecure, file, dir }) => {
+    fs.writeFileSync(file, previousStore);
+    assert(thrownBy(() => saveSecure({ added: true })) === error &&
+      fs.readFileSync(file, 'utf8') === previousStore && fs.readdirSync(dir).join() === 'secure.json',
+    `secure save: failed ${step} leaves the original and cleans up the temporary file`);
+  }, { fileOps: { [step](target) {
+    if (step === 'writeFileSync') fs.writeFileSync(target, 'partial');
+    throw error;
+  } } });
+}
+
+const AGENT_TOKEN = 'ghp_' + 'A'.repeat(36);
+const OTHER_TOKEN = 'ghp_' + 'B'.repeat(36);
+const OTHER_KEY = KEY + '-new';
+const credentials = {
+  geminiKeyEnc: Buffer.from(KEY).toString('base64'),
+  agentGitTokenEnc: Buffer.from(AGENT_TOKEN).toString('base64'),
+};
+
+withSecureStore(({ file, startup, handlers, getToken }) => {
+  fs.writeFileSync(file, JSON.stringify({ ...credentials, other: 'kept' }));
+  startup();
+  const saved = handlers.get('set-agent-token')({}, OTHER_TOKEN);
+  const afterSave = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert(saved.ok && getToken() === OTHER_TOKEN && afterSave.geminiKeyEnc === credentials.geminiKeyEnc &&
+    afterSave.other === 'kept' && afterSave.agentGitTokenEnc === Buffer.from(OTHER_TOKEN).toString('base64'),
+  'ABlueAgent save: replaces the token and preserves the rest of the store');
+  const cleared = handlers.get('clear-agent-token')({});
+  const afterClear = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert(cleared.ok && getToken() === null && afterClear.geminiKeyEnc === credentials.geminiKeyEnc &&
+    afterClear.other === 'kept' && !('agentGitTokenEnc' in afterClear),
+  'ABlueAgent clear: removes the token and preserves the rest of the store');
+});
+
+for (const failure of ['invalid JSON', 'read error']) {
+  let refuseRead = false;
+  const content = failure === 'invalid JSON' ? '{"other":' : JSON.stringify(credentials);
+  for (const action of ['save', 'clear']) {
+    withSecureStore(({ file, dir, loadSecure, saveSecure, startup, handlers, getToken }) => {
+      refuseRead = false;
+      fs.writeFileSync(file, JSON.stringify(credentials));
+      startup();
+      fs.writeFileSync(file, content);
+      refuseRead = failure === 'read error';
+      const gemini = makeIpc({ loadSecure, saveSecure });
+      gemini.setKeyDirect(KEY);
+      const result = action === 'save' ? gemini.ipc.handleSet(gemini.world.trusted, OTHER_KEY)
+        : gemini.ipc.handleClear(gemini.world.trusted);
+      assert(result.ok === false && /could not read secure\.json/.test(result.error) && gemini.logs.length === 1 &&
+        gemini.getKey() === KEY && fs.readFileSync(file, 'utf8') === content,
+      `Gemini ${action}: ${failure} is reported and the file and loaded key are kept`);
+      // Restore the fixture so each caller faces the original failure even on the broken baseline.
+      fs.writeFileSync(file, content);
+      const handle = handlers.get(action === 'save' ? 'set-agent-token' : 'clear-agent-token');
+      let tokenResult;
+      const error = thrownBy(() => { tokenResult = handle({}, OTHER_TOKEN); });
+      assert(!error && tokenResult?.ok === false && /could not read secure\.json/.test(tokenResult.error) &&
+        getToken() === AGENT_TOKEN && fs.readFileSync(file, 'utf8') === content &&
+        fs.readdirSync(dir).join() === 'secure.json',
+      `ABlueAgent ${action}: ${failure} returns a visible refusal and keeps the file and loaded token`);
+    }, { fileOps: { readFileSync(file, encoding) {
+      if (refuseRead) throw readError;
+      return fs.readFileSync(file, encoding);
+    } } });
+  }
+}
+
+for (const [channel, explanation] of [
+  ['set-agent-token', 'could not save secure.json'],
+  ['clear-agent-token', 'could not save secure.json'],
+]) {
+  withSecureStore(({ file, startup, handlers, getToken }) => {
+    const content = JSON.stringify(credentials);
+    fs.writeFileSync(file, content);
+    startup();
+    let result;
+    const error = thrownBy(() => { result = handlers.get(channel)({}, OTHER_TOKEN); });
+    assert(!error && result?.ok === false && result.error === explanation &&
+      getToken() === AGENT_TOKEN && fs.readFileSync(file, 'utf8') === content,
+    `${channel}: a failed replacement is reported and the loaded token is kept`);
+  }, { fileOps: { renameSync: () => { throw fsError('EIO'); } } });
+}
+
+withSecureStore(({ file, startup, dialogs, getKey, getToken }) => {
+  fs.writeFileSync(file, '{"other":');
+  assert(!thrownBy(startup) && dialogs.length === 1 && /could not read secure\.json/i.test(dialogs[0]) &&
+    getKey() === null && getToken() === null && fs.readFileSync(file, 'utf8') === '{"other":',
+  'startup: a malformed store is reported once and the app can continue without the credentials');
+});
+
+// The startup dialog names a bounded reason, the folder and a recovery step, never the parse text,
+// and the same reason is logged and queued for the Logs tab.
+for (const [label, content, fileOps, reason] of [
+  ['malformed JSON', '{"other":', undefined, 'not valid JSON'],
+  ['a non-object store', '[]', undefined, 'not a JSON object'],
+  ['a read error', '{}', { readFileSync: () => { throw fsError('EACCES'); } }, 'EACCES'],
+]) {
+  withSecureStore(({ file, dir, startup, dialogs, logs, flushNotices }) => {
+    fs.writeFileSync(file, content);
+    startup();
+    const sent = [];
+    flushNotices((line) => sent.push(line));
+    assert(dialogs.length === 1 && dialogs[0].includes(`(${reason})`) && dialogs[0].includes(dir) &&
+      /rename secure\.json/i.test(dialogs[0]) && !/Unexpected|JSON at position|must contain/.test(dialogs[0]),
+    `startup: ${label} shows the bounded reason "${reason}", the folder and the recovery step`);
+    assert(logs.length === 1 && logs[0].includes(`(${reason})`) && sent.length === 1 && sent[0] === logs[0],
+    `startup: ${label} logs the same reason once and sends it to the Logs tab once the window exists`);
+  }, { fileOps });
+}
+
+withSecureStore(({ file, startup, logs, dialogs, getKey, getToken, flushNotices }) => {
+  fs.writeFileSync(file, JSON.stringify(credentials));
+  startup();
+  assert(logs.length === 1 && /^\[gemini\] stored Gemini key could not be decrypted$/.test(logs[0]) &&
+    dialogs.length === 0 && getKey() === null && getToken() === AGENT_TOKEN,
+  'startup: Gemini decryption failure logs one fixed line and the other credential still loads');
+  const sent = [];
+  flushNotices((line) => sent.push(line));
+  flushNotices((line) => sent.push(line));
+  assert(sent.length === 1 && sent[0] === logs[0],
+    'startup: the Gemini decrypt notice reaches the Logs tab once the window exists, and only once');
+}, { decryptString: (value) => {
+  const text = value.toString();
+  if (text === KEY) throw new Error(`test payload\n${KEY}`.repeat(100));
+  return text;
+} });
+
 // --- main.js and preload wiring (source tripwires) ----------------------------------------------
 {
-  const src = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+  const src = mainSource;
   const wiring = [
     ["get-gemini-key-status", 'geminiKeyIpc.handleStatus(e)'],
     ["set-gemini-key", 'geminiKeyIpc.handleSet(e, key)'],
@@ -212,8 +419,12 @@ for (const [label, err] of [
   assert(/assessSender:\s*\(e\)\s*=>\s*launcherGate\.assess\(e\)/.test(block),
     'main.js gives the module the same trusted-sender gate as the ABlueAgent token channels');
   assert(/win\.webContents\.send\('main-error', line\)/.test(block), 'main.js shows refusals on the main-error channel');
+  const cw = src.slice(src.indexOf('function createWindow()'), src.indexOf('\napp.whenReady()'));
+  assert(/webContents\.once\('did-finish-load', \(\) => flushCredentialNotices\(/.test(cw) &&
+    /flushCredentialNotices\([\s\S]*?send\('main-error', line\)/.test(cw),
+  'main.js: createWindow sends queued startup credential notices on main-error once the page has loaded');
   // The stored key's field is read only by the startup loader; every write goes through the module.
-  const li = src.indexOf('function loadGeminiKey()');
+  const li = src.indexOf('function loadGeminiKey(');
   const loader = li < 0 ? '' : src.slice(li, src.indexOf('\n}', li));
   const outside = (src.match(/geminiKeyEnc/g) || []).length - (loader.match(/geminiKeyEnc/g) || []).length;
   assert(loader.includes('geminiKeyEnc') && outside === 0,
@@ -236,6 +447,21 @@ for (const [label, err] of [
     /else appendLog\(`\[key\] clear failed: /.test(clear) &&
     (clear.match(/updateKeyBanner/g) || []).length === 1,
     'renderer: Clear shows "no key" only after main says ok, and logs a refusal');
+  const tokenClear = app.match(/\$\('#agentTokenClear'\)\.onclick = async \(\) => \{[\s\S]*?\n  \};/)[0];
+  assert(/if \(r && r\.ok\) agentTokenStatusCheck\.update\(\{ ok: true, hasToken: false \}\)/.test(tokenClear) &&
+    /else appendLog\(.*clear failed: .*r\.error/.test(tokenClear),
+    'renderer: token Clear displays the refusal and keeps the stored banner');
+  // Startup credential notices go out on main-error as soon as the page has loaded, so boot() must
+  // listen before its first await (ipcRenderer drops a message that arrives with no listener).
+  const bootAt = app.indexOf('async function boot() {');
+  const bootBody = (bootAt < 0 ? '' : app.slice(bootAt, app.indexOf('\n}\n', bootAt)))
+    .replace(/^\s*\/\/.*$/gm, ''); // comments may say "await"; only code counts
+  const firstAwait = bootBody.search(/\bawait\b/);
+  const errorAt = bootBody.indexOf("cc.onMainError(");
+  const infoAt = bootBody.indexOf("cc.onMainInfo(");
+  assert(errorAt > 0 && infoAt > 0 && firstAwait > 0 && errorAt < firstAwait && infoAt < firstAwait &&
+    (bootBody.match(/cc\.onMainError\(/g) || []).length === 1,
+  'renderer: boot() registers the main-error and main-info listeners once, before its first await');
   const preload = fs.readFileSync(path.join(__dirname, 'preload.js'), 'utf8');
   assert(!/getGeminiKey\s*:|readGeminiKey/.test(preload), 'preload has no way to read the key back');
 }

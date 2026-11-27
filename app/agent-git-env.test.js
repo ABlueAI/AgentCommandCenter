@@ -150,18 +150,18 @@ const AMBIENT = {
   }
   assert(!/tlog\([^)]*agentGitToken\b(?!\s*\?)/.test(src), 'the token is never logged');
   {
-    const load = src.match(/function loadAgentGitToken\(\) \{[\s\S]*?\n\}/)[0];
+    const load = src.match(/function loadAgentGitToken\(s\) \{[\s\S]*?\n\}/)[0];
     const lines = [];
     const decrypted = 'fixture-invalid-token';
     const ctx = {
       Buffer, isAgentToken,
       safeStorage: { isEncryptionAvailable: () => true, decryptString: () => decrypted },
-      loadSecure: () => ({ agentGitTokenEnc: 'YQ==' }),
-      tlog: (line) => lines.push(line),
+      store: { agentGitTokenEnc: 'YQ==' },
+      noteCredential: (line) => lines.push(line),
     };
     const run = (c) => require('node:vm').runInNewContext(
       'let agentGitToken = null; let agentGitTokenLoadIssue = null;\n' + load
-      + '\nloadAgentGitToken(); ({ token: agentGitToken, issue: agentGitTokenLoadIssue });', c);
+      + '\nloadAgentGitToken(store); ({ token: agentGitToken, issue: agentGitTokenLoadIssue });', c);
     const res = run(ctx);
     assert(res.token === null && lines.length === 1 && /invalid shape/.test(lines[0]) && !lines[0].includes(decrypted),
       'a decrypted token of the wrong shape is refused and logged without its value');

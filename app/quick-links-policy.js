@@ -39,6 +39,7 @@ const REASON = Object.freeze({
   ID_TOO_LONG: 'id-too-long',
   DUPLICATE_ID: 'duplicate-id',
   LABEL_INVALID: 'label-invalid',
+  LABEL_BIDI_CHARACTER: 'label-bidi-character',
   LABEL_TOO_LONG: 'label-too-long',
   URL_NOT_STRING: 'url-not-string',
   URL_EMPTY: 'url-empty',
@@ -58,7 +59,9 @@ const REASON = Object.freeze({
 
 const ID_PATTERN = /^[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?$/;
 const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f]/;
-const BIDI_RE = /[\u202a-\u202e\u2066-\u2069]/;
+// Every Unicode Bidi_Control character (UAX #9): the embeddings, overrides and isolates, and the
+// implicit marks U+061C, U+200E and U+200F, which reorder displayed text just as well (issue #340).
+const BIDI_RE = /\p{Bidi_Control}/u;
 const ENCODED_CONTROL_RE = /%(?:0[0-9a-f]|1[0-9a-f]|7f|8[0-9a-f]|9[0-9a-f])/i;
 
 function refuse(reason) { return { ok: false, reason }; }
@@ -122,9 +125,11 @@ function validateEntry(entry) {
   if (typeof entry.id !== 'string' || !ID_PATTERN.test(entry.id)) return refuse(REASON.ID_INVALID);
   if (entry.id.length > MAX_ID_LENGTH) return refuse(REASON.ID_TOO_LONG);
   if (typeof entry.label !== 'string' || entry.label.length === 0 || entry.label !== entry.label.trim()
-      || CONTROL_RE.test(entry.label) || BIDI_RE.test(entry.label)) {
+      || CONTROL_RE.test(entry.label)) {
     return refuse(REASON.LABEL_INVALID);
   }
+  // Its own reason, so a saved label that looks fine but holds an invisible mark says why it is refused.
+  if (BIDI_RE.test(entry.label)) return refuse(REASON.LABEL_BIDI_CHARACTER);
   if (entry.label.length > MAX_LABEL_LENGTH) return refuse(REASON.LABEL_TOO_LONG);
   const url = validateUrl(entry.url);
   if (!url.ok) return url;
