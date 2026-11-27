@@ -75,7 +75,7 @@ const libraryScript = new Script(appSource.slice(
   appSource.indexOf('function showTermEmpty()'),
 ) + '\nsetupLibrary();', { filename: 'app.js (Library)' });
 
-function makeLibrary({ accept = () => ({ ok: true }) } = {}) {
+function makeLibrary({ accept = () => ({ ok: true }), openReport = null, globals = {} } = {}) {
   const scans = [];
   const accepted = [];
   const logs = [];
@@ -101,16 +101,18 @@ function makeLibrary({ accept = () => ({ ok: true }) } = {}) {
         return accept(generation);
       },
       libraryRead: async () => ({ ok: true, status: 'available', text: 'Stored report' }),
+      libraryOpenReport: openReport || (async () => { throw new Error('unexpected open report'); }),
     },
     crypto: webcrypto,
     document: doc,
     agentDom: { el },
     appendLog: (line) => logs.push(line),
     $,
+    ...globals,
   });
   libraryScript.runInContext(ctx);
   const nodes = new Script('libFollowup._nodes()').runInContext(ctx);
-  return { $, nodes, scans, logs, accepted, refresh: () => $('#libRefresh').onclick() };
+  return { $, ctx, nodes, scans, logs, accepted, refresh: () => $('#libRefresh').onclick() };
 }
 
 function listResult(title) {
@@ -121,22 +123,40 @@ function listResult(title) {
 
 (async () => {
   // The renderer also checks request order, including IPC errors that never arrive as a main reply.
-  for (const olderFails of [false, true]) {
+  for (const late of ['success', 'error', 'refusal']) {
     const { $, scans, logs, accepted, refresh } = makeLibrary();
     const older = refresh();
     const newer = refresh();
     scans[1].resolve(listResult('Newer report'));
     await newer;
     const latestStatus = $('#libStatus').textContent;
-    if (olderFails) scans[0].reject(new Error('IPC unavailable'));
+    if (late === 'error') scans[0].reject(new Error('IPC unavailable'));
+    else if (late === 'refusal') scans[0].resolve({ ok: false, error: 'refresh-superseded' });
     else scans[0].resolve(listResult('Older report'));
     await older;
     assert($('#libList').textContent.includes('Newer report') &&
       $('#libStatus').textContent === latestStatus,
-      `a late scan ${olderFails ? 'error' : 'success'} leaves the newest list and status visible`);
+      `a late scan ${late} leaves the newest list and status visible`);
     assert(accepted.length === 1 && accepted[0] === scans[1].generation,
       'only the newest scan generation is accepted');
-    if (olderFails) assert(logs.some((line) => line.includes('list failed')), 'the late IPC error is logged');
+    if (late === 'error') {
+      assert(logs.some((line) => line.includes('list failed: ipc-failed (list: Error)')),
+        'the late IPC error is logged with the step and error name');
+    }
+  }
+
+  {
+    // Open Report on a Library that hasn't loaded: its first scan keeps the reader, so the pane's
+    // report still shows once the scan finishes (audit renderer:22 moved the epoch bump to clearReader).
+    const { $, ctx, nodes, scans } = makeLibrary({
+      openReport: async () => ({ ok: true, status: 'available', text: 'Pane report', title: 'Pane run' }),
+      globals: { focusLibrarySurface() {} },
+    });
+    const opening = new Script("openReportForPane('pty4')").runInContext(ctx);
+    scans[0].resolve(listResult('Listed report'));
+    await opening;
+    assert($('#libReportText').textContent === 'Pane report' && !nodes.wrap.classList.contains('hidden'),
+      'Open Report before the first scan shows the pane report and its Ask control after the scan');
   }
 
   // The report, question and Ask identity stay together if the newest refresh fails.

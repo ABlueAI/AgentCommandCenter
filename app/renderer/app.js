@@ -286,6 +286,7 @@ async function refreshLibrary({ preserveReader = false } = {}) {
   libState.loaded = true;
   $('#libStatus').textContent = 'Scanning…';
   let res;
+  let step = 'list';
   try {
     res = await cc.libraryList(generation);
     if (res?.ok === true) {
@@ -294,12 +295,14 @@ async function refreshLibrary({ preserveReader = false } = {}) {
       else {
         // Keep main's handles aligned with what this renderer accepts. A newer request cannot
         // start between this acknowledgement and rendering the list in the same turn.
+        step = 'accept';
         const accepted = cc.libraryAcceptList(generation);
         if (accepted?.ok !== true) res = accepted;
       }
     }
-  } catch {
-    appendLog('[library] list failed: ipc-failed\n');
+  } catch (e) {
+    // The error's name and step only: its message can carry a path.
+    appendLog(`[library] list failed: ipc-failed (${step}: ${(e && e.name) || 'Error'})\n`);
     if (libState.refreshGeneration !== generation) return 'superseded';
     $('#libStatus').textContent = 'Scan failed.';
     return 'failed';
