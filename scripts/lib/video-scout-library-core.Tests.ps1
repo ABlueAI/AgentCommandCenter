@@ -549,3 +549,15 @@ Describe 'V4Q: the Library NEVER exposes a rejected-response diagnostic' {
         ($src -match 'diagnosticArtifacts') | Should Be $false
     }
 }
+
+Describe 'Invoke-VideoScoutLibraryList root lookup (audit main:29)' {
+    It 'treats only a confirmed missing root as no runs yet; every other lookup failure reaches the caller' {
+        # An access failure can't be staged portably on a CI runner, so this pins the one catch: a
+        # widened catch would show an unreadable root as an empty Library again.
+        $src = [System.IO.File]::ReadAllText((Join-Path $here 'video-scout-library-core.ps1'))
+        $m = [regex]::Match($src, '(?s)\[System\.IO\.File\]::GetAttributes\(\$fullRoot\)(.*?)if \(-not \(\$rootAttributes')
+        $m.Success | Should Be $true
+        ([regex]::Matches($m.Groups[1].Value, '\bcatch\b')).Count | Should Be 1
+        $m.Groups[1].Value | Should Match 'catch \[System\.IO\.FileNotFoundException\], \[System\.IO\.DirectoryNotFoundException\] \{'
+    }
+}

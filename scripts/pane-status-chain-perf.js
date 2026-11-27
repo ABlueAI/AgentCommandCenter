@@ -53,7 +53,8 @@ function electronProcessCensus() {
   const ps = require(path.join(APP_DIR, 'pane-status', 'pane-status-lock')).resolveWindowsPowerShellPath(process.env);
   if (!ps.ok) return { ok: false, reason: ps.reason };
   const r = cp.spawnSync(ps.path, ['-NoProfile', '-NonInteractive', '-Command',
-    '$ErrorActionPreference = "Stop"; '
+    // Progress records would reach stderr when it is piped and fail a good census.
+    '$ErrorActionPreference = "Stop"; $ProgressPreference = "SilentlyContinue"; '
     + '$p = @(Get-Process | Where-Object { $_.ProcessName -eq "electron" }); '
     + '"" + $p.Count + " " + @($p | Where-Object { $_.MainWindowHandle -ne 0 }).Count'],
   { windowsHide: true, encoding: 'utf8', timeout: 30000 });
