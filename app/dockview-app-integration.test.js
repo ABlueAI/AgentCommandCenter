@@ -84,7 +84,7 @@ const S = report.scenarios || {};
 const EXPECTED_SCENARIOS = [
   'production', 'classic', 'scriptRefusal', 'adoptionRollback', 'newPaneTransaction',
   'startFailure', 'library', 'maximize', 'closeConvergence', 'diagnostic',
-  'layoutOperations', 'exactSet', 'malformedAndConcurrency', 'saveRefused',
+  'layoutOperations', 'exactSet', 'malformedAndConcurrency', 'saveRefused', 'rendererReload',
 ];
 for (const name of EXPECTED_SCENARIOS) {
   assert(!!S[name], `the ${name} scenario is present in the report`);
@@ -93,6 +93,15 @@ for (const name of EXPECTED_SCENARIOS) {
 if (EXPECTED_SCENARIOS.some((n) => !S[n])) {
   process.stderr.write('  ✗ FATAL: a scenario is missing; the assertions below would prove nothing\n');
   process.exit(1);
+}
+
+// ---------------------------------------------------------------------------
+process.stdout.write('\nterminal IDs survive a renderer reload\n');
+{
+  const { before, after, ptyStart, ptyKill } = S.rendererReload;
+  assert(before.settled && after.settled, 'the original and reloaded renderers settled');
+  assert(ptyStart.join(',') === 'pty1,pty2' && ptyKill.length === 0,
+    'a new pane after reload has a distinct ID while main still owns the earlier pane');
 }
 
 // ---------------------------------------------------------------------------
