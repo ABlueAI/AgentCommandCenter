@@ -643,6 +643,7 @@ const LEDGER = 'admission-ledger.json';
       for (const [base, dir, reason] of [
         ['-main', worktree, 'invalid-branch-name'],
         ['bad ref', worktree, 'invalid-branch-name'],
+        ['@', worktree, 'invalid-branch-name'],
         ['main', outside, 'not-authorized'],
       ]) {
         const from = gitCalls.length;
@@ -650,6 +651,10 @@ const LEDGER = 'admission-ledger.json';
         assert(result?.ok === false && result.error === reason, `review-diff visibly refuses ${reason} (${base})`);
         assert(!gitCalls.slice(from).some((args) => args[2] === 'diff') && !fs.existsSync(path.join(dir, '.agent-review.diff')),
           `review-diff refusal (${base}, ${reason}) runs no diff and writes no review file`);
+        if (base === '@') {
+          assert(gitCalls.slice(from).some((args) => args[0] === 'check-ref-format' && args.includes('@')),
+            'a name the branch rule accepts but Git refuses (@) is refused by git check-ref-format');
+        }
       }
       const result = await reviewDiff(trusted, { worktree });
       assert(result?.ok === true && result.files === 1 && fs.readFileSync(diffFile, 'utf8').includes('review fixture'),
