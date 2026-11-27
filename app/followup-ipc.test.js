@@ -11,6 +11,7 @@
 const { createFollowupIpc, normalizeFollowupQuestion, validateFollowupRequest,
   FOLLOWUP_QUESTION_MAX, FOLLOWUP_REPORT_CONTEXT_MAX, FOLLOWUP_MODEL } = require('./followup-ipc');
 const { createLibraryIpc } = require('./library-ipc');
+const { runAsyncSuite } = require('./test-helpers/run-async-suite');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -86,7 +87,7 @@ const PANE_REQ = (q) => ({ source: 'pane', paneId: 'pty7', question: q === undef
     'mixed / missing / extra / wrong-typed / unknown-source requests are ALL bad-request');
 }
 
-(async () => {
+runAsyncSuite('followup-ipc', async () => {
   // ── sender gate ────────────────────────────────────────────────────────────────────────────
   {
     const { ipc, counters } = makeIpc();
@@ -277,6 +278,5 @@ const PANE_REQ = (q) => ({ source: 'pane', paneId: 'pty7', question: q === undef
       'resolveHandle refuses non-strings and unknown handles');
   }
 
-  process.stdout.write(`\nfollowup-ipc: ${passed} passed, ${failed} failed\n`);
-  process.exit(failed ? 1 : 0);
-})();
+  return { passed, failed };
+});
