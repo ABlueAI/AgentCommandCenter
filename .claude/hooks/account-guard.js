@@ -88,8 +88,8 @@
 // reached through an alias or `gh -R x api` with other global options, a GraphQL mutation read from
 // a file (`-F query=@mutation.graphql`), `curl` or SDK calls to
 // api.github.com with a token, and tools other than Bash and PowerShell (GitHub MCP tools:
-// .claude/settings.json denies the ones whose names were checked; its deny rules are written for
-// the Bash tool, issue #219). A process running as
+// .claude/settings.json denies the ones whose names were checked; every Bash deny rule there has a
+// PowerShell counterpart, issue #219). A process running as
 // Blue's Windows user can still use his stored logins, which is why he removes them after
 // checklist step 35 (BLUE-CHECKLIST.md step 49). Review and merge calls are guarded only as far as
 // this hook sees them: the real gate is that `main` needs Blue's approval, and the merge audit
@@ -439,7 +439,8 @@ function splitCommands(input, depth = 0, ctx = scanContext()) {
 
 const PS_SINGLE = "'‘’‚‛";
 const PS_DOUBLE = '"“”„';
-const PS_SEPARATORS = new Set([';', '&', '|', '\n', '\r', '{', '}', ')']);
+const PS_SEPARATORS = new Set([';', '&', '|', '\n', '{', '}', ')']);
+const normalizePowerShellLineEndings = (text) => text.replace(/\r\n?/g, '\n');
 // Separates the elements of an array argument (`'pr', 'merge'`) inside one word. PowerShell passes
 // each element to a native program as an argument of its own, so classifySimpleCommand splits on it.
 const PS_ARRAY_SEP = '\u001F';
@@ -478,7 +479,7 @@ function psStringEnd(s, i, ctx, onSub) {
 // a PowerShell version reads it differently. A here-string that never closes marks ctx.unbalanced.
 function psHereString(s, i, ctx) {
   if (s[i] !== '@' || !isOneOf(PS_SINGLE + PS_DOUBLE, s[i + 1])) return null;
-  const m = /^[ \t]*\r?\n/.exec(s.slice(i + 2));
+  const m = /^[ \t]*\n/.exec(s.slice(i + 2));
   if (!m) return null;
   const expandable = isOneOf(PS_DOUBLE, s[i + 1]);
   const quotes = expandable ? PS_DOUBLE : PS_SINGLE;
@@ -487,7 +488,7 @@ function psHereString(s, i, ctx) {
   for (;;) {
     const lineStart = pos;
     if (isOneOf(quotes, s[lineStart]) && s[lineStart + 1] === '@') {
-      const body = s.slice(bodyStart, Math.max(bodyStart, lineStart - 1)).replace(/\r$/, '');
+      const body = s.slice(bodyStart, Math.max(bodyStart, lineStart - 1));
       return { body, end: lineStart + 1, expandable };
     }
     let k = lineStart;
@@ -573,7 +574,10 @@ function splitPowerShell(input, depth = 0, ctx = scanContext()) {
   const commands = [];
   if (typeof input !== 'string') return commands;
   if (depth > MAX_DEPTH) { ctx.unbalanced = true; return commands; }
+  if (!ctx.work) ctx.work = scanWork(); // a caller's plain { unbalanced } context gets its own budget
   charge(ctx.work, input.length + 1);
+  // #315: the splitter and its helpers use LF throughout, so CRLF scripts split like LF ones.
+  input = normalizePowerShellLineEndings(input);
   let words = [];
   let word = null;
   let pipeInput = null;
@@ -595,7 +599,7 @@ function splitPowerShell(input, depth = 0, ctx = scanContext()) {
     }
     if (separator === '|' && words.length === 1 && startsWithLiteral) pipeInput = words[0];
     else if (separator === '|' && words.length === 2 && /^write-output$/i.test(words[0])) pipeInput = words[1];
-    else if (words.length || (separator !== '\n' && separator !== '\r')) pipeInput = null;
+    else if (words.length || separator !== '\n') pipeInput = null;
     startsWithLiteral = false;
     words = [];
   };
@@ -607,7 +611,6 @@ function splitPowerShell(input, depth = 0, ctx = scanContext()) {
     const c = s[i];
     if (c === '`') { // escape; a backtick at the end of a line continues the command
       if (s[i + 1] === '\n') { i++; continue; }
-      if (s[i + 1] === '\r' && s[i + 2] === '\n') { i += 2; continue; }
       word = (word || '') + (s[i + 1] || '');
       i++;
       continue;
@@ -683,7 +686,7 @@ function splitPowerShell(input, depth = 0, ctx = scanContext()) {
       else word = PS_ARRAY_SEP;
       for (;;) { // skip spaces, line breaks, backtick line continuations and comments after it
         const j = i + 1;
-        const ws = /^(?:\s+|`\r?\n)/.exec(s.slice(j, j + 66));
+        const ws = /^(?:\s+|`\n)/.exec(s.slice(j, j + 66));
         if (ws) { i += ws[0].length; continue; }
         if (s[j] === '#') { const nl = s.indexOf('\n', j); i = (nl === -1 ? s.length : nl) - 1; continue; }
         if (s[j] === '<' && s[j + 1] === '#') {
@@ -1051,7 +1054,7 @@ function classifySimpleCommand(words, depth, mode, work) {
         : withArgs || /^-(c|command|co|com|comm|comma|comman)$/i.test(flag);
       if (!isCmdFlag) continue;
       if (SHELLS.has(prog)) return scanCommand(rest[k + 1], depth + 1, 'bash', work);
-      const script = withArgs ? rest[k + 1] : rest.slice(k + 1).join(' ');
+      const script = normalizePowerShellLineEndings(withArgs ? rest[k + 1] : rest.slice(k + 1).join(' '));
       const psHit = scanCommand(script, depth + 1, 'ps', work);
       if (ALWAYS_BLOCKED.has(psHit)) return psHit;
       return pickHit([psHit, scanCommand(script, depth + 1, 'bash', work)].filter(Boolean));
@@ -1183,10 +1186,11 @@ function psWordScan(text) {
 function scanCommand(command, depth, mode, work) {
   if (typeof command !== 'string') return null;
   if (depth > MAX_DEPTH) throw new ScanLimit('the command exceeded the supported shell nesting depth');
+  const script = mode === 'ps' ? normalizePowerShellLineEndings(command) : command;
   const ctx = scanContext(work);
   const hits = [];
   const split = mode === 'ps' ? splitPowerShell : splitCommands;
-  for (const words of split(command, depth, ctx)) {
+  for (const words of split(script, depth, ctx)) {
     const hit = classifySimpleCommand(words, work.depths.get(words), mode, work);
     if (hit) hits.push(hit);
     if (ALWAYS_BLOCKED.has(hit)) return hit;
@@ -1195,13 +1199,13 @@ function scanCommand(command, depth, mode, work) {
   // login-dependent command, because a review or merge command may be hiding behind the quote.
   // For PowerShell, a backtick line continuation is joined first (`git `<newline>`push`).
   if (ctx.unbalanced) {
-    for (const hit of rawScanAll(mode === 'ps' ? command.replace(/`\r?\n/g, ' ') : command, work)) hits.push(hit);
+    for (const hit of rawScanAll(mode === 'ps' ? script.replace(/`\n/g, ' ') : script, work)) hits.push(hit);
   }
   // PowerShell, fail-closed: the words of a guarded command anywhere in the script (psWordScan) get the
   // login check, after every hit above, so a review or merge command found above still wins.
   if (mode === 'ps') {
-    charge(work, 2 * command.length);
-    const words = psWordScan(command);
+    charge(work, 2 * script.length);
+    const words = psWordScan(script);
     if (words.includes('git push' + PS_WORDS_NOTE)) work.wordScanPush = true;
     hits.push(...words);
   }

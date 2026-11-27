@@ -20,6 +20,13 @@ const MAX_FILE_BYTES = 1048576;   // 1 MiB; 200 records are far smaller
 const MAX_PANE_ID_LENGTH = 64;
 const MAX_TEXT_LENGTH = 1024;     // worktree path, role, cli
 
+// S46 session hygiene: who owns a session, and the short "done when" Blue gives it.
+const OWNERS = Object.freeze(['blue', 'composer', 'runner']);
+const DEFAULT_OWNER = 'blue';     // every pane today is one Blue opened from Mako's own UI
+const MAX_DONE_WHEN_LENGTH = 200;
+// eslint-disable-next-line no-control-regex
+const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 // Why a record stopped. `unknown` is set at startup for a record Mako never closed (a crash or a
@@ -46,6 +53,9 @@ const REASON = Object.freeze({
   DUPLICATE_SESSION_ID: 'session-memory-duplicate-session-id',
   BAD_STOP_REASON: 'session-memory-bad-stop-reason',
   NOT_RESUMABLE: 'session-memory-not-resumable',
+  BAD_OWNER: 'session-memory-bad-owner',
+  BAD_DONE_WHEN: 'session-memory-bad-done-when',
+  UNKNOWN_SESSION: 'session-memory-unknown-session',
 });
 
 function refuse(reason) { return { ok: false, reason }; }
@@ -62,6 +72,23 @@ function boundedPaneId(v) {
   return typeof v === 'string' && v.length > 0 && v.length <= MAX_PANE_ID_LENGTH ? v : null;
 }
 
+// S46: a done-when is one short line of plain text. '' (after trimming) clears it. Anything else is
+// refused, never trimmed to fit or stripped of characters.
+function checkDoneWhen(v) {
+  if (typeof v !== 'string') return refuse(REASON.BAD_DONE_WHEN);
+  const t = v.trim();
+  if (t.length > MAX_DONE_WHEN_LENGTH || CONTROL_RE.test(t)) return refuse(REASON.BAD_DONE_WHEN);
+  return { ok: true, doneWhen: t === '' ? null : t };
+}
+
+// S46: a record stopped for good. The shell exited or Blue closed the pane, or Blue already answered
+// the Resume offer for it (or a newer Mako run replaced the offer), so it will never be offered
+// again. These records archive themselves.
+function isFinished(r) {
+  if (!r || r.stoppedAt === null || r.stoppedAt === undefined) return false;
+  return !RESUMABLE_STOPS.has(r.stopReason) || r.offered === true;
+}
+
 function isIsoTime(v) { return typeof v === 'string' && v.length <= 40 && !Number.isNaN(Date.parse(v)); }
 
 function validRecord(r) {
@@ -72,6 +99,13 @@ function validRecord(r) {
   if (!isIsoTime(r.startedAt)) return false;
   // S09: `offered` is optional, so S08's files stay valid and S08 ignores it.
   if (r.offered !== undefined && typeof r.offered !== 'boolean') return false;
+  // S46: optional too, so S08 and S09 files stay valid.
+  if (r.owner !== undefined && !OWNERS.includes(r.owner)) return false;
+  if (r.doneWhen !== undefined && r.doneWhen !== null) {
+    const d = checkDoneWhen(r.doneWhen);
+    if (!d.ok || d.doneWhen !== r.doneWhen) return false;
+  }
+  for (const k of ['lastActiveAt', 'archivedAt']) if (r[k] !== undefined && r[k] !== null && !isIsoTime(r[k])) return false;
   if (r.stoppedAt === null) return r.stopReason === null;
   return isIsoTime(r.stoppedAt) && STOP_REASONS.has(r.stopReason);
 }
@@ -144,8 +178,9 @@ function createSessionMemoryStore({ userDataDir, fsImpl = fs, now = () => new Da
     return next;
   }
 
-  function recordStart({ sessionId, paneId, role, cli, worktree } = {}) {
+  function recordStart({ sessionId, paneId, role, cli, worktree, owner = DEFAULT_OWNER } = {}) {
     if (!isSessionId(sessionId)) return refuse(REASON.BAD_SESSION_ID);
+    if (!OWNERS.includes(owner)) return refuse(REASON.BAD_OWNER);
     const rec = {
       sessionId,
       paneId: boundedPaneId(paneId),
@@ -155,6 +190,7 @@ function createSessionMemoryStore({ userDataDir, fsImpl = fs, now = () => new Da
       startedAt: now().toISOString(),
       stoppedAt: null,
       stopReason: null,
+      owner,
     };
     return update((records) => {
       if (records.some((r) => r.sessionId === sessionId)) return refuse(REASON.DUPLICATE_SESSION_ID);
@@ -235,16 +271,56 @@ function createSessionMemoryStore({ userDataDir, fsImpl = fs, now = () => new Da
       r.stoppedAt = null;
       r.stopReason = null;
       delete r.offered;
+      delete r.archivedAt;
       return { ok: true, changed: true, records };
+    });
+  }
+
+  // S46: the session showed activity (main calls this from the pane's output, at most once an hour
+  // per session). Only an open record is touched.
+  function touch(sessionId) {
+    if (!isSessionId(sessionId)) return refuse(REASON.BAD_SESSION_ID);
+    return update((records) => {
+      const r = records.find((x) => x.sessionId === sessionId);
+      if (!r || r.stoppedAt !== null) return { ok: true, changed: false, records };
+      r.lastActiveAt = now().toISOString();
+      return { ok: true, changed: true, records };
+    });
+  }
+
+  // S46: Blue's "done when" for one session; '' clears it. An unknown session is refused.
+  function setDoneWhen(sessionId, text) {
+    if (!isSessionId(sessionId)) return refuse(REASON.BAD_SESSION_ID);
+    const d = checkDoneWhen(text);
+    if (!d.ok) return d;
+    return update((records) => {
+      const r = records.find((x) => x.sessionId === sessionId);
+      if (!r) return refuse(REASON.UNKNOWN_SESSION);
+      if ((r.doneWhen === undefined ? null : r.doneWhen) === d.doneWhen) return { ok: true, changed: false, records };
+      if (d.doneWhen === null) delete r.doneWhen; else r.doneWhen = d.doneWhen;
+      return { ok: true, changed: true, records };
+    });
+  }
+
+  // S46: finished sessions archive themselves (isFinished above). Archived records stay in the file
+  // (oldest still drop off at MAX_RECORDS); they leave the hygiene list and the idle list.
+  function archiveFinished() {
+    return update((records) => {
+      const at = now().toISOString();
+      let n = 0;
+      for (const r of records) if (isFinished(r) && !r.archivedAt) { r.archivedAt = at; n++; }
+      return { ok: true, changed: n > 0, records, archived: n };
     });
   }
 
   return {
     recordStart, recordStop, closeOpen, list, resumeOffer, markOffered, recordResume,
+    touch, setDoneWhen, archiveFinished,
     filePath: () => filePath,
   };
 }
 
 module.exports = {
   createSessionMemoryStore, isSessionId, FILENAME, VERSION, MAX_RECORDS, STOP_REASON, RESUMABLE_STOPS, REASON,
+  OWNERS, DEFAULT_OWNER, MAX_DONE_WHEN_LENGTH, checkDoneWhen, isFinished,
 };

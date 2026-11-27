@@ -592,13 +592,10 @@ const WORDS_PS = [
   ["$e = 'repos/o/r/pulls/5/reviews'; gh api $e -f event=APPROVE", W('gh api review')],
   ['gh api graphql -F query=@q.graphql # mergePullRequest', W('gh api merge')],
   ["gh api -XPOST ('repos/o/r/pulls/5/' + 'reviews')", W('gh api review')],
-  // Line endings the splitter reads differently from PowerShell (issue #229's area): a comment ended by
-  // a lone CR, a NEL (U+0085) or a line separator (U+2028) can't hide the words.
-  ['Write-Host x # note\rgit push origin x', W('git push')],
+  // Other separator characters still get the word scan.
   ['Write-Host x # note\u0085git push origin x', W('git push')],
   ['Write-Host x # note\u2028git push origin x', W('git push')],
   ['Write-Host x # note\u2029gh pr ready 5', W('gh pr ready')],
-  ['Write-Host x # note\rgh pr merge 5', W('gh pr merge')],
 ];
 for (const [cmd, want] of WORDS_PS) {
   assert(ps(cmd) === want, `PowerShell ${JSON.stringify(cmd)} -> ${want}`);
@@ -621,6 +618,54 @@ const NOT_GUARDED_PS = [
 for (const cmd of NOT_GUARDED_PS) {
   assert(ps(cmd) === null, `PowerShell ${JSON.stringify(cmd)} -> not guarded`);
 }
+
+process.stdout.write('\nPowerShell line endings\n');
+const PS_LINE_ENDINGS = [['LF', '\n'], ['CRLF', '\r\n'], ['CR', '\r']];
+for (const [label, lines] of [
+  ['statement separator', ['Write-Output first', 'Write-Output second']],
+  ['line continuation', ['Write-Output `', '  message']],
+  ['line comment', ['Write-Output first # note', 'Write-Output second']],
+  ['comment in a group', ['Write-Output $(# note', 'Write-Output message', ')']],
+  ['array across lines', ["Write-Output 'first', `", '# note', "'second'"]],
+  ['stop-parsing token', ['example --% literal text', 'Write-Output message']],
+  ['literal here-string', ["Write-Output @'", 'first', 'second', "'@", 'Write-Output done']],
+  ['expandable here-string', ['Write-Output @"', 'first', '$(Write-Output message)', '"@', 'Write-Output done']],
+]) {
+  const expected = JSON.stringify(guard.splitPowerShell(lines.join('\n')));
+  for (const [name, eol] of PS_LINE_ENDINGS) {
+    const ctx = { unbalanced: false };
+    const words = guard.splitPowerShell(lines.join(eol), 0, ctx);
+    assert(!ctx.unbalanced && JSON.stringify(words) === expected, `${label} with ${name}: same PowerShell tokens as LF`);
+  }
+}
+
+for (const [cmd, want] of [
+  ['git push', 'git push'],
+  ['gh pr create', 'gh pr create'],
+  ['gh pr new', 'gh pr create'],
+  ['gh pr ready 5', 'gh pr ready'],
+  ['gh pr review 5 --approve', 'gh pr review'],
+  ['gh pr merge 5', 'gh pr merge'],
+  ['gh api -X POST repos/o/r/pulls/5/reviews', 'gh api review'],
+  ['gh api -X PUT repos/o/r/pulls/5/merge', 'gh api merge'],
+]) {
+  for (const [name, eol] of PS_LINE_ENDINGS) {
+    const statements = ['Write-Output start;', cmd, 'Write-Output done'].join(eol);
+    assert(ps(statements) === want, `${want} across statement separators with ${name}: parsed command`);
+    for (const quote of ["'", '"']) {
+      const hereString = [`Write-Output @${quote}`, 'Example command', cmd, `${quote}@`].join(eol);
+      assert(ps(hereString) === W(want), `${want} in ${quote}@ here-string text with ${name}: word scan`);
+    }
+  }
+}
+
+// A comment ended by a lone CR or a CRLF can't hide the next line: it is read as a command (issue #229).
+for (const eol of ['\r', '\r\n']) {
+  assert(ps(`Write-Host x # note${eol}git push origin x`) === 'git push', `comment ended by ${JSON.stringify(eol)} -> git push`);
+  assert(ps(`Write-Host x # note${eol}gh pr merge 5`) === 'gh pr merge', `comment ended by ${JSON.stringify(eol)} -> gh pr merge`);
+}
+// The LF baseline of the line-ending matrix is not empty, so the comparison above can't pass vacuously.
+assert(guard.splitPowerShell('Write-Output first\nWrite-Output second').length === 2, 'LF baseline splits into 2 commands');
 
 process.stdout.write('\nthe same PR work through the Bash tool and the PowerShell tool\n');
 // Every command that is the same text in both shells gives the same answer in both.
@@ -1462,6 +1507,16 @@ try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* temp cleanu
 // ---------------------------------------------------------------------------------------------
 process.stdout.write('\n.claude/settings.json\n');
 const settings = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, '.claude', 'settings.json'), 'utf8'));
+// Every Bash deny rule (push, merge and review) has a PowerShell counterpart (issue #219).
+// PowerShell rules take the same shape as Bash rules, `:*` suffix included: verified 2026-11-27 against
+// https://code.claude.com/docs/en/permissions, "PowerShell" section ("PowerShell permission rules use
+// the same shape as Bash rules").
+const isBashDeny = (rule) => /^Bash\(/.test(rule);
+const powerShellDenyFor = (rule) => rule.replace(/^Bash\(/, 'PowerShell(');
+for (const rule of settings.permissions.deny.filter(isBashDeny)) {
+  const counterpart = powerShellDenyFor(rule);
+  assert(settings.permissions.deny.includes(counterpart), `${rule}: deny also includes ${counterpart}`);
+}
 const DENY = [
   'mcp__github__merge_pull_request',
   'mcp__github__enable_pr_auto_merge',
@@ -1484,8 +1539,9 @@ const DENY = [
   'Bash(gh api repos/*/pulls/*/ccr/auto_merge*)',
   'Bash(gh api /repos/*/pulls/*/ccr/auto_merge*)',
 ];
-assert(JSON.stringify(settings.permissions && settings.permissions.deny) === JSON.stringify(DENY),
-  'the deny rules are the expected list (the original ones first, then the review and merge variants)');
+const expectedDeny = [...DENY, ...DENY.filter(isBashDeny).map(powerShellDenyFor)];
+assert(JSON.stringify(settings.permissions && settings.permissions.deny) === JSON.stringify(expectedDeny),
+  'the deny rules are the expected list, including a PowerShell counterpart for every Bash rule');
 // Verified 2026-11-11 against https://code.claude.com/docs/en/permissions (read that day):
 //   * a Bash rule's `*` may stand anywhere and spans any text; `Bash(cmd:*)` is the same as `Bash(cmd *)`
 //     but only at the end of a pattern; deny rules are checked first and a PreToolUse hook can't undo one;
@@ -1500,10 +1556,10 @@ assert(JSON.stringify(settings.permissions && settings.permissions.deny) === JSO
 // the two older entries were not listed in that session, so they are unchanged and unverified here.
 for (const rule of settings.permissions.deny) {
   assert(!/^mcp__.*\(/.test(rule), `${rule}: an MCP rule has no parentheses (Claude Code skips it otherwise)`);
-  assert(!/^Bash\(command:/.test(rule), `${rule}: no \`command:\` form (Claude Code ignores it)`);
-  assert(!/^Bash\(.*:\*.+\)$/.test(rule), `${rule}: \`:*\` appears only at the end of a pattern`);
+  assert(!/^(Bash|PowerShell)\(command:/.test(rule), `${rule}: no \`command:\` form (Claude Code ignores it)`);
+  assert(!/^(Bash|PowerShell)\(.*:\*.+\)$/.test(rule), `${rule}: \`:*\` appears only at the end of a pattern`);
 }
-assert(!settings.permissions.deny.some((r) => /^Bash\(gh api \*/.test(r)),
+assert(!settings.permissions.deny.some((r) => /^(Bash|PowerShell)\(gh api \*/.test(r)),
   'a gh api deny starts with the endpoint, so a comment body that merely says "reviews" or "merge" is not matched by a leading wildcard');
 const groups = (settings.hooks && settings.hooks.PreToolUse) || [];
 const entry = groups.find((g) => g.matcher === 'Bash|PowerShell');
