@@ -83,6 +83,28 @@ Describe 'Invoke-VideoScoutLibraryList (indexer)' {
         $r = Invoke-VideoScoutLibraryList -RunRoot (Join-Path $env:TEMP ('nope-' + [guid]::NewGuid().ToString('N')))
         $r.ok | Should Be $true; $r.rootExists | Should Be $false; @($r.entries).Count | Should Be 0
     }
+    It 'reports a scan failure when the run root is a file' {
+        $file = Join-Path $TestDrive 'unavailable-root'
+        Set-Content -LiteralPath $file -Value 'fixture'
+
+        { Invoke-VideoScoutLibraryList -RunRoot $file } | Should Throw
+    }
+    It 'reports a scan failure when the root path is invalid' {
+        { Invoke-VideoScoutLibraryList -RunRoot ('invalid' + [char]0 + 'root') } | Should Throw
+    }
+    It 'reports failure from the Library command with a bounded error and nonzero status' {
+        $file = Join-Path $TestDrive 'unavailable-command-root'
+        Set-Content -LiteralPath $file -Value 'fixture'
+        $powerShell = (Get-Process -Id $PID).Path
+        $libraryScript = Join-Path (Split-Path -Parent $here) 'video-scout-library.ps1'
+        $output = & $powerShell -NoProfile -ExecutionPolicy Bypass -File $libraryScript -Action List -RunRoot $file
+        $actualExit = $LASTEXITCODE
+
+        $actualExit | Should Be 1
+        $response = $output | ConvertFrom-Json
+        $response.ok | Should Be $false
+        $response.reason | Should Be 'internal-error'
+    }
     It 'projects a valid completed-with-report live run as available + exact' {
         $root = New-TempRoot
         $rid = 'run-20260718-120000-000-1000-aaaaaaaa'
