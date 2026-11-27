@@ -17,6 +17,7 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const { spawnSync } = require('child_process');
+const { runInNewContext } = require('vm');
 const policy = require('./role-fence-policy');
 const { parseRoleFrontmatter } = require('./role-frontmatter');
 
@@ -193,6 +194,155 @@ section('5. The hook carries the policy allowlist (drift tripwire)');
   assert(list && JSON.stringify(list) === JSON.stringify(policy.ALLOWED_TOOLS), 'hook HOOK_ALLOWED_TOOLS === policy ALLOWED_TOOLS');
   assert(policy.FORBIDDEN_TOOLS.every((t) => list && list.indexOf(t) === -1), 'no forbidden tool is on the hook allowlist');
   assert(/\[fence-tool-not-allowed\]'/.test(hook), 'the hook carries the constant tool refusal');
+}
+
+section('6. Path containment uses the filesystem and refuses unverifiable paths');
+{
+  const root = path.join(sandboxDir, 'allowed');
+  const outside = path.join(sandboxDir, 'outside');
+  const destination = path.join(outside, 'folder');
+  fs.mkdirSync(root);
+  fs.mkdirSync(destination, { recursive: true });
+  const alias = path.join(root, 'alias');
+  const dangling = path.join(root, 'dangling');
+  const outsideFile = path.join(outside, 'file.md');
+  fs.writeFileSync(outsideFile, 'test fixture');
+  fs.writeFileSync(path.join(root, 'Sample.md'), 'test fixture');
+  fs.mkdirSync(path.join(root, 'subdirectory'));
+  fs.symlinkSync(destination, alias, 'junction');
+  fs.symlinkSync(path.join(outside, 'missing'), dangling, 'junction');
+  const run = (filePath, cwd = root) => spawnSync(process.execPath, [hookPath], {
+    input: JSON.stringify({ cwd, tool_name: 'Write', tool_input: { file_path: filePath } }),
+    encoding: 'utf8',
+  });
+  const denied = (r) => r.status === 2 && r.stderr.includes('[fence-outside-sandbox]');
+  // A path the hook cannot check refuses with its own constant, never the outside-sandbox one.
+  const unchecked = (r) => r.status === 2 && r.stderr.includes('[fence-path-check-failed]')
+    && !r.stderr.includes('[fence-outside-sandbox]');
+  const runTool = (toolName, toolInput) => spawnSync(process.execPath, [hookPath], {
+    input: JSON.stringify({ cwd: root, tool_name: toolName, tool_input: toolInput }),
+    encoding: 'utf8',
+  });
+  assert(unchecked(runTool('Read', { path: outsideFile })), 'Read without file_path is refused');
+  assert(unchecked(runTool('Write', { notebook_path: outsideFile })), 'Write without file_path is refused');
+  assert(unchecked(runTool('Edit', {})), 'Edit without any path is refused');
+  assert(run('new/report.md').status === 0, 'a new file under new in-sandbox directories is allowed');
+  assert(denied(run(path.join(alias, 'new.md'))), 'a directory alias resolving outside is refused');
+  assert(unchecked(run(path.join(dangling, 'new.md'))), 'a dangling directory alias is refused');
+  assert(unchecked(run('new.md', path.join(root, 'missing'))), 'an unresolved sandbox root is refused');
+  assert(unchecked(run(42)), 'a non-string path is refused visibly');
+  assert(denied(run(['alias', '..', 'file.md'].join(path.sep))),
+    'parent segments are checked with filesystem resolution');
+  assert(run(['subdirectory', '..', 'Sample.md'].join(path.sep)).status === 0,
+    'a parent segment resolving inside the sandbox is allowed');
+  if (process.platform === 'win32') {
+    assert(run(path.join(root, 'SAMPLE.MD').replace(/\\/g, '/')).status === 0,
+      'native Windows resolution accepts alternate case and slashes inside the sandbox');
+  }
+  if (process.platform !== 'win32') {
+    const fileLink = path.join(root, 'file-link');
+    fs.symlinkSync(outsideFile, fileLink);
+    assert(denied(run(fileLink)), 'a file symlink resolving outside is refused');
+  }
+}
+
+section('7. Windows path spellings use Windows filesystem identity');
+{
+  // The native resolver on Windows expands 8.3 aliases. Model the native results so this
+  // check still runs when the volume or the test runner does not provide short names.
+  const win = path.win32;
+  const root = String.raw`X:\fixture\Allowed`;
+  const outside = win.join(win.dirname(root), 'Other Directory');
+  const outsideShortName = 'OTHERD~1';
+  const rootShortName = 'ALLOWE~1';
+  const outsideFile = win.join(outside, 'file.md');
+  const otherCase = win.join(win.dirname(root), win.basename(root).toLowerCase());
+  const existing = [root, win.dirname(root), outside, outsideFile, win.join(root, 'file.md'),
+    otherCase, win.join(otherCase, 'file.md'), win.join(root, 'console.md')];
+  const realpath = (raw) => {
+    const expanded = win.normalize(raw).replace(outsideShortName, 'Other Directory')
+      .replace(rootShortName, win.basename(root));
+    if (win.basename(expanded) === 'inaccessible.md') {
+      throw Object.assign(new Error('Fixture permission denied'), { code: 'EACCES' });
+    }
+    const found = existing.find((p) => p === expanded)
+      || existing.find((p) => p.toLowerCase() === expanded.toLowerCase());
+    if (!found) throw Object.assign(new Error('Fixture path missing'), { code: 'ENOENT' });
+    return found;
+  };
+  const run = (filePath) => {
+    const callbacks = new Map();
+    let stderr = '';
+    const exit = {};
+    const stat = (p) => {
+      const canonical = realpath(p);
+      return { isDirectory: () => !canonical.endsWith('.md'), dev: 1n, ino: BigInt(existing.indexOf(canonical) + 1) };
+    };
+    const fsFixture = { realpathSync: { native: realpath }, lstatSync: stat, statSync: stat };
+    const processFixture = {
+      platform: 'win32', env: {}, stdin: { on: (event, fn) => callbacks.set(event, fn) },
+      stderr: { write: (message) => { stderr += message; } },
+      exit: (status) => { exit.status = status; throw exit; },
+    };
+    try {
+      runInNewContext(fs.readFileSync(hookPath, 'utf8'), {
+        require: (name) => {
+          if (name === 'fs') return fsFixture;
+          if (name === 'path') return win;
+          throw new Error('Unexpected fixture dependency ' + name);
+        },
+        process: processFixture,
+      });
+      callbacks.get('data')(JSON.stringify({ cwd: root, tool_name: 'Read', tool_input: { file_path: filePath } }));
+      callbacks.get('end')();
+    } catch (e) {
+      if (e !== exit) throw e;
+    }
+    return { status: exit.status, stderr };
+  };
+  assert(run(win.join(root, 'file.md').toUpperCase().replace(/\\/g, '/')).status === 0,
+    'an in-root path with alternate case and slashes is allowed');
+  assert(run(win.join(win.dirname(root), rootShortName, 'file.md')).status === 0,
+    'a short name expanding to a path inside the root is allowed');
+  assert(run(win.join(root, 'console.md')).status === 0,
+    'a name that only starts like a reserved device name is allowed');
+  // Paths that resolve outside the root: refused as outside the sandbox.
+  const refusals = [
+    ['alternate case', outsideFile.toUpperCase()],
+    ['mixed slashes', outsideFile.replace(/\\/g, '/')],
+    ['parent segments', root + String.raw`\..\Other Directory\file.md`],
+    ['short name', win.join(win.dirname(root), outsideShortName, 'file.md')],
+    ['a differently cased directory with its own filesystem identity', win.join(otherCase, 'file.md')],
+  ];
+  for (const [label, filePath] of refusals) {
+    const result = run(filePath);
+    assert(result.status === 2 && result.stderr.includes('[fence-outside-sandbox]'),
+      'Windows path check refuses ' + label);
+  }
+  // Paths the hook cannot check (ambiguous Win32 spellings, filesystem errors): refused with the
+  // separate path-check constant, so they never look like an attempt to leave the sandbox.
+  const unchecked = [
+    ['trailing dot', root + String.raw`\file.md.`],
+    ['trailing space', root + '\\file.md '],
+    ['a filesystem permission error', win.join(root, 'inaccessible.md')],
+    ['UNC', String.raw`\\fixture.invalid\share\file.md`],
+    ['extended device namespace', '\\\\?\\' + outsideFile],
+    ['Win32 device namespace', '\\\\.\\' + outsideFile],
+    ['drive-relative', 'X:file.md'],
+    ['reserved device name NUL', win.join(root, 'NUL')],
+    ['reserved device name with an extension', win.join(root, 'con.txt')],
+    ['reserved device name with a superscript digit', win.join(root, 'COM\u00b9')],
+    ['reserved device name with a trailing space before the extension', win.join(root, 'aux .md')],
+    ['alternate data stream', win.join(root, 'file.md:secret')],
+    ['a wildcard character', win.join(root, 'a?b.md')],
+    ['a control character', win.join(root, 'a\u0001b.md')],
+  ];
+  for (const [label, filePath] of unchecked) {
+    const result = run(filePath);
+    assert(result.status === 2 && result.stderr.includes('[fence-path-check-failed]')
+      && !result.stderr.includes('[fence-outside-sandbox]'),
+      'Windows path check refuses ' + label + ' as unchecked');
+  }
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });
