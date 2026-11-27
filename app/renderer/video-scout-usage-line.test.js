@@ -48,8 +48,8 @@ const refused = [
   ['a forged log line carrying the marker', '[main error] something [video-scout usage]'],
   ['the marker alone', USAGE_MARKER],
   ['a control character', base.replace('model=', 'model=\u0008')],
-  ['a bidirectional override', base.replace('model=gemini', 'model=‮gemini')],
-  ['a zero-width character', base.replace('total=', 'total=​')],
+  ['a bidirectional override', base.replace('model=gemini', 'model=\u202egemini')],
+  ['a zero-width character', base.replace('total=', 'total=\u200b')],
   ['a non-numeric count', base.replace('output=3122', 'output=lots')],
   ['an unknown media resolution', base.replace('mediaRes=MEDIUM', 'mediaRes=ULTRA')],
   ['an over-long model name', base.replace('gemini-2.5-flash-lite', 'm'.repeat(65))],
@@ -84,6 +84,57 @@ console.log('createUsageLogGate: per-pane decisions');
   const b = createUsageLogGate();
   a.consider('[video-scout usage] odd');
   assert(typeof b.consider('[video-scout usage] odd') === 'string', 'each pane has its own gate');
+}
+
+{
+  // Order: an odd line, then a valid one (still logged), then the cap (its own notice), then odd again.
+  const gate = createUsageLogGate();
+  assert(typeof gate.consider('[video-scout usage] odd') === 'string', 'order: first odd line gets the notice');
+  assert(gate.consider(base) === base + '\n', 'order: a valid line after the odd notice is still logged');
+  const rest = [];
+  for (let i = 1; i < MAX_USAGE_LINES_PER_PANE + 2; i++) rest.push(gate.consider(base));
+  assert(rest.filter((l) => l === base + '\n').length === MAX_USAGE_LINES_PER_PANE - 1 &&
+    rest.filter((l) => l && l !== base + '\n').length === 1, 'order: the cap notice is tracked apart from the odd-line notice');
+  assert(gate.consider('[video-scout usage] odd again') === null, 'order: the odd-line notice stays once per pane');
+}
+
+console.log('the real pane path: PtyParser feeding the gate');
+{
+  const { PtyParser } = require('./pty-parser');
+  const run = (chunks) => {
+    const gate = createUsageLogGate();
+    const out = [];
+    const parser = new PtyParser((ev) => {
+      if (!ev.partial && ev.text) { const l = gate.consider(ev.text); if (l) out.push(l); }
+    });
+    for (const c of chunks) parser.feed(c);
+    parser.flush();
+    return out;
+  };
+  const ESC = String.fromCharCode(0x1b);
+  const wire = ESC + '[0m' + base + ESC + '[K' + '\r\n';
+  const cut = wire.indexOf('usage');
+  const out = run(['analysis line one\r\n', wire.slice(0, cut), wire.slice(cut)]);
+  assert(out.length === 1 && out[0] === base + '\n',
+    'a colour-wrapped CRLF usage line split inside the marker reaches Logs exactly as printed');
+  // Pins today's behaviour for a cursor-forward code in place of a space: the parser drops it, the
+  // line no longer matches, and the fixed notice shows instead. A parser change shows up here.
+  const moved = run([base.replace(' output=', ESC + '[1Coutput=') + '\r\n']);
+  assert(moved.length === 1 && moved[0] !== base + '\n' && !moved[0].includes('prompt='),
+    'a cursor-forward code inside the line gives the fixed notice (current parser behaviour)');
+}
+
+console.log('the module loads beside the other classic scripts');
+{
+  const vm = require('vm');
+  const ctx = vm.createContext({ window: {}, document: { createElement: () => ({}) } });
+  let error = null;
+  try {
+    vm.runInContext(fs.readFileSync(path.join(__dirname, 'video-scout-usage-line.js'), 'utf8'), ctx, { filename: 'video-scout-usage-line.js' });
+    vm.runInContext(fs.readFileSync(path.join(__dirname, 'agent-dom.js'), 'utf8'), ctx, { filename: 'agent-dom.js' });
+  } catch (err) { error = err; }
+  assert(error === null, `no top-level name clash with agent-dom.js in one shared script scope${error ? ` (${error.message})` : ''}`);
+  assert(typeof ctx.window.ccVideoScoutUsage?.createUsageLogGate === 'function', 'the browser global is set');
 }
 
 console.log('app.js routes Video Scout lines through the gate');
