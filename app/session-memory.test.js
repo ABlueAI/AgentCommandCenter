@@ -347,7 +347,7 @@ section('Profile lease: one owner per profile across OS processes');
     'a lock that cannot be created is refused as profile-lock-failed, not as busy');
   assert(typeof broken.cause === 'string' && /^[A-Za-z0-9_-]{1,48}$/.test(broken.cause) && !broken.cause.includes(dir),
     'the lock failure carries a bounded, path-free cause');
-  assert(errorCause(Object.assign(new Error('C:\\Users\\secret\\path'), { code: 'EACCES' })) === 'EACCES'
+  assert(errorCause(Object.assign(new Error('D:\\fixture\\lock-dir\\path'), { code: 'EACCES' })) === 'EACCES'
     && errorCause(new TypeError('x')) === 'TypeError' && errorCause(null) === 'unknown',
     'errorCause keeps only the code or name, never the message');
 }
