@@ -237,7 +237,6 @@ const libState = { entries: [], selectedHandle: null, currentReportText: '', loa
 const libClip = window.ccClipboardConsumer.createClipboardConsumer({
   invokeRead: () => cc.clipboardRead(),
   invokeWrite: (s) => cc.clipboardWrite(s),
-  ptyWrite: () => {},          // the reader never pastes into a PTY
   log: appendLog,
   paneId: 'library',
 });
@@ -480,16 +479,27 @@ function openInAppTerminal(opts = {}) {
   // worktree metadata and must never be interpolated into innerHTML (AUDIT-REPORT.md finding #1).
   const pane = agentDom.buildTermPane(document, { badge, label, worktreeTitle: worktree || '', openReport: role === 'video-scout' && !claudeVideoScout });
   $('#terminalGrid').appendChild(pane);
-  const term = new Terminal({ theme: xtermTheme(), fontFamily: "'Cascadia Code','Consolas',monospace", fontSize: 13, cursorBlink: true, allowProposedApi: true, scrollback: 5000 });
+  const termBody = pane.querySelector('.term-body');
+  const openTerminalLink = async (_event, uri) => {
+    try {
+      const result = await cc.openTerminalLink(uri);
+      // Main logs policy, confirmation, and OS refusals with bounded reason codes.
+      if (typeof result?.ok !== 'boolean') appendLog(`[terminal ${id}] Link open failed: unexpected response\n`);
+    } catch {
+      appendLog(`[terminal ${id}] Link open failed: IPC unavailable\n`);
+    }
+  };
+  const term = new Terminal({
+    theme: xtermTheme(), fontFamily: "'Cascadia Code','Consolas',monospace", fontSize: 13, cursorBlink: true, allowProposedApi: true, scrollback: 5000,
+    // Route OSC 8 through the same app policy as detected text links, including rejected schemes.
+    linkHandler: { activate: openTerminalLink, allowNonHttpProtocols: true },
+  });
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
-  // Clickable URLs — opened only via the vetted shell.openExternal path, http(s) only.
-  term.loadAddon(new WebLinksAddon.WebLinksAddon((e, uri) => {
-    if (/^https?:\/\//i.test(uri)) cc.openExternal(uri);
-  }));
+  term.loadAddon(new WebLinksAddon.WebLinksAddon(openTerminalLink));
   // Correct width for wide/emoji glyphs so the agents' box-drawing TUIs render cleanly.
   try { term.loadAddon(new Unicode11Addon.Unicode11Addon()); term.unicode.activeVersion = '11'; } catch {}
-  term.open(pane.querySelector('.term-body'));
+  term.open(termBody);
   // GPU renderer for smooth large output; fall back to DOM if the WebGL context is lost.
   try {
     const webgl = new WebglAddon.WebglAddon();
@@ -505,24 +515,27 @@ function openInAppTerminal(opts = {}) {
   //   Ctrl+C                    -> copy when text is selected, otherwise send SIGINT (^C)
   //   Ctrl+Shift+C              -> always copy the selection
   //   right-click               -> copy selection, else paste
-  //   OSC 52                    -> programs (e.g. Claude Code's "Copied!") set the OS clipboard
-  // Paste writes raw bytes to the PTY (like typing) rather than term.paste(), whose bracketed-
-  // paste escapes some TUIs (e.g. the Gemini prompt) silently drop.
-  // All clipboard access is async IPC to main (main is the security boundary — the
-  // sandboxed preload's Electron clipboard is undefined). The consumer helpers never
-  // throw/reject: a rejection or { ok:false } becomes a visible metadata-only Logs line,
-  // and a failed read returns null so it can never be pasted. Fire-and-forget callers
-  // (Ctrl+C/V, right-click, OSC 52) get a trailing .catch as belt-and-suspenders so a
-  // future edit can't turn one into an unhandled rejection.
+  // The CLI this pane actually runs: a role always launches its role CLI.
+  const paneCli = role ? ROLES[role].cli : cli;
+  // Paste behaviour per pane (clipboard-consumer.js pastePolicyFor): shell panes confirm a multiline
+  // paste; Gemini panes get plain text because the Gemini prompt drops bracketed-paste escapes.
+  const pastePolicy = window.ccClipboardConsumer.pastePolicyFor({ paneCli, claudeVideoScout });
+  if (pastePolicy.ignoreBracketedPaste) term.options.ignoreBracketedPasteMode = true;
   const clip = window.ccClipboardConsumer.createClipboardConsumer({
     invokeRead: () => cc.clipboardRead(),
     invokeWrite: (s) => cc.clipboardWrite(s),
-    ptyWrite: (text) => cc.ptyWrite(id, text),
+    paste: (text) => {
+      if (!terms.has(id) || term.options.disableStdin) return false;
+      term.paste(text); // xterm brackets only when the program has enabled bracketed paste.
+    },
+    confirmMultiline: pastePolicy.confirmMultiline
+      ? () => window.confirm('Paste multiple lines into this shell? Pasted lines can run commands.')
+      : undefined,
     log: appendLog,
     paneId: id,
   });
-  // The CLI this pane actually runs: a role always launches its role CLI.
-  const paneCli = role ? ROLES[role].cli : cli;
+  const clipboardFailed = () => appendLog(`[clipboard ${id}] Clipboard operation failed\n`);
+  const pasteFromClipboard = () => { clip.pasteIntoPty().catch(clipboardFailed); };
   term.attachCustomKeyEventHandler((e) => {
     // Shift+Enter -> newline in Claude Code panes (term-keys.js). preventDefault stops the browser
     // keypress that would otherwise make xterm also send a submitting CR.
@@ -532,42 +545,37 @@ function openInAppTerminal(opts = {}) {
       return false;
     }
     // Ctrl+V / Ctrl+Shift+V: paste once and cancel the browser's own paste (term-keys.js, S31).
-    if (window.ccTermKeys.handlePasteKey(e, () => { clip.pasteIntoPty().catch(() => {}); })) return false;
+    if (window.ccTermKeys.handlePasteKey(e, pasteFromClipboard)) return false;
     if (e.type !== 'keydown' || !e.ctrlKey) return true;
     const isC = e.code === 'KeyC' || (e.key && e.key.toLowerCase() === 'c');
     if (isC) {
       const sel = term.getSelection();
       appendLog(`[copy ${id}] Ctrl+${e.shiftKey ? 'Shift+' : ''}C: ${sel ? sel.length + ' chars selected' : 'no selection → SIGINT'}\n`);
-      if (sel) { clip.writeClip(sel).catch(() => {}); term.clearSelection(); return false; } // copy
+      if (sel) { clip.writeClip(sel).catch(clipboardFailed); term.clearSelection(); return false; } // copy
       if (e.shiftKey) return false;                          // Ctrl+Shift+C, nothing selected: swallow
       return true;                                           // plain Ctrl+C, nothing selected: SIGINT
     }
     return true;
   });
   appendLog(`[copy ${id}] key handler registered\n`);
-  pane.querySelector('.term-body').addEventListener('contextmenu', (e) => {
+  termBody.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     const s = term.getSelection();
-    if (s) { clip.writeClip(s).catch(() => {}); term.clearSelection(); }
-    else clip.pasteIntoPty().catch(() => {});
+    if (s) { clip.writeClip(s).catch(clipboardFailed); term.clearSelection(); }
+    else pasteFromClipboard();
   });
-  // OSC 52: when a program in the PTY asks the terminal to set the clipboard (Claude Code's
-  // "(Copied!)", etc.), actually write it to the Windows clipboard. Payload is "<sel>;<base64>".
-  if (term.parser && term.parser.registerOscHandler) {
-    term.parser.registerOscHandler(52, (data) => {
-      const i = (data || '').indexOf(';');
-      if (i >= 0) {
-        const b64 = data.slice(i + 1);
-        if (b64 && b64 !== '?') {
-          let decoded = null;
-          try { decoded = decodeURIComponent(escape(atob(b64))); }
-          catch { try { decoded = atob(b64); } catch (err) { appendLog(`[osc52 ${id}] base64 decode failed: ${(err && err.message) || err}\n`); } }
-          if (decoded !== null) clip.writeClip(decoded, `osc52 ${id}`).catch(() => {});
-        }
-      }
-      return true; // handled
-    });
-  }
+  // Intercept native paste (e.g. Shift+Insert or an Edit menu) before xterm's own listeners.
+  termBody.addEventListener('paste', (e) => {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    try { clip.pasteText(e.clipboardData?.getData('text/plain')); }
+    catch { clipboardFailed(); }
+  }, true);
+  // Consume OSC 52 without decoding the payload. The first refusal says what to do instead; repeats
+  // are counted and logged again at most once a minute (clipboard-consumer.js).
+  term.parser.registerOscHandler(52, window.ccClipboardConsumer.createOscClipboardRefusal({
+    log: appendLog, paneId: id,
+  }));
   // Keep this terminal fit to its grid cell whenever the layout changes — a pane added/removed,
   // the window resized, the tab shown. This is the canonical xterm.js pattern (observe the
   // container + debounce + fit); without it a reflowed pane keeps its old size and overflows.
@@ -600,7 +608,6 @@ function openInAppTerminal(opts = {}) {
   // the header. Remember the last non-empty value when xterm first observes it;
   // PowerShell and agent panes now use the same pane-local handoff.
   const selectionDisposable = term.onSelectionChange(rememberSpeakSelection);
-  const termBody = pane.querySelector('.term-body');
   termBody.addEventListener('pointerdown', () => speakSelectionMemory.clear(), true);
   const mouseSelectionFallback = window.ccTTSSelection.installMouseTrackingSelectionFallback({
     term,
@@ -836,6 +843,7 @@ function openInAppTerminal(opts = {}) {
   // panel to strand and main already surfaces its own refusal through `main-error`.
   const onStartFailed = (reason) => {
     if (!terms.has(id)) return;             // the user closed it first — nothing to undo
+    term.options.disableStdin = true;
     appendLog(`[pty] start FAILED for ${id}: ${reason}`
       + (layoutInstance ? ' — removing the pane and its layout panel\n' : '\n'));
     if (layoutInstance) closeThisPane();
@@ -1387,6 +1395,36 @@ async function offerResume() {
   resumeView.render(offer.rows);
 }
 
+// ---- S46: the daily idle-sessions list -------------------------------------------------------------
+// Main lists every recorded Claude session with its owner, state, done-when and idle time, and
+// archives finished ones (app/session-hygiene.js). Checked at startup and every hour; the sessions
+// idle 3 days or more show once per local day. A failed read is logged, never hidden.
+const HYGIENE_CHECK_MS = 60 * 60 * 1000;
+let hygieneShownDay = null;
+let hygieneView = null;
+async function checkSessionHygiene() {
+  const host = $('#hygieneHost');
+  if (!host || !window.ccSessionHygieneView) return;
+  if (!hygieneView) {
+    hygieneView = window.ccSessionHygieneView.create({
+      document,
+      host,
+      roleLabel: (r) => (ROLES[r] ? ROLES[r].label : r),
+      onSaveDoneWhen: (row, text) => cc.sessionHygieneDoneWhen(row.sessionId, text),
+    });
+  }
+  let answer = null;
+  try { answer = await cc.sessionHygieneList(); } catch { answer = null; }
+  if (!answer || answer.ok !== true) {
+    appendLog(`[hygiene] could not read the session list: ${(answer && answer.error) || 'ipc-rejected'}\n`);
+    return;
+  }
+  if (!window.ccSessionHygieneView.shouldShow(hygieneShownDay, answer)) return;
+  hygieneShownDay = answer.day;
+  appendLog(`[hygiene] ${answer.idle.length} Claude session(s) idle ${answer.idleDays} days or more\n`);
+  hygieneView.render(answer.idle, answer.idleDays);
+}
+
 // ---- S66 shared navigation ------------------------------------------------------------------
 // The three-tab shell (shell-nav.js) wraps today's layout as the control room tab. If it can't
 // start, it says so in the Logs tab and the old layout stays the whole app (index.html keeps the
@@ -1534,6 +1572,10 @@ function startShell(settings) {
 }
 
 async function boot() {
+  // Listen before the first await: main sends its startup notices (credential store, issue #249)
+  // once the page has loaded, and ipcRenderer drops a message that arrives with no listener.
+  cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));
+  cc.onMainInfo((m) => appendLog('\n[main] ' + m + '\n'));
   const s = await cc.getSettings();
   applyTheme((s && s.theme) || 'obsidian');
   startShell(s);
@@ -1546,8 +1588,8 @@ async function boot() {
     state.authority = a.level;
     if (a.fellBack) appendLog(`[authority] stored level not recognised; using ${a.level}\n`);
   }
-  // Issue #161: a refused status check says why (main's own main-error line can arrive before the
-  // listener below exists) and shows the key banner, never a silent "no key".
+  // Issue #161: a refused status check says why (the reply carries the reason, so it doesn't depend
+  // on main's main-error line) and shows the key banner, never a silent "no key".
   updateKeyBanner(await geminiKeyStatusOrLog());
   // S06: not awaited, so the token check adds no IPC round trip to the boot path (pane startup is
   // timing-sensitive); a failed check leaves the banner showing and says so in the Logs tab.
@@ -1572,13 +1614,17 @@ async function boot() {
   });
   cc.onPtyExit(({ id }) => {
     const t = terms.get(id);
-    if (t) { t.parser.flush(); t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n'); }
+    if (t) {
+      t.term.options.disableStdin = true;
+      t.parser.flush();
+      t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n');
+    }
   });
   cc.onClaudeVideoScoutEvent(handleClaudeVideoEvent);
-  cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));
-  cc.onMainInfo((m) => appendLog('\n[main] ' + m + '\n'));
-  // S09: after the main-error listener, so a session-memory refusal or a refused Resume is shown.
+  // S09: the main-error listener (top of boot) is up, so a session-memory refusal or a refused Resume is shown.
   await offerResume();
+  await checkSessionHygiene();
+  setInterval(() => { checkSessionHygiene(); }, HYGIENE_CHECK_MS);
 
 // EXPERIMENT A — PROTOTYPE pane status (Claude only, one pane).
 // docs/OSS-PROCUREMENT-pane-status.md — "BLUE SUBSYSTEM VERDICT: PROTOTYPE".
@@ -1727,35 +1773,52 @@ function installSTTUnavailableControl() {
 function setupSTTControls() {
   const stt = window.ccSTT; if (!stt) return;
   const micBtn = $('#sttMic');
-  if (micBtn && !micBtn.dataset.sttWired) {
-    micBtn.dataset.sttWired = '1';
-    micBtn.onclick = () => {
-      // Returns true when it sent a start or stop to the engine, false when it refused (push to
-      // talk reads this, so a refused start is never waited on).
-      if (stt.isRecording()) { stt.toggle(); return true; } // second click: stop + one finalized transcript
-      if (stt.isBusy()) { appendLog('[stt] still transcribing the previous dictation…\n'); sttNotice('Still typing the last dictation. Try again in a moment.', 6000); return false; }
-      if (!activeTermId || !terms.has(activeTermId)) { appendLog('[stt] click into an agent pane first, then 🎤.\n'); sttNotice('Dictation needs a pane: click into an agent pane in the control room first.', 8000); return false; }
-      // Lock the destination NOW: however long the model load takes, and whatever pane
-      // is clicked meanwhile, the finished transcript goes here or is refused visibly.
-      sttDictationTargetId = activeTermId;
-      const paneRole = (terms.get(sttDictationTargetId) || {}).role || 'shell';
-      appendLog(`[stt] dictation started — locked to pane ${sttDictationTargetId} (${paneRole})\n`);
-      stt.toggle(); // first click: recording starts immediately (model loads at stop time)
-      return true;
-    };
-  }
-  stt.onStatus(({ state: st, detail }) => {
+  const showStatus = ({ state: st, detail }) => {
     if (st === 'recording') sttNotice(`Recording for pane ${sttDictationTargetId || '?'}. Let go of Ctrl Space (or press Stop) to type it.`, 0);
     else if (st === 'transcribing') sttNotice('Transcribing…', 0);
     else if (st === 'error') sttNotice('Dictation failed. Details in Logs.', 8000);
     else if (st === 'idle') sttNotice('', 0);
     const el = $('#sttStatus'); if (el) el.textContent = (st && st !== 'idle') ? (st + (detail ? ' — ' + detail : '')) : '';
     if (micBtn) { micBtn.textContent = st === 'recording' ? '⏺ Stop' : '🎤 Dictate'; micBtn.classList.toggle('rec', st === 'recording'); }
-    if (st === 'error' && detail) appendLog('[stt] ' + detail + '\n');
+    if (st === 'error') {
+      sttDictationTargetId = null;
+      if (detail) appendLog('[stt] ' + detail + '\n');
+    }
     // Last, and after this handler returns: a pending push-to-talk stop calls the engine, which
     // reports 'transcribing' at once; doing it here would let this 'recording' update overwrite it.
     if (pushToTalk) setTimeout(() => pushToTalk.onSttStatus(st), 0);
-  });
+  };
+  // start() and stopAndTranscribe() report their expected failures themselves; anything that
+  // still throws or rejects here is unexpected, so its reason is shown, never swallowed.
+  const reportToggleFailure = (e) => {
+    showStatus({ state: 'error', detail: stt.describeUnexpectedFailure(e) });
+  };
+  const runToggle = () => {
+    let pending;
+    try { pending = stt.toggle(); } catch (e) { reportToggleFailure(e); return false; }
+    Promise.resolve(pending).catch(reportToggleFailure);
+    return true;
+  };
+  if (micBtn && !micBtn.dataset.sttWired) {
+    micBtn.dataset.sttWired = '1';
+    micBtn.onclick = () => {
+      // Returns true when it sent a start or stop to the engine, false when it refused (push to
+      // talk reads this, so a refused start is never waited on). The click itself stays
+      // synchronous; the engine's promise is watched by runToggle.
+      if (stt.isStarting()) { appendLog('[stt] still waiting for the microphone…\n'); return false; } // #232: one request
+      if (stt.isRecording()) return runToggle(); // second click: stop + one finalized transcript
+      if (stt.isBusy()) { appendLog('[stt] still transcribing the previous dictation…\n'); sttNotice('Still typing the last dictation. Try again in a moment.', 6000); return false; }
+      if (!activeTermId || !terms.has(activeTermId)) { appendLog('[stt] click into an agent pane first, then 🎤.\n'); sttNotice('Dictation needs a pane: click into an agent pane in the control room first.', 8000); return false; }
+      // Lock the destination NOW, before the microphone is requested: however long the
+      // permission prompt or model load takes, and whatever pane is clicked meanwhile, the
+      // finished transcript goes here or is refused visibly.
+      sttDictationTargetId = activeTermId;
+      const paneRole = (terms.get(sttDictationTargetId) || {}).role || 'shell';
+      appendLog(`[stt] dictation requested — locked to pane ${sttDictationTargetId} (${paneRole})\n`);
+      return runToggle(); // first click: recording starts once the microphone opens (model loads at stop time)
+    };
+  }
+  stt.onStatus(showStatus);
   stt.onResult((text) => {
     const targetId = sttDictationTargetId;
     sttDictationTargetId = null;
