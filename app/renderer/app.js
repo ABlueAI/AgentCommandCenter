@@ -1808,6 +1808,8 @@ function setupTTSControls() {
 
 let repoChangeGeneration = 0;
 let worktreeRefreshGeneration = 0;
+// The repo whose last agent refresh failed ('' when it succeeded); the cards show it, not "No agents".
+let agentRefreshFailedFor = '';
 
 async function refreshRepos() {
   const generation = repoChangeGeneration;
@@ -1843,6 +1845,7 @@ async function onRepoChange(repo) {
     state.repo = repo;
     state.githubUrl = '';
     state.worktrees = [];
+    agentRefreshFailedFor = '';
     renderAgentList();
     renderAgentGrid();
   }
@@ -1872,11 +1875,23 @@ async function refreshAgents() {
   const generation = ++worktreeRefreshGeneration;
   appendLog('[TIMING] refreshAgents: listWorktrees START\n');
   let all;
+  let failure = '';
   try { all = repo ? await cc.listWorktrees(repo) : []; }
-  catch (e) { appendLog(`[repositories] could not refresh agents: ${e?.message || e}\n`); return; }
-  if (!Array.isArray(all)) { appendLog('[repositories] agent refresh refused: invalid response\n'); return; }
+  catch (e) { failure = `could not refresh agents: ${e?.message || e}`; }
+  if (!failure && !Array.isArray(all)) failure = 'agent refresh refused: invalid response';
+  if (failure) {
+    appendLog(`[repositories] ${failure}\n`);
+    // Only the newest refresh of the selected repo may change what the cards say. An empty list
+    // after a failure must not look like a repo with no agents, so the cards name the failure.
+    if (generation !== worktreeRefreshGeneration || repo !== state.repo) return;
+    agentRefreshFailedFor = repo;
+    renderAgentList();
+    renderAgentGrid();
+    return;
+  }
   appendLog(`[TIMING] refreshAgents: listWorktrees END (${all.length} items)\n`);
   if (generation !== worktreeRefreshGeneration || repo !== state.repo) return;
+  agentRefreshFailedFor = '';
   // The first worktree is the main checkout; the rest are agents.
   state.worktrees = all.filter((w) => !w.branch || w.branch !== 'main');
   renderAgentList();
@@ -1905,9 +1920,18 @@ function agentColorOf(wt) {
   return 'claude';
 }
 
+// The repo path comes from disk, so it is set as text, never as HTML.
+function agentRefreshFailedNote(className) {
+  const note = document.createElement('div');
+  note.className = className;
+  note.textContent = `Could not list agents for ${agentRefreshFailedFor.split(/[\\/]/).pop()}; see Logs.`;
+  return note;
+}
+
 function renderAgentList() {
   const list = $('#agentList');
   if (state.worktrees.length === 0) {
+    if (agentRefreshFailedFor) { list.innerHTML = ''; list.appendChild(agentRefreshFailedNote('empty')); return; }
     list.innerHTML = '<div class="empty">No agents yet. Click <b>+ New</b>.</div>';
     return;
   }
@@ -1929,6 +1953,7 @@ function renderAgentGrid() {
   const grid = $('#agentGrid');
   grid.innerHTML = '';
   if (state.worktrees.length === 0) {
+    if (agentRefreshFailedFor) { grid.appendChild(agentRefreshFailedNote('empty muted')); return; }
     grid.innerHTML = '<div class="empty muted">No active agents. Use <b>+ New</b> in the sidebar.</div>';
     return;
   }

@@ -83,7 +83,7 @@ function setup(overrides = {}) {
       if (!elements.has(selector)) elements.set(selector, new Element(document));
       return elements.get(selector);
     },
-    documentElement: { setAttribute: noop },
+    documentElement: { setAttribute: noop, removeAttribute: noop },
     querySelectorAll: () => [],
     createElement: () => new Element(document),
     createTextNode(text) {
@@ -145,6 +145,8 @@ function setup(overrides = {}) {
     requestAnimationFrame(fn) { return frames.push(fn); },
     setTimeout: noop,
     clearTimeout: noop,
+    setInterval: noop,
+    clearInterval: noop,
     alert(message) { assert.fail(message); },
   });
   // Boot on demand so each test can drive the production handlers with its own IPC.
@@ -200,6 +202,46 @@ test('#234 late repository responses cannot replace the current cards or link', 
   assert.equal(env.evaluate('state.worktrees[0].path'), 'B/new', 'only the newest refresh of B can update the cards');
 });
 
+test('#234 a late repository list cannot switch back to the old repo', async () => {
+  const slowList = deferred();
+  const env = setup({ listRepos: () => slowList.promise });
+  const refresh = env.evaluate('refreshRepos()');
+  await nextTurn();
+  await env.evaluate("onRepoChange('B')");
+  slowList.resolve({ repos: ['A', 'B'], selectedRepo: 'A' });
+  await refresh;
+  assert.equal(env.evaluate('state.repo'), 'B', 'the repo picked during the scan stays selected');
+});
+
+test('#234 failed repository and agent refreshes are visible', async () => {
+  const env = setup({
+    listRepos: async () => { throw new Error('projects root unreadable'); },
+    listWorktrees: async () => { throw new Error('git worktree list failed'); },
+  });
+  const log = env.document.querySelector('#logView');
+  await env.evaluate('refreshRepos()');
+  env.flushFrames();
+  assert.match(log.textContent, /\[repositories\] list failed: projects root unreadable/);
+
+  await env.evaluate("onRepoChange('A')");
+  env.flushFrames();
+  assert.match(log.textContent, /\[repositories\] could not refresh agents: git worktree list failed/);
+  const list = env.document.querySelector('#agentList');
+  const grid = env.document.querySelector('#agentGrid');
+  assert.match(list.textContent, /Could not list agents for A; see Logs/, 'the sidebar does not look like an empty repo');
+  assert.match(grid.textContent, /Could not list agents for A; see Logs/, 'the grid does not look like an empty repo');
+  assert.doesNotMatch(list.textContent + grid.textContent, /No agents yet|No active agents/);
+
+  env.cc.listWorktrees = async () => 'not a list';
+  await env.evaluate('refreshAgents()');
+  assert.match(list.textContent, /Could not list agents for A/, 'an invalid response is shown the same way');
+
+  env.cc.listWorktrees = async () => [];
+  await env.evaluate('refreshAgents()');
+  assert.match(list.textContent, /No agents yet/, 'the next successful refresh clears the failure');
+  assert.match(grid.textContent, /No active agents/);
+});
+
 test('#235 long-running terminals do not render hidden history and SDK usage still reaches Logs', async () => {
   const env = setup();
   await env.start();
@@ -244,6 +286,26 @@ test('#236 Logs batches writes, keeps a bounded tail and preserves the reader po
   assert.equal(log.writes, 2);
   assert.equal(log.textContent.split('\n')[log.scrollTop], lineAtTop, 'keeps the same line in view after front eviction');
   assert.match(log.textContent, /another new line\n$/);
+});
+
+test('#236 Logs written while its tab is hidden opens at the tail, or where the reader left it', () => {
+  const env = setup();
+  const log = env.document.querySelector('#logView');
+  log.clientHeight = 0; // Logs is its own tab, so it is usually hidden while lines arrive.
+  env.evaluate("for (let i = 0; i < 50; i++) appendLog('hidden line ' + i + '\\n')");
+  env.flushFrames();
+  env.evaluate("switchTab('logs')");
+  assert.equal(log.scrollTop, log.scrollHeight, 'opening Logs jumps to the tail');
+
+  log.clientHeight = 10;
+  log.scrollTop = 5;
+  env.evaluate("switchTab('terminals')");
+  log.clientHeight = 0;
+  env.evaluate("appendLog('arrived while hidden\\n')");
+  env.flushFrames();
+  env.evaluate("switchTab('logs')");
+  assert.equal(log.scrollTop, 5, 'a reader who scrolled up keeps their place');
+  assert.match(log.textContent, /arrived while hidden\n$/);
 });
 
 test('#237 Refresh prevents a row from binding Ask to an expired Library handle', async () => {
@@ -305,8 +367,11 @@ test('#237 Refresh prevents a row from binding Ask to an expired Library handle'
   await env.evaluate('refreshLibrary()');
   assert.equal(env.document.querySelector('#libStatus').textContent, 'Scan failed.');
   assert.equal(env.document.querySelector('#libRefresh').disabled, false);
+  const readsBefore = reads.length;
   await freshRow.onclick();
+  question.value = 'What happened?';
   await env.evaluate('libFollowup.submit()');
+  assert.equal(reads.length, readsBefore, 'a row from the failed refresh does not read its report');
   assert.deepEqual(asks, [run.runId], 'a rejected refresh retires the old Ask source');
 });
 
