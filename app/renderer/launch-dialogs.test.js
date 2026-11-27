@@ -230,6 +230,56 @@ for (const role of ['plain', 'builder']) {
   });
 }
 
+test('a rejected worktree request is logged with its reason and starts nothing', async () => {
+  const app = renderer({ newAgent: async () => { throw new Error('synthetic IPC rejection'); } });
+  app.run("Object.assign(state, { chosenRole: 'builder' });");
+  app.control('#taskName').value = 'failed-task';
+  await app.run('createAgent()');
+  assert.equal(app.launches.length, 0);
+  assert.equal(app.alerts.length, 1);
+  assert.match(app.alerts[0], /could not create the worktree/i);
+  assert.doesNotMatch(app.alerts[0], /may already exist/i, 'an IPC rejection is not reported as a name clash');
+  assert.match(app.control('#logView').textContent, /could not create worktree for "failed-task": synthetic IPC rejection/);
+});
+
+test('a created worktree whose list refresh fails says so and starts nothing', async () => {
+  const app = renderer({ newAgent: async () => ({ ok: true, worktree: '/synthetic/refresh-task' }) });
+  app.run("Object.assign(state, { chosenRole: 'builder' });");
+  app.run("refreshAgents = async () => { throw new Error('synthetic refresh failure'); };");
+  app.control('#taskName').value = 'refresh-task';
+  await app.run('createAgent()');
+  assert.equal(app.launches.length, 0);
+  assert.equal(app.alerts.length, 1);
+  assert.match(app.alerts[0], /worktree was created/i);
+  assert.match(app.control('#logView').textContent, /could not refresh the worktree list.*synthetic refresh failure/);
+});
+
+test('Gemini Video Scout with no stored key closes the dialog and points to the key field', async () => {
+  const app = renderer({ getGeminiKeyStatus: async () => ({ ok: true, hasKey: false }) });
+  await app.run('createAgent()');
+  assert.equal(app.launches.length, 0);
+  assert.equal(app.control('#modal').classList.contains('hidden'), true);
+  assert.equal(app.control('#geminiKeyInput').focused, true);
+  assert.match(app.control('#logView').textContent, /GEMINI_API_KEY not stored/);
+  assert.equal(app.control('#modalCreate').disabled, false);
+});
+
+test('a Video Scout launch that throws is logged with its reason and can be retried', async () => {
+  let resets = 0;
+  const app = renderer({
+    tlogReset: async () => { if (++resets === 1) throw new Error('synthetic timing failure'); },
+    getGeminiKeyStatus: async () => ({ ok: true, hasKey: true }),
+  });
+  await app.run('createAgent()');
+  assert.equal(app.launches.length, 0);
+  assert.equal(app.alerts.length, 1);
+  assert.match(app.alerts[0], /could not start Video Scout/i);
+  assert.match(app.control('#logView').textContent, /\[video-scout\] launch failed: synthetic timing failure/);
+  assert.equal(app.control('#modalCreate').disabled, false);
+  await app.run('createAgent()');
+  assert.equal(app.launches.length, 1, 'a second submission is accepted');
+});
+
 for (const action of ['Resume', 'Start fresh']) {
   test(action + ' keeps the recovery offer until a PTY acknowledges startup', async () => {
     const failed = deferred();

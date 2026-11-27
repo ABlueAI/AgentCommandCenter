@@ -2804,8 +2804,8 @@ async function createAgent() {
     $('#modalCreate').disabled = true;
     try {
       await launchVideoScout(role, input, submission);
-    } catch {
-      appendLog('[video-scout] could not complete the Video Scout launch. See the launch status and try again.\n');
+    } catch (error) {
+      appendLog(`[video-scout] launch failed: ${(error && error.message) || String(error)}\n`);
       if (videoSubmission === submission) alert('Could not start Video Scout. See Logs for details, then try again.');
     } finally {
       if (videoSubmission === submission) releaseVideoSubmission();
@@ -2875,10 +2875,14 @@ async function createAgent() {
       appendLog('[TIMING] createAgent: refreshAgents START\n');
       await refreshAgents();
       appendLog('[TIMING] createAgent: refreshAgents END\n');
-    } catch {
-      if (worktreeOk(res || { error: 'Mako could not confirm worktree creation.' }, task)) {
-        appendLog('[agent] could not refresh the worktree list; the terminal was not started\n');
-        alert('The worktree was created, but Mako could not refresh the Agents list to open it.');
+    } catch (error) {
+      const why = (error && error.message) || String(error);
+      if (!res) {
+        appendLog(`[agent] could not create worktree for "${task}": ${why}\n`);
+        alert('Could not create the worktree. See Logs for details, then try again.');
+      } else if (worktreeOk(res, task)) {
+        appendLog(`[agent] could not refresh the worktree list; the terminal was not started: ${why}\n`);
+        alert('The worktree was created, but Mako could not refresh the Agents list to open it. See Logs for details.');
       }
       return;
     }
