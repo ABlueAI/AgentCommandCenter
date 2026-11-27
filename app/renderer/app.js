@@ -709,9 +709,15 @@ function openInAppTerminal(opts = {}) {
   }
   // Xterm is the only terminal history view. The SDK Video Scout still needs the
   // line-buffered, ANSI-stripped usage record in Logs, even when split across PTY chunks.
-  const usageParser = role === 'video-scout' && !claudeVideoScout
+  // The pane's other lines are model output, so only an exact usage line is copied
+  // (video-scout-usage-line.js).
+  const usageLogGate = (role === 'video-scout' && !claudeVideoScout)
+    ? window.ccVideoScoutUsage.createUsageLogGate() : null;
+  const usageParser = usageLogGate
     ? new PtyParser((ev) => {
-        if (ev.text.includes('[video-scout usage]')) appendLog(ev.text.trim() + '\n');
+        if (ev.partial || !ev.text) return;
+        const logLine = usageLogGate.consider(ev.text);
+        if (logLine) appendLog(logLine);
       }, { completedLinesOnly: true, maxPendingChars: 4096 })
     : null;
   const paneData = { term, fit, pane, ro, roConnected: true, role, usageParser };

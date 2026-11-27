@@ -116,6 +116,7 @@ function setup(overrides = {}) {
     ccTermCopy: require('./term-copy'),
     ccTermKeys: require('./term-keys'),
     ccTTSSelection: require('./tts-selection'),
+    ccVideoScoutUsage: require('./video-scout-usage-line'),
     ccQuickLinksView: { createQuickLinksView: () => ({ load: noop }) },
     ccUsageView: { createUsageView: () => ({}) },
   };
@@ -261,10 +262,10 @@ test('#235 long-running terminals do not render hidden history and SDK usage sti
   assert.equal(env.evaluate('terms.get("pty2").usageParser._buf.length'), 4096);
   env.pty.data({ id: 'pty2', data: '\r\n' });
   env.pty.data({ id: 'pty2', data: '\x1b[32m[video-scout usa' });
-  env.pty.data({ id: 'pty2', data: 'ge] total=23\x1b[0m' });
+  env.pty.data({ id: 'pty2', data: 'ge] prompt=13 (video=8 audio=2 text=3) output=10 total=23 model=stub mediaRes=LOW\x1b[0m' });
   env.pty.exit({ id: 'pty2' });
   env.flushFrames();
-  assert.match(env.document.querySelector('#logView').textContent, /\[video-scout usage\] total=23/);
+  assert.match(env.document.querySelector('#logView').textContent, /\[video-scout usage\] prompt=13 \(video=8 audio=2 text=3\) output=10 total=23 model=stub mediaRes=LOW\n/);
 });
 
 test('#236 Logs batches writes, keeps a bounded tail and preserves the reader position', () => {
