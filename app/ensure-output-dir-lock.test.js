@@ -146,17 +146,26 @@ const readTrust = () => {
   {
     // Attempted against a fixture file with icacls. If this machine will not actually produce a
     // denial for the owning user, the evidence is RETAINED AS OUTSTANDING rather than claimed.
+    const { execFileSync } = require('child_process');
+    const who = (process.env.USERDOMAIN || '') + '\\' + (process.env.USERNAME || '');
+    const acl = (args) => execFileSync('icacls', [CLAUDE_JSON, ...args], { stdio: ['ignore', 'ignore', 'ignore'] });
     let denied = false;
+    let setDeny = false;
     try {
-      const { execFileSync } = require('child_process');
-      const who = (process.env.USERDOMAIN || '') + '\\' + (process.env.USERNAME || '');
-      execFileSync('icacls', [CLAUDE_JSON, '/deny', who + ':(W)'], { stdio: ['ignore', 'ignore', 'ignore'] });
-      try { fs.appendFileSync(CLAUDE_JSON, 'x'); } catch (e) { denied = true; }
-    } catch (e) { /* icacls unavailable */ }
+      acl(['/deny', who + ':(W)']);
+      setDeny = true;
+      try { fs.closeSync(fs.openSync(CLAUDE_JSON, 'a')); }
+      catch { denied = true; }
+    } catch { /* icacls unavailable */ }
 
+    let result;
+    try {
+      if (denied) result = await ensure(record.event, { role: 'web-scout' });
+    } finally {
+      if (setDeny) acl(['/remove:d', who]);
+    }
     if (denied) {
-      const r = await ensure(record.event, { role: 'web-scout' });
-      assert(r?.ok === true || r?.error === 'sandbox-trust-write-failed',
+      assert(result?.ok === true || result?.error === 'sandbox-trust-write-failed',
         'the atomic replacement either succeeds or returns a visible refusal');
       const after = await Promise.race([
         ensure(record.event, { role: 'web-scout' }),
@@ -169,11 +178,7 @@ const readTrust = () => {
         + 'Retained as OUTSTANDING; WO-7 is not claimed complete on this axis.');
       process.stdout.write('  ! OUTSTANDING: fixture write-denial not reproducible on this machine\n');
     }
-    try {
-      const { execFileSync } = require('child_process');
-      const who = (process.env.USERDOMAIN || '') + '\\' + (process.env.USERNAME || '');
-      execFileSync('icacls', [CLAUDE_JSON, '/remove:d', who], { stdio: ['ignore', 'ignore', 'ignore'] });
-    } catch (e) { /* best effort */ }
+
   }
 
   process.env.USERPROFILE = prevUser;

@@ -56,9 +56,9 @@ refused('_'.repeat(0) || '', 'empty (guard)');
 accepted('x'.repeat(MAX_TASK_LEN), `exactly MAX_TASK_LEN (${MAX_TASK_LEN}) chars`);
 refused('x'.repeat(MAX_TASK_LEN + 1), 'one over MAX_TASK_LEN');
 
-// --- case rule (M2): lowercase-only, mirroring what the renderer canonicalizes to. REFUSE mixed
+// --- case rule (M2): lowercase-only. Refuse mixed
 //     case, never silently lowercase. -------------------------------------------------------------
-refused('Task-1', 'mixed case (uppercase T) — renderer canonicalizes to lowercase, so this is refused not folded');
+refused('Task-1', 'mixed case (uppercase T) refuses');
 refused('MixedCase', 'interior uppercase');
 refused('ALLCAPS', 'all uppercase');
 refused('CON', 'uppercase reserved name — refused by the lowercase rule (before the device-name check even runs)');
@@ -97,5 +97,34 @@ for (const branch of ['HEAD', '-topic', 'topic..draft', 'topic//draft', '/topic'
   assert(!validBranchName(branch), 'refuses invalid branch input ' + JSON.stringify(branch));
 }
 
-process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
-process.exit(failed ? 1 : 0);
+async function testRendererLaunch() {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const vm = require('node:vm');
+  const js = fs.readFileSync(path.join(__dirname, 'renderer', 'app.js'), 'utf8');
+  const start = js.indexOf('async function createAgent()');
+  const source = js.slice(start, js.lastIndexOf('boot();'));
+  const calls = [];
+  const alerts = [];
+  const input = { value: 'Two words', focus() {} };
+  const context = vm.createContext({
+    window: {}, $: () => input, state: { chosenRole: 'plain', chosenCli: 'codex', repo: 'fixture' },
+    cc: { tlogReset() {}, newAgent(req) { calls.push(req); return { ok: false }; } },
+    alert(message) { alerts.push(message); }, closeModal() {}, appendLog() {}, refreshAgents() {},
+    worktreeOk: (result) => result.ok,
+  });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, 'task-name.js'), 'utf8'), context);
+  vm.runInContext(source, context);
+  await vm.runInContext('createAgent()', context);
+  assert(calls.length === 0 && alerts.length === 1, 'renderer refuses an invalid task instead of changing the name');
+  input.value = 'two_words';
+  await vm.runInContext('createAgent()', context);
+  assert(calls.length === 1 && calls[0].task === input.value, 'renderer passes the accepted task name unchanged');
+}
+
+testRendererLaunch().catch((error) => {
+  assert(false, 'renderer launch validation failed: ' + error.message);
+}).finally(() => {
+  process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
+  process.exitCode = failed ? 1 : 0;
+});

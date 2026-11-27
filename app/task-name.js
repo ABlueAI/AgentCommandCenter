@@ -1,14 +1,7 @@
 'use strict';
-// Server-side (main-process) validation for the agent `task` name. `task` crosses the untrusted
-// renderer -> main IPC boundary (new-agent / remove-agent) and then flows into a filesystem path
-// (path.join(dirname(repo), `${repo}-${task}`)) and a git branch name (agent/<task>) inside
-// new-agent.ps1. The renderer sanitizes it for UX, but a modified/bypassed renderer can call
-// ipcRenderer.invoke('new-agent', { task }) with anything — and the remove path passes a
-// git-derived, unsanitized taskOf(wt). So this is the actual enforcement boundary (AUDIT-REPORT.md
-// finding #4): a bad task must be REFUSED here, before any fs/git/child_process call, never
-// silently sanitized or truncated into a "close enough" name (project convention: refuse visibly).
-//
-// Dependency-free (no electron/fs) so it unit-tests in plain node, matching video-scout-args.js.
+// Task names are both worktree suffixes and components of agent/<task> refs.
+// The renderer checks the text for immediate feedback and main independently
+// validates every request before using the name in a path or launching a process.
 
 // Length cap: the task becomes both a sibling folder name (`<repo>-<task>`) and a branch component
 // (`agent/<task>`); real names are short kebab slugs. 64 is generous for those while keeping the
@@ -17,13 +10,6 @@ const MAX_TASK_LEN = 64;
 
 // Charset: LOWERCASE ASCII letters, digits, dash, underscore only, and the FIRST character must be a
 // lowercase letter, digit, or underscore (never '-', which git/CLIs can read as a flag).
-//
-// Case (M2): the charset is lowercase-only rather than adding a separate `task !== task.toLowerCase()`
-// branch — one canonical allowlist regex is the single source of truth for "what is a valid task,"
-// mirrors exactly what the renderer already canonicalizes to (toLowerCase().replace(/[^a-z0-9-]+/g)),
-// and leaves no second predicate to drift out of sync. Refusal is inherent, not silent lowercasing:
-// an uppercase character simply fails the match, so a mixed-case name (e.g. "Task-1") is REFUSED with
-// a visible error — we never quietly fold it to lowercase and proceed.
 //
 // Deliberately NARROWER than the "letters/digits/dash/underscore/space" example: the task is spliced
 // into a git ref (agent/<task>), and git ref names forbid spaces (and ~ ^ : ? * [ \ .. etc.), so
@@ -82,4 +68,8 @@ function validBranchName(branch) {
     && branch.split('/').every((part) => part && !part.startsWith('.') && !part.endsWith('.lock'));
 }
 
-module.exports = { validateTask, validBranchName, MAX_TASK_LEN, TASK_RE };
+if (typeof module !== 'undefined') {
+  module.exports = { validateTask, validBranchName, MAX_TASK_LEN, TASK_RE };
+} else {
+  window.ccTaskName = { validateTask };
+}

@@ -2727,8 +2727,14 @@ async function createAgent() {
     return;
   }
 
-  const task = $('#taskName').value.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '');
-  if (!task) { $('#taskName').focus(); return; }
+  const taskInput = $('#taskName');
+  const taskCheck = window.ccTaskName.validateTask(taskInput.value);
+  if (!taskCheck.ok) {
+    alert(taskCheck.error);
+    taskInput.focus();
+    return;
+  }
+  const task = taskCheck.task;
   closeModal();
 
   // Plain: today's behavior — fresh worktree + a bare CLI.
