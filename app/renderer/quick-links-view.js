@@ -40,8 +40,9 @@
       throw new Error('quick-links-view: list/save/open API is required');
     }
 
-    const state = { entries: [], draft: [], loaded: false, managing: false };
+    const state = { entries: [], draft: [], loadStatus: 'loading', managing: false, saving: false };
     const byId = (id) => doc.getElementById(id);
+    const canEdit = () => state.loadStatus === 'ready' && state.managing && !state.saving;
 
     function setStatus(message, error) {
       const node = byId('quickLinksStatus');
@@ -76,7 +77,9 @@
     function renderList() {
       const host = byId('quickLinksList');
       host.textContent = '';
-      if (!state.loaded) {
+      byId('quickLinksManage').disabled = state.loadStatus !== 'ready';
+      if (state.loadStatus === 'failed') return;
+      if (state.loadStatus === 'loading') {
         const pending = doc.createElement('div'); pending.className = 'ql-empty'; pending.textContent = 'Loading…';
         host.appendChild(pending); return;
       }
@@ -93,6 +96,7 @@
     }
 
     function updateDraft(id, patch) {
+      if (!canEdit()) return false;
       const entry = state.draft.find((candidate) => candidate.id === id);
       if (!entry) return false;
       if (patch && typeof patch.label === 'string') entry.label = patch.label;
@@ -101,6 +105,7 @@
     }
 
     function removeDraft(id) {
+      if (!canEdit()) return false;
       const before = state.draft.length;
       state.draft = state.draft.filter((entry) => entry.id !== id);
       renderEditor();
@@ -115,19 +120,30 @@
         const label = doc.createElement('input');
         label.type = 'text'; label.value = entry.label; label.maxLength = 80;
         label.setAttribute('aria-label', 'Quick Link label'); label.placeholder = 'Label';
-        label.oninput = () => { entry.label = label.value; };
+        label.oninput = () => { updateDraft(entry.id, { label: label.value }); };
         const url = doc.createElement('input');
         url.type = 'url'; url.value = entry.url; url.maxLength = 2048;
         url.setAttribute('aria-label', `${entry.label || 'Quick Link'} URL`); url.placeholder = 'https://…';
         url.spellcheck = false; url.autocomplete = 'off';
-        url.oninput = () => { entry.url = url.value; };
+        url.oninput = () => { updateDraft(entry.id, { url: url.value }); };
         const remove = makeButton('Remove', 'ghost ql-remove');
         remove.setAttribute('aria-label', `Remove ${entry.label || 'Quick Link'}`);
         remove.onclick = () => { removeDraft(entry.id); };
         row.appendChild(label); row.appendChild(url); row.appendChild(remove); host.appendChild(row);
       }
-      byId('quickLinksAdd').disabled = state.draft.length >= MAX_ENTRIES;
-      byId('quickLinksAddBundle').disabled = state.draft.length >= MAX_ENTRIES;
+      updateEditorControls();
+    }
+
+    function updateEditorControls() {
+      const locked = !canEdit();
+      const atCapacity = state.draft.length >= MAX_ENTRIES;
+      byId('quickLinksAdd').disabled = locked || atCapacity;
+      byId('quickLinksAddBundle').disabled = locked || atCapacity;
+      byId('quickLinksSave').disabled = locked;
+      byId('quickLinksCancel').disabled = locked;
+      for (const row of byId('quickLinksRows').children) {
+        for (const control of row.children) control.disabled = locked;
+      }
     }
 
     function setManaging(enabled) {
@@ -138,17 +154,21 @@
     }
 
     function startManage() {
+      if (state.loadStatus !== 'ready' || state.managing) return;
       state.draft = state.entries.map((entry) => ({ ...entry }));
-      renderEditor();
       setManaging(true);
+      renderEditor();
       setStatus('Edit links, then Save Changes or Cancel.', false);
     }
     function cancel() {
+      if (!canEdit()) return;
       state.draft = [];
       setManaging(false);
+      updateEditorControls();
       setStatus('', false);
     }
     function add() {
+      if (!canEdit()) return false;
       if (state.draft.length >= MAX_ENTRIES) { announceFailure('Add', 'too-many-entries'); return false; }
       const id = makeId();
       if (typeof id !== 'string' || id.length > 64 || !ID_PATTERN.test(id)
@@ -163,6 +183,7 @@
     // Adds the bundle links the draft doesn't already have (same ID or same URL), in order, up to
     // the entry cap. Nothing is stored until Save Changes.
     function addBundle() {
+      if (!canEdit()) return 0;
       const missing = BUNDLE_ENTRIES.filter((link) => !state.draft.some(
         (entry) => entry.id === link.id || entry.url === link.url));
       if (missing.length === 0) { setStatus('The Mako bundle is already in your links.', false); return 0; }
@@ -180,6 +201,7 @@
     }
 
     async function save() {
+      if (!canEdit()) return false;
       // Normalization is a UI convenience only; main parses, bounds, and validates independently.
       const config = {
         schemaVersion: SCHEMA_VERSION,
@@ -192,10 +214,15 @@
       let text;
       try { text = JSON.stringify(config); }
       catch { announceFailure('Save', 'serialization-failed'); return false; }
+      state.saving = true;
+      updateEditorControls();
+      setStatus('Saving Quick Links…', false);
       let result;
       try { result = await api.save(text); }
-      catch { announceFailure('Save', 'ipc-failed'); return false; }
+      catch { result = { error: 'ipc-failed' }; }
+      state.saving = false;
       if (!result || !result.ok || !result.config || !Array.isArray(result.config.entries)) {
+        updateEditorControls();
         announceFailure('Save', result && result.error); return false;
       }
       state.entries = result.config.entries.map((entry) => ({ ...entry }));
@@ -243,17 +270,25 @@
     }
 
     async function load() {
-      if (typeof api.listPresets === 'function') await loadPresets();
+      state.loadStatus = 'loading';
+      renderList();
+      updateEditorControls();
       setStatus('Loading Quick Links…', false);
+      if (typeof api.listPresets === 'function') await loadPresets();
       let result;
       try { result = await api.list(); }
-      catch { state.loaded = true; renderList(); announceFailure('List', 'ipc-failed'); return false; }
-      state.loaded = true;
+      catch { result = { error: 'ipc-failed' }; }
       if (!result || !result.ok || !result.config || !Array.isArray(result.config.entries)) {
-        state.entries = []; renderList(); announceFailure('List', result && result.error); return false;
+        state.loadStatus = 'failed';
+        state.entries = [];
+        renderList();
+        announceFailure('List', result && result.error);
+        return false;
       }
       state.entries = result.config.entries.map((entry) => ({ ...entry }));
+      state.loadStatus = 'ready';
       renderList();
+      updateEditorControls();
       setStatus('', false);
       log(`[quick-links-ui] operation=list result=ok count=${state.entries.length}\n`);
       return true;
@@ -266,6 +301,7 @@
       byId('quickLinksSave').onclick = () => { save(); };
       byId('quickLinksCancel').onclick = () => cancel();
       renderList();
+      updateEditorControls();
     }
 
     return {
@@ -273,7 +309,7 @@
       snapshot: () => ({
         entries: state.entries.map((entry) => ({ ...entry })),
         draft: state.draft.map((entry) => ({ ...entry })),
-        loaded: state.loaded,
+        loaded: state.loadStatus === 'ready',
         managing: state.managing,
       }),
     };
