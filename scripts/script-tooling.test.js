@@ -10,7 +10,7 @@ function runScript(relativePath, { stdin, argv = [], env = {}, modules }) {
   const exitSignal = {};
   const result = { status: null, stdout: '', stderr: '' };
   const loader = vm.runInThisContext(
-    '(function (require, process, __dirname) {\n' + fs.readFileSync(file, 'utf8').replace(/^#!.*\n/, '') + '\n})',
+    '(function (require, process, __dirname) {\n' + fs.readFileSync(file, 'utf8').replace(/^#![^\r\n]*/, '') + '\n})',
     { filename: file },
   );
   const runtime = {
