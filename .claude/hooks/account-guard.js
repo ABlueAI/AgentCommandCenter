@@ -75,8 +75,8 @@
 // reached through an alias or `gh -R x api` with other global options, a GraphQL mutation read from
 // a file (`-F query=@mutation.graphql`), `curl` or SDK calls to
 // api.github.com with a token, and tools other than Bash and PowerShell (GitHub MCP tools:
-// .claude/settings.json denies the ones whose names were checked; its deny rules are written for
-// the Bash tool, issue #219). A process running as
+// .claude/settings.json denies the ones whose names were checked; every Bash deny rule there has a
+// PowerShell counterpart, issue #219). A process running as
 // Blue's Windows user can still use his stored logins, which is why he removes them after
 // checklist step 35 (BLUE-CHECKLIST.md step 49). Review and merge calls are guarded only as far as
 // this hook sees them: the real gate is that `main` needs Blue's approval, and the merge audit

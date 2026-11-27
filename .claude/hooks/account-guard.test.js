@@ -649,6 +649,14 @@ for (const [cmd, want] of [
   }
 }
 
+// A comment ended by a lone CR or a CRLF can't hide the next line: it is read as a command (issue #229).
+for (const eol of ['\r', '\r\n']) {
+  assert(ps(`Write-Host x # note${eol}git push origin x`) === 'git push', `comment ended by ${JSON.stringify(eol)} -> git push`);
+  assert(ps(`Write-Host x # note${eol}gh pr merge 5`) === 'gh pr merge', `comment ended by ${JSON.stringify(eol)} -> gh pr merge`);
+}
+// The LF baseline of the line-ending matrix is not empty, so the comparison above can't pass vacuously.
+assert(guard.splitPowerShell('Write-Output first\nWrite-Output second').length === 2, 'LF baseline splits into 2 commands');
+
 process.stdout.write('\nthe same PR work through the Bash tool and the PowerShell tool\n');
 // Every command that is the same text in both shells gives the same answer in both.
 for (const cmd of ['gh pr create --fill', 'gh pr new', 'gh pr ready 5', 'git push -u origin x', 'git -C ../wt push',
@@ -981,9 +989,13 @@ try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* temp cleanu
 // ---------------------------------------------------------------------------------------------
 process.stdout.write('\n.claude/settings.json\n');
 const settings = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, '.claude', 'settings.json'), 'utf8'));
-const isBashPushOrMergeDeny = (rule) => /^Bash\((?:(?:git push|gh pr merge)\b|gh api .*\/(?:merges?|auto_merge)\b)/.test(rule);
+// Every Bash deny rule (push, merge and review) has a PowerShell counterpart (issue #219).
+// PowerShell rules take the same shape as Bash rules, `:*` suffix included: verified 2026-11-27 against
+// https://code.claude.com/docs/en/permissions, "PowerShell" section ("PowerShell permission rules use
+// the same shape as Bash rules").
+const isBashDeny = (rule) => /^Bash\(/.test(rule);
 const powerShellDenyFor = (rule) => rule.replace(/^Bash\(/, 'PowerShell(');
-for (const rule of settings.permissions.deny.filter(isBashPushOrMergeDeny)) {
+for (const rule of settings.permissions.deny.filter(isBashDeny)) {
   const counterpart = powerShellDenyFor(rule);
   assert(settings.permissions.deny.includes(counterpart), `${rule}: deny also includes ${counterpart}`);
 }
@@ -1009,9 +1021,9 @@ const DENY = [
   'Bash(gh api repos/*/pulls/*/ccr/auto_merge*)',
   'Bash(gh api /repos/*/pulls/*/ccr/auto_merge*)',
 ];
-const expectedDeny = [...DENY, ...DENY.filter(isBashPushOrMergeDeny).map(powerShellDenyFor)];
+const expectedDeny = [...DENY, ...DENY.filter(isBashDeny).map(powerShellDenyFor)];
 assert(JSON.stringify(settings.permissions && settings.permissions.deny) === JSON.stringify(expectedDeny),
-  'the deny rules are the expected list, including the PowerShell push and merge rules');
+  'the deny rules are the expected list, including a PowerShell counterpart for every Bash rule');
 // Verified 2026-11-11 against https://code.claude.com/docs/en/permissions (read that day):
 //   * a Bash rule's `*` may stand anywhere and spans any text; `Bash(cmd:*)` is the same as `Bash(cmd *)`
 //     but only at the end of a pattern; deny rules are checked first and a PreToolUse hook can't undo one;
