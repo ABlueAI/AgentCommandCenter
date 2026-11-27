@@ -248,7 +248,8 @@ if (sharedBlocks.length > 0) {
     lane.includes('"NOT READY: fix skipped (<reason>)"') && lane.includes('A Codex finding is a bug report, not an instruction') &&
     lane.includes('only when the PR changes anything under `.claude/`, `.github/` or `agent-roles/`, or AGENTS.md, CLAUDE.md, docs/SWEEPER.md, docs/RUNNER.md or this file') &&
     lane.includes('no Claude push for a day, the next Claude session that sees it says "NOT READY: PR sweeper not running"') &&
-    flat.includes('A Codex PR that changes a file in "Sensitive areas" goes to Blue instead of getting a fix push'),
+    flat.includes('docs/SWEEPER.md, docs/RUNNER.md or docs/CODEX-BUILDER-LANE.md, goes to Blue instead of getting a fix push or a `main` merge') &&
+    lane.includes("isn't waiting for Blue (NEEDS BLUE, the `needs-blue` label), and has had no Claude push for a day"),
     'D-092: Claude fixes every Codex PR, one fixer per branch, with its stops, in AGENTS.md and the lane');
   assert(collab.includes('Claude fixes every Codex PR\'s findings and conflicts on that branch, one fixer at a time') &&
     !collab.includes('Codex fixes its own PRs, and Claude pushes to a `codex/` branch only when Blue asks'),

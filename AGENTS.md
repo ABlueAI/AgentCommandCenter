@@ -167,7 +167,8 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
    - **Codex's quota** (D-091; Blue, 2026-11-27: "yes continue to ready to merge with claude
      review alone"). Codex's code-review quota counts as exhausted for a PR only when
      `chatgpt-codex-connector[bot]` answered that PR's latest review trigger (its latest head
-     pushed, or its latest mark-ready) with its usage-limit notice ("You have reached your Codex
+     pushed, or its latest mark-ready; a later commit that only merges `main` with no change beyond
+     resolving a conflict doesn't count as a new trigger) with its usage-limit notice ("You have reached your Codex
      usage limits for code reviews", as on #286, #287, #302 and #315), that notice is edited by no
      one else (check its edit history; if you can't, it doesn't count), and since that notice the
      bot has posted no review, no comment with findings or a pass, and no 👍 (+1) reaction, on any
@@ -623,8 +624,9 @@ account stays clear of GitHub's abuse detection.
   one fixer per branch at a time, each fix push followed by the usual Opus delta run (Blue,
   2026-11-27, D-092: "Yes, Claude fixes all"; docs/CODEX-BUILDER-LANE.md item 6). Blue no longer
   pastes fix requests into the Codex app or comments "Claude fixes #N". A Codex PR that changes
-  a file in "Sensitive areas" goes to Blue instead of getting a fix push (docs/CODEX-BUILDER-LANE.md
-  item 6). The fixer is the PR
+  anything under `.claude/`, `.github/` or `agent-roles/`, or AGENTS.md, CLAUDE.md,
+  docs/SWEEPER.md, docs/RUNNER.md or docs/CODEX-BUILDER-LANE.md, goes to Blue instead of getting a
+  fix push or a `main` merge (docs/CODEX-BUILDER-LANE.md item 6). The fixer is the PR
   sweeper (docs/SWEEPER.md) or a Claude cloud session; Claude otherwise never pushes to a `codex/`
   branch. This replaces the narrower asks before it (docs-only record PRs, 2026-11-23; security
   findings, a CRITICAL one included, and a fix request with no push within a day, D-090), which

@@ -98,7 +98,8 @@ minutes during the trial (checklist step 30).
    sweeper, docs/RUNNER.md). If a fix doesn't clear a finding, the session finishes it as AGENTS.md
    "One small last fix" says, without asking Blue (D-090). A conflict whose resolution isn't clear
    follows docs/SWEEPER.md's rule for unclear code conflicts. If a Codex PR has an open high or
-   medium finding, a failing check or a conflict and no Claude push for a day, the next Claude
+   medium finding, a failing check or a conflict, isn't waiting for Blue (NEEDS BLUE, the
+   `needs-blue` label), and has had no Claude push for a day, the next Claude
    session that sees it says "NOT READY: PR sweeper not running" (AGENTS.md "The shared brain") and
    lists the PR in its session-end message. Nothing written for a fix ever names
    Codex's handle. D-092 replaces the earlier fix requests and conflict comments to Codex, the
