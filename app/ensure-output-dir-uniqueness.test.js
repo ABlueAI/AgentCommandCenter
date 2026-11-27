@@ -45,8 +45,11 @@ const OUTPUTS = path.join(PROJECTS, '.command-center', 'outputs');
 const CLAUDE_JSON = path.join(HOME, '.claude.json');
 
 const record = { handled: new Map(), on: new Map() };
+const mainFrame = { url: require('url').pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).toString() };
+let trustedEvent;
 function electronStub() {
-  const wc = { mainFrame: { url: 'file:///x' }, on() {}, send() {}, setWindowOpenHandler() {}, openDevTools() {}, session: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} } };
+  const wc = { mainFrame, on() {}, send() {}, setWindowOpenHandler() {}, openDevTools() {}, session: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} } };
+  trustedEvent = { sender: wc, senderFrame: mainFrame };
   const w = new Proxy({ webContents: wc, isDestroyed: () => false }, { get(t, k) { return k in t ? t[k] : () => {}; } });
   class BrowserWindow { constructor() { return w; } static getAllWindows() { return []; } }
   return {
@@ -96,7 +99,7 @@ Module._load = function (request) {
   {
     const N = 20;
     // SAME role for every call, deliberately. Varying the role per fixture would hide the defect.
-    const results = await Promise.all(Array.from({ length: N }, () => ensure({}, { role: 'web-scout' })));
+    const results = await Promise.all(Array.from({ length: N }, () => ensure(trustedEvent, { role: 'web-scout' })));
     assert(results.every((r) => r && r.ok === true), 'all ' + N + ' calls reported ok');
     const dirs = results.map((r) => r.dir);
     assert(new Set(dirs).size === N, 'they produced ' + new Set(dirs).size + ' DISTINCT sandboxes (expected ' + N + ')');
@@ -111,7 +114,7 @@ Module._load = function (request) {
 
   section('CONTAINMENT IS UNCHANGED BY THE NEW NAME');
   {
-    const r = await ensure({}, { role: 'web-scout' });
+    const r = await ensure(trustedEvent, { role: 'web-scout' });
     const real = fs.realpathSync.native(r.dir);
     const root = fs.realpathSync.native(OUTPUTS);
     assert(real.toLowerCase().startsWith(root.toLowerCase() + path.sep),
@@ -123,7 +126,7 @@ Module._load = function (request) {
   section('EXCLUSIVE CREATION — an existing directory is never adopted');
   {
     const before = new Set(fs.readdirSync(OUTPUTS));
-    const r = await ensure({}, { role: 'web-scout' });
+    const r = await ensure(trustedEvent, { role: 'web-scout' });
     assert(!before.has(path.basename(r.dir)), 'the handler returned a directory that did not previously exist');
     // Pre-creating every name the handler could pick is impossible by construction; assert the
     // primitive instead, which is what makes that true.
@@ -138,13 +141,13 @@ Module._load = function (request) {
 
   section('ROLE SANITISATION IS UNCHANGED');
   {
-    const weird = await ensure({}, { role: '../../etc/passwd' });
+    const weird = await ensure(trustedEvent, { role: '../../etc/passwd' });
     assert(weird.ok === true, 'a hostile role string still yields a sandbox');
     const real = fs.realpathSync.native(weird.dir);
     assert(real.toLowerCase().startsWith(fs.realpathSync.native(OUTPUTS).toLowerCase() + path.sep),
       'and it is still confined to the outputs root (no traversal via the role name)');
     assert(path.basename(weird.dir).indexOf('..') === -1, 'the sanitized name contains no traversal characters');
-    const empty = await ensure({}, { role: '' });
+    const empty = await ensure(trustedEvent, { role: '' });
     assert(empty.ok === true && path.basename(empty.dir).indexOf('output-') === 0,
       'an empty role still falls back to the "output" prefix');
   }

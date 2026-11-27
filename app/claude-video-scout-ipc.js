@@ -131,7 +131,12 @@ function createClaudeVideoScoutIpc({
   }
 
   function cancel(event, id) {
-    if (!trustedSenderGate.assess(event).ok || !active || active.id !== id) return;
+    const sender = trustedSenderGate.assess(event);
+    if (!sender.ok) {
+      log(`claude-video-scout-cancel refused: ${sender.reason}`);
+      return;
+    }
+    if (!active || active.id !== id) return;
     active.controller.abort();
   }
 

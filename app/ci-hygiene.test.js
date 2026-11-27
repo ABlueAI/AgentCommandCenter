@@ -9,8 +9,13 @@
 //      renamed job would leave the required check waiting forever and block every merge.
 //   3. The packages `npm audit fix` patched in S02 stay at or above their fixed versions in the
 //      lockfile (docs/DEPENDENCY-ADVISORIES.md lists each advisory and why the rest remain).
+//   4. `allowScripts` in app/package.json (npm 11's install-script approval, issue #210) names
+//      exactly the three reviewed versions, and exactly the lockfile packages that declare an
+//      install script, so a dependency bump can't leave a script blocked on Node 26 while CI
+//      (Node 22, which ignores the field) stays green.
 
 const fs = require('fs');
+const { isDeepStrictEqual } = require('node:util');
 const path = require('path');
 
 let passed = 0, failed = 0;
@@ -69,6 +74,24 @@ for (const [name, floor] of Object.entries(FLOORS)) {
 }
 assert(!atLeast('7.6.4', '7.6.5') && atLeast('42.11.15', '42.10.0') && !atLeast('42.9.3', '42.10.0'),
   'the version comparison orders patch and minor numbers numerically');
+
+process.stdout.write('\nnpm allows install scripts only for the reviewed dependency versions\n');
+const { allowScripts } = require('./package.json');
+assert(isDeepStrictEqual(allowScripts, {
+  'onnxruntime-node@1.21.0': true,
+  'protobufjs@7.6.6': true,
+  'sharp@0.34.5': true,
+}), `allowScripts is exactly the three reviewed versions (${JSON.stringify(allowScripts)})`);
+const withScripts = Object.entries(lock.packages)
+  .filter(([key, entry]) => key !== '' && entry && entry.hasInstallScript === true)
+  .map(([key, entry]) => `${key.slice(key.lastIndexOf('node_modules/') + 'node_modules/'.length)}@${entry.version}`)
+  .sort();
+const allowed = Object.keys(allowScripts || {}).sort();
+assert(withScripts.length >= 3, `the lockfile walk found the install-script packages (${withScripts.length} found, at least 3 expected)`);
+assert(isDeepStrictEqual(withScripts, allowed),
+  `allowScripts matches every lockfile package with an install script (lockfile: ${withScripts.join(', ')}; allowScripts: ${allowed.join(', ')})`);
+assert(Object.values(allowScripts || {}).length > 0 && Object.values(allowScripts || {}).every((v) => v === true),
+  'every allowScripts entry is true');
 
 process.stdout.write(`\nci-hygiene: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);
