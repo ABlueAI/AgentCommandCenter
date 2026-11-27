@@ -260,6 +260,13 @@ input:focus { outline: none; border-color: var(--accent); }
 .resume-head span { flex: 1; }
 .resume-label { font-weight: 600; }
 .resume-warn { color: var(--danger); }
+/* S46: the daily idle-sessions list (session-hygiene-view.js), styled like the Resume offer. */
+.hygiene-list { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; font-size: 12.5px; border-bottom: 1px solid var(--border); }
+.hygiene-head, .hygiene-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hygiene-head span { flex: 1; }
+.hygiene-label { font-weight: 600; }
+.hygiene-done-when { flex: 1; min-width: 180px; font-size: 12px; }
+.hygiene-warn { color: var(--danger); }
 /* S11 usage panel */
 .usage-panel { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-right: 12px; }
 .usage-panel .usage-window { white-space: nowrap; }
@@ -379,6 +386,142 @@ input:focus { outline: none; border-color: var(--accent); }
    overlay is GONE, and with it the prototype banner and the audio slot. The surface is now an
    ordinary in-flow block inside the Terminals tab, so the toolbar above it — including the
    `.tts-controls` element, which no longer moves anywhere — is never covered. */
+
+/* ---- S66 fonts: Inter (UI) and Cascadia Code (code), shipped with the app, never fetched from the
+   web (THIRD-PARTY-NOTICES.md). Own family names, so the terminals keep asking for the system's
+   'Cascadia Code' exactly as before and their glyph measurements don't depend on a font load. */
+@font-face { font-family: 'Mako Inter'; src: url('vendor/fonts/InterVariable.woff2') format('woff2'); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Mako Cascadia Code'; src: url('vendor/fonts/CascadiaCode.woff2') format('woff2'); font-weight: 200 700; font-style: normal; font-display: swap; }
+:root { --mk-sans: 'Mako Inter', 'Segoe UI', system-ui, sans-serif; --mk-mono: 'Mako Cascadia Code', 'Cascadia Code', 'Consolas', ui-monospace, monospace; }
+:root[data-mako-layout="tabs"] body { font-family: var(--mk-sans); }
+
+/* ---- S66 shared navigation (shell-nav.js; tokens from ui-tokens.js, docs/DESIGN-BRIEF-1.1.md 3) ----
+   Components use only --mk-* tokens. The fallbacks after each token are today's theme variables, so
+   the Settings page and the palette still read correctly in the old layout, where no tab colour set
+   is applied. */
+#makoShell[hidden], .layout[hidden], .mk-panel[hidden], .mk-settings[hidden],
+.mk-palette-backdrop[hidden], .mk-palette-empty[hidden] { display: none !important; }
+:root[data-mako-layout="tabs"] body { background: var(--mk-surface); color: var(--mk-ink); }
+/* The old top bar belongs to the control room until S66's later steps move its pieces into the shell. */
+:root[data-mako-layout="tabs"]:not([data-mako-tab="control"]) .topbar,
+:root[data-mako-view="settings"] .topbar { display: none; }
+.mk-shell { flex: 0 0 auto; background: var(--mk-surface-sunken); border-bottom: 1px solid var(--mk-line); }
+.mk-stripe { height: 22px; display: flex; align-items: center; padding: 0 16px; background: var(--mk-accent); color: var(--mk-on-accent); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; }
+.mk-tabbar { height: 50px; display: flex; align-items: center; gap: 8px; padding: 0 16px; }
+.mk-tablist { display: flex; gap: 4px; }
+.mk-spacer { flex: 1; }
+.mk-tab {
+  font: 500 13.5px/20px var(--mk-sans); color: var(--mk-ink-muted); background: transparent;
+  border: 1px solid transparent; border-radius: 7px; padding: 6px 12px; cursor: pointer;
+}
+.mk-tab:hover { background: var(--mk-surface-hover); color: var(--mk-ink); }
+.mk-tab[aria-selected="true"] { color: var(--mk-ink); background: var(--mk-surface-raised); border-color: var(--mk-line); box-shadow: inset 0 -2px 0 var(--mk-accent); }
+.mk-btn {
+  font: 500 13.5px/20px var(--mk-sans); color: var(--mk-ink, var(--text)); background: var(--mk-surface-raised, var(--panel));
+  border: 1px solid var(--mk-line-strong, var(--border)); border-radius: 7px; padding: 5px 10px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.mk-btn:hover { background: var(--mk-surface-hover, var(--panel-2)); }
+.mk-btn:disabled { opacity: 0.5; cursor: default; }
+.mk-tab:focus-visible, .mk-btn:focus-visible, .mk-palette-input:focus-visible, .mk-check input:focus-visible,
+.mk-panel:focus-visible, .mk-title:focus-visible, #makoSettingsTopbar:focus-visible {
+  outline: 2px solid var(--mk-focus, var(--accent-2)); outline-offset: 2px;
+}
+.mk-kbd { font: 500 11px/14px var(--mk-mono); padding: 1px 5px; border-radius: 4px; border: 1px solid var(--mk-line-strong, var(--border)); color: var(--mk-ink-muted, var(--muted)); }
+.mk-views { display: contents; }
+.mk-panel { flex: 1; min-height: 0; overflow: auto; padding: 32px; background: var(--mk-surface); color: var(--mk-ink); }
+.mk-overline { margin: 0 0 8px; font: 600 11px/14px var(--mk-sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--mk-ink-faint, var(--muted)); }
+.mk-frame { display: flex; gap: 0; padding: 0; }
+.mk-frame-main { flex: 1; min-width: 0; padding: 32px; overflow: auto; }
+.mk-sidebar { flex: 0 0 238px; padding: 16px 8px; border-right: 1px solid var(--mk-line); background: var(--mk-surface); overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+.mk-sidebar-section { display: flex; flex-direction: column; gap: 2px; }
+.mk-sidebar-section .mk-overline { padding: 0 8px; }
+.mk-side-item { text-align: left; font: 500 13.5px/20px var(--mk-sans); color: var(--mk-ink-muted); background: transparent; border: 0; border-radius: 7px; padding: 6px 8px; transition-property: background-color, color; }
+.mk-side-item:hover { background: var(--mk-surface-hover); color: var(--mk-ink); }
+.mk-side-item:focus-visible { outline: 2px solid var(--mk-focus); outline-offset: 2px; }
+@media (max-width: 1100px) { .mk-sidebar { flex-basis: 196px; } }
+.mk-frame-note { max-width: 760px; font: 400 14.5px/23px var(--mk-sans); color: var(--mk-ink-muted); }
+.mk-meta { font: 400 12.5px/18px var(--mk-sans); color: var(--mk-ink-muted, var(--muted)); margin: 4px 0; }
+.mk-title { margin: 0; font: 600 22px/28px var(--mk-sans); color: var(--mk-ink, var(--text)); }
+.mk-settings { flex: 1; min-height: 0; overflow: auto; padding: 24px 32px; background: var(--mk-surface, var(--bg)); color: var(--mk-ink, var(--text)); }
+.mk-settings-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; max-width: 760px; }
+.mk-settings-section { max-width: 760px; padding: 16px 0; border-top: 1px solid var(--mk-line, var(--border)); }
+.mk-check { display: inline-flex; align-items: center; gap: 8px; font: 500 13.5px/20px var(--mk-sans); cursor: pointer; }
+.mk-shortcuts { border-collapse: collapse; font: 400 13.5px/20px var(--mk-sans); }
+.mk-shortcuts th, .mk-shortcuts td { text-align: left; padding: 4px 16px 4px 0; border-bottom: 1px solid var(--mk-line, var(--border)); }
+.mk-shortcuts th { font: 600 11px/14px var(--mk-sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--mk-ink-faint, var(--muted)); }
+.mk-palette-backdrop { position: fixed; inset: 0; z-index: 1000; display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; background: rgba(0,0,0,0.45); }
+.mk-palette {
+  width: min(560px, calc(100vw - 32px)); background: var(--mk-surface-raised, var(--panel)); color: var(--mk-ink, var(--text));
+  border: 1px solid var(--mk-line-strong, var(--border)); border-radius: 12px; box-shadow: var(--mk-shadow-float, 0 14px 36px rgba(0,0,0,0.5)); overflow: hidden;
+}
+.mk-palette-input {
+  width: 100%; padding: 12px 16px; border: 0; border-bottom: 1px solid var(--mk-line, var(--border)); background: transparent;
+  color: inherit; font: 400 14.5px/23px var(--mk-sans);
+}
+.mk-palette-list { list-style: none; margin: 0; padding: 4px; max-height: 50vh; overflow: auto; }
+.mk-palette-option { display: flex; justify-content: space-between; gap: 12px; padding: 6px 12px; border-radius: 7px; cursor: pointer; font: 500 13.5px/20px var(--mk-sans); }
+.mk-palette-option[aria-selected="true"] { background: var(--mk-surface-hover, var(--panel-2)); box-shadow: inset 2px 0 0 var(--mk-accent, var(--accent)); }
+.mk-palette-empty { padding: 8px 16px; }
+/* The repo emblem rail (brief 3.4: rail 68, emblem 42), down the left in the three-tab layout. */
+.mk-rail { display: none; }
+:root[data-mako-layout="tabs"] .mk-rail {
+  display: block; position: fixed; left: 0; top: 0; bottom: 0; width: 68px; overflow-y: auto;
+  background: var(--mk-surface-sunken); border-right: 1px solid var(--mk-line); padding: 8px 0;
+}
+:root[data-mako-layout="tabs"] body { padding-left: 68px; }
+.mk-rail-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.mk-emblem {
+  position: relative; width: 42px; height: 42px; border-radius: 50%; border: 2px solid transparent; cursor: pointer;
+  font: 600 16px/1 var(--mk-sans); color: var(--mk-emblem-ink);
+  background-image: radial-gradient(rgba(11,16,32,0.22) 1px, transparent 1.2px); background-size: 5px 5px;
+}
+.mk-emblem[aria-current="true"] { border-color: var(--mk-ink); }
+.mk-emblem:focus-visible { outline: 2px solid var(--mk-focus); outline-offset: 2px; }
+.mk-emblem-1 { background-color: var(--mk-emblem-1); } .mk-emblem-2 { background-color: var(--mk-emblem-2); }
+.mk-emblem-3 { background-color: var(--mk-emblem-3); } .mk-emblem-4 { background-color: var(--mk-emblem-4); }
+.mk-emblem-5 { background-color: var(--mk-emblem-5); } .mk-emblem-6 { background-color: var(--mk-emblem-6); }
+.mk-emblem-7 { background-color: var(--mk-emblem-7); } .mk-emblem-8 { background-color: var(--mk-emblem-8); }
+.mk-emblem-dot { position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; border-radius: 50%; background: var(--mk-status-needs); border: 2px solid var(--mk-surface-sunken); }
+
+/* Shared components (brief 3.5): card, status chip, properties list, primary button. */
+.mk-card { background: var(--mk-surface-raised); color: var(--mk-ink); border: 1px solid var(--mk-line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.mk-card-permission { border-color: var(--mk-status-needs); }
+.mk-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mk-card-head .mk-overline { margin: 0; }
+.mk-card-title { margin: 0; font: 600 15px/20px var(--mk-sans); }
+.mk-chip { font: 600 12px/16px var(--mk-sans); padding: 1px 6px; border-radius: 4px; border: 1px solid currentColor; }
+.mk-chip-question, .mk-chip-permission { color: var(--mk-status-needs); }
+.mk-chip-working { color: var(--mk-status-working); }
+.mk-chip-finished { color: var(--mk-status-ended); }
+.mk-props { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; font: 400 12.5px/18px var(--mk-sans); }
+.mk-prop-name { color: var(--mk-ink-muted); }
+.mk-prop-value { margin: 0; color: var(--mk-ink); overflow-wrap: anywhere; }
+.mk-mono { font-family: var(--mk-mono); }
+.mk-verdict { margin: 0; font: 600 12.5px/18px var(--mk-sans); color: var(--mk-ink); }
+.mk-verdict-ready { color: var(--mk-status-ended); }
+.mk-card-actions, .mk-card-footer { display: flex; flex-wrap: wrap; gap: 8px; }
+.mk-card-footer { border-top: 1px solid var(--mk-line); padding-top: 8px; }
+.mk-btn-primary { background: var(--mk-accent); color: var(--mk-on-accent); border-color: var(--mk-accent); }
+.mk-btn-primary:hover { background: var(--mk-accent); filter: brightness(1.1); }
+/* Top-bar status pieces and the banners. The usage chip is today's S11 panel, moved into the shell. */
+.mk-status { display: flex; align-items: center; gap: 8px; }
+.mk-status .usage-panel { margin-right: 4px; color: var(--mk-ink-muted); }
+.mk-status .usage-panel.usage-warn { color: var(--mk-status-needs); }
+.mk-status .usage-window { font: 600 12.5px/18px var(--mk-mono); font-variant-numeric: tabular-nums; }
+.mk-btn[aria-pressed="true"] { border-color: var(--mk-accent, var(--accent)); }
+.mk-banners { flex: 0 0 auto; }
+.mk-banner[hidden] { display: none !important; }
+.mk-banner { display: flex; align-items: center; gap: 12px; padding: 4px 16px; font: 500 12.5px/18px var(--mk-sans); border-bottom: 1px solid var(--mk-line, var(--border)); }
+.mk-banner-quiet { background: var(--mk-surface-raised, var(--panel)); color: var(--mk-ink, var(--text)); }
+.mk-banner-paused { background: var(--mk-composer, #22190b); color: var(--mk-composer-ink, #f0c060); }
+.mk-banner-btn { padding: 2px 8px; font-size: 12.5px; }
+.mk-banner-notice { background: var(--mk-surface-raised, var(--panel)); color: var(--mk-ink, var(--text)); }
+.mk-banner-btn:focus-visible { outline: 2px solid var(--mk-focus, var(--accent-2)); outline-offset: 2px; }
+/* The old global `button { transition: .12s }` would also animate the focus ring and sizes; S66's
+   controls fade only their colours, so the focus ring appears at once (brief 3.6). */
+.mk-tab, .mk-btn, .mk-emblem { transition-property: background-color, color, border-color; }
+@media (prefers-reduced-motion: reduce) { .mk-tab, .mk-btn, .mk-emblem { transition: none; } }
 
 /* The embedded production surface: a sibling of `.term-grid` in the same tab, taking the same
    remaining space the grid would. Exactly one of the two is visible at a time.

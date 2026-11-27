@@ -72,6 +72,52 @@ MiniMax, Hunyuan and Baichuan finds nothing. Mako's four run on `model: opus` in
 Blue's plan. The only China-origin model in this work is SkillSpector's default analyzer, which was
 not used (static mode).
 
+### Scanner re-pinned to SkillSpector 2.13.7 (S68, 2026-11-26)
+
+Blue moved the scanner from 2.12.0 to 2.13.7 on 2026-11-25 ("Yes: move SkillSpector, our scanner,
+from 2.12.0 to 2.13.7."; docs/DECISIONS.md, 2026-11-25). From S68 on, every pin-and-scan step uses
+this pin; the 2.12.0 results above and in older records stay as they were run.
+
+- **Pin** (verified 2026-11-26, `git ls-remote` on `https://github.com/NVIDIA/SkillSpector` and a
+  clone checked out at the tag): tag `v2.13.7`, commit
+  `c323ad4c43e3c8f2de051572cc25b2711d11e648`, a lightweight tag on a commit. Old pin `v2.12.0` still
+  resolves to `c7958a3268d9498644b22edb75d0f051bbc8cbfc`, as recorded above. Licence: Apache-2.0
+  (the `LICENSE` file at the tag). Its release notes (`docs/release/skillspector-2.13.7.md` at the
+  tag) say it was cut from `main` at `2d0c6ddcb`.
+- **Install:** from the checked-out tag into a throwaway Python 3.12 virtual environment in the
+  cloud session (`pip install <clone>`; 2.13.7 needs Python 3.12 or later, 2.12.0 ran on 3.11).
+  Its dependencies are ranges, not a lock, so pip resolved 76 packages from PyPI that day (not
+  pinned by this record; a later run may get newer ones).
+- **China-origin rule:** the default analyzer model moved from `z-ai/glm-5.2` to
+  `z-ai/glm-5.3-flash` (Zhipu, China-based; `src/skillspector/providers/nv_build/provider.py` line
+  49 at the tag), and 2.13 adds a MiniMax provider (MiniMax is China-based). Neither may run, so
+  the scanner stays static only: `--no-llm`, no provider credentials (run under `env -i` with only
+  `PATH` and a scratch `HOME`). Static mode doesn't use either model, so this is the same standing
+  as 2.12.0 (AGENTS.md "Engineering rules": a scanner whose analysis stage would call such a model
+  runs in static mode only).
+- **Scanner guard** (docs/PLAN-1.1.md, "S68 to S72 details"), verified on both runs below: each
+  report's metadata has `llm_requested: false`, `llm_available: false`, an empty
+  `inference_usage` and `llm_provenance.determinism.reason` "LLM analysis was not executed for
+  this scan."; dependency inspection (new in 2.13, opt-in with `--inspect-dependencies`) reports
+  `not_requested`. A repeat run of the Obsidian Skills scan under `strace -f -e trace=connect`
+  made no `AF_INET` or `AF_INET6` connection, so the static run reached no network service (the
+  OSV.dev lookup docs/decisions/OSS-hyperframes.md mentions has nothing to look up in Markdown).
+- **Known file, old against new** (verified 2026-11-26): the same four ECC files S39 scanned
+  (`agents/security-reviewer.md`, `typescript-reviewer.md`, `silent-failure-hunter.md` and
+  `pr-test-analyzer.md` at ECC `d2ef268`), with
+  `skillspector scan <dir> --no-llm --recursive --format json`, about 10 seconds:
+
+| | 2.12.0 (S39, 2026-11-17) | 2.13.7 (S68, 2026-11-26) |
+|---|---|---|
+| Findings | 1 MEDIUM, RP1 "MCP Rug Pull", `security-reviewer.md` line 34, `npx eslint` | The same: 1 MEDIUM, RP1, `security-reviewer.md` line 34, `npx eslint`, confidence 0.7 |
+| Risk score | 7/100 | 7/100, LOW, "SAFE" |
+| Coverage | Partial (one analyzer hit its parse limit in `typescript-reviewer.md`) | Complete: 4 of 4 files fully inspected |
+
+  The only difference is coverage, which is better. So 2.13.7 passes as the scanner. Its report
+  format is close to 2.12.0's (`issues`, `risk_assessment`, `analysis_completeness`, `metadata`);
+  a scan of a big tree can still come back partial, and the rule above holds: a partial scan is
+  reported to Blue and never counted as a pass.
+
 ## Options considered
 
 | Option | What it means | Verdict |

@@ -668,7 +668,14 @@ async function scenarioAdoptionRollback() {
       dockHidden: dock.hidden,
       dockChildren: dock.children.length,
       engineActive: !!window.ccDockviewDiagnostics,
-      panesVisible: panes.every((p) => window.__cc.reachable(p.querySelector('.term-body'))),
+      // The classic grid is a scroll container: on a small screen (GitHub's Windows runner clamps
+      // this window to about 1008 x 655) two stacked panes of the grid's 260 px minimum don't both
+      // fit under the app's chrome, so each pane is scrolled into view within the grid first, as a
+      // user would. What is measured is unchanged: each pane is in the document, laid out, and the
+      // topmost element at its own centre, not hidden or covered.
+      panesVisible: panes.every((p) => { p.scrollIntoView({ block: 'nearest' }); return window.__cc.reachable(p.querySelector('.term-body')); }),
+      // Diagnostic only: the window's real content size (a CI screen can clamp the window).
+      viewport: { w: window.innerWidth, h: window.innerHeight },
       logs: window.__cc.logs().slice(-3000),
     };
   })()`);
