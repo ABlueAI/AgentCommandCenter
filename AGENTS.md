@@ -165,21 +165,25 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      Codex's quota is exhausted (next bullet). Never re-trigger it with a
      comment that writes Codex's handle.
    - **Codex's quota** (D-091; Blue, 2026-11-27: "yes continue to ready to merge with claude
-     review alone"). Codex's code-review quota counts as exhausted while the newest comment or
-     review by `chatgpt-codex-connector[bot]` anywhere in this repository is its usage-limit notice
-     ("You have reached your Codex usage limits for code reviews", as on #286, #287, #302 and #315),
-     with no review, pass or findings from that bot after it. Meanwhile a PR is `READY TO MERGE` on
-     Claude's pass alone: CI green on the latest head, the Opus review loop done with no high or
-     medium finding open, author and latest pusher not `ABlueAI`, the merge-order check clean, and
-     every other step 5 condition met. Its TLDR carries a 🟡 line "Claude's review alone (D-091:
-     Codex's review quota exhausted, <link to the newest notice>)", and nobody writes "waiting for
-     Codex's pass" or `NOT READY: no Codex pass` for it. Codex's inline findings already posted are
-     still fixed or answered. The quota has returned once that bot posts any review, pass or
-     finding after its newest notice; from then on Codex's pass is required again, also on a PR
-     marked ready under D-091 and not yet merged: a Claude session re-triggers Codex's review on it
-     through draft and ready as above, once per head, and its line becomes `NOT READY: no Codex
-     pass` until Codex passes (🤖 Claude decided: "required again" read as covering every unmerged
-     PR).
+     review alone"). Codex's code-review quota counts as exhausted for a PR only when
+     `chatgpt-codex-connector[bot]` answered that PR's latest review trigger (its latest head
+     pushed, or its latest mark-ready) with its usage-limit notice ("You have reached your Codex
+     usage limits for code reviews", as on #286, #287, #302 and #315), that notice is edited by no
+     one else (check its edit history; if you can't, it doesn't count), and since that notice the
+     bot has posted no review, no comment with findings or a pass, and no 👍 (+1) reaction, on any
+     PR in this repository (check the bot's issue comments, PR reviews and reactions). If the bot
+     posted nothing at all on the PR, D-091 doesn't apply: the Codex-pass gap above does. While
+     D-091 applies, a PR is `READY TO MERGE` on Claude's pass alone: CI green on the latest head,
+     the Opus review loop done with no high or medium finding open, author and latest pusher not
+     `ABlueAI`, the merge-order check clean, and every other step 5 condition met. Its TLDR carries
+     a 🟡 line "Claude's review alone (D-091: Codex's review quota exhausted, <link to that PR's
+     notice and its time>)", and nobody writes "waiting for Codex's pass" or `NOT READY: no Codex
+     pass` for it. Codex's inline findings already posted are still fixed or answered. The quota
+     has returned once that bot posts any review, pass, finding or 👍 reaction after its newest
+     notice; from then on Codex's pass is required again, also on a PR marked ready under D-091
+     and not yet merged: a Claude session re-triggers Codex's review on it through draft and ready
+     as above, once per head, and its line becomes `NOT READY: no Codex pass` until Codex passes
+     (🤖 Claude decided: "required again" read as covering every unmerged PR).
 4. The builder fixes CI failures and review findings itself. After 3 failed fix rounds on the same
    CI problem, it writes its diagnosis and options in the PR, takes the best option and goes on,
    recorded as a `🤖 Claude decided:` line in the TLDR (D-090); it stops for Blue only when that
@@ -618,7 +622,9 @@ account stays clear of GitHub's abuse detection.
   (Claude's, Codex's own and failing checks) and merge conflicts itself on its `codex/` branch,
   one fixer per branch at a time, each fix push followed by the usual Opus delta run (Blue,
   2026-11-27, D-092: "Yes, Claude fixes all"; docs/CODEX-BUILDER-LANE.md item 6). Blue no longer
-  pastes fix requests into the Codex app or comments "Claude fixes #N". The fixer is the PR
+  pastes fix requests into the Codex app or comments "Claude fixes #N". A Codex PR that changes
+  a file in "Sensitive areas" goes to Blue instead of getting a fix push (docs/CODEX-BUILDER-LANE.md
+  item 6). The fixer is the PR
   sweeper (docs/SWEEPER.md) or a Claude cloud session; Claude otherwise never pushes to a `codex/`
   branch. This replaces the narrower asks before it (docs-only record PRs, 2026-11-23; security
   findings, a CRITICAL one included, and a fix request with no push within a day, D-090), which
