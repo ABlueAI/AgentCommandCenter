@@ -58,6 +58,9 @@ class Element {
 }
 
 class Terminal {
+  options = {};
+  parser = { registerOscHandler: noop };
+
   loadAddon() {}
   open() {}
   onData() {}
@@ -104,7 +107,7 @@ function renderer(ipc = {}) {
       ccQuickLinksView: { createQuickLinksView: noop },
       ccUsageView: { createUsageView: noop },
       ccPaneMaximize: { createPaneMaximizer: () => ({ handlePaneClosed: noop }) },
-      ccClipboardConsumer: { createClipboardConsumer: noop },
+      ccClipboardConsumer: require('./clipboard-consumer'),
       ccReportFollowup: { createReportFollowup: noop },
       ccSessionResumeView: require('./session-resume-view'),
       ccTTSSelection: { createSelectionMemory: noop, installMouseTrackingSelectionFallback: noop },
