@@ -1564,7 +1564,13 @@ function startShell(settings) {
 }
 
 async function boot() {
-  const s = await cc.getSettings();
+  let s;
+  try { s = await cc.getSettings(); }
+  catch (error) {
+    appendLog(`[settings] ${error.message}\n`);
+    switchTab('logs');
+    return;
+  }
   applyTheme((s && s.theme) || 'obsidian');
   startShell(s);
   bindPushToTalk();

@@ -381,11 +381,32 @@ function validateVideoUrl(url) {
 
 // ---- tiny settings store (userData/settings.json) ---------------------------
 const settingsPath = () => path.join(app.getPath('userData'), 'settings.json');
-function loadSettings() {
-  try { return JSON.parse(fs.readFileSync(settingsPath(), 'utf8')); }
-  catch { return { projectsRoot: DEFAULT_PROJECTS_ROOT, selectedRepo: '' }; }
+const defaultSettings = () => ({ projectsRoot: DEFAULT_PROJECTS_ROOT, selectedRepo: '' });
+function settingsError(message) {
+  sendMainLog(message);
+  return new Error(message);
 }
-function saveSettings(s) { fs.writeFileSync(settingsPath(), JSON.stringify(s, null, 2)); }
+function readSettings(file) {
+  // Only a missing directory entry is first run. A failed read after this check is a refusal.
+  try { fs.lstatSync(file); }
+  catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw settingsError('Cannot read settings.json. Restore access to the file and try again.');
+  }
+  let text;
+  try { text = fs.readFileSync(file, 'utf8'); }
+  catch { throw settingsError('Cannot read settings.json. Restore access to the file and try again.'); }
+  let settings;
+  try { settings = JSON.parse(text); }
+  catch { throw settingsError('Invalid settings.json. Recover the file and try again.'); }
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)
+      || typeof settings.projectsRoot !== 'string' || !settings.projectsRoot
+      || (settings.selectedRepo !== undefined && typeof settings.selectedRepo !== 'string')) {
+    throw settingsError('Invalid settings.json. Recover the file and try again.');
+  }
+  return settings;
+}
+function loadSettings() { return readSettings(settingsPath()) ?? defaultSettings(); }
 
 // ---- encrypted secrets store (userData/secure.json) -------------------------
 // Values are encrypted with the OS credential store (DPAPI on Windows) via Electron's
@@ -576,7 +597,8 @@ function createWindow() {
 app.whenReady().then(() => {
   loadGeminiKey(); // decrypt stored GEMINI_API_KEY into memory before any PTY can launch
   loadAgentGitToken(); // S06: the ABlueAgent token, likewise before any PTY can launch
-  // S08: a record still open now was never closed (a crash or a forced kill): close it as `unknown`.
+  sessionMemoryLease = sessionMemoryMod.acquireProfileLease(app.getPath('userData'));
+  // Only the profile's session memory owner can recover records left open by an interrupted run.
   sessionMemoryCall(() => sessionMemory().closeOpen(sessionMemoryMod.STOP_REASON.UNKNOWN));
   // S46: finished sessions archive themselves.
   sessionMemoryCall(() => sessionMemory().archiveFinished());
@@ -998,7 +1020,13 @@ function killPaneTreesOnShutdown() {
 // Listeners run in registration order, so the tree kill runs before the controlled-run closure.
 app.on('before-quit', () => { killPaneTreesOnShutdown(); });
 app.on('before-quit', () => { closeControlledRunOnShutdown(); });
-app.on('will-quit', () => { paneStatusNotifications.dispose(); });
+app.on('will-quit', () => {
+  paneStatusNotifications.dispose();
+  if (sessionMemoryLease?.ok) {
+    sessionMemoryLease.release();
+    sessionMemoryLease = null;
+  }
+});
 app.on('window-all-closed', () => {
   paneStatusNotifications.dispose();
   killPaneTreesOnShutdown();
@@ -1090,9 +1118,13 @@ ipcMain.handle('build-info', () => {
   return buildInfoPromise;
 });
 ipcMain.handle('save-settings', async (_e, partial) => {
-  const s = { ...loadSettings(), ...partial };
-  saveSettings(s);
-  return s;
+  const file = settingsPath();
+  const current = readSettings(file);
+  const settings = { ...(current ?? defaultSettings()), ...partial };
+  // A concurrent first save must not replace a file that appeared after our missing-file check.
+  try { fs.writeFileSync(file, JSON.stringify(settings, null, 2), { flag: current ? 'w' : 'wx' }); }
+  catch { throw settingsError('Cannot save settings.json. Check access to the file and try again.'); }
+  return settings;
 });
 
 // ---- IPC: Gemini key management (safeStorage) --------------------------------
@@ -1462,9 +1494,7 @@ ipcMain.handle('review-diff', async (_e, { worktree, base }) => {
 // enumeration failure degrades to a smaller/empty set, so the launch refuses rather than opens.
 function listLauncherAuthorizedDirs() {
   const dirs = [];
-  let root;
-  try { root = loadSettings().projectsRoot; } catch { root = null; }
-  if (!root) return dirs;
+  const root = loadSettings().projectsRoot;
   let repos = [];
   try {
     repos = fs.readdirSync(root, { withFileTypes: true })
@@ -1698,6 +1728,7 @@ let agentTokenMissingNoticeSent = false;
 // It never gates a launch: a refused read or write is logged and shown once per reason on the
 // visible error channel, and the pane still starts.
 let sessionMemoryStore = null;
+let sessionMemoryLease = null;
 function sessionMemory() {
   if (!sessionMemoryStore) sessionMemoryStore = sessionMemoryMod.createSessionMemoryStore({ userDataDir: app.getPath('userData') });
   return sessionMemoryStore;
@@ -1710,14 +1741,23 @@ function noteSessionMemory(res) {
   // Counted as sent only once it reaches a window, so a refusal at startup shows on the next one.
   if (sessionMemoryNoticesSent.has(reason) || !win || win.isDestroyed()) return;
   sessionMemoryNoticesSent.add(reason);
-  win.webContents.send('main-error',
-    `Session memory refused [${reason}]: Claude session IDs are not being recorded (${sessionMemoryMod.FILENAME} in Mako's settings folder).`);
+  const detail = reason === sessionMemoryMod.REASON.PROFILE_BUSY
+    ? 'Another Mako process owns this profile’s session records. Close it, then reopen this window to use session history and Resume.'
+    : `Claude session IDs are not being recorded (${sessionMemoryMod.FILENAME} in Mako's settings folder).`;
+  win.webContents.send('main-error', `Session memory refused [${reason}]: ${detail}`);
 }
-// Every session-memory call goes through here: a throw is logged, never passed on, so recording can
-// never stop a launch, a kill or a shutdown.
+function sessionMemoryResult(fn) {
+  if (!sessionMemoryLease?.ok) {
+    return { ok: false, reason: sessionMemoryLease?.reason ?? sessionMemoryMod.REASON.PROFILE_LOCK_FAILED };
+  }
+  try { return fn(); }
+  catch { return { ok: false, reason: 'session-memory-failed' }; }
+}
+// Refusals are visible while PTY launch and cleanup can still finish.
 function sessionMemoryCall(fn) {
-  try { const res = fn(); noteSessionMemory(res); return res; }
-  catch (e) { tlog(`[session-memory] failed: ${(e && e.message) || e}`); return { ok: false }; }
+  const res = sessionMemoryResult(fn);
+  noteSessionMemory(res);
+  return res;
 }
 // paneId -> the main-minted session ID of the Claude pane running in it.
 const paneSessions = new Map();
@@ -1783,9 +1823,7 @@ ipcMain.handle('session-hygiene-done-when', (e, sessionId, text) => {
   // shown on the row, not a session-memory failure, so it must not raise the "IDs are not being
   // recorded" notice. A real store failure (read or write) still does.
   const INPUT_REFUSALS = [sessionMemoryMod.REASON.BAD_DONE_WHEN, sessionMemoryMod.REASON.UNKNOWN_SESSION, sessionMemoryMod.REASON.BAD_SESSION_ID];
-  let res;
-  try { res = sessionMemory().setDoneWhen(sessionId, text); }
-  catch (err) { tlog(`[session-hygiene] done-when failed: ${(err && err.message) || err}`); return { ok: false, error: 'session-memory-failed' }; }
+  const res = sessionMemoryResult(() => sessionMemory().setDoneWhen(sessionId, text));
   if (res && res.ok) return { ok: true };
   const reason = (res && res.reason) || 'session-memory-failed';
   if (INPUT_REFUSALS.includes(reason)) tlog(`[session-hygiene] done-when refused [${reason}]`);

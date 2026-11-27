@@ -136,10 +136,10 @@ async function bootMain(admissionEnv, options) {
 
   // Route `electron` and the native PTY binding to the stubs for the duration of this scenario.
   const realLoad = Module._load;
-  Module._load = function (request) {
+  Module._load = function (request, parent) {
     if (request === 'electron') return electronStub;
     if (request === '@lydell/node-pty') return ptyStub;
-    if (request === 'fs' && arguments[1]?.filename === MAIN_PATH && opt.mainFs) return opt.mainFs;
+    if (request === 'fs' && parent?.filename === MAIN_PATH && opt.mainFs) return opt.mainFs;
     return realLoad.apply(this, arguments);
   };
 
@@ -557,10 +557,18 @@ const LEDGER = 'admission-ledger.json';
     try {
       const file = path.join(userDataDir, 'settings.json');
       let unreadable = false;
-      const mainFs = { ...fs, readFileSync(filePath, ...args) {
-        if (filePath === file && unreadable) throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
-        return fs.readFileSync(filePath, ...args);
-      } };
+      let raceFirstSave = false;
+      const mainFs = {
+        ...fs,
+        readFileSync(filePath, ...args) {
+          if (filePath === file && unreadable) throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+          return fs.readFileSync(filePath, ...args);
+        },
+        writeFileSync(filePath, ...args) {
+          if (filePath === file && raceFirstSave) fs.writeFileSync(file, '{just appeared', { flag: 'wx' });
+          return fs.writeFileSync(filePath, ...args);
+        },
+      };
       const { record } = await bootMain({}, { userDataDir, mainFs });
       const get = record.handled.get('get-settings');
       const save = record.handled.get('save-settings');
@@ -571,11 +579,17 @@ const LEDGER = 'admission-ledger.json';
       const defaults = await get();
       assert(typeof defaults.projectsRoot === 'string' && defaults.selectedRepo === '' && !fs.existsSync(file),
         'missing settings return first-run defaults without writing');
+      raceFirstSave = true;
+      assert(await invokeRefuses(() => save({}, { theme: 'obsidian' }))
+        && fs.readFileSync(file, 'utf8') === '{just appeared', 'first save preserves a file that appears during the save');
+      raceFirstSave = false;
+      fs.unlinkSync(file);
       const prefs = { projectsRoot: path.join(userDataDir, 'projects'), selectedRepo: 'saved-repo', theme: 'void' };
       await save({}, prefs);
       const saved = fs.readFileSync(file, 'utf8');
       for (const [label, bytes, denyRead] of [
-        ['unreadable', saved, true], ['malformed JSON', '{broken', false], ['wrong shape', 'null', false],
+        ['unreadable', saved, true], ['malformed JSON', '{broken', false],
+        ['wrong shape', 'null', false], ['invalid project root', '{"projectsRoot":42}', false],
       ]) {
         fs.writeFileSync(file, bytes);
         unreadable = denyRead;
@@ -608,9 +622,13 @@ const LEDGER = 'admission-ledger.json';
       const second = (await bootMain({}, { userDataDir })).record;
       assert(second.windowsCreated === 1, 'the other window can still open');
       assert(store.list().records[0].stoppedAt === null, 'the other window cannot mark the running record interrupted');
-      const offer = await second.handled.get('session-resume-offer')({ senderFrame: second.webContents.mainFrame, sender: second.webContents });
-      assert(offer.ok === false && second.sent.some((line) => /session memory refused/i.test(line)),
+      const sender = { senderFrame: second.webContents.mainFrame, sender: second.webContents };
+      const offer = await second.handled.get('session-resume-offer')(sender);
+      assert(offer.ok === false && second.sent.some((line) => line.includes('session-memory-profile-in-use')),
         'the other window visibly refuses session recovery for the busy profile');
+      const change = await second.handled.get('session-hygiene-done-when')(sender, sessionId, 'Done');
+      assert(!change.ok && store.list().records[0].doneWhen === undefined,
+        'the other window cannot edit the live profile’s session records');
       for (const fn of second.appHandlers.get('before-quit') || []) fn({ preventDefault() {} });
       for (const fn of second.appHandlers.get('will-quit') || []) fn();
       assert(store.list().records[0].stoppedAt === null, 'quitting the other window leaves the record open');
