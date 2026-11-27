@@ -181,7 +181,9 @@ const GIT_VALUE_OPTS = new Set(['-C', '-c', '--git-dir', '--work-tree', '--names
 // starting with `!` is a shell command and is checked as Bash; any other value is expanded like git
 // does and checked again, so a push through it is recorded in work.pushes and gets every push check.
 // An alias whose value can't be read (`--config-env`, set in the same call, a lookup that fails or
-// runs past its budget, a hook input with no usable cwd, a shell alias that reads its arguments) is
+// runs past its budget, a hook input with no usable cwd, a shell alias that reads its arguments, a
+// shell alias that pushes when the call has git options other than `-c alias.*`, which its push
+// would be recorded without) is
 // a push the guard can't read: it gets the login check, and under any other login decide() refuses
 // it, as it does every push whose destination can't be checked.
 // git's built-in commands (`git --list-cmds=builtins`, git 2.43): git runs these before any alias, so an
@@ -318,6 +320,14 @@ const shellQuote = (w) => `'${String(w).replace(/'/g, `'\\''`)}'`;
 // because a nested `sh -c '...'` reads its first argument there).
 const SHELL_ARGS_REF = /\$(?:[@*0-9]|\{[@*0-9])/;
 
+// git's options before the subcommand hold only `-c alias.NAME=VALUE` pairs (or none).
+function onlyAliasOptions(globalArgs) {
+  for (let k = 0; k < globalArgs.length; k += 2) {
+    if (globalArgs[k] !== '-c' || !/^alias\.[A-Za-z0-9][A-Za-z0-9-]*=/i.test(String(globalArgs[k + 1]))) return false;
+  }
+  return true;
+}
+
 // A push through an alias whose value can't be read: the login check, then refused under any other
 // login in decide() (work.unreadAlias), since its destination can't be checked.
 function unreadAlias(work, why) {
@@ -344,12 +354,22 @@ function classifyGitAlias(rest, j, before, depth, work) {
     const script = value.slice(1);
     if (args.length && SHELL_ARGS_REF.test(script)) return unreadAlias(work, 'a shell alias that reads its arguments');
     const saved = work.aliasNames;
+    const pushesBefore = work.pushes.length;
     work.aliasNames = new Set([...(saved || []), ...definedAliasNames(globalArgs, before)]);
+    let hit;
     try {
-      return scanCommand([script, ...args.map(shellQuote)].join(' '), depth + 1, 'bash', work);
+      hit = scanCommand([script, ...args.map(shellQuote)].join(' '), depth + 1, 'bash', work);
     } finally {
       work.aliasNames = saved;
     }
+    // git runs a shell alias in the `-C` folder (or `--git-dir`/`--work-tree` repository) and hands its
+    // `-c` settings to the programs it starts, but the push the script runs is recorded without them,
+    // so its destination would be checked in the wrong repository or config: refused instead. Only
+    // `-c alias.NAME=...` pairs, which can't change a push's destination, are left out of this.
+    if (work.pushes.length > pushesBefore && !onlyAliasOptions(globalArgs)) {
+      return unreadAlias(work, 'a shell alias run with git options that change where it pushes');
+    }
+    return hit;
   }
   const expansion = splitAliasValue(value);
   if (expansion === null) return null; // git refuses an alias with an unclosed quote

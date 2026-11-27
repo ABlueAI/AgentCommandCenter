@@ -1589,6 +1589,23 @@ process.stdout.write('\ngit aliases (issue #337)\n');
     const a = guard.decide(bash(`git -c 'alias.run=!f() { git "$@"; }; f' run push`), agentLogin, withPushSources);
     assert(a.exitCode === 2 && /reads its arguments/.test(a.stderr || ''), 'a shell alias that reads its arguments, given some, is refused under an agent login');
     assert(guard.decide(bash('git lfs pull'), agentLogin, aliases({})).exitCode === 0, 'an unknown subcommand that is no alias is allowed under an agent login');
+    // Review run 4: a shell alias's push loses the outer call's -C and -c options, so it is refused.
+    for (const cmd of [
+      `git -C ${REPO_ROOT} -c 'alias.p=!git push origin x' p`,
+      "git -c remote.origin.pushurl=https://example.invalid/o/r.git -c 'alias.p=!git push origin x' p",
+      "git --git-dir=.git -c 'alias.p=!git push origin x' p",
+    ]) {
+      const r = guard.decide(bash(cmd), agentLogin, withPushSources);
+      assert(r.exitCode === 2 && /git options that change where it pushes/.test(r.stderr || ''), `refuse a shell alias's push run with git options: ${cmd}`);
+    }
+    assert(guard.decide(bash("git -c 'alias.p=!git push origin x' p"), agentLogin, withPushSources).exitCode === 0,
+      'a shell alias defined by `-c alias.*` alone keeps its push checks and is allowed when they pass');
+    assert(guard.decide(bash("git -C . -c 'alias.s=!git status' s"), agentLogin, withPushSources).exitCode === 0,
+      'a shell alias with git options that runs no push is allowed');
+    {
+      const r = guard.decide(bash('git -C . p origin x'), agentLogin, aliases({ p: 'push' }));
+      assert(r.exitCode === 0, 'a plain alias keeps -C on the expanded push, so it is checked, not refused');
+    }
     let budget = 0;
     const slow = guard.decide(bash('git p'), agentLogin, { ...withPushSources, gitAlias: () => { budget++; return { none: true }; } });
     assert(slow.exitCode === 0 && budget === 1, 'the injected lookup runs once for one alias');
