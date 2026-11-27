@@ -214,8 +214,8 @@ const LEDGER = 'admission-ledger.json';
     assert(!fs.existsSync(path.join(r.userDataDir, 'secure.json')), 'credential refusals create no storage file');
 
     const invalidTask = { repo: r.userDataDir, task: '' };
-    const creation = await handled.get('new-agent')({}, invalidTask);
-    const removal = await handled.get('remove-agent')({}, invalidTask);
+    const creation = await handled.get('new-agent')(trusted, invalidTask);
+    const removal = await handled.get('remove-agent')(trusted, invalidTask);
     assert(!creation.ok && !removal.ok && /cannot remove worktree/i.test(removal.error),
       'both worktree commands independently refuse a missing task name');
     assert(r.record.sent.includes('New agent refused: ' + creation.error) && r.record.sent.includes(removal.error),
@@ -239,10 +239,16 @@ const LEDGER = 'admission-ledger.json';
         '',
       ].join('\n'));
     } });
-    const list = r.record.handled.get('list-worktrees');
-    deepEqual(await list({}, undefined), []);
+    const { handled, webContents } = r.record;
+    const trusted = { sender: webContents, senderFrame: webContents.mainFrame };
+    const list = handled.get('list-worktrees');
+    let refusal = null;
+    try { await list({}, r.userDataDir); } catch (err) { refusal = err; }
+    assert(refusal && /untrusted|sender/i.test(refusal.message), 'worktree listing refuses an untrusted caller');
     deepEqual(gitCalls, []);
-    const listed = await list({}, r.userDataDir);
+    deepEqual(await list(trusted, undefined), []);
+    deepEqual(gitCalls, []);
+    const listed = await list(trusted, r.userDataDir);
     deepEqual(gitCalls, [{
       command: 'git', args: ['worktree', 'list', '--porcelain'], cwd: r.userDataDir,
     }]);
