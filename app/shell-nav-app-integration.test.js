@@ -13,6 +13,7 @@
 // real microphone, and Ctrl K / Ctrl Space against a focused live terminal (no PTY runs in this
 // harness); BLUE-CHECKLIST.md step 81 covers the last two on Blue's PC.
 
+const strictAssert = require('node:assert/strict');
 const { spawnSync } = require('child_process');
 const path = require('path');
 
@@ -22,6 +23,18 @@ function assert(cond, label) {
   else { process.stderr.write(`  ✗ FAIL: ${label}\n`); failed++; }
 }
 const eq = (a, b, label) => assert(JSON.stringify(a) === JSON.stringify(b), `${label} (got ${JSON.stringify(a)})`);
+
+function readHarnessReport(run) {
+  const line = String(run.stdout || '').split('\n').find((l) => l.startsWith('{"ok"'));
+  return line === undefined ? null : JSON.parse(line);
+}
+
+// A report can be flushed before the process fails during shutdown.
+const successfulReport = '{"ok":true}\n';
+strictAssert.throws(
+  () => readHarnessReport({ stdout: successfulReport, stderr: 'shutdown failed', status: 7, signal: null }),
+  /harness exit 7[\s\S]*shutdown failed/,
+);
 
 let electronPath = null;
 try { electronPath = require('electron'); } catch { electronPath = null; }
@@ -35,8 +48,7 @@ if (process.platform === 'linux') args.unshift('--no-sandbox');
 const run = spawnSync(electronPath, args, { cwd: __dirname, env: childEnv, encoding: 'utf8', timeout: 300000 });
 
 let report = null;
-const line = String(run.stdout || '').split('\n').find((l) => l.startsWith('{"ok"'));
-try { report = JSON.parse(line); } catch { report = null; }
+try { report = readHarnessReport(run); } catch { report = null; }
 assert(report !== null, 'the harness produced a JSON report');
 if (!report) {
   process.stderr.write(`harness exit ${run.status} signal ${run.signal}\nstderr tail:\n${String(run.stderr || '').split('\n').slice(-25).join('\n')}\n`);
