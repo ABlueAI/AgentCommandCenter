@@ -66,11 +66,15 @@ switch ($env:VS_PROBE_STUB) {
                 Set-Content -LiteralPath (Join-Path $root 'fixture-env.json')
             Remove-Item -LiteralPath (Join-Path $run 'probe-launch.json') -ErrorAction SilentlyContinue
             $watch = [Diagnostics.Stopwatch]::StartNew()
-            $result = Invoke-DurationProbe -YtDlp $ytdlp -Url $url -TimeoutSec $TimeoutSec -WorkingDirectory $run 6>$null
+            # Keep the probe's own diagnostic line (information stream) so a failure says why.
+            $all = @(Invoke-DurationProbe -YtDlp $ytdlp -Url $url -TimeoutSec $TimeoutSec -WorkingDirectory $run 6>&1)
+            $result = $all | Where-Object { $_ -is [psobject] -and $_.PSObject.Properties['TimedOut'] } | Select-Object -First 1
+            $diagnostic = ($all | Where-Object { -not ($_.PSObject.Properties['TimedOut']) } | ForEach-Object { [string]$_ }) -join ' '
             $watch.Stop()
             $launchFile = Join-Path $run 'probe-launch.json'
             [PSCustomObject]@{
                 Result = $result
+                Diagnostic = $diagnostic
                 Seconds = $watch.Elapsed.TotalSeconds
                 Launch = if (Test-Path -LiteralPath $launchFile) { Get-Content -LiteralPath $launchFile -Raw | ConvertFrom-Json }
             }
@@ -80,6 +84,7 @@ switch ($env:VS_PROBE_STUB) {
 
     It 'reads the duration the native child prints, from the run directory, with the option terminator' {
         $r = Invoke-StubProbe -Behavior 'ok' -TimeoutSec 120
+        $r.Diagnostic | Should BeNullOrEmpty
         $r.Result.TimedOut | Should Be $false
         $r.Result.Duration | Should Be 100
         $r.Launch.Cwd | Should Be $run
@@ -94,6 +99,7 @@ switch ($env:VS_PROBE_STUB) {
     It 'turns a nonzero yt-dlp exit into an unknown duration (fail closed), not a pass' {
         $r = Invoke-StubProbe -Behavior 'fail' -TimeoutSec 120
         $r.Result.Duration | Should BeNullOrEmpty
+        $r.Diagnostic | Should Match 'exited with code 1'
         $r.Result.TimedOut | Should Be $false
     }
 
