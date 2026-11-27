@@ -6,6 +6,14 @@ full runner (parallel sessions, evening digest).
 
 Since 2026-11-23 the PR sweeper (docs/SWEEPER.md) clears conflicts and `waits-for-merge` waits and owns the `STATUS.md` status PR; where a prompt below differs, docs/SWEEPER.md and AGENTS.md win.
 
+Since 2026-11-27 (Blue, D-091 and D-092; docs/DECISIONS.md), two more rules win over the prompts
+below: while Codex's code-review quota is exhausted, a PR is `READY TO MERGE` on Claude's Opus
+review alone, and no line says "waiting for Codex's pass" (AGENTS.md "How work flows" step 3,
+"Codex's quota"); and Claude fixes every Codex PR's findings and conflicts itself, so no prompt
+below posts fix requests or conflict comments for Codex, or leaves fixes to Codex
+(docs/CODEX-BUILDER-LANE.md item 6; docs/SWEEPER.md, "CODEX PRS: CLAUDE FIXES"). The stored and
+proposed prompts are not rewritten here; aligning them is a follow-up.
+
 ## Schedule
 
 - **When:** every day at 8:01 AM Eastern (`CRON_TZ=America/New_York 1 8 * * *`), one minute after
@@ -439,6 +447,10 @@ issue #313 tracks aligning them):
   prioritize maxing out here", Blue, 2026-11-24) are in docs/DECISIONS.md's 2026-11-24 entry
   "Blue's go on the UI", which records a go on the UI rows, not a `parallel_cap` change; no entry
   is numbered D-077, and no recorded decision raises the cap.
+- **Override 6**'s "NOT READY: waiting for Codex's pass" no longer applies while Codex's
+  code-review quota is exhausted (D-091, Blue, 2026-11-27; AGENTS.md "Hard rules" item 9 and "How
+  work flows" step 3, "Codex's quota"): such a PR is `READY TO MERGE` on Claude's pass alone. The
+  wrapper puts AGENTS.md over the overrides, so AGENTS.md wins.
 - **Override 6** states Codex's pass more loosely than AGENTS.md "Hard rules" item 9: it doesn't
   say the +1 must come after the latest head was pushed, or that a comment must be by
   `chatgpt-codex-connector[bot]` and edited by no one else. The wrapper's first paragraph puts
