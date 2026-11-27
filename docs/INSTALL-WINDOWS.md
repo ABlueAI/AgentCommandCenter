@@ -45,19 +45,18 @@ Every row is classified as one of:
 | Prerequisite | Class | Why / what breaks without it | Evidence |
 |---|---|---|---|
 | Windows 11, x64 | Launch | The documented and measured target. `x64` is the architecture of the runtime actually inspected on the development host. `@lydell/node-pty` also ships a `win32-arm64` prebuilt, but arm64 is **unverified** here. | `docs/SMART-APP-CONTROL-AND-DISTRIBUTION.md` § Bounded upstream-binary investigation (`electron-v42.5.0-win32-x64.zip`); `app/package-lock.json` (`@lydell/node-pty-win32-x64`, `@lydell/node-pty-win32-arm64`) |
-| Windows PowerShell 5.1 | Launch | Every terminal pane and every helper invocation is `powershell.exe`. Panes: `pty.spawn('powershell.exe', …)`. Helpers: `execFile('powershell', …)`. `scripts/run-pester.ps1` declares `#Requires -Version 5.1`. | `app/main.js:1343`, `app/main.js:205`, `app/main.js:946`, `scripts/run-pester.ps1:1` |
-| Git (on `PATH`) | Launch | The repo is obtained with `git clone`, and the app shells out to `git` for repo discovery, worktree listing, the origin remote, and review diffs. `scripts/new-agent.ps1` is pure `git`. | `app/main.js:803-806`, `app/main.js:1105`, `scripts/new-agent.ps1` |
-| Node.js **≥ 22.12.0** + its bundled npm | Launch | Strictest `engines.node` floor in the tracked lockfile, from `electron@42.11.16` (42.5.0 until S02's audit fix, same floor). Use the npm that ships with that Node install; the lockfile is `lockfileVersion: 3`. | `app/package-lock.json:903-920` (`"node_modules/electron"` → `"engines": { "node": ">= 22.12.0" }`), `app/package-lock.json:4` |
+| Windows PowerShell 5.1 | Launch | Every terminal pane and every helper invocation is `powershell.exe`. Panes: `pty.spawn('powershell.exe', …)`. Helpers: `execFile('powershell', …)`. `scripts/run-pester.ps1` declares `#Requires -Version 5.1`. | `app/main.js` (`pty.spawn` and `runLibraryAction`), `scripts/run-pester.ps1:1` |
+| Git (on `PATH`) | Launch | The repo is obtained with `git clone`, and the app shells out to `git` for worktree listing, the origin remote, and review diffs. `scripts/new-agent.ps1` is pure `git`. | `app/main.js` (`list-repos`, `list-worktrees`, `repo-github-url`, `review-diff`), `scripts/new-agent.ps1` |
+| Node.js **≥ 22.12.0** + its bundled npm | Launch | Strictest `engines.node` floor in the tracked lockfile, from `electron@42.11.16` (42.5.0 until S02's audit fix, same floor). Use the npm that ships with that Node install; the lockfile is `lockfileVersion: 3`. | `app/package-lock.json:921-938` (`"node_modules/electron"` → `"engines": { "node": ">= 22.12.0" }`), `app/package-lock.json:4` |
 | Network access to the npm registry | Launch | `npm ci` fetches the locked dependency tree. `electron` depends on `@electron/get`, which retrieves the Electron runtime binary — so the install also needs Electron's download host reachable. Electron 42 has no install script of its own; `app/package.json`'s `postinstall` fetches the binary during `npm ci` (§ 4, verified with npm 11.16.0 on 2026-10-18). | `app/package-lock.json` (`node_modules/electron` → `dependencies["@electron/get"]`) |
-| Claude Code CLI, installed and authenticated | Launch (for agent panes) | Every role pane runs `claude --agent <role>`; the Plain picker can also launch a bare `claude`. Mako never authenticates for you — sign in through Claude Code itself. The Electron shell starts without it, but no builder/reviewer/scout pane can work. | `app/main.js:216`, `app/main.js:232-247` (`AGENT_CMD.claude`, `buildAgentCommand`), `app/renderer/index.html:247-254`, `AGENTS.md` § Environment |
-| Codex CLI (`codex` on `PATH`) | Optional | Only reachable from the **Plain** role's CLI sub-picker. Nothing in startup, roles, fences, or Video Scout depends on it. | `app/main.js:216` (`AGENT_CMD.codex`), `docs/SMOKE-TEST.md` § B |
+| Claude Code CLI, installed and authenticated | Launch (for agent panes) | Every role pane runs `claude --agent <role>`; the Plain picker can also launch a bare `claude`. Mako never authenticates for you — sign in through Claude Code itself. The Electron shell starts without it, but no builder/reviewer/scout pane can work. | `app/main.js` (`AGENT_CMD.claude`, `buildAgentCommand`), `app/renderer/index.html` (New Agent CLI picker) |
+| Codex CLI (`codex` on `PATH`) | Optional | Reachable from the **Plain** role's CLI sub-picker and an agent card's **Codex** button. Nothing in startup, roles, fences, or Video Scout depends on it. | `app/main.js` (`AGENT_CMD.codex`), `app/renderer/agent-dom.js` (`buildAgentCard`), `docs/SMOKE-TEST.md` § B |
 | Gemini CLI (`gemini` on `PATH`) | Feature — Video Scout, CLI route only | `feed-gemini.ps1` resolves `gemini` from `PATH`, falling back to `%APPDATA%\npm\gemini.cmd`. Absent, the script saves the download and reports that it was never analyzed. The **SDK route** (public YouTube URL, video mode) does not use the CLI at all. Also reachable from the Plain picker. | `scripts/feed-gemini.ps1:477-481`, `scripts/feed-gemini.ps1:646`, `scripts/gemini-video-sdk.js:1-15` |
-| `GEMINI_API_KEY` | Feature — Video Scout | A Video Scout pane is **refused** without a stored key. Set it only through the in-app key banner (§ 7). | `app/main.js:1234-1237`, `app/renderer/index.html:45-48` |
+| `GEMINI_API_KEY` | Feature — Video Scout, Gemini provider | A Gemini Video Scout pane is **refused** without a stored key. Set it only through the in-app key banner (§ 7). | `app/main.js` (`pty-start`), `app/renderer/index.html` (Gemini key banner and provider picker) |
 | `yt-dlp` (on `PATH`) | Feature — Video Scout, CLI route only | `Get-YtDlpPath` throws `"yt-dlp not found on PATH…"` and names the install command itself. Not used by the SDK route. | `scripts/lib/invoke-duration-probe.ps1:21-25` |
 | `ffmpeg` (on `PATH`) | Feature — Video Scout `audio` / `video` modes | Those modes pass `-x --audio-format mp3` and `--merge-output-format mp4` to yt-dlp. The flags are tracked fact; that yt-dlp needs ffmpeg to perform that post-processing is **yt-dlp's documented behavior**, not something verified in this order. `transcript` mode (the default) does not post-process. | `scripts/feed-gemini.ps1:546`, `scripts/feed-gemini.ps1:550-552` |
-| VS Code (stable, standard install location) | Feature — the **🖥️ Open in VSCode** button | `resolveVscodeExe` probes `%LOCALAPPDATA%\Programs\Microsoft VS Code\Code.exe`, then `%ProgramFiles%`, then `%ProgramFiles(x86)%`. Not found ⇒ `vscode-not-found`, a visible refusal. Nothing else uses it. | `app/launchers.js:65-79`, `app/main.js:1169`, `app/renderer/index.html:56` |
-| Windows Terminal (`wt.exe`) | Feature — the **▶️ Open Terminal** button | `resolveTerminalExe` prefers the App Execution Alias at `%LOCALAPPDATA%\Microsoft\WindowsApps\wt.exe`, else the bare `wt` name; a missing `wt` surfaces as a visible spawn error. In-app panes do **not** use it. | `app/launchers.js:88-97`, `app/main.js:1163`, `app/renderer/index.html:58` |
-| Vibe Kanban desktop app | Optional | Only the **🗂️ Open Vibe Kanban** button and the Board tab. If it is not found the app offers a "Locate app…" picker. Community-maintained; do not make anything depend on it. | `app/main.js:1442-1449`, `app/renderer/index.html:63,109-110`, `docs/SETUP-WINDOWS.md` Phase 3 |
+| VS Code (stable, standard install location) | Feature — the **🖥️ Open in VSCode** button | `resolveVscodeExe` probes `%LOCALAPPDATA%\Programs\Microsoft VS Code\Code.exe`, then `%ProgramFiles%`, then `%ProgramFiles(x86)%`. Not found ⇒ `vscode-not-found`, a visible refusal. Nothing else uses it. | `app/launchers.js:65-79`, `app/main.js` (`open-vscode`), `app/renderer/index.html` (`openVscode`) |
+| Windows Terminal (`wt.exe`) | Feature — the **▶️ Open Terminal** button | `resolveTerminalExe` prefers the App Execution Alias at `%LOCALAPPDATA%\Microsoft\WindowsApps\wt.exe`, else the bare `wt` name; a missing `wt` surfaces as a visible spawn error. In-app panes do **not** use it. | `app/launchers.js:88-97`, `app/main.js` (`open-terminal`), `app/renderer/index.html` (`openTerminal`) |
 | Pester 3.x / 4.x | Optional (developer test suite) | Only `scripts/run-pester.ps1`. It refuses and prints its own install line if an incompatible version is present. Nothing at runtime touches Pester. | `scripts/run-pester.ps1:19-23` |
 
 **`restic` is deliberately absent from this table.** It belongs to the separate
@@ -65,12 +64,6 @@ backup/restore exercise
 ([BACKUP-RECOVERY-EVIDENCE-2026-08-14.md](BACKUP-RECOVERY-EVIDENCE-2026-08-14.md)),
 not to installing or launching Mako. Do not install it as part of this
 procedure.
-
-> **Known documentation conflict.** [SETUP-WINDOWS.md](SETUP-WINDOWS.md) still
-> says "Node.js 18+". That predates the current `app/` dependency tree. **The
-> lockfile floor above (≥ 22.12.0) is the one to follow** for running the
-> application. Reconciling SETUP-WINDOWS.md is separate work; it is not changed
-> by this guide.
 
 **Compiler toolchain — what the tracked files actually show.** The tracked
 dependency graph uses platform/prebuilt packages: `@lydell/node-pty` resolves to
@@ -119,7 +112,7 @@ The application source lives under **`app\`**, and **`app\package.json` is the
 only `package.json` in the repository — there is no root-level `package.json` and
 no root-level lockfile.** `scripts\` must stay a sibling of `app\`: `app/main.js`
 resolves helper scripts as `path.join(__dirname, '..', 'scripts')`
-(`app/main.js:187`). Do not relocate `app\` on its own.
+(`app/main.js`, `SCRIPTS_DIR`). Do not relocate `app\` on its own.
 
 ---
 
@@ -170,7 +163,7 @@ That invocation is **process-local**: `-ExecutionPolicy Bypass` on a single
 `Set-ExecutionPolicy` and does not change machine or user policy. The same
 bounded form is what `scripts/run-pester.ps1` documents for itself
 (`scripts/run-pester.ps1:12`), and it is the form the application uses internally
-(`app/main.js:205`, `app/main.js:1232`). **Never** run `Set-ExecutionPolicy` to
+(`app/main.js`, `runLibraryAction` and `pty-start`). **Never** run `Set-ExecutionPolicy` to
 make this work.
 
 What the script deploys (`scripts/sync-roles.ps1`):
@@ -190,15 +183,12 @@ writes no credential, and asks for none.
 **It overwrites same-named files** in `%USERPROFILE%\.claude\agents\` and
 `%USERPROFILE%\.claude\hooks\`. If you keep personal agent files with these
 names — `builder`, `reviewer`, `codebase-scout`, `web-scout`, `operator`,
-`source-scout` — back them up first.
+`source-scout`, `page-reader` — back them up first.
 
-Why this is a gate, not a nicety: the three fenced roles (`web-scout`,
-`operator`, `source-scout`) **fail closed**. Before launching one, the app calls
-`verify-fence`, which checks that the role file exists, that `__CC_HOOK__` was
-substituted, that a `PreToolUse` fence is wired, that the hook file is present on
-disk, and that the matcher includes `Read`. Any failure blocks the launch with
-"write-fence not active" rather than starting an unconfined agent
-(`app/main.js:1073-1097`, `app/renderer/app.js:2158-2168`).
+Why this is a gate, not a nicety: the four fenced roles (`web-scout`,
+`operator`, `source-scout`, `page-reader`) **fail closed**. The app checks the
+deployed role and fence policy at launch in `pty-start`. Failed checks refuse
+the launch visibly (`app/main.js`, `FENCED_ROLES` and `pty-start`).
 
 Non-fenced roles (`builder`, `reviewer`, `codebase-scout`) launch
 `claude --agent <role>`, which requires the deployed role file to exist — that is
@@ -222,49 +212,48 @@ starts the same application with `--classic-layout`.
 
 **Expected first-launch behavior**
 
-- The Electron window opens with the Board / Agents / Terminals / Library / Logs
-  tabs.
+- The Electron window opens with the Brain / Control room / Aquarium tabs.
+  Control room contains Agents / Terminals / Library / Logs.
 - The **Logs** tab is where failures surface. Startup, refusals, and launch
   decisions are written there instead of crashing the app.
 - The repo dropdown lists immediate sub-folders of the configured **projects
   root** that contain a `.git` entry. If the root does not exist, the list is
   simply **empty** — `list-repos` swallows the error and returns no repos
-  (`app/main.js:897-905`). An empty dropdown on a new machine almost always means
+  (`app/main.js`, `list-repos`). An empty dropdown on a new machine almost always means
   the projects root is wrong, not that the app is broken.
 - The **Quick Links** group renders its seeded destinations, exactly
-  **Starboard Platform** and **Outlook Web** (`app/quick-links-policy.js:14`).
+  **Starboard Platform** and **Outlook Web** (`app/quick-links-policy.js`, `DEFAULT_LABELS`).
 - If `GEMINI_API_KEY` has never been stored, the key banner is available for
   Video Scout. Ignore it unless you use that feature.
 
 ### Set or correct the projects root — do this before creating any agent
 
 The first-run default is the literal string **`D:\Workspace`**
-(`app/main.js:186`, `DEFAULT_PROJECTS_ROOT`). **This is a machine-specific
+(`app/main.js`, `DEFAULT_PROJECTS_ROOT`). **This is a machine-specific
 assumption, not a requirement — `D:\Workspace` does not exist on every machine,
 and nothing creates it.**
 
 To correct it:
 
-1. Click the **📁** button beside the repo dropdown (title: "Change projects root
-   folder").
+1. Open **Settings** → **Today's settings** → **Change projects folder**.
+   In the old layout, the **📁** button beside the repo dropdown also opens the picker.
 2. Pick your repositories folder in the native directory dialog.
-3. The choice is saved to `settings.json` under Electron's `userData` directory
-   and the repo list refreshes immediately
-   (`app/renderer/app.js:1642-1645`, `app/main.js:279-284`, `app/main.js:860-864`).
+3. The choice is saved as `projectsRoot` in `settings.json` under Electron's
+   `userData` directory and the repo list refreshes immediately
+   (`app/renderer/app.js`, `changeRoot`, and `app/main.js`, `save-settings`).
 
 The projects root is load-bearing beyond the dropdown: fenced roles run inside
 `<projectsRoot>\.command-center\outputs\…`, and a fenced pane whose cwd resolves
-outside that sandbox is refused (`app/main.js:1000-1004`, `app/main.js:1213`,
-`app/main.js:1200-1225`). Set it correctly before creating agents.
+outside that sandbox is refused (`app/main.js`, `createOutputSandbox` and
+`pty-start`). Set it correctly before creating agents.
 
 ### Machine-specific assumptions still present in 1.0
 
 State these plainly rather than discovering them on a new machine:
 
 - **Projects root** defaults to `D:\Workspace` — configurable in the UI, as above.
-- **Video Scout run root** is the hard-coded constant
-  `D:\Gemini_Video_Review\downloads` (`app/main.js:192`,
-  `VIDEO_SCOUT_RUN_ROOT`), reused as the download directory, the Library listing
+- **Gemini Video Scout run root** is the hard-coded constant
+  `VIDEO_SCOUT_RUN_ROOT` in `app/main.js`, reused as the download directory, the Library listing
   root, and the report-resolution root. It is **not** configurable from the UI.
   On a machine without a `D:` drive, Video Scout and the Library are affected.
   This is a known 1.0 limitation (§ 9).
@@ -286,14 +275,14 @@ CLI; it never collects, stores, proxies, or refreshes a Claude credential.
 banner:
 
 1. Paste the key into the key field in the header banner
-   (`app/renderer/index.html:45-48`).
+   (`app/renderer/index.html`, `geminiKeyInput`).
 2. Click **Save encrypted**.
 
 The key is encrypted with Electron `safeStorage` (DPAPI on Windows) and written
 as ciphertext to `secure.json` in the app's `userData` directory. The plaintext
 is decrypted into main-process memory and injected only into the specific
 Video Scout PTY that needs it; it never crosses IPC back to the renderer
-(`app/main.js:286-306`, `app/main.js:871-889`, `app/main.js:1336`). If
+(`app/main.js`, `securePath`, `app/gemini-key-ipc.js`, `handleSet`, and `app/pty-env.js`, `buildMainIssuedEnv`). If
 `safeStorage` reports encryption unavailable, saving is refused visibly rather
 than falling back to plaintext.
 
@@ -301,20 +290,12 @@ than falling back to plaintext.
 
 - **Never** use `setx` — or any persistent Windows user/machine environment
   variable — for a provider credential. A value persisted that way is present in
-  the **application's own ambient environment** and is spread into **at least the
-  unfenced PTYs** — plain shells, Plain-CLI panes, and Video Scout — because
-  `pty-start` builds each PTY environment from `process.env`
-  (`app/main.js:1276-1340`). Among the six deployed roles, only **Builder** is
-  granted the `Bash` tool (`agent-roles/builder.md`); the three fenced roles hold
-  `WebSearch, WebFetch, Read, Write` and Reviewer and Codebase Scout hold
-  `Read, Grep, Glob`, so today there is no fenced-role Bash step to read it. That
-  narrows the blast radius; it does **not** make `setx` acceptable — the value is
-  still ambient, still persistent, and still outside `safeStorage`. Mako
-  sets `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` on every PTY to limit what Claude
-  Code forwards into subprocesses it spawns itself (`app/main.js:1276-1340`;
-  `AGENTS.md` § How I work, item 8), and P1 fenced-role environment containment
-  (release plan § 2.3) is separately tightening what fenced PTYs inherit —
-  **neither is a reason to persist a secret in the environment.** If a key was
+  the **application's own ambient environment**, outside `safeStorage`.
+  `buildPtyEnv` filters inherited variables, and the Gemini Video Scout pane
+  gets its key from `safeStorage`. Mako sets
+  `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` on every PTY to limit what Claude
+  Code forwards into subprocesses it spawns itself (`app/pty-env.js`,
+  `buildMainIssuedEnv` and `buildPtyEnv`, and `AGENTS.md` § Security rules). If a key was
   previously set with `setx`, remove it: System Properties → Environment
   Variables → User variables → delete the entry, or
   `[Environment]::SetEnvironmentVariable('GEMINI_API_KEY', $null, 'User')`.
@@ -345,7 +326,7 @@ Before starting, fully **quit and reopen** the app if you changed anything under
    Code installed, or attempt a fenced role before running `sync-roles.ps1`; both
    refuse visibly.
 3. **The projects root is valid.** The repo dropdown lists your repositories. An
-   empty list means the root is wrong — fix it with **📁** (§ 6) before going
+   empty list means the root is wrong — fix it with **Change projects folder** (§ 6) before going
    further. *(SMOKE-TEST.md § A.)*
 4. **An ordinary terminal pane starts.** Terminals tab → **+ Shell**. A
    PowerShell pane opens and accepts input. This exercises the PTY layer,
@@ -357,9 +338,8 @@ Before starting, fully **quit and reopen** the app if you changed anything under
    prompt proves launch, wiring, and role deployment; submitting one would
    consume provider usage. *(SMOKE-TEST.md § B, second item.)*
 6. **Fenced roles are not tested until `sync-roles.ps1` has completed.** Do not
-   attempt Web Scout, Operator, or Source Scout before § 5. If you do, the
-   correct result is a **BLOCK** with "write-fence not active" — that is the
-   fail-closed guard working, not an installation defect. The adversarial fence
+   attempt **Web Scout**, **Operator**, **Source**, or **Page** before § 5.
+   If you do, the correct result is a visible launch refusal. The adversarial fence
    proof (SMOKE-TEST.md § E and the formal matrix) is **not** part of this guide;
    it belongs to release item 4.
 7. **Quick Links and pane status are present.** The Quick Links group renders
@@ -398,8 +378,8 @@ Recorded so a clean-machine run does not rediscover them as surprises:
 2. **The clean-machine/VM exercise is still pending.** It is release item 6
    (release plan § 2.6). This guide has not been executed on a clean machine. Its
    output may be a blocker rather than a pass.
-3. **Video Scout relies on machine-specific storage.** `VIDEO_SCOUT_RUN_ROOT` is
-   hard-coded to `D:\Gemini_Video_Review\downloads` (`app/main.js:192`) and is
+3. **Gemini Video Scout relies on machine-specific storage.** `VIDEO_SCOUT_RUN_ROOT` is
+   hard-coded in `app/main.js` and is
    not exposed in the UI — the known **`D:` path issue**. A machine without that
    drive has an unresolved Video Scout and Library storage path.
 4. **The clean VM and the daily-driver host are different Windows editions.** The
@@ -429,9 +409,6 @@ Recorded so a clean-machine run does not rediscover them as surprises:
    (scheduling, off-site survival, stale-backup detection, immutable retention)
    are explicitly deferred to 2.0 (release plan § 6.1;
    [BACKUP-RECOVERY-EVIDENCE-2026-08-14.md](BACKUP-RECOVERY-EVIDENCE-2026-08-14.md)).
-9. **Reconciliation debt.** [SETUP-WINDOWS.md](SETUP-WINDOWS.md) still states
-   "Node.js 18+", which the current lockfile contradicts (§ 2). That file is not
-   changed by this guide.
 
 ---
 
@@ -583,7 +560,7 @@ problem, not a trust problem, and it deserves its own diagnostic work order.
   machines.
 - Do not persist provider credentials in environment variables (`setx`).
 - Do not enable autonomous merge or autonomous provider actions. The human merge
-  gate stays on (`AGENTS.md` § How I work, item 2).
+  gate stays on (`AGENTS.md` § Hard rules, item 1).
 - Do not claim that repackaging the same unsigned Electron binary alone solves
   Smart App Control.
 
@@ -614,8 +591,7 @@ The full record is
 ## 11. Related documents
 
 - [SETUP-WINDOWS.md](SETUP-WINDOWS.md) — the six-phase parallel-agent workflow
-  setup (worktrees, Vibe Kanban, model routing). Complementary to this guide; its
-  "Node.js 18+" line is superseded for `app/` (§ 2).
+  setup (worktrees, Vibe Kanban, model routing). Complementary to this guide.
 - [SMOKE-TEST.md](SMOKE-TEST.md) — the full manual hard-test checklist.
 - [SMART-APP-CONTROL-AND-DISTRIBUTION.md](SMART-APP-CONTROL-AND-DISTRIBUTION.md)
   — the signing/distribution investigation record.

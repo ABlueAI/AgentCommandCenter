@@ -24,8 +24,8 @@ To try an agent's branch in the dev copy: `git fetch origin`, then in the dev fo
 `git switch --detach origin/<branch>`, `npm ci` in `app` if `package-lock.json` changed, and
 restart the dev copy.
 
-The dev window's title and build badge read `Mako (dev) 1.0.0 · <branch>@<commit>`, and Windows
-gives it its own taskbar button.
+The dev window's title and build badge read `Mako (dev) 1.0.0 · <commit>` in the detached checkout
+above (`Mako (dev) 1.0.0 · <branch>@<commit>` on a branch), and Windows gives it its own taskbar button.
 
 ## What the dev copy keeps separate
 
@@ -36,7 +36,7 @@ Nothing the renderer or a saved setting does can change which copy a window is.
 |---|---|---|
 | Settings folder (Electron `userData`): `settings.json`, the encrypted keys in `secure.json`, Quick Links, the pane layout, pane-status records, the admission ledger | `%APPDATA%\command-center` (unchanged) | `%APPDATA%\command-center-dev` |
 | Windows taskbar identity (AppUserModelID) | `ABlueAI.Mako` (unchanged) | `ABlueAI.Mako.Dev` |
-| Claude Code hooks (pane status in `%USERPROFILE%\.claude\settings.json`) | set up and removed from the Terminals toolbar, as today | **never** installed, removed or changed: the toolbar shows "Claude status: off (dev copy)" with no button, no status listener opens, and panes show no status |
+| Claude Code hooks (pane status in `%USERPROFILE%\.claude\settings.json`) | set up and removed from the Terminals toolbar (under **Control room** in the three-tab layout) | **never** installed, removed or changed: the toolbar shows "Claude status: off (dev copy)" with no button, no status listener opens, and panes show no status |
 
 Because the settings folder is separate, the dev copy starts with defaults: the default projects
 root (`D:\Workspace`, the same as the stable copy's default; change it in the dev copy if you want

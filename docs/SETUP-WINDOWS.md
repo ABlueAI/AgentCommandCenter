@@ -3,7 +3,7 @@
 A step-by-step build of a parallel-agent workflow using tools you already own. ~90 min
 total, but each phase stands alone — you have a useful setup after Phase 2.
 
-Prereqs: Git, Node.js 18+, and Claude Code installed and connected to GitHub.
+Prereqs: Git, Node.js 22.12.0+ for Mako, and Claude Code installed and connected to GitHub.
 Default shell is **PowerShell**; fall back to **WSL2** if you hit path/shell friction.
 
 ---
@@ -89,9 +89,9 @@ agents against, add a `CLAUDE.md` describing *that* project + these conventions,
 agent boots already knowing the project, your plan→review→test→human-merge discipline,
 and what's out of scope. You stop re-explaining the project every session.
 
-> Tip: copy the "How I work / Model routing / Out of scope" sections from this repo's
-> `CLAUDE.md` into each project's `CLAUDE.md`, and rewrite only the "What this project is"
-> part to match that project.
+> Tip: use "How work flows" and "Out of scope unless Blue explicitly approves the guardrails first"
+> in this repo's `AGENTS.md` as references for each project's `CLAUDE.md`, and write its
+> "What this project is" section to match that project.
 
 ---
 
