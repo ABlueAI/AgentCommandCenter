@@ -111,15 +111,17 @@ Only the PR sweeper's status PR edits this file (AGENTS.md "The shared brain";
 - **Codex's November audits (PRs #317 and #318, merged 2026-11-26 and 2026-11-27):**
   `docs/audits/codex-main-2026-11.md` (main process and scripts) and
   `docs/audits/codex-renderer-2026-11.md` (renderer) list findings on `main` at `1136f88`, each
-  with severity and a fix idea; security rows give a title and severity only. Open Codex PR #336
-  (issue #329, confirm before removing a worktree) takes the main audit's first high row.
+  with severity and a fix idea; security rows give a title and severity only. Codex PR #336
+  (issue #329, confirm before removing a worktree), open as of 2026-11-27 05:15 UTC, takes the main
+  audit's first high row (verified: GitHub's REST API for #336 and #329, and the audit's line 9).
 - **Session hygiene (S46, PR #286, merged 2026-11-27):** every recorded Claude session has an
   owner, a state and a "done when"; finished sessions archive themselves; the Terminals tab shows
   a once-a-day list of sessions idle 3 days or more. Its "Done when" still needs Blue's PC check
   (checklist step 83), so S46 stays IN PROGRESS (#286).
 - **Symvibe record (S47, PR #287, merged 2026-11-27):** `docs/decisions/OSS-symvibe.md` records
   the builder's defaults under D-090 (crew presets BUILD FRESH, goal-stopping loops ADOPT, branch
-  status BUILD FRESH), which the merge approved; checklist step 84 is optional. No code yet, so S47
+  status BUILD FRESH), which the merge approved; checklist step 84's done-when is met by that merge
+  (not yet ticked). No code yet, so S47
   stays READY for its build.
 
 - **Release: Mako 1.0.0 is released.**
