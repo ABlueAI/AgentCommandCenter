@@ -1759,35 +1759,52 @@ function installSTTUnavailableControl() {
 function setupSTTControls() {
   const stt = window.ccSTT; if (!stt) return;
   const micBtn = $('#sttMic');
-  if (micBtn && !micBtn.dataset.sttWired) {
-    micBtn.dataset.sttWired = '1';
-    micBtn.onclick = () => {
-      // Returns true when it sent a start or stop to the engine, false when it refused (push to
-      // talk reads this, so a refused start is never waited on).
-      if (stt.isRecording()) { stt.toggle(); return true; } // second click: stop + one finalized transcript
-      if (stt.isBusy()) { appendLog('[stt] still transcribing the previous dictation…\n'); sttNotice('Still typing the last dictation. Try again in a moment.', 6000); return false; }
-      if (!activeTermId || !terms.has(activeTermId)) { appendLog('[stt] click into an agent pane first, then 🎤.\n'); sttNotice('Dictation needs a pane: click into an agent pane in the control room first.', 8000); return false; }
-      // Lock the destination NOW: however long the model load takes, and whatever pane
-      // is clicked meanwhile, the finished transcript goes here or is refused visibly.
-      sttDictationTargetId = activeTermId;
-      const paneRole = (terms.get(sttDictationTargetId) || {}).role || 'shell';
-      appendLog(`[stt] dictation started — locked to pane ${sttDictationTargetId} (${paneRole})\n`);
-      stt.toggle(); // first click: recording starts immediately (model loads at stop time)
-      return true;
-    };
-  }
-  stt.onStatus(({ state: st, detail }) => {
+  const showStatus = ({ state: st, detail }) => {
     if (st === 'recording') sttNotice(`Recording for pane ${sttDictationTargetId || '?'}. Let go of Ctrl Space (or press Stop) to type it.`, 0);
     else if (st === 'transcribing') sttNotice('Transcribing…', 0);
     else if (st === 'error') sttNotice('Dictation failed. Details in Logs.', 8000);
     else if (st === 'idle') sttNotice('', 0);
     const el = $('#sttStatus'); if (el) el.textContent = (st && st !== 'idle') ? (st + (detail ? ' — ' + detail : '')) : '';
     if (micBtn) { micBtn.textContent = st === 'recording' ? '⏺ Stop' : '🎤 Dictate'; micBtn.classList.toggle('rec', st === 'recording'); }
-    if (st === 'error' && detail) appendLog('[stt] ' + detail + '\n');
+    if (st === 'error') {
+      sttDictationTargetId = null;
+      if (detail) appendLog('[stt] ' + detail + '\n');
+    }
     // Last, and after this handler returns: a pending push-to-talk stop calls the engine, which
     // reports 'transcribing' at once; doing it here would let this 'recording' update overwrite it.
     if (pushToTalk) setTimeout(() => pushToTalk.onSttStatus(st), 0);
-  });
+  };
+  // start() and stopAndTranscribe() report their expected failures themselves; anything that
+  // still throws or rejects here is unexpected, so its reason is shown, never swallowed.
+  const reportToggleFailure = (e) => {
+    showStatus({ state: 'error', detail: stt.describeUnexpectedFailure(e) });
+  };
+  const runToggle = () => {
+    let pending;
+    try { pending = stt.toggle(); } catch (e) { reportToggleFailure(e); return false; }
+    Promise.resolve(pending).catch(reportToggleFailure);
+    return true;
+  };
+  if (micBtn && !micBtn.dataset.sttWired) {
+    micBtn.dataset.sttWired = '1';
+    micBtn.onclick = () => {
+      // Returns true when it sent a start or stop to the engine, false when it refused (push to
+      // talk reads this, so a refused start is never waited on). The click itself stays
+      // synchronous; the engine's promise is watched by runToggle.
+      if (stt.isStarting()) { appendLog('[stt] still waiting for the microphone…\n'); return false; } // #232: one request
+      if (stt.isRecording()) return runToggle(); // second click: stop + one finalized transcript
+      if (stt.isBusy()) { appendLog('[stt] still transcribing the previous dictation…\n'); sttNotice('Still typing the last dictation. Try again in a moment.', 6000); return false; }
+      if (!activeTermId || !terms.has(activeTermId)) { appendLog('[stt] click into an agent pane first, then 🎤.\n'); sttNotice('Dictation needs a pane: click into an agent pane in the control room first.', 8000); return false; }
+      // Lock the destination NOW, before the microphone is requested: however long the
+      // permission prompt or model load takes, and whatever pane is clicked meanwhile, the
+      // finished transcript goes here or is refused visibly.
+      sttDictationTargetId = activeTermId;
+      const paneRole = (terms.get(sttDictationTargetId) || {}).role || 'shell';
+      appendLog(`[stt] dictation requested — locked to pane ${sttDictationTargetId} (${paneRole})\n`);
+      return runToggle(); // first click: recording starts once the microphone opens (model loads at stop time)
+    };
+  }
+  stt.onStatus(showStatus);
   stt.onResult((text) => {
     const targetId = sttDictationTargetId;
     sttDictationTargetId = null;
