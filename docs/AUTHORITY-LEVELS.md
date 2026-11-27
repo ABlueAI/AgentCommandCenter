@@ -17,35 +17,30 @@ so it never runs a Claude agent on Blue's PC.
 ## The env scrub and explicit tool sets (S31)
 
 Every Claude pane runs with `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` (AGENTS.md "Security rules"). With
-it set, Claude Code prints "Permission mode forced to default - CLAUDE_CODE_SUBPROCESS_ENV_SCRUB is set
-... Declare allowedTools explicitly" and opens every pane in default mode, whatever `--permission-mode`
-says (seen on Blue's PC with Claude Code 2.1.316, checklist step 40). `--allowedTools` is still
-honored, so each level also passes an explicit set of tools that run without asking; anything else
-still asks. The scrub stays on; turning it off is Blue's call. The sets live in
-`app/authority-level.js` (`ALLOWED_TOOLS`, `DISALLOWED_TOOLS`):
+it set, Claude Code 2.1.316 reported that it forced the permission mode to `default` and requested
+explicit allowed tools (seen on Blue's PC, checklist step 40). Mako passes the rules below through
+`--allowedTools` and `--disallowedTools`. Whether Claude Code applies `--allowedTools` under the scrub is
+**unverified**. The sets live in `app/authority-level.js` (`ALLOWED_TOOLS`, `DISALLOWED_TOOLS`).
 
-| Level | Runs without asking | Denied |
+| Level | Explicit allows | Explicit denies |
 |---|---|---|
 | Minimum | `Read`, `Glob`, `Grep`, `TodoWrite` | `Edit`, `Write`, `NotebookEdit` |
-| Medium | Minimum's, plus `Edit`, `Write`, `NotebookEdit` | nothing extra; every command still asks |
-| High | Medium's, plus `git branch`, `git switch`, `git add`, `git commit` | nothing extra; anything else (including `git push`, `git fetch` and `npm test`) still asks |
+| Medium | Minimum's, plus `Edit`, `Write`, `NotebookEdit` | None |
+| High | Same as Medium | None |
 
 - **Minimum** can't use the edit tools at all. Shell commands still ask, and one you approve can change
   files. Plan mode works the same way (Claude Code's docs: in plan mode other shell commands go through
   the regular permission flow), so say no to a command at Minimum unless it only reads.
-- **High** doesn't allow `npm test` or `npm ci` without asking: the agent can edit `package.json` or
-  the lockfile without asking, and those commands would then run whatever it wrote. `git fetch` asks
-  too, because `--upload-pack=<command>` runs a command. Hooks and git config sit in Claude Code's
-  protected paths (`.git`), so editing them still asks.
-- Claude Code's built-in read-only commands (`ls`, `cat`, read-only forms of `git` such as
-  `git status`, `git diff` and `git log`, and others) run without asking at every level, as they
-  always did, so they aren't in the lists.
+- **High** leaves `git commit` and `git switch` to Claude Code's normal permission checks in every
+  repository, including repositories with tracked hooks or `core.hooksPath`. This keeps the
+  preset independent of the current hook configuration. High also leaves `git branch`, `git add`,
+  and all other shell commands to Claude Code's permission checks, which include its built-in
+  read-only command handling.
 
 The command is `claude [--agent <role>] --allowedTools '<set>' [--disallowedTools '<set>']
 --permission-mode <mode> ["<opening prompt>"]`: the lists come before the mode because they take
-several values and would otherwise swallow the opening prompt. `--permission-mode` is still passed, so
-the level's mode applies again if the scrub ever stops forcing default. High no longer gets `auto`'s
-classifier while the scrub forces default; its fixed list is the stand-in.
+several values and would otherwise swallow the opening prompt. Mako also passes the selected
+`--permission-mode`. When the scrub forces default mode, High uses default mode's permission checks.
 
 ## How it works
 
@@ -85,3 +80,8 @@ classifier while the scrub forces default; its fixed list is the stand-in.
   Shift+Tab still cycles modes; Mako doesn't block that.
 - Whether `auto` is available on Blue's current plan is not verified here (BLUE-CHECKLIST.md step 40
   checks it).
+
+## Follow-ups
+
+- Verify Claude Code's worktree-relative path syntax for `Read`, `Edit` and `Write` in
+  `--allowedTools` before scoping those rules. The preset currently emits bare tool names.

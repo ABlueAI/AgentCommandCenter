@@ -27,6 +27,7 @@ const path = require('path');
 const Module = require('module');
 const { randomUUID } = require('crypto');
 const { createSessionMemoryStore, STOP_REASON } = require('./session-memory');
+const childProcess = require('child_process');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -44,7 +45,11 @@ const ENTRY_URL = require('url').pathToFileURL(path.join(__dirname, 'renderer', 
 function makeElectronStub(userDataDir, record) {
   const fakeWebContents = {
     mainFrame: { url: ENTRY_URL },
-    on() {}, send(ch, line) { record.sent.push(String(line)); }, setWindowOpenHandler() {}, openDevTools() {},
+    on() {}, isDestroyed: () => false, setWindowOpenHandler() {}, openDevTools() {},
+    send(ch, line) {
+      record.sent.push(String(line));
+      if (ch === 'main-error') record.mainErrors.push(String(line));
+    },
     session: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} },
   };
   record.webContents = fakeWebContents;
@@ -116,7 +121,7 @@ async function bootMain(admissionEnv, options) {
   const record = {
     handled: new Map(), on: new Map(), appEvents: [], appHandlers: new Map(), windowsCreated: 0,
     quitCalls: 0, singleInstanceLockCalls: 0, ptySpawns: 0, kills: 0, sent: [], onQuit: null, spawns: [],
-    whenReadyCalls: 0, appUserModelIds: [],
+    whenReadyCalls: 0, appUserModelIds: [], mainErrors: [],
   };
   const electronStub = makeElectronStub(userDataDir, record);
   // Only the shutdown scenarios opt in to a spawnable PTY. It is a plain object: no process exists,
@@ -140,6 +145,7 @@ async function bootMain(admissionEnv, options) {
     if (request === 'electron') return electronStub;
     if (request === '@lydell/node-pty') return ptyStub;
     if (request === 'fs' && parent?.filename === MAIN_PATH && opt.mainFs) return opt.mainFs;
+    if (opt.childProcess && request === 'child_process' && parent?.filename === MAIN_PATH) return opt.childProcess;
     return realLoad.apply(this, arguments);
   };
 
@@ -572,20 +578,21 @@ const LEDGER = 'admission-ledger.json';
       const { record } = await bootMain({}, { userDataDir, mainFs });
       const get = record.handled.get('get-settings');
       const save = record.handled.get('save-settings');
+      const trusted = { sender: record.webContents, senderFrame: record.webContents.mainFrame };
       const invokeRefuses = async (invoke) => {
         try { await invoke(); return false; }
         catch (e) { return /settings\.json/i.test(e.message); }
       };
-      const defaults = await get();
+      const defaults = await get(trusted);
       assert(typeof defaults.projectsRoot === 'string' && defaults.selectedRepo === '' && !fs.existsSync(file),
         'missing settings return first-run defaults without writing');
       raceFirstSave = true;
-      assert(await invokeRefuses(() => save({}, { theme: 'obsidian' }))
+      assert(await invokeRefuses(() => save(trusted, { theme: 'obsidian' }))
         && fs.readFileSync(file, 'utf8') === '{just appeared', 'first save preserves a file that appears during the save');
       raceFirstSave = false;
       fs.unlinkSync(file);
       const prefs = { projectsRoot: path.join(userDataDir, 'projects'), selectedRepo: 'saved-repo', theme: 'void' };
-      await save({}, prefs);
+      await save(trusted, prefs);
       const saved = fs.readFileSync(file, 'utf8');
       for (const [label, bytes, denyRead] of [
         ['unreadable', saved, true], ['malformed JSON', '{broken', false],
@@ -594,14 +601,14 @@ const LEDGER = 'admission-ledger.json';
         fs.writeFileSync(file, bytes);
         unreadable = denyRead;
         const noticeCount = record.sent.length;
-        assert(await invokeRefuses(get), `${label}: get-settings rejects with a settings error`);
-        assert(await invokeRefuses(() => save({}, { theme: 'obsidian' })), `${label}: save-settings rejects with a settings error`);
+        assert(await invokeRefuses(() => get(trusted)), `${label}: get-settings rejects with a settings error`);
+        assert(await invokeRefuses(() => save(trusted, { theme: 'obsidian' })), `${label}: save-settings rejects with a settings error`);
         assert(record.sent.slice(noticeCount).some((line) => line.includes('settings.json')), `${label}: the window receives a visible notice`);
         assert(fs.readFileSync(file, 'utf8') === bytes, `${label}: original bytes are preserved`);
       }
       unreadable = false;
       fs.writeFileSync(file, saved);
-      const recovered = await save({}, { theme: 'nord' });
+      const recovered = await save(trusted, { theme: 'nord' });
       assert(recovered.projectsRoot === prefs.projectsRoot && recovered.selectedRepo === prefs.selectedRepo
         && recovered.theme === 'nord', 'saving works after recovery and preserves the other preferences');
       for (const fn of record.appHandlers.get('will-quit') || []) fn();
@@ -639,6 +646,121 @@ const LEDGER = 'admission-ledger.json';
       for (const fn of next.appHandlers.get('will-quit') || []) fn();
     } finally {
       fs.rmSync(userDataDir, { recursive: true, force: true });
+    }
+  }
+
+  section('(9) trusted sender at every registered IPC channel, settings, and review diff');
+  {
+    const gitCalls = [];
+    // The review fixture uses real Git. The stubs record only main's calls and prevent any other
+    // child process from running during the all-channel sweep.
+    const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'mako-ipc-'));
+    const projects = path.join(fixture, 'projects');
+    const repo = path.join(projects, 'repo');
+    const worktree = path.join(fixture, 'registered-worktree');
+    const outside = path.join(fixture, 'outside');
+    const settingsPath = path.join(fixture, 'settings.json');
+    const diffFile = path.join(worktree, '.agent-review.diff');
+    const realGit = (args) => childProcess.execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    try {
+      for (const dir of [repo, outside]) fs.mkdirSync(dir, { recursive: true });
+      realGit(['-C', repo, 'init', '-b', 'main']);
+      realGit(['-C', repo, '-c', 'user.name=IPC Test', '-c', 'user.email=ipc-test@example.invalid',
+        '-c', 'commit.gpgSign=false', 'commit', '--allow-empty', '-m', 'Fixture']);
+      realGit(['-C', repo, 'worktree', 'add', '-b', 'review', worktree]);
+      fs.writeFileSync(path.join(worktree, 'sample.txt'), 'review fixture\n');
+      realGit(['-C', worktree, 'add', 'sample.txt']);
+      const initialSettings = { projectsRoot: projects, selectedRepo: repo, legacySetting: 'retained' };
+      fs.writeFileSync(settingsPath, JSON.stringify(initialSettings));
+      let allowReviewGit = false;
+      const r = await bootMain(VALID_ENV, { userDataDir: fixture, childProcess: {
+        execFile(file, args, options, callback) {
+          gitCalls.push(args);
+          if (allowReviewGit && file === 'git') return childProcess.execFile(file, args, options, callback);
+          callback(new Error('Unexpected subprocess in the IPC sweep'), '');
+        },
+        execFileSync(file, args) {
+          gitCalls.push(args);
+          if (allowReviewGit && file === 'git') return realGit(args);
+          throw new Error('Unexpected subprocess in the IPC sweep');
+        },
+      } });
+      assert(!r.loadError && r.record.windowsCreated === 1, 'all IPC startup registrations ran');
+      assert(r.record.handled.has(CH_STATE) && r.record.handled.has('dockview-layout-load'),
+        'the sweep includes conditional admission and Dockview channels');
+      for (const [kind, handlers] of [['handle', r.record.handled], ['on', r.record.on]]) {
+        for (const [channel, handler] of handlers) {
+          let checks = 0;
+          let payloadRead = false;
+          const event = { get sender() { checks += 1; return {}; } };
+          const readPayload = () => { payloadRead = true; throw new Error('Refused IPC read its payload'); };
+          const payload = new Proxy({}, { get: readPayload, ownKeys: readPayload });
+          const errorsBefore = r.record.mainErrors.length;
+          // A handle channel must visibly refuse: reject with the sender reason, resolve to { ok: false },
+          // or (the launcher channels) resolve to nothing after reporting the sender refusal on
+          // main-error. Resolving to anything else means the channel ran on after the check.
+          let refused = false;
+          let resolvedEmpty = false;
+          try {
+            const out = await handler(event, payload);
+            refused = !!out && out.ok === false;
+            resolvedEmpty = out === undefined;
+          } catch (error) {
+            assert(/untrusted-sender/.test(error.message), `${channel} rejects with a sender reason`);
+            refused = true;
+          }
+          assert(checks === 1 && !payloadRead, `${kind} ${channel} checks the sender once before reading the payload`);
+          if (!refused && resolvedEmpty) refused = r.record.mainErrors.slice(errorsBefore).some((line) => line.includes('untrusted-sender'));
+          if (kind === 'handle') assert(refused, `${channel} refuses an untrusted sender (rejects, returns ok: false, or reports it and returns nothing)`);
+          if (kind === 'on') {
+            assert(r.record.mainErrors.slice(errorsBefore).some((line) => line.includes('untrusted-sender')),
+              `${channel} reports a refusal on a fire-and-forget channel`);
+          }
+        }
+      }
+      assert(gitCalls.length === 0 && r.record.ptySpawns === 0, 'refused senders start no subprocesses');
+
+      const sender = r.record.webContents;
+      const trusted = { sender, senderFrame: sender.mainFrame };
+      const saveSettings = r.record.handled.get('save-settings');
+      let saveError;
+      try { await saveSettings(trusted, { theme: 'obsidian', unexpectedSetting: true }); }
+      catch (error) { saveError = error; }
+      assert(saveError && /unknown-setting/.test(saveError.message), 'unknown settings reject visibly');
+      assert(fs.readFileSync(settingsPath, 'utf8') === JSON.stringify(initialSettings), 'a refused patch leaves settings untouched');
+      const approved = { projectsRoot: projects, selectedRepo: repo, theme: 'obsidian', ttsVoice: 'fixture',
+        ttsSpeed: 1, authority: 'high', uiLayout: 'tabs', uiTab: 'control', uiQuietSince: null, uiPausedSince: null };
+      const saved = await saveSettings(trusted, approved);
+      assert(Object.keys(approved).every((key) => saved[key] === approved[key]) && saved.legacySetting === 'retained',
+        'all supported keys save and an existing setting survives');
+
+      allowReviewGit = true;
+      const reviewDiff = r.record.handled.get('review-diff');
+      for (const [base, dir, reason] of [
+        ['-main', worktree, 'invalid-base-ref'],
+        ['bad ref', worktree, 'invalid-base-ref'],
+        ['main', outside, 'not-authorized'],
+      ]) {
+        const from = gitCalls.length;
+        const result = await reviewDiff(trusted, { worktree: dir, base });
+        assert(result?.ok === false && result.error === reason, `review-diff visibly refuses ${reason} (${base})`);
+        assert(!gitCalls.slice(from).some((args) => args[2] === 'diff') && !fs.existsSync(path.join(dir, '.agent-review.diff')),
+          `review-diff refusal (${base}, ${reason}) runs no diff and writes no review file`);
+      }
+      const result = await reviewDiff(trusted, { worktree });
+      assert(result?.ok === true && result.files === 1 && fs.readFileSync(diffFile, 'utf8').includes('review fixture'),
+        'an authorized linked worktree gets a real diff against the default base');
+      const diffArgs = gitCalls.findLast((args) => args[2] === 'diff');
+      assert(diffArgs?.slice(3).join(' ') === '--end-of-options main --', 'git receives the ref after the end of options');
+      const before = fs.readFileSync(diffFile, 'utf8');
+      const missing = await reviewDiff(trusted, { worktree, base: 'missing-ref' });
+      assert(missing?.ok === false && missing.error === 'git-diff-failed', 'Git failure is visible instead of an empty success');
+      assert(fs.readFileSync(diffFile, 'utf8') === before, 'Git failure leaves the existing review file untouched');
+      // Quit as the app does, so the session-memory profile lease releases its lock file before
+      // the fixture is removed (an open lock file fails the removal on Windows with EBUSY).
+      for (const fn of r.record.appHandlers.get('will-quit') || []) fn();
+    } finally {
+      fs.rmSync(fixture, { recursive: true, force: true });
     }
   }
 
