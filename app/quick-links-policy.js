@@ -58,7 +58,9 @@ const REASON = Object.freeze({
 
 const ID_PATTERN = /^[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?$/;
 const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f]/;
-const BIDI_RE = /[\u202a-\u202e\u2066-\u2069]/;
+// Every Unicode Bidi_Control character (UAX #9): the embeddings, overrides and isolates, and the
+// implicit marks U+061C, U+200E and U+200F, which reorder displayed text just as well (issue #340).
+const BIDI_RE = /\p{Bidi_Control}/u;
 const ENCODED_CONTROL_RE = /%(?:0[0-9a-f]|1[0-9a-f]|7f|8[0-9a-f]|9[0-9a-f])/i;
 
 function refuse(reason) { return { ok: false, reason }; }

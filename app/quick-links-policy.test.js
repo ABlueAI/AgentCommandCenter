@@ -79,6 +79,14 @@ refused('https://fixture.example/%8f', REASON.URL_ENCODED_CONTROL, 'rejects enco
 refused('https://fixture.example/%GG', REASON.URL_INVALID_PERCENT_ENCODING, 'rejects malformed percent escape');
 refused('https://fixture.example/%', REASON.URL_INVALID_PERCENT_ENCODING, 'rejects truncated percent escape');
 refused('https://fixture.example/\u202eevil', REASON.URL_BIDI_CHARACTER, 'rejects bidi override');
+// Issue #340: every Unicode Bidi_Control character, the implicit marks included.
+for (const [ch, name] of [['‎', 'LEFT-TO-RIGHT MARK'], ['‏', 'RIGHT-TO-LEFT MARK'], ['؜', 'ARABIC LETTER MARK'],
+  ['‪', 'LEFT-TO-RIGHT EMBEDDING'], ['⁦', 'LEFT-TO-RIGHT ISOLATE'], ['⁩', 'POP DIRECTIONAL ISOLATE']]) {
+  refused(`https://fixture.example/${ch}path`, REASON.URL_BIDI_CHARACTER, `rejects ${name} in a URL`);
+  eq(validateConfigObject(config([entry('ql-a', `Label${ch}x`)])).reason, REASON.LABEL_INVALID, `rejects ${name} in a label`);
+}
+assert(validateUrl('https://fixture.example/العربية').ok, 'accepts right-to-left letters that are not bidi controls');
+assert(validateConfigObject(config([entry('ql-a', 'موقع Docs')])).ok, 'accepts a right-to-left label without bidi controls');
 
 process.stdout.write('\nbounded URL/config input\n');
 refused('https://fixture.example/' + 'x'.repeat(MAX_URL_LENGTH), REASON.URL_TOO_LONG, 'rejects URL over length bound');
