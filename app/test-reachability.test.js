@@ -57,7 +57,9 @@ function runFixture(files) {
   }
 }
 
-const skippedFixture = { 'renderer/video-model-policy.test.js': 'process.exit(99);' };
+const { getTestFiles, SKIPPED_TESTS } = require('./run-tests');
+// One stub per current skip-list entry, so a new entry doesn't make every fixture stale.
+const skippedFixture = Object.fromEntries(Object.keys(SKIPPED_TESTS).map((file) => [file, 'process.exit(99);']));
 const passing = runFixture({
   ...skippedFixture,
   'nested suite/pass case.test.js': "if (require('path').dirname(__dirname) !== process.cwd()) process.exit(91); console.log('PASS MARKER');",
@@ -77,6 +79,15 @@ assert(/Failed test files:[\s\S]*a-fail\.test\.js \(exit 7\)[\s\S]*b-fail\.test\
   'runner names every failed file and its exit code in the final summary');
 assert(/electron-binary\.test\.js\r?\nFIRST MARKER[\s\S]*a-fail\.test\.js[\s\S]*b-fail\.test\.js[\s\S]*z-later\.test\.js\r?\nLATER MARKER/.test(failures.stdout),
   'runner runs priority files first, then sorted suites, and continues after failures');
+
+const firstFails = runFixture({
+  ...skippedFixture,
+  'electron-binary.test.js': 'process.exit(5);',
+  'a-later.test.js': "console.log('MUST NOT RUN');",
+});
+assert(firstFails.status === 5 && !firstFails.stdout.includes('MUST NOT RUN')
+  && /electron-binary\.test\.js \(exit 5\)[\s\S]*stopped: a run-first check failed/.test(firstFails.stderr),
+  `a failing run-first check stops the run before later suites (exit ${firstFails.status})`);
 
 const empty = runFixture({
   ...skippedFixture,
@@ -133,8 +144,10 @@ function unreachableSuites(testJs, appRun, skips, wrappers) {
     const relative = file.slice('app/'.length);
     if (appRun.has(relative)) return false;
     const skip = skips[relative];
-    if (!skip || !skip.reason?.trim()) return true;
-    return Boolean(skip.wrapper && wrappers.get(skip.wrapper) !== file);
+    // A skip must name the Pester wrapper that runs the file instead: a reason alone would
+    // let a suite run nowhere.
+    if (!skip || !skip.reason?.trim() || !skip.wrapper) return true;
+    return wrappers.get(skip.wrapper) !== file;
   });
 }
 
@@ -159,16 +172,18 @@ const sampleUnreachable = unreachableSuites(
   },
   new Map([[sampleWrapper, sampleSuite]]),
 );
-assert(sampleUnreachable.join(', ') === `${sampleOrphan}, scripts/sample.test.js`,
-  'reachability rejects same-basename orphans and accepts explicit skips with a reason');
+assert(sampleUnreachable.join(', ') === `${sampleOrphan}, ${reasonOnly}, scripts/sample.test.js`,
+  'reachability rejects same-basename orphans and skips without a wrapper, and accepts a wrapped skip');
 assert(unreachableSuites(
   [sampleSuite], new Set(),
   { 'nested suite/sample.test.js': { reason: 'Fixture wrapper.', wrapper: sampleWrapper } },
   new Map(),
 ).length === 1, 'reachability rejects a skip whose declared wrapper no longer runs it');
 assert(unreachableSuites(
-  [reasonOnly], new Set(), { 'reason-only.test.js': { reason: ' ' } }, new Map(),
-).length === 1, 'reachability rejects a skip without a stated reason');
+  [sampleSuite], new Set(),
+  { 'nested suite/sample.test.js': { reason: ' ', wrapper: sampleWrapper } },
+  new Map([[sampleWrapper, sampleSuite]]),
+).length === 1, 'reachability rejects a skip without a stated reason, even with a wrapper');
 
 const all = walk(REPO_ROOT);
 const rel = (f) => path.relative(REPO_ROOT, f).split(path.sep).join('/');
@@ -179,7 +194,6 @@ const testPs = all.filter((f) => f.endsWith('.Tests.ps1'));
 assert(testJs.length >= 20, `discovery floor: found ${testJs.length} *.test.js files (>= 20 expected)`);
 assert(testPs.length >= 14, `discovery floor: found ${testPs.length} *.Tests.ps1 files (>= 14 expected)`);
 
-const { getTestFiles, SKIPPED_TESTS } = require('./run-tests');
 const files = getTestFiles();
 const appRun = new Set(files);
 assert(appRun.size === files.length, 'the runner discovers every selected file once');

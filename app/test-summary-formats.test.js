@@ -100,7 +100,7 @@ const SHAPE_E_SUITES = [
 process.stdout.write('\nevery registered suite emits a summary the reconciliation can count\n');
 {
   assert(suites.length > 0, `the gate discovers suites (${suites.length})`);
-  assert(suites.every((suite) => suite.endsWith('.test.js')), 'every discovered file has the suite suffix');
+  assert(suites.length >= 100, `the gate discovers at least 100 suites, a floor against a discovery bug (${suites.length})`);
 
   const byShape = { A: [], B: [], C: [], D: [], E: [], NONE: [] };
   for (const rel of suites) {

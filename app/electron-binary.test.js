@@ -4,8 +4,9 @@
 // The desktop shortcut starts app\node_modules\electron\dist\electron.exe directly. Electron 42
 // downloads that binary lazily, so `npm ci` alone left the shortcut with nothing to start. This
 // checks the postinstall that fixes it is wired up, that its check and failure paths behave, and
-// that this install really has the binary. It runs first in `npm test`, before any test that calls
-// require('electron') (which would quietly download the binary and hide a broken postinstall).
+// that this install really has the binary. It runs first in `npm test` (app/run-tests.js RUN_FIRST),
+// and if it fails the runner stops before any test that calls require('electron') (which would
+// quietly download the binary and hide a broken postinstall).
 
 const fs = require('fs');
 const os = require('os');

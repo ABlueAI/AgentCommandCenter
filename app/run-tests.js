@@ -57,6 +57,12 @@ function run() {
     }
     // Keep the first failure's code, as the old chain did, while running every suite.
     process.exitCode ||= result.status || 1;
+    // A failed run-first check stops the run, as the old && chain did: later suites that
+    // call require('electron') would download the binary and hide a broken postinstall.
+    if (RUN_FIRST.includes(file)) {
+      failures.push('(stopped: a run-first check failed, so no later suite ran)');
+      break;
+    }
   }
 
   if (failures.length) console.error(`\nFailed test files:\n  ${failures.join('\n  ')}`);

@@ -73,4 +73,16 @@ Describe 'test-runner reachability (Pester family)' {
         & node -e $check $runner
         $LASTEXITCODE | Should Be 0
     }
+
+    It 'runs the Node-side meta-test directly, so a runner that hides failures cannot hide its own' {
+        # npm test can't gate run-tests.js on its own: if the runner stopped passing exit codes,
+        # the fixture that checks it would fail inside that same runner and be lost. Running the
+        # suite here, outside npm test, makes the runner fixtures an independent CI gate.
+        $metaSuite = Join-Path (Join-Path $repoRoot 'app') 'test-reachability.test.js'
+        # cmd /c merges stderr natively (PS 5.1); %ERRORLEVEL% reaches $LASTEXITCODE.
+        $metaOutput = cmd /c "node `"$metaSuite`" 2>&1"
+        $metaExit = $LASTEXITCODE
+        $verdict = if ($metaExit -eq 0) { 'exit 0' } else { "exit $metaExit`n" + ($metaOutput -join "`n") }
+        $verdict | Should Be 'exit 0'
+    }
 }
