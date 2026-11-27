@@ -1146,6 +1146,8 @@ function psWords(text) {
   const words = new Set();
   const add = (t) => { for (const m of t.matchAll(PS_WORD)) words.add(psWordName(m[0])); };
   add(text.replace(PS_ESCAPE, ' '));
+  // PowerShell drops a backtick inside a bare word (`git-pu\`sh`), so the words are also read without them.
+  add(text.replace(/`/g, ''));
   add(text.replace(PS_UNICODE_ESCAPE, (m, hex) => {
     const n = parseInt(hex, 16);
     return n <= 0x10ffff ? String.fromCodePoint(n) : ' ';
@@ -1406,10 +1408,28 @@ const PS_DYNAMIC_NAMES =
   /(?<![\w.\-$])(?:iex|invoke-expression|invoke-command|icm|start-process|saps|start|start-job|sajb|pwsh|powershell|cmd|bash|sh|wsl)(?:\.exe)?(?![\w.\-\/\\])/i;
 // (A script block run in place, `& { ... }`, is left out: the parser reads its commands.)
 const PS_CALL_OPERATOR = /(?:^|[\s;|{(`])[&.]\s*["'$(@\u2018-\u201e]/;
-const PS_OTHER_DYNAMIC = /\[scriptblock\]|(?<![\w-])-enc(?:odedcommand)?(?![\w-])|git-push(?:\.exe)?(?![\w.\-])/i;
+const PS_OTHER_DYNAMIC = /\[scriptblock\]|\.(?:invokescript|addscript)\s*\(|(?<![\w-])-enc(?:odedcommand)?(?![\w-])|git-push(?:\.exe)?(?![\w.\-])/i;
 
+// The text is also read with PowerShell's backtick escapes removed and with block comments turned into a
+// space, as PowerShell reads a command name (`i\`ex`) or the gap after `&` (`&<# #>$g`). Each extra copy
+// can only add a match. Returns the matched word or form, or null.
 function runsTextOrProgram(command) {
-  return PS_DYNAMIC_NAMES.test(command) || PS_CALL_OPERATOR.test(command) || PS_OTHER_DYNAMIC.test(command);
+  const unticked = command.replace(/`/g, '');
+  const variants = [command, unticked, command.replace(/<#[\s\S]*?#>/g, ' '), unticked.replace(/<#[\s\S]*?#>/g, ' ')];
+  for (const text of variants) {
+    for (const re of [PS_DYNAMIC_NAMES, PS_CALL_OPERATOR, PS_OTHER_DYNAMIC]) {
+      const m = re.exec(text);
+      if (m) return m[0].trim().slice(0, 40) || 'the call operator';
+    }
+  }
+  return null;
+}
+
+// Its own message: the push may be an ordinary one, so it names what matched and the way out.
+function runAsTextRefusal(match) {
+  return `the same PowerShell command contains "${match}", which can run text or a program, so a push in it is ` +
+    'in a form the guard cannot read. Run the push on its own, as a plain `git push <remote> <branch>` in a ' +
+    'separate tool call (put a commit whose message names such a word in an earlier call, or reword it)';
 }
 
 const WORD_SCAN_PUSH_NOTICE =
@@ -1458,7 +1478,8 @@ function decide(input, getLogin = readGhLogin, sources = {}, work = scanWork()) 
     // refusing every such command (the login block above is unchanged).
     // Next to a form that runs text or a program, the words may be a push the parser can't read, so the
     // command is refused even when it also holds a readable push.
-    if (work.wordScanPush && runsTextOrProgram(command)) throw new PushRefusal(UNREAD_PUSH);
+    const runsText = work.wordScanPush ? runsTextOrProgram(command) : null;
+    if (runsText) throw new PushRefusal(runAsTextRefusal(runsText));
     if (work.wordScanPush && !work.pushes.length) {
       return { exitCode: 0, checked, systemMessage: WORD_SCAN_PUSH_NOTICE };
     }

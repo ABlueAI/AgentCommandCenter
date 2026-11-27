@@ -1108,6 +1108,26 @@ process.stdout.write('\npush destinations (review run 1 on #324)\n');
       assert(v.exitCode === 2 && /form the guard cannot read/.test(v.stderr || ''),
         `ABlueAgent + PowerShell ${JSON.stringify(cmd)}: refused although a readable push is also present`);
     }
+    // Review run 4 on #324: backtick-escaped names, a block comment after the call operator, and the
+    // .NET script runners are refused next to a readable push too.
+    for (const cmd of ["git push origin topic; $c = 'git push origin shared'; i`ex $c",
+      'C:\\Git\\libexec\\git-core\\git-pu`sh.exe origin shared',
+      "$g = 'git'; git push origin topic; &<##>$g push origin shared",
+      "$g = 'git'; git push origin topic; . <# x #> $g push origin shared",
+      "git push origin topic; $ExecutionContext.InvokeCommand.InvokeScript('git push origin shared')"]) {
+      const v = guard.decide(pwsh(cmd), agentLogin);
+      assert(v.exitCode === 2 && /form the guard cannot read/.test(v.stderr || ''),
+        `ABlueAgent + PowerShell ${JSON.stringify(cmd)}: an escaped or commented run-as-text push is refused`);
+    }
+    // Review run 4 on #324: an honest commit and push in one call, whose message names a listed word, is
+    // refused with a message that names the word and says to push in a separate tool call.
+    {
+      const v = guard.decide(pwsh('git add -A; git commit -m "Start the sweeper"; git push -u origin x'), agentLogin);
+      assert(v.exitCode === 2 && /contains "Start"/.test(v.stderr || '') && /separate tool call/.test(v.stderr || ''),
+        'ABlueAgent + PowerShell commit-then-push with a listed word: the refusal names the word and the way out');
+      const pushAlone = guard.decide(pwsh('git push -u origin x'), agentLogin);
+      assert(pushAlone.exitCode === 0 && !pushAlone.stderr, 'ABlueAgent + PowerShell: the same push alone in its own call passes');
+    }
     for (const cmd of ['cd..; git push origin topic', 'cd sub; cd..; git push origin topic']) {
       const v = guard.decide(pwsh(cmd), agentLogin);
       assert(v.exitCode === 2 && /directory change/.test(v.stderr || ''),
