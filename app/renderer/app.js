@@ -1564,6 +1564,10 @@ function startShell(settings) {
 }
 
 async function boot() {
+  // Listen before the first await: main sends its startup notices (credential store, issue #249)
+  // once the page has loaded, and ipcRenderer drops a message that arrives with no listener.
+  cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));
+  cc.onMainInfo((m) => appendLog('\n[main] ' + m + '\n'));
   const s = await cc.getSettings();
   applyTheme((s && s.theme) || 'obsidian');
   startShell(s);
@@ -1576,8 +1580,8 @@ async function boot() {
     state.authority = a.level;
     if (a.fellBack) appendLog(`[authority] stored level not recognised; using ${a.level}\n`);
   }
-  // Issue #161: a refused status check says why (main's own main-error line can arrive before the
-  // listener below exists) and shows the key banner, never a silent "no key".
+  // Issue #161: a refused status check says why (the reply carries the reason, so it doesn't depend
+  // on main's main-error line) and shows the key banner, never a silent "no key".
   updateKeyBanner(await geminiKeyStatusOrLog());
   // S06: not awaited, so the token check adds no IPC round trip to the boot path (pane startup is
   // timing-sensitive); a failed check leaves the banner showing and says so in the Logs tab.
@@ -1605,9 +1609,7 @@ async function boot() {
     if (t) { t.parser.flush(); t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n'); }
   });
   cc.onClaudeVideoScoutEvent(handleClaudeVideoEvent);
-  cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));
-  cc.onMainInfo((m) => appendLog('\n[main] ' + m + '\n'));
-  // S09: after the main-error listener, so a session-memory refusal or a refused Resume is shown.
+  // S09: the main-error listener (top of boot) is up, so a session-memory refusal or a refused Resume is shown.
   await offerResume();
   await checkSessionHygiene();
   setInterval(() => { checkSessionHygiene(); }, HYGIENE_CHECK_MS);

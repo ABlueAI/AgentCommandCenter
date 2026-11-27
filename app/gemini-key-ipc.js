@@ -15,7 +15,7 @@ function createGeminiKeyIpc(deps) {
   const assessSender = d.assessSender;                   // (event) => { ok, reason? }
   const isEncryptionAvailable = d.isEncryptionAvailable; // () => boolean
   const encryptString = d.encryptString;                 // (plain) => Buffer
-  const loadSecure = d.loadSecure;                       // () => object
+  const loadSecure = d.loadSecure;                       // () => object, throws on failure
   const saveSecure = d.saveSecure;                       // (object) => void, throws on failure
   const getKey = d.getKey;                               // () => string | null
   const setKey = d.setKey;                               // (string | null) => void
@@ -53,14 +53,13 @@ function createGeminiKeyIpc(deps) {
     if (typeof key !== 'string' || !key.trim()) return refuse('save', 'key is empty');
     if (!isEncryptionAvailable()) return refuse('save', 'safeStorage encryption not available on this system');
     const k = key.trim();
-    let enc;
-    try { enc = encryptString(k); }
+    let s;
+    try { s = loadSecure(); }
+    catch (err) { return refuse('save', `could not read secure.json [${codeOf(err)}]`); }
+    try { s.geminiKeyEnc = encryptString(k).toString('base64'); }
     catch (err) { return refuse('save', `could not encrypt the key (safeStorage) [${codeOf(err)}]`); }
-    try {
-      const s = loadSecure(); s.geminiKeyEnc = enc.toString('base64'); saveSecure(s);
-    } catch (err) {
-      return refuse('save', `could not save secure.json [${codeOf(err)}]`);
-    }
+    try { saveSecure(s); }
+    catch (err) { return refuse('save', `could not save secure.json [${codeOf(err)}]`); }
     setKey(k);
     return { ok: true };
   }
@@ -68,9 +67,12 @@ function createGeminiKeyIpc(deps) {
   function handleClear(event) {
     const g = assessSender(event);
     if (!g.ok) return refuse('clear', g.reason);
-    try {
-      const s = loadSecure(); delete s.geminiKeyEnc; saveSecure(s);
-    } catch (err) {
+    let s;
+    try { s = loadSecure(); }
+    catch (err) { return refuse('clear', `could not read secure.json [${codeOf(err)}]`); }
+    delete s.geminiKeyEnc;
+    try { saveSecure(s); }
+    catch (err) {
       // The stored key is still on disk, so the in-memory key stays too: say so, never pretend.
       return refuse('clear', `could not save secure.json; the key is still stored [${codeOf(err)}]`);
     }

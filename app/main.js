@@ -394,31 +394,87 @@ function saveSettings(s) { fs.writeFileSync(settingsPath(), JSON.stringify(s, nu
 // it; it never crosses the IPC boundary back to the renderer.
 const securePath = () => path.join(app.getPath('userData'), 'secure.json');
 function loadSecure() {
-  try { return JSON.parse(fs.readFileSync(securePath(), 'utf8')); }
-  catch { return {}; }
+  const file = securePath();
+  let text;
+  try { text = fs.readFileSync(file, 'utf8'); }
+  catch (err) {
+    if (err?.code === 'ENOENT') return {};
+    throw err;
+  }
+  const store = JSON.parse(text);
+  if (!store || typeof store !== 'object' || Array.isArray(store)) {
+    throw new TypeError('secure.json must contain a JSON object');
+  }
+  return store;
 }
-function saveSecure(s) { fs.writeFileSync(securePath(), JSON.stringify(s)); }
+
+function saveSecure(s) {
+  const file = securePath();
+  const text = JSON.stringify(s);
+  const temp = `${file}.${crypto.randomUUID()}.tmp`;
+  const fd = fs.openSync(temp, 'wx', 0o600);
+  // The original remains in place until the staged file has been written, flushed and closed.
+  try {
+    try { fs.writeFileSync(fd, text, { encoding: 'utf8', flush: true }); }
+    finally { fs.closeSync(fd); }
+    fs.renameSync(temp, file);
+  } catch (err) {
+    try { fs.rmSync(temp, { force: true }); }
+    catch { tlog('[secure] could not remove the temporary secure.json file'); }
+    throw err;
+  }
+}
+
+// Startup credential notices run before the window exists, so sendMainLog would drop them. They are
+// logged at once and queued here; createWindow sends them on main-error once the page has loaded.
+const credentialNotices = [];
+function noteCredential(line) { tlog(line); credentialNotices.push(line); }
+function flushCredentialNotices(send) {
+  while (credentialNotices.length) send(credentialNotices.shift());
+}
+// A bounded reason for an unreadable store: a short error code or a fixed phrase, never the error's
+// own message (a JSON parse message quotes the file's text).
+function secureStoreReason(err) {
+  if (err && typeof err.code === 'string' && /^[A-Z][A-Z0-9_]{0,31}$/.test(err.code)) return err.code;
+  if (err && err.name === 'SyntaxError') return 'not valid JSON';
+  if (err && err.name === 'TypeError') return 'not a JSON object';
+  return 'unknown error';
+}
 
 let geminiKey = null; // decrypted GEMINI_API_KEY; null = not configured
 // S06: decrypted ABlueAgent GitHub token (checklist step 14); null = not configured. Same store and
 // rules as the Gemini key: ciphertext on disk, plaintext only in main memory and agent pane envs.
 let agentGitToken = null;
-function loadAgentGitToken() {
-  if (!safeStorage.isEncryptionAvailable()) return;
-  const s = loadSecure();
+function loadAgentGitToken(s) {
   if (!s.agentGitTokenEnc) return;
   try {
     const t = safeStorage.decryptString(Buffer.from(s.agentGitTokenEnc, 'base64'));
     agentGitToken = isAgentToken(t) ? t : null;
-  } catch { tlog('[agent-git] stored ABlueAgent token unreadable (different OS user?); agent panes use your own git login'); }
+  } catch { noteCredential('[agent-git] stored ABlueAgent token unreadable (different OS user?); agent panes use your own git login'); }
 }
 
-function loadGeminiKey() {
-  if (!safeStorage.isEncryptionAvailable()) return;
-  const s = loadSecure();
+function loadGeminiKey(s) {
   if (!s.geminiKeyEnc) return;
   try { geminiKey = safeStorage.decryptString(Buffer.from(s.geminiKeyEnc, 'base64')); }
-  catch { /* ciphertext unreadable (different OS user / key rotation) — leave null */ }
+  catch { noteCredential('[gemini] stored Gemini key could not be decrypted'); }
+}
+
+function loadStoredCredentials() {
+  if (!safeStorage.isEncryptionAvailable()) return;
+  let store;
+  try { store = loadSecure(); }
+  catch (err) {
+    const reason = secureStoreReason(err);
+    noteCredential(`[secure] could not read secure.json (${reason}); stored credentials were not loaded`);
+    dialog.showErrorBox('Credential store unavailable',
+      `Mako could not read secure.json (${reason}) in ${path.dirname(securePath())}. ` +
+      'Stored credentials were not loaded, and saving or clearing a credential is refused until the store is readable. ' +
+      'If the file is locked, close the program holding it and restart Mako. To start over, close Mako, ' +
+      'rename secure.json (for example to secure.json.bad), restart Mako and enter the Gemini key and the ABlueAgent token again.');
+    return;
+  }
+  loadGeminiKey(store);
+  loadAgentGitToken(store);
 }
 
 let win = null;
@@ -548,6 +604,10 @@ function createWindow() {
     const sameDocument = details?.isSameDocument ?? isInPlace;
     if (mainFrame && !sameDocument) claudeScout.shutdown();
   });
+  // Startup credential notices (loadStoredCredentials) wait for the page, then go to the Logs tab.
+  win.webContents.once('did-finish-load', () => flushCredentialNotices((line) => {
+    if (win && !win.isDestroyed()) win.webContents.send('main-error', line);
+  }));
   win.loadFile(ENTRY_PATH);
 
   // --- Navigation lockdown (AUDIT #3 / electronegativity LIMIT_NAVIGATION HIGH) -----------------
@@ -574,8 +634,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  loadGeminiKey(); // decrypt stored GEMINI_API_KEY into memory before any PTY can launch
-  loadAgentGitToken(); // S06: the ABlueAgent token, likewise before any PTY can launch
+  loadStoredCredentials(); // decrypt stored credentials before any PTY can launch
   // S08: a record still open now was never closed (a crash or a forced kill): close it as `unknown`.
   sessionMemoryCall(() => sessionMemory().closeOpen(sessionMemoryMod.STOP_REASON.UNKNOWN));
   // S46: finished sessions archive themselves.
@@ -1675,18 +1734,26 @@ ipcMain.handle('set-agent-token', (e, token) => {
   const t = norm.token;
   if (!isAgentToken(t)) return { ok: false, error: 'not a GitHub token' };
   if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'safeStorage encryption not available on this system' };
-  try {
-    const enc = safeStorage.encryptString(t);
-    const s = loadSecure(); s.agentGitTokenEnc = enc.toString('base64'); saveSecure(s);
-    agentGitToken = t;
-    tlog(`[agent-git] ABlueAgent token stored; new agent panes push as ABlueAgent${norm.removed ? ` (${norm.removed} invisible or space character(s) removed)` : ''}`);
-    return { ok: true };
-  } catch { return { ok: false, error: 'could not encrypt or save the token' }; }
+  let s;
+  try { s = loadSecure(); }
+  catch { return { ok: false, error: 'could not read secure.json' }; }
+  try { s.agentGitTokenEnc = safeStorage.encryptString(t).toString('base64'); }
+  catch { return { ok: false, error: 'could not encrypt the token' }; }
+  try { saveSecure(s); }
+  catch { return { ok: false, error: 'could not save secure.json' }; }
+  agentGitToken = t;
+  tlog(`[agent-git] ABlueAgent token stored; new agent panes push as ABlueAgent${norm.removed ? ` (${norm.removed} invisible or space character(s) removed)` : ''}`);
+  return { ok: true };
 });
 ipcMain.handle('clear-agent-token', (e) => {
   const g = launcherGate.assess(e);
   if (!g.ok) return { ok: false, error: g.reason };
-  const s = loadSecure(); delete s.agentGitTokenEnc; saveSecure(s);
+  let s;
+  try { s = loadSecure(); }
+  catch { return { ok: false, error: 'could not read secure.json' }; }
+  delete s.agentGitTokenEnc;
+  try { saveSecure(s); }
+  catch { return { ok: false, error: 'could not save secure.json' }; }
   agentGitToken = null;
   tlog('[agent-git] ABlueAgent token cleared; new agent panes use your own git login');
   return { ok: true };
