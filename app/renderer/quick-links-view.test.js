@@ -32,6 +32,12 @@ class Element {
   getAttribute(name) { return this.attributes[name] || null; }
   appendChild(child) { this.children.push(child); return child; }
   walk() { return this.children.flatMap((child) => [child, ...child.walk()]); }
+  click() { if (!this.disabled) return this.onclick?.(); }
+  input(value) {
+    if (this.disabled) return;
+    this.value = value;
+    this.oninput?.();
+  }
 }
 function makeDocument() {
   const ids = {};
@@ -71,6 +77,13 @@ function harness(overrides = {}) {
   });
   view.mount();
   return { document, calls, logs, api, view, setCurrent: (value) => { current = value; } };
+}
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
 }
 
 (async () => {
@@ -118,6 +131,52 @@ function harness(overrides = {}) {
       'an unbounded preset reason is logged as unknown-error');
   }
 
+  process.stdout.write('\nediting waits for a successful list\n');
+  {
+    const list = deferred();
+    const h = harness({ api: { list: () => list.promise } });
+    const { quickLinksManage, quickLinksSave, quickLinksStatus } = h.document.ids;
+    assert(quickLinksManage.disabled, 'Manage is disabled when mounted');
+    const loading = h.view.load();
+    assert(quickLinksManage.disabled, 'Manage is disabled while the list is pending');
+    assert(quickLinksStatus.textContent.includes('Loading'), 'the pending load is visible');
+    quickLinksManage.click();
+    assert(!h.view.snapshot().managing, 'Manage cannot open an empty draft while loading');
+    assert(quickLinksSave.disabled, 'Save is disabled while the list is pending');
+    assert(!(await h.view.save()), 'a direct Save is refused while the list is pending');
+    eq(h.calls.save.length, 0, 'the pending list cannot cause a write');
+    list.resolve({ ok: true, config: defaults() });
+    assert(await loading, 'the delayed list succeeds');
+    assert(!quickLinksManage.disabled, 'Manage is enabled when the list succeeds');
+    quickLinksManage.click();
+    eq(h.view.snapshot().draft.map(({ id }) => id).join(','), 'ql-seed-a,ql-seed-b',
+      'the draft starts from the saved links');
+  }
+  for (const [reason, list] of [
+    ['read-failed', async () => ({ ok: false, error: 'read-failed' })],
+    ['unknown-error', async () => ({ ok: true, config: {} })],
+    ['ipc-failed', async () => { throw new Error('list failed'); }],
+  ]) {
+    const h = harness({ api: { list } });
+    const { quickLinksManage, quickLinksList, quickLinksStatus } = h.document.ids;
+    assert(!(await h.view.load()), `list returns false for ${reason}`);
+    assert(quickLinksManage.disabled, `Manage stays disabled after ${reason}`);
+    assert(!h.view.snapshot().loaded, `the list stays unloaded after ${reason}`);
+    assert(!quickLinksList.textContent.includes('No Quick Links configured'), 'a failed read is distinct from an empty list');
+    eq(quickLinksStatus.getAttribute('role'), 'alert', 'list failure is announced as an alert');
+    eq(quickLinksStatus.textContent, `List refused — ${reason}.`, 'list failure shows the bounded reason');
+    assert(!(await h.view.save()), 'a failed list still prevents a direct Save');
+    eq(h.calls.save.length, 0, 'the failed list cannot cause a write');
+  }
+  {
+    const h = harness();
+    h.setCurrent({ schemaVersion: 1, entries: [] });
+    assert(await h.view.load(), 'a successful empty list is loaded');
+    h.document.ids.quickLinksManage.click();
+    assert(h.view.snapshot().managing, 'a successful empty list can be edited');
+    eq(h.view.snapshot().draft.length, 0, 'an empty list starts with an empty draft');
+  }
+
   process.stdout.write('\nadd/edit/remove with Save and Cancel\n');
   {
     const h = harness(); await h.view.load();
@@ -139,6 +198,60 @@ function harness(overrides = {}) {
     h.view.cancel();
     eq(h.view.snapshot().entries.length, 2, 'Cancel discards an unpersisted removal');
     eq(h.calls.save.length, 2, 'Cancel performs no save');
+  }
+
+  process.stdout.write('\nthe editor is locked while Save is pending\n');
+  for (const outcome of ['success', 'refusal', 'rejection']) {
+    const pending = deferred();
+    const saves = [];
+    const h = harness({ api: { save: (text) => {
+      saves.push(JSON.parse(text));
+      if (saves.length === 1) return pending.promise;
+      return Promise.resolve({ ok: true, config: saves.at(-1) });
+    } } });
+    await h.view.load();
+    const { quickLinksManage, quickLinksRows, quickLinksAdd, quickLinksAddBundle, quickLinksCancel,
+      quickLinksSave, quickLinksStatus } = h.document.ids;
+    quickLinksManage.click();
+    const [label, url, remove] = quickLinksRows.children[0].children;
+    label.input('Submitted label');
+    const saving = h.view.save();
+    const controls = [label, url, remove, quickLinksAdd, quickLinksAddBundle, quickLinksCancel, quickLinksSave];
+    assert(controls.every((control) => control.disabled), 'all editor controls are disabled during Save');
+    eq(quickLinksStatus.textContent, 'Saving Quick Links…', 'pending Save is visible');
+    label.input('Later label');
+    url.input('https://later.test.invalid');
+    remove.click();
+    quickLinksAdd.click();
+    quickLinksAddBundle.click();
+    quickLinksCancel.click();
+    assert(!(await h.view.save()), 'a duplicate direct Save is refused');
+    eq(saves.length, 1, 'only one write is sent');
+    assert(h.view.snapshot().managing, 'the editor stays open while Save is pending');
+    eq(JSON.stringify(h.view.snapshot().draft), JSON.stringify(saves[0].entries),
+      'the pending draft still matches the submitted links');
+
+    if (outcome === 'success') {
+      pending.resolve({ ok: true, config: saves[0] });
+      assert(await saving, 'Save succeeds');
+      assert(!h.view.snapshot().managing, 'successful Save closes the editor');
+      eq(h.view.snapshot().entries[0].label, 'Submitted label', 'the submitted edit is kept');
+      assert(!quickLinksManage.disabled, 'Manage can reopen after successful Save');
+    } else {
+      if (outcome === 'refusal') pending.resolve({ ok: false, error: 'write-failed' });
+      else pending.reject(new Error('save failed'));
+      assert(!(await saving), `Save returns false on ${outcome}`);
+      const reason = outcome === 'refusal' ? 'write-failed' : 'ipc-failed';
+      eq(quickLinksStatus.textContent, `Save refused — ${reason}.`, 'Save failure is visible');
+      assert(h.view.snapshot().managing, 'failed Save keeps the editor open');
+      const [retryLabel, retryUrl, retryRemove] = quickLinksRows.children[0].children;
+      assert([retryLabel, retryUrl, retryRemove, quickLinksAdd, quickLinksAddBundle, quickLinksCancel, quickLinksSave]
+        .every((control) => !control.disabled), 'editor controls recover after a failed Save');
+      eq(retryLabel.value, 'Submitted label', 'the submitted draft survives a failed Save');
+      retryLabel.input('Retried label');
+      assert(await h.view.save(), 'the edited draft can be retried');
+      eq(saves[1]?.entries[0]?.label, 'Retried label', 'retry submits the corrected draft');
+    }
   }
 
   process.stdout.write('\nvisible bounded refusal and metadata-only renderer logs\n');
