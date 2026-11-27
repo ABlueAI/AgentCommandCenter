@@ -37,7 +37,7 @@ function test(name, options, run) {
 }
 after(() => process.stdout.write(`\nremove-agent: ${passed} passed, ${failed} failed\n`));
 
-function handler({ inspection = clean, checkError, checkStdout, removeError, response = 0, trusted = true, request } = {}) {
+function handler({ inspection = clean, checkError, checkStdout, checkStderr = 'Git check failed', removeError, response = 0, trusted = true, request } = {}) {
   const calls = [];
   const entryUrl = 'file:///mako/index.html';
   const frame = { url: entryUrl };
@@ -55,7 +55,7 @@ function handler({ inspection = clean, checkError, checkStdout, removeError, res
       assert.equal(command, 'powershell');
       assert.ok(args.includes(script));
       calls.push({ args, options });
-      if (args.includes('-Check')) callback(checkError, checkStdout ?? JSON.stringify(inspection), 'Git check failed');
+      if (args.includes('-Check')) callback(checkError, checkStdout ?? JSON.stringify(inspection), checkStderr);
       else callback(removeError, '', 'Git refused worktree removal');
     },
   });
@@ -266,8 +266,10 @@ test('an agent commit reachable from a remote tip missing locally counts as publ
   git(other, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
     '-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '-qm', 'Remote-only commit');
   git(other, 'push', '-q', 'origin', 'published');
+  const trackingBefore = git(repo, 'for-each-ref', '--format=%(refname) %(objectname)', 'refs/remotes');
   assert.deepEqual(inspect().commits, []);
-  assert.equal(git(repo, 'branch', '-r'), 'fixture/main');
+  assert.equal(git(repo, 'for-each-ref', '--format=%(refname) %(objectname)', 'refs/remotes'), trackingBefore,
+    'the check wrote a remote-tracking ref');
 });
 
 test('an unreachable remote refuses visibly and leaves the worktree intact', { skip }, (t) => {
@@ -308,30 +310,88 @@ test('bare -Force without the checked state never removes a worktree with local 
   assert.ok(fs.existsSync(path.join(worktree, 'new file.txt')));
 });
 
-test('the check ignores commands planted in the repository config', { skip }, (t) => {
+test('a planted fsmonitor command never runs during the check or the removal', { skip }, (t) => {
   const { repo, worktree, git, inspect, run } = fixture(t);
-  const marker = path.join(path.dirname(repo), 'planted marker');
-  const shellPath = marker.replace(/\\/g, '/');
-  git(repo, 'config', 'core.fsmonitor', `echo planted > "${shellPath}"`);
-  git(repo, 'config', 'remote.fixture.uploadpack', `echo planted > "${shellPath}"; git-upload-pack`);
   git(worktree, 'commit', '--allow-empty', '-qm', 'Agent commit');
+  const marker = path.join(path.dirname(repo), 'planted marker');
+  git(repo, 'config', 'core.fsmonitor', `echo planted > "${marker.replace(/\\/g, '/')}"`);
   const { commits, state } = inspect();
   assert.match(commits[0], /Agent commit/);
-  assert.ok(!fs.existsSync(marker), 'a planted config command ran during the check');
+  assert.ok(!fs.existsSync(marker), 'a planted fsmonitor command ran during the check');
   const removed = run('-Force', '-ExpectedState', state);
   assert.equal(removed.status, 0, removed.stderr);
-  assert.ok(!fs.existsSync(marker), 'a planted config command ran during removal');
+  assert.ok(!fs.existsSync(marker), 'a planted fsmonitor command ran during removal');
 });
 
-test('many remote branches are handled without piping object IDs through PowerShell', { skip }, (t) => {
+for (const [key, value] of [
+  ['remote.fixture.uploadpack', 'MARKER; git-upload-pack'],
+  ['credential.helper', '!MARKER'],
+  ['core.askPass', 'MARKER'],
+  ['core.sshCommand', 'MARKER'],
+  ['url.MARKER.insteadOf', 'nowhere:'],
+  ['protocol.allow', 'always'],
+  ['filter.planted.clean', 'MARKER'],
+  ['include.path', 'planted-include'],
+]) {
+  test(`repository config that sets ${key} is refused before any network or status call`, { skip }, (t) => {
+    const { repo, worktree, git, run } = fixture(t);
+    const marker = path.join(path.dirname(repo), 'planted marker');
+    git(repo, 'config', key, value.replace('MARKER', `echo planted > "${marker.replace(/\\/g, '/')}"`));
+    const result = run('-Check');
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /repository config sets/i);
+    assert.ok(result.stderr.toLowerCase().includes(key.toLowerCase().split('.')[0]));
+    assert.ok(!fs.existsSync(marker), 'a planted config command ran');
+    assert.ok(fs.existsSync(worktree));
+  });
+}
+
+test('Git LFS filter settings in the repository config are allowed', { skip }, (t) => {
+  const { repo, git, inspect } = fixture(t);
+  git(repo, 'config', 'filter.lfs.clean', 'git-lfs clean -- %f');
+  git(repo, 'config', 'filter.lfs.required', 'true');
+  assert.deepEqual(inspect().commits, []);
+});
+
+test('more remote tips than one command-line chunk are fetched and all count', { skip }, (t) => {
   const { worktree, remote, git, inspect } = fixture(t);
   git(worktree, 'commit', '--allow-empty', '-qm', 'Agent commit');
-  git(worktree, 'push', '-q', remote, 'HEAD:refs/heads/published');
   const main = git(remote, 'rev-parse', 'main');
-  const lines = [];
-  for (let i = 0; i < 450; i++) lines.push(`create refs/heads/extra-${i} ${main}`);
-  execFileSync('git', ['update-ref', '--stdin'], { cwd: remote, input: lines.join('\n') + '\n' });
-  assert.deepEqual(inspect().commits, []);
-  git(remote, 'update-ref', '-d', 'refs/heads/published');
+  // 450 distinct one-commit branches on the remote, none of them in the local repo.
+  const stream = [];
+  for (let i = 0; i < 450; i++) {
+    const message = `extra ${i}\n`;
+    stream.push(`commit refs/heads/extra-${i}`, `committer Fixture <fixture@example.invalid> ${1700000000 + i} +0000`,
+      `data ${Buffer.byteLength(message)}`, message.trimEnd(), `from ${main}`, '');
+  }
+  execFileSync('git', ['fast-import', '--quiet'], { cwd: remote, input: stream.join('\n') + '\n' });
   assert.match(inspect().commits[0], /Agent commit/);
+  git(worktree, 'push', '-q', remote, 'HEAD:refs/heads/published');
+  assert.deepEqual(inspect().commits, []);
+});
+
+test('a planted alternate-refs command in the repository config is refused', { skip }, (t) => {
+  const { repo, git, run } = fixture(t);
+  git(repo, 'config', 'core.alternateRefsCommand', 'echo planted');
+  const result = run('-Check');
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /repository config sets core\.alternaterefscommand/i);
+});
+
+test('a check output over the buffer limit is not reported as a timeout', async () => {
+  const overflow = Object.assign(new Error('stdout maxBuffer length exceeded'),
+    { killed: true, code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' });
+  const { invoke } = handler({ checkError: overflow });
+  const result = await invoke();
+  assert.equal(result.ok, false);
+  assert.doesNotMatch(result.error, /timed out/i);
+});
+
+test('a login embedded in a remote URL is not echoed back in a check error', async () => {
+  const { invoke } = handler({ checkError: new Error('exit 128'),
+    checkStderr: "fatal: unable to access 'https://agent:s3cret-token@example.invalid/repo.git/'" });
+  const result = await invoke();
+  assert.equal(result.ok, false);
+  assert.doesNotMatch(result.error, /s3cret-token/);
+  assert.match(result.error, /https:\/\/<redacted>@example\.invalid/);
 });

@@ -1235,7 +1235,7 @@ ipcMain.handle('remove-agent', async (event, request) => {
     if (isCheck) execOptions.timeout = CHECK_TIMEOUT_MS;
     execFile('powershell', [...args, ...options], execOptions,
       (error, stdout, stderr) => {
-        if (error && isCheck && error.killed) {
+        if (error && isCheck && error.killed && error.code !== 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
           reject(new Error(`timed out after ${CHECK_TIMEOUT_MS / 1000} s while checking the ${task} worktree ` +
             '(a slow or unreachable remote?); nothing was removed.'));
         } else if (error) reject(new Error((stderr || '').trim() || error.message));
@@ -1273,8 +1273,10 @@ ipcMain.handle('remove-agent', async (event, request) => {
     await run(...options);
     return { ok: true };
   } catch (error) {
-    tlog(`remove-agent: ${failure}: ${String(error.message).split('\n')[0].slice(0, 300)}`);
-    return { ok: false, error: `${failure}: ${error.message}` };
+    // Git's error text can quote a remote URL; drop any login embedded in one.
+    const message = String(error.message).replace(/\/\/[^/@\s]+@/g, '//<redacted>@');
+    tlog(`remove-agent: ${failure}: ${message.split('\n')[0].slice(0, 300)}`);
+    return { ok: false, error: `${failure}: ${message}` };
   }
 });
 

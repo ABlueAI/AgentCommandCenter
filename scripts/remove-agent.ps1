@@ -20,15 +20,19 @@ $ErrorActionPreference = "Stop"
 # The repository (and any agent working in it) controls its config; Mako's removal must not
 # run a command it put there. Remotes are reached by URL so remote.<name>.* settings don't apply.
 $script:HooksOff = Join-Path ([IO.Path]::GetTempPath()) ("mako-no-hooks-" + [Guid]::NewGuid().ToString('N'))
+# A stalled https transfer (under 1 KB/s for 30 s) fails instead of hanging the removal.
 $script:SafeGitConfig = @('-c', 'core.fsmonitor=false', '-c', "core.hooksPath=$script:HooksOff",
-    '-c', 'protocol.ext.allow=never')
+    '-c', 'protocol.ext.allow=never', '-c', 'http.lowSpeedLimit=1000', '-c', 'http.lowSpeedTime=30')
 
 function Invoke-CheckedGit {
     param([string]$Directory, [string[]]$Arguments)
     # No stdin: Windows PowerShell 5.1 adds a byte-order mark and CRLF to text piped into git.
     & git --no-replace-objects @script:SafeGitConfig -C $Directory @Arguments
     if ($LASTEXITCODE -ne 0) {
-        $subcommand = @($Arguments | Where-Object { $_ -notlike '-*' })[0]
+        $subcommand = $null
+        for ($n = 0; $n -lt $Arguments.Count -and -not $subcommand; $n++) {
+            if ($Arguments[$n] -eq '-c') { $n++ } elseif ($Arguments[$n] -notlike '-*') { $subcommand = $Arguments[$n] }
+        }
         throw "Git $subcommand failed (exit $LASTEXITCODE) in $Directory."
     }
 }
@@ -41,13 +45,42 @@ function Get-Chunk {
     return , [string[]]@($Items[$Start..$last])
 }
 
+# Repository config keys that can run a command or hand a login to one during the check or the
+# removal. They have no safe override, so the script refuses and names them. Git LFS's own
+# filter settings are allowed.
+$script:RiskyConfig = '^(credential\..*|core\.(askpass|sshcommand|gitproxy|alternaterefscommand|alternaterefsprefixes)|ssh\..*|url\..*\.(insteadof|pushinsteadof)|' +
+    'remote\..*\.(uploadpack|receivepack|vcs)|protocol\..*|include\..*|includeif\..*|filter\..*)$'
+function Assert-SafeRepositoryConfig {
+    param([string]$Directory)
+    $found = @(
+        foreach ($scope in @('--local', '--worktree')) {
+            foreach ($key in @(Invoke-CheckedGit $Directory @('config', $scope, '--includes', '--name-only', '--list'))) {
+                if ($key -notmatch $script:RiskyConfig) { continue }
+                if ($key -match '^filter\.lfs\.(clean|smudge|process|required)$') {
+                    $values = @(Invoke-CheckedGit $Directory @('config', $scope, '--includes', '--get-all', $key))
+                    if (@($values | Where-Object { $_ -notmatch '^(git-lfs( |$)|true$)' }).Count -eq 0) { continue }
+                }
+                $key
+            }
+        }
+    ) | Sort-Object -Unique
+    if ($found) {
+        throw ("The repository config sets $($found -join ', '), which could run a command during removal. " +
+            "Remove it (git config --unset), or remove the worktree by hand from a terminal.")
+    }
+}
+
 $previousConsoleEncoding = [Console]::OutputEncoding
 $previousTerminalPrompt = $env:GIT_TERMINAL_PROMPT
 $previousCredentialPrompt = $env:GCM_INTERACTIVE
+$previousGitAskPass = $env:GIT_ASKPASS
+$previousSshAskPass = $env:SSH_ASKPASS
 try {
     [Console]::OutputEncoding = $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
     $env:GIT_TERMINAL_PROMPT = '0'
     $env:GCM_INTERACTIVE = 'never'
+    $env:GIT_ASKPASS = $null
+    $env:SSH_ASKPASS = $null
 
     $repoRoot     = Invoke-CheckedGit (Get-Location).ProviderPath @('rev-parse', '--show-toplevel')
     $repoName     = Split-Path $repoRoot -Leaf
@@ -60,6 +93,7 @@ try {
         (Invoke-CheckedGit $worktreePath $commonDirArgs) -ne (Invoke-CheckedGit $repoRoot $commonDirArgs)) {
         throw 'The agent directory is not a worktree of the selected repository.'
     }
+    Assert-SafeRepositoryConfig $worktreePath
 
     # Use live branch tips. A cached tracking ref can outlive a deleted remote branch.
     $remoteTips = @(
@@ -143,4 +177,6 @@ try {
     [Console]::OutputEncoding = $previousConsoleEncoding
     $env:GIT_TERMINAL_PROMPT = $previousTerminalPrompt
     $env:GCM_INTERACTIVE = $previousCredentialPrompt
+    $env:GIT_ASKPASS = $previousGitAskPass
+    $env:SSH_ASKPASS = $previousSshAskPass
 }
