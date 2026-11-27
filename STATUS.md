@@ -3,8 +3,15 @@
 S55 is implemented on its review branch. Independent review and the Windows Firefox profile check
 (checklist step 57) are pending.
 
-Updated 2026-11-24 by PR #230 (S54: Claude Code option in Video Scout, rebuilt to Blue's approved design, pending review and PC check).
-Before that, updated 2026-11-24 by PR #257 (status: plan rows and this file after the merges of 2026-11-23 and
+Updated 2026-11-26 by the PR sweeper's status PR (covers main up to 0a5702c: PR #254, S38's full
+security check; PRs #291, #293 and #292, Codex's lane widened to sensitive work; PR #230, S54's
+Claude video analysis; PR #294, Blue's open-source verdicts and rows S68 to S72; verified: GitHub's
+REST API, read 2026-11-26 about 05:45 UTC, shows them merged 2026-11-25 08:51 UTC to 2026-11-26
+03:45 UTC in that order). Before that: PR #285 (status 2026-11-25, never merged; its edits are
+carried here) covered main up to 28c7e18: PR #225, the PR
+sweeper and its rules; PR #255, S45, updated this file itself; verified: GitHub's REST API,
+read 2026-11-25 about 06:50 UTC, shows #257, #255 and #225 merged in that order at 06:29 to 06:31
+UTC, and #282 before them at 06:13 UTC. Before that: updated 2026-11-24 by PR #230 (S54: Claude Code option in Video Scout, rebuilt to Blue's approved design, pending review and PC check). Before that, updated 2026-11-24 by PR #257 (status: plan rows and this file after the merges of 2026-11-23 and
 2026-11-24; "2026-11-24 (status PR #257)" under Next). Before that: updated 2026-11-23 by PR #206 (S52 HyperFrames vetting, sandbox render and Blue's conditional FORK
 verdict; review fixes pushed by a Claude cloud session on Blue's ask). Before that: updated 2026-11-24 by PR #209 (S48's OSS record, docs/decisions/OSS-memory.md, with Blue's
 verdict: PROTOTYPE an isolated Open Second Brain subset, PATTERN-MINE ai-memory and GBrain; step 68
@@ -26,7 +33,8 @@ covered #130 (S15), #146, #147, #140, #155 (S33), #152 (S31), #153, #157 (S34) a
 #158 to #160 merged just before it (2026-11-05 00:00 to 00:02 UTC).
 Also updated 2026-11-24 by PR #282 (Blue's decisions D-084 to D-086: default go, short
 colour-coded TLDRs, and the commander on H1; a plan change; "Right now" below).
-Every PR that changes the state updates this file.
+Only the PR sweeper's status PR edits this file (AGENTS.md "The shared brain";
+[docs/SWEEPER.md](docs/SWEEPER.md), Job D).
 
 ## Right now
 
@@ -45,11 +53,30 @@ Every PR that changes the state updates this file.
   proposal of Claude's, for Blue to check: one small last fix of one medium finding and one extra
   review run past the run cap, instead of stopping as "needs Blue".
 
-- **Video Scout (S54, draft PR #230):** Claude Code analyzes a YouTube or Vimeo video from frames
+- **The PR sweeper (PR #225, merged 2026-11-25, verified as above; Blue approved it on 2026-11-23, docs/DECISIONS.md
+  2026-11-23):** a Claude routine, "Mako PR sweeper", fires hourly (and on every push to `main` once
+  that trigger is added). It merges `main` into conflicting `claude/` PRs and Codex's docs-only record PRs (on Codex's
+  other PRs it asks Codex in a comment), clears
+  `waits-for-merge` waits, opens PRs for Codex branches that have none and reviews them, and keeps
+  this file current through one status PR a day. Its instructions are
+  [docs/SWEEPER.md](docs/SWEEPER.md). Blue's part: checklist step 70 (about 5 minutes: add the
+  push-to-`main` trigger and turn on its notifications). Not verified: whether the push trigger is
+  set; an agent reading the routine back checks it (step 70).
+- **Video Scout (S54, PR #230, merged 2026-11-26):** Claude Code analyzes a YouTube or Vimeo video from frames
   sampled at scene changes (at least one every 10 seconds, near-duplicates dropped, 640 px or 1280 px
   in detail mode, at most 120 frames with batching) and an on-device Whisper transcript, using
   Claude.ai subscription sign-in, after an estimate the user can cancel (Blue's design, D-065).
-  The independent review, Codex's pass and the real-video PC check (step 73) are pending.
+  Reviewed by Claude and Codex before the merge (builder's reading: the PR's TLDR; not re-checked
+  here); the real-video PC check (step 73) is still pending, so the S54 row stays as it is.
+- **Codex's lane (PRs #291, #293 and #292, merged 2026-11-25; Blue, 2026-11-25, docs/DECISIONS.md):**
+  Codex may build any plan row or issue Claude could, sensitive ones included, through the normal
+  hand-off. Claude keeps the UI rows (S66, S18 to S20), the Composer's dispatch tools and the rules
+  and checks that judge Codex's own PRs (docs/CODEX-BUILDER-LANE.md item 1).
+- **Open-source verdicts and rows S68 to S72 (PR #294, merged 2026-11-26; a plan change; Blue,
+  2026-11-25):** step 82 is ticked (all 314 ECC rows have his verdict). New rows: S68 re-pins
+  SkillSpector and Obsidian Skills, S69 pattern-mines Trail of Bits skills into `security-reviewer`,
+  S70 one claude-security trial scan (Blue starts it, checklist step 85), S71 one elephant-goldfish
+  trial on the Composer spec, S72 an E2E smoke test on Windows runners.
 
 - **Release: Mako 1.0.0 is released.**
   - Tag `v1.0.0` was created on 2026-10-18 at `main` commit `37009eb`, which includes the
@@ -88,7 +115,7 @@ Every PR that changes the state updates this file.
     certainty labels, a cap of 2 runs on docs-only PRs (5 otherwise), the model rule, the clarified
     China-origin rule, the scope freeze on 2026-12-01, Claude builds the UI, Codex PR reviews only
     from a Claude cloud session, the merge sitting and PC-check evenings, and Dependabot PRs' review
-    (issue #205). S40 (draft PR #256) is not merged, so reviews stay ranked high, medium, low.
+    (issue #205). S40 (PR #256, merged 2026-11-24, verified: GitHub's REST API, read 2026-11-26) ranks reviews CRITICAL, HIGH, MEDIUM, LOW.
   - **The 1.1 schedule (S61, PR #223):** [docs/SCHEDULE-1.1.md](docs/SCHEDULE-1.1.md), adopted:
     Blue merged that PR on 2026-11-24: the UI gate (about 2026-11-28 to 2026-12-02), the Composer and tab chains,
     a main-case release of about 2026-12-18 to 2027-01-05 against the 2027-01-15 target, and the
@@ -100,7 +127,7 @@ Every PR that changes the state updates this file.
   - **Nothing from Blue's sheets is open:** he answered the 14 items the sheet left open the same
     day (docs/DECISIONS.md, 2026-11-16, "Follow-up answers"), among them the definition of
     CRITICAL, subagents on by default with a cap of 3, and a "pause all" button.
-- **Full security check (S38, PR #254, 2026-11-24, done):** one read-only check of every sensitive
+- **Full security check (S38, PR #254, run 2026-11-24, merged 2026-11-25):** one read-only check of every sensitive
   area in AGENTS.md on `main` at `b99e377` (builder's reading: one `security-reviewer` pass per
   area plus the builder's own checks; PR #254 lists the areas covered). Public text gives titles and
   severities only (docs/DECISIONS.md 2026-11-21, item 7). The details went to Blue in the S38
@@ -211,7 +238,7 @@ Every PR that changes the state updates this file.
   of what Codex did, are still to be checked (docs/1.1-GAP-AUDIT.md, A4). **2026-11-16:** Blue
   made the trial S26's result ("until we burn through codex usage ... not necessarily a permanent
   change"), keeps ChatGPT and will "use heavily over the next 3 weeks ... use claude as backup
-  reviewer". The lane stays open to about 2026-11-30 for non-sensitive early tasks (S36 and S56
+  reviewer". The lane stays open to about 2026-11-30 for non-sensitive early tasks (widened on 2026-11-25 by PRs #291 to #293 to sensitive work too; see above) (S36 and S56
   in the lane; S56's 9 bug issues are #232 to #240, and from PR #241 its row is no longer tagged Sensitive; S52 and S53, `blue`-lane rows, started by Blue himself), Codex reviews Claude's PRs with Sonnet as backup, and he checks in on 2026-11-30 (checklist
   step 63); S26 closes when his resets are used. The lane's rules and the required Opus review are
   unchanged. **2026-11-21:** ChatGPT Plus stays through the 1.1 release and Codex's heavy use runs
@@ -467,7 +494,7 @@ still starts after the H1 setup day (step 54).
 **2026-11-24 (S45, PR #255):** ECC's 314 skills are listed in
 [docs/decisions/OSS-ecc.md](docs/decisions/OSS-ecc.md) "ECC's other skills (S45)", each with a
 proposed verdict (1 FORK, 4 PROTOTYPE, 22 PATTERN-MINE, 286 SKIP; `gateguard` left to S44) and a
-blank for Blue's. Nothing installed. Once it merges S45 is DONE; Blue's per-skill verdicts are
+blank for Blue's. Nothing installed. S45 is DONE (merged 2026-11-25); Blue's per-skill verdicts are
 pending (BLUE-CHECKLIST.md step 82), and a pick becomes a 1.2 plan row only after his verdict.
 
 **S52 (PR #206):** [HyperFrames vetting and trial](docs/decisions/OSS-hyperframes.md) are recorded.
