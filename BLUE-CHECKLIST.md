@@ -1643,6 +1643,22 @@ Step 88 comes from PR #315 (issue #219). Step numbers 86 and 87 belong to open P
   - *Done when:* you've told any agent what you saw (no warning, rules listed, or what differed);
     it ticks this with the date and how it checked.
 
+## From PR #334 (terminal clipboard, paste and links)
+
+Step 93 comes from PR #334 (issue #273). Step numbers 86, 87 and 90 to 92 belong to open PRs.
+
+- [ ] **93. Check terminal paste and clipboard on Windows (PR #334).** **About 10 minutes**, on the
+  next Tuesday or Friday PC-check evening after merging PR #334, after fully restarting Mako.
+  - Paste one line, then two lines, into a Gemini Video Scout pane and a Claude pane (Ctrl+V and
+    right-click): the text arrives whole in both, with no confirmation prompt.
+  - In a plain PowerShell pane, paste two lines: Mako asks before pasting; Cancel pastes nothing.
+    Press Shift+Insert with one line copied: it pastes once.
+  - In a Claude pane, use something that copies through the terminal (Claude Code's "Copied!"):
+    the Logs tab shows one line saying the clipboard was not changed and to use Ctrl+C instead,
+    and your clipboard still holds what it held before.
+  - *Done when:* you've told any agent what you saw (each check as above, or what differed); it
+    ticks this with the date and how it checked.
+
 ## Coming up this month (the runner will ask when it gets there)
 
 You can start on the first one now, which saves time later.

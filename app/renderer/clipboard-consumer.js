@@ -99,7 +99,46 @@
     return { writeText, writeClip, readClip, pasteText, pasteIntoPty };
   }
 
-  const api = { createClipboardConsumer };
+  // Which paste behaviour a pane gets, from the CLI it actually runs. Plain shell panes confirm a
+  // paste with a line break (pasted lines can run commands). Gemini panes ignore bracketed-paste
+  // mode: the Gemini prompt silently drops xterm's bracketed-paste escapes, so they get plain text,
+  // as before term.paste() was used. Every other pane keeps xterm's standard bracketed paste.
+  function pastePolicyFor(facts) {
+    const f = facts || {};
+    return {
+      confirmMultiline: !f.paneCli && !f.claudeVideoScout,
+      ignoreBracketedPaste: f.paneCli === 'gemini',
+    };
+  }
+
+  // OSC 52 (a program asking the terminal to set the clipboard) is consumed without decoding the
+  // payload. The first refusal says what happened and what to do instead; repeats are counted and
+  // logged again at most once per gap, so a chatty program can't flood the Logs tab and later
+  // refusals are never silent.
+  const OSC_REFUSAL_LOG_GAP_MS = 60 * 1000;
+  function createOscClipboardRefusal(deps) {
+    const log = deps.log || (() => {});
+    const paneId = deps.paneId || '';
+    const now = deps.now || Date.now;
+    let lastLogAt = null;
+    let unlogged = 0;
+    return function refuseOscClipboard() {
+      const t = now();
+      if (lastLogAt === null) {
+        log(`[osc52 ${paneId}] A program asked to set the clipboard; that is blocked in Mako panes, so its "Copied" notice did not change your clipboard. Select the text and press Ctrl+C instead.\n`);
+        lastLogAt = t;
+      } else if (t - lastLogAt >= OSC_REFUSAL_LOG_GAP_MS) {
+        log(`[osc52 ${paneId}] Blocked ${unlogged + 1} more clipboard request(s) from this pane; your clipboard was not changed. Select the text and press Ctrl+C instead.\n`);
+        lastLogAt = t;
+        unlogged = 0;
+      } else {
+        unlogged++;
+      }
+      return true;
+    };
+  }
+
+  const api = { createClipboardConsumer, pastePolicyFor, createOscClipboardRefusal, OSC_REFUSAL_LOG_GAP_MS };
   global.ccClipboardConsumer = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window === 'undefined' ? globalThis : window);

@@ -10,7 +10,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('node:vm');
-const { createClipboardConsumer } = require('./clipboard-consumer');
+const { createClipboardConsumer, pastePolicyFor, createOscClipboardRefusal, OSC_REFUSAL_LOG_GAP_MS } = require('./clipboard-consumer');
 const { CLIPBOARD_CHAR_LIMIT } = require('../clipboard-ipc');
 const { Terminal } = require('./vendor/xterm');
 
@@ -108,6 +108,57 @@ function harness(opts) {
     term.dispose();
   }
 
+  // A Gemini pane ignores bracketed-paste mode (the Gemini prompt drops the escapes), so its paste
+  // arrives as plain text even while the program has enabled the mode.
+  {
+    const term = new Terminal({ ignoreBracketedPasteMode: pastePolicyFor({ paneCli: 'gemini' }).ignoreBracketedPaste });
+    term._core.textarea = { value: '' };
+    const data = [];
+    term.onData((text) => data.push(text));
+    await new Promise((resolve) => term.write('\x1b[?2004h', resolve));
+    term.paste('one\ntwo');
+    assert(data.length === 1 && data[0] === 'one\rtwo', 'a Gemini pane pastes without bracketed-paste escapes');
+    term.dispose();
+  }
+
+  // --- pastePolicyFor: which panes confirm a multiline paste and which skip bracketed paste --------
+  {
+    const cases = [
+      [{ paneCli: undefined }, true, false, 'a plain shell pane'],
+      [{ paneCli: null }, true, false, 'a shell pane with no CLI'],
+      [{ paneCli: 'claude' }, false, false, 'a Claude pane'],
+      [{ paneCli: 'codex' }, false, false, 'a Codex pane'],
+      [{ paneCli: 'gemini' }, false, true, 'a Gemini pane (including the Video Scout role)'],
+      [{ paneCli: undefined, claudeVideoScout: true }, false, false, 'a Claude Video Scout pane'],
+    ];
+    for (const [input, confirm, ignoreBracketed, label] of cases) {
+      const policy = pastePolicyFor(input);
+      assert(policy.confirmMultiline === confirm && policy.ignoreBracketedPaste === ignoreBracketed,
+        `paste policy for ${label}: confirm multiline ${confirm}, ignore bracketed paste ${ignoreBracketed}`);
+    }
+    const empty = pastePolicyFor();
+    assert(empty.confirmMultiline === true && empty.ignoreBracketedPaste === false,
+      'no pane facts means the safest shell policy (confirm multiline)');
+  }
+
+  // --- createOscClipboardRefusal: actionable, bounded, never logs the payload ---------------------
+  {
+    const logs = [];
+    let t = 1000;
+    const refuse = createOscClipboardRefusal({ log: (l) => logs.push(l), paneId: 'pty9', now: () => t });
+    const payload = 'c;' + btoa('sample clipboard text');
+    assert(refuse(payload) === true && logs.length === 1, 'the first OSC 52 request is consumed and logged once');
+    assert(/blocked/i.test(logs[0]) && /Ctrl\+C/.test(logs[0]) && /did not change your clipboard/.test(logs[0]),
+      'the first refusal says the clipboard was not changed and how to copy instead');
+    t += 1000; refuse(payload); refuse(payload);
+    assert(logs.length === 1, 'repeat requests inside the gap are counted, not logged');
+    t += OSC_REFUSAL_LOG_GAP_MS;
+    assert(refuse(payload) === true && logs.length === 2 && /3 more/.test(logs[1]),
+      'after the gap, the next refusal logs again with the number blocked since the last line');
+    assert(!logs.join('').includes('sample clipboard text') && !logs.join('').includes(payload.slice(2)),
+      'no OSC 52 payload is ever logged');
+  }
+
   // --- writeClip: metadata-only Logs, empty is a no-op -------------------------------------------
   {
     const SECRET = 'do-not-log-this-clipboard-text';
@@ -189,7 +240,7 @@ function harness(opts) {
     assert(/clip\.writeClip\(sel\)\.catch\(/.test(appSrc), 'Ctrl+C copy handles an unexpected rejection');
     assert(/addEventListener\('paste',[\s\S]*?clip\.pasteText\([\s\S]*?\}, true\);/.test(appSrc),
       'native paste events pass through the same paste policy before reaching xterm');
-    const oscBlock = /let oscClipboardRefused = false;\s*term\.parser\.registerOscHandler\(52,[\s\S]*?^\s*\}\);/m.exec(appSrc);
+    const oscBlock = /term\.parser\.registerOscHandler\(52, window\.ccClipboardConsumer\.createOscClipboardRefusal\(\{[\s\S]*?\}\)\);/.exec(appSrc);
     const logs = [];
     const writes = [];
     let onOsc52;
@@ -197,6 +248,7 @@ function harness(opts) {
     if (oscBlock) {
       vm.runInNewContext(oscBlock[0], {
         id: 'pty9', appendLog: (line) => logs.push(line),
+        window: { ccClipboardConsumer: { createOscClipboardRefusal } },
         term: { parser: { registerOscHandler: (_id, handler) => { onOsc52 = handler; } } },
         clip: { writeClip: (text) => { writes.push(text); return Promise.resolve(); } },
         atob,
@@ -206,6 +258,24 @@ function harness(opts) {
         && logs.length === 1 && /clipboard.*(blocked|refused)/i.test(logs[0]) && !logs[0].includes(payload),
         'OSC 52 requests are consumed and visibly refused without writing or logging the payload');
     }
+    // The pane's paste policy comes from the tested helper, and a closed pane refuses input.
+    const paneCliAt = appSrc.indexOf('const paneCli = role ? ROLES[role].cli : cli;');
+    const policyAt = appSrc.indexOf('const pastePolicy = window.ccClipboardConsumer.pastePolicyFor({ paneCli, claudeVideoScout });');
+    const consumerAt = appSrc.indexOf('window.ccClipboardConsumer.createClipboardConsumer({', policyAt);
+    assert(paneCliAt > 0 && policyAt > paneCliAt && consumerAt > policyAt,
+      'app.js derives the pane CLI, then its paste policy, before building the clipboard consumer');
+    assert(/confirmMultiline: pastePolicy\.confirmMultiline\s*\?/.test(appSrc),
+      'multiline confirmation follows the paste policy');
+    assert(/if \(pastePolicy\.ignoreBracketedPaste\) term\.options\.ignoreBracketedPasteMode = true;/.test(appSrc),
+      'Gemini panes turn off bracketed paste through the paste policy');
+    assert(/if \(!terms\.has\(id\) \|\| term\.options\.disableStdin\) return false;\s*term\.paste\(text\);/.test(appSrc),
+      'paste refuses a closed or input-disabled pane before reaching xterm');
+    const startFailed = /const onStartFailed = \(reason\) => \{[\s\S]*?\n  \};/.exec(appSrc);
+    assert(Boolean(startFailed) && startFailed[0].includes('term.options.disableStdin = true;'),
+      'a failed start disables the pane\'s input');
+    const ptyExit = /cc\.onPtyExit\(\(\{ id \}\) => \{[\s\S]*?\n  \}\);/.exec(appSrc);
+    assert(Boolean(ptyExit) && ptyExit[0].includes('t.term.options.disableStdin = true;'),
+      'a PTY exit disables the pane\'s input');
     assert(!/cc\.clipboardRead\(\) \|\|/.test(appSrc) && !/return \(cc\.clipboardRead/.test(appSrc),
       'the old synchronous readClip/writeClip helpers are gone');
   }

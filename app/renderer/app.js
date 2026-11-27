@@ -517,6 +517,10 @@ function openInAppTerminal(opts = {}) {
   //   right-click               -> copy selection, else paste
   // The CLI this pane actually runs: a role always launches its role CLI.
   const paneCli = role ? ROLES[role].cli : cli;
+  // Paste behaviour per pane (clipboard-consumer.js pastePolicyFor): shell panes confirm a multiline
+  // paste; Gemini panes get plain text because the Gemini prompt drops bracketed-paste escapes.
+  const pastePolicy = window.ccClipboardConsumer.pastePolicyFor({ paneCli, claudeVideoScout });
+  if (pastePolicy.ignoreBracketedPaste) term.options.ignoreBracketedPasteMode = true;
   const clip = window.ccClipboardConsumer.createClipboardConsumer({
     invokeRead: () => cc.clipboardRead(),
     invokeWrite: (s) => cc.clipboardWrite(s),
@@ -524,7 +528,7 @@ function openInAppTerminal(opts = {}) {
       if (!terms.has(id) || term.options.disableStdin) return false;
       term.paste(text); // xterm brackets only when the program has enabled bracketed paste.
     },
-    confirmMultiline: !paneCli && !claudeVideoScout
+    confirmMultiline: pastePolicy.confirmMultiline
       ? () => window.confirm('Paste multiple lines into this shell? Pasted lines can run commands.')
       : undefined,
     log: appendLog,
@@ -567,15 +571,11 @@ function openInAppTerminal(opts = {}) {
     try { clip.pasteText(e.clipboardData?.getData('text/plain')); }
     catch { clipboardFailed(); }
   }, true);
-  // Consume OSC 52 without decoding the payload. Report the policy once per pane to bound logging.
-  let oscClipboardRefused = false;
-  term.parser.registerOscHandler(52, () => {
-    if (!oscClipboardRefused) {
-      appendLog(`[osc52 ${id}] Clipboard requests from terminal output are blocked in this pane\n`);
-      oscClipboardRefused = true;
-    }
-    return true;
-  });
+  // Consume OSC 52 without decoding the payload. The first refusal says what to do instead; repeats
+  // are counted and logged again at most once a minute (clipboard-consumer.js).
+  term.parser.registerOscHandler(52, window.ccClipboardConsumer.createOscClipboardRefusal({
+    log: appendLog, paneId: id,
+  }));
   // Keep this terminal fit to its grid cell whenever the layout changes — a pane added/removed,
   // the window resized, the tab shown. This is the canonical xterm.js pattern (observe the
   // container + debounce + fit); without it a reflowed pane keeps its old size and overflows.
