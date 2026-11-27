@@ -84,7 +84,7 @@ function fakeBoard(columns = COLUMNS) {
   await throws(() => parsePlan('# no table'), /header not found/, 'a missing table throws');
   await throws(() => parsePlan(plan('| S01 | **A.** | x | High | cloud | READY |\n')), /6 cells/, 'a row with a missing cell throws');
   await throws(() => parsePlan(plan(row('S01', 'A', 'READY'), row('S01', 'B', 'READY'))), /appears twice/, 'a duplicate session id throws');
-  for (const interruption of ['\n', '<!-- note -->\n']) {
+  for (const interruption of ['\n', '<!-- note -->\n', '## Accidental subheading\n']) {
     const { api, state } = fakeRepo();
     const { board, placed, removed } = fakeBoard();
     const markdown = plan(row('S01', 'A', 'READY'), row('S02', 'B', 'READY'), interruption, row('S03', 'C', 'READY'));
@@ -92,6 +92,17 @@ function fakeBoard(columns = COLUMNS) {
       /interrupted session table.*S03/, 'an interrupted session table fails visibly');
     eq(state.writes, [], 'a partial table produces no repository writes');
     eq([placed, removed], [[], []], 'a partial table produces no board writes');
+  }
+  {
+    const { api, state } = fakeRepo();
+    const markdown = plan(row('S01', 'A', 'READY'), row('S02', 'B', 'READY')).replace(/^\|---.*\n/m, '');
+    await throws(() => syncPlan({ markdown, planUrl: URL, api }),
+      /invalid session table separator/, 'a missing separator cannot silently drop the first row');
+    eq(state.writes, [], 'a missing separator produces no repository writes');
+  }
+  {
+    const markdown = `# Plan\n## Sessions\n${HEAD}${row('S01', 'A', 'READY')}\n## Other table\n${row('S02', 'B', 'READY')}`;
+    eq(parsePlan(markdown).map((s) => s.id), ['S01'], 'a session-shaped row in a different section is outside the table');
   }
 
   process.stdout.write('\nfirst run: labels, milestone, one issue per session\n');
@@ -379,6 +390,27 @@ function fakeBoard(columns = COLUMNS) {
 
   process.stdout.write('\nthe GraphQL board adapter\n');
   {
+    const { api, state } = fakeRepo();
+    const mutations = [];
+    const graphql = async (query, vars) => {
+      if (/projectV2\(number/.test(query)) {
+        return { user: { projectV2: {
+          id: 'P', field: { id: 'F', options: COLUMNS.map((name) => ({ id: name, name })) },
+        } } };
+      }
+      if (/\bitems\(/.test(query)) {
+        if (vars.cursor === 'next') throw new Error('board page unavailable');
+        return { node: { items: { nodes: [], pageInfo: { hasNextPage: true, endCursor: 'next' } } } };
+      }
+      if (/^mutation/.test(query)) mutations.push(vars);
+      return { addProjectV2ItemById: { item: { id: 'ITEM' } } };
+    };
+    const board = githubBoard(graphql, { login: 'x', number: 1 });
+    await throws(() => syncPlan({ markdown: plan(row('S01', 'A', 'READY')), planUrl: URL, api, board }),
+      /board page unavailable/, 'a failed board page read fails the sync visibly');
+    eq([state.writes, mutations], [[], []], 'a failed board page read produces no repository or board writes');
+  }
+  {
     const mutations = [];
     const pages = [];
     const item = (nodeId, optionId) => ({
@@ -394,14 +426,14 @@ function fakeBoard(columns = COLUMNS) {
       if (/projectV2\(number/.test(query)) {
         return { user: { projectV2: { id: 'P', field: { id: 'F', options: [{ id: 'ready', name: 'Ready' }] } } } };
       }
-      if (/projectItems/.test(query)) {
-        return { node: { projectItems: { nodes: [{ id: 'other-item', project: { id: 'Q' } }] } } };
-      }
       if (/\bitems\(/.test(query)) {
-        pages.push(vars.cursor);
+        pages.push(vars);
         const first = vars.cursor == null;
+        const includeArchived = /archivedStates:\s*\[ARCHIVED, NOT_ARCHIVED\]/.test(query);
+        const laterItems = [item('I3', 'hold')];
+        if (includeArchived) laterItems.unshift(item('I2', 'ready'));
         return { node: { items: {
-          nodes: first ? [item('I1', 'ready'), item('I4')] : [item('I2', 'ready'), item('I3', 'hold')],
+          nodes: first ? [item('I1', 'ready'), item('I4')] : laterItems,
           pageInfo: { hasNextPage: first, endCursor: first ? 'next' : null },
         } } };
       }
@@ -413,9 +445,10 @@ function fakeBoard(columns = COLUMNS) {
     eq(mutations.splice(0), [], 'placing a card already in its desired column makes no mutations');
     await b.remove('I2');
     await b.remove('I2');
-    eq(mutations.splice(0), [{ project: 'P', item: 'item-I2' }], 'a dropped card on a later page is deleted once');
+    eq(mutations.splice(0), [{ project: 'P', item: 'item-I2' }], 'a dropped session’s archived card on a later page is deleted once');
     await b.place('I3', 'ready');
     await b.place('I4', 'ready');
+    await b.place('I5', 'ready');
     await b.place('I5', 'ready');
     eq(mutations.splice(0), [
       { project: 'P', item: 'item-I3', field: 'F', option: 'ready' },
@@ -423,7 +456,7 @@ function fakeBoard(columns = COLUMNS) {
       { project: 'P', content: 'I5' },
       { project: 'P', item: 'item-I5', field: 'F', option: 'ready' },
     ], 'only a missing card is added; changed, unset and new cards get a Status write');
-    eq(pages, [null, 'next'], 'the board is read once, across all pages');
+    eq(pages, [{ project: 'P', cursor: null }, { project: 'P', cursor: 'next' }], 'the configured board is read once, across all pages');
   }
   {
     const calls = [];
@@ -431,8 +464,10 @@ function fakeBoard(columns = COLUMNS) {
       calls.push([query.replace(/\s+/g, ' ').trim().split(' ').slice(0, 2).join(' '), vars]);
       if (/projectV2\(number/.test(query)) return { user: { projectV2: { id: 'P', field: { id: 'F', options: [{ id: 'o1', name: 'Ready' }, { id: 'o2', name: 'Done' }] } } } };
       if (/addProjectV2ItemById/.test(query)) return { addProjectV2ItemById: { item: { id: 'ITEM' } } };
-      if (/projectItems/.test(query)) return { node: { projectItems: { nodes: vars.content === 'I2'
-        ? [{ id: 'mine', project: { id: 'P' } }, { id: 'other', project: { id: 'Q' } }, { id: 'hidden', project: null }] : [] } } };
+      if (/\bitems\(/.test(query)) return { node: { items: {
+        nodes: [{ id: 'mine', content: { id: 'I2' } }, { id: 'draft', content: {} }, { id: 'hidden', content: null }],
+        pageInfo: { hasNextPage: false, endCursor: null },
+      } } };
       return {};
     };
     const b = githubBoard(graphql, { login: 'ABlueAI', number: 3 });
@@ -444,10 +479,10 @@ function fakeBoard(columns = COLUMNS) {
     eq(calls.map((c) => c[1]), [{ project: 'P', content: 'I1' }, { project: 'P', item: 'ITEM', field: 'F', option: 'o2' }], 'place() adds the issue, then sets its Status');
     calls.length = 0;
     await b.remove('I2');
-    eq(calls.slice(1).map((c) => c[1]), [{ project: 'P', item: 'mine' }], 'remove() deletes only this project\'s item (other and unreadable projects are left alone)');
+    eq(calls.map((c) => c[1]), [{ project: 'P', item: 'mine' }], 'remove() deletes only the matching issue card from the configured project');
     calls.length = 0;
     await b.remove('I3');
-    eq(calls.length, 1, 'remove() of an issue not on the board only looks it up');
+    eq(calls.length, 0, 'remove() of an issue absent from the board makes no calls');
     const none = githubBoard(async () => ({ user: { projectV2: null } }), { login: 'x', number: 1 });
     await throws(() => none.columns(), /not found or not readable/, 'a missing project throws');
     const nofield = githubBoard(async () => ({ user: { projectV2: { id: 'P', field: null } } }), { login: 'x', number: 1 });
