@@ -187,6 +187,7 @@ const preferences = S.preferenceSaves || {};
 assert(/theme/i.test(preferences.settingsError || ''), 'the theme write failure is visible from Settings');
 assert(['theme', 'voice', 'speed'].every((word) => (preferences.failures || '').toLowerCase().includes(word)),
   'each failed preference is named and stays visible alongside the others');
+assert(preferences.logged === true, 'the Logs tab names each failed preference and why it failed');
 eq(preferences.applied, { theme: 'nord', voice: 'test-voice', speed: 1.25 }, 'the preferences still take effect for this session');
 assert(preferences.toolbarTheme === 'dracula' && (preferences.saves || []).some((p) => p.theme === 'dracula'),
   'the toolbar theme change also persists through main');

@@ -10,19 +10,23 @@ async function savePreference(key, value, label) {
   const partial = { [key]: value };
   pendingPreferenceSaves.set(key, partial);
   let saved;
+  let reason = '';
   try {
     const result = await cc.saveSettings(partial);
     saved = result && result.ok !== false && (result.ok === true || result[key] === value);
-  } catch {
+    if (!saved) reason = (result && result.error) || 'save refused';
+  } catch (e) {
     saved = false;
+    reason = (e && e.message) || String(e);
   }
+  if (!saved) appendLog('[settings] could not save ' + key + ': ' + reason + '\n');
   // An older reply must not overwrite the status of a newer change to the same preference.
   if (pendingPreferenceSaves.get(key) !== partial) return;
   pendingPreferenceSaves.delete(key);
   if (saved) {
     preferenceSaveErrors.delete(key);
   } else {
-    const message = 'Could not save ' + label + '. The change may be lost when Mako restarts.';
+    const message = 'Could not save ' + label + '. The change may be lost when Mako restarts. Details in Logs.';
     preferenceSaveErrors.set(key, message);
   }
   const banner = $('#preferenceSaveErrors');

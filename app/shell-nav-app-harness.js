@@ -502,7 +502,12 @@ async function scenarioPreferenceSaves() {
     const applied = { theme: document.documentElement.getAttribute('data-theme'), ...window.__speech };
     change('themeSelect', 'dracula');
     await t.waitFor(() => failures && !/theme/i.test(errorText()), 2000);
-    return { settingsError, failures, applied, afterThemeRetry: errorText(),
+    const log = t.log();
+    const logLines = log.split('\\n');
+    const logged = logLines.some((l) => l.startsWith('[settings] could not save theme: ') && l.includes('EPERM: harness theme write refused')) &&
+      log.includes('[settings] could not save ttsVoice: save refused') &&
+      log.includes('[settings] could not save ttsSpeed: save refused');
+    return { settingsError, failures, applied, afterThemeRetry: errorText(), logged,
       toolbarTheme: document.documentElement.getAttribute('data-theme') };
   })()`);
   r.saves = ipc.saves.slice();
