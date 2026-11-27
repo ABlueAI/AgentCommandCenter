@@ -196,7 +196,7 @@ assert(!/theme/i.test(preferences.afterThemeRetry || '') && /voice/i.test(prefer
 process.stdout.write('\nagent surfaces show linked worktrees regardless of branch\n');
 const checkout = S.primaryCheckout || {};
 for (const [surface, rows] of [['list', checkout.list], ['grid', checkout.grid]]) {
-  assert(rows && rows.length === 2 && rows[0].includes('/projects/selected-agent') && rows[1].includes('/projects/selected-detached'),
+  eq(rows, ['/projects/selected-agent', '/projects/selected-detached'],
     surface + ' excludes the primary checkout on master and includes the main and detached linked worktrees');
 }
 

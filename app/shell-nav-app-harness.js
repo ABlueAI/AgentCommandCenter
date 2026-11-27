@@ -519,8 +519,10 @@ async function scenarioPrimaryCheckout() {
   ]);
   const r = await run(`(async () => {
     await window.__t.waitFor(() => typeof document.getElementById('openTerminal').onclick === 'function');
-    const paths = (selector) => Array.from(document.querySelector(selector).children, (node) => node.textContent);
-    return { list: paths('#agentList'), grid: paths('#agentGrid') };
+    return {
+      list: Array.from(document.querySelectorAll('#agentList .agent-row .name'), (node) => node.title),
+      grid: Array.from(document.querySelectorAll('#agentGrid .card .meta'), (node) => node.textContent),
+    };
   })()`);
   await park();
   return r;
