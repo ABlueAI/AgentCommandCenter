@@ -28,15 +28,38 @@ class Element {
     };
   }
   appendChild(child) { this.children.push(child); }
+  append(...children) { this.children.push(...children); }
+  querySelector(selector) { return this.children.find((child) => child.selector === selector); }
   set textContent(value) { this.text = value; this.children = []; }
   get textContent() { return [this.text, ...this.children.map((child) => child.textContent)].filter(Boolean).join(' '); }
   addEventListener() {}
+  setAttribute(name, value) { this[name] = value; }
   focus() { this.focused = true; }
   remove() {}
   button(text) {
     if (this.tag === 'button' && this.textContent === text) return this;
     return this.children.map((child) => child.button(text)).find(Boolean);
   }
+}
+
+class Terminal {
+  loadAddon() {}
+  open() {}
+  onData() {}
+  onResize() {}
+  attachCustomKeyEventHandler() {}
+  onSelectionChange() { return { dispose: noop }; }
+  dispose() {}
+}
+
+function terminalPane() {
+  const pane = new Element();
+  for (const selector of ['.term-body', '.spk', '.copy-out', '.max', '.chat-body', '.x']) {
+    const child = new Element();
+    child.selector = selector;
+    pane.appendChild(child);
+  }
+  return pane;
 }
 
 function renderer(ipc = {}) {
@@ -51,7 +74,13 @@ function renderer(ipc = {}) {
   const alerts = [];
   const context = vm.createContext({
     URL,
-    document: { addEventListener: noop, querySelector: control, createElement: (tag) => new Element(tag) },
+    Terminal,
+    FitAddon: { FitAddon: class { fit() {} } },
+    WebLinksAddon: { WebLinksAddon: class {} },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    PtyParser: class {},
+    setTimeout: noop, // Skip the unrelated post-launch terminal refit.
+    document: { addEventListener: noop, querySelector: control, querySelectorAll: () => [], createElement: (tag) => new Element(tag) },
     alert: (message) => alerts.push(message),
     window: {
       addEventListener: noop,
@@ -59,26 +88,32 @@ function renderer(ipc = {}) {
       ccAudioModuleHealth: { createAudioModuleHealth: noop },
       ccQuickLinksView: { createQuickLinksView: noop },
       ccUsageView: { createUsageView: noop },
-      ccPaneMaximize: { createPaneMaximizer: noop },
+      ccPaneMaximize: { createPaneMaximizer: () => ({ handlePaneClosed: noop }) },
       ccClipboardConsumer: { createClipboardConsumer: noop },
       ccReportFollowup: { createReportFollowup: noop },
       ccSessionResumeView: require('./session-resume-view'),
+      ccTTSSelection: { createSelectionMemory: noop, installMouseTrackingSelectionFallback: noop },
     },
     cc: { tlogReset: async () => {}, ...ipc },
-    agentDom: require('./agent-dom'),
+    agentDom: { buildTermPane: terminalPane },
+    analysisFocus: require('./analysis-focus'),
     videoModelPolicy: require('./video-model-policy'),
     videoRangeUi: require('./video-range-ui'),
   });
   // Run the renderer with synthetic controls and IPC, without starting unrelated boot work.
   vm.runInContext(source.replace(/\nboot\(\);\s*$/, ''), context, { filename: 'app.js' });
   const run = (code) => vm.runInContext(code, context);
+  control('#terminalGrid').style = {};
   Object.assign(context, {
-    closeModal: () => control('#modal').classList.add('hidden'),
-    openInAppTerminal: (options) => { launches.push(options); return ipc.start?.(options); },
+    switchTab: noop,
+    buildClaudeVideoSettings: noop,
+    fillClaudeVideoSettings: noop,
+    loadClaudeVideoSettings: noop,
     readVideoAnalysisFocus: () => ({}),
     readClaudeVideoSettings: () => ({}),
     refreshAgents: async () => {},
   });
+  if (!ipc.ptyStart) context.openInAppTerminal = (options) => launches.push(options);
   run("Object.assign(state, { repo: '/synthetic/repo', chosenRole: 'video-scout' });");
   return { run, control, launches, alerts };
 }
@@ -90,10 +125,48 @@ test('Gemini Video Scout hands off a double submission only once', async () => {
   const first = app.run('createAgent()');
   const second = app.run('createAgent()');
   await tick();
+  assert.equal(app.control('#modalCreate').disabled, true);
   key.resolve({ ok: true, hasKey: true });
   await Promise.all([first, second]);
   assert.equal(app.launches.length, 1, 'one user submission starts one pane');
   assert.equal(keyChecks, 1);
+  assert.equal(app.control('#modalCreate').disabled, false);
+});
+
+test('a refused Gemini key check keeps the dialog open and allows a retry', async () => {
+  let attempts = 0;
+  const app = renderer({ getGeminiKeyStatus: async () => ++attempts === 1
+    ? { ok: false, error: 'synthetic refusal' } : { ok: true, hasKey: true } });
+  await app.run('createAgent()');
+  assert.equal(app.launches.length, 0);
+  assert.equal(app.control('#modal').classList.contains('hidden'), false);
+  assert.equal(app.control('#modalCreate').disabled, false);
+  assert.match(app.alerts[0], /could not check the Gemini key status/i);
+  await app.run('createAgent()');
+  assert.equal(app.launches.length, 1);
+});
+
+test('a cancelled Gemini key check cannot launch or reset the next submission', async () => {
+  const cancelled = deferred();
+  const current = deferred();
+  let attempts = 0;
+  const app = renderer({ getGeminiKeyStatus: () => (++attempts === 1 ? cancelled : current).promise });
+  const first = app.run('createAgent()');
+  await tick();
+  app.run('closeModal()');
+  app.run("openModal(); state.chosenRole = 'video-scout';");
+  app.control('#taskName').value = 'https://www.youtube.com/watch?v=second';
+  const second = app.run('createAgent()');
+  await tick();
+  cancelled.resolve({ ok: true, hasKey: true });
+  await first;
+  assert.equal(app.launches.length, 0);
+  assert.equal(app.control('#modal').classList.contains('hidden'), false);
+  assert.equal(app.control('#modalCreate').disabled, true);
+  current.resolve({ ok: true, hasKey: true });
+  await second;
+  assert.equal(app.launches.length, 1);
+  assert.match(app.launches[0].videoUrl, /v=second$/);
 });
 
 for (const provider of ['gemini', 'claude']) {
@@ -124,10 +197,11 @@ for (const role of ['plain', 'builder']) {
     const first = app.run('createAgent()');
     await tick();
     assert.equal(requests[0].task, 'first-task');
-    app.run("Object.assign(state, { chosenRole: 'builder', chosenCli: 'claude', hardTask: false });");
+    app.run("openModal(); state.chosenCli = 'claude';");
     app.control('#taskName').value = 'second-task';
     worktree.resolve({ ok: true, worktree: '/synthetic/first-task' });
     await first;
+    assert.equal(app.control('#modal').classList.contains('hidden'), false);
     assert.equal(app.launches[0].worktree, '/synthetic/first-task');
     if (role === 'plain') {
       assert.equal(app.launches[0].cli, 'codex');
@@ -143,22 +217,29 @@ for (const action of ['Resume', 'Start fresh']) {
     const failed = deferred();
     const retry = deferred();
     const dismissals = [];
+    const starts = [];
     const row = { sessionId: 'synthetic-session', worktree: '/synthetic/recovery' };
-    let attempts = 0;
     const app = renderer({
       sessionResumeOffer: async () => ({ ok: true, rows: [row] }),
       sessionResumeDismiss: async (id) => { dismissals.push(id); return { ok: true }; },
-      start: () => (++attempts === 1 ? failed : retry).promise,
+      ptyStart: (options) => { starts.push(options); return (starts.length === 1 ? failed : retry).promise; },
     });
     await app.run('offerResume()');
     const host = app.control('#resumeHost');
     const pending = host.button(action).onclick();
     await tick();
     assert.ok(host.button(action), 'the offer is still visible while startup is pending');
+    assert.equal(host.button('Resume').disabled, true);
+    assert.equal(host.button('Start fresh').disabled, true);
+    assert.equal(starts.length, 1);
+    assert.equal(starts[0].resumeSessionId, action === 'Resume' ? row.sessionId : undefined);
     assert.deepEqual(dismissals, []);
-    failed.resolve({ ok: false, error: 'synthetic refusal' });
+    if (action === 'Resume') failed.resolve({ ok: false, error: 'synthetic refusal' });
+    else failed.reject(new Error('synthetic IPC rejection'));
     await pending;
     assert.ok(host.button(action), 'the offer is still available after startup fails');
+    assert.match(host.textContent, /could not start this pane/i);
+    assert.equal(host.button(action).disabled, false);
     const started = host.button(action).onclick();
     await tick();
     assert.deepEqual(dismissals, []);

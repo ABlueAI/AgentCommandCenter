@@ -856,6 +856,8 @@ function openInAppTerminal(opts = {}) {
     if (!terms.has(id)) return;
     fit.fit(); cc.ptyResize(id, term.cols, term.rows); activeTermId = id; term.focus();
   }, 40);
+  // Session recovery waits for main to acknowledge the PTY before removing its offer.
+  return startResult;
 }
 
 // ---- Dockview layout engine scripts ------------------------------------------------------------
@@ -1347,34 +1349,40 @@ function buildDockviewHost(container) {
 async function offerResume() {
   const host = $('#resumeHost');
   if (!host || !window.ccSessionResumeView) return;
-  const dismiss = (row) => Promise.resolve(cc.sessionResumeDismiss(row.sessionId))
-    .then((r) => { if (!r || r.ok !== true) appendLog(`[resume] could not record your choice: ${(r && r.error) || 'unknown'}\n`); })
-    .catch(() => appendLog('[resume] could not record your choice: ipc-rejected\n'));
-  const paneOpts = (row) => ({ worktree: row.worktree, role: row.role || undefined, cli: 'claude' });
+  const dismiss = async (row) => {
+    try {
+      const result = await cc.sessionResumeDismiss(row.sessionId);
+      if (!result || result.ok !== true) appendLog(`[resume] could not record your choice: ${(result && result.error) || 'unknown'}\n`);
+    } catch {
+      appendLog('[resume] could not record your choice: ipc-rejected\n');
+    }
+  };
+  async function launch(row, resume) {
+    // Maximum sends Claude tasks to a cloud session, which cannot use this local recovery offer.
+    if (state.authority === 'maximum') {
+      appendLog('[resume] Maximum starts no local Claude pane. Pick another authority level and try again.\n');
+      return false;
+    }
+    if (resume) appendLog(`[resume] resuming a ${row.role || 'claude'} pane with claude --resume\n`);
+    try {
+      const result = await openInAppTerminal({
+        worktree: row.worktree, role: row.role || undefined, cli: 'claude',
+        ...(resume ? { resumeSessionId: row.sessionId } : {}),
+      });
+      if (result?.ok !== true) return false;
+    } catch {
+      appendLog('[resume] could not start the pane. The recovery offer is still available.\n');
+      return false;
+    }
+    if (!resume) await dismiss(row);
+    return true;
+  }
   const resumeView = window.ccSessionResumeView.create({
     document,
     host,
     roleLabel: (r) => (ROLES[r] ? ROLES[r].label : r),
-    onResume: (row) => {
-      // Maximum sends Claude tasks to a cloud session, which can't continue a conversation on this PC.
-      if (state.authority === 'maximum') {
-        appendLog('[resume] Maximum starts no local Claude pane, so nothing can be resumed here. Pick another authority level, then Resume.\n');
-        return false;
-      }
-      appendLog(`[resume] resuming a ${row.role || 'claude'} pane with claude --resume\n`);
-      openInAppTerminal(Object.assign(paneOpts(row), { resumeSessionId: row.sessionId }));
-      return true;
-    },
-    onFresh: (row) => {
-      // Same rule as Resume: at Maximum nothing starts here, so the session isn't dismissed either.
-      if (state.authority === 'maximum') {
-        appendLog('[resume] Maximum starts no local Claude pane. Pick another authority level, then Start fresh.\n');
-        return false;
-      }
-      dismiss(row);
-      openInAppTerminal(paneOpts(row));
-      return true;
-    },
+    onResume: (row) => launch(row, true),
+    onFresh: (row) => launch(row, false),
     onDismiss: dismiss,
   });
   let offer = null;
@@ -2101,6 +2109,7 @@ function wireUi() {
   $('#newAgent').onclick = openModal;
   $('#modalCancel').onclick = closeModal;
   $('#modalCreate').onclick = createAgent;
+  $('#taskName').oninput = () => showVideoUrlError('');
   // S15: hand the last page-reader report to the Reviewer. MAIN copies report.md into a fresh folder
   // (never the page-reader's own, which a page-reading agent can write) and names that folder and the
   // Reviewer's fixed opening line; the renderer supplies neither.
@@ -2212,6 +2221,7 @@ function updateAnalysisFocusCounter() {
 // `mode` is 'video', 'page' or anything else for a task name (a bare `true` still means video).
 function setTaskInputMode(mode) {
   const lbl = $('#taskNameLabel'); const inp = $('#taskName');
+  showVideoUrlError('');
   if (mode === true || mode === 'video') {
     if (lbl) lbl.innerHTML = 'Video URL';
     if (inp) inp.placeholder = 'https://youtu.be/…';
@@ -2340,11 +2350,15 @@ function updateVideoRangeVisibility() {
 // mirrors YOUTUBE_HOSTS in video-scout-args.js and the YouTube subset of VIDEO_HOSTS in main.js
 // (which remain the authority; a bypassed renderer is still refused there). Used only to block a
 // range + non-YouTube launch in the UI before a dead pane is ever created.
-function isYouTubeUrl(url) {
-  try {
-    const h = new URL(url).hostname.toLowerCase();
-    return h === 'youtube.com' || h === 'www.youtube.com' || h === 'm.youtube.com' || h === 'youtu.be';
-  } catch { return false; }
+function isYouTubeHost(host) {
+  return host === 'youtube.com' || host === 'www.youtube.com' || host === 'm.youtube.com' || host === 'youtu.be';
+}
+
+function showVideoUrlError(message) {
+  const error = $('#videoUrlError');
+  error.textContent = message;
+  error.classList.toggle('hidden', !message);
+  $('#taskName').setAttribute('aria-invalid', String(Boolean(message)));
 }
 
 function syncVideoProvider() {
@@ -2386,8 +2400,17 @@ function populateTargets() {
   for (const wt of state.worktrees) add(wt.path, displayNameOf(wt));
 }
 
+// A pending video submission belongs to this opening of the dialog. Closing or reopening it
+// invalidates the submission so a late key check cannot launch from, or close, the next dialog.
+let videoSubmission = null;
+function releaseVideoSubmission() {
+  videoSubmission = null;
+  $('#modalCreate').disabled = false;
+}
+
 function openModal() {
   if (!state.repo) { alert('Pick a repo first (set your projects root with 📁).'); return; }
+  releaseVideoSubmission();
   $('#taskName').value = '';
   // reset to Builder default
   state.chosenRole = 'builder'; state.hardTask = false;
@@ -2437,6 +2460,7 @@ function openModal() {
   $('#taskName').focus();
 }
 function closeModal() {
+  releaseVideoSubmission();
   $('#modal').classList.add('hidden');
   $('#terminalGrid').style.pointerEvents = '';
 }
@@ -2622,102 +2646,149 @@ async function handleClaudeVideoEvent({ id, token, status, estimate, pcm }) {
   }
 }
 
-async function createAgent() {
-  await cc.tlogReset();
-  appendLog('[TIMING] createAgent: START\n');
-  const role = state.chosenRole;
-  const meta = role !== 'plain' ? ROLES[role] : null;
-
-  // Video Scout uses the selected provider for this URL.
-  if (meta && meta.video) {
-    const url = $('#taskName').value.trim();
-    if (!/^https?:\/\/\S+$/.test(url)) { alert('Enter a video URL (starting with http:// or https://).'); $('#taskName').focus(); return; }
-    const provider = $('#videoProviderSelect').value;
-    if (provider !== 'claude' && provider !== 'gemini') {
-      alert('Choose Gemini or Claude Code for Video Scout.');
-      return;
-    }
-    if (provider === 'claude') {
-      const focusOpt = readVideoAnalysisFocus();
-      if (!focusOpt) return;
-      const claudeSettings = readClaudeVideoSettings();
-      if (!claudeSettings) return;
-      closeModal();
-      openInAppTerminal({
-        role, claudeVideoScout: true, videoUrl: url, ...focusOpt, claudeVideoSettings: claudeSettings,
-        title: `Video Scout · Claude · ${new URL(url).hostname}`,
-      });
-      return;
-    }
-    const ks = await geminiKeyStatusOrLog();
-    if (!ks || !ks.hasKey) {
-      closeModal();
-      if (ks) appendLog('[video-scout] GEMINI_API_KEY not stored — enter it in the key setup banner.\n');
-      updateKeyBanner({ hasKey: false });
-      $('#geminiKeyInput').focus();
-      return;
-    }
-    // Time slices: only meaningful in video mode (transcript/audio have no video stream to slice —
-    // the rows are hidden then too, see updateVideoRangeVisibility). On ANY failure we BLOCK
-    // submission with visible inline feedback, mark the offending row(s), and do NOT fall back to
-    // whole-video — a user who asked for slices must never be silently downgraded to (and billed
-    // for) the whole video. Whole-video is only the explicit all-blank path. This is immediate-
-    // feedback UX; main.js (video-scout-args.js) independently refuses on the pty-start IPC handler
-    // as the bypass-proof enforcement boundary.
-    const rangeErrEl = $('#videoRangeError');
-    const showRangeError = (msg, badRows) => {
-      if (rangeErrEl) { rangeErrEl.textContent = msg; rangeErrEl.classList.remove('hidden'); }
-      const bad = Array.isArray(badRows) && badRows.length ? badRows : sliceRows.map((_, i) => i);
-      for (const i of bad) {
-        const r = sliceRows[i];
-        if (r) { r.startEl.classList.add('invalid'); r.endEl.classList.add('invalid'); }
-      }
-      appendLog(`[video-scout] launch blocked: ${msg}\n`);
-    };
-    clearSliceRowErrors();
-
-    // Belt check: clear-on-hide (updateVideoRangeVisibility) guarantees a non-video mode has blank
-    // rows, so this is unreachable in normal operation. If it ever fires, some path bypassed
-    // clear-on-hide — log it loudly rather than let stale slices slip by unnoticed.
-    const stale = videoRangeUi.detectStaleSliceRows({ analysisMode: state.analysisMode, rows: collectSliceRowValues() });
-    if (stale) appendLog(`[video-scout] ${stale}\n`);
-
-    let rangeOpts = {};
-    let rangeLogSuffix = '';
-    if (state.analysisMode === 'video') {
-      const cls = videoRangeUi.classifySliceRows({ rows: collectSliceRowValues() });
-      if (cls.kind === 'error') {
-        showRangeError(cls.message, cls.badRows);
-        return; // modal stays open, rows + error visible — do not launch, no pane
-      }
-      if (cls.kind === 'single' || cls.kind === 'multi') {
-        if (!isYouTubeUrl(url)) {
-          showRangeError('Time slices only work for YouTube URLs (analyzed directly via the Gemini API). Clear the slices, or use a YouTube URL.');
-          return; // modal stays open — do not create a pane that main would refuse anyway
-        }
-      }
-      if (cls.kind === 'single') {
-        // One populated row = the existing single-slice scalar path, unchanged end to end.
-        rangeOpts = { startOffset: cls.startOffset, endOffset: cls.endOffset };
-        rangeLogSuffix = `, range: ${cls.startOffset}s-${cls.endOffset}s`;
-      } else if (cls.kind === 'multi') {
-        // 2-8 rows = the V4 path: ONE submission, ONE provider request with N ordered parts.
-        rangeOpts = { sliceRanges: cls.ranges };
-        rangeLogSuffix = `, slices: ${cls.ranges.length} (aggregate ${cls.aggregateSeconds}s)`;
-      }
-    }
+async function launchVideoScout(role, url, submission) {
+  const taskInput = $('#taskName');
+  showVideoUrlError('');
+  const parsed = /^https?:\/\/\S+$/.test(url) ? URL.parse(url) : null;
+  if (!parsed?.hostname) {
+    showVideoUrlError('Enter a valid video URL starting with http:// or https://.');
+    taskInput.focus();
+    return;
+  }
+  const host = parsed.hostname;
+  const provider = $('#videoProviderSelect').value;
+  if (provider !== 'claude' && provider !== 'gemini') {
+    alert('Choose Gemini or Claude Code for Video Scout.');
+    return;
+  }
+  if (provider === 'claude') {
     const focusOpt = readVideoAnalysisFocus();
     if (!focusOpt) return;
-    const focusLogSuffix = focusOpt.analysisFocus ? `, focus: ${focusOpt.analysisFocus.length} chars` : '';
+    const claudeSettings = readClaudeVideoSettings();
+    if (!claudeSettings) return;
+    await resetCreateAgentTiming();
+    if (videoSubmission !== submission) return;
     closeModal();
-    appendLog(`\n[video-scout] downloading + analyzing ${url}… (mode: ${state.analysisMode}, model: ${state.videoModel}, media resolution: ${state.mediaResolution}${rangeLogSuffix}${focusLogSuffix})\n`);
     openInAppTerminal({
-      worktree: state.repo || undefined, role, videoScout: true, videoUrl: url,
-      videoModel: state.videoModel, mediaResolution: state.mediaResolution, analysisMode: state.analysisMode,
-      ...rangeOpts,
-      ...focusOpt,
-      title: `Video Scout · ${new URL(url).hostname}`,
+      role, claudeVideoScout: true, videoUrl: url, ...focusOpt, claudeVideoSettings: claudeSettings,
+      title: `Video Scout · Claude · ${host}`,
     });
+    return;
+  }
+
+  const { repo, analysisMode, videoModel, mediaResolution } = state;
+  // Time slices: only meaningful in video mode (transcript/audio have no video stream to slice —
+  // the rows are hidden then too, see updateVideoRangeVisibility). On ANY failure we BLOCK
+  // submission with visible inline feedback, mark the offending row(s), and do NOT fall back to
+  // whole-video — a user who asked for slices must never be silently downgraded to (and billed
+  // for) the whole video. Whole-video is only the explicit all-blank path. This is immediate-
+  // feedback UX; main.js (video-scout-args.js) independently refuses on the pty-start IPC handler
+  // as the bypass-proof enforcement boundary.
+  const rangeErrEl = $('#videoRangeError');
+  const showRangeError = (msg, badRows) => {
+    if (rangeErrEl) { rangeErrEl.textContent = msg; rangeErrEl.classList.remove('hidden'); }
+    const bad = Array.isArray(badRows) && badRows.length ? badRows : sliceRows.map((_, i) => i);
+    for (const i of bad) {
+      const r = sliceRows[i];
+      if (r) { r.startEl.classList.add('invalid'); r.endEl.classList.add('invalid'); }
+    }
+    appendLog(`[video-scout] launch blocked: ${msg}\n`);
+  };
+  clearSliceRowErrors();
+
+  // Belt check: clear-on-hide (updateVideoRangeVisibility) guarantees a non-video mode has blank
+  // rows, so this is unreachable in normal operation. If it ever fires, some path bypassed
+  // clear-on-hide — log it loudly rather than let stale slices slip by unnoticed.
+  const stale = videoRangeUi.detectStaleSliceRows({ analysisMode, rows: collectSliceRowValues() });
+  if (stale) appendLog(`[video-scout] ${stale}\n`);
+
+  let rangeOpts = {};
+  let rangeLogSuffix = '';
+  if (analysisMode === 'video') {
+    const cls = videoRangeUi.classifySliceRows({ rows: collectSliceRowValues() });
+    if (cls.kind === 'error') {
+      showRangeError(cls.message, cls.badRows);
+      return; // modal stays open, rows + error visible — do not launch, no pane
+    }
+    if ((cls.kind === 'single' || cls.kind === 'multi') && !isYouTubeHost(host)) {
+      showRangeError('Time slices only work for YouTube URLs (analyzed directly via the Gemini API). Clear the slices, or use a YouTube URL.');
+      return; // modal stays open — do not create a pane that main would refuse anyway
+    }
+    if (cls.kind === 'single') {
+      // One populated row = the existing single-slice scalar path, unchanged end to end.
+      rangeOpts = { startOffset: cls.startOffset, endOffset: cls.endOffset };
+      rangeLogSuffix = `, range: ${cls.startOffset}s-${cls.endOffset}s`;
+    } else if (cls.kind === 'multi') {
+      // 2-8 rows = the V4 path: ONE submission, ONE provider request with N ordered parts.
+      rangeOpts = { sliceRanges: cls.ranges };
+      rangeLogSuffix = `, slices: ${cls.ranges.length} (aggregate ${cls.aggregateSeconds}s)`;
+    }
+  }
+  const focusOpt = readVideoAnalysisFocus();
+  if (!focusOpt) return;
+  const focusLogSuffix = focusOpt.analysisFocus ? `, focus: ${focusOpt.analysisFocus.length} chars` : '';
+  await resetCreateAgentTiming();
+  if (videoSubmission !== submission) return;
+  const ks = await geminiKeyStatusOrLog();
+  if (videoSubmission !== submission) return;
+  if (!ks) {
+    alert('Could not check the Gemini key status. See Logs for details, then try again.');
+    return;
+  }
+  if (!ks.hasKey) {
+    closeModal();
+    appendLog('[video-scout] GEMINI_API_KEY not stored — enter it in the key setup banner.\n');
+    updateKeyBanner({ hasKey: false });
+    $('#geminiKeyInput').focus();
+    return;
+  }
+
+  closeModal();
+  appendLog(`\n[video-scout] downloading + analyzing ${url}… (mode: ${analysisMode}, model: ${videoModel}, media resolution: ${mediaResolution}${rangeLogSuffix}${focusLogSuffix})\n`);
+  openInAppTerminal({
+    worktree: repo || undefined, role, videoScout: true, videoUrl: url,
+    videoModel, mediaResolution, analysisMode, ...rangeOpts, ...focusOpt,
+    title: `Video Scout · ${host}`,
+  });
+}
+
+async function resetCreateAgentTiming() {
+  await cc.tlogReset();
+  appendLog('[TIMING] createAgent: START\n');
+}
+
+async function createAgent() {
+  if (videoSubmission) return;
+  const { chosenRole: role, chosenCli, hardTask, repo } = state;
+  const meta = role !== 'plain' ? ROLES[role] : null;
+  const input = $('#taskName').value.trim();
+
+  if (meta && meta.video) {
+    const submission = {};
+    videoSubmission = submission;
+    $('#modalCreate').disabled = true;
+    try {
+      await launchVideoScout(role, input, submission);
+    } catch {
+      appendLog('[video-scout] could not complete the Video Scout launch. See the launch status and try again.\n');
+      if (videoSubmission === submission) alert('Could not start Video Scout. See Logs for details, then try again.');
+    } finally {
+      if (videoSubmission === submission) releaseVideoSubmission();
+    }
+    return;
+  }
+
+  const needsWorktree = role === 'plain' || meta?.needsWorktree;
+  const task = input.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '');
+  if (needsWorktree) {
+    if (!task) { $('#taskName').focus(); return; }
+    closeModal();
+  }
+  try {
+    await resetCreateAgentTiming();
+  } catch {
+    appendLog('[agent] could not start launch timing: ipc-rejected\n');
+    alert('Could not start the launch. See Logs for details, then try again.');
     return;
   }
 
@@ -2758,40 +2829,37 @@ async function createAgent() {
     return;
   }
 
-  const task = $('#taskName').value.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '');
-  if (!task) { $('#taskName').focus(); return; }
-  closeModal();
-
-  // Plain: today's behavior — fresh worktree + a bare CLI.
-  if (role === 'plain') {
-    appendLog(`\n[agent] worktree agent/${task} (plain ${state.chosenCli})…\n`);
-    appendLog('[TIMING] createAgent: newAgent START\n');
-    const res = await cc.newAgent({ repo: state.repo, task });
-    appendLog('[TIMING] createAgent: newAgent END\n');
-    appendLog('[TIMING] createAgent: refreshAgents START\n');
-    await refreshAgents();
-    appendLog('[TIMING] createAgent: refreshAgents END\n');
+  if (needsWorktree) {
+    const description = role === 'plain' ? `plain ${chosenCli}` : `${role}${hardTask ? ', opus/xhigh' : ''}`;
+    appendLog(`\n[agent] worktree agent/${task} (${description})…\n`);
+    let res;
+    try {
+      appendLog('[TIMING] createAgent: newAgent START\n');
+      res = await cc.newAgent({ repo, task });
+      appendLog('[TIMING] createAgent: newAgent END\n');
+      appendLog('[TIMING] createAgent: refreshAgents START\n');
+      await refreshAgents();
+      appendLog('[TIMING] createAgent: refreshAgents END\n');
+    } catch {
+      if (worktreeOk(res || { error: 'Mako could not confirm worktree creation.' }, task)) {
+        appendLog('[agent] could not refresh the worktree list; the terminal was not started\n');
+        alert('The worktree was created, but Mako could not refresh the Agents list to open it.');
+      }
+      return;
+    }
     if (!worktreeOk(res, task)) return;
-    appendLog('[TIMING] createAgent: openInAppTerminal (plain)\n');
-    openInAppTerminal({ worktree: res.worktree, cli: state.chosenCli });
-    return;
-  }
-
-  if (meta.needsWorktree) {
-    // Builder: fresh worktree, launched with the role (Opus override when Hard is checked).
-    appendLog(`\n[agent] worktree agent/${task} (${role}${state.hardTask ? ', opus/xhigh' : ''})…\n`);
-    appendLog('[TIMING] createAgent: newAgent START\n');
-    const res = await cc.newAgent({ repo: state.repo, task });
-    appendLog('[TIMING] createAgent: newAgent END\n');
-    appendLog('[TIMING] createAgent: refreshAgents START\n');
-    await refreshAgents();
-    appendLog('[TIMING] createAgent: refreshAgents END\n');
-    if (!worktreeOk(res, task)) return;
-    const model = state.hardTask ? 'opus' : undefined;
-    const effort = state.hardTask ? 'xhigh' : undefined;
+    if (role === 'plain') {
+      appendLog('[TIMING] createAgent: openInAppTerminal (plain)\n');
+      openInAppTerminal({ worktree: res.worktree, cli: chosenCli });
+      return;
+    }
+    const model = hardTask ? 'opus' : undefined;
+    const effort = hardTask ? 'xhigh' : undefined;
     appendLog('[TIMING] createAgent: openInAppTerminal (builder)\n');
     openInAppTerminal({ worktree: res.worktree, role, cli: 'claude', model, effort, title: `${meta.label} · ${task}` });
   } else {
+    if (!task) { $('#taskName').focus(); return; }
+    closeModal();
     // Web-Scout / Operator: run in a dedicated fenced sandbox outside any repo. Its
     // PreToolUse write-fence confines writes to this dir — it can't touch a repo.
     // FAIL CLOSED: confirm the fence is actually deployed before launching a write-capable

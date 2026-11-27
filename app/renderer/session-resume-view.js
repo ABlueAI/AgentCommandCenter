@@ -26,8 +26,7 @@
     return { label: `${who} · ${folderName(row.worktree)}`, detail: `${how} ${when}`, title: row.worktree || '', warnings };
   }
 
-  // host: the empty #resumeHost element. Handlers get the row; onResume and onFresh return false to keep
-  // the row (for example at Maximum, where no local Claude pane starts).
+  // host: the empty #resumeHost element. onResume and onFresh can resolve false to keep the offer.
   function create(deps) {
     const d = deps || {};
     const doc = d.document;
@@ -35,6 +34,8 @@
     const roleLabel = typeof d.roleLabel === 'function' ? d.roleLabel : (r) => r;
     const onResume = d.onResume, onFresh = d.onFresh, onDismiss = d.onDismiss;
     let rows = [];
+    const pending = new Set();
+    const failed = new Set();
 
     function node(tag, className, text) {
       const n = doc.createElement(tag);
@@ -51,6 +52,27 @@
     }
     function drop(row) { rows = rows.filter((r) => r !== row); draw(); }
 
+    async function choose(row, launch) {
+      if (pending.has(row)) return;
+      pending.add(row);
+      failed.delete(row);
+      draw();
+      let started;
+      try {
+        started = await launch(row);
+      } catch {
+        started = false;
+      } finally {
+        pending.delete(row);
+      }
+      if (started === false) {
+        failed.add(row);
+        draw();
+      } else {
+        drop(row);
+      }
+    }
+
     function draw() {
       host.textContent = '';
       if (rows.length === 0) { host.className = 'resume-host hidden'; return; }
@@ -59,10 +81,13 @@
       const head = node('div', 'resume-head');
       const n = rows.length;
       head.appendChild(node('span', null, `${n === 1 ? 'One Claude pane was' : n + ' Claude panes were'} open when Mako last closed. Resume each conversation, or start fresh.`));
-      head.appendChild(button('Not now', 'mini ghost', 'Don\'t offer these again', () => {
+      const dismissAll = button('Not now', 'mini ghost', 'Don\'t offer these again', () => {
         const all = rows; rows = []; draw();
+        failed.clear();
         for (const r of all) onDismiss(r);
-      }));
+      });
+      dismissAll.disabled = pending.size > 0;
+      head.appendChild(dismissAll);
       box.appendChild(head);
       for (const row of rows) {
         const t = describeRow(row, roleLabel);
@@ -75,12 +100,16 @@
         if (row.worktreeMissing) {
           line.appendChild(button('Dismiss', 'mini ghost', 'Don\'t offer this again', () => { drop(row); onDismiss(row); }));
         } else {
-          line.appendChild(button('Resume', 'mini accent', 'Open this pane again with claude --resume', () => {
-            if (onResume(row) !== false) drop(row);
-          }));
-          line.appendChild(button('Start fresh', 'mini ghost', 'Open the same pane with a new conversation', () => {
-            if (onFresh(row) !== false) drop(row);
-          }));
+          const resume = button('Resume', 'mini accent', 'Open this pane again with claude --resume', () => choose(row, onResume));
+          const fresh = button('Start fresh', 'mini ghost', 'Open the same pane with a new conversation', () => choose(row, onFresh));
+          resume.disabled = fresh.disabled = pending.has(row);
+          line.appendChild(resume);
+          line.appendChild(fresh);
+          if (failed.has(row)) {
+            const error = node('span', 'resume-warn small', 'Could not start this pane. Check Logs for details, then try again.');
+            error.setAttribute('role', 'alert');
+            line.appendChild(error);
+          }
         }
         box.appendChild(line);
       }
