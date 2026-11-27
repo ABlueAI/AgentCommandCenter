@@ -574,3 +574,51 @@ input:focus { outline: none; border-color: var(--accent); }
 /* S54: the estimate's Send / Cancel bar in a Claude Video Scout pane. */
 .claude-video-confirm { display: flex; gap: 8px; padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--border); }
 #claudeVideoSettingsHost { display: grid; grid-template-columns: 1fr 110px; gap: 4px 10px; align-items: center; margin: 6px 0; }
+
+/* ---- S18: the brain tab (brain-stage.js; docs/DESIGN-BRIEF-1.1.md section 4) ---------------------- */
+.mk-brain { display: flex; gap: 16px; min-height: 100%; }
+.mk-brain-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.mk-brain-right { width: 272px; flex: none; display: flex; flex-direction: column; gap: 8px; border-left: 1px solid var(--mk-line); padding-left: 16px; }
+@media (max-width: 1280px) { .mk-brain-right { width: 228px; } }
+.mk-stage { border: 1px solid var(--mk-line); border-radius: 12px; padding: 12px; background: radial-gradient(ellipse at center, #1c3486 0%, var(--mk-surface-sunken) 70%); }
+.mk-stage-top { display: flex; align-items: center; gap: 8px; }
+.mk-stage-live { flex: 1; }
+.mk-input, .mk-select, .mk-message-input { background: var(--mk-surface-sunken); color: var(--mk-ink); border: 1px solid var(--mk-line-strong); border-radius: 7px; padding: 4px 8px; font: 500 13.5px/20px var(--mk-sans); }
+.mk-input:focus-visible, .mk-select:focus-visible, .mk-message-input:focus-visible, .mk-node:focus-visible, .mk-shark-slot:focus-visible { outline: 2px solid var(--mk-focus); outline-offset: 2px; }
+.mk-stage-field { position: relative; height: 360px; }
+.mk-shark-host { position: absolute; left: 22%; right: 22%; top: 4%; bottom: 14%; pointer-events: none; }
+.mk-shark-canvas { width: 100%; height: 100%; display: block; mix-blend-mode: screen; -webkit-mask-image: radial-gradient(ellipse at center, #000 45%, transparent 72%); mask-image: radial-gradient(ellipse at center, #000 45%, transparent 72%); }
+.mk-shark-slot { position: absolute; left: 50%; bottom: 2px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 0; background: none; border: none; color: var(--mk-ink); }
+.mk-shark-mark { font: 600 22px/28px var(--mk-sans); }
+.mk-node { position: absolute; transform: translate(-50%, -50%); display: grid; grid-template-columns: auto 1fr; column-gap: 6px; align-items: center; max-width: 220px; background: var(--mk-surface-raised); color: var(--mk-ink); border: 1px solid var(--mk-line); border-radius: 7px; padding: 4px 8px; text-align: left; cursor: pointer; font: 500 13.5px/20px var(--mk-sans); }
+.mk-node:hover { background: var(--mk-surface-hover); }
+.mk-node-empty { position: absolute; left: 0; top: 4%; transform: none; width: 20%; border: none; background: none; text-align: left; cursor: default; }
+.mk-node-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--mk-status-idle); grid-row: span 2; }
+.mk-node-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mk-node-sub { font: 400 12.5px/18px var(--mk-sans); color: var(--mk-ink-muted); }
+.mk-node-needs .mk-node-dot { width: 12px; height: 12px; background: var(--mk-status-needs); box-shadow: 0 0 0 4px rgba(242, 96, 107, 0.25); }
+.mk-node-needs .mk-node-sub { color: var(--mk-status-needs); }
+.mk-node-working .mk-node-dot { background: var(--mk-status-working); }
+.mk-node-ended .mk-node-dot { background: var(--mk-status-ended); }
+.mk-node-held .mk-node-dot { background: var(--mk-status-held); }
+.mk-node-focus, .mk-node-hit { border-color: var(--mk-focus); }
+.mk-flow-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.mk-flow-item { border: 1px solid var(--mk-line); border-radius: 7px; padding: 8px 12px; }
+.mk-flow-item .mk-overline, .mk-flow-item .mk-numeral { margin: 0; }
+.mk-numeral { font: 600 15px/20px var(--mk-mono); font-variant-numeric: tabular-nums; }
+.mk-convo { max-width: 760px; display: flex; flex-direction: column; gap: 12px; padding: 0 24px; }
+.mk-convo-cards { display: flex; flex-direction: column; gap: 12px; }
+.mk-question { margin: 0; font: 600 18px/24px var(--mk-sans); }
+.mk-message-box { background: var(--mk-composer); border: 1px solid var(--mk-composer-line); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.mk-message-input { background: transparent; border: none; resize: vertical; }
+.mk-message-input::placeholder { color: var(--mk-composer-placeholder); }
+.mk-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.mk-chip-mode { border: 1px solid var(--mk-composer-line); color: var(--mk-composer-ink); border-radius: 4px; padding: 0 6px; font: 500 12.5px/18px var(--mk-sans); }
+.mk-shark-note { max-width: 260px; text-align: center; font-size: 11px; line-height: 14px; }
+.mk-shark-error { color: var(--mk-status-needs); }
+.mk-message-box .mk-btn-primary { align-self: flex-end; }
+.mk-stage-lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.mk-line { stroke-width: 1; vector-effect: non-scaling-stroke; }
+.mk-line-tracking { stroke: var(--mk-status-working); stroke-opacity: 0.3; }
+.mk-line-waiting { stroke: var(--mk-status-needs); stroke-dasharray: 3 7; }
+.mk-prompt-detail { margin: 0; font: 400 12.5px/19px var(--mk-mono); color: var(--mk-ink-muted); white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -130,6 +130,9 @@ const ui = {
   appendLog() {},
   sttNotice() {},
   pushToTalk: null,
+  // S18's brain tab: setupSTTControls also updates the shark; no stage or clock in this test.
+  sharkClock: null,
+  brainStage: null,
 };
 runInNewContext(`${setupControls}\nsetupSTTControls();`, ui);
 

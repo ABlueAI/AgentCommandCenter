@@ -372,9 +372,15 @@ process.stdout.write('\nindex.html ships the EMBEDDED dock and loads no Dockview
   // `window.ccSessionHygieneView` and builds into #hygieneHost only when app.js asks it to.
   // Issue #358 adds the Video Scout usage-line gate: 35 -> 36. `video-scout-usage-line.js` publishes
   // `window.ccVideoScoutUsage` and touches no DOM.
-  assert(scriptTags === 36, `index.html loads exactly 36 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view, the terminal key mapping, the authority choice, the usage panel view, the resume view, the agent token view (S31), the Claude Video Scout settings (S54), S66's colour tokens, navigation shell, In-focus card and emblem rail, the idle-sessions view (S46) and the Video Scout usage-line gate (#358) (found ${scriptTags})`);
+  // S18 adds the brain stage, the shark shape and the shark renderer: 36 -> 39. `brain-stage.js`
+  // and `shark-shape.js` publish `window.ccBrainStage` and `window.ccSharkShape` and build only
+  // when app.js asks; `shark-renderer.js` is an ES module (it imports the vendored Three.js) that
+  // publishes `window.ccSharkRenderer` and draws only once app.js creates it on the brain tab.
+  assert(scriptTags === 39, `index.html loads exactly 39 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view, the terminal key mapping, the authority choice, the usage panel view, the resume view, the agent token view (S31), the Claude Video Scout settings (S54), S66's colour tokens, navigation shell, In-focus card and emblem rail, the idle-sessions view (S46), the Video Scout usage-line gate (#358) and S18's brain stage, shark shape and shark renderer module (found ${scriptTags})`);
   assert(/<script src="video-scout-usage-line\.js"><\/script>/.test(indexSrc),
     'the #358 Video Scout usage-line gate is loaded');
+  assert(/<script src="brain-stage\.js"><\/script>/.test(indexSrc) && /<script src="shark-shape\.js"><\/script>/.test(indexSrc)
+    && /<script type="module" src="shark-renderer\.js"><\/script>/.test(indexSrc), 'S18: the three added scripts are exactly the brain stage, the shark shape and the shark renderer module');
   assert(/<script src="session-resume-view\.js"><\/script>/.test(indexSrc),
     'the S09 resume view is loaded');
   assert(/<script src="session-hygiene-view\.js"><\/script>/.test(indexSrc),

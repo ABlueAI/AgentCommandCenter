@@ -727,6 +727,10 @@ function openInAppTerminal(opts = {}) {
   }
   const chatBody = pane.querySelector('.chat-body');
   const paneData = { term, fit, pane, ro, roConnected: true, chatBody, role, pendingEvents: [], rafId: null, tailBubble: null, parser: null };
+  // S18: what the brain tab's task node shows for this pane. Text only; brain-stage.js never
+  // writes any of it back into a pane.
+  // The authority this pane was started at (the selector applies only to panes started after it).
+  paneData.brain = { label, repo: currentRepoLabel(), branch: worktree ? wtName : '', authority: state.authority || '', openedAt: Date.now(), lastOutputAt: Date.now(), lines: [], tail: '' };
   // Video-scout SDK runs print one machine-readable token-usage line; surface it in the Logs
   // tab so every run's real cost is recorded outside the (closable) pane. The parser is already
   // line-buffered and ANSI-stripped, so chunk boundaries can't split the marker. The pane's other
@@ -734,6 +738,7 @@ function openInAppTerminal(opts = {}) {
   const usageLogGate = (role === 'video-scout' && !claudeVideoScout)
     ? window.ccVideoScoutUsage.createUsageLogGate() : null;
   paneData.parser = new PtyParser((ev) => {
+    if (ev && typeof ev.text === 'string' && ev.type !== 'ui_chrome') brainRecordLine(paneData.brain, ev);
     if (usageLogGate && !ev.partial && ev.text) {
       const logLine = usageLogGate.consider(ev.text);
       if (logLine) appendLog(logLine);
@@ -776,6 +781,7 @@ function openInAppTerminal(opts = {}) {
     else cc.ptyKill(id);
     term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
+    brainRefresh();
   };
   // ---- LOCAL ROLLBACK (pre-PTY only) ----------------------------------------------------------
   // Undo everything this function built in the RENDERER, for the window in which no PTY exists yet.
@@ -793,6 +799,7 @@ function openInAppTerminal(opts = {}) {
     if (paneData.rafId !== null) { cancelAnimationFrame(paneData.rafId); paneData.rafId = null; }
     term.dispose(); pane.remove(); terms.delete(id);
     if (terms.size === 0) showTermEmpty();
+    brainRefresh();
   };
   paneData.closePane = closeThisPane;
   pane.querySelector('.x').onclick = closeThisPane;
@@ -802,6 +809,7 @@ function openInAppTerminal(opts = {}) {
   });
   term.textarea && term.textarea.addEventListener('focus', () => { activeTermId = id; });
   terms.set(id, paneData);
+  brainRefresh();
 
   // ---- TERMINAL LAUNCH TRANSACTION -------------------------------------------------------------
   // ORDER IS LOAD-BEARING: dock FIRST, start the PTY only once the dock has succeeded.
@@ -1567,12 +1575,193 @@ function startShell(settings) {
     emblemRail = null;
     appendLog('[shell] REFUSED: the repo emblem rail did not start (rail-start-failed); use the repo picker\n');
   }
+  startBrainStage();
   // Coming back to the control room: its terminals were display:none, so refit the classic grid
   // (docked panes refit through their own observers).
   window.addEventListener('mako-shell-change', (e) => {
     const d = e.detail || {};
     if (d.view === 'tab' && (d.layout === 'old' || d.tab === 'control')) setTimeout(fitAllTerms, 0);
   });
+}
+
+// ---- S18: the brain tab (brain-stage.js) ----------------------------------------------------------
+// The stage reads three things per pane: its pane-status state (S06/S07's hook view), when its PTY
+// last printed, and its last output lines (for the permission or question menu on screen). A card
+// answer goes back through `cc.ptyWrite`, main's one `pty-write` chokepoint, and brain-stage.js only
+// ever produces a digit the menu offered or Esc.
+let brainStage = null;
+const brainStatus = new Map(); // paneId -> { state, since }
+const BRAIN_MAX_LINES = 40;
+function currentRepoLabel() {
+  const sel = $('#repoSelect');
+  const o = sel && sel.selectedOptions && sel.selectedOptions[0];
+  return o && o.value ? o.textContent : '';
+}
+function brainRecordLine(b, ev) {
+  if (ev.partial) { b.tail = ev.text; return; }
+  b.tail = '';
+  b.lines.push(ev.text);
+  if (b.lines.length > BRAIN_MAX_LINES) { b.lines.splice(0, b.lines.length - BRAIN_MAX_LINES); b.dropped = true; }
+}
+function brainNoteStatus(view) {
+  if (!view || typeof view.paneId !== 'string' || !view.paneId) return;
+  const state = typeof view.state === 'string' ? view.state : 'unknown';
+  const prev = brainStatus.get(view.paneId);
+  if (!prev || prev.state !== state) {
+    brainStatus.set(view.paneId, { state, since: Date.now() });
+    // Working again means any menu on screen was answered: forget the old lines, so a later
+    // "needs you" never shows a card for a menu that is gone.
+    const t = terms.get(view.paneId);
+    if (state === 'working' && t && t.brain) { t.brain.lines = []; t.brain.tail = ''; t.brain.dropped = false; }
+  }
+  brainRefresh();
+}
+function brainInput(id) {
+  const t = terms.get(id);
+  if (!t || !t.brain) return null;
+  const s = brainStatus.get(id);
+  return {
+    id, title: t.brain.label, repo: t.brain.repo, branch: t.brain.branch, role: t.role || '', authority: t.brain.authority,
+    status: s ? s.state : 'unknown', statusSince: s ? s.since : t.brain.openedAt, lastOutputAt: t.brain.lastOutputAt,
+    lines: t.brain.tail ? t.brain.lines.concat([t.brain.tail]) : t.brain.lines.slice(),
+    linesTruncated: t.brain.dropped === true,
+  };
+}
+function brainInputs() {
+  const out = [];
+  for (const id of terms.keys()) { const p = brainInput(id); if (p) out.push(p); }
+  return out;
+}
+function brainRefresh() {
+  if (!brainStage) return;
+  try { brainStage.update(brainInputs()); }
+  catch { appendLog('[brain] REFUSED: the stage could not update (update-failed)\n'); }
+}
+function brainTabShowing() {
+  return !!(shell && shell.getState().layout === 'tabs' && shell.getState().view === 'tab' && shell.getState().tab === 'brain');
+}
+// The shark (brief 7): shark-renderer.js (an ES module, loaded after the classic scripts) draws it;
+// shark-shape.js's clock decides when. It draws only while the brain tab is showing and the window
+// is visible, at 30 fps by default, and holds still under reduced motion. A renderer that can't
+// start (no WebGL, the module failed to load) is shown on the stage with its reason.
+// A refusal's fixed kind (brain-stage.js and shark-renderer.js set `kind` on what they throw);
+// anything else becomes the fallback. An exception's own text is never echoed.
+function refusalKind(e, fallback) {
+  return e && typeof e.kind === 'string' && /^[a-z0-9-]{1,40}$/.test(e.kind) ? e.kind : fallback;
+}
+let sharkClock = null;
+let sharkRenderer = null;
+function startShark(shape) {
+  const begin = () => {
+    if (sharkRenderer || !brainStage) return;
+    const sharkFailed = (kind) => {
+      brainStage.setShark({ note: `The shark stopped (${kind})`, error: true });
+      appendLog(`[shark] REFUSED: the shark stopped drawing (${kind})\n`);
+    };
+    try {
+      sharkRenderer = window.ccSharkRenderer.create({ host: brainStage.sharkHost, shape, geo: window.ccSharkShape, onError: (kind) => { if (sharkClock) sharkClock.fail(kind); else sharkFailed(kind); } });
+    } catch (e) {
+      const reason = refusalKind(e, 'renderer-failed');
+      brainStage.setShark({ note: `The shark can't draw here (${reason})`, error: true });
+      appendLog(`[shark] REFUSED: the renderer did not start (${reason})\n`);
+      return;
+    }
+    const reduced = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+    sharkClock = window.ccSharkShape.createSharkClock({
+      draw: (frame) => sharkRenderer.draw(frame),
+      requestFrame: (cb) => requestAnimationFrame(cb),
+      cancelFrame: (id) => cancelAnimationFrame(id),
+      now: () => performance.now(),
+      isHidden: () => document.hidden || !brainTabShowing(),
+      prefersReducedMotion: () => !!(reduced && reduced.matches),
+      log: (line) => appendLog(line),
+      onError: sharkFailed,
+    });
+    const wake = () => { sharkClock.visibilityChanged(); };
+    document.addEventListener('visibilitychange', wake);
+    window.addEventListener('mako-shell-change', () => { if (brainTabShowing()) sharkRenderer.resize(); wake(); });
+    window.addEventListener('resize', () => { if (brainTabShowing()) sharkRenderer.resize(); });
+    if (reduced && typeof reduced.addEventListener === 'function') reduced.addEventListener('change', wake);
+    sharkClock.start();
+  };
+  // The renderer starts the first time the brain tab shows, so a session spent in the control room
+  // never creates a WebGL context.
+  const whenShown = (fn) => {
+    if (brainTabShowing()) { fn(); return; }
+    const onChange = () => { if (brainTabShowing()) { window.removeEventListener('mako-shell-change', onChange); fn(); } };
+    window.addEventListener('mako-shell-change', onChange);
+  };
+  if (window.ccSharkRenderer) { whenShown(begin); return; }
+  let done = false;
+  window.addEventListener('mako-shark-renderer-ready', () => { if (!done) { done = true; whenShown(begin); } }, { once: true });
+  setTimeout(() => {
+    if (done) return;
+    done = true;
+    if (window.ccSharkRenderer) { whenShown(begin); return; }
+    brainStage.setShark({ note: 'The shark can\'t draw here (renderer-module-missing)', error: true });
+    appendLog('[shark] REFUSED: the renderer module did not load (renderer-module-missing)\n');
+  }, 10000);
+}
+function startBrainStage() {
+  const frame = $('#makoPanel-brain');
+  const host = frame && frame.querySelector('.mk-frame-main');
+  if (!host || !window.ccBrainStage || !window.ccInFocusCard) {
+    appendLog('[brain] REFUSED: the brain tab did not start (brain-module-missing); your agents are in the control room\n');
+    return;
+  }
+  try {
+    const note = host.querySelector('.mk-frame-note');
+    if (note) note.remove();
+    brainStage = window.ccBrainStage.createBrainStage({
+      doc: document, host, inFocus: window.ccInFocusCard,
+      onViewPaused: (paused) => { if (sharkClock) { if (paused) sharkClock.pause(); else sharkClock.resume(); } },
+      log: (line) => appendLog(line),
+      readPane: (id) => brainInput(id),
+      onKeys: (id, keys) => {
+        if (!terms.has(id)) return { ok: false, reason: 'pane-closed' };
+        cc.ptyWrite(id, keys);
+        return { ok: true };
+      },
+      onOpenPane: (id) => {
+        if (!terms.has(id)) { const e = new Error('pane-closed'); e.kind = 'pane-closed'; throw e; }
+        shell.setTab('control');
+        const t = terms.get(id);
+        activeTermId = id;
+        // Focus is a convenience: a pane disposed in between simply isn't focused.
+        setTimeout(() => { try { t.term.focus(); } catch { /* pane gone: nothing to focus */ } }, 0);
+      },
+    });
+  } catch (e) {
+    brainStage = null;
+    appendLog(`[brain] REFUSED: the brain tab did not start (${refusalKind(e, 'start-failed')}); your agents are in the control room\n`);
+    return;
+  }
+  // The shark's shape file (brief 7): checked strictly; a bad or missing file is shown and logged,
+  // and the last good shape stays. shark-renderer.js draws it (startShark).
+  if (window.ccSharkShape) {
+    const loader = window.ccSharkShape.createShapeLoader({ log: (line) => appendLog(line) });
+    loader.load(() => fetch('../assets/shark/shark-shape-B3.json').then((r) => { if (!r.ok) throw new Error('missing'); return r.text(); }))
+      .then((res) => {
+        if (res.ok) brainStage.setShark({ note: `Shape ${res.shape.id} (${res.shape.name}) loaded` });
+        else brainStage.setShark({ note: `Shark shape refused (${res.reason})${res.fellBack ? '; using the last good shape' : ''}`, error: true });
+        if (res.shape) startShark(res.shape);
+      })
+      .catch(() => {
+        brainStage.setShark({ note: 'The shark can\'t draw here (start-failed)', error: true });
+        appendLog('[shark] REFUSED: the shark did not start (start-failed)\n');
+      });
+  } else {
+    brainStage.setShark({ note: 'Shark shape refused (shape-module-missing)', error: true });
+    appendLog('[shark] REFUSED: the shape module did not load\n');
+  }
+  // Ctrl+F on the brain tab finds a node; elsewhere it is left alone (terminals keep their own).
+  window.addEventListener('keydown', (e) => {
+    if (brainStage && brainTabShowing() && window.ccBrainStage.isFindChord(e)) { e.preventDefault(); e.stopPropagation(); brainStage.focusFind(); }
+  }, true);
+  // Waiting minutes, the stall watch and "updated n seconds ago" move with time, not only events.
+  setInterval(() => { if (!document.hidden && brainTabShowing()) brainRefresh(); }, 5000);
+  window.addEventListener('mako-shell-change', () => { if (brainTabShowing()) brainRefresh(); });
+  brainRefresh();
 }
 
 async function boot() {
@@ -1614,7 +1803,7 @@ async function boot() {
   appendLog(`[build] ${buildLabel}\n`);
   cc.onPtyData(({ id, data }) => {
     const t = terms.get(id);
-    if (t) { t.term.write(data); t.parser.feed(data); }
+    if (t) { t.term.write(data); t.parser.feed(data); if (t.brain) t.brain.lastOutputAt = Date.now(); }
   });
   cc.onPtyExit(({ id }) => {
     const t = terms.get(id);
@@ -1677,6 +1866,7 @@ const paneStatusSetup = (window.ccPaneStatus && window.ccPaneStatusBadge)
   : null;
 if (paneStatusBadge) {
   window.ccPaneStatus.onView((view) => {
+    brainNoteStatus(view);
     const shown = paneStatusBadge.update(view);
     if (shown && view && view.paneId) {
       appendLog(`[pane-status] ${view.paneId} -> ${shown.label}${view.reason ? ` (${view.reason})` : ''}\n`);
@@ -1791,6 +1981,10 @@ function setupSTTControls() {
     // Last, and after this handler returns: a pending push-to-talk stop calls the engine, which
     // reports 'transcribing' at once; doing it here would let this 'recording' update overwrite it.
     if (pushToTalk) setTimeout(() => pushToTalk.onSttStatus(st), 0);
+    // S18: the shark listens while Blue holds Ctrl Space (Mako's own state, never a task's).
+    // Thinking and speaking come with the conductor (S51), through the same setState call.
+    if (sharkClock) sharkClock.setState(st === 'recording' ? 'listening' : 'idle');
+    if (brainStage) brainStage.setShark({ state: st === 'recording' ? 'Listening' : 'Idle' });
   };
   // start() and stopAndTranscribe() report their expected failures themselves; anything that
   // still throws or rejects here is unexpected, so its reason is shown, never swallowed.
