@@ -1632,6 +1632,22 @@ Step 93 comes from PR #334 (issue #273). Step numbers 86, 87 and 90 to 92 belong
   - *Done when:* you've told any agent what you saw (each check as above, or what differed); it
     ticks this with the date and how it checked.
 
+## From PR #365 (S47: branch status per agent)
+
+Step 97 comes from PR #365. Step numbers 94 to 96 belong to open PRs.
+
+- [ ] **97. Check each agent's branch status on Windows (S47, PR #365).** **About 5 minutes**, on
+  the next Tuesday or Friday PC-check evening after merging PR #365, after fully restarting Mako,
+  with a repo that has at least one agent worktree.
+  - On the Terminals tab, each agent's card and sidebar row show a short line under its name, such
+    as "in sync · clean" or "↑2 · 3 changed"; hover it for the branch, upstream and file counts.
+  - In that agent's terminal, change a file and wait about 20 seconds: the line says "1 changed".
+    Commit it: within 20 seconds the line shows "↑1" (or "no upstream" on a branch never pushed).
+  - While an agent is working in its worktree, its own `git add` and `git commit` never fail with
+    "index.lock exists" (the status read takes no lock).
+  - *Done when:* you've told any agent what you saw (each check as above, or what differed); it
+    ticks this with the date and how it checked.
+
 ## From the H1 commander (PR #282)
 
 Step 80 comes from PR #282 (docs/DECISIONS.md, 2026-11-24, D-084). Step numbers 77 to 79 belong to

@@ -34,6 +34,7 @@ const { createNavGuards } = require('./nav-guard');
 // whole pty-start handler is asserted by launcher-fence-invariant.test.js.
 const { resolveVscodeExe, resolveTerminalExe } = require('./launchers');
 const { createLauncherAuthorizer } = require('./launcher-authz');
+const { readBranchStatuses, MAX_PATHS: BRANCH_STATUS_MAX_PATHS } = require('./branch-status');
 // The launcher IPC boundary: gate -> authorize -> resolve exe -> shell-free spawn. Pure + unit-tested
 // (launcher-ipc.test.js); an untrusted sender or unauthorized dir spawns zero children.
 const { createLauncherIpc } = require('./launcher-ipc');
@@ -1554,6 +1555,30 @@ handleTrustedIpc('review-diff', async (request) => {
   catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
   const files = (diff.match(/^diff --git /gm) || []).length;
   return { ok: true, fileName, files, bytes: diff.length };
+});
+
+// S47 piece 3: the branch status (branch, upstream, ahead/behind, changed files) of every agent the
+// renderer shows, in one call. Each path is membership-checked against the repo roots and live
+// worktrees, the same set the one-click launchers use (launcher-authz.js), so the renderer can't
+// point git at an arbitrary folder; that set is listed once per call, not once per path, because
+// listing it runs git synchronously. Each read takes no lock (branch-status.js), so it never races
+// the agent's own git commands. Every refusal and failure comes back as { ok: false, error } in that
+// path's slot and the card says "status unavailable"; none is reported as clean.
+handleTrustedIpc('worktree-branch-status', async (worktrees) => {
+  if (!Array.isArray(worktrees) || worktrees.length > BRANCH_STATUS_MAX_PATHS) {
+    throw new Error(reportIpcRefusal('worktree-branch-status', 'invalid-worktree-list'));
+  }
+  let dirs;
+  try { dirs = listLauncherAuthorizedDirs(); } catch { dirs = null; }
+  const authorizer = createLauncherAuthorizer({
+    realpath: (p) => fs.realpathSync.native(p),
+    isDirectory: (p) => fs.statSync(p).isDirectory(),
+    listAuthorizedDirs: () => { if (!Array.isArray(dirs)) throw new Error('enumeration-failed'); return dirs; },
+  });
+  return readBranchStatuses({
+    execFile,
+    authorize: (p) => authorizer.authorize(p),
+  }, worktrees);
 });
 
 // ---- IPC: one-click launchers ----------------------------------------------

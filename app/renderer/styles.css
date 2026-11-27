@@ -112,6 +112,13 @@ select {
 .agent-row .name { flex: 1; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-row .x { color: var(--muted); border: none; background: none; padding: 2px 4px; }
 .agent-row .x:hover { color: var(--danger); }
+/* S47: branch status per agent ("↑2 ↓1 · 3 changed"), in the sidebar row and the agent card. */
+.branch-status { color: var(--muted); font-family: var(--mono); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agent-row .branch-status { flex: 0 1 auto; max-width: 45%; }
+.card .branch-status { margin-top: 2px; }
+.branch-status[data-state="changed"] { color: var(--claude); }
+.branch-status[data-state="conflict"],
+.branch-status[data-state="error"] { color: var(--danger); }
 
 /* ---- compact Quick Links sidebar ---- */
 .quick-links-list { display: flex; flex-direction: column; gap: 5px; }

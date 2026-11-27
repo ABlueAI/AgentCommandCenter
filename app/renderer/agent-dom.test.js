@@ -5,7 +5,7 @@
 // labels) as INERT TEXT — an <img onerror>/<script>/quote/& payload can never become a live DOM
 // element (AUDIT-REPORT.md finding #1).
 
-const { el, buildTermPane, buildAgentRow, buildAgentCard } = require('./agent-dom');
+const { el, buildTermPane, buildAgentRow, buildAgentCard, applyBranchStatus } = require('./agent-dom');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -197,6 +197,27 @@ throws(() => el(doc, 'div', { attrs: { ONMOUSEOVER: 'x' } }), 'el() throws on ON
   const cardOk = buildAgentCard(doc, { colorClass: 'claude', branchText: 'b', path: 'p', removable: true });
   const rmOk = cardOk.querySelectorAll('[data-act]').filter((b) => b.getAttribute('data-act') === 'rm')[0];
   assert(rmOk.getAttribute('disabled') === null, 'removable card: rm button is enabled');
+}
+
+// --- S47: the branch status slot on the row and the card -------------------------------------------
+{
+  const row = buildAgentRow(doc, { colorClass: 'claude', name: 'x', path: 'p' });
+  const card = buildAgentCard(doc, { colorClass: 'claude', branchText: 'b', path: 'p' });
+  for (const [label, root] of [['row', row], ['card', card]]) {
+    const node = root.querySelector('.branch-status');
+    assert(!!node && node.getAttribute('data-state') === 'loading' && node.textContent === '', `${label}: an empty .branch-status slot, state loading`);
+    applyBranchStatus(node, { state: 'changed', text: XSS, title: QUOTES });
+    noLiveInjection(root, `${label} branch status`);
+    assert(node.textContent === XSS && node.getAttribute('title') === QUOTES, `${label}: branch status text and title are the literal payloads`);
+    assert(node.getAttribute('data-state') === 'changed', `${label}: data-state set from the view`);
+    applyBranchStatus(node, { state: 'x" onclick="evil', text: 't', title: 't' });
+    assert(node.getAttribute('data-state') === 'error', `${label}: an unknown state is written as error, never as given`);
+  }
+  assert(card.querySelectorAll('[data-act]').length === 8 && card.querySelectorAll('.row').length === 3, 'card still has its 8 buttons in 3 rows');
+  assert(!!row.querySelector('.x') && !!row.querySelector('.name'), 'row still has its name and remove button');
+  applyBranchStatus(null, { state: 'clean' });
+  applyBranchStatus(row.querySelector('.branch-status'), null);
+  assert(true, 'applyBranchStatus ignores a missing node or view');
 }
 
 process.stdout.write(`\n${passed} passed, ${failed} failed\n`);

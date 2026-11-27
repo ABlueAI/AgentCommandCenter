@@ -370,7 +370,11 @@ process.stdout.write('\nindex.html ships the EMBEDDED dock and loads no Dockview
   // `emblem-rail.js` publishes `window.ccEmblemRail` and builds only when app.js creates it.
   // S46 adds the daily idle-sessions view: 34 -> 35. `session-hygiene-view.js` publishes
   // `window.ccSessionHygieneView` and builds into #hygieneHost only when app.js asks it to.
-  assert(scriptTags === 35, `index.html loads exactly 35 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view, the terminal key mapping, the authority choice, the usage panel view, the resume view, the agent token view (S31), the Claude Video Scout settings (S54), S66's colour tokens, navigation shell, In-focus card and emblem rail, and the idle-sessions view (S46) (found ${scriptTags})`);
+  // S47 adds the branch status view: 35 -> 36. `branch-status-view.js` publishes
+  // `window.branchStatusView` (pure text, no DOM) for the agent cards and sidebar rows.
+  assert(scriptTags === 36, `index.html loads exactly 36 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view, the terminal key mapping, the authority choice, the usage panel view, the resume view, the agent token view (S31), the Claude Video Scout settings (S54), S66's colour tokens, navigation shell, In-focus card and emblem rail, the idle-sessions view (S46) and the branch status view (S47) (found ${scriptTags})`);
+  assert(/<script src="branch-status-view\.js"><\/script>/.test(indexSrc),
+    'the S47 branch status view is loaded');
   assert(/<script src="session-resume-view\.js"><\/script>/.test(indexSrc),
     'the S09 resume view is loaded');
   assert(/<script src="session-hygiene-view\.js"><\/script>/.test(indexSrc),

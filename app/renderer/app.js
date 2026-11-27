@@ -1625,6 +1625,8 @@ async function boot() {
   await offerResume();
   await checkSessionHygiene();
   setInterval(() => { checkSessionHygiene(); }, HYGIENE_CHECK_MS);
+  // S47: keep each agent's branch status current while the window is in view.
+  setInterval(() => { if (!document.hidden) refreshBranchStatuses(); }, BRANCH_STATUS_POLL_MS);
 
 // EXPERIMENT A — PROTOTYPE pane status (Claude only, one pane).
 // docs/OSS-PROCUREMENT-pane-status.md — "BLUE SUBSYSTEM VERDICT: PROTOTYPE".
@@ -1897,8 +1899,68 @@ async function refreshAgents() {
   appendLog(`[TIMING] refreshAgents: listWorktrees END (${all.length} items)\n`);
   // The first worktree is the main checkout; the rest are agents.
   state.worktrees = all.filter((w) => !w.branch || w.branch !== 'main');
+  branchStatusNodes = new Map();
   renderAgentList();
   renderAgentGrid();
+  refreshBranchStatuses();
+}
+
+// ---- S47 piece 3: branch status per agent --------------------------------------
+// Each agent's card and sidebar row carry a .branch-status line ("↑2 ↓1 · 3 changed"). Main reads
+// them with a lock-free `git status --porcelain=v2` (app/branch-status.js), for paths it checks
+// itself, in one call per refresh; the renderer only asks and shows. One refresh runs at a time: a
+// request that finds one running (a poll, or a re-render of the agent list) runs once it ends. A failed read shows "status unavailable" and is
+// logged once per new reason, so a broken worktree is visible without flooding the log.
+const BRANCH_STATUS_POLL_MS = 20000;
+let branchStatusNodes = new Map();          // worktree path -> [.branch-status nodes]
+let branchStatusRunning = false;
+let branchStatusAgain = false;              // a refresh was asked for while one was running
+const branchStatusLastError = new Map();    // worktree path -> last error reason logged
+
+function trackBranchStatusNode(wtPath, root) {
+  const node = root.querySelector('.branch-status');
+  if (!node) return;
+  const list = branchStatusNodes.get(wtPath) || [];
+  list.push(node);
+  branchStatusNodes.set(wtPath, list);
+}
+
+function noteBranchStatusError(wtPath, reason, detail) {
+  if (branchStatusLastError.get(wtPath) === reason) return;
+  branchStatusLastError.set(wtPath, reason);
+  appendLog(`[agent] branch status unavailable for ${JSON.stringify(wtPath)}: ${reason}${detail ? ` (${detail})` : ''}\n`);
+}
+
+async function refreshBranchStatuses() {
+  if (branchStatusRunning) { branchStatusAgain = true; return; }
+  const paths = [...branchStatusNodes.keys()];
+  if (paths.length === 0) return;
+  branchStatusRunning = true;
+  const views = new Map();
+  try {
+    const results = await cc.worktreeBranchStatus(paths);
+    paths.forEach((wtPath, i) => {
+      const res = Array.isArray(results) ? results[i] : undefined;
+      const view = branchStatusView.describeBranchStatus(res);
+      if (view.state === branchStatusView.STATE.ERROR) noteBranchStatusError(wtPath, (res && res.error) || 'no answer', res && res.detail);
+      else branchStatusLastError.delete(wtPath);
+      views.set(wtPath, view);
+    });
+  } catch {
+    // A rejected invoke is a refused sender or a bad list; main has already shown why on its
+    // main-error line (reportIpcRefusal), so each worktree is named and points there.
+    for (const wtPath of paths) {
+      views.set(wtPath, branchStatusView.errorView({ error: 'ipc-failed' }));
+      noteBranchStatusError(wtPath, 'ipc-failed', 'see the [main error] line');
+    }
+  } finally {
+    branchStatusRunning = false;
+  }
+  // Look the nodes up now, not before the await: a re-render meanwhile replaced them.
+  for (const [wtPath, view] of views) {
+    for (const node of branchStatusNodes.get(wtPath) || []) agentDom.applyBranchStatus(node, view);
+  }
+  if (branchStatusAgain) { branchStatusAgain = false; refreshBranchStatuses(); }
 }
 
 // The task slug for an app-created worktree, whose folder is named "<repo>-<task>". Returns null
@@ -1939,6 +2001,7 @@ function renderAgentList() {
       colorClass: agentColorOf(wt), name: displayNameOf(wt), path: wt.path, removable: !!task,
     });
     if (task) row.querySelector('.x').onclick = () => removeAgent(task);
+    trackBranchStatusNode(wt.path, row);
     list.appendChild(row);
   }
 }
@@ -1969,6 +2032,7 @@ function renderAgentGrid() {
         else if (act === 'rm') { if (task) removeAgent(task); } // disabled button won't fire; guard anyway
       };
     });
+    trackBranchStatusNode(wt.path, card);
     grid.appendChild(card);
   }
 }
