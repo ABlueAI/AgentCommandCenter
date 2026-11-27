@@ -80,7 +80,8 @@ function createRoleDefinitionResolver(deps) {
     const agents = path.join(config, 'agents');
     const filename = role + '.md';
     const file = path.join(agents, filename);
-    let bytes;
+    const bytes = Buffer.alloc(MAX_ROLE_BYTES + 1);
+    let length = 0;
     try {
       for (const dir of [config, agents]) {
         const stat = fsx.lstatSync(dir);
@@ -95,14 +96,27 @@ function createRoleDefinitionResolver(deps) {
       if (!stat.isFile()) return refuse(REASON.UNSUPPORTED_ENTRY);
       if (stat.nlink > 1) return refuse(REASON.LINKED_ENTRY);
       if (stat.size > MAX_ROLE_BYTES) return refuse(REASON.CANDIDATE_UNSUPPORTED);
-      bytes = fsx.readFileSync(file);
+      const fd = fsx.openSync(file, 'r');
+      try {
+        const opened = fsx.fstatSync(fd);
+        if (!opened.isFile() || opened.dev !== stat.dev || opened.ino !== stat.ino || opened.nlink !== 1) {
+          return refuse(REASON.CANDIDATE_UNREADABLE);
+        }
+        while (length < bytes.length) {
+          const read = fsx.readSync(fd, bytes, length, bytes.length - length, null);
+          if (read === 0) break;
+          length += read;
+        }
+      } finally {
+        fsx.closeSync(fd);
+      }
     } catch (error) {
       return refuse(error.code === 'ENOENT' ? REASON.ROLE_NOT_DEPLOYED : REASON.CANDIDATE_UNREADABLE);
     }
 
-    if (bytes.length > MAX_ROLE_BYTES) return refuse(REASON.CANDIDATE_UNSUPPORTED);
+    if (length > MAX_ROLE_BYTES) return refuse(REASON.CANDIDATE_UNSUPPORTED);
     let text;
-    try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+    try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, length)); }
     catch { return refuse(REASON.CANDIDATE_UNSUPPORTED); }
     const parsed = parseRoleFrontmatter(text);
     if (!parsed.ok || parsed.name !== role || !parsed.toolsDeclared || parsed.tools.length === 0

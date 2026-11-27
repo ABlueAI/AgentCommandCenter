@@ -64,7 +64,7 @@ function makeElectronStub(userDataDir, record) {
     dialog: { showOpenDialog: async () => ({ canceled: true, filePaths: [] }) },
     session: { defaultSession: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} } },
     safeStorage: {
-      isEncryptionAvailable: () => false,
+      isEncryptionAvailable: () => true,
       encryptString: (s) => Buffer.from(s, 'utf8'),
       decryptString: (b) => Buffer.from(b).toString('utf8'),
     },
@@ -98,6 +98,9 @@ const HOOKS = path.join(HOME, '.claude', 'hooks');
 for (const d of [USER_DATA, AGENTS, HOOKS, OUTPUTS, REPO]) fs.mkdirSync(d, { recursive: true });
 fs.writeFileSync(path.join(USER_DATA, 'settings.json'), JSON.stringify({ projectsRoot: PROJECTS, selectedRepo: '' }));
 
+fs.writeFileSync(path.join(USER_DATA, 'secure.json'),
+  JSON.stringify({ geminiKeyEnc: Buffer.from('fixture').toString('base64') }));
+
 const TRACKED_HOOK = path.join(__dirname, '..', 'scripts', 'hooks', 'fence-write.js');
 const DEPLOYED_HOOK = path.join(HOOKS, 'fence-write.js');
 fs.copyFileSync(TRACKED_HOOK, DEPLOYED_HOOK);
@@ -129,7 +132,7 @@ const ptyStub = {
 // registry is never written in any mode, and only the `query` verb is ever issued (asserted below).
 const realCp = require('child_process');
 realCp.execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: REPO });
-realCp.execFileSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test',
+realCp.execFileSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.com',
   '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Fixture', '--allow-empty'], { cwd: REPO });
 record.regMode = 'real';
 record.regCalls = [];
@@ -309,6 +312,28 @@ Module._load = function (request) {
     assert(valid?.ok === true && valid.empty, 'a valid base branch and worktree produce a clean diff');
     const missing = await diff(goodEvent, { worktree: good.worktree, base: 'missing-branch' });
     assert(missing?.error === 'git-diff-failed', 'a valid branch name without a ref refuses visibly');
+  }
+
+  section('Gemini Video Scout launcher arguments');
+  {
+    const opts = { id: 'video-input', role: 'video-scout', videoScout: true, cwd: REPO,
+      videoUrl: 'https://www.youtube.com/watch?v=fixture', mediaResolution: 'HIGH', videoModel: 'gemini-2.5-pro' };
+    for (const override of [
+      { videoUrl: 24 }, { videoUrl: 'https://www.youtube.com/' + 'x'.repeat(2048) },
+      { videoUrl: 'https://example.com/video' }, { videoUrl: 'https://www.youtube.com:8443/watch' },
+      { mediaResolution: 'UNKNOWN' }, { startOffset: 1n, endOffset: 12 },
+      { cwd: FIX },
+    ]) {
+      const before = record.ptySpawns;
+      const errors = record.mainErrors.length;
+      const result = await ptyStart(goodEvent, { ...opts, ...override });
+      assert(result?.ok === false && record.ptySpawns === before && record.mainErrors.length > errors,
+        'invalid Video Scout input refuses visibly before spawning');
+    }
+    const result = await ptyStart(goodEvent, opts);
+    const args = record.spawnArgs.at(-1)?.args;
+    assert(result?.ok === true && args?.[args.indexOf('-Url') + 1] === opts.videoUrl
+      && args?.[args.indexOf('-MediaResolution') + 1] === 'HIGH', 'valid Video Scout inputs reach their discrete arguments');
   }
 
   section('POSITIVE CONTROL — a fenced role launches and carries the main-issued denials');

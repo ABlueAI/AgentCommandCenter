@@ -395,8 +395,8 @@ const REGIONS = [
     // Previous pin retained: 17354 / 1ed564dea4af33f5dbe7afcb47b0d0cb2178ff1fb289a60b2e37a3d078581b2d
     // Launcher input and role source checks run before the admission claim and spawn.
     // Previous pin retained: 18861 / 790e4fa29a245a5064c1d1da05940f73f8a7b0c250747150bb601d378ef313f6
-    utf16Length: 18116,
-    sha: '09410e70ed24a092a287ad96b407666f06965a87b2f21d7dd00f1de6793b5f84',
+    utf16Length: 17208,
+    sha: '891082caf28682af8bc23d42deac49f2c6e6443460c3c4b2c5bd0348197c35a8',
   },
 ];
 

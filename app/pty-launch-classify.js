@@ -80,6 +80,12 @@ function classifyPtyLaunch(opts, deps) {
   }
   const role = roleAbsent ? null : rawRole;
 
+  for (const hint of [opts.cli, opts.agent]) {
+    if (hint !== undefined && hint !== null && hint !== '' && !validClis.has(hint)) {
+      return { ok: false, reason: REASON.UNKNOWN_CLI };
+    }
+  }
+
   // Video Scout coherence, BOTH directions (Blue's decision): the flag and the role identity must
   // agree, so neither a flag without the role nor the role without the flag can launch.
   if (videoScout || role === VIDEO_SCOUT_ROLE) {
@@ -114,9 +120,6 @@ function classifyPtyLaunch(opts, deps) {
   const rawCli = (opts.cli || opts.agent || null);
   if (rawCli === null) {
     return { ok: true, kind: KIND.SHELL, role: null, cli: null, fenced: false, videoScout: false };
-  }
-  if (typeof rawCli !== 'string' || !validClis.has(rawCli)) {
-    return { ok: false, reason: REASON.UNKNOWN_CLI };
   }
   return { ok: true, kind: KIND.CLI, role: null, cli: rawCli, fenced: false, videoScout: false };
 }

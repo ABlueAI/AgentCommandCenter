@@ -93,6 +93,11 @@ for (const bad of ['powershell', 'sh', 'node', 'CLAUDE']) {
 }
 assert(go({ role: null, cli: 42 }).reason === REASON.UNKNOWN_CLI, 'non-string cli refuses');
 
+for (const opts of [{ cli: false }, { agent: 0 }, { role: 'builder', cli: {} },
+  { role: 'video-scout', videoScout: true, agent: [] }]) {
+  assert(go(opts).reason === REASON.UNKNOWN_CLI, 'an explicit invalid CLI hint refuses in every launch kind');
+}
+
 section('HOSTILE \u2014 malformed options never throw');
 for (const bad of [null, undefined, 'string', 42, true, [], [1, 2]]) {
   let r = null, threw = false;

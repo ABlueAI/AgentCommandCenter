@@ -43,12 +43,19 @@ section('Exact deployed role files');
     const result = resolve();
     assert(result.ok && result.path === deployed && result.text === roleDoc('web-scout'), 'uses the exact deployed file');
     const unreadable = Object.assign({}, fs, {
-      readFileSync(file, ...args) {
+      openSync(file, ...args) {
         if (file === deployed) throw Object.assign(new Error('denied'), { code: 'EACCES' });
-        return fs.readFileSync(file, ...args);
+        return fs.openSync(file, ...args);
       },
     });
     assert(resolve('web-scout', unreadable).reason === REASON.CANDIDATE_UNREADABLE, 'unreadable file refuses');
+    const changed = Object.assign({}, fs, {
+      openSync(file, ...args) {
+        return fs.openSync(file === deployed ? path.join(projectAgents, 'web-scout.md') : file, ...args);
+      },
+    });
+    assert(resolve('web-scout', changed).reason === REASON.CANDIDATE_UNREADABLE,
+      'the opened file must match the exact file inspected');
     for (const content of ['No frontmatter.', roleDoc('operator'), Buffer.from([0xff]), roleDoc('web-scout').split('Body.')[0]]) {
       fs.writeFileSync(deployed, content);
       assert(resolve().reason === REASON.CANDIDATE_UNSUPPORTED, 'malformed definition refuses');
