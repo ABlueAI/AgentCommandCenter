@@ -33,7 +33,9 @@
 //          addPullRequestReview or submitPullRequestReview. A read (a GET with no body) of those
 //          endpoints is not matched here (.claude/settings.json denies `gh api` to them whatever
 //          the method, which is stricter).
-//      Anything else exits 0 straight away, without starting `gh` or touching the network.
+//      Anything else exits 0 straight away, without starting `gh` or touching the network; the
+//      one process it may start is a local `git config --get alias.NAME` for a git subcommand that
+//      isn't one of git's built-ins (the git-alias notes below).
 //   2. For a login-dependent command only, runs `gh api user --jq .login` (same environment as the
 //      session, so a Mako agent pane's GH_TOKEN and a cloud session's login are what it sees).
 //      It checks gh's login, not the credential `git push` itself uses (Git Credential Manager or
@@ -65,8 +67,10 @@
 //
 // Known gaps (not a security boundary; it guards against an honest session using the wrong
 // login): a git alias defined in a way the guard doesn't read (an `include.path` or a
-// GIT_CONFIG_GLOBAL file named on the same command; see the git-alias notes below for what it
-// does read), wrappers that take their own options (`timeout 60 git push`, `nice -n 5`, `sudo -u x`,
+// GIT_CONFIG_GLOBAL file named on the same command, or a repository's own alias after a `cd`
+// earlier in the same call or with GIT_DIR set on the command, since the lookup reads the hook
+// input's cwd and the hook's own environment; see the git-alias notes
+// below for what it does read), wrappers that take their own options (`timeout 60 git push`, `nice -n 5`, `sudo -u x`,
 // `xargs`, and `cmd /c` from Bash), `pwsh -EncodedCommand`, `pwsh -File` and a script piped into
 // pwsh's standard input, in PowerShell a guarded command whose words appear only as fragments
 // (`'g' + 'it'`, `[char]103`, base64; whole words held in a variable or an array, as in `gh @a`,
@@ -130,42 +134,72 @@ const GIT_VALUE_OPTS = new Set(['-C', '-c', '--git-dir', '--work-tree', '--names
 // alias.NAME`, a local read with no network, at most GIT_ALIAS_LOOKUPS per tool call). A value starting
 // with `!` is a shell command and is checked as Bash; any other value is expanded like git does and
 // checked again. An alias whose value can't be read (`--config-env`, a lookup that fails or runs past
-// its budget) gets the login check, with GIT_ALIAS_NOTE in the matched name.
-// Names git runs as its own commands (`git --list-cmds=main`, git 2.43, plus later additions); an alias
-// with one of these names is ignored by git, so it is never looked up.
+// its budget, a hook input with no usable cwd) gets the login check, with GIT_ALIAS_NOTE and the
+// reason in the matched name.
+// git's built-in commands (`git --list-cmds=builtins`, git 2.43): git runs these before any alias, so an
+// alias with one of these names is ignored and never looked up. Scripts and newer commands are left out
+// on purpose: git runs an alias of that name when the script or command isn't installed, so it is looked up.
 const GIT_COMMANDS = new Set((
-  'add am annotate apply archive backfill bisect blame branch bugreport bundle cat-file check-attr '
-  + 'check-ignore check-mailmap check-ref-format checkout checkout--worker checkout-index cherry cherry-pick '
-  + 'clean clone column commit commit-graph commit-tree config count-objects credential credential-cache '
-  + 'credential-cache--daemon credential-store daemon describe diagnose diff diff-files diff-index diff-pairs '
-  + 'diff-tree difftool difftool--helper fast-export fast-import fetch fetch-pack filter-branch fmt-merge-msg '
-  + 'for-each-ref for-each-repo format-patch fsck fsck-objects fsmonitor--daemon gc get-tar-commit-id grep '
-  + 'hash-object help hook http-backend http-fetch http-push imap-send index-pack init init-db instaweb '
-  + 'interpret-trailers last-modified log ls-files ls-remote ls-tree mailinfo mailsplit maintenance merge '
-  + 'merge-base merge-file merge-index merge-octopus merge-one-file merge-ours merge-recursive '
-  + 'merge-recursive-ours merge-recursive-theirs merge-resolve merge-subtree merge-tree mergetool mktag mktree '
-  + 'multi-pack-index mv name-rev notes pack-objects pack-redundant pack-refs patch-id pickaxe prune '
-  + 'prune-packed pull push quiltimport range-diff read-tree rebase receive-pack refs reflog remote '
-  + 'remote-ext remote-fd remote-ftp remote-ftps remote-http remote-https repack replace replay repo '
-  + 'request-pull rerere reset restore rev-list rev-parse revert rm send-pack sh-i18n--envsubst shell '
-  + 'shortlog show show-branch show-index show-ref sparse-checkout stage stash status stripspace submodule '
-  + 'submodule--helper subtree switch symbolic-ref tag unpack-file unpack-objects update-index update-ref '
-  + 'update-server-info upload-archive upload-archive--writer upload-pack var verify-commit verify-pack '
-  + 'verify-tag version web--browse whatchanged worktree write-tree'
+  'add am annotate apply archive bisect blame branch bugreport bundle cat-file check-attr '
+  + 'check-ignore check-mailmap check-ref-format checkout checkout--worker checkout-index cherry '
+  + 'cherry-pick clean clone column commit commit-graph commit-tree config count-objects credential '
+  + 'credential-cache credential-cache--daemon credential-store describe diagnose diff diff-files '
+  + 'diff-index diff-tree difftool fast-export fast-import fetch fetch-pack fmt-merge-msg '
+  + 'for-each-ref for-each-repo format-patch fsck fsck-objects fsmonitor--daemon gc '
+  + 'get-tar-commit-id grep hash-object help hook index-pack init init-db interpret-trailers log '
+  + 'ls-files ls-remote ls-tree mailinfo mailsplit maintenance merge merge-base merge-file '
+  + 'merge-index merge-ours merge-recursive merge-recursive-ours merge-recursive-theirs '
+  + 'merge-subtree merge-tree mktag mktree multi-pack-index mv name-rev notes pack-objects '
+  + 'pack-redundant pack-refs patch-id pickaxe prune prune-packed pull push range-diff read-tree '
+  + 'rebase receive-pack reflog remote remote-ext remote-fd repack replace rerere reset restore '
+  + 'rev-list rev-parse revert rm send-pack shortlog show show-branch show-index show-ref '
+  + 'sparse-checkout stage stash status stripspace submodule--helper switch symbolic-ref tag '
+  + 'unpack-file unpack-objects update-index update-ref update-server-info upload-archive '
+  + 'upload-archive--writer upload-pack var verify-commit verify-pack verify-tag version whatchanged '
+  + 'worktree write-tree'
 ).split(' '));
 const GIT_ALIAS_NAME = /^[A-Za-z0-9][A-Za-z0-9-]*$/;
-const GIT_ALIAS_NOTE = ' (through a git alias whose value could not be read)';
+// The note on a push through an alias whose value couldn't be read; the reason follows it.
+const GIT_ALIAS_NOTE = ' (through a git alias whose value could not be read';
+const aliasNote = (why) => `${GIT_ALIAS_NOTE}: ${why})`;
 const GIT_ALIAS_LOOKUPS = 4;
 const GIT_TIMEOUT_MS = 3000;
 // Per tool call (set by findGuardedCommand at depth 0 and by decide): the alias names a `git config`
 // in the same call defines, and the configured-alias lookup with its remaining budget.
-let aliasState = { scriptNames: new Set(), lookup: null, budget: 0 };
+let aliasState = { scriptNames: new Set(), lookup: null, budget: 0, cache: new Map() };
 
-// `git config [opts] [set] alias.NAME VALUE` anywhere in the tool call's text, in any shell.
+// `git config [opts] [set] alias.NAME VALUE`, or GIT_CONFIG_KEY_n / GIT_CONFIG_PARAMETERS naming
+// `alias.NAME` (`export ...` in Bash, `$env:...` in PowerShell), anywhere in the tool call's text.
 const GIT_CONFIG_ALIAS = /\bgit(?:\.exe)?["']?\s[^\n;&|]*?\bconfig\b[^\n;&|]*?\balias\.([A-Za-z0-9][A-Za-z0-9-]*)\b/gi;
+const GIT_CONFIG_ENV_ALIAS = /\bGIT_CONFIG_(?:KEY_\d+|PARAMETERS)\b[^\n;&|]*?\balias\.([A-Za-z0-9][A-Za-z0-9-]*)\b/gi;
 function scriptAliasNames(text) {
   const names = new Set();
-  for (const m of String(text).matchAll(GIT_CONFIG_ALIAS)) names.add(m[1].toLowerCase());
+  for (const re of [GIT_CONFIG_ALIAS, GIT_CONFIG_ENV_ALIAS]) {
+    for (const m of String(text).matchAll(re)) names.add(m[1].toLowerCase());
+  }
+  return names;
+}
+
+// The alias names that git's options before the subcommand (`-c`, `--config-env`) and the
+// assignments before `git` (GIT_CONFIG_KEY_n, GIT_CONFIG_PARAMETERS) define. git hands these to the
+// programs a shell alias starts, so they stay known inside one.
+function definedAliasNames(gitOpts, assigns) {
+  const names = new Set();
+  const add = (v) => {
+    const m = /^alias\.([A-Za-z0-9][A-Za-z0-9-]*)(?:=|$)/i.exec(String(v));
+    if (m) names.add(m[1].toLowerCase());
+  };
+  for (let k = 0; k < gitOpts.length; k++) {
+    const o = gitOpts[k];
+    if (o === '-c' || o === '--config-env') add(gitOpts[++k]);
+    else if (o.startsWith('--config-env=')) add(o.slice('--config-env='.length));
+  }
+  for (const a of assigns) {
+    const m = /^GIT_CONFIG_(?:KEY_\d+=(.*)|PARAMETERS=(.*))$/.exec(a);
+    if (!m) continue;
+    if (m[1] !== undefined) add(m[1]);
+    else for (const x of m[2].matchAll(/alias\.([A-Za-z0-9][A-Za-z0-9-]*)/gi)) names.add(x[1].toLowerCase());
+  }
   return names;
 }
 
@@ -183,7 +217,7 @@ function resolveGitAlias(name, gitOpts, assigns) {
     if (typeof v !== 'string') continue;
     const eq = v.indexOf('=');
     if ((eq === -1 ? v : v.slice(0, eq)).toLowerCase() !== key) continue;
-    found = o === '-c' ? (eq === -1 ? null : { value: v.slice(eq + 1) }) : { unknown: true };
+    found = o === '-c' ? (eq === -1 ? null : { value: v.slice(eq + 1) }) : { unknown: true, why: 'its value comes from --config-env' };
   }
   if (found) return found;
   const env = {};
@@ -195,19 +229,48 @@ function resolveGitAlias(name, gitOpts, assigns) {
     const m = /^GIT_CONFIG_KEY_(\d+)$/.exec(k);
     if (m && v.toLowerCase() === key) {
       const value = env[`GIT_CONFIG_VALUE_${m[1]}`];
-      return typeof value === 'string' ? { value } : { unknown: true };
+      return typeof value === 'string' ? { value } : { unknown: true, why: `GIT_CONFIG_VALUE_${m[1]} is not on the command` };
     }
   }
-  if (typeof env.GIT_CONFIG_PARAMETERS === 'string' && env.GIT_CONFIG_PARAMETERS.toLowerCase().includes(key)) return { unknown: true };
-  if (aliasState.scriptNames.has(name.toLowerCase())) return { unknown: true };
+  if (typeof env.GIT_CONFIG_PARAMETERS === 'string' && env.GIT_CONFIG_PARAMETERS.toLowerCase().includes(key)) return { unknown: true, why: 'set in GIT_CONFIG_PARAMETERS' };
+  if (aliasState.scriptNames.has(name.toLowerCase())) return { unknown: true, why: 'set in the same command' };
   if (!aliasState.lookup) return null;
-  if (aliasState.budget <= 0) return { unknown: true };
-  aliasState.budget--;
-  const r = aliasState.lookup(name, gitOpts);
+  // One lookup per name and set of git options in a tool call (`git lfs ... && git lfs ...`).
+  const cacheKey = JSON.stringify([name.toLowerCase(), ...gitOpts]);
+  let r = aliasState.cache.get(cacheKey);
+  if (r === undefined) {
+    if (aliasState.budget <= 0) return { unknown: true, why: `more than ${GIT_ALIAS_LOOKUPS} aliases to look up` };
+    aliasState.budget--;
+    r = aliasState.lookup(name, gitOpts) || null;
+    aliasState.cache.set(cacheKey, r);
+  }
   if (r && typeof r.value === 'string') return { value: r.value };
   if (r && r.none === true) return null;
-  return { unknown: true };
+  return { unknown: true, why: (r && typeof r.error === 'string' && r.error) || 'the lookup gave no answer' };
 }
+
+// A plain alias value split into words the way git does (split_cmdline: quotes and backslashes, no
+// `$(...)`, globs or other shell syntax). An unclosed quote, which git refuses, gives null.
+function splitAliasValue(value) {
+  const words = [];
+  let cur = null;
+  let quote = null;
+  for (let k = 0; k < value.length; k++) {
+    const c = value[k];
+    if (quote === null && /\s/.test(c)) { if (cur !== null) { words.push(cur); cur = null; } continue; }
+    if (cur === null) cur = '';
+    if (c === '\\' && quote !== "'" && k + 1 < value.length) { cur += value[++k]; continue; }
+    if (quote === null && (c === '"' || c === "'")) { quote = c; continue; }
+    if (quote !== null && c === quote) { quote = null; continue; }
+    cur += c;
+  }
+  if (quote !== null) return null;
+  if (cur !== null) words.push(cur);
+  return words;
+}
+const shellQuote = (w) => `'${String(w).replace(/'/g, `'\\''`)}'`;
+// A shell alias that reads its arguments (`$@`, `$*`, `$1` to `$9`, `${...}` of one of them).
+const SHELL_ARGS_REF = /\$(?:[@*1-9]|\{[@*1-9])/;
 
 // `git` with the words after it (`rest`) and before it (`before`): 'git push' for a push, a push through
 // an alias, or whatever guarded command a shell alias runs; else null.
@@ -216,14 +279,30 @@ function classifyGit(rest, before, depth) {
   const sub = rest[j];
   if (sub === 'push') return 'git push';
   if (typeof sub !== 'string' || GIT_COMMANDS.has(sub) || !GIT_ALIAS_NAME.test(sub)) return null;
-  if (depth >= 8) return 'git push' + GIT_ALIAS_NOTE; // an alias loop, or nesting past the parser's limit
+  if (depth >= 8) return 'git push' + aliasNote('an alias loop, or nesting too deep'); // past the parser's limit
   const alias = resolveGitAlias(sub, rest.slice(0, j), before);
   if (!alias) return null;
-  if (alias.unknown) return 'git push' + GIT_ALIAS_NOTE;
+  if (alias.unknown) return 'git push' + aliasNote(alias.why);
   const value = alias.value.trim();
-  if (value.startsWith('!')) return findGuardedCommand(value.slice(1), depth + 1, 'bash');
-  const expansion = splitCommands(value)[0] || [];
-  return classifySimpleCommand([...before, 'git', ...rest.slice(0, j), ...expansion, ...rest.slice(j + 1)], depth + 1, 'bash');
+  const args = rest.slice(j + 1);
+  if (value.startsWith('!')) {
+    // A shell alias: git runs it with the call's remaining words as its arguments (`sh -c '<value>
+    // "$@"'`). They are appended, as git does; a script that reads them itself gets the login check,
+    // since what it does with them can't be read. The aliases this git call defines stay known inside.
+    const script = value.slice(1);
+    if (args.length && SHELL_ARGS_REF.test(script)) return 'git push' + aliasNote('a shell alias that reads its arguments');
+    const saved = aliasState;
+    const scriptNames = new Set([...saved.scriptNames, ...definedAliasNames(rest.slice(0, j), before)]);
+    aliasState = { ...saved, scriptNames };
+    try {
+      return findGuardedCommand([script, ...args.map(shellQuote)].join(' '), depth + 1, 'bash');
+    } finally {
+      aliasState = { ...aliasState, scriptNames: saved.scriptNames };
+    }
+  }
+  const expansion = splitAliasValue(value);
+  if (expansion === null) return null; // git refuses an alias with an unclosed quote
+  return classifySimpleCommand([...before, 'git', ...rest.slice(0, j), ...expansion, ...args], depth + 1, 'bash');
 }
 
 // gh flags that take a separate value, before or after `pr`.
@@ -1012,7 +1091,8 @@ function psWordScan(text) {
 
 // The guarded command in a command line (a review or merge command first, else the first
 // login-dependent one), or null. `mode` is 'bash' (the Bash tool) or 'ps' (the PowerShell tool).
-// Never touches the network.
+// Never touches the network; when decide() sets the alias lookup, it may start a local
+// `git config --get` (with `-C` naming a network share, git itself may read that share).
 function findGuardedCommand(command, depth = 0, mode = 'bash') {
   if (depth > 8 || typeof command !== 'string') return null;
   const script = mode === 'ps' ? normalizePowerShellLineEndings(command) : command;
@@ -1063,8 +1143,8 @@ function resolveProgram(program, env = process.env) {
 
 // A configured git alias: { value }, { none: true } when it isn't set, or { error } (never throws).
 // Runs `git [-C dir] [--git-dir x] [--work-tree x] config --get alias.NAME` in `cwd`, a local read.
-function readGitAlias(name, gitOpts = [], cwd = undefined) {
-  const git = resolveProgram('git');
+function readGitAlias(name, gitOpts = [], cwd = undefined, env = process.env) {
+  const git = resolveProgram('git', env);
   if (!git) return { error: 'git is not installed or not on PATH' };
   const args = [];
   for (let k = 0; k < gitOpts.length; k++) {
@@ -1076,6 +1156,10 @@ function readGitAlias(name, gitOpts = [], cwd = undefined) {
       args.push(o);
     }
   }
+  // The hook runs before the command is approved: it never opens a network path the command names
+  // (`\\host\share`, `//host/x`); such an alias gets the login check instead.
+  const values = args.filter((a) => !a.startsWith('-') || /=/.test(a)).map((a) => (a.startsWith('--') ? a.slice(a.indexOf('=') + 1) : a));
+  if (values.some((v) => /^[\\/]{2}/.test(v))) return { error: 'the command names a network path' };
   try {
     const out = execFileSync(git, [...args, 'config', '--get', `alias.${name}`], {
       encoding: 'utf8',
@@ -1140,9 +1224,14 @@ function decide(input, getLogin = readGhLogin, getGitAlias = readGitAlias) {
       : { exitCode: 0, checked: false };
   }
 
-  const cwd = input && typeof input.cwd === 'string' && path.isAbsolute(input.cwd) && fs.existsSync(input.cwd) ? input.cwd : undefined;
+  // The alias lookup reads the session's folder (the hook input's cwd); without a usable one it
+  // answers with an error, so an alias there gets the login check instead of passing unread.
+  const cwd = input && typeof input.cwd === 'string' && path.isAbsolute(input.cwd) && fs.existsSync(input.cwd) ? input.cwd : null;
+  const lookup = cwd
+    ? (name, gitOpts) => getGitAlias(name, gitOpts, cwd)
+    : () => ({ error: 'the hook input has no usable cwd' });
   const saved = aliasState;
-  aliasState = { ...saved, lookup: (name, gitOpts) => getGitAlias(name, gitOpts, cwd), budget: GIT_ALIAS_LOOKUPS };
+  aliasState = { ...saved, lookup, budget: GIT_ALIAS_LOOKUPS, cache: new Map() };
   let hit;
   try { hit = findGuardedCommand(command, 0, mode); } finally { aliasState = saved; }
   if (!hit) return { exitCode: 0, checked: false };
