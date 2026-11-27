@@ -90,6 +90,11 @@ const TOOL_REFUSAL_MESSAGE =
 
 const REFUSAL_MESSAGE =
   'Blocked by Mako path fence: this role may only access files inside its own sandbox. [fence-outside-sandbox]';
+// A path the hook could not check (a filesystem error, an unsupported Windows spelling, a missing
+// working directory or a hook bug) refuses with its own constant, so it is never mistaken for an
+// attempt to leave the sandbox. Like REFUSAL_MESSAGE, it names no path.
+const PATH_CHECK_REFUSAL_MESSAGE =
+  'Blocked by Mako path fence: the path could not be checked. [fence-path-check-failed]';
 
 function ordinaryPath(value) {
   if (typeof value !== 'string' || value === '' || value.includes('\0')) {
@@ -226,6 +231,9 @@ function isAllowedPageUrl(url) {
   try {
     const policy = require(policyPath);
     if (typeof url === 'string' && url.length > policy.MAX_URL_LENGTH) return false;
+    // validatePageUrl trims its input, but the browser is given the string as sent. Refuse any URL
+    // with leading or trailing whitespace, so the browser opens exactly the string that was checked.
+    if (typeof url === 'string' && url !== url.trim()) return false;
     const checked = policy.validatePageUrl(url);
     if (checked.reason !== policy.REASON.CHECK_UNAVAILABLE) return checked.ok === true;
   } catch {
@@ -275,7 +283,7 @@ process.stdin.on('end', () => {
   try {
     allowed = isAllowedPath(data && data.cwd, target);
   } catch {
-    refuse(REFUSAL_MESSAGE);
+    refuse(PATH_CHECK_REFUSAL_MESSAGE);
   }
   if (allowed) process.exit(0);
 

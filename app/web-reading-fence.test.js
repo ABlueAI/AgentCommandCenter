@@ -216,11 +216,21 @@ section('6. Path containment uses the filesystem and refuses unverifiable paths'
     encoding: 'utf8',
   });
   const denied = (r) => r.status === 2 && r.stderr.includes('[fence-outside-sandbox]');
+  // A path the hook cannot check refuses with its own constant, never the outside-sandbox one.
+  const unchecked = (r) => r.status === 2 && r.stderr.includes('[fence-path-check-failed]')
+    && !r.stderr.includes('[fence-outside-sandbox]');
+  const runTool = (toolName, toolInput) => spawnSync(process.execPath, [hookPath], {
+    input: JSON.stringify({ cwd: root, tool_name: toolName, tool_input: toolInput }),
+    encoding: 'utf8',
+  });
+  assert(unchecked(runTool('Read', { path: outsideFile })), 'Read without file_path is refused');
+  assert(unchecked(runTool('Write', { notebook_path: outsideFile })), 'Write without file_path is refused');
+  assert(unchecked(runTool('Edit', {})), 'Edit without any path is refused');
   assert(run('new/report.md').status === 0, 'a new file under new in-sandbox directories is allowed');
   assert(denied(run(path.join(alias, 'new.md'))), 'a directory alias resolving outside is refused');
-  assert(denied(run(path.join(dangling, 'new.md'))), 'a dangling directory alias is refused');
-  assert(denied(run('new.md', path.join(root, 'missing'))), 'an unresolved sandbox root is refused');
-  assert(denied(run(42)), 'a non-string path is refused visibly');
+  assert(unchecked(run(path.join(dangling, 'new.md'))), 'a dangling directory alias is refused');
+  assert(unchecked(run('new.md', path.join(root, 'missing'))), 'an unresolved sandbox root is refused');
+  assert(unchecked(run(42)), 'a non-string path is refused visibly');
   assert(denied(run(['alias', '..', 'file.md'].join(path.sep))),
     'parent segments are checked with filesystem resolution');
   assert(run(['subdirectory', '..', 'Sample.md'].join(path.sep)).status === 0,
@@ -248,7 +258,7 @@ section('7. Windows path spellings use Windows filesystem identity');
   const outsideFile = win.join(outside, 'file.md');
   const otherCase = win.join(win.dirname(root), win.basename(root).toLowerCase());
   const existing = [root, win.dirname(root), outside, outsideFile, win.join(root, 'file.md'),
-    otherCase, win.join(otherCase, 'file.md')];
+    otherCase, win.join(otherCase, 'file.md'), win.join(root, 'console.md')];
   const realpath = (raw) => {
     const expanded = win.normalize(raw).replace(outsideShortName, 'Other Directory')
       .replace(rootShortName, win.basename(root));
@@ -294,24 +304,44 @@ section('7. Windows path spellings use Windows filesystem identity');
     'an in-root path with alternate case and slashes is allowed');
   assert(run(win.join(win.dirname(root), rootShortName, 'file.md')).status === 0,
     'a short name expanding to a path inside the root is allowed');
+  assert(run(win.join(root, 'console.md')).status === 0,
+    'a name that only starts like a reserved device name is allowed');
+  // Paths that resolve outside the root: refused as outside the sandbox.
   const refusals = [
     ['alternate case', outsideFile.toUpperCase()],
     ['mixed slashes', outsideFile.replace(/\\/g, '/')],
     ['parent segments', root + String.raw`\..\Other Directory\file.md`],
-    ['trailing dot', root + String.raw`\file.md.`],
-    ['trailing space', root + '\\file.md '],
     ['short name', win.join(win.dirname(root), outsideShortName, 'file.md')],
     ['a differently cased directory with its own filesystem identity', win.join(otherCase, 'file.md')],
-    ['a filesystem permission error', win.join(root, 'inaccessible.md')],
-    ['UNC', String.raw`\\fixture.invalid\share\file.md`],
-    ['extended device namespace', '\\\\?\\' + outsideFile],
-    ['Win32 device namespace', '\\\\.\\' + outsideFile],
-    ['drive-relative', 'X:file.md'],
   ];
   for (const [label, filePath] of refusals) {
     const result = run(filePath);
     assert(result.status === 2 && result.stderr.includes('[fence-outside-sandbox]'),
       'Windows path check refuses ' + label);
+  }
+  // Paths the hook cannot check (ambiguous Win32 spellings, filesystem errors): refused with the
+  // separate path-check constant, so they never look like an attempt to leave the sandbox.
+  const unchecked = [
+    ['trailing dot', root + String.raw`\file.md.`],
+    ['trailing space', root + '\\file.md '],
+    ['a filesystem permission error', win.join(root, 'inaccessible.md')],
+    ['UNC', String.raw`\\fixture.invalid\share\file.md`],
+    ['extended device namespace', '\\\\?\\' + outsideFile],
+    ['Win32 device namespace', '\\\\.\\' + outsideFile],
+    ['drive-relative', 'X:file.md'],
+    ['reserved device name NUL', win.join(root, 'NUL')],
+    ['reserved device name with an extension', win.join(root, 'con.txt')],
+    ['reserved device name with a superscript digit', win.join(root, 'COM\u00b9')],
+    ['reserved device name with a trailing space before the extension', win.join(root, 'aux .md')],
+    ['alternate data stream', win.join(root, 'file.md:secret')],
+    ['a wildcard character', win.join(root, 'a?b.md')],
+    ['a control character', win.join(root, 'a\u0001b.md')],
+  ];
+  for (const [label, filePath] of unchecked) {
+    const result = run(filePath);
+    assert(result.status === 2 && result.stderr.includes('[fence-path-check-failed]')
+      && !result.stderr.includes('[fence-outside-sandbox]'),
+      'Windows path check refuses ' + label + ' as unchecked');
   }
 }
 

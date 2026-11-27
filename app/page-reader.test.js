@@ -245,6 +245,11 @@ section('5. Fence hook gates (the real hook)');
   for (const hostname of ['example.org', '8.8.8.8', '[2606:4700:4700::1111]']) {
     assert(run(nav, { url: 'https://' + hostname + '/' }).status === 0, 'navigation accepts a public host');
   }
+  for (const u of [' https://example.org/', 'https://example.org/ ', '\thttps://example.org/', 'https://example.org/\n']) {
+    const r = run(nav, { url: u });
+    assert(r.status === 2 && r.stderr.includes('[fence-page-denied]'),
+      'navigation refuses a URL the browser would get with surrounding whitespace ' + JSON.stringify(u));
+  }
   const missingPolicy = { ...env, [policyKey]: '' };
   const badPolicy = { ...env, [policyKey]: path.join(sandbox, 'missing.js') };
   for (const hookEnv of [missingPolicy, badPolicy]) {

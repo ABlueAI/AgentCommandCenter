@@ -1469,6 +1469,21 @@ Step 75 comes from PR #245. Step numbers 73 and 74 belong to open PRs (#230 and 
   - *Done when:* a Web Scout pane launches after the sync, and you tell any agent "step 75 done"; it ticks
     this with the date.
 
+Step 89 comes from PR #327.
+
+- [ ] **89. Re-deploy the fence hook after PR #327 merges, and check a Page pane.** **About 5
+  minutes**, the next time you open Mako after merging PR #327 (if step 75 isn't done yet, do this
+  instead of it: it covers both). PR #327 changes the fence hook again, and Mako refuses to launch the
+  fenced roles (Web Scout, Source Scout, Operator and Page panes) until the deployed copy matches the
+  new one. The hook now also loads Mako's own page-URL check, which CI can't run on your PC.
+  - Pull `main`, run `scripts/sync-roles.ps1`, and restart Mako fully (close every window).
+  - Open a Page pane on a public https page (for example `https://example.org/`): it should open and
+    read the page. Then ask it to open `https://localhost/`: it should show "Blocked by Mako page
+    fence" with `[fence-page-denied]`.
+  - **New Agent > 🌐 Web Scout**, **Create & Launch**: the pane should start.
+  - *Done when:* both checks behave as above, and you tell any agent "step 89 done"; it ticks this
+    with the date.
+
 ## From S14 (the 1.1 design brief)
 
 Step 77 comes from PR #253.
