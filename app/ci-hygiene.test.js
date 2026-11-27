@@ -48,6 +48,10 @@ for (const [job, check] of [['app', 'App tests (Windows)'], ['pester', 'PowerShe
   assert(guardrailGuide.includes(`**${check}** — **GitHub Actions**.`),
     `guardrail setup identifies GitHub Actions as the expected source for "${check}"`);
 }
+const blueChecklist = fs.readFileSync(path.join(repoRoot, 'BLUE-CHECKLIST.md'), 'utf8');
+const sourceCheck = blueChecklist.match(/^  - Issue #279:[^\r\n]*(?:\r?\n {4}[^\r\n]*)*/m)?.[0];
+assert(sourceCheck?.includes('[guardrail setup](docs/SETUP-GUARDRAILS.md#part-a-right-after-pr-27-merges-10-minutes)'),
+  'the issue #279 checklist item links to the guardrail setup');
 
 process.stdout.write('\naudited packages stay at or above their fixed versions\n');
 const lock = JSON.parse(fs.readFileSync(path.join(__dirname, 'package-lock.json'), 'utf8'));
