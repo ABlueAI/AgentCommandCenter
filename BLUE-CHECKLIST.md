@@ -1643,6 +1643,22 @@ Step 88 comes from PR #315 (issue #219). Step numbers 86 and 87 belong to open P
   - *Done when:* you've told any agent what you saw (no warning, rules listed, or what differed);
     it ticks this with the date and how it checked.
 
+## From PR #314 (secure.json refuses instead of overwriting, issue #249)
+
+Step 91 comes from PR #314. Step number 90 belongs to an open PR.
+
+- [ ] **91. Check the credential store after a restart (PR #314).** **About 10 minutes**, on the
+  next Tuesday or Friday PC-check evening after merging PR #314.
+  - Pull `main`, fully restart Mako, then save and clear the Gemini key and the ABlueAgent token
+    once each; check that each says it worked and that they're still there after another restart.
+  - Close Mako, copy `secure.json` in Mako's settings folder somewhere safe, then put `{` (one
+    character) in it and start Mako. Check that one "Credential store unavailable" box appears,
+    saying "not valid JSON" and naming the folder, that Mako still opens, and that the same line
+    shows in the Logs tab.
+  - Close Mako, put your copy back, start Mako and check that both credentials are loaded again.
+  - *Done when:* you've told any agent what you saw; it ticks this with the date and how it
+    checked.
+
 ## Coming up this month (the runner will ask when it gets there)
 
 You can start on the first one now, which saves time later.
