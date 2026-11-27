@@ -702,10 +702,12 @@ const pwsh = (command) => ({ hook_event_name: 'PreToolUse', tool_name: 'PowerShe
   let psCalls = 0;
   for (const cmd of NOT_GUARDED_PS) guard.decide(pwsh(cmd), () => { psCalls++; return { login: 'ABlueAI' }; });
   assert(psCalls === 0, `no gh call for any non-matching PowerShell command (${psCalls} calls)`);
-  // Review run 1: a PowerShell call with no command says so instead of allowing in silence.
-  const missing = guard.decide({ tool_name: 'PowerShell', tool_input: {} }, () => ({ login: 'ABlueAI' }));
-  assert(missing.exitCode === 0 && /couldn't read the PowerShell tool's command/.test(missing.systemMessage) && !/\n/.test(missing.systemMessage),
-    'PowerShell with no tool_input.command: exit 0 with a one-line notice');
+  for (const toolName of ['Bash', 'PowerShell']) {
+    const missing = guard.decide({ tool_name: toolName, tool_input: {} }, never);
+    assert(missing.exitCode === 2 && missing.stderr?.includes(`couldn't read the ${toolName} tool's command`) && !/\n/.test(missing.stderr),
+      `${toolName} with no tool_input.command: exit 2 with a one-line refusal`);
+  }
+  assert(asked === 0, 'an unreadable shell command never starts gh');
   // Codex's review of 004b8cd: printing an array that spells a merge is checked again and, as a merge
   // command, blocked under any login without a gh call (fails closed; Blue, 2026-11-24). Giving one to
   // the call operator is blocked the same way.
@@ -823,8 +825,6 @@ const pwsh = (command) => ({ hook_event_name: 'PreToolUse', tool_name: 'PowerShe
   }
   assert(fuzzThrew === 0 && fuzzSlow === 0, `fuzz: 6,000 PowerShell inputs, no throw, none over 500 ms (slowest ${fuzzWorst} ms)`);
   assert(fuzzMissed === 0, `fuzz: every input holding the words git and push is guarded (${fuzzMissed} missed)`);
-  const bashMissing = guard.decide({ tool_name: 'Bash', tool_input: {} }, () => ({ login: 'ABlueAI' }));
-  assert(bashMissing.exitCode === 0 && !bashMissing.systemMessage, 'Bash with no command: unchanged (exit 0, silent)');
   // Only the two tools' exact names are checked (the names hooks see: docs, tools reference).
   assert(guard.decide({ tool_name: 'Read', tool_input: { command: 'git push' } }, () => ({ login: 'ABlueAI' })).exitCode === 0,
     'a tool other than Bash or PowerShell is not checked');
@@ -928,9 +928,16 @@ const ghCalls = () => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8')
   fs.unlinkSync(planted);
 }
 {
-  const env = { ...process.env, PATH: binDir, FAKE_GH_MODE: 'ABlueAI', FAKE_GH_LOG: logFile };
-  const r = spawnSync(process.execPath, [HOOK], { cwd: workDir, env, input: 'not json', encoding: 'utf8' });
-  assert(r.status === 0 && /couldn't read the hook input/.test(r.stdout), 'unreadable input: exit 0 with a notice');
+  for (const [input, label] of [['not json', 'invalid JSON'], ['', 'empty stdin'], ['{}', 'missing tool name'], ['null', 'null hook input']]) {
+    const r = spawnSync(process.execPath, [HOOK], { cwd: workDir, input, encoding: 'utf8' });
+    assert(r.status === 2 && r.stdout === '' && /couldn't read the hook input/.test(r.stderr),
+      `${label}: exit 2 with a refusal on stderr`);
+  }
+  for (const toolName of ['Bash', 'PowerShell']) {
+    const r = runHook(42, { toolName });
+    assert(r.status === 2 && r.stdout === '' && r.stderr.includes(`couldn't read the ${toolName} tool's command`),
+      `${toolName} with a non-string command: exit 2 with a refusal on stderr`);
+  }
 }
 {
   // App identities, end to end.
@@ -1050,7 +1057,7 @@ assert(!!hook, 'a PreToolUse hook with matcher "Bash|PowerShell" runs account-gu
 assert(hook && hook.type === 'command' && hook.command === 'node', 'exec form: command "node"');
 assert(hook && JSON.stringify(hook.args) === JSON.stringify(['${CLAUDE_PROJECT_DIR}/.claude/hooks/account-guard.js']),
   'args point at the script through ${CLAUDE_PROJECT_DIR}');
-assert(hook && !('onFailure' in hook), 'onFailure unset: in exec form a hook that fails to run never blocks (docs default)');
+assert(hook && hook.onFailure === 'block', 'onFailure blocks shell calls if the guard crashes, times out or cannot start');
 assert(hook && !('shell' in hook), 'no shell field (ignored in exec form anyway)');
 assert(hook && typeof hook.timeout === 'number' && hook.timeout * 1000 > 10000,
   'timeout is longer than the 10-second gh call');

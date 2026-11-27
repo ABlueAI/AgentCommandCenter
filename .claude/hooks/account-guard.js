@@ -50,13 +50,10 @@
 //      (`systemMessage` in JSON on stdout) that the account couldn't be checked.
 //   4. A review or merge command (above) exits 2 with its own message, whatever the login.
 //
-// It fails open on purpose (Blue, 2026-11-04: "i just dont want this to cause more problems"):
-// only a confirmed `ABlueAI` login blocks. A crash, bad input or an unknown shape is allowed
-// with a notice. settings.json leaves `onFailure` unset, so in exec form a hook that can't start
-// (no node on PATH, a missing script) is a non-blocking error: "Without `onFailure` set, the same
-// missing script is a non-blocking error and `ls` runs" (docs, "Block the action when a hook
-// fails"). Exec form: "path placeholders ... are substituted into `command` and into each `args`
-// element as plain strings" (docs, "Exec form and shell form").
+// An unreadable hook input or internal error blocks the shell call. settings.json sets
+// `onFailure: "block"` so Claude Code also refuses the call if the hook cannot start or times out
+// (docs, "Block the action when a hook fails"). For login-dependent commands, an unknown GitHub
+// login still allows the call with a notice (Blue, 2026-11-04).
 //
 // Hook contract (official docs, https://code.claude.com/docs/en/hooks, read 2026-11-04):
 // "Exit with code 2 to block the action ... a `PreToolUse` hook blocks the tool call";
@@ -79,8 +76,7 @@
 // PowerShell counterpart, issue #219). A process running as
 // Blue's Windows user can still use his stored logins, which is why he removes them after
 // checklist step 35 (BLUE-CHECKLIST.md step 49). Review and merge calls are guarded only as far as
-// this hook sees them: the real gate is that `main` needs Blue's approval, and the merge audit
-// (.github/workflows/merge-audit.yml) alerts when an agent approved a PR that Blue authored.
+// this hook sees them. See docs/SETUP-GUARDRAILS.md for GitHub-side approval and merge controls.
 
 const { execFileSync } = require('child_process');
 const fs = require('fs');
@@ -987,18 +983,17 @@ const TOOL_MODES = { Bash: 'bash', PowerShell: 'ps' };
 // Returns { exitCode: 0 | 2, stderr?: string, systemMessage?: string, checked: boolean }.
 function decide(input, getLogin = readGhLogin) {
   const toolName = input && input.tool_name;
-  const command = input && input.tool_input && input.tool_input.command;
-  const mode = TOOL_MODES[toolName];
-  if (!mode) return { exitCode: 0, checked: false };
+  if (typeof toolName !== 'string' || !toolName.trim()) {
+    return { exitCode: 2, checked: false, stderr: "Account guard: couldn't read the hook input (no tool name)." };
+  }
+  if (!Object.hasOwn(TOOL_MODES, toolName)) return { exitCode: 0, checked: false };
+
+  const command = input.tool_input?.command;
   if (typeof command !== 'string') {
-    // The PowerShell tool's input shape comes from the docs, not from a live call: if it ever
-    // carries no `command`, say so instead of allowing in silence. (Bash keeps its silent exit.)
-    return mode === 'ps'
-      ? { exitCode: 0, checked: false, systemMessage: `Account guard: couldn't read the ${toolName} tool's command (no tool_input.command); allowed.` }
-      : { exitCode: 0, checked: false };
+    return { exitCode: 2, checked: false, stderr: `Account guard: couldn't read the ${toolName} tool's command (expected tool_input.command to be a string).` };
   }
 
-  const hit = findGuardedCommand(command, 0, mode);
+  const hit = findGuardedCommand(command, 0, TOOL_MODES[toolName]);
   if (!hit) return { exitCode: 0, checked: false };
 
   // Review and merge commands are blocked under any login: no `gh` call, nothing to fail open on.
@@ -1029,27 +1024,25 @@ function decide(input, getLogin = readGhLogin) {
 }
 
 function readStdin() {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let data = '';
     process.stdin.setEncoding('utf8');
     process.stdin.on('data', (chunk) => { data += chunk; });
     process.stdin.on('end', () => resolve(data));
-    process.stdin.on('error', () => resolve(data));
+    process.stdin.on('error', reject);
   });
 }
 
 async function main() {
-  let verdict;
+  let input;
   try {
-    const raw = await readStdin();
-    let input;
-    try { input = JSON.parse(raw); } catch {
-      verdict = { exitCode: 0, systemMessage: "Account guard: couldn't read the hook input; allowed." };
-    }
-    if (!verdict) verdict = decide(input);
-  } catch (err) {
-    verdict = { exitCode: 0, systemMessage: `Account guard: internal error (${err && err.message}); allowed.` };
+    input = JSON.parse(await readStdin());
+  } catch {
+    process.stderr.write("Account guard: couldn't read the hook input (expected JSON on stdin).\n");
+    process.exitCode = 2;
+    return;
   }
+  const verdict = decide(input);
   if (verdict.systemMessage) {
     process.stdout.write(JSON.stringify({ systemMessage: verdict.systemMessage }) + '\n');
     process.stderr.write(verdict.systemMessage + '\n');
@@ -1058,7 +1051,12 @@ async function main() {
   process.exitCode = verdict.exitCode;
 }
 
-if (require.main === module) main();
+if (require.main === module) {
+  main().catch(() => {
+    process.stderr.write('Account guard: internal error while checking the shell call.\n');
+    process.exitCode = 2;
+  });
+}
 
 module.exports = {
   splitCommands, splitPowerShell, findGuardedCommand, rawScan, psWordScan, resolveGh, decide, readGhLogin,

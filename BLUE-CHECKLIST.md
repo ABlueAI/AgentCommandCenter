@@ -65,6 +65,8 @@ push" or "one more review run", so those are not listed here.
   report open (10 minutes).
 - [Step 61](#from-the-mako-11-decision-sheet-2026-11-16): tell a local agent on your PC "do step 61"
   (2 minutes; you approved the delete on 2026-11-16).
+- [Step 95](#from-issue-85-merge-permissions): verify who can merge to `main` after approval,
+  before merging the issue #85 fix (about 5 minutes once a test PR has green CI).
 
 **On a date:**
 
@@ -1642,6 +1644,15 @@ Step 88 comes from PR #315 (issue #219). Step numbers 86 and 87 belong to open P
     the `PowerShell(...)` rules next to the `Bash(...)` ones (for example `PowerShell(gh pr merge:*)`).
   - *Done when:* you've told any agent what you saw (no warning, rules listed, or what differed);
     it ticks this with the date and how it checked.
+
+## From issue #85 (merge permissions)
+
+- [ ] **95. Verify who can merge to `main` after approval (issue #85).** **About 5 minutes** once a
+  test PR has green CI, before merging the issue #85 fix. In GitHub's rulesets, confirm or configure
+  the merge restriction using [Part C of the guardrail setup](docs/SETUP-GUARDRAILS.md#part-c-restrict-who-can-merge-issue-85).
+  - *Done when:* you've confirmed that the agent account's merge control is disabled on an
+    approved, green test PR, yours is available, and `protect-main` still requires code-owner
+    approval and both Windows checks. Tell an agent what you verified so it can date and tick this.
 
 ## Coming up this month (the runner will ask when it gets there)
 

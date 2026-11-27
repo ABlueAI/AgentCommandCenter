@@ -43,7 +43,8 @@ personal approval.
 
 After Part A: nobody can push to main, force-push it or delete it; every change needs a PR with green
 CI; auto-merge cannot be switched on by an agent. **Remaining gap:** an agent acting as your account
-could still press Merge on a green PR. Part B closes that.
+could still press Merge on a green PR. Part B separates the accounts so GitHub can require your
+approval. Part C covers who can merge after that approval.
 
 ## Part B: before the daily runner starts (15 minutes)
 
@@ -64,17 +65,39 @@ could still press Merge on a green PR. Part B closes that.
 5. **Tell Claude it's done.** Session S01 opens a test PR from the agent account and confirms it cannot
    merge without you.
 
-## Who can merge after Part B
+## Who can merge agent-authored PRs after Part B
 
 | Actor | Can push to main | Can merge a PR |
 |---|---|---|
-| Claude or any agent (agent account, Write role) | No | No: needs Blue's approval, and the agent cannot approve as Blue |
-| Codex (linked to the agent account) | No | No: its PRs are opened as the agent account, its reviews come from `chatgpt-codex-connector[bot]` as comments, and neither can give the code owner's approval (docs/CODEX-BUILDER-LANE.md) |
+| Claude or any agent (agent account, Write role) | No | Before Blue approves: no. After approval and green CI: GitHub's enforcement is unverified until Part C is checked. |
+| Codex (linked to the agent account) | No | Same as other agents. Its reviews cannot supply the required code-owner approval. |
 | A GitHub Actions workflow | No | No: read-only token, cannot approve |
 | Someone opening a PR from a fork | No | No |
 | Blue (ABlueAI) | No (PR required for everyone) | Yes, after CI passes, approving the agent's PR |
 
 The merge audit workflow opens a `security-alert` issue if anything reaches main any other way.
+
+## Part C: restrict who can merge (issue #85)
+
+The Claude Code deny rules and shell hook block the merge calls they match in sessions that load
+them. Claude Code 2.1.295 or later also blocks a shell call if the hook cannot run. GitHub controls
+merge permission for every client. Approval and status checks alone do not identify who may merge
+an approved PR.
+
+Blue's decision, before merging the issue #85 fix (see [checklist step 95](../BLUE-CHECKLIST.md#from-issue-85-merge-permissions)):
+
+1. Review the active rulesets for `main` and confirm who can update it through an approved PR.
+2. If a merge restriction is needed, the recommended setup is a separate active branch ruleset
+   for `main` with **Restrict updates** and a **Repository administrators** bypass set to
+   **For pull requests only**, if Blue is the only repository administrator. Keep `protect-main`
+   active with its empty bypass list so approval and the required Windows checks still apply.
+3. Verify on an approved, green test PR that the agent account's merge control is disabled and
+   Blue's is available. Record the result without merging the test PR.
+
+GitHub documents [Restrict updates](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#restrict-updates),
+[pull-request-only bypass](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository#granting-bypass-permissions-for-your-branch-or-tag-ruleset)
+and [rule layering](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets#about-rule-layering).
+Claude Code documents [blocking the action when a hook fails](https://code.claude.com/docs/en/hooks#block-the-action-when-a-hook-fails).
 
 ## What is still not covered
 
