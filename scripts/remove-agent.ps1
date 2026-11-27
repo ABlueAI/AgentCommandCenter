@@ -50,7 +50,7 @@ function Get-Chunk {
 # filter settings are allowed.
 $script:RiskyConfig = '^(credential\..*|core\.(askpass|sshcommand|gitproxy|alternaterefscommand|alternaterefsprefixes)|' +
     'ssh\..*|url\..*\.(insteadof|pushinsteadof)|remote\..*\.(uploadpack|receivepack|vcs|proxy|proxyauthmethod)|' +
-    'http\..*|protocol\..*|include\..*|includeif\..*|filter\..*|hook\..*)$'
+    'http\..*|protocol\..*|include\..*|includeif\..*|filter\..*|hook\..*|lfs\.extension\..*)$'
 # Only the exact values "git lfs install" writes; anything appended to them would run in a shell.
 $script:StandardLfs = @{
     clean    = '^git-lfs clean -- %f$'
@@ -183,6 +183,7 @@ try {
 
     $removeArgs = @('worktree', 'remove')
     if ($Force -and $changes.Count) { $removeArgs += '--force' }
+    Assert-SafeRepositoryConfig $worktreePath  # git worktree remove runs its own status check
     Invoke-CheckedGit $repoRoot ($removeArgs + @('--', $worktreePath))
 
     Write-Host "Removed worktree: $worktreePath" -ForegroundColor Green

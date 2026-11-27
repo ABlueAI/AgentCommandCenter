@@ -337,6 +337,7 @@ for (const [key, value] of [
   ['http.proxy', 'http://proxy.example.invalid:8080'],
   ['remote.fixture.proxy', 'http://proxy.example.invalid:8080'],
   ['hook.planted.command', 'MARKER'],
+  ['lfs.extension.planted.clean', 'MARKER'],
 ]) {
   test(`repository config that sets ${key} is refused before any network or status call`, { skip }, (t) => {
     const { repo, worktree, git, run } = fixture(t);
