@@ -3,8 +3,23 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { test } = require('node:test');
+const { after, test: runTest } = require('node:test');
 const vm = require('node:vm');
+
+let passed = 0;
+let failed = 0;
+function test(name, run) {
+  runTest(name, async () => {
+    try {
+      await run();
+      passed++;
+    } catch (error) {
+      failed++;
+      throw error;
+    }
+  });
+}
+after(() => process.stdout.write(`launch-dialogs: ${passed} passed, ${failed} failed\n`));
 
 const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
 const deferred = () => {
