@@ -25,6 +25,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const Module = require('module');
+const { randomUUID } = require('crypto');
+const { createSessionMemoryStore, STOP_REASON } = require('./session-memory');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -137,6 +139,7 @@ async function bootMain(admissionEnv, options) {
   Module._load = function (request) {
     if (request === 'electron') return electronStub;
     if (request === '@lydell/node-pty') return ptyStub;
+    if (request === 'fs' && arguments[1]?.filename === MAIN_PATH && opt.mainFs) return opt.mainFs;
     return realLoad.apply(this, arguments);
   };
 
@@ -545,6 +548,79 @@ const LEDGER = 'admission-ledger.json';
       }
       assert(r.record.whenReadyCalls === 1 && r.record.windowsCreated === 1,
         '[' + label + '] readiness and the single window still follow');
+    }
+  }
+
+  section('Settings read failures refuse visibly and preserve saved preferences');
+  {
+    const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mako-settings-'));
+    try {
+      const file = path.join(userDataDir, 'settings.json');
+      let unreadable = false;
+      const mainFs = { ...fs, readFileSync(filePath, ...args) {
+        if (filePath === file && unreadable) throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+        return fs.readFileSync(filePath, ...args);
+      } };
+      const { record } = await bootMain({}, { userDataDir, mainFs });
+      const get = record.handled.get('get-settings');
+      const save = record.handled.get('save-settings');
+      const invokeRefuses = async (invoke) => {
+        try { await invoke(); return false; }
+        catch (e) { return /settings\.json/i.test(e.message); }
+      };
+      const defaults = await get();
+      assert(typeof defaults.projectsRoot === 'string' && defaults.selectedRepo === '' && !fs.existsSync(file),
+        'missing settings return first-run defaults without writing');
+      const prefs = { projectsRoot: path.join(userDataDir, 'projects'), selectedRepo: 'saved-repo', theme: 'void' };
+      await save({}, prefs);
+      const saved = fs.readFileSync(file, 'utf8');
+      for (const [label, bytes, denyRead] of [
+        ['unreadable', saved, true], ['malformed JSON', '{broken', false], ['wrong shape', 'null', false],
+      ]) {
+        fs.writeFileSync(file, bytes);
+        unreadable = denyRead;
+        const noticeCount = record.sent.length;
+        assert(await invokeRefuses(get), `${label}: get-settings rejects with a settings error`);
+        assert(await invokeRefuses(() => save({}, { theme: 'obsidian' })), `${label}: save-settings rejects with a settings error`);
+        assert(record.sent.slice(noticeCount).some((line) => line.includes('settings.json')), `${label}: the window receives a visible notice`);
+        assert(fs.readFileSync(file, 'utf8') === bytes, `${label}: original bytes are preserved`);
+      }
+      unreadable = false;
+      fs.writeFileSync(file, saved);
+      const recovered = await save({}, { theme: 'nord' });
+      assert(recovered.projectsRoot === prefs.projectsRoot && recovered.selectedRepo === prefs.selectedRepo
+        && recovered.theme === 'nord', 'saving works after recovery and preserves the other preferences');
+      for (const fn of record.appHandlers.get('will-quit') || []) fn();
+    } finally {
+      fs.rmSync(userDataDir, { recursive: true, force: true });
+    }
+  }
+
+  section('Session recovery belongs to one process per profile');
+  {
+    const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mako-session-profile-'));
+    try {
+      const store = createSessionMemoryStore({ userDataDir });
+      const first = (await bootMain({}, { userDataDir })).record;
+      const sessionId = randomUUID();
+      assert(store.recordStart({ sessionId, paneId: 'p1', cli: 'claude', worktree: userDataDir }).ok,
+        'the first process has an open session record');
+      const second = (await bootMain({}, { userDataDir })).record;
+      assert(second.windowsCreated === 1, 'the other window can still open');
+      assert(store.list().records[0].stoppedAt === null, 'the other window cannot mark the running record interrupted');
+      const offer = await second.handled.get('session-resume-offer')({ senderFrame: second.webContents.mainFrame, sender: second.webContents });
+      assert(offer.ok === false && second.sent.some((line) => /session memory refused/i.test(line)),
+        'the other window visibly refuses session recovery for the busy profile');
+      for (const fn of second.appHandlers.get('before-quit') || []) fn({ preventDefault() {} });
+      for (const fn of second.appHandlers.get('will-quit') || []) fn();
+      assert(store.list().records[0].stoppedAt === null, 'quitting the other window leaves the record open');
+      // Release ownership without the graceful record close, as after an interrupted run.
+      for (const fn of first.appHandlers.get('will-quit') || []) fn();
+      const next = (await bootMain({}, { userDataDir })).record;
+      assert(store.list().records[0].stopReason === STOP_REASON.UNKNOWN, 'the next owner recovers the interrupted record');
+      for (const fn of next.appHandlers.get('will-quit') || []) fn();
+    } finally {
+      fs.rmSync(userDataDir, { recursive: true, force: true });
     }
   }
 

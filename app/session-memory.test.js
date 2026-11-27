@@ -144,15 +144,38 @@ for (const [label, text] of [
   }
 }
 
-section('the newest records are kept, up to ' + MAX_RECORDS);
+section('retention keeps running sessions and prunes the oldest closed record first');
 {
-  const dir = freshDir();
-  const s = createSessionMemoryStore({ userDataDir: dir });
+  const s = createSessionMemoryStore({ userDataDir: freshDir() });
+  const active = id();
+  s.recordStart({ sessionId: active, cli: 'claude' });
   const ids = [];
-  for (let i = 0; i < MAX_RECORDS + 5; i++) { const sid = id(); ids.push(sid); s.recordStart({ sessionId: sid, paneId: 'p' + i }); }
+  for (let i = 0; i < MAX_RECORDS; i++) {
+    const sid = id();
+    ids.push(sid);
+    s.recordStart({ sessionId: sid });
+    s.recordStop(sid, STOP_REASON.CLOSED);
+  }
   const recs = s.list().records;
   assert(recs.length === MAX_RECORDS, 'the file holds at most ' + MAX_RECORDS + ' records');
-  assert(recs[0].sessionId === ids[5] && recs[recs.length - 1].sessionId === ids[ids.length - 1], 'the oldest five dropped off');
+  assert(recs[0].sessionId === active && recs[0].stoppedAt === null, 'the oldest running session stays recorded');
+  assert(recs[1].sessionId === ids[1] && recs.at(-1).sessionId === ids.at(-1), 'the oldest closed session drops off');
+  const restarted = createSessionMemoryStore({ userDataDir: path.dirname(s.filePath()) });
+  restarted.closeOpen(STOP_REASON.UNKNOWN);
+  assert(restarted.resumeOffer().records.some((r) => r.sessionId === active), 'the running session is offered after restart');
+}
+
+{
+  const s = createSessionMemoryStore({ userDataDir: freshDir() });
+  for (let i = 0; i < MAX_RECORDS; i++) s.recordStart({ sessionId: id() });
+  const before = fs.readFileSync(s.filePath(), 'utf8');
+  const overflowId = id();
+  const full = s.recordStart({ sessionId: overflowId });
+  assert(!full.ok && typeof full.reason === 'string', 'a full store of open records visibly refuses a new record');
+  assert(fs.readFileSync(s.filePath(), 'utf8') === before, 'the refusal leaves every open record intact');
+  s.recordStop(JSON.parse(before).records[0].sessionId, STOP_REASON.EXITED);
+  assert(s.recordStart({ sessionId: overflowId }).ok && s.list().records.at(-1).sessionId === overflowId,
+    'recording can resume once a closed record is available to prune');
 }
 
 section('a failed write is refused and leaves the previous file');
