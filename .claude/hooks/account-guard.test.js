@@ -1015,6 +1015,7 @@ process.stdout.write('\ngit aliases (issue #337)\n');
   assert(find("git -c 'alias.g=!git' g status") === null, '... and they are only words: `git status` through it is not a push');
   assert(noted(find(`git -c 'alias.run=!f() { git "$@"; }; f' run push`)), 'a shell alias that reads its arguments, given some: login check');
   assert(find(`git -c 'alias.run=!f() { git "$@"; }; f' run`) === null, '... and given none, its own text is checked');
+  assert(noted(find(`git -c "alias.g=!sh -c 'git $0'" g push`)), 'a nested `sh -c` reading $0, given arguments: login check');
   assert(noted(find("git -c 'alias.p=!git q' -c alias.q=push p")), "aliases the outer call defines stay known inside a shell alias");
   assert(find("git -c 'alias.p=push --push-option=$(x) origin HEAD' p") === 'git push', 'a plain alias value is split like git does: `$(...)` is just text');
   assert(find(`git -c 'alias.p=push "a b"' p`) === 'git push', 'quoted words in a plain alias value');

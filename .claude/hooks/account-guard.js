@@ -69,7 +69,8 @@
 // login): a git alias defined in a way the guard doesn't read (an `include.path` or a
 // GIT_CONFIG_GLOBAL file named on the same command, or a repository's own alias after a `cd`
 // earlier in the same call or with GIT_DIR set on the command, since the lookup reads the hook
-// input's cwd and the hook's own environment; see the git-alias notes
+// input's cwd and the hook's own environment; the lookup still reads a network path that the
+// repository's own `.git` file or `include.path` names; see the git-alias notes
 // below for what it does read), wrappers that take their own options (`timeout 60 git push`, `nice -n 5`, `sudo -u x`,
 // `xargs`, and `cmd /c` from Bash), `pwsh -EncodedCommand`, `pwsh -File` and a script piped into
 // pwsh's standard input, in PowerShell a guarded command whose words appear only as fragments
@@ -269,8 +270,9 @@ function splitAliasValue(value) {
   return words;
 }
 const shellQuote = (w) => `'${String(w).replace(/'/g, `'\\''`)}'`;
-// A shell alias that reads its arguments (`$@`, `$*`, `$1` to `$9`, `${...}` of one of them).
-const SHELL_ARGS_REF = /\$(?:[@*1-9]|\{[@*1-9])/;
+// A shell alias that reads its arguments (`$@`, `$*`, `$0` to `$9`, `${...}` of one of them; `$0`
+// because a nested `sh -c '...'` reads its first argument there).
+const SHELL_ARGS_REF = /\$(?:[@*0-9]|\{[@*0-9])/;
 
 // `git` with the words after it (`rest`) and before it (`before`): 'git push' for a push, a push through
 // an alias, or whatever guarded command a shell alias runs; else null.
@@ -1092,7 +1094,7 @@ function psWordScan(text) {
 // The guarded command in a command line (a review or merge command first, else the first
 // login-dependent one), or null. `mode` is 'bash' (the Bash tool) or 'ps' (the PowerShell tool).
 // Never touches the network; when decide() sets the alias lookup, it may start a local
-// `git config --get` (with `-C` naming a network share, git itself may read that share).
+// `git config --get`, which refuses a network path named on the command (readGitAlias).
 function findGuardedCommand(command, depth = 0, mode = 'bash') {
   if (depth > 8 || typeof command !== 'string') return null;
   const script = mode === 'ps' ? normalizePowerShellLineEndings(command) : command;
