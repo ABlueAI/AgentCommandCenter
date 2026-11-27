@@ -3,7 +3,18 @@
 S55 is implemented on its review branch. Independent review and the Windows Firefox profile check
 (checklist step 57) are pending.
 
-Updated 2026-11-27 by the PR sweeper's status PR (covers main up to d664229: PR #317, Codex's
+Updated 2026-11-27 by the PR sweeper's second status PR of the day (covers main up to c50b569:
+PR #302, S69's Trail of Bits patterns in security-reviewer; PR #315, account guard line endings
+and PowerShell deny rules; PR #288, S62's tree and merged-work history data; PR #327, the fence
+hook's page-reader host rule; PR #339, D-091 and D-092 in the rules (Claude's review alone while
+Codex's quota is out; Claude fixes every Codex PR); PR #307, S56's audio bugs; PR #310, fix #210
+(the 3 install scripts); PR #314, fix #249 (secure.json refuses instead of overwriting); PR #316,
+one trusted-sender check on every IPC handler; PR #324, the account guard's remaining command
+forms and work budget; PR #326, authority levels match the docs; PR #334, terminal clipboard,
+paste and links; PR #360, Quick Links refuses every Unicode bidi control (#340); PR #343, renderer
+module tests; PR #362, checklist step 90's duplicate renumbered to 96; verified: GitHub's REST
+API, read 2026-11-27 about 15:50 UTC, shows them merged 2026-11-27 05:11 to 15:37 UTC in that
+order). Before that: updated 2026-11-27 by the PR sweeper's status PR #338 (covers main up to d664229: PR #317, Codex's
 main-process and scripts audit; PR #318, Codex's renderer audit; PR #286, S46's session hygiene;
 PR #287, S47's Symvibe OSS record; verified: GitHub's REST API, read 2026-11-27 about 05:15 UTC,
 shows them merged 2026-11-26 23:42 UTC to 2026-11-27 05:10 UTC in that order). Before that:
