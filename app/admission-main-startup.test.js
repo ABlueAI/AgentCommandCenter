@@ -601,10 +601,22 @@ const LEDGER = 'admission-ledger.json';
           const readPayload = () => { payloadRead = true; throw new Error('Refused IPC read its payload'); };
           const payload = new Proxy({}, { get: readPayload, ownKeys: readPayload });
           const errorsBefore = r.record.mainErrors.length;
-          try { await handler(event, payload); } catch (error) {
+          // A handle channel must visibly refuse: reject with the sender reason, resolve to { ok: false },
+          // or (the launcher channels) resolve to nothing after reporting the sender refusal on
+          // main-error. Resolving to anything else means the channel ran on after the check.
+          let refused = false;
+          let resolvedEmpty = false;
+          try {
+            const out = await handler(event, payload);
+            refused = !!out && out.ok === false;
+            resolvedEmpty = out === undefined;
+          } catch (error) {
             assert(/untrusted-sender/.test(error.message), `${channel} rejects with a sender reason`);
+            refused = true;
           }
           assert(checks === 1 && !payloadRead, `${kind} ${channel} checks the sender once before reading the payload`);
+          if (!refused && resolvedEmpty) refused = r.record.mainErrors.slice(errorsBefore).some((line) => line.includes('untrusted-sender'));
+          if (kind === 'handle') assert(refused, `${channel} refuses an untrusted sender (rejects, returns ok: false, or reports it and returns nothing)`);
           if (kind === 'on') {
             assert(r.record.mainErrors.slice(errorsBefore).some((line) => line.includes('untrusted-sender')),
               `${channel} reports a refusal on a fire-and-forget channel`);

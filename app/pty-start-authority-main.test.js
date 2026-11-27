@@ -380,6 +380,66 @@ Module._load = function (request) {
     assert((await dismissIpc(goodEvent, 'not-a-uuid')).ok === false, 'dismiss refuses a non-UUID');
   }
 
+  section('S46 SESSION HYGIENE — owner, state, done-when, auto-archive and last activity, through main');
+  {
+    const memPath = path.join(USER_DATA, 'session-memory.json');
+    const readMem = () => JSON.parse(fs.readFileSync(memPath, 'utf8'));
+    const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+    const listIpc = record.handled.get('session-hygiene-list');
+    const doneIpc = record.handled.get('session-hygiene-done-when');
+    assert(typeof listIpc === 'function' && typeof doneIpc === 'function', 'main registers session-hygiene-list and session-hygiene-done-when');
+    const untrusted = { sender: { other: 1 }, senderFrame: wc.mainFrame };
+    assert((await listIpc(untrusted)).ok === false && (await doneIpc(untrusted, '5e55a0b1-0000-4000-8000-000000000009', 'x')).ok === false,
+      'both refuse an untrusted sender');
+
+    const res = await ptyStart(goodEvent, { id: 'pane-s46', role: null, cli: 'claude', cwd: FIX });
+    const m = record.spawnArgs[record.spawnArgs.length - 1].args.join(' ').match(new RegExp('--session-id (' + UUID + ')$'));
+    const sid = m && m[1];
+    assert(res && res.ok === true && sid, 'a new claude pane starts');
+    let rec = readMem().records.find((r) => r.sessionId === sid);
+    assert(rec && rec.owner === 'blue', 'its record is owned by Blue');
+
+    const ptyWrite = record.on.get('pty-write');
+    const onData = (data) => ptyWrite(goodEvent, { id: 'pane-s46', data });
+    onData('hello');
+    rec = readMem().records.find((r) => r.sessionId === sid);
+    assert(rec && typeof rec.lastActiveAt === 'string', 'its first input records last activity');
+    ptyWrite(goodEvent, { id: 'pane-resume', data: 'x' });
+    const resumed = readMem().records.find((r) => r.sessionId === '5e55a0b1-0000-4000-8000-000000000009');
+    assert(resumed && typeof resumed.lastActiveAt === 'string', 'input to a resumed pane records its activity too');
+    const mem = readMem();
+    Object.assign(mem.records.find((r) => r.sessionId === sid), { startedAt: '2026-09-30T00:00:00.000Z', lastActiveAt: '2026-10-01T00:00:00.000Z' });
+    fs.writeFileSync(memPath, JSON.stringify(mem));
+    onData('more');
+    rec = readMem().records.find((r) => r.sessionId === sid);
+    assert(rec && rec.lastActiveAt === '2026-10-01T00:00:00.000Z', 'more input within the hour writes nothing (at most once an hour)');
+
+    const list = await listIpc(goodEvent);
+    assert(list.ok === true && list.idleDays === 3 && /^\d{4}-\d{2}-\d{2}$/.test(list.day), 'the list answers with the idle threshold and the local day');
+    const row = list.ok && list.rows.find((r) => r.sessionId === sid);
+    assert(row && row.state === 'running' && row.owner === 'blue' && row.idle === true && list.idle.some((r) => r.sessionId === sid),
+      'a running session silent for weeks is on the idle list');
+    const answered = readMem().records.find((r) => r.sessionId === '5e55a0b1-0000-4000-8000-00000000000b');
+    assert(answered && typeof answered.archivedAt === 'string' && !list.rows.some((r) => r.sessionId === answered.sessionId),
+      'a session Blue answered Start fresh for is archived and leaves the list');
+
+    assert((await doneIpc(goodEvent, sid, '  PR opened and CI green  ')).ok === true, 'a done-when is saved');
+    rec = readMem().records.find((r) => r.sessionId === sid);
+    assert(rec && rec.doneWhen === 'PR opened and CI green', 'trimmed, as one line');
+    const after = await listIpc(goodEvent);
+    assert(after.ok && after.rows.find((r) => r.sessionId === sid).doneWhen === 'PR opened and CI green', 'and the list shows it');
+    const errsBefore = record.mainErrors.length;
+    const bad = await doneIpc(goodEvent, sid, 'line one\nline two');
+    assert(bad.ok === false && bad.error === 'session-memory-bad-done-when', 'a done-when with a line break is refused, visibly');
+    assert((await doneIpc(goodEvent, sid, 'tab\there')).ok === false, 'so is one with a tab');
+    assert((await doneIpc(goodEvent, sid, 'x'.repeat(201))).ok === false, 'one over 200 characters is refused');
+    assert((await doneIpc(goodEvent, '5e55a0b1-0000-4000-8000-0000000000ee', 'x')).error === 'session-memory-unknown-session', 'an unknown session is refused');
+    assert(record.mainErrors.slice(errsBefore).every((l) => !/Session memory refused/.test(l)),
+      'and none of those input refusals raises the "session IDs are not being recorded" notice');
+    assert((await doneIpc(goodEvent, sid, '')).ok === true && readMem().records.find((r) => r.sessionId === sid).doneWhen === undefined,
+      'an empty done-when clears it');
+  }
+
   section('REFUSALS — every one must spawn ZERO PTYs in main');
   const refusals = [
     ['untrusted sender', { sender: { other: 1 }, senderFrame: wc.mainFrame }, { id: 'a', role: 'web-scout', cwd: SANDBOX }],

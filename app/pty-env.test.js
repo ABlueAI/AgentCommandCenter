@@ -513,6 +513,7 @@ process.stdout.write('\n-- main-issued reservation drift matrix --\n');
           ...(videoScout ? ['GEMINI_API_KEY'] : []),
           // MOVED (controlled WebFetch): the mode name is owned by EVERY pane, issued or not.
           'BLUE_HELM_CONTROLLED_WEBFETCH_MODE',
+          'BLUE_HELM_PAGE_READER_POLICY',
         ])];
         if (!Object.keys(mainIssued).every((name) => reservedNames.includes(name))
           || JSON.stringify(reservedNames) !== JSON.stringify(expectedReserved)) {
@@ -523,7 +524,22 @@ process.stdout.write('\n-- main-issued reservation drift matrix --\n');
   }
   assert(calls === 40, 'reservation drift matrix covers 2 Video Scout × 5 Gemini × 4 pane-status cases');
   assert(failures.length === 0,
-    'every matrix call reserves exactly emitted keys plus absent-but-owned pane-status, Video Scout Gemini and WebFetch-mode names');
+    'every matrix call reserves emitted keys and the owned pane-status, Gemini, WebFetch and page-reader names');
+}
+
+process.stdout.write('\n-- main-owned page-reader URL policy --\n');
+{
+  const key = 'BLUE_HELM_PAGE_READER_POLICY';
+  const baseEnv = { [key]: 'ambient', [key.toLowerCase()]: 'ambient variant' };
+  const policy = require.resolve('./page-reader');
+  const issued = buildPtyEnv({ baseEnv, fencedRole: true, pageReaderPolicy: policy });
+  assert(issued[key] === policy && Object.keys(issued).filter((name) => name.toUpperCase() === key).length === 1,
+    'a fenced page-reader pane receives only the issued validator path');
+  for (const opts of [{ fencedRole: true }, { fencedRole: false, pageReaderPolicy: policy }]) {
+    const env = buildPtyEnv({ baseEnv, ...opts });
+    assert(!Object.keys(env).some((name) => name.toUpperCase() === key),
+      'ambient validators are absent from panes without a fenced page-reader policy');
+  }
 }
 
 process.stdout.write('\n-- controlled WebFetch mode (main-issued, fenced only, exact values) --\n');
