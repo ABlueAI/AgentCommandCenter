@@ -294,8 +294,10 @@ test('the script restores Git prompt settings in an existing PowerShell session'
   const { repo } = fixture(t);
   const result = spawnSync(powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command',
     '$env:GIT_TERMINAL_PROMPT = "1"; Remove-Item Env:GCM_INTERACTIVE -ErrorAction SilentlyContinue; '
+    + '$env:GIT_ASKPASS = "keep-git-askpass"; $env:SSH_ASKPASS = "keep-ssh-askpass"; '
     + '& $env:MAKO_TEST_REMOVE_SCRIPT -Task demo -Check | Out-Null; '
-    + 'if ($env:GIT_TERMINAL_PROMPT -ne "1" -or (Test-Path Env:GCM_INTERACTIVE)) { exit 1 }'],
+    + 'if ($env:GIT_TERMINAL_PROMPT -ne "1" -or (Test-Path Env:GCM_INTERACTIVE)) { exit 1 }; '
+    + 'if ($env:GIT_ASKPASS -ne "keep-git-askpass" -or $env:SSH_ASKPASS -ne "keep-ssh-askpass") { exit 2 }'],
   { cwd: repo, encoding: 'utf8', env: { ...process.env, MAKO_TEST_REMOVE_SCRIPT: script } });
   assert.equal(result.status, 0, result.stderr);
 });
@@ -332,6 +334,9 @@ for (const [key, value] of [
   ['protocol.allow', 'always'],
   ['filter.planted.clean', 'MARKER'],
   ['include.path', 'planted-include'],
+  ['http.proxy', 'http://proxy.example.invalid:8080'],
+  ['remote.fixture.proxy', 'http://proxy.example.invalid:8080'],
+  ['hook.planted.command', 'MARKER'],
 ]) {
   test(`repository config that sets ${key} is refused before any network or status call`, { skip }, (t) => {
     const { repo, worktree, git, run } = fixture(t);
@@ -345,6 +350,39 @@ for (const [key, value] of [
     assert.ok(fs.existsSync(worktree));
   });
 }
+
+test('the config check works with more than one worktree and no worktreeConfig extension', { skip }, (t) => {
+  const { repo, git, inspect } = fixture(t);
+  git(repo, 'worktree', 'add', '-qb', 'agent/second', path.join(path.dirname(repo), 'repo-second'));
+  assert.deepEqual(inspect().commits, []);
+});
+
+test('worktree-scoped config is checked too', { skip }, (t) => {
+  const { repo, worktree, git, run } = fixture(t);
+  git(repo, 'config', 'extensions.worktreeConfig', 'true');
+  git(worktree, 'config', '--worktree', 'core.sshCommand', 'echo planted');
+  const result = run('-Check');
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /repository config sets core\.sshcommand/i);
+});
+
+test('a worktree with a submodule is refused and kept', { skip }, (t) => {
+  const { worktree, git, run } = fixture(t);
+  const head = git(worktree, 'rev-parse', 'HEAD');
+  git(worktree, 'update-index', '--add', '--cacheinfo', `160000,${head},vendored`);
+  const result = run('-Check');
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /submodule/i);
+  assert.ok(fs.existsSync(worktree));
+});
+
+test('a Git LFS filter value with a command appended is refused', { skip }, (t) => {
+  const { repo, git, run } = fixture(t);
+  git(repo, 'config', 'filter.lfs.clean', 'git-lfs clean -- %f; echo planted');
+  const result = run('-Check');
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /repository config sets filter\.lfs\.clean/i);
+});
 
 test('Git LFS filter settings in the repository config are allowed', { skip }, (t) => {
   const { repo, git, inspect } = fixture(t);

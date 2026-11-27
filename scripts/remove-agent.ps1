@@ -45,28 +45,42 @@ function Get-Chunk {
     return , [string[]]@($Items[$Start..$last])
 }
 
-# Repository config keys that can run a command or hand a login to one during the check or the
-# removal. They have no safe override, so the script refuses and names them. Git LFS's own
+# Repository config keys that can run a command, or send a login somewhere, during the check or
+# the removal. They have no safe override, so the script refuses and names them. Git LFS's own
 # filter settings are allowed.
-$script:RiskyConfig = '^(credential\..*|core\.(askpass|sshcommand|gitproxy|alternaterefscommand|alternaterefsprefixes)|ssh\..*|url\..*\.(insteadof|pushinsteadof)|' +
-    'remote\..*\.(uploadpack|receivepack|vcs)|protocol\..*|include\..*|includeif\..*|filter\..*)$'
+$script:RiskyConfig = '^(credential\..*|core\.(askpass|sshcommand|gitproxy|alternaterefscommand|alternaterefsprefixes)|' +
+    'ssh\..*|url\..*\.(insteadof|pushinsteadof)|remote\..*\.(uploadpack|receivepack|vcs|proxy|proxyauthmethod)|' +
+    'http\..*|protocol\..*|include\..*|includeif\..*|filter\..*|hook\..*)$'
+# Only the exact values "git lfs install" writes; anything appended to them would run in a shell.
+$script:StandardLfs = @{
+    clean    = '^git-lfs clean -- %f$'
+    smudge   = '^git-lfs smudge( --skip)? -- %f$'
+    process  = '^git-lfs filter-process( --skip)?$'
+    required = '^true$'
+}
 function Assert-SafeRepositoryConfig {
     param([string]$Directory)
+    # One listing with scopes: "git config --worktree" fails when a repository has more than one
+    # worktree and extensions.worktreeConfig is off. Names only, one per line, includes followed.
     $found = @(
-        foreach ($scope in @('--local', '--worktree')) {
-            foreach ($key in @(Invoke-CheckedGit $Directory @('config', $scope, '--includes', '--name-only', '--list'))) {
-                if ($key -notmatch $script:RiskyConfig) { continue }
-                if ($key -match '^filter\.lfs\.(clean|smudge|process|required)$') {
-                    $values = @(Invoke-CheckedGit $Directory @('config', $scope, '--includes', '--get-all', $key))
-                    if (@($values | Where-Object { $_ -notmatch '^(git-lfs( |$)|true$)' }).Count -eq 0) { continue }
-                }
-                $key
+        foreach ($entry in @(Invoke-CheckedGit $Directory @('config', '--list', '--show-scope', '--name-only', '--includes'))) {
+            $scope, $key = $entry -split "`t", 2
+            if ($scope -notin @('local', 'worktree') -or $key -notmatch $script:RiskyConfig) { continue }
+            if ($key -match '^filter\.lfs\.(clean|smudge|process|required)$') {
+                $standard = $script:StandardLfs[$Matches[1]]
+                $values = @(Invoke-CheckedGit $Directory @('config', '--includes', '--get-all', $key))
+                if (@($values | Where-Object { $_ -cnotmatch $standard }).Count -eq 0) { continue }
             }
+            $key
         }
     ) | Sort-Object -Unique
     if ($found) {
-        throw ("The repository config sets $($found -join ', '), which could run a command during removal. " +
-            "Remove it (git config --unset), or remove the worktree by hand from a terminal.")
+        throw ("The repository config sets $($found -join ', '), which could run a command or send a login " +
+            "during removal. Remove it (git config --unset), or remove the worktree by hand from a terminal.")
+    }
+    # A submodule has its own config, which this check doesn't read, and git status runs inside it.
+    if (@(Invoke-CheckedGit $Directory @('ls-files', '--stage') | Where-Object { $_ -like '160000 *' }).Count) {
+        throw 'The worktree has submodules, which Mako does not check. Remove the worktree by hand from a terminal.'
     }
 }
 
@@ -144,6 +158,7 @@ try {
         $i += $script:ChunkSize
     } while ($i -lt $allTips.Count)
     $commits = @($unpublished | ForEach-Object { $_.Substring($_.IndexOf(' ') + 1) })
+    Assert-SafeRepositoryConfig $worktreePath  # again, in case it changed during the network calls
     $changes = @(Invoke-CheckedGit $worktreePath @('--no-optional-locks', '-c', 'core.quotePath=false', 'status',
         '--porcelain=v1', '--untracked-files=all', '--ignored=matching', '--ignore-submodules=none'))
 
