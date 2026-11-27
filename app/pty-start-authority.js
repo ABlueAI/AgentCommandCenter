@@ -49,17 +49,20 @@ function createPtyStartAuthority(deps) {
     return { ok: true, launch: launch };
   }
 
-  function authorizeFencedRole(req) {
-    const role = req && req.role;
-    const cwd = req && req.cwd;
-    const found = resolveDefinition({ role: role, cwd: cwd });
+  function authorizeRole(req, fenced) {
+    const found = resolveDefinition(req);
     if (!found || found.ok !== true) return refuse('resolve', (found && found.reason) || 'resolve-bad-input');
-    const policy = assertPolicy({ role: role, text: found.text });
+    if (!fenced) {
+      if (found.settingsArg) return refuse('resolve', 'resolve-unexpected-role-hooks');
+      return found;
+    }
+    const policy = assertPolicy({ role: req.role, text: found.text });
     if (!policy || policy.ok !== true) return refuse('policy', (policy && policy.reason) || 'fence-policy-declaration-unparseable');
-    return { ok: true, definitionPath: found.path, scope: found.scope, hookPath: policy.hookPath };
+    if (found.settingsArg && !found.singlePreToolUse) return refuse('policy', 'resolve-unexpected-role-hooks');
+    return { ...found, definitionPath: found.path, hookPath: policy.hookPath };
   }
 
-  return { assess: assess, authorizeFencedRole: authorizeFencedRole };
+  return { assess, authorizeRole, authorizeFencedRole: (req) => authorizeRole(req, true) };
 }
 
-module.exports = { createPtyStartAuthority: createPtyStartAuthority };
+module.exports = { createPtyStartAuthority };

@@ -19,6 +19,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const Module = require('module');
+const { pathToFileURL } = require('url');
 
 let passed = 0, failed = 0, outstanding = [];
 function assert(cond, label) {
@@ -45,8 +46,9 @@ const CLAUDE_JSON = path.join(HOME, '.claude.json');
 
 const record = { handled: new Map(), on: new Map() };
 function electronStub() {
-  const mainFrame = { url: 'file:///x' };
+  const mainFrame = { url: pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).toString() };
   const wc = { mainFrame, on() {}, send() {}, setWindowOpenHandler() {}, openDevTools() {}, session: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} } };
+  record.event = { sender: wc, senderFrame: wc.mainFrame };
   const w = new Proxy({ webContents: wc, isDestroyed: () => false }, { get(t, k) { return k in t ? t[k] : () => {}; } });
   class BrowserWindow { constructor() { return w; } static getAllWindows() { return []; } }
   return {
@@ -88,10 +90,8 @@ const readTrust = () => {
   section('SERIALISATION — N concurrent calls, no lost update');
   {
     const N = 20;
-    // Distinct roles AND distinct calls: this part measures the LOCK, so every call must produce a
-    // different trust key. Same-role uniqueness is a separate property, measured in its own suite.
     const results = await Promise.all(
-      Array.from({ length: N }, (_, i) => ensure({}, { role: 'lockrole' + i }))
+      Array.from({ length: N }, () => ensure(record.event, { role: 'web-scout' }))
     );
     assert(results.length === N, 'all ' + N + ' promises settled');
     assert(results.every((r) => r && r.ok === true), 'every call reported ok');
@@ -112,14 +112,12 @@ const readTrust = () => {
     // would silently hang every future sandbox launch app-wide.
     const good = fs.readFileSync(CLAUDE_JSON, 'utf8');
     fs.writeFileSync(CLAUDE_JSON, '{ this is not json', 'utf8');
-    const during = await ensure({}, { role: 'parsefail' });
-    assert(during && during.ok === true,
-      'a corrupt trust file does NOT block the sandbox launch (best-effort write, as designed)');
-    assert(fs.existsSync(during.dir), 'and the sandbox directory still exists');
+    const during = await ensure(record.event, { role: 'web-scout' });
+    assert(during?.error === 'sandbox-trust-write-failed', 'a corrupt trust file visibly refuses the sandbox');
     fs.writeFileSync(CLAUDE_JSON, good, 'utf8');
 
     const after = await Promise.race([
-      ensure({}, { role: 'afterparsefail' }),
+      ensure(record.event, { role: 'web-scout' }),
       new Promise((r) => setTimeout(() => r({ ok: false, timedOut: true }), 5000)),
     ]);
     assert(after && after.ok === true && !after.timedOut,
@@ -133,12 +131,12 @@ const readTrust = () => {
     const good = fs.readFileSync(CLAUDE_JSON, 'utf8');
     fs.rmSync(CLAUDE_JSON, { force: true });
     fs.mkdirSync(CLAUDE_JSON, { recursive: true });
-    const during = await ensure({}, { role: 'renamefail' });
-    assert(during && during.ok === true, 'a failing rename does not block the launch either');
+    const during = await ensure(record.event, { role: 'web-scout' });
+    assert(during?.error === 'sandbox-trust-write-failed', 'an unwritable trust file visibly refuses the sandbox');
     fs.rmSync(CLAUDE_JSON, { recursive: true, force: true });
     fs.writeFileSync(CLAUDE_JSON, good, 'utf8');
     const after = await Promise.race([
-      ensure({}, { role: 'afterrenamefail' }),
+      ensure(record.event, { role: 'web-scout' }),
       new Promise((r) => setTimeout(() => r({ ok: false, timedOut: true }), 5000)),
     ]);
     assert(after && after.ok === true && !after.timedOut, 'and the lock is still free afterwards');
@@ -157,11 +155,11 @@ const readTrust = () => {
     } catch (e) { /* icacls unavailable */ }
 
     if (denied) {
-      const r = await ensure({}, { role: 'readonly' });
-      assert(r && r.ok === true, 'a write-denied trust file does NOT block the sandbox launch');
-      assert(fs.existsSync(r.dir), 'and the sandbox directory is still created');
+      const r = await ensure(record.event, { role: 'web-scout' });
+      assert(r?.ok === true || r?.error === 'sandbox-trust-write-failed',
+        'the atomic replacement either succeeds or returns a visible refusal');
       const after = await Promise.race([
-        ensure({}, { role: 'afterreadonly' }),
+        ensure(record.event, { role: 'web-scout' }),
         new Promise((res) => setTimeout(() => res({ ok: false, timedOut: true }), 5000)),
       ]);
       assert(after && after.ok === true && !after.timedOut, 'and the lock is released after the denial');

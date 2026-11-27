@@ -206,6 +206,7 @@ function parseRoleFrontmatter(text) {
   return {
     ok: true,
     name: name,
+    prompt: lines.slice(close + 1).join('\n'),
     toolsDeclared: toolsDeclared,
     tools: tools,
     disallowedTools: disallowedTools,

@@ -72,4 +72,14 @@ function validateTask(task) {
   return { ok: true, task };
 }
 
-module.exports = { validateTask, MAX_TASK_LEN, TASK_RE };
+// Branch-only subset of git check-ref-format. The full refs/heads/ prefix is
+// supplied by the caller so revision selectors and filenames cannot match.
+function validBranchName(branch) {
+  return typeof branch === 'string' && branch.length > 0 && Buffer.byteLength(branch, 'utf8') <= 255
+    && !branch.startsWith('-') && branch !== 'HEAD' && !branch.endsWith('.')
+    && !/[\x00-\x20\x7f~^:?*\[\\]/.test(branch)
+    && !branch.includes('..') && !branch.includes('@{')
+    && branch.split('/').every((part) => part && !part.startsWith('.') && !part.endsWith('.lock'));
+}
+
+module.exports = { validateTask, validBranchName, MAX_TASK_LEN, TASK_RE };

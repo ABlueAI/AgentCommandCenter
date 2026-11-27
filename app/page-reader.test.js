@@ -313,6 +313,10 @@ Module._load = function (request) {
   }
   assert(!fs.existsSync(path.join(USER_DATA, 'page-reader')), 'nothing was written for a local or private URL');
 
+  const oversized = await prepare(good, { url: ' '.repeat(pr.MAX_URL_LENGTH) + URL_OK });
+  assert(oversized?.error === pr.REASON.TOO_LONG, 'a raw oversized request refuses before trimming');
+  const malformed = await prepare(good, [{ url: URL_OK }]);
+  assert(malformed?.error === 'invalid-request', 'an array request refuses visibly');
   const mcpInstalled = fs.existsSync(path.join(__dirname, 'node_modules', '@playwright', 'mcp', 'cli.js'));
   if (!mcpInstalled) {
     const missing = await prepare(good, { url: URL_OK });
@@ -332,8 +336,7 @@ Module._load = function (request) {
     assert(cfg.mcpServers.playwright.args[0] === path.join(__dirname, 'node_modules', '@playwright', 'mcp', 'cli.js'), 'the MCP config starts the locked app dependency');
     assert(!fs.existsSync(path.join(r.dir, 'mcp.json')), 'the MCP config is not in the pane\'s writable folder');
 
-    // The project-scoped copies are closer to the launch folder than any installed agents.
-    const agents = path.join(PROJECTS, '.claude', 'agents');
+    const agents = path.join(HOME, '.claude', 'agents');
     const hooks = path.join(HOME, '.claude', 'hooks');
     fs.mkdirSync(agents, { recursive: true }); fs.mkdirSync(hooks, { recursive: true });
     fs.copyFileSync(HOOK_SRC, path.join(hooks, 'fence-write.js'));
@@ -342,7 +345,7 @@ Module._load = function (request) {
     const ptyStart = record.handled.get('pty-start');
     const started = await ptyStart(good, { id: 'page-1', role: 'page-reader', cli: 'claude', cwd: r.dir, cols: 80, rows: 24 });
     if (started.ok !== true) process.stdout.write('  (pty-start refused: ' + started.error + ')\n');
-    assert(started.ok === true, 'pty-start launches with the temporary page-reader copy despite an installed agent above it');
+    assert(started.ok === true, 'pty-start launches with the exact deployed page-reader definition');
     const spawn = record.spawnArgs[record.spawnArgs.length - 1];
     const cmd = spawn && spawn.args[spawn.args.indexOf('-Command') + 1];
     process.stdout.write('  command: ' + cmd + '\n');
@@ -354,8 +357,11 @@ Module._load = function (request) {
     assert(withPrompt.ok === false, 'a renderer-supplied opening prompt for page-reader is still refused');
     fs.writeFileSync(path.join(agents, 'web-scout.md'),
       fs.readFileSync(path.join(REPO, 'agent-roles', 'web-scout.md'), 'utf8').replace('__CC_HOOK__', path.join(hooks, 'fence-write.js').replace(/\\/g, '/')));
-    const scout = await ptyStart(good, { id: 'scout-1', role: 'web-scout', cli: 'claude', cwd: r.dir, cols: 80, rows: 24 });
-    assert(scout.ok === true, 'a web-scout pane still launches');
+    const wrongSandbox = await ptyStart(good, { id: 'scout-wrong', role: 'web-scout', cwd: r.dir });
+    assert(wrongSandbox?.error === 'not-authorized', 'a web-scout cannot use a page-reader sandbox');
+    const webSandbox = await record.handled.get('ensure-output-dir')(good, { role: 'web-scout' });
+    const scout = await ptyStart(good, { id: 'scout-1', role: 'web-scout', cli: 'claude', cwd: webSandbox.dir, cols: 80, rows: 24 });
+    assert(scout.ok === true, 'a web-scout pane launches in its own prepared sandbox');
     const scoutSpawn = record.spawnArgs[record.spawnArgs.length - 1];
     const scoutCmd = scout.ok ? scoutSpawn.args[scoutSpawn.args.indexOf('-Command') + 1] : '';
     assert(scoutCmd.indexOf('--mcp-config') === -1 && scoutCmd.indexOf('mcp__') === -1, 'other roles get no MCP config or MCP tools');

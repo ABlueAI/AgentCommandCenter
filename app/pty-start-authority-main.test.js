@@ -93,8 +93,9 @@ const HOME = path.join(FIX, 'home');
 const PROJECTS = path.join(FIX, 'projects');
 const OUTPUTS = path.join(PROJECTS, '.command-center', 'outputs');
 const AGENTS = path.join(HOME, '.claude', 'agents');
+const REPO = path.join(PROJECTS, 'repo');
 const HOOKS = path.join(HOME, '.claude', 'hooks');
-for (const d of [USER_DATA, AGENTS, HOOKS, OUTPUTS]) fs.mkdirSync(d, { recursive: true });
+for (const d of [USER_DATA, AGENTS, HOOKS, OUTPUTS, REPO]) fs.mkdirSync(d, { recursive: true });
 fs.writeFileSync(path.join(USER_DATA, 'settings.json'), JSON.stringify({ projectsRoot: PROJECTS, selectedRepo: '' }));
 
 const TRACKED_HOOK = path.join(__dirname, '..', 'scripts', 'hooks', 'fence-write.js');
@@ -103,11 +104,11 @@ fs.copyFileSync(TRACKED_HOOK, DEPLOYED_HOOK);
 // Deploy the roles exactly as sync-roles.ps1 does: substitute __CC_HOOK__ with the absolute path,
 // using forward slashes (Node accepts them on Windows).
 const HOOK_FWD = DEPLOYED_HOOK.replace(/\\/g, '/');
-for (const r of ['web-scout', 'operator', 'source-scout', 'builder']) {
+for (const r of ['web-scout', 'operator', 'source-scout', 'builder', 'reviewer', 'page-reader']) {
   const src = fs.readFileSync(path.join(__dirname, '..', 'agent-roles', r + '.md'), 'utf8');
   fs.writeFileSync(path.join(AGENTS, r + '.md'), src.replace('__CC_HOOK__', HOOK_FWD), 'utf8');
 }
-const SANDBOX = fs.mkdtempSync(path.join(OUTPUTS, 'web-scout-fixture-'));
+let SANDBOX;
 
 const record = { handled: new Map(), on: new Map(), windowsCreated: 0, ptySpawns: 0, spawnArgs: [], exitHandlers: [], mainErrors: [], webContents: null };
 const ptyStub = {
@@ -127,6 +128,9 @@ const ptyStub = {
 // The simulated modes return a fabricated parent listing or throw a fabricated failure — the real
 // registry is never written in any mode, and only the `query` verb is ever issued (asserted below).
 const realCp = require('child_process');
+realCp.execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: REPO });
+realCp.execFileSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test',
+  '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Fixture', '--allow-empty'], { cwd: REPO });
 record.regMode = 'real';
 record.regCalls = [];
 record.realRegListings = [];
@@ -168,6 +172,20 @@ function fakeReg(mode, args) {
   }
 }
 const cpWrapped = Object.assign({}, realCp, {
+  execFile(file, args, options, callback) {
+    if (file !== 'powershell' || !args.includes(path.join(__dirname, '..', 'scripts', 'new-agent.ps1'))) {
+      return realCp.execFile.apply(realCp, arguments);
+    }
+    const task = args[args.indexOf('-Task') + 1];
+    record.newAgentCalls ??= [];
+    record.newAgentCalls.push({ task, cwd: options.cwd });
+    if (task === 'script-failure') return callback(new Error('fixture failure'));
+    if (task === 'registered') {
+      const worktree = path.join(path.dirname(REPO), 'repo-registered');
+      realCp.execFileSync('git', ['worktree', 'add', '-q', '-b', 'agent/registered', worktree, 'main'], { cwd: REPO });
+    }
+    return callback(null, '');
+  },
   execFileSync(file, args) {
     if (file === 'reg') {
       record.regCalls.push((args || []).slice());
@@ -208,6 +226,7 @@ Module._load = function (request) {
   const ensureOutputDir = record.handled.get('ensure-output-dir');
   const wc = record.webContents;
   const goodEvent = { sender: wc, senderFrame: wc.mainFrame };
+  SANDBOX = (await ensureOutputDir(goodEvent, { role: 'web-scout' })).dir;
 
   section('PRECONDITIONS');
   assert(typeof ptyStart === 'function', 'the real main.js registered a pty-start handler');
@@ -228,8 +247,8 @@ Module._load = function (request) {
     const deployed = fs.readFileSync(builderFile);
     fs.unlinkSync(builderFile);
     try {
-      const result = await ptyStart(goodEvent, { id: 'pane-missing-role', role: 'builder', cwd: FIX });
-      assert(result?.ok === false, 'a missing deployed role refuses a builder launch');
+      const result = await ptyStart(goodEvent, { id: 'pane-missing-role', role: 'builder', cwd: REPO });
+      assert(result?.error === 'resolve-role-not-deployed', 'a missing deployed role refuses a builder launch');
       assert(record.ptySpawns === before && record.mainErrors.length > errors,
         'a missing definition is visible and spawns nothing');
     } finally {
@@ -238,6 +257,26 @@ Module._load = function (request) {
 
     const badFolder = await ptyStart(goodEvent, { id: 'pane-invalid-cwd', cli: 'codex', cwd: 42 });
     assert(badFolder?.ok === false, 'a non-string launcher folder refuses instead of using the profile');
+    for (const overrides of [
+      { cwd: '/unknown-folder' }, { cols: '80' }, { rows: 0 }, { id: 'x'.repeat(65) },
+      { role: 'builder', model: 'other' }, { role: 'builder', effort: {} },
+      { role: 'builder', initialPrompt: 'x'.repeat(4097) },
+    ]) {
+      const spawns = record.ptySpawns;
+      const notices = record.mainErrors.length;
+      const result = await ptyStart(goodEvent, { id: 'pane-invalid-input', cli: 'codex', cwd: REPO, ...overrides });
+      assert(result?.ok === false && spawns === record.ptySpawns && record.mainErrors.length > notices,
+        'invalid pane input refuses visibly without a spawn');
+    }
+    const diff = record.handled.get('review-diff');
+    const badBranch = await diff(goodEvent, { worktree: REPO, base: 'topic..draft' });
+    assert(badBranch?.error === 'invalid-branch-name', 'review diff requires a branch name');
+    const prepare = record.handled.get('page-reader-prepare');
+    const badPage = await prepare(goodEvent, { url: 'https://example.com/', extra: true });
+    assert(badPage?.error === 'invalid-request', 'page-reader refuses an unexpected request field');
+    const stray = fs.mkdtempSync(path.join(OUTPUTS, 'web-scout-2026-08-28T12-34-56-'));
+    const unprepared = await ptyStart(goodEvent, { id: 'unprepared', role: 'web-scout', cwd: stray });
+    assert(unprepared?.error === 'not-authorized', 'a sandbox that main did not prepare refuses');
     const output = await ensureOutputDir(goodEvent, { role: 'other-role' });
     assert(output?.ok === false, 'sandbox preparation refuses unknown roles');
     try {
@@ -247,6 +286,29 @@ Module._load = function (request) {
     } catch {
       assert(false, 'new-agent refuses a malformed request without throwing');
     }
+  }
+
+  section('Repository launcher authorization');
+  {
+    const newAgent = record.handled.get('new-agent');
+    for (const req of [{ repo: FIX, task: 'task' }, { repo: 42, task: 'task' },
+      { repo: REPO, task: 'invalid task' }, { repo: REPO, task: 't'.repeat(65) }]) {
+      assert((await newAgent(goodEvent, req))?.ok === false, 'invalid repository or task refuses');
+    }
+    assert(!record.newAgentCalls, 'none of the refused inputs ran the launcher script');
+    const childError = await newAgent(goodEvent, { repo: REPO, task: 'script-failure' });
+    assert(childError?.error === 'worktree-creation-failed', 'a script failure is reported');
+    fs.mkdirSync(path.join(PROJECTS, 'repo-unregistered'));
+    assert((await newAgent(goodEvent, { repo: REPO, task: 'unregistered' }))?.error === 'worktree-not-registered',
+      'an existing folder alone is insufficient to report success');
+    const good = await newAgent(goodEvent, { repo: REPO, task: 'registered' });
+    assert(good?.ok === true && good.branch === 'agent/registered'
+      && good.worktree === fs.realpathSync.native(path.join(PROJECTS, 'repo-registered')), 'a registered worktree succeeds');
+    const diff = record.handled.get('review-diff');
+    const valid = await diff(goodEvent, { worktree: good.worktree, base: 'main' });
+    assert(valid?.ok === true && valid.empty, 'a valid base branch and worktree produce a clean diff');
+    const missing = await diff(goodEvent, { worktree: good.worktree, base: 'missing-branch' });
+    assert(missing?.error === 'git-diff-failed', 'a valid branch name without a ref refuses visibly');
   }
 
   section('POSITIVE CONTROL — a fenced role launches and carries the main-issued denials');
@@ -294,12 +356,19 @@ Module._load = function (request) {
   }
   {
     const before = record.ptySpawns;
-    await ptyStart(goodEvent, { id: 'pane-builder', role: 'builder', cli: 'claude', cwd: FIX });
+    const projectRoles = path.join(REPO, '.claude', 'agents');
+    fs.mkdirSync(projectRoles, { recursive: true });
+    const builderText = fs.readFileSync(path.join(AGENTS, 'builder.md'), 'utf8');
+    fs.writeFileSync(path.join(projectRoles, 'builder.md'), builderText.replace('model: sonnet', 'model: opus'));
+    await ptyStart(goodEvent, { id: 'pane-builder', role: 'builder', cli: 'claude', cwd: REPO });
     assert(record.ptySpawns === before + 1, 'BUILDER IS UNAFFECTED: it launches from a non-sandbox cwd');
     const cmd = record.spawnArgs[record.spawnArgs.length - 1].args.join(' ');
     assert(cmd.indexOf('--agent builder') !== -1, 'as the builder agent');
     assert(cmd.indexOf('--disallowedTools') === -1, 'and carries NO denials — it is deliberately unfenced');
     const env = record.spawnArgs[record.spawnArgs.length - 1].env;
+    assert(cmd.includes('--agents $env:MAKO_LAUNCH_ROLE_ARG')
+      && env.MAKO_LAUNCH_ROLE_ARG.includes('sonnet') && !env.MAKO_LAUNCH_ROLE_ARG.includes('opus'),
+      'the command receives the checked user role even with a valid project definition present');
     assert(cmd.indexOf('--allowedTools') === -1
       && !Object.keys(env).some((k) => k.toUpperCase() === 'BLUE_HELM_CONTROLLED_WEBFETCH_MODE'),
     'and gets no WebFetch grant and no WebFetch mode');
@@ -312,34 +381,34 @@ Module._load = function (request) {
     const readMem = () => JSON.parse(fs.readFileSync(memPath, 'utf8'));
     const lastCmd = () => record.spawnArgs[record.spawnArgs.length - 1].args.join(' ');
     const before = record.ptySpawns;
-    await ptyStart(goodEvent, { id: 'pane-s08', role: 'builder', cli: 'claude', cwd: FIX, sessionId: '11111111-1111-1111-1111-111111111111' });
+    await ptyStart(goodEvent, { id: 'pane-s08', role: 'builder', cli: 'claude', cwd: REPO, sessionId: '11111111-1111-1111-1111-111111111111' });
     assert(record.ptySpawns === before + 1, 'a builder pane launches');
-    const m = lastCmd().match(new RegExp('claude --agent builder --session-id (' + UUID + ')$'));
+    const m = lastCmd().match(new RegExp('claude --agent builder --agents \\$env:MAKO_LAUNCH_ROLE_ARG --session-id (' + UUID + ')$'));
     assert(m !== null, 'its command ends with a main-minted --session-id UUID');
     assert(lastCmd().indexOf('11111111-1111-1111-1111-111111111111') === -1, 'a renderer-supplied sessionId is ignored');
     const sid = m && m[1];
     let mem = readMem();
     let rec = mem.records.find((r) => r.sessionId === sid);
     assert(mem.version === 1 && rec && rec.paneId === 'pane-s08' && rec.role === 'builder' && rec.cli === 'claude'
-      && rec.worktree === FIX && typeof rec.startedAt === 'string' && rec.stoppedAt === null,
+      && rec.worktree === REPO && typeof rec.startedAt === 'string' && rec.stoppedAt === null,
       'session-memory.json in userData records the session ID, pane, role and worktree, still open');
     record.exitHandlers[record.exitHandlers.length - 1]();
     rec = readMem().records.find((r) => r.sessionId === sid);
     assert(rec && typeof rec.stoppedAt === 'string' && rec.stopReason === 'exited', 'the process exit closes the record as `exited`');
 
-    await ptyStart(goodEvent, { id: 'pane-s08-cli', role: null, cli: 'claude', cwd: FIX });
+    await ptyStart(goodEvent, { id: 'pane-s08-cli', role: null, cli: 'claude', cwd: REPO });
     const m2 = lastCmd().match(new RegExp('-Command claude --session-id (' + UUID + ')$'));
     assert(m2 !== null && m2[1] !== sid, 'a bare claude CLI pane gets its own fresh session ID');
     rec = readMem().records.find((r) => r.sessionId === (m2 && m2[1]));
     assert(rec && rec.role === null && rec.cli === 'claude', 'and is recorded with no role');
     const count = readMem().records.length;
-    await ptyStart(goodEvent, { id: 'pane-s08-codex', role: null, cli: 'codex', cwd: FIX });
+    await ptyStart(goodEvent, { id: 'pane-s08-codex', role: null, cli: 'codex', cwd: REPO });
     assert(lastCmd().indexOf('--session-id') === -1, 'a codex pane gets no --session-id');
-    await ptyStart(goodEvent, { id: 'pane-s08-shell', role: null, cli: null, cwd: FIX });
+    await ptyStart(goodEvent, { id: 'pane-s08-shell', role: null, cli: null, cwd: REPO });
     assert(lastCmd().indexOf('--session-id') === -1, 'a plain shell pane gets no --session-id');
     assert(readMem().records.length === count, 'and neither is recorded');
     const spawnsBefore = record.ptySpawns;
-    await ptyStart(goodEvent, { id: 'pane-s08-bad', role: 'Builder', cli: 'claude', cwd: FIX });
+    await ptyStart(goodEvent, { id: 'pane-s08-bad', role: 'Builder', cli: 'claude', cwd: REPO });
     assert(record.ptySpawns === spawnsBefore && readMem().records.length === count, 'a refused launch spawns nothing and records nothing');
   }
 
@@ -353,8 +422,8 @@ Module._load = function (request) {
     const SID_GONE = '5e55a0b1-0000-4000-8000-00000000000c';
     const stopped = { startedAt: '2026-10-27T09:00:00.000Z', stoppedAt: '2026-10-27T10:00:00.000Z', stopReason: 'mako-closed', cli: 'claude' };
     const mem = readMem();
-    mem.records.push(Object.assign({ sessionId: SID, paneId: 'old1', role: 'builder', worktree: FIX }, stopped));
-    mem.records.push(Object.assign({ sessionId: SID_BARE, paneId: 'old2', role: null, worktree: FIX }, stopped));
+    mem.records.push(Object.assign({ sessionId: SID, paneId: 'old1', role: 'builder', worktree: REPO }, stopped));
+    mem.records.push(Object.assign({ sessionId: SID_BARE, paneId: 'old2', role: null, worktree: REPO }, stopped));
     mem.records.push(Object.assign({ sessionId: SID_GONE, paneId: 'old3', role: null, worktree: path.join(FIX, 'gone') }, stopped));
     fs.writeFileSync(memPath, JSON.stringify(mem));
 
@@ -372,31 +441,31 @@ Module._load = function (request) {
 
     const refusedResumes = [
       ['a different folder', { id: 'pane-r1', role: 'builder', cli: 'claude', cwd: SANDBOX, resumeSessionId: SID }],
-      ['a different role', { id: 'pane-r2', role: 'reviewer', cli: 'claude', cwd: FIX, resumeSessionId: SID }],
-      ['a codex pane', { id: 'pane-r3', role: null, cli: 'codex', cwd: FIX, resumeSessionId: SID_BARE }],
-      ['an opening prompt', { id: 'pane-r4', role: 'builder', cli: 'claude', cwd: FIX, resumeSessionId: SID, initialPrompt: 'hi' }],
-      ['an ID not offered', { id: 'pane-r5', role: 'builder', cli: 'claude', cwd: FIX, resumeSessionId: '5e55a0b1-0000-4000-8000-0000000000ff' }],
-      ['a hostile ID', { id: 'pane-r6', role: 'builder', cli: 'claude', cwd: FIX, resumeSessionId: SID + ' --dangerously-skip-permissions' }],
-      ['a folder that is gone (main falls back to USERPROFILE)', { id: 'pane-r7', role: null, cli: 'claude', cwd: path.join(FIX, 'gone'), resumeSessionId: SID_GONE }],
+      ['a different role', { id: 'pane-r2', role: 'reviewer', cli: 'claude', cwd: REPO, resumeSessionId: SID }],
+      ['a codex pane', { id: 'pane-r3', role: null, cli: 'codex', cwd: REPO, resumeSessionId: SID_BARE }],
+      ['an opening prompt', { id: 'pane-r4', role: 'builder', cli: 'claude', cwd: REPO, resumeSessionId: SID, initialPrompt: 'hi' }],
+      ['an ID not offered', { id: 'pane-r5', role: 'builder', cli: 'claude', cwd: REPO, resumeSessionId: '5e55a0b1-0000-4000-8000-0000000000ff' }],
+      ['a hostile ID', { id: 'pane-r6', role: 'builder', cli: 'claude', cwd: REPO, resumeSessionId: SID + ' --dangerously-skip-permissions' }],
+      ['a folder that is gone', { id: 'pane-r7', role: null, cli: 'claude', cwd: path.join(FIX, 'gone'), resumeSessionId: SID_GONE }],
     ];
     for (const [label, opts] of refusedResumes) {
       const before = record.ptySpawns;
       const errs = record.mainErrors.length;
       const res = await ptyStart(goodEvent, opts);
       assert(res && res.ok === false && record.ptySpawns === before
-        && record.mainErrors.slice(errs).some((l) => /^Resume refused \[resume-[a-z-]+\]$/.test(l)),
+        && record.mainErrors.slice(errs).some((l) => /^(?:Resume refused \[resume-[a-z-]+\]|Pane launch refused: (?:not-authorized|unresolved-path))$/.test(l)),
       'resume with ' + label + ': refused visibly, ZERO PTYs');
     }
 
     const before = record.ptySpawns;
-    const res = await ptyStart(goodEvent, { id: 'pane-resume', role: 'builder', cli: 'claude', cwd: FIX, resumeSessionId: SID });
+    const res = await ptyStart(goodEvent, { id: 'pane-resume', role: 'builder', cli: 'claude', cwd: REPO, resumeSessionId: SID });
     assert(res && res.ok === true && record.ptySpawns === before + 1, 'an offered builder session resumes in its folder');
-    assert(new RegExp('claude --agent builder --resume ' + SID + '$').test(lastCmd()) && lastCmd().indexOf('--session-id') === -1,
+    assert(lastCmd().endsWith('--agents $env:MAKO_LAUNCH_ROLE_ARG --resume ' + SID) && lastCmd().indexOf('--session-id') === -1,
       'its command ends with --resume <the recorded ID>, and mints no new --session-id');
     let r = readMem().records.find((x) => x.sessionId === SID);
     assert(r && r.paneId === 'pane-resume' && r.stoppedAt === null && r.stopReason === null && r.startedAt === stopped.startedAt,
       'the same record is open again, in the new pane');
-    const twice = await ptyStart(goodEvent, { id: 'pane-resume-2', role: 'builder', cli: 'claude', cwd: FIX, resumeSessionId: SID });
+    const twice = await ptyStart(goodEvent, { id: 'pane-resume-2', role: 'builder', cli: 'claude', cwd: REPO, resumeSessionId: SID });
     assert(twice && twice.ok === false && record.ptySpawns === before + 1, 'the same session can\'t be resumed into a second pane');
     const after = await offerIpc(goodEvent);
     assert(after.ok && !after.rows.some((x) => x.sessionId === SID), 'and it leaves the offer');
@@ -404,7 +473,7 @@ Module._load = function (request) {
     assert((await dismissIpc(goodEvent, SID_BARE)).ok === true, 'Start fresh marks a session answered');
     r = readMem().records.find((x) => x.sessionId === SID_BARE);
     assert(r && r.offered === true, 'its record says so');
-    const fresh = await ptyStart(goodEvent, { id: 'pane-resume-3', role: null, cli: 'claude', cwd: FIX, resumeSessionId: SID_BARE });
+    const fresh = await ptyStart(goodEvent, { id: 'pane-resume-3', role: null, cli: 'claude', cwd: REPO, resumeSessionId: SID_BARE });
     assert(fresh && fresh.ok === false, 'a dismissed session can no longer be resumed');
     assert((await dismissIpc(goodEvent, 'not-a-uuid')).ok === false, 'dismiss refuses a non-UUID');
   }
@@ -523,7 +592,7 @@ Module._load = function (request) {
     // Preserved: the legitimate unfenced opening prompt (the reviewer launch) still reaches the command.
     const before = record.ptySpawns;
     const res = await ptyStart(goodEvent, {
-      id: 'pane-reviewer', role: 'reviewer', cli: 'claude', cwd: FIX,
+      id: 'pane-reviewer', role: 'reviewer', cli: 'claude', cwd: REPO,
       initialPrompt: 'Review the change set in ./x.diff',
     });
     assert(record.ptySpawns === before + 1 && (!res || res.ok !== false), 'a reviewer launch with an opening prompt still spawns');
@@ -537,19 +606,19 @@ Module._load = function (request) {
     const lastCmd = () => record.spawnArgs[record.spawnArgs.length - 1].args.join(' ');
     for (const [level, mode] of [['minimum', 'plan'], ['medium', 'acceptEdits'], ['high', 'auto']]) {
       let before = record.ptySpawns;
-      await ptyStart(goodEvent, { id: 'pane-auth-b-' + level, role: 'builder', cli: 'claude', cwd: FIX, authority: level });
+      await ptyStart(goodEvent, { id: 'pane-auth-b-' + level, role: 'builder', cli: 'claude', cwd: REPO, authority: level });
       assert(record.ptySpawns === before + 1, `builder at ${level} spawns`);
       assert(lastCmd().indexOf('claude --agent builder --allowedTools ') !== -1 && lastCmd().indexOf('--permission-mode ' + mode) !== -1,
         `and launches with its explicit tool set and --permission-mode ${mode}`);
       before = record.ptySpawns;
-      await ptyStart(goodEvent, { id: 'pane-auth-c-' + level, role: null, cli: 'claude', cwd: FIX, authority: level });
+      await ptyStart(goodEvent, { id: 'pane-auth-c-' + level, role: null, cli: 'claude', cwd: REPO, authority: level });
       assert(record.ptySpawns === before + 1 && / claude --allowedTools '/.test(' ' + lastCmd()) && lastCmd().indexOf('--permission-mode ' + mode) !== -1,
         `a bare claude pane at ${level} launches with --permission-mode ${mode}`);
     }
     {
       const before = record.ptySpawns;
       await ptyStart(goodEvent, {
-        id: 'pane-auth-prompt', role: 'reviewer', cli: 'claude', cwd: FIX, authority: 'minimum',
+        id: 'pane-auth-prompt', role: 'reviewer', cli: 'claude', cwd: REPO, authority: 'minimum',
         initialPrompt: 'Review the change set in ./x.diff',
       });
       assert(record.ptySpawns === before + 1
@@ -558,7 +627,7 @@ Module._load = function (request) {
     }
     {
       const before = record.ptySpawns;
-      await ptyStart(goodEvent, { id: 'pane-auth-none', role: 'builder', cli: 'claude', cwd: FIX });
+      await ptyStart(goodEvent, { id: 'pane-auth-none', role: 'builder', cli: 'claude', cwd: REPO });
       assert(record.ptySpawns === before + 1 && lastCmd().indexOf('--permission-mode') === -1,
         'no level sent: the pre-S10 command, no --permission-mode');
     }
@@ -571,17 +640,17 @@ Module._load = function (request) {
     }
     for (const cli of ['codex', 'gemini']) {
       const before = record.ptySpawns;
-      await ptyStart(goodEvent, { id: 'pane-auth-' + cli, role: null, cli, cwd: FIX, authority: 'maximum' });
+      await ptyStart(goodEvent, { id: 'pane-auth-' + cli, role: null, cli, cwd: REPO, authority: 'maximum' });
       assert(record.ptySpawns === before + 1 && lastCmd().indexOf('--permission-mode') === -1,
         `a ${cli} pane at Maximum launches as before (no Claude mode)`);
     }
     const auth = [
-      ['builder at maximum', { id: 'x1', role: 'builder', cli: 'claude', cwd: FIX, authority: 'maximum' }, 'authority-maximum-runs-in-cloud'],
-      ['bare claude at maximum', { id: 'x2', role: null, cli: 'claude', cwd: FIX, authority: 'maximum' }, 'authority-maximum-runs-in-cloud'],
+      ['builder at maximum', { id: 'x1', role: 'builder', cli: 'claude', cwd: REPO, authority: 'maximum' }, 'authority-maximum-runs-in-cloud'],
+      ['bare claude at maximum', { id: 'x2', role: null, cli: 'claude', cwd: REPO, authority: 'maximum' }, 'authority-maximum-runs-in-cloud'],
       ['web-scout at maximum', { id: 'x3', role: 'web-scout', cli: 'claude', cwd: SANDBOX, authority: 'maximum' }, 'authority-maximum-runs-in-cloud'],
-      ['a mode name as the level', { id: 'x4', role: 'builder', cli: 'claude', cwd: FIX, authority: 'bypassPermissions' }, 'authority-unknown-level'],
-      ['an injected level', { id: 'x5', role: 'builder', cli: 'claude', cwd: FIX, authority: 'high --dangerously-skip-permissions' }, 'authority-unknown-level'],
-      ['a non-string level', { id: 'x6', role: 'builder', cli: 'claude', cwd: FIX, authority: { level: 'high' } }, 'authority-unknown-level'],
+      ['a mode name as the level', { id: 'x4', role: 'builder', cli: 'claude', cwd: REPO, authority: 'bypassPermissions' }, 'authority-unknown-level'],
+      ['an injected level', { id: 'x5', role: 'builder', cli: 'claude', cwd: REPO, authority: 'high --dangerously-skip-permissions' }, 'authority-unknown-level'],
+      ['a non-string level', { id: 'x6', role: 'builder', cli: 'claude', cwd: REPO, authority: { level: 'high' } }, 'authority-unknown-level'],
     ];
     for (const [label, opts, reason] of auth) {
       const before = record.ptySpawns;
@@ -595,7 +664,7 @@ Module._load = function (request) {
     }
   }
 
-  section('L1 — definition resolution and process launch use the SAME canonical cwd');
+  section('The launcher uses the canonical sandbox folder');
   {
     // A junction OUTSIDE outputs/ that points INTO the sandbox. Containment accepts it (its real path
     // is inside), so before this correction the resolver scanned from the real path while the spawn
@@ -606,29 +675,14 @@ Module._load = function (request) {
     assert(made, 'fixture: a directory junction into the sandbox was created (no elevation needed)');
     if (made) {
       const canonical = fs.realpathSync.native(SANDBOX);
-      const agentsSuffix = path.sep + path.join('.claude', 'agents');
-      const probes = [];
-      const realExists = fs.existsSync;
-      fs.existsSync = function (p) {
-        // Project/user-scope probes only; the managed-scope check also ends in .claude\agents.
-        if (typeof p === 'string' && p.endsWith(agentsSuffix) && DEFAULT_MANAGED_PATHS.indexOf(p) === -1) probes.push(p);
-        return realExists.apply(fs, arguments);
-      };
       const before = record.ptySpawns;
-      let res = null;
-      try { res = await ptyStart(goodEvent, { id: 'pane-junction', role: 'web-scout', cli: 'claude', cwd: junction }); }
-      finally { fs.existsSync = realExists; }
+      const res = await ptyStart(goodEvent, { id: 'pane-junction', role: 'web-scout', cli: 'claude', cwd: junction });
       assert(record.ptySpawns === before + 1 && (!res || res.ok !== false), 'the contained junction launch is accepted');
       const spawnCwd = record.spawnArgs[record.spawnArgs.length - 1].cwd;
       assert(spawnCwd === canonical, 'the spawn receives the canonical sandbox path');
       assert(spawnCwd !== junction, 'NOT the declared junction path');
-      assert(probes.length > 0 && probes[0] === path.join(spawnCwd, '.claude', 'agents'),
-        "the resolver's first project-scope probe is <spawn cwd>\\.claude\\agents — the same path");
-      const fold = (p) => p.toLowerCase();
-      assert(probes.every((p) => fold(p).indexOf(fold(junction)) !== 0),
-        'and the resolver never probed under the declared junction path');
     }
-    try { fs.rmdirSync(junction); } catch (e) { /* best effort; FIX is removed at the end */ }
+    try { fs.rmSync(junction, { force: true }); } catch (e) { /* best effort; FIX is removed at the end */ }
   }
 
   section('L2 — managed-policy registry probe: absence is established, unreadable refuses');
@@ -731,8 +785,8 @@ Module._load = function (request) {
       const errBefore = record.mainErrors.length;
       const res = await ptyStart(goodEvent, { id: 'drift-n1', role: 'web-scout', cli: 'claude', cwd: SANDBOX });
       const lines = record.mainErrors.slice(errBefore);
-      assert(res && res.ok === false && res.error === 'fence-policy-tools-declared-empty',
-        JSON.stringify(line) + ': REFUSED with the bounded empty-tools reason');
+      assert(res && res.ok === false && res.error === 'resolve-candidate-unsupported-grammar',
+        JSON.stringify(line) + ': REFUSED with the bounded malformed-definition reason');
       assert(record.ptySpawns === before, JSON.stringify(line) + ': ZERO PTYs spawned');
       assert(lines.every((l) => l.indexOf('[admission]') === -1),
         JSON.stringify(line) + ': no admission line (refused before any admission claim)');
@@ -743,29 +797,27 @@ Module._load = function (request) {
     assert(record.ptySpawns === before + 1 && (!ok || ok.ok !== false), 'the restored tracked role launches again');
   }
 
-  section('N3 — a REAL junction inside the fixture ~/.claude/agents refuses; it is never followed or skipped');
+  section('Only the exact deployed filename may supply the role');
   {
-    // Real Node Dirent types from a real NTFS junction (no elevation needed). Only the disposable
-    // fixture's agents tree is touched; no deployed role tree is.
     const target = path.join(FIX, 'linked-target');
-    fs.mkdirSync(target, { recursive: true });
-    for (const name of ['linked-roles', 'linked.md']) {
-      const link = path.join(AGENTS, name);
-      let made = false;
-      try { fs.symlinkSync(target, link, 'junction'); made = true; } catch (e) { made = false; }
-      assert(made, 'fixture: junction ' + JSON.stringify(name) + ' created inside the fixture agents tree');
-      if (!made) continue;
+    fs.mkdirSync(target);
+    const filename = path.join(AGENTS, 'web-scout.md');
+    const saved = filename + '.saved';
+    fs.renameSync(filename, saved);
+    fs.symlinkSync(target, filename, 'junction');
+    try {
       const before = record.ptySpawns;
-      let res = null;
-      try { res = await ptyStart(goodEvent, { id: 'n3', role: 'web-scout', cli: 'claude', cwd: SANDBOX }); }
-      finally { try { fs.rmdirSync(link); } catch (e) { /* removed with FIX at the end */ } }
-      assert(res && res.ok === false && res.error === 'resolve-agent-tree-linked-entry',
-        JSON.stringify(name) + ': REFUSED as a linked agent-tree entry');
-      assert(record.ptySpawns === before, JSON.stringify(name) + ': ZERO PTYs spawned');
+      const result = await ptyStart(goodEvent, { id: 'n3', role: 'web-scout', cwd: SANDBOX });
+      assert(result?.error === 'resolve-agent-tree-linked-entry' && record.ptySpawns === before,
+        'a linked requested definition refuses without a spawn');
+    } finally {
+      fs.rmSync(filename, { force: true });
+      fs.renameSync(saved, filename);
     }
+    fs.symlinkSync(target, path.join(AGENTS, 'unrelated'), 'junction');
     const before = record.ptySpawns;
     const ok = await ptyStart(goodEvent, { id: 'n3-restored', role: 'web-scout', cli: 'claude', cwd: SANDBOX });
-    assert(record.ptySpawns === before + 1 && (!ok || ok.ok !== false), 'with the junctions removed the clean tree launches again');
+    assert(record.ptySpawns === before + 1 && ok?.ok !== false, 'unrelated directory entries do not affect the requested role');
   }
 
   section('verify-fence delegates to the SAME policy (early feedback, not enforcement)');

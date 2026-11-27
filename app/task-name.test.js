@@ -4,7 +4,7 @@
 // validator (the enforcement boundary) REFUSES traversal / injection / malformed names before any
 // fs/git/spawn call, and still accepts every legitimate name unchanged (AUDIT-REPORT.md finding #4).
 
-const { validateTask, MAX_TASK_LEN } = require('./task-name');
+const { validBranchName, validateTask, MAX_TASK_LEN } = require('./task-name');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -88,6 +88,14 @@ accepted('a', 'single char');
 accepted('feature_x', 'underscore allowed');
 accepted('9lives', 'leading digit allowed');
 accepted('_scratch', 'leading underscore allowed');
+
+for (const branch of ['main', 'feature/topic.v2', 'release/1.0', '@', 'fix/part_name']) {
+  assert(validBranchName(branch), 'accepts branch ' + branch);
+}
+for (const branch of ['HEAD', '-topic', 'topic..draft', 'topic//draft', '/topic', 'topic/', 'topic.',
+  'topic/.draft', 'topic.lock/draft', 'topic@{draft}', 'topic draft', 'topic:draft', 'x'.repeat(256), [], null]) {
+  assert(!validBranchName(branch), 'refuses invalid branch input ' + JSON.stringify(branch));
+}
 
 process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

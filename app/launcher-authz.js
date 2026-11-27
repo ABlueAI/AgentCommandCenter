@@ -44,19 +44,21 @@ function createLauncherAuthorizer(deps) {
   }
 
   // Returns { ok:true, dir } — the CANONICAL REAL directory to spawn into — or { ok:false, reason }.
-  function authorize(rawDir) {
+  function authorize(rawDir, scope) {
     const norm = normalizeLauncherDir(rawDir);
     if (!norm.ok) return { ok: false, reason: norm.reason };
 
     const cand = resolveReal(norm.dir);
     if (!cand) return { ok: false, reason: 'unresolved-path' };
+    const canonical = normalizeLauncherDir(cand.real);
+    if (!canonical.ok) return canonical;
 
     let dir = false;
     try { dir = !!isDirectory(cand.real); } catch { dir = false; }
     if (!dir) return { ok: false, reason: 'not-a-directory' };
 
     let authorized;
-    try { authorized = listAuthorizedDirs(); } catch { return { ok: false, reason: 'enumeration-failed' }; }
+    try { authorized = listAuthorizedDirs(scope); } catch { return { ok: false, reason: 'enumeration-failed' }; }
     if (!Array.isArray(authorized)) return { ok: false, reason: 'enumeration-failed' };
 
     for (const a of authorized) {

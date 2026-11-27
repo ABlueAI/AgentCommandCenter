@@ -94,7 +94,7 @@ function assert(condition, label) {
   const { args, notes, error } = buildVideoScoutArgs({ videoModel: 'gemini-2.5-pro', mediaResolution: 'ULTRA' });
   assert(typeof error === 'string' && error.includes('resolution'), 'an invalid mediaResolution refuses the launch');
   assert(!args.includes('-MediaResolution'), 'rejects a mediaResolution outside VALID_MEDIA_RESOLUTIONS');
-  assert(args[args.indexOf('-Model') + 1] === 'gemini-2.5-pro', 'the valid model still serializes');
+  assert(args.length === 0, 'a refused request returns no arguments');
   assert(notes.some(n => /mediaResolution.*REJECTED/.test(n)), 'notes flag the rejected mediaResolution explicitly');
 }
 {

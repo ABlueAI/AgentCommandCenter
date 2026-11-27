@@ -282,10 +282,12 @@ const REGIONS = [
     // logic itself is unchanged. The `let fencedCwd = null;` declaration sits just ABOVE this region's
     // start anchor. Behaviourally proven by the junction case in pty-start-authority-main.test.js.
     // Previous pin retained: 1896 / ba003038c21fb4c802fa0d86c0d65dd1e12774f24e57fe6568d15182c36d8de0
-    start: 'if (launch.fenced) {',
-    end: '// Never spawn into a missing directory',
-    utf16Length: 2183,
-    sha: '080893bcf88208575975d6cea67703c646b944e9495e625cf82d71520d7b93dc',
+    // Launch checks authorize scoped directories and resolve the deployed role before spawning.
+    // Previous pin retained: 2183 / 080893bcf88208575975d6cea67703c646b944e9495e625cf82d71520d7b93dc
+    start: "const refuse = (reason) => refuseLaunch('Pane launch', reason);",
+    end: '// S09: a resume request',
+    utf16Length: 1867,
+    sha: '2fabcb8cf340f9d18bea4897c1f0701651c553d2b28bcd552e55e20dd7586998',
   },
   {
     name: 'ptyEnv block',
@@ -307,10 +309,12 @@ const REGIONS = [
     // itself refuses the identity for either (pty-env.test.js and agent-git-env.test.js prove it).
     // Every other argument, the scrub and P1 are byte-identical.
     // Previous pin retained: 217 / 8227036cb1ce84d0c32fd38ff4999c6db71a9625dc6beba26b9a85dd6bec5f08
+    // The role launcher injects only the validated definition and settings after the env builder.
+    // Previous pin retained: 302 / fc8deeab81b2e88627956f87b871de00f210e5515ee82236214572db21b70088
     start: 'const fencedRole = launch.fenced;',
     end: 'let p;',
-    utf16Length: 302,
-    sha: 'fc8deeab81b2e88627956f87b871de00f210e5515ee82236214572db21b70088',
+    utf16Length: 685,
+    sha: '0a5775e343ad875776fce9116cd41d74ae5e4a1815e74dd3a8792731dc8a7468',
   },
   {
     name: 'pty-start handler',
@@ -389,8 +393,10 @@ const REGIONS = [
     // block, spawn sink and failure cleanup are unchanged. The S09 assertions at the end of this file
     // pin the new wiring.
     // Previous pin retained: 17354 / 1ed564dea4af33f5dbe7afcb47b0d0cb2178ff1fb289a60b2e37a3d078581b2d
-    utf16Length: 18861,
-    sha: '790e4fa29a245a5064c1d1da05940f73f8a7b0c250747150bb601d378ef313f6',
+    // Launcher input and role source checks run before the admission claim and spawn.
+    // Previous pin retained: 18861 / 790e4fa29a245a5064c1d1da05940f73f8a7b0c250747150bb601d378ef313f6
+    utf16Length: 18116,
+    sha: '09410e70ed24a092a287ad96b407666f06965a87b2f21d7dd00f1de6793b5f84',
   },
 ];
 
@@ -483,17 +489,18 @@ assert(/admissionBudget\.notePaneExit\(id\)/.test(src),
 assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src),
   'main.js never calls a mutation that could restore or extend an allowance (none exists)');
 
-// FENCE BOUNDARY CORRECTION (L1) content assertions — pinned as wiring so a future re-pin cannot drop
-// them with the hash. The fenced branch records the canonical cwd it resolved from, and the spawn cwd
-// uses it for fenced launches while the non-fenced rule is unchanged.
+// The scoped launcher authorizer supplies the canonical cwd. The role
+// definition is checked after directory approval and before admission.
 {
-  const gateStart = mustFind(src, 'if (launch.fenced) {', 'fenced gate');
-  const gate = src.slice(gateStart, mustFind(src, '// Never spawn into a missing directory', 'fenced gate end'));
-  const assignAt = gate.indexOf('fencedCwd = resolvedCwd;');
-  assert(assignAt !== -1 && assignAt > gate.indexOf('ptyStartAuthority.authorizeFencedRole({ role: launch.role, cwd: resolvedCwd })'),
-    'L1: the fenced branch records resolvedCwd only AFTER the definition resolved from it was accepted');
-  assert(src.indexOf("const cwd = fencedCwd !== null ? fencedCwd\n    : ((opts.cwd && fs.existsSync(opts.cwd)) ? opts.cwd : process.env.USERPROFILE);") !== -1,
-    'L1: fenced launches spawn from that canonical cwd; the non-fenced cwd rule is unchanged');
+  const gateStart = mustFind(src, 'const folder = launcherAuthorizer.authorize(opts.cwd,', 'launch folder gate');
+  const gate = src.slice(gateStart, mustFind(src, '// S09: a resume request', 'launch folder gate end'));
+  assert(gate.includes('sandboxRole: launch.fenced ? launch.role : null,')
+    && gate.includes('if (!folder.ok) return refuse(folder.reason);')
+    && gate.includes('cwd = folder.dir;'),
+    'the role-scoped folder gate refuses before using its canonical directory');
+  assert(gate.indexOf('ptyStartAuthority.authorizeRole({ role: launch.role }, launch.fenced)')
+    > gate.indexOf('cwd = folder.dir;'),
+    'role definition resolution follows launcher directory authorization');
 }
 
 // CONTROLLED WEBFETCH content assertions — pinned as wiring so a future re-pin cannot drop them with the
@@ -504,7 +511,7 @@ assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src)
   const handler = src.slice(hStart, mustFind(src, "ipcMain.on('pty-write'", 'pty-start handler end'));
   const claimAt = handler.indexOf('admissionPaneClaimed = admissionLaunch.controlled === true;');
   const decideAt = handler.indexOf('const webFetch = controlledWebFetchLaunch({');
-  const buildAt = handler.indexOf('buildAgentCommand(opts, launch, webFetch, claudeSessionId, resumeSessionId !== null)');
+  const buildAt = handler.indexOf('buildAgentCommand(opts, launch, webFetch, claudeSessionId, resumeSessionId !== null, definition)');
   assert(claimAt !== -1 && decideAt > claimAt && buildAt > decideAt,
     'WebFetch: the claim, then the grant decision, then the command — in that order');
   assert((handler.match(/buildAgentCommand\(/g) || []).length === 1,
@@ -525,7 +532,7 @@ assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src)
   const handler = src.slice(hStart, mustFind(src, "ipcMain.on('pty-write'", 'pty-start handler end'));
   const mintAt = handler.indexOf('const claudeSessionId = resumeSessionId\n    || ((launch.kind === LAUNCH_KIND.ROLE || (launch.kind === LAUNCH_KIND.CLI && launch.cli === \'claude\'))\n      ? crypto.randomUUID() : null);');
   assert(mintAt !== -1 && mintAt > handler.indexOf('const webFetch = controlledWebFetchLaunch({')
-    && mintAt < handler.indexOf('buildAgentCommand(opts, launch, webFetch, claudeSessionId, resumeSessionId !== null)'),
+    && mintAt < handler.indexOf('buildAgentCommand(opts, launch, webFetch, claudeSessionId, resumeSessionId !== null, definition)'),
     'S08: the session ID is main-minted (crypto.randomUUID) for role and claude CLI panes, before the command');
   assert((handler.match(/opts\.sessionId|opts\[/g) || []).length === 0,
     'S08: the handler never reads a session ID (or any computed field) from the renderer');
@@ -539,7 +546,7 @@ assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src)
   // S09: the resume check runs after the spawn cwd is chosen and before the admission claim, a refusal
   // returns before anything else, and only main's checked copy of the ID can reach the command.
   const checkAt = handler.indexOf('const resumeCheck = sessionResume.checkResume({');
-  assert(checkAt !== -1 && checkAt > handler.indexOf('const cwd = fencedCwd !== null ? fencedCwd')
+  assert(checkAt !== -1 && checkAt > handler.indexOf('cwd = folder.dir;')
     && checkAt < handler.indexOf('const admissionLaunch = prepareAdmissionPaneLaunch({'),
     'S09: the resume check runs after the spawn cwd is chosen and before the admission claim');
   const refuseAt = handler.indexOf('if (!resumeCheck.ok) {');
@@ -592,7 +599,7 @@ assert(!/admissionBudget\.(setAllowance|reset|refund|grant|certify)\b/.test(src)
     'S10/S31: buildAgentCommand adds the mode and tool lists only through authorityArgs (role and bare claude)');
   assert(!/\.authority\b/.test(builder) && !/\.permissionMode\b/.test(builder),
     'S10: buildAgentCommand never reads the renderer level or a raw mode field');
-  const promptAt = builder.indexOf('// Optional opening prompt');
+  const promptAt = builder.indexOf('if (initialPrompt)');
   assert(builder.indexOf('cmd += authorityArgs(launch);') !== -1 && builder.indexOf('cmd += authorityArgs(launch);') < promptAt,
     'S10/S31: in a role command the mode and tool lists come before the opening prompt');
 }

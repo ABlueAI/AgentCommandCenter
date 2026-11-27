@@ -21,6 +21,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const Module = require('module');
+const { pathToFileURL } = require('url');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -46,7 +47,8 @@ const CLAUDE_JSON = path.join(HOME, '.claude.json');
 
 const record = { handled: new Map(), on: new Map() };
 function electronStub() {
-  const wc = { mainFrame: { url: 'file:///x' }, on() {}, send() {}, setWindowOpenHandler() {}, openDevTools() {}, session: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} } };
+  const wc = { mainFrame: { url: pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).toString() }, on() {}, send() {}, setWindowOpenHandler() {}, openDevTools() {}, session: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} } };
+  record.event = { sender: wc, senderFrame: wc.mainFrame };
   const w = new Proxy({ webContents: wc, isDestroyed: () => false }, { get(t, k) { return k in t ? t[k] : () => {}; } });
   class BrowserWindow { constructor() { return w; } static getAllWindows() { return []; } }
   return {
@@ -96,7 +98,7 @@ Module._load = function (request) {
   {
     const N = 20;
     // SAME role for every call, deliberately. Varying the role per fixture would hide the defect.
-    const results = await Promise.all(Array.from({ length: N }, () => ensure({}, { role: 'web-scout' })));
+    const results = await Promise.all(Array.from({ length: N }, () => ensure(record.event, { role: 'web-scout' })));
     assert(results.every((r) => r && r.ok === true), 'all ' + N + ' calls reported ok');
     const dirs = results.map((r) => r.dir);
     assert(new Set(dirs).size === N, 'they produced ' + new Set(dirs).size + ' DISTINCT sandboxes (expected ' + N + ')');
@@ -111,7 +113,7 @@ Module._load = function (request) {
 
   section('CONTAINMENT IS UNCHANGED BY THE NEW NAME');
   {
-    const r = await ensure({}, { role: 'web-scout' });
+    const r = await ensure(record.event, { role: 'web-scout' });
     const real = fs.realpathSync.native(r.dir);
     const root = fs.realpathSync.native(OUTPUTS);
     assert(real.toLowerCase().startsWith(root.toLowerCase() + path.sep),
@@ -123,7 +125,7 @@ Module._load = function (request) {
   section('EXCLUSIVE CREATION — an existing directory is never adopted');
   {
     const before = new Set(fs.readdirSync(OUTPUTS));
-    const r = await ensure({}, { role: 'web-scout' });
+    const r = await ensure(record.event, { role: 'web-scout' });
     assert(!before.has(path.basename(r.dir)), 'the handler returned a directory that did not previously exist');
     // Pre-creating every name the handler could pick is impossible by construction; assert the
     // primitive instead, which is what makes that true.
@@ -136,17 +138,15 @@ Module._load = function (request) {
     assert(!recursiveThrew, 'while recursive mkdirSync silently ACCEPTS it — the discarded approach');
   }
 
-  section('ROLE SANITISATION IS UNCHANGED');
+  section('INVALID ROLES REFUSE');
   {
-    const weird = await ensure({}, { role: '../../etc/passwd' });
-    assert(weird.ok === true, 'a hostile role string still yields a sandbox');
-    const real = fs.realpathSync.native(weird.dir);
-    assert(real.toLowerCase().startsWith(fs.realpathSync.native(OUTPUTS).toLowerCase() + path.sep),
-      'and it is still confined to the outputs root (no traversal via the role name)');
-    assert(path.basename(weird.dir).indexOf('..') === -1, 'the sanitized name contains no traversal characters');
-    const empty = await ensure({}, { role: '' });
-    assert(empty.ok === true && path.basename(empty.dir).indexOf('output-') === 0,
-      'an empty role still falls back to the "output" prefix');
+    const before = fs.readdirSync(OUTPUTS).sort();
+    for (const role of ['', 'other/role', '..', {}, 'a'.repeat(65), 'page-reader']) {
+      const result = await ensure(record.event, { role });
+      assert(result?.error === 'invalid-sandbox-role', 'invalid role cannot create a sandbox');
+    }
+    assert(JSON.stringify(fs.readdirSync(OUTPUTS).sort()) === JSON.stringify(before),
+      'refusals did not allocate folders');
   }
 
   process.env.USERPROFILE = prevUser;

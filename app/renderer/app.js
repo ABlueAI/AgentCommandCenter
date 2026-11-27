@@ -1937,7 +1937,8 @@ async function launchReviewer(worktree) {
     initialPrompt = `Review the change set in ./${r.fileName} (this branch vs main, ${r.files} file(s)). Read that file, then report findings per your role instructions.`;
   } else {
     appendLog(`[reviewer] could not build diff for ${name}: ${(r && r.error) || 'unknown error'}\n`);
-    initialPrompt = 'The diff could not be generated automatically. Ask the human to paste the diff you should review.';
+    alert('Could not start Reviewer. ' + ((r && r.error) || 'The diff could not be generated.'));
+    return;
   }
   openInAppTerminal({ worktree, role: 'reviewer', cli: 'claude', initialPrompt, title: `Reviewer · ${name}` });
 }
