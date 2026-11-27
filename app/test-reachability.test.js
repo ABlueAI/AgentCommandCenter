@@ -23,7 +23,9 @@
 // snapshots under docs/ that contain historical copies of repo files.)
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -35,6 +37,59 @@ const REPO_ROOT = path.resolve(__dirname, '..');
 const APP_DIR = path.join(REPO_ROOT, 'app');
 const SCRIPTS_DIR = path.join(REPO_ROOT, 'scripts');
 const EXCLUDED_DIRS = new Set(['node_modules', '.git', '.worktrees', 'vendor', 'dist', 'source-material']);
+
+// Run the real CLI in disposable app trees so these cases never execute repository suites.
+function runFixture(files) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mako test runner '));
+  try {
+    const app = path.join(root, 'app with spaces');
+    fs.mkdirSync(app);
+    const runner = path.join(app, 'run-tests.js');
+    fs.copyFileSync(path.join(APP_DIR, 'run-tests.js'), runner);
+    for (const [relative, source] of Object.entries(files)) {
+      const file = path.join(app, ...relative.split('/'));
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, source);
+    }
+    const result = spawnSync(process.execPath, [runner], { cwd: root, encoding: 'utf8' });
+    if (result.error) throw result.error;
+    return result;
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
+const skippedFixture = { 'renderer/video-model-policy.test.js': 'process.exit(99);' };
+const passing = runFixture({
+  ...skippedFixture,
+  'nested suite/pass case.test.js': "if (require('path').dirname(__dirname) !== process.cwd()) process.exit(91); console.log('PASS MARKER');",
+});
+assert(passing.status === 0 && /nested suite\/pass case\.test\.js\r?\nPASS MARKER/.test(passing.stdout),
+  `runner announces and executes a passing suite with spaces in its path (exit ${passing.status})`);
+
+const failures = runFixture({
+  ...skippedFixture,
+  'z-later.test.js': "console.log('LATER MARKER');",
+  'a-fail.test.js': 'process.exit(7);',
+  'b-fail.test.js': 'process.exit(9);',
+  'electron-binary.test.js': "console.log('FIRST MARKER');",
+});
+assert(failures.status === 7, `runner preserves the first failing suite's exit code (got ${failures.status})`);
+assert(/Failed test files:[\s\S]*a-fail\.test\.js \(exit 7\)[\s\S]*b-fail\.test\.js \(exit 9\)/.test(failures.stderr),
+  'runner names every failed file and its exit code in the final summary');
+assert(/electron-binary\.test\.js\r?\nFIRST MARKER[\s\S]*a-fail\.test\.js[\s\S]*b-fail\.test\.js[\s\S]*z-later\.test\.js\r?\nLATER MARKER/.test(failures.stdout),
+  'runner runs priority files first, then sorted suites, and continues after failures');
+
+const empty = runFixture({
+  ...skippedFixture,
+  ...Object.fromEntries([...EXCLUDED_DIRS].map((dir) => [`nested/${dir}/ignored.test.js`, 'process.exit(98);'])),
+});
+assert(empty.status === 1 && /no test files to run/i.test(empty.stderr),
+  'runner refuses a tree with only skipped files and files in excluded directories');
+
+const stale = runFixture({ 'pass.test.js': "console.log('MUST NOT RUN');" });
+assert(stale.status === 1 && /stale skip-list entry: renderer\/video-model-policy\.test\.js/i.test(stale.stderr)
+  && !stale.stdout.includes('MUST NOT RUN'), 'runner refuses a stale skip-list entry before launching suites');
 
 // Manual walk: skips excluded names BEFORE descending (never enters node_modules — this
 // also keeps the walk out of the app/node_modules junction) and never follows links.
