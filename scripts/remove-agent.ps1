@@ -16,14 +16,29 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
+# Settings that stop the repository's own config from running commands during this script.
+# The repository (and any agent working in it) controls its config; Mako's removal must not
+# run a command it put there. Remotes are reached by URL so remote.<name>.* settings don't apply.
+$script:HooksOff = Join-Path ([IO.Path]::GetTempPath()) ("mako-no-hooks-" + [Guid]::NewGuid().ToString('N'))
+$script:SafeGitConfig = @('-c', 'core.fsmonitor=false', '-c', "core.hooksPath=$script:HooksOff",
+    '-c', 'protocol.ext.allow=never')
+
 function Invoke-CheckedGit {
-    param([string]$Directory, [string[]]$Arguments, [string[]]$InputLines = @())
-    if ($InputLines.Count -gt 0) {
-        $InputLines | & git --no-replace-objects -C $Directory @Arguments
-    } else {
-        & git --no-replace-objects -C $Directory @Arguments
+    param([string]$Directory, [string[]]$Arguments)
+    # No stdin: Windows PowerShell 5.1 adds a byte-order mark and CRLF to text piped into git.
+    & git --no-replace-objects @script:SafeGitConfig -C $Directory @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        $subcommand = @($Arguments | Where-Object { $_ -notlike '-*' })[0]
+        throw "Git $subcommand failed (exit $LASTEXITCODE) in $Directory."
     }
-    if ($LASTEXITCODE -ne 0) { throw "Git $($Arguments[0]) failed (exit $LASTEXITCODE)." }
+}
+
+# Object IDs go on the command line in chunks, well under Windows' 32K command-line limit.
+$script:ChunkSize = 200
+function Get-Chunk {
+    param([string[]]$Items, [int]$Start)
+    $last = [Math]::Min($Start + $script:ChunkSize, $Items.Count) - 1
+    return , [string[]]@($Items[$Start..$last])
 }
 
 $previousConsoleEncoding = [Console]::OutputEncoding
@@ -48,37 +63,53 @@ try {
 
     # Use live branch tips. A cached tracking ref can outlive a deleted remote branch.
     $remoteTips = @(
-        foreach ($remote in (Invoke-CheckedGit $worktreePath @('remote'))) {
-            $tips = @(
-                foreach ($line in (Invoke-CheckedGit $worktreePath @('ls-remote', '--heads', '--', $remote))) {
+        foreach ($remote in @(Invoke-CheckedGit $worktreePath @('remote'))) {
+            $url = @(Invoke-CheckedGit $worktreePath @('remote', 'get-url', '--', $remote))[0]
+            if (-not $url -or $url.StartsWith('-')) { throw "Remote $remote has no usable URL." }
+            $tips = [string[]]@(@(
+                foreach ($line in @(Invoke-CheckedGit $worktreePath @('ls-remote', '--heads', '--', $url))) {
                     if ($line -notmatch '^([0-9a-f]{40}|[0-9a-f]{64})\trefs/heads/.+$') {
                         throw 'Git returned an invalid remote branch entry.'
                     }
                     $Matches[1]
                 }
-            )
+            ) | Sort-Object -Unique)
             if ($tips.Count -eq 0) { continue }
 
             # Fetch missing objects by ID without writing tracking refs or FETCH_HEAD.
-            $missing = @(
-                foreach ($object in (Invoke-CheckedGit $worktreePath @('cat-file', '--batch-check=%(objectname) %(objecttype)') $tips)) {
-                    if ($object -match '^([0-9a-f]+) missing$') { $Matches[1] }
-                    elseif ($object -notmatch '^[0-9a-f]+ commit$') { throw 'A remote branch does not point to a commit.' }
+            for ($i = 0; $i -lt $tips.Count; $i += $script:ChunkSize) {
+                $chunk = Get-Chunk $tips $i
+                $present = @(Invoke-CheckedGit $worktreePath (@('rev-list', '--no-walk', '--ignore-missing') + $chunk))
+                $missing = @($chunk | Where-Object { $present -notcontains $_ })
+                if ($missing.Count) {
+                    Invoke-CheckedGit $worktreePath (@('fetch', '--quiet', '--no-auto-gc', '--no-tags',
+                        '--no-write-fetch-head', '--no-recurse-submodules', '--refmap=', '--', $url) + $missing) | Out-Null
                 }
-            )
-            if ($missing.Count) {
-                Invoke-CheckedGit $worktreePath @('fetch', '--stdin', '--no-auto-gc', '--no-tags',
-                    '--no-write-fetch-head', '--no-recurse-submodules', '--refmap=', '--', $remote) $missing | Out-Null
             }
             $tips
         }
-    ) | Sort-Object -Unique
+    )
 
-    $head = Invoke-CheckedGit $worktreePath @('rev-parse', '--verify', 'HEAD')
-    $logArgs = @('log', '--no-show-signature', '--format=%h%x20%s', $head)
-    $exclude = @($remoteTips | ForEach-Object { if ($_) { "^$_" } })
-    if ($exclude.Count) { $logArgs += '--stdin' }
-    $commits = @(Invoke-CheckedGit $worktreePath $logArgs $exclude)
+    $head = @(Invoke-CheckedGit $worktreePath @('rev-parse', '--verify', 'HEAD'))[0]
+    # Commits on HEAD that no live remote tip reaches: the intersection over every chunk of tips.
+    $logArgs = @('log', '--no-show-signature', '--format=%H%x20%h%x20%s', $head)
+    $allTips = [string[]]@($remoteTips | Where-Object { $_ })
+    $unpublished = $null
+    $i = 0
+    do {
+        $gitArgs = $logArgs
+        if ($allTips.Count) { $gitArgs = $logArgs + @('--not') + (Get-Chunk $allTips $i) }
+        $lines = @(Invoke-CheckedGit $worktreePath $gitArgs)
+        if ($null -eq $unpublished) {
+            $unpublished = $lines
+        } else {
+            $keep = @{}
+            foreach ($line in $lines) { $keep[$line.Split(' ')[0]] = $true }
+            $unpublished = @($unpublished | Where-Object { $keep.ContainsKey($_.Split(' ')[0]) })
+        }
+        $i += $script:ChunkSize
+    } while ($i -lt $allTips.Count)
+    $commits = @($unpublished | ForEach-Object { $_.Substring($_.IndexOf(' ') + 1) })
     $changes = @(Invoke-CheckedGit $worktreePath @('--no-optional-locks', '-c', 'core.quotePath=false', 'status',
         '--porcelain=v1', '--untracked-files=all', '--ignored=matching', '--ignore-submodules=none'))
 

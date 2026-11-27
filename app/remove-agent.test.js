@@ -37,7 +37,7 @@ function test(name, options, run) {
 }
 after(() => process.stdout.write(`\nremove-agent: ${passed} passed, ${failed} failed\n`));
 
-function handler({ inspection = clean, checkError, checkStdout, removeError, response = 0, trusted = true } = {}) {
+function handler({ inspection = clean, checkError, checkStdout, removeError, response = 0, trusted = true, request } = {}) {
   const calls = [];
   const entryUrl = 'file:///mako/index.html';
   const frame = { url: entryUrl };
@@ -51,16 +51,17 @@ function handler({ inspection = clean, checkError, checkStdout, removeError, res
     } },
     path, validateTask, win, createTrustedSenderGate, ENTRY_URL: entryUrl,
     SCRIPTS_DIR: path.dirname(script), tlog() {},
-    execFile: (command, args, _options, callback) => {
+    execFile: (command, args, options, callback) => {
       assert.equal(command, 'powershell');
       assert.ok(args.includes(script));
-      calls.push({ args });
+      calls.push({ args, options });
       if (args.includes('-Check')) callback(checkError, checkStdout ?? JSON.stringify(inspection), 'Git check failed');
       else callback(removeError, '', 'Git refused worktree removal');
     },
   });
   const event = trusted ? { sender: win.webContents, senderFrame: frame } : {};
-  return { calls, invoke: () => invoke(event, { repo: path.join(os.tmpdir(), 'repo'), task: 'demo' }) };
+  const body = request === undefined ? { repo: path.join(os.tmpdir(), 'repo'), task: 'demo' } : request;
+  return { calls, invoke: () => invoke(event, body) };
 }
 
 test('clean worktrees are checked first and removed without force or a prompt', async () => {
@@ -110,6 +111,63 @@ for (const [label, options] of [
     assert.ok(calls[0].args.includes('-Check'));
   });
 }
+
+for (const [label, inspection] of [
+  ['changes as a string', { ...clean, changes: ' M one.txt' }],
+  ['commits as an object', { ...clean, commits: { value: ['a1 x'], Count: 1 } }],
+  ['an empty entry', { ...clean, changes: [''] }],
+  ['a non-string entry', { ...clean, commits: [7] }],
+  ['a short state', { ...clean, state: 'abc' }],
+  ['an upper-case state', { ...clean, state: 'A'.repeat(64) }],
+  ['no state', { changes: [], commits: [] }],
+]) {
+  test(`a check result with ${label} refuses before any removal`, async () => {
+    const { calls, invoke } = handler({ inspection });
+    const result = await invoke();
+    assert.equal(result.ok, false);
+    assert.match(result.error, /invalid worktree state/);
+    assert.equal(calls.length, 1);
+  });
+}
+
+for (const [label, request] of [
+  ['a relative repo', { repo: 'relative', task: 'demo' }],
+  ['no repo', { task: 'demo' }],
+  ['a non-string repo', { repo: ['C:\\repo'], task: 'demo' }],
+]) {
+  test(`${label} is refused before any git runs`, async () => {
+    const { calls, invoke } = handler({ request });
+    const result = await invoke();
+    assert.equal(result.ok, false);
+    assert.match(result.error, /repository/i);
+    assert.deepEqual(calls, []);
+  });
+}
+
+test('only the check has a time limit; the removal run is never cut short', async () => {
+  const { calls, invoke } = handler({ inspection: dirty, response: 1 });
+  assert.equal((await invoke()).ok, true);
+  assert.ok(calls[0].options.timeout > 0);
+  assert.equal(calls[2].options.timeout, undefined);
+});
+
+test('a check that times out says so and that nothing was removed', async () => {
+  const killed = Object.assign(new Error('Command failed: powershell'), { killed: true, signal: 'SIGTERM' });
+  const { calls, invoke } = handler({ checkError: killed });
+  const result = await invoke();
+  assert.equal(result.ok, false);
+  assert.match(result.error, /timed out/i);
+  assert.match(result.error, /nothing was removed/i);
+  assert.equal(calls.length, 1);
+});
+
+test('the dialog pins Cancel as the default and safe button', async () => {
+  const { calls, invoke } = handler({ inspection: dirty });
+  await invoke();
+  const { dialog } = calls[1];
+  assert.equal(dialog.buttons[dialog.cancelId], 'Cancel');
+  assert.equal(dialog.buttons[1], 'Remove worktree');
+});
 
 test('a nonzero removal exit reaches the renderer as an error', async () => {
   const { invoke } = handler({ removeError: Object.assign(new Error('exit 1'), { code: 1 }) });
@@ -238,4 +296,42 @@ test('the script restores Git prompt settings in an existing PowerShell session'
     + 'if ($env:GIT_TERMINAL_PROMPT -ne "1" -or (Test-Path Env:GCM_INTERACTIVE)) { exit 1 }'],
   { cwd: repo, encoding: 'utf8', env: { ...process.env, MAKO_TEST_REMOVE_SCRIPT: script } });
   assert.equal(result.status, 0, result.stderr);
+});
+
+test('bare -Force without the checked state never removes a worktree with local work', { skip }, (t) => {
+  const { worktree, git, run } = fixture(t);
+  git(worktree, 'commit', '--allow-empty', '-qm', 'Local commit');
+  fs.writeFileSync(path.join(worktree, 'new file.txt'), 'new\n');
+  const result = run('-Force');
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /local work/i);
+  assert.ok(fs.existsSync(path.join(worktree, 'new file.txt')));
+});
+
+test('the check ignores commands planted in the repository config', { skip }, (t) => {
+  const { repo, worktree, git, inspect, run } = fixture(t);
+  const marker = path.join(path.dirname(repo), 'planted marker');
+  const shellPath = marker.replace(/\\/g, '/');
+  git(repo, 'config', 'core.fsmonitor', `echo planted > "${shellPath}"`);
+  git(repo, 'config', 'remote.fixture.uploadpack', `echo planted > "${shellPath}"; git-upload-pack`);
+  git(worktree, 'commit', '--allow-empty', '-qm', 'Agent commit');
+  const { commits, state } = inspect();
+  assert.match(commits[0], /Agent commit/);
+  assert.ok(!fs.existsSync(marker), 'a planted config command ran during the check');
+  const removed = run('-Force', '-ExpectedState', state);
+  assert.equal(removed.status, 0, removed.stderr);
+  assert.ok(!fs.existsSync(marker), 'a planted config command ran during removal');
+});
+
+test('many remote branches are handled without piping object IDs through PowerShell', { skip }, (t) => {
+  const { worktree, remote, git, inspect } = fixture(t);
+  git(worktree, 'commit', '--allow-empty', '-qm', 'Agent commit');
+  git(worktree, 'push', '-q', remote, 'HEAD:refs/heads/published');
+  const main = git(remote, 'rev-parse', 'main');
+  const lines = [];
+  for (let i = 0; i < 450; i++) lines.push(`create refs/heads/extra-${i} ${main}`);
+  execFileSync('git', ['update-ref', '--stdin'], { cwd: remote, input: lines.join('\n') + '\n' });
+  assert.deepEqual(inspect().commits, []);
+  git(remote, 'update-ref', '-d', 'refs/heads/published');
+  assert.match(inspect().commits[0], /Agent commit/);
 });

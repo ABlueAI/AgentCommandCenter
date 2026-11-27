@@ -1200,8 +1200,9 @@ ipcMain.handle('remove-agent', async (event, request) => {
   // possibly-hostile state: `task` is taskOf(wt), derived from a worktree folder/branch that may
   // have been planted BEFORE this validation existed (an older build, manual git, or a pre-fix
   // bypassed renderer). A create-time gate cannot retroactively sanitize what is already on disk,
-  // and the name then flows into a filesystem path + `git worktree remove --force`
-  // (remove-agent.ps1), so it must be re-checked here, at the layer that actually runs git.
+  // and the name then flows into a filesystem path + `git worktree remove` (remove-agent.ps1;
+  // `--force` only after the user confirms), so it must be re-checked here, at the layer that
+  // actually runs git.
   // (finding #4). Do NOT "simplify" this by trusting the create gate — they guard different inputs.
   const taskCheck = validateTask(task);
   if (!taskCheck.ok) {
@@ -1220,14 +1221,24 @@ ipcMain.handle('remove-agent', async (event, request) => {
     return { ok: false, error: msg };
   }
   if (typeof repo !== 'string' || !path.isAbsolute(repo)) {
+    tlog('remove-agent: REFUSED no absolute repo path');
     return { ok: false, error: 'Select a repository before removing a worktree.' };
   }
   const script = path.join(SCRIPTS_DIR, 'remove-agent.ps1');
+  // Only the read-only check has a time limit. A timeout kills powershell.exe but not the git it
+  // started, so cutting the removal run short would report a failure while git keeps deleting.
+  const CHECK_TIMEOUT_MS = 60_000;
   const run = (...options) => new Promise((resolve, reject) => {
     const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script, '-Task', task];
-    execFile('powershell', [...args, ...options], { cwd: repo, windowsHide: true, timeout: 60_000 },
+    const isCheck = options.includes('-Check');
+    const execOptions = { cwd: repo, windowsHide: true, maxBuffer: 16 * 1024 * 1024 };
+    if (isCheck) execOptions.timeout = CHECK_TIMEOUT_MS;
+    execFile('powershell', [...args, ...options], execOptions,
       (error, stdout, stderr) => {
-        if (error) reject(new Error((stderr || '').trim() || error.message));
+        if (error && isCheck && error.killed) {
+          reject(new Error(`timed out after ${CHECK_TIMEOUT_MS / 1000} s while checking the ${task} worktree ` +
+            '(a slow or unreachable remote?); nothing was removed.'));
+        } else if (error) reject(new Error((stderr || '').trim() || error.message));
         else resolve(stdout);
       });
   });
@@ -1262,6 +1273,7 @@ ipcMain.handle('remove-agent', async (event, request) => {
     await run(...options);
     return { ok: true };
   } catch (error) {
+    tlog(`remove-agent: ${failure}: ${String(error.message).split('\n')[0].slice(0, 300)}`);
     return { ok: false, error: `${failure}: ${error.message}` };
   }
 });

@@ -1643,6 +1643,21 @@ Step 88 comes from PR #315 (issue #219). Step numbers 86 and 87 belong to open P
   - *Done when:* you've told any agent what you saw (no warning, rules listed, or what differed);
     it ticks this with the date and how it checked.
 
+## From PR #336 (the Remove button asks before deleting work)
+
+Step 92 comes from PR #336 (issue #329). Step numbers 90 and 91 belong to open PRs.
+
+- [ ] **92. Check the worktree Remove button on Windows (PR #336).** **About 5 minutes**, on the next
+  Tuesday or Friday PC-check evening after merging PR #336.
+  - Pull `main`, fully restart Mako, and start a throwaway agent (any task name, such as `remove-test`).
+  - In its worktree, make a new file and one commit you don't push.
+  - Click Remove on that agent: a warning should list the file and the commit. Click Cancel: the
+    worktree folder should still be there with the file in it.
+  - Click Remove again and confirm: the folder should be gone, and `git branch --list agent/remove-test`
+    in the repo should still show the branch (delete it with `git branch -D agent/remove-test`).
+  - *Done when:* you've told any agent what you saw (listed, kept on Cancel, gone on confirm with
+    the branch kept, or what differed); it ticks this with the date and how it checked.
+
 ## Coming up this month (the runner will ask when it gets there)
 
 You can start on the first one now, which saves time later.
