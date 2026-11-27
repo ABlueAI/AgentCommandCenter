@@ -44,9 +44,11 @@ fs.writeFileSync(path.join(USER_DATA, 'settings.json'), JSON.stringify({ project
 const CLAUDE_JSON = path.join(HOME, '.claude.json');
 
 const record = { handled: new Map(), on: new Map() };
+const mainFrame = { url: require('url').pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).toString() };
+let trustedEvent;
 function electronStub() {
-  const mainFrame = { url: 'file:///x' };
   const wc = { mainFrame, on() {}, send() {}, setWindowOpenHandler() {}, openDevTools() {}, session: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} } };
+  trustedEvent = { sender: wc, senderFrame: mainFrame };
   const w = new Proxy({ webContents: wc, isDestroyed: () => false }, { get(t, k) { return k in t ? t[k] : () => {}; } });
   class BrowserWindow { constructor() { return w; } static getAllWindows() { return []; } }
   return {
@@ -91,7 +93,7 @@ const readTrust = () => {
     // Distinct roles AND distinct calls: this part measures the LOCK, so every call must produce a
     // different trust key. Same-role uniqueness is a separate property, measured in its own suite.
     const results = await Promise.all(
-      Array.from({ length: N }, (_, i) => ensure({}, { role: 'lockrole' + i }))
+      Array.from({ length: N }, (_, i) => ensure(trustedEvent, { role: 'lockrole' + i }))
     );
     assert(results.length === N, 'all ' + N + ' promises settled');
     assert(results.every((r) => r && r.ok === true), 'every call reported ok');
@@ -112,14 +114,14 @@ const readTrust = () => {
     // would silently hang every future sandbox launch app-wide.
     const good = fs.readFileSync(CLAUDE_JSON, 'utf8');
     fs.writeFileSync(CLAUDE_JSON, '{ this is not json', 'utf8');
-    const during = await ensure({}, { role: 'parsefail' });
+    const during = await ensure(trustedEvent, { role: 'parsefail' });
     assert(during && during.ok === true,
       'a corrupt trust file does NOT block the sandbox launch (best-effort write, as designed)');
     assert(fs.existsSync(during.dir), 'and the sandbox directory still exists');
     fs.writeFileSync(CLAUDE_JSON, good, 'utf8');
 
     const after = await Promise.race([
-      ensure({}, { role: 'afterparsefail' }),
+      ensure(trustedEvent, { role: 'afterparsefail' }),
       new Promise((r) => setTimeout(() => r({ ok: false, timedOut: true }), 5000)),
     ]);
     assert(after && after.ok === true && !after.timedOut,
@@ -133,12 +135,12 @@ const readTrust = () => {
     const good = fs.readFileSync(CLAUDE_JSON, 'utf8');
     fs.rmSync(CLAUDE_JSON, { force: true });
     fs.mkdirSync(CLAUDE_JSON, { recursive: true });
-    const during = await ensure({}, { role: 'renamefail' });
+    const during = await ensure(trustedEvent, { role: 'renamefail' });
     assert(during && during.ok === true, 'a failing rename does not block the launch either');
     fs.rmSync(CLAUDE_JSON, { recursive: true, force: true });
     fs.writeFileSync(CLAUDE_JSON, good, 'utf8');
     const after = await Promise.race([
-      ensure({}, { role: 'afterrenamefail' }),
+      ensure(trustedEvent, { role: 'afterrenamefail' }),
       new Promise((r) => setTimeout(() => r({ ok: false, timedOut: true }), 5000)),
     ]);
     assert(after && after.ok === true && !after.timedOut, 'and the lock is still free afterwards');
@@ -157,11 +159,11 @@ const readTrust = () => {
     } catch (e) { /* icacls unavailable */ }
 
     if (denied) {
-      const r = await ensure({}, { role: 'readonly' });
+      const r = await ensure(trustedEvent, { role: 'readonly' });
       assert(r && r.ok === true, 'a write-denied trust file does NOT block the sandbox launch');
       assert(fs.existsSync(r.dir), 'and the sandbox directory is still created');
       const after = await Promise.race([
-        ensure({}, { role: 'afterreadonly' }),
+        ensure(trustedEvent, { role: 'afterreadonly' }),
         new Promise((res) => setTimeout(() => res({ ok: false, timedOut: true }), 5000)),
       ]);
       assert(after && after.ok === true && !after.timedOut, 'and the lock is released after the denial');
