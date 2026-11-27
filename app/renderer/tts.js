@@ -170,9 +170,10 @@ async function speak(rawText) {
       }
     }
   } catch (e) {
+    if (mine !== requestId) return;
+    disposeActiveQueue();
     speaking = false;
-    queue.end(); // let already-queued audio drain; URLs are revoked either way
-    if (mine === requestId) setStatus('error', 'speech failed: ' + (e && e.message));
+    setStatus('error', 'speech failed: ' + (e && e.message));
     return;
   }
   queue.end();
