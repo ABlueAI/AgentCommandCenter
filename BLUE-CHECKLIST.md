@@ -1478,6 +1478,21 @@ Step 75 comes from PR #245. Step numbers 73 and 74 belong to open PRs (#230 and 
   - *Done when:* a Web Scout pane launches after the sync, and you tell any agent "step 75 done"; it ticks
     this with the date.
 
+Step 89 comes from PR #327.
+
+- [ ] **89. Re-deploy the fence hook after PR #327 merges, and check a Page pane.** **About 5
+  minutes**, the next time you open Mako after merging PR #327 (if step 75 isn't done yet, do this
+  instead of it: it covers both). PR #327 changes the fence hook again, and Mako refuses to launch the
+  fenced roles (Web Scout, Source Scout, Operator and Page panes) until the deployed copy matches the
+  new one. The hook now also loads Mako's own page-URL check, which CI can't run on your PC.
+  - Pull `main`, run `scripts/sync-roles.ps1`, and restart Mako fully (close every window).
+  - Open a Page pane on a public https page (for example `https://example.org/`): it should open and
+    read the page. Then ask it to open `https://localhost/`: it should show "Blocked by Mako page
+    fence" with `[fence-page-denied]`.
+  - **New Agent > 🌐 Web Scout**, **Create & Launch**: the pane should start.
+  - *Done when:* both checks behave as above, and you tell any agent "step 89 done"; it ticks this
+    with the date.
+
 ## From S14 (the 1.1 design brief)
 
 Step 77 comes from PR #253.
@@ -1517,6 +1532,23 @@ Step 81 comes from PR #283.
      greyed-out switches, **Quiet hours** and **Pause all**, which S18 and S19 turn on.
   - *Done when:* you tell any agent "S66 PC check: OK" or what looked wrong; the agent ticks this
     with the date and your words, and anything wrong becomes a fix PR.
+
+## From S46 (session hygiene)
+
+Step 83 comes from PR #286.
+
+- [ ] **83. Check the daily idle-sessions list on your PC.** **About 5 minutes**, at the next Tuesday
+  or Friday PC check after PR #286 merges, on the dev copy (`npm run start:dev` in `app`).
+  - Close Mako with one Claude pane open, then in Mako's settings folder for the dev copy open
+    `session-memory.json` and, in that record, set `startedAt`, `stoppedAt` and (if it is there)
+    `lastActiveAt` all to the same time 4 days ago, for example `2026-11-21T09:00:00.000Z` (idle time
+    counts from the latest of the three). Or simply wait 3 days. Start the dev copy again and leave
+    the Resume offer unanswered (answering it archives the session, so it leaves the idle list).
+  - The Terminals tab shows "One Claude session has been idle 3 days or more", with the pane's role,
+    folder, idle days, "waiting for Resume or Start fresh" and "owner Blue". Type a done-when, Save,
+    and restart: the row shows it.
+  - *Done when:* the list shows and the done-when survives a restart; tell any agent "step 83 done"
+    (or what went wrong) and it ticks this with the date.
 
 ## Every day, once the runner is on
 
@@ -1599,6 +1631,18 @@ open PRs (#283, #286 and #287).
     plugin was uninstalled or left disabled, with each finding's title and severity only; you
     tell any agent "step 85 done" and it ticks this with the date and how it checked.
 
+## From PR #315 (the account guard's PowerShell deny rules)
+
+Step 88 comes from PR #315 (issue #219). Step numbers 86 and 87 belong to open PRs.
+
+- [ ] **88. Check the PowerShell deny rules on Windows (PR #315).** **About 5 minutes**, on the next
+  Tuesday or Friday PC-check evening after merging PR #315.
+  - On your PC, pull `main` in your Mako checkout, start Claude Code there and run `/permissions`.
+  - Check that Claude Code showed no settings warning at start-up, and that the "Deny" list shows
+    the `PowerShell(...)` rules next to the `Bash(...)` ones (for example `PowerShell(gh pr merge:*)`).
+  - *Done when:* you've told any agent what you saw (no warning, rules listed, or what differed);
+    it ticks this with the date and how it checked.
+
 ## Coming up this month (the runner will ask when it gets there)
 
 You can start on the first one now, which saves time later.
@@ -1660,6 +1704,13 @@ You can start on the first one now, which saves time later.
   any agent. Merging PR #255 records the list, not your verdicts.
   - *Done when:* each row you decided has your verdict in its last column, word for word, and the
     agent ticks this with the date and the rows it filled.
+- [ ] **84. Optional: your verdicts on S47's Symvibe record (PR #287).** **About 10 minutes**, before
+  you merge PR #287. The ask was settled under D-090 on 2026-11-26: the record carries the builder's
+  defaults (crew presets BUILD FRESH, goal-stopping loops ADOPT, branch status BUILD FRESH), and
+  merging PR #287 approves them. To choose otherwise, say so in PR #287 before merging; an agent then
+  records your words in `docs/decisions/OSS-symvibe.md`.
+  - *Done when:* PR #287 is merged (the defaults stand) or your own verdict is in the record word for
+    word; the agent ticks this with the date and which.
 
 ## Dated reminders
 
