@@ -1125,8 +1125,12 @@ process.stdout.write('\npush destinations (review run 1 on #324)\n');
       const v = guard.decide(pwsh('git add -A; git commit -m "Start the sweeper"; git push -u origin x'), agentLogin);
       assert(v.exitCode === 2 && /contains "Start"/.test(v.stderr || '') && /separate tool call/.test(v.stderr || ''),
         'ABlueAgent + PowerShell commit-then-push with a listed word: the refusal names the word and the way out');
-      const pushAlone = guard.decide(pwsh('git push -u origin x'), agentLogin);
+      const pushAlone = guard.decide(pwsh('git push -u origin x'), agentLogin, withPushSources);
       assert(pushAlone.exitCode === 0 && !pushAlone.stderr, 'ABlueAgent + PowerShell: the same push alone in its own call passes');
+      const started = Date.now();
+      const long = guard.decide(pwsh("git push origin topic; $null = '" + '<#'.repeat(150000) + "'"), agentLogin, withPushSources);
+      assert(Date.now() - started < 5000 && typeof long.exitCode === 'number',
+        `a long unclosed block-comment run is scanned in linear time (${Date.now() - started} ms)`);
     }
     for (const cmd of ['cd..; git push origin topic', 'cd sub; cd..; git push origin topic']) {
       const v = guard.decide(pwsh(cmd), agentLogin);

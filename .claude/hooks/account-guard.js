@@ -1415,7 +1415,7 @@ const PS_OTHER_DYNAMIC = /\[scriptblock\]|\.(?:invokescript|addscript)\s*\(|(?<!
 // can only add a match. Returns the matched word or form, or null.
 function runsTextOrProgram(command) {
   const unticked = command.replace(/`/g, '');
-  const variants = [command, unticked, command.replace(/<#[\s\S]*?#>/g, ' '), unticked.replace(/<#[\s\S]*?#>/g, ' ')];
+  const variants = [command, unticked, withoutBlockComments(command), withoutBlockComments(unticked)];
   for (const text of variants) {
     for (const re of [PS_DYNAMIC_NAMES, PS_CALL_OPERATOR, PS_OTHER_DYNAMIC]) {
       const m = re.exec(text);
@@ -1423,6 +1423,21 @@ function runsTextOrProgram(command) {
     }
   }
   return null;
+}
+
+// Each `<# ... #>` becomes a space, in one pass (linear in the text; an unclosed `<#` keeps the rest).
+function withoutBlockComments(text) {
+  let out = '';
+  let at = 0;
+  for (;;) {
+    const open = text.indexOf('<#', at);
+    if (open === -1) break;
+    const close = text.indexOf('#>', open + 2);
+    if (close === -1) break;
+    out += text.slice(at, open) + ' ';
+    at = close + 2;
+  }
+  return out + text.slice(at);
 }
 
 // Its own message: the push may be an ordinary one, so it names what matched and the way out.
