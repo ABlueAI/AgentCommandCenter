@@ -8,20 +8,24 @@
 // Guarantees the work order requires, all enforced here:
 //   - success is reported ONLY after the IPC promise resolves with { ok:true };
 //   - an IPC rejection OR a structured { ok:false } refuses VISIBLY (a metadata-only
-//     Logs line) and never throws — so fire-and-forget callers (Ctrl+C/V, right-click,
-//     OSC 52) leave no unhandled rejection;
-//   - a FAILED read never reaches ptyWrite (null sentinel, distinct from '' = empty);
+//     Logs line) and never throws — so fire-and-forget callers (Ctrl+C/V, right-click)
+//     leave no unhandled rejection;
+//   - a failed read never reaches xterm (null sentinel, distinct from '' = empty);
 //   - no clipboard CONTENT is ever logged — only character counts and reason strings.
 //
 // IIFE-wrapped for the shared renderer <script> global scope (see term-copy.js).
 ((global) => {
+
+  const PASTE_CHAR_LIMIT = 1000000; // Match the clipboard IPC bound for native paste events.
+  const UNSAFE_PASTE_CONTROL = /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/;
 
   function errMsg(err) { return (err && err.message) || String(err) || 'unknown error'; }
 
   function createClipboardConsumer(deps) {
     const invokeRead = deps.invokeRead;    // () => Promise<{ ok, text?, error? }>
     const invokeWrite = deps.invokeWrite;  // (s) => Promise<{ ok, error? }>
-    const ptyWrite = deps.ptyWrite;        // (text) => void  (paste target)
+    const paste = deps.paste;             // (text) => false if the terminal can't accept input
+    const confirmMultiline = deps.confirmMultiline; // Set for shell panes.
     const log = deps.log || (() => {});
     const paneId = deps.paneId || '';
 
@@ -37,7 +41,7 @@
       }
     }
 
-    // Terminal-shortcut write (Ctrl+C / Ctrl+Shift+C / right-click / OSC 52): writeText
+    // Terminal-shortcut write (Ctrl+C / Ctrl+Shift+C / right-click): writeText
     // plus one metadata-only Logs line. Empty input is a no-op refusal (nothing to copy).
     async function writeClip(text, label) {
       const tag = label || `copy ${paneId}`;
@@ -59,19 +63,82 @@
       return null;
     }
 
-    // Paste into the PTY — a FAILED read (null) must never reach ptyWrite.
-    async function pasteIntoPty() {
-      const t = await readClip();
-      if (t === null) return false;                 // failure already logged — never paste
-      if (t) { ptyWrite(t); return true; }
-      log('[clipboard] nothing to paste (clipboard empty).\n');
+    function refusePaste(reason) {
+      log(`[clipboard ${paneId}] Paste refused: ${reason}\n`);
       return false;
     }
 
-    return { writeText, writeClip, readClip, pasteIntoPty };
+    function pasteText(text) {
+      if (typeof text !== 'string') return refusePaste('clipboard text unavailable');
+      if (!text) return refusePaste('clipboard empty');
+      if (text.length > PASTE_CHAR_LIMIT) return refusePaste('clipboard text exceeds the size limit');
+      if (UNSAFE_PASTE_CONTROL.test(text)) return refusePaste('clipboard text contains control characters');
+
+      // Treat Windows CRLF and bare CR as line breaks, including a final line break.
+      const normalized = text.replace(/\r\n?/g, '\n');
+      if (confirmMultiline && /[\n\u2028\u2029]/.test(normalized)) {
+        try {
+          if (confirmMultiline() !== true) return refusePaste('multiline paste cancelled');
+        } catch {
+          return refusePaste('multiline confirmation failed');
+        }
+      }
+      try {
+        if (paste(normalized) === false) return refusePaste('terminal input unavailable');
+      } catch {
+        return refusePaste('terminal paste failed');
+      }
+      return true;
+    }
+
+    async function pasteIntoPty() {
+      const text = await readClip();
+      return text !== null && pasteText(text);
+    }
+
+    return { writeText, writeClip, readClip, pasteText, pasteIntoPty };
   }
 
-  const api = { createClipboardConsumer };
+  // Which paste behaviour a pane gets, from the CLI it actually runs. Plain shell panes confirm a
+  // paste with a line break (pasted lines can run commands). Gemini panes ignore bracketed-paste
+  // mode: the Gemini prompt silently drops xterm's bracketed-paste escapes, so they get plain text,
+  // as before term.paste() was used. Every other pane keeps xterm's standard bracketed paste.
+  function pastePolicyFor(facts) {
+    const f = facts || {};
+    return {
+      confirmMultiline: !f.paneCli && !f.claudeVideoScout,
+      ignoreBracketedPaste: f.paneCli === 'gemini',
+    };
+  }
+
+  // OSC 52 (a program asking the terminal to set the clipboard) is consumed without decoding the
+  // payload. The first refusal says what happened and what to do instead; repeats are counted and
+  // logged again at most once per gap, so a chatty program can't flood the Logs tab and later
+  // refusals are never silent.
+  const OSC_REFUSAL_LOG_GAP_MS = 60 * 1000;
+  function createOscClipboardRefusal(deps) {
+    const log = deps.log || (() => {});
+    const paneId = deps.paneId || '';
+    const now = deps.now || Date.now;
+    let lastLogAt = null;
+    let unlogged = 0;
+    return function refuseOscClipboard() {
+      const t = now();
+      if (lastLogAt === null) {
+        log(`[osc52 ${paneId}] A program asked to set the clipboard; that is blocked in Mako panes, so its "Copied" notice did not change your clipboard. Select the text and press Ctrl+C instead.\n`);
+        lastLogAt = t;
+      } else if (t - lastLogAt >= OSC_REFUSAL_LOG_GAP_MS) {
+        log(`[osc52 ${paneId}] Blocked ${unlogged + 1} more clipboard request(s) from this pane; your clipboard was not changed. Select the text and press Ctrl+C instead.\n`);
+        lastLogAt = t;
+        unlogged = 0;
+      } else {
+        unlogged++;
+      }
+      return true;
+    };
+  }
+
+  const api = { createClipboardConsumer, pastePolicyFor, createOscClipboardRefusal, OSC_REFUSAL_LOG_GAP_MS };
   global.ccClipboardConsumer = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window === 'undefined' ? globalThis : window);
