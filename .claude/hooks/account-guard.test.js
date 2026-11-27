@@ -746,6 +746,247 @@ process.stdout.write('\nremaining account guard regressions\n');
   assert(broken.exitCode === 2 && /internal error/.test(broken.stderr || ''), 'an internal hook error refuses visibly');
 }
 
+// Review run 1 on #324: the push destination checks.
+process.stdout.write('\npush destinations (review run 1 on #324)\n');
+{
+  const { PushRefusal } = require('./account-guard-push.js');
+  const repo = { full_name: 'o/r' };
+  const pull = (login, head, base = 'main', headRepo = repo) => ({ user: { login }, head: { ref: head, repo: headRepo }, base: { ref: base, repo } });
+  // A fake git: `config` lists the entries, `symbolic-ref` names the branch (null: detached HEAD),
+  // `remote get-url` lists each remote's push URLs. Every call is recorded with its directory.
+  const fakeGit = ({ config = [['push.default', 'current']], branch = 'topic', urls = { origin: ['https://github.com/o/r.git'] }, calls = [] } = {}) => (args, cwd) => {
+    calls.push({ args, cwd });
+    if (args.includes('config')) return config.map(([k, v]) => `${k}\n${v}\0`).join('');
+    if (args.includes('symbolic-ref')) return branch === null ? '' : `${branch}\n`;
+    if (args.includes('get-url')) {
+      const name = args[args.length - 1];
+      if (!urls[name]) { const e = new Error('no such remote'); e.status = 2; throw e; }
+      return urls[name].join('\n') + '\n';
+    }
+    throw new Error('unexpected Git call');
+  };
+  const agent = () => ({ login: 'ABlueAgent' });
+  const sharedPulls = [pull('other', 'shared'), pull('ABlueAgent', 'mine')];
+  const run = (cmd, { git = fakeGit(), pulls = sharedPulls, login = agent, tool = 'Bash', cwd, repos } = {}) => {
+    const input = { hook_event_name: 'PreToolUse', tool_name: tool, tool_input: { command: cmd } };
+    if (cwd) input.cwd = cwd;
+    return guard.decide(input, login, { git, openPulls: (r) => { repos?.push(r); return pulls; } });
+  };
+  const refused = (v, re) => v.exitCode === 2 && re.test(v.stderr || '');
+
+  // HIGH 1: redirection words are not push arguments.
+  const words = (cmd) => JSON.stringify(guard.splitCommands(cmd));
+  assert(words('git push origin topic > out.log 2>&1') === JSON.stringify([['git', 'push', 'origin', 'topic']]),
+    'Bash: `> out.log 2>&1` is not part of the push arguments');
+  assert(words('git push origin topic &>/dev/null') === JSON.stringify([['git', 'push', 'origin', 'topic']]), 'Bash: `&>/dev/null` is a redirection');
+  assert(words('git push origin topic >>log 2>err <in 3<>rw >|clob') === JSON.stringify([['git', 'push', 'origin', 'topic']]),
+    'Bash: `>>`, `2>`, `<`, `<>` and `>|` targets are dropped');
+  assert(words('git push origin top2>x') === JSON.stringify([['git', 'push', 'origin', 'top2']]), 'Bash: digits inside a word are not a file descriptor');
+  assert(words('git push origin topic 2 >x') === JSON.stringify([['git', 'push', 'origin', 'topic', '2']]), 'Bash: a separate `2` is an argument');
+  assert(guard.findGuardedCommand('>out.log git push origin x') === 'git push', 'Bash: a redirection before the program no longer hides it');
+  assert(guard.findGuardedCommand('diff <(git push) x') === 'git push', 'Bash: a process substitution is still split out');
+  assert(guard.findGuardedCommand('cat <<< "$(git push)"') === 'git push', "Bash: a here-string's substitution is still checked");
+  assert(JSON.stringify(guard.splitPowerShell('git push origin topic 2>&1 | Out-String')[0]) === JSON.stringify(['git', 'push', 'origin', 'topic']),
+    'PowerShell: `2>&1` is a stream merge, not an argument');
+  assert(JSON.stringify(guard.splitPowerShell('git push origin topic *> $null')[0]) === JSON.stringify(['git', 'push', 'origin', 'topic']),
+    'PowerShell: `*> $null` is a redirection');
+  assert(JSON.stringify(guard.splitPowerShell('git push origin topic >> out.txt')[0]) === JSON.stringify(['git', 'push', 'origin', 'topic']),
+    'PowerShell: `>> out.txt` is a redirection');
+  for (const cmd of ['git push origin topic 2>shared', 'git push origin topic >main', 'git push origin topic > shared 2>&1',
+    'git push origin topic 2>&1 | tail -5', 'git push origin topic <shared', 'git push origin topic &>> main']) {
+    const v = run(cmd);
+    assert(v.exitCode === 0, `${cmd}: the redirection target is not a destination (exit ${v.exitCode}: ${v.stderr || ''})`);
+  }
+  for (const cmd of ['git push origin topic 2>&1 | Out-String', 'git push origin topic *> $null', 'git push origin topic > main']) {
+    assert(run(cmd, { tool: 'PowerShell' }).exitCode === 0, `PowerShell ${cmd}: the redirection target is not a destination`);
+  }
+  {
+    const calls = [];
+    const v = run('git push 2>/dev/null origin shared', { git: fakeGit({ calls }) });
+    assert(refused(v, /another open pull request/) && calls.some((c) => c.args.includes('get-url') && c.args.at(-1) === 'origin'),
+      'git push 2>/dev/null origin shared: origin is the remote and shared is still checked');
+  }
+
+  // HIGH 2: argument and environment combinations that change the repository.
+  for (const cmd of ['git push --repo=/tmp/local https://github.com/o/r.git shared', 'git push --repo=origin git@github.com:o/r.git shared',
+    'git push --repo origin origin shared']) {
+    assert(refused(run(cmd), /two possible repositories/), `${cmd}: refused, --repo with a positional repository`);
+  }
+  for (const cmd of ['GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.pushurl GIT_CONFIG_VALUE_0=https://github.com/o/r.git git push origin shared2',
+    'GIT_DIR=/tmp/other/.git git push origin topic', 'env HOME=/tmp/h git push origin topic',
+    'export GIT_CONFIG_GLOBAL=/tmp/c; git push origin topic', 'git --config-env=remote.origin.pushurl=URL push origin topic']) {
+    assert(refused(run(cmd), /environment variables/), `${cmd}: refused, it changes what git reads`);
+  }
+  for (const cmd of ["$env:GIT_DIR = 'C:\\x\\.git'; git push origin topic", "[Environment]::SetEnvironmentVariable('GIT_CONFIG_GLOBAL', 'x'); git push origin topic"]) {
+    assert(refused(run(cmd, { tool: 'PowerShell' }), /environment variables/), `PowerShell ${cmd}: refused`);
+  }
+  assert(run('GIT_TRACE=1 GIT_TERMINAL_PROMPT=0 git push origin topic').exitCode === 0, 'GIT_TRACE and GIT_TERMINAL_PROMPT on a push: allowed');
+  assert(run('git push -C x origin topic 2>&1; echo "$HOME"').exitCode === 2, 'an unknown push option still refuses');
+  assert(run('git push origin topic; echo "$HOME"').exitCode === 0, 'reading $HOME is not setting it');
+
+  // HIGH 3: destination spellings git expands.
+  for (const cmd of ['git push origin heads/main', 'git push origin HEAD:heads/main', 'git push origin refs/heads/main',
+    'git push origin HEAD:refs/heads/main', 'git push origin @:main', 'git push origin HEAD:main', 'git push origin topic:heads/main',
+    'git push origin main', 'git push origin topic main']) {
+    assert(refused(run(cmd), /pushes to main are blocked/), `${cmd}: refused as a push to main`);
+  }
+  assert(refused(run('git push origin @', { git: fakeGit({ branch: 'main' }) }), /pushes to main/), 'git push origin @ on main: refused (@ is HEAD)');
+  assert(refused(run('git push origin +main'), /force/), 'git push origin +main: refused as a force push');
+  assert(refused(run('git push origin :main'), /deletion/), 'git push origin :main: refused as a deletion');
+  for (const cmd of ['git push origin heads/shared', 'git push origin HEAD:heads/shared', 'git push origin refs/heads/shared', 'git push origin topic:shared']) {
+    assert(refused(run(cmd), /another open pull request/), `${cmd}: refused, another author's PR branch`);
+  }
+  assert(refused(run('git push origin @', { git: fakeGit({ branch: 'shared' }) }), /another open pull request/), "git push origin @ on another author's PR branch: refused");
+  for (const cmd of ['git push origin topic:HEAD', 'git push origin @{u}', 'git push origin FETCH_HEAD', 'git push origin topic:refs/heads/../main',
+    'git push origin topic:refs/heads//main', 'git push origin topic:main.lock', 'git push origin ^topic']) {
+    assert(refused(run(cmd), /could not be verified|blocked/), `${cmd}: refused, the destination can't be read`);
+  }
+  assert(run('git push origin tag v1', { pulls: [pull('other', 'tag'), pull('other', 'v1')] }).exitCode === 0, '`tag <name>` pushes a tag, not branches named tag or v1');
+  assert(run('git push origin heads/mine').exitCode === 0, "git push origin heads/mine: the agent's own PR branch is allowed");
+
+  // MEDIUM: configured push mappings, applied as git applies them.
+  const origin = [['remote.origin.url', 'https://github.com/o/r.git']];
+  assert(refused(run('git push origin topic', { git: fakeGit({ config: [...origin, ['remote.origin.push', 'refs/heads/topic:refs/heads/shared']] }) }), /another open pull request/),
+    'remote.origin.push maps an explicit source-only refspec (topic -> shared)');
+  assert(refused(run('git push origin topic', { git: fakeGit({ config: [...origin, ['remote.origin.push', 'refs/heads/*:refs/heads/team/*']] }), pulls: [pull('other', 'team/topic')] }), /another open pull request/),
+    'remote.origin.push patterns map an explicit refspec (topic -> team/topic)');
+  assert(refused(run('git push origin topic', { git: fakeGit({ config: [...origin, ['remote.origin.push', '+refs/heads/*:refs/heads/*']] }) }), /force/),
+    'a forcing remote.origin.push mapping is refused');
+  assert(refused(run('git push origin topic', { git: fakeGit({ config: [...origin, ['remote.origin.push', 'refs/heads/topic:refs/heads/main']] }) }), /pushes to main/),
+    'a mapping to main is refused');
+  assert(refused(run('git push', { git: fakeGit({ config: [...origin, ['remote.origin.push', 'refs/heads/*:refs/heads/*']] }) }), /could not be verified/),
+    'a configured pattern with no refspec on the command line (a bulk push) is refused');
+  const upstream = [['push.default', 'upstream'], ['branch.topic.remote', 'origin'], ['branch.topic.merge', 'refs/heads/shared']];
+  assert(refused(run('git push origin topic', { git: fakeGit({ config: upstream }) }), /another open pull request/),
+    'push.default=upstream maps an explicit branch to its upstream (topic -> shared)');
+  assert(refused(run('git push', { git: fakeGit({ config: upstream }) }), /another open pull request/), 'push.default=upstream with no refspec: the upstream is checked');
+  assert(run('git push origin topic', { git: fakeGit({ config: [['push.default', 'current'], ['branch.topic.merge', 'refs/heads/shared']] }) }).exitCode === 0,
+    'push.default=current: branch.<name>.merge does not map an explicit refspec');
+
+  // HIGH 4: a push found only by the word scan or the text scan is refused visibly, under every login.
+  for (const cmd of ["$p = 'push'; git $p origin HEAD:main", "git push origin topic; $p = 'push'; git $p origin HEAD:main",
+    "$c = 'git push origin HEAD:main'; iex $c", "& 'C:\\Program Files\\Git\\mingw64\\libexec\\git-core\\git-push.exe' origin main"]) {
+    assert(refused(run(cmd, { tool: 'PowerShell' }), /form the guard cannot read/), `PowerShell ${cmd}: refused visibly`);
+    assert(refused(run(cmd, { tool: 'PowerShell', login: () => ({ appToken: true }) }), /form the guard cannot read/), `PowerShell ${cmd}: refused under an App token too`);
+    const blue = run(cmd, { tool: 'PowerShell', login: () => ({ login: 'ABlueAI' }) });
+    assert(blue.exitCode === 2 && blue.stderr.includes(guard.BLOCK_MESSAGE), `PowerShell ${cmd}: ABlueAI still gets the login block`);
+  }
+  assert(run('git push origin topic', { tool: 'PowerShell' }).exitCode === 0, 'PowerShell: a plain push is checked and allowed');
+  assert(refused(run('echo "unclosed && git commit -m push'), /form the guard cannot read/), 'Bash: a push found only by the text scan is refused visibly');
+  assert(run("echo 'unclosed && git push origin topic").exitCode === 0, 'Bash: a push the text scan can read is checked and allowed');
+
+  // HIGH 5: a directory change before the push.
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'account-guard-cd-'));
+  const sub = path.join(base, 'sub');
+  fs.mkdirSync(path.join(sub, 'deeper'), { recursive: true });
+  const dirsOf = (cmd, opts = {}) => {
+    const calls = [];
+    const v = run(cmd, { git: fakeGit({ calls }), cwd: base, ...opts });
+    return { v, dirs: [...new Set(calls.map((c) => c.cwd))] };
+  };
+  for (const [cmd, want, tool] of [
+    ['git push origin topic', base], ['cd sub && git push origin topic', sub], [`cd '${sub}' && git push origin topic`, sub],
+    ['cd sub; cd deeper\ngit push origin topic', path.join(sub, 'deeper')], ["cd 'sub' && git push origin topic", sub],
+    ['Set-Location sub; git push origin topic', sub, 'PowerShell'], ['cd -Path sub; git push origin topic', sub, 'PowerShell'],
+    ["Set-Location -LiteralPath 'sub'\ngit push origin topic", sub, 'PowerShell'],
+    [`cd "${sub}${path.sep === '\\' ? '\\' : '/'}deeper" && git push origin topic`, path.join(sub, 'deeper')]]) {
+    const { v, dirs } = dirsOf(cmd, { tool: tool || 'Bash' });
+    assert(v.exitCode === 0 && dirs.length === 1 && dirs[0] === want, `${tool || 'Bash'} ${JSON.stringify(cmd)}: git runs in ${path.relative(base, want) || 'the session directory'} (${dirs})`);
+  }
+  for (const [cmd, tool] of [['git add -A && cd sub && git push origin topic'], ['(cd sub) && git push origin topic'], ['cd "$D" && git push origin topic'],
+    ['cd missing && git push origin topic'], ['cd sub/* && git push origin topic'], ['cd ~someone && git push origin topic'],
+    ['bash -c "cd sub && git push origin topic"'], ['env -C sub git push origin topic'], ['pushd sub && git push origin topic && popd'],
+    ['cd sub && git push origin topic; cd ..'], ['for d in a b; do cd $d; git push origin topic; done'],
+    ['Push-Location sub; git push origin topic; Pop-Location', 'PowerShell'], ['Set-Location $dir; git push origin topic', 'PowerShell'],
+    ["if ($x) { Set-Location sub }; git push origin topic", 'PowerShell']]) {
+    const { v } = dirsOf(cmd, { tool: tool || 'Bash' });
+    assert(refused(v, /directory change the guard could not follow/), `${tool || 'Bash'} ${JSON.stringify(cmd)}: refused visibly`);
+  }
+  assert(dirsOf('cd sub && npm test').v.exitCode === 0, 'a directory change with no push is not checked');
+  fs.rmSync(base, { recursive: true, force: true });
+
+  // Remote URL classification (it decides whether the PR check runs at all).
+  for (const [url, want] of [['https://github.com/o/r.git', 'o/r'], ['https://github.com/o/r', 'o/r'], ['git@github.com:o/r.git', 'o/r'],
+    ['ssh://git@github.com/o/r.git', 'o/r'], ['ssh://git@ssh.github.com:443/o/r.git', 'o/r'], ['HTTPS://GitHub.com/O/R.git', 'O/R']]) {
+    const repos = [];
+    const v = run(`git push ${url} topic`, { repos });
+    assert(v.exitCode === 0 && repos.length === 1 && repos[0].toLowerCase() === want.toLowerCase(), `explicit URL ${url}: the PR check runs for ${want} (${repos})`);
+  }
+  for (const url of ['https://gitlab.com/o/r.git', 'git@example.com:o/r.git', 'github.com:o/r', 'https://github.com.evil.example/o/r.git']) {
+    assert(refused(run(`git push ${url} topic`), /GitHub repository or local path/), `${url}: refused, not a GitHub repository or local path`);
+  }
+  for (const url of ['../other', '/tmp/other', 'file:///tmp/other', "'C:\\work\\other'", '.']) {
+    const repos = [];
+    const v = run(`git push ${url} shared`, { repos });
+    assert(v.exitCode === 0 && repos.length === 0, `local path ${url}: no PR check`);
+  }
+  {
+    const repos = [];
+    const config = [['url.https://github.com/.insteadof', 'gh:'], ['push.default', 'current']];
+    assert(refused(run('git push gh:o/r shared', { git: fakeGit({ config }), repos }), /another open pull request/) && repos[0] === 'o/r',
+      'url.<base>.insteadOf rewrites an explicit URL before it is classified');
+    const local = [['url./tmp/local/.pushinsteadof', 'https://github.com/'], ['url.https://example.com/.insteadof', 'https://github.com/']];
+    const localRepos = [];
+    assert(run('git push https://github.com/o/r.git shared', { git: fakeGit({ config: local }), repos: localRepos }).exitCode === 0 && localRepos.length === 0,
+      'url.<base>.pushInsteadOf wins over insteadOf for a push');
+    const multi = [];
+    const both = fakeGit({ urls: { origin: ['https://github.com/o/r.git', 'git@github.com:o/r2.git'] } });
+    assert(run('git push origin topic', { git: both, repos: multi }).exitCode === 0 && JSON.stringify(multi) === JSON.stringify(['o/r', 'o/r2']),
+      'every push URL of a remote gets the PR check');
+    assert(refused(run('git push origin shared', { git: fakeGit({ urls: { origin: ['/tmp/mirror', 'https://github.com/o/r.git'] } }) }), /another open pull request/),
+      'a local push URL next to a GitHub one does not skip the GitHub check');
+    assert(refused(run('git push origin topic', { git: fakeGit({ urls: { origin: ['https://github.com/o/r.git', 'https://gitlab.com/o/r.git'] } }) }), /GitHub repository/),
+      'a non-GitHub push URL next to a GitHub one is refused');
+  }
+
+  // Logins: unknown, case, and App ([bot]) authors.
+  const topicPulls = [pull('ABlueAgent', 'topic')];
+  for (const [label, login] of [['gh error', () => ({ error: 'gh could not read the login (exit 1)' })], ['App token', () => ({ appToken: true })]]) {
+    const v = run('git push origin topic', { login, pulls: topicPulls });
+    assert(refused(v, /could not check who owns the PR branch/) && !/another open pull request/.test(v.stderr), `${label}: its own reason, not "another author's PR"`);
+    assert(run('git push origin free', { login, pulls: topicPulls }).exitCode === 0, `${label}: a branch no PR uses is still allowed`);
+  }
+  assert(run('git push origin topic', { login: () => ({ login: 'ablueagent' }), pulls: topicPulls }).exitCode === 0, 'the PR author matches the login in any case');
+  assert(run('git push origin topic', { login: () => ({ login: 'mako-agents[bot]' }), pulls: [pull('mako-agents[bot]', 'topic')] }).exitCode === 0,
+    'a [bot] author owns its own PR branch');
+  assert(refused(run('git push origin topic', { login: () => ({ login: 'mako-agents[bot]' }), pulls: [pull('other-app[bot]', 'topic')] }), /another open pull request/),
+    "another [bot]'s PR branch is refused");
+
+  // The other refusal branches.
+  for (const [cfg, re, label] of [[['push.recursesubmodules', 'on-demand'], /submodule/, 'push.recurseSubmodules'],
+    [['push.followtags', 'true'], /bulk tag/, 'push.followTags'], [['remote.origin.mirror', 'true'], /mirror/, 'remote.origin.mirror']]) {
+    assert(refused(run('git push origin topic', { git: fakeGit({ config: [['push.default', 'current'], cfg] }) }), re), `${label} in the config: refused`);
+  }
+  for (const flag of ['--tags', '--follow-tags', '--prune', '--all', '--mirror']) {
+    assert(refused(run(`git push ${flag} origin topic`), /bulk push options are blocked/), `${flag}: refused`);
+  }
+  assert(refused(run('git push --recurse-submodules=on-demand origin topic'), /submodule/), '--recurse-submodules=on-demand: refused');
+  assert(run('git push --recurse-submodules check origin topic').exitCode === 0, '--recurse-submodules check: its value is consumed, allowed');
+  assert(run('git push -o ci.skip origin topic').exitCode === 0, '-o takes the next word as its value, not the remote');
+  assert(run('git push -uo ci.skip origin topic').exitCode === 0, '-o last in a short group takes the next word');
+  assert(refused(run('git push origin topic -o'), /missing its value/), '-o with no value: refused');
+  assert(refused(run('git push', { git: fakeGit({ branch: null }) }), /current branch could not be verified/), 'detached HEAD: refused with its own reason');
+  assert(refused(run('git push origin HEAD', { git: fakeGit({ branch: null }) }), /current branch could not be verified/), 'detached HEAD with a HEAD refspec: refused');
+  {
+    const thrown = run('git push origin topic', { git: () => { throw new PushRefusal('the fixture refused'); } });
+    assert(refused(thrown, /git push refused because the fixture refused\./), 'a PushRefusal raised by a check keeps its own text');
+  }
+
+  // The catch-all keeps a sanitized cause.
+  const broken = guard.decide(bash('gh pr ready 5'), () => { const e = new TypeError('secret /home/x/token ghp_abc'); e.code = 'ERR_FIXTURE'; throw e; });
+  assert(refused(broken, /internal error while checking the tool command \(TypeError, ERR_FIXTURE\)\./) && !/secret|home|ghp_/.test(broken.stderr),
+    "an internal error names the error's class and code, never its message");
+
+  // A large legitimate commit followed by a push still behaves as a normal push.
+  const big = 'x'.repeat(200 * 1024);
+  const heredoc = run(`git commit -F- <<'EOF'\n${big}\nEOF\ngit push origin topic`);
+  assert(heredoc.exitCode === 0 && !heredoc.stderr, `Bash: a 200 KB heredoc commit then git push: allowed as a normal push (${heredoc.stderr || ''})`);
+  assert(refused(run(`git commit -F- <<'EOF'\n${big}\nEOF\ngit push origin shared`), /another open pull request/), 'Bash: ... and its destination is still checked');
+  const hereString = run(`git commit -m @'\n${big}\n'@\ngit push origin topic`, { tool: 'PowerShell' });
+  assert(hereString.exitCode === 0 && !hereString.stderr, `PowerShell: a 200 KB here-string commit then git push: allowed as a normal push (${hereString.stderr || ''})`);
+  assert(guard.findGuardedCommand(`git commit -m @'\n${big}\n'@\ngit push`, 0, 'ps') === 'git push', 'PowerShell: the 200 KB here-string scan finishes (not the scan limit)');
+}
+
 {
   const v = guard.decide(pwsh('& gh.exe pr create --fill'), () => ({ login: 'ABlueAI' }));
   assert(v.exitCode === 2 && /ABlueAI/.test(v.stderr) && /gh pr create/.test(v.stderr), 'ABlueAI + PowerShell & gh.exe pr create: exit 2 with the block message');
@@ -801,17 +1042,51 @@ process.stdout.write('\nremaining account guard regressions\n');
   // The word scan: one login check; blocked under ABlueAI with the block message, allowed silently under
   // ABlueAgent, and the "couldn't check" notice when gh can't answer, as for any login-dependent command.
   let wordsBlue = 0, wordsAgent = 0, wordsAsked = 0;
-  for (const [cmd] of WORDS_PS) {
+  for (const [cmd, want] of WORDS_PS) {
     const blue = guard.decide(pwsh(cmd), () => { wordsAsked++; return { login: 'ABlueAI' }; });
     if (blue.exitCode === 2 && blue.checked === true && /Blocked by Mako's account guard/.test(blue.stderr) && blue.stderr.includes(guard.PS_WORDS_NOTE)) wordsBlue++;
     const agentV = guard.decide(pwsh(cmd), () => { wordsAsked++; return { login: 'ABlueAgent' }; });
-    if (agentV.exitCode === 0 && !agentV.stderr && !agentV.systemMessage) wordsAgent++;
+    // Review run 1 on #324 (deliberate change): a push found only by the word scan can't have its
+    // destination checked. Next to a form that runs text or a program (iex, &, Start-Process, ...) it is
+    // refused visibly; otherwise (an honest `git stash push`, or a message that mentions a push) it is
+    // allowed with a visible notice. The other word-scan hits still get only the login check.
+    const wordPushOk = (v) => (v.exitCode === 2 && /form the guard cannot read/.test(v.stderr || ''))
+      || (v.exitCode === 0 && /no push destination was checked/.test(v.systemMessage || ''));
+    if (want === W('git push')
+      ? wordPushOk(agentV)
+      : agentV.exitCode === 0 && !agentV.stderr && !agentV.systemMessage) wordsAgent++;
   }
   assert(wordsBlue === WORDS_PS.length, `every word-scan case exits 2 under ABlueAI with the block message (${wordsBlue} of ${WORDS_PS.length})`);
-  assert(wordsAgent === WORDS_PS.length, `every word-scan case exits 0, silent, under ABlueAgent (${wordsAgent} of ${WORDS_PS.length})`);
+  assert(wordsAgent === WORDS_PS.length && WORDS_PS.some(([, want]) => want === W('git push')) && WORDS_PS.some(([, want]) => want !== W('git push')),
+    `under ABlueAgent, every word-scan push is refused or noticed visibly and every other word-scan case exits 0, silent (${wordsAgent} of ${WORDS_PS.length})`);
+  {
+    const agentLogin = () => ({ login: 'ABlueAgent' });
+    for (const cmd of ['git stash push -m wip', 'git log --grep=push', 'git commit -m "Fix git push refusal"']) {
+      const v = guard.decide(pwsh(cmd), agentLogin);
+      assert(v.exitCode === 0 && /no push destination was checked/.test(v.systemMessage || '') && !v.stderr,
+        `ABlueAgent + PowerShell ${JSON.stringify(cmd)}: exit 0 with the visible word-scan notice`);
+    }
+    // A push run as text is refused: by the word-scan rule when the parser can't read it, or by the
+    // destination check when it can.
+    for (const cmd of ["$c = 'git push origin main'; iex $c", "Invoke-Expression 'git push origin main'",
+      "Start-Process git 'push origin main'", "powershell -c 'git push origin main'"]) {
+      const v = guard.decide(pwsh(cmd), agentLogin);
+      assert(v.exitCode === 2 && /Blocked by Mako's account guard/.test(v.stderr || '') && !v.systemMessage,
+        `ABlueAgent + PowerShell ${JSON.stringify(cmd)}: a push to main run as text is refused visibly`);
+    }
+    const unread = guard.decide(pwsh("$c = 'git push origin x'; iex $c"), agentLogin);
+    assert(unread.exitCode === 2 && /form the guard cannot read/.test(unread.stderr || ''),
+      'ABlueAgent + PowerShell iex of a variable holding a push: refused as unreadable');
+  }
   assert(wordsAsked === 2 * WORDS_PS.length, `one gh login check per word-scan decision (${wordsAsked} for ${2 * WORDS_PS.length})`);
-  const wordsOff = guard.decide(pwsh("Write-Host 'git push'"), () => ({ error: 'gh is not installed or not on PATH' }));
+  const wordsOff = guard.decide(pwsh("Write-Host 'gh pr create'"), () => ({ error: 'gh is not installed or not on PATH' }));
   assert(wordsOff.exitCode === 0 && /couldn't check/.test(wordsOff.systemMessage), 'word scan, gh not installed: exit 0 with the notice (fails open, as before)');
+  const pushWordsOff = guard.decide(pwsh("Write-Host 'git push'"), () => ({ error: 'gh is not installed or not on PATH' }));
+  assert(pushWordsOff.exitCode === 0 && /no push destination was checked/.test(pushWordsOff.systemMessage || ''),
+    'word-scan push, gh not installed: exit 0 with the visible word-scan notice (review run 1 on #324)');
+  const pushWordsOffRun = guard.decide(pwsh("$c = 'git push origin x'; iex $c"), () => ({ error: 'gh is not installed or not on PATH' }));
+  assert(pushWordsOffRun.exitCode === 2 && /form the guard cannot read/.test(pushWordsOffRun.stderr || ''),
+    'word-scan push run as text, gh not installed: refused visibly');
   // A review or merge command the splitter finds still wins over the word scan's login check.
   assert(ps("Write-Host 'git push'; gh pr merge 5") === 'gh pr merge', 'a parsed merge wins over a word-scan push');
   assert(ps("git push; Write-Host 'gh pr merge'") === 'git push', 'a parsed push comes before a word-scan merge (both get the login check)');
@@ -843,27 +1118,31 @@ process.stdout.write('\nremaining account guard regressions\n');
     ['200 block comments', 'Write-Output a\n' + '<#x#>'.repeat(200) + '\nGet-Thing'],
     ['2,000 lines of #', ('Write-Output a\n' + '#'.repeat(40) + '\n').repeat(2000)]]) {
     const t0 = Date.now();
-    guard.findGuardedCommand(cmd, 0, 'ps');
+    const r = guard.findGuardedCommand(cmd, 0, 'ps');
     const ms = Date.now() - t0;
-    assert(ms < 2000, `PowerShell ${label}: classified in ${ms} ms (under 2,000)`);
+    assert(ms < 2000 && r !== 'command scan limit', `PowerShell ${label}: classified in ${ms} ms (under 2,000), a finished scan (${r})`);
   }
   // Review run 8: the word scan and the after-a-keyword check stay linear on long and odd inputs.
-  for (const [label, cmd] of [['50,000 gh pr merge', 'gh pr merge 5 '.repeat(50000)],
+  for (const [label, cmd, expect] of [['50,000 gh pr merge', 'gh pr merge 5 '.repeat(50000)],
     ['100,000 backticks', '`'.repeat(100000) + 'git push'],
     ['50,000 unfinished `u{', '`u{'.repeat(50000) + '67'],
     ['50,000 `u{67}', '`u{67}'.repeat(50000)],
     ['100,000 quotes', "'".repeat(100000)],
     ['20,000 returns', 'return '.repeat(20000) + 'git push'],
     ['20,000 gits on one line', 'Write-Host ' + 'git '.repeat(20000)],
-    ['20,000 iex', 'iex '.repeat(20000) + 'git push'],
-    ['30,000 short statements', 'return gh pr view 5; '.repeat(30000)],
+    ['20,000 iex', 'iex '.repeat(20000) + 'git push', 'limit'],
+    ['30,000 short statements', 'return gh pr view 5; '.repeat(30000), 'limit'],
     ['100,000 dots', '.'.repeat(100000) + 'a'],
     ['100,000 a.', 'a.'.repeat(100000)],
     ['100,000 dashes', '-'.repeat(100000) + 'x']]) {
+    // `limit`: the input is built to exhaust the nesting or work budget, so the scan stops there (a
+    // visible refusal in decide); every other input finishes its scan.
     const t0 = Date.now();
-    const threw = (() => { try { guard.findGuardedCommand(cmd, 0, 'ps'); return false; } catch { return true; } })();
+    let r;
+    const threw = (() => { try { r = guard.findGuardedCommand(cmd, 0, 'ps'); return false; } catch { return true; } })();
     const ms = Date.now() - t0;
-    assert(!threw && ms < 2000, `PowerShell ${label}: classified in ${ms} ms (under 2,000), no throw`);
+    const finished = expect === 'limit' ? r === 'command scan limit' : r !== 'command scan limit';
+    assert(!threw && ms < 2000 && finished, `PowerShell ${label}: classified in ${ms} ms (under 2,000), no throw, ${expect === 'limit' ? 'stopped at the budget' : 'a finished scan'} (${r})`);
   }
   // A seeded fuzz: random PowerShell-ish scripts never throw, finish quickly, and any script that holds
   // `git` and `push` as words (with random text between, after and around them) is always guarded.
@@ -871,7 +1150,7 @@ process.stdout.write('\nremaining account guard regressions\n');
   const rand = (n) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
   const PIECES = ['git', 'push', 'gh', 'pr', 'merge', 'return', 'throw', '&', '.', '|', ';', '{', '}', '(', ')', '@(', '$(', '$x', '=', ',',
     "'", '"', '`', '`n', '`u{67}', '#', '<#', '#>', '@\'\n', '\n\'@', '\n', '\r', '\r\n', ' ', '\t', 'iex', 'cmd /c', 'Start-Process', '--%', '^', '\\', '\u2028', '\u0085'];
-  let fuzzThrew = 0, fuzzSlow = 0, fuzzMissed = 0, fuzzWorst = 0;
+  let fuzzThrew = 0, fuzzSlow = 0, fuzzMissed = 0, fuzzWorst = 0, fuzzLimited = 0;
   for (let n = 0; n < 3000; n++) {
     let text = '';
     for (let k = rand(40); k > 0; k--) text += PIECES[rand(PIECES.length)];
@@ -884,11 +1163,13 @@ process.stdout.write('\nremaining account guard regressions\n');
       const ms = Date.now() - t0;
       fuzzWorst = Math.max(fuzzWorst, ms);
       if (ms > 500) fuzzSlow++;
+      if (r === 'command scan limit') fuzzLimited++;
       if (t === guardedText && !r) fuzzMissed++;
     }
   }
   assert(fuzzThrew === 0 && fuzzSlow === 0, `fuzz: 6,000 PowerShell inputs, no throw, none over 500 ms (slowest ${fuzzWorst} ms)`);
   assert(fuzzMissed === 0, `fuzz: every input holding the words git and push is guarded (${fuzzMissed} missed)`);
+  assert(fuzzLimited === 0, `fuzz: every input finishes its scan, none stops at the work budget (${fuzzLimited} stopped)`);
   const bashMissing = guard.decide({ tool_name: 'Bash', tool_input: {} }, () => ({ login: 'ABlueAI' }));
   assert(bashMissing.exitCode === 0 && !bashMissing.systemMessage, 'Bash with no command: unchanged (exit 0, silent)');
   // Only the two tools' exact names are checked (the names hooks see: docs, tools reference).
@@ -918,7 +1199,8 @@ const fs = require('fs');
 fs.appendFileSync(process.env.FAKE_GH_LOG, process.argv.slice(2).join(' ') + '\\n');
 const mode = process.env.FAKE_GH_MODE;
 if (process.argv.slice(2).some((arg) => arg.startsWith('repos/o/r/pulls?'))) {
-  if (mode === 'pulls-offline') process.exit(1);
+  if (mode === 'pulls-offline') { process.stderr.write('error connecting to api.github.com\\n'); process.exit(1); }
+  if (mode === 'pulls-object') { process.stdout.write('{}\\n'); process.exit(0); }
   process.stdout.write(JSON.stringify([{ user: { login: 'AnotherAgent' }, head: { ref: 'shared', repo: { full_name: 'o/r' } }, base: { ref: 'main', repo: { full_name: 'o/r' } } }]) + '\\n');
   process.exit(0);
 }
@@ -1037,6 +1319,34 @@ const ghCalls = () => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8')
   const missing = runHook('git push origin topic', { pathDir: emptyDir });
   assert(missing.status === 2 && /could not verify|not installed/.test(missing.stderr),
     'missing push verification tools visibly refuse the push');
+  // Review run 1 on #324: each failure names its cause; a refusal raised inside keeps its own text.
+  assert(/\(gh api pulls: exit 1: error connecting to api\.github\.com\)/.test(unavailable.stderr),
+    `the PR check failure names the operation, exit status and stderr's first line (${unavailable.stderr.trim()})`);
+  const objectPage = runHook('git push origin topic', { mode: 'pulls-object' });
+  assert(objectPage.status === 2 && /git push refused because GitHub returned an unreadable pull request list\./.test(objectPage.stderr),
+    `a refusal raised inside the PR lookup is not reworded (${objectPage.stderr.trim()})`);
+  // A push after a directory change runs git in that directory: another checkout on another
+  // author's PR branch is refused, the session's own checkout is allowed.
+  const other = path.join(tmp, 'other-checkout');
+  fs.mkdirSync(other);
+  execFileSync('git', ['-C', other, 'init', '--initial-branch=shared'], { stdio: 'pipe' });
+  execFileSync('git', ['-C', other, 'remote', 'add', 'origin', 'https://github.com/o/r.git'], { stdio: 'pipe' });
+  const elsewhere = runHook(`cd '${other}' && git push`);
+  assert(elsewhere.status === 2 && /in use by another open pull request/.test(elsewhere.stderr),
+    `cd <other checkout> && git push: checked in that checkout and refused (${elsewhere.stderr.trim()})`);
+  const here = runHook('git push');
+  assert(here.status === 0, `git push in the session's own checkout: allowed (${here.stderr.trim()})`);
+  const psElsewhere = runHook(`Set-Location '${other}'; git push`, { toolName: 'PowerShell' });
+  assert(psElsewhere.status === 2 && /in use by another open pull request/.test(psElsewhere.stderr), 'PowerShell Set-Location <other checkout>; git push: refused');
+  const unfollowed = runHook(`git status && cd '${other}' && git push`);
+  assert(unfollowed.status === 2 && /directory change the guard could not follow/.test(unfollowed.stderr), 'a directory change the hook cannot follow: refused visibly');
+  const noRemote = runHook(`cd '${emptyDir}' && git push origin topic`);
+  assert(noRemote.status === 2 && /Git could not verify the push destination \(git (?:remote|config): exit \d+/.test(noRemote.stderr),
+    `a failed git check names the operation and exit status (${noRemote.stderr.trim()})`);
+  execFileSync('git', ['-C', other, 'commit', '--allow-empty', '-m', 'x', '-q'], { stdio: 'pipe', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@invalid', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@invalid' } });
+  execFileSync('git', ['-C', other, 'checkout', '-q', '--detach'], { stdio: 'pipe' });
+  const detached = runHook(`cd '${other}' && git push`);
+  assert(detached.status === 2 && /the current branch could not be verified\./.test(detached.stderr), `detached HEAD: its own refusal text end to end (${detached.stderr.trim()})`);
 }
 {
   // Review and merge commands: blocked under every login and even with no gh at all.
@@ -1075,7 +1385,12 @@ const ghCalls = () => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8')
   const words = runHook("git commit -m @'\ngit push later\n'@", { mode: 'ABlueAI', toolName: 'PowerShell' });
   assert(words.status === 2 && words.stderr.includes(guard.PS_WORDS_NOTE), `ABlueAI + PowerShell commit with "git push" in its here-string: exit 2 (got ${words.status})`);
   const wordsAgentRun = runHook("git commit -m @'\ngit push later\n'@", { mode: 'ABlueAgent', toolName: 'PowerShell' });
-  assert(wordsAgentRun.status === 0 && wordsAgentRun.stdout.trim() === '' && wordsAgentRun.stderr.trim() === '', 'ABlueAgent + the same commit: exit 0, nothing printed');
+  // Review run 1 on #324: with no readable push and nothing run as text, the commit goes ahead with a
+  // visible notice that no push destination was checked.
+  assert(wordsAgentRun.status === 0 && /no push destination was checked/.test(wordsAgentRun.stdout + wordsAgentRun.stderr),
+    `ABlueAgent + the same commit: exit 0 with the visible word-scan notice (got ${wordsAgentRun.status})`);
+  const commitAndPush = runHook("git commit -m @'\ngit push later\n'@\ngit push origin topic", { mode: 'ABlueAgent', toolName: 'PowerShell' });
+  assert(commitAndPush.status === 0 && commitAndPush.stderr.trim() === '', `ABlueAgent + that commit followed by a plain push: exit 0, the push is checked (got ${commitAndPush.status}: ${commitAndPush.stderr.trim()})`);
   const returned = runHook('& { return git push origin HEAD }', { mode: 'ABlueAI', toolName: 'PowerShell' });
   assert(returned.status === 2 && /git push/.test(returned.stderr), `ABlueAI + PowerShell & { return git push origin HEAD }: exit 2 end to end (got ${returned.status})`);
 }

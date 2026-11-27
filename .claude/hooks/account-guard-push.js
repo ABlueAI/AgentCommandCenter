@@ -1,6 +1,8 @@
 'use strict';
 
 // Resolve push destinations using read-only Git and GitHub calls. The hook never runs a push.
+// Where the hook can't be sure it reaches the same destination as git, it refuses the push (fails
+// closed): a destination is checked under every name git could give it, never only the likeliest one.
 class PushRefusal extends Error {}
 
 const REFUSED_OPTIONS = new Set(['--all', '--branches', '--mirror', '--tags', '--follow-tags', '--prune',
@@ -45,27 +47,78 @@ function pushArguments(args) {
       if (!SHORT_SWITCHES.has(flag)) refuse('the push option could not be verified');
     }
   }
-  if (remote && positionals.length && !positionals[0].includes(':')) {
-    // Git takes a positional repository ahead of --repo when both are present.
-    refuse('the push lists two possible repositories');
+  // With both --repo and a positional, git takes the first positional as the repository, even one
+  // spelled like a refspec (`git@github.com:o/r.git`). The hook doesn't guess which one git uses.
+  if (remote && positionals.length) refuse('the push lists two possible repositories');
+  remote = remote || positionals.shift();
+  // `tag <name>` is git's short form of refs/tags/<name>:refs/tags/<name>.
+  const refs = [];
+  for (let i = 0; i < positionals.length; i++) {
+    if (positionals[i] === 'tag' && i + 1 < positionals.length) {
+      refs.push(`refs/tags/${positionals[++i]}:refs/tags/${positionals[i]}`);
+    } else refs.push(positionals[i]);
   }
-  return { remote: remote || positionals.shift(), refs: positionals };
+  return { remote, refs };
 }
 
-function destination(ref) {
-  if (ref.startsWith('+')) refuse('force-push refspecs are blocked');
-  if (ref.startsWith(':')) refuse('deletion and matching refspecs are blocked');
-  const colon = ref.indexOf(':');
-  const target = colon === -1 ? ref : ref.slice(colon + 1);
-  if (!target || /[\s*?\[\]~^:\\$]/.test(target)) refuse('a push destination could not be verified');
-  if (target.startsWith('refs/') && !target.startsWith('refs/heads/')) {
-    if (target.startsWith('refs/tags/')) return null;
+// A ref name the hook can read: no glob, revision syntax or anything git's ref-name rules reject.
+function unreadableName(name) {
+  return !name || /[\s*?[\]~^:\\$]|\.\.|@\{|\/\/|\/\.|^[./-]|[/.]$|\.lock(?:\/|$)|^@$/.test(name);
+}
+
+// Every branch on the remote that a destination name could update. A full name is exact. A short
+// name is matched by git against the remote's refs (refs/<name>, refs/tags/<name>, refs/heads/<name>
+// and so on), so `heads/main` reaches refs/heads/main; failing a match, git guesses a prefix from the
+// source. Both readings are returned. A tag-only destination returns no branch.
+function destinationBranches(target) {
+  if (unreadableName(target)) refuse('a push destination could not be verified');
+  if (target.startsWith('refs/')) {
+    if (target.startsWith('refs/heads/')) return [target.slice('refs/heads/'.length)];
+    if (target.startsWith('refs/tags/')) return [];
     refuse('the push destination is outside branches and tags');
   }
-  const branch = target.replace(/^refs\/heads\//, '');
-  if (!branch || branch.startsWith('-')) refuse('a push destination could not be verified');
-  if (branch === 'main') refuse('pushes to main are blocked');
-  return branch;
+  // HEAD, FETCH_HEAD and the like name a pseudo-ref, not a branch: as a destination they can't be read.
+  if (/^[A-Z_]*HEAD$/.test(target)) refuse('a push destination could not be verified');
+  return target.startsWith('heads/') ? [target, target.slice('heads/'.length)] : [target];
+}
+
+// The local full ref names a source-only refspec (`git push origin topic`) could stand for; git then
+// pushes to the same full name on the remote. `HEAD` and its alias `@` are the current branch.
+function sourceRefs(ref, currentBranch) {
+  if (ref === 'HEAD' || ref === '@') return [`refs/heads/${currentBranch()}`];
+  if (unreadableName(ref) || /^[A-Z_]*HEAD$/.test(ref)) refuse('a push destination could not be verified');
+  if (ref.startsWith('refs/')) return [ref];
+  const full = [`refs/heads/${ref}`, `refs/tags/${ref}`];
+  if (ref.startsWith('heads/')) full.push(`refs/${ref}`);
+  if (ref.startsWith('tags/')) full.push(`refs/${ref}`);
+  return full;
+}
+
+// remote.<name>.push applied to a source-only refspec, as git's refspec_append_mapped does. Returns the
+// mapped destinations (empty if none matched). A mapping that forces the push is refused.
+function mappedDestinations(configured, srcFull, shortRef) {
+  const out = [];
+  for (const raw of configured) {
+    const force = raw.startsWith('+');
+    const spec = force ? raw.slice(1) : raw;
+    if (spec.startsWith('^')) refuse('a configured push mapping could not be verified');
+    const colon = spec.indexOf(':');
+    const src = colon === -1 ? spec : spec.slice(0, colon);
+    const dst = colon === -1 ? src : spec.slice(colon + 1);
+    let mapped = null;
+    const star = src.indexOf('*');
+    if (star !== -1) {
+      const head = src.slice(0, star);
+      const tail = src.slice(star + 1);
+      if (srcFull.length >= head.length + tail.length && srcFull.startsWith(head) && srcFull.endsWith(tail)) {
+        mapped = dst.replace('*', srcFull.slice(head.length, srcFull.length - tail.length));
+      }
+    } else if (src === srcFull || src === shortRef) mapped = dst;
+    if (mapped === null) continue;
+    if (force) refuse('force-push refspecs are blocked');
+    out.push(mapped);
+  }
+  return out;
 }
 
 function gitConfig(output) {
@@ -111,8 +164,15 @@ function gitHubRepository(url) {
 
 function resolvePush(push, git, charge) {
   const { remote: explicitRemote, refs } = pushArguments(push.args);
-  let branches = refs.map(destination);
-  const runGit = (args) => git([...push.globalArgs, ...args]);
+  // Refspecs that name their destination are refused before any git call when they push to main or
+  // force or delete (the same checks run again below, with the configuration).
+  for (const ref of refs) {
+    if (ref.startsWith('+')) refuse('force-push refspecs are blocked');
+    if (ref.startsWith(':')) refuse('deletion and matching refspecs are blocked');
+    const colon = ref.indexOf(':');
+    if (colon !== -1 && destinationBranches(ref.slice(colon + 1)).includes('main')) refuse('pushes to main are blocked');
+  }
+  const runGit = (args) => git([...push.globalArgs, ...args], push.cwd);
   const rawConfig = runGit(['config', '--null', '--list']);
   charge(rawConfig.length);
   const config = gitConfig(rawConfig);
@@ -136,24 +196,48 @@ function resolvePush(push, git, charge) {
   }
   if (enabled(get(`remote.${remote}.mirror`))) refuse('configured mirror pushes are blocked');
 
-  if (!refs.length) {
-    const configured = config.get(`remote.${remote}.push`);
-    if (configured?.length) branches = configured.map(destination);
-    else {
-      const behavior = (get('push.default') ?? 'simple').toLowerCase();
-      if (behavior === 'nothing') return [];
-      if (behavior === 'matching') refuse('push.default=matching pushes multiple branches');
-      const name = currentBranch();
-      const upstreamRemote = get(`branch.${name}.remote`);
-      const upstream = config.get(`branch.${name}.merge`) || [];
-      if (behavior === 'upstream' || behavior === 'tracking') {
-        if (upstreamRemote !== remote || upstream.length !== 1) refuse('the upstream push destination could not be verified');
-        branches = upstream.map(destination);
-      } else if (behavior === 'current' || behavior === 'simple') branches = [destination(`refs/heads/${name}`)];
-      else refuse('the configured push.default could not be verified');
+  const behavior = (get('push.default') ?? 'simple').toLowerCase();
+  const configured = config.get(`remote.${remote}.push`) || [];
+  // The branches one refspec can update. `mapped` applies remote.<name>.push and push.default=upstream
+  // to a source-only refspec, as git does for one given on the command line.
+  const refspecBranches = (ref, mapped) => {
+    if (ref.startsWith('+')) refuse('force-push refspecs are blocked');
+    if (ref.startsWith(':')) refuse('deletion and matching refspecs are blocked');
+    if (ref.startsWith('^')) refuse('a push destination could not be verified');
+    const colon = ref.indexOf(':');
+    if (colon !== -1) return destinationBranches(ref.slice(colon + 1));
+    const names = [];
+    for (const full of sourceRefs(ref, currentBranch)) {
+      names.push(...destinationBranches(full));
+      if (!mapped) continue;
+      for (const dst of mappedDestinations(configured, full, ref)) names.push(...destinationBranches(dst));
+      const local = full.startsWith('refs/heads/') ? full.slice('refs/heads/'.length) : null;
+      if (local && (behavior === 'upstream' || behavior === 'tracking')) {
+        const merge = config.get(`branch.${local}.merge`) || [];
+        if (merge.length > 1) refuse('the upstream push destination could not be verified');
+        if (merge.length === 1) names.push(...destinationBranches(merge[0]));
+      }
     }
+    return names;
+  };
+
+  let branches = [];
+  if (refs.length) branches = refs.flatMap((ref) => refspecBranches(ref, true));
+  else if (configured.length) branches = configured.flatMap((ref) => refspecBranches(ref, false));
+  else {
+    if (behavior === 'nothing') return [];
+    if (behavior === 'matching') refuse('push.default=matching pushes multiple branches');
+    const name = currentBranch();
+    const upstreamRemote = get(`branch.${name}.remote`);
+    const upstream = config.get(`branch.${name}.merge`) || [];
+    if (behavior === 'upstream' || behavior === 'tracking') {
+      if (upstreamRemote !== remote || upstream.length !== 1) refuse('the upstream push destination could not be verified');
+      branches = destinationBranches(upstream[0]);
+    } else if (behavior === 'current' || behavior === 'simple') branches = destinationBranches(`refs/heads/${name}`);
+    else refuse('the configured push.default could not be verified');
   }
-  const branchNames = new Set(branches.filter(Boolean).map((name) => name === 'HEAD' ? destination(`refs/heads/${currentBranch()}`) : name));
+  const branchNames = new Set(branches);
+  if (branchNames.has('main')) refuse('pushes to main are blocked');
   if (!branchNames.size) return [];
   const urls = /[/:\\]/.test(remote) || remote === '.'
     ? [remoteOverride(config, remote)]
@@ -185,6 +269,9 @@ function checkPushes(pushes, { login, git, openPulls, charge }) {
       if (author && login && author.toLowerCase() === login.toLowerCase()) continue;
       for (const ref of [pr?.head, pr?.base]) {
         if (ref?.repo?.full_name?.toLowerCase() === repo && branches.has(ref.ref)) {
+          // With no known login (an App installation token, or gh could not answer), the hook can't
+          // tell this session's own PR from another author's, so it says that instead.
+          if (!login) refuse('an open pull request uses a destination branch and the guard could not check who owns the PR branch (no GitHub login)');
           refuse('a destination branch is in use by another open pull request');
         }
       }
