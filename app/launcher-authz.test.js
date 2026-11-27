@@ -119,5 +119,21 @@ try {
   try { fs.rmSync(base, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
 }
 
+// The canonical candidate is handed to the directory listing, so main can skip git calls that
+// cannot matter (pty-start-authority-main.test.js proves main does).
+{
+  const ALIAS = IS_WIN ? 'C:\\alias' : '/alias';
+  const REAL = IS_WIN ? 'C:\\real' : '/real';
+  const seen = [];
+  const authz = createLauncherAuthorizer({
+    realpath: (p) => (p === ALIAS ? REAL : p), isDirectory: () => true,
+    listAuthorizedDirs: (scope, candidate) => { seen.push([scope, candidate]); return [REAL]; },
+  });
+  const scope = { includeReport: true };
+  const res = authz.authorize(ALIAS, scope);
+  assert(res.ok === true && seen.length === 1 && seen[0][0] === scope && seen[0][1] === REAL,
+    'the listing receives the scope and the canonical real path of the candidate');
+}
+
 process.stdout.write(`\nlauncher-authz: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

@@ -29,7 +29,22 @@ const REASON = Object.freeze({
   MANAGED_PRESENT: 'resolve-managed-scope-present',
   MANAGED_UNREADABLE: 'resolve-managed-scope-unreadable',
   CANDIDATE_UNREADABLE: 'resolve-candidate-unreadable',
-  CANDIDATE_UNSUPPORTED: 'resolve-candidate-unsupported-grammar',
+  // One bounded reason per role-file check, so a refusal names what to fix (never the value).
+  ROLE_TOO_LARGE: 'resolve-role-too-large',
+  ROLE_NOT_UTF8: 'resolve-role-not-utf8',
+  ROLE_FRONTMATTER_INVALID: 'resolve-role-frontmatter-invalid',
+  ROLE_NAME_MISMATCH: 'resolve-role-name-mismatch',
+  ROLE_TOOLS_MISSING: 'resolve-role-tools-missing',
+  ROLE_TOOLS_EMPTY: 'resolve-role-tools-empty',
+  ROLE_DESCRIPTION_MISSING: 'resolve-role-description-missing',
+  ROLE_BODY_EMPTY: 'resolve-role-body-empty',
+  ROLE_CONTROL_CHARACTER: 'resolve-role-control-character',
+  ROLE_UNKNOWN_FIELD: 'resolve-role-unknown-field',
+  ROLE_INVALID_MODEL: 'resolve-role-invalid-model',
+  ROLE_INVALID_EFFORT: 'resolve-role-invalid-effort',
+  ROLE_INVALID_PERMISSION_MODE: 'resolve-role-invalid-permission-mode',
+  ROLE_INVALID_COLOR: 'resolve-role-invalid-color',
+  ROLE_ARG_TOO_LONG: 'resolve-role-argument-too-long',
   LINKED_ENTRY: 'resolve-agent-tree-linked-entry',
   UNSUPPORTED_ENTRY: 'resolve-agent-tree-unsupported-entry',
   ROLE_NOT_DEPLOYED: 'resolve-role-not-deployed',
@@ -95,7 +110,7 @@ function createRoleDefinitionResolver(deps) {
       if (stat.isSymbolicLink()) return refuse(REASON.LINKED_ENTRY);
       if (!stat.isFile()) return refuse(REASON.UNSUPPORTED_ENTRY);
       if (stat.nlink > 1) return refuse(REASON.LINKED_ENTRY);
-      if (stat.size > MAX_ROLE_BYTES) return refuse(REASON.CANDIDATE_UNSUPPORTED);
+      if (stat.size > MAX_ROLE_BYTES) return refuse(REASON.ROLE_TOO_LARGE);
       const fd = fsx.openSync(file, 'r');
       try {
         const opened = fsx.fstatSync(fd);
@@ -114,23 +129,26 @@ function createRoleDefinitionResolver(deps) {
       return refuse(error.code === 'ENOENT' ? REASON.ROLE_NOT_DEPLOYED : REASON.CANDIDATE_UNREADABLE);
     }
 
-    if (length > MAX_ROLE_BYTES) return refuse(REASON.CANDIDATE_UNSUPPORTED);
+    if (length > MAX_ROLE_BYTES) return refuse(REASON.ROLE_TOO_LARGE);
     let text;
     try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, length)); }
-    catch { return refuse(REASON.CANDIDATE_UNSUPPORTED); }
+    catch { return refuse(REASON.ROLE_NOT_UTF8); }
+    if (/[\x00-\x08\x0b-\x1f\x7f]/.test(text.replace(/\r\n|\n/g, ''))) return refuse(REASON.ROLE_CONTROL_CHARACTER);
     const parsed = parseRoleFrontmatter(text);
-    if (!parsed.ok || parsed.name !== role || !parsed.toolsDeclared || parsed.tools.length === 0
-        || !parsed.scalars.description || !parsed.prompt.trim() || /[\x00-\x08\x0b-\x1f\x7f]/.test(text.replace(/\r\n|\n/g, ''))
-        || Object.keys(parsed.scalars).some((key) => !ROLE_FIELDS.has(key))) {
-      return refuse(REASON.CANDIDATE_UNSUPPORTED);
-    }
+    if (!parsed.ok) return refuse(REASON.ROLE_FRONTMATTER_INVALID);
+    if (parsed.name !== role) return refuse(REASON.ROLE_NAME_MISMATCH);
+    if (Object.keys(parsed.scalars).some((key) => !ROLE_FIELDS.has(key))) return refuse(REASON.ROLE_UNKNOWN_FIELD);
+    if (!parsed.toolsDeclared) return refuse(REASON.ROLE_TOOLS_MISSING);
+    if (parsed.tools.length === 0) return refuse(REASON.ROLE_TOOLS_EMPTY);
+    if (!parsed.scalars.description) return refuse(REASON.ROLE_DESCRIPTION_MISSING);
+    if (!parsed.prompt.trim()) return refuse(REASON.ROLE_BODY_EMPTY);
 
     const { description, model, effort, permissionMode, color } = parsed.scalars;
-    if ((model !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(model))
-        || (effort !== undefined && !['low', 'medium', 'high', 'xhigh', 'max'].includes(effort))
-        || (permissionMode !== undefined && permissionMode !== 'default')
-        || (color !== undefined && !['red', 'blue', 'green', 'yellow', 'purple', 'orange', 'pink', 'cyan'].includes(color))) {
-      return refuse(REASON.CANDIDATE_UNSUPPORTED);
+    if (model !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(model)) return refuse(REASON.ROLE_INVALID_MODEL);
+    if (effort !== undefined && !['low', 'medium', 'high', 'xhigh', 'max'].includes(effort)) return refuse(REASON.ROLE_INVALID_EFFORT);
+    if (permissionMode !== undefined && permissionMode !== 'default') return refuse(REASON.ROLE_INVALID_PERMISSION_MODE);
+    if (color !== undefined && !['red', 'blue', 'green', 'yellow', 'purple', 'orange', 'pink', 'cyan'].includes(color)) {
+      return refuse(REASON.ROLE_INVALID_COLOR);
     }
     const definition = { description, prompt: parsed.prompt, tools: parsed.tools, model, effort, permissionMode, color };
     if (parsed.disallowedTools.length) definition.disallowedTools = parsed.disallowedTools;
@@ -141,7 +159,7 @@ function createRoleDefinitionResolver(deps) {
     // Use Claude's session settings for the checked fence hook. CLI agents keep
     // the role definition and its tool list, and the settings flag owns the hook.
     const settingsArg = events.length ? encodeRoleArg({ disableAllHooks: false, hooks: parsed.events }) : null;
-    if (roleArg.length + (settingsArg?.length || 0) > MAX_ROLE_ARG_LENGTH) return refuse(REASON.CANDIDATE_UNSUPPORTED);
+    if (roleArg.length + (settingsArg?.length || 0) > MAX_ROLE_ARG_LENGTH) return refuse(REASON.ROLE_ARG_TOO_LONG);
     return { ok: true, text, path: file, scope: 'user', roleArg, settingsArg, singlePreToolUse };
   }
 

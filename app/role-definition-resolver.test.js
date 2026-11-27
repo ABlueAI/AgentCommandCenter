@@ -56,10 +56,39 @@ section('Exact deployed role files');
     });
     assert(resolve('web-scout', changed).reason === REASON.CANDIDATE_UNREADABLE,
       'the opened file must match the exact file inspected');
-    for (const content of ['No frontmatter.', roleDoc('operator'), Buffer.from([0xff]), roleDoc('web-scout').split('Body.')[0]]) {
+    // Each malformed definition refuses with its own bounded reason, so Blue can tell which line of
+    // which file to fix.
+    const doc = (lines, body = 'Body.') => ['---', ...lines, '---', '', body].join('\n');
+    const base = ['name: web-scout', 'description: A short description.', 'tools: Read, Write'];
+    const malformed = [
+      ['No frontmatter.', REASON.ROLE_FRONTMATTER_INVALID, 'no frontmatter'],
+      [roleDoc('operator'), REASON.ROLE_NAME_MISMATCH, 'a different name'],
+      [Buffer.from([0xff]), REASON.ROLE_NOT_UTF8, 'invalid UTF-8'],
+      [roleDoc('web-scout').split('Body.')[0], REASON.ROLE_BODY_EMPTY, 'an empty prompt body'],
+      [doc(['name: web-scout', 'description: A short description.']), REASON.ROLE_TOOLS_MISSING, 'no tools line'],
+      [doc(['name: web-scout', 'description: A short description.', 'tools:']), REASON.ROLE_TOOLS_EMPTY, 'an empty tools line'],
+      [doc(['name: web-scout', 'tools: Read, Write']), REASON.ROLE_DESCRIPTION_MISSING, 'no description'],
+      [doc([...base, 'extra: value']), REASON.ROLE_UNKNOWN_FIELD, 'an unknown frontmatter field'],
+      [doc([...base, 'permissionMode: bypassPermissions']), REASON.ROLE_INVALID_PERMISSION_MODE, 'a permission mode other than default'],
+      [doc([...base, 'permissionMode: acceptEdits']), REASON.ROLE_INVALID_PERMISSION_MODE, 'acceptEdits as the permission mode'],
+      [doc([...base, 'model: "bad model!"']), REASON.ROLE_INVALID_MODEL, 'an invalid model'],
+      [doc([...base, 'effort: ultra']), REASON.ROLE_INVALID_EFFORT, 'an invalid effort'],
+      [doc([...base, 'color: magenta']), REASON.ROLE_INVALID_COLOR, 'a colour outside the list'],
+      [doc(base, 'Body with a control \u0001 character.'), REASON.ROLE_CONTROL_CHARACTER, 'a control character'],
+      [doc(base, 'x'.repeat(16 * 1024 + 1)), REASON.ROLE_TOO_LARGE, 'a file over 16 KiB'],
+      // Spaces encode to six characters each in the launch argument: a file under the size cap whose
+      // encoded definition is over the argument cap.
+      [doc(base, 'a ' + ' '.repeat(15000) + 'b'), REASON.ROLE_ARG_TOO_LONG, 'an encoded definition over the argument cap'],
+    ];
+    for (const [content, reason, label] of malformed) {
       fs.writeFileSync(deployed, content);
-      assert(resolve().reason === REASON.CANDIDATE_UNSUPPORTED, 'malformed definition refuses');
+      const got = resolve();
+      assert(got.ok === false && got.reason === reason, `${label} refuses with ${reason} (got ${got.reason})`);
     }
+    fs.writeFileSync(deployed, doc([...base, 'permissionMode: default', 'model: sonnet', 'effort: high', 'color: blue']));
+    assert(resolve().ok === true, 'the allowed values of every checked field still resolve');
+    assert(!Object.prototype.hasOwnProperty.call(REASON, 'CANDIDATE_UNSUPPORTED'),
+      'no generic "unsupported grammar" reason is left to hide which check failed');
     fs.unlinkSync(deployed);
     fs.linkSync(path.join(projectAgents, 'web-scout.md'), deployed);
     assert(resolve().reason === REASON.LINKED_ENTRY, 'a hard link cannot supply the role');

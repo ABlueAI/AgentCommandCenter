@@ -24,7 +24,7 @@ const { normalizeLauncherDir } = require('./launchers');
 function createLauncherAuthorizer(deps) {
   const realpath = deps && deps.realpath;                       // (p) => canonical real path; THROWS if missing/broken
   const isDirectory = deps && deps.isDirectory;                 // (realPath) => bool
-  const listAuthorizedDirs = deps && deps.listAuthorizedDirs;   // () => string[] (repo roots + worktrees)
+  const listAuthorizedDirs = deps && deps.listAuthorizedDirs;   // (scope, candidateReal) => string[] (repo roots + worktrees)
   const isWin = deps && typeof deps.isWin === 'boolean' ? deps.isWin : (process.platform === 'win32');
   if (typeof realpath !== 'function') throw new Error('launcher-authz: realpath must be a function.');
   if (typeof isDirectory !== 'function') throw new Error('launcher-authz: isDirectory must be a function.');
@@ -58,7 +58,7 @@ function createLauncherAuthorizer(deps) {
     if (!dir) return { ok: false, reason: 'not-a-directory' };
 
     let authorized;
-    try { authorized = listAuthorizedDirs(scope); } catch { return { ok: false, reason: 'enumeration-failed' }; }
+    try { authorized = listAuthorizedDirs(scope, cand.real); } catch { return { ok: false, reason: 'enumeration-failed' }; }
     if (!Array.isArray(authorized)) return { ok: false, reason: 'enumeration-failed' };
 
     for (const a of authorized) {

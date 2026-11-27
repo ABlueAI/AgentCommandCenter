@@ -47,7 +47,7 @@ const CLAUDE_JSON = path.join(HOME, '.claude.json');
 const record = { handled: new Map(), on: new Map() };
 function electronStub() {
   const mainFrame = { url: pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).toString() };
-  const wc = { mainFrame, on() {}, send() {}, setWindowOpenHandler() {}, openDevTools() {}, session: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} } };
+  const wc = { mainFrame, on() {}, send(ch, line) { (record.sent ??= []).push(String(line)); }, setWindowOpenHandler() {}, openDevTools() {}, session: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} } };
   record.event = { sender: wc, senderFrame: wc.mainFrame };
   const w = new Proxy({ webContents: wc, isDestroyed: () => false }, { get(t, k) { return k in t ? t[k] : () => {}; } });
   class BrowserWindow { constructor() { return w; } static getAllWindows() { return []; } }
@@ -113,7 +113,7 @@ const readTrust = () => {
     const good = fs.readFileSync(CLAUDE_JSON, 'utf8');
     fs.writeFileSync(CLAUDE_JSON, '{ this is not json', 'utf8');
     const during = await ensure(record.event, { role: 'web-scout' });
-    assert(during?.error === 'sandbox-trust-write-failed', 'a corrupt trust file visibly refuses the sandbox');
+    assert(during?.error === 'sandbox-trust-file-unparseable', 'a corrupt trust file visibly refuses the sandbox with its own reason');
     fs.writeFileSync(CLAUDE_JSON, good, 'utf8');
 
     const after = await Promise.race([
@@ -131,8 +131,15 @@ const readTrust = () => {
     const good = fs.readFileSync(CLAUDE_JSON, 'utf8');
     fs.rmSync(CLAUDE_JSON, { force: true });
     fs.mkdirSync(CLAUDE_JSON, { recursive: true });
+    const outputs = path.join(PROJECTS, '.command-center', 'outputs');
+    const foldersBefore = fs.readdirSync(outputs).length;
+    const sentBefore = (record.sent || []).length;
     const during = await ensure(record.event, { role: 'web-scout' });
     assert(during?.error === 'sandbox-trust-write-failed', 'an unwritable trust file visibly refuses the sandbox');
+    assert((record.sent || []).slice(sentBefore).some((l) => /sandbox-trust-write-failed \(E[A-Z]+\)/.test(l)),
+      'and the Logs tab line carries the error code');
+    assert(fs.readdirSync(outputs).length === foldersBefore && !fs.readdirSync(HOME).some((n) => n.endsWith('.tmp')),
+      'the refused sandbox folder and its temporary trust file are removed');
     fs.rmSync(CLAUDE_JSON, { recursive: true, force: true });
     fs.writeFileSync(CLAUDE_JSON, good, 'utf8');
     const after = await Promise.race([
@@ -140,6 +147,36 @@ const readTrust = () => {
       new Promise((r) => setTimeout(() => r({ ok: false, timedOut: true }), 5000)),
     ]);
     assert(after && after.ok === true && !after.timedOut, 'and the lock is still free afterwards');
+  }
+
+  section('SANDBOX ROOT — a control folder that is not a plain directory refuses with its own reason');
+  {
+    const outputs = path.join(PROJECTS, '.command-center', 'outputs');
+    const saved = outputs + '-saved';
+    fs.renameSync(outputs, saved);
+    fs.writeFileSync(outputs, 'not a folder');
+    try {
+      const res = await ensure(record.event, { role: 'web-scout' });
+      assert(res?.ok === false && res.error === 'invalid-outputs-root', 'an outputs path that is a file refuses as invalid-outputs-root');
+    } finally {
+      fs.rmSync(outputs, { force: true });
+      fs.renameSync(saved, outputs);
+    }
+    const blockedRoot = path.join(FIX, 'blocked-root');
+    fs.writeFileSync(blockedRoot, 'a file where the projects folder should be');
+    const settingsFile = path.join(USER_DATA, 'settings.json');
+    const settingsBefore = fs.readFileSync(settingsFile, 'utf8');
+    fs.writeFileSync(settingsFile, JSON.stringify({ projectsRoot: blockedRoot, selectedRepo: '' }));
+    const sentBefore = (record.sent || []).length;
+    try {
+      const res = await ensure(record.event, { role: 'web-scout' });
+      assert(res?.ok === false && res.error === 'sandbox-create-failed'
+        && (record.sent || []).slice(sentBefore).some((l) => /sandbox-create-failed \(E[A-Z]+\)/.test(l)),
+      'a sandbox that cannot be created refuses with the error code in the Logs tab');
+    } finally {
+      fs.writeFileSync(settingsFile, settingsBefore);
+      fs.rmSync(blockedRoot, { force: true });
+    }
   }
 
   section('READ-ONLY / PERMISSION PATH — disposable fixture only, never real user configuration');

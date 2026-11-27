@@ -1142,11 +1142,21 @@ ipcMain.handle('list-worktrees', async (_e, repo) => {
 ipcMain.handle('repo-github-url', async (_e, repo) => remoteToHttps(await git(['remote', 'get-url', 'origin'], repo)));
 
 // ---- IPC: agents ------------------------------------------------------------
-function refuseLaunch(launcher, reason) {
-  const line = `${launcher} refused: ${reason}`;
+// `detail` is a bounded diagnostic for the Logs tab only (an error code or one cleaned line of a
+// script's error output); the renderer still receives only the reason constant.
+function refuseLaunch(launcher, reason, detail) {
+  const line = `${launcher} refused: ${reason}${detail ? ` (${detail})` : ''}`;
   tlog(line);
   sendMainLog(line, 'error');
   return { ok: false, error: reason };
+}
+
+// One line of external error text, safe for the Logs tab: first non-empty line, terminal colour
+// sequences and control characters removed, at most 200 characters.
+function boundedDetail(text) {
+  const line = String(text || '').split(/\r?\n/)
+    .map((l) => l.replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]/g, '').replace(/[\x00-\x1f\x7f-\x9f]/g, '').trim()).find(Boolean);
+  return line ? line.slice(0, 200) : '';
 }
 
 function isLaunchRequest(req, fields) {
@@ -1156,7 +1166,7 @@ function isLaunchRequest(req, fields) {
 
 // Create a worktree with the app's own script and verify the result against git.
 ipcMain.handle('new-agent', async (e, req) => {
-  const refuse = (reason) => refuseLaunch('New agent', reason);
+  const refuse = (reason, detail) => refuseLaunch('New agent', reason, detail);
   const sender = launcherGate.assess(e);
   if (!sender.ok) return refuse(sender.reason);
   if (!isLaunchRequest(req, ['repo', 'task'])) return refuse('invalid-request');
@@ -1171,16 +1181,28 @@ ipcMain.handle('new-agent', async (e, req) => {
   const branch = `agent/${task}`;
   const created = await new Promise((resolve) => {
     execFile('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-Task', task],
-      { cwd: repo.dir }, (error) => resolve(!error));
+      { cwd: repo.dir }, (error, _stdout, stderr) => resolve(error
+        ? { ok: false, detail: boundedDetail(stderr) || boundedDetail(error.message) || 'no error output' }
+        : { ok: true }));
   });
-  if (!created) return refuse('worktree-creation-failed');
+  // The script's own error line (for example a branch that already exists) goes to the Logs tab.
+  if (!created.ok) return refuse('worktree-creation-failed', created.detail);
+  let tree;
+  try { tree = fs.realpathSync.native(worktree); }
+  catch (error) {
+    return error && error.code === 'ENOENT'
+      ? refuse('worktree-folder-missing')
+      : refuse('worktree-verification-failed', (error && error.code) || 'error');
+  }
+  let entries;
+  try { entries = listGitWorktrees(repo.dir); }
+  catch (error) { return refuse('worktree-enumeration-failed', (error && error.code) || 'git-failed'); }
+  const registered = entries.find((entry) =>
+    entry.branch === `refs/heads/${branch}` && equalLaunchPaths(entry.path, tree));
   try {
-    const tree = fs.realpathSync.native(worktree);
-    const registered = listGitWorktrees(repo.dir).find((entry) =>
-      entry.branch === `refs/heads/${branch}` && equalLaunchPaths(entry.path, tree));
     if (registered && fs.statSync(tree).isDirectory()) return { ok: true, worktree: tree, branch };
-  } catch {
-    return refuse('worktree-verification-failed');
+  } catch (error) {
+    return refuse('worktree-verification-failed', (error && error.code) || 'error');
   }
   return refuse('worktree-not-registered');
 });
@@ -1248,7 +1270,12 @@ async function createOutputSandbox(role) {
     const outputs = outputSandboxRoot(loadSettings().projectsRoot, true);
     dir = fs.mkdtempSync(path.join(outputs, `${role}-${stamp}-`));
   }
-  catch { return refuseLaunch('Output sandbox', 'sandbox-create-failed'); }
+  catch (error) {
+    // A control or outputs folder that is not a plain directory has its own reason; any other
+    // failure carries its error code (EACCES, ENOSPC, ...) to the Logs tab.
+    if (error && error.message === 'invalid-outputs-root') return refuseLaunch('Output sandbox', 'invalid-outputs-root');
+    return refuseLaunch('Output sandbox', 'sandbox-create-failed', (error && error.code) || 'error');
+  }
   tlog('ensure-output-dir: mkdirSync done');
 
   // Pre-trust this sandbox in ~/.claude.json so Claude Code's workspace-trust prompt never
@@ -1276,7 +1303,9 @@ async function createOutputSandbox(role) {
     // not a snapshot taken before a sibling call's write landed.
     let claudeData = {};
     if (fs.existsSync(claudeJsonPath)) {
-      claudeData = JSON.parse(fs.readFileSync(claudeJsonPath, 'utf8'));
+      const raw = fs.readFileSync(claudeJsonPath, 'utf8');
+      try { claudeData = JSON.parse(raw); }
+      catch { throw Object.assign(new Error('trust file unparseable'), { code: 'UNPARSEABLE' }); }
     }
     if (!claudeData.projects) claudeData.projects = {};
     const projectKey = dir.replace(/\\/g, '/'); // Claude Code stores paths with forward slashes
@@ -1296,14 +1325,18 @@ async function createOutputSandbox(role) {
     fs.writeFileSync(tmp, JSON.stringify(claudeData, null, 2), 'utf8');
     fs.renameSync(tmp, claudeJsonPath);
     tlog('ensure-output-dir: .claude.json write+rename done');
-  } catch {
+  } catch (error) {
     try {
       if (tmp) fs.rmSync(tmp, { force: true });
       fs.rmdirSync(dir);
     } catch {
+      sendMainLog(`Output sandbox: could not remove incomplete launch files in ${path.basename(dir)}`, 'error');
       tlog('Output sandbox: could not remove incomplete launch files');
     }
-    return refuseLaunch('Output sandbox', 'sandbox-trust-write-failed');
+    // ~/.claude.json that is not valid JSON (Claude Code rewrites it often) is told apart from a
+    // failed read, write or rename, which carries its error code.
+    if (error && error.code === 'UNPARSEABLE') return refuseLaunch('Output sandbox', 'sandbox-trust-file-unparseable');
+    return refuseLaunch('Output sandbox', 'sandbox-trust-write-failed', (error && error.code) || 'error');
   } finally {
     release(); // always release — a throw must never deadlock the chain
   }
@@ -1519,18 +1552,38 @@ function listOutputSandboxes(root, role) {
 }
 
 // The scope is chosen in main. Directory membership is re-derived for each launch.
-function listLauncherAuthorizedDirs({ repoRootsOnly = false, sandboxRole = null, includeReport = false } = {}) {
+// `candidate` is the launch folder's canonical path (launcher-authz.js). `git worktree list` runs
+// synchronously, so it is spared where it can't matter: a repository root needs no git call, and the
+// repository whose name the folder carries (new-agent's `<repo>-<task>` sibling) is listed first;
+// the other repositories are listed only if that finds nothing, so a hand-made worktree elsewhere
+// still launches.
+function listLauncherAuthorizedDirs({ repoRootsOnly = false, sandboxRole = null, includeReport = false } = {}, candidate = null) {
   const root = loadSettings().projectsRoot;
   if (sandboxRole) return listOutputSandboxes(root, sandboxRole);
   const dirs = includeReport ? listOutputSandboxes(root, 'page-report') : [];
   const repos = fs.readdirSync(root, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && fs.existsSync(path.join(root, entry.name, '.git')))
     .map((entry) => path.join(root, entry.name));
-  for (const repo of repos) {
-    dirs.push(repo);
-    if (repoRootsOnly) continue;
-    try { dirs.push(...listGitWorktrees(repo).map((entry) => entry.path)); }
-    catch { /* Only the independently enumerated repository root is authorized. */ }
+  dirs.push(...repos);
+  if (repoRootsOnly) return dirs;
+  const isCandidate = (dir) => {
+    if (typeof candidate !== 'string') return false;
+    try { return equalLaunchPaths(fs.realpathSync.native(dir), candidate); } catch { return false; }
+  };
+  if (repos.some(isCandidate)) return dirs;
+  const fold = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
+  const folder = typeof candidate === 'string' ? fold(path.basename(candidate)) : '';
+  const likely = repos.filter((repo) => folder.startsWith(fold(path.basename(repo)) + '-'));
+  for (const repo of [...likely, ...repos.filter((r) => !likely.includes(r))]) {
+    let trees;
+    try { trees = listGitWorktrees(repo).map((entry) => entry.path); }
+    catch {
+      // Only the independently enumerated repository root is authorized; say why its worktrees refuse.
+      sendMainLog('Launcher: git worktree list failed for one repository; its worktrees cannot launch', 'error');
+      continue;
+    }
+    dirs.push(...trees);
+    if (trees.some(isCandidate)) return dirs;
   }
   return dirs;
 }

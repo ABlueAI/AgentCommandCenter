@@ -182,14 +182,20 @@ const cpWrapped = Object.assign({}, realCp, {
     const task = args[args.indexOf('-Task') + 1];
     record.newAgentCalls ??= [];
     record.newAgentCalls.push({ task, cwd: options.cwd });
-    if (task === 'script-failure') return callback(new Error('fixture failure'));
+    if (task === 'script-failure') {
+      return callback(new Error('fixture failure'), '', '\n\u001b[31mfatal: a branch named agent/script-failure already exists\u001b[0m\nsecond line\n');
+    }
     if (task === 'registered') {
       const worktree = path.join(path.dirname(REPO), 'repo-registered');
       realCp.execFileSync('git', ['worktree', 'add', '-q', '-b', 'agent/registered', worktree, 'main'], { cwd: REPO });
     }
     return callback(null, '');
   },
-  execFileSync(file, args) {
+  execFileSync(file, args, options) {
+    if (file === 'git' && args && args[0] === 'worktree' && args[1] === 'list') {
+      record.worktreeLists ??= [];
+      record.worktreeLists.push(options && options.cwd);
+    }
     if (file === 'reg') {
       record.regCalls.push((args || []).slice());
       if (record.regMode !== 'real') return fakeReg(record.regMode, args || []);
@@ -218,6 +224,9 @@ Module._load = function (request) {
   return realLoad.apply(this, arguments);
 };
 
+// main.js installs an uncaughtException handler that logs and carries on, so a section that throws
+// would otherwise end the run with exit code 0 and no summary. The run fails unless it reaches the end.
+process.exitCode = 1;
 (async () => {
   require(MAIN_PATH);
   await new Promise((r) => setImmediate(r));
@@ -259,17 +268,45 @@ Module._load = function (request) {
     }
 
     const badFolder = await ptyStart(goodEvent, { id: 'pane-invalid-cwd', cli: 'codex', cwd: 42 });
-    assert(badFolder?.ok === false, 'a non-string launcher folder refuses instead of using the profile');
-    for (const overrides of [
-      { cwd: '/unknown-folder' }, { cols: '80' }, { rows: 0 }, { id: 'x'.repeat(65) },
-      { role: 'builder', model: 'other' }, { role: 'builder', effort: {} },
-      { role: 'builder', initialPrompt: 'x'.repeat(4097) },
-    ]) {
+    assert(badFolder?.ok === false && badFolder.error === 'not-a-string', 'a non-string launcher folder refuses instead of using the profile');
+    const inputCases = [
+      [{ cwd: '/unknown-folder' }, 'unresolved-path'], [{ cols: '80' }, 'invalid-pane-size'],
+      [{ rows: 0 }, 'invalid-pane-size'], [{ id: 'x'.repeat(65) }, 'invalid-pane-id'],
+      [{ role: 'builder', model: 'other' }, 'invalid-role-model'], [{ role: 'builder', effort: {} }, 'invalid-role-effort'],
+      [{ role: 'builder', initialPrompt: 'x'.repeat(4097) }, 'invalid-opening-prompt'],
+    ];
+    // Opening prompts are spliced into the PowerShell -Command string, so shell metacharacters must
+    // refuse for every unfenced role before anything is built.
+    for (const role of ['reviewer', 'builder']) {
+      for (const prompt of ['x" ; calc ; "', '$(whoami)', 'a`b', 'a ; b', 'a\nb', 'a\rb', '"quoted"', 'a & b', 'a | b']) {
+        inputCases.push([{ role, cli: 'claude', initialPrompt: prompt }, 'invalid-opening-prompt']);
+      }
+    }
+    for (const [overrides, reason] of inputCases) {
       const spawns = record.ptySpawns;
       const notices = record.mainErrors.length;
       const result = await ptyStart(goodEvent, { id: 'pane-invalid-input', cli: 'codex', cwd: REPO, ...overrides });
-      assert(result?.ok === false && spawns === record.ptySpawns && record.mainErrors.length > notices,
-        'invalid pane input refuses visibly without a spawn');
+      assert(result?.ok === false && result.error === reason && spawns === record.ptySpawns && record.mainErrors.length > notices,
+        `invalid pane input ${JSON.stringify(overrides).slice(0, 60)} refuses visibly with ${reason} and no spawn (got ${result?.error})`);
+    }
+    {
+      const spawns = record.ptySpawns;
+      const baseline = await ptyStart(goodEvent, { id: 'pane-valid-input', cli: 'codex', cwd: REPO });
+      assert(baseline?.ok === true && record.ptySpawns === spawns + 1, 'the same request without the bad field launches');
+    }
+    // The reviewer's two real opening prompts from app/renderer/app.js (launchReviewer) pass.
+    const appSrc = fs.readFileSync(path.join(__dirname, 'renderer', 'app.js'), 'utf8');
+    const emptyPrompt = 'There are no changes versus main to review in this checkout. Say so, and ask which branch or files to review.';
+    const diffPrompt = 'Review the change set in ./.agent-review.diff (this branch vs main, 3 file(s)). Read that file, then report findings per your role instructions.';
+    assert(appSrc.includes("initialPrompt = '" + emptyPrompt + "';")
+      && appSrc.includes('initialPrompt = `Review the change set in ./${r.fileName} (this branch vs main, ${r.files} file(s)). Read that file, then report findings per your role instructions.`;'),
+    'fixture: the two reviewer prompts match app.js');
+    for (const [i, prompt] of [emptyPrompt, diffPrompt].entries()) {
+      const spawns = record.ptySpawns;
+      const launched = await ptyStart(goodEvent, { id: 'pane-reviewer-prompt-' + i, role: 'reviewer', cli: 'claude', cwd: REPO, initialPrompt: prompt });
+      assert(launched?.ok === true && record.ptySpawns === spawns + 1
+        && record.spawnArgs.at(-1).args.join(' ').includes('"' + prompt + '"'),
+      'the reviewer launches with app.js\'s ' + (i ? 'diff' : 'no-changes') + ' prompt');
     }
     const diff = record.handled.get('review-diff');
     const badBranch = await diff(goodEvent, { worktree: REPO, base: 'topic..draft' });
@@ -289,18 +326,54 @@ Module._load = function (request) {
     } catch {
       assert(false, 'new-agent refuses a malformed request without throwing');
     }
+    // The four request handlers that create or prepare something refuse an untrusted sender and a
+    // request with an extra field, and create nothing.
+    const untrusted = { sender: { other: 1 }, senderFrame: wc.mainFrame };
+    const outputsBefore = JSON.stringify(fs.readdirSync(OUTPUTS).sort());
+    const calls = (record.newAgentCalls || []).length;
+    const handlers = [
+      ['new-agent', { repo: REPO, task: 'untrusted-task' }],
+      ['ensure-output-dir', { role: 'web-scout' }],
+      ['verify-fence', { role: 'web-scout' }],
+      ['review-diff', { worktree: REPO, base: 'main' }],
+    ];
+    for (const [channel, req] of handlers) {
+      const res = await record.handled.get(channel)(untrusted, req);
+      assert(res?.ok === false && res.error === 'untrusted-sender', channel + ' refuses an untrusted sender');
+    }
+    for (const [channel, req, reason] of [
+      ['ensure-output-dir', { role: 'web-scout', dir: OUTPUTS }, 'invalid-sandbox-role'],
+      ['verify-fence', { role: 'web-scout', hookPath: 'x' }, 'unknown-role'],
+      ['new-agent', { repo: REPO, task: 'extra-task', branch: 'x' }, 'invalid-request'],
+      ['review-diff', { worktree: REPO, base: 'main', file: 'x' }, 'invalid-request'],
+    ]) {
+      const res = await record.handled.get(channel)(goodEvent, req);
+      assert(res?.ok === false && res.error === reason, channel + ' refuses a request with an extra field (' + reason + ')');
+    }
+    assert(JSON.stringify(fs.readdirSync(OUTPUTS).sort()) === outputsBefore, 'no refused request created a sandbox folder');
+    assert((record.newAgentCalls || []).length === calls, 'no refused request ran the new-agent script');
+    assert(!fs.existsSync(path.join(REPO, '.agent-review.diff')), 'no refused request wrote a review diff');
   }
 
   section('Repository launcher authorization');
   {
     const newAgent = record.handled.get('new-agent');
-    for (const req of [{ repo: FIX, task: 'task' }, { repo: 42, task: 'task' },
-      { repo: REPO, task: 'invalid task' }, { repo: REPO, task: 't'.repeat(65) }]) {
-      assert((await newAgent(goodEvent, req))?.ok === false, 'invalid repository or task refuses');
+    for (const [req, reason] of [[{ repo: FIX, task: 'task' }, /^not-authorized$/], [{ repo: 42, task: 'task' }, /^not-a-string$/],
+      [{ repo: REPO, task: 'invalid task' }, /^Task name may contain only/], [{ repo: REPO, task: 't'.repeat(65) }, /^Task name is too long/]]) {
+      const res = await newAgent(goodEvent, req);
+      assert(res?.ok === false && reason.test(res.error), 'invalid repository or task refuses with ' + reason + ' (got ' + res?.error + ')');
     }
-    assert(!record.newAgentCalls, 'none of the refused inputs ran the launcher script');
+    assert(!(record.newAgentCalls || []).some((c) => c.task !== 'untrusted-task' && c.task !== 'extra-task'), 'none of the refused inputs ran the launcher script');
+    const errorsBefore = record.mainErrors.length;
     const childError = await newAgent(goodEvent, { repo: REPO, task: 'script-failure' });
     assert(childError?.error === 'worktree-creation-failed', 'a script failure is reported');
+    const scriptLine = record.mainErrors.slice(errorsBefore).join('\n');
+    assert(scriptLine.includes('worktree-creation-failed (fatal: a branch named agent/script-failure already exists)'),
+      'the script\'s own first error line reaches the Logs tab next to the reason');
+    assert(!/[\x00-\x1f]/.test(scriptLine.replace(/\n/g, '')) && !scriptLine.includes('second line'),
+      'only one line of it, with its control characters removed');
+    assert((await newAgent(goodEvent, { repo: REPO, task: 'missing-folder' }))?.error === 'worktree-folder-missing',
+      'a script that reports success without creating the folder gets its own reason');
     fs.mkdirSync(path.join(PROJECTS, 'repo-unregistered'));
     assert((await newAgent(goodEvent, { repo: REPO, task: 'unregistered' }))?.error === 'worktree-not-registered',
       'an existing folder alone is insufficient to report success');
@@ -312,23 +385,49 @@ Module._load = function (request) {
     assert(valid?.ok === true && valid.empty, 'a valid base branch and worktree produce a clean diff');
     const missing = await diff(goodEvent, { worktree: good.worktree, base: 'missing-branch' });
     assert(missing?.error === 'git-diff-failed', 'a valid branch name without a ref refuses visibly');
+
+    // pty-start lists worktrees only where the folder can be one: a repository root needs no git call,
+    // and a worktree is found through the repository whose name its folder carries. (A folder under
+    // the projects root that holds a .git entry counts as a root itself, so these worktrees live
+    // outside it.)
+    const other = path.join(PROJECTS, 'zz-other');
+    fs.mkdirSync(other);
+    realCp.execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: other });
+    record.worktreeLists = [];
+    const atRoot = await ptyStart(goodEvent, { id: 'pane-at-root', cli: 'codex', cwd: REPO });
+    assert(atRoot?.ok === true && record.worktreeLists.length === 0, 'a launch at a repository root runs no git worktree list');
+    const named = path.join(FIX, 'repo-outside');
+    realCp.execFileSync('git', ['worktree', 'add', '-q', '-b', 'outside', named, 'main'], { cwd: REPO });
+    record.worktreeLists = [];
+    const atTree = await ptyStart(goodEvent, { id: 'pane-at-tree', cli: 'codex', cwd: named });
+    assert(atTree?.ok === true && record.worktreeLists.length === 1 && record.worktreeLists[0] === REPO,
+      'a launch in a worktree lists only its own repository\'s worktrees');
+    const elsewhere = path.join(FIX, 'hand-made-tree');
+    realCp.execFileSync('git', ['worktree', 'add', '-q', '-b', 'hand-made', elsewhere, 'main'], { cwd: REPO });
+    record.worktreeLists = [];
+    const handMade = await ptyStart(goodEvent, { id: 'pane-hand-made', cli: 'codex', cwd: elsewhere });
+    assert(handMade?.ok === true && record.worktreeLists.includes(REPO),
+      'a worktree whose folder name carries no repository name still launches (the other repositories are listed)');
+    const stranger = await ptyStart(goodEvent, { id: 'pane-stranger', cli: 'codex', cwd: FIX });
+    assert(stranger?.ok === false && stranger.error === 'not-authorized', 'a folder that is no repository or worktree still refuses');
+    fs.rmSync(other, { recursive: true, force: true });
   }
 
   section('Gemini Video Scout launcher arguments');
   {
     const opts = { id: 'video-input', role: 'video-scout', videoScout: true, cwd: REPO,
       videoUrl: 'https://www.youtube.com/watch?v=fixture', mediaResolution: 'HIGH', videoModel: 'gemini-2.5-pro' };
-    for (const override of [
-      { videoUrl: 24 }, { videoUrl: 'https://www.youtube.com/' + 'x'.repeat(2048) },
-      { videoUrl: 'https://example.com/video' }, { videoUrl: 'https://www.youtube.com:8443/watch' },
-      { mediaResolution: 'UNKNOWN' }, { startOffset: 1n, endOffset: 12 },
-      { cwd: FIX },
+    for (const [override, reason] of [
+      [{ videoUrl: 24 }, /^invalid video URL$/], [{ videoUrl: 'https://www.youtube.com/' + 'x'.repeat(2048) }, /^invalid video URL$/],
+      [{ videoUrl: 'https://example.com/video' }, /^invalid video URL$/], [{ videoUrl: 'https://www.youtube.com:8443/watch' }, /^invalid video URL$/],
+      [{ mediaResolution: 'UNKNOWN' }, /^Invalid media resolution/], [{ startOffset: 1n, endOffset: 12 }, /^Time range must be whole seconds/],
+      [{ cwd: FIX }, /^not-authorized$/],
     ]) {
       const before = record.ptySpawns;
       const errors = record.mainErrors.length;
       const result = await ptyStart(goodEvent, { ...opts, ...override });
-      assert(result?.ok === false && record.ptySpawns === before && record.mainErrors.length > errors,
-        'invalid Video Scout input refuses visibly before spawning');
+      assert(result?.ok === false && reason.test(result.error) && record.ptySpawns === before && record.mainErrors.length > errors,
+        'invalid Video Scout input ' + Object.keys(override).join() + ' refuses visibly with ' + reason + ' before spawning');
     }
     const result = await ptyStart(goodEvent, opts);
     const args = record.spawnArgs.at(-1)?.args;
@@ -355,6 +454,23 @@ Module._load = function (request) {
     const env = record.spawnArgs[record.spawnArgs.length - 1].env;
     assert(env.BLUE_HELM_CONTROLLED_WEBFETCH_MODE === 'disabled',
       'and receives the main-issued WebFetch mode `disabled`');
+    // The fence hook reaches a fenced pane only through --settings, so the command must name both
+    // main-issued variables and the settings must carry the deployed hook as its one PreToolUse hook.
+    assert(cmd.includes('--agents $env:MAKO_LAUNCH_ROLE_ARG --settings $env:MAKO_LAUNCH_ROLE_SETTINGS'),
+      'the fenced command passes the checked role and its hook settings');
+    // Undo encodeRoleArg's Windows argv quoting (backslashes doubled before a quote, then an escaped quote).
+    const decode = (v) => JSON.parse(String(v).replace(/(\\+)"/g, (m, bs) => '\\'.repeat((bs.length - 1) / 2) + '"'));
+    let settings = null;
+    try { settings = decode(env.MAKO_LAUNCH_ROLE_SETTINGS); } catch { settings = null; }
+    const pre = settings && settings.hooks && settings.hooks.PreToolUse;
+    assert(Array.isArray(pre) && pre.length === 1 && pre[0].hooks.length === 1
+      && typeof pre[0].hooks[0].command === 'string' && pre[0].hooks[0].command.includes(HOOK_FWD)
+      && Object.keys(settings.hooks).join() === 'PreToolUse',
+    'the settings carry exactly one PreToolUse hook, the deployed fence hook');
+    let roleDef = null;
+    try { roleDef = decode(env.MAKO_LAUNCH_ROLE_ARG); } catch { roleDef = null; }
+    assert(roleDef && roleDef['web-scout'] && typeof roleDef['web-scout'].prompt === 'string' && Array.isArray(roleDef['web-scout'].tools),
+      'and the role argument decodes to the checked web-scout definition');
   }
   {
     // The denials are MAIN-OWNED constants: no renderer field may add, remove, or reorder them.
@@ -390,6 +506,8 @@ Module._load = function (request) {
     const cmd = record.spawnArgs[record.spawnArgs.length - 1].args.join(' ');
     assert(cmd.indexOf('--agent builder') !== -1, 'as the builder agent');
     assert(cmd.indexOf('--disallowedTools') === -1, 'and carries NO denials — it is deliberately unfenced');
+    assert(cmd.indexOf('--settings') === -1 && !('MAKO_LAUNCH_ROLE_SETTINGS' in record.spawnArgs.at(-1).env),
+      'and gets no hook settings');
     const env = record.spawnArgs[record.spawnArgs.length - 1].env;
     assert(cmd.includes('--agents $env:MAKO_LAUNCH_ROLE_ARG')
       && env.MAKO_LAUNCH_ROLE_ARG.includes('sonnet') && !env.MAKO_LAUNCH_ROLE_ARG.includes('opus'),
@@ -515,7 +633,9 @@ Module._load = function (request) {
     assert((await listIpc(untrusted)).ok === false && (await doneIpc(untrusted, '5e55a0b1-0000-4000-8000-000000000009', 'x')).ok === false,
       'both refuse an untrusted sender');
 
-    const res = await ptyStart(goodEvent, { id: 'pane-s46', role: null, cli: 'claude', cwd: FIX });
+    // A repository root: since the launch-input checks, a pane with an explicit folder must be a
+    // main-owned repository or worktree.
+    const res = await ptyStart(goodEvent, { id: 'pane-s46', role: null, cli: 'claude', cwd: REPO });
     const m = record.spawnArgs[record.spawnArgs.length - 1].args.join(' ').match(new RegExp('--session-id (' + UUID + ')$'));
     const sid = m && m[1];
     assert(res && res.ok === true && sid, 'a new claude pane starts');
@@ -870,8 +990,8 @@ Module._load = function (request) {
       const errBefore = record.mainErrors.length;
       const res = await ptyStart(goodEvent, { id: 'drift-n1', role: 'web-scout', cli: 'claude', cwd: SANDBOX });
       const lines = record.mainErrors.slice(errBefore);
-      assert(res && res.ok === false && res.error === 'resolve-candidate-unsupported-grammar',
-        JSON.stringify(line) + ': REFUSED with the bounded malformed-definition reason');
+      assert(res && res.ok === false && res.error === 'resolve-role-tools-empty',
+        JSON.stringify(line) + ': REFUSED with the specific empty-tools reason');
       assert(record.ptySpawns === before, JSON.stringify(line) + ': ZERO PTYs spawned');
       assert(lines.every((l) => l.indexOf('[admission]') === -1),
         JSON.stringify(line) + ': no admission line (refused before any admission claim)');
