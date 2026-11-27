@@ -1,0 +1,170 @@
+'use strict';
+
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { test } = require('node:test');
+const vm = require('node:vm');
+
+const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+const deferred = () => {
+  let resolve, reject;
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+};
+const tick = () => new Promise((resolve) => setImmediate(resolve));
+const noop = () => {};
+
+class Element {
+  constructor(tag = 'div') {
+    this.tag = tag;
+    this.children = [];
+    this.classes = new Set();
+    this.classList = {
+      add: (name) => this.classes.add(name),
+      remove: (name) => this.classes.delete(name),
+      contains: (name) => this.classes.has(name),
+      toggle: (name, enabled) => enabled ? this.classes.add(name) : this.classes.delete(name),
+    };
+  }
+  appendChild(child) { this.children.push(child); }
+  set textContent(value) { this.text = value; this.children = []; }
+  get textContent() { return [this.text, ...this.children.map((child) => child.textContent)].filter(Boolean).join(' '); }
+  addEventListener() {}
+  focus() { this.focused = true; }
+  remove() {}
+  button(text) {
+    if (this.tag === 'button' && this.textContent === text) return this;
+    return this.children.map((child) => child.button(text)).find(Boolean);
+  }
+}
+
+function renderer(ipc = {}) {
+  const controls = new Map();
+  const control = (id) => {
+    if (!controls.has(id)) controls.set(id, new Element());
+    return controls.get(id);
+  };
+  control('#taskName').value = 'https://www.youtube.com/watch?v=synthetic';
+  control('#videoProviderSelect').value = 'gemini';
+  const launches = [];
+  const alerts = [];
+  const context = vm.createContext({
+    URL,
+    document: { addEventListener: noop, querySelector: control, createElement: (tag) => new Element(tag) },
+    alert: (message) => alerts.push(message),
+    window: {
+      addEventListener: noop,
+      ccAuthorityChoice: require('./authority-choice'),
+      ccAudioModuleHealth: { createAudioModuleHealth: noop },
+      ccQuickLinksView: { createQuickLinksView: noop },
+      ccUsageView: { createUsageView: noop },
+      ccPaneMaximize: { createPaneMaximizer: noop },
+      ccClipboardConsumer: { createClipboardConsumer: noop },
+      ccReportFollowup: { createReportFollowup: noop },
+      ccSessionResumeView: require('./session-resume-view'),
+    },
+    cc: { tlogReset: async () => {}, ...ipc },
+    agentDom: require('./agent-dom'),
+    videoModelPolicy: require('./video-model-policy'),
+    videoRangeUi: require('./video-range-ui'),
+  });
+  // Run the renderer with synthetic controls and IPC, without starting unrelated boot work.
+  vm.runInContext(source.replace(/\nboot\(\);\s*$/, ''), context, { filename: 'app.js' });
+  const run = (code) => vm.runInContext(code, context);
+  Object.assign(context, {
+    closeModal: () => control('#modal').classList.add('hidden'),
+    openInAppTerminal: (options) => { launches.push(options); return ipc.start?.(options); },
+    readVideoAnalysisFocus: () => ({}),
+    readClaudeVideoSettings: () => ({}),
+    refreshAgents: async () => {},
+  });
+  run("Object.assign(state, { repo: '/synthetic/repo', chosenRole: 'video-scout' });");
+  return { run, control, launches, alerts };
+}
+
+test('Gemini Video Scout hands off a double submission only once', async () => {
+  const key = deferred();
+  let keyChecks = 0;
+  const app = renderer({ getGeminiKeyStatus: () => { keyChecks++; return key.promise; } });
+  const first = app.run('createAgent()');
+  const second = app.run('createAgent()');
+  await tick();
+  key.resolve({ ok: true, hasKey: true });
+  await Promise.all([first, second]);
+  assert.equal(app.launches.length, 1, 'one user submission starts one pane');
+  assert.equal(keyChecks, 1);
+});
+
+for (const provider of ['gemini', 'claude']) {
+  test(provider + ' shows a field error for a malformed Video Scout URL before starting', async () => {
+    let keyChecks = 0;
+    const app = renderer({ getGeminiKeyStatus: async () => { keyChecks++; return { ok: true, hasKey: true }; } });
+    app.control('#videoProviderSelect').value = provider;
+    const input = app.control('#taskName');
+    input.value = 'https://[invalid';
+    const result = await Promise.allSettled([app.run('createAgent()')]);
+    assert.equal(app.control('#modal').classList.contains('hidden'), false, provider + ' leaves the dialog open');
+    assert.equal(result[0].status, 'fulfilled');
+    assert.equal(input.focused, true);
+    assert.match(app.control('#videoUrlError').textContent, /valid video URL/i);
+    assert.equal(app.control('#videoUrlError').classList.contains('hidden'), false);
+    assert.equal(app.launches.length, 0);
+    assert.equal(keyChecks, 0);
+  });
+}
+
+for (const role of ['plain', 'builder']) {
+  test('pending ' + role + ' worktree launch uses the submitted options', async () => {
+    const worktree = deferred();
+    const requests = [];
+    const app = renderer({ newAgent: (request) => { requests.push(request); return worktree.promise; } });
+    app.run("Object.assign(state, { chosenCli: 'codex', hardTask: true, chosenRole: " + JSON.stringify(role) + ' });');
+    app.control('#taskName').value = 'first-task';
+    const first = app.run('createAgent()');
+    await tick();
+    assert.equal(requests[0].task, 'first-task');
+    app.run("Object.assign(state, { chosenRole: 'builder', chosenCli: 'claude', hardTask: false });");
+    app.control('#taskName').value = 'second-task';
+    worktree.resolve({ ok: true, worktree: '/synthetic/first-task' });
+    await first;
+    assert.equal(app.launches[0].worktree, '/synthetic/first-task');
+    if (role === 'plain') {
+      assert.equal(app.launches[0].cli, 'codex');
+    } else {
+      assert.equal(app.launches[0].model, 'opus');
+      assert.equal(app.launches[0].effort, 'xhigh');
+    }
+  });
+}
+
+for (const action of ['Resume', 'Start fresh']) {
+  test(action + ' keeps the recovery offer until a PTY acknowledges startup', async () => {
+    const failed = deferred();
+    const retry = deferred();
+    const dismissals = [];
+    const row = { sessionId: 'synthetic-session', worktree: '/synthetic/recovery' };
+    let attempts = 0;
+    const app = renderer({
+      sessionResumeOffer: async () => ({ ok: true, rows: [row] }),
+      sessionResumeDismiss: async (id) => { dismissals.push(id); return { ok: true }; },
+      start: () => (++attempts === 1 ? failed : retry).promise,
+    });
+    await app.run('offerResume()');
+    const host = app.control('#resumeHost');
+    const pending = host.button(action).onclick();
+    await tick();
+    assert.ok(host.button(action), 'the offer is still visible while startup is pending');
+    assert.deepEqual(dismissals, []);
+    failed.resolve({ ok: false, error: 'synthetic refusal' });
+    await pending;
+    assert.ok(host.button(action), 'the offer is still available after startup fails');
+    const started = host.button(action).onclick();
+    await tick();
+    assert.deepEqual(dismissals, []);
+    retry.resolve({ ok: true });
+    await started;
+    assert.equal(host.button(action), undefined);
+    assert.deepEqual(dismissals, action === 'Start fresh' ? [row.sessionId] : []);
+  });
+}
