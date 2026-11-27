@@ -335,11 +335,7 @@ async function settle() { for (let i = 0; i < 4; i += 1) await new Promise((r) =
   {
     const s = makeStack({ allowance: 2, panes: [['pty1', true], ['pty2', true], ['library', true]] });
     s.budget.claimPane('pty1');
-    let reached = 0;
-    const ptyWrite = (id) => { if (s.ipc.refuseDirectWrite(id)) return; reached += 1; };
-    for (const ch of 'echo hi\r') ptyWrite('pty2', ch);
-    for (const ch of 'ls\r') ptyWrite('library', ch);
-    eq(reached, 11, 'every keystroke to an UNCONTROLLED pane passed through untouched');
+    // Actual byte forwarding through main's registered handler is covered by admission-main-startup.test.js.
     eq(s.ipc.refuseDirectWrite('pty2'), false, 'pty2 is never refused');
     eq(s.budget.isDirectInputBlocked('pty2'), false, 'pty2 is not a controlled pane');
   }

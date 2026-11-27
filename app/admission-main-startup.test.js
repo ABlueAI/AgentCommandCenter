@@ -122,16 +122,17 @@ async function bootMain(admissionEnv, options) {
     whenReadyCalls: 0, appUserModelIds: [], mainErrors: [],
   };
   const electronStub = makeElectronStub(userDataDir, record);
-  // Only the shutdown scenarios opt in to a spawnable PTY. It is a plain object: no process exists,
+  // Tests with panes opt in to a spawnable PTY. It is a plain object: no process exists,
   // and its onExit callback is recorded but NEVER invoked — exactly the teardown race in which a
   // synchronous quit outruns node-pty's asynchronous exit notification.
   const ptyStub = {
     spawn(file, args, spawnOpts) {
       record.ptySpawns += 1;
       if (!opt.spawnable) throw new Error('pty.spawn must not run in this test');
-      record.spawns.push({ args: (args || []).slice(), env: (spawnOpts && spawnOpts.env) || {} });
+      const writes = [];
+      record.spawns.push({ args: (args || []).slice(), env: (spawnOpts && spawnOpts.env) || {}, writes });
       return {
-        pid: 4242, onData() {}, onExit() {}, write() {}, resize() {},
+        pid: 4242, onData() {}, onExit() {}, write(bytes) { writes.push(bytes); }, resize() {},
         kill() { record.kills += 1; if (opt.killThrows) throw new Error('kill failed'); },
       };
     },
@@ -222,6 +223,29 @@ const LEDGER = 'admission-ledger.json';
     }
     assert(r.record.singleInstanceLockCalls === 0, 'no single-instance lock is requested');
     assert(r.record.ptySpawns === 0, 'no PTY is spawned during startup');
+  }
+
+  section('(2b) the registered pty-write handler forwards ordinary terminal input');
+  {
+    const { record, userDataDir, loadError } = await bootMain(VALID_ENV, { spawnable: true });
+    try {
+      if (loadError) throw loadError;
+      const { webContents } = record;
+      const event = { sender: webContents, senderFrame: webContents.mainFrame };
+      const start = record.handled.get('pty-start');
+      const write = record.on.get('pty-write');
+      const controlled = await start(event, { id: 'pty1', cli: 'claude', cols: 80, rows: 24 });
+      const state = await record.handled.get(CH_STATE)(event);
+      const ordinary = await start(event, { id: 'pty2', cols: 80, rows: 24 });
+      assert(controlled.ok === true && state.state.paneId === 'pty1', 'the admission run is bound to the first pane');
+      assert(ordinary.ok === true && record.spawns.length === 2, 'the ordinary shell gets its own PTY');
+      const inputs = ['x', '\r', '\x1b[200~pasted text\x1b[201~'];
+      for (const data of inputs) write(event, { id: 'pty2', data });
+      assert(JSON.stringify(record.spawns[1].writes) === JSON.stringify(inputs),
+        'ordinary PTY receives each typed and pasted byte in order');
+    } finally {
+      fs.rmSync(userDataDir, { recursive: true, force: true });
+    }
   }
 
   // ---- (3) MALFORMED requested configuration: protective, not ordinary ------------------------
