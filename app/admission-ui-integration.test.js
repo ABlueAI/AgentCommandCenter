@@ -15,13 +15,12 @@
 // modules are composed the way main.js composes them — in particular that the UI cannot double-spend,
 // cannot bypass the boundary, and cannot make a refusal cheaper than it is.
 //
-// It also holds the QUICK LINKS COEXISTENCE assertions. Both features touched main.js, preload.js and
-// package.json, so "the rebase did not quietly drop one of them" is a property worth a test rather
-// than a glance at a merge summary.
+// It also holds the QUICK LINKS COEXISTENCE assertions for the app wiring and test coverage.
 
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { getTestFiles } = require('./run-tests');
 
 const config = require('./admission-budget-config');
 const budgetModule = require('./admission-budget');
@@ -381,14 +380,20 @@ async function settle() { for (let i = 0; i < 4; i += 1) await new Promise((r) =
     const css = read('renderer/styles.css');
     assert(css.includes('.quick-links-list'), 'the Quick Links styles survived');
     assert(css.includes('.admission-bar'), 'the admission styles were added alongside them');
-    // The test chain must carry BOTH feature sets.
-    const chain = JSON.parse(read('package.json')).scripts.test.split('&&').map((s) => s.trim());
-    eq(chain.length, new Set(chain).size, 'no duplicate entry in the test chain');
-    eq(chain.filter((c) => c.includes('quick-links')).length, 6, 'all 6 Quick Links suites are in the chain (S55 added quick-links-presets)');
-    // 10 = the 8 original admission suites + admission-main-startup (the semantic main-entry
-    // startup test) + admission-process-cas (the independent-process ledger CAS test). Both were added
-    // by the bootstrap/recovery correction; single-instance.test.js was removed with its module.
-    eq(chain.filter((c) => c.includes('admission')).length, 10, 'all 10 admission suites are in the chain');
+    // Pin existing coverage by path so adding another suite needs no change here.
+    const suites = getTestFiles();
+    const discovered = new Set(suites);
+    eq(suites.length, discovered.size, 'no duplicate entry in test discovery');
+    const expected = [
+      'quick-links-integration.test.js', 'quick-links-ipc.test.js', 'quick-links-policy.test.js',
+      'quick-links-presets.test.js', 'quick-links-store.test.js', 'renderer/quick-links-view.test.js',
+      'admission-budget-config.test.js', 'admission-budget-store.test.js', 'admission-budget.test.js',
+      'admission-ipc.test.js', 'admission-main-startup.test.js', 'admission-process-cas.test.js',
+      'admission-protective-state.test.js', 'admission-pty-boundary.test.js',
+      'admission-ui-integration.test.js', 'renderer/admission-view.test.js',
+    ];
+    eq(expected.filter((file) => !discovered.has(file)).join(', '), '',
+      'npm test discovers the existing Quick Links and admission suites');
   }
 
   // ---- (12) no renderer path bypasses admission-submit-prompt -----------------------------------

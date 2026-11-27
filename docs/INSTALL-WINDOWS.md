@@ -378,6 +378,11 @@ Set-Location (Join-Path $RepoRoot 'app')
 npm test
 ```
 
+`npm test` discovers `*.test.js` files under `app/`. Add new app suites anywhere in that tree
+outside the excluded directories in `app/run-tests.js`. The runner checks the Electron binary
+first, then runs the remaining suites in sorted order. It reports every failed file at the end
+and returns the first failing suite's exit code.
+
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoRoot 'scripts\run-pester.ps1')
 ```

@@ -13,6 +13,7 @@
 //      exactly the three reviewed versions, and exactly the lockfile packages that declare an
 //      install script, so a dependency bump can't leave a script blocked on Node 26 while CI
 //      (Node 22, which ignores the field) stays green.
+//   5. `npm test` invokes the discovery runner directly so its exit code reaches CI.
 
 const fs = require('fs');
 const { isDeepStrictEqual } = require('node:util');
@@ -76,7 +77,7 @@ assert(!atLeast('7.6.4', '7.6.5') && atLeast('42.11.15', '42.10.0') && !atLeast(
   'the version comparison orders patch and minor numbers numerically');
 
 process.stdout.write('\nnpm allows install scripts only for the reviewed dependency versions\n');
-const { allowScripts } = require('./package.json');
+const { allowScripts, scripts } = require('./package.json');
 assert(isDeepStrictEqual(allowScripts, {
   'onnxruntime-node@1.21.0': true,
   'protobufjs@7.6.6': true,
@@ -92,6 +93,9 @@ assert(isDeepStrictEqual(withScripts, allowed),
   `allowScripts matches every lockfile package with an install script (lockfile: ${withScripts.join(', ')}; allowScripts: ${allowed.join(', ')})`);
 assert(Object.values(allowScripts || {}).length > 0 && Object.values(allowScripts || {}).every((v) => v === true),
   'every allowScripts entry is true');
+
+assert(scripts && scripts.test === 'node run-tests.js',
+  'npm test invokes the discovery runner directly and propagates its exit code');
 
 process.stdout.write(`\nci-hygiene: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

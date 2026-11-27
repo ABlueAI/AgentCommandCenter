@@ -9,13 +9,11 @@
 // not work; this kills the class.
 //
 // Reachability contract:
-//   *.test.js   — reachable when its app-relative path appears in app/package.json's
-//                 "test" script, OR its basename is referenced by a *.Tests.ps1 wrapper
-//                 under scripts/ (the K5 pattern: run-pester executes the Node suite).
-//   *.Tests.ps1 — checked by the sibling scripts/test-reachability.Tests.ps1 (run-pester
-//                 auto-discovers recursively under scripts/, so "reachable" = "inside
-//                 that root"); this file only verifies that sibling EXISTS, so the two
-//                 meta-tests watch each other and neither can become the next orphan.
+//   app/*.test.js — discovered by run-tests.js, or explicitly skipped with a reason.
+//                   A skip that names a Pester wrapper must point to one that runs it.
+//   Other *.test.js — run by a Pester wrapper under scripts/.
+//   *.Tests.ps1 — checked by the sibling scripts/test-reachability.Tests.ps1, which
+//                 also checks that npm test discovers this suite.
 //
 // Excluded directory names (never descended, matched at any depth):
 //   node_modules, .git, .worktrees, vendor, dist, source-material
@@ -91,83 +89,111 @@ const stale = runFixture({ 'pass.test.js': "console.log('MUST NOT RUN');" });
 assert(stale.status === 1 && /stale skip-list entry: renderer\/video-model-policy\.test\.js/i.test(stale.stderr)
   && !stale.stdout.includes('MUST NOT RUN'), 'runner refuses a stale skip-list entry before launching suites');
 
-// Manual walk: skips excluded names BEFORE descending (never enters node_modules — this
-// also keeps the walk out of the app/node_modules junction) and never follows links.
-function walk(dir, hits) {
-  let entries;
-  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return hits; }
-  for (const e of entries) {
-    if (e.isSymbolicLink()) continue;
-    const full = path.join(dir, e.name);
-    if (e.isDirectory()) {
-      if (!EXCLUDED_DIRS.has(e.name)) walk(full, hits);
-    } else if (/\.test\.js$/.test(e.name) || /\.Tests\.ps1$/.test(e.name)) {
+// Walk the entire repo independently of the app runner to catch suites placed outside its root.
+function walk(dir, hits = []) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory() && !EXCLUDED_DIRS.has(entry.name)) {
+      walk(full, hits);
+    } else if (entry.isFile() && /(?:\.test\.js|\.Tests\.ps1)$/.test(entry.name)) {
       hits.push(full);
     }
   }
   return hits;
 }
 
-const all = walk(REPO_ROOT, []);
-const rel = (f) => path.relative(REPO_ROOT, f).split(path.sep).join('/');
-const testJs = all.filter((f) => /\.test\.js$/.test(f));
-const testPs = all.filter((f) => /\.Tests\.ps1$/.test(f));
+// The Node wrappers build $suite with Join-Path and pass it to node. Match the full
+// resolved path so a comment or a different suite with the same basename cannot count.
+function wrapperTarget(wrapper, source) {
+  const body = source.replace(/<#[\s\S]*?#>/g, '');
+  if (!/^\s*\$output = cmd \/c "node `"\$suite`" 2>&1"\s*$/m.test(body)) return undefined;
+  let expression = body.match(/^\$suite = (.+)$/m)?.[1].trim();
+  const parts = [];
+  while (expression) {
+    const join = /^Join-Path (.+) '([^']+)'$/.exec(expression);
+    if (!join) break;
+    parts.unshift(join[2].replace(/\\/g, '/'));
+    expression = join[1].replace(/^\((.*)\)$/, '$1');
+  }
+  if (!parts.length) return undefined;
+  if (expression === '$here') return path.posix.join(path.posix.dirname(wrapper), ...parts);
+  if (expression === '$repoRoot' || expression === 'Split-Path -Parent $here') {
+    return path.posix.join(...parts);
+  }
+}
 
-// Floor guards: a silently-broken walker must not pass by discovering nothing.
+function unreachableSuites(testJs, appRun, skips, wrappers) {
+  const wrapped = new Set(wrappers.values());
+  return testJs.filter((file) => {
+    if (!file.startsWith('app/')) return !wrapped.has(file);
+    const relative = file.slice('app/'.length);
+    if (appRun.has(relative)) return false;
+    const skip = skips[relative];
+    if (!skip || !skip.reason?.trim()) return true;
+    return Boolean(skip.wrapper && wrappers.get(skip.wrapper) !== file);
+  });
+}
+
+const sampleWrapper = 'scripts/example.Tests.ps1';
+const sampleSource = [
+  String.raw`$suite = Join-Path (Join-Path $repoRoot 'app\nested suite') 'sample.test.js'`,
+  '$output = cmd /c "node `"$suite`" 2>&1"',
+].join('\r\n');
+const sampleSuite = 'app/nested suite/sample.test.js';
+assert(wrapperTarget(sampleWrapper, sampleSource) === sampleSuite,
+  'reachability resolves the exact path from a Windows-style wrapper');
+assert(wrapperTarget(sampleWrapper, sampleSource.replace('$output', '# $output')) === undefined,
+  'reachability ignores a wrapper invocation in a comment');
+const sampleOrphan = 'app/elsewhere/sample.test.js';
+const reasonOnly = 'app/reason-only.test.js';
+const sampleUnreachable = unreachableSuites(
+  [sampleSuite, sampleOrphan, reasonOnly, 'scripts/sample.test.js'],
+  new Set(),
+  {
+    'nested suite/sample.test.js': { reason: 'Fixture wrapper.', wrapper: sampleWrapper },
+    'reason-only.test.js': { reason: 'Fixture skip without a wrapper.' },
+  },
+  new Map([[sampleWrapper, sampleSuite]]),
+);
+assert(sampleUnreachable.join(', ') === `${sampleOrphan}, scripts/sample.test.js`,
+  'reachability rejects same-basename orphans and accepts explicit skips with a reason');
+assert(unreachableSuites(
+  [sampleSuite], new Set(),
+  { 'nested suite/sample.test.js': { reason: 'Fixture wrapper.', wrapper: sampleWrapper } },
+  new Map(),
+).length === 1, 'reachability rejects a skip whose declared wrapper no longer runs it');
+assert(unreachableSuites(
+  [reasonOnly], new Set(), { 'reason-only.test.js': { reason: ' ' } }, new Map(),
+).length === 1, 'reachability rejects a skip without a stated reason');
+
+const all = walk(REPO_ROOT);
+const rel = (f) => path.relative(REPO_ROOT, f).split(path.sep).join('/');
+const testJs = all.filter((f) => f.endsWith('.test.js')).map(rel).sort();
+const testPs = all.filter((f) => f.endsWith('.Tests.ps1'));
+
+// Floor guards: a broken walker must fail if it discovers too few suites.
 assert(testJs.length >= 20, `discovery floor: found ${testJs.length} *.test.js files (>= 20 expected)`);
 assert(testPs.length >= 14, `discovery floor: found ${testPs.length} *.Tests.ps1 files (>= 14 expected)`);
 
-const pkg = JSON.parse(fs.readFileSync(path.join(APP_DIR, 'package.json'), 'utf8'));
-const testScript = (pkg.scripts && pkg.scripts.test) || '';
-assert(testScript.length > 0, 'app/package.json has a "test" script to check against');
+const { getTestFiles, SKIPPED_TESTS } = require('./run-tests');
+const files = getTestFiles();
+const appRun = new Set(files);
+assert(appRun.size === files.length, 'the runner discovers every selected file once');
+assert(files[0] === 'electron-binary.test.js', 'the Electron binary check runs first');
+const wrappers = new Map(testPs
+  .filter((file) => file.startsWith(SCRIPTS_DIR + path.sep) && file !== path.join(SCRIPTS_DIR, 'test-reachability.Tests.ps1'))
+  .map((file) => [rel(file), wrapperTarget(rel(file), fs.readFileSync(file, 'utf8'))]));
 
-// EXACT-TOKEN matching, not substring: `renderer/tts.test.js` being wired must never
-// mask a future root-level orphan `tts.test.js` (a masked orphan is the precise
-// failure this tool exists to catch, so a substring false-negative here would be
-// self-defeating). The "test" script is tokenized into its `node <path>` invocations
-// and compared for equality.
-const wiredPkgPaths = new Set(
-  testScript.split('&&')
-    .map((s) => s.trim())
-    .filter((s) => s.startsWith('node '))
-    .map((s) => s.slice(5).trim())
-);
-
-// Wrapper corpus: every Pester suite under scripts/ (a Node suite referenced by one of
-// these is executed by the run-pester gate — the K5 wrapper pattern). This meta-test's
-// own Pester sibling is EXCLUDED: it is a watchdog that mentions test filenames, not a
-// wrapper that executes them, and must not count as reachability for anything.
-const wrapperText = testPs
-  .filter((f) => f.startsWith(SCRIPTS_DIR + path.sep) && path.basename(f) !== 'test-reachability.Tests.ps1')
-  .map((f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } })
-  .join('\n');
-const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-const unreachable = testJs.filter((f) => {
-  const relApp = path.relative(APP_DIR, f).split(path.sep).join('/');
-  const inPackageJson = !relApp.startsWith('..') && wiredPkgPaths.has(relApp);
-  // Basename bounded by non-filename characters on both sides: 'x-tts.test.js' or
-  // 'tts.test.js.bak' inside a wrapper cannot satisfy 'tts.test.js'. (The trailing
-  // guard includes '.' symmetrically with the leading one — delta-Reviewer LOW.)
-  const inWrapper = new RegExp(`(?<![\\w.\\-/\\\\])${escapeRe(path.basename(f))}(?![\\w.\\-])`).test(wrapperText);
-  return !inPackageJson && !inWrapper;
-});
-
-// THE invariant — and per the work order the failure names the files, not a count.
+const unreachable = unreachableSuites(testJs, appRun, SKIPPED_TESTS, wrappers);
 assert(unreachable.length === 0,
   unreachable.length === 0
-    ? 'every *.test.js is reachable (app/package.json "test" script or a scripts/ Pester wrapper)'
-    : `UNREACHABLE *.test.js — no runner executes: ${unreachable.map(rel).join(', ')}`);
+    ? 'every *.test.js is discovered, run by its Pester wrapper, or explicitly skipped with a reason'
+    : `UNREACHABLE *.test.js — no runner or valid skip: ${unreachable.join(', ')}`);
 
-// Mutual watchdog: the Pester-side meta suite must exist inside run-pester's root, so
-// the *.Tests.ps1 family keeps ITS reachability check too.
 assert(fs.existsSync(path.join(SCRIPTS_DIR, 'test-reachability.Tests.ps1')),
   'the sibling scripts/test-reachability.Tests.ps1 meta-suite exists (mutual anti-orphan watchdog)');
-
-// Explicit self-check (also implied by the invariant above): this meta-test is itself
-// wired into the node gate. Yes, this is the joke; it is also the requirement.
-assert(wiredPkgPaths.has('test-reachability.test.js'),
-  'this meta-test is itself an exact node invocation in app/package.json "test" (not the next orphan)');
+assert(require('./package.json').scripts?.test === 'node run-tests.js' && appRun.has('test-reachability.test.js'),
+  'npm test invokes the runner directly and discovers this meta-test');
 
 process.stdout.write(`\ntest-reachability: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);
