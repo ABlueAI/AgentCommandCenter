@@ -125,5 +125,11 @@ const mainSrc = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8').replace
   assert(/window-all-closed[\s\S]{0,220}videoScoutRunIds\.clear\(\)/.test(mainSrc), 'window-all-closed clears the registry (window shutdown)');
 }
 
+{
+  const { throws } = require('node:assert/strict');
+  throws(() => generateRunId({ now: new Date(NaN), pid: 42, randomHex: '01234567' }),
+    /generated an invalid run ID/);
+}
+
 process.stdout.write(`\nvideo-scout-run-id: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

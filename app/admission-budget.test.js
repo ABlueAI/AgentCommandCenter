@@ -952,6 +952,23 @@ function testSourceTripwires() {
 // ---- run -------------------------------------------------------------------------------------------
 
 (async () => {
+  {
+    const h = makeBudget();
+    const early = await h.budget.submitPrompt('pty1', 'Fixture prompt');
+    assert(!early.ok && early.reason === REASON.NOT_INITIALIZED &&
+      h.budget.claimPane('pty1').reason === REASON.NOT_INITIALIZED &&
+      h.budget.state().reason === REASON.NOT_INITIALIZED && h.storage.saves === 0 && h.writes.length === 0,
+    'an uninitialized budget refuses claims and prompts before side effects');
+    assert(h.budget.initialize().ok && h.budget.initialize().ok && h.storage.saves === 1,
+      'repeated initialization reads the established state without another write');
+  }
+
+  {
+    const h = makeBudget({ storage: makeStorage({ schemaVersion: 1, runs: {} }) });
+    assert(h.budget.initialize().ok && recordOf(h.storage).admitted === 0 && h.storage.saves === 1,
+      'an existing ledger can initialize a new run with zero admissions');
+  }
+
   await testDisabled();
   await testExactlyNThenRefuse();
   await testPersistFailure();

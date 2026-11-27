@@ -892,6 +892,14 @@ process.stdout.write('\n-- production main-process wiring --\n');
   assert(!/'BLUE_HELM_PANE_STATUS_TOKEN'|BLUE_HELM_PANE_STATUS_TOKEN:/.test(reporter + controller), 'the old name is no longer read or set');
 }
 
+{
+  const { copyAllowedWindowsEnv, omitReservedWindowsEnv } = require('./pty-env');
+  deepEqual(copyAllowedWindowsEnv({ Path: 7, PATH: 'fixture-path' }, ['Path']), { PATH: 'fixture-path' },
+    'a malformed value cannot displace a valid Windows environment entry');
+  deepEqual(copyAllowedWindowsEnv(null), {}, 'missing environment copies no allowlisted keys');
+  deepEqual(omitReservedWindowsEnv(null), {}, 'missing environment and reserved list produce an empty copy');
+}
+
 process.stdout.write(`\npty-env: ${passed} passed, ${failed} failed, ${skipped} skipped\n`);
 process.exit(failed ? 1 : 0);
 }

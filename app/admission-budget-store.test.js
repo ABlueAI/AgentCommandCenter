@@ -469,5 +469,29 @@ try {
   try { fs.rmSync(CREATED_BY_THIS_TEST, { recursive: true, force: true }); } catch { /* best effort */ }
 }
 
+{
+  const userDataDir = path.join(os.tmpdir(), 'mako-admission-ledger-fixture');
+  const stats = { isFile: () => true, isSymbolicLink: () => false, size: 1 };
+  for (const [data, reason] of [
+    [null, STORE_REASON.READ_FAILED],
+    [Buffer.alloc(MAX_RAW_BYTES + 1), STORE_REASON.TOO_LARGE],
+    [Buffer.from('null'), STORE_REASON.INVALID_JSON],
+  ]) {
+    const store = createAdmissionLedgerStore({
+      userDataDir,
+      fsImpl: { lstatSync: () => stats, readFileSync: () => data },
+    });
+    assert(store.load().reason === reason, `ledger read refuses with ${reason}`);
+    assert(store.save([], null).reason === STORE_REASON.NOT_SERIALIZABLE,
+      'ledger refuses an array before opening a lock');
+  }
+  const store = createAdmissionLedgerStore({
+    userDataDir,
+    fsImpl: { openSync: () => { throw Object.assign(new Error('fixture lock failure'), { code: 'EACCES' }); } },
+  });
+  assert(store.save(GOOD_DOC, null).reason === STORE_REASON.WRITE_FAILED,
+    'lock access failure is distinct from concurrent ownership');
+}
+
 process.stdout.write(`\nadmission-budget-store: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

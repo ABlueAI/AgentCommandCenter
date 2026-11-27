@@ -136,5 +136,13 @@ process.stdout.write('\nS31: EXPLICIT TOOL SETS (the env scrub forces default mo
   assert(authorityArgs(null) === '', 'no launch: nothing');
 }
 
+{
+  const unknown = applyAuthority(roleBuilder, new String(LEVEL.HIGH));
+  assert(!unknown.ok && unknown.reason === REASON.UNKNOWN_LEVEL, 'a boxed authority string is refused');
+  const local = applyAuthority(cliCodex, LEVEL.MAXIMUM);
+  assert(local.ok && local.authority === LEVEL.MAXIMUM && local.permissionMode === null && !local.authorityApplied,
+    'Maximum does not attach Claude permission flags to another CLI');
+}
+
 process.stdout.write(`\nauthority-level: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

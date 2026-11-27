@@ -84,6 +84,34 @@ try {
     assert(reasonOf(badShape.authorize(proj)) === 'enumeration-failed', 'a non-array enumeration degrades to a refusal (enumeration-failed)');
   }
 
+  {
+    const brokenStat = createLauncherAuthorizer({
+      realpath: realFn,
+      isDirectory: () => { throw new Error('fixture stat failure'); },
+      listAuthorizedDirs: () => { throw new Error('must not enumerate after failed stat'); },
+    });
+    assert(reasonOf(brokenStat.authorize(proj)) === 'not-a-directory',
+      'a throwing directory check visibly refuses before enumeration');
+
+    const emptyRealpath = createLauncherAuthorizer({
+      realpath: () => '',
+      isDirectory: () => { throw new Error('must not stat an empty path'); },
+      listAuthorizedDirs: () => [],
+    });
+    assert(reasonOf(emptyRealpath.authorize(proj)) === 'unresolved-path',
+      'an empty canonical path is refused before the directory check');
+
+    const folded = createLauncherAuthorizer({
+      realpath: (p) => p,
+      isDirectory: () => true,
+      listAuthorizedDirs: () => [null, '', proj.toUpperCase()],
+      isWin: true,
+    });
+    const result = folded.authorize(proj.toLowerCase());
+    assert(result.ok && result.dir === proj.toLowerCase(),
+      'Windows identity skips empty entries and folds case while retaining the canonical candidate');
+  }
+
   // --- Windows case-insensitivity: an upper-cased authorized path still resolves to the same dir --
   if (IS_WIN) {
     const a = authz.authorize(proj.toUpperCase());

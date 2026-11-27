@@ -180,5 +180,14 @@ section('AGREEMENT \u2014 admission eligibility must match the accepted classifi
     'the shape that split loose `!opts.videoScout` from strict `=== true` never reaches a consumer');
 }
 
+{
+  const shell = classifyPtyLaunch({});
+  assert(shell.ok && shell.kind === KIND.SHELL, 'plain shell classifies without optional role and CLI sets');
+  const cli = classifyPtyLaunch({ cli: 'claude' });
+  const role = classifyPtyLaunch({ role: 'builder' }, { validRoles: ['builder'] });
+  assert(!cli.ok && cli.reason === REASON.UNKNOWN_CLI, 'an absent CLI set authorizes no named CLI');
+  assert(!role.ok && role.reason === REASON.UNKNOWN_ROLE, 'an invalid role set authorizes no named role');
+}
+
 process.stdout.write('\npty-launch-classify: ' + passed + ' passed, ' + failed + ' failed\n');
 process.exit(failed ? 1 : 0);

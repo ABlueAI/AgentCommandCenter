@@ -57,6 +57,10 @@ try {
     assert(r.ok && r.exe === path.join(dir, 'dist', 'electron.exe'), 'complete install: ok, exe is dist/electron.exe');
   }
   {
+    const missingVersion = checkElectronBinary(fakeElectron('version-file-missing', { pathTxt: 'electron.exe', exe: 'electron.exe' }));
+    assert(!missingVersion.ok && /package is 42\.5\.0/.test(missingVersion.reason),
+      'an installed executable without dist/version cannot be verified');
+
     const r = ensureElectronBinary(fakeElectron('no-install-js'));
     assert(!r.ok && /devDependencies/.test(r.reason), 'ensure without install.js (devDependencies omitted): fails, not skipped');
   }

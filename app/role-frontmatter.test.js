@@ -148,5 +148,33 @@ section('TOOLS DECLARATION');
   assert(parseRoleFrontmatter(role({}).replace(/\n/g, '\r\n')).ok === true, 'CRLF line endings parse');
 }
 
+{
+  const { deepEqual } = require('node:assert/strict');
+  const lines = [
+    'hooks:',
+    '  PreToolUse:',
+    '    - matcher: "Read"',
+    '      hooks:',
+    '        - type: command',
+    '          command: fixture',
+  ];
+  const hooks = lines.join('\n');
+  for (const [name, input, expected] of [
+    ['nested scalar', role({ hooks: null }).replace('description: d', 'description:\n  nested: value'), REASON.UNSUPPORTED_STRUCTURE],
+    ['inline hooks', role({ hooks: 'hooks: {}' }), REASON.UNSUPPORTED_HOOKS_GRAMMAR],
+    ['duplicate event', role({ hooks: hooks + '\n  PreToolUse: []' }), REASON.DUPLICATE_KEY],
+    ['missing hook command', role({ hooks: lines.slice(0, -1).join('\n') }), REASON.UNSUPPORTED_HOOKS_GRAMMAR],
+    ['empty hook list', role({ hooks: lines.slice(0, -2).join('\n') }), REASON.UNSUPPORTED_HOOKS_GRAMMAR],
+    ['empty name', role({ hooks: null }).replace('name: web-scout', 'name:'), REASON.NAME_INVALID],
+    ['unsupported denied tool', role({ hooks: null }).replace('model: sonnet', 'disallowedTools: bad tool'), REASON.UNSUPPORTED_VALUE],
+  ]) {
+    const result = parseRoleFrontmatter(input);
+    assert(!result.ok && result.reason === expected, `role parser refuses ${name} with ${expected}`);
+  }
+  const spaced = parseRoleFrontmatter(role({ hooks: hooks.replace('  PreToolUse:', '\n  PreToolUse:\n') + '\nmodelHint: example' }));
+  deepEqual(spaced.events.PreToolUse, [{ matcher: 'Read', hooks: [{ type: 'command', command: 'fixture' }] }]);
+  assert(spaced.scalars.modelHint === 'example', 'hook parsing resumes at the next top-level scalar');
+}
+
 process.stdout.write('\nrole-frontmatter: ' + passed + ' passed, ' + failed + ' failed\n');
 process.exit(failed ? 1 : 0);

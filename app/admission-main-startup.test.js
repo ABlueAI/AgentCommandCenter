@@ -188,6 +188,23 @@ const LEDGER = 'admission-ledger.json';
     assert(!fs.existsSync(path.join(r.userDataDir, LEDGER)),
       'no ledger file is created with no run configured');
     assert(r.record.singleInstanceLockCalls === 0, 'no single-instance lock is requested');
+    const { handled, webContents } = r.record;
+    const trusted = { sender: webContents, senderFrame: webContents.mainFrame };
+    const tokenStatus = handled.get('get-agent-token-status');
+    const setToken = handled.get('set-agent-token');
+    const clearToken = handled.get('clear-agent-token');
+    const status = tokenStatus(trusted);
+    assert(status.ok && status.hasToken === false && status.available === false,
+      'the registered credential status handler reports unavailable OS encryption');
+    for (const handler of [tokenStatus, setToken, clearToken]) {
+      const denied = handler({});
+      assert(!denied.ok && denied.error === 'untrusted-sender', 'credential IPC refuses an untrusted caller');
+    }
+    const invalid = setToken(trusted, 'fixture input');
+    assert(!invalid.ok && invalid.error.startsWith('not a GitHub token'),
+      'trusted credential IPC still refuses malformed input');
+    assert(!fs.existsSync(path.join(r.userDataDir, 'secure.json')), 'credential refusals create no storage file');
+
     assert(r.record.ptySpawns === 0, 'no PTY is spawned');
   }
 

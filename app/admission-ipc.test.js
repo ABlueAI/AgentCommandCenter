@@ -423,6 +423,26 @@ function testSourceTripwires() {
 // ---- run -------------------------------------------------------------------------------------------------
 
 (async () => {
+  {
+    const { deepEqual, throws } = require('node:assert/strict');
+    throws(() => createAdmissionIpc(), /budget is required/);
+    const budget = fakeBudget();
+    const ipc = createAdmissionIpc({ budget });
+    throws(() => ipc.register({}), /ipcMain with handle/);
+    const handlers = new Map();
+    ipc.register({ handle: (name, handler) => handlers.set(name, handler) });
+    deepEqual(await handlers.get(CHANNEL_SUBMIT)({}, { paneId: 'pty1', prompt: 'Fixture prompt' }),
+      { ok: false, reason: IPC_REASON.UNTRUSTED });
+    deepEqual(await handlers.get(CHANNEL_STATE)({}), { ok: false, reason: IPC_REASON.UNTRUSTED });
+    deepEqual(budget.calls, []);
+    const trusted = makeIpc({ budget });
+    trusted.ipc.register({ handle: (name, handler) => handlers.set(name, handler) });
+    assert((await handlers.get(CHANNEL_SUBMIT)({}, { paneId: 'pty1', prompt: 'Fixture prompt' })).ok &&
+      budget.calls.length === 1, 'registered submit forwards the validated request once');
+    assert((await handlers.get(CHANNEL_STATE)({})).state.admitted === 1,
+      'registered state handler returns the budget projection');
+  }
+
   await testDirectInputBlocked();
   await testNoBypass();
   await testUncontrolledPanesUnaffected();

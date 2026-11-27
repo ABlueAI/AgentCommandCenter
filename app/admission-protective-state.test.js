@@ -268,6 +268,30 @@ function createHarness({ env = VALID_ENV, initialDoc, initLoadFailure, spawnThro
       'launch-time prompt refusal creates no claim, admission, process write, or cleanup residue');
   }
 
+  {
+    const plan = config.parseAdmissionConfig(VALID_ENV);
+    const opts = { id: 'pty1', cli: 'claude' };
+    const reason = budgetModule.REASON;
+    const operations = {
+      enabled: true,
+      state: () => ({ ok: true }),
+      boundPaneId: () => null,
+      claimPane: () => null,
+    };
+    for (const [budget, expected] of [
+      [null, reason.NOT_INITIALIZED],
+      [{ ...operations, state: () => ({ ok: false, reason: reason.STORAGE_UNREADABLE }) }, reason.STORAGE_UNREADABLE],
+      [operations, reason.NOT_INITIALIZED],
+      [{ ...operations, claimPane: () => ({ ok: false, reason: reason.STORAGE_CONFLICT }) }, reason.STORAGE_CONFLICT],
+    ]) {
+      const result = prepareAdmissionPaneLaunch({ plan, budget, opts, validRoles: ROLES });
+      assert(!result.ok && result.eligible && !result.controlled && result.reason === expected,
+        `an unavailable launch budget or claim refuses with ${expected}`);
+    }
+    assert(!closeAfterFailedSpawn(null, 'pty1', { controlled: false }),
+      'a failed spawn of an ordinary pane needs no budget cleanup');
+  }
+
   process.stdout.write(`\nadmission-protective-state: ${passed} passed, ${failed} failed\n`);
   process.exit(failed ? 1 : 0);
 })().catch((error) => {

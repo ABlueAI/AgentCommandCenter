@@ -85,6 +85,57 @@ function trustedIpc(overrides) {
     assert(o.ok === false && o.error === 'untrusted-sender', 'handleOpenReport denies an untrusted sender');
   }
 
+  {
+    const cases = [
+      [async () => { throw new Error('fixture subprocess failure'); }, 'library-subprocess-failed'],
+      [async () => null, 'library-error'],
+      [async () => ({ ok: false }), 'library-error'],
+      [async () => ({ ok: false, reason: 'root-unavailable' }), 'root-unavailable'],
+    ];
+    for (const [runLibraryAction, reason] of cases) {
+      const { ipc, ev } = trustedIpc({ runLibraryAction });
+      const result = await ipc.handleList(ev);
+      assert(result.ok === false && result.error === reason && !('entries' in result),
+        `list subprocess refuses with ${reason} and omits entries`);
+    }
+  }
+
+  {
+    const cases = [
+      [async () => { throw new Error('fixture read failure'); }, { ok: false, error: 'library-subprocess-failed' }],
+      [async () => null, { ok: false, error: 'library-error' }],
+      [async () => ({ ok: false }), { ok: false, status: 'unsafe', error: 'read-refused' }],
+    ];
+    for (const [runLibraryAction, expected] of cases) {
+      const { ipc, ev } = trustedIpc({ runLibraryAction, getRunIdForPane: () => 'fixture-run' });
+      const result = await ipc.handleOpenReport(ev, 'pty1');
+      assert(JSON.stringify(result) === JSON.stringify(expected),
+        `read subprocess failure returns ${expected.error} without report content`);
+    }
+  }
+
+  {
+    const { ipc, ev } = trustedIpc({
+      runLibraryAction: async () => ({ ok: true, entries: [{ title: 'Missing identity' }, { runId: 'fixture-run' }] }),
+    });
+    const result = await ipc.handleList(ev);
+    assert(result.ok && result.total === 1 && result.entries.length === 1 && result.invalidCount === 0,
+      'a partial list drops unidentified entries and defaults the optional counts');
+    const [entry] = result.entries;
+    assert(entry.title === '(untitled run)' && entry.reportStatus === 'incomplete' && entry.dateKind === 'unknown',
+      'sparse identified entries use explicit display defaults');
+  }
+
+  {
+    const { ipc, ev } = trustedIpc({
+      getRunIdForPane: () => 'fixture-run',
+      runLibraryAction: async () => ({ ok: true, text: 'fixture report' }),
+    });
+    const result = await ipc.handleOpenReport(ev, 'pty1');
+    assert(result.ok && result.status === 'incomplete' && result.reportStatus === 'incomplete' && result.text === null,
+      'a read without an available status returns no report content');
+  }
+
   // --- List: path-free projection + opaque handles ---
   {
     const { ipc, ev } = trustedIpc();

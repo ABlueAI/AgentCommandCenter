@@ -124,5 +124,27 @@ process.stdout.write('\nraw save bounds and closed schema\n');
   } finally { cleanup(dir); }
 }
 
+{
+  const { throws } = require('node:assert/strict');
+  throws(() => createQuickLinksStore(), /userDataDir is required/);
+  const userDataDir = tempDir();
+  try {
+    throws(() => createQuickLinksStore({ userDataDir, defaultConfig: {} }), /defaultConfig must pass policy/);
+    const stats = { isFile: () => true, isSymbolicLink: () => false, size: 1 };
+    for (const [data, reason] of [
+      [null, STORE_REASON.READ_FAILED],
+      [Buffer.alloc(MAX_CONFIG_BYTES + 1), REASON.CONFIG_TOO_LARGE],
+    ]) {
+      const store = createQuickLinksStore({
+        userDataDir,
+        fsImpl: { lstatSync: () => stats, readFileSync: () => data },
+      });
+      eq(store.load().reason, reason, 'read rechecks the actual buffer before parsing');
+    }
+  } finally {
+    cleanup(userDataDir);
+  }
+}
+
 process.stdout.write(`\nquick-links-store: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

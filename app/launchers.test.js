@@ -179,5 +179,18 @@ if (IS_WIN) {
   process.stdout.write('  · (positive-control cmd.exe test is Windows-only — skipped on this platform)\n');
 }
 
+{
+  const base = require('node:path').join(require('node:os').tmpdir(), 'mako-launcher-fixture');
+  const exe = require('node:path').join(base, 'Microsoft VS Code', 'Code.exe');
+  const result = resolveVscodeExe({
+    env: { 'ProgramFiles(x86)': base },
+    exists: (candidate) => candidate === exe,
+    isWin: true,
+  });
+  assert(result.ok && result.exe === exe, 'VS Code resolves an x86 installation when earlier locations are absent');
+  assert(resolveVscodeExe({ env: {}, isWin: true }).reason === 'vscode-not-found',
+    'an empty Windows install environment returns a visible refusal');
+}
+
 process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

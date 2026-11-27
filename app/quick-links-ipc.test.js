@@ -45,6 +45,33 @@ function harness(overrides = {}) {
 }
 
 (async () => {
+  {
+    const h = harness({
+      store: { load: () => null, saveText: () => ({ ok: false }) },
+      presets: { list: () => null, open: async () => ({ ok: false }) },
+    });
+    for (const result of [
+      h.ipc.handleList(h.trustedEvent),
+      h.ipc.handleSave(h.trustedEvent, '{}'),
+      await h.ipc.handleOpen(h.trustedEvent, 'ql-fixture'),
+      h.ipc.handleListPresets(h.trustedEvent),
+      await h.ipc.handleOpenPreset(h.trustedEvent, 'ql-fixture'),
+    ]) {
+      eq(result.error, IPC_REASON.STORE_FAILURE, 'missing adapter failure details map to a bounded refusal');
+    }
+    eq(h.opens.length, 0, 'store failure prevents an OS open');
+    eq(h.logs.length, 5, 'all five adapter failures are visible');
+  }
+
+  {
+    const h = harness({ presets: {
+      list: () => { throw new Error('fixture list failure'); },
+      open: async () => ({ ok: true }),
+    } });
+    eq(h.ipc.handleListPresets(h.trustedEvent).error, IPC_REASON.STORE_FAILURE,
+      'a throwing preset list returns a bounded refusal');
+  }
+
   process.stdout.write('\ntrusted sender on every operation\n');
   {
     const h = harness();

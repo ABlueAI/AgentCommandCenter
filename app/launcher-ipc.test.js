@@ -99,5 +99,24 @@ for (const method of ['handleOpenVscode', 'handleOpenTerminal']) {
     'the trusted-sender gate short-circuits before authorization or any spawn');
 }
 
+{
+  const errors = [];
+  const launches = [];
+  const ipc = createLauncherIpc({
+    assessSender: () => ({ ok: true }),
+    authorize: () => ({ ok: true, dir: REAL_DIR }),
+    resolveVscode: () => ({ ok: true, exe: VS_EXE }),
+    resolveTerminal: () => WT_EXE,
+    launch: (_cmd, _args, onError) => launches.push(onError),
+    logRefusal: (line) => errors.push(line),
+  });
+  ipc.handleOpenVscode({}, REAL_DIR);
+  ipc.handleOpenTerminal({}, REAL_DIR);
+  launches[0](Object.assign(new Error('fixture detail'), { code: 'ENOENT' }));
+  launches[1](new Error('fixture detail'));
+  assert(errors.join('|') === 'Open in VS Code refused: spawn-failed (ENOENT)|Open Terminal refused: spawn-failed (error)',
+    'both launcher callbacks log the bounded spawn error with or without an error code');
+}
+
 process.stdout.write(`\nlauncher-ipc: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

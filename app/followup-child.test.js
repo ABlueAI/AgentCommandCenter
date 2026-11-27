@@ -79,6 +79,30 @@ const PAYLOAD = { report: 'SECRET-REPORT-BODY', question: 'SECRET-QUESTION-BODY'
 }
 
 (async () => {
+  const keyLookupRegression = {
+    skip: 'the child runner rejects when key lookup throws',
+    async run() {
+      const { deepEqual } = require('node:assert/strict');
+      const { runner, spawns } = makeRunner({
+        deps: { getKey: () => { throw new Error('fixture key lookup failure'); } },
+      });
+      deepEqual(await runner.run(PAYLOAD), { ok: false, error: 'gemini-key-missing' });
+      deepEqual(spawns, []);
+    },
+  };
+  if (keyLookupRegression.skip) process.stdout.write(`  - SKIP: ${keyLookupRegression.skip}\n`);
+  else await keyLookupRegression.run();
+
+  {
+    const child = fakeChild();
+    child.stdin.end = () => { throw new Error('fixture pipe closed'); };
+    child.kill = () => { throw new Error('fixture process already gone'); };
+    const { runner } = makeRunner({ child });
+    const result = await runner.run(PAYLOAD);
+    assert(result.ok === false && result.error === 'child-spawn-failed',
+      'synchronous stdin failure settles visibly even if process cleanup throws');
+  }
+
   // missing key refuses BEFORE spawn
   {
     const spawns = [];

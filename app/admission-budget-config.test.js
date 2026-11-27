@@ -208,5 +208,8 @@ process.stdout.write('\n-- source tripwires --\n');
     'main delegates every pane start to the protective admission launch policy before spawn');
 }
 
+assert(Object.keys(config.stripAdmissionEnv(null)).length === 0, 'absent child environment strips to an empty object');
+assert(config.hasAdmissionEnv('fixture') === false, 'non-object input has no admission keys');
+
 process.stdout.write(`\nadmission-budget-config: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

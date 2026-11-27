@@ -25,6 +25,18 @@ function makeLock(over) {
   }, over || {}));
 }
 
+{
+  const { throws } = require('node:assert/strict');
+  throws(() => lockMod.createPaneStatusLock(), /installId is required/);
+  throws(() => lockMod.createPaneStatusLock({ installId: INSTALL }), /settingsDir is required/);
+  const lock = makeLock();
+  for (const value of [null, [], { schemaVersion: -1 }, { schemaVersion: 1, installId: INSTALL, pid: '42' }]) {
+    fs.writeFileSync(lock.lockPath(), JSON.stringify(value));
+    assert(lock.inspect().reason === lockMod.LOCK_REFUSAL.MALFORMED,
+      'a malformed lock identity is refused instead of treated as absent');
+  }
+}
+
 // ---------------------------------------------------------------- in-process mutex
 {
   const lock = makeLock();

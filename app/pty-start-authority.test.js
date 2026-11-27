@@ -157,5 +157,26 @@ section('REFUSAL LOGGING IS BOUNDED');
   assert(calls.refusals[0].indexOf('pty-start refused') === 0, 'and it is the bounded refusal form');
 }
 
+{
+  const logs = [];
+  const deps = {
+    assessSender: () => ({ ok: true }),
+    classify: () => ({ ok: true }),
+    resolveDefinition: () => ({ ok: true }),
+    assertPolicy: () => ({ ok: true }),
+    logRefusal: (line) => logs.push(line),
+  };
+  for (const [override, invoke, stage, reason] of [
+    [{ assessSender: () => undefined }, (ipc) => ipc.assess({}, {}), 'sender', 'untrusted-sender'],
+    [{ classify: () => ({ ok: false }) }, (ipc) => ipc.assess({}, {}), 'classify', 'classify-malformed-opts'],
+    [{ resolveDefinition: () => null }, (ipc) => ipc.authorizeFencedRole({}), 'resolve', 'resolve-bad-input'],
+    [{ assertPolicy: () => null }, (ipc) => ipc.authorizeFencedRole({}), 'policy', 'fence-policy-declaration-unparseable'],
+  ]) {
+    const result = invoke(createPtyStartAuthority({ ...deps, ...override }));
+    assert(!result.ok && result.reason === reason && logs.pop() === `pty-start refused [${stage}]: ${reason}`,
+      `a missing ${stage} decision fails closed with a bounded refusal`);
+  }
+}
+
 process.stdout.write('\npty-start-authority: ' + passed + ' passed, ' + failed + ' failed\n');
 process.exit(failed ? 1 : 0);

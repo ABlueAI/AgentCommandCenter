@@ -128,5 +128,14 @@ eq(buildDefaultConfig({ starboardUrl: 'https://fixture.example' }).reason, REASO
 assert(!DEFAULT_LABELS.some((label) => /CRM|Hexona|GoHighLevel/.test(label)),
   'default labels contain no forbidden historical/vendor name');
 
+{
+  const { serializeConfig } = require('./quick-links-policy');
+  eq(validateConfigObject([]).reason, REASON.CONFIG_NOT_OBJECT, 'a config array is refused');
+  eq(validateEntry(null).reason, REASON.ENTRY_NOT_OBJECT, 'a null entry is refused');
+  eq(serializeConfig(config([null])).reason, REASON.ENTRY_NOT_OBJECT, 'serialization propagates entry validation failure');
+  assert(validateConfigObject(Object.assign(Object.create(null), config())).ok,
+    'closed-schema records with a null prototype are accepted');
+}
+
 process.stdout.write(`\nquick-links-policy: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

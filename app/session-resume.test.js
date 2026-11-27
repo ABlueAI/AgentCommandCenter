@@ -91,5 +91,17 @@ for (const [label, over, reason] of cases) {
 }
 assert(Object.values(REASON).every((v) => /^resume-[a-z-]+$/.test(v)), 'every reason is a bounded constant');
 
+{
+  const rows = offerView([builderRec], {
+    now: () => new Date('2026-10-29T10:00:00.000Z'),
+    retentionDays: 1,
+  });
+  assert(rows[0].worktreeMissing === true && rows[0].mayBeExpired === true,
+    'missing existence checker and custom retention produce both warnings');
+  const malformed = checkResume({ ...base, offer: { ok: true, records: {} } });
+  assert(!malformed.ok && malformed.reason === REASON.OFFER_UNREADABLE,
+    'a successful offer with malformed records still refuses the resume');
+}
+
 process.stdout.write('\nsession-resume: ' + passed + ' passed, ' + failed + ' failed\n');
 process.exit(failed ? 1 : 0);

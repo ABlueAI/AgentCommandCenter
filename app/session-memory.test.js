@@ -232,5 +232,18 @@ section('S09: `offered` keeps S08 files valid and refuses a bad value');
 }
 
 try { fs.rmSync(ROOT, { recursive: true, force: true }); } catch { /* best effort */ }
+{
+  const store = createSessionMemoryStore({
+    userDataDir: path.join(os.tmpdir(), 'mako-session-memory-fixture'),
+    fsImpl: { lstatSync: () => { throw Object.assign(new Error('fixture access failure'), { code: 'EACCES' }); } },
+  });
+  const result = store.list();
+  assert(!result.ok && result.reason === REASON.READ_FAILED, 'inspection failure is distinct from an absent session ledger');
+  assert(store.recordStop('invalid', STOP_REASON.EXITED).reason === REASON.BAD_SESSION_ID,
+    'stop rejects a malformed ID before touching the ledger');
+  assert(store.recordResume('invalid', 'pty1').reason === REASON.BAD_SESSION_ID,
+    'resume rejects a malformed ID before touching the ledger');
+}
+
 process.stdout.write('\nsession-memory: ' + passed + ' passed, ' + failed + ' failed\n');
 process.exit(failed ? 1 : 0);

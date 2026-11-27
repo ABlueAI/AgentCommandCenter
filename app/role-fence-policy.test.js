@@ -401,5 +401,19 @@ section('CONTROLLED WEBFETCH — the standalone hook carries the same literals (
   assert(/const WEBFETCH_MAX_URL_LENGTH = 2000;/.test(hook), 'hook URL length bound is 2000');
 }
 
+{
+  const rejected = assertFencedRoleDefinition({
+    role: 'web-scout',
+    text: build(),
+    canonicalHookPath: HOOK,
+    trackedHookSha256: TRACKED_SHA,
+    fsx,
+    hashFile: () => { throw new Error('fixture hash failure'); },
+    platform: 'win32',
+  });
+  assert(!rejected.ok && rejected.reason === REASON.HOOK_CONTENT_MISMATCH,
+    'an unreadable hook fingerprint is a visible policy refusal');
+}
+
 process.stdout.write('\nrole-fence-policy: ' + passed + ' passed, ' + failed + ' failed\n');
 process.exit(failed ? 1 : 0);
