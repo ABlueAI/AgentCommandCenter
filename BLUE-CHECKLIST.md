@@ -33,10 +33,11 @@ changed to classic `public_repo` (PR #46); step 8 moved to 2026-10-28 and steps 
 
 Updated 2026-11-26 by Claude (checklist cleanup, PR #303): step 77 ticked, steps 30, 59 and 72
 struck as superseded, steps 22 and 27 handed to agents (your part of each is done), each with its
-evidence in the step. This is everything still open for you on `main`, grouped by when. Each link
-goes to the section that holds the step. Under D-090 (your words, 2026-11-25, recorded in PR #301,
-not yet on `main`) agents decide procedural PR questions themselves, such as "one more push" or
-"one more review run", so those are not listed here.
+evidence in the step. Later the same day (issue #304): step 27 ticked against the routine read-back
+recorded in docs/RUNNER.md, and step 81 (from PR #283) added. This is everything still open for you on `main`, grouped by when. Each
+link goes to the section that holds the step. Under D-090 (your words, 2026-11-25; on `main` since
+PR #301 merged on 2026-11-26) agents decide procedural PR questions themselves, such as "one more
+push" or "one more review run", so those are not listed here.
 
 **At every merge sitting (no step number; they recur):**
 
@@ -52,8 +53,9 @@ not yet on `main`) agents decide procedural PR questions themselves, such as "on
   done" (5 seconds). *Not verified: the hand-off for this PR says you said "Max is on" on
   2026-11-23, but no record on `main` or GitHub quotes it, so it isn't ticked.*
 - [Step 50](#before-the-daily-runner-starts-building): tell any Claude session "apply the digest
-  prompt from docs/RUNNER.md" (2 minutes). Only the digest's prompt is left (read back
-  2026-11-26).
+  prompt from docs/RUNNER.md" (2 minutes). The digest's stored prompt is older than `main`'s (read
+  back 2026-11-26); the runner's stored prompt is recorded in docs/RUNNER.md and reads `main`'s
+  runner prompt every fire.
 - [Step 70](#from-s37-the-account-guard-and-the-powershell-tool): the PR sweeper's push trigger and
   phone notifications (5 minutes), or tell any agent "set up the sweeper's trigger and
   notifications".
@@ -90,6 +92,8 @@ not yet on `main`) agents decide procedural PR questions themselves, such as "on
   [step 73](#video-scout-s54) (20 minutes; PR #230 merged 2026-11-26),
   [step 75](#from-s58-fenced-web-reading-agents) (3 minutes) and
   [step 79](#from-s38-the-full-security-check) (10 minutes, with the S38 private report).
+- [Step 81](#from-s66-the-shared-navigation), the three-tab shell (10 minutes; PR #283 merged
+  2026-11-26).
 
 **At H1:**
 
@@ -119,16 +123,12 @@ not yet on `main`) agents decide procedural PR questions themselves, such as "on
   ([Waiting on you](#waiting-on-you-the-runner-wont-ask): an issue you open as `ABlueAI`, or a
   hand-off to an agent in its own session), and S60's brief from the same chat.
 
-**Yours until PR #301 (D-090) merges, then an agent decides:**
-[step 71](#waiting-on-you-the-runner-wont-ask) (the UI-library OSS verdict) and step 84 (S47's
-Symvibe verdicts, in PR #287, not yet on `main`). Once #301 is on `main`, the agent records the
-recommended verdict, marked 🤖, and your merge approves it; until then, give the verdict if you
-want it settled sooner.
-
 **Open, but agents' work, not yours:** [step 22](#any-time-not-blocking) (your verdict is already
-on your signed 2026-11-16 sheet; an agent copies it into the OSS record) and
-[step 27](#before-the-daily-runner-starts-building) (your part is done; recording the runner's
-stored prompt is issue #304).
+on your signed 2026-11-16 sheet; an agent copies it into the OSS record), and, since PR #301 (D-090)
+merged on 2026-11-26, [step 71](#waiting-on-you-the-runner-wont-ask) (the UI-library OSS verdict)
+and step 84 (S47's Symvibe verdicts, in PR #287, not yet on `main`): the agent records the
+recommended verdict, marked 🤖, and your merge approves it. Give a verdict yourself only if you
+want a different one.
 
 ## Do next, in this order
 
@@ -366,17 +366,19 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   "Limits, from the official docs").
   - *Done when:* you tell any agent "usage credits are off". Claude can't read that page, so it
     records your word and the date here.
-- [ ] **27. Right after merging S04 (PR #84), have its runner applied.** *Your part is done;
-  read back 2026-11-26 (read-only `list_triggers`, about 04:30 UTC): **Mako all-day runner** is on,
-  every hour at :07 Eastern, Opus 5.5, notifications off, no connectors, last fire 2026-11-26 04:07
-  UTC succeeded; **Mako evening digest** is on, 8:03 PM Eastern, Opus 5.5, push on, no connectors,
-  last fire 2026-11-26 01:03 UTC succeeded; **Mako daily runner** is off (last fire 2026-11-04).
-  The runner works PRs as `ABlueAgent` (PR #300, S68, labelled `runner`). So the "Left to do, as
-  read on 2026-10-23" list below is done. Not ticked, because "prompt matching `main`" doesn't hold
-  yet: since 2026-11-24 the runner's stored prompt is a short wrapper (follow the runner prompt
-  docs/RUNNER.md marks as current, plus its own overrides) that isn't recorded in the repo, which
-  is agents' work (issue #304), and the digest's stored prompt is older than `main`'s (step 50).
-  S04's own two-day check is separate.* About 10 minutes, in the
+- [x] **27. Right after merging S04 (PR #84), have its runner applied.** *Done; ticked 2026-11-26
+  against the read-back recorded in docs/RUNNER.md, "Read back 2026-11-26 (issue #304)"
+  (`list_triggers`, read-only, about 04:30 and 07:15 UTC): **Mako all-day runner** is on, every hour
+  at :07 Eastern, Opus 5.5, notifications off, no connectors, its fires succeed, and its PRs open as
+  `ABlueAgent` (PR #300, S68, labelled `runner`); **Mako evening digest** is on, 8:03 PM Eastern,
+  Opus 5.5, push on, no connectors; **Mako daily runner** is off (last fire 2026-11-04). So the
+  "Left to do, as read on 2026-10-23" list below is done, apart from its last bullet (applying the
+  prompts), which is step 50. The runner's stored prompt, a short wrapper set on 2026-11-24 that
+  follows the runner prompt docs/RUNNER.md marks as current with its own overrides, is recorded
+  there as read, so it is on `main`. The "prompt matching `main`" part of this step's done-when
+  has been step 50's since PR #166 (step 50 applies the prompts), so it doesn't hold this tick: the
+  digest's stored prompt is older than `main`'s, and that is step 50. S04's own two-day check is
+  separate.* About 10 minutes, in the
   same sitting as the merge, after step 28. Merging S04 ends the old runner's one-at-a-time rule,
   so don't leave this for the morning. Tell the main chat "S04 merged".
   - That session follows docs/RUNNER.md "Applying it": it creates **Mako all-day runner** (every
@@ -410,9 +412,16 @@ on its own, one session at a time on Pro until you upgrade (step 8).
 - [ ] **50. Have the runner and digest prompts applied (after you merge PR #166).** *Still open,
   read back 2026-11-26 (`list_triggers`, read-only): the runner's stored prompt is a wrapper that
   tells it to follow the runner prompt docs/RUNNER.md marks as current, with its own overrides on
-  top (recording it is issue #304), and the digest's stored prompt (last changed 2026-11-05) is PR
+  top (recorded verbatim in docs/RUNNER.md, "Read back 2026-11-26 (issue #304)"), and the digest's
+  stored prompt (last changed 2026-11-05) is PR
   #166's text, without the later "agent login" and "Agent writes" lines of "Proposed digest prompt
-  (verbatim)". Your part: tell any Claude session "apply the digest prompt from docs/RUNNER.md".* About 2 minutes,
+  (verbatim)". **As of 2026-11-26 this step covers the digest only:** leave the all-day runner's
+  stored text as it is (it already reads "Proposed runner prompt (verbatim)" every fire, and
+  replacing it would drop its overrides; aligning those is issue #313). Your part: tell any Claude
+  session "apply the digest prompt from docs/RUNNER.md". Done when, as of 2026-11-26: the session
+  reads both tasks back, the digest's prompt matches "Proposed digest prompt (verbatim)" on `main`
+  as text, and the runner's still matches the read-back recorded in docs/RUNNER.md. Where the text
+  below says otherwise, this note wins.* About 2 minutes,
   right after you merge PR #166 (the merge-order rule). Tell any Claude session "apply the runner
   prompts from docs/RUNNER.md". It updates only the prompts of the scheduled tasks **Mako all-day
   runner** and **Mako evening digest** from "Proposed runner prompt (verbatim)" and "Proposed digest
@@ -1469,6 +1478,21 @@ Step 75 comes from PR #245. Step numbers 73 and 74 belong to open PRs (#230 and 
   - *Done when:* a Web Scout pane launches after the sync, and you tell any agent "step 75 done"; it ticks
     this with the date.
 
+Step 89 comes from PR #327.
+
+- [ ] **89. Re-deploy the fence hook after PR #327 merges, and check a Page pane.** **About 5
+  minutes**, the next time you open Mako after merging PR #327 (if step 75 isn't done yet, do this
+  instead of it: it covers both). PR #327 changes the fence hook again, and Mako refuses to launch the
+  fenced roles (Web Scout, Source Scout, Operator and Page panes) until the deployed copy matches the
+  new one. The hook now also loads Mako's own page-URL check, which CI can't run on your PC.
+  - Pull `main`, run `scripts/sync-roles.ps1`, and restart Mako fully (close every window).
+  - Open a Page pane on a public https page (for example `https://example.org/`): it should open and
+    read the page. Then ask it to open `https://localhost/`: it should show "Blocked by Mako page
+    fence" with `[fence-page-denied]`.
+  - **New Agent > 🌐 Web Scout**, **Create & Launch**: the pane should start.
+  - *Done when:* both checks behave as above, and you tell any agent "step 89 done"; it ticks this
+    with the date.
+
 ## From S14 (the 1.1 design brief)
 
 Step 77 comes from PR #253.
@@ -1508,6 +1532,23 @@ Step 81 comes from PR #283.
      greyed-out switches, **Quiet hours** and **Pause all**, which S18 and S19 turn on.
   - *Done when:* you tell any agent "S66 PC check: OK" or what looked wrong; the agent ticks this
     with the date and your words, and anything wrong becomes a fix PR.
+
+## From S46 (session hygiene)
+
+Step 83 comes from PR #286.
+
+- [ ] **83. Check the daily idle-sessions list on your PC.** **About 5 minutes**, at the next Tuesday
+  or Friday PC check after PR #286 merges, on the dev copy (`npm run start:dev` in `app`).
+  - Close Mako with one Claude pane open, then in Mako's settings folder for the dev copy open
+    `session-memory.json` and, in that record, set `startedAt`, `stoppedAt` and (if it is there)
+    `lastActiveAt` all to the same time 4 days ago, for example `2026-11-21T09:00:00.000Z` (idle time
+    counts from the latest of the three). Or simply wait 3 days. Start the dev copy again and leave
+    the Resume offer unanswered (answering it archives the session, so it leaves the idle list).
+  - The Terminals tab shows "One Claude session has been idle 3 days or more", with the pane's role,
+    folder, idle days, "waiting for Resume or Start fresh" and "owner Blue". Type a done-when, Save,
+    and restart: the row shows it.
+  - *Done when:* the list shows and the done-when survives a restart; tell any agent "step 83 done"
+    (or what went wrong) and it ticks this with the date.
 
 ## Every day, once the runner is on
 
@@ -1590,6 +1631,18 @@ open PRs (#283, #286 and #287).
     plugin was uninstalled or left disabled, with each finding's title and severity only; you
     tell any agent "step 85 done" and it ticks this with the date and how it checked.
 
+## From PR #315 (the account guard's PowerShell deny rules)
+
+Step 88 comes from PR #315 (issue #219). Step numbers 86 and 87 belong to open PRs.
+
+- [ ] **88. Check the PowerShell deny rules on Windows (PR #315).** **About 5 minutes**, on the next
+  Tuesday or Friday PC-check evening after merging PR #315.
+  - On your PC, pull `main` in your Mako checkout, start Claude Code there and run `/permissions`.
+  - Check that Claude Code showed no settings warning at start-up, and that the "Deny" list shows
+    the `PowerShell(...)` rules next to the `Bash(...)` ones (for example `PowerShell(gh pr merge:*)`).
+  - *Done when:* you've told any agent what you saw (no warning, rules listed, or what differed);
+    it ticks this with the date and how it checked.
+
 ## Coming up this month (the runner will ask when it gets there)
 
 You can start on the first one now, which saves time later.
@@ -1626,11 +1679,11 @@ You can start on the first one now, which saves time later.
   it arrives.
 - [ ] **71. Your verdict on S63's UI-library record (PR #224).** **Yours until PR #301 (D-090)
   merges, then an agent decides.** *Marked 2026-11-26: D-090 (your words, 2026-11-25) is recorded
-  in PR #301, not yet on `main`. Once it is, the agent that next needs these libraries (S49 or S51)
+  in PR #301, which merged on 2026-11-26, so this is now an agent's. The agent that next needs these libraries (S49 or S51)
   records the record's "Recommended direction" (prototype Cytoscape.js and a UI-only Deep Chat
   build; adopt MiniSearch if ranked search across task fields is in scope; adopt the Obsidian URI)
-  as its 🤖 verdict in the record, ticks this, and your merge approves it. Until then this step
-  stands as written. PR #224 merged on 2026-11-24.* **About 15 minutes**, any time
+  as its 🤖 verdict in the record, ticks this, and your merge approves it. PR #224 merged on
+  2026-11-24.* **About 15 minutes**, any time
   before S49 or S51 picks its chat and graph libraries. S63 delivered an OSS record,
   `docs/decisions/OSS-ui-libraries.md`, in place of the `docs/research/` write-up its plan row
   names. Read it and give your verdict on each option (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD
@@ -1651,6 +1704,13 @@ You can start on the first one now, which saves time later.
   any agent. Merging PR #255 records the list, not your verdicts.
   - *Done when:* each row you decided has your verdict in its last column, word for word, and the
     agent ticks this with the date and the rows it filled.
+- [ ] **84. Optional: your verdicts on S47's Symvibe record (PR #287).** **About 10 minutes**, before
+  you merge PR #287. The ask was settled under D-090 on 2026-11-26: the record carries the builder's
+  defaults (crew presets BUILD FRESH, goal-stopping loops ADOPT, branch status BUILD FRESH), and
+  merging PR #287 approves them. To choose otherwise, say so in PR #287 before merging; an agent then
+  records your words in `docs/decisions/OSS-symvibe.md`.
+  - *Done when:* PR #287 is merged (the defaults stand) or your own verdict is in the record word for
+    word; the agent ticks this with the date and which.
 
 ## Dated reminders
 
