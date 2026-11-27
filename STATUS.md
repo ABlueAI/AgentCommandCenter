@@ -3,7 +3,12 @@
 S55 is implemented on its review branch. Independent review and the Windows Firefox profile check
 (checklist step 57) are pending.
 
-Updated 2026-11-26 by the PR sweeper's second status PR of the day (covers main up to 0baa0cd:
+Updated 2026-11-27 by the PR sweeper's status PR (covers main up to d664229: PR #317, Codex's
+main-process and scripts audit; PR #318, Codex's renderer audit; PR #286, S46's session hygiene;
+PR #287, S47's Symvibe OSS record; verified: GitHub's REST API, read 2026-11-27 about 05:15 UTC,
+shows them merged 2026-11-26 23:42 UTC to 2026-11-27 05:10 UTC in that order). Before that:
+updated 2026-11-26 by the PR sweeper's second status PR of the day, PR #328, never merged, its
+edits carried here (covers main up to 0baa0cd:
 PR #312, the runner record for issue #304, merged 2026-11-26 18:42 UTC (verified: GitHub's REST
 API, read 2026-11-26 about 23:40 UTC); before it, up to 1136f88: PR #303, the checklist cleanup; PR #301, D-090 in the rules; PR #300, S68's re-pins; PR #283, S66's
 shared navigation; PR #208, S53's AgentPlayback record; verified: GitHub's REST API, read
@@ -103,6 +108,19 @@ Only the PR sweeper's status PR edits this file (AGENTS.md "The shared brain";
   not a pass, and the plugin install from the new source waits for Blue's word on PR #300 (step 31).
 - **S53 done (PR #208, merged 2026-11-26):** AgentPlayback is vetted and recorded in
   docs/decisions/OSS-agentplayback.md with Blue's verdict, PATTERN-MINE; no build.
+- **Codex's November audits (PRs #317 and #318, merged 2026-11-26 and 2026-11-27):**
+  `docs/audits/codex-main-2026-11.md` (main process and scripts) and
+  `docs/audits/codex-renderer-2026-11.md` (renderer) list findings on `main` at `1136f88`, each
+  with severity and a fix idea; security rows give a title and severity only. Open Codex PR #336
+  (issue #329, confirm before removing a worktree) takes the main audit's first high row.
+- **Session hygiene (S46, PR #286, merged 2026-11-27):** every recorded Claude session has an
+  owner, a state and a "done when"; finished sessions archive themselves; the Terminals tab shows
+  a once-a-day list of sessions idle 3 days or more. Its "Done when" still needs Blue's PC check
+  (checklist step 83), so S46 stays IN PROGRESS (#286).
+- **Symvibe record (S47, PR #287, merged 2026-11-27):** `docs/decisions/OSS-symvibe.md` records
+  the builder's defaults under D-090 (crew presets BUILD FRESH, goal-stopping loops ADOPT, branch
+  status BUILD FRESH), which the merge approved; checklist step 84 is optional. No code yet, so S47
+  stays READY for its build.
 
 - **Release: Mako 1.0.0 is released.**
   - Tag `v1.0.0` was created on 2026-10-18 at `main` commit `37009eb`, which includes the
