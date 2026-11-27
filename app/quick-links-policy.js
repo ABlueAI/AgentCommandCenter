@@ -39,6 +39,7 @@ const REASON = Object.freeze({
   ID_TOO_LONG: 'id-too-long',
   DUPLICATE_ID: 'duplicate-id',
   LABEL_INVALID: 'label-invalid',
+  LABEL_BIDI_CHARACTER: 'label-bidi-character',
   LABEL_TOO_LONG: 'label-too-long',
   URL_NOT_STRING: 'url-not-string',
   URL_EMPTY: 'url-empty',
@@ -123,9 +124,11 @@ function validateEntry(entry) {
   if (typeof entry.id !== 'string' || !ID_PATTERN.test(entry.id)) return refuse(REASON.ID_INVALID);
   if (entry.id.length > MAX_ID_LENGTH) return refuse(REASON.ID_TOO_LONG);
   if (typeof entry.label !== 'string' || entry.label.length === 0 || entry.label !== entry.label.trim()
-      || CONTROL_RE.test(entry.label) || BIDI_RE.test(entry.label)) {
+      || CONTROL_RE.test(entry.label)) {
     return refuse(REASON.LABEL_INVALID);
   }
+  // Its own reason, so a saved label that looks fine but holds an invisible mark says why it is refused.
+  if (BIDI_RE.test(entry.label)) return refuse(REASON.LABEL_BIDI_CHARACTER);
   if (entry.label.length > MAX_LABEL_LENGTH) return refuse(REASON.LABEL_TOO_LONG);
   const url = validateUrl(entry.url);
   if (!url.ok) return url;
