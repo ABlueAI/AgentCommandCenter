@@ -396,11 +396,15 @@ test('analyzes video with no audio track and does not call Whisper', async (t) =
 });
 
 test('real FFmpeg: scene changes and the gap are sampled, static repeats are deduped, frames are 640 or 1280 px', async (t) => {
-  try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); }
-  catch (err) {
-    if (err.code !== 'ENOENT') throw err;
-    t.skip('FFmpeg executable unavailable');
-    return skipped;
+  for (const tool of ['ffmpeg', 'ffprobe']) {
+    try { execFileSync(tool, ['-version'], { stdio: 'ignore' }); }
+    catch (err) {
+      if (tool === 'ffmpeg' && err.code === 'ENOENT' && process.env.MAKO_REQUIRE_FFMPEG !== '1') {
+        t.skip('FFmpeg executable unavailable');
+        return skipped;
+      }
+      throw new Error(`FFmpeg coverage required: ${tool} could not run. Install FFmpeg and ffprobe on PATH.`, { cause: err });
+    }
   }
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'test-s54-ffmpeg-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));

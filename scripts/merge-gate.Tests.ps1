@@ -28,13 +28,17 @@ $script:MgFixtureRoots = New-Object System.Collections.ArrayList
 # --------------------------------------------------------------------------------------------
 
 function Invoke-MgGit {
-    param([string]$RepoPath, [string[]]$GitArgs)
+    param([string]$RepoPath, [string[]]$GitArgs, [switch]$AllowFailure)
     $ErrorActionPreference = 'Continue'
     $raw = & git -C $RepoPath @GitArgs 2>&1
     $code = $LASTEXITCODE
     $lines = @()
     foreach ($i in @($raw)) { if ($null -ne $i) { $lines += [string]$i } }
-    return New-Object psobject -Property @{ ExitCode = $code; Lines = $lines; Text = ($lines -join "`n") }
+    $text = $lines -join "`n"
+    if ($code -ne 0 -and -not $AllowFailure) {
+        throw "Fixture git $($GitArgs -join ' ') exited with code ${code}: $text"
+    }
+    return New-Object psobject -Property @{ ExitCode = $code; Lines = $lines; Text = $text }
 }
 
 function Get-MgSha {
@@ -86,10 +90,16 @@ function New-MgFixture {
     )
     $root = New-MgFixtureRoot
     $null = Invoke-MgGit $root @('init', '-b', 'main')
-    $null = Invoke-MgGit $root @('config', 'user.email', 'mg-test@example.com')
-    $null = Invoke-MgGit $root @('config', 'user.name', 'MG Test')
-    $null = Invoke-MgGit $root @('config', 'core.autocrlf', 'false')
-    $null = Invoke-MgGit $root @('config', 'commit.gpgsign', 'false')
+    # Write the fixture's local Git settings together to avoid four Git process launches.
+    Add-Content -LiteralPath (Join-Path $root '.git\config') -Encoding Ascii -ErrorAction Stop -Value @'
+[user]
+    email = mg-test@example.com
+    name = MG Test
+[core]
+    autocrlf = false
+[commit]
+    gpgsign = false
+'@
 
     Set-Content -LiteralPath (Join-Path $root 'notes.txt') -Value 'base notes' -Encoding Ascii
     [void](New-Item -ItemType Directory -Path (Join-Path $root 'docs'))
@@ -114,19 +124,20 @@ function New-MgFixture {
     $reviewedTip = Get-MgSha $root 'HEAD'
     for ($i = 1; $i -le $TailCommits; $i++) {
         Add-Content -LiteralPath (Join-Path $root 'docs\BUILDER-HANDOFF-demo.md') -Value ('tail update ' + $i)
-        $null = Invoke-MgGit $root @('add', '-A')
-        $null = Invoke-MgGit $root @('commit', '-m', ('handoff tail ' + $i))
+        $null = Invoke-MgGit $root @('commit', '-am', ('handoff tail ' + $i))
     }
-    $branchTip = Get-MgSha $root 'HEAD'
+    $branchTip = $reviewedTip
+    if ($TailCommits -gt 0) { $branchTip = Get-MgSha $root 'HEAD' }
 
     $null = Invoke-MgGit $root @('switch', 'main')
+    $mainSha = $base
     if ($AdvancedMain -or $Conflict) {
         Set-Content -LiteralPath (Join-Path $root 'main-advance.txt') -Value 'main advanced' -Encoding Ascii
         if ($Conflict) { Set-Content -LiteralPath (Join-Path $root 'notes.txt') -Value 'main version of notes' -Encoding Ascii }
         $null = Invoke-MgGit $root @('add', '-A')
         $null = Invoke-MgGit $root @('commit', '-m', 'main advance')
+        $mainSha = Get-MgSha $root 'HEAD'
     }
-    $mainSha = Get-MgSha $root 'HEAD'
     $null = Invoke-MgGit $root @('update-ref', 'refs/remotes/origin/main', $mainSha)
 
     if ($PinnedInWorktreesDir) {
@@ -932,7 +943,7 @@ Describe 'merge-gate conflict stop: guarded --abort' {
     $fx = New-MgFixture -Conflict
 
     It 'aborts a real conflicted merge only because MERGE_HEAD exists' {
-        $m = Invoke-MgGit $fx.Root @('merge', '--no-ff', '-m', 'conflict test', '--', 'feature/demo')
+        $m = Invoke-MgGit $fx.Root @('merge', '--no-ff', '-m', 'conflict test', '--', 'feature/demo') -AllowFailure
         $m.ExitCode | Should Not Be 0
         Test-Path -LiteralPath (Join-Path $fx.Root '.git\MERGE_HEAD') | Should Be $true
         $global:MgOut = @()

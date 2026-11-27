@@ -15,6 +15,8 @@
 //      (Node 22, which ignores the field) stays green.
 
 const fs = require('fs');
+const { spawnSync } = require('node:child_process');
+const os = require('node:os');
 const { isDeepStrictEqual } = require('node:util');
 const path = require('path');
 
@@ -50,6 +52,45 @@ for (const [job, check] of [['app', 'App tests (Windows)'], ['pester', 'PowerShe
   assert(new RegExp(`^  ${job}:\\r?\\n    name: ${check.replace(/[()]/g, '\\$&')}\\s*$`, 'm').test(ci),
     `ci.yml job "${job}" is named "${check}"`);
 }
+
+const appJob = ci.split(/^  pester:\s*$/m)[0];
+const pesterJob = ci.slice(appJob.length);
+const pesterRunner = fs.readFileSync(path.join(repoRoot, 'scripts', 'run-pester.ps1'), 'utf8');
+
+process.stdout.write('\nWindows CI runs the real FFmpeg fixture\n');
+assert(/^      - name: Install pinned FFmpeg\r?\n[\s\S]+?GITHUB_PATH[\s\S]+?^      - name: npm test\r?\n(?:        .*\r?\n)*?          MAKO_REQUIRE_FFMPEG: '1'$/m.test(appJob),
+  'the app job installs FFmpeg on PATH before requiring the real FFmpeg test');
+const emptyPath = fs.mkdtempSync(path.join(os.tmpdir(), 'mako-ci-empty-path-'));
+try {
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toUpperCase() !== 'PATH'));
+  const result = spawnSync(process.execPath, [
+    '--test', '--test-name-pattern=^real FFmpeg:', path.join(__dirname, 'claude-video-scout.test.js'),
+  ], { cwd: emptyPath, env: { ...env, PATH: emptyPath, MAKO_REQUIRE_FFMPEG: '1' }, encoding: 'utf8', timeout: 15_000 });
+  if (result.error) throw result.error;
+  assert(result.status === 1 && /FFmpeg coverage required: ffmpeg could not run/.test(result.stdout),
+    'the real FFmpeg test exits nonzero with an actionable error when CI cannot run ffmpeg');
+} finally {
+  fs.rmSync(emptyPath, { recursive: true });
+}
+
+process.stdout.write('\nWindows CI provisions an exact Pester version\n');
+assert(/^    runs-on: windows-\d{4}$/m.test(pesterJob) &&
+  /Install pinned Pester/.test(pesterJob) && /Import-Module[^\r\n]+-RequiredVersion/.test(pesterRunner),
+  'the PowerShell job names its Windows image and provisions and imports pinned Pester');
+
+process.stdout.write('\nApp CI fetches only the fixed Quick Links baseline\n');
+const quickLinksTest = fs.readFileSync(path.join(__dirname, 'quick-links-integration.test.js'), 'utf8');
+const baseline = quickLinksTest.match(/^const BASE = '([0-9a-f]{40})';$/m)?.[1];
+assert(baseline && /^          fetch-depth: 1$/m.test(appJob) &&
+  appJob.includes(`git fetch --no-tags --depth=1 origin ${baseline}`) &&
+  appJob.indexOf('git fetch --no-tags') < appJob.indexOf('- name: npm test'),
+  'the app job shallow-fetches the same baseline commit the integration test reads');
+
+process.stdout.write('\nPowerShell CI measures each suite\n');
+assert(/foreach \(\$suite in \$suites\)/.test(pesterRunner) &&
+  /\[System\.Diagnostics\.Stopwatch\]::StartNew\(\)/.test(pesterRunner) &&
+  /Invoke-Pester -Path \$suite\.FullName -PassThru/.test(pesterRunner) && /Elapsed\.TotalSeconds/.test(pesterRunner),
+  'the Pester runner times individual discovered suites, including setup outside It blocks');
 
 process.stdout.write('\naudited packages stay at or above their fixed versions\n');
 const lock = JSON.parse(fs.readFileSync(path.join(__dirname, 'package-lock.json'), 'utf8'));
