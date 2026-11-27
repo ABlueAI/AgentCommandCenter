@@ -220,7 +220,15 @@ function cancelVideoTranscription(owner) {
   if (ownsVideoTranscription(videoBusy, videoOwner, owner)) videoCancelled = true;
 }
 
+// The bounded reason app.js shows when a Dictate click fails in a way start() and
+// stopAndTranscribe() don't already report (an unexpected throw or rejection). Like the other
+// reasons this module writes, it is the error's message cut to 160 characters, never the transcript.
+function describeUnexpectedFailure(e) {
+  return 'Dictation could not complete: ' + String((e && e.message) || e).slice(0, 160);
+}
+
 window.ccSTT = {
+  describeUnexpectedFailure,
   transcribeVideoPcm,
   cancelVideoTranscription,
   toggle,

@@ -1777,7 +1777,7 @@ function setupSTTControls() {
   // start() and stopAndTranscribe() report their expected failures themselves; anything that
   // still throws or rejects here is unexpected, so its reason is shown, never swallowed.
   const reportToggleFailure = (e) => {
-    showStatus({ state: 'error', detail: 'Dictation could not complete: ' + String((e && e.message) || e).slice(0, 160) });
+    showStatus({ state: 'error', detail: stt.describeUnexpectedFailure(e) });
   };
   const runToggle = () => {
     let pending;
