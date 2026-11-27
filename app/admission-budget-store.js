@@ -62,6 +62,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const os = require('os');
 
 // Fixed filename. A constant, joined to a main-supplied directory. No caller-supplied string ever
 // reaches this path, and the run id is deliberately NOT part of it — one ledger holds every run, so a
@@ -142,9 +143,13 @@ const CHECKSUM_PATTERN = /^[0-9a-f]{64}$/;
  * @param {string} deps.userDataDir  Electron `userData`. MAIN supplies this; nothing downstream of
  *                                   the renderer or the PTY supplies any part of a path.
  * @param {object} [deps.fsImpl]     Injectable for tests.
- * @param {function} [deps.log]      Reports cleanup failures after the write outcome is known.
+ * @param {function} [deps.log]      Reports cleanup failures after the write outcome is known, and
+ *                                   why a held write lock could not be recovered.
+ * @param {function} [deps.bootTimeMs] Injectable for tests: when this boot of the OS started.
  */
-function createAdmissionLedgerStore({ userDataDir, fsImpl = fs, log = console.warn } = {}) {
+function createAdmissionLedgerStore({
+  userDataDir, fsImpl = fs, log = console.warn, bootTimeMs = () => Date.now() - os.uptime() * 1000,
+} = {}) {
   if (typeof userDataDir !== 'string' || !userDataDir) {
     throw new Error('createAdmissionLedgerStore: userDataDir is required');
   }
@@ -161,10 +166,27 @@ function createAdmissionLedgerStore({ userDataDir, fsImpl = fs, log = console.wa
     }
   }
 
+  // A held lock that recovery refuses to clear is logged with why, so a stuck lock can be told apart
+  // from a second Mako window. The log names only the lock's file name, never the path.
+  function refuseRecovery(why) {
+    log(`[admission] ledger write lock ${LOCK_FILENAME} is held (${why}); NOTHING is sent while it is.`
+      + ' If no other Mako window is open, close Mako and delete that file or folder from its data folder.');
+    return false;
+  }
+
+  // An owner marker made before this boot of the OS belongs to a process that can no longer run,
+  // even when its PID now names another process (Windows reuses PIDs). A margin absorbs rounding;
+  // a marker from a live owner is always newer than the boot.
+  const BOOT_MARGIN_MS = 5000;
+  function markerPredatesBoot(markerPath) {
+    try { return fsImpl.lstatSync(markerPath).mtimeMs < bootTimeMs() - BOOT_MARGIN_MS; }
+    catch { return false; }
+  }
+
   function recoverLock() {
     let entries;
     try {
-      if (!fsImpl.lstatSync(lockPath).isDirectory()) return false;
+      if (!fsImpl.lstatSync(lockPath).isDirectory()) return refuseRecovery('a lock file from an older Mako, or not a folder');
       entries = fsImpl.readdirSync(lockPath, { withFileTypes: true });
     } catch (err) {
       if (err.code === 'ENOENT') return true;
@@ -173,10 +195,14 @@ function createAdmissionLedgerStore({ userDataDir, fsImpl = fs, log = console.wa
     if (entries.length !== 0) {
       const [entry] = entries;
       const match = LOCK_OWNER_PATTERN.exec(entry.name);
-      if (entries.length !== 1 || !entry.isDirectory() || !match || !ownerIsGone(Number(match[1]))) {
-        return false;
+      if (entries.length !== 1 || !entry.isDirectory() || !match) {
+        return refuseRecovery('unexpected entries in the lock folder');
       }
-      try { fsImpl.rmdirSync(path.join(lockPath, entry.name)); }
+      const markerPath = path.join(lockPath, entry.name);
+      if (!ownerIsGone(Number(match[1])) && !markerPredatesBoot(markerPath)) {
+        return refuseRecovery(`its owner, process ${Number(match[1])}, is still running`);
+      }
+      try { fsImpl.rmdirSync(markerPath); }
       catch (err) {
         // Another recovery contender already removed this exact marker.
         if (err.code !== 'ENOENT') throw err;
@@ -202,7 +228,8 @@ function createAdmissionLedgerStore({ userDataDir, fsImpl = fs, log = console.wa
       }
       candidate = undefined;
       return { ok: true, owner };
-    } catch {
+    } catch (err) {
+      log(`[admission] could not take the ledger write lock: ${(err && err.code) || (err && err.name) || 'unknown error'}`);
       return refuse(STORE_REASON.WRITE_FAILED);
     } finally {
       if (candidate) {

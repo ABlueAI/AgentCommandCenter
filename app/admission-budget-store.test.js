@@ -160,6 +160,93 @@ try {
       'a live owner marker survives and the contender writes no ledger');
   }
   {
+    // Every shape recovery must not clear refuses as a conflict, leaves the lock as it was, writes no
+    // ledger, and says in the log why the lock is still held (audit main:18 follow-up).
+    const shapes = [
+      ['two entries', (lock) => { fs.mkdirSync(path.join(lock, `999999-${'a'.repeat(32)}`), { recursive: true });
+        fs.mkdirSync(path.join(lock, `999998-${'b'.repeat(32)}`)); }],
+      ['a marker name that is not an owner', (lock) => { fs.mkdirSync(path.join(lock, 'not-an-owner'), { recursive: true }); }],
+      ['an owner marker that is a file', (lock) => { fs.mkdirSync(lock, { recursive: true });
+        fs.writeFileSync(path.join(lock, `999999-${'c'.repeat(32)}`), ''); }],
+      ['an owner PID above the Windows range', (lock) => { fs.mkdirSync(path.join(lock, `9999999999-${'d'.repeat(32)}`), { recursive: true }); }],
+      ['a lock file from an older Mako', (lock) => { fs.writeFileSync(lock, ''); }],
+    ];
+    for (const [label, make] of shapes) {
+      const dir = freshDir(`cas-refuse-shape-${shapes.indexOf(shapes.find((x) => x[0] === label))}`);
+      const lines = [];
+      const store = createAdmissionLedgerStore({ userDataDir: dir, log: (l) => lines.push(l), bootTimeMs: () => 0 });
+      make(store.lockPath());
+      const snapshot = () => (fs.lstatSync(store.lockPath()).isDirectory()
+        ? fs.readdirSync(store.lockPath()).sort().join('|') : 'file');
+      const before = snapshot();
+      const denied = store.save(GOOD_DOC, null);
+      assert(denied.ok === false && denied.reason === STORE_REASON.CONFLICT, `${label}: refused as a conflict`);
+      assert(snapshot() === before && !fs.existsSync(store.ledgerPath()), `${label}: the lock survives and no ledger is written`);
+      assert(lines.some((l) => l.includes('admission-ledger.json.lock is held') && !l.includes(dir)),
+        `${label}: the log says the lock is held, without the path`);
+    }
+  }
+  {
+    // A crash between removing the owner marker and removing the folder leaves it empty: recover it.
+    const dir = freshDir('cas-empty-lock');
+    const store = createAdmissionLedgerStore({ userDataDir: dir });
+    fs.mkdirSync(store.lockPath());
+    assert(store.save(GOOD_DOC, null).ok === true && !fs.existsSync(store.lockPath()),
+      'an empty lock folder is recovered and the save succeeds');
+  }
+  {
+    // Windows reuses PIDs: a marker made before this boot is recovered even if its PID is running now.
+    const dir = freshDir('cas-before-boot');
+    const store = createAdmissionLedgerStore({ userDataDir: dir, log: () => {}, bootTimeMs: () => Date.now() });
+    const owner = path.join(store.lockPath(), `${process.pid}-${'e'.repeat(32)}`);
+    fs.mkdirSync(owner, { recursive: true });
+    const old = new Date(Date.now() - 3600 * 1000);
+    fs.utimesSync(owner, old, old);
+    assert(store.save(GOOD_DOC, null).ok === true && !fs.existsSync(store.lockPath()),
+      'an owner marker older than this boot is recovered although its PID is alive');
+    const fresh = createAdmissionLedgerStore({ userDataDir: freshDir('cas-after-boot'), log: () => {},
+      bootTimeMs: () => Date.now() - 3600 * 1000 });
+    const liveOwner = path.join(fresh.lockPath(), `${process.pid}-${'e'.repeat(32)}`);
+    fs.mkdirSync(liveOwner, { recursive: true });
+    const denied = fresh.save(GOOD_DOC, null);
+    assert(denied.ok === false && denied.reason === STORE_REASON.CONFLICT && fs.existsSync(liveOwner),
+      'a live owner marker made after this boot still refuses');
+  }
+  {
+    // A failed release is the stuck state row main:18 is about: it is logged, and later saves in this
+    // process refuse rather than proceed without the lock.
+    const dir = freshDir('cas-release-fails');
+    const lines = [];
+    let failRelease = true;
+    const store = createAdmissionLedgerStore({ userDataDir: dir, log: (l) => lines.push(l), fsImpl: {
+      ...fs,
+      rmdirSync(target, ...args) {
+        if (failRelease && path.dirname(target) === store.lockPath()) {
+          const err = new Error('denied'); err.code = 'EPERM'; throw err;
+        }
+        return fs.rmdirSync(target, ...args);
+      },
+    } });
+    const first = store.save(GOOD_DOC, null);
+    assert(first.ok === true, 'the save itself still reports its result');
+    assert(lines.includes('[admission] could not release the ledger write lock'), 'the failed release is logged');
+    const next = store.save(GOOD_DOC, first.revision);
+    assert(next.ok === false && next.reason === STORE_REASON.CONFLICT, 'a later save refuses while our lock is stuck');
+    failRelease = false;
+  }
+  {
+    // A failure while taking the lock is logged with its error code, not only refused.
+    const dir = freshDir('cas-acquire-fails');
+    const lines = [];
+    const store = createAdmissionLedgerStore({ userDataDir: dir, log: (l) => lines.push(l), fsImpl: {
+      ...fs,
+      mkdtempSync() { const err = new Error('denied'); err.code = 'EPERM'; throw err; },
+    } });
+    const denied = store.save(GOOD_DOC, null);
+    assert(denied.ok === false && denied.reason === STORE_REASON.WRITE_FAILED, 'a lock failure refuses as write-failed');
+    assert(lines.some((l) => l.includes('could not take the ledger write lock: EPERM')), 'the lock failure is logged with its code');
+  }
+  {
     const dir = freshDir('cas-dead-owner');
     const store = createAdmissionLedgerStore({ userDataDir: dir });
     const initial = store.save(GOOD_DOC, null);
@@ -523,7 +610,7 @@ try {
     // No new dependency, and no key material anywhere.
     const src = fs.readFileSync(path.join(__dirname, 'admission-budget-store.js'), 'utf8');
     const requires = src.match(/require\('([^']+)'\)/g) || [];
-    assert(requires.every((r) => /'(fs|path|crypto)'/.test(r)),
+    assert(requires.every((r) => /'(fs|path|crypto|os)'/.test(r)),
       `the store requires only node built-ins (saw ${requires.join(' ')})`);
     assert(!/createHmac|scrypt|pbkdf2|randomBytes|dpapi|safeStorage|registry/i.test(src),
       'no HMAC, no key derivation, no DPAPI, no registry anchor — an unkeyed digest only');

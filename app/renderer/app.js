@@ -1603,7 +1603,9 @@ async function boot() {
       t.parser.flush();
       t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n');
     }
-    if (admissionView) await admissionView.refresh();
+    if (admissionView) {
+      await admissionView.refresh().catch(() => appendLog('[admission-ui] refresh after pane exit failed\n'));
+    }
   });
   wireUi();
   await quickLinksView.load();
