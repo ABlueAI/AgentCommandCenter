@@ -247,11 +247,15 @@ function Invoke-VideoScoutLibraryList {
     $total        = 0
     $capExceeded  = $false
 
-    $fullRoot = $null
-    try { $fullRoot = [System.IO.Path]::GetFullPath($RunRoot).TrimEnd('\','/') } catch { $fullRoot = $null }
-    # A missing root is a valid "no runs yet" state, not an error.
-    if (-not $fullRoot -or -not [System.IO.Directory]::Exists($fullRoot)) {
+    $fullRoot = [System.IO.Path]::GetFullPath($RunRoot)
+    try {
+        $rootAttributes = [System.IO.File]::GetAttributes($fullRoot)
+    } catch [System.IO.FileNotFoundException], [System.IO.DirectoryNotFoundException] {
+        # A confirmed missing root is a valid "no runs yet" state.
         return @{ ok = $true; rootExists = $false; total = 0; capExceeded = $false; entries = @(); invalid = @() }
+    }
+    if (-not ($rootAttributes -band [System.IO.FileAttributes]::Directory)) {
+        throw 'Library run root must be a directory.'
     }
 
     $addInvalid = {

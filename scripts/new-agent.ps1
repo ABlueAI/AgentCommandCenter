@@ -32,11 +32,14 @@ if (Test-Path $worktreePath) {
 # If the branch already exists (e.g. a prior agent was removed but its branch was preserved),
 # attach that branch to the new worktree instead of trying to re-create it.
 $branchExists = git branch --list $branch
+# Handle Git's exit code directly, including when the caller uses PowerShell 7 native errors.
+$PSNativeCommandUseErrorActionPreference = $false
 if ($branchExists) {
     git worktree add $worktreePath $branch
 } else {
     git worktree add -b $branch $worktreePath $Base
 }
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host ""
 Write-Host "Agent worktree ready:" -ForegroundColor Green
