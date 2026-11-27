@@ -12,11 +12,9 @@
  * still `Read` a repo secret (e.g. `.env`) and emit its contents in normal output. Read
  * needed the same boundary as Write, enforced the same way — at the hook, not the prompt.
  *
- * Resolution is filesystem-real, not just textual. `path.resolve` alone collapses `..\`
- * lexically but does NOT follow symlinks — a symlink sitting inside the sandbox that points
- * outside it would pass a pure path.resolve check. We resolve via fs.realpathSync, walking
- * up to the nearest existing ancestor when the target itself doesn't exist yet (true for
- * most writes, and harmless for reads of paths that were never there).
+ * Filesystem containment uses native realpath for the root and target. A new target must have
+ * a verified existing ancestor. Windows paths must use ordinary drive-absolute or relative
+ * syntax. Ambiguous Win32 spellings and filesystem errors are refused.
  *
  * Wired from a role's frontmatter:
  *   hooks:
@@ -42,8 +40,8 @@
  * is deployed standalone and cannot require it.
  *
  * PAGE-READER BROWSER GATE (S15). The page-reader role may call exactly two Playwright MCP tools, and
- * its matcher routes both here: `browser_navigate` only to an https: URL with no userinfo, at most
- * PAGE_MAX_URL_LENGTH characters; `browser_snapshot` never with a `filename` (Playwright would write
+ * its matcher routes both here: `browser_navigate` must pass the app's page-reader URL policy;
+ * `browser_snapshot` never with a `filename` (Playwright would write
  * that file itself, outside the Write fence). Any other MCP tool that reaches this hook refuses, but
  * the matcher routes only those two here: the other Playwright tools are kept out by the launch's
  * main-issued --disallowedTools list (app/page-reader.js DENIED_MCP_TOOLS), not by this hook. The
@@ -79,28 +77,133 @@ const INPUT_REFUSAL_MESSAGE =
 
 const PAGE_NAVIGATE_TOOL = 'mcp__playwright__browser_navigate';
 const PAGE_SNAPSHOT_TOOL = 'mcp__playwright__browser_snapshot';
-const PAGE_MAX_URL_LENGTH = 2000;
+const PAGE_POLICY_ENV_KEY = 'BLUE_HELM_PAGE_READER_POLICY';
 const PAGE_REFUSAL_MESSAGE =
-  'Blocked by Mako page fence: this pane may only open https pages and read them, with no file output. [fence-page-denied]';
+  'Blocked by Mako page fence: this pane may only open public HTTPS pages and read them, with no file output. [fence-page-denied]';
+const PAGE_POLICY_REFUSAL_MESSAGE =
+  'Blocked by Mako page fence: the page URL check is unavailable. [fence-page-check-unavailable]';
 
 const HOOK_ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'MultiEdit', 'WebSearch', 'WebFetch'];
+const FILE_TOOLS = new Set(['Read', 'Write', 'Edit', 'MultiEdit']);
 const TOOL_REFUSAL_MESSAGE =
   'Blocked by Mako tool fence: this role may not use that tool. [fence-tool-not-allowed]';
 
 const REFUSAL_MESSAGE =
   'Blocked by Mako path fence: this role may only access files inside its own sandbox. [fence-outside-sandbox]';
+// A path the hook could not check (a filesystem error, an unsupported Windows spelling, a missing
+// working directory or a hook bug) refuses with its own constant, so it is never mistaken for an
+// attempt to leave the sandbox. Like REFUSAL_MESSAGE, it names no path.
+const PATH_CHECK_REFUSAL_MESSAGE =
+  'Blocked by Mako path fence: the path could not be checked. [fence-path-check-failed]';
 
-// Resolve the real (symlink-free) path. Walks up to the nearest existing ancestor if the
-// target doesn't exist yet, then re-appends the unresolved tail, so a brand-new file inside
-// a real sandbox dir still resolves correctly instead of throwing ENOENT.
-function realOrNearest(p) {
-  try {
-    return fs.realpathSync.native(p);
-  } catch {
-    const parent = path.dirname(p);
-    if (parent === p) return p; // hit a filesystem root; nothing left to resolve
-    return path.join(realOrNearest(parent), path.basename(p));
+function ordinaryPath(value) {
+  if (typeof value !== 'string' || value === '' || value.includes('\0')) {
+    throw new Error('Invalid path');
   }
+  if (process.platform !== 'win32') return value;
+
+  const normalized = value.replace(/\//g, '\\');
+  const driveAbsolute = /^[a-z]:\\/i.test(normalized);
+  const tail = driveAbsolute ? normalized.slice(3) : normalized;
+  // Refuse UNC, device namespaces, rooted paths without a drive, drive-relative paths and
+  // alternate streams before asking the filesystem to resolve them.
+  if ((!driveAbsolute && tail.startsWith('\\')) || /[<>:"|?*\x00-\x1f]/.test(tail)) {
+    throw new Error('Unsupported Windows path');
+  }
+  for (const part of tail.split('\\')) {
+    if (part === '.' || part === '..') continue;
+    // Win32 can interpret these spellings differently depending on the API and namespace.
+    if (/[. ]$/.test(part) || /^(?:con|prn|aux|nul|conin\$|conout\$|(?:com|lpt)[1-9¹²³]) *(?:\.|$)/i.test(part)) {
+      throw new Error('Ambiguous Windows path component');
+    }
+  }
+  return normalized;
+}
+
+// A new file may lack several parent directories. Only ENOENT on a genuinely absent entry
+// permits trying its parent. In particular, lstat still sees a dangling link and blocks it.
+function realOrNearest(target) {
+  const missing = [];
+  let current = target;
+  for (;;) {
+    let real;
+    try {
+      real = fs.realpathSync.native(current);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    if (real !== undefined) {
+      if (missing.length === 0) return ordinaryPath(real);
+      if (!fs.statSync(real).isDirectory()) throw new Error('Ancestor is not a directory');
+      return path.join(ordinaryPath(real), ...missing.reverse());
+    }
+
+    try {
+      fs.lstatSync(current);
+      throw new Error('Existing path could not be resolved');
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    const parent = path.dirname(current);
+    const name = path.basename(current);
+    if (parent === current || name === '.' || name === '..') throw new Error('Path could not be resolved');
+    missing.push(name);
+    current = parent;
+  }
+}
+
+function isWithin(root, target) {
+  const prefix = root.endsWith(path.sep) ? root : root + path.sep;
+  if (target === root || target.startsWith(prefix)) return true;
+  if (process.platform !== 'win32') return false;
+  if (target.toLowerCase() !== root.toLowerCase() && !target.toLowerCase().startsWith(prefix.toLowerCase())) return false;
+
+  // NTFS also supports case-sensitive directories. Compare the actual directory identities
+  // when the canonical spellings only agree after case folding.
+  const volume = path.parse(target).root;
+  const rootDepth = root.slice(path.parse(root).root.length).split(path.sep).filter(Boolean).length;
+  const ancestor = path.join(volume, ...target.slice(volume.length).split(path.sep).slice(0, rootDepth));
+  const expected = fs.statSync(root, { bigint: true });
+  const actual = fs.statSync(ancestor, { bigint: true });
+  return expected.ino !== 0n && expected.dev === actual.dev && expected.ino === actual.ino;
+}
+
+function realWithWindowsParents(absolute) {
+  const volume = path.parse(absolute).root;
+  let directory = volume;
+  let parts = [];
+  for (const part of absolute.slice(volume.length).split(path.sep)) {
+    if (part === '..') {
+      // Give native realpath the prefix before Win32 normalization can remove the parent
+      // segment and the directory or junction it acts on.
+      const real = ordinaryPath(fs.realpathSync.native(path.join(directory, ...parts)));
+      if (!fs.statSync(real).isDirectory()) throw new Error('Parent segment must follow a directory');
+      directory = path.dirname(real);
+      parts = [];
+    } else if (part && part !== '.') {
+      parts.push(part);
+    }
+  }
+  return realOrNearest(path.join(directory, ...parts));
+}
+
+function isAllowedPath(cwd, target) {
+  const base = ordinaryPath(cwd);
+  const requested = ordinaryPath(target);
+  if (!path.isAbsolute(base)) return false;
+  const root = ordinaryPath(fs.realpathSync.native(base));
+  if (!fs.statSync(root).isDirectory()) return false;
+
+  const lexical = path.resolve(root, requested);
+  if (!isWithin(root, realOrNearest(lexical))) return false;
+
+  // Check physical resolution as well when normalization could discard a directory alias
+  // before a parent segment.
+  const absolute = path.isAbsolute(requested) ? requested : root + path.sep + requested;
+  if (process.platform === 'win32') {
+    return !requested.split(path.sep).includes('..') || isWithin(root, realWithWindowsParents(absolute));
+  }
+  return absolute === lexical || isWithin(root, realOrNearest(absolute));
 }
 
 // Constant refusals only: none names a path, URL, host or port.
@@ -120,12 +223,23 @@ function isAllowedWebFetchUrl(url) {
     && u.username === '' && u.password === '';
 }
 
-// https: only, no user name or password, bounded length, WHATWG parsing (as for WebFetch above).
+// Mako issues the absolute path to its own validator for the classified page-reader launch.
+// The hook is deployed outside the checkout, so it uses that app-owned path for navigation only.
 function isAllowedPageUrl(url) {
-  if (typeof url !== 'string' || url.length === 0 || url.length > PAGE_MAX_URL_LENGTH) return false;
-  let u;
-  try { u = new URL(url); } catch { return false; }
-  return u.protocol === 'https:' && u.username === '' && u.password === '';
+  const policyPath = process.env[PAGE_POLICY_ENV_KEY];
+  if (!policyPath || !path.isAbsolute(policyPath)) refuse(PAGE_POLICY_REFUSAL_MESSAGE);
+  try {
+    const policy = require(policyPath);
+    if (typeof url === 'string' && url.length > policy.MAX_URL_LENGTH) return false;
+    // validatePageUrl trims its input, but the browser is given the string as sent. Refuse any URL
+    // with leading or trailing whitespace, so the browser opens exactly the string that was checked.
+    if (typeof url === 'string' && url !== url.trim()) return false;
+    const checked = policy.validatePageUrl(url);
+    if (checked.reason !== policy.REASON.CHECK_UNAVAILABLE) return checked.ok === true;
+  } catch {
+    refuse(PAGE_POLICY_REFUSAL_MESSAGE);
+  }
+  refuse(PAGE_POLICY_REFUSAL_MESSAGE);
 }
 
 let input = '';
@@ -162,17 +276,16 @@ process.stdin.on('end', () => {
   if (wellFormed && HOOK_ALLOWED_TOOLS.indexOf(data.tool_name) === -1) refuse(TOOL_REFUSAL_MESSAGE);
 
   const ti = (data && data.tool_input) || {};
-  const target = ti.file_path || ti.notebook_path || ti.path;
-  if (!target) process.exit(0); // nothing path-like to check
-
-  const root = realOrNearest(path.resolve((data && data.cwd) || process.cwd()));
-  const resolved = realOrNearest(path.resolve(root, target));
-
-  // Windows paths are case-insensitive; compare case-folded there.
-  const fold = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
-  const within = fold(resolved) === fold(root) || fold(resolved).startsWith(fold(root) + path.sep);
-
-  if (within) process.exit(0); // allowed
+  const requiresPath = wellFormed && FILE_TOOLS.has(data.tool_name);
+  const target = requiresPath ? ti.file_path : ti.file_path || ti.notebook_path || ti.path;
+  if (!requiresPath && !target) process.exit(0); // non-file tool without a path
+  let allowed;
+  try {
+    allowed = isAllowedPath(data && data.cwd, target);
+  } catch {
+    refuse(PATH_CHECK_REFUSAL_MESSAGE);
+  }
+  if (allowed) process.exit(0);
 
   // One CONSTANT refusal. It never names the requested path, the resolved path, the cwd or the sandbox
   // root: the refusal is shown to the model and in the pane, and a path is itself disclosure.

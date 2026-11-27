@@ -7,7 +7,8 @@ it, adding the date and how they checked. Blue can tick boxes himself, or tell a
 Permanent link: https://github.com/ABlueAI/AgentCommandCenter/blob/main/BLUE-CHECKLIST.md
 
 Last updated 2026-11-24 by Claude (S14, PR #253: step 18 ticked with your go on the UI, step 77
-added to read the brief's questions); earlier, on 2026-11-23 (S37, PR #218: step 69 added, a 3-minute live check of the
+added to read the brief's questions); earlier, on 2026-11-23, by Claude (S53's AgentPlayback verdict recorded and step 67 ticked, PR
+#208); earlier, on 2026-11-23 (S37, PR #218: step 69 added, a 3-minute live check of the
 account guard on the PowerShell tool); earlier, on 2026-11-21 (your decisions of 2026-11-16 to 2026-11-21, PR #212: steps 27
 and 50 leave the top of "Do next", steps 57, 60 and 63 follow your answers, step 68 added, dated
 reminders added; earlier, on 2026-11-18, your answers to PR #195's questions, PR #204: step 65 added,
@@ -28,7 +29,111 @@ step 16; PR #46's token rules approved with its merge). Earlier: step 17 added a
 changed to classic `public_repo` (PR #46); step 8 moved to 2026-10-28 and steps 18 to 20 added (PR
 #48); step 16 added and ticked, with the 2026-10-21 Codex agent-request result (PR #47).
 
+## Open for Blue, by when
+
+Updated 2026-11-26 by Claude (checklist cleanup, PR #303): step 77 ticked, steps 30, 59 and 72
+struck as superseded, steps 22 and 27 handed to agents (your part of each is done), each with its
+evidence in the step. Later the same day (issue #304): step 27 ticked against the routine read-back
+recorded in docs/RUNNER.md, and step 81 (from PR #283) added. This is everything still open for you on `main`, grouped by when. Each
+link goes to the section that holds the step. Under D-090 (your words, 2026-11-25; on `main` since
+PR #301 merged on 2026-11-26) agents decide procedural PR questions themselves, such as "one more
+push" or "one more review run", so those are not listed here.
+
+**At every merge sitting (no step number; they recur):**
+
+- Before you approve a Codex PR (a `codex/` branch), open its "Independent review (Opus)" comment's
+  "Run by:" link and check it is a Claude session that reviewed that PR: the line alone can be
+  forged (AGENTS.md "How work flows" step 3; docs/CODEX-BUILDER-LANE.md item 5).
+- When an agent opens an `agent-claimed` claim issue to hand work to Codex, lock it (right sidebar >
+  **Lock conversation**), since agents can't (docs/CODEX-BUILDER-LANE.md item 4).
+
+**At your desk, this week (about 25 minutes in all):**
+
+- [Step 8](#before-the-daily-runner-starts-building): if Claude Max is on, tell any agent "step 8
+  done" (5 seconds). *Not verified: the hand-off for this PR says you said "Max is on" on
+  2026-11-23, but no record on `main` or GitHub quotes it, so it isn't ticked.*
+- [Step 50](#before-the-daily-runner-starts-building): tell any Claude session "apply the digest
+  prompt from docs/RUNNER.md" (2 minutes). The digest's stored prompt is older than `main`'s (read
+  back 2026-11-26); the runner's stored prompt is recorded in docs/RUNNER.md and reads `main`'s
+  runner prompt every fire.
+- [Step 70](#from-s37-the-account-guard-and-the-powershell-tool): the PR sweeper's push trigger and
+  phone notifications (5 minutes), or tell any agent "set up the sweeper's trigger and
+  notifications".
+- [Step 65](#from-the-mako-11-decision-sheet-2026-11-16): Dependabot alerts and security updates on
+  (3 minutes; your words, 2026-11-18: "now").
+- [Step 78](#from-s38-the-full-security-check): two security decisions from S38, with the private
+  report open (10 minutes).
+- [Step 61](#from-the-mako-11-decision-sheet-2026-11-16): tell a local agent on your PC "do step 61"
+  (2 minutes; you approved the delete on 2026-11-16).
+
+**On a date:**
+
+- [Step 58](#from-the-mako-11-decision-sheet-2026-11-16), **by Friday 2026-11-27**: the
+  lessons-learned draft, when the agent sends it (15 minutes). If it isn't done, the tune-up runs
+  from the draft as it is (your decision, 2026-11-22).
+- [Step 60](#from-the-mako-11-decision-sheet-2026-11-16), **overdue** (it was set for 2026-11-24):
+  the Composer prototype day. No scores are recorded; give an agent your scores, or a new date.
+- [Step 63](#from-the-mako-11-decision-sheet-2026-11-16), **Monday 2026-11-30**: the Codex check-in
+  (5 minutes).
+- [Step 85](#from-your-open-source-verdicts-2026-11-25), **any day after S68 (PR #300) merges**: start
+  the claude-security trial scan (an afternoon, you at the start and the end).
+
+**PC-check evenings** (Tuesdays and Fridays; next: Friday 2026-11-27, then Tuesday 2026-12-01):
+
+- [Step 15](#any-time-not-blocking), the voice check on Electron 42.11.16 (10 minutes).
+- [Step 69](#from-s37-the-account-guard-and-the-powershell-tool) (3 minutes), then
+  [step 35](#any-time-not-blocking) (15 minutes), then [step 49](#any-time-not-blocking) (5 minutes
+  per PC), in that order.
+- [Steps 23 and 24](#any-time-not-blocking) (24 is optional), [29](#any-time-not-blocking),
+  [31](#any-time-not-blocking) (its plugin bullet waits for your word on PR #300),
+  [38, 39, 40, 41, 44, 45 and 48](#any-time-not-blocking),
+  [74 and 76](#any-time-not-blocking): the older PC checks, each a few minutes.
+- [Step 57](#from-the-mako-11-decision-sheet-2026-11-16) (10 minutes),
+  [step 73](#video-scout-s54) (20 minutes; PR #230 merged 2026-11-26),
+  [step 75](#from-s58-fenced-web-reading-agents) (3 minutes) and
+  [step 79](#from-s38-the-full-security-check) (10 minutes, with the S38 private report).
+- [Step 81](#from-s66-the-shared-navigation), the three-tab shell (10 minutes; PR #283 merged
+  2026-11-26).
+
+**At H1:**
+
+- [Step 54](#from-the-mako-11-decision-sheet-2026-11-16), the H1 setup day (1.5 to 3 hours; it
+  includes step 25's tick). No record shows it done.
+- [Step 80](#from-the-h1-commander-pr-282), the commander, once S67's PR (#289) merges.
+- [Step 55](#from-the-mako-11-decision-sheet-2026-11-16) when S20's PR asks, and
+  [step 56](#from-the-mako-11-decision-sheet-2026-11-16) when S48's PR asks.
+
+**Business, spending and credentials, when you start that work:**
+
+- [Step 33](#any-time-not-blocking) before S29, [step 36](#any-time-not-blocking) before S30,
+  [step 34](#any-time-not-blocking) when S24's watcher is ready, and
+  [step 46](#any-time-not-blocking) before your first client.
+- [Step 17](#any-time-not-blocking), the token audit: the last step before the 1.1 release (target
+  2027-01-15). The agent token's renewal is due by 2027-01-14 ([Dated reminders](#dated-reminders)).
+
+**Inputs only you can hand over (no step number; their plan rows wait on them):**
+
+- **The Composer v1 scope sign-off** (S51, `NEEDS BLUE (scope pending sign-off)` in
+  docs/PLAN-1.1.md; "Do next" item 7). The scope is being written in your separate Composer chat;
+  once you sign it, the spec goes into the repo and a plan change splits S51 into build sessions.
+  S71 (the elephant-goldfish trial) also waits on that spec. The 1.1 scope freezes on 2026-12-01.
+- **The Composer scout report** (S49, `NEEDS BLUE (scout report)`): it is in your vault, so hand it
+  to the session that runs S49's independent audit, in that session, never on GitHub.
+- **The agent-roles package and brief** from your agent-roles chat: S28's package
+  ([Waiting on you](#waiting-on-you-the-runner-wont-ask): an issue you open as `ABlueAI`, or a
+  hand-off to an agent in its own session), and S60's brief from the same chat.
+
+**Open, but agents' work, not yours:** [step 22](#any-time-not-blocking) (your verdict is already
+on your signed 2026-11-16 sheet; an agent copies it into the OSS record), and, since PR #301 (D-090)
+merged on 2026-11-26, [step 71](#waiting-on-you-the-runner-wont-ask) (the UI-library OSS verdict)
+and step 84 (S47's Symvibe verdicts, in PR #287, not yet on `main`): the agent records the
+recommended verdict, marked 🤖, and your merge approves it. Give a verdict yourself only if you
+want a different one.
+
 ## Do next, in this order
+
+*2026-11-26: "Open for Blue, by when" above is the current list. Where this older order differs,
+the index wins; this order is kept as history.*
 
 Your words (2026-10-21): "we will walk through this. place it where you prioritize it in relation to
 other remaining items." Claude's order for what is left:
@@ -261,7 +366,19 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   "Limits, from the official docs").
   - *Done when:* you tell any agent "usage credits are off". Claude can't read that page, so it
     records your word and the date here.
-- [ ] **27. Right after merging S04 (PR #84), have its runner applied.** About 10 minutes, in the
+- [x] **27. Right after merging S04 (PR #84), have its runner applied.** *Done; ticked 2026-11-26
+  against the read-back recorded in docs/RUNNER.md, "Read back 2026-11-26 (issue #304)"
+  (`list_triggers`, read-only, about 04:30 and 07:15 UTC): **Mako all-day runner** is on, every hour
+  at :07 Eastern, Opus 5.5, notifications off, no connectors, its fires succeed, and its PRs open as
+  `ABlueAgent` (PR #300, S68, labelled `runner`); **Mako evening digest** is on, 8:03 PM Eastern,
+  Opus 5.5, push on, no connectors; **Mako daily runner** is off (last fire 2026-11-04). So the
+  "Left to do, as read on 2026-10-23" list below is done, apart from its last bullet (applying the
+  prompts), which is step 50. The runner's stored prompt, a short wrapper set on 2026-11-24 that
+  follows the runner prompt docs/RUNNER.md marks as current with its own overrides, is recorded
+  there as read, so it is on `main`. The "prompt matching `main`" part of this step's done-when
+  has been step 50's since PR #166 (step 50 applies the prompts), so it doesn't hold this tick: the
+  digest's stored prompt is older than `main`'s, and that is step 50. S04's own two-day check is
+  separate.* About 10 minutes, in the
   same sitting as the merge, after step 28. Merging S04 ends the old runner's one-at-a-time rule,
   so don't leave this for the morning. Tell the main chat "S04 merged".
   - That session follows docs/RUNNER.md "Applying it": it creates **Mako all-day runner** (every
@@ -292,7 +409,19 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     usage-limit stop resumes on its own, and the digest arrives both evenings; then tell any agent
     "check S04".
 
-- [ ] **50. Have the runner and digest prompts applied (after you merge PR #166).** About 2 minutes,
+- [ ] **50. Have the runner and digest prompts applied (after you merge PR #166).** *Still open,
+  read back 2026-11-26 (`list_triggers`, read-only): the runner's stored prompt is a wrapper that
+  tells it to follow the runner prompt docs/RUNNER.md marks as current, with its own overrides on
+  top (recorded verbatim in docs/RUNNER.md, "Read back 2026-11-26 (issue #304)"), and the digest's
+  stored prompt (last changed 2026-11-05) is PR
+  #166's text, without the later "agent login" and "Agent writes" lines of "Proposed digest prompt
+  (verbatim)". **As of 2026-11-26 this step covers the digest only:** leave the all-day runner's
+  stored text as it is (it already reads "Proposed runner prompt (verbatim)" every fire, and
+  replacing it would drop its overrides; aligning those is issue #313). Your part: tell any Claude
+  session "apply the digest prompt from docs/RUNNER.md". Done when, as of 2026-11-26: the session
+  reads both tasks back, the digest's prompt matches "Proposed digest prompt (verbatim)" on `main`
+  as text, and the runner's still matches the read-back recorded in docs/RUNNER.md. Where the text
+  below says otherwise, this note wins.* About 2 minutes,
   right after you merge PR #166 (the merge-order rule). Tell any Claude session "apply the runner
   prompts from docs/RUNNER.md". It updates only the prompts of the scheduled tasks **Mako all-day
   runner** and **Mako evening digest** from "Proposed runner prompt (verbatim)" and "Proposed digest
@@ -614,7 +743,12 @@ on its own, one session at a time on Pro until you upgrade (step 8).
   - *Done when:* that session reads the scheduled task back, its prompt matches docs/RUNNER.md
     "Current prompt (verbatim)" on `main`, and it ticks this step with the date and how it checked.
 
-- [ ] **22. Evaluate qodo-ai/pr-agent as Mako's PR reviewer.** About 20 minutes of your own time,
+- [ ] **22. Evaluate qodo-ai/pr-agent as Mako's PR reviewer.** **Your part is done; an agent
+  records it.** *Marked 2026-11-26: your signed decision sheet already gives the verdict
+  (docs/DECISIONS.md, 2026-11-16, ticked: "keep `pr-reviewer`, pattern-mine pr-agent and Anthropic's
+  review plugins, no key, no spending"); your own wording wasn't relayed. What's left is an agent
+  copying that verdict into docs/decisions/OSS-pr-review.md's "Blue's verdict" line, citing the
+  sheet, and ticking this. Nothing to do unless you want another verdict.* About 20 minutes of your own time,
   after session S34 writes up the options (added 2026-11-03), whenever you get to it ("add it to my
   list, i will get to it"). (Numbered 22 because open PR #52
   uses 21.)
@@ -725,7 +859,14 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     Hexona login or you added another link (never paste a login or password); it ticks this with the date. A link that fails: say which and what
     happened, and Mako's Logs line (it names a reason, never the URL).
 
-- [ ] **30. Codex trial build (S26).** About **3 minutes**, in two parts, after you answer the
+- **30. ~~Codex trial build (S26).~~ Superseded.** *Struck 2026-11-26: the trial ran as PR #140
+  (merged 2026-11-04), you made it S26's result on 2026-11-16 (docs/DECISIONS.md, 2026-11-16,
+  "Codex"), and since 2026-11-25 Codex gets work through the reworded lane, any plan row by a claim
+  issue and one hand-off comment (docs/DECISIONS.md, 2026-11-25, "Codex's lane, reworded"). Its two
+  recurring checks (lock each claim issue; open a Codex PR review's "Run by:" link before
+  approving) now sit under "At every merge sitting" in the index at the top. The trial's records
+  (which account pushed, whether the issue mention started the task, what context Codex read) are
+  issue #305. The number stays so no other step is renumbered.* About **3 minutes**, in two parts, after you answer the
   trial question on PR #114 ((A) wait for S07, or (B) the small `not-installed` test task now).
   - The builder opens a claim issue titled `Sxx:` (or `S26 trial:` for option B), labelled
     `agent-claimed`. Open it, click **Lock conversation** (right sidebar) > **Lock**. Then comment
@@ -749,17 +890,33 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     It prints `created` for `Mako index.md`, `AGENTS.md` and `CLAUDE.md`.
   - In Obsidian: **Open folder as vault** > pick that folder. Open `Mako index.md` and click the
     STATUS link once.
-  - **Wait for S68 before this bullet** (PR #294, 2026-11-25): the plugin moved to
-    `obsidianmd/obsidian-skills` and is to be installed at 1.2.3 only after S68's pin-and-scan
-    audit; S68 updates the command below.
+  - **First, your word on S68's scan** (PR #300, 2026-11-26; 1 minute): S68 pinned the plugin at
+    1.2.3 from its new home, `obsidianmd/obsidian-skills` (commit `a53f591`, MIT). The scanner's
+    run was partial: 2 of its 19 files were only partly inspected by one check, and a partial scan
+    never counts as a pass (docs/decisions/OSS-obsidian-skills.md, "Pin-and-scan of 1.2.3"). The
+    agent read both spans by hand and found only reference text. Reply on PR #300 (or to any
+    agent) "install Obsidian Skills 1.2.3" to go ahead, or "wait" to hold it. Recommended: install.
+    If you say wait, skip the next bullet; the vault works without the plugin.
   - In PowerShell: `cd D:\Workspace\Mako-Vault`, start `claude`, run
-    `/plugin marketplace add kepano/obsidian-skills`, then `/plugin`, install the Obsidian skills
-    plugin it lists, and choose the project scope if it asks. (These names come from search
-    extracts, not the plugin's own page; if they differ, tell the agent what you saw.)
+    `/plugin marketplace add https://github.com/obsidianmd/obsidian-skills.git#1.2.3`, then
+    `/plugin install obsidian@obsidian-skills`, and choose the project scope if it asks. The
+    `#1.2.3` suffix pins the marketplace to the scanned tag (that Claude Code accepts it is not
+    verified). **If Claude Code refuses it, stop there and tell the agent; install nothing.**
+    Never add the marketplace without the suffix: that installs whatever is newest, which nobody
+    scanned. The plugin names come from the plugin's own README at 1.2.3.
+  - Still in that session, before using the plugin, ask: "Find the installed Obsidian plugin's
+    files and check each one's sha256 against the table 'Shipped files at 1.2.3' in
+    docs/decisions/OSS-obsidian-skills.md on GitHub (ABlueAI/AgentCommandCenter). If any file is
+    missing, extra or different, uninstall the plugin and tell me." The version shown in
+    `/plugin` (1.2.3) is only a first look: a later, unscanned commit can keep that number, and a
+    tag can be moved, so the file check is what proves it is the scanned copy.
+  - If a skill offers to install a missing tool (`npm install -g defuddle`, `knap` or
+    `obsidian-headless`), say no for now: those aren't pinned or scanned yet.
   - Still in that session, ask: "Read Mako index.md and add a note called Test with a link to it
     under Notes." Check the note and the link appear in Obsidian.
-  - *Done when:* you tell an agent the vault opened, the plugin installed and the test note and
-    link appeared (or what failed); it ticks this with the date and S13 is marked done.
+  - *Done when:* you tell an agent the vault opened, the plugin installed and its files matched
+    the table, and the test note and link appeared (or what failed); it ticks this with the date
+    and S13 is marked done.
 
 - [x] **32. A private repo for S22's marina brief.** *Verified 2026-10-23 by the all-day runner:
   Blue replied on PR #116 that the brief goes in `mako-business`; GitHub reports
@@ -1132,7 +1289,11 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
   this just be completed prior to Friday?"; docs/SCHEDULE-1.1.md).
   - *Done when:* you tell an agent it is approved (or what to change). It ticks this with the date
     and your words.
-- [ ] **59. Re-link Codex reviews to `ABlueAgent`.** **About 5 minutes**, any time this week (your
+- **59. ~~Re-link Codex reviews to `ABlueAgent`.~~ Superseded.** *Struck 2026-11-26: step 16
+  already linked Codex to `ABlueAgent` on 2026-10-20, and Codex reviews `ABlueAgent`'s PRs without
+  being asked, which is what this step's check needed (verified 2026-11-26 on GitHub: Codex's
+  review on PR #208, an `ABlueAgent` PR, at 03:54 UTC). If Codex stops reviewing agent PRs, an
+  agent adds a new step. The number stays.* **About 5 minutes**, any time this week (your
   yes, 2026-11-16; you do this one yourself). In ChatGPT's Codex settings, connect GitHub as
   `ABlueAgent` (a private browser window signed in to GitHub as `ABlueAgent`, as in step 16) and
   keep automatic reviews on for `ABlueAI/AgentCommandCenter`.
@@ -1199,6 +1360,19 @@ docs/PLAN-1.1.md "Mako 1.1 scope"). Step numbers 47 and 51 to 53 belong to open 
     ([session](https://claude.ai/code/session_01UWhuMF5YrgU1ojPL6DN1Q1)). Recorded in the [S52 vetting and trial record](docs/decisions/OSS-hyperframes.md#blues-verdict)
     and [the decisions log](docs/DECISIONS.md#2026-11-18-s52-hyperframes-verdict-pr-206).
 
+- [x] **67. AgentPlayback verdict recorded (S53).** Verdict: PATTERN-MINE. Blue (2026-11-18, in his
+  main chat), adopting Mako main's recommendation: 'I think your recommendation verdicts are very
+  good. So, yes to both of those recommendations.' Reconfirmed by Blue on 2026-11-23: 'pattern
+  mine'. Take the idea of a local, read-only replay of what each agent did; use none of its code.
+  S53 closes with no build. Any replay work goes to S19 or S62, under their existing waits.
+  - *Verification:* checked 2026-11-23 (UTC) by a Claude cloud session against Blue's words as
+    quoted in the Mako main session's hand-off to it ([session](https://claude.ai/code/session_01UWhuMF5YrgU1ojPL6DN1Q1)). Recorded in
+    [the OSS record](docs/decisions/OSS-agentplayback.md#blues-verdict-word-for-word) and
+    [the decisions log](docs/DECISIONS.md#2026-11-23-agentplayback-verdict-s53).
+  - The builder originally read the China-origin rule as covering the tracked Kimi config, which the
+    npm package omits. The builder sees replay fitting S19 (pane activity) or S62 (merged-work
+    history).
+
 ## From your decisions of 2026-11-16 to 2026-11-21
 
 Step 68 comes from those decisions (docs/DECISIONS.md, 2026-11-21). Step numbers 66 and 67 belong to
@@ -1251,7 +1425,11 @@ Step 69 comes from S37 (PR #218, issue #217), not from the decisions above.
 Step 72 comes from PR #227 (docs/DECISIONS.md, 2026-11-23). Step numbers 69 to 71 belong to open PRs
 (#218, #225 and #224).
 
-- [ ] **72. Codex's review on the `codex/` PRs (PR #227's question).** **About 2 minutes to answer**,
+- **72. ~~Codex's review on the `codex/` PRs (PR #227's question).~~ Superseded.** *Struck
+  2026-11-26: Codex now reviews `codex/` PRs instead of asking for an environment (verified on
+  GitHub: its "Codex Review" on PR #208, branch `codex/s53-agentplayback`, at commit `7ec78d5`,
+  2026-11-26 03:54 UTC), so there is no question left for you. #206 and #209 merged on
+  2026-11-24. The number stays.* **About 2 minutes to answer**,
   once PR #227 is merged. Your rule says a PR is `READY TO MERGE` only with Codex's pass, but on the
   three `codex/` PRs (#206, #208, #209) Codex answered "create an environment for this repo" instead
   of reviewing. Answer PR #227's question: create that Codex environment (the agent's
@@ -1300,11 +1478,29 @@ Step 75 comes from PR #245. Step numbers 73 and 74 belong to open PRs (#230 and 
   - *Done when:* a Web Scout pane launches after the sync, and you tell any agent "step 75 done"; it ticks
     this with the date.
 
+Step 89 comes from PR #327.
+
+- [ ] **89. Re-deploy the fence hook after PR #327 merges, and check a Page pane.** **About 5
+  minutes**, the next time you open Mako after merging PR #327 (if step 75 isn't done yet, do this
+  instead of it: it covers both). PR #327 changes the fence hook again, and Mako refuses to launch the
+  fenced roles (Web Scout, Source Scout, Operator and Page panes) until the deployed copy matches the
+  new one. The hook now also loads Mako's own page-URL check, which CI can't run on your PC.
+  - Pull `main`, run `scripts/sync-roles.ps1`, and restart Mako fully (close every window).
+  - Open a Page pane on a public https page (for example `https://example.org/`): it should open and
+    read the page. Then ask it to open `https://localhost/`: it should show "Blocked by Mako page
+    fence" with `[fence-page-denied]`.
+  - **New Agent > 🌐 Web Scout**, **Create & Launch**: the pane should start.
+  - *Done when:* both checks behave as above, and you tell any agent "step 89 done"; it ticks this
+    with the date.
+
 ## From S14 (the 1.1 design brief)
 
 Step 77 comes from PR #253.
 
-- [ ] **77. Read the S14 brief's 18 questions, then merge PR #253.** **About 10 minutes**, at your
+- [x] **77. Read the S14 brief's 18 questions, then merge PR #253.** *Done 2026-11-24: PR #253
+  merged by ABlueAI at 19:48 UTC (verified on GitHub, 2026-11-26), which approved every default you
+  didn't change. Questions 3, 4 and 6 still come back to you at S18's first PC check and in S19's
+  draft PR, as below.* **About 10 minutes**, at your
   next merge sitting. Open `docs/DESIGN-BRIEF-1.1.md` on the PR's branch and read only its "Questions
   for Blue" table: each question has a default, and merging the PR approves every default you don't
   change. To change one, tell any agent "S14 question N: <your answer>" (before or after the merge).
@@ -1314,6 +1510,45 @@ Step 77 comes from PR #253.
   drops that commit.
   - *Done when:* PR #253 is merged, or you have answered the questions you want changed; the agent
     ticks this with the date.
+
+## From S66 (the shared navigation)
+
+Step 81 comes from PR #283.
+
+- [ ] **81. PC check of the three-tab shell (S66).** **About 10 minutes**, at the first Tuesday or
+  Friday PC-check evening after PR #283 merges. Pull `main` and fully restart Mako, then:
+  1. Mako opens on the **Control room** tab with your panes as before, under a thin blue scope stripe
+     naming the repo, with Brain and Aquarium tabs beside it and a rail of round repo emblems on the
+     left. Click each tab: the colours change (dark blue, black, green-ish); Brain and Aquarium say
+     which session builds them.
+  2. Press **Ctrl K**: the palette opens. Type "logs" and press Enter: you land on the Logs view.
+     Press Ctrl K, then Esc: it closes.
+  3. Click an emblem: the repo switches (the stripe and the repo picker follow).
+  4. Click **Settings**, tick **Use the old layout**: today's single screen comes back. Restart Mako:
+     it is still the old layout. Untick it to go back.
+  5. Hold **Ctrl Space** in a pane and speak, then let go: the words are typed into that pane. Then
+     click into a pane and press **Ctrl K**: the palette opens and nothing is typed into the pane.
+  6. Look: does anything read wrong or feel cramped? Note the usage chip (top right) and the two
+     greyed-out switches, **Quiet hours** and **Pause all**, which S18 and S19 turn on.
+  - *Done when:* you tell any agent "S66 PC check: OK" or what looked wrong; the agent ticks this
+    with the date and your words, and anything wrong becomes a fix PR.
+
+## From S46 (session hygiene)
+
+Step 83 comes from PR #286.
+
+- [ ] **83. Check the daily idle-sessions list on your PC.** **About 5 minutes**, at the next Tuesday
+  or Friday PC check after PR #286 merges, on the dev copy (`npm run start:dev` in `app`).
+  - Close Mako with one Claude pane open, then in Mako's settings folder for the dev copy open
+    `session-memory.json` and, in that record, set `startedAt`, `stoppedAt` and (if it is there)
+    `lastActiveAt` all to the same time 4 days ago, for example `2026-11-21T09:00:00.000Z` (idle time
+    counts from the latest of the three). Or simply wait 3 days. Start the dev copy again and leave
+    the Resume offer unanswered (answering it archives the session, so it leaves the idle list).
+  - The Terminals tab shows "One Claude session has been idle 3 days or more", with the pane's role,
+    folder, idle days, "waiting for Resume or Start fresh" and "owner Blue". Type a done-when, Save,
+    and restart: the row shows it.
+  - *Done when:* the list shows and the done-when survives a restart; tell any agent "step 83 done"
+    (or what went wrong) and it ticks this with the date.
 
 ## Every day, once the runner is on
 
@@ -1396,6 +1631,18 @@ open PRs (#283, #286 and #287).
     plugin was uninstalled or left disabled, with each finding's title and severity only; you
     tell any agent "step 85 done" and it ticks this with the date and how it checked.
 
+## From PR #315 (the account guard's PowerShell deny rules)
+
+Step 88 comes from PR #315 (issue #219). Step numbers 86 and 87 belong to open PRs.
+
+- [ ] **88. Check the PowerShell deny rules on Windows (PR #315).** **About 5 minutes**, on the next
+  Tuesday or Friday PC-check evening after merging PR #315.
+  - On your PC, pull `main` in your Mako checkout, start Claude Code there and run `/permissions`.
+  - Check that Claude Code showed no settings warning at start-up, and that the "Deny" list shows
+    the `PowerShell(...)` rules next to the `Bash(...)` ones (for example `PowerShell(gh pr merge:*)`).
+  - *Done when:* you've told any agent what you saw (no warning, rules listed, or what differed);
+    it ticks this with the date and how it checked.
+
 ## Coming up this month (the runner will ask when it gets there)
 
 You can start on the first one now, which saves time later.
@@ -1407,8 +1654,8 @@ You can start on the first one now, which saves time later.
 - **Session S12:** confirm your Hexona login link in Mako (step 29).
 - **Session S13:** install Obsidian, create the vault and install the skills (step 31).
 - **Session S26:** the trial (PR #140) is its result; the lane stays open to about 2026-11-30 and
-  closes when your Codex resets are used (step 63). Step 30's records of what Codex did are still
-  unticked.
+  closes when your Codex resets are used (step 63). Step 30 is struck (2026-11-26); the trial's
+  records of what Codex did are issue #305.
 - **Session S16:** ~~your Composer verdict (step 19)~~ Done 2026-10-21: no option adopted, everything open for study, questions deferred (step 19).
 - **Session S17:** ~~pick one of 2 or 3 design directions~~ Done: you picked Shark A (recorded
   2026-11-16).
@@ -1430,7 +1677,13 @@ You can start on the first one now, which saves time later.
   edited, by anyone else), or hand it to an agent in its own session to open the PR. Not as a PR of your
   own: you can't approve your own PR, so it couldn't merge. S28 stays `NEEDS BLUE (package)` until
   it arrives.
-- [ ] **71. Your verdict on S63's UI-library record (PR #224).** **About 15 minutes**, any time
+- [ ] **71. Your verdict on S63's UI-library record (PR #224).** **Yours until PR #301 (D-090)
+  merges, then an agent decides.** *Marked 2026-11-26: D-090 (your words, 2026-11-25) is recorded
+  in PR #301, which merged on 2026-11-26, so this is now an agent's. The agent that next needs these libraries (S49 or S51)
+  records the record's "Recommended direction" (prototype Cytoscape.js and a UI-only Deep Chat
+  build; adopt MiniSearch if ranked search across task fields is in scope; adopt the Obsidian URI)
+  as its 🤖 verdict in the record, ticks this, and your merge approves it. PR #224 merged on
+  2026-11-24.* **About 15 minutes**, any time
   before S49 or S51 picks its chat and graph libraries. S63 delivered an OSS record,
   `docs/decisions/OSS-ui-libraries.md`, in place of the `docs/research/` write-up its plan row
   names. Read it and give your verdict on each option (ADOPT, FORK, PROTOTYPE, PATTERN-MINE or BUILD
@@ -1451,6 +1704,13 @@ You can start on the first one now, which saves time later.
   any agent. Merging PR #255 records the list, not your verdicts.
   - *Done when:* each row you decided has your verdict in its last column, word for word, and the
     agent ticks this with the date and the rows it filled.
+- [ ] **84. Optional: your verdicts on S47's Symvibe record (PR #287).** **About 10 minutes**, before
+  you merge PR #287. The ask was settled under D-090 on 2026-11-26: the record carries the builder's
+  defaults (crew presets BUILD FRESH, goal-stopping loops ADOPT, branch status BUILD FRESH), and
+  merging PR #287 approves them. To choose otherwise, say so in PR #287 before merging; an agent then
+  records your words in `docs/decisions/OSS-symvibe.md`.
+  - *Done when:* PR #287 is merged (the defaults stand) or your own verdict is in the record word for
+    word; the agent ticks this with the date and which.
 
 ## Dated reminders
 

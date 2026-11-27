@@ -243,7 +243,7 @@ process.stdout.write('\ngrid owner -> Dockview owner -> failed multi-pane adopti
   assert(r.stage3.allBackInGrid === true, 'both are back in the classic grid');
   assert(r.stage3.anyInDock === false, 'neither is left in the dock');
   assert(r.stage3.anyDetached === false, 'neither was left detached from the document');
-  assert(r.stage3.panesVisible === true, 'both are visible and reachable');
+  assert(r.stage3.panesVisible === true, `both are visible and reachable (viewport ${JSON.stringify(r.stage3.viewport)}, panes ${JSON.stringify(r.stage3.boxes)})`);
   assert(r.stage3.gridHidden === false && r.stage3.dockHidden === true, 'the grid is the visible surface again');
   assert(r.stage3.dockChildren === 0, 'the dock was emptied — no orphan Dockview surface survives');
   assert(r.stage3.engineActive === false, 'the engine is not active');

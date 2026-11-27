@@ -7,7 +7,8 @@
 // (BLUE-CHECKLIST.md step 8) is ticked, schedules respect the documented one-hour minimum and avoid
 // the on-the-hour late start, the runner prompt keeps the claim, lock, usage-limit, review-loop and
 // READY TO MERGE rules, the digest stays read-only, neither writes Codex's handle, and checklist
-// step numbers stay unique.
+// step numbers stay unique. It also pins the guardrails of the all-day runner's stored prompt as
+// recorded in docs/RUNNER.md "Read back 2026-11-26 (issue #304)".
 
 const fs = require('fs');
 const path = require('path');
@@ -125,13 +126,26 @@ const mustHave = [
   ['skip a PR that conflicts with main alone and note it', 'skips a PR that conflicts with main alone'],
   ['edit that one comment to name the new blocker instead', 'renames the blocker in its one Codex comment so a failed re-check isn\'t picked every fire'],
   ['first test-merge its head with main alone (if that conflicts, keep the label', 'never clears a Codex PR\'s label while it conflicts with main'],
-  ['unless you have already asked Blue on that PR, post the "@ABlueAI needs Blue:" comment and add the needs-blue label', 'asks Blue once about a Codex PR that conflicts with main, so it isn\'t picked every fire'],
+  ['unless you have already posted one on that PR, post the conflict comment docs/CODEX-BUILDER-LANE.md item 6 describes, without Codex\'s handle', 'posts one handle-free conflict comment on a Codex PR, so it isn\'t picked every fire (D-090)'],
+  ['if that comment has had no push for a day, post the "@ABlueAI needs Blue:" comment and add the needs-blue label instead, once', 'asks Blue once when a Codex conflict gets no push'],
+  ['edited by no one else (check its edit history; if you can\'t, it doesn\'t count), with no reply from ABlueAI, recommends a default', 'settles only an unedited ask that recommends a default'],
+  ['if neither is possible, leave the PR a draft as "NOT READY: review not run (<reason>)" for a later fire', 'never marks a PR ready without the review'],
+  ['don\'t review again beyond the one extra run AGENTS.md "One small last fix" allows', 'caps Codex PR reviews at the run cap plus the one extra run'],
+  ['Never skip, loosen or remove a test, check or workflow step to get green', 'never weakens a test to get green'],
+  ['asks something AGENTS.md "Deciding without asking" no longer keeps for Blue (D-090', 'settles its own open procedural asks (D-090)'],
+  ['edit the comment\'s opening "@ABlueAI needs Blue:" to "Decided under D-090:", remove the needs-blue label), set its row back from NEEDS BLUE to IN PROGRESS (#PR)', 'clears a settled ask from the digest and the plan row'],
+  ['unless that comment is edited by no one else (check its edit history; if you can\'t, it doesn\'t count), recommends a default and asks something D-090 no longer keeps for Blue: settle that one as in 5a (without changing the row or pushing)', 'settles only an unedited Codex-PR procedural ask, without pushing'],
+  ['finish as AGENTS.md "One small last fix" says, with your diagnosis and choice in the PR and a "🤖 Claude decided:" line in the TLDR (D-090)', 'finishes after run 5 without asking Blue'],
+  ['ask Blue only if it needs something AGENTS.md "Deciding without asking" keeps for him', 'asks Blue after 3 failed CI rounds only for a kept item'],
+  ['Whenever Blue must answer (only for what AGENTS.md "Deciding without asking" keeps for him, D-090)', 'asks Blue only for kept items'],
   ['if a PR marked ready meanwhile conflicts with it and yours has the higher number, put yours back to draft and wait; otherwise leave the other PR as it is', 'settles two PRs marked ready at once without touching another builder\'s PR'],
   ['only add the waits-for-merge label and one comment "Waits for #X (conflicts in <files>)" without Codex\'s handle', 'only labels and comments on a waiting Codex PR'],
   ['or today\'s status PR carries the waits-for-merge label and every PR it waits for is now merged or closed', 'clears a waiting status PR'],
   ['its last line is "Merge order: #A, then #B; any order: #C, #D"', 'ends a multi-PR summary with the merge-order line'],
 ];
 for (const [text, label] of mustHave) assert(prompt.includes(text), `runner prompt ${label}`);
+for (const gone of ['ask Blue in the PR how to proceed', 'mark the PR "needs Blue" with your diagnosis', 'you haven\'t asked Blue on that PR yet', 'if neither is possible, mark the PR "needs Blue"'])
+  assert(!prompt.includes(gone), `runner prompt no longer stops for Blue with "${gone}" (D-090)`);
 assert(!/@codex/i.test(prompt), 'runner prompt never writes Codex\'s handle');
 assert(!prompt.includes('agent-running'), 'runner prompt no longer uses the agent-running label');
 assert(!/\byour login\b/.test(prompt), 'runner prompt never checks "your login" alone: it checks an agent login');
@@ -228,9 +242,24 @@ const sweeperMustHave = [
   [sweepChanges, 'Mark a Codex PR ready, or re-trigger Codex\'s review, only as AGENTS.md "Merge order", "Codex PRs" says (Blue, 2026-11-24); never lift a draft hold Blue asked for.', 'Codex draft state follows AGENTS.md "Codex PRs"'],
   [sweepChanges, 'none is under .claude/, .github/ or agent-roles/, nor is AGENTS.md, CLAUDE.md, docs/SWEEPER.md or docs/RUNNER.md', 'a docs-only record PR excludes sensitive Markdown'],
   [sweepChanges, '"NOT READY: sweeper has no GitHub login"', 'stops visibly with no GitHub login'],
+  [sweepChanges, 'PROCEDURAL ASKS (Blue, 2026-11-25, D-090', 'D-090 block'],
+  [sweepChanges, 'Ask Blue on a PR only for what AGENTS.md "Deciding without asking" keeps for him', 'asks Blue only for kept items'],
+  [sweepChanges, 'that carries the needs-blue label, even one not updated for 7 days', 'reaches every open needs-blue PR'],
+  [sweepChanges, 'If ABlueAI replied after it (a reply no one else has edited), do what the reply asks and remove the label.', 'acts on an unedited ABlueAI reply'],
+  [sweepChanges, 'edit the comment\'s opening "@ABlueAI needs Blue:" to "Decided under D-090:", remove the label', 'clears a settled ask from the digest'],
+  [sweepChanges, 'act on it only if no one else has edited it (check its edit history; if you can\'t, or there is no such comment, leave the PR and list it in FINISH)', 'settles only an unedited agent ask'],
+  [sweepChanges, 'ask as Job A says instead when the conflict is in a sensitive area', 'still asks Blue on a sensitive conflict'],
+  [sweepChanges, 'skip it if it holds a live runner-lock marker', 'never settles an ask on a locked PR'],
+  [sweepChanges, 'Do nothing more on that PR in this block', 'only settles, leaving the next step to the PR\'s builder'],
+  [sweepChanges, 'by recording that default only (you push no change for it here', 'records the default without pushing it'],
+  [sweepChanges, 'only an unedited agent ask, only a default of the kinds listed here', 'names its one exception to NEVER'],
+  [sweepChanges, 'never skipping, loosening or removing a test, check or workflow step', 'never weakens a test to get green'],
+  [jobD, 'then finish it as AGENTS.md "One small last fix" says, without asking Blue', 'Job D: finishes after the docs-only cap without asking Blue'],
+  [sweepChanges, 'If it asks something Blue keeps, or you can\'t tell, leave it and list it in FINISH.', 'leaves kept and unclear asks to Blue'],
   [sweepChanges, '"NOT READY: sweeper failed at <job and step>: <error>"', 'reports a failed step instead of "nothing to do"'],
 ];
 for (const [block, text, label] of sweeperMustHave) assert(block.includes(text), `sweeper ${label}`);
+assert(!sweepChanges.includes('or else the latest one saying why the label is there'), 'sweeper never acts on a comment that is not an unedited needs-Blue ask');
 for (const [name, block] of [['instructions', sweep], ['Job D', jobD], ['changes', sweepChanges]]) {
   assert(!/[@＠]codex/i.test(block), `sweeper ${name} never write Codex's handle`);
   assert(!block.includes('＠'), `sweeper ${name} use a plain @, so a needs-Blue mention notifies Blue`);
@@ -244,6 +273,24 @@ assert(rulesFlat.includes('except the PR sweeper\'s idle line "Sweeper: nothing 
   && sweepChanges.includes('end with the single line "Sweeper: nothing to do" only when every job ran and nothing needed action'),
   'AGENTS.md step 5 names the sweeper\'s idle line as its one exception, and SWEEPER.md limits it to clean idle fires');
 assert(!/[@＠]codex/i.test(sweeper), 'docs/SWEEPER.md never writes Codex\'s handle');
+
+// The all-day runner's stored prompt, as recorded from the live task (issue #304). A change to the
+// stored text goes through this block, so it must keep the stored prompt's own guardrails.
+const stored = fenced('### Read back 2026-11-26 (issue #304)');
+assert(stored.startsWith('You are the Mako all-day runner'), 'docs/RUNNER.md records the all-day runner\'s stored prompt (issue #304)');
+const storedFlat = stored.replace(/\s+/g, ' ');
+for (const [text, label] of [
+  ['if it returns ABlueAI or fails, do nothing else and end "NOT READY: runner identity check failed"', 'fails closed on the ABlueAI login'],
+  ['Never merge, enable auto-merge, push to main, force-push, or change repository settings, rulesets or any scheduled task, including this one.', 'never merges, pushes to main, force-pushes or changes settings or tasks'],
+  ['at most 24 pushes an hour', 'keeps the 24-pushes-an-hour cap'],
+  ['120 GitHub writes an hour', 'keeps the 120-writes-an-hour cap'],
+  ['On any 403 or 429 mentioning a rate limit, secondary rate limit or abuse detection: stop at once, write nothing more', 'stops at the first rate-limit signal'],
+  ['Never use paid extra usage.', 'never uses paid extra usage'],
+  ['write "at-codex"', 'replaces Codex\'s handle'],
+  ['The rules in that repository\'s AGENTS.md govern everything you do.', 'puts AGENTS.md over everything'],
+]) assert(storedFlat.includes(text), `recorded runner prompt ${label}`);
+for (const login of AGENT_LOGINS) assert(stored.includes(login), `recorded runner prompt names the agent login ${login}`);
+assert(!/[@＠]codex/i.test(stored), 'recorded runner prompt never writes Codex\'s handle');
 
 process.stdout.write(`\nrunner-proposal: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

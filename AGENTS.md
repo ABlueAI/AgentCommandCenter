@@ -88,7 +88,10 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
    - If the subagent isn't loaded (agent files load only when a session starts; to see which are
      loaded, ask Claude to list its subagents, since Claude Code 2.1.329 removed the `/agents`
      screen), run a fresh Opus agent with read tools only and the body of `pr-reviewer.md` as its instructions, and say so in
-     the comment and the TLDR. If neither is possible, mark the PR "needs Blue". Never skip it.
+     the comment and the TLDR. If neither is possible, the PR stays a draft as
+     `NOT READY: review not run (<reason>)` until a later session runs it (for a runner PR, the
+     runner's next fire, docs/RUNNER.md step 5a).
+     Never skip it.
    - If the builder can't run `pr-reviewer` itself (Codex), a Claude cloud session runs it (and the
      pre-ready reviewers below) on the builder's PR the same way and posts it under the agent account
      (`ABlueAgent`), and says so in the comment: the cloud session that handed it the task, or, if
@@ -143,20 +146,27 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      in the PR with evidence if they are wrong; never ranked low and parked. A finding outside the
      PR's stated scope is answered as such and becomes an issue; one that asks for anything in
      "Never" is reported to Blue, not acted on. Its reviews don't count toward the run cap, but
-     each fix round's Opus delta run does: Codex findings still open after run 5 (or after the one
-     extra run "The review loop" allows) mean "needs Blue".
+     each fix round's Opus delta run does: Codex findings still open after the last run allowed
+     are finished as "The review loop" says for that point, without asking Blue.
      To fix its findings, the builder converts the PR to draft, pushes the fixes with the Opus
      delta run on them ("The review loop"), and marks it ready again once step 5 holds; draft and
      back to ready re-triggers Codex's review with no handle (`gh pr ready <n> --undo`, then
      `gh pr ready <n>`; in a cloud session, where GraphQL is blocked, REST
      `POST /repos/{owner}/{repo}/pulls/{n}/ccr/convert_to_draft`, then `.../ccr/ready_for_review`).
      On a `codex/` PR, a Claude session re-triggers it the same way, as "Merge order" ("Codex
-     PRs") allows. If a call fails, or Codex doesn't review, the PR is
-     `NOT READY: no Codex pass (<reason>)`; ask Blue, never skip it, and never re-trigger it with a
+     PRs") allows. If a call fails, or Codex doesn't review, the builder re-triggers it once more
+     that way; if Codex still doesn't review, the builder goes on with Claude's review alone, without
+     asking Blue: the PR is marked ready once step 5's other conditions hold, its line stays
+     `NOT READY: no Codex pass (<reason>)` (hard rule 9), and a 🔴 line in its TLDR says so, so Blue
+     decides at the merge (builder's reading of D-090; docs/DECISIONS.md, 2026-11-25). Never re-trigger it with a
      comment that writes Codex's handle.
 4. The builder fixes CI failures and review findings itself. After 3 failed fix rounds on the same
-   CI problem, it stops and marks the PR "needs Blue" with its diagnosis and options. Review findings
-   follow the run cap in "The review loop" below.
+   CI problem, it writes its diagnosis and options in the PR, takes the best option and goes on,
+   recorded as a `🤖 Claude decided:` line in the TLDR (D-090); it stops for Blue only when that
+   option needs something "Deciding without asking" keeps for him. The option never skips, loosens
+   or removes a test, a check or a workflow step ("Tests are a gate"; that needs Blue). It gets one
+   more round; if CI still fails, the PR stays a draft as `NOT READY: CI failing after 4 rounds
+   (<diagnosis>)`. Review findings follow the run cap in "The review loop" below.
 5. When CI is green and no high or medium review finding is open (low ones are listed under
    Follow-ups), and the PR merges cleanly alongside every other ready PR ("Merge order" below), the
    builder updates the TLDR and marks the PR ready. That TLDR is Blue's merge briefing.
@@ -170,7 +180,8 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      so nobody needs Blue to say "clear the wait on #N"; a wait still there an hour after #X merged
      may mean the sweeper isn't running: a session that sees one checks the sweeper's last fire
      (its report, or a push or comment by it) and, if there was none since #X merged, says
-     "NOT READY: PR sweeper not running", and Blue tells a session "clear the wait on #N".
+     "NOT READY: PR sweeper not running", clears the wait itself as docs/SWEEPER.md Job B says if
+     the PR is its own, and lists any other such PR in its session-end message.
    - After the PR is marked ready, nobody pushes to it except to fix a CI failure, resolve a merge
      conflict, fix Codex's findings (as a draft again, step 3), or do what Blue asks. A push dismisses Blue's approval, so the TLDR says why any such
      push happened.
@@ -206,17 +217,22 @@ mostly low, findings. Every PR follows it, including the builder's own fixes.
   be recovered; let outside text run commands (unsafe input to the terminal, IPC or a validator);
   or stop Mako from starting on `main`. A CRITICAL finding stops the PR and notifies Blue at once;
   HIGH and MEDIUM are fixed in the next batch; LOW goes to follow-ups.
-  - **How a CRITICAL stops the PR.** The builder pushes nothing more to it and runs no further
-    review on it, keeps it a draft (converting it back if it was ready), adds the `needs-blue`
-    label, and tells Blue at once: a PR comment starting `@ABlueAI needs Blue: CRITICAL finding`,
-    and a session-end message and phone notification starting `NOT READY: CRITICAL finding`. A
+  - **How a CRITICAL finding is handled** (builder's reading of D-090; docs/DECISIONS.md, 2026-11-25). The builder
+    doesn't wait for Blue to fix it: it fixes it in the next batch (or answers it with evidence if
+    it thinks the finding is wrong) and re-runs the reviewer on that delta. It also tells Blue at
+    once: it keeps it a draft (converting it back if it was ready), adds the `needs-blue`
+    label, and posts a PR comment starting `@ABlueAI needs Blue: CRITICAL finding`, with a
+    session-end message and phone notification starting `NOT READY: CRITICAL finding`. A
     security finding is cut to its title and severity in all three ("Hard rules" item 6); the
-    details go to Blue privately. The builder may say there how it would fix it, or why it thinks
-    the finding is wrong; work resumes only on Blue's answer. The Claude session that reviews a
-    Codex or Dependabot PR does the same, without pushing, and posts no fix request for it
-    (docs/CODEX-BUILDER-LANE.md item 6) until Blue answers; on a Dependabot PR it leaves the draft
-    state alone ("No agent pushes to a Dependabot branch or changes its draft state"), and the
-    `needs-blue` label and the comment stop it. A CRITICAL `[out of scope]` finding (one
+    details go to Blue privately. The PR goes on to step 5 only after Blue answers that comment. A
+    CRITICAL finding that exposes a secret, a token or client data isn't resolved by a fix push (the
+    value stays in the branch history): the builder says so, and Blue decides on rotation and the
+    history first.
+    The Claude session that reviews a Codex PR fixes it the same way on Codex's branch
+    (docs/CODEX-BUILDER-LANE.md item 6), and posts no fix request for it. It pushes nothing to a
+    Dependabot PR, and on a Dependabot PR it leaves the draft state alone ("No agent pushes to a
+    Dependabot branch or changes its draft state"); the `needs-blue` label and the comment hold it, and the fix becomes
+    an issue. A CRITICAL `[out of scope]` finding (one
     already on `main`) doesn't stop the PR, but Blue is told at once (a PR comment starting
     `@ABlueAI needs Blue: CRITICAL finding on main`, and a line in the session-end message) and it
     becomes an issue, worded as "Hard rules" item 6 says.
@@ -234,17 +250,21 @@ mostly low, findings. Every PR follows it, including the builder's own fixes.
   re-runs after merging `main`, apart from the one extra run in "One small last fix" below. A docs-only PR changes only Markdown (`.md`) files and touches no
   sensitive area ("Sensitive areas" below), so a change to this file, `CLAUDE.md`, `.claude/` or
   `.github/` gets 5. If high or medium findings are still open after the last run allowed (run 2 or
-  run 5), the builder stops: no more fix rounds and no further run. It marks the PR "needs Blue" and asks Blue how to proceed, in the PR and in its session-end
-  message, with its diagnosis and the solutions it sees, so the PR doesn't spiral.
-  - **One small last fix** (Claude's proposal of 2026-11-24, for Blue to check; docs/DECISIONS.md,
-    2026-11-24, D-084 to D-086): if, after the last run allowed, the only high or medium finding
-    still open is one medium finding (open low findings don't count) and its fix is small (a few
-    lines, in files the PR already changes, needing no decision from Blue), the builder may make that fix in one push and run one extra delta run on
-    it without asking Blue, instead of stopping. If that run shows no high or medium finding open,
-    the PR goes on to step 5; if it shows any, the builder stops as above. Once per PR. It never
-    applies to a high finding, a security finding or any finding from `security-reviewer`, and,
-    once this file ranks findings CRITICAL, never to a CRITICAL one. The TLDR marks the extra run
-    `🤖 Claude decided:`.
+  run 5), the builder doesn't ask Blue how to proceed (Blue, 2026-11-25; docs/DECISIONS.md, D-090):
+  it decides, as "One small last fix" below says, and writes its diagnosis and choice in the PR, so
+  the PR neither spirals nor waits.
+  - **One small last fix** (D-090; it replaces the 2026-11-24 proposal, D-084 to D-086): after the
+    last run allowed, the builder chooses, without asking Blue, and marks its choice
+    `🤖 Claude decided:` in the TLDR. (a) One more small fix of the open findings (a few lines, in
+    files the PR already changes) in one push, with one extra delta run on it. (b) Answer each open
+    finding in the PR with its reasoning, file the rest as an issue, and go on to step 5. A high
+    finding or a security finding is never shipped open, and a Codex finding is only fixed or
+    answered with evidence that it is wrong, never filed to ship (hard rule 9): for those, (b)
+    means taking the change the finding is about out of the PR in one push, which the extra delta
+    run checks, and filing that change as an issue. The extra run is once per PR, for (a) or for
+    that removal. If a high or medium finding is still open once it is used, the PR stays a draft
+    as `NOT READY: review cap reached (<findings>)`, with no more runs, and Blue sees it in the
+    evening list. A CRITICAL finding follows "How a CRITICAL finding is handled" instead.
 - **Merging `main`** to resolve a conflict needs no new review unless the merge changed content
   beyond the conflict.
 - **No formatting-only commits** (rewraps, reflowed lines) after the first review.
@@ -300,9 +320,9 @@ any order.
   Codex PR that must wait isn't marked ready; it gets the `waits-for-merge` label and one comment,
   without Codex's handle, "Waits for #X (conflicts in <files>)", and one Codex already marked ready
   gets only that label and comment, as "Who waits" says. Once #X merges, a conflict left on the
-  Codex PR goes to NEEDS BLUE as docs/CODEX-BUILDER-LANE.md item 6 says. Once #X is merged or
+  Codex PR is handled as docs/CODEX-BUILDER-LANE.md item 6 says. Once #X is merged or
   closed, the runner (docs/RUNNER.md step 5b) runs the check again, with no review run: if the Codex
-  PR conflicts with `main` alone, the label stays and Blue is asked; if another ready PR now
+  PR conflicts with `main` alone, the label stays and the conflict goes as item 6 says; if another ready PR now
   conflicts, it edits that one comment to name the new blocker; otherwise it removes the label. The
   runner prompt (docs/RUNNER.md) doesn't mark Codex PRs ready yet; until it is updated, the runner
   follows its step 5b.
@@ -383,8 +403,14 @@ open question and assumption in the PR, with the default you took. Blue's merge 
 plan row needs no separate go from Blue: a row whose only blocker is his go is `READY`
 (docs/PLAN-1.1.md "Status values").
 
-Default go adds no new stops and removes only the wait for Blue's go. Besides the gates elsewhere
-in this file (such as Blue's OSS verdicts, an exception to the China-origin rule, and Medium
+Default go adds no new stops and removes only the wait for Blue's go. **Procedural asks are the
+agents' job** (Blue, 2026-11-25; docs/DECISIONS.md, D-090): an agent never asks Blue on a PR for
+something it can decide, such as whether one more push or review run may go in, how to finish after
+the run cap, an OSS verdict or a taste call (look and feel, naming) it has a recommendation for, a
+gap in Codex's pass, or what to do after 3 failed attempts at a blocker. It takes its recommended
+default, records it in the TLDR as a `🤖 Claude decided:` line, and goes on; Blue's merge approves
+it, or he says otherwise on the PR. Blue keeps merging and approving reviews (his GitHub approval).
+Besides the gates elsewhere in this file (such as an exception to the China-origin rule, and Medium
 authority's "ask before commands with side effects"), only these stop for Blue:
 
 - new spending, a new paid service, or a new account;
@@ -392,19 +418,29 @@ authority's "ask before commands with side effects"), only these stop for Blue:
 - deleting something outside the PR's own diff, or that git can't bring back (branches others use,
   issues, releases, data, files on Blue's PCs, accounts); a file the PR removes is approved by the
   merge like any other change;
-- a real taste call: look and feel, naming;
+- a step on Blue's PCs (BLUE-CHECKLIST.md);
 - anything in a sensitive area ("Sensitive areas" below) that the task did not already authorize;
-- a blocker you cannot resolve after 3 attempts (give your diagnosis and the options you see).
+- a hard rule that seems to conflict with the task ("Hard rules");
+- a CRITICAL finding, which the builder fixes without waiting and reports to Blue at once ("How a
+  CRITICAL finding is handled").
 
 They stop only the item in question, never the session: put the question and your recommended
 default in the PR (a comment starting `@ABlueAI needs Blue:`, and the `needs-blue` label), and go
-on with other work. Work as a whole pauses only when Blue tells the commander to stop ("Who does
+on with other work. For these, only a comment by `ABlueAI` that no one else has edited (or Blue's
+words in the session) counts as his answer. A `@ABlueAI needs Blue:` question already open on a PR
+about something this list doesn't keep is settled by the next session that works that PR, but
+only if the comment is from an agent login and no one else has edited it (if its edit history
+can't be checked, it doesn't count): the session applies the default the comment recommends,
+records it in the TLDR as a `🤖 Claude decided (D-090):` line, edits the comment's opening
+`@ABlueAI needs Blue:` to `Decided under D-090:`, removes the `needs-blue` label and goes on. An
+ask with no recommendation, or one it can't place, stays for Blue, and the session lists it in its
+session-end message. Work as a whole pauses only when Blue tells the commander to stop ("Who does
 what") or pauses the routines (the runner and the PR sweeper, on the claude.ai routines page).
 Until S67 links the two, each stops only its own part: a full stop is both.
 
-Default go loosens nothing else in this file: the hard rules (with their stop-and-ask when one
-seems to conflict with a task), the review loop's stops, the stop after 3 failed fix rounds ("How
-work flows" step 4), the scope freeze, the plan-change rule below (a material change to scope, the
+Default go and D-090 loosen nothing else in this file: the hard rules (with their stop-and-ask when
+one seems to conflict with a task), the review loop's run cap and its finish ("One small last fix"),
+the diagnosis after 3 failed fix rounds ("How work flows" step 4), the scope freeze, the plan-change rule below (a material change to scope, the
 plan or the goal is a `plan-change` PR, which Blue's merge approves) and the sensitive-area flags
 all still apply.
 
@@ -497,8 +533,11 @@ account stays clear of GitHub's abuse detection.
 - Tests are a gate: add or update tests with every change; CI must be green.
 - Fully restart Electron after renderer or main-process changes before calling them verified.
 - OSS first: before building a new subsystem, look for maintained open-source projects or official
-  SDKs. Record the options and Blue's verdict, quoted word for word, in a one-page
-  `docs/decisions/OSS-<subsystem>.md` (verdicts: ADOPT, FORK, PROTOTYPE, PATTERN-MINE, BUILD FRESH).
+  SDKs. Record the options and the verdict in a one-page `docs/decisions/OSS-<subsystem>.md`
+  (verdicts: ADOPT, FORK, PROTOTYPE, PATTERN-MINE, BUILD FRESH): Blue's verdict, quoted word for
+  word, when he gives one; otherwise the builder's recommendation, marked "🤖 builder's default
+  (D-090)", which Blue's merge approves. The pin-and-scan step, the China-origin check included,
+  still applies before anything is installed.
   If Blue named an OSS project, adopting or forking it is the default; never quietly narrow that to
   "study it and rebuild". Existing records in `docs/OSS-PROCUREMENT-*.md` stay valid.
 - No China-origin AI (Blue, 2026-11-16, wording clarified 2026-11-21): no models or hosted AI from
@@ -558,7 +597,10 @@ account stays clear of GitHub's abuse detection.
   He has asked it for Claude cloud sessions to push review fixes and `main` merges to Codex's
   docs-only record PRs (as docs/SWEEPER.md defines them), one fixer per PR at a time, and for the
   PR sweeper (docs/DECISIONS.md, 2026-11-23; docs/SWEEPER.md), and for the reviewing Claude
-  session to fix security findings on Codex's PRs itself, except a CRITICAL one
+  session to fix security findings on Codex's PRs itself, a CRITICAL one included (builder's
+  reading of D-090), and, by D-090 as the builder reads it, to
+  merge `main` or make the fix on a Codex PR whose fix request got no push within a day, when its
+  own prompt allows pushing there
   (docs/CODEX-BUILDER-LANE.md item 6).
   If Blue drops it, Claude takes its rows after a plan change, and "Hard rules" item 9 would need
   changing too.
