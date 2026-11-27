@@ -347,6 +347,8 @@ process.stdout.write('\nLibrary navigation adds, focuses, and never duplicates t
   assert(JSON.stringify(L.open.panels) === JSON.stringify(['library']), 'exactly one panel exists');
   assert(L.libraryListCalls.afterOpen === 1,
     'opening the Library for the first time runs the existing first-load scan exactly once');
+  assert(/^0 run\(s\) ·/.test(L.open.scanStatus),
+    'the renderer accepts the matching scan generation through the real preload and Electron IPC');
 
   assert(L.again.count === 1, 'clicking Library again creates NO second element');
   assert(L.again.libraryPanels === 1, 'and no second panel');

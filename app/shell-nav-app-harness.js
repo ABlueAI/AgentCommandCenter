@@ -464,7 +464,14 @@ app.whenReady().then(async () => {
   ipcMain.on('pty-kill', () => {});
   ipcMain.on('pty-write', () => {});
   ipcMain.on('pty-resize', () => {});
-  ipcMain.handle('library-list', () => ({ ok: true, entries: [], total: 0, invalidCount: 0, invalid: [], capExceeded: false }));
+  let libraryGeneration;
+  ipcMain.handle('library-list', (_e, generation) => {
+    libraryGeneration = generation;
+    return { ok: true, entries: [], total: 0, invalidCount: 0, invalid: [], capExceeded: false };
+  });
+  ipcMain.on('library-accept-list', (e, generation) => {
+    e.returnValue = { ok: typeof generation === 'string' && generation === libraryGeneration };
+  });
   ipcMain.handle('clipboard-read', () => ({ ok: true, text: '' }));
   ipcMain.handle('clipboard-write', () => ({ ok: true }));
   ipcMain.handle('open-external', () => ({ ok: true }));

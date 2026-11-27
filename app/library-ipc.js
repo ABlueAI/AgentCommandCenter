@@ -15,14 +15,15 @@ const crypto = require('crypto');
 const { createTrustedSenderGate } = require('./trusted-ipc-sender');
 
 // An opaque, unguessable handle. It encodes NOTHING — no path, no run ID, no filename. It is only a
-// lookup key into a main-private table that maps to a validated run ID, and the whole table is
-// replaced on every List refresh (so a handle from a stale list can never resolve).
+// lookup key into a main-private table that maps to a validated run ID. Accepting a new List
+// replaces the whole table and invalidates all handles from the previously displayed list.
 function newHandle() { return 'lib_' + crypto.randomBytes(24).toString('hex'); }
 
 // Coercers that keep the renderer payload to known, bounded primitives only (never a raw PS object).
 const str = (v) => (typeof v === 'string' ? v : null);
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 const DATE_KINDS = new Set(['exact', 'approximate', 'unknown']);
+const REFRESH_GENERATION = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 function createLibraryIpc(deps) {
   const entryUrl = deps && deps.entryUrl;
@@ -39,9 +40,8 @@ function createLibraryIpc(deps) {
   // Constructor validates entryUrl/getTrustedWindow (fails closed if missing).
   const gate = createTrustedSenderGate({ entryUrl, getTrustedWindow });
 
-  // handle -> validated run ID. Rebuilt wholesale on every successful List; replacing it invalidates
-  // every previously-issued handle.
   let handleMap = new Map();
+  let latestRefresh = null;
 
   function refuse(op, reason) {
     // Bounded reason constant only — never a path, run ID, or any manifest/report content.
@@ -78,13 +78,20 @@ function createLibraryIpc(deps) {
     };
   }
 
-  async function handleList(event) {
+  async function handleList(event, generation) {
     const g = gate.assess(event);
     if (!g.ok) return refuse('list', g.reason);
+    if (typeof generation !== 'string' || !REFRESH_GENERATION.test(generation) ||
+        latestRefresh?.generation === generation) {
+      return refuse('list', 'invalid-refresh-generation');
+    }
+    const refresh = { generation, handles: null };
+    latestRefresh = refresh;
     let res;
     try { res = await runLibraryAction({ action: 'List' }); }
     catch { return refuse('list', 'library-subprocess-failed'); }
     if (!res || res.ok !== true) return refuse('list', (res && str(res.reason)) || 'library-error');
+    if (latestRefresh !== refresh) return refuse('list', 'refresh-superseded');
 
     const fresh = new Map();
     const entries = [];
@@ -93,13 +100,12 @@ function createLibraryIpc(deps) {
       const p = projectEntry(e, fresh);
       if (p) entries.push(p);
     }
-    handleMap = fresh;   // replacing the table invalidates all previously-issued handles
-
     const rawInvalid = Array.isArray(res.invalid) ? res.invalid : [];
     const invalid = rawInvalid.map((x) => ({
       runLabel: str(x && x.runLabel) || '(unrecognized run directory)',
       reason: str(x && x.reason) || 'invalid',
     }));
+    refresh.handles = fresh;
     return {
       ok: true,
       rootExists: res.rootExists !== false,
@@ -109,6 +115,17 @@ function createLibraryIpc(deps) {
       invalid,
       entries,
     };
+  }
+
+  function handleAcceptList(event, generation) {
+    const g = gate.assess(event);
+    if (!g.ok) return refuse('accept-list', g.reason);
+    if (!latestRefresh?.handles || latestRefresh.generation !== generation) {
+      return refuse('accept-list', 'refresh-not-pending');
+    }
+    handleMap = latestRefresh.handles;
+    latestRefresh.handles = null;
+    return { ok: true };
   }
 
   // Shared Read projection: main resolves an identity to a run ID, PowerShell RE-VALIDATES everything
@@ -158,6 +175,7 @@ function createLibraryIpc(deps) {
 
   return {
     handleList,
+    handleAcceptList,
     handleRead,
     handleOpenReport,
     // V3b, MAIN-INTERNAL ONLY (never exposed over IPC): resolve a CURRENT opaque handle to its

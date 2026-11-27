@@ -7,6 +7,7 @@
 // tests the real boundary logic without touching disk.
 
 const { createLibraryIpc } = require('./library-ipc');
+const { randomUUID } = require('node:crypto');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -73,6 +74,13 @@ function trustedIpc(overrides) {
   return { ipc, calls, ev: evt(w) };
 }
 
+async function listAndAccept(ipc, ev) {
+  const generation = randomUUID();
+  const list = await ipc.handleList(ev, generation);
+  if (list.ok && !ipc.handleAcceptList(ev, generation).ok) throw new Error('List acceptance failed');
+  return list;
+}
+
 (async () => {
   // --- sender gate on every handler ---
   {
@@ -88,7 +96,7 @@ function trustedIpc(overrides) {
   // --- List: path-free projection + opaque handles ---
   {
     const { ipc, ev } = trustedIpc();
-    const res = await ipc.handleList(ev);
+    const res = await listAndAccept(ipc, ev);
     assert(res.ok === true && res.entries.length === 2, 'handleList returns the two valid entries');
     assert(res.invalidCount === 1 && res.invalid[0].reason === 'manifest-schema-invalid', 'invalid count + bounded reason surfaced');
     const e0 = res.entries[0];
@@ -108,7 +116,7 @@ function trustedIpc(overrides) {
       return { ok: true, status: 'available', outcome: 'completed', reportStatus: 'available', title: 'Alpha', mode: 'transcript', route: 'cli', chars: 5, text: 'hello' };
     };
     const { ipc, ev } = trustedIpc({ runLibraryAction });
-    const list = await ipc.handleList(ev);
+    const list = await listAndAccept(ipc, ev);
     const handle = list.entries[0].handle;
     const read = await ipc.handleRead(ev, handle);
     assert(read.ok === true && read.status === 'available' && read.text === 'hello', 'handleRead returns the report text for a valid handle');
@@ -118,9 +126,63 @@ function trustedIpc(overrides) {
     const nonString = await ipc.handleRead(ev, 42);
     assert(nonString.ok === false && nonString.error === 'unknown-handle', 'a non-string handle is refused');
     // Refresh the list -> the OLD handle must become stale.
-    await ipc.handleList(ev);
+    await listAndAccept(ipc, ev);
     const stale = await ipc.handleRead(ev, handle);
     assert(stale.ok === false && stale.error === 'unknown-handle', 'a handle from a previous list refresh is invalidated');
+  }
+
+  // --- Overlapping scans cannot replace the newest scan's handles ---
+  {
+    const olderScan = Promise.withResolvers();
+    const newerScan = Promise.withResolvers();
+    const scans = [olderScan, newerScan];
+    const { ipc, ev } = trustedIpc({ runLibraryAction: () => scans.shift().promise });
+    const older = ipc.handleList(ev, randomUUID());
+    const newerGeneration = randomUUID();
+    const newer = ipc.handleList(ev, newerGeneration);
+    newerScan.resolve(listPayload());
+    const latest = await newer;
+    assert(ipc.handleAcceptList(ev, newerGeneration).ok, 'the newest list can be accepted');
+    olderScan.resolve(listPayload());
+    const stale = await older;
+    assert(stale.ok === false && stale.error === 'refresh-superseded',
+      'an older scan completing last refuses without publishing handles');
+    assert(ipc.resolveHandle(latest.entries[0].handle) === listPayload().entries[0].runId,
+      'the newest scan keeps its handle after the older scan finishes');
+  }
+
+  // Main can finish a scan before the next request reaches it, while the renderer already
+  // knows the result is stale. A failed newer scan must leave the displayed handles usable.
+  {
+    const results = [listPayload(), listPayload(), { ok: false, reason: 'library-error' }];
+    const { ipc, ev } = trustedIpc({ runLibraryAction: async () => results.shift() });
+    const displayed = await listAndAccept(ipc, ev);
+    const displayedHandle = displayed.entries[0].handle;
+    const skippedGeneration = randomUUID();
+    const skipped = await ipc.handleList(ev, skippedGeneration);
+    assert(ipc.resolveHandle(displayedHandle) === listPayload().entries[0].runId &&
+      ipc.resolveHandle(skipped.entries[0].handle) === undefined,
+    'prepared handles cannot replace the displayed list before acceptance');
+    const failed = await ipc.handleList(ev, randomUUID());
+    assert(!failed.ok && failed.error === 'library-error', 'the newest scan reports its failure');
+    assert(!ipc.handleAcceptList(ev, skippedGeneration).ok, 'a superseded prepared result cannot be accepted');
+    assert(ipc.resolveHandle(displayedHandle) === listPayload().entries[0].runId,
+      'the displayed handle remains valid after the failed scan');
+  }
+
+  {
+    const { ipc, ev, calls } = trustedIpc();
+    const invalid = await ipc.handleList(ev, { generation: randomUUID() });
+    assert(!invalid.ok && invalid.error === 'invalid-refresh-generation' && calls.length === 0,
+      'an invalid generation refuses before starting a scan');
+    const generation = randomUUID();
+    const pending = await ipc.handleList(ev, generation);
+    const denied = ipc.handleAcceptList(untrustedEvt(), generation);
+    assert(!denied.ok && denied.error === 'untrusted-sender' &&
+      ipc.resolveHandle(pending.entries[0].handle) === undefined,
+    'an untrusted sender cannot activate a prepared handle table');
+    assert(ipc.handleAcceptList(ev, generation).ok && !ipc.handleAcceptList(ev, generation).ok,
+      'a prepared table may be accepted once');
   }
 
   // --- Read passthrough shapes: not-persisted / incomplete / PS refusal ---
@@ -137,7 +199,7 @@ function trustedIpc(overrides) {
     ];
     const runLibraryAction = async (a) => (a.action === 'List' ? { ok: true, entries: listEntries, invalid: [], total: 3 } : shapes[a.runId]);
     const { ipc, ev } = trustedIpc({ runLibraryAction });
-    const list = await ipc.handleList(ev);
+    const list = await listAndAccept(ipc, ev);
     const byLabel = {}; for (const e of list.entries) byLabel[e.displayRunLabel] = e.handle;
     const np = await ipc.handleRead(ev, byLabel['run-a']);
     assert(np.ok === true && np.status === 'not-persisted' && np.text === null, 'not-persisted read returns no text');
@@ -166,7 +228,7 @@ function trustedIpc(overrides) {
   {
     const runLibraryAction = async () => { throw new Error('powershell blew up'); };
     const { ipc, ev } = trustedIpc({ runLibraryAction });
-    const l = await ipc.handleList(ev);
+    const l = await listAndAccept(ipc, ev);
     assert(l.ok === false && l.error === 'library-subprocess-failed', 'a thrown subprocess fails closed on List');
   }
 
@@ -188,7 +250,7 @@ function trustedIpc(overrides) {
       invalid: [],
     });
     const { ipc, ev } = trustedIpc({ runLibraryAction: async () => v3Payload() });
-    const l = await ipc.handleList(ev);
+    const l = await listAndAccept(ipc, ev);
     assert(l.ok === true && l.entries.length === 1, 'a schema-v3 multi-slice run lists successfully');
     const e = l.entries[0];
     assert(e.sliceCount === 2 && e.aggregateSliceSeconds === 50,
@@ -203,7 +265,7 @@ function trustedIpc(overrides) {
   {
     // A legacy List payload with no slice fields must project them as null, never undefined-crash.
     const { ipc, ev } = trustedIpc();
-    const l = await ipc.handleList(ev);
+    const l = await listAndAccept(ipc, ev);
     assert(l.entries.every((e) => e.sliceCount === null && e.aggregateSliceSeconds === null),
       'historical entries with no slice fields project null (num()) without error');
   }

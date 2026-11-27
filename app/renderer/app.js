@@ -233,7 +233,7 @@ document.addEventListener('keydown', (e) => {
 // innerHTML/Markdown/URL attributes. Copy Report and Maximize REUSE the V1a clipboard consumer and
 // the pane-maximize controller (no duplicate implementations).
 const LV = window.ccLibraryView;
-const libState = { entries: [], selectedHandle: null, currentReportText: '', loaded: false };
+const libState = { entries: [], selectedHandle: null, currentReportText: '', loaded: false, refreshGeneration: null };
 const libClip = window.ccClipboardConsumer.createClipboardConsumer({
   invokeRead: () => cc.clipboardRead(),
   invokeWrite: (s) => cc.clipboardWrite(s),
@@ -277,33 +277,51 @@ function renderLibraryList() {
       listEl.appendChild(row);
     }
   }
-  const c = LV.computeCounts(libState.entries);
-  $('#libStatus').textContent =
-    `${c.total} run(s) · ${c.available} with report · ${c.notPersisted} metadata-only · ${c.incomplete} incomplete · ${c.approximate} approx · ${c.unknown} unknown`;
 }
 
-async function refreshLibrary() {
-  // V3b: a refresh START bumps the reader epoch (and clears the follow-up state). If something
-  // newer (a selection or Open Report) takes the reader over while the scan runs, this refresh has
-  // become LATE: it still applies the fresh list + handles below, but it must NOT clear or replace
-  // what the newer action displayed.
-  const myEpoch = libFollowup.noteRefreshStart();
+async function refreshLibrary({ preserveReader = false } = {}) {
+  const generation = crypto.randomUUID();
+  libState.refreshGeneration = generation;
+  const readerEpoch = libFollowup.currentEpoch();
   libState.loaded = true;
   $('#libStatus').textContent = 'Scanning…';
   let res;
-  try { res = await cc.libraryList(); }
-  catch (e) { appendLog(`[library] list failed: ${(e && e.message) || e}\n`); $('#libStatus').textContent = 'Scan failed.'; return; }
-  if (!res || !res.ok) {
-    appendLog(`[library] list refused: ${(res && res.error) || 'unknown error'}\n`);
-    $('#libStatus').textContent = 'Scan refused.';
-    return;
+  let step = 'list';
+  try {
+    res = await cc.libraryList(generation);
+    if (res?.ok === true) {
+      if (libState.refreshGeneration !== generation) return 'superseded';
+      if (!Array.isArray(res.entries)) res = { ok: false, error: 'invalid-list-response' };
+      else {
+        // Keep main's handles aligned with what this renderer accepts. A newer request cannot
+        // start between this acknowledgement and rendering the list in the same turn.
+        step = 'accept';
+        const accepted = cc.libraryAcceptList(generation);
+        if (accepted?.ok !== true) res = accepted;
+      }
+    }
+  } catch (e) {
+    // The error's name and step only: its message can carry a path.
+    appendLog(`[library] list failed: ipc-failed (${step}: ${(e && e.name) || 'Error'})\n`);
+    if (libState.refreshGeneration !== generation) return 'superseded';
+    $('#libStatus').textContent = 'Scan failed.';
+    return 'failed';
   }
-  libState.entries = Array.isArray(res.entries) ? res.entries : [];
-  if (libFollowup.isCurrent(myEpoch)) {
+  if (res?.ok !== true) {
+    appendLog(`[library] list refused: ${res?.error || 'unknown-error'}\n`);
+    if (libState.refreshGeneration !== generation) return 'superseded';
+    $('#libStatus').textContent = 'Scan refused.';
+    return 'failed';
+  }
+  libState.entries = res.entries;
+  if (!preserveReader && libFollowup.isCurrent(readerEpoch)) {
     libState.selectedHandle = null;
     clearReader();
   }
   renderLibraryList();
+  const c = LV.computeCounts(libState.entries);
+  $('#libStatus').textContent =
+    `${c.total} run(s) · ${c.available} with report · ${c.notPersisted} metadata-only · ${c.incomplete} incomplete · ${c.approximate} approx · ${c.unknown} unknown`;
   // Honest, metadata-only reporting of what the scan found (no report/manifest content).
   appendLog(`[library] scanned root: total=${res.total} valid=${libState.entries.length} invalid=${res.invalidCount} capExceeded=${res.capExceeded === true}\n`);
   if (res.capExceeded) appendLog('[library] NOTE: run-directory cap reached; some runs are not listed.\n');
@@ -315,6 +333,7 @@ async function refreshLibrary() {
 }
 
 function clearReader() {
+  libFollowup.noteCleared();
   $('#libMetaHost').textContent = '';
   $('#libReportText').textContent = '';
   const st = $('#libReportStatus'); st.textContent = ''; st.classList.add('hidden');
@@ -385,7 +404,7 @@ async function openReportForPane(paneId) {
   // identity as the follow-up source (no Library handle is minted for Open Report).
   await window.ccReportFollowup.openPaneReportOrdered(libFollowup, {
     isLoaded: () => libState.loaded,
-    refresh: () => refreshLibrary(),
+    refresh: () => refreshLibrary({ preserveReader: true }),
     beforeRead: () => {
       libState.selectedHandle = null;
       renderLibraryList();

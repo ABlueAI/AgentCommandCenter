@@ -10,6 +10,10 @@
 
 const RF = require('./report-followup');
 const { el } = require('./agent-dom');
+const { readFileSync } = require('node:fs');
+const { join } = require('node:path');
+const { webcrypto } = require('node:crypto');
+const { Script, createContext } = require('node:vm');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -41,6 +45,7 @@ class StubEl {
   get textContent() { return this._text !== null ? this._text : this.childNodes.map((c) => c.textContent).join(''); }
   set innerHTML(v) { this.childNodes = parseHtml(); }
   appendChild(n) { this._text = null; this.childNodes.push(n); return n; }
+  addEventListener() {}
   walk(acc) { for (const c of this.childNodes) { if (c instanceof StubEl) { acc.push(c); c.walk(acc); } } return acc; }
 }
 class StubText { constructor(t) { this.nodeType = 3; this.tagName = '#text'; this._text = t == null ? '' : String(t); } get textContent() { return this._text; } }
@@ -63,13 +68,139 @@ function makeCtl(opts) {
 }
 const clickAsk = (n) => n.btn.onclick({ preventDefault() { } });
 
+// Run the actual Library click, render, and report functions with controlled IPC replies.
+const appSource = readFileSync(join(__dirname, 'app.js'), 'utf8');
+const libraryScript = new Script(appSource.slice(
+  appSource.indexOf('const LV = window.ccLibraryView;'),
+  appSource.indexOf('function showTermEmpty()'),
+) + '\nsetupLibrary();', { filename: 'app.js (Library)' });
+
+function makeLibrary({ accept = () => ({ ok: true }), openReport = null, globals = {} } = {}) {
+  const scans = [];
+  const accepted = [];
+  const logs = [];
+  const elements = new Map();
+  const $ = (id) => {
+    if (!elements.has(id)) elements.set(id, new StubEl(doc, 'div'));
+    return elements.get(id);
+  };
+  const ctx = createContext({
+    window: {
+      ccLibraryView: require('./library-view'),
+      ccClipboardConsumer: { createClipboardConsumer() {} },
+      ccReportFollowup: RF,
+    },
+    cc: {
+      libraryList: (generation) => {
+        const scan = { generation, ...Promise.withResolvers() };
+        scans.push(scan);
+        return scan.promise;
+      },
+      libraryAcceptList: (generation) => {
+        accepted.push(generation);
+        return accept(generation);
+      },
+      libraryRead: async () => ({ ok: true, status: 'available', text: 'Stored report' }),
+      libraryOpenReport: openReport || (async () => { throw new Error('unexpected open report'); }),
+    },
+    crypto: webcrypto,
+    document: doc,
+    agentDom: { el },
+    appendLog: (line) => logs.push(line),
+    $,
+    ...globals,
+  });
+  libraryScript.runInContext(ctx);
+  const nodes = new Script('libFollowup._nodes()').runInContext(ctx);
+  return { $, ctx, nodes, scans, logs, accepted, refresh: () => $('#libRefresh').onclick() };
+}
+
+function listResult(title) {
+  return { ok: true, total: 1, invalidCount: 0, entries: [
+    { handle: 'lib_' + title, title, reportStatus: 'available' },
+  ] };
+}
+
 (async () => {
+  // The renderer also checks request order, including IPC errors that never arrive as a main reply.
+  for (const late of ['success', 'error', 'refusal']) {
+    const { $, scans, logs, accepted, refresh } = makeLibrary();
+    const older = refresh();
+    const newer = refresh();
+    scans[1].resolve(listResult('Newer report'));
+    await newer;
+    const latestStatus = $('#libStatus').textContent;
+    if (late === 'error') scans[0].reject(new Error('IPC unavailable'));
+    else if (late === 'refusal') scans[0].resolve({ ok: false, error: 'refresh-superseded' });
+    else scans[0].resolve(listResult('Older report'));
+    await older;
+    assert($('#libList').textContent.includes('Newer report') &&
+      $('#libStatus').textContent === latestStatus,
+      `a late scan ${late} leaves the newest list and status visible`);
+    assert(accepted.length === 1 && accepted[0] === scans[1].generation,
+      'only the newest scan generation is accepted');
+    if (late === 'error') {
+      assert(logs.some((line) => line.includes('list failed: ipc-failed (list: Error)')),
+        'the late IPC error is logged with the step and error name');
+    }
+  }
+
+  {
+    // Open Report on a Library that hasn't loaded: its first scan keeps the reader, so the pane's
+    // report still shows once the scan finishes (audit renderer:22 moved the epoch bump to clearReader).
+    const { $, ctx, nodes, scans } = makeLibrary({
+      openReport: async () => ({ ok: true, status: 'available', text: 'Pane report', title: 'Pane run' }),
+      globals: { focusLibrarySurface() {} },
+    });
+    const opening = new Script("openReportForPane('pty4')").runInContext(ctx);
+    scans[0].resolve(listResult('Listed report'));
+    await opening;
+    assert($('#libReportText').textContent === 'Pane report' && !nodes.wrap.classList.contains('hidden'),
+      'Open Report before the first scan shows the pane report and its Ask control after the scan');
+  }
+
+  // The report, question and Ask identity stay together if the newest refresh fails.
+  for (const failure of ['refusal', 'rejection', 'accept refusal']) {
+    let refuseAcceptance = false;
+    const { $, nodes, scans, refresh } = makeLibrary({
+      accept: () => refuseAcceptance ? { ok: false, error: 'refresh-not-pending' } : { ok: true },
+    });
+    const initial = refresh();
+    scans[0].resolve(listResult('Selected report'));
+    await initial;
+    await $('#libList').childNodes[0].onclick();
+    nodes.question.value = 'My unsent question';
+    nodes.question.oninput();
+    const failedRefresh = refresh();
+    const draftWhilePending = nodes.question.value;
+    if (failure === 'rejection') scans[1].reject(new Error('IPC unavailable'));
+    else if (failure === 'refusal') scans[1].resolve({ ok: false, error: 'library-subprocess-failed' });
+    else {
+      refuseAcceptance = true;
+      scans[1].resolve(listResult('Unaccepted report'));
+    }
+    await failedRefresh;
+    const failureStatus = failure === 'rejection' ? 'Scan failed.' : 'Scan refused.';
+    assert($('#libStatus').textContent === failureStatus && $('#libReportText').textContent === 'Stored report' &&
+      $('#libList').textContent.includes('Selected report'), `a refresh ${failure} is visible alongside the old list and report`);
+    assert(draftWhilePending === 'My unsent question' && nodes.question.value === 'My unsent question' &&
+      !nodes.btn.disabled && !nodes.wrap.classList.contains('hidden'),
+      `a refresh ${failure} preserves the draft question and Ask control`);
+    refuseAcceptance = false;
+    const retry = refresh();
+    scans[2].resolve(listResult('Refreshed report'));
+    await retry;
+    assert($('#libList').textContent.includes('Refreshed report') && $('#libReportText').textContent === '' &&
+      nodes.question.value === '' && nodes.wrap.classList.contains('hidden'),
+      'a successful retry replaces the list and clears the old reader and Ask state together');
+  }
+
   // ── mount + visibility/enable rules; nothing auto-submits ──────────────────────────────────
   {
     const { ctl, calls, n } = makeCtl();
     assert(n.wrap.classList.contains('hidden'), 'the section mounts hidden (no report yet)');
     assert(n.btn.disabled === true, 'Ask starts disabled');
-    ctl.noteSelection(); ctl.noteOpenReportStart(); ctl.noteRefreshStart(); ctl.noteCleared();
+    ctl.noteSelection(); ctl.noteOpenReportStart(); ctl.noteCleared();
     ctl.setSource({ kind: 'library', handle: 'lib_a' }, true);
     assert(calls.length === 0, 'mount + selection + open + refresh + clear + setSource submit NOTHING (submission is explicit only)');
     assert(!n.wrap.classList.contains('hidden'), 'the section shows once an available report + source exist');
@@ -198,7 +329,7 @@ const clickAsk = (n) => n.btn.onclick({ preventDefault() { } });
   // ── epoch decision used by app.js: a late refresh must not clear ───────────────────────────
   {
     const { ctl } = makeCtl();
-    const refreshEpoch = ctl.noteRefreshStart();
+    const refreshEpoch = ctl.currentEpoch();
     assert(ctl.isCurrent(refreshEpoch), 'a refresh with no newer action is current (its completion MAY clear the reader)');
     ctl.noteOpenReportStart();
     assert(!ctl.isCurrent(refreshEpoch), 'after Open Report starts, that refresh is LATE — app.js skips its reader clear');
@@ -212,14 +343,14 @@ const clickAsk = (n) => n.btn.onclick({ preventDefault() { } });
     let loaded = false;
     const res = await RF.openPaneReportOrdered(ctl, {
       isLoaded: () => loaded,
-      refresh: async () => { order.push('refresh-start'); ctl.noteRefreshStart(); loaded = true; order.push('refresh-done(clears reader)'); },
+      refresh: async () => { order.push('refresh-start'); loaded = true; order.push('refresh-done'); },
       beforeRead: () => order.push('before-read'),
       readPane: async () => { order.push('read'); return { ok: true, status: 'available', text: 'PANE REPORT' }; },
       display: () => order.push('display'),
       displayError: () => order.push('display-error'),
     }, 'pty4');
     assert(res === 'done', 'the ordered open completes');
-    assert(order.join(' -> ') === 'refresh-start -> refresh-done(clears reader) -> before-read -> read -> display',
+    assert(order.join(' -> ') === 'refresh-start -> refresh-done -> before-read -> read -> display',
       'the initial Library refresh completes strictly BEFORE the pane report is read and displayed');
     assert(JSON.stringify(ctl._state().source) === JSON.stringify({ kind: 'pane', paneId: 'pty4' }),
       'the follow-up source recorded after the read is the PANE identity');
@@ -230,7 +361,7 @@ const clickAsk = (n) => n.btn.onclick({ preventDefault() { } });
     let displayed = 0;
     const res = await RF.openPaneReportOrdered(ctl, {
       isLoaded: () => false,
-      refresh: async () => { ctl.noteRefreshStart(); ctl.noteSelection(); /* user clicked a run mid-scan */ },
+      refresh: async () => { ctl.noteSelection(); },
       readPane: async () => ({ ok: true, status: 'available', text: 'T' }),
       display: () => { displayed++; },
     }, 'pty4');
@@ -251,6 +382,19 @@ const clickAsk = (n) => n.btn.onclick({ preventDefault() { } });
     releaseRead();
     const res = await p;
     assert(res === 'superseded' && displayed === 0, 'a pane read finishing after a newer action does not display');
+  }
+  {
+    const { ctl } = makeCtl();
+    let reads = 0;
+    const deps = {
+      isLoaded: () => false,
+      readPane: async () => { reads++; return { ok: true, status: 'available', text: 'T' }; },
+      display: () => {},
+    };
+    const stale = await RF.openPaneReportOrdered(ctl, { ...deps, refresh: async () => 'superseded' }, 'pty4');
+    assert(stale === 'superseded' && reads === 0, 'a superseded initial scan cannot continue its pane read');
+    const failedScan = await RF.openPaneReportOrdered(ctl, { ...deps, refresh: async () => 'failed' }, 'pty4');
+    assert(failedScan === 'done' && reads === 1, 'a failed initial scan still allows the independent pane read');
   }
   {
     // 4) An unavailable pane read records NO follow-up source.
