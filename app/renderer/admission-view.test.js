@@ -219,6 +219,25 @@ function harness(opts = {}) {
   }
 
   // -- 6. N+1 visibly refuses --------------------------------------------------------------------
+  {
+    for (const nextDraft of ['next prompt', 'submitted prompt']) {
+      let complete;
+      const h = harness({ submitPrompt: () => new Promise((resolve) => { complete = resolve; }) });
+      h.view.mount(); await h.view.refresh();
+      h.input().value = 'submitted prompt';
+      h.input().oninput();
+      const pending = h.view.submit();
+      h.input().value = 'some edits';
+      h.input().oninput();
+      h.input().value = nextDraft;
+      h.input().oninput();
+      complete({ ok: true, remaining: 2 });
+      eq(await pending, true, 'the original draft was sent successfully');
+      eq(h.calls.submit[0].prompt, 'submitted prompt', 'only the submitted draft was sent');
+      eq(h.input().value, nextDraft, 'success preserves later edits, including edits back to the submitted text');
+      eq(h.counter().textContent, `${nextDraft.length} / ${MAX_PROMPT_CHARS}`, 'the counter reflects the preserved draft');
+    }
+  }
   process.stdout.write('\n(6) N+1 VISIBLY refuses\n');
   {
     // (a) The client already knows the allowance is gone: refuse without spending a round trip.

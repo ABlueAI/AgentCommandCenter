@@ -16,6 +16,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { spawnSync } = require('child_process');
 const {
   createAdmissionLedgerStore, LEDGER_FILENAME, LOCK_FILENAME, MAX_RAW_BYTES, STORE_REASON,
   CHECKSUM_FIELD, canonicalize, checksumOf,
@@ -136,17 +137,46 @@ try {
     store.save(GOOD_DOC, null);
     const loaded = store.load();
     const before = fs.readFileSync(store.ledgerPath());
-    // Model another live application process holding the fixed lock. Remove exactly the lock this
-    // test created, in this test-owned directory, after asserting the refusal.
+    // An old-format lock carries no owner identity, so recovery must refuse it.
     fs.writeFileSync(store.lockPath(), 'test-owned-lock', 'utf8');
     const changed = JSON.parse(JSON.stringify(GOOD_DOC));
     changed.runs['evidence-run-0001'].admitted = 2;
     const rejected = store.save(changed, loaded.revision);
     assert(rejected.ok === false && rejected.reason === STORE_REASON.CONFLICT,
-      'an already-held cross-process lock refuses visibly');
+      'an ownerless legacy lock refuses visibly');
     assert(fs.readFileSync(store.ledgerPath()).equals(before),
       'a lock conflict leaves the canonical ledger byte-identical');
     fs.rmSync(store.lockPath());
+  }
+  {
+    const dir = freshDir('cas-dead-owner');
+    const store = createAdmissionLedgerStore({ userDataDir: dir });
+    const initial = store.save(GOOD_DOC, null);
+    const child = spawnSync(process.execPath, ['-e', `
+      const fs = require('fs');
+      const { createAdmissionLedgerStore } = require(process.argv[1]);
+      const store = createAdmissionLedgerStore({ userDataDir: process.argv[2], fsImpl: {
+        ...fs,
+        writeFileSync(file, ...args) {
+          if (typeof file === 'string' && file.endsWith('.tmp')) process.exit(42);
+          return fs.writeFileSync(file, ...args);
+        },
+      } });
+      store.save(store.load().doc, process.argv[3]);
+    `, require.resolve('./admission-budget-store'), dir, initial.revision]);
+    assert(child.status === 42 && fs.existsSync(store.lockPath()),
+      'the independent writer exited while holding the lock');
+    const before = fs.readFileSync(store.ledgerPath());
+    const changed = JSON.parse(JSON.stringify(GOOD_DOC));
+    changed.runs['evidence-run-0001'].admitted = 2;
+    const stale = store.save(changed, '0'.repeat(64));
+    assert(stale.ok === false && stale.reason === STORE_REASON.CONFLICT,
+      'recovery still refuses an outdated ledger revision');
+    assert(fs.readFileSync(store.ledgerPath()).equals(before),
+      'the stale revision leaves the ledger byte-identical');
+    assert(store.save(changed, initial.revision).ok === true,
+      'a later writer with the correct revision recovers after the holder exits');
+    assert(!fs.existsSync(store.lockPath()), 'successful recovery leaves no held lock');
   }
   {
     const dir = freshDir('cas-revision-required');
