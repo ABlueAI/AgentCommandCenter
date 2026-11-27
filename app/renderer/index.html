@@ -182,6 +182,9 @@
         <!-- S09: the Resume or Start fresh offer (session-resume-view.js). Empty and hidden unless Mako
              last closed with Claude panes open. -->
         <div id="resumeHost" class="resume-host hidden"></div>
+        <!-- S46: the daily list of Claude sessions idle 3 days or more (session-hygiene-view.js). Empty
+             and hidden unless one is idle; shown once a day. -->
+        <div id="hygieneHost" class="hygiene-host hidden"></div>
         <div id="terminalGrid" class="term-grid">
           <div class="empty muted" id="termEmpty">No terminals open. Open an agent from the <b>Agents</b> tab, or click <b>+ Shell</b>.</div>
         </div>
@@ -388,6 +391,7 @@
   <script src="agent-dom.js"></script>
   <script src="authority-choice.js"></script>
   <script src="session-resume-view.js"></script>
+  <script src="session-hygiene-view.js"></script>
   <script src="term-copy.js"></script>
   <script src="term-keys.js"></script>
   <script src="agent-token-view.js"></script>
