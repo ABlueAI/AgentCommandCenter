@@ -1747,17 +1747,20 @@ function noteSessionMemory(res) {
   win.webContents.send('main-error', `Session memory refused [${reason}]: ${detail}`);
 }
 function sessionMemoryResult(fn) {
-  if (!sessionMemoryLease?.ok) {
-    return { ok: false, reason: sessionMemoryLease?.reason ?? sessionMemoryMod.REASON.PROFILE_LOCK_FAILED };
-  }
-  try { return fn(); }
-  catch { return { ok: false, reason: 'session-memory-failed' }; }
+  return sessionMemoryLease?.ok
+    ? fn()
+    : { ok: false, reason: sessionMemoryLease?.reason ?? sessionMemoryMod.REASON.PROFILE_LOCK_FAILED };
 }
 // Refusals are visible while PTY launch and cleanup can still finish.
 function sessionMemoryCall(fn) {
-  const res = sessionMemoryResult(fn);
-  noteSessionMemory(res);
-  return res;
+  try {
+    const res = sessionMemoryResult(fn);
+    noteSessionMemory(res);
+    return res;
+  } catch (e) {
+    tlog('[session-memory] failed [session-memory-failed]');
+    return { ok: false, reason: 'session-memory-failed' };
+  }
 }
 // paneId -> the main-minted session ID of the Claude pane running in it.
 const paneSessions = new Map();
@@ -1819,16 +1822,15 @@ ipcMain.handle('session-hygiene-list', (e) => {
 ipcMain.handle('session-hygiene-done-when', (e, sessionId, text) => {
   const g = launcherGate.assess(e);
   if (!g.ok) return { ok: false, error: g.reason };
-  // Not through sessionMemoryCall: a refused done-when (bad text, an unknown session) is Blue's input,
-  // shown on the row, not a session-memory failure, so it must not raise the "IDs are not being
-  // recorded" notice. A real store failure (read or write) still does.
+  // Input refusals are shown on the row. Only a store failure needs the shared warning.
   const INPUT_REFUSALS = [sessionMemoryMod.REASON.BAD_DONE_WHEN, sessionMemoryMod.REASON.UNKNOWN_SESSION, sessionMemoryMod.REASON.BAD_SESSION_ID];
-  const res = sessionMemoryResult(() => sessionMemory().setDoneWhen(sessionId, text));
-  if (res && res.ok) return { ok: true };
-  const reason = (res && res.reason) || 'session-memory-failed';
-  if (INPUT_REFUSALS.includes(reason)) tlog(`[session-hygiene] done-when refused [${reason}]`);
+  let res;
+  try { res = sessionMemoryResult(() => sessionMemory().setDoneWhen(sessionId, text)); }
+  catch { res = { ok: false, reason: 'session-memory-failed' }; }
+  if (res.ok) return { ok: true };
+  if (INPUT_REFUSALS.includes(res.reason)) tlog(`[session-hygiene] done-when refused [${res.reason}]`);
   else noteSessionMemory(res);
-  return { ok: false, error: reason };
+  return { ok: false, error: res.reason };
 });
 // S46: a session's last activity: the last input that reached its pane (typing, a pasted or spoken
 // prompt; every ordinary input route converges on pty-write). Recorded here rather than from the
