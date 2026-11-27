@@ -179,7 +179,7 @@ async function main() {
 
   section('gitEnv: what git may see of main\'s environment');
   {
-    const e = gitEnv({ Path: 'C:\\Windows', SystemRoot: 'C:\\Windows', USERPROFILE: 'C:\\Users\\b', TEMP: 'C:\\t',
+    const e = gitEnv({ Path: 'C:\\Windows', SystemRoot: 'C:\\Windows', USERPROFILE: 'D:\\profiles\\b', TEMP: 'C:\\t',
       GH_TOKEN: 'secret', GEMINI_API_KEY: 'k', ANTHROPIC_API_KEY: 'k', GIT_DIR: 'C:\\evil', GIT_CONFIG_GLOBAL: 'C:\\evil', NODE_OPTIONS: '--require x' });
     assert(e.Path === 'C:\\Windows' && e.SystemRoot && e.USERPROFILE && e.TEMP, 'keeps Path, SystemRoot, USERPROFILE and TEMP as spelled');
     for (const k of ['GH_TOKEN', 'GEMINI_API_KEY', 'ANTHROPIC_API_KEY', 'GIT_DIR', 'GIT_CONFIG_GLOBAL', 'NODE_OPTIONS']) assert(!(k in e), `drops ${k}`);
