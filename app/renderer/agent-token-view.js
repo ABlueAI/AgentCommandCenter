@@ -16,6 +16,9 @@
         try {
           result = await getStatus();
           if (!result || result.ok !== true) log(`[agent token] status check refused: ${result?.error || 'unknown error'}\n`);
+          else if (result.loadIssue === 'invalid-shape' || result.loadIssue === 'unreadable') {
+            log(`[agent token] the stored ABlueAgent token was refused at start-up (${result.loadIssue}); agent panes use your own git login until you save it again\n`);
+          }
         } catch {
           log('[agent token] status check failed\n');
         }

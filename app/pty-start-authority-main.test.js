@@ -1084,11 +1084,24 @@ Module._load = function (request) {
     assert(started.ok, 'the pending-close test pane started');
     record.on.get('pty-kill')(goodEvent, id);
     assert(typeof finishTreeKill === 'function' && !record.ptyKills.includes(pid), 'pane close starts the tree kill first');
+    const finishFirst = finishTreeKill;
+    // A second pane is closed and its process exits before quit: its PID may already belong to
+    // another process (Windows reuses PIDs), so shutdown must not target it.
+    const exitedId = 'pane-exited-before-shutdown';
+    const exitedStarted = await ptyStart(goodEvent, { id: exitedId, cli: 'claude', cwd: FIX });
+    const exitedPid = 1000 + record.ptySpawns;
+    assert(exitedStarted.ok, 'the exited-before-quit test pane started');
+    record.on.get('pty-kill')(goodEvent, exitedId);
+    const finishExited = finishTreeKill;
+    record.exitHandlers[record.exitHandlers.length - 1]({ exitCode: 0 });
     for (const listener of record.appEvents.get('before-quit')) listener();
     assert(record.treeKills.length === 1 && record.treeKills[0].includes(pid),
       'shutdown includes the PID removed from the live pane map');
+    assert(!record.treeKills[0].includes(exitedPid), 'shutdown never targets the PID of a pane whose process already exited');
     assert(record.ptyKills.filter((killed) => killed === pid).length === 1, 'shutdown closes the pending PTY');
-    finishTreeKill();
+    assert(!record.ptyKills.includes(exitedPid), 'shutdown does not close the PTY of a pane that already exited');
+    finishFirst();
+    finishExited();
     assert(record.ptyKills.filter((killed) => killed === pid).length === 1, 'a late async callback cannot kill the PTY twice');
   }
 

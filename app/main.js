@@ -403,6 +403,9 @@ let geminiKey = null; // decrypted GEMINI_API_KEY; null = not configured
 // S06: decrypted ABlueAgent GitHub token (checklist step 14); null = not configured. Same store and
 // rules as the Gemini key: ciphertext on disk, plaintext only in main memory and agent pane envs.
 let agentGitToken = null;
+// Why a stored token was refused at start-up ('invalid-shape' | 'unreadable'), or null. Start-up log
+// lines go out before the window exists, so the status reply carries this to the Logs tab.
+let agentGitTokenLoadIssue = null;
 function loadAgentGitToken() {
   if (!safeStorage.isEncryptionAvailable()) return;
   const s = loadSecure();
@@ -410,8 +413,14 @@ function loadAgentGitToken() {
   try {
     const t = safeStorage.decryptString(Buffer.from(s.agentGitTokenEnc, 'base64'));
     agentGitToken = isAgentToken(t) ? t : null;
-    if (agentGitToken === null) tlog('[agent-git] stored ABlueAgent token refused: invalid shape');
-  } catch { tlog('[agent-git] stored ABlueAgent token unreadable (different OS user?); agent panes use your own git login'); }
+    if (agentGitToken === null) {
+      agentGitTokenLoadIssue = 'invalid-shape';
+      tlog('[agent-git] stored ABlueAgent token refused: invalid shape');
+    }
+  } catch {
+    agentGitTokenLoadIssue = 'unreadable';
+    tlog('[agent-git] stored ABlueAgent token unreadable (different OS user?); agent panes use your own git login');
+  }
 }
 
 function loadGeminiKey() {
@@ -1668,7 +1677,7 @@ ipcMain.handle('usage-read', (e) => usageIpc.handleRead(e));
 ipcMain.handle('get-agent-token-status', (e) => {
   const g = launcherGate.assess(e);
   if (!g.ok) return { ok: false, error: g.reason };
-  return { ok: true, hasToken: agentGitToken !== null, available: safeStorage.isEncryptionAvailable() };
+  return { ok: true, hasToken: agentGitToken !== null, available: safeStorage.isEncryptionAvailable(), loadIssue: agentGitTokenLoadIssue };
 });
 ipcMain.handle('set-agent-token', (e, token) => {
   const g = launcherGate.assess(e);
@@ -1683,6 +1692,7 @@ ipcMain.handle('set-agent-token', (e, token) => {
     const enc = safeStorage.encryptString(t);
     const s = loadSecure(); s.agentGitTokenEnc = enc.toString('base64'); saveSecure(s);
     agentGitToken = t;
+    agentGitTokenLoadIssue = null;
     tlog(`[agent-git] ABlueAgent token stored; new agent panes push as ABlueAgent${norm.removed ? ` (${norm.removed} invisible or space character(s) removed)` : ''}`);
     return { ok: true };
   } catch { return { ok: false, error: 'could not encrypt or save the token' }; }
@@ -1692,6 +1702,7 @@ ipcMain.handle('clear-agent-token', (e) => {
   if (!g.ok) return { ok: false, error: g.reason };
   const s = loadSecure(); delete s.agentGitTokenEnc; saveSecure(s);
   agentGitToken = null;
+  agentGitTokenLoadIssue = null;
   tlog('[agent-git] ABlueAgent token cleared; new agent panes use your own git login');
   return { ok: true };
 });

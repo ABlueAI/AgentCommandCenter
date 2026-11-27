@@ -115,6 +115,56 @@ async function testChoices() {
   if (btn('Start fresh')) await btn('Start fresh').onclick();
   assert(v.rows().length === 0, 'Start fresh can replace a refused Resume in the same run');
 
+  // A launch that throws: the error goes to onLaunchError, the row stays with its buttons back on,
+  // and the warning shows.
+  {
+    const throwHost = new Stub('div');
+    const thrown = row({ sessionId: 'throws' });
+    const errors = [];
+    const tv = view.create({
+      document: doc, host: throwHost, roleLabel,
+      onResume: () => { throw new Error('fixture launch failure'); },
+      onFresh: async () => true,
+      onDismiss: () => {},
+      onLaunchError: (err) => errors.push(err),
+    });
+    tv.render([thrown]);
+    const tbtn = (label) => throwHost.all('BUTTON').find((b) => b.textContent === label);
+    await tbtn('Resume').onclick();
+    assert(errors.length === 1 && errors[0] && errors[0].message === 'fixture launch failure',
+      'a throwing launch reports its error to onLaunchError once');
+    assert(tv.rows()[0] === thrown && tbtn('Resume').disabled !== true && tbtn('Start fresh').disabled !== true,
+      'after a throwing launch the row stays and its buttons work again');
+    assert(throwHost.textContent.includes('Could not start the pane'), 'a throwing launch shows the warning on the row');
+  }
+
+  // "Not now" while a launch is pending does nothing, and Start fresh can't start a second pane.
+  {
+    const waitHost = new Stub('div');
+    const waiting = row({ sessionId: 'waiting' });
+    let finish;
+    const dismissed = [];
+    const launches = [];
+    const wv = view.create({
+      document: doc, host: waitHost, roleLabel,
+      onResume: (r) => { launches.push('resume:' + r.sessionId); return new Promise((resolve) => { finish = resolve; }); },
+      onFresh: async (r) => { launches.push('fresh:' + r.sessionId); return true; },
+      onDismiss: (r) => { dismissed.push(r); },
+    });
+    wv.render([waiting]);
+    const wbtn = (label) => waitHost.all('BUTTON').find((b) => b.textContent === label);
+    const resuming = wbtn('Resume').onclick();
+    assert(wbtn('Not now').disabled === true, '"Not now" is disabled while a launch is pending');
+    wbtn('Not now').onclick();
+    assert(dismissed.length === 0 && wv.rows().length === 1 && wv.rows()[0] === waiting,
+      '"Not now" does nothing while a launch is pending');
+    await wbtn('Start fresh').onclick();
+    assert(launches.join() === 'resume:waiting', 'Start fresh does not start a second pane while Resume is pending');
+    finish(true);
+    await resuming;
+    assert(wv.rows().length === 0, 'the pending Resume still completes');
+  }
+
   process.stdout.write(`\nsession-resume-view: ${passed} passed, ${failed} failed\n`);
   process.exitCode = failed ? 1 : 0;
 })().catch((err) => { console.error(err); process.exitCode = 1; });

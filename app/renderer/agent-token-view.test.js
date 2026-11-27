@@ -56,6 +56,22 @@ assert(html.indexOf('<script src="agent-token-view.js"></script>') !== -1
     respond({ ok: true, hasToken: true });
     await pending;
     assert(statuses.length === 3 && statuses[2] === changed, 'a late boot response cannot overwrite an interactive change');
+    // A stored token main refused at start-up reaches the Logs tab through the status reply: main's
+    // own start-up log line goes out before the window exists, so it would never be seen.
+    for (const issue of ['invalid-shape', 'unreadable']) {
+      const lines = [];
+      const seen = [];
+      const boot = createStatusCheck((result) => seen.push(result), (line) => lines.push(line));
+      await boot.read(async () => ({ ok: true, hasToken: false, available: true, loadIssue: issue }));
+      assert(seen.length === 1 && lines.length === 1 && lines[0].includes(issue) && /save it again/i.test(lines[0]),
+        `a stored token refused at start-up (${issue}) is logged with its reason and what to do`);
+    }
+    {
+      const lines = [];
+      const boot = createStatusCheck(() => {}, (line) => lines.push(line));
+      await boot.read(async () => ({ ok: true, hasToken: true, available: true, loadIssue: null }));
+      assert(lines.length === 0, 'a healthy status logs nothing');
+    }
   }
   process.stdout.write(`\nagent-token-view: ${passed} passed, ${failed} failed\n`);
   process.exitCode = failed ? 1 : 0;

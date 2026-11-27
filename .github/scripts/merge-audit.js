@@ -89,14 +89,15 @@ async function auditPush({ shas, human, agents = AGENT_LOGINS, api }) {
   return problems;
 }
 
-// Adapter from actions/github-script's `github` client. Paginate each list, including the
-// closed PR lookup used when a commit has no associated PR.
+// Adapter from actions/github-script's `github` client. Every list is paginated except
+// recentPrsIntoMain, which reads the 100 most recently updated closed PRs: a PR that just merged is
+// among them, and a commit it misses still alerts.
 function githubApi(github, { owner, repo }) {
   return {
     prsForCommit: (commit_sha) =>
       github.paginate(github.rest.repos.listPullRequestsAssociatedWithCommit, { owner, repo, commit_sha, per_page: 100 }),
-    recentPrsIntoMain: () =>
-      github.paginate(github.rest.pulls.list, { owner, repo, state: 'closed', base: BASE, sort: 'updated', direction: 'desc', per_page: 100 }),
+    recentPrsIntoMain: async () =>
+      (await github.rest.pulls.list({ owner, repo, state: 'closed', base: BASE, sort: 'updated', direction: 'desc', per_page: 100 })).data,
     prCommits: async (pull_number) =>
       (await github.paginate(github.rest.pulls.listCommits, { owner, repo, pull_number, per_page: 100 })).map((c) => c.sha),
     getPr: async (pull_number) => (await github.rest.pulls.get({ owner, repo, pull_number })).data,

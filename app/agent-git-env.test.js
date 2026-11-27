@@ -153,14 +153,29 @@ const AMBIENT = {
     const load = src.match(/function loadAgentGitToken\(\) \{[\s\S]*?\n\}/)[0];
     const lines = [];
     const decrypted = 'fixture-invalid-token';
-    const token = require('node:vm').runInNewContext('let agentGitToken = null;\n' + load + '\nloadAgentGitToken(); agentGitToken;', {
+    const ctx = {
       Buffer, isAgentToken,
       safeStorage: { isEncryptionAvailable: () => true, decryptString: () => decrypted },
       loadSecure: () => ({ agentGitTokenEnc: 'YQ==' }),
       tlog: (line) => lines.push(line),
-    });
-    assert(token === null && lines.length === 1 && /invalid shape/.test(lines[0]) && !lines[0].includes(decrypted),
+    };
+    const run = (c) => require('node:vm').runInNewContext(
+      'let agentGitToken = null; let agentGitTokenLoadIssue = null;\n' + load
+      + '\nloadAgentGitToken(); ({ token: agentGitToken, issue: agentGitTokenLoadIssue });', c);
+    const res = run(ctx);
+    assert(res.token === null && lines.length === 1 && /invalid shape/.test(lines[0]) && !lines[0].includes(decrypted),
       'a decrypted token of the wrong shape is refused and logged without its value');
+    assert(res.issue === 'invalid-shape', 'the wrong-shape refusal is kept for the status reply');
+    const unreadable = run({ ...ctx, safeStorage: { isEncryptionAvailable: () => true, decryptString: () => { throw new Error('x'); } } });
+    assert(unreadable.token === null && unreadable.issue === 'unreadable', 'an unreadable stored token is kept as unreadable');
+    const fine = run({ ...ctx, isAgentToken: () => true });
+    assert(fine.token === decrypted && fine.issue === null, 'a good token leaves no load issue');
+    const status = src.slice(src.indexOf("ipcMain.handle('get-agent-token-status'"), src.indexOf("ipcMain.handle('set-agent-token'"));
+    assert(/loadIssue: agentGitTokenLoadIssue/.test(status), 'get-agent-token-status returns the start-up load issue (never the token)');
+    for (const ch of ['set-agent-token', 'clear-agent-token']) {
+      const i = src.indexOf(`ipcMain.handle('${ch}'`);
+      assert(/agentGitTokenLoadIssue = null;/.test(src.slice(i, src.indexOf('\n});', i))), `${ch} clears the start-up load issue`);
+    }
   }
   const preload = fs.readFileSync(path.join(__dirname, 'preload.js'), 'utf8');
   assert(!/getAgentToken\b|readAgentToken/.test(preload), 'preload has no way to read the token back');
