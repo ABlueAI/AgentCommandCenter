@@ -174,7 +174,7 @@ try {
     for (const [label, make] of shapes) {
       const dir = freshDir(`cas-refuse-shape-${shapes.indexOf(shapes.find((x) => x[0] === label))}`);
       const lines = [];
-      const store = createAdmissionLedgerStore({ userDataDir: dir, log: (l) => lines.push(l), bootTimeMs: () => 0 });
+      const store = createAdmissionLedgerStore({ userDataDir: dir, log: (l) => lines.push(l) });
       make(store.lockPath());
       const snapshot = () => (fs.lstatSync(store.lockPath()).isDirectory()
         ? fs.readdirSync(store.lockPath()).sort().join('|') : 'file');
@@ -195,22 +195,18 @@ try {
       'an empty lock folder is recovered and the save succeeds');
   }
   {
-    // Windows reuses PIDs: a marker made before this boot is recovered even if its PID is running now.
-    const dir = freshDir('cas-before-boot');
-    const store = createAdmissionLedgerStore({ userDataDir: dir, log: () => {}, bootTimeMs: () => Date.now() });
+    // A clock adjustment can make a live owner's marker appear older than the boot.
+    const dir = freshDir('cas-old-live-owner');
+    const store = createAdmissionLedgerStore({ userDataDir: dir, log: () => {} });
     const owner = path.join(store.lockPath(), `${process.pid}-${'e'.repeat(32)}`);
     fs.mkdirSync(owner, { recursive: true });
-    const old = new Date(Date.now() - 3600 * 1000);
+    const old = new Date('2000-01-01T00:00:00Z');
     fs.utimesSync(owner, old, old);
-    assert(store.save(GOOD_DOC, null).ok === true && !fs.existsSync(store.lockPath()),
-      'an owner marker older than this boot is recovered although its PID is alive');
-    const fresh = createAdmissionLedgerStore({ userDataDir: freshDir('cas-after-boot'), log: () => {},
-      bootTimeMs: () => Date.now() - 3600 * 1000 });
-    const liveOwner = path.join(fresh.lockPath(), `${process.pid}-${'e'.repeat(32)}`);
-    fs.mkdirSync(liveOwner, { recursive: true });
-    const denied = fresh.save(GOOD_DOC, null);
-    assert(denied.ok === false && denied.reason === STORE_REASON.CONFLICT && fs.existsSync(liveOwner),
-      'a live owner marker made after this boot still refuses');
+    const denied = store.save(GOOD_DOC, null);
+    assert(denied.ok === false && denied.reason === STORE_REASON.CONFLICT,
+      'an old marker with a live owner still refuses');
+    assert(fs.existsSync(owner) && !fs.existsSync(store.ledgerPath()),
+      'the old marker and the ledger are left alone while the owner is alive');
   }
   {
     // A failed release is the stuck state row main:18 is about: it is logged, and later saves in this
@@ -610,7 +606,7 @@ try {
     // No new dependency, and no key material anywhere.
     const src = fs.readFileSync(path.join(__dirname, 'admission-budget-store.js'), 'utf8');
     const requires = src.match(/require\('([^']+)'\)/g) || [];
-    assert(requires.every((r) => /'(fs|path|crypto|os)'/.test(r)),
+    assert(requires.every((r) => /'(fs|path|crypto)'/.test(r)),
       `the store requires only node built-ins (saw ${requires.join(' ')})`);
     assert(!/createHmac|scrypt|pbkdf2|randomBytes|dpapi|safeStorage|registry/i.test(src),
       'no HMAC, no key derivation, no DPAPI, no registry anchor — an unkeyed digest only');

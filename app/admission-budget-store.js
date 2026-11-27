@@ -62,7 +62,6 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const os = require('os');
 
 // Fixed filename. A constant, joined to a main-supplied directory. No caller-supplied string ever
 // reaches this path, and the run id is deliberately NOT part of it — one ledger holds every run, so a
@@ -103,6 +102,7 @@ function refuse(reason) { return { ok: false, reason }; }
 
 function ownerIsGone(pid) {
   if (pid > 0x7fffffff) return false;
+  // Only a missing PID proves that the recorded owner is gone.
   try {
     process.kill(pid, 0); // Signal zero only queries existence.
     return false;
@@ -145,11 +145,8 @@ const CHECKSUM_PATTERN = /^[0-9a-f]{64}$/;
  * @param {object} [deps.fsImpl]     Injectable for tests.
  * @param {function} [deps.log]      Reports cleanup failures after the write outcome is known, and
  *                                   why a held write lock could not be recovered.
- * @param {function} [deps.bootTimeMs] Injectable for tests: when this boot of the OS started.
  */
-function createAdmissionLedgerStore({
-  userDataDir, fsImpl = fs, log = console.warn, bootTimeMs = () => Date.now() - os.uptime() * 1000,
-} = {}) {
+function createAdmissionLedgerStore({ userDataDir, fsImpl = fs, log = console.warn } = {}) {
   if (typeof userDataDir !== 'string' || !userDataDir) {
     throw new Error('createAdmissionLedgerStore: userDataDir is required');
   }
@@ -169,18 +166,8 @@ function createAdmissionLedgerStore({
   // A held lock that recovery refuses to clear is logged with why, so a stuck lock can be told apart
   // from a second Mako window. The log names only the lock's file name, never the path.
   function refuseRecovery(why) {
-    log(`[admission] ledger write lock ${LOCK_FILENAME} is held (${why}); NOTHING is sent while it is.`
-      + ' If no other Mako window is open, close Mako and delete that file or folder from its data folder.');
+    log(`[admission] ledger write lock ${LOCK_FILENAME} is held (${why}); NOTHING is sent while it is.`);
     return false;
-  }
-
-  // An owner marker made before this boot of the OS belongs to a process that can no longer run,
-  // even when its PID now names another process (Windows reuses PIDs). A margin absorbs rounding;
-  // a marker from a live owner is always newer than the boot.
-  const BOOT_MARGIN_MS = 5000;
-  function markerPredatesBoot(markerPath) {
-    try { return fsImpl.lstatSync(markerPath).mtimeMs < bootTimeMs() - BOOT_MARGIN_MS; }
-    catch { return false; }
   }
 
   function recoverLock() {
@@ -198,11 +185,11 @@ function createAdmissionLedgerStore({
       if (entries.length !== 1 || !entry.isDirectory() || !match) {
         return refuseRecovery('unexpected entries in the lock folder');
       }
-      const markerPath = path.join(lockPath, entry.name);
-      if (!ownerIsGone(Number(match[1])) && !markerPredatesBoot(markerPath)) {
-        return refuseRecovery(`its owner, process ${Number(match[1])}, is still running`);
+      const pid = Number(match[1]);
+      if (!ownerIsGone(pid)) {
+        return refuseRecovery(`could not confirm owner process ${pid} has exited`);
       }
-      try { fsImpl.rmdirSync(markerPath); }
+      try { fsImpl.rmdirSync(path.join(lockPath, entry.name)); }
       catch (err) {
         // Another recovery contender already removed this exact marker.
         if (err.code !== 'ENOENT') throw err;
