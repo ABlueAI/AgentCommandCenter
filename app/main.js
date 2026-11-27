@@ -425,6 +425,22 @@ function saveSecure(s) {
   }
 }
 
+// Startup credential notices run before the window exists, so sendMainLog would drop them. They are
+// logged at once and queued here; createWindow sends them on main-error once the page has loaded.
+const credentialNotices = [];
+function noteCredential(line) { tlog(line); credentialNotices.push(line); }
+function flushCredentialNotices(send) {
+  while (credentialNotices.length) send(credentialNotices.shift());
+}
+// A bounded reason for an unreadable store: a short error code or a fixed phrase, never the error's
+// own message (a JSON parse message quotes the file's text).
+function secureStoreReason(err) {
+  if (err && typeof err.code === 'string' && /^[A-Z][A-Z0-9_]{0,31}$/.test(err.code)) return err.code;
+  if (err && err.name === 'SyntaxError') return 'not valid JSON';
+  if (err && err.name === 'TypeError') return 'not a JSON object';
+  return 'unknown error';
+}
+
 let geminiKey = null; // decrypted GEMINI_API_KEY; null = not configured
 // S06: decrypted ABlueAgent GitHub token (checklist step 14); null = not configured. Same store and
 // rules as the Gemini key: ciphertext on disk, plaintext only in main memory and agent pane envs.
@@ -434,22 +450,27 @@ function loadAgentGitToken(s) {
   try {
     const t = safeStorage.decryptString(Buffer.from(s.agentGitTokenEnc, 'base64'));
     agentGitToken = isAgentToken(t) ? t : null;
-  } catch { tlog('[agent-git] stored ABlueAgent token unreadable (different OS user?); agent panes use your own git login'); }
+  } catch { noteCredential('[agent-git] stored ABlueAgent token unreadable (different OS user?); agent panes use your own git login'); }
 }
 
 function loadGeminiKey(s) {
   if (!s.geminiKeyEnc) return;
   try { geminiKey = safeStorage.decryptString(Buffer.from(s.geminiKeyEnc, 'base64')); }
-  catch { tlog('[gemini] stored Gemini key could not be decrypted'); }
+  catch { noteCredential('[gemini] stored Gemini key could not be decrypted'); }
 }
 
 function loadStoredCredentials() {
   if (!safeStorage.isEncryptionAvailable()) return;
   let store;
   try { store = loadSecure(); }
-  catch {
+  catch (err) {
+    const reason = secureStoreReason(err);
+    noteCredential(`[secure] could not read secure.json (${reason}); stored credentials were not loaded`);
     dialog.showErrorBox('Credential store unavailable',
-      'Mako could not read secure.json. Stored credentials were not loaded. Saving and clearing credentials require a readable store.');
+      `Mako could not read secure.json (${reason}) in ${path.dirname(securePath())}. ` +
+      'Stored credentials were not loaded, and saving or clearing a credential is refused until the store is readable. ' +
+      'If the file is locked, close the program holding it and restart Mako. To start over, close Mako, ' +
+      'rename secure.json (for example to secure.json.bad), restart Mako and enter the Gemini key and the ABlueAgent token again.');
     return;
   }
   loadGeminiKey(store);
@@ -583,6 +604,10 @@ function createWindow() {
     const sameDocument = details?.isSameDocument ?? isInPlace;
     if (mainFrame && !sameDocument) claudeScout.shutdown();
   });
+  // Startup credential notices (loadStoredCredentials) wait for the page, then go to the Logs tab.
+  win.webContents.once('did-finish-load', () => flushCredentialNotices((line) => {
+    if (win && !win.isDestroyed()) win.webContents.send('main-error', line);
+  }));
   win.loadFile(ENTRY_PATH);
 
   // --- Navigation lockdown (AUDIT #3 / electronegativity LIMIT_NAVIGATION HIGH) -----------------

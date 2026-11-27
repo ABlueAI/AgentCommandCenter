@@ -198,7 +198,8 @@ for (const [label, err] of [
 
 // Exercise the main-process store and handler bodies in Node, with real files and stubbed OS/IPC
 // boundaries. Fault injection works on Windows even when the test account can read every fixture.
-const mainSource = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+// Windows checks main.js out CRLF (core.autocrlf), so normalise before matching on '\n'.
+const mainSource = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8').replace(/\r\n/g, '\n');
 function withSecureStore(run, { fileOps, decryptString } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mako-secure-test-'));
   try {
@@ -214,9 +215,13 @@ function withSecureStore(run, { fileOps, decryptString } = {}) {
     const storeSource = mainSource.slice(mainSource.indexOf('const securePath ='), mainSource.indexOf('\nlet win = null;'));
     const tokenSource = mainSource.slice(mainSource.indexOf("ipcMain.handle('get-agent-token-status'"),
       mainSource.indexOf('let agentTokenMissingNoticeSent'));
-    const startupCall = mainSource.match(/app\.whenReady\(\)\.then\(\(\) => \{\n((?:  load\w+\(\);[^\n]*\n)+)/)[1];
+    const startupMatch = mainSource.match(/app\.whenReady\(\)\.then\(\(\) => \{\n((?:  load\w+\(\);[^\n]*\n)+)/);
+    assert(!!startupMatch, 'main.js: app.whenReady() starts with the credential loader call(s)');
+    if (!startupMatch) return;
+    const startupCall = startupMatch[1];
     const store = runInNewContext(`${storeSource}\n${tokenSource}
       ({ loadSecure, saveSecure, startup: () => { ${startupCall} },
+        flushNotices: (send) => flushCredentialNotices(send),
         getKey: () => geminiKey, getToken: () => agentGitToken })`, {
       app: { getPath: () => dir },
       fs: { ...fs, ...fileOps },
@@ -357,12 +362,37 @@ withSecureStore(({ file, startup, dialogs, getKey, getToken }) => {
   'startup: a malformed store is reported once and the app can continue without the credentials');
 });
 
-withSecureStore(({ file, startup, logs, dialogs, getKey, getToken }) => {
+// The startup dialog names a bounded reason, the folder and a recovery step, never the parse text,
+// and the same reason is logged and queued for the Logs tab.
+for (const [label, content, fileOps, reason] of [
+  ['malformed JSON', '{"other":', undefined, 'not valid JSON'],
+  ['a non-object store', '[]', undefined, 'not a JSON object'],
+  ['a read error', '{}', { readFileSync: () => { throw fsError('EACCES'); } }, 'EACCES'],
+]) {
+  withSecureStore(({ file, dir, startup, dialogs, logs, flushNotices }) => {
+    fs.writeFileSync(file, content);
+    startup();
+    const sent = [];
+    flushNotices((line) => sent.push(line));
+    assert(dialogs.length === 1 && dialogs[0].includes(`(${reason})`) && dialogs[0].includes(dir) &&
+      /rename secure\.json/i.test(dialogs[0]) && !/Unexpected|JSON at position|must contain/.test(dialogs[0]),
+    `startup: ${label} shows the bounded reason "${reason}", the folder and the recovery step`);
+    assert(logs.length === 1 && logs[0].includes(`(${reason})`) && sent.length === 1 && sent[0] === logs[0],
+    `startup: ${label} logs the same reason once and sends it to the Logs tab once the window exists`);
+  }, { fileOps });
+}
+
+withSecureStore(({ file, startup, logs, dialogs, getKey, getToken, flushNotices }) => {
   fs.writeFileSync(file, JSON.stringify(credentials));
   startup();
   assert(logs.length === 1 && /^\[gemini\] stored Gemini key could not be decrypted$/.test(logs[0]) &&
     dialogs.length === 0 && getKey() === null && getToken() === AGENT_TOKEN,
   'startup: Gemini decryption failure logs one fixed line and the other credential still loads');
+  const sent = [];
+  flushNotices((line) => sent.push(line));
+  flushNotices((line) => sent.push(line));
+  assert(sent.length === 1 && sent[0] === logs[0],
+    'startup: the Gemini decrypt notice reaches the Logs tab once the window exists, and only once');
 }, { decryptString: (value) => {
   const text = value.toString();
   if (text === KEY) throw new Error(`test payload\n${KEY}`.repeat(100));
@@ -389,6 +419,10 @@ withSecureStore(({ file, startup, logs, dialogs, getKey, getToken }) => {
   assert(/assessSender:\s*\(e\)\s*=>\s*launcherGate\.assess\(e\)/.test(block),
     'main.js gives the module the same trusted-sender gate as the ABlueAgent token channels');
   assert(/win\.webContents\.send\('main-error', line\)/.test(block), 'main.js shows refusals on the main-error channel');
+  const cw = src.slice(src.indexOf('function createWindow()'), src.indexOf('\napp.whenReady()'));
+  assert(/webContents\.once\('did-finish-load', \(\) => flushCredentialNotices\(/.test(cw) &&
+    /flushCredentialNotices\([\s\S]*?send\('main-error', line\)/.test(cw),
+  'main.js: createWindow sends queued startup credential notices on main-error once the page has loaded');
   // The stored key's field is read only by the startup loader; every write goes through the module.
   const li = src.indexOf('function loadGeminiKey(');
   const loader = li < 0 ? '' : src.slice(li, src.indexOf('\n}', li));
