@@ -309,12 +309,12 @@ const REGIONS = [
     // itself refuses the identity for either (pty-env.test.js and agent-git-env.test.js prove it).
     // Every other argument, the scrub and P1 are byte-identical.
     // Previous pin retained: 217 / 8227036cb1ce84d0c32fd38ff4999c6db71a9625dc6beba26b9a85dd6bec5f08
-    // The role launcher injects only the validated definition and settings after the env builder.
+    // The role launcher passes its checked definition to the env builder.
     // Previous pin retained: 302 / fc8deeab81b2e88627956f87b871de00f210e5515ee82236214572db21b70088
     start: 'const fencedRole = launch.fenced;',
     end: 'let p;',
-    utf16Length: 685,
-    sha: '0a5775e343ad875776fce9116cd41d74ae5e4a1815e74dd3a8792731dc8a7468',
+    utf16Length: 334,
+    sha: 'def093a02a803a4e648c70fd89694017eef94f30f33f77b03571b06e47fea93d',
   },
   {
     name: 'pty-start handler',
@@ -395,8 +395,8 @@ const REGIONS = [
     // Previous pin retained: 17354 / 1ed564dea4af33f5dbe7afcb47b0d0cb2178ff1fb289a60b2e37a3d078581b2d
     // Launcher input and role source checks run before the admission claim and spawn.
     // Previous pin retained: 18861 / 790e4fa29a245a5064c1d1da05940f73f8a7b0c250747150bb601d378ef313f6
-    utf16Length: 17175,
-    sha: '2c771018455b90c167b62c509a5913a48ea69289e6887246bdb8fa5760c30279',
+    utf16Length: 16824,
+    sha: 'a3e67026585688a63a55f5dfc6cd7c9cc98c30ad5ce6881b656c5e6fa631e71c',
   },
 ];
 

@@ -512,7 +512,7 @@ process.stdout.write('\n-- main-issued reservation drift matrix --\n');
           ...ALWAYS_RESERVED_ENV_NAMES.slice(1),
           ...(videoScout ? ['GEMINI_API_KEY'] : []),
           // MOVED (controlled WebFetch): the mode name is owned by EVERY pane, issued or not.
-          'BLUE_HELM_CONTROLLED_WEBFETCH_MODE',
+          'BLUE_HELM_CONTROLLED_WEBFETCH_MODE', 'MAKO_LAUNCH_ROLE_ARG', 'MAKO_LAUNCH_ROLE_SETTINGS',
         ])];
         if (!Object.keys(mainIssued).every((name) => reservedNames.includes(name))
           || JSON.stringify(reservedNames) !== JSON.stringify(expectedReserved)) {
@@ -523,7 +523,7 @@ process.stdout.write('\n-- main-issued reservation drift matrix --\n');
   }
   assert(calls === 40, 'reservation drift matrix covers 2 Video Scout × 5 Gemini × 4 pane-status cases');
   assert(failures.length === 0,
-    'every matrix call reserves exactly emitted keys plus absent-but-owned pane-status, Video Scout Gemini and WebFetch-mode names');
+    'every matrix call reserves exactly emitted keys plus absent-but-owned pane-status, Video Scout Gemini and WebFetch-mode and role launch names');
 }
 
 process.stdout.write('\n-- controlled WebFetch mode (main-issued, fenced only, exact values) --\n');
@@ -871,6 +871,19 @@ process.stdout.write('\n-- production main-process wiring --\n');
   const envLogLines = mainSrc.split(/\r?\n/).filter((line) => line.includes('pty-start: env built'));
   assert(envLogLines.length === 1 && !envLogLines[0].includes('process.env') && !envLogLines[0].includes('ptyEnv'),
     'the environment diagnostic is one bounded metadata-only line and contains no environment value expression');
+}
+
+{
+  const baseEnv = { mako_launch_role_arg: 'ambient', Mako_Launch_Role_Settings: 'ambient' };
+  const roleDefinition = { roleArg: 'checked role', settingsArg: 'checked hook settings' };
+  const role = buildPtyEnv({ baseEnv, roleDefinition });
+  assert(role.MAKO_LAUNCH_ROLE_ARG === roleDefinition.roleArg
+    && role.MAKO_LAUNCH_ROLE_SETTINGS === roleDefinition.settingsArg
+    && Object.keys(role).filter((name) => /^mako_launch_role_/i.test(name)).length === 2,
+    'the environment builder owns the exact role arguments and removes ambient variants');
+  const ordinary = buildPtyEnv({ baseEnv });
+  assert(!Object.keys(ordinary).some((name) => /^mako_launch_role_/i.test(name)),
+    'ambient role arguments are removed even when no role is launched');
 }
 
 // S31 item 2: Claude Code's env scrub removes variables whose name looks like a credential

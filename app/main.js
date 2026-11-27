@@ -1988,15 +1988,8 @@ ipcMain.handle('pty-start', (e, opts) => {
     webFetchMode: webFetch.mode,
     agentGit: agentPane,
     agentGitToken,
+    roleDefinition: definition,
   });
-  if (definition) {
-    // Remove case variants before adding main's values to the Windows environment.
-    for (const key of Object.keys(ptyEnv)) {
-      if ([ROLE_ARG_ENV, ROLE_SETTINGS_ENV].includes(key.toUpperCase())) delete ptyEnv[key];
-    }
-    ptyEnv[ROLE_ARG_ENV] = definition.roleArg;
-    if (definition.settingsArg) ptyEnv[ROLE_SETTINGS_ENV] = definition.settingsArg;
-  }
   let p;
   const envMode = fencedRole ? 'fenced-tier-1' : 'unfenced-current';
   tlog(`pty-start: env built — mode=${envMode}; scrub=forced; video-scout-key=${launch.videoScout ? 'explicit' : 'not-explicit'}; pane-status=${paneStatusEnrollment.ok ? 'enrolled' : 'not-enrolled'}; agent-git=${agentPane ? (agentGitToken ? 'ABlueAgent' : 'no-token') : 'n/a'}`);
