@@ -1054,9 +1054,8 @@ function tlog(msg) {
 // Call at the start of each createAgent attempt to reset the clock.
 function tlogReset() { _t0 = Date.now(); tlog('--- new createAgent sequence ---'); }
 
-// Resolve the real (symlink-free) path. Walks up to the nearest existing ancestor when the
-// target doesn't exist yet — mirrors scripts/hooks/fence-write.js so the main-process cwd
-// guard and the hook use identical resolution logic and cannot be diverged by path tricks.
+// Resolve paths for the launcher's working-directory checks. The tool hook independently
+// validates file paths at the point of use.
 function realOrNearest(p) {
   try { return fs.realpathSync.native(p); }
   catch {
@@ -1839,11 +1838,8 @@ ipcMain.handle('pty-start', (e, opts) => {
   // a successful spawn (below), so a refused/failed launch leaves no mapping.
   let acceptedRunId = null;
 
-  // Hard gate: fenced roles (web-scout, operator, source-scout) must run inside the
-  // ensure-output-dir sandbox. Enforce here rather than relying on renderer discipline —
-  // same "tool-enforced-not-convention" principle the hook itself is built on. Uses the
-  // same realpath + case-fold logic as fence-write.js so both layers agree on what "inside"
-  // means and can't be split by a symlink or a Unicode/case path trick.
+  // The main process requires fenced roles to launch inside the ensure-output-dir sandbox.
+  // That working directory is the sandbox root for the tool hook's separate file checks.
   let fencedCwd = null;
   if (launch.fenced) {
     // Reason CONSTANTS only. The pre-existing messages interpolated `declaredCwd`, `resolvedCwd`
@@ -1997,9 +1993,9 @@ ipcMain.handle('pty-start', (e, opts) => {
   //
   // buildPtyEnv constructs CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, Video Scout's safeStorage
   // GEMINI_API_KEY when applicable, at most the two exact string-valued pane-status transport
-  // entries, and, for a fenced web-scout pane only, the controlled-WebFetch mode chosen above, before
-  // spreading the filtered ambient base. The reserved set is derived from the emitted main-issued map
-  // plus absent-but-owned pane-status names, Video Scout's Gemini name and the WebFetch mode name; every
+  // entries, the web-scout's controlled-WebFetch mode and the page reader's validator path, before
+  // spreading the filtered ambient base. The reserved set includes the emitted main-issued map and
+  // absent-but-owned names for pane status, Gemini, WebFetch mode and the page-reader policy. Every
   // ASCII-case ambient variant is removed first, so correctness does not depend on key ordering. Neither
   // pane-status entry is recovered from process.env, and no environment value is logged. For
   // unfenced panes, stripAdmissionEnv removes admission keys from the inherited PTY
@@ -2016,6 +2012,7 @@ ipcMain.handle('pty-start', (e, opts) => {
     geminiKey,
     paneStatusEnv,
     webFetchMode: webFetch.mode,
+    pageReaderPolicy: fencedRole && launch.role === pageReaderMod.ROLE ? require.resolve('./page-reader') : undefined,
     agentGit: agentPane,
     agentGitToken,
   });
