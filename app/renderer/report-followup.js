@@ -7,7 +7,7 @@
 //   - Submission happens ONLY from the Ask button. Selecting, opening, refreshing, or restoring a
 //     report never submits anything — no code path here calls submit() except the click handler.
 //   - A renderer-local monotonically increasing EPOCH suppresses stale responses: every selection /
-//     Open Report start / Refresh start / reader clear bumps it (and clears question, answer, and
+//     Open Report start / reader clear bumps it (and clears question, answer, and
 //     errors); a submission captures the epoch and its result is DISCARDED unless the epoch is
 //     still current. The epoch is renderer state only — it is never sent to or echoed by main.
 //   - The submit control disables while a follow-up is in flight (main's global single-flight rule
@@ -68,7 +68,7 @@
       if (msg) n.error.classList.remove('hidden'); else n.error.classList.add('hidden');
     }
 
-    // Every selection / open-start / refresh-start / clear runs through here: bump the epoch (so
+    // Every selection / open-start / clear runs through here: bump the epoch (so
     // any in-flight response becomes stale) and clear the previous question, answer, and errors.
     function bump() {
       state.epoch++;
@@ -179,7 +179,6 @@
       setSource,
       noteSelection: bump,
       noteOpenReportStart: bump,
-      noteRefreshStart: bump,
       noteCleared: bump,
       currentEpoch: () => state.epoch,
       isCurrent: (epoch) => epoch === state.epoch,
@@ -190,25 +189,19 @@
 
   // V3b Open Report ordering (the production algorithm app.js runs, exported so the ordering is
   // unit-tested — not re-implemented — in report-followup.test.js):
-  //   1. Open Report bumps the epoch (clearing follow-up state) and, when the Library has not
-  //      loaded yet, AWAITS the initial scan before reading the pane report — so the scan's
-  //      completion (which clears the reader) is strictly ordered BEFORE the pane display and can
-  //      never land on top of it.
-  //   2. The awaited refresh bumps the epoch exactly once (its own noteRefreshStart). If the epoch
-  //      moved further, something newer took the reader over while the scan ran: this open stops
-  //      ('superseded') instead of overwriting it.
+  //   1. Open Report takes ownership of the reader and awaits the initial scan when the Library
+  //      has yet to load. That scan preserves the reader because Open Report owns it.
+  //   2. A superseded initial scan or a newer reader action stops this open after the await.
   //   3. The pane read's result displays only if the epoch is still current, and only a successful
   //      'available' read records the PANE identity as the follow-up source (no Library handle is
   //      minted; a later list refresh does not invalidate this source).
-  // deps: { isLoaded():bool, refresh():Promise (must bump exactly once via noteRefreshStart),
+  // deps: { isLoaded():bool, refresh():Promise (preserves the reader),
   //         beforeRead():void, readPane(paneId):Promise, display(res):void, displayError():void }
   async function openPaneReportOrdered(followup, deps, paneId) {
-    const started = followup.noteOpenReportStart();
-    let myEpoch = started;
+    const myEpoch = followup.noteOpenReportStart();
     if (!deps.isLoaded()) {
-      await deps.refresh();
-      if (followup.currentEpoch() !== started + 1) return 'superseded';
-      myEpoch = started + 1;
+      const result = await deps.refresh();
+      if (result === 'superseded' || !followup.isCurrent(myEpoch)) return 'superseded';
     }
     if (deps.beforeRead) deps.beforeRead();
     let res;

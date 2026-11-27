@@ -74,11 +74,14 @@ contextBridge.exposeInMainWorld('cc', {
   clipboardRead: () => ipcRenderer.invoke('clipboard-read'),
   clipboardWrite: (t) => ipcRenderer.invoke('clipboard-write', t),
 
-  // V5b2 Library / in-app report reader (invoke-only). List returns bounded metadata + OPAQUE
+  // V5b2 Library / in-app report reader. List returns bounded metadata + OPAQUE
   // main-issued handles; a report is requested only by handle (library) or by pane ID (Open Report on
   // a live Video Scout pane). The renderer never sends or receives a filesystem path. Main validates
   // the sender/frame/URL, runs the PowerShell library boundary, and enforces every bound.
-  libraryList: () => ipcRenderer.invoke('library-list'),
+  libraryList: (generation) => ipcRenderer.invoke('library-list', generation),
+  // Acknowledge the new handle table in the same renderer turn that displays it. Main only
+  // validates the sender and swaps an in-memory map here. The scan itself is asynchronous.
+  libraryAcceptList: (generation) => ipcRenderer.sendSync('library-accept-list', generation),
   libraryRead: (handle) => ipcRenderer.invoke('library-read', handle),
   libraryOpenReport: (paneId) => ipcRenderer.invoke('library-open-report', paneId),
   // V3b follow-up Q&A (invoke-only). The request is a strict discriminated shape carrying ONLY a

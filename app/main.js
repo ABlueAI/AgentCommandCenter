@@ -811,7 +811,10 @@ app.whenReady().then(() => {
       if (win && !win.isDestroyed()) win.webContents.send('main-error', line);
     },
   });
-  ipcMain.handle('library-list', (e) => libraryIpc.handleList(e));
+  ipcMain.handle('library-list', (e, generation) => libraryIpc.handleList(e, generation));
+  ipcMain.on('library-accept-list', (e, generation) => {
+    e.returnValue = libraryIpc.handleAcceptList(e, generation);
+  });
   ipcMain.handle('library-read', (e, handle) => libraryIpc.handleRead(e, handle));
   ipcMain.handle('library-open-report', (e, paneId) => libraryIpc.handleOpenReport(e, paneId));
 

@@ -808,6 +808,7 @@ async function scenarioLibrary() {
       inDock: !!(el && el.closest('#terminalDock')),
       terminalsTabActive: [...document.querySelectorAll('.tab')].some((t) => t.dataset.tab === 'terminals' && t.classList.contains('active')),
       visible: window.__cc.reachable(document.getElementById('libRefresh')),
+      scanStatus: document.getElementById('libStatus').textContent,
       box: window.__cc.box(el),
       controls: ['libRefresh','libSearch','libMode','libRoute','libOutcome','libDateKind','libSort','libStatus','libList','libReader','libCopy','libMax','libMetaHost','libReportText','libFollowupHost']
         .filter((id) => !!document.getElementById(id)).length,
@@ -1360,9 +1361,14 @@ app.whenReady().then(async () => {
   ipcMain.on('pty-kill', (_e, id) => { ipc.ptyKill.push(id); });
   ipcMain.on('pty-write', () => { ipc.ptyWrite++; });
   ipcMain.on('pty-resize', () => { ipc.ptyResize++; });
-  ipcMain.handle('library-list', () => {
+  let libraryGeneration;
+  ipcMain.handle('library-list', (_e, generation) => {
     ipc.libraryList++;
+    libraryGeneration = generation;
     return { ok: true, entries: [], total: 0, invalidCount: 0, invalid: [], capExceeded: false };
+  });
+  ipcMain.on('library-accept-list', (e, generation) => {
+    e.returnValue = { ok: typeof generation === 'string' && generation === libraryGeneration };
   });
   ipcMain.handle('library-read', () => { ipc.libraryRead++; return { ok: false, status: 'not-persisted' }; });
   ipcMain.handle('library-open-report', () => { ipc.libraryOpenReport++; return { ok: false, status: 'not-persisted' }; });

@@ -264,11 +264,15 @@ const PANE_REQ = (q) => ({ source: 'pane', paneId: 'pty7', question: q === undef
       logUsage: () => { }, logRefusal: () => { },
     });
     const ev1 = evt(w);
-    const list1 = await libraryIpc.handleList(ev1);
+    const list1 = await libraryIpc.handleList(ev1, '00000000-0000-4000-8000-000000000001');
+    assert(libraryIpc.handleAcceptList(ev1, '00000000-0000-4000-8000-000000000001').ok,
+      'the displayed list is accepted');
     const handle = list1.entries[0].handle;
     const ok = await followupIpc.handleAsk(ev1, { source: 'library', handle, question: 'q?' });
     assert(ok.ok === true && children.length === 1, 'a handle from the CURRENT List submits one follow-up');
-    await libraryIpc.handleList(ev1);   // refresh: the table is replaced wholesale
+    await libraryIpc.handleList(ev1, '00000000-0000-4000-8000-000000000002');
+    assert(libraryIpc.handleAcceptList(ev1, '00000000-0000-4000-8000-000000000002').ok,
+      'accepting the refreshed list replaces the handle table');
     const stale = await followupIpc.handleAsk(ev1, { source: 'library', handle, question: 'q?' });
     assert(stale.ok === false && stale.error === 'unknown-handle',
       'the SAME handle from the superseded List explicitly fails after refresh');
