@@ -47,6 +47,7 @@ contextBridge.exposeInMainWorld('cc', {
   usageRead: () => ipcRenderer.invoke('usage-read'),
 
   // in-app terminals (node-pty)
+  openTerminalLink: (u) => ipcRenderer.invoke('open-terminal-link', u),
   tlogReset: () => ipcRenderer.invoke('tlog-reset'),
   ptyStart: (o) => ipcRenderer.invoke('pty-start', o),
   claudeVideoScoutRun: (req) => ipcRenderer.invoke('claude-video-scout-run', req),
