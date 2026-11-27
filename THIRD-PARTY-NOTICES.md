@@ -22,6 +22,8 @@ file under `app/renderer/vendor/` is missing from the table below.
 | `app/renderer/vendor/addon-web-links.js` | xterm.js web links addon (`@xterm/addon-web-links`, `lib/addon-web-links.js`) | 0.12.0 | MIT ([text](LICENSES/MIT-xterm.js.txt)) | Copyright (c) 2017, The xterm.js authors | [xtermjs/xterm.js@f447274, `addons/addon-web-links`](https://github.com/xtermjs/xterm.js/tree/f447274f430fd22513f6adbf9862d19524471c04/addons/addon-web-links) |
 | `app/renderer/vendor/addon-webgl.js` | xterm.js WebGL addon (`@xterm/addon-webgl`, `lib/addon-webgl.js`) | 0.19.0 | MIT ([text](LICENSES/MIT-xterm.js.txt)) | Copyright (c) 2018, The xterm.js authors | [xtermjs/xterm.js@f447274, `addons/addon-webgl`](https://github.com/xtermjs/xterm.js/tree/f447274f430fd22513f6adbf9862d19524471c04/addons/addon-webgl) |
 | `app/renderer/vendor/kokoro.web.js` | kokoro-js (`kokoro-js`, `dist/kokoro.web.js`), a prebuilt bundle; **contains eSpeak NG, GPL-3.0-or-later** (next section) | 1.2.1 | Mixed: GPL-3.0-or-later ([text](LICENSES/GPL-3.0.txt)) for the eSpeak NG engine and data; Apache-2.0 ([text](LICENSES/Apache-2.0.txt)) and MIT ([text](LICENSES/MIT-kokoro-bundle.txt)) for the rest | See the next section, one line per component | See the next section, one link per component |
+| `app/renderer/vendor/fonts/InterVariable.woff2` | Inter, the UI font of the 1.1 layout (S66); `web/InterVariable.woff2` from the release file `Inter-4.1.zip`, unmodified | 4.1 | OFL-1.1 ([text](LICENSES/OFL-1.1-Inter.txt)) | Copyright (c) 2016 The Inter Project Authors | [rsms/inter@e3a3d4c (tag v4.1)](https://github.com/rsms/inter/tree/e3a3d4c57d5ecc01453a575621882a384c1995a3) |
+| `app/renderer/vendor/fonts/CascadiaCode.woff2` | Cascadia Code, the code font of the 1.1 layout (S66); `woff2/CascadiaCode.woff2` from the release file `CascadiaCode-2407.24.zip`, unmodified (the licence reserves the name "Cascadia Code" for unmodified copies) | 2407.24 | OFL-1.1 ([text](LICENSES/OFL-1.1-CascadiaCode.txt)) | Copyright (c) 2019 - Present, Microsoft Corporation, with Reserved Font Name Cascadia Code | [microsoft/cascadia-code@56bcca3 (tag v2407.24)](https://github.com/microsoft/cascadia-code/tree/56bcca3f2c1e4cb19458954f0e2bb4635960df91) |
 
 The five xterm.js npm packages above were all published from the same xterm.js commit, `f447274`
 (each package's `gitHead`).
@@ -129,6 +131,15 @@ On 2026-11-07, each npm package named above was downloaded with `npm pack`, and 
 one in `phonemizer` 1.2.0 and 1.2.1's `dist/phonemizer.js`, and kokoro-js 1.2.1's lockfile pins
 1.2.1. Each commit linked above is the package's npm `gitHead`, or a tag that resolves to that
 commit, except espeak-ng (version unverified, above) and `@huggingface/jinja` (no `gitHead`).
+
+The two fonts (S66, 2026-11-24) were checked the same way against their upstream release files
+rather than npm: `Inter-4.1.zip` (sha256 `9883fdd4a49d4fb66bd8177ba6625ef9a64aa45899767dde3d36aa425756b11e`)
+and `CascadiaCode-2407.24.zip` (sha256 `e67a68ee3386db63f48b9054bd196ea752bc6a4ebb4df35adce6733da50c8474`),
+downloaded from each project's GitHub release for the tag linked above; each font file here is the
+named file in its zip, byte for byte (`InterVariable.woff2` sha256 `693b77d4…29a8e3`,
+`CascadiaCode.woff2` sha256 `3ec1f7e7…bc60dccc`). The fonts are copied unmodified, so the Reserved
+Font Name in Cascadia Code's licence doesn't apply (it restricts modified versions). The licence
+texts in `LICENSES/` are each project's own licence file at that tag.
 
 ## Keeping this file current
 
