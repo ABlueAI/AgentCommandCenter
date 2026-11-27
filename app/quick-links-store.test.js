@@ -146,5 +146,29 @@ process.stdout.write('\nraw save bounds and closed schema\n');
   }
 }
 
+{
+  const userDataDir = tempDir();
+  try {
+    const file = path.join(userDataDir, CONFIG_FILENAME);
+    fs.writeFileSync(file, JSON.stringify(fixtureConfig()));
+    const before = fs.readFileSync(file);
+    const actions = [];
+    const fsImpl = {
+      ...fs,
+      fsyncSync() { actions.push('flush'); throw new Error('fixture flush failure'); },
+      closeSync(fd) { actions.push('close'); fs.closeSync(fd); },
+      renameSync() { actions.push('rename'); },
+      rmSync(temp, options) { actions.push('remove'); fs.rmSync(temp, options); },
+    };
+    const result = createQuickLinksStore({ userDataDir, fsImpl }).saveText(JSON.stringify(fixtureConfig('Replacement')));
+    eq(result.reason, STORE_REASON.WRITE_FAILED, 'a failed flush returns a bounded write refusal');
+    eq(actions.join(','), 'flush,close,remove', 'failed flush closes and removes the temp file before replacement');
+    assert(fs.readFileSync(file).equals(before) && fs.readdirSync(userDataDir).length === 1,
+      'the previous config remains byte-identical and no temporary file is left');
+  } finally {
+    cleanup(userDataDir);
+  }
+}
+
 process.stdout.write(`\nquick-links-store: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

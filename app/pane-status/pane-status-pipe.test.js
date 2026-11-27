@@ -75,12 +75,14 @@ const settle = (ms) => new Promise((r) => setTimeout(r, ms || 250));
     'synchronous bind failure closes the partial listener and reports the cause');
 
     const fatal = [];
-    fake.listen = () => fake.emit('listening');
+    const listening = new EventEmitter();
+    listening.listen = () => listening.emit('listening');
+    listening.close = () => {};
     const ready = pipeMod.createPaneStatusPipe({
-      net: { createServer: () => fake }, registry, pipeName, onFatal: (code) => fatal.push(code),
+      net: { createServer: () => listening }, registry, pipeName, onFatal: (code) => fatal.push(code),
     });
     assert((await ready.start()).ok && (await ready.start()).ok, 'starting a listening server is idempotent');
-    fake.emit('error', Object.assign(new Error('fixture listener failure'), { code: 'EIO' }));
+    listening.emit('error', Object.assign(new Error('fixture listener failure'), { code: 'EIO' }));
     assert(!ready.isListening() && fatal.join() === 'EIO', 'a listener failure after readiness notifies its owner');
     ready.stop();
   }

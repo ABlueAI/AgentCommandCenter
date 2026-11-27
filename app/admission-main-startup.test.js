@@ -205,6 +205,14 @@ const LEDGER = 'admission-ledger.json';
       'trusted credential IPC still refuses malformed input');
     assert(!fs.existsSync(path.join(r.userDataDir, 'secure.json')), 'credential refusals create no storage file');
 
+    const invalidTask = { repo: r.userDataDir, task: '' };
+    const creation = await handled.get('new-agent')({}, invalidTask);
+    const removal = await handled.get('remove-agent')({}, invalidTask);
+    assert(!creation.ok && !removal.ok && /cannot remove worktree/i.test(removal.error),
+      'both worktree commands independently refuse a missing task name');
+    assert(r.record.sent.includes('New agent refused: ' + creation.error) && r.record.sent.includes(removal.error),
+      'both worktree command refusals reach the window');
+
     assert(r.record.ptySpawns === 0, 'no PTY is spawned');
   }
 

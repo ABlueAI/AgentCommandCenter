@@ -476,6 +476,7 @@ try {
     [null, STORE_REASON.READ_FAILED],
     [Buffer.alloc(MAX_RAW_BYTES + 1), STORE_REASON.TOO_LARGE],
     [Buffer.from('null'), STORE_REASON.INVALID_JSON],
+    [Buffer.from('{'), STORE_REASON.INVALID_JSON],
   ]) {
     const store = createAdmissionLedgerStore({
       userDataDir,

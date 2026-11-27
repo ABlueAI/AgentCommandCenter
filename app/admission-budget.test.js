@@ -969,6 +969,17 @@ function testSourceTripwires() {
       'an existing ledger can initialize a new run with zero admissions');
   }
 
+  {
+    const h = makeBudget();
+    assert(h.budget.initialize().ok && h.budget.claimPane('pty1').ok, 'reload failure fixture initialized and bound');
+    const saves = h.storage.saves;
+    h.storage.load = () => { throw new Error('fixture reload failure'); };
+    const submitted = await h.budget.submitPrompt('pty1', 'Fixture prompt');
+    assert(!submitted.ok && submitted.reason === REASON.STORAGE_UNREADABLE &&
+      h.budget.initialize().reason === REASON.STORAGE_UNREADABLE && h.storage.saves === saves && h.writes.length === 0,
+    'an unexpected reload exception leaves the budget refusing and writes nothing');
+  }
+
   await testDisabled();
   await testExactlyNThenRefuse();
   await testPersistFailure();

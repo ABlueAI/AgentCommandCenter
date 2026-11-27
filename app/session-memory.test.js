@@ -245,5 +245,38 @@ try { fs.rmSync(ROOT, { recursive: true, force: true }); } catch { /* best effor
     'resume rejects a malformed ID before touching the ledger');
 }
 
+{
+  const userDataDir = path.join(os.tmpdir(), 'mako-session-memory-fixture');
+  const stats = { isFile: () => true, isSymbolicLink: () => false, size: 1 };
+  const oversized = createSessionMemoryStore({
+    userDataDir,
+    fsImpl: { lstatSync: () => ({ ...stats, size: Number.MAX_SAFE_INTEGER }) },
+  });
+  assert(oversized.list().reason === REASON.TOO_LARGE, 'an oversized ledger is refused before reading');
+  const unreadable = createSessionMemoryStore({
+    userDataDir,
+    fsImpl: {
+      lstatSync: () => stats,
+      readFileSync: () => { throw new Error('fixture ledger read failure'); },
+    },
+  });
+  assert(unreadable.list().reason === REASON.READ_FAILED, 'failed bytes read is distinct from missing session data');
+
+  const record = { sessionId: id(), paneId: 'pty1', role: 'builder', cli: 'claude', worktree: null,
+    startedAt: '2026-10-24T10:00:00Z', stoppedAt: null, stopReason: null };
+  for (const [label, malformed] of [
+    ['non-object row', null],
+    ['numeric saved pane ID', { ...record, paneId: 1 }],
+    ['oversized saved role', { ...record, role: 'r'.repeat(1025) }],
+    ['bad timestamp', { ...record, startedAt: 'fixture time' }],
+  ]) {
+    const store = createSessionMemoryStore({
+      userDataDir,
+      fsImpl: { lstatSync: () => stats, readFileSync: () => JSON.stringify({ version: 1, records: [malformed] }) },
+    });
+    assert(store.list().reason === REASON.INVALID, `${label} refuses the persisted record`);
+  }
+}
+
 process.stdout.write('\nsession-memory: ' + passed + ' passed, ' + failed + ' failed\n');
 process.exit(failed ? 1 : 0);
