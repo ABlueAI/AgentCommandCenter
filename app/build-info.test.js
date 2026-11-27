@@ -87,5 +87,6 @@ runAsyncSuite('build-info', async () => {
   const pkg = require('./package.json');
   eq(pkg.version, '1.0.0', 'package.json carries the 1.0.0 release version');
 
+  process.stdout.write(`\nbuild-info: ${passed} passed, ${failed} failed\n`);
   return { passed, failed };
 });

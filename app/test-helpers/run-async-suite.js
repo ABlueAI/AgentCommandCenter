@@ -14,7 +14,6 @@ async function runAsyncSuite(name, run) {
   try {
     const { passed, failed } = await run();
     if (passed + failed === 0) throw new Error('no assertions ran');
-    process.stdout.write(`\n${name}: ${passed} passed, ${failed} failed\n`);
     if (failed > 0) process.exitCode = 1;
   } catch (error) {
     console.error(`${name}: suite failed`, error);

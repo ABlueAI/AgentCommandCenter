@@ -209,5 +209,6 @@ runAsyncSuite('library-ipc', async () => {
       'historical entries with no slice fields project null (num()) without error');
   }
 
+  process.stdout.write(`\nlibrary-ipc: ${passed} passed, ${failed} failed\n`);
   return { passed, failed };
 });

@@ -278,5 +278,6 @@ runAsyncSuite('followup-ipc', async () => {
       'resolveHandle refuses non-strings and unknown handles');
   }
 
+  process.stdout.write(`\nfollowup-ipc: ${passed} passed, ${failed} failed\n`);
   return { passed, failed };
 });
