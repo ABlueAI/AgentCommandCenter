@@ -112,6 +112,8 @@
       reason: null,   // last bounded refusal reason
     };
     const el = {};
+    let editRevision = 0;
+    let stateRequest = 0;
 
     function bridgeUsable() {
       return !!bridge && typeof bridge.submitPrompt === 'function' && typeof bridge.getState === 'function';
@@ -165,7 +167,7 @@
         }
         return true;
       };
-      el.input.oninput = () => { renderCounter(); };
+      el.input.oninput = () => { editRevision += 1; renderCounter(); };
 
       el.send = doc.createElement('button');
       el.send.type = 'button';
@@ -223,8 +225,10 @@
         return;
       }
       const remaining = typeof run.remaining === 'number' ? run.remaining : 0;
-      el.counts.textContent = `${remaining} of ${run.allowance} turn(s) remaining · ${run.admitted} spent`;
-      el.counts.classList.toggle('spent', remaining <= 0);
+      const closed = run.runState === 'closed';
+      const allowanceLabel = closed ? 'unused turn(s) voided' : 'turn(s) remaining';
+      el.counts.textContent = `${remaining} of ${run.allowance} ${allowanceLabel} · ${run.admitted} spent`;
+      el.counts.classList.toggle('spent', closed || remaining <= 0);
       if (run.paneBound === true && typeof run.paneId === 'string') {
         el.pane.textContent = `pane: ${run.paneId}`;
         el.pane.classList.remove('unbound');
@@ -232,17 +236,20 @@
         el.pane.textContent = run.bindingStale === true ? 'pane: unbound (stale binding)' : 'pane: unbound';
         el.pane.classList.add('unbound');
       }
-      el.badge.textContent = run.runState === 'closed' ? 'RUN CLOSED' : 'CONTROLLED RUN';
+      el.badge.textContent = closed ? 'RUN CLOSED' : 'CONTROLLED RUN';
       // A send is possible only with a live binding, allowance left, and no request already out.
-      el.send.disabled = state.inFlight || remaining <= 0 || run.paneBound !== true || run.runState === 'closed';
+      el.send.disabled = state.inFlight || remaining <= 0 || run.paneBound !== true || closed;
     }
 
-    /** Pull bounded state from main. Called on boot and after EVERY submission, success or refusal. */
+    /** Pull bounded state from main after boot, pane lifecycle changes, and submissions. */
     async function refresh() {
       if (!bridgeUsable()) { state.ready = false; return refuse(LOCAL_REASON.BRIDGE_UNAVAILABLE); }
+      const request = ++stateRequest;
       let result;
       try { result = await bridge.getState(); }
-      catch { state.ready = false; state.run = null; renderRun(); return refuse(LOCAL_REASON.IPC_FAILED); }
+      catch { result = { ok: false, reason: LOCAL_REASON.IPC_FAILED }; }
+      // A read already in flight when the pane exits may resolve after the closeout read.
+      if (request !== stateRequest) return false;
       if (!result || result.ok !== true || !result.state || result.state.ok !== true) {
         state.ready = false;
         state.run = null;
@@ -283,6 +290,7 @@
       const text = typeof el.input.value === 'string' ? el.input.value : '';
       if (text.trim().length === 0) return refuse(LOCAL_REASON.EMPTY_PROMPT);
       if (text.length > MAX_PROMPT_CHARS) return refuse(LOCAL_REASON.TOO_LONG);
+      const submittedRevision = editRevision;
 
       state.inFlight = true;
       state.reason = null;
@@ -302,9 +310,10 @@
 
       const admitted = !!(result && result.ok === true);
       if (admitted) {
-        // Cleared ONLY on a real admission, so a refused prompt is still there to correct and resend.
-        el.input.value = '';
-        renderCounter();
+        if (editRevision === submittedRevision) {
+          el.input.value = '';
+          renderCounter();
+        }
         setNotice(`Sent. ${typeof result.remaining === 'number' ? result.remaining : '?'} turn(s) remaining.`, false);
         log(`[admission-ui] result=admitted remaining=${typeof result.remaining === 'number' ? result.remaining : -1}\n`);
       } else {

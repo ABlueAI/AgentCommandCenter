@@ -149,10 +149,21 @@ try {
     fs.rmSync(store.lockPath());
   }
   {
+    const dir = freshDir('cas-live-owner');
+    const store = createAdmissionLedgerStore({ userDataDir: dir });
+    const owner = path.join(store.lockPath(), `${process.pid}-${'f'.repeat(32)}`);
+    fs.mkdirSync(owner, { recursive: true });
+    const denied = store.save(GOOD_DOC, null);
+    assert(denied.ok === false && denied.reason === STORE_REASON.CONFLICT,
+      'a lock with a live owner refuses visibly');
+    assert(fs.existsSync(owner) && !fs.existsSync(store.ledgerPath()),
+      'a live owner marker survives and the contender writes no ledger');
+  }
+  {
     const dir = freshDir('cas-dead-owner');
     const store = createAdmissionLedgerStore({ userDataDir: dir });
     const initial = store.save(GOOD_DOC, null);
-    const child = spawnSync(process.execPath, ['-e', `
+    const leaveLock = () => spawnSync(process.execPath, ['-e', `
       const fs = require('fs');
       const { createAdmissionLedgerStore } = require(process.argv[1]);
       const store = createAdmissionLedgerStore({ userDataDir: process.argv[2], fsImpl: {
@@ -164,6 +175,7 @@ try {
       } });
       store.save(store.load().doc, process.argv[3]);
     `, require.resolve('./admission-budget-store'), dir, initial.revision]);
+    const child = leaveLock();
     assert(child.status === 42 && fs.existsSync(store.lockPath()),
       'the independent writer exited while holding the lock');
     const before = fs.readFileSync(store.ledgerPath());
@@ -174,7 +186,34 @@ try {
       'recovery still refuses an outdated ledger revision');
     assert(fs.readFileSync(store.ledgerPath()).equals(before),
       'the stale revision leaves the ledger byte-identical');
-    assert(store.save(changed, initial.revision).ok === true,
+    assert(!fs.existsSync(store.lockPath()), 'the stale revision leaves no held lock');
+
+    const secondChild = leaveLock();
+    assert(secondChild.status === 42 && fs.existsSync(store.lockPath()), 'a second writer leaves an abandoned lock');
+    if (secondChild.status === 42 && fs.existsSync(store.lockPath())) {
+      const staleOwner = path.join(store.lockPath(), fs.readdirSync(store.lockPath())[0]);
+      const liveOwner = path.join(store.lockPath(), `${process.pid}-${'f'.repeat(32)}`);
+      const delayed = createAdmissionLedgerStore({ userDataDir: dir, fsImpl: {
+        ...fs,
+        rmdirSync(target) {
+          if (target === staleOwner) {
+            // Another contender recovers first and acquires the lock before this deletion runs.
+            fs.rmdirSync(staleOwner);
+            fs.mkdirSync(liveOwner);
+          }
+          return fs.rmdirSync(target);
+        },
+      } });
+      const rejected = delayed.save(changed, initial.revision);
+      assert(rejected.ok === false && rejected.reason === STORE_REASON.CONFLICT,
+        'a delayed recovery contender refuses when another writer owns the lock');
+      assert(fs.existsSync(liveOwner) && fs.readFileSync(store.ledgerPath()).equals(before),
+        'the contender leaves the replacement owner and the ledger intact');
+      fs.rmdirSync(liveOwner);
+    }
+
+    assert(leaveLock().status === 42, 'a third writer leaves an abandoned lock');
+    assert(store.save(changed, initial.revision).ok === true && store.load().doc.runs['evidence-run-0001'].admitted === 2,
       'a later writer with the correct revision recovers after the holder exits');
     assert(!fs.existsSync(store.lockPath()), 'successful recovery leaves no held lock');
   }

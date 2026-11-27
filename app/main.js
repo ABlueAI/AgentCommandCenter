@@ -870,7 +870,10 @@ app.whenReady().then(() => {
   // allowance and no terminator: it supplies a pane id and one bounded prompt, and main owns the rest.
   if (admissionEnabled) {
     const admissionGate = createTrustedSenderGate({ entryUrl: ENTRY_URL, getTrustedWindow: () => win });
-    const admissionStore = createAdmissionLedgerStore({ userDataDir: app.getPath('userData') });
+    const admissionStore = createAdmissionLedgerStore({
+      userDataDir: app.getPath('userData'),
+      log: (line) => { tlog(line); sendMainLog(line, 'error'); },
+    });
     admissionBudget = createAdmissionBudget({
       plan: admissionPlan,
       storage: admissionStore,
@@ -2123,6 +2126,8 @@ ipcMain.on('pty-kill', (_e, id) => {
   // remainder is voided, never transferred, and the consumed count is untouched.
   if (admissionEnabled && admissionBudget.enabled) admissionBudget.notePaneExit(id);
   if (admissionIpc) admissionIpc.forgetPane(id);
+  // A close may never get a process-exit event. Notify admission after updating main's run state.
+  if (admissionEnabled && win && !win.isDestroyed()) win.webContents.send('pty-exit', { id, closed: true });
   // S08: last, after the kill is started, so recording can never block it.
   stopPaneSession(id, sessionMemoryMod.STOP_REASON.CLOSED);
 });

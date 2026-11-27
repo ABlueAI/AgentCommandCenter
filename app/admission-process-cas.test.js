@@ -6,7 +6,7 @@
 // WHY THIS FILE EXISTS. Double-spend of the LAST paid admission is the failure this whole control was
 // built to stop, and it is the one property that CANNOT be proved by two objects inside one process:
 // a same-process test shares the module-local `inFlight` guard and never touches the OS primitives that
-// actually do the work — the `wx` lock file and the checksum-revision compare-and-swap in
+// actually do the work — the atomic lock-directory publication and checksum-revision compare-and-swap in
 // `admission-budget-store.js`. An independent Full-class review proved the property by hand with two
 // spawned processes; this file makes that evidence TRACKED and REPEATABLE instead of a one-off.
 //
@@ -269,8 +269,8 @@ function runRace(dir) {
     assert(!/requestSingleInstanceLock/.test(mainSrc),
       'main.js holds no Electron single-instance lock, and the races above still hold');
     const storeSrc = fs.readFileSync(path.join(__dirname, 'admission-budget-store.js'), 'utf8');
-    assert(/openSync\(lockPath, 'wx'\)/.test(storeSrc),
-      'the cross-process primitive is the ledger lock file, owned by the store');
+    assert(/renameSync\(candidate, lockPath\)/.test(storeSrc),
+      'the cross-process primitive is the atomic lock-directory publication, owned by the store');
     assert(!/single-instance|requestSingleInstanceLock/.test(storeSrc),
       'the store claims no dependence on application single-instance startup');
   }

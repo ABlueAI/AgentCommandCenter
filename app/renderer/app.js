@@ -1584,6 +1584,11 @@ async function boot() {
   cc.getAgentTokenStatus().then(updateAgentTokenBanner)
     .catch(() => { updateAgentTokenBanner(null); appendLog('[agent token] status check failed\n'); });
   await refreshRepos();
+  cc.onPtyExit(async ({ id, closed }) => {
+    const t = terms.get(id);
+    if (t && !closed) { t.parser.flush(); t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n'); }
+    if (admissionView) await admissionView.refresh();
+  });
   wireUi();
   await quickLinksView.load();
   // Pull the controlled run's bounded counts once the bar exists. No-op with no run configured.
@@ -1599,10 +1604,6 @@ async function boot() {
   cc.onPtyData(({ id, data }) => {
     const t = terms.get(id);
     if (t) { t.term.write(data); t.parser.feed(data); }
-  });
-  cc.onPtyExit(({ id }) => {
-    const t = terms.get(id);
-    if (t) { t.parser.flush(); t.term.write('\r\n\x1b[90m[process exited — close this pane]\x1b[0m\r\n'); }
   });
   cc.onClaudeVideoScoutEvent(handleClaudeVideoEvent);
   cc.onMainError((m) => appendLog('\n[main error] ' + m + '\n'));

@@ -444,7 +444,6 @@ async function settle() { for (let i = 0; i < 4; i += 1) await new Promise((r) =
       'no admission bridge means ordinary launches make no refresh IPC call');
   }
 
-  // ---- (13) live ledger access failure writes NOTHING -------------------------------------------
   section('(12c) the toolbar refreshes after natural exit and explicit pane close');
   {
     const appJs = fs.readFileSync(path.join(__dirname, 'renderer', 'app.js'), 'utf8').replace(/\r\n/g, '\n');
@@ -483,9 +482,12 @@ async function settle() { for (let i = 0; i < 4; i += 1) await new Promise((r) =
       eq(s.view.snapshot().run.runState, 'closed', `${pathName}: the toolbar shows the closed run`);
       eq(s.view.snapshot().run.paneBound, false, `${pathName}: the toolbar no longer shows the binding`);
       eq(s.send().disabled, true, `${pathName}: Send is disabled as soon as the run closes`);
+      assert(s.host.textContent.includes('2 of 2 unused turn(s) voided'),
+        `${pathName}: the toolbar labels the remaining allowance as voided`);
     }
   }
 
+  // ---- (13) live ledger access failure writes NOTHING -------------------------------------------
   section('(13) a live ledger access failure writes NOTHING and spends NOTHING');
   {
     const s = makeStack({ allowance: 3 });

@@ -218,7 +218,7 @@ function harness(opts = {}) {
     eq(h.view.snapshot().inFlight, false, 'in-flight clears afterwards');
   }
 
-  // -- 6. N+1 visibly refuses --------------------------------------------------------------------
+  process.stdout.write('\n(5b) successful sends preserve edits made while waiting\n');
   {
     for (const nextDraft of ['next prompt', 'submitted prompt']) {
       let complete;
@@ -238,6 +238,7 @@ function harness(opts = {}) {
       eq(h.counter().textContent, `${nextDraft.length} / ${MAX_PROMPT_CHARS}`, 'the counter reflects the preserved draft');
     }
   }
+  // -- 6. N+1 visibly refuses --------------------------------------------------------------------
   process.stdout.write('\n(6) N+1 VISIBLY refuses\n');
   {
     // (a) The client already knows the allowance is gone: refuse without spending a round trip.
@@ -336,6 +337,21 @@ function harness(opts = {}) {
 
   // -- 8. state refreshes after success AND refusal ----------------------------------------------
   process.stdout.write('\n(8) state REFRESHES after both success and refusal\n');
+  {
+    let completeEarlierRead;
+    let reads = 0;
+    const h = harness({ getState: () => {
+      if (++reads === 1) return new Promise((resolve) => { completeEarlierRead = resolve; });
+      return { ok: true, state: runState({ runState: 'closed', paneBound: false, paneId: null }) };
+    } });
+    h.view.mount();
+    const earlierRead = h.view.refresh();
+    await h.view.refresh();
+    completeEarlierRead({ ok: true, state: runState() });
+    await earlierRead;
+    eq(h.badge().textContent, 'RUN CLOSED', 'a late older refresh cannot reopen the displayed run');
+    eq(h.send().disabled, true, 'a late older refresh cannot re-enable Send');
+  }
   {
     const h = harness();
     h.view.mount();
