@@ -1122,7 +1122,8 @@ process.stdout.write('\npush destinations (review run 1 on #324)\n');
     // Review run 2 on #324: trigger words inside strings, file names or other cmdlets don't count.
     for (const cmd of ['git stash push -- scripts/check.sh', 'git stash push; Start-Sleep 2; git stash pop',
       'git commit -m "Fix git push refusal"', 'git add .; git commit -m "x"; git push -u origin x']) {
-      const v = guard.decide(pwsh(cmd), agentLogin);
+      // The push sources are injected, so the real push case doesn't reach git or the live GitHub API.
+      const v = guard.decide(pwsh(cmd), agentLogin, withPushSources);
       assert(v.exitCode === 0 && !v.stderr, `ABlueAgent + PowerShell ${JSON.stringify(cmd)}: not refused (exit ${v.exitCode})`);
     }
     // Review run 3 on #324: the test reads the raw text, strings included, so a shell's name next to
