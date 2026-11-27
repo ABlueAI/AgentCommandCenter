@@ -457,7 +457,7 @@ async function settle() { for (let i = 0; i < 4; i += 1) await new Promise((r) =
       s.view.mount(); await s.view.refresh();
       eq(s.send().disabled, false, `${pathName}: Send starts enabled`);
       let rendererListener;
-      const terms = new Map([['pty1', { parser: { flush() {} }, term: { write() {} } }]]);
+      const terms = new Map([['pty1', { parser: { flush() {} }, term: { write() {}, options: {} } }]]);
       vm.runInNewContext(rendererExit, {
         cc: { onPtyExit: (cb) => { rendererListener = cb; } }, terms, admissionView: s.view,
       });
@@ -476,6 +476,7 @@ async function settle() { for (let i = 0; i < 4; i += 1) await new Promise((r) =
         runMain(mainClose, {
           ipcMain: { on: (_channel, cb) => cb(null, 'pty1') }, processTree: { killTree() {} },
           videoScoutRunIds: { remove() {} }, stopPaneSession() {}, sessionMemoryMod: { STOP_REASON: {} },
+          ipcSenderRefusal: () => false,
         });
       }
       await settle();
