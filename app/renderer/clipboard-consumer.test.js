@@ -5,12 +5,14 @@
 // success is reported only after the promise RESOLVES {ok:true}; a rejection or {ok:false}
 // refuses visibly and never throws; a failed READ never pastes into the PTY; no clipboard
 // CONTENT is logged; and none of the async paths leave an unhandled rejection.
-// A trailing static section pins app.js's wiring (await-before-success, .catch on the
-// fire-and-forget callers, no direct cc.clipboardWrite in the copy path) and preload/main.
+// A trailing section checks app.js's clipboard wiring and the main/preload boundary.
 
 const fs = require('fs');
 const path = require('path');
-const { createClipboardConsumer } = require('./clipboard-consumer');
+const vm = require('node:vm');
+const { createClipboardConsumer, pastePolicyFor, createOscClipboardRefusal, OSC_REFUSAL_LOG_GAP_MS } = require('./clipboard-consumer');
+const { CLIPBOARD_CHAR_LIMIT } = require('../clipboard-ipc');
+const { Terminal } = require('./vendor/xterm');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -29,7 +31,8 @@ function harness(opts) {
   const consumer = createClipboardConsumer({
     invokeRead: o.invokeRead || (() => Promise.resolve({ ok: true, text: '' })),
     invokeWrite: o.invokeWrite || (() => Promise.resolve({ ok: true })),
-    ptyWrite: (text) => pastes.push(text),
+    paste: o.paste || ((text) => pastes.push(text)),
+    confirmMultiline: o.confirmMultiline,
     log: (line) => logs.push(line),
     paneId: 'pty9',
   });
@@ -48,6 +51,112 @@ function harness(opts) {
     const rejected = createClipboardConsumer({ invokeWrite: () => Promise.reject(new Error('IPC channel closed')) });
     const r = await rejected.writeText('x');
     assert(r.ok === false && /IPC channel closed/.test(r.error), 'writeText turns an IPC REJECTION into { ok:false }, never throws');
+  }
+
+  // Shell pastes prompt on any line break, including a trailing newline copied with a command.
+  {
+    const unsafe = harness({ invokeRead: async () => ({ ok: true, text: 'sample\u0000\u001b\u007f\u0085text' }) });
+    assert(await unsafe.consumer.pasteIntoPty() === false && unsafe.pastes.length === 0
+      && unsafe.logs.some((line) => /control characters/i.test(line) && !line.includes('sample')),
+      'paste refuses control characters visibly without printing clipboard text');
+    const prompts = [];
+    const accepted = harness({
+      invokeRead: async () => ({ ok: true, text: 'one\titem\r\ntwo\rthree\n' }),
+      confirmMultiline: () => { prompts.push('confirm'); return true; },
+    });
+    assert(await accepted.consumer.pasteIntoPty() === true && prompts.length === 1
+      && accepted.pastes[0] === 'one\titem\ntwo\nthree\n', 'confirmed paste preserves tabs and normalizes line endings');
+    const cancelled = harness({
+      invokeRead: async () => ({ ok: true, text: 'one\n' }),
+      confirmMultiline: () => false,
+    });
+    assert(await cancelled.consumer.pasteIntoPty() === false && cancelled.pastes.length === 0,
+      'cancelling a shell paste with a trailing newline sends nothing');
+    const single = harness({
+      invokeRead: async () => ({ ok: true, text: 'one\titem' }),
+      confirmMultiline: () => { throw new Error('unexpected confirmation'); },
+    });
+    assert(await single.consumer.pasteIntoPty() === true && single.pastes[0] === 'one\titem',
+      'one-line text with a tab pastes without confirmation');
+    const promptFailed = harness({ confirmMultiline: () => { throw new Error('prompt unavailable'); } });
+    assert(promptFailed.consumer.pasteText('one\ntwo') === false && promptFailed.pastes.length === 0
+      && promptFailed.logs.at(-1).includes('confirmation failed'), 'a failed confirmation visibly refuses the paste');
+    const unavailable = harness({ paste: () => false });
+    assert(unavailable.consumer.pasteText('one') === false && unavailable.logs.at(-1).includes('terminal input unavailable'),
+      'paste into a closed or read-only pane is visibly refused');
+    const native = harness();
+    assert(native.consumer.pasteText('a'.repeat(CLIPBOARD_CHAR_LIMIT + 1)) === false
+      && native.pastes.length === 0 && native.logs.at(-1).includes('size limit'), 'native paste uses the clipboard IPC size limit');
+  }
+
+  // Exercise the shipped xterm's paste framing and mode negotiation without a browser.
+  {
+    const term = new Terminal();
+    term._core.textarea = { value: '' }; // The clipboard helper clears the textarea after pasting.
+    const data = [];
+    term.onData((text) => data.push(text));
+    const { consumer } = harness({
+      invokeRead: async () => ({ ok: true, text: 'one\ntwo' }),
+      paste: (text) => term.paste(text),
+    });
+    await new Promise((resolve) => term.write('\x1b[?2004h', resolve));
+    await consumer.pasteIntoPty();
+    await new Promise((resolve) => term.write('\x1b[?2004l', resolve));
+    await consumer.pasteIntoPty();
+    assert(data.length === 2 && data[0] === '\x1b[200~one\rtwo\x1b[201~' && data[1] === 'one\rtwo',
+      'the active xterm mode determines whether paste is bracketed');
+    term.dispose();
+  }
+
+  // A Gemini pane ignores bracketed-paste mode (the Gemini prompt drops the escapes), so its paste
+  // arrives as plain text even while the program has enabled the mode.
+  {
+    const term = new Terminal({ ignoreBracketedPasteMode: pastePolicyFor({ paneCli: 'gemini' }).ignoreBracketedPaste });
+    term._core.textarea = { value: '' };
+    const data = [];
+    term.onData((text) => data.push(text));
+    await new Promise((resolve) => term.write('\x1b[?2004h', resolve));
+    term.paste('one\ntwo');
+    assert(data.length === 1 && data[0] === 'one\rtwo', 'a Gemini pane pastes without bracketed-paste escapes');
+    term.dispose();
+  }
+
+  // --- pastePolicyFor: which panes confirm a multiline paste and which skip bracketed paste --------
+  {
+    const cases = [
+      [{ paneCli: undefined }, true, false, 'a plain shell pane'],
+      [{ paneCli: null }, true, false, 'a shell pane with no CLI'],
+      [{ paneCli: 'claude' }, false, false, 'a Claude pane'],
+      [{ paneCli: 'codex' }, false, false, 'a Codex pane'],
+      [{ paneCli: 'gemini' }, false, true, 'a Gemini pane (including the Video Scout role)'],
+      [{ paneCli: undefined, claudeVideoScout: true }, false, false, 'a Claude Video Scout pane'],
+    ];
+    for (const [input, confirm, ignoreBracketed, label] of cases) {
+      const policy = pastePolicyFor(input);
+      assert(policy.confirmMultiline === confirm && policy.ignoreBracketedPaste === ignoreBracketed,
+        `paste policy for ${label}: confirm multiline ${confirm}, ignore bracketed paste ${ignoreBracketed}`);
+    }
+    const empty = pastePolicyFor();
+    assert(empty.confirmMultiline === true && empty.ignoreBracketedPaste === false,
+      'no pane facts means the safest shell policy (confirm multiline)');
+  }
+
+  // --- createOscClipboardRefusal: actionable, bounded, never logs the payload ---------------------
+  {
+    const logs = [];
+    let t = 1000;
+    const refuse = createOscClipboardRefusal({ log: (l) => logs.push(l), paneId: 'pty9', now: () => t });
+    const payload = 'c;' + btoa('sample clipboard text');
+    assert(refuse(payload) === true && logs.length === 1, 'the first OSC 52 request is consumed and logged once');
+    assert(/blocked/i.test(logs[0]) && /Ctrl\+C/.test(logs[0]) && /did not change your clipboard/.test(logs[0]),
+      'the first refusal says the clipboard was not changed and how to copy instead');
+    t += 1000; refuse(payload); refuse(payload);
+    assert(logs.length === 1, 'repeat requests inside the gap are counted, not logged');
+    t += OSC_REFUSAL_LOG_GAP_MS;
+    assert(refuse(payload) === true && logs.length === 2 && /3 more/.test(logs[1]),
+      'after the gap, the next refusal logs again with the number blocked since the last line');
+    assert(!logs.join('').includes('sample clipboard text') && !logs.join('').includes(payload.slice(2)),
+      'no OSC 52 payload is ever logged');
   }
 
   // --- writeClip: metadata-only Logs, empty is a no-op -------------------------------------------
@@ -128,9 +237,46 @@ function harness(opts) {
       'the Copy Output write reports rejection through the visible failure handler');
     assert(!/cc\.clipboardWrite\(/.test(block), 'Copy Output no longer calls cc.clipboardWrite directly — it routes through the consumer');
     // The terminal shortcut paths are async with .catch.
-    assert(/clip\.pasteIntoPty\(\)\.catch\(\(\) => \{\}\)/.test(appSrc), 'Ctrl+V / right-click paste is fire-and-forget WITH a .catch');
-    assert(/clip\.writeClip\(sel\)\.catch\(\(\) => \{\}\)/.test(appSrc), 'Ctrl+C copy is fire-and-forget WITH a .catch');
-    assert(/clip\.writeClip\(decoded, `osc52 \$\{id\}`\)\.catch\(\(\) => \{\}\)/.test(appSrc), 'OSC 52 write is fire-and-forget WITH a .catch');
+    assert(/handlePasteKey\(e, pasteFromClipboard\)/.test(appSrc), 'Ctrl+V retains the double-paste guard');
+    assert(/clip\.writeClip\(sel\)\.catch\(/.test(appSrc), 'Ctrl+C copy handles an unexpected rejection');
+    assert(/addEventListener\('paste',[\s\S]*?clip\.pasteText\([\s\S]*?\}, true\);/.test(appSrc),
+      'native paste events pass through the same paste policy before reaching xterm');
+    const oscBlock = /term\.parser\.registerOscHandler\(52, window\.ccClipboardConsumer\.createOscClipboardRefusal\(\{[\s\S]*?\}\)\);/.exec(appSrc);
+    const logs = [];
+    const writes = [];
+    let onOsc52;
+    assert(Boolean(oscBlock), 'the terminal explicitly handles OSC 52');
+    if (oscBlock) {
+      vm.runInNewContext(oscBlock[0], {
+        id: 'pty9', appendLog: (line) => logs.push(line),
+        window: { ccClipboardConsumer: { createOscClipboardRefusal } },
+        term: { parser: { registerOscHandler: (_id, handler) => { onOsc52 = handler; } } },
+        clip: { writeClip: (text) => { writes.push(text); return Promise.resolve(); } },
+        atob,
+      });
+      const payload = 'sample clipboard text';
+      assert(onOsc52(`c;${btoa(payload)}`) === true && onOsc52('c;?') === true && writes.length === 0
+        && logs.length === 1 && /clipboard.*(blocked|refused)/i.test(logs[0]) && !logs[0].includes(payload),
+        'OSC 52 requests are consumed and visibly refused without writing or logging the payload');
+    }
+    // The pane's paste policy comes from the tested helper, and a closed pane refuses input.
+    const paneCliAt = appSrc.indexOf('const paneCli = role ? ROLES[role].cli : cli;');
+    const policyAt = appSrc.indexOf('const pastePolicy = window.ccClipboardConsumer.pastePolicyFor({ paneCli, claudeVideoScout });');
+    const consumerAt = appSrc.indexOf('window.ccClipboardConsumer.createClipboardConsumer({', policyAt);
+    assert(paneCliAt > 0 && policyAt > paneCliAt && consumerAt > policyAt,
+      'app.js derives the pane CLI, then its paste policy, before building the clipboard consumer');
+    assert(/confirmMultiline: pastePolicy\.confirmMultiline\s*\?/.test(appSrc),
+      'multiline confirmation follows the paste policy');
+    assert(/if \(pastePolicy\.ignoreBracketedPaste\) term\.options\.ignoreBracketedPasteMode = true;/.test(appSrc),
+      'Gemini panes turn off bracketed paste through the paste policy');
+    assert(/if \(!terms\.has\(id\) \|\| term\.options\.disableStdin\) return false;\s*term\.paste\(text\);/.test(appSrc),
+      'paste refuses a closed or input-disabled pane before reaching xterm');
+    const startFailed = /const onStartFailed = \(reason\) => \{[\s\S]*?\n  \};/.exec(appSrc);
+    assert(Boolean(startFailed) && startFailed[0].includes('term.options.disableStdin = true;'),
+      'a failed start disables the pane\'s input');
+    const ptyExit = /cc\.onPtyExit\(\(\{ id \}\) => \{[\s\S]*?\n  \}\);/.exec(appSrc);
+    assert(Boolean(ptyExit) && ptyExit[0].includes('t.term.options.disableStdin = true;'),
+      'a PTY exit disables the pane\'s input');
     assert(!/cc\.clipboardRead\(\) \|\|/.test(appSrc) && !/return \(cc\.clipboardRead/.test(appSrc),
       'the old synchronous readClip/writeClip helpers are gone');
   }
@@ -160,4 +306,7 @@ function harness(opts) {
 
   process.stdout.write(`\nclipboard-consumer: ${passed} passed, ${failed} failed\n`);
   process.exit(failed ? 1 : 0);
-})();
+})().catch((err) => {
+  console.error(err);
+  process.exitCode = 1;
+});
