@@ -13,6 +13,7 @@
 
 const { stripAdmissionEnv } = require('./admission-budget-config');
 const { CONTROLLED_WEBFETCH } = require('./role-fence-policy');
+const { POLICY_ENV_KEY } = require('./page-reader');
 // S06: the ABlueAgent GitHub identity for unfenced agent panes (agent-git-env.js).
 const { AGENT_GIT_ENV_KEYS, buildAgentGitEnv } = require('./agent-git-env');
 
@@ -119,9 +120,9 @@ function omitReservedWindowsEnv(baseEnv, reservedNames) {
  * `Object.keys(mainIssued)` makes every emitted key reserved by construction. Pane-status names are
  * owned even when enrollment supplies no string value; Video Scout similarly owns Gemini even when
  * safeStorage supplies no valid key, preventing ambient fallback in both absent-value cases. The
- * controlled-WebFetch mode name is owned for EVERY pane, emitted or not.
+ * controlled-WebFetch mode and page-reader policy names are owned for every pane, emitted or not.
  */
-function buildMainIssuedEnv({ videoScout, geminiKey, paneStatusEnv, fencedRole, webFetchMode, agentGit, agentGitToken }) {
+function buildMainIssuedEnv({ videoScout, geminiKey, paneStatusEnv, fencedRole, webFetchMode, pageReaderPolicy, agentGit, agentGitToken }) {
   const mainIssued = { [SUBPROCESS_SCRUB_ENV_KEY]: '1' };
   // S06: an agent pane (main decides, from the classified launch) owns every GitHub/git identity name,
   // emitted or not, so an ambient GH_TOKEN or GIT_CONFIG_* can never stand in for the agent's own.
@@ -141,12 +142,16 @@ function buildMainIssuedEnv({ videoScout, geminiKey, paneStatusEnv, fencedRole, 
   if (fencedRole === true && WEBFETCH_MODE_VALUES.indexOf(webFetchMode) !== -1) {
     mainIssued[WEBFETCH_MODE_ENV_KEY] = webFetchMode;
   }
+  if (fencedRole === true && typeof pageReaderPolicy === 'string' && pageReaderPolicy !== '') {
+    mainIssued[POLICY_ENV_KEY] = pageReaderPolicy;
+  }
   const reservedNames = [...new Set([
     ...Object.keys(mainIssued),
     ...PANE_STATUS_ENV_KEYS,
     ...(videoScout ? [GEMINI_ENV_KEY] : []),
     ...(agentPane ? AGENT_GIT_ENV_KEYS : []),
     WEBFETCH_MODE_ENV_KEY,
+    POLICY_ENV_KEY,
   ])];
   return { mainIssued, reservedNames };
 }
@@ -157,10 +162,10 @@ function buildMainIssuedEnv({ videoScout, geminiKey, paneStatusEnv, fencedRole, 
  * `fencedRole` is computed in main from the standing predicate:
  *   !opts.videoScout && opts.role && FENCED_ROLES.has(opts.role)
  */
-function buildPtyEnv({ baseEnv, fencedRole, videoScout, geminiKey, paneStatusEnv, webFetchMode, agentGit, agentGitToken }) {
+function buildPtyEnv({ baseEnv, fencedRole, videoScout, geminiKey, paneStatusEnv, webFetchMode, pageReaderPolicy, agentGit, agentGitToken }) {
   const source = baseEnv && typeof baseEnv === 'object' ? baseEnv : {};
   const { mainIssued, reservedNames } = buildMainIssuedEnv({
-    videoScout, geminiKey, paneStatusEnv, fencedRole, webFetchMode, agentGit, agentGitToken,
+    videoScout, geminiKey, paneStatusEnv, fencedRole, webFetchMode, pageReaderPolicy, agentGit, agentGitToken,
   });
   const ambientBase = fencedRole
     ? copyAllowedWindowsEnv(source, FENCED_ENV_ALLOWLIST)

@@ -150,6 +150,7 @@ const { createQuickLinksPresets } = require('./quick-links-presets');
 const { createQuickLinksStore } = require('./quick-links-store');
 const sessionMemoryMod = require('./session-memory');
 const sessionResume = require('./session-resume');
+const sessionHygiene = require('./session-hygiene');
 const { createQuickLinksIpc } = require('./quick-links-ipc');
 const { buildDefaultConfig: buildQuickLinksDefaultConfig, validateUrl: validateQuickLinkUrl } = require('./quick-links-policy');
 // S06: the legacy open-external channel goes through the same URL policy (open-external-ipc.js).
@@ -579,6 +580,8 @@ app.whenReady().then(() => {
   loadAgentGitToken(); // S06: the ABlueAgent token, likewise before any PTY can launch
   // S08: a record still open now was never closed (a crash or a forced kill): close it as `unknown`.
   sessionMemoryCall(() => sessionMemory().closeOpen(sessionMemoryMod.STOP_REASON.UNKNOWN));
+  // S46: finished sessions archive themselves.
+  sessionMemoryCall(() => sessionMemory().archiveFinished());
   // K8 media-permission hardening: grant ONLY a microphone-only request ('media' with
   // mediaTypes exactly ['audio']) coming from this window's main frame at the exact
   // entry document with the trusted file: origin — the in-app Whisper dictation path.
@@ -1055,9 +1058,8 @@ function tlog(msg) {
 // Call at the start of each createAgent attempt to reset the clock.
 function tlogReset() { _t0 = Date.now(); tlog('--- new createAgent sequence ---'); }
 
-// Resolve the real (symlink-free) path. Walks up to the nearest existing ancestor when the
-// target doesn't exist yet — mirrors scripts/hooks/fence-write.js so the main-process cwd
-// guard and the hook use identical resolution logic and cannot be diverged by path tricks.
+// Resolve paths for the launcher's working-directory checks. The tool hook independently
+// validates file paths at the point of use.
 function realOrNearest(p) {
   try { return fs.realpathSync.native(p); }
   catch {
@@ -1729,6 +1731,7 @@ function stopPaneSession(id, reason, expected) {
   const sid = paneSessions.get(id);
   if (!sid || (expected !== undefined && sid !== expected)) return;
   paneSessions.delete(id);
+  sessionTouchedAt.delete(sid);
   sessionMemoryCall(() => sessionMemory().recordStop(sid, reason));
 }
 
@@ -1762,6 +1765,55 @@ ipcMain.handle('session-resume-dismiss', (e, sessionId) => {
   return res && res.ok ? { ok: true } : { ok: false, error: (res && res.reason) || 'session-memory-failed' };
 });
 
+// ---- S46: session hygiene ----------------------------------------------------------------------
+// Each recorded Claude session's owner, state, done-when and idle time (app/session-hygiene.js).
+// Finished sessions archive themselves here too, so a Mako left running for days still archives
+// them. Trusted sender only. `day` is the local calendar day, so the renderer shows the idle list
+// once a day.
+ipcMain.handle('session-hygiene-list', (e) => {
+  const g = launcherGate.assess(e);
+  if (!g.ok) return { ok: false, error: g.reason };
+  const archived = sessionMemoryCall(() => sessionMemory().archiveFinished());
+  if (!archived || archived.ok !== true) return { ok: false, error: (archived && archived.reason) || 'session-memory-failed' };
+  if (archived.archived) tlog(`[session-hygiene] archived ${archived.archived} finished session(s)`);
+  const rows = sessionHygiene.view(archived.records);
+  const idle = sessionHygiene.idleRows(rows);
+  return { ok: true, rows, idle, idleDays: sessionHygiene.IDLE_DAYS, day: sessionHygiene.dayKey(new Date()) };
+});
+ipcMain.handle('session-hygiene-done-when', (e, sessionId, text) => {
+  const g = launcherGate.assess(e);
+  if (!g.ok) return { ok: false, error: g.reason };
+  // Not through sessionMemoryCall: a refused done-when (bad text, an unknown session) is Blue's input,
+  // shown on the row, not a session-memory failure, so it must not raise the "IDs are not being
+  // recorded" notice. A real store failure (read or write) still does.
+  const INPUT_REFUSALS = [sessionMemoryMod.REASON.BAD_DONE_WHEN, sessionMemoryMod.REASON.UNKNOWN_SESSION, sessionMemoryMod.REASON.BAD_SESSION_ID];
+  let res;
+  try { res = sessionMemory().setDoneWhen(sessionId, text); }
+  catch (err) { tlog(`[session-hygiene] done-when failed: ${(err && err.message) || err}`); return { ok: false, error: 'session-memory-failed' }; }
+  if (res && res.ok) return { ok: true };
+  const reason = (res && res.reason) || 'session-memory-failed';
+  if (INPUT_REFUSALS.includes(reason)) tlog(`[session-hygiene] done-when refused [${reason}]`);
+  else noteSessionMemory(res);
+  return { ok: false, error: reason };
+});
+// S46: a session's last activity: the last input that reached its pane (typing, a pasted or spoken
+// prompt; every ordinary input route converges on pty-write). Recorded here rather than from the
+// pane's output so the pinned pty-start handler (launcher-fence-invariant.test.js) stays unchanged.
+// Written at most once an hour per session.
+const SESSION_TOUCH_MS = 60 * 60 * 1000;
+const SESSION_TOUCH_RETRY_MS = 5 * 60 * 1000;
+const sessionTouchedAt = new Map();
+function touchPaneSession(id) {
+  const sid = paneSessions.get(id);
+  if (!sid) return;
+  const t = Date.now();
+  const last = sessionTouchedAt.get(sid);
+  if (last !== undefined && t - last < SESSION_TOUCH_MS) return;
+  const res = sessionMemoryCall(() => sessionMemory().touch(sid));
+  // A failed write is tried again after 5 minutes, not an hour, and not on every keystroke.
+  sessionTouchedAt.set(sid, res && res.ok ? t : t - SESSION_TOUCH_MS + SESSION_TOUCH_RETRY_MS);
+}
+
 // ---- IPC: in-app terminals (node-pty + xterm.js) ---------------------------
 // Each renderer terminal pane gets a real ConPTY here: PowerShell spawned in the
 // worktree, optionally running the chosen agent CLI, with bytes streamed both ways.
@@ -1790,11 +1842,8 @@ ipcMain.handle('pty-start', (e, opts) => {
   // a successful spawn (below), so a refused/failed launch leaves no mapping.
   let acceptedRunId = null;
 
-  // Hard gate: fenced roles (web-scout, operator, source-scout) must run inside the
-  // ensure-output-dir sandbox. Enforce here rather than relying on renderer discipline —
-  // same "tool-enforced-not-convention" principle the hook itself is built on. Uses the
-  // same realpath + case-fold logic as fence-write.js so both layers agree on what "inside"
-  // means and can't be split by a symlink or a Unicode/case path trick.
+  // The main process requires fenced roles to launch inside the ensure-output-dir sandbox.
+  // That working directory is the sandbox root for the tool hook's separate file checks.
   let fencedCwd = null;
   if (launch.fenced) {
     // Reason CONSTANTS only. The pre-existing messages interpolated `declaredCwd`, `resolvedCwd`
@@ -1948,9 +1997,9 @@ ipcMain.handle('pty-start', (e, opts) => {
   //
   // buildPtyEnv constructs CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, Video Scout's safeStorage
   // GEMINI_API_KEY when applicable, at most the two exact string-valued pane-status transport
-  // entries, and, for a fenced web-scout pane only, the controlled-WebFetch mode chosen above, before
-  // spreading the filtered ambient base. The reserved set is derived from the emitted main-issued map
-  // plus absent-but-owned pane-status names, Video Scout's Gemini name and the WebFetch mode name; every
+  // entries, the web-scout's controlled-WebFetch mode and the page reader's validator path, before
+  // spreading the filtered ambient base. The reserved set includes the emitted main-issued map and
+  // absent-but-owned names for pane status, Gemini, WebFetch mode and the page-reader policy. Every
   // ASCII-case ambient variant is removed first, so correctness does not depend on key ordering. Neither
   // pane-status entry is recovered from process.env, and no environment value is logged. For
   // unfenced panes, stripAdmissionEnv removes admission keys from the inherited PTY
@@ -1967,6 +2016,7 @@ ipcMain.handle('pty-start', (e, opts) => {
     geminiKey,
     paneStatusEnv,
     webFetchMode: webFetch.mode,
+    pageReaderPolicy: fencedRole && launch.role === pageReaderMod.ROLE ? require.resolve('./page-reader') : undefined,
     agentGit: agentPane,
     agentGitToken,
   });
@@ -2061,6 +2111,8 @@ ipcMain.handle('pty-start', (e, opts) => {
 // The refusal is visible (bounded reason on the Logs channel, throttled so a held key cannot flood it)
 // and it never echoes the bytes. Uncontrolled panes take the original path, byte-for-byte.
 ipcMain.on('pty-write', (_e, { id, data }) => {
+  // S46: input reaching a Claude pane is the session's activity (at most one write an hour).
+  touchPaneSession(id);
   admissionPtyBoundary.writeDirect(id, data);
 });
 ipcMain.on('pty-resize', (_e, { id, cols, rows }) => { const p = ptys.get(id); if (p) { try { p.resize(cols, rows); } catch (err) { tlog(`pty-resize ${id} failed (process likely exiting): ${(err && err.message) || err}`); } } });
