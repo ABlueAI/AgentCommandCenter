@@ -1119,15 +1119,19 @@ on its own, one session at a time on Pro until you upgrade (step 8).
     the status PR marks S10 done.
   - **Re-run after S31 merges** (about 5 minutes; on 2026-11-02 every level opened in default mode,
     because Mako's env scrub makes Claude Code force default. S31 keeps the scrub and gives each
-    level an explicit list of tools that run without asking; docs/AUTHORITY-LEVELS.md):
+    level an explicit list of allowed and denied tools; whether Claude Code honours the allowed list
+    under the scrub is not verified, and this re-run is how it gets checked; docs/AUTHORITY-LEVELS.md):
     1. Pull `main` and restart Mako fully. The footer may still show default mode; that is expected.
     2. **Minimum**, new builder pane: ask "Read README.md and summarise it in one line" (no prompt),
        then "Create a file called s31-check.txt" (the edit tools are refused; if Claude then offers a
        shell command that writes the file, it asks first: say no, and tell the agent it asked).
-    3. **Medium**, new builder pane: ask it to create `s31-check.txt` (no prompt), then to run
-       `git add s31-check.txt` (it asks first; answer no).
-    4. **High**, new builder pane: ask it to commit `s31-check.txt` on a scratch branch (no prompt),
-       then to run `git push --dry-run` (it asks first; answer no). Delete the scratch branch and
+    3. **Medium**, new builder pane: ask it to create `s31-check.txt`, then to run
+       `git add s31-check.txt` (it asks first; answer no). This is the check of the open question:
+       if creating the file runs with no prompt, the allowed list works under the scrub; if it asks,
+       answer no and tell the agent it asked.
+    4. **High**, new builder pane: ask it to create `s31-check.txt` (no prompt, if step 3 had none),
+       then to commit it on a scratch branch and to run `git push --dry-run` (both ask first; answer
+       no). High now sends the same tool lists as Medium, so every git command asks. Delete
        `s31-check.txt`.
     5. Tell an agent what each step did.
 - [ ] **41. S11 on your PC: usage panel.** About **10 minutes**, after you merge the S11 PR, #126.
@@ -1516,6 +1520,24 @@ Step 89 comes from PR #327.
   - *Done when:* both checks behave as above, and you tell any agent "step 89 done"; it ticks this
     with the date.
 
+Step 90 comes from PR #307.
+
+- [ ] **90. Check Dictate and read-aloud failures on your PC (S56, PR #307).** **About 3 minutes**,
+  on the next Tuesday or Friday PC check after you merge PR #307. PR #307 makes Dictate and
+  read-aloud let go of the microphone and speakers when something fails; CI checks it only with
+  stand-ins, so only your PC can show the real microphone and speakers behave.
+  - Pull `main` and restart Mako fully (close every window).
+  - Click into a pane, then double-click 🎤 Dictate quickly while the microphone permission prompt
+    is open (if Windows shows one): there should be one prompt, and the text should land in the
+    first pane you clicked.
+  - Start Dictate and click Stop: the Windows microphone indicator (system tray) should go off.
+  - Block Mako's microphone (Windows Settings > Privacy & security > Microphone), click Dictate: a
+    visible error should show. Allow it again; Dictate should work on the next click.
+  - Read some pane text aloud and, if you can, make it fail (for example, disconnect from the
+    network on a first run of a new voice): the audio should stop when the error shows.
+  - *Done when:* each check behaves as above, and you tell any agent "step 90 done"; it ticks this
+    with the date.
+
 ## From S14 (the 1.1 design brief)
 
 Step 77 comes from PR #253.
@@ -1617,6 +1639,22 @@ behind both steps are in the private report from the S38 session, not in this pu
     results stay private: a public issue gets at most "checked on Blue's PC, <date>" or a severity
     change. The agent ticks this with the date.
 
+## From PR #334 (terminal clipboard, paste and links)
+
+Step 93 comes from PR #334 (issue #273). Step numbers 86, 87 and 90 to 92 belong to open PRs.
+
+- [ ] **93. Check terminal paste and clipboard on Windows (PR #334).** **About 10 minutes**, on the
+  next Tuesday or Friday PC-check evening after merging PR #334, after fully restarting Mako.
+  - Paste one line, then two lines, into a Gemini Video Scout pane and a Claude pane (Ctrl+V and
+    right-click): the text arrives whole in both, with no confirmation prompt.
+  - In a plain PowerShell pane, paste two lines: Mako asks before pasting; Cancel pastes nothing.
+    Press Shift+Insert with one line copied: it pastes once.
+  - In a Claude pane, use something that copies through the terminal (Claude Code's "Copied!"):
+    the Logs tab shows one line saying the clipboard was not changed and to use Ctrl+C instead,
+    and your clipboard still holds what it held before.
+  - *Done when:* you've told any agent what you saw (each check as above, or what differed); it
+    ticks this with the date and how it checked.
+
 ## From the H1 commander (PR #282)
 
 Step 80 comes from PR #282 (docs/DECISIONS.md, 2026-11-24, D-084). Step numbers 77 to 79 belong to
@@ -1654,6 +1692,22 @@ open PRs (#283, #286 and #287).
     plugin was uninstalled or left disabled, with each finding's title and severity only; you
     tell any agent "step 85 done" and it ticks this with the date and how it checked.
 
+## From PR #314 (secure.json refuses instead of overwriting, issue #249)
+
+Step 91 comes from PR #314. Step number 90 belongs to an open PR.
+
+- [ ] **91. Check the credential store after a restart (PR #314).** **About 10 minutes**, on the
+  next Tuesday or Friday PC-check evening after merging PR #314.
+  - Pull `main`, fully restart Mako, then save and clear the Gemini key and the ABlueAgent token
+    once each; check that each says it worked and that they're still there after another restart.
+  - Close Mako, copy `secure.json` in Mako's settings folder somewhere safe, then put `{` (one
+    character) in it and start Mako. Check that one "Credential store unavailable" box appears,
+    saying "not valid JSON" and naming the folder, that Mako still opens, and that the same line
+    shows in the Logs tab.
+  - Close Mako, put your copy back, start Mako and check that both credentials are loaded again.
+  - *Done when:* you've told any agent what you saw; it ticks this with the date and how it
+    checked.
+
 ## From PR #315 (the account guard's PowerShell deny rules)
 
 Step 88 comes from PR #315 (issue #219). Step numbers 86 and 87 belong to open PRs.
@@ -1665,6 +1719,20 @@ Step 88 comes from PR #315 (issue #219). Step numbers 86 and 87 belong to open P
     the `PowerShell(...)` rules next to the `Bash(...)` ones (for example `PowerShell(gh pr merge:*)`).
   - *Done when:* you've told any agent what you saw (no warning, rules listed, or what differed);
     it ticks this with the date and how it checked.
+
+## From PR #310 (npm install-script approvals, issue #210)
+
+Step 90 comes from PR #310.
+
+- [ ] **90. Check a clean install on Node 26.13.1 (PR #310).** **About 5 minutes**, on the next
+  Tuesday or Friday PC-check evening after merging PR #310.
+  - On a PC with Node 26.13.1, pull `main` in your Mako checkout, open PowerShell in `app\` and
+    run `npm ci`.
+  - Check that it exits without an error and reports no blocked install scripts for
+    `onnxruntime-node`, `protobufjs` or `sharp`.
+  - Open Mako from its shortcut and check that it starts.
+  - *Done when:* you've told any agent what you saw (clean install and Mako started, or the message
+    you got); it ticks this with the date and how it checked.
 
 ## Coming up this month (the runner will ask when it gets there)
 
