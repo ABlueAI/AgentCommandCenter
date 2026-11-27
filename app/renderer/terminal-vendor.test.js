@@ -1,12 +1,27 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const { test } = require('node:test');
+const { after, test: runTest } = require('node:test');
 const { Terminal } = require('./vendor/xterm');
 const { FitAddon } = require('./vendor/addon-fit');
 const { Unicode11Addon } = require('./vendor/addon-unicode11');
 const { WebLinksAddon } = require('./vendor/addon-web-links');
 const { WebglAddon } = require('./vendor/addon-webgl');
+
+let passed = 0;
+let failed = 0;
+function test(name, run) {
+  runTest(name, async (t) => {
+    try {
+      await run(t);
+      passed++;
+    } catch (error) {
+      failed++;
+      throw error;
+    }
+  });
+}
+after(() => process.stdout.write(`terminal-vendor: ${passed} passed, ${failed} failed\n`));
 
 function write(terminal, text) {
   return new Promise((resolve) => terminal.write(text, resolve));
