@@ -1187,7 +1187,12 @@ ipcMain.handle('new-agent', async (_e, { repo, task }) => {
 });
 
 // Tear down an agent's worktree (branch is preserved by the script).
-ipcMain.handle('remove-agent', async (_e, { repo, task }) => {
+const removeAgentGate = createTrustedSenderGate({ entryUrl: ENTRY_URL, getTrustedWindow: () => win });
+ipcMain.handle('remove-agent', async (event, request) => {
+  if (!removeAgentGate.assess(event).ok) {
+    return { ok: false, error: 'Worktree removal requires the main Mako window.' };
+  }
+  const { repo, task } = request || {};
   // Re-validate here INDEPENDENTLY of new-agent — not redundant paranoia. new-agent validates a
   // name the user is typing right now; this path validates a name read back out of PERSISTENT,
   // possibly-hostile state: `task` is taskOf(wt), derived from a worktree folder/branch that may
@@ -1212,13 +1217,51 @@ ipcMain.handle('remove-agent', async (_e, { repo, task }) => {
     if (win && !win.isDestroyed()) win.webContents.send('main-error', msg);
     return { ok: false, error: msg };
   }
+  if (typeof repo !== 'string' || !path.isAbsolute(repo)) {
+    return { ok: false, error: 'Select a repository before removing a worktree.' };
+  }
   const script = path.join(SCRIPTS_DIR, 'remove-agent.ps1');
-  await new Promise((resolve) => {
-    execFile('powershell',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-Task', task, '-Force'],
-      { cwd: repo }, () => resolve());
+  const run = (...options) => new Promise((resolve, reject) => {
+    const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script, '-Task', task];
+    execFile('powershell', [...args, ...options], { cwd: repo, windowsHide: true, timeout: 60_000 },
+      (error, stdout, stderr) => {
+        if (error) reject(new Error((stderr || '').trim() || error.message));
+        else resolve(stdout);
+      });
   });
-  return { ok: true };  // normalized contract: { ok, error? } — matches new-agent / the refusal above (L3)
+
+  let failure = 'Could not check the worktree';
+  try {
+    const { changes, commits, state } = JSON.parse(await run('-Check'));
+    const isList = (value) => Array.isArray(value) && value.every((entry) => typeof entry === 'string' && entry.length);
+    if (!isList(changes) || !isList(commits) || typeof state !== 'string' || !/^[a-f0-9]{64}$/.test(state)) {
+      throw new Error('The removal check returned an invalid worktree state.');
+    }
+
+    const options = ['-ExpectedState', state];
+    if (changes.length || commits.length) {
+      failure = 'Could not confirm worktree removal';
+      const detail = [];
+      if (changes.length) {
+        detail.push('Uncommitted changes in these files and folders will be lost:', ...changes, '');
+      }
+      if (commits.length) {
+        detail.push('Commits not on any remote branch:', ...commits, '', 'Git keeps local branches after removal.');
+      }
+      const { response } = await dialog.showMessageBox(win, {
+        type: 'warning', title: 'Remove agent worktree', message: `Remove the ${task} worktree?`,
+        detail: detail.join('\n').trimEnd(),
+        buttons: ['Cancel', 'Remove worktree'], defaultId: 0, cancelId: 0,
+      });
+      if (response !== 1) return { ok: true, cancelled: true };
+      options.push('-Force');
+    }
+    failure = 'Worktree removal failed';
+    await run(...options);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: `${failure}: ${error.message}` };
+  }
 });
 
 // Create a dedicated, fenced outputs sandbox for a research role (web-scout/operator) so it

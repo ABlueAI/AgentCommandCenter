@@ -5,13 +5,14 @@ const { execFileSync, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const test = require('node:test');
+const { test: nodeTest, after } = require('node:test');
 const vm = require('node:vm');
 const { validateTask } = require('./task-name');
+const { createTrustedSenderGate } = require('./trusted-ipc-sender');
 
 const script = path.join(__dirname, '..', 'scripts', 'remove-agent.ps1');
 const source = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
-const handlerSource = source.slice(source.indexOf("ipcMain.handle('remove-agent'"),
+const handlerSource = source.slice(source.indexOf('// Tear down an agent\'s worktree'),
   source.indexOf('// Create a dedicated, fenced outputs sandbox'));
 const clean = { changes: [], commits: [], state: 'a'.repeat(64) };
 const dirty = {
@@ -20,9 +21,27 @@ const dirty = {
   commits: ['a987654 Local commit'],
 };
 
-function handler({ inspection = clean, checkError, checkStdout, removeError, response = 0 } = {}) {
+let passed = 0;
+let failed = 0;
+function test(name, options, run) {
+  if (typeof options === 'function') return test(name, {}, options);
+  nodeTest(name, options, async (context) => {
+    try {
+      await run(context);
+      passed++;
+    } catch (error) {
+      failed++;
+      throw error;
+    }
+  });
+}
+after(() => process.stdout.write(`\nremove-agent: ${passed} passed, ${failed} failed\n`));
+
+function handler({ inspection = clean, checkError, checkStdout, removeError, response = 0, trusted = true } = {}) {
   const calls = [];
-  const win = { isDestroyed: () => false, webContents: { send() {} } };
+  const entryUrl = 'file:///mako/index.html';
+  const frame = { url: entryUrl };
+  const win = { isDestroyed: () => false, webContents: { mainFrame: frame, send() {} } };
   let invoke;
   vm.runInNewContext(handlerSource, {
     ipcMain: { handle: (_name, fn) => { invoke = fn; } },
@@ -30,7 +49,8 @@ function handler({ inspection = clean, checkError, checkStdout, removeError, res
       calls.push({ dialog: options });
       return { response };
     } },
-    path, validateTask, win, SCRIPTS_DIR: path.dirname(script), tlog() {},
+    path, validateTask, win, createTrustedSenderGate, ENTRY_URL: entryUrl,
+    SCRIPTS_DIR: path.dirname(script), tlog() {},
     execFile: (command, args, _options, callback) => {
       assert.equal(command, 'powershell');
       assert.ok(args.includes(script));
@@ -39,7 +59,8 @@ function handler({ inspection = clean, checkError, checkStdout, removeError, res
       else callback(removeError, '', 'Git refused worktree removal');
     },
   });
-  return { calls, invoke: () => invoke({}, { repo: path.join(os.tmpdir(), 'repo'), task: 'demo' }) };
+  const event = trusted ? { sender: win.webContents, senderFrame: frame } : {};
+  return { calls, invoke: () => invoke(event, { repo: path.join(os.tmpdir(), 'repo'), task: 'demo' }) };
 }
 
 test('clean worktrees are checked first and removed without force or a prompt', async () => {
@@ -76,8 +97,11 @@ test('only explicit confirmation passes force and the inspected state', async ()
   assert.equal(args[args.indexOf('-ExpectedState') + 1], dirty.state);
 });
 
-for (const options of [{ checkError: new Error('inspection failed') }, { checkStdout: 'invalid JSON' }]) {
-  test('a failed or unreadable inspection refuses visibly before any removal', async () => {
+for (const [label, options] of [
+  ['a failed', { checkError: new Error('inspection failed') }],
+  ['an unreadable', { checkStdout: 'invalid JSON' }],
+]) {
+  test(`${label} inspection refuses visibly before any removal`, async () => {
     const { calls, invoke } = handler(options);
     const result = await invoke();
     assert.equal(result.ok, false);
@@ -94,11 +118,17 @@ test('a nonzero removal exit reaches the renderer as an error', async () => {
   assert.match(result.error, /Git refused worktree removal/);
 });
 
+test('an untrusted sender cannot start the removal check', async () => {
+  const { calls, invoke } = handler({ trusted: false });
+  assert.equal((await invoke()).ok, false);
+  assert.deepEqual(calls, []);
+});
+
 const powershell = process.env.MAKO_TEST_POWERSHELL || (process.platform === 'win32' ? 'powershell' : 'pwsh');
 const hasPowerShell = spawnSync(powershell, ['-NoProfile', '-Command', 'exit 0']).status === 0;
 
 function fixture(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mako-remove-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mako remove-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const repo = path.join(root, 'repo');
   const worktree = path.join(root, 'repo-demo');
@@ -127,9 +157,10 @@ function fixture(t) {
   return { repo, worktree, remote, git, run, inspect };
 }
 
-const skip = hasPowerShell ? false : 'PowerShell is required for the worktree integration cases';
+const skip = !hasPowerShell && process.platform !== 'win32' && !process.env.MAKO_TEST_POWERSHELL
+  ? 'PowerShell is required for the worktree integration cases' : false;
 
-test('inspection is read-only, lists local work and rejects changed state before force removal', { skip }, (t) => {
+test('inspection lists local work and preserves it when the removal state has changed', { skip }, (t) => {
   const { worktree, git, run, inspect, repo } = fixture(t);
   git(worktree, 'commit', '--allow-empty', '-qm', 'Local commit');
   fs.appendFileSync(path.join(worktree, 'tracked.txt'), 'change\n');
@@ -168,6 +199,19 @@ test('only live remote branch history counts, including branches with no local t
   assert.ok(fs.existsSync(worktree));
 });
 
+test('an agent commit reachable from a remote tip missing locally counts as published', { skip }, (t) => {
+  const { repo, worktree, remote, git, inspect } = fixture(t);
+  git(worktree, 'commit', '--allow-empty', '-qm', 'Agent commit');
+  git(worktree, 'push', '-q', remote, 'HEAD:refs/heads/published');
+  const other = path.join(path.dirname(repo), 'other');
+  git(repo, 'clone', '-q', '--branch', 'published', remote, other);
+  git(other, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+    '-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '-qm', 'Remote-only commit');
+  git(other, 'push', '-q', 'origin', 'published');
+  assert.deepEqual(inspect().commits, []);
+  assert.equal(git(repo, 'branch', '-r'), 'fixture/main');
+});
+
 test('an unreachable remote refuses visibly and leaves the worktree intact', { skip }, (t) => {
   const { repo, worktree, remote, git, run } = fixture(t);
   git(repo, 'remote', 'set-url', 'fixture', `${remote}-missing`);
@@ -184,4 +228,14 @@ test('Git removal failure exits nonzero and prints no success', { skip }, (t) =>
   assert.notEqual(result.status, 0);
   assert.doesNotMatch(result.stdout, /Removed worktree/);
   assert.ok(fs.existsSync(worktree));
+});
+
+test('the script restores Git prompt settings in an existing PowerShell session', { skip }, (t) => {
+  const { repo } = fixture(t);
+  const result = spawnSync(powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command',
+    '$env:GIT_TERMINAL_PROMPT = "1"; Remove-Item Env:GCM_INTERACTIVE -ErrorAction SilentlyContinue; '
+    + '& $env:MAKO_TEST_REMOVE_SCRIPT -Task demo -Check | Out-Null; '
+    + 'if ($env:GIT_TERMINAL_PROMPT -ne "1" -or (Test-Path Env:GCM_INTERACTIVE)) { exit 1 }'],
+  { cwd: repo, encoding: 'utf8', env: { ...process.env, MAKO_TEST_REMOVE_SCRIPT: script } });
+  assert.equal(result.status, 0, result.stderr);
 });
