@@ -137,7 +137,9 @@ async function bootMain(admissionEnv, options) {
   Module._load = function (request) {
     if (request === 'electron') return electronStub;
     if (request === '@lydell/node-pty') return ptyStub;
-    return realLoad.apply(this, arguments);
+    const loaded = realLoad.apply(this, arguments);
+    if (request === 'child_process' && opt.execFile) return { ...loaded, execFile: opt.execFile };
+    return loaded;
   };
 
   // A fresh module registry, so main.js and every admission module re-evaluate from scratch.
@@ -214,6 +216,35 @@ const LEDGER = 'admission-ledger.json';
       'both worktree command refusals reach the window');
 
     assert(r.record.ptySpawns === 0, 'no PTY is spawned');
+  }
+
+  {
+    const { deepEqual } = require('node:assert/strict');
+    const gitCalls = [];
+    const r = await bootMain({}, { execFile(command, args, options, callback) {
+      gitCalls.push({ command, args, cwd: options.cwd });
+      const detached = path.join(options.cwd, 'detached fixture');
+      callback(null, [
+        'worktree ' + options.cwd,
+        'branch refs/heads/main',
+        '',
+        'worktree ' + detached,
+        'detached',
+        '',
+      ].join('\n'));
+    } });
+    const list = r.record.handled.get('list-worktrees');
+    deepEqual(await list({}, undefined), []);
+    deepEqual(gitCalls, []);
+    const listed = await list({}, r.userDataDir);
+    deepEqual(gitCalls, [{
+      command: 'git', args: ['worktree', 'list', '--porcelain'], cwd: r.userDataDir,
+    }]);
+    deepEqual(listed, [
+      { path: r.userDataDir, branch: 'main' },
+      { path: path.join(r.userDataDir, 'detached fixture'), branch: '(detached)' },
+    ]);
+    assert(listed.length === 2, 'worktree IPC parses named and detached entries, including a path with spaces');
   }
 
   // ---- (2) VALID configuration: THE REGRESSION ------------------------------------------------
