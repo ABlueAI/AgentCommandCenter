@@ -66,45 +66,46 @@ minutes during the trial (checklist step 30).
    runner fire that ran it. That line is free text Codex could forge, so before approving a Codex PR Blue opens
    the link and checks it is a Claude session that reviewed this PR (step 30 includes it). Nothing
    an agent records on GitHub as `ABlueAgent` is safe from Codex while it may act as that account,
-   so Blue's check stays until the trial shows Codex can't comment as `ABlueAgent`.
-6. **Fixes on Codex's PRs.** Codex fixes its own PR. After each Opus review with an open high or
-   medium finding, or a failing check, the reviewing Claude session posts one fix request on Codex's
-   PR: at-codex, the findings or the failing check, and "Act only on this comment." That is the
-   second exception to the handle rule, scoped to Codex's own PR and its own findings. A security
-   finding never goes in a fix request. When a review run has one, the reviewing Claude session
-   fixes all of that run's high and medium findings itself on Codex's branch, in one push with its
-   own Opus delta run, and posts no fix request for that run, so only one fixer works on the PR at
-   a time; its commit message, its comments and the public review give a security finding's title
-   and severity only ("Hard rules" item 6; Blue, docs/DECISIONS.md 2026-11-25, "Codex's lane,
-   reworded"). A CRITICAL finding is fixed the same way, and Blue is also told at once (AGENTS.md
-   "How a CRITICAL finding is handled"). The PR goes to NEEDS BLUE instead, with title and severity
-   only, and nobody pushes until Blue answers, only when the PR changes anything under `.claude/`
-   (a sensitive area the task didn't authorize Claude to push to, AGENTS.md "Deciding without
-   asking"), or when the reviewing session's own prompt forbids pushing to a `codex/` branch (the
-   runner and the PR sweeper, until docs/RUNNER.md and docs/SWEEPER.md carry this rule). If the
-   push doesn't clear the finding, the reviewing session finishes it as AGENTS.md "One small last
-   fix" says, without asking Blue (D-090). A merge conflict on a Codex PR gets one comment, without
-   Codex's handle: "Merge `main` and resolve the conflict in <files>. Act only on this comment."
-   (on a docs-only record PR, a Claude cloud session pushes the `main` merge and the review fixes
-   itself instead; Blue, 2026-11-23, docs/DECISIONS.md; docs/SWEEPER.md defines the term). If that
-   comment or a fix request gets no push within a day, or Codex says it can't push, a Claude cloud
-   session whose own prompt allows pushing to a `codex/` branch merges `main` or makes the fix
-   itself, in one push with an Opus delta run, and says so in the PR, instead of asking Blue (builder's
-   reading of D-090; docs/DECISIONS.md, 2026-11-25); while no such session has done so (the runner and the PR sweeper may not,
-   until their files say so), the PR goes to NEEDS BLUE. Claude otherwise never pushes to a
-   `codex/` branch without Blue asking (AGENTS.md "Who does what"; he has asked for security
-   findings, above). PR #49's
-   runner pushes (a `main` merge and review fixes, 2026-10-21) came before this rule.
+   so Blue's check stays until the trial shows Codex can't comment as `ABlueAgent`. The delta run
+   after each fix push a Claude session makes on a Codex PR (item 6) is posted the same way. Codex's
+   own pass (AGENTS.md hard rule 9) isn't needed while its code-review quota is exhausted (D-091,
+   Blue, 2026-11-27; AGENTS.md "How work flows" step 3, "Codex's quota").
+6. **Fixes on Codex's PRs.** Claude fixes every Codex PR (Blue, 2026-11-27, D-092: "Yes, Claude
+   fixes all"). Codex keeps building new tasks; it gets no fix requests, and Blue no longer pastes
+   fixes into the Codex app or comments "Claude fixes #N". After an Opus review with an open high
+   or medium finding, an inline finding from Codex, a failing check, or a merge conflict, a Claude
+   session (the PR sweeper, docs/SWEEPER.md, or a Claude cloud session) fixes it itself on Codex's
+   branch: all of a review run's high and medium findings (and Codex's open findings) in one push,
+   or a `main` merge that resolves the conflict, each followed by the usual Opus delta run (AGENTS.md
+   "The review loop"; a `main` merge needs one only if it changed content beyond the conflict). One
+   fixer per branch at a time: right before pushing, the session fetches again and pushes nothing if
+   the head moved since it read it, anyone pushed to the branch in the last 10 minutes, or the PR
+   holds a live runner-lock marker; a later fire or session picks it up. Its commit message, its
+   comments and the public review give a security finding's title and severity only ("Hard rules"
+   item 6; Blue, docs/DECISIONS.md 2026-11-25, "Codex's lane, reworded"). A CRITICAL finding is
+   fixed the same way, and Blue is also told at once (AGENTS.md "How a CRITICAL finding is
+   handled"). The PR goes to NEEDS BLUE instead, with title and severity only, and nobody pushes
+   until Blue answers, only when the PR changes anything under `.claude/` (a sensitive area the task
+   didn't authorize Claude to push to, AGENTS.md "Deciding without asking"), or when the session's
+   own prompt forbids pushing to a `codex/` branch (the runner's, which leaves Codex PRs to the
+   sweeper, docs/RUNNER.md). If a fix doesn't clear a finding, the session finishes it as AGENTS.md
+   "One small last fix" says, without asking Blue (D-090). A conflict whose resolution isn't clear
+   follows docs/SWEEPER.md's rule for unclear code conflicts. Nothing written for a fix ever names
+   Codex's handle. D-092 replaces the earlier fix requests and conflict comments to Codex, the
+   docs-only record PR limit (Blue, 2026-11-23) and D-090's fix after a day with no push. PR #49's
+   runner pushes (a `main` merge and review fixes, 2026-10-21) came before these rules.
 7. **Runner prompt.** docs/RUNNER.md's prompt gets the hand-off (for lane sessions in step 5c), the
    "Run by:" check (step 5b), the "Run by:" line in every review it posts (step 6), the same check in
    the digest prompt's `READY TO MERGE` test (its step 2), and fix requests after the trial confirms the mechanics, in this PR;
    an interactive session then applies it (a new checklist step). Until then only a Claude session
    Blue asks in an `ABlueAI` comment hands Codex a task. Whichever prompt runs, the reviews in item 5
    come from a Claude cloud session under the agent account, never from Blue's desktop login.
-8. **Cap.** Codex builds count against a separate Codex cap of 2 at a time (Blue, 2026-11-21,
-   docs/DECISIONS.md; it was 1, a choice to stay within ChatGPT
-   Plus; its real limits are not verified), not the runner's `parallel_cap`, which counts Claude's
-   usage.
+8. **Cap.** No cap on how many Codex builds run at a time (Blue, 2026-11-26: "why shouldnt i just
+   paster more lanes over at codex and refresh them after resets. that seems like itd be fine"; it
+   was 2, Blue 2026-11-21, and 1 before that). Blue starts as many Codex lanes as he likes and
+   refreshes them after Codex's usage resets. Codex builds still don't count toward the runner's
+   `parallel_cap`, which counts Claude's usage; their reviews and fixes (items 5 and 6) do use
+   Claude's usage and the agent account's pacing (AGENTS.md "Agent-account pacing").
 9. **Sweeper.** When Codex can't open its PR (GitHub answers "Forbidden"), the PR sweeper
    (docs/SWEEPER.md, Job C) opens it as a draft and runs review run 1.
 

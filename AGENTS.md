@@ -39,7 +39,9 @@ judgment only where it leaves room, and record each such assumption in the PR.
    `chatgpt-codex-connector[bot]` on the PR, or a comment by that bot, edited by no one else, on the
    latest head saying it found no major issues; a comment by any other account never counts).
    Codex's own inline findings are fixed, or answered with evidence if wrong, never parked as low
-   ("How work flows" steps 3 and 5).
+   ("How work flows" steps 3 and 5). One exception (D-091, Blue, 2026-11-27): while Codex's
+   code-review quota is exhausted, as "How work flows" step 3 ("Codex's quota") defines it, Claude's
+   pass alone is enough; Codex's pass is required again once its quota returns.
 
 ## The shared brain: read first, update always
 
@@ -109,7 +111,8 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      step, the China-origin check included ("Engineering rules"), and the review says what it found.
      A Dependabot PR is `NOT READY` until that review is posted, CI is green, every high and
      medium finding is answered and it has Codex's pass ("Hard rules" item 9); if Codex doesn't
-     review it, it is `NOT READY: no Codex pass` and Blue decides. No agent pushes to a
+     review it, it is `NOT READY: no Codex pass` and Blue decides (while Codex's quota is
+     exhausted, Claude's review alone is enough: "Codex's quota" below). No agent pushes to a
      Dependabot branch or changes its draft state: a finding that needs a change goes in a comment
      and becomes an issue, and Blue decides whether to merge or close the PR. The runner never
      builds on one; the routine that does PR upkeep (docs/RUNNER.md) reviews it. In the merge-order
@@ -158,8 +161,25 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
      that way; if Codex still doesn't review, the builder goes on with Claude's review alone, without
      asking Blue: the PR is marked ready once step 5's other conditions hold, its line stays
      `NOT READY: no Codex pass (<reason>)` (hard rule 9), and a 🔴 line in its TLDR says so, so Blue
-     decides at the merge (builder's reading of D-090; docs/DECISIONS.md, 2026-11-25). Never re-trigger it with a
+     decides at the merge (builder's reading of D-090; docs/DECISIONS.md, 2026-11-25), unless
+     Codex's quota is exhausted (next bullet). Never re-trigger it with a
      comment that writes Codex's handle.
+   - **Codex's quota** (D-091; Blue, 2026-11-27: "yes continue to ready to merge with claude
+     review alone"). Codex's code-review quota counts as exhausted while the newest comment or
+     review by `chatgpt-codex-connector[bot]` anywhere in this repository is its usage-limit notice
+     ("You have reached your Codex usage limits for code reviews", as on #286, #287, #302 and #315),
+     with no review, pass or findings from that bot after it. Meanwhile a PR is `READY TO MERGE` on
+     Claude's pass alone: CI green on the latest head, the Opus review loop done with no high or
+     medium finding open, author and latest pusher not `ABlueAI`, the merge-order check clean, and
+     every other step 5 condition met. Its TLDR carries a 🟡 line "Claude's review alone (D-091:
+     Codex's review quota exhausted, <link to the newest notice>)", and nobody writes "waiting for
+     Codex's pass" or `NOT READY: no Codex pass` for it. Codex's inline findings already posted are
+     still fixed or answered. The quota has returned once that bot posts any review, pass or
+     finding after its newest notice; from then on Codex's pass is required again, also on a PR
+     marked ready under D-091 and not yet merged: a Claude session re-triggers Codex's review on it
+     through draft and ready as above, once per head, and its line becomes `NOT READY: no Codex
+     pass` until Codex passes (🤖 Claude decided: "required again" read as covering every unmerged
+     PR).
 4. The builder fixes CI failures and review findings itself. After 3 failed fix rounds on the same
    CI problem, it writes its diagnosis and options in the PR, takes the best option and goes on,
    recorded as a `🤖 Claude decided:` line in the TLDR (D-090); it stops for Blue only when that
@@ -188,7 +208,8 @@ GPT all work from the same facts. Merging a PR is how Blue approves a change to 
    - Every session-end message and phone notification about a PR starts with `READY TO MERGE` (CI
      green, independent review done and every high and medium finding fixed or answered, low ones
      listed as follow-ups, Codex's pass on the latest head with its findings fixed or answered
-     (step 3), PR marked ready) or `NOT READY: <reason>`. A summary covering
+     (step 3; not needed while Codex's quota is exhausted, D-091), PR marked ready) or
+     `NOT READY: <reason>`. A summary covering
      several PRs starts each PR's line that way; a session-end message or phone notification about no
      PR (such as the runner's gate notice) starts with `NOT READY: <reason>`, except the PR sweeper's idle line "Sweeper: nothing to do" (docs/SWEEPER.md). Blue merges only on `READY TO MERGE`; a reason that
      needs his answer says so. A PR with the `waits-for-merge` label is `NOT READY: waits for #X`.
@@ -334,8 +355,8 @@ any order.
 - The `waits-for-merge` label is created by the first builder that needs it, if missing.
 - **The sweeper.** After every merge to `main` (once its push trigger is set up, BLUE-CHECKLIST.md
   step 70), and hourly, the PR sweeper (docs/SWEEPER.md) merges
-  `main` into each conflicting `claude/` PR and Codex docs-only record PR (docs/SWEEPER.md defines
-  it; Codex's other PRs keep the rule above) and clears every `waits-for-merge` wait whose blocker is merged or closed, so
+  `main` into each conflicting `claude/` and `codex/` PR (Codex's, by D-092, Blue, 2026-11-27, as
+  docs/SWEEPER.md says) and clears every `waits-for-merge` wait whose blocker is merged or closed, so
   builders don't need Blue to say "clear the wait on #N".
 
 ### Never
@@ -593,15 +614,15 @@ account stays clear of GitHub's abuse detection.
   `.github/`, the checks that CI runs every suite, and docs/DECISIONS.md entries on the rules; it
   never loosens a test that reads them; the full list is docs/CODEX-BUILDER-LANE.md item 1), which stay Claude's (Blue, docs/DECISIONS.md 2026-11-25, "Codex's lane, reworded";
   docs/CODEX-BUILDER-LANE.md item 1), and planning partner. Works in its own `codex/` branch,
-  never Claude's, and fixes its own PRs; Claude never pushes to a `codex/` branch unless Blue asks.
-  He has asked it for Claude cloud sessions to push review fixes and `main` merges to Codex's
-  docs-only record PRs (as docs/SWEEPER.md defines them), one fixer per PR at a time, and for the
-  PR sweeper (docs/DECISIONS.md, 2026-11-23; docs/SWEEPER.md), and for the reviewing Claude
-  session to fix security findings on Codex's PRs itself, a CRITICAL one included (builder's
-  reading of D-090), and, by D-090 as the builder reads it, to
-  merge `main` or make the fix on a Codex PR whose fix request got no push within a day, when its
-  own prompt allows pushing there
-  (docs/CODEX-BUILDER-LANE.md item 6).
+  never Claude's, and keeps building new tasks. Claude fixes every Codex PR's review findings
+  (Claude's, Codex's own and failing checks) and merge conflicts itself on its `codex/` branch,
+  one fixer per branch at a time, each fix push followed by the usual Opus delta run (Blue,
+  2026-11-27, D-092: "Yes, Claude fixes all"; docs/CODEX-BUILDER-LANE.md item 6). Blue no longer
+  pastes fix requests into the Codex app or comments "Claude fixes #N". The fixer is the PR
+  sweeper (docs/SWEEPER.md) or a Claude cloud session; Claude otherwise never pushes to a `codex/`
+  branch. This replaces the narrower asks before it (docs-only record PRs, 2026-11-23; security
+  findings, a CRITICAL one included, and a fix request with no push within a day, D-090), which
+  D-092 covers.
   If Blue drops it, Claude takes its rows after a plan change, and "Hard rules" item 9 would need
   changing too.
 - Plans and reviews happen in the repo (PRs, issues, these files), never by copying text between apps.

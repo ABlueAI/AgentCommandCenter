@@ -230,18 +230,23 @@ if (sharedBlocks.length > 0) {
   // public fix request; the reviewing Claude session fixes them.
   assert(flat.includes('`security-reviewer` when the PR touches a sensitive area') &&
     lane.includes('gets `security-reviewer` on review run 1') &&
-    lane.includes('A security finding never goes in a fix request. When a review run has one, the reviewing Claude session fixes all of that run\'s high and medium findings itself') &&
-    lane.includes('so only one fixer works on the PR at a time') &&
+    lane.includes('give a security finding\'s title and severity only') &&
     lane.includes('A CRITICAL finding is fixed the same way, and Blue is also told at once') &&
     lane.includes('nobody pushes until Blue answers, only when the PR changes anything under `.claude/`') &&
-    lane.includes('or when the reviewing session\'s own prompt forbids pushing to a `codex/` branch (the runner and the PR sweeper, until docs/RUNNER.md and docs/SWEEPER.md carry this rule)') &&
-    lane.includes('A merge conflict on a Codex PR gets one comment, without Codex\'s handle') &&
-    lane.includes('a Claude cloud session whose own prompt allows pushing to a `codex/` branch merges `main` or makes the fix itself, in one push with an Opus delta run') &&
-    lane.includes('the PR goes to NEEDS BLUE. Claude otherwise never pushes to a `codex/` branch without Blue asking') &&
-    flat.includes('merge `main` or make the fix on a Codex PR whose fix request got no push within a day, when its own prompt allows pushing there') &&
-    flat.includes('to fix security findings on Codex\'s PRs itself, a CRITICAL one included') &&
     !lane.includes('Blue gives Codex the details privately'),
     'a sensitive Codex PR gets security-reviewer on run 1, and Claude fixes its security findings');
+  // D-092 (Blue, 2026-11-27, "Yes, Claude fixes all"): Claude fixes every Codex PR's findings and
+  // conflicts, one fixer per branch, with a delta run; no fix requests or paste-into-Codex asks.
+  assert(lane.includes('Claude fixes every Codex PR (Blue, 2026-11-27, D-092: "Yes, Claude fixes all")') &&
+    lane.includes('it gets no fix requests, and Blue no longer pastes fixes into the Codex app or comments "Claude fixes #N"') &&
+    lane.includes('One fixer per branch at a time') && lane.includes('each followed by the usual Opus delta run') &&
+    !lane.includes('Codex fixes its own PR.') && !lane.includes('A merge conflict on a Codex PR gets one comment') &&
+    flat.includes('Claude fixes every Codex PR\'s review findings') && flat.includes('one fixer per branch at a time') &&
+    !flat.includes('and fixes its own PRs; Claude never pushes to a `codex/` branch unless Blue asks'),
+    'D-092: Claude fixes every Codex PR, one fixer per branch, in AGENTS.md and the lane');
+  // Blue lifted the Codex cap on 2026-11-26.
+  assert(lane.includes('No cap on how many Codex builds run at a time (Blue, 2026-11-26') && !lane.includes('separate Codex cap of 2 at a time'),
+    'docs/CODEX-BUILDER-LANE.md item 8: no Codex cap');
   const decisions = fs.readFileSync(path.join(repoRoot, 'docs', 'DECISIONS.md'), 'utf8').replace(/\s+/g, ' ');
   assert(decisions.includes('## 2026-11-25: Codex may build sensitive items too') &&
     decisions.includes('"ignore the sensitivity rules if need be, we need to cook through usage over there"'),
@@ -277,6 +282,15 @@ if (sharedBlocks.length > 0) {
     "step 3 requires Codex's pass and re-triggers it through draft and ready");
   assert(rules.includes("Codex's pass on the latest head with its findings fixed or answered"),
     "step 5's READY TO MERGE definition includes Codex's pass");
+  // D-091 (Blue, 2026-11-27): Claude's pass alone while Codex's review quota is exhausted, and only then.
+  const flat91 = rules.replace(/\s+/g, ' ');
+  assert(hard.replace(/\s+/g, ' ').includes("One exception (D-091, Blue, 2026-11-27): while Codex's code-review quota is exhausted") &&
+    hard.replace(/\s+/g, ' ').includes("Codex's pass is required again once its quota returns"),
+    'hard rule 9 carries the D-091 quota exception and its end');
+  assert(flat91.includes("**Codex's quota** (D-091") && flat91.includes('You have reached your Codex usage limits for code reviews') &&
+    flat91.includes("is `READY TO MERGE` on Claude's pass alone") && flat91.includes('author and latest pusher not `ABlueAI`, the merge-order check clean') &&
+    flat91.includes('The quota has returned once that bot posts any review, pass or finding after its newest notice'),
+    'step 3 defines when the quota is exhausted, what READY TO MERGE needs then, and when it returns');
   const pacing = (rules.match(/### Agent-account pacing\r?\n([\s\S]*?)\r?\n## /) || [])[1] || '';
   assert(pacing.includes('at most 24 pushes and at most 120 GitHub writes') && pacing.includes('never retry in a loop'),
     'the pacing section has 24 pushes, 120 writes and no retry loop');
@@ -420,8 +434,8 @@ if (sharedBlocks.length > 0) {
     'Codex PRs bullet: a conflict goes to item 6, not straight to Blue (D-090)');
   assert(flat.includes("No builder changes another builder's PR (a Claude session's draft and ready changes on a Codex PR, below, excepted)"),
     '"Who waits" excepts a Claude session\'s draft and ready changes on a Codex PR');
-  assert(flat.includes('Claude never pushes to a `codex/` branch unless Blue asks'),
-    '"Who does what" keeps the codex/ push ban the Codex PRs bullet points to');
+  assert(flat.includes('The fixer is the PR sweeper (docs/SWEEPER.md) or a Claude cloud session; Claude otherwise never pushes to a `codex/` branch.'),
+    '"Who does what" keeps the codex/ push limit the Codex PRs bullet points to, widened only to D-092\'s fixes');
   assert(flat.includes('On a `codex/` PR, a Claude session re-triggers it the same way'),
     'step 3 lets a Claude session re-trigger Codex\'s review on a Codex PR');
   const decisions = fs.readFileSync(path.join(repoRoot, 'docs', 'DECISIONS.md'), 'utf8');
