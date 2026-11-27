@@ -21,10 +21,17 @@ const ERROR_WORDS = Object.freeze({
   'git-status-timed-out': 'git status took too long',
   'git-status-unparseable': 'git status gave output Mako could not read',
   'branch-status-invalid-input': 'bad request',
-  'not-authorized': 'not a worktree of a repo under your projects folder',
+  'not-authorized': 'not in Mako’s list of repos and worktrees under your projects folder',
   'unresolved-path': 'the worktree folder is missing',
   'not-a-directory': 'the worktree folder is missing',
-  'enumeration-failed': 'could not list the repo’s worktrees',
+  'enumeration-failed': 'could not list the repos and worktrees under your projects folder',
+  'not-a-string': 'bad worktree path',
+  'blank': 'empty worktree path',
+  'too-long': 'the worktree path is too long',
+  'control-char': 'the worktree path has a control character',
+  'forbidden-char': 'the worktree path has a character Mako refuses ( % & | ^ < > ( ) " \' ` )',
+  'not-absolute': 'the worktree path is not absolute',
+  'traversal': 'the worktree path has a .. part',
   'ipc-failed': 'Mako could not ask its main process',
 });
 
@@ -89,7 +96,55 @@ function describeBranchStatus(res) {
   return { state, text: parts.join(' · '), title: tips.join('\n') };
 }
 
-const api = { describeBranchStatus, loadingView, errorView, STATE, ERROR_WORDS };
+// The refresh loop app.js runs, kept here so it is tested without a DOM or IPC.
+// deps: { ask(paths) -> Promise<answers[]> (cc.worktreeBranchStatus), apply(path, view) (fills that
+// path's nodes, looked up when called), log(line), maxBatch }. refresh(paths) asks for every path in
+// batches of at most maxBatch; one refresh runs at a time and a refresh asked for meanwhile runs
+// once it ends, with the newest paths. A failure is logged once per path and reason.
+function createBranchStatusPoller(deps) {
+  const maxBatch = Number.isInteger(deps.maxBatch) && deps.maxBatch > 0 ? deps.maxBatch : 64;
+  const lastError = new Map();
+  let running = false;
+  let pending = null;
+  function note(path, reason, detail) {
+    if (lastError.get(path) === reason) return;
+    lastError.set(path, reason);
+    deps.log(`[agent] branch status unavailable for ${JSON.stringify(path)}: ${reason}${detail ? ` (${detail})` : ''}`);
+  }
+  async function runBatch(batch) {
+    let answers;
+    let failure = null;
+    try { answers = await deps.ask(batch); }
+    catch (e) { failure = String((e && e.message) || e).slice(0, 300); }
+    batch.forEach((path, i) => {
+      let view;
+      if (failure !== null) {
+        view = errorView({ error: 'ipc-failed', detail: failure });
+        note(path, 'ipc-failed', failure);
+      } else {
+        const res = Array.isArray(answers) ? answers[i] : undefined;
+        view = describeBranchStatus(res);
+        if (view.state === STATE.ERROR) note(path, (res && res.error) || 'no answer', res && res.detail);
+        else lastError.delete(path);
+      }
+      deps.apply(path, view);
+    });
+  }
+  async function refresh(paths) {
+    if (running) { pending = paths; return; }
+    running = true;
+    try {
+      const list = Array.isArray(paths) ? paths : [];
+      for (let i = 0; i < list.length; i += maxBatch) await runBatch(list.slice(i, i + maxBatch));
+    } finally {
+      running = false;
+    }
+    if (pending) { const next = pending; pending = null; await refresh(next); }
+  }
+  return { refresh, isRunning: () => running };
+}
+
+const api = { describeBranchStatus, loadingView, errorView, createBranchStatusPoller, STATE, ERROR_WORDS };
 global.branchStatusView = api;
 if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window === 'undefined' ? globalThis : window);

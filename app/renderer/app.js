@@ -1908,14 +1908,17 @@ async function refreshAgents() {
 // ---- S47 piece 3: branch status per agent --------------------------------------
 // Each agent's card and sidebar row carry a .branch-status line ("↑2 ↓1 · 3 changed"). Main reads
 // them with a lock-free `git status --porcelain=v2` (app/branch-status.js), for paths it checks
-// itself, in one call per refresh; the renderer only asks and shows. One refresh runs at a time: a
-// request that finds one running (a poll, or a re-render of the agent list) runs once it ends. A failed read shows "status unavailable" and is
-// logged once per new reason, so a broken worktree is visible without flooding the log.
+// itself; the renderer only asks and shows. The refresh loop (one at a time, batches of 64, each
+// failure logged once per reason) is createBranchStatusPoller in branch-status-view.js.
 const BRANCH_STATUS_POLL_MS = 20000;
 let branchStatusNodes = new Map();          // worktree path -> [.branch-status nodes]
-let branchStatusRunning = false;
-let branchStatusAgain = false;              // a refresh was asked for while one was running
-const branchStatusLastError = new Map();    // worktree path -> last error reason logged
+const branchStatusPoller = branchStatusView.createBranchStatusPoller({
+  ask: (paths) => cc.worktreeBranchStatus(paths),
+  // Look the nodes up when the answer arrives: a re-render meanwhile replaced them.
+  apply: (wtPath, view) => { for (const node of branchStatusNodes.get(wtPath) || []) agentDom.applyBranchStatus(node, view); },
+  log: (line) => appendLog(line + '\n'),
+  maxBatch: 64,
+});
 
 function trackBranchStatusNode(wtPath, root) {
   const node = root.querySelector('.branch-status');
@@ -1925,42 +1928,8 @@ function trackBranchStatusNode(wtPath, root) {
   branchStatusNodes.set(wtPath, list);
 }
 
-function noteBranchStatusError(wtPath, reason, detail) {
-  if (branchStatusLastError.get(wtPath) === reason) return;
-  branchStatusLastError.set(wtPath, reason);
-  appendLog(`[agent] branch status unavailable for ${JSON.stringify(wtPath)}: ${reason}${detail ? ` (${detail})` : ''}\n`);
-}
-
-async function refreshBranchStatuses() {
-  if (branchStatusRunning) { branchStatusAgain = true; return; }
-  const paths = [...branchStatusNodes.keys()];
-  if (paths.length === 0) return;
-  branchStatusRunning = true;
-  const views = new Map();
-  try {
-    const results = await cc.worktreeBranchStatus(paths);
-    paths.forEach((wtPath, i) => {
-      const res = Array.isArray(results) ? results[i] : undefined;
-      const view = branchStatusView.describeBranchStatus(res);
-      if (view.state === branchStatusView.STATE.ERROR) noteBranchStatusError(wtPath, (res && res.error) || 'no answer', res && res.detail);
-      else branchStatusLastError.delete(wtPath);
-      views.set(wtPath, view);
-    });
-  } catch {
-    // A rejected invoke is a refused sender or a bad list; main has already shown why on its
-    // main-error line (reportIpcRefusal), so each worktree is named and points there.
-    for (const wtPath of paths) {
-      views.set(wtPath, branchStatusView.errorView({ error: 'ipc-failed' }));
-      noteBranchStatusError(wtPath, 'ipc-failed', 'see the [main error] line');
-    }
-  } finally {
-    branchStatusRunning = false;
-  }
-  // Look the nodes up now, not before the await: a re-render meanwhile replaced them.
-  for (const [wtPath, view] of views) {
-    for (const node of branchStatusNodes.get(wtPath) || []) agentDom.applyBranchStatus(node, view);
-  }
-  if (branchStatusAgain) { branchStatusAgain = false; refreshBranchStatuses(); }
+function refreshBranchStatuses() {
+  return branchStatusPoller.refresh([...branchStatusNodes.keys()]);
 }
 
 // The task slug for an app-created worktree, whose folder is named "<repo>-<task>". Returns null
