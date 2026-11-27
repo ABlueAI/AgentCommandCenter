@@ -1076,9 +1076,29 @@ process.stdout.write('\npush destinations (review run 1 on #324)\n');
     }
     // Review run 2 on #324: trigger words inside strings, file names or other cmdlets don't count.
     for (const cmd of ['git stash push -- scripts/check.sh', 'git stash push; Start-Sleep 2; git stash pop',
-      'git commit -m "Refuse git push from PowerShell"', "git commit -m 'run git push in bash or cmd' # start"]) {
+      'git commit -m "Fix git push refusal"', 'git add .; git commit -m "x"; git push -u origin x']) {
       const v = guard.decide(pwsh(cmd), agentLogin);
       assert(v.exitCode === 0 && !v.stderr, `ABlueAgent + PowerShell ${JSON.stringify(cmd)}: not refused (exit ${v.exitCode})`);
+    }
+    // Review run 3 on #324: the test reads the raw text, strings included, so a shell's name next to
+    // "git push" in a message is refused (fail-closed by design), with advice to reword.
+    for (const cmd of ['git commit -m "Refuse git push from PowerShell"', "git commit -m 'run git push in bash or cmd'"]) {
+      const v = guard.decide(pwsh(cmd), agentLogin);
+      assert(v.exitCode === 2 && /form the guard cannot read/.test(v.stderr || '') && /reword/.test(v.stderr || ''),
+        `ABlueAgent + PowerShell ${JSON.stringify(cmd)}: refused with advice to reword (by design)`);
+    }
+    // Review run 3 on #324: a subexpression inside a string, a backtick-escaped quote, git's own git-push
+    // program by bare path, and a nested cmd.exe are all refused, alone and next to a readable push.
+    for (const cmd of ["git push origin topic; $c = 'git push origin shared'; Write-Output \"$(iex $c)\"",
+      "$c = 'git push origin main'; Write-Output \"$(iex $c)\"",
+      "$c = 'git push origin shared'; git push origin topic; Write-Output @\"\n$(iex $c)\n\"@",
+      "git push origin topic; $c = 'git push origin shared'; echo `'; iex $c; echo `'",
+      'C:\\Git\\libexec\\git-core\\git-push.exe origin main',
+      'git push origin topic; C:\\Git\\libexec\\git-core\\git-push.exe origin shared',
+      'C:\\Windows\\System32\\cmd.exe /c git push origin shared']) {
+      const v = guard.decide(pwsh(cmd), agentLogin);
+      assert(v.exitCode === 2 && /form the guard cannot read/.test(v.stderr || ''),
+        `ABlueAgent + PowerShell ${JSON.stringify(cmd)}: a push run as text or by git-push is refused`);
     }
     // Review run 2 on #324: a push run as text is refused even next to a readable push.
     for (const cmd of ["git push origin topic; $c = 'git push origin shared'; iex $c",

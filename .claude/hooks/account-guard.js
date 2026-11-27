@@ -1395,27 +1395,21 @@ const TOOL_MODES = { Bash: 'bash', PowerShell: 'ps' };
 // The verdict for one hook input. `getLogin` is injectable for tests.
 // Returns { exitCode: 0 | 2, stderr?: string, systemMessage?: string, checked: boolean }.
 // PowerShell forms that run text or a program the parser can't read as a plain git call: Invoke-Expression
-// and its aliases, Invoke-Command, Start-Process, a nested shell, the call or dot-source operator on a
-// string, variable or expression, a script block, an encoded command, or git's own git-push program. A
-// word-scan push next to any of them stays refused.
+// and its aliases, Invoke-Command, Start-Process, a job, a nested shell, the call or dot-source operator on
+// a string, variable, expression or array, a script block object, an encoded command, or git's own
+// git-push program. A word-scan push next to any of them is refused, even beside a readable push. The test
+// runs on the raw command text, strings and comments included: blanking them would let a subexpression
+// inside a string (or a quoting trick) hide one. Names count only as whole words, so `Start-Sleep` or
+// `check.sh` don't match; a word such as `PowerShell` in a commit message next to "git push" does, and that
+// command is refused with advice to reword (fail-closed by design).
 const PS_DYNAMIC_NAMES =
-  /(?<![\w.\-\/\\$])(?:iex|invoke-expression|invoke-command|icm|start-process|saps|start|start-job|sajb|pwsh|powershell|cmd|bash|sh|wsl)(?:\.exe)?(?![\w.\-\/\\])/i;
-// The call or dot-source operator on a string, variable, expression or array: the program it runs is
-// whatever that text names.
-// (A script block, `& { ... }`, is left out: the parser reads its commands.)
-const PS_CALL_OPERATOR = /(?:^|[\s;|{(])[&.]\s*["'$(@]/;
-const PS_OTHER_DYNAMIC = /\[scriptblock\]|(?<![\w-])-enc(?:odedcommand)?(?![\w-])/i;
+  /(?<![\w.\-$])(?:iex|invoke-expression|invoke-command|icm|start-process|saps|start|start-job|sajb|pwsh|powershell|cmd|bash|sh|wsl)(?:\.exe)?(?![\w.\-\/\\])/i;
+// (A script block run in place, `& { ... }`, is left out: the parser reads its commands.)
+const PS_CALL_OPERATOR = /(?:^|[\s;|{(`])[&.]\s*["'$(@\u2018-\u201e]/;
+const PS_OTHER_DYNAMIC = /\[scriptblock\]|(?<![\w-])-enc(?:odedcommand)?(?![\w-])|git-push(?:\.exe)?(?![\w.\-])/i;
 
-// Quoted strings (here-strings included) and comments are blanked first, so a word inside a commit
-// message, a file name or a comment never counts; a quote becomes '' so the call operator's target
-// still shows.
 function runsTextOrProgram(command) {
-  const bare = command
-    .replace(/@'[\s\S]*?'@|@"[\s\S]*?"@/g, "''")
-    .replace(/'(?:[^']|'')*'|"(?:[^"`]|`[\s\S])*"/g, "''")
-    .replace(/<#[\s\S]*?#>/g, ' ')
-    .replace(/(^|\s)#[^\n]*/g, '$1');
-  return PS_DYNAMIC_NAMES.test(bare) || PS_CALL_OPERATOR.test(bare) || PS_OTHER_DYNAMIC.test(bare);
+  return PS_DYNAMIC_NAMES.test(command) || PS_CALL_OPERATOR.test(command) || PS_OTHER_DYNAMIC.test(command);
 }
 
 const WORD_SCAN_PUSH_NOTICE =
