@@ -43,6 +43,12 @@ function makeIpc(over) {
   assert(opened[0] === 'http://example.com/', 'the URL handed to the OS is the parsed href, not the raw string');
 }
 
+{
+  const { throws } = require('node:assert/strict');
+  throws(() => createOpenExternalIpc(), /assessSender must be a function/);
+  throws(() => createOpenExternalIpc({ assessSender: () => ({ ok: true }) }), /validateUrl must be a function/);
+}
+
 const SECRET = 'SECRETTOKEN';
 for (const [label, url] of [
   ['file: URL', `file:///C:/Windows/${SECRET}.exe`],

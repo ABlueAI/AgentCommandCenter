@@ -240,5 +240,10 @@ for (const [label, err] of [
   assert(!/getGeminiKey\s*:|readGeminiKey/.test(preload), 'preload has no way to read the key back');
 }
 
+{
+  const { throws } = require('node:assert/strict');
+  throws(() => createGeminiKeyIpc(), /assessSender must be a function/);
+}
+
 process.stdout.write(`\ngemini-key-ipc: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

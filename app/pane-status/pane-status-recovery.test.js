@@ -75,6 +75,24 @@ function reconcileAndProveSettingsUnchanged(e, label) {
   return result;
 }
 
+{
+  const e = makeEnv();
+  const file = descriptorMod.descriptorPath(e.userData);
+  const descriptor = JSON.stringify({ schemaVersion: descriptorMod.SCHEMA_VERSION + 1 });
+  fs.writeFileSync(file, descriptor);
+  fs.writeFileSync(e.settingsPath, '{}');
+  const result = reconcileAndProveSettingsUnchanged(e, 'newer schema');
+  assert(result.outcome === OUT.RECONCILIATION_REQUIRED && result.reason === WHY.DESCRIPTOR_NEWER_SCHEMA &&
+    fs.readFileSync(file, 'utf8') === descriptor, 'a newer recovery descriptor is left read-only');
+}
+{
+  const e = makeEnv();
+  fs.writeFileSync(e.settingsPath, '{invalid');
+  const result = reconcileAndProveSettingsUnchanged(e, 'unreadable settings');
+  assert(result.outcome === OUT.RECONCILIATION_REQUIRED && result.reason === WHY.SETTINGS_UNREADABLE,
+    'missing descriptor and invalid settings require reconciliation');
+}
+
 // ---------------------------------------------------------------- clean first run
 {
   const e = makeEnv();

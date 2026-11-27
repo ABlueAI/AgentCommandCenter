@@ -242,5 +242,20 @@ for (const p of npmTableProblems) assert(false, p);
 assert(npmTableProblems.length === 0,
   `THIRD-PARTY-NOTICES.md's npm table lists exactly the ${policy.PACKAGE_EXCEPTIONS.length} package exceptions, with their licences and lockfile versions`);
 
+{
+  const malformed = policy.parseSpdx('MIT AND )');
+  assert(!malformed.ok && malformed.error.includes('unexpected'), 'an unexpected grammar token is a licence parse error');
+  const prose = policy.checkNoticeRows([{ file: 'fixture.js', licence: 'MIT or proprietary' }], []);
+  assert(prose.length === 1 && prose[0].includes('word that marks a non-permissive licence'),
+    'non-permissive prose makes a notice row fail even when it also names MIT');
+  assert(policy.noticeNpmRows('## Notes\n\nFixture text') === null,
+    'a document without a package table has no parsed npm rows');
+  const row = { name: 'fixture', licence: 'MIT', version: '1.0.0' };
+  const problems = policy.checkNoticeNpmTable([row, { ...row }], { packages: {} }, [row]);
+  assert(problems.some((line) => line.includes('lockfile has undefined')) &&
+    problems.some((line) => line.includes('two rows')),
+  'duplicate npm notice rows and a missing lockfile entry both surface as errors');
+}
+
 process.stdout.write(`\nthird-party-notices: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

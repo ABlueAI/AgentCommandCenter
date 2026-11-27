@@ -145,7 +145,6 @@ process.stdout.write('\nusage-statusline: as a real process (stdin in, one line 
   eq(big.stdout, 'usage: status data too large\n', 'oversized input: visible reason');
 }
 
-fs.rmSync(tmpRoot, { recursive: true, force: true });
 {
   eq(usageFile.snapshotFromPayload(null, NOW), null, 'a primitive or missing payload yields no usage snapshot');
   const filePath = freshPath();
@@ -161,5 +160,6 @@ fs.rmSync(tmpRoot, { recursive: true, force: true });
   eq(calls.join(','), 'rename,rename,cleanup', 'a second rename failure attempts temp cleanup once');
 }
 
+fs.rmSync(tmpRoot, { recursive: true, force: true });
 process.stdout.write(`\nusage-statusline: ${passed} passed, ${failed} failed\n`);
 if (failed) process.exit(1);

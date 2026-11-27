@@ -535,5 +535,19 @@ process.stdout.write('\nrefusal reasons never leak file contents\n');
   assert(store.reset().reason === REASON.WRITE_FAILED, 'reset failure is returned to the caller');
 }
 
+{
+  for (const [mutate, reason] of [
+    [(layout) => { layout.grid.root.data[0].data.views = null; }, REASON.LAYOUT_SHAPE],
+    [(layout) => { layout.grid.root.data[0].data.views = []; }, REASON.LAYOUT_SHAPE],
+    [(layout) => { layout.panels.pty1.title = 42; }, REASON.LAYOUT_SHAPE],
+  ]) {
+    const layout = clone(FIXTURE);
+    mutate(layout);
+    assert(verdict(layout).reason === reason, 'malformed layout member is refused before persistence');
+  }
+  assert(validateEnvelope({ ...envelopeOf(clone(FIXTURE)), savedAt: '2026-13-01T00:00:00Z' }).reason === REASON.TIMESTAMP,
+    'a syntactically valid timestamp with an invalid month is refused');
+}
+
 process.stdout.write(`\ndockview-layout-store: ${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exit(1);

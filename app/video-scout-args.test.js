@@ -539,6 +539,17 @@ const SLICES2_JSON = '[{"startOffset":10,"endOffset":30},{"startOffset":60,"endO
   assert(!notes.some((n) => n.includes(SLICES2_JSON)), 'the serialized JSON never appears in a note (Logs privacy)');
 }
 
+{
+  for (const endOffset of [null, '']) {
+    const result = buildVideoScoutArgs({ videoUrl: YT, analysisMode: 'video', sliceRanges: slices2, endOffset });
+    assert(result.error === null && result.args.includes('-SliceRangesJson') && !result.args.includes('-EndOffset'),
+      'an unset scalar end does not conflict with a valid slice selection');
+  }
+  const defaultMode = buildVideoScoutArgs({ videoUrl: YT, sliceRanges: slices2 });
+  assert(defaultMode.error === null && defaultMode.args.includes('-SliceRangesJson'),
+    'a slice request without an explicit analysis mode uses the default video mode');
+}
+
 // --- accept: 8 slices summing to exactly 1800s (cap inclusive) ---------------------------------
 {
   const eight = Array.from({ length: 8 }, (_, i) => ({ startOffset: i * 400, endOffset: i * 400 + 225 }));

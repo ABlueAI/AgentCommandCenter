@@ -90,6 +90,8 @@ async function fixture(t, opts = {}) {
       return stdout({ format: { duration: String(opts.probeDuration ?? opts.duration ?? 3.2) }, streams });
     }
     if (args.includes('-fps_mode')) {
+      if (opts.frameFailure === 'scene') return { code: 1, stdout: '', stderr: 'fixture decode error' };
+      if (opts.frameFailure === 'missing-data') return stdout(null);
       // Pass 1: the frame-time log and the 9x8 thumbnails, as FFmpeg's metadata and rawvideo outputs write them.
       const log = candidates.map(({ time }, i) => `frame:${i}    pts:${Math.round(time * 1000)}   pts_time:${time}\nlavfi.scene_score=0.500000`);
       await fs.writeFile(path.join(options.cwd, 'frames.txt'), log.join('\n') + '\n');
@@ -99,10 +101,12 @@ async function fixture(t, opts = {}) {
       return stdout(null);
     }
     if (args.includes('-frames:v')) {
+      if (opts.frameFailure === 'frame') return { code: 1, stdout: '', stderr: 'fixture extraction error' };
       const seek = args[args.indexOf('-ss') + 1];
       await fs.writeFile(args.at(-1), Buffer.from(`fake image at ${seek}`));
       return stdout(null);
     }
+    if (opts.frameFailure === 'audio') return { code: 1, stdout: '', stderr: 'fixture audio error' };
     await fs.writeFile(args.at(-1), Buffer.from(opts.oddPcm ? [0, 0, 4] : [0, 0, 4, 0]));
     return stdout(null);
   };
@@ -130,6 +134,24 @@ async function fixture(t, opts = {}) {
   const extractions = () => calls.filter(({ exe, args }) => exe === 'ffmpeg' && args.includes('-frames:v') && !args.includes('-fps_mode'));
   return { analyze, calls, root, estimates, analysisCalls, extractions };
 }
+
+test('refuses unavailable media tools, invalid durations and decode failures before analysis', async (t) => {
+  for (const [options, reason] of [
+    [{ missing: 'ffmpeg' }, /ffmpeg is missing/],
+    [{ metadata: stdout({ duration: 0 }) }, /duration is unavailable/],
+    [{ download: async ({ cwd }) => { await fs.writeFile(path.join(cwd, 'video.mp4'), ''); return stdout(null); } },
+      /MP4 is empty/],
+    [{ frameFailure: 'scene' }, /could not decode its frames/],
+    [{ frameFailure: 'missing-data' }, /scene detection produced no frames/],
+    [{ frameFailure: 'frame' }, /could not extract a sampled frame/],
+    [{ frameFailure: 'audio' }, /audio could not be decoded/],
+  ]) {
+    const { analyze, analysisCalls, root } = await fixture(t, options);
+    await assert.rejects(analyze, reason);
+    assert.equal(analysisCalls().length, 0);
+    assert.deepEqual(await fs.readdir(root), []);
+  }
+});
 
 test('sends shell-free CLI arguments, scene-sampled 640 px frames and the local transcript after the estimate', async (t) => {
   const { analyze, calls, root, estimates, analysisCalls, extractions } = await fixture(t);
@@ -809,6 +831,45 @@ test('IPC maps Whisper replies, cancels only its own run, and logs real errors b
   assert.equal((await scout.run(good, { id: 'pty2', url })).error, 'Claude Video Scout failed to start (RangeError).');
   assert.equal(logged.at(-1), 'Claude Video Scout failed to start (RangeError).');
   assert(causes.at(-1) instanceof RangeError, 'the original error goes to the developer console');
+});
+
+test('IPC reports failed renderer deliveries and cancels an active request on shutdown', async () => {
+  let phase = 'transcript';
+  let sendFailure = true;
+  const sent = [];
+  const errors = [];
+  const event = { sender: { send: (_channel, payload) => {
+    if (sendFailure) throw new Error('fixture renderer unavailable');
+    sent.push(payload);
+  } } };
+  const scout = createClaudeVideoScoutIpc({
+    trustedSenderGate: { assess: (candidate) => ({ ok: candidate === event }) },
+    validateVideoUrl: (candidate) => candidate,
+    log: (line) => errors.push(line),
+    analyze: async ({ focus, progress, transcribe, confirm }) => {
+      assert.equal(focus, 'fixture focus');
+      if (phase === 'transcript') return transcribe(Buffer.from([0, 0]), { durationSeconds: 1 });
+      if (!sendFailure) progress('Fixture status');
+      return confirm('Fixture estimate');
+    },
+  });
+  const request = { id: 'pty1', url, focus: '  fixture focus  ' };
+  assert.equal(scout.shutdown(), null);
+  const transcript = await scout.run(event, request);
+  assert.equal(transcript.error, 'Mako could not send the audio to local Whisper.');
+  phase = 'confirm';
+  const estimate = await scout.run(event, request);
+  assert.equal(estimate.error, 'Mako could not show the estimate in the Video Scout pane.');
+  assert.deepEqual(errors, [transcript.error, estimate.error]);
+
+  sendFailure = false;
+  const waiting = scout.run(event, request);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(sent[0].status, 'Fixture status');
+  assert.equal(scout.shutdown(), waiting);
+  assert.equal((await waiting).error, 'Claude Video Scout was cancelled.');
+  assert.equal(scout.shutdown(), null);
+  assert.equal(errors.length, 2);
 });
 
 test('main cancels the run when the window reloads, and the renderer shows Whisper failures and cleans terminal text', async () => {

@@ -211,5 +211,20 @@ process.stdout.write('\ndeepEqual compares meaning, not serialization\n');
     'NEGATIVE CONTROL: JSON.stringify DOES disagree on key order — which is why it was the wrong tool');
 }
 
+{
+  for (const [text, reason] of [
+    [null, 'not-a-string'],
+    ['{', 'malformed-json'],
+    ['[]', 'not-an-object'],
+    ['null', 'not-an-object'],
+  ]) {
+    const parsed = doc.parse(text);
+    assert(!parsed.ok && parsed.reason === reason, `settings parser refuses with ${reason}`);
+  }
+  const empty = doc.parse(' \n');
+  assert(empty.ok && Object.keys(empty.value).length === 0 && doc.serialize(null) === '{}\n',
+    'blank settings have an explicit empty-document representation');
+}
+
 process.stdout.write(`\npane-status-settings-doc: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

@@ -92,5 +92,12 @@ const build = (win) => createTrustedSenderGate({ entryUrl: ENTRY, getTrustedWind
   assert(!threw && res.ok === false && res.reason === 'not-main-frame', 'a webContents with a throwing mainFrame getter refuses (not-main-frame), never throws');
 }
 
+{
+  const absentContents = createTrustedSenderGate({ entryUrl: ENTRY, getTrustedWindow: () => ({}) });
+  const result = absentContents.assess({ sender: {}, senderFrame: {} });
+  assert(!result.ok && result.reason === 'untrusted-sender',
+    'a window without webContents refuses even before either frame can be compared');
+}
+
 process.stdout.write(`\ntrusted-ipc-sender: ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

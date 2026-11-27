@@ -443,6 +443,31 @@ function testSourceTripwires() {
       'registered state handler returns the budget projection');
   }
 
+  {
+    const vm = require('node:vm');
+    const preload = fs.readFileSync(path.join(__dirname, 'preload.js'), 'utf8');
+    const bridges = new Map();
+    const calls = [];
+    const electron = {
+      contextBridge: { exposeInMainWorld: (name, api) => bridges.set(name, api) },
+      ipcRenderer: { invoke: (...args) => calls.push(args) },
+    };
+    for (const argv of [[], ['--blue-helm-admission-budget']]) {
+      bridges.clear();
+      vm.runInNewContext(preload, { require: () => electron, process: { argv } }, { filename: 'preload.js' });
+      assert(bridges.has('ccAdmission') === (argv.length > 0),
+        'executing the preload exposes the admission bridge only for a controlled run');
+    }
+    const bridge = bridges.get('ccAdmission');
+    const request = { paneId: 'pty1', prompt: 'Fixture prompt' };
+    bridge.submitPrompt(request);
+    bridge.getState();
+    assert(Object.isFrozen(bridge) && calls.length === 2 &&
+      calls[0][0] === CHANNEL_SUBMIT && calls[0][1] === request &&
+      calls[1][0] === CHANNEL_STATE && calls[1].length === 1,
+    'the real preload forwards only the submit payload and a zero-argument state check');
+  }
+
   await testDirectInputBlocked();
   await testNoBypass();
   await testUncontrolledPanesUnaffected();
