@@ -49,7 +49,7 @@ for (const [job, check] of [['app', 'App tests (Windows)'], ['pester', 'PowerShe
     `guardrail setup identifies GitHub Actions as the expected source for "${check}"`);
 }
 const blueChecklist = fs.readFileSync(path.join(repoRoot, 'BLUE-CHECKLIST.md'), 'utf8');
-const sourceCheck = blueChecklist.match(/^  - Issue #279:[^\r\n]*(?:\r?\n {4}[^\r\n]*)*/m)?.[0];
+const sourceCheck = blueChecklist.match(/^  - For issue #279,[^\r\n]*(?:\r?\n {4}[^\r\n]*)*/m)?.[0];
 assert(sourceCheck?.includes('[guardrail setup](docs/SETUP-GUARDRAILS.md#part-a-right-after-pr-27-merges-10-minutes)'),
   'the issue #279 checklist item links to the guardrail setup');
 

@@ -1583,8 +1583,8 @@ behind both steps are in the private report from the S38 session, not in this pu
     (only you change repository settings), or tell an agent another way to close it.
   - Issue #270's last item: decide whether two kinds of material named in the private report stay in
     this public repository.
-  - Issue #279: at your next merge sitting, allow about 2 minutes to confirm both required Windows
-    checks use **GitHub Actions** as their expected source in `protect-main`. Use the
+  - For issue #279, allow about 2 minutes at your next merge sitting to confirm both required
+    Windows checks use **GitHub Actions** as their expected source in `protect-main`. Use the
     [guardrail setup](docs/SETUP-GUARDRAILS.md#part-a-right-after-pr-27-merges-10-minutes)
     to update either source if needed. Reopen the ruleset to verify both saved values and confirm
     both Actions results are required on the next PR.
