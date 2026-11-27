@@ -1023,9 +1023,15 @@ function formatUsageLine(usage, model, mediaResolution, sliced, sliceCount) {
 // The analysis is model output and prints to the same stream as the usage and quality lines, which
 // the renderer and feed-gemini.ps1 pick out by their bracketed markers (any letter case in
 // PowerShell's -match). Rewrite those markers in the analysis so only the SDK's own lines carry them.
+// Control characters other than tab and line breaks go first: the renderer strips terminal codes
+// before it matches, so a code inside a marker must not hide it from the rewrite.
 const LOG_MARKER_RE = /\[(\s*video-scout\s+(?:usage|quality)\s*)\]/gi;
 function neutralizeLogMarkers(text) {
-  return String(text == null ? '' : text).replace(LOG_MARKER_RE, '($1)');
+  return String(text == null ? '' : text)
+    // The renderer's own terminal-code pattern (app/renderer/pty-parser.js RE_ANSI), then any other control.
+    .replace(/\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b./g, '')
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '')
+    .replace(LOG_MARKER_RE, '($1)');
 }
 
 // Upstream error text is attacker-adjacent (it renders provider/network strings into our logs):

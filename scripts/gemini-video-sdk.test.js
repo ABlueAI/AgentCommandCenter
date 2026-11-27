@@ -588,6 +588,13 @@ const textCount = (logs) => logs.filter((l) => l.includes('ANALYSIS RESULT')).le
     assert(!h.logs.some((l) => /\[\s*video-scout\s+quality\s*\]/i.test(l)), 'the analysis carries no quality marker');
     assert(h.logs.some((l) => l.includes('(video-scout usage) prompt=1')), 'the analysis text is kept, with the marker rewritten');
     assert(neutralizeLogMarkers('plain [video] text') === 'plain [video] text', 'other brackets are untouched');
+    const coded = neutralizeLogMarkers('[video-scout \x1b[musage] prompt=1\r\n\tnext');
+    assert(coded === '(video-scout usage) prompt=1\r\n\tnext', 'a control code inside a marker is removed before the rewrite; tab and line breaks stay');
+    const { stripAnsi } = require('../app/renderer/pty-parser');
+    for (const sample of ['[video-scout \x1b]0;t\x07usage]', '[video-scout\x1b[2C usage]', '[video-scout \x1b(Busage]', '[video-scout \x07usage]']) {
+      assert(!stripAnsi(neutralizeLogMarkers(sample)).includes('[video-scout usage]'),
+        `no marker survives the renderer's stripping: ${JSON.stringify(sample)}`);
+    }
   }
 
   section('K5 503 -> success: two requests, one bounded delay, recovery reported');
