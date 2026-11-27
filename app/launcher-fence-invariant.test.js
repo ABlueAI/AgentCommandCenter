@@ -310,11 +310,14 @@ const REGIONS = [
     // Every other argument, the scrub and P1 are byte-identical.
     // Previous pin retained: 217 / 8227036cb1ce84d0c32fd38ff4999c6db71a9625dc6beba26b9a85dd6bec5f08
     // The role launcher passes its checked definition to the env builder.
-    // Previous pin retained: 302 / fc8deeab81b2e88627956f87b871de00f210e5515ee82236214572db21b70088
+    // Page-reader navigation adds one buildPtyEnv argument with the app validator's path for the
+    // classified fenced page-reader role. page-reader.test.js checks the deployed hook and its launch.
+    // Re-pinned after merging main: main's page-reader pin (421) plus the role-definition line (+32).
+    // Previous pins: 302 / fc8deeab...; branch 334 / def093a0...; main 421 / 0341bc5c...
     start: 'const fencedRole = launch.fenced;',
     end: 'let p;',
-    utf16Length: 334,
-    sha: 'def093a02a803a4e648c70fd89694017eef94f30f33f77b03571b06e47fea93d',
+    utf16Length: 453,
+    sha: 'ef7d4bf80686b6cb4e08a968ca6536b97a6bc18131840790a27c011b26afa40d',
   },
   {
     name: 'pty-start handler',
@@ -394,9 +397,12 @@ const REGIONS = [
     // pin the new wiring.
     // Previous pin retained: 17354 / 1ed564dea4af33f5dbe7afcb47b0d0cb2178ff1fb289a60b2e37a3d078581b2d
     // Launcher input and role source checks run before the admission claim and spawn.
-    // Previous pin retained: 18861 / 790e4fa29a245a5064c1d1da05940f73f8a7b0c250747150bb601d378ef313f6
-    utf16Length: 16824,
-    sha: 'a3e67026585688a63a55f5dfc6cd7c9cc98c30ad5ce6881b656c5e6fa631e71c',
+    // Page-reader navigation adds the argument pinned above and rewords the env comment.
+    // Re-pinned after merging main: the branch's handler (16824) plus main's page-reader argument and
+    // env-comment rewording only (verified by diffing the region).
+    // Previous pins: 18861 / 790e4fa2...; branch 16824 / a3e67026...; main 18721 / 3376aed5...
+    utf16Length: 16932,
+    sha: '726caf2885dbff60d338958127d89df0120ff1fcf9741dcff6cf3cf4a2e927a7',
   },
 ];
 

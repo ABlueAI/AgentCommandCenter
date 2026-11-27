@@ -23,14 +23,15 @@ function loadIpaddr() {
 }
 
 const ROLE = 'page-reader';
+const POLICY_ENV_KEY = 'BLUE_HELM_PAGE_READER_POLICY';
 
 // The MCP server's name in the config. Claude Code names its tools mcp__<server>__<tool>.
 const MCP_SERVER = 'playwright';
 
 // THE ONLY TWO BROWSER TOOLS. Navigate to a page; read it as an accessibility snapshot. Everything
 // else Playwright MCP offers (click, type, fill, evaluate, upload, screenshot, tabs, file output) is
-// left out. scripts/hooks/fence-write.js carries the same two literals (it is deployed standalone and
-// cannot require this module); page-reader.test.js holds them equal.
+// left out. scripts/hooks/fence-write.js carries the same two tool names and receives this validator
+// from the launcher. page-reader.test.js checks the names and the deployed hook's behavior.
 const MCP_TOOLS = Object.freeze([
   'mcp__playwright__browser_navigate',
   'mcp__playwright__browser_snapshot',
@@ -161,9 +162,9 @@ const LOCAL_SUFFIXES = Object.freeze(['localhost', 'local', 'home.arpa', 'intern
  * broadcast, reserved, the ranges that embed an IPv4 address (6to4, Teredo, NAT64), and any IPv6
  * address outside 2000::/3.
  *
- * This checks the URL Blue gives, before the pane starts. Host NAMES are not resolved: a check here
- * and Chromium's own lookup later can get different answers, so resolving would only look safe.
- * What the pane's browser does after that first page is outside this check (see the PR for #162).
+ * This checks the URL Blue gives before launch and each navigation URL passed to the hook. Host
+ * names are not resolved: a check here and Chromium's own lookup later can get different answers.
+ * Browser-initiated requests are outside this check (see the PR for #162).
  */
 function hostRefusal(hostname) {
   let ipaddr;
@@ -271,6 +272,7 @@ function pageReaderCliArgs(mcpConfigPath) {
 
 module.exports = {
   ROLE,
+  POLICY_ENV_KEY,
   MCP_SERVER,
   MCP_TOOLS,
   DENIED_MCP_TOOLS,

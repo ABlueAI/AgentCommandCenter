@@ -368,13 +368,18 @@ process.stdout.write('\nindex.html ships the EMBEDDED dock and loads no Dockview
   // `window.ccShellNav` and builds nothing until app.js's boot() calls createShell();
   // `in-focus-card.js` publishes `window.ccInFocusCard` and builds only when a caller asks;
   // `emblem-rail.js` publishes `window.ccEmblemRail` and builds only when app.js creates it.
-  assert(scriptTags === 35, `index.html loads exactly 35 <script src> tags, including the shared task-name validator (found ${scriptTags})`);
+  // S46 adds the daily idle-sessions view: 34 -> 35. `session-hygiene-view.js` publishes
+  // `window.ccSessionHygieneView` and builds into #hygieneHost only when app.js asks it to.
+  // The shared task-name validator (`../task-name.js`) loads before app.js: 35 -> 36.
+  assert(scriptTags === 36, `index.html loads exactly 36 <script src> tags — the original 21 plus the pane-status badge, the Quick Links view, the admission view, the terminal key mapping, the authority choice, the usage panel view, the resume view, the agent token view (S31), the Claude Video Scout settings (S54), S66's colour tokens, navigation shell, In-focus card and emblem rail, the idle-sessions view (S46) and the shared task-name validator (found ${scriptTags})`);
   const taskValidator = '<script src="../task-name.js"></script>';
   assert(indexSrc.split(taskValidator).length === 2
     && indexSrc.indexOf(taskValidator) < indexSrc.indexOf('<script src="app.js"></script>'),
     'the shared task-name validator loads once before the launcher');
   assert(/<script src="session-resume-view\.js"><\/script>/.test(indexSrc),
     'the S09 resume view is loaded');
+  assert(/<script src="session-hygiene-view\.js"><\/script>/.test(indexSrc),
+    'the S46 idle-sessions view is loaded');
   assert(/<script src="usage-view\.js"><\/script>/.test(indexSrc),
     'the S11 usage panel view is loaded');
   assert(/<script src="term-keys\.js"><\/script>/.test(indexSrc),
