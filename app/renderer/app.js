@@ -731,13 +731,17 @@ function openInAppTerminal(opts = {}) {
   // writes any of it back into a pane.
   // The authority this pane was started at (the selector applies only to panes started after it).
   paneData.brain = { label, repo: currentRepoLabel(), branch: worktree ? wtName : '', authority: state.authority || '', openedAt: Date.now(), lastOutputAt: Date.now(), lines: [], tail: '' };
+  // Video-scout SDK runs print one machine-readable token-usage line; surface it in the Logs
+  // tab so every run's real cost is recorded outside the (closable) pane. The parser is already
+  // line-buffered and ANSI-stripped, so chunk boundaries can't split the marker. The pane's other
+  // lines are model output, so only an exact usage line is copied (video-scout-usage-line.js).
+  const usageLogGate = (role === 'video-scout' && !claudeVideoScout)
+    ? window.ccVideoScoutUsage.createUsageLogGate() : null;
   paneData.parser = new PtyParser((ev) => {
     if (ev && typeof ev.text === 'string' && ev.type !== 'ui_chrome') brainRecordLine(paneData.brain, ev);
-    // Video-scout SDK runs print one machine-readable token-usage line; surface it in the Logs
-    // tab so every run's real cost is recorded outside the (closable) pane. The parser is already
-    // line-buffered and ANSI-stripped, so chunk boundaries can't split the marker.
-    if (role === 'video-scout' && !claudeVideoScout && !ev.partial && ev.text && ev.text.includes('[video-scout usage]')) {
-      appendLog(ev.text.trim() + '\n');
+    if (usageLogGate && !ev.partial && ev.text) {
+      const logLine = usageLogGate.consider(ev.text);
+      if (logLine) appendLog(logLine);
     }
     paneData.pendingEvents.push(ev);
     if (paneData.rafId === null) paneData.rafId = requestAnimationFrame(() => drainChatEvents(paneData));
