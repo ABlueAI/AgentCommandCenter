@@ -17,8 +17,8 @@ const INDEX_FILE = path.join(__dirname, 'renderer', 'index.html');
 const PRELOAD_FILE = path.join(__dirname, 'preload.js');
 const STEP_TIMEOUT_MS = 30000;
 
-const ipc = { saves: [], ptyStart: 0 };
-const control = { settings: {}, gate: null, release: () => {}, repos: [], saveFail: false, worktrees: [] };
+const ipc = { saves: [], ptyStart: 0, terminals: [] };
+const control = { settings: {}, gate: null, release: () => {}, repos: [], saveFail: false, worktrees: [], savePreference: null };
 const remote = [];
 const consoleErrors = [];
 let win = null;
@@ -44,13 +44,16 @@ const PRELUDE = `(() => {
   };
 })();`;
 
-async function open(name, settings, beforeBoot, repos) {
+async function open(name, settings, beforeBoot, repos, worktrees) {
   progress(`${name}: loading`);
   control.settings = settings;
   control.repos = repos || [];
-  control.worktrees = control.repos.length ? [{ path: 'D:\\Workspace\\AgentCommandCenter-search-bar', branch: 'agent/search-bar' }] : [];
+  control.worktrees = worktrees ?? (control.repos.length ? [
+    { path: control.repos[0], branch: 'main' },
+    { path: 'D:\\Workspace\\AgentCommandCenter-search-bar', branch: 'agent/search-bar' },
+  ] : []);
   control.gate = new Promise((r) => { control.release = r; });
-  ipc.saves = []; ipc.ptyStart = 0;
+  ipc.saves = []; ipc.ptyStart = 0; ipc.terminals = [];
   await withTimeout(win.loadFile(INDEX_FILE), STEP_TIMEOUT_MS, `${name}: loadFile`);
   await run(PRELUDE);
   if (beforeBoot) await run(beforeBoot);
@@ -95,7 +98,8 @@ async function scenarioFirstRun() {
     out.pttNotice = t.shown('#makoNotice') ? document.getElementById('makoNotice').textContent : null;
     document.activeElement.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', code: 'Space', bubbles: true, cancelable: true }));
     out.pttNoticeAfterRelease = t.shown('#makoNotice') ? document.getElementById('makoNotice').textContent : null;
-    out.pttLogged = ['[stt] dictation engine unavailable', '[stt] click into an agent pane first'].some((x) => t.log().slice(logBefore).includes(x));
+    // Logs is written in an animation frame (S56 #236), so wait for the line rather than reading at once.
+    out.pttLogged = await t.waitFor(() => ['[stt] dictation engine unavailable', '[stt] click into an agent pane first'].some((x) => t.log().slice(logBefore).includes(x)), 3000);
     document.getElementById('makoTab-brain').focus();
     out.rightPrevented = t.key('ArrowRight');
     out.afterRight = t.selectedTab();
@@ -334,7 +338,7 @@ async function scenarioTopBar() {
     out.pausedRestored = t.shown('#makoPausedBanner');
     out.pausedText = document.getElementById('makoPausedBanner').textContent;
     out.quietBadStoredOff = !t.shown('#makoQuietBanner');
-    out.quietBadLogged = t.log().includes('stored quiet-hours state not recognised');
+    out.quietBadLogged = await t.waitFor(() => t.log().includes('stored quiet-hours state not recognised'), 3000);
     out.usageOnTab = {};
     out.pausedOnTab = {};
     for (const tab of ['brain', 'control', 'aquarium']) {
@@ -399,7 +403,7 @@ async function refusalCase(name, beforeBoot) {
     out.paletteInPage = !!document.getElementById('makoPalette');
     // The top bar's Settings button says why there is no Settings page, and opens Logs.
     document.getElementById('makoSettingsTopbar').click();
-    out.settingsRefusalLogged = t.log().includes('Settings is unavailable');
+    out.settingsRefusalLogged = await t.waitFor(() => t.log().includes('Settings is unavailable'), 3000);
     out.logsOpened = document.querySelector('.tabpane[data-pane=logs]').classList.contains('active');
     return out;
   })()`);
@@ -430,9 +434,103 @@ async function scenarioSaveFails() {
     const status = document.getElementById('makoLayoutStatus');
     const first = status.textContent;
     await t.waitFor(() => !status.textContent.includes('Saving'));
-    return { first, final: status.textContent, logged: t.log().includes('could not save settings (uiLayout): save-failed') };
+    const logged = await t.waitFor(() => t.log().includes('could not save settings (uiLayout): save-failed'), 3000);
+    return { first, final: status.textContent, logged };
   })()`);
   control.saveFail = false;
+  await park();
+  return r;
+}
+
+async function scenarioStartupSaveFails() {
+  const repo = '/projects/startup';
+  let refuse;
+  const pendingSave = new Promise((resolve, reject) => { refuse = reject; });
+  control.savePreference = (partial) => ('selectedRepo' in partial ? pendingSave : null);
+  await open('startupSaveFails', { theme: 'obsidian' }, null, [repo]);
+  const wiredWhileSaving = await run(
+    'window.__t.waitFor(() => typeof document.getElementById("openTerminal").onclick === "function", 2000)');
+  refuse(new Error('EPERM: harness write refused'));
+  const r = await run(`(async () => {
+    const t = window.__t;
+    const banner = '#preferenceSaveErrors';
+    const visible = await t.waitFor(() => t.shown(banner) && /selected repository/i.test(document.querySelector(banner).textContent), 2000);
+    document.getElementById('openTerminal').click();
+    document.getElementById('makoTab-brain').click();
+    return { visible, persistsAcrossTabs: t.shown(banner) };
+  })()`);
+  r.wiredWhileSaving = wiredWhileSaving;
+  r.terminals = ipc.terminals.slice();
+  control.savePreference = null;
+  await park();
+  return r;
+}
+
+async function scenarioPreferenceSaves() {
+  control.savePreference = (partial) => {
+    if (partial.theme === 'nord') return Promise.reject(new Error('EPERM: harness theme write refused'));
+    if (partial.ttsVoice === 'test-voice' || partial.ttsSpeed === 1.25) return { ok: false };
+    return null;
+  };
+  await open('preferenceSaves', { theme: 'obsidian', ttsVoice: 'initial-voice', ttsSpeed: 1 }, `(() => {
+    window.__speech = { voice: '', speed: 0 };
+    window.ccTTS = {
+      voices: [{ id: 'initial-voice', label: 'Initial' }, { id: 'test-voice', label: 'Test' }],
+      getVoice: () => 'initial-voice',
+      setVoice: (voice) => { window.__speech.voice = voice; },
+      setSpeed: (speed) => { window.__speech.speed = Number(speed); },
+      onStatus: () => {},
+    };
+  })()`);
+  const r = await run(`(async () => {
+    const t = window.__t;
+    await t.waitFor(() => typeof document.getElementById('ttsVoice').onchange === 'function');
+    const change = (id, value) => {
+      const select = document.getElementById(id);
+      select.value = value;
+      select.dispatchEvent(new Event('change'));
+    };
+    document.getElementById('makoSettingsOpen').click();
+    change('makoThemeSelect', 'nord');
+    const banner = '#preferenceSaveErrors';
+    const errorText = () => t.shown(banner) ? document.querySelector(banner).textContent : '';
+    await t.waitFor(() => /theme/i.test(errorText()), 2000);
+    const settingsError = errorText();
+    document.getElementById('makoSettingsClose').click();
+    change('ttsVoice', 'test-voice');
+    change('ttsSpeed', '1.25');
+    await t.waitFor(() => /voice/i.test(errorText()) && /speed/i.test(errorText()), 2000);
+    const failures = errorText();
+    const applied = { theme: document.documentElement.getAttribute('data-theme'), ...window.__speech };
+    change('themeSelect', 'dracula');
+    await t.waitFor(() => failures && !/theme/i.test(errorText()), 2000);
+    const log = t.log();
+    const logLines = log.split('\\n');
+    const logged = logLines.some((l) => l.startsWith('[settings] could not save theme: ') && l.includes('EPERM: harness theme write refused')) &&
+      log.includes('[settings] could not save ttsVoice: save refused') &&
+      log.includes('[settings] could not save ttsSpeed: save refused');
+    return { settingsError, failures, applied, afterThemeRetry: errorText(), logged,
+      toolbarTheme: document.documentElement.getAttribute('data-theme') };
+  })()`);
+  r.saves = ipc.saves.slice();
+  control.savePreference = null;
+  await park();
+  return r;
+}
+
+async function scenarioPrimaryCheckout() {
+  await open('primaryCheckout', { theme: 'obsidian' }, null, ['/projects/selected'], [
+    { path: '/projects/selected', branch: 'master' },
+    { path: '/projects/selected-agent', branch: 'main' },
+    { path: '/projects/selected-detached', branch: '(detached)' },
+  ]);
+  const r = await run(`(async () => {
+    await window.__t.waitFor(() => typeof document.getElementById('openTerminal').onclick === 'function');
+    return {
+      list: Array.from(document.querySelectorAll('#agentList .agent-row .name'), (node) => node.title),
+      grid: Array.from(document.querySelectorAll('#agentGrid .card .meta'), (node) => node.textContent),
+    };
+  })()`);
   await park();
   return r;
 }
@@ -452,11 +550,12 @@ app.whenReady().then(async () => {
   ipcMain.handle('save-settings', (_e, partial) => {
     ipc.saves.push(partial);
     if (control.saveFail && partial && 'uiLayout' in partial) throw new Error('EPERM: harness write refused');
-    return { ok: true };
+    return control.savePreference?.(partial) ?? { ...control.settings, ...partial };
   });
   ipcMain.handle('list-repos', () => ({ repos: control.repos.slice(), selectedRepo: control.repos[0] || '' }));
   ipcMain.handle('list-worktrees', () => control.worktrees.slice());
   ipcMain.handle('repo-github-url', () => '');
+  ipcMain.handle('open-terminal', (_e, repo) => { ipc.terminals.push(repo); return { ok: true }; });
   ipcMain.handle('get-gemini-key-status', () => ({ ok: true, hasKey: true, available: true }));
   ipcMain.handle('get-agent-token-status', () => ({ ok: true, hasToken: true }));
   ipcMain.handle('tlog-reset', () => ({ ok: true }));
@@ -484,7 +583,11 @@ app.whenReady().then(async () => {
     process.stdout.write(JSON.stringify({ ok: false, fatal: { scenario: 'watchdog', error: 'over budget' }, scenarios }) + '\n');
     app.exit(1);
   }, 4 * 60 * 1000);
-  for (const [name, fn] of [['firstRun', scenarioFirstRun], ['palette', scenarioPalette], ['settings', scenarioSettingsAndOldLayout], ['restartOld', scenarioRestartOld], ['topBar', scenarioTopBar], ['refusal', scenarioRefusal], ['saveFails', scenarioSaveFails]]) {
+  for (const [name, fn] of [
+    ['firstRun', scenarioFirstRun], ['palette', scenarioPalette], ['settings', scenarioSettingsAndOldLayout],
+    ['restartOld', scenarioRestartOld], ['topBar', scenarioTopBar], ['refusal', scenarioRefusal], ['saveFails', scenarioSaveFails],
+    ['startupSaveFails', scenarioStartupSaveFails], ['preferenceSaves', scenarioPreferenceSaves], ['primaryCheckout', scenarioPrimaryCheckout],
+  ]) {
     try { scenarios[name] = await fn(); progress(`${name}: done`); }
     catch (e) { fatal = { scenario: name, error: String((e && e.message) || e) }; progress(`${name}: FAILED ${fatal.error}`); break; }
   }
