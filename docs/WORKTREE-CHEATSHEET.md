@@ -43,13 +43,15 @@ Worktrees isolate work; **you still have to merge it**. The reviewed path:
 2. Push the branch: `git push -u origin agent/<task>`.
 3. Open a PR on GitHub, review the **diff yourself**, run/confirm tests.
 4. Merge the PR (human gate — never auto-merge auth/payments/data changes).
-5. Back in the main folder: `git pull`, then `remove-agent` + delete the branch.
+5. Back in the main folder: `git pull`, then run [`remove-agent.ps1`](../scripts/remove-agent.ps1) with
+   `-Task <task>` (PowerShell) or [`remove-agent.sh`](../scripts/remove-agent.sh) with
+   `<task>` (Bash) and delete the branch.
 
 ## Gotchas
 - **Don't** create a worktree *inside* the repo folder — put it as a **sibling** (`../`),
   or you'll nest a repo inside itself.
-- Each worktree has its own `node_modules` / build output. Run `npm install` in a new
-  worktree before `npm run dev`.
+- Each worktree has its own `node_modules` / build output. For Mako, run `npm ci` in
+  the new worktree's `app` folder before `npm run start:dev`.
 - Two worktrees can't share one branch. Give each agent its own branch (the scripts do).
 - Windows path friction is a known failure mode — if a tool chokes on `\` vs `/`, that's
   your cue to retry the step in WSL2.

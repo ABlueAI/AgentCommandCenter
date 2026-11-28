@@ -1,7 +1,7 @@
 # Usage panel (S11)
 
-Mako's top bar shows how much of the Claude plan's two usage limits is used, the 5-hour window and
-the weekly window, each with a countdown to its reset. At 90% of either it turns red and says to
+Mako's top bar (beside the tabs in the three-tab layout) shows how much of the Claude plan's
+two usage limits is used, the 5-hour window and the weekly window, each with a countdown to its reset. At 90% of either it turns red and says to
 pause the runner. **Pause runner** opens https://claude.ai/code/routines, where the runner routine
 is switched off and on (docs/RUNNER.md).
 

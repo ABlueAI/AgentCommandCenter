@@ -47,4 +47,4 @@ See **`prompts/TASK-BRIEF-TEMPLATE.md`** for how to write a card/prompt that get
 ## What this deliberately does NOT do (yet)
 - No autonomous "fix prod → auto-PR → auto-merge" loops.
 - No full observability wiring (Sentry/PostHog).
-A human merge gate stays on anything touching auth, payments, or user data. See `CLAUDE.md`.
+A human merge gate stays on anything touching auth, payments, or user data. See `AGENTS.md`.

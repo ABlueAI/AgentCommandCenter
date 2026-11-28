@@ -44,8 +44,8 @@ start. Delete or fix the file to start recording again.
 
 When Mako starts, it looks for the Claude panes that were still open when it last went away:
 records stopped as `mako-closed` (you closed Mako) or `unknown` (Mako stopped unexpectedly). If
-there are any, the top of the Terminals tab lists them, one row each, with the role, the folder and
-when Mako closed:
+there are any, the top of **Terminals** (under **Control room** in the three-tab layout) lists them,
+one row each, with the role, the folder and when Mako closed:
 
 - **Resume** opens the same role in the same folder and runs `claude --resume <sessionId>`, so the
   conversation continues where it was. The pane starts at the authority level picked now. At
@@ -103,5 +103,6 @@ A session's **state** is `running` (open in a pane), `waiting` (open when Mako w
 Start fresh not answered yet), `finished` (the shell exited, Blue closed the pane, or the offer was
 answered) or `archived`. Finished sessions archive themselves at startup and on each hourly check;
 archived records stay in the file until the 200-record limit drops them. Once a local day, the
-Terminals tab lists the sessions idle 3 days or more (no input, stop or start for 3 days), with
-their owner, state and done-when. S19's control room takes the list over in its right panel.
+**Terminals** view (under **Control room** in the three-tab layout) lists the sessions idle 3 days
+or more (no input, stop or start for 3 days), with their owner, state and done-when.
+S19's control room takes the list over in its right panel.
