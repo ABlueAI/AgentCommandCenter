@@ -1616,6 +1616,21 @@ behind both steps are in the private report from the S38 session, not in this pu
     results stay private: a public issue gets at most "checked on Blue's PC, <date>" or a severity
     change. The agent ticks this with the date.
 
+## From PR #336 (the Remove button asks before deleting work)
+
+Step 92 comes from PR #336 (issue #329). Step numbers 90 and 91 belong to open PRs.
+
+- [ ] **92. Check the worktree Remove button on Windows (PR #336).** **About 5 minutes**, on the next
+  Tuesday or Friday PC-check evening after merging PR #336.
+  - Pull `main`, fully restart Mako, and start a throwaway agent (any task name, such as `remove-test`).
+  - In its worktree, make a new file and one commit you don't push.
+  - Click Remove on that agent: a warning should list the file and the commit. Click Cancel: the
+    worktree folder should still be there with the file in it.
+  - Click Remove again and confirm: the folder should be gone, and `git branch --list agent/remove-test`
+    in the repo should still show the branch (delete it with `git branch -D agent/remove-test`).
+  - *Done when:* you've told any agent what you saw (listed, kept on Cancel, gone on confirm with
+    the branch kept, or what differed); it ticks this with the date and how it checked.
+
 ## From PR #334 (terminal clipboard, paste and links)
 
 Step 93 comes from PR #334 (issue #273). Step numbers 86, 87 and 90 to 92 belong to open PRs.
