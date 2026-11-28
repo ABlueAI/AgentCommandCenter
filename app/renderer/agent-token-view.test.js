@@ -4,6 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 const { saveResultMessage } = require('./agent-token-view');
 
 let passed = 0, failed = 0;
@@ -39,5 +40,42 @@ assert(/<span id="agentTokenStatus"[^>]*role="status"/.test(html), 'the banner h
 assert(html.indexOf('<script src="agent-token-view.js"></script>') !== -1
   && html.indexOf('agent-token-view.js') < html.indexOf('<script src="app.js"></script>'), 'the view loads before app.js');
 
-process.stdout.write(`\nagent-token-view: ${passed} passed, ${failed} failed\n`);
-process.exit(failed ? 1 : 0);
+async function saveHandlerTest() {
+  const button = { disabled: false };
+  const input = { value: 'synthetic token input', focus: () => { focused = true; } };
+  let focused = false;
+  let flagged = false;
+  const status = { textContent: '', classList: { toggle: (_name, value) => { flagged = value; } } };
+  const elements = { '#agentTokenSave': button, '#agentTokenInput': input, '#agentTokenStatus': status };
+  const logs = [];
+  let rejectSave;
+  let saved = false;
+  const pending = new Promise((_resolve, reject) => { rejectSave = reject; });
+  let request = pending;
+  vm.runInNewContext(save, {
+    $: (selector) => elements[selector],
+    cc: { setAgentToken: () => request },
+    window: { ccAgentTokenView: { saveResultMessage } },
+    appendLog: (line) => logs.push(line),
+    updateAgentTokenBanner: (result) => { saved = result.hasToken; },
+  });
+
+  const attempt = button.onclick();
+  assert(button.disabled && status.textContent === 'Saving…', 'the Save button is disabled while the request is pending');
+  rejectSave(new Error(`IPC disconnected (${input.value})`));
+  const rejection = await attempt.then(() => null, (error) => error);
+  assert(!rejection && !button.disabled, 'a rejected save is handled and the Save button is restored');
+  assert(flagged && status.textContent.includes('IPC disconnected') && logs.some((line) => line.includes('save failed')),
+    'a rejected save displays the failure and records it in Logs');
+  assert(!status.textContent.includes(input.value) && !logs.join('').includes(input.value),
+    'the failure message and Logs do not expose the submitted token');
+  assert(input.value === 'synthetic token input' && focused, 'a rejected save keeps and focuses the token input for retry');
+  request = Promise.resolve({ ok: true });
+  await button.onclick();
+  assert(!button.disabled && !flagged && !input.value && saved, 'the next save can succeed');
+}
+
+saveHandlerTest().then(() => {
+  process.stdout.write(`\nagent-token-view: ${passed} passed, ${failed} failed\n`);
+  process.exitCode = failed ? 1 : 0;
+}).catch((error) => { console.error(error); process.exitCode = 1; });

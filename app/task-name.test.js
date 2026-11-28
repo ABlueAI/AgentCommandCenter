@@ -109,6 +109,8 @@ async function testRendererLaunch() {
   const input = { value: 'Two words', focus() {} };
   const context = vm.createContext({
     window: {}, $: () => input, state: { chosenRole: 'plain', chosenCli: 'codex', repo: 'fixture' },
+    // Declared above createAgent in app.js, so the sliced source needs them here.
+    videoSubmission: null, resetCreateAgentTiming: async () => {},
     cc: { tlogReset() {}, newAgent(req) { calls.push(req); return { ok: false }; } },
     alert(message) { alerts.push(message); }, closeModal() {}, appendLog() {}, refreshAgents() {},
     worktreeOk: (result) => result.ok,

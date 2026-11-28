@@ -55,8 +55,13 @@ const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
 const preload = fs.readFileSync(path.join(__dirname, 'preload.js'), 'utf8');
 const app = fs.readFileSync(path.join(__dirname, 'renderer', 'app.js'), 'utf8');
 assert(/function sendMainLog\(line, kind\)/.test(main) && /channelFor\(line, kind\)/.test(main), 'main has one sender that uses channelFor');
-assert(/const line = `\[TIMING \+\$\{elapsed\}ms\] \$\{msg\}`;\s*console\.log\(line\);\s*sendMainLog\(line, 'routine'\);/.test(main),
-  'timing lines go through it as routine');
+assert(/function tlog\(msg, kind = 'routine'\)/.test(main) &&
+  /const line = `\[TIMING \+\$\{elapsed\}ms\] \$\{msg\}`;\s*console\.log\(line\);\s*sendMainLog\(line, kind\);/.test(main),
+  'timing lines default to routine and forward an explicit kind');
+assert(/const processTree = createProcessTreeKiller\(\{[^}]*\blog: tlog,/.test(main),
+  'process-tree logging reaches tlog with its kind');
+assert(/: createPaneStatusController\(\{[\s\S]*?commandName: AGENT_CMD\.claude,\s*log: tlog,[\s\S]*?publishSetupState: paneStatusPublishers\.publishSetupState,\s*log: tlog,/.test(main),
+  'pane-status version, lock and pipe logging reach tlog with their kind');
 assert(/logUsage: \(line\) => \{\s*console\.log\(line\);\s*sendMainLog\(line, 'routine'\);/.test(main), 'usage lines go through it as routine');
 assert(/log: \(line\) => \{ tlog\(line\); sendMainLog\(line, 'routine'\); \}/.test(main), 'admission budget lines go through it as routine');
 assert(/onMainInfo: \(cb\) => ipcRenderer\.on\('main-info', \(_e, m\) => cb\(m\)\)/.test(preload), 'preload exposes main-info (receive only)');
