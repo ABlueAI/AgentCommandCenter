@@ -30,6 +30,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { getTestFiles } = require('./run-tests');
 
 let passed = 0, failed = 0;
 function assert(cond, label) {
@@ -38,11 +39,7 @@ function assert(cond, label) {
 }
 
 const APP_DIR = __dirname;
-const pkg = JSON.parse(fs.readFileSync(path.join(APP_DIR, 'package.json'), 'utf8'));
-const segments = pkg.scripts.test.split('&&').map((s) => s.trim()).filter(Boolean);
-const suites = segments
-  .map((s) => s.replace(/^node\s+/, '').trim())
-  .filter((s) => s.endsWith('.test.js'));
+const suites = getTestFiles();
 
 // Source-shape rules, most specific first. Order matters: E's line also satisfies A's pattern.
 const SHAPE_E = /\$\{\s*passed\s*\+\s*failed\s*\}\s*tests:/;
@@ -102,9 +99,8 @@ const SHAPE_E_SUITES = [
 
 process.stdout.write('\nevery registered suite emits a summary the reconciliation can count\n');
 {
-  assert(suites.length > 0, `the gate registers suites (${suites.length})`);
-  assert(suites.length === segments.length,
-    `every gate segment is a suite file (${suites.length} of ${segments.length})`);
+  assert(suites.length > 0, `the gate discovers suites (${suites.length})`);
+  assert(suites.length >= 100, `the gate discovers at least 100 suites, a floor against a discovery bug (${suites.length})`);
 
   const byShape = { A: [], B: [], C: [], D: [], E: [], NONE: [] };
   for (const rel of suites) {

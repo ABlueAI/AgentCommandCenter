@@ -7,6 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const { getTestFiles } = require('./run-tests');
 
 const BASE = 'a2121ca36727bbb3294fd61a057f13730b8a1d17';
 const APP = __dirname;
@@ -125,7 +126,7 @@ for (const forbiddenLabel of ['Starboard CRM', 'GoHighLevel', 'Hexona']) {
   assert(!productionQuickLinks.includes(forbiddenLabel), `production Quick Links source contains no forbidden label ${forbiddenLabel}`);
 }
 
-process.stdout.write('\nno dependency delta and full-chain reachability\n');
+process.stdout.write('\nno dependency delta and npm test reachability\n');
 const currentPkg = JSON.parse(read('package.json'));
 const basePkg = JSON.parse(fromBase('package.json'));
 // S15 (PR #130, Blue's verdict 2026-11-03: ADOPT Playwright MCP) adds exactly one runtime dependency,
@@ -220,9 +221,9 @@ const requiredTests = [
   'quick-links-policy.test.js', 'quick-links-store.test.js', 'quick-links-ipc.test.js',
   'quick-links-integration.test.js', 'renderer/quick-links-view.test.js',
 ];
+const suites = getTestFiles();
 for (const suite of requiredTests) {
-  const token = `node ${suite}`;
-  assert(currentPkg.scripts.test.split('&&').map((part) => part.trim()).filter((part) => part === token).length === 1,
+  assert(suites.filter((file) => file === suite).length === 1,
     `${suite} is reachable exactly once from npm test`);
 }
 
