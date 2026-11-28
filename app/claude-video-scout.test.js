@@ -833,13 +833,13 @@ test('main cancels the run when the window reloads, and the renderer shows Whisp
 
   const js = await fs.readFile(path.join(__dirname, 'renderer/app.js'), 'utf8');
   const writes = [];
-  const fed = [];
   const submitted = [];
   const cancelled = [];
   let failSubmit = false;
   const context = vm.createContext({
     window: {},
-    terms: new Map([['pty1', { term: { write: (data) => writes.push(data) }, parser: { feed: (data) => fed.push(data) } }]]),
+    // Claude Video Scout writes straight to xterm, without a hidden chat history.
+    terms: new Map([['pty1', { term: { write: (data) => writes.push(data) } }]]),
     cc: {
       claudeVideoScoutTranscript: async (req) => { if (failSubmit) throw new Error('ipc gone'); submitted.push(req); return { ok: true }; },
       claudeVideoScoutCancel: (id) => cancelled.push(id),
@@ -852,7 +852,6 @@ test('main cancels the run when the window reloads, and the renderer shows Whisp
 
   vm.runInContext("writeClaudeVideoPane('pty1', 'a\\x1b[31mred\\x07\\x9b2J\\r\\nnext\\nline')", context);
   assert.equal(writes.at(-1), 'a[31mred2J\r\nnext\r\nline\r\n');
-  assert.equal(fed.at(-1), writes.at(-1));
 
   await vm.runInContext("handleClaudeVideoEvent({ id: 'pty1', token: 't1', pcm: new Uint8Array(2) })", context);
   assert.deepEqual(JSON.parse(JSON.stringify(submitted.at(-1))), { id: 'pty1', token: 't1', error: 'unavailable' });
